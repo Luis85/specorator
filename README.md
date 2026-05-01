@@ -23,6 +23,7 @@ Specorator is an Obsidian plugin and companion app for spec-driven, agentic soft
 |----------|---------|
 | [docs/product-vision.md](docs/product-vision.md) | Product north star, principles, and v1/v2.0 direction |
 | [docs/roadmap-v1.md](docs/roadmap-v1.md) | Phased delivery plan for v1 alpha |
+| [docs/process/requirements-intake.md](docs/process/requirements-intake.md) | Intake-first requirements and design workflow |
 
 ## Project tracking
 
@@ -43,7 +44,13 @@ The planned stack: Obsidian community plugin · Vue 3 · Vue Router · Pinia 2 �
 
 ## Contributing
 
-Issues and pull requests are welcome. See the [roadmap](docs/roadmap-v1.md) for current priorities. Issue templates are available for feature requests, bug reports, tasks, and architecture decisions.
+Issues and pull requests are welcome. See the [roadmap](docs/roadmap-v1.md) for current priorities.
+
+**Intake-first workflow:** new requirements and design decisions go through a structured intake process before implementation begins.
+
+- Open a **Requirement intake** or **Design intake** issue using the provided templates.
+- Add a requirement draft under `requirements/intake/` using `REQ-0000-template.md`.
+- Follow `docs/process/requirements-intake.md` for triage and promotion steps.
 
 ## Related repositories
 
