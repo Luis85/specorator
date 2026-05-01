@@ -1,8 +1,9 @@
 import { builtinModules } from 'module';
+import { resolve } from 'path';
 import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
 
-// Modules provided by the Obsidian desktop environment that must not be bundled
-const obsidianExternals = [
+const OBSIDIAN_EXTERNALS = [
 	'obsidian',
 	'electron',
 	'@codemirror/autocomplete',
@@ -18,22 +19,41 @@ const obsidianExternals = [
 	'@lezer/lr',
 ];
 
-export default defineConfig({
-	build: {
-		lib: {
-			entry: 'src/main.ts',
-			formats: ['cjs'],
-			fileName: () => 'main.js',
-		},
-		rollupOptions: {
-			external: [...obsidianExternals, ...builtinModules, ...builtinModules.map((m) => `node:${m}`)],
-			output: {
-				exports: 'default',
+const ALL_EXTERNALS = [
+	...OBSIDIAN_EXTERNALS,
+	...builtinModules,
+	...builtinModules.map((m) => `node:${m}`),
+];
+
+export default defineConfig(({ mode }) => {
+	const alias = { '@': resolve(__dirname, 'src') };
+
+	if (mode === 'plugin') {
+		return {
+			plugins: [vue()],
+			resolve: { alias },
+			build: {
+				lib: {
+					entry: resolve(__dirname, 'src/plugin/main.ts'),
+					formats: ['cjs'],
+					fileName: () => 'main.js',
+				},
+				rollupOptions: {
+					external: ALL_EXTERNALS,
+					output: { exports: 'default' },
+				},
+				outDir: '.',
+				emptyOutDir: false,
+				sourcemap: 'inline',
+				minify: false,
 			},
-		},
-		outDir: '.',
-		emptyOutDir: false,
-		sourcemap: 'inline',
-		minify: false,
-	},
+		};
+	}
+
+	// Standalone dev / browser build
+	return {
+		plugins: [vue()],
+		resolve: { alias },
+		build: { outDir: 'dist-standalone' },
+	};
 });

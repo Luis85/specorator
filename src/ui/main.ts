@@ -1,0 +1,21 @@
+/**
+ * Standalone entry point — runs in a regular browser via `npm run dev`.
+ * Uses MockBridge and dev fixtures instead of Obsidian APIs.
+ */
+import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+import App from './App.vue'
+import { router } from './router'
+import { i18n } from './i18n'
+import { BRIDGE_KEY } from '@/infrastructure/bridge/BridgeKey'
+import { MockBridge } from '@/infrastructure/mock/MockBridge'
+import { DEV_FIXTURES } from '@/infrastructure/mock/fixtures'
+
+const bridge = new MockBridge(DEV_FIXTURES)
+
+const app = createApp(App)
+app.use(createPinia())
+app.use(router)
+app.use(i18n)
+app.provide(BRIDGE_KEY, bridge)
+app.mount('#app')
