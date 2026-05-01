@@ -1,0 +1,7 @@
+node_modules/
+main.js
+package-lock.json
+
+# Design artifacts and product docs are not plugin source
+docs/
+requirements/

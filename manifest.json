@@ -1,0 +1,10 @@
+{
+	"id": "specorator",
+	"name": "Specorator",
+	"version": "0.0.1",
+	"minAppVersion": "1.4.0",
+	"description": "Spec-driven, agentic software development workflow inside Obsidian.",
+	"author": "Luis85",
+	"authorUrl": "https://github.com/Luis85",
+	"isDesktopOnly": false
+}

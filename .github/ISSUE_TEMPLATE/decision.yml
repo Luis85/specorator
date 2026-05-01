@@ -1,6 +1,6 @@
 name: Architecture / design decision
 description: A decision that needs to be made, explored, and recorded
-labels: ["architecture"]
+labels: ['architecture']
 body:
   - type: textarea
     id: context

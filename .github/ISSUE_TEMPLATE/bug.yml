@@ -1,6 +1,6 @@
 name: Bug report
 description: Report a defect or unexpected behavior
-labels: ["bug"]
+labels: ['bug']
 body:
   - type: textarea
     id: description
@@ -31,8 +31,8 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: "Obsidian version · Plugin version · OS"
-      placeholder: "Obsidian 1.x · Specorator 0.x · macOS 14"
+      description: 'Obsidian version · Plugin version · OS'
+      placeholder: 'Obsidian 1.x · Specorator 0.x · macOS 14'
     validations:
       required: true
 

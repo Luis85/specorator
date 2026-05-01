@@ -1,7 +1,7 @@
-name: "Requirement intake"
-description: "Propose a new requirement that should become a frontmatter requirement note."
-title: "req: <requirement summary>"
-labels: ["requirements", "intake", "needs-triage"]
+name: 'Requirement intake'
+description: 'Propose a new requirement that should become a frontmatter requirement note.'
+title: 'req: <requirement summary>'
+labels: ['requirements', 'intake', 'needs-triage']
 body:
   - type: markdown
     attributes:
@@ -13,7 +13,7 @@ body:
     attributes:
       label: Proposed requirement ID
       description: Format `REQ-XXXX` where `XXXX` is zero-padded numeric.
-      placeholder: "REQ-0001"
+      placeholder: 'REQ-0001'
     validations:
       required: true
   - type: textarea
@@ -28,7 +28,7 @@ body:
     attributes:
       label: Requirement statement
       description: Write a testable requirement using SHALL language.
-      placeholder: "The system SHALL ..."
+      placeholder: 'The system SHALL ...'
     validations:
       required: true
   - type: textarea
@@ -49,6 +49,6 @@ body:
     attributes:
       label: Related design intake issue
       description: Link to design intake issue when applicable.
-      placeholder: "#123"
+      placeholder: '#123'
     validations:
       required: false

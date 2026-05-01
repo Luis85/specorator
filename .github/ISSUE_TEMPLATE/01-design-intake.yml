@@ -1,7 +1,7 @@
-name: "Design intake"
-description: "Capture design-level problem framing, options, and decision pressure."
-title: "design: <concise design problem>"
-labels: ["design", "intake", "needs-triage"]
+name: 'Design intake'
+description: 'Capture design-level problem framing, options, and decision pressure.'
+title: 'design: <concise design problem>'
+labels: ['design', 'intake', 'needs-triage']
 body:
   - type: markdown
     attributes:
@@ -12,7 +12,7 @@ body:
     attributes:
       label: Problem statement
       description: What user or workflow problem are we solving?
-      placeholder: "Who is blocked, and why?"
+      placeholder: 'Who is blocked, and why?'
     validations:
       required: true
   - type: textarea
@@ -20,7 +20,7 @@ body:
     attributes:
       label: Intended outcomes
       description: What should be measurably better when this is complete?
-      placeholder: "Examples: reduced onboarding friction, clearer stage transitions"
+      placeholder: 'Examples: reduced onboarding friction, clearer stage transitions'
     validations:
       required: true
   - type: textarea
