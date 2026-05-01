@@ -1,3 +1,15 @@
+---
+title: "Specorator design brief"
+doc_type: design
+status: draft
+owner: product
+last_updated: 2026-05-01
+references:
+  - docs/product-vision.md
+  - docs/prd.md
+  - docs/design/USE_CASES.md
+---
+
 # Specorator — Design Brief
 
 **Type:** Internal · Designer + PM alignment  

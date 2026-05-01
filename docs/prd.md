@@ -1,10 +1,23 @@
+---
+title: "Specorator product requirements"
+doc_type: prd
+status: draft
+owner: product
+last_updated: 2026-05-01
+references:
+  - docs/product-vision.md
+  - docs/roadmap-v1.md
+  - docs/design/USE_CASES.md
+---
+
 # Product Requirements Document — Specorator
 
 **Status:** Draft  
 **Date:** 2026-05-01  
 **Related issues:** [#1](https://github.com/Luis85/specorator/issues/1), [#23](https://github.com/Luis85/specorator/issues/23), [#26](https://github.com/Luis85/specorator/issues/26), [#27](https://github.com/Luis85/specorator/issues/27), [#24](https://github.com/Luis85/specorator/issues/24)  
-**Product vision:** [docs/product-vision.md](product-vision.md)  
-**Roadmap:** [docs/roadmap-v1.md](roadmap-v1.md)
+**Product vision:** [Product Vision](./product-vision.md)  
+**Roadmap:** [Roadmap v1](./roadmap-v1.md)  
+**Design use cases:** [Use Case Catalogue](./design/USE_CASES.md)
 
 ---
 

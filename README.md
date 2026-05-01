@@ -1,3 +1,15 @@
+---
+title: "Specorator repository overview"
+doc_type: home
+status: draft
+owner: product
+last_updated: 2026-05-01
+references:
+  - docs/product-vision.md
+  - docs/prd.md
+  - docs/roadmap-v1.md
+---
+
 # Specorator
 
 Specorator is an Obsidian plugin and companion app for spec-driven, agentic software development. It guides users through a structured workflow — from idea to release — keeping all artifacts as editable Markdown inside the vault.
