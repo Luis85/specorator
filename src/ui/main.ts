@@ -1,7 +1,11 @@
 /**
  * Standalone entry point — runs in a regular browser via `npm run dev`.
  * Uses MockBridge and dev fixtures instead of Obsidian APIs.
+ *
+ * CSS custom properties are injected here (not in App.vue) so they are
+ * scoped to standalone mode only and never leak into Obsidian's theme.
  */
+import './standalone.css'
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'

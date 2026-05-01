@@ -20,6 +20,7 @@ export function useFeatures() {
       return await fn()
     } catch (e) {
       store.setError(e instanceof Error ? e.message : 'Unknown error')
+      return undefined
     } finally {
       store.setLoading(false)
     }
@@ -47,9 +48,9 @@ export function useFeatures() {
         const dto = featureDtoFromDomain(result.value)
         store.upsert(dto)
         return dto
-      } else {
-        store.setError(result.error.message)
       }
+      store.setError(result.error.message)
+      return undefined
     })
   }
 

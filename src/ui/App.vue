@@ -25,29 +25,13 @@ const { t } = useI18n()
 </template>
 
 <style>
-/* CSS custom properties — in Obsidian these come from the theme.
-   In standalone dev mode we define sensible defaults here. */
-:root {
-  --background-primary: #1e1e2e;
-  --background-secondary: #181825;
-  --background-modifier-border: #313244;
-  --background-modifier-hover: #2a2a3d;
-  --text-normal: #cdd6f4;
-  --text-muted: #a6adc8;
-  --text-error: #f38ba8;
-  --text-on-accent: #1e1e2e;
-  --interactive-accent: #cba6f7;
-}
-
+/* Global reset — safe in both Obsidian and standalone mode. */
 * { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
-  background: var(--background-primary);
-  color: var(--text-normal);
-}
 </style>
+
+<!-- Standalone-only styles injected by main.ts via a <style> tag on #app.
+     In Obsidian, the theme provides these variables; we must NOT set them
+     on :root or body as that would override the entire Obsidian UI. -->
 
 <style scoped>
 .sp-app {

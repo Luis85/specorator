@@ -1,0 +1,23 @@
+/*
+ * Standalone dev-mode CSS — imported only by src/ui/main.ts.
+ * These variables are provided by the Obsidian theme at runtime;
+ * scoping them here prevents them from overriding the real Obsidian UI.
+ */
+#app {
+	--background-primary: #1e1e2e;
+	--background-secondary: #181825;
+	--background-modifier-border: #313244;
+	--background-modifier-hover: #2a2a3d;
+	--text-normal: #cdd6f4;
+	--text-muted: #a6adc8;
+	--text-error: #f38ba8;
+	--text-on-accent: #1e1e2e;
+	--interactive-accent: #cba6f7;
+
+	height: 100vh;
+	overflow: hidden;
+	font-family: system-ui, -apple-system, sans-serif;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	margin: 0;
+}

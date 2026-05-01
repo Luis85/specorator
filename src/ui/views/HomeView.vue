@@ -56,7 +56,7 @@ async function handleCreate(title: string) {
           :feature="feature"
           @activate="activateFeature"
           @archive="archiveFeature"
-          @open="router.push({ name: 'features' })"
+          @open="router.push({ name: 'features', query: { open: $event } })"
         />
       </div>
     </section>

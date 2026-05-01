@@ -5,9 +5,12 @@ import FeatureCard from '../components/feature/FeatureCard.vue'
 import CreateFeatureForm from '../components/feature/CreateFeatureForm.vue'
 import AppButton from '../components/common/AppButton.vue'
 import { useFeatures } from '../composables/useFeatures'
+import { useBridge } from '../composables/useBridge'
 
 const { t } = useI18n()
-const { items, loading, error, loadFeatures, createFeature, activateFeature, archiveFeature } = useFeatures()
+const bridge = useBridge()
+const { items, loading, error, loadFeatures, createFeature, activateFeature, archiveFeature } =
+  useFeatures()
 const showCreateForm = ref(false)
 
 onMounted(loadFeatures)
@@ -15,6 +18,13 @@ onMounted(loadFeatures)
 async function handleCreate(title: string) {
   await createFeature(title)
   showCreateForm.value = false
+}
+
+async function handleOpen(featureId: string) {
+  const feature = items.value.find((f) => f.id === featureId)
+  if (!feature) return
+  const settings = await bridge.getSettings()
+  await bridge.openFile(`${settings.featuresFolder}/${feature.slug}/_meta.md`)
 }
 </script>
 
@@ -50,7 +60,7 @@ async function handleCreate(title: string) {
           :feature="feature"
           @activate="activateFeature"
           @archive="archiveFeature"
-          @open="() => {}"
+          @open="handleOpen"
         />
       </div>
     </template>

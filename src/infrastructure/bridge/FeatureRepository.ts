@@ -33,7 +33,9 @@ function parseFrontmatter(content: string): Record<string, string> {
       if (colonIdx === -1) return []
       const key = line.slice(0, colonIdx).trim()
       const raw = line.slice(colonIdx + 1).trim()
-      const value = raw.startsWith('"') ? raw.slice(1, raw.lastIndexOf('"')) : raw
+      const value = raw.startsWith('"')
+        ? raw.slice(1, raw.lastIndexOf('"')).replace(/\\"/g, '"')
+        : raw
       return [[key, value]]
     }),
   )
