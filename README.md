@@ -1,5 +1,5 @@
 ---
-title: "Specorator repository overview"
+title: 'Specorator repository overview'
 doc_type: home
 status: draft
 owner: product
@@ -31,22 +31,22 @@ Specorator is an Obsidian plugin and companion app for spec-driven, agentic soft
 
 ## Documentation
 
-| Document | Purpose |
-|----------|---------|
-| [docs/product-vision.md](docs/product-vision.md) | Product north star, principles, and v1/v2.0 direction |
-| [docs/roadmap-v1.md](docs/roadmap-v1.md) | Phased delivery plan for v1 alpha |
-| [docs/process/requirements-intake.md](docs/process/requirements-intake.md) | Intake-first requirements and design workflow |
+| Document                                                                   | Purpose                                               |
+| -------------------------------------------------------------------------- | ----------------------------------------------------- |
+| [docs/product-vision.md](docs/product-vision.md)                           | Product north star, principles, and v1/v2.0 direction |
+| [docs/roadmap-v1.md](docs/roadmap-v1.md)                                   | Phased delivery plan for v1 alpha                     |
+| [docs/process/requirements-intake.md](docs/process/requirements-intake.md) | Intake-first requirements and design workflow         |
 
 ## Project tracking
 
-| Issue | Purpose |
-|-------|---------|
-| [#47 — Roadmap progress tracker](https://github.com/Luis85/specorator/issues/47) | Phase-by-phase checklist |
-| [#1 — v1 alpha planning](https://github.com/Luis85/specorator/issues/1) | v1 feature scope and acceptance criteria |
-| [#23 — v2.0 planning](https://github.com/Luis85/specorator/issues/23) | Companion-app and agentonomous direction |
-| [#2 — Repo setup objective](https://github.com/Luis85/specorator/issues/2) | Repository and GitHub foundation work |
-| [#11 — Plugin shell objective](https://github.com/Luis85/specorator/issues/11) | Plugin architecture and toolchain |
-| [#24 — Product setup objective](https://github.com/Luis85/specorator/issues/24) | PRDs, use cases, and product artifacts |
+| Issue                                                                            | Purpose                                  |
+| -------------------------------------------------------------------------------- | ---------------------------------------- |
+| [#47 — Roadmap progress tracker](https://github.com/Luis85/specorator/issues/47) | Phase-by-phase checklist                 |
+| [#1 — v1 alpha planning](https://github.com/Luis85/specorator/issues/1)          | v1 feature scope and acceptance criteria |
+| [#23 — v2.0 planning](https://github.com/Luis85/specorator/issues/23)            | Companion-app and agentonomous direction |
+| [#2 — Repo setup objective](https://github.com/Luis85/specorator/issues/2)       | Repository and GitHub foundation work    |
+| [#11 — Plugin shell objective](https://github.com/Luis85/specorator/issues/11)   | Plugin architecture and toolchain        |
+| [#24 — Product setup objective](https://github.com/Luis85/specorator/issues/24)  | PRDs, use cases, and product artifacts   |
 
 ## Development
 

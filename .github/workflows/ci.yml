@@ -8,7 +8,7 @@ on:
 
 jobs:
   verify:
-    name: Install, typecheck, and build
+    name: Install, typecheck, lint, and build
     runs-on: ubuntu-latest
 
     steps:
@@ -27,9 +27,8 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # Lint — pending until ESLint is configured (issue #17)
-      # - name: Lint
-      #   run: npm run lint
+      - name: Lint
+        run: npm run lint
 
       # Tests — pending until Vitest is configured (issue #18)
       # - name: Test
