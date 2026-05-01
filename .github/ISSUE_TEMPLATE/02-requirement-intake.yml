@@ -1,0 +1,54 @@
+name: "Requirement intake"
+description: "Propose a new requirement that should become a frontmatter requirement note."
+title: "req: <requirement summary>"
+labels: ["requirements", "intake", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this issue to propose a requirement before implementation starts.
+        A merged requirement should be represented by a file in `requirements/intake/`.
+  - type: input
+    id: requirement_id
+    attributes:
+      label: Proposed requirement ID
+      description: Format `REQ-XXXX` where `XXXX` is zero-padded numeric.
+      placeholder: "REQ-0001"
+    validations:
+      required: true
+  - type: textarea
+    id: user_need
+    attributes:
+      label: User need
+      description: Who needs this and what outcome do they need?
+    validations:
+      required: true
+  - type: textarea
+    id: requirement_statement
+    attributes:
+      label: Requirement statement
+      description: Write a testable requirement using SHALL language.
+      placeholder: "The system SHALL ..."
+    validations:
+      required: true
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Rationale
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      description: Bullet list of objective pass/fail criteria.
+    validations:
+      required: true
+  - type: input
+    id: related_design
+    attributes:
+      label: Related design intake issue
+      description: Link to design intake issue when applicable.
+      placeholder: "#123"
+    validations:
+      required: false
