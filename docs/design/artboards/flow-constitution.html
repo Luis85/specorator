@@ -1,0 +1,399 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Flow · constitution & house rules</title>
+<link rel="stylesheet" href="../wireframes.css">
+<style>
+  body { margin: 0; background: var(--ob-bg); }
+  .scroll { width: 100%; overflow-x: auto; padding: 80px 0 60px; }
+  .sub-head { padding: 48px 32px 8px; }
+  .sub-head .sub-label { font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--ob-text-faint); text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; }
+  .sub-head h3 { font-family:var(--sketch); font-size:22px; font-weight:700; color:var(--ob-text); margin:0 0 4px; }
+  .sub-head p { font-family:"Inter",sans-serif; font-size:12px; color:var(--ob-text-mute); margin:0; line-height:1.5; max-width:680px; }
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="sb-section-head">
+  <div class="meta">flow · the invisible foundation</div>
+  <h2>Constitution & house rules — the rules the gates enforce</h2>
+  <p>The constitution (step 2) is where a project defines its own standards: coding conventions, accessibility requirements, naming rules, anything the team cares about. It's the most powerful artifact in the system — because gate checks enforce it — and the least understood. This flow covers writing it, editing it, and what happens when a feature violates it.</p>
+</div>
+
+<!-- ═══ PART 1: WRITING THE CONSTITUTION ═══ -->
+<div class="sub-head">
+  <div class="sub-label">part 1 of 3</div>
+  <h3>Writing — first-time constitution</h3>
+  <p>A new vault has no constitution. The first time a user reaches step 2, the coach scaffolds the process: start with one rule, not ten. The constitution lives in a single markdown file at the vault root.</p>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 2500px;">
+
+  <!-- W1: empty state — no constitution yet -->
+  <div class="sb-frame">
+    <div class="sb-num">W1</div>
+    <div class="sb-time">step 2 · first feature</div>
+    <div class="sb-anno top">
+      <span class="tag">empty state</span>
+      <b>No constitution yet.</b><br>
+      The coach shows what a constitution is and why it matters — before asking for one. Plain English, no jargon.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 2 of 11 · constitution</div>
+
+      <div class="coach" style="font-size:11px;">
+        <div>
+          <div class="ctitle">House rules — your project's standards</div>
+          <div class="ctext" style="font-size:11px;line-height:1.5;">These are the rules every feature in this project must follow. Write them once; the gate checks them every time.<br><br>Start with one. You can add more as you learn what matters.</div>
+          <div class="cactions">
+            <button class="sk-btn primary" style="font-size:10.5px;padding:2px 9px;">Write first rule →</button>
+            <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);margin-left:4px;">skip for now</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>"Write them once." One rule to start.</b>
+      <span class="sub">Coach explains before asking. No blank page.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">click</span></div>
+
+  <!-- W2: scaffolded first rule -->
+  <div class="sb-frame">
+    <div class="sb-num">W2</div>
+    <div class="sb-time">first rule</div>
+    <div class="sb-anno bottom">
+      <span class="tag">DR-003 · plain English</span>
+      <b>Rules are plain English sentences.</b><br>
+      Not code. Not regex. "All UI copy must have a translation key." The plugin parses the rule at gate time; if it can't verify automatically, it prompts the user to self-check.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:8px;">House rule #1</div>
+
+      <div style="margin-bottom:7px;">
+        <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">The rule <span style="color:var(--ob-text-faint);font-weight:400;text-transform:none;letter-spacing:0;font-family:Inter;font-size:10px;">plain sentence</span></div>
+        <div class="mini-input cursor" style="font-size:11px;padding:5px 7px;border-color:var(--accent);">All UI copy must have a translation key</div>
+      </div>
+
+      <div style="margin-bottom:7px;">
+        <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">How do we check it? <span style="color:var(--ob-text-faint);font-weight:400;text-transform:none;letter-spacing:0;font-family:Inter;font-size:10px;">optional — for auto-checking</span></div>
+        <div class="mini-list" style="font-size:10.5px;line-height:1.75;">
+          <div class="it hl"><span class="ic" style="background:var(--accent);border-color:var(--accent);"></span>Self-check at gate (I confirm manually)</div>
+          <div class="it"><span class="ic"></span>File must contain a "Strings" section</div>
+          <div class="it"><span class="ic"></span>Regex match in codebase</div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button class="sk-btn primary" style="font-size:10.5px;padding:3px 10px;">Save rule</button>
+        <button class="sk-btn ghost" style="font-size:10.5px;padding:3px 9px;">+ Add another</button>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Rule + check method.</b>
+      <span class="sub">Self-check, file-section check, or regex. Plugin picks the method.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">save</span></div>
+
+  <!-- W3: constitution file created -->
+  <div class="sb-frame">
+    <div class="sb-num">W3</div>
+    <div class="sb-time">saved · file created</div>
+    <div class="sb-anno top">
+      <span class="tag">DR-004 · plain markdown</span>
+      <b>Constitution is one markdown file.</b><br>
+      <code>CONSTITUTION.md</code> at the vault root. Human-readable. Editable in any text editor. The plugin re-reads it on every gate check.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:8px;">magic-link-auth · step 2</div>
+
+      <div class="mini-window" style="margin-bottom:8px;">
+        <div class="head">CONSTITUTION.md · vault root</div>
+        <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text);line-height:1.7;">
+          <span style="color:var(--ob-text-faint);"># House rules</span><br>
+          <br>
+          1. All UI copy must have a translation key<br>
+          <span style="color:var(--ob-text-faint);">   check: self · gate step 4</span>
+        </div>
+      </div>
+
+      <div style="background:rgba(74,209,150,0.07);border:1px solid var(--lane-define,#4ad196);border-radius:4px;padding:5px 8px;font-family:Inter;font-size:10.5px;color:var(--ob-text);display:flex;align-items:center;gap:6px;">
+        <span style="color:var(--lane-define,#4ad196);">✓</span> Constitution created · 1 rule
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>CONSTITUTION.md at vault root.</b>
+      <span class="sub">Shared across all features in the vault.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">gate time</span></div>
+
+  <!-- W4: gate enforces the rule -->
+  <div class="sb-frame">
+    <div class="sb-num">W4</div>
+    <div class="sb-time">gate · rule enforced</div>
+    <div class="sb-anno bottom">
+      <span class="tag">gate · define→build</span>
+      <b>House rule appears in the gate checklist.</b><br>
+      The gate reads CONSTITUTION.md and adds each rule to the checklist. The user wrote the rule once; it checks every feature automatically.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:4px;">
+        Define <span style="font-size:11px;color:var(--ob-text-faint);font-family:JetBrains Mono;">→ Build</span>
+      </div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">gate checklist</div>
+
+      <div class="mini-list" style="font-size:10.5px;line-height:1.85;">
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>Vision · 1 paragraph ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>4+ rules · testable ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>0 open questions ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>Decision note linked ✓</div>
+        <div class="it hl" style="background:rgba(127,109,242,0.1);">
+          <span class="ic" style="background:var(--accent);border-color:var(--accent);"></span>
+          <span>House rule: translation keys ✓ <span style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">self-check</span></span>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Rule in checklist. Self-check ticked.</b>
+      <span class="sub">Write once, enforce every time. The loop closes here.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══ PART 2: EDITING & VIOLATIONS ═══ -->
+<div class="sub-head">
+  <div class="sub-label">part 2 of 3</div>
+  <h3>Editing — changing a rule mid-flight</h3>
+  <p>Rules evolve. A rule added during feature 1 may need updating after feature 4. Changing a house rule mid-flight has cascading consequences — features that already passed the gate with the old rule may not pass with the new one. The plugin surfaces this explicitly.</p>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 2200px;">
+
+  <!-- E1: editing the constitution -->
+  <div class="sb-frame">
+    <div class="sb-num">E1</div>
+    <div class="sb-time">editing a rule</div>
+    <div class="sb-anno top">
+      <span class="tag">mutation</span>
+      <b>Edit directly in CONSTITUTION.md.</b><br>
+      No special editor. The file is plain markdown. The plugin watches for saves and re-evaluates affected features automatically.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:8px;">CONSTITUTION.md</div>
+
+      <div class="mini-window" style="margin-bottom:8px;">
+        <div class="head">CONSTITUTION.md</div>
+        <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text);line-height:1.7;">
+          <span style="color:var(--ob-text-faint);"># House rules</span><br><br>
+          1. All UI copy must have a translation key<br>
+          <span style="color:var(--ob-text-faint);">   check: self · gate step 4</span><br><br>
+          2. <span style="color:var(--accent);">All API endpoints must have rate limiting<span style="color:var(--accent);">▏</span></span><br>
+          <span style="color:var(--ob-text-faint);">   check: file must contain "Rate limits" section</span>
+        </div>
+      </div>
+
+      <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);">save to propagate to all active features ↓</div>
+    </div>
+    <div class="sb-caption">
+      <b>Plain markdown. Live editing.</b>
+      <span class="sub">Plugin re-reads on save. No special UI needed.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">save</span></div>
+
+  <!-- E2: cascading warning -->
+  <div class="sb-frame">
+    <div class="sb-num">E2</div>
+    <div class="sb-time">cascade warning</div>
+    <div class="sb-anno bottom">
+      <span class="tag">informed consent</span>
+      <b>Plugin shows which features are affected.</b><br>
+      Features that already passed the gate with the old rule set may now fail the new gate check. Shown as a one-time warning — not a block.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:8px;">New rule added</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.5;margin-bottom:8px;">
+        "All API endpoints must have rate limiting" now applies to all active features.
+      </div>
+
+      <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;">Features in Build/Ship that may be affected</div>
+      <div style="display:flex;flex-direction:column;gap:4px;font-family:Inter;font-size:10.5px;margin-bottom:8px;">
+        <div style="background:rgba(255,229,107,0.06);border:1px solid #b08a14;border-radius:3px;padding:5px 8px;">
+          <span style="color:#c9a227;">⚑</span> magic-link-auth · step 5 · <span style="color:var(--ob-text-mute);">check needed</span>
+        </div>
+        <div style="background:rgba(255,229,107,0.06);border:1px solid #b08a14;border-radius:3px;padding:5px 8px;">
+          <span style="color:#c9a227;">⚑</span> data-export-csv · step 7 · <span style="color:var(--ob-text-mute);">check needed</span>
+        </div>
+      </div>
+
+      <button class="sk-btn" style="font-size:10px;padding:2px 8px;">Review affected features</button>
+    </div>
+    <div class="sb-caption">
+      <b>Cascade shown. Not hidden.</b>
+      <span class="sub">Yellow, not red. A check, not a revert.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">violation</span></div>
+
+  <!-- E3: violation in-flight -->
+  <div class="sb-frame">
+    <div class="sb-num">E3</div>
+    <div class="sb-time">rule violated</div>
+    <div class="sb-anno top">
+      <span class="tag">violation state</span>
+      <b>Cockpit flags the violation. Gate re-checks.</b><br>
+      Features currently in Build or Ship with a violated house rule get a yellow flag on the cockpit rail and a gate re-check nudge. Not a block — the work is already done. An override with reason clears it.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 5 · build lane</div>
+
+      <div style="background:rgba(255,229,107,0.07);border:1px solid #b08a14;border-radius:4px;padding:8px 10px;font-family:Inter;font-size:10.5px;color:var(--ob-text);margin-bottom:8px;">
+        <div style="font-weight:700;color:#c9a227;margin-bottom:3px;">⚑ House rule added since last gate</div>
+        <div style="color:var(--ob-text-mute);font-size:10px;line-height:1.5;margin-bottom:5px;">"All API endpoints must have rate limiting" — does this feature comply?</div>
+        <div style="display:flex;gap:6px;">
+          <button class="sk-btn" style="font-size:9.5px;padding:2px 7px;border-color:#b08a14;color:#c9a227;">Yes — add note</button>
+          <button class="sk-btn ghost" style="font-size:9.5px;padding:2px 7px;">Override with reason</button>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Violation = yellow nudge, not red block.</b>
+      <span class="sub">Work already in flight isn't invalidated. Self-check or override.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">remove rule</span></div>
+
+  <!-- E4: removing a rule -->
+  <div class="sb-frame">
+    <div class="sb-num">E4</div>
+    <div class="sb-time">rule removed</div>
+    <div class="sb-anno bottom">
+      <span class="tag">retroactive</span>
+      <b>Removing a rule doesn't un-check past gates.</b><br>
+      A rule that was enforced at gate-time stays in the gate's audit log even after the rule is deleted from CONSTITUTION.md. Historical record is immutable.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:6px;">Rule removed</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.5;margin-bottom:8px;">
+        "All API endpoints must have rate limiting" removed from CONSTITUTION.md.
+      </div>
+
+      <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-radius:4px;padding:8px 10px;font-family:Inter;font-size:10.5px;margin-bottom:6px;">
+        <div style="font-weight:700;color:var(--ob-text);margin-bottom:2px;">Effect on active features</div>
+        <div style="color:var(--ob-text-mute);font-size:10px;line-height:1.5;">Gate flag cleared. No re-check needed for features in flight.</div>
+      </div>
+      <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-radius:4px;padding:8px 10px;font-family:Inter;font-size:10.5px;">
+        <div style="font-weight:700;color:var(--ob-text);margin-bottom:2px;">Effect on closed features</div>
+        <div style="color:var(--ob-text-mute);font-size:10px;line-height:1.5;">Gate history unchanged. Audit log preserved.</div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Remove forward, not backward.</b>
+      <span class="sub">Past gates are immutable. Future gates skip the rule.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══ PART 3: EDGE CASES & RATIONALE ═══ -->
+<div class="sub-head">
+  <div class="sub-label">part 3 of 3</div>
+  <h3>Edge cases & design rationale</h3>
+</div>
+
+<div style="padding:8px 32px 36px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;">
+
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">A</div>
+    <div class="sb-time">no constitution</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Feature with no constitution</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        CONSTITUTION.md is optional. If it doesn't exist, the gate's "house rules respected" check is marked as exempt (not passing, not failing) — shown as a hollow circle. The feature is not penalised for not having house rules; it just doesn't get the benefit of them.
+      </div>
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">
+        ○ house rules · no constitution · exempt
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Optional, not mandatory.</b>
+      <span class="sub">No CONSTITUTION.md = exempt, not failing.</span>
+    </div>
+  </div>
+
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">B</div>
+    <div class="sb-time">auto-verifiable rules</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Rules the plugin can check itself</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        Some house rules can be auto-verified: "spec file must contain a 'Strings' section" is a file-content check. "Rate limiting must be documented" can be a regex. Auto-verifiable rules show a <span style="color:var(--lane-define,#4ad196);">✓ auto</span> tag in the gate checklist; self-check rules show <span style="color:var(--ob-text-faint);">✓ self</span>.
+      </div>
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text);">
+        <span style="color:var(--lane-define,#4ad196);">✓ auto</span> Strings section present<br>
+        <span style="color:var(--ob-text-faint);">✓ self</span> Translation keys confirmed
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Auto vs self. Both count.</b>
+      <span class="sub">Plugin does what it can. User covers the rest.</span>
+    </div>
+  </div>
+
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">C</div>
+    <div class="sb-time">retro → new rule</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Retrospective feeds constitution</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        When a retrospective notes a recurring problem, the coach offers to add a house rule. The new rule is drafted from the retro text and opened in CONSTITUTION.md for review before saving. The gate immediately starts checking it on future features.
+      </div>
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--accent);">retro → constitution → gate</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-faint);margin-top:3px;">the full learning loop</div>
+    </div>
+    <div class="sb-caption">
+      <b>Learning loop closes here.</b>
+      <span class="sub">Bug → retro → rule → gate. Never the same bug twice.</span>
+    </div>
+  </div>
+
+</div>
+
+<div style="padding:0 32px 60px;display:grid;grid-template-columns:repeat(2,1fr);gap:18px;">
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">One file, vault root</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">CONSTITUTION.md is shared across the whole vault, not per-feature. House rules are project-level conventions — they apply to everything. If a rule only applies to one feature, it belongs in that feature's step 3 (EARS rules), not the constitution. (DR-004)</p>
+  </div>
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Start with one rule, not ten</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">A constitution with 20 rules from day one is a constitution nobody reads. The coach pushes for one rule to start. More rules come naturally from retrospectives and real problems. The constitution should grow from experience, not aspiration. (Principle 2)</p>
+  </div>
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Violations are yellow, not red</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">A new rule added mid-flight flags existing features as needing a check — but doesn't block them. The work is already done; the team should acknowledge the gap, not be forced to undo progress. Override-with-reason is always the escape. (Principle 5)</p>
+  </div>
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Gate history is immutable</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Removing a rule from the constitution doesn't rewrite past gate audits. A feature that passed a gate with rule X should remain recorded as having passed with rule X, even if rule X no longer exists. The audit trail's value depends on its immutability.</p>
+  </div>
+</div>
+
+</body></html>

@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spec 05 · Team mode — Specorator</title>
+<link rel="stylesheet" href="spec.css">
+</head>
+<body>
+
+<div class="topbar">
+  <a class="topbar-back" href="index.html">← overview</a>
+  <span class="topbar-sep">/</span>
+  <span class="nav-title" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);">spec 05 · team mode</span>
+  <span class="topbar-spacer"></span>
+  <a class="topbar-link prev" href="spec-algorithms.html">← spec 04</a>
+  <a class="topbar-link" href="index.html">↑ overview</a>
+</div>
+
+<div class="spec-doc">
+
+<div class="spec-hero">
+  <div class="spec-num">spec · 05 · OQ-5 resolved</div>
+  <h1>Team mode</h1>
+  <p>Specorator has no server. Team mode is a set of conventions layered on top of shared vault sync (Obsidian Sync or Git). This spec defines every convention, the PR sign-off detection algorithm, inline attribution format, and sync conflict handling.</p>
+</div>
+
+<!-- 1. Design decision -->
+<section>
+  <h2><span class="sec-num">1</span>Design decision (OQ-5)</h2>
+  <div class="callout callout-teal">
+    <strong>Decision:</strong> Team mode without a server = shared vault + three conventions: (1) committer handles in settings matched against Obsidian Sync authors or git commit emails; (2) PR merge as the peer gate sign-off ceremony; (3) inline <code>&lt;!-- @handle · date --&gt;</code> attribution in spec files as the audit trail. No CRDT, no WebSocket, no account required.
+  </div>
+  <p>This decision trades some edge-case friction (Dropbox teams can't use PR detection; real-time presence is "last active" not live cursor) for zero infrastructure. That trade is correct for MVP.</p>
+</section>
+
+<!-- 2. Enabling team mode -->
+<section>
+  <h2><span class="sec-num">2</span>Enabling team mode</h2>
+  <p>Team mode is enabled per-vault in settings (<code>gateMode: "team"</code>). It requires a shared vault already syncing. The plugin does not set up sync — it assumes it is already working.</p>
+
+  <div class="schema-table-wrap">
+    <table class="schema-table">
+      <thead>
+        <tr><th>Setting</th><th>Type</th><th>Default</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>gateMode</code></td><td>string</td><td><code>"solo"</code></td><td>Set to <code>"team"</code> to enable team mode.</td></tr>
+        <tr><td><code>committers</code></td><td>string[]</td><td><code>[]</code></td><td>List of @handles. Must match Obsidian Sync author names or git commit email prefixes.</td></tr>
+        <tr><td><code>minReviewers</code></td><td>number</td><td><code>1</code></td><td>How many committers (excluding the feature owner) must sign off on a gate. Default 1.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <strong>Migration:</strong> When team mode is enabled on a vault with existing features, only gates crossed <em>after</em> enabling team mode require peer sign-off. Gates crossed in solo mode stay closed — their _meta.md records are not modified.
+  </div>
+</section>
+
+<!-- 3. Committer attribution -->
+<section>
+  <h2><span class="sec-num">3</span>Committer attribution format</h2>
+  <p>Every plugin-managed write in team mode appends a committer comment to the modified line. This is the audit trail — it lives in the file, not a log.</p>
+
+  <div class="code-block">
+<pre><span class="cm"># In a step file — OQ resolution by a peer</span>
+? Should links expire after 15 min or 60 min?
+! 15 min — mobile re-send is one tap anyway.
+  &lt;!-- @arch-lead · 2026-05-01 --&gt;
+
+<span class="cm"># In a step file — step hand-off</span>
+<span class="cm"># (added to frontmatter, not body)</span>
+handed_off_by: "@arch-lead"
+handed_off_at: 2026-05-01T14:32:00Z
+
+<span class="cm"># In _meta.md — gate crossing with peer sign-off</span>
+gates:
+  - gate: define-to-build
+    crossed_at: 2026-04-28T15:00:00Z
+    crossed_by: "@you"
+    peer_signoff: "@arch-lead"
+    peer_signoff_at: 2026-04-28T14:55:00Z
+    peer_signoff_method: "pr-merge"   <span class="cm"># or "in-file"</span></pre>
+  </div>
+
+  <div class="callout callout-yellow">
+    <strong>Unknown committer:</strong> If a write carries a handle not in <code>settings.committers</code>, show a soft warning: "Unrecognised committer @X — add them in settings?" The action still proceeds — the warning is a nudge, not a block.
+  </div>
+</section>
+
+<!-- 4. PR sign-off -->
+<section>
+  <h2><span class="sec-num">4</span>PR sign-off flow</h2>
+  <p>The Define→Build gate in team mode requires a peer review. The mechanic: a PR whose description carries the gate checklist. Merging the PR is the sign-off. No new UI ritual invented.</p>
+
+  <h3>PR template generation</h3>
+  <p>When the user clicks "Request peer sign-off" in the cockpit (gate is self-passing but peer sign-off is outstanding), the plugin generates a PR description and either opens it in the browser (if git remote is configured) or copies it to clipboard.</p>
+
+  <div class="code-block">
+<pre><span class="kw">function</span> <span class="fn">generatePRTemplate</span>(feature: Feature, gateResult: GateResult): string {
+  <span class="kw">const</span> checks = gateResult.checks
+    .filter(c => c.severity !== <span class="str">"off"</span>)
+    .map(c => <span class="str">`${c.pass ? "✓" : "☐"} ${c.label}`</span>)
+    .join(<span class="str">"\n"</span>)
+
+  <span class="kw">const</span> reviewer = settings.committers
+    .filter(h => h !== currentHandle())
+    [<span class="num">0</span>] ?? <span class="str">"@team"</span>
+
+  <span class="kw">return</span> <span class="str">`## ${feature.name} · Define → Build gate
+
+**Reviewer:** ${reviewer}
+
+### Gate checklist
+${checks}
+
+### Spec files
+- features/${feature.slug}/01-vision.md
+- features/${feature.slug}/03-rules.md
+- features/${feature.slug}/04-how-it-works.md
+
+_Merging this PR constitutes peer sign-off on the gate._
+`</span>
+}</pre>
+  </div>
+
+  <h3>Merge-commit detection</h3>
+  <p>Specorator detects a peer sign-off by watching for a commit from a listed committer that touches <code>_meta.md</code> in the feature folder. This is the signal that a PR was merged.</p>
+
+  <div class="pseudo">
+<pre><span class="kw">function</span> <span class="fn">detectPeerSignoff</span>(feature: Feature, gate: string): boolean {
+  <span class="cm">// Check _meta.md git log for a commit by a listed committer</span>
+  <span class="cm">// other than the feature owner, touching the feature folder</span>
+
+  <span class="kw">if</span> (!isGitVault()) {
+    <span class="cm">// Fallback: check for <!-- @handle --> comment in _meta.md</span>
+    <span class="cm">// Added manually by peer using the in-file convention</span>
+    <span class="kw">return</span> hasInFileSignoff(feature, gate)
+  }
+
+  <span class="kw">const</span> log = gitLog(<span class="str">`features/${feature.slug}/_meta.md`</span>)
+  <span class="kw">const</span> peerCommits = log.filter(commit =>
+    settings.committers.includes(commit.authorHandle) &&
+    commit.authorHandle !== currentHandle()
+  )
+
+  <span class="kw">return</span> peerCommits.length >= settings.minReviewers
+}
+
+<span class="cm">// In-file fallback (Obsidian Sync / Dropbox teams)</span>
+<span class="kw">function</span> <span class="fn">hasInFileSignoff</span>(feature: Feature, gate: string): boolean {
+  <span class="kw">const</span> meta = readMeta(feature)
+  <span class="kw">const</span> gateRecord = meta.gates.find(g => g.gate === gate)
+  <span class="kw">return</span> !!gateRecord?.peer_signoff
+  <span class="cm">// peer_signoff is written manually by the peer editing _meta.md</span>
+}</pre>
+  </div>
+</section>
+
+<!-- 5. Peer OQ resolution -->
+<section>
+  <h2><span class="sec-num">5</span>Peer OQ resolution</h2>
+  <p>A teammate can resolve an OQ by editing the spec file directly — same mechanic as solo (<code>?</code> → <code>!</code>), plus a handle comment. No plugin action required on the peer's side. The feature owner sees the resolution on next sync.</p>
+
+  <div class="code-block">
+<pre><span class="cm"># Peer resolves an OQ — file edit by @arch-lead</span>
+? Should links expire after 15 min or 60 min?
+! 15 min — mobile re-send is one tap.
+  &lt;!-- @arch-lead · 2026-05-01 --&gt;
+
+<span class="cm"># Peer escalates (can't answer) — tags the owner</span>
+? Should links expire after 15 min or 60 min? @you
+&lt;!-- @arch-lead · can't answer --&gt;</pre>
+  </div>
+
+  <h3>Tag escalation detection</h3>
+  <div class="pseudo">
+<pre><span class="kw">function</span> <span class="fn">isTaggedForCurrentUser</span>(oq: OQRecord): boolean {
+  <span class="cm">// OQ line contains @{currentHandle} and is not yet resolved</span>
+  <span class="kw">return</span> !oq.resolved && oq.text.includes(<span class="str">`@${currentHandle()}`</span>)
+}
+
+<span class="cm">// Tagged OQs shown with accent border in cockpit OQ panel</span>
+<span class="cm">// Label: "Needs your answer" (not "unresolved")</span></pre>
+  </div>
+</section>
+
+<!-- 6. Presence -->
+<section>
+  <h2><span class="sec-num">6</span>Presence (MVP: last-active, not live)</h2>
+  <p>The cockpit shows a presence strip in team mode. In MVP, presence is "last active" — read from Obsidian Sync metadata (last editor) or git log (last commit author). Not live cursor tracking.</p>
+  <div class="schema-table-wrap">
+    <table class="schema-table">
+      <thead>
+        <tr><th>Signal</th><th>Source</th><th>Refresh</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Who is in vault</td><td>Obsidian Sync: <code>app.internalPlugins.getPluginById("sync")</code> user list (if available)</td><td>On vault open. Not real-time.</td></tr>
+        <tr><td>What they're editing</td><td>Git: last commit touching feature folder, by committer in list</td><td>On file modify event.</td></tr>
+        <tr><td>Fallback</td><td>Last <code>handed_off_by</code> or <code><!-- @handle --></code> found in any feature file</td><td>On cache rebuild.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout-yellow">
+    <strong>Post-MVP:</strong> Real-time presence requires either Obsidian Sync's live session API (not yet public) or a relay server. Both are out of scope for v1.
+  </div>
+</section>
+
+<!-- 7. Edge cases -->
+<section>
+  <h2><span class="sec-num">7</span>Edge cases</h2>
+
+  <h3>Solo → team migration</h3>
+  <p>Gates crossed before <code>gateMode</code> was set to <code>"team"</code> do not retroactively require peer sign-off. The plugin checks the gate record's timestamp against the settings change timestamp. If gate was crossed before team mode, it stays closed.</p>
+
+  <h3>3+ person teams</h3>
+  <p>Set <code>minReviewers: 2</code> in settings. The gate check counts unique committer handles in the gate record's <code>peer_signoff</code> array. No UI change — the gate check label reads "2 peer sign-offs" automatically.</p>
+
+  <h3>Committer not in list</h3>
+  <p>Show soft warning. Resolution still counts. Add nudge in cockpit: "Add @handle to committers list in settings."</p>
+
+  <h3>Vault-only teams (no git)</h3>
+  <p>PR detection is unavailable. Peer sign-off is done via the in-file convention: peer edits <code>_meta.md</code> to add <code>peer_signoff: "@handle"</code> to the gate record. This is documented in the PR template as the fallback path.</p>
+</section>
+
+</div>
+
+<footer class="spec-footer">
+  <a href="spec-algorithms.html">← spec 04 · algorithms</a>
+  <span>Specorator · Spec 05 · Team mode · OQ-5 resolved</span>
+  <a href="index.html">↑ overview</a>
+</footer>
+</body>
+</html>

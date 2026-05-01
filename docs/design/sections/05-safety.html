@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>05 · Safety nets — Specorator</title>
+<link rel="stylesheet" href="nav.css">
+<style>
+  .flow-acts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .act-link {
+    display: block;
+    text-decoration: none;
+    background: rgba(255,255,255,.03);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px 14px;
+    transition: border-color .12s, background .12s;
+  }
+  .act-link:hover { border-color: var(--accent); background: rgba(127,109,242,.06); }
+  .act-link .act-num { font-family:"JetBrains Mono",monospace; font-size:10px; color:var(--faint); margin-bottom:4px; }
+  .act-link .act-title { font-size:13px; color:var(--text); font-weight:600; }
+  .act-link .act-sub { font-size:11.5px; color:var(--mute); margin-top:3px; line-height:1.4; }
+</style>
+</head>
+<body>
+
+<nav class="top-nav">
+  <a class="nav-back" href="../index.html">← index</a>
+  <span class="nav-sep">/</span>
+  <span class="nav-title">05 · Safety nets</span>
+  <span class="nav-spacer"></span>
+  <a class="nav-prev" href="04-interactions.html">← 04 Interactions</a>
+  <a class="nav-next" href="06-system.html">06 System →</a>
+</nav>
+
+<div class="sec-header">
+  <div class="sec-num">section 05</div>
+  <div class="sec-title">Safety nets</div>
+  <p class="sec-subtitle">Users need to feel safe experimenting. Three forgiveness paths — undo (24h), revert (full history), and spatial recovery ("where am I?"). Feature completion and archival live here too.</p>
+</div>
+
+<div class="artboard-list">
+
+  <!-- Recovery -->
+  <div class="flow-card" style="cursor:default;">
+    <div class="flow-card-num">5a</div>
+    <div class="flow-card-title">Recovery — undo, revert, "where am I?"</div>
+    <div class="flow-card-desc">Three distinct situations, one shared principle: the user should never feel trapped. Undo covers 24 hours. Revert covers the full feature history. "I'm lost" covers spatial disorientation.</div>
+    <div class="flow-acts">
+      <a class="act-link" href="flows/recovery-undo.html">
+        <div class="act-num">part 1 of 3</div>
+        <div class="act-title">Undo — 24-hour safety net</div>
+        <div class="act-sub">Snapshot on every mutation → banner → undo → restored</div>
+      </a>
+      <a class="act-link" href="flows/recovery-revert.html">
+        <div class="act-num">part 2 of 3</div>
+        <div class="act-title">Revert — going further back</div>
+        <div class="act-sub">Timeline view → pick version → confirm → restored with warning</div>
+      </a>
+      <a class="act-link" href="flows/recovery-lost.html">
+        <div class="act-num">part 3 of 3</div>
+        <div class="act-title">"Where am I?"</div>
+        <div class="act-sub">Disorientation → breadcrumb → full context panel → re-oriented</div>
+      </a>
+    </div>
+  </div>
+
+  <!-- Completion -->
+  <div class="flow-card" style="cursor:default;">
+    <div class="flow-card-num">5b</div>
+    <div class="flow-card-title">Feature completion &amp; archival</div>
+    <div class="flow-card-desc">Crossing the final gate, completing the Ship lane, and archiving the spec. The archive is the permanent record — read-only, searchable, reopenable.</div>
+    <div class="flow-acts">
+      <a class="act-link" href="flows/completion-shipping.html">
+        <div class="act-num">part 1 of 3</div>
+        <div class="act-title">Shipping — final gate</div>
+        <div class="act-sub">Build→Ship gate → release notes → deployment log → retro</div>
+      </a>
+      <a class="act-link" href="flows/completion-archive.html">
+        <div class="act-num">part 2 of 3</div>
+        <div class="act-title">Archive — permanent record</div>
+        <div class="act-sub">Close action → archive/ folder → read-only → reopen path</div>
+      </a>
+      <a class="act-link" href="flows/completion-edge.html">
+        <div class="act-num">part 3 of 3</div>
+        <div class="act-title">Edge cases &amp; rationale</div>
+        <div class="act-sub">Abandoned features · partial ships · re-open ceremony</div>
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<footer class="site-footer">
+  <span>Specorator wireframes · section 05 of 07</span>
+  <a href="06-system.html" style="color:var(--accent);text-decoration:none;">06 System →</a>
+</footer>
+
+<!-- Lightbox overlay -->
+<div class="lightbox" id="lightbox">
+  <div class="lightbox-bar">
+    <span class="lightbox-title" id="lightbox-title"></span>
+    <button class="lightbox-close" onclick="closeLightbox()">✕ close  [esc]</button>
+  </div>
+  <div class="lightbox-body" id="lightbox-body"></div>
+</div>
+<script>
+function openLightbox(src, title, w, h) {
+  const lb = document.getElementById('lightbox');
+  const body = document.getElementById('lightbox-body');
+  document.getElementById('lightbox-title').textContent = title;
+  body.innerHTML = '<iframe src="' + src + '" width="' + w + '" height="' + h + '" style="width:' + w + 'px;height:' + h + 'px;"></iframe>';
+  lb.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  const lb = document.getElementById('lightbox');
+  lb.classList.remove('open');
+  document.getElementById('lightbox-body').innerHTML = '';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeLightbox(); });
+</script>
+</body>
+</html>

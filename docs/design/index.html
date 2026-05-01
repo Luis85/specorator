@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Specorator — Wireframe Index</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1a1a1a;
+    --bg2: #222;
+    --bg3: #2a2a2a;
+    --line: #333;
+    --text: #dcddde;
+    --mute: #8c8d8e;
+    --faint: #555;
+    --accent: #7f6df2;
+    --green: #4ad196;
+    --yellow: #c9a227;
+    --sketch: "Kalam", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Inter", sans-serif;
+    min-height: 100vh;
+  }
+
+  /* ── header ── */
+  .site-header {
+    padding: 48px 48px 0;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 32px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+  }
+  .logo {
+    font-family: var(--sketch);
+    font-size: 36px;
+    color: var(--text);
+    line-height: 1;
+  }
+  .logo span {
+    display: block;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: var(--mute);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    margin-bottom: 6px;
+  }
+  .header-meta {
+    text-align: right;
+  }
+  .header-meta .date {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: var(--faint);
+    margin-bottom: 6px;
+  }
+  .canvas-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 4px 10px;
+    opacity: .8;
+  }
+  .canvas-link:hover { opacity: 1; background: rgba(127,109,242,.08); }
+
+  /* ── intro ── */
+  .intro {
+    padding: 40px 48px 0;
+    max-width: 760px;
+  }
+  .intro h1 {
+    font-family: var(--sketch);
+    font-size: 28px;
+    color: var(--text);
+    margin-bottom: 10px;
+    font-weight: 700;
+  }
+  .intro p {
+    font-size: 14px;
+    color: var(--mute);
+    line-height: 1.6;
+    max-width: 640px;
+  }
+
+  /* ── walkthrough hint ── */
+  .walk-hint {
+    margin: 28px 48px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(127,109,242,.06);
+    border: 1px solid rgba(127,109,242,.3);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 12.5px;
+    color: var(--mute);
+    max-width: 700px;
+  }
+  .walk-hint .arrow {
+    color: var(--accent);
+    font-size: 18px;
+    flex: 0 0 auto;
+  }
+  .walk-hint b { color: var(--text); }
+
+  /* ── section grid ── */
+  .sections {
+    padding: 40px 48px 80px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+  }
+
+  .sec-card {
+    display: block;
+    text-decoration: none;
+    background: var(--bg2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 20px 22px;
+    transition: border-color .15s, background .15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .sec-card:hover {
+    border-color: var(--accent);
+    background: var(--bg3);
+  }
+  .sec-card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--card-accent, var(--accent));
+    opacity: .7;
+  }
+
+  .card-num {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: var(--faint);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    margin-bottom: 8px;
+  }
+  .card-title {
+    font-family: var(--sketch);
+    font-size: 22px;
+    color: var(--text);
+    margin-bottom: 6px;
+    line-height: 1.15;
+  }
+  .card-desc {
+    font-size: 12.5px;
+    color: var(--mute);
+    line-height: 1.55;
+    margin-bottom: 14px;
+  }
+
+  .card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .tag {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    background: rgba(255,255,255,.04);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    color: var(--faint);
+    padding: 2px 7px;
+  }
+  .tag.accent { color: var(--accent); border-color: rgba(127,109,242,.3); background: rgba(127,109,242,.06); }
+  .tag.green  { color: var(--green);  border-color: rgba(74,209,150,.3);  background: rgba(74,209,150,.06); }
+  .tag.yellow { color: var(--yellow); border-color: rgba(201,162,39,.3);  background: rgba(201,162,39,.06); }
+
+  .card-arrow {
+    position: absolute;
+    top: 20px; right: 20px;
+    font-size: 18px;
+    color: var(--faint);
+    transition: color .15s, transform .15s;
+  }
+  .sec-card:hover .card-arrow {
+    color: var(--accent);
+    transform: translateX(3px);
+  }
+
+  /* ── footer ── */
+  .site-footer {
+    border-top: 1px solid var(--line);
+    padding: 20px 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    color: var(--faint);
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="logo">
+    <span>obsidian plugin</span>
+    Specorator
+  </div>
+  <div class="header-meta">
+    <div class="date">Wireframes · May 2026</div>
+    <a class="canvas-link" href="handoff/index.html" style="margin-right:8px;">⚙ Eng handoff</a>
+  <a class="canvas-link" href="Specorator Wireframes.html">⊞ Full canvas overview</a>
+  </div>
+</header>
+
+<div class="intro">
+  <h1>Wireframe walkthrough</h1>
+  <p>32 artboards across 8 sections. Start with design rationale to understand the principles, then walk section by section. Each section page breaks flows into individual acts — no more 3000px wide scrolls.</p>
+</div>
+
+<div class="walk-hint">
+  <span class="arrow">✶</span>
+  <span><b>Suggested order:</b> 00 Rationale → 01 Product → 02 Edge cases → 03 Core flows → 04 Interactions → 05 Safety nets → 06 System → 07 Help</span>
+</div>
+
+<div class="sections">
+
+  <a class="sec-card" href="sections/00-rationale.html" style="--card-accent: #7f6df2;">
+    <div class="card-num">00</div>
+    <div class="card-title">Design rationale</div>
+    <div class="card-desc">Start here. Core principles, key decisions (DR-001–007), trade-offs, open questions, and non-goals. Sets the frame for everything that follows.</div>
+    <div class="card-tags">
+      <span class="tag">1 artboard</span>
+      <span class="tag accent">principles</span>
+      <span class="tag accent">decisions</span>
+    </div>
+    <span class="card-arrow">→</span>
+  </a>
+
+  <a class="sec-card" href="sections/01-product.html" style="--card-accent: #4ad196;">
+    <div class="card-num">01</div>
+    <div class="card-title">The product</div>
+    <div class="card-desc">First impressions. Onboarding flow plus 4 cockpit layout directions (A–D) and the first-feature spotlight walkthrough.</div>
+    <div class="card-tags">
+      <span class="tag">6 artboards</span>
+      <span class="tag green">onboarding</span>
+      <span class="tag green">cockpit A–D</span>
+      <span class="tag green">walkthrough</span>
+    </div>
+    <span class="card-arrow">→</span>
+  </a>
+
+  <a class="sec-card" href="sections/02-states.html" style="--card-accent: #4ad196;">
+    <div class="card-num">02</div>
+    <div class="card-title">Cockpit A · edge cases</div>
+    <div class="card-desc">Everything the three-pane cockpit must handle gracefully — from brand-new vault through gate fail, stale, and just-handed-off states.</div>
+    <div class="card-tags">
+      <span class="tag">6 artboards</span>
+      <span class="tag green">states</span>
+      <span class="tag yellow">edge cases</span>
+    </div>
+    <span class="card-arrow">→</span>
+  </a>
+
+  <a class="sec-card" href="sections/03-core-flows.html" style="--card-accent: #7f6df2;">
+    <div class="card-num">03</div>
+    <div class="card-title">Core user flows</div>
+    <div class="card-desc">The most-travelled paths. First feature (the "earning trust" moment), second session (returning user), and hand-off (the most-used micro-interaction).</div>
+    <div class="card-tags">
+      <span class="tag">3 flows</span>
+      <span class="tag accent">first feature</span>
+      <span class="tag accent">hand-off</span>
+    </div>
+    <span class="card-arrow">→</span>
+  </a>
+
+  <a class="sec-card" href="sections/04-interactions.html" style="--card-accent: #c9a227;">
+    <div class="card-num">04</div>
+    <div class="card-title">Key interactions</div>
+    <div class="card-desc">Where the discipline lives. Gate review, open questions (? → !), decision notes (ADRs), and skipping steps with a mandatory reason.</div>
+    <div class="card-tags">
+      <span class="tag">5 flows</span>
+      <span class="tag yellow">gate review</span>
+      <span class="tag yellow">open questions</span>
+      <span class="tag yellow">ADR</span>
+    </div>
+    <span class="card-arrow">→</span>
+  </a>
+
+  <a class="sec-card" href="sections/05-safety.html" style="--card-accent: #7fa8e0;">
+    <div class="card-num">05</div>
+    <div class="card-title">Safety nets</div>
+    <div class="card-desc">Undo, revert, and recovery. How the product handles "I made a mistake" and "where am I?" Feature completion and archival lives here too.</div>
+    <div class="card-tags">
+      <span class="tag">2 flows</span>
+      <span class="tag">undo · revert</span>
+      <span class="tag">archival</span>
+    </div>
+    <span class="card-arrow">→</span>
+  </a>
+
+  <a class="sec-card" href="sections/06-system.html" style="--card-accent: #3ec9b0;">
+    <div class="card-num">06</div>
+    <div class="card-title">System catalogues</div>
+    <div class="card-desc">Reference material for eng hand-off. Constitution, errors &amp; feedback, settings, keyboard commands, and team mode (OQ-5 resolved).</div>
+    <div class="card-tags">
+      <span class="tag">5 catalogues</span>
+      <span class="tag green">OQ-5 resolved</span>
+      <span class="tag">team mode</span>
+    </div>
+    <span class="card-arrow">→</span>
+  </a>
+
+  <a class="sec-card" href="sections/07-help.html" style="--card-accent: #7f6df2;">
+    <div class="card-num">07</div>
+    <div class="card-title">Help system</div>
+    <div class="card-desc">Every jargon term has a (?) popover: one-line definition, one-paragraph why, one link. Consistent pattern across the whole product.</div>
+    <div class="card-tags">
+      <span class="tag">1 artboard</span>
+      <span class="tag accent">popovers</span>
+    </div>
+    <span class="card-arrow">→</span>
+  </a>
+
+</div>
+
+<footer class="site-footer">
+  <span>Specorator wireframes · 32 artboards · 8 sections · OQ-5 resolved</span>
+  <a href="Specorator Wireframes.html" style="color:var(--accent);text-decoration:none;">⊞ Full canvas →</a>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,350 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Flow · gate review</title>
+<link rel="stylesheet" href="../wireframes.css">
+<style>
+  body { margin: 0; background: var(--ob-bg); }
+  .scroll { width: 100%; overflow-x: auto; padding: 80px 0 60px; }
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="sb-section-head">
+  <div class="meta">flow · the most ceremonial moment</div>
+  <h2>Gate review — where the discipline actually lives</h2>
+  <p>Between Define and Build, and between Build and Ship, sits a gate. The gate is the only place the system says "no, you can't move on yet." This must feel like a friend who notices you forgot something — not a customs officer.</p>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 2900px;">
+
+  <!-- 01 approaching -->
+  <div class="sb-frame">
+    <div class="sb-num">01</div>
+    <div class="sb-time">step 4</div>
+    <div class="sb-anno top">
+      <span class="tag">approaching</span>
+      <b>Gate gets visible early.</b><br>
+      Not a surprise. The cockpit shows it from step 3 onward as "next stop."
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 4 of 11 · how it works</div>
+      <div class="sk-box thin" style="padding:7px 9px;background:rgba(255,229,107,0.05);border-color:#b08a14;">
+        <div style="font-family:Inter;font-size:11px;color:var(--ob-text);font-weight:700;margin-bottom:3px;">⚑ Gate ahead · after step 4</div>
+        <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);line-height:1.5;">
+          End-of-Define checklist. We'll show it now so nothing's a surprise.
+        </div>
+      </div>
+      <div class="mini-stages" style="margin-top:10px;">
+        <span class="d done"></span><span class="sep"></span><span class="d done"></span><span class="sep"></span><span class="d done"></span><span class="sep"></span>
+        <span class="d active"></span>
+        <span style="margin:0 6px;font-family:JetBrains Mono;font-size:11px;color:#b08a14;">⚑</span>
+        <span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Gate visible from a distance.</b>
+      <span class="sub">Not a surprise. Yellow flag in the rail.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">finish 4</span></div>
+
+  <!-- 02 gate opens -->
+  <div class="sb-frame">
+    <div class="sb-num">02</div>
+    <div class="sb-time">enter gate</div>
+    <div class="sb-anno bottom">
+      <span class="tag">principle 5</span>
+      <b>Loud, but kind.</b><br>
+      Yellow background, not red. This is a checkpoint, not a violation.
+    </div>
+    <div class="sb-screen" style="background:rgba(255,229,107,0.04);">
+      <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:2px;">
+        Define <span style="font-size:11px;color:var(--ob-text-faint);font-family:JetBrains Mono;">→ Build</span>
+      </div>
+      <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);margin-bottom:10px;">
+        Before you build, let's check the thinking is sound.
+      </div>
+      <div class="mini-list" style="font-size:11px;line-height:1.9;">
+        <div class="it"><span class="ic" style="background:#b08a14;border-color:#b08a14;"></span>Vision is one paragraph, not a wall</div>
+        <div class="it"><span class="ic" style="background:#b08a14;border-color:#b08a14;"></span>4+ rules, all testable</div>
+        <div class="it"><span class="ic" style="background:#b08a14;border-color:#b08a14;"></span>0 open questions</div>
+        <div class="it"><span class="ic" style="background:#b08a14;border-color:#b08a14;"></span>"How it works" links to a decision note</div>
+        <div class="it"><span class="ic" style="background:#b08a14;border-color:#b08a14;"></span>House rules respected</div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Five items. Plain English.</b>
+      <span class="sub">Not "EARS compliance." Not "ADR linkage." Just the questions.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">check</span></div>
+
+  <!-- 03 evaluating -->
+  <div class="sb-frame">
+    <div class="sb-num">03</div>
+    <div class="sb-time">auto-check</div>
+    <div class="sb-anno top">
+      <span class="tag">deterministic</span>
+      <b>The plugin does the boring part.</b><br>
+      Counts rules, parses frontmatter, finds links. No LLM. No judgement calls.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);text-transform:uppercase;margin-bottom:6px;">running checks...</div>
+      <div class="mini-list" style="font-size:11px;line-height:1.9;">
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>Vision · 1 paragraph ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>5 rules · all testable ✓</div>
+        <div class="it"><span class="ic" style="background:#c66;border-color:#c66;"></span><span style="color:#c66;">2 open questions found</span></div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>1 decision note linked ✓</div>
+        <div class="it"><span class="ic" style="background:#c66;border-color:#c66;"></span><span style="color:#c66;">House rule "translatable strings" not addressed</span></div>
+      </div>
+      <div style="position:absolute;bottom:10px;left:14px;right:14px;font-family:JetBrains Mono;font-size:10px;color:#c66;">
+        2 of 5 failed · gate cannot pass
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>3 pass, 2 fail.</b>
+      <span class="sub">Specific. Mechanical. No vibes.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">help</span></div>
+
+  <!-- 04 fix list -->
+  <div class="sb-frame">
+    <div class="sb-num">04</div>
+    <div class="sb-time">show me how</div>
+    <div class="sb-anno bottom">
+      <span class="tag">DR-003 · plain English</span>
+      <b>Failures are tasks, not errors.</b><br>
+      "Resolve 2 questions" not "EARS-001 violation."
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:Inter;font-size:11.5px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">2 things blocking the gate</div>
+
+      <div class="sk-box thin" style="padding:7px 9px;margin-bottom:6px;">
+        <div style="font-family:Inter;font-size:11px;color:var(--ob-text);font-weight:600;margin-bottom:2px;">A · Resolve 2 open questions</div>
+        <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);line-height:1.5;">
+          They're in <code style="font-size:10px;">02-questions.md</code>. Pick an answer, mark <code style="font-size:10px;">!</code> next to it.
+        </div>
+        <button class="sk-btn" style="font-size:10.5px;padding:2px 8px;margin-top:4px;">Open file</button>
+      </div>
+
+      <div class="sk-box thin" style="padding:7px 9px;">
+        <div style="font-family:Inter;font-size:11px;color:var(--ob-text);font-weight:600;margin-bottom:2px;">B · Address translatable strings</div>
+        <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);line-height:1.5;">
+          House rule says all UI copy must have a translation key. Add a <i>Strings</i> section to <code style="font-size:10px;">04-how-it-works.md</code>.
+        </div>
+        <button class="sk-btn" style="font-size:10.5px;padding:2px 8px;margin-top:4px;">Add section</button>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Each failure has a one-click fix.</b>
+      <span class="sub">Or skip-with-reason. Never just a wall.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">fix</span></div>
+
+  <!-- 05 retry -->
+  <div class="sb-frame">
+    <div class="sb-num">05</div>
+    <div class="sb-time">re-run</div>
+    <div class="sb-anno top">
+      <span class="tag">UX texture</span>
+      <b>Re-run is one click.</b><br>
+      Auto-runs on file save, but the manual button is there for confidence.
+    </div>
+    <div class="sb-screen">
+      <div class="mini-list" style="font-size:11px;line-height:1.9;">
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>Vision · 1 paragraph ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>5 rules · all testable ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>0 open questions ✓ <span style="color:var(--ob-text-faint);font-size:10px;">(was 2)</span></div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>Decision note linked ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>House rules respected ✓ <span style="color:var(--ob-text-faint);font-size:10px;">(strings added)</span></div>
+      </div>
+      <div style="position:absolute;bottom:10px;left:14px;right:14px;font-family:JetBrains Mono;font-size:10px;color:var(--lane-define,#4ad196);">
+        all checks pass · gate ready to advance
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>5 of 5 pass.</b>
+      <span class="sub">"Was 2" deltas tell you what changed.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">advance</span></div>
+
+  <!-- 06 advance -->
+  <div class="sb-frame">
+    <div class="sb-num">06</div>
+    <div class="sb-time">cross gate</div>
+    <div class="sb-anno bottom">
+      <span class="tag">moment of weight</span>
+      <b>This one gets ceremony.</b><br>
+      Not confetti — but a slow cross-fade and a lane-change indicator. The user just made a decision.
+    </div>
+    <div class="sb-screen" style="background:linear-gradient(to right, rgba(74,209,150,0.06), rgba(31,61,110,0.08));">
+      <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">
+        Define <span style="color:var(--lane-define,#4ad196);">✓</span> → <span style="color:#1f3d6e;">Build</span>
+      </div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.5;margin-bottom:10px;">
+        Define lane closed. You said: <i>this is what we're building, and these are the rules.</i> Now the question changes from <b>"what?"</b> to <b>"how?"</b>
+      </div>
+      <div style="display:flex;gap:5px;align-items:center;">
+        <button class="sk-btn primary" style="font-size:11px;padding:3px 10px;">Cross the gate</button>
+        <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);margin-left:6px;">⌘ ⏎ · undo for 24h</span>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>The lane changes.</b>
+      <span class="sub">"What" → "How." Marked, but not celebrated.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">land</span></div>
+
+  <!-- 07 in build -->
+  <div class="sb-frame">
+    <div class="sb-num">07</div>
+    <div class="sb-time">in Build</div>
+    <div class="sb-anno top">
+      <span class="tag">post-state</span>
+      <b>Cockpit recolors.</b><br>
+      Subtle: lane accent shifts from green to blue. Same layout, new vocabulary in the coach.
+    </div>
+    <div class="sb-screen">
+      <div style="background:rgba(127,109,242,0.1);border:1px solid var(--accent);border-radius:4px;padding:6px 8px;display:flex;align-items:center;gap:6px;font-size:10.5px;font-family:Inter;color:var(--ob-text);margin-bottom:8px;">
+        <span>↶</span>
+        <span><b>Crossed gate:</b> Define → Build</span>
+        <span style="margin-left:auto;color:var(--accent);">undo (24h)</span>
+      </div>
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:6px;">step 5 · check the design <span class="sk-pill build" style="font-size:9px;padding:0 5px;margin-left:4px;">build</span></div>
+      <div class="sk-box thin" style="padding:7px 9px;border-color:#1f3d6e;background:rgba(31,61,110,0.06);">
+        <div style="font-family:Inter;font-size:11px;font-weight:700;color:var(--ob-text);">✶ Coach · build mode</div>
+        <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);line-height:1.45;margin-top:2px;">
+          Now we figure out <i>how</i>. Sketch the design and link it here.
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Same cockpit, new lane.</b>
+      <span class="sub">Calm transition. Undo still armed.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ─────── special cases ─────── -->
+<div class="sb-section-head">
+  <div class="meta">edge cases</div>
+  <h2 style="font-size:22px;">When the gate is more than a checklist</h2>
+</div>
+
+<div style="padding:8px 32px 36px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;">
+
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">A</div>
+    <div class="sb-time">override</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">"I know what I'm doing"</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        Power users can override a failing gate by writing a one-line reason. The override is logged in the feature's <code style="font-size:10px;">_meta.md</code> and visible to teammates.
+      </div>
+      <div class="mini-input" style="font-size:10.5px;border-color:var(--accent);">Skipping translation — internal-only feature</div>
+      <div style="margin-top:6px;font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">marked ⚠ on the rail · audit-able</div>
+    </div>
+    <div class="sb-caption">
+      <b>Always escapable.</b>
+      <span class="sub">With a reason. Never silent.</span>
+    </div>
+  </div>
+
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">B</div>
+    <div class="sb-time">team gate</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Two-person gate</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;">
+        In team mode, the Define→Build gate requires a peer-review tick from another committer. The PR template carries the gate checklist; merging the PR auto-passes the gate.
+      </div>
+      <div style="margin-top:8px;font-family:JetBrains Mono;font-size:10px;color:var(--ob-text);background:var(--ob-bg-2);padding:6px 8px;border-radius:3px;">
+        ✓ self<br>
+        ☐ peer (waiting on @arch-lead)
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Ceremony scales with team.</b>
+      <span class="sub">Solo: instant. Team: PR review.</span>
+    </div>
+  </div>
+
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">C</div>
+    <div class="sb-time">retro</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Failed in production</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;">
+        If a feature ships and bugs happen, you can re-open the gate. The cockpit logs <i>which</i> gate item, in retrospect, should've caught it. This feeds back into the project's house rules.
+      </div>
+      <div style="margin-top:8px;font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">
+        learning loop · gates evolve
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Gates aren't static.</b>
+      <span class="sub">Real bugs become future checks.</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─────── design notes ─────── -->
+<div class="sb-section-head" style="padding-top:8px;">
+  <div class="meta">design rationale for this flow</div>
+  <h2 style="font-size:22px;">Why we made these choices</h2>
+</div>
+
+<div style="padding:8px 32px 60px;display:grid;grid-template-columns:repeat(2,1fr);gap:18px;">
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Yellow, not red</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Red says "you broke something." Yellow says "let's pause." The user hasn't done anything wrong — they've reached a checkpoint. Tone matters.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Auto-check, not manual</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">The plugin counts rules and parses links. The user never has to "press check." Gates are continuously-evaluated; the button just lets you advance once they pass.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Each failure has a fix-button</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">A blocked user is a frustrated user. Every failure must answer "and what do I do?" — open a file, add a section, mark a question. Never just a "your gate failed" wall.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Gate ceremony &gt; hand-off ceremony</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">A hand-off is a step. A gate is a lane change. The cross-fade is slower (400ms vs 250ms) and the cockpit recolors. Reserved emphasis where it matters.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;grid-column:span 2;border-color:var(--lane-define,#4ad196);">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <div style="font-family:JetBrains Mono;font-size:10px;color:var(--lane-define,#4ad196);text-transform:uppercase;">decision · OQ-3 resolved</div>
+      <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">2026-05-01 · accepted</span>
+    </div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Auto-pass for solo; explicit sign-off for team</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;margin-bottom:8px;"><b>Choice:</b> Gate passes automatically when all checklist items are ticked, with the "Cross the gate" button as the user's deliberate intent-signal. Solo builders get no extra friction. In team mode, the Define→Build gate additionally requires a peer-review tick (see edge case B in this flow) — the PR merge is the sign-off.<br><br><b>Why auto-pass for solo:</b> A solo builder is already accountable to themselves. Adding a mandatory sign-off step on a gate they alone control adds ceremony without safety. The explicit button click is enough intent-signal. If users fly through gates without reading, the answer is better gate copy — not a second confirmation.<br><br><b>Why explicit for team:</b> A gate crossing that affects a collaborator's work needs a human witness. The PR template carries the checklist; merging is the sign-off. No extra UI required — it piggybacks on an existing ritual.</p>
+    <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--lane-define,#4ad196);">→ decisions/gate-auto-pass-vs-signoff.md · linked from _meta.md</div>
+  </div>
+
+</div>
+
+</body></html>

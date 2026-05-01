@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>01 · The product — Specorator</title>
+<link rel="stylesheet" href="nav.css">
+</head>
+<body>
+
+<nav class="top-nav">
+  <a class="nav-back" href="../index.html">← index</a>
+  <span class="nav-sep">/</span>
+  <span class="nav-title">01 · The product</span>
+  <span class="nav-spacer"></span>
+  <a class="nav-prev" href="00-rationale.html">← 00 Rationale</a>
+  <a class="nav-next" href="02-states.html">02 States →</a>
+</nav>
+
+<div class="sec-header">
+  <div class="sec-num">section 01</div>
+  <div class="sec-title">The product</div>
+  <p class="sec-subtitle">First impressions and four layout directions. Walk: Onboarding → then compare Cockpit A/B/C/D to pick a direction → Walkthrough shows the in-product first-feature tour.</p>
+</div>
+
+<div class="artboard-list">
+
+  <div class="group-label">Onboarding</div>
+
+  <div class="ab-card">
+    <div class="ab-card-header">
+      <span class="ab-label"><b>1a · Onboarding</b> — first run, plain-language welcome</span>
+      <button class="ab-expand" onclick="openLightbox('../artboards/onboarding.html', 'onboarding', 1280, 800)">⤢ open full</button>
+    </div>
+    <div class="ab-iframe-wrap" style="height:600px;">
+      <iframe src="../artboards/onboarding.html" width="1280" height="800" style="width:1280px;height:800px;"></iframe>
+    </div>
+  </div>
+
+  <div class="group-label" style="margin-top:24px;">Cockpit layout directions</div>
+
+  <div class="ab-card">
+    <div class="ab-card-header">
+      <span class="ab-label"><b>1b · Cockpit A</b> — three-pane, context-aware (v1 default)</span>
+      <button class="ab-expand" onclick="openLightbox('../artboards/cockpit-A.html', 'cockpit-A', 1280, 800)">⤢ open full</button>
+    </div>
+    <div class="ab-iframe-wrap" style="height:600px;">
+      <iframe src="../artboards/cockpit-A.html" width="1280" height="800" style="width:1280px;height:800px;"></iframe>
+    </div>
+  </div>
+
+  <div class="ab-card">
+    <div class="ab-card-header">
+      <span class="ab-label"><b>1c · Cockpit B</b> — vertical rail, focused stage editor</span>
+      <button class="ab-expand" onclick="openLightbox('../artboards/cockpit-B.html', 'cockpit-B', 1280, 800)">⤢ open full</button>
+    </div>
+    <div class="ab-iframe-wrap" style="height:600px;">
+      <iframe src="../artboards/cockpit-B.html" width="1280" height="800" style="width:1280px;height:800px;"></iframe>
+    </div>
+  </div>
+
+  <div class="ab-card">
+    <div class="ab-card-header">
+      <span class="ab-label"><b>1d · Cockpit C</b> — stages-as-board, drag to hand-off</span>
+      <button class="ab-expand" onclick="openLightbox('../artboards/cockpit-C.html', 'cockpit-C', 1280, 800)">⤢ open full</button>
+    </div>
+    <div class="ab-iframe-wrap" style="height:600px;">
+      <iframe src="../artboards/cockpit-C.html" width="1280" height="800" style="width:1280px;height:800px;"></iframe>
+    </div>
+  </div>
+
+  <div class="ab-card">
+    <div class="ab-card-header">
+      <span class="ab-label"><b>1e · Cockpit D</b> — feed view, what needs you</span>
+      <button class="ab-expand" onclick="openLightbox('../artboards/cockpit-D.html', 'cockpit-D', 1280, 800)">⤢ open full</button>
+    </div>
+    <div class="ab-iframe-wrap" style="height:600px;">
+      <iframe src="../artboards/cockpit-D.html" width="1280" height="800" style="width:1280px;height:800px;"></iframe>
+    </div>
+  </div>
+
+  <div class="group-label" style="margin-top:24px;">First-feature tour</div>
+
+  <div class="ab-card">
+    <div class="ab-card-header">
+      <span class="ab-label"><b>1f · Walkthrough</b> — spotlight tour of the cockpit</span>
+      <button class="ab-expand" onclick="openLightbox('../artboards/walkthrough.html', 'walkthrough', 1280, 800)">⤢ open full</button>
+    </div>
+    <div class="ab-iframe-wrap" style="height:600px;">
+      <iframe src="../artboards/walkthrough.html" width="1280" height="800" style="width:1280px;height:800px;"></iframe>
+    </div>
+  </div>
+
+</div>
+
+<footer class="site-footer">
+  <span>Specorator wireframes · section 01 of 07</span>
+  <a href="02-states.html" style="color:var(--accent);text-decoration:none;">02 Edge cases →</a>
+</footer>
+
+<!-- Lightbox overlay -->
+<div class="lightbox" id="lightbox">
+  <div class="lightbox-bar">
+    <span class="lightbox-title" id="lightbox-title"></span>
+    <button class="lightbox-close" onclick="closeLightbox()">✕ close  [esc]</button>
+  </div>
+  <div class="lightbox-body" id="lightbox-body"></div>
+</div>
+<script>
+function openLightbox(src, title, w, h) {
+  const lb = document.getElementById('lightbox');
+  const body = document.getElementById('lightbox-body');
+  document.getElementById('lightbox-title').textContent = title;
+  body.innerHTML = '<iframe src="' + src + '" width="' + w + '" height="' + h + '" style="width:' + w + 'px;height:' + h + 'px;"></iframe>';
+  lb.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  const lb = document.getElementById('lightbox');
+  lb.classList.remove('open');
+  document.getElementById('lightbox-body').innerHTML = '';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeLightbox(); });
+</script>
+</body>
+</html>

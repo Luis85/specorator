@@ -1,0 +1,905 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Flow · team mode</title>
+<link rel="stylesheet" href="../wireframes.css">
+<style>
+  body { margin: 0; background: var(--ob-bg); }
+  .scroll { width: 100%; overflow-x: auto; padding: 80px 0 60px; }
+  .sub-head {
+    padding: 48px 32px 8px;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+  }
+  .sub-head .sub-label {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    color: var(--ob-text-faint);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+  }
+  .sub-head h3 {
+    font-family: var(--sketch);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--ob-text);
+    margin: 0;
+  }
+  .sub-head-inner { display: flex; flex-direction: column; }
+  .sub-head p {
+    font-family: "Inter", sans-serif;
+    font-size: 12px;
+    color: var(--ob-text-mute);
+    margin: 4px 0 0;
+    line-height: 1.5;
+    max-width: 640px;
+  }
+
+  /* team-specific colours */
+  :root {
+    --team-teal: #3ec9b0;
+    --team-teal-soft: rgba(62,201,176,0.10);
+    --team-amber: #c9a227;
+    --team-amber-soft: rgba(201,162,39,0.10);
+    --peer-color: #7fa8e0;
+    --peer-soft: rgba(127,168,224,0.10);
+  }
+
+  .peer-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--peer-soft);
+    border: 1px solid var(--peer-color);
+    border-radius: 3px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: var(--peer-color);
+    padding: 1px 7px;
+  }
+
+  .sync-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--team-teal-soft);
+    border: 1px solid var(--team-teal);
+    border-radius: 3px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: var(--team-teal);
+    padding: 2px 8px;
+  }
+
+  .conflict-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(204,102,102,0.10);
+    border: 1px solid #c66;
+    border-radius: 3px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: #c66;
+    padding: 2px 8px;
+  }
+
+  .avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    font-family: "Inter", sans-serif;
+    font-size: 9px;
+    font-weight: 700;
+    flex: 0 0 auto;
+  }
+  .avatar.self  { background: rgba(127,109,242,0.25); color: var(--accent); border: 1px solid var(--accent); }
+  .avatar.peer  { background: var(--peer-soft); color: var(--peer-color); border: 1px solid var(--peer-color); }
+  .avatar.peer2 { background: rgba(62,201,176,0.15); color: var(--team-teal); border: 1px solid var(--team-teal); }
+
+  .pr-block {
+    background: var(--ob-bg-2);
+    border: 1px solid var(--ob-line);
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: var(--ob-text-mute);
+    line-height: 1.7;
+  }
+  .pr-block .pr-title {
+    font-family: "Inter", sans-serif;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--ob-text);
+    margin-bottom: 4px;
+  }
+  .pr-block .pr-check { color: var(--lane-define, #4ad196); }
+  .pr-block .pr-open  { color: var(--team-amber); }
+  .pr-block .pr-head  { color: var(--ob-text-faint); font-size: 9.5px; text-transform: uppercase; letter-spacing:.06em; margin-bottom:3px; }
+
+  .presence-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--team-teal);
+    margin-right: 4px;
+  }
+  .presence-dot.away { background: var(--team-amber); }
+
+  .oq-pill {
+    display: inline-block;
+    background: rgba(255,229,107,0.12);
+    border: 1px solid #b08a14;
+    border-radius: 3px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: #c9a227;
+    padding: 1px 6px;
+  }
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="sb-section-head">
+  <div class="meta">flow · OQ-5 resolved · team mode without a server</div>
+  <h2>Team mode — shared vault, no central server</h2>
+  <p>Specorator has no backend. Team mode is Obsidian Sync (or Git) plus conventions. This flow shows what team mode actually looks and feels like, end-to-end: setup, daily use, gate sign-off, peer OQ resolution, and sync conflicts. Four acts.</p>
+</div>
+
+<!-- ═══════════════════════════════════
+     ACT 1 · SETUP
+═══════════════════════════════════ -->
+<div class="sub-head">
+  <div class="sub-head-inner">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span class="sub-label">act 1 of 4</span>
+      <h3>Setup — enabling team mode in a shared vault</h3>
+    </div>
+    <p>Team mode is a one-time settings toggle per vault. It unlocks peer sign-off on gates, presence indicators, and committer attribution. Requires a shared vault already syncing (Obsidian Sync, Git, or Dropbox).</p>
+  </div>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 2800px;">
+
+  <!-- S1 solo vault today -->
+  <div class="sb-frame">
+    <div class="sb-num">S1</div>
+    <div class="sb-time">solo vault · today</div>
+    <div class="sb-anno top">
+      <span class="tag">starting point</span>
+      <b>Everything built so far is solo.</b><br>
+      Solo mode = default. No team UI anywhere. Clean.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">cockpit · step 6 · check the design · build</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-faint);display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+        <div class="avatar self">ME</div>
+        solo vault · no teammates
+      </div>
+      <div class="mini-list" style="font-size:10.5px;line-height:1.7;">
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>Gate · Define ✓</div>
+        <div class="it"><span class="ic" style="background:#b08a14;border-color:#b08a14;"></span>Gate · Build — in progress</div>
+      </div>
+      <div style="margin-top:10px;font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">⚙ settings → team mode: off</div>
+    </div>
+    <div class="sb-caption">
+      <b>Default: solo.</b>
+      <span class="sub">No peer UI. Same cockpit the user already knows.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">open settings</span></div>
+
+  <!-- S2 team toggle -->
+  <div class="sb-frame">
+    <div class="sb-num">S2</div>
+    <div class="sb-time">settings · team mode</div>
+    <div class="sb-anno bottom">
+      <span class="tag">settings · vault</span>
+      <b>One toggle. One field.</b><br>
+      Enable team mode, list committers. That's it. No accounts, no invites, no server.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Settings · Vault</div>
+
+      <div style="display:flex;flex-direction:column;gap:7px;">
+        <div style="background:var(--ob-bg-2);border:1px solid var(--team-teal);border-radius:4px;padding:8px 10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <div style="font-family:Inter;font-size:11.5px;font-weight:700;color:var(--ob-text);">Team mode</div>
+            <div style="background:var(--team-teal);border-radius:2px;font-family:JetBrains Mono;font-size:9px;color:#000;font-weight:700;padding:1px 7px;">ON</div>
+          </div>
+          <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);line-height:1.45;">Enables peer sign-off on Define→Build gate, committer attribution, and presence indicators. Vault must already be shared via Obsidian Sync or Git.</div>
+        </div>
+
+        <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-radius:4px;padding:8px 10px;">
+          <div style="font-family:Inter;font-size:11px;font-weight:600;color:var(--ob-text);margin-bottom:5px;">Committers</div>
+          <div style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text);line-height:1.8;">
+            <div style="color:var(--accent);">@you</div>
+            <div style="color:var(--peer-color);">@arch-lead</div>
+            <div style="color:var(--team-teal);">@pm-sara</div>
+          </div>
+          <div style="font-family:Inter;font-size:10px;color:var(--ob-text-faint);margin-top:4px;">one handle per line · matches git log or Obsidian Sync author</div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Committers, not accounts.</b>
+      <span class="sub">Handles match git / Obsidian Sync author. No onboarding for teammates.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">save</span></div>
+
+  <!-- S3 cockpit with presence -->
+  <div class="sb-frame">
+    <div class="sb-num">S3</div>
+    <div class="sb-time">cockpit · team on</div>
+    <div class="sb-anno top">
+      <span class="tag">new UI · minimal</span>
+      <b>Three things appear. Nothing else changes.</b><br>
+      Presence strip, attribution on steps, peer sign-off slot on gate items.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:6px;">step 6 · check the design · build</div>
+
+      <!-- presence strip -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:5px 7px;background:var(--ob-bg-2);border-radius:4px;border:1px solid var(--ob-line);">
+        <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">now in vault:</span>
+        <div class="avatar self">ME</div>
+        <div class="avatar peer">AL</div>
+        <span style="font-family:JetBrains Mono;font-size:9px;color:var(--peer-color);">@arch-lead · 02-vision.md</span>
+      </div>
+
+      <!-- gate status -->
+      <div style="font-family:Inter;font-size:10px;font-weight:600;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;">Gate · Build</div>
+      <div class="mini-list" style="font-size:10.5px;line-height:1.7;">
+        <div class="it"><span class="ic" style="background:var(--ob-text-mute);border-color:var(--ob-text-mute);opacity:.4;"></span>Design linked</div>
+        <div class="it"><span class="ic" style="background:var(--ob-text-mute);border-color:var(--ob-text-mute);opacity:.4;"></span>Test plan exists</div>
+        <div class="it" style="border-left:2px solid var(--peer-color);padding-left:5px;"><span class="ic" style="background:var(--ob-text-mute);border-color:var(--ob-text-mute);opacity:.4;"></span>Peer sign-off <span style="color:var(--peer-color);font-size:9.5px;font-family:JetBrains Mono;">(new · team mode)</span></div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Three new things, max.</b>
+      <span class="sub">Presence strip · attribution · peer sign-off slot on gate.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">daily work</span></div>
+
+  <!-- S4 attribution -->
+  <div class="sb-frame">
+    <div class="sb-num">S4</div>
+    <div class="sb-time">attribution · on save</div>
+    <div class="sb-anno bottom">
+      <span class="tag">DR-006 · markdown-native</span>
+      <b>Every write carries a committer tag.</b><br>
+      In team mode, resolved questions and crossed gates log <code style="font-size:9px;">&lt;!-- @handle --&gt;</code> inline. No separate audit log.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:13px;color:var(--ob-text);margin-bottom:6px;">magic-link-auth · 03-rules.md</div>
+      <div class="mini-window">
+        <div class="head">03-rules.md</div>
+        <div style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text);line-height:1.75;">
+          - WHEN link expired THEN show re-send<br>
+          <span style="color:var(--lane-define,#4ad196);">! Links expire after 15 min</span><br>
+          <span style="color:var(--ob-text-faint);">  &lt;!-- @arch-lead · 2026-04-30 --&gt;</span>
+        </div>
+      </div>
+      <div style="margin-top:8px;display:flex;align-items:center;gap:6px;">
+        <div class="avatar peer">AL</div>
+        <span style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);">@arch-lead resolved this OQ</span>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Attribution in-file.</b>
+      <span class="sub">Readable in any editor. No server. No separate log.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════
+     ACT 2 · GATE SIGN-OFF
+═══════════════════════════════════ -->
+<div class="sub-head">
+  <div class="sub-head-inner">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span class="sub-label">act 2 of 4</span>
+      <h3>Gate sign-off — the PR as the ceremony</h3>
+    </div>
+    <p>In team mode, the Define→Build gate requires a peer tick before it can pass. The mechanic: a PR whose template carries the gate checklist. Merging the PR is the sign-off. No extra UI invented — an existing ritual does the work.</p>
+  </div>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 3000px;">
+
+  <!-- G1 gate reached, self passing -->
+  <div class="sb-frame">
+    <div class="sb-num">G1</div>
+    <div class="sb-time">define→build gate</div>
+    <div class="sb-anno top">
+      <span class="tag">OQ-3 resolved · team path</span>
+      <b>Self checks pass. Peer sign-off pending.</b><br>
+      Everything ticks green on auto-check. The only thing stopping advancement is the team gate item.
+    </div>
+    <div class="sb-screen" style="background:rgba(255,229,107,0.04);">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:6px;">Gate · Define → Build</div>
+      <div class="mini-list" style="font-size:10.5px;line-height:1.75;">
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>Vision · 1 paragraph ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>5 rules · all testable ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>0 open questions ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>Decision note linked ✓</div>
+        <div class="it" style="border-left:2px solid var(--peer-color);padding-left:6px;background:var(--peer-soft);">
+          <span class="ic" style="border-color:#b08a14;"></span>
+          <span>Peer sign-off <span style="color:var(--peer-color);font-family:JetBrains Mono;font-size:9px;">waiting</span></span>
+        </div>
+      </div>
+      <div style="position:absolute;bottom:10px;left:14px;right:14px;font-family:JetBrains Mono;font-size:10px;color:#b08a14;">
+        4 of 5 pass · waiting on peer
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>4/5 pass, gate held.</b>
+      <span class="sub">Only peer sign-off blocks. System is honest about what's missing.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">request PR</span></div>
+
+  <!-- G2 PR template -->
+  <div class="sb-frame">
+    <div class="sb-num">G2</div>
+    <div class="sb-time">open PR</div>
+    <div class="sb-anno bottom">
+      <span class="tag">existing ritual</span>
+      <b>Specorator generates a PR description.</b><br>
+      One button → opens a pre-filled PR in the browser (or copies a markdown block for Git hosts without API access).
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:Inter;font-size:11px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Specorator → PR template</div>
+      <div class="pr-block">
+        <div class="pr-title">magic-link-auth · Define → Build gate</div>
+        <div class="pr-head">Checklist (auto-generated)</div>
+        <div class="pr-check">✓ Vision: 1 paragraph</div>
+        <div class="pr-check">✓ 5 EARS rules, all testable</div>
+        <div class="pr-check">✓ 0 open questions</div>
+        <div class="pr-check">✓ Decision note: decisions/link-expiry.md</div>
+        <div class="pr-open">☐ Peer sign-off</div>
+        <div style="margin-top:6px;color:var(--ob-text-faint);font-size:9.5px;">reviewer: @arch-lead</div>
+      </div>
+      <button class="sk-btn primary" style="font-size:10.5px;padding:3px 10px;margin-top:8px;">Open in browser →</button>
+    </div>
+    <div class="sb-caption">
+      <b>PR template: pre-filled.</b>
+      <span class="sub">Checklist matches the gate. Reviewer suggested from committers list.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">peer reviews</span></div>
+
+  <!-- G3 peer in vault / async -->
+  <div class="sb-frame">
+    <div class="sb-num">G3</div>
+    <div class="sb-time">peer · async review</div>
+    <div class="sb-anno top">
+      <span class="tag">async-first</span>
+      <b>Peer reviews the spec files directly.</b><br>
+      No meeting required. @arch-lead opens the feature folder in their Obsidian and reads. Comments go in a <code style="font-size:9px;">_review.md</code> file by convention.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:13px;color:var(--ob-text);margin-bottom:6px;">@arch-lead's view</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+        <div class="avatar peer">AL</div>
+        <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text);">reading magic-link-auth/</div>
+        <span class="presence-dot"></span>
+      </div>
+      <div class="mini-window" style="margin-bottom:6px;">
+        <div class="head">_review.md (by @arch-lead)</div>
+        <div style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text);line-height:1.75;">
+          Vision: clear ✓<br>
+          Rules: expiry rule confirmed ✓<br>
+          <span style="color:#b08a14;">? Is 15 min too short for mobile users?</span>
+        </div>
+      </div>
+      <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);">
+        Peer adds a ? in _review.md → surfaces in your cockpit as a new OQ
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Review is a file, not a form.</b>
+      <span class="sub">? in _review.md → tracked OQ for feature owner. Async, offline, no account.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">merge PR</span></div>
+
+  <!-- G4 PR merged → gate passes -->
+  <div class="sb-frame">
+    <div class="sb-num">G4</div>
+    <div class="sb-time">merge = sign-off</div>
+    <div class="sb-anno bottom">
+      <span class="tag">zero extra UI</span>
+      <b>Merging the PR is the sign-off act.</b><br>
+      Specorator watches for a commit from a listed committer that touches <code style="font-size:9px;">_meta.md</code>. That commit = peer sign-off. Gate passes.
+    </div>
+    <div class="sb-screen" style="background:linear-gradient(to right,rgba(62,201,176,0.05),rgba(74,209,150,0.04));">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:6px;">
+        Gate passed <span style="color:var(--team-teal);">✓</span>
+      </div>
+      <div class="mini-list" style="font-size:10.5px;line-height:1.75;">
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>Self checks ✓</div>
+        <div class="it"><span class="ic" style="background:var(--team-teal);border-color:var(--team-teal);"></span>Peer sign-off ✓ <span style="color:var(--ob-text-faint);font-family:JetBrains Mono;font-size:9px;">@arch-lead · merged</span></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+        <button class="sk-btn primary" style="font-size:11px;padding:3px 10px;">Cross the gate ⌘⏎</button>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Merge unlocks the gate.</b>
+      <span class="sub">@arch-lead's commit touches _meta.md → sign-off detected automatically.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">cross</span></div>
+
+  <!-- G5 in build -->
+  <div class="sb-frame">
+    <div class="sb-num">G5</div>
+    <div class="sb-time">in Build · with team</div>
+    <div class="sb-anno top">
+      <span class="tag">post-gate</span>
+      <b>Same cockpit. Presence strip persists.</b><br>
+      Attribution on all subsequent step hand-offs. Who did what stays in the file, not a separate log.
+    </div>
+    <div class="sb-screen">
+      <div class="banner-undo" style="font-size:10.5px;margin-bottom:8px;">
+        <span>↶</span> <span>Crossed gate: Define → Build</span> <span style="margin-left:auto;color:var(--accent);">undo (24h)</span>
+      </div>
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:6px;">step 5 · check design · <span class="sk-pill build" style="font-size:9px;padding:0 5px;">build</span></div>
+      <div style="display:flex;align-items:center;gap:8px;padding:4px 7px;background:var(--ob-bg-2);border-radius:4px;border:1px solid var(--ob-line);font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">
+        <div class="avatar self" style="width:16px;height:16px;font-size:8px;">ME</div>
+        <div class="avatar peer" style="width:16px;height:16px;font-size:8px;">AL</div>
+        <span>2 in vault</span>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Build starts with team context.</b>
+      <span class="sub">Gate history in _meta.md. Presence visible. Attribution on.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════
+     ACT 3 · PEER OQ RESOLUTION
+═══════════════════════════════════ -->
+<div class="sub-head">
+  <div class="sub-head-inner">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span class="sub-label">act 3 of 4</span>
+      <h3>Peer OQ resolution — async, no meeting</h3>
+    </div>
+    <p>A teammate can resolve your open question by changing <code>?</code> → <code>!</code> in the spec file and adding their handle. On your next sync, the cockpit count drops and attribution is shown. They can also escalate a question they can't answer by tagging you.</p>
+  </div>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 2600px;">
+
+  <!-- P1 peer sees OQ in their cockpit -->
+  <div class="sb-frame">
+    <div class="sb-num">P1</div>
+    <div class="sb-time">peer · their cockpit</div>
+    <div class="sb-anno top">
+      <span class="tag">shared vault · same OQs</span>
+      <b>Teammates see all open questions.</b><br>
+      In team mode, the cockpit OQ panel shows OQs for any feature the teammate is watching. Unfamiliar ones are greyed — still readable, just not their default focus.
+    </div>
+    <div class="sb-screen">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+        <div class="avatar peer">AL</div>
+        <span style="font-family:var(--sketch);font-size:13px;color:var(--ob-text);">@arch-lead's cockpit</span>
+      </div>
+      <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;display:flex;align-items:center;gap:6px;">
+        Open questions <span class="oq-pill">? 1</span>
+      </div>
+      <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-left:3px solid #b08a14;border-radius:3px;padding:7px 9px;">
+        <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text);margin-bottom:2px;line-height:1.4;">Is 15 min expiry too short for mobile users?</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:3px;">
+          <div class="avatar self" style="width:15px;height:15px;font-size:8px;">ME</div>
+          <span style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">magic-link-auth · 03-rules.md · 2 days</span>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Peer can see and act on OQs.</b>
+      <span class="sub">Originator shown. Age shown. Can resolve or tag owner.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">peer knows answer</span></div>
+
+  <!-- P2 peer resolves -->
+  <div class="sb-frame">
+    <div class="sb-num">P2</div>
+    <div class="sb-time">peer resolves · inline</div>
+    <div class="sb-anno bottom">
+      <span class="tag">same mechanic · one extra step</span>
+      <b>? → ! · same as solo, plus handle.</b><br>
+      Peer edits the file, adds their handle in a comment. The convention is the protocol.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:13px;color:var(--ob-text);margin-bottom:4px;">@arch-lead editing</div>
+      <div class="mini-window">
+        <div class="head">03-rules.md · line 6</div>
+        <div style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text);line-height:1.75;">
+          <span style="color:#b08a14;">? Is 15 min too short for mobile users?</span><br>
+          <span style="color:var(--lane-define,#4ad196);">! 15 min is fine — mobile re-send is 1 tap.</span><br>
+          <span style="color:var(--ob-text-faint);">  &lt;!-- @arch-lead · 2026-05-01 --&gt;</span><span style="color:var(--accent);">▏</span>
+        </div>
+      </div>
+      <div style="margin-top:8px;font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);">save → syncs to feature owner</div>
+    </div>
+    <div class="sb-caption">
+      <b>Peer resolves in-file.</b>
+      <span class="sub">Handle + date inline. No form, no modal, no platform.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">sync lands</span></div>
+
+  <!-- P3 owner cockpit updates -->
+  <div class="sb-frame">
+    <div class="sb-num">P3</div>
+    <div class="sb-time">owner · sync received</div>
+    <div class="sb-anno top">
+      <span class="tag">zero friction</span>
+      <b>Counter drops. Attribution shown.</b><br>
+      On next Obsidian Sync pulse, the OQ count drops and the resolver's handle appears next to the resolved item.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:13px;color:var(--ob-text);margin-bottom:6px;">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;display:flex;align-items:center;gap:6px;">
+        Open questions <span style="background:rgba(74,209,150,0.1);border:1px solid var(--lane-define,#4ad196);border-radius:3px;font-family:JetBrains Mono;font-size:10px;color:var(--lane-define,#4ad196);padding:1px 6px;">✓ 0</span>
+      </div>
+      <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-left:3px solid var(--team-teal);border-radius:3px;padding:7px 9px;opacity:.6;">
+        <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text);text-decoration:line-through;margin-bottom:2px;">Is 15 min too short for mobile users?</div>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <div class="avatar peer" style="width:14px;height:14px;font-size:7px;">AL</div>
+          <span style="font-family:JetBrains Mono;font-size:9px;color:var(--team-teal);">resolved by @arch-lead</span>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Zero OQs. Resolved by @arch-lead.</b>
+      <span class="sub">No notification needed — the cockpit speaks for itself.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">can't answer?</span></div>
+
+  <!-- P4 peer escalates / tags -->
+  <div class="sb-frame">
+    <div class="sb-num">P4</div>
+    <div class="sb-time">peer escalates</div>
+    <div class="sb-anno bottom">
+      <span class="tag">tag escalation</span>
+      <b>Peer adds @you to the OQ line instead of resolving.</b><br>
+      If the peer doesn't know the answer, they add <code style="font-size:9px;">@you</code> to the question. Specorator surfaces it as "tagged — needs your answer."
+    </div>
+    <div class="sb-screen">
+      <div class="mini-window" style="margin-bottom:8px;">
+        <div class="head">03-rules.md</div>
+        <div style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text);line-height:1.75;">
+          <span style="color:#b08a14;">? Is 15 min too short? @you</span><br>
+          <span style="color:var(--ob-text-faint);">&lt;!-- @arch-lead · can't answer --&gt;</span>
+        </div>
+      </div>
+      <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-left:3px solid var(--accent);border-radius:3px;padding:7px 9px;">
+        <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text);margin-bottom:2px;"><b>Tagged:</b> Is 15 min too short?</div>
+        <div style="font-family:JetBrains Mono;font-size:9px;color:var(--accent);">@arch-lead needs your answer</div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Escalation = a @ in the file.</b>
+      <span class="sub">No DM, no Slack, no platform. The file is the thread.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════
+     ACT 4 · SYNC CONFLICTS
+═══════════════════════════════════ -->
+<div class="sub-head">
+  <div class="sub-head-inner">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span class="sub-label">act 4 of 4</span>
+      <h3>Sync conflicts — the worst case, handled</h3>
+    </div>
+    <p>Two people editing the same spec file at the same time produces a conflict. Obsidian Sync (and Git) surface this as a duplicate file. Specorator detects the conflict marker, surfaces it in the cockpit, and guides resolution — without touching the conflict itself.</p>
+  </div>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 2400px;">
+
+  <!-- C1 conflict detected -->
+  <div class="sb-frame">
+    <div class="sb-num">C1</div>
+    <div class="sb-time">sync · conflict lands</div>
+    <div class="sb-anno top">
+      <span class="tag">worst case</span>
+      <b>Obsidian Sync creates a duplicate.</b><br>
+      Two edits to the same file → Obsidian Sync appends <code style="font-size:9px;">(conflicted copy)</code> to one version. Specorator scans for this on startup.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">cockpit · build</div>
+
+      <div style="background:rgba(204,102,102,0.08);border:1px solid #c66;border-radius:4px;padding:7px 10px;display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;">
+        <span style="color:#c66;font-size:16px;line-height:1;">⚠</span>
+        <div>
+          <div style="font-family:Inter;font-size:11px;font-weight:700;color:var(--ob-text);margin-bottom:2px;">Sync conflict in 03-rules.md</div>
+          <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);">Two versions exist. Resolve before the gate can re-evaluate.</div>
+        </div>
+      </div>
+      <button class="sk-btn" style="font-size:10.5px;padding:3px 10px;border-color:#c66;color:#c66;">Resolve conflict →</button>
+    </div>
+    <div class="sb-caption">
+      <b>Conflict banner in cockpit.</b>
+      <span class="sub">Gate paused until resolved. Not an error — a pause.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">click resolve</span></div>
+
+  <!-- C2 conflict resolver UI -->
+  <div class="sb-frame">
+    <div class="sb-num">C2</div>
+    <div class="sb-time">conflict · side-by-side</div>
+    <div class="sb-anno bottom">
+      <span class="tag">show don't merge</span>
+      <b>Specorator shows both versions. You pick.</b><br>
+      No auto-merge. Specorator opens a split view: your version on the left, theirs on the right. The only action: "keep mine," "keep theirs," or "open both in Obsidian."
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">03-rules.md · conflict</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+        <div class="mini-window">
+          <div class="head" style="color:var(--accent);">yours · @you</div>
+          <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text);line-height:1.65;">
+            - …re-send UI<br>
+            <span style="color:var(--lane-define,#4ad196);">! 15 min — fewer phishing<br>  risks</span>
+          </div>
+        </div>
+        <div class="mini-window">
+          <div class="head" style="color:var(--peer-color);">theirs · @arch-lead</div>
+          <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text);line-height:1.65;">
+            - …re-send UI<br>
+            <span style="color:var(--lane-define,#4ad196);">! 15 min — mobile re-send<br>  is 1 tap anyway</span>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button class="sk-btn" style="font-size:10px;padding:2px 8px;">Keep mine</button>
+        <button class="sk-btn" style="font-size:10px;padding:2px 8px;">Keep theirs</button>
+        <button class="sk-btn ghost" style="font-size:10px;padding:2px 8px;">Open in Obsidian</button>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Side-by-side. You decide.</b>
+      <span class="sub">Specorator never auto-merges spec text. Humans own this.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">choose</span></div>
+
+  <!-- C3 conflict resolved -->
+  <div class="sb-frame">
+    <div class="sb-num">C3</div>
+    <div class="sb-time">conflict · resolved</div>
+    <div class="sb-anno top">
+      <span class="tag">back to normal</span>
+      <b>Conflict file deleted. Gate re-evaluates.</b><br>
+      The chosen version is kept, the <code style="font-size:9px;">(conflicted copy)</code> file is deleted, and the gate re-runs its checks.
+    </div>
+    <div class="sb-screen" style="background:rgba(62,201,176,0.04);">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="color:var(--team-teal);font-size:18px;">✓</span>
+        <div style="font-family:Inter;font-size:11.5px;font-weight:700;color:var(--ob-text);">Conflict resolved</div>
+      </div>
+      <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);line-height:1.5;margin-bottom:8px;">
+        03-rules.md restored. Conflict copy removed. Gate re-evaluating...
+      </div>
+      <div class="mini-list" style="font-size:10.5px;line-height:1.75;">
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>0 open questions ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>Rules unchanged ✓</div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Clean. Gate re-runs.</b>
+      <span class="sub">One version survives. Attribution preserved in the file.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">proceed</span></div>
+
+  <!-- C4 git alt -->
+  <div class="sb-frame">
+    <div class="sb-num">C4</div>
+    <div class="sb-time">git vault · diff</div>
+    <div class="sb-anno bottom">
+      <span class="tag">git path</span>
+      <b>Git teams get conflict markers instead.</b><br>
+      Git produces <code style="font-size:9px;">&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>/<code style="font-size:9px;">&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> markers in the file. Specorator detects these and shows the same "open in editor" nudge — same surface, different resolution path.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:Inter;font-size:11px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Git conflict detected</div>
+      <div class="mini-window">
+        <div class="head">03-rules.md</div>
+        <div style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text);line-height:1.65;">
+          <span style="color:#c66;">&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</span><br>
+          <span style="color:var(--accent);">! 15 min — fewer phishing</span><br>
+          <span style="color:#c66;">=======</span><br>
+          <span style="color:var(--peer-color);">! 15 min — mobile re-send</span><br>
+          <span style="color:#c66;">&gt;&gt;&gt;&gt;&gt;&gt;&gt; arch-lead</span>
+        </div>
+      </div>
+      <button class="sk-btn ghost" style="font-size:10px;padding:2px 9px;margin-top:8px;">Open in editor to resolve</button>
+    </div>
+    <div class="sb-caption">
+      <b>Git: nudge to editor.</b>
+      <span class="sub">Specorator doesn't parse git markers. Just surfaces and steps aside.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ─────── edge cases ─────── -->
+<div class="sb-section-head">
+  <div class="meta">edge cases</div>
+  <h2 style="font-size:22px;">Team mode complications</h2>
+</div>
+
+<div style="padding:8px 32px 36px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;">
+
+  <!-- A: team mode, one person vault -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">A</div>
+    <div class="sb-time">solo → team migration</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Enabling team on a live solo vault</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        When team mode is enabled on a vault with existing features, Specorator doesn't retroactively require peer sign-off on closed gates. Only gates crossed <i>after</i> team mode is enabled need the peer tick. Existing <code style="font-size:10px;">_meta.md</code> files are unchanged.
+      </div>
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">gates closed before team-mode: unaffected<br>gates closed after: need peer sign-off</div>
+    </div>
+    <div class="sb-caption">
+      <b>Non-destructive migration.</b>
+      <span class="sub">Old gates stay closed. New gates get the team requirement.</span>
+    </div>
+  </div>
+
+  <!-- B: committer not in vault -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">B</div>
+    <div class="sb-time">unknown committer</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">A handle not in the committers list</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        If <code style="font-size:10px;">@newperson</code> resolves an OQ but isn't in the committers list, Specorator shows a soft warning: "unrecognised committer — add them in settings, or the resolution counts anyway." It doesn't block — it nudges.
+      </div>
+      <div style="background:rgba(201,162,39,0.08);border:1px solid var(--team-amber);border-radius:3px;padding:6px 9px;font-family:Inter;font-size:10.5px;color:var(--ob-text);">
+        <b>@newperson</b> not in committers list — <span style="color:var(--team-amber);">add them?</span>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Unknown handle: soft warning.</b>
+      <span class="sub">Resolution still counts. Settings nudge to add them.</span>
+    </div>
+  </div>
+
+  <!-- C: 3-person teams / multiple sign-offs -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">C</div>
+    <div class="sb-time">3+ person team</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">How many sign-offs?</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        MVP: one peer sign-off required. Settings allow a <code style="font-size:10px;">min-reviewers: 2</code> override for larger teams. Specorator counts unique committer handles in the PR merge commit's reviewer list. This is not a UI change — just a threshold.
+      </div>
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">
+        settings:<br>
+        min-reviewers: 1 &nbsp;&nbsp;← default<br>
+        min-reviewers: 2 &nbsp;&nbsp;← opt-in
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Threshold, not new UI.</b>
+      <span class="sub">A settings integer. The gate reads it. No new screens.</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─────── OQ-5 resolution card ─────── -->
+<div class="sb-section-head" style="padding-top:8px;">
+  <div class="meta">decision · OQ-5 resolved</div>
+  <h2 style="font-size:22px;">How Specorator does team mode</h2>
+</div>
+
+<div style="padding:8px 32px 36px;display:grid;grid-template-columns:repeat(2,1fr);gap:18px;">
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Shared vault, not a server</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Team mode is a property of the vault, not an account. Obsidian Sync or Git is the transport. Specorator reads committer handles from the same markdown files everyone is already editing. No server, no API key, no SaaS dependency.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">PR as the sign-off ritual</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Engineers already do PRs. Specorator generates the checklist-carrying PR description and detects the merge commit. The ceremony is real — a human reviewed and approved. The ceremony tool is one the team already trusts. No new ritual invented.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Attribution in-file</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Every resolution carries <code><!-- @handle · date --></code>. This is readable in any editor, survives vault moves, doesn't require Specorator to read the history. The file is the log. (DR-004 · markdown-native)</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Conflicts: show, don't merge</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Specorator detects conflicts and surfaces them. It never auto-merges spec text — the content of a spec is a human decision, not a diff problem. "Open in editor" is the deepest intervention the plugin makes.</p>
+  </div>
+
+  <div class="sk-box dashed" style="padding:14px 16px;grid-column:span 2;">
+    <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:4px;">Open: what's still deferred</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px;">
+      <div>
+        <div style="font-family:JetBrains Mono;font-size:9.5px;color:#c66;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;">not in MVP</div>
+        <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;">
+          Real-time presence (Obsidian Sync only shows who last edited, not who is live right now). Presence strip in S3 is "last active," not live cursor.<br><br>
+          PR auto-detection requires a Git remote. Vault-only teams (Obsidian Sync, Dropbox) rely on the manual PR flow or treat the committer-in-file convention as the sign-off.
+        </div>
+      </div>
+      <div>
+        <div style="font-family:JetBrains Mono;font-size:9.5px;color:#b08a14;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;">to revisit post-MVP</div>
+        <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;">
+          Notification when a peer resolves your OQ (currently: just the counter drop on sync). A pull notification — "arch-lead resolved 2 OQs while you were away" — might be worth a simple badge.<br><br>
+          Multi-feature portfolio visibility: can @arch-lead see all features they're a committer on, across all vaults? Not designed. Cross-vault team mode is out of scope for now.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;grid-column:span 2;border-color:var(--team-teal);">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <div style="font-family:JetBrains Mono;font-size:10px;color:var(--team-teal);text-transform:uppercase;">decision · OQ-5 resolved</div>
+      <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">2026-05-01 · accepted</span>
+    </div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Team mode without a server: shared vault + conventions</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;margin-bottom:8px;">
+      <b>Decision:</b> Team mode is implemented entirely through shared-vault conventions, not a server. The three mechanisms are: (1) committer handles in a settings field, matched against Obsidian Sync authors or git commit emails; (2) the PR template as the peer gate sign-off ceremony, with merge-commit detection as the trigger; (3) inline <code>&lt;!-- @handle --&gt;</code> attribution in spec files as the audit trail.<br><br>
+      <b>Why no server:</b> A server introduces accounts, uptime SLAs, data residency concerns, and a monetisation question on day one. All three team features (presence, sign-off, attribution) can be achieved with conventions on top of sync infrastructure teams already have. The cost is some edge-case friction (Dropbox teams can't use PR detection; real-time presence is faked). That trade is correct for an MVP.<br><br>
+      <b>Why the PR:</b> The gate sign-off needs ceremony and a real human witness. The PR review already provides both. Inventing a new "review request" UI inside the plugin would duplicate the PR workflow at lower fidelity. Piggyback on the existing ritual.
+    </p>
+    <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--team-teal);">→ decisions/team-mode-no-server.md · linked from _meta.md</div>
+  </div>
+
+</div>
+
+</body></html>

@@ -1,0 +1,96 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Cockpit A · brand new vault</title>
+<link rel="stylesheet" href="../wireframes.css">
+</head>
+<body class="density-comfy" data-theme="dark" style="margin:0;background:transparent;">
+<div class="artboard-wrap"><div class="ob-window"><div class="ob-titlebar">
+  <div class="ob-traffic"><span></span><span></span><span></span></div>
+  <div style="margin-left:8px;">my-vault — Obsidian</div>
+  <div style="margin-left:auto;font-family:JetBrains Mono,monospace;font-size:10.5px;color:var(--ob-text-faint);">scaffolded · no specs yet</div>
+</div>
+<div class="ob-body">
+  <div class="ob-ribbon">
+    <div class="ob-ribbon-icon spec">S</div>
+    <div class="ob-ribbon-icon">⌂</div>
+    <div class="ob-ribbon-icon">⊞</div>
+    <div class="ob-ribbon-icon">★</div>
+    <div class="ob-ribbon-icon">⚙</div>
+  </div>
+  <div class="ob-leftpane">
+    <div class="ob-ph-label">Specorator · features</div>
+    <ul style="opacity:0.5;">
+      <li class="file faint" style="padding-left:6px;font-style:italic;">no features yet</li>
+    </ul>
+    <div class="ob-ph-label" style="margin-top:14px;">Scaffold</div>
+    <ul style="font-size:11.5px;font-family:JetBrains Mono,monospace;">
+      <li class="file" style="font-size:10.5px;">specs/</li>
+      <li class="file" style="font-size:10.5px;">templates/</li>
+      <li class="file" style="font-size:10.5px;">memory/</li>
+      <li class="file" style="font-size:10.5px;">docs/steering/</li>
+    </ul>
+  </div>
+  <div class="ob-main">
+    <div class="ob-tabs">
+      <div class="ob-tab active"><span class="dot"></span>Cockpit · empty</div>
+    </div>
+    <div class="ob-content" style="display:grid;place-items:center;">
+      <div style="max-width:600px;text-align:center;">
+        <div class="sk-h-xs">Vault scaffolded · ready</div>
+        <h1 class="sk-h sk-h-xl" style="margin:8px 0 14px;">Your first <span class="sk-underline">feature</span>.</h1>
+        <p class="sk-p" style="font-size:15px;max-width:500px;margin:0 auto;">A feature is a spec folder under <span class="sk-mono">specs/</span>. Specorator walks it through 11 stages — idea → retrospective. Start with one sentence; the lifecycle figures the rest out.</p>
+
+        <div class="sk-box dashed" style="margin-top:22px;padding:18px 16px;text-align:left;">
+          <div class="row" style="gap:8px;align-items:center;">
+            <span class="sk-pill" style="background:var(--highlighter);color:var(--ink-pen);border-color:var(--ink-pen);font-size:9.5px;">/spec:start</span>
+            <input type="text" placeholder="one-line idea — e.g. magic-link login for the web app"
+              style="flex:1;background:transparent;border:none;outline:none;color:var(--ob-text);font-family:Kalam,cursive;font-size:18px;border-bottom:1.5px dashed var(--ob-text-faint);padding:4px 2px;" value="">
+          </div>
+          <div class="muted" style="font-family:Inter,sans-serif;font-size:11px;margin-top:8px;">
+            scaffolds <span class="sk-mono">specs/&lt;slug&gt;/idea.md</span> · drops you at stage 1
+          </div>
+        </div>
+
+        <div class="row" style="justify-content:center;gap:10px;margin-top:14px;">
+          <button class="sk-btn primary">Create feature</button>
+          <span class="muted" style="font-family:Inter,sans-serif;font-size:12px;">or</span>
+          <button class="sk-btn">Adopt existing folder</button>
+          <button class="sk-btn ghost">Read the methodology</button>
+        </div>
+
+        <div class="sk-divider" style="margin-top:28px;"></div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:left;">
+          <div class="sk-box thin" style="padding:10px;">
+            <div style="font-family:Inter;font-size:11.5px;font-weight:700;margin-bottom:4px;">Try a sample</div>
+            <p class="sk-p" style="font-size:12px;">load <span class="sk-mono">cli-todo</span> demo — a finished feature you can poke around</p>
+          </div>
+          <div class="sk-box thin" style="padding:10px;">
+            <div style="font-family:Inter;font-size:11.5px;font-weight:700;margin-bottom:4px;">Steering docs</div>
+            <p class="sk-p" style="font-size:12px;">drop in product / tech / structure conventions before scaling out</p>
+          </div>
+          <div class="sk-box thin" style="padding:10px;">
+            <div style="font-family:Inter;font-size:11.5px;font-weight:700;margin-bottom:4px;">Constitution</div>
+            <p class="sk-p" style="font-size:12px;">declare invariants once — every gate validates against them</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="ob-rightpane">
+    <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:0.08em;color:var(--ob-text-faint);margin-bottom:10px;">Getting started</div>
+    <div class="sk-box thin" style="padding:10px;margin-bottom:10px;">
+      <div style="font-family:Inter;font-size:12px;font-weight:600;margin-bottom:6px;">Recommended path</div>
+      <ol style="font-family:Inter,sans-serif;font-size:11.5px;color:var(--ob-text-mute);padding-left:18px;line-height:1.7;margin:0;">
+        <li>Run <span class="sk-mono">/spec:start</span></li>
+        <li>Capture idea + research</li>
+        <li>Convert to EARS requirements</li>
+        <li>Hand off to design</li>
+      </ol>
+    </div>
+    <div class="sk-box thin" style="padding:10px;">
+      <div style="font-family:Inter;font-size:12px;font-weight:600;margin-bottom:6px;">No LLM needed</div>
+      <p class="sk-p" style="font-family:Inter;font-size:11.5px;margin:0;">All scaffolding is deterministic — markdown templates only.</p>
+    </div>
+  </div>
+</div></div></div>
+</body></html>

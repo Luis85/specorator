@@ -1,0 +1,583 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Flow · recovery</title>
+<link rel="stylesheet" href="../wireframes.css">
+<style>
+  body { margin: 0; background: var(--ob-bg); }
+  .scroll { width: 100%; overflow-x: auto; padding: 80px 0 60px; }
+  .sub-head {
+    padding: 48px 32px 8px;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+  }
+  .sub-head .sub-label {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    color: var(--ob-text-faint);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+  }
+  .sub-head h3 {
+    font-family: var(--sketch);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--ob-text);
+    margin: 0;
+  }
+  .sub-head p {
+    font-family: "Inter", sans-serif;
+    font-size: 12px;
+    color: var(--ob-text-mute);
+    margin: 4px 0 0;
+    line-height: 1.5;
+    max-width: 640px;
+  }
+  .sub-head-inner { display: flex; flex-direction: column; }
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="sb-section-head">
+  <div class="meta">flow · forgiveness paths</div>
+  <h2>Recovery — undo, revert, and "where am I?"</h2>
+  <p>Three distinct situations, one shared principle: the user should never feel trapped. Undo covers the last 24 hours. Revert covers anything in the feature's history. "I'm lost" covers spatial disorientation — not knowing where in the 11 steps they are or how they got there.</p>
+</div>
+
+<!-- ═══════════════════════════════════
+     SUB-STORY 1 · UNDO (24h)
+═══════════════════════════════════ -->
+<div class="sub-head">
+  <div class="sub-head-inner">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span class="sub-label">part 1 of 3</span>
+      <h3>Undo — the 24-hour safety net</h3>
+    </div>
+    <p>Every mutation snapshots first. The undo banner arms immediately after any step hand-off, gate cross, or file write. Visible for 24h, then silently expires.</p>
+  </div>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 2100px;">
+
+  <!-- U1 armed after hand-off -->
+  <div class="sb-frame">
+    <div class="sb-num">U1</div>
+    <div class="sb-time">t = 0 · just handed off</div>
+    <div class="sb-anno top">
+      <span class="tag">DR-005 · snapshot first</span>
+      <b>Banner arms immediately.</b><br>
+      No delay. The snapshot was taken before the write, so undo is always safe to offer.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 5 of 11 · check the design</div>
+
+      <div class="banner-undo" style="margin-bottom:8px;">
+        <span>↶</span>
+        <span style="flex:1;"><b>Handed off:</b> step 4 → step 5</span>
+        <span style="color:var(--accent);font-size:11.5px;cursor:pointer;">Undo</span>
+        <span style="color:var(--ob-text-faint);font-size:10.5px;margin-left:8px;">24h</span>
+      </div>
+
+      <div class="sk-box thin" style="padding:8px 10px;opacity:.5;">
+        <div style="font-family:Inter;font-size:11px;font-weight:700;color:var(--ob-text);margin-bottom:3px;">✶ Coach · step 5</div>
+        <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);">Sketch or link the design for this feature.</div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Undo banner: always on top.</b>
+      <span class="sub">Never buried. Fades after 24h without interaction.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">click undo</span></div>
+
+  <!-- U2 confirm -->
+  <div class="sb-frame">
+    <div class="sb-num">U2</div>
+    <div class="sb-time">confirm</div>
+    <div class="sb-anno bottom">
+      <span class="tag">principle 2</span>
+      <b>One confirm, not two.</b><br>
+      We don't ask "are you sure?" twice. The action is reversible anyway — a snapshot exists either way.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);margin-bottom:10px;">magic-link-auth</div>
+
+      <div class="sk-box thin" style="padding:12px 14px;border-color:var(--accent);">
+        <div style="font-family:var(--sketch);font-size:17px;color:var(--ob-text);margin-bottom:4px;">Undo hand-off?</div>
+        <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.5;margin-bottom:10px;">
+          This puts <b>step 4</b> back as the current step and restores the file state from 2 minutes ago.
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button class="sk-btn primary" style="font-size:10.5px;padding:3px 10px;">Yes, undo</button>
+          <button class="sk-btn ghost" style="font-size:10.5px;padding:3px 9px;">Keep step 5</button>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Plain English: what changes.</b>
+      <span class="sub">"Restores file state from 2 minutes ago" — concrete, not vague.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">confirm</span></div>
+
+  <!-- U3 restored -->
+  <div class="sb-frame">
+    <div class="sb-num">U3</div>
+    <div class="sb-time">restored</div>
+    <div class="sb-anno top">
+      <span class="tag">post-state</span>
+      <b>Back to step 4. Quiet.</b><br>
+      No fanfare. The only evidence is the faint "restored" tag and the undo counter reset.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 4 of 11 · how it works</div>
+
+      <div style="background:rgba(127,109,242,0.07);border:1px solid var(--ob-line);border-radius:4px;padding:5px 8px;font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <span>↶</span> Restored to step 4 · <span style="font-family:JetBrains Mono;font-size:9.5px;">2 min ago</span>
+      </div>
+
+      <div class="sk-box thin" style="padding:8px 10px;border-color:var(--lane-define,#4ad196);background:rgba(74,209,150,0.04);">
+        <div style="font-family:Inter;font-size:11px;font-weight:700;color:var(--ob-text);margin-bottom:2px;">✓ Ready to hand off</div>
+        <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);">Back to where you were.</div>
+      </div>
+
+      <div class="mini-stages" style="margin-top:10px;">
+        <span class="d done"></span><span class="sep"></span><span class="d done"></span><span class="sep"></span><span class="d done"></span><span class="sep"></span>
+        <span class="d active"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Step 4 restored. Quiet.</b>
+      <span class="sub">Stage rail rolls back. Files restored. No modal.</span>
+    </div>
+  </div>
+
+  <!-- spacer -->
+  <div style="flex:0 0 48px;"></div>
+
+  <!-- U4 expired -->
+  <div class="sb-frame" style="opacity:.72;">
+    <div class="sb-num" style="background:var(--ob-bg-2);border-color:var(--ob-line);color:var(--ob-text-faint);">U4</div>
+    <div class="sb-time">24h later</div>
+    <div class="sb-anno bottom">
+      <span class="tag">expiry</span>
+      <b>Banner fades silently.</b><br>
+      No alert. No "your undo window has closed." It just disappears. If they need deeper recovery, revert is the path (part 2).
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 5 of 11 · check the design</div>
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);margin-bottom:8px;">[ undo window closed 24h ago ]</div>
+      <div class="sk-box thin" style="padding:8px 10px;">
+        <div style="font-family:Inter;font-size:11px;font-weight:700;color:var(--ob-text);margin-bottom:2px;">✶ Coach · step 5</div>
+        <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);">Sketch or link the design for this feature.</div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Gone quietly.</b>
+      <span class="sub">Undo expired. No noise. Revert is still available.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════
+     SUB-STORY 2 · REVERT
+═══════════════════════════════════ -->
+<div class="sub-head">
+  <div class="sub-head-inner">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span class="sub-label">part 2 of 3</span>
+      <h3>Revert — going further back</h3>
+    </div>
+    <p>When undo has expired or the user wants to revisit a much earlier state, revert shows a named timeline of snapshots — not raw git commits, not ISO timestamps. Human-readable moments.</p>
+  </div>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 1900px;">
+
+  <!-- R1 trigger -->
+  <div class="sb-frame">
+    <div class="sb-num">R1</div>
+    <div class="sb-time">command palette</div>
+    <div class="sb-anno top">
+      <span class="tag">access point</span>
+      <b>Revert lives in the palette.</b><br>
+      Not in a menu. Not in settings. Cmd+P → "revert" → feature name. Power-user path, deliberately one step deeper than undo.
+    </div>
+    <div class="sb-screen">
+      <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-radius:5px;padding:8px 10px;margin-bottom:0;">
+        <div style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text-faint);margin-bottom:5px;">⌘ P</div>
+        <div class="mini-input cursor" style="font-size:11px;padding:5px 7px;border-color:var(--accent);margin-bottom:6px;">revert</div>
+        <div class="mini-list" style="font-size:11px;line-height:1.7;">
+          <div class="it hl"><span class="ic"></span>Revert feature to earlier state…</div>
+          <div class="it" style="opacity:.5;"><span class="ic"></span>Revert single file…</div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>One command. Two granularities.</b>
+      <span class="sub">Whole-feature revert vs. single-file revert.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">select</span></div>
+
+  <!-- R2 snapshot list -->
+  <div class="sb-frame">
+    <div class="sb-num">R2</div>
+    <div class="sb-time">pick a moment</div>
+    <div class="sb-anno bottom">
+      <span class="tag">human-readable</span>
+      <b>Named moments, not timestamps.</b><br>
+      "After hand-off: step 4" not "2026-04-30T14:22:31Z." The system names snapshots from what happened.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:8px;">magic-link-auth · history</div>
+
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;">Snapshots</div>
+
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <div style="background:rgba(127,109,242,0.12);border:1px solid var(--accent);border-radius:3px;padding:6px 8px;font-family:Inter;font-size:10.5px;color:var(--ob-text);">
+          <div style="font-weight:700;">After hand-off: step 5</div>
+          <div style="color:var(--ob-text-faint);font-size:9.5px;font-family:JetBrains Mono;">2 hours ago · current</div>
+        </div>
+        <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-radius:3px;padding:6px 8px;font-family:Inter;font-size:10.5px;color:var(--ob-text);">
+          <div style="font-weight:600;">After hand-off: step 4</div>
+          <div style="color:var(--ob-text-faint);font-size:9.5px;font-family:JetBrains Mono;">yesterday · 15:30</div>
+        </div>
+        <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-radius:3px;padding:6px 8px;font-family:Inter;font-size:10.5px;color:var(--ob-text);">
+          <div style="font-weight:600;">After gate cross: Define → Build</div>
+          <div style="color:var(--ob-text-faint);font-size:9.5px;font-family:JetBrains Mono;">3 days ago</div>
+        </div>
+        <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-radius:3px;padding:6px 8px;font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);">
+          <div style="font-weight:600;">Feature created</div>
+          <div style="color:var(--ob-text-faint);font-size:9.5px;font-family:JetBrains Mono;">5 days ago · origin</div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>4 moments shown.</b>
+      <span class="sub">Named from lifecycle events — not raw git log.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">pick</span></div>
+
+  <!-- R3 preview diff -->
+  <div class="sb-frame">
+    <div class="sb-num">R3</div>
+    <div class="sb-time">preview</div>
+    <div class="sb-anno top">
+      <span class="tag">informed consent</span>
+      <b>Show what changes before committing.</b><br>
+      Which files, which steps, which decisions get rolled back. No surprises.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:6px;">Revert to: gate cross</div>
+      <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);margin-bottom:8px;line-height:1.5;">
+        3 days ago. This removes steps 4–5 and restores the Define-lane state.
+      </div>
+
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">What changes</div>
+      <div class="mini-tree" style="margin-bottom:8px;">
+        <div style="color:#c66;">− 04-how-it-works.md <span style="color:var(--ob-text-faint);">(reverted)</span></div>
+        <div style="color:#c66;">− 05-check-design.md <span style="color:var(--ob-text-faint);">(removed)</span></div>
+        <div style="color:#c66;">− decisions/use-magic-links.md <span style="color:var(--ob-text-faint);">(removed)</span></div>
+        <div style="color:var(--ob-text-faint);">  _meta.md <span>(updated)</span></div>
+      </div>
+
+      <div style="display:flex;gap:6px;">
+        <button class="sk-btn primary" style="font-size:10.5px;padding:3px 10px;">Revert</button>
+        <button class="sk-btn ghost" style="font-size:10.5px;padding:3px 9px;">Cancel</button>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Diff first. Revert second.</b>
+      <span class="sub">Files listed. Steps listed. No nasty surprises.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">revert</span></div>
+
+  <!-- R4 done -->
+  <div class="sb-frame">
+    <div class="sb-num">R4</div>
+    <div class="sb-time">reverted</div>
+    <div class="sb-anno bottom">
+      <span class="tag">DR-005</span>
+      <b>The revert itself is snapshotted.</b><br>
+      So you can undo the revert. Turtles all the way down — but practically, one level is enough.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">Define · gate just crossed</div>
+
+      <div class="banner-undo" style="margin-bottom:8px;">
+        <span>↶</span>
+        <span style="flex:1;"><b>Reverted</b> to: gate cross</span>
+        <span style="color:var(--accent);font-size:11.5px;cursor:pointer;">Undo revert</span>
+        <span style="color:var(--ob-text-faint);font-size:10.5px;margin-left:8px;">24h</span>
+      </div>
+
+      <div class="mini-stages">
+        <span class="d done"></span><span class="sep"></span><span class="d done"></span><span class="sep"></span><span class="d done"></span><span class="sep"></span>
+        <span class="d active"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Reverted. Undo banner re-arms.</b>
+      <span class="sub">"Undo revert" available for 24h — full symmetry.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════
+     SUB-STORY 3 · I'M LOST
+═══════════════════════════════════ -->
+<div class="sub-head">
+  <div class="sub-head-inner">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span class="sub-label">part 3 of 3</span>
+      <h3>"Where am I?" — spatial disorientation</h3>
+    </div>
+    <p>A user comes back after a week. They open Obsidian and don't know which step they're on, what they were doing, or what's next. This is the most common recovery scenario. It should resolve in one glance.</p>
+  </div>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 1700px;">
+
+  <!-- L1 return state -->
+  <div class="sb-frame">
+    <div class="sb-num">L1</div>
+    <div class="sb-time">returning after a week</div>
+    <div class="sb-anno top">
+      <span class="tag">re-entry</span>
+      <b>Cockpit answers before they ask.</b><br>
+      Feature name, current step, last action, next action — all visible without opening any file.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 5 of 11 · check the design <span class="sk-pill build" style="font-size:9px;padding:0 5px;margin-left:4px;">build</span></div>
+
+      <div class="sk-box thin" style="padding:8px 10px;border-color:var(--ob-text-faint);margin-bottom:8px;">
+        <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);text-transform:uppercase;margin-bottom:4px;">Last activity · 7 days ago</div>
+        <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.5;">
+          Handed off step 4 → 5.<br>
+          Logged decision: use-magic-links.
+        </div>
+      </div>
+
+      <div class="coach" style="font-size:11px;">
+        <div>
+          <div class="ctitle">Step 5 · check the design</div>
+          <div class="ctext" style="font-size:11px;">Sketch the interaction flow or link a Figma frame. One artefact, then you can hand off.</div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>One glance: where, what, next.</b>
+      <span class="sub">Last activity surfaced unprompted. No hunting.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">still lost?</span></div>
+
+  <!-- L2 full map -->
+  <div class="sb-frame">
+    <div class="sb-num">L2</div>
+    <div class="sb-time">expand timeline</div>
+    <div class="sb-anno bottom">
+      <span class="tag">escape hatch</span>
+      <b>"Show me everything" mode.</b><br>
+      One click from the cockpit expands a full feature timeline: every step, every hand-off, every decision note, every gate. Read-only audit trail.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:8px;">magic-link-auth · full timeline</div>
+
+      <div style="display:flex;flex-direction:column;gap:3px;font-family:Inter;font-size:10.5px;">
+        <div style="display:flex;gap:8px;align-items:center;padding:4px 6px;border-radius:3px;background:var(--ob-bg-2);">
+          <span style="color:var(--lane-define,#4ad196);font-size:10px;">✓</span>
+          <span style="color:var(--ob-text);">Step 1–4 complete</span>
+          <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">5 days ago</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;padding:4px 6px;border-radius:3px;background:var(--ob-bg-2);">
+          <span style="color:var(--lane-define,#4ad196);font-size:10px;">⚑</span>
+          <span style="color:var(--ob-text);">Gate crossed: Define → Build</span>
+          <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">5 days ago</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;padding:4px 6px;border-radius:3px;background:var(--ob-bg-2);">
+          <span style="color:var(--accent);font-size:10px;">✎</span>
+          <span style="color:var(--ob-text);">Decision: use-magic-links</span>
+          <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">7 days ago</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;padding:4px 6px;border-radius:3px;background:rgba(127,109,242,0.1);border:1px solid var(--accent);">
+          <span style="color:var(--highlighter);font-size:10px;">▶</span>
+          <span style="color:var(--ob-text);font-weight:700;">Now: step 5 · check the design</span>
+          <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">current</span>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Full audit trail in one panel.</b>
+      <span class="sub">Chronological. Named events, not file paths.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">still lost?</span></div>
+
+  <!-- L3 wrong feature -->
+  <div class="sb-frame">
+    <div class="sb-num">L3</div>
+    <div class="sb-time">wrong feature open</div>
+    <div class="sb-anno top">
+      <span class="tag">navigation</span>
+      <b>Feature switcher is always visible.</b><br>
+      The cockpit header is a dropdown — tap it to see all active features, their current step, and their lane. No Obsidian file tree required.
+    </div>
+    <div class="sb-screen">
+      <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-radius:4px;padding:8px 10px;">
+        <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Switch feature</div>
+
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <div style="background:rgba(127,109,242,0.1);border:1px solid var(--accent);border-radius:3px;padding:6px 8px;font-family:Inter;font-size:10.5px;">
+            <div style="font-weight:700;color:var(--ob-text);">magic-link-auth</div>
+            <div style="color:var(--ob-text-faint);font-size:9.5px;font-family:JetBrains Mono;">step 5 · build · active</div>
+          </div>
+          <div style="background:var(--ob-bg);border:1px solid var(--ob-line);border-radius:3px;padding:6px 8px;font-family:Inter;font-size:10.5px;">
+            <div style="font-weight:600;color:var(--ob-text);">data-export-csv</div>
+            <div style="color:var(--ob-text-faint);font-size:9.5px;font-family:JetBrains Mono;">step 2 · define</div>
+          </div>
+          <div style="background:var(--ob-bg);border:1px solid var(--ob-line);border-radius:3px;padding:6px 8px;font-family:Inter;font-size:10.5px;">
+            <div style="font-weight:600;color:var(--ob-text-mute);">rate-limiting</div>
+            <div style="color:var(--ob-text-faint);font-size:9.5px;font-family:JetBrains Mono;">step 9 · ship · stale 14d</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>All features at a glance.</b>
+      <span class="sub">Step, lane, stale flag. Tap to switch.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ─────── edge cases ─────── -->
+<div class="sb-section-head">
+  <div class="meta">edge cases</div>
+  <h2 style="font-size:22px;">Recovery corner cases</h2>
+</div>
+
+<div style="padding:8px 32px 36px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;">
+
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">A</div>
+    <div class="sb-time">undo across gate</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Undoing a gate cross</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        Gate crossings are undoable for 24h like any mutation. But the undo banner is more emphatic: it shows "This puts you back in the Define lane" with the lane colour shift visible in the confirm screen.
+      </div>
+      <div style="background:rgba(255,229,107,0.06);border:1px solid #b08a14;border-radius:3px;padding:6px 8px;font-family:Inter;font-size:10.5px;color:var(--ob-text);">
+        ⚑ Undo puts you back in <b>Define</b> lane
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Lane-change undo is explicit.</b>
+      <span class="sub">Same mechanism, higher-stakes language.</span>
+    </div>
+  </div>
+
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">B</div>
+    <div class="sb-time">vault deleted</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">File gone outside the plugin</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        If a user deletes a spec file from the OS file system, the cockpit shows a "file missing" warning on that step — not an error. Offers: restore from snapshot · skip this step · mark as intentionally removed.
+      </div>
+      <div class="sk-box dashed" style="padding:6px 8px;border-color:#c66;">
+        <div style="font-family:JetBrains Mono;font-size:9.5px;color:#c66;">⚠ 03-rules.md missing</div>
+        <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);margin-top:3px;">Restore · Skip · Mark removed</div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Missing ≠ error.</b>
+      <span class="sub">Three choices, no panic.</span>
+    </div>
+  </div>
+
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">C</div>
+    <div class="sb-time">conflict on sync</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Two devices, one vault</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        Obsidian Sync or iCloud can create conflicts. Specorator detects <code style="font-size:10px;">conflict</code> copies of spec files and shows them in the feature timeline as a branch — pick one, discard the other. No auto-merge.
+      </div>
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">
+        ⑂ conflict: 04-how-it-works.md<br>
+        keep A (laptop) · keep B (phone)
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Conflicts shown, never hidden.</b>
+      <span class="sub">Human picks. No auto-merge surprises.</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─────── design notes ─────── -->
+<div class="sb-section-head" style="padding-top:8px;">
+  <div class="meta">design rationale for this flow</div>
+  <h2 style="font-size:22px;">Why we made these choices</h2>
+</div>
+
+<div style="padding:8px 32px 60px;display:grid;grid-template-columns:repeat(2,1fr);gap:18px;">
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Snapshot before every mutation</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Undo is only trustworthy if it's unconditional. DR-005 mandates a snapshot before every file write, gate cross, and hand-off. No exceptions, no "undo not available." (DR-005)</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Named moments, not timestamps</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">"After gate cross: Define → Build" is scannable in half a second. "2026-04-27T09:14:52Z" is not. The revert list derives snapshot names from lifecycle events — the same vocabulary the user already knows.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Diff before revert</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Revert R3 shows which files change before committing. This is the difference between a power tool and a dangerous tool. One extra screen; infinite trust gained.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">"Where am I" answered by the cockpit</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Re-entry is the most common recovery scenario — not undo, not revert. The cockpit's "last activity" section is the first answer. The full timeline is the second. The feature switcher is the third. Three layers, progressively more detailed.</p>
+  </div>
+
+  <div class="sk-box dashed" style="padding:14px 16px;grid-column:span 2;">
+    <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:4px;">Open question · how many snapshots to keep?</div>
+    <p class="sk-p" style="font-family:Inter;font-size:12px;">The revert list shows all lifecycle snapshots (one per hand-off, gate, or major mutation). Features can have 11+ hand-offs, 2 gate crossings — so up to ~15 snapshots. Storage cost is low (markdown files only), but the list UX could get long. <b>Option A:</b> show all, grouped by lane (Define / Build / Ship). <b>Option B:</b> show only gate snapshots by default, expand for step-level detail. Leaning Option A for V1, revisit if lists exceed 20 items.</p>
+  </div>
+
+</div>
+
+</body></html>

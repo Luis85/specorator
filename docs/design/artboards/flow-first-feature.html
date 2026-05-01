@@ -1,0 +1,338 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Flow · first feature</title>
+<link rel="stylesheet" href="../wireframes.css">
+<style>
+  body { margin: 0; background: var(--ob-bg); }
+  .scroll {
+    width: 100%;
+    overflow-x: auto;
+    padding: 80px 0 80px;
+  }
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="sb-section-head">
+  <div class="meta">flow · the first 60 seconds</div>
+  <h2>From "I have an idea" to "feature is on step&nbsp;1"</h2>
+  <p>The user has just installed Specorator and scaffolded their vault. They have an idea ("let users sign in with magic links"). What does the next minute feel like? This is the moment the product earns trust — or doesn't.</p>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 2540px;">
+
+  <!-- ─────── Frame 1: trigger ─────── -->
+  <div class="sb-frame">
+    <div class="sb-num">01</div>
+    <div class="sb-time">t = 0s</div>
+    <div class="sb-anno top">
+      <span class="tag">entry</span>
+      <b>Three ways in</b><br>
+      Cmd palette · ribbon button · the cockpit's empty state. All three land at the same modal.
+    </div>
+    <div class="sb-screen">
+      <div class="mini-window" style="margin-bottom:8px;">
+        <div class="head">command palette</div>
+        <div class="mini-input cursor" style="width:100%;">/spec:start</div>
+      </div>
+      <div class="mini-list" style="margin-top:4px;">
+        <div class="it hl"><span class="ic"></span><span><b>Specorator: Start a new feature</b></span></div>
+        <div class="it"><span class="ic"></span><span style="color:var(--ob-text-mute);">Specorator: Open cockpit</span></div>
+        <div class="it"><span class="ic"></span><span style="color:var(--ob-text-mute);">Specorator: Show what needs me</span></div>
+      </div>
+      <div style="position:absolute;bottom:10px;left:14px;right:14px;display:flex;gap:6px;align-items:center;">
+        <span class="mini-key">⌘</span><span class="mini-key">P</span>
+        <span style="font-family:Inter;font-size:11px;color:var(--ob-text-faint);margin-left:6px;">type "spec"</span>
+      </div>
+    </div>
+    <div class="sb-caption">
+      User triggers <b>/spec:start</b>
+      <span class="sub">No "new feature" wizard buried in a menu. The palette is the door.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">enter</span></div>
+
+  <!-- ─────── Frame 2: capture the idea ─────── -->
+  <div class="sb-frame">
+    <div class="sb-num">02</div>
+    <div class="sb-time">t = 4s</div>
+    <div class="sb-anno bottom">
+      <span class="tag">principle 2</span>
+      <b>One field, not a form.</b><br>
+      Don't ask for owner, dates, lanes, tags. Just the idea, in the user's own words.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">What's the idea?</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);margin-bottom:10px;">A sentence is fine. We'll help you sharpen it later.</div>
+      <div class="mini-input cursor" style="width:100%;padding:10px;font-size:12px;border-color:var(--accent);">Let users sign in with a magic link instead of a password</div>
+      <div style="display:flex;gap:6px;margin-top:14px;align-items:center;">
+        <button class="sk-btn primary" style="font-size:12px;padding:4px 12px;">Start →</button>
+        <span style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text-faint);">⏎ to confirm · esc to cancel</span>
+      </div>
+      <div style="position:absolute;bottom:10px;left:14px;font-family:Inter;font-size:10.5px;color:var(--ob-text-faint);">
+        ✶ <i>Don't worry about the slug — we'll generate it.</i>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>One field. Plain English.</b>
+      <span class="sub">No name, no owner, no due date. Just the idea.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">⏎</span></div>
+
+  <!-- ─────── Frame 3: scaffold ─────── -->
+  <div class="sb-frame">
+    <div class="sb-num">03</div>
+    <div class="sb-time">t = 6s</div>
+    <div class="sb-anno top">
+      <span class="tag">decision DR-004</span>
+      <b>Markdown is the source of truth.</b><br>
+      The plugin never holds hidden state. Every artifact is a real file you can git-add.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:8px;">
+        Setting up <span class="sk-underline">magic-link-auth</span>...
+      </div>
+      <div class="mini-tree">
+        <div>specs/</div>
+        <div class="ind new">└ magic-link-auth/</div>
+        <div class="ind new">&nbsp;&nbsp;├ <b>00-vision.md</b> ← <span style="color:var(--accent);">opens here</span></div>
+        <div class="ind">&nbsp;&nbsp;├ 01-rules.md</div>
+        <div class="ind">&nbsp;&nbsp;├ 02-questions.md</div>
+        <div class="ind" style="color:var(--ob-text-faint);">&nbsp;&nbsp;├ ... (8 more)</div>
+        <div class="ind new">&nbsp;&nbsp;└ <b>_meta.md</b></div>
+      </div>
+      <div style="margin-top:10px;font-family:JetBrains Mono;font-size:10px;color:var(--ob-text-mute);">
+        +12 files · folder created · git index unchanged (yet)
+      </div>
+      <div style="position:absolute;bottom:8px;left:14px;right:14px;display:flex;align-items:center;gap:8px;">
+        <span style="font-family:Inter;font-size:10.5px;color:var(--accent);">↶ undo for 24h</span>
+        <span style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text-faint);margin-left:auto;">snapshot saved</span>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Folder + 12 files appear in the vault.</b>
+      <span class="sub">Plain Markdown. Git-friendly. Yours forever.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">open</span></div>
+
+  <!-- ─────── Frame 4: the vision file opens ─────── -->
+  <div class="sb-frame">
+    <div class="sb-num">04</div>
+    <div class="sb-time">t = 8s</div>
+    <div class="sb-anno bottom">
+      <span class="tag">principle 1</span>
+      <b>"Vision" not "PRD".</b><br>
+      The technical term sits underneath in mono, small. Click it for the explainer.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);margin-bottom:2px;">specs/magic-link-auth/00-vision.md</div>
+      <div style="font-family:var(--sketch);font-size:20px;color:var(--ob-text);line-height:1.1;margin-bottom:1px;">
+        The vision <span style="font-size:11px;color:var(--ob-text-faint);font-family:JetBrains Mono;">PRD</span> <span style="font-size:11px;color:var(--accent);">(?)</span>
+      </div>
+      <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);margin-bottom:10px;">step&nbsp;1 of&nbsp;11</div>
+      <div class="sk-box thin" style="padding:8px 10px;font-family:Inter;font-size:11px;color:var(--ob-text);line-height:1.5;background:rgba(127,109,242,0.05);border-color:var(--accent);">
+        <div style="font-weight:700;margin-bottom:3px;">Why this exists</div>
+        Let users sign in with a magic link instead of a password
+        <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);margin-top:6px;">↑ pulled from your one-liner</div>
+      </div>
+      <div style="margin-top:8px;font-family:Inter;font-size:11px;color:var(--ob-text-mute);">
+        Now: who is this for, and why is the password version not good enough?
+      </div>
+      <div class="mini-stages" style="margin-top:10px;">
+        <span class="d active"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span><span class="d"></span>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Step 1 opens with their idea pre-filled.</b>
+      <span class="sub">Not a blank page. A starting point with one prompt.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">type</span></div>
+
+  <!-- ─────── Frame 5: coach in cockpit ─────── -->
+  <div class="sb-frame">
+    <div class="sb-num">05</div>
+    <div class="sb-time">t = 22s</div>
+    <div class="sb-anno top">
+      <span class="tag">principle 5</span>
+      <b>Quiet by default.</b><br>
+      No celebratory toast. Just the cockpit, calmly showing where they are.
+    </div>
+    <div class="sb-screen">
+      <div style="display:grid;grid-template-columns:62px 1fr;gap:8px;height:100%;">
+        <div style="border-right:1px dashed var(--ob-line);padding-right:6px;">
+          <div style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);text-transform:uppercase;margin-bottom:4px;">files</div>
+          <div style="font-family:Inter;font-size:10px;color:var(--ob-text);line-height:1.6;">
+            <div style="color:var(--accent);">▸ magic-link...</div>
+            <div style="padding-left:8px;color:var(--accent);font-weight:600;">00-vision</div>
+            <div style="padding-left:8px;color:var(--ob-text-mute);">01-rules</div>
+          </div>
+        </div>
+        <div>
+          <div style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);text-transform:uppercase;margin-bottom:2px;">cockpit</div>
+          <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+          <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 1 of 11 · the vision</div>
+
+          <div class="sk-box" style="border-color:var(--accent);background:rgba(127,109,242,0.06);padding:8px 10px;">
+            <div style="font-family:Inter;font-size:11px;font-weight:700;color:var(--ob-text);margin-bottom:3px;">✶ Coach</div>
+            <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);line-height:1.45;">
+              Answer two prompts in <b>00-vision.md</b>: who it's for, why now. Then come back.
+            </div>
+            <div style="margin-top:6px;display:flex;gap:5px;">
+              <button class="sk-btn" style="font-size:10px;padding:2px 6px;">Open file</button>
+              <button class="sk-btn ghost" style="font-size:10px;padding:2px 6px;">I've got this</button>
+            </div>
+          </div>
+          <div class="mini-stages" style="margin-top:10px;">
+            <span class="d active"></span><span class="sep"></span>
+            <span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span>
+            <span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span>
+            <span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span>
+            <span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span>
+            <span class="d"></span><span class="sep"></span><span class="d"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Cockpit is now alive.</b>
+      <span class="sub">Coach gives one specific next action. Dismissable.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">first hand-off</span></div>
+
+  <!-- ─────── Frame 6: first hand-off ─────── -->
+  <div class="sb-frame">
+    <div class="sb-num">06</div>
+    <div class="sb-time">t = 60s</div>
+    <div class="sb-anno bottom">
+      <span class="tag">decision DR-005</span>
+      <b>Reversible by default.</b><br>
+      First hand-off proves the safety net before they need it.
+    </div>
+    <div class="sb-branch">branch · &lt;60s? skip coach<br>branch · open question? block</div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 2 of 11 · the rules</div>
+
+      <div style="background:rgba(127,109,242,0.1);border:1px solid var(--accent);border-radius:4px;padding:6px 8px;display:flex;align-items:center;gap:6px;font-size:10.5px;font-family:Inter;color:var(--ob-text);margin-bottom:8px;">
+        <span>↶</span>
+        <span><b>Just handed off:</b> step 1 → step 2.</span>
+        <span style="margin-left:auto;color:var(--accent);">undo (24h)</span>
+      </div>
+
+      <div class="sk-box thin" style="padding:8px 10px;font-family:Inter;font-size:10.5px;line-height:1.55;color:var(--ob-text-mute);">
+        <div style="color:var(--ob-text);font-weight:700;margin-bottom:3px;font-size:11px;">What just happened</div>
+        · Saved your vision<br>
+        · Created <b>01-rules.md</b><br>
+        · Coach moved to step 2
+      </div>
+      <div class="mini-stages" style="margin-top:10px;">
+        <span class="d done"></span><span class="sep"></span>
+        <span class="d active"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span>
+        <span class="d"></span>
+      </div>
+      <div style="position:absolute;bottom:8px;left:14px;right:14px;font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">
+        first hand-off complete · momentum established
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>One step done. Ten to go.</b>
+      <span class="sub">The undo banner teaches the safety net the moment they need it.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ─────── Branch sidecar ─────── -->
+<div class="sb-section-head" style="padding-top:16px;">
+  <div class="meta">branches we don't show inline</div>
+  <h2 style="font-size:22px;">Where the flow forks</h2>
+</div>
+<div style="padding:8px 32px 40px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;">
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px;">branch · b1</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">User cancels at frame 02</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Esc closes the modal. No folder created. No state change. The cockpit stays empty. <b>Cost of cancelling: zero.</b></p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px;">branch · b2</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Vault has no <code style="font-size:13px;">specs/</code> folder yet</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">/spec:start detects this and runs <b>scaffold</b> first (a one-time, reversible setup). User sees a "first time? we'll set you up" callout, not an error.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px;">branch · b3</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Slug collision</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">"magic-link-auth" already exists. We don't ask the user to rename — we suffix <code>-2</code> and tell them in the post-state. Renamable later from the cockpit header.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px;">branch · b4</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">User dismisses the coach</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">"I've got this" hides the coach for this step only. Cockpit stays — just quieter. Coach reappears at the next step unless globally disabled in settings.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px;">branch · b5</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">User adds a <code style="font-size:13px;">?</code> question</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Open question detected → it shows up in the cockpit's "open questions" tab. Hand-off at frame 06 would be <b>blocked</b> if any are unresolved.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px;">branch · b6</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">User edits files outside Obsidian</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Frontmatter is the source of truth (DR-004). Cockpit re-reads on file change. The user can hand-edit the stage marker if they want — we won't fight them.</p>
+  </div>
+
+</div>
+
+<!-- ─────── Failure modes ─────── -->
+<div class="sb-section-head" style="padding-top:8px;">
+  <div class="meta">where this flow could fail us</div>
+  <h2 style="font-size:22px;">Risks &amp; open questions</h2>
+</div>
+<div style="padding:8px 32px 60px;display:grid;grid-template-columns:1fr 1fr;gap:18px;">
+
+  <div class="sk-box dashed" style="padding:14px 16px;">
+    <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:4px;">F1 · "Folder dump" feels intimidating</div>
+    <p class="sk-p" style="font-family:Inter;font-size:12px;">Frame 03 shows 12 files appearing in the vault. New users may panic. <b>Mitigation:</b> animate them in slowly · show a "we'll explain each as you go" line · only 00-vision opens automatically.</p>
+  </div>
+
+  <div class="sk-box dashed" style="padding:14px 16px;">
+    <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:4px;">F2 · The one-liner is too short to derive a slug</div>
+    <p class="sk-p" style="font-family:Inter;font-size:12px;">"sign in" → <code>sign-in</code>? Too generic. <b>Open question:</b> do we ask for a name at all (orthodoxy), or quietly auto-suggest with a rename hint?</p>
+  </div>
+
+  <div class="sk-box dashed" style="padding:14px 16px;">
+    <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:4px;">F3 · 60s is too short, or too long</div>
+    <p class="sk-p" style="font-family:Inter;font-size:12px;">We assume a fast first hand-off proves momentum. But step 1 (vision) may legitimately take 5 minutes of thinking. <b>Test:</b> watch real users, don't optimize for speed if quality suffers.</p>
+  </div>
+
+  <div class="sk-box dashed" style="padding:14px 16px;">
+    <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:4px;">F4 · Coach says the same thing every time</div>
+    <p class="sk-p" style="font-family:Inter;font-size:12px;">If coach copy is canned, repeat users will tune it out. <b>Mitigation:</b> make coach copy a function of (stage, what's filled, what's missing) — never identical twice.</p>
+  </div>
+
+</div>
+
+</body></html>

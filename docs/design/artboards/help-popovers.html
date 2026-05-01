@@ -1,0 +1,83 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Concept popovers</title>
+<link rel="stylesheet" href="../wireframes.css">
+</head>
+<body class="density-comfy" data-theme="dark" style="margin:0;background:#1e1e1e;padding:32px;color:var(--ob-text);">
+<div class="artboard-wrap" style="background:#1e1e1e;padding:0;width:1280px;height:800px;">
+<div style="padding:24px 32px;">
+  <div class="sk-h-xs">Help system · explainers</div>
+  <h1 class="sk-h sk-h-lg" style="margin:6px 0 4px;">Every <span class="sk-underline">jargon term</span> has a (?) that opens this.</h1>
+  <p class="sk-p" style="font-size:13.5px;max-width:640px;">One sentence what it is, one paragraph why it exists, one link to read more. Same shape every time so users know what to expect.</p>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px;padding:0 32px;">
+
+  <!-- Hand-off -->
+  <div style="position:relative;height:240px;">
+    <div class="sk-mono" style="margin-bottom:30px;">click "Hand off" →</div>
+    <div class="popover" style="top:30px;left:0;width:auto;right:8px;">
+      <div class="ph">Hand-off</div>
+      <div class="pp">Finishing one of the 11 steps so the next one can begin.</div>
+      <div class="pp">When you hand off, Specorator marks the file as done, creates the next file from a template, and (optionally) notifies whoever owns the next step. You can undo within 24 hours.</div>
+      <div class="plink">▸ Read about the lifecycle</div>
+    </div>
+  </div>
+
+  <!-- The rules -->
+  <div style="position:relative;height:240px;">
+    <div class="sk-mono" style="margin-bottom:30px;">"The rules <span class="subtle-jargon">requirements</span>" →</div>
+    <div class="popover" style="top:30px;left:0;right:8px;width:auto;border-color:var(--lane-define);">
+      <div class="ph" style="color:var(--lane-define);">The rules</div>
+      <div class="pp">Short, testable statements about how the feature must behave.</div>
+      <div class="pp">Each rule starts with "When… the system shall…". Specorator helps you write them so they're easy to check later. The technical name is <i>EARS requirements</i>.</div>
+      <div class="plink">▸ Show me an example</div>
+    </div>
+  </div>
+
+  <!-- Decision note -->
+  <div style="position:relative;height:240px;">
+    <div class="sk-mono" style="margin-bottom:30px;">"Decision note <span class="subtle-jargon">ADR</span>" →</div>
+    <div class="popover" style="top:30px;left:0;right:8px;width:auto;border-color:var(--lane-build);">
+      <div class="ph" style="color:var(--lane-build);">Decision note</div>
+      <div class="pp">A short doc that records <i>why</i> you made a big choice.</div>
+      <div class="pp">Like: "we picked magic-link over passwords because users have to be able to log in on shared computers." Future-you will thank present-you. The technical name is ADR.</div>
+      <div class="plink">▸ Start a decision note</div>
+    </div>
+  </div>
+
+  <!-- Open question -->
+  <div style="position:relative;height:240px;margin-top:18px;">
+    <div class="sk-mono" style="margin-bottom:30px;">"Open question" →</div>
+    <div class="popover" style="top:30px;left:0;right:8px;width:auto;border-color:var(--soft-yellow);">
+      <div class="ph" style="color:#e8c46b;">Open question</div>
+      <div class="pp">Something you wrote in a doc but aren't sure about.</div>
+      <div class="pp">Mark uncertainty with <code>?</code> and a sentence. Specorator gathers them and won't let you hand off until they're resolved — so nothing gets glossed over.</div>
+      <div class="plink">▸ See open questions</div>
+    </div>
+  </div>
+
+  <!-- House rules -->
+  <div style="position:relative;height:240px;margin-top:18px;">
+    <div class="sk-mono" style="margin-bottom:30px;">"House rules <span class="subtle-jargon">constitution</span>" →</div>
+    <div class="popover" style="top:30px;left:0;right:8px;width:auto;border-color:var(--accent);">
+      <div class="ph" style="color:var(--accent);">House rules</div>
+      <div class="pp">Project-wide invariants every feature must respect.</div>
+      <div class="pp">"All user-facing strings translatable." "No new dependencies without a decision note." Hand-off checks include house rules automatically.</div>
+      <div class="plink">▸ Open house rules</div>
+    </div>
+  </div>
+
+  <!-- Coach -->
+  <div style="position:relative;height:240px;margin-top:18px;">
+    <div class="sk-mono" style="margin-bottom:30px;">"Coach" →</div>
+    <div class="popover" style="top:30px;left:0;right:8px;width:auto;">
+      <div class="ph">Coach</div>
+      <div class="pp">A small panel that tells you what to do next, in plain English.</div>
+      <div class="pp">Quiet by default — no cheerleading. Click <b>I've got this</b> to dismiss it for the current step. You can re-enable it from settings.</div>
+      <div class="plink">▸ Coach settings</div>
+    </div>
+  </div>
+
+</div>
+</div>
+</body></html>

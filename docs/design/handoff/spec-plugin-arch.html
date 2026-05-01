@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spec 03 · Plugin architecture — Specorator</title>
+<link rel="stylesheet" href="spec.css">
+</head>
+<body>
+
+<div class="topbar">
+  <a class="topbar-back" href="index.html">← overview</a>
+  <span class="topbar-sep">/</span>
+  <span class="nav-title" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);">spec 03 · plugin architecture</span>
+  <span class="topbar-spacer"></span>
+  <a class="topbar-link prev" href="spec-state-machine.html">← spec 02</a>
+  <a class="topbar-link" href="spec-algorithms.html">spec 04 →</a>
+</div>
+
+<div class="spec-doc">
+
+<div class="spec-hero">
+  <div class="spec-num">spec · 03</div>
+  <h1>Plugin architecture &amp; API</h1>
+  <p>Obsidian plugin entry point, view types, event hooks, command registration, and the complete settings schema. Assumes familiarity with the Obsidian plugin API (obsidian.d.ts). Minimum Obsidian version: 1.4.0.</p>
+</div>
+
+<!-- 1. Entry point -->
+<section>
+  <h2><span class="sec-num">1</span>Entry point</h2>
+  <div class="code-block">
+<pre>// main.ts — plugin entry point
+export default class SpecoratorPlugin extends Plugin {
+  settings: SpecoratorSettings;
+  cache: SpecoratorCache;
+  cockpitView: CockpitView | null;
+
+  async onload() {
+    await this.loadSettings();
+    this.cache = new SpecoratorCache(this.app.vault, this.settings);
+    await this.cache.build();          // scan vault on startup
+    this.registerView(COCKPIT_VIEW_TYPE, (leaf) => new CockpitView(leaf, this));
+    this.registerCommands();
+    this.registerEventHooks();
+    this.addSettingTab(new SpecoratorSettingTab(this.app, this));
+  }
+
+  async onunload() {
+    this.cache.destroy();
+  }
+}</pre>
+  </div>
+</section>
+
+<!-- 2. Views -->
+<section>
+  <h2><span class="sec-num">2</span>View types</h2>
+
+  <h3>CockpitView</h3>
+  <p>The primary interface. Registered as a leaf view via <code>registerView()</code>. Renders into a dedicated Obsidian leaf (right pane, or user-chosen layout). Not a modal.</p>
+  <div class="code-block">
+<pre>COCKPIT_VIEW_TYPE = "specorator-cockpit"
+
+class CockpitView extends ItemView {
+  getViewType(): string { return COCKPIT_VIEW_TYPE; }
+  getDisplayText(): string { return "Specorator"; }
+  getIcon(): string { return "layout-dashboard"; }
+
+  async onOpen() { this.render(); }
+
+  render() {
+    // Re-renders on:
+    // - active leaf change (DR-002 · context inference)
+    // - cache invalidation (file save)
+    // - settings change
+  }
+}</pre>
+  </div>
+
+  <div class="callout callout-yellow">
+    <strong>Layout note:</strong> Cockpit A (three-pane) uses the left pane for the feature list, the centre pane for the active feature, and the right pane for context/OQ/coach. The plugin does not own Obsidian's left sidebar — it registers a leaf view and lets the user place it. The default open position is <code>right</code>.
+  </div>
+
+  <h3>GateView (modal-like)</h3>
+  <p>Gate review is a full-screen overlay rendered inside the cockpit view — not an Obsidian Modal. This gives it full CSS control and allows the slow 400ms cross-fade.</p>
+</section>
+
+<!-- 3. Event hooks -->
+<section>
+  <h2><span class="sec-num">3</span>Event hooks</h2>
+  <div class="schema-table-wrap">
+    <table class="schema-table">
+      <thead>
+        <tr><th>Event</th><th>Handler</th><th>Action</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>vault.on('modify', file)</code></td>
+          <td><code>onFileModify</code></td>
+          <td>If file matches feature glob: invalidate cache for that feature, re-evaluate gate checks, update cockpit if visible.</td>
+        </tr>
+        <tr>
+          <td><code>vault.on('rename', file)</code></td>
+          <td><code>onFileRename</code></td>
+          <td>If old path matched feature glob: warn user that renaming step files breaks Specorator. Do not auto-migrate (post-MVP).</td>
+        </tr>
+        <tr>
+          <td><code>vault.on('delete', file)</code></td>
+          <td><code>onFileDelete</code></td>
+          <td>If deleted file is a step file: remove from cache, flag feature as having missing steps in cockpit.</td>
+        </tr>
+        <tr>
+          <td><code>workspace.on('active-leaf-change', leaf)</code></td>
+          <td><code>onLeafChange</code></td>
+          <td>Resolve active feature from leaf path (DR-002). Update cockpit context. No action if leaf is not a Markdown file in features/.</td>
+        </tr>
+        <tr>
+          <td><code>workspace.on('layout-change')</code></td>
+          <td><code>onLayoutChange</code></td>
+          <td>Re-render cockpit if its leaf is now visible.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 4. Commands -->
+<section>
+  <h2><span class="sec-num">4</span>Command registration</h2>
+  <p>All commands registered via <code>this.addCommand()</code>. No global keyboard shortcuts registered by default except <code>⌘⏎</code> on Specorator-owned confirm surfaces. All commands available via <code>⌘P</code>.</p>
+
+  <div class="schema-table-wrap">
+    <table class="cmd-table">
+      <thead>
+        <tr><th style="width:35%;">Command ID</th><th style="width:30%;">Palette name</th><th style="width:15%;">Default hotkey</th><th>Available</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>specorator:open-cockpit</code></td><td>Specorator: Open cockpit</td><td>⌘⇧K (suggested)</td><td><span class="avail av-always">always</span></td></tr>
+        <tr><td><code>specorator:switch-feature</code></td><td>Specorator: Switch feature</td><td>⌘⇧F (suggested)</td><td><span class="avail av-always">always</span></td></tr>
+        <tr><td><code>specorator:open-current-step</code></td><td>Specorator: Open current step</td><td>⌘⇧. (suggested)</td><td><span class="avail av-cockpit">cockpit</span></td></tr>
+        <tr><td><code>specorator:open-archive</code></td><td>Specorator: Open archive</td><td>none</td><td><span class="avail av-always">always</span></td></tr>
+        <tr><td><code>specorator:show-timeline</code></td><td>Specorator: Show timeline</td><td>none</td><td><span class="avail av-cockpit">cockpit</span></td></tr>
+        <tr><td><code>specorator:open-settings</code></td><td>Specorator: Open settings</td><td>none</td><td><span class="avail av-always">always</span></td></tr>
+        <tr><td><code>specorator:new-feature</code></td><td>Specorator: New feature</td><td>⌘⇧N (suggested)</td><td><span class="avail av-always">always</span></td></tr>
+        <tr><td><code>specorator:hand-off-step</code></td><td>Specorator: Hand off step</td><td>⌘⏎ (confirm surface)</td><td><span class="avail av-cockpit">cockpit</span></td></tr>
+        <tr><td><code>specorator:skip-step</code></td><td>Specorator: Skip step…</td><td>none</td><td><span class="avail av-cockpit">cockpit</span></td></tr>
+        <tr><td><code>specorator:log-decision</code></td><td>Specorator: Log decision…</td><td>⌘⇧D (suggested)</td><td><span class="avail av-always">always</span></td></tr>
+        <tr><td><code>specorator:close-feature</code></td><td>Specorator: Close feature</td><td>none</td><td><span class="avail av-cockpit">cockpit</span></td></tr>
+        <tr><td><code>specorator:abandon-feature</code></td><td>Specorator: Abandon feature…</td><td>none</td><td><span class="avail av-cockpit">cockpit</span></td></tr>
+        <tr><td><code>specorator:reopen-feature</code></td><td>Specorator: Re-open feature…</td><td>none</td><td><span class="avail av-palette">palette</span></td></tr>
+        <tr><td><code>specorator:cross-gate</code></td><td>Specorator: Cross gate</td><td>⌘⏎ (gate screen)</td><td><span class="avail av-gate">gate screen</span></td></tr>
+        <tr><td><code>specorator:rerun-gate</code></td><td>Specorator: Re-run gate</td><td>none</td><td><span class="avail av-cockpit">cockpit</span></td></tr>
+        <tr><td><code>specorator:undo-last</code></td><td>Specorator: Undo last action</td><td>none</td><td><span class="avail av-cockpit">cockpit</span></td></tr>
+        <tr><td><code>specorator:revert-feature</code></td><td>Specorator: Revert feature…</td><td>none</td><td><span class="avail av-palette">palette</span></td></tr>
+        <tr><td><code>specorator:revert-file</code></td><td>Specorator: Revert file…</td><td>none</td><td><span class="avail av-palette">palette</span></td></tr>
+        <tr><td><code>specorator:open-constitution</code></td><td>Specorator: Open constitution</td><td>none</td><td><span class="avail av-always">always</span></td></tr>
+        <tr><td><code>specorator:add-house-rule</code></td><td>Specorator: Add house rule…</td><td>none</td><td><span class="avail av-always">always</span></td></tr>
+        <tr><td><code>specorator:export-spec</code></td><td>Specorator: Export spec…</td><td>none</td><td><span class="avail av-cockpit">cockpit</span></td></tr>
+        <tr><td><code>specorator:copy-error</code></td><td>Specorator: Copy error report</td><td>none</td><td><span class="avail av-always">always</span></td></tr>
+        <tr><td><code>specorator:run-diagnostics</code></td><td>Specorator: Run diagnostics</td><td>none</td><td><span class="avail av-always">always</span></td></tr>
+        <tr><td><code>specorator:override-gate</code></td><td>Specorator: Override gate check…</td><td>none</td><td><span class="avail av-gate">gate screen</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 5. Settings schema -->
+<section>
+  <h2><span class="sec-num">5</span>Settings schema</h2>
+  <p>Stored in Obsidian plugin data (<code>data.json</code>). Loaded via <code>this.loadData()</code>. All settings take effect immediately — no restart, no save button.</p>
+  <div class="code-block">
+<pre>interface SpecoratorSettings {
+  // ── Vault layout (configurable; migration required if changed) ──
+  featuresFolder:   string;   // default: "features"
+  archiveFolder:    string;   // default: "archive"
+  decisionsFolder:  string;   // default: "decisions"
+  constitutionFile: string;   // default: "CONSTITUTION.md"
+
+  // ── Workflow ──
+  defaultFeatureSize: "ask" | "small" | "large"; // default: "ask"
+  staleThresholdDays: number;   // default: 14
+  retroRequired:      boolean;  // default: true
+  snapshotRetention:  "all" | number;  // default: "all" (DR-005: always on)
+  oqStaleThresholdDays: number; // default: 14
+
+  // ── Notifications ──
+  notificationLevel: "major" | "verbose"; // default: "major"
+  coachNudges:       boolean;  // default: true
+  decisionNotePrompt: boolean; // default: true
+  reentryContext:    boolean;  // default: true
+  reentryThresholdHours: number; // default: 24
+
+  // ── Gates ──
+  gateMode:          "solo" | "team"; // default: "solo"
+  decisionNoteGateCheck: "hard" | "soft" | "off"; // default: "soft"
+  gateScanTrigger:   "on-save" | "manual"; // default: "on-save"
+  minEarsRules:      number;   // default: 4
+  skipWarningThreshold: number; // default: 8
+
+  // ── Team mode (gateMode = "team" only) ──
+  committers:        string[]; // @handles, default: []
+  minReviewers:      number;   // default: 1
+
+  // ── Immutable (DR-005, DR-006) — shown in settings UI as read-only ──
+  // snapshotBeforeEveryMutation: true  (always on, not stored)
+  // noTelemetry: true                  (always on, not stored)
+}</pre>
+  </div>
+</section>
+
+<!-- 6. Obsidian API surface -->
+<section>
+  <h2><span class="sec-num">6</span>Obsidian API surface used</h2>
+  <div class="schema-table-wrap">
+    <table class="schema-table">
+      <thead>
+        <tr><th>API</th><th>Used for</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>Plugin</code></td><td>Base class. Entry point, command registration, settings, event hooks.</td></tr>
+        <tr><td><code>ItemView</code></td><td>Cockpit view. Renders in a leaf. Not a modal.</td></tr>
+        <tr><td><code>PluginSettingTab</code></td><td>Settings panel in Obsidian Settings → Community plugins.</td></tr>
+        <tr><td><code>Vault</code></td><td>File read/write (<code>read</code>, <code>modify</code>, <code>create</code>, <code>rename</code>, <code>delete</code>). Also <code>getMarkdownFiles()</code> for vault scan.</td></tr>
+        <tr><td><code>MetadataCache</code></td><td>Frontmatter parsing via <code>getFileCache(file).frontmatter</code>. Faster than raw file reads for repeated access.</td></tr>
+        <tr><td><code>Workspace</code></td><td>Active leaf change events. Opening leaves. Reveal/focus.</td></tr>
+        <tr><td><code>Notice</code></td><td>Status bar messages (tier 1 notifications only). Duration: 3000ms for info, 0 (sticky) for errors.</td></tr>
+        <tr><td><code>Modal</code></td><td>Skip reason prompt, abandon reason prompt, gate override reason prompt. Not used for gate review itself.</td></tr>
+        <tr><td><code>FuzzySuggestModal</code></td><td>Feature switcher (fuzzy search by feature name).</td></tr>
+        <tr><td><code>TFile</code>, <code>TFolder</code></td><td>File/folder type guards throughout.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout-yellow">
+    <strong>Do not use:</strong> <code>app.fileManager.renameFile()</code> for plugin-managed renames without updating all wikilinks and frontmatter references. Use <code>vault.rename()</code> + a manual reference update pass. Obsidian's link update only covers user-visible wikilinks, not frontmatter strings.
+  </div>
+</section>
+
+</div>
+
+<footer class="spec-footer">
+  <a href="spec-state-machine.html">← spec 02 · state machine</a>
+  <span>Specorator · Spec 03 · Plugin architecture</span>
+  <a href="spec-algorithms.html">spec 04 · algorithms →</a>
+</footer>
+</body>
+</html>

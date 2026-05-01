@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spec 01 · Data model — Specorator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="spec.css">
+</head>
+<body>
+
+<div class="topbar">
+  <a class="topbar-back" href="index.html">← overview</a>
+  <span class="topbar-sep">/</span>
+  <span class="topbar-title">spec 01 · data model</span>
+  <span class="topbar-spacer"></span>
+  <a class="topbar-link" href="spec-state-machine.html">spec 02 →</a>
+</div>
+
+<div class="spec-doc">
+
+<div class="spec-hero">
+  <div class="spec-num">spec · 01</div>
+  <h1>Data model</h1>
+  <p>All persistent state lives in Markdown files with YAML frontmatter. The plugin owns no database. This spec defines the canonical folder layout, file-naming scheme, frontmatter schema for each file type, and the in-memory cache contract.</p>
+</div>
+
+<!-- 1. Vault folder layout -->
+<section>
+  <h2><span class="sec-num">1</span>Vault folder layout</h2>
+  <p>Default paths are user-configurable in settings. Changing paths after features exist requires a migration (not yet designed — post-MVP). The plugin warns on settings change if existing files would be orphaned.</p>
+
+  <div class="code-block">
+<pre>vault-root/
+├── CONSTITUTION.md          ← house rules (vault-level)
+├── features/                ← configurable: settings.featuresFolder
+│   └── {feature-slug}/      ← one folder per feature
+│       ├── _meta.md         ← feature metadata + gate history (plugin-managed)
+│       ├── 01-vision.md
+│       ├── 02-questions.md
+│       ├── 03-rules.md
+│       ├── 04-how-it-works.md
+│       ├── 05-check-design.md
+│       ├── 06-check-rules.md
+│       ├── 07-check-code.md
+│       ├── 08-check-security.md
+│       ├── 09-release-notes.md
+│       ├── 10-deployment-log.md
+│       ├── 11-retrospective.md
+│       └── decisions/       ← optional: feature-scoped ADRs
+│           └── *.md
+├── archive/                 ← configurable: settings.archiveFolder
+│   └── {feature-slug}/      ← identical structure to features/
+├── decisions/               ← configurable: settings.decisionsFolder
+│   └── *.md                 ← vault-scoped ADRs</pre>
+  </div>
+
+  <div class="callout">
+    <strong>Invariant:</strong> The plugin only scans files that match <code>features/*/[0-9][0-9]-*.md</code> or <code>features/*/_meta.md</code>. All other files in the vault are invisible to Specorator. A <code>?</code> in a daily note never becomes a tracked OQ.
+  </div>
+</section>
+
+<!-- 2. Feature slug -->
+<section>
+  <h2><span class="sec-num">2</span>Feature slug</h2>
+  <p>The folder name is the canonical identifier for a feature. It is set at creation and must not change (changing it breaks all internal links and frontmatter cross-references).</p>
+  <div class="code-block">
+<pre>slug = kebab-case(feature-name) + optional "-" + 4-digit-date
+examples:
+  magic-link-auth
+  payment-webhooks
+  user-dashboard-2026</pre>
+  </div>
+  <p class="muted">The plugin does not enforce a date suffix but the scaffolding wizard appends one if a collision is detected.</p>
+</section>
+
+<!-- 3. Step files -->
+<section>
+  <h2><span class="sec-num">3</span>Step files (01-*.md – 11-*.md)</h2>
+  <p>Each step file carries a mandatory frontmatter block. The plugin reads and writes <code>status</code>, <code>skipped</code>, and <code>skip_reason</code>. All other fields are user-editable.</p>
+
+  <div class="schema-table-wrap">
+    <table class="schema-table">
+      <thead>
+        <tr><th>Field</th><th>Type</th><th>Values</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>specorator</code></td><td>boolean</td><td><code>true</code></td><td>Opt-in marker. Plugin ignores files without this field.</td></tr>
+        <tr><td><code>step</code></td><td>integer</td><td>1–11</td><td>Step number. Must match filename prefix.</td></tr>
+        <tr><td><code>lane</code></td><td>string</td><td><code>define</code> | <code>build</code> | <code>ship</code></td><td>Derived from step number. Plugin sets on scaffold; treat as read-only.</td></tr>
+        <tr><td><code>status</code></td><td>string</td><td><code>active</code> | <code>done</code> | <code>skipped</code></td><td>Plugin-managed. Only plugin writes this.</td></tr>
+        <tr><td><code>skipped</code></td><td>boolean</td><td><code>true</code> | absent</td><td>Present and true when status is <code>skipped</code>.</td></tr>
+        <tr><td><code>skip_reason</code></td><td>string</td><td>free text</td><td>Mandatory when skipped. One line. Shown in rail tooltip.</td></tr>
+        <tr><td><code>handed_off_at</code></td><td>ISO 8601</td><td>timestamp</td><td>Plugin sets on hand-off. Absent if not yet handed off.</td></tr>
+        <tr><td><code>handed_off_by</code></td><td>string</td><td>@handle</td><td>Set in team mode only. Matches committer list.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="code-block">
+<pre>---
+specorator: true
+step: 3
+lane: define
+status: done
+handed_off_at: 2026-04-28T14:32:00Z
+---
+# Rules (EARS)
+- WHEN user submits email THEN system sends magic link
+...</pre>
+  </div>
+</section>
+
+<!-- 4. _meta.md -->
+<section>
+  <h2><span class="sec-num">4</span>_meta.md — the feature's source of truth</h2>
+  <p>Plugin-managed file. Never directly edited by the user (the plugin presents a read-only view). Contains the full feature state, gate history, snapshot index, and audit log.</p>
+
+  <div class="schema-table-wrap">
+    <table class="schema-table">
+      <thead>
+        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>feature</code></td><td>string</td><td>Human-readable feature name (from creation wizard).</td></tr>
+        <tr><td><code>slug</code></td><td>string</td><td>Canonical identifier = folder name.</td></tr>
+        <tr><td><code>status</code></td><td>string</td><td><code>active</code> | <code>archived</code> | <code>abandoned</code></td></tr>
+        <tr><td><code>lane</code></td><td>string</td><td><code>define</code> | <code>build</code> | <code>ship</code> | <code>closed</code></td></tr>
+        <tr><td><code>created_at</code></td><td>ISO 8601</td><td>Feature creation timestamp.</td></tr>
+        <tr><td><code>last_active_at</code></td><td>ISO 8601</td><td>Updated on every file save within the feature folder.</td></tr>
+        <tr><td><code>gates</code></td><td>object[]</td><td>Array of gate crossing records (see below).</td></tr>
+        <tr><td><code>snapshots</code></td><td>object[]</td><td>Snapshot index — paths + timestamps. Actual snapshot files live in <code>.specorator/snapshots/</code>.</td></tr>
+        <tr><td><code>team_mode</code></td><td>boolean</td><td>Inherited from vault settings at time of gate crossing. Recorded so gate history is accurate even if settings later change.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="code-block">
+<pre>---
+feature: Magic link auth
+slug: magic-link-auth
+status: active
+lane: build
+created_at: 2026-04-20T09:00:00Z
+last_active_at: 2026-04-30T16:44:00Z
+gates:
+  - gate: define-to-build
+    crossed_at: 2026-04-28T15:00:00Z
+    crossed_by: "@you"
+    peer_signoff: "@arch-lead"     # team mode only
+    overrides: []
+snapshots:
+  - id: snap-001
+    label: before-define-build-gate
+    timestamp: 2026-04-28T14:59:00Z
+    path: .specorator/snapshots/magic-link-auth/snap-001/
+team_mode: false
+---</pre>
+  </div>
+</section>
+
+<!-- 5. CONSTITUTION.md -->
+<section>
+  <h2><span class="sec-num">5</span>CONSTITUTION.md</h2>
+  <p>A single Markdown file at vault root. Each house rule is a list item with a mandatory check method. The plugin reads this on startup and on file-save events.</p>
+  <div class="code-block">
+<pre># House rules
+
+Rules that apply to every feature in this vault.
+
+## Rules
+
+- All UI strings must have a translation key. Check: grep for un-keyed string literals.
+- Every API endpoint must have a corresponding rule in step 3. Check: count endpoints vs. EARS rules.
+- No dependency added without a decision note. Check: diff package.json against decisions/.
+
+## Retired rules
+<!-- retired rules stay here for audit purposes, marked with date -->
+</pre>
+  </div>
+  <div class="callout callout-yellow">
+    <strong>Gate check:</strong> The plugin parses every bullet in the <code>## Rules</code> section. Each bullet's "Check:" clause is the human-readable description shown in the gate check list. The plugin does not execute the check automatically — it presents it to the user to confirm.
+  </div>
+</section>
+
+<!-- 6. Decision notes -->
+<section>
+  <h2><span class="sec-num">6</span>Decision notes (ADRs)</h2>
+  <p>Plain Markdown files. The plugin creates them via the "Log decision" command with a 3-field wizard. Saved to <code>decisions/</code> (vault-level) or <code>features/{slug}/decisions/</code> (feature-scoped). Linked from step files via wikilink.</p>
+  <div class="code-block">
+<pre>---
+decision_id: DEC-001
+feature: magic-link-auth     # omit for vault-level decisions
+date: 2026-04-28
+status: accepted
+---
+# Link expiry: 15 minutes
+
+## Context
+Magic links expire. Shorter = more secure. Longer = better UX for slow email.
+
+## Decision
+15 minutes. Re-send is trivial (one tap on mobile).
+
+## Consequences
+- Re-send flow must be tested.
+- Error message must explain expiry clearly.
+</pre>
+  </div>
+</section>
+
+<!-- 7. In-memory cache -->
+<section>
+  <h2><span class="sec-num">7</span>In-memory cache</h2>
+  <p>Parsing frontmatter on every cockpit render would be too slow. The plugin maintains an in-memory cache, invalidated per-file on <code>vault.on('modify')</code>. The cache is rebuilt on plugin load by scanning all files matching the feature folder glob.</p>
+  <div class="schema-table-wrap">
+    <table class="schema-table">
+      <thead>
+        <tr><th>Cache key</th><th>Value</th><th>Invalidated on</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>features</code></td><td>Map&lt;slug, FeatureRecord&gt;</td><td>Any file in <code>features/*/</code> modified</td></tr>
+        <tr><td><code>constitution</code></td><td>Rule[]</td><td><code>CONSTITUTION.md</code> modified</td></tr>
+        <tr><td><code>decisions</code></td><td>DecisionNote[]</td><td>Any file in <code>decisions/</code> modified</td></tr>
+        <tr><td><code>gateStatus</code></td><td>Map&lt;slug, GateResult&gt;</td><td>Any step file in the feature modified</td></tr>
+        <tr><td><code>oqCounts</code></td><td>Map&lt;slug, OQRecord[]&gt;</td><td>Any step file in the feature modified</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">
+    <strong>Performance note:</strong> The full vault scan on plugin load should complete in &lt;200ms for vaults up to 500 features. If a user's vault exceeds this, consider lazy-loading features not recently accessed. Benchmark on plugin load; do not block the Obsidian startup thread.
+  </div>
+</section>
+
+<!-- 8. Snapshot storage -->
+<section>
+  <h2><span class="sec-num">8</span>Snapshot storage</h2>
+  <p>Snapshots are full copies of the feature folder, stored in a hidden plugin-data folder. They are not visible in the Obsidian file tree.</p>
+  <div class="code-block">
+<pre>.specorator/               ← plugin data dir (hidden from Obsidian tree)
+└── snapshots/
+    └── {slug}/
+        └── {snap-id}/     ← full copy of features/{slug}/ at snapshot time
+            ├── _meta.md
+            ├── 01-vision.md
+            └── ...        ← all step files at time of snapshot</pre>
+  </div>
+  <p class="muted">Snapshot pruning: on plugin load, delete snapshots older than 24h unless they are gate-crossing snapshots (which are retained until the feature is archived). The index in <code>_meta.md</code> is the authoritative list of what should exist.</p>
+</section>
+
+</div><!-- /spec-doc -->
+
+<footer class="spec-footer">
+  <span>Specorator · Spec 01 · Data model</span>
+  <a href="spec-state-machine.html">spec 02 · state machine →</a>
+</footer>
+</body>
+</html>

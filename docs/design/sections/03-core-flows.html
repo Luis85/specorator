@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>03 · Core user flows — Specorator</title>
+<link rel="stylesheet" href="nav.css">
+<style>
+  .flow-acts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .act-link {
+    display: block;
+    text-decoration: none;
+    background: rgba(255,255,255,.03);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px 14px;
+    transition: border-color .12s, background .12s;
+  }
+  .act-link:hover { border-color: var(--accent); background: rgba(127,109,242,.06); }
+  .act-link .act-num { font-family:"JetBrains Mono",monospace; font-size:10px; color:var(--faint); margin-bottom:4px; }
+  .act-link .act-title { font-size:13px; color:var(--text); font-weight:600; }
+  .act-link .act-sub { font-size:11.5px; color:var(--mute); margin-top:3px; line-height:1.4; }
+</style>
+</head>
+<body>
+
+<nav class="top-nav">
+  <a class="nav-back" href="../index.html">← index</a>
+  <span class="nav-sep">/</span>
+  <span class="nav-title">03 · Core user flows</span>
+  <span class="nav-spacer"></span>
+  <a class="nav-prev" href="02-states.html">← 02 States</a>
+  <a class="nav-next" href="04-interactions.html">04 Interactions →</a>
+</nav>
+
+<div class="sec-header">
+  <div class="sec-num">section 03</div>
+  <div class="sec-title">Core user flows</div>
+  <p class="sec-subtitle">The most-travelled paths. First feature (earning trust in the first 60 seconds), second session (the returning user and drop-off risks), and hand-off (the most-used micro-interaction).</p>
+</div>
+
+<div class="artboard-list">
+
+  <!-- First feature -->
+  <div class="flow-card" style="cursor:default;">
+    <div class="flow-card-num">3a</div>
+    <div class="flow-card-title">First feature — the first 60 seconds</div>
+    <div class="flow-card-desc">From "I have an idea" to step 1. The moment the product earns trust or loses it. One long storyboard — open full to pan.</div>
+    <div class="flow-acts">
+      <a class="act-link" href="#" onclick="openLightbox('../artboards/flow-first-feature.html','flow-first-feature',2600,1400);return false;">
+        <div class="act-num">full flow · 2600 × 1400</div>
+        <div class="act-title">Open storyboard ⤢</div>
+        <div class="act-sub">Vault setup → feature name → scaffold → step 1 · welcome</div>
+      </a>
+    </div>
+  </div>
+
+  <!-- Second session -->
+  <div class="flow-card" style="cursor:default;">
+    <div class="flow-card-num">3b</div>
+    <div class="flow-card-title">Second session — exploring → committed</div>
+    <div class="flow-card-desc">The returning user. Five frames that define whether they stay or leave. Drop-off risks and mitigations mapped.</div>
+    <div class="flow-acts">
+      <a class="act-link" href="flows/session2-flow.html">
+        <div class="act-num">part 1 of 2</div>
+        <div class="act-title">The flow</div>
+        <div class="act-sub">Tutorial nudge → real feature → blank vision → first handoff → committed</div>
+      </a>
+      <a class="act-link" href="flows/session2-risks.html">
+        <div class="act-num">part 2 of 2</div>
+        <div class="act-title">Drop-off risks</div>
+        <div class="act-sub">Blank vision · "this is overkill" · constitution friction</div>
+      </a>
+    </div>
+  </div>
+
+  <!-- Hand-off -->
+  <div class="flow-card" style="cursor:default;">
+    <div class="flow-card-num">3c</div>
+    <div class="flow-card-title">Hand-off — the most-used micro-interaction</div>
+    <div class="flow-card-desc">Moving a step from active to complete. Lightweight but needs ceremony. Undo arms immediately.</div>
+    <div class="flow-acts">
+      <a class="act-link" href="#" onclick="openLightbox('../artboards/flow-handoff.html','flow-handoff',2900,1700);return false;">
+        <div class="act-num">full flow · 2900 × 1700</div>
+        <div class="act-title">Open storyboard ⤢</div>
+        <div class="act-sub">Trigger → confirm → undo window → next step</div>
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<footer class="site-footer">
+  <span>Specorator wireframes · section 03 of 07</span>
+  <a href="04-interactions.html" style="color:var(--accent);text-decoration:none;">04 Interactions →</a>
+</footer>
+
+<!-- Lightbox overlay -->
+<div class="lightbox" id="lightbox">
+  <div class="lightbox-bar">
+    <span class="lightbox-title" id="lightbox-title"></span>
+    <button class="lightbox-close" onclick="closeLightbox()">✕ close  [esc]</button>
+  </div>
+  <div class="lightbox-body" id="lightbox-body"></div>
+</div>
+<script>
+function openLightbox(src, title, w, h) {
+  const lb = document.getElementById('lightbox');
+  const body = document.getElementById('lightbox-body');
+  document.getElementById('lightbox-title').textContent = title;
+  body.innerHTML = '<iframe src="' + src + '" width="' + w + '" height="' + h + '" style="width:' + w + 'px;height:' + h + 'px;"></iframe>';
+  lb.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  const lb = document.getElementById('lightbox');
+  lb.classList.remove('open');
+  document.getElementById('lightbox-body').innerHTML = '';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeLightbox(); });
+</script>
+</body>
+</html>

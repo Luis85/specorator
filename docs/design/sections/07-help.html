@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>07 · Help system — Specorator</title>
+<link rel="stylesheet" href="nav.css">
+</head>
+<body>
+
+<nav class="top-nav">
+  <a class="nav-back" href="../index.html">← index</a>
+  <span class="nav-sep">/</span>
+  <span class="nav-title">07 · Help system</span>
+  <span class="nav-spacer"></span>
+  <a class="nav-prev" href="06-system.html">← 06 System</a>
+  <a class="nav-next disabled" href="#">→</a>
+</nav>
+
+<div class="sec-header">
+  <div class="sec-num">section 07</div>
+  <div class="sec-title">Help system</div>
+  <p class="sec-subtitle">Every jargon term in the cockpit has a (?) button that opens a same-shape popover: one-line definition, one-paragraph why, one link to read more. Consistent pattern across the whole product.</p>
+</div>
+
+<div class="artboard-list">
+  <div class="ab-card">
+    <div class="ab-card-header">
+      <span class="ab-label"><b>7a · Concept popovers</b> — jargon explainers · 1280 × 800</span>
+      <button class="ab-expand" onclick="openLightbox('../artboards/help-popovers.html', 'help-popovers', 1280, 800)">⤢ open full</button>
+    </div>
+    <div class="ab-iframe-wrap" style="height:600px;">
+      <iframe src="../artboards/help-popovers.html" width="1280" height="800" style="width:1280px;height:800px;"></iframe>
+    </div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <span>Specorator wireframes · section 07 of 07 · end of walkthrough</span>
+  <a href="../index.html" style="color:var(--accent);text-decoration:none;">← back to index</a>
+</footer>
+
+<!-- Lightbox overlay -->
+<div class="lightbox" id="lightbox">
+  <div class="lightbox-bar">
+    <span class="lightbox-title" id="lightbox-title"></span>
+    <button class="lightbox-close" onclick="closeLightbox()">✕ close  [esc]</button>
+  </div>
+  <div class="lightbox-body" id="lightbox-body"></div>
+</div>
+<script>
+function openLightbox(src, title, w, h) {
+  const lb = document.getElementById('lightbox');
+  const body = document.getElementById('lightbox-body');
+  document.getElementById('lightbox-title').textContent = title;
+  body.innerHTML = '<iframe src="' + src + '" width="' + w + '" height="' + h + '" style="width:' + w + 'px;height:' + h + 'px;"></iframe>';
+  lb.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  const lb = document.getElementById('lightbox');
+  lb.classList.remove('open');
+  document.getElementById('lightbox-body').innerHTML = '';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeLightbox(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,145 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Cockpit D — feed</title>
+<link rel="stylesheet" href="../wireframes.css">
+</head>
+<body class="density-comfy" data-theme="dark" style="margin:0;background:transparent;">
+<div class="artboard-wrap"><div class="ob-window"><div class="ob-titlebar">
+  <div class="ob-traffic"><span></span><span></span><span></span></div>
+  <div style="margin-left:8px;">my-vault — Obsidian</div>
+</div>
+<div class="ob-body" style="grid-template-columns:36px 1fr 320px;">
+  <div class="ob-ribbon">
+    <div class="ob-ribbon-icon spec">S</div>
+    <div class="ob-ribbon-icon">⌂</div>
+    <div class="ob-ribbon-icon">⊞</div>
+    <div class="ob-ribbon-icon">★</div>
+    <div class="ob-ribbon-icon">⚙</div>
+  </div>
+  <div class="ob-main">
+    <div class="ob-tabs">
+      <div class="ob-tab active"><span class="dot"></span>Cockpit · feed</div>
+    </div>
+    <div class="ob-content" style="padding:0;display:grid;grid-template-rows:auto 1fr;">
+      <!-- header -->
+      <div style="padding:20px 28px 14px;border-bottom:1px solid var(--ob-line);">
+        <div class="sk-h-xs">my-vault</div>
+        <h1 class="sk-h sk-h-xl" style="margin:4px 0 6px;"><span class="sk-underline">What needs you</span> right now</h1>
+        <div class="row" style="gap:8px;font-family:Inter,sans-serif;font-size:12px;color:var(--ob-text-mute);">
+          <span>5 features in flight</span><span>·</span>
+          <span>1 gate · 2 clarifications · 0 ADRs awaiting peer-review</span>
+        </div>
+      </div>
+
+      <!-- feed column -->
+      <div style="padding:18px 28px;overflow:hidden;display:grid;grid-template-columns:1fr;gap:10px;">
+
+        <!-- group: blockers -->
+        <div class="sk-h-xs" style="margin-top:0;">⚑ blockers</div>
+        <div class="sk-box" style="border-color:var(--soft-yellow);background:rgba(232,196,107,0.05);">
+          <div class="row" style="justify-content:space-between;align-items:flex-start;">
+            <div style="flex:1;">
+              <div class="row" style="gap:8px;"><span class="sk-pill gate">gate</span><span class="sk-pill define">user-auth</span><span class="muted" style="font-family:Inter;font-size:11px;">design → specification</span></div>
+              <div class="sk-h sk-h-sm" style="margin-top:6px;">2 clarifications block the gate</div>
+              <p class="sk-p" style="font-size:13px;">design.md §4 (session lifetime) and §6 (mobile fallback) — answer inline or file as sponsor questions.</p>
+            </div>
+            <div class="col" style="gap:6px;align-items:flex-end;">
+              <button class="sk-btn primary">Resolve →</button>
+              <span class="sk-mono">@you · 2d</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- group: today -->
+        <div class="sk-h-xs">▸ today</div>
+        <div class="sk-box thin">
+          <div class="row" style="justify-content:space-between;">
+            <div>
+              <div class="row" style="gap:8px;"><span class="sk-pill build">billing-export</span><span class="muted" style="font-family:Inter;font-size:11px;">implementation · 12/18 tasks</span></div>
+              <div class="sk-h sk-h-sm" style="margin-top:4px;font-size:14.5px;">handed off to <b>@dev-bot</b></div>
+            </div>
+            <span class="sk-mono">3h ago</span>
+          </div>
+        </div>
+        <div class="sk-box thin">
+          <div class="row" style="justify-content:space-between;">
+            <div>
+              <div class="row" style="gap:8px;"><span class="sk-pill ship">onboarding-v2</span><span class="muted" style="font-family:Inter;font-size:11px;">review</span></div>
+              <div class="sk-h sk-h-sm" style="margin-top:4px;font-size:14.5px;">awaiting peer review · @ux-lead</div>
+            </div>
+            <span class="sk-mono">5h ago</span>
+          </div>
+        </div>
+        <div class="sk-box thin">
+          <div class="row" style="justify-content:space-between;">
+            <div>
+              <div class="row" style="gap:8px;"><span class="sk-pill build">webhooks-v2</span><span class="muted" style="font-family:Inter;font-size:11px;">testing</span></div>
+              <div class="sk-h sk-h-sm" style="margin-top:4px;font-size:14.5px;">all e2e green — gate auto-checked ✓</div>
+            </div>
+            <span class="sk-mono">7h ago</span>
+          </div>
+        </div>
+
+        <!-- group: this week -->
+        <div class="sk-h-xs">▸ this week</div>
+        <div class="sk-box thin">
+          <div class="row" style="justify-content:space-between;">
+            <div>
+              <div class="row" style="gap:8px;"><span class="sk-pill define">sso-saml</span><span class="muted" style="font-family:Inter;font-size:11px;">requirements · 8 EARS</span></div>
+              <div class="sk-h sk-h-sm" style="margin-top:4px;font-size:14.5px;">drafted by @pm — needs your sign-off</div>
+            </div>
+            <span class="sk-mono">2d</span>
+          </div>
+        </div>
+        <div class="sk-box thin">
+          <div class="row" style="justify-content:space-between;">
+            <div>
+              <div class="row" style="gap:8px;"><span class="sk-pill ship">cli-todo</span><span class="muted" style="font-family:Inter;font-size:11px;">retrospective</span></div>
+              <div class="sk-h sk-h-sm" style="margin-top:4px;font-size:14.5px;">shipped — write retro within 5d</div>
+            </div>
+            <span class="sk-mono">4d</span>
+          </div>
+        </div>
+
+        <div class="sk-anno" style="align-self:center;margin-top:6px;">grouped by urgency, not by feature</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- right: portfolio glance -->
+  <div class="ob-rightpane">
+    <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:0.08em;color:var(--ob-text-faint);margin-bottom:12px;">Portfolio</div>
+    <div class="sk-box thin" style="padding:10px;margin-bottom:10px;">
+      <div style="font-family:Inter;font-size:12.5px;font-weight:600;margin-bottom:8px;">5 features by stage</div>
+      <!-- mini stacked bar -->
+      <div style="display:flex;height:14px;border-radius:4px;overflow:hidden;border:1px solid var(--ob-line);">
+        <div style="width:18%;background:var(--lane-define);"></div>
+        <div style="width:22%;background:var(--lane-define);opacity:0.7;"></div>
+        <div style="width:18%;background:var(--lane-build);"></div>
+        <div style="width:22%;background:var(--lane-build);opacity:0.7;"></div>
+        <div style="width:20%;background:var(--lane-ship);"></div>
+      </div>
+      <div class="row" style="justify-content:space-between;font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);margin-top:6px;">
+        <span>Define · 2</span><span>Build · 2</span><span>Ship · 1</span>
+      </div>
+    </div>
+    <div class="sk-box thin" style="padding:10px;margin-bottom:10px;">
+      <div style="font-family:Inter;font-size:12.5px;font-weight:600;margin-bottom:6px;">Velocity (4 wk)</div>
+      <!-- ascii spark -->
+      <div style="font-family:JetBrains Mono;font-size:11px;color:var(--ob-text-mute);letter-spacing:2px;">▁▃▂▅▄▇█</div>
+      <div class="muted" style="font-family:Inter;font-size:10.5px;margin-top:4px;">2 stages handed off / week</div>
+    </div>
+    <div class="sk-box thin" style="padding:10px;">
+      <div style="font-family:Inter;font-size:12.5px;font-weight:600;margin-bottom:6px;">Stale &gt; 7d</div>
+      <div style="font-family:Inter;font-size:11.5px;line-height:1.7;color:var(--ob-text-mute);">
+        <div>· notif-prefs <span class="faint">idea · 9d</span></div>
+        <div>· audit-log <span class="faint">specification · 11d</span></div>
+      </div>
+    </div>
+    <div class="sk-divider"></div>
+    <div class="sk-h-xs">command palette</div>
+    <div class="sk-box thin" style="padding:8px;margin-top:6px;font-family:JetBrains Mono;font-size:11px;color:var(--ob-text-mute);">
+      ⌘P → spec:<span style="color:var(--ob-text);">_</span>
+    </div>
+  </div>
+</div></div></div>
+</body></html>

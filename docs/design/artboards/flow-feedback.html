@@ -1,0 +1,612 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Errors, feedback & notifications</title>
+<link rel="stylesheet" href="../wireframes.css">
+<style>
+  body { margin: 0; background: var(--ob-bg); }
+  .scroll { width: 100%; overflow-x: auto; padding: 80px 0 60px; }
+
+  .sub-head {
+    padding: 48px 32px 8px;
+  }
+  .sub-head .sub-label {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    color: var(--ob-text-faint);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    margin-bottom: 6px;
+  }
+  .sub-head h3 {
+    font-family: var(--sketch);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--ob-text);
+    margin: 0 0 4px;
+  }
+  .sub-head p {
+    font-family: "Inter", sans-serif;
+    font-size: 12px;
+    color: var(--ob-text-mute);
+    margin: 0;
+    line-height: 1.5;
+    max-width: 680px;
+  }
+
+  /* status bar strip */
+  .ob-statusbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--ob-bg-2);
+    border-top: 1px solid var(--ob-line);
+    padding: 0 10px;
+    height: 22px;
+    font-family: "Inter", sans-serif;
+    font-size: 10.5px;
+    color: var(--ob-text-mute);
+  }
+  .ob-statusbar .sb-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .ob-statusbar .sb-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--ob-text-faint);
+  }
+  .ob-statusbar .sb-dot.ok    { background: var(--lane-define, #4ad196); }
+  .ob-statusbar .sb-dot.warn  { background: #c9a227; }
+  .ob-statusbar .sb-dot.error { background: #c66; }
+
+  /* notification tier badge */
+  .tier-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    padding: 2px 7px;
+    border-radius: 3px;
+    border: 1px solid currentColor;
+  }
+  .tier-1 { color: var(--ob-text-faint); }
+  .tier-2 { color: var(--accent); }
+  .tier-3 { color: #c9a227; }
+
+  /* cross-ref link */
+  .xref {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9.5px;
+    color: var(--accent);
+    background: rgba(127,109,242,0.08);
+    border: 1px solid rgba(127,109,242,0.25);
+    border-radius: 3px;
+    padding: 2px 7px;
+  }
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="sb-section-head">
+  <div class="meta">catalogue · errors · feedback · notifications</div>
+  <h2>Error cases, user feedback & notifications</h2>
+  <p>Three distinct communication concerns. Errors are things that went wrong. Feedback confirms things went right (or shows progress). Notifications are async signals that something changed while you weren't looking. Each gets a different surface and a different tone. Existing coverage (gate failures, sync conflicts, undo) is cross-referenced rather than re-illustrated.</p>
+</div>
+
+<!-- ═══════════════════════════════════
+     SECTION 1 · NOTIFICATION SURFACES
+     (the architecture, first)
+═══════════════════════════════════ -->
+<div class="sub-head">
+  <div class="sub-label">section 1 of 4</div>
+  <h3>Notification surfaces — the three tiers</h3>
+  <p>Principle 5: quiet by default, loud only when blocking. Three surfaces, three loudness levels. A major event may escalate through all three; a minor one never leaves tier 1.</p>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 2200px;">
+
+  <!-- T1: status bar -->
+  <div class="sb-frame">
+    <div class="sb-num">T1</div>
+    <div class="sb-time">tier 1 · always visible</div>
+    <div class="sb-anno top">
+      <span class="tag">principle 5 · quiet</span>
+      <b>Status bar: the quietest surface.</b><br>
+      A single coloured dot + label. Never demands attention. Glanceable health at all times.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:13px;color:var(--ob-text);margin-bottom:8px;">Obsidian window footer</div>
+
+      <!-- healthy state -->
+      <div style="margin-bottom:10px;">
+        <div style="font-family:Inter;font-size:10px;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">healthy</div>
+        <div class="ob-statusbar">
+          <div class="sb-item">
+            <span class="sb-dot ok"></span>
+            <span>Specorator</span>
+          </div>
+          <div class="sb-item" style="margin-left:auto;color:var(--ob-text-faint);font-size:9.5px;font-family:JetBrains Mono;">magic-link-auth · step 5</div>
+        </div>
+      </div>
+
+      <!-- warning state -->
+      <div style="margin-bottom:10px;">
+        <div style="font-family:Inter;font-size:10px;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">warning</div>
+        <div class="ob-statusbar">
+          <div class="sb-item">
+            <span class="sb-dot warn"></span>
+            <span style="color:#c9a227;">Specorator · 2 OQs</span>
+          </div>
+          <div class="sb-item" style="margin-left:auto;color:var(--ob-text-faint);font-size:9.5px;font-family:JetBrains Mono;">step 4 · gate blocked</div>
+        </div>
+      </div>
+
+      <!-- error state -->
+      <div>
+        <div style="font-family:Inter;font-size:10px;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">error</div>
+        <div class="ob-statusbar">
+          <div class="sb-item">
+            <span class="sb-dot error"></span>
+            <span style="color:#c66;">Specorator · parse error</span>
+          </div>
+          <div class="sb-item" style="margin-left:auto;color:#c66;font-size:9.5px;font-family:JetBrains Mono;">_meta.md · click to fix</div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Three dot colours. One glance.</b>
+      <span class="sub">Green = healthy · amber = needs attention · red = blocking error.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">escalates to</span></div>
+
+  <!-- T2: cockpit banner -->
+  <div class="sb-frame">
+    <div class="sb-num">T2</div>
+    <div class="sb-time">tier 2 · cockpit banner</div>
+    <div class="sb-anno bottom">
+      <span class="tag">major events only</span>
+      <b>Banner: inline, persistent, dismissible.</b><br>
+      Appears for major events — gate pass, ship, blocking error. Stays until dismissed. Never stacks (new banner replaces old).
+    </div>
+    <div class="sb-screen">
+      <!-- gate pass banner -->
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">gate passed</div>
+      <div style="background:rgba(74,209,150,0.08);border:1px solid var(--lane-define,#4ad196);border-radius:4px;padding:8px 10px;font-family:Inter;font-size:11px;color:var(--ob-text);display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="color:var(--lane-define,#4ad196);font-size:14px;">⚑</span>
+        <span><b>Gate passed:</b> Define → Build ready</span>
+        <span style="margin-left:auto;color:var(--ob-text-faint);font-size:10px;cursor:pointer;">×</span>
+      </div>
+
+      <!-- shipped banner -->
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">shipped</div>
+      <div style="background:rgba(255,229,107,0.07);border:1px solid #b08a14;border-radius:4px;padding:8px 10px;font-family:Inter;font-size:11px;color:var(--ob-text);display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="color:#c9a227;font-size:14px;">✦</span>
+        <span><b>Shipped:</b> magic-link-auth</span>
+        <span style="margin-left:auto;color:var(--ob-text-faint);font-size:10px;cursor:pointer;">×</span>
+      </div>
+
+      <!-- blocking error banner -->
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">blocking error</div>
+      <div style="background:rgba(204,102,102,0.08);border:1px solid #c66;border-radius:4px;padding:8px 10px;font-family:Inter;font-size:11px;color:var(--ob-text);display:flex;align-items:center;gap:8px;">
+        <span style="color:#c66;font-size:14px;">⚠</span>
+        <span><b>Parse error:</b> _meta.md line 4</span>
+        <span style="color:var(--accent);margin-left:auto;font-size:10.5px;cursor:pointer;">Fix →</span>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Three banner flavours.</b>
+      <span class="sub">Green = advance · amber = celebrate · red = fix needed.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">contextual</span></div>
+
+  <!-- T3: coach nudge -->
+  <div class="sb-frame">
+    <div class="sb-num">T3</div>
+    <div class="sb-time">tier 3 · coach nudge</div>
+    <div class="sb-anno top">
+      <span class="tag">principle 2 · one action</span>
+      <b>Coach: contextual guidance, not alerts.</b><br>
+      The coach reacts to what the user is doing right now. Not a notification — a suggestion. Always has a "not now" escape.
+    </div>
+    <div class="sb-screen">
+      <!-- three coach states -->
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">step-complete nudge</div>
+      <div class="coach" style="font-size:10.5px;margin-bottom:7px;">
+        <div>
+          <div class="ctitle">Ready to hand off?</div>
+          <div class="ctext" style="font-size:10.5px;">All items ticked. Hand off step 4 to move to step 5.</div>
+          <div class="cactions">
+            <button class="sk-btn primary" style="font-size:10px;padding:2px 8px;">Hand off →</button>
+            <span style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);margin-left:4px;">not yet</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">returning user nudge</div>
+      <div class="coach" style="font-size:10.5px;">
+        <div>
+          <div class="ctitle">Back after 7 days</div>
+          <div class="ctext" style="font-size:10.5px;">Last: handed off step 4. You're on step 5 — check the design.</div>
+          <div class="cactions">
+            <button class="sk-btn primary" style="font-size:10px;padding:2px 8px;">Open step 5</button>
+            <span style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);margin-left:4px;">show all</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Coach = guide, not alarm.</b>
+      <span class="sub">Contextual. Always dismissible. Never stacks.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">rules</span></div>
+
+  <!-- T4: escalation rules -->
+  <div class="sb-frame">
+    <div class="sb-num">T4</div>
+    <div class="sb-time">escalation matrix</div>
+    <div class="sb-anno bottom">
+      <span class="tag">principle 5</span>
+      <b>Which tier for which event?</b><br>
+      The matrix is the spec. Everything else follows from it.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Event → surface</div>
+
+      <div style="display:flex;flex-direction:column;gap:4px;font-family:Inter;font-size:10px;">
+        <!-- header row -->
+        <div style="display:grid;grid-template-columns:1fr 60px 60px 60px;gap:4px;color:var(--ob-text-faint);font-family:JetBrains Mono;font-size:9px;text-transform:uppercase;padding:0 4px;">
+          <span>Event</span><span style="text-align:center;">Bar</span><span style="text-align:center;">Banner</span><span style="text-align:center;">Coach</span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 60px 60px 60px;gap:4px;background:var(--ob-bg-2);padding:4px;border-radius:3px;align-items:center;">
+          <span style="color:var(--ob-text);">File saved</span>
+          <span style="text-align:center;color:var(--lane-define,#4ad196);">●</span>
+          <span style="text-align:center;color:var(--ob-text-faint);">—</span>
+          <span style="text-align:center;color:var(--ob-text-faint);">—</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 60px 60px 60px;gap:4px;background:var(--ob-bg-2);padding:4px;border-radius:3px;align-items:center;">
+          <span style="color:var(--ob-text);">Step handed off</span>
+          <span style="text-align:center;color:var(--lane-define,#4ad196);">●</span>
+          <span style="text-align:center;color:var(--ob-text-faint);">—</span>
+          <span style="text-align:center;color:var(--lane-define,#4ad196);">●</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 60px 60px 60px;gap:4px;background:var(--ob-bg-2);padding:4px;border-radius:3px;align-items:center;">
+          <span style="color:var(--ob-text);">OQ added</span>
+          <span style="text-align:center;color:#c9a227;">●</span>
+          <span style="text-align:center;color:var(--ob-text-faint);">—</span>
+          <span style="text-align:center;color:var(--ob-text-faint);">—</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 60px 60px 60px;gap:4px;background:var(--ob-bg-2);padding:4px;border-radius:3px;align-items:center;">
+          <span style="color:var(--ob-text);">Gate passed</span>
+          <span style="text-align:center;color:var(--lane-define,#4ad196);">●</span>
+          <span style="text-align:center;color:var(--lane-define,#4ad196);">●</span>
+          <span style="text-align:center;color:var(--lane-define,#4ad196);">●</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 60px 60px 60px;gap:4px;background:var(--ob-bg-2);padding:4px;border-radius:3px;align-items:center;">
+          <span style="color:var(--ob-text);">Shipped</span>
+          <span style="text-align:center;color:#c9a227;">●</span>
+          <span style="text-align:center;color:#c9a227;">●</span>
+          <span style="text-align:center;color:#c9a227;">●</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 60px 60px 60px;gap:4px;background:rgba(204,102,102,0.06);border:1px solid rgba(204,102,102,0.2);padding:4px;border-radius:3px;align-items:center;">
+          <span style="color:#c66;">Blocking error</span>
+          <span style="text-align:center;color:#c66;">●</span>
+          <span style="text-align:center;color:#c66;">●</span>
+          <span style="text-align:center;color:var(--ob-text-faint);">—</span>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>The matrix. Not the vibe.</b>
+      <span class="sub">Every event has one authoritative surface mapping.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════
+     SECTION 2 · ERROR CASES
+═══════════════════════════════════ -->
+<div class="sub-head">
+  <div class="sub-label">section 2 of 4</div>
+  <h3>Error cases — catalogue</h3>
+  <p>Four categories of error the plugin must handle gracefully. Each has a surface (status bar dot + cockpit banner), a message (plain English, not stack traces), and a recovery action (one click to fix or acknowledge). Gate failures and sync conflicts are cross-referenced — see those flows for detail.</p>
+</div>
+
+<div style="padding:8px 32px 8px;display:grid;grid-template-columns:repeat(2,1fr);gap:18px;">
+
+  <!-- E1: file system error -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">E1</div>
+    <div class="sb-time">file system</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;">
+        <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);">File system error</div>
+        <span class="tier-badge tier-2">tier 2 · banner</span>
+      </div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        Triggered when the plugin can't read or write a spec file — permission denied, file locked by another process, or disk full.
+      </div>
+
+      <div style="background:rgba(204,102,102,0.08);border:1px solid #c66;border-radius:4px;padding:8px 10px;font-family:Inter;font-size:10.5px;color:var(--ob-text);margin-bottom:6px;">
+        <div style="font-weight:700;color:#c66;margin-bottom:2px;">⚠ Can't write: 04-how-it-works.md</div>
+        <div style="color:var(--ob-text-mute);font-size:10px;line-height:1.5;">File is locked or permission denied. Your changes are held in memory.</div>
+        <div style="margin-top:6px;display:flex;gap:6px;">
+          <button class="sk-btn" style="font-size:9.5px;padding:2px 7px;border-color:#c66;color:#c66;">Retry</button>
+          <button class="sk-btn ghost" style="font-size:9.5px;padding:2px 7px;">Save copy elsewhere</button>
+        </div>
+      </div>
+
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">changes held in memory until resolved</div>
+    </div>
+    <div class="sb-caption">
+      <b>Changes held. Never lost.</b>
+      <span class="sub">Retry or export. Snapshot taken before the failure.</span>
+    </div>
+  </div>
+
+  <!-- E2: frontmatter parse error -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">E2</div>
+    <div class="sb-time">frontmatter</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;">
+        <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);">Frontmatter parse error</div>
+        <span class="tier-badge tier-2">tier 2 · banner</span>
+      </div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        Triggered when YAML frontmatter in a spec file is malformed — usually caused by manual editing. The plugin can't read the feature's state.
+      </div>
+
+      <div style="background:rgba(204,102,102,0.08);border:1px solid #c66;border-radius:4px;padding:8px 10px;font-family:Inter;font-size:10.5px;color:var(--ob-text);margin-bottom:6px;">
+        <div style="font-weight:700;color:#c66;margin-bottom:2px;">⚠ Bad frontmatter: _meta.md line 4</div>
+        <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-mute);background:var(--ob-bg);padding:4px 6px;border-radius:2px;margin-bottom:5px;line-height:1.5;">
+          status: in-progress<br>
+          <span style="color:#c66;">step 4  ← missing colon</span>
+        </div>
+        <button class="sk-btn" style="font-size:9.5px;padding:2px 7px;border-color:#c66;color:#c66;">Open file at line 4</button>
+      </div>
+
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">cockpit paused — resumes on fix + save</div>
+    </div>
+    <div class="sb-caption">
+      <b>Exact line shown. One-click to fix.</b>
+      <span class="sub">Cockpit pauses but doesn't corrupt. Plain YAML, fixable in any editor.</span>
+    </div>
+  </div>
+
+  <!-- E3: invalid step transition -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">E3</div>
+    <div class="sb-time">invalid transition</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;">
+        <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);">Invalid step transition</div>
+        <span class="tier-badge tier-2">tier 2 · banner</span>
+      </div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        Triggered when frontmatter is edited directly to jump steps out of order (e.g. <code style="font-size:10px;">current_step: 9</code> while on step 4). Plugin detects the gap and flags it.
+      </div>
+
+      <div style="background:rgba(255,229,107,0.07);border:1px solid #b08a14;border-radius:4px;padding:8px 10px;font-family:Inter;font-size:10.5px;color:var(--ob-text);margin-bottom:6px;">
+        <div style="font-weight:700;color:#c9a227;margin-bottom:2px;">⚑ Step jump detected: 4 → 9</div>
+        <div style="color:var(--ob-text-mute);font-size:10px;line-height:1.5;">Steps 5–8 would be skipped without reasons. Add skip reasons or revert to step 4.</div>
+        <div style="margin-top:6px;display:flex;gap:6px;">
+          <button class="sk-btn" style="font-size:9.5px;padding:2px 7px;border-color:#b08a14;color:#c9a227;">Add skip reasons</button>
+          <button class="sk-btn ghost" style="font-size:9.5px;padding:2px 7px;">Revert to step 4</button>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Amber, not red.</b>
+      <span class="sub">Solvable: add skip reasons. Or revert. Not a crash.</span>
+    </div>
+  </div>
+
+  <!-- E4: plugin crash / recovery -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">E4</div>
+    <div class="sb-time">plugin crash</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;">
+        <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);">Plugin crash / recovery</div>
+        <span class="tier-badge tier-2">tier 2 · banner</span>
+      </div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        If the plugin crashes mid-mutation (e.g. Obsidian force-quit during a hand-off), it detects an incomplete write on next load and offers recovery. DR-005 guarantees a snapshot always exists.
+      </div>
+
+      <div style="background:rgba(204,102,102,0.08);border:1px solid #c66;border-radius:4px;padding:8px 10px;font-family:Inter;font-size:10.5px;color:var(--ob-text);margin-bottom:6px;">
+        <div style="font-weight:700;color:#c66;margin-bottom:2px;">⚠ Incomplete write detected</div>
+        <div style="color:var(--ob-text-mute);font-size:10px;line-height:1.5;margin-bottom:5px;">Last session ended mid-hand-off. A snapshot exists from before the write.</div>
+        <div style="display:flex;gap:6px;">
+          <button class="sk-btn primary" style="font-size:9.5px;padding:2px 8px;">Restore snapshot</button>
+          <button class="sk-btn ghost" style="font-size:9.5px;padding:2px 7px;">Keep current files</button>
+        </div>
+      </div>
+
+      <div style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">DR-005 · snapshot taken before every mutation</div>
+    </div>
+    <div class="sb-caption">
+      <b>Always recoverable. DR-005.</b>
+      <span class="sub">Snapshot exists before every write. Crash = restore, not data loss.</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- cross-refs -->
+<div style="padding:4px 32px 20px;display:flex;gap:10px;flex-wrap:wrap;">
+  <span style="font-family:Inter;font-size:11px;color:var(--ob-text-faint);">See also:</span>
+  <span class="xref">↗ flow-gate · gate check failures</span>
+  <span class="xref">↗ flow-recovery · sync conflicts</span>
+  <span class="xref">↗ flow-skip · skip-with-reason (E3 variant)</span>
+</div>
+
+<!-- ═══════════════════════════════════
+     SECTION 3 · USER FEEDBACK
+═══════════════════════════════════ -->
+<div class="sub-head">
+  <div class="sub-label">section 3 of 4</div>
+  <h3>User feedback — confirmations, progress, empty states</h3>
+  <p>Feedback tells the user their action worked (or is working). Major confirmations get a cockpit banner; minor ones get a status bar tick and nothing else. Progress indicators are used sparingly — only when a check takes more than ~300ms.</p>
+</div>
+
+<div style="padding:8px 32px 8px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;">
+
+  <!-- F1: success confirmations -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">F1</div>
+    <div class="sb-time">success · major</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Major success states</div>
+
+      <!-- gate passed -->
+      <div style="background:rgba(74,209,150,0.07);border:1px solid var(--lane-define,#4ad196);border-radius:4px;padding:7px 9px;font-family:Inter;font-size:10.5px;color:var(--ob-text);display:flex;align-items:center;gap:7px;margin-bottom:5px;">
+        <span style="color:var(--lane-define,#4ad196);">⚑</span>
+        <span><b>Gate passed</b> — Define → Build ready</span>
+        <span style="margin-left:auto;color:var(--ob-text-faint);font-size:10px;">×</span>
+      </div>
+
+      <!-- shipped -->
+      <div style="background:rgba(255,229,107,0.07);border:1px solid #b08a14;border-radius:4px;padding:7px 9px;font-family:Inter;font-size:10.5px;color:var(--ob-text);display:flex;align-items:center;gap:7px;margin-bottom:5px;">
+        <span style="color:#c9a227;">✦</span>
+        <span><b>Shipped:</b> magic-link-auth</span>
+        <span style="margin-left:auto;color:var(--ob-text-faint);font-size:10px;">×</span>
+      </div>
+
+      <!-- decision note saved -->
+      <div style="background:rgba(127,109,242,0.08);border:1px solid var(--accent);border-radius:4px;padding:7px 9px;font-family:Inter;font-size:10.5px;color:var(--ob-text);display:flex;align-items:center;gap:7px;">
+        <span style="color:var(--accent);">✎</span>
+        <span><b>Decision saved</b> and linked</span>
+        <span style="margin-left:auto;color:var(--ob-text-faint);font-size:10px;">×</span>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Three major confirmations.</b>
+      <span class="sub">Each gets a banner. Colour-coded by type.</span>
+    </div>
+  </div>
+
+  <!-- F2: progress indicator -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">F2</div>
+    <div class="sb-time">progress · gate scan</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Gate scan in progress</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        Gate checks are near-instant for small vaults. For large ones (&gt;500 files), a scan can take 1–3 seconds. A subtle inline indicator replaces the gate checklist during evaluation.
+      </div>
+
+      <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-radius:4px;padding:8px 10px;margin-bottom:6px;">
+        <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);text-transform:uppercase;margin-bottom:6px;">Checking gate…</div>
+        <div style="display:flex;flex-direction:column;gap:5px;">
+          <div style="display:flex;align-items:center;gap:7px;font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);">
+            <span style="color:var(--lane-define,#4ad196);">✓</span> Vision paragraph
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);">
+            <span style="color:var(--lane-define,#4ad196);">✓</span> Rules count
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);">
+            <span style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);">…</span> Scanning open questions
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;font-family:Inter;font-size:10.5px;color:var(--ob-text-faint);opacity:.4;">
+            <span>○</span> Decision note link
+          </div>
+        </div>
+      </div>
+
+      <div style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">items check in sequence · ~300ms typical</div>
+    </div>
+    <div class="sb-caption">
+      <b>Sequential scan. Live ticks.</b>
+      <span class="sub">Each item checks and ticks in order — feels fast and legible.</span>
+    </div>
+  </div>
+
+  <!-- F3: empty states -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">F3</div>
+    <div class="sb-time">empty states</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Empty states catalogue</div>
+
+      <!-- no features -->
+      <div style="background:var(--ob-bg-2);border:1px dashed var(--ob-line);border-radius:4px;padding:7px 9px;margin-bottom:5px;">
+        <div style="font-family:Inter;font-size:10.5px;font-weight:700;color:var(--ob-text);margin-bottom:2px;">No features yet</div>
+        <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);">Create your first feature to start.</div>
+        <button class="sk-btn primary" style="font-size:9.5px;padding:2px 8px;margin-top:5px;">New feature</button>
+      </div>
+
+      <!-- no OQs -->
+      <div style="background:var(--ob-bg-2);border:1px dashed var(--ob-line);border-radius:4px;padding:7px 9px;margin-bottom:5px;">
+        <div style="font-family:Inter;font-size:10.5px;font-weight:700;color:var(--ob-text);margin-bottom:2px;">No open questions</div>
+        <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);">Start a line with ? to track one.</div>
+      </div>
+
+      <!-- no decisions -->
+      <div style="background:var(--ob-bg-2);border:1px dashed var(--ob-line);border-radius:4px;padding:7px 9px;">
+        <div style="font-family:Inter;font-size:10.5px;font-weight:700;color:var(--ob-text);margin-bottom:2px;">No decision notes</div>
+        <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);">Log a decision when you make a big choice.</div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Empty = instructive, not blank.</b>
+      <span class="sub">Each empty state explains how to fill it. No lorem ipsum.</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════
+     SECTION 4 · DESIGN NOTES
+═══════════════════════════════════ -->
+<div class="sub-head">
+  <div class="sub-label">section 4 of 4</div>
+  <h3>Design rationale</h3>
+  <p>Why this architecture, not another.</p>
+</div>
+
+<div style="padding:8px 32px 60px;display:grid;grid-template-columns:repeat(2,1fr);gap:18px;">
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Three tiers, not one toast</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">A single toast system collapses urgency — a "file saved" toast and a "blocking error" toast look identical. Three surfaces let urgency be communicated through position and persistence, not just colour. The status bar is always visible; the banner demands a dismiss; the coach is an invitation. (Principle 5)</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Banners don't stack</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">A new banner replaces the old one. Stacked notifications train users to dismiss everything without reading. One banner at a time means one thing to pay attention to. The old event is still in the timeline if needed.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Error messages are tasks, not codes</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">"Can't write: 04-how-it-works.md — file is locked" is a task. "EACCES: permission denied, open '/…/04-how-it-works.md'" is not. Every error message must answer: what failed, why, and what to do. (DR-003)</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">No telemetry, no error reporting</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">DR-006 rules out any server-side error collection. Errors are surfaced to the user only. The plugin can offer a "copy error to clipboard for GitHub issue" action, but never auto-submits anything. User owns all data, including errors.</p>
+  </div>
+
+</div>
+
+</body></html>

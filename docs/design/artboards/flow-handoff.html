@@ -1,0 +1,436 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Flow · hand-off</title>
+<link rel="stylesheet" href="../wireframes.css">
+<style>
+  body { margin: 0; background: var(--ob-bg); }
+  .scroll { width: 100%; overflow-x: auto; padding: 80px 0 60px; }
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="sb-section-head">
+  <div class="meta">flow · the most-used micro-interaction</div>
+  <h2>Hand-off — finishing one step so the next can begin</h2>
+  <p>This is the moment that defines the product's <i>feel</i>. It happens dozens of times per feature. It must be confident enough to invite, calm enough not to startle, and reversible enough to be trusted.</p>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 2900px;">
+
+  <!-- 01 pre-state -->
+  <div class="sb-frame">
+    <div class="sb-num">01</div>
+    <div class="sb-time">t = 0</div>
+    <div class="sb-anno top">
+      <span class="tag">pre-state</span>
+      <b>Eligible.</b><br>
+      Coach turned green when all gate items ticked. The "Hand off" button is now solid — earlier it was ghosted.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 4 of 11 · how it works</div>
+
+      <div class="sk-box thin" style="padding:8px 10px;border-color:var(--lane-define,#4ad196);background:rgba(74,209,150,0.06);">
+        <div style="font-family:Inter;font-size:11px;font-weight:700;color:var(--ob-text);margin-bottom:4px;">✓ Ready to hand off</div>
+        <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);line-height:1.5;">
+          <span class="sk-check done"></span>4 rules written<br>
+          <span class="sk-check done"></span>0 open questions<br>
+          <span class="sk-check done"></span>linked to vision
+        </div>
+        <div style="margin-top:8px;display:flex;gap:5px;">
+          <button class="sk-btn primary" style="font-size:11px;padding:3px 10px;">Hand off →</button>
+          <button class="sk-btn ghost" style="font-size:11px;padding:3px 8px;">Not yet</button>
+        </div>
+      </div>
+
+      <div class="mini-stages" style="margin-top:10px;">
+        <span class="d done"></span><span class="sep"></span><span class="d done"></span><span class="sep"></span><span class="d done"></span><span class="sep"></span>
+        <span class="d active"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Hand-off button is solid.</b>
+      <span class="sub">Eligibility is visible, not hidden behind a click.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">click</span></div>
+
+  <!-- 02 confirm -->
+  <div class="sb-frame">
+    <div class="sb-num">02</div>
+    <div class="sb-time">t = 0.2s</div>
+    <div class="sb-anno bottom">
+      <span class="tag">principle 5</span>
+      <b>Loud only when blocking.</b><br>
+      Not a modal. An inline confirm — keeps the page calm, lets escape-key bail.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 4 of 11 · how it works</div>
+
+      <div class="sk-box" style="padding:10px 12px;border-color:var(--accent);background:rgba(127,109,242,0.08);">
+        <div style="font-family:var(--sketch);font-size:16px;color:var(--ob-text);margin-bottom:4px;">Hand off step 4 → step 5?</div>
+        <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+          We'll mark <b>04-how-it-works.md</b> done, create <b>05-check-the-design.md</b> from the template, and notify <b>@arch-lead</b>.
+        </div>
+        <div style="display:flex;gap:5px;align-items:center;">
+          <button class="sk-btn primary" style="font-size:11px;padding:3px 10px;">Yes, hand off</button>
+          <button class="sk-btn" style="font-size:11px;padding:3px 8px;">Cancel</button>
+          <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">⏎ · esc</span>
+        </div>
+        <div style="margin-top:8px;font-family:Inter;font-size:10.5px;color:var(--ob-text-faint);">
+          <span style="color:var(--accent);">↶</span> Reversible for 24 hours after.
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Inline confirm, not a modal.</b>
+      <span class="sub">Says exactly what will happen, in plain English.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">⏎</span></div>
+
+  <!-- 03 snapshot -->
+  <div class="sb-frame">
+    <div class="sb-num">03</div>
+    <div class="sb-time">t = 0.4s</div>
+    <div class="sb-anno top">
+      <span class="tag">DR-005 · safety net</span>
+      <b>Snapshot first, mutate second.</b><br>
+      Before any file changes, we save the pre-state. Undo is now armed.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">snapshot saving...</div>
+      <div class="mini-tree">
+        <div>.specorator/snapshots/</div>
+        <div class="ind new">└ 2026-05-01_handoff_4-5.zip</div>
+      </div>
+      <div style="margin-top:12px;font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;">
+        <div style="display:flex;align-items:center;gap:6px;"><span class="sk-check done"></span>frontmatter snapshot</div>
+        <div style="display:flex;align-items:center;gap:6px;"><span class="sk-check done"></span>file contents snapshot</div>
+        <div style="display:flex;align-items:center;gap:6px;"><span class="sk-check done"></span>cockpit state snapshot</div>
+      </div>
+      <div style="position:absolute;bottom:10px;left:14px;right:14px;font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">
+        ~6kb · auto-clean after 24h
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Snapshot before mutation.</b>
+      <span class="sub">Always. Even for the smallest hand-off.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">apply</span></div>
+
+  <!-- 04 mutation -->
+  <div class="sb-frame">
+    <div class="sb-num">04</div>
+    <div class="sb-time">t = 0.5s</div>
+    <div class="sb-anno bottom">
+      <span class="tag">DR-004 · markdown is truth</span>
+      <b>Files change. Plugin doesn't store state.</b><br>
+      Frontmatter on the file is the new state. The plugin re-reads it on next render.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text-mute);line-height:1.6;">
+        <div style="color:var(--lane-define,#4ad196);">~ 04-how-it-works.md</div>
+        <div style="padding-left:12px;color:var(--ob-text-faint);">stage: 4 → <span style="color:var(--lane-define,#4ad196);">done</span></div>
+        <div style="padding-left:12px;color:var(--ob-text-faint);">completed_at: 2026-05-01</div>
+        <div style="margin-top:6px;color:var(--accent);">+ 05-check-the-design.md</div>
+        <div style="padding-left:12px;color:var(--ob-text-faint);">stage: 5 (active)</div>
+        <div style="padding-left:12px;color:var(--ob-text-faint);">owner: @arch-lead</div>
+        <div style="padding-left:12px;color:var(--ob-text-faint);">linked_to: 04, 03, 02, 01</div>
+      </div>
+      <div style="margin-top:12px;padding:6px 8px;border-left:2px solid var(--accent);background:rgba(127,109,242,0.06);font-family:Inter;font-size:11px;color:var(--ob-text-mute);">
+        Notification queued: <b>@arch-lead</b>
+        <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);margin-top:2px;">via Obsidian Sync · or none</div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>One file marked done. One file created.</b>
+      <span class="sub">Both via frontmatter. No DB. Git-friendly diff.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">render</span></div>
+
+  <!-- 05 transition -->
+  <div class="sb-frame">
+    <div class="sb-num">05</div>
+    <div class="sb-time">t = 0.7s</div>
+    <div class="sb-anno top">
+      <span class="tag">UX texture</span>
+      <b>250ms cross-fade.</b><br>
+      Not snappy. Deliberate. Old step fades, new step settles in. The dot on the rail slides.
+    </div>
+    <div class="sb-screen">
+      <div style="position:absolute;inset:14px;display:grid;grid-template-rows:1fr 1fr;gap:8px;">
+        <div style="opacity:0.35;border:1.2px dashed var(--ob-line);padding:6px 8px;border-radius:4px;">
+          <div style="font-family:Inter;font-size:10px;color:var(--ob-text-faint);">step 4 · how it works</div>
+          <div style="font-family:Inter;font-size:9.5px;color:var(--ob-text-faint);">fading out</div>
+        </div>
+        <div style="border:1.5px solid var(--accent);padding:6px 8px;border-radius:4px;background:rgba(127,109,242,0.08);">
+          <div style="font-family:Inter;font-size:10px;color:var(--accent);font-weight:700;">step 5 · check the design</div>
+          <div style="font-family:Inter;font-size:9.5px;color:var(--ob-text-mute);">settling in</div>
+        </div>
+      </div>
+      <div style="position:absolute;bottom:10px;left:14px;right:14px;font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);text-align:center;">
+        ───── 250ms ─────
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Cross-fade, not jump.</b>
+      <span class="sub">The product feels deliberate, not hurried.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">land</span></div>
+
+  <!-- 06 post-state -->
+  <div class="sb-frame">
+    <div class="sb-num">06</div>
+    <div class="sb-time">t = 1s</div>
+    <div class="sb-anno bottom">
+      <span class="tag">teaches the safety net</span>
+      <b>Undo banner is the lesson.</b><br>
+      First-time users learn reversibility right when they need it — not in a help doc.
+    </div>
+    <div class="sb-screen">
+      <div style="background:rgba(127,109,242,0.1);border:1px solid var(--accent);border-radius:4px;padding:6px 8px;display:flex;align-items:center;gap:6px;font-size:10.5px;font-family:Inter;color:var(--ob-text);margin-bottom:8px;">
+        <span>↶</span>
+        <span><b>Handed off:</b> 4 → 5</span>
+        <span style="margin-left:auto;color:var(--accent);">undo (24h)</span>
+      </div>
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:6px;">step 5 · check the design</div>
+
+      <div class="sk-box thin" style="padding:7px 9px;border-color:var(--accent);background:rgba(127,109,242,0.04);">
+        <div style="font-family:Inter;font-size:11px;font-weight:700;color:var(--ob-text);margin-bottom:2px;">✶ Now waiting on @arch-lead</div>
+        <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);line-height:1.45;">
+          Nothing for you here. Want to switch features?
+        </div>
+      </div>
+      <div class="mini-stages" style="margin-top:10px;">
+        <span class="d done"></span><span class="sep"></span><span class="d done"></span><span class="sep"></span><span class="d done"></span><span class="sep"></span>
+        <span class="d done"></span><span class="sep"></span>
+        <span class="d active"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Undo banner. New owner. Calm cockpit.</b>
+      <span class="sub">Momentum without urgency.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">later</span></div>
+
+  <!-- 07 undo expires -->
+  <div class="sb-frame">
+    <div class="sb-num">07</div>
+    <div class="sb-time">t + 24h</div>
+    <div class="sb-anno top">
+      <span class="tag">end of safety window</span>
+      <b>Quietly expires.</b><br>
+      No "are you sure" prompt. Just a status change. The change is now part of history.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.7;">
+        <div style="color:var(--ob-text);font-weight:700;font-size:11.5px;margin-bottom:4px;">Recent hand-offs</div>
+        <div style="display:flex;align-items:center;gap:6px;padding:3px 0;">
+          · billing-export · 6→7 <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">just now</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;padding:3px 0;color:var(--ob-text-mute);">
+          · magic-link-auth · 4→5 <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">25h ago</span>
+        </div>
+        <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);padding-left:12px;">↳ snapshot expired · no undo</div>
+      </div>
+      <div style="margin-top:14px;font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);font-style:italic;">
+        Snapshots auto-prune after 24h. To go back further, use git.
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Snapshot prunes itself.</b>
+      <span class="sub">Past 24h, the artifact is git's job — not ours.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ─────── failure variants ─────── -->
+<div class="sb-section-head">
+  <div class="meta">when the hand-off can't proceed</div>
+  <h2 style="font-size:22px;">Failure variants</h2>
+  <p>The same six frames, but one of them blocks. Each block must explain itself, suggest a fix, and never mock the user for trying.</p>
+</div>
+
+<div style="padding:8px 32px 36px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;">
+
+  <!-- F1 -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num" style="background:#e8c46b;">!</div>
+    <div class="sb-time">block A</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Open questions remain</div>
+      <div style="background:rgba(255,229,107,0.08);border:1px solid #b08a14;border-radius:4px;padding:8px;font-family:Inter;font-size:11px;color:var(--ob-text);line-height:1.55;">
+        <div style="font-family:JetBrains Mono;font-size:9.5px;color:#b08a14;text-transform:uppercase;margin-bottom:3px;">2 unresolved</div>
+        · "Magic link expiry — 15min or 24h?"<br>
+        · "Rate limit per email or per IP?"
+      </div>
+      <div style="margin-top:8px;display:flex;gap:5px;">
+        <button class="sk-btn" style="font-size:10.5px;padding:3px 8px;">Resolve them</button>
+        <button class="sk-btn ghost" style="font-size:10.5px;padding:3px 8px;">Mark "won't decide"</button>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Open question detected.</b>
+      <span class="sub">Don't gloss over it. We'd rather block.</span>
+    </div>
+  </div>
+
+  <!-- F2 -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num" style="background:#e8c46b;">!</div>
+    <div class="sb-time">block B</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Gate items not ticked</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.7;">
+        <div><span class="sk-check done"></span>4 rules written</div>
+        <div><span class="sk-check"></span><span style="color:#b08a14;">house rules respected</span></div>
+        <div><span class="sk-check done"></span>linked to vision</div>
+      </div>
+      <div style="margin-top:8px;font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);font-style:italic;">
+        One house rule unmet: "all user-facing copy translatable." Add a translation key list.
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Gate failing.</b>
+      <span class="sub">Tells you which item, and why it matters.</span>
+    </div>
+  </div>
+
+  <!-- F3 -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num" style="background:#e8c46b;">!</div>
+    <div class="sb-time">block C</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">File on disk doesn't match</div>
+      <div style="background:rgba(255,229,107,0.08);border:1px solid #b08a14;border-radius:4px;padding:8px;font-family:Inter;font-size:11px;color:var(--ob-text);line-height:1.55;">
+        <code style="font-size:10px;">04-how-it-works.md</code> was edited externally since you opened it. Reload before handing off, or your edit will overwrite theirs.
+      </div>
+      <div style="margin-top:8px;display:flex;gap:5px;">
+        <button class="sk-btn primary" style="font-size:10.5px;padding:3px 8px;">Reload + diff</button>
+        <button class="sk-btn ghost" style="font-size:10.5px;padding:3px 8px;">Keep mine</button>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Conflict detected.</b>
+      <span class="sub">Always offer "see the diff" before forcing a choice.</span>
+    </div>
+  </div>
+
+  <!-- F4 -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num" style="background:#e8c46b;">!</div>
+    <div class="sb-time">block D</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Next-step file already exists</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;">
+        <code style="font-size:10px;">05-check-the-design.md</code> is already in the folder with content. Did you start it manually?
+      </div>
+      <div style="margin-top:8px;display:flex;gap:5px;flex-wrap:wrap;">
+        <button class="sk-btn" style="font-size:10.5px;padding:3px 8px;">Use existing</button>
+        <button class="sk-btn ghost" style="font-size:10.5px;padding:3px 8px;">Backup + replace</button>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Resume vs replace.</b>
+      <span class="sub">Always backup before replacing. Never destroy work.</span>
+    </div>
+  </div>
+
+  <!-- F5 -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num" style="background:#e8c46b;">!</div>
+    <div class="sb-time">block E</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Owner not set on next step</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;">
+        Step 5 ("check the design") usually goes to <b>@arch-lead</b>. We didn't find them in your team file.
+      </div>
+      <div style="margin-top:8px;display:flex;gap:5px;">
+        <button class="sk-btn" style="font-size:10.5px;padding:3px 8px;">Pick owner</button>
+        <button class="sk-btn ghost" style="font-size:10.5px;padding:3px 8px;">Just me</button>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Soft-block: owner missing.</b>
+      <span class="sub">Solo users default to "just me" silently.</span>
+    </div>
+  </div>
+
+  <!-- F6 -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num" style="background:#c66;color:white;">×</div>
+    <div class="sb-time">block F</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Vault is read-only</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;">
+        We can't write a snapshot. The vault is on a read-only mount, or git index is locked.
+      </div>
+      <div style="margin-top:8px;font-family:JetBrains Mono;font-size:10px;color:var(--ob-text-faint);">
+        We refuse rather than mutate without a snapshot. Always.
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Hard fail. No mutation without snapshot.</b>
+      <span class="sub">DR-005 is non-negotiable.</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─────── micro-interaction details ─────── -->
+<div class="sb-section-head" style="padding-top:16px;">
+  <div class="meta">the small stuff</div>
+  <h2 style="font-size:22px;">Micro-interaction notes</h2>
+</div>
+
+<div style="padding:8px 32px 60px;display:grid;grid-template-columns:repeat(2,1fr);gap:18px;">
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">timing</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Total target: ~1 second</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">200ms confirm reveal · 100ms snapshot · 100ms file mutation · 250ms cross-fade · 350ms settle. Anything faster feels like a glitch; anything slower feels like a wait.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">keyboard path</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">No mouse needed</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;"><span class="mini-key">⌘</span><span class="mini-key">⏎</span> from anywhere in the cockpit triggers hand-off. <span class="mini-key">⏎</span> confirms. <span class="mini-key">esc</span> cancels. <span class="mini-key">⌘</span><span class="mini-key">Z</span> within 24h undoes — exactly like text editing.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">sound</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Silent.</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">No success chime. No haptic. The visible cross-fade is enough. Sound would feel like cheerleading — see principle 5.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">repeat hand-off</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Power-user mode</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Once a user has handed off N times (TBD ~10), the inline confirm becomes opt-in. <span class="mini-key">⌘</span><span class="mini-key">⏎</span> goes straight to mutation. Undo banner still shows. They've earned the speed.</p>
+  </div>
+
+  <div class="sk-box dashed" style="padding:14px 16px;grid-column:span 2;">
+    <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:4px;">Open question OQ-3 · gates auto-pass or explicit sign-off?</div>
+    <p class="sk-p" style="font-family:Inter;font-size:12px;">If <i>auto-pass</i>, this flow is what we get — gate ticks turn the button green and hand-off proceeds. If <i>explicit sign-off</i>, we need an extra "I sign off on this gate" frame between 01 and 02. Tradeoff: ceremony vs friction. <b>Leaning auto-pass</b> for solo users, <b>explicit</b> when team-mode is enabled. To resolve in DR-008.</p>
+  </div>
+
+</div>
+
+</body></html>

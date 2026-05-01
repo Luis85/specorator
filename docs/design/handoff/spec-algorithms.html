@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spec 04 · Key algorithms — Specorator</title>
+<link rel="stylesheet" href="spec.css">
+</head>
+<body>
+
+<div class="topbar">
+  <a class="topbar-back" href="index.html">← overview</a>
+  <span class="topbar-sep">/</span>
+  <span class="nav-title" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);">spec 04 · key algorithms</span>
+  <span class="topbar-spacer"></span>
+  <a class="topbar-link prev" href="spec-plugin-arch.html">← spec 03</a>
+  <a class="topbar-link" href="spec-team-mode.html">spec 05 →</a>
+</div>
+
+<div class="spec-doc">
+
+<div class="spec-hero">
+  <div class="spec-num">spec · 04</div>
+  <h1>Key algorithms</h1>
+  <p>Pseudocode for the six core algorithms: gate evaluation, OQ scanning, snapshot/undo, stale detection, conflict detection, and the feature context resolver. Implementation-ready — these define exact behaviour, not just intent.</p>
+</div>
+
+<!-- 1. Gate evaluation -->
+<section>
+  <h2><span class="sec-num">1</span>Gate evaluation</h2>
+  <p>Runs on every file save (if settings.gateScanTrigger = "on-save") or manually. Returns a <code>GateResult</code> — a list of check outcomes. Never mutates state.</p>
+
+  <div class="pseudo">
+<pre><span class="kw">function</span> <span class="fn">evaluateGate</span>(feature: Feature, gate: <span class="str">"define-build"</span> | <span class="str">"build-ship"</span>): GateResult {
+
+  <span class="kw">const</span> checks: CheckResult[] = []
+
+  <span class="kw">if</span> (gate === <span class="str">"define-build"</span>) {
+
+    <span class="cm">// A1: Vision length</span>
+    <span class="kw">const</span> vision = readStepBody(feature, <span class="num">1</span>)
+    checks.push({
+      id: <span class="str">"A1"</span>,
+      label: <span class="str">"Vision is one paragraph"</span>,
+      pass: wordCount(firstParagraph(vision)) <= <span class="num">150</span>,
+      severity: <span class="str">"hard"</span>
+    })
+
+    <span class="cm">// A2: EARS rule count</span>
+    <span class="kw">const</span> rules = readStepBody(feature, <span class="num">3</span>)
+    <span class="kw">const</span> earsLines = rules.split(<span class="str">"\n"</span>)
+      .filter(l => <span class="str">/^(WHEN|IF|WHILE|WHERE)\s/</span>.test(l.trim()))
+    checks.push({
+      id: <span class="str">"A2"</span>,
+      label: <span class="str">`${earsLines.length} EARS rules (min ${settings.minEarsRules})`</span>,
+      pass: earsLines.length >= settings.minEarsRules,
+      severity: <span class="str">"hard"</span>
+    })
+
+    <span class="cm">// A3: Zero open questions (all step files)</span>
+    <span class="kw">const</span> openOQs = scanOQs(feature).filter(oq => !oq.resolved)
+    checks.push({
+      id: <span class="str">"A3"</span>,
+      label: <span class="str">`${openOQs.length} open questions`</span>,
+      pass: openOQs.length === <span class="num">0</span>,
+      severity: <span class="str">"hard"</span>
+    })
+
+    <span class="cm">// A4: Decision note linked (configurable severity)</span>
+    <span class="kw">const</span> howItWorks = readStepBody(feature, <span class="num">4</span>)
+    checks.push({
+      id: <span class="str">"A4"</span>,
+      label: <span class="str">"Decision note linked from step 4"</span>,
+      pass: <span class="str">/\[\[decisions\//</span>.test(howItWorks),
+      severity: settings.decisionNoteGateCheck  <span class="cm">// "hard"|"soft"|"off"</span>
+    })
+
+    <span class="cm">// A5: Constitution respected</span>
+    <span class="kw">const</span> rules_const = parseConstitution()
+    checks.push({
+      id: <span class="str">"A5"</span>,
+      label: <span class="str">"House rules respected"</span>,
+      pass: rules_const.every(r => isAcknowledged(r, feature)),
+      severity: <span class="str">"hard"</span>
+    })
+
+    <span class="cm">// Team mode: peer sign-off</span>
+    <span class="kw">if</span> (settings.gateMode === <span class="str">"team"</span>) {
+      checks.push({
+        id: <span class="str">"T1"</span>,
+        label: <span class="str">"Peer sign-off"</span>,
+        pass: hasPeerSignoff(feature, <span class="str">"define-build"</span>),
+        severity: <span class="str">"hard"</span>
+      })
+    }
+
+  } <span class="kw">else if</span> (gate === <span class="str">"build-ship"</span>) {
+
+    <span class="cm">// B1: All build steps done or skipped</span>
+    <span class="kw">const</span> buildSteps = [<span class="num">5</span>, <span class="num">6</span>, <span class="num">7</span>, <span class="num">8</span>]
+    <span class="kw">const</span> allDone = buildSteps.every(n => {
+      <span class="kw">const</span> s = getStepStatus(feature, n)
+      <span class="kw">return</span> s.status === <span class="str">"done"</span> || (s.status === <span class="str">"skipped"</span> && s.skip_reason)
+    })
+    checks.push({ id: <span class="str">"B1"</span>, label: <span class="str">"All build steps done or skipped"</span>, pass: allDone, severity: <span class="str">"hard"</span> })
+
+    <span class="cm">// B2: Constitution (re-run — may have changed)</span>
+    <span class="kw">const</span> rules_b = parseConstitution()
+    checks.push({
+      id: <span class="str">"B2"</span>, label: <span class="str">"House rules respected"</span>,
+      pass: rules_b.every(r => isAcknowledged(r, feature)), severity: <span class="str">"hard"</span>
+    })
+
+    <span class="cm">// B3: Zero OQs (again)</span>
+    <span class="kw">const</span> openOQs_b = scanOQs(feature).filter(oq => !oq.resolved)
+    checks.push({ id: <span class="str">"B3"</span>, label: <span class="str">"0 open questions"</span>, pass: openOQs_b.length === <span class="num">0</span>, severity: <span class="str">"hard"</span> })
+
+  }
+
+  <span class="kw">return</span> {
+    gate,
+    checks,
+    pass: checks.filter(c => c.severity === <span class="str">"hard"</span>).every(c => c.pass),
+    failCount: checks.filter(c => !c.pass && c.severity !== <span class="str">"off"</span>).length
+  }
+}</pre>
+  </div>
+</section>
+
+<!-- 2. OQ scanner -->
+<section>
+  <h2><span class="sec-num">2</span>Open question scanner</h2>
+  <p>Scans all step files for <code>? </code>-prefixed lines. Resolution is detected by a following <code>! </code> line. Runs on every file save for files in the feature folder.</p>
+
+  <div class="pseudo">
+<pre><span class="kw">function</span> <span class="fn">scanOQs</span>(feature: Feature): OQRecord[] {
+  <span class="kw">const</span> results: OQRecord[] = []
+
+  <span class="kw">for</span> (const stepFile of feature.stepFiles) {
+    <span class="kw">const</span> lines = readFile(stepFile).split(<span class="str">"\n"</span>)
+
+    <span class="kw">for</span> (let i = <span class="num">0</span>; i < lines.length; i++) {
+      <span class="kw">const</span> line = lines[i].trim()
+
+      <span class="kw">if</span> (<span class="str">/^\? .+/</span>.test(line)) {
+        <span class="cm">// Found an open question line</span>
+        <span class="kw">const</span> questionText = line.slice(<span class="num">2</span>)  <span class="cm">// strip "? "</span>
+
+        <span class="cm">// Check if next non-empty line is a resolution (! prefix)</span>
+        <span class="kw">const</span> nextLine = lines.slice(i + <span class="num">1</span>).find(l => l.trim() !== <span class="str">""</span>)?.trim()
+        <span class="kw">const</span> resolved = nextLine?.startsWith(<span class="str">"! "</span>) ?? <span class="kw">false</span>
+
+        <span class="cm">// Extract resolver handle from comment if present</span>
+        <span class="cm">// e.g. <!-- @arch-lead · 2026-05-01 --></span>
+        <span class="kw">const</span> resolverMatch = nextLine?.match(<span class="str">/&lt;!--\s*@(\S+)/</span>)
+        <span class="kw">const</span> resolvedBy = resolverMatch ? <span class="str">`@${resolverMatch[1]}`</span> : <span class="kw">null</span>
+
+        results.push({
+          file: stepFile,
+          line: i,
+          text: questionText,
+          resolved,
+          resolvedBy,
+          age: daysSince(fileMtime(stepFile))
+        })
+      }
+    }
+  }
+
+  <span class="kw">return</span> results
+}
+
+<span class="cm">// OQ staleness check (run on cache build + on save)</span>
+<span class="kw">function</span> <span class="fn">isOQStale</span>(oq: OQRecord): boolean {
+  <span class="kw">return</span> !oq.resolved && oq.age > settings.oqStaleThresholdDays
+}</pre>
+  </div>
+</section>
+
+<!-- 3. Snapshot & undo -->
+<section>
+  <h2><span class="sec-num">3</span>Snapshot &amp; undo</h2>
+
+  <div class="pseudo">
+<pre><span class="kw">function</span> <span class="fn">snapshot</span>(feature: Feature, label: string): SnapshotRecord {
+  <span class="kw">const</span> snapId = <span class="str">`snap-${Date.now()}`</span>
+  <span class="kw">const</span> snapPath = <span class="str">`.specorator/snapshots/${feature.slug}/${snapId}/`</span>
+
+  <span class="cm">// Copy all step files + _meta.md to the snapshot dir</span>
+  <span class="kw">for</span> (const file of feature.allFiles) {
+    <span class="kw">const</span> content = await vault.read(file)
+    await vault.create(<span class="str">`${snapPath}${file.name}`</span>, content)
+  }
+
+  <span class="cm">// Record in _meta.md snapshots[]</span>
+  <span class="kw">const</span> record = { id: snapId, label, timestamp: now(), path: snapPath }
+  await appendToMeta(feature, <span class="str">"snapshots"</span>, record)
+  <span class="kw">return</span> record
+}
+
+<span class="kw">function</span> <span class="fn">undo</span>(feature: Feature): void {
+  <span class="cm">// Find the most recent snapshot within the 24h window</span>
+  <span class="kw">const</span> recent = feature.meta.snapshots
+    .filter(s => hoursSince(s.timestamp) < <span class="num">24</span>)
+    .sort((a, b) => b.timestamp - a.timestamp)[<span class="num">0</span>]
+
+  <span class="kw">if</span> (!recent) <span class="kw">throw</span> <span class="str">"No undo snapshot available"</span>
+
+  <span class="cm">// Restore all files from snapshot</span>
+  <span class="kw">for</span> (const snapFile of listFiles(recent.path)) {
+    <span class="kw">const</span> content = await vault.read(snapFile)
+    await vault.modify(featureFile(feature, snapFile.name), content)
+  }
+
+  <span class="cm">// Remove the snapshot we just restored from (it's consumed)</span>
+  await removeSnapshot(feature, recent.id)
+}
+
+<span class="cm">// Prune stale snapshots on plugin load</span>
+<span class="kw">function</span> <span class="fn">pruneSnapshots</span>(feature: Feature): void {
+  <span class="kw">for</span> (const snap of feature.meta.snapshots) {
+    <span class="kw">const</span> isGateCrossing = snap.label.startsWith(<span class="str">"before-"</span>)
+    <span class="kw">const</span> isExpired = hoursSince(snap.timestamp) > <span class="num">24</span>
+    <span class="cm">// Keep gate-crossing snapshots until feature is archived</span>
+    <span class="kw">if</span> (isExpired && !isGateCrossing) deleteSnapshot(feature, snap.id)
+  }
+}</pre>
+  </div>
+</section>
+
+<!-- 4. Context resolver -->
+<section>
+  <h2><span class="sec-num">4</span>Feature context resolver</h2>
+  <p>Called on every <code>active-leaf-change</code> event. Determines which feature the cockpit should show. Implements DR-002.</p>
+
+  <div class="pseudo">
+<pre><span class="kw">function</span> <span class="fn">resolveActiveFeature</span>(activeFile: TFile | null): Feature | null {
+
+  <span class="kw">if</span> (!activeFile) <span class="kw">return</span> lastFocusedFeature  <span class="cm">// OQ-2: restore context</span>
+
+  <span class="cm">// Check if the active file is inside a feature folder</span>
+  <span class="kw">const</span> path = activeFile.path
+  <span class="kw">const</span> match = path.match(<span class="str">/^features\/([^/]+)\//</span>)
+
+  <span class="kw">if</span> (match) {
+    <span class="kw">const</span> slug = match[<span class="num">1</span>]
+    <span class="kw">const</span> feature = cache.features.get(slug)
+    <span class="kw">if</span> (feature) {
+      lastFocusedFeature = feature  <span class="cm">// persist for next session</span>
+      <span class="kw">return</span> feature
+    }
+  }
+
+  <span class="cm">// File is not in a feature folder — keep showing last focused</span>
+  <span class="kw">return</span> lastFocusedFeature
+}
+
+<span class="cm">// Empty state logic</span>
+<span class="kw">function</span> <span class="fn">emptyCockpitState</span>(): <span class="str">"new-vault"</span> | <span class="str">"all-archived"</span> | <span class="str">"feature"</span> {
+  <span class="kw">const</span> active = cache.features.filter(f => f.status === <span class="str">"active"</span>)
+  <span class="kw">if</span> (cache.features.size === <span class="num">0</span>) <span class="kw">return</span> <span class="str">"new-vault"</span>
+  <span class="kw">if</span> (active.length === <span class="num">0</span>) <span class="kw">return</span> <span class="str">"all-archived"</span>
+  <span class="kw">return</span> <span class="str">"feature"</span>
+}</pre>
+  </div>
+</section>
+
+<!-- 5. Stale detection -->
+<section>
+  <h2><span class="sec-num">5</span>Stale detection</h2>
+  <div class="pseudo">
+<pre><span class="kw">function</span> <span class="fn">isFeatureStale</span>(feature: Feature): boolean {
+  <span class="kw">return</span> (
+    feature.status === <span class="str">"active"</span> &&
+    daysSince(feature.meta.last_active_at) > settings.staleThresholdDays
+  )
+}
+
+<span class="cm">// Run on cache build and on plugin load</span>
+<span class="kw">function</span> <span class="fn">computeStaleFeatures</span>(): Feature[] {
+  <span class="kw">return</span> [...cache.features.values()].filter(isFeatureStale)
+}
+
+<span class="cm">// Stale indicator: shown in feature switcher + rail</span>
+<span class="cm">// NOT a block — stale features still fully functional</span></pre>
+  </div>
+</section>
+
+<!-- 6. Conflict detection -->
+<section>
+  <h2><span class="sec-num">6</span>Sync conflict detection</h2>
+  <p>Applies in team mode only. Obsidian Sync creates duplicate files with "(conflicted copy)" suffix. Git creates files with conflict markers. Both need detection and surface — but the plugin does not resolve them automatically.</p>
+
+  <div class="pseudo">
+<pre><span class="kw">function</span> <span class="fn">detectConflicts</span>(feature: Feature): ConflictRecord[] {
+  <span class="kw">const</span> conflicts: ConflictRecord[] = []
+
+  <span class="kw">for</span> (const file of feature.allFiles) {
+    <span class="cm">// Obsidian Sync: duplicate file with "(conflicted copy)" in name</span>
+    <span class="kw">const</span> conflictedCopy = vault.getAbstractFileByPath(
+      file.path.replace(<span class="str">".md"</span>, <span class="str">" (conflicted copy).md"</span>)
+    )
+    <span class="kw">if</span> (conflictedCopy) {
+      conflicts.push({ type: <span class="str">"sync-duplicate"</span>, file, conflictFile: conflictedCopy })
+    }
+
+    <span class="cm">// Git: conflict markers in file content</span>
+    <span class="kw">const</span> content = await vault.read(file)
+    <span class="kw">if</span> (content.includes(<span class="str">"<<<<<<< HEAD"</span>)) {
+      conflicts.push({ type: <span class="str">"git-markers"</span>, file, conflictFile: null })
+    }
+  }
+
+  <span class="kw">return</span> conflicts
+}
+
+<span class="cm">// UX contract: show conflict banner in cockpit</span>
+<span class="cm">// Gate evaluation is PAUSED while any conflict exists on a feature's files</span>
+<span class="cm">// Plugin MUST NOT auto-resolve — only surface and provide "open in editor" action</span></pre>
+  </div>
+
+  <div class="callout callout-red">
+    <strong>Do not auto-merge.</strong> The plugin surfaces the conflict and offers: "keep yours", "keep theirs" (for Sync duplicates), or "open in editor" (for Git markers). It never merges spec content automatically — spec text is a human decision.
+  </div>
+</section>
+
+</div>
+
+<footer class="spec-footer">
+  <a href="spec-plugin-arch.html">← spec 03 · plugin arch</a>
+  <span>Specorator · Spec 04 · Algorithms</span>
+  <a href="spec-team-mode.html">spec 05 · team mode →</a>
+</footer>
+</body>
+</html>

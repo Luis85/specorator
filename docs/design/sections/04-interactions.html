@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>04 · Key interactions — Specorator</title>
+<link rel="stylesheet" href="nav.css">
+<style>
+  .flow-acts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .act-link {
+    display: block;
+    text-decoration: none;
+    background: rgba(255,255,255,.03);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px 14px;
+    transition: border-color .12s, background .12s;
+  }
+  .act-link:hover { border-color: var(--accent); background: rgba(127,109,242,.06); }
+  .act-link .act-num { font-family:"JetBrains Mono",monospace; font-size:10px; color:var(--faint); margin-bottom:4px; }
+  .act-link .act-title { font-size:13px; color:var(--text); font-weight:600; }
+  .act-link .act-sub { font-size:11.5px; color:var(--mute); margin-top:3px; line-height:1.4; }
+  .act-link.yellow:hover { border-color: var(--yellow); background: rgba(201,162,39,.06); }
+  .act-link.green:hover  { border-color: var(--green);  background: rgba(74,209,150,.06); }
+</style>
+</head>
+<body>
+
+<nav class="top-nav">
+  <a class="nav-back" href="../index.html">← index</a>
+  <span class="nav-sep">/</span>
+  <span class="nav-title">04 · Key interactions</span>
+  <span class="nav-spacer"></span>
+  <a class="nav-prev" href="03-core-flows.html">← 03 Core flows</a>
+  <a class="nav-next" href="05-safety.html">05 Safety →</a>
+</nav>
+
+<div class="sec-header">
+  <div class="sec-num">section 04</div>
+  <div class="sec-title">Key interactions</div>
+  <p class="sec-subtitle">Where the discipline lives. Gate review enforces quality; open questions surface uncertainty; decision notes record choices; skip shows how steps can be bypassed with a mandatory reason. OQ-2 resolved: cockpit empty state.</p>
+</div>
+
+<div class="artboard-list">
+
+  <!-- Gate review -->
+  <div class="flow-card" style="cursor:default;">
+    <div class="flow-card-num">4a</div>
+    <div class="flow-card-title">Gate review — where the discipline lives</div>
+    <div class="flow-card-desc">Between Define and Build, and Build and Ship, sits a gate. The only place the system says "not yet." Must feel like a friend noticing you forgot something — not a customs officer.</div>
+    <div class="flow-acts">
+      <a class="act-link yellow" href="flows/gate-main.html">
+        <div class="act-num">main flow · 7 frames</div>
+        <div class="act-title">Gate: approaching → cross</div>
+        <div class="act-sub">Gate visible early → auto-check → fix list → re-run → advance</div>
+      </a>
+      <a class="act-link yellow" href="flows/gate-edge.html">
+        <div class="act-num">edge cases + rationale</div>
+        <div class="act-title">Override · team gate · retro</div>
+        <div class="act-sub">Power-user escape · PR sign-off · failed-in-prod learning loop</div>
+      </a>
+    </div>
+  </div>
+
+  <!-- Open question -->
+  <div class="flow-card" style="cursor:default;">
+    <div class="flow-card-num">4b</div>
+    <div class="flow-card-title">Open question — ? → collected → resolved</div>
+    <div class="flow-card-desc">A ? prefix in any spec file becomes a tracked question. Surfaces in the cockpit, counted by the gate, closable with a one-line answer that optionally becomes a decision note.</div>
+    <div class="flow-acts">
+      <a class="act-link yellow" href="flows/oq-writing.html">
+        <div class="act-num">act 1 of 3</div>
+        <div class="act-title">Writing — ? in a spec file</div>
+        <div class="act-sub">Typing the ? → save → registered silently → across files</div>
+      </a>
+      <a class="act-link yellow" href="flows/oq-collecting.html">
+        <div class="act-num">act 2 of 3</div>
+        <div class="act-title">Collecting — cockpit aggregates</div>
+        <div class="act-sub">Right-pane OQ list → jump to source line</div>
+      </a>
+      <a class="act-link yellow" href="flows/oq-resolving.html">
+        <div class="act-num">act 3 of 3 + edge cases</div>
+        <div class="act-title">Resolving — ! to close</div>
+        <div class="act-sub">? → ! → counter drops → gate clears → optional ADR escalation</div>
+      </a>
+    </div>
+  </div>
+
+  <!-- OQ-2 resolved -->
+  <div class="flow-card" style="cursor:default;">
+    <div class="flow-card-num">4c</div>
+    <div class="flow-card-title">OQ-2 resolved — cockpit empty state</div>
+    <div class="flow-card-desc">Decision: last-focused feature as default. What the cockpit shows when there's nothing to do. Three distinct situations, three distinct responses.</div>
+    <div class="flow-acts">
+      <a class="act-link" href="#" onclick="openLightbox('../artboards/flow-oq2.html','flow-oq2',2200,1500);return false;">
+        <div class="act-num">full artboard · 2200 × 1500</div>
+        <div class="act-title">Open full ⤢</div>
+        <div class="act-sub">Returning user · all archived · new vault</div>
+      </a>
+    </div>
+  </div>
+
+  <!-- Decision note -->
+  <div class="flow-card" style="cursor:default;">
+    <div class="flow-card-num">4d</div>
+    <div class="flow-card-title">Decision note — the most-resisted artifact</div>
+    <div class="flow-card-desc">ADRs done right: 60 seconds, plain English, pre-filled from context. Not a wiki page. Not a Confluence doc. A markdown file in the feature folder.</div>
+    <div class="flow-acts">
+      <a class="act-link" href="#" onclick="openLightbox('../artboards/flow-adr.html','flow-adr',2700,1600);return false;">
+        <div class="act-num">full flow · 2700 × 1600</div>
+        <div class="act-title">Open storyboard ⤢</div>
+        <div class="act-sub">Coach prompt → pre-fill → 60-second write → linked → archived</div>
+      </a>
+    </div>
+  </div>
+
+  <!-- Skip steps -->
+  <div class="flow-card" style="cursor:default;">
+    <div class="flow-card-num">4e</div>
+    <div class="flow-card-title">Skip steps — OQ-4 resolved</div>
+    <div class="flow-card-desc">Steps are skippable with a mandatory one-line reason. Never silent. The skip is logged in the feature's _meta.md and shown in the rail as ⊘.</div>
+    <div class="flow-acts">
+      <a class="act-link" href="#" onclick="openLightbox('../artboards/flow-skip.html','flow-skip',2700,1700);return false;">
+        <div class="act-num">full flow · 2700 × 1700</div>
+        <div class="act-title">Open storyboard ⤢</div>
+        <div class="act-sub">Skip trigger → reason input → logged → rail indicator</div>
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<footer class="site-footer">
+  <span>Specorator wireframes · section 04 of 07</span>
+  <a href="05-safety.html" style="color:var(--accent);text-decoration:none;">05 Safety →</a>
+</footer>
+
+<!-- Lightbox overlay -->
+<div class="lightbox" id="lightbox">
+  <div class="lightbox-bar">
+    <span class="lightbox-title" id="lightbox-title"></span>
+    <button class="lightbox-close" onclick="closeLightbox()">✕ close  [esc]</button>
+  </div>
+  <div class="lightbox-body" id="lightbox-body"></div>
+</div>
+<script>
+function openLightbox(src, title, w, h) {
+  const lb = document.getElementById('lightbox');
+  const body = document.getElementById('lightbox-body');
+  document.getElementById('lightbox-title').textContent = title;
+  body.innerHTML = '<iframe src="' + src + '" width="' + w + '" height="' + h + '" style="width:' + w + 'px;height:' + h + 'px;"></iframe>';
+  lb.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  const lb = document.getElementById('lightbox');
+  lb.classList.remove('open');
+  document.getElementById('lightbox-body').innerHTML = '';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeLightbox(); });
+</script>
+</body>
+</html>

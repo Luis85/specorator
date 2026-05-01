@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>02 · Cockpit A states — Specorator</title>
+<link rel="stylesheet" href="nav.css">
+</head>
+<body>
+
+<nav class="top-nav">
+  <a class="nav-back" href="../index.html">← index</a>
+  <span class="nav-sep">/</span>
+  <span class="nav-title">02 · Cockpit A · edge cases</span>
+  <span class="nav-spacer"></span>
+  <a class="nav-prev" href="01-product.html">← 01 Product</a>
+  <a class="nav-next" href="03-core-flows.html">03 Core flows →</a>
+</nav>
+
+<div class="sec-header">
+  <div class="sec-num">section 02</div>
+  <div class="sec-title">Cockpit A · edge cases</div>
+  <p class="sec-subtitle">Everything the three-pane cockpit must handle gracefully. Walk in order: brand-new vault → scaffolded but empty → gate failing → gate passing → stale/blocked → just handed off.</p>
+</div>
+
+<div class="artboard-list">
+
+  <div class="ab-card">
+    <div class="ab-card-header">
+      <span class="ab-label"><b>2a · Brand-new vault</b> — no specs yet</span>
+      <button class="ab-expand" onclick="openLightbox('../artboards/state-newvault.html', 'state-newvault', 1280, 800)">⤢ open full</button>
+    </div>
+    <div class="ab-iframe-wrap" style="height:600px;">
+      <iframe src="../artboards/state-newvault.html" width="1280" height="800" style="width:1280px;height:800px;"></iframe>
+    </div>
+  </div>
+
+  <div class="ab-card">
+    <div class="ab-card-header">
+      <span class="ab-label"><b>2b · Scaffolded, no focus</b> — vault set up but no feature selected</span>
+      <button class="ab-expand" onclick="openLightbox('../artboards/state-empty.html', 'state-empty', 1280, 800)">⤢ open full</button>
+    </div>
+    <div class="ab-iframe-wrap" style="height:600px;">
+      <iframe src="../artboards/state-empty.html" width="1280" height="800" style="width:1280px;height:800px;"></iframe>
+    </div>
+  </div>
+
+  <div class="ab-card">
+    <div class="ab-card-header">
+      <span class="ab-label"><b>2c · Gate failing</b> — canonical Cockpit A state</span>
+      <button class="ab-expand" onclick="openLightbox('../artboards/state-gate-fail.html', 'state-gate-fail', 1280, 800)">⤢ open full</button>
+    </div>
+    <div class="ab-iframe-wrap" style="height:600px;">
+      <iframe src="../artboards/state-gate-fail.html" width="1280" height="800" style="width:1280px;height:800px;"></iframe>
+    </div>
+  </div>
+
+  <div class="ab-card">
+    <div class="ab-card-header">
+      <span class="ab-label"><b>2d · Gate passing</b> — ready to advance</span>
+      <button class="ab-expand" onclick="openLightbox('../artboards/state-gate-pass.html', 'state-gate-pass', 1280, 800)">⤢ open full</button>
+    </div>
+    <div class="ab-iframe-wrap" style="height:600px;">
+      <iframe src="../artboards/state-gate-pass.html" width="1280" height="800" style="width:1280px;height:800px;"></iframe>
+    </div>
+  </div>
+
+  <div class="ab-card">
+    <div class="ab-card-header">
+      <span class="ab-label"><b>2e · Stale / blocked</b> — externally blocked</span>
+      <button class="ab-expand" onclick="openLightbox('../artboards/state-stale.html', 'state-stale', 1280, 800)">⤢ open full</button>
+    </div>
+    <div class="ab-iframe-wrap" style="height:600px;">
+      <iframe src="../artboards/state-stale.html" width="1280" height="800" style="width:1280px;height:800px;"></iframe>
+    </div>
+  </div>
+
+  <div class="ab-card">
+    <div class="ab-card-header">
+      <span class="ab-label"><b>2f · Just handed off</b> — undo + safety net visible</span>
+      <button class="ab-expand" onclick="openLightbox('../artboards/state-undo.html', 'state-undo', 1280, 800)">⤢ open full</button>
+    </div>
+    <div class="ab-iframe-wrap" style="height:600px;">
+      <iframe src="../artboards/state-undo.html" width="1280" height="800" style="width:1280px;height:800px;"></iframe>
+    </div>
+  </div>
+
+</div>
+
+<footer class="site-footer">
+  <span>Specorator wireframes · section 02 of 07</span>
+  <a href="03-core-flows.html" style="color:var(--accent);text-decoration:none;">03 Core flows →</a>
+</footer>
+
+<!-- Lightbox overlay -->
+<div class="lightbox" id="lightbox">
+  <div class="lightbox-bar">
+    <span class="lightbox-title" id="lightbox-title"></span>
+    <button class="lightbox-close" onclick="closeLightbox()">✕ close  [esc]</button>
+  </div>
+  <div class="lightbox-body" id="lightbox-body"></div>
+</div>
+<script>
+function openLightbox(src, title, w, h) {
+  const lb = document.getElementById('lightbox');
+  const body = document.getElementById('lightbox-body');
+  document.getElementById('lightbox-title').textContent = title;
+  body.innerHTML = '<iframe src="' + src + '" width="' + w + '" height="' + h + '" style="width:' + w + 'px;height:' + h + 'px;"></iframe>';
+  lb.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  const lb = document.getElementById('lightbox');
+  lb.classList.remove('open');
+  document.getElementById('lightbox-body').innerHTML = '';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeLightbox(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Cockpit C — board</title>
+<link rel="stylesheet" href="../wireframes.css">
+</head>
+<body class="density-comfy" data-theme="dark" style="margin:0;background:transparent;">
+<div class="artboard-wrap"><div class="ob-window"><div class="ob-titlebar">
+  <div class="ob-traffic"><span></span><span></span><span></span></div>
+  <div style="margin-left:8px;">my-vault — Obsidian</div>
+</div>
+<div class="ob-body" style="grid-template-columns:36px 1fr;">
+  <div class="ob-ribbon">
+    <div class="ob-ribbon-icon spec">S</div>
+    <div class="ob-ribbon-icon">⌂</div>
+    <div class="ob-ribbon-icon">⊞</div>
+    <div class="ob-ribbon-icon">★</div>
+    <div class="ob-ribbon-icon">⚙</div>
+  </div>
+  <div class="ob-main">
+    <div class="ob-tabs">
+      <div class="ob-tab active"><span class="dot"></span>Specorator · Board</div>
+      <div class="ob-tab">user-auth/design.md</div>
+    </div>
+    <div class="ob-content" style="padding:18px 22px;">
+      <div class="row" style="justify-content:space-between;align-items:flex-end;margin-bottom:12px;">
+        <div>
+          <div class="sk-h-xs">Project · my-vault</div>
+          <h1 class="sk-h sk-h-lg" style="margin:4px 0 0;"><span class="sk-underline">All features</span> by stage <span class="muted" style="font-size:14px;font-weight:400;">— drag a card to hand off</span></h1>
+        </div>
+        <div class="row" style="gap:8px;">
+          <button class="sk-btn ghost">filter: any track</button>
+          <button class="sk-btn">+ new feature</button>
+        </div>
+      </div>
+
+      <!-- 11 stage columns -->
+      <div style="display:grid;grid-template-columns:repeat(11,minmax(0,1fr));gap:8px;height:560px;">
+        <!-- col template -->
+        <div class="sk-box thin" style="padding:8px;display:flex;flex-direction:column;gap:6px;">
+          <div style="font-family:Inter,sans-serif;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--lane-define);text-align:center;">idea</div>
+          <div class="sk-box thin" style="padding:6px;background:rgba(127,109,242,0.04);"><div style="font-family:Inter;font-size:11px;font-weight:600;">notif-prefs</div><div class="muted" style="font-size:10px;">2d</div></div>
+          <div class="sk-box thin dashed" style="padding:6px;text-align:center;"><span class="muted" style="font-size:10px;">+ idea</span></div>
+        </div>
+
+        <div class="sk-box thin" style="padding:8px;">
+          <div style="font-family:Inter;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--lane-define);text-align:center;">research</div>
+        </div>
+
+        <div class="sk-box thin" style="padding:8px;display:flex;flex-direction:column;gap:6px;">
+          <div style="font-family:Inter;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--lane-define);text-align:center;">requirements</div>
+          <div class="sk-box thin" style="padding:6px;"><div style="font-family:Inter;font-size:11px;font-weight:600;">sso-saml</div><div class="muted" style="font-size:10px;">8 EARS</div></div>
+        </div>
+
+        <div class="sk-box thin" style="padding:8px;display:flex;flex-direction:column;gap:6px;border-color:var(--highlighter);background:rgba(232,196,107,0.04);">
+          <div style="font-family:Inter;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--highlighter);text-align:center;">design</div>
+          <div class="sk-box thin" style="padding:6px;border-color:var(--highlighter);background:var(--ob-bg-2);"><div style="font-family:Inter;font-size:11px;font-weight:600;">user-auth</div><div class="muted" style="font-size:10px;">2 clarifs</div><div style="margin-top:3px;"><span class="sk-pill gate" style="font-size:8.5px;padding:0 5px;">→gate</span></div></div>
+        </div>
+
+        <div class="sk-box thin" style="padding:8px;display:flex;flex-direction:column;gap:6px;">
+          <div style="font-family:Inter;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--lane-build);text-align:center;">specification</div>
+          <div class="sk-box thin" style="padding:6px;"><div style="font-family:Inter;font-size:11px;font-weight:600;">audit-log</div><div class="muted" style="font-size:10px;">draft</div></div>
+        </div>
+
+        <div class="sk-box thin" style="padding:8px;">
+          <div style="font-family:Inter;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--lane-build);text-align:center;">tasks</div>
+        </div>
+
+        <div class="sk-box thin" style="padding:8px;display:flex;flex-direction:column;gap:6px;">
+          <div style="font-family:Inter;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--lane-build);text-align:center;">impl</div>
+          <div class="sk-box thin" style="padding:6px;"><div style="font-family:Inter;font-size:11px;font-weight:600;">billing-export</div><div class="muted" style="font-size:10px;">12 / 18 tasks</div></div>
+          <div class="sk-box thin" style="padding:6px;"><div style="font-family:Inter;font-size:11px;font-weight:600;">cli-flags</div><div class="muted" style="font-size:10px;">3 / 4</div></div>
+        </div>
+
+        <div class="sk-box thin" style="padding:8px;display:flex;flex-direction:column;gap:6px;">
+          <div style="font-family:Inter;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--lane-build);text-align:center;">testing</div>
+          <div class="sk-box thin" style="padding:6px;"><div style="font-family:Inter;font-size:11px;font-weight:600;">webhooks-v2</div><div class="muted" style="font-size:10px;">e2e green</div></div>
+        </div>
+
+        <div class="sk-box thin" style="padding:8px;display:flex;flex-direction:column;gap:6px;">
+          <div style="font-family:Inter;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--lane-ship);text-align:center;">review</div>
+          <div class="sk-box thin" style="padding:6px;"><div style="font-family:Inter;font-size:11px;font-weight:600;">onboarding-v2</div><div style="margin-top:3px;"><span class="sk-pill gate" style="font-size:8.5px;padding:0 5px;">gate</span></div></div>
+        </div>
+
+        <div class="sk-box thin" style="padding:8px;">
+          <div style="font-family:Inter;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--lane-ship);text-align:center;">release</div>
+        </div>
+
+        <div class="sk-box thin" style="padding:8px;display:flex;flex-direction:column;gap:6px;">
+          <div style="font-family:Inter;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--lane-ship);text-align:center;">retro</div>
+          <div class="sk-box thin" style="padding:6px;background:rgba(46,160,67,0.06);"><div style="font-family:Inter;font-size:11px;font-weight:600;">cli-todo</div><div class="muted" style="font-size:10px;">shipped 9d ago</div></div>
+        </div>
+      </div>
+
+      <!-- legend / footer -->
+      <div class="row" style="justify-content:space-between;margin-top:14px;font-family:Inter;font-size:11px;color:var(--ob-text-mute);">
+        <div class="row" style="gap:14px;">
+          <span><span class="sk-circle" style="background:var(--lane-define);border-color:var(--lane-define);"></span>Define</span>
+          <span><span class="sk-circle" style="background:var(--lane-build);border-color:var(--lane-build);"></span>Build</span>
+          <span><span class="sk-circle" style="background:var(--lane-ship);border-color:var(--lane-ship);"></span>Ship</span>
+          <span><span class="sk-circle gate"></span>Gate pending</span>
+        </div>
+        <div class="muted">5 features · 1 gate awaiting · 0 stalled &gt;7d</div>
+      </div>
+    </div>
+  </div>
+</div></div></div>
+</body></html>

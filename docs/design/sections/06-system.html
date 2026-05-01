@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>06 · System catalogues — Specorator</title>
+<link rel="stylesheet" href="nav.css">
+<style>
+  .flow-acts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .act-link {
+    display: block;
+    text-decoration: none;
+    background: rgba(255,255,255,.03);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px 14px;
+    transition: border-color .12s, background .12s;
+  }
+  .act-link:hover { border-color: var(--accent); background: rgba(127,109,242,.06); }
+  .act-link .act-num { font-family:"JetBrains Mono",monospace; font-size:10px; color:var(--faint); margin-bottom:4px; }
+  .act-link .act-title { font-size:13px; color:var(--text); font-weight:600; }
+  .act-link .act-sub { font-size:11.5px; color:var(--mute); margin-top:3px; line-height:1.4; }
+  .act-link.teal:hover { border-color: var(--teal); background: rgba(62,201,176,.06); }
+  .oq-resolved {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(62,201,176,.08);
+    border: 1px solid rgba(62,201,176,.3);
+    border-radius: 3px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: var(--teal);
+    padding: 2px 8px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+
+<nav class="top-nav">
+  <a class="nav-back" href="../index.html">← index</a>
+  <span class="nav-sep">/</span>
+  <span class="nav-title">06 · System catalogues</span>
+  <span class="nav-spacer"></span>
+  <a class="nav-prev" href="05-safety.html">← 05 Safety</a>
+  <a class="nav-next" href="07-help.html">07 Help →</a>
+</nav>
+
+<div class="sec-header">
+  <div class="sec-num">section 06</div>
+  <div class="sec-title">System catalogues</div>
+  <p class="sec-subtitle">Reference material for engineering hand-off. Not flows — inventories. Constitution, errors &amp; feedback, settings, keyboard commands, and team mode. Each is a complete catalogue of its domain.</p>
+</div>
+
+<div class="artboard-list">
+
+  <!-- Constitution -->
+  <div class="flow-card" style="cursor:default;">
+    <div class="flow-card-num">6a</div>
+    <div class="flow-card-title">Constitution &amp; house rules</div>
+    <div class="flow-card-desc">Team-level rules that apply to every feature in the vault. Writing the first rule, editing mid-flight, and what happens when a rule change breaks a passing gate.</div>
+    <div class="flow-acts">
+      <a class="act-link" href="flows/constitution-writing.html">
+        <div class="act-num">part 1 of 3</div>
+        <div class="act-title">Writing — first constitution</div>
+        <div class="act-sub">Coach scaffolds → one rule to start → constitution.md created</div>
+      </a>
+      <a class="act-link" href="flows/constitution-editing.html">
+        <div class="act-num">part 2 of 3</div>
+        <div class="act-title">Editing — changing a rule mid-flight</div>
+        <div class="act-sub">Rule change → cascade warning → affected features flagged</div>
+      </a>
+      <a class="act-link" href="flows/constitution-edge.html">
+        <div class="act-num">part 3 of 3</div>
+        <div class="act-title">Edge cases &amp; rationale</div>
+        <div class="act-sub">Conflicting rules · rule retirement · vault-level vs feature-level</div>
+      </a>
+    </div>
+  </div>
+
+  <!-- Errors & feedback -->
+  <div class="flow-card" style="cursor:default;">
+    <div class="flow-card-num">6b</div>
+    <div class="flow-card-title">Errors, feedback &amp; notifications</div>
+    <div class="flow-card-desc">Three notification tiers, four error categories, and the full feedback catalogue. Principle 5: quiet by default, loud only when blocking.</div>
+    <div class="flow-acts">
+      <a class="act-link" href="flows/feedback-tiers.html">
+        <div class="act-num">section 1 of 4</div>
+        <div class="act-title">Notification tiers</div>
+        <div class="act-sub">Status bar dot · cockpit banner · modal interrupt</div>
+      </a>
+      <a class="act-link" href="flows/feedback-errors.html">
+        <div class="act-num">section 2 of 4</div>
+        <div class="act-title">Error catalogue</div>
+        <div class="act-sub">Sync fail · parse error · vault corrupt · plugin conflict</div>
+      </a>
+      <a class="act-link" href="flows/feedback-confirmations.html">
+        <div class="act-num">sections 3–4</div>
+        <div class="act-title">Confirmations &amp; rationale</div>
+        <div class="act-sub">Progress · empty states · design decisions</div>
+      </a>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="flow-card" style="cursor:default;">
+    <div class="flow-card-num">6c</div>
+    <div class="flow-card-title">Settings &amp; configuration</div>
+    <div class="flow-card-desc">Four settings groups in the Obsidian native panel: Workflow, Notifications, Gates, Vault. Immutable settings (DR-005, DR-006) shown as enforced — transparent, not hidden.</div>
+    <div class="flow-acts">
+      <a class="act-link" href="flows/settings-workflow.html">
+        <div class="act-num">sections 1–2</div>
+        <div class="act-title">Workflow &amp; Notifications</div>
+        <div class="act-sub">6 workflow rows · 5 notification rows</div>
+      </a>
+      <a class="act-link" href="flows/settings-gates.html">
+        <div class="act-num">sections 3–4</div>
+        <div class="act-title">Gates &amp; Vault</div>
+        <div class="act-sub">5 gate rows · 5 vault rows · migration UX note</div>
+      </a>
+    </div>
+  </div>
+
+  <!-- Keyboard -->
+  <div class="flow-card" style="cursor:default;">
+    <div class="flow-card-num">6d</div>
+    <div class="flow-card-title">Keyboard &amp; command palette</div>
+    <div class="flow-card-desc">Complete catalogue of all commands: name, palette label, default shortcut (most are "none" by design), availability context, and notes. 4 groups, ~25 commands.</div>
+    <div class="flow-acts">
+      <a class="act-link" href="flows/keyboard-nav.html">
+        <div class="act-num">groups 1–2</div>
+        <div class="act-title">Navigation &amp; feature actions</div>
+        <div class="act-sub">Open cockpit · switch feature · new feature · hand off · skip</div>
+      </a>
+      <a class="act-link" href="flows/keyboard-gate.html">
+        <div class="act-num">groups 3–4</div>
+        <div class="act-title">Gate lifecycle &amp; utility</div>
+        <div class="act-sub">Cross gate · revert · constitution · export · diagnostics</div>
+      </a>
+    </div>
+  </div>
+
+  <!-- Team mode -->
+  <div class="flow-card" style="cursor:default;">
+    <div class="flow-card-num">6e</div>
+    <div class="flow-card-title">
+      Team mode
+      <span class="oq-resolved">✓ OQ-5 resolved</span>
+    </div>
+    <div class="flow-card-desc">Shared vault + conventions — no server. How Specorator handles peer gate sign-off, async OQ resolution, committer attribution, and sync conflicts end-to-end.</div>
+    <div class="flow-acts">
+      <a class="act-link teal" href="flows/team-setup.html">
+        <div class="act-num">act 1 of 4</div>
+        <div class="act-title">Setup</div>
+        <div class="act-sub">Solo → team toggle · committers list · three new UI elements</div>
+      </a>
+      <a class="act-link teal" href="flows/team-gate.html">
+        <div class="act-num">act 2 of 4</div>
+        <div class="act-title">Gate sign-off</div>
+        <div class="act-sub">PR template → peer review → merge = sign-off → gate passes</div>
+      </a>
+      <a class="act-link teal" href="flows/team-oq.html">
+        <div class="act-num">act 3 of 4</div>
+        <div class="act-title">Peer OQ resolution</div>
+        <div class="act-sub">Peer sees OQs · resolves inline · tag-escalation · counter drops</div>
+      </a>
+      <a class="act-link teal" href="flows/team-conflicts.html">
+        <div class="act-num">act 4 of 4 + edge cases</div>
+        <div class="act-title">Sync conflicts</div>
+        <div class="act-sub">Conflict detected · side-by-side · you pick · git path</div>
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<footer class="site-footer">
+  <span>Specorator wireframes · section 06 of 07</span>
+  <a href="07-help.html" style="color:var(--accent);text-decoration:none;">07 Help →</a>
+</footer>
+
+<!-- Lightbox overlay -->
+<div class="lightbox" id="lightbox">
+  <div class="lightbox-bar">
+    <span class="lightbox-title" id="lightbox-title"></span>
+    <button class="lightbox-close" onclick="closeLightbox()">✕ close  [esc]</button>
+  </div>
+  <div class="lightbox-body" id="lightbox-body"></div>
+</div>
+<script>
+function openLightbox(src, title, w, h) {
+  const lb = document.getElementById('lightbox');
+  const body = document.getElementById('lightbox-body');
+  document.getElementById('lightbox-title').textContent = title;
+  body.innerHTML = '<iframe src="' + src + '" width="' + w + '" height="' + h + '" style="width:' + w + 'px;height:' + h + 'px;"></iframe>';
+  lb.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  const lb = document.getElementById('lightbox');
+  lb.classList.remove('open');
+  document.getElementById('lightbox-body').innerHTML = '';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeLightbox(); });
+</script>
+</body>
+</html>

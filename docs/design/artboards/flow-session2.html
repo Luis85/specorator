@@ -1,0 +1,306 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Flow · second session onboarding</title>
+<link rel="stylesheet" href="../wireframes.css">
+<style>
+  body { margin: 0; background: var(--ob-bg); }
+  .scroll { width: 100%; overflow-x: auto; padding: 80px 0 60px; }
+  .sub-head { padding: 48px 32px 8px; }
+  .sub-head .sub-label { font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--ob-text-faint); text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; }
+  .sub-head h3 { font-family:var(--sketch); font-size:22px; font-weight:700; color:var(--ob-text); margin:0 0 4px; }
+  .sub-head p { font-family:"Inter",sans-serif; font-size:12px; color:var(--ob-text-mute); margin:0; line-height:1.5; max-width:680px; }
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="sb-section-head">
+  <div class="meta">flow · the drop-off moment</div>
+  <h2>Second session — from "exploring" to "committed"</h2>
+  <p>Session 1 is covered by the onboarding flow and flow-first-feature. Session 2 is the real test: the user comes back the next day, the tutorial feature is done, and now they have to apply the discipline to a real project. This is the highest drop-off point. The UX must bridge the gap between "this made sense in the tutorial" and "I'm doing this for real."</p>
+</div>
+
+<!-- CONTEXT -->
+<div style="padding:16px 32px 0;">
+  <div class="sk-box thin" style="padding:14px 16px;max-width:860px;border-color:var(--ob-text-faint);">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text-faint);text-transform:uppercase;margin-bottom:5px;">context · where session 2 starts</div>
+    <p style="font-family:Inter;font-size:11.5px;color:var(--ob-text-mute);margin:0;line-height:1.6;">
+      The user completed session 1: installed the plugin, ran through the tutorial feature ("hello-world" or similar), saw the cockpit, maybe wrote one rule. Now they open Obsidian the next day with a real feature in mind. Three things are true: (1) they understand the shape of the lifecycle, (2) they don't yet trust that it'll work for their kind of work, (3) they're about to decide whether to commit or abandon.
+    </p>
+  </div>
+</div>
+
+<!-- MAIN FLOW -->
+<div class="sub-head">
+  <div class="sub-label">the flow</div>
+  <h3>Session 2 — step by step</h3>
+  <p>Five moments that define whether the user stays or leaves. Each has a UX lever.</p>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 2600px;">
+
+  <!-- F1: opening Obsidian -->
+  <div class="sb-frame">
+    <div class="sb-num">01</div>
+    <div class="sb-time">opening obsidian</div>
+    <div class="sb-anno top">
+      <span class="tag">re-entry</span>
+      <b>Cockpit restores session 1 context.</b><br>
+      The tutorial feature is still in the cockpit. Last activity shows "completed tutorial." A gentle "ready for a real one?" nudge appears — once.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">hello-world <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">tutorial</span></div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">all steps complete · ready to close</div>
+
+      <div style="background:rgba(255,229,107,0.07);border:1px solid #b08a14;border-radius:4px;padding:8px 10px;font-family:Inter;font-size:10.5px;color:var(--ob-text);margin-bottom:8px;">
+        <div style="font-weight:700;color:#c9a227;margin-bottom:3px;">✦ Tutorial complete</div>
+        <div style="color:var(--ob-text-mute);font-size:10px;line-height:1.5;margin-bottom:5px;">You've seen the whole lifecycle. Ready to try it with a real feature?</div>
+        <div style="display:flex;gap:6px;">
+          <button class="sk-btn primary" style="font-size:10px;padding:2px 8px;">Start real feature</button>
+          <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);align-self:center;">close tutorial first</span>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>One nudge, one time.</b>
+      <span class="sub">Never shown again after dismissed. Closes the tutorial chapter.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">start real</span></div>
+
+  <!-- F2: naming the real feature -->
+  <div class="sb-frame">
+    <div class="sb-num">02</div>
+    <div class="sb-time">new feature</div>
+    <div class="sb-anno bottom">
+      <span class="tag">naming</span>
+      <b>Name is the only required field.</b><br>
+      Same creation flow as the tutorial. But the coach has shifted tone: no more "let's explore" — now it's "let's build."
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:8px;">New feature</div>
+
+      <div style="margin-bottom:8px;">
+        <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">Name</div>
+        <div class="mini-input cursor" style="font-size:11px;padding:5px 7px;border-color:var(--accent);">user-profile-editing</div>
+      </div>
+
+      <div style="margin-bottom:8px;">
+        <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">Size</div>
+        <div class="mini-list" style="font-size:10.5px;line-height:1.75;">
+          <div class="it"><span class="ic"></span>Large</div>
+          <div class="it hl"><span class="ic" style="background:var(--accent);border-color:var(--accent);"></span>Medium</div>
+          <div class="it"><span class="ic"></span>Small</div>
+        </div>
+      </div>
+
+      <button class="sk-btn primary" style="font-size:10.5px;padding:3px 10px;">Create</button>
+    </div>
+    <div class="sb-caption">
+      <b>Same form, real stakes.</b>
+      <span class="sub">No tutorial scaffolding. Their feature, their pace.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">create</span></div>
+
+  <!-- F3: step 1 — the blank-page moment -->
+  <div class="sb-frame">
+    <div class="sb-num">03</div>
+    <div class="sb-time">step 1 · vision</div>
+    <div class="sb-anno top">
+      <span class="tag">blank page risk</span>
+      <b>The hardest moment: real writing, real stakes.</b><br>
+      The tutorial had a pre-filled vision. This one doesn't. The coach offers a one-sentence prompt to get started — not a template, not a form. One question.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">user-profile-editing</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 1 of 11 · vision</div>
+
+      <div class="coach" style="font-size:11px;margin-bottom:8px;">
+        <div>
+          <div class="ctitle">What are you building, and for whom?</div>
+          <div class="ctext" style="font-size:11px;">Write one paragraph. The goal is to say it out loud, not to be right.</div>
+        </div>
+      </div>
+
+      <div class="mini-window">
+        <div class="head">01-vision.md</div>
+        <div style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text-faint);line-height:1.75;min-height:40px;">
+          <span style="color:var(--accent);">▏</span>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>"What are you building, and for whom?"</b>
+      <span class="sub">One question. No template. Get out of the way.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">write</span></div>
+
+  <!-- F4: first hand-off -->
+  <div class="sb-frame">
+    <div class="sb-num">04</div>
+    <div class="sb-time">first hand-off · real</div>
+    <div class="sb-anno bottom">
+      <span class="tag">moment of trust</span>
+      <b>First real hand-off earns a light acknowledgement.</b><br>
+      Not confetti. A one-time "first real step" note in the undo banner — only on the first hand-off of a non-tutorial feature. Marks the transition from learning to doing.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">user-profile-editing</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 2 of 11 · constitution</div>
+
+      <div class="banner-undo" style="margin-bottom:8px;">
+        <span>↶</span>
+        <span style="flex:1;"><b>Step 1 done.</b> First real feature underway.</span>
+        <span style="color:var(--accent);font-size:11px;">undo</span>
+        <span style="color:var(--ob-text-faint);font-size:10px;margin-left:6px;">24h</span>
+      </div>
+
+      <div class="coach" style="font-size:11px;">
+        <div>
+          <div class="ctitle">Step 2 · house rules</div>
+          <div class="ctext" style="font-size:11px;">Write the standards this feature must meet. Start with one rule.</div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>"First real feature underway."</b>
+      <span class="sub">One-time note. Light acknowledgement, not celebration.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">in flow</span></div>
+
+  <!-- F5: in flow — committed -->
+  <div class="sb-frame">
+    <div class="sb-num">05</div>
+    <div class="sb-time">step 3 · committed</div>
+    <div class="sb-anno top">
+      <span class="tag">committed state</span>
+      <b>By step 3, they've decided.</b><br>
+      If the user reaches step 3 of a real feature, research shows they're very likely to continue. The UX from here is standard — no more special session-2 handling. They're a Specorator user now.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">user-profile-editing</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 3 of 11 · rules (EARS) <span class="sk-pill define" style="font-size:9px;padding:0 5px;margin-left:4px;">define</span></div>
+
+      <div class="mini-stages" style="margin-bottom:10px;">
+        <span class="d done"></span><span class="sep"></span>
+        <span class="d done"></span><span class="sep"></span>
+        <span class="d active"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span>
+        <span class="d"></span><span class="sep"></span>
+        <span class="d"></span>
+      </div>
+
+      <div class="coach" style="font-size:11px;">
+        <div>
+          <div class="ctitle">Step 3 · rules</div>
+          <div class="ctext" style="font-size:11px;">Write testable rules: WHEN … THEN … Four or more to pass the gate.</div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Step 3 = committed.</b>
+      <span class="sub">No more special handling. They're a Specorator user.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- DROP-OFF RISKS -->
+<div class="sub-head">
+  <div class="sub-label">drop-off risks</div>
+  <h3>Where users abandon in session 2 — and what we do about it</h3>
+</div>
+
+<div style="padding:8px 32px 36px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;">
+
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">R1</div>
+    <div class="sb-time">risk · blank vision</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">"I don't know what to write"</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        The blank vision file is the #1 drop-off point. Mitigations: (1) coach asks one question, not ten; (2) "write one paragraph — it doesn't have to be right" reduces perfectionism; (3) the file opens in edit mode, not preview.
+      </div>
+      <div style="background:rgba(127,109,242,0.08);border:1px solid var(--accent);border-radius:3px;padding:5px 8px;font-family:Inter;font-size:10.5px;color:var(--ob-text);">
+        coach: "What are you building, and for whom?"
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>One question. Low bar.</b>
+      <span class="sub">"It doesn't have to be right" is load-bearing copy.</span>
+    </div>
+  </div>
+
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">R2</div>
+    <div class="sb-time">risk · "this is overkill"</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">"11 steps for a profile edit?"</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        Users may feel the full lifecycle is too heavy for their feature. The size selector ("Small / Medium / Large") addresses this — selecting "Small" shows that most steps are optional. The coach also surfaces this: "This is a medium feature — you'll likely use 6–8 steps."
+      </div>
+      <div class="coach" style="font-size:10.5px;">
+        <div>
+          <div class="ctitle">Medium feature</div>
+          <div class="ctext" style="font-size:10px;">You'll likely use 6–8 of the 11 steps. Skip the rest with a reason.</div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Size = permission to skip.</b>
+      <span class="sub">Not 11 mandatory steps. 11 available steps.</span>
+    </div>
+  </div>
+
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">R3</div>
+    <div class="sb-time">risk · constitution friction</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Step 2: "I don't have house rules yet"</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        A new user doesn't have house rules — they're still learning what their standards are. Step 2 can be skipped with reason ("building standards as I go") or pre-populated with a starter template of 2–3 common rules that the user edits down.
+      </div>
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">
+        skip reason: "building standards as I go"<br>
+        → skipped · gate item: exempt
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Skip is always valid.</b>
+      <span class="sub">Constitution grows from retrospectives, not day one.</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- DESIGN NOTES -->
+<div style="padding:0 32px 60px;display:grid;grid-template-columns:repeat(2,1fr);gap:18px;">
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">One-time "first real feature" note</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">The transition from tutorial to real work deserves acknowledgement — but not celebration. A note in the undo banner ("First real feature underway") marks the moment without being patronising. It's shown once, on the first hand-off of a non-tutorial feature, and never again.</p>
+  </div>
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Step 3 = committed — no more hand-holding</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">After step 3 of a real feature, session-2-specific UX disappears. No more "tutorial complete" banners, no more "first real feature" notes. The user is in the standard lifecycle. Treating them as a learner past that point would be condescending — they've earned full trust.</p>
+  </div>
+  <div class="sk-box dashed" style="padding:14px 16px;grid-column:span 2;">
+    <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:4px;">Open: should the tutorial feature be auto-closed?</div>
+    <p class="sk-p" style="font-family:Inter;font-size:12px;">The tutorial feature (hello-world) is complete but takes up space in the cockpit at session 2. Options: (A) auto-close it when session 2 starts — feels presumptuous; (B) leave it and show the "ready for a real one?" banner — current design; (C) ask the user to close it explicitly before continuing — adds friction but is deliberate. Current: option B. May revisit if the tutorial feature causes confusion in testing.</p>
+  </div>
+</div>
+
+</body></html>

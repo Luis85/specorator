@@ -1,0 +1,102 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Cockpit · undo + safety</title>
+<link rel="stylesheet" href="../wireframes.css">
+</head>
+<body class="density-comfy" data-theme="dark" style="margin:0;background:transparent;">
+<div class="artboard-wrap"><div class="ob-window"><div class="ob-titlebar">
+  <div class="ob-traffic"><span></span><span></span><span></span></div>
+  <div style="margin-left:8px;">my-vault — Obsidian</div>
+  <div style="margin-left:auto;font-family:JetBrains Mono,monospace;font-size:10.5px;">user-auth · just handed off</div>
+</div>
+<div class="ob-body">
+  <div class="ob-ribbon">
+    <div class="ob-ribbon-icon spec">S</div>
+    <div class="ob-ribbon-icon">⌂</div>
+    <div class="ob-ribbon-icon">⊞</div>
+    <div class="ob-ribbon-icon">★</div>
+    <div class="ob-ribbon-icon">⚙</div>
+  </div>
+  <div class="ob-leftpane">
+    <div class="ob-ph-label">Your features</div>
+    <ul>
+      <li class="open active" style="color:var(--ob-text);">user-auth <span style="margin-left:auto;font-family:monospace;font-size:10px;color:var(--accent);">step 5</span></li>
+      <li class="file" style="padding-left:18px;font-size:11.5px;color:#4ad196;">How it works ✓ done</li>
+      <li class="file active" style="padding-left:18px;font-size:11.5px;">Check the design</li>
+    </ul>
+  </div>
+  <div class="ob-main">
+    <div class="ob-tabs">
+      <div class="ob-tab active"><span class="dot"></span>Cockpit</div>
+    </div>
+    <div class="ob-content">
+
+      <div class="banner-undo" style="margin-bottom:14px;">
+        <span style="font-size:16px;">↶</span>
+        <div style="flex:1;">
+          <b>Just handed off:</b> step 4 → step 5 (checking the design). <span class="muted">@arch-lead notified.</span>
+        </div>
+        <button class="sk-btn" style="font-size:11.5px;padding:3px 10px;">Undo (24h left)</button>
+        <span class="cdismiss" style="margin-left:6px;">dismiss</span>
+      </div>
+
+      <div class="row" style="justify-content:space-between;align-items:flex-end;">
+        <div>
+          <div class="sk-h-xs">Project · my-vault</div>
+          <h1 class="sk-h sk-h-xl" style="margin:4px 0 6px;"><span class="sk-underline">user-auth</span></h1>
+        </div>
+        <div class="col" style="align-items:flex-end;gap:6px;">
+          <span class="sk-pill build">step 5 · checking</span>
+          <span class="sk-mono">handed off 8 min ago</span>
+        </div>
+      </div>
+
+      <div class="coach" style="margin-top:14px;">
+        <div style="flex:1;">
+          <div class="ctitle">You're now waiting on <b>@arch-lead</b>.</div>
+          <div class="ctext">Nothing to do here for now. The cockpit will update when they finish. Want to work on a different feature?</div>
+          <div class="cactions">
+            <button class="sk-btn" style="font-size:12px;padding:4px 10px;">Show what needs me</button>
+            <button class="sk-btn ghost" style="font-size:12px;padding:4px 10px;">Pick another feature</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sk-box" style="margin-top:14px;padding:14px 18px;">
+        <div class="sk-h-xs" style="margin-bottom:10px;">The 11 steps</div>
+        <div class="stage-dots">
+          <span class="d done"></span><span class="sep"></span>
+          <span class="d done"></span><span class="sep"></span>
+          <span class="d done"></span><span class="sep"></span>
+          <span class="d done"></span><span class="sep"></span>
+          <span class="d active"></span><span class="sep"></span>
+          <span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span><span class="sep"></span><span class="d"></span>
+        </div>
+      </div>
+
+      <div class="sk-box dashed" style="margin-top:14px;">
+        <div class="sk-h-xs" style="margin-bottom:6px;">What just happened (in plain English)</div>
+        <ul style="list-style:none;padding:0;margin:0;font-family:Inter,sans-serif;font-size:12.5px;line-height:1.85;color:var(--ob-text-mute);">
+          <li>· Marked <b>How it works.md</b> as step 4 done</li>
+          <li>· Created <b>Check the design.md</b> from a template</li>
+          <li>· Notified <b>@arch-lead</b> they're up</li>
+          <li>· Saved a snapshot — undo restores everything for 24h</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="ob-rightpane">
+    <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:0.08em;color:var(--ob-text-faint);margin-bottom:10px;">Safety net</div>
+    <div class="sk-box thin" style="padding:10px;margin-bottom:10px;">
+      <div style="font-family:Inter;font-size:12.5px;font-weight:600;margin-bottom:6px;">Recent hand-offs</div>
+      <div style="font-family:Inter;font-size:11.5px;color:var(--ob-text-mute);line-height:1.7;">
+        <div>· user-auth · step 4→5 <span class="muted" style="font-size:10.5px;">8m</span> <span style="color:var(--accent);">undo</span></div>
+        <div>· billing-export · step 6→7 <span class="muted" style="font-size:10.5px;">2d</span> <span class="faint">expired</span></div>
+      </div>
+    </div>
+    <div class="sk-box thin" style="padding:10px;">
+      <div style="font-family:Inter;font-size:12.5px;font-weight:600;margin-bottom:6px;">Mistakes are fine</div>
+      <p class="sk-p" style="font-family:Inter;font-size:11.5px;margin:0;">Specorator never silently overwrites your work. Every hand-off is a snapshot.</p>
+    </div>
+  </div>
+</div></div></div>
+</body></html>

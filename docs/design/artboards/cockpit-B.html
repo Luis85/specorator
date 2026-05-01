@@ -1,0 +1,121 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Cockpit B — left rail</title>
+<link rel="stylesheet" href="../wireframes.css">
+</head>
+<body class="density-comfy" data-theme="dark" style="margin:0;background:transparent;">
+<div class="artboard-wrap"><div class="ob-window"><div class="ob-titlebar">
+  <div class="ob-traffic"><span></span><span></span><span></span></div>
+  <div style="margin-left:8px;">my-vault — Obsidian</div>
+</div>
+<div class="ob-body" style="grid-template-columns:36px 220px 1fr;">
+  <div class="ob-ribbon">
+    <div class="ob-ribbon-icon spec">S</div>
+    <div class="ob-ribbon-icon">⌂</div>
+    <div class="ob-ribbon-icon">⊞</div>
+    <div class="ob-ribbon-icon">★</div>
+    <div class="ob-ribbon-icon">⚙</div>
+  </div>
+  <div class="ob-leftpane">
+    <div class="ob-ph-label">Specorator</div>
+    <ul>
+      <li class="active file" style="color:var(--accent);">Cockpit · user-auth</li>
+      <li class="file faint">All features</li>
+      <li class="file faint">ADRs · 11</li>
+      <li class="file faint">Steering docs</li>
+      <li class="file faint">Roadmap</li>
+    </ul>
+    <div class="ob-ph-label" style="margin-top:14px;">Recent</div>
+    <ul>
+      <li class="file" style="font-size:11.5px;">requirements.md</li>
+      <li class="file" style="font-size:11.5px;">design.md</li>
+      <li class="file" style="font-size:11.5px;">0011-magic-link.md</li>
+    </ul>
+  </div>
+  <div class="ob-main">
+    <div class="ob-tabs">
+      <div class="ob-tab active"><span class="dot"></span>user-auth · cockpit</div>
+    </div>
+    <div class="ob-content" style="padding:0;display:grid;grid-template-columns:240px 1fr;">
+      <!-- vertical stage rail -->
+      <div style="border-right:1px solid var(--ob-line);padding:24px 16px;background:linear-gradient(180deg,transparent,rgba(127,109,242,0.04));">
+        <div class="sk-h-xs" style="margin-bottom:14px;">Lifecycle</div>
+        <div style="position:relative;padding-left:22px;">
+          <!-- vertical line -->
+          <div style="position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:repeating-linear-gradient(to bottom,var(--ob-line) 0 4px,transparent 4px 8px);"></div>
+          <div style="display:flex;flex-direction:column;gap:14px;font-family:Inter,sans-serif;font-size:12.5px;">
+            <div style="position:relative;"><span style="position:absolute;left:-22px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--lane-define);border:1.5px solid var(--lane-define);"></span><div>idea</div><div class="muted" style="font-size:10.5px;">10d ago · @you</div></div>
+            <div style="position:relative;"><span style="position:absolute;left:-22px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--lane-define);border:1.5px solid var(--lane-define);"></span><div>research</div><div class="muted" style="font-size:10.5px;">8d ago</div></div>
+            <div style="position:relative;"><span style="position:absolute;left:-22px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--lane-define);border:1.5px solid var(--lane-define);"></span><div>requirements</div><div class="muted" style="font-size:10.5px;">5d ago · 14 EARS</div></div>
+            <div style="position:relative;"><span style="position:absolute;left:-22px;top:0;width:18px;height:18px;border-radius:50%;background:var(--highlighter);border:2px solid var(--ink-pen);box-shadow:0 0 0 4px rgba(232,196,107,0.18);"></span><div style="font-weight:700;color:var(--highlighter);">design <span class="sk-anno" style="font-size:13px;color:var(--highlighter);">you are here</span></div><div class="muted" style="font-size:10.5px;">in progress · 2d</div></div>
+            <div style="position:relative;"><span style="position:absolute;left:-22px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--soft-yellow);border:1.5px solid #b08a14;"></span><div class="muted">specification <span class="sk-pill gate" style="font-size:9px;margin-left:4px;">gate</span></div></div>
+            <div style="position:relative;"><span style="position:absolute;left:-22px;top:2px;width:14px;height:14px;border-radius:50%;background:transparent;border:1.5px solid var(--ob-text-faint);"></span><div class="faint">tasks</div></div>
+            <div style="position:relative;"><span style="position:absolute;left:-22px;top:2px;width:14px;height:14px;border-radius:50%;border:1.5px solid var(--ob-text-faint);"></span><div class="faint">implementation</div></div>
+            <div style="position:relative;"><span style="position:absolute;left:-22px;top:2px;width:14px;height:14px;border-radius:50%;border:1.5px solid var(--ob-text-faint);"></span><div class="faint">testing</div></div>
+            <div style="position:relative;"><span style="position:absolute;left:-22px;top:2px;width:14px;height:14px;border-radius:50%;border:1.5px solid var(--ob-text-faint);"></span><div class="faint">review</div></div>
+            <div style="position:relative;"><span style="position:absolute;left:-22px;top:2px;width:14px;height:14px;border-radius:50%;border:1.5px solid var(--ob-text-faint);"></span><div class="faint">release</div></div>
+            <div style="position:relative;"><span style="position:absolute;left:-22px;top:2px;width:14px;height:14px;border-radius:50%;border:1.5px solid var(--ob-text-faint);"></span><div class="faint">retrospective</div></div>
+          </div>
+        </div>
+      </div>
+      <!-- focused stage editor -->
+      <div style="padding:24px 28px;overflow:hidden;">
+        <div class="sk-h-xs">Stage 4 of 11</div>
+        <h1 class="sk-h sk-h-xl" style="margin:4px 0 6px;">design <span class="muted" style="font-size:18px;font-weight:400;">— translate REQs into a buildable shape</span></h1>
+        <div class="row" style="font-family:Inter,sans-serif;font-size:12px;color:var(--ob-text-mute);gap:8px;">
+          <span class="sk-tag">design.md</span><span>·</span><span>opened 2d ago</span><span>·</span><span>3 ADRs · 2 clarifications open</span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin-top:18px;">
+          <div class="sk-box">
+            <div class="sk-h-xs" style="margin-bottom:8px;">Inputs</div>
+            <ul style="list-style:none;padding:0;margin:0;font-family:Inter,sans-serif;font-size:12.5px;line-height:1.85;">
+              <li><span class="sk-circle done"></span>requirements.md · 14 EARS statements</li>
+              <li><span class="sk-circle done"></span>memory/constitution.md · 6 invariants</li>
+              <li><span class="sk-circle done"></span>docs/steering/tech.md</li>
+              <li><span class="sk-circle done"></span>research/auth-providers.md</li>
+            </ul>
+            <div class="sk-divider"></div>
+            <div class="sk-h-xs" style="margin-bottom:8px;">Outputs you'll produce</div>
+            <ul style="list-style:none;padding:0;margin:0;font-family:Inter,sans-serif;font-size:12.5px;line-height:1.85;">
+              <li><span class="sk-circle active"></span>design.md · sections per REQ</li>
+              <li><span class="sk-circle"></span>ADRs for each architectural fork</li>
+              <li><span class="sk-circle"></span>traceability table REQ ↔ §</li>
+            </ul>
+          </div>
+
+          <div class="col">
+            <div class="sk-box">
+              <div class="sk-h-xs" style="margin-bottom:6px;">Gate to next stage</div>
+              <p class="sk-p" style="font-size:13px;margin-bottom:8px;">→ specification</p>
+              <div style="font-family:Inter,sans-serif;font-size:12px;line-height:1.85;">
+                <div><span class="sk-check done"></span>every REQ → § mapped <span class="muted">13/14</span></div>
+                <div><span class="sk-check gate"></span>0 open clarifications <span class="muted">2 open</span></div>
+                <div><span class="sk-check done"></span>ADRs filed for forks</div>
+                <div><span class="sk-check"></span>peer review</div>
+              </div>
+              <button class="sk-btn primary" style="margin-top:10px;width:100%;">Request gate review</button>
+            </div>
+            <div class="sk-box thin">
+              <div class="sk-h-xs" style="margin-bottom:6px;">Slash commands here</div>
+              <div style="font-family:JetBrains Mono;font-size:11px;color:var(--ob-text-mute);line-height:1.85;">
+                <div>/spec:design  <span class="faint">— draft sections from REQs</span></div>
+                <div>/adr:new      <span class="faint">— file decision</span></div>
+                <div>/spec:check   <span class="faint">— validate gate</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sk-box dashed" style="margin-top:14px;">
+          <div class="row" style="justify-content:space-between;">
+            <div><div class="sk-h sk-h-sm">2 open clarifications</div>
+              <p class="sk-p" style="margin-top:4px;">resolve inline in design.md, or file as questions for the sponsor</p>
+            </div>
+            <button class="sk-btn">Open in editor</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></div></div>
+</body></html>

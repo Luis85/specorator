@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>00 · Design rationale — Specorator</title>
+<link rel="stylesheet" href="nav.css">
+</head>
+<body>
+
+<nav class="top-nav">
+  <a class="nav-back" href="../index.html">← index</a>
+  <span class="nav-sep">/</span>
+  <span class="nav-title">00 · Design rationale</span>
+  <span class="nav-spacer"></span>
+  <a class="nav-prev disabled" href="#">← prev</a>
+  <a class="nav-next" href="01-product.html">01 Product →</a>
+</nav>
+
+<div class="sec-header">
+  <div class="sec-num">section 00</div>
+  <div class="sec-title">Design rationale</div>
+  <p class="sec-subtitle">Start here before walking any screen. Core principles, decisions DR-001–007, trade-offs, open questions, and non-goals. Skim the top half — it sets the frame for every choice made elsewhere.</p>
+</div>
+
+<div class="artboard-list">
+  <div class="ab-card">
+    <div class="ab-card-header">
+      <span class="ab-label"><b>Principles, decisions &amp; open questions</b> · 1080 × 2400 · scroll vertically</span>
+      <button class="ab-expand" onclick="openLightbox('../artboards/rationale.html', 'rationale', 1080, 2400)">⤢ open full</button>
+    </div>
+    <div class="ab-iframe-wrap" style="height:700px;">
+      <iframe src="../artboards/rationale.html" width="1080" height="2400" style="width:1080px;height:2400px;"></iframe>
+    </div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <span>Specorator wireframes · section 00 of 07</span>
+  <a href="01-product.html" style="color:var(--accent);text-decoration:none;">01 Product →</a>
+</footer>
+
+<!-- Lightbox overlay -->
+<div class="lightbox" id="lightbox">
+  <div class="lightbox-bar">
+    <span class="lightbox-title" id="lightbox-title"></span>
+    <button class="lightbox-close" onclick="closeLightbox()">✕ close  [esc]</button>
+  </div>
+  <div class="lightbox-body" id="lightbox-body"></div>
+</div>
+<script>
+function openLightbox(src, title, w, h) {
+  const lb = document.getElementById('lightbox');
+  const body = document.getElementById('lightbox-body');
+  document.getElementById('lightbox-title').textContent = title;
+  body.innerHTML = '<iframe src="' + src + '" width="' + w + '" height="' + h + '" style="width:' + w + 'px;height:' + h + 'px;"></iframe>';
+  lb.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  const lb = document.getElementById('lightbox');
+  lb.classList.remove('open');
+  document.getElementById('lightbox-body').innerHTML = '';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeLightbox(); });
+</script>
+</body>
+</html>

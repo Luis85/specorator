@@ -1,0 +1,405 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Flow · feature completion & archival</title>
+<link rel="stylesheet" href="../wireframes.css">
+<style>
+  body { margin: 0; background: var(--ob-bg); }
+  .scroll { width: 100%; overflow-x: auto; padding: 80px 0 60px; }
+  .sub-head { padding: 48px 32px 8px; }
+  .sub-head .sub-label { font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--ob-text-faint); text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; }
+  .sub-head h3 { font-family:var(--sketch); font-size:22px; font-weight:700; color:var(--ob-text); margin:0 0 4px; }
+  .sub-head p { font-family:"Inter",sans-serif; font-size:12px; color:var(--ob-text-mute); margin:0; line-height:1.5; max-width:680px; }
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="sb-section-head">
+  <div class="meta">flow · the moment discipline pays off</div>
+  <h2>Feature completion — ship, close, archive</h2>
+  <p>Shipping is the only moment in the lifecycle that deserves a little weight. Not confetti — but a deliberate close. The feature moves from the active cockpit into an archive that's permanent, searchable, and useful for retrospectives. It can be re-opened if bugs surface.</p>
+</div>
+
+<!-- ═══ PART 1: SHIPPING ═══ -->
+<div class="sub-head">
+  <div class="sub-label">part 1 of 3</div>
+  <h3>Shipping — crossing the final gate</h3>
+  <p>The Build→Ship gate is the last checkpoint. After it passes, the "Ship" lane has three steps: release notes, deployment log, retrospective. Completing all three unlocks the close action.</p>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 2500px;">
+
+  <!-- S1: final gate passed -->
+  <div class="sb-frame">
+    <div class="sb-num">S1</div>
+    <div class="sb-time">build→ship gate</div>
+    <div class="sb-anno top">
+      <span class="tag">gate · build→ship</span>
+      <b>Second gate. Same shape, different lane.</b><br>
+      Build→Ship checks: code reviewed, design spec complete, test plan linked, release notes drafted. Same auto-check mechanism as Define→Build.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 8 of 11 · Build → Ship gate</div>
+
+      <div class="mini-list" style="font-size:10.5px;line-height:1.85;">
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>Code reviewed ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>Design spec complete ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>Test plan linked ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>Release notes drafted ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>0 open questions ✓</div>
+      </div>
+      <div style="position:absolute;bottom:10px;left:14px;right:14px;font-family:JetBrains Mono;font-size:9.5px;color:var(--lane-define,#4ad196);">
+        all checks pass · Build → Ship ready
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>5 of 5. Gate passes.</b>
+      <span class="sub">Same ceremony as Define→Build. Cockpit recolors to Ship lane.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">cross gate</span></div>
+
+  <!-- S2: ship lane steps -->
+  <div class="sb-frame">
+    <div class="sb-num">S2</div>
+    <div class="sb-time">ship lane · steps 9–11</div>
+    <div class="sb-anno bottom">
+      <span class="tag">ship lane</span>
+      <b>Three short steps before close.</b><br>
+      Release notes (9), deployment log (10), retrospective (11). Deliberately lightweight — the heavy work happened in Define and Build.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">Ship lane <span class="sk-pill ship" style="font-size:9px;padding:0 5px;margin-left:4px;">ship</span></div>
+
+      <div style="display:flex;flex-direction:column;gap:4px;font-family:Inter;font-size:10.5px;">
+        <div style="display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:3px;background:rgba(74,209,150,0.07);border:1px solid var(--lane-define,#4ad196);">
+          <span style="color:var(--lane-define,#4ad196);">✓</span>
+          <span style="color:var(--ob-text);">09 · release notes</span>
+          <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">done</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:3px;background:rgba(127,109,242,0.08);border:1px solid var(--accent);">
+          <span style="color:var(--accent);">▶</span>
+          <span style="color:var(--ob-text);font-weight:600;">10 · deployment log</span>
+          <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--accent);">current</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:3px;background:var(--ob-bg-2);border:1px solid var(--ob-line);opacity:.55;">
+          <span style="color:var(--ob-text-faint);">○</span>
+          <span style="color:var(--ob-text-mute);">11 · retrospective</span>
+          <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">next</span>
+        </div>
+      </div>
+
+      <div style="margin-top:8px;font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">complete all 3 → close feature</div>
+    </div>
+    <div class="sb-caption">
+      <b>Three steps. One unlocks the close.</b>
+      <span class="sub">Short by design — the thinking was done earlier.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">complete 11</span></div>
+
+  <!-- S3: close action -->
+  <div class="sb-frame">
+    <div class="sb-num">S3</div>
+    <div class="sb-time">close feature</div>
+    <div class="sb-anno top">
+      <span class="tag">moment of weight</span>
+      <b>Close is deliberate. Not automatic.</b><br>
+      All 11 steps done triggers a "ready to close" state — the user still clicks Close. This is the full stop at the end of the sentence.
+    </div>
+    <div class="sb-screen" style="background:linear-gradient(to bottom, rgba(74,209,150,0.05), rgba(255,229,107,0.04));">
+      <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.5;margin-bottom:10px;">
+        All 11 steps complete. Both gates crossed. The feature is ready to close.
+      </div>
+
+      <div style="display:flex;align-items:center;gap:3px;margin-bottom:12px;flex-wrap:wrap;">
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--lane-define,#4ad196);display:inline-block;"></span>
+        <span style="width:6px;height:1px;background:var(--lane-define,#4ad196);display:inline-block;"></span>
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--lane-define,#4ad196);display:inline-block;"></span>
+        <span style="width:6px;height:1px;background:var(--lane-define,#4ad196);display:inline-block;"></span>
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--lane-define,#4ad196);display:inline-block;"></span>
+        <span style="width:6px;height:1px;background:var(--lane-define,#4ad196);display:inline-block;"></span>
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--lane-define,#4ad196);display:inline-block;"></span>
+        <span style="font-family:JetBrains Mono;font-size:11px;color:var(--lane-define,#4ad196);margin:0 4px;">⚑</span>
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--lane-define,#4ad196);display:inline-block;"></span>
+        <span style="width:6px;height:1px;background:var(--lane-define,#4ad196);display:inline-block;"></span>
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--lane-define,#4ad196);display:inline-block;"></span>
+        <span style="width:6px;height:1px;background:var(--lane-define,#4ad196);display:inline-block;"></span>
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--lane-define,#4ad196);display:inline-block;"></span>
+        <span style="font-family:JetBrains Mono;font-size:11px;color:#c9a227;margin:0 4px;">⚑</span>
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--lane-define,#4ad196);display:inline-block;"></span>
+        <span style="width:6px;height:1px;background:var(--lane-define,#4ad196);display:inline-block;"></span>
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--lane-define,#4ad196);display:inline-block;"></span>
+        <span style="width:6px;height:1px;background:var(--lane-define,#4ad196);display:inline-block;"></span>
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--lane-define,#4ad196);display:inline-block;"></span>
+      </div>
+
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="sk-btn primary" style="font-size:11px;padding:4px 12px;">Close feature</button>
+        <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">⌘ ⏎ · moves to archive</span>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>All green. One button.</b>
+      <span class="sub">The full stop. Slow cross-fade to archive state.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">close</span></div>
+
+  <!-- S4: closed state -->
+  <div class="sb-frame">
+    <div class="sb-num">S4</div>
+    <div class="sb-time">just closed</div>
+    <div class="sb-anno bottom">
+      <span class="tag">post-state</span>
+      <b>Cockpit acknowledges. Then steps aside.</b><br>
+      A brief "closed" banner. The cockpit switches to the next active feature (or the empty state if none). No lingering.
+    </div>
+    <div class="sb-screen">
+      <div style="background:rgba(255,229,107,0.07);border:1px solid #b08a14;border-radius:4px;padding:8px 10px;font-family:Inter;font-size:11px;color:var(--ob-text);display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="color:#c9a227;font-size:14px;">✦</span>
+        <span><b>Closed:</b> magic-link-auth</span>
+        <span style="color:var(--accent);margin-left:auto;font-size:10.5px;cursor:pointer;">View archive →</span>
+        <span style="color:var(--ob-text-faint);font-size:10px;cursor:pointer;">×</span>
+      </div>
+
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:4px;">data-export-csv</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 2 of 11 · constitution <span class="sk-pill define" style="font-size:9px;padding:0 5px;margin-left:4px;">define</span></div>
+      <div class="coach" style="font-size:11px;">
+        <div>
+          <div class="ctitle">Next up: data-export-csv</div>
+          <div class="ctext" style="font-size:11px;">You're on step 2. Write the house rules for this feature.</div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Cockpit moves on.</b>
+      <span class="sub">Banner → next feature. Archive link preserved.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══ PART 2: ARCHIVE ═══ -->
+<div class="sub-head">
+  <div class="sub-label">part 2 of 3</div>
+  <h3>Archive — the permanent record</h3>
+  <p>Closed features live in <code>archive/</code>. They're read-only by default, searchable, and carry their full spec, gate history, decision notes, and retrospective. They can be re-opened — which is how post-ship bugs feed back into the system.</p>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 1800px;">
+
+  <!-- A1: archive view -->
+  <div class="sb-frame">
+    <div class="sb-num">A1</div>
+    <div class="sb-time">archive · list</div>
+    <div class="sb-anno top">
+      <span class="tag">searchable</span>
+      <b>Archive is a first-class surface.</b><br>
+      Not just a folder. A filterable list in the cockpit: by date, lane, gate outcome, feature name. Useful for retrospectives and pattern-finding.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:8px;">Archive</div>
+
+      <div class="mini-input" style="font-size:10.5px;padding:4px 6px;margin-bottom:7px;border-color:var(--ob-line);">search closed features…</div>
+
+      <div style="display:flex;flex-direction:column;gap:4px;font-family:Inter;font-size:10.5px;">
+        <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-radius:3px;padding:6px 8px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="color:var(--lane-define,#4ad196);">✦</span>
+            <span style="font-weight:700;color:var(--ob-text);">magic-link-auth</span>
+            <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">closed 2026-05-01</span>
+          </div>
+          <div style="color:var(--ob-text-faint);font-size:9.5px;font-family:JetBrains Mono;margin-top:2px;">11 steps · 2 gates · 3 decisions · 12 days</div>
+        </div>
+        <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-radius:3px;padding:6px 8px;opacity:.7;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="color:var(--ob-text-faint);">✦</span>
+            <span style="font-weight:600;color:var(--ob-text);">rate-limiting-v1</span>
+            <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">closed 2026-04-12</span>
+          </div>
+          <div style="color:var(--ob-text-faint);font-size:9.5px;font-family:JetBrains Mono;margin-top:2px;">8 steps · 2 gates · 1 decision · 6 days</div>
+        </div>
+        <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-radius:3px;padding:6px 8px;opacity:.5;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="color:var(--ob-text-faint);">✦</span>
+            <span style="font-weight:600;color:var(--ob-text-mute);">email-verification</span>
+            <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">closed 2026-03-28</span>
+          </div>
+          <div style="color:var(--ob-text-faint);font-size:9.5px;font-family:JetBrains Mono;margin-top:2px;">11 steps · 2 gates · 5 decisions · 21 days</div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Every closed feature. One list.</b>
+      <span class="sub">Steps, gates, decisions, cycle time — at a glance.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">open</span></div>
+
+  <!-- A2: archived feature view -->
+  <div class="sb-frame">
+    <div class="sb-num">A2</div>
+    <div class="sb-time">archive · feature detail</div>
+    <div class="sb-anno bottom">
+      <span class="tag">read-only</span>
+      <b>Full spec. Read-only. Re-openable.</b><br>
+      All steps, gate outcomes, decisions, OQ resolutions, skip reasons. A complete audit trail. The "Re-open" button is always visible.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:2px;">magic-link-auth</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">closed 2026-05-01 · 12 days</span>
+        <span style="background:rgba(255,229,107,0.1);border:1px solid #b08a14;border-radius:3px;padding:1px 6px;font-family:JetBrains Mono;font-size:9px;color:#c9a227;">archived</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:3px;font-family:Inter;font-size:10px;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:6px;padding:3px 5px;background:var(--ob-bg-2);border-radius:3px;">
+          <span style="color:var(--lane-define,#4ad196);">✓</span><span>11 steps complete</span>
+          <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">2 skipped (with reasons)</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;padding:3px 5px;background:var(--ob-bg-2);border-radius:3px;">
+          <span style="color:var(--lane-define,#4ad196);">⚑</span><span>2 gates crossed</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;padding:3px 5px;background:var(--ob-bg-2);border-radius:3px;">
+          <span style="color:var(--accent);">✎</span><span>3 decision notes</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;padding:3px 5px;background:var(--ob-bg-2);border-radius:3px;">
+          <span style="color:var(--ob-text-faint);">?</span><span>4 OQs resolved</span>
+        </div>
+      </div>
+
+      <button class="sk-btn ghost" style="font-size:10px;padding:2px 9px;">Re-open feature</button>
+    </div>
+    <div class="sb-caption">
+      <b>Full audit. Always re-openable.</b>
+      <span class="sub">Nothing deleted. Everything traceable.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">re-open</span></div>
+
+  <!-- A3: re-open flow -->
+  <div class="sb-frame">
+    <div class="sb-num">A3</div>
+    <div class="sb-time">re-open</div>
+    <div class="sb-anno top">
+      <span class="tag">post-ship bug</span>
+      <b>Re-open restores to the last active step.</b><br>
+      The feature re-enters the cockpit at step 11 (retrospective) with a "re-opened" tag. A new retrospective entry captures why it was re-opened. Undo is armed for 24h.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:8px;">Re-open: magic-link-auth?</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.5;margin-bottom:8px;">
+        This moves the feature back to active. It will appear in the cockpit at step 11. Why are you re-opening?
+      </div>
+
+      <div class="mini-input cursor" style="font-size:11px;padding:5px 7px;border-color:var(--accent);margin-bottom:8px;">Post-ship bug: magic links not expiring on mobile</div>
+
+      <div style="display:flex;gap:6px;">
+        <button class="sk-btn primary" style="font-size:10.5px;padding:3px 10px;">Re-open</button>
+        <button class="sk-btn ghost" style="font-size:10.5px;padding:3px 9px;">Cancel</button>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Re-open with a reason.</b>
+      <span class="sub">Reason logged in retrospective. Closes the feedback loop.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══ PART 3: EDGE CASES & RATIONALE ═══ -->
+<div class="sub-head">
+  <div class="sub-label">part 3 of 3</div>
+  <h3>Edge cases & design rationale</h3>
+</div>
+
+<div style="padding:8px 32px 36px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;">
+
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">A</div>
+    <div class="sb-time">abandoned feature</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">"I'm not building this anymore"</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        A feature can be abandoned at any step. Command palette: "Abandon feature." Requires a one-line reason. Moves to archive with status <code style="font-size:10px;">abandoned</code>. Distinct from <code style="font-size:10px;">closed</code> in the archive list — a different icon, a different colour.
+      </div>
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">
+        ✕ abandoned · step 4 · "pivoted away"
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Abandoned ≠ deleted.</b>
+      <span class="sub">Still in archive. Still searchable. Different icon.</span>
+    </div>
+  </div>
+
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">B</div>
+    <div class="sb-time">retrospective required?</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Can you skip the retrospective?</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        Step 11 (retrospective) can be skipped with a reason — same as any other step. But it's the only step that specifically blocks the close action without a skip reason. You can't close silently with a blank retrospective — that's the one enforced moment of reflection.
+      </div>
+      <div style="background:rgba(255,229,107,0.06);border:1px solid #b08a14;border-radius:3px;padding:5px 8px;font-family:Inter;font-size:10.5px;color:var(--ob-text);">
+        ⚑ Step 11 is blank — add a note or skip with reason to close
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Retro: the one enforced reflection.</b>
+      <span class="sub">Skippable, but not silently. One line minimum.</span>
+    </div>
+  </div>
+
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">C</div>
+    <div class="sb-time">house rules update</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Retrospective → house rules</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        If the retrospective surfaces a pattern ("we always forget to add a strings section"), the coach offers: "Add this to your house rules?" One click opens the constitution file with the new rule pre-drafted. The learning loop closes here.
+      </div>
+      <div class="coach" style="font-size:10.5px;">
+        <div>
+          <div class="ctitle">Add to house rules?</div>
+          <div class="ctext" style="font-size:10px;">You've noted "strings section" twice. Make it a house rule?</div>
+          <div class="cactions">
+            <button class="sk-btn primary" style="font-size:9.5px;padding:2px 7px;">Add rule</button>
+            <span style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);margin-left:4px;">not now</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Retro → constitution. Learning loop.</b>
+      <span class="sub">Patterns become rules. Rules become gate checks.</span>
+    </div>
+  </div>
+
+</div>
+
+<div style="padding:0 32px 60px;display:grid;grid-template-columns:repeat(2,1fr);gap:18px;">
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Close is deliberate, not automatic</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Completing step 11 doesn't auto-close. The user clicks "Close feature." This is intentional — closing is a commitment, and commitments deserve a moment of intentionality. The button is never hidden, but it requires a click.</p>
+  </div>
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Archive is searchable, not a graveyard</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Closed features are the most valuable design resource a team has — they show what worked, what took too long, what kept getting re-opened. The archive surface should feel like a library, not a trash bin. Cycle time, decision count, gate outcomes — all visible at a glance.</p>
+  </div>
+</div>
+
+</body></html>

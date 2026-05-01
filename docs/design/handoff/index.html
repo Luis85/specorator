@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Specorator — Engineering Handoff</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #111;
+    --bg2: #181818;
+    --bg3: #1f1f1f;
+    --line: #2a2a2a;
+    --text: #e2e2e2;
+    --mute: #888;
+    --faint: #444;
+    --accent: #7f6df2;
+    --green: #4ad196;
+    --yellow: #c9a227;
+    --red: #c66;
+    --teal: #3ec9b0;
+    --blue: #7fa8e0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: "Inter", sans-serif; min-height: 100vh; }
+
+  /* ── top bar ── */
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--line);
+    padding: 0 40px;
+    height: 48px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .topbar-logo {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px; font-weight: 700;
+    color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .topbar-logo .badge {
+    background: var(--accent);
+    color: #fff;
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    letter-spacing: .04em;
+  }
+  .topbar-sep { color: var(--faint); }
+  .topbar-title { font-size: 12px; color: var(--mute); font-family: "JetBrains Mono", monospace; }
+  .topbar-spacer { flex: 1; }
+  .topbar-link {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px; color: var(--mute);
+    text-decoration: none;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 4px 10px;
+  }
+  .topbar-link:hover { color: var(--text); border-color: var(--accent); }
+
+  /* ── hero ── */
+  .hero {
+    padding: 72px 40px 56px;
+    max-width: 900px;
+    border-bottom: 1px solid var(--line);
+  }
+  .hero-eyebrow {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px; color: var(--faint);
+    text-transform: uppercase; letter-spacing: .12em;
+    margin-bottom: 16px;
+  }
+  .hero h1 {
+    font-size: 48px; font-weight: 700;
+    color: var(--text); line-height: 1.05;
+    letter-spacing: -.02em;
+    margin-bottom: 20px;
+  }
+  .hero h1 em { color: var(--accent); font-style: normal; }
+  .hero p {
+    font-size: 16px; color: var(--mute);
+    line-height: 1.6; max-width: 680px;
+    margin-bottom: 10px;
+  }
+  .hero-meta {
+    display: flex; gap: 20px; flex-wrap: wrap;
+    margin-top: 24px;
+  }
+  .hero-meta .chip {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px; color: var(--faint);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 3px 9px;
+  }
+  .hero-meta .chip b { color: var(--text); }
+
+  /* ── spec nav grid ── */
+  .spec-grid {
+    padding: 40px 40px 80px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px;
+  }
+  .spec-card {
+    display: block; text-decoration: none;
+    background: var(--bg2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 22px 24px;
+    transition: border-color .12s, background .12s;
+    position: relative;
+    overflow: hidden;
+  }
+  .spec-card::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--card-color, var(--accent));
+    opacity: .6;
+  }
+  .spec-card:hover { border-color: var(--card-color, var(--accent)); background: var(--bg3); }
+  .card-id {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px; color: var(--faint);
+    text-transform: uppercase; letter-spacing: .1em;
+    margin-bottom: 8px;
+  }
+  .card-title {
+    font-size: 17px; font-weight: 700;
+    color: var(--text); margin-bottom: 6px;
+    line-height: 1.2;
+  }
+  .card-desc {
+    font-size: 12.5px; color: var(--mute);
+    line-height: 1.55; margin-bottom: 14px;
+  }
+  .card-tags {
+    display: flex; flex-wrap: wrap; gap: 5px;
+  }
+  .ctag {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px; color: var(--faint);
+    border: 1px solid var(--line);
+    border-radius: 3px; padding: 2px 7px;
+    background: rgba(255,255,255,.02);
+  }
+  .card-arrow {
+    position: absolute; top: 22px; right: 22px;
+    font-size: 16px; color: var(--faint);
+    transition: color .12s, transform .12s;
+  }
+  .spec-card:hover .card-arrow { color: var(--card-color, var(--accent)); transform: translateX(3px); }
+
+  /* ── key decisions inline ── */
+  .decisions-section {
+    padding: 0 40px 60px;
+    border-top: 1px solid var(--line);
+  }
+  .section-head {
+    padding: 40px 0 20px;
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  .section-head h2 { font-size: 22px; font-weight: 700; color: var(--text); }
+  .section-head .sh-meta {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px; color: var(--faint);
+  }
+
+  .dr-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .dr-table th {
+    text-align: left;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px; color: var(--faint);
+    text-transform: uppercase; letter-spacing: .08em;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+    font-weight: 500;
+  }
+  .dr-table td {
+    padding: 12px 12px;
+    border-bottom: 1px solid var(--line);
+    color: var(--text);
+    vertical-align: top;
+    line-height: 1.5;
+  }
+  .dr-table tr:last-child td { border-bottom: none; }
+  .dr-table td:first-child {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px; color: var(--accent);
+    white-space: nowrap; width: 80px;
+  }
+  .dr-table td:nth-child(2) { font-weight: 600; width: 260px; }
+  .dr-table td:nth-child(3) { color: var(--mute); font-size: 12.5px; }
+  .dr-table .verdict {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9.5px; color: var(--green);
+    text-transform: uppercase; letter-spacing: .06em;
+    white-space: nowrap;
+  }
+
+  /* ── non-goals ── */
+  .nongoals {
+    padding: 0 40px 80px;
+    border-top: 1px solid var(--line);
+  }
+  .ng-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
+    margin-top: 4px;
+  }
+  .ng-item {
+    background: var(--bg2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .ng-item .ng-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .ng-item .ng-desc { font-size: 12px; color: var(--mute); line-height: 1.5; }
+
+  /* ── footer ── */
+  footer {
+    border-top: 1px solid var(--line);
+    padding: 18px 40px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px; color: var(--faint);
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-logo">
+    SPECORATOR
+    <span class="badge">ENG HANDOFF</span>
+  </div>
+  <span class="topbar-sep">/</span>
+  <span class="topbar-title">overview</span>
+  <span class="topbar-spacer"></span>
+  <a class="topbar-link" href="../index.html">← wireframes</a>
+</div>
+
+<div class="hero">
+  <div class="hero-eyebrow">Engineering handoff · v0.1 · May 2026</div>
+  <h1>Specorator<br><em>implementation spec</em></h1>
+  <p>An Obsidian plugin that scaffolds disciplined software work: 11 steps, 3 lanes, 2 gates. Markdown-native, local-first, no server. This package covers architecture, data model, state machine, UX contracts, settings schema, commands, team mode, and key algorithms.</p>
+  <p>Target audience: external contractor with Obsidian plugin experience. Read the spec pages in order; reference the wireframes for UX detail.</p>
+  <div class="hero-meta">
+    <span class="chip"><b>Platform:</b> Obsidian plugin (TypeScript)</span>
+    <span class="chip"><b>Storage:</b> Markdown + YAML frontmatter</span>
+    <span class="chip"><b>Server:</b> none</span>
+    <span class="chip"><b>Accounts:</b> none</span>
+    <span class="chip"><b>Telemetry:</b> none (DR-006)</span>
+    <span class="chip"><b>Min Obsidian:</b> 1.4.0</span>
+  </div>
+</div>
+
+<!-- spec pages -->
+<div class="spec-grid">
+
+  <a class="spec-card" href="spec-data-model.html" style="--card-color: #4ad196;">
+    <div class="card-id">spec · 01</div>
+    <div class="card-title">Data model</div>
+    <div class="card-desc">Vault folder structure, file naming conventions, YAML frontmatter schema for every file type, and the in-memory cache model.</div>
+    <div class="card-tags">
+      <span class="ctag">folder layout</span>
+      <span class="ctag">frontmatter</span>
+      <span class="ctag">_meta.md</span>
+      <span class="ctag">cache</span>
+    </div>
+    <span class="card-arrow">→</span>
+  </a>
+
+  <a class="spec-card" href="spec-state-machine.html" style="--card-color: #c9a227;">
+    <div class="card-id">spec · 02</div>
+    <div class="card-title">State machine & UX contracts</div>
+    <div class="card-desc">The 11 steps, 3 lanes, 2 gates. Every state transition, guard condition, and the exact UI behaviour required at each state. The most important spec page.</div>
+    <div class="card-tags">
+      <span class="ctag">steps 1–11</span>
+      <span class="ctag">gate guards</span>
+      <span class="ctag">UX contracts</span>
+      <span class="ctag">transitions</span>
+    </div>
+    <span class="card-arrow">→</span>
+  </a>
+
+  <a class="spec-card" href="spec-plugin-arch.html" style="--card-color: #7f6df2;">
+    <div class="card-id">spec · 03</div>
+    <div class="card-title">Plugin architecture & API</div>
+    <div class="card-desc">Obsidian API surface, plugin entry point, view types, event hooks, command registration, settings schema with defaults, and Obsidian version constraints.</div>
+    <div class="card-tags">
+      <span class="ctag">Plugin class</span>
+      <span class="ctag">ItemView</span>
+      <span class="ctag">commands</span>
+      <span class="ctag">settings</span>
+    </div>
+    <span class="card-arrow">→</span>
+  </a>
+
+  <a class="spec-card" href="spec-algorithms.html" style="--card-color: #7fa8e0;">
+    <div class="card-id">spec · 04</div>
+    <div class="card-title">Key algorithms</div>
+    <div class="card-desc">Pseudocode for gate evaluation, open-question scanning, snapshot/undo, stale detection, conflict detection, and the OQ syntax parser. Implementation-ready.</div>
+    <div class="card-tags">
+      <span class="ctag">gate eval</span>
+      <span class="ctag">OQ scanner</span>
+      <span class="ctag">snapshots</span>
+      <span class="ctag">conflict detect</span>
+    </div>
+    <span class="card-arrow">→</span>
+  </a>
+
+  <a class="spec-card" href="spec-team-mode.html" style="--card-color: #3ec9b0;">
+    <div class="card-id">spec · 05</div>
+    <div class="card-title">Team mode</div>
+    <div class="card-desc">Shared vault conventions, committer list, PR sign-off detection, peer OQ resolution, inline attribution format, and sync conflict handling. OQ-5 resolved.</div>
+    <div class="card-tags">
+      <span class="ctag">shared vault</span>
+      <span class="ctag">PR sign-off</span>
+      <span class="ctag">attribution</span>
+      <span class="ctag">conflicts</span>
+    </div>
+    <span class="card-arrow">→</span>
+  </a>
+
+</div>
+
+<!-- key decisions summary -->
+<div class="decisions-section">
+  <div class="section-head">
+    <h2>Key decisions</h2>
+    <span class="sh-meta">DR-001 – DR-007 · accepted</span>
+  </div>
+  <table class="dr-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Decision</th>
+        <th>Rationale (terse)</th>
+        <th style="width:90px;">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>DR-001</td>
+        <td>Build as Obsidian plugin, not standalone app</td>
+        <td>Users already live in Obsidian. Local-first, strong plugin API, frontmatter support native. VS Code too engineering-coded; standalone too much surface area for v1.</td>
+        <td><span class="verdict">accepted</span></td>
+      </tr>
+      <tr>
+        <td>DR-002</td>
+        <td>Cockpit follows the active note (context inference)</td>
+        <td>Plugin infers current feature from the path of the active Markdown file. Manual pin available as override. Empty state when no feature is in focus.</td>
+        <td><span class="verdict">accepted</span></td>
+      </tr>
+      <tr>
+        <td>DR-003</td>
+        <td>Plain-English aliases as primary labels</td>
+        <td>"The rules" shown large; "requirements (EARS)" shown small. Jargon is secondary, always has a (?) popover. Power-user mode exposes orthodox vocabulary.</td>
+        <td><span class="verdict">accepted</span></td>
+      </tr>
+      <tr>
+        <td>DR-004</td>
+        <td>Markdown + frontmatter is the only persistent state</td>
+        <td>No SQLite, no JSON sidecars. All state lives in YAML frontmatter on spec files. Plugin-readable, human-readable, git-friendly. Cache in plugin local storage; invalidate on mtime change.</td>
+        <td><span class="verdict">accepted</span></td>
+      </tr>
+      <tr>
+        <td>DR-005</td>
+        <td>24-hour undo on every state change (always on)</td>
+        <td>Snapshot taken before every hand-off, gate cross, and file mutation. 24h window. Not configurable — this is the safety contract. Storage cost negligible (Markdown compresses well).</td>
+        <td><span class="verdict">accepted</span></td>
+      </tr>
+      <tr>
+        <td>DR-006</td>
+        <td>No telemetry, no account, no server</td>
+        <td>All data stays local. Non-negotiable for v1. Obsidian users self-select for local-first. Learning happens through interviews and GitHub issues.</td>
+        <td><span class="verdict">accepted</span></td>
+      </tr>
+      <tr>
+        <td>DR-007</td>
+        <td>Sketchy lo-fi wireframes for design phase</td>
+        <td>HTML wireframes with Kalam font. Iterates fast, shares cleanly, signals "not done." Will rebuild in production CSS. Not a contractor concern.</td>
+        <td><span class="verdict">accepted</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- non-goals -->
+<div class="nongoals">
+  <div class="section-head">
+    <h2>Non-goals</h2>
+    <span class="sh-meta">explicit out-of-scope for v1 · say no to these</span>
+  </div>
+  <div class="ng-list">
+    <div class="ng-item">
+      <div class="ng-title">Code generation</div>
+      <div class="ng-desc">Specorator scaffolds thinking, not code. It integrates with Cursor / Claude Code / Aider but does not compete with them.</div>
+    </div>
+    <div class="ng-item">
+      <div class="ng-title">Graph-of-everything view</div>
+      <div class="ng-desc">Obsidian already has the graph view. Do not reinvent it.</div>
+    </div>
+    <div class="ng-item">
+      <div class="ng-title">Custom templating language</div>
+      <div class="ng-desc">Markdown + frontmatter is enough. Template files are just notes — users can edit them directly.</div>
+    </div>
+    <div class="ng-item">
+      <div class="ng-title">Mobile app</div>
+      <div class="ng-desc">Obsidian Mobile exists. The cockpit may not work well on mobile in v1; that is acceptable. Mobile is for reading, not for advancing gates.</div>
+    </div>
+    <div class="ng-item">
+      <div class="ng-title">AI agent inside Specorator</div>
+      <div class="ng-desc">Core flow is deterministic — parsed frontmatter, not a model. LLM features (e.g. "summarise OQs") can layer later but must not be required.</div>
+    </div>
+    <div class="ng-item">
+      <div class="ng-title">Real-time multiplayer</div>
+      <div class="ng-desc">Team mode is shared vault + conventions (see spec 05). No CRDT, no WebSocket, no server sync layer in v1.</div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span>Specorator · Engineering handoff · v0.1 · May 2026</span>
+  <a href="../index.html" style="color:var(--accent);text-decoration:none;">← wireframe index</a>
+</footer>
+
+</body>
+</html>

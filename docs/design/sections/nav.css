@@ -1,0 +1,286 @@
+/* Shared nav styles for all section pages */
+@import url("https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap");
+
+:root {
+  --bg: #1a1a1a;
+  --bg2: #222;
+  --bg3: #2a2a2a;
+  --line: #333;
+  --text: #dcddde;
+  --mute: #8c8d8e;
+  --faint: #555;
+  --accent: #7f6df2;
+  --green: #4ad196;
+  --yellow: #c9a227;
+  --teal: #3ec9b0;
+  --sketch: "Kalam", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", sans-serif;
+  min-height: 100vh;
+}
+
+/* ── top nav bar ── */
+.top-nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--line);
+  padding: 0 32px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.nav-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--mute);
+  text-decoration: none;
+}
+.nav-back:hover { color: var(--text); }
+.nav-sep {
+  font-size: 14px;
+  color: var(--faint);
+}
+.nav-title {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--text);
+}
+.nav-spacer { flex: 1; }
+.nav-prev, .nav-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--mute);
+  text-decoration: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 3px 10px;
+}
+.nav-prev:hover, .nav-next:hover { color: var(--text); border-color: var(--accent); }
+.nav-prev.disabled, .nav-next.disabled { opacity: .3; pointer-events: none; }
+
+/* ── section header ── */
+.sec-header {
+  padding: 40px 48px 28px;
+  border-bottom: 1px solid var(--line);
+}
+.sec-num {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  margin-bottom: 10px;
+}
+.sec-title {
+  font-family: var(--sketch);
+  font-size: 36px;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.sec-subtitle {
+  font-size: 13.5px;
+  color: var(--mute);
+  max-width: 680px;
+  line-height: 1.6;
+}
+
+/* ── artboard list ── */
+.artboard-list {
+  padding: 32px 48px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── artboard card (direct embed) ── */
+.ab-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg2);
+}
+.ab-card-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ab-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--mute);
+}
+.ab-label b { color: var(--text); }
+.ab-expand {
+  margin-left: auto;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--accent);
+  text-decoration: none;
+  border: 1px solid rgba(127,109,242,.35);
+  border-radius: 3px;
+  padding: 2px 8px;
+  background: none;
+  cursor: pointer;
+}
+.ab-expand:hover { background: rgba(127,109,242,.08); }
+
+/* iframe wrapper — clips to artboard dimensions */
+.ab-iframe-wrap {
+  overflow: auto;
+  background: #1e1e1e;
+  max-height: 700px;
+}
+.ab-iframe-wrap iframe {
+  display: block;
+  border: 0;
+}
+
+/* ── flow card (link only, no embed) ── */
+.flow-card {
+  display: block;
+  text-decoration: none;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px 22px;
+  transition: border-color .15s, background .15s;
+  position: relative;
+}
+.flow-card:hover {
+  border-color: var(--accent);
+  background: var(--bg3);
+}
+.flow-card-num {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px;
+  color: var(--faint);
+  margin-bottom: 6px;
+}
+.flow-card-title {
+  font-family: var(--sketch);
+  font-size: 20px;
+  color: var(--text);
+  margin-bottom: 5px;
+}
+.flow-card-desc {
+  font-size: 12.5px;
+  color: var(--mute);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+.flow-card-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.act-tag {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--faint);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 2px 7px;
+  background: rgba(255,255,255,.03);
+}
+.act-tag.accent { color: var(--accent); border-color: rgba(127,109,242,.3); background: rgba(127,109,242,.06); }
+.act-tag.green  { color: var(--green);  border-color: rgba(74,209,150,.3);  background: rgba(74,209,150,.06); }
+.act-tag.yellow { color: var(--yellow); border-color: rgba(201,162,39,.3);  background: rgba(201,162,39,.06); }
+.act-tag.teal   { color: var(--teal);   border-color: rgba(62,201,176,.3);  background: rgba(62,201,176,.06); }
+.flow-card-arrow {
+  position: absolute;
+  top: 20px; right: 20px;
+  font-size: 18px;
+  color: var(--faint);
+  transition: color .15s, transform .15s;
+}
+.flow-card:hover .flow-card-arrow { color: var(--accent); transform: translateX(3px); }
+
+/* ── group label ── */
+.group-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--faint);
+  padding: 8px 0 4px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+
+/* ── fullscreen lightbox overlay ── */
+.lightbox {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #0e0e0e;
+  flex-direction: column;
+}
+.lightbox.open { display: flex; }
+.lightbox-bar {
+  flex: 0 0 40px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+}
+.lightbox-title {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--mute);
+  flex: 1;
+}
+.lightbox-close {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--mute);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+  color: var(--text);
+}
+.lightbox-close:hover { border-color: var(--accent); color: var(--accent); }
+.lightbox-body {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+.lightbox-body iframe {
+  border: 0;
+  display: block;
+}
+
+/* ── footer ── */
+.site-footer {
+  border-top: 1px solid var(--line);
+  padding: 16px 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px;
+  color: var(--faint);
+}

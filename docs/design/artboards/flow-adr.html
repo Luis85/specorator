@@ -1,0 +1,371 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Flow · decision note (ADR)</title>
+<link rel="stylesheet" href="../wireframes.css">
+<style>
+  body { margin: 0; background: var(--ob-bg); }
+  .scroll { width: 100%; overflow-x: auto; padding: 80px 0 60px; }
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="sb-section-head">
+  <div class="meta">flow · the most-resisted artifact</div>
+  <h2>Decision note — "I made a big choice."</h2>
+  <p>The ADR is the artifact builders most reliably skip. The UX job here is to make the blank page disappear: pre-fill context, collapse the form to three fields, and close the loop by auto-linking back to where the thought came from.</p>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 2700px;">
+
+  <!-- 01 trigger in coach -->
+  <div class="sb-frame">
+    <div class="sb-num">01</div>
+    <div class="sb-time">step 4 · how it works</div>
+    <div class="sb-anno top">
+      <span class="tag">trigger</span>
+      <b>Coach surfaces the prompt.</b><br>
+      Not a menu. Not a command. One nudge, one action — appears after the "How it works" field has content.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:10px;">step 4 of 11 · how it works</div>
+
+      <div class="mini-window" style="margin-bottom:8px;">
+        <div class="head">04-how-it-works.md</div>
+        <div style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text);line-height:1.6;">
+          We'll use Supabase magic links instead<br>
+          of password auth. Simpler session<br>
+          mgmt, no credential storage.
+        </div>
+      </div>
+
+      <div class="coach" style="font-size:11px;">
+        <div>
+          <div class="ctitle">Made a choice here?</div>
+          <div class="ctext" style="font-size:11px;">Big decisions deserve a note — what you chose and why. Takes 60 seconds.</div>
+          <div class="cactions">
+            <button class="sk-btn primary" style="font-size:10.5px;padding:2px 9px;">Log a decision →</button>
+            <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);margin-left:4px;">not now</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>One nudge, one action.</b>
+      <span class="sub">Coach disappears if dismissed. Returns only when content changes again.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">click</span></div>
+
+  <!-- 02 pre-filled form -->
+  <div class="sb-frame">
+    <div class="sb-num">02</div>
+    <div class="sb-time">form opens</div>
+    <div class="sb-anno bottom">
+      <span class="tag">DR-003 · plain English</span>
+      <b>No blank page.</b><br>
+      Context is pre-filled from the current step. Three fields only. "Decision note" not "ADR."
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:8px;">New decision note</div>
+
+      <div style="margin-bottom:7px;">
+        <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">The choice <span class="subtle-jargon">title</span></div>
+        <div class="mini-input cursor" style="font-size:11px;padding:5px 7px;border-color:var(--accent);">Use Supabase magic links for auth</div>
+      </div>
+
+      <div style="margin-bottom:7px;">
+        <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">Why <span class="subtle-jargon">context + rationale</span></div>
+        <div style="background:var(--ob-bg);border:1px solid var(--ob-line);border-radius:3px;padding:5px 7px;font-family:JetBrains Mono;font-size:10px;color:var(--ob-text-faint);line-height:1.5;min-height:42px;">
+          type your reasoning...
+        </div>
+      </div>
+
+      <div style="margin-bottom:7px;">
+        <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">Alternatives considered <span class="subtle-jargon">optional</span></div>
+        <div style="background:var(--ob-bg);border:1px dashed var(--ob-line);border-radius:3px;padding:5px 7px;font-family:JetBrains Mono;font-size:10px;color:var(--ob-text-faint);line-height:1.5;min-height:30px;">
+          optional — what else did you think about?
+        </div>
+      </div>
+
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);margin-top:4px;">linked to: step 4 · how it works</div>
+    </div>
+    <div class="sb-caption">
+      <b>Three fields. Title pre-filled from context.</b>
+      <span class="sub">Alternatives is optional — never blocks saving.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">write</span></div>
+
+  <!-- 03 filled in -->
+  <div class="sb-frame">
+    <div class="sb-num">03</div>
+    <div class="sb-time">filled</div>
+    <div class="sb-anno top">
+      <span class="tag">principle 2</span>
+      <b>One next action.</b><br>
+      "Save decision" is the only primary. No publish, no draft, no export — it's a markdown file.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:8px;">New decision note</div>
+
+      <div style="margin-bottom:7px;">
+        <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">The choice</div>
+        <div class="mini-input" style="font-size:11px;padding:5px 7px;border-color:var(--accent);">Use Supabase magic links for auth</div>
+      </div>
+
+      <div style="margin-bottom:7px;">
+        <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">Why</div>
+        <div style="background:var(--ob-bg);border:1px solid var(--accent);border-radius:3px;padding:5px 7px;font-family:JetBrains Mono;font-size:10px;color:var(--ob-text);line-height:1.5;min-height:42px;">
+          Simpler session management, no<br>credential storage. Supabase handles<br>the token rotation for us.
+        </div>
+      </div>
+
+      <div style="margin-bottom:7px;">
+        <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">Alternatives considered</div>
+        <div style="background:var(--ob-bg);border:1px dashed var(--ob-line);border-radius:3px;padding:5px 7px;font-family:JetBrains Mono;font-size:10px;color:var(--ob-text-faint);line-height:1.5;">
+          JWT + refresh tokens (more control,<br>more surface area)
+        </div>
+      </div>
+
+      <div style="display:flex;gap:6px;align-items:center;margin-top:8px;">
+        <button class="sk-btn primary" style="font-size:10.5px;padding:3px 10px;">Save decision</button>
+        <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">⌘ ⏎</span>
+        <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);margin-left:auto;">cancel</span>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Ready to save.</b>
+      <span class="sub">⌘ ⏎ shortcut — minimal friction.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">save</span></div>
+
+  <!-- 04 saved + auto-linked -->
+  <div class="sb-frame">
+    <div class="sb-num">04</div>
+    <div class="sb-time">saved</div>
+    <div class="sb-anno bottom">
+      <span class="tag">DR-004 · markdown only</span>
+      <b>File created. Link placed. Nothing hidden.</b><br>
+      The note lands in <code style="font-size:9px;">decisions/</code>. A wikilink appears inline in "how it works." No DB, no sync.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:10px;">step 4 of 11 · how it works</div>
+
+      <div class="mini-window" style="margin-bottom:8px;">
+        <div class="head">04-how-it-works.md</div>
+        <div style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text);line-height:1.6;">
+          We'll use Supabase magic links instead<br>
+          of password auth. Simpler session<br>
+          mgmt, no credential storage.<br>
+          <span style="color:var(--accent);">→ [[decisions/use-magic-links]]</span>
+        </div>
+      </div>
+
+      <div class="mini-tree" style="margin-bottom:6px;">
+        <div>decisions/</div>
+        <div class="ind new">└── use-magic-links.md <span style="color:var(--ob-text-faint);">← just created</span></div>
+      </div>
+
+      <div style="background:rgba(74,209,150,0.07);border:1px solid var(--lane-define,#4ad196);border-radius:4px;padding:5px 8px;font-family:Inter;font-size:10.5px;color:var(--ob-text);display:flex;align-items:center;gap:6px;">
+        <span style="color:var(--lane-define,#4ad196);">✓</span> Decision saved and linked
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Auto-linked. No manual step.</b>
+      <span class="sub">Wikilink appears in the triggering file instantly.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">open</span></div>
+
+  <!-- 05 the note itself -->
+  <div class="sb-frame">
+    <div class="sb-num">05</div>
+    <div class="sb-time">in vault</div>
+    <div class="sb-anno top">
+      <span class="tag">DR-004 · plain markdown</span>
+      <b>Just a .md file.</b><br>
+      Frontmatter carries the metadata. Body is readable prose. No special renderer required.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);margin-bottom:6px;">use-magic-links.md</div>
+
+      <div style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);line-height:1.65;background:var(--ob-bg-2);border:1px solid var(--ob-line);border-radius:3px;padding:6px 8px;margin-bottom:8px;">
+        <span style="color:var(--ob-text-mute);">---</span><br>
+        feature: magic-link-auth<br>
+        step: 4<br>
+        date: 2026-05-01<br>
+        status: accepted<br>
+        <span style="color:var(--ob-text-mute);">---</span>
+      </div>
+
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);margin-bottom:5px;">Use Supabase magic links for auth</div>
+
+      <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:6px;">
+        <b style="color:var(--ob-text-faint);font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:2px;">Why</b>
+        Simpler session management, no credential storage. Supabase handles token rotation.
+      </div>
+
+      <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);line-height:1.55;">
+        <b style="color:var(--ob-text-faint);font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:2px;">Alternatives</b>
+        JWT + refresh tokens (more control, more surface area)
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Readable without the plugin.</b>
+      <span class="sub">Status: accepted, date, feature — all in frontmatter.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">later</span></div>
+
+  <!-- 06 cockpit shows it -->
+  <div class="sb-frame">
+    <div class="sb-num">06</div>
+    <div class="sb-time">cockpit · later</div>
+    <div class="sb-anno bottom">
+      <span class="tag">gate · DR-001</span>
+      <b>Gate counts decision notes.</b><br>
+      One of the Define→Build gate checks is "How it works links to a decision note." This one now passes automatically.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:6px;">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 4 of 11</div>
+
+      <div class="mini-list" style="font-size:10.5px;line-height:1.75;">
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>Vision · 1 paragraph ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>5 rules · all testable ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>0 open questions ✓</div>
+        <div class="it hl"><span class="ic" style="background:var(--accent);border-color:var(--accent);"></span>"How it works" → decision note ✓</div>
+        <div class="it"><span class="ic" style="background:var(--ob-text-mute);border-color:var(--ob-text-mute);opacity:.4;"></span>House rules</div>
+      </div>
+
+      <div style="position:absolute;bottom:10px;left:14px;right:14px;font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">
+        4 of 5 passing · 1 remaining
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Gate item auto-checked.</b>
+      <span class="sub">No manual tick required. Saving the note was enough.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ─────── special cases ─────── -->
+<div class="sb-section-head">
+  <div class="meta">edge cases</div>
+  <h2 style="font-size:22px;">When the standard path doesn't fit</h2>
+</div>
+
+<div style="padding:8px 32px 36px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;">
+
+  <!-- A: triggered from OQ resolving -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">A</div>
+    <div class="sb-time">from open question</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">OQ becomes the context</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        When an open question is resolved (marked <code style="font-size:10px;">!</code>), the coach offers: "This looks like a decision. Log it?" The OQ text becomes the pre-fill for "Why."
+      </div>
+      <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-radius:3px;padding:5px 8px;font-family:JetBrains Mono;font-size:10px;color:var(--ob-text);line-height:1.55;">
+        <span style="color:#4ad196;">!</span> Use JWTs with short expiry<br>
+        <span style="color:var(--ob-text-faint);">resolved by: @you · 2026-05-01</span>
+      </div>
+      <div style="margin-top:6px;font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">→ decision note pre-filled from OQ text</div>
+    </div>
+    <div class="sb-caption">
+      <b>OQ resolution = decision trigger.</b>
+      <span class="sub">No double-entry. One gesture.</span>
+    </div>
+  </div>
+
+  <!-- B: retroactive — adding note to an old step -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">B</div>
+    <div class="sb-time">retroactive</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">"I forgot to log this earlier"</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        From any step, the coach always has a secondary "Log a past decision" link. Opens the same 3-field form. The only difference: the date field is editable (defaults to today, but accepts any past date).
+      </div>
+      <div class="sk-box dashed" style="padding:6px 8px;">
+        <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">Log a decision from the past ↗</div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Always available, never nagging.</b>
+      <span class="sub">Retroactive logging earns no gate penalty.</span>
+    </div>
+  </div>
+
+  <!-- C: dismissed too many times -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">C</div>
+    <div class="sb-time">persistent skip</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Dismissed 3×? Gate warns instead.</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        If the user dismisses the coach nudge 3 times on the same step without logging a note, the gate check for "How it works links to a decision note" turns yellow — not red. A soft reminder, not a block.
+      </div>
+      <div style="background:rgba(255,229,107,0.06);border:1px solid #b08a14;border-radius:3px;padding:6px 8px;font-family:Inter;font-size:10.5px;color:var(--ob-text);">
+        ⚑ no decision note yet — <span style="color:#b08a14;">is that intentional?</span>
+      </div>
+      <div style="margin-top:6px;font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">skip with reason → gate passes anyway</div>
+    </div>
+    <div class="sb-caption">
+      <b>Principle 5: quiet → loud only when blocking.</b>
+      <span class="sub">Yellow flag, not red wall. Always escapable.</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─────── design notes ─────── -->
+<div class="sb-section-head" style="padding-top:8px;">
+  <div class="meta">design rationale for this flow</div>
+  <h2 style="font-size:22px;">Why we made these choices</h2>
+</div>
+
+<div style="padding:8px 32px 60px;display:grid;grid-template-columns:repeat(2,1fr);gap:18px;">
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">"Decision note" not "ADR"</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">ADR is jargon that makes people feel like they're filing paperwork. "Decision note" is what it actually is: a note about a decision. Same file, same frontmatter, different first impression. (DR-003)</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Three fields, pre-filled</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">The blank page is the enemy of the decision note. Context, date, and feature name are auto-filled from where the user triggered the form. The title is inferred from the step content. The user only writes "why" and optionally "what else."</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Auto-link, not manual</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">The biggest source of decision-note abandonment is the linking step — people forget, lose context, or don't know where to put the wikilink. Saving the note places the link automatically. The file and the context are always paired. (DR-004)</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Nudge, not enforcement</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">The gate checks for a linked decision note, but it doesn't block on it the way it blocks on open questions. Three dismissals turns the check yellow, not red. The goal is habit, not compliance theatre. (Principle 5)</p>
+  </div>
+
+  <div class="sk-box dashed" style="padding:14px 16px;grid-column:span 2;">
+    <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:4px;">Open question · how much to pre-fill the title?</div>
+    <p class="sk-p" style="font-family:Inter;font-size:12px;">Frame 02 shows the title pre-filled ("Use Supabase magic links for auth"). This is the ideal but requires some NLP to extract a decision-shaped phrase from the step content. <b>Fallback:</b> pre-fill with the step name ("how it works") and let the user edit. <b>Test plan:</b> ship with step-name pre-fill first, see if users edit it into something better or just save the default.</p>
+  </div>
+
+</div>
+
+</body></html>

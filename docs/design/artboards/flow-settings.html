@@ -1,0 +1,429 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Settings & configuration</title>
+<link rel="stylesheet" href="../wireframes.css">
+<style>
+  body { margin: 0; background: var(--ob-bg); }
+  .sub-head { padding: 48px 32px 8px; }
+  .sub-head .sub-label { font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--ob-text-faint); text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; }
+  .sub-head h3 { font-family:var(--sketch); font-size:22px; font-weight:700; color:var(--ob-text); margin:0 0 4px; }
+  .sub-head p { font-family:"Inter",sans-serif; font-size:12px; color:var(--ob-text-mute); margin:0; line-height:1.5; max-width:680px; }
+
+  .settings-section {
+    padding: 8px 32px 32px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+  .settings-group {
+    background: var(--ob-bg-2);
+    border: 1px solid var(--ob-line);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .settings-group .sg-head {
+    padding: 10px 12px 8px;
+    border-bottom: 1px solid var(--ob-line);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: var(--ob-text-faint);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    background: var(--ob-bg);
+  }
+  .settings-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--ob-line);
+    font-family: "Inter", sans-serif;
+  }
+  .settings-row:last-child { border-bottom: none; }
+  .settings-row .sr-label {
+    flex: 1;
+    min-width: 0;
+  }
+  .settings-row .sr-label .sr-name {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--ob-text);
+    margin-bottom: 2px;
+  }
+  .settings-row .sr-label .sr-desc {
+    font-size: 10.5px;
+    color: var(--ob-text-mute);
+    line-height: 1.4;
+  }
+  .settings-row .sr-ctrl {
+    flex: 0 0 auto;
+  }
+
+  /* toggle pill */
+  .tog {
+    width: 32px; height: 18px;
+    border-radius: 999px;
+    border: 1.5px solid var(--ob-text-mute);
+    background: transparent;
+    position: relative;
+    cursor: pointer;
+    display: inline-block;
+  }
+  .tog::after {
+    content: "";
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--ob-text-mute);
+    transition: left .15s;
+  }
+  .tog.on {
+    border-color: var(--lane-define,#4ad196);
+    background: rgba(74,209,150,0.15);
+  }
+  .tog.on::after {
+    left: 16px;
+    background: var(--lane-define,#4ad196);
+  }
+
+  /* select */
+  .sel {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: var(--ob-text);
+    background: var(--ob-bg);
+    border: 1px solid var(--ob-line);
+    border-radius: 3px;
+    padding: 3px 6px;
+    min-width: 80px;
+  }
+
+  /* number input */
+  .num-in {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: var(--ob-text);
+    background: var(--ob-bg);
+    border: 1px solid var(--ob-line);
+    border-radius: 3px;
+    padding: 3px 6px;
+    width: 50px;
+    text-align: right;
+  }
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="sb-section-head">
+  <div class="meta">catalogue · settings & configuration</div>
+  <h2>Settings — what the user can control</h2>
+  <p>Specorator has no account, no server, no telemetry (DR-006). All configuration is local — stored in Obsidian's plugin data file. Settings are grouped into four areas: workflow, notifications, gates, and vault. This catalogue is the authoritative spec for the settings surface.</p>
+</div>
+
+<!-- SETTINGS SURFACE -->
+<div class="sub-head">
+  <div class="sub-label">surface · obsidian settings panel</div>
+  <h3>Where settings live</h3>
+  <p>Specorator settings live in Obsidian's native Settings → Community plugins → Specorator panel. No custom settings window. This keeps the experience consistent with the rest of Obsidian and avoids building a second navigation system.</p>
+</div>
+
+<div style="padding:8px 32px 24px;">
+  <div class="mini-window" style="max-width:780px;">
+    <div class="head">Settings → Community plugins → Specorator</div>
+    <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);padding:8px 4px;">
+      Four sections below. All settings take effect immediately — no save button, no restart required.
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 1: WORKFLOW -->
+<div class="sub-head">
+  <div class="sub-label">section 1 of 4</div>
+  <h3>Workflow settings</h3>
+  <p>How the plugin behaves during normal feature work.</p>
+</div>
+
+<div class="settings-section">
+  <div class="settings-group" style="grid-column: span 3;">
+    <div class="sg-head">Workflow</div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">Default feature size</div>
+        <div class="sr-desc">Scaffold suggestion when creating a new feature. "Small" pre-selects skippable steps; "Large" keeps all 11.</div>
+      </div>
+      <div class="sr-ctrl">
+        <div class="sel" style="display:inline-block;">Ask each time ▾</div>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">Stale feature threshold</div>
+        <div class="sr-desc">Days without activity before a feature is flagged as stale in the cockpit rail and feature switcher.</div>
+      </div>
+      <div class="sr-ctrl">
+        <div style="display:flex;align-items:center;gap:4px;">
+          <input class="num-in" type="text" value="14" readonly>
+          <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">days</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">Retrospective required to close</div>
+        <div class="sr-desc">When on, closing a feature requires step 11 to have content or a skip reason. When off, close is available as soon as all other steps are done.</div>
+      </div>
+      <div class="sr-ctrl"><span class="tog on"></span></div>
+    </div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">Snapshot before every mutation</div>
+        <div class="sr-desc">DR-005. Always on — cannot be disabled. Snapshots are taken before every hand-off, gate cross, and file write.</div>
+      </div>
+      <div class="sr-ctrl">
+        <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--lane-define,#4ad196);">always on</span>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">Snapshot retention</div>
+        <div class="sr-desc">How many lifecycle snapshots to keep per feature. Older snapshots are pruned automatically. Minimum 3 (gate crossings only).</div>
+      </div>
+      <div class="sr-ctrl">
+        <div class="sel" style="display:inline-block;">All ▾</div>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">OQ stale threshold</div>
+        <div class="sr-desc">Days before an open question turns amber in the cockpit panel.</div>
+      </div>
+      <div class="sr-ctrl">
+        <div style="display:flex;align-items:center;gap:4px;">
+          <input class="num-in" type="text" value="14" readonly>
+          <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">days</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- SECTION 2: NOTIFICATIONS -->
+<div class="sub-head">
+  <div class="sub-label">section 2 of 4</div>
+  <h3>Notification settings</h3>
+  <p>Which events surface banners and coach nudges. Status bar is always on — it's the quietest surface and costs nothing.</p>
+</div>
+
+<div class="settings-section">
+  <div class="settings-group" style="grid-column: span 3;">
+    <div class="sg-head">Notifications</div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">Notification level</div>
+        <div class="sr-desc">Controls which events show cockpit banners. "Major" = gate pass + ship + errors only. "Verbose" = also includes hand-offs and OQ resolutions.</div>
+      </div>
+      <div class="sr-ctrl">
+        <div class="sel" style="display:inline-block;">Major ▾</div>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">Coach nudges</div>
+        <div class="sr-desc">Show contextual guidance in the right pane. When off, the coach is hidden entirely — the cockpit still works, but without suggestions.</div>
+      </div>
+      <div class="sr-ctrl"><span class="tog on"></span></div>
+    </div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">Decision note prompt</div>
+        <div class="sr-desc">Show the "Made a big choice?" coach nudge after significant content changes in a step file.</div>
+      </div>
+      <div class="sr-ctrl"><span class="tog on"></span></div>
+    </div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">Re-entry context (returning user)</div>
+        <div class="sr-desc">Show last-activity summary in the coach when returning after more than 1 day of inactivity.</div>
+      </div>
+      <div class="sr-ctrl"><span class="tog on"></span></div>
+    </div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">Re-entry threshold</div>
+        <div class="sr-desc">Hours of inactivity before the "Back after N days" coach nudge appears.</div>
+      </div>
+      <div class="sr-ctrl">
+        <div style="display:flex;align-items:center;gap:4px;">
+          <input class="num-in" type="text" value="24" readonly>
+          <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">hours</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- SECTION 3: GATES -->
+<div class="sub-head">
+  <div class="sub-label">section 3 of 4</div>
+  <h3>Gate settings</h3>
+  <p>Gate strictness and check behaviour. OQ-3 is resolved (auto-pass for solo); these settings let users override the defaults.</p>
+</div>
+
+<div class="settings-section">
+  <div class="settings-group" style="grid-column: span 3;">
+    <div class="sg-head">Gates</div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">Gate mode</div>
+        <div class="sr-desc">Solo: gate passes when all checks tick (auto-pass). Team: Define→Build gate requires a peer sign-off (PR merge). OQ-3 decision.</div>
+      </div>
+      <div class="sr-ctrl">
+        <div class="sel" style="display:inline-block;">Solo ▾</div>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">Decision note gate check</div>
+        <div class="sr-desc">Whether "how it works links to a decision note" is a hard block (red) or a soft nudge (yellow) at the Define→Build gate.</div>
+      </div>
+      <div class="sr-ctrl">
+        <div class="sel" style="display:inline-block;">Soft (yellow) ▾</div>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">Gate scan trigger</div>
+        <div class="sr-desc">When the plugin re-evaluates gate checks. "On save" is recommended. "Manual" disables auto-evaluation — gate only checks when you click re-run.</div>
+      </div>
+      <div class="sr-ctrl">
+        <div class="sel" style="display:inline-block;">On save ▾</div>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">Minimum EARS rules</div>
+        <div class="sr-desc">How many testable rules step 3 must contain to pass the Define→Build gate check. Default: 4.</div>
+      </div>
+      <div class="sr-ctrl">
+        <input class="num-in" type="text" value="4" readonly>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">"Too many skips" warning threshold</div>
+        <div class="sr-desc">Number of skipped steps that triggers the "is this intentional?" cockpit warning. Default: 8 of 11.</div>
+      </div>
+      <div class="sr-ctrl">
+        <input class="num-in" type="text" value="8" readonly>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- SECTION 4: VAULT -->
+<div class="sub-head">
+  <div class="sub-label">section 4 of 4</div>
+  <h3>Vault settings</h3>
+  <p>Where Specorator puts its files and how it names them. Changing these after features exist requires a migration — the settings page warns about this.</p>
+</div>
+
+<div class="settings-section">
+  <div class="settings-group" style="grid-column: span 3;">
+    <div class="sg-head">Vault</div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">Features folder</div>
+        <div class="sr-desc">Root folder for all feature subfolders. Changing this after features exist will break existing links until migrated.</div>
+      </div>
+      <div class="sr-ctrl">
+        <div class="mini-input" style="font-size:10px;padding:3px 6px;min-width:100px;">features/</div>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">Archive folder</div>
+        <div class="sr-desc">Where closed and abandoned features are moved.</div>
+      </div>
+      <div class="sr-ctrl">
+        <div class="mini-input" style="font-size:10px;padding:3px 6px;min-width:100px;">archive/</div>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">Decisions folder</div>
+        <div class="sr-desc">Where decision notes (ADRs) are saved.</div>
+      </div>
+      <div class="sr-ctrl">
+        <div class="mini-input" style="font-size:10px;padding:3px 6px;min-width:100px;">decisions/</div>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">Constitution file name</div>
+        <div class="sr-desc">Name of the vault-root house rules file.</div>
+      </div>
+      <div class="sr-ctrl">
+        <div class="mini-input" style="font-size:10px;padding:3px 6px;min-width:120px;">CONSTITUTION.md</div>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="sr-label">
+        <div class="sr-name">No telemetry, no account, no server</div>
+        <div class="sr-desc">DR-006. All data stays local. This is not configurable.</div>
+      </div>
+      <div class="sr-ctrl">
+        <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--lane-define,#4ad196);">enforced</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- DESIGN NOTES -->
+<div style="padding:8px 32px 60px;display:grid;grid-template-columns:repeat(2,1fr);gap:18px;">
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Obsidian's native settings panel</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Building a custom settings window would mean building a second navigation system. Obsidian's settings panel is already familiar, handles search, and keeps cognitive load low. The tradeoff: limited layout control. Worth it.</p>
+  </div>
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Immutable settings marked "enforced"</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">DR-005 (snapshots) and DR-006 (no telemetry) are non-negotiable. Rather than hiding them from settings, they appear as read-only rows with an "enforced" or "always on" label. Users know they exist and why. Transparency over hiding.</p>
+  </div>
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">No save button — immediate effect</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">All settings take effect immediately on change. No "Apply" button, no restart required. This matches Obsidian's own convention and reduces the "did my change do anything?" anxiety.</p>
+  </div>
+  <div class="sk-box dashed" style="padding:14px 16px;">
+    <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:4px;">Open: folder migration UX</div>
+    <p class="sk-p" style="font-family:Inter;font-size:12px;">If a user changes "Features folder" after features exist, all existing wikilinks break. The settings row warns about this, but the migration path (offer to rename the folder + update all links) is not yet designed. Deferred to post-MVP — the default folders are sensible and most users won't change them.</p>
+  </div>
+</div>
+
+</body></html>

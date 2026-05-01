@@ -1,0 +1,493 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Design rationale — Specorator Obsidian plugin</title>
+<link rel="stylesheet" href="../wireframes.css">
+<style>
+  body { margin: 0; background: var(--ob-bg); color: var(--ob-text); font-family: "Inter", sans-serif; }
+  .doc {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 56px 72px 96px;
+    font-size: 14.5px;
+    line-height: 1.65;
+  }
+  .doc h1 {
+    font-family: var(--sketch);
+    font-weight: 700;
+    font-size: 44px;
+    line-height: 1.1;
+    margin: 0 0 8px;
+    color: var(--ob-text);
+    letter-spacing: -0.01em;
+  }
+  .doc h1 .underline {
+    background-image: linear-gradient(transparent 70%, var(--highlighter, rgba(255,229,107,0.5)) 70%);
+    padding: 0 4px;
+  }
+  .doc .lede {
+    font-size: 17px;
+    line-height: 1.5;
+    color: var(--ob-text-mute);
+    max-width: 720px;
+    margin: 0 0 8px;
+  }
+  .doc .meta {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: var(--ob-text-faint);
+    margin-bottom: 36px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .doc h2 {
+    font-family: var(--sketch);
+    font-weight: 700;
+    font-size: 26px;
+    margin: 56px 0 6px;
+    color: var(--ob-text);
+    border-bottom: 1.5px solid var(--ob-line);
+    padding-bottom: 10px;
+  }
+  .doc h2 .num {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+    color: var(--accent);
+    margin-right: 12px;
+    vertical-align: 4px;
+  }
+  .doc h3 {
+    font-family: "Inter", sans-serif;
+    font-weight: 700;
+    font-size: 15.5px;
+    margin: 28px 0 6px;
+    color: var(--ob-text);
+  }
+  .doc h3 .tag {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    color: var(--ob-text-faint);
+    margin-right: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .doc p { margin: 8px 0; color: var(--ob-text); }
+  .doc p.muted { color: var(--ob-text-mute); }
+  .doc ul, .doc ol {
+    margin: 10px 0;
+    padding-left: 22px;
+    color: var(--ob-text);
+  }
+  .doc li { margin: 4px 0; }
+  .doc li::marker { color: var(--ob-text-faint); }
+
+  .doc .callout {
+    border-left: 3px solid var(--accent);
+    background: rgba(127,109,242,0.06);
+    padding: 12px 16px;
+    margin: 14px 0;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--ob-text-mute);
+  }
+  .doc .callout b { color: var(--ob-text); }
+  .doc .callout.warn { border-left-color: #b08a14; background: rgba(255,229,107,0.08); }
+  .doc .callout.green { border-left-color: var(--lane-define, #4ad196); background: rgba(74,209,150,0.06); }
+
+  .doc code, .doc kbd {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12.5px;
+    background: var(--ob-bg-2);
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--ob-line);
+    color: var(--ob-text);
+  }
+
+  .principle {
+    border: 1.5px solid var(--ob-line);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin: 12px 0;
+    background: var(--ob-bg-2);
+  }
+  .principle .head {
+    font-family: var(--sketch);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--ob-text);
+    margin-bottom: 4px;
+  }
+  .principle .versus {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    color: var(--ob-text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+  }
+  .principle .versus b { color: var(--ob-text-mute); }
+  .principle .body { font-size: 13.5px; color: var(--ob-text-mute); line-height: 1.55; }
+  .principle .body b { color: var(--ob-text); }
+
+  .decision {
+    margin: 16px 0;
+    padding: 14px 18px;
+    border: 1.2px dashed var(--ob-line);
+    border-radius: 4px;
+  }
+  .decision .head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+  .decision .id {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: var(--accent);
+    background: rgba(127,109,242,0.1);
+    padding: 2px 8px;
+    border-radius: 3px;
+  }
+  .decision .title {
+    font-family: "Inter", sans-serif;
+    font-weight: 700;
+    font-size: 14.5px;
+    color: var(--ob-text);
+  }
+  .decision .verdict {
+    margin-left: auto;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--lane-define, #4ad196);
+  }
+  .decision .grid {
+    display: grid;
+    grid-template-columns: 88px 1fr;
+    gap: 6px 14px;
+    font-size: 13px;
+    color: var(--ob-text-mute);
+    line-height: 1.55;
+  }
+  .decision .grid dt {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    color: var(--ob-text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding-top: 2px;
+  }
+  .decision .grid dd { margin: 0; color: var(--ob-text); }
+  .decision .grid dd.note { color: var(--ob-text-mute); }
+
+  .toc {
+    background: var(--ob-bg-2);
+    border: 1px solid var(--ob-line);
+    border-radius: 6px;
+    padding: 16px 22px;
+    margin: 24px 0 8px;
+  }
+  .toc .label {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    color: var(--ob-text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+  }
+  .toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  .toc li { font-size: 13px; line-height: 1.8; }
+  .toc a { color: var(--ob-text); text-decoration: none; }
+  .toc a:hover { color: var(--accent); }
+
+  .footnote {
+    margin-top: 64px;
+    padding-top: 18px;
+    border-top: 1px solid var(--ob-line);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: var(--ob-text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .twocol {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 14px 0;
+  }
+  .twocol .card {
+    border: 1.5px solid var(--ob-line);
+    border-radius: 4px;
+    padding: 12px 16px;
+  }
+  .twocol .card .h {
+    font-family: var(--sketch);
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .twocol .card.bad .h { color: #c66; }
+  .twocol .card.good .h { color: var(--lane-define, #4ad196); }
+  .twocol .card p { font-size: 13px; color: var(--ob-text-mute); margin: 4px 0; }
+  .twocol .card ul { font-size: 13px; color: var(--ob-text-mute); margin: 4px 0; padding-left: 20px; }
+</style>
+</head>
+<body data-theme="dark">
+<div class="doc">
+
+  <h1>Design <span class="underline">rationale</span> — Specorator</h1>
+  <p class="lede">Why this plugin works the way it does. Fundamentals, principles, and the decisions we made along the way — written so future-us (and contributors) can challenge them on purpose, not by accident.</p>
+  <p class="meta">v0.1 draft · low-fi wireframe phase · living document</p>
+
+  <div class="toc">
+    <div class="label">Contents</div>
+    <ol>
+      <li><a href="#fundamentals">Fundamentals</a></li>
+      <li><a href="#principles">Core principles</a></li>
+      <li><a href="#shape">Shape of the product</a></li>
+      <li><a href="#decisions">Key decisions</a></li>
+      <li><a href="#tradeoffs">Trade-offs we accept</a></li>
+      <li><a href="#open">Open questions</a></li>
+      <li><a href="#nongoals">Non-goals</a></li>
+    </ol>
+  </div>
+
+  <!-- ───────── FUNDAMENTALS ───────── -->
+  <h2 id="fundamentals"><span class="num">01</span>Fundamentals</h2>
+
+  <h3><span class="tag">user</span>Who Specorator is for</h3>
+  <p>One person, working alone or with a small team, building software with AI assistance. They are <b>not necessarily a software engineer</b> — they may be a designer, a PM, a domain expert, a founder. They have ideas, they have judgement, but they have not internalized the rituals of disciplined software work: requirements, decision records, traceability, gate reviews. They want to ship something good and they suspect those rituals would help them, but the orthodox practice is daunting.</p>
+  <p class="muted">Implication: every concept must be teachable in one sentence. Jargon is not forbidden, but it must <i>always</i> have a one-click explainer attached. We never assume the reader has done a CS degree.</p>
+
+  <h3><span class="tag">where</span>Why Obsidian</h3>
+  <p>The artifacts of disciplined software work are <b>plain-text Markdown files in folders</b>. Vision, requirements, decision notes, traceability matrices — all text. Obsidian is a beloved local-first Markdown editor with a graph view, backlinks, frontmatter, and a plugin API. It is already where many of our users keep their notes. Building Specorator inside Obsidian means we never own the user's data; we just augment what they already have.</p>
+
+  <h3><span class="tag">problem</span>The problem we're solving</h3>
+  <p>AI accelerates code generation but doesn't accelerate <i>good judgement</i>. Without structure, AI-assisted projects produce a lot of code very quickly that doesn't add up to a working product. The cure is not "more discipline" applied as guilt — it is a <b>scaffold</b> that makes the next right action obvious, and that catches mistakes before they compound.</p>
+  <p>Specorator's job is to be that scaffold. It does not write the code. It tells you <b>what to think about next</b>, <b>what to write down</b>, and <b>what to check</b> before moving on.</p>
+
+  <h3><span class="tag">model</span>The mental model</h3>
+  <p>Every feature you build moves through <b>11 steps</b>, grouped into three lanes: <b>Define</b> (figure out what), <b>Build</b> (figure out how, and do it), <b>Ship</b> (verify and release). Between lanes are <b>gates</b> — small checklists that prevent moving forward with unresolved questions. The 11 steps and the gates are the spine of the product.</p>
+  <p class="muted">The 11 are not arbitrary; they map to the underlying P3.express + spec-driven-development methodology the project is based on. But we never make the user say "P3" or "EARS" or "ADR" out loud unless they want to.</p>
+
+  <!-- ───────── PRINCIPLES ───────── -->
+  <h2 id="principles"><span class="num">02</span>Core principles</h2>
+  <p class="muted">These are the constraints we hold each other to. When in doubt, re-read these.</p>
+
+  <div class="principle">
+    <div class="head">1. Plain English first, jargon on demand.</div>
+    <div class="versus"><b>not:</b> "Author the EARS-formatted requirements ADR" &nbsp;·&nbsp; <b>but:</b> "Write down the rules this feature must follow."</div>
+    <div class="body">The orthodox terms (requirements, ADR, constitution, spec, EARS, traceability) are powerful but exclusionary. We use plain-English aliases as the primary label, with the technical term shown <i>secondarily</i> so users can grow into the vocabulary if they want to. A <code>(?)</code> next to any jargon opens a same-shape popover: <b>one-line definition · one paragraph why · one link to read more</b>.</div>
+  </div>
+
+  <div class="principle">
+    <div class="head">2. Show one next action, not ten options.</div>
+    <div class="versus"><b>not:</b> a dashboard of metrics &nbsp;·&nbsp; <b>but:</b> a coach saying <i>"You're at step 3. Write the rules. Here's a template."</i></div>
+    <div class="body">The cockpit always answers "what should I do right now?" with a single recommended action. Other actions are available, but they don't compete for attention. This is the opposite of a feature-dense IDE; it's closer to a turn-by-turn navigator.</div>
+  </div>
+
+  <div class="principle">
+    <div class="head">3. The Markdown is the source of truth.</div>
+    <div class="versus"><b>not:</b> a database the plugin owns &nbsp;·&nbsp; <b>but:</b> files in your vault, which the plugin reads and offers to update.</div>
+    <div class="body">Specorator never holds state the user can't see. Frontmatter on each note encodes stage, owner, links, and gate status. If the plugin disappeared tomorrow, every artifact would still be a readable, editable, version-controlled Markdown file. This is non-negotiable.</div>
+  </div>
+
+  <div class="principle">
+    <div class="head">4. Mistakes are fine. Hand-offs are reversible.</div>
+    <div class="versus"><b>not:</b> "are you sure?" modals &nbsp;·&nbsp; <b>but:</b> a 24-hour undo on every state change.</div>
+    <div class="body">Every hand-off (advance to next step, complete a gate, archive a feature) creates a snapshot. The user can undo within 24h with one click. This lets us be confident with our recommendations without making people anxious about following them.</div>
+  </div>
+
+  <div class="principle">
+    <div class="head">5. Quiet by default; loud when blocking.</div>
+    <div class="versus"><b>not:</b> celebratory toasts &nbsp;·&nbsp; <b>but:</b> calm progress, with attention reserved for things that actually need a decision.</div>
+    <div class="body">No confetti, no "Great job!" No badges. The only time the UI raises its voice is when a gate is failing, a question has gone stale for &gt;7 days, or a hand-off would silently lose information. Loudness is a budget; we spend it carefully.</div>
+  </div>
+
+  <div class="principle">
+    <div class="head">6. Built for the lone builder; usable by a team.</div>
+    <div class="versus"><b>not:</b> a multiplayer SaaS &nbsp;·&nbsp; <b>but:</b> a personal tool whose artifacts happen to also work in a Git-based team.</div>
+    <div class="body">The primary user is one person. But the artifacts (Markdown + frontmatter) are git-friendly, so a team using GitHub PR review naturally inherits the discipline. Specorator never adds a server, an account, or a sync layer. Your team coordination is your repo.</div>
+  </div>
+
+  <div class="principle">
+    <div class="head">7. The plugin teaches you the discipline; it doesn't replace it.</div>
+    <div class="versus"><b>not:</b> automate-it-all &nbsp;·&nbsp; <b>but:</b> training wheels you can take off.</div>
+    <div class="body">After enough use, the user should be able to explain what an EARS requirement is, when to write a decision note, and what makes a good gate. Power-user mode strips the explainers and exposes the orthodox vocabulary. We are happy when users outgrow the coach.</div>
+  </div>
+
+  <!-- ───────── SHAPE ───────── -->
+  <h2 id="shape"><span class="num">03</span>Shape of the product</h2>
+
+  <h3>The cockpit is the home</h3>
+  <p>Cockpit A — three panes, context-aware — is the v1 home. Left pane shows your features. Center pane answers "where am I and what do I do next" for the active feature. Right pane shows the metadata of whatever Markdown file is open. Other layouts (rail, board, feed) are <i>modes</i> reachable from the cockpit, not separate apps.</p>
+
+  <div class="callout"><b>Decision DR-002.</b> The cockpit is opinionated about <i>which feature you're looking at</i>. If you click a Markdown file in another folder, the cockpit follows. If you open a feature folder, the cockpit centers on it. The cockpit never goes blank just because you opened a stray note.</div>
+
+  <h3>Eleven steps, three lanes, two gates</h3>
+  <p>Define (1–4) → <kbd>gate</kbd> → Build (5–8) → <kbd>gate</kbd> → Ship (9–11). The two gates are the only places the system actually says "no, you can't move on." Everywhere else it suggests, recommends, and hand-holds.</p>
+
+  <h3>Help is a popover, not a manual</h3>
+  <p>Every domain term in the UI gets a <code>(?)</code> trigger that opens a popover with a fixed shape. We don't write a separate user manual. The popovers <i>are</i> the manual, surfaced exactly when needed.</p>
+
+  <!-- ───────── DECISIONS ───────── -->
+  <h2 id="decisions"><span class="num">04</span>Key decisions</h2>
+  <p class="muted">Numbered, dated, with the alternatives we considered. New decisions append; existing ones get superseded, never edited.</p>
+
+  <div class="decision">
+    <div class="head">
+      <span class="id">DR-001</span>
+      <span class="title">Build inside Obsidian, not as a standalone app</span>
+      <span class="verdict">accepted</span>
+    </div>
+    <dl class="grid">
+      <dt>context</dt><dd>The user already has a Markdown editor they like. Building a new shell would duplicate effort and force migration.</dd>
+      <dt>options</dt><dd>(a) Standalone Electron app · (b) VS Code extension · <b>(c) Obsidian plugin</b> · (d) CLI only</dd>
+      <dt>chose</dt><dd>(c). Obsidian is local-first, has a strong plugin API, supports frontmatter natively, and our user persona already lives there. VS Code is too engineering-coded; standalone is too much surface area for v1.</dd>
+      <dt>cost</dt><dd class="note">We inherit Obsidian's UI conventions, including some we'd rather replace (the ribbon, the file-tree style). We'll lean in rather than fight them.</dd>
+    </dl>
+  </div>
+
+  <div class="decision">
+    <div class="head">
+      <span class="id">DR-002</span>
+      <span class="title">Cockpit follows the active note</span>
+      <span class="verdict">accepted</span>
+    </div>
+    <dl class="grid">
+      <dt>context</dt><dd>The plugin needs a way to know "which feature is the user thinking about right now."</dd>
+      <dt>options</dt><dd>(a) User pins a feature explicitly · <b>(b) Cockpit infers from active note path</b> · (c) Always show all features at once</dd>
+      <dt>chose</dt><dd>(b). Inference matches Obsidian's existing behavior and keeps the cockpit feeling like a contextual companion rather than a separate app. (a) is available as a manual override.</dd>
+      <dt>cost</dt><dd class="note">Need a defined empty state for "no feature is in focus" — see state-empty.html.</dd>
+    </dl>
+  </div>
+
+  <div class="decision">
+    <div class="head">
+      <span class="id">DR-003</span>
+      <span class="title">Plain-English aliases as primary labels</span>
+      <span class="verdict">accepted</span>
+    </div>
+    <dl class="grid">
+      <dt>context</dt><dd>Our users include people who are not engineers. The orthodox vocabulary (EARS, ADR, constitution, traceability) is powerful but alienating.</dd>
+      <dt>options</dt><dd>(a) Use orthodox terms everywhere · <b>(b) Plain-English primary, technical term secondary</b> · (c) Hide the technical terms entirely</dd>
+      <dt>chose</dt><dd>(b). "The rules" is shown big; "requirements" is shown small underneath. Users who outgrow the alias can flip to power-user mode.</dd>
+      <dt>cost</dt><dd class="note">Twice the labels to maintain. We accept this; it pays for itself in onboarding.</dd>
+    </dl>
+  </div>
+
+  <div class="decision">
+    <div class="head">
+      <span class="id">DR-004</span>
+      <span class="title">Markdown + frontmatter is the only state</span>
+      <span class="verdict">accepted</span>
+    </div>
+    <dl class="grid">
+      <dt>context</dt><dd>The plugin needs to know the stage of every feature, the gate status, owners, links between artifacts, etc.</dd>
+      <dt>options</dt><dd>(a) Plugin maintains a SQLite db · (b) JSON sidecar files · <b>(c) YAML frontmatter on every note</b></dd>
+      <dt>chose</dt><dd>(c). Frontmatter is human-readable, git-friendly, and survives the plugin being uninstalled. Obsidian renders it cleanly.</dd>
+      <dt>cost</dt><dd class="note">Performance: parsing many files on vault load. Mitigated by caching parse results in plugin local storage, invalidated on file mtime change.</dd>
+    </dl>
+  </div>
+
+  <div class="decision">
+    <div class="head">
+      <span class="id">DR-005</span>
+      <span class="title">24-hour undo on every state change</span>
+      <span class="verdict">accepted</span>
+    </div>
+    <dl class="grid">
+      <dt>context</dt><dd>Hand-offs and gate completions feel scary if they're irreversible, especially while users are still learning the model.</dd>
+      <dt>options</dt><dd>(a) Confirmation modals before every change · <b>(b) Reversible by default with 24h undo</b> · (c) Trust users, no safety net</dd>
+      <dt>chose</dt><dd>(b). Modals slow people down without preventing real mistakes. Undo lets us be confident in our recommendations.</dd>
+      <dt>cost</dt><dd class="note">We persist a "snapshot" per state change for 24h. Storage cost is negligible (Markdown files compress well). Cleanup on plugin load.</dd>
+    </dl>
+  </div>
+
+  <div class="decision">
+    <div class="head">
+      <span class="id">DR-006</span>
+      <span class="title">No telemetry, no account, no server</span>
+      <span class="verdict">accepted</span>
+    </div>
+    <dl class="grid">
+      <dt>context</dt><dd>We could learn a lot from usage data. We could also build sync. Both add accounts.</dd>
+      <dt>options</dt><dd>(a) Anonymous opt-in telemetry · (b) Opt-in account for sync · <b>(c) Strictly local, nothing leaves the user's machine</b></dd>
+      <dt>chose</dt><dd>(c) for v1. Obsidian users self-select for local-first; introducing an account would betray the product's premise. We'll learn through interviews and GitHub issues instead.</dd>
+      <dt>cost</dt><dd class="note">Slower learning loop. We accept this for trust.</dd>
+    </dl>
+  </div>
+
+  <div class="decision">
+    <div class="head">
+      <span class="id">DR-007</span>
+      <span class="title">Sketchy low-fi wireframes for v0.1, not Figma</span>
+      <span class="verdict">accepted</span>
+    </div>
+    <dl class="grid">
+      <dt>context</dt><dd>We needed to explore layout and information architecture without inviting "but the colors are wrong" feedback.</dd>
+      <dt>options</dt><dd>(a) Figma hi-fi · (b) Whiteboard photos · <b>(c) Sketchy HTML wireframes (Kalam font, hand-drawn vibes)</b></dd>
+      <dt>chose</dt><dd>(c). HTML lets us iterate fast, embed real Obsidian chrome, and share a single canvas link. Sketchy aesthetic signals "this is not done yet" without making us actually undraw.</dd>
+      <dt>cost</dt><dd class="note">Will rebuild in production-quality CSS later. The wireframes are throwaway by design.</dd>
+    </dl>
+  </div>
+
+  <!-- ───────── TRADE-OFFS ───────── -->
+  <h2 id="tradeoffs"><span class="num">05</span>Trade-offs we accept</h2>
+
+  <div class="twocol">
+    <div class="card good">
+      <div class="h">We optimize for</div>
+      <ul>
+        <li>The lone, semi-technical builder</li>
+        <li>Long projects where memory matters</li>
+        <li>Local files, git, plain Markdown</li>
+        <li>Turn-by-turn clarity</li>
+        <li>Recoverable mistakes</li>
+        <li>Teaching, with a graceful exit</li>
+      </ul>
+    </div>
+    <div class="card bad">
+      <div class="h">We don't optimize for</div>
+      <ul>
+        <li>Multi-user real-time collaboration</li>
+        <li>Tiny one-shot scripts where ceremony costs more than it saves</li>
+        <li>Cloud-native or web-only workflows</li>
+        <li>Pure power-users who want a CLI</li>
+        <li>Project-management overhead beyond a single product line</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout warn"><b>Note.</b> "Don't optimize for" doesn't mean "actively block." A team can adopt Specorator if they're git-disciplined; a CLI lover can ignore the cockpit. We just won't compromise the lone-builder experience to court those audiences.</div>
+
+  <!-- ───────── OPEN ───────── -->
+  <h2 id="open"><span class="num">06</span>Open questions</h2>
+  <p class="muted">Things we haven't decided. Each will become a numbered decision when we do.</p>
+  <ul>
+    <li><b>OQ-1.</b> Should the cockpit have a "command bar" inside it, or rely on Obsidian's command palette? Argues for: discoverability. Against: redundancy with native palette.</li>
+    <li><b>OQ-2.</b> When the user opens a Markdown file <i>not</i> in a feature folder, should the cockpit (a) go to a "what needs you" feed, (b) show the last feature, or (c) clear with a "no feature in focus" empty state? Currently leaning (c).</li>
+    <li><b>OQ-3.</b> Do gates require explicit sign-off, or do they auto-pass when their checklist is fully ticked? Argues for explicit: ceremony reinforces gravity. Against: friction.</li>
+    <li><b>OQ-4.</b> How do we handle features that legitimately don't need every step? (e.g. a tiny config change.) Skip steps? Mark N/A? Have a "lite" mode?</li>
+    <li><b>OQ-5.</b> What does "team mode" actually mean if we never add a server? Probably: better PR-review templates and per-feature CODEOWNERS hints. To be designed.</li>
+  </ul>
+
+  <!-- ───────── NON-GOALS ───────── -->
+  <h2 id="nongoals"><span class="num">07</span>Non-goals</h2>
+  <p class="muted">Things people will ask for that we will say no to, with reason.</p>
+  <ul>
+    <li><b>Code generation.</b> Specorator scaffolds <i>thinking</i>, not files of code. We integrate with whatever AI coding tool the user prefers (Cursor, Claude Code, Aider) but don't compete with them.</li>
+    <li><b>A graph-of-everything view.</b> Obsidian already has the graph view. We don't need to reinvent it.</li>
+    <li><b>Custom templating language.</b> Markdown + frontmatter is enough. If users want power, they can edit the template files directly — they're just notes.</li>
+    <li><b>Mobile app.</b> Obsidian Mobile exists. The cockpit may not work well there in v1; that's acceptable. Mobile is for reading, not for advancing gates.</li>
+    <li><b>An AI agent inside Specorator.</b> The plugin <i>recommends</i> next actions deterministically, based on parsed frontmatter. We can layer LLM features later (e.g. "summarize the open questions") but the core flow doesn't depend on a model being available.</li>
+  </ul>
+
+  <div class="footnote">
+    Living document · v0.1 · last updated during low-fi wireframe phase · supersedes any earlier verbal rationale
+  </div>
+</div>
+</body></html>

@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spec 02 · State machine & UX contracts — Specorator</title>
+<link rel="stylesheet" href="spec.css">
+</head>
+<body>
+
+<div class="topbar">
+  <a class="topbar-back" href="index.html">← overview</a>
+  <span class="topbar-sep">/</span>
+  <span class="nav-title" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);">spec 02 · state machine & UX contracts</span>
+  <span class="topbar-spacer"></span>
+  <a class="topbar-link prev" href="spec-data-model.html">← spec 01</a>
+  <a class="topbar-link" href="spec-plugin-arch.html">spec 03 →</a>
+</div>
+
+<div class="spec-doc">
+
+<div class="spec-hero">
+  <div class="spec-num">spec · 02</div>
+  <h1>State machine &amp; UX contracts</h1>
+  <p>The authoritative description of every state a feature can be in, every valid transition, and the exact UI behaviour the plugin must produce. This is the most important spec page — prioritise it over all others when in doubt.</p>
+</div>
+
+<!-- 1. Overview -->
+<section>
+  <h2><span class="sec-num">1</span>Overview</h2>
+  <p>A feature moves through <strong>11 steps</strong>, grouped into <strong>3 lanes</strong>. Between lanes sit <strong>2 gates</strong> — the only places the plugin says "not yet." Every other transition is reversible within 24 hours.</p>
+
+  <div class="code-block">
+<pre>DEFINE (steps 1–4)
+  1 · Vision              "What are we building and why?"
+  2 · Open questions      "What don't we know yet?"
+  3 · Rules (EARS)        "What must always/never be true?"
+  4 · How it works        "The technical approach, in prose."
+  ── GATE: Define → Build ───────────────────────────────
+BUILD (steps 5–8)
+  5 · Check the design    "Does the design match the rules?"
+  6 · Check the rules     "Are the rules still valid?"
+  7 · Check the code      "Does the implementation match?"
+  8 · Check security      "Any new attack surface?"
+  ── GATE: Build → Ship ────────────────────────────────
+SHIP (steps 9–11)
+  9  · Release notes      "What changed, for humans."
+  10 · Deployment log     "What ran, where, when."
+  11 · Retrospective      "What would we do differently?"</pre>
+  </div>
+
+  <div class="callout">
+    <strong>Step ≠ document.</strong> Each step corresponds to one Markdown file. The file can be as short as two sentences. The plugin doesn't grade quality — it only checks for presence and structural compliance (e.g. "has at least 4 EARS rules" for step 3).
+  </div>
+</section>
+
+<!-- 2. Step catalogue -->
+<section>
+  <h2><span class="sec-num">2</span>Step catalogue</h2>
+  <div class="schema-table-wrap">
+    <table class="state-table">
+      <thead>
+        <tr>
+          <th style="width:60px;">Step</th>
+          <th style="width:80px;">Lane</th>
+          <th style="width:180px;">File</th>
+          <th>Gate check contribution</th>
+          <th>Skippable?</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="step-num">01</td>
+          <td><span class="lane-badge lane-define">define</span></td>
+          <td><code>01-vision.md</code></td>
+          <td>Vision is ≤1 paragraph (checked by word count of first non-heading block). Gate: Define→Build.</td>
+          <td>No. Vision is required.</td>
+        </tr>
+        <tr>
+          <td class="step-num">02</td>
+          <td><span class="lane-badge lane-define">define</span></td>
+          <td><code>02-questions.md</code></td>
+          <td>0 open questions (lines starting with <code>? </code>). Gate: Define→Build blocks until all resolved.</td>
+          <td>Yes, with reason. Skip reason must explain why no questions were needed.</td>
+        </tr>
+        <tr>
+          <td class="step-num">03</td>
+          <td><span class="lane-badge lane-define">define</span></td>
+          <td><code>03-rules.md</code></td>
+          <td>≥4 EARS-formatted rules (lines starting with WHEN/IF/WHILE/WHERE). Count is configurable (settings.minEarsRules, default 4). Gate: Define→Build.</td>
+          <td>No. Rules are required.</td>
+        </tr>
+        <tr>
+          <td class="step-num">04</td>
+          <td><span class="lane-badge lane-define">define</span></td>
+          <td><code>04-how-it-works.md</code></td>
+          <td>Contains at least one wikilink to a decision note (<code>[[decisions/</code>). Soft check (yellow, configurable to off). Gate: Define→Build.</td>
+          <td>Yes, with reason.</td>
+        </tr>
+        <tr>
+          <td colspan="5" style="background:rgba(201,162,39,.06);padding:10px 12px;">
+            <span class="lane-badge lane-gate" style="margin-right:8px;">GATE</span>
+            <strong>Define → Build.</strong> All 5 checks must pass (see §4). In team mode, additionally requires peer sign-off (PR merge from a listed committer).
+          </td>
+        </tr>
+        <tr>
+          <td class="step-num">05</td>
+          <td><span class="lane-badge lane-build">build</span></td>
+          <td><code>05-check-design.md</code></td>
+          <td>Non-empty body (not just frontmatter). Gate: Build→Ship.</td>
+          <td>Yes, with reason.</td>
+        </tr>
+        <tr>
+          <td class="step-num">06</td>
+          <td><span class="lane-badge lane-build">build</span></td>
+          <td><code>06-check-rules.md</code></td>
+          <td>Non-empty body. Gate: Build→Ship.</td>
+          <td>Yes, with reason.</td>
+        </tr>
+        <tr>
+          <td class="step-num">07</td>
+          <td><span class="lane-badge lane-build">build</span></td>
+          <td><code>07-check-code.md</code></td>
+          <td>Non-empty body. Gate: Build→Ship.</td>
+          <td>Yes, with reason.</td>
+        </tr>
+        <tr>
+          <td class="step-num">08</td>
+          <td><span class="lane-badge lane-build">build</span></td>
+          <td><code>08-check-security.md</code></td>
+          <td>Non-empty body. Gate: Build→Ship.</td>
+          <td>Yes, with reason.</td>
+        </tr>
+        <tr>
+          <td colspan="5" style="background:rgba(201,162,39,.06);padding:10px 12px;">
+            <span class="lane-badge lane-gate" style="margin-right:8px;">GATE</span>
+            <strong>Build → Ship.</strong> All Build steps done or skipped-with-reason. No constitution violations (if CONSTITUTION.md exists).
+          </td>
+        </tr>
+        <tr>
+          <td class="step-num">09</td>
+          <td><span class="lane-badge lane-ship">ship</span></td>
+          <td><code>09-release-notes.md</code></td>
+          <td>Non-empty body. Required to close feature (unless skipped with reason).</td>
+          <td>Yes, with reason.</td>
+        </tr>
+        <tr>
+          <td class="step-num">10</td>
+          <td><span class="lane-badge lane-ship">ship</span></td>
+          <td><code>10-deployment-log.md</code></td>
+          <td>Non-empty body. Required to close.</td>
+          <td>Yes, with reason.</td>
+        </tr>
+        <tr>
+          <td class="step-num">11</td>
+          <td><span class="lane-badge lane-ship">ship</span></td>
+          <td><code>11-retrospective.md</code></td>
+          <td>Non-empty body. Required to close (configurable: settings.retroRequired, default on).</td>
+          <td>Yes, with reason. If skipped, the skip reason is used as the retro.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 3. Feature status enum -->
+<section>
+  <h2><span class="sec-num">3</span>Feature status enum</h2>
+  <div class="schema-table-wrap">
+    <table class="schema-table">
+      <thead>
+        <tr><th>Status</th><th>Lane</th><th>Meaning</th><th>Valid transitions</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>active</code></td>
+          <td>define | build | ship</td>
+          <td>Feature is in progress.</td>
+          <td>→ archived (close) · → abandoned</td>
+        </tr>
+        <tr>
+          <td><code>archived</code></td>
+          <td>closed</td>
+          <td>Feature completed and moved to archive/.</td>
+          <td>→ active (re-open, with reason)</td>
+        </tr>
+        <tr>
+          <td><code>abandoned</code></td>
+          <td>closed</td>
+          <td>Feature explicitly stopped. Reason mandatory.</td>
+          <td>→ active (re-open, with reason)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 4. Gate check definitions -->
+<section>
+  <h2><span class="sec-num">4</span>Gate check definitions</h2>
+  <h3>Gate A · Define → Build (5 checks)</h3>
+  <div class="schema-table-wrap">
+    <table class="schema-table">
+      <thead>
+        <tr><th style="width:40px;">#</th><th>Check</th><th>Pass condition</th><th>Severity</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>A1</td><td>Vision is one paragraph</td><td>Body of 01-vision.md has ≤1 non-heading block of ≤150 words.</td><td>Hard block</td></tr>
+        <tr><td>A2</td><td>Minimum EARS rules</td><td>03-rules.md has ≥N lines matching <code>/^(WHEN|IF|WHILE|WHERE)\s/</code>. N = settings.minEarsRules.</td><td>Hard block</td></tr>
+        <tr><td>A3</td><td>Zero open questions</td><td>No line in any step file matches <code>/^\? .+/</code> with status = open (i.e. not followed by a <code>!</code> resolution).</td><td>Hard block</td></tr>
+        <tr><td>A4</td><td>Decision note linked</td><td>04-how-it-works.md contains at least one wikilink matching <code>/\[\[decisions\//</code>.</td><td>Soft (configurable)</td></tr>
+        <tr><td>A5</td><td>Constitution respected</td><td>Each rule in CONSTITUTION.md is acknowledged — either a check note in step files, or an explicit override with reason in _meta.md.</td><td>Hard block</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Gate B · Build → Ship (3 checks)</h3>
+  <div class="schema-table-wrap">
+    <table class="schema-table">
+      <thead>
+        <tr><th style="width:40px;">#</th><th>Check</th><th>Pass condition</th><th>Severity</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>B1</td><td>All Build steps done or skipped</td><td>Steps 5–8 each have status = done OR (status = skipped AND skip_reason is non-empty).</td><td>Hard block</td></tr>
+        <tr><td>B2</td><td>Constitution still respected</td><td>Same as A5 — re-run against current CONSTITUTION.md (rules may have changed since Define gate).</td><td>Hard block</td></tr>
+        <tr><td>B3</td><td>No new open questions</td><td>Zero unresolved <code>? </code> lines across all step files.</td><td>Hard block</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 5. UX contracts -->
+<section>
+  <h2><span class="sec-num">5</span>UX contracts</h2>
+  <p>These are the exact behaviours the plugin must produce in each state. "MUST" = no flexibility. "SHOULD" = default behaviour; user-configurable.</p>
+
+  <h3>Any step file saved</h3>
+  <div class="ux-contract">
+    <div class="ux-label">contract · on file save</div>
+    <ul>
+      <li><span class="must">MUST</span> re-scan the file for OQ lines (<code>? </code> prefix) and update the oqCounts cache.</li>
+      <li><span class="must">MUST</span> re-evaluate gate checks for the affected feature and update gateStatus cache.</li>
+      <li><span class="must">MUST</span> update last_active_at in _meta.md.</li>
+      <li><span class="must">MUST NOT</span> show a toast or modal unless a gate check transitions from pass → fail or vice versa.</li>
+      <li><span class="should">SHOULD</span> update the cockpit status bar within 300ms of save.</li>
+    </ul>
+  </div>
+
+  <h3>Step hand-off</h3>
+  <div class="ux-contract">
+    <div class="ux-label">contract · hand-off</div>
+    <ul>
+      <li><span class="must">MUST</span> take a snapshot before writing any changes (DR-005).</li>
+      <li><span class="must">MUST</span> set status = done and handed_off_at = now on the step's frontmatter.</li>
+      <li><span class="must">MUST</span> advance the feature's active step to the next non-skipped step.</li>
+      <li><span class="must">MUST</span> show an undo banner in the cockpit for 24 hours.</li>
+      <li><span class="must">MUST NOT</span> advance past a gate — gate crossing is a separate action.</li>
+      <li><span class="should">SHOULD</span> animate the transition in 250ms.</li>
+      <li><span class="must">MUST NOT</span> show confetti, toast, or celebratory UI.</li>
+    </ul>
+  </div>
+
+  <h3>Gate crossing</h3>
+  <div class="ux-contract">
+    <div class="ux-label">contract · gate cross</div>
+    <ul>
+      <li><span class="must">MUST</span> be unavailable if any hard-block gate check is failing.</li>
+      <li><span class="must">MUST</span> take a named snapshot labelled <code>before-{gate}-gate</code> before any write.</li>
+      <li><span class="must">MUST</span> update the feature's lane in _meta.md.</li>
+      <li><span class="must">MUST</span> log the gate crossing in gates[] in _meta.md with timestamp and actor handle.</li>
+      <li><span class="must">MUST</span> show an undo banner for 24 hours.</li>
+      <li><span class="must">MUST</span> use a 400ms transition (slower than hand-off — this is a lane change).</li>
+      <li><span class="must">MUST NOT</span> cross if in team mode and peer sign-off is absent.</li>
+    </ul>
+  </div>
+
+  <h3>Gate override</h3>
+  <div class="ux-contract">
+    <div class="ux-label">contract · gate override</div>
+    <ul>
+      <li><span class="must">MUST</span> prompt for a one-line reason (mandatory — gate cannot be overridden silently).</li>
+      <li><span class="must">MUST</span> log the override in _meta.md gates[] with reason, actor, and timestamp.</li>
+      <li><span class="must">MUST</span> mark the gate crossing with a ⚠ in the timeline and rail.</li>
+      <li><span class="must">MUST NOT</span> require peer sign-off in team mode for an override — the override is a solo decision.</li>
+    </ul>
+  </div>
+
+  <h3>Undo</h3>
+  <div class="ux-contract">
+    <div class="ux-label">contract · undo</div>
+    <ul>
+      <li><span class="must">MUST</span> restore all step files from the snapshot taken immediately before the action.</li>
+      <li><span class="must">MUST</span> restore _meta.md from the snapshot.</li>
+      <li><span class="must">MUST</span> be unavailable after 24 hours from the mutation timestamp.</li>
+      <li><span class="must">MUST</span> require a confirm step (one click, not two) before restoring.</li>
+      <li><span class="must">MUST NOT</span> be available for gate overrides that have already been peer-reviewed in team mode.</li>
+    </ul>
+  </div>
+
+  <h3>Cockpit empty states</h3>
+  <div class="ux-contract">
+    <div class="ux-label">contract · empty states (OQ-2 resolved)</div>
+    <ul>
+      <li><span class="must">MUST</span> show the last-focused feature as default when opening the cockpit (context restoration, zero friction).</li>
+      <li>If all features are archived: <span class="must">MUST</span> show an "all caught up" empty state with a "New feature" CTA.</li>
+      <li>If vault has no features at all: <span class="must">MUST</span> show a "new vault" empty state with onboarding copy and a "New feature" CTA.</li>
+      <li><span class="must">MUST NOT</span> show a blank panel with no explanation.</li>
+    </ul>
+  </div>
+
+  <h3>Stale feature</h3>
+  <div class="ux-contract">
+    <div class="ux-label">contract · stale detection</div>
+    <ul>
+      <li><span class="must">MUST</span> flag a feature as stale when <code>now - last_active_at > settings.staleThresholdDays</code>.</li>
+      <li><span class="should">SHOULD</span> show stale indicator in the feature switcher and rail.</li>
+      <li><span class="must">MUST NOT</span> block any action on a stale feature — stale is a nudge, not a block.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 6. Skip mechanics -->
+<section>
+  <h2><span class="sec-num">6</span>Skip mechanics</h2>
+  <p>Any step can be skipped (except steps 1 and 3, which are required). A skip is never silent — a reason is always required.</p>
+  <div class="code-block">
+<pre>skip(step, reason):
+  REQUIRE reason is non-empty string
+  REQUIRE step is not 1 or 3
+  snapshot(feature)           -- DR-005
+  step.status = "skipped"
+  step.skipped = true
+  step.skip_reason = reason
+  step.handed_off_at = now
+  writeFile(step)
+  if skippedCount(feature) >= settings.skipWarningThreshold:
+    showCockpitWarning("Many steps skipped — is this intentional?")</pre>
+  </div>
+  <div class="callout callout-yellow">
+    <strong>Skip display:</strong> Skipped steps show as ◇ (diamond) in the rail, not ✓ (check). The skip reason is shown in a tooltip on hover. The step is visually distinct from done steps.
+  </div>
+</section>
+
+</div>
+
+<footer class="spec-footer">
+  <a href="spec-data-model.html">← spec 01 · data model</a>
+  <span>Specorator · Spec 02 · State machine</span>
+  <a href="spec-plugin-arch.html">spec 03 · plugin architecture →</a>
+</footer>
+</body>
+</html>

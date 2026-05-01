@@ -1,0 +1,181 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>OQ-2 resolved · cockpit empty state</title>
+<link rel="stylesheet" href="../wireframes.css">
+<style>
+  body { margin: 0; background: var(--ob-bg); }
+  .scroll { width: 100%; overflow-x: auto; padding: 80px 0 60px; }
+  .sub-head { padding: 48px 32px 8px; }
+  .sub-head .sub-label { font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--ob-text-faint); text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; }
+  .sub-head h3 { font-family:var(--sketch); font-size:22px; font-weight:700; color:var(--ob-text); margin:0 0 4px; }
+  .sub-head p { font-family:"Inter",sans-serif; font-size:12px; color:var(--ob-text-mute); margin:0; line-height:1.5; max-width:680px; }
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="sb-section-head">
+  <div class="meta">OQ-2 resolved · cockpit when no feature is in focus</div>
+  <h2>Cockpit empty state — what do you show when nothing is active?</h2>
+  <p>Three candidates were on the table: show a feed of everything needing attention across all features, return to the last-focused feature, or show a true empty state with a "pick a feature" prompt. This flow documents the decision and shows the three states the cockpit must handle.</p>
+</div>
+
+<!-- DECISION BOX -->
+<div style="padding:16px 32px 0;">
+  <div class="sk-box thin" style="padding:14px 16px;border-color:var(--lane-define,#4ad196);max-width:900px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <div style="font-family:JetBrains Mono;font-size:10px;color:var(--lane-define,#4ad196);text-transform:uppercase;">decision · OQ-2 resolved</div>
+      <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">2026-05-01 · accepted</span>
+    </div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Last-focused feature, with a feed fallback when truly empty</div>
+    <p style="font-family:Inter;font-size:11.5px;color:var(--ob-text-mute);line-height:1.6;margin:0 0 6px;">
+      <b>Choice:</b> When the user opens Obsidian and no feature is explicitly selected, the cockpit restores the last-focused feature. If no feature has ever been focused (new vault, or all features archived), it shows a minimal empty state with one action: "Start a feature."<br><br>
+      <b>Why not the feed:</b> A feed of all features needing attention is useful — but it's a portfolio view, not a cockpit. The cockpit is designed for single-feature depth. The feed is better as a dedicated view (Cockpit D) than as the default empty state. Mixing them creates a context-switching cost every time you open Obsidian.<br><br>
+      <b>Why last-focused over empty:</b> Most users work on one feature at a time. Restoring their last context is almost always correct. The empty state is a genuine edge case — new vault or post-archive — not the common path.
+    </p>
+    <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--lane-define,#4ad196);">→ decisions/cockpit-empty-state.md · linked from rationale.html OQ-2</div>
+  </div>
+</div>
+
+<!-- THREE STATES -->
+<div class="sub-head">
+  <div class="sub-label">the three cockpit states</div>
+  <h3>What the cockpit shows in each situation</h3>
+  <p>Three distinct situations, three distinct cockpit states. Each has a clear first action that gets the user back to productive work immediately.</p>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 2000px;">
+
+  <!-- State 1: last focused -->
+  <div class="sb-frame">
+    <div class="sb-num">01</div>
+    <div class="sb-time">returning user</div>
+    <div class="sb-anno top">
+      <span class="tag">common case</span>
+      <b>Cockpit restores last context.</b><br>
+      No prompt. No picker. Just the feature you were working on, at the step you left it. "Last activity" shows what happened and when.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 5 of 11 · check the design <span class="sk-pill build" style="font-size:9px;padding:0 5px;margin-left:4px;">build</span></div>
+
+      <div class="sk-box thin" style="padding:8px 10px;border-color:var(--ob-text-faint);margin-bottom:8px;">
+        <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);text-transform:uppercase;margin-bottom:4px;">Last activity · 2 days ago</div>
+        <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.5;">Handed off step 4. Decision note saved.</div>
+      </div>
+
+      <div class="coach" style="font-size:11px;">
+        <div>
+          <div class="ctitle">Step 5 · check the design</div>
+          <div class="ctext" style="font-size:11px;">Sketch or link a design artefact. Then hand off.</div>
+        </div>
+      </div>
+
+      <div style="margin-top:8px;font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">
+        switch feature ↓ — tap header
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Last context restored instantly.</b>
+      <span class="sub">No picker, no prompt. Just work.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">all archived</span></div>
+
+  <!-- State 2: all features archived -->
+  <div class="sb-frame">
+    <div class="sb-num">02</div>
+    <div class="sb-time">all features done</div>
+    <div class="sb-anno bottom">
+      <span class="tag">earned empty state</span>
+      <b>Earned empty state.</b><br>
+      All features are closed or archived. This is a genuine accomplishment — the empty state acknowledges it before prompting for the next thing.
+    </div>
+    <div class="sb-screen" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:10px;padding:20px 14px;">
+      <div style="font-family:var(--sketch);font-size:28px;color:var(--ob-text-faint);">✦</div>
+      <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);">All caught up.</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.5;max-width:200px;">Every feature is closed or archived. Time to build something new.</div>
+      <button class="sk-btn primary" style="font-size:11px;padding:4px 14px;margin-top:4px;">Start a feature</button>
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">or browse archive →</div>
+    </div>
+    <div class="sb-caption">
+      <b>"All caught up." — earned, not hollow.</b>
+      <span class="sub">Acknowledges completion. One action forward.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">new vault</span></div>
+
+  <!-- State 3: truly empty (new vault) -->
+  <div class="sb-frame">
+    <div class="sb-num">03</div>
+    <div class="sb-time">new vault</div>
+    <div class="sb-anno top">
+      <span class="tag">first run</span>
+      <b>New vault: minimal, instructive.</b><br>
+      No archive link (nothing's there). Just the plugin's one-line promise and a single action. The same state as the onboarding artboard — same entry point.
+    </div>
+    <div class="sb-screen" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:10px;padding:20px 14px;">
+      <div style="font-family:var(--sketch);font-size:22px;color:var(--ob-text-faint);">S</div>
+      <div style="font-family:var(--sketch);font-size:16px;color:var(--ob-text);">Specorator</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.5;max-width:200px;">Disciplined software development, one feature at a time.</div>
+      <button class="sk-btn primary" style="font-size:11px;padding:4px 14px;margin-top:4px;">Start your first feature</button>
+    </div>
+    <div class="sb-caption">
+      <b>New vault: one action only.</b>
+      <span class="sub">No clutter. The plugin's premise in one sentence.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">multiple active</span></div>
+
+  <!-- State 4: multiple active, no focus -->
+  <div class="sb-frame">
+    <div class="sb-num">04</div>
+    <div class="sb-time">multiple active</div>
+    <div class="sb-anno bottom">
+      <span class="tag">feature picker</span>
+      <b>Multiple active features: show the picker.</b><br>
+      If last-focused can't be determined (e.g. vault copied from another machine), the cockpit shows a compact feature list. Sorted by most-recently-active. One tap to focus.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:8px;">Which feature?</div>
+      <div style="display:flex;flex-direction:column;gap:4px;font-family:Inter;font-size:10.5px;">
+        <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-radius:3px;padding:6px 8px;cursor:pointer;">
+          <div style="font-weight:700;color:var(--ob-text);">magic-link-auth</div>
+          <div style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">step 5 · build · 2 days ago</div>
+        </div>
+        <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-radius:3px;padding:6px 8px;cursor:pointer;">
+          <div style="font-weight:600;color:var(--ob-text);">data-export-csv</div>
+          <div style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">step 2 · define · 5 days ago</div>
+        </div>
+        <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-radius:3px;padding:6px 8px;cursor:pointer;opacity:.65;">
+          <div style="font-weight:600;color:var(--ob-text-mute);">rate-limiting</div>
+          <div style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">step 9 · ship · stale 14d</div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Picker as last resort.</b>
+      <span class="sub">Sorted by recency. Stale flagged. One tap to focus.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- RATIONALE -->
+<div style="padding:32px 32px 60px;display:grid;grid-template-columns:repeat(2,1fr);gap:18px;">
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">why not the feed</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Feed = portfolio view, not empty state</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Cockpit D (the feed) is a deliberate choice — a view the user switches to. Making it the default empty state means every vault-open starts with a context switch. The cockpit is for depth; the feed is for breadth. They serve different moments.</p>
+  </div>
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">why last-focused</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Context restoration = zero friction re-entry</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">The biggest competitor to Specorator is "I'll just keep it in my head." Context restoration has to be instant — if opening the cockpit costs a click to pick a feature, some users will stop opening it. Last-focused is almost always right; the edge cases (picker, earned empty) are rare.</p>
+  </div>
+</div>
+
+</body></html>

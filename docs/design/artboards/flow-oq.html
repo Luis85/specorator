@@ -1,0 +1,542 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Flow · open question</title>
+<link rel="stylesheet" href="../wireframes.css">
+<style>
+  body { margin: 0; background: var(--ob-bg); }
+  .scroll { width: 100%; overflow-x: auto; padding: 80px 0 60px; }
+  .sub-head {
+    padding: 48px 32px 8px;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+  }
+  .sub-head .sub-label {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    color: var(--ob-text-faint);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+  }
+  .sub-head h3 {
+    font-family: var(--sketch);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--ob-text);
+    margin: 0;
+  }
+  .sub-head-inner { display: flex; flex-direction: column; }
+  .sub-head p {
+    font-family: "Inter", sans-serif;
+    font-size: 12px;
+    color: var(--ob-text-mute);
+    margin: 4px 0 0;
+    line-height: 1.5;
+    max-width: 640px;
+  }
+  .oq-pill {
+    display: inline-block;
+    background: rgba(255,229,107,0.12);
+    border: 1px solid #b08a14;
+    border-radius: 3px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: #c9a227;
+    padding: 1px 6px;
+  }
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="sb-section-head">
+  <div class="meta">flow · questions that live in the open</div>
+  <h2>Open question — ? in a note → collected → resolved</h2>
+  <p>Open questions are the honest residue of incomplete thinking. The plugin doesn't hide them — it surfaces them. A <code style="font-size:11px;">?</code> prefix in any spec file becomes a tracked question, visible in the cockpit, counted by the gate, and closable with a one-line answer that optionally becomes a decision note.</p>
+</div>
+
+<!-- ═══════════════════════════════════
+     ACT 1 · WRITING
+═══════════════════════════════════ -->
+<div class="sub-head">
+  <div class="sub-head-inner">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span class="sub-label">act 1 of 3</span>
+      <h3>Writing — ? in any spec file</h3>
+    </div>
+    <p>No command, no form, no special mode. A line starting with <code>?</code> in any spec markdown file is an open question. The plugin watches for it on save.</p>
+  </div>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 2000px;">
+
+  <!-- W1 typing the ? -->
+  <div class="sb-frame">
+    <div class="sb-num">W1</div>
+    <div class="sb-time">writing · step 3 rules</div>
+    <div class="sb-anno top">
+      <span class="tag">plain markdown</span>
+      <b>The syntax is just a ? prefix.</b><br>
+      No special command. No modal. Works in any spec file in the feature folder.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:10px;">step 3 of 11 · rules (EARS)</div>
+
+      <div class="mini-window">
+        <div class="head">03-rules.md</div>
+        <div style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text);line-height:1.75;">
+          - WHEN user submits email THEN system sends link<br>
+          - WHEN link clicked THEN session starts<br>
+          - WHEN link expired THEN show re-send UI<br>
+          <span style="color:#c9a227;">? Should links expire after 15 min or 60 min?</span><span style="color:var(--accent);">▏</span>
+        </div>
+      </div>
+
+      <div style="margin-top:8px;font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">
+        save to register ↓
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>? prefix = open question.</b>
+      <span class="sub">Plain text. Works offline. No special renderer needed.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">save</span></div>
+
+  <!-- W2 registered -->
+  <div class="sb-frame">
+    <div class="sb-num">W2</div>
+    <div class="sb-time">on save</div>
+    <div class="sb-anno bottom">
+      <span class="tag">principle 5 · quiet</span>
+      <b>Quiet acknowledgement.</b><br>
+      No modal. No toast. The coach count ticks up and the ? line gets a subtle highlight. That's the entire notification.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:10px;">step 3 of 11 · rules</div>
+
+      <div class="mini-window" style="margin-bottom:8px;">
+        <div class="head">03-rules.md</div>
+        <div style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text);line-height:1.75;">
+          - WHEN user submits email THEN system sends link<br>
+          - WHEN link clicked THEN session starts<br>
+          - WHEN link expired THEN show re-send UI<br>
+          <span style="background:rgba(255,229,107,0.08);border-left:2px solid #b08a14;padding-left:4px;color:#c9a227;">? Should links expire after 15 min or 60 min?</span>
+        </div>
+      </div>
+
+      <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);display:flex;align-items:center;gap:6px;">
+        <span class="oq-pill">? 1</span>
+        <span>open question registered</span>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Registered silently.</b>
+      <span class="sub">Yellow left-border in the file. Counter ticks up in cockpit.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">more ?s</span></div>
+
+  <!-- W3 multiple questions -->
+  <div class="sb-frame">
+    <div class="sb-num">W3</div>
+    <div class="sb-time">across files</div>
+    <div class="sb-anno top">
+      <span class="tag">cross-file</span>
+      <b>? works in any spec file.</b><br>
+      The plugin scans the whole feature folder on save. Questions from different files are all collected under the same feature.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:15px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">step 4 of 11 · how it works</div>
+
+      <div class="mini-window" style="margin-bottom:8px;">
+        <div class="head">04-how-it-works.md</div>
+        <div style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text);line-height:1.75;">
+          Use Supabase magic links for auth.<br>
+          <span style="background:rgba(255,229,107,0.08);border-left:2px solid #b08a14;padding-left:4px;color:#c9a227;">? Which Supabase region — us-east or eu-west?</span>
+        </div>
+      </div>
+
+      <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);display:flex;align-items:center;gap:6px;">
+        <span class="oq-pill">? 2</span>
+        <span>questions across 2 files</span>
+      </div>
+
+      <div style="margin-top:8px;font-family:JetBrains Mono;font-size:9.5px;color:#c66;">
+        gate will block until resolved
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>2 open questions now.</b>
+      <span class="sub">Gate check: "0 open questions" is failing. Visible in cockpit.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════
+     ACT 2 · COLLECTING
+═══════════════════════════════════ -->
+<div class="sub-head">
+  <div class="sub-head-inner">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span class="sub-label">act 2 of 3</span>
+      <h3>Collecting — the cockpit aggregates all ?s</h3>
+    </div>
+    <p>The cockpit's right pane always shows outstanding open questions for the current feature. They're grouped by file, sorted by age, and each links directly to the line in the spec.</p>
+  </div>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 1700px;">
+
+  <!-- C1 cockpit OQ panel -->
+  <div class="sb-frame">
+    <div class="sb-num">C1</div>
+    <div class="sb-time">cockpit · right pane</div>
+    <div class="sb-anno top">
+      <span class="tag">always visible</span>
+      <b>OQs live in the right pane.</b><br>
+      Not hidden behind a command. The panel is always there when there are open questions — disappears when count hits zero.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:13px;color:var(--ob-text);margin-bottom:6px;">magic-link-auth</div>
+
+      <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;display:flex;align-items:center;gap:6px;">
+        Open questions <span class="oq-pill">? 2</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-left:3px solid #b08a14;border-radius:3px;padding:7px 9px;">
+          <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text);margin-bottom:2px;line-height:1.4;">Should links expire after 15 min or 60 min?</div>
+          <div style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">03-rules.md · 3 days ago</div>
+        </div>
+        <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-left:3px solid #b08a14;border-radius:3px;padding:7px 9px;">
+          <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text);margin-bottom:2px;line-height:1.4;">Which Supabase region — us-east or eu-west?</div>
+          <div style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">04-how-it-works.md · 1 day ago</div>
+        </div>
+      </div>
+
+      <div style="margin-top:8px;font-family:JetBrains Mono;font-size:9.5px;color:#c66;">
+        gate blocked: 2 unresolved
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Right pane: OQ list.</b>
+      <span class="sub">File source + age shown. Gate status at bottom.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">click ?</span></div>
+
+  <!-- C2 jump to line -->
+  <div class="sb-frame">
+    <div class="sb-num">C2</div>
+    <div class="sb-time">jump to source</div>
+    <div class="sb-anno bottom">
+      <span class="tag">one click to context</span>
+      <b>Clicking the OQ opens the file at that line.</b><br>
+      Not a modal. The actual markdown file, scrolled to the ? line, ready to edit.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:13px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">03-rules.md</div>
+
+      <div class="mini-window">
+        <div class="head">03-rules.md · line 4</div>
+        <div style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text);line-height:1.75;">
+          - WHEN user submits email THEN…<br>
+          - WHEN link clicked THEN…<br>
+          - WHEN link expired THEN…<br>
+          <span style="background:rgba(255,229,107,0.14);border-left:2px solid #b08a14;padding-left:4px;color:#c9a227;display:block;">? Should links expire after 15 min or 60 min?<span style="color:var(--accent);">▏</span></span>
+        </div>
+      </div>
+
+      <div style="margin-top:8px;font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);">
+        edit the line to resolve ↓
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>File opens at the exact line.</b>
+      <span class="sub">User edits in place — no intermediary screen.</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════
+     ACT 3 · RESOLVING
+═══════════════════════════════════ -->
+<div class="sub-head">
+  <div class="sub-head-inner">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span class="sub-label">act 3 of 3</span>
+      <h3>Resolving — marking an answer</h3>
+    </div>
+    <p>Resolution is a single character change: <code>?</code> → <code>!</code>. The answer follows on the same line or the next. On save, the cockpit count drops, and if this was the last one, the gate check turns green. Optionally, the resolution becomes a decision note.</p>
+  </div>
+</div>
+
+<div class="scroll">
+<div class="sb-strip" style="min-width: 2400px;">
+
+  <!-- R1 marking resolved -->
+  <div class="sb-frame">
+    <div class="sb-num">R1</div>
+    <div class="sb-time">editing · mark resolved</div>
+    <div class="sb-anno top">
+      <span class="tag">DR-004 · plain markdown</span>
+      <b>? → ! to resolve.</b><br>
+      One character. The answer follows on the same line. Works in any markdown editor — no plugin required to read a resolved question.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:13px;color:var(--ob-text);">magic-link-auth</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">03-rules.md</div>
+
+      <div class="mini-window">
+        <div class="head">03-rules.md</div>
+        <div style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text);line-height:1.75;">
+          - WHEN user submits email THEN…<br>
+          - WHEN link clicked THEN…<br>
+          - WHEN link expired THEN…<br>
+          <span style="color:var(--lane-define,#4ad196);">! Links expire after 15 min — shorter window,</span><span style="color:var(--accent);">▏</span><br>
+          <span style="color:var(--lane-define,#4ad196);">  less phishing risk, re-send is trivial.</span>
+        </div>
+      </div>
+
+      <div style="margin-top:8px;font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);">
+        save to close the question ↓
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>! = resolved. Answer inline.</b>
+      <span class="sub">The reasoning stays in the file forever — no separate doc needed.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">save</span></div>
+
+  <!-- R2 cockpit updates -->
+  <div class="sb-frame">
+    <div class="sb-num">R2</div>
+    <div class="sb-time">cockpit reacts</div>
+    <div class="sb-anno bottom">
+      <span class="tag">principle 5 · quiet</span>
+      <b>Counter drops. No toast.</b><br>
+      The OQ panel updates on save. One fewer question. If this was the last, the panel collapses and the gate check turns green.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:13px;color:var(--ob-text);margin-bottom:6px;">magic-link-auth</div>
+
+      <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;display:flex;align-items:center;gap:6px;">
+        Open questions <span class="oq-pill">? 1</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px;">
+        <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-left:3px solid var(--lane-define,#4ad196);border-radius:3px;padding:7px 9px;opacity:.55;">
+          <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text);margin-bottom:2px;line-height:1.4;text-decoration:line-through;">Should links expire after 15 min or 60 min?</div>
+          <div style="font-family:JetBrains Mono;font-size:9px;color:var(--lane-define,#4ad196);">resolved ✓</div>
+        </div>
+        <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-left:3px solid #b08a14;border-radius:3px;padding:7px 9px;">
+          <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text);margin-bottom:2px;line-height:1.4;">Which Supabase region — us-east or eu-west?</div>
+          <div style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">04-how-it-works.md · 1 day ago</div>
+        </div>
+      </div>
+
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:#b08a14;">
+        1 remaining · gate still blocked
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Counter: 2 → 1.</b>
+      <span class="sub">Resolved item struck-through briefly, then gone.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">resolve last</span></div>
+
+  <!-- R3 gate clears -->
+  <div class="sb-frame">
+    <div class="sb-num">R3</div>
+    <div class="sb-time">zero questions</div>
+    <div class="sb-anno top">
+      <span class="tag">gate · define→build</span>
+      <b>Gate check turns green.</b><br>
+      "0 open questions" was the only failing check. It now passes. No button press — the gate evaluates continuously.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:13px;color:var(--ob-text);margin-bottom:6px;">magic-link-auth</div>
+
+      <div style="font-family:Inter;font-size:10px;font-weight:700;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+        Open questions <span style="background:rgba(74,209,150,0.1);border:1px solid var(--lane-define,#4ad196);border-radius:3px;font-family:JetBrains Mono;font-size:10px;color:var(--lane-define,#4ad196);padding:1px 6px;">✓ 0</span>
+      </div>
+
+      <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-faint);margin-bottom:10px;">No open questions. All resolved.</div>
+
+      <div class="mini-list" style="font-size:10.5px;line-height:1.75;">
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>Vision · 1 paragraph ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>5 rules · all testable ✓</div>
+        <div class="it hl"><span class="ic" style="background:var(--accent);border-color:var(--accent);"></span>0 open questions ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>Decision note linked ✓</div>
+        <div class="it"><span class="ic" style="background:var(--ob-text-mute);border-color:var(--ob-text-mute);opacity:.4;"></span>House rules</div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Gate item auto-passes.</b>
+      <span class="sub">4 of 5 green. No button. Continuous evaluation.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">big decision?</span></div>
+
+  <!-- R4 offer decision note -->
+  <div class="sb-frame">
+    <div class="sb-num">R4</div>
+    <div class="sb-time">optional escalation</div>
+    <div class="sb-anno bottom">
+      <span class="tag">ADR · DR-003</span>
+      <b>Coach offers to escalate to a decision note.</b><br>
+      Not mandatory. Not every OQ is a decision. But if the answer has architectural weight, one click promotes it.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:13px;color:var(--ob-text);margin-bottom:6px;">magic-link-auth</div>
+
+      <div style="background:rgba(74,209,150,0.06);border:1px solid var(--lane-define,#4ad196);border-radius:4px;padding:6px 8px;margin-bottom:8px;font-family:Inter;font-size:10.5px;color:var(--ob-text);display:flex;align-items:center;gap:6px;">
+        <span style="color:var(--lane-define,#4ad196);">✓</span> Resolved: link expiry
+      </div>
+
+      <div class="coach" style="font-size:11px;">
+        <div>
+          <div class="ctitle">Was this a big choice?</div>
+          <div class="ctext" style="font-size:11px;">If this decision has architectural weight, log it as a decision note — 60 seconds.</div>
+          <div class="cactions">
+            <button class="sk-btn primary" style="font-size:10.5px;padding:2px 9px;">Log decision →</button>
+            <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);margin-left:4px;">no, it's minor</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>OQ → decision note in one click.</b>
+      <span class="sub">OQ text becomes the pre-fill (edge case A from the ADR flow).</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ─────── edge cases ─────── -->
+<div class="sb-section-head">
+  <div class="meta">edge cases</div>
+  <h2 style="font-size:22px;">When questions get complicated</h2>
+</div>
+
+<div style="padding:8px 32px 36px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;">
+
+  <!-- A: OQ in a non-spec file -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">A</div>
+    <div class="sb-time">wrong file</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">? in a non-spec file</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        The plugin only scans files inside a feature folder (files named with the step prefix <code style="font-size:10px;">01-</code> through <code style="font-size:10px;">11-</code>). A <code style="font-size:10px;">?</code> in a daily note or personal file is invisible to Specorator. No accidental captures.
+      </div>
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">
+        only scans: features/*/0[1-9]-*.md<br>
+        ignores: everything else
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Scoped to spec files only.</b>
+      <span class="sub">Personal notes stay personal.</span>
+    </div>
+  </div>
+
+  <!-- B: stale OQ — question never resolved -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">B</div>
+    <div class="sb-time">stale question</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">? open for 14+ days</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        Questions older than 14 days turn amber in the cockpit panel and get a "stale" tag. The feature itself may also show as stale in the feature switcher. Not an error — a nudge.
+      </div>
+      <div style="background:var(--ob-bg-2);border:1px solid var(--ob-line);border-left:3px solid #c66;border-radius:3px;padding:7px 9px;">
+        <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text);margin-bottom:2px;">Which region — us-east or eu-west?</div>
+        <div style="font-family:JetBrains Mono;font-size:9px;color:#c66;">stale · 21 days open</div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>14 days → amber. Not red.</b>
+      <span class="sub">Still a nudge, not a block. Gate still counts it.</span>
+    </div>
+  </div>
+
+  <!-- C: question answered by someone else -->
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">C</div>
+    <div class="sb-time">team mode</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Peer resolves your ?</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        In team mode (shared vault via Obsidian Sync), a peer can change <code style="font-size:10px;">?</code> → <code style="font-size:10px;">!</code> in the spec file. On your next sync, the cockpit count drops. The resolved line carries the resolver's initials in a comment: <code style="font-size:10px;">&lt;!-- @arch-lead --&gt;</code>
+      </div>
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">
+        ! 15 min expiry &lt;!-- @arch-lead --&gt;
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Async resolution works.</b>
+      <span class="sub">Resolver credited in file. No server required.</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─────── design notes ─────── -->
+<div class="sb-section-head" style="padding-top:8px;">
+  <div class="meta">design rationale for this flow</div>
+  <h2 style="font-size:22px;">Why we made these choices</h2>
+</div>
+
+<div style="padding:8px 32px 60px;display:grid;grid-template-columns:repeat(2,1fr);gap:18px;">
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">? and ! — the whole syntax</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">One character to open a question. One character to close it. The answer lives on the same line. The file stays readable in any markdown editor. No plugin, no renderer, no schema. (DR-004)</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Gate blocks on open questions</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">An open question is explicit uncertainty. The Define→Build gate requires 0 open questions because you shouldn't build something you haven't decided yet. This is the one gate item that genuinely blocks — not a yellow flag. (DR-001)</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">OQ → decision note is optional</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Not every resolved question is a decision note. "Which colour for the button?" doesn't need an ADR. The coach nudges, the user judges. The two flows connect but neither requires the other.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Cockpit panel collapses at zero</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">The OQ panel only appears when there are open questions. When the count hits zero, it disappears. Principle 5: quiet by default, loud only when something needs attention.</p>
+  </div>
+
+  <div class="sk-box dashed" style="padding:14px 16px;grid-column:span 2;">
+    <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:4px;">Open question OQ-2 (meta) · what if someone uses ? for bullet lists?</div>
+    <p class="sk-p" style="font-family:Inter;font-size:12px;">The <code style="font-size:11px;">?</code> prefix conflicts with any markdown author who uses question-mark bullets. Mitigations: (A) require <code style="font-size:11px;">? </code> with a space — rare as a list prefix. (B) scope scanning to a specific frontmatter tag (<code style="font-size:11px;">specorator: true</code>). (C) use a different sigil (<code style="font-size:11px;">OQ:</code>). <b>Current design uses option A</b> — simplest, lowest friction. Will revisit if false positives appear in beta.</p>
+  </div>
+
+</div>
+
+</body></html>

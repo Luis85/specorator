@@ -1,0 +1,433 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Catalogue · keyboard & commands</title>
+<link rel="stylesheet" href="../wireframes.css">
+<style>
+  body { margin: 0; background: var(--ob-bg); }
+  .sub-head { padding: 48px 32px 8px; }
+  .sub-head .sub-label { font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--ob-text-faint); text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; }
+  .sub-head h3 { font-family:var(--sketch); font-size:22px; font-weight:700; color:var(--ob-text); margin:0 0 4px; }
+  .sub-head p { font-family:"Inter",sans-serif; font-size:12px; color:var(--ob-text-mute); margin:0; line-height:1.5; max-width:680px; }
+
+  .cmd-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: "Inter", sans-serif;
+    font-size: 11.5px;
+  }
+  .cmd-table thead tr {
+    border-bottom: 1.5px solid var(--ob-line);
+  }
+  .cmd-table thead th {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--ob-text-faint);
+    padding: 6px 12px 8px;
+    text-align: left;
+    font-weight: 400;
+  }
+  .cmd-table tbody tr {
+    border-bottom: 1px solid var(--ob-line);
+  }
+  .cmd-table tbody tr:last-child { border-bottom: none; }
+  .cmd-table tbody td {
+    padding: 9px 12px;
+    vertical-align: top;
+    color: var(--ob-text-mute);
+  }
+  .cmd-table tbody td:first-child {
+    color: var(--ob-text);
+    font-weight: 600;
+  }
+  .cmd-table tbody td .cmd-desc {
+    font-size: 11px;
+    color: var(--ob-text-mute);
+    margin-top: 2px;
+    line-height: 1.4;
+  }
+
+  /* keyboard key rendering */
+  .k {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: var(--ob-text);
+    background: var(--ob-bg-2);
+    border: 1px solid var(--ob-line);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 2px 6px;
+    white-space: nowrap;
+  }
+  .k-sep {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: var(--ob-text-faint);
+    margin: 0 2px;
+  }
+
+  /* command group label */
+  .cmd-group-row td {
+    background: var(--ob-bg-2);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--ob-text-faint);
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--ob-line);
+  }
+
+  /* availability pill */
+  .av {
+    display: inline-block;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+  }
+  .av-always { color: var(--lane-define, #4ad196); }
+  .av-cockpit { color: var(--accent); }
+  .av-gate { color: #c9a227; }
+  .av-palette { color: var(--ob-text-faint); }
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="sb-section-head">
+  <div class="meta">catalogue · keyboard & command palette</div>
+  <h2>Keyboard vocabulary — every command, shortcut, and context</h2>
+  <p>Specorator's full command surface. Four groups: navigation, feature actions, gate & lifecycle, and utility. All commands are available via Obsidian's command palette (⌘P). Keyboard shortcuts are opt-in defaults — users can rebind any of them in Obsidian's hotkeys settings.</p>
+</div>
+
+<!-- DESIGN PRINCIPLE NOTE -->
+<div style="padding:16px 32px 0;">
+  <div class="sk-box thin" style="padding:12px 14px;max-width:900px;border-color:var(--ob-text-faint);">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--ob-text-faint);text-transform:uppercase;margin-bottom:5px;">design constraint</div>
+    <p style="font-family:Inter;font-size:11.5px;color:var(--ob-text-mute);margin:0;line-height:1.6;">
+      Specorator registers no global keyboard shortcuts by default — Obsidian's keyspace is shared with dozens of plugins and the user's own bindings. The only default shortcut is <span class="k">⌘ ⏎</span> for "confirm / advance" within Specorator-owned modal surfaces (hand-off confirm, gate cross, close feature). All other shortcuts are suggested defaults the user must opt into via Hotkeys settings.
+    </p>
+  </div>
+</div>
+
+<!-- ═══ GROUP 1: NAVIGATION ═══ -->
+<div class="sub-head">
+  <div class="sub-label">group 1 of 4</div>
+  <h3>Navigation — moving around the cockpit</h3>
+</div>
+
+<div style="padding:0 32px 32px;">
+  <table class="cmd-table">
+    <thead>
+      <tr>
+        <th style="width:28%;">Command</th>
+        <th style="width:22%;">Palette name</th>
+        <th style="width:18%;">Default shortcut</th>
+        <th style="width:12%;">Available</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="cmd-group-row"><td colspan="5">Navigation</td></tr>
+
+      <tr>
+        <td>Open cockpit<div class="cmd-desc">Opens the Specorator cockpit view in the current pane</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Open cockpit</span></td>
+        <td><span class="k">⌘ shift K</span> <span style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">suggested</span></td>
+        <td><span class="av av-always">always</span></td>
+        <td>Restores last-focused feature. If none, shows empty state.</td>
+      </tr>
+
+      <tr>
+        <td>Switch feature<div class="cmd-desc">Opens the feature picker dropdown in the cockpit header</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Switch feature</span></td>
+        <td><span class="k">⌘ shift F</span> <span style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">suggested</span></td>
+        <td><span class="av av-always">always</span></td>
+        <td>Fuzzy search by feature name. Sorted by recency.</td>
+      </tr>
+
+      <tr>
+        <td>Go to current step file<div class="cmd-desc">Opens the markdown file for the feature's current active step</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Open current step</span></td>
+        <td><span class="k">⌘ shift .</span> <span style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">suggested</span></td>
+        <td><span class="av av-cockpit">cockpit</span></td>
+        <td>Opens step file in main pane. Creates it if missing.</td>
+      </tr>
+
+      <tr>
+        <td>Open archive<div class="cmd-desc">Opens the archive list in the cockpit</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Open archive</span></td>
+        <td>none</td>
+        <td><span class="av av-always">always</span></td>
+        <td>Sorted by close date, newest first.</td>
+      </tr>
+
+      <tr>
+        <td>Open feature timeline<div class="cmd-desc">Expands the full event timeline for the current feature</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Show timeline</span></td>
+        <td>none</td>
+        <td><span class="av av-cockpit">cockpit</span></td>
+        <td>Shows all hand-offs, gate crossings, decisions, OQ resolutions in order.</td>
+      </tr>
+
+      <tr>
+        <td>Open settings<div class="cmd-desc">Opens Obsidian settings scrolled to the Specorator panel</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Open settings</span></td>
+        <td>none</td>
+        <td><span class="av av-always">always</span></td>
+        <td>Standard Obsidian settings — no custom window.</td>
+      </tr>
+
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══ GROUP 2: FEATURE ACTIONS ═══ -->
+<div class="sub-head">
+  <div class="sub-label">group 2 of 4</div>
+  <h3>Feature actions — creating, moving, closing</h3>
+</div>
+
+<div style="padding:0 32px 32px;">
+  <table class="cmd-table">
+    <thead>
+      <tr>
+        <th style="width:28%;">Command</th>
+        <th style="width:22%;">Palette name</th>
+        <th style="width:18%;">Default shortcut</th>
+        <th style="width:12%;">Available</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="cmd-group-row"><td colspan="5">Feature lifecycle</td></tr>
+
+      <tr>
+        <td>New feature<div class="cmd-desc">Opens the feature creation form (name + size)</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: New feature</span></td>
+        <td><span class="k">⌘ shift N</span> <span style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">suggested</span></td>
+        <td><span class="av av-always">always</span></td>
+        <td>Scaffolds folder + step files. Focuses cockpit on new feature.</td>
+      </tr>
+
+      <tr>
+        <td>Hand off step<div class="cmd-desc">Marks the current step complete and advances to the next</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Hand off step</span></td>
+        <td><span class="k">⌘ ⏎</span> <span style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">default · confirm surface only</span></td>
+        <td><span class="av av-cockpit">cockpit</span></td>
+        <td>Only active when the step is eligible (gate checks green). Triggers undo banner.</td>
+      </tr>
+
+      <tr>
+        <td>Skip step<div class="cmd-desc">Opens the skip-reason form for a specific step</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Skip step…</span></td>
+        <td>none</td>
+        <td><span class="av av-cockpit">cockpit</span></td>
+        <td>Prompts for reason. Mandatory. Marks step as ◇ in rail.</td>
+      </tr>
+
+      <tr>
+        <td>Log a decision<div class="cmd-desc">Opens the 3-field decision note form, pre-filled from current step context</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Log decision…</span></td>
+        <td><span class="k">⌘ shift D</span> <span style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">suggested</span></td>
+        <td><span class="av av-always">always</span></td>
+        <td>Pre-fills from open file context. Saves to decisions/ and auto-links.</td>
+      </tr>
+
+      <tr>
+        <td>Close feature<div class="cmd-desc">Closes the current feature and moves it to archive/</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Close feature</span></td>
+        <td>none</td>
+        <td><span class="av av-cockpit">cockpit</span></td>
+        <td>Only available when all steps are done or skipped (with reasons). Requires retro or skip-retro reason.</td>
+      </tr>
+
+      <tr>
+        <td>Abandon feature<div class="cmd-desc">Archives the feature with status "abandoned" — requires a reason</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Abandon feature…</span></td>
+        <td>none</td>
+        <td><span class="av av-cockpit">cockpit</span></td>
+        <td>Reason mandatory. Logs in _meta.md. Distinct from closed in archive list.</td>
+      </tr>
+
+      <tr>
+        <td>Re-open feature<div class="cmd-desc">Moves an archived feature back to active, with a re-open reason</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Re-open feature…</span></td>
+        <td>none</td>
+        <td><span class="av av-palette">palette</span></td>
+        <td>Prompts for reason. Reason logged in retrospective. Undo armed for 24h.</td>
+      </tr>
+
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══ GROUP 3: GATE & LIFECYCLE ═══ -->
+<div class="sub-head">
+  <div class="sub-label">group 3 of 4</div>
+  <h3>Gate & lifecycle — advancing, reverting, recovering</h3>
+</div>
+
+<div style="padding:0 32px 32px;">
+  <table class="cmd-table">
+    <thead>
+      <tr>
+        <th style="width:28%;">Command</th>
+        <th style="width:22%;">Palette name</th>
+        <th style="width:18%;">Default shortcut</th>
+        <th style="width:12%;">Available</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="cmd-group-row"><td colspan="5">Gates</td></tr>
+
+      <tr>
+        <td>Cross gate<div class="cmd-desc">Advances the feature from one lane to the next (Define→Build or Build→Ship)</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Cross gate</span></td>
+        <td><span class="k">⌘ ⏎</span> <span style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">on gate confirm screen</span></td>
+        <td><span class="av av-gate">gate screen</span></td>
+        <td>Only available when all gate checks pass. Slower ceremony than hand-off (400ms vs 250ms).</td>
+      </tr>
+
+      <tr>
+        <td>Re-run gate checks<div class="cmd-desc">Forces an immediate re-evaluation of gate checks for the current feature</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Re-run gate</span></td>
+        <td>none</td>
+        <td><span class="av av-cockpit">cockpit</span></td>
+        <td>Normally runs on save. Manual trigger for confidence. Shows sequential tick animation.</td>
+      </tr>
+
+      <tr class="cmd-group-row"><td colspan="5">Recovery</td></tr>
+
+      <tr>
+        <td>Undo last action<div class="cmd-desc">Reverts the most recent hand-off or gate crossing (within 24h window)</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Undo last action</span></td>
+        <td>none</td>
+        <td><span class="av av-cockpit">cockpit</span></td>
+        <td>Only active within 24h of last mutation. Also accessible via undo banner. Requires confirm.</td>
+      </tr>
+
+      <tr>
+        <td>Revert feature to earlier state<div class="cmd-desc">Opens the named snapshot list for the current feature</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Revert feature…</span></td>
+        <td>none</td>
+        <td><span class="av av-palette">palette</span></td>
+        <td>Shows named lifecycle snapshots (not raw timestamps). Shows diff before committing.</td>
+      </tr>
+
+      <tr>
+        <td>Revert single file<div class="cmd-desc">Opens the snapshot list for one spec file only</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Revert file…</span></td>
+        <td>none</td>
+        <td><span class="av av-palette">palette</span></td>
+        <td>Scoped to the currently open file. Useful for recovering a single step without rolling back the whole feature.</td>
+      </tr>
+
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══ GROUP 4: UTILITY ═══ -->
+<div class="sub-head">
+  <div class="sub-label">group 4 of 4</div>
+  <h3>Utility — constitution, export, diagnostics</h3>
+</div>
+
+<div style="padding:0 32px 60px;">
+  <table class="cmd-table">
+    <thead>
+      <tr>
+        <th style="width:28%;">Command</th>
+        <th style="width:22%;">Palette name</th>
+        <th style="width:18%;">Default shortcut</th>
+        <th style="width:12%;">Available</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="cmd-group-row"><td colspan="5">Constitution</td></tr>
+
+      <tr>
+        <td>Open constitution<div class="cmd-desc">Opens CONSTITUTION.md in the main pane</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Open constitution</span></td>
+        <td>none</td>
+        <td><span class="av av-always">always</span></td>
+        <td>Creates CONSTITUTION.md if it doesn't exist. Opens in edit mode.</td>
+      </tr>
+
+      <tr>
+        <td>Add house rule<div class="cmd-desc">Opens the rule form pre-focused, appends to CONSTITUTION.md on save</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Add house rule…</span></td>
+        <td>none</td>
+        <td><span class="av av-always">always</span></td>
+        <td>Prompts for rule text + check method. Propagates to gate checks immediately on save.</td>
+      </tr>
+
+      <tr class="cmd-group-row"><td colspan="5">Export & diagnostics</td></tr>
+
+      <tr>
+        <td>Export feature spec<div class="cmd-desc">Bundles all step files for the current feature into a single markdown document</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Export spec…</span></td>
+        <td>none</td>
+        <td><span class="av av-cockpit">cockpit</span></td>
+        <td>Output: one .md file with all steps concatenated, gate outcomes, and decision notes. Suitable for sharing with contractors or archiving externally.</td>
+      </tr>
+
+      <tr>
+        <td>Copy error to clipboard<div class="cmd-desc">Copies the last plugin error as a formatted bug report</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Copy error report</span></td>
+        <td>none</td>
+        <td><span class="av av-always">always</span></td>
+        <td>No auto-submit (DR-006). User pastes into a GitHub issue manually. Only active when an error exists.</td>
+      </tr>
+
+      <tr>
+        <td>Run diagnostics<div class="cmd-desc">Checks vault structure, CONSTITUTION.md syntax, and all feature frontmatter for consistency</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Run diagnostics</span></td>
+        <td>none</td>
+        <td><span class="av av-always">always</span></td>
+        <td>Useful after manual vault edits or plugin upgrades. Reports issues in a cockpit banner; no auto-fix.</td>
+      </tr>
+
+      <tr>
+        <td>Override gate check<div class="cmd-desc">Bypasses a failing gate check with a mandatory reason</div></td>
+        <td><span style="font-family:JetBrains Mono;font-size:10px;">Specorator: Override gate check…</span></td>
+        <td>none</td>
+        <td><span class="av av-gate">gate screen</span></td>
+        <td>Reason logged in _meta.md. Shown as ⚠ in audit trail. Available on any failing check.</td>
+      </tr>
+
+    </tbody>
+  </table>
+
+  <!-- availability legend -->
+  <div style="margin-top:20px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+    <span style="font-family:Inter;font-size:11px;color:var(--ob-text-faint);">Availability:</span>
+    <span><span class="av av-always">always</span> <span style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);">— any context</span></span>
+    <span><span class="av av-cockpit">cockpit</span> <span style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);">— cockpit view open + feature focused</span></span>
+    <span><span class="av av-gate">gate screen</span> <span style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);">— gate review screen active</span></span>
+    <span><span class="av av-palette">palette</span> <span style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);">— ⌘P only, no shortcut</span></span>
+  </div>
+
+  <!-- design notes -->
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:32px;">
+    <div class="sk-box thin" style="padding:14px 16px;">
+      <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+      <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">No default shortcuts except ⌘ ⏎</div>
+      <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Obsidian's keyspace is contested. Registering shortcuts without asking causes conflicts with other plugins. The only default is ⌘ ⏎ on Specorator-owned confirm surfaces — a context where no other plugin will interfere. Everything else is opt-in.</p>
+    </div>
+    <div class="sk-box thin" style="padding:14px 16px;">
+      <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+      <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">All commands in the palette</div>
+      <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Every Specorator action is reachable via ⌘P. This is the contract. No action should require knowing a keyboard shortcut or finding a hidden button. The palette is the universal escape hatch — always there, always complete.</p>
+    </div>
+  </div>
+</div>
+
+</body></html>

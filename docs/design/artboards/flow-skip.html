@@ -1,0 +1,391 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Flow · skip steps (OQ-4)</title>
+<link rel="stylesheet" href="../wireframes.css">
+<style>
+  body { margin: 0; background: var(--ob-bg); }
+  .scroll { width: 100%; overflow-x: auto; padding: 80px 0 60px; }
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="sb-section-head">
+  <div class="meta">flow · OQ-4 resolved · features that skip steps</div>
+  <h2>Step skipping — "this is a tiny config change"</h2>
+  <p>Not every feature needs all 11 steps. A one-line config tweak doesn't need a vision statement. A dependency bump doesn't need EARS rules. The plugin must be disciplined without being bureaucratic. This flow shows how skipping works, what it logs, and what it doesn't allow.</p>
+</div>
+
+<!-- ═══════════════════════════════════
+     DECISION · OQ-4
+═══════════════════════════════════ -->
+<div style="padding:16px 32px 0;">
+  <div class="sk-box thin" style="padding:14px 16px;border-color:var(--lane-define,#4ad196);max-width:860px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <div style="font-family:JetBrains Mono;font-size:10px;color:var(--lane-define,#4ad196);text-transform:uppercase;">decision · OQ-4 resolved</div>
+      <span style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">2026-05-01 · accepted</span>
+    </div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Steps can be skipped with a one-line reason — never silently</div>
+    <p style="font-family:Inter;font-size:11.5px;color:var(--ob-text-mute);line-height:1.6;margin:0 0 6px;">
+      <b>Choice:</b> Any step can be marked <code style="font-size:10.5px;">skipped</code> in frontmatter with a mandatory one-line reason. Skipped steps are visible in the stage rail as hollow diamonds, not greyed-out dots — they exist as deliberate gaps, not absences. Gates still run; skipped steps are exempt from their checklist items but the skip reason is displayed in the gate summary.<br><br>
+      <b>Why not skip silently:</b> A silent skip is a hidden assumption. If a feature ships with 3 skipped steps and something breaks, the post-mortem can't distinguish "we thought about it and decided not to" from "we forgot." The one-line reason is the audit trail.<br><br>
+      <b>Why not require approval to skip:</b> Solo builders don't need permission from themselves. The friction of requiring approval would cause people to just… not use the plugin for small things. Better to have an honest skip than a shadow feature outside the system.
+    </p>
+    <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--lane-define,#4ad196);">→ decisions/step-skipping-policy.md · linked from _meta.md</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════
+     MAIN FLOW
+═══════════════════════════════════ -->
+<div class="scroll">
+<div class="sb-strip" style="min-width: 2600px;">
+
+  <!-- 01 small feature created -->
+  <div class="sb-frame">
+    <div class="sb-num">01</div>
+    <div class="sb-time">feature created</div>
+    <div class="sb-anno top">
+      <span class="tag">entry point</span>
+      <b>Same creation flow, different scope.</b><br>
+      No "lite mode" switch. Every feature starts the same way — the scaffold question asks its size, but that's a hint, not a gate.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:6px;">New feature</div>
+      <div class="mini-window" style="margin-bottom:8px;">
+        <div class="head">name</div>
+        <div class="mini-input" style="font-size:11px;padding:4px 6px;">bump-rate-limit-to-200rps</div>
+      </div>
+      <div style="font-family:Inter;font-size:10.5px;color:var(--ob-text-mute);margin-bottom:4px;">How big is this?</div>
+      <div class="mini-list" style="font-size:10.5px;line-height:1.75;">
+        <div class="it"><span class="ic"></span>Large — new user-facing capability</div>
+        <div class="it"><span class="ic"></span>Medium — changes existing behaviour</div>
+        <div class="it hl"><span class="ic" style="background:var(--accent);border-color:var(--accent);"></span>Small — config, dependency, or plumbing</div>
+      </div>
+      <div style="margin-top:6px;font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">
+        hint only — you can still use all 11 steps
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>"Small" is a hint, not a mode.</b>
+      <span class="sub">Scaffold suggests which steps to skip. User decides.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">create</span></div>
+
+  <!-- 02 scaffold suggests skips -->
+  <div class="sb-frame">
+    <div class="sb-num">02</div>
+    <div class="sb-time">scaffold preview</div>
+    <div class="sb-anno bottom">
+      <span class="tag">suggestion not mandate</span>
+      <b>Scaffold pre-marks steps, user confirms.</b><br>
+      "Small" pre-selects steps 1, 3, 6, 9–11 as likely-skippable. Anything can be toggled. Nothing is skipped until the user says so.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:8px;">bump-rate-limit-to-200rps</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;">Suggested skips for "small"</div>
+
+      <div style="display:flex;flex-direction:column;gap:3px;font-family:Inter;font-size:10.5px;">
+        <div style="display:flex;align-items:center;gap:7px;padding:3px 5px;border-radius:3px;">
+          <span style="color:var(--lane-define,#4ad196);font-size:12px;">◇</span>
+          <span style="color:var(--ob-text-mute);text-decoration:line-through;">01 · vision</span>
+          <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">suggested skip</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;padding:3px 5px;border-radius:3px;background:rgba(127,109,242,0.07);">
+          <span style="color:var(--ob-text);font-size:12px;">●</span>
+          <span style="color:var(--ob-text);font-weight:600;">02 · constitution</span>
+          <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--accent);">keep</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;padding:3px 5px;border-radius:3px;">
+          <span style="color:var(--lane-define,#4ad196);font-size:12px;">◇</span>
+          <span style="color:var(--ob-text-mute);text-decoration:line-through;">03 · rules (EARS)</span>
+          <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">suggested skip</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;padding:3px 5px;border-radius:3px;background:rgba(127,109,242,0.07);">
+          <span style="color:var(--ob-text);font-size:12px;">●</span>
+          <span style="color:var(--ob-text);font-weight:600;">04 · how it works</span>
+          <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--accent);">keep</span>
+        </div>
+        <div style="color:var(--ob-text-faint);font-size:9.5px;font-family:JetBrains Mono;padding-left:5px;">… 7 more steps</div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Pre-marked, not pre-skipped.</b>
+      <span class="sub">User reviews and confirms before any step is actually skipped.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">confirm</span></div>
+
+  <!-- 03 adding a skip reason -->
+  <div class="sb-frame">
+    <div class="sb-num">03</div>
+    <div class="sb-time">skip reason</div>
+    <div class="sb-anno top">
+      <span class="tag">audit trail</span>
+      <b>One-line reason is mandatory.</b><br>
+      Can't skip silently. The reason goes into the step's frontmatter and shows up in the gate summary and timeline.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:8px;">Skip: step 1 · vision</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.5;margin-bottom:8px;">
+        Why is this step not needed for this feature?
+      </div>
+      <div class="mini-input cursor" style="font-size:11px;padding:5px 7px;border-color:var(--accent);">Config change only — no new user-facing behaviour</div>
+      <div style="margin-top:8px;font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">
+        saved to frontmatter: <code style="font-size:9px;">skip_reason: …</code>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:6px;">
+        <button class="sk-btn primary" style="font-size:10.5px;padding:3px 10px;">Skip step</button>
+        <button class="sk-btn ghost" style="font-size:10.5px;padding:3px 9px;">Keep it</button>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Reason required. One field.</b>
+      <span class="sub">Frontmatter: <code style="font-size:10px;">status: skipped</code> + <code style="font-size:10px;">skip_reason</code>.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">skip</span></div>
+
+  <!-- 04 stage rail with skips -->
+  <div class="sb-frame">
+    <div class="sb-num">04</div>
+    <div class="sb-time">cockpit · in progress</div>
+    <div class="sb-anno bottom">
+      <span class="tag">visual distinction</span>
+      <b>Skipped steps = hollow diamonds.</b><br>
+      Not greyed-out dots — that would look like "not started." A diamond shape communicates a deliberate gap. Hover shows the skip reason.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);">bump-rate-limit-to-200rps</div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:10px;">step 2 of 11 · constitution <span class="sk-pill define" style="font-size:9px;padding:0 5px;margin-left:4px;">define</span></div>
+
+      <!-- custom stage rail with skips -->
+      <div style="display:flex;align-items:center;gap:3px;margin-bottom:10px;flex-wrap:wrap;">
+        <!-- step 1: skipped -->
+        <span style="font-size:13px;color:var(--ob-text-faint);" title="skipped: config change only">◇</span>
+        <span style="width:6px;height:1px;background:var(--ob-text-mute);display:inline-block;"></span>
+        <!-- step 2: active -->
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--highlighter);border:1.5px solid var(--ink-pen);display:inline-block;"></span>
+        <span style="width:6px;height:1px;background:var(--ob-text-mute);display:inline-block;"></span>
+        <!-- step 3: skipped -->
+        <span style="font-size:13px;color:var(--ob-text-faint);" title="skipped: no EARS needed">◇</span>
+        <span style="width:6px;height:1px;background:var(--ob-text-mute);display:inline-block;"></span>
+        <!-- steps 4–8: pending -->
+        <span style="width:8px;height:8px;border-radius:50%;border:1.4px solid var(--ob-text-mute);display:inline-block;"></span>
+        <span style="width:6px;height:1px;background:var(--ob-text-mute);display:inline-block;"></span>
+        <span style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">⚑</span>
+        <span style="width:6px;height:1px;background:var(--ob-text-mute);display:inline-block;"></span>
+        <span style="width:8px;height:8px;border-radius:50%;border:1.4px solid var(--ob-text-mute);display:inline-block;"></span>
+        <span style="width:6px;height:1px;background:var(--ob-text-mute);display:inline-block;"></span>
+        <span style="width:8px;height:8px;border-radius:50%;border:1.4px solid var(--ob-text-mute);display:inline-block;"></span>
+        <span style="width:6px;height:1px;background:var(--ob-text-mute);display:inline-block;"></span>
+        <span style="width:8px;height:8px;border-radius:50%;border:1.4px solid var(--ob-text-mute);display:inline-block;"></span>
+        <span style="width:6px;height:1px;background:var(--ob-text-mute);display:inline-block;"></span>
+        <span style="font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">⚑</span>
+        <span style="width:6px;height:1px;background:var(--ob-text-mute);display:inline-block;"></span>
+        <span style="width:8px;height:8px;border-radius:50%;border:1.4px solid var(--ob-text-mute);display:inline-block;"></span>
+        <span style="width:6px;height:1px;background:var(--ob-text-mute);display:inline-block;"></span>
+        <span style="font-size:13px;color:var(--ob-text-faint);">◇</span>
+        <span style="width:6px;height:1px;background:var(--ob-text-mute);display:inline-block;"></span>
+        <span style="width:8px;height:8px;border-radius:50%;border:1.4px solid var(--ob-text-mute);display:inline-block;"></span>
+        <span style="width:6px;height:1px;background:var(--ob-text-mute);display:inline-block;"></span>
+        <span style="font-size:13px;color:var(--ob-text-faint);">◇</span>
+      </div>
+
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">
+        ◇ = skipped (deliberate) · hover for reason
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Diamonds, not ghosts.</b>
+      <span class="sub">Visual distinction: skipped ≠ not-yet-started.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">reach gate</span></div>
+
+  <!-- 05 gate with skips -->
+  <div class="sb-frame">
+    <div class="sb-num">05</div>
+    <div class="sb-time">gate · Define→Build</div>
+    <div class="sb-anno top">
+      <span class="tag">gate · adapted</span>
+      <b>Gate skips checklist items for skipped steps.</b><br>
+      "4+ rules, all testable" doesn't apply if step 3 was skipped. The gate shows which items were exempted and why.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:4px;">
+        Define <span style="font-size:11px;color:var(--ob-text-faint);font-family:JetBrains Mono;">→ Build</span>
+      </div>
+      <div style="font-family:Inter;font-size:10px;color:var(--ob-text-mute);margin-bottom:8px;">gate adapted for skipped steps</div>
+
+      <div class="mini-list" style="font-size:10.5px;line-height:1.85;">
+        <div class="it" style="opacity:.45;">
+          <span style="font-size:11px;color:var(--ob-text-faint);margin-right:4px;">◇</span>
+          <span style="color:var(--ob-text-faint);">Vision · step skipped</span>
+          <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">exempt</span>
+        </div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>Constitution ✓</div>
+        <div class="it" style="opacity:.45;">
+          <span style="font-size:11px;color:var(--ob-text-faint);margin-right:4px;">◇</span>
+          <span style="color:var(--ob-text-faint);">Rules · step skipped</span>
+          <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">exempt</span>
+        </div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>"How it works" complete ✓</div>
+        <div class="it"><span class="ic" style="background:var(--lane-define,#4ad196);border-color:var(--lane-define,#4ad196);"></span>0 open questions ✓</div>
+      </div>
+
+      <div style="position:absolute;bottom:10px;left:14px;right:14px;font-family:JetBrains Mono;font-size:9.5px;color:var(--lane-define,#4ad196);">
+        gate ready · 2 items exempt (skipped steps)
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Gate adapts. Skips are transparent.</b>
+      <span class="sub">Exempt items shown, not hidden. Reason visible on hover.</span>
+    </div>
+  </div>
+
+  <div class="sb-arrow"><span class="lbl">cross</span></div>
+
+  <!-- 06 shipped -->
+  <div class="sb-frame">
+    <div class="sb-num">06</div>
+    <div class="sb-time">shipped</div>
+    <div class="sb-anno bottom">
+      <span class="tag">audit · post-ship</span>
+      <b>Skip log survives the feature.</b><br>
+      The timeline shows which steps were skipped, the reasons, and who skipped them. If a bug traces back to a skipped step, the log shows when and why the decision was made.
+    </div>
+    <div class="sb-screen">
+      <div style="font-family:var(--sketch);font-size:14px;color:var(--ob-text);margin-bottom:8px;">bump-rate-limit · shipped ✓</div>
+
+      <div style="display:flex;flex-direction:column;gap:3px;font-family:Inter;font-size:10.5px;">
+        <div style="display:flex;gap:8px;align-items:center;padding:3px 5px;border-radius:3px;background:var(--ob-bg-2);">
+          <span style="color:var(--lane-define,#4ad196);">✓</span>
+          <span>Steps 2, 4, 5, 6 complete</span>
+          <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">all lanes</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;padding:3px 5px;border-radius:3px;background:var(--ob-bg-2);">
+          <span style="color:var(--ob-text-faint);">◇</span>
+          <span style="color:var(--ob-text-mute);">Steps 1, 3, 9, 11 skipped</span>
+          <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">config change</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;padding:3px 5px;border-radius:3px;background:var(--ob-bg-2);">
+          <span style="color:var(--lane-define,#4ad196);">⚑</span>
+          <span>Both gates crossed</span>
+          <span style="margin-left:auto;font-family:JetBrains Mono;font-size:9px;color:var(--ob-text-faint);">adapted</span>
+        </div>
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Full audit trail. Skips included.</b>
+      <span class="sub">Post-mortem can distinguish "forgot" from "decided."</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ─────── edge cases ─────── -->
+<div class="sb-section-head">
+  <div class="meta">edge cases</div>
+  <h2 style="font-size:22px;">When skipping gets complicated</h2>
+</div>
+
+<div style="padding:8px 32px 36px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;">
+
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">A</div>
+    <div class="sb-time">un-skipping</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">"Actually, I do need this step"</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        A skipped step can be un-skipped at any time before shipping. The stage rail diamond turns back to a dot. The step's files are created from the template (blank, as if new). The skip reason is moved to a comment in frontmatter — kept for the audit trail, not deleted.
+      </div>
+      <div style="font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">
+        # skip_reason (removed): config change only<br>
+        status: in-progress
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Always reversible.</b>
+      <span class="sub">Skip reason archived, not erased.</span>
+    </div>
+  </div>
+
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">B</div>
+    <div class="sb-time">skip a gate step</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">Can you skip step 4 (the gate step)?</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        Steps 4 and 8 are gate adjacents — they feed directly into the Define→Build and Build→Ship gates. Skipping them is allowed but triggers an extra warning: "This step's content is checked by the gate. Skipping it means the gate will have fewer checks." The gate item becomes exempt-with-warning, shown in amber.
+      </div>
+      <div style="background:rgba(255,229,107,0.06);border:1px solid #b08a14;border-radius:3px;padding:5px 8px;font-family:Inter;font-size:10.5px;color:var(--ob-text);">
+        ⚑ gate item exempt — step 4 skipped
+      </div>
+    </div>
+    <div class="sb-caption">
+      <b>Gate adjacent = amber, not blocked.</b>
+      <span class="sub">Extra warning. Always passable.</span>
+    </div>
+  </div>
+
+  <div class="sb-frame" style="flex:initial;transform:none;">
+    <div class="sb-num">C</div>
+    <div class="sb-time">all steps skipped</div>
+    <div class="sb-screen" style="min-height:auto;">
+      <div style="font-family:Inter;font-size:12px;font-weight:700;color:var(--ob-text);margin-bottom:6px;">What if someone skips everything?</div>
+      <div style="font-family:Inter;font-size:11px;color:var(--ob-text-mute);line-height:1.55;margin-bottom:8px;">
+        If more than 8 of 11 steps are marked skipped, the cockpit shows a quiet warning: "This feature has almost no spec. Is that intentional?" Not a block — a reality check. Useful for teams reviewing each other's features.
+      </div>
+      <div style="background:rgba(255,229,107,0.06);border:1px solid #b08a14;border-radius:3px;padding:5px 8px;font-family:Inter;font-size:10.5px;color:var(--ob-text);">
+        ⚑ 9 of 11 steps skipped — is this intentional?
+      </div>
+      <div style="margin-top:5px;font-family:JetBrains Mono;font-size:9.5px;color:var(--ob-text-faint);">yes, intentional · no, let me review</div>
+    </div>
+    <div class="sb-caption">
+      <b>Reality check, not a block.</b>
+      <span class="sub">Nudge at 8+. Always dismissible with confirmation.</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─────── design notes ─────── -->
+<div class="sb-section-head" style="padding-top:8px;">
+  <div class="meta">design rationale for this flow</div>
+  <h2 style="font-size:22px;">Why we made these choices</h2>
+</div>
+
+<div style="padding:8px 32px 60px;display:grid;grid-template-columns:repeat(2,1fr);gap:18px;">
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">No "lite mode" — same scaffold, fewer steps</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">A separate lite mode would be a second product to maintain. Instead, skipping is a first-class action on the standard 11-step scaffold. Small features are just features with some deliberate gaps.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">◇ diamond, not greyed dot</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">A greyed dot looks like "not started yet." A diamond is a different shape — it signals "this position was considered and left intentionally empty." The visual vocabulary needs to distinguish three states: done, pending, and deliberately absent.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Reason mandatory, approval optional</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">Solo builders need no approval — only an honest reason. Team builders can layer peer-review on top if they want (house rule). The plugin enforces the reason; teams enforce the review. Right responsibility at the right level.</p>
+  </div>
+
+  <div class="sk-box thin" style="padding:14px 16px;">
+    <div style="font-family:JetBrains Mono;font-size:10px;color:var(--accent);text-transform:uppercase;margin-bottom:5px;">choice</div>
+    <div style="font-family:var(--sketch);font-size:18px;color:var(--ob-text);margin-bottom:4px;">Gate adapts, doesn't break</div>
+    <p class="sk-p" style="font-family:Inter;font-size:11.5px;">A gate that hard-fails on a legitimately skipped step is a gate that gets overridden every time. Instead, skipped-step gate items are marked exempt — still visible, still auditable, but not blocking. The gate earns trust by being reasonable.</p>
+  </div>
+
+</div>
+
+</body></html>
