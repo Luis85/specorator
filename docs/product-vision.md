@@ -1,3 +1,14 @@
+---
+title: "Specorator product vision"
+doc_type: vision
+status: draft
+owner: product
+last_updated: 2026-05-01
+references:
+  - docs/prd.md
+  - docs/roadmap-v1.md
+---
+
 # Product Vision
 
 ## Vision

@@ -1,3 +1,14 @@
+---
+title: "Specorator v1 alpha delivery roadmap"
+doc_type: roadmap
+status: draft
+owner: product
+last_updated: 2026-05-01
+references:
+  - docs/product-vision.md
+  - docs/prd.md
+---
+
 # First Increment Roadmap — Specorator v1 Alpha
 
 This document organizes the existing GitHub issues into a sequenced delivery plan for the Specorator v1 alpha release. It is derived from the planning issues and the product vision, and is maintained alongside the issue tracker.

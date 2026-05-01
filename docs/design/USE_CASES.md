@@ -1,3 +1,15 @@
+---
+title: "Specorator use case catalogue"
+doc_type: use-cases
+status: draft
+owner: product
+last_updated: 2026-05-01
+references:
+  - docs/prd.md
+  - docs/product-vision.md
+  - docs/design/DESIGN_BRIEF.md
+---
+
 # Specorator — Use Case Catalogue
 
 **Derived from:** Wireframe designs, flow artboards, and engineering spec (v0.1)  

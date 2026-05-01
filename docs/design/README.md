@@ -1,3 +1,15 @@
+---
+title: "Specorator design package index"
+doc_type: design-index
+status: draft
+owner: product
+last_updated: 2026-05-01
+references:
+  - docs/design/DESIGN_BRIEF.md
+  - docs/design/USE_CASES.md
+  - docs/prd.md
+---
+
 # Specorator — Obsidian Plugin
 ### Wireframes & Engineering Handoff
 

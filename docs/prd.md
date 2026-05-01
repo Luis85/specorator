@@ -1,3 +1,15 @@
+---
+title: "Specorator product requirements"
+doc_type: prd
+status: draft
+owner: product
+last_updated: 2026-05-01
+references:
+  - docs/product-vision.md
+  - docs/roadmap-v1.md
+  - docs/design/USE_CASES.md
+---
+
 # Product Requirements Document — Specorator
 
 **Status:** Draft  

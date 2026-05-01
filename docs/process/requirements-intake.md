@@ -1,3 +1,14 @@
+---
+title: "Requirements intake workflow"
+doc_type: process
+status: draft
+owner: product
+last_updated: 2026-05-01
+references:
+  - requirements/intake/REQ-0000-template.md
+  - docs/prd.md
+---
+
 # Requirements Intake Workflow
 
 This repository uses frontmatter-backed Markdown files in `requirements/intake/` as the durable intake artifact for new requirements.

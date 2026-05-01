@@ -1,3 +1,14 @@
+---
+title: "Pull request template"
+doc_type: contribution-template
+status: active
+owner: engineering
+last_updated: 2026-05-01
+references:
+  - README.md
+  - docs/roadmap-v1.md
+---
+
 ## Summary
 
 <!-- What does this PR do? Link the issue it closes with "Closes #NNN". -->
