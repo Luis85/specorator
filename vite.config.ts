@@ -26,7 +26,7 @@ export default defineConfig({
 			fileName: () => 'main.js',
 		},
 		rollupOptions: {
-			external: [...obsidianExternals, ...builtinModules],
+			external: [...obsidianExternals, ...builtinModules, ...builtinModules.map((m) => `node:${m}`)],
 			output: {
 				exports: 'default',
 			},
