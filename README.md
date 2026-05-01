@@ -1,5 +1,51 @@
 # Specorator
 
-Specorator is an Obsidian-centered workflow product for spec-driven, agentic software development.
+Specorator is an Obsidian plugin and companion app for spec-driven, agentic software development. It guides users through a structured workflow — from idea to release — keeping all artifacts as editable Markdown inside the vault.
 
-The long-term product direction is captured in [docs/product-vision.md](docs/product-vision.md). The core idea: users should be able to run, inspect, and maintain the full workflow from an approachable interface, while the underlying vault quality tooling remains usable without requiring an LLM integration.
+**Current status:** Planning and setup phase. No installable plugin exists yet.
+
+## What it does
+
+**v1 alpha** establishes the plugin foundation:
+
+- Installs and manages the [`agentic-workflow`](https://github.com/Luis85/agentic-workflow) template inside an Obsidian vault.
+- Provides a workflow cockpit: active stage, required artifacts, next actions, and quality checks.
+- Keeps all generated content as plain Markdown — readable and usable without the plugin.
+
+**v2.0** adds a companion-app experience:
+
+- Integrates [`agentonomous`](https://github.com/Luis85/agentonomous) to provide a team of agentic coworkers that assist with drafting, review, and workflow progression.
+- Users stay focused on their vault; they decide what context agents can see, what they propose, and what becomes a durable artifact.
+
+## Documentation
+
+| Document | Purpose |
+|----------|---------|
+| [docs/product-vision.md](docs/product-vision.md) | Product north star, principles, and v1/v2.0 direction |
+| [docs/roadmap-v1.md](docs/roadmap-v1.md) | Phased delivery plan for v1 alpha |
+
+## Project tracking
+
+| Issue | Purpose |
+|-------|---------|
+| [#47 — Roadmap progress tracker](https://github.com/Luis85/specorator/issues/47) | Phase-by-phase checklist |
+| [#1 — v1 alpha planning](https://github.com/Luis85/specorator/issues/1) | v1 feature scope and acceptance criteria |
+| [#23 — v2.0 planning](https://github.com/Luis85/specorator/issues/23) | Companion-app and agentonomous direction |
+| [#2 — Repo setup objective](https://github.com/Luis85/specorator/issues/2) | Repository and GitHub foundation work |
+| [#11 — Plugin shell objective](https://github.com/Luis85/specorator/issues/11) | Plugin architecture and toolchain |
+| [#24 — Product setup objective](https://github.com/Luis85/specorator/issues/24) | PRDs, use cases, and product artifacts |
+
+## Development
+
+> Full setup documentation is in progress ([#10](https://github.com/Luis85/specorator/issues/10)). This section will expand once the plugin scaffold ([#5](https://github.com/Luis85/specorator/issues/5)) and CI ([#6](https://github.com/Luis85/specorator/issues/6)) are in place.
+
+The planned stack: Obsidian community plugin · Vue 3 · Vue Router · Pinia 2 · TypeScript 6 · Vite · Vitest · ESLint · TypeDoc.
+
+## Contributing
+
+Issues and pull requests are welcome. See the [roadmap](docs/roadmap-v1.md) for current priorities. Issue templates are available for feature requests, bug reports, tasks, and architecture decisions.
+
+## Related repositories
+
+- [`agentic-workflow`](https://github.com/Luis85/agentic-workflow) — workflow methodology, templates, and quality gates. [Upstream planning issue](https://github.com/Luis85/agentic-workflow/issues/96).
+- [`agentonomous`](https://github.com/Luis85/agentonomous) — agent orchestration engine used in v2.0.

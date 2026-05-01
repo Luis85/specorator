@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Product vision
+    url: https://github.com/Luis85/specorator/blob/main/docs/product-vision.md
+    about: Read the product north star before opening a feature request.
+  - name: Roadmap
+    url: https://github.com/Luis85/specorator/blob/main/docs/roadmap-v1.md
+    about: Check the roadmap to see what phase is active before filing a task.

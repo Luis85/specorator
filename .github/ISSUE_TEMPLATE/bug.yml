@@ -1,0 +1,43 @@
+name: Bug report
+description: Report a defect or unexpected behavior
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the unexpected behavior clearly.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What was expected?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Obsidian with the plugin enabled.
+        2. ...
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: "Obsidian version · Plugin version · OS"
+      placeholder: "Obsidian 1.x · Specorator 0.x · macOS 14"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, vault structure notes, or anything else that helps.

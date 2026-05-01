@@ -1,0 +1,30 @@
+name: Task
+description: A concrete setup, engineering, documentation, or maintenance task
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What does this task accomplish and why does it matter now?
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is in scope? What is explicitly out of scope?
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Checkable conditions that define done.
+    validations:
+      required: true
+
+  - type: textarea
+    id: related
+    attributes:
+      label: Related
+      description: Link to related issues, PRDs, or ADRs.
