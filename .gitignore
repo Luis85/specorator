@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build output
+main.js
+main.js.map
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Obsidian local settings (not plugin source)
+.obsidian/

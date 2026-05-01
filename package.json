@@ -1,0 +1,19 @@
+{
+  "name": "specorator",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Spec-driven, agentic software development workflow inside Obsidian.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "builtin-modules": "^4.0.0",
+    "obsidian": "latest",
+    "typescript": "^5.8.0",
+    "vite": "^6.0.0"
+  }
+}
