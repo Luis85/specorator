@@ -1,0 +1,46 @@
+name: "Design intake"
+description: "Capture design-level problem framing, options, and decision pressure."
+title: "design: <concise design problem>"
+labels: ["design", "intake", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this issue when a workflow or UX decision needs explicit design treatment.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What user or workflow problem are we solving?
+      placeholder: "Who is blocked, and why?"
+    validations:
+      required: true
+  - type: textarea
+    id: outcomes
+    attributes:
+      label: Intended outcomes
+      description: What should be measurably better when this is complete?
+      placeholder: "Examples: reduced onboarding friction, clearer stage transitions"
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints and non-goals
+      description: What boundaries must the design respect?
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Candidate approaches
+      description: List options considered, including at least one rejected path.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance signals
+      description: How will maintainers decide this design is good enough to implement?
+    validations:
+      required: true
