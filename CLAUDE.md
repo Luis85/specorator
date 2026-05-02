@@ -110,7 +110,7 @@ The 12 stage slugs (from `src/domain/feature/FeatureStep.ts`): `idea`, `research
 - **Cut all feature branches from `develop`**, not from `main`.
 - **Open PRs targeting `develop`**.
 - To publish a preview: PR `develop` → `demo`.
-- To cut a release: PR `develop` → `main`, merge, then tag `main` HEAD with `vX.Y.Z`.
+- To cut a release: PR `develop` → `main`, merge, then tag `main` HEAD with the plain semver version `X.Y.Z` (no `v` prefix — Obsidian marketplace requires tag to equal `manifest.json` version exactly). Use `npm version <bump>` to keep `manifest.json`, `package.json`, `versions.json`, and the tag in sync.
 - Never push directly to `main` or tag from any branch other than `main`.
 
 CI runs on push/PR to `develop`, `demo`, and `main`. GitHub Pages deploys only on push to `demo`.

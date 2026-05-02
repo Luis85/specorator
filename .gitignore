@@ -24,6 +24,9 @@ Thumbs.db
 # Generated API docs (run `npm run docs:api` to regenerate)
 docs/api/
 
-# Local agent state (Claude Code, etc.)
-.claude/
+# Local agent state (Claude Code, etc.) — track shared bits, ignore ephemeral ones
+.claude/*
+!.claude/settings.json
+!.claude/skills/
+.claude/issue-*.md
 .worktrees/
