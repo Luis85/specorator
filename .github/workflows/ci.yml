@@ -7,6 +7,21 @@ on:
     branches: [develop, demo, main]
 
 jobs:
+  guard:
+    name: Verify PR source is develop
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject non-develop source
+        if: github.head_ref != 'develop'
+        run: |
+          echo "::error::PRs to main must come from 'develop' (got '${{ github.head_ref }}')"
+          exit 1
+      - name: Confirm develop source
+        if: github.head_ref == 'develop'
+        run: |
+          echo "OK: PR source is develop"
+
   verify:
     name: Install, typecheck, lint, test, and build
     runs-on: ubuntu-latest
