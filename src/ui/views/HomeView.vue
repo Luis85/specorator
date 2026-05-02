@@ -16,8 +16,8 @@ const showCreateForm = ref(false)
 
 onMounted(loadFeatures)
 
-async function handleCreate(title: string) {
-  await createFeature(title)
+async function handleCreate(payload: { title: string; area?: string }) {
+  await createFeature(payload.title, payload.area)
   showCreateForm.value = false
 }
 

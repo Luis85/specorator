@@ -39,11 +39,14 @@ export function useFeatures() {
     })
   }
 
-  async function createFeature(title: string): Promise<FeatureDto | undefined> {
+  async function createFeature(
+    title: string,
+    area?: string,
+  ): Promise<FeatureDto | undefined> {
     return withLoading(async () => {
       const settings = await bridge.getSettings()
       const repo = new FeatureRepository(bridge, settings)
-      const result = await new CreateFeatureUseCase(repo).execute({ title })
+      const result = await new CreateFeatureUseCase(repo).execute({ title, area })
       if (result.ok) {
         const dto = featureDtoFromDomain(result.value)
         store.upsert(dto)

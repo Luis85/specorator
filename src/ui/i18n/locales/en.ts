@@ -15,6 +15,8 @@ export default {
     create: 'New Feature',
     title: 'Title',
     placeholder: 'e.g. Dark mode support',
+    area: 'Area code (optional)',
+    areaPlaceholder: 'e.g. DM (2–5 letters)',
     status: {
       draft: 'Draft',
       active: 'Active',
