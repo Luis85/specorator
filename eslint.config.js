@@ -1,8 +1,11 @@
+import { fileURLToPath } from 'node:url';
 import js from '@eslint/js';
 import prettier from 'eslint-config-prettier';
 import pluginVue from 'eslint-plugin-vue';
 import tseslint from 'typescript-eslint';
 import globals from 'globals';
+
+const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
 
 export default tseslint.config(
 	// Base JS recommended rules
@@ -25,6 +28,7 @@ export default tseslint.config(
 			},
 			parserOptions: {
 				parser: tseslint.parser,
+				tsconfigRootDir,
 			},
 		},
 	},
@@ -34,7 +38,7 @@ export default tseslint.config(
 
 	// Global ignores
 	{
-		ignores: ['node_modules/', 'main.js', 'dist-standalone/'],
+		ignores: ['node_modules/', 'main.js', 'dist-standalone/', '.worktrees/', 'docs/api/'],
 	},
 
 	// Project-wide rules
