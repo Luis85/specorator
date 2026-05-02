@@ -33,17 +33,18 @@ Specorator is an Obsidian plugin and companion app for spec-driven, agentic soft
 
 ## Documentation
 
-| Document                                                                   | Purpose                                               |
-| -------------------------------------------------------------------------- | ----------------------------------------------------- |
-| [docs/product-vision.md](docs/product-vision.md)                           | Product north star, principles, and v1/v2.0 direction |
-| [docs/prd.md](docs/prd.md)                                                 | v1 and v2.0 product requirements documents            |
-| [docs/roadmap-v1.md](docs/roadmap-v1.md)                                   | Phased delivery plan for v1 alpha                     |
-| [docs/process/requirements-intake.md](docs/process/requirements-intake.md) | Intake-first requirements and design workflow         |
-| [docs/contributing.md](docs/contributing.md)                               | Labels, milestones, branch naming, and merge policy   |
-| [docs/traceability.md](docs/traceability.md)                               | Requirements traceability index and ID conventions    |
-| [docs/glossary.md](docs/glossary.md)                                       | Product terminology baseline                          |
-| [docs/github-workspace.md](docs/github-workspace.md)                       | GitHub Project board, views, fields, and admin setup  |
-| [docs/initiation.md](docs/initiation.md)                                   | P3.express initiation package and go/no-go decision   |
+| Document                                                                                 | Purpose                                                                  |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [docs/product-vision.md](docs/product-vision.md)                                         | Product north star, principles, and v1/v2.0 direction                    |
+| [docs/prd.md](docs/prd.md)                                                               | v1 and v2.0 product requirements documents                               |
+| [docs/roadmap-v1.md](docs/roadmap-v1.md)                                                 | Phased delivery plan for v1 alpha                                        |
+| [docs/pre-feature-architecture-readiness.md](docs/pre-feature-architecture-readiness.md) | Architecture and infrastructure readiness review before feature delivery |
+| [docs/process/requirements-intake.md](docs/process/requirements-intake.md)               | Intake-first requirements and design workflow                            |
+| [docs/contributing.md](docs/contributing.md)                                             | Labels, milestones, branch naming, and merge policy                      |
+| [docs/traceability.md](docs/traceability.md)                                             | Requirements traceability index and ID conventions                       |
+| [docs/glossary.md](docs/glossary.md)                                                     | Product terminology baseline                                             |
+| [docs/github-workspace.md](docs/github-workspace.md)                                     | GitHub Project board, views, fields, and admin setup                     |
+| [docs/initiation.md](docs/initiation.md)                                                 | P3.express initiation package and go/no-go decision                      |
 
 ## Project tracking
 
