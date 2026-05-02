@@ -7,6 +7,18 @@ on:
     branches: [develop, demo, main]
 
 jobs:
+  workflow-lint:
+    name: Lint workflow files (actionlint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Install actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
+      - name: Run actionlint
+        run: ./actionlint -color
+
   guard:
     name: Verify PR source is develop
     if: github.event_name == 'pull_request' && github.base_ref == 'main'
@@ -14,8 +26,10 @@ jobs:
     steps:
       - name: Reject non-develop source
         if: github.head_ref != 'develop'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
         run: |
-          echo "::error::PRs to main must come from 'develop' (got '${{ github.head_ref }}')"
+          echo "::error::PRs to main must come from 'develop' (got '$HEAD_REF')"
           exit 1
       - name: Confirm develop source
         if: github.head_ref == 'develop'
