@@ -21,4 +21,12 @@ describe('file route encoding', () => {
 
     expect(normalizeFileRoutePath(legacyRouteParam)).toBe('specs/Über cool feature/test plan.md')
   })
+
+  it('normalizes legacy single-segment file route paths', () => {
+    expect(normalizeFileRoutePath('My%20Note.md')).toBe('My Note.md')
+  })
+
+  it('preserves percent-like literals in current slash-containing paths', () => {
+    expect(normalizeFileRoutePath('docs/100%2Fready.md')).toBe('docs/100%2Fready.md')
+  })
 })
