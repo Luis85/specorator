@@ -16,7 +16,7 @@ onMounted(loadSettings)
 async function handleSave() {
   saving.value = true
   try {
-    await saveSettings({ ...settings })
+    await saveSettings({ ...settings.value })
     saved.value = true
     setTimeout(() => { saved.value = false }, 2500)
   } finally {
@@ -25,7 +25,7 @@ async function handleSave() {
 }
 
 function update<K extends keyof PluginSettings>(key: K, value: PluginSettings[K]) {
-  ;(settings as Record<string, unknown>)[key] = value
+  settings.value = { ...settings.value, [key]: value }
 }
 </script>
 
