@@ -31,19 +31,17 @@ Suggested fix: make `MockBridge.openFile()` dispatch the same `sp:open-file`
 event as `LocalStorageBridge.openFile()`, or use `LocalStorageBridge` for a
 manual persistence/dev mode.
 
-### 2. File-view routing likely double-encodes paths
+### 2. File-view routing path encoding (verified — not an issue)
 
-`src/ui/App.vue` calls `encodeURIComponent(path)` before passing the value to a
-named Vue Router param. Vue Router also encodes params for the `/file/:encodedPath`
-route. `src/ui/views/FileView.vue` decodes only once before calling
-`bridge.readFile(filePath)`.
+Initial review flagged `src/ui/App.vue` passing `encodeURIComponent(path)` to a
+named Vue Router param (`/file/:encodedPath`) as a potential double-encoding
+bug. Re-verification against Vue Router 4 behavior: `route.params.encodedPath`
+returns the value as `specs%2F...`, and `src/ui/views/FileView.vue` calls
+`decodeURIComponent` exactly once before `bridge.readFile(filePath)`, yielding
+`specs/...`. Slash-containing paths resolve correctly.
 
-Impact: paths containing slashes can arrive as `specs%2F...` instead of
-`specs/...`, causing the file viewer to show a not-found state for existing
-files.
-
-Suggested fix: either pass the raw path and let Vue Router encode it, or change
-the route to a catch-all param and normalize decoding in one place.
+Status: false positive. No fix required. Retained here so the audit trail shows
+the claim was investigated and dismissed.
 
 ### 3. The frontend does not expose stage advancement
 
