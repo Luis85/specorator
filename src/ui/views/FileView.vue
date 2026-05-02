@@ -10,7 +10,7 @@ const route = useRoute()
 const router = useRouter()
 const bridge = useBridge()
 
-const filePath = decodeURIComponent(route.params.encodedPath as string)
+const filePath = route.params.filePath as string
 const content = ref<string | null>(null)
 const notFound = ref(false)
 const copied = ref(false)
