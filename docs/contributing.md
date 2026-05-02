@@ -101,7 +101,7 @@ Milestones map to the phases in [docs/roadmap-v1.md](./roadmap-v1.md).
 | **Phase 3 — Plugin Shell** | Vue scaffold, browser runtime, bridge API, toolchain, test harness |
 | **v1 Alpha** | Feature delivery: template install, workflow navigator, artifact creation |
 
-Assign issues to their milestone during triage. Phase 0 and Phase 1 issues must reach "complete or explicitly deferred" before Phase 3 and Phase 4 implementation work is considered ready.
+Assign issues to their milestone during triage. Phase 0 and Phase 1 issues must reach "complete or explicitly deferred" before Phase 3 begins. Phase 2 must also be at sufficient completion before Phase 3 is considered ready. Phase 4 begins only after Phase 3 is complete. See [docs/roadmap-v1.md](./roadmap-v1.md) for the full prerequisite chain.
 
 ---
 

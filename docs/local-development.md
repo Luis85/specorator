@@ -130,7 +130,7 @@ Keep the test vault empty of personal content. The plugin may write files during
 
 ## Verifying plugin behavior before opening a PR
 
-1. Run the full verification gate: `npm run typecheck && npm run lint && npm run test && npm run build`
+1. Run the full verification gate: `npm run typecheck && npm run lint && npm run test && npm run build && npm run build:web && npm run docs:api`
 2. Confirm the plugin loads in Obsidian without errors (check **Settings → Community plugins** and the developer console with `Ctrl+Shift+I` / `Cmd+Option+I`).
 3. Open the Specorator panel and confirm the UI renders correctly.
 4. Exercise the specific code path changed by your PR and confirm it works as expected.
