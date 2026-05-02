@@ -38,6 +38,7 @@ export default {
       retrospective: 'Retrospektive',
     },
     stepProgress: 'Schritt {current} von {total}',
+    complete: 'Abgeschlossen',
     actions: {
       activate: 'Feature starten',
       archive: 'Archivieren',
