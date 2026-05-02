@@ -210,7 +210,7 @@ This section summarises how issues, milestones, labels, PRs, releases, and proje
 ### Releases
 
 - Releases are created from `main` after all v1 Alpha milestone issues are closed.
-- The release workflow (`.github/workflows/release.yml`) packages `main.js` and `manifest.json` as release assets.
+- The release workflow (`.github/workflows/release.yml`) packages `main.js`, `manifest.json`, and `styles.css` as release assets.
 - Release tags follow `v{major}.{minor}.{patch}` (e.g., `v0.1.0` for first alpha).
 - Pre-release tags (`v0.1.0-alpha.1`) trigger pre-release packaging.
 - See `docs/marketplace-readiness.md` for the Obsidian marketplace submission checklist.
