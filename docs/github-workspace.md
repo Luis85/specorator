@@ -84,6 +84,17 @@ Verify the following labels exist in **Issues → Labels**. Create any that are 
 | `documentation` | `#0075ca` | Documentation-only work |
 | `architecture` | `#e4e669` | Architecture decision or constraint |
 
+### Intake labels
+
+These labels are auto-applied by the issue form templates (`01-design-intake.yml`, `02-requirement-intake.yml`) and must exist for the intake flow to work correctly.
+
+| Label | Colour | Description |
+|---|---|---|
+| `requirements` | `#d4c5f9` | Requirement intake item |
+| `design` | `#fef2c0` | Design intake item |
+| `intake` | `#c5def5` | New item in the intake queue |
+| `needs-triage` | `#e4e669` | Awaiting triage and milestone assignment |
+
 ### Domain labels
 
 | Label | Colour | Description |

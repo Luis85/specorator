@@ -212,6 +212,8 @@ npm run lint
 npm run typecheck
 npm run test
 npm run build
+npm run build:web
+npm run docs:api
 ```
 
 All checks must pass. See [docs/local-development.md](./local-development.md) for the full verification workflow.
@@ -276,13 +278,15 @@ The required check name (`Install, typecheck, lint, test, and build`) matches th
 
 ## 9. CI and Checks
 
-The CI workflow (`.github/workflows/ci.yml`) runs on every push and PR and executes:
+The CI workflow (`.github/workflows/ci.yml`) runs on pushes to `main` and on pull requests targeting `main`. It does **not** run on feature-branch pushes — run the checks locally before opening a PR. Steps:
 
 1. `npm ci` — install dependencies
 2. `npm run typecheck` — TypeScript strict-mode check
 3. `npm run lint` — ESLint
 4. `npm run test` — Vitest unit tests
-5. `npm run build` — Vite production build
+5. `npm run build` — Vite plugin build
+6. `npm run build:web` — standalone UI build
+7. `npm run docs:api` — TypeDoc API docs generation
 
 All steps must pass for the check to succeed. Dependabot keeps dependencies current; security alerts are configured in `.github/dependabot.yml`.
 
