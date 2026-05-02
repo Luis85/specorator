@@ -200,7 +200,7 @@ Keep the description short (3–5 words, kebab-case). Do not include issue numbe
 - **Cut feature branches from `develop`**, not from `main`.
 - **Open PRs targeting `develop`**.
 - **To publish a preview:** open a PR from `develop` to `demo`, merge it; GitHub Actions deploys to GitHub Pages automatically.
-- **To cut a release:** open a PR from `develop` to `main`, merge it, then tag the resulting `main` HEAD with the release version (`vX.Y.Z`). The release workflow publishes the plugin.
+- **To cut a release:** open a PR from `develop` to `main`, merge it, then tag the resulting `main` HEAD with the release version using `npm version <patch|minor|major>` (or `git tag X.Y.Z` directly). Tags must be plain semver (`0.1.0`), **never** prefixed with `v` — the Obsidian marketplace and the release workflow both require the tag to match `manifest.json` → `version` exactly. The release workflow publishes the plugin.
 - **Never** push directly to `main` or cut a release tag from any branch other than `main`.
 - Delete merged feature branches; do not accumulate stale branches.
 

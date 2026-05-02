@@ -131,9 +131,21 @@ Run this checklist before tagging any release candidate.
 
 ### Versioning
 
-- [ ] `manifest.json` → `version` updated.
-- [ ] `package.json` → `version` matches `manifest.json`.
-- [ ] GitHub release tag matches both (e.g. `1.0.0`, not `v1.0.0` — Obsidian prefers no `v` prefix).
+Versioning is automated via `npm version <patch|minor|major>`, which:
+
+1. Bumps `package.json` → `version`.
+2. Runs `version-bump.js` (via the `version` npm hook) — bumps `manifest.json` → `version` and adds an entry to `versions.json` for the new version → its `minAppVersion`.
+3. Stages `manifest.json` and `versions.json`.
+4. Commits the bump and creates a tag with the plain semver string (e.g. `0.1.0`, **never** `v0.1.0` — `.npmrc` sets `tag-version-prefix=""`).
+
+Manual checklist before pushing the tag to `main`:
+
+- [ ] `manifest.json` → `version` matches `package.json` → `version`.
+- [ ] `versions.json` contains an entry for the new version mapping it to the current `minAppVersion`.
+- [ ] Local tag is plain semver, no `v` prefix (e.g. `0.1.0`).
+- [ ] Tag points at the `main` HEAD commit (the release workflow rejects tags not on `main` HEAD).
+
+The release workflow re-checks all three files at run time and refuses to publish on any mismatch.
 
 ### Automated checks
 
@@ -173,7 +185,7 @@ The following items must be resolved before a marketplace submission PR can be o
 | 1 | Plugin is not yet feature-complete (v1 alpha scope not finished) | #1 |
 | 2 | README does not yet include installation or sideload instructions | #3, #10 |
 | 3 | No CHANGELOG exists yet | #8 |
-| 4 | Release tag convention, `versions.json`, and release-build settings still need reconciliation before public submission | #8 |
+| 4 | ~~Release tag convention, `versions.json`, and release-build settings still need reconciliation before public submission~~ — resolved: tag pattern is plain semver, `versions.json` is committed, `npm version <bump>` automates the bump via `version-bump.mjs`, release workflow validates manifest + package + versions.json against tag | #8 |
 | 5 | Pre-feature architecture readiness work should be broken into focused implementation plans before v1 feature delivery accelerates | docs/pre-feature-architecture-readiness.md |
 
 Marketplace submission is planned after the v1 alpha milestone is reached. Track submission readiness in #20.
