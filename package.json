@@ -17,7 +17,8 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"build:web": "vue-tsc --noEmit && vite build",
-		"test:coverage": "vitest run --coverage"
+		"test:coverage": "vitest run --coverage",
+		"docs:api": "typedoc"
 	},
 	"dependencies": {
 		"pinia": "^2.1.7",
@@ -39,6 +40,7 @@
 		"jsdom": "^29.1.1",
 		"obsidian": "latest",
 		"prettier": "^3.8.3",
+		"typedoc": "^0.28.19",
 		"typescript": "^5.8.0",
 		"typescript-eslint": "^8.59.1",
 		"vite": "^6.0.0",

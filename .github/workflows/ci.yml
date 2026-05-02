@@ -38,3 +38,6 @@ jobs:
 
       - name: Build (standalone UI)
         run: npm run build:web
+
+      - name: Generate API docs
+        run: npm run docs:api

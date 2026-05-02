@@ -20,3 +20,6 @@ Thumbs.db
 
 # Obsidian local settings (not plugin source)
 .obsidian/
+
+# Generated API docs (run `npm run docs:api` to regenerate)
+docs/api/
