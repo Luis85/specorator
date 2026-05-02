@@ -243,15 +243,16 @@ Keep commits focused. A commit that does two unrelated things should be two comm
 Run the full pre-PR verification locally:
 
 ```bash
-npm run lint
+npm audit --audit-level=high --omit=dev
 npm run typecheck
+npm run lint
 npm run test
 npm run build
 npm run build:web
 npm run docs:api
 ```
 
-All checks must pass. See [docs/local-development.md](./local-development.md) for the full verification workflow.
+`npm audit` is included because CI's `verify` job runs it unconditionally on every PR (see §9). All checks must pass. See [docs/local-development.md](./local-development.md) for the full verification workflow and [.codex/pre-pr-gate.md](../.codex/pre-pr-gate.md) for the agent-oriented version of the same chain.
 
 ### PR description
 
