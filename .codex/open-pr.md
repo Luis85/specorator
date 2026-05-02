@@ -67,14 +67,17 @@ CI status:
 gh pr view <n> --json statusCheckRollup,mergeStateStatus
 ```
 
-Required checks for `develop`:
+The repository ruleset on `develop` enforces exactly one required status check by name:
 
-- `Install, typecheck, lint, test, and build`
-- `Lint workflow files (actionlint)`
-- `Verify third-party actions are SHA-pinned` (in the same job as actionlint)
-- `Review pull-request dependency changes`
+- `Install, typecheck, lint, test, and build` — the `verify` job in `.github/workflows/ci.yml`
 
-If any required check fails, fetch the failing log:
+Several other checks must also pass for the merge UI to allow a squash. They are not enforced by the ruleset, so a failure is reported as `UNSTABLE` rather than `BLOCKED`, but the PR should not be merged while any of them is failing:
+
+- `Lint workflow files (actionlint)` — runs `actionlint` and the SHA-pin enforcement step
+- `Review pull-request dependency changes` — `actions/dependency-review-action`
+- `GitGuardian Security Checks`
+
+If any of these fails, fetch the failing log:
 
 ```sh
 gh run view --log-failed --job=<job-id>
