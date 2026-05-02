@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import AppBadge from '../common/AppBadge.vue'
 import AppButton from '../common/AppButton.vue'
 import type { FeatureDto } from '@/ui/types/FeatureDto'
 import { FEATURE_STEP_COUNT } from '@/domain/feature/FeatureStep'
 
-defineProps<{ feature: FeatureDto }>()
+const props = defineProps<{ feature: FeatureDto }>()
 
 const emit = defineEmits<{
   activate: [id: string]
@@ -13,6 +14,11 @@ const emit = defineEmits<{
 }>()
 
 const stepCount = FEATURE_STEP_COUNT
+const displayedStep = computed(() => Math.min(Math.max(props.feature.currentStep, 1), stepCount))
+const isComplete = computed(() => props.feature.currentStep > stepCount)
+const showProgress = computed(() => props.feature.status !== 'draft')
+const completedSteps = computed(() => (isComplete.value ? stepCount : displayedStep.value - 1))
+const progressWidth = computed(() => `${(completedSteps.value / stepCount) * 100}%`)
 </script>
 
 <template>
@@ -22,15 +28,24 @@ const stepCount = FEATURE_STEP_COUNT
       <AppBadge :status="feature.status" />
     </header>
 
-    <div v-if="feature.status === 'active'" class="sp-feature-card__progress">
+    <div v-if="showProgress" class="sp-feature-card__progress">
       <div class="sp-progress-bar">
         <div
           class="sp-progress-bar__fill"
-          :style="{ width: `${((feature.currentStep - 1) / stepCount) * 100}%` }"
+          :style="{ width: progressWidth }"
         />
       </div>
-      <span class="sp-feature-card__step-label">
-        {{ $t('feature.stepProgress', { current: feature.currentStep, total: stepCount }) }}
+      <span v-if="feature.status === 'archived'" class="sp-feature-card__step-label">
+        {{ $t('feature.status.archived') }}
+      </span>
+      <span v-else-if="feature.status === 'abandoned'" class="sp-feature-card__step-label">
+        {{ $t('feature.status.abandoned') }}
+      </span>
+      <span v-else-if="isComplete" class="sp-feature-card__step-label">
+        {{ $t('feature.complete') }}
+      </span>
+      <span v-else class="sp-feature-card__step-label">
+        {{ $t('feature.stepProgress', { current: displayedStep, total: stepCount }) }}
       </span>
     </div>
 
