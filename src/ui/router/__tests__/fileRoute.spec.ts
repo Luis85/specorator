@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { router } from '../index'
+import { normalizeFileRoutePath } from '../fileRoute'
 
 describe('file route encoding', () => {
   it('round-trips a raw path with spaces, unicode, and slash separators', () => {
@@ -13,5 +14,11 @@ describe('file route encoding', () => {
     expect(resolved.href).not.toContain('%25')
     expect(matched.name).toBe('file')
     expect(matched.params.filePath).toBe(filePath)
+  })
+
+  it('normalizes legacy double-encoded file route paths', () => {
+    const legacyRouteParam = 'specs%2FÜber%20cool%20feature%2Ftest%20plan.md'
+
+    expect(normalizeFileRoutePath(legacyRouteParam)).toBe('specs/Über cool feature/test plan.md')
   })
 })
