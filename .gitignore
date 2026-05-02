@@ -1,9 +1,12 @@
 # Dependencies
 node_modules/
 
-# Build output
+# Build output — Obsidian plugin bundle (output to project root by convention)
 main.js
 main.js.map
+
+# Standalone UI build
+dist-standalone/
 
 # TypeScript incremental build info
 *.tsbuildinfo
