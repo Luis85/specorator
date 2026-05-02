@@ -27,13 +27,17 @@ function deriveArea(slugValue: string): string {
  * - Steps after currentStep → `pending`
  */
 function buildArtifactsBlock(currentStep: number): string {
+	// Mirror the same lower-bound clamp applied to stageIndex in serializeFeature
+	// so artifact statuses stay consistent with current_stage (e.g. currentStep ≤ 0
+	// still marks idea as complete rather than pending).
+	const effective = Math.max(1, currentStep)
 	return FEATURE_STEPS.map((slug, idx) => {
 		const stepNum = idx + 1
 		let status: string
-		if (stepNum < currentStep) {
+		if (stepNum < effective) {
 			status = 'complete'
-		} else if (stepNum === currentStep) {
-			status = currentStep === 1 ? 'complete' : 'in-progress'
+		} else if (stepNum === effective) {
+			status = effective === 1 ? 'complete' : 'in-progress'
 		} else {
 			status = 'pending'
 		}

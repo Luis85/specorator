@@ -297,5 +297,8 @@ describe('AdvanceFeatureStageUseCase', () => {
     // Clamped to index 0 → idea, never `undefined`
     expect(meta).toContain('current_stage: idea')
     expect(meta).not.toContain('current_stage: undefined')
+    // Artifacts must be consistent: idea complete, not pending
+    expect(meta).toContain('  idea: complete')
+    expect(meta).not.toContain('  idea: pending')
   })
 })
