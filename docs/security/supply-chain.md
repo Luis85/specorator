@@ -54,7 +54,7 @@ uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 Two CI checks back this rule:
 
 - `actionlint` validates workflow YAML syntax and expression types.
-- A dedicated `Verify third-party actions are SHA-pinned` step in the `workflow-lint` job greps every `uses:` line in `.github/workflows/*.yml` and fails the build if any reference is not pinned to a 40-character commit SHA. Local composite actions (`./...`) and `docker://` references are exempt.
+- A dedicated `Verify third-party actions are SHA-pinned` step in the `workflow-lint` job greps every `uses:` line across both `.yml` and `.yaml` files under `.github/workflows/` and fails the build if any reference is not pinned to a 40-character commit SHA. Local composite actions (`./...`) and `docker://` references are exempt.
 
 A PR that introduces an unpinned `uses:` line cannot merge until the SHA is supplied.
 

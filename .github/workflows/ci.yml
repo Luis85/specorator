@@ -30,7 +30,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          violations=$(grep -nE '^[[:space:]]*-?[[:space:]]*uses:' .github/workflows/*.yml \
+          mapfile -t files < <(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) | sort)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No workflow files found under .github/workflows."
+            exit 0
+          fi
+          violations=$(grep -nE '^[[:space:]]*-?[[:space:]]*uses:' "${files[@]}" \
             | grep -vE 'uses:[[:space:]]*\./' \
             | grep -vE 'uses:[[:space:]]*docker://' \
             | grep -vE 'uses:[[:space:]]*[^@[:space:]]+@[0-9a-f]{40}([[:space:]]|$)' \
