@@ -38,8 +38,10 @@ jobs:
           violations=$(awk '
             /^[[:space:]]*-?[[:space:]]*uses:/ {
               ref = $0
+              sub(/\r$/, "", ref)
               sub(/^[^:]*:[[:space:]]*/, "", ref)
               sub(/[[:space:]]*#.*$/, "", ref)
+              sub(/[[:space:]]+$/, "", ref)
               gsub(/^["\x27]+|["\x27]+$/, "", ref)
               if (ref ~ /^\.\//) next
               if (ref ~ /^docker:\/\//) next
