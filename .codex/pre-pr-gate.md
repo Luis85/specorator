@@ -48,8 +48,8 @@ If commits from `origin/develop` are missing from your branch, merge or rebase b
 ## Failure handling
 
 - **A check fails consistently in one environment but passes in another.** Treat the failing environment as authoritative — that is what CI will see. Do not "fix" by suppressing in the failing environment.
-- **A check fails for an unrelated reason** (e.g. a TypeDoc warning surfaced by a dependency update). Fix it in the same PR if it's small; otherwise file a separate issue and skip *only* that step with a recorded justification in the PR description. Never silently skip.
-- **You believe the gate itself is wrong.** File an issue, propose the fix in a separate PR, and merge that PR before merging the work that needs the change.
+- **A check fails for a reason that looks unrelated to your change** (e.g. a TypeDoc warning surfaced by a dependency update). Fix it in the same PR if it's small. If the fix is large enough to deserve its own PR, stop here, open a separate PR for the prerequisite fix, get it merged, then come back to your work. Never bypass the gate or push a PR with a known-failing pre-PR check — `AGENTS.md` §3 forbids it without exception.
+- **You believe the gate itself is wrong.** Same approach as above: file an issue, propose the fix in a separate PR, and merge that PR before merging the work that needs the change.
 
 ## Output
 
