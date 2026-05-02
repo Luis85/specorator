@@ -6,7 +6,7 @@
 	"description": "Spec-driven, agentic software development workflow inside Obsidian.",
 	"main": "main.js",
 	"scripts": {
-		"dev": "vite",
+		"dev": "vite --open",
 		"dev:plugin": "vite build --watch --mode plugin",
 		"build": "vue-tsc --noEmit && vite build --mode plugin",
 		"typecheck": "vue-tsc --noEmit",
