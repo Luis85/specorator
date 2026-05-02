@@ -43,11 +43,12 @@ function buildArtifactsBlock(currentStep: number): string {
 
 function serializeFeature(feature: Feature): string {
 	const p = feature.toPlainObject()
-	// Clamp to the last valid index so completed features (currentStep > 12)
-	// write `retrospective` rather than falling back to `idea`.
-	const stageIndex = Math.min(p.currentStep - 1, FEATURE_STEPS.length - 1)
+	// Clamp index to [0, last] so currentStep ≤ 0 or > 12 both produce a valid stage.
+	const stageIndex = Math.max(0, Math.min(p.currentStep - 1, FEATURE_STEPS.length - 1))
 	const currentStage = FEATURE_STEPS[stageIndex]
-	const area = p.area || deriveArea(p.slug)
+	// Strip non-uppercase-letter characters so the area scalar is always safe YAML.
+	const rawArea = p.area || deriveArea(p.slug)
+	const area = rawArea.replace(/[^A-Z]/g, '').slice(0, 5) || deriveArea(p.slug)
 	const lastUpdated = p.updatedAt.toISOString().slice(0, 10)
 	return [
 		'---',

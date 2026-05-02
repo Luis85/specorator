@@ -84,6 +84,15 @@ describe('CreateFeatureUseCase', () => {
     expect(meta).toContain('area: DM')
   })
 
+  it('strips non-uppercase-letter characters from area so YAML stays valid', async () => {
+    await makeUseCase(bridge).execute({ title: 'Dark mode', area: 'R&D' })
+
+    const meta = bridge.getAllFiles()['specs/dark-mode/workflow-state.md']
+    // '&' is stripped; result is 'RD'
+    expect(meta).toContain('area: RD')
+    expect(meta).not.toContain('&')
+  })
+
   it('derives area from slug initials when area is omitted', async () => {
     await makeUseCase(bridge).execute({ title: 'Dark mode' })
 
@@ -209,5 +218,32 @@ describe('AdvanceFeatureStageUseCase', () => {
     expect(meta).toContain('currentStep: 13')
     // Completed features must write the last stage, not the `idea` fallback
     expect(meta).toContain('current_stage: retrospective')
+  })
+
+  it('serialises current_stage as idea when currentStep is 0 (corrupt vault data)', async () => {
+    const { Feature } = await import('@/domain/feature/Feature')
+    const { Slug } = await import('@/domain/shared/Slug')
+    const bridge = new MockBridge()
+    const repo = makeRepo(bridge)
+
+    const slugResult = Slug.create('corrupt-feature')
+    expect(slugResult.ok).toBe(true)
+    if (!slugResult.ok) return
+
+    const feature = Feature.reconstitute({
+      id: 'corrupt-id',
+      slug: slugResult.value,
+      title: 'Corrupt Feature',
+      status: 'draft',
+      currentStep: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    await repo.save(feature)
+
+    const meta = bridge.getAllFiles()['specs/corrupt-feature/workflow-state.md']
+    // Clamped to index 0 → idea, never `undefined`
+    expect(meta).toContain('current_stage: idea')
+    expect(meta).not.toContain('current_stage: undefined')
   })
 })
