@@ -26,7 +26,7 @@ gh pr create \
   --base develop \
   --head <branch-name> \
   --title "<type>(<scope>): <imperative summary>" \
-  --body-file <(cat <<'EOF'
+  --body "$(cat <<'EOF'
 ## Summary
 
 <one short paragraph: what changed, why>
@@ -42,8 +42,10 @@ Closes #<issue-number>
 - [ ] CI passes
 - [ ] <feature-specific manual check, if applicable>
 EOF
-)
+)"
 ```
+
+`$(...)` and here-documents are POSIX; the previous draft used `<(...)` process substitution, which is a bash-only feature and would fail under `dash` or another strict POSIX shell.
 
 Title rules:
 
