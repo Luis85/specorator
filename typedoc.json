@@ -1,0 +1,19 @@
+{
+  "$schema": "https://typedoc.app/schema.json",
+  "entryPoints": [
+    "src/infrastructure/bridge/IBridge.ts",
+    "src/infrastructure/bridge/BridgeKey.ts",
+    "src/domain",
+    "src/application"
+  ],
+  "entryPointStrategy": "expand",
+  "out": "docs/api",
+  "tsconfig": "tsconfig.typedoc.json",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "excludeExternals": true,
+  "exclude": ["**/*.spec.ts", "**/__tests__/**"],
+  "readme": "none",
+  "name": "Specorator API",
+  "githubPages": false
+}
