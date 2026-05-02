@@ -14,7 +14,7 @@ references:
 
 Specorator is an Obsidian plugin and companion app for spec-driven, agentic software development. It guides users through a structured workflow — from idea to release — keeping all artifacts as editable Markdown inside the vault.
 
-**Current status:** Planning and setup phase. No installable plugin exists yet.
+**Current status:** Plugin shell complete. v1 alpha feature delivery in progress.
 
 ## What it does
 
@@ -34,6 +34,7 @@ Specorator is an Obsidian plugin and companion app for spec-driven, agentic soft
 | Document                                                                   | Purpose                                               |
 | -------------------------------------------------------------------------- | ----------------------------------------------------- |
 | [docs/product-vision.md](docs/product-vision.md)                           | Product north star, principles, and v1/v2.0 direction |
+| [docs/prd.md](docs/prd.md)                                                 | v1 and v2.0 product requirements documents            |
 | [docs/roadmap-v1.md](docs/roadmap-v1.md)                                   | Phased delivery plan for v1 alpha                     |
 | [docs/process/requirements-intake.md](docs/process/requirements-intake.md) | Intake-first requirements and design workflow         |
 
@@ -50,9 +51,9 @@ Specorator is an Obsidian plugin and companion app for spec-driven, agentic soft
 
 ## Development
 
-> Full setup documentation is in progress ([#10](https://github.com/Luis85/specorator/issues/10)). This section will expand once the plugin scaffold ([#5](https://github.com/Luis85/specorator/issues/5)) and CI ([#6](https://github.com/Luis85/specorator/issues/6)) are in place.
+Full setup documentation is tracked in [#10](https://github.com/Luis85/specorator/issues/10).
 
-The planned stack: Obsidian community plugin · Vue 3 · Vue Router · Pinia 2 · TypeScript 6 · Vite · Vitest · ESLint · TypeDoc.
+**Stack:** Obsidian community plugin · Vue 3 · Vue Router · Pinia 2 · TypeScript 5.8 · Vite · Vitest · ESLint · TypeDoc
 
 ## Contributing
 
