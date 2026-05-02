@@ -6,10 +6,18 @@ on:
   pull_request:
     branches: [develop, demo, main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   workflow-lint:
     name: Lint workflow files (actionlint)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -23,6 +31,7 @@ jobs:
     name: Verify PR source is develop
     if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-latest
+    timeout-minutes: 2
     steps:
       - name: Reject non-develop source
         if: github.head_ref != 'develop'
@@ -39,6 +48,7 @@ jobs:
   verify:
     name: Install, typecheck, lint, test, and build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout

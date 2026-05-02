@@ -23,3 +23,7 @@ Thumbs.db
 
 # Generated API docs (run `npm run docs:api` to regenerate)
 docs/api/
+
+# Local agent state (Claude Code, etc.)
+.claude/
+.worktrees/
