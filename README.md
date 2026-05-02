@@ -51,7 +51,7 @@ Specorator is an Obsidian plugin and companion app for spec-driven, agentic soft
 
 ## Development
 
-Full setup documentation is tracked in [#10](https://github.com/Luis85/specorator/issues/10).
+See [docs/local-development.md](docs/local-development.md) for the full setup guide: prerequisites, commands, sideloading into an Obsidian test vault, and pre-PR verification steps.
 
 **Stack:** Obsidian community plugin · Vue 3 · Vue Router · Pinia 2 · TypeScript 5.8 · Vite · Vitest · ESLint · TypeDoc
 
