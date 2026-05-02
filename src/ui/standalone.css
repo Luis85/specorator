@@ -3,7 +3,7 @@
  * These variables are provided by the Obsidian theme at runtime;
  * scoping them here prevents them from overriding the real Obsidian UI.
  */
-#app {
+.specorator-root {
 	--background-primary: #1e1e2e;
 	--background-secondary: #181825;
 	--background-modifier-border: #313244;
