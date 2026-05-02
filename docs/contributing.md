@@ -3,12 +3,14 @@ title: "Specorator contribution guide"
 doc_type: process
 status: active
 owner: engineering
-last_updated: 2026-05-02
+last_updated: 2026-05-03
 references:
   - docs/local-development.md
   - docs/roadmap-v1.md
   - docs/process/requirements-intake.md
   - CONSTITUTION.md
+  - AGENTS.md
+  - .codex/
 ---
 
 # Contributing to Specorator
@@ -17,8 +19,9 @@ references:
 
 This guide covers the GitHub workflow for Specorator: how issues are filed and triaged, how labels and milestones are used, how branches are named, and what is expected before a PR is merged.
 
-For local development setup, see [docs/local-development.md](./local-development.md).
-For the non-negotiable working agreement, see [CONSTITUTION.md](../CONSTITUTION.md).
+- For local development setup, see [docs/local-development.md](./local-development.md).
+- For the non-negotiable working agreement, see [CONSTITUTION.md](../CONSTITUTION.md).
+- For automated and AI-agent contributors (Codex, Claude Code, scripted tooling), the operating manual is [`AGENTS.md`](../AGENTS.md) at the repo root, with mechanical step-by-step recipes in [`.codex/`](../.codex/). Humans should still read this guide first.
 
 ---
 
@@ -310,17 +313,35 @@ The required check name (`Install, typecheck, lint, test, and build`) matches th
 
 ## 9. CI and Checks
 
-The CI workflow (`.github/workflows/ci.yml`) runs on pushes to `develop`, `demo`, and `main`, and on pull requests targeting any of those three branches. It does **not** run on raw feature-branch pushes — run the checks locally before opening a PR. Steps:
+The CI workflow (`.github/workflows/ci.yml`) runs on pushes to `develop`, `demo`, and `main`, and on pull requests targeting any of those three branches. It does **not** run on raw feature-branch pushes — run the checks locally before opening a PR.
+
+### `verify` job
 
 1. `npm ci` — install dependencies
-2. `npm run typecheck` — TypeScript strict-mode check
-3. `npm run lint` — ESLint
-4. `npm run test` — Vitest unit tests
-5. `npm run build` — Vite plugin build
-6. `npm run build:web` — standalone UI build
-7. `npm run docs:api` — TypeDoc API docs generation
+2. `npm audit --audit-level=high --omit=dev` — fail on `high`/`critical` advisories in production dependencies
+3. `npm run typecheck` — TypeScript strict-mode check
+4. `npm run lint` — ESLint
+5. `npm run test` — Vitest unit tests
+6. `npm run build` — Vite plugin build
+7. `npm run build:web` — standalone UI build
+8. `npm run docs:api` — TypeDoc API docs generation
 
-All steps must pass for the check to succeed. Dependabot keeps dependencies current; security alerts are configured in `.github/dependabot.yml`.
+### `workflow-lint` job
+
+1. `actionlint` — validates workflow YAML syntax and expression types
+2. SHA-pin check — fails the build if any `uses:` reference in `.github/workflows/*.{yml,yaml}` is not pinned to a 40-character commit SHA
+
+### Pull-request-only jobs
+
+- `Review pull-request dependency changes` (`actions/dependency-review-action`) — fails on `high`+ vulnerabilities or GPL-family licenses introduced by the diff.
+
+### Scheduled jobs
+
+- `OpenSSF Scorecard` runs weekly, on push to `main`, and on branch-protection-rule changes; results publish to the OpenSSF registry and SARIF uploads to code-scanning.
+
+### Supply-chain policy
+
+The full supply-chain hardening policy — thresholds, manual review expectations, and the SHA-pinning rule — lives in [docs/security/supply-chain.md](./security/supply-chain.md). Dependabot keeps dependencies current; auto-merge for patch and dev-minor updates is configured in `.github/workflows/dependabot-auto-merge.yml`.
 
 ---
 
@@ -330,3 +351,6 @@ All steps must pass for the check to succeed. Dependabot keeps dependencies curr
 - [docs/roadmap-v1.md](./roadmap-v1.md) — current phase and priorities
 - [docs/process/requirements-intake.md](./process/requirements-intake.md) — intake workflow for new requirements
 - [docs/traceability.md](./traceability.md) — requirements ID conventions
+- [docs/security/supply-chain.md](./security/supply-chain.md) — supply-chain hardening policy
+- [AGENTS.md](../AGENTS.md) — operating manual for automated and AI-agent contributors
+- [.codex/](../.codex/) — mechanical step-by-step recipes paired with `AGENTS.md`
