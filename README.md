@@ -12,7 +12,12 @@ references:
 
 # Specorator
 
-**[specorator.github.io/specorator](https://luis85.github.io/specorator/) · [Try it live in your browser →](https://luis85.github.io/specorator/app/)**
+[![CI](https://github.com/Luis85/specorator/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/Luis85/specorator/actions/workflows/ci.yml?query=branch%3Adevelop)
+[![Pages](https://github.com/Luis85/specorator/actions/workflows/pages.yml/badge.svg?branch=demo)](https://github.com/Luis85/specorator/actions/workflows/pages.yml?query=branch%3Ademo)
+[![Release](https://img.shields.io/github/v/release/Luis85/specorator?include_prereleases&display_name=tag&sort=semver)](https://github.com/Luis85/specorator/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+**[luis85.github.io/specorator](https://luis85.github.io/specorator/) · [Try it live in your browser →](https://luis85.github.io/specorator/app/)**
 
 Specorator is an Obsidian plugin and companion app for spec-driven, agentic software development. It guides users through a structured workflow — from idea to release — keeping all artifacts as editable Markdown inside the vault.
 
@@ -56,6 +61,17 @@ Specorator is an Obsidian plugin and companion app for spec-driven, agentic soft
 | [#2 — Repo setup objective](https://github.com/Luis85/specorator/issues/2)       | Repository and GitHub foundation work    |
 | [#11 — Plugin shell objective](https://github.com/Luis85/specorator/issues/11)   | Plugin architecture and toolchain        |
 | [#24 — Product setup objective](https://github.com/Luis85/specorator/issues/24)  | PRDs, use cases, and product artifacts   |
+
+## Install (BRAT — beta)
+
+Specorator is not yet on the Obsidian community marketplace. While in v1 alpha you can install it via [BRAT](https://github.com/TfTHacker/obsidian42-brat) to receive automatic updates from this repository.
+
+1. Install **BRAT** from the Obsidian community plugins.
+2. Open BRAT settings → **Add Beta plugin**.
+3. Paste the repository URL: `https://github.com/Luis85/specorator`.
+4. Click **Add Plugin**. BRAT installs the latest tagged release and will auto-update on each new release.
+
+> Marketplace submission will follow once BRAT distribution has validated stability. Until then, BRAT is the only supported install path.
 
 ## Development
 
