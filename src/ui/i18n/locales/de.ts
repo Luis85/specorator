@@ -67,5 +67,11 @@ export default {
     error: 'Etwas ist schiefgelaufen',
     noItems: 'Keine Einträge gefunden',
     close: 'Schließen',
+    back: 'Zurück',
+  },
+  file: {
+    notFound: 'Datei nicht im lokalen Speicher gefunden.',
+    copy: 'Kopieren',
+    copied: 'Kopiert!',
   },
 } as const

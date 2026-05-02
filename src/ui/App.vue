@@ -1,8 +1,33 @@
 <script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterView, RouterLink } from 'vue-router'
+import { RouterView, RouterLink, useRouter } from 'vue-router'
+import AppToast from './components/common/AppToast.vue'
+import { useNotificationStore } from './stores/notificationStore'
 
 const { t } = useI18n()
+const router = useRouter()
+const notificationStore = useNotificationStore()
+
+function onNotice(e: Event) {
+  const { message, durationMs } = (e as CustomEvent<{ message: string; durationMs: number }>).detail
+  notificationStore.addNotice(message, durationMs)
+}
+
+function onOpenFile(e: Event) {
+  const { path } = (e as CustomEvent<{ path: string }>).detail
+  router.push({ name: 'file', params: { encodedPath: encodeURIComponent(path) } })
+}
+
+onMounted(() => {
+  window.addEventListener('sp:notice', onNotice)
+  window.addEventListener('sp:open-file', onOpenFile)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('sp:notice', onNotice)
+  window.removeEventListener('sp:open-file', onOpenFile)
+})
 </script>
 
 <template>
@@ -21,6 +46,7 @@ const { t } = useI18n()
     <main class="sp-main">
       <RouterView />
     </main>
+    <AppToast />
   </div>
 </template>
 

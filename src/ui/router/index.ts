@@ -2,6 +2,7 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import FeaturesView from '../views/FeaturesView.vue'
 import SettingsView from '../views/SettingsView.vue'
+import FileView from '../views/FileView.vue'
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -9,5 +10,6 @@ export const router = createRouter({
     { path: '/', name: 'home', component: HomeView },
     { path: '/features', name: 'features', component: FeaturesView },
     { path: '/settings', name: 'settings', component: SettingsView },
+    { path: '/file/:encodedPath', name: 'file', component: FileView },
   ],
 })

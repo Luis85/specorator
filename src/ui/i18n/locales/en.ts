@@ -67,5 +67,11 @@ export default {
     error: 'Something went wrong',
     noItems: 'No items found',
     close: 'Close',
+    back: 'Back',
+  },
+  file: {
+    notFound: 'File not found in local storage.',
+    copy: 'Copy',
+    copied: 'Copied!',
   },
 } as const

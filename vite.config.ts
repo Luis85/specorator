@@ -54,6 +54,10 @@ export default defineConfig(({ mode }) => {
 	return {
 		plugins: [vue()],
 		resolve: { alias },
-		build: { outDir: 'dist-standalone' },
+		build: {
+			outDir: 'dist-standalone',
+			base: process.env.VITE_BASE_URL ?? '/',
+		},
+		base: process.env.VITE_BASE_URL ?? '/',
 	};
 });
