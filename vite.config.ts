@@ -40,7 +40,12 @@ export default defineConfig(({ mode }) => {
 				},
 				rollupOptions: {
 					external: ALL_EXTERNALS,
-					output: { exports: 'default' },
+					output: {
+						exports: 'default',
+						// Obsidian convention: CSS file must be named styles.css
+						assetFileNames: (info) =>
+							info.names?.some((n) => n.endsWith('.css')) ? 'styles.css' : '[name][extname]',
+					},
 				},
 				outDir: '.',
 				emptyOutDir: false,
