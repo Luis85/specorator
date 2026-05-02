@@ -7,6 +7,7 @@ last_updated: 2026-05-02
 references:
   - manifest.json
   - docs/roadmap-v1.md
+  - docs/pre-feature-architecture-readiness.md
   - https://github.com/obsidianmd/obsidian-releases/blob/master/plugin-review.md
 ---
 
@@ -172,7 +173,8 @@ The following items must be resolved before a marketplace submission PR can be o
 | 1 | Plugin is not yet feature-complete (v1 alpha scope not finished) | #1 |
 | 2 | README does not yet include installation or sideload instructions | #3, #10 |
 | 3 | No CHANGELOG exists yet | #8 |
-| 4 | Release workflow does not yet auto-attach plugin artifacts to GitHub releases | #8 |
+| 4 | Release tag convention, `versions.json`, and release-build settings still need reconciliation before public submission | #8 |
+| 5 | Pre-feature architecture readiness work should be broken into focused implementation plans before v1 feature delivery accelerates | docs/pre-feature-architecture-readiness.md |
 
 Marketplace submission is planned after the v1 alpha milestone is reached. Track submission readiness in #20.
 
