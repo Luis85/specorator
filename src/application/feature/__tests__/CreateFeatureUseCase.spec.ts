@@ -196,5 +196,7 @@ describe('AdvanceFeatureStageUseCase', () => {
 
     const meta = bridge.getAllFiles()['specs/retro-feature/workflow-state.md']
     expect(meta).toContain('currentStep: 13')
+    // Completed features must write the last stage, not the `idea` fallback
+    expect(meta).toContain('current_stage: retrospective')
   })
 })

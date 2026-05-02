@@ -43,7 +43,10 @@ function buildArtifactsBlock(currentStep: number): string {
 
 function serializeFeature(feature: Feature): string {
 	const p = feature.toPlainObject()
-	const currentStage = FEATURE_STEPS[p.currentStep - 1] ?? 'idea'
+	// Clamp to the last valid index so completed features (currentStep > 12)
+	// write `retrospective` rather than falling back to `idea`.
+	const stageIndex = Math.min(p.currentStep - 1, FEATURE_STEPS.length - 1)
+	const currentStage = FEATURE_STEPS[stageIndex]
 	const area = p.area || deriveArea(p.slug)
 	const lastUpdated = p.updatedAt.toISOString().slice(0, 10)
 	return [
