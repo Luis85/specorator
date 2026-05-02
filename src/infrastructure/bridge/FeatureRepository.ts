@@ -81,16 +81,24 @@ function parseFrontmatter(content: string): Record<string, string> {
 	const match = /^---\n([\s\S]*?)\n---/.exec(content)
 	if (!match) return {}
 
+	let inArtifactsBlock = false
 	return Object.fromEntries(
 		match[1].split('\n').flatMap((line) => {
-			// Skip indented lines (block map child values)
-			if (line.startsWith(' ') || line.startsWith('\t')) return []
+			const isIndented = line.startsWith(' ') || line.startsWith('\t')
+			if (inArtifactsBlock) {
+				// Stay in the block while lines are indented; exit on the first non-indented line.
+				if (isIndented) return []
+				inArtifactsBlock = false
+			}
 			const colonIdx = line.indexOf(':')
 			if (colonIdx === -1) return []
 			const key = line.slice(0, colonIdx).trim()
 			const raw = line.slice(colonIdx + 1).trim()
-			// Skip keys with no inline value (block map parents like `artifacts:`)
-			if (!raw) return []
+			// A key with no inline value is a block-map parent (e.g. `artifacts:`).
+			if (!raw) {
+				if (key === 'artifacts') inArtifactsBlock = true
+				return []
+			}
 			const value = raw.startsWith('"')
 				? raw.slice(1, raw.lastIndexOf('"')).replace(/\\"/g, '"')
 				: raw
