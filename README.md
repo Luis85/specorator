@@ -37,6 +37,9 @@ Specorator is an Obsidian plugin and companion app for spec-driven, agentic soft
 | [docs/prd.md](docs/prd.md)                                                 | v1 and v2.0 product requirements documents            |
 | [docs/roadmap-v1.md](docs/roadmap-v1.md)                                   | Phased delivery plan for v1 alpha                     |
 | [docs/process/requirements-intake.md](docs/process/requirements-intake.md) | Intake-first requirements and design workflow         |
+| [docs/contributing.md](docs/contributing.md)                               | Labels, milestones, branch naming, and merge policy   |
+| [docs/traceability.md](docs/traceability.md)                               | Requirements traceability index and ID conventions    |
+| [docs/glossary.md](docs/glossary.md)                                       | Product terminology baseline                          |
 
 ## Project tracking
 
