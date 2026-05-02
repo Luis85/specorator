@@ -26,6 +26,34 @@ jobs:
           bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
       - name: Run actionlint
         run: ./actionlint -color
+      - name: Verify third-party actions are SHA-pinned
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) | sort)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No workflow files found under .github/workflows."
+            exit 0
+          fi
+          violations=$(awk '
+            /^[[:space:]]*-?[[:space:]]*uses:/ {
+              ref = $0
+              sub(/\r$/, "", ref)
+              sub(/^[^:]*:[[:space:]]*/, "", ref)
+              sub(/[[:space:]]*#.*$/, "", ref)
+              sub(/[[:space:]]+$/, "", ref)
+              gsub(/^["\x27]+|["\x27]+$/, "", ref)
+              if (ref ~ /^\.\//) next
+              if (ref ~ /^docker:\/\//) next
+              if (ref !~ /@[0-9a-f]{40}$/) print FILENAME ":" FNR ": " $0
+            }
+          ' "${files[@]}")
+          if [ -n "$violations" ]; then
+            echo "::error::Unpinned actions found — every 'uses:' must reference a 40-character commit SHA (see docs/security/supply-chain.md)."
+            echo "$violations"
+            exit 1
+          fi
+          echo "All third-party actions are SHA-pinned."
 
   guard:
     name: Verify PR source is develop

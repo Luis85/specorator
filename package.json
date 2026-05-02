@@ -7,6 +7,7 @@
 	"main": "main.js",
 	"scripts": {
 		"dev": "vite",
+		"dev:open": "vite --open",
 		"dev:plugin": "vite build --watch --mode plugin",
 		"build": "vue-tsc --noEmit && vite build --mode plugin",
 		"typecheck": "vue-tsc --noEmit",

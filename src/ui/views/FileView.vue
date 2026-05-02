@@ -4,13 +4,14 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AppButton from '../components/common/AppButton.vue'
 import { useBridge } from '../composables/useBridge'
+import { normalizeFileRoutePath } from '../router/fileRoute'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const bridge = useBridge()
 
-const filePath = decodeURIComponent(route.params.encodedPath as string)
+const filePath = normalizeFileRoutePath(route.params.filePath as string)
 const content = ref<string | null>(null)
 const notFound = ref(false)
 const copied = ref(false)
