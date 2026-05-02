@@ -17,6 +17,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag is on main HEAD
+        run: |
+          git fetch origin main
+          MAIN_SHA=$(git rev-parse origin/main)
+          if [ "$GITHUB_SHA" != "$MAIN_SHA" ]; then
+            echo "Release tag must point to the current main HEAD ($MAIN_SHA), got $GITHUB_SHA"
+            exit 1
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

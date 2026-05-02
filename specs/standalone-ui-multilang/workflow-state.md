@@ -1,10 +1,14 @@
 ---
-feature: standalone-ui-multilang
+id: c4d5e6f7-a890-4b12-c3d4-e5f6a7b8c9d0
+feature: "Standalone UI with multilang support and DDD architecture"
 area: SUI
+slug: standalone-ui-multilang
 current_stage: implementation
 status: active
 last_updated: 2026-05-01
 last_agent: developer
+createdAt: 2026-05-01T00:00:00+02:00
+updatedAt: 2026-05-01T00:00:00+02:00
 artifacts:
   idea: complete
   research: skipped
