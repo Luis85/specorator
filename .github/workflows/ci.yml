@@ -26,6 +26,21 @@ jobs:
           bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
       - name: Run actionlint
         run: ./actionlint -color
+      - name: Verify third-party actions are SHA-pinned
+        shell: bash
+        run: |
+          set -euo pipefail
+          violations=$(grep -nE '^[[:space:]]*-?[[:space:]]*uses:' .github/workflows/*.yml \
+            | grep -vE 'uses:[[:space:]]*\./' \
+            | grep -vE 'uses:[[:space:]]*docker://' \
+            | grep -vE 'uses:[[:space:]]*[^@[:space:]]+@[0-9a-f]{40}([[:space:]]|$)' \
+            || true)
+          if [ -n "$violations" ]; then
+            echo "::error::Unpinned actions found — every 'uses:' must reference a 40-character commit SHA (see docs/security/supply-chain.md)."
+            echo "$violations"
+            exit 1
+          fi
+          echo "All third-party actions are SHA-pinned."
 
   guard:
     name: Verify PR source is develop
