@@ -18,7 +18,8 @@
 		"test:watch": "vitest",
 		"build:web": "vue-tsc --noEmit && vite build",
 		"test:coverage": "vitest run --coverage",
-		"docs:api": "typedoc"
+		"docs:api": "typedoc",
+		"version": "node version-bump.js && git add manifest.json versions.json"
 	},
 	"dependencies": {
 		"pinia": "^2.1.7",
