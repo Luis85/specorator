@@ -17,7 +17,14 @@ export class CreateFeatureUseCase implements UseCase<CreateFeatureInput, Feature
     const slugResult = Slug.create(input.title)
     if (!slugResult.ok) return slugResult
 
-    const existing = await this.repository.findBySlug(slugResult.value)
+    // findBySlug throws when the file exists but is malformed, so both the
+    // "already exists" and "unreadable file" cases block creation safely.
+    let existing: Feature | null
+    try {
+      existing = await this.repository.findBySlug(slugResult.value)
+    } catch (e) {
+      return err(e instanceof Error ? e : new Error(String(e)))
+    }
     if (existing) {
       return err(new Error(`A feature with slug "${slugResult.value}" already exists`))
     }

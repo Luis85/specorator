@@ -81,15 +81,15 @@ describe('CreateFeatureUseCase', () => {
     await makeUseCase(bridge).execute({ title: 'Dark mode', area: 'dm' })
 
     const meta = bridge.getAllFiles()['specs/dark-mode/workflow-state.md']
-    expect(meta).toContain('area: DM')
+    expect(meta).toContain('area: "DM"')
   })
 
   it('strips non-uppercase-letter characters from area so YAML stays valid', async () => {
     await makeUseCase(bridge).execute({ title: 'Dark mode', area: 'R&D' })
 
     const meta = bridge.getAllFiles()['specs/dark-mode/workflow-state.md']
-    // '&' is stripped; result is 'RD'
-    expect(meta).toContain('area: RD')
+    // '&' is stripped; result is 'RD', always quoted
+    expect(meta).toContain('area: "RD"')
     expect(meta).not.toContain('&')
   })
 
@@ -97,7 +97,7 @@ describe('CreateFeatureUseCase', () => {
     await makeUseCase(bridge).execute({ title: 'Dark mode' })
 
     const meta = bridge.getAllFiles()['specs/dark-mode/workflow-state.md']
-    expect(meta).toContain('area: DM')
+    expect(meta).toContain('area: "DM"')
   })
 
   it('rejects creation when a feature with the same slug already exists', async () => {
@@ -107,6 +107,29 @@ describe('CreateFeatureUseCase', () => {
 
     expect(second.ok).toBe(false)
     if (!second.ok) expect(second.error.message).toMatch(/already exists/)
+  })
+
+  it('rejects creation when workflow-state.md exists but is malformed (no overwrite)', async () => {
+    // Pre-seed a malformed (unparseable) workflow-state.md at the target slug path
+    await bridge.writeFile('specs/dark-mode/workflow-state.md', 'not valid frontmatter')
+
+    const result = await makeUseCase(bridge).execute({ title: 'Dark mode' })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.message).toMatch(/could not be parsed/)
+    // Original file must be untouched
+    expect(bridge.getAllFiles()['specs/dark-mode/workflow-state.md']).toBe('not valid frontmatter')
+  })
+
+  it('quotes area and applies sanitization to the slug-derived fallback', async () => {
+    // A purely numeric title produces a numeric-only slug → deriveArea gives digits only
+    // After sanitization the quoted scalar must never look like a YAML number
+    await makeUseCase(bridge).execute({ title: '42' })
+
+    const meta = bridge.getAllFiles()['specs/42/workflow-state.md']
+    // area must be quoted so YAML parsers see a string, never a number
+    expect(meta).toMatch(/area: "[A-Z]{2,5}"/)
+    expect(meta).not.toMatch(/area: \d/)
   })
 
   it('rejects an empty title', async () => {

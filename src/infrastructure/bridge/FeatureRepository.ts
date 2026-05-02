@@ -46,16 +46,17 @@ function serializeFeature(feature: Feature): string {
 	// Clamp index to [0, last] so currentStep ≤ 0 or > 12 both produce a valid stage.
 	const stageIndex = Math.max(0, Math.min(p.currentStep - 1, FEATURE_STEPS.length - 1))
 	const currentStage = FEATURE_STEPS[stageIndex]
-	// Strip non-uppercase-letter characters so the area scalar is always safe YAML.
-	const rawArea = p.area || deriveArea(p.slug)
-	const area = rawArea.replace(/[^A-Z]/g, '').slice(0, 5) || deriveArea(p.slug)
+	// Sanitize area: keep only A-Z, apply to both user value and derived fallback,
+	// then quote the scalar so the YAML value is always a safe string (never a number).
+	const sanitize = (s: string) => s.replace(/[^A-Z]/g, '').slice(0, 5)
+	const area = sanitize(p.area || deriveArea(p.slug)) || sanitize(deriveArea(p.slug)) || 'XX'
 	const lastUpdated = p.updatedAt.toISOString().slice(0, 10)
 	return [
 		'---',
 		`id: ${p.id}`,
 		`slug: ${p.slug}`,
 		`feature: "${p.title.replace(/"/g, '\\"')}"`,
-		`area: ${area}`,
+		`area: "${area}"`,
 		`status: ${p.status}`,
 		`currentStep: ${p.currentStep}`,
 		`current_stage: ${currentStage}`,
@@ -173,7 +174,12 @@ export class FeatureRepository implements IFeatureRepository {
 		const path = this.metaPath(slug.toString())
 		if (!(await this.bridge.fileExists(path))) return null
 		const content = await this.bridge.readFile(path)
-		return deserializeFeature(content)
+		const feature = deserializeFeature(content)
+		// File exists but is malformed — throw so callers cannot silently overwrite it.
+		if (feature === null) {
+			throw new Error(`Spec at "${path}" exists but could not be parsed — will not overwrite.`)
+		}
+		return feature
 	}
 
 	async findById(id: string): Promise<Feature | null> {
