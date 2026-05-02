@@ -74,7 +74,7 @@ describe('LocalStorageBridge', () => {
       localStorage.setItem('specorator:settings', JSON.stringify({ locale: 'de' }))
       const settings = await bridge.getSettings()
       expect(settings.locale).toBe('de')
-      expect(settings.featuresFolder).toBe(DEFAULT_SETTINGS.featuresFolder)
+      expect(settings.specsFolder).toBe(DEFAULT_SETTINGS.specsFolder)
     })
   })
 

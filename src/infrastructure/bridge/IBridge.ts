@@ -1,21 +1,21 @@
 export interface PluginSettings {
-  readonly locale: string
-  readonly featuresFolder: string
-  readonly archiveFolder: string
-  readonly decisionsFolder: string
-  readonly constitutionFile: string
-  readonly gateStrictness: 'strict' | 'lenient'
-  readonly teamMode: boolean
+	readonly locale: string
+	readonly specsFolder: string
+	readonly archiveFolder: string
+	readonly decisionsFolder: string
+	readonly constitutionFile: string
+	readonly gateStrictness: 'strict' | 'lenient'
+	readonly teamMode: boolean
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
-  locale: 'en',
-  featuresFolder: 'features',
-  archiveFolder: 'archive',
-  decisionsFolder: 'decisions',
-  constitutionFile: 'CONSTITUTION.md',
-  gateStrictness: 'strict',
-  teamMode: false,
+	locale: 'en',
+	specsFolder: 'specs',
+	archiveFolder: 'archive',
+	decisionsFolder: 'decisions',
+	constitutionFile: 'CONSTITUTION.md',
+	gateStrictness: 'strict',
+	teamMode: false,
 }
 
 /**

@@ -20,13 +20,13 @@ export class SpecoratorSettingTab extends PluginSettingTab {
     containerEl.createEl('h2', { text: 'Specorator' })
 
     new Setting(containerEl)
-      .setName('Features folder')
-      .setDesc('Vault folder where feature directories are created.')
+      .setName('Specs folder')
+      .setDesc('Vault folder where spec directories are created (agentic-workflow convention: specs).')
       .addText((text) =>
         text
-          .setValue(this.plugin.settings.featuresFolder)
+          .setValue(this.plugin.settings.specsFolder)
           .onChange(async (value) => {
-            await this.plugin.updateSettings({ featuresFolder: value.trim() || 'features' })
+            await this.plugin.updateSettings({ specsFolder: value.trim() || 'specs' })
           }),
       )
 
