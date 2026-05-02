@@ -138,6 +138,35 @@ describe('CreateFeatureUseCase', () => {
   })
 })
 
+describe('FeatureRepository.delete', () => {
+  it('removes all stage artifact files, not just workflow-state.md', async () => {
+    const bridge = new MockBridge()
+    const repo = makeRepo(bridge)
+
+    const created = await new CreateFeatureUseCase(repo).execute({ title: 'Search' })
+    expect(created.ok).toBe(true)
+    if (!created.ok) return
+
+    // Advance once to create research.md
+    await new ActivateFeatureUseCase(repo).execute({ featureId: created.value.id })
+    await new AdvanceFeatureStageUseCase(repo).execute({ featureId: created.value.id })
+
+    // Both files should exist before deletion
+    const before = bridge.getAllFiles()
+    expect('specs/search/workflow-state.md' in before).toBe(true)
+    expect('specs/search/idea.md' in before).toBe(true)
+    expect('specs/search/research.md' in before).toBe(true)
+
+    const deleteResult = await repo.delete(created.value.id)
+    expect(deleteResult.ok).toBe(true)
+
+    const after = bridge.getAllFiles()
+    expect('specs/search/workflow-state.md' in after).toBe(false)
+    expect('specs/search/idea.md' in after).toBe(false)
+    expect('specs/search/research.md' in after).toBe(false)
+  })
+})
+
 describe('ActivateFeatureUseCase', () => {
   it('updates workflow-state.md for an existing feature (upsert)', async () => {
     const bridge = new MockBridge()

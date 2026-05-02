@@ -244,7 +244,9 @@ export class FeatureRepository implements IFeatureRepository {
 		try {
 			const feature = await this.findById(id)
 			if (!feature) return err(new Error(`Feature "${id}" not found`))
-			await this.bridge.deleteFile(this.metaPath(feature.slug.toString()))
+			const folder = `${this.settings.specsFolder}/${feature.slug.toString()}`
+			const files = await this.bridge.listFiles(folder)
+			await Promise.all(files.map((path) => this.bridge.deleteFile(path)))
 			return ok(undefined)
 		} catch (e) {
 			return err(e instanceof Error ? e : new Error(String(e)))
