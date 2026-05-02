@@ -91,7 +91,7 @@ Automated review (Codex) typically posts within 3–5 minutes of the latest push
 
 ```sh
 gh pr view <n> --json reviews
-gh api repos/<owner>/<repo>/pulls/<n>/comments
+gh api --paginate repos/<owner>/<repo>/pulls/<n>/comments
 ```
 
 Inline comments live on the second endpoint and are easy to miss if you only query the first. Address every inline comment before merging — see [`address-review.md`](./address-review.md).

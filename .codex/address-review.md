@@ -28,7 +28,7 @@ gh pr view <n> --json reviews --jq '.reviews[] | {
 }'
 
 # Inline file-line comments (the actual technical feedback)
-gh api repos/<owner>/<repo>/pulls/<n>/comments --jq '.[] | {
+gh api --paginate repos/<owner>/<repo>/pulls/<n>/comments --jq '.[] | {
   path,
   line,
   commit: .commit_id,
@@ -36,6 +36,8 @@ gh api repos/<owner>/<repo>/pulls/<n>/comments --jq '.[] | {
   body: (.body[0:600])
 }'
 ```
+
+`--paginate` is required: without it, `gh api` returns only the first page (30 comments by default) and a long-running review thread on the PR will silently lose later comments. The `--jq` filter is applied per page, so pagination still produces a single concatenated stream of records.
 
 If the inline endpoint returns a non-empty array, treat each entry as real review feedback that must be resolved before merge.
 
@@ -83,7 +85,7 @@ Before squash-merging, re-run step 1. If new comments appeared on the latest com
 ```sh
 # Final check
 gh pr view <n> --json mergeable,mergeStateStatus,statusCheckRollup
-gh api repos/<owner>/<repo>/pulls/<n>/comments --jq 'length'
+gh api --paginate repos/<owner>/<repo>/pulls/<n>/comments --jq '.[]' | jq -s 'length'
 ```
 
 If `mergeStateStatus` is `CLEAN`, all checks SUCCESS, and every inline comment has been addressed, proceed to merge per [`open-pr.md`](./open-pr.md) §5.

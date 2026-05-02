@@ -147,7 +147,7 @@ Reviews on this repository can include both a top-level summary body and inline 
 A common failure mode is to query only the review summary (e.g. `gh pr view <n> --json reviews`) and miss inline comments that contain the substantive feedback. Inline comments live on a different endpoint:
 
 ```sh
-gh api repos/<owner>/<repo>/pulls/<n>/comments
+gh api --paginate repos/<owner>/<repo>/pulls/<n>/comments
 ```
 
 Rules:
