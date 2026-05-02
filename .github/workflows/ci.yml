@@ -35,11 +35,17 @@ jobs:
             echo "No workflow files found under .github/workflows."
             exit 0
           fi
-          violations=$(grep -nE '^[[:space:]]*-?[[:space:]]*uses:' "${files[@]}" \
-            | grep -vE 'uses:[[:space:]]*\./' \
-            | grep -vE 'uses:[[:space:]]*docker://' \
-            | grep -vE 'uses:[[:space:]]*[^@[:space:]]+@[0-9a-f]{40}([[:space:]]|$)' \
-            || true)
+          violations=$(awk '
+            /^[[:space:]]*-?[[:space:]]*uses:/ {
+              ref = $0
+              sub(/^[^:]*:[[:space:]]*/, "", ref)
+              sub(/[[:space:]]*#.*$/, "", ref)
+              gsub(/^["\x27]+|["\x27]+$/, "", ref)
+              if (ref ~ /^\.\//) next
+              if (ref ~ /^docker:\/\//) next
+              if (ref !~ /@[0-9a-f]{40}$/) print FILENAME ":" FNR ": " $0
+            }
+          ' "${files[@]}")
           if [ -n "$violations" ]; then
             echo "::error::Unpinned actions found — every 'uses:' must reference a 40-character commit SHA (see docs/security/supply-chain.md)."
             echo "$violations"
