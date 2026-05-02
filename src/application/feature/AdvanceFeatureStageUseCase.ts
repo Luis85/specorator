@@ -25,17 +25,20 @@ export class AdvanceFeatureStageUseCase implements UseCase<AdvanceFeatureStageIn
 
     const advanced = advancedResult.value
 
-    // Persist workflow-state first so the step counter is durable before the
-    // stage artifact file is written.  If save fails we leave no orphaned file.
-    const saveResult = await this.repository.save(advanced)
-    if (!saveResult.ok) return saveResult
-
-    // When currentStep exceeds the last stage (feature complete), there is no
-    // stage file to create — skip the file step.
+    // Stage file is written before workflow-state so the operation is safe to
+    // retry.  createStageFile is idempotent: if the file already exists it
+    // returns ok without overwriting, so a retry after a failed save will find
+    // the file present, skip the write, and re-attempt the save at the correct
+    // currentStep.  If we saved first instead, a createStageFile failure would
+    // leave currentStep already incremented; a retry would advance again and
+    // permanently skip the missing artifact.
     if (!advanced.isComplete) {
       const fileResult = await this.repository.createStageFile(advanced, advanced.currentStep)
       if (!fileResult.ok) return fileResult
     }
+
+    const saveResult = await this.repository.save(advanced)
+    if (!saveResult.ok) return saveResult
 
     return advancedResult
   }
