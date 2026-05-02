@@ -99,6 +99,39 @@ The 12 stage slugs (from `src/domain/feature/FeatureStep.ts`): `idea`, `research
 - `src/plugin/settings.ts` — settings type (mirrors `IBridge.PluginSettings`) and settings tab
 - `src/ui/main.ts` — browser (standalone) entry point, mounts Vue with `MockBridge`
 
+## Branching model
+
+| Branch | Purpose |
+|---|---|
+| `develop` | Integration branch. All feature branches cut from and merged back here. Default branch. |
+| `demo` | Preview branch. GitHub Pages deploys from here (not from `main`). |
+| `main` | Stable release gate. Only merges from `develop`; triggers plugin release on tag. |
+
+- **Cut all feature branches from `develop`**, not from `main`.
+- **Open PRs targeting `develop`**.
+- To publish a preview: PR `develop` → `demo`.
+- To cut a release: PR `develop` → `main`, merge, then tag `main` HEAD with `vX.Y.Z`.
+- Never push directly to `main` or tag from any branch other than `main`.
+
+CI runs on push/PR to `develop`, `demo`, and `main`. GitHub Pages deploys only on push to `demo`.
+
+## Spec-first gate (Phase 4)
+
+**No Phase 4 feature implementation branch may be opened** until the feature has:
+
+1. `specs/{slug}/idea.md` — accepted by the PM role
+2. `specs/{slug}/workflow-state.md` — canonical ADR-005 schema, correct stage
+3. Requirements accepted (or explicit PM sign-off to proceed from idea directly)
+
+Current Phase 4 spec entries in `specs/`:
+- `template-installation-service` — idea stage
+- `workflow-navigation-ui` — idea stage
+- `artifact-creation-scaffolding` — idea stage
+- `agent-interaction-placeholder` — idea stage
+- `update-model-placeholder` — idea stage
+
+See `CONSTITUTION.md` §3 and `decisions/DEC-001` for rationale.
+
 ## Development notes
 
 - `npm run dev` opens the full UI in a browser with no Obsidian runtime needed — the recommended environment for UI-focused work.

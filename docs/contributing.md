@@ -1,13 +1,14 @@
 ---
 title: "Specorator contribution guide"
 doc_type: process
-status: draft
+status: active
 owner: engineering
-last_updated: 2026-05-01
+last_updated: 2026-05-02
 references:
   - docs/local-development.md
   - docs/roadmap-v1.md
   - docs/process/requirements-intake.md
+  - CONSTITUTION.md
 ---
 
 # Contributing to Specorator
@@ -17,6 +18,7 @@ references:
 This guide covers the GitHub workflow for Specorator: how issues are filed and triaged, how labels and milestones are used, how branches are named, and what is expected before a PR is merged.
 
 For local development setup, see [docs/local-development.md](./local-development.md).
+For the non-negotiable working agreement, see [CONSTITUTION.md](../CONSTITUTION.md).
 
 ---
 
@@ -40,6 +42,16 @@ Before opening a feature request, read the [product vision](./product-vision.md)
 ### Intake-first for requirements and design
 
 New requirements and significant design decisions go through a structured intake process before implementation begins. See [docs/process/requirements-intake.md](./process/requirements-intake.md) for the triage and promotion steps.
+
+### Spec-first gate for Phase 4 features
+
+No Phase 4 feature implementation branch may be opened until a `specs/` entry exists for that feature:
+
+1. `specs/{slug}/idea.md` — accepted by the PM role.
+2. `specs/{slug}/workflow-state.md` — at the correct stage using the ADR-005 canonical schema.
+3. Requirements written and accepted (or an explicit PM sign-off to proceed from idea directly to implementation).
+
+This gate enforces that Specorator is a live example of the agentic-workflow methodology it supports. See [CONSTITUTION.md](../CONSTITUTION.md) §3 and [decisions/DEC-001](../decisions/DEC-001-adopt-agentic-workflow-for-repo.md).
 
 ---
 
@@ -139,9 +151,26 @@ Issues without acceptance criteria should not move to "In progress". If the scop
 
 ---
 
-## 5. Branches
+## 5. Branching model
 
-### Naming convention
+The repository uses a three-branch model. All development flows through `develop`; previews publish from `demo`; releases happen only on `main`.
+
+| Branch | Purpose | Who pushes here |
+|---|---|---|
+| `develop` | Primary integration branch. All feature branches are cut from here and merged back here. | PRs from feature branches |
+| `demo` | Preview branch. GitHub Pages deploys from here. | PR from `develop` when a preview is wanted |
+| `main` | Stable release branch. Triggers the Obsidian plugin release. | PR from `develop` only, for releases |
+
+### CI trigger matrix
+
+| Event | CI | GitHub Pages | Plugin release |
+|---|---|---|---|
+| Push / PR → `develop` | ✅ | ❌ | ❌ |
+| `develop` → `demo` (merge) | ✅ | ✅ deploy | ❌ |
+| `develop` → `main` (merge) | ✅ | ❌ | ✅ tag + publish |
+| Manual `workflow_dispatch` | ✅ optional | ✅ optional | ❌ |
+
+### Branch naming convention
 
 ```
 <type>/<short-description>
@@ -166,11 +195,14 @@ chore/update-vitest-to-3
 
 Keep the description short (3–5 words, kebab-case). Do not include issue numbers in branch names; link the issue in the PR instead.
 
-### Branch rules
+### Branch workflow
 
-- Branch from `main` for all new work.
-- Never commit directly to `main`.
-- Delete merged branches; do not accumulate stale branches.
+- **Cut feature branches from `develop`**, not from `main`.
+- **Open PRs targeting `develop`**.
+- **To publish a preview:** open a PR from `develop` to `demo`, merge it; GitHub Actions deploys to GitHub Pages automatically.
+- **To cut a release:** open a PR from `develop` to `main`, merge it, then tag the resulting `main` HEAD with the release version (`vX.Y.Z`). The release workflow publishes the plugin.
+- **Never** push directly to `main` or cut a release tag from any branch other than `main`.
+- Delete merged feature branches; do not accumulate stale branches.
 
 ---
 
@@ -278,7 +310,7 @@ The required check name (`Install, typecheck, lint, test, and build`) matches th
 
 ## 9. CI and Checks
 
-The CI workflow (`.github/workflows/ci.yml`) runs on pushes to `main` and on pull requests targeting `main`. It does **not** run on feature-branch pushes — run the checks locally before opening a PR. Steps:
+The CI workflow (`.github/workflows/ci.yml`) runs on pushes to `develop`, `demo`, and `main`, and on pull requests targeting any of those three branches. It does **not** run on raw feature-branch pushes — run the checks locally before opening a PR. Steps:
 
 1. `npm ci` — install dependencies
 2. `npm run typecheck` — TypeScript strict-mode check

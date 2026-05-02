@@ -1,6 +1,6 @@
 ---
 id: PRD-GHU-001
-title: GitHub Pages deployment with localStorage persistence
+title: GitHub Pages dual-deployment — product page and standalone UI with localStorage persistence
 stage: requirements
 feature: github-pages-ui
 status: accepted
@@ -8,18 +8,20 @@ owner: pm
 inputs:
   - IDEA-GHU-001
 created: 2026-05-01
-updated: 2026-05-01
+updated: 2026-05-02
 ---
 
 ## Summary
 
-The Specorator standalone UI must be automatically deployed to GitHub Pages and must operate with full feature parity to the Obsidian plugin. All persistence (feature artifacts, settings) must use `localStorage` as the backing store so the app is fully functional without any backend or Obsidian runtime.
+The Specorator GitHub Pages deployment must serve two things from a single automated workflow: a product landing page at the root and the full standalone app at `/app/`. All app persistence (feature artifacts, settings) must use `localStorage` as the backing store so the app is fully functional without any backend or Obsidian runtime. Deployment is triggered by pushes to the `demo` branch, not `main`, in line with the branching model (#78).
 
 ## Goals
 
-- Any visitor to `https://luis85.github.io/specorator/` can create, advance, archive, and manage features with data that persists across sessions.
+- `https://luis85.github.io/specorator/` serves a product page introducing the plugin and linking to the live app.
+- `https://luis85.github.io/specorator/app/` serves the fully functional standalone Specorator UI.
+- Any visitor to the app URL can create, advance, archive, and manage features with data that persists across sessions.
 - Contributors can review UI changes via a live URL without installing Obsidian.
-- Deployment is zero-touch: a push to `main` automatically publishes the updated UI.
+- Deployment is zero-touch: a push to `demo` automatically publishes the updated site.
 
 ## Non-goals
 
@@ -36,13 +38,28 @@ The Specorator standalone UI must be automatically deployed to GitHub Pages and 
 ### REQ-GHU-001
 
 **Pattern:** ubiquitous
-**Statement:** The repository shall include a GitHub Actions workflow that builds the standalone SPA and deploys it to GitHub Pages on every push to `main`.
+**Statement:** The repository shall include a GitHub Actions workflow that builds the dual-site (product page + standalone SPA) and deploys it to GitHub Pages on every push to `demo`.
 **Acceptance:**
 - The workflow file exists at `.github/workflows/pages.yml`.
-- The workflow triggers on `push` to `main` and on `workflow_dispatch`.
-- The build step runs `npm run build:web` with `VITE_BASE_URL=/specorator/`.
-- The `dist-standalone/` directory is uploaded as a Pages artifact and deployed.
-- The deployed app is accessible at `https://luis85.github.io/specorator/` (or the equivalent GitHub Pages URL for the repository).
+- The workflow triggers on `push` to `demo` and on `workflow_dispatch`.
+- The build step runs `npm run build:web` with `VITE_BASE_URL=/specorator/app/`.
+- The assembled `_site/` directory contains `index.html` (product page) at the root and the SPA assets under `app/`.
+- The deployed product page is accessible at `https://luis85.github.io/specorator/`.
+- The deployed app is accessible at `https://luis85.github.io/specorator/app/`.
+**Priority:** must
+**Satisfies:** IDEA-GHU-001
+
+---
+
+### REQ-GHU-007
+
+**Pattern:** ubiquitous
+**Statement:** The Pages deployment shall serve a product landing page at the root URL that introduces Specorator and links to the standalone app.
+**Acceptance:**
+- `site/index.html` is committed to the repository and contains the product page content.
+- The workflow copies `site/index.html` to `_site/index.html` before artifact upload.
+- The product page loads at `https://luis85.github.io/specorator/` without redirects.
+- The product page includes a visible link to the app at `/specorator/app/`.
 **Priority:** must
 **Satisfies:** IDEA-GHU-001
 

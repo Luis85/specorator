@@ -1,10 +1,14 @@
 ---
-feature: agentic-workflow-vault-structure
+id: f3a1c2b4-e890-4d56-a3f1-b2c3d4e5f6a7
+feature: "Align plugin vault structure with agentic-workflow conventions"
 area: AVS
-current_stage: design
+slug: agentic-workflow-vault-structure
+current_stage: spec
 status: active
 last_updated: 2026-05-02
 last_agent: architect
+createdAt: 2026-05-01T00:00:00+02:00
+updatedAt: 2026-05-02T00:00:00+02:00
 artifacts:
   idea: complete
   research: skipped
