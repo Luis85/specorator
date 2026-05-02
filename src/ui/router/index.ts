@@ -10,6 +10,6 @@ export const router = createRouter({
     { path: '/', name: 'home', component: HomeView },
     { path: '/features', name: 'features', component: FeaturesView },
     { path: '/settings', name: 'settings', component: SettingsView },
-    { path: '/file/:encodedPath', name: 'file', component: FileView },
+    { path: '/file/:filePath(.*)', name: 'file', component: FileView },
   ],
 })
