@@ -205,7 +205,13 @@ export class FeatureRepository implements IFeatureRepository {
 			await this.bridge.createFolder(folder)
 			const path = this.metaPath(feature.slug.toString())
 			const isNew = !(await this.bridge.fileExists(path))
-			await this.bridge.writeFile(path, serializeFeature(feature))
+			// On first creation, write idea.md before workflow-state.md so the
+			// operation is retry-safe.  idea.md creation is idempotent (preserves
+			// an existing file and returns ok), so if workflow-state.md then fails
+			// to write, workflow-state.md is still absent and findBySlug returns
+			// null — CreateFeatureUseCase can retry without hitting the duplicate
+			// check.  If we wrote workflow-state.md first, an idea.md failure
+			// would leave a valid metadata file and block any retry.
 			if (isNew) {
 				const ideaPath = this.stagePath(feature.slug.toString(), 'idea')
 				if (await this.bridge.fileExists(ideaPath)) {
@@ -217,6 +223,7 @@ export class FeatureRepository implements IFeatureRepository {
 					await this.bridge.writeFile(ideaPath, buildStageStub('idea', feature.slug.toString(), feature.title, date))
 				}
 			}
+			await this.bridge.writeFile(path, serializeFeature(feature))
 			return ok(undefined)
 		} catch (e) {
 			return err(e instanceof Error ? e : new Error(String(e)))
