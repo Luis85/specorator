@@ -1,11 +1,16 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { CreateFeatureUseCase } from '../CreateFeatureUseCase'
+import { AdvanceFeatureStageUseCase } from '../AdvanceFeatureStageUseCase'
+import { ActivateFeatureUseCase } from '../ActivateFeatureUseCase'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { DEFAULT_SETTINGS } from '@/infrastructure/bridge/IBridge'
 
+function makeRepo(bridge: MockBridge) {
+  return new FeatureRepository(bridge, DEFAULT_SETTINGS)
+}
 function makeUseCase(bridge: MockBridge) {
-  return new CreateFeatureUseCase(new FeatureRepository(bridge, DEFAULT_SETTINGS))
+  return new CreateFeatureUseCase(makeRepo(bridge))
 }
 
 describe('CreateFeatureUseCase', () => {
@@ -15,7 +20,7 @@ describe('CreateFeatureUseCase', () => {
     bridge = new MockBridge()
   })
 
-  it('creates a feature and persists it to the bridge', async () => {
+  it('creates a feature and persists workflow-state.md', async () => {
     const useCase = makeUseCase(bridge)
     const result = await useCase.execute({ title: 'Dark mode' })
 
@@ -27,9 +32,52 @@ describe('CreateFeatureUseCase', () => {
     expect(result.value.slug.toString()).toBe('dark-mode')
 
     const files = bridge.getAllFiles()
-    const metaPath = `specs/dark-mode/workflow-state.md`
+    const metaPath = 'specs/dark-mode/workflow-state.md'
     expect(metaPath in files).toBe(true)
-    expect(files[metaPath]).toContain('title: "Dark mode"')
+    const meta = files[metaPath]
+    expect(meta).toContain('feature: "Dark mode"')
+    expect(meta).not.toContain('title:')
+  })
+
+  it('writes the full artifacts block map (not an empty list)', async () => {
+    const result = await makeUseCase(bridge).execute({ title: 'Dark mode' })
+    expect(result.ok).toBe(true)
+
+    const meta = bridge.getAllFiles()['specs/dark-mode/workflow-state.md']
+    expect(meta).toContain('artifacts:')
+    expect(meta).toContain('  idea: complete')
+    expect(meta).toContain('  research: pending')
+    expect(meta).not.toContain('artifacts: []')
+  })
+
+  it('writes last_updated as a date-only string (YYYY-MM-DD)', async () => {
+    const result = await makeUseCase(bridge).execute({ title: 'Dark mode' })
+    expect(result.ok).toBe(true)
+
+    const meta = bridge.getAllFiles()['specs/dark-mode/workflow-state.md']
+    expect(meta).toMatch(/last_updated: \d{4}-\d{2}-\d{2}\n/)
+  })
+
+  it('creates idea.md alongside workflow-state.md on first save', async () => {
+    await makeUseCase(bridge).execute({ title: 'Dark mode' })
+
+    const files = bridge.getAllFiles()
+    expect('specs/dark-mode/idea.md' in files).toBe(true)
+    expect(files['specs/dark-mode/idea.md']).toContain('stage: idea')
+  })
+
+  it('stores the user-supplied area in uppercase', async () => {
+    await makeUseCase(bridge).execute({ title: 'Dark mode', area: 'dm' })
+
+    const meta = bridge.getAllFiles()['specs/dark-mode/workflow-state.md']
+    expect(meta).toContain('area: DM')
+  })
+
+  it('derives area from slug initials when area is omitted', async () => {
+    await makeUseCase(bridge).execute({ title: 'Dark mode' })
+
+    const meta = bridge.getAllFiles()['specs/dark-mode/workflow-state.md']
+    expect(meta).toContain('area: DM')
   })
 
   it('rejects creation when a feature with the same slug already exists', async () => {
@@ -44,5 +92,76 @@ describe('CreateFeatureUseCase', () => {
   it('rejects an empty title', async () => {
     const result = await makeUseCase(bridge).execute({ title: '   ' })
     expect(result.ok).toBe(false)
+  })
+})
+
+describe('ActivateFeatureUseCase', () => {
+  it('updates workflow-state.md for an existing feature (upsert)', async () => {
+    const bridge = new MockBridge()
+    const repo = makeRepo(bridge)
+    const createResult = await new CreateFeatureUseCase(repo).execute({ title: 'Search' })
+    expect(createResult.ok).toBe(true)
+    if (!createResult.ok) return
+
+    const activateResult = await new ActivateFeatureUseCase(repo).execute({
+      featureId: createResult.value.id,
+    })
+    expect(activateResult.ok).toBe(true)
+    if (!activateResult.ok) return
+
+    const meta = bridge.getAllFiles()['specs/search/workflow-state.md']
+    expect(meta).toContain('status: active')
+  })
+})
+
+describe('AdvanceFeatureStageUseCase', () => {
+  it('advances step and creates the new stage file', async () => {
+    const bridge = new MockBridge()
+    const repo = makeRepo(bridge)
+
+    const created = await new CreateFeatureUseCase(repo).execute({ title: 'Search' })
+    expect(created.ok).toBe(true)
+    if (!created.ok) return
+
+    const activated = await new ActivateFeatureUseCase(repo).execute({
+      featureId: created.value.id,
+    })
+    expect(activated.ok).toBe(true)
+
+    const advanced = await new AdvanceFeatureStageUseCase(repo).execute({
+      featureId: created.value.id,
+    })
+    expect(advanced.ok).toBe(true)
+    if (!advanced.ok) return
+
+    expect(advanced.value.currentStep).toBe(2)
+
+    const files = bridge.getAllFiles()
+    expect('specs/search/research.md' in files).toBe(true)
+    expect(files['specs/search/research.md']).toContain('stage: research')
+  })
+
+  it('keeps an existing stage file without overwriting (REQ-AVS-005)', async () => {
+    const bridge = new MockBridge()
+    const repo = makeRepo(bridge)
+
+    const created = await new CreateFeatureUseCase(repo).execute({ title: 'Search' })
+    expect(created.ok).toBe(true)
+    if (!created.ok) return
+
+    await new ActivateFeatureUseCase(repo).execute({ featureId: created.value.id })
+
+    // Pre-seed the stage file with custom content
+    await bridge.writeFile('specs/search/research.md', '# my custom research\n')
+
+    const advanced = await new AdvanceFeatureStageUseCase(repo).execute({
+      featureId: created.value.id,
+    })
+    expect(advanced.ok).toBe(true)
+
+    // Custom file must not be overwritten
+    expect(bridge.getAllFiles()['specs/search/research.md']).toBe('# my custom research\n')
+    // A notice must have been shown
+    expect(bridge.getNotices().some((n) => n.message.includes('research.md'))).toBe(true)
   })
 })

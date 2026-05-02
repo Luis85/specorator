@@ -6,6 +6,8 @@ import type { UseCase } from '../shared/UseCase'
 
 export interface CreateFeatureInput {
   readonly title: string
+  /** Optional 3–5 uppercase-letter area code (e.g. "DM" for dark-mode). Derived from slug if omitted. */
+  readonly area?: string
 }
 
 export class CreateFeatureUseCase implements UseCase<CreateFeatureInput, Feature> {
@@ -21,7 +23,7 @@ export class CreateFeatureUseCase implements UseCase<CreateFeatureInput, Feature
     }
 
     const id = crypto.randomUUID()
-    const featureResult = Feature.create(id, slugResult.value, input.title)
+    const featureResult = Feature.create(id, slugResult.value, input.title, input.area)
     if (!featureResult.ok) return featureResult
 
     const saveResult = await this.repository.save(featureResult.value)

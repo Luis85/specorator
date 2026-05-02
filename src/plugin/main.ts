@@ -1,4 +1,4 @@
-import { Plugin } from 'obsidian'
+import { Notice, Plugin, TFolder } from 'obsidian'
 import { SpecoratorView, VIEW_TYPE } from './SpecoratorView'
 import { SpecoratorSettingTab, DEFAULT_SETTINGS, type PluginSettings } from './settings'
 
@@ -21,6 +21,8 @@ export default class SpecoratorPlugin extends Plugin {
     })
 
     this.addSettingTab(new SpecoratorSettingTab(this.app, this))
+
+    this.detectLegacyVaultLayout()
   }
 
   async onunload(): Promise<void> {
@@ -29,12 +31,33 @@ export default class SpecoratorPlugin extends Plugin {
 
   async loadSettings(): Promise<void> {
     const stored = await this.loadData()
-    this.settings = { ...DEFAULT_SETTINGS, ...(stored as Partial<PluginSettings>) }
+    // NFR-AVS-004: treat legacy `featuresFolder` as `specsFolder` if present
+    const raw = (stored ?? {}) as Record<string, unknown>
+    if (raw.featuresFolder && !raw.specsFolder) {
+      raw.specsFolder = raw.featuresFolder
+    }
+    this.settings = { ...DEFAULT_SETTINGS, ...(raw as Partial<PluginSettings>) }
   }
 
   async updateSettings(partial: Partial<PluginSettings>): Promise<void> {
     this.settings = { ...this.settings, ...partial }
     await this.saveData(this.settings)
+  }
+
+  /**
+   * DESIGN-AVS-001: If the vault has a `features/` folder but not a `specs/`
+   * folder, show a one-time notice informing the user to rename it.
+   */
+  private detectLegacyVaultLayout(): void {
+    const hasFeaturesFolder = this.app.vault.getAbstractFileByPath('features') instanceof TFolder
+    const hasSpecsFolder = this.app.vault.getAbstractFileByPath(this.settings.specsFolder) instanceof TFolder
+    if (hasFeaturesFolder && !hasSpecsFolder) {
+      new Notice(
+        `Specorator: this vault uses the old \`features/\` folder. ` +
+          `Please rename it to \`${this.settings.specsFolder}/\` or update the Specs folder setting.`,
+        8000,
+      )
+    }
   }
 
   private async activateView(): Promise<void> {

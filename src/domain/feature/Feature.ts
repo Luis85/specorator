@@ -7,6 +7,7 @@ export interface FeatureProps {
   readonly id: string
   readonly slug: Slug
   readonly title: string
+  readonly area?: string
   readonly status: FeatureStatus
   readonly currentStep: number
   readonly createdAt: Date
@@ -17,6 +18,7 @@ export interface FeaturePlainObject {
   readonly id: string
   readonly slug: string
   readonly title: string
+  readonly area: string
   readonly status: FeatureStatus
   readonly currentStep: number
   readonly createdAt: Date
@@ -26,7 +28,7 @@ export interface FeaturePlainObject {
 export class Feature {
   private constructor(private readonly props: FeatureProps) {}
 
-  static create(id: string, slug: Slug, title: string): Result<Feature> {
+  static create(id: string, slug: Slug, title: string, area?: string): Result<Feature> {
     if (!title.trim()) {
       return err(new Error('Feature title cannot be empty'))
     }
@@ -36,6 +38,7 @@ export class Feature {
         id,
         slug,
         title: title.trim(),
+        area: area?.toUpperCase().trim() || '',
         status: 'draft',
         currentStep: 1,
         createdAt: now,
@@ -51,6 +54,7 @@ export class Feature {
   get id(): string { return this.props.id }
   get slug(): Slug { return this.props.slug }
   get title(): string { return this.props.title }
+  get area(): string { return this.props.area ?? '' }
   get status(): FeatureStatus { return this.props.status }
   get currentStep(): number { return this.props.currentStep }
   get createdAt(): Date { return this.props.createdAt }
@@ -93,6 +97,7 @@ export class Feature {
       id: this.props.id,
       slug: this.props.slug.toString(),
       title: this.props.title,
+      area: this.props.area ?? '',
       status: this.props.status,
       currentStep: this.props.currentStep,
       createdAt: this.props.createdAt,
