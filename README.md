@@ -12,6 +12,8 @@ references:
 
 # Specorator
 
+**[specorator.github.io/specorator](https://luis85.github.io/specorator/) · [Try it live in your browser →](https://luis85.github.io/specorator/app/)**
+
 Specorator is an Obsidian plugin and companion app for spec-driven, agentic software development. It guides users through a structured workflow — from idea to release — keeping all artifacts as editable Markdown inside the vault.
 
 **Current status:** Plugin shell complete. v1 alpha feature delivery in progress.
