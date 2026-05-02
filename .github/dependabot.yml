@@ -1,0 +1,57 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    groups:
+      dev-tooling:
+        patterns:
+          - "@eslint/*"
+          - "eslint*"
+          - "prettier*"
+          - "typescript*"
+          - "vue-tsc"
+          - "typedoc*"
+          - "globals"
+        update-types:
+          - minor
+          - patch
+      vite-vitest:
+        patterns:
+          - "vite*"
+          - "@vitejs/*"
+          - "vitest*"
+          - "@vitest/*"
+        update-types:
+          - minor
+          - patch
+      vue:
+        patterns:
+          - "vue*"
+          - "@vue/*"
+          - "pinia"
+          - "vue-i18n"
+          - "vue-router"
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
