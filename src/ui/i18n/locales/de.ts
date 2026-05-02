@@ -15,6 +15,8 @@ export default {
     create: 'Neues Feature',
     title: 'Titel',
     placeholder: 'z. B. Dark-Mode-Unterstützung',
+    area: 'Bereichscode (optional)',
+    areaPlaceholder: 'z. B. DM (2–5 Buchstaben)',
     status: {
       draft: 'Entwurf',
       active: 'Aktiv',
