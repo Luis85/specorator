@@ -40,6 +40,8 @@ Specorator is an Obsidian plugin and companion app for spec-driven, agentic soft
 | [docs/contributing.md](docs/contributing.md)                               | Labels, milestones, branch naming, and merge policy   |
 | [docs/traceability.md](docs/traceability.md)                               | Requirements traceability index and ID conventions    |
 | [docs/glossary.md](docs/glossary.md)                                       | Product terminology baseline                          |
+| [docs/github-workspace.md](docs/github-workspace.md)                       | GitHub Project board, views, fields, and admin setup  |
+| [docs/initiation.md](docs/initiation.md)                                   | P3.express initiation package and go/no-go decision   |
 
 ## Project tracking
 
