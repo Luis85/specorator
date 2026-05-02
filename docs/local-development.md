@@ -146,6 +146,41 @@ npm run dev
 
 This starts a Vite dev server (typically at `http://localhost:5173`). The browser build uses `MockBridge` instead of `ObsidianBridge`, so all plugin-specific Obsidian APIs are simulated. This is the recommended environment for UI-focused work.
 
+## GitHub Pages site
+
+The repository publishes a product page at `https://luis85.github.io/specorator/` and a live standalone UI at `https://luis85.github.io/specorator/app/`.
+
+### Site structure
+
+| Path | Content | Source |
+|------|---------|--------|
+| `/specorator/` | Product page | `site/index.html` (hand-authored HTML/CSS) |
+| `/specorator/app/` | Standalone plugin UI | `npm run build:web` → `dist-standalone/` |
+
+### How the deployment works
+
+The `.github/workflows/pages.yml` workflow runs on every push to `main`:
+
+1. Runs `npm run build:web` with `VITE_BASE_URL=/specorator/app/` so all SPA asset paths are prefixed correctly.
+2. Assembles a `_site/` staging directory:
+   - `site/index.html` → `_site/index.html`
+   - `dist-standalone/**` → `_site/app/**`
+3. Uploads `_site/` as the GitHub Pages artifact and deploys it.
+
+### Updating the product page
+
+Edit `site/index.html` and push to `main`. The workflow redeploys automatically.
+
+### Building the Pages site locally
+
+```sh
+VITE_BASE_URL=/specorator/app/ npm run build:web
+mkdir -p _site/app
+cp site/index.html _site/index.html
+cp -r dist-standalone/. _site/app/
+# Open _site/index.html in a browser to preview
+```
+
 ## Related
 
 - [vite.config.ts](../vite.config.ts) — build configuration for both plugin and standalone modes

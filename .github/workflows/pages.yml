@@ -31,11 +31,17 @@ jobs:
       - name: Build standalone SPA
         run: npm run build:web
         env:
-          VITE_BASE_URL: /specorator/
+          VITE_BASE_URL: /specorator/app/
+
+      - name: Assemble Pages site
+        run: |
+          mkdir -p _site/app
+          cp site/index.html _site/index.html
+          cp -r dist-standalone/. _site/app/
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist-standalone
+          path: _site
 
   deploy:
     needs: build

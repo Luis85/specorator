@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Specorator — spec-driven, agentic software development for Obsidian</title>
+    <meta
+      name="description"
+      content="Specorator is an Obsidian plugin that guides you through a structured spec-driven workflow — from idea to release — keeping all artifacts as editable Markdown in your vault."
+    />
+    <style>
+      /* ── Reset & base ───────────────────────────────────── */
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        --color-bg:        #0d1117;
+        --color-surface:   #161b22;
+        --color-border:    #30363d;
+        --color-accent:    #7c3aed;
+        --color-accent-lt: #a78bfa;
+        --color-text:      #e6edf3;
+        --color-muted:     #8b949e;
+        --color-code-bg:   #1f2937;
+        --radius:          8px;
+        --max-w:           860px;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        background: var(--color-bg);
+        color: var(--color-text);
+        line-height: 1.65;
+        font-size: 1rem;
+      }
+
+      a { color: var(--color-accent-lt); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+
+      /* ── Layout ─────────────────────────────────────────── */
+      .container { max-width: var(--max-w); margin: 0 auto; padding: 0 1.5rem; }
+
+      /* ── Header ─────────────────────────────────────────── */
+      header {
+        border-bottom: 1px solid var(--color-border);
+        padding: 1rem 0;
+      }
+      header .inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+      header .logo {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: var(--color-text);
+        letter-spacing: -0.02em;
+      }
+      header .logo span { color: var(--color-accent-lt); }
+      header nav { display: flex; gap: 1.25rem; font-size: 0.9rem; color: var(--color-muted); }
+      header nav a { color: var(--color-muted); }
+      header nav a:hover { color: var(--color-text); text-decoration: none; }
+
+      /* ── Hero ───────────────────────────────────────────── */
+      .hero {
+        text-align: center;
+        padding: 5rem 0 4rem;
+      }
+      .hero .badge {
+        display: inline-block;
+        background: rgba(124, 58, 237, 0.15);
+        color: var(--color-accent-lt);
+        border: 1px solid rgba(124, 58, 237, 0.4);
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        padding: 0.25rem 0.85rem;
+        margin-bottom: 1.5rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .hero h1 {
+        font-size: clamp(2rem, 5vw, 3rem);
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1.15;
+        margin-bottom: 1.25rem;
+      }
+      .hero h1 em { font-style: normal; color: var(--color-accent-lt); }
+      .hero p {
+        font-size: 1.15rem;
+        color: var(--color-muted);
+        max-width: 600px;
+        margin: 0 auto 2.5rem;
+        line-height: 1.75;
+      }
+      .hero-cta {
+        display: flex;
+        gap: 0.85rem;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.65rem 1.5rem;
+        border-radius: var(--radius);
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: opacity 0.15s;
+      }
+      .btn:hover { opacity: 0.88; text-decoration: none; }
+      .btn-primary {
+        background: var(--color-accent);
+        color: #fff;
+      }
+      .btn-secondary {
+        background: var(--color-surface);
+        color: var(--color-text);
+        border: 1px solid var(--color-border);
+      }
+
+      /* ── Section base ───────────────────────────────────── */
+      section { padding: 3.5rem 0; border-top: 1px solid var(--color-border); }
+      section h2 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin-bottom: 1.25rem;
+      }
+      section p { color: var(--color-muted); margin-bottom: 1rem; max-width: 700px; }
+
+      /* ── What / problem ─────────────────────────────────── */
+      .what-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 1rem;
+        margin-top: 1.5rem;
+      }
+      .card {
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        padding: 1.25rem 1.5rem;
+      }
+      .card-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+      .card h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 0.4rem;
+        color: var(--color-text);
+      }
+      .card p { font-size: 0.9rem; margin-bottom: 0; color: var(--color-muted); }
+
+      /* ── Workflow steps ─────────────────────────────────── */
+      .stage-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 1.25rem;
+      }
+      .stage-pill {
+        background: var(--color-code-bg);
+        color: var(--color-accent-lt);
+        border: 1px solid rgba(124, 58, 237, 0.25);
+        border-radius: 999px;
+        font-size: 0.78rem;
+        padding: 0.2rem 0.7rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      /* ── Try it live ────────────────────────────────────── */
+      .try-live {
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        padding: 2rem;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-top: 1.5rem;
+      }
+      .try-live p { margin: 0; }
+
+      /* ── Install ────────────────────────────────────────── */
+      .install-steps { margin-top: 1.25rem; counter-reset: step; }
+      .install-steps li {
+        counter-increment: step;
+        list-style: none;
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        font-size: 0.95rem;
+        color: var(--color-muted);
+      }
+      .install-steps li::before {
+        content: counter(step);
+        flex-shrink: 0;
+        width: 1.6rem;
+        height: 1.6rem;
+        border-radius: 50%;
+        background: rgba(124, 58, 237, 0.2);
+        color: var(--color-accent-lt);
+        font-size: 0.8rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        background: var(--color-code-bg);
+        color: var(--color-accent-lt);
+        padding: 0.1em 0.4em;
+        border-radius: 4px;
+        font-size: 0.88em;
+      }
+
+      /* ── Vision / roadmap ───────────────────────────────── */
+      .roadmap-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-top: 1.5rem;
+      }
+      @media (max-width: 580px) { .roadmap-row { grid-template-columns: 1fr; } }
+      .roadmap-card {
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        padding: 1.25rem 1.5rem;
+      }
+      .roadmap-card .version {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--color-muted);
+        margin-bottom: 0.6rem;
+      }
+      .roadmap-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
+      .roadmap-card ul {
+        padding-left: 1.1rem;
+        font-size: 0.88rem;
+        color: var(--color-muted);
+        line-height: 1.7;
+      }
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.15rem 0.6rem;
+        border-radius: 999px;
+        margin-top: 0.75rem;
+      }
+      .status-alpha {
+        background: rgba(234, 179, 8, 0.12);
+        color: #fbbf24;
+        border: 1px solid rgba(234, 179, 8, 0.3);
+      }
+      .status-planned {
+        background: rgba(99, 102, 241, 0.1);
+        color: #a78bfa;
+        border: 1px solid rgba(99, 102, 241, 0.25);
+      }
+
+      /* ── Related repos ──────────────────────────────────── */
+      .related-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+        margin-top: 1.25rem;
+      }
+      .repo-card {
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        padding: 1rem 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+      }
+      .repo-card .repo-name {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.9rem;
+        color: var(--color-accent-lt);
+        font-weight: 600;
+      }
+      .repo-card p { font-size: 0.85rem; color: var(--color-muted); margin: 0; }
+
+      /* ── Contribute ─────────────────────────────────────── */
+      .link-list { margin-top: 1rem; }
+      .link-list li {
+        list-style: none;
+        padding: 0.4rem 0;
+        border-bottom: 1px solid var(--color-border);
+        font-size: 0.9rem;
+        color: var(--color-muted);
+      }
+      .link-list li:last-child { border-bottom: none; }
+      .link-list li a { color: var(--color-accent-lt); }
+
+      /* ── Footer ─────────────────────────────────────────── */
+      footer {
+        border-top: 1px solid var(--color-border);
+        padding: 2rem 0;
+        text-align: center;
+        font-size: 0.85rem;
+        color: var(--color-muted);
+      }
+      footer a { color: var(--color-muted); }
+      footer a:hover { color: var(--color-text); text-decoration: none; }
+    </style>
+  </head>
+  <body>
+
+    <!-- ── Header ─────────────────────────────────────────── -->
+    <header>
+      <div class="container inner">
+        <span class="logo">Spec<span>orator</span></span>
+        <nav>
+          <a href="#try-live">Try live</a>
+          <a href="#install">Install</a>
+          <a href="#contribute">Contribute</a>
+          <a href="https://github.com/Luis85/specorator">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <!-- ── Hero ───────────────────────────────────────────── -->
+    <main>
+      <section class="hero" style="border-top: none;">
+        <div class="container">
+          <div class="badge">Obsidian plugin · v1 alpha</div>
+          <h1>Spec-driven workflow,<br /><em>inside your vault</em></h1>
+          <p>
+            Specorator guides you from idea to release through a structured 12-stage workflow.
+            Every artifact lives as editable Markdown in your Obsidian vault — owned by you,
+            readable without the plugin, and ready for agentic assistance when you want it.
+          </p>
+          <div class="hero-cta">
+            <a href="app/" class="btn btn-primary">
+              ▶&nbsp; Try it in your browser
+            </a>
+            <a href="#install" class="btn btn-secondary">
+              Install in Obsidian
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── What is Specorator? ─────────────────────────── -->
+      <section id="what">
+        <div class="container">
+          <h2>What is Specorator?</h2>
+          <p>
+            Specorator is an <strong>Obsidian plugin</strong> that embeds the
+            <a href="https://github.com/Luis85/agentic-workflow">agentic-workflow</a> methodology
+            directly into your vault. It gives you a cockpit view of your active feature, tracks
+            which stage you are on, surfaces the next required artifacts, and enforces quality
+            gates before you advance.
+          </p>
+          <p>
+            All content stays in plain Markdown. You never need to log into a separate tool,
+            upload files to an external service, or hand over control of your context.
+            Specorator is a helping hand, not a gatekeeper.
+          </p>
+
+          <div class="what-grid">
+            <div class="card">
+              <div class="card-icon">🗂️</div>
+              <h3>Vault-first</h3>
+              <p>Every artifact is a Markdown file in <code>specs/{slug}/</code>. Open, edit, and version-control it with any tool you already use.</p>
+            </div>
+            <div class="card">
+              <div class="card-icon">🔁</div>
+              <h3>Stage-gated workflow</h3>
+              <p>12 stages from <code>idea</code> to <code>retrospective</code>. Advance only when quality gates pass — no skipping, no guessing what comes next.</p>
+            </div>
+            <div class="card">
+              <div class="card-icon">🤝</div>
+              <h3>You stay in control</h3>
+              <p>You decide what context agents can see, what they propose, and what becomes a durable artifact. Specorator surfaces options — you make decisions.</p>
+            </div>
+            <div class="card">
+              <div class="card-icon">🧩</div>
+              <h3>Try without installing</h3>
+              <p>The standalone UI runs fully in your browser with <code>localStorage</code> — no Obsidian, no sign-up, no backend required.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── The problem ────────────────────────────────── -->
+      <section id="problem">
+        <div class="container">
+          <h2>The problem it solves</h2>
+          <p>
+            Most developers start coding before the problem is well understood. They jump from
+            a vague idea to a PR without a spec, without a test plan, and without a retrospective.
+            The result is rework, scope creep, and knowledge scattered across chat threads,
+            Notion pages, and half-finished documents.
+          </p>
+          <p>
+            Specorator brings the <em>whole workflow</em> — ideation, research, requirements,
+            design, spec, tasks, implementation, testing, review, release, and retrospective —
+            into a single, consistent place: your Obsidian vault. It keeps you focused on the
+            work, not on process admin.
+          </p>
+
+          <div class="stage-list">
+            <span class="stage-pill">idea</span>
+            <span class="stage-pill">research</span>
+            <span class="stage-pill">requirements</span>
+            <span class="stage-pill">design</span>
+            <span class="stage-pill">spec</span>
+            <span class="stage-pill">tasks</span>
+            <span class="stage-pill">implementation-log</span>
+            <span class="stage-pill">test-plan</span>
+            <span class="stage-pill">test-report</span>
+            <span class="stage-pill">review</span>
+            <span class="stage-pill">release-notes</span>
+            <span class="stage-pill">retrospective</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Try it live ──────────────────────────────────── -->
+      <section id="try-live">
+        <div class="container">
+          <h2>Try it live in your browser</h2>
+          <p>
+            The standalone UI uses your browser's <code>localStorage</code> as a vault — no
+            Obsidian runtime, no sign-up, no data sent anywhere. Create a feature, walk through
+            the stages, and see the workflow in action.
+          </p>
+
+          <div class="try-live">
+            <div>
+              <strong>Specorator — live demo</strong>
+              <p style="margin-top: 0.25rem; font-size: 0.9rem;">
+                All data stays in your browser. Nothing is uploaded or stored externally.
+              </p>
+            </div>
+            <a href="app/" class="btn btn-primary" style="font-size: 1rem; padding: 0.75rem 2rem;">
+              ▶&nbsp; Open the live plugin UI
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Relationship to agentic-workflow ─────────────── -->
+      <section id="workflow">
+        <div class="container">
+          <h2>Relationship to <code>agentic-workflow</code></h2>
+          <p>
+            <a href="https://github.com/Luis85/agentic-workflow">agentic-workflow</a> is the
+            upstream methodology: a detailed 12-stage process with templates, quality gates,
+            and heuristics for what "good" looks like at each stage.
+            Specorator is the Obsidian <em>runtime</em> for that methodology.
+          </p>
+          <p>
+            The plugin installs the <code>agentic-workflow</code> template set into your vault,
+            creates the correct folder structure, and exposes the cockpit UI for tracking and
+            advancing features. Changes to the upstream methodology flow into Specorator as
+            template and validation updates.
+          </p>
+        </div>
+      </section>
+
+      <!-- ── Roadmap ────────────────────────────────────────── -->
+      <section id="roadmap">
+        <div class="container">
+          <h2>What is available now, and what is coming</h2>
+
+          <div class="roadmap-row">
+            <div class="roadmap-card">
+              <div class="version">v1 alpha — in progress</div>
+              <h3>Plugin foundation</h3>
+              <ul>
+                <li>Create and manage features from the Obsidian sidebar</li>
+                <li>Advance through all 12 stages with quality-gate checks</li>
+                <li>Auto-creates stage stub files in <code>specs/{slug}/</code></li>
+                <li>Standalone browser UI (try without installing)</li>
+                <li>LocalStorage persistence for browser demo</li>
+              </ul>
+              <span class="status-badge status-alpha">⚡ Active development</span>
+            </div>
+
+            <div class="roadmap-card">
+              <div class="version">v2.0 — planned</div>
+              <h3>Agentonomous integration</h3>
+              <ul>
+                <li>Team of agentic coworkers powered by <a href="https://github.com/Luis85/agentonomous">agentonomous</a></li>
+                <li>Agents assist with drafting, review, and quality checking</li>
+                <li>You control what context agents see and what they propose</li>
+                <li>All agent outputs remain editable Markdown in your vault</li>
+                <li>Companion-app experience alongside the Obsidian plugin</li>
+              </ul>
+              <span class="status-badge status-planned">🔭 Planned</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Install ────────────────────────────────────────── -->
+      <section id="install">
+        <div class="container">
+          <h2>Install or sideload into Obsidian</h2>
+          <p>
+            Specorator is not yet listed in the Obsidian Community Plugin directory.
+            Use the manual sideload method until it is submitted.
+          </p>
+
+          <ol class="install-steps">
+            <li>
+              <span>
+                Download the latest release from the
+                <a href="https://github.com/Luis85/specorator/releases">GitHub Releases page</a>:
+                <code>manifest.json</code>, <code>main.js</code>, and <code>styles.css</code>.
+              </span>
+            </li>
+            <li>
+              <span>
+                Create the folder <code>{vault}/.obsidian/plugins/specorator/</code> inside your
+                Obsidian vault.
+              </span>
+            </li>
+            <li>
+              <span>
+                Copy the three downloaded files into that folder.
+              </span>
+            </li>
+            <li>
+              <span>
+                In Obsidian, open <strong>Settings → Community plugins</strong>, disable Safe Mode
+                if prompted, then enable <strong>Specorator</strong> from the list.
+              </span>
+            </li>
+            <li>
+              <span>
+                Open the Specorator panel from the left sidebar ribbon or via
+                <strong>Command palette → Specorator: Open</strong>.
+              </span>
+            </li>
+          </ol>
+
+          <p style="margin-top: 1rem;">
+            For the full local development setup — including running the standalone UI in a browser
+            and sideloading a dev build — see
+            <a href="https://github.com/Luis85/specorator/blob/main/docs/local-development.md">docs/local-development.md</a>.
+          </p>
+        </div>
+      </section>
+
+      <!-- ── Related repositories ──────────────────────────── -->
+      <section id="ecosystem">
+        <div class="container">
+          <h2>Related repositories</h2>
+          <p>Specorator is part of a small, focused ecosystem.</p>
+
+          <div class="related-grid">
+            <a href="https://github.com/Luis85/specorator" class="repo-card" style="text-decoration: none;">
+              <span class="repo-name">Luis85/specorator</span>
+              <p>This repository. Obsidian plugin + standalone browser UI.</p>
+            </a>
+            <a href="https://github.com/Luis85/agentic-workflow" class="repo-card" style="text-decoration: none;">
+              <span class="repo-name">Luis85/agentic-workflow</span>
+              <p>Upstream workflow methodology, templates, and quality gates.</p>
+            </a>
+            <a href="https://github.com/Luis85/agentonomous" class="repo-card" style="text-decoration: none;">
+              <span class="repo-name">Luis85/agentonomous</span>
+              <p>Agent orchestration engine. Powers v2.0 agentic coworkers.</p>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Contribute ─────────────────────────────────────── -->
+      <section id="contribute">
+        <div class="container">
+          <h2>Contribute or follow development</h2>
+          <p>
+            Issues and pull requests are welcome. Development follows an intake-first workflow:
+            open a Requirement or Design intake issue before implementing.
+          </p>
+
+          <ul class="link-list">
+            <li><a href="https://github.com/Luis85/specorator">GitHub repository</a> — source code, issues, and pull requests</li>
+            <li><a href="https://github.com/Luis85/specorator/issues/1">#1 — v1 alpha planning</a> — v1 feature scope and acceptance criteria</li>
+            <li><a href="https://github.com/Luis85/specorator/issues/23">#23 — v2.0 planning</a> — companion-app and agentonomous direction</li>
+            <li><a href="https://github.com/Luis85/specorator/issues/47">#47 — Roadmap progress tracker</a> — phase-by-phase checklist</li>
+            <li><a href="https://github.com/Luis85/specorator/blob/main/docs/local-development.md">Local development guide</a> — prerequisites, commands, and sideloading</li>
+            <li><a href="https://github.com/Luis85/specorator/blob/main/docs/contributing.md">Contributing guide</a> — labels, milestones, branch naming, and merge policy</li>
+            <li><a href="https://github.com/Luis85/agentic-workflow/issues/96">Upstream planning issue</a> — agentic-workflow #96</li>
+          </ul>
+        </div>
+      </section>
+    </main>
+
+    <!-- ── Footer ─────────────────────────────────────────── -->
+    <footer>
+      <div class="container">
+        <p>
+          <a href="https://github.com/Luis85/specorator">Specorator</a> ·
+          MIT licence ·
+          Built with Obsidian · Vue 3 · TypeScript
+        </p>
+      </div>
+    </footer>
+
+  </body>
+</html>
