@@ -3,7 +3,7 @@
  * These variables are provided by the Obsidian theme at runtime;
  * scoping them here prevents them from overriding the real Obsidian UI.
  */
-#app {
+.specorator-root {
 	--background-primary: #1e1e2e;
 	--background-secondary: #181825;
 	--background-modifier-border: #313244;
@@ -14,6 +14,8 @@
 	--text-on-accent: #1e1e2e;
 	--interactive-accent: #cba6f7;
 
+	position: fixed;
+	inset: 0;
 	height: 100vh;
 	overflow: hidden;
 	font-family: system-ui, -apple-system, sans-serif;
