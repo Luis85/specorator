@@ -2,6 +2,7 @@ import js from '@eslint/js';
 import prettier from 'eslint-config-prettier';
 import pluginVue from 'eslint-plugin-vue';
 import tseslint from 'typescript-eslint';
+import globals from 'globals';
 
 export default tseslint.config(
 	// Base JS recommended rules
@@ -10,8 +11,23 @@ export default tseslint.config(
 	// TypeScript rules
 	...tseslint.configs.recommended,
 
-	// Vue 3 rules
+	// Vue 3 rules (sets vue-eslint-parser as the parser for .vue files)
 	...pluginVue.configs['flat/recommended'],
+
+	// Wire @typescript-eslint/parser into vue-eslint-parser for <script lang="ts">
+	// and provide browser + node globals so DOM types are recognised
+	{
+		files: ['**/*.vue', '**/*.ts', '**/*.js'],
+		languageOptions: {
+			globals: {
+				...globals.browser,
+				...globals.node,
+			},
+			parserOptions: {
+				parser: tseslint.parser,
+			},
+		},
+	},
 
 	// Disable ESLint formatting rules that conflict with Prettier
 	prettier,
@@ -47,7 +63,7 @@ export default tseslint.config(
 
 	// Adapter layer — obsidian imports permitted here
 	{
-		files: ['src/plugin/**/*.ts'],
+		files: ['src/plugin/**/*.ts', 'src/infrastructure/obsidian/**/*.ts'],
 		rules: {
 			'no-restricted-imports': 'off',
 		},
