@@ -14,10 +14,10 @@
 		"lint:fix": "eslint . --fix",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
-		"test": "vitest run",
-		"test:watch": "vitest",
+		"test": "vitest run --configLoader runner",
+		"test:watch": "vitest --configLoader runner",
 		"build:web": "vue-tsc --noEmit && vite build",
-		"test:coverage": "vitest run --coverage",
+		"test:coverage": "vitest run --configLoader runner --coverage",
 		"docs:api": "typedoc",
 		"version": "node version-bump.js && git add manifest.json versions.json"
 	},
