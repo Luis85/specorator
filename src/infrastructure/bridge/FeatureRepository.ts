@@ -192,9 +192,15 @@ export class FeatureRepository implements IFeatureRepository {
 			const isNew = !(await this.bridge.fileExists(path))
 			await this.bridge.writeFile(path, serializeFeature(feature))
 			if (isNew) {
-				const date = feature.createdAt.toISOString().slice(0, 10)
 				const ideaPath = this.stagePath(feature.slug.toString(), 'idea')
-				await this.bridge.writeFile(ideaPath, buildStageStub('idea', feature.slug.toString(), feature.title, date))
+				if (await this.bridge.fileExists(ideaPath)) {
+					this.bridge.showNotice(
+						`Specorator: idea.md already exists — keeping your version.`,
+					)
+				} else {
+					const date = feature.createdAt.toISOString().slice(0, 10)
+					await this.bridge.writeFile(ideaPath, buildStageStub('idea', feature.slug.toString(), feature.title, date))
+				}
 			}
 			return ok(undefined)
 		} catch (e) {

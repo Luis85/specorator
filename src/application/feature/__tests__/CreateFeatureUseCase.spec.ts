@@ -66,6 +66,17 @@ describe('CreateFeatureUseCase', () => {
     expect(files['specs/dark-mode/idea.md']).toContain('stage: idea')
   })
 
+  it('preserves an existing idea.md and shows a notice (REQ-AVS-005)', async () => {
+    await bridge.writeFile('specs/dark-mode/idea.md', '# my handwritten idea\n')
+
+    // Manually seed a feature folder without workflow-state.md so save() treats it as new
+    const result = await makeUseCase(bridge).execute({ title: 'Dark mode' })
+    expect(result.ok).toBe(true)
+
+    expect(bridge.getAllFiles()['specs/dark-mode/idea.md']).toBe('# my handwritten idea\n')
+    expect(bridge.getNotices().some((n) => n.message.includes('idea.md'))).toBe(true)
+  })
+
   it('stores the user-supplied area in uppercase', async () => {
     await makeUseCase(bridge).execute({ title: 'Dark mode', area: 'dm' })
 
