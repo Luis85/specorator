@@ -18,9 +18,8 @@
 		"noFallthroughCasesInSwitch": true,
 		"noImplicitReturns": true,
 		"esModuleInterop": true,
-		"baseUrl": ".",
 		"paths": {
-			"@/*": ["src/*"]
+			"@/*": ["./src/*"]
 		}
 	},
 	"include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue", "vite.config.ts", "vitest.config.ts"]

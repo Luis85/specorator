@@ -22,29 +22,29 @@
 		"version": "node version-bump.js && git add manifest.json versions.json"
 	},
 	"dependencies": {
-		"pinia": "^2.1.7",
-		"vue": "^3.4.0",
+		"pinia": "^3.0.4",
+		"vue": "^3.5.33",
 		"vue-i18n": "^11.4.0",
-		"vue-router": "^4.3.0"
+		"vue-router": "^5.0.6"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
 		"@types/node": "^25.6.0",
-		"@vitejs/plugin-vue": "^5.0.4",
+		"@vitejs/plugin-vue": "^6.0.6",
 		"@vitest/coverage-v8": "^4.1.5",
-		"@vue/test-utils": "^2.4.4",
+		"@vue/test-utils": "^2.4.10",
 		"@vue/tsconfig": "^0.9.1",
 		"eslint": "^10.3.0",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-vue": "^10.9.0",
 		"globals": "^17.6.0",
 		"jsdom": "^29.1.1",
-		"obsidian": "latest",
+		"obsidian": "^1.12.3",
 		"prettier": "^3.8.3",
 		"typedoc": "^0.28.19",
-		"typescript": "^5.8.0",
+		"typescript": "^6.0.3",
 		"typescript-eslint": "^8.59.1",
-		"vite": "^6.0.0",
+		"vite": "^8.0.10",
 		"vitest": "^4.1.5",
 		"vue-tsc": "^3.2.7"
 	}
