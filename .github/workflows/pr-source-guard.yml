@@ -1,14 +1,8 @@
-name: Main source guard
+name: PR source guard
 
 on:
   pull_request:
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - edited
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   guard:
