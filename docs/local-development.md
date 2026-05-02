@@ -57,7 +57,7 @@ npm ci
 Run the full verification gate before opening a pull request:
 
 ```sh
-npm run typecheck && npm run lint && npm run test && npm run build
+npm run typecheck && npm run lint && npm run test && npm run build && npm run build:web && npm run docs:api
 ```
 
 ## Build output
