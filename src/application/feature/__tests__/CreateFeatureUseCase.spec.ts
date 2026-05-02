@@ -27,7 +27,7 @@ describe('CreateFeatureUseCase', () => {
     expect(result.value.slug.toString()).toBe('dark-mode')
 
     const files = bridge.getAllFiles()
-    const metaPath = `features/dark-mode/_meta.md`
+    const metaPath = `specs/dark-mode/workflow-state.md`
     expect(metaPath in files).toBe(true)
     expect(files[metaPath]).toContain('title: "Dark mode"')
   })

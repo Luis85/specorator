@@ -20,10 +20,10 @@ describe('MockBridge', () => {
 
   it('lists sub-folders under a parent', async () => {
     const bridge = new MockBridge({
-      'features/dark-mode/_meta.md': '',
-      'features/onboarding/_meta.md': '',
+      'specs/dark-mode/workflow-state.md': '',
+      'specs/onboarding/workflow-state.md': '',
     })
-    const folders = await bridge.listFolders('features')
+    const folders = await bridge.listFolders('specs')
     expect(folders.sort()).toEqual(['dark-mode', 'onboarding'])
   })
 

@@ -24,7 +24,7 @@ async function handleOpen(featureId: string) {
   const feature = items.value.find((f) => f.id === featureId)
   if (!feature) return
   const settings = await bridge.getSettings()
-  await bridge.openFile(`${settings.featuresFolder}/${feature.slug}/_meta.md`)
+  await bridge.openFile(`${settings.specsFolder}/${feature.slug}/workflow-state.md`)
 }
 </script>
 

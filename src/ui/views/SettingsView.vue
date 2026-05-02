@@ -49,13 +49,13 @@ function update<K extends keyof PluginSettings>(key: K, value: PluginSettings[K]
       </div>
 
       <div class="sp-settings__field">
-        <label class="sp-settings__label" for="featuresFolder">{{ t('settings.featuresFolder') }}</label>
+        <label class="sp-settings__label" for="specsFolder">{{ t('settings.specsFolder') }}</label>
         <input
-          id="featuresFolder"
+          id="specsFolder"
           class="sp-settings__input"
           type="text"
-          :value="settings.featuresFolder"
-          @input="(e) => update('featuresFolder', (e.target as HTMLInputElement).value)"
+          :value="settings.specsFolder"
+          @input="(e) => update('specsFolder', (e.target as HTMLInputElement).value)"
         />
       </div>
 
