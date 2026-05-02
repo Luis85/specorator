@@ -2,7 +2,13 @@ name: Main source guard
 
 on:
   pull_request:
-    branches: [main]
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - edited
+    branches:
+      - main
 
 jobs:
   guard:
