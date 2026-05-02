@@ -25,8 +25,12 @@ export class AdvanceFeatureStageUseCase implements UseCase<AdvanceFeatureStageIn
 
     const advanced = advancedResult.value
 
-    const fileResult = await this.repository.createStageFile(advanced, advanced.currentStep)
-    if (!fileResult.ok) return fileResult
+    // When currentStep exceeds the last stage (feature complete), there is no
+    // stage file to create — skip the file step and persist the completion state.
+    if (!advanced.isComplete) {
+      const fileResult = await this.repository.createStageFile(advanced, advanced.currentStep)
+      if (!fileResult.ok) return fileResult
+    }
 
     const saveResult = await this.repository.save(advanced)
     if (!saveResult.ok) return saveResult

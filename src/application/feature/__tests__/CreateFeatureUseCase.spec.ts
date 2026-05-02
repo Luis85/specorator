@@ -164,4 +164,37 @@ describe('AdvanceFeatureStageUseCase', () => {
     // A notice must have been shown
     expect(bridge.getNotices().some((n) => n.message.includes('research.md'))).toBe(true)
   })
+
+  it('completing the final stage (step 12 → 13) persists without error', async () => {
+    const { Feature } = await import('@/domain/feature/Feature')
+    const { Slug } = await import('@/domain/shared/Slug')
+    const bridge = new MockBridge()
+    const repo = makeRepo(bridge)
+
+    const slugResult = Slug.create('retro-feature')
+    expect(slugResult.ok).toBe(true)
+    if (!slugResult.ok) return
+
+    // Reconstitute a feature already at the last step
+    const feature = Feature.reconstitute({
+      id: 'retro-id',
+      slug: slugResult.value,
+      title: 'Retro Feature',
+      status: 'active',
+      currentStep: 12,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    await repo.save(feature)
+
+    const result = await new AdvanceFeatureStageUseCase(repo).execute({ featureId: 'retro-id' })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.isComplete).toBe(true)
+    expect(result.value.currentStep).toBe(13)
+
+    const meta = bridge.getAllFiles()['specs/retro-feature/workflow-state.md']
+    expect(meta).toContain('currentStep: 13')
+  })
 })
