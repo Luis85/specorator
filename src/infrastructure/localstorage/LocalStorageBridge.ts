@@ -43,7 +43,7 @@ export class LocalStorageBridge implements IBridge {
         const relative = filePath.slice(parent.endsWith('/') ? parent.length : parent.length + 1)
         const slash = relative.indexOf('/')
         if (slash !== -1) {
-          folders.add(parent + '/' + relative.slice(0, slash))
+          folders.add(relative.slice(0, slash))
         }
       }
     }

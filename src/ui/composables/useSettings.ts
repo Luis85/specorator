@@ -1,3 +1,4 @@
+import { storeToRefs } from 'pinia'
 import { useBridge } from './useBridge'
 import { useSettingsStore } from '../stores/settingsStore'
 import { setLocale } from '../i18n'
@@ -7,6 +8,7 @@ import type { PluginSettings } from '@/infrastructure/bridge/IBridge'
 export function useSettings() {
   const bridge = useBridge()
   const store = useSettingsStore()
+  const { settings, loading } = storeToRefs(store)
 
   async function loadSettings(): Promise<void> {
     store.setLoading(true)
@@ -26,8 +28,8 @@ export function useSettings() {
   }
 
   return {
-    settings: store.settings,
-    loading: store.loading,
+    settings,
+    loading,
     loadSettings,
     saveSettings,
   }

@@ -48,8 +48,8 @@ describe('LocalStorageBridge', () => {
       await bridge.writeFile('features/dark-mode/_meta.md', '')
       await bridge.writeFile('features/search/_meta.md', '')
       const folders = await bridge.listFolders('features')
-      expect(folders).toContain('features/dark-mode')
-      expect(folders).toContain('features/search')
+      expect(folders).toContain('dark-mode')
+      expect(folders).toContain('search')
     })
 
     it('createFolder is a no-op and does not throw', async () => {
