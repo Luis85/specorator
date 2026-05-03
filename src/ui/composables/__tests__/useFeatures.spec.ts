@@ -3,7 +3,12 @@ import { defineComponent, h } from 'vue'
 import { createPinia } from 'pinia'
 import { describe, expect, it, beforeEach } from 'vitest'
 import { useFeatures } from '../useFeatures'
-import { BRIDGE_KEY } from '@/infrastructure/bridge/BridgeKey'
+import {
+	SETTINGS_PORT,
+	VAULT_PORT,
+	WORKSPACE_PORT,
+	NOTIFICATION_PORT,
+} from '@/infrastructure/bridge/ports'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { CreateFeatureUseCase } from '@/application/feature/CreateFeatureUseCase'
@@ -21,14 +26,19 @@ function harness(bridge: MockBridge) {
   mount(Host, {
     global: {
       plugins: [createPinia()],
-      provide: { [BRIDGE_KEY as unknown as symbol]: bridge },
+      provide: {
+				[SETTINGS_PORT as unknown as symbol]: bridge,
+				[VAULT_PORT as unknown as symbol]: bridge,
+				[WORKSPACE_PORT as unknown as symbol]: bridge,
+				[NOTIFICATION_PORT as unknown as symbol]: bridge,
+			},
     },
   })
   return api
 }
 
 async function seedActiveFeature(bridge: MockBridge, title = 'Search') {
-  const repo = new FeatureRepository(bridge, DEFAULT_SETTINGS)
+  const repo = new FeatureRepository(bridge, bridge, DEFAULT_SETTINGS)
   const created = await new CreateFeatureUseCase(repo).execute({ title })
   if (!created.ok) throw created.error
   const activated = await new ActivateFeatureUseCase(repo).execute({ featureId: created.value.id })

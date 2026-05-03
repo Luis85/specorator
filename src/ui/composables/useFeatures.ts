@@ -1,5 +1,7 @@
 import { computed } from 'vue'
-import { useBridge } from './useBridge'
+import { useSettingsPort } from './useSettingsPort'
+import { useVaultPort } from './useVaultPort'
+import { useNotificationPort } from './useNotificationPort'
 import { useFeatureStore } from '../stores/featureStore'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { GetFeaturesUseCase } from '@/application/feature/GetFeaturesUseCase'
@@ -12,7 +14,9 @@ import { featureDtoFromDomain } from '../types/FeatureDto'
 import type { FeatureDto } from '../types/FeatureDto'
 
 export function useFeatures() {
-  const bridge = useBridge()
+  const settingsPort = useSettingsPort()
+  const vault = useVaultPort()
+  const notifications = useNotificationPort()
   const store = useFeatureStore()
 
   async function withLoading<T>(fn: () => Promise<T>): Promise<T | undefined> {
@@ -27,8 +31,8 @@ export function useFeatures() {
 
   async function loadFeatures(): Promise<void> {
     await withLoading(async () => {
-      const settings = await bridge.getSettings()
-      const repo = new FeatureRepository(bridge, settings)
+      const settings = await settingsPort.getSettings()
+      const repo = new FeatureRepository(vault, notifications, settings)
       const result = await new GetFeaturesUseCase(repo).execute()
       if (result.ok) {
         store.setItems(result.value.map(featureDtoFromDomain))
@@ -43,8 +47,8 @@ export function useFeatures() {
     area?: string,
   ): Promise<FeatureDto | undefined> {
     return withLoading(async () => {
-      const settings = await bridge.getSettings()
-      const repo = new FeatureRepository(bridge, settings)
+      const settings = await settingsPort.getSettings()
+      const repo = new FeatureRepository(vault, notifications, settings)
       const result = await new CreateFeatureUseCase(repo).execute({ title, area })
       if (result.ok) {
         const dto = featureDtoFromDomain(result.value)
@@ -58,8 +62,8 @@ export function useFeatures() {
 
   async function activateFeature(featureId: string): Promise<void> {
     await withLoading(async () => {
-      const settings = await bridge.getSettings()
-      const repo = new FeatureRepository(bridge, settings)
+      const settings = await settingsPort.getSettings()
+      const repo = new FeatureRepository(vault, notifications, settings)
       const result = await new ActivateFeatureUseCase(repo).execute({ featureId })
       if (result.ok) {
         store.upsert(featureDtoFromDomain(result.value))
@@ -71,8 +75,8 @@ export function useFeatures() {
 
   async function archiveFeature(featureId: string): Promise<void> {
     await withLoading(async () => {
-      const settings = await bridge.getSettings()
-      const repo = new FeatureRepository(bridge, settings)
+      const settings = await settingsPort.getSettings()
+      const repo = new FeatureRepository(vault, notifications, settings)
       const result = await new ArchiveFeatureUseCase(repo).execute({ featureId })
       if (result.ok) {
         store.upsert(featureDtoFromDomain(result.value))
@@ -84,8 +88,8 @@ export function useFeatures() {
 
   async function advanceFeatureStage(featureId: string): Promise<void> {
     await withLoading(async () => {
-      const settings = await bridge.getSettings()
-      const repo = new FeatureRepository(bridge, settings)
+      const settings = await settingsPort.getSettings()
+      const repo = new FeatureRepository(vault, notifications, settings)
       const result = await new AdvanceFeatureStageUseCase(repo).execute({ featureId })
       if (result.ok) {
         store.upsert(featureDtoFromDomain(result.value))
