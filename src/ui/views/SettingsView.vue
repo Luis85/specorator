@@ -71,6 +71,28 @@ function update<K extends keyof PluginSettings>(key: K, value: PluginSettings[K]
       </div>
 
       <div class="sp-settings__field">
+        <label class="sp-settings__label" for="decisionsFolder">{{ t('settings.decisionsFolder') }}</label>
+        <input
+          id="decisionsFolder"
+          class="sp-settings__input"
+          type="text"
+          :value="settings.decisionsFolder"
+          @input="(e) => update('decisionsFolder', (e.target as HTMLInputElement).value)"
+        />
+      </div>
+
+      <div class="sp-settings__field">
+        <label class="sp-settings__label" for="constitutionFile">{{ t('settings.constitutionFile') }}</label>
+        <input
+          id="constitutionFile"
+          class="sp-settings__input"
+          type="text"
+          :value="settings.constitutionFile"
+          @input="(e) => update('constitutionFile', (e.target as HTMLInputElement).value)"
+        />
+      </div>
+
+      <div class="sp-settings__field">
         <label class="sp-settings__label" for="gateStrictness">{{ t('settings.gateStrictness') }}</label>
         <select
           id="gateStrictness"

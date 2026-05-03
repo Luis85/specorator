@@ -55,6 +55,7 @@ export default {
     specsFolder: 'Specs-Ordner',
     archiveFolder: 'Archiv-Ordner',
     decisionsFolder: 'Entscheidungs-Ordner',
+    constitutionFile: 'Verfassungsdatei',
     gateStrictness: 'Gate-Strenge',
     strict: 'Streng',
     lenient: 'Nachsichtig',
