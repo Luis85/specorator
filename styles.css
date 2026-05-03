@@ -74,7 +74,7 @@ to { transform: rotate(360deg);
 }
 }
 
-.specorator-root :where(.sp-feature-card[data-v-bb8a519d]) {
+.specorator-root :where(.sp-feature-card[data-v-d12e9f37]) {
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
@@ -83,13 +83,13 @@ to { transform: rotate(360deg);
   flex-direction: column;
   gap: 0.625rem;
 }
-.specorator-root :where(.sp-feature-card__header[data-v-bb8a519d]) {
+.specorator-root :where(.sp-feature-card__header[data-v-d12e9f37]) {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
 }
-.specorator-root :where(.sp-feature-card__title[data-v-bb8a519d]) {
+.specorator-root :where(.sp-feature-card__title[data-v-d12e9f37]) {
   margin: 0;
   font-size: 0.9375rem;
   font-weight: 600;
@@ -100,34 +100,34 @@ to { transform: rotate(360deg);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.specorator-root :where(.sp-feature-card__progress[data-v-bb8a519d]) {
+.specorator-root :where(.sp-feature-card__progress[data-v-d12e9f37]) {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
 }
-.specorator-root :where(.sp-progress-bar[data-v-bb8a519d]) {
+.specorator-root :where(.sp-progress-bar[data-v-d12e9f37]) {
   height: 4px;
   background: var(--background-modifier-border);
   border-radius: 9999px;
   overflow: hidden;
 }
-.specorator-root :where(.sp-progress-bar__fill[data-v-bb8a519d]) {
+.specorator-root :where(.sp-progress-bar__fill[data-v-d12e9f37]) {
   height: 100%;
   background: var(--interactive-accent);
   border-radius: 9999px;
   transition: width 0.3s ease;
 }
-.specorator-root :where(.sp-feature-card__step-label[data-v-bb8a519d]) {
+.specorator-root :where(.sp-feature-card__step-label[data-v-d12e9f37]) {
   font-size: 0.75rem;
   color: var(--text-muted);
 }
-.specorator-root :where(.sp-feature-card__actions[data-v-bb8a519d]) {
+.specorator-root :where(.sp-feature-card__actions[data-v-d12e9f37]) {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
 }
 
-.specorator-root :where(.sp-create-form[data-v-463f7cec]) {
+.specorator-root :where(.sp-create-form[data-v-06b998e0]) {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -136,14 +136,14 @@ to { transform: rotate(360deg);
   border: 1px solid var(--interactive-accent);
   border-radius: 8px;
 }
-.specorator-root :where(.sp-create-form__label[data-v-463f7cec]) {
+.specorator-root :where(.sp-create-form__label[data-v-06b998e0]) {
   font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.specorator-root :where(.sp-create-form__input[data-v-463f7cec]) {
+.specorator-root :where(.sp-create-form__input[data-v-06b998e0]) {
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
@@ -153,40 +153,40 @@ to { transform: rotate(360deg);
   outline: none;
   width: 100%;
 }
-.specorator-root :where(.sp-create-form__input[data-v-463f7cec]:focus) {
+.specorator-root :where(.sp-create-form__input[data-v-06b998e0]:focus) {
   border-color: var(--interactive-accent);
 }
-.specorator-root :where(.sp-create-form__actions[data-v-463f7cec]) {
+.specorator-root :where(.sp-create-form__actions[data-v-06b998e0]) {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.25rem;
 }
 
-.specorator-root :where(.sp-home[data-v-4d439000]) {
+.specorator-root :where(.sp-home[data-v-d17088d3]) {
   padding: 1rem;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
 }
-.specorator-root :where(.sp-home__header[data-v-4d439000]) { display: flex; align-items: flex-start; justify-content: space-between;
+.specorator-root :where(.sp-home__header[data-v-d17088d3]) { display: flex; align-items: flex-start; justify-content: space-between;
 }
-.specorator-root :where(.sp-home__title[data-v-4d439000]) { margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--text-normal);
+.specorator-root :where(.sp-home__title[data-v-d17088d3]) { margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--text-normal);
 }
-.specorator-root :where(.sp-home__subtitle[data-v-4d439000]) { margin: 0.25rem 0 0; font-size: 0.875rem; color: var(--text-muted);
+.specorator-root :where(.sp-home__subtitle[data-v-d17088d3]) { margin: 0.25rem 0 0; font-size: 0.875rem; color: var(--text-muted);
 }
-.specorator-root :where(.sp-home__section[data-v-4d439000]) { display: flex; flex-direction: column; gap: 0.75rem;
+.specorator-root :where(.sp-home__section[data-v-d17088d3]) { display: flex; flex-direction: column; gap: 0.75rem;
 }
-.specorator-root :where(.sp-home__section-header[data-v-4d439000]) { display: flex; align-items: center; justify-content: space-between;
+.specorator-root :where(.sp-home__section-header[data-v-d17088d3]) { display: flex; align-items: center; justify-content: space-between;
 }
-.specorator-root :where(.sp-home__section-title[data-v-4d439000]) { margin: 0; font-size: 0.875rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;
+.specorator-root :where(.sp-home__section-title[data-v-d17088d3]) { margin: 0; font-size: 0.875rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;
 }
-.specorator-root :where(.sp-home__cards[data-v-4d439000]) { display: flex; flex-direction: column; gap: 0.625rem;
+.specorator-root :where(.sp-home__cards[data-v-d17088d3]) { display: flex; flex-direction: column; gap: 0.625rem;
 }
-.specorator-root :where(.sp-home__meta[data-v-4d439000]) { color: var(--text-muted); font-size: 0.875rem; margin: 0;
+.specorator-root :where(.sp-home__meta[data-v-d17088d3]) { color: var(--text-muted); font-size: 0.875rem; margin: 0;
 }
-.specorator-root :where(.sp-home__error[data-v-4d439000]) { color: var(--text-error); font-size: 0.875rem; margin: 0;
+.specorator-root :where(.sp-home__error[data-v-d17088d3]) { color: var(--text-error); font-size: 0.875rem; margin: 0;
 }
-.specorator-root :where(.sp-home__nav[data-v-4d439000]) { display: flex; gap: 0.5rem;
+.specorator-root :where(.sp-home__nav[data-v-d17088d3]) { display: flex; gap: 0.5rem;
 }
 
 .specorator-root :where(.sp-features[data-v-f106eca5]) {
