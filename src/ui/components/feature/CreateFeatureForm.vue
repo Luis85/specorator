@@ -17,6 +17,7 @@ const area = ref('')
 const submitting = ref(false)
 
 async function handleSubmit() {
+  if (submitting.value) return
   const trimmedTitle = title.value.trim()
   if (!trimmedTitle) return
   const trimmedArea = area.value.trim()

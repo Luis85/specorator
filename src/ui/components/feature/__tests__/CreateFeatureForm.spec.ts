@@ -34,6 +34,22 @@ describe('CreateFeatureForm', () => {
     expect((wrapper.find('#feature-title').element as HTMLInputElement).value).toBe('My Feature')
   })
 
+  it('ignores re-entrant submits while a submit is in flight', async () => {
+    let resolve!: (v: boolean) => void
+    const handler = vi.fn(() => new Promise<boolean>((r) => { resolve = r }))
+    const wrapper = mountForm(handler)
+
+    await wrapper.find('#feature-title').setValue('My Feature')
+    // First submit — handler is now in flight
+    await wrapper.find('form').trigger('submit')
+    // Second submit while first is still pending
+    await wrapper.find('form').trigger('submit')
+    resolve(true)
+    await flushPromises()
+
+    expect(handler).toHaveBeenCalledTimes(1)
+  })
+
   it('emits cancel when the cancel button is clicked', async () => {
     const wrapper = mountForm(vi.fn())
 
