@@ -10,9 +10,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    // Transitional: both globs while the migration in progress.
-    // Tightened to tests/**/*.test.ts only after the move (Task 4).
-    include: ['src/**/*.spec.ts', 'tests/**/*.test.ts'],
+    include: ['tests/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
