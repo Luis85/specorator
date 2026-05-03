@@ -48,7 +48,7 @@ async function handleOpen(featureId: string) {
   <div class="sp-home">
     <header class="sp-home__header">
       <div>
-        <h1 class="sp-home__title">{{ t('home.title') }}</h1>
+        <h1 class="sp-home__title" data-testid="home-title">{{ t('home.title') }}</h1>
         <p class="sp-home__subtitle">{{ t('home.subtitle') }}</p>
       </div>
     </header>
@@ -56,7 +56,12 @@ async function handleOpen(featureId: string) {
     <section class="sp-home__section">
       <div class="sp-home__section-header">
         <h2 class="sp-home__section-title">{{ t('home.activeFeatures') }}</h2>
-        <AppButton variant="primary" size="sm" @click="showCreateForm = !showCreateForm">
+        <AppButton
+          variant="primary"
+          size="sm"
+          data-testid="home-create-feature"
+          @click="showCreateForm = !showCreateForm"
+        >
           + {{ t('feature.create') }}
         </AppButton>
       </div>
@@ -73,7 +78,7 @@ async function handleOpen(featureId: string) {
         {{ t('home.noActiveFeatures') }}
       </p>
 
-      <div v-else class="sp-home__cards">
+      <div v-else class="sp-home__cards" data-testid="home-active-features">
         <FeatureCard
           v-for="feature in activeItems"
           :key="feature.id"
