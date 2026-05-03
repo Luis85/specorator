@@ -1,3 +1,5 @@
+import { trySync } from './tryAsync';
+
 // Intentionally empty so feature modules can add channels by declaration merging.
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface EventMap {}
@@ -18,6 +20,8 @@ export interface EventBusOptions {
 	readonly traceLimit?: number;
 	readonly idFactory?: () => string;
 	readonly now?: () => Date;
+	/** Receives errors from fire-and-forget listeners invoked through emit(). */
+	readonly onListenerError?: (error: unknown, envelope: EventEnvelope) => void;
 }
 
 export interface EmitOptions {
@@ -64,6 +68,7 @@ interface EventBusState {
 	readonly traceLimit: number;
 	readonly idFactory: () => string;
 	readonly now: () => Date;
+	readonly onListenerError: (error: unknown, envelope: EventEnvelope) => void;
 	readonly traceEntries: readonly TraceEntry[];
 }
 
@@ -94,6 +99,12 @@ function insertByPriority<Payload>(
 ): readonly ListenerEntry<Payload>[] {
 	const next = [...entries, entry];
 	return next.sort((left, right) => right.priority - left.priority);
+}
+
+function sortByPriority<Payload>(
+	entries: readonly ListenerEntry<Payload>[],
+): readonly ListenerEntry<Payload>[] {
+	return [...entries].sort((left, right) => right.priority - left.priority);
 }
 
 function removeById<Payload>(
@@ -166,6 +177,7 @@ export function createEventBus<Events extends EventMap = EventMap>(
 		traceLimit: normalizePositiveInteger(options.traceLimit, DEFAULT_TRACE_LIMIT),
 		idFactory: options.idFactory ?? createDefaultId,
 		now: options.now ?? (() => new Date()),
+		onListenerError: options.onListenerError ?? (() => undefined),
 		traceEntries: [],
 	};
 	const listeners = new Map<string, readonly ListenerEntry<unknown>[]>();
@@ -235,6 +247,21 @@ export function createEventBus<Events extends EventMap = EventMap>(
 		};
 	}
 
+	function createSnapshot<K extends EventKey<Events>>(
+		channel: K,
+	): readonly ListenerEntry<Events[EventKey<Events>]>[] {
+		return sortByPriority([
+			...getChannelListeners<Events[EventKey<Events>]>(channel),
+			...anyListeners,
+		]);
+	}
+
+	function reportListenerError(error: unknown, envelope: EventEnvelope): void {
+		void trySync(() => {
+			state.onListenerError(error, envelope);
+		}, 'event listener error hook failed');
+	}
+
 	function emit<K extends EventKey<Events>>(
 		channel: K,
 		payload: Events[K],
@@ -242,9 +269,16 @@ export function createEventBus<Events extends EventMap = EventMap>(
 	): EventEnvelope<Events[K]> {
 		const envelope = createEnvelope(channel, payload, emitOptions, state);
 		rememberTrace(envelope);
-		const snapshot = [...getChannelListeners<Events[K]>(channel), ...anyListeners];
+		const snapshot = createSnapshot(channel);
 		snapshot.forEach((entry) => {
-			void entry.listener(envelope);
+			const result = trySync(() => entry.listener(envelope), 'event listener failed');
+			if (!result.ok) {
+				reportListenerError(result.error, envelope);
+				return;
+			}
+			void Promise.resolve(result.value).catch((error: unknown) => {
+				reportListenerError(error, envelope);
+			});
 		});
 		return envelope;
 	}
@@ -256,7 +290,7 @@ export function createEventBus<Events extends EventMap = EventMap>(
 	): Promise<EventEnvelope<Events[K]>> {
 		const envelope = createEnvelope(channel, payload, emitOptions, state);
 		rememberTrace(envelope);
-		const snapshot = [...getChannelListeners<Events[K]>(channel), ...anyListeners];
+		const snapshot = createSnapshot(channel);
 		await runBounded(
 			snapshot.map((entry) => async () => {
 				await entry.listener(envelope);

@@ -115,6 +115,52 @@ describe('createEventBus', () => {
 		expect(seen).toEqual(['alpha', 'beta']);
 	});
 
+	it('uses priority ordering across channel and onAny listeners', () => {
+		const bus = createEventBus<TestEvents>();
+		const calls: string[] = [];
+
+		bus.on(
+			'alpha',
+			() => {
+				calls.push('channel-low');
+			},
+			{ priority: 1 },
+		);
+		bus.onAny(
+			(event) => {
+				calls.push(`any-high-${event.channel}`);
+			},
+			{ priority: 10 },
+		);
+
+		bus.emit('alpha', { value: 1 });
+
+		expect(calls).toEqual(['any-high-alpha', 'channel-low']);
+	});
+
+	it('uses priority ordering across channel and onAny async listeners', async () => {
+		const bus = createEventBus<TestEvents>();
+		const calls: string[] = [];
+
+		bus.on(
+			'alpha',
+			() => {
+				calls.push('channel-low');
+			},
+			{ priority: 1 },
+		);
+		bus.onAny(
+			async (event) => {
+				calls.push(`any-high-${event.channel}`);
+			},
+			{ priority: 10 },
+		);
+
+		await bus.emitAsync('alpha', { value: 1 });
+
+		expect(calls).toEqual(['any-high-alpha', 'channel-low']);
+	});
+
 	it('propagates trace ids through parent event ids', () => {
 		const bus = createEventBus<TestEvents>({
 			idFactory: createIds(['root-event', 'child-event', 'manual-event']),
@@ -178,6 +224,54 @@ describe('createEventBus', () => {
 
 		const envelope = await emitted;
 		expect(envelope.channel).toBe('alpha');
+	});
+
+	it('routes sync emit listener failures to the listener error hook', async () => {
+		const errors: unknown[] = [];
+		const bus = createEventBus<TestEvents>({
+			onListenerError(error) {
+				errors.push(error);
+			},
+		});
+		const calls: string[] = [];
+
+		bus.on('alpha', async () => {
+			throw new Error('async listener failed');
+		});
+		bus.on('alpha', () => {
+			throw new Error('sync listener failed');
+		});
+		bus.on('alpha', () => {
+			calls.push('after-errors');
+		});
+
+		bus.emit('alpha', { value: 1 });
+		await Promise.resolve();
+
+		expect(errors).toHaveLength(2);
+		expect(errors.every((error) => error instanceof Error)).toBe(true);
+		expect(calls).toEqual(['after-errors']);
+	});
+
+	it('keeps dispatch isolated when the listener error hook fails', () => {
+		const bus = createEventBus<TestEvents>({
+			onListenerError() {
+				throw new Error('reporting failed');
+			},
+		});
+		const calls: string[] = [];
+
+		bus.on('alpha', () => {
+			throw new Error('listener failed');
+		});
+		bus.on('alpha', () => {
+			calls.push('after-error-hook');
+		});
+
+		expect(() => {
+			bus.emit('alpha', { value: 1 });
+		}).not.toThrow();
+		expect(calls).toEqual(['after-error-hook']);
 	});
 
 	it('supports typed envelope handlers', () => {
