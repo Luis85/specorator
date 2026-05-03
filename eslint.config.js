@@ -419,4 +419,23 @@ export default defineConfig(
 			'obsidianmd/ui/sentence-case': ['error', { brands: ['Specorator'] }],
 		},
 	},
+
+	// Tests must query exclusively via data-testid (ADR-009).
+	// CSS class and id selector literals passed to wrapper.find / findAll /
+	// get / getAll are forbidden — add a data-testid attribute and route
+	// through a PageObject getter instead.
+	{
+		files: ['tests/**/*.ts'],
+		rules: {
+			'no-restricted-syntax': [
+				'error',
+				{
+					selector:
+						"CallExpression[callee.property.name=/^(find|findAll|get|getAll)$/] > Literal[value=/^[\\.#]/]",
+					message:
+						'Tests must query via data-testid only. CSS class and id selectors are forbidden — add a data-testid attribute and route through a PageObject getter instead.',
+				},
+			],
+		},
+	},
 );
