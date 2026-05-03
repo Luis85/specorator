@@ -57,8 +57,20 @@ npm ci
 Run the full verification gate before opening a pull request:
 
 ```sh
-npm run typecheck && npm run lint && npm run test && npm run build && npm run build:web && npm run docs:api
+npm run verify
 ```
+
+## Git hooks
+
+Install the pre-push hook with:
+
+```sh
+npm run hooks:install
+```
+
+The hook runs `typecheck`, `lint`, and `validate:manifest` before each push. It is intentionally fast — use `npm run verify` for the full gate.
+
+**Husky:** Native Git hooks (`core.hooksPath`) are sufficient for this project. Husky would add cross-platform convenience (auto-install on `npm ci`) but introduces a dev dependency. It remains a follow-up candidate if onboarding friction becomes a problem.
 
 ## Build output
 
@@ -130,7 +142,7 @@ Keep the test vault empty of personal content. The plugin may write files during
 
 ## Verifying plugin behavior before opening a PR
 
-1. Run the full verification gate: `npm run typecheck && npm run lint && npm run test && npm run build && npm run build:web && npm run docs:api`
+1. Run the full verification gate: `npm run verify`
 2. Confirm the plugin loads in Obsidian without errors (check **Settings → Community plugins** and the developer console with `Ctrl+Shift+I` / `Cmd+Option+I`).
 3. Open the Specorator panel and confirm the UI renders correctly.
 4. Exercise the specific code path changed by your PR and confirm it works as expected.
@@ -159,9 +171,9 @@ The repository publishes a product page at `https://luis85.github.io/specorator/
 
 ### How the deployment works
 
-The `.github/workflows/pages.yml` workflow runs on every push to `main`:
+The `.github/workflows/pages.yml` workflow runs on every push to `demo`:
 
-1. Runs `npm run build:web` with `VITE_BASE_URL=/specorator/app/` so all SPA asset paths are prefixed correctly.
+1. Runs `npm run build:pages`, which sets `VITE_BASE_URL=/specorator/app/` and invokes `npm run build:web`, so all SPA asset paths are prefixed correctly.
 2. Assembles a `_site/` staging directory:
    - `site/index.html` → `_site/index.html`
    - `dist-standalone/**` → `_site/app/**`
@@ -169,15 +181,12 @@ The `.github/workflows/pages.yml` workflow runs on every push to `main`:
 
 ### Updating the product page
 
-Edit `site/index.html` and push to `main`. The workflow redeploys automatically.
+Edit `site/index.html` and push to `demo`. The workflow redeploys automatically.
 
 ### Building the Pages site locally
 
 ```sh
-VITE_BASE_URL=/specorator/app/ npm run build:web
-mkdir -p _site/app
-cp site/index.html _site/index.html
-cp -r dist-standalone/. _site/app/
+npm run build:pages
 # Open _site/index.html in a browser to preview
 ```
 
