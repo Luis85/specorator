@@ -1,4 +1,5 @@
 import { ok, err, type Result } from '@/domain/shared/Result'
+import { tryAsync } from '@/domain/shared/tryAsync'
 import { Slug } from '@/domain/shared/Slug'
 import { Feature } from '@/domain/feature/Feature'
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
@@ -19,13 +20,9 @@ export class CreateFeatureUseCase implements UseCase<CreateFeatureInput, Feature
 
     // findBySlug throws when the file exists but is malformed, so both the
     // "already exists" and "unreadable file" cases block creation safely.
-    let existing: Feature | null
-    try {
-      existing = await this.repository.findBySlug(slugResult.value)
-    } catch (e) {
-      return err(e instanceof Error ? e : new Error(String(e)))
-    }
-    if (existing) {
+    const existingResult = await tryAsync(() => this.repository.findBySlug(slugResult.value))
+    if (!existingResult.ok) return existingResult
+    if (existingResult.value) {
       return err(new Error(`A feature with slug "${slugResult.value}" already exists`))
     }
 

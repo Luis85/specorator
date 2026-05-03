@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import AppButton from '../components/common/AppButton.vue'
 import { useBridge } from '../composables/useBridge'
 import { normalizeFileRoutePath } from '../router/fileRoute'
+import { tryAsync } from '@/domain/shared/tryAsync'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -17,11 +18,9 @@ const notFound = ref(false)
 const copied = ref(false)
 
 onMounted(async () => {
-  try {
-    content.value = await bridge.readFile(filePath)
-  } catch {
-    notFound.value = true
-  }
+  const result = await tryAsync(() => bridge.readFile(filePath))
+  if (result.ok) content.value = result.value
+  else notFound.value = true
 })
 
 async function copyContent() {
