@@ -9,8 +9,16 @@ import { useBridge } from '../composables/useBridge'
 
 const { t } = useI18n()
 const bridge = useBridge()
-const { items, loading, error, loadFeatures, createFeature, activateFeature, archiveFeature } =
-  useFeatures()
+const {
+  items,
+  loading,
+  error,
+  loadFeatures,
+  createFeature,
+  activateFeature,
+  archiveFeature,
+  advanceFeatureStage,
+} = useFeatures()
 const showCreateForm = ref(false)
 
 onMounted(loadFeatures)
@@ -64,6 +72,7 @@ async function handleOpen(featureId: string) {
           :feature="feature"
           @activate="activateFeature"
           @archive="archiveFeature"
+          @advance-step="advanceFeatureStage"
           @open="handleOpen"
         />
       </div>

@@ -5,6 +5,7 @@ import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { GetFeaturesUseCase } from '@/application/feature/GetFeaturesUseCase'
 import { CreateFeatureUseCase } from '@/application/feature/CreateFeatureUseCase'
 import { ActivateFeatureUseCase } from '@/application/feature/ActivateFeatureUseCase'
+import { AdvanceFeatureStageUseCase } from '@/application/feature/AdvanceFeatureStageUseCase'
 import { ArchiveFeatureUseCase } from '@/application/feature/ArchiveFeatureUseCase'
 import { featureDtoFromDomain } from '../types/FeatureDto'
 import type { FeatureDto } from '../types/FeatureDto'
@@ -83,6 +84,19 @@ export function useFeatures() {
     })
   }
 
+  async function advanceFeatureStage(featureId: string): Promise<void> {
+    await withLoading(async () => {
+      const settings = await bridge.getSettings()
+      const repo = new FeatureRepository(bridge, settings)
+      const result = await new AdvanceFeatureStageUseCase(repo).execute({ featureId })
+      if (result.ok) {
+        store.upsert(featureDtoFromDomain(result.value))
+      } else {
+        store.setError(result.error.message)
+      }
+    })
+  }
+
   return {
     items: computed(() => store.items),
     activeItems: computed(() => store.activeItems),
@@ -93,5 +107,6 @@ export function useFeatures() {
     createFeature,
     activateFeature,
     archiveFeature,
+    advanceFeatureStage,
   }
 }

@@ -71,4 +71,39 @@ describe('FeatureCard', () => {
     expect(wrapper.text()).toContain('Abandoned')
     expect(wrapper.text()).not.toContain('Step 13 of 12')
   })
+
+  describe('advance step button', () => {
+    function findAdvanceButton(wrapper: ReturnType<typeof mountCard>) {
+      return wrapper.findAll('button').find((b) => b.text() === 'Advance Step')
+    }
+
+    it('renders for active features that have not completed all stages', () => {
+      const wrapper = mountCard(makeFeature({ status: 'active', currentStep: 3 }))
+      expect(findAdvanceButton(wrapper)).toBeTruthy()
+    })
+
+    it('does not render for draft features', () => {
+      const wrapper = mountCard(makeFeature({ status: 'draft', currentStep: 1 }))
+      expect(findAdvanceButton(wrapper)).toBeFalsy()
+    })
+
+    it('does not render once the feature is complete', () => {
+      const wrapper = mountCard(makeFeature({ status: 'active', currentStep: 13 }))
+      expect(findAdvanceButton(wrapper)).toBeFalsy()
+    })
+
+    it('does not render for archived or abandoned features', () => {
+      const archived = mountCard(makeFeature({ status: 'archived', currentStep: 4 }))
+      const abandoned = mountCard(makeFeature({ status: 'abandoned', currentStep: 4 }))
+      expect(findAdvanceButton(archived)).toBeFalsy()
+      expect(findAdvanceButton(abandoned)).toBeFalsy()
+    })
+
+    it('emits advance-step with the feature id when clicked', async () => {
+      const wrapper = mountCard(makeFeature({ id: 'feat-42', status: 'active', currentStep: 2 }))
+      await findAdvanceButton(wrapper)!.trigger('click')
+
+      expect(wrapper.emitted('advance-step')).toEqual([['feat-42']])
+    })
+  })
 })

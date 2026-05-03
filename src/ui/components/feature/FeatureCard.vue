@@ -11,6 +11,7 @@ const emit = defineEmits<{
   activate: [id: string]
   archive: [id: string]
   open: [id: string]
+  'advance-step': [id: string]
 }>()
 
 const stepCount = FEATURE_STEP_COUNT
@@ -57,6 +58,14 @@ const progressWidth = computed(() => `${(completedSteps.value / stepCount) * 100
         @click="emit('activate', feature.id)"
       >
         {{ $t('feature.actions.activate') }}
+      </AppButton>
+      <AppButton
+        v-if="feature.status === 'active' && !isComplete"
+        variant="primary"
+        size="sm"
+        @click="emit('advance-step', feature.id)"
+      >
+        {{ $t('feature.actions.advanceStep') }}
       </AppButton>
       <AppButton
         v-if="feature.status === 'active'"
