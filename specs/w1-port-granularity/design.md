@@ -127,7 +127,7 @@ Files grouped by which port set each consumes. Driven by an audit of the 21 impo
 |---|---|---|
 | **Pure SettingsPort** | `src/ui/composables/useSettings.ts`, `src/ui/stores/settingsStore.ts`, `src/ui/views/SettingsView.vue`, `src/plugin/settings.ts` | `SettingsPort` + `PluginSettings` type |
 | **SettingsPort + WorkspacePort** | `src/ui/views/HomeView.vue`, `src/ui/views/FeaturesView.vue` | both |
-| **VaultPort + WorkspacePort** | `src/ui/views/FileView.vue` | both |
+| **VaultPort only** | `src/ui/views/FileView.vue` | `VaultPort` (file content read; `router.back()` is Vue Router, not the bridge) |
 | **VaultPort + NotificationPort (full repo)** | `src/infrastructure/bridge/FeatureRepository.ts` | both (notification is the `idea.md` already-exists path and `createStageFile` overwrite-protection notice) |
 | **`useFeatures` composable + tests** | `src/ui/composables/useFeatures.ts`, `src/ui/composables/__tests__/useFeatures.spec.ts` | `SettingsPort` + `VaultPort` + `NotificationPort` (constructs `FeatureRepository`) |
 | **Plugin entry + view** | `src/plugin/main.ts`, `src/plugin/SpecoratorView.ts` | constructs `ObsidianBridge`, provides all four |
