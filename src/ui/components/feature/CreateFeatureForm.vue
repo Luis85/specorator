@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppButton from '../common/AppButton.vue'
+import { tryAsync } from '@/domain/shared/tryAsync'
 
 const props = defineProps<{
   submitHandler: (payload: { title: string; area?: string }) => Promise<boolean>
@@ -22,14 +23,15 @@ async function handleSubmit() {
   if (!trimmedTitle) return
   const trimmedArea = area.value.trim()
   submitting.value = true
-  try {
-    const succeeded = await props.submitHandler({ title: trimmedTitle, area: trimmedArea || undefined })
-    if (succeeded) {
-      title.value = ''
-      area.value = ''
-    }
-  } finally {
-    submitting.value = false
+  const result = await tryAsync(() =>
+    props.submitHandler({ title: trimmedTitle, area: trimmedArea || undefined }),
+  )
+  submitting.value = false
+  if (result.ok && result.value) {
+    title.value = ''
+    area.value = ''
+  } else if (!result.ok) {
+    throw result.error
   }
 }
 </script>

@@ -62,6 +62,18 @@ export default tseslint.config(
 			'@typescript-eslint/no-explicit-any': 'error',
 			'vue/multi-word-component-names': 'off',
 			'vue/component-api-style': ['error', ['script-setup']],
+			// Result discipline (ADR-004): raw try/catch is reserved for the
+			// infrastructure layer and the tryAsync/trySync helper itself.
+			// Domain, application, and UI code must use those helpers to
+			// convert thrown values into Result<T, E>.
+			'no-restricted-syntax': [
+				'error',
+				{
+					selector: 'TryStatement',
+					message:
+						'Use tryAsync/trySync from @/domain/shared/tryAsync instead of try/catch. Raw try/catch is allowed only in src/infrastructure/** and the helper itself.',
+				},
+			],
 		},
 	},
 
@@ -70,6 +82,20 @@ export default tseslint.config(
 		files: ['src/plugin/**/*.ts', 'src/infrastructure/obsidian/**/*.ts'],
 		rules: {
 			'no-restricted-imports': 'off',
+		},
+	},
+
+	// Result-discipline allowlist: the helper itself, the infrastructure
+	// adapter layer, and Node-side scripts are the only places where raw
+	// try/catch is sanctioned.
+	{
+		files: [
+			'src/infrastructure/**/*.ts',
+			'src/domain/shared/tryAsync.ts',
+			'scripts/**/*.js',
+		],
+		rules: {
+			'no-restricted-syntax': 'off',
 		},
 	},
 );

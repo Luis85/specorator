@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import AppButton from '../components/common/AppButton.vue'
 import { useSettings } from '../composables/useSettings'
 import { SUPPORTED_LOCALES } from '../i18n'
+import { tryAsync } from '@/domain/shared/tryAsync'
 import type { PluginSettings } from '@/infrastructure/bridge/IBridge'
 
 const { t } = useI18n()
@@ -15,13 +16,11 @@ onMounted(loadSettings)
 
 async function handleSave() {
   saving.value = true
-  try {
-    await saveSettings({ ...settings.value })
-    saved.value = true
-    setTimeout(() => { saved.value = false }, 2500)
-  } finally {
-    saving.value = false
-  }
+  const result = await tryAsync(() => saveSettings({ ...settings.value }))
+  saving.value = false
+  if (!result.ok) throw result.error
+  saved.value = true
+  setTimeout(() => { saved.value = false }, 2500)
 }
 
 function update<K extends keyof PluginSettings>(key: K, value: PluginSettings[K]) {

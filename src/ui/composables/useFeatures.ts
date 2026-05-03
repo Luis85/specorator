@@ -7,6 +7,7 @@ import { CreateFeatureUseCase } from '@/application/feature/CreateFeatureUseCase
 import { ActivateFeatureUseCase } from '@/application/feature/ActivateFeatureUseCase'
 import { AdvanceFeatureStageUseCase } from '@/application/feature/AdvanceFeatureStageUseCase'
 import { ArchiveFeatureUseCase } from '@/application/feature/ArchiveFeatureUseCase'
+import { tryAsync } from '@/domain/shared/tryAsync'
 import { featureDtoFromDomain } from '../types/FeatureDto'
 import type { FeatureDto } from '../types/FeatureDto'
 
@@ -17,14 +18,11 @@ export function useFeatures() {
   async function withLoading<T>(fn: () => Promise<T>): Promise<T | undefined> {
     store.setLoading(true)
     store.setError(null)
-    try {
-      return await fn()
-    } catch (e) {
-      store.setError(e instanceof Error ? e.message : 'Unknown error')
-      return undefined
-    } finally {
-      store.setLoading(false)
-    }
+    const result = await tryAsync(fn)
+    store.setLoading(false)
+    if (result.ok) return result.value
+    store.setError(result.error.message)
+    return undefined
   }
 
   async function loadFeatures(): Promise<void> {
