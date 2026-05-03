@@ -15,7 +15,9 @@ export default class SpecoratorPlugin extends Plugin {
     })
 
     this.addCommand({
-      id: 'open-panel',
+      // Keep the original command id so existing hotkeys and automations survive upgrades.
+      // eslint-disable-next-line obsidianmd/commands/no-plugin-id-in-command-id
+      id: 'open-specorator',
       name: 'Open panel',
       callback: () => void this.activateView(),
     })
