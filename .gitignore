@@ -27,6 +27,9 @@ Thumbs.db
 # Generated API docs (run `npm run docs:api` to regenerate)
 docs/api/
 
+# Coverage report (run `npm run test:coverage` to regenerate)
+coverage/
+
 # Local agent state (Claude Code, etc.) — track shared bits, ignore ephemeral ones
 .claude/*
 !.claude/settings.json

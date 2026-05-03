@@ -22,7 +22,7 @@ npm run docs:api           # TypeDoc API docs → docs/api/
 
 **Run a single test file:**
 ```sh
-npx vitest run src/domain/feature/__tests__/Feature.spec.ts
+npx vitest run tests/domain/feature/Feature.test.ts
 ```
 
 **Pre-PR verification gate:**
@@ -97,6 +97,13 @@ The 12 stage slugs (from `src/domain/feature/FeatureStep.ts`): `idea`, `research
 - Vue Router uses `createWebHashHistory` (hash-mode) so routing works inside Obsidian's embedded view and on GitHub Pages.
 - Pinia stores hold plain DTOs only — domain class instances must not cross the store boundary.
 - UI imports use cases for business logic; UI must not import domain or infrastructure directly except for port types from `@/domain/ports` and the matching InjectionKey symbols from `@/infrastructure/bridge/ports`.
+
+### Testing conventions (ADR-009)
+
+- Tests live under `tests/`, mirroring `src/` path-for-path. The test for `src/x/y.ts` is `tests/x/y.test.ts`. The `.test.ts` extension is canonical; `.spec.ts` is no longer used. `__tests__/` folders inside `src/` are forbidden.
+- The shared fake-ports factory `tests/__fakes__/fake-ports.ts` exposes `fakeModulePorts()` returning the four ADR-008 ports plus the underlying `MockBridge` reference. Mutations through one port are visible through the others. Use it for any test that needs more than one port.
+- Vue component tests that mount a component MUST have a co-located class-based PageObject (e.g. `Home.po.ts` next to `Home.test.ts`). Elements are queried exclusively by `data-testid`. CSS-class and id selectors (`.foo`, `#bar`) are forbidden in `tests/**`; ESLint enforces this.
+- `npm run test:coverage` enforces hard thresholds 80/70/80/80 (statements/branches/functions/lines). The threshold gate runs as part of `npm run verify`, so CI inherits it automatically.
 
 ### Key files
 

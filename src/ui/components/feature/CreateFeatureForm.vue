@@ -37,7 +37,7 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <form class="sp-create-form" @submit.prevent="handleSubmit">
+  <form class="sp-create-form" data-testid="create-form" @submit.prevent="handleSubmit">
     <label class="sp-create-form__label" for="feature-title">
       {{ t('feature.title') }}
     </label>
@@ -49,6 +49,7 @@ async function handleSubmit() {
       :placeholder="t('feature.placeholder')"
       autocomplete="off"
       required
+      data-testid="feature-title-input"
     />
     <label class="sp-create-form__label" for="feature-area">
       {{ t('feature.area') }}
@@ -61,12 +62,23 @@ async function handleSubmit() {
       :placeholder="t('feature.areaPlaceholder')"
       autocomplete="off"
       maxlength="5"
+      data-testid="feature-area-input"
     />
     <div class="sp-create-form__actions">
-      <AppButton variant="primary" :loading="submitting" :disabled="!title.trim()">
+      <AppButton
+        variant="primary"
+        :loading="submitting"
+        :disabled="!title.trim()"
+        data-testid="create-submit"
+      >
         {{ t('feature.create') }}
       </AppButton>
-      <AppButton variant="ghost" type="button" @click="emit('cancel')">
+      <AppButton
+        variant="ghost"
+        type="button"
+        data-testid="create-cancel"
+        @click="emit('cancel')"
+      >
         {{ t('common.cancel') }}
       </AppButton>
     </div>
