@@ -1,6 +1,7 @@
 import { Notice, Plugin, TFolder } from 'obsidian'
 import { SpecoratorView, VIEW_TYPE } from './SpecoratorView'
-import { SpecoratorSettingTab, DEFAULT_SETTINGS, type PluginSettings } from './settings'
+import { SpecoratorSettingTab } from './settings'
+import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
 
 export default class SpecoratorPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS }

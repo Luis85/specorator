@@ -1,7 +1,7 @@
 ---
 slug: w1-port-granularity
 title: W1 — Replace IBridge with narrow ports
-status: design
+status: accepted
 issue: 99
 epic: 85
 date: 2026-05-03
