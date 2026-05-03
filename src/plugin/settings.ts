@@ -20,13 +20,26 @@ export class SpecoratorSettingTab extends PluginSettingTab {
     containerEl.createEl('h2', { text: 'Specorator' })
 
     new Setting(containerEl)
+      .setName('Language')
+      .setDesc('Display language for the Specorator panel.')
+      .addDropdown((dd) =>
+        dd
+          .addOption('en', 'English')
+          .addOption('de', 'Deutsch')
+          .setValue(this.plugin.settings.locale)
+          .onChange(async (value) => {
+            await this.plugin.updateSettings({ locale: value })
+          }),
+      )
+
+    new Setting(containerEl)
       .setName('Specs folder')
       .setDesc('Vault folder where spec directories are created (agentic-workflow convention: specs).')
       .addText((text) =>
         text
           .setValue(this.plugin.settings.specsFolder)
           .onChange(async (value) => {
-            await this.plugin.updateSettings({ specsFolder: value.trim() || 'specs' })
+            await this.plugin.updateSettings({ specsFolder: value.trim() || DEFAULT_SETTINGS.specsFolder })
           }),
       )
 
@@ -37,7 +50,29 @@ export class SpecoratorSettingTab extends PluginSettingTab {
         text
           .setValue(this.plugin.settings.archiveFolder)
           .onChange(async (value) => {
-            await this.plugin.updateSettings({ archiveFolder: value.trim() || 'archive' })
+            await this.plugin.updateSettings({ archiveFolder: value.trim() || DEFAULT_SETTINGS.archiveFolder })
+          }),
+      )
+
+    new Setting(containerEl)
+      .setName('Decisions folder')
+      .setDesc('Vault folder for architecture decision records.')
+      .addText((text) =>
+        text
+          .setValue(this.plugin.settings.decisionsFolder)
+          .onChange(async (value) => {
+            await this.plugin.updateSettings({ decisionsFolder: value.trim() || DEFAULT_SETTINGS.decisionsFolder })
+          }),
+      )
+
+    new Setting(containerEl)
+      .setName('Constitution file')
+      .setDesc('Vault path to the project constitution markdown file.')
+      .addText((text) =>
+        text
+          .setValue(this.plugin.settings.constitutionFile)
+          .onChange(async (value) => {
+            await this.plugin.updateSettings({ constitutionFile: value.trim() || DEFAULT_SETTINGS.constitutionFile })
           }),
       )
 
