@@ -20,6 +20,12 @@ export default defineConfig({
         '**/__fixtures__/**',
         'src/infrastructure/mock/fixtures.ts',
       ],
+      thresholds: {
+        statements: 80,
+        branches: 70,
+        functions: 80,
+        lines: 80,
+      },
     },
   },
   resolve: {
