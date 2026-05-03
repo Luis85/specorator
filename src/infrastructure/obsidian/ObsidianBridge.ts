@@ -1,5 +1,4 @@
 import { Notice, TFile, TFolder, type App } from 'obsidian'
-import type { IBridge } from '../bridge/IBridge'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 import type {
 	SettingsPort,
@@ -9,7 +8,7 @@ import type {
 } from '@/domain/ports'
 
 export class ObsidianBridge
-	implements IBridge, SettingsPort, VaultPort, WorkspacePort, NotificationPort
+	implements SettingsPort, VaultPort, WorkspacePort, NotificationPort
 {
   constructor(
     private readonly app: App,

@@ -1,5 +1,5 @@
 import { storeToRefs } from 'pinia'
-import { useBridge } from './useBridge'
+import { useSettingsPort } from './useSettingsPort'
 import { useSettingsStore } from '../stores/settingsStore'
 import { setLocale } from '../i18n'
 import type { SupportedLocale } from '../i18n'
@@ -7,7 +7,7 @@ import { tryAsync } from '@/domain/shared/tryAsync'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 
 export function useSettings() {
-  const bridge = useBridge()
+  const bridge = useSettingsPort()
   const store = useSettingsStore()
   const { settings, loading } = storeToRefs(store)
 

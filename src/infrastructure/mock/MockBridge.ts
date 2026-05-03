@@ -1,4 +1,3 @@
-import type { IBridge } from '../bridge/IBridge'
 import type {
 	SettingsPort,
 	VaultPort,
@@ -12,7 +11,7 @@ import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginS
  * Provides test helper methods for inspecting state.
  */
 export class MockBridge
-	implements IBridge, SettingsPort, VaultPort, WorkspacePort, NotificationPort
+	implements SettingsPort, VaultPort, WorkspacePort, NotificationPort
 {
   private readonly files = new Map<string, string>()
   private readonly folders = new Set<string>()
