@@ -1,10 +1,18 @@
 import type { IBridge } from '@/infrastructure/bridge/IBridge'
+import type {
+	SettingsPort,
+	VaultPort,
+	WorkspacePort,
+	NotificationPort,
+} from '@/domain/ports'
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
 const FILE_PREFIX = 'specorator:file:'
 const SETTINGS_KEY = 'specorator:settings'
 
-export class LocalStorageBridge implements IBridge {
+export class LocalStorageBridge
+	implements IBridge, SettingsPort, VaultPort, WorkspacePort, NotificationPort
+{
   async readFile(path: string): Promise<string> {
     const value = localStorage.getItem(FILE_PREFIX + path)
     if (value === null) throw new Error(`File not found: ${path}`)
