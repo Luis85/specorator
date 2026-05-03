@@ -239,7 +239,7 @@ gh api repos/<org>/<repo-name>/branches/main/protection \
     "strict": true,
     "contexts": ["verify"]
   },
-  "enforce_admins": false,
+  "enforce_admins": true,
   "required_pull_request_reviews": {
     "dismiss_stale_reviews": false,
     "require_code_owner_reviews": false,
@@ -253,6 +253,8 @@ EOF
 ```
 
 > Update `"contexts"` to match the exact job name in your CI workflow (see Phase 5).
+
+> `enforce_admins: true` applies the same rules to repository admins. This is the recommended default — without it, admins can push directly to `main` and bypass CI. If you ever need an emergency bypass (e.g., CI is broken and a hotfix is urgent), temporarily disable it via the API or web UI, land the fix, then re-enable it.
 
 **Gate checklist:**
 - [ ] Repository created with correct visibility
@@ -1049,7 +1051,8 @@ Add a workflow-lint step to CI that fails the build if any `uses:` reference is 
       - name: Check action SHA pinning
         run: |
           set -e
-          UNPINNED=$(grep -rE 'uses: [^@]+@[^#\n]+' .github/workflows/ \
+          # Anchor to ^\s+uses: so only YAML keys match, not uses: inside shell strings
+          UNPINNED=$(grep -rE '^\s+uses:\s+[^@]+@[^#\s]+' .github/workflows/ \
             | grep -v '@[0-9a-f]\{40\}' || true)
           if [ -n "$UNPINNED" ]; then
             echo "Unpinned actions found:"
@@ -1307,20 +1310,22 @@ The squash commit message should be the PR title + an optional body explaining w
 ### 7.9 Cut the First Release
 
 ```bash
-# On develop: verify everything is clean
-npm run verify
+# Step 1: bump version files on a release branch (never commit directly to main)
+git checkout develop && git pull origin develop
+git checkout -b release/0.1.0
+npm version 0.1.0 --no-git-tag-version   # updates package.json / manifest.json, no commit or tag yet
+git add package.json manifest.json versions.json   # add whichever version files your project has
+git commit -m "chore: bump version to 0.1.0"
+git push -u origin release/0.1.0
 
-# Merge develop → main
-git checkout develop
-git pull origin develop
-gh pr create --title "release: v0.1.0" --base main --head develop
-# (wait for CI, then merge)
+# Step 2: PR release branch → main (goes through normal CI + review gate)
+gh pr create --title "release: 0.1.0" --base main --head release/0.1.0
+# (wait for CI, then squash-merge)
 
-# Tag main HEAD
-git checkout main
-git pull origin main
-npm version 0.1.0  # or: git tag 0.1.0 && git push origin 0.1.0
-git push origin main --tags
+# Step 3: tag main HEAD — push the tag only, no extra commit
+git checkout main && git pull origin main
+git tag 0.1.0
+git push origin 0.1.0
 ```
 
 The release workflow triggers on the tag and creates a GitHub release with the built artifacts.
@@ -1428,42 +1433,42 @@ create_issue() {
 
 create_issue \
   "Add repository identity, README, license, and baseline documentation" \
-  "## Goal\nEstablish project identity with README, LICENSE, SECURITY.md, and CONSTITUTION.md.\n\n## Acceptance criteria\n- [ ] README includes one-sentence description and quick-start stub\n- [ ] LICENSE file present\n- [ ] SECURITY.md with responsible disclosure path\n- [ ] CONSTITUTION.md captures non-negotiable working agreements" \
+  $'## Goal\nEstablish project identity with README, LICENSE, SECURITY.md, and CONSTITUTION.md.\n\n## Acceptance criteria\n- [ ] README includes one-sentence description and quick-start stub\n- [ ] LICENSE file present\n- [ ] SECURITY.md with responsible disclosure path\n- [ ] CONSTITUTION.md captures non-negotiable working agreements' \
   "documentation,setup"
 
 create_issue \
   "Set up GitHub issue templates, PR template, labels, and milestone conventions" \
-  "## Goal\nCreate a deliberate GitHub environment so issues are structured and searchable.\n\n## Acceptance criteria\n- [ ] Default labels deleted\n- [ ] Custom label taxonomy created\n- [ ] All milestones exist\n- [ ] Issue templates added (feature, bug, task, decision, requirement intake)\n- [ ] PR template added\n- [ ] Blank issues disabled" \
+  $'## Goal\nCreate a deliberate GitHub environment so issues are structured and searchable.\n\n## Acceptance criteria\n- [ ] Default labels deleted\n- [ ] Custom label taxonomy created\n- [ ] All milestones exist\n- [ ] Issue templates added (feature, bug, task, decision, requirement intake)\n- [ ] PR template added\n- [ ] Blank issues disabled' \
   "documentation,setup,github"
 
 create_issue \
   "Define branch protection and merge policy for main" \
-  "## Goal\nProtect main from direct pushes and force pushes; require CI to pass.\n\n## Acceptance criteria\n- [ ] Branch protection rule on main requires PR before merge\n- [ ] Required status check: verify CI job\n- [ ] Force pushes blocked\n- [ ] Direct deletions blocked\n- [ ] develop is the default branch" \
+  $'## Goal\nProtect main from direct pushes and force pushes; require CI to pass.\n\n## Acceptance criteria\n- [ ] Branch protection rule on main requires PR before merge\n- [ ] Required status check: verify CI job\n- [ ] Force pushes blocked\n- [ ] Direct deletions blocked\n- [ ] develop is the default branch' \
   "setup,github"
 
 create_issue \
   "Scaffold the project with language and build toolchain" \
-  "## Goal\nBootstrap the project so it builds, typechecks, lints, and tests with zero errors.\n\n## Acceptance criteria\n- [ ] npm run typecheck passes\n- [ ] npm run lint passes\n- [ ] npm run test passes (even if no tests yet)\n- [ ] npm run build produces an artifact\n- [ ] npm run verify exits 0" \
+  $'## Goal\nBootstrap the project so it builds, typechecks, lints, and tests with zero errors.\n\n## Acceptance criteria\n- [ ] npm run typecheck passes\n- [ ] npm run lint passes\n- [ ] npm run test passes (even if no tests yet)\n- [ ] npm run build produces an artifact\n- [ ] npm run verify exits 0' \
   "enhancement,setup"
 
 create_issue \
   "Add CI verification for install, lint, typecheck, test, and build" \
-  "## Goal\nCI runs the same checks as npm run verify on every PR to develop.\n\n## Acceptance criteria\n- [ ] ci.yml triggers on push/PR to develop, demo, main\n- [ ] Jobs: verify (typecheck, lint, test, build) + workflow-lint\n- [ ] All third-party actions SHA-pinned\n- [ ] Branch protection requires CI to pass" \
+  $'## Goal\nCI runs the same checks as npm run verify on every PR to develop.\n\n## Acceptance criteria\n- [ ] ci.yml triggers on push/PR to develop, demo, main\n- [ ] Jobs: verify (typecheck, lint, test, build) + workflow-lint\n- [ ] All third-party actions SHA-pinned\n- [ ] Branch protection requires CI to pass' \
   "setup,ci"
 
 create_issue \
   "Add release and packaging workflow" \
-  "## Goal\nAutomate release artifact creation on semver tags from main.\n\n## Acceptance criteria\n- [ ] release.yml triggers on semver tags\n- [ ] Workflow verifies tag is on main HEAD\n- [ ] GitHub release created with built artifacts\n- [ ] Pre-release flag set for tags with pre-release suffix" \
+  $'## Goal\nAutomate release artifact creation on semver tags from main.\n\n## Acceptance criteria\n- [ ] release.yml triggers on semver tags\n- [ ] Workflow verifies tag is on main HEAD\n- [ ] GitHub release created with built artifacts\n- [ ] Pre-release flag set for tags with pre-release suffix' \
   "setup,ci,release"
 
 create_issue \
   "Configure dependency, security, and maintenance automation" \
-  "## Goal\nKeep dependencies current and security advisories surfaced automatically.\n\n## Acceptance criteria\n- [ ] Dependabot configured for npm and GitHub Actions\n- [ ] Auto-merge for safe dependency updates\n- [ ] Dependency review action on PRs\n- [ ] OpenSSF Scorecard scheduled" \
+  $'## Goal\nKeep dependencies current and security advisories surfaced automatically.\n\n## Acceptance criteria\n- [ ] Dependabot configured for npm and GitHub Actions\n- [ ] Auto-merge for safe dependency updates\n- [ ] Dependency review action on PRs\n- [ ] OpenSSF Scorecard scheduled' \
   "setup,github,ci,security"
 
 create_issue \
   "Document local development and contribution workflow" \
-  "## Goal\nA newcomer can run the project locally in under 10 minutes using the docs.\n\n## Acceptance criteria\n- [ ] docs/local-development.md covers prerequisites, setup, dev commands\n- [ ] docs/contributing.md covers issue workflow, branching, commits, PRs, CI\n- [ ] Pre-PR gate documented with exact command" \
+  $'## Goal\nA newcomer can run the project locally in under 10 minutes using the docs.\n\n## Acceptance criteria\n- [ ] docs/local-development.md covers prerequisites, setup, dev commands\n- [ ] docs/contributing.md covers issue workflow, branching, commits, PRs, CI\n- [ ] Pre-PR gate documented with exact command' \
   "documentation,setup"
 
 echo "Phase 1 backlog created."
