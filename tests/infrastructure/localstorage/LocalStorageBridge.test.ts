@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { LocalStorageBridge } from '../LocalStorageBridge'
+import { LocalStorageBridge } from '@/infrastructure/localstorage/LocalStorageBridge'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
 describe('LocalStorageBridge', () => {

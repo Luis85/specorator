@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { MockBridge } from '../MockBridge'
+import { MockBridge } from '@/infrastructure/mock/MockBridge'
 
 describe('MockBridge', () => {
   it('reads a file that was seeded in the constructor', async () => {

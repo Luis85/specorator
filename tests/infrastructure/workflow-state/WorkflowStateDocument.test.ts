@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Feature } from '@/domain/feature/Feature';
 import { Slug } from '@/domain/shared/Slug';
-import { deserializeWorkflowState, serializeWorkflowState } from '../WorkflowStateDocument';
+import { deserializeWorkflowState, serializeWorkflowState } from '@/infrastructure/workflow-state/WorkflowStateDocument';
 
 function fixture(name: string): string {
 	return readFileSync(

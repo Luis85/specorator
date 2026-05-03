@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { router } from '../index'
-import { normalizeFileRoutePath } from '../fileRoute'
+import { router } from '@/ui/router/index'
+import { normalizeFileRoutePath } from '@/ui/router/fileRoute'
 
 describe('file route encoding', () => {
   it('round-trips a raw path with spaces, unicode, and slash separators', () => {

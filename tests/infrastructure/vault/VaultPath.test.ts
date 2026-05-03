@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { joinVaultPath, normalizeVaultPath } from '../VaultPath';
+import { joinVaultPath, normalizeVaultPath } from '@/infrastructure/vault/VaultPath';
 
 describe('VaultPath', () => {
 	it('normalizes duplicate slashes, dot segments, and Windows separators', () => {

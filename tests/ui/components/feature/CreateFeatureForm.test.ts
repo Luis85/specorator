@@ -1,7 +1,7 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import { i18n } from '@/ui/i18n'
-import CreateFeatureForm from '../CreateFeatureForm.vue'
+import CreateFeatureForm from '@/ui/components/feature/CreateFeatureForm.vue'
 
 function mountForm(submitHandler: (payload: { title: string; area?: string }) => Promise<boolean>) {
   return mount(CreateFeatureForm, {

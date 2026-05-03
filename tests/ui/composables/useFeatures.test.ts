@@ -2,7 +2,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import { createPinia } from 'pinia'
 import { describe, expect, it, beforeEach } from 'vitest'
-import { useFeatures } from '../useFeatures'
+import { useFeatures } from '@/ui/composables/useFeatures'
 import {
 	SETTINGS_PORT,
 	VAULT_PORT,

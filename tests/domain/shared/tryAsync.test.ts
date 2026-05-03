@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { tryAsync, trySync } from '../tryAsync'
+import { tryAsync, trySync } from '@/domain/shared/tryAsync'
 
 describe('trySync', () => {
   it('wraps a value in ok', () => {

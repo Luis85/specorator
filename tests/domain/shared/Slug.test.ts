@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Slug } from '../Slug'
+import { Slug } from '@/domain/shared/Slug'
 
 describe('Slug', () => {
   it('creates a lowercase kebab slug from a title', () => {

@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import { i18n } from '@/ui/i18n'
 import type { FeatureDto } from '@/ui/types/FeatureDto'
-import FeatureCard from '../FeatureCard.vue'
+import FeatureCard from '@/ui/components/feature/FeatureCard.vue'
 
 function makeFeature(overrides: Partial<FeatureDto> = {}): FeatureDto {
   return {

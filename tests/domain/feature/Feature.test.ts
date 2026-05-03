@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { Feature } from '../Feature'
-import { Slug } from '../../shared/Slug'
-import { FEATURE_STEP_COUNT, getStepMeta } from '../FeatureStep'
+import { Feature } from '@/domain/feature/Feature'
+import { Slug } from '@/domain/shared/Slug'
+import { FEATURE_STEP_COUNT, getStepMeta } from '@/domain/feature/FeatureStep'
 
 function makeSlug(raw = 'dark-mode') {
   const r = Slug.create(raw)
