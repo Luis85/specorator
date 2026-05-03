@@ -243,16 +243,10 @@ Keep commits focused. A commit that does two unrelated things should be two comm
 Run the full pre-PR verification locally:
 
 ```bash
-npm audit --audit-level=high --omit=dev
-npm run typecheck
-npm run lint
-npm run test
-npm run build
-npm run build:web
-npm run docs:api
+npm run verify
 ```
 
-`npm audit` is included because CI's `verify` job runs it unconditionally on every PR (see §9). All checks must pass. See [docs/local-development.md](./local-development.md) for the full verification workflow and [.codex/pre-pr-gate.md](../.codex/pre-pr-gate.md) for the agent-oriented version of the same chain.
+`npm run verify` includes production dependency audit, manifest validation, typecheck, lint, tests, plugin build, standalone UI build, API docs, and whitespace checks. All checks must pass. `npm run format:check` remains available, but it is not yet part of the required gate because the current baseline is not Prettier-clean. See [docs/local-development.md](./local-development.md) for the full verification workflow and [.codex/pre-pr-gate.md](../.codex/pre-pr-gate.md) for the agent-oriented version of the same chain.
 
 ### PR description
 
@@ -330,7 +324,7 @@ The CI workflow (`.github/workflows/ci.yml`) runs on pushes to `develop`, `demo`
 ### `workflow-lint` job
 
 1. `actionlint` — validates workflow YAML syntax and expression types
-2. SHA-pin check — fails the build if any `uses:` reference in `.github/workflows/*.{yml,yaml}` is not pinned to a 40-character commit SHA
+2. `npm run verify:workflows` — fails the build if any `uses:` reference in `.github/workflows/*.{yml,yaml}` is not pinned to a 40-character commit SHA
 
 ### Pull-request-only jobs
 

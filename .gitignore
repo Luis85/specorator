@@ -7,6 +7,7 @@ main.js.map
 
 # Standalone UI build
 dist-standalone/
+_site/
 
 # TypeScript incremental build info
 *.tsbuildinfo

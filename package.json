@@ -18,8 +18,11 @@
 		"test": "vitest run --configLoader runner",
 		"test:watch": "vitest --configLoader runner",
 		"build:web": "vue-tsc --noEmit && vite build",
+		"build:pages": "node scripts/build-pages-local.js",
 		"test:coverage": "vitest run --configLoader runner --coverage",
-		"verify": "npm audit --audit-level=high --omit=dev && npm run typecheck && npm run lint && npm run test && npm run build && npm run build:web && npm run docs:api",
+		"verify": "npm audit --audit-level=high --omit=dev && npm run validate:manifest && npm run typecheck && npm run lint && npm run test && npm run build && npm run build:web && npm run docs:api && git diff --check",
+		"verify:workflows": "node scripts/verify-workflows.js",
+		"hooks:install": "git config core.hooksPath .githooks",
 		"docs:api": "typedoc",
 		"validate:manifest": "node scripts/validate-manifest.js",
 		"version": "node version-bump.js && node scripts/validate-manifest.js && git add manifest.json versions.json"

@@ -38,7 +38,7 @@ export default tseslint.config(
 
 	// Global ignores
 	{
-		ignores: ['node_modules/', 'main.js', 'dist-standalone/', '.worktrees/', 'docs/api/'],
+		ignores: ['node_modules/', 'main.js', 'dist-standalone/', '_site/', '.worktrees/', 'docs/api/'],
 	},
 
 	// Project-wide rules

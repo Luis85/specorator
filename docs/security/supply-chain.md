@@ -54,7 +54,7 @@ uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 Two CI checks back this rule:
 
 - `actionlint` validates workflow YAML syntax and expression types.
-- A dedicated `Verify third-party actions are SHA-pinned` step in the `workflow-lint` job greps every `uses:` line across both `.yml` and `.yaml` files under `.github/workflows/` and fails the build if any reference is not pinned to a 40-character commit SHA. Local composite actions (`./...`) and `docker://` references are exempt.
+- `npm run verify:workflows` checks every `uses:` line across both `.yml` and `.yaml` files under `.github/workflows/` and fails the build if any reference is not pinned to a 40-character commit SHA. Local composite actions (`./...`) and `docker://` references are exempt.
 
 A PR that introduces an unpinned `uses:` line cannot merge until the SHA is supplied.
 
@@ -80,7 +80,7 @@ When a PR adds a new runtime dependency (`dependencies` in `package.json`, not `
 
 ### Workflow / action changes
 
-- Any new `uses:` line must be pinned to a SHA in the same PR that introduces it. CI does not enforce this directly today; reviewers do.
+- Any new `uses:` line must be pinned to a SHA in the same PR that introduces it. CI enforces this through `npm run verify:workflows`; reviewers still confirm the SHA matches the intended upstream tag.
 - Granting a workflow `write` permission requires an explicit comment in the PR explaining what is written and why a `read` token is insufficient.
 
 ## Threat model assumptions

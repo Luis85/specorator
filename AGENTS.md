@@ -38,19 +38,21 @@ Run all of the following before opening or updating a PR. CI re-runs them, but f
 
 ```sh
 npm audit --audit-level=high --omit=dev \
+  && npm run validate:manifest \
   && npm run typecheck \
   && npm run lint \
   && npm run test \
   && npm run build \
   && npm run build:web \
-  && npm run docs:api
+  && npm run docs:api \
+  && git diff --check
 ```
 
 `npm audit` is part of the standard chain because the CI `verify` job runs it unconditionally on every PR. Matching that locally catches advisories that were published since your last install.
 
 Additional gates depending on what changed:
 
-- **Workflow file changed** (`.github/workflows/*.{yml,yaml}`): run `actionlint` locally and confirm every `uses:` reference is pinned to a 40-character commit SHA. CI enforces both, but the local pass shortens the loop. See [`docs/security/supply-chain.md`](./docs/security/supply-chain.md).
+- **Workflow file changed** (`.github/workflows/*.{yml,yaml}`): run `npm run verify:workflows` and `actionlint` locally. CI enforces both, but the local pass shortens the loop. See [`docs/security/supply-chain.md`](./docs/security/supply-chain.md).
 - **Vue/UI changed**: build the standalone UI (`npm run build:web`) and load it in a browser. Type-checks alone do not validate runtime behaviour.
 
 If any gate fails, fix the underlying issue. Do not bypass with `--no-verify`, `--ignore-scripts`, `if: false`, or by deleting the failing step. If the gate itself is wrong, file an issue and propose the fix in a separate PR before merging the work that needs the bypass.

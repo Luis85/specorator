@@ -51,14 +51,32 @@ npm ci
 | `npm run build` | Type-checks and builds the Obsidian plugin bundle |
 | `npm run dev:plugin` | Builds the plugin in watch mode (rebuilds on save) |
 | `npm run build:web` | Builds the standalone browser UI to `dist-standalone/` |
+| `npm run build:pages` | Builds the GitHub Pages preview into `_site/` with the production base path |
 | `npm run dev` | Runs the standalone UI dev server in the browser |
 | `npm run docs:api` | Generates TypeDoc API docs to `docs/api/` |
+| `npm run verify` | Runs the standard local pre-PR gate |
+| `npm run verify:workflows` | Confirms GitHub Actions `uses:` entries are pinned to commit SHAs |
+| `npm run hooks:install` | Points Git at the repo's shared `.githooks/` directory |
 
 Run the full verification gate before opening a pull request:
 
 ```sh
-npm run typecheck && npm run lint && npm run test && npm run build && npm run build:web && npm run docs:api
+npm run verify
 ```
+
+Run `npm ci` before `npm run verify` when `package.json` or `package-lock.json` changed, or when you are validating from a fresh checkout.
+
+### Optional pre-push hook
+
+The repository includes a native Git pre-push hook in `.githooks/pre-push`. Enable it per checkout:
+
+```sh
+npm run hooks:install
+```
+
+The hook runs `npm run verify` before every push. If the branch changes workflow files, it also runs `npm run verify:workflows` and runs `actionlint` when `actionlint` is installed locally. CI remains authoritative, but the hook catches most avoidable failures before a remote push.
+
+Husky would also work for this job and can auto-install hooks through npm lifecycle scripts. The current repo uses native Git hooks instead to avoid adding a dev dependency and to keep hook installation explicit. Reconsider Husky if the team wants automatic hook setup for every `npm install` and accepts that extra lifecycle behavior.
 
 ## Build output
 
@@ -130,7 +148,7 @@ Keep the test vault empty of personal content. The plugin may write files during
 
 ## Verifying plugin behavior before opening a PR
 
-1. Run the full verification gate: `npm run typecheck && npm run lint && npm run test && npm run build && npm run build:web && npm run docs:api`
+1. Run the full verification gate: `npm run verify`
 2. Confirm the plugin loads in Obsidian without errors (check **Settings → Community plugins** and the developer console with `Ctrl+Shift+I` / `Cmd+Option+I`).
 3. Open the Specorator panel and confirm the UI renders correctly.
 4. Exercise the specific code path changed by your PR and confirm it works as expected.
@@ -159,7 +177,7 @@ The repository publishes a product page at `https://luis85.github.io/specorator/
 
 ### How the deployment works
 
-The `.github/workflows/pages.yml` workflow runs on every push to `main`:
+The `.github/workflows/pages.yml` workflow runs on every push to `demo`:
 
 1. Runs `npm run build:web` with `VITE_BASE_URL=/specorator/app/` so all SPA asset paths are prefixed correctly.
 2. Assembles a `_site/` staging directory:
@@ -169,15 +187,12 @@ The `.github/workflows/pages.yml` workflow runs on every push to `main`:
 
 ### Updating the product page
 
-Edit `site/index.html` and push to `main`. The workflow redeploys automatically.
+Edit `site/index.html` and merge the change to `demo`. The workflow redeploys automatically.
 
 ### Building the Pages site locally
 
 ```sh
-VITE_BASE_URL=/specorator/app/ npm run build:web
-mkdir -p _site/app
-cp site/index.html _site/index.html
-cp -r dist-standalone/. _site/app/
+npm run build:pages
 # Open _site/index.html in a browser to preview
 ```
 
