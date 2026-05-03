@@ -32,4 +32,11 @@ describe('MockBridge', () => {
     bridge.showNotice('Hello world')
     expect(bridge.getNotices()[0].message).toBe('Hello world')
   })
+
+  it('tracks the last opened file', async () => {
+    const bridge = new MockBridge()
+    expect(bridge.getOpenedFile()).toBeNull()
+    await bridge.openFile('specs/my-feature/workflow-state.md')
+    expect(bridge.getOpenedFile()).toBe('specs/my-feature/workflow-state.md')
+  })
 })

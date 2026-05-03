@@ -10,6 +10,7 @@ export class MockBridge implements IBridge {
   private readonly folders = new Set<string>()
   private settings: PluginSettings = { ...DEFAULT_SETTINGS }
   private readonly noticeLog: Array<{ message: string; durationMs: number }> = []
+  private openedFile: string | null = null
 
   constructor(initialFiles: Record<string, string> = {}) {
     for (const [path, content] of Object.entries(initialFiles)) {
@@ -64,8 +65,8 @@ export class MockBridge implements IBridge {
     this.folders.add(path)
   }
 
-  async openFile(_path: string): Promise<void> {
-    // No-op in standalone mode
+  async openFile(path: string): Promise<void> {
+    this.openedFile = path
   }
 
   showNotice(message: string, durationMs = 4000): void {
@@ -85,6 +86,10 @@ export class MockBridge implements IBridge {
 
   getNotices(): Array<{ message: string; durationMs: number }> {
     return [...this.noticeLog]
+  }
+
+  getOpenedFile(): string | null {
+    return this.openedFile
   }
 
   getAllFiles(): Record<string, string> {

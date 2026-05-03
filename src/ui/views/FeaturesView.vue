@@ -15,9 +15,13 @@ const showCreateForm = ref(false)
 
 onMounted(loadFeatures)
 
-async function handleCreate(payload: { title: string; area?: string }) {
-  await createFeature(payload.title, payload.area)
-  showCreateForm.value = false
+async function handleCreate(payload: { title: string; area?: string }): Promise<boolean> {
+  const result = await createFeature(payload.title, payload.area)
+  if (result) {
+    showCreateForm.value = false
+    return true
+  }
+  return false
 }
 
 async function handleOpen(featureId: string) {
@@ -39,7 +43,7 @@ async function handleOpen(featureId: string) {
 
     <CreateFeatureForm
       v-if="showCreateForm"
-      @submit="handleCreate"
+      :submit-handler="handleCreate"
       @cancel="showCreateForm = false"
     />
 

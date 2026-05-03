@@ -3,8 +3,11 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppButton from '../common/AppButton.vue'
 
+const props = defineProps<{
+  submitHandler: (payload: { title: string; area?: string }) => Promise<boolean>
+}>()
+
 const emit = defineEmits<{
-  submit: [payload: { title: string; area?: string }]
   cancel: []
 }>()
 
@@ -14,14 +17,17 @@ const area = ref('')
 const submitting = ref(false)
 
 async function handleSubmit() {
+  if (submitting.value) return
   const trimmedTitle = title.value.trim()
   if (!trimmedTitle) return
   const trimmedArea = area.value.trim()
   submitting.value = true
   try {
-    emit('submit', { title: trimmedTitle, area: trimmedArea || undefined })
-    title.value = ''
-    area.value = ''
+    const succeeded = await props.submitHandler({ title: trimmedTitle, area: trimmedArea || undefined })
+    if (succeeded) {
+      title.value = ''
+      area.value = ''
+    }
   } finally {
     submitting.value = false
   }
