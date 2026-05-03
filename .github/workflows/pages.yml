@@ -29,16 +29,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build standalone SPA
-        run: npm run build:web
-        env:
-          VITE_BASE_URL: /specorator/app/
-
-      - name: Assemble Pages site
-        run: |
-          mkdir -p _site/app
-          cp site/index.html _site/index.html
-          cp -r dist-standalone/. _site/app/
+      - name: Build and assemble Pages site
+        run: npm run build:pages
 
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:

@@ -19,9 +19,12 @@
 		"test:watch": "vitest --configLoader runner",
 		"build:web": "vue-tsc --noEmit && vite build",
 		"test:coverage": "vitest run --configLoader runner --coverage",
-		"verify": "npm audit --audit-level=high --omit=dev && npm run typecheck && npm run lint && npm run test && npm run build && npm run build:web && npm run docs:api",
+		"verify": "npm audit --audit-level=high --omit=dev && npm run typecheck && npm run lint && npm run test && npm run build && npm run build:web && npm run docs:api && npm run validate:manifest && npm run verify:workflows && git diff --check --ignore-cr-at-eol",
 		"docs:api": "typedoc",
 		"validate:manifest": "node scripts/validate-manifest.js",
+		"verify:workflows": "node scripts/verify-workflows.js",
+		"build:pages": "node scripts/build-pages.js",
+		"hooks:install": "git config core.hooksPath .githooks",
 		"version": "node version-bump.js && node scripts/validate-manifest.js && git add manifest.json versions.json"
 	},
 	"dependencies": {
