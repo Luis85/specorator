@@ -24,8 +24,8 @@ export interface FeatureStepMeta {
 }
 
 export function getStepMeta(stepNumber: number): FeatureStepMeta | undefined {
+	if (stepNumber < 1 || stepNumber > FEATURE_STEP_COUNT) return undefined
 	const slug = FEATURE_STEPS[stepNumber - 1]
-	if (!slug) return undefined
 	return { number: stepNumber, slug, fileName: `${slug}.md` }
 }
 

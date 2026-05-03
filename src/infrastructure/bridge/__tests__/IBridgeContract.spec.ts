@@ -6,7 +6,7 @@ import { MockBridge } from '@/infrastructure/mock/MockBridge';
 interface BridgeScenario {
 	readonly bridge: IBridge;
 	readonly readOpenedFile: () => string | null;
-	readonly readNotices: () => Array<{ message: string; durationMs: number }>;
+	readonly readNotices: () => { message: string; durationMs: number }[];
 }
 
 interface BridgeHarness {
@@ -119,7 +119,7 @@ registerBridgeContract({
 	makeScenario: () => {
 		localStorage.clear();
 		let openedFile: string | null = null;
-		const notices: Array<{ message: string; durationMs: number }> = [];
+		const notices: { message: string; durationMs: number }[] = [];
 		const abort = new AbortController();
 
 		window.addEventListener(

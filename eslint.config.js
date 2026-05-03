@@ -1,21 +1,71 @@
 import { fileURLToPath } from 'node:url';
+import { defineConfig } from 'eslint/config';
 import js from '@eslint/js';
 import prettier from 'eslint-config-prettier';
 import pluginVue from 'eslint-plugin-vue';
+import obsidianmd from 'eslint-plugin-obsidianmd';
 import tseslint from 'typescript-eslint';
 import globals from 'globals';
 
 const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
 
-export default tseslint.config(
+// Architectural-boundary import bans by layer (ADR-001 / ADR-002).
+const DOMAIN_FORBIDDEN_IMPORTS = [
+	{ name: 'obsidian', message: 'Domain must not depend on Obsidian. Use ports/Result instead.' },
+	{ name: 'vue', message: 'Domain must not depend on Vue.' },
+	{ name: 'pinia', message: 'Domain must not depend on Pinia.' },
+	{ name: 'vue-router', message: 'Domain must not depend on Vue Router.' },
+	{ name: '@vue/reactivity', message: 'Domain must not depend on Vue reactivity.' },
+];
+const DOMAIN_FORBIDDEN_PATTERNS = [
+	{ group: ['node:*'], message: 'Domain must not depend on Node built-ins.' },
+	{
+		group: ['@/infrastructure/*', 'src/infrastructure/*', '../infrastructure/*'],
+		message: 'Domain must not depend on infrastructure.',
+	},
+];
+// UI may reach into `@/infrastructure/bridge/**` (the port boundary, per
+// CLAUDE.md) but nothing else under infrastructure/. Composition-root
+// modules (src/ui/main.ts) are carved out further down.
+const UI_FORBIDDEN_PATTERNS = [
+	{
+		group: [
+			'@/infrastructure/mock/**',
+			'@/infrastructure/obsidian/**',
+			'@/infrastructure/localstorage/**',
+			'@/infrastructure/vault/**',
+			'@/infrastructure/workflow-state/**',
+			'src/infrastructure/mock/**',
+			'src/infrastructure/obsidian/**',
+			'src/infrastructure/localstorage/**',
+			'src/infrastructure/vault/**',
+			'src/infrastructure/workflow-state/**',
+			'../infrastructure/mock/**',
+			'../infrastructure/obsidian/**',
+			'../infrastructure/localstorage/**',
+			'../infrastructure/vault/**',
+			'../infrastructure/workflow-state/**',
+		],
+		message: 'UI may only reach into @/infrastructure/bridge/** (the port boundary).',
+	},
+];
+
+const MAX_LINES_OPTIONS = { max: 350, skipBlankLines: true, skipComments: true };
+
+export default defineConfig(
 	// Base JS recommended rules
 	js.configs.recommended,
 
-	// TypeScript rules
-	...tseslint.configs.recommended,
+	// TypeScript type-aware rules (project-driven)
+	...tseslint.configs.recommendedTypeChecked,
+	...tseslint.configs.stylisticTypeChecked,
 
 	// Vue 3 rules (sets vue-eslint-parser as the parser for .vue files)
 	...pluginVue.configs['flat/recommended'],
+
+	// obsidianmd plugin recommended rule pack — kept early so project-wide
+	// rule blocks below can override anything that conflicts with our setup.
+	...obsidianmd.configs.recommended,
 
 	// Wire @typescript-eslint/parser into vue-eslint-parser for <script lang="ts">
 	// and provide browser + node globals so DOM types are recognised
@@ -28,6 +78,8 @@ export default tseslint.config(
 			},
 			parserOptions: {
 				parser: tseslint.parser,
+				project: ['./tsconfig.lint.json'],
+				extraFileExtensions: ['.vue'],
 				tsconfigRootDir,
 			},
 		},
@@ -38,34 +90,91 @@ export default tseslint.config(
 
 	// Global ignores
 	{
-		ignores: ['node_modules/', 'main.js', 'dist-standalone/', '.worktrees/', 'docs/api/'],
+		ignores: [
+			'node_modules/',
+			'main.js',
+			'dist-standalone/',
+			'.worktrees/',
+			'docs/',
+			// Boundary-rule proof fixtures: deliberately invalid imports/
+			// syntax that the lint test exercises via the ESLint API.
+			// Not lintable as part of the daily `npm run lint` surface.
+			'**/__fixtures__/**',
+			'**/*.json',
+			'**/*.md',
+			// Node-side build/release scripts: not part of the type-aware lint
+			// surface (they run in Node, not in the plugin/UI build).
+			'scripts/**',
+			'version-bump.js',
+		],
 	},
 
 	// Project-wide rules
 	{
 		files: ['**/*.ts', '**/*.js', '**/*.vue'],
 		rules: {
-			// Adapter boundary: obsidian must only be imported in the plugin adapter layer
-			'no-restricted-imports': [
-				'error',
-				{
-					paths: [
-						{
-							name: 'obsidian',
-							message:
-								'Import from obsidian only in the plugin adapter layer (src/plugin/**).',
-						},
-					],
-				},
-			],
+			// Existing rules
+			'no-unused-vars': 'off', // delegated to @typescript-eslint/no-unused-vars
 			'@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
 			'@typescript-eslint/no-explicit-any': 'error',
 			'vue/multi-word-component-names': 'off',
 			'vue/component-api-style': ['error', ['script-setup']],
+
+			// W5 rule pack — type-aware
+			'@typescript-eslint/strict-boolean-expressions': 'error',
+			'@typescript-eslint/no-floating-promises': 'error',
+			'@typescript-eslint/no-misused-promises': 'error',
+			'@typescript-eslint/no-unsafe-return': 'error',
+			'@typescript-eslint/no-unsafe-assignment': 'error',
+			'@typescript-eslint/no-unsafe-argument': 'error',
+			'@typescript-eslint/no-unsafe-member-access': 'error',
+			'@typescript-eslint/no-unsafe-call': 'error',
+			'@typescript-eslint/consistent-type-imports': 'error',
+			'@typescript-eslint/prefer-nullish-coalescing': 'error',
+			'@typescript-eslint/prefer-optional-chain': 'error',
+			'@typescript-eslint/restrict-template-expressions': 'error',
+			'@typescript-eslint/no-base-to-string': 'error',
+			'@typescript-eslint/only-throw-error': 'error',
+			'@typescript-eslint/no-confusing-void-expression': 'error',
+			'@typescript-eslint/use-unknown-in-catch-callback-variable': 'error',
+			'@typescript-eslint/require-await': 'error',
+			'@typescript-eslint/await-thenable': 'error',
+			'@typescript-eslint/no-unnecessary-condition': 'error',
+			'@typescript-eslint/no-redundant-type-constituents': 'error',
+
+			// W5 rule pack — scalar
+			eqeqeq: ['error', 'always'],
+			'no-var': 'error',
+			'prefer-const': 'error',
+			complexity: ['error', 10],
+
+			// W5 rule pack — DOM injection bans
+			'no-restricted-properties': [
+				'error',
+				{
+					object: 'document',
+					property: 'innerHTML',
+					message: 'innerHTML is unsafe; use textContent or createEl().',
+				},
+				{
+					property: 'innerHTML',
+					message: 'innerHTML is unsafe; use textContent or createEl().',
+				},
+				{
+					property: 'outerHTML',
+					message: 'outerHTML is unsafe; use createEl()/replaceChildren().',
+				},
+				{
+					property: 'insertAdjacentHTML',
+					message: 'insertAdjacentHTML is unsafe; use createEl()/append().',
+				},
+			],
+
+			// W5 rule pack — syntax bans
 			// Result discipline (ADR-004): raw try/catch is reserved for the
 			// infrastructure layer and the tryAsync/trySync helper itself.
-			// Domain, application, and UI code must use those helpers to
-			// convert thrown values into Result<T, E>.
+			// Domain, application, and UI must use those helpers.
+			// `delete` operator is banned project-wide; reassign or omit instead.
 			'no-restricted-syntax': [
 				'error',
 				{
@@ -73,11 +182,87 @@ export default tseslint.config(
 					message:
 						'Use tryAsync/trySync from @/domain/shared/tryAsync instead of try/catch. Raw try/catch is allowed only in src/infrastructure/** and the helper itself.',
 				},
+				{
+					selector: 'UnaryExpression[operator="delete"]',
+					message:
+						'Avoid the `delete` operator; reassign with `undefined` or rebuild the object instead.',
+				},
 			],
+
+			// W5 rule pack — cross-layer import baseline
+			// (Layer-specific overrides below tighten this further.)
+			'no-restricted-imports': [
+				'error',
+				{
+					paths: [
+						{
+							name: 'obsidian',
+							message:
+								'Import from obsidian only in the plugin adapter layer (src/plugin/** and src/infrastructure/obsidian/**).',
+						},
+					],
+				},
+			],
+
+			// W5 rule pack — file-size tiering (warn floor)
+			'max-lines': ['warn', MAX_LINES_OPTIONS],
+
+			// Out-of-scope obsidianmd recommended rules — opinionated style
+			// items not part of the W5 acceptance list. Keep the security/
+			// architectural ones; downgrade purely cosmetic ones.
+			'@typescript-eslint/array-type': 'off',
+			'@typescript-eslint/no-deprecated': 'warn',
 		},
 	},
 
-	// Adapter layer — obsidian imports permitted here
+	// Domain layer — strictest import boundary, hard line-limit
+	{
+		files: ['src/domain/**/*.ts'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					paths: DOMAIN_FORBIDDEN_IMPORTS,
+					patterns: DOMAIN_FORBIDDEN_PATTERNS,
+				},
+			],
+			'max-lines': ['error', MAX_LINES_OPTIONS],
+		},
+	},
+
+	// Modules layer (introduced in W2) — same hard line-limit posture
+	{
+		files: ['src/modules/**/*.ts'],
+		rules: {
+			'max-lines': ['error', MAX_LINES_OPTIONS],
+		},
+	},
+
+	// UI layer — must not reach into infrastructure. Also runs in plain
+	// browser via the standalone build, so popout-window-only rules from
+	// the obsidianmd plugin don't apply here.
+	{
+		files: ['src/ui/**/*.ts', 'src/ui/**/*.vue'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					paths: [
+						{
+							name: 'obsidian',
+							message:
+								'Import from obsidian only in the plugin adapter layer (src/plugin/** and src/infrastructure/obsidian/**).',
+						},
+					],
+					patterns: UI_FORBIDDEN_PATTERNS,
+				},
+			],
+			'obsidianmd/prefer-active-doc': 'off',
+			'obsidianmd/prefer-active-window-timers': 'off',
+		},
+	},
+
+	// Adapter layer — obsidian imports permitted
 	{
 		files: ['src/plugin/**/*.ts', 'src/infrastructure/obsidian/**/*.ts'],
 		rules: {
@@ -85,17 +270,117 @@ export default tseslint.config(
 		},
 	},
 
-	// Result-discipline allowlist: the helper itself, the infrastructure
-	// adapter layer, and Node-side scripts are the only places where raw
-	// try/catch is sanctioned.
+	// UI composition root (standalone bootstrap) — instantiates concrete
+	// infrastructure adapters and runs in a plain browser, not Obsidian,
+	// so the popout-window rules do not apply.
+	{
+		files: ['src/ui/main.ts'],
+		rules: {
+			'no-restricted-imports': 'off',
+			'obsidianmd/prefer-active-doc': 'off',
+			'obsidianmd/prefer-active-window-timers': 'off',
+		},
+	},
+
+	// Result-discipline allowlist: the helper itself and the infrastructure
+	// adapter layer are the only places where raw try/catch is sanctioned.
+	// (delete-operator ban still applies.)
 	{
 		files: [
 			'src/infrastructure/**/*.ts',
 			'src/domain/shared/tryAsync.ts',
-			'scripts/**/*.js',
 		],
 		rules: {
-			'no-restricted-syntax': 'off',
+			'no-restricted-syntax': [
+				'error',
+				{
+					selector: 'UnaryExpression[operator="delete"]',
+					message:
+						'Avoid the `delete` operator; reassign with `undefined` or rebuild the object instead.',
+				},
+			],
+		},
+	},
+
+	// LocalStorageBridge: the GitHub Pages demo bridge is intentionally
+	// browser localStorage-backed; the obsidianmd ban does not apply.
+	{
+		files: ['src/infrastructure/localstorage/**/*.ts'],
+		rules: {
+			'no-restricted-globals': 'off',
+		},
+	},
+
+	// VaultPath utility: the whole point of this module is to normalise the
+	// `.obsidian` configuration directory; the obsidianmd `hardcoded-config-path`
+	// warning is exactly what it produces.
+	{
+		files: ['src/infrastructure/vault/**/*.ts'],
+		rules: {
+			'obsidianmd/hardcoded-config-path': 'off',
+		},
+	},
+
+	// MockBridge: dev-only fallback bridge; console.warn is appropriate.
+	{
+		files: ['src/infrastructure/mock/**/*.ts'],
+		rules: {
+			'obsidianmd/rule-custom-message': 'off',
+		},
+	},
+
+	// Plugin adapter layer: `Workspace.revealLeaf` (Promise-returning in
+	// 1.7.2) and `FileManager.trashFile` (1.6.6) are the canonical APIs we
+	// want to use. The `no-unsupported-api` rule flags them against our
+	// declared minAppVersion of 1.4.0; bumping minAppVersion is a
+	// release-management decision tracked separately, not a W5 concern.
+	{
+		files: ['src/plugin/main.ts', 'src/infrastructure/obsidian/**/*.ts'],
+		rules: {
+			'obsidianmd/no-unsupported-api': 'off',
+		},
+	},
+
+	// Test files — relax strict rules that get noisy in fixtures/mocks
+	{
+		files: ['**/__tests__/**/*.ts', '**/*.spec.ts'],
+		rules: {
+			'@typescript-eslint/no-unsafe-assignment': 'off',
+			'@typescript-eslint/no-unsafe-member-access': 'off',
+			'@typescript-eslint/no-unsafe-argument': 'off',
+			'@typescript-eslint/no-unsafe-call': 'off',
+			'@typescript-eslint/no-unsafe-return': 'off',
+			'@typescript-eslint/strict-boolean-expressions': 'off',
+			'@typescript-eslint/no-floating-promises': 'off',
+			'@typescript-eslint/only-throw-error': 'off',
+			'@typescript-eslint/require-await': 'off',
+			'no-restricted-globals': 'off',
+			'no-restricted-imports': 'off',
+			complexity: 'off',
+			'max-lines': 'off',
+		},
+	},
+
+	// Bridge implementations: the IBridge port returns Promise<T> for every
+	// method; sync-bodied async implementations are valid satisfactions of
+	// the contract (and are easier to read than `Promise.resolve(...)`).
+	{
+		files: [
+			'src/infrastructure/mock/**/*.ts',
+			'src/infrastructure/localstorage/**/*.ts',
+			'src/infrastructure/obsidian/**/*.ts',
+		],
+		rules: {
+			'@typescript-eslint/require-await': 'off',
+		},
+	},
+
+	// obsidianmd ui/sentence-case — applied to plugin- and UI-facing strings
+	// with our brand allowlist.
+	{
+		files: ['src/plugin/**/*.ts', 'src/ui/**/*.ts', 'src/ui/**/*.vue'],
+		rules: {
+			'obsidianmd/ui/sentence-case': ['error', { brands: ['Specorator'] }],
 		},
 	},
 );

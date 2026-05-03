@@ -370,13 +370,13 @@ to   { opacity: 1; transform: translateY(0);
   box-sizing: border-box;
 }
 
-.specorator-root :where(.sp-app[data-v-884c0b35]) {
+.specorator-root :where(.sp-app[data-v-773279d7]) {
   display: flex;
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
 }
-.specorator-root :where(.sp-nav[data-v-884c0b35]) {
+.specorator-root :where(.sp-nav[data-v-773279d7]) {
   display: flex;
   gap: 0;
   border-bottom: 1px solid var(--background-modifier-border);
@@ -384,7 +384,7 @@ to   { opacity: 1; transform: translateY(0);
   padding: 0 0.5rem;
   flex-shrink: 0;
 }
-.specorator-root :where(.sp-nav__link[data-v-884c0b35]) {
+.specorator-root :where(.sp-nav__link[data-v-773279d7]) {
   padding: 0.5rem 0.875rem;
   font-size: 0.8125rem;
   font-weight: 500;
@@ -393,14 +393,14 @@ to   { opacity: 1; transform: translateY(0);
   border-bottom: 2px solid transparent;
   transition: color 0.15s, border-color 0.15s;
 }
-.specorator-root :where(.sp-nav__link[data-v-884c0b35]:hover) {
+.specorator-root :where(.sp-nav__link[data-v-773279d7]:hover) {
   color: var(--text-normal);
 }
-.specorator-root :where(.sp-nav__link--active[data-v-884c0b35]) {
+.specorator-root :where(.sp-nav__link--active[data-v-773279d7]) {
   color: var(--text-normal);
   border-bottom-color: var(--interactive-accent);
 }
-.specorator-root :where(.sp-main[data-v-884c0b35]) {
+.specorator-root :where(.sp-main[data-v-773279d7]) {
   flex: 1;
   overflow-y: auto;
 }

@@ -38,7 +38,7 @@ function scopeSelector(selector: string): string {
 }
 
 function parentAtRule(rule: Rule): AtRule | undefined {
-	return rule.parent?.type === 'atrule' ? (rule.parent as AtRule) : undefined;
+	return rule.parent?.type === 'atrule' ? (rule.parent) : undefined;
 }
 
 function scopeBuiltCss(): VitePlugin {
@@ -56,7 +56,7 @@ function scopeBuiltCss(): VitePlugin {
 				root.walkRules((rule) => {
 					const atRule = parentAtRule(rule);
 
-					if (atRule?.name.endsWith('keyframes')) {
+					if (atRule?.name.endsWith('keyframes') === true) {
 						return;
 					}
 
@@ -88,7 +88,7 @@ export default defineConfig(({ mode }) => {
 						exports: 'default',
 						// Obsidian convention: CSS file must be named styles.css
 						assetFileNames: (info) =>
-							info.names?.some((n) => n.endsWith('.css')) ? 'styles.css' : '[name][extname]',
+							info.names.some((n) => n.endsWith('.css')) ? 'styles.css' : '[name][extname]',
 					},
 				},
 				outDir: '.',

@@ -9,7 +9,7 @@ export class MockBridge implements IBridge {
   private readonly files = new Map<string, string>()
   private readonly folders = new Set<string>()
   private settings: PluginSettings = { ...DEFAULT_SETTINGS }
-  private readonly noticeLog: Array<{ message: string; durationMs: number }> = []
+  private readonly noticeLog: { message: string; durationMs: number }[] = []
   private openedFile: string | null = null
 
   constructor(initialFiles: Record<string, string> = {}) {
@@ -87,7 +87,7 @@ export class MockBridge implements IBridge {
 
   // ── Test helpers ──────────────────────────────────────────────────────────
 
-  getNotices(): Array<{ message: string; durationMs: number }> {
+  getNotices(): { message: string; durationMs: number }[] {
     return [...this.noticeLog]
   }
 

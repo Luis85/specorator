@@ -38,7 +38,7 @@ export class Feature {
         id,
         slug,
         title: title.trim(),
-        area: area?.toUpperCase().trim() || '',
+        area: area?.toUpperCase().trim() ?? '',
         status: 'draft',
         currentStep: 1,
         createdAt: now,
