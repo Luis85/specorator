@@ -21,7 +21,8 @@
 		"test:coverage": "vitest run --configLoader runner --coverage",
 		"verify": "npm audit --audit-level=high --omit=dev && npm run typecheck && npm run lint && npm run test && npm run build && npm run build:web && npm run docs:api",
 		"docs:api": "typedoc",
-		"version": "node version-bump.js && git add manifest.json versions.json"
+		"validate:manifest": "node scripts/validate-manifest.js",
+		"version": "node version-bump.js && node scripts/validate-manifest.js && git add manifest.json versions.json"
 	},
 	"dependencies": {
 		"pinia": "^3.0.4",
