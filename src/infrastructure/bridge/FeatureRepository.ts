@@ -3,7 +3,7 @@ import { Slug } from '@/domain/shared/Slug';
 import { Feature } from '@/domain/feature/Feature';
 import { getStepMeta } from '@/domain/feature/FeatureStep';
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository';
-import type { IBridge } from './IBridge';
+import type { VaultPort, NotificationPort } from '@/domain/ports';
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
 import { joinVaultPath } from '../vault/VaultPath';
 import {
@@ -37,7 +37,8 @@ function buildStageStub(
 
 export class FeatureRepository implements IFeatureRepository {
 	constructor(
-		private readonly bridge: IBridge,
+		private readonly vault: VaultPort,
+		private readonly notifications: NotificationPort,
 		private readonly settings: PluginSettings,
 	) {}
 
@@ -61,12 +62,12 @@ export class FeatureRepository implements IFeatureRepository {
 
 	async findAll(): Promise<Feature[]> {
 		const specsFolder = this.checkedPath(this.settings.specsFolder);
-		const folders = await this.bridge.listFolders(specsFolder);
+		const folders = await this.vault.listFolders(specsFolder);
 		const features = await Promise.all(
 			folders.map(async (folder) => {
 				const path = this.checkedPath(specsFolder, folder, META_FILE);
 				try {
-					const content = await this.bridge.readFile(path);
+					const content = await this.vault.readFile(path);
 					return deserializeWorkflowState(content);
 				} catch {
 					return null;
@@ -78,8 +79,8 @@ export class FeatureRepository implements IFeatureRepository {
 
 	async findBySlug(slug: Slug): Promise<Feature | null> {
 		const path = this.metaPath(slug.toString());
-		if (!(await this.bridge.fileExists(path))) return null;
-		const content = await this.bridge.readFile(path);
+		if (!(await this.vault.fileExists(path))) return null;
+		const content = await this.vault.readFile(path);
 		const feature = deserializeWorkflowState(content);
 		// File exists but is malformed — throw so callers cannot silently overwrite it.
 		if (feature === null) {
@@ -100,10 +101,10 @@ export class FeatureRepository implements IFeatureRepository {
 	async save(feature: Feature): Promise<Result<void>> {
 		try {
 			const folder = this.folderPath(feature.slug.toString());
-			await this.bridge.createFolder(folder);
+			await this.vault.createFolder(folder);
 			const path = this.metaPath(feature.slug.toString());
-			const isNew = !(await this.bridge.fileExists(path));
-			if (!isNew && deserializeWorkflowState(await this.bridge.readFile(path)) === null) {
+			const isNew = !(await this.vault.fileExists(path));
+			if (!isNew && deserializeWorkflowState(await this.vault.readFile(path)) === null) {
 				return err(
 					new Error(`Spec at "${path}" exists but could not be parsed — will not overwrite.`),
 				);
@@ -117,17 +118,17 @@ export class FeatureRepository implements IFeatureRepository {
 			// would leave a valid metadata file and block any retry.
 			if (isNew) {
 				const ideaPath = this.stagePath(feature.slug.toString(), 'idea');
-				if (await this.bridge.fileExists(ideaPath)) {
-					this.bridge.showNotice(`Specorator: idea.md already exists — keeping your version.`);
+				if (await this.vault.fileExists(ideaPath)) {
+					this.notifications.showNotice(`Specorator: idea.md already exists — keeping your version.`);
 				} else {
 					const date = feature.createdAt.toISOString().slice(0, 10);
-					await this.bridge.writeFile(
+					await this.vault.writeFile(
 						ideaPath,
 						buildStageStub('idea', feature.slug.toString(), feature.title, date),
 					);
 				}
 			}
-			await this.bridge.writeFile(path, serializeWorkflowState(feature));
+			await this.vault.writeFile(path, serializeWorkflowState(feature));
 			return ok(undefined);
 		} catch (e) {
 			return err(e instanceof Error ? e : new Error(String(e)));
@@ -145,14 +146,14 @@ export class FeatureRepository implements IFeatureRepository {
 			if (!meta) return err(new Error(`Unknown step number: ${stepNumber}`));
 
 			const path = this.stagePath(feature.slug.toString(), meta.slug);
-			if (await this.bridge.fileExists(path)) {
-				this.bridge.showNotice(
+			if (await this.vault.fileExists(path)) {
+				this.notifications.showNotice(
 					`Specorator: ${meta.slug}.md already exists — keeping your version.`,
 				);
 				return ok(undefined);
 			}
 			const date = new Date().toISOString().slice(0, 10);
-			await this.bridge.writeFile(
+			await this.vault.writeFile(
 				path,
 				buildStageStub(meta.slug, feature.slug.toString(), feature.title, date),
 			);
@@ -167,8 +168,8 @@ export class FeatureRepository implements IFeatureRepository {
 			const feature = await this.findById(id);
 			if (!feature) return err(new Error(`Feature "${id}" not found`));
 			const folder = this.folderPath(feature.slug.toString());
-			const files = await this.bridge.listFiles(folder);
-			await Promise.all(files.map((path) => this.bridge.deleteFile(path)));
+			const files = await this.vault.listFiles(folder);
+			await Promise.all(files.map((path) => this.vault.deleteFile(path)));
 			return ok(undefined);
 		} catch (e) {
 			return err(e instanceof Error ? e : new Error(String(e)));
