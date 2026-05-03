@@ -22,12 +22,15 @@ export class FeatureCardPageObject {
 	}
 
 	get progressFill() {
-		return this.wrapper.find(this.byTid(TID.progressFill))
+		return this.wrapper.get(this.byTid(TID.progressFill))
 	}
 
 	get stepLabelText(): string {
-		const el = this.wrapper.find(this.byTid(TID.stepLabel))
-		return el.exists() ? el.text() : ''
+		return this.wrapper.get(this.byTid(TID.stepLabel)).text()
+	}
+
+	hasStepLabel(): boolean {
+		return this.wrapper.find(this.byTid(TID.stepLabel)).exists()
 	}
 
 	get advanceStepButton() {
