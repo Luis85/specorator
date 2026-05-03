@@ -8,7 +8,7 @@ import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { CreateFeatureUseCase } from '@/application/feature/CreateFeatureUseCase'
 import { ActivateFeatureUseCase } from '@/application/feature/ActivateFeatureUseCase'
-import { DEFAULT_SETTINGS } from '@/infrastructure/bridge/IBridge'
+import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
 function harness(bridge: MockBridge) {
   let api!: ReturnType<typeof useFeatures>

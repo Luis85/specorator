@@ -1,5 +1,6 @@
 import { Notice, TFile, TFolder, type App } from 'obsidian'
-import type { IBridge, PluginSettings } from '../bridge/IBridge'
+import type { IBridge } from '../bridge/IBridge'
+import type { PluginSettings } from '@/domain/settings/PluginSettings'
 
 export class ObsidianBridge implements IBridge {
   constructor(

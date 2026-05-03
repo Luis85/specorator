@@ -5,7 +5,7 @@ import AppButton from '../components/common/AppButton.vue'
 import { useSettings } from '../composables/useSettings'
 import { SUPPORTED_LOCALES } from '../i18n'
 import { tryAsync } from '@/domain/shared/tryAsync'
-import type { PluginSettings } from '@/infrastructure/bridge/IBridge'
+import type { PluginSettings } from '@/domain/settings/PluginSettings'
 
 const { t } = useI18n()
 const { settings, loadSettings, saveSettings } = useSettings()

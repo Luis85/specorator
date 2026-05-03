@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { PluginSettings } from '@/infrastructure/bridge/IBridge'
-import { DEFAULT_SETTINGS } from '@/infrastructure/bridge/IBridge'
+import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<PluginSettings>({ ...DEFAULT_SETTINGS })

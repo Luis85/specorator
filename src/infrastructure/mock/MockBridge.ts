@@ -1,5 +1,5 @@
-import type { IBridge, PluginSettings } from '../bridge/IBridge'
-import { DEFAULT_SETTINGS } from '../bridge/IBridge'
+import type { IBridge } from '../bridge/IBridge'
+import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
 /**
  * In-memory bridge used in standalone dev mode and unit tests.

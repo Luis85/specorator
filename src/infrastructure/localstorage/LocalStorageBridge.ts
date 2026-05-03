@@ -1,5 +1,5 @@
-import type { IBridge, PluginSettings } from '@/infrastructure/bridge/IBridge'
-import { DEFAULT_SETTINGS } from '@/infrastructure/bridge/IBridge'
+import type { IBridge } from '@/infrastructure/bridge/IBridge'
+import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
 const FILE_PREFIX = 'specorator:file:'
 const SETTINGS_KEY = 'specorator:settings'

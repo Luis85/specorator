@@ -1,6 +1,5 @@
 import { App, PluginSettingTab, Setting } from 'obsidian'
-import type { PluginSettings } from '@/infrastructure/bridge/IBridge'
-import { DEFAULT_SETTINGS } from '@/infrastructure/bridge/IBridge'
+import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 import type SpecoratorPlugin from './main'
 
 export type { PluginSettings }

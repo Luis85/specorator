@@ -4,7 +4,7 @@ import { AdvanceFeatureStageUseCase } from '../AdvanceFeatureStageUseCase'
 import { ActivateFeatureUseCase } from '../ActivateFeatureUseCase'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
-import { DEFAULT_SETTINGS, type PluginSettings } from '@/infrastructure/bridge/IBridge'
+import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
 
 function makeRepo(bridge: MockBridge, settings: PluginSettings = DEFAULT_SETTINGS) {
   return new FeatureRepository(bridge, settings)

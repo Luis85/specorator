@@ -3,7 +3,8 @@ import { Slug } from '@/domain/shared/Slug';
 import { Feature } from '@/domain/feature/Feature';
 import { getStepMeta } from '@/domain/feature/FeatureStep';
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository';
-import type { IBridge, PluginSettings } from './IBridge';
+import type { IBridge } from './IBridge';
+import type { PluginSettings } from '@/domain/settings/PluginSettings';
 import { joinVaultPath } from '../vault/VaultPath';
 import {
 	deserializeWorkflowState,
