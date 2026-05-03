@@ -83,6 +83,10 @@ export function useFeatures() {
     })
   }
 
+  function clearError(): void {
+    store.setError(null)
+  }
+
   return {
     items: computed(() => store.items),
     activeItems: computed(() => store.activeItems),
@@ -93,5 +97,6 @@ export function useFeatures() {
     createFeature,
     activateFeature,
     archiveFeature,
+    clearError,
   }
 }

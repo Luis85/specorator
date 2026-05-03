@@ -11,14 +11,41 @@ import { useBridge } from '../composables/useBridge'
 const { t } = useI18n()
 const router = useRouter()
 const bridge = useBridge()
-const { activeItems, loading, error, loadFeatures, createFeature, activateFeature, archiveFeature } = useFeatures()
+const {
+  activeItems,
+  loading,
+  error,
+  loadFeatures,
+  createFeature,
+  activateFeature,
+  archiveFeature,
+  clearError,
+} = useFeatures()
 const showCreateForm = ref(false)
+const createError = ref<string | null>(null)
 
 onMounted(loadFeatures)
 
-async function handleCreate(payload: { title: string; area?: string }) {
-  await createFeature(payload.title, payload.area)
+function toggleCreateForm() {
+  createError.value = null
+  showCreateForm.value = !showCreateForm.value
+}
+
+function closeCreateForm() {
+  createError.value = null
   showCreateForm.value = false
+}
+
+async function handleCreate(payload: { title: string; area?: string }): Promise<boolean> {
+  createError.value = null
+  const created = await createFeature(payload.title, payload.area)
+  if (!created) {
+    createError.value = error.value ?? t('common.error')
+    clearError()
+    return false
+  }
+  closeCreateForm()
+  return true
 }
 
 async function handleOpen(featureId: string) {
@@ -41,15 +68,16 @@ async function handleOpen(featureId: string) {
     <section class="sp-home__section">
       <div class="sp-home__section-header">
         <h2 class="sp-home__section-title">{{ t('home.activeFeatures') }}</h2>
-        <AppButton variant="primary" size="sm" @click="showCreateForm = !showCreateForm">
+        <AppButton variant="primary" size="sm" @click="toggleCreateForm">
           + {{ t('feature.create') }}
         </AppButton>
       </div>
 
       <CreateFeatureForm
         v-if="showCreateForm"
-        @submit="handleCreate"
-        @cancel="showCreateForm = false"
+        :submit-handler="handleCreate"
+        :error-message="createError"
+        @cancel="closeCreateForm"
       />
 
       <p v-if="loading" class="sp-home__meta">{{ t('common.loading') }}</p>

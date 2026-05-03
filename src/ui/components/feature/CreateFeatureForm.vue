@@ -3,8 +3,15 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppButton from '../common/AppButton.vue'
 
+type CreateFeaturePayload = { title: string; area?: string }
+
+const props = defineProps<{
+  errorMessage?: string | null
+  submitHandler?: (payload: CreateFeaturePayload) => boolean | Promise<boolean>
+}>()
+
 const emit = defineEmits<{
-  submit: [payload: { title: string; area?: string }]
+  submit: [payload: CreateFeaturePayload]
   cancel: []
 }>()
 
@@ -19,9 +26,13 @@ async function handleSubmit() {
   const trimmedArea = area.value.trim()
   submitting.value = true
   try {
-    emit('submit', { title: trimmedTitle, area: trimmedArea || undefined })
-    title.value = ''
-    area.value = ''
+    const payload = { title: trimmedTitle, area: trimmedArea || undefined }
+    const succeeded = props.submitHandler ? await props.submitHandler(payload) : true
+    emit('submit', payload)
+    if (succeeded) {
+      title.value = ''
+      area.value = ''
+    }
   } finally {
     submitting.value = false
   }
@@ -54,6 +65,9 @@ async function handleSubmit() {
       autocomplete="off"
       maxlength="5"
     />
+    <p v-if="errorMessage" class="sp-create-form__error" role="alert">
+      {{ errorMessage }}
+    </p>
     <div class="sp-create-form__actions">
       <AppButton variant="primary" :loading="submitting" :disabled="!title.trim()">
         {{ t('feature.create') }}
@@ -97,6 +111,12 @@ async function handleSubmit() {
 
 .sp-create-form__input:focus {
   border-color: var(--interactive-accent);
+}
+
+.sp-create-form__error {
+  color: var(--text-error);
+  font-size: 0.875rem;
+  margin: 0.125rem 0 0;
 }
 
 .sp-create-form__actions {
