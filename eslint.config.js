@@ -9,7 +9,7 @@ import globals from 'globals';
 
 const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
 
-// Architectural-boundary import bans by layer (ADR-001 / ADR-002).
+// Architectural-boundary import bans by layer (ADR-001 / ADR-008).
 const DOMAIN_FORBIDDEN_IMPORTS = [
 	{ name: 'obsidian', message: 'Domain must not depend on Obsidian. Use ports/Result instead.' },
 	{ name: 'vue', message: 'Domain must not depend on Vue.' },
@@ -51,6 +51,33 @@ const UI_FORBIDDEN_PATTERNS = [
 ];
 
 const MAX_LINES_OPTIONS = { max: 350, skipBlankLines: true, skipComments: true };
+
+// ADR-008: the aggregate IBridge / BridgeKey / useBridge surface was deleted
+// in favour of four narrow ports under src/domain/ports. Re-introducing any of
+// those names — even by accident — should fail lint with a clear pointer.
+// Pattern list covers alias-style imports (@/...) and every relative-path form
+// the now-deleted files used (`./X`, `../X`, `../bridge/X`, etc.). ESLint's
+// `patterns` uses minimatch; `**/X` matches @/... and bare-name forms but does
+// NOT match relative dot-prefixed paths, so the relative variants are listed
+// explicitly.
+const PORTS_BAN_PATTERN = {
+	group: [
+		'**/IBridge',
+		'**/BridgeKey',
+		'**/useBridge',
+		'./IBridge',
+		'./BridgeKey',
+		'./useBridge',
+		'../IBridge',
+		'../BridgeKey',
+		'../useBridge',
+		'../bridge/IBridge',
+		'../bridge/BridgeKey',
+		'../composables/useBridge',
+	],
+	message:
+		'IBridge / BridgeKey / useBridge were superseded by the narrow ports in src/domain/ports (ADR-008). Import a specific port (SettingsPort, VaultPort, WorkspacePort, NotificationPort) and the matching composable instead.',
+};
 
 export default defineConfig(
 	// Base JS recommended rules
@@ -201,6 +228,7 @@ export default defineConfig(
 								'Import from obsidian only in the plugin adapter layer (src/plugin/** and src/infrastructure/obsidian/**).',
 						},
 					],
+					patterns: [PORTS_BAN_PATTERN],
 				},
 			],
 
@@ -254,7 +282,7 @@ export default defineConfig(
 								'Import from obsidian only in the plugin adapter layer (src/plugin/** and src/infrastructure/obsidian/**).',
 						},
 					],
-					patterns: UI_FORBIDDEN_PATTERNS,
+					patterns: [...UI_FORBIDDEN_PATTERNS, PORTS_BAN_PATTERN],
 				},
 			],
 			'obsidianmd/prefer-active-doc': 'off',
@@ -361,9 +389,10 @@ export default defineConfig(
 		},
 	},
 
-	// Bridge implementations: the IBridge port returns Promise<T> for every
-	// method; sync-bodied async implementations are valid satisfactions of
-	// the contract (and are easier to read than `Promise.resolve(...)`).
+	// Bridge implementations: the four narrow ports declare Promise<T> for
+	// every async method; sync-bodied async implementations are valid
+	// satisfactions of the contract (and are easier to read than
+	// `Promise.resolve(...)`).
 	{
 		files: [
 			'src/infrastructure/mock/**/*.ts',

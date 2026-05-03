@@ -1,9 +1,12 @@
 ---
 id: ADR-002
 title: IBridge abstraction for all Obsidian API calls
-status: accepted
+status: superseded
+superseded_by: ADR-008
 date: 2026-05-01
 ---
+
+> **Superseded by [ADR-008](ADR-008-narrow-ports-supersede-ibridge.md) (2026-05-03).** The aggregate `IBridge` interface has been replaced by four narrow ports (`SettingsPort`, `VaultPort`, `WorkspacePort`, `NotificationPort`). The injection-and-composable pattern described below remains, but with one InjectionKey and one composable per port.
 
 # ADR-002 — IBridge abstraction for all Obsidian API calls
 

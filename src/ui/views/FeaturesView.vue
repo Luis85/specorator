@@ -5,10 +5,12 @@ import FeatureCard from '../components/feature/FeatureCard.vue'
 import CreateFeatureForm from '../components/feature/CreateFeatureForm.vue'
 import AppButton from '../components/common/AppButton.vue'
 import { useFeatures } from '../composables/useFeatures'
-import { useBridge } from '../composables/useBridge'
+import { useSettingsPort } from '../composables/useSettingsPort'
+import { useWorkspacePort } from '../composables/useWorkspacePort'
 
 const { t } = useI18n()
-const bridge = useBridge()
+const settingsPort = useSettingsPort()
+const workspace = useWorkspacePort()
 const {
   items,
   loading,
@@ -35,8 +37,8 @@ async function handleCreate(payload: { title: string; area?: string }): Promise<
 async function handleOpen(featureId: string) {
   const feature = items.value.find((f) => f.id === featureId)
   if (!feature) return
-  const settings = await bridge.getSettings()
-  await bridge.openFile(`${settings.specsFolder}/${feature.slug}/workflow-state.md`)
+  const settings = await settingsPort.getSettings()
+  await workspace.openFile(`${settings.specsFolder}/${feature.slug}/workflow-state.md`)
 }
 </script>
 

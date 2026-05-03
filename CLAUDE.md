@@ -48,15 +48,24 @@ domain ← application ← infrastructure ← ui
 | UI | `src/ui/` | Vue 3 components, Pinia stores, Vue Router, composables |
 | Plugin | `src/plugin/` | Obsidian `Plugin` subclass, `SpecoratorView`, settings tab |
 
-### IBridge abstraction (ADR-002)
+### Narrow ports (ADR-008)
 
-All Obsidian API calls go through `IBridge` (`src/infrastructure/bridge/IBridge.ts`). Three implementations:
+All Obsidian API calls go through four narrow ports declared in `src/domain/ports/`:
+
+- **`SettingsPort`** — `getSettings`, `saveSettings`
+- **`VaultPort`** — `readFile`, `writeFile`, `deleteFile`, `listFiles`, `listFolders`, `fileExists`, `createFolder`
+- **`WorkspacePort`** — `openFile`
+- **`NotificationPort`** — `showNotice`
+
+Three runtime classes implement all four ports:
 
 - **`ObsidianBridge`** (`src/infrastructure/obsidian/`) — production, wraps `App` + `Vault`
 - **`MockBridge`** (`src/infrastructure/mock/`) — unit tests and `npm run dev`
 - **`LocalStorageBridge`** (`src/infrastructure/localstorage/`) — GitHub Pages demo
 
-The bridge is injected via `app.provide(BRIDGE_KEY, bridge)` and consumed in components/stores via `useBridge()`. Vue components must **never** import `obsidian` directly (ESLint `no-restricted-imports` enforces this).
+Each port has its own `InjectionKey` (`SETTINGS_PORT`, `VAULT_PORT`, `WORKSPACE_PORT`, `NOTIFICATION_PORT` in `src/infrastructure/bridge/ports.ts`) and its own composable (`useSettingsPort`, `useVaultPort`, `useWorkspacePort`, `useNotificationPort` in `src/ui/composables/`). Consumers depend on **one port per dependency** — there is no aggregate `usePorts()`. ESLint forbids re-introducing the deleted `IBridge` / `BridgeKey` / `useBridge` symbols.
+
+Vue components must **never** import `obsidian` directly (ESLint `no-restricted-imports` enforces this).
 
 ### Result type (ADR-004)
 
@@ -87,16 +96,18 @@ The 12 stage slugs (from `src/domain/feature/FeatureStep.ts`): `idea`, `research
 - All components use `<script setup>` (Composition API). Options API is not used; ESLint enforces this.
 - Vue Router uses `createWebHashHistory` (hash-mode) so routing works inside Obsidian's embedded view and on GitHub Pages.
 - Pinia stores hold plain DTOs only — domain class instances must not cross the store boundary.
-- UI imports use cases for business logic; UI must not import domain or infrastructure directly except for `BridgeKey` types.
+- UI imports use cases for business logic; UI must not import domain or infrastructure directly except for port types from `@/domain/ports` and the matching InjectionKey symbols from `@/infrastructure/bridge/ports`.
 
 ### Key files
 
-- `src/infrastructure/bridge/IBridge.ts` — bridge interface + `PluginSettings` type + `DEFAULT_SETTINGS`
+- `src/domain/ports/` — narrow port interfaces (SettingsPort, VaultPort, WorkspacePort, NotificationPort)
+- `src/domain/settings/PluginSettings.ts` — `PluginSettings` type + `DEFAULT_SETTINGS`
+- `src/infrastructure/bridge/ports.ts` — per-port InjectionKey symbols
 - `src/infrastructure/bridge/FeatureRepository.ts` — serialises/deserialises `workflow-state.md`, creates stage stubs
 - `src/domain/feature/Feature.ts` — `Feature` aggregate
 - `src/domain/feature/FeatureStep.ts` — `FEATURE_STEPS` array and step metadata helpers
 - `src/plugin/main.ts` — Obsidian plugin entry point
-- `src/plugin/settings.ts` — settings type (mirrors `IBridge.PluginSettings`) and settings tab
+- `src/plugin/settings.ts` — settings tab (reads `PluginSettings` from `@/domain/settings/PluginSettings`)
 - `src/ui/main.ts` — browser (standalone) entry point, mounts Vue with `MockBridge`
 
 ## Branching model

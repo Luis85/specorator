@@ -4,7 +4,12 @@ import { createPinia } from 'pinia'
 import { router } from '@/ui/router'
 import { i18n, setLocale, type SupportedLocale } from '@/ui/i18n'
 import App from '@/ui/App.vue'
-import { BRIDGE_KEY } from '@/infrastructure/bridge/BridgeKey'
+import {
+	SETTINGS_PORT,
+	VAULT_PORT,
+	WORKSPACE_PORT,
+	NOTIFICATION_PORT,
+} from '@/infrastructure/bridge/ports'
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
 import type SpecoratorPlugin from './main'
 
@@ -45,7 +50,10 @@ export class SpecoratorView extends ItemView {
     this.vueApp.use(createPinia())
     this.vueApp.use(router)
     this.vueApp.use(i18n)
-    this.vueApp.provide(BRIDGE_KEY, bridge)
+    this.vueApp.provide(SETTINGS_PORT, bridge)
+    this.vueApp.provide(VAULT_PORT, bridge)
+    this.vueApp.provide(WORKSPACE_PORT, bridge)
+    this.vueApp.provide(NOTIFICATION_PORT, bridge)
     this.vueApp.mount(mountPoint)
     return Promise.resolve()
   }
