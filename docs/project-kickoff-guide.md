@@ -1332,8 +1332,13 @@ The squash commit message should be the PR title + an optional body explaining w
 # Step 1: bump version files on a release branch (never commit directly to main)
 git checkout develop && git pull origin develop
 git checkout -b release/0.1.0
-npm version 0.1.0 --no-git-tag-version   # updates package.json / manifest.json, no commit or tag yet
-git add package.json manifest.json versions.json   # add whichever version files your project has
+npm version 0.1.0 --no-git-tag-version   # updates package files, no commit or tag yet
+for file in package.json package-lock.json manifest.json versions.json; do
+  if [ -f "$file" ]; then
+    git add "$file"
+  fi
+done
+git diff --cached --quiet && { echo "No version files were staged"; exit 1; }
 git commit -m "chore: bump version to 0.1.0"
 git push -u origin release/0.1.0
 
