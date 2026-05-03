@@ -109,10 +109,10 @@ CI runs the standard verify + workflow-lint + dependency-review + manifest-valid
 After CI is green and the PR is reviewed:
 
 ```sh
-gh pr merge <pr-number> --merge          # NOT --squash. Use a merge commit.
+gh pr merge <pr-number> --squash
 ```
 
-> Use a merge commit (not squash) for `develop → main` PRs. The release tag must point at the merge commit on `main`, and squash-merging would replace it with a fresh commit whose history does not show the released `develop` work.
+Squash-merge per the repository merge policy in [`docs/contributing.md`](./contributing.md) §7. The squash commit on `main` becomes the new release point; step 5 below re-tags the release on it. The full per-PR history of what shipped is recoverable from the auto-generated release notes (which use PR titles since the previous tag) and from `develop`'s linear log.
 
 After merge:
 
