@@ -39,7 +39,10 @@ export class MockBridge implements IBridge {
 
   async listFiles(folder: string): Promise<string[]> {
     const prefix = folder.endsWith('/') ? folder : `${folder}/`
-    return [...this.files.keys()].filter((p) => p.startsWith(prefix))
+    return [...this.files.keys()].filter((p) => {
+      if (!p.startsWith(prefix)) return false
+      return !p.slice(prefix.length).includes('/')
+    })
   }
 
   async listFolders(parent: string): Promise<string[]> {
