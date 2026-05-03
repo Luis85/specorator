@@ -55,6 +55,20 @@ jobs:
           fi
           echo "All third-party actions are SHA-pinned."
 
+  manifest-validation:
+    name: Validate manifest and versions.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: lts/*
+      - name: Validate manifest
+        run: node scripts/validate-manifest.js
+
   guard:
     name: Verify PR source is develop
     if: github.event_name == 'pull_request' && github.base_ref == 'main'

@@ -3,17 +3,23 @@ title: Obsidian marketplace readiness
 doc_type: checklist
 status: draft
 owner: engineering
-last_updated: 2026-05-02
+last_updated: 2026-05-03
 references:
   - manifest.json
+  - docs/release-process.md
   - docs/roadmap-v1.md
   - docs/pre-feature-architecture-readiness.md
+  - scripts/validate-manifest.js
   - https://github.com/obsidianmd/obsidian-releases/blob/master/plugin-review.md
 ---
 
 # Obsidian Marketplace Readiness
 
 This document captures the constraints, requirements, and pre-submission checklist for submitting Specorator to the [Obsidian community plugins](https://obsidian.md/plugins) marketplace. It must be reviewed before every release candidate.
+
+For the end-to-end mechanical release flow (versioning policy, develop → main → tag → published release), see [`docs/release-process.md`](./release-process.md). This file covers the *marketplace-specific* prerequisites that sit on top of that flow.
+
+Items marked **auto-enforced** are checked by `scripts/validate-manifest.js` (run in CI as the `manifest-validation` job and via the `version` lifecycle hook). The remaining items still require manual review.
 
 ---
 
@@ -31,7 +37,7 @@ The `.gitignore` correctly excludes `main.js` and `main.js.map` from source cont
 
 ### Version alignment rule
 
-`manifest.json` → `version` **must** match `package.json` → `version` at release time. The GitHub release tag **must** match both. Mismatches are rejected by the marketplace submission bot.
+`manifest.json` → `version` **must** match `package.json` → `version` at release time. The GitHub release tag **must** match both. Mismatches are rejected by the marketplace submission bot. **Auto-enforced** by `scripts/validate-manifest.js` in CI and by `release.yml` on tag push.
 
 ---
 
@@ -39,16 +45,16 @@ The `.gitignore` correctly excludes `main.js` and `main.js.map` from source cont
 
 The current `manifest.json` satisfies the mandatory fields. Review each field before submission:
 
-| Field | Current value | Requirement |
-|---|---|---|
-| `id` | `specorator` | Unique across all community plugins; lowercase, no spaces |
-| `name` | `Specorator` | Human-readable display name |
-| `version` | `0.0.1` | Semver; must match `package.json` and release tag |
-| `minAppVersion` | `1.4.0` | Minimum Obsidian desktop version tested against |
-| `description` | `"Spec-driven workflow cockpit…"` | ≤250 characters; plain text only; no marketing language |
-| `author` | `Luis85` | Real name or consistent handle |
-| `authorUrl` | `https://github.com/Luis85` | Must be a reachable URL |
-| `isDesktopOnly` | `true` | Correct: the plugin writes vault files via Node.js APIs unavailable in Obsidian mobile |
+| Field | Current value | Requirement | Auto-enforced |
+|---|---|---|---|
+| `id` | `specorator` | Unique across all community plugins; lowercase, no spaces | ✅ format check (lowercase alphanumeric, hyphens) |
+| `name` | `Specorator` | Human-readable display name | ✅ non-empty string |
+| `version` | `0.0.1` | Semver; must match `package.json` and release tag | ✅ semver + cross-file alignment |
+| `minAppVersion` | `1.4.0` | Minimum Obsidian desktop version tested against | ✅ semver + matches `versions.json[<current>]` |
+| `description` | `"Spec-driven workflow cockpit…"` | ≤250 characters; plain text only; no marketing language | ✅ length check (plain-text and marketing tone are manual) |
+| `author` | `Luis85` | Real name or consistent handle | ✅ non-empty string |
+| `authorUrl` | `https://github.com/Luis85` | Must be a reachable URL | ✅ http(s) URL format (reachability is manual) |
+| `isDesktopOnly` | `true` | Correct: the plugin writes vault files via Node.js APIs unavailable in Obsidian mobile | ✅ boolean type (semantic correctness is manual) |
 
 **Before submission, also add:**
 
@@ -140,12 +146,12 @@ Versioning is automated via `npm version <patch|minor|major>`, which:
 
 Manual checklist before pushing the tag to `main`:
 
-- [ ] `manifest.json` → `version` matches `package.json` → `version`.
-- [ ] `versions.json` contains an entry for the new version mapping it to the current `minAppVersion`.
-- [ ] Local tag is plain semver, no `v` prefix (e.g. `0.1.0`).
-- [ ] Tag points at the `main` HEAD commit (the release workflow rejects tags not on `main` HEAD).
+- [ ] `manifest.json` → `version` matches `package.json` → `version`. **Auto-enforced** (`manifest-validation` CI job + `release.yml`).
+- [ ] `versions.json` contains an entry for the new version mapping it to the current `minAppVersion`. **Auto-enforced**.
+- [ ] Local tag is plain semver, no `v` prefix (e.g. `0.1.0`). Manual — `.npmrc` removes the prefix automatically when using `npm version`.
+- [ ] Tag points at the `main` HEAD commit. **Auto-enforced** by `release.yml`'s "Verify tag is on main HEAD" step.
 
-The release workflow re-checks all three files at run time and refuses to publish on any mismatch.
+The release workflow re-checks all three files at run time and refuses to publish on any mismatch. The full mechanical flow (including the develop → main merge step) is documented in [`docs/release-process.md`](./release-process.md).
 
 ### Automated checks
 

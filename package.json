@@ -20,7 +20,8 @@
 		"build:web": "vue-tsc --noEmit && vite build",
 		"test:coverage": "vitest run --configLoader runner --coverage",
 		"docs:api": "typedoc",
-		"version": "node version-bump.js && git add manifest.json versions.json"
+		"validate:manifest": "node scripts/validate-manifest.js",
+		"version": "node version-bump.js && node scripts/validate-manifest.js && git add manifest.json versions.json"
 	},
 	"dependencies": {
 		"pinia": "^3.0.4",
