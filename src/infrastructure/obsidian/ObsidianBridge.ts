@@ -1,6 +1,10 @@
 import { Notice, TFile, TFolder, type App } from 'obsidian'
 import type { IBridge, PluginSettings } from '../bridge/IBridge'
 
+type FileManagerWithTrash = App['fileManager'] & {
+  trashFile?: (file: TFile) => Promise<void>
+}
+
 export class ObsidianBridge implements IBridge {
   constructor(
     private readonly app: App,
@@ -26,6 +30,13 @@ export class ObsidianBridge implements IBridge {
   async deleteFile(path: string): Promise<void> {
     const file = this.app.vault.getAbstractFileByPath(path)
     if (file instanceof TFile) {
+      const fileManager = this.app.fileManager as FileManagerWithTrash
+      if (typeof fileManager.trashFile === 'function') {
+        await fileManager.trashFile(file)
+        return
+      }
+      // Compatibility fallback for Obsidian versions below FileManager.trashFile.
+      // eslint-disable-next-line obsidianmd/prefer-file-manager-trash-file
       await this.app.vault.delete(file)
     }
   }

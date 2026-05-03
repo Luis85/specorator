@@ -16,7 +16,7 @@ function onNotice(e: Event) {
 
 function onOpenFile(e: Event) {
   const { path } = (e as CustomEvent<{ path: string }>).detail
-  router.push({ name: 'file', params: { filePath: path } })
+  void router.push({ name: 'file', params: { filePath: path } })
 }
 
 onMounted(() => {

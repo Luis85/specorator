@@ -15,8 +15,10 @@ export default class SpecoratorPlugin extends Plugin {
     })
 
     this.addCommand({
+      // Keep the original command id so existing hotkeys and automations survive upgrades.
+      // eslint-disable-next-line obsidianmd/commands/no-plugin-id-in-command-id
       id: 'open-specorator',
-      name: 'Open Specorator panel',
+      name: 'Open panel',
       callback: () => void this.activateView(),
     })
 
@@ -25,15 +27,17 @@ export default class SpecoratorPlugin extends Plugin {
     this.detectLegacyVaultLayout()
   }
 
-  async onunload(): Promise<void> {
+  // Detach this plugin's custom view leaves when the plugin is disabled.
+  // eslint-disable-next-line obsidianmd/detach-leaves
+  override onunload(): void {
     this.app.workspace.detachLeavesOfType(VIEW_TYPE)
   }
 
   async loadSettings(): Promise<void> {
-    const stored = await this.loadData()
+    const stored = (await this.loadData()) as Record<string, unknown> | null
     // NFR-AVS-004: treat legacy `featuresFolder` as `specsFolder` if present
-    const raw = (stored ?? {}) as Record<string, unknown>
-    if (raw.featuresFolder && !raw.specsFolder) {
+    const raw: Record<string, unknown> = { ...(stored ?? {}) }
+    if (typeof raw.featuresFolder === 'string' && typeof raw.specsFolder !== 'string') {
       raw.specsFolder = raw.featuresFolder
     }
     this.settings = { ...DEFAULT_SETTINGS, ...(raw as Partial<PluginSettings>) }
@@ -65,13 +69,13 @@ export default class SpecoratorPlugin extends Plugin {
 
     const existing = workspace.getLeavesOfType(VIEW_TYPE)
     if (existing.length > 0) {
-      workspace.revealLeaf(existing[0])
+      void workspace.revealLeaf(existing[0])
       return
     }
 
     const leaf = workspace.getRightLeaf(false)
-    if (!leaf) return
+    if (leaf === null) return
     await leaf.setViewState({ type: VIEW_TYPE, active: true })
-    workspace.revealLeaf(leaf)
+    void workspace.revealLeaf(leaf)
   }
 }

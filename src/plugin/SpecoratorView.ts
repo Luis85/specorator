@@ -24,11 +24,11 @@ export class SpecoratorView extends ItemView {
   getDisplayText(): string { return 'Specorator' }
   getIcon(): string { return 'layout-dashboard' }
 
-  async onOpen(): Promise<void> {
+  onOpen(): Promise<void> {
     const container = this.containerEl.children[1] as HTMLElement
     container.empty()
 
-    const mountPoint = container.createEl('div', {
+    const mountPoint = container.createDiv({
       cls: 'specorator-root',
       attr: { id: 'specorator-root', style: 'height:100%;overflow:auto;' },
     })
@@ -47,10 +47,12 @@ export class SpecoratorView extends ItemView {
     this.vueApp.use(i18n)
     this.vueApp.provide(BRIDGE_KEY, bridge)
     this.vueApp.mount(mountPoint)
+    return Promise.resolve()
   }
 
-  async onClose(): Promise<void> {
+  onClose(): Promise<void> {
     this.vueApp?.unmount()
     this.vueApp = null
+    return Promise.resolve()
   }
 }

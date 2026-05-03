@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { Feature } from '../Feature'
 import { Slug } from '../../shared/Slug'
-import { FEATURE_STEP_COUNT } from '../FeatureStep'
+import { FEATURE_STEP_COUNT, getStepMeta } from '../FeatureStep'
 
 function makeSlug(raw = 'dark-mode') {
   const r = Slug.create(raw)
@@ -16,6 +16,15 @@ function makeFeature(title = 'Dark mode') {
 }
 
 describe('Feature', () => {
+  describe('getStepMeta', () => {
+    it.each([0, FEATURE_STEP_COUNT + 1, NaN, 1.5])(
+      'rejects invalid step number %s',
+      (stepNumber) => {
+        expect(getStepMeta(stepNumber)).toBeUndefined()
+      },
+    )
+  })
+
   describe('create', () => {
     it('creates a draft feature with step 1', () => {
       const f = makeFeature()

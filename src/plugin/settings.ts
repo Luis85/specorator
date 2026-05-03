@@ -1,4 +1,5 @@
-import { App, PluginSettingTab, Setting } from 'obsidian'
+import type { App} from 'obsidian';
+import { PluginSettingTab, Setting } from 'obsidian'
 import type { PluginSettings } from '@/infrastructure/bridge/IBridge'
 import { DEFAULT_SETTINGS } from '@/infrastructure/bridge/IBridge'
 import type SpecoratorPlugin from './main'
@@ -17,7 +18,7 @@ export class SpecoratorSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this
     containerEl.empty()
-    containerEl.createEl('h2', { text: 'Specorator' })
+    
 
     new Setting(containerEl)
       .setName('Language')

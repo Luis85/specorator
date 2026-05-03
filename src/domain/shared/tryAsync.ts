@@ -14,13 +14,13 @@ function safeStringify(value: unknown): string {
 
 function toError(thrown: unknown, context?: string): Error {
   if (thrown instanceof Error) {
-    if (!context) return thrown
+    if (context === undefined || context === '') return thrown
     const wrapped = new Error(`${context}: ${thrown.message}`)
     wrapped.cause = thrown
     return wrapped
   }
   const message = safeStringify(thrown)
-  return new Error(context ? `${context}: ${message}` : message)
+  return new Error(context !== undefined && context !== '' ? `${context}: ${message}` : message)
 }
 
 /**
