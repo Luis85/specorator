@@ -27,7 +27,7 @@ npx vitest run src/domain/feature/__tests__/Feature.spec.ts
 
 **Pre-PR verification gate:**
 ```sh
-npm run typecheck && npm run lint && npm run test && npm run build && npm run build:web && npm run docs:api
+npm run verify
 ```
 
 ## Architecture
