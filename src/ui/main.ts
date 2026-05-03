@@ -11,7 +11,12 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import { router } from './router'
 import { i18n } from './i18n'
-import { BRIDGE_KEY } from '@/infrastructure/bridge/BridgeKey'
+import {
+	SETTINGS_PORT,
+	VAULT_PORT,
+	WORKSPACE_PORT,
+	NOTIFICATION_PORT,
+} from '@/infrastructure/bridge/ports'
 import { LocalStorageBridge } from '@/infrastructure/localstorage/LocalStorageBridge'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { DEV_FIXTURES } from '@/infrastructure/mock/fixtures'
@@ -25,5 +30,8 @@ const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 app.use(i18n)
-app.provide(BRIDGE_KEY, bridge)
+app.provide(SETTINGS_PORT, bridge)
+app.provide(VAULT_PORT, bridge)
+app.provide(WORKSPACE_PORT, bridge)
+app.provide(NOTIFICATION_PORT, bridge)
 app.mount(mountPoint ?? '#app')
