@@ -1,11 +1,19 @@
 import type { IBridge } from '../bridge/IBridge'
+import type {
+	SettingsPort,
+	VaultPort,
+	WorkspacePort,
+	NotificationPort,
+} from '@/domain/ports'
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
 /**
  * In-memory bridge used in standalone dev mode and unit tests.
  * Provides test helper methods for inspecting state.
  */
-export class MockBridge implements IBridge {
+export class MockBridge
+	implements IBridge, SettingsPort, VaultPort, WorkspacePort, NotificationPort
+{
   private readonly files = new Map<string, string>()
   private readonly folders = new Set<string>()
   private settings: PluginSettings = { ...DEFAULT_SETTINGS }
