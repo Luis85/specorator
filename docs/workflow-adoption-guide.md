@@ -163,7 +163,7 @@ Milestone: Phase 1 — Repo Foundation
 
 Acceptance criteria:
 - [ ] ci.yml runs typecheck, lint, test, and build on PRs to develop/main
-- [ ] release.yml triggers on semver tags from main HEAD only
+- [ ] release.yml publishes only for semver tags from main HEAD
 - [ ] Dependabot configured for package manager and GitHub Actions
 - [ ] Dependabot auto-merge for patch and dev-minor updates
 - [ ] All third-party actions pinned to commit SHAs
@@ -228,7 +228,7 @@ Acceptance criteria:
 
 ## Quick-reference: issue creation commands
 
-Copy and adapt these to file all eight steps at once:
+Copy and adapt these to file all eight steps at once in a fresh repository. The script deliberately creates plain issues only: labels and milestones are introduced by Step 3, so assigning them before that step runs would make `gh issue create` fail. After Step 3 is complete, apply the labels and milestones shown in the issue bodies.
 
 ```bash
 #!/usr/bin/env bash
@@ -238,43 +238,35 @@ REPO="${REPO:?Set REPO=org/repo}"
 
 gh issue create --repo "$REPO" \
   --title "P0: initiate project — roles, description, risk register, go/no-go" \
-  --body $'## Acceptance criteria\n- [ ] Roles table complete with gaps noted\n- [ ] docs/initiation.md written\n- [ ] Risk register seeded (≥3 risks)\n- [ ] Go/No-Go decision recorded' \
-  --label "governance,planning" --milestone "Phase 0 — Initiation"
+  --body $'## Intended triage\nLabels: governance, planning\nMilestone: Phase 0 — Initiation\n\n## Acceptance criteria\n- [ ] Roles table complete with gaps noted\n- [ ] docs/initiation.md written\n- [ ] Risk register seeded (≥3 risks)\n- [ ] Go/No-Go decision recorded'
 
 gh issue create --repo "$REPO" \
   --title "P1: create repository with baseline files and branch protection" \
-  --body $'## Acceptance criteria\n- [ ] Repo created (squash-merge, auto-delete branches)\n- [ ] README, LICENSE, SECURITY, CONSTITUTION committed\n- [ ] develop branch created and set as default\n- [ ] main protected: PR + CI required, force-push blocked' \
-  --label "setup,github" --milestone "Phase 1 — Repo Foundation"
+  --body $'## Intended triage\nLabels: setup, github\nMilestone: Phase 1 — Repo Foundation\n\n## Acceptance criteria\n- [ ] Repo created (squash-merge, auto-delete branches)\n- [ ] README, LICENSE, SECURITY, CONSTITUTION committed\n- [ ] develop branch created and set as default\n- [ ] main protected: PR + CI required, force-push blocked'
 
 gh issue create --repo "$REPO" \
   --title "P1: add labels, milestones, issue templates, and PR template" \
-  --body $'## Acceptance criteria\n- [ ] Default labels deleted; custom taxonomy created\n- [ ] Phase milestones created\n- [ ] Issue templates added (feature, bug, task, decision, requirement intake)\n- [ ] Blank issues disabled\n- [ ] PR template added' \
-  --label "setup,github" --milestone "Phase 1 — Repo Foundation"
+  --body $'## Intended triage\nLabels: setup, github\nMilestone: Phase 1 — Repo Foundation\n\n## Acceptance criteria\n- [ ] Default labels deleted; custom taxonomy created\n- [ ] Phase milestones created\n- [ ] Issue templates added (feature, bug, task, decision, requirement intake)\n- [ ] Blank issues disabled\n- [ ] PR template added'
 
 gh issue create --repo "$REPO" \
   --title "P1: file initial epics, phase objectives, and Phase 1 task backlog" \
-  --body $'## Acceptance criteria\n- [ ] One epic per major product capability\n- [ ] One objective per milestone phase\n- [ ] Phase 1 task issues filed with acceptance criteria\n- [ ] All issues labeled and milestone-assigned\n- [ ] Roadmap tracker filed and pinned' \
-  --label "planning,product" --milestone "Phase 1 — Repo Foundation"
+  --body $'## Intended triage\nLabels: planning, product\nMilestone: Phase 1 — Repo Foundation\n\n## Acceptance criteria\n- [ ] One epic per major product capability\n- [ ] One objective per milestone phase\n- [ ] Phase 1 task issues filed with acceptance criteria\n- [ ] All issues labeled and milestone-assigned\n- [ ] Roadmap tracker filed and pinned'
 
 gh issue create --repo "$REPO" \
   --title "P3: scaffold project — language, build, lint, format, and test harness" \
-  --body $'## Acceptance criteria\n- [ ] Strict-mode TypeScript (or equivalent) configured\n- [ ] ESLint with architectural boundary rules\n- [ ] Prettier (no ESLint conflicts)\n- [ ] Test harness with coverage reporting\n- [ ] npm run verify exits 0' \
-  --label "setup,tooling" --milestone "Phase 3 — Tech Scaffold"
+  --body $'## Intended triage\nLabels: setup, tooling\nMilestone: Phase 3 — Tech Scaffold\n\n## Acceptance criteria\n- [ ] Strict-mode TypeScript (or equivalent) configured\n- [ ] ESLint with architectural boundary rules\n- [ ] Prettier (no ESLint conflicts)\n- [ ] Test harness with coverage reporting\n- [ ] npm run verify exits 0'
 
 gh issue create --repo "$REPO" \
   --title "P1: add CI workflow, release workflow, and dependency automation" \
-  --body $'## Acceptance criteria\n- [ ] ci.yml on PRs to develop/main\n- [ ] release.yml on semver tags from main HEAD\n- [ ] Dependabot + auto-merge configured\n- [ ] All actions SHA-pinned\n- [ ] Branch protection requires CI' \
-  --label "setup,ci,release" --milestone "Phase 1 — Repo Foundation"
+  --body $'## Intended triage\nLabels: setup, ci, release\nMilestone: Phase 1 — Repo Foundation\n\n## Acceptance criteria\n- [ ] ci.yml on PRs to develop/main\n- [ ] release.yml validates semver tags from main HEAD before publishing\n- [ ] Dependabot + auto-merge configured\n- [ ] All actions SHA-pinned\n- [ ] Branch protection requires CI'
 
 gh issue create --repo "$REPO" \
   --title "P3: write ADRs, contributing guide, and local development guide" \
-  --body $'## Acceptance criteria\n- [ ] ADR per structural decision (≥5)\n- [ ] docs/contributing.md covers full workflow\n- [ ] docs/local-development.md: newcomer running in <10 min\n- [ ] CLAUDE.md/AGENTS.md added if AI agents will contribute' \
-  --label "documentation,architecture" --milestone "Phase 3 — Tech Scaffold"
+  --body $'## Intended triage\nLabels: documentation, architecture\nMilestone: Phase 3 — Tech Scaffold\n\n## Acceptance criteria\n- [ ] ADR per structural decision (≥5)\n- [ ] docs/contributing.md covers full workflow\n- [ ] docs/local-development.md: newcomer running in <10 min\n- [ ] CLAUDE.md/AGENTS.md added if AI agents will contribute'
 
 gh issue create --repo "$REPO" \
   --title "v1: <describe your hello-world increment>" \
-  --body $'## Acceptance criteria\n- [ ] Feature exercises all architectural layers\n- [ ] At least one test written\n- [ ] npm run verify passes before PR is opened\n- [ ] CI passes on the PR\n- [ ] Squash-merged to develop\n- [ ] develop → main merged and tagged X.Y.Z\n- [ ] GitHub release created by release workflow' \
-  --label "enhancement" --milestone "v1 Alpha"
+  --body $'## Intended triage\nLabels: enhancement\nMilestone: v1 Alpha\n\n## Acceptance criteria\n- [ ] Feature exercises all architectural layers\n- [ ] At least one test written\n- [ ] npm run verify passes before PR is opened\n- [ ] CI passes on the PR\n- [ ] Squash-merged to develop\n- [ ] develop → main merged and tagged X.Y.Z\n- [ ] GitHub release created by release workflow'
 
 echo "Adoption backlog created (8 issues)."
 ```

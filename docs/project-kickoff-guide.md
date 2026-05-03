@@ -932,8 +932,7 @@ name: Release
 on:
   push:
     tags:
-      - '[0-9]*.[0-9]*.[0-9]*'
-      - '[0-9]*.[0-9]*.[0-9]*-*'
+      - '*'
 
 permissions:
   contents: write
@@ -950,6 +949,13 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
+
+      - name: Verify tag is semver
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "ERROR: tag must be semver, e.g. 0.1.0, 0.1.0-beta.1, or 0.1.0+build.1" >&2
+            exit 1
+          fi
 
       - name: Verify tag is on main HEAD
         run: |
@@ -1068,7 +1074,7 @@ Add a workflow-lint step to CI that fails the build if any `uses:` reference is 
 
 **Gate checklist:**
 - [ ] `ci.yml` workflow runs on PRs to `develop`, `demo`, `main`
-- [ ] `release.yml` workflow triggers on semver tags on `main` HEAD only
+- [ ] `release.yml` publishes only for semver tags on `main` HEAD
 - [ ] Dependabot configured for npm and GitHub Actions
 - [ ] Dependabot auto-merge for safe updates configured
 - [ ] All `uses:` references SHA-pinned (not version tags)
@@ -1462,7 +1468,7 @@ create_issue \
 
 create_issue \
   "Add release and packaging workflow" \
-  $'## Goal\nAutomate release artifact creation on semver tags from main.\n\n## Acceptance criteria\n- [ ] release.yml triggers on semver tags\n- [ ] Workflow verifies tag is on main HEAD\n- [ ] GitHub release created with built artifacts\n- [ ] Pre-release flag set for tags with pre-release suffix' \
+  $'## Goal\nAutomate release artifact creation on semver tags from main.\n\n## Acceptance criteria\n- [ ] release.yml validates semver tags before release creation\n- [ ] Workflow verifies tag is on main HEAD\n- [ ] GitHub release created with built artifacts\n- [ ] Pre-release flag set for tags with pre-release suffix' \
   "setup,ci,release"
 
 create_issue \
