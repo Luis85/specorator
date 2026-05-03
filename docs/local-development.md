@@ -181,7 +181,7 @@ The `.github/workflows/pages.yml` workflow runs on every push to `demo`:
 
 ### Updating the product page
 
-Edit `site/index.html` and push to `main`. The workflow redeploys automatically.
+Edit `site/index.html` and push to `demo`. The workflow redeploys automatically.
 
 ### Building the Pages site locally
 
