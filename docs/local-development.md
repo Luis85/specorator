@@ -173,7 +173,7 @@ The repository publishes a product page at `https://luis85.github.io/specorator/
 
 The `.github/workflows/pages.yml` workflow runs on every push to `demo`:
 
-1. Runs `npm run build:web` with `VITE_BASE_URL=/specorator/app/` so all SPA asset paths are prefixed correctly.
+1. Runs `npm run build:pages`, which sets `VITE_BASE_URL=/specorator/app/` and invokes `npm run build:web`, so all SPA asset paths are prefixed correctly.
 2. Assembles a `_site/` staging directory:
    - `site/index.html` → `_site/index.html`
    - `dist-standalone/**` → `_site/app/**`
