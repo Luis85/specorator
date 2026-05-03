@@ -1,5 +1,5 @@
 import { Feature } from '@/domain/feature/Feature';
-import { isFeatureStatus } from '@/domain/feature/FeatureStatus';
+import { isFeatureStatus, type FeatureStatus } from '@/domain/feature/FeatureStatus';
 import { FEATURE_STEPS } from '@/domain/feature/FeatureStep';
 import { Slug } from '@/domain/shared/Slug';
 
@@ -7,7 +7,7 @@ import { Slug } from '@/domain/shared/Slug';
 function deriveArea(slugValue: string): string {
 	return slugValue
 		.split('-')
-		.map((w) => w[0]?.toUpperCase() ?? '')
+		.map((w) => w.charAt(0).toUpperCase())
 		.join('')
 		.slice(0, 5);
 }
@@ -56,13 +56,14 @@ export function serializeWorkflowState(feature: Feature): string {
 	].join('\n');
 }
 
-function parseWorkflowStateFrontmatter(content: string): Record<string, string> {
+function parseWorkflowStateFrontmatter(content: string): Partial<Record<string, string>> {
 	const match = /^---\n([\s\S]*?)\n---/.exec(content);
-	if (!match) return {};
+	const body = match?.[1];
+	if (body === undefined) return {};
 
 	let inArtifactsBlock = false;
 	return Object.fromEntries(
-		match[1].split('\n').flatMap((line) => {
+		body.split('\n').flatMap((line) => {
 			const isIndented = line.startsWith(' ') || line.startsWith('\t');
 			if (inArtifactsBlock) {
 				if (isIndented) return [];
@@ -90,25 +91,68 @@ function parseScalar(raw: string): string {
 	return raw;
 }
 
-export function deserializeWorkflowState(content: string): Feature | null {
-	const data = parseWorkflowStateFrontmatter(content);
+interface ValidatedWorkflowState {
+	id: string;
+	slug: string;
+	title: string;
+	area: string;
+	status: FeatureStatus;
+	currentStep: number;
+	createdAt: string | undefined;
+	updatedAt: string | undefined;
+}
 
-	const title = data.feature || data.title;
-	if (!data.id || !title || !data.slug || !data.status || !data.currentStep) return null;
-	if (!isFeatureStatus(data.status)) return null;
+function asFeatureStatus(value: string | undefined): FeatureStatus | undefined {
+	return value !== undefined && isFeatureStatus(value) ? value : undefined;
+}
 
-	const slug = Slug.reconstitute(data.slug);
-	const currentStep = parseInt(data.currentStep, 10);
-	if (isNaN(currentStep)) return null;
+function asRequiredScalar(value: string | undefined): string | undefined {
+	return value !== undefined && value.trim() !== '' ? value : undefined;
+}
 
-	return Feature.reconstitute({
-		id: data.id,
+function validateWorkflowFrontmatter(
+	data: Partial<Record<string, string>>,
+): ValidatedWorkflowState | null {
+	const id = asRequiredScalar(data.id);
+	const slug = asRequiredScalar(data.slug);
+	const title = asRequiredScalar(data.feature ?? data.title);
+	const status = asFeatureStatus(data.status);
+	const stepRaw = data.currentStep;
+	const currentStep = stepRaw !== undefined ? parseInt(stepRaw, 10) : NaN;
+
+	if (
+		id === undefined ||
+		title === undefined ||
+		slug === undefined ||
+		status === undefined ||
+		Number.isNaN(currentStep)
+	) {
+		return null;
+	}
+	return {
+		id,
 		slug,
 		title,
-		area: data.area || '',
-		status: data.status,
+		area: data.area ?? '',
+		status,
 		currentStep,
-		createdAt: new Date(data.createdAt ?? Date.now()),
-		updatedAt: new Date(data.updatedAt ?? Date.now()),
+		createdAt: data.createdAt,
+		updatedAt: data.updatedAt,
+	};
+}
+
+export function deserializeWorkflowState(content: string): Feature | null {
+	const validated = validateWorkflowFrontmatter(parseWorkflowStateFrontmatter(content));
+	if (validated === null) return null;
+
+	return Feature.reconstitute({
+		id: validated.id,
+		slug: Slug.reconstitute(validated.slug),
+		title: validated.title,
+		area: validated.area,
+		status: validated.status,
+		currentStep: validated.currentStep,
+		createdAt: new Date(validated.createdAt ?? Date.now()),
+		updatedAt: new Date(validated.updatedAt ?? Date.now()),
 	});
 }

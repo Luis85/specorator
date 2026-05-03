@@ -19,6 +19,6 @@ export const i18n = createI18n({
 })
 
 export function setLocale(locale: SupportedLocale): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(i18n.global as any).locale.value = locale
+  const ref = (i18n.global as { locale: { value: SupportedLocale } }).locale
+  ref.value = locale
 }

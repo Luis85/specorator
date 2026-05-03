@@ -1,6 +1,6 @@
 import { ok, err, type Result } from '@/domain/shared/Result';
-import { Slug } from '@/domain/shared/Slug';
-import { Feature } from '@/domain/feature/Feature';
+import type { Slug } from '@/domain/shared/Slug';
+import type { Feature } from '@/domain/feature/Feature';
 import { getStepMeta } from '@/domain/feature/FeatureStep';
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository';
 import type { VaultPort, NotificationPort } from '@/domain/ports';

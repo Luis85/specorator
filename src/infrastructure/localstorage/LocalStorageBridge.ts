@@ -31,7 +31,7 @@ export class LocalStorageBridge
     const results: string[] = []
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
-      if (key?.startsWith(prefix)) {
+      if (key?.startsWith(prefix) === true) {
         const filePath = key.slice(FILE_PREFIX.length)
         const relative = filePath.slice(folder.endsWith('/') ? folder.length : folder.length + 1)
         if (!relative.includes('/')) results.push(filePath)
@@ -45,7 +45,7 @@ export class LocalStorageBridge
     const folders = new Set<string>()
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
-      if (key?.startsWith(prefix)) {
+      if (key?.startsWith(prefix) === true) {
         const filePath = key.slice(FILE_PREFIX.length)
         const relative = filePath.slice(parent.endsWith('/') ? parent.length : parent.length + 1)
         const slash = relative.indexOf('/')
@@ -75,9 +75,10 @@ export class LocalStorageBridge
 
   async getSettings(): Promise<PluginSettings> {
     const raw = localStorage.getItem(SETTINGS_KEY)
-    if (!raw) return { ...DEFAULT_SETTINGS }
+    if (raw === null || raw === '') return { ...DEFAULT_SETTINGS }
     try {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) }
+      const parsed = JSON.parse(raw) as Partial<PluginSettings>
+      return { ...DEFAULT_SETTINGS, ...parsed }
     } catch {
       return { ...DEFAULT_SETTINGS }
     }

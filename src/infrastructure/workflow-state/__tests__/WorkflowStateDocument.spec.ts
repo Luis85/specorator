@@ -33,6 +33,17 @@ describe('WorkflowStateDocument', () => {
 		expect(deserializeWorkflowState(content)).toBeNull();
 	});
 
+	it.each([
+		['id', 'id: fixture-id', 'id: ""'],
+		['slug', 'slug: dark-mode', 'slug: ""'],
+		['feature', "feature: 'Dark mode'", 'feature: ""'],
+		['title', "feature: 'Dark mode'", 'title: ""'],
+	])('rejects workflow-state data with an empty %s field', (_field, original, replacement) => {
+		const content = fixture('valid-workflow-state.md').replace(original, replacement);
+
+		expect(deserializeWorkflowState(content)).toBeNull();
+	});
+
 	it('serializes a valid workflow-state document', () => {
 		const slug = Slug.reconstitute('quoted-title');
 		const feature = Feature.reconstitute({

@@ -9,6 +9,7 @@
     "src/application/**/*.ts"
   ],
   "exclude": [
-    "**/*.spec.ts"
+    "**/*.spec.ts",
+    "**/__fixtures__/**"
   ]
 }

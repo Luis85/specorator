@@ -23,7 +23,7 @@ export class CreateFeatureUseCase implements UseCase<CreateFeatureInput, Feature
     const existingResult = await tryAsync(() => this.repository.findBySlug(slugResult.value))
     if (!existingResult.ok) return existingResult
     if (existingResult.value) {
-      return err(new Error(`A feature with slug "${slugResult.value}" already exists`))
+      return err(new Error(`A feature with slug "${slugResult.value.value}" already exists`))
     }
 
     const id = crypto.randomUUID()
