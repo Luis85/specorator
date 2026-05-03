@@ -55,6 +55,7 @@ export default {
     specsFolder: 'Specs folder',
     archiveFolder: 'Archive folder',
     decisionsFolder: 'Decisions folder',
+    constitutionFile: 'Constitution file',
     gateStrictness: 'Gate strictness',
     strict: 'Strict',
     lenient: 'Lenient',
