@@ -29,6 +29,7 @@ export class SpecoratorView extends ItemView {
     container.empty()
 
     const mountPoint = container.createEl('div', {
+      cls: 'specorator-root',
       attr: { id: 'specorator-root', style: 'height:100%;overflow:auto;' },
     })
 

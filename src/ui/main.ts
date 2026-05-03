@@ -17,10 +17,13 @@ import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { DEV_FIXTURES } from '@/infrastructure/mock/fixtures'
 
 const bridge = import.meta.env.PROD ? new LocalStorageBridge() : new MockBridge(DEV_FIXTURES)
+const mountPoint = document.querySelector('#app')
+
+mountPoint?.classList.add('specorator-root')
 
 const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 app.use(i18n)
 app.provide(BRIDGE_KEY, bridge)
-app.mount('#app')
+app.mount(mountPoint ?? '#app')

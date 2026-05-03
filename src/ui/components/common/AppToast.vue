@@ -5,18 +5,16 @@ const store = useNotificationStore()
 </script>
 
 <template>
-  <Teleport to="body">
-    <div class="sp-toast-container" aria-live="polite" aria-atomic="false">
-      <div
-        v-for="notice in store.notices"
-        :key="notice.id"
-        class="sp-toast"
-        role="status"
-      >
-        {{ notice.message }}
-      </div>
+  <div class="sp-toast-container" aria-live="polite" aria-atomic="false">
+    <div
+      v-for="notice in store.notices"
+      :key="notice.id"
+      class="sp-toast"
+      role="status"
+    >
+      {{ notice.message }}
     </div>
-  </Teleport>
+  </div>
 </template>
 
 <style scoped>

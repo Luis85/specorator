@@ -51,11 +51,16 @@ onUnmounted(() => {
 </template>
 
 <style>
-/* Global reset — safe in both Obsidian and standalone mode. */
-* { box-sizing: border-box; }
+/* Scope shared reset to the plugin mount root so Obsidian host UI is untouched. */
+.specorator-root,
+.specorator-root *,
+.specorator-root *::before,
+.specorator-root *::after {
+  box-sizing: border-box;
+}
 </style>
 
-<!-- Standalone-only styles injected by main.ts via a <style> tag on #app.
+<!-- Standalone-only variables are imported by main.ts and scoped to .specorator-root.
      In Obsidian, the theme provides these variables; we must NOT set them
      on :root or body as that would override the entire Obsidian UI. -->
 
