@@ -4,10 +4,10 @@ import { AdvanceFeatureStageUseCase } from '../AdvanceFeatureStageUseCase'
 import { ActivateFeatureUseCase } from '../ActivateFeatureUseCase'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
-import { DEFAULT_SETTINGS } from '@/infrastructure/bridge/IBridge'
+import { DEFAULT_SETTINGS, type PluginSettings } from '@/infrastructure/bridge/IBridge'
 
-function makeRepo(bridge: MockBridge) {
-  return new FeatureRepository(bridge, DEFAULT_SETTINGS)
+function makeRepo(bridge: MockBridge, settings: PluginSettings = DEFAULT_SETTINGS) {
+  return new FeatureRepository(bridge, settings)
 }
 function makeUseCase(bridge: MockBridge) {
   return new CreateFeatureUseCase(makeRepo(bridge))
@@ -121,6 +121,15 @@ describe('CreateFeatureUseCase', () => {
     expect(bridge.getAllFiles()['specs/dark-mode/workflow-state.md']).toBe('not valid frontmatter')
   })
 
+  it('rejects unsafe configured specs paths before writing vault files', async () => {
+    const repo = makeRepo(bridge, { ...DEFAULT_SETTINGS, specsFolder: '../outside' })
+    const result = await new CreateFeatureUseCase(repo).execute({ title: 'Dark mode' })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.message).toMatch(/parent traversal/)
+    expect(bridge.getAllFiles()).toEqual({})
+  })
+
   it('quotes area and applies sanitization to the slug-derived fallback', async () => {
     // A purely numeric title produces a numeric-only slug → deriveArea gives digits only
     // After sanitization the quoted scalar must never look like a YAML number
@@ -183,6 +192,21 @@ describe('ActivateFeatureUseCase', () => {
 
     const meta = bridge.getAllFiles()['specs/search/workflow-state.md']
     expect(meta).toContain('status: active')
+  })
+
+  it('does not overwrite malformed workflow-state.md during direct repository save', async () => {
+    const bridge = new MockBridge()
+    const repo = makeRepo(bridge)
+    const created = await new CreateFeatureUseCase(repo).execute({ title: 'Search' })
+    expect(created.ok).toBe(true)
+    if (!created.ok) return
+
+    await bridge.writeFile('specs/search/workflow-state.md', 'not valid frontmatter')
+
+    const saveResult = await repo.save(created.value)
+
+    expect(saveResult.ok).toBe(false)
+    expect(bridge.getAllFiles()['specs/search/workflow-state.md']).toBe('not valid frontmatter')
   })
 })
 
