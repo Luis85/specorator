@@ -25,8 +25,10 @@ export default class SpecoratorPlugin extends Plugin {
     this.detectLegacyVaultLayout()
   }
 
+  // Detach this plugin's custom view leaves when the plugin is disabled.
+  // eslint-disable-next-line obsidianmd/detach-leaves
   override onunload(): void {
-    // No teardown required: leaves are auto-detached by Obsidian.
+    this.app.workspace.detachLeavesOfType(VIEW_TYPE)
   }
 
   async loadSettings(): Promise<void> {
