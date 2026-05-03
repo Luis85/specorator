@@ -73,13 +73,15 @@ Before opening the release PR:
 
 ---
 
-## 3. Bump versions
+## 3. Bump versions on a release branch
 
-From a clean checkout on `develop`:
+`develop` is PR-only — direct pushes are forbidden by the branching model documented in [`docs/contributing.md`](./contributing.md) §5 and [`AGENTS.md`](../AGENTS.md) §4. The version bump therefore lives on a short-lived release branch that gets PR-merged into `develop` before the `develop → main` promotion.
+
+From a clean checkout:
 
 ```sh
-git checkout develop
-git pull --ff-only origin develop
+git fetch origin develop --prune
+git checkout -b chore/release-X.Y.Z origin/develop
 
 npm version <patch|minor|major>
 ```
@@ -89,16 +91,33 @@ npm version <patch|minor|major>
 1. Bumps `package.json` → `version`.
 2. Runs `version-bump.js`, which updates `manifest.json` → `version` and appends an entry to `versions.json` mapping the new version to the current `minAppVersion`.
 3. Runs `scripts/validate-manifest.js` to assert all three files are consistent.
-4. Stages `manifest.json` + `versions.json` and creates a commit named `vX.Y.Z` *(npm default)*. The tag uses plain semver per `.npmrc` `tag-version-prefix=""`, so the tag is `X.Y.Z` (no `v`).
+4. Stages `manifest.json` + `versions.json`, creates a commit, and creates a local annotated tag named `X.Y.Z` (plain semver — `.npmrc` sets `tag-version-prefix=""`).
 
-**Do not push the tag yet.** The tag must point at `main` HEAD, not `develop` HEAD.
+The local `X.Y.Z` tag now points at the bump commit on the release branch. **Do not push the tag yet** — it must end up on `main` HEAD, not on the release branch HEAD.
+
+Push the branch (without the tag) and open a PR:
+
+```sh
+git push -u origin chore/release-X.Y.Z         # branch only, no --tags
+gh pr create --base develop --head chore/release-X.Y.Z \
+  --title "chore(release): bump to X.Y.Z" \
+  --body "Closes <issue-if-any>. Pre-step for release X.Y.Z; the develop->main PR will follow."
+```
+
+CI runs the full verify + workflow-lint + dependency-review + manifest-validation chain. After review:
+
+```sh
+gh pr merge <pr-number> --squash --delete-branch
+```
+
+The squash-merge produces a fresh commit on `develop` containing the version-bump diff. The local `X.Y.Z` tag still points at the original release-branch commit, which is now an orphan; step 5 below re-anchors the tag.
 
 ---
 
 ## 4. Promote `develop` → `main`
 
 ```sh
-git push origin develop
+git fetch origin develop
 gh pr create --base main --head develop \
   --title "release: X.Y.Z" \
   --body "Release notes draft. Closes #<release-tracking-issue> if any."
@@ -126,10 +145,10 @@ git pull --ff-only origin main
 
 ## 5. Push the release tag
 
-The version-bump commit produced a local tag (`X.Y.Z`) that currently points at the *develop* commit. Re-tag the merge commit on `main`:
+The version-bump commit's original tag still points at the now-orphaned release-branch commit. Re-tag the squash commit on `main`:
 
 ```sh
-git tag -d X.Y.Z                  # remove the develop-pointing tag
+git tag -d X.Y.Z                  # remove the orphan release-branch tag
 git tag X.Y.Z                     # re-create on the current main HEAD
 git push origin X.Y.Z
 ```
@@ -163,7 +182,8 @@ After the release workflow finishes:
 | Failure | Recovery |
 |---|---|
 | Pre-PR gate fails locally | Fix the underlying issue and re-run. Do not push a known-broken release PR. |
-| `manifest-validation` fails on the develop→main PR | The bump produced an invalid state. Inspect the validator output, fix `manifest.json` / `versions.json` / `package.json`, force-push the develop branch *only if no one else has pulled it*; otherwise revert the bump commit on develop and start over. |
+| `manifest-validation` fails on the release-branch PR (step 3) | The bump produced an invalid state. Inspect the validator output, fix `manifest.json` / `versions.json` / `package.json` on the release branch, push, let CI re-run. The PR is the only thing failing; develop is untouched. |
+| `manifest-validation` fails on the develop→main PR (step 4) | A commit landed on `develop` between step 3 and step 4 that altered one of the three files. Open a fix PR (chore branch → develop) to reconcile, merge, then re-open / re-trigger the develop→main PR. |
 | Release workflow fails on `Verify tag is on main HEAD` | The tag does not point at `main` HEAD. Delete the remote tag (`git push origin :X.Y.Z`), re-tag locally on `main` HEAD, push. |
 | Release workflow fails on `Verify manifest, package, and versions.json all match tag` | The bump created a mismatch that slipped past the develop→main PR. Most likely cause: a follow-up commit on `develop` between bump and merge altered one of the three files. Open a fix PR to reconcile, merge, then delete and re-create the tag on the new `main` HEAD. |
 | GitHub release was created but a wrong file is attached | Edit the release on GitHub and re-upload the missing asset. Do *not* delete and re-create the release — direct download links break. |
