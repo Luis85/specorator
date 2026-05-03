@@ -1036,7 +1036,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-### 5.5 Supply-Chain Hardening
+> **Token permissions for Dependabot workflows:** GitHub restricts `GITHUB_TOKEN` to read-only by default for Dependabot PRs on public repositories. The explicit `permissions: contents: write / pull-requests: write` block above overrides this for non-fork Dependabot updates — **do not remove it**. If your organisation's security policy prevents `pull_request` workflows from gaining write access, use `pull_request_target` as the trigger instead (note: `pull_request_target` runs in the base-branch context and has access to secrets, so review GitHub's security guidance before switching).
 
 Add a workflow-lint step to CI that fails the build if any `uses:` reference is not SHA-pinned:
 
@@ -1051,8 +1051,9 @@ Add a workflow-lint step to CI that fails the build if any `uses:` reference is 
       - name: Check action SHA pinning
         run: |
           set -e
-          # Anchor to ^\s+uses: so only YAML keys match, not uses: inside shell strings
-          UNPINNED=$(grep -rE '^\s+uses:\s+[^@]+@[^#\s]+' .github/workflows/ \
+          # Match both "- uses:" (inline step) and "  uses:" (named step) forms;
+          # the leading whitespace+optional-dash anchor avoids matching uses: inside shell strings
+          UNPINNED=$(grep -rE '^\s+(-\s+)?uses:\s+[^@]+@[^#\s]+' .github/workflows/ \
             | grep -v '@[0-9a-f]\{40\}' || true)
           if [ -n "$UNPINNED" ]; then
             echo "Unpinned actions found:"
