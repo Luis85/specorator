@@ -10,12 +10,18 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    include: ['src/**/*.spec.ts'],
+    // Transitional: both globs while the migration in progress.
+    // Tightened to tests/**/*.test.ts only after the move (Task 4).
+    include: ['src/**/*.spec.ts', 'tests/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: ['src/domain/**', 'src/application/**', 'src/infrastructure/**'],
-      exclude: ['src/infrastructure/obsidian/**'],
+      exclude: [
+        'src/infrastructure/obsidian/**',
+        '**/__fixtures__/**',
+        'src/infrastructure/mock/fixtures.ts',
+      ],
     },
   },
   resolve: {
