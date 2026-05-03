@@ -91,7 +91,9 @@ Aligning with upstream conventions removes the translation layer and makes Speco
 ## Consequences
 
 - `FeatureRepository.serializeFeature` writes `feature:` (not `title:`), the `artifacts` YAML block map, and `last_updated` as a date string.
-- `FeatureRepository.deserializeFeature` reads `feature` as the title (with `title` as a fallback for backward compatibility during the transition).
+- `WorkflowStateDocument.serializeWorkflowState` writes `feature:` (not `title:`), the `artifacts` YAML block map, and `last_updated` as a date string.
+- `WorkflowStateDocument.deserializeWorkflowState` reads `feature` as the title (with `title` as a fallback for backward compatibility during the transition).
+- `FeatureRepository` delegates workflow-state parsing and writing to the owned workflow-state document module instead of owning the schema inline.
 - `PluginSettings.specsFolder` defaults to `specs`; `featuresFolder` is treated as an alias of `specsFolder` if present in saved settings (NFR-AVS-004).
 - The `FeatureStep` domain type already maps step numbers to the correct agentic-workflow slugs (`FEATURE_STEPS` in `src/domain/feature/FeatureStep.ts`).
 - All vault files remain plain Markdown with YAML frontmatter — readable and editable without the plugin.
