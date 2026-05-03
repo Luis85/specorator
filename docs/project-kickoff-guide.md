@@ -240,7 +240,11 @@ gh api repos/<org>/<repo-name>/branches/main/protection \
     "contexts": ["verify"]
   },
   "enforce_admins": false,
-  "required_pull_request_reviews": null,
+  "required_pull_request_reviews": {
+    "dismiss_stale_reviews": false,
+    "require_code_owner_reviews": false,
+    "required_approving_review_count": 0
+  },
   "restrictions": null,
   "allow_force_pushes": false,
   "allow_deletions": false
@@ -672,8 +676,10 @@ gh issue create \
 | v1 Alpha | ⏳ Pending | v1 Alpha |
 EOF
   )" \
-  --label "product,planning" \
-  --pin
+  --label "product,planning"
+
+# Pin the issue (separate command — gh issue create has no --pin flag)
+gh issue pin <issue-number> --repo <org>/<repo-name>
 ```
 
 **Gate checklist:**
