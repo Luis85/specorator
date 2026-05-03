@@ -238,7 +238,7 @@ gh api repos/<org>/<repo-name>/branches/main/protection \
 {
   "required_status_checks": {
     "strict": true,
-    "contexts": ["verify"]
+    "contexts": ["Install, typecheck, lint, test, and build"]
   },
   "enforce_admins": true,
   "required_pull_request_reviews": {
@@ -253,7 +253,7 @@ gh api repos/<org>/<repo-name>/branches/main/protection \
 EOF
 ```
 
-> Update `"contexts"` to match the exact job name in your CI workflow (see Phase 5).
+> Update `"contexts"` to match the exact check name reported by your CI workflow (see Phase 5). In the workflow below, the job id is `verify`, but the reported check name is `Install, typecheck, lint, test, and build`.
 
 > `enforce_admins: true` applies the same rules to repository admins. This is the recommended default — without it, admins can push directly to `main` and bypass CI. If you ever need an emergency bypass (e.g., CI is broken and a hotfix is urgent), temporarily disable it via the API or web UI, land the fix, then re-enable it.
 
@@ -1079,7 +1079,7 @@ Add a workflow-lint step to CI that fails the build if any `uses:` reference is 
 - [ ] Dependabot auto-merge for safe updates configured
 - [ ] All `uses:` references SHA-pinned (not version tags)
 - [ ] Supply-chain pin-check added to CI
-- [ ] Branch protection updated to require the `verify` CI job
+- [ ] Branch protection updated to require the CI check named `Install, typecheck, lint, test, and build`
 
 ---
 
@@ -1453,7 +1453,7 @@ create_issue \
 
 create_issue \
   "Define branch protection and merge policy for main" \
-  $'## Goal\nProtect main from direct pushes and force pushes; require CI to pass.\n\n## Acceptance criteria\n- [ ] Branch protection rule on main requires PR before merge\n- [ ] Required status check: verify CI job\n- [ ] Force pushes blocked\n- [ ] Direct deletions blocked\n- [ ] develop is the default branch' \
+  $'## Goal\nProtect main from direct pushes and force pushes; require CI to pass.\n\n## Acceptance criteria\n- [ ] Branch protection rule on main requires PR before merge\n- [ ] Required status check matches the CI check name exactly\n- [ ] Force pushes blocked\n- [ ] Direct deletions blocked\n- [ ] develop is the default branch' \
   "setup,github"
 
 create_issue \
