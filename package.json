@@ -19,6 +19,7 @@
 		"test:watch": "vitest --configLoader runner",
 		"build:web": "vue-tsc --noEmit && vite build",
 		"test:coverage": "vitest run --configLoader runner --coverage",
+		"verify": "npm audit --audit-level=high --omit=dev && npm run typecheck && npm run lint && npm run test && npm run build && npm run build:web && npm run docs:api",
 		"docs:api": "typedoc",
 		"validate:manifest": "node scripts/validate-manifest.js",
 		"version": "node version-bump.js && node scripts/validate-manifest.js && git add manifest.json versions.json"
