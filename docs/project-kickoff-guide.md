@@ -280,6 +280,7 @@ gh label create "architecture"  --color "e4e669" --description "Architecture dec
 
 # Create domain labels
 gh label create "setup"         --color "bfd4f2" --description "Repository, tooling, CI, or GitHub configuration"
+gh label create "github"        --color "bfd4f2" --description "GitHub-specific setup (templates, labels, Actions, branch protection)"
 gh label create "ci"            --color "0e8a16" --description "CI/CD pipeline changes"
 gh label create "product"       --color "d93f0b" --description "Product direction, PRDs, use cases, or roadmap"
 gh label create "planning"      --color "c2e0c6" --description "Project or milestone planning"
@@ -1366,6 +1367,7 @@ Full label set for a typical software project:
 | Name | Color | Description |
 |---|---|---|
 | `setup` | `#bfd4f2` | Repository, tooling, CI, or GitHub configuration |
+| `github` | `#bfd4f2` | GitHub-specific setup (templates, labels, Actions, branch protection) |
 | `ci` | `#0e8a16` | CI/CD pipeline changes |
 | `product` | `#d93f0b` | Product direction, PRDs, use cases, or roadmap |
 | `planning` | `#c2e0c6` | Project or milestone planning |
