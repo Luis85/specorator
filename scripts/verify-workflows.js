@@ -17,7 +17,7 @@ const violations = []
 
 for (const file of files) {
   const path = join(dir, file)
-  const lines = readFileSync(path, 'utf8').split('\n')
+  const lines = readFileSync(path, 'utf8').split(/\r?\n/)
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     const match = line.match(/^\s*-?\s*uses:\s*(.+)$/)
