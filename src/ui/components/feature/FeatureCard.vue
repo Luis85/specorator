@@ -23,7 +23,7 @@ const progressWidth = computed(() => `${(completedSteps.value / stepCount) * 100
 </script>
 
 <template>
-  <article class="sp-feature-card">
+  <article class="sp-feature-card" data-testid="feature-card">
     <header class="sp-feature-card__header">
       <h3 class="sp-feature-card__title">{{ feature.title }}</h3>
       <AppBadge :status="feature.status" />
@@ -34,18 +34,19 @@ const progressWidth = computed(() => `${(completedSteps.value / stepCount) * 100
         <div
           class="sp-progress-bar__fill"
           :style="{ width: progressWidth }"
+          data-testid="progress-fill"
         />
       </div>
-      <span v-if="feature.status === 'archived'" class="sp-feature-card__step-label">
+      <span v-if="feature.status === 'archived'" class="sp-feature-card__step-label" data-testid="step-label">
         {{ $t('feature.status.archived') }}
       </span>
-      <span v-else-if="feature.status === 'abandoned'" class="sp-feature-card__step-label">
+      <span v-else-if="feature.status === 'abandoned'" class="sp-feature-card__step-label" data-testid="step-label">
         {{ $t('feature.status.abandoned') }}
       </span>
-      <span v-else-if="isComplete" class="sp-feature-card__step-label">
+      <span v-else-if="isComplete" class="sp-feature-card__step-label" data-testid="step-label">
         {{ $t('feature.complete') }}
       </span>
-      <span v-else class="sp-feature-card__step-label">
+      <span v-else class="sp-feature-card__step-label" data-testid="step-label">
         {{ $t('feature.stepProgress', { current: displayedStep, total: stepCount }) }}
       </span>
     </div>
@@ -55,6 +56,7 @@ const progressWidth = computed(() => `${(completedSteps.value / stepCount) * 100
         v-if="feature.status === 'draft'"
         variant="primary"
         size="sm"
+        data-testid="activate-button"
         @click="emit('activate', feature.id)"
       >
         {{ $t('feature.actions.activate') }}
@@ -63,6 +65,7 @@ const progressWidth = computed(() => `${(completedSteps.value / stepCount) * 100
         v-if="feature.status === 'active' && !isComplete"
         variant="primary"
         size="sm"
+        data-testid="advance-step-button"
         @click="emit('advance-step', feature.id)"
       >
         {{ $t('feature.actions.advanceStep') }}
@@ -71,6 +74,7 @@ const progressWidth = computed(() => `${(completedSteps.value / stepCount) * 100
         v-if="feature.status === 'active'"
         variant="ghost"
         size="sm"
+        data-testid="open-button"
         @click="emit('open', feature.id)"
       >
         {{ $t('feature.actions.open') }}
@@ -79,6 +83,7 @@ const progressWidth = computed(() => `${(completedSteps.value / stepCount) * 100
         v-if="feature.status !== 'archived' && feature.status !== 'abandoned'"
         variant="ghost"
         size="sm"
+        data-testid="archive-button"
         @click="emit('archive', feature.id)"
       >
         {{ $t('feature.actions.archive') }}
