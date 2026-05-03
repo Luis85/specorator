@@ -135,8 +135,9 @@ gh repo edit \
   --enable-issues=true \
   --enable-projects=true \
   --delete-branch-on-merge=true \
-  --squash-merge=true \
-  --no-merge-commit
+  --enable-squash-merge=true \
+  --enable-merge-commit=false \
+  --enable-rebase-merge=false
 ```
 
 ### 1.2 Add Baseline Files
@@ -1006,7 +1007,9 @@ Create `.github/workflows/dependabot-auto-merge.yml`:
 ```yaml
 name: Dependabot auto-merge
 
-on: pull_request
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
 
 permissions:
   contents: write
@@ -1015,10 +1018,10 @@ permissions:
 jobs:
   auto-merge:
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
+    if: |
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     steps:
-      - uses: actions/checkout@<SHA>
-
       - name: Fetch dependabot metadata
         id: meta
         uses: dependabot/fetch-metadata@<SHA>
@@ -1036,7 +1039,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-> **Token permissions for Dependabot workflows:** GitHub restricts `GITHUB_TOKEN` to read-only by default for Dependabot PRs on public repositories. The explicit `permissions: contents: write / pull-requests: write` block above overrides this for non-fork Dependabot updates — **do not remove it**. If your organisation's security policy prevents `pull_request` workflows from gaining write access, use `pull_request_target` as the trigger instead (note: `pull_request_target` runs in the base-branch context and has access to secrets, so review GitHub's security guidance before switching).
+> **Token permissions for Dependabot workflows:** Dependabot PRs need a writable token to enable auto-merge. This workflow uses `pull_request_target` so the token comes from the protected base-branch workflow, then limits execution to same-repository Dependabot PRs and never checks out PR code. Keep those guards together. If you add steps that execute repository code, move them to a separate `pull_request` workflow with read-only permissions.
 
 Add a workflow-lint step to CI that fails the build if any `uses:` reference is not SHA-pinned:
 
@@ -1053,8 +1056,8 @@ Add a workflow-lint step to CI that fails the build if any `uses:` reference is 
           set -e
           # Match both "- uses:" (inline step) and "  uses:" (named step) forms;
           # the leading whitespace+optional-dash anchor avoids matching uses: inside shell strings
-          UNPINNED=$(grep -rE '^\s+(-\s+)?uses:\s+[^@]+@[^#\s]+' .github/workflows/ \
-            | grep -v '@[0-9a-f]\{40\}' || true)
+          UNPINNED=$(grep -rE '^[[:space:]]*(-[[:space:]]*)?uses:[[:space:]]*[^@[:space:]#]+@[^#[:space:]]+' .github/workflows/ \
+            | grep -vE '@[0-9a-f]{40}([[:space:]#]|$)' || true)
           if [ -n "$UNPINNED" ]; then
             echo "Unpinned actions found:"
             echo "$UNPINNED"
