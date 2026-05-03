@@ -106,26 +106,32 @@ function asFeatureStatus(value: string | undefined): FeatureStatus | undefined {
 	return value !== undefined && isFeatureStatus(value) ? value : undefined;
 }
 
+function asRequiredScalar(value: string | undefined): string | undefined {
+	return value !== undefined && value.trim() !== '' ? value : undefined;
+}
+
 function validateWorkflowFrontmatter(
 	data: Partial<Record<string, string>>,
 ): ValidatedWorkflowState | null {
-	const title = data.feature ?? data.title;
+	const id = asRequiredScalar(data.id);
+	const slug = asRequiredScalar(data.slug);
+	const title = asRequiredScalar(data.feature ?? data.title);
 	const status = asFeatureStatus(data.status);
 	const stepRaw = data.currentStep;
 	const currentStep = stepRaw !== undefined ? parseInt(stepRaw, 10) : NaN;
 
 	if (
-		data.id === undefined ||
+		id === undefined ||
 		title === undefined ||
-		data.slug === undefined ||
+		slug === undefined ||
 		status === undefined ||
 		Number.isNaN(currentStep)
 	) {
 		return null;
 	}
 	return {
-		id: data.id,
-		slug: data.slug,
+		id,
+		slug,
 		title,
 		area: data.area ?? '',
 		status,
