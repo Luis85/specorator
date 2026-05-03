@@ -72,4 +72,37 @@ describe('tryAsync', () => {
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.message).toBe('while loading: inner')
   })
+
+  it('returns err — never rejects — when the thrown value cannot be stringified', async () => {
+    const unstringifiable = Object.create(null) as object
+    const result = await tryAsync(async () => {
+      throw unstringifiable
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBeInstanceOf(Error)
+  })
+
+  it('returns err — never rejects — when toString itself throws', async () => {
+    const hostile = {
+      toString() {
+        throw new Error('toString-boom')
+      },
+    }
+    const result = await tryAsync(async () => {
+      throw hostile
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBeInstanceOf(Error)
+  })
+})
+
+describe('trySync — coercion hardening', () => {
+  it('returns err — never throws — when the thrown value cannot be stringified', () => {
+    const unstringifiable = Object.create(null) as object
+    const result = trySync(() => {
+      throw unstringifiable
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBeInstanceOf(Error)
+  })
 })

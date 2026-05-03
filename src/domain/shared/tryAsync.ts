@@ -1,11 +1,26 @@
 import { ok, err, type Result } from './Result'
 
+// `String(thrown)` invokes the value's `Symbol.toPrimitive` / `toString` /
+// `valueOf` — any of which can throw (e.g. on `Object.create(null)`, or
+// objects with throwing coercion hooks). The helper guarantees callers
+// receive a Result, so coercion must never escape.
+function safeStringify(value: unknown): string {
+  try {
+    return String(value)
+  } catch {
+    return '[unstringifiable thrown value]'
+  }
+}
+
 function toError(thrown: unknown, context?: string): Error {
-  const base = thrown instanceof Error ? thrown : new Error(String(thrown))
-  if (!context) return base
-  const wrapped = new Error(`${context}: ${base.message}`)
-  if (thrown instanceof Error) wrapped.cause = thrown
-  return wrapped
+  if (thrown instanceof Error) {
+    if (!context) return thrown
+    const wrapped = new Error(`${context}: ${thrown.message}`)
+    wrapped.cause = thrown
+    return wrapped
+  }
+  const message = safeStringify(thrown)
+  return new Error(context ? `${context}: ${message}` : message)
 }
 
 /**
