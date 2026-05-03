@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs'
 
-const SEMVER = /^\d+\.\d+\.\d+(?:-[\w.]+)?$/
+// Official semver.org regex (https://semver.org/#is-there-a-suggested-regular-expression-regex-to-check-a-semver-string)
+// Accepts the prerelease and build-metadata grammar; rejects empty identifiers,
+// leading zeros on numeric identifiers, and stray underscores.
+const SEMVER =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
+// Obsidian's minAppVersion is documented as plain X.Y.Z without prerelease/build metadata.
+const MINAPP_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const ID_FORMAT = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
 const URL_FORMAT = /^https?:\/\/[^\s]+$/
 const errors = []
@@ -74,9 +80,9 @@ if (manifest && versions && pkg) {
     errors.push(`manifest.version must match semver \`X.Y.Z[-prerelease]\`; got: ${manifest.version}`)
   }
 
-  if (typeof manifest.minAppVersion !== 'string' || !SEMVER.test(manifest.minAppVersion)) {
+  if (typeof manifest.minAppVersion !== 'string' || !MINAPP_VERSION.test(manifest.minAppVersion)) {
     errors.push(
-      `manifest.minAppVersion must match semver \`X.Y.Z\`; got: ${manifest.minAppVersion}`,
+      `manifest.minAppVersion must match semver \`X.Y.Z\` (no prerelease or build metadata); got: ${manifest.minAppVersion}`,
     )
   }
 
@@ -93,8 +99,10 @@ if (manifest && versions && pkg) {
       if (!SEMVER.test(k)) {
         errors.push(`versions.json key not semver: ${k}`)
       }
-      if (typeof v !== 'string' || !SEMVER.test(v)) {
-        errors.push(`versions.json[${k}] value must be semver string; got: ${JSON.stringify(v)}`)
+      if (typeof v !== 'string' || !MINAPP_VERSION.test(v)) {
+        errors.push(
+          `versions.json[${k}] value must be plain X.Y.Z (Obsidian minAppVersion form); got: ${JSON.stringify(v)}`,
+        )
       }
     }
 
