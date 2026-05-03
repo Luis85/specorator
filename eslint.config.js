@@ -56,6 +56,26 @@ export default tseslint.config(
 								'Import from obsidian only in the plugin adapter layer (src/plugin/**).',
 						},
 					],
+					patterns: [
+						{
+							group: [
+								'**/IBridge',
+								'**/BridgeKey',
+								'**/useBridge',
+								'./IBridge',
+								'./BridgeKey',
+								'./useBridge',
+								'../IBridge',
+								'../BridgeKey',
+								'../useBridge',
+								'../bridge/IBridge',
+								'../bridge/BridgeKey',
+								'../composables/useBridge',
+							],
+							message:
+								'IBridge / BridgeKey / useBridge were superseded by the narrow ports in src/domain/ports (ADR-008). Import a specific port (SettingsPort, VaultPort, WorkspacePort, NotificationPort) and the matching composable instead.',
+						},
+					],
 				},
 			],
 			'@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
