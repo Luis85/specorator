@@ -3,14 +3,14 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AppButton from '../components/common/AppButton.vue'
-import { useBridge } from '../composables/useBridge'
+import { useVaultPort } from '../composables/useVaultPort'
 import { normalizeFileRoutePath } from '../router/fileRoute'
 import { tryAsync } from '@/domain/shared/tryAsync'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const bridge = useBridge()
+const vault = useVaultPort()
 
 const filePath = normalizeFileRoutePath(route.params.filePath as string)
 const content = ref<string | null>(null)
@@ -18,7 +18,7 @@ const notFound = ref(false)
 const copied = ref(false)
 
 onMounted(async () => {
-  const result = await tryAsync(() => bridge.readFile(filePath))
+  const result = await tryAsync(() => vault.readFile(filePath))
   if (result.ok) content.value = result.value
   else notFound.value = true
 })
