@@ -238,7 +238,10 @@ gh api repos/<org>/<repo-name>/branches/main/protection \
 {
   "required_status_checks": {
     "strict": true,
-    "contexts": ["Install, typecheck, lint, test, and build"]
+    "contexts": [
+      "Install, typecheck, lint, test, and build",
+      "Workflow lint and pin check"
+    ]
   },
   "enforce_admins": true,
   "required_pull_request_reviews": {
@@ -253,7 +256,7 @@ gh api repos/<org>/<repo-name>/branches/main/protection \
 EOF
 ```
 
-> Update `"contexts"` to match the exact check name reported by your CI workflow (see Phase 5). In the workflow below, the job id is `verify`, but the reported check name is `Install, typecheck, lint, test, and build`.
+> Update `"contexts"` to match the exact check names reported by your CI workflow (see Phase 5). In the workflow below, the job ids are `verify` and `workflow-lint`, but the reported check names are `Install, typecheck, lint, test, and build` and `Workflow lint and pin check`.
 
 > `enforce_admins: true` applies the same rules to repository admins. This is the recommended default — without it, admins can push directly to `main` and bypass CI. If you ever need an emergency bypass (e.g., CI is broken and a hotfix is urgent), temporarily disable it via the API or web UI, land the fix, then re-enable it.
 
@@ -951,10 +954,16 @@ jobs:
           cache: 'npm'
 
       - name: Verify tag is semver
+        id: semver
         run: |
           if [[ ! "$GITHUB_REF_NAME" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
             echo "ERROR: tag must be semver, e.g. 0.1.0, 0.1.0-beta.1, or 0.1.0+build.1" >&2
             exit 1
+          fi
+          if [[ "$GITHUB_REF_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+- ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Verify tag is on main HEAD
@@ -975,7 +984,7 @@ jobs:
         with:
           files: |
             dist/*
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ steps.semver.outputs.prerelease == 'true' }}
 ```
 
 ### 5.3 Dependabot
@@ -1079,7 +1088,7 @@ Add a workflow-lint step to CI that fails the build if any `uses:` reference is 
 - [ ] Dependabot auto-merge for safe updates configured
 - [ ] All `uses:` references SHA-pinned (not version tags)
 - [ ] Supply-chain pin-check added to CI
-- [ ] Branch protection updated to require the CI check named `Install, typecheck, lint, test, and build`
+- [ ] Branch protection updated to require the CI checks named `Install, typecheck, lint, test, and build` and `Workflow lint and pin check`
 
 ---
 
