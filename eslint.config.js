@@ -121,6 +121,7 @@ export default defineConfig(
 			'node_modules/',
 			'main.js',
 			'dist-standalone/',
+			'coverage/',
 			'.worktrees/',
 			'docs/',
 			// Boundary-rule proof fixtures: deliberately invalid imports/
@@ -369,9 +370,13 @@ export default defineConfig(
 		},
 	},
 
-	// Test files — relax strict rules that get noisy in fixtures/mocks
+	// Test files — relax strict rules that get noisy in fixtures/mocks.
+	// obsidianmd rules are relaxed too: tests mirror the production modules
+	// they cover (e.g. VaultPath tests assert on the literal `.obsidian`
+	// path), and UI test fixtures use test-only strings ("My Feature") that
+	// are not user-facing.
 	{
-		files: ['**/__tests__/**/*.ts', '**/*.spec.ts'],
+		files: ['tests/**/*.ts'],
 		rules: {
 			'@typescript-eslint/no-unsafe-assignment': 'off',
 			'@typescript-eslint/no-unsafe-member-access': 'off',
@@ -386,6 +391,8 @@ export default defineConfig(
 			'no-restricted-imports': 'off',
 			complexity: 'off',
 			'max-lines': 'off',
+			'obsidianmd/hardcoded-config-path': 'off',
+			'obsidianmd/ui/sentence-case': 'off',
 		},
 	},
 
