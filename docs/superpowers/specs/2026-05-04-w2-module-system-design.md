@@ -123,15 +123,23 @@ export interface ModuleDescriptor<S = Record<string, unknown>> {
   readonly commands?: ReadonlyArray<ModuleCommandDescriptor>
   readonly views?: ReadonlyArray<ModuleViewIntent>
   readonly settingsSchema?: ModuleSettingsSchema
+  /**
+   * Flat locale message maps only. W8 may widen to nested objects if vue-i18n
+   * nested key syntax is adopted; until then, keep keys dotted and flat.
+   * Example: `{ en: { 'hello.title': 'Hello' } }`
+   */
   readonly messages?: Partial<Record<string, Record<string, string>>>
-  readonly extensions?: ReadonlyArray<unknown>
   init(ports: ModulePorts, settings: S): void | Promise<void>
+  /**
+   * Called by W4 PluginCore when settings change. Not invoked by the W2
+   * provisional bootstrapModules() — wiring is deferred to W4.
+   */
   onSettingsChange?(next: S): void | Promise<void>
   destroy?(): void | Promise<void>
 }
 ```
 
-`dependsOn` is declared now so modules can express their dependency graph; topo-sort enforcement is deferred to W4. All fields except `id` and `init` are optional.
+`dependsOn` is declared now so modules can express their dependency graph; topo-sort enforcement is deferred to W4. All fields except `id` and `init` are optional. `extensions` is omitted — no workstream in scope consumes it; it can be added when a concrete consumer is specified.
 
 ### `defineModule()`
 
@@ -159,7 +167,7 @@ export interface BootstrappedModules {
 export async function bootstrapModules(
   modules: ReadonlyArray<ModuleDescriptor>,
   ports: ModulePorts,
-  settings: Record<string, unknown>,
+  settings: Readonly<Record<string, unknown>>,
 ): Promise<BootstrappedModules> {
   for (const mod of modules) {
     await mod.init(ports, settings)
@@ -175,6 +183,8 @@ export async function bootstrapModules(
 ```
 
 Intentionally thin: sequential init in declaration order, reverse-order teardown. No validation, no topo-sort, no leak detection — all W4.
+
+**Type-safety constraint:** `ReadonlyArray<ModuleDescriptor>` erases the generic `S` to `Record<string, unknown>`. This is intentional for W2 — `bootstrapModules()` only works with modules that use the default `S`. Any module that declares `defineModule<MySettings>({...})` cannot be passed to `bootstrapModules()` without a type error. W4's `PluginCore` will solve this with a discriminated union or covariant wrapper. For W2, all modules use `S = Record<string, unknown>`.
 
 ---
 
@@ -259,24 +269,56 @@ const { t } = useI18n()
 
 ## ESLint Cross-Module Import Ban
 
-Added to `eslint.config.js` as a new config block scoped to `src/modules/**`:
+The existing `eslint.config.js` already has a `src/modules/**/*.ts` block (lines ~262–268) containing only a `max-lines` rule. Add a **second** `src/modules/**` block alongside it — do not collapse them, as that would lose the `max-lines` rule:
 
 ```js
+// Second block — cross-module import ban (sibling module imports forbidden)
 {
   files: ['src/modules/**'],
   rules: {
     'no-restricted-imports': ['error', {
-      patterns: [{
-        regex: String.raw`@/modules/(?!(index|module)$)[^/]+/`,
-        message: 'Modules must not import sibling modules directly. Use the EventBus.',
-      }],
+      patterns: [
+        {
+          // Ban alias-path imports into sibling modules
+          regex: String.raw`@/modules/(?!(index|module)$)[^/]+/`,
+          message: 'Modules must not import sibling modules directly. Use the EventBus.',
+        },
+        {
+          // Ban relative imports into sibling modules (e.g. ../other-module/foo)
+          regex: String.raw`\.\./[^/]+/`,
+          message: 'Modules must not import sibling modules directly. Use the EventBus.',
+        },
+      ],
     }],
   },
 }
 ```
 
-Allows: `@/modules/index`, `@/modules/module`.  
-Bans: `@/modules/hello/` from `@/modules/other/`, etc.
+Allows: `@/modules/index`, `@/modules/module`, intra-module relative imports (`./hello-events`).  
+Bans: `@/modules/hello/` from `@/modules/other/`, and `../hello/hello-module` from `../other/`.
+
+## ESLint `src/core/**` Layer Guard
+
+`src/core/` is a new layer with no existing ESLint block. Add one banning obsidian/plugin/ui/vue to keep it at the application/infrastructure boundary:
+
+```js
+{
+  files: ['src/core/**'],
+  rules: {
+    'no-restricted-imports': ['error', {
+      paths: [
+        { name: 'obsidian', message: 'src/core must not import obsidian directly.' },
+        { name: 'vue', message: 'src/core must not import vue.' },
+        { name: 'pinia', message: 'src/core must not import pinia.' },
+      ],
+      patterns: [
+        { regex: String.raw`@/plugin/`, message: 'src/core must not import src/plugin.' },
+        { regex: String.raw`@/ui/`, message: 'src/core must not import src/ui.' },
+      ],
+    }],
+  },
+}
+```
 
 ---
 
@@ -291,15 +333,65 @@ Documents:
 - Event channel naming convention (`module-id:event-name`)
 - Where module settings fields go (W7 will render them)
 - When to use Vue emits vs. EventBus (parent/child = emits; cross-module = bus)
+- Import path convention: intra-module relative imports (`./hello-events`) are allowed; any reach beyond the module's own directory must use the `@/` alias (never `../../domain/...`)
 
 ---
 
 ## Tests
 
-`tests/modules/hello/hello-module.test.ts`:
-- `init()` emits `hello:initialized` on the bus with correct payload
-- `destroy()` is a no-op (no leak)
-- Uses `fakeModulePorts()` from `tests/__fakes__/fake-ports.ts` plus a real `createEventBus()`
+### `tests/__fakes__/fake-ports.ts` — update required
+
+Add `bus` to `FakePorts` and `fakeModulePorts()` so the factory returns a complete `ModulePorts`-compatible object:
+
+```ts
+import { createEventBus } from '@/domain/shared/event-bus'
+import type { EventBus } from '@/domain/shared/event-bus'
+
+export interface FakePorts {
+  readonly bridge: MockBridge
+  readonly settings: SettingsPort
+  readonly vault: VaultPort
+  readonly workspace: WorkspacePort
+  readonly notifications: NotificationPort
+  readonly bus: EventBus  // ← added in W2
+}
+
+export function fakeModulePorts(): FakePorts {
+  const bridge = new MockBridge()
+  return {
+    bridge,
+    settings: bridge,
+    vault: bridge,
+    workspace: bridge,
+    notifications: bridge,
+    bus: createEventBus(),  // ← added in W2
+  }
+}
+```
+
+All existing tests that destructure `fakeModulePorts()` are unaffected — they don't reference `bus`.
+
+### `tests/modules/hello/hello-module.test.ts`
+
+- `init()` emits `hello:initialized` on the bus with correct `moduleId` payload
+- `destroy` is undefined (no leak — bus listener was never subscribed)
+- Constructs `ModulePorts` from `fakeModulePorts()` directly (the updated factory includes `bus`)
+
+### Coverage include
+
+Add `src/modules/**` and `src/core/**` to `vitest.config.ts` `coverage.include` so module and bootstrap code is tracked against thresholds:
+
+```ts
+coverage: {
+  include: [
+    'src/domain/**',
+    'src/application/**',
+    'src/infrastructure/**',
+    'src/modules/**',   // ← added in W2
+    'src/core/**',      // ← added in W2
+  ],
+}
+```
 
 ---
 
@@ -328,5 +420,6 @@ Documents:
 | Per-module settings migration pipeline | W7 |
 | vue-i18n `messages` merge per module | W8 |
 | Storybook stories for HelloView | W9 |
+| `onSettingsChange` invocation (settings-change pipeline) | W4 PluginCore |
 | View intent → router/Obsidian view wiring | W4 / W11 |
 | Scaffold script for new modules | W12 |
