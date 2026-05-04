@@ -3,6 +3,7 @@ import { onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterView, RouterLink, useRouter } from 'vue-router'
 import AppToast from './components/common/AppToast.vue'
+import ErrorBoundary from './components/ErrorBoundary.vue'
 import { useNotificationStore } from './stores/notificationStore'
 
 const { t } = useI18n()
@@ -10,7 +11,11 @@ const router = useRouter()
 const notificationStore = useNotificationStore()
 
 function onNotice(e: Event) {
-  const { message, durationMs } = (e as CustomEvent<{ message: string; durationMs: number }>).detail
+  const { message, durationMs } = (e as CustomEvent<{
+    severity: 'error' | 'warning' | 'success' | 'info'
+    message: string
+    durationMs: number
+  }>).detail
   notificationStore.addNotice(message, durationMs)
 }
 
@@ -44,7 +49,9 @@ onUnmounted(() => {
       </RouterLink>
     </nav>
     <main class="sp-main">
-      <RouterView />
+      <ErrorBoundary>
+        <RouterView />
+      </ErrorBoundary>
     </main>
     <AppToast />
   </div>
