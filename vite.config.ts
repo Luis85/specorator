@@ -1,3 +1,4 @@
+import { copyFileSync } from 'fs';
 import { builtinModules } from 'module';
 import { resolve } from 'path';
 import { defineConfig, type Plugin as VitePlugin } from 'vite';
@@ -26,6 +27,19 @@ const ALL_EXTERNALS = [
 	...builtinModules,
 	...builtinModules.map((m) => `node:${m}`),
 ];
+
+function copyPluginArtifacts(): VitePlugin {
+	return {
+		name: 'specorator-copy-plugin-artifacts',
+		closeBundle() {
+			copyFileSync(resolve(__dirname, 'dist-plugin/main.js'), resolve(__dirname, 'main.js'));
+			copyFileSync(
+				resolve(__dirname, 'dist-plugin/styles.css'),
+				resolve(__dirname, 'styles.css'),
+			);
+		},
+	};
+}
 
 function scopeSelector(selector: string): string {
 	const trimmedSelector = selector.trim();
@@ -74,7 +88,7 @@ export default defineConfig(({ mode }) => {
 
 	if (mode === 'plugin') {
 		return {
-			plugins: [vue(), scopeBuiltCss()],
+			plugins: [vue(), scopeBuiltCss(), copyPluginArtifacts()],
 			resolve: { alias },
 			build: {
 				lib: {
@@ -91,7 +105,7 @@ export default defineConfig(({ mode }) => {
 							info.names.some((n) => n.endsWith('.css')) ? 'styles.css' : '[name][extname]',
 					},
 				},
-				outDir: '.',
+				outDir: 'dist-plugin',
 				emptyOutDir: false,
 				sourcemap: 'inline',
 				minify: false,

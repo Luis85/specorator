@@ -5,6 +5,9 @@ node_modules/
 main.js
 main.js.map
 
+# Plugin build staging dir (artifacts are copied to project root after build)
+dist-plugin/
+
 # Standalone UI build
 dist-standalone/
 
