@@ -41,7 +41,7 @@ function validateModules(modules: ReadonlyArray<ModuleDescriptor>): void {
   }
 }
 
-// eslint-disable-next-line complexity
+// eslint-disable-next-line complexity -- Kahn's BFS; complexity comes from the algorithm itself, not incidental branching.
 function topoSort(modules: ReadonlyArray<ModuleDescriptor>): ModuleDescriptor[] {
   const inDegree = new Map<string, number>()
   const adj = new Map<string, string[]>() // dep → dependants
@@ -102,6 +102,7 @@ export class PluginCore {
   private readonly modules: ReadonlyArray<ModuleDescriptor>
   private sorted: ModuleDescriptor[] = []
   private readonly leakMap = new Map<string, number>()
+  private _initCalled = false
 
   constructor(
     modules: ReadonlyArray<ModuleDescriptor>,
@@ -129,6 +130,11 @@ export class PluginCore {
   }
 
   async init(rawSettings: Record<string, unknown>): Promise<void> {
+    if (this._initCalled) {
+      throw new Error('PluginCore.init() has already been called')
+    }
+    this._initCalled = true
+
     // Step 1: validate
     validateModules(this.modules)
 

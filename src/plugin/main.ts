@@ -50,6 +50,8 @@ export default class SpecoratorPlugin extends Plugin {
   // eslint-disable-next-line obsidianmd/detach-leaves
   override onunload(): void {
     this.app.workspace.detachLeavesOfType(VIEW_TYPE)
+    // onunload() is synchronous (Obsidian contract). destroy() is fire-and-forget;
+    // module destroy() implementations must be fast and non-critical.
     void this.core?.destroy()
   }
 
