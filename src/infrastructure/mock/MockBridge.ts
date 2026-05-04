@@ -3,6 +3,7 @@ import type {
 	VaultPort,
 	WorkspacePort,
 	NotificationPort,
+	LoggerPort,
 } from '@/domain/ports'
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
@@ -11,7 +12,7 @@ import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginS
  * Provides test helper methods for inspecting state.
  */
 export class MockBridge
-	implements SettingsPort, VaultPort, WorkspacePort, NotificationPort
+	implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort
 {
   private readonly files = new Map<string, string>()
   private readonly folders = new Set<string>()
@@ -108,5 +109,23 @@ export class MockBridge
 
   seedSettings(partial: Partial<PluginSettings>): void {
     this.settings = { ...this.settings, ...partial }
+  }
+
+  // ── LoggerPort ────────────────────────────────────────────────────────────
+
+  debug(message: string, context?: Record<string, unknown>): void {
+    console.debug(`[MockBridge] ${message}`, context)
+  }
+
+  info(message: string, context?: Record<string, unknown>): void {
+    console.info(`[MockBridge] ${message}`, context)
+  }
+
+  warn(message: string, context?: Record<string, unknown>): void {
+    console.warn(`[MockBridge] ${message}`, context)
+  }
+
+  error(message: string, error?: unknown, context?: Record<string, unknown>): void {
+    console.error(`[MockBridge] ${message}`, error, context)
   }
 }

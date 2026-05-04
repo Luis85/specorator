@@ -86,7 +86,32 @@ export const helloModule = defineModule({
 | `ports.vault` | `VaultPort` | `readFile()`, `writeFile()`, etc. |
 | `ports.workspace` | `WorkspacePort` | `openFile()` |
 | `ports.notifications` | `NotificationPort` | `showNotice()` |
+| `ports.logger` | `LoggerPort` | Structured logging (debug/info/warn/error). |
 | `ports.bus` | `EventBus` | cross-module events |
+
+### Bus subscription ownership
+
+All bus subscriptions acquired in `init()` must be stored in module-local scope and released in `destroy()`:
+
+```ts
+// ✅ correct
+let unsub: (() => void) | null = null
+
+const myModule = defineModule({
+  id: 'my-module',
+  init(ports) {
+    unsub = ports.bus.on('some:event', handler)
+  },
+  destroy() {
+    unsub?.()
+    unsub = null
+  },
+})
+```
+
+Do **not** delegate unsubscription to Vue component lifecycle hooks (`onUnmounted`). A module may outlive or be destroyed independently of any component, and leaked listeners will trigger the W4 listener-leak tripwire.
+
+Modules must not hold references to sibling module instances. All inter-module communication goes through the shared `EventBus`. Do not emit bus events from `destroy()` — this can corrupt the per-module listener delta measurement in the tripwire.
 
 ## Vue SFC isolation
 

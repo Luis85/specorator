@@ -9,20 +9,14 @@ import {
   VAULT_PORT,
   WORKSPACE_PORT,
   NOTIFICATION_PORT,
+  LOGGER_PORT,
 } from '@/infrastructure/bridge/ports'
-import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
-import { createEventBus } from '@/domain/shared/event-bus'
-import { tryAsync } from '@/domain/shared/tryAsync'
-import { bootstrapModules, type BootstrappedModules } from '@/core/bootstrap'
-import { ALL_MODULES, type ModulePorts } from '@/modules'
 import type SpecoratorPlugin from './main'
 
 export const VIEW_TYPE = 'specorator'
 
 export class SpecoratorView extends ItemView {
   private vueApp: VueApp | null = null
-  private readonly appBus = createEventBus()
-  private bootstrapped: BootstrappedModules | null = null
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -31,17 +25,11 @@ export class SpecoratorView extends ItemView {
     super(leaf)
   }
 
-  getViewType(): string {
-    return VIEW_TYPE
-  }
-  getDisplayText(): string {
-    return 'Specorator'
-  }
-  getIcon(): string {
-    return 'layout-dashboard'
-  }
+  getViewType(): string { return VIEW_TYPE }
+  getDisplayText(): string { return 'Specorator' }
+  getIcon(): string { return 'layout-dashboard' }
 
-  async onOpen(): Promise<void> {
+  onOpen(): Promise<void> {
     const container = this.containerEl.children[1] as HTMLElement
     container.empty()
 
@@ -50,26 +38,9 @@ export class SpecoratorView extends ItemView {
       attr: { id: 'specorator-root', style: 'height:100%;overflow:auto;' },
     })
 
-    const bridge = new ObsidianBridge(
-      this.app,
-      this.plugin.settings,
-      (s) => this.plugin.updateSettings(s),
-    )
+    const bridge = this.plugin.bridge!
 
     setLocale(this.plugin.settings.locale as SupportedLocale)
-
-    const ports: ModulePorts = {
-      settings: bridge,
-      vault: bridge,
-      workspace: bridge,
-      notifications: bridge,
-      bus: this.appBus,
-    }
-    this.bootstrapped = await bootstrapModules(
-      ALL_MODULES,
-      ports,
-      this.plugin.settings as unknown as Readonly<Record<string, unknown>>,
-    )
 
     this.vueApp = createApp(App)
     this.vueApp.use(createPinia())
@@ -79,20 +50,14 @@ export class SpecoratorView extends ItemView {
     this.vueApp.provide(VAULT_PORT, bridge)
     this.vueApp.provide(WORKSPACE_PORT, bridge)
     this.vueApp.provide(NOTIFICATION_PORT, bridge)
+    this.vueApp.provide(LOGGER_PORT, bridge)
     this.vueApp.mount(mountPoint)
+    return Promise.resolve()
   }
 
-  async onClose(): Promise<void> {
-    const teardownResult = this.bootstrapped !== null
-      ? await tryAsync(async () => {
-          await this.bootstrapped!.teardown()
-          this.bootstrapped = null
-        })
-      : null
+  onClose(): Promise<void> {
     this.vueApp?.unmount()
     this.vueApp = null
-    if (teardownResult !== null && !teardownResult.ok) {
-      throw teardownResult.error
-    }
+    return Promise.resolve()
   }
 }
