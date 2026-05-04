@@ -5,15 +5,15 @@ import type {
 	WorkspacePort,
 	NotificationPort,
 } from '@/domain/ports'
+import { createEventBus } from '@/domain/shared/event-bus'
+import type { EventBus } from '@/domain/shared/event-bus'
 
 /**
  * Standard test seam: all four narrow ports backed by a single MockBridge
- * instance. `bridge` is exposed so tests can read recorded notices and
- * opened-file paths via MockBridge's spy methods.
+ * instance, plus a fresh EventBus.
  *
- * Per-method overrides are not parameterised (YAGNI). Callers that need to
- * override one method should construct their own scenario inline; if the
- * pattern recurs, add an `overrides` parameter then.
+ * `bridge` is exposed so tests can inspect recorded notices and opened-file paths.
+ * `bus` is exposed so tests can subscribe to events before calling module init.
  */
 export interface FakePorts {
 	readonly bridge: MockBridge
@@ -21,6 +21,7 @@ export interface FakePorts {
 	readonly vault: VaultPort
 	readonly workspace: WorkspacePort
 	readonly notifications: NotificationPort
+	readonly bus: EventBus
 }
 
 export function fakeModulePorts(): FakePorts {
@@ -31,5 +32,6 @@ export function fakeModulePorts(): FakePorts {
 		vault: bridge,
 		workspace: bridge,
 		notifications: bridge,
+		bus: createEventBus(),
 	}
 }

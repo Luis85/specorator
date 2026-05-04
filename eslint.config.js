@@ -267,6 +267,53 @@ export default defineConfig(
 		},
 	},
 
+	// Cross-module import ban — modules communicate through the EventBus only.
+	// Pattern 1: alias-path ban (@/modules/other-module/...)
+	// Pattern 2: relative-path ban (../other-module/...)
+	// Allows: @/modules/index, @/modules/module, ./intra-module-file
+	{
+		files: ['src/modules/**'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					patterns: [
+						{
+							regex: String.raw`@/modules/(?!(index|module)$)[^/]+/`,
+							message: 'Modules must not import sibling modules directly. Use the EventBus.',
+						},
+						{
+							regex: String.raw`\.\./[^/]+/`,
+							message: 'Modules must not import sibling modules directly. Use the EventBus.',
+						},
+					],
+				},
+			],
+		},
+	},
+
+	// Core layer — application/infrastructure boundary.
+	// Must not import obsidian, vue, pinia, src/plugin, or src/ui.
+	{
+		files: ['src/core/**'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					paths: [
+						{ name: 'obsidian', message: 'src/core must not import obsidian directly.' },
+						{ name: 'vue', message: 'src/core must not import vue.' },
+						{ name: 'pinia', message: 'src/core must not import pinia.' },
+					],
+					patterns: [
+						{ regex: String.raw`@/plugin/`, message: 'src/core must not import src/plugin.' },
+						{ regex: String.raw`@/ui/`, message: 'src/core must not import src/ui.' },
+					],
+				},
+			],
+		},
+	},
+
 	// UI layer — must not reach into infrastructure. Also runs in plain
 	// browser via the standalone build, so popout-window-only rules from
 	// the obsidianmd plugin don't apply here.

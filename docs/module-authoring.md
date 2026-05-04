@@ -1,0 +1,174 @@
+# Module Authoring Guide
+
+This guide explains how to add a bounded-context module to the plugin. A module is a self-contained feature area that declares its commands, views, settings fields, and locale messages in one descriptor, and receives all dependencies through a `ModulePorts` object.
+
+## When to create a module
+
+Create a module when you are adding a feature area that owns one or more of: Obsidian commands, a settings section, user-facing UI components, or cross-plugin lifecycle events.
+
+Shared utilities, value objects, and repository logic belong in `src/domain/` and `src/application/`, not in modules.
+
+## File layout
+
+```
+src/modules/
+  <module-name>/
+    <module-name>-events.ts    ← EventMap declaration merging
+    <module-name>-module.ts    ← module descriptor (default export or named)
+    SomeView.vue               ← Vue SFCs owned by this module
+```
+
+Conventions:
+- Directory: kebab-case (`hello`, `template-installer`, `workflow-nav`)
+- Module file: `<module-name>-module.ts`, exports a named const like `helloModule`
+- Events file: `<module-name>-events.ts`
+- SFCs: PascalCase (`HelloView.vue`, `TemplateForm.vue`)
+
+## Defining a module
+
+```typescript
+import './hello-events'
+import { defineModule } from '@/modules'
+
+export const helloModule = defineModule({
+  id: 'hello',                 // unique, kebab-case, used as command ID prefix
+
+  commands: [
+    {
+      id: 'hello:open-view',   // MUST be prefixed 'module-id:action'
+      name: 'Hello: Open view',
+      callback: () => undefined,
+    },
+  ],
+
+  views: [
+    { id: 'hello-view', label: 'Hello' },  // intent only — W4/W11 wire to router/Obsidian
+  ],
+
+  settingsSchema: {
+    fields: [
+      {
+        type: 'toggle',        // 'toggle' | 'text' | 'number' | 'dropdown'
+        key: 'showBadge',
+        label: 'Show badge',
+        default: true,
+      },
+    ],
+  },
+
+  messages: {
+    en: { 'hello.title': 'Hello from Specorator' },
+    de: { 'hello.title': 'Hallo von Specorator' },
+  },
+
+  init(ports, settings) {
+    // Called once on plugin load.
+    ports.bus.emit('hello:initialized', { moduleId: 'hello' })
+  },
+
+  onSettingsChange(next) {
+    // Called by PluginCore (W4) when settings change.
+  },
+
+  destroy() {
+    // Unsubscribe all bus listeners registered in init().
+  },
+})
+```
+
+## `ModulePorts`
+
+`init(ports, settings)` receives:
+
+| Field | Type | Use |
+|-------|------|-----|
+| `ports.settings` | `SettingsPort` | `getSettings()` / `saveSettings()` |
+| `ports.vault` | `VaultPort` | `readFile()`, `writeFile()`, etc. |
+| `ports.workspace` | `WorkspacePort` | `openFile()` |
+| `ports.notifications` | `NotificationPort` | `showNotice()` |
+| `ports.bus` | `EventBus` | cross-module events |
+
+## Vue SFC isolation
+
+- Use `<style scoped>` — no global selectors
+- Props and emits must be narrow and explicit
+- No sibling-module imports in `<script>` blocks — use the bus for cross-module events
+- All testable elements need `data-testid` attributes
+
+## Event channels
+
+Channels follow `<module-id>:<event-name>`:
+
+```typescript
+// hello-events.ts
+import type {} from '@/domain/shared/event-bus'
+declare module '@/domain/shared/event-bus' {
+  interface EventMap {
+    'hello:initialized': { moduleId: string }
+  }
+}
+```
+
+Import this as a side-effect in your module file: `import './hello-events'`.
+
+## When to use Vue emits vs. EventBus
+
+| Situation | Use |
+|-----------|-----|
+| Parent → child data | Vue props |
+| Child → parent notification | Vue `emit` |
+| Module A → Module B at runtime | EventBus |
+| Local UI state | `ref`/`reactive` or Pinia store |
+
+## Import path rules
+
+- **Within your module**: relative imports are fine (`./hello-events`, `./HelloView.vue`)
+- **Outside your module**: use the `@/` alias (`@/domain/shared/Result`, `@/modules`)
+- **Importing another module directly**: **forbidden** — ESLint will error. Use the EventBus.
+- **Never** use `../../` or deeper relative paths from inside `src/modules/`; use `@/` instead.
+
+## Registering a new module
+
+Add your module to `src/modules/index.ts`. The full file after adding `myModule` looks like:
+
+```typescript
+import type { ModuleDescriptor } from './module'
+import { helloModule } from './hello/hello-module'
+import { myModule } from './my-module/my-module-module'
+
+export { defineModule } from './module'
+export type {
+  ModuleDescriptor,
+  ModulePorts,
+  ModuleSettingsSchema,
+  SettingsFieldDescriptor,
+  ModuleCommandDescriptor,
+  ModuleViewIntent,
+} from './module'
+export { helloModule, myModule }
+
+export const ALL_MODULES: ReadonlyArray<ModuleDescriptor> = [helloModule, myModule]
+```
+
+Modules init in declaration order; teardown runs in reverse order.
+
+## Testing
+
+Follow ADR-009 conventions. Mirror path: `tests/modules/<module-name>/<module-name>-module.test.ts`.
+
+Use `fakeModulePorts()` from `tests/__fakes__/fake-ports.ts`:
+
+```typescript
+import { helloModule } from '@/modules/hello/hello-module'
+import { fakeModulePorts } from '../../__fakes__/fake-ports'
+
+it('emits hello:initialized on init', () => {
+  const ports = fakeModulePorts()
+  const received: Array<{ moduleId: string }> = []
+  ports.bus.on('hello:initialized', (env) => received.push(env.payload))
+  helloModule.init(ports, {})
+  expect(received).toHaveLength(1)
+})
+```
+
+For Vue component tests, co-locate a PageObject (e.g. `HelloView.po.ts`) and query exclusively by `data-testid`.
