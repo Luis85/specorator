@@ -116,7 +116,7 @@ Runs in **reverse topo order**:
 - Create `ObsidianBridge` (implements all five ports).
 - Import `ALL_MODULES`.
 - Instantiate `PluginCore(ALL_MODULES, bridge)`.
-- `onload()`: register view, ribbon, command, settings tab; call `await core.init(await this.loadData())`.
+- `onload()`: register view, ribbon, command, settings tab; call `await core.init(await this.loadData() ?? {})`. (`loadData()` returns `null` on fresh installs — the nullish fallback ensures `migrateSettings` always receives an object.)
 - `onunload()`: call `await core.destroy()`.
 
 View, ribbon icon, and settings tab registration remain in `main.ts` — they are Obsidian-specific and `PluginCore` must stay pure TypeScript.
