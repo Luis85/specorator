@@ -1,5 +1,5 @@
 import './hello-events'
-import { defineModule } from '@/modules'
+import { defineModule } from '@/modules/module'
 
 export const helloModule = defineModule({
   id: 'hello',
