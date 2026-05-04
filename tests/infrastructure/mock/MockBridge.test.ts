@@ -29,8 +29,9 @@ describe('MockBridge', () => {
 
   it('records notices', () => {
     const bridge = new MockBridge()
-    bridge.showNotice('Hello world')
+    bridge.showInfo('Hello world')
     expect(bridge.getNotices()[0].message).toBe('Hello world')
+    expect(bridge.getNotices()[0].severity).toBe('info')
   })
 
   it('tracks the last opened file', async () => {

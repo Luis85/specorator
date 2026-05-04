@@ -17,7 +17,17 @@ export class MockBridge
   private readonly files = new Map<string, string>()
   private readonly folders = new Set<string>()
   private settings: PluginSettings = { ...DEFAULT_SETTINGS }
-  private readonly noticeLog: { message: string; durationMs: number }[] = []
+  private readonly noticeLog: {
+    severity: 'error' | 'warning' | 'success' | 'info'
+    message: string
+    durationMs: number
+  }[] = []
+  readonly logEntries: Array<{
+    level: 'debug' | 'info' | 'warn' | 'error'
+    message: string
+    error?: unknown
+    context?: Record<string, unknown>
+  }> = []
   private openedFile: string | null = null
 
   constructor(initialFiles: Record<string, string> = {}) {
@@ -80,9 +90,24 @@ export class MockBridge
     this.openedFile = path
   }
 
-  showNotice(message: string, durationMs = 4000): void {
-    this.noticeLog.push({ message, durationMs })
-    console.info(`[MockBridge Notice] ${message}`)
+  showError(message: string, durationMs = 0): void {
+    this.noticeLog.push({ severity: 'error', message, durationMs })
+    console.error(`[MockBridge Notice:error] ${message}`)
+  }
+
+  showWarning(message: string, durationMs = 8000): void {
+    this.noticeLog.push({ severity: 'warning', message, durationMs })
+    console.warn(`[MockBridge Notice:warning] ${message}`)
+  }
+
+  showSuccess(message: string, durationMs = 4000): void {
+    this.noticeLog.push({ severity: 'success', message, durationMs })
+    console.info(`[MockBridge Notice:success] ${message}`)
+  }
+
+  showInfo(message: string, durationMs = 4000): void {
+    this.noticeLog.push({ severity: 'info', message, durationMs })
+    console.info(`[MockBridge Notice:info] ${message}`)
   }
 
   async getSettings(): Promise<PluginSettings> {
@@ -95,7 +120,11 @@ export class MockBridge
 
   // ── Test helpers ──────────────────────────────────────────────────────────
 
-  getNotices(): { message: string; durationMs: number }[] {
+  getNotices(): {
+    severity: 'error' | 'warning' | 'success' | 'info'
+    message: string
+    durationMs: number
+  }[] {
     return [...this.noticeLog]
   }
 
@@ -114,18 +143,22 @@ export class MockBridge
   // ── LoggerPort ────────────────────────────────────────────────────────────
 
   debug(message: string, context?: Record<string, unknown>): void {
+    this.logEntries.push({ level: 'debug', message, context })
     console.debug(`[MockBridge] ${message}`, context)
   }
 
   info(message: string, context?: Record<string, unknown>): void {
+    this.logEntries.push({ level: 'info', message, context })
     console.info(`[MockBridge] ${message}`, context)
   }
 
   warn(message: string, context?: Record<string, unknown>): void {
+    this.logEntries.push({ level: 'warn', message, context })
     console.warn(`[MockBridge] ${message}`, context)
   }
 
   error(message: string, error?: unknown, context?: Record<string, unknown>): void {
+    this.logEntries.push({ level: 'error', message, error, context })
     console.error(`[MockBridge] ${message}`, error, context)
   }
 }
