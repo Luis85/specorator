@@ -1,4 +1,4 @@
-import { trySync } from './tryAsync';
+import { tryAsync, trySync } from './tryAsync';
 
 // Intentionally empty so feature modules can add channels by declaration merging.
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
@@ -293,7 +293,11 @@ export function createEventBus<Events extends EventMap = EventMap>(
 		const snapshot = createSnapshot(channel);
 		await runBounded(
 			snapshot.map((entry) => async () => {
-				await entry.listener(envelope);
+				const result = await tryAsync(
+					() => Promise.resolve(entry.listener(envelope)),
+					'event listener failed',
+				);
+				if (!result.ok) reportListenerError(result.error, envelope);
 			}),
 			state.asyncConcurrency,
 		);

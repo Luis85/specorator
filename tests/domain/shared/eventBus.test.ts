@@ -287,6 +287,52 @@ describe('createEventBus', () => {
 		expect(received?.payload.value).toBe(7);
 	});
 
+	it('routes emitAsync listener failures to the listener error hook without rejecting the caller', async () => {
+		const errors: unknown[] = [];
+		const bus = createEventBus<TestEvents>({
+			onListenerError(error) {
+				errors.push(error);
+			},
+		});
+		const calls: string[] = [];
+
+		bus.on('alpha', async () => {
+			throw new Error('async listener failed');
+		});
+		bus.on('alpha', () => {
+			throw new Error('sync listener failed');
+		});
+		bus.on('alpha', () => {
+			calls.push('after-errors');
+		});
+
+		await expect(bus.emitAsync('alpha', { value: 1 })).resolves.toMatchObject({
+			channel: 'alpha',
+		});
+		expect(errors).toHaveLength(2);
+		expect(errors.every((e) => e instanceof Error)).toBe(true);
+		expect(calls).toEqual(['after-errors']);
+	});
+
+	it('keeps emitAsync dispatch isolated when the listener error hook fails', async () => {
+		const bus = createEventBus<TestEvents>({
+			onListenerError() {
+				throw new Error('reporting failed');
+			},
+		});
+		const calls: string[] = [];
+
+		bus.on('alpha', () => {
+			throw new Error('listener failed');
+		});
+		bus.on('alpha', () => {
+			calls.push('after-error-hook');
+		});
+
+		await expect(bus.emitAsync('alpha', { value: 1 })).resolves.toBeDefined();
+		expect(calls).toEqual(['after-error-hook']);
+	});
+
 	it('supports EventMap declaration merging', () => {
 		const bus = createEventBus();
 		let received: EventEnvelope<EventMap['merged']> | undefined;
