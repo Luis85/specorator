@@ -14,11 +14,18 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
-      include: ['src/domain/**', 'src/application/**', 'src/infrastructure/**'],
+      include: [
+        'src/domain/**',
+        'src/application/**',
+        'src/infrastructure/**',
+        'src/modules/**',
+        'src/core/**',
+      ],
       exclude: [
         'src/infrastructure/obsidian/**',
         '**/__fixtures__/**',
         'src/infrastructure/mock/fixtures.ts',
+        'src/modules/**/*.vue',
       ],
       thresholds: {
         statements: 80,
