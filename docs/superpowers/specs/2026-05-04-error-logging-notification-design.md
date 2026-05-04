@@ -214,7 +214,7 @@ export function toUserMessage(err: Error): string {
 | `onErrorCaptured` (in `ErrorBoundary.vue`) | Root component | Sync/async errors in child `setup()`, lifecycle hooks, template handlers, watchers |
 | `app.config.errorHandler` | Both entry points | Everything that bubbles past `onErrorCaptured`; terminal Vue error handler |
 | `window.addEventListener('unhandledrejection')` | Both entry points | Unhandled Promise rejections outside Vue's lifecycle — **must log + notify** (bypasses all Vue error handlers) |
-| `router.onError(handler)` | `src/ui/router.ts` | Navigation guard rejections — **must log + notify** (app may stay on previous route, ErrorBoundary never renders) |
+| `router.onError(handler)` | `src/ui/router/index.ts` | Navigation guard rejections — **must log + notify** (app may stay on previous route, ErrorBoundary never renders) |
 
 **`onErrorCaptured` vs `app.config.errorHandler` ordering:** `onErrorCaptured` in child components fires first. If the handler explicitly returns `false`, the error stops propagating and `app.config.errorHandler` is NOT called. If it returns `undefined` (implicit — the most common accidental bug), the error continues bubbling to the global handler, causing duplicate log entries. Always return `false` explicitly when the boundary handles the error.
 
@@ -277,7 +277,7 @@ window.addEventListener('unhandledrejection', onUnhandledRejection)
 // In src/ui/main.ts (standalone browser): no teardown needed — page lifetime = app lifetime.
 ```
 
-**`router.onError`** — wired in `src/ui/router.ts`:
+**`router.onError`** — wired in `src/ui/router/index.ts`:
 
 ```typescript
 router.onError((err) => {
@@ -330,7 +330,7 @@ Infrastructure (FeatureRepository) file-conflict guard:
 | Modified — wrap RouterView with ErrorBoundary | `src/ui/App.vue` |
 | Modified — app.config.errorHandler + unhandledrejection + provide LOGGER_PORT | `src/ui/main.ts` |
 | Modified — app.config.errorHandler + unhandledrejection (stored ref, removed in onClose) + provide LOGGER_PORT + getSettings getter + hideAllNotices on close | `src/plugin/SpecoratorView.ts` |
-| Modified — add router.onError | `src/ui/router.ts` |
+| Modified — add router.onError | `src/ui/router/index.ts` |
 | Modified — fix throw site, migrate to feedback.reportResult | `src/ui/composables/useSettings.ts` |
 | Modified — fix throw site, migrate to feedback.reportResult | `src/ui/components/feature/CreateFeatureForm.vue` |
 | Modified — fix throw site, migrate to feedback.reportResult | `src/ui/views/SettingsView.vue` |

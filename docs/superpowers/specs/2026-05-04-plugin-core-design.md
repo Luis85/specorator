@@ -116,7 +116,15 @@ Runs in **reverse topo order**:
 - Create `ObsidianBridge` (implements all five ports).
 - Import `ALL_MODULES`.
 - Instantiate `PluginCore(ALL_MODULES, bridge)`.
-- `onload()`: register view, ribbon, command, settings tab; call `await core.init(await this.loadData() ?? {})`. (`loadData()` returns `null` on fresh installs — the nullish fallback ensures `migrateSettings` always receives an object.)
+- `onload()`: register view, ribbon, command, settings tab; merge settings before handing to core:
+  ```ts
+  const raw = await this.loadData() ?? {}
+  // Merge with DEFAULT_SETTINGS so migrateSettings stub always receives a complete object.
+  // Also handles legacy key renames (e.g. featuresFolder → specsFolder) that the current
+  // main.ts applies before runtime use. migrateSettings (W7) will replace this merge.
+  const settings = { ...DEFAULT_SETTINGS, ...raw }
+  await core.init(settings)
+  ```
 - `onunload()`: Obsidian's `onunload()` is synchronous (`void` return). Call `void core.destroy()` — fire-and-forget. Teardown runs async after unload returns. Listener-leak checks and destroy errors are still logged via `LoggerPort`, but the host does not wait for them. This is an accepted limitation of Obsidian's lifecycle; there is no awaitable unload hook available.
 
 View, ribbon icon, and settings tab registration remain in `main.ts` — they are Obsidian-specific and `PluginCore` must stay pure TypeScript.
