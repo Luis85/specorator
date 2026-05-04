@@ -5,6 +5,7 @@ import type {
 	VaultPort,
 	WorkspacePort,
 	NotificationPort,
+	LoggerPort,
 } from '@/domain/ports'
 
 type FileManagerWithTrash = App['fileManager'] & {
@@ -12,7 +13,7 @@ type FileManagerWithTrash = App['fileManager'] & {
 }
 
 export class ObsidianBridge
-  implements SettingsPort, VaultPort, WorkspacePort, NotificationPort
+  implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort
 {
   constructor(
     private readonly app: App,
@@ -89,5 +90,24 @@ export class ObsidianBridge
   async saveSettings(settings: PluginSettings): Promise<void> {
     this.settings = { ...settings }
     await this.onSaveSettings(settings)
+  }
+
+  // ── LoggerPort ────────────────────────────────────────────────────────────
+
+  debug(message: string, context?: Record<string, unknown>): void {
+    console.debug(`[Specorator] ${message}`, context)
+  }
+
+  info(message: string, context?: Record<string, unknown>): void {
+    console.info(`[Specorator] ${message}`, context)
+  }
+
+  warn(message: string, context?: Record<string, unknown>): void {
+    console.warn(`[Specorator] ${message}`, context)
+  }
+
+  error(message: string, error?: unknown, context?: Record<string, unknown>): void {
+    console.error(`[Specorator] ${message}`, error, context)
+    new Notice(`Specorator error: ${message}`, 6000)
   }
 }

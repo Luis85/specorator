@@ -3,6 +3,7 @@ import type {
 	VaultPort,
 	WorkspacePort,
 	NotificationPort,
+	LoggerPort,
 } from '@/domain/ports'
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
@@ -10,7 +11,7 @@ const FILE_PREFIX = 'specorator:file:'
 const SETTINGS_KEY = 'specorator:settings'
 
 export class LocalStorageBridge
-	implements SettingsPort, VaultPort, WorkspacePort, NotificationPort
+	implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort
 {
   async readFile(path: string): Promise<string> {
     const value = localStorage.getItem(FILE_PREFIX + path)
@@ -86,5 +87,23 @@ export class LocalStorageBridge
 
   async saveSettings(settings: PluginSettings): Promise<void> {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+  }
+
+  // ── LoggerPort ────────────────────────────────────────────────────────────
+
+  debug(message: string, context?: Record<string, unknown>): void {
+    console.debug(`[Specorator] ${message}`, context)
+  }
+
+  info(message: string, context?: Record<string, unknown>): void {
+    console.info(`[Specorator] ${message}`, context)
+  }
+
+  warn(message: string, context?: Record<string, unknown>): void {
+    console.warn(`[Specorator] ${message}`, context)
+  }
+
+  error(message: string, error?: unknown, context?: Record<string, unknown>): void {
+    console.error(`[Specorator] ${message}`, error, context)
   }
 }
