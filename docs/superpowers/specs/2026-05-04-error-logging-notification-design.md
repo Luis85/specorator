@@ -1,7 +1,7 @@
 ---
 title: Unified Error Handling, Logging & Notification System
 date: 2026-05-04
-status: draft
+status: approved
 github_issue: https://github.com/Luis85/specorator/issues/155
 ---
 
