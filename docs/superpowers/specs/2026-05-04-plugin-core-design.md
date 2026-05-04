@@ -50,7 +50,7 @@ export interface LoggerPort {
 }
 ```
 
-All bridge implementations delegate to `console.*`. `ObsidianBridge` additionally fires an Obsidian `Notice` for `error`-level messages to surface them in the UI. No new constructor parameters are needed for any bridge — `LoggerPort` uses only `console` and `Notice`, both globally available.
+All bridge implementations default to `console.*` only. `LoggerPort` is strictly logging — no `NotificationPort` calls, no Obsidian `Notice`. User-facing error notifications are the exclusive responsibility of `NotificationPort`/`FeedbackService` (see `2026-05-04-error-logging-notification-design.md`).
 
 `MockBridge`'s `LoggerPort` implementation is a console delegate used in the standalone dev app. Unit tests in `plugin-core.test.ts` inject a separate `vi.fn()` spy object and do not exercise `MockBridge`'s logger methods — this is intentional; the bridge implementation is covered by the standalone dev app smoke path.
 
@@ -181,8 +181,16 @@ onListenerError: (error: unknown, envelope: EventEnvelope) => {
 - Create `ObsidianBridge` (implements all five ports including `LoggerPort`).
 - Import `ALL_MODULES`.
 - Instantiate `PluginCore(ALL_MODULES, bridge)`.
-- `onload()`: register view, ribbon, command, settings tab; call `await core.init(await this.loadData())`.
-- `onunload()`: call `await core.destroy()`.
+- `onload()`: register view, ribbon, command, settings tab; merge settings before handing to core:
+  ```ts
+  const raw = await this.loadData() ?? {}
+  // Merge with DEFAULT_SETTINGS so migrateSettings stub always receives a complete object.
+  // Also handles legacy key renames (e.g. featuresFolder → specsFolder) that the current
+  // main.ts applies before runtime use. migrateSettings (W7) will replace this merge.
+  const settings = { ...DEFAULT_SETTINGS, ...raw }
+  await core.init(settings)
+  ```
+- `onunload()`: Obsidian's `onunload()` is synchronous (`void` return). Call `void core.destroy()` — fire-and-forget. Teardown runs async after unload returns. Listener-leak checks and destroy errors are still logged via `LoggerPort`, but the host does not wait for them. This is an accepted limitation of Obsidian's lifecycle; there is no awaitable unload hook available.
 - Add `app.provide(LOGGER_PORT, bridge)` alongside the existing port provisions.
 
 View, ribbon icon, and settings tab registration remain in `main.ts` — they are Obsidian-specific and `PluginCore` must stay pure TypeScript.
