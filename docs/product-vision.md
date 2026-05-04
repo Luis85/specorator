@@ -74,7 +74,7 @@ v1 has no runtime dependency. It is the stable UI scaffold on which v2.0 is buil
 
 v2.0 connects the plugin to [`specorator-runtime`](https://github.com/Luis85/specorator-runtime), turning it into a live agentic cockpit.
 
-The user triggers a workflow session from the plugin. The runtime interprets the active workflow definition, resolves the task graph, and invokes agents from [`agentonomous`](https://github.com/Luis85/agentonomous) at each task. The plugin subscribes to the runtime's event stream and renders execution state in real time — which tasks are running, which agents are active, what outputs have been produced.
+The user triggers a workflow session from the plugin. The runtime interprets the active workflow definition, resolves the task graph (the ordered set of tasks derived from the workflow definition), and invokes agents from [`agentonomous`](https://github.com/Luis85/agentonomous) at each task. The plugin subscribes to the runtime's event stream and renders execution state in real time — which tasks are running, which agents are active, what outputs have been produced.
 
 All agent outputs arrive as proposals. The user reviews, edits, accepts, or rejects each one before it becomes a vault artifact. Nothing is silently applied.
 
