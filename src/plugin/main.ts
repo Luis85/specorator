@@ -9,21 +9,22 @@ import { ALL_MODULES } from '@/modules'
 export default class SpecoratorPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS }
   core: PluginCore | null = null
+  bridge: ObsidianBridge | null = null
 
   async onload(): Promise<void> {
     await this.loadSettings()
 
-    const bridge = new ObsidianBridge(
+    this.bridge = new ObsidianBridge(
       this.app,
       this.settings,
       (s) => this.updateSettings(s),
     )
     this.core = new PluginCore(ALL_MODULES, {
-      settings: bridge,
-      vault: bridge,
-      workspace: bridge,
-      notifications: bridge,
-      logger: bridge,
+      settings: this.bridge,
+      vault: this.bridge,
+      workspace: this.bridge,
+      notifications: this.bridge,
+      logger: this.bridge,
     })
     // Pass already-normalized settings (loadSettings() already called loadData() and merged).
     // Passing raw loadData() would bypass the featuresFolder→specsFolder migration in loadSettings().

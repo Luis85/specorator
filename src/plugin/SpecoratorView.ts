@@ -11,7 +11,6 @@ import {
   NOTIFICATION_PORT,
   LOGGER_PORT,
 } from '@/infrastructure/bridge/ports'
-import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
 import type SpecoratorPlugin from './main'
 
 export const VIEW_TYPE = 'specorator'
@@ -39,11 +38,7 @@ export class SpecoratorView extends ItemView {
       attr: { id: 'specorator-root', style: 'height:100%;overflow:auto;' },
     })
 
-    const bridge = new ObsidianBridge(
-      this.app,
-      this.plugin.settings,
-      (s) => this.plugin.updateSettings(s),
-    )
+    const bridge = this.plugin.bridge!
 
     setLocale(this.plugin.settings.locale as SupportedLocale)
 
