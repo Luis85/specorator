@@ -21,7 +21,7 @@ Specorator is one component in a four-part ecosystem. The plugin is the **user-f
 │         (UI cockpit — Obsidian, standalone browser)      │
 │   triggers sessions · subscribes to events · review UI   │
 └────────────────────┬────────────────────────────────────┘
-                     │ events / commands
+          commands / session triggers ↓ ↑ event stream
 ┌────────────────────▼────────────────────────────────────┐
 │                  specorator-runtime                      │
 │     execution engine · session model · event bus         │
@@ -38,7 +38,7 @@ Specorator is one component in a four-part ecosystem. The plugin is the **user-f
 
 | Component | Role |
 |---|---|
-| [`specorator-plugin`](https://github.com/Luis85/specorator) | UI layer. Obsidian plugin and standalone browser app. Triggers runtime sessions, subscribes to runtime events, presents execution state, and gives users the review and accept surface for agent outputs. |
+| [`specorator-plugin`](https://github.com/Luis85/specorator) | UI layer. Obsidian plugin and standalone browser app. In v1: surfaces workflow state, scaffolds artifacts, and runs quality checks without a runtime dependency. In v2.0: triggers runtime sessions, subscribes to runtime events, presents execution state, and gives users the review and accept surface for agent outputs. |
 | [`specorator-runtime`](https://github.com/Luis85/specorator-runtime) | Execution engine. Interprets workflow definitions, manages session lifecycle, invokes agents, emits typed events, and exposes queryable state. Published as an npm library consumed by the plugin. |
 | [`agentic-workflow`](https://github.com/Luis85/agentic-workflow) | Methodology and definitions. Stage model, templates, quality gates, and traceability conventions. Released versions are the source of truth for workflow structure. |
 | [`agentonomous`](https://github.com/Luis85/agentonomous) | Agent capabilities. TypeScript autonomous-agent library. Provides the agent implementations the runtime invokes — structured input/output contracts, cognition models. |
@@ -90,7 +90,7 @@ The user stays in Obsidian. The runtime and agents operate behind the plugin's U
 ## Principles
 
 - **Workflow first.** The plugin models the full workflow, not just note editing shortcuts.
-- **Local first.** v1 tooling works offline. v2.0 runtime runs locally; no hosted service required.
+- **Local first.** v1 tooling works offline. The runtime itself runs locally and requires no hosted Specorator service. LLM provider access for agents is user-configured and optional per the "LLM optional" principle.
 - **LLM optional.** v1 is fully productive without any LLM provider configured. v2.0 degrades gracefully when no provider is available.
 - **Inspectable state.** Users see the active stage, required artifacts, quality gates, blockers, and next actions — and in v2.0, live session state from the runtime.
 - **Deterministic upkeep.** Validation, linting, traceability checks, scaffolders, and repair helpers are exposed as normal plugin capabilities.
@@ -130,7 +130,7 @@ The plugin should make these capabilities available without requiring chat-based
 ## Non-Goals
 
 - Replacing Obsidian as the editing environment.
-- Requiring a single LLM provider or hosted service.
+- Requiring any specific LLM provider or any hosted Specorator service.
 - Hiding workflow artifacts behind opaque plugin state.
 - Automating human approval gates.
 - Turning the workflow into a generic project management board detached from specs.
@@ -155,7 +155,7 @@ The plugin should make these capabilities available without requiring chat-based
 | OQ-01 | Which workflow stages must be supported in the first usable v1 slice? |
 | OQ-02 | Which `agentic-workflow` scripts should become plugin commands first? |
 | OQ-03 | What vault health checks are mandatory before any agentic session is triggered? |
-| OQ-04 | How should the plugin communicate with `specorator-runtime` — direct npm import, local IPC, or CLI bridge? |
+| OQ-04 | Given the runtime is consumed as an npm library, does the Obsidian plugin require an IPC or worker-thread boundary to avoid blocking the UI thread during execution? |
 | OQ-05 | What is the minimum runtime event set the plugin must handle to render useful session state in v2.0? |
 | OQ-06 | Which `agentonomous` agents should be available in the first v2.0 session? |
 | OQ-07 | How should interrupted or failed runtime sessions be surfaced and recovered from in the UI? |
