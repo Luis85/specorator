@@ -43,10 +43,12 @@ const ports: ModulePorts = {
   bus: appBus,
 }
 
-void bootstrapModules(ALL_MODULES, ports, {}).then(() => {
-  app.provide(SETTINGS_PORT, bridge)
-  app.provide(VAULT_PORT, bridge)
-  app.provide(WORKSPACE_PORT, bridge)
-  app.provide(NOTIFICATION_PORT, bridge)
-  app.mount(mountPoint ?? '#app')
-})
+void bootstrapModules(ALL_MODULES, ports, {})
+  .then(() => {
+    app.provide(SETTINGS_PORT, bridge)
+    app.provide(VAULT_PORT, bridge)
+    app.provide(WORKSPACE_PORT, bridge)
+    app.provide(NOTIFICATION_PORT, bridge)
+    app.mount(mountPoint ?? '#app')
+  })
+  .catch(console.error)
