@@ -1,37 +1,47 @@
+import { vi } from 'vitest'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import type {
-	SettingsPort,
-	VaultPort,
-	WorkspacePort,
-	NotificationPort,
+  SettingsPort,
+  VaultPort,
+  WorkspacePort,
+  NotificationPort,
+  LoggerPort,
 } from '@/domain/ports'
 import { createEventBus } from '@/domain/shared/event-bus'
 import type { EventBus } from '@/domain/shared/event-bus'
 
 /**
  * Standard test seam: all four narrow ports backed by a single MockBridge
- * instance, plus a fresh EventBus.
+ * instance, plus a fresh EventBus and a vi.fn() spy LoggerPort.
  *
  * `bridge` is exposed so tests can inspect recorded notices and opened-file paths.
  * `bus` is exposed so tests can subscribe to events before calling module init.
+ * `logger` spies can be asserted on: `ports.logger.warn`, `ports.logger.error`, etc.
  */
 export interface FakePorts {
-	readonly bridge: MockBridge
-	readonly settings: SettingsPort
-	readonly vault: VaultPort
-	readonly workspace: WorkspacePort
-	readonly notifications: NotificationPort
-	readonly bus: EventBus
+  readonly settings: SettingsPort
+  readonly vault: VaultPort
+  readonly workspace: WorkspacePort
+  readonly notifications: NotificationPort
+  readonly logger: LoggerPort
+  readonly bus: EventBus
+  readonly bridge: MockBridge
 }
 
 export function fakeModulePorts(): FakePorts {
-	const bridge = new MockBridge()
-	return {
-		bridge,
-		settings: bridge,
-		vault: bridge,
-		workspace: bridge,
-		notifications: bridge,
-		bus: createEventBus(),
-	}
+  const bridge = new MockBridge()
+  return {
+    settings: bridge,
+    vault: bridge,
+    workspace: bridge,
+    notifications: bridge,
+    logger: {
+      debug: vi.fn(),
+      info:  vi.fn(),
+      warn:  vi.fn(),
+      error: vi.fn(),
+    },
+    bus: createEventBus(),
+    bridge,
+  }
 }

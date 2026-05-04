@@ -1,4 +1,4 @@
-import type { SettingsPort, VaultPort, WorkspacePort, NotificationPort } from '@/domain/ports'
+import type { SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort } from '@/domain/ports'
 import type { EventBus } from '@/domain/shared/event-bus'
 
 export interface SettingsFieldDescriptor {
@@ -30,6 +30,7 @@ export interface ModulePorts {
 	readonly vault: VaultPort
 	readonly workspace: WorkspacePort
 	readonly notifications: NotificationPort
+	readonly logger: LoggerPort
 	readonly bus: EventBus
 }
 

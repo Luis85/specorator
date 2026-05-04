@@ -5,6 +5,7 @@ import type {
 	VaultPort,
 	WorkspacePort,
 	NotificationPort,
+	LoggerPort,
 } from '@/domain/ports'
 
 type FileManagerWithTrash = App['fileManager'] & {
@@ -12,11 +13,11 @@ type FileManagerWithTrash = App['fileManager'] & {
 }
 
 export class ObsidianBridge
-  implements SettingsPort, VaultPort, WorkspacePort, NotificationPort
+  implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort
 {
   constructor(
     private readonly app: App,
-    private settings: PluginSettings,
+    private readonly settingsGetter: () => PluginSettings,
     private readonly onSaveSettings: (settings: PluginSettings) => Promise<void>,
   ) {}
 
@@ -83,11 +84,35 @@ export class ObsidianBridge
   }
 
   async getSettings(): Promise<PluginSettings> {
-    return { ...this.settings }
+    return { ...this.settingsGetter() }
   }
 
   async saveSettings(settings: PluginSettings): Promise<void> {
-    this.settings = { ...settings }
     await this.onSaveSettings(settings)
   }
+
+  // ── LoggerPort ────────────────────────────────────────────────────────────
+  // The obsidianmd plugin guidelines discourage console in plugin code, but
+  // structured logging via console is the correct implementation for a logger
+  // bridge; we suppress the rule for this section only.
+  /* eslint-disable obsidianmd/rule-custom-message */
+
+  debug(message: string, context?: Record<string, unknown>): void {
+    console.debug(`[Specorator] ${message}`, context)
+  }
+
+  info(message: string, context?: Record<string, unknown>): void {
+    console.info(`[Specorator] ${message}`, context)
+  }
+
+  warn(message: string, context?: Record<string, unknown>): void {
+    console.warn(`[Specorator] ${message}`, context)
+  }
+
+  error(message: string, error?: unknown, context?: Record<string, unknown>): void {
+    console.error(`[Specorator] ${message}`, error, context)
+    new Notice(`Specorator error: ${message}`, 6000)
+  }
+
+  /* eslint-enable obsidianmd/rule-custom-message */
 }
