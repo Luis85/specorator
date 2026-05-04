@@ -54,6 +54,8 @@ void bridge.getSettings()
     app.provide(NOTIFICATION_PORT, bridge)
     app.provide(LOGGER_PORT, bridge)
 
+    // Set errorHandler BEFORE mount() so initial render/setup errors flow through
+    // bridge.error()/showError() instead of escaping to console.
     app.config.errorHandler = (err, _instance, info) => {
       bridge.error(`[Vue] Unhandled error in ${info}`, err)
       bridge.showError('An unexpected error occurred. Check the console for details.')

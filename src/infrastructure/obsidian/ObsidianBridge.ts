@@ -26,7 +26,7 @@ export class ObsidianBridge
 
   constructor(
     private readonly app: App,
-    private readonly _getSettings: () => PluginSettings,
+    private readonly settingsGetter: () => PluginSettings,
     private readonly onSaveSettings: (settings: PluginSettings) => Promise<void>,
   ) {}
 
@@ -121,7 +121,7 @@ export class ObsidianBridge
   }
 
   async getSettings(): Promise<PluginSettings> {
-    return { ...this._getSettings() }
+    return { ...this.settingsGetter() }
   }
 
   async saveSettings(settings: PluginSettings): Promise<void> {
@@ -129,7 +129,7 @@ export class ObsidianBridge
   }
 
   private _shouldLog(level: 'debug' | 'info' | 'warn' | 'error'): boolean {
-    const configured = this._getSettings().logLevel
+    const configured = this.settingsGetter().logLevel
     return (
       (ObsidianBridge._LEVEL_RANK[level] ?? 0) >= (ObsidianBridge._LEVEL_RANK[configured] ?? 0)
     )

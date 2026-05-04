@@ -9,7 +9,7 @@ import { ALL_MODULES } from '@/modules'
 export default class SpecoratorPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS }
   core: PluginCore | null = null
-  private bridge: ObsidianBridge | null = null
+  bridge: ObsidianBridge | null = null
 
   async onload(): Promise<void> {
     await this.loadSettings()
