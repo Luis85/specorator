@@ -359,6 +359,8 @@ Open the PR created in Task 1 and confirm all commits from Chunks 2–5 appear i
 - Create: `docs/index.html` — static GitHub Pages product page
 - Create: PR `develop → demo` to publish
 
+**Branch:** Run all steps on the existing `feature/product-vision-refinement` branch (same branch as Chunks 1–5). Steps 1–6 commit to that branch; Step 7 opens a `develop → demo` PR *after* the feature branch has been merged to `develop` via the PR from Task 1.
+
 **Note:** The actual HTML product page does not yet exist (issue #22, Phase 4). This task implements it. Use the `frontend-design` skill when building `docs/index.html`.
 
 - [ ] **Step 1: Fix product-page-brief.md Section 4 ecosystem table**
@@ -426,15 +428,19 @@ Create `docs/index.html` — a static HTML product page with no build step, read
 - Must render correctly via `file://` (no relative path issues)
 - Obsidian-appropriate aesthetic: clean, dark-mode compatible, minimal
 
-**Use the `frontend-design` skill for this step.** Invoke it before writing any HTML.
+**Step 4a — Invoke `frontend-design` skill before writing any HTML.** This is not optional.
+
+**Step 4b — Write `docs/index.html`** following the skill's output and the content rules above.
 
 - [ ] **Step 5: Verify page renders correctly**
 
 Open `docs/index.html` directly in a browser (`file://`) and confirm:
 - All 9 sections render
-- No broken links within the page
+- All internal `#anchor` links resolve (every `href="#id"` must have a matching `id=` on a target element)
 - 4-component ecosystem table appears correctly
 - v1/v2.0 distinction is clear throughout
+
+For a more realistic check, also run: `npx serve docs/` and open `http://localhost:3000`
 
 - [ ] **Step 6: Commit the product page**
 
@@ -443,16 +449,38 @@ git add docs/index.html
 git commit -m "feat(product-page): add GitHub Pages product page (issue #22)"
 ```
 
-- [ ] **Step 7: Merge feature branch to develop, then open PR develop → demo**
+- [ ] **Step 7: Open PR develop → demo to publish**
 
-First ensure all chunks are merged into `develop` via the PR from Task 1. Then:
+Before opening this PR:
+1. Confirm the feature branch PR (Task 1) has been merged into `develop`.
+2. Verify GitHub Pages is configured to serve from the `docs/` folder on the `demo` branch (GitHub repo Settings → Pages → Source). If not configured, set it before merging.
+
+**On Linux/macOS or Git Bash (recommended):**
 
 ```bash
 gh pr create \
   --base demo \
   --head develop \
   --title "chore(demo): publish ecosystem vision update + product page" \
-  --body "$(cat <<'EOF'
+  --body "## What this publishes
+
+- Updated product vision (ecosystem-first restructure)
+- Updated product-page-brief, glossary, PRD, roadmap
+- New GitHub Pages product page (docs/index.html — issue #22)
+
+## Verify after merge
+
+- [ ] \`https://luis85.github.io/specorator/\` resolves and renders the product page
+- [ ] Ecosystem table shows all 4 components correctly
+- [ ] v1/v2.0 distinction is clear throughout"
+```
+
+**On Windows PowerShell:**
+
+```powershell
+gh pr create --base demo --head develop `
+  --title "chore(demo): publish ecosystem vision update + product page" `
+  --body @'
 ## What this publishes
 
 - Updated product vision (ecosystem-first restructure)
@@ -464,6 +492,5 @@ gh pr create \
 - [ ] `https://luis85.github.io/specorator/` resolves and renders the product page
 - [ ] Ecosystem table shows all 4 components correctly
 - [ ] v1/v2.0 distinction is clear throughout
-EOF
-)"
+'@
 ```
