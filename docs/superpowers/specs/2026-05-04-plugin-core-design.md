@@ -42,7 +42,7 @@ export interface LoggerPort {
 }
 ```
 
-All bridge implementations default to `console.*`. `ObsidianBridge` additionally fires an Obsidian `Notice` for `error`-level messages to surface them in the UI.
+All bridge implementations default to `console.*` only. `LoggerPort` is strictly logging — no `NotificationPort` calls, no Obsidian `Notice`. User-facing error notifications are the exclusive responsibility of `NotificationPort`/`FeedbackService` (see `2026-05-04-error-logging-notification-design.md`).
 
 ## Core Events (`core-events.ts`)
 
