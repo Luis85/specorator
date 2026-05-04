@@ -239,7 +239,9 @@ getNotices(): { severity: 'error' | 'warning' | 'success' | 'info'; message: str
 }
 ```
 
-- [ ] **Step 4.3: Update `LoggerPort` methods to append to `logEntries`**
+- [ ] **Step 4.3: Replace existing `LoggerPort` methods to append to `logEntries`**
+
+The `MockBridge` already has `debug`, `info`, `warn`, and `error` methods that only call `console.*`. Replace those four methods in the `// ── LoggerPort ──` section with versions that also append to `logEntries`:
 
 ```typescript
 debug(message: string, context?: Record<string, unknown>): void {
@@ -324,7 +326,7 @@ async saveSettings(settings: PluginSettings): Promise<void> {
 
 After making these changes, search the file for any remaining `this.settings` reads and replace with `this._getSettings()`. The `saveSettings` method no longer needs to update a local field — the getter reads the live value from the caller.
 
-- [ ] **Step 6.3: Add Notice tracking fields and methods**
+- [ ] **Step 6.2: Add Notice tracking fields and methods**
 
 ```typescript
 private readonly _activeNotices: Set<Notice> = new Set()
@@ -343,7 +345,7 @@ hideAllNotices(): void {
 }
 ```
 
-- [ ] **Step 6.4: Replace `showNotice` with four severity methods**
+- [ ] **Step 6.3: Replace `showNotice` with four severity methods**
 
 ```typescript
 showError(message: string, durationMs = 0): void {
@@ -363,7 +365,7 @@ showInfo(message: string, durationMs = 4000): void {
 }
 ```
 
-- [ ] **Step 6.5: Add level-filtering to `LoggerPort` methods + remove `new Notice` from `error()`**
+- [ ] **Step 6.4: Add level-filtering to `LoggerPort` methods + remove `new Notice` from `error()`**
 
 The existing `error()` calls `new Notice(...)` — remove it. Add level filtering to all four methods:
 
@@ -644,17 +646,22 @@ this._onUnhandledRejection = (event: PromiseRejectionEvent) => {
 }
 window.addEventListener('unhandledrejection', this._onUnhandledRejection)
 
-// router.onError — navigation failures may leave app on previous route
-router.onError((err) => {
-  bridge.error('[Router] Navigation error', err)
-  bridge.showError('Navigation failed. Please try again.')
+// router.onError — navigation failures may leave app on previous route.
+// Store cleanup fn; router is a module-level singleton so each onOpen() must
+// unregister its handler in onClose() to prevent accumulation.
+this._routerErrorCleanup = router.onError((err) => {
+  if (!this.bridge) return  // guard: view already closed
+  this.bridge.error('[Router] Navigation error', err)
+  this.bridge.showError('Navigation failed. Please try again.')
 })
 ```
 
-Add the instance field:
+Add the instance fields (add these to the class body alongside `vueApp`):
 
 ```typescript
+private bridge: ObsidianBridge | null = null
 private _onUnhandledRejection: ((e: PromiseRejectionEvent) => void) | null = null
+private _routerErrorCleanup: (() => void) | null = null
 ```
 
 - [ ] **Step 10.4: Update `onClose()` to clean up**
@@ -665,6 +672,8 @@ onClose(): Promise<void> {
     window.removeEventListener('unhandledrejection', this._onUnhandledRejection)
     this._onUnhandledRejection = null
   }
+  this._routerErrorCleanup?.()
+  this._routerErrorCleanup = null
   this.bridge?.hideAllNotices()
   this.vueApp?.unmount()
   this.vueApp = null
@@ -1321,55 +1330,90 @@ git commit -m "fix(ui): replace loadSettings throw with notify.showError"
 
 **Files:**
 - Modify: `src/ui/views/SettingsView.vue`
-- Modify: `tests/ui/views/SettingsView.test.ts` (add test)
+- Create: `tests/ui/views/SettingsView.po.ts` (new — no test file exists yet)
+- Create: `tests/ui/views/SettingsView.test.ts` (new — no test file exists yet)
 
 `handleSave` throws on `saveSettings` failure. Replace with explicit notification.
 
-- [ ] **Step 17.1: Add a failing test for the save error path**
-
-In `tests/ui/views/SettingsView.test.ts`, add:
+- [ ] **Step 17.1: Create the page object**
 
 ```typescript
-it('handleSave: calls notify.showError instead of throwing when saveSettings rejects', async () => {
-  const notify = { showError: vi.fn(), showWarning: vi.fn(), showSuccess: vi.fn(), showInfo: vi.fn() }
-  // mount with a saveSettings that rejects
-  const wrapper = mount(SettingsView, {
-    global: {
-      provide: {
-        [SETTINGS_PORT as symbol]: {
-          getSettings: () => Promise.resolve({ ...DEFAULT_SETTINGS }),
-          saveSettings: () => Promise.reject(new Error('write failed')),
+// tests/ui/views/SettingsView.po.ts
+import type { VueWrapper } from '@vue/test-utils'
+
+export class SettingsViewPO {
+  constructor(private readonly wrapper: VueWrapper) {}
+
+  get saveButton() {
+    return this.wrapper.get('[data-testid="settings-save"]')
+  }
+
+  async clickSave(): Promise<void> {
+    await this.saveButton.trigger('click')
+  }
+}
+```
+
+Note: `SettingsView.vue` does not currently have `data-testid="settings-save"` on its save button. You will add it in Step 17.3.
+
+- [ ] **Step 17.2: Create the failing test file**
+
+```typescript
+// tests/ui/views/SettingsView.test.ts
+import { mount, flushPromises } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
+import { createPinia } from 'pinia'
+import SettingsView from '@/ui/views/SettingsView.vue'
+import { i18n } from '@/ui/i18n'
+import { SETTINGS_PORT, NOTIFICATION_PORT } from '@/infrastructure/bridge/ports'
+import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
+import { SettingsViewPO } from './SettingsView.po'
+
+describe('SettingsView', () => {
+  it('handleSave: calls notify.showError instead of throwing when saveSettings rejects', async () => {
+    const notify = { showError: vi.fn(), showWarning: vi.fn(), showSuccess: vi.fn(), showInfo: vi.fn() }
+    const wrapper = mount(SettingsView, {
+      global: {
+        provide: {
+          [SETTINGS_PORT as symbol]: {
+            getSettings: () => Promise.resolve({ ...DEFAULT_SETTINGS }),
+            saveSettings: () => Promise.reject(new Error('write failed')),
+          },
+          [NOTIFICATION_PORT as symbol]: notify,
         },
-        [NOTIFICATION_PORT as symbol]: notify,
+        plugins: [createPinia(), i18n],
       },
-      plugins: [createPinia(), i18n],
-    },
+    })
+    await flushPromises()  // let onMounted(loadSettings) settle
+    const po = new SettingsViewPO(wrapper)
+    await po.clickSave()
+    await flushPromises()
+    expect(notify.showError).toHaveBeenCalledWith(expect.stringContaining('write failed'))
   })
-  const po = new SettingsViewPO(wrapper)
-  await po.clickSave()
-  expect(notify.showError).toHaveBeenCalledWith(expect.stringContaining('write failed'))
 })
 ```
 
-- [ ] **Step 17.2: Run test to verify it fails**
+- [ ] **Step 17.3: Run test to verify it fails**
 
 ```sh
 npx vitest run tests/ui/views/SettingsView.test.ts
 ```
 
-Expected: FAIL.
+Expected: FAIL — `SettingsView` still throws.
 
-- [ ] **Step 17.3: Fix `SettingsView.vue`**
+- [ ] **Step 17.4: Fix `SettingsView.vue`**
 
-Add `useNotificationPort` and `toUserMessage`; replace the throw:
+Add `useNotificationPort`, `toUserMessage`, and `data-testid` to save button:
 
 ```typescript
+// add to existing imports in <script setup>:
 import { useNotificationPort } from '../composables/useNotificationPort'
 import { toUserMessage } from '@/application/shared/errorMessages'
 
-// inside <script setup>:
+// inside <script setup> (after existing const declarations):
 const notify = useNotificationPort()
 
+// replace handleSave:
 async function handleSave() {
   saving.value = true
   const result = await tryAsync(() => saveSettings({ ...settings.value }))
@@ -1383,16 +1427,22 @@ async function handleSave() {
 }
 ```
 
-- [ ] **Step 17.4: Run test to verify it passes**
+Also add `data-testid="settings-save"` to the save `<AppButton>` in the template:
+
+```html
+<AppButton variant="primary" :loading="saving" data-testid="settings-save" @click="handleSave">
+```
+
+- [ ] **Step 17.5: Run test to verify it passes**
 
 ```sh
 npx vitest run tests/ui/views/SettingsView.test.ts
 ```
 
-- [ ] **Step 17.5: Commit**
+- [ ] **Step 17.6: Commit**
 
 ```sh
-git add src/ui/views/SettingsView.vue tests/ui/views/SettingsView.test.ts
+git add src/ui/views/SettingsView.vue tests/ui/views/SettingsView.po.ts tests/ui/views/SettingsView.test.ts
 git commit -m "fix(ui): replace handleSave throw with notify.showError"
 ```
 
@@ -1408,9 +1458,13 @@ git commit -m "fix(ui): replace handleSave throw with notify.showError"
 
 - [ ] **Step 18.1: Add a failing test for the submit error path**
 
-In `tests/ui/components/feature/CreateFeatureForm.test.ts`, add:
+In `tests/ui/components/feature/CreateFeatureForm.test.ts`, add inside the existing `describe('CreateFeatureForm', ...)` block. Existing imports at top of file (`mount`, `flushPromises`, `vi`, `i18n`, `CreateFeatureForm`, `CreateFeatureFormPageObject`) stay unchanged; only add the `NOTIFICATION_PORT` import:
 
 ```typescript
+// Add to existing imports:
+import { NOTIFICATION_PORT } from '@/infrastructure/bridge/ports'
+
+// Add inside describe block:
 it('handleSubmit: calls notify.showError instead of throwing when submitHandler rejects', async () => {
   const notify = { showError: vi.fn(), showWarning: vi.fn(), showSuccess: vi.fn(), showInfo: vi.fn() }
   const wrapper = mount(CreateFeatureForm, {
@@ -1418,15 +1472,14 @@ it('handleSubmit: calls notify.showError instead of throwing when submitHandler 
       submitHandler: () => Promise.reject(new Error('slug conflict')),
     },
     global: {
-      provide: {
-        [NOTIFICATION_PORT as symbol]: notify,
-      },
+      provide: { [NOTIFICATION_PORT as symbol]: notify },
       plugins: [i18n],
     },
   })
-  const po = new CreateFeatureFormPO(wrapper)
-  await po.fillTitle('My Feature')
+  const po = new CreateFeatureFormPageObject(wrapper)
+  await po.setTitle('My Feature')  // matches existing PO method name
   await po.submit()
+  await flushPromises()
   expect(notify.showError).toHaveBeenCalledWith(expect.stringContaining('slug conflict'))
 })
 ```
