@@ -73,7 +73,7 @@ Auto-dismissing errors are a named UX anti-pattern (Nielsen Norman Group, Carbon
 **Migration of existing `showNotice` call sites:**
 
 - `FeatureRepository` has 2 call sites (file-already-exists guards) → migrate to `NotificationPort.showInfo()`. The repository is infrastructure and continues to depend on `NotificationPort` alone (not `FeedbackService`). See §4.3.
-- `src/plugin/main.ts` `detectLegacyVaultLayout()` calls `new Notice(...)` directly, bypassing `NotificationPort` entirely. Migrate to `notificationPort.showWarning(...)` and add `src/plugin/main.ts` to the entry-point wiring that holds a port reference. This call site is also not tracked in the notice handle `Set` — it will orphan-leak on unload without this migration.
+- `src/plugin/main.ts` `detectLegacyVaultLayout()` calls `new Notice(...)` directly, bypassing `NotificationPort` entirely. Migrate to `notificationPort.showWarning(...)`. Currently `bridge` is a local variable inside `onload()` and `detectLegacyVaultLayout()` has no access to it — promote `bridge` to an instance field (`private bridge!: ObsidianBridge`) set at the top of `onload()` before any use. This also ensures `bridge.hideAllNotices()` can be called from `onunload()`. This call site is also not tracked in the notice handle `Set` — it will orphan-leak on unload without this migration.
 
 ### 4.2 `LoggerPort` — New 5th Narrow Port
 
@@ -98,7 +98,7 @@ export interface LoggerPort {
 
 **Composable:** `src/ui/composables/useLoggerPort.ts` already exists. No change needed.
 
-**`src/domain/ports/index.ts`:** Currently exports only the original four ports — `LoggerPort` is absent. Add `export type { LoggerPort }` alongside the existing re-exports.
+**`src/domain/ports/index.ts`:** Already exports `LoggerPort` (added in W4). No change needed.
 
 **`PluginSettings` extension** — additive, all existing fields preserved:
 
@@ -340,6 +340,7 @@ Infrastructure (FeatureRepository) file-conflict guard:
 | Modified — additive `logLevel` field | `src/domain/settings/PluginSettings.ts` |
 | Modified — add `export type { LoggerPort }` if not already present | `src/domain/ports/index.ts` |
 | **Already exists** — no change needed | `src/infrastructure/bridge/ports.ts` (LOGGER_PORT) |
+| **Already exists** — no change needed | `src/domain/ports/index.ts` (LoggerPort re-export added in W4) |
 | **Already exists** — no change needed | `src/ui/composables/useLoggerPort.ts` |
 | Updated — new severity methods; Notice handle tracking (`Set<Notice>` + `hideAllNotices()`); constructor snapshot → getter; remove `new Notice(...)` from `error()` | `src/infrastructure/obsidian/ObsidianBridge.ts` |
 | Updated — new severity methods + `severity` in `noticeLog`; add public `logEntries` field; implement `LoggerPort` | `src/infrastructure/mock/MockBridge.ts` |
@@ -348,7 +349,7 @@ Infrastructure (FeatureRepository) file-conflict guard:
 | New helper | `src/application/shared/errorMessages.ts` |
 | New component | `src/ui/components/ErrorBoundary.vue` |
 | Modified — wrap RouterView with ErrorBoundary; update `sp:notice` event consumer to destructure `severity` from event detail (note: severity-differentiated toast styling in `notificationStore`/`AppToast.vue` is **out of scope** — deferred to standalone UX spec) | `src/ui/App.vue` |
-| Modified — app.config.errorHandler + router.onError + unhandledrejection (named ref) + provide LOGGER_PORT + provide NOTIFICATION_PORT before mount | `src/ui/main.ts` |
+| Modified — add: `app.config.errorHandler`, `router.onError`, `unhandledrejection` handler (named ref, no teardown needed — page lifetime); `LOGGER_PORT` and `NOTIFICATION_PORT` already provided | `src/ui/main.ts` |
 | Modified — app.config.errorHandler + router.onError + unhandledrejection (named ref, removed in onClose) + provide LOGGER_PORT + getSettings getter + hideAllNotices on close | `src/plugin/SpecoratorView.ts` |
 | Modified — migrate `detectLegacyVaultLayout()` raw `new Notice(...)` to `notificationPort.showWarning()` | `src/plugin/main.ts` |
 | Modified — fix throw site, migrate to feedback.reportResult | `src/ui/composables/useSettings.ts` |
