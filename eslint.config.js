@@ -120,6 +120,7 @@ export default defineConfig(
 		ignores: [
 			'node_modules/',
 			'main.js',
+			'dist-plugin/',
 			'dist-standalone/',
 			'coverage/',
 			'.worktrees/',
