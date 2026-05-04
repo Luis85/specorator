@@ -2,12 +2,32 @@ import { Notice, Plugin, TFolder } from 'obsidian'
 import { SpecoratorView, VIEW_TYPE } from './SpecoratorView'
 import { SpecoratorSettingTab } from './settings'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
+import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
+import { PluginCore } from '@/core/plugin-core'
+import { ALL_MODULES } from '@/modules'
 
 export default class SpecoratorPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS }
+  core: PluginCore | null = null
 
   async onload(): Promise<void> {
     await this.loadSettings()
+
+    const bridge = new ObsidianBridge(
+      this.app,
+      this.settings,
+      (s) => this.updateSettings(s),
+    )
+    this.core = new PluginCore(ALL_MODULES, {
+      settings: bridge,
+      vault: bridge,
+      workspace: bridge,
+      notifications: bridge,
+      logger: bridge,
+    })
+    // Pass already-normalized settings (loadSettings() already called loadData() and merged).
+    // Passing raw loadData() would bypass the featuresFolder→specsFolder migration in loadSettings().
+    await this.core.init(this.settings as unknown as Record<string, unknown>)
 
     this.registerView(VIEW_TYPE, (leaf) => new SpecoratorView(leaf, this))
 
@@ -24,14 +44,13 @@ export default class SpecoratorPlugin extends Plugin {
     })
 
     this.addSettingTab(new SpecoratorSettingTab(this.app, this))
-
     this.detectLegacyVaultLayout()
   }
 
-  // Detach this plugin's custom view leaves when the plugin is disabled.
   // eslint-disable-next-line obsidianmd/detach-leaves
   override onunload(): void {
     this.app.workspace.detachLeavesOfType(VIEW_TYPE)
+    void this.core?.destroy()
   }
 
   async loadSettings(): Promise<void> {

@@ -135,7 +135,7 @@ describe('PluginCore degraded module handling', () => {
     const core = new PluginCore([a], ports)
 
     const received: Array<{ moduleId: string; error: Error }> = []
-    core.bus.on('core:module-degraded', (env) => received.push(env.payload))
+    core.bus.on('core:module-degraded', (env) => { received.push(env.payload) })
 
     await core.init({})
     expect(received).toEqual([{ moduleId: 'a', error: err }])
