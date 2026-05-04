@@ -211,8 +211,8 @@ export function toUserMessage(err: Error): string {
 |---|---|---|
 | `onErrorCaptured` (in `ErrorBoundary.vue`) | Root component | Sync/async errors in child `setup()`, lifecycle hooks, template handlers, watchers |
 | `app.config.errorHandler` | Both entry points | Everything that bubbles past `onErrorCaptured`; terminal Vue error handler |
-| `window.addEventListener('unhandledrejection')` | Both entry points | Unhandled Promise rejections outside Vue's lifecycle (Pinia actions, async utilities) |
-| `router.onError(handler)` | `src/ui/router.ts` | Navigation guard rejections (invisible to Vue error handlers) |
+| `window.addEventListener('unhandledrejection')` | Both entry points | Unhandled Promise rejections outside Vue's lifecycle — **must log + notify** (bypasses all Vue error handlers) |
+| `router.onError(handler)` | `src/ui/router.ts` | Navigation guard rejections — **must log + notify** (app may stay on previous route, ErrorBoundary never renders) |
 
 **`onErrorCaptured` vs `app.config.errorHandler` ordering:** `onErrorCaptured` in child components fires first. If the handler explicitly returns `false`, the error stops propagating and `app.config.errorHandler` is NOT called. If it returns `undefined` (implicit — the most common accidental bug), the error continues bubbling to the global handler, causing duplicate log entries. Always return `false` explicitly when the boundary handles the error.
 
@@ -266,6 +266,9 @@ app.config.errorHandler = (err, _instance, info) => {
 // cycles re-run this code; without removal, handlers accumulate and fire multiple times).
 const onUnhandledRejection = (event: PromiseRejectionEvent) => {
   loggingPort.error('[Unhandled rejection]', event.reason)
+  // Must notify — these rejections bypass Vue's error chain entirely (no onErrorCaptured,
+  // no app.config.errorHandler), so the user would otherwise see nothing.
+  notificationPort.showError('An unexpected error occurred. Check the console for details.')
 }
 window.addEventListener('unhandledrejection', onUnhandledRejection)
 // In SpecoratorView.onClose: window.removeEventListener('unhandledrejection', onUnhandledRejection)
@@ -277,7 +280,9 @@ window.addEventListener('unhandledrejection', onUnhandledRejection)
 ```typescript
 router.onError((err) => {
   loggingPort.error('[Router] Navigation error', err)
-  // No showError call here — ErrorBoundary already renders a fallback for failed routes.
+  // Must notify — navigation failures can leave the app on the previous route
+  // without rendering ErrorBoundary, so the user sees no visual feedback otherwise.
+  notificationPort.showError('Navigation failed. Please try again.')
 })
 ```
 
