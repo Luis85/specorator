@@ -656,10 +656,9 @@ this._routerErrorCleanup = router.onError((err) => {
 })
 ```
 
-Add the instance fields (add these to the class body alongside `vueApp`):
+Add these two instance fields to the class body alongside `vueApp` and the `bridge` field from Step 10.2:
 
 ```typescript
-private bridge: ObsidianBridge | null = null
 private _onUnhandledRejection: ((e: PromiseRejectionEvent) => void) | null = null
 private _routerErrorCleanup: (() => void) | null = null
 ```
