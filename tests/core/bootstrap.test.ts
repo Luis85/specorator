@@ -55,4 +55,37 @@ describe('bootstrapModules', () => {
 
     await expect(teardown()).resolves.toBeUndefined()
   })
+
+  it('rolls back initialized modules in reverse when a later init fails', async () => {
+    const destroyed: string[] = []
+    const ports = fakeModulePorts()
+    const a = makeModule('a', {
+      init: vi.fn(),
+      destroy: () => { destroyed.push('a') },
+    })
+    const b = makeModule('b', {
+      init: () => { throw new Error('b init failed') },
+      destroy: () => { destroyed.push('b') },
+    })
+
+    await expect(bootstrapModules([a, b], ports, {})).rejects.toThrow('b init failed')
+    expect(destroyed).toEqual(['a'])
+  })
+
+  it('continues teardown even when a destroy method throws', async () => {
+    const destroyed: string[] = []
+    const ports = fakeModulePorts()
+    const a = makeModule('a', {
+      init: vi.fn(),
+      destroy: () => { throw new Error('a destroy failed') },
+    })
+    const b = makeModule('b', {
+      init: vi.fn(),
+      destroy: () => { destroyed.push('b') },
+    })
+
+    const { teardown } = await bootstrapModules([a, b], ports, {})
+    await expect(teardown()).resolves.toBeUndefined()
+    expect(destroyed).toContain('b')
+  })
 })

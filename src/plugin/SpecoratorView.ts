@@ -12,6 +12,7 @@ import {
 } from '@/infrastructure/bridge/ports'
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
 import { createEventBus } from '@/domain/shared/event-bus'
+import { tryAsync } from '@/domain/shared/tryAsync'
 import { bootstrapModules, type BootstrappedModules } from '@/core/bootstrap'
 import { ALL_MODULES, type ModulePorts } from '@/modules'
 import type SpecoratorPlugin from './main'
@@ -82,11 +83,16 @@ export class SpecoratorView extends ItemView {
   }
 
   async onClose(): Promise<void> {
-    if (this.bootstrapped !== null) {
-      await this.bootstrapped.teardown()
-      this.bootstrapped = null
-    }
+    const teardownResult = this.bootstrapped !== null
+      ? await tryAsync(async () => {
+          await this.bootstrapped!.teardown()
+          this.bootstrapped = null
+        })
+      : null
     this.vueApp?.unmount()
     this.vueApp = null
+    if (teardownResult !== null && !teardownResult.ok) {
+      throw teardownResult.error
+    }
   }
 }

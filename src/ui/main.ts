@@ -43,7 +43,8 @@ const ports: ModulePorts = {
   bus: appBus,
 }
 
-void bootstrapModules(ALL_MODULES, ports, {})
+void bridge.getSettings()
+  .then((settings) => bootstrapModules(ALL_MODULES, ports, settings as unknown as Readonly<Record<string, unknown>>))
   .then(() => {
     app.provide(SETTINGS_PORT, bridge)
     app.provide(VAULT_PORT, bridge)

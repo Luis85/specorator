@@ -1,7 +1,14 @@
 import type { ModuleDescriptor, ModulePorts } from '@/modules'
+import { tryAsync } from '@/domain/shared/tryAsync'
 
 export interface BootstrappedModules {
   readonly teardown: () => Promise<void>
+}
+
+async function runDestroy(mod: ModuleDescriptor): Promise<void> {
+  if (mod.destroy !== undefined) {
+    await tryAsync(() => Promise.resolve(mod.destroy!()))
+  }
 }
 
 export async function bootstrapModules(
@@ -9,15 +16,21 @@ export async function bootstrapModules(
   ports: ModulePorts,
   settings: Readonly<Record<string, unknown>>,
 ): Promise<BootstrappedModules> {
+  const initialized: ModuleDescriptor[] = []
   for (const mod of modules) {
-    await Promise.resolve(mod.init(ports, settings))
+    const result = await tryAsync(() => Promise.resolve(mod.init(ports, settings)))
+    if (!result.ok) {
+      for (const m of [...initialized].reverse()) {
+        await runDestroy(m)
+      }
+      throw result.error
+    }
+    initialized.push(mod)
   }
   return {
     teardown: async () => {
       for (const mod of [...modules].reverse()) {
-        if (mod.destroy !== undefined) {
-          await Promise.resolve(mod.destroy())
-        }
+        await runDestroy(mod)
       }
     },
   }
