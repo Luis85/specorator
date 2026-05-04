@@ -118,8 +118,10 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 
 **Error serialization:** When `err` is provided to `error()`, log both `err.message` and `err.stack`. `JSON.stringify(new Error(...))` produces `{}` — implementations must never rely on JSON serialization of `Error` objects. Call `console.error(message, err)` to preserve the full stack trace in DevTools.
 
+**`LoggerPort` is strictly logging-only — no notification side effects:** No `LoggerPort` implementation may call `NotificationPort` or show an Obsidian `Notice`. Notifications are exclusively the responsibility of `NotificationPort` and `FeedbackService`. `plugin-core-design.md` describes `ObsidianBridge` additionally firing an Obsidian `Notice` for error-level log messages — that behaviour is superseded by this spec. Implementing it would cause double notification whenever `FeedbackService.reportResult` (or any caller) calls both `log.error()` and `notify.showError()` for the same event, violating the "log + notify exactly once" invariant.
+
 **Implementation notes:**
-- `ObsidianBridge`: Constructor signature changes from receiving a settings snapshot to `getSettings: () => PluginSettings`. `SpecoratorView.ts` passes `() => this.settings`. Wraps `console.*`. Calls `getSettings().logLevel` at each invocation. Suppresses calls below the configured level. Prefixes all output with `[Specorator]`.
+- `ObsidianBridge`: Constructor signature changes from receiving a settings snapshot to `getSettings: () => PluginSettings`. `SpecoratorView.ts` passes `() => this.settings`. Wraps `console.*` only — no `Notice` calls. Calls `getSettings().logLevel` at each invocation. Suppresses calls below the configured level. Prefixes all output with `[Specorator]`.
 - `MockBridge`: Hardcodes `logLevel = 'debug'`. Appends to `logEntries: Array<{ level: LogLevel; message: string; error?: unknown; context?: Record<string, unknown> }>` for test assertions. No contract test file — assertions live inline in MockBridge-specific tests.
 - `LocalStorageBridge`: Hardcodes `logLevel = 'debug'`. Wraps `console.*`. Prefixes with `[Specorator]`.
 
