@@ -96,7 +96,9 @@ export interface LoggerPort {
 
 **InjectionKey:** `LOGGER_PORT: InjectionKey<LoggerPort>` already exists in `src/infrastructure/bridge/ports.ts`. No change needed.
 
-**Composable:** `src/ui/composables/useLoggerPort.ts` already exists. No change needed. Verify `src/domain/ports/index.ts` re-exports `LoggerPort` — add `export type { LoggerPort }` if missing.
+**Composable:** `src/ui/composables/useLoggerPort.ts` already exists. No change needed.
+
+**`src/domain/ports/index.ts`:** Currently exports only the original four ports — `LoggerPort` is absent. Add `export type { LoggerPort }` alongside the existing re-exports.
 
 **`PluginSettings` extension** — additive, all existing fields preserved:
 
@@ -123,7 +125,7 @@ constructor(
 )
 ```
 
-`SpecoratorView.ts` passes `() => this.plugin.settings`; `src/plugin/main.ts` passes `() => this.settings`. All logging calls read `this.getSettings().logLevel` at invocation time. `getSettings` also replaces all reads of `this.settings` in `SettingsPort` methods.
+`SpecoratorView.ts` currently passes `this.plugin.settings` (snapshot) — change to `() => this.plugin.settings`. `src/plugin/main.ts` currently passes `this.settings` (snapshot) — change to `() => this.settings`. All logging calls read `this.getSettings().logLevel` at invocation time. `getSettings` also replaces all reads of `this.settings` in `SettingsPort` methods.
 
 **Console prefix:** Every log line from `ObsidianBridge` is prefixed with `[Specorator]`. Multiple plugins share the Obsidian DevTools console — without a prefix, log output is indistinguishable from other plugins.
 
@@ -229,7 +231,7 @@ export function toUserMessage(err: Error): string {
 | `onErrorCaptured` (in `ErrorBoundary.vue`) | Root component | Sync/async errors in child `setup()`, lifecycle hooks, template handlers, watchers |
 | `app.config.errorHandler` | Both entry points | Everything that bubbles past `onErrorCaptured`; terminal Vue error handler |
 | `window.addEventListener('unhandledrejection')` | Both entry points | Unhandled Promise rejections outside Vue's lifecycle — **must log + notify** (bypasses all Vue error handlers) |
-| `router.onError(handler)` | `src/ui/router/index.ts` | Navigation guard rejections — **must log + notify** (app may stay on previous route, ErrorBoundary never renders) |
+| `router.onError(handler)` | Both entry points (`src/ui/main.ts`, `src/plugin/SpecoratorView.ts`) | Navigation guard rejections — **must log + notify** (app may stay on previous route, ErrorBoundary never renders) |
 
 **`onErrorCaptured` vs `app.config.errorHandler` ordering:** `onErrorCaptured` in child components fires first. If the handler explicitly returns `false`, the error stops propagating and `app.config.errorHandler` is NOT called. If it returns `undefined` (implicit — the most common accidental bug), the error continues bubbling to the global handler, causing duplicate log entries. Always return `false` explicitly when the boundary handles the error.
 
@@ -345,7 +347,7 @@ Infrastructure (FeatureRepository) file-conflict guard:
 | New service | `src/application/shared/FeedbackService.ts` |
 | New helper | `src/application/shared/errorMessages.ts` |
 | New component | `src/ui/components/ErrorBoundary.vue` |
-| Modified — wrap RouterView with ErrorBoundary; update `sp:notice` event consumer to destructure `severity` | `src/ui/App.vue` |
+| Modified — wrap RouterView with ErrorBoundary; update `sp:notice` event consumer to destructure `severity` from event detail (note: severity-differentiated toast styling in `notificationStore`/`AppToast.vue` is **out of scope** — deferred to standalone UX spec) | `src/ui/App.vue` |
 | Modified — app.config.errorHandler + router.onError + unhandledrejection (named ref) + provide LOGGER_PORT + provide NOTIFICATION_PORT before mount | `src/ui/main.ts` |
 | Modified — app.config.errorHandler + router.onError + unhandledrejection (named ref, removed in onClose) + provide LOGGER_PORT + getSettings getter + hideAllNotices on close | `src/plugin/SpecoratorView.ts` |
 | Modified — migrate `detectLegacyVaultLayout()` raw `new Notice(...)` to `notificationPort.showWarning()` | `src/plugin/main.ts` |
