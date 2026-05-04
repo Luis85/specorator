@@ -19,7 +19,9 @@ export class FeedbackService {
 	): Result<T> {
 		if (result.ok) {
 			this.log.info(context.operation, { ...context.logContext, success: true })
-			if (context.successMessage) this.notify.showSuccess(context.successMessage)
+			if (context.successMessage !== undefined && context.successMessage.length > 0) {
+				this.notify.showSuccess(context.successMessage)
+			}
 		} else {
 			this.log.error(context.operation, result.error, context.logContext)
 			this.notify.showError(`${context.errorLabel}: ${toUserMessage(result.error)}`)

@@ -1,4 +1,4 @@
-import { DOMWrapper } from '@vue/test-utils'
+import type { DOMWrapper } from '@vue/test-utils'
 
 export class ErrorBoundaryPO {
 	constructor(private readonly wrapper: { find: (sel: string) => DOMWrapper<Element> }) {}

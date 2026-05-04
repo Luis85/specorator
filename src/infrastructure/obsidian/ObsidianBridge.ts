@@ -22,7 +22,7 @@ export class ObsidianBridge
     error: 3,
   }
 
-  private readonly _activeNotices: Set<Notice> = new Set()
+  private readonly _activeNotices = new Set<Notice>()
 
   constructor(
     private readonly app: App,
