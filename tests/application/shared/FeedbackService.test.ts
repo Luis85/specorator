@@ -19,7 +19,7 @@ function makeFakeNotify(): NotificationPort {
 function ok<T>(value: T): Result<T> {
 	return { ok: true, value }
 }
-function err(message: string): Result<never> {
+function err(message: string): { ok: false; error: Error } {
 	return { ok: false, error: new Error(message) }
 }
 
