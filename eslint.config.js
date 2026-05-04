@@ -435,6 +435,12 @@ export default defineConfig(
 			'@typescript-eslint/no-floating-promises': 'off',
 			'@typescript-eslint/only-throw-error': 'off',
 			'@typescript-eslint/require-await': 'off',
+			// Vitest's expect(spy.method).toHaveBeenCalled() pattern requires
+			// passing method references that are vi.fn() mocks, not real class
+			// methods; the unbound-method warning is a false positive here.
+			'@typescript-eslint/unbound-method': 'off',
+			// Empty arrow functions are used as no-op stubs in test fixtures.
+			'@typescript-eslint/no-empty-function': 'off',
 			'no-restricted-globals': 'off',
 			'no-restricted-imports': 'off',
 			complexity: 'off',

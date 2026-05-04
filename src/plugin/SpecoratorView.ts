@@ -30,7 +30,7 @@ export class SpecoratorView extends ItemView {
   getDisplayText(): string { return 'Specorator' }
   getIcon(): string { return 'layout-dashboard' }
 
-  async onOpen(): Promise<void> {
+  onOpen(): Promise<void> {
     const container = this.containerEl.children[1] as HTMLElement
     container.empty()
 
@@ -57,10 +57,12 @@ export class SpecoratorView extends ItemView {
     this.vueApp.provide(NOTIFICATION_PORT, bridge)
     this.vueApp.provide(LOGGER_PORT, bridge)
     this.vueApp.mount(mountPoint)
+    return Promise.resolve()
   }
 
-  async onClose(): Promise<void> {
+  onClose(): Promise<void> {
     this.vueApp?.unmount()
     this.vueApp = null
+    return Promise.resolve()
   }
 }

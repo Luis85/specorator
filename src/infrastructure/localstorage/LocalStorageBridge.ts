@@ -90,6 +90,9 @@ export class LocalStorageBridge
   }
 
   // ── LoggerPort ────────────────────────────────────────────────────────────
+  // Console is the only output channel available in a browser-only bridge;
+  // the obsidianmd/rule-custom-message (no-console) ban does not apply here.
+  /* eslint-disable obsidianmd/rule-custom-message */
 
   debug(message: string, context?: Record<string, unknown>): void {
     console.debug(`[Specorator] ${message}`, context)
@@ -106,4 +109,6 @@ export class LocalStorageBridge
   error(message: string, error?: unknown, context?: Record<string, unknown>): void {
     console.error(`[Specorator] ${message}`, error, context)
   }
+
+  /* eslint-enable obsidianmd/rule-custom-message */
 }

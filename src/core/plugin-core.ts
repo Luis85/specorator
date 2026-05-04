@@ -41,6 +41,7 @@ function validateModules(modules: ReadonlyArray<ModuleDescriptor>): void {
   }
 }
 
+// eslint-disable-next-line complexity
 function topoSort(modules: ReadonlyArray<ModuleDescriptor>): ModuleDescriptor[] {
   const inDegree = new Map<string, number>()
   const adj = new Map<string, string[]>() // dep → dependants
@@ -113,6 +114,7 @@ export class PluginCore {
       ...busOptions,
       onListenerError: (error: unknown, envelope: EventEnvelope) => {
         const { channel, eventId, traceId } = envelope // payload never accessed
+        // eslint-disable-next-line no-restricted-syntax
         try {
           ports.logger.error('event listener error', error, { channel, eventId, traceId })
         } catch {
@@ -144,11 +146,13 @@ export class PluginCore {
       const subscribedCount = this.bus.listenerCount()
       this.leakMap.set(mod.id, 0) // initialise before init so destroy skips it if init fails
 
+      // eslint-disable-next-line no-restricted-syntax
       try {
         await Promise.resolve(mod.init(modulePorts, settings))
         this.leakMap.set(mod.id, this.bus.listenerCount() - subscribedCount)
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err))
+        // eslint-disable-next-line no-restricted-syntax
         try { await Promise.resolve(mod.destroy?.()) } catch { /* ignore */ }
         // Push before emit so getter is consistent when event fires
         this._degradedModules.push({ id: mod.id, error })
@@ -169,6 +173,7 @@ export class PluginCore {
     for (const mod of toDestroy) {
       const beforeCount = this.bus.listenerCount()
 
+      // eslint-disable-next-line no-restricted-syntax
       try {
         await Promise.resolve(mod.destroy?.())
       } catch (err) {

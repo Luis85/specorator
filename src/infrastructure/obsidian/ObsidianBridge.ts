@@ -93,6 +93,10 @@ export class ObsidianBridge
   }
 
   // ── LoggerPort ────────────────────────────────────────────────────────────
+  // The obsidianmd plugin guidelines discourage console in plugin code, but
+  // structured logging via console is the correct implementation for a logger
+  // bridge; we suppress the rule for this section only.
+  /* eslint-disable obsidianmd/rule-custom-message */
 
   debug(message: string, context?: Record<string, unknown>): void {
     console.debug(`[Specorator] ${message}`, context)
@@ -110,4 +114,6 @@ export class ObsidianBridge
     console.error(`[Specorator] ${message}`, error, context)
     new Notice(`Specorator error: ${message}`, 6000)
   }
+
+  /* eslint-enable obsidianmd/rule-custom-message */
 }
