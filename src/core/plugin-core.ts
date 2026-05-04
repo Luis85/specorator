@@ -153,7 +153,7 @@ export class PluginCore {
     for (const mod of this.sorted) {
       // Skip modules whose declared prerequisites have been degraded
       const degradedDep = (mod.dependsOn ?? []).find((id) => degradedIds.has(id))
-      if (degradedDep != null) {
+      if (degradedDep !== undefined) {
         const error = new Error(`prerequisite module degraded: "${degradedDep}"`)
         this._degradedModules.push({ id: mod.id, error })
         this.bus.emit('core:module-degraded', { moduleId: mod.id, error })
