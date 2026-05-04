@@ -17,7 +17,7 @@ export class ObsidianBridge
 {
   constructor(
     private readonly app: App,
-    private settings: PluginSettings,
+    private readonly settingsGetter: () => PluginSettings,
     private readonly onSaveSettings: (settings: PluginSettings) => Promise<void>,
   ) {}
 
@@ -84,11 +84,10 @@ export class ObsidianBridge
   }
 
   async getSettings(): Promise<PluginSettings> {
-    return { ...this.settings }
+    return { ...this.settingsGetter() }
   }
 
   async saveSettings(settings: PluginSettings): Promise<void> {
-    this.settings = { ...settings }
     await this.onSaveSettings(settings)
   }
 

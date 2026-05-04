@@ -16,7 +16,7 @@ export default class SpecoratorPlugin extends Plugin {
 
     this.bridge = new ObsidianBridge(
       this.app,
-      this.settings,
+      () => this.settings,
       (s) => this.updateSettings(s),
     )
     this.core = new PluginCore(ALL_MODULES, {
