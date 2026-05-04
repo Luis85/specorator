@@ -16,6 +16,7 @@ import {
   VAULT_PORT,
   WORKSPACE_PORT,
   NOTIFICATION_PORT,
+  LOGGER_PORT,
 } from '@/infrastructure/bridge/ports'
 import { LocalStorageBridge } from '@/infrastructure/localstorage/LocalStorageBridge'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
@@ -40,6 +41,7 @@ const ports: ModulePorts = {
   vault: bridge,
   workspace: bridge,
   notifications: bridge,
+  logger: bridge,
   bus: appBus,
 }
 
@@ -50,6 +52,7 @@ void bridge.getSettings()
     app.provide(VAULT_PORT, bridge)
     app.provide(WORKSPACE_PORT, bridge)
     app.provide(NOTIFICATION_PORT, bridge)
+    app.provide(LOGGER_PORT, bridge)
     app.mount(mountPoint ?? '#app')
   })
   .catch(console.error)
