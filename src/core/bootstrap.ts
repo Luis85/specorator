@@ -20,6 +20,7 @@ export async function bootstrapModules(
   for (const mod of modules) {
     const result = await tryAsync(() => Promise.resolve(mod.init(ports, settings)))
     if (!result.ok) {
+      await runDestroy(mod)
       for (const m of [...initialized].reverse()) {
         await runDestroy(m)
       }

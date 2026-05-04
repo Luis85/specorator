@@ -56,7 +56,7 @@ describe('bootstrapModules', () => {
     await expect(teardown()).resolves.toBeUndefined()
   })
 
-  it('rolls back initialized modules in reverse when a later init fails', async () => {
+  it('rolls back failing module then initialized modules in reverse when init fails', async () => {
     const destroyed: string[] = []
     const ports = fakeModulePorts()
     const a = makeModule('a', {
@@ -69,7 +69,7 @@ describe('bootstrapModules', () => {
     })
 
     await expect(bootstrapModules([a, b], ports, {})).rejects.toThrow('b init failed')
-    expect(destroyed).toEqual(['a'])
+    expect(destroyed).toEqual(['b', 'a'])
   })
 
   it('continues teardown even when a destroy method throws', async () => {
