@@ -148,7 +148,19 @@ export class PluginCore {
     const modulePorts: ModulePorts = { ...this.ports, bus: this.bus }
 
     // Step 5: init each module
+    const degradedIds = new Set<string>()
+
     for (const mod of this.sorted) {
+      // Skip modules whose declared prerequisites have been degraded
+      const degradedDep = (mod.dependsOn ?? []).find((id) => degradedIds.has(id))
+      if (degradedDep != null) {
+        const error = new Error(`prerequisite module degraded: "${degradedDep}"`)
+        this._degradedModules.push({ id: mod.id, error })
+        this.bus.emit('core:module-degraded', { moduleId: mod.id, error })
+        degradedIds.add(mod.id)
+        continue
+      }
+
       const subscribedCount = this.bus.listenerCount()
       this.leakMap.set(mod.id, 0) // initialise before init so destroy skips it if init fails
 
@@ -163,6 +175,7 @@ export class PluginCore {
         // Push before emit so getter is consistent when event fires
         this._degradedModules.push({ id: mod.id, error })
         this.bus.emit('core:module-degraded', { moduleId: mod.id, error })
+        degradedIds.add(mod.id)
       }
     }
 

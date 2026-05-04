@@ -154,7 +154,31 @@ describe('PluginCore degraded module handling', () => {
     expect(degradedCount).toBe(1)
   })
 
-  it('skips degraded modules during destroy', async () => {
+  it('skips dependent modules when a prerequisite is degraded', async () => {
+    const ports = makePorts()
+    const a = makeModule('a', { init: () => { throw new Error('a boom') } })
+    const b = makeModule('b', { dependsOn: ['a'], init: vi.fn() })
+    const core = new PluginCore([a, b], ports)
+
+    await core.init({})
+    expect(b.init).not.toHaveBeenCalled()
+    expect(core.degradedModules.map((d) => d.id)).toEqual(['a', 'b'])
+  })
+
+  it('emits core:module-degraded for each cascaded dependent', async () => {
+    const ports = makePorts()
+    const a = makeModule('a', { init: () => { throw new Error('root fail') } })
+    const b = makeModule('b', { dependsOn: ['a'], init: vi.fn() })
+    const core = new PluginCore([a, b], ports)
+
+    const events: string[] = []
+    core.bus.on('core:module-degraded', (env) => { events.push(env.payload.moduleId) })
+
+    await core.init({})
+    expect(events).toEqual(['a', 'b'])
+  })
+
+  it('does not abort other modules when one fails init', async () => {
     const destroySpy = vi.fn()
     const ports = makePorts()
     const a = makeModule('a', { init: () => { throw new Error('boom') }, destroy: destroySpy })
