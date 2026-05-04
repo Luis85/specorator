@@ -17,6 +17,8 @@ describe('helloModule', () => {
   })
 
   it('has no destroy method (no bus subscriptions to clean up)', () => {
-    expect(helloModule.destroy).toBeUndefined()
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const { destroy } = helloModule
+    expect(destroy).toBeUndefined()
   })
 })

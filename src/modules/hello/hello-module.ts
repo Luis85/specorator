@@ -3,7 +3,7 @@ import { defineModule } from '@/modules'
 
 export const helloModule = defineModule({
   id: 'hello',
-  commands: [{ id: 'hello:open-view', name: 'Hello: Open view', callback: () => {} }],
+  commands: [{ id: 'hello:open-view', name: 'Hello: Open view', callback: () => undefined }],
   views: [{ id: 'hello-view', label: 'Hello' }],
   settingsSchema: {
     fields: [{ type: 'toggle', key: 'showBadge', label: 'Show badge', default: true }],
