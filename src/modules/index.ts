@@ -1,3 +1,6 @@
+import type { ModuleDescriptor } from './module'
+import { helloModule } from './hello/hello-module'
+
 export { defineModule } from './module'
 export type {
   ModuleDescriptor,
@@ -7,3 +10,6 @@ export type {
   ModuleCommandDescriptor,
   ModuleViewIntent,
 } from './module'
+export { helloModule }
+
+export const ALL_MODULES: ReadonlyArray<ModuleDescriptor> = [helloModule]
