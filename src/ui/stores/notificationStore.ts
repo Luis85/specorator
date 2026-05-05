@@ -17,7 +17,8 @@ export const useNotificationStore = defineStore('notifications', () => {
     notices.value.push({ id, message, durationMs })
     // durationMs <= 0 means sticky (matches Obsidian Notice convention used by
     // showError). Without this guard, setTimeout(0) would remove the notice on
-    // the next tick, hiding error feedback.
+    // the next tick, hiding error feedback. Sticky notices are dismissed via
+    // dismissNotice(id) — bound to the click handler in AppToast.
     if (durationMs > 0) {
       setTimeout(() => {
         notices.value = notices.value.filter((n) => n.id !== id)
@@ -25,5 +26,13 @@ export const useNotificationStore = defineStore('notifications', () => {
     }
   }
 
-  return { notices, addNotice }
+  function dismissNotice(id: number) {
+    notices.value = notices.value.filter((n) => n.id !== id)
+  }
+
+  function clearAll() {
+    notices.value = []
+  }
+
+  return { notices, addNotice, dismissNotice, clearAll }
 })

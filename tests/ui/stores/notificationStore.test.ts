@@ -34,4 +34,23 @@ describe('notificationStore.addNotice', () => {
 		vi.advanceTimersByTime(60_000)
 		expect(store.notices).toHaveLength(1)
 	})
+
+	it('dismissNotice removes the matching sticky notice', () => {
+		const store = useNotificationStore()
+		store.addNotice('error A', 0)
+		store.addNotice('error B', 0)
+		const stickyA = store.notices[0]
+		store.dismissNotice(stickyA.id)
+		expect(store.notices).toHaveLength(1)
+		expect(store.notices[0].message).toBe('error B')
+	})
+
+	it('clearAll removes every notice', () => {
+		const store = useNotificationStore()
+		store.addNotice('one', 0)
+		store.addNotice('two', 0)
+		store.addNotice('three', 0)
+		store.clearAll()
+		expect(store.notices).toHaveLength(0)
+	})
 })

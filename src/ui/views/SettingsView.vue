@@ -119,6 +119,21 @@ function update<K extends keyof PluginSettings>(key: K, value: PluginSettings[K]
           @change="(e) => update('teamMode', (e.target as HTMLInputElement).checked)"
         />
       </div>
+
+      <div class="sp-settings__field">
+        <label class="sp-settings__label" for="logLevel">{{ t('settings.logLevel') }}</label>
+        <select
+          id="logLevel"
+          class="sp-settings__select"
+          :value="settings.logLevel"
+          @change="(e) => update('logLevel', (e.target as HTMLSelectElement).value as 'debug' | 'info' | 'warn' | 'error')"
+        >
+          <option value="debug">debug</option>
+          <option value="info">info</option>
+          <option value="warn">warn</option>
+          <option value="error">error</option>
+        </select>
+      </div>
     </div>
 
     <div class="sp-settings__footer">

@@ -96,5 +96,22 @@ export class SpecoratorSettingTab extends PluginSettingTab {
           await this.plugin.updateSettings({ teamMode: value })
         }),
       )
+
+    new Setting(containerEl)
+      .setName('Log level')
+      .setDesc('Console log verbosity. Errors and warnings are always useful; lower levels are noisy.')
+      .addDropdown((dd) =>
+        dd
+          .addOption('debug', 'Debug')
+          .addOption('info', 'Info')
+          .addOption('warn', 'Warn (default)')
+          .addOption('error', 'Error')
+          .setValue(this.plugin.settings.logLevel)
+          .onChange(async (value) => {
+            await this.plugin.updateSettings({
+              logLevel: value as PluginSettings['logLevel'],
+            })
+          }),
+      )
   }
 }
