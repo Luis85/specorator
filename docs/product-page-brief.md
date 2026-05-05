@@ -3,7 +3,7 @@ title: "Specorator product page content brief"
 doc_type: content-brief
 status: draft
 owner: product
-last_updated: 2026-05-01
+last_updated: 2026-05-05
 references:
   - docs/product-vision.md
   - docs/prd.md
@@ -17,7 +17,7 @@ references:
 **Implements:** GitHub Pages product page for `Luis85/specorator`  
 **Source documents:** [Product Vision](./product-vision.md) · [PRD](./prd.md) · [Use Cases](./design/USE_CASES.md) · [Glossary](./glossary.md)
 
-This brief provides all the structure, copy boundaries, and content decisions needed to implement issue #22 (the GitHub Pages product page). Work from this brief rather than from individual issue descriptions.
+This brief provides all the structure, copy boundaries, and content decisions needed to implement and maintain the GitHub Pages product page. Work from this brief rather than from individual issue descriptions.
 
 ---
 
@@ -27,18 +27,27 @@ This brief provides all the structure, copy boundaries, and content decisions ne
 
 | Audience | Goal on the page |
 |---|---|
-| **Curious user** | Understand what Specorator is, whether it helps their workflow, how to get started |
-| **Obsidian user already using `agentic-workflow`** | See how the plugin automates their current manual steps and makes the methodology accessible inside Obsidian |
+| **Curious builder** | Understand what Specorator is, whether it fits their way of working, and how to get started — regardless of technical background |
+| **Non-technical founder or PM** | See that this tool is for them, not just for engineers; understand that plain language is sufficient to work with the AI assistant |
+| **Engineer or architect** | Understand the workflow discipline, the AI assistance model, and the quality guarantees at each stage |
 | **Potential contributor** | Find out how to get involved, run the project locally, and understand where development is heading |
 | **Evaluator / researcher** | Quickly grasp the product's purpose, scope, and relationship to upstream repos |
 
 ### Primary Message
 
-> Specorator is an Obsidian plugin that turns the `agentic-workflow` methodology into an approachable, guided experience inside your vault. It installs the workflow, navigates your active work, and helps you build better software with discipline — without requiring a heavy process tool.
+> Specorator is a guided development companion that takes you — and your whole team — from first idea to tested code. It brings structured workflow into a single, connected environment — with an AI assistant that will know your work coming in v1. All your files stay plain text, owned by you.
 
 ### Secondary Message
 
-> In v2.0, Specorator becomes a companion app powered by `agentonomous`, giving you a team of agentic coworkers that assist with drafting, reviewing, and improving your workflow outputs while you stay focused on the vault.
+> In v2.0, Specorator becomes a fully orchestrated agentic environment — purpose-built specialist agents covering every role from PM to QA, working in and out of your knowledge base with your explicit oversight at every step.
+
+### Framing principle — Obsidian is the engine, not the product
+
+Specorator is the product. Obsidian is the foundation it runs on — chosen for its powerful local knowledge graph, plugin ecosystem, and deep file-system integration. The page should reflect this hierarchy:
+
+- **Never lead** a section by calling Specorator "an Obsidian plugin."
+- **Do mention** Obsidian where relevant — in a dedicated "Powered by Obsidian" section and in install instructions — but as a substrate, not an identity.
+- **Never use** "vault" as primary user-facing language; prefer "your knowledge base" or "your files" for external copy. ("Vault" is fine in install instructions where users are already inside Obsidian.)
 
 ---
 
@@ -46,173 +55,209 @@ This brief provides all the structure, copy boundaries, and content decisions ne
 
 ### Section 1 — Hero
 
-**Heading (suggested):** *Specorator — structured software work, inside Obsidian*
+**Heading:** *From idea to tested code. Every step, guided.*
 
-**Subheading:** *Install the workflow. Navigate your active work. Build with discipline.*
+**Subheading:** Specorator is your guided development companion — structured workflow, AI assistance, and your knowledge in one place.
 
-**Body:** 2–3 sentences maximum. Establish what Specorator is and who it is for. Do not mention `agentonomous` here — keep the hero focused on the v1 value.
+**Body:** 2–3 sentences. Establish what Specorator is and who it is for. Do not describe Specorator as an Obsidian plugin. Do not mention technical stack. Obsidian may appear as a subordinate clause at most.
 
 **CTA:** Two buttons:
-- Primary: "Get started" → links to quick-start / local-dev section
-- Secondary: "View on GitHub" → links to `Luis85/specorator`
+- Primary: "Try it in your browser" → opens live demo
+- Secondary: "Get started" → links to get-started section
 
-**Copy constraint:** Do not claim agent capabilities in the hero. v1 is a workflow tool, not an AI product.
-
----
-
-### Section 2 — What problem does it solve?
-
-Speak to the target persona (the Focused Builder from the Design Brief): someone who suspects discipline would help them but finds orthodox process daunting.
-
-**Key points to cover:**
-- AI coding tools make it easy to generate code, but not easy to generate *good* software.
-- Without structure, decisions get lost, specs diverge from code, and features don't finish cleanly.
-- The discipline (requirements, decision records, quality gates) exists but is buried in enterprise tooling.
-- Specorator is a plugin-sized, jargon-softened version: it makes the next right action obvious.
-
-**Copy constraint:** One short paragraph or a tight 3-point list. Do not expand into methodology detail here.
+**Badge:** "v1 alpha · in development" — no mention of "Obsidian plugin" in the badge.
 
 ---
 
-### Section 3 — How does it work? (v1 capabilities)
+### Section 2 — What is Specorator?
 
-Explain the three core v1 workflows with short, concrete descriptions. Use past-present tense: what the user *does*, not what the product *will do*.
+Lead with the product value, not the implementation substrate.
 
-**Template installation**
-> Install a supported version of the `agentic-workflow` template into your vault with one command. Specorator checks for existing files and asks before overwriting anything.
+**Opening:** Describe what Specorator does for the user, in one or two plain-language paragraphs.
 
-**Workflow navigation**
-> Open the cockpit to see your active feature, current stage, and the next artifact you need to create. Commands open workflow files directly in Obsidian — no file-system browsing required.
+**Three pillars:**
+1. Guided workflow — 12 stages, always know where you are and what comes next
+2. AI that knows your work — context-aware, stage-aware assistant; no manual prompt construction required
+3. You stay in control — every AI output is a proposal; nothing is written without explicit acceptance
 
-**Artifact creation**
-> Create a new feature scaffold from the plugin UI. All outputs are plain Markdown in your vault — readable and editable with or without the plugin installed.
-
-**Copy constraint:** Do not list v2.0 coworker capabilities in this section. Flag them clearly as "coming in v2.0" if mentioned at all.
+**Copy constraint:** Do not use "Obsidian plugin" as the first or primary descriptor. The product leads; the implementation follows.
 
 ---
 
-### Section 4 — How does it relate to `agentic-workflow`?
+### Section 3 — Who it's for
 
-Short explanation of the three-layer relationship:
+Explicitly address non-technical users. Show that this is not a developer-only tool.
 
-| Layer | Role |
+**Audiences to cover:**
+- Founders and PMs — plain language to spec
+- Engineers and architects — traceability, quality gates, implementation to retrospective
+- Designers and analysts — decisions and requirements alongside artifacts
+- Anyone who wants to try it — browser demo, no setup required
+
+**Copy constraint:** Do not frame the problem as "developers who forget to write specs." Frame it as: everyone in the room benefits from a shared, structured, connected way of working.
+
+---
+
+### Section 4 — The 12 stages
+
+Show the lifecycle with plain-language stage labels, not technical slug names.
+
+| # | Plain-language label |
 |---|---|
-| `agentic-workflow` | The methodology — workflow stages, artifacts, templates, quality gates. Specorator consumes released versions. |
-| Specorator | The Obsidian plugin — installs, navigates, and surfaces the methodology from inside the vault. |
-| `agentonomous` | The agent orchestration engine — powers v2.0 agentic coworkers. Not used in v1. |
+| 1 | Exploring the idea |
+| 2 | Looking into it |
+| 3 | What it needs to do |
+| 4 | How it should look and feel |
+| 5 | The full plan |
+| 6 | Breaking it into steps |
+| 7 | Building it |
+| 8 | How we'll check it works |
+| 9 | What we found |
+| 10 | Checking our work |
+| 11 | Telling people about it |
+| 12 | What we learned |
 
-Link to `Luis85/agentic-workflow` repository.
-
-**Copy constraint:** Do not imply that `agentonomous` is part of v1. Reference it only as the v2.0 direction.
-
----
-
-### Section 5 — What's available now? (v1 status)
-
-Be honest about v1 alpha status. Do not overstate stability.
-
-**What works:**
-- Plugin scaffold and build toolchain
-- Isolated browser runtime for the Vue 3 UI
-- Typed Obsidian-to-UI bridge API
-- CI and dependency automation
-- Local development documentation
-
-**In active development:**
-- Template installation service
-- Workflow navigator UI
-- Artifact creation commands
-
-**Copy constraint:** Only list items that are actually built or in flight. Do not list items as "available" that are still in planning.
+**Copy constraint:** Do not display raw stage slugs (`idea`, `research`, etc.) as the primary labels in user-facing copy.
 
 ---
 
-### Section 6 — v2.0 direction (companion app)
+### Section 5 — AI assistant
 
-One short section on the v2.0 vision. Frame it as a roadmap direction, not a current feature.
+The AI assistant is a v1 feature — not v2.0 — but **it is not yet shipped**. Describe it as in active development for v1, using future tense for the sidebar capabilities until the feature lands.
 
-**Heading:** *Where we're going: agentic coworkers in your vault*
+**Key points (describe in future tense until shipped):**
+- Permanent side panel, always visible — *will sit alongside your work*
+- Context-aware — *will know your persona, active file, current stage, and opted-in knowledge base before you type a word*
+- Suggests relevant actions per stage — *will surface stage-appropriate prompts, not generic chat*
+- Every proposed change is a review card — *nothing will be applied without acceptance*
 
-**Body:** 2–3 sentences. In v2.0, Specorator becomes a companion app powered by `agentonomous`. Users get a team of purpose-built agentic coworkers — Spec Writer, Design Reviewer, Decision Recorder, Task Planner — that assist with producing workflow outputs while the user retains full control over what gets accepted and written to the vault.
+**Status indicator:** Include the "⚡ In development for v1" badge on this section until the feature ships.
 
-**CTA:** "Follow v2.0 planning →" → links to [issue #23](https://github.com/Luis85/specorator/issues/23)
-
-**Copy constraint:** Use "v2.0" or "coming in v2.0" consistently. Do not use "coming soon" without version context.
-
----
-
-### Section 7 — Quick start / get started
-
-The practical entry point for users who want to try the plugin.
-
-**Steps (draft — update when installation is available):**
-
-1. Clone the repository: `git clone https://github.com/Luis85/specorator`
-2. Install dependencies: `npm install`
-3. Run in browser mode: `npm run dev` → opens at `http://localhost:5173`
-4. Build for Obsidian sideloading: `npm run build`
-5. Copy `main.js` and `manifest.json` to `.obsidian/plugins/specorator/` in your vault
-
-**Note:** Link to [local development docs](./local-development.md) for the full setup guide.
-
-**Copy constraint:** Do not describe marketplace installation until the plugin is submitted. Use "sideloading" and link to the local-dev docs.
+**Copy constraint:** The AI assistant is a v1 feature — do not describe it as "coming in v2.0". But it is not yet implemented — do not use present tense for sidebar capabilities that do not yet exist in `src/`. Use "will", "is being built to", or "in active development". Update this section to present tense once #161 ships. Do not use AI terminology ("prompt", "model", "context window", "LLM"). Do not describe the MCP server or technical integration details.
 
 ---
 
-### Section 8 — Contributor path
+### Section 6 — Try it live
 
-For developers who want to work on the plugin.
+The browser demo entry point.
 
-**What to link:**
-- [Local development documentation](./local-development.md)
-- [Obsidian marketplace readiness checklist](./marketplace-readiness.md)
-- [Roadmap](./roadmap-v1.md)
-- [Open issues](https://github.com/Luis85/specorator/issues)
-- [CONTRIBUTING guide] (create when issue #4 is fully resolved)
+**Key points:**
+- No account, no sign-up, nothing sent anywhere
+- Data stays in local browser storage
+- Full workflow experience — create a feature, walk through stages
 
-**Short paragraph:** Specorator is an open development project. Contributions to the plugin shell, bridge API, UI, and documentation are welcome. Read the local development guide to set up the test vault and run the CI checks locally.
+**CTA:** "Open the live demo"
 
 ---
 
-### Section 9 — Footer / links
+### Section 7 — Roadmap
 
-| Link | Target |
+Two columns: first increment (in development) and v2.0 (planned).
+
+**First increment — in development:**
+- Onboarding with persona setup
+- Guided workflow template installation
+- AI chat assistant in permanent side panel
+- Workflow navigator
+- Artifact creation
+- Standalone browser demo
+
+**v2.0 — planned:**
+- Purpose-built specialist agent roles (PM, architect, engineer, QA, writer)
+- Fully orchestrated sessions
+- Live execution state in the panel
+- All outputs remain reviewable proposals
+- Powered by `agentonomous`
+
+**Copy constraint:** Always use "first increment" or "v1" for the current scope. Always use "v2.0" for planned items — never "coming soon" without version context.
+
+---
+
+### Section 8 — Powered by Obsidian
+
+Dedicated section positioning Obsidian as the engine.
+
+**Key points:**
+- Specorator runs as a plugin inside Obsidian — chosen as the foundation for its knowledge graph, plugin ecosystem, and deep file integration
+- Obsidian is the engine; Specorator is the product that runs on it
+- Because of this foundation, the AI assistant can reason over the full connected graph of your knowledge, not just the active file
+- All files are plain Markdown — readable anywhere, version-controllable, permanently yours
+
+**Copy constraint:** This is where Obsidian is explained — not in the hero or the "what is Specorator?" section.
+
+---
+
+### Section 9 — Get started
+
+The practical entry point for installation.
+
+**Steps:**
+1. Download the latest release (`manifest.json`, `main.js`, `styles.css`) from GitHub Releases
+2. Create `{vault}/.obsidian/plugins/specorator/` in your Obsidian vault
+3. Copy the three files into that folder
+4. Open Obsidian → Settings → Community plugins → enable Specorator
+5. Open the Specorator panel from the left sidebar ribbon icon, or via **Command palette → Specorator: Open panel**. This is your main cockpit for the workflow. *(Alpha note: auto-open onboarding on first install is a tracked requirement — #162 — but not yet shipped. Update this step to describe the guided setup once that feature lands.)*
+
+**Copy constraint:** Do not describe marketplace installation until the plugin is submitted. Step 5 must reflect what the current plugin actually does on first enable — not the intended onboarding experience that is still in development. Update step 5 when #162 auto-open ships.
+
+---
+
+### Section 10 — Ecosystem
+
+Brief section on the related repositories.
+
+| Repo | Role |
 |---|---|
-| GitHub repository | `https://github.com/Luis85/specorator` |
-| `agentic-workflow` | `https://github.com/Luis85/agentic-workflow` |
-| `agentonomous` | `https://github.com/Luis85/agentonomous` |
-| v1 alpha planning | Issue #1 |
-| v2.0 planning | Issue #23 |
-| Roadmap | `docs/roadmap-v1.md` |
+| `Luis85/specorator` | This repository. The guided workflow and AI assistant. |
+| `Luis85/agentic-workflow` | Upstream workflow methodology, templates, and quality gates. |
+| `Luis85/agentonomous` | Agent implementation library. Powers the v2.0 specialist roles. |
+| `Luis85/specorator-runtime` | Execution engine for v2.0 orchestrated sessions. |
+
+---
+
+### Section 11 — Contribute
+
+Short section for contributors.
+
+**Links:**
+- GitHub repository
+- #1 — v1 alpha planning
+- #23 — v2.0 planning
+- #47 — Roadmap progress tracker
+- Local development guide
+- Contributing guide
 
 ---
 
 ## 3. Copy Boundaries
 
-These rules prevent the page from overpromising capabilities that are not yet built.
-
 | Rule | Rationale |
 |---|---|
-| Never describe coworkers, agent runs, or proposed outputs as current features. | These are v2.0 capabilities. Claiming them in v1 creates false expectations. |
-| Never use "AI" to describe v1 without qualification. | v1 has no live AI integration. The coach text is static guidance, not generated content. |
-| Always distinguish "v1" from "v2.0" when describing roadmap items. | Users should know what they can try now vs. what is planned. |
+| Never call Specorator "an Obsidian plugin" in the hero, meta description, or section leads. | Obsidian is the engine, not the product identity. |
+| Never use AI terminology with users: "prompt", "model", "context window", "LLM", "system prompt". | The product promise is plain-language interaction; technical terms undermine trust. |
+| Never describe the AI assistant as a v2.0 feature. | It ships in v1. Misrepresenting this creates false low expectations. |
+| Always use plain-language stage labels in user-facing copy, not technical slugs. | Non-technical users should not encounter `implementation-log` or `test-report` as primary labels. |
+| Always distinguish "first increment / v1" from "v2.0" when describing roadmap items. | Users should know what they can try now vs. what is planned. |
 | Always link to an issue or doc for any claim about upcoming capabilities. | Keeps the page accountable and avoids vague promises. |
-| Do not describe sideloading as "installing from the Obsidian marketplace" until submission. | The plugin has not been submitted. Sideloading is a manual process. |
+| Never describe agent outputs as automatically applied. | All outputs are proposals; misrepresenting this breaks user trust. |
 
 ---
 
 ## 4. Page Structure Summary
 
 ```
-1. Hero — what it is, primary CTA
-2. Problem — why structured workflow matters
-3. How it works — three v1 capabilities
-4. Ecosystem — relationship to agentic-workflow and agentonomous
-5. Current status — what's built vs. in progress
-6. v2.0 direction — companion app roadmap
-7. Get started — quick-start steps
-8. Contribute — contributor path
-9. Footer links
+1. Hero — product-centric headline, try-live and get-started CTAs
+2. What is Specorator — three pillars: workflow, AI, control
+3. Who it's for — non-technical users front and centre
+4. The 12 stages — plain-language labels, numbered grid
+5. AI assistant — permanent side panel, context-aware, proposal model
+6. Try it live — browser demo CTA
+7. Roadmap — first increment vs. v2.0
+8. Powered by Obsidian — engine framing, knowledge graph, plain files
+9. Get started — install steps with onboarding mention
+10. Ecosystem — four related repositories
+11. Contribute — contributor path links
+12. Footer — "Powered by Obsidian · Vue 3 · TypeScript"
 ```
 
 ---
@@ -220,9 +265,9 @@ These rules prevent the page from overpromising capabilities that are not yet bu
 ## 5. Hosting Notes
 
 - Host via GitHub Pages on `Luis85/specorator` (configure in repository Settings → Pages).
-- Source: `docs/` directory on `main` branch, or a dedicated `gh-pages` branch — decide before implementation.
-- Link the page URL from the README `<p>` tag / shields row once live.
-- Update this brief alongside meaningful product or status changes; do not let it drift from the actual plugin state.
+- Source: `site/` directory on `demo` branch (aligns with the branching model; CI deploys on push to `demo`).
+- Link the page URL from the README once live.
+- Update this brief whenever the product scope or roadmap changes meaningfully.
 
 ---
 
@@ -230,8 +275,9 @@ These rules prevent the page from overpromising capabilities that are not yet bu
 
 | Trigger | Section(s) to review |
 |---|---|
-| Template installation shipped | Section 5 (current status), Section 7 (quick start steps) |
-| Marketplace submission | Section 7 (update from sideloading to marketplace install) |
-| v2.0 integration begins | Section 6, Section 4 (ecosystem table) |
-| New contributor docs added | Section 8 (contributor path links) |
-| New `agentic-workflow` release consumed | Section 3, Section 7 |
+| Claude CLI chat sidebar ships | Section 5 (AI assistant — mark as available) |
+| Template installation ships | Section 7 (roadmap status), Section 9 (get started steps) |
+| Marketplace submission | Section 9 (update from sideloading to marketplace install) |
+| v2.0 planning matures | Section 7 (roadmap), Section 10 (ecosystem) |
+| New contributor docs added | Section 11 (contributor path links) |
+| New `agentic-workflow` release consumed | Section 9 (get started), Section 10 (ecosystem) |
