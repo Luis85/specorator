@@ -50,20 +50,21 @@ domain ← application ← infrastructure ← ui
 
 ### Narrow ports (ADR-008)
 
-All Obsidian API calls go through four narrow ports declared in `src/domain/ports/`:
+All Obsidian API calls go through five narrow ports declared in `src/domain/ports/`:
 
 - **`SettingsPort`** — `getSettings`, `saveSettings`
 - **`VaultPort`** — `readFile`, `writeFile`, `deleteFile`, `listFiles`, `listFolders`, `fileExists`, `createFolder`
 - **`WorkspacePort`** — `openFile`
-- **`NotificationPort`** — `showNotice`
+- **`NotificationPort`** — `showError`, `showWarning`, `showSuccess`, `showInfo` (severity-typed; `showError` defaults to a sticky notice — `durationMs = 0`)
+- **`LoggerPort`** — `debug`, `info`, `warn`, `error`. Console-only; never calls `NotificationPort`. Filtered by `PluginSettings.logLevel` (default `warn`) in `ObsidianBridge`. User-facing error notifications go through `NotificationPort`/`FeedbackService`.
 
-Three runtime classes implement all four ports:
+Three runtime classes implement all five ports:
 
 - **`ObsidianBridge`** (`src/infrastructure/obsidian/`) — production, wraps `App` + `Vault`
 - **`MockBridge`** (`src/infrastructure/mock/`) — unit tests and `npm run dev`
 - **`LocalStorageBridge`** (`src/infrastructure/localstorage/`) — GitHub Pages demo
 
-Each port has its own `InjectionKey` (`SETTINGS_PORT`, `VAULT_PORT`, `WORKSPACE_PORT`, `NOTIFICATION_PORT` in `src/infrastructure/bridge/ports.ts`) and its own composable (`useSettingsPort`, `useVaultPort`, `useWorkspacePort`, `useNotificationPort` in `src/ui/composables/`). Consumers depend on **one port per dependency** — there is no aggregate `usePorts()`. ESLint forbids re-introducing the deleted `IBridge` / `BridgeKey` / `useBridge` symbols.
+Each port has its own `InjectionKey` (`SETTINGS_PORT`, `VAULT_PORT`, `WORKSPACE_PORT`, `NOTIFICATION_PORT`, `LOGGER_PORT` in `src/infrastructure/bridge/ports.ts`) and its own composable (`useSettingsPort`, `useVaultPort`, `useWorkspacePort`, `useNotificationPort`, `useLoggerPort` in `src/ui/composables/`). Consumers depend on **one port per dependency** — there is no aggregate `usePorts()`. ESLint forbids re-introducing the deleted `IBridge` / `BridgeKey` / `useBridge` symbols.
 
 Vue components must **never** import `obsidian` directly (ESLint `no-restricted-imports` enforces this).
 
@@ -107,7 +108,10 @@ The 12 stage slugs (from `src/domain/feature/FeatureStep.ts`): `idea`, `research
 
 ### Key files
 
-- `src/domain/ports/` — narrow port interfaces (SettingsPort, VaultPort, WorkspacePort, NotificationPort)
+- `src/domain/ports/` — narrow port interfaces (SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort)
+- `src/application/shared/FeedbackService.ts` — composable-layer side-effect emitter wrapping LoggerPort + NotificationPort
+- `src/application/shared/errorMessages.ts` — `toUserMessage` maps domain errors to user-friendly strings
+- `src/ui/components/ErrorBoundary.vue` — wraps `<RouterView />` in `App.vue`; logs + notifies before swallowing component errors
 - `src/domain/settings/PluginSettings.ts` — `PluginSettings` type + `DEFAULT_SETTINGS`
 - `src/infrastructure/bridge/ports.ts` — per-port InjectionKey symbols
 - `src/infrastructure/bridge/FeatureRepository.ts` — serialises/deserialises `workflow-state.md`, creates stage stubs

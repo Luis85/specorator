@@ -60,6 +60,7 @@ export default {
     strict: 'Streng',
     lenient: 'Nachsichtig',
     teamMode: 'Teammodus',
+    logLevel: 'Log-Level',
     save: 'Einstellungen speichern',
     saved: 'Einstellungen gespeichert.',
   },

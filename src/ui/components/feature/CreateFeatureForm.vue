@@ -2,7 +2,9 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppButton from '../common/AppButton.vue'
+import { useNotificationPort } from '@/ui/composables/useNotificationPort'
 import { tryAsync } from '@/domain/shared/tryAsync'
+import { toUserMessage } from '@/application/shared/errorMessages'
 
 const props = defineProps<{
   submitHandler: (payload: { title: string; area?: string }) => Promise<boolean>
@@ -13,6 +15,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const notify = useNotificationPort()
 const title = ref('')
 const area = ref('')
 const submitting = ref(false)
@@ -31,7 +34,7 @@ async function handleSubmit() {
     title.value = ''
     area.value = ''
   } else if (!result.ok) {
-    throw result.error
+    notify.showError(toUserMessage(result.error))
   }
 }
 </script>

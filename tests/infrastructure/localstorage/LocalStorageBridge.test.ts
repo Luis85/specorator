@@ -79,14 +79,14 @@ describe('LocalStorageBridge', () => {
   })
 
   describe('event dispatching', () => {
-    it('showNotice dispatches sp:notice CustomEvent', () => {
-      const received: { message: string; durationMs: number }[] = []
+    it('showInfo dispatches sp:notice CustomEvent with severity=info', () => {
+      const received: { severity: string; message: string; durationMs: number }[] = []
       window.addEventListener('sp:notice', (e) => {
         received.push((e as CustomEvent).detail)
       })
-      bridge.showNotice('hello', 2000)
+      bridge.showInfo('hello', 2000)
       expect(received).toHaveLength(1)
-      expect(received[0]).toEqual({ message: 'hello', durationMs: 2000 })
+      expect(received[0]).toEqual({ severity: 'info', message: 'hello', durationMs: 2000 })
     })
 
     it('openFile dispatches sp:open-file CustomEvent', async () => {

@@ -1,4 +1,4 @@
-import { Notice, Plugin, TFolder } from 'obsidian'
+import { Plugin, TFolder } from 'obsidian'
 import { SpecoratorView, VIEW_TYPE } from './SpecoratorView'
 import { SpecoratorSettingTab } from './settings'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
@@ -51,6 +51,7 @@ export default class SpecoratorPlugin extends Plugin {
   // eslint-disable-next-line obsidianmd/detach-leaves
   override onunload(): void {
     this.app.workspace.detachLeavesOfType(VIEW_TYPE)
+    this.bridge?.hideAllNotices()
     // onunload() is synchronous (Obsidian contract). destroy() is fire-and-forget;
     // module destroy() implementations must be fast and non-critical.
     void this.core?.destroy()
@@ -76,11 +77,12 @@ export default class SpecoratorPlugin extends Plugin {
    * folder, show a one-time notice informing the user to rename it.
    */
   private detectLegacyVaultLayout(): void {
+    if (!this.bridge) return
     const hasFeaturesFolder = this.app.vault.getAbstractFileByPath('features') instanceof TFolder
     const hasSpecsFolder = this.app.vault.getAbstractFileByPath(this.settings.specsFolder) instanceof TFolder
     if (hasFeaturesFolder && !hasSpecsFolder) {
-      new Notice(
-        `Specorator: this vault uses the old \`features/\` folder. ` +
+      this.bridge.showWarning(
+        `This vault uses the old \`features/\` folder. ` +
           `Please rename it to \`${this.settings.specsFolder}/\` or update the Specs folder setting.`,
         8000,
       )

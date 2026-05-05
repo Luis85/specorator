@@ -20,7 +20,7 @@ describe('fakeModulePorts', () => {
 
 	it('records notices via the notifications port', () => {
 		const ports = fakeModulePorts()
-		ports.notifications.showNotice('hi')
+		ports.notifications.showInfo('hi')
 		expect(ports.bridge.getNotices()).toHaveLength(1)
 	})
 })
