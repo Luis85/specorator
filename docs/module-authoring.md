@@ -85,7 +85,7 @@ export const helloModule = defineModule({
 | `ports.settings` | `SettingsPort` | `getSettings()` / `saveSettings()` |
 | `ports.vault` | `VaultPort` | `readFile()`, `writeFile()`, etc. |
 | `ports.workspace` | `WorkspacePort` | `openFile()` |
-| `ports.notifications` | `NotificationPort` | `showNotice()` |
+| `ports.notifications` | `NotificationPort` | `showError()` / `showWarning()` / `showSuccess()` / `showInfo()` |
 | `ports.logger` | `LoggerPort` | Structured logging (debug/info/warn/error). |
 | `ports.bus` | `EventBus` | cross-module events |
 

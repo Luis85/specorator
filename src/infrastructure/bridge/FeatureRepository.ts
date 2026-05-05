@@ -119,7 +119,7 @@ export class FeatureRepository implements IFeatureRepository {
 			if (isNew) {
 				const ideaPath = this.stagePath(feature.slug.toString(), 'idea');
 				if (await this.vault.fileExists(ideaPath)) {
-					this.notifications.showNotice(`Specorator: idea.md already exists — keeping your version.`);
+					this.notifications.showInfo(`Specorator: idea.md already exists — keeping your version.`);
 				} else {
 					const date = feature.createdAt.toISOString().slice(0, 10);
 					await this.vault.writeFile(
@@ -147,7 +147,7 @@ export class FeatureRepository implements IFeatureRepository {
 
 			const path = this.stagePath(feature.slug.toString(), meta.slug);
 			if (await this.vault.fileExists(path)) {
-				this.notifications.showNotice(
+				this.notifications.showInfo(
 					`Specorator: ${meta.slug}.md already exists — keeping your version.`,
 				);
 				return ok(undefined);

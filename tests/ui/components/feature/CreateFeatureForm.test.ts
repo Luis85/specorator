@@ -2,14 +2,24 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import { i18n } from '@/ui/i18n'
 import CreateFeatureForm from '@/ui/components/feature/CreateFeatureForm.vue'
+import { NOTIFICATION_PORT } from '@/infrastructure/bridge/ports'
 import { CreateFeatureFormPageObject } from './CreateFeatureForm.po'
 
 function mountForm(
 	submitHandler: (payload: { title: string; area?: string }) => Promise<boolean>,
 ) {
+	const notify = {
+		showError: vi.fn(),
+		showWarning: vi.fn(),
+		showSuccess: vi.fn(),
+		showInfo: vi.fn(),
+	}
 	const wrapper = mount(CreateFeatureForm, {
 		props: { submitHandler },
-		global: { plugins: [i18n] },
+		global: {
+			provide: { [NOTIFICATION_PORT as symbol]: notify },
+			plugins: [i18n],
+		},
 	})
 	return new CreateFeatureFormPageObject(wrapper)
 }
@@ -56,5 +66,28 @@ describe('CreateFeatureForm', () => {
 		const po = mountForm(vi.fn())
 		await po.clickCancel()
 		expect(po.emitted('cancel')).toBeTruthy()
+	})
+
+	it('handleSubmit: calls notify.showError instead of throwing when submitHandler rejects', async () => {
+		const notify = {
+			showError: vi.fn(),
+			showWarning: vi.fn(),
+			showSuccess: vi.fn(),
+			showInfo: vi.fn(),
+		}
+		const wrapper = mount(CreateFeatureForm, {
+			props: {
+				submitHandler: () => Promise.reject(new Error('slug conflict')),
+			},
+			global: {
+				provide: { [NOTIFICATION_PORT as symbol]: notify },
+				plugins: [i18n],
+			},
+		})
+		const po = new CreateFeatureFormPageObject(wrapper)
+		await po.setTitle('My Feature')
+		await po.submit()
+		await flushPromises()
+		expect(notify.showError).toHaveBeenCalledWith(expect.stringContaining('slug conflict'))
 	})
 })

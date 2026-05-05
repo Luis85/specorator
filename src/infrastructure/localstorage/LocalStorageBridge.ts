@@ -70,8 +70,28 @@ export class LocalStorageBridge
     window.dispatchEvent(new CustomEvent('sp:open-file', { detail: { path } }))
   }
 
-  showNotice(message: string, durationMs = 4000): void {
-    window.dispatchEvent(new CustomEvent('sp:notice', { detail: { message, durationMs } }))
+  showError(message: string, durationMs = 0): void {
+    window.dispatchEvent(
+      new CustomEvent('sp:notice', { detail: { severity: 'error', message, durationMs } }),
+    )
+  }
+
+  showWarning(message: string, durationMs = 8000): void {
+    window.dispatchEvent(
+      new CustomEvent('sp:notice', { detail: { severity: 'warning', message, durationMs } }),
+    )
+  }
+
+  showSuccess(message: string, durationMs = 4000): void {
+    window.dispatchEvent(
+      new CustomEvent('sp:notice', { detail: { severity: 'success', message, durationMs } }),
+    )
+  }
+
+  showInfo(message: string, durationMs = 4000): void {
+    window.dispatchEvent(
+      new CustomEvent('sp:notice', { detail: { severity: 'info', message, durationMs } }),
+    )
   }
 
   async getSettings(): Promise<PluginSettings> {

@@ -1,13 +1,16 @@
 import { storeToRefs } from 'pinia'
 import { useSettingsPort } from './useSettingsPort'
+import { useNotificationPort } from './useNotificationPort'
 import { useSettingsStore } from '../stores/settingsStore'
 import { setLocale } from '../i18n'
 import type { SupportedLocale } from '../i18n'
 import { tryAsync } from '@/domain/shared/tryAsync'
+import { toUserMessage } from '@/application/shared/errorMessages'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 
 export function useSettings() {
   const bridge = useSettingsPort()
+  const notify = useNotificationPort()
   const store = useSettingsStore()
   const { settings, loading } = storeToRefs(store)
 
@@ -19,7 +22,10 @@ export function useSettings() {
       if (s.locale) setLocale(s.locale as SupportedLocale)
     })
     store.setLoading(false)
-    if (!result.ok) throw result.error
+    if (!result.ok) {
+      notify.showError(toUserMessage(result.error))
+      return
+    }
   }
 
   async function saveSettings(updated: PluginSettings): Promise<void> {

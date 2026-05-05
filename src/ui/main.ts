@@ -53,6 +53,25 @@ void bridge.getSettings()
     app.provide(WORKSPACE_PORT, bridge)
     app.provide(NOTIFICATION_PORT, bridge)
     app.provide(LOGGER_PORT, bridge)
+
+    // Set errorHandler BEFORE mount() so initial render/setup errors flow through
+    // bridge.error()/showError() instead of escaping to console.
+    app.config.errorHandler = (err, _instance, info) => {
+      bridge.error(`[Vue] Unhandled error in ${info}`, err)
+      bridge.showError('An unexpected error occurred. Check the console for details.')
+    }
+
+    // Standalone: page lifetime = app lifetime, no teardown needed.
+    window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
+      bridge.error('[Unhandled rejection]', event.reason)
+      bridge.showError('An unexpected error occurred. Check the console for details.')
+    })
+
+    router.onError((err) => {
+      bridge.error('[Router] Navigation error', err)
+      bridge.showError('Navigation failed. Please try again.')
+    })
+
     app.mount(mountPoint ?? '#app')
   })
   .catch(console.error)

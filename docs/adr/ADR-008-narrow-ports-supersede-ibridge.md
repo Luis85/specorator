@@ -10,18 +10,19 @@ supersedes: ADR-002
 
 ## Decision
 
-The single `IBridge` interface introduced by ADR-002 is replaced by four narrow ports declared in `src/domain/ports/`:
+The single `IBridge` interface introduced by ADR-002 is replaced by narrow ports declared in `src/domain/ports/`:
 
 | Port | Surface |
 |---|---|
 | `SettingsPort` | `getSettings`, `saveSettings` |
 | `VaultPort` | `readFile`, `writeFile`, `deleteFile`, `listFiles`, `listFolders`, `fileExists`, `createFolder` |
 | `WorkspacePort` | `openFile` |
-| `NotificationPort` | `showNotice` |
+| `NotificationPort` | `showError`, `showWarning`, `showSuccess`, `showInfo` (severity-typed; `showError` defaults to a sticky notice — `durationMs = 0`). See `docs/superpowers/specs/2026-05-04-error-logging-notification-design.md`. |
+| `LoggerPort` | `debug`, `info`, `warn`, `error` (added 2026-05-04). Console-only; never calls `NotificationPort`. |
 
-Each runtime continues to be one class (`ObsidianBridge`, `MockBridge`, `LocalStorageBridge`) that declares `implements` on all four port interfaces. The class file lives in the same per-runtime directory as before. No state is duplicated across ports.
+Each runtime continues to be one class (`ObsidianBridge`, `MockBridge`, `LocalStorageBridge`) that declares `implements` on every port interface. The class file lives in the same per-runtime directory as before. No state is duplicated across ports.
 
-Dependency injection registers the same instance under four distinct Vue `InjectionKey`s (`SETTINGS_PORT`, `VAULT_PORT`, `WORKSPACE_PORT`, `NOTIFICATION_PORT`) defined in `src/infrastructure/bridge/ports.ts`. Consumers inject one port at a time via dedicated composables (`useSettingsPort`, `useVaultPort`, `useWorkspacePort`, `useNotificationPort`). There is no aggregate `usePorts()` composable.
+Dependency injection registers the same instance under distinct Vue `InjectionKey`s (`SETTINGS_PORT`, `VAULT_PORT`, `WORKSPACE_PORT`, `NOTIFICATION_PORT`, `LOGGER_PORT`) defined in `src/infrastructure/bridge/ports.ts`. Consumers inject one port at a time via dedicated composables (`useSettingsPort`, `useVaultPort`, `useWorkspacePort`, `useNotificationPort`, `useLoggerPort`). There is no aggregate `usePorts()` composable.
 
 `PluginSettings` and `DEFAULT_SETTINGS` move to `src/domain/settings/PluginSettings.ts`.
 

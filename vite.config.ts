@@ -90,6 +90,9 @@ export default defineConfig(({ mode }) => {
 		return {
 			plugins: [vue(), scopeBuiltCss(), copyPluginArtifacts()],
 			resolve: { alias },
+			define: {
+				'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
+			},
 			build: {
 				lib: {
 					entry: resolve(__dirname, 'src/plugin/main.ts'),

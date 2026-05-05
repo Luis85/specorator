@@ -3,12 +3,15 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppButton from '../components/common/AppButton.vue'
 import { useSettings } from '../composables/useSettings'
+import { useNotificationPort } from '../composables/useNotificationPort'
 import { SUPPORTED_LOCALES } from '../i18n'
 import { tryAsync } from '@/domain/shared/tryAsync'
+import { toUserMessage } from '@/application/shared/errorMessages'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 
 const { t } = useI18n()
 const { settings, loadSettings, saveSettings } = useSettings()
+const notify = useNotificationPort()
 const saved = ref(false)
 const saving = ref(false)
 
@@ -18,7 +21,10 @@ async function handleSave() {
   saving.value = true
   const result = await tryAsync(() => saveSettings({ ...settings.value }))
   saving.value = false
-  if (!result.ok) throw result.error
+  if (!result.ok) {
+    notify.showError(toUserMessage(result.error))
+    return
+  }
   saved.value = true
   setTimeout(() => { saved.value = false }, 2500)
 }
@@ -113,10 +119,25 @@ function update<K extends keyof PluginSettings>(key: K, value: PluginSettings[K]
           @change="(e) => update('teamMode', (e.target as HTMLInputElement).checked)"
         />
       </div>
+
+      <div class="sp-settings__field">
+        <label class="sp-settings__label" for="logLevel">{{ t('settings.logLevel') }}</label>
+        <select
+          id="logLevel"
+          class="sp-settings__select"
+          :value="settings.logLevel"
+          @change="(e) => update('logLevel', (e.target as HTMLSelectElement).value as 'debug' | 'info' | 'warn' | 'error')"
+        >
+          <option value="debug">debug</option>
+          <option value="info">info</option>
+          <option value="warn">warn</option>
+          <option value="error">error</option>
+        </select>
+      </div>
     </div>
 
     <div class="sp-settings__footer">
-      <AppButton variant="primary" :loading="saving" @click="handleSave">
+      <AppButton variant="primary" :loading="saving" data-testid="settings-save" @click="handleSave">
         {{ t('settings.save') }}
       </AppButton>
       <span v-if="saved" class="sp-settings__saved">{{ t('settings.saved') }}</span>

@@ -17,6 +17,8 @@ export const VIEW_TYPE = 'specorator'
 
 export class SpecoratorView extends ItemView {
   private vueApp: VueApp | null = null
+  private _onUnhandledRejection: ((e: PromiseRejectionEvent) => void) | null = null
+  private _routerErrorCleanup: (() => void) | null = null
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -51,11 +53,39 @@ export class SpecoratorView extends ItemView {
     this.vueApp.provide(WORKSPACE_PORT, bridge)
     this.vueApp.provide(NOTIFICATION_PORT, bridge)
     this.vueApp.provide(LOGGER_PORT, bridge)
+
+    // Set errorHandler BEFORE mount() so errors thrown during initial render/setup
+    // are routed through bridge.error()/showError() instead of escaping to console.
+    this.vueApp.config.errorHandler = (err, _instance, info) => {
+      bridge.error(`[Vue] Unhandled error in ${info}`, err)
+      bridge.showError('An unexpected error occurred. Check the console for details.')
+    }
+
+    this._onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      bridge.error('[Unhandled rejection]', event.reason)
+      bridge.showError('An unexpected error occurred. Check the console for details.')
+    }
+    window.addEventListener('unhandledrejection', this._onUnhandledRejection)
+
+    // Router is a module-level singleton, so each onOpen() must unregister its handler
+    // in onClose() to prevent accumulation across panel re-opens.
+    this._routerErrorCleanup = router.onError((err) => {
+      bridge.error('[Router] Navigation error', err)
+      bridge.showError('Navigation failed. Please try again.')
+    })
+
     this.vueApp.mount(mountPoint)
     return Promise.resolve()
   }
 
   onClose(): Promise<void> {
+    if (this._onUnhandledRejection) {
+      window.removeEventListener('unhandledrejection', this._onUnhandledRejection)
+      this._onUnhandledRejection = null
+    }
+    this._routerErrorCleanup?.()
+    this._routerErrorCleanup = null
+    this.plugin.bridge?.hideAllNotices()
     this.vueApp?.unmount()
     this.vueApp = null
     return Promise.resolve()

@@ -1,7 +1,7 @@
 ---
 title: Unified Error Handling, Logging & Notification System
 date: 2026-05-04
-status: draft
+status: approved
 github_issue: https://github.com/Luis85/specorator/issues/155
 ---
 
@@ -63,14 +63,17 @@ export interface NotificationPort {
 
 Auto-dismissing errors are a named UX anti-pattern (Nielsen Norman Group, Carbon Design System): the toast disappears before the user can act, and the visual distance from the error source breaks the feedback loop.
 
-**Notice handle leak — `ObsidianBridge` must track instances:** Obsidian's `Notice` creates a DOM element that persists until its timeout. If the plugin is unloaded while a `Notice` is visible, the element becomes orphaned. Fix: `ObsidianBridge` stores every returned `Notice` in a `Set<Notice>`. On plugin `onunload`, iterate the set and call `.hide()` on each. This requires `SpecoratorView.ts` to call `bridge.hideAllNotices()` (or equivalent) in its `onClose`/`onunload`.
+**Notice handle leak — `ObsidianBridge` must track instances:** Obsidian's `Notice` creates a DOM element that persists until its timeout. If the plugin is unloaded while a `Notice` is visible, the element becomes orphaned. Fix: `ObsidianBridge` stores every returned `Notice` in a `Set<Notice>`. On plugin `onunload`, iterate the set and call `.hide()` on each. This requires `SpecoratorView.ts` to call `bridge.hideAllNotices()` in its `onClose`.
 
 **Implementation notes:**
 - `ObsidianBridge`: Map all four methods to `new Notice(message, durationMs ?? defaultForSeverity)`, prefixing the message with `[Error] `, `[Warning] `, `[✓] `, or `[Info] ` respectively. Store instance in the tracking `Set`. Return value is `void` (port contract). Separately track and clear on unload.
 - `MockBridge`: Change `noticeLog` entries from `{ message, durationMs }` tuples to `{ severity: 'error' | 'warning' | 'success' | 'info'; message: string; durationMs: number }` tuples. Add `console.error/warn/info/log` calls accordingly.
 - `LocalStorageBridge`: Dispatch `sp:notice` custom event with an additional `severity` field on the event detail.
 
-**Migration of existing `showNotice` call sites:** `FeatureRepository` has 2 call sites (file-already-exists guards). These migrate to `NotificationPort.showInfo()` directly — the repository is infrastructure and continues to depend on `NotificationPort` alone (not `FeedbackService`). See §4.3.
+**Migration of existing `showNotice` call sites:**
+
+- `FeatureRepository` has 2 call sites (file-already-exists guards) → migrate to `NotificationPort.showInfo()`. The repository is infrastructure and continues to depend on `NotificationPort` alone (not `FeedbackService`). See §4.3.
+- `src/plugin/main.ts` `detectLegacyVaultLayout()` calls `new Notice(...)` directly, bypassing `NotificationPort` entirely. Migrate to `notificationPort.showWarning(...)`. Currently `bridge` is a local variable inside `onload()` and `detectLegacyVaultLayout()` has no access to it — promote `bridge` to an instance field (`private bridge!: ObsidianBridge`) set at the top of `onload()` before any use. This also ensures `bridge.hideAllNotices()` can be called from `onunload()`. This call site is also not tracked in the notice handle `Set` — it will orphan-leak on unload without this migration.
 
 ### 4.2 `LoggerPort` — New 5th Narrow Port
 
@@ -91,9 +94,11 @@ export interface LoggerPort {
 
 `error?: unknown` (not `Error`) — catches non-Error throws from promise rejections and Obsidian internals. The `context` bag carries structured key-value pairs (e.g., `{ featureSlug, stage }`) without polluting the message string.
 
-**InjectionKey:** Add `LOGGER_PORT: InjectionKey<LoggerPort>` to `src/infrastructure/bridge/ports.ts`.
+**InjectionKey:** `LOGGER_PORT: InjectionKey<LoggerPort>` already exists in `src/infrastructure/bridge/ports.ts`. No change needed.
 
-**Composable:** `src/ui/composables/useLoggerPort.ts` — same pattern as existing port composables, throws if port not provided.
+**Composable:** `src/ui/composables/useLoggerPort.ts` already exists. No change needed.
+
+**`src/domain/ports/index.ts`:** Already exports `LoggerPort` (added in W4). No change needed.
 
 **`PluginSettings` extension** — additive, all existing fields preserved:
 
@@ -110,7 +115,17 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 }
 ```
 
-**`ObsidianBridge` construction — live settings access:** `ObsidianBridge` currently receives a settings snapshot. To support hot-changes to `logLevel` without plugin restart, it must receive a `getSettings: () => PluginSettings` getter instead of a snapshot. `SpecoratorView.ts` passes `() => this.settings` (or equivalent live accessor). All logging calls read `getSettings().logLevel` at invocation time.
+**`ObsidianBridge` construction — live settings access:** `ObsidianBridge` currently receives a settings snapshot (`private settings: PluginSettings`). To support hot-changes to `logLevel` without plugin restart, replace the snapshot with a `getSettings: () => PluginSettings` getter. The full new constructor signature:
+
+```typescript
+constructor(
+  private readonly app: App,
+  private readonly getSettings: () => PluginSettings,
+  private readonly onSaveSettings: (s: PluginSettings) => Promise<void>,
+)
+```
+
+`SpecoratorView.ts` currently passes `this.plugin.settings` (snapshot) — change to `() => this.plugin.settings`. `src/plugin/main.ts` currently passes `this.settings` (snapshot) — change to `() => this.settings`. All logging calls read `this.getSettings().logLevel` at invocation time. `getSettings` also replaces all reads of `this.settings` in `SettingsPort` methods.
 
 **Console prefix:** Every log line from `ObsidianBridge` is prefixed with `[Specorator]`. Multiple plugins share the Obsidian DevTools console — without a prefix, log output is indistinguishable from other plugins.
 
@@ -120,10 +135,12 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 
 **`LoggerPort` is strictly logging-only — no notification side effects:** No `LoggerPort` implementation may call `NotificationPort` or show an Obsidian `Notice`. Notifications are exclusively the responsibility of `NotificationPort` and `FeedbackService`. `plugin-core-design.md` describes `ObsidianBridge` additionally firing an Obsidian `Notice` for error-level log messages — that behaviour is superseded by this spec. Implementing it would cause double notification whenever `FeedbackService.reportResult` (or any caller) calls both `log.error()` and `notify.showError()` for the same event, violating the "log + notify exactly once" invariant.
 
+**⚠️ Existing code to remove:** The current `ObsidianBridge.error()` implementation fires `new Notice(\`Specorator error: ${message}\`, 6000)`. Remove that line. It is exactly the superseded behaviour described above.
+
 **Implementation notes:**
 - `ObsidianBridge`: Constructor signature changes from receiving a settings snapshot to `getSettings: () => PluginSettings`. `SpecoratorView.ts` passes `() => this.settings`. Wraps `console.*` only — no `Notice` calls. Calls `getSettings().logLevel` at each invocation. Suppresses calls below the configured level. Prefixes all output with `[Specorator]`.
-- `MockBridge`: Hardcodes `logLevel = 'debug'`. Appends to `logEntries: Array<{ level: LogLevel; message: string; error?: unknown; context?: Record<string, unknown> }>` for test assertions. No contract test file — assertions live inline in MockBridge-specific tests.
-- `LocalStorageBridge`: Hardcodes `logLevel = 'debug'`. Wraps `console.*`. Prefixes with `[Specorator]`.
+- `MockBridge`: Hardcodes `logLevel = 'debug'`. Appends to a **public** `logEntries: Array<{ level: LogLevel; message: string; error?: unknown; context?: Record<string, unknown> }>` field (or exposed via a public `getLogEntries()` helper following the same pattern as `getNotices()`). No contract test file — assertions live inline in MockBridge-specific tests.
+- `LocalStorageBridge`: Hardcodes `logLevel = 'debug'`. Wraps `console.*`. Prefixes with `[Specorator]`. Must also implement `LoggerPort` so it satisfies the bridge type (required for `src/ui/main.ts` to provide `LOGGER_PORT`).
 
 ### 4.3 `FeedbackService` — Application-Layer Façade
 
@@ -133,7 +150,7 @@ This preserves the double-logging invariant: log and notify exactly once, at the
 
 **`FeedbackService` is a side-effect emitter, not a control-flow wrapper.** Its core method passes `Result<T>` through unchanged — the caller retains the result to inspect it after feedback is emitted.
 
-**Location:** `src/application/shared/FeedbackService.ts`
+**Location:** `src/application/shared/FeedbackService.ts` — the class is defined in the application layer, which `src/ui/` composables may import per the DDD import direction (`domain ← application ← infrastructure ← ui`). "Composable-layer only" means `FeedbackService` is never injected into use cases — not that it must physically live in `src/ui/`.
 
 ```typescript
 export class FeedbackService {
@@ -214,11 +231,13 @@ export function toUserMessage(err: Error): string {
 | `onErrorCaptured` (in `ErrorBoundary.vue`) | Root component | Sync/async errors in child `setup()`, lifecycle hooks, template handlers, watchers |
 | `app.config.errorHandler` | Both entry points | Everything that bubbles past `onErrorCaptured`; terminal Vue error handler |
 | `window.addEventListener('unhandledrejection')` | Both entry points | Unhandled Promise rejections outside Vue's lifecycle — **must log + notify** (bypasses all Vue error handlers) |
-| `router.onError(handler)` | `src/ui/router/index.ts` | Navigation guard rejections — **must log + notify** (app may stay on previous route, ErrorBoundary never renders) |
+| `router.onError(handler)` | Both entry points (`src/ui/main.ts`, `src/plugin/SpecoratorView.ts`) | Navigation guard rejections — **must log + notify** (app may stay on previous route, ErrorBoundary never renders) |
 
 **`onErrorCaptured` vs `app.config.errorHandler` ordering:** `onErrorCaptured` in child components fires first. If the handler explicitly returns `false`, the error stops propagating and `app.config.errorHandler` is NOT called. If it returns `undefined` (implicit — the most common accidental bug), the error continues bubbling to the global handler, causing duplicate log entries. Always return `false` explicitly when the boundary handles the error.
 
 **`ErrorBoundary.vue` placement:** Wraps `<RouterView />` inside `App.vue`. Both runtimes (Obsidian plugin mounts `App.vue` via `SpecoratorView.ts`; standalone browser mounts it via `src/ui/main.ts`) share the same `App.vue`, so a single change covers both.
+
+**Port provision prerequisite:** `ErrorBoundary.vue` calls `useLoggerPort()` and `useNotificationPort()` inside `<script setup>`. Both `LOGGER_PORT` and `NOTIFICATION_PORT` must be provided before `App.vue` mounts. `src/ui/main.ts` must call `app.provide(LOGGER_PORT, bridge)` and `app.provide(NOTIFICATION_PORT, bridge)` before `app.mount(...)`. Missing either provision causes `useLoggerPort()` to throw inside the very boundary meant to catch errors — an unrecoverable blank screen.
 
 **`ErrorBoundary.vue`** — `src/ui/components/ErrorBoundary.vue`:
 
@@ -277,7 +296,7 @@ window.addEventListener('unhandledrejection', onUnhandledRejection)
 // In src/ui/main.ts (standalone browser): no teardown needed — page lifetime = app lifetime.
 ```
 
-**`router.onError`** — wired in `src/ui/router/index.ts`:
+**`router.onError`** — wired in **both entry points** (`src/ui/main.ts` and `src/plugin/SpecoratorView.ts`), alongside `app.config.errorHandler`, where `loggingPort` and `notificationPort` are already in scope:
 
 ```typescript
 router.onError((err) => {
@@ -288,7 +307,7 @@ router.onError((err) => {
 })
 ```
 
-`loggingPort` and `notificationPort` are obtained from the application context before the app is mounted, not from Vue's provide/inject (which is unavailable outside component context).
+Do NOT wire `router.onError` in `src/ui/router/index.ts` — the router module is created at import time before any ports exist, and Vue's provide/inject is unavailable outside component context.
 
 **Fix component-level throws (three sites):**
 1. `CreateFeatureForm.vue` — `throw result.error` → replace with `feedback.reportResult(result, { ... })`; check `result.ok` to guard post-success logic
@@ -316,21 +335,23 @@ Infrastructure (FeatureRepository) file-conflict guard:
 
 | Action | File |
 |---|---|
-| New port interface | `src/domain/ports/LoggerPort.ts` |
-| Modified port interface | `src/domain/ports/NotificationPort.ts` |
+| **Already exists** — no change needed | `src/domain/ports/LoggerPort.ts` |
+| Modified port interface — replace `showNotice` with severity methods | `src/domain/ports/NotificationPort.ts` |
 | Modified — additive `logLevel` field | `src/domain/settings/PluginSettings.ts` |
-| New InjectionKey | `src/infrastructure/bridge/ports.ts` |
-| New composable | `src/ui/composables/useLoggerPort.ts` |
-| Updated — new severity methods + Notice handle tracking + getSettings getter | `src/infrastructure/obsidian/ObsidianBridge.ts` |
-| Updated — new severity methods + logEntries array | `src/infrastructure/mock/MockBridge.ts` |
-| Updated — new severity methods | `src/infrastructure/localstorage/LocalStorageBridge.ts` |
+| Modified — add `export type { LoggerPort }` if not already present | `src/domain/ports/index.ts` |
+| **Already exists** — no change needed | `src/infrastructure/bridge/ports.ts` (LOGGER_PORT) |
+| **Already exists** — no change needed | `src/domain/ports/index.ts` (LoggerPort re-export added in W4) |
+| **Already exists** — no change needed | `src/ui/composables/useLoggerPort.ts` |
+| Updated — new severity methods; Notice handle tracking (`Set<Notice>` + `hideAllNotices()`); constructor snapshot → getter; remove `new Notice(...)` from `error()` | `src/infrastructure/obsidian/ObsidianBridge.ts` |
+| Updated — new severity methods + `severity` in `noticeLog`; add public `logEntries` field; implement `LoggerPort` | `src/infrastructure/mock/MockBridge.ts` |
+| Updated — new severity methods + `severity` in `sp:notice` event detail; implement `LoggerPort` | `src/infrastructure/localstorage/LocalStorageBridge.ts` |
 | New service | `src/application/shared/FeedbackService.ts` |
 | New helper | `src/application/shared/errorMessages.ts` |
 | New component | `src/ui/components/ErrorBoundary.vue` |
-| Modified — wrap RouterView with ErrorBoundary | `src/ui/App.vue` |
-| Modified — app.config.errorHandler + unhandledrejection + provide LOGGER_PORT | `src/ui/main.ts` |
-| Modified — app.config.errorHandler + unhandledrejection (stored ref, removed in onClose) + provide LOGGER_PORT + getSettings getter + hideAllNotices on close | `src/plugin/SpecoratorView.ts` |
-| Modified — add router.onError | `src/ui/router/index.ts` |
+| Modified — wrap RouterView with ErrorBoundary; update `sp:notice` event consumer to destructure `severity` from event detail (note: severity-differentiated toast styling in `notificationStore`/`AppToast.vue` is **out of scope** — deferred to standalone UX spec) | `src/ui/App.vue` |
+| Modified — add: `app.config.errorHandler`, `router.onError`, `unhandledrejection` handler (named ref, no teardown needed — page lifetime); `LOGGER_PORT` and `NOTIFICATION_PORT` already provided | `src/ui/main.ts` |
+| Modified — app.config.errorHandler + router.onError + unhandledrejection (named ref, removed in onClose) + provide LOGGER_PORT + getSettings getter + hideAllNotices on close | `src/plugin/SpecoratorView.ts` |
+| Modified — migrate `detectLegacyVaultLayout()` raw `new Notice(...)` to `notificationPort.showWarning()` | `src/plugin/main.ts` |
 | Modified — fix throw site, migrate to feedback.reportResult | `src/ui/composables/useSettings.ts` |
 | Modified — fix throw site, migrate to feedback.reportResult | `src/ui/components/feature/CreateFeatureForm.vue` |
 | Modified — fix throw site, migrate to feedback.reportResult | `src/ui/views/SettingsView.vue` |

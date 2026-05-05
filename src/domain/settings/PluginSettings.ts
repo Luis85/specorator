@@ -10,6 +10,7 @@ export interface PluginSettings {
 	readonly constitutionFile: string
 	readonly gateStrictness: 'strict' | 'lenient'
 	readonly teamMode: boolean
+	readonly logLevel: 'debug' | 'info' | 'warn' | 'error'
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -20,4 +21,5 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	constitutionFile: 'CONSTITUTION.md',
 	gateStrictness: 'strict',
 	teamMode: false,
+	logLevel: 'warn',
 }
