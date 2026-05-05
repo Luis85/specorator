@@ -123,15 +123,17 @@ Show the lifecycle with plain-language stage labels, not technical slug names.
 
 ### Section 5 — AI assistant
 
-Explain the AI assistant as a first-class v1 feature, not a future roadmap item.
+The AI assistant is a v1 feature — not v2.0 — but **it is not yet shipped**. Describe it as in active development for v1, using future tense for the sidebar capabilities until the feature lands.
 
-**Key points:**
-- Permanent side panel, always visible
-- Knows your persona, active file, current stage, and opted-in knowledge base context — before you type a word
-- Suggests relevant actions per stage (not generic chat prompts)
-- Every proposed change is a review card — nothing applied without acceptance
+**Key points (describe in future tense until shipped):**
+- Permanent side panel, always visible — *will sit alongside your work*
+- Context-aware — *will know your persona, active file, current stage, and opted-in knowledge base before you type a word*
+- Suggests relevant actions per stage — *will surface stage-appropriate prompts, not generic chat*
+- Every proposed change is a review card — *nothing will be applied without acceptance*
 
-**Copy constraint:** Do not describe the AI assistant as "coming in v2.0" — it is a v1 feature. Do not use AI terminology ("prompt", "model", "context window", "LLM"). Do not describe the MCP server or technical integration details.
+**Status indicator:** Include the "⚡ In development for v1" badge on this section until the feature ships.
+
+**Copy constraint:** The AI assistant is a v1 feature — do not describe it as "coming in v2.0". But it is not yet implemented — do not use present tense for sidebar capabilities that do not yet exist in `src/`. Use "will", "is being built to", or "in active development". Update this section to present tense once #161 ships. Do not use AI terminology ("prompt", "model", "context window", "LLM"). Do not describe the MCP server or technical integration details.
 
 ---
 
