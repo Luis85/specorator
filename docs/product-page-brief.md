@@ -35,7 +35,7 @@ This brief provides all the structure, copy boundaries, and content decisions ne
 
 ### Primary Message
 
-> Specorator is a guided development companion that takes you — and your whole team — from first idea to tested code. It brings structured workflow and an AI assistant that knows your work into a single, connected environment. All your files stay plain text, owned by you.
+> Specorator is a guided development companion that takes you — and your whole team — from first idea to tested code. It brings structured workflow into a single, connected environment — with an AI assistant that will know your work coming in v1. All your files stay plain text, owned by you.
 
 ### Secondary Message
 
