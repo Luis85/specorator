@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Specorator — spec-driven, agentic software development for Obsidian</title>
+    <title>Specorator — guided software development from idea to tested code</title>
     <meta
       name="description"
-      content="Specorator is an Obsidian plugin that guides you through a structured spec-driven workflow — from idea to release — keeping all artifacts as editable Markdown in your vault."
+      content="Specorator guides you through the full development lifecycle — from first idea to retrospective — with structured workflow today and an AI assistant coming in v1 that will know your context and keep everyone aligned."
     />
     <style>
       /* ── Reset & base ───────────────────────────────────── */
@@ -132,8 +132,8 @@
       }
       section p { color: var(--color-muted); margin-bottom: 1rem; max-width: 700px; }
 
-      /* ── What / problem ─────────────────────────────────── */
-      .what-grid {
+      /* ── Cards ──────────────────────────────────────────── */
+      .card-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
         gap: 1rem;
@@ -154,22 +154,60 @@
       }
       .card p { font-size: 0.9rem; margin-bottom: 0; color: var(--color-muted); }
 
-      /* ── Workflow steps ─────────────────────────────────── */
-      .stage-list {
-        display: flex;
-        flex-wrap: wrap;
+      /* ── Pillars ─────────────────────────────────────────── */
+      .pillar-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.25rem;
+        margin-top: 1.5rem;
+      }
+      .pillar {
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        padding: 1.5rem;
+      }
+      .pillar-num {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--color-accent-lt);
+        margin-bottom: 0.5rem;
+      }
+      .pillar h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.5rem; }
+      .pillar p { font-size: 0.9rem; color: var(--color-muted); margin: 0; }
+
+      /* ── Stage list ─────────────────────────────────────── */
+      .stage-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
         gap: 0.5rem;
         margin-top: 1.25rem;
       }
-      .stage-pill {
-        background: var(--color-code-bg);
-        color: var(--color-accent-lt);
-        border: 1px solid rgba(124, 58, 237, 0.25);
-        border-radius: 999px;
-        font-size: 0.78rem;
-        padding: 0.2rem 0.7rem;
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      .stage-item {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        padding: 0.55rem 0.9rem;
       }
+      .stage-num {
+        flex-shrink: 0;
+        width: 1.4rem;
+        height: 1.4rem;
+        border-radius: 50%;
+        background: rgba(124, 58, 237, 0.2);
+        color: var(--color-accent-lt);
+        font-size: 0.72rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .stage-label { font-size: 0.88rem; color: var(--color-text); }
 
       /* ── Try it live ────────────────────────────────────── */
       .try-live {
@@ -184,6 +222,17 @@
         margin-top: 1.5rem;
       }
       .try-live p { margin: 0; }
+
+      /* ── Callout ─────────────────────────────────────────── */
+      .callout {
+        background: rgba(124, 58, 237, 0.07);
+        border: 1px solid rgba(124, 58, 237, 0.25);
+        border-radius: var(--radius);
+        padding: 1.25rem 1.5rem;
+        margin-top: 1.5rem;
+      }
+      .callout p { margin: 0; font-size: 0.95rem; color: var(--color-text); max-width: none; }
+      .callout strong { color: var(--color-accent-lt); }
 
       /* ── Install ────────────────────────────────────────── */
       .install-steps { margin-top: 1.25rem; counter-reset: step; }
@@ -219,7 +268,7 @@
         font-size: 0.88em;
       }
 
-      /* ── Vision / roadmap ───────────────────────────────── */
+      /* ── Roadmap ────────────────────────────────────────── */
       .roadmap-row {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -293,7 +342,7 @@
       }
       .repo-card p { font-size: 0.85rem; color: var(--color-muted); margin: 0; }
 
-      /* ── Contribute ─────────────────────────────────────── */
+      /* ── Link list ──────────────────────────────────────── */
       .link-list { margin-top: 1rem; }
       .link-list li {
         list-style: none;
@@ -325,7 +374,7 @@
         <span class="logo">Spec<span>orator</span></span>
         <nav>
           <a href="#try-live">Try live</a>
-          <a href="#install">Install</a>
+          <a href="#get-started">Get started</a>
           <a href="#contribute">Contribute</a>
           <a href="https://github.com/Luis85/specorator">GitHub</a>
         </nav>
@@ -336,19 +385,19 @@
     <main>
       <section class="hero" style="border-top: none;">
         <div class="container">
-          <div class="badge">Obsidian plugin · v1 alpha</div>
-          <h1>Spec-driven workflow,<br /><em>inside your vault</em></h1>
+          <div class="badge">v1 alpha · in development</div>
+          <h1>From idea to tested code.<br /><em>Every step, guided.</em></h1>
           <p>
-            Specorator guides you from idea to release through a structured 12-stage workflow.
-            Every artifact lives as editable Markdown in your Obsidian vault — owned by you,
-            readable without the plugin, and ready for agentic assistance when you want it.
+            Specorator is your guided development companion — structured workflow,
+            AI assistance, and your knowledge in one place. Express what you want to build
+            and let Specorator keep you moving, every stage of the way.
           </p>
           <div class="hero-cta">
             <a href="app/" class="btn btn-primary">
               ▶&nbsp; Try it in your browser
             </a>
-            <a href="#install" class="btn btn-secondary">
-              Install in Obsidian
+            <a href="#get-started" class="btn btn-secondary">
+              Get started
             </a>
           </div>
         </div>
@@ -359,73 +408,121 @@
         <div class="container">
           <h2>What is Specorator?</h2>
           <p>
-            Specorator is an <strong>Obsidian plugin</strong> that embeds the
-            <a href="https://github.com/Luis85/agentic-workflow">agentic-workflow</a> methodology
-            directly into your vault. It gives you a cockpit view of your active feature, tracks
-            which stage you are on, surfaces the next required artifacts, and enforces quality
-            gates before you advance.
+            Specorator is a guided development companion that takes you through the entire lifecycle
+            of a software feature — from the first conversation about an idea, all the way to a
+            retrospective. It gives you a cockpit view of your active work, an AI assistant that
+            knows your context, and a structured workflow that keeps everyone aligned — whether
+            you're a solo developer, a product manager, or a founder who doesn't write code.
           </p>
           <p>
-            All content stays in plain Markdown. You never need to log into a separate tool,
-            upload files to an external service, or hand over control of your context.
-            Specorator is a helping hand, not a gatekeeper.
+            All your work stays as plain files — owned by you, readable without the tool, and never
+            locked into a cloud service. Specorator is the guide, not the gatekeeper.
           </p>
 
-          <div class="what-grid">
-            <div class="card">
-              <div class="card-icon">🗂️</div>
-              <h3>Vault-first</h3>
-              <p>Every artifact is a Markdown file in <code>specs/{slug}/</code>. Open, edit, and version-control it with any tool you already use.</p>
+          <div class="pillar-grid">
+            <div class="pillar">
+              <div class="pillar-num">01</div>
+              <h3>Guided workflow</h3>
+              <p>12 stages from first idea to retrospective. Always know where you are, what comes next, and what you need to produce before you move on.</p>
             </div>
-            <div class="card">
-              <div class="card-icon">🔁</div>
-              <h3>Stage-gated workflow</h3>
-              <p>12 stages from <code>idea</code> to <code>retrospective</code>. Advance only when quality gates pass — no skipping, no guessing what comes next.</p>
+            <div class="pillar">
+              <div class="pillar-num">02</div>
+              <h3>AI that knows your work <em style="font-style:normal; font-size:0.75rem; color:var(--color-muted);">— in development</em></h3>
+              <p>An always-visible AI assistant will understand your persona, your current stage, and the active work in your knowledge base — before you type a word. Ask questions, get drafts, request reviews — in plain language. <em>(Coming in v1 — see roadmap.)</em></p>
             </div>
-            <div class="card">
-              <div class="card-icon">🤝</div>
+            <div class="pillar">
+              <div class="pillar-num">03</div>
               <h3>You stay in control</h3>
-              <p>You decide what context agents can see, what they propose, and what becomes a durable artifact. Specorator surfaces options — you make decisions.</p>
-            </div>
-            <div class="card">
-              <div class="card-icon">🧩</div>
-              <h3>Try without installing</h3>
-              <p>The standalone UI runs fully in your browser with <code>localStorage</code> — no Obsidian, no sign-up, no backend required.</p>
+              <p>Every AI suggestion is a proposal. You review, edit, accept, or reject it before anything is written. Your files are never modified without your explicit say-so.</p>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- ── The problem ────────────────────────────────── -->
-      <section id="problem">
+      <!-- ── Who it's for ──────────────────────────────── -->
+      <section id="for-who">
         <div class="container">
-          <h2>The problem it solves</h2>
+          <h2>Built for everyone in the room</h2>
           <p>
-            Most developers start coding before the problem is well understood. They jump from
-            a vague idea to a PR without a spec, without a test plan, and without a retrospective.
-            The result is rework, scope creep, and knowledge scattered across chat threads,
-            Notion pages, and half-finished documents.
-          </p>
-          <p>
-            Specorator brings the <em>whole workflow</em> — ideation, research, requirements,
-            design, spec, tasks, implementation, testing, review, release, and retrospective —
-            into a single, consistent place: your Obsidian vault. It keeps you focused on the
-            work, not on process admin.
+            Good software comes from good collaboration between people who think differently.
+            Specorator is designed for all of them — not just the ones who write code.
           </p>
 
-          <div class="stage-list">
-            <span class="stage-pill">idea</span>
-            <span class="stage-pill">research</span>
-            <span class="stage-pill">requirements</span>
-            <span class="stage-pill">design</span>
-            <span class="stage-pill">spec</span>
-            <span class="stage-pill">tasks</span>
-            <span class="stage-pill">implementation-log</span>
-            <span class="stage-pill">test-plan</span>
-            <span class="stage-pill">test-report</span>
-            <span class="stage-pill">review</span>
-            <span class="stage-pill">release-notes</span>
-            <span class="stage-pill">retrospective</span>
+          <div class="card-grid">
+            <div class="card">
+              <div class="card-icon">💡</div>
+              <h3>Founders and PMs</h3>
+              <p>Turn a vague idea into a clear, structured brief. Describe what you want in plain language — Specorator helps you get to requirements, decisions, and a solid spec.</p>
+            </div>
+            <div class="card">
+              <div class="card-icon">🏗️</div>
+              <h3>Engineers and architects</h3>
+              <p>Go from spec to tasks to implementation with clear traceability. Quality gates catch gaps before they become bugs. Retrospectives make the next feature better.</p>
+            </div>
+            <div class="card">
+              <div class="card-icon">🎨</div>
+              <h3>Designers and analysts</h3>
+              <p>Design decisions and requirements live alongside the code artifacts. Everything is connected — no context lost in a separate tool.</p>
+            </div>
+            <div class="card">
+              <div class="card-icon">🧩</div>
+              <h3>Try without installing</h3>
+              <p>The standalone UI runs fully in your browser — no account, no setup, no data sent anywhere. Create a feature and walk through the workflow right now.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── The 12 stages ────────────────────────────────── -->
+      <section id="stages">
+        <div class="container">
+          <h2>The full lifecycle, from first thought to lessons learned</h2>
+          <p>
+            Most tools support a fraction of the journey. Specorator covers all 12 stages —
+            with AI assistance at every one. The further you go, the more context your AI
+            assistant has to give you useful, grounded answers.
+          </p>
+
+          <div class="stage-grid">
+            <div class="stage-item"><span class="stage-num">1</span><span class="stage-label">Exploring the idea</span></div>
+            <div class="stage-item"><span class="stage-num">2</span><span class="stage-label">Looking into it</span></div>
+            <div class="stage-item"><span class="stage-num">3</span><span class="stage-label">What it needs to do</span></div>
+            <div class="stage-item"><span class="stage-num">4</span><span class="stage-label">How it should look and feel</span></div>
+            <div class="stage-item"><span class="stage-num">5</span><span class="stage-label">The full plan</span></div>
+            <div class="stage-item"><span class="stage-num">6</span><span class="stage-label">Breaking it into steps</span></div>
+            <div class="stage-item"><span class="stage-num">7</span><span class="stage-label">Building it</span></div>
+            <div class="stage-item"><span class="stage-num">8</span><span class="stage-label">How we'll check it works</span></div>
+            <div class="stage-item"><span class="stage-num">9</span><span class="stage-label">What we found</span></div>
+            <div class="stage-item"><span class="stage-num">10</span><span class="stage-label">Checking our work</span></div>
+            <div class="stage-item"><span class="stage-num">11</span><span class="stage-label">Telling people about it</span></div>
+            <div class="stage-item"><span class="stage-num">12</span><span class="stage-label">What we learned</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── How AI works ────────────────────────────────── -->
+      <section id="ai-assistant">
+        <div class="container">
+          <h2>AI assistance — <em style="font-style:normal; color: var(--color-accent-lt)">in active development</em></h2>
+          <span class="status-badge status-alpha" style="margin-bottom: 1.25rem; display: inline-flex;">⚡ In development for v1</span>
+          <p>
+            The AI assistant will sit in a permanent side panel alongside your work. It will know
+            who you are, what you're working on, and where you are in the workflow — before you
+            type a single word. Rather than asking you to describe your project every time,
+            Specorator will build that context silently. You just say what you need.
+          </p>
+          <p>
+            The assistant will be able to read your notes, understand your decisions, and propose
+            new content using your existing knowledge as context — all through the same files you
+            already work with.
+          </p>
+
+          <div class="callout">
+            <p>
+              <strong>Proposals, not surprises.</strong> Every file the AI wants to create or
+              change will appear as a review card first. You read it, adjust if needed, and accept —
+              or reject it entirely. Nothing will be written until you decide.
+            </p>
           </div>
         </div>
       </section>
@@ -435,9 +532,9 @@
         <div class="container">
           <h2>Try it live in your browser</h2>
           <p>
-            The standalone UI uses your browser's <code>localStorage</code> as a vault — no
-            Obsidian runtime, no sign-up, no data sent anywhere. Create a feature, walk through
-            the stages, and see the workflow in action.
+            The standalone UI stores everything in your browser's local storage — no account,
+            no sign-up, nothing sent anywhere. Create a feature, walk through the stages, and
+            see the workflow in action.
           </p>
 
           <div class="try-live">
@@ -448,59 +545,41 @@
               </p>
             </div>
             <a href="app/" class="btn btn-primary" style="font-size: 1rem; padding: 0.75rem 2rem;">
-              ▶&nbsp; Open the live plugin UI
+              ▶&nbsp; Open the live demo
             </a>
           </div>
         </div>
       </section>
 
-      <!-- ── Relationship to agentic-workflow ─────────────── -->
-      <section id="workflow">
-        <div class="container">
-          <h2>Relationship to <code>agentic-workflow</code></h2>
-          <p>
-            <a href="https://github.com/Luis85/agentic-workflow">agentic-workflow</a> is the
-            upstream methodology: a detailed 12-stage process with templates, quality gates,
-            and heuristics for what "good" looks like at each stage.
-            Specorator is the Obsidian <em>runtime</em> for that methodology.
-          </p>
-          <p>
-            The plugin installs the <code>agentic-workflow</code> template set into your vault,
-            creates the correct folder structure, and exposes the cockpit UI for tracking and
-            advancing features. Changes to the upstream methodology flow into Specorator as
-            template and validation updates.
-          </p>
-        </div>
-      </section>
-
-      <!-- ── Roadmap ────────────────────────────────────────── -->
+      <!-- ── What's available / roadmap ─────────────────── -->
       <section id="roadmap">
         <div class="container">
-          <h2>What is available now, and what is coming</h2>
+          <h2>What's available now, and what's coming</h2>
 
           <div class="roadmap-row">
             <div class="roadmap-card">
-              <div class="version">v1 alpha — in progress</div>
-              <h3>Plugin foundation</h3>
+              <div class="version">First increment — in development</div>
+              <h3>Guided workflow + AI assistant</h3>
               <ul>
-                <li>Create and manage features from the Obsidian sidebar</li>
-                <li>Advance through all 12 stages with quality-gate checks</li>
-                <li>Auto-creates stage stub files in <code>specs/{slug}/</code></li>
-                <li>Standalone browser UI (try without installing)</li>
-                <li>LocalStorage persistence for browser demo</li>
+                <li>Onboarding — set up your workspace and introduce yourself to your AI assistant</li>
+                <li>Guided installation of the workflow template into your knowledge base</li>
+                <li>AI chat assistant in a permanent side panel — context-aware from the start</li>
+                <li>Workflow navigator — active feature, current stage, next actions</li>
+                <li>Artifact creation from the UI</li>
+                <li>Standalone browser demo (try without installing anything)</li>
               </ul>
               <span class="status-badge status-alpha">⚡ Active development</span>
             </div>
 
             <div class="roadmap-card">
               <div class="version">v2.0 — planned</div>
-              <h3>Agentonomous integration</h3>
+              <h3>Fully orchestrated agentic teams</h3>
               <ul>
-                <li>Team of agentic coworkers powered by <a href="https://github.com/Luis85/agentonomous">agentonomous</a></li>
-                <li>Agents assist with drafting, review, and quality checking</li>
-                <li>You control what context agents see and what they propose</li>
-                <li>All agent outputs remain editable Markdown in your vault</li>
-                <li>Companion-app experience alongside the Obsidian plugin</li>
+                <li>Purpose-built agent roles: PM, architect, engineer, QA, writer</li>
+                <li>Agents run full workflow sessions end-to-end</li>
+                <li>Live execution state streamed to the panel</li>
+                <li>All agent outputs remain reviewable proposals</li>
+                <li>Powered by <a href="https://github.com/Luis85/agentonomous">agentonomous</a></li>
               </ul>
               <span class="status-badge status-planned">🔭 Planned</span>
             </div>
@@ -508,13 +587,35 @@
         </div>
       </section>
 
-      <!-- ── Install ────────────────────────────────────────── -->
-      <section id="install">
+      <!-- ── Powered by Obsidian ──────────────────────────── -->
+      <section id="obsidian">
         <div class="container">
-          <h2>Install or sideload into Obsidian</h2>
+          <h2>Powered by Obsidian</h2>
+          <p>
+            Specorator runs as a plugin inside <a href="https://obsidian.md">Obsidian</a> — chosen
+            as its foundation for its powerful local knowledge graph, rich plugin ecosystem, and deep
+            file-system integration. Obsidian is the engine; Specorator is the product that runs on it.
+          </p>
+          <p>
+            Because of this foundation, your entire knowledge base — notes, diagrams, structured
+            data, linked documents — becomes part of the context your AI assistant reasons over.
+            The AI doesn't just read your active file; it can navigate your whole graph of connected
+            knowledge to give you grounded, relevant answers.
+          </p>
+          <p>
+            All files are plain Markdown in a folder you own. They're readable in any text editor,
+            version-controllable with git, and useful long after this tool is gone.
+          </p>
+        </div>
+      </section>
+
+      <!-- ── Get started ────────────────────────────────────── -->
+      <section id="get-started">
+        <div class="container">
+          <h2>Get started</h2>
           <p>
             Specorator is not yet listed in the Obsidian Community Plugin directory.
-            Use the manual sideload method until it is submitted.
+            Use the manual sideload method to install it today.
           </p>
 
           <ol class="install-steps">
@@ -544,15 +645,17 @@
             </li>
             <li>
               <span>
-                Open the Specorator panel from the left sidebar ribbon or via
-                <strong>Command palette → Specorator: Open</strong>.
+                Open the Specorator panel from the left sidebar ribbon icon, or via
+                <strong>Command palette → Specorator: Open panel</strong>. This is your main cockpit —
+                create features, advance stages, and navigate your workflow from here.
+                <em style="color: var(--color-muted);">Onboarding (auto-opens on first install) is in active development — see the roadmap above.</em>
               </span>
             </li>
           </ol>
 
           <p style="margin-top: 1rem;">
             For the full local development setup — including running the standalone UI in a browser
-            and sideloading a dev build — see
+            and building a dev build — see
             <a href="https://github.com/Luis85/specorator/blob/main/docs/local-development.md">docs/local-development.md</a>.
           </p>
         </div>
@@ -562,12 +665,12 @@
       <section id="ecosystem">
         <div class="container">
           <h2>Related repositories</h2>
-          <p>Specorator is part of a small, focused ecosystem.</p>
+          <p>Specorator is part of a focused ecosystem of connected tools.</p>
 
           <div class="related-grid">
             <a href="https://github.com/Luis85/specorator" class="repo-card" style="text-decoration: none;">
               <span class="repo-name">Luis85/specorator</span>
-              <p>This repository. Obsidian plugin + standalone browser UI.</p>
+              <p>This repository. The guided workflow and AI assistant plugin.</p>
             </a>
             <a href="https://github.com/Luis85/agentic-workflow" class="repo-card" style="text-decoration: none;">
               <span class="repo-name">Luis85/agentic-workflow</span>
@@ -575,7 +678,11 @@
             </a>
             <a href="https://github.com/Luis85/agentonomous" class="repo-card" style="text-decoration: none;">
               <span class="repo-name">Luis85/agentonomous</span>
-              <p>Agent orchestration engine. Powers v2.0 agentic coworkers.</p>
+              <p>Agent implementation library. Powers the v2.0 specialist agent roles.</p>
+            </a>
+            <a href="https://github.com/Luis85/specorator-runtime" class="repo-card" style="text-decoration: none;">
+              <span class="repo-name">Luis85/specorator-runtime</span>
+              <p>Execution engine for v2.0 orchestrated sessions.</p>
             </a>
           </div>
         </div>
@@ -592,12 +699,11 @@
 
           <ul class="link-list">
             <li><a href="https://github.com/Luis85/specorator">GitHub repository</a> — source code, issues, and pull requests</li>
-            <li><a href="https://github.com/Luis85/specorator/issues/1">#1 — v1 alpha planning</a> — v1 feature scope and acceptance criteria</li>
-            <li><a href="https://github.com/Luis85/specorator/issues/23">#23 — v2.0 planning</a> — companion-app and agentonomous direction</li>
+            <li><a href="https://github.com/Luis85/specorator/issues/1">#1 — v1 alpha planning</a> — first increment scope and acceptance criteria</li>
+            <li><a href="https://github.com/Luis85/specorator/issues/23">#23 — v2.0 planning</a> — orchestrated agentic teams direction</li>
             <li><a href="https://github.com/Luis85/specorator/issues/47">#47 — Roadmap progress tracker</a> — phase-by-phase checklist</li>
             <li><a href="https://github.com/Luis85/specorator/blob/main/docs/local-development.md">Local development guide</a> — prerequisites, commands, and sideloading</li>
             <li><a href="https://github.com/Luis85/specorator/blob/main/docs/contributing.md">Contributing guide</a> — labels, milestones, branch naming, and merge policy</li>
-            <li><a href="https://github.com/Luis85/agentic-workflow/issues/96">Upstream planning issue</a> — agentic-workflow #96</li>
           </ul>
         </div>
       </section>
@@ -609,7 +715,7 @@
         <p>
           <a href="https://github.com/Luis85/specorator">Specorator</a> ·
           MIT licence ·
-          Built with Obsidian · Vue 3 · TypeScript
+          Powered by Obsidian · Vue 3 · TypeScript
         </p>
       </div>
     </footer>
