@@ -25,6 +25,7 @@ A new user installing Specorator faces several immediate barriers before they ca
 
 ## Success criteria
 
+- **Auto-open on first install:** When `onboardingComplete` is absent or `false`, the plugin opens the onboarding wizard automatically when Obsidian loads — without requiring any ribbon click, command palette action, or prior knowledge. A first-time installer must never be left staring at an empty Obsidian window wondering what to do next.
 - A new user completes onboarding in under three minutes and arrives at the workflow navigator or chat sidebar in a ready state.
 - The persona step ("Tell us about yourself") uses warm, non-technical copy; provides three example persona cards as inspiration; and has a de-emphasised "I'll do this later" option — not a cancel button.
 - Claude CLI availability is checked and communicated in plain language: "Your AI assistant is ready" or "To get AI help, you'll need Claude installed" — never "ClaudeCliPort unavailable" or similar.
@@ -37,6 +38,7 @@ A new user installing Specorator faces several immediate barriers before they ca
 
 ## Constraints
 
+- **Auto-open must ship with the wizard:** The `onLayoutReady()` hook in `main.ts` must call `activateView()` when `onboardingComplete` is absent or `false`. This is not a follow-up — it ships as part of the same feature. A wizard that requires manual discovery is not onboarding.
 - Must not introduce any breaking changes to `PluginSettings` — additions only (`userPersona: string`, `onboardingComplete: boolean`).
 - The persona textarea must feel like a friendly invitation, not a form field. No labels like "User persona", "Configure persona", or "Role and responsibilities".
 - Claude CLI check must use `ClaudeCliPort.isAvailable()` — never call the CLI directly from the UI layer.
