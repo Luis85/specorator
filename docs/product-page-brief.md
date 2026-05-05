@@ -194,9 +194,9 @@ The practical entry point for installation.
 2. Create `{vault}/.obsidian/plugins/specorator/` in your Obsidian vault
 3. Copy the three files into that folder
 4. Open Obsidian → Settings → Community plugins → enable Specorator
-5. Specorator opens and guides you through a short setup
+5. Open the Specorator panel from the left sidebar ribbon icon, or via **Command palette → Specorator: Open**. This is your main cockpit for the workflow. *(Alpha note: auto-open onboarding on first install is a tracked requirement — #162 — but not yet shipped. Update this step to describe the guided setup once that feature lands.)*
 
-**Copy constraint:** Do not describe marketplace installation until the plugin is submitted. Last step should mention the onboarding experience, not raw configuration.
+**Copy constraint:** Do not describe marketplace installation until the plugin is submitted. Step 5 must reflect what the current plugin actually does on first enable — not the intended onboarding experience that is still in development. Update step 5 when #162 auto-open ships.
 
 ---
 
