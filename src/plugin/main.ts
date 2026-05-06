@@ -96,9 +96,8 @@ export default class SpecoratorPlugin extends Plugin {
       for (const key of PLUGIN_SETTINGS_KEYS) {
         if (key in raw) specorator[key] = raw[key]
       }
-      const { _moduleVersions } = raw
       this._storedData = {
-        ...(_moduleVersions !== undefined ? { _moduleVersions } : {}),
+        ...raw,
         specorator,
       }
     } else {

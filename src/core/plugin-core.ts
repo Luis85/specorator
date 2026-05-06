@@ -191,7 +191,7 @@ export class PluginCore {
     if (!this._initCalled) return
 
     const mod = this.modules.find((m) => m.settingsKey === settingsKey)
-    if (mod?.onSettingsChange === undefined) return
+    if (mod === undefined) return
 
     let value: unknown = rawValue
     if (mod.validateSettings !== undefined) {
@@ -208,6 +208,8 @@ export class PluginCore {
     }
 
     this.moduleSettingsMap.set(settingsKey, value)
+
+    if (mod.onSettingsChange === undefined) return
 
     const hookResult = await tryAsync(() => Promise.resolve(mod.onSettingsChange!(value as never)))
     if (!hookResult.ok) {

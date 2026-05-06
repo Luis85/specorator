@@ -500,6 +500,21 @@ describe('PluginCore.notifySettingsChanged', () => {
     )
   })
 
+  it('updates moduleSettingsMap even when onSettingsChange is absent', async () => {
+    const ports = makePorts()
+    const mod = makeModule('a', {
+      settingsKey: 'a',
+      validateSettings: (raw: unknown) => ({ ...(raw as object), validated: true }),
+      // intentionally no onSettingsChange
+    })
+    const core = new PluginCore([mod], ports)
+    await core.init({ a: {} })
+
+    await core.notifySettingsChanged('a', { updated: true })
+
+    expect(core.getModuleSettings('a')).toEqual(expect.objectContaining({ updated: true, validated: true }))
+  })
+
   it('is a no-op when settingsKey is not found', async () => {
     const ports = makePorts()
     const core = new PluginCore([], ports)
