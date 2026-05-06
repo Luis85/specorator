@@ -10,7 +10,7 @@ describe('helloModule', () => {
       received.push(envelope.payload)
     })
 
-    helloModule.init(ports, {})
+    helloModule.init(ports, { showBadge: true })
 
     expect(received).toHaveLength(1)
     expect(received[0]).toEqual({ moduleId: 'hello' })

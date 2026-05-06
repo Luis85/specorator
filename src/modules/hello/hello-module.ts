@@ -1,8 +1,21 @@
 import './hello-events'
 import { defineModule } from '@/modules/module'
 
-export const helloModule = defineModule({
+interface HelloSettings {
+  showBadge: boolean
+}
+
+export const helloModule = defineModule<HelloSettings>({
   id: 'hello',
+  settingsKey: 'hello',
+  settingsVersion: 1,
+  settingsDefaults: { showBadge: true },
+
+  validateSettings(raw: unknown): HelloSettings {
+    const r = (raw ?? {}) as Record<string, unknown>
+    return { showBadge: typeof r.showBadge === 'boolean' ? r.showBadge : true }
+  },
+
   commands: [{ id: 'hello:open-view', name: 'Hello: Open view', callback: () => undefined }],
   views: [{ id: 'hello-view', label: 'Hello' }],
   settingsSchema: {

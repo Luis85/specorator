@@ -1,6 +1,7 @@
 import './core-events'
 import type { SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort } from '@/domain/ports'
 import { createEventBus, type EventBus, type EventBusOptions, type EventEnvelope } from '@/domain/shared/event-bus'
+import { tryAsync, trySync } from '@/domain/shared/tryAsync'
 import type { ModuleDescriptor, ModulePorts } from '@/modules'
 
 export interface CorePorts {
@@ -16,7 +17,6 @@ export interface CorePorts {
 function validateModules(modules: ReadonlyArray<ModuleDescriptor>): void {
   const ids = new Set<string>()
 
-  // 1a. Duplicate IDs
   for (const mod of modules) {
     if (ids.has(mod.id)) {
       throw new Error(`duplicate module id: "${mod.id}"`)
@@ -27,12 +27,10 @@ function validateModules(modules: ReadonlyArray<ModuleDescriptor>): void {
   for (const mod of modules) {
     const deps = mod.dependsOn ?? []
 
-    // 1c. Self-dependency
     if (deps.includes(mod.id)) {
       throw new Error(`self-dependency detected for module "${mod.id}"`)
     }
 
-    // 1d. Unknown deps
     for (const dep of deps) {
       if (!ids.has(dep)) {
         throw new Error(`unknown dependency "${dep}" in module "${mod.id}"`)
@@ -59,7 +57,6 @@ function topoSort(modules: ReadonlyArray<ModuleDescriptor>): ModuleDescriptor[] 
     }
   }
 
-  // Seed queue in declaration order (stable sort)
   const queue: ModuleDescriptor[] = modules.filter((m) => inDegree.get(m.id) === 0)
   const sorted: ModuleDescriptor[] = []
   const byId = new Map(modules.map((m) => [m.id, m]))
@@ -74,7 +71,6 @@ function topoSort(modules: ReadonlyArray<ModuleDescriptor>): ModuleDescriptor[] 
     }
   }
 
-  // 1e. Any remaining nodes = cycle
   if (sorted.length !== modules.length) {
     const remaining = modules
       .filter((m) => !sorted.includes(m))
@@ -86,11 +82,58 @@ function topoSort(modules: ReadonlyArray<ModuleDescriptor>): ModuleDescriptor[] 
   return sorted
 }
 
+// eslint-disable-next-line complexity -- Migration pipeline; each branch handles one aspect of the migration/validation/fallback spec.
 function migrateSettings(
-  _modules: ReadonlyArray<ModuleDescriptor>,
+  modules: ReadonlyArray<ModuleDescriptor>,
   settings: Record<string, unknown>,
-): Record<string, unknown> {
-  return settings // W7 replaces this
+  logger: LoggerPort,
+): void {
+  const versions = ((settings._moduleVersions ?? {}) as Record<string, number>)
+
+  for (const mod of modules) {
+    if (mod.settingsKey === undefined) continue
+
+    const key = mod.settingsKey
+    const storedVersion = versions[key] ?? 0
+    const targetVersion = mod.settingsVersion ?? 0
+
+    let blob: unknown = settings[key] ?? {}
+
+    if (storedVersion < targetVersion && mod.migrate !== undefined) {
+      const migrateResult = trySync(() => mod.migrate!(storedVersion, blob))
+      if (migrateResult.ok) {
+        blob = migrateResult.value
+      } else {
+        logger.warn('settings migration failed; falling back to defaults', {
+          moduleId: mod.id,
+          settingsKey: key,
+          fromVersion: storedVersion,
+          toVersion: targetVersion,
+          error: migrateResult.error.message,
+        })
+        blob = mod.settingsDefaults ?? {}
+      }
+    }
+
+    if (mod.validateSettings !== undefined) {
+      const validateResult = trySync(() => mod.validateSettings!(blob))
+      if (validateResult.ok) {
+        blob = validateResult.value
+      } else {
+        logger.warn('validateSettings failed; falling back to defaults', {
+          moduleId: mod.id,
+          settingsKey: key,
+          error: validateResult.error.message,
+        })
+        blob = mod.settingsDefaults ?? {}
+      }
+    }
+
+    settings[key] = blob
+    versions[key] = targetVersion
+  }
+
+  settings._moduleVersions = versions
 }
 
 // ── PluginCore ────────────────────────────────────────────────────────────────
@@ -102,6 +145,7 @@ export class PluginCore {
   private readonly modules: ReadonlyArray<ModuleDescriptor>
   private sorted: ModuleDescriptor[] = []
   private readonly leakMap = new Map<string, number>()
+  private readonly moduleSettingsMap = new Map<string, unknown>()
   private _initCalled = false
 
   constructor(
@@ -129,57 +173,73 @@ export class PluginCore {
     return [...this._degradedModules]
   }
 
+  /** All registered modules in declaration order (available before init). */
+  get allModules(): ReadonlyArray<ModuleDescriptor> {
+    return this.modules
+  }
+
+  /** Returns the migrated, validated settings slice for a module by settingsKey. */
+  getModuleSettings(settingsKey: string): unknown {
+    return this.moduleSettingsMap.get(settingsKey)
+  }
+
+  /**
+   * Called after a settings save to invoke the matching module's onSettingsChange hook.
+   * Runs validateSettings before the hook and logs + skips on failure.
+   */
+  async notifySettingsChanged(settingsKey: string, rawValue: unknown): Promise<void> {
+    if (!this._initCalled) return
+
+    const mod = this.modules.find((m) => m.settingsKey === settingsKey)
+    if (mod?.onSettingsChange === undefined) return
+
+    let value: unknown = rawValue
+    if (mod.validateSettings !== undefined) {
+      const validateResult = trySync(() => mod.validateSettings!(rawValue))
+      if (!validateResult.ok) {
+        this.ports.logger.warn('validateSettings failed; skipping onSettingsChange', {
+          moduleId: mod.id,
+          settingsKey,
+          error: validateResult.error.message,
+        })
+        return
+      }
+      value = validateResult.value
+    }
+
+    this.moduleSettingsMap.set(settingsKey, value)
+
+    const hookResult = await tryAsync(() => Promise.resolve(mod.onSettingsChange!(value as never)))
+    if (!hookResult.ok) {
+      this.ports.logger.error('onSettingsChange failed', hookResult.error, { moduleId: mod.id })
+    }
+  }
+
   async init(rawSettings: Record<string, unknown>): Promise<void> {
     if (this._initCalled) {
       throw new Error('PluginCore.init() has already been called')
     }
     this._initCalled = true
 
-    // Step 1: validate
     validateModules(this.modules)
-
-    // Step 2: topo-sort
     this.sorted = topoSort(this.modules)
 
-    // Step 3: migrate (stub)
-    const settings = migrateSettings(this.modules, rawSettings)
-
-    // Step 4: assemble ModulePorts
-    const modulePorts: ModulePorts = { ...this.ports, bus: this.bus }
-
-    // Step 5: init each module
-    const degradedIds = new Set<string>()
+    migrateSettings(this.sorted, rawSettings, this.ports.logger)
+    const settings = rawSettings
 
     for (const mod of this.sorted) {
-      // Skip modules whose declared prerequisites have been degraded
-      const degradedDep = (mod.dependsOn ?? []).find((id) => degradedIds.has(id))
-      if (degradedDep !== undefined) {
-        const error = new Error(`prerequisite module degraded: "${degradedDep}"`)
-        this._degradedModules.push({ id: mod.id, error })
-        this.bus.emit('core:module-degraded', { moduleId: mod.id, error })
-        degradedIds.add(mod.id)
-        continue
-      }
-
-      const subscribedCount = this.bus.listenerCount()
-      this.leakMap.set(mod.id, 0) // initialise before init so destroy skips it if init fails
-
-      // eslint-disable-next-line no-restricted-syntax
-      try {
-        await Promise.resolve(mod.init(modulePorts, settings))
-        this.leakMap.set(mod.id, this.bus.listenerCount() - subscribedCount)
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err))
-        // eslint-disable-next-line no-restricted-syntax
-        try { await Promise.resolve(mod.destroy?.()) } catch { /* ignore */ }
-        // Push before emit so getter is consistent when event fires
-        this._degradedModules.push({ id: mod.id, error })
-        this.bus.emit('core:module-degraded', { moduleId: mod.id, error })
-        degradedIds.add(mod.id)
+      if (mod.settingsKey !== undefined) {
+        this.moduleSettingsMap.set(mod.settingsKey, settings[mod.settingsKey] ?? mod.settingsDefaults ?? {})
       }
     }
 
-    // Step 6
+    const modulePorts: ModulePorts = { ...this.ports, bus: this.bus }
+    const degradedIds = new Set<string>()
+
+    for (const mod of this.sorted) {
+      await this.initModule(mod, modulePorts, settings, degradedIds)
+    }
+
     this.bus.emit('core:init-complete', { degradedCount: this._degradedModules.length })
   }
 
@@ -192,13 +252,10 @@ export class PluginCore {
     for (const mod of toDestroy) {
       const beforeCount = this.bus.listenerCount()
 
-      // eslint-disable-next-line no-restricted-syntax
-      try {
-        await Promise.resolve(mod.destroy?.())
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err))
-        this.ports.logger.error('module destroy failed', error, { moduleId: mod.id })
-        continue // skip tripwire for this module
+      const result = await tryAsync(() => Promise.resolve(mod.destroy?.()))
+      if (!result.ok) {
+        this.ports.logger.error('module destroy failed', result.error, { moduleId: mod.id })
+        continue
       }
 
       const afterCount = this.bus.listenerCount()
@@ -216,5 +273,41 @@ export class PluginCore {
     }
 
     this.bus.emit('core:destroy-complete', { leakCount })
+  }
+
+  private async initModule(
+    mod: ModuleDescriptor,
+    modulePorts: ModulePorts,
+    settings: Record<string, unknown>,
+    degradedIds: Set<string>,
+  ): Promise<void> {
+    const degradedDep = (mod.dependsOn ?? []).find((id) => degradedIds.has(id))
+    if (degradedDep !== undefined) {
+      const error = new Error(`prerequisite module degraded: "${degradedDep}"`)
+      this._degradedModules.push({ id: mod.id, error })
+      this.bus.emit('core:module-degraded', { moduleId: mod.id, error })
+      degradedIds.add(mod.id)
+      return
+    }
+
+    const subscribedCount = this.bus.listenerCount()
+    this.leakMap.set(mod.id, 0)
+
+    const moduleSettings =
+      mod.settingsKey !== undefined
+        ? (settings[mod.settingsKey] ?? mod.settingsDefaults ?? {})
+        : settings
+
+    const result = await tryAsync(() => Promise.resolve(mod.init(modulePorts, moduleSettings as never)))
+    if (result.ok) {
+      this.leakMap.set(mod.id, this.bus.listenerCount() - subscribedCount)
+      return
+    }
+
+    await tryAsync(() => Promise.resolve(mod.destroy?.()))
+    // Push before emit so getter is consistent when event fires
+    this._degradedModules.push({ id: mod.id, error: result.error })
+    this.bus.emit('core:module-degraded', { moduleId: mod.id, error: result.error })
+    degradedIds.add(mod.id)
   }
 }

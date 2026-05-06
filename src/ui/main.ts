@@ -23,7 +23,7 @@ import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { DEV_FIXTURES } from '@/infrastructure/mock/fixtures'
 import { createEventBus } from '@/domain/shared/event-bus'
 import { bootstrapModules } from '@/core/bootstrap'
-import { ALL_MODULES, type ModulePorts } from '@/modules'
+import { ALL_MODULES, type ModuleDescriptor, type ModulePorts } from '@/modules'
 
 const bridge = import.meta.env.PROD ? new LocalStorageBridge() : new MockBridge(DEV_FIXTURES)
 const mountPoint = document.querySelector('#app')
@@ -46,7 +46,7 @@ const ports: ModulePorts = {
 }
 
 void bridge.getSettings()
-  .then((settings) => bootstrapModules(ALL_MODULES, ports, settings as unknown as Readonly<Record<string, unknown>>))
+  .then((settings) => bootstrapModules(ALL_MODULES as ReadonlyArray<ModuleDescriptor>, ports, settings as unknown as Readonly<Record<string, unknown>>))
   .then(() => {
     app.provide(SETTINGS_PORT, bridge)
     app.provide(VAULT_PORT, bridge)
