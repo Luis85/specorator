@@ -63,6 +63,23 @@ describe('PluginCore validation', () => {
     const core3 = new PluginCore([a, b], ports)
     await expect(core3.init({})).rejects.toThrow(/\bb\b/)
   })
+
+  it('rejects duplicate settingsKey across modules', async () => {
+    const ports = makePorts()
+    const a = makeModule('a', { settingsKey: 'shared' })
+    const b = makeModule('b', { settingsKey: 'shared' })
+    const core = new PluginCore([a, b], ports)
+
+    await expect(core.init({})).rejects.toThrow(/duplicate settingsKey.*shared/i)
+  })
+
+  it('rejects a settingsKey starting with underscore', async () => {
+    const ports = makePorts()
+    const a = makeModule('a', { settingsKey: '_reserved' })
+    const core = new PluginCore([a], ports)
+
+    await expect(core.init({})).rejects.toThrow(/reserved settingsKey.*_reserved/i)
+  })
 })
 
 // ── Topo-sort & init order ────────────────────────────────────────────────────

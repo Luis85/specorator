@@ -119,10 +119,12 @@ export default class SpecoratorPlugin extends Plugin {
 
   async updateModuleSettings(settingsKey: string, partial: Record<string, unknown>): Promise<void> {
     const current = (this._storedData[settingsKey] ?? {}) as Record<string, unknown>
-    const updated = { ...current, ...partial }
-    this._storedData = { ...this._storedData, [settingsKey]: updated }
+    const merged = { ...current, ...partial }
+    // Notify first so validateSettings runs; persist the (possibly coerced) validated value.
+    await this.core?.notifySettingsChanged(settingsKey, merged)
+    const validated = (this.core?.getModuleSettings(settingsKey) ?? merged) as Record<string, unknown>
+    this._storedData = { ...this._storedData, [settingsKey]: validated }
     await this.saveData(this._storedData)
-    await this.core?.notifySettingsChanged(settingsKey, updated)
   }
 
   /**

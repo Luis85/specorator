@@ -14,6 +14,20 @@ export interface CorePorts {
 
 // ── Validation helpers ────────────────────────────────────────────────────────
 
+function validateSettingsKeys(modules: ReadonlyArray<ModuleDescriptor>): void {
+  const seen = new Set<string>()
+  for (const mod of modules) {
+    if (mod.settingsKey === undefined) continue
+    if (mod.settingsKey.startsWith('_')) {
+      throw new Error(`reserved settingsKey "${mod.settingsKey}" in module "${mod.id}"`)
+    }
+    if (seen.has(mod.settingsKey)) {
+      throw new Error(`duplicate settingsKey "${mod.settingsKey}" in module "${mod.id}"`)
+    }
+    seen.add(mod.settingsKey)
+  }
+}
+
 function validateModules(modules: ReadonlyArray<ModuleDescriptor>): void {
   const ids = new Set<string>()
 
@@ -23,6 +37,8 @@ function validateModules(modules: ReadonlyArray<ModuleDescriptor>): void {
     }
     ids.add(mod.id)
   }
+
+  validateSettingsKeys(modules)
 
   for (const mod of modules) {
     const deps = mod.dependsOn ?? []
