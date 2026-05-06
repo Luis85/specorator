@@ -104,7 +104,11 @@ function migrateSettings(
   settings: Record<string, unknown>,
   logger: LoggerPort,
 ): void {
-  const versions = ((settings._moduleVersions ?? {}) as Record<string, number>)
+  const raw = settings._moduleVersions
+  const versions: Record<string, number> =
+    raw !== null && typeof raw === 'object' && !Array.isArray(raw)
+      ? (raw as Record<string, number>)
+      : {}
 
   for (const mod of modules) {
     if (mod.settingsKey === undefined) continue

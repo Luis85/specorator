@@ -459,6 +459,23 @@ describe('PluginCore settings migration', () => {
 
     expect(core.getModuleSettings('x')).toEqual({ value: 7, ok: true })
   })
+
+  it('recovers gracefully when _moduleVersions is not a plain object', async () => {
+    const ports = makePorts()
+    const migrate = vi.fn().mockReturnValue({ migrated: true })
+    const mod = makeModule('a', {
+      settingsKey: 'a',
+      settingsVersion: 1,
+      migrate,
+    })
+    // Simulate corrupted storage: _moduleVersions is a string, not an object.
+    const raw: Record<string, unknown> = { _moduleVersions: 'corrupted', a: {} }
+
+    const core = new PluginCore([mod], ports)
+    await expect(core.init(raw)).resolves.toBeUndefined()
+    // storedVersion fell back to 0, so migrate() is called (0 < 1).
+    expect(migrate).toHaveBeenCalledWith(0, {})
+  })
 })
 
 // ── notifySettingsChanged ─────────────────────────────────────────────────────
