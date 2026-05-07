@@ -111,10 +111,12 @@ export default class SpecoratorPlugin extends Plugin {
   }
 
   async updateSettings(partial: Partial<PluginSettings>): Promise<void> {
-    this.settings = { ...this.settings, ...partial }
-    this._storedData = { ...this._storedData, specorator: { ...this.settings } }
+    const merged = { ...this.settings, ...partial }
+    await this.core?.notifySettingsChanged('specorator', merged)
+    const validated = (this.core?.getModuleSettings('specorator') ?? merged) as PluginSettings
+    this.settings = validated
+    this._storedData = { ...this._storedData, specorator: { ...validated } }
     await this.saveData(this._storedData)
-    await this.core?.notifySettingsChanged('specorator', this.settings)
   }
 
   async updateModuleSettings(settingsKey: string, partial: Record<string, unknown>): Promise<void> {
