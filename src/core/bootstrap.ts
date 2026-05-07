@@ -18,7 +18,11 @@ export async function bootstrapModules(
 ): Promise<BootstrappedModules> {
   const initialized: ModuleDescriptor[] = []
   for (const mod of modules) {
-    const result = await tryAsync(() => Promise.resolve(mod.init(ports, settings)))
+    const moduleSettings =
+      mod.settingsKey !== undefined
+        ? ((settings[mod.settingsKey] ?? mod.settingsDefaults ?? {}) as never)
+        : (settings as never)
+    const result = await tryAsync(() => Promise.resolve(mod.init(ports, moduleSettings)))
     if (!result.ok) {
       await runDestroy(mod)
       for (const m of [...initialized].reverse()) {
