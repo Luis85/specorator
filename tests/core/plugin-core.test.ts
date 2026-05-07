@@ -63,6 +63,23 @@ describe('PluginCore validation', () => {
     const core3 = new PluginCore([a, b], ports)
     await expect(core3.init({})).rejects.toThrow(/\bb\b/)
   })
+
+  it('rejects duplicate settingsKey across modules', async () => {
+    const ports = makePorts()
+    const a = makeModule('a', { settingsKey: 'shared' })
+    const b = makeModule('b', { settingsKey: 'shared' })
+    const core = new PluginCore([a, b], ports)
+
+    await expect(core.init({})).rejects.toThrow(/duplicate settingsKey.*shared/i)
+  })
+
+  it('rejects a settingsKey starting with underscore', async () => {
+    const ports = makePorts()
+    const a = makeModule('a', { settingsKey: '_reserved' })
+    const core = new PluginCore([a], ports)
+
+    await expect(core.init({})).rejects.toThrow(/reserved settingsKey.*_reserved/i)
+  })
 })
 
 // ── Topo-sort & init order ────────────────────────────────────────────────────
@@ -320,5 +337,236 @@ describe('PluginCore listener error routing', () => {
     const calls = (ports.logger.error as ReturnType<typeof vi.fn>).mock.calls
     const allArgs = JSON.stringify(calls)
     expect(allArgs).not.toContain('degradedCount')
+  })
+})
+
+// ── Settings migration ────────────────────────────────────────────────────────
+
+describe('PluginCore settings migration', () => {
+  it('runs migrate() when storedVersion < settingsVersion', async () => {
+    const ports = makePorts()
+    const migrate = vi.fn((_: number, blob: unknown) => ({ ...(blob as Record<string, unknown>), v: 1 }))
+    const mod = makeModule('a', {
+      settingsKey: 'a',
+      settingsVersion: 1,
+      migrate,
+    })
+    const raw: Record<string, unknown> = { a: { original: true }, _moduleVersions: { a: 0 } }
+
+    const core = new PluginCore([mod], ports)
+    await core.init(raw)
+
+    expect(migrate).toHaveBeenCalledWith(0, { original: true })
+    expect(core.getModuleSettings('a')).toMatchObject({ original: true, v: 1 })
+  })
+
+  it('skips migrate() when storedVersion equals settingsVersion', async () => {
+    const ports = makePorts()
+    const migrate = vi.fn()
+    const mod = makeModule('a', {
+      settingsKey: 'a',
+      settingsVersion: 2,
+      migrate,
+    })
+    const raw: Record<string, unknown> = { a: { x: 1 }, _moduleVersions: { a: 2 } }
+
+    const core = new PluginCore([mod], ports)
+    await core.init(raw)
+
+    expect(migrate).not.toHaveBeenCalled()
+  })
+
+  it('falls back to defaults and logs warn when migrate() throws', async () => {
+    const ports = makePorts()
+    const mod = makeModule('a', {
+      settingsKey: 'a',
+      settingsVersion: 1,
+      settingsDefaults: { fallback: true },
+      migrate: () => { throw new Error('migration failed') },
+    })
+    const raw: Record<string, unknown> = { a: {}, _moduleVersions: { a: 0 } }
+
+    const core = new PluginCore([mod], ports)
+    await core.init(raw)
+
+    expect(core.getModuleSettings('a')).toEqual({ fallback: true })
+    expect(ports.logger.warn).toHaveBeenCalledWith(
+      'settings migration failed; falling back to defaults',
+      expect.objectContaining({ moduleId: 'a', settingsKey: 'a' }),
+    )
+  })
+
+  it('runs validateSettings after migration', async () => {
+    const ports = makePorts()
+    const validateSettings = vi.fn((blob: unknown) => ({ ...(blob as object), validated: true }))
+    const mod = makeModule('a', {
+      settingsKey: 'a',
+      settingsVersion: 1,
+      migrate: (_: number, blob: unknown) => ({ ...(blob as object), migrated: true }),
+      validateSettings,
+    })
+    const raw: Record<string, unknown> = { a: { x: 1 }, _moduleVersions: { a: 0 } }
+
+    const core = new PluginCore([mod], ports)
+    await core.init(raw)
+
+    expect(validateSettings).toHaveBeenCalledWith(expect.objectContaining({ x: 1, migrated: true }))
+    expect(core.getModuleSettings('a')).toMatchObject({ x: 1, migrated: true, validated: true })
+  })
+
+  it('falls back to defaults and logs warn when validateSettings throws', async () => {
+    const ports = makePorts()
+    const mod = makeModule('a', {
+      settingsKey: 'a',
+      settingsDefaults: { fallback: true },
+      validateSettings: () => { throw new Error('invalid') },
+    })
+    const raw: Record<string, unknown> = { a: { bad: 'data' } }
+
+    const core = new PluginCore([mod], ports)
+    await core.init(raw)
+
+    expect(core.getModuleSettings('a')).toEqual({ fallback: true })
+    expect(ports.logger.warn).toHaveBeenCalledWith(
+      'validateSettings failed; falling back to defaults',
+      expect.objectContaining({ moduleId: 'a' }),
+    )
+  })
+
+  it('skips modules with no settingsKey', async () => {
+    const ports = makePorts()
+    const migrate = vi.fn()
+    const mod = makeModule('a', { migrate }) // no settingsKey
+    const raw: Record<string, unknown> = { unrelated: 42 }
+
+    const core = new PluginCore([mod], ports)
+    await core.init(raw)
+
+    expect(migrate).not.toHaveBeenCalled()
+    expect(core.getModuleSettings('a')).toBeUndefined()
+  })
+
+  it('exposes migrated slice via getModuleSettings()', async () => {
+    const ports = makePorts()
+    const mod = makeModule('x', {
+      settingsKey: 'x',
+      validateSettings: (blob: unknown) => ({ ...(blob as object), ok: true }),
+    })
+    const raw: Record<string, unknown> = { x: { value: 7 } }
+
+    const core = new PluginCore([mod], ports)
+    await core.init(raw)
+
+    expect(core.getModuleSettings('x')).toEqual({ value: 7, ok: true })
+  })
+
+  it('recovers gracefully when _moduleVersions is not a plain object', async () => {
+    const ports = makePorts()
+    const migrate = vi.fn().mockReturnValue({ migrated: true })
+    const mod = makeModule('a', {
+      settingsKey: 'a',
+      settingsVersion: 1,
+      migrate,
+    })
+    // Simulate corrupted storage: _moduleVersions is a string, not an object.
+    const raw: Record<string, unknown> = { _moduleVersions: 'corrupted', a: {} }
+
+    const core = new PluginCore([mod], ports)
+    await expect(core.init(raw)).resolves.toBeUndefined()
+    // storedVersion fell back to 0, so migrate() is called (0 < 1).
+    expect(migrate).toHaveBeenCalledWith(0, {})
+  })
+})
+
+// ── notifySettingsChanged ─────────────────────────────────────────────────────
+
+describe('PluginCore.notifySettingsChanged', () => {
+  it('calls onSettingsChange with validated value', async () => {
+    const ports = makePorts()
+    const onSettingsChange = vi.fn()
+    const mod = makeModule('a', {
+      settingsKey: 'a',
+      validateSettings: (raw: unknown) => ({ ...(raw as object), validated: true }),
+      onSettingsChange,
+    })
+    const core = new PluginCore([mod], ports)
+    await core.init({ a: {} })
+
+    await core.notifySettingsChanged('a', { foo: 'bar' })
+
+    expect(onSettingsChange).toHaveBeenCalledWith(expect.objectContaining({ foo: 'bar', validated: true }))
+  })
+
+  it('skips notification when validateSettings throws, and logs warn', async () => {
+    const ports = makePorts()
+    const onSettingsChange = vi.fn()
+    const mod = makeModule('a', {
+      settingsKey: 'a',
+      validateSettings: () => { throw new Error('bad') },
+      onSettingsChange,
+    })
+    const core = new PluginCore([mod], ports)
+    await core.init({ a: {} })
+
+    await core.notifySettingsChanged('a', { bad: true })
+
+    expect(onSettingsChange).not.toHaveBeenCalled()
+    expect(ports.logger.warn).toHaveBeenCalledWith(
+      'validateSettings failed; skipping onSettingsChange',
+      expect.objectContaining({ moduleId: 'a' }),
+    )
+  })
+
+  it('catches and logs errors thrown by onSettingsChange', async () => {
+    const ports = makePorts()
+    const mod = makeModule('a', {
+      settingsKey: 'a',
+      onSettingsChange: () => { throw new Error('hook failed') },
+    })
+    const core = new PluginCore([mod], ports)
+    await core.init({ a: {} })
+
+    await expect(core.notifySettingsChanged('a', {})).resolves.toBeUndefined()
+    expect(ports.logger.error).toHaveBeenCalledWith(
+      'onSettingsChange failed',
+      expect.any(Error),
+      expect.objectContaining({ moduleId: 'a' }),
+    )
+  })
+
+  it('updates moduleSettingsMap even when onSettingsChange is absent', async () => {
+    const ports = makePorts()
+    const mod = makeModule('a', {
+      settingsKey: 'a',
+      validateSettings: (raw: unknown) => ({ ...(raw as object), validated: true }),
+      // intentionally no onSettingsChange
+    })
+    const core = new PluginCore([mod], ports)
+    await core.init({ a: {} })
+
+    await core.notifySettingsChanged('a', { updated: true })
+
+    expect(core.getModuleSettings('a')).toEqual(expect.objectContaining({ updated: true, validated: true }))
+  })
+
+  it('is a no-op when settingsKey is not found', async () => {
+    const ports = makePorts()
+    const core = new PluginCore([], ports)
+    await core.init({})
+
+    await expect(core.notifySettingsChanged('ghost', {})).resolves.toBeUndefined()
+    expect(ports.logger.warn).not.toHaveBeenCalled()
+  })
+
+  it('is a no-op before init() is called', async () => {
+    const ports = makePorts()
+    const onSettingsChange = vi.fn()
+    const mod = makeModule('a', { settingsKey: 'a', onSettingsChange })
+    const core = new PluginCore([mod], ports)
+
+    // Do NOT call core.init()
+    await core.notifySettingsChanged('a', {})
+
+    expect(onSettingsChange).not.toHaveBeenCalled()
   })
 })

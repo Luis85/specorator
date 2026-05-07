@@ -4,12 +4,27 @@ import { SpecoratorSettingTab } from './settings'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
 import { PluginCore } from '@/core/plugin-core'
-import { ALL_MODULES } from '@/modules'
+import { ALL_MODULES, type ModuleDescriptor } from '@/modules'
+
+/** Keys that belong to the flat PluginSettings namespace. */
+const PLUGIN_SETTINGS_KEYS: ReadonlyArray<keyof PluginSettings> = [
+  'locale',
+  'specsFolder',
+  'archiveFolder',
+  'decisionsFolder',
+  'constitutionFile',
+  'gateStrictness',
+  'teamMode',
+  'logLevel',
+]
 
 export default class SpecoratorPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS }
   core: PluginCore | null = null
   bridge: ObsidianBridge | null = null
+
+  /** Full stored data blob: specorator sub-key + per-module sub-keys + _moduleVersions. */
+  private _storedData: Record<string, unknown> = {}
 
   async onload(): Promise<void> {
     await this.loadSettings()
@@ -19,16 +34,25 @@ export default class SpecoratorPlugin extends Plugin {
       () => this.settings,
       (s) => this.updateSettings(s),
     )
-    this.core = new PluginCore(ALL_MODULES, {
+    this.core = new PluginCore(ALL_MODULES as ReadonlyArray<ModuleDescriptor>, {
       settings: this.bridge,
       vault: this.bridge,
       workspace: this.bridge,
       notifications: this.bridge,
       logger: this.bridge,
     })
-    // Pass already-normalized settings (loadSettings() already called loadData() and merged).
-    // Passing raw loadData() would bypass the featuresFolder→specsFolder migration in loadSettings().
-    await this.core.init(this.settings as unknown as Record<string, unknown>)
+
+    // Pass the full stored blob so PluginCore can migrate per-module settings in-place.
+    await this.core.init(this._storedData)
+
+    // Re-sync PluginSettings from the specorator blob after migration/validation may have coerced values.
+    this.settings = {
+      ...DEFAULT_SETTINGS,
+      ...((this._storedData.specorator ?? {}) as Partial<PluginSettings>),
+    }
+
+    // Persist any migrations that occurred during init.
+    await this.saveData(this._storedData)
 
     this.registerView(VIEW_TYPE, (leaf) => new SpecoratorView(leaf, this))
 
@@ -59,17 +83,50 @@ export default class SpecoratorPlugin extends Plugin {
 
   async loadSettings(): Promise<void> {
     const stored = (await this.loadData()) as Record<string, unknown> | null
-    // NFR-AVS-004: treat legacy `featuresFolder` as `specsFolder` if present
     const raw: Record<string, unknown> = { ...(stored ?? {}) }
+
+    // NFR-AVS-004: treat legacy `featuresFolder` as `specsFolder` if present.
     if (typeof raw.featuresFolder === 'string' && typeof raw.specsFolder !== 'string') {
       raw.specsFolder = raw.featuresFolder
     }
-    this.settings = { ...DEFAULT_SETTINGS, ...(raw as Partial<PluginSettings>) }
+
+    // Promote legacy flat PluginSettings to the specorator sub-key (W7 storage migration).
+    if (!('specorator' in raw)) {
+      const specorator: Record<string, unknown> = {}
+      for (const key of PLUGIN_SETTINGS_KEYS) {
+        if (key in raw) specorator[key] = raw[key]
+      }
+      this._storedData = {
+        ...raw,
+        specorator,
+      }
+    } else {
+      this._storedData = raw
+    }
+
+    this.settings = {
+      ...DEFAULT_SETTINGS,
+      ...((this._storedData.specorator ?? {}) as Partial<PluginSettings>),
+    }
   }
 
   async updateSettings(partial: Partial<PluginSettings>): Promise<void> {
-    this.settings = { ...this.settings, ...partial }
-    await this.saveData(this.settings)
+    const merged = { ...this.settings, ...partial }
+    await this.core?.notifySettingsChanged('specorator', merged)
+    const validated = (this.core?.getModuleSettings('specorator') ?? merged) as PluginSettings
+    this.settings = validated
+    this._storedData = { ...this._storedData, specorator: { ...validated } }
+    await this.saveData(this._storedData)
+  }
+
+  async updateModuleSettings(settingsKey: string, partial: Record<string, unknown>): Promise<void> {
+    const current = (this._storedData[settingsKey] ?? {}) as Record<string, unknown>
+    const merged = { ...current, ...partial }
+    // Notify first so validateSettings runs; persist the (possibly coerced) validated value.
+    await this.core?.notifySettingsChanged(settingsKey, merged)
+    const validated = (this.core?.getModuleSettings(settingsKey) ?? merged) as Record<string, unknown>
+    this._storedData = { ...this._storedData, [settingsKey]: validated }
+    await this.saveData(this._storedData)
   }
 
   /**

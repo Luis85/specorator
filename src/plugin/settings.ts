@@ -1,6 +1,6 @@
 import type { App } from 'obsidian'
 import { PluginSettingTab, Setting } from 'obsidian'
-import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
+import type { ModuleDescriptor, SettingsFieldDescriptor } from '@/modules/module'
 import type SpecoratorPlugin from './main'
 
 export class SpecoratorSettingTab extends PluginSettingTab {
@@ -14,104 +14,88 @@ export class SpecoratorSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this
     containerEl.empty()
-    
 
-    new Setting(containerEl)
-      .setName('Language')
-      .setDesc('Display language for the Specorator panel.')
-      .addDropdown((dd) =>
-        dd
-          .addOption('en', 'English')
-          .addOption('de', 'Deutsch')
-          .setValue(this.plugin.settings.locale)
-          .onChange(async (value) => {
-            await this.plugin.updateSettings({ locale: value })
+    for (const mod of this.plugin.core?.allModules ?? []) {
+      const fields = mod.settingsSchema?.fields
+      if (fields === undefined || fields.length === 0) continue
+
+      new Setting(containerEl).setName(mod.id).setHeading()
+
+      for (const field of fields) {
+        const currentValue = this.currentValue(mod, field)
+        const setting = new Setting(containerEl).setName(field.label)
+        if (field.description !== undefined) setting.setDesc(field.description)
+        this.addControl(setting, mod, field, currentValue)
+      }
+    }
+  }
+
+  private currentValue(mod: ModuleDescriptor, field: SettingsFieldDescriptor): unknown {
+    if (mod.settingsKey === 'specorator') {
+      return (this.plugin.settings as unknown as Record<string, unknown>)[field.key] ?? field.default
+    }
+    if (mod.settingsKey !== undefined) {
+      const slice = (this.plugin.core?.getModuleSettings(mod.settingsKey) ?? {}) as Record<string, unknown>
+      return slice[field.key] ?? field.default
+    }
+    return field.default
+  }
+
+  private addControl(
+    setting: Setting,
+    mod: ModuleDescriptor,
+    field: SettingsFieldDescriptor,
+    currentValue: unknown,
+  ): void {
+    switch (field.type) {
+      case 'toggle':
+        setting.addToggle((t) =>
+          t.setValue(currentValue as boolean).onChange(async (value) => {
+            await this.saveField(mod, field.key, value)
           }),
-      )
+        )
+        break
 
-    new Setting(containerEl)
-      .setName('Specs folder')
-      .setDesc('Vault folder where spec directories are created (agentic-workflow convention: specs).')
-      .addText((text) =>
-        text
-          .setValue(this.plugin.settings.specsFolder)
-          .onChange(async (value) => {
-            await this.plugin.updateSettings({ specsFolder: value.trim() || DEFAULT_SETTINGS.specsFolder })
-          }),
-      )
+      case 'text':
+        setting.addText((t) =>
+          t
+            .setValue(String(currentValue ?? field.default))
+            .onChange(async (value) => {
+              await this.saveField(mod, field.key, value.trim() || String(field.default))
+            }),
+        )
+        break
 
-    new Setting(containerEl)
-      .setName('Archive folder')
-      .setDesc('Vault folder for archived features.')
-      .addText((text) =>
-        text
-          .setValue(this.plugin.settings.archiveFolder)
-          .onChange(async (value) => {
-            await this.plugin.updateSettings({ archiveFolder: value.trim() || DEFAULT_SETTINGS.archiveFolder })
-          }),
-      )
+      case 'number':
+        setting.addText((t) =>
+          t
+            .setValue(String(currentValue ?? field.default))
+            .onChange(async (value) => {
+              const n = Number(value)
+              await this.saveField(mod, field.key, Number.isNaN(n) ? field.default : n)
+            }),
+        )
+        break
 
-    new Setting(containerEl)
-      .setName('Decisions folder')
-      .setDesc('Vault folder for architecture decision records.')
-      .addText((text) =>
-        text
-          .setValue(this.plugin.settings.decisionsFolder)
-          .onChange(async (value) => {
-            await this.plugin.updateSettings({ decisionsFolder: value.trim() || DEFAULT_SETTINGS.decisionsFolder })
-          }),
-      )
+      case 'dropdown': {
+        setting.addDropdown((dd) => {
+          for (const opt of field.options ?? []) {
+            dd.addOption(opt.value, opt.label)
+          }
+          dd.setValue(String(currentValue ?? field.default)).onChange(async (value) => {
+            await this.saveField(mod, field.key, value)
+          })
+        })
+        break
+      }
+    }
+  }
 
-    new Setting(containerEl)
-      .setName('Constitution file')
-      .setDesc('Vault path to the project constitution markdown file.')
-      .addText((text) =>
-        text
-          .setValue(this.plugin.settings.constitutionFile)
-          .onChange(async (value) => {
-            await this.plugin.updateSettings({ constitutionFile: value.trim() || DEFAULT_SETTINGS.constitutionFile })
-          }),
-      )
-
-    new Setting(containerEl)
-      .setName('Gate strictness')
-      .setDesc('Strict: blocks advancement when required artifacts are missing. Lenient: warns only.')
-      .addDropdown((dd) =>
-        dd
-          .addOption('strict', 'Strict')
-          .addOption('lenient', 'Lenient')
-          .setValue(this.plugin.settings.gateStrictness)
-          .onChange(async (value) => {
-            await this.plugin.updateSettings({
-              gateStrictness: value as PluginSettings['gateStrictness'],
-            })
-          }),
-      )
-
-    new Setting(containerEl)
-      .setName('Team mode')
-      .setDesc('Enable peer sign-off and multi-author attribution.')
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.teamMode).onChange(async (value) => {
-          await this.plugin.updateSettings({ teamMode: value })
-        }),
-      )
-
-    new Setting(containerEl)
-      .setName('Log level')
-      .setDesc('Console log verbosity. Errors and warnings are always useful; lower levels are noisy.')
-      .addDropdown((dd) =>
-        dd
-          .addOption('debug', 'Debug')
-          .addOption('info', 'Info')
-          .addOption('warn', 'Warn (default)')
-          .addOption('error', 'Error')
-          .setValue(this.plugin.settings.logLevel)
-          .onChange(async (value) => {
-            await this.plugin.updateSettings({
-              logLevel: value as PluginSettings['logLevel'],
-            })
-          }),
-      )
+  private async saveField(mod: ModuleDescriptor, key: string, value: unknown): Promise<void> {
+    if (mod.settingsKey === 'specorator') {
+      await this.plugin.updateSettings({ [key]: value })
+    } else if (mod.settingsKey !== undefined) {
+      await this.plugin.updateModuleSettings(mod.settingsKey, { [key]: value })
+    }
   }
 }
