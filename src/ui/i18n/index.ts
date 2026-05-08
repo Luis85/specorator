@@ -29,10 +29,21 @@ function flatToNested(flat: Record<string, string>): Record<string, unknown> {
     const parts = key.split('.')
     let current = nested
     for (let i = 0; i < parts.length - 1; i++) {
-      if (!(parts[i] in current)) current[parts[i]] = {}
-      current = current[parts[i]] as Record<string, unknown>
+      const part = parts[i]
+      if (part in current) {
+        if (typeof current[part] !== 'object' || current[part] === null) {
+          throw new Error(`i18n key collision: "${parts.slice(0, i + 1).join('.')}" is both a leaf and a parent`)
+        }
+      } else {
+        current[part] = {}
+      }
+      current = current[part] as Record<string, unknown>
     }
-    current[parts[parts.length - 1]] = value
+    const leaf = parts[parts.length - 1]
+    if (leaf in current && typeof current[leaf] === 'object' && current[leaf] !== null) {
+      throw new Error(`i18n key collision: "${key}" conflicts with existing parent key`)
+    }
+    current[leaf] = value
   }
   return nested
 }
