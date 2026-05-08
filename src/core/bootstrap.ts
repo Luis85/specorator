@@ -1,5 +1,6 @@
 import type { ModuleDescriptor, ModulePorts } from '@/modules'
 import { tryAsync, trySync } from '@/domain/shared/tryAsync'
+import { applyModuleMessages } from './applyModuleMessages'
 
 export interface BootstrappedModules {
   readonly teardown: () => Promise<void>
@@ -8,16 +9,6 @@ export interface BootstrappedModules {
 async function runDestroy(mod: ModuleDescriptor): Promise<void> {
   if (mod.destroy !== undefined) {
     await tryAsync(() => Promise.resolve(mod.destroy!()))
-  }
-}
-
-function applyModuleMessages(
-  mod: ModuleDescriptor,
-  mergeMessages: (locale: string, messages: Record<string, string>) => void,
-): void {
-  if (mod.messages === undefined) return
-  for (const [locale, msgs] of Object.entries(mod.messages)) {
-    if (msgs !== undefined) mergeMessages(locale, msgs)
   }
 }
 
