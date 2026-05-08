@@ -1,16 +1,16 @@
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
+import { storybookTest } from '@storybook/addon-vitest/vitest-plugin'
+import { playwright } from '@vitest/browser-playwright'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'path'
 
 const projectRoot = fileURLToPath(new URL('.', import.meta.url))
+const alias = { '@': resolve(projectRoot, 'src') }
 
 export default defineConfig({
-  plugins: [vue()],
+  resolve: { alias },
   test: {
-    environment: 'jsdom',
-    globals: true,
-    include: ['tests/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
@@ -34,8 +34,30 @@ export default defineConfig({
         lines: 80,
       },
     },
-  },
-  resolve: {
-    alias: { '@': resolve(projectRoot, 'src') },
+    projects: [
+      {
+        plugins: [vue()],
+        resolve: { alias },
+        test: {
+          name: 'unit',
+          environment: 'jsdom',
+          globals: true,
+          include: ['tests/**/*.test.ts'],
+        },
+      },
+      {
+        plugins: [vue(), storybookTest({ configDir: '.storybook' })],
+        resolve: { alias },
+        test: {
+          name: 'storybook',
+          browser: {
+            enabled: true,
+            provider: playwright(),
+            headless: true,
+            instances: [{ browser: 'chromium' }],
+          },
+        },
+      },
+    ],
   },
 })
