@@ -1,7 +1,7 @@
 import type { Preview } from '@storybook/vue3-vite'
 import { setup } from '@storybook/vue3-vite'
 import { createPinia } from 'pinia'
-import { i18n } from '../src/ui/i18n'
+import { i18n, setLocale } from '../src/ui/i18n'
 import './obsidian-theme.css'
 
 setup((app) => {
@@ -30,6 +30,7 @@ const preview: Preview = {
       const theme = (ctx.globals as { theme?: 'light' | 'dark' }).theme ?? 'dark'
       document.body.classList.remove('theme-light', 'theme-dark')
       document.body.classList.add(`theme-${theme}`)
+      setLocale('en')
       return story()
     },
   ],

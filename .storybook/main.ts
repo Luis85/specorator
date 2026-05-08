@@ -1,4 +1,5 @@
 import type { StorybookConfig } from '@storybook/vue3-vite'
+import { fileURLToPath } from 'node:url'
 
 const config: StorybookConfig = {
   framework: '@storybook/vue3-vite',
@@ -8,7 +9,7 @@ const config: StorybookConfig = {
     cfg.resolve = cfg.resolve ?? {}
     cfg.resolve.alias = {
       ...(cfg.resolve.alias ?? {}),
-      '@': new URL('../src', import.meta.url).pathname,
+      '@': fileURLToPath(new URL('../src', import.meta.url)),
     }
     return cfg
   },
