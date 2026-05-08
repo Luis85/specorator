@@ -92,6 +92,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Install Playwright Chromium (storybook test runner)
+        run: npx playwright install --with-deps chromium
+
       - name: Test
         run: npm run test
 
