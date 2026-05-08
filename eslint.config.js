@@ -123,6 +123,7 @@ export default defineConfig(
 			'dist-plugin/',
 			'dist-standalone/',
 			'coverage/',
+			'storybook-static/',
 			'.worktrees/',
 			'docs/',
 			// Boundary-rule proof fixtures: deliberately invalid imports/
@@ -490,6 +491,26 @@ export default defineConfig(
 						'Tests must query via data-testid only. CSS class and id selectors are forbidden — add a data-testid attribute and route through a PageObject getter instead.',
 				},
 			],
+		},
+	},
+
+	// Stories + Storybook config — relax architectural-boundary rules so
+	// stories can freely import @/ui/components and @/domain types.
+	{
+		files: ['stories/**/*.ts', '.storybook/**/*.ts'],
+		rules: {
+			'no-restricted-imports': 'off',
+			'max-lines': 'off',
+			complexity: 'off',
+			'@typescript-eslint/no-unsafe-assignment': 'off',
+			'@typescript-eslint/no-unsafe-member-access': 'off',
+			'@typescript-eslint/no-unsafe-call': 'off',
+			'@typescript-eslint/no-unsafe-return': 'off',
+			'@typescript-eslint/no-unsafe-argument': 'off',
+			// Storybook configs run in the browser/Node, not in Obsidian.
+			'@typescript-eslint/require-await': 'off',
+			'obsidianmd/prefer-active-doc': 'off',
+			'obsidianmd/prefer-active-window-timers': 'off',
 		},
 	},
 );

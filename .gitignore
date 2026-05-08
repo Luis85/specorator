@@ -33,6 +33,9 @@ docs/api/
 # Coverage report (run `npm run test:coverage` to regenerate)
 coverage/
 
+# Storybook static build output (run `npm run build-storybook` to regenerate)
+storybook-static/
+
 # Local agent state (Claude Code, etc.) — track shared bits, ignore ephemeral ones
 .claude/*
 !.claude/settings.json

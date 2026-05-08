@@ -5,6 +5,8 @@
 		"src/**/*.d.ts",
 		"src/**/*.vue",
 		"tests/**/*.ts",
+		"stories/**/*.ts",
+		".storybook/**/*.ts",
 		"vite.config.ts",
 		"vitest.config.ts",
 		"eslint.config.js"
