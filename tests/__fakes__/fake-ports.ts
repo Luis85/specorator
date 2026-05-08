@@ -6,6 +6,7 @@ import type {
   WorkspacePort,
   NotificationPort,
   LoggerPort,
+  TranslationPort,
 } from '@/domain/ports'
 import { createEventBus } from '@/domain/shared/event-bus'
 import type { EventBus } from '@/domain/shared/event-bus'
@@ -25,6 +26,7 @@ export interface FakePorts {
   readonly notifications: NotificationPort
   readonly logger: LoggerPort
   readonly bus: EventBus
+  readonly t: TranslationPort
   readonly bridge: MockBridge
 }
 
@@ -42,6 +44,7 @@ export function fakeModulePorts(): FakePorts {
       error: vi.fn(),
     },
     bus: createEventBus(),
+    t: { t: vi.fn((key: string) => key) },
     bridge,
   }
 }

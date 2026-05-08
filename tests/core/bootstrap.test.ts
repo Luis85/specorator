@@ -88,4 +88,33 @@ describe('bootstrapModules', () => {
     await expect(teardown()).resolves.toBeUndefined()
     expect(destroyed).toContain('b')
   })
+
+  it('calls mergeMessages for each locale in mod.messages before init', async () => {
+    const calls: Array<[string, Record<string, string>]> = []
+    const ports = fakeModulePorts()
+    const mod = makeModule('msg', {
+      messages: {
+        en: { 'msg.title': 'Title' },
+        de: { 'msg.title': 'Titel' },
+      },
+      init: vi.fn(),
+    })
+
+    await bootstrapModules([mod], ports, {}, (locale, msgs) => { calls.push([locale, msgs]) })
+
+    expect(calls).toEqual([
+      ['en', { 'msg.title': 'Title' }],
+      ['de', { 'msg.title': 'Titel' }],
+    ])
+  })
+
+  it('does not call mergeMessages when module has no messages', async () => {
+    const merge = vi.fn()
+    const ports = fakeModulePorts()
+    const mod = makeModule('no-msg', { init: vi.fn() })
+
+    await bootstrapModules([mod], ports, {}, merge)
+
+    expect(merge).not.toHaveBeenCalled()
+  })
 })

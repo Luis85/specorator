@@ -11,13 +11,25 @@ async function runDestroy(mod: ModuleDescriptor): Promise<void> {
   }
 }
 
+function applyModuleMessages(
+  mod: ModuleDescriptor,
+  mergeMessages: (locale: string, messages: Record<string, string>) => void,
+): void {
+  if (mod.messages === undefined) return
+  for (const [locale, msgs] of Object.entries(mod.messages)) {
+    if (msgs !== undefined) mergeMessages(locale, msgs)
+  }
+}
+
 export async function bootstrapModules(
   modules: ReadonlyArray<ModuleDescriptor>,
   ports: ModulePorts,
   settings: Readonly<Record<string, unknown>>,
+  mergeMessages?: (locale: string, messages: Record<string, string>) => void,
 ): Promise<BootstrappedModules> {
   const initialized: ModuleDescriptor[] = []
   for (const mod of modules) {
+    if (mergeMessages !== undefined) applyModuleMessages(mod, mergeMessages)
     const moduleSettings =
       mod.settingsKey !== undefined
         ? ((settings[mod.settingsKey] ?? mod.settingsDefaults ?? {}) as never)

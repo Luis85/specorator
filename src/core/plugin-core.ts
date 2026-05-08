@@ -1,5 +1,5 @@
 import './core-events'
-import type { SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort } from '@/domain/ports'
+import type { SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, TranslationPort } from '@/domain/ports'
 import { createEventBus, type EventBus, type EventBusOptions, type EventEnvelope } from '@/domain/shared/event-bus'
 import { tryAsync, trySync } from '@/domain/shared/tryAsync'
 import type { ModuleDescriptor, ModulePorts } from '@/modules'
@@ -10,6 +10,8 @@ export interface CorePorts {
   readonly workspace: WorkspacePort
   readonly notifications: NotificationPort
   readonly logger: LoggerPort
+  readonly t: TranslationPort
+  readonly i18nMerge?: (locale: string, messages: Record<string, string>) => void
 }
 
 // ── Validation helpers ────────────────────────────────────────────────────────
@@ -156,6 +158,16 @@ function migrateSettings(
   settings._moduleVersions = versions
 }
 
+function applyModuleMessages(
+  mod: ModuleDescriptor,
+  i18nMerge: (locale: string, messages: Record<string, string>) => void,
+): void {
+  if (mod.messages === undefined) return
+  for (const [locale, msgs] of Object.entries(mod.messages)) {
+    if (msgs !== undefined) i18nMerge(locale, msgs)
+  }
+}
+
 // ── PluginCore ────────────────────────────────────────────────────────────────
 
 export class PluginCore {
@@ -255,7 +267,7 @@ export class PluginCore {
       }
     }
 
-    const modulePorts: ModulePorts = { ...this.ports, bus: this.bus }
+    const modulePorts: ModulePorts = { ...this.ports, bus: this.bus, t: this.ports.t }
     const degradedIds = new Set<string>()
 
     for (const mod of this.sorted) {
@@ -311,6 +323,8 @@ export class PluginCore {
       degradedIds.add(mod.id)
       return
     }
+
+    if (this.ports.i18nMerge !== undefined) applyModuleMessages(mod, this.ports.i18nMerge)
 
     const subscribedCount = this.bus.listenerCount()
     this.leakMap.set(mod.id, 0)

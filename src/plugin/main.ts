@@ -5,6 +5,8 @@ import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginS
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
 import { PluginCore } from '@/core/plugin-core'
 import { ALL_MODULES, type ModuleDescriptor } from '@/modules'
+import { i18nMerge, i18nTranslate } from '@/ui/i18n'
+import type { TranslationPort } from '@/domain/ports'
 
 /** Keys that belong to the flat PluginSettings namespace. */
 const PLUGIN_SETTINGS_KEYS: ReadonlyArray<keyof PluginSettings> = [
@@ -34,12 +36,15 @@ export default class SpecoratorPlugin extends Plugin {
       () => this.settings,
       (s) => this.updateSettings(s),
     )
+    const translationPort: TranslationPort = { t: i18nTranslate }
     this.core = new PluginCore(ALL_MODULES as ReadonlyArray<ModuleDescriptor>, {
       settings: this.bridge,
       vault: this.bridge,
       workspace: this.bridge,
       notifications: this.bridge,
       logger: this.bridge,
+      t: translationPort,
+      i18nMerge,
     })
 
     // Pass the full stored blob so PluginCore can migrate per-module settings in-place.

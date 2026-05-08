@@ -8,8 +8,8 @@ import type { CorePorts } from '@/core/plugin-core'
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function makePorts(): CorePorts {
-  const { settings, vault, workspace, notifications, logger } = fakeModulePorts()
-  return { settings, vault, workspace, notifications, logger }
+  const { settings, vault, workspace, notifications, logger, t } = fakeModulePorts()
+  return { settings, vault, workspace, notifications, logger, t }
 }
 
 function makeModule(
