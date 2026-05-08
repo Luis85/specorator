@@ -50,7 +50,6 @@ export default defineConfig({
         resolve: { alias },
         test: {
           name: 'storybook',
-          include: ['stories/**/*.stories.ts'],
           browser: {
             enabled: true,
             provider: playwright(),
