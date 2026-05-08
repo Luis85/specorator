@@ -195,6 +195,24 @@ describe('PluginCore degraded module handling', () => {
     expect(events).toEqual(['a', 'b'])
   })
 
+  it('degrades a module when i18nMerge throws instead of aborting plugin init', async () => {
+    const ports: CorePorts = {
+      ...makePorts(),
+      i18nMerge: () => { throw new Error('merge boom') },
+    }
+    const mod = makeModule('a', {
+      messages: { en: { 'a.key': 'val' } },
+      init: vi.fn(),
+    })
+    const core = new PluginCore([mod], ports)
+
+    await core.init({})
+
+    expect(core.degradedModules).toHaveLength(1)
+    expect(core.degradedModules[0].id).toBe('a')
+    expect(mod.init).not.toHaveBeenCalled()
+  })
+
   it('does not abort other modules when one fails init', async () => {
     const destroySpy = vi.fn()
     const ports = makePorts()

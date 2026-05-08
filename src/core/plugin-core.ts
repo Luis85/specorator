@@ -324,7 +324,15 @@ export class PluginCore {
       return
     }
 
-    if (this.ports.i18nMerge !== undefined) applyModuleMessages(mod, this.ports.i18nMerge)
+    if (this.ports.i18nMerge !== undefined) {
+      const mergeResult = trySync(() => { applyModuleMessages(mod, this.ports.i18nMerge!) })
+      if (!mergeResult.ok) {
+        this._degradedModules.push({ id: mod.id, error: mergeResult.error })
+        this.bus.emit('core:module-degraded', { moduleId: mod.id, error: mergeResult.error })
+        degradedIds.add(mod.id)
+        return
+      }
+    }
 
     const subscribedCount = this.bus.listenerCount()
     this.leakMap.set(mod.id, 0)

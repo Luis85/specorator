@@ -117,4 +117,23 @@ describe('bootstrapModules', () => {
 
     expect(merge).not.toHaveBeenCalled()
   })
+
+  it('rolls back initialized modules when mergeMessages throws', async () => {
+    const destroyed: string[] = []
+    const ports = fakeModulePorts()
+    const a = makeModule('a', {
+      init: vi.fn(),
+      destroy: () => { destroyed.push('a') },
+    })
+    const b = makeModule('b', {
+      messages: { en: { 'b.key': 'val' } },
+      init: vi.fn(),
+      destroy: () => { destroyed.push('b') },
+    })
+
+    const merge = vi.fn().mockImplementationOnce(() => { throw new Error('merge failed') })
+
+    await expect(bootstrapModules([a, b], ports, {}, merge)).rejects.toThrow('merge failed')
+    expect(destroyed).toEqual(['b', 'a'])
+  })
 })

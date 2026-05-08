@@ -1,5 +1,5 @@
 import type { ModuleDescriptor, ModulePorts } from '@/modules'
-import { tryAsync } from '@/domain/shared/tryAsync'
+import { tryAsync, trySync } from '@/domain/shared/tryAsync'
 
 export interface BootstrappedModules {
   readonly teardown: () => Promise<void>
@@ -29,7 +29,16 @@ export async function bootstrapModules(
 ): Promise<BootstrappedModules> {
   const initialized: ModuleDescriptor[] = []
   for (const mod of modules) {
-    if (mergeMessages !== undefined) applyModuleMessages(mod, mergeMessages)
+    if (mergeMessages !== undefined) {
+      const mergeResult = trySync(() => { applyModuleMessages(mod, mergeMessages) })
+      if (!mergeResult.ok) {
+        await runDestroy(mod)
+        for (const m of [...initialized].reverse()) {
+          await runDestroy(m)
+        }
+        throw mergeResult.error
+      }
+    }
     const moduleSettings =
       mod.settingsKey !== undefined
         ? ((settings[mod.settingsKey] ?? mod.settingsDefaults ?? {}) as never)
