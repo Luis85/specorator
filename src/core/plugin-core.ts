@@ -1,8 +1,9 @@
 import './core-events'
-import type { SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort } from '@/domain/ports'
+import type { SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, TranslationPort } from '@/domain/ports'
 import { createEventBus, type EventBus, type EventBusOptions, type EventEnvelope } from '@/domain/shared/event-bus'
 import { tryAsync, trySync } from '@/domain/shared/tryAsync'
 import type { ModuleDescriptor, ModulePorts } from '@/modules'
+import { applyModuleMessages } from './applyModuleMessages'
 
 export interface CorePorts {
   readonly settings: SettingsPort
@@ -10,6 +11,8 @@ export interface CorePorts {
   readonly workspace: WorkspacePort
   readonly notifications: NotificationPort
   readonly logger: LoggerPort
+  readonly t: TranslationPort
+  readonly i18nMerge?: (locale: string, messages: Record<string, string>) => void
 }
 
 // ── Validation helpers ────────────────────────────────────────────────────────
@@ -255,7 +258,15 @@ export class PluginCore {
       }
     }
 
-    const modulePorts: ModulePorts = { ...this.ports, bus: this.bus }
+    const modulePorts: ModulePorts = {
+      settings: this.ports.settings,
+      vault: this.ports.vault,
+      workspace: this.ports.workspace,
+      notifications: this.ports.notifications,
+      logger: this.ports.logger,
+      t: this.ports.t,
+      bus: this.bus,
+    }
     const degradedIds = new Set<string>()
 
     for (const mod of this.sorted) {
@@ -310,6 +321,16 @@ export class PluginCore {
       this.bus.emit('core:module-degraded', { moduleId: mod.id, error })
       degradedIds.add(mod.id)
       return
+    }
+
+    if (this.ports.i18nMerge !== undefined) {
+      const mergeResult = trySync(() => { applyModuleMessages(mod, this.ports.i18nMerge!) })
+      if (!mergeResult.ok) {
+        this._degradedModules.push({ id: mod.id, error: mergeResult.error })
+        this.bus.emit('core:module-degraded', { moduleId: mod.id, error: mergeResult.error })
+        degradedIds.add(mod.id)
+        return
+      }
     }
 
     const subscribedCount = this.bus.listenerCount()

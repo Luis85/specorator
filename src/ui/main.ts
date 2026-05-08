@@ -10,7 +10,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import { router } from './router'
-import { i18n } from './i18n'
+import { i18n, i18nMerge, i18nTranslate, setLocale, type SupportedLocale } from './i18n'
 import {
   SETTINGS_PORT,
   VAULT_PORT,
@@ -24,6 +24,7 @@ import { DEV_FIXTURES } from '@/infrastructure/mock/fixtures'
 import { createEventBus } from '@/domain/shared/event-bus'
 import { bootstrapModules } from '@/core/bootstrap'
 import { ALL_MODULES, type ModuleDescriptor, type ModulePorts } from '@/modules'
+import type { TranslationPort } from '@/domain/ports'
 
 const bridge = import.meta.env.PROD ? new LocalStorageBridge() : new MockBridge(DEV_FIXTURES)
 const mountPoint = document.querySelector('#app')
@@ -35,6 +36,8 @@ app.use(createPinia())
 app.use(router)
 app.use(i18n)
 
+const translationPort: TranslationPort = { t: i18nTranslate }
+
 const appBus = createEventBus()
 const ports: ModulePorts = {
   settings: bridge,
@@ -43,10 +46,14 @@ const ports: ModulePorts = {
   notifications: bridge,
   logger: bridge,
   bus: appBus,
+  t: translationPort,
 }
 
 void bridge.getSettings()
-  .then((settings) => bootstrapModules(ALL_MODULES as ReadonlyArray<ModuleDescriptor>, ports, settings as unknown as Readonly<Record<string, unknown>>))
+  .then((settings) => {
+    if (settings.locale) setLocale(settings.locale as SupportedLocale)
+    return bootstrapModules(ALL_MODULES as ReadonlyArray<ModuleDescriptor>, ports, settings as unknown as Readonly<Record<string, unknown>>, i18nMerge)
+  })
   .then(() => {
     app.provide(SETTINGS_PORT, bridge)
     app.provide(VAULT_PORT, bridge)
