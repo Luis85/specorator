@@ -10,7 +10,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import { router } from './router'
-import { i18n, i18nMerge, i18nTranslate } from './i18n'
+import { i18n, i18nMerge, i18nTranslate, setLocale, type SupportedLocale } from './i18n'
 import {
   SETTINGS_PORT,
   VAULT_PORT,
@@ -50,7 +50,10 @@ const ports: ModulePorts = {
 }
 
 void bridge.getSettings()
-  .then((settings) => bootstrapModules(ALL_MODULES as ReadonlyArray<ModuleDescriptor>, ports, settings as unknown as Readonly<Record<string, unknown>>, i18nMerge))
+  .then((settings) => {
+    if (settings.locale) setLocale(settings.locale as SupportedLocale)
+    return bootstrapModules(ALL_MODULES as ReadonlyArray<ModuleDescriptor>, ports, settings as unknown as Readonly<Record<string, unknown>>, i18nMerge)
+  })
   .then(() => {
     app.provide(SETTINGS_PORT, bridge)
     app.provide(VAULT_PORT, bridge)

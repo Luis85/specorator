@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginS
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
 import { PluginCore } from '@/core/plugin-core'
 import { ALL_MODULES, type ModuleDescriptor } from '@/modules'
-import { i18nMerge, i18nTranslate } from '@/ui/i18n'
+import { i18nMerge, i18nTranslate, setLocale, type SupportedLocale } from '@/ui/i18n'
 import type { TranslationPort } from '@/domain/ports'
 
 /** Keys that belong to the flat PluginSettings namespace. */
@@ -47,6 +47,7 @@ export default class SpecoratorPlugin extends Plugin {
       i18nMerge,
     })
 
+    setLocale(this.settings.locale as SupportedLocale)
     // Pass the full stored blob so PluginCore can migrate per-module settings in-place.
     await this.core.init(this._storedData)
 
