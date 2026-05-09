@@ -1,5 +1,7 @@
 import { vi } from 'vitest'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
+import { MockMetadataCacheAdapter } from '@/infrastructure/mock/MockMetadataCacheAdapter'
+import { MockCanvasAdapter } from '@/infrastructure/mock/MockCanvasAdapter'
 import type {
   SettingsPort,
   VaultPort,
@@ -18,6 +20,7 @@ import type { EventBus } from '@/domain/shared/event-bus'
  * `bridge` is exposed so tests can inspect recorded notices and opened-file paths.
  * `bus` is exposed so tests can subscribe to events before calling module init.
  * `logger` spies can be asserted on: `ports.logger.warn`, `ports.logger.error`, etc.
+ * `metadataCache` and `canvas` are exposed for tests that need those ports.
  */
 export interface FakePorts {
   readonly settings: SettingsPort
@@ -28,10 +31,14 @@ export interface FakePorts {
   readonly bus: EventBus
   readonly t: TranslationPort
   readonly bridge: MockBridge
+  readonly metadataCache: MockMetadataCacheAdapter
+  readonly canvas: MockCanvasAdapter
 }
 
 export function fakeModulePorts(): FakePorts {
   const bridge = new MockBridge()
+  const metadataCache = new MockMetadataCacheAdapter()
+  const canvas = new MockCanvasAdapter()
   return {
     settings: bridge,
     vault: bridge,
@@ -46,5 +53,7 @@ export function fakeModulePorts(): FakePorts {
     bus: createEventBus(),
     t: { t: vi.fn((key: string) => key) },
     bridge,
+    metadataCache,
+    canvas,
   }
 }

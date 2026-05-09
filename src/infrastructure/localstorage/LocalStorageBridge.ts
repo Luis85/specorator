@@ -4,6 +4,8 @@ import type {
 	WorkspacePort,
 	NotificationPort,
 	LoggerPort,
+	ActiveFileSnapshot,
+	Unsubscriber,
 } from '@/domain/ports'
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
@@ -68,6 +70,16 @@ export class LocalStorageBridge
 
   async openFile(path: string): Promise<void> {
     window.dispatchEvent(new CustomEvent('sp:open-file', { detail: { path } }))
+  }
+
+  getActiveFile(): ActiveFileSnapshot | null {
+    return null
+  }
+
+  onActiveFileChanged(_handler: (file: ActiveFileSnapshot | null) => void): Unsubscriber {
+    // no active-file concept in browser bridge
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    return () => {}
   }
 
   showError(message: string, durationMs = 0): void {

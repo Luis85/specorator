@@ -25,6 +25,15 @@ function registerWorkspaceContract(harness: Harness): void {
 			await scenario.port.openFile('specs/search/workflow-state.md')
 			expect(scenario.readOpenedFile()).toBe('specs/search/workflow-state.md')
 		})
+
+		it('getActiveFile returns null initially', () => {
+			expect(scenario.port.getActiveFile()).toBeNull()
+		})
+
+		it('unsubscriber returned by onActiveFileChanged can be called without error', () => {
+			const unsub = scenario.port.onActiveFileChanged(() => {})
+			expect(() => { unsub() }).not.toThrow()
+		})
 	})
 }
 
