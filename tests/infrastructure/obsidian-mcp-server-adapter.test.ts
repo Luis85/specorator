@@ -1,10 +1,11 @@
 import * as http from 'node:http'
 import { describe, it, expect } from 'vitest'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
+import { MockBridge } from '@/infrastructure/mock/MockBridge'
 
 describe('ObsidianMcpServerAdapter', () => {
   it('start() assigns a dynamic port in valid range', async () => {
-    const adapter = new ObsidianMcpServerAdapter()
+    const adapter = new ObsidianMcpServerAdapter(new MockBridge())
     const { port } = await adapter.start()
     expect(port).toBeGreaterThan(0)
     expect(port).toBeLessThanOrEqual(65535)
@@ -12,7 +13,7 @@ describe('ObsidianMcpServerAdapter', () => {
   })
 
   it('getConnectionConfig() returns 127.0.0.1 URL matching the assigned port', async () => {
-    const adapter = new ObsidianMcpServerAdapter()
+    const adapter = new ObsidianMcpServerAdapter(new MockBridge())
     const { port } = await adapter.start()
     expect(adapter.getConnectionConfig()).toEqual({
       transport: 'http',
@@ -22,25 +23,25 @@ describe('ObsidianMcpServerAdapter', () => {
   })
 
   it('getConnectionConfig() throws before start()', () => {
-    const adapter = new ObsidianMcpServerAdapter()
+    const adapter = new ObsidianMcpServerAdapter(new MockBridge())
     expect(() => adapter.getConnectionConfig()).toThrow(/not started/)
   })
 
   it('getConnectionConfig() throws after stop()', async () => {
-    const adapter = new ObsidianMcpServerAdapter()
+    const adapter = new ObsidianMcpServerAdapter(new MockBridge())
     await adapter.start()
     await adapter.stop()
     expect(() => adapter.getConnectionConfig()).toThrow(/not started/)
   })
 
   it('stop() closes the server cleanly', async () => {
-    const adapter = new ObsidianMcpServerAdapter()
+    const adapter = new ObsidianMcpServerAdapter(new MockBridge())
     await adapter.start()
     await expect(adapter.stop()).resolves.toBeUndefined()
   })
 
   it('returns 421 for requests with a non-localhost Host header (DNS rebinding guard)', async () => {
-    const adapter = new ObsidianMcpServerAdapter()
+    const adapter = new ObsidianMcpServerAdapter(new MockBridge())
     const { port } = await adapter.start()
 
     const statusCode = await new Promise<number>((resolve, reject) => {
@@ -59,7 +60,7 @@ describe('ObsidianMcpServerAdapter', () => {
   })
 
   it('returns 500 and stays alive when transport.handleRequest rejects', async () => {
-    const adapter = new ObsidianMcpServerAdapter()
+    const adapter = new ObsidianMcpServerAdapter(new MockBridge())
     const { port } = await adapter.start()
 
     // Send a request immediately after stop() is called on the transport
@@ -85,8 +86,8 @@ describe('ObsidianMcpServerAdapter', () => {
     expect([200, 202, 400, 404, 500, 0]).toContain(statusCode)
   })
 
-  it('server returns empty tool list at /mcp', async () => {
-    const adapter = new ObsidianMcpServerAdapter()
+  it('server responds to initialize at /mcp', async () => {
+    const adapter = new ObsidianMcpServerAdapter(new MockBridge())
     const { port } = await adapter.start()
 
     const response = await fetch(`http://localhost:${port}/mcp`, {
