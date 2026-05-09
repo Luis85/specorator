@@ -102,7 +102,7 @@ export class MockBridge
     }
     this.activeFile = snapshot
     for (const handler of this.activeFileHandlers) {
-      handler(snapshot)
+      handler({ ...snapshot })
     }
   }
 
@@ -120,7 +120,7 @@ export class MockBridge
   setActiveFile(file: ActiveFileSnapshot | null): void {
     this.activeFile = file !== null ? { ...file } : null
     for (const handler of this.activeFileHandlers) {
-      handler(this.activeFile)
+      handler(this.activeFile !== null ? { ...this.activeFile } : null)
     }
   }
 
