@@ -238,6 +238,13 @@ export default defineConfig(
 			// W5 rule pack — file-size tiering (warn floor)
 			'max-lines': ['warn', MAX_LINES_OPTIONS],
 
+			// W12 — comments tagged with the warning markers below must be
+			// converted to GitHub issues instead. See `terms` for the list.
+			'no-warning-comments': [
+				'error',
+				{ terms: ['todo', 'fixme', 'xxx'], location: 'anywhere' },
+			],
+
 			// Out-of-scope obsidianmd recommended rules — opinionated style
 			// items not part of the W5 acceptance list. Keep the security/
 			// architectural ones; downgrade purely cosmetic ones.
