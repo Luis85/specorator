@@ -20,6 +20,18 @@ describe('ObsidianMcpServerAdapter', () => {
     await adapter.stop()
   })
 
+  it('getConnectionConfig() throws before start()', () => {
+    const adapter = new ObsidianMcpServerAdapter()
+    expect(() => adapter.getConnectionConfig()).toThrow(/not started/)
+  })
+
+  it('getConnectionConfig() throws after stop()', async () => {
+    const adapter = new ObsidianMcpServerAdapter()
+    await adapter.start()
+    await adapter.stop()
+    expect(() => adapter.getConnectionConfig()).toThrow(/not started/)
+  })
+
   it('stop() closes the server cleanly', async () => {
     const adapter = new ObsidianMcpServerAdapter()
     await adapter.start()

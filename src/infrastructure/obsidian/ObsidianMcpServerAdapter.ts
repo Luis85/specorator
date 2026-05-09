@@ -56,6 +56,9 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
   }
 
   getConnectionConfig(): McpConnectionConfig {
+    if (this.assignedPort === 0) {
+      throw new Error('MCP server not started — call start() first')
+    }
     return { transport: 'http', url: `http://localhost:${this.assignedPort}/mcp` }
   }
 }
