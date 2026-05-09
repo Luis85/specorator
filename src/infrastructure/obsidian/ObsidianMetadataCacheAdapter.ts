@@ -28,7 +28,7 @@ export class ObsidianMetadataCacheAdapter implements MetadataCachePort {
   }
 
   getResolvedLinks(sourcePath: string): Record<string, number> {
-    return this.app.metadataCache.resolvedLinks[sourcePath] ?? {}
+    return { ...this.app.metadataCache.resolvedLinks[sourcePath] }
   }
 
   getAllTags(): Record<string, number> {

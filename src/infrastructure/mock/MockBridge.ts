@@ -92,6 +92,17 @@ export class MockBridge
 
   async openFile(path: string): Promise<void> {
     this.openedFile = path
+    const filename = path.split('/').pop() ?? path
+    const dot = filename.lastIndexOf('.')
+    const snapshot: ActiveFileSnapshot = {
+      path,
+      basename: dot !== -1 ? filename.slice(0, dot) : filename,
+      extension: dot !== -1 ? filename.slice(dot + 1) : '',
+    }
+    this.activeFile = snapshot
+    for (const handler of this.activeFileHandlers) {
+      handler(snapshot)
+    }
   }
 
   getActiveFile(): ActiveFileSnapshot | null {
