@@ -136,6 +136,8 @@ export default defineConfig(
 			// surface (they run in Node, not in the plugin/UI build).
 			'scripts/**',
 			'version-bump.js',
+			// Sub-projects under sites/ have their own ESLint setups.
+			'sites/**',
 		],
 	},
 
