@@ -5,11 +5,12 @@ export class MockCanvasAdapter implements CanvasPort {
   private readonly written = new Map<string, JsonCanvasData>()
 
   seedCanvas(path: string, data: JsonCanvasData): void {
-    this.store.set(path, data)
+    this.store.set(path, structuredClone(data))
   }
 
   getWritten(path: string): JsonCanvasData | undefined {
-    return this.written.get(path)
+    const data = this.written.get(path)
+    return data !== undefined ? structuredClone(data) : undefined
   }
 
   isCanvas(path: string): boolean {
@@ -21,11 +22,12 @@ export class MockCanvasAdapter implements CanvasPort {
     if (data === undefined) {
       throw new Error(`[MockCanvasAdapter] Canvas not found: ${path}`)
     }
-    return data
+    return structuredClone(data)
   }
 
   async writeCanvas(path: string, data: JsonCanvasData): Promise<void> {
-    this.store.set(path, data)
-    this.written.set(path, data)
+    const clone = structuredClone(data)
+    this.store.set(path, clone)
+    this.written.set(path, clone)
   }
 }

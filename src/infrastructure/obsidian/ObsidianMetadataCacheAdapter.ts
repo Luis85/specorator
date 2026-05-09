@@ -46,11 +46,16 @@ export class ObsidianMetadataCacheAdapter implements MetadataCachePort {
   }
 
   onMetadataChanged(handler: (path: string) => void): Unsubscriber {
-    const ref = this.app.metadataCache.on('changed', (file) => {
+    // 'changed' fires after indexing; 'resolve' fires when resolvedLinks updates complete
+    const changedRef = this.app.metadataCache.on('changed', (file) => {
+      handler(file.path)
+    })
+    const resolveRef = this.app.metadataCache.on('resolve', (file) => {
       handler(file.path)
     })
     return () => {
-      this.app.metadataCache.offref(ref)
+      this.app.metadataCache.offref(changedRef)
+      this.app.metadataCache.offref(resolveRef)
     }
   }
 }
