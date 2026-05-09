@@ -20,6 +20,11 @@ export interface ModuleCommandDescriptor {
 	readonly callback: () => void
 }
 
+export interface ModuleUriAction {
+	readonly action: string
+	readonly handler: (params: URLSearchParams) => void
+}
+
 export interface ModuleViewIntent {
 	readonly id: string
 	readonly label: string
@@ -39,6 +44,7 @@ export interface ModuleDescriptor<S = Record<string, unknown>> {
 	readonly id: string
 	readonly dependsOn?: ReadonlyArray<string>
 	readonly commands?: ReadonlyArray<ModuleCommandDescriptor>
+	readonly uriActions?: ReadonlyArray<ModuleUriAction>
 	readonly views?: ReadonlyArray<ModuleViewIntent>
 	readonly settingsSchema?: ModuleSettingsSchema
 	/** Unique key used to read/write this module's settings slice in the stored blob. Omit if the module has no persistent settings. */

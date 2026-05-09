@@ -17,6 +17,18 @@ export interface CorePorts {
 
 // ── Validation helpers ────────────────────────────────────────────────────────
 
+function validateUriActions(modules: ReadonlyArray<ModuleDescriptor>): void {
+  const seen = new Set<string>()
+  for (const mod of modules) {
+    for (const uriAction of mod.uriActions ?? []) {
+      if (seen.has(uriAction.action)) {
+        throw new Error(`duplicate URI action "${uriAction.action}" in module "${mod.id}"`)
+      }
+      seen.add(uriAction.action)
+    }
+  }
+}
+
 function validateSettingsKeys(modules: ReadonlyArray<ModuleDescriptor>): void {
   const seen = new Set<string>()
   for (const mod of modules) {
@@ -42,6 +54,7 @@ function validateModules(modules: ReadonlyArray<ModuleDescriptor>): void {
   }
 
   validateSettingsKeys(modules)
+  validateUriActions(modules)
 
   for (const mod of modules) {
     const deps = mod.dependsOn ?? []
@@ -169,6 +182,7 @@ export class PluginCore {
   private sorted: ModuleDescriptor[] = []
   private readonly leakMap = new Map<string, number>()
   private readonly moduleSettingsMap = new Map<string, unknown>()
+  private readonly uriDispatch = new Map<string, (params: URLSearchParams) => void>()
   private _initCalled = false
 
   constructor(
@@ -204,6 +218,19 @@ export class PluginCore {
   /** Returns the migrated, validated settings slice for a module by settingsKey. */
   getModuleSettings(settingsKey: string): unknown {
     return this.moduleSettingsMap.get(settingsKey)
+  }
+
+  /** Dispatch an obsidian://specorator URI to the matching module handler. Returns true if handled. */
+  handleUri(params: URLSearchParams): boolean {
+    const action = params.get('action')
+    if (action === null) return false
+    const handler = this.uriDispatch.get(action)
+    if (handler === undefined) return false
+    const result = trySync(() => { handler(params) })
+    if (!result.ok) {
+      this.ports.logger.error('URI action handler failed', result.error, { action })
+    }
+    return true
   }
 
   /**
@@ -248,6 +275,12 @@ export class PluginCore {
 
     validateModules(this.modules)
     this.sorted = topoSort(this.modules)
+
+    for (const mod of this.modules) {
+      for (const uriAction of mod.uriActions ?? []) {
+        this.uriDispatch.set(uriAction.action, uriAction.handler)
+      }
+    }
 
     migrateSettings(this.sorted, rawSettings, this.ports.logger)
     const settings = rawSettings
