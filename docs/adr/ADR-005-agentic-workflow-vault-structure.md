@@ -46,7 +46,7 @@ status: draft | active | archived | abandoned
 last_updated: YYYY-MM-DD
 last_agent: ""
 artifacts:
-  idea: complete | in-progress | pending | skipped | blocked
+  idea: complete | in-progress | draft | pending | skipped | blocked
   research: pending
   requirements: pending
   design: pending
