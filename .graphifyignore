@@ -30,3 +30,9 @@ Thumbs.db
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+
+# Corpus scope: exclude tests, stories, scripts, and all HTML (design wireframes + generated)
+tests/
+stories/
+scripts/
+*.html

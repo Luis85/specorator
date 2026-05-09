@@ -1,0 +1,986 @@
+{
+  "D:\\Projects\\specorator-plugin\\version-bump.js": {
+    "mtime": 1777757328.0,
+    "hash": "7983d593077cd2ba1a9e468e3db22c1b"
+  },
+  "D:\\Projects\\specorator-plugin\\vite.config.ts": {
+    "mtime": 1778001174.0,
+    "hash": "3dfc758859f667e373e777098fbccaf4"
+  },
+  "D:\\Projects\\specorator-plugin\\vitest.config.ts": {
+    "mtime": 1778317790.0,
+    "hash": "189380a15daeba8fdf1b583baaefe699"
+  },
+  "D:\\Projects\\specorator-plugin\\eslint.config.js": {
+    "mtime": 1778362308.0,
+    "hash": "d2238f345ce1788263d565d369e16aa9"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\design\\app.jsx": {
+    "mtime": 1777663924.0,
+    "hash": "984f163b29278284819d490c7f57adc3"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\design\\design-canvas.jsx": {
+    "mtime": 1777663924.0,
+    "hash": "fc3cb820a1545e2801a93ff9396f3efe"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\design\\tweaks-panel.jsx": {
+    "mtime": 1777663924.0,
+    "hash": "ec8b02c3cbe44477205ced241127929b"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\vite-env.d.ts": {
+    "mtime": 1777749328.0,
+    "hash": "0352474ba2918efe13895edbc3780d94"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\shims-vue.d.ts": {
+    "mtime": 1777832586.0,
+    "hash": "70201cb0249748577faa031612514785"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\application\\feature\\ActivateFeatureUseCase.ts": {
+    "mtime": 1777749328.0,
+    "hash": "453b2ccb773a00ff4a79c19b0539388e"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\application\\feature\\AdvanceFeatureStageUseCase.ts": {
+    "mtime": 1777749328.0,
+    "hash": "1f5dc46c0d8a4bcd2f8f84441cbfb020"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\application\\feature\\ArchiveFeatureUseCase.ts": {
+    "mtime": 1777749328.0,
+    "hash": "a736e5e232a234cbeccf7b4435bdda18"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\application\\feature\\GetFeaturesUseCase.ts": {
+    "mtime": 1777749328.0,
+    "hash": "ccab8e6400ba99c9b2aef556c1b890e9"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\application\\feature\\CreateFeatureUseCase.ts": {
+    "mtime": 1777832586.0,
+    "hash": "5c1c0add0e2838e70c285f7750fa82a3"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\application\\shared\\UseCase.ts": {
+    "mtime": 1777749328.0,
+    "hash": "75a6364e4a32927f907d6a5311ba1825"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\application\\shared\\FeedbackService.ts": {
+    "mtime": 1778001174.0,
+    "hash": "8079b245453cd5be03b09c60fed42dab"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\application\\shared\\errorMessages.ts": {
+    "mtime": 1778001174.0,
+    "hash": "6824dfbd29169f58c4bc0aa4c527ef35"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\application\\__fixtures__\\uses-delete-operator.ts": {
+    "mtime": 1777832586.0,
+    "hash": "666ef19e04b7732a1d9cd751463271ae"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\application\\__fixtures__\\uses-try-catch.ts": {
+    "mtime": 1777832586.0,
+    "hash": "da164c6a7ddf1540eb6aae9e62dd55d6"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\feature\\FeatureStatus.ts": {
+    "mtime": 1777749328.0,
+    "hash": "b6a7d7851c7c5d2139812ef5e62df5bc"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\feature\\IFeatureRepository.ts": {
+    "mtime": 1777749328.0,
+    "hash": "1f4a1b9ba96c07757b06c927ab3169ed"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\feature\\Feature.ts": {
+    "mtime": 1777832586.0,
+    "hash": "aa7d6dbc2489327a4545aeaf3d909289"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\feature\\FeatureStep.ts": {
+    "mtime": 1777832586.0,
+    "hash": "70eb82d330b9368d92f532511a7c86bf"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\shared\\Result.ts": {
+    "mtime": 1777749328.0,
+    "hash": "bc85e63efc0cc39c648c9dc9f9f239ff"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\shared\\Slug.ts": {
+    "mtime": 1777749328.0,
+    "hash": "1ab124df8455cf43fcd4cebbdffef62f"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\shared\\tryAsync.ts": {
+    "mtime": 1777832586.0,
+    "hash": "5ae38454a6a6cdff44199a0e27744fe1"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\shared\\event-bus.ts": {
+    "mtime": 1777931604.0,
+    "hash": "cb129b333c1fa6dcd29f2689a8cefd51"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\__fixtures__\\imports-node-builtin.ts": {
+    "mtime": 1777832586.0,
+    "hash": "6c515d02c8c4a8db0da24d50e7e8afdd"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\__fixtures__\\imports-obsidian.ts": {
+    "mtime": 1777832586.0,
+    "hash": "2d6d131941cf5a6b2c556ada527a743f"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\__fixtures__\\imports-vue.ts": {
+    "mtime": 1777832586.0,
+    "hash": "d7d1269b0c0ae24282b6dcd2572e66be"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\__fixtures__\\uses-try-catch.ts": {
+    "mtime": 1777832586.0,
+    "hash": "788f8508454cac1d22ef1e415917138e"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\__fixtures__\\imports-infrastructure.ts": {
+    "mtime": 1777837948.0,
+    "hash": "f7dd2c6a0c3481534e4dcf41901fba98"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\ports\\SettingsPort.ts": {
+    "mtime": 1777837948.0,
+    "hash": "2a5696b015d5cba80d9fe6761313ce71"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\ports\\VaultPort.ts": {
+    "mtime": 1777837948.0,
+    "hash": "e430e8dd5495b0420a66e7f0e7b598e7"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\ports\\LoggerPort.ts": {
+    "mtime": 1777931604.0,
+    "hash": "669a3cfa93fabaca15505e33bb81bd38"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\ports\\NotificationPort.ts": {
+    "mtime": 1778001174.0,
+    "hash": "cbf82fb01da0d0bc8f7d6bc8d1d32999"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\ports\\TranslationPort.ts": {
+    "mtime": 1778273830.0,
+    "hash": "4d113c1b5216b4ecb847f6f107fdee78"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\ports\\WorkspacePort.ts": {
+    "mtime": 1778343006.0,
+    "hash": "61216bc2dbcecf0cad8b96b903d81a02"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\ports\\canvas-port.ts": {
+    "mtime": 1778343006.0,
+    "hash": "a528dc0c654ced7a1a73bd138f63527b"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\ports\\metadata-cache-port.ts": {
+    "mtime": 1778343006.0,
+    "hash": "e8b56119b4ecb5660b0f48859d670f09"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\ports\\shared.ts": {
+    "mtime": 1778343006.0,
+    "hash": "96db12e44d5c98648513b97cb8bfa2da"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\ports\\index.ts": {
+    "mtime": 1778359222.0,
+    "hash": "1cf5dc5fb87a1d49d27d632bdd90089d"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\ports\\obsidian-mcp-server-port.ts": {
+    "mtime": 1778359222.0,
+    "hash": "0c6f27dbdc74afcc04554dae80f54592"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\domain\\settings\\PluginSettings.ts": {
+    "mtime": 1778001174.0,
+    "hash": "8746ef9978a4e01894605486a092e065"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\infrastructure\\bridge\\FeatureRepository.ts": {
+    "mtime": 1778001174.0,
+    "hash": "3b811c3af74378e04a09e859c34162b6"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\infrastructure\\bridge\\ports.ts": {
+    "mtime": 1778343006.0,
+    "hash": "45797a7488aa37bdb4912f8c6a94a98b"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\infrastructure\\localstorage\\LocalStorageBridge.ts": {
+    "mtime": 1778343006.0,
+    "hash": "547039f5d7c9a0c75f0b79d304c42fe3"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\infrastructure\\mock\\fixtures.ts": {
+    "mtime": 1777749328.0,
+    "hash": "11a6241d261dabc6f74515da2cd1e6e8"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\infrastructure\\mock\\MockBridge.ts": {
+    "mtime": 1778343006.0,
+    "hash": "fc6a038e193da580ef66564263f25e81"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\infrastructure\\mock\\MockCanvasAdapter.ts": {
+    "mtime": 1778343006.0,
+    "hash": "c672dfddb32e4f9b742b57ac76094ce3"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\infrastructure\\mock\\MockMetadataCacheAdapter.ts": {
+    "mtime": 1778343006.0,
+    "hash": "6a66f7ed0189787cd2d1c28ba9579922"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\infrastructure\\mock\\MockObsidianMcpServerAdapter.ts": {
+    "mtime": 1778359224.0,
+    "hash": "a9006802b67a3e31daa7d35f3e13c726"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\infrastructure\\obsidian\\ObsidianBridge.ts": {
+    "mtime": 1778343006.0,
+    "hash": "dde1da2ead1cecc5c581bb96f9cf136f"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\infrastructure\\obsidian\\ObsidianCanvasAdapter.ts": {
+    "mtime": 1778343006.0,
+    "hash": "5a36cdabb3b1bf55bc8de830496cd426"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\infrastructure\\obsidian\\ObsidianMetadataCacheAdapter.ts": {
+    "mtime": 1778343006.0,
+    "hash": "f1be98686e1053a72aaff304f44be3b3"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\infrastructure\\obsidian\\ObsidianClaudeCliAdapter.ts": {
+    "mtime": 1778359224.0,
+    "hash": "af5f42ef8dae2eb20c611aa5b4d04feb"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\infrastructure\\obsidian\\ObsidianMcpServerAdapter.ts": {
+    "mtime": 1778363160.0,
+    "hash": "a215abb38f9ba14df234579ee4e7488a"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\infrastructure\\vault\\VaultPath.ts": {
+    "mtime": 1777832586.0,
+    "hash": "532f0d68a9f8b98417d1641d6571745c"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\infrastructure\\workflow-state\\WorkflowStateDocument.ts": {
+    "mtime": 1777832586.0,
+    "hash": "98760a07790488b110c580b0ceb9d5e8"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\plugin\\settings.ts": {
+    "mtime": 1778273830.0,
+    "hash": "e60066c088f17f2b6aec4b86535b8fd3"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\plugin\\SpecoratorView.ts": {
+    "mtime": 1778320568.0,
+    "hash": "cd8cb2ef84fdae12171f136e0dcc5c91"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\plugin\\main.ts": {
+    "mtime": 1778362308.0,
+    "hash": "64185a3c58688ee91433dc824a922171"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\AppRoot.vue": {
+    "mtime": 1778320568.0,
+    "hash": "0109d5497e12f1c7a2cf7b965acd5e85"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\main.ts": {
+    "mtime": 1778320568.0,
+    "hash": "5f0f3e669c1f039f623c4bf51e5adfa2"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\components\\ErrorBoundary.vue": {
+    "mtime": 1778001174.0,
+    "hash": "85c5148bca88fe8b256a469617cc71e5"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\components\\common\\AppBadge.vue": {
+    "mtime": 1777749328.0,
+    "hash": "b45d4e407f46407e78a8196a0f4d2654"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\components\\common\\AppButton.vue": {
+    "mtime": 1777749328.0,
+    "hash": "8f21df4847699d9bc3e1117a8c076dbe"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\components\\common\\AppToast.vue": {
+    "mtime": 1778001174.0,
+    "hash": "1d0c02036c76b3e2d194f485643079dc"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\components\\feature\\FeatureCard.vue": {
+    "mtime": 1777847966.0,
+    "hash": "d9a9c57d042d22e9e87db2266cf670bd"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\components\\feature\\CreateFeatureForm.vue": {
+    "mtime": 1778001174.0,
+    "hash": "8d857d58706b2ba7798f3c9ae902c55e"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\composables\\useFeatures.ts": {
+    "mtime": 1777837948.0,
+    "hash": "07eb18753c7c349e6d454927106f6e00"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\composables\\useNotificationPort.ts": {
+    "mtime": 1777837948.0,
+    "hash": "d322d72312e464f5fe599927854b41eb"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\composables\\useSettingsPort.ts": {
+    "mtime": 1777837948.0,
+    "hash": "effbc02f65999a2a122875ce646c6b8a"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\composables\\useVaultPort.ts": {
+    "mtime": 1777837948.0,
+    "hash": "4def63dc88ace8664a56991f5fbc8965"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\composables\\useWorkspacePort.ts": {
+    "mtime": 1777837948.0,
+    "hash": "1721ca158ec6c12febd6728a04e59815"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\composables\\useLoggerPort.ts": {
+    "mtime": 1777931604.0,
+    "hash": "6717f7ba8a01e0c50634e5ecd25ef830"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\composables\\useSettings.ts": {
+    "mtime": 1778001174.0,
+    "hash": "f2b3c7905e25cea3304dc56744f3f042"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\composables\\useCanvasPort.ts": {
+    "mtime": 1778343006.0,
+    "hash": "b0838a9699ed7bb7587bea9adb969086"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\composables\\useMetadataCachePort.ts": {
+    "mtime": 1778343006.0,
+    "hash": "9473e038739e5ca458fcd89eedef64a8"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\i18n\\index.ts": {
+    "mtime": 1778273830.0,
+    "hash": "cf18889fa6672b4e4472df5fc6dd4511"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\i18n\\locales\\de.ts": {
+    "mtime": 1778001174.0,
+    "hash": "69ecc93524c6550e00f4e203093a104f"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\i18n\\locales\\en.ts": {
+    "mtime": 1778001174.0,
+    "hash": "b4534fbf3ffec66fd146a28672556df5"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\router\\fileRoute.ts": {
+    "mtime": 1777814998.0,
+    "hash": "0a0c662a9576a01940d88641eb0b48ba"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\router\\index.ts": {
+    "mtime": 1778320568.0,
+    "hash": "42795b97bb1822547da2acec3d4baf0b"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\stores\\featureStore.ts": {
+    "mtime": 1777749328.0,
+    "hash": "f96f16fa4505e7ffaadfeb6a313a197e"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\stores\\settingsStore.ts": {
+    "mtime": 1777837948.0,
+    "hash": "ebec12926f25d6871cf5fa786f1c7930"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\stores\\notificationStore.ts": {
+    "mtime": 1778001174.0,
+    "hash": "a410a48677cc2628407c0ee20f50e10e"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\types\\FeatureDto.ts": {
+    "mtime": 1777749328.0,
+    "hash": "1a634ee7cd044b3a6941ff60ffa0769e"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\views\\FeaturesView.vue": {
+    "mtime": 1777837948.0,
+    "hash": "86c8a833c49dd350d3985ce88392e95f"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\views\\FileView.vue": {
+    "mtime": 1777837948.0,
+    "hash": "0ae669b893b4fdd68efdb8bf0ae0d831"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\views\\HomeView.vue": {
+    "mtime": 1777847966.0,
+    "hash": "d4971ad483e69cf7dde8cedd1b5bfa70"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\views\\SettingsView.vue": {
+    "mtime": 1778001174.0,
+    "hash": "d9a1810d1269496ae56d0abb36d53199"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\__fixtures__\\imports-mock-bridge.ts": {
+    "mtime": 1777832586.0,
+    "hash": "30482c59c4f7a98f070d455a54385dd0"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\__fixtures__\\imports-obsidian.ts": {
+    "mtime": 1777832586.0,
+    "hash": "26bf1f974e9767fd05afd794a7db8cf4"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\layouts\\DashboardLayout.vue": {
+    "mtime": 1778320568.0,
+    "hash": "c8711dbac519af159e45e67fedbc3d79"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\layouts\\MainLayout.vue": {
+    "mtime": 1778320568.0,
+    "hash": "7c7261d49639974afb20628937c52e43"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\layouts\\PanelLayout.vue": {
+    "mtime": 1778320568.0,
+    "hash": "616d81bcacaff67768956cb69e4467a1"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\ui\\layouts\\index.ts": {
+    "mtime": 1778320568.0,
+    "hash": "eeb4ad214cd0e517274286da5ea14cc5"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\core\\core-events.ts": {
+    "mtime": 1777931604.0,
+    "hash": "d3506e444036d9de64df71b7593662d7"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\core\\applyModuleMessages.ts": {
+    "mtime": 1778273830.0,
+    "hash": "2f3600b9c98abad661ec6002ae3c7deb"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\core\\bootstrap.ts": {
+    "mtime": 1778273830.0,
+    "hash": "be3f419ce35b054e0f2562b11355de05"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\core\\core-settings.ts": {
+    "mtime": 1778273830.0,
+    "hash": "c4d175acb261af9ef04236360e15f755"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\core\\plugin-core.ts": {
+    "mtime": 1778359222.0,
+    "hash": "9909779b47d08fbe2eee2053c3b128ed"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\modules\\index.ts": {
+    "mtime": 1778273830.0,
+    "hash": "1624ba9440d587813318b7e7debb2578"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\modules\\module.ts": {
+    "mtime": 1778354558.0,
+    "hash": "7882b8a2e3c98540298f7eaff5a45b6b"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\modules\\hello\\HelloView.vue": {
+    "mtime": 1777920048.0,
+    "hash": "84291c91868059702a982ce2efef7f2d"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\modules\\hello\\hello-events.ts": {
+    "mtime": 1777920048.0,
+    "hash": "21c6a1e60cc9c69741e666793b505d85"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\modules\\hello\\hello-module.ts": {
+    "mtime": 1778273830.0,
+    "hash": "f689739d77a831c981c02c561534c760"
+  },
+  "D:\\Projects\\specorator-plugin\\sites\\specorator\\astro.config.mjs": {
+    "mtime": 1778362308.0,
+    "hash": "7d8cb2819280303669a0a96393d2715b"
+  },
+  "D:\\Projects\\specorator-plugin\\SECURITY.md": {
+    "mtime": 1777749326.0,
+    "hash": "105e0fb0a45ce14852fea56dec872978"
+  },
+  "D:\\Projects\\specorator-plugin\\CONSTITUTION.md": {
+    "mtime": 1777755048.0,
+    "hash": "a46987503142d236ed87ba4f008644ce"
+  },
+  "D:\\Projects\\specorator-plugin\\README.md": {
+    "mtime": 1777756518.0,
+    "hash": "54b289679915b31c1541587ccee42d8c"
+  },
+  "D:\\Projects\\specorator-plugin\\AGENTS.md": {
+    "mtime": 1777802586.0,
+    "hash": "ebc4abbb5671b92aa32524a48ef24ec3"
+  },
+  "D:\\Projects\\specorator-plugin\\CLAUDE.md": {
+    "mtime": 1778344086.0,
+    "hash": "5b1d8048b1ad8308ffa119d9b9081f5e"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\github-workspace.md": {
+    "mtime": 1777749326.0,
+    "hash": "155e13c08994aaa6cb2a32c9562bb97e"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary.md": {
+    "mtime": 1777749326.0,
+    "hash": "65feda915e9f45d61de2973f0ea93ef6"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\initiation.md": {
+    "mtime": 1777749326.0,
+    "hash": "9728a6530c33deedce5bd00d8319ca2e"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\prd.md": {
+    "mtime": 1777749326.0,
+    "hash": "d6406ca532ce476751d2b16d92362eee"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\roadmap-v1.md": {
+    "mtime": 1777749326.0,
+    "hash": "86132eea7e86c72f76be02e4a85d209f"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\traceability.md": {
+    "mtime": 1777749326.0,
+    "hash": "41b5b935b61f11bdfd5bf323cdd6e070"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\pre-feature-architecture-readiness.md": {
+    "mtime": 1777755942.0,
+    "hash": "7a10784e2e9b8d1ba44fc1a360a706a0"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\contributing.md": {
+    "mtime": 1777802586.0,
+    "hash": "074285103f4e52b46c4339503e485612"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\testing-coverage-gap-matrix.md": {
+    "mtime": 1777807694.0,
+    "hash": "ea41da45cdaf8397b47aa073b804cb1b"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\marketplace-readiness.md": {
+    "mtime": 1777812270.0,
+    "hash": "4762f96e066def525ecd21a12eb40d32"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\release-process.md": {
+    "mtime": 1777812270.0,
+    "hash": "4e01c7c127c24fabc8ddfb06d21ab16b"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\local-development.md": {
+    "mtime": 1777828940.0,
+    "hash": "805b5aed57b75c300aae335295c2c67b"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\project-kickoff-guide.md": {
+    "mtime": 1777828940.0,
+    "hash": "643c17bb754644d14c3cbe99cc546004"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\workflow-adoption-guide.md": {
+    "mtime": 1777828940.0,
+    "hash": "77fbecb422c8c8e8ced1c60ccf46ecfc"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\product-page-brief.md": {
+    "mtime": 1778273830.0,
+    "hash": "fa78f8c9165a8d965dc9ae8da706d72d"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\product-vision.md": {
+    "mtime": 1778273830.0,
+    "hash": "9574e511d5e5ec6f62d8af6df93775fe"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\module-authoring.md": {
+    "mtime": 1778328132.0,
+    "hash": "df907799fdf1fb0a104c6797c91bb88c"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\h-acd.md": {
+    "mtime": 1778344086.0,
+    "hash": "3e4e52eb8d395649472f2057090e648d"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\process\\requirements-intake.md": {
+    "mtime": 1777749326.0,
+    "hash": "b0486de967f9dad2904b2653a56d062f"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\design\\DESIGN_BRIEF.md": {
+    "mtime": 1777749326.0,
+    "hash": "a28b1063cd458fa9114cb9670705abc9"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\design\\README.md": {
+    "mtime": 1777749326.0,
+    "hash": "962831daa2c1be06dcded7f11ac2a121"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\design\\USE_CASES.md": {
+    "mtime": 1777749326.0,
+    "hash": "ece319612657e60e868062ec68aad8d1"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\design\\idea-gamified-workflow-research.md": {
+    "mtime": 1778273828.0,
+    "hash": "b63fd8b208eda4c89c9b2d814efcb5d7"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\adr\\ADR-001-ddd-layered-architecture.md": {
+    "mtime": 1777749326.0,
+    "hash": "c3e8891bfd1953215a293bffd77e12c3"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\adr\\ADR-003-vue3-composition-hash-router.md": {
+    "mtime": 1777749326.0,
+    "hash": "d910b3c8e61d4d9c4fc2fa6e1e9233a9"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\adr\\ADR-004-result-discriminated-union.md": {
+    "mtime": 1777749326.0,
+    "hash": "185d4ded59f57c3efbc8be04658a3e37"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\adr\\ADR-006-obsidian-api-and-vault-write-safety.md": {
+    "mtime": 1777808348.0,
+    "hash": "83c41f4a568830c84caeb69794ff81bc"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\adr\\ADR-007-agent-runtime-boundary.md": {
+    "mtime": 1777808348.0,
+    "hash": "17423471818d8c059c8ef08821fe5ed0"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\adr\\ADR-002-ibridge-abstraction.md": {
+    "mtime": 1777837948.0,
+    "hash": "072a84b33db726d839c6964f2929631a"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\adr\\ADR-009-test-conventions.md": {
+    "mtime": 1777847966.0,
+    "hash": "d058c5e34f91790604268e300cc8cc44"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\adr\\ADR-008-narrow-ports-supersede-ibridge.md": {
+    "mtime": 1778001174.0,
+    "hash": "106cd8f3addbdc7706a64f2610ccb123"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\adr\\ADR-005-agentic-workflow-vault-structure.md": {
+    "mtime": 1778344086.0,
+    "hash": "fed688851ce53c3f87bafca3542a73ea"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\reviews\\frontend-implementation-review-2026-05-02.md": {
+    "mtime": 1777759518.0,
+    "hash": "429552612605b34fae9ade1eec6dff12"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\security\\supply-chain.md": {
+    "mtime": 1777761606.0,
+    "hash": "89378b327ac8e41f70b54832440af5b5"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\superpowers\\specs\\2026-05-03-verification-gate-hardening-design.md": {
+    "mtime": 1777828940.0,
+    "hash": "82a8eef98d148c2e1498931c5d5e6f89"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\superpowers\\specs\\2026-05-04-w2-module-system-design.md": {
+    "mtime": 1777910968.0,
+    "hash": "a3f03a8800cca0a786e6be4b0fa11dc8"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\superpowers\\specs\\2026-05-04-plugin-core-design.md": {
+    "mtime": 1777931604.0,
+    "hash": "ad188ca17245653ff19dbf742c05eaa3"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\superpowers\\specs\\2026-05-04-error-logging-notification-design.md": {
+    "mtime": 1778001174.0,
+    "hash": "5425721f66dd8287d05d70d8bf4d3c6e"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\superpowers\\specs\\2026-05-08-storybook-design.md": {
+    "mtime": 1778317790.0,
+    "hash": "a5255ad881b88984f713e703aa62fe8b"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\superpowers\\specs\\2026-05-09-w12-scaffold-polish-design.md": {
+    "mtime": 1778328132.0,
+    "hash": "ed8c5adf20531add38a31b3efc8ba543"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\superpowers\\specs\\2026-05-09-w13-d1-narrow-ports-design.md": {
+    "mtime": 1778343006.0,
+    "hash": "82574190e451ebb2d31c9deb0b15ed62"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\superpowers\\specs\\2026-05-09-specorator-agent-orchestrator-design.md": {
+    "mtime": 1778344086.0,
+    "hash": "8421a2468971d098f682e4d9cf0afd24"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\superpowers\\plans\\2026-05-03-verification-gate-hardening.md": {
+    "mtime": 1777825728.0,
+    "hash": "d59458c6f65a7ebd2c6496309ea40547"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\superpowers\\plans\\2026-05-03-w10-test-conventions.md": {
+    "mtime": 1777847966.0,
+    "hash": "5fcfb297b32c8ccb5fa60ce01a9c2d18"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\superpowers\\plans\\2026-05-04-ecosystem-product-vision-refinement.md": {
+    "mtime": 1777910968.0,
+    "hash": "ea10191f9d08e637c8cc6c1f2918948d"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\superpowers\\plans\\2026-05-04-w2-module-system.md": {
+    "mtime": 1777920048.0,
+    "hash": "01562bfa8ce6f17687f58bf721065cfe"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\superpowers\\plans\\2026-05-04-w4-plugin-core.md": {
+    "mtime": 1777922144.0,
+    "hash": "691149d8d3dd3ea59e7ca964a2f8f2d0"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\superpowers\\plans\\2026-05-04-error-logging-notification.md": {
+    "mtime": 1778001174.0,
+    "hash": "62cae0d64e7b51919cb2a8b2a23d9a15"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\superpowers\\plans\\2026-05-08-working-with-issues-user-flow-issue.md": {
+    "mtime": 1778273830.0,
+    "hash": "91d83540ed19bbf1c6d31f237b40071e"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\superpowers\\plans\\2026-05-08-storybook-w9.md": {
+    "mtime": 1778317790.0,
+    "hash": "2f8809bf85926cbac532244e6a5d47cd"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\superpowers\\plans\\2026-05-09-w12-scaffold-polish.md": {
+    "mtime": 1778328132.0,
+    "hash": "f49b525f27b2907046e87e4ce42c799e"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\superpowers\\plans\\2026-05-09-w13-d1-narrow-ports.md": {
+    "mtime": 1778343006.0,
+    "hash": "65d1103ec41713755e00210c84e51da7"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\README.md": {
+    "mtime": 1778273828.0,
+    "hash": "35332b549d08e2c9433c4ce0551d83e3"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\accepted-output.md": {
+    "mtime": 1778273828.0,
+    "hash": "3b90720ea8702a24857c8ba996d0668d"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\adlc.md": {
+    "mtime": 1778273828.0,
+    "hash": "3b9f3c882e45b792deabd0b135212946"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\agentic-coworker.md": {
+    "mtime": 1778273828.0,
+    "hash": "9ab95189f440ccaab858aff0b4439821"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\agentic-workflow.md": {
+    "mtime": 1778273828.0,
+    "hash": "e0a36c9f9eed18d5acdb6615488d1fd8"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\agentonomous.md": {
+    "mtime": 1778273828.0,
+    "hash": "d339d72bd181e3a9ee07df8a3eb46bd4"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\artifact.md": {
+    "mtime": 1778273828.0,
+    "hash": "022f69b331d7ef71a1f4ccf3ca78d302"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\chat-sidebar.md": {
+    "mtime": 1778273830.0,
+    "hash": "e02c3fe81809cd0665263f13ec6d9c24"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\claude-cli-port.md": {
+    "mtime": 1778273830.0,
+    "hash": "549c17647b61f3951187de8a9ecd4194"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\cockpit.md": {
+    "mtime": 1778273830.0,
+    "hash": "ab42f3fd8860f3deffb20abdf9711407"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\companion-app.md": {
+    "mtime": 1778273830.0,
+    "hash": "f0d70718992d08eb5c24dd5e1af2396f"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\decision-note.md": {
+    "mtime": 1778273830.0,
+    "hash": "9a1a96fdc6e5f7055dd75208f0512240"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\feature.md": {
+    "mtime": 1778273830.0,
+    "hash": "bf5b4df4c1c8eb595950260e8043e804"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\fleet-dashboard.md": {
+    "mtime": 1778273830.0,
+    "hash": "403412147c34636c125e4941c8dd00d7"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\gate-check.md": {
+    "mtime": 1778273830.0,
+    "hash": "d26d2684079c2edaa0cc96c2a877fb9d"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\gate.md": {
+    "mtime": 1778273830.0,
+    "hash": "470d3de957523ea2b892270936af4210"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\hitl.md": {
+    "mtime": 1778273830.0,
+    "hash": "e4f298312b38d5178ade0cb4763415bf"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\hotl.md": {
+    "mtime": 1778273830.0,
+    "hash": "e165dfefa9ecbb8b146c43f4ca11e161"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\human-authority.md": {
+    "mtime": 1778273830.0,
+    "hash": "6bb15c9c6e671fd42556675fe2f000f3"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\intent-first.md": {
+    "mtime": 1778273830.0,
+    "hash": "c01ba85c87fe31c2ff8aa449f1972233"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\mcp-server.md": {
+    "mtime": 1778273830.0,
+    "hash": "3522c6fbd6cd0e86463797eed29f6d9c"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\narrow-port.md": {
+    "mtime": 1778273830.0,
+    "hash": "8a23628a290eceaae80a31237e0232a3"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\open-question.md": {
+    "mtime": 1778273830.0,
+    "hash": "b1ada4d43da57e760f9a79c90b083c11"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\oversight-mode.md": {
+    "mtime": 1778273830.0,
+    "hash": "ca164dac0fa96e8335a4a0038962bbe8"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\pipeline.md": {
+    "mtime": 1778273830.0,
+    "hash": "3da4b40914760f9bd130932aa9063acf"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\proposed-output.md": {
+    "mtime": 1778273830.0,
+    "hash": "d2b1a22bff705436d5e978edad775e75"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\runtime-port.md": {
+    "mtime": 1778273830.0,
+    "hash": "b0435619f2545a5d7c0956298a692a63"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\scaffold.md": {
+    "mtime": 1778273830.0,
+    "hash": "688458f0e9df0642feb197e4d8b4e91c"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\session-log.md": {
+    "mtime": 1778273830.0,
+    "hash": "4267910a6a8f870542046a3655bbceaa"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\specorator-runtime.md": {
+    "mtime": 1778273830.0,
+    "hash": "04efa842d296faca767f8a45fc59f7f7"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\specorator.md": {
+    "mtime": 1778273830.0,
+    "hash": "3db189e90312654d93050f60d8b8171a"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\traceability-chain.md": {
+    "mtime": 1778273830.0,
+    "hash": "77b94e123c475f0c1d2b45d0a21405e0"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\vault-as-operating-environment.md": {
+    "mtime": 1778273830.0,
+    "hash": "f4d2c19bc245e4123b17a1204355f570"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\workflow-encapsulation.md": {
+    "mtime": 1778273830.0,
+    "hash": "f442eb57f0090b00640ba396a35455db"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\workflow-navigator.md": {
+    "mtime": 1778273830.0,
+    "hash": "cd9fc25f5e67c777b14c068304316afc"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\workflow-stage.md": {
+    "mtime": 1778273830.0,
+    "hash": "df7d671302ef17494a317205e31a9dff"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\workflow-state.md": {
+    "mtime": 1778273830.0,
+    "hash": "594d5dd68e013f88d59084b528bcd84c"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\glossary\\h-acd.md": {
+    "mtime": 1778344086.0,
+    "hash": "ff5b4def44e8fca783fbfade118f1d13"
+  },
+  "D:\\Projects\\specorator-plugin\\docs\\issues\\2026-05-08-product-page-target.md": {
+    "mtime": 1778273830.0,
+    "hash": "203b3e535661abd6f6cdd02d6866c84e"
+  },
+  "D:\\Projects\\specorator-plugin\\requirements\\intake\\REQ-0000-template.md": {
+    "mtime": 1777671836.0,
+    "hash": "cd1bfaee50d71781a44bc19cc2bd761e"
+  },
+  "D:\\Projects\\specorator-plugin\\requirements\\intake\\REQ-0001-graphify-integration.md": {
+    "mtime": 1778366134.0,
+    "hash": "f2192fd3652f56004192501d06f99f96"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\agentic-workflow-vault-structure\\idea.md": {
+    "mtime": 1777749328.0,
+    "hash": "91cf380e0b24fd03fbb0bcab1a06df94"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\agentic-workflow-vault-structure\\spec.md": {
+    "mtime": 1777749328.0,
+    "hash": "e898fc83f13a30d50d584638108a6b8d"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\agentic-workflow-vault-structure\\tasks.md": {
+    "mtime": 1777749328.0,
+    "hash": "1107da291e3666ee16790a6aa8b6c73b"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\agentic-workflow-vault-structure\\workflow-state.md": {
+    "mtime": 1777755048.0,
+    "hash": "dd8f5f2deef539dd55acb9f20f8a53b4"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\agentic-workflow-vault-structure\\design.md": {
+    "mtime": 1778344086.0,
+    "hash": "d42863ea1fa9cc8614fb9d1b6a19f0ed"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\agentic-workflow-vault-structure\\requirements.md": {
+    "mtime": 1778344086.0,
+    "hash": "920c1e30ee6325470a761b0230c8aa48"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\github-pages-ui\\idea.md": {
+    "mtime": 1777755048.0,
+    "hash": "d02b294bb5f405025ec1d4554181e4a2"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\github-pages-ui\\requirements.md": {
+    "mtime": 1777755048.0,
+    "hash": "7625dbf687a43dcbe465c76158f1356a"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\github-pages-ui\\workflow-state.md": {
+    "mtime": 1777755048.0,
+    "hash": "5748fa5f29d019172ee8e8f30a55ca57"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\standalone-ui-multilang\\idea.md": {
+    "mtime": 1777749328.0,
+    "hash": "47a1726bace20db3603f087dcca18724"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\standalone-ui-multilang\\requirements.md": {
+    "mtime": 1777749328.0,
+    "hash": "8ec58a1caa9b820937f603e40c3ca902"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\standalone-ui-multilang\\workflow-state.md": {
+    "mtime": 1777755048.0,
+    "hash": "b9e66c4e090bf4018130e38c605f67cc"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\agent-interaction-placeholder\\idea.md": {
+    "mtime": 1777755048.0,
+    "hash": "89fdbe2497f288c055e3a24cb3468029"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\agent-interaction-placeholder\\workflow-state.md": {
+    "mtime": 1777755048.0,
+    "hash": "b70b70e2628847afa22789854cffc919"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\artifact-creation-scaffolding\\idea.md": {
+    "mtime": 1777755048.0,
+    "hash": "e628646b5c61d3f1e25035ea010a5964"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\artifact-creation-scaffolding\\workflow-state.md": {
+    "mtime": 1777755048.0,
+    "hash": "90a0f41f382da4f3d0b1c29af57a11ff"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\template-installation-service\\idea.md": {
+    "mtime": 1777755048.0,
+    "hash": "f342ba10588d7b2014e9b10413de0438"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\template-installation-service\\workflow-state.md": {
+    "mtime": 1777755048.0,
+    "hash": "9d37a9ee9932aa0a2b2f439c98af9306"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\update-model-placeholder\\idea.md": {
+    "mtime": 1777755048.0,
+    "hash": "86332eb89cd567a6f04204dc02448dd8"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\update-model-placeholder\\workflow-state.md": {
+    "mtime": 1777755048.0,
+    "hash": "528c43baf1f4d78e8e47c3b8e04d7e14"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\workflow-navigation-ui\\idea.md": {
+    "mtime": 1777755048.0,
+    "hash": "2819819737318c21ba1caa3fd6c7f3a2"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\workflow-navigation-ui\\workflow-state.md": {
+    "mtime": 1777755048.0,
+    "hash": "8f00bb1db67b487e3ae3e77652aca8bd"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\w1-port-granularity\\design.md": {
+    "mtime": 1777837948.0,
+    "hash": "5a3e6157b5e7fa6d4b744d10201eb649"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\w1-port-granularity\\plan.md": {
+    "mtime": 1777837948.0,
+    "hash": "58554f411915ffefe7b7de9158021561"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\w10-test-conventions\\design.md": {
+    "mtime": 1777847966.0,
+    "hash": "cd157b208779659fc6379146361ff1a4"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\claude-cli-chat-sidebar\\idea.md": {
+    "mtime": 1778273830.0,
+    "hash": "db5e3207a636f5c39225d49d627f9bef"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\claude-cli-chat-sidebar\\workflow-state.md": {
+    "mtime": 1778273830.0,
+    "hash": "8651d3365bf8c3c065af714ac74bef80"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\plugin-onboarding\\idea.md": {
+    "mtime": 1778273830.0,
+    "hash": "35d768208ecc6bfea4b949ffb99bc1c1"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\plugin-onboarding\\workflow-state.md": {
+    "mtime": 1778273830.0,
+    "hash": "e7d32bfa2171b85acb348376c104829f"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\plugin-architecture\\design.md": {
+    "mtime": 1778343006.0,
+    "hash": "a3dc86aa0f9ab63db393418e42faf2eb"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\plugin-architecture\\idea.md": {
+    "mtime": 1778343006.0,
+    "hash": "3586a80c55e800ae0a50dec7b1325227"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\plugin-architecture\\tasks.md": {
+    "mtime": 1778343006.0,
+    "hash": "fdc2821eb42ce2a507ba22f53cc202a6"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\plugin-architecture\\workflow-state.md": {
+    "mtime": 1778343006.0,
+    "hash": "125d904e04d4b6773ce9499f465235b0"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\specorator-agent-orchestrator\\design.md": {
+    "mtime": 1778344086.0,
+    "hash": "7864ac58ff894ee34c6adcba51ccc02c"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\specorator-agent-orchestrator\\idea.md": {
+    "mtime": 1778344086.0,
+    "hash": "48cc92cf45847049ff944f568a432333"
+  },
+  "D:\\Projects\\specorator-plugin\\specs\\specorator-agent-orchestrator\\workflow-state.md": {
+    "mtime": 1778344086.0,
+    "hash": "d482b8635a57be160c58265e363cf16c"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\infrastructure\\workflow-state\\__fixtures__\\malformed-workflow-state.md": {
+    "mtime": 1777808348.0,
+    "hash": "fde7c76d6f548a12d57f86c9be51d6e3"
+  },
+  "D:\\Projects\\specorator-plugin\\src\\infrastructure\\workflow-state\\__fixtures__\\valid-workflow-state.md": {
+    "mtime": 1777808348.0,
+    "hash": "bfb2799d4e236722cb6a4911ee16499b"
+  },
+  "D:\\Projects\\specorator-plugin\\decisions\\DEC-001-adopt-agentic-workflow-for-repo.md": {
+    "mtime": 1777755048.0,
+    "hash": "bbc1fae40eacc638fcfe548de514a705"
+  }
+}
