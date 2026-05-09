@@ -1,0 +1,32 @@
+# Build outputs
+node_modules/
+dist-plugin/
+dist-standalone/
+_site/
+main.js
+main.js.map
+*.tsbuildinfo
+
+# Generated artifacts (regenerate-on-demand)
+docs/api/
+coverage/
+storybook-static/
+sites/specorator/.astro/
+
+# Graph output itself (prevent circular indexing)
+graphify-out/
+
+# Obsidian runtime
+.obsidian/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Lock files (dependency resolution noise)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
