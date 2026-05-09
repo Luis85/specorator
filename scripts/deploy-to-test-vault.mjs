@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // W12 — copy built plugin output into a local Obsidian test vault.
 // Usage: SPECORATOR_TEST_VAULT=/path/to/vault npm run build:deploy
-import { access, copyFile, mkdir, readFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { pathExists } from './_utils.mjs';
 
 const PLUGIN_FILES = ['main.js', 'manifest.json', 'styles.css'];
 
@@ -21,15 +22,6 @@ export async function readPluginId(repoRoot) {
 
 export function resolveTargetDir(vaultPath, pluginId) {
 	return path.join(vaultPath, '.obsidian', 'plugins', pluginId);
-}
-
-async function pathExists(p) {
-	try {
-		await access(p);
-		return true;
-	} catch {
-		return false;
-	}
 }
 
 export async function deployToVault({ repoRoot, vaultPath, log = () => {} }) {

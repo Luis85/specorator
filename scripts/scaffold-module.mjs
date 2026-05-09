@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // W12 — scaffold a new module skeleton under src/modules/<name>/.
 // Usage: npm run scaffold:module -- <module-name>
-import { access, mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { pathExists } from './_utils.mjs';
 
 const NAME_REGEX = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
@@ -134,15 +135,6 @@ export function plannedFiles(repoRoot, name) {
 			contents: renderTestFile(name),
 		},
 	];
-}
-
-async function pathExists(p) {
-	try {
-		await access(p);
-		return true;
-	} catch {
-		return false;
-	}
 }
 
 export async function scaffoldModule({ repoRoot, name, log = () => {} }) {
