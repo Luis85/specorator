@@ -33,6 +33,7 @@
 		"version": "node version-bump.js && node scripts/validate-manifest.js && git add manifest.json versions.json"
 	},
 	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.29.0",
 		"pinia": "^3.0.4",
 		"vue": "^3.5.33",
 		"vue-i18n": "^11.4.0",

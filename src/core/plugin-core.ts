@@ -1,5 +1,5 @@
 import './core-events'
-import type { SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, TranslationPort } from '@/domain/ports'
+import type { SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, TranslationPort, ObsidianMcpServerPort } from '@/domain/ports'
 import { createEventBus, type EventBus, type EventBusOptions, type EventEnvelope } from '@/domain/shared/event-bus'
 import { tryAsync, trySync } from '@/domain/shared/tryAsync'
 import type { ModuleDescriptor, ModulePorts } from '@/modules'
@@ -13,6 +13,7 @@ export interface CorePorts {
   readonly logger: LoggerPort
   readonly t: TranslationPort
   readonly i18nMerge?: (locale: string, messages: Record<string, string>) => void
+  readonly mcpServer?: ObsidianMcpServerPort
 }
 
 // ── Validation helpers ────────────────────────────────────────────────────────
@@ -306,6 +307,8 @@ export class PluginCore {
       await this.initModule(mod, modulePorts, settings, degradedIds)
     }
 
+    await this.startMcpServer()
+
     this.bus.emit('core:init-complete', { degradedCount: this._degradedModules.length })
   }
 
@@ -338,7 +341,25 @@ export class PluginCore {
       }
     }
 
+    await this.stopMcpServer()
+
     this.bus.emit('core:destroy-complete', { leakCount })
+  }
+
+  private async startMcpServer(): Promise<void> {
+    if (this.ports.mcpServer === undefined) return
+    const result = await tryAsync(() => this.ports.mcpServer!.start())
+    if (!result.ok) {
+      this.ports.logger.error('MCP server start failed', result.error)
+    }
+  }
+
+  private async stopMcpServer(): Promise<void> {
+    if (this.ports.mcpServer === undefined) return
+    const result = await tryAsync(() => this.ports.mcpServer!.stop())
+    if (!result.ok) {
+      this.ports.logger.error('MCP server stop failed', result.error)
+    }
   }
 
   private async initModule(
