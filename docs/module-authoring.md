@@ -2,6 +2,46 @@
 
 This guide explains how to add a bounded-context module to the plugin. A module is a self-contained feature area that declares its commands, views, settings fields, and locale messages in one descriptor, and receives all dependencies through a `ModulePorts` object.
 
+## Quick start — `npm run scaffold:module`
+
+The fastest way to start a module is the W12 scaffold script:
+
+```sh
+npm run scaffold:module -- template-installer
+```
+
+It creates four files (skipping any that already exist, so it is safe to re-run):
+
+```
+src/modules/template-installer/template-installer-module.ts
+src/modules/template-installer/template-installer-events.ts
+src/modules/template-installer/TemplateInstallerView.vue
+tests/modules/template-installer/template-installer-module.test.ts
+```
+
+Module names must be kebab-case ASCII (`^[a-z][a-z0-9]*(-[a-z0-9]+)*$`). The script then prints the registry edit needed in `src/modules/index.ts` and the command to run the generated test.
+
+## Deploying to a local Obsidian test vault — `npm run build:deploy`
+
+`build:deploy` runs `npm run build` and then copies `main.js`, `manifest.json`, and `styles.css` into `<vault>/.obsidian/plugins/specorator/`. Set the vault path via the `SPECORATOR_TEST_VAULT` environment variable — there is no default.
+
+```sh
+# bash / zsh
+SPECORATOR_TEST_VAULT="$HOME/Vaults/specorator-dev" npm run build:deploy
+
+# PowerShell
+$env:SPECORATOR_TEST_VAULT = "C:\Vaults\specorator-dev"
+npm run build:deploy
+```
+
+The script fails fast if `SPECORATOR_TEST_VAULT` is unset, the path is missing, or the folder has no `.obsidian/` subdirectory. Subsequent runs overwrite previously deployed files (idempotent).
+
+## File conventions
+
+- Filenames are kebab-case (`template-installer-module.ts`, not `templateInstallerModule.ts`).
+- `.js`-extension imports are not used in the plugin source — Vite + the `@/` alias handle resolution.
+- `TODO` / `FIXME` / `XXX` comments are rejected by ESLint (`no-warning-comments`). Open an issue and reference it from the code instead.
+
 ## When to create a module
 
 Create a module when you are adding a feature area that owns one or more of: Obsidian commands, a settings section, user-facing UI components, or cross-plugin lifecycle events.

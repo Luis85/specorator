@@ -26,6 +26,8 @@
 		"validate:manifest": "node scripts/validate-manifest.js",
 		"verify:workflows": "node scripts/verify-workflows.js",
 		"build:pages": "node scripts/build-pages.js",
+		"scaffold:module": "node scripts/scaffold-module.mjs",
+		"build:deploy": "npm run build && node scripts/deploy-to-test-vault.mjs",
 		"hooks:install": "git config core.hooksPath .githooks",
 		"version": "node version-bump.js && node scripts/validate-manifest.js && git add manifest.json versions.json"
 	},
