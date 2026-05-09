@@ -52,3 +52,6 @@ graphify-out/.graphify_root
 
 # graphify extraction cache — large, rebuilt automatically; commit only human-readable outputs
 graphify-out/cache/
+
+# graphify file manifest — keyed by absolute local paths + mtimes; not portable across machines
+graphify-out/manifest.json
