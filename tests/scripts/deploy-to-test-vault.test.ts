@@ -91,6 +91,46 @@ describe('deploy-to-test-vault — manifest plumbing', () => {
 	});
 });
 
+describe('deploy-to-test-vault — manifest error cases', () => {
+	it('throws when manifest id is an empty string', async () => {
+		const repoRoot = await makeTempDir('specorator-deploy-repo-');
+		try {
+			await writeFile(
+				path.join(repoRoot, 'manifest.json'),
+				JSON.stringify({ id: '', name: 'Test', version: '0.0.1' }),
+				'utf8',
+			);
+			await expect(readPluginId(repoRoot)).rejects.toThrow(/missing required string "id"/);
+		} finally {
+			await rm(repoRoot, { recursive: true, force: true });
+		}
+	});
+
+	it('throws when manifest id is not a string', async () => {
+		const repoRoot = await makeTempDir('specorator-deploy-repo-');
+		try {
+			await writeFile(
+				path.join(repoRoot, 'manifest.json'),
+				JSON.stringify({ id: 42, name: 'Test', version: '0.0.1' }),
+				'utf8',
+			);
+			await expect(readPluginId(repoRoot)).rejects.toThrow(/missing required string "id"/);
+		} finally {
+			await rm(repoRoot, { recursive: true, force: true });
+		}
+	});
+
+	it('throws when manifest.json contains invalid JSON', async () => {
+		const repoRoot = await makeTempDir('specorator-deploy-repo-');
+		try {
+			await writeFile(path.join(repoRoot, 'manifest.json'), '{ broken json', 'utf8');
+			await expect(readPluginId(repoRoot)).rejects.toThrow();
+		} finally {
+			await rm(repoRoot, { recursive: true, force: true });
+		}
+	});
+});
+
 describe('deploy-to-test-vault — copy behavior', () => {
 	it('copies main.js, manifest.json, and styles.css when present', async () => {
 		const repoRoot = await makeTempDir('specorator-deploy-repo-');
