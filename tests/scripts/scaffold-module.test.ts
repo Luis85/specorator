@@ -9,6 +9,7 @@ import {
 	renderModuleFile,
 	renderTestFile,
 	renderViewFile,
+	renderViewPoFile,
 	scaffoldModule,
 	toCamelCase,
 	toPascalCase,
@@ -54,6 +55,7 @@ describe('scaffold-module — render output', () => {
 		expect(out).toContain('templateInstallerModule');
 		expect(out).toContain("id: 'template-installer'");
 		expect(out).toContain("'template-installer:initialized'");
+		expect(out).toContain('init(ports, _settings)');
 	});
 
 	it('events file augments the EventMap with module-prefixed channel', () => {
@@ -74,10 +76,17 @@ describe('scaffold-module — render output', () => {
 		expect(out).toContain('fakeModulePorts');
 		expect(out).toContain("ports.bus.on('template-installer:initialized'");
 	});
+
+	it('view PO file carries class name, TID const, and data-testid root', () => {
+		const out = renderViewPoFile('template-installer');
+		expect(out).toContain('TemplateInstallerViewPageObject');
+		expect(out).toContain("root: 'template-installer-view'");
+		expect(out).toContain('data-testid=');
+	});
 });
 
 describe('scaffold-module — file plan', () => {
-	it('plans four files at the expected paths', () => {
+	it('plans five files at the expected paths', () => {
 		const plan = plannedFiles('/repo', 'template-installer');
 		const paths = plan.map((f) => f.path.replace(/\\/g, '/'));
 		expect(paths).toEqual([
@@ -85,11 +94,23 @@ describe('scaffold-module — file plan', () => {
 			'/repo/src/modules/template-installer/template-installer-events.ts',
 			'/repo/src/modules/template-installer/TemplateInstallerView.vue',
 			'/repo/tests/modules/template-installer/template-installer-module.test.ts',
+			'/repo/tests/modules/template-installer/TemplateInstallerView.po.ts',
 		]);
 	});
 });
 
 describe('scaffold-module — write behavior', () => {
+	it('rejects a name ending in -module and suggests the corrected name', async () => {
+		const root = await makeTempRoot();
+		try {
+			await expect(
+				scaffoldModule({ repoRoot: root, name: 'template-module' }),
+			).rejects.toThrow(/must not end with '-module'/);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
 	it('rejects an invalid name without writing anything', async () => {
 		const root = await makeTempRoot();
 		try {
@@ -101,17 +122,17 @@ describe('scaffold-module — write behavior', () => {
 		}
 	});
 
-	it('creates all four files on first run', async () => {
+	it('creates all five files on first run', async () => {
 		const root = await makeTempRoot();
 		try {
-			const result = await scaffoldModule({ repoRoot: root, name: 'demo-module' });
-			expect(result.created).toHaveLength(4);
+			const result = await scaffoldModule({ repoRoot: root, name: 'demo-widget' });
+			expect(result.created).toHaveLength(5);
 			expect(result.skipped).toHaveLength(0);
 			const moduleFile = await readFile(
-				path.join(root, 'src', 'modules', 'demo-module', 'demo-module-module.ts'),
+				path.join(root, 'src', 'modules', 'demo-widget', 'demo-widget-module.ts'),
 				'utf8',
 			);
-			expect(moduleFile).toContain('demoModuleModule');
+			expect(moduleFile).toContain('demoWidgetModule');
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}
@@ -120,12 +141,12 @@ describe('scaffold-module — write behavior', () => {
 	it('skips existing files without overwriting (idempotent)', async () => {
 		const root = await makeTempRoot();
 		try {
-			const moduleDir = path.join(root, 'src', 'modules', 'demo-module');
+			const moduleDir = path.join(root, 'src', 'modules', 'demo-widget');
 			await mkdir(moduleDir, { recursive: true });
-			const targetFile = path.join(moduleDir, 'demo-module-module.ts');
+			const targetFile = path.join(moduleDir, 'demo-widget-module.ts');
 			await writeFile(targetFile, 'EXISTING_CONTENT', 'utf8');
 
-			const result = await scaffoldModule({ repoRoot: root, name: 'demo-module' });
+			const result = await scaffoldModule({ repoRoot: root, name: 'demo-widget' });
 
 			expect(result.skipped.map((f) => f.role)).toContain('module');
 			expect(result.created.map((f) => f.role)).not.toContain('module');
@@ -139,10 +160,10 @@ describe('scaffold-module — write behavior', () => {
 	it('returns no created files when every target already exists', async () => {
 		const root = await makeTempRoot();
 		try {
-			await scaffoldModule({ repoRoot: root, name: 'demo-module' });
-			const second = await scaffoldModule({ repoRoot: root, name: 'demo-module' });
+			await scaffoldModule({ repoRoot: root, name: 'demo-widget' });
+			const second = await scaffoldModule({ repoRoot: root, name: 'demo-widget' });
 			expect(second.created).toHaveLength(0);
-			expect(second.skipped).toHaveLength(4);
+			expect(second.skipped).toHaveLength(5);
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}
