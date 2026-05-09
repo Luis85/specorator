@@ -588,3 +588,88 @@ describe('PluginCore.notifySettingsChanged', () => {
     expect(onSettingsChange).not.toHaveBeenCalled()
   })
 })
+
+// ── URI dispatch ──────────────────────────────────────────────────────────────
+
+describe('PluginCore.handleUri', () => {
+  it('dispatches to the matching module handler and returns true', async () => {
+    const ports = makePorts()
+    const handler = vi.fn()
+    const mod = makeModule('a', {
+      uriActions: [{ action: 'open-chat', handler }],
+    })
+    const core = new PluginCore([mod], ports)
+    await core.init({})
+
+    const handled = core.handleUri(new URLSearchParams('action=open-chat'))
+
+    expect(handled).toBe(true)
+    expect(handler).toHaveBeenCalledWith(expect.any(URLSearchParams))
+  })
+
+  it('passes URLSearchParams including extra params to handler', async () => {
+    const ports = makePorts()
+    const handler = vi.fn()
+    const mod = makeModule('a', {
+      uriActions: [{ action: 'send-message', handler }],
+    })
+    const core = new PluginCore([mod], ports)
+    await core.init({})
+
+    core.handleUri(new URLSearchParams('action=send-message&text=hello'))
+
+    const received: URLSearchParams = handler.mock.calls[0][0]
+    expect(received.get('text')).toBe('hello')
+  })
+
+  it('returns false for unknown action without throwing', async () => {
+    const ports = makePorts()
+    const core = new PluginCore([], ports)
+    await core.init({})
+
+    let handled: boolean | undefined
+    expect(() => { handled = core.handleUri(new URLSearchParams('action=ghost')) }).not.toThrow()
+    expect(handled).toBe(false)
+  })
+
+  it('detects duplicate action across modules and throws on init', async () => {
+    const ports = makePorts()
+    const handler = vi.fn()
+    const a = makeModule('a', { uriActions: [{ action: 'open-chat', handler }] })
+    const b = makeModule('b', { uriActions: [{ action: 'open-chat', handler }] })
+    const core = new PluginCore([a, b], ports)
+
+    await expect(core.init({})).rejects.toThrow(/duplicate.*open-chat/i)
+  })
+
+  it('returns false when no action param is present', async () => {
+    const ports = makePorts()
+    const handler = vi.fn()
+    const mod = makeModule('a', { uriActions: [{ action: 'open-chat', handler }] })
+    const core = new PluginCore([mod], ports)
+    await core.init({})
+
+    let handled: boolean | undefined
+    expect(() => { handled = core.handleUri(new URLSearchParams('')) }).not.toThrow()
+    expect(handled).toBe(false)
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('catches and logs handler errors without throwing', async () => {
+    const ports = makePorts()
+    const mod = makeModule('a', {
+      uriActions: [{ action: 'boom', handler: () => { throw new Error('handler exploded') } }],
+    })
+    const core = new PluginCore([mod], ports)
+    await core.init({})
+
+    let handled: boolean | undefined
+    expect(() => { handled = core.handleUri(new URLSearchParams('action=boom')) }).not.toThrow()
+    expect(handled).toBe(true)
+    expect(ports.logger.error).toHaveBeenCalledWith(
+      'URI action handler failed',
+      expect.any(Error),
+      expect.objectContaining({ action: 'boom' }),
+    )
+  })
+})

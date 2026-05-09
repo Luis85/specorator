@@ -76,6 +76,23 @@ export default class SpecoratorPlugin extends Plugin {
 
     this.addSettingTab(new SpecoratorSettingTab(this.app, this))
     this.detectLegacyVaultLayout()
+
+    this.registerObsidianProtocolHandler('specorator', (params) => {
+      const searchParams = new URLSearchParams(Object.entries(params))
+      if (this.core?.handleUri(searchParams) === true) return
+
+      // v1 stub handlers — replaced by module uriActions when the owning module is built
+      const action = params.action
+      if (action === 'open-chat' || action === 'focus-chat') {
+        void this.activateView()
+        return
+      }
+      if (action === 'send-message' || action === 'open-workflow') {
+        this.bridge?.showInfo(`URI action "${action}" is not yet implemented.`)
+        return
+      }
+      this.bridge?.showWarning(`Unknown Specorator URI action: "${action}"`)
+    })
   }
 
   // eslint-disable-next-line obsidianmd/detach-leaves
