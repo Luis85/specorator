@@ -47,7 +47,7 @@ export class ObsidianMetadataCacheAdapter implements MetadataCachePort {
 
   onMetadataChanged(handler: (path: string) => void): Unsubscriber {
     // 'changed' fires after indexing; 'resolve' fires when resolvedLinks updates complete;
-    // 'deleted' fires when a file is removed (backlinks/tag counts change without a 'changed' event)
+    // 'deleted' fires when a file is removed; vault 'rename' is excluded from 'changed'
     const changedRef = this.app.metadataCache.on('changed', (file) => {
       handler(file.path)
     })
@@ -57,10 +57,15 @@ export class ObsidianMetadataCacheAdapter implements MetadataCachePort {
     const deletedRef = this.app.metadataCache.on('deleted', (file) => {
       handler(file.path)
     })
+    const renamedRef = this.app.vault.on('rename', (file, oldPath) => {
+      handler(oldPath)
+      handler(file.path)
+    })
     return () => {
       this.app.metadataCache.offref(changedRef)
       this.app.metadataCache.offref(resolveRef)
       this.app.metadataCache.offref(deletedRef)
+      this.app.vault.offref(renamedRef)
     }
   }
 }
