@@ -6,6 +6,8 @@ import type {
 	WorkspacePort,
 	NotificationPort,
 	LoggerPort,
+	ActiveFileSnapshot,
+	Unsubscriber,
 } from '@/domain/ports'
 
 type FileManagerWithTrash = App['fileManager'] & {
@@ -85,6 +87,21 @@ export class ObsidianBridge
     const file = this.app.vault.getAbstractFileByPath(path)
     if (file instanceof TFile) {
       await this.app.workspace.getLeaf().openFile(file)
+    }
+  }
+
+  getActiveFile(): ActiveFileSnapshot | null {
+    const file = this.app.workspace.getActiveFile()
+    if (!file) return null
+    return { path: file.path, basename: file.basename, extension: file.extension }
+  }
+
+  onActiveFileChanged(handler: (file: ActiveFileSnapshot | null) => void): Unsubscriber {
+    const ref = this.app.workspace.on('file-open', (file) => {
+      handler(file ? { path: file.path, basename: file.basename, extension: file.extension } : null)
+    })
+    return () => {
+      this.app.workspace.offref(ref)
     }
   }
 
