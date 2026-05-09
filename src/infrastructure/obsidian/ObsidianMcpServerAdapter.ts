@@ -214,7 +214,11 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
     registerTools(mcp, this.vault)
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
     await mcp.connect(transport)
-    await transport.handleRequest(req, res)
+    try {
+      await transport.handleRequest(req, res)
+    } finally {
+      await transport.close()
+    }
   }
 
   async stop(): Promise<void> {
