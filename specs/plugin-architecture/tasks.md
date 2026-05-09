@@ -6,7 +6,7 @@
 
 **Architecture:** DDD layered imports (`domain ← application ← infrastructure ← ui ← plugin`). All Obsidian API calls flow through five narrow port interfaces declared in `src/domain/ports/`. Three runtime adapters (`ObsidianBridge`, `MockBridge`, `LocalStorageBridge`) each implement all five ports. `npm run verify` is the single authoritative pass/fail signal for agents and CI.
 
-**Spec:** `docs/superpowers/specs/2026-05-09-obsidian-plugin-baseline-design.md`
+**Spec:** `specs/plugin-architecture/design.md`
 
 **Tech Stack:** TypeScript strict · Vue 3 `<script setup>` · Vite · Vitest (v8 coverage) · ESLint flat config · Prettier · TypeDoc · size-limit · `obsidian` API types
 
@@ -2456,7 +2456,7 @@ Confirm the coverage table shows thresholds met for statements ≥80, branches �
 
 - [ ] **Step 4: Tick each acceptance criterion**
 
-From the spec (`docs/superpowers/specs/2026-05-09-obsidian-plugin-baseline-design.md`):
+From the spec (`specs/plugin-architecture/design.md`):
 
 - [ ] `npm run build` → `main.js` at project root
 - [ ] `npm run build:web` → `dist-standalone/` exists
@@ -2484,7 +2484,7 @@ git commit -m "chore: baseline harness complete — all acceptance criteria met"
 ```bash
 gh pr create \
   --title "chore: pre-feature baseline harness" \
-  --body "Implements all 8 capabilities from docs/superpowers/specs/2026-05-09-obsidian-plugin-baseline-design.md. npm run verify is green. All acceptance criteria met." \
+  --body "Implements all 8 capabilities from specs/plugin-architecture/design.md. npm run verify is green. All acceptance criteria met." \
   --base develop
 ```
 
