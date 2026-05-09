@@ -30,11 +30,12 @@ export class MockMetadataCacheAdapter implements MetadataCachePort {
   }
 
   getFileMetadata(path: string): FileMetadataSnapshot | null {
-    return this.metadata.get(path) ?? null
+    const snapshot = this.metadata.get(path)
+    return snapshot !== undefined ? structuredClone(snapshot) : null
   }
 
   getBacklinks(path: string): string[] {
-    return this.backlinks.get(path) ?? []
+    return [...(this.backlinks.get(path) ?? [])]
   }
 
   getResolvedLinks(sourcePath: string): Record<string, number> {
