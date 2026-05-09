@@ -3,7 +3,7 @@ import { createApp, type App as VueApp } from 'vue'
 import { createPinia } from 'pinia'
 import { router } from '@/ui/router'
 import { i18n, setLocale, type SupportedLocale } from '@/ui/i18n'
-import App from '@/ui/App.vue'
+import AppRoot from '@/ui/AppRoot.vue'
 import {
   SETTINGS_PORT,
   VAULT_PORT,
@@ -44,7 +44,7 @@ export class SpecoratorView extends ItemView {
 
     setLocale(this.plugin.settings.locale as SupportedLocale)
 
-    this.vueApp = createApp(App)
+    this.vueApp = createApp(AppRoot)
     this.vueApp.use(createPinia())
     this.vueApp.use(router)
     this.vueApp.use(i18n)
