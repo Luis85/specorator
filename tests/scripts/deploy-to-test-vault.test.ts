@@ -192,6 +192,28 @@ describe('deploy-to-test-vault — copy behavior', () => {
 		}
 	});
 
+	it('throws before writing any files when main.js is absent', async () => {
+		const repoRoot = await makeTempDir('specorator-deploy-repo-');
+		const vaultRoot = await makeTempDir('specorator-deploy-vault-');
+		try {
+			await writeFakeRepo(repoRoot, { 'styles.css': '.x{}' });
+			await writeFakeVault(vaultRoot);
+
+			await expect(deployToVault({ repoRoot, vaultPath: vaultRoot })).rejects.toThrow(
+				/main\.js missing/,
+			);
+
+			const targetDir = resolveTargetDir(vaultRoot, 'specorator');
+			const exists = await import('node:fs/promises').then((fs) =>
+				fs.access(targetDir).then(() => true, () => false),
+			);
+			expect(exists).toBe(false);
+		} finally {
+			await rm(repoRoot, { recursive: true, force: true });
+			await rm(vaultRoot, { recursive: true, force: true });
+		}
+	});
+
 	it('overwrites previously deployed files (idempotent)', async () => {
 		const repoRoot = await makeTempDir('specorator-deploy-repo-');
 		const vaultRoot = await makeTempDir('specorator-deploy-vault-');

@@ -59,6 +59,10 @@ export async function deployToVault({ repoRoot, vaultPath, log = () => {} }) {
 		);
 	}
 
+	if (!(await pathExists(path.join(repoRoot, 'main.js')))) {
+		throw new Error('main.js missing — run `npm run build` before deploying.');
+	}
+
 	const pluginId = await readPluginId(repoRoot);
 	const targetDir = resolveTargetDir(vaultPath, pluginId);
 	await mkdir(targetDir, { recursive: true });
@@ -81,9 +85,6 @@ export async function deployToVault({ repoRoot, vaultPath, log = () => {} }) {
 		throw new Error(
 			`No build artefacts found in ${repoRoot}. Run \`npm run build\` before deploying.`,
 		);
-	}
-	if (missing.includes('main.js')) {
-		throw new Error('main.js missing — run `npm run build` before deploying.');
 	}
 
 	return { pluginId, targetDir, copied, missing };
