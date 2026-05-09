@@ -23,7 +23,13 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Install actionlint
         run: |
-          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
+          curl -sSfL -o actionlint.tar.gz \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          curl -sSfL -o actionlint_checksums.txt \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/checksums.txt
+          sha256sum --check --ignore-missing actionlint_checksums.txt
+          tar -xzf actionlint.tar.gz actionlint
+          rm actionlint.tar.gz actionlint_checksums.txt
       - name: Run actionlint
         run: ./actionlint -color
       - name: Set up Node.js
