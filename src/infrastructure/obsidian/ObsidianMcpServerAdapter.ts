@@ -14,8 +14,15 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
     await mcp.connect(transport)
 
     const server = http.createServer((req, res) => {
+      const host = req.headers.host?.split(':')[0] ?? ''
+      if (host !== '127.0.0.1' && host !== 'localhost') {
+        res.writeHead(421).end()
+        return
+      }
       if (req.url === '/mcp') {
-        void transport.handleRequest(req, res)
+        void transport.handleRequest(req, res).catch(() => {
+          if (!res.headersSent) res.writeHead(500).end()
+        })
       } else {
         res.writeHead(404).end()
       }

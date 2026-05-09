@@ -4,6 +4,10 @@ export class ObsidianClaudeCliAdapter {
   constructor(private readonly mcpServer: ObsidianMcpServerPort) {}
 
   getMcpCliArgs(): string[] {
-    return ['--mcp-url', this.mcpServer.getConnectionConfig().url]
+    const { url } = this.mcpServer.getConnectionConfig()
+    return [
+      '--mcp-config',
+      JSON.stringify({ mcpServers: { specorator: { type: 'http', url } } }),
+    ]
   }
 }
