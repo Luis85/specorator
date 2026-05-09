@@ -38,3 +38,5 @@ Every feature, interaction, and piece of copy in Specorator is evaluated against
 ## Reference
 
 [Human-Agent Centered Design](https://hacd.lovable.app/) — the foundational framework that Specorator applies.
+
+For the full product philosophy document, see [docs/h-acd.md](../h-acd.md).
