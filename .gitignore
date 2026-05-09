@@ -36,6 +36,9 @@ coverage/
 # Storybook static build output (run `npm run build-storybook` to regenerate)
 storybook-static/
 
+# Astro product page build artifacts
+sites/specorator/.astro/
+
 # Local agent state (Claude Code, etc.) — track shared bits, ignore ephemeral ones
 .claude/*
 !.claude/settings.json
