@@ -6,14 +6,14 @@ slug: specorator-agent-orchestrator
 current_stage: idea
 status: active
 last_updated: 2026-05-09
-last_agent: pm
+last_agent: architect
 createdAt: 2026-05-09T00:00:00+02:00
 updatedAt: 2026-05-09T00:00:00+02:00
 artifacts:
   idea: complete
-  research: pending
-  requirements: pending
-  design: pending
+  research: skipped
+  requirements: skipped
+  design: draft
   spec: pending
   tasks: pending
   implementation-log: pending
@@ -28,10 +28,10 @@ artifacts:
 
 | Stage | Status | Artifact | Notes |
 |---|---|---|---|
-| 1 — Idea | complete | `idea.md` | Brainstormed from Symphony SPEC.md; design doc in `docs/superpowers/specs/` |
-| 2 — Research | pending | — | |
-| 3 — Requirements | pending | — | |
-| 4 — Design | pending | — | |
+| 1 — Idea | complete | `idea.md` | Brainstormed from Symphony SPEC.md |
+| 2 — Research | skipped | — | Symphony spec + existing port conventions cover domain research |
+| 3 — Requirements | skipped | — | PM sign-off to proceed from idea directly; formal requirements deferred |
+| 4 — Design | draft | `design.md` | DESIGN-SAO-001; 3 open decisions pending architect sign-off |
 | 5 — Specification | pending | — | |
 | 6 — Tasks | pending | — | |
 | 7 — Implementation | pending | — | |
@@ -49,7 +49,8 @@ artifacts:
 
 | Date | From | To | Note |
 |---|---|---|---|
-| 2026-05-09 | pm | — | Idea authored; brainstorm design doc written; spec-first gate satisfied for idea stage |
+| 2026-05-09 | pm | architect | Idea authored; brainstorm completed; research + requirements skipped per PM sign-off |
+| 2026-05-09 | architect | pm | DESIGN-SAO-001 draft written; 3 open decisions need resolution before design accepted |
 
 ## Open clarifications
 
