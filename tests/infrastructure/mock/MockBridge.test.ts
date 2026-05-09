@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 
 describe('MockBridge', () => {
@@ -39,5 +39,48 @@ describe('MockBridge', () => {
     expect(bridge.getOpenedFile()).toBeNull()
     await bridge.openFile('specs/my-feature/workflow-state.md')
     expect(bridge.getOpenedFile()).toBe('specs/my-feature/workflow-state.md')
+  })
+})
+
+describe('MockBridge — WorkspacePort active file', () => {
+  it('getActiveFile returns null when no active file is set', () => {
+    const bridge = new MockBridge()
+    expect(bridge.getActiveFile()).toBeNull()
+  })
+
+  it('getActiveFile returns the snapshot after setActiveFile', () => {
+    const bridge = new MockBridge()
+    bridge.setActiveFile({ path: 'specs/foo/idea.md', basename: 'idea', extension: 'md' })
+    expect(bridge.getActiveFile()).toEqual({
+      path: 'specs/foo/idea.md',
+      basename: 'idea',
+      extension: 'md',
+    })
+  })
+
+  it('setActiveFile fires registered onActiveFileChanged handlers', () => {
+    const bridge = new MockBridge()
+    const snapshot = { path: 'specs/foo/idea.md', basename: 'idea', extension: 'md' }
+    const handler = vi.fn()
+    bridge.onActiveFileChanged(handler)
+    bridge.setActiveFile(snapshot)
+    expect(handler).toHaveBeenCalledWith(snapshot)
+  })
+
+  it('setActiveFile(null) fires handler with null', () => {
+    const bridge = new MockBridge()
+    const handler = vi.fn()
+    bridge.onActiveFileChanged(handler)
+    bridge.setActiveFile(null)
+    expect(handler).toHaveBeenCalledWith(null)
+  })
+
+  it('unsubscriber from onActiveFileChanged stops handler from firing', () => {
+    const bridge = new MockBridge()
+    const handler = vi.fn()
+    const unsub = bridge.onActiveFileChanged(handler)
+    unsub()
+    bridge.setActiveFile({ path: 'specs/foo/idea.md', basename: 'idea', extension: 'md' })
+    expect(handler).not.toHaveBeenCalled()
   })
 })

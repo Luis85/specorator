@@ -4,6 +4,8 @@ import type {
 	WorkspacePort,
 	NotificationPort,
 	LoggerPort,
+	ActiveFileSnapshot,
+	Unsubscriber,
 } from '@/domain/ports'
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
@@ -29,6 +31,8 @@ export class MockBridge
     context?: Record<string, unknown>
   }> = []
   private openedFile: string | null = null
+  private activeFile: ActiveFileSnapshot | null = null
+  private readonly activeFileHandlers = new Set<(f: ActiveFileSnapshot | null) => void>()
 
   constructor(initialFiles: Record<string, string> = {}) {
     for (const [path, content] of Object.entries(initialFiles)) {
@@ -88,6 +92,24 @@ export class MockBridge
 
   async openFile(path: string): Promise<void> {
     this.openedFile = path
+  }
+
+  getActiveFile(): ActiveFileSnapshot | null {
+    return this.activeFile
+  }
+
+  onActiveFileChanged(handler: (f: ActiveFileSnapshot | null) => void): Unsubscriber {
+    this.activeFileHandlers.add(handler)
+    return () => {
+      this.activeFileHandlers.delete(handler)
+    }
+  }
+
+  setActiveFile(file: ActiveFileSnapshot | null): void {
+    this.activeFile = file
+    for (const handler of this.activeFileHandlers) {
+      handler(file)
+    }
   }
 
   showError(message: string, durationMs = 0): void {
