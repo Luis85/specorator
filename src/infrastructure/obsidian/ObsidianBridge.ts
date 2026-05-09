@@ -97,8 +97,8 @@ export class ObsidianBridge
   }
 
   onActiveFileChanged(handler: (file: ActiveFileSnapshot | null) => void): Unsubscriber {
-    const ref = this.app.workspace.on('active-leaf-change', () => {
-      handler(this.getActiveFile())
+    const ref = this.app.workspace.on('file-open', (file) => {
+      handler(file ? { path: file.path, basename: file.basename, extension: file.extension } : null)
     })
     return () => {
       this.app.workspace.offref(ref)
