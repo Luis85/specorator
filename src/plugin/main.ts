@@ -46,7 +46,7 @@ export default class SpecoratorPlugin extends Plugin {
       logger: this.bridge,
       t: translationPort,
       i18nMerge,
-      mcpServer: new ObsidianMcpServerAdapter(),
+      mcpServer: new ObsidianMcpServerAdapter(this.bridge),
     })
 
     setLocale(this.settings.locale as SupportedLocale)
