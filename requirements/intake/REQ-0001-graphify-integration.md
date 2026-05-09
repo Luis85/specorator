@@ -1,10 +1,11 @@
 ---
 id: REQ-0001
-status: proposed
+status: accepted
 summary: "Integrate graphify knowledge-graph tooling into the Specorator plugin repository"
 owner: "Luis85"
 created: 2026-05-10
 last_updated: 2026-05-10
+accepted: 2026-05-10
 source_issue: "#207"
 related_design: ""
 tags: [requirements, intake, tooling, architecture]
