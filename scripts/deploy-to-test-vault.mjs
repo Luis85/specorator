@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 // W12 — copy built plugin output into a local Obsidian test vault.
 // Usage: SPECORATOR_TEST_VAULT=/path/to/vault npm run build:deploy
 import { copyFile, mkdir, readFile } from 'node:fs/promises';
@@ -8,8 +9,13 @@ import { pathExists } from './_utils.mjs';
 
 const PLUGIN_FILES = ['main.js', 'manifest.json', 'styles.css'];
 
+/** @type {'SPECORATOR_TEST_VAULT'} */
 export const VAULT_ENV_VAR = 'SPECORATOR_TEST_VAULT';
 
+/**
+ * @param {string} repoRoot
+ * @returns {Promise<string>}
+ */
 export async function readPluginId(repoRoot) {
 	const manifestPath = path.join(repoRoot, 'manifest.json');
 	const raw = await readFile(manifestPath, 'utf8');
@@ -20,10 +26,23 @@ export async function readPluginId(repoRoot) {
 	return manifest.id;
 }
 
+/**
+ * @param {string} vaultPath
+ * @param {string} pluginId
+ * @returns {string}
+ */
 export function resolveTargetDir(vaultPath, pluginId) {
 	return path.join(vaultPath, '.obsidian', 'plugins', pluginId);
 }
 
+/**
+ * @typedef {{ repoRoot: string, vaultPath: string | undefined, log?: (message: string) => void }} DeployOptions
+ * @typedef {{ pluginId: string, targetDir: string, copied: ReadonlyArray<string>, missing: ReadonlyArray<string> }} DeployResult
+ */
+/**
+ * @param {DeployOptions} options
+ * @returns {Promise<DeployResult>}
+ */
 export async function deployToVault({ repoRoot, vaultPath, log = () => {} }) {
 	if (typeof vaultPath !== 'string' || vaultPath.length === 0) {
 		throw new Error(

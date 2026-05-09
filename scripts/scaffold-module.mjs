@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 // W12 — scaffold a new module skeleton under src/modules/<name>/.
 // Usage: npm run scaffold:module -- <module-name>
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -8,10 +9,18 @@ import { pathExists } from './_utils.mjs';
 
 const NAME_REGEX = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
+/**
+ * @typedef {{ role: 'module' | 'events' | 'view' | 'test' | 'view-po', path: string, contents: string }} ScaffoldFile
+ * @typedef {{ created: ReadonlyArray<ScaffoldFile>, skipped: ReadonlyArray<ScaffoldFile> }} ScaffoldResult
+ * @typedef {{ repoRoot: string, name: string, log?: (message: string) => void }} ScaffoldOptions
+ */
+
+/** @param {unknown} name @returns {boolean} */
 export function isValidModuleName(name) {
 	return typeof name === 'string' && NAME_REGEX.test(name);
 }
 
+/** @param {string} name @returns {string} */
 export function toPascalCase(name) {
 	return name
 		.split('-')
@@ -19,11 +28,13 @@ export function toPascalCase(name) {
 		.join('');
 }
 
+/** @param {string} name @returns {string} */
 export function toCamelCase(name) {
 	const pascal = toPascalCase(name);
 	return pascal.charAt(0).toLowerCase() + pascal.slice(1);
 }
 
+/** @param {string} name @returns {string} */
 export function renderModuleFile(name) {
 	const pascal = toPascalCase(name);
 	const camel = toCamelCase(name);
@@ -53,13 +64,14 @@ export const ${camel}Module = defineModule<${pascal}Settings>({
 \t\ten: { '${name}.title': '${pascal}' },
 \t},
 
-\tinit(ports) {
+\tinit(ports, _settings) {
 \t\tports.bus.emit('${name}:initialized', { moduleId: '${name}' });
 \t},
 });
 `;
 }
 
+/** @param {string} name @returns {string} */
 export function renderEventsFile(name) {
 	return `import type {} from '@/domain/shared/event-bus';
 
@@ -71,8 +83,8 @@ declare module '@/domain/shared/event-bus' {
 `;
 }
 
+/** @param {string} name @returns {string} */
 export function renderViewFile(name) {
-	const pascal = toPascalCase(name);
 	return `<script setup lang="ts">
 import { useI18n } from 'vue-i18n';
 
@@ -89,6 +101,7 @@ const { t } = useI18n();
 `;
 }
 
+/** @param {string} name @returns {string} */
 export function renderTestFile(name) {
 	const camel = toCamelCase(name);
 	return `import { describe, it, expect } from 'vitest';
@@ -112,6 +125,30 @@ describe('${camel}Module', () => {
 `;
 }
 
+/** @param {string} name @returns {string} */
+export function renderViewPoFile(name) {
+	const pascal = toPascalCase(name);
+	return `import type { VueWrapper } from '@vue/test-utils'
+
+const TID = {
+\troot: '${name}-view',
+} as const
+
+export class ${pascal}ViewPageObject {
+\tconstructor(private readonly wrapper: VueWrapper) {}
+
+\tprivate byTid(tid: string) {
+\t\treturn \`[data-testid="\${tid}"]\`
+\t}
+
+\tget root() {
+\t\treturn this.wrapper.get(this.byTid(TID.root))
+\t}
+}
+`;
+}
+
+/** @param {string} repoRoot @param {string} name @returns {ReadonlyArray<ScaffoldFile>} */
 export function plannedFiles(repoRoot, name) {
 	return [
 		{
@@ -134,10 +171,22 @@ export function plannedFiles(repoRoot, name) {
 			path: path.join(repoRoot, 'tests', 'modules', name, `${name}-module.test.ts`),
 			contents: renderTestFile(name),
 		},
+		{
+			role: 'view-po',
+			path: path.join(repoRoot, 'tests', 'modules', name, `${toPascalCase(name)}View.po.ts`),
+			contents: renderViewPoFile(name),
+		},
 	];
 }
 
+/** @param {ScaffoldOptions} options @returns {Promise<ScaffoldResult>} */
 export async function scaffoldModule({ repoRoot, name, log = () => {} }) {
+	if (typeof name === 'string' && name.endsWith('-module')) {
+		const suggestion = name.slice(0, -7);
+		throw new Error(
+			`Module name must not end with '-module' (the suffix is added automatically). Use '${suggestion}' instead: npm run scaffold:module -- ${suggestion}`,
+		);
+	}
 	if (!isValidModuleName(name)) {
 		throw new Error(
 			`Invalid module name: ${JSON.stringify(name)}. Use kebab-case, lowercase, ASCII (e.g. 'template-installer').`,
@@ -163,8 +212,10 @@ export async function scaffoldModule({ repoRoot, name, log = () => {} }) {
 	return { created, skipped };
 }
 
+/** @param {string} name @returns {string} */
 export function wiringInstructions(name) {
 	const camel = toCamelCase(name);
+	const pascal = toPascalCase(name);
 	return [
 		'',
 		'Next steps — wire the module into the registry:',
@@ -177,7 +228,10 @@ export function wiringInstructions(name) {
 		'  2. Run the generated test:',
 		`     npx vitest run tests/modules/${name}/${name}-module.test.ts`,
 		'',
-		'  3. Document the module in docs/module-authoring.md if it adds new patterns.',
+		`  3. If you add a view test, the co-located ${pascal}View.po.ts stub is ready.`,
+		'     Elements must be queried by data-testid only — no CSS class or id selectors.',
+		'',
+		'  4. Document the module in docs/module-authoring.md if it adds new patterns.',
 		'',
 	].join('\n');
 }

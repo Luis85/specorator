@@ -1,5 +1,8 @@
 {
 	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"allowJs": true
+	},
 	"include": [
 		"src/**/*.ts",
 		"src/**/*.d.ts",
@@ -9,7 +12,8 @@
 		".storybook/**/*.ts",
 		"vite.config.ts",
 		"vitest.config.ts",
-		"eslint.config.js"
+		"eslint.config.js",
+		"scripts/**/*.mjs"
 	],
 	"exclude": []
 }
