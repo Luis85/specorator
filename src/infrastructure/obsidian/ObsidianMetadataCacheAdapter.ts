@@ -12,7 +12,7 @@ export class ObsidianMetadataCacheAdapter implements MetadataCachePort {
     return {
       path,
       tags: (cache.tags ?? []).map((t) => t.tag),
-      frontmatter: { ...(cache.frontmatter ?? {}) },
+      frontmatter: structuredClone(cache.frontmatter ?? {}),
       links: (cache.links ?? []).map((l) => l.link),
       embeds: (cache.embeds ?? []).map((e) => e.link),
     }
