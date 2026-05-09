@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}  
 
 jobs:
   workflow-lint:
@@ -23,13 +23,11 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Install actionlint
         run: |
-          curl -sSfL -o actionlint_1.7.12_linux_amd64.tar.gz \
+          curl -L -o actionlint_1.7.12_linux_amd64.tar.gz \
             https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
-          curl -sSfL -o actionlint_checksums.txt \
-            https://github.com/rhysd/actionlint/releases/download/v1.7.12/checksums.txt
-          sha256sum --check --ignore-missing actionlint_checksums.txt
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint_1.7.12_linux_amd64.tar.gz" | sha256sum --check
           tar -xzf actionlint_1.7.12_linux_amd64.tar.gz actionlint
-          rm actionlint_1.7.12_linux_amd64.tar.gz actionlint_checksums.txt
+          rm actionlint_1.7.12_linux_amd64.tar.gz
       - name: Run actionlint
         run: ./actionlint -color
       - name: Set up Node.js
