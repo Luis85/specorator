@@ -101,7 +101,7 @@ slug: {slug}
 | `status` | `draft \| active \| archived \| abandoned`. Matches `FeatureStatus`. |
 | `last_updated` | ISO-8601 date string (`YYYY-MM-DD`), not full datetime. Updated on every write. |
 | `last_agent` | Empty string in v1. Reserved for agentonomous integration in v2.0. |
-| `artifacts` | YAML block map. One entry per stage. Values: `pending \| in-progress \| complete \| skipped \| blocked`. On creation: `idea: complete`, all others `pending`. Updated when a stage file is created or the user advances. |
+| `artifacts` | YAML block map. One entry per stage. Values: `pending \| in-progress \| draft \| complete \| skipped \| blocked`. On creation: `idea: complete`, all others `pending`. Updated when a stage file is created or the user advances. `draft` is hand-authored only; the plugin serializer never emits it. |
 | `createdAt` / `updatedAt` | Full ISO-8601 datetime; plugin-internal for domain reconstitution. |
 | `slug` | Plugin-internal; used to resolve the folder path without directory scanning. |
 

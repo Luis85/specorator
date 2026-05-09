@@ -151,6 +151,8 @@ Current Phase 4 spec entries in `specs/`:
 - `artifact-creation-scaffolding` — idea stage
 - `agent-interaction-placeholder` — idea stage
 - `update-model-placeholder` — idea stage
+- `claude-cli-chat-sidebar` — idea stage
+- `specorator-agent-orchestrator` — idea stage
 
 See `CONSTITUTION.md` §3 and `decisions/DEC-001` for rationale.
 
