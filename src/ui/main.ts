@@ -8,7 +8,7 @@
 import './standalone.css'
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import App from './App.vue'
+import AppRoot from './AppRoot.vue'
 import { router } from './router'
 import { i18n, i18nMerge, i18nTranslate, setLocale, type SupportedLocale } from './i18n'
 import {
@@ -31,7 +31,7 @@ const mountPoint = document.querySelector('#app')
 
 mountPoint?.classList.add('specorator-root')
 
-const app = createApp(App)
+const app = createApp(AppRoot)
 app.use(createPinia())
 app.use(router)
 app.use(i18n)
