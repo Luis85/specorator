@@ -157,6 +157,13 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
       const result = parseToolResult(resp) as { matches: Array<{ path: string }> }
       expect(result.matches.map((m) => m.path)).toContain('specs/dark-mode/idea.md')
     })
+
+    it('produces no double-slash paths when folder has trailing slash', async () => {
+      const resp = await callTool(port, 'vault_search', { query: 'idea', folder: 'specs/' })
+      const result = parseToolResult(resp) as { matches: Array<{ path: string }> }
+      expect(result.matches.every((m) => !m.path.includes('//'))).toBe(true)
+      expect(result.matches.map((m) => m.path)).toContain('specs/dark-mode/idea.md')
+    })
   })
 
   describe('vault_list_folder', () => {
@@ -171,6 +178,13 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
     it('returns subfolders as full paths', async () => {
       const resp = await callTool(port, 'vault_list_folder', { folder: 'specs' })
       const result = parseToolResult(resp) as { files: string[]; folders: string[] }
+      expect(result.folders).toContain('specs/dark-mode')
+    })
+
+    it('produces no double-slash paths when folder has trailing slash', async () => {
+      const resp = await callTool(port, 'vault_list_folder', { folder: 'specs/' })
+      const result = parseToolResult(resp) as { files: string[]; folders: string[] }
+      expect(result.folders.every((f) => !f.includes('//'))).toBe(true)
       expect(result.folders).toContain('specs/dark-mode')
     })
   })

@@ -21,9 +21,14 @@ function parseFrontmatter(content: string): Record<string, unknown> {
   }
 }
 
+function joinVaultPath(parent: string, child: string): string {
+  const p = parent.replace(/\/+$/, '')
+  return p ? `${p}/${child}` : child
+}
+
 async function collectFiles(vault: VaultPort, folder: string): Promise<string[]> {
   const [files, subfolders] = await Promise.all([vault.listFiles(folder), vault.listFolders(folder)])
-  const nested = await Promise.all(subfolders.map((sub) => collectFiles(vault, `${folder}/${sub}`)))
+  const nested = await Promise.all(subfolders.map((sub) => collectFiles(vault, joinVaultPath(folder, sub))))
   return [...files, ...nested.flat()]
 }
 
@@ -100,7 +105,7 @@ function registerTools(mcp: McpServer, vault: VaultPort): void {
         vault.listFiles(folder),
         vault.listFolders(folder),
       ])
-      const folders = subfolderNames.map((sub) => `${folder}/${sub}`)
+      const folders = subfolderNames.map((sub) => joinVaultPath(folder, sub))
       return ok({ files, folders })
     },
   )
