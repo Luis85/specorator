@@ -92,6 +92,7 @@ export class MockBridge
 
   async openFile(path: string): Promise<void> {
     this.openedFile = path
+    if (!this.files.has(path)) return
     const filename = path.split('/').pop() ?? path
     const dot = filename.lastIndexOf('.')
     const snapshot: ActiveFileSnapshot = {
@@ -106,7 +107,7 @@ export class MockBridge
   }
 
   getActiveFile(): ActiveFileSnapshot | null {
-    return this.activeFile
+    return this.activeFile !== null ? { ...this.activeFile } : null
   }
 
   onActiveFileChanged(handler: (f: ActiveFileSnapshot | null) => void): Unsubscriber {
@@ -117,9 +118,9 @@ export class MockBridge
   }
 
   setActiveFile(file: ActiveFileSnapshot | null): void {
-    this.activeFile = file
+    this.activeFile = file !== null ? { ...file } : null
     for (const handler of this.activeFileHandlers) {
-      handler(file)
+      handler(this.activeFile)
     }
   }
 
