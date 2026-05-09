@@ -49,3 +49,6 @@ sites/specorator/.astro/
 # graphify machine-local state (interpreter path + scan root — regenerated per machine)
 graphify-out/.graphify_python
 graphify-out/.graphify_root
+
+# graphify extraction cache — large, rebuilt automatically; commit only human-readable outputs
+graphify-out/cache/

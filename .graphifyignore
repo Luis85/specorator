@@ -31,8 +31,8 @@ package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
-# Corpus scope: exclude tests, stories, scripts, and all HTML (design wireframes + generated)
+# Corpus scope: exclude tests, stories, scripts, and HTML design exports (not root index.html)
 tests/
 stories/
 scripts/
-*.html
+docs/design/**/*.html
