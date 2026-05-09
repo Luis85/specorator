@@ -38,7 +38,7 @@ export class MockMetadataCacheAdapter implements MetadataCachePort {
   }
 
   getResolvedLinks(sourcePath: string): Record<string, number> {
-    return this.resolvedLinks.get(sourcePath) ?? {}
+    return { ...(this.resolvedLinks.get(sourcePath) ?? {}) }
   }
 
   getAllTags(): Record<string, number> {
