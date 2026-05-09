@@ -22,6 +22,6 @@ export class MockObsidianMcpServerAdapter implements ObsidianMcpServerPort {
   }
 
   getConnectionConfig(): McpConnectionConfig {
-    return { transport: 'http', url: `http://localhost:${this._port}/mcp` }
+    return { transport: 'http', url: `http://127.0.0.1:${this._port}/mcp` }
   }
 }

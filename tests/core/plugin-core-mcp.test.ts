@@ -36,7 +36,7 @@ describe('PluginCore MCP server lifecycle', () => {
     const mcpServer: ObsidianMcpServerPort = {
       start: async () => ({ port: 3001 }),
       stop: async () => { throw new Error('stop failed') },
-      getConnectionConfig: () => ({ transport: 'http', url: 'http://localhost:3001/mcp' }),
+      getConnectionConfig: () => ({ transport: 'http', url: 'http://127.0.0.1:3001/mcp' }),
     }
     const core = new PluginCore([], { ...ports, mcpServer })
     await core.init({})
@@ -52,7 +52,7 @@ describe('PluginCore MCP server lifecycle', () => {
     const mcpServer: ObsidianMcpServerPort = {
       start: async () => { order.push('mcp:start'); return { port: 3001 } },
       stop: async () => { order.push('mcp:stop') },
-      getConnectionConfig: () => ({ transport: 'http', url: 'http://localhost:3001/mcp' }),
+      getConnectionConfig: () => ({ transport: 'http', url: 'http://127.0.0.1:3001/mcp' }),
     }
     const mod = {
       id: 'a',

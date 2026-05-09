@@ -10,12 +10,12 @@ describe('ObsidianMcpServerAdapter', () => {
     await adapter.stop()
   })
 
-  it('getConnectionConfig() returns http URL matching the assigned port', async () => {
+  it('getConnectionConfig() returns 127.0.0.1 URL matching the assigned port', async () => {
     const adapter = new ObsidianMcpServerAdapter()
     const { port } = await adapter.start()
     expect(adapter.getConnectionConfig()).toEqual({
       transport: 'http',
-      url: `http://localhost:${port}/mcp`,
+      url: `http://127.0.0.1:${port}/mcp`,
     })
     await adapter.stop()
   })

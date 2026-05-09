@@ -7,13 +7,13 @@ describe('ObsidianClaudeCliAdapter', () => {
     const mcpServer = new MockObsidianMcpServerAdapter(3001)
     const adapter = new ObsidianClaudeCliAdapter(mcpServer)
     const args = adapter.getMcpCliArgs()
-    expect(args).toEqual(['--mcp-url', 'http://localhost:3001/mcp'])
+    expect(args).toEqual(['--mcp-url', 'http://127.0.0.1:3001/mcp'])
   })
 
   it('getMcpCliArgs() reflects a different port when adapter uses a different port', () => {
     const mcpServer = new MockObsidianMcpServerAdapter(4242)
     const adapter = new ObsidianClaudeCliAdapter(mcpServer)
     const args = adapter.getMcpCliArgs()
-    expect(args).toEqual(['--mcp-url', 'http://localhost:4242/mcp'])
+    expect(args).toEqual(['--mcp-url', 'http://127.0.0.1:4242/mcp'])
   })
 })
