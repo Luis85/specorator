@@ -161,7 +161,7 @@ claude --dangerously-skip-permissions --output-format stream-json
 - Strict variable checking — unknown vars fail dispatch
 - Empty body → minimal default prompt
 
-**Success:** agent exits 0 AND stage artifact file exists in worktree → merge to main branch → `AdvanceFeatureStageUseCase` → `Unclaimed`.
+**Success:** agent exits 0 AND stage artifact file exists in worktree → merge to originating branch (captured at dispatch time) → `AdvanceFeatureStageUseCase` → `Unclaimed`.
 
 ---
 

@@ -51,7 +51,7 @@ The Specorator plugin must create and manage vault artifacts using the folder la
 **Statement:** The plugin shall create a `workflow-state.md` file as the primary tracking artifact for each feature, with YAML frontmatter fields compatible with the agentic-workflow `workflow-state-template.md` schema.
 **Acceptance:**
 - `workflow-state.md` frontmatter includes at minimum: `feature`, `area`, `current_stage`, `status`, `last_updated`, `last_agent`, and `artifacts`.
-- The `artifacts` field is a YAML map with one key per stage and values from the set `pending | in-progress | draft | complete | skipped | blocked`.
+- The `artifacts` field is a YAML map with one key per stage and values from the set `pending | in-progress | draft | complete | skipped | blocked`. The plugin serializer only writes `pending`, `in-progress`, `complete`, `skipped`, and `blocked`; `draft` is a hand-authored-only value that the plugin must read without error but never emits.
 - An agentic-workflow agent reading `workflow-state.md` can determine the current stage and all artifact statuses without additional parsing.
 **Priority:** must
 **Satisfies:** IDEA-AVS-001

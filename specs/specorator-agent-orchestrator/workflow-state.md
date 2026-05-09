@@ -6,7 +6,7 @@ slug: specorator-agent-orchestrator
 current_stage: idea
 status: active
 last_updated: 2026-05-09
-last_agent: architect
+last_agent: ""
 createdAt: 2026-05-09T00:00:00+02:00
 updatedAt: 2026-05-09T00:00:00+02:00
 artifacts:
