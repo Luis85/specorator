@@ -1,8 +1,13 @@
-/**
- * Opens a vault-relative file in the host workspace (Obsidian tab,
- * standalone harness route, etc.). Implementations decide how the open
- * action manifests in their environment.
- */
+import type { Unsubscriber } from './shared'
+
+export interface ActiveFileSnapshot {
+  path: string
+  basename: string
+  extension: string
+}
+
 export interface WorkspacePort {
-	openFile(path: string): Promise<void>
+  openFile(path: string): Promise<void>
+  getActiveFile(): ActiveFileSnapshot | null
+  onActiveFileChanged(handler: (file: ActiveFileSnapshot | null) => void): Unsubscriber
 }
