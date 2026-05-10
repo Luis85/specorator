@@ -111,7 +111,7 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
   })
 
   describe('tools/list', () => {
-    it('registers all 30 tools', async () => {
+    it('registers all 35 tools', async () => {
       const resp = (await mcpPost(port, {
         jsonrpc: '2.0',
         id: 99,
@@ -120,6 +120,11 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
       })) as { result: { tools: Array<{ name: string }> } }
       const names = resp.result.tools.map((t) => t.name).sort()
       expect(names).toEqual([
+        'bases_find_by_field',
+        'bases_get_record',
+        'bases_list_fields',
+        'bases_query',
+        'bases_update_record',
         'canvas_add_edge',
         'canvas_add_file_node',
         'canvas_add_text_node',
