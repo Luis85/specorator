@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { MockMetadataCacheAdapter } from '@/infrastructure/mock/MockMetadataCacheAdapter'
+import { MockCanvasAdapter } from '@/infrastructure/mock/MockCanvasAdapter'
 import { parse as parseYaml } from 'yaml'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
@@ -93,7 +94,14 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
     vault = new MockBridge(VAULT_FILES)
     const repo = new FeatureRepository(vault, vault, () => DEFAULT_SETTINGS)
     const metadataCache = new MockMetadataCacheAdapter()
-    adapter = new ObsidianMcpServerAdapter(vault, repo, () => DEFAULT_SETTINGS.specsFolder, metadataCache)
+    const canvas = new MockCanvasAdapter()
+    adapter = new ObsidianMcpServerAdapter(
+      vault,
+      repo,
+      () => DEFAULT_SETTINGS.specsFolder,
+      metadataCache,
+      canvas,
+    )
     ;({ port } = await adapter.start())
     await initMcp(port)
   })
@@ -103,7 +111,7 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
   })
 
   describe('tools/list', () => {
-    it('registers all 24 tools', async () => {
+    it('registers all 30 tools', async () => {
       const resp = (await mcpPost(port, {
         jsonrpc: '2.0',
         id: 99,
@@ -112,6 +120,12 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
       })) as { result: { tools: Array<{ name: string }> } }
       const names = resp.result.tools.map((t) => t.name).sort()
       expect(names).toEqual([
+        'canvas_add_edge',
+        'canvas_add_file_node',
+        'canvas_add_text_node',
+        'canvas_create',
+        'canvas_read',
+        'canvas_update_node',
         'frontmatter_get',
         'frontmatter_get_field',
         'frontmatter_set_field',
@@ -507,7 +521,14 @@ describe('ObsidianMcpServerAdapter — workflow tools', () => {
     vault = new MockBridge()
     repo = new FeatureRepository(vault, vault, () => DEFAULT_SETTINGS)
     const metadataCache = new MockMetadataCacheAdapter()
-    adapter = new ObsidianMcpServerAdapter(vault, repo, () => DEFAULT_SETTINGS.specsFolder, metadataCache)
+    const canvas = new MockCanvasAdapter()
+    adapter = new ObsidianMcpServerAdapter(
+      vault,
+      repo,
+      () => DEFAULT_SETTINGS.specsFolder,
+      metadataCache,
+      canvas,
+    )
     ;({ port } = await adapter.start())
     await initMcp(port)
   })

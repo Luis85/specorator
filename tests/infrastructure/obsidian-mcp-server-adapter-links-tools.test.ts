@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { MockMetadataCacheAdapter } from '@/infrastructure/mock/MockMetadataCacheAdapter'
+import { MockCanvasAdapter } from '@/infrastructure/mock/MockCanvasAdapter'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
@@ -67,11 +68,13 @@ describe('ObsidianMcpServerAdapter — links tools', () => {
     })
     const repo = new FeatureRepository(vault, vault, () => DEFAULT_SETTINGS)
     metadataCache = new MockMetadataCacheAdapter()
+    const canvas = new MockCanvasAdapter()
     adapter = new ObsidianMcpServerAdapter(
       vault,
       repo,
       () => DEFAULT_SETTINGS.specsFolder,
       metadataCache,
+      canvas,
     )
     ;({ port } = await adapter.start())
     await initMcp(port)
