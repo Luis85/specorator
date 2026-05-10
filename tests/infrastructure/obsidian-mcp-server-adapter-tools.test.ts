@@ -4,6 +4,8 @@ import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { parse as parseYaml } from 'yaml'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
+import { Feature } from '@/domain/feature/Feature'
+import { Slug } from '@/domain/shared/Slug'
 
 async function mcpPost(port: number, body: unknown): Promise<unknown> {
   const res = await fetch(`http://127.0.0.1:${port}/mcp`, {
@@ -451,6 +453,237 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
         params: { path: 'notes/new.md', content: '# New' },
         status: 'pending',
       })
+    })
+  })
+})
+
+describe('ObsidianMcpServerAdapter — workflow tools', () => {
+  let adapter: ObsidianMcpServerAdapter
+  let vault: MockBridge
+  let repo: FeatureRepository
+  let port: number
+
+  async function seedFeature(
+    title: string,
+    activate = true,
+    advanceTo = 0,
+  ): Promise<Feature> {
+    const slugResult = Slug.create(title)
+    if (!slugResult.ok) throw slugResult.error
+    const featureResult = Feature.create(
+      `id-${slugResult.value.toString()}`,
+      slugResult.value,
+      title,
+    )
+    if (!featureResult.ok) throw featureResult.error
+    let feature = featureResult.value
+    if (activate) {
+      const activated = feature.activate()
+      if (!activated.ok) throw activated.error
+      feature = activated.value
+    }
+    for (let i = 0; i < advanceTo; i++) {
+      const adv = feature.advanceStep()
+      if (!adv.ok) throw adv.error
+      feature = adv.value
+    }
+    const saved = await repo.save(feature)
+    if (!saved.ok) throw saved.error
+    return feature
+  }
+
+  beforeEach(async () => {
+    vault = new MockBridge()
+    repo = new FeatureRepository(vault, vault, () => DEFAULT_SETTINGS)
+    adapter = new ObsidianMcpServerAdapter(vault, repo, () => DEFAULT_SETTINGS.specsFolder)
+    ;({ port } = await adapter.start())
+    await initMcp(port)
+  })
+
+  afterEach(async () => {
+    await adapter.stop()
+  })
+
+  describe('workflow_get_state', () => {
+    it('returns full feature DTO for an existing slug', async () => {
+      await seedFeature('Dark Mode', true, 2)
+      const resp = await callTool(port, 'workflow_get_state', { slug: 'dark-mode' })
+      expect(resp.result.isError).toBeFalsy()
+      const dto = parseToolResult(resp) as Record<string, unknown>
+      expect(dto.slug).toBe('dark-mode')
+      expect(dto.title).toBe('Dark Mode')
+      expect(dto.status).toBe('active')
+      expect(dto.currentStep).toBe(3)
+    })
+
+    it('returns isError when feature not found', async () => {
+      const resp = await callTool(port, 'workflow_get_state', { slug: 'missing' })
+      expect(resp.result.isError).toBe(true)
+    })
+
+    it('returns isError when slug is invalid', async () => {
+      const resp = await callTool(port, 'workflow_get_state', { slug: '!!!' })
+      expect(resp.result.isError).toBe(true)
+    })
+  })
+
+  describe('workflow_list_features', () => {
+    it('returns array of {slug, stage, title} for all features', async () => {
+      await seedFeature('Dark Mode', true, 2)
+      await seedFeature('Light Mode', true, 0)
+      const resp = await callTool(port, 'workflow_list_features', {})
+      expect(resp.result.isError).toBeFalsy()
+      const result = parseToolResult(resp) as {
+        features: Array<{ slug: string; stage: string; title: string }>
+      }
+      const sorted = [...result.features].sort((a, b) => a.slug.localeCompare(b.slug))
+      expect(sorted).toEqual([
+        { slug: 'dark-mode', stage: 'requirements', title: 'Dark Mode' },
+        { slug: 'light-mode', stage: 'idea', title: 'Light Mode' },
+      ])
+    })
+
+    it('returns empty array when no features exist', async () => {
+      const resp = await callTool(port, 'workflow_list_features', {})
+      expect(parseToolResult(resp)).toEqual({ features: [] })
+    })
+  })
+
+  describe('workflow_get_stage_artifacts', () => {
+    it('returns 12 artifact entries with exists flags reflecting vault state', async () => {
+      await seedFeature('Dark Mode', true, 1)
+      const resp = await callTool(port, 'workflow_get_stage_artifacts', { slug: 'dark-mode' })
+      expect(resp.result.isError).toBeFalsy()
+      const result = parseToolResult(resp) as {
+        stage: string
+        artifacts: Array<{ slug: string; path: string; exists: boolean }>
+      }
+      expect(result.stage).toBe('research')
+      expect(result.artifacts).toHaveLength(12)
+      const idea = result.artifacts.find((a) => a.slug === 'idea')
+      expect(idea).toBeDefined()
+      expect(idea?.exists).toBe(true)
+      expect(idea?.path).toBe('specs/dark-mode/idea.md')
+      const design = result.artifacts.find((a) => a.slug === 'design')
+      expect(design?.exists).toBe(false)
+    })
+
+    it('returns isError when feature not found', async () => {
+      const resp = await callTool(port, 'workflow_get_stage_artifacts', { slug: 'missing' })
+      expect(resp.result.isError).toBe(true)
+    })
+  })
+
+  describe('workflow_get_quality_gates', () => {
+    it('returns all 12 stages in order', async () => {
+      const resp = await callTool(port, 'workflow_get_quality_gates', {})
+      expect(resp.result.isError).toBeFalsy()
+      const result = parseToolResult(resp) as {
+        gates: Array<{ number: number; slug: string; fileName: string }>
+      }
+      expect(result.gates).toHaveLength(12)
+      expect(result.gates[0]).toEqual({ number: 1, slug: 'idea', fileName: 'idea.md' })
+      expect(result.gates[11]).toEqual({
+        number: 12,
+        slug: 'retrospective',
+        fileName: 'retrospective.md',
+      })
+    })
+  })
+
+  describe('workflow_create_artifact', () => {
+    it('returns pending receipt without writing the stage file', async () => {
+      await seedFeature('Dark Mode', true, 0)
+      const resp = await callTool(port, 'workflow_create_artifact', {
+        slug: 'dark-mode',
+        stage: 'design',
+      })
+      expect(resp.result.isError).toBeFalsy()
+      const result = parseToolResult(resp) as { proposalId: string; status: string }
+      expect(result.status).toBe('pending')
+      expect(typeof result.proposalId).toBe('string')
+      expect(await vault.fileExists('specs/dark-mode/design.md')).toBe(false)
+    })
+
+    it('accept creates the stage artifact file', async () => {
+      await seedFeature('Dark Mode', true, 0)
+      const resp = await callTool(port, 'workflow_create_artifact', {
+        slug: 'dark-mode',
+        stage: 'design',
+      })
+      const { proposalId } = parseToolResult(resp) as { proposalId: string }
+      await adapter.acceptProposal(proposalId)
+      expect(await vault.fileExists('specs/dark-mode/design.md')).toBe(true)
+      const content = await vault.readFile('specs/dark-mode/design.md')
+      expect(content).toContain('stage: design')
+      expect(content).toContain('feature: dark-mode')
+    })
+
+    it('reject leaves the vault unchanged', async () => {
+      await seedFeature('Dark Mode', true, 0)
+      const resp = await callTool(port, 'workflow_create_artifact', {
+        slug: 'dark-mode',
+        stage: 'design',
+      })
+      const { proposalId } = parseToolResult(resp) as { proposalId: string }
+      adapter.rejectProposal(proposalId)
+      expect(await vault.fileExists('specs/dark-mode/design.md')).toBe(false)
+    })
+
+    it('returns isError for unknown stage slug', async () => {
+      await seedFeature('Dark Mode', true, 0)
+      const resp = await callTool(port, 'workflow_create_artifact', {
+        slug: 'dark-mode',
+        stage: 'made-up',
+      })
+      expect(resp.result.isError).toBe(true)
+    })
+
+    it('returns isError when feature not found', async () => {
+      const resp = await callTool(port, 'workflow_create_artifact', {
+        slug: 'missing',
+        stage: 'design',
+      })
+      expect(resp.result.isError).toBe(true)
+    })
+  })
+
+  describe('workflow_propose_advance', () => {
+    it('returns pending receipt without advancing the feature', async () => {
+      await seedFeature('Dark Mode', true, 0)
+      const resp = await callTool(port, 'workflow_propose_advance', { slug: 'dark-mode' })
+      expect(resp.result.isError).toBeFalsy()
+      const result = parseToolResult(resp) as { proposalId: string; status: string }
+      expect(result.status).toBe('pending')
+      const stateResp = await callTool(port, 'workflow_get_state', { slug: 'dark-mode' })
+      const dto = parseToolResult(stateResp) as { currentStep: number }
+      expect(dto.currentStep).toBe(1)
+    })
+
+    it('accept advances the feature to the next stage and creates the stage stub', async () => {
+      await seedFeature('Dark Mode', true, 0)
+      const resp = await callTool(port, 'workflow_propose_advance', { slug: 'dark-mode' })
+      const { proposalId } = parseToolResult(resp) as { proposalId: string }
+      await adapter.acceptProposal(proposalId)
+      const stateResp = await callTool(port, 'workflow_get_state', { slug: 'dark-mode' })
+      const dto = parseToolResult(stateResp) as { currentStep: number }
+      expect(dto.currentStep).toBe(2)
+      expect(await vault.fileExists('specs/dark-mode/research.md')).toBe(true)
+    })
+
+    it('reject leaves the feature at its current stage', async () => {
+      await seedFeature('Dark Mode', true, 0)
+      const resp = await callTool(port, 'workflow_propose_advance', { slug: 'dark-mode' })
+      const { proposalId } = parseToolResult(resp) as { proposalId: string }
+      adapter.rejectProposal(proposalId)
+      const stateResp = await callTool(port, 'workflow_get_state', { slug: 'dark-mode' })
+      const dto = parseToolResult(stateResp) as { currentStep: number }
+      expect(dto.currentStep).toBe(1)
+    })
+
+    it('returns isError when feature not found', async () => {
+      const resp = await callTool(port, 'workflow_propose_advance', { slug: 'missing' })
+      expect(resp.result.isError).toBe(true)
     })
   })
 })

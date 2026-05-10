@@ -5,8 +5,9 @@ import { z } from 'zod'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import type { ObsidianMcpServerPort, McpConnectionConfig, VaultPort } from '@/domain/ports'
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
-import { getAllStepMeta, getStepMeta } from '@/domain/feature/FeatureStep'
+import { FEATURE_STEPS, getAllStepMeta, getStepMeta } from '@/domain/feature/FeatureStep'
 import { Slug } from '@/domain/shared/Slug'
+import { AdvanceFeatureStageUseCase } from '@/application/feature/AdvanceFeatureStageUseCase'
 import { ProposalStore, type PendingProposal } from './ProposalStore'
 
 function parseFrontmatter(content: string): Record<string, unknown> {
@@ -225,6 +226,7 @@ function registerWorkflowTools(
   vault: VaultPort,
   store: ProposalStore,
   specsFolder: () => string,
+  advanceUseCase: AdvanceFeatureStageUseCase,
 ): void {
   mcp.registerTool(
     'workflow_get_state',
@@ -294,14 +296,25 @@ function registerWorkflowTools(
   mcp.registerTool(
     'workflow_create_artifact',
     {
-      description: 'Queue a request to create a stage artifact — stub pending #191',
+      description: 'Create a stage artifact file (idempotent, overwrite-safe). Queued for proposal review.',
       inputSchema: {
         slug: z.string().describe('Feature slug'),
-        stage: z.string().describe('Stage slug (e.g. "design")'),
+        stage: z.string().describe('Stage slug (one of the 12 FEATURE_STEPS)'),
       },
     },
     async ({ slug, stage }) => {
-      const proposalId = store.queue('workflow_create_artifact', { slug, stage }, () => Promise.resolve())
+      const slugResult = Slug.create(slug)
+      if (!slugResult.ok) throw new Error(`Invalid slug: ${slug}`)
+      const stageIndex = (FEATURE_STEPS as readonly string[]).indexOf(stage)
+      if (stageIndex === -1) throw new Error(`Invalid stage: ${stage}`)
+      const feature = await repo.findBySlug(slugResult.value)
+      if (!feature) throw new Error(`Feature not found: ${slug}`)
+      const proposalId = store.queue('workflow_create_artifact', { slug, stage }, async () => {
+        const fresh = await repo.findBySlug(slugResult.value)
+        if (!fresh) throw new Error(`Feature no longer exists: ${slug}`)
+        const result = await repo.createStageFile(fresh, stageIndex + 1)
+        if (!result.ok) throw result.error
+      })
       return ok({ proposalId, status: 'pending' })
     },
   )
@@ -309,11 +322,19 @@ function registerWorkflowTools(
   mcp.registerTool(
     'workflow_propose_advance',
     {
-      description: 'Queue a proposal to advance a feature to the next stage — stub pending #191',
+      description: 'Advance a feature to the next workflow stage. Queued for proposal review.',
       inputSchema: { slug: z.string().describe('Feature slug') },
     },
     async ({ slug }) => {
-      const proposalId = store.queue('workflow_propose_advance', { slug }, () => Promise.resolve())
+      const slugResult = Slug.create(slug)
+      if (!slugResult.ok) throw new Error(`Invalid slug: ${slug}`)
+      const feature = await repo.findBySlug(slugResult.value)
+      if (!feature) throw new Error(`Feature not found: ${slug}`)
+      const featureId = feature.id
+      const proposalId = store.queue('workflow_propose_advance', { slug }, async () => {
+        const result = await advanceUseCase.execute({ featureId })
+        if (!result.ok) throw result.error
+      })
       return ok({ proposalId, status: 'pending' })
     },
   )
@@ -321,6 +342,7 @@ function registerWorkflowTools(
 
 export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
   private readonly proposalStore = new ProposalStore()
+  private readonly advanceUseCase: AdvanceFeatureStageUseCase
   private httpServer: http.Server | null = null
   private assignedPort = 0
 
@@ -328,7 +350,9 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
     private readonly vault: VaultPort,
     private readonly repo: IFeatureRepository,
     private readonly specsFolder: () => string,
-  ) {}
+  ) {
+    this.advanceUseCase = new AdvanceFeatureStageUseCase(repo)
+  }
 
   // Off-port by design: called directly by the sidebar module, not via MCP.
   async acceptProposal(proposalId: string): Promise<void> {
@@ -379,7 +403,14 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
   ): Promise<void> {
     const mcp = new McpServer({ name: 'specorator', version: '1.0.0' })
     registerTools(mcp, this.vault, this.proposalStore)
-    registerWorkflowTools(mcp, this.repo, this.vault, this.proposalStore, this.specsFolder)
+    registerWorkflowTools(
+      mcp,
+      this.repo,
+      this.vault,
+      this.proposalStore,
+      this.specsFolder,
+      this.advanceUseCase,
+    )
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
     await mcp.connect(transport)
     try {
