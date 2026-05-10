@@ -203,6 +203,37 @@ export default defineConfig(
 				},
 			],
 
+			// v1 shell hardening — Vue template DOM injection ban.
+			// `pluginVue.configs['flat/recommended']` sets this to "warn"; we
+			// upgrade to "error" so the no-v-html sink matches the severity of
+			// the JS/TS innerHTML bans above. See CLAUDE.md "DOM construction".
+			'vue/no-v-html': 'error',
+
+			// v1 shell hardening — forbid browser-native dialog globals.
+			// `window.confirm` / `alert` / `prompt` block Obsidian's event loop
+			// and look out-of-place in the plugin UI. Use an Obsidian `Modal`
+			// subclass (e.g. `new (class extends Modal { onOpen() { ... } })(app).open()`)
+			// instead. Tests, LocalStorageBridge demo bridge, and any other
+			// non-plugin contexts disable this rule via scoped overrides below.
+			'no-restricted-globals': [
+				'error',
+				{
+					name: 'confirm',
+					message:
+						'window.confirm blocks the Obsidian event loop. Use an Obsidian Modal subclass instead.',
+				},
+				{
+					name: 'alert',
+					message:
+						'window.alert blocks the Obsidian event loop. Use NotificationPort or an Obsidian Modal subclass instead.',
+				},
+				{
+					name: 'prompt',
+					message:
+						'window.prompt blocks the Obsidian event loop. Use an Obsidian Modal subclass instead.',
+				},
+			],
+
 			// W5 rule pack — syntax bans
 			// Result discipline (ADR-004): raw try/catch is reserved for the
 			// infrastructure layer and the tryAsync/trySync helper itself.

@@ -99,6 +99,12 @@ The 12 stage slugs (from `src/domain/feature/FeatureStep.ts`): `idea`, `research
 - Pinia stores hold plain DTOs only — domain class instances must not cross the store boundary.
 - UI imports use cases for business logic; UI must not import domain or infrastructure directly except for port types from `@/domain/ports` and the matching InjectionKey symbols from `@/infrastructure/bridge/ports`.
 
+### DOM construction
+
+Plugin code must not call `window.confirm` / `window.alert` / `window.prompt`. These block Obsidian's event loop and look out of place in the plugin UI. Use an Obsidian `Modal` subclass (`new (class extends Modal { onOpen() { /* … */ } })(app).open()`) for confirmation and input flows, and use `NotificationPort` for non-blocking feedback. Enforced project-wide by `no-restricted-globals`; tests, `LocalStorageBridge` (GitHub Pages demo), and Storybook are scoped out via overrides.
+
+Plugin code must not assign `innerHTML` / `outerHTML` / `insertAdjacentHTML`, and Vue templates must not use `v-html`. Build DOM with Obsidian helpers `createEl` / `createDiv` / `setText` (or `textContent` for raw DOM), which are XSS-safe by construction. Enforced by `no-restricted-properties` (TS/JS) and `vue/no-v-html` (templates), both at error severity.
+
 ### Testing conventions (ADR-009)
 
 - Tests live under `tests/`, mirroring `src/` path-for-path. The test for `src/x/y.ts` is `tests/x/y.test.ts`. The `.test.ts` extension is canonical; `.spec.ts` is no longer used. `__tests__/` folders inside `src/` are forbidden.
