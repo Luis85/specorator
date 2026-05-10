@@ -1,7 +1,7 @@
 ---
 id: REQ-0002
 status: proposed
-summary: "Every user interaction SHALL be wrapped in a typed Request object, dispatched through the runtime, and return a typed Response object; the full lifecycle SHALL be traced as events on the EventBus."
+summary: "Every user interaction SHALL be wrapped in a typed Request object carrying UI context (route, trigger, element, input snapshot), dispatched through the runtime, and return a typed Response object; the full lifecycle SHALL be traced as events on the EventBus."
 owner: "Luis85"
 created: 2026-05-10
 last_updated: 2026-05-10
@@ -12,16 +12,22 @@ tags: [requirements, intake, architecture, tracing, event-bus]
 priority: high
 risk: medium
 verification:
-  - "A UserRequest value object exists in src/application/shared/ with requestId, optional traceId, action, input, and issuedAt fields; dispatcher mints traceId when absent"
+  - "A UserRequest value object exists in src/application/shared/ with requestId, optional traceId, action, input, issuedAt, and uiContext fields; dispatcher mints traceId when absent"
+  - "A UiContext value object exists in src/application/shared/ with route, trigger, optional elementId, and optional inputSnapshot fields"
   - "A UserResponse value object exists in src/application/shared/ with requestId, traceId, action, status, value/error, and durationMs fields"
   - "interaction:started, interaction:succeeded, and interaction:failed channels are declared via EventMap declaration merge"
   - "A RequestDispatcher (or equivalent) accepts a UserRequest, emits lifecycle events on the bus, and returns a UserResponse"
   - "All UI composables that invoke use cases do so through the dispatcher, not by calling UseCase.execute() directly"
-  - "Unit tests cover: successful dispatch emits started + succeeded events with matching requestId/traceId; failing dispatch emits started + failed events; durationMs is non-negative"
+  - "Unit tests cover: successful dispatch emits started + succeeded events with matching requestId/traceId; failing dispatch emits started + failed events; durationMs is non-negative; uiContext is present in interaction:started payload"
 statement: >
   The system SHALL wrap every user-initiated interaction (form submissions, command
   invocations, step advancements, and any other action originating from the UI layer)
   in a UserRequest value object before handing it to the application runtime.
+  The UserRequest SHALL carry a UiContext snapshot that captures: the user's current
+  route at the moment of the interaction, the nature of the triggering action
+  (click, form submission, keyboard input, command palette invocation, or URI action),
+  the data-testid of the triggering UI element where applicable, and a sanitised
+  snapshot of any input values provided by the user.
   The runtime SHALL emit an interaction:started event on the EventBus when a request
   is received, execute the corresponding use case, emit an interaction:succeeded or
   interaction:failed event carrying the outcome and duration, and return a UserResponse
@@ -38,16 +44,22 @@ rationale: >
   interaction in a request/response pair and emitting lifecycle events on the shared
   bus gives the runtime full observability into what the user triggered, what the
   system did, whether it succeeded, and how long it took — without modifying the
-  domain or infrastructure layers. The pattern also provides a single choke-point for
-  cross-cutting concerns such as loading-state management, optimistic updates, and
-  future audit logging.
+  domain or infrastructure layers. Attaching a UiContext snapshot to every request
+  means an observer can answer not just what happened and whether it succeeded, but
+  also where the user was in the application, what they clicked or submitted, and what
+  values they entered — enabling session replay, support diagnostics, and usage
+  analytics without any post-hoc reconstruction. The pattern also provides a single
+  choke-point for cross-cutting concerns such as loading-state management, optimistic
+  updates, and future audit logging.
 acceptance_criteria:
-  - "A read-only UserRequest<TInput> type is declared in src/application/shared/ with fields: requestId (string), traceId (string | undefined — caller may supply to chain a parent trace; dispatcher mints one when absent), action (string), input (TInput), issuedAt (Date)."
+  - "A UiTrigger discriminated union type is declared in src/application/shared/ as: 'click' | 'form-submit' | 'keypress' | 'command' | 'uri-action'."
+  - "A read-only UiContext type is declared in src/application/shared/ with fields: route (string — current hash-mode route at the moment of the interaction, e.g. '/features/dark-mode'), trigger (UiTrigger), elementId (string | undefined — data-testid of the triggering element), inputSnapshot (Record<string, unknown> | undefined — sanitised input values provided by the user at dispatch time)."
+  - "A read-only UserRequest<TInput> type is declared in src/application/shared/ with fields: requestId (string), traceId (string | undefined — caller may supply to chain a parent trace; dispatcher mints one when absent), action (string), input (TInput), issuedAt (Date), uiContext (UiContext)."
   - "A read-only UserResponse<TOutput> type is declared in src/application/shared/ with fields: requestId (string), traceId (string), action (string), status ('success' | 'failure'), value (TOutput, present on success), error (Error, present on failure), durationMs (number)."
-  - "Three EventMap channels are added via declaration merge in src/application/shared/interaction-events.ts: interaction:started carrying { requestId, traceId, action, issuedAt }; interaction:succeeded carrying { requestId, traceId, action, durationMs, value: unknown }; interaction:failed carrying { requestId, traceId, action, durationMs, error: Error }."
+  - "Three EventMap channels are added via declaration merge in src/application/shared/interaction-events.ts: interaction:started carrying { requestId, traceId, action, issuedAt, uiContext: UiContext }; interaction:succeeded carrying { requestId, traceId, action, durationMs, value: unknown }; interaction:failed carrying { requestId, traceId, action, durationMs, error: Error }."
   - "A RequestDispatcher type (or equivalent factory function) is declared in src/application/shared/. Its dispatch method accepts a UserRequest<TInput> and a UseCase<TInput, TOutput>, emits interaction:started when the request is received, then emits exactly one terminal event — interaction:succeeded on success or interaction:failed on failure — and returns Promise<UserResponse<TOutput>>."
   - "The dispatcher resolves the traceId for an interaction as: UserRequest.traceId if present, otherwise a freshly minted ID. This resolved traceId is passed as EmitOptions.traceId on all three event emissions so all envelopes for the same interaction share a single trace. UserResponse.traceId is always the resolved value (never undefined)."
-  - "All existing UI composables that call use case execute() methods are updated to route through the dispatcher."
+  - "All existing UI composables that call use case execute() methods are updated to route through the dispatcher and to populate uiContext with: the current hash-mode route (from Vue Router's useRoute()), the appropriate UiTrigger value, the data-testid of the triggering element where identifiable, and a sanitised inputSnapshot of any user-provided values."
   - "No domain or infrastructure source file is modified by this change."
   - "npm run verify passes with no new type errors, lint violations, or coverage regressions."
 traceability:
@@ -73,6 +85,14 @@ traceability:
 `action` is a dot-separated string identifying the use case, e.g. `"feature:create"`, `"feature:advance-stage"`, `"feature:archive"`, `"feature:activate"`. Naming convention to be finalised in the design doc.
 
 `traceId` on the `UserRequest` may be supplied by the caller (e.g. propagated from an upstream event envelope) or generated fresh by the dispatcher when absent, matching the convention already used by `createEventBus`.
+
+`UiContext.route` is read from Vue Router's `useRoute().fullPath` at the moment the composable builds the request — this gives the hash-mode path the user was on when they triggered the action (e.g. `/features/dark-mode`).
+
+`UiContext.elementId` SHOULD be the `data-testid` attribute of the element that triggered the interaction, consistent with the `data-testid`-only selector convention already enforced in tests (ADR-009). It is `undefined` when no stable element identity exists (e.g. a programmatic trigger).
+
+`UiContext.inputSnapshot` MUST NOT include secrets or raw password fields. Sanitisation rules to be defined in the design doc.
+
+`UiTrigger` values: `'click'` — button or link press; `'form-submit'` — form submission event; `'keypress'` — keyboard shortcut; `'command'` — Obsidian command palette invocation; `'uri-action'` — `obsidian://specorator` URI dispatch.
 
 The dispatcher is injected with the `EventBus` instance owned by `PluginCore`; UI composables obtain it via a new `BUS_PORT` InjectionKey or an extended `ModulePorts`, to be decided at design time.
 
