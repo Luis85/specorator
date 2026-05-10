@@ -1,12 +1,13 @@
 ---
 id: REQ-0003
-status: proposed
+status: accepted
 summary: "Declare per-feature dependencies on Obsidian community plugins; check on startup and feature entry; gracefully disable features with missing dependencies"
 owner: "Luis85"
 created: 2026-05-10
 last_updated: 2026-05-10
+accepted: 2026-05-10
 source_issue: "#221"
-related_design: ""
+related_design: "#227"
 tags: [requirements, intake, architecture, ports, ux]
 priority: medium
 risk: medium
@@ -35,7 +36,14 @@ traceability:
     - "ADR-009 — testing conventions"
     - "Issue #221 — Requirement intake"
   downstream:
-    - "TBD — design / implementation tasks after acceptance"
+    - "#227 — design intake (ratified 2026-05-10)"
+    - "#228 — CommunityPluginPort interface + DI plumbing"
+    - "#229 — port implementation across ObsidianBridge, MockBridge, LocalStorageBridge"
+    - "#230 — FeatureAvailabilityService + feature-dependency registry"
+    - "#231 — plugin onload availability check + LoggerPort"
+    - "#232 — UI re-eval + disabled state + NotificationPort warning"
+    - "#233 — settings-tab discoverability surface"
+    - "#234 — ADR / docs sweep"
 ---
 
 ## Notes
@@ -49,9 +57,19 @@ traceability:
   - Startup: compute availability once during plugin `onload` and log missing deps; do not show a user notice on startup to avoid noise.
   - On-demand: re-evaluate when a dependent feature is invoked (route guard, component mount, or use-case entry — choose at design time).
   - Out of scope: subscribing to live plugin enable/disable events. A future requirement can add live reactivity if needed.
-- **Open questions for triage / design:**
-  - Disabled vs hidden when a dependency is missing — should it be feature-configurable, or one global rule?
-  - Where should the registry live: domain (pure data) or application (alongside use cases)?
-  - Should the notice be one-shot per session, or re-shown on every feature entry?
-  - How should declared dependencies be discovered for documentation (auto-generated table in the README / settings tab)?
+- **Ratified design decisions (2026-05-10, #227):**
+  - **Registry placement:** `src/application/features/feature-dependencies.ts`. Application layer co-locates with `FeatureAvailabilityService` (#230); avoids a needless `application → domain` import for what is configuration data.
+  - **Disabled vs hidden:** disabled by default; per-feature `presentation: 'hidden'` opt-in flag in registry entries. Default discoverability over silent omission.
+  - **Notice cadence:** once per session per `(featureId, missingPluginId)` pair. Persistent surface lives in the settings-tab table (#233); `NotificationPort.showWarning` serves as the in-the-moment alert on entry.
+  - **Re-evaluation seam:** Vue Router `beforeEnter` guard on each gated route. Hash-mode router (ADR-003) gives a single chokepoint; rejected `onMounted` (race-prone) and use-case entry (UI surface lost).
+  - **Discovery surface:** settings-tab section reading directly from the registry module, with live ✓/✗ status from `CommunityPluginPort.listEnabledPluginIds()`. Single source of truth — no duplicate list, no auto-generated markdown.
+  - **Live reactivity:** confirmed out of scope; revisit as a follow-up REQ if user friction surfaces.
+- **Registry entry shape:**
+  ```ts
+  type FeatureDependency = {
+    featureId: FeatureId
+    requiredPluginIds: string[]
+    presentation?: 'disabled' | 'hidden'  // default 'disabled'
+  }
+  ```
 - **Risk:** medium. Touches plugin lifecycle, adds a new port across three bridges, and affects UI affordances. Mitigated by following the established narrow-port + composable pattern.
