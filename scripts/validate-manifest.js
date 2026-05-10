@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs'
+import { basename } from 'node:path'
 
 // Official semver.org regex (https://semver.org/#is-there-a-suggested-regular-expression-regex-to-check-a-semver-string)
 // Accepts the prerelease and build-metadata grammar; rejects empty identifiers,
@@ -10,6 +11,12 @@ const SEMVER =
 const MINAPP_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const ID_FORMAT = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
 const URL_FORMAT = /^https?:\/\/[^\s]+$/
+// Obsidian's plugin submission spec forbids "obsidian" / "plugin" in manifest.id
+// and forbids "Obsidian" / "Plugin" as whole words in manifest.name.
+// See https://docs.obsidian.md/Plugins/Releasing/Submission+requirements+for+plugins
+const ID_FORBIDDEN_SUBSTRINGS = /(obsidian|plugin)/i
+const NAME_FORBIDDEN_WORDS = /\b(obsidian|plugin)\b/i
+const SUBMISSION_DOC = 'https://docs.obsidian.md/Plugins/Releasing/Submission+requirements+for+plugins'
 const errors = []
 
 function readJson(path) {
@@ -48,8 +55,35 @@ if (manifest && versions && pkg) {
     )
   }
 
+  if (typeof manifest.id === 'string' && ID_FORBIDDEN_SUBSTRINGS.test(manifest.id)) {
+    errors.push(
+      `manifest.id must not contain "obsidian" or "plugin" (case-insensitive); got: ${JSON.stringify(manifest.id)}. See ${SUBMISSION_DOC}`,
+    )
+  }
+
+  // In CI, manifest.id must match the GitHub repository name (the segment after
+  // the owner in GITHUB_REPOSITORY). Skipped in local dev because worktrees and
+  // checkouts can land under arbitrary folder names.
+  if (
+    typeof manifest.id === 'string' &&
+    process.env.CI === 'true' &&
+    typeof process.env.GITHUB_REPOSITORY === 'string' &&
+    process.env.GITHUB_REPOSITORY.length > 0
+  ) {
+    const repoName = basename(process.env.GITHUB_REPOSITORY.split('/').pop() ?? '')
+    if (repoName && manifest.id !== repoName) {
+      errors.push(
+        `manifest.id (${JSON.stringify(manifest.id)}) must equal the GitHub repo name (${JSON.stringify(repoName)}). See ${SUBMISSION_DOC}`,
+      )
+    }
+  }
+
   if (typeof manifest.name !== 'string' || manifest.name.length === 0) {
     errors.push('manifest.name must be a non-empty string')
+  } else if (NAME_FORBIDDEN_WORDS.test(manifest.name)) {
+    errors.push(
+      `manifest.name must not contain "Obsidian" or "Plugin" as words (case-insensitive); got: ${JSON.stringify(manifest.name)}. See ${SUBMISSION_DOC}`,
+    )
   }
 
   if (typeof manifest.description !== 'string') {
