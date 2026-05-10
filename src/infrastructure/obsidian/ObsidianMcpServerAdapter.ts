@@ -4,6 +4,9 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import type { ObsidianMcpServerPort, McpConnectionConfig, VaultPort } from '@/domain/ports'
+import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
+import { getAllStepMeta, getStepMeta } from '@/domain/feature/FeatureStep'
+import { Slug } from '@/domain/shared/Slug'
 import { ProposalStore, type PendingProposal } from './ProposalStore'
 
 function parseFrontmatter(content: string): Record<string, unknown> {
@@ -216,12 +219,116 @@ function registerTools(mcp: McpServer, vault: VaultPort, store: ProposalStore): 
   )
 }
 
+function registerWorkflowTools(
+  mcp: McpServer,
+  repo: IFeatureRepository,
+  vault: VaultPort,
+  store: ProposalStore,
+  specsFolder: () => string,
+): void {
+  mcp.registerTool(
+    'workflow_get_state',
+    {
+      description: 'Get the full workflow state for a feature by slug',
+      inputSchema: { slug: z.string().describe('Feature slug') },
+    },
+    async ({ slug }) => {
+      const slugResult = Slug.create(slug)
+      if (!slugResult.ok) throw new Error(`Invalid slug: ${slug}`)
+      const feature = await repo.findBySlug(slugResult.value)
+      if (!feature) throw new Error(`Feature not found: ${slug}`)
+      return ok(feature.toPlainObject())
+    },
+  )
+
+  mcp.registerTool(
+    'workflow_list_features',
+    {
+      description: 'List all features with their current stage and title',
+      inputSchema: {},
+    },
+    async () => {
+      const features = await repo.findAll()
+      return ok({
+        features: features.map((f) => ({
+          slug: f.slug.toString(),
+          stage: f.isComplete ? 'retrospective' : (getStepMeta(f.currentStep)?.slug ?? 'unknown'),
+          title: f.title,
+        })),
+      })
+    },
+  )
+
+  mcp.registerTool(
+    'workflow_get_stage_artifacts',
+    {
+      description: 'Get all stage artifact files for a feature and their vault existence status',
+      inputSchema: { slug: z.string().describe('Feature slug') },
+    },
+    async ({ slug }) => {
+      const slugResult = Slug.create(slug)
+      if (!slugResult.ok) throw new Error(`Invalid slug: ${slug}`)
+      const feature = await repo.findBySlug(slugResult.value)
+      if (!feature) throw new Error(`Feature not found: ${slug}`)
+      const stage = feature.isComplete ? 'retrospective' : (getStepMeta(feature.currentStep)?.slug ?? 'unknown')
+      const artifacts = await Promise.all(
+        getAllStepMeta().map(async (meta) => {
+          const path = joinVaultPath(joinVaultPath(specsFolder(), feature.slug.toString()), meta.fileName)
+          const exists = await vault.fileExists(path)
+          return { slug: meta.slug, path, exists }
+        }),
+      )
+      return ok({ stage, artifacts })
+    },
+  )
+
+  mcp.registerTool(
+    'workflow_get_quality_gates',
+    {
+      description: 'Get all 12 workflow stage definitions (quality gates) in order',
+      inputSchema: {},
+    },
+    async () => ok({ gates: getAllStepMeta() }),
+  )
+
+  mcp.registerTool(
+    'workflow_create_artifact',
+    {
+      description: 'Queue a request to create a stage artifact — stub pending #191',
+      inputSchema: {
+        slug: z.string().describe('Feature slug'),
+        stage: z.string().describe('Stage slug (e.g. "design")'),
+      },
+    },
+    async ({ slug, stage }) => {
+      const proposalId = store.queue('workflow_create_artifact', { slug, stage }, () => Promise.resolve())
+      return ok({ proposalId, status: 'pending' })
+    },
+  )
+
+  mcp.registerTool(
+    'workflow_propose_advance',
+    {
+      description: 'Queue a proposal to advance a feature to the next stage — stub pending #191',
+      inputSchema: { slug: z.string().describe('Feature slug') },
+    },
+    async ({ slug }) => {
+      const proposalId = store.queue('workflow_propose_advance', { slug }, () => Promise.resolve())
+      return ok({ proposalId, status: 'pending' })
+    },
+  )
+}
+
 export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
   private readonly proposalStore = new ProposalStore()
   private httpServer: http.Server | null = null
   private assignedPort = 0
 
-  constructor(private readonly vault: VaultPort) {}
+  constructor(
+    private readonly vault: VaultPort,
+    private readonly repo: IFeatureRepository,
+    private readonly specsFolder: () => string,
+  ) {}
 
   // Off-port by design: called directly by the sidebar module, not via MCP.
   async acceptProposal(proposalId: string): Promise<void> {
@@ -272,6 +379,7 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
   ): Promise<void> {
     const mcp = new McpServer({ name: 'specorator', version: '1.0.0' })
     registerTools(mcp, this.vault, this.proposalStore)
+    registerWorkflowTools(mcp, this.repo, this.vault, this.proposalStore, this.specsFolder)
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
     await mcp.connect(transport)
     try {

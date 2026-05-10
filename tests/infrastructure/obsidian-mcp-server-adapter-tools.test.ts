@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { parse as parseYaml } from 'yaml'
+import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
+import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
 async function mcpPost(port: number, body: unknown): Promise<unknown> {
   const res = await fetch(`http://127.0.0.1:${port}/mcp`, {
@@ -86,7 +88,8 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
 
   beforeEach(async () => {
     vault = new MockBridge(VAULT_FILES)
-    adapter = new ObsidianMcpServerAdapter(vault)
+    const repo = new FeatureRepository(vault, vault, () => DEFAULT_SETTINGS)
+    adapter = new ObsidianMcpServerAdapter(vault, repo, () => DEFAULT_SETTINGS.specsFolder)
     ;({ port } = await adapter.start())
     await initMcp(port)
   })
@@ -96,7 +99,7 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
   })
 
   describe('tools/list', () => {
-    it('registers all 10 tools', async () => {
+    it('registers all 16 tools', async () => {
       const resp = (await mcpPost(port, {
         jsonrpc: '2.0',
         id: 99,
@@ -115,6 +118,12 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
         'vault_read_note',
         'vault_search',
         'vault_write_note',
+        'workflow_create_artifact',
+        'workflow_get_quality_gates',
+        'workflow_get_stage_artifacts',
+        'workflow_get_state',
+        'workflow_list_features',
+        'workflow_propose_advance',
       ])
     })
   })

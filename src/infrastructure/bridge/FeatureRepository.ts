@@ -39,7 +39,7 @@ export class FeatureRepository implements IFeatureRepository {
 	constructor(
 		private readonly vault: VaultPort,
 		private readonly notifications: NotificationPort,
-		private readonly settings: PluginSettings,
+		private readonly getSettings: () => PluginSettings,
 	) {}
 
 	private checkedPath(...segments: string[]): string {
@@ -48,20 +48,20 @@ export class FeatureRepository implements IFeatureRepository {
 		return path.value;
 	}
 
-	private folderPath(slugValue: string): string {
-		return this.checkedPath(this.settings.specsFolder, slugValue);
+	private folderPath(specsFolder: string, slugValue: string): string {
+		return this.checkedPath(specsFolder, slugValue);
 	}
 
-	private metaPath(slugValue: string): string {
-		return this.checkedPath(this.settings.specsFolder, slugValue, META_FILE);
+	private metaPath(specsFolder: string, slugValue: string): string {
+		return this.checkedPath(specsFolder, slugValue, META_FILE);
 	}
 
-	private stagePath(slugValue: string, stageName: string): string {
-		return this.checkedPath(this.settings.specsFolder, slugValue, `${stageName}.md`);
+	private stagePath(specsFolder: string, slugValue: string, stageName: string): string {
+		return this.checkedPath(specsFolder, slugValue, `${stageName}.md`);
 	}
 
 	async findAll(): Promise<Feature[]> {
-		const specsFolder = this.checkedPath(this.settings.specsFolder);
+		const specsFolder = this.checkedPath(this.getSettings().specsFolder);
 		const folders = await this.vault.listFolders(specsFolder);
 		const features = await Promise.all(
 			folders.map(async (folder) => {
@@ -78,7 +78,8 @@ export class FeatureRepository implements IFeatureRepository {
 	}
 
 	async findBySlug(slug: Slug): Promise<Feature | null> {
-		const path = this.metaPath(slug.toString());
+		const specsFolder = this.getSettings().specsFolder;
+		const path = this.metaPath(specsFolder, slug.toString());
 		if (!(await this.vault.fileExists(path))) return null;
 		const content = await this.vault.readFile(path);
 		const feature = deserializeWorkflowState(content);
@@ -99,10 +100,13 @@ export class FeatureRepository implements IFeatureRepository {
 	 * On first creation (file did not exist), also writes the idea.md stub.
 	 */
 	async save(feature: Feature): Promise<Result<void>> {
+		// Snapshot specsFolder once so all paths in this multi-step write resolve
+		// to the same root, even if the user changes the setting mid-flight.
+		const specsFolder = this.getSettings().specsFolder;
 		try {
-			const folder = this.folderPath(feature.slug.toString());
+			const folder = this.folderPath(specsFolder, feature.slug.toString());
 			await this.vault.createFolder(folder);
-			const path = this.metaPath(feature.slug.toString());
+			const path = this.metaPath(specsFolder, feature.slug.toString());
 			const isNew = !(await this.vault.fileExists(path));
 			if (!isNew && deserializeWorkflowState(await this.vault.readFile(path)) === null) {
 				return err(
@@ -117,7 +121,7 @@ export class FeatureRepository implements IFeatureRepository {
 			// check.  If we wrote workflow-state.md first, an idea.md failure
 			// would leave a valid metadata file and block any retry.
 			if (isNew) {
-				const ideaPath = this.stagePath(feature.slug.toString(), 'idea');
+				const ideaPath = this.stagePath(specsFolder, feature.slug.toString(), 'idea');
 				if (await this.vault.fileExists(ideaPath)) {
 					this.notifications.showInfo(`Specorator: idea.md already exists — keeping your version.`);
 				} else {
@@ -141,11 +145,12 @@ export class FeatureRepository implements IFeatureRepository {
 	 * is already present, preserving any manually edited content (REQ-AVS-005).
 	 */
 	async createStageFile(feature: Feature, stepNumber: number): Promise<Result<void>> {
+		const specsFolder = this.getSettings().specsFolder;
 		try {
 			const meta = getStepMeta(stepNumber);
 			if (!meta) return err(new Error(`Unknown step number: ${stepNumber}`));
 
-			const path = this.stagePath(feature.slug.toString(), meta.slug);
+			const path = this.stagePath(specsFolder, feature.slug.toString(), meta.slug);
 			if (await this.vault.fileExists(path)) {
 				this.notifications.showInfo(
 					`Specorator: ${meta.slug}.md already exists — keeping your version.`,
@@ -164,10 +169,11 @@ export class FeatureRepository implements IFeatureRepository {
 	}
 
 	async delete(id: string): Promise<Result<void>> {
+		const specsFolder = this.getSettings().specsFolder;
 		try {
 			const feature = await this.findById(id);
 			if (!feature) return err(new Error(`Feature "${id}" not found`));
-			const folder = this.folderPath(feature.slug.toString());
+			const folder = this.folderPath(specsFolder, feature.slug.toString());
 			const files = await this.vault.listFiles(folder);
 			await Promise.all(files.map((path) => this.vault.deleteFile(path)));
 			return ok(undefined);

@@ -4,6 +4,7 @@ import { SpecoratorSettingTab } from './settings'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
+import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { PluginCore } from '@/core/plugin-core'
 import { ALL_MODULES, type ModuleDescriptor } from '@/modules'
 import { i18nMerge, i18nTranslate, setLocale, type SupportedLocale } from '@/ui/i18n'
@@ -46,7 +47,11 @@ export default class SpecoratorPlugin extends Plugin {
       logger: this.bridge,
       t: translationPort,
       i18nMerge,
-      mcpServer: new ObsidianMcpServerAdapter(this.bridge),
+      mcpServer: new ObsidianMcpServerAdapter(
+        this.bridge,
+        new FeatureRepository(this.bridge, this.bridge, () => this.settings),
+        () => this.settings.specsFolder,
+      ),
     })
 
     setLocale(this.settings.locale as SupportedLocale)
