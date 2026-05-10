@@ -6,9 +6,10 @@
  * `'obsidian'`) without crashing Vite's import-analysis pass.
  *
  * The stub implements just enough surface for `ObsidianBridge`:
- *   - `normalizePath` — matches Obsidian's documented behaviour (backslashes
- *     to forward slashes, collapse runs of slashes, strip leading + trailing
- *     slashes).
+ *   - `normalizePath` — matches Obsidian's behaviour for the cases this stub
+ *     exercises (backslashes to forward slashes, collapse runs of slashes,
+ *     strip leading + trailing slashes). Does NOT implement Obsidian's NBSP
+ *     replacement, Unicode NFC normalisation, or the empty-path → '/' case.
  *   - `Notice`, `TFile`, `TFolder` — empty classes so `instanceof` checks
  *     work and tests can construct sentinel instances.
  *
