@@ -43,7 +43,8 @@ Dependency injection registers the same instance under distinct Vue `InjectionKe
 
 ## Notes for downstream work
 
-- W2 (#100): module manifest declares port dependencies by symbol (`SETTINGS_PORT`, `VAULT_PORT`, ...). Module loader injects the requested ports into the module's bootstrap function.
-- W3 (#101): EventBus is its own port (`EventBusPort`) introduced in W3, not here.
-- W7 (#105): settings schema work touches `SettingsPort` shape; that PR may add migration methods to the port.
-- W8 (#106): vue-i18n integration introduces `TranslationPort` if the module needs it.
+- W2 (#100): the module descriptor receives every port through a single `ModulePorts` object (`{ settings, vault, workspace, notifications, logger, bus, t }`); modules do not declare per-port dependency symbols. See [ADR-010](ADR-010-module-system-and-defineModule.md).
+- W3 (#101): EventBus is a runtime-agnostic in-process primitive (`src/domain/shared/event-bus.ts`), not a port. Modules receive it on `ModulePorts.bus`. See [ADR-011](ADR-011-typed-eventbus-envelope.md). The earlier prediction that W3 would introduce an `EventBusPort` did not survive design.
+- W7 (#105): per-module settings versioning (`settingsKey` + `settingsVersion` + `migrate` + `validateSettings`) lives on the module descriptor; `SettingsPort` shape was not extended. See [ADR-010](ADR-010-module-system-and-defineModule.md).
+- W8 (#106): `TranslationPort` shipped as `ports.t`. Module-owned `messages.{locale}` blocks are merged into vue-i18n at module init.
+- W13 (#163): `ObsidianMcpServerPort` (`src/domain/ports/obsidian-mcp-server-port.ts`) is the sixth narrow port. Lifecycle ownership lives on `PluginCore`. See [ADR-013](ADR-013-obsidian-mcp-server.md).
