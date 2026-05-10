@@ -125,6 +125,7 @@ export default defineConfig(
 			'coverage/',
 			'storybook-static/',
 			'.worktrees/',
+			'.claude/',
 			'docs/',
 			// Boundary-rule proof fixtures: deliberately invalid imports/
 			// syntax that the lint test exercises via the ESLint API.
