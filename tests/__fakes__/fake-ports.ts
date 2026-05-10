@@ -14,8 +14,10 @@ import { createEventBus } from '@/domain/shared/event-bus'
 import type { EventBus } from '@/domain/shared/event-bus'
 
 /**
- * Standard test seam: all four narrow ports backed by a single MockBridge
- * instance, plus a fresh EventBus and a vi.fn() spy LoggerPort.
+ * Standard test seam: all five narrow ports (settings/vault/workspace/notifications
+ * + logger) backed by a single MockBridge instance, plus a fresh EventBus and a
+ * vi.fn() spy LoggerPort, a TranslationPort stub, and W13 mocks (metadataCache,
+ * canvas).
  *
  * `bridge` is exposed so tests can inspect recorded notices and opened-file paths.
  * `bus` is exposed so tests can subscribe to events before calling module init.
