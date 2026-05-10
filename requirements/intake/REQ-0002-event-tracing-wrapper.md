@@ -6,7 +6,7 @@ owner: "Luis85"
 created: 2026-05-10
 last_updated: 2026-05-10
 revised: 2026-05-10
-source_issue: ""
+source_issue: "#211"
 related_design: ""
 tags: [requirements, intake, architecture, tracing, event-bus]
 priority: high
@@ -20,14 +20,18 @@ verification:
   - "All UI composables that invoke use cases do so through the dispatcher, not by calling UseCase.execute() directly"
   - "Unit tests cover: successful dispatch emits started + succeeded events with matching requestId/traceId; failing dispatch emits started + failed events; durationMs is non-negative; uiContext is present in interaction:started payload"
 statement: >
-  The system SHALL wrap every user-initiated interaction (form submissions, command
-  invocations, step advancements, and any other action originating from the UI layer)
-  in a UserRequest value object before handing it to the application runtime.
+  The system SHALL wrap every user-initiated interaction that is routed through the
+  Vue UI composable layer (form submissions, button clicks, step advancements, and
+  any other action whose entry point is a Vue composable calling a use case) in a
+  UserRequest value object before handing it to the application runtime.
   The UserRequest SHALL carry a UiContext snapshot that captures: the user's current
   route at the moment of the interaction, the nature of the triggering action
-  (click, form submission, keyboard input, command palette invocation, or URI action),
-  the data-testid of the triggering UI element where applicable, and a sanitised
-  snapshot of any input values provided by the user.
+  (click, form submission, or keyboard shortcut within the Vue UI), the data-testid
+  of the triggering UI element where applicable, and a sanitised snapshot of any
+  input values provided by the user.
+  Plugin-layer entry points (Obsidian command palette callbacks and URI action
+  handlers registered in src/plugin/main.ts) are out of scope for this requirement
+  and are addressed separately in a future plugin-layer tracing requirement.
   The runtime SHALL emit an interaction:started event on the EventBus when a request
   is received, execute the corresponding use case, emit an interaction:succeeded or
   interaction:failed event carrying the outcome and duration, and return a UserResponse
@@ -78,6 +82,7 @@ traceability:
 
 - **In scope:** `src/application/shared/` new types + dispatcher; `src/ui/` composable updates to call through dispatcher; declaration-merge event channels.
 - **Out of scope:** domain layer (`src/domain/`), infrastructure adapters, `ObsidianBridge`, `MockBridge`. No port interfaces change.
+- **Out of scope (plugin layer):** command palette callbacks (`addCommand` in `src/plugin/main.ts`) and URI action handlers (`handleUri` / `uriDispatch` in `PluginCore`) are **not** covered by this requirement. They are plugin-layer entry points that bypass the Vue composable layer. Wrapping them is deferred to a future plugin-layer tracing requirement. The `'command'` and `'uri-action'` values in `UiTrigger` are reserved for that future extension.
 - **UseCase contract unchanged:** `UseCase<TInput, TOutput>.execute()` is not modified. The dispatcher is an application-layer wrapper, not a domain primitive.
 
 ### Design notes
