@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { parse as parseYaml } from 'yaml'
+import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
+import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
 async function mcpPost(port: number, body: unknown): Promise<unknown> {
   const res = await fetch(`http://127.0.0.1:${port}/mcp`, {
@@ -86,7 +88,8 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
 
   beforeEach(async () => {
     vault = new MockBridge(VAULT_FILES)
-    adapter = new ObsidianMcpServerAdapter(vault)
+    const repo = new FeatureRepository(vault, vault, DEFAULT_SETTINGS)
+    adapter = new ObsidianMcpServerAdapter(vault, repo, DEFAULT_SETTINGS.specsFolder)
     ;({ port } = await adapter.start())
     await initMcp(port)
   })

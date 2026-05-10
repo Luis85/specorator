@@ -4,6 +4,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import type { ObsidianMcpServerPort, McpConnectionConfig, VaultPort } from '@/domain/ports'
+import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
 import { ProposalStore, type PendingProposal } from './ProposalStore'
 
 function parseFrontmatter(content: string): Record<string, unknown> {
@@ -216,12 +217,26 @@ function registerTools(mcp: McpServer, vault: VaultPort, store: ProposalStore): 
   )
 }
 
+function registerWorkflowTools(
+  _mcp: McpServer,
+  _repo: IFeatureRepository,
+  _vault: VaultPort,
+  _store: ProposalStore,
+  _specsFolder: string,
+): void {
+  // tools added in Tasks 3–7
+}
+
 export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
   private readonly proposalStore = new ProposalStore()
   private httpServer: http.Server | null = null
   private assignedPort = 0
 
-  constructor(private readonly vault: VaultPort) {}
+  constructor(
+    private readonly vault: VaultPort,
+    private readonly repo: IFeatureRepository,
+    private readonly specsFolder: string,
+  ) {}
 
   // Off-port by design: called directly by the sidebar module, not via MCP.
   async acceptProposal(proposalId: string): Promise<void> {
@@ -272,6 +287,7 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
   ): Promise<void> {
     const mcp = new McpServer({ name: 'specorator', version: '1.0.0' })
     registerTools(mcp, this.vault, this.proposalStore)
+    registerWorkflowTools(mcp, this.repo, this.vault, this.proposalStore, this.specsFolder)
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
     await mcp.connect(transport)
     try {
