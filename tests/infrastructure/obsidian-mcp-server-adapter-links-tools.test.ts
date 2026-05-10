@@ -135,18 +135,11 @@ describe('ObsidianMcpServerAdapter — links tools', () => {
   describe('graph_traverse', () => {
     beforeEach(() => {
       // Graph: a -> b -> c, b <- d
-      metadataCache.seedMetadata('a.md', {
-        path: 'a.md', tags: [], frontmatter: {}, links: ['b.md'], embeds: [],
-      })
-      metadataCache.seedMetadata('b.md', {
-        path: 'b.md', tags: [], frontmatter: {}, links: ['c.md'], embeds: [],
-      })
-      metadataCache.seedMetadata('c.md', {
-        path: 'c.md', tags: [], frontmatter: {}, links: [], embeds: [],
-      })
-      metadataCache.seedMetadata('d.md', {
-        path: 'd.md', tags: [], frontmatter: {}, links: ['b.md'], embeds: [],
-      })
+      // Outgoing expansion uses resolvedLinks (canonical paths), not raw linktexts.
+      metadataCache.seedResolvedLinks('a.md', { 'b.md': 1 })
+      metadataCache.seedResolvedLinks('b.md', { 'c.md': 1 })
+      metadataCache.seedResolvedLinks('c.md', {})
+      metadataCache.seedResolvedLinks('d.md', { 'b.md': 1 })
       metadataCache.seedBacklinks('b.md', ['a.md', 'd.md'])
       metadataCache.seedBacklinks('c.md', ['b.md'])
     })
@@ -185,11 +178,10 @@ describe('ObsidianMcpServerAdapter — links tools', () => {
     it('caps depth at 5', async () => {
       // Build a chain of depth 10
       for (let i = 0; i < 10; i++) {
-        metadataCache.seedMetadata(`n${i}.md`, {
-          path: `n${i}.md`, tags: [], frontmatter: {},
-          links: i < 9 ? [`n${i + 1}.md`] : [],
-          embeds: [],
-        })
+        metadataCache.seedResolvedLinks(
+          `n${i}.md`,
+          i < 9 ? { [`n${i + 1}.md`]: 1 } : {},
+        )
       }
       const resp = await callTool(port, 'graph_traverse', {
         startPath: 'n0.md',
@@ -202,12 +194,8 @@ describe('ObsidianMcpServerAdapter — links tools', () => {
     })
 
     it('handles cycles without infinite loop', async () => {
-      metadataCache.seedMetadata('x.md', {
-        path: 'x.md', tags: [], frontmatter: {}, links: ['y.md'], embeds: [],
-      })
-      metadataCache.seedMetadata('y.md', {
-        path: 'y.md', tags: [], frontmatter: {}, links: ['x.md'], embeds: [],
-      })
+      metadataCache.seedResolvedLinks('x.md', { 'y.md': 1 })
+      metadataCache.seedResolvedLinks('y.md', { 'x.md': 1 })
       const resp = await callTool(port, 'graph_traverse', {
         startPath: 'x.md',
         depth: 5,
@@ -215,6 +203,27 @@ describe('ObsidianMcpServerAdapter — links tools', () => {
       })
       const result = parseToolResult(resp) as { nodes: string[] }
       expect(result.nodes.sort()).toEqual(['x.md', 'y.md'])
+    })
+
+    it('expands via resolvedLinks paths, not raw linktexts (multi-hop with linktext != path)', async () => {
+      // Real Obsidian: getFileMetadata().links are linktexts ("Bar"), not paths.
+      // BFS must expand via resolvedLinks so the next hop's lookup finds the canonical path.
+      metadataCache.seedMetadata('p1.md', {
+        path: 'p1.md', tags: [], frontmatter: {}, links: ['Bar'], embeds: [],
+      })
+      metadataCache.seedResolvedLinks('p1.md', { 'p2.md': 1 })
+      metadataCache.seedResolvedLinks('p2.md', { 'p3.md': 1 })
+      metadataCache.seedResolvedLinks('p3.md', {})
+      const resp = await callTool(port, 'graph_traverse', {
+        startPath: 'p1.md',
+        depth: 5,
+        direction: 'outgoing',
+      })
+      const result = parseToolResult(resp) as { nodes: string[]; edges: [string, string][] }
+      expect(result.nodes.sort()).toEqual(['p1.md', 'p2.md', 'p3.md'])
+      expect(result.edges).toEqual(
+        expect.arrayContaining([['p1.md', 'p2.md'], ['p2.md', 'p3.md']]),
+      )
     })
   })
 

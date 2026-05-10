@@ -379,9 +379,12 @@ function neighborsOf(
   node: string,
   direction: TraverseDirection,
 ): { outgoing: readonly string[]; incoming: readonly string[] } {
+  // Outgoing expansion uses resolvedLinks keys — those are canonical vault paths.
+  // getFileMetadata().links contains raw linktexts ("Page", "Page#Heading") that
+  // cannot be reused as node keys for the next BFS hop.
   const outgoing =
     direction === 'outgoing' || direction === 'both'
-      ? (metadataCache.getFileMetadata(node)?.links ?? [])
+      ? Object.keys(metadataCache.getResolvedLinks(node))
       : []
   const incoming =
     direction === 'backlinks' || direction === 'both' ? metadataCache.getBacklinks(node) : []
