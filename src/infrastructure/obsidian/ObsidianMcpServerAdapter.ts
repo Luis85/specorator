@@ -252,7 +252,7 @@ function registerWorkflowTools(
       return ok({
         features: features.map((f) => ({
           slug: f.slug.toString(),
-          stage: getStepMeta(f.currentStep)?.slug ?? 'unknown',
+          stage: f.isComplete ? 'completed' : (getStepMeta(f.currentStep)?.slug ?? 'unknown'),
           title: f.title,
         })),
       })
@@ -270,7 +270,7 @@ function registerWorkflowTools(
       if (!slugResult.ok) throw new Error(`Invalid slug: ${slug}`)
       const feature = await repo.findBySlug(slugResult.value)
       if (!feature) throw new Error(`Feature not found: ${slug}`)
-      const stage = getStepMeta(feature.currentStep)?.slug ?? 'unknown'
+      const stage = feature.isComplete ? 'completed' : (getStepMeta(feature.currentStep)?.slug ?? 'unknown')
       const artifacts = await Promise.all(
         getAllStepMeta().map(async (meta) => {
           const path = joinVaultPath(joinVaultPath(specsFolder(), feature.slug.toString()), meta.fileName)
