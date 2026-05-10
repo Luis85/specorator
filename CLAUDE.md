@@ -102,7 +102,7 @@ The 12 stage slugs (from `src/domain/feature/FeatureStep.ts`): `idea`, `research
 ### Testing conventions (ADR-009)
 
 - Tests live under `tests/`, mirroring `src/` path-for-path. The test for `src/x/y.ts` is `tests/x/y.test.ts`. The `.test.ts` extension is canonical; `.spec.ts` is no longer used. `__tests__/` folders inside `src/` are forbidden.
-- The shared fake-ports factory `tests/__fakes__/fake-ports.ts` exposes `fakeModulePorts()` returning the four ADR-008 ports plus the underlying `MockBridge` reference. Mutations through one port are visible through the others. Use it for any test that needs more than one port.
+- The shared fake-ports factory `tests/__fakes__/fake-ports.ts` exposes `fakeModulePorts()` returning the five ADR-008 ports plus a fresh `EventBus`, a `TranslationPort` stub, and the underlying `MockBridge` reference (and `metadataCache` / `canvas` mocks for W13 ports). Mutations through one port are visible through the others. Use it for any test that needs more than one port.
 - Vue component tests that mount a component MUST have a co-located class-based PageObject (e.g. `Home.po.ts` next to `Home.test.ts`). Elements are queried exclusively by `data-testid`. CSS-class and id selectors (`.foo`, `#bar`) are forbidden in `tests/**`; ESLint enforces this.
 - `npm run test:coverage` enforces hard thresholds 80/70/80/80 (statements/branches/functions/lines). The threshold gate runs as part of `npm run verify`, so CI inherits it automatically.
 
