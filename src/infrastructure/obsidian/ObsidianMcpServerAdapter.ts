@@ -273,7 +273,7 @@ function registerWorkflowTools(
       const stage = getStepMeta(feature.currentStep)?.slug ?? 'unknown'
       const artifacts = await Promise.all(
         getAllStepMeta().map(async (meta) => {
-          const path = joinVaultPath(joinVaultPath(specsFolder(), slug), meta.fileName)
+          const path = joinVaultPath(joinVaultPath(specsFolder(), feature.slug.toString()), meta.fileName)
           const exists = await vault.fileExists(path)
           return { slug: meta.slug, path, exists }
         }),
