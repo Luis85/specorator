@@ -398,5 +398,36 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
       const unchanged = await vault.readFile('specs/dark-mode/workflow-state.md')
       expect(parseFrontmatter(unchanged).status).toBe('active')
     })
+
+    it('accept creates frontmatter block on note with no existing frontmatter', async () => {
+      const resp = await callTool(port, 'frontmatter_set_field', {
+        path: 'notes/hello.md',
+        field: 'tag',
+        value: 'greeting',
+      })
+      const { proposalId } = parseToolResult(resp) as { proposalId: string }
+      await adapter.acceptProposal(proposalId)
+      const updated = await vault.readFile('notes/hello.md')
+      expect(parseFrontmatter(updated).tag).toBe('greeting')
+      expect(updated).toContain('# Hello')
+    })
+  })
+
+  describe('getProposals()', () => {
+    it('returns pending proposal with correct shape after write tool call', async () => {
+      const resp = await callTool(port, 'vault_write_note', {
+        path: 'notes/new.md',
+        content: '# New',
+      })
+      const { proposalId } = parseToolResult(resp) as { proposalId: string }
+      const proposals = adapter.getProposals()
+      expect(proposals).toHaveLength(1)
+      expect(proposals[0]).toEqual({
+        proposalId,
+        toolName: 'vault_write_note',
+        params: { path: 'notes/new.md', content: '# New' },
+        status: 'pending',
+      })
+    })
   })
 })

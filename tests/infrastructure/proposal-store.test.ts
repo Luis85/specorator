@@ -97,6 +97,17 @@ describe('ProposalStore', () => {
       store.reject(id)
       await expect(store.accept(id)).rejects.toThrow(id)
     })
+
+    it('leaves status pending and allows retry when mutate throws', async () => {
+      const store = new ProposalStore()
+      const mutate = vi.fn().mockRejectedValueOnce(new Error('vault error')).mockResolvedValue(undefined)
+      const id = store.queue('vault_write_note', {}, mutate)
+      await expect(store.accept(id)).rejects.toThrow('vault error')
+      expect(store.get(id)?.status).toBe('pending')
+      await store.accept(id)
+      expect(store.get(id)?.status).toBe('accepted')
+      expect(mutate).toHaveBeenCalledTimes(2)
+    })
   })
 
   describe('reject()', () => {

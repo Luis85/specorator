@@ -21,8 +21,13 @@ export class ProposalStore {
   async accept(proposalId: string): Promise<void> {
     const entry = this.#getOrThrow(proposalId)
     this.#assertPending(entry)
-    await entry.mutate()
     entry.status = 'accepted'
+    try {
+      await entry.mutate()
+    } catch (e) {
+      entry.status = 'pending'
+      throw e
+    }
   }
 
   reject(proposalId: string): void {

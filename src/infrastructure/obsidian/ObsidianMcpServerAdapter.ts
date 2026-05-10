@@ -176,12 +176,11 @@ function registerTools(mcp: McpServer, vault: VaultPort, store: ProposalStore): 
     'frontmatter_set_field',
     {
       description: 'Set a frontmatter field — queued for proposal review',
-      inputSchema: { path: z.string(), field: z.string(), value: z.any() },
+      inputSchema: { path: z.string(), field: z.string(), value: z.unknown() },
     },
     async ({ path, field, value }) => {
-      const safeValue: unknown = value
-      const proposalId = store.queue('frontmatter_set_field', { path, field, value: safeValue }, () =>
-        applyFrontmatterUpdate(vault, path, { [field]: safeValue }),
+      const proposalId = store.queue('frontmatter_set_field', { path, field, value }, () =>
+        applyFrontmatterUpdate(vault, path, { [field]: value }),
       )
       return ok({ proposalId, status: 'pending' })
     },
@@ -212,6 +211,7 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
 
   constructor(private readonly vault: VaultPort) {}
 
+  // Off-port by design: called directly by the sidebar module, not via MCP.
   async acceptProposal(proposalId: string): Promise<void> {
     await this.proposalStore.accept(proposalId)
   }
