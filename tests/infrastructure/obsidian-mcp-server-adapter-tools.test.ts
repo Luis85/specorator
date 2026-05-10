@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
+import { MockMetadataCacheAdapter } from '@/infrastructure/mock/MockMetadataCacheAdapter'
 import { parse as parseYaml } from 'yaml'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
@@ -91,7 +92,8 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
   beforeEach(async () => {
     vault = new MockBridge(VAULT_FILES)
     const repo = new FeatureRepository(vault, vault, () => DEFAULT_SETTINGS)
-    adapter = new ObsidianMcpServerAdapter(vault, repo, () => DEFAULT_SETTINGS.specsFolder)
+    const metadataCache = new MockMetadataCacheAdapter()
+    adapter = new ObsidianMcpServerAdapter(vault, repo, () => DEFAULT_SETTINGS.specsFolder, metadataCache)
     ;({ port } = await adapter.start())
     await initMcp(port)
   })
@@ -496,7 +498,8 @@ describe('ObsidianMcpServerAdapter — workflow tools', () => {
   beforeEach(async () => {
     vault = new MockBridge()
     repo = new FeatureRepository(vault, vault, () => DEFAULT_SETTINGS)
-    adapter = new ObsidianMcpServerAdapter(vault, repo, () => DEFAULT_SETTINGS.specsFolder)
+    const metadataCache = new MockMetadataCacheAdapter()
+    adapter = new ObsidianMcpServerAdapter(vault, repo, () => DEFAULT_SETTINGS.specsFolder, metadataCache)
     ;({ port } = await adapter.start())
     await initMcp(port)
   })

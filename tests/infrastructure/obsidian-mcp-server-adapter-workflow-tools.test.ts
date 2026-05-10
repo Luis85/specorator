@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
+import { MockMetadataCacheAdapter } from '@/infrastructure/mock/MockMetadataCacheAdapter'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
@@ -142,7 +143,8 @@ describe('ObsidianMcpServerAdapter — workflow tools', () => {
   beforeEach(async () => {
     vault = new MockBridge(VAULT_FILES)
     const repo = new FeatureRepository(vault, vault, () => DEFAULT_SETTINGS)
-    adapter = new ObsidianMcpServerAdapter(vault, repo, () => SPECS_FOLDER)
+    const metadataCache = new MockMetadataCacheAdapter()
+    adapter = new ObsidianMcpServerAdapter(vault, repo, () => SPECS_FOLDER, metadataCache)
     ;({ port } = await adapter.start())
     await initMcp(port)
   })
@@ -190,7 +192,8 @@ describe('ObsidianMcpServerAdapter — workflow tools', () => {
     it('returns empty array when specs folder has no features', async () => {
       const emptyVault = new MockBridge({})
       const emptyRepo = new FeatureRepository(emptyVault, emptyVault, () => DEFAULT_SETTINGS)
-      const emptyAdapter = new ObsidianMcpServerAdapter(emptyVault, emptyRepo, () => SPECS_FOLDER)
+      const emptyMetadataCache = new MockMetadataCacheAdapter()
+      const emptyAdapter = new ObsidianMcpServerAdapter(emptyVault, emptyRepo, () => SPECS_FOLDER, emptyMetadataCache)
       const { port: emptyPort } = await emptyAdapter.start()
       await initMcp(emptyPort)
       const resp = await callTool(emptyPort, 'workflow_list_features', {})

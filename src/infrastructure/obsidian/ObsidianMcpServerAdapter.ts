@@ -3,7 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
-import type { ObsidianMcpServerPort, McpConnectionConfig, VaultPort } from '@/domain/ports'
+import type { ObsidianMcpServerPort, McpConnectionConfig, VaultPort, MetadataCachePort } from '@/domain/ports'
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
 import { FEATURE_STEPS, getAllStepMeta, getStepMeta } from '@/domain/feature/FeatureStep'
 import { Slug } from '@/domain/shared/Slug'
@@ -353,8 +353,13 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
     private readonly vault: VaultPort,
     private readonly repo: IFeatureRepository,
     private readonly specsFolder: () => string,
+    private readonly metadataCache: MetadataCachePort,
   ) {
     this.advanceUseCase = new AdvanceFeatureStageUseCase(repo)
+    // metadataCache is wired here for upcoming metadata/link tools (PR1 task 5+).
+    // Reference it once so strict TS noUnusedParameters does not flag the field
+    // until Task 5 registers the consuming tools.
+    void this.metadataCache
   }
 
   // Off-port by design: called directly by the sidebar module, not via MCP.
