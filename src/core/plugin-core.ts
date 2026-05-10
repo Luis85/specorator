@@ -277,9 +277,10 @@ export class PluginCore {
       }
     }
 
-    if (settingsKey === 'specorator') {
-      await this._syncMcpRunning()
-    }
+    // Reconcile MCP after every settings change — the sync is a cheap no-op
+    // when desired === running, so we avoid hardcoding which module's
+    // settingsKey owns the toggle.
+    await this._syncMcpRunning()
   }
 
   /** True iff the MCP server is currently running under PluginCore's control. */
