@@ -57,7 +57,7 @@ type WorkflowRunStatus =
   | 'cancelled'
 
 type WorkflowRun = {
-  runId: string              // {YYYY-MM-DD-HHmm}-{canvas-basename}
+  runId: string              // {YYYY-MM-DD-HHmmss}-{canvas-basename}[-{NN}]
   runDir: string             // specs/workflow-runs/{runId}/
   graph: WorkflowGraph
   currentStepIndex: number   // 0 = pre-input
@@ -95,6 +95,7 @@ User                Sidebar           ExecuteWorkflowUseCase    AgentExecutionPo
  |                    |                       | readFile(canvasPath) -------------------->|
  |                    |                       |<------------------- json -----------------|
  |                    |                       | parse + validate (linear)                  |
+ |                    |                       | allocate runDir (try base, then -2, -3 …) ->|
  |                    |                       | createFolder(runDir) -------------------->|
  |                    |                       | writeFile(00-input.md) ------------------>|
  |                    |                       |                         |                  |

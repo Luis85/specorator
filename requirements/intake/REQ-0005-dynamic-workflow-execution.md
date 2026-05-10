@@ -6,7 +6,7 @@ owner: "Luis85"
 created: 2026-05-10
 last_updated: 2026-05-10
 source_issue: "#251"
-related_design: ""
+related_design: "#253"
 tags: [requirements, intake, workflow, canvas, agent, sidebar]
 priority: medium
 risk: medium
@@ -23,7 +23,7 @@ acceptance_criteria:
   - "A non-linear graph (branch, join, cycle, multiple sources/sinks, isolated node) is rejected with a `Result.error` carrying the offending shape; no agent call is made."
   - "A new narrow domain port `AgentExecutionPort` exposes at minimum `runSkill(prompt: string, contextFiles: string[]): Promise<Result<{ outputPath: string }>>` and is implemented by the Claude CLI bridge introduced by the `claude-cli-chat-sidebar` spec."
   - "An application-layer `ExecuteWorkflowUseCase` orchestrates a `WorkflowRun`: creates `specs/workflow-runs/{run-id}/`, writes `00-input.md`, then for each step renders the SKILL.md body plus prior scratch file references as a prompt, invokes `AgentExecutionPort.runSkill`, and verifies the named scratch file exists; missing output aborts the run."
-  - "Run directory naming is deterministic: `{YYYY-MM-DD-HHmm}-{canvas-basename}` produced from a clock port, so tests can assert exact paths."
+  - "Run directory naming is deterministic and collision-resistant: the primary id is `{YYYY-MM-DD-HHmmss}-{canvas-basename}` produced from a clock port at second resolution; if that directory already exists, the use case appends a `-{NN}` suffix (starting at `-2`) and retries until a free path is found. Tests assert exact paths by fixing both the clock port and the vault state."
   - "Per-step scratch files use the contract `{NN}-{skill-slug}.md` where `NN` is the 1-based zero-padded step index and `{skill-slug}` is derived from the SKILL.md frontmatter `name`."
   - "Each skill prompt MUST instruct the agent to write its output to the named scratch file; the use case fails the step with `StepOutputMissing` if the file is absent after the agent turn."
   - "Cancellation through the sidebar Stop control aborts the active step's CLI process, marks the run `cancelled`, and preserves all scratch files written up to that point."
@@ -40,7 +40,7 @@ traceability:
     - "ADR-009 — testing conventions"
     - "Phase 4 spec: claude-cli-chat-sidebar (hard dependency)"
   downstream:
-    - "<design-intake-issue — to be filed after acceptance>"
+    - "#253 — design intake (open)"
     - "<task issues — domain Workflow aggregate, AgentExecutionPort, ExecuteWorkflowUseCase, sidebar slash command, settings>"
 ---
 
@@ -53,11 +53,14 @@ traceability:
 - **Scratch dir layout:**
   ```
   specs/workflow-runs/
-    2026-05-10-1430-refactor-flow/
+    2026-05-10-143015-refactor-flow/        # first run
       00-input.md
       01-extract-context.md
       02-rewrite-tests.md
       03-summarize.md
+    2026-05-10-143015-refactor-flow-2/      # second run within the same second → suffix
+      00-input.md
+      ...
   ```
 - **Step contract:** every skill MUST end its turn by writing the named scratch file. The plugin renders each prompt with an explicit instruction line `Write your output to: <path>` and a list of prior scratch file references. No retries in MVP; re-running a workflow allocates a new run directory.
 - **Invocation surface:**
