@@ -233,7 +233,9 @@ function registerWorkflowTools(
       inputSchema: { slug: z.string().describe('Feature slug') },
     },
     async ({ slug }) => {
-      const feature = await repo.findBySlug(Slug.reconstitute(slug))
+      const slugResult = Slug.create(slug)
+      if (!slugResult.ok) throw new Error(`Invalid slug: ${slug}`)
+      const feature = await repo.findBySlug(slugResult.value)
       if (!feature) throw new Error(`Feature not found: ${slug}`)
       return ok(feature.toPlainObject())
     },
@@ -264,7 +266,9 @@ function registerWorkflowTools(
       inputSchema: { slug: z.string().describe('Feature slug') },
     },
     async ({ slug }) => {
-      const feature = await repo.findBySlug(Slug.reconstitute(slug))
+      const slugResult = Slug.create(slug)
+      if (!slugResult.ok) throw new Error(`Invalid slug: ${slug}`)
+      const feature = await repo.findBySlug(slugResult.value)
       if (!feature) throw new Error(`Feature not found: ${slug}`)
       const stage = getStepMeta(feature.currentStep)?.slug ?? 'unknown'
       const artifacts = await Promise.all(
