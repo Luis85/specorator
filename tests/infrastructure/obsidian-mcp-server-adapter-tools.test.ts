@@ -99,7 +99,7 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
   })
 
   describe('tools/list', () => {
-    it('registers all 10 tools', async () => {
+    it('registers all 16 tools', async () => {
       const resp = (await mcpPost(port, {
         jsonrpc: '2.0',
         id: 99,
@@ -118,6 +118,12 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
         'vault_read_note',
         'vault_search',
         'vault_write_note',
+        'workflow_create_artifact',
+        'workflow_get_quality_gates',
+        'workflow_get_stage_artifacts',
+        'workflow_get_state',
+        'workflow_list_features',
+        'workflow_propose_advance',
       ])
     })
   })
