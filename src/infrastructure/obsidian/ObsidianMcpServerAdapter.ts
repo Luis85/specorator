@@ -297,7 +297,7 @@ function registerWorkflowTools(
       },
     },
     async ({ slug, stage }) => {
-      const proposalId = store.queue('workflow_create_artifact', { slug, stage }, async () => {})
+      const proposalId = store.queue('workflow_create_artifact', { slug, stage }, () => Promise.resolve())
       return ok({ proposalId, status: 'pending' })
     },
   )
@@ -309,7 +309,7 @@ function registerWorkflowTools(
       inputSchema: { slug: z.string().describe('Feature slug') },
     },
     async ({ slug }) => {
-      const proposalId = store.queue('workflow_propose_advance', { slug }, async () => {})
+      const proposalId = store.queue('workflow_propose_advance', { slug }, () => Promise.resolve())
       return ok({ proposalId, status: 'pending' })
     },
   )
