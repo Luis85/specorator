@@ -107,7 +107,7 @@ export class ObsidianBridge
 
   private _track(notice: Notice): void {
     this._activeNotices.add(notice)
-    notice.noticeEl.addEventListener(
+    notice.messageEl.addEventListener(
       'animationend',
       () => {
         this._activeNotices.delete(notice)
