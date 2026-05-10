@@ -72,7 +72,7 @@ type WorkflowFailure =
   | { kind: 'CanvasParseError'; reason: string }
   | { kind: 'SkillNotFound'; path: string }
   | { kind: 'InvalidSkillFormat'; path: string; reason: string }
-  | { kind: 'UnsupportedGraph'; reason: 'branch' | 'multi-source' | 'multi-sink' | 'isolated-node' | 'empty' }
+  | { kind: 'UnsupportedGraph'; reason: 'branch' | 'join' | 'multi-source' | 'multi-sink' | 'disconnected-node' | 'empty' }
   | { kind: 'CycleDetected' }
   | { kind: 'StepOutputMissing'; stepIndex: number }
   | { kind: 'AgentExecutionFailed'; stepIndex: number; stderr: string }
@@ -122,10 +122,10 @@ Obsidian's `.canvas` format is JSON with `nodes[]` (each `{ id, type, file? }`) 
 
 1. Filters `nodes` to `type === 'file'` and `file` ending in `.md`.
 2. Builds adjacency lists from `edges`.
-3. Validates: exactly one source (in-degree 0), exactly one sink (out-degree 0), single linear path (each non-sink node has out-degree 1, each non-source node has in-degree 1), no cycles, no isolated nodes.
+3. Validates: exactly one source (in-degree 0), exactly one sink (out-degree 0), single linear path from source to sink (each non-sink node has out-degree 1, each non-source node has in-degree 1), no cycles, and no nodes outside that path (`disconnected-node`). A 1-node graph is valid: the single node is both source and sink, the chain has length 1, and the workflow runs as a 1-step workflow. The `disconnected-node` rejection only fires in multi-node graphs.
 4. Returns ordered `WorkflowStep[]` from source to sink.
 
-Snapshot fixtures live under `tests/__fixtures__/canvas/` covering: 1-node, 3-node linear, branch (reject), join (reject), cycle (reject), isolated node (reject), empty (reject).
+Snapshot fixtures live under `tests/__fixtures__/canvas/` covering: 1-node (accept), 3-node linear (accept), branch (reject), join (reject), cycle (reject), disconnected-node in a multi-node graph (reject), empty (reject).
 
 ---
 
