@@ -14,7 +14,7 @@ verification:
   - "Domain unit tests: `Workflow.fromCanvas(json)` covers happy path, cycle, branch (rejected in MVP), missing source/sink, empty graph"
   - "Application unit tests: `ExecuteWorkflowUseCase` against `fakeModulePorts()` and a fake `AgentExecutionPort`; cases cover 1-step, 3-step, mid-run failure, missing scratch output, cancellation"
   - "Vue component test asserts step-progress list via class-based PageObject and `data-testid` selectors per ADR-009"
-  - "Manual smoke: dev vault recipe authoring 3 SKILL.md notes linked on a `.canvas`, executed via `/workflow` slash command, asserting deterministic scratch dir contents under `specs/workflow-runs/{run-id}/`"
+  - "Manual smoke: dev vault recipe authoring 3 SKILL.md notes linked on a `.canvas`, executed via `/workflow` slash command, asserting deterministic scratch dir contents under `{workflowRunsFolder}/{run-id}/` (default `specs/workflow-runs/{run-id}/`); a second pass with a non-default `workflowRunsFolder` setting confirms the configurable path is honored"
   - "ESLint port-import boundaries remain green; Vue components do not import `obsidian` directly"
 statement: "The system SHALL execute an Obsidian Canvas file as an ordered linear chain of SKILL.md notes by topologically sorting the canvas graph, sequentially invoking each skill through a narrow `AgentExecutionPort` backed by the Claude CLI sidebar, persisting per-step inputs and outputs as markdown scratch artifacts under a per-run directory in the vault, and surfacing run progress and terminal status in the sidebar UI. Branching DAGs, conditional edges, loops, and sub-workflows are out of scope for this requirement."
 rationale: "Specorator's value compounds when users can compose reusable agent skills into repeatable, auditable workflows without leaving Obsidian. Canvas is already the native graph surface in Obsidian and SKILL.md is an established markdown contract; combining them lets users assemble pipelines visually and execute them through the same Claude CLI bridge that powers the sidebar chat. A vault-backed run directory makes every step's input and output inspectable and version-controllable, which matches Specorator's spec-first ethos. Constraining MVP to a linear chain keeps the first cut shippable and pushes branching/conditional semantics into follow-up REQs once real usage informs the contract."
@@ -50,15 +50,15 @@ traceability:
 - **Canvas surface:** an Obsidian `.canvas` is JSON inside the vault. No new Obsidian API method is needed — `VaultPort.readFile` plus a domain-side parser is sufficient. The canvas JSON shape is an undocumented public surface of Obsidian; parse defensively and add snapshot tests against sample canvases checked into `tests/__fixtures__/`.
 - **Skill note shape:** superpowers-style `SKILL.md` with YAML frontmatter (`name`, `description`, optional `triggers`, optional `tags`) plus body. Body is the prompt fragment used at step execution. Plain Obsidian markdown notes without this frontmatter are rejected with `InvalidSkillFormat`.
 - **MVP graph constraints:** exactly one source node and exactly one sink node (which collapse to the same node in a 1-node graph), a single linear source-to-sink path, no cycles, and no nodes disconnected from that path. A 1-node graph is the smallest valid workflow. Branching DAGs, conditionals, loops, and sub-workflows are explicit follow-up REQs.
-- **Scratch dir layout:**
+- **Scratch dir layout** (illustrated with the default `workflowRunsFolder = specs/workflow-runs`; the literal prefix is whatever the setting holds at render time):
   ```
-  specs/workflow-runs/
-    2026-05-10-143015-refactor-flow/        # first run
+  {workflowRunsFolder}/                       # e.g. specs/workflow-runs/
+    2026-05-10-143015-refactor-flow/          # first run
       00-input.md
       01-extract-context.md
       02-rewrite-tests.md
       03-summarize.md
-    2026-05-10-143015-refactor-flow-2/      # second run within the same second → suffix
+    2026-05-10-143015-refactor-flow-2/        # second run within the same second → suffix
       00-input.md
       ...
   ```

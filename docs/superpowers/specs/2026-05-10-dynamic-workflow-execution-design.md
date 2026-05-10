@@ -10,7 +10,7 @@
 
 ## 1. Overview
 
-Execute an Obsidian Canvas as an ordered linear chain of SKILL.md notes. Plugin parses the `.canvas` JSON, topologically sorts a single-path graph, and sequentially invokes each skill through a narrow `AgentExecutionPort` backed by the Claude CLI sidebar bridge. Each step's input and output is persisted as markdown under `specs/workflow-runs/{run-id}/`.
+Execute an Obsidian Canvas as an ordered linear chain of SKILL.md notes. Plugin parses the `.canvas` JSON, topologically sorts a single-path graph, and sequentially invokes each skill through a narrow `AgentExecutionPort` backed by the Claude CLI sidebar bridge. Each step's input and output is persisted as markdown under `{workflowRunsFolder}/{run-id}/` — where `workflowRunsFolder` is a configurable `PluginSettings` field (default `specs/workflow-runs`).
 
 MVP is linear-only. Branching DAGs, conditionals, loops, and sub-workflows are explicit follow-up REQs.
 
@@ -58,7 +58,7 @@ type WorkflowRunStatus =
 
 type WorkflowRun = {
   runId: string              // {YYYY-MM-DD-HHmmss}-{canvas-basename}[-{NN}]
-  runDir: string             // specs/workflow-runs/{runId}/
+  runDir: string             // {workflowRunsFolder}/{runId}/  — workflowRunsFolder from PluginSettings
   graph: WorkflowGraph
   currentStepIndex: number   // 0 = pre-input
   status: WorkflowRunStatus
@@ -144,13 +144,13 @@ Snapshot fixtures live under `tests/__fixtures__/canvas/` covering: 1-node (acce
 ---
 
 Context from prior workflow steps:
-- specs/workflow-runs/{runId}/00-input.md
-- specs/workflow-runs/{runId}/01-extract-context.md
+- {workflowRunsFolder}/{runId}/00-input.md
+- {workflowRunsFolder}/{runId}/01-extract-context.md
 
-Write your output to: specs/workflow-runs/{runId}/02-rewrite-tests.md
+Write your output to: {workflowRunsFolder}/{runId}/02-rewrite-tests.md
 ```
 
-`AgentExecutionPort.runSkill` receives the rendered prompt and the explicit `contextFiles` array (which the Claude CLI bridge can pass as `--file` arguments or analogous attachments — bridge-internal detail).
+The literal paths are produced by substituting the configured `workflowRunsFolder` setting (default `specs/workflow-runs`) and the allocated `runId` at render time. `AgentExecutionPort.runSkill` receives the rendered prompt and the explicit `contextFiles` array (which the Claude CLI bridge can pass as `--file` arguments or analogous attachments — bridge-internal detail).
 
 ---
 
