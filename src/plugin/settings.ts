@@ -28,6 +28,25 @@ export class SpecoratorSettingTab extends PluginSettingTab {
         this.addControl(setting, mod, field, currentValue)
       }
     }
+
+    this.renderMcpServerStatus()
+  }
+
+  /**
+   * Static status indicator for the local MCP server. Reflects the state at
+   * the moment the settings tab is rendered — re-open settings to refresh.
+   * Lives below the module-driven settings so the user sees it after the
+   * "Enable MCP server (advanced)" toggle.
+   */
+  private renderMcpServerStatus(): void {
+    const running = this.plugin.core?.isMcpServerRunning() === true
+    new Setting(this.containerEl)
+      .setName('MCP server status')
+      .setDesc(
+        running
+          ? 'Running. Use the "Stop MCP server" command or toggle the setting above to stop it.'
+          : 'Stopped. Toggle "Enable MCP server (advanced)" above, or run the "Start MCP server" command.',
+      )
   }
 
   private currentValue(mod: ModuleDescriptor, field: SettingsFieldDescriptor): unknown {

@@ -22,6 +22,7 @@ const PLUGIN_SETTINGS_KEYS: ReadonlyArray<keyof PluginSettings> = [
   'gateStrictness',
   'teamMode',
   'logLevel',
+  'mcpServerEnabled',
 ]
 
 export default class SpecoratorPlugin extends Plugin {
@@ -56,6 +57,7 @@ export default class SpecoratorPlugin extends Plugin {
         new ObsidianMetadataCacheAdapter(this.app),
         new ObsidianCanvasAdapter(this.bridge),
       ),
+      isMcpServerEnabled: () => this.settings.mcpServerEnabled,
     })
 
     setLocale(this.settings.locale as SupportedLocale)
@@ -83,6 +85,20 @@ export default class SpecoratorPlugin extends Plugin {
       id: 'open-specorator',
       name: 'Open panel',
       callback: () => void this.activateView(),
+    })
+
+    this.addCommand({
+      id: 'start-mcp-server',
+      name: 'Start MCP server',
+      // Explicit user action — bypass the enabled gate. The toggle in
+      // settings remains the source of truth for the auto-start path.
+      callback: () => void this.core?.startMcpServer({ force: true }),
+    })
+
+    this.addCommand({
+      id: 'stop-mcp-server',
+      name: 'Stop MCP server',
+      callback: () => void this.core?.stopMcpServer(),
     })
 
     this.addSettingTab(new SpecoratorSettingTab(this.app, this))

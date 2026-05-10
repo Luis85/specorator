@@ -11,6 +11,13 @@ export interface PluginSettings {
 	readonly gateStrictness: 'strict' | 'lenient'
 	readonly teamMode: boolean
 	readonly logLevel: 'debug' | 'info' | 'warn' | 'error'
+	/**
+	 * Opt-in flag for the local MCP server (HTTP/SSE on 127.0.0.1).
+	 * Default is `false` for privacy — the server is started only when the
+	 * user explicitly enables it via Settings or runs the "Start MCP server"
+	 * command. See README "MCP server (advanced, opt-in)".
+	 */
+	readonly mcpServerEnabled: boolean
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -22,4 +29,5 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	gateStrictness: 'strict',
 	teamMode: false,
 	logLevel: 'warn',
+	mcpServerEnabled: false,
 }
