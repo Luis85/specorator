@@ -7,8 +7,7 @@ import { ensureLeafLoaded } from '@/plugin/leafLoader'
  *
  * Obsidian 1.7.2 introduced deferred view leaves: `workspace.getLeavesOfType()`
  * can return leaves whose `.view` is a `DeferredView` placeholder. Awaiting
- * `leaf.loadIfDeferred()` materialises the real view. The helper must be
- * backward-compatible with Obsidian <1.7.2 where the properties are absent.
+ * `leaf.loadIfDeferred()` materialises the real view.
  *
  * These tests cover `ensureLeafLoaded` only — exercising the full plugin
  * lifecycle would require booting the real Obsidian `Plugin` base class.
@@ -46,25 +45,5 @@ describe('ensureLeafLoaded (deferred-leaf safety)', () => {
 
     await expect(ensureLeafLoaded(leaf)).rejects.toBe(boom)
     expect(loadIfDeferred).toHaveBeenCalledTimes(1)
-  })
-
-  it('resolves without throwing on older Obsidian (no isDeferred / loadIfDeferred)', async () => {
-    // Obsidian <1.7.2: neither property exists. Helper must treat the leaf as
-    // not-deferred and resolve immediately.
-    const leaf = {} as unknown as WorkspaceLeaf
-
-    await expect(ensureLeafLoaded(leaf)).resolves.toBeUndefined()
-  })
-
-  it('resolves without invoking loadIfDeferred if isDeferred is undefined but the method exists', async () => {
-    // Defensive: some intermediate Obsidian versions may expose the method but
-    // not the getter. Treat as not-deferred.
-    const loadIfDeferred = vi.fn().mockResolvedValue(undefined)
-    const leaf = {
-      loadIfDeferred,
-    } as unknown as WorkspaceLeaf
-
-    await expect(ensureLeafLoaded(leaf)).resolves.toBeUndefined()
-    expect(loadIfDeferred).not.toHaveBeenCalled()
   })
 })
