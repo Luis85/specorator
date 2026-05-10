@@ -26,10 +26,22 @@ async function applyFrontmatterUpdate(
   updates: Record<string, unknown>,
 ): Promise<void> {
   const content = await vault.readFile(path)
-  const existing = parseFrontmatter(content)
+  const fmMatch = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(content)
+  let existing: Record<string, unknown> = {}
+  let bodyStart = 0
+  if (fmMatch) {
+    try {
+      const parsed = parseYaml(fmMatch[1]) as unknown
+      if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        existing = parsed as Record<string, unknown>
+        bodyStart = fmMatch[0].length
+      }
+    } catch {
+      // non-YAML block — leave bodyStart at 0 so content is preserved
+    }
+  }
   const merged = { ...existing, ...updates }
-  const body = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '')
-  await vault.writeFile(path, `---\n${stringifyYaml(merged)}---\n${body}`)
+  await vault.writeFile(path, `---\n${stringifyYaml(merged)}---\n${content.slice(bodyStart)}`)
 }
 
 function joinVaultPath(parent: string, child: string): string {

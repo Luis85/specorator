@@ -40,7 +40,7 @@ export class ProposalStore {
     return Array.from(this.entries.values()).map(({ proposalId, toolName, params, status }) => ({
       proposalId,
       toolName,
-      params,
+      params: structuredClone(params),
       status,
     }))
   }
@@ -48,7 +48,12 @@ export class ProposalStore {
   get(proposalId: string): PendingProposal | undefined {
     const entry = this.entries.get(proposalId)
     if (!entry) return undefined
-    return { proposalId: entry.proposalId, toolName: entry.toolName, params: entry.params, status: entry.status }
+    return {
+      proposalId: entry.proposalId,
+      toolName: entry.toolName,
+      params: structuredClone(entry.params),
+      status: entry.status,
+    }
   }
 
   #getOrThrow(proposalId: string): ProposalEntry {

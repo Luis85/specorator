@@ -67,6 +67,17 @@ describe('ProposalStore', () => {
       const id = store.queue('vault_write_note', {}, async () => {})
       expect('mutate' in store.get(id)!).toBe(false)
     })
+
+    it('returns a deep copy of params — mutating returned value does not affect queued closure', async () => {
+      const params = { fields: { status: 'pending' } }
+      const captured: Record<string, unknown>[] = []
+      const store = new ProposalStore()
+      const id = store.queue('frontmatter_set_many', params, async () => { captured.push(params.fields) })
+      const snapshot = store.get(id)!.params as typeof params
+      snapshot.fields.status = 'mutated'
+      await store.accept(id)
+      expect(captured[0].status).toBe('pending')
+    })
   })
 
   describe('accept()', () => {

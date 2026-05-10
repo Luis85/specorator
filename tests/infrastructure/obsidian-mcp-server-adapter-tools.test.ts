@@ -73,6 +73,7 @@ function parseFrontmatter(content: string): Record<string, unknown> {
 const VAULT_FILES = {
   'notes/hello.md': '# Hello\n\nWorld content here',
   'notes/another.md': '# Another\n\nSome other stuff',
+  'notes/non-yaml-fence.md': '---\nnot: [valid: yaml\n---\nBody stays',
   'specs/dark-mode/workflow-state.md':
     '---\nid: abc123\nslug: dark-mode\nstatus: active\ncurrentStep: 3\n---\nBody content',
   'specs/dark-mode/idea.md': '# Idea\n\nSome idea content',
@@ -397,6 +398,19 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
       adapter.rejectProposal(proposalId)
       const unchanged = await vault.readFile('specs/dark-mode/workflow-state.md')
       expect(parseFrontmatter(unchanged).status).toBe('active')
+    })
+
+    it('accept does not strip content when note starts with non-YAML --- block', async () => {
+      const resp = await callTool(port, 'frontmatter_set_field', {
+        path: 'notes/non-yaml-fence.md',
+        field: 'tag',
+        value: 'test',
+      })
+      const { proposalId } = parseToolResult(resp) as { proposalId: string }
+      await adapter.acceptProposal(proposalId)
+      const result = await vault.readFile('notes/non-yaml-fence.md')
+      expect(result).toContain('Body stays')
+      expect(result).toContain('not: [valid: yaml')
     })
 
     it('accept creates frontmatter block on note with no existing frontmatter', async () => {
