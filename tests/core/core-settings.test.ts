@@ -109,14 +109,15 @@ describe('coreSettingsModule.validateSettings', () => {
 })
 
 describe('coreSettingsModule.settingsSchema', () => {
-  it('exposes 8 field descriptors', () => {
-    expect(coreSettingsModule.settingsSchema?.fields).toHaveLength(8)
+  it('exposes a field descriptor for every PluginSettings key', () => {
+    const expected = Object.keys(DEFAULT_SETTINGS).length
+    expect(coreSettingsModule.settingsSchema?.fields).toHaveLength(expected)
   })
 
   it('every field key is a valid PluginSettings key', () => {
     const validKeys = Object.keys(DEFAULT_SETTINGS) as ReadonlyArray<keyof PluginSettings>
     const fieldKeys = coreSettingsModule.settingsSchema?.fields.map((f) => f.key) ?? []
-    expect(fieldKeys).toHaveLength(8)
+    expect(fieldKeys).toHaveLength(validKeys.length)
     for (const k of fieldKeys) {
       expect(validKeys).toContain(k as keyof PluginSettings)
     }
