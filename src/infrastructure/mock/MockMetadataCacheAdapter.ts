@@ -5,6 +5,7 @@ export class MockMetadataCacheAdapter implements MetadataCachePort {
   private readonly backlinks = new Map<string, string[]>()
   private readonly resolvedLinks = new Map<string, Record<string, number>>()
   private tags: Record<string, number> = {}
+  private readonly linkpathDest = new Map<string, string>()
   private readonly handlers = new Set<(path: string) => void>()
 
   seedMetadata(path: string, snapshot: FileMetadataSnapshot): void {
@@ -21,6 +22,10 @@ export class MockMetadataCacheAdapter implements MetadataCachePort {
 
   seedTags(tags: Record<string, number>): void {
     this.tags = { ...tags }
+  }
+
+  seedLinkpathDest(linktext: string, sourcePath: string, dest: string): void {
+    this.linkpathDest.set(`${linktext}|${sourcePath}`, dest)
   }
 
   triggerChange(path: string): void {
@@ -44,6 +49,10 @@ export class MockMetadataCacheAdapter implements MetadataCachePort {
 
   getAllTags(): Record<string, number> {
     return { ...this.tags }
+  }
+
+  getFirstLinkpathDest(linktext: string, sourcePath: string): string | null {
+    return this.linkpathDest.get(`${linktext}|${sourcePath}`) ?? null
   }
 
   onMetadataChanged(handler: (path: string) => void): Unsubscriber {
