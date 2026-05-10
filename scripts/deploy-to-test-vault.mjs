@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pathExists } from './_utils.mjs';
 
-const PLUGIN_FILES = ['main.js', 'manifest.json', 'styles.css'];
+const PLUGIN_FILES = ['main.js', 'manifest.json', 'styles.css', '.hotreload'];
 
 /** @type {'SPECORATOR_TEST_VAULT'} */
 export const VAULT_ENV_VAR = 'SPECORATOR_TEST_VAULT';
