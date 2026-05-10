@@ -95,13 +95,20 @@ User                Sidebar           ExecuteWorkflowUseCase    AgentExecutionPo
  |                    |                       | readFile(canvasPath) -------------------->|
  |                    |                       |<------------------- json -----------------|
  |                    |                       | parse + validate (linear)                  |
- |                    |                       | allocate runDir (try base, then -2, -3 …) ->|
+ |                    |                       |                         |                  |
+ |                    |   ── pre-flight ──    | for each step i:        |                  |
+ |                    |                       |   readFile(skillPath) ------------------->|
+ |                    |                       |   parse + validate frontmatter             |
+ |                    |                       | (any failure → Result.error, no agent call)|
+ |                    |                       |                         |                  |
+ |                    |                       | allocate runDir under {workflowRunsFolder} |
+ |                    |                       |   (try base, then -2, -3 …) ------------->|
  |                    |                       | createFolder(runDir) -------------------->|
  |                    |                       | writeFile(00-input.md) ------------------>|
  |                    |                       |                         |                  |
- |                    |   for each step i:                              |                  |
- |                    |                       | readFile(skillPath) --------------------->|
- |                    |                       | render prompt(body + prior scratch refs)   |
+ |                    |   ── execution ──     | for each step i:        |                  |
+ |                    |                       | render prompt(pre-loaded body + prior      |
+ |                    |                       |   scratch refs)                            |
  |                    |                       | runSkill(prompt, ctx) ->|                  |
  |                    |<-- step started ------|                         | (CLI subprocess) |
  |<-- progress line --|                       |                         | writes scratch --|
@@ -149,7 +156,7 @@ Write your output to: specs/workflow-runs/{runId}/02-rewrite-tests.md
 
 ## 7. Error Handling
 
-- All validation runs **before** any agent call. Pre-flight failures return `Result.error` with no side effects.
+- All validation runs **before** any agent call. Pre-flight covers: canvas read + parse, graph shape, every SKILL.md read + frontmatter validation. Pre-flight failures return `Result.error` with no side effects (no `runDir`, no scratch files).
 - Runtime failures preserve `runDir` and any scratch files written so far for inspection.
 - `NotificationPort.showError` surfaces failures with a sticky notice naming the offending node or step.
 - No retries in MVP. Re-running a workflow allocates a fresh `runId`.
