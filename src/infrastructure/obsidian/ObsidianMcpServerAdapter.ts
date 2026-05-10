@@ -179,8 +179,9 @@ function registerTools(mcp: McpServer, vault: VaultPort, store: ProposalStore): 
       inputSchema: { path: z.string(), field: z.string(), value: z.any() },
     },
     async ({ path, field, value }) => {
-      const proposalId = store.queue('frontmatter_set_field', { path, field, value }, () =>
-        applyFrontmatterUpdate(vault, path, { [field]: value }),
+      const safeValue: unknown = value
+      const proposalId = store.queue('frontmatter_set_field', { path, field, value: safeValue }, () =>
+        applyFrontmatterUpdate(vault, path, { [field]: safeValue }),
       )
       return ok({ proposalId, status: 'pending' })
     },

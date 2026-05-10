@@ -111,21 +111,21 @@ describe('ProposalStore', () => {
 
     it('throws on unknown id', () => {
       const store = new ProposalStore()
-      expect(() => store.reject('no-such-id')).toThrow('no-such-id')
+      expect(() => { store.reject('no-such-id') }).toThrow('no-such-id')
     })
 
     it('throws when already accepted', async () => {
       const store = new ProposalStore()
       const id = store.queue('vault_write_note', {}, async () => {})
       await store.accept(id)
-      expect(() => store.reject(id)).toThrow(id)
+      expect(() => { store.reject(id) }).toThrow(id)
     })
 
     it('throws when already rejected', () => {
       const store = new ProposalStore()
       const id = store.queue('vault_write_note', {}, async () => {})
       store.reject(id)
-      expect(() => store.reject(id)).toThrow(id)
+      expect(() => { store.reject(id) }).toThrow(id)
     })
   })
 })

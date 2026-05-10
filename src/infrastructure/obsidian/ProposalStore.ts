@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-export type PendingProposal = {
+export interface PendingProposal {
   proposalId: string
   toolName: string
   params: unknown
@@ -32,14 +32,18 @@ export class ProposalStore {
   }
 
   getAll(): ReadonlyArray<PendingProposal> {
-    return Array.from(this.entries.values()).map(({ mutate: _m, ...rest }) => rest)
+    return Array.from(this.entries.values()).map(({ proposalId, toolName, params, status }) => ({
+      proposalId,
+      toolName,
+      params,
+      status,
+    }))
   }
 
   get(proposalId: string): PendingProposal | undefined {
     const entry = this.entries.get(proposalId)
     if (!entry) return undefined
-    const { mutate: _m, ...rest } = entry
-    return rest
+    return { proposalId: entry.proposalId, toolName: entry.toolName, params: entry.params, status: entry.status }
   }
 
   #getOrThrow(proposalId: string): ProposalEntry {
