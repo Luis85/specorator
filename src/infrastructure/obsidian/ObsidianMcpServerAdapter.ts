@@ -372,6 +372,115 @@ function registerMetadataTools(mcp: McpServer, metadataCache: MetadataCachePort)
   )
 }
 
+function registerLinksTools(
+  mcp: McpServer,
+  vault: VaultPort,
+  metadataCache: MetadataCachePort,
+  store: ProposalStore,
+): void {
+  mcp.registerTool(
+    'links_get_outgoing',
+    {
+      description: 'Get outgoing wikilinks from a note (resolved + unresolved linktexts)',
+      inputSchema: { path: z.string().describe('Vault-relative path') },
+    },
+    async ({ path }) => {
+      const snapshot = metadataCache.getFileMetadata(path)
+      return ok({ links: snapshot?.links ?? [] })
+    },
+  )
+
+  mcp.registerTool(
+    'links_get_backlinks',
+    {
+      description: 'Get vault paths that link to the given note',
+      inputSchema: { path: z.string().describe('Vault-relative path') },
+    },
+    async ({ path }) => ok({ backlinks: metadataCache.getBacklinks(path) }),
+  )
+
+  mcp.registerTool(
+    'links_resolve',
+    {
+      description: 'Resolve a wikilink linktext to its absolute vault path. Uses Obsidian metadata cache in-process.',
+      inputSchema: {
+        linktext: z.string().describe('Wikilink linktext, e.g. "Page Name" or "folder/page"'),
+        sourcePath: z.string().describe('Source note path the link is being resolved from'),
+      },
+    },
+    async ({ linktext, sourcePath }) =>
+      ok({ resolved: metadataCache.getFirstLinkpathDest(linktext, sourcePath) }),
+  )
+
+  mcp.registerTool(
+    'graph_traverse',
+    {
+      description: 'BFS traverse the link graph from a start node. Direction = outgoing | backlinks | both. Depth capped at 5.',
+      inputSchema: {
+        startPath: z.string().describe('Starting vault path'),
+        depth: z.number().int().min(1).describe('Hop limit (capped at 5)'),
+        direction: z.enum(['outgoing', 'backlinks', 'both']),
+      },
+    },
+    async ({ startPath, depth, direction }) => {
+      const cappedDepth = Math.min(depth, 5)
+      const visited = new Set<string>([startPath])
+      const edges: Array<[string, string]> = []
+      let frontier: string[] = [startPath]
+      for (let hop = 0; hop < cappedDepth; hop++) {
+        const next: string[] = []
+        for (const node of frontier) {
+          const out =
+            direction === 'outgoing' || direction === 'both'
+              ? (metadataCache.getFileMetadata(node)?.links ?? [])
+              : []
+          const back =
+            direction === 'backlinks' || direction === 'both'
+              ? metadataCache.getBacklinks(node)
+              : []
+          for (const target of out) {
+            edges.push([node, target])
+            if (!visited.has(target)) {
+              visited.add(target)
+              next.push(target)
+            }
+          }
+          for (const source of back) {
+            edges.push([source, node])
+            if (!visited.has(source)) {
+              visited.add(source)
+              next.push(source)
+            }
+          }
+        }
+        frontier = next
+        if (frontier.length === 0) break
+      }
+      return ok({ nodes: Array.from(visited), edges })
+    },
+  )
+
+  mcp.registerTool(
+    'links_add_to_note',
+    {
+      description: 'Append a wikilink [[target]] (or [[target|display]]) to a note. Queued for proposal review.',
+      inputSchema: {
+        path: z.string().describe('Vault-relative note path'),
+        target: z.string().describe('Link target (linktext or path)'),
+        displayText: z.string().optional().describe('Optional display text after the pipe'),
+      },
+    },
+    async ({ path, target, displayText }) => {
+      const wikilink = displayText ? `[[${target}|${displayText}]]` : `[[${target}]]`
+      const proposalId = store.queue('links_add_to_note', { path, target, displayText }, async () => {
+        const existing = await vault.readFile(path)
+        await vault.writeFile(path, `${existing}\n${wikilink}`)
+      })
+      return ok({ proposalId, status: 'pending' })
+    },
+  )
+}
+
 export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
   private readonly proposalStore = new ProposalStore()
   private readonly advanceUseCase: AdvanceFeatureStageUseCase
@@ -445,6 +554,7 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
       this.advanceUseCase,
     )
     registerMetadataTools(mcp, this.metadataCache)
+    registerLinksTools(mcp, this.vault, this.metadataCache, this.proposalStore)
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
     await mcp.connect(transport)
     try {
