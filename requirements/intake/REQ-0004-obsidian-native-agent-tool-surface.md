@@ -34,7 +34,7 @@ acceptance_criteria:
   - "Canvas writes conform to the JSON Canvas spec (https://github.com/obsidianmd/jsoncanvas); a round-trip `canvas_read` after acceptance returns the inserted node or edge."
   - "Bases writes via `bases_update_record` only modify frontmatter fields declared by `bases_list_fields` for the targeted base; fields outside that schema are rejected."
   - "ESLint `no-restricted-imports` boundaries remain green: no Vue component imports `obsidian`; no MCP tool implementation reaches into `app.vault` or `app.metadataCache` outside the documented port surface."
-  - "Test coverage for `src/infrastructure/mcp/**` and `src/application/proposals/**` meets the project-wide 80/70/80/80 thresholds enforced by `npm run verify`."
+  - "`npm run verify` remains green after MCP server and ProposalStore code lands, including the global 80/70/80/80 (statements/branches/functions/lines) coverage thresholds defined in `vitest.config.ts`."
   - "A canvas or bases write tool whose review UI is not yet implemented surfaces an explicit \"coming soon\" proposal card rather than silently failing or applying."
 traceability:
   upstream:
@@ -62,7 +62,6 @@ traceability:
   - Live subscription to vault file-change events for cache invalidation. Cache freshness is delegated to Obsidian's metadata cache; reactive cache invalidation is a future requirement if needed.
 - **Open questions for triage / design.**
   - Should the MCP transport be HTTP/SSE (matches reference implementations) or stdio (lower surface area, no port collisions)? Decide before W13 hardening.
-  - Should `workflow_propose_advance` route through `ProposalStore` like other writes, or use the dedicated stage-advancement approval flow already defined for the workflow UI? They are functionally similar — pick one path for consistency.
   - Where does the proposal review card live in the sidebar component tree — inline in the chat transcript, or a separate "pending changes" pane? UX decision; design intake recommended.
   - Diff rendering strategy for `vault_write_note` proposals: full file diff, hunk-level diff, or summary-only? Performance vs clarity tradeoff for large notes.
   - "Coming soon" proposal cards for canvas/bases writes — should they queue and replay once the review UI ships, or reject immediately and let the agent retry later?
