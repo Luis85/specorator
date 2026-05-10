@@ -343,6 +343,35 @@ function registerWorkflowTools(
   )
 }
 
+function registerMetadataTools(mcp: McpServer, metadataCache: MetadataCachePort): void {
+  mcp.registerTool(
+    'metadata_get_file_cache',
+    {
+      description: 'Get the metadata cache snapshot (tags, frontmatter, links, embeds) for a vault note',
+      inputSchema: { path: z.string().describe('Vault-relative path') },
+    },
+    async ({ path }) => ok({ snapshot: metadataCache.getFileMetadata(path) }),
+  )
+
+  mcp.registerTool(
+    'metadata_get_all_tags',
+    {
+      description: 'Get the tag → count map across the entire vault',
+      inputSchema: {},
+    },
+    async () => ok({ tags: metadataCache.getAllTags() }),
+  )
+
+  mcp.registerTool(
+    'metadata_get_resolved_links',
+    {
+      description: 'Get resolved outgoing links and their counts for a source note',
+      inputSchema: { sourcePath: z.string().describe('Source vault path') },
+    },
+    async ({ sourcePath }) => ok({ links: metadataCache.getResolvedLinks(sourcePath) }),
+  )
+}
+
 export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
   private readonly proposalStore = new ProposalStore()
   private readonly advanceUseCase: AdvanceFeatureStageUseCase
@@ -356,10 +385,6 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
     private readonly metadataCache: MetadataCachePort,
   ) {
     this.advanceUseCase = new AdvanceFeatureStageUseCase(repo)
-    // metadataCache is wired here for upcoming metadata/link tools (PR1 task 5+).
-    // Reference it once so strict TS noUnusedParameters does not flag the field
-    // until Task 5 registers the consuming tools.
-    void this.metadataCache
   }
 
   // Off-port by design: called directly by the sidebar module, not via MCP.
@@ -419,6 +444,7 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
       this.specsFolder,
       this.advanceUseCase,
     )
+    registerMetadataTools(mcp, this.metadataCache)
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
     await mcp.connect(transport)
     try {
