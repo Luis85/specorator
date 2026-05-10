@@ -467,11 +467,12 @@ describe('ObsidianMcpServerAdapter — workflow tools', () => {
     title: string,
     activate = true,
     advanceTo = 0,
+    idOverride?: string,
   ): Promise<Feature> {
     const slugResult = Slug.create(title)
     if (!slugResult.ok) throw slugResult.error
     const featureResult = Feature.create(
-      `id-${slugResult.value.toString()}`,
+      idOverride ?? `id-${slugResult.value.toString()}`,
       slugResult.value,
       title,
     )
@@ -645,6 +646,25 @@ describe('ObsidianMcpServerAdapter — workflow tools', () => {
         stage: 'design',
       })
       expect(resp.result.isError).toBe(true)
+    })
+
+    it('binds proposal to feature.id — accept rejects after slug recycle', async () => {
+      const original = await seedFeature('Dark Mode', true, 0, 'id-original')
+      const resp = await callTool(port, 'workflow_create_artifact', {
+        slug: 'dark-mode',
+        stage: 'design',
+      })
+      const { proposalId } = parseToolResult(resp) as { proposalId: string }
+
+      const deleteResult = await repo.delete(original.id)
+      expect(deleteResult.ok).toBe(true)
+      // Recreate with same slug — different id.
+      await seedFeature('Dark Mode', true, 0, 'id-replacement')
+
+      await expect(adapter.acceptProposal(proposalId)).rejects.toThrow(
+        /no longer exists/,
+      )
+      expect(await vault.fileExists('specs/dark-mode/design.md')).toBe(false)
     })
   })
 

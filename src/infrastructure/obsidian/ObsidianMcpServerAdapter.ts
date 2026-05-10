@@ -309,8 +309,11 @@ function registerWorkflowTools(
       if (stageIndex === -1) throw new Error(`Invalid stage: ${stage}`)
       const feature = await repo.findBySlug(slugResult.value)
       if (!feature) throw new Error(`Feature not found: ${slug}`)
+      // Bind to feature.id (not slug) so a delayed accept cannot retarget a
+      // replacement feature that happens to reuse the same slug after delete.
+      const featureId = feature.id
       const proposalId = store.queue('workflow_create_artifact', { slug, stage }, async () => {
-        const fresh = await repo.findBySlug(slugResult.value)
+        const fresh = await repo.findById(featureId)
         if (!fresh) throw new Error(`Feature no longer exists: ${slug}`)
         const result = await repo.createStageFile(fresh, stageIndex + 1)
         if (!result.ok) throw result.error
