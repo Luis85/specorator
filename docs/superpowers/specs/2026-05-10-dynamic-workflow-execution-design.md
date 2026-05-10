@@ -70,11 +70,13 @@ type WorkflowRun = {
 type WorkflowFailure =
   | { kind: 'CanvasNotFound'; path: string }
   | { kind: 'CanvasParseError'; reason: string }
+  | { kind: 'MalformedCanvas'; reason: 'duplicate-node-id' | 'dangling-edge'; nodeId?: string; edgeId?: string; detail?: string }
   | { kind: 'UnsupportedCanvasNode'; nodeId: string; nodeType: string; detail?: string }
   | { kind: 'SkillNotFound'; path: string }
   | { kind: 'InvalidSkillFormat'; path: string; reason: string }
   | { kind: 'UnsupportedGraph'; reason: 'branch' | 'join' | 'multi-source' | 'multi-sink' | 'disconnected-node' | 'empty' }
   | { kind: 'CycleDetected' }
+  | { kind: 'InvalidSlashCommand'; reason: 'missing-canvas' | 'unterminated-quote' | 'missing-input' | 'path-escapes-vault'; detail?: string }
   | { kind: 'StepOutputMissing'; stepIndex: number }
   | { kind: 'AgentExecutionFailed'; stepIndex: number; stderr: string }
   | { kind: 'Cancelled'; stepIndex: number }
@@ -129,11 +131,11 @@ Cancellation: sidebar's `Stop` button cancels the in-flight `runSkill` promise, 
 Obsidian's `.canvas` format is JSON with `nodes[]` (each `{ id, type, file? }`) and `edges[]` (each `{ id, fromNode, toNode }`). The parser:
 
 1. Validates every entry in `nodes` is `type === 'file'` with `file` ending in `.md`. Any other node type (`text`, `link`, `group`, sub-`canvas`, etc.) or a `file` node pointing at a non-`.md` path fails the run with `UnsupportedCanvasNode { nodeId, nodeType }`. The parser does **not** silently drop non-SKILL nodes — extra nodes on the canvas always produce an explicit failure so authoring mistakes surface immediately.
-2. Builds adjacency lists from `edges`.
+2. Validates structural integrity before building adjacency lists. Every `id` in `nodes` MUST be unique — duplicates fail with `MalformedCanvas { reason: 'duplicate-node-id', nodeId }`. Every `fromNode` and `toNode` referenced by an entry in `edges` MUST exist in the validated `nodes` set — dangling references fail with `MalformedCanvas { reason: 'dangling-edge', edgeId, nodeId }` (where `nodeId` is the missing endpoint id). Adjacency lists are built only after these checks pass.
 3. Validates: exactly one source (in-degree 0), exactly one sink (out-degree 0), single linear path from source to sink (each non-sink node has out-degree 1, each non-source node has in-degree 1), no cycles, and no nodes outside that path (`disconnected-node`). A 1-node graph is valid: the single node is both source and sink, the chain has length 1, and the workflow runs as a 1-step workflow. The `disconnected-node` rejection only fires in multi-node graphs.
 4. Returns ordered `WorkflowStep[]` from source to sink.
 
-Snapshot fixtures live under `tests/__fixtures__/canvas/` covering: 1-node (accept), 3-node linear (accept), branch (reject), join (reject), cycle (reject), disconnected-node in a multi-node graph (reject), unsupported-node-type (reject — e.g. a text card mixed in with file nodes), file-node-non-md (reject — file node pointing at `.png`), empty (reject).
+Snapshot fixtures live under `tests/__fixtures__/canvas/` covering: 1-node (accept), 3-node linear (accept), branch (reject), join (reject), cycle (reject), disconnected-node in a multi-node graph (reject), unsupported-node-type (reject — e.g. a text card mixed in with file nodes), file-node-non-md (reject — file node pointing at `.png`), duplicate-node-id (reject), dangling-edge (reject — edge endpoint missing from `nodes`), empty (reject).
 
 ---
 
@@ -157,7 +159,7 @@ The literal paths are produced by substituting the configured `workflowRunsFolde
 
 ## 7. Error Handling
 
-- All validation runs **before** any agent call. Pre-flight covers: canvas read + parse, every node-type check (`UnsupportedCanvasNode` rejects non-`.md` file nodes and non-file node types), graph shape, every SKILL.md read + frontmatter validation. Pre-flight failures return `Result.error` with no side effects (no `runDir`, no scratch files).
+- All validation runs **before** any agent call. Pre-flight covers: slash-command parse (`InvalidSlashCommand`), canvas read + JSON parse (`CanvasNotFound`, `CanvasParseError`), node-type check (`UnsupportedCanvasNode` rejects non-`.md` file nodes and non-file node types), structural check (`MalformedCanvas` rejects duplicate node ids and dangling edge endpoints), graph shape (`UnsupportedGraph`, `CycleDetected`), every SKILL.md read + frontmatter validation (`SkillNotFound`, `InvalidSkillFormat`). Pre-flight failures return `Result.error` with no side effects (no `runDir`, no scratch files).
 - Runtime failures preserve `runDir` and any scratch files written so far for inspection.
 - `NotificationPort.showError` surfaces failures with a sticky notice naming the offending node or step.
 - No retries in MVP. Re-running a workflow allocates a fresh `runId`.
