@@ -1,6 +1,7 @@
 import { Plugin, TFolder } from 'obsidian'
 import { SpecoratorView, VIEW_TYPE } from './SpecoratorView'
 import { SpecoratorSettingTab } from './settings'
+import { promoteLegacyFlatSettings } from './loadSettings-migrate'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
@@ -11,18 +12,6 @@ import { PluginCore } from '@/core/plugin-core'
 import { ALL_MODULES, type ModuleDescriptor } from '@/modules'
 import { i18nMerge, i18nTranslate, setLocale, type SupportedLocale } from '@/ui/i18n'
 import type { TranslationPort } from '@/domain/ports'
-
-/** Keys that belong to the flat PluginSettings namespace. */
-const PLUGIN_SETTINGS_KEYS: ReadonlyArray<keyof PluginSettings> = [
-  'locale',
-  'specsFolder',
-  'archiveFolder',
-  'decisionsFolder',
-  'constitutionFile',
-  'gateStrictness',
-  'teamMode',
-  'logLevel',
-]
 
 export default class SpecoratorPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS }
@@ -119,24 +108,7 @@ export default class SpecoratorPlugin extends Plugin {
     const stored = (await this.loadData()) as Record<string, unknown> | null
     const raw: Record<string, unknown> = { ...(stored ?? {}) }
 
-    // NFR-AVS-004: treat legacy `featuresFolder` as `specsFolder` if present.
-    if (typeof raw.featuresFolder === 'string' && typeof raw.specsFolder !== 'string') {
-      raw.specsFolder = raw.featuresFolder
-    }
-
-    // Promote legacy flat PluginSettings to the specorator sub-key (W7 storage migration).
-    if (!('specorator' in raw)) {
-      const specorator: Record<string, unknown> = {}
-      for (const key of PLUGIN_SETTINGS_KEYS) {
-        if (key in raw) specorator[key] = raw[key]
-      }
-      this._storedData = {
-        ...raw,
-        specorator,
-      }
-    } else {
-      this._storedData = raw
-    }
+    this._storedData = promoteLegacyFlatSettings(raw)
 
     this.settings = {
       ...DEFAULT_SETTINGS,
