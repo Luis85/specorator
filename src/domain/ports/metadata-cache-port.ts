@@ -13,5 +13,11 @@ export interface MetadataCachePort {
   getBacklinks(path: string): string[]
   getResolvedLinks(sourcePath: string): Record<string, number>
   getAllTags(): Record<string, number>
+  /**
+   * Resolve a wikilink (e.g. "Page Name" or "folder/page") to its absolute vault path
+   * relative to the given source. Returns null if unresolved.
+   * MUST use Obsidian's in-process metadata cache. Never shell out.
+   */
+  getFirstLinkpathDest(linktext: string, sourcePath: string): string | null
   onMetadataChanged(handler: (path: string) => void): Unsubscriber
 }

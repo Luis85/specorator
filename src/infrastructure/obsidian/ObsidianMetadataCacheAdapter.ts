@@ -45,6 +45,11 @@ export class ObsidianMetadataCacheAdapter implements MetadataCachePort {
     return counts
   }
 
+  getFirstLinkpathDest(linktext: string, sourcePath: string): string | null {
+    const dest = this.app.metadataCache.getFirstLinkpathDest(linktext, sourcePath)
+    return dest?.path ?? null
+  }
+
   onMetadataChanged(handler: (path: string) => void): Unsubscriber {
     // 'changed' fires after indexing; 'resolve' fires when resolvedLinks updates complete;
     // 'deleted' fires when a file is removed; vault 'rename' is excluded from 'changed'

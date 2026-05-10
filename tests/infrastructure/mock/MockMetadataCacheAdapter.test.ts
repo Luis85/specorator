@@ -84,4 +84,24 @@ describe('MockMetadataCacheAdapter', () => {
     expect(handler1).not.toHaveBeenCalled()
     expect(handler2).toHaveBeenCalledWith('specs/foo/idea.md')
   })
+
+  it('getFirstLinkpathDest returns null when not seeded', () => {
+    const adapter = new MockMetadataCacheAdapter()
+    expect(adapter.getFirstLinkpathDest('Foo', 'specs/bar/idea.md')).toBeNull()
+  })
+
+  it('getFirstLinkpathDest returns the seeded destination', () => {
+    const adapter = new MockMetadataCacheAdapter()
+    adapter.seedLinkpathDest('Foo', 'specs/bar/idea.md', 'specs/foo/idea.md')
+    expect(adapter.getFirstLinkpathDest('Foo', 'specs/bar/idea.md')).toBe('specs/foo/idea.md')
+  })
+
+  it('getFirstLinkpathDest is keyed by both linktext and source', () => {
+    const adapter = new MockMetadataCacheAdapter()
+    adapter.seedLinkpathDest('Foo', 'a.md', 'specs/a-foo.md')
+    adapter.seedLinkpathDest('Foo', 'b.md', 'specs/b-foo.md')
+    expect(adapter.getFirstLinkpathDest('Foo', 'a.md')).toBe('specs/a-foo.md')
+    expect(adapter.getFirstLinkpathDest('Foo', 'b.md')).toBe('specs/b-foo.md')
+    expect(adapter.getFirstLinkpathDest('Foo', 'c.md')).toBeNull()
+  })
 })

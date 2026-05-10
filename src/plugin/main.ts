@@ -4,6 +4,7 @@ import { SpecoratorSettingTab } from './settings'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
+import { ObsidianMetadataCacheAdapter } from '@/infrastructure/obsidian/ObsidianMetadataCacheAdapter'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { PluginCore } from '@/core/plugin-core'
 import { ALL_MODULES, type ModuleDescriptor } from '@/modules'
@@ -51,6 +52,7 @@ export default class SpecoratorPlugin extends Plugin {
         this.bridge,
         new FeatureRepository(this.bridge, this.bridge, () => this.settings),
         () => this.settings.specsFolder,
+        new ObsidianMetadataCacheAdapter(this.app),
       ),
     })
 

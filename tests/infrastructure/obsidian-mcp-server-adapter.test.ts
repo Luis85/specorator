@@ -2,13 +2,15 @@ import * as http from 'node:http'
 import { describe, it, expect } from 'vitest'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
+import { MockMetadataCacheAdapter } from '@/infrastructure/mock/MockMetadataCacheAdapter'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
 function makeAdapter(files: Record<string, string> = {}): ObsidianMcpServerAdapter {
   const vault = new MockBridge(files)
   const repo = new FeatureRepository(vault, vault, () => DEFAULT_SETTINGS)
-  return new ObsidianMcpServerAdapter(vault, repo, () => DEFAULT_SETTINGS.specsFolder)
+  const metadataCache = new MockMetadataCacheAdapter()
+  return new ObsidianMcpServerAdapter(vault, repo, () => DEFAULT_SETTINGS.specsFolder, metadataCache)
 }
 
 describe('ObsidianMcpServerAdapter', () => {
