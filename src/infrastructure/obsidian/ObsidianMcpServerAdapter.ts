@@ -2,10 +2,9 @@ import * as http from 'node:http'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
-import { parse as parseYaml } from 'yaml'
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import type { ObsidianMcpServerPort, McpConnectionConfig, VaultPort } from '@/domain/ports'
-
-const STUB_PROPOSAL_ID = 'stub-00000000-0000-0000-0000-000000000000'
+import { ProposalStore, type PendingProposal } from './ProposalStore'
 
 function parseFrontmatter(content: string): Record<string, unknown> {
   const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content)
@@ -21,6 +20,30 @@ function parseFrontmatter(content: string): Record<string, unknown> {
   }
 }
 
+async function applyFrontmatterUpdate(
+  vault: VaultPort,
+  path: string,
+  updates: Record<string, unknown>,
+): Promise<void> {
+  const content = await vault.readFile(path)
+  const fmMatch = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(content)
+  let existing: Record<string, unknown> = {}
+  let bodyStart = 0
+  if (fmMatch) {
+    try {
+      const parsed = parseYaml(fmMatch[1]) as unknown
+      if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        existing = parsed as Record<string, unknown>
+        bodyStart = fmMatch[0].length
+      }
+    } catch {
+      // non-YAML block — leave bodyStart at 0 so content is preserved
+    }
+  }
+  const merged = { ...existing, ...updates }
+  await vault.writeFile(path, `---\n${stringifyYaml(merged)}---\n${content.slice(bodyStart)}`)
+}
+
 function joinVaultPath(parent: string, child: string): string {
   const p = parent.replace(/\/+$/, '')
   return p ? `${p}/${child}` : child
@@ -28,7 +51,9 @@ function joinVaultPath(parent: string, child: string): string {
 
 async function collectFiles(vault: VaultPort, folder: string): Promise<string[]> {
   const [files, subfolders] = await Promise.all([vault.listFiles(folder), vault.listFolders(folder)])
-  const nested = await Promise.all(subfolders.map((sub) => collectFiles(vault, joinVaultPath(folder, sub))))
+  const nested = await Promise.all(
+    subfolders.map((sub) => collectFiles(vault, joinVaultPath(folder, sub))),
+  )
   return [...files, ...nested.flat()]
 }
 
@@ -36,7 +61,7 @@ function ok(data: unknown): { content: [{ type: 'text'; text: string }] } {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data) }] }
 }
 
-function registerTools(mcp: McpServer, vault: VaultPort): void {
+function registerTools(mcp: McpServer, vault: VaultPort, store: ProposalStore): void {
   mcp.registerTool(
     'vault_read_note',
     {
@@ -52,7 +77,12 @@ function registerTools(mcp: McpServer, vault: VaultPort): void {
       description: 'Overwrite a vault note — queued for proposal review',
       inputSchema: { path: z.string(), content: z.string() },
     },
-    async () => ok({ proposalId: STUB_PROPOSAL_ID, status: 'pending' }),
+    async ({ path, content }) => {
+      const proposalId = store.queue('vault_write_note', { path, content }, () =>
+        vault.writeFile(path, content),
+      )
+      return ok({ proposalId, status: 'pending' })
+    },
   )
 
   mcp.registerTool(
@@ -61,7 +91,13 @@ function registerTools(mcp: McpServer, vault: VaultPort): void {
       description: 'Append text to a vault note — queued for proposal review',
       inputSchema: { path: z.string(), content: z.string().describe('Text to append') },
     },
-    async () => ok({ proposalId: STUB_PROPOSAL_ID, status: 'pending' }),
+    async ({ path, content }) => {
+      const proposalId = store.queue('vault_append_to_note', { path, content }, async () => {
+        const existing = await vault.readFile(path)
+        await vault.writeFile(path, existing + content)
+      })
+      return ok({ proposalId, status: 'pending' })
+    },
   )
 
   mcp.registerTool(
@@ -87,7 +123,7 @@ function registerTools(mcp: McpServer, vault: VaultPort): void {
             matches.push({ path, excerpt: content.slice(start, end).trim() })
           }
         } catch {
-          // Skip unreadable files
+          // skip unreadable files
         }
       }
       return ok({ matches })
@@ -152,9 +188,14 @@ function registerTools(mcp: McpServer, vault: VaultPort): void {
     'frontmatter_set_field',
     {
       description: 'Set a frontmatter field — queued for proposal review',
-      inputSchema: { path: z.string(), field: z.string(), value: z.any() },
+      inputSchema: { path: z.string(), field: z.string(), value: z.unknown() },
     },
-    async () => ok({ proposalId: STUB_PROPOSAL_ID, status: 'pending' }),
+    async ({ path, field, value }) => {
+      const proposalId = store.queue('frontmatter_set_field', { path, field, value }, () =>
+        applyFrontmatterUpdate(vault, path, { [field]: value }),
+      )
+      return ok({ proposalId, status: 'pending' })
+    },
   )
 
   mcp.registerTool(
@@ -166,15 +207,34 @@ function registerTools(mcp: McpServer, vault: VaultPort): void {
         fields: z.record(z.string(), z.any()).describe('Key-value pairs to set'),
       },
     },
-    async () => ok({ proposalId: STUB_PROPOSAL_ID, status: 'pending' }),
+    async ({ path, fields }) => {
+      const proposalId = store.queue('frontmatter_set_many', { path, fields }, () =>
+        applyFrontmatterUpdate(vault, path, fields),
+      )
+      return ok({ proposalId, status: 'pending' })
+    },
   )
 }
 
 export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
+  private readonly proposalStore = new ProposalStore()
   private httpServer: http.Server | null = null
   private assignedPort = 0
 
   constructor(private readonly vault: VaultPort) {}
+
+  // Off-port by design: called directly by the sidebar module, not via MCP.
+  async acceptProposal(proposalId: string): Promise<void> {
+    await this.proposalStore.accept(proposalId)
+  }
+
+  rejectProposal(proposalId: string): void {
+    this.proposalStore.reject(proposalId)
+  }
+
+  getProposals(): ReadonlyArray<PendingProposal> {
+    return this.proposalStore.getAll()
+  }
 
   async start(): Promise<{ port: number }> {
     const server = http.createServer((req, res) => {
@@ -211,7 +271,7 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
     res: http.ServerResponse,
   ): Promise<void> {
     const mcp = new McpServer({ name: 'specorator', version: '1.0.0' })
-    registerTools(mcp, this.vault)
+    registerTools(mcp, this.vault, this.proposalStore)
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
     await mcp.connect(transport)
     try {
