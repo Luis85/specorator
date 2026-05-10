@@ -7,7 +7,7 @@ import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
 
 function makeRepo(bridge: MockBridge, settings: PluginSettings = DEFAULT_SETTINGS) {
-  return new FeatureRepository(bridge, bridge, settings)
+  return new FeatureRepository(bridge, bridge, () => settings)
 }
 function makeUseCase(bridge: MockBridge) {
   return new CreateFeatureUseCase(makeRepo(bridge))

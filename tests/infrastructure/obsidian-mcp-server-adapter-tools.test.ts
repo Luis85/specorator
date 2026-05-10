@@ -88,8 +88,8 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
 
   beforeEach(async () => {
     vault = new MockBridge(VAULT_FILES)
-    const repo = new FeatureRepository(vault, vault, DEFAULT_SETTINGS)
-    adapter = new ObsidianMcpServerAdapter(vault, repo, DEFAULT_SETTINGS.specsFolder)
+    const repo = new FeatureRepository(vault, vault, () => DEFAULT_SETTINGS)
+    adapter = new ObsidianMcpServerAdapter(vault, repo, () => DEFAULT_SETTINGS.specsFolder)
     ;({ port } = await adapter.start())
     await initMcp(port)
   })

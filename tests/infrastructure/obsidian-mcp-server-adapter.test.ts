@@ -7,8 +7,8 @@ import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
 function makeAdapter(files: Record<string, string> = {}): ObsidianMcpServerAdapter {
   const vault = new MockBridge(files)
-  const repo = new FeatureRepository(vault, vault, DEFAULT_SETTINGS)
-  return new ObsidianMcpServerAdapter(vault, repo, DEFAULT_SETTINGS.specsFolder)
+  const repo = new FeatureRepository(vault, vault, () => DEFAULT_SETTINGS)
+  return new ObsidianMcpServerAdapter(vault, repo, () => DEFAULT_SETTINGS.specsFolder)
 }
 
 describe('ObsidianMcpServerAdapter', () => {

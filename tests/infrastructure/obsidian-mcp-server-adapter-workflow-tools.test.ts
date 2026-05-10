@@ -141,8 +141,8 @@ describe('ObsidianMcpServerAdapter — workflow tools', () => {
 
   beforeEach(async () => {
     vault = new MockBridge(VAULT_FILES)
-    const repo = new FeatureRepository(vault, vault, DEFAULT_SETTINGS)
-    adapter = new ObsidianMcpServerAdapter(vault, repo, SPECS_FOLDER)
+    const repo = new FeatureRepository(vault, vault, () => DEFAULT_SETTINGS)
+    adapter = new ObsidianMcpServerAdapter(vault, repo, () => SPECS_FOLDER)
     ;({ port } = await adapter.start())
     await initMcp(port)
   })
@@ -189,8 +189,8 @@ describe('ObsidianMcpServerAdapter — workflow tools', () => {
 
     it('returns empty array when specs folder has no features', async () => {
       const emptyVault = new MockBridge({})
-      const emptyRepo = new FeatureRepository(emptyVault, emptyVault, DEFAULT_SETTINGS)
-      const emptyAdapter = new ObsidianMcpServerAdapter(emptyVault, emptyRepo, SPECS_FOLDER)
+      const emptyRepo = new FeatureRepository(emptyVault, emptyVault, () => DEFAULT_SETTINGS)
+      const emptyAdapter = new ObsidianMcpServerAdapter(emptyVault, emptyRepo, () => SPECS_FOLDER)
       const { port: emptyPort } = await emptyAdapter.start()
       await initMcp(emptyPort)
       const resp = await callTool(emptyPort, 'workflow_list_features', {})

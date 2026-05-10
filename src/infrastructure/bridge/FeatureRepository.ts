@@ -39,7 +39,7 @@ export class FeatureRepository implements IFeatureRepository {
 	constructor(
 		private readonly vault: VaultPort,
 		private readonly notifications: NotificationPort,
-		private readonly settings: PluginSettings,
+		private readonly getSettings: () => PluginSettings,
 	) {}
 
 	private checkedPath(...segments: string[]): string {
@@ -49,19 +49,19 @@ export class FeatureRepository implements IFeatureRepository {
 	}
 
 	private folderPath(slugValue: string): string {
-		return this.checkedPath(this.settings.specsFolder, slugValue);
+		return this.checkedPath(this.getSettings().specsFolder, slugValue);
 	}
 
 	private metaPath(slugValue: string): string {
-		return this.checkedPath(this.settings.specsFolder, slugValue, META_FILE);
+		return this.checkedPath(this.getSettings().specsFolder, slugValue, META_FILE);
 	}
 
 	private stagePath(slugValue: string, stageName: string): string {
-		return this.checkedPath(this.settings.specsFolder, slugValue, `${stageName}.md`);
+		return this.checkedPath(this.getSettings().specsFolder, slugValue, `${stageName}.md`);
 	}
 
 	async findAll(): Promise<Feature[]> {
-		const specsFolder = this.checkedPath(this.settings.specsFolder);
+		const specsFolder = this.checkedPath(this.getSettings().specsFolder);
 		const folders = await this.vault.listFolders(specsFolder);
 		const features = await Promise.all(
 			folders.map(async (folder) => {

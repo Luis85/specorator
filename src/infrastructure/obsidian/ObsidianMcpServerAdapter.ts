@@ -224,7 +224,7 @@ function registerWorkflowTools(
   repo: IFeatureRepository,
   vault: VaultPort,
   store: ProposalStore,
-  specsFolder: string,
+  specsFolder: () => string,
 ): void {
   mcp.registerTool(
     'workflow_get_state',
@@ -269,7 +269,7 @@ function registerWorkflowTools(
       const stage = getStepMeta(feature.currentStep)?.slug ?? 'unknown'
       const artifacts = await Promise.all(
         getAllStepMeta().map(async (meta) => {
-          const path = `${specsFolder}/${slug}/${meta.fileName}`
+          const path = joinVaultPath(joinVaultPath(specsFolder(), slug), meta.fileName)
           const exists = await vault.fileExists(path)
           return { slug: meta.slug, path, exists }
         }),
@@ -323,7 +323,7 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
   constructor(
     private readonly vault: VaultPort,
     private readonly repo: IFeatureRepository,
-    private readonly specsFolder: string,
+    private readonly specsFolder: () => string,
   ) {}
 
   // Off-port by design: called directly by the sidebar module, not via MCP.

@@ -38,7 +38,7 @@ function harness(bridge: MockBridge) {
 }
 
 async function seedActiveFeature(bridge: MockBridge, title = 'Search') {
-  const repo = new FeatureRepository(bridge, bridge, DEFAULT_SETTINGS)
+  const repo = new FeatureRepository(bridge, bridge, () => DEFAULT_SETTINGS)
   const created = await new CreateFeatureUseCase(repo).execute({ title })
   if (!created.ok) throw created.error
   const activated = await new ActivateFeatureUseCase(repo).execute({ featureId: created.value.id })
