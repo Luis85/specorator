@@ -384,16 +384,14 @@ export class PluginCore {
    * Start the local MCP server.
    *
    * - Idempotent: no-op when already running.
-   * - Gated by `ports.isMcpServerEnabled()` for auto-start and settings-toggle
-   *   paths. Pass `{ force: true }` from explicit-command paths to bypass the
-   *   gate (the user just asked for it).
+   * - Gated by `ports.isMcpServerEnabled()`.
    * - Errors are logged via `LoggerPort` and swallowed; the server simply
    *   remains stopped on failure.
    */
-  async startMcpServer(opts: { force?: boolean } = {}): Promise<void> {
+  async startMcpServer(): Promise<void> {
     if (this.ports.mcpServer === undefined) return
     if (this._mcpRunning) return
-    if (opts.force !== true && this.ports.isMcpServerEnabled?.() !== true) return
+    if (this.ports.isMcpServerEnabled?.() !== true) return
 
     const result = await tryAsync(() => this.ports.mcpServer!.start())
     if (!result.ok) {

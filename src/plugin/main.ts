@@ -90,15 +90,13 @@ export default class SpecoratorPlugin extends Plugin {
     this.addCommand({
       id: 'start-mcp-server',
       name: 'Start MCP server',
-      // Explicit user action — bypass the enabled gate. The toggle in
-      // settings remains the source of truth for the auto-start path.
-      callback: () => void this.core?.startMcpServer({ force: true }),
+      callback: () => void this.updateSettings({ mcpServerEnabled: true }),
     })
 
     this.addCommand({
       id: 'stop-mcp-server',
       name: 'Stop MCP server',
-      callback: () => void this.core?.stopMcpServer(),
+      callback: () => void this.updateSettings({ mcpServerEnabled: false }),
     })
 
     this.addSettingTab(new SpecoratorSettingTab(this.app, this))

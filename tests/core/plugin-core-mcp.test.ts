@@ -96,19 +96,8 @@ describe('PluginCore MCP server lifecycle', () => {
   })
 })
 
-describe('PluginCore MCP server force-start (explicit command)', () => {
-  it('startMcpServer({ force: true }) starts even when the gate says disabled', async () => {
-    const mcpServer = new MockObsidianMcpServerAdapter()
-    const core = new PluginCore([], makePorts({ mcpServer, isMcpServerEnabled: () => false }))
-    await core.init({})
-    expect(mcpServer.started).toBe(false)
-
-    await core.startMcpServer({ force: true })
-    expect(mcpServer.started).toBe(true)
-    expect(core.isMcpServerRunning()).toBe(true)
-  })
-
-  it('startMcpServer() without force respects the gate', async () => {
+describe('PluginCore MCP server gate', () => {
+  it('startMcpServer() respects the gate when disabled', async () => {
     const mcpServer = new MockObsidianMcpServerAdapter()
     const core = new PluginCore([], makePorts({ mcpServer, isMcpServerEnabled: () => false }))
     await core.init({})
@@ -124,7 +113,7 @@ describe('PluginCore MCP server idempotency', () => {
     const startSpy = vi.spyOn(mcpServer, 'start')
     const core = new PluginCore([], makePorts({ mcpServer, isMcpServerEnabled: () => true }))
     await core.init({}) // first start via auto-start path
-    await core.startMcpServer({ force: true }) // second call — should be no-op
+    await core.startMcpServer() // second call — should be no-op
     expect(startSpy).toHaveBeenCalledTimes(1)
   })
 
