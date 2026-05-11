@@ -161,3 +161,38 @@ describe('PluginCore MCP server settings-toggle sync', () => {
     expect(core.isMcpServerRunning()).toBe(false)
   })
 })
+
+describe('PluginCore MCP server sync serialization', () => {
+  it('serializes concurrent sync calls — later start wins over an in-flight stop', async () => {
+    let enabled = true
+    let resolveStop: () => void = () => {}
+
+    const mcpServer: ObsidianMcpServerPort = {
+      start: async () => ({ port: 3001 }),
+      stop: () => new Promise<void>(resolve => { resolveStop = resolve }),
+      getConnectionConfig: () => ({ transport: 'http', url: 'http://127.0.0.1:3001/mcp' }),
+    }
+
+    const core = new PluginCore([coreSettingsModuleAsAny], makePorts({
+      mcpServer,
+      isMcpServerEnabled: () => enabled,
+    }))
+    await core.init({})
+    expect(core.isMcpServerRunning()).toBe(true)
+
+    // Trigger stop — stop() will block until resolveStop() is called.
+    enabled = false
+    const firstSync = core.notifySettingsChanged('specorator', { ...DEFAULT_SETTINGS, mcpServerEnabled: false })
+
+    // Before stop completes, queue a start.
+    enabled = true
+    const secondSync = core.notifySettingsChanged('specorator', { ...DEFAULT_SETTINGS, mcpServerEnabled: true })
+
+    // Unblock the pending stop.
+    resolveStop()
+    await Promise.all([firstSync, secondSync])
+
+    // The serialized chain processes stop then start — server must be running.
+    expect(core.isMcpServerRunning()).toBe(true)
+  })
+})

@@ -195,6 +195,7 @@ export class PluginCore {
   private readonly uriDispatch = new Map<string, (params: URLSearchParams) => void>()
   private _initCalled = false
   private _mcpRunning = false
+  private _syncChain: Promise<void> = Promise.resolve()
 
   constructor(
     modules: ReadonlyArray<ModuleDescriptor>,
@@ -289,10 +290,19 @@ export class PluginCore {
   }
 
   /**
-   * Reconciles the MCP server's running state with `ports.isMcpServerEnabled()`.
-   * Called after a settings change that may have toggled the enabled flag.
+   * Enqueues a reconciliation onto a serial promise chain so that concurrent
+   * calls (e.g. rapid stop→start) never observe stale `_mcpRunning` state.
+   * Each enqueued reconciliation reads `isMcpServerEnabled()` fresh when it
+   * actually runs, so the last queued call always reflects the latest intent.
    */
-  private async _syncMcpRunning(): Promise<void> {
+  private _syncMcpRunning(): Promise<void> {
+    this._syncChain = this._syncChain
+      .then(() => this._doSyncMcpRunning())
+      .catch(() => { /* start/stop errors are logged inside those methods */ })
+    return this._syncChain
+  }
+
+  private async _doSyncMcpRunning(): Promise<void> {
     if (this.ports.mcpServer === undefined) return
     const desired = this.ports.isMcpServerEnabled?.() === true
     if (desired && !this._mcpRunning) {
