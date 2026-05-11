@@ -1,4 +1,4 @@
-import { copyFileSync } from 'fs';
+import { copyFileSync, existsSync } from 'fs';
 import { builtinModules } from 'module';
 import { resolve } from 'path';
 import { defineConfig, type Plugin as VitePlugin } from 'vite';
@@ -37,6 +37,13 @@ function copyPluginArtifacts(): VitePlugin {
 				resolve(__dirname, 'dist-plugin/styles.css'),
 				resolve(__dirname, 'styles.css'),
 			);
+			// Sourcemap is emitted as a separate file (sourcemap: true). Copy it next to
+			// main.js so local DevTools can resolve it. The released asset bundle in
+			// release.yml deliberately omits main.js.map.
+			const mapSrc = resolve(__dirname, 'dist-plugin/main.js.map');
+			if (existsSync(mapSrc)) {
+				copyFileSync(mapSrc, resolve(__dirname, 'main.js.map'));
+			}
 		},
 	};
 }
@@ -110,7 +117,7 @@ export default defineConfig(({ mode }) => {
 				},
 				outDir: 'dist-plugin',
 				emptyOutDir: false,
-				sourcemap: 'inline',
+				sourcemap: true,
 				minify: false,
 			},
 		};
