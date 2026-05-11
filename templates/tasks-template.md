@@ -18,7 +18,7 @@ Each task ≤ ~½ day, has a stable ID, references ≥ 1 requirement, and has a 
 
 > **TDD ordering:** test tasks for a requirement come **before** the implementation task for that requirement.
 
-> **"May slice" annotation:** A task that touches more than one independent code path or artifact may legitimately ship as several PRs rather than one. Mark such tasks with 🪓 in the heading (in addition to the task-type emoji), and add a `**Slice plan:**` line under the task sketching the expected slices. PR planners should expect the task to land in pieces; each slice PR must reference the parent task ID and name the slice it completes so traceability stays attached to the original task. (Convention filed by the v0.3 retrospective after multiple plan-level tasks shipped in slices that were not anticipated by the original `tasks.md`. See [`specs/version-0-3-plan/retrospective.md`](../specs/version-0-3-plan/retrospective.md) for the originating examples.)
+> **"May slice" annotation:** A task that touches more than one independent code path or artifact may legitimately ship as several PRs rather than one. Mark such tasks with 🪓 in the heading (in addition to the task-type emoji), and add a `**Slice plan:**` line under the task sketching the expected slices. PR planners should expect the task to land in pieces; each slice PR must reference the parent task ID and name the slice it completes so traceability stays attached to the original task. (Convention originated in v0.3 retrospective findings — plan-level tasks that shipped in slices not anticipated by the original `tasks.md`.)
 
 ## Legend
 

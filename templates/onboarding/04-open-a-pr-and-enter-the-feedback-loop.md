@@ -46,7 +46,7 @@ Push a real branch, open a draft PR, request a Codex review, respond to the feed
 
 ## Acceptance criteria
 
-- [ ] Branch follows the `feat/<scope>/<description>` naming convention.
+- [ ] Branch follows the `<type>/<short-kebab>` naming convention (e.g., `feature/fix-login-redirect`).
 - [ ] Draft PR exists and references the parent issue.
 - [ ] At least one Codex review was requested.
 - [ ] At least one review finding was addressed (either with a code change or a reasoned reply).

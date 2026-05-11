@@ -28,8 +28,9 @@ TEST-* IDs MUST go in a NON-LEADING column.
 defines them with TEST IDs in the first column). This file only references those IDs.
 
 If you put `TEST-<AREA>-NNN` in the first column of a table here, `specorator check:traceability`
-treats the row as a NEW definition and reports a collision against `spec.md`. Keep the
-first column as the REQ/NFR ID and list the TEST IDs in a later column.
+(Specorator plugin command — not a local npm script) treats the row as a NEW definition
+and reports a collision against `spec.md`. Keep the first column as the REQ/NFR ID and
+list the TEST IDs in a later column.
 -->
 
 | REQ ID | Tests | Passed | Failed | Status |
