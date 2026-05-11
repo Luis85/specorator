@@ -56,7 +56,7 @@
 		"eslint": "^10.3.0",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-obsidianmd": "^0.2.9",
-		"eslint-plugin-vue": "^10.9.0",
+		"eslint-plugin-vue": "^10.9.1",
 		"globals": "^17.6.0",
 		"jsdom": "^29.1.1",
 		"obsidian": "^1.12.3",
@@ -66,9 +66,9 @@
 		"storybook": "^10.3.6",
 		"typedoc": "^0.28.19",
 		"typescript": "^6.0.3",
-		"typescript-eslint": "^8.59.1",
+		"typescript-eslint": "^8.59.2",
 		"vite": "^8.0.12",
 		"vitest": "^4.1.5",
-		"vue-tsc": "^3.2.7"
+		"vue-tsc": "^3.2.8"
 	}
 }
