@@ -52,6 +52,15 @@ const UI_FORBIDDEN_PATTERNS = [
 
 const MAX_LINES_OPTIONS = { max: 350, skipBlankLines: true, skipComments: true };
 
+// Shared DOM-injection property bans (used in the global block and in scoped
+// overrides that carve out the window.* dialog entries for non-plugin contexts).
+const DOM_INJECTION_BANS = [
+	{ object: 'document', property: 'innerHTML', message: 'innerHTML is unsafe; use textContent or createEl().' },
+	{ property: 'innerHTML', message: 'innerHTML is unsafe; use textContent or createEl().' },
+	{ property: 'outerHTML', message: 'outerHTML is unsafe; use createEl()/replaceChildren().' },
+	{ property: 'insertAdjacentHTML', message: 'insertAdjacentHTML is unsafe; use createEl()/append().' },
+];
+
 // ADR-008: the aggregate IBridge / BridgeKey / useBridge surface was deleted
 // in favour of four narrow ports under src/domain/ports. Re-introducing any of
 // those names — even by accident — should fail lint with a clear pointer.
@@ -185,25 +194,11 @@ export default defineConfig(
 			// `no-restricted-globals` covers bare confirm()/alert()/prompt(); this
 			// block covers the window.confirm() / window.alert() / window.prompt()
 			// member-call form that `no-restricted-globals` does not reach.
+			// Non-plugin contexts (tests, LocalStorageBridge, stories) re-declare
+			// this rule with only DOM_INJECTION_BANS to preserve their carve-out.
 			'no-restricted-properties': [
 				'error',
-				{
-					object: 'document',
-					property: 'innerHTML',
-					message: 'innerHTML is unsafe; use textContent or createEl().',
-				},
-				{
-					property: 'innerHTML',
-					message: 'innerHTML is unsafe; use textContent or createEl().',
-				},
-				{
-					property: 'outerHTML',
-					message: 'outerHTML is unsafe; use createEl()/replaceChildren().',
-				},
-				{
-					property: 'insertAdjacentHTML',
-					message: 'insertAdjacentHTML is unsafe; use createEl()/append().',
-				},
+				...DOM_INJECTION_BANS,
 				{
 					object: 'window',
 					property: 'confirm',
@@ -444,10 +439,13 @@ export default defineConfig(
 
 	// LocalStorageBridge: the GitHub Pages demo bridge is intentionally
 	// browser localStorage-backed; the obsidianmd ban does not apply.
+	// Re-declare no-restricted-properties keeping only DOM-injection bans so
+	// window.confirm/alert/prompt remain permitted in this context.
 	{
 		files: ['src/infrastructure/localstorage/**/*.ts'],
 		rules: {
 			'no-restricted-globals': 'off',
+			'no-restricted-properties': ['error', ...DOM_INJECTION_BANS],
 		},
 	},
 
@@ -505,6 +503,9 @@ export default defineConfig(
 			// Empty arrow functions are used as no-op stubs in test fixtures.
 			'@typescript-eslint/no-empty-function': 'off',
 			'no-restricted-globals': 'off',
+			// Re-declare keeping only DOM-injection bans so window.confirm/alert/prompt
+			// remain permitted in test fixtures and helpers.
+			'no-restricted-properties': ['error', ...DOM_INJECTION_BANS],
 			'no-restricted-imports': 'off',
 			complexity: 'off',
 			'max-lines': 'off',
@@ -558,9 +559,13 @@ export default defineConfig(
 
 	// Stories + Storybook config — relax architectural-boundary rules so
 	// stories can freely import @/ui/components and @/domain types.
+	// Storybook runs in browser/Node, not in Obsidian, so dialog globals are
+	// permitted; re-declare keeping only DOM-injection bans.
 	{
 		files: ['stories/**/*.ts', '.storybook/**/*.ts'],
 		rules: {
+			'no-restricted-globals': 'off',
+			'no-restricted-properties': ['error', ...DOM_INJECTION_BANS],
 			'no-restricted-imports': 'off',
 			'max-lines': 'off',
 			complexity: 'off',
