@@ -14,7 +14,7 @@ Push a real branch, open a draft PR, request a Codex review, respond to the feed
 1. **Create a topic branch** from your integration branch. Detect it (defaults to `main` if `origin/HEAD` is not set):
    ```bash
    INTEGRATION=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
-   INTEGRATION=${INTEGRATION:-main}
+   INTEGRATION=${INTEGRATION:-develop}
    git switch "$INTEGRATION"
    git pull --ff-only
    git switch -c feat/<scope>/<short-description>
