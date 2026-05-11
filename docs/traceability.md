@@ -226,6 +226,9 @@ These map the five product vision themes from [`docs/product-vision.md`](./produ
 | ARCH-003 | `agentonomous` integration extension point — no design choices that block v2.0 | V1-FR-043 | #23 |
 | ARCH-004 | Vault-first state — workflow state derived from Markdown, not plugin-private storage | V1-DA-003–004 | — |
 | ARCH-005 | Template source boundary — released versions only, not repo HEAD | V1-FR-016 | — |
+| ARCH-006 | Vault path boundary — all user-supplied paths validated via `normalizeVaultPath` before any `VaultPort` call; domain stays Obsidian-free | — | ADR-008 Appendix |
+| ARCH-007 | Deferred workspace leaf guard — always call `leaf.loadIfDeferred()` before `leaf.openFile()` or reading `leaf.view` (Obsidian 1.6+) | — | ADR-008 Appendix |
+| ARCH-008 | MCP server opt-in — server defaults off; lifecycle owned by `PluginCore`; started only via explicit user command, not on plugin load | — | ADR-013 §Opt-in lifecycle |
 
 ---
 
