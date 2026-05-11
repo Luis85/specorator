@@ -2,6 +2,7 @@ import '../../src/core/core-events' // load EventMap augmentation
 import { describe, it, expect, vi } from 'vitest'
 import { PluginCore } from '@/core/plugin-core'
 import { fakeModulePorts } from '../__fakes__/fake-ports'
+import { helloModule } from '@/modules/hello/hello-module'
 import type { ModuleDescriptor } from '@/modules'
 import type { CorePorts } from '@/core/plugin-core'
 
@@ -671,5 +672,86 @@ describe('PluginCore.handleUri', () => {
       expect.any(Error),
       expect.objectContaining({ action: 'boom' }),
     )
+  })
+})
+
+// ── migrateSettings coverage gaps (#240) ─────────────────────────────────────
+
+describe('PluginCore migrateSettings coverage gaps (#240)', () => {
+  it('runs migrate when _moduleVersions key is missing from raw', async () => {
+    const ports = makePorts()
+    const migrate = vi.fn((_: number, blob: unknown) => ({ ...(blob as object), migrated: true }))
+    const mod = makeModule('a', {
+      settingsKey: 'a',
+      settingsVersion: 1,
+      migrate,
+    })
+    // Note: no _moduleVersions key at all.
+    const raw: Record<string, unknown> = { a: { x: 1 } }
+
+    const core = new PluginCore([mod], ports)
+    await core.init(raw)
+
+    expect(migrate).toHaveBeenCalledWith(0, { x: 1 })
+    expect(core.getModuleSettings('a')).toMatchObject({ x: 1, migrated: true })
+    expect(raw._moduleVersions).toEqual({ a: 1 })
+  })
+
+  it('does NOT call migrate when storedVersion > targetVersion (no downgrade)', async () => {
+    // Regression-fence: documents current behaviour. The implementation:
+    //   1) DOES NOT run migrate when stored > target (the storedVersion < target
+    //      guard fails);
+    //   2) OVERWRITES `_moduleVersions[key]` with the targetVersion regardless
+    //      of stored value (so a downgraded data shape silently re-records the
+    //      target version). If anyone changes either, this test catches them.
+    const ports = makePorts()
+    const migrate = vi.fn()
+    const mod = makeModule('a', {
+      settingsKey: 'a',
+      settingsVersion: 1, // target
+      migrate,
+      // intentionally no validateSettings — keep blob identity inspectable.
+    })
+    const originalBlob = { keepMe: true }
+    const raw: Record<string, unknown> = { _moduleVersions: { a: 5 }, a: originalBlob }
+
+    const core = new PluginCore([mod], ports)
+    await core.init(raw)
+
+    expect(migrate).not.toHaveBeenCalled()
+    // Original blob is preserved (no validate step touched it).
+    expect(core.getModuleSettings('a')).toEqual({ keepMe: true })
+    // Documented behaviour: stored version is overwritten with target (1), not
+    // left at 5. This is the "silently re-records" caveat.
+    expect((raw._moduleVersions as Record<string, number>).a).toBe(1)
+  })
+
+  it('per-module versioning for hello: storedVersion bumped silently when no migrate is declared', async () => {
+    const ports = makePorts()
+    const raw: Record<string, unknown> = {
+      hello: { showBadge: false },
+      _moduleVersions: { hello: 0 },
+    }
+
+    const core = new PluginCore([helloModule as unknown as ModuleDescriptor], ports)
+    await core.init(raw)
+
+    // helloModule has settingsVersion=1 but no migrate hook. The stale 0 bumps
+    // to 1 silently, and the blob is preserved (validateSettings coerces a
+    // boolean to itself).
+    expect((raw._moduleVersions as Record<string, number>).hello).toBe(1)
+    expect(core.getModuleSettings('hello')).toEqual({ showBadge: false })
+  })
+
+  it('per-module versioning for hello: validateSettings coerces an invalid value', async () => {
+    const ports = makePorts()
+    // showBadge is not a boolean -> validateSettings coerces to default true.
+    const raw: Record<string, unknown> = { hello: { showBadge: 'not-a-bool' } }
+
+    const core = new PluginCore([helloModule as unknown as ModuleDescriptor], ports)
+    await core.init(raw)
+
+    expect(core.getModuleSettings('hello')).toEqual({ showBadge: true })
+    expect((raw._moduleVersions as Record<string, number>).hello).toBe(1)
   })
 })
