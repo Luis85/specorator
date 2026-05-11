@@ -39,6 +39,4 @@ Write a well-formed GitHub issue that the Specorator workflow can pick up. This 
 
 ## Next step
 
-Once your issue is created, move to [Issue 2 — Triage: classify and prioritise]().
-
-> **Note:** The link above will be updated automatically once the full onboarding series is created.
+Once your issue is created, move to [Issue 2 — Triage: classify and prioritise](02-triage-classify-and-prioritise.md).

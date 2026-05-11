@@ -38,4 +38,4 @@ Take the issue you created in step 1 and apply the full triage process: correct 
 
 ## Next step
 
-Move to [Issue 3 — Break the issue down]() to decompose this issue into vertical slices.
+Move to [Issue 3 — Break the issue down](03-break-the-issue-down.md) to decompose this issue into vertical slices.

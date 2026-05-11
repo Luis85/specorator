@@ -54,4 +54,4 @@ Push a real branch, open a draft PR, request a Codex review, respond to the feed
 
 ## Next step
 
-Move to [Issue 5 — Accept and merge the PR]() to close the loop.
+Move to [Issue 5 — Accept and merge the PR](05-accept-and-merge-the-pr.md) to close the loop.

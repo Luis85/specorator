@@ -15,7 +15,7 @@ If a rule here disagrees with `docs/contributing.md`, the human guide wins; open
 
 ## 0a. Operating rules
 
-- **Stay in scope.** Each agent role has a defined responsibility (see `.claude/agents/`). No code in research; no requirement changes during implementation.
+- **Stay in scope.** Each agent role has a defined responsibility (see `.claude/agents/` — shipped by the Specorator plugin, not tracked in this repo). No code in research; no requirement changes during implementation.
 - **Specs = source of truth.** Implementation reveals a missing requirement → escalate, don't silently invent. Update spec first, then code.
 - **Respect quality gates.** Acceptance criteria in `docs/quality-framework.md` are non-negotiable.
 - **Trace everything.** `REQ-<AREA>-NNN`, `T-<AREA>-NNN`, `TEST-<AREA>-NNN`, `ADR-NNNN`. Reference IDs in commits, PRs, artifacts. See [`docs/traceability.md`](docs/traceability.md).

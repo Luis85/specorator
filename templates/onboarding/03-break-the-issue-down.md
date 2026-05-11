@@ -36,4 +36,4 @@ Decompose your triaged issue into independent vertical slices, each deliverable 
 
 ## Next step
 
-Move to [Issue 4 — Open a PR and enter the feedback loop]() to push a branch and request a review.
+Move to [Issue 4 — Open a PR and enter the feedback loop](04-open-a-pr-and-enter-the-feedback-loop.md) to push a branch and request a review.
