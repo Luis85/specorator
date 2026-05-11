@@ -48,3 +48,20 @@ Dependency injection registers the same instance under distinct Vue `InjectionKe
 - W7 (#105): per-module settings versioning (`settingsKey` + `settingsVersion` + `migrate` + `validateSettings`) lives on the module descriptor; `SettingsPort` shape was not extended. See [ADR-010](ADR-010-module-system-and-defineModule.md).
 - W8 (#106): `TranslationPort` shipped as `ports.t`. Module-owned `messages.{locale}` blocks are merged into vue-i18n at module init.
 - W13 (#163): `ObsidianMcpServerPort` (`src/domain/ports/obsidian-mcp-server-port.ts`) is the sixth narrow port. Lifecycle ownership lives on `PluginCore`. See [ADR-013](ADR-013-obsidian-mcp-server.md).
+
+## Appendix — invariants that apply across all port implementations
+
+### Vault path boundary (`normalizeVaultPath`)
+
+All vault path strings that originate from user input or external configuration **must** pass through `normalizeVaultPath` (`src/infrastructure/vault/VaultPath.ts`) before being forwarded to any `VaultPort` method. This function rejects absolute paths, parent-traversal segments (`..`), empty strings, and reserved vault roots (`.obsidian`). The domain and application layers never import `obsidian` directly; this is the enforcement point that keeps those layers Obsidian-free and testable without the Obsidian runtime.
+
+### Deferred workspace leaves
+
+Obsidian 1.6+ introduced lazy ("deferred") leaf loading. Any code that obtains a workspace leaf — via `workspace.getLeaf()`, `workspace.getLeavesOfType()`, or event callbacks — **must** call `await leaf.loadIfDeferred()` before calling `leaf.openFile()` or reading `leaf.view`. Skipping this check produces silent no-ops on deferred leaves. This invariant applies to `ObsidianBridge.openFile` and any future `WorkspacePort` implementations that interact with leaves.
+
+```ts
+// Correct pattern for ObsidianBridge.openFile and similar helpers:
+const leaf = this.app.workspace.getLeaf(false) ?? this.app.workspace.getLeaf(true)
+await leaf.loadIfDeferred()
+await leaf.openFile(file)
+```
