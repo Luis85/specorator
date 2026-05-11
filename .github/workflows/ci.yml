@@ -108,5 +108,8 @@ jobs:
       - name: Build (standalone UI)
         run: npm run build:web
 
+      - name: Check bundle size budget
+        run: npm run verify:bundle-size
+
       - name: Generate API docs
         run: npm run docs:api
