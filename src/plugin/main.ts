@@ -162,6 +162,7 @@ export default class SpecoratorPlugin extends Plugin {
 
   async updateSettings(partial: Partial<PluginSettings>): Promise<void> {
     const merged = { ...this.settings, ...partial }
+    this.settings = merged
     await this.core?.notifySettingsChanged('specorator', merged)
     const validated = (this.core?.getModuleSettings('specorator') ?? merged) as PluginSettings
     this.settings = validated
