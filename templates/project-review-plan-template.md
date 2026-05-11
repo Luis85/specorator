@@ -32,8 +32,8 @@ inputs:
 | Git history | `<range>` | Commit cadence and branch hygiene | pending |
 | Pull requests | `<query>` | Review feedback and rework | pending |
 | CI | `<query>` | Verification failures and flaky checks | pending |
-| Issue mirror sync | `npm run sync:issues -- --dry-run --json` or `skipped: <reason>` | Advisory comparison between local `issues/` records and GitHub issue metadata | pending |
-| Issue mirror drift | `npm run check:issues` | Advisory local drift check for malformed issue records and specs without linked issues | pending |
+| Issue mirror sync | project-specific command or `skipped: <reason>` | Advisory comparison between local `issues/` records and GitHub issue metadata | pending |
+| Issue mirror drift | project-specific command or `skipped: <reason>` | Advisory local drift check for malformed issue records and specs without linked issues | pending |
 | Retrospectives | `specs/*/retrospective.md` | Prior learnings | pending |
 
 ## Issue mirror evidence

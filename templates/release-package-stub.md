@@ -21,7 +21,7 @@ entry_point: false
 
 ## How to use this stub
 
-This file shipped in the released Specorator template package as a **stub** — a structural placeholder, not finished content. The codebase form (in the Specorator template repository) carries built-up examples and version-specific commentary that are intentionally omitted from the released package per the fresh-surface contract documented in [`docs/release-package-contents.md`](../docs/release-package-contents.md). (The ADR that records the policy ships in the codebase only — the released `docs/adr/` folder ships with a stub `README.md` explaining how the consumer files their own ADRs starting at `ADR-0001`.)
+This file shipped in the released Specorator template package as a **stub** — a structural placeholder, not finished content. The codebase form (in the Specorator template repository) carries built-up examples and version-specific commentary that are intentionally omitted from the released package. (The ADR that records the policy ships in the codebase only — the released `docs/adr/` folder ships with a stub `README.md` explaining how the consumer files their own ADRs starting at `ADR-0001`.)
 
 To fill it in:
 
@@ -32,4 +32,4 @@ To fill it in:
 
 If you find a section heading that does not fit your product, replace it. If you find one that you do not yet have an answer for, leave the `<!-- TODO: ... -->` marker — Specorator agents and skills will surface the gap rather than fail.
 
-The reference shape for stubs is this file. The methodology page that documents how content is stubified for the released package is [`docs/release-package-contents.md`](../docs/release-package-contents.md). (Maintainers reading the codebase can also see the full policy record in `docs/adr/` — that ADR ships in the codebase only and is excluded from the released package by the very policy it records.)
+The reference shape for stubs is this file. (Maintainers reading the upstream codebase can see the full policy record in `docs/adr/` — that ADR ships in the upstream codebase only and is excluded from the released package by the very policy it records.)
