@@ -48,7 +48,7 @@ function registerCanvasContract(harness: Harness): void {
 			const data = { nodes: [{ id: 'original' }], edges: [] }
 			await port.writeCanvas('diagram.canvas', data)
 			// Mutate the source after the write.
-			;(data.nodes[0] as { id: string }).id = 'mutated'
+			data.nodes[0].id = 'mutated'
 			const result = await port.readCanvas('diagram.canvas')
 			expect((result.nodes![0] as { id: string }).id).toBe('original')
 		})

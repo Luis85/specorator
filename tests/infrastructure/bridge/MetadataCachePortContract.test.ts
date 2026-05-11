@@ -36,7 +36,8 @@ function registerMetadataCacheContract(harness: Harness): void {
 
 		it('getAllTags returns a plain object', () => {
 			const tags = port.getAllTags()
-			expect(tags !== null && typeof tags === 'object' && !Array.isArray(tags)).toBe(true)
+			expect(typeof tags).toBe('object')
+			expect(Array.isArray(tags)).toBe(false)
 		})
 
 		it('returns null for an unresolved linkpath destination', () => {
