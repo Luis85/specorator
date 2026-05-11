@@ -20,6 +20,9 @@ import {
 } from '@/infrastructure/bridge/ports'
 import { LocalStorageBridge } from '@/infrastructure/localstorage/LocalStorageBridge'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
+import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
+import { FeatureService } from '@/application/feature/FeatureService'
+import { FEATURE_SERVICE_KEY } from './composables/useFeatureService'
 import { DEV_FIXTURES } from '@/infrastructure/mock/fixtures'
 import { createEventBus } from '@/domain/shared/event-bus'
 import { bootstrapModules } from '@/core/bootstrap'
@@ -60,6 +63,10 @@ void bridge.getSettings()
     app.provide(WORKSPACE_PORT, bridge)
     app.provide(NOTIFICATION_PORT, bridge)
     app.provide(LOGGER_PORT, bridge)
+    app.provide(
+      FEATURE_SERVICE_KEY,
+      new FeatureService(new FeatureRepository(bridge, bridge, bridge)),
+    )
 
     // Set errorHandler BEFORE mount() so initial render/setup errors flow through
     // bridge.error()/showError() instead of escaping to console.
