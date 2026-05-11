@@ -22,7 +22,7 @@ Before changing files, read:
 
 Load scoped steering docs from `docs/steering/` only when they matter to the task.
 
-For architecture-improvement work — reducing coupling, refactoring shallow modules, or improving testability / AI-navigability — also read `.claude/skills/improve-codebase-architecture/SKILL.md` before proposing edits. Treat it as a practice guide: surface deepening opportunities first, then make implementation changes only after a candidate is selected.
+For architecture-improvement work — reducing coupling, refactoring shallow modules, or improving testability / AI-navigability — read the `improve-codebase-architecture` skill if available (shipped by the specorator plugin; not tracked in this repo). Surface deepening opportunities first, then make implementation changes only after a candidate is selected.
 
 ## GitHub access
 
