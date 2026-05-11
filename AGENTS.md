@@ -9,7 +9,7 @@ If a rule here disagrees with `docs/contributing.md`, the human guide wins; open
 ## 0. Read these first
 
 1. **`memory/constitution.md`** — governing principles. Override only with explicit human approval.
-2. **`.claude/memory/MEMORY.md`** — operational memory: workflow rules + project state, indexed.
+2. **`.claude/memory/MEMORY.md`** *(agent-local, not in repo)* — operational memory index maintained by Claude Code per machine. Load if present; skip if absent.
 3. **`docs/specorator.md`** — full Specorator workflow definition (Stages 1–11 + opt-in tracks).
 4. **Current feature's `specs/<feature>/workflow-state.md`** — active stage + what's already produced.
 
