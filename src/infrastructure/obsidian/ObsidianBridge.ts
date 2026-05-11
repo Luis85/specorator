@@ -1,4 +1,4 @@
-import { Notice, TFile, TFolder, type App } from 'obsidian'
+import { Notice, TFile, TFolder, normalizePath, type App } from 'obsidian'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 import type {
 	SettingsPort,
@@ -33,22 +33,25 @@ export class ObsidianBridge
   ) {}
 
   async readFile(path: string): Promise<string> {
-    const file = this.app.vault.getAbstractFileByPath(path)
-    if (!(file instanceof TFile)) throw new Error(`File not found: ${path}`)
+    const normalized = normalizePath(path)
+    const file = this.app.vault.getAbstractFileByPath(normalized)
+    if (!(file instanceof TFile)) throw new Error(`File not found: ${normalized}`)
     return this.app.vault.read(file)
   }
 
   async writeFile(path: string, content: string): Promise<void> {
-    const existing = this.app.vault.getAbstractFileByPath(path)
+    const normalized = normalizePath(path)
+    const existing = this.app.vault.getAbstractFileByPath(normalized)
     if (existing instanceof TFile) {
       await this.app.vault.modify(existing, content)
     } else {
-      await this.app.vault.create(path, content)
+      await this.app.vault.create(normalized, content)
     }
   }
 
   async deleteFile(path: string): Promise<void> {
-    const file = this.app.vault.getAbstractFileByPath(path)
+    const normalized = normalizePath(path)
+    const file = this.app.vault.getAbstractFileByPath(normalized)
     if (file instanceof TFile) {
       const fileManager = this.app.fileManager as FileManagerWithTrash
       if (typeof fileManager.trashFile === 'function') {
@@ -62,29 +65,34 @@ export class ObsidianBridge
   }
 
   async listFiles(folder: string): Promise<string[]> {
-    const dir = this.app.vault.getAbstractFileByPath(folder)
+    const normalized = normalizePath(folder)
+    const dir = this.app.vault.getAbstractFileByPath(normalized)
     if (!(dir instanceof TFolder)) return []
     return dir.children.filter((f): f is TFile => f instanceof TFile).map((f) => f.path)
   }
 
   async listFolders(parent: string): Promise<string[]> {
-    const dir = this.app.vault.getAbstractFileByPath(parent)
+    const normalized = normalizePath(parent)
+    const dir = this.app.vault.getAbstractFileByPath(normalized)
     if (!(dir instanceof TFolder)) return []
     return dir.children.filter((f): f is TFolder => f instanceof TFolder).map((f) => f.name)
   }
 
   async fileExists(path: string): Promise<boolean> {
-    return this.app.vault.getAbstractFileByPath(path) instanceof TFile
+    const normalized = normalizePath(path)
+    return this.app.vault.getAbstractFileByPath(normalized) instanceof TFile
   }
 
   async createFolder(path: string): Promise<void> {
-    if (!(this.app.vault.getAbstractFileByPath(path) instanceof TFolder)) {
-      await this.app.vault.createFolder(path)
+    const normalized = normalizePath(path)
+    if (!(this.app.vault.getAbstractFileByPath(normalized) instanceof TFolder)) {
+      await this.app.vault.createFolder(normalized)
     }
   }
 
   async openFile(path: string): Promise<void> {
-    const file = this.app.vault.getAbstractFileByPath(path)
+    const normalized = normalizePath(path)
+    const file = this.app.vault.getAbstractFileByPath(normalized)
     if (file instanceof TFile) {
       await this.app.workspace.getLeaf().openFile(file)
     }
