@@ -184,3 +184,22 @@ Full recipe: [`.codex/address-review.md`](./.codex/address-review.md).
 | [`docs/security/supply-chain.md`](./docs/security/supply-chain.md) | Supply-chain hardening policy (audit, dep-review, Scorecard, SHA-pinning). |
 | [`docs/local-development.md`](./docs/local-development.md) | Local dev environment setup. |
 | [`decisions/`](./decisions/) | Architectural decision records. |
+
+---
+
+## 10. agentic-workflow Claude plugin
+
+The upstream agentic-workflow methodology that governs delivery in this repo ships as a Claude Code plugin from [`Luis85/agentic-workflow`](https://github.com/Luis85/agentic-workflow) (current release: v0.8.0). When activated it adds spec-first commands (`/spec`, `/adr`, `/issue`, `/roadmap`, …), agent personas, and skills aligned with the Specorator workflow.
+
+**Install (one-time, per Claude Code session):**
+
+```
+/plugin marketplace add https://github.com/Luis85/agentic-workflow.git
+/plugin install specorator@specorator-marketplace
+```
+
+The marketplace manifest lives at [`Luis85/agentic-workflow:.claude-plugin/marketplace.json`](https://github.com/Luis85/agentic-workflow/blob/develop/.claude-plugin/marketplace.json); the plugin contents live on the `dist/claude-plugin` branch under `claude-plugin/specorator/`.
+
+**Coexistence with project-local skills:** the repo ships a local skill at `.claude/skills/publish-release` that the plugin does not override. If both are present, the local skill wins (project-level skills take precedence). Document any further project-specific deviations in this section.
+
+The activation step is intentionally not declared in `.claude/settings.json`'s `enabledPlugins` — marketplaces from external git URLs must be registered at runtime via the slash command above before the plugin can be enabled. Closes the open work tracked in upstream #181 / consumer #97.

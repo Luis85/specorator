@@ -10,9 +10,11 @@ npm run lint               # ESLint
 npm run lint:fix           # ESLint with auto-fix
 npm run format             # Prettier (write)
 npm run format:check       # Prettier (check only)
-npm run test               # Vitest once
-npm run test:watch         # Vitest watch mode
-npm run test:coverage      # Vitest + lcov coverage report
+npm run test               # Vitest unit tests (fast, no browser)
+npm run test:storybook     # Storybook/Playwright tests (requires Chromium)
+npm run test:all           # unit + storybook combined
+npm run test:watch         # Vitest unit watch mode
+npm run test:coverage      # unit tests + lcov coverage report
 npm run build              # type-check + build Obsidian plugin bundle → project root
 npm run dev:plugin         # plugin build in watch mode
 npm run build:web          # build standalone browser UI → dist-standalone/

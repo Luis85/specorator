@@ -57,7 +57,26 @@ develop                      main
 
 ## Step-by-step process
 
-### Step 1 — Decide and announce the bump
+### Step 1 — Pre-flight gate + decide the bump
+
+**Run the pre-flight gate first.** It aborts on the first failure, so fix any reported issue before continuing.
+
+```sh
+npm run release:preflight
+```
+
+Pre-flight checks (defined in `scripts/release-preflight.mjs`):
+
+- `README.md` and `LICENSE` exist at repo root
+- No sample-plugin remnants (`SampleModal`, `SampleSettingTab`) in `src/`
+- `manifest.json` · `package.json` · `versions.json` versions are consistent (`validate-manifest.js`)
+- `manifest.description` ≤ 250 chars, no emoji, does not start with "This plugin", ends with `.`
+- Release assets (`main.js`, `manifest.json`, `styles.css`) are present and non-empty
+- Advisory: warns if `fundingUrl` is set without a live donation page
+
+If the gate exits non-zero: stop, report the errors, do not proceed to the bump.
+
+---
 
 Read the current version from `manifest.json`:
 

@@ -1,6 +1,8 @@
 import { Plugin, TFolder } from 'obsidian'
 import { SpecoratorView, VIEW_TYPE } from './SpecoratorView'
 import { SpecoratorSettingTab } from './settings'
+import { promoteLegacyFlatSettings } from './loadSettings-migrate'
+import { ensureLeafLoaded } from './leafLoader'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
@@ -11,18 +13,6 @@ import { PluginCore } from '@/core/plugin-core'
 import { ALL_MODULES, type ModuleDescriptor } from '@/modules'
 import { i18nMerge, i18nTranslate, setLocale, type SupportedLocale } from '@/ui/i18n'
 import type { TranslationPort } from '@/domain/ports'
-
-/** Keys that belong to the flat PluginSettings namespace. */
-const PLUGIN_SETTINGS_KEYS: ReadonlyArray<keyof PluginSettings> = [
-  'locale',
-  'specsFolder',
-  'archiveFolder',
-  'decisionsFolder',
-  'constitutionFile',
-  'gateStrictness',
-  'teamMode',
-  'logLevel',
-]
 
 export default class SpecoratorPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS }
@@ -56,6 +46,7 @@ export default class SpecoratorPlugin extends Plugin {
         new ObsidianMetadataCacheAdapter(this.app),
         new ObsidianCanvasAdapter(this.bridge),
       ),
+      isMcpServerEnabled: () => this.settings.mcpServerEnabled,
     })
 
     setLocale(this.settings.locale as SupportedLocale)
@@ -85,8 +76,19 @@ export default class SpecoratorPlugin extends Plugin {
       callback: () => void this.activateView(),
     })
 
+    this.addCommand({
+      id: 'start-mcp-server',
+      name: 'Start MCP server',
+      callback: () => void this.updateSettings({ mcpServerEnabled: true }),
+    })
+
+    this.addCommand({
+      id: 'stop-mcp-server',
+      name: 'Stop MCP server',
+      callback: () => void this.updateSettings({ mcpServerEnabled: false }),
+    })
+
     this.addSettingTab(new SpecoratorSettingTab(this.app, this))
-    this.detectLegacyVaultLayout()
 
     this.registerObsidianProtocolHandler('specorator', (params) => {
       const searchParams = new URLSearchParams(Object.entries(params))
@@ -104,8 +106,17 @@ export default class SpecoratorPlugin extends Plugin {
       }
       this.bridge?.showWarning(`Unknown Specorator URI action: "${action}"`)
     })
+
+    // Workspace/vault index isn't guaranteed ready during onload(). Defer any
+    // logic that reads workspace layout or vault state until layout is ready.
+    this.app.workspace.onLayoutReady(() => {
+      this.detectLegacyVaultLayout()
+    })
   }
 
+  // Obsidian's lifecycle guarantees a single onunload() call when the plugin
+  // is disabled or the app exits, so detaching our own leaves here is the
+  // expected cleanup path despite the obsidianmd/detach-leaves rule's caution.
   // eslint-disable-next-line obsidianmd/detach-leaves
   override onunload(): void {
     this.app.workspace.detachLeavesOfType(VIEW_TYPE)
@@ -119,24 +130,7 @@ export default class SpecoratorPlugin extends Plugin {
     const stored = (await this.loadData()) as Record<string, unknown> | null
     const raw: Record<string, unknown> = { ...(stored ?? {}) }
 
-    // NFR-AVS-004: treat legacy `featuresFolder` as `specsFolder` if present.
-    if (typeof raw.featuresFolder === 'string' && typeof raw.specsFolder !== 'string') {
-      raw.specsFolder = raw.featuresFolder
-    }
-
-    // Promote legacy flat PluginSettings to the specorator sub-key (W7 storage migration).
-    if (!('specorator' in raw)) {
-      const specorator: Record<string, unknown> = {}
-      for (const key of PLUGIN_SETTINGS_KEYS) {
-        if (key in raw) specorator[key] = raw[key]
-      }
-      this._storedData = {
-        ...raw,
-        specorator,
-      }
-    } else {
-      this._storedData = raw
-    }
+    this._storedData = promoteLegacyFlatSettings(raw)
 
     this.settings = {
       ...DEFAULT_SETTINGS,
@@ -146,6 +140,7 @@ export default class SpecoratorPlugin extends Plugin {
 
   async updateSettings(partial: Partial<PluginSettings>): Promise<void> {
     const merged = { ...this.settings, ...partial }
+    this.settings = merged
     await this.core?.notifySettingsChanged('specorator', merged)
     const validated = (this.core?.getModuleSettings('specorator') ?? merged) as PluginSettings
     this.settings = validated
@@ -185,6 +180,7 @@ export default class SpecoratorPlugin extends Plugin {
 
     const existing = workspace.getLeavesOfType(VIEW_TYPE)
     if (existing.length > 0) {
+      await ensureLeafLoaded(existing[0])
       void workspace.revealLeaf(existing[0])
       return
     }
