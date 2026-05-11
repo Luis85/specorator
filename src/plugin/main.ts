@@ -1,6 +1,7 @@
 import { Plugin, TFolder } from 'obsidian'
 import { SpecoratorView, VIEW_TYPE } from './SpecoratorView'
 import { SpecoratorSettingTab } from './settings'
+import { ensureLeafLoaded } from './leafLoader'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
@@ -86,7 +87,6 @@ export default class SpecoratorPlugin extends Plugin {
     })
 
     this.addSettingTab(new SpecoratorSettingTab(this.app, this))
-    this.detectLegacyVaultLayout()
 
     this.registerObsidianProtocolHandler('specorator', (params) => {
       const searchParams = new URLSearchParams(Object.entries(params))
@@ -103,6 +103,12 @@ export default class SpecoratorPlugin extends Plugin {
         return
       }
       this.bridge?.showWarning(`Unknown Specorator URI action: "${action}"`)
+    })
+
+    // Workspace/vault index isn't guaranteed ready during onload(). Defer any
+    // logic that reads workspace layout or vault state until layout is ready.
+    this.app.workspace.onLayoutReady(() => {
+      this.detectLegacyVaultLayout()
     })
   }
 
@@ -188,6 +194,7 @@ export default class SpecoratorPlugin extends Plugin {
 
     const existing = workspace.getLeavesOfType(VIEW_TYPE)
     if (existing.length > 0) {
+      await ensureLeafLoaded(existing[0])
       void workspace.revealLeaf(existing[0])
       return
     }
