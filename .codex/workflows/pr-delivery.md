@@ -48,6 +48,6 @@ Every Codex-opened PR should include:
 - Linked requirement, task, ADR, issue, or local issue file when one exists.
 - Known limitations or skipped checks.
 
-The PR title is part of the delivery contract, not cosmetic metadata. Validate it against [`docs/ci-automation.md`](../../docs/ci-automation.md#pr-title-rules) before opening the PR so CI does not fail on a metadata-only error after local `verify` has passed.
+The PR title is part of the delivery contract, not cosmetic metadata. Use Conventional Commits format. Allowed types: `feat`, `fix`, `chore`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `revert`. Scopes are optional. Do not invent types such as `plan:` or `release:`.
 
 Codex should not stop at "pushed a branch" when GitHub access is available. The expected endpoint is an open PR and an explicit next-step prompt for the human.
