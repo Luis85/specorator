@@ -11,14 +11,16 @@ Push a real branch, open a draft PR, request a Codex review, respond to the feed
 
 ## Steps
 
-1. **Create a topic branch** from your integration branch. Detect it (defaults to `main` if `origin/HEAD` is not set):
+1. **Create a topic branch** from your integration branch. Detect it (defaults to `develop` if `origin/HEAD` is not set):
    ```bash
    INTEGRATION=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
    INTEGRATION=${INTEGRATION:-develop}
    git switch "$INTEGRATION"
    git pull --ff-only
-   git switch -c feat/<scope>/<short-description>
+   git switch -c feature/<short-kebab>
    ```
+
+   Branch prefix must be one of `feature`, `fix`, `docs`, `chore`, `refactor` (see `AGENTS.md` §4).
 
 2. **Make a small, real change.** For example: fix a typo in a docs file, add a placeholder test, or update a template. The change does not need to be complete — it just needs to exist.
 
@@ -30,7 +32,7 @@ Push a real branch, open a draft PR, request a Codex review, respond to the feed
 
 4. **Push and open a draft PR**:
    ```bash
-   git push -u origin feat/<scope>/<short-description>
+   git push -u origin feature/<short-kebab>
    gh pr create --draft --title "feat(<scope>): <what it does>" --body "Closes #<issue-number>"
    ```
 

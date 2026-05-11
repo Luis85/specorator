@@ -1,6 +1,6 @@
 # State-file shared sections
 
-> Reference for the free-form sections every track-state template carries. Linked from `workflow-state-template.md`, `discovery-state-template.md`, `stock-taking-state-template.md`, `deal-state-template.md`, `project-state-template.md`, `roadmap-state-template.md`, `quality-state-template.md`, `scaffolding-state-template.md`, `portfolio-state-template.md`. Skill / agent code must keep the section *headings* in each state file (validated by `check:specs`); the *prose explanations* are factored here so each template stays terse.
+> Reference for the free-form sections every track-state template carries. Linked from `workflow-state-template.md`, `discovery-state-template.md`, `stock-taking-state-template.md`, `deal-state-template.md`, `project-state-template.md`, `roadmap-state-template.md`, `quality-state-template.md`, `scaffolding-state-template.md`, `portfolio-state-template.md`. Skill / agent code must keep the section *headings* in each state file (enforced by agent review, not an automated command); the *prose explanations* are factored here so each template stays terse.
 
 ## Status enums
 
