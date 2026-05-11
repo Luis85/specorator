@@ -181,7 +181,10 @@ export default defineConfig(
 			'prefer-const': 'error',
 			complexity: ['error', 10],
 
-			// W5 rule pack — DOM injection bans
+			// W5 rule pack — DOM injection bans + dialog globals (member-call form).
+			// `no-restricted-globals` covers bare confirm()/alert()/prompt(); this
+			// block covers the window.confirm() / window.alert() / window.prompt()
+			// member-call form that `no-restricted-globals` does not reach.
 			'no-restricted-properties': [
 				'error',
 				{
@@ -200,6 +203,24 @@ export default defineConfig(
 				{
 					property: 'insertAdjacentHTML',
 					message: 'insertAdjacentHTML is unsafe; use createEl()/append().',
+				},
+				{
+					object: 'window',
+					property: 'confirm',
+					message:
+						'window.confirm blocks the Obsidian event loop. Use an Obsidian Modal subclass instead.',
+				},
+				{
+					object: 'window',
+					property: 'alert',
+					message:
+						'window.alert blocks the Obsidian event loop. Use NotificationPort or an Obsidian Modal subclass instead.',
+				},
+				{
+					object: 'window',
+					property: 'prompt',
+					message:
+						'window.prompt blocks the Obsidian event loop. Use an Obsidian Modal subclass instead.',
 				},
 			],
 
