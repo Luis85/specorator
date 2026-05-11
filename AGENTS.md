@@ -17,7 +17,7 @@ If a rule here disagrees with `docs/contributing.md`, the human guide wins; open
 
 - **Stay in scope.** Each agent role has a defined responsibility (see `.claude/agents/` — shipped by the Specorator plugin, not tracked in this repo). No code in research; no requirement changes during implementation.
 - **Specs = source of truth.** Implementation reveals a missing requirement → escalate, don't silently invent. Update spec first, then code.
-- **Respect quality gates.** Acceptance criteria in `docs/quality-framework.md` are non-negotiable.
+- **Respect quality gates.** Acceptance criteria in `docs/quality-framework.md` are non-negotiable once the stub is populated for your project.
 - **Trace everything.** `REQ-<AREA>-NNN`, `T-<AREA>-NNN`, `TEST-<AREA>-NNN`, `ADR-NNNN`. Reference IDs in commits, PRs, artifacts. See [`docs/traceability.md`](docs/traceability.md).
 - **EARS for requirements.** Functional requirements use EARS notation — map 1:1 to tests. See [`docs/ears-notation.md`](docs/ears-notation.md).
 - **ADRs for irreversible decisions.** Architecturally load-bearing → ADR in `docs/adr/`. Use `templates/adr-template.md`. ADR bodies are immutable; supersede to change.
