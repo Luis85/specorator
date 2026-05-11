@@ -15,7 +15,7 @@ updated: YYYY-MM-DD
 # Frame — <Sprint title>
 
 > Phase 1 — *Discover + Define.* Turn an outcome into testable opportunity statements.
-> Methods used here are described in [`docs/discovery-track.md`](../docs/discovery-track.md#5-method-library).
+> Methods used here are guided by the `/discovery:frame` conductor in the Specorator plugin.
 
 ## Strategic outcome
 
