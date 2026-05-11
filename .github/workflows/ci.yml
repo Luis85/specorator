@@ -96,17 +96,23 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Test (unit)
+        run: npm run test
+
       - name: Install Playwright Chromium (storybook test runner)
         run: npx playwright install --with-deps chromium
 
-      - name: Test
-        run: npm run test
+      - name: Test (Storybook)
+        run: npm run test:storybook
 
       - name: Build (plugin)
         run: npm run build
 
       - name: Build (standalone UI)
         run: npm run build:web
+
+      - name: Check bundle size budget
+        run: npm run verify:bundle-size
 
       - name: Generate API docs
         run: npm run docs:api

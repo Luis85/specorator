@@ -11,8 +11,26 @@ function coerceString(value: unknown, fallback: string): string {
 export const coreSettingsModule = defineModule<PluginSettings>({
   id: 'specorator',
   settingsKey: 'specorator',
-  settingsVersion: 1,
+  settingsVersion: 2,
   settingsDefaults: { ...DEFAULT_SETTINGS },
+
+  /**
+   * Migrate stored settings forward to the current schema version.
+   *
+   * v1 → v2: introduces `mcpServerEnabled`. Default it to `false` (opt-out)
+   * for upgrading installs so existing users do not silently start receiving
+   * a local MCP server. Only inject when absent — never flip an existing
+   * user choice.
+   */
+  migrate(fromVersion: number, blob: unknown): unknown {
+    const out = (blob !== null && typeof blob === 'object' && !Array.isArray(blob)
+      ? { ...(blob as Record<string, unknown>) }
+      : {}) as Record<string, unknown>
+    if (fromVersion < 2 && !('mcpServerEnabled' in out)) {
+      out.mcpServerEnabled = false
+    }
+    return out
+  },
 
   validateSettings(raw: unknown): PluginSettings {
     const r = (raw ?? {}) as Partial<PluginSettings>
@@ -29,6 +47,8 @@ export const coreSettingsModule = defineModule<PluginSettings>({
       logLevel: (VALID_LOG_LEVELS as ReadonlyArray<string>).includes(r.logLevel as string)
         ? r.logLevel!
         : DEFAULT_SETTINGS.logLevel,
+      mcpServerEnabled:
+        typeof r.mcpServerEnabled === 'boolean' ? r.mcpServerEnabled : DEFAULT_SETTINGS.mcpServerEnabled,
     }
   },
 
@@ -103,6 +123,14 @@ export const coreSettingsModule = defineModule<PluginSettings>({
           { value: 'error', label: 'Error' },
         ],
         default: DEFAULT_SETTINGS.logLevel,
+      },
+      {
+        type: 'toggle',
+        key: 'mcpServerEnabled',
+        label: 'Enable MCP server (advanced)',
+        description:
+          'Allow local MCP clients to access your Specorator data via 127.0.0.1. Off by default for privacy.',
+        default: DEFAULT_SETTINGS.mcpServerEnabled,
       },
     ],
   },
