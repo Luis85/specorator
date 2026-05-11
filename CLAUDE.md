@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+@AGENTS.md
+@memory/constitution.md
+@.claude/memory/MEMORY.md
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Commands
@@ -163,6 +167,33 @@ See `CONSTITUTION.md` §3 and `decisions/DEC-001` for rationale.
 - `@` path alias resolves to `src/` in both Vite and Vitest configs.
 - The plugin build writes `main.js` to the project root (gitignored). `manifest.json` and `styles.css` are committed.
 - New requirements and design decisions follow an intake-first workflow: open a **Requirement intake** or **Design intake** issue, add a draft under `requirements/intake/`, and follow `docs/process/requirements-intake.md` before implementing.
+
+## Specorator workflow
+
+Two entry points for the lifecycle (Stages 1–11):
+
+- **Conversational (recommended):** say "let's start a feature" or "drive this end-to-end" — the `orchestrate` skill gates with `AskUserQuestion` and dispatches the right `/spec:*` command per stage.
+- **Manual:** `/spec:start` → `/spec:idea` → `/spec:research` → `/spec:requirements` → `/spec:design` → `/spec:specify` → `/spec:tasks` → `/spec:implement` → `/spec:test` → `/spec:review` → `/spec:release` → `/spec:retro`. Optional gates: `/spec:clarify`, `/spec:analyze`.
+
+State lives in `specs/<feature-slug>/workflow-state.md`. Slash commands update it on stage completion — don't edit by hand mid-workflow.
+
+Opt-in tracks: Discovery (`/discovery:start`), Stock-taking (`/stock-taking:start`), Sales (`/sales:start`), Project Manager (`/project:start`), Roadmap (`/roadmap:start`), Portfolio (`/portfolio:start`), Quality Assurance (`/quality:start`), Project Scaffolding (`/scaffold:start`), Design (`/design:start`), Issue-breakdown (`/issue:breakdown`), Issue-draft (`/issue:draft`), Issue-tackle (`/issue:tackle`), Specorator Improvement (`/specorator:update`).
+
+### Claude Code conventions
+
+- Subagents are project-scoped (`.claude/agents/`) with intentionally narrow tool lists. Missing tool = feature, not bug.
+- Skills live in `.claude/skills/` — auto-trigger from natural language; explicit invoke via `/<skill-name>`.
+- Topic branches live in worktrees under `.worktrees/<slug>/`. See [`docs/worktrees.md`](docs/worktrees.md).
+- Where every artifact lands is documented in [`docs/sink.md`](docs/sink.md). Don't invent new sink locations.
+- New work packages (briefs, RFPs, zips, reference material) land in [`inputs/`](inputs/). Every conductor consults `inputs/` at the start of its scope phase. No auto-extract — see [`docs/inputs-ingestion.md`](docs/inputs-ingestion.md).
+- For irreversible architectural decisions, use `/adr:new` (wraps `record-decision` skill).
+- For glossary terms, use `/glossary:new "<term>"`. Entries live one-per-file under `docs/glossary/`.
+
+### What not to do
+
+- Don't expand the workflow with new stages or roles without an ADR.
+- Don't write code from a vague brief — run the upstream stages first or explicitly mark them skipped.
+- Don't merge feature work directly into workflow template files (`docs/`, `templates/`, `.claude/`) unless improving the template itself — use `/specorator:update`.
 
 ## graphify
 

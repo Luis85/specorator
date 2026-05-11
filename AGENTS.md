@@ -6,6 +6,53 @@ If a rule here disagrees with `docs/contributing.md`, the human guide wins; open
 
 ---
 
+## 0. Read these first
+
+1. **`memory/constitution.md`** — governing principles. Override only with explicit human approval.
+2. **`.claude/memory/MEMORY.md`** — operational memory: workflow rules + project state, indexed.
+3. **`docs/specorator.md`** — full Specorator workflow definition (Stages 1–11 + opt-in tracks).
+4. **Current feature's `specs/<feature>/workflow-state.md`** — active stage + what's already produced.
+
+## 0a. Operating rules
+
+- **Stay in scope.** Each agent role has a defined responsibility (see `.claude/agents/`). No code in research; no requirement changes during implementation.
+- **Specs = source of truth.** Implementation reveals a missing requirement → escalate, don't silently invent. Update spec first, then code.
+- **Respect quality gates.** Acceptance criteria in `docs/quality-framework.md` are non-negotiable.
+- **Trace everything.** `REQ-<AREA>-NNN`, `T-<AREA>-NNN`, `TEST-<AREA>-NNN`, `ADR-NNNN`. Reference IDs in commits, PRs, artifacts. See [`docs/traceability.md`](docs/traceability.md).
+- **EARS for requirements.** Functional requirements use EARS notation — map 1:1 to tests. See [`docs/ears-notation.md`](docs/ears-notation.md).
+- **ADRs for irreversible decisions.** Architecturally load-bearing → ADR in `docs/adr/`. Use `templates/adr-template.md`. ADR bodies are immutable; supersede to change.
+- **Update workflow state.** Finishing a stage → update `specs/<feature>/workflow-state.md`.
+- **Consult `inputs/` at intake.** Every conductor's scope phase lists `inputs/` and asks the user which items are relevant. Never auto-extract zips or archives. See [`docs/inputs-ingestion.md`](docs/inputs-ingestion.md).
+- **Escalate ambiguity.** No guessing. Ask the human or open a `clarifications` block.
+- **Template-self changes use `/specorator:update` first.** Keywords: new track, skill, workflow, update template.
+- **Memory edits are docs-only.** Updates to `.claude/memory/` ride their own PR with no changeset.
+
+## 0b. Agent classes
+
+Track taxonomy frozen in ADR-0026. Agent classes per track:
+
+| Class | Purpose |
+|---|---|
+| **Lifecycle (Stage 1–11 specialists)** | analyst, pm, ux/ui-designer, architect, planner, dev, qa, reviewer, release-manager, sre, retrospective |
+| **Discovery specialists** *(opt-in)* | facilitator + product-strategist, user-researcher, game-designer, divergent-thinker, critic, prototyper. Produces `chosen-brief.md`. |
+| **Stock-taking** *(opt-in, brownfield)* | `legacy-auditor`. Inventory existing systems before new work. |
+| **Sales** *(opt-in, service provider)* | `sales-qualifier`, `scoping-facilitator`, `estimator`, `proposal-writer`. Produces `order.md`. |
+| **Project manager** *(opt-in)* | Client-engagement governance (P3.Express). State under `projects/<slug>/`. Never edits `specs/`. |
+| **Roadmap manager** *(opt-in)* | Outcome roadmaps + stakeholder maps under `roadmaps/<slug>/`. Read-only on `specs/`. |
+| **Portfolio** *(opt-in)* | P5 Express X/Y/Z cycles. Reads `specs/*/workflow-state.md`; never modifies spec artifacts. |
+| **Project scaffolder** *(opt-in)* | Source-led onboarding from collected docs/folders. State under `scaffolding/<slug>/`. |
+| **Quality assurance** *(opt-in)* | ISO 9001-aligned readiness review. State under `quality/<slug>/`. |
+| **Project review** *(opt-in)* | Evidence-backed history review; captures learnings, proposes improvements, opens draft PR. |
+| **Issue-breakdown** *(opt-in)* | Post-tasks. Issue → draft PRs. |
+| **Issue-draft** *(opt-in)* | Post-Stage-1. Early draft PR from `idea.md`; living-PRD issue body. |
+| **Issue-tackle** *(opt-in)* | Triage-first conductor. Scans issue/PR for open tasks, proposes path, creates worktree, opens PR. |
+| **Design** *(opt-in)* | Brand-aware surface creation. State under `designs/<slug>/`. |
+| **Specorator improvement** *(companion)* | Improve this template's scripts, tooling, workflows, docs, agents, skills, templates. |
+
+Skills (`.claude/skills/`) = reusable how-tos any agent invokes. Conductors are the conversational entry points.
+
+---
+
 ## 1. Environment
 
 - **Runtime:** Node.js LTS (matches `lts/*` in `.github/workflows/ci.yml`).
@@ -179,8 +226,13 @@ Full recipe: [`.codex/address-review.md`](./.codex/address-review.md).
 | Document | What it covers |
 |---|---|
 | [`CLAUDE.md`](./CLAUDE.md) | Claude-Code-specific repository guide (architecture, paths, conventions). Read first. |
+| [`memory/constitution.md`](./memory/constitution.md) | Non-negotiable governing principles. |
+| [`docs/specorator.md`](./docs/specorator.md) | Full Specorator workflow definition (Stages 1–11 + all tracks). |
+| [`docs/sink.md`](./docs/sink.md) | Canonical list of where every artifact lands. Don't invent new locations. |
+| [`docs/verify-gate.md`](./docs/verify-gate.md) | What `npm run verify` checks and when to run it. |
+| [`docs/worktrees.md`](./docs/worktrees.md) | Topic branch worktree conventions. |
 | [`docs/contributing.md`](./docs/contributing.md) | Human-oriented contribution guide. Authoritative for triage, labels, milestones, merge policy. |
-| [`CONSTITUTION.md`](./CONSTITUTION.md) | Non-negotiable working agreement. |
+| [`CONSTITUTION.md`](./CONSTITUTION.md) | Non-negotiable working agreement (legacy location — see `memory/constitution.md`). |
 | [`docs/security/supply-chain.md`](./docs/security/supply-chain.md) | Supply-chain hardening policy (audit, dep-review, Scorecard, SHA-pinning). |
 | [`docs/local-development.md`](./docs/local-development.md) | Local dev environment setup. |
 | [`decisions/`](./decisions/) | Architectural decision records. |
