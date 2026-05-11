@@ -22,7 +22,7 @@ This repo treats Codex as an autonomous topic-branch contributor. When a human a
    Fresh worktrees do not share `node_modules` with the main checkout. Skipping this step can make first-run verify actions fail before they reach the actual project checks.
 5. Work only inside that worktree.
 6. Keep the change to one concern and update the corresponding docs, state files, or issue records in the same branch.
-7. Run the relevant verification gate before pushing. Use `npm run verify` as the final gate. During iteration, `specorator check:fast` (typecheck + tests + registry + agents), `specorator check:content` (links, ADR index, docs), and `specorator check:workflow` (specs, roadmaps, traceability) are available for narrower feedback. Run targeted checks and state exactly what passed.
+7. Run the relevant verification gate before pushing. Use `npm run verify` as the final gate. During iteration, use the narrower scripts defined in `package.json`: `npm run typecheck`, `npm run lint`, `npm run test`, `npm run verify:scaffold`, `npm run verify:workflows`. Run targeted checks and state exactly what passed.
 8. Commit with an imperative message that references relevant IDs or issue paths.
 9. Push the topic branch to `origin`.
 10. Open a pull request against the integration branch with a Conventional Commits title that matches the CI allowlist. Allowed title types are `feat`, `fix`, `chore`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, and `revert`; scopes are optional. Do not invent descriptive types such as `plan:` or `release:`. For planning artifacts and documentation-only specs, use `docs: ...`.

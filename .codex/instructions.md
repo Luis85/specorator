@@ -16,7 +16,7 @@ Before changing files, read:
 
 1. `AGENTS.md`
 2. `memory/constitution.md`
-3. `.claude/memory/MEMORY.md`
+3. `.claude/memory/MEMORY.md` *(agent-local, not tracked in repo — load if present, skip if absent)*
 4. The relevant workflow doc under `docs/`
 5. The relevant Codex workflow under `.codex/workflows/`
 
