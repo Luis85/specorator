@@ -445,6 +445,7 @@ export default defineConfig(
 		files: ['src/infrastructure/localstorage/**/*.ts'],
 		rules: {
 			'no-restricted-globals': 'off',
+			'no-alert': 'off',
 			'no-restricted-properties': ['error', ...DOM_INJECTION_BANS],
 		},
 	},
@@ -503,6 +504,7 @@ export default defineConfig(
 			// Empty arrow functions are used as no-op stubs in test fixtures.
 			'@typescript-eslint/no-empty-function': 'off',
 			'no-restricted-globals': 'off',
+			'no-alert': 'off',
 			// Re-declare keeping only DOM-injection bans so window.confirm/alert/prompt
 			// remain permitted in test fixtures and helpers.
 			'no-restricted-properties': ['error', ...DOM_INJECTION_BANS],
@@ -565,6 +567,7 @@ export default defineConfig(
 		files: ['stories/**/*.ts', '.storybook/**/*.ts'],
 		rules: {
 			'no-restricted-globals': 'off',
+			'no-alert': 'off',
 			'no-restricted-properties': ['error', ...DOM_INJECTION_BANS],
 			'no-restricted-imports': 'off',
 			'max-lines': 'off',
