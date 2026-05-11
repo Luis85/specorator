@@ -23,6 +23,7 @@
 		"test:coverage": "vitest run --configLoader runner --coverage",
 		"verify": "npm audit --audit-level=high --omit=dev && npm run typecheck && npm run lint && npm run test:coverage && npm run build && npm run build:web && npm run verify:bundle-size && npm run docs:api && npm run validate:manifest && npm run verify:scaffold && npm run verify:workflows && git diff --check --ignore-cr-at-eol",
 		"docs:api": "typedoc",
+		"release:preflight": "node scripts/release-preflight.mjs",
 		"validate:manifest": "node scripts/validate-manifest.js",
 		"verify:scaffold": "node scripts/verify-scaffold.mjs",
 		"verify:workflows": "node scripts/verify-workflows.js",
