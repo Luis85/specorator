@@ -11,10 +11,9 @@ Push a real branch, open a draft PR, request a Codex review, respond to the feed
 
 ## Steps
 
-1. **Create a topic branch** from your integration branch. Detect it (defaults to `develop` if `origin/HEAD` is not set):
+1. **Create a topic branch** from your integration branch (`develop` in this repository — replace if yours differs):
    ```bash
-   INTEGRATION=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
-   INTEGRATION=${INTEGRATION:-develop}
+   INTEGRATION=develop   # Replace with your repository's integration branch name
    git switch "$INTEGRATION"
    git pull --ff-only
    git switch -c feature/<short-kebab>
