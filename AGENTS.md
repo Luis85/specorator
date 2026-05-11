@@ -227,7 +227,7 @@ Full recipe: [`.codex/address-review.md`](./.codex/address-review.md).
 |---|---|
 | [`CLAUDE.md`](./CLAUDE.md) | Claude-Code-specific repository guide (architecture, paths, conventions). Read first. |
 | [`memory/constitution.md`](./memory/constitution.md) | Non-negotiable governing principles. |
-| [`docs/specorator.md`](./docs/specorator.md) | Full Specorator workflow definition (Stages 1–11 + all tracks). |
+| [`docs/specorator.md`](./docs/specorator.md) | Workflow definition stub — not yet populated; defer to plugin `CLAUDE.md` §Specorator workflow until filled in. |
 | [`docs/sink.md`](./docs/sink.md) | Canonical list of where every artifact lands. Don't invent new locations. |
 | [`docs/verify-gate.md`](./docs/verify-gate.md) | What `npm run verify` checks and when to run it. |
 | [`docs/worktrees.md`](./docs/worktrees.md) | Topic branch worktree conventions. |

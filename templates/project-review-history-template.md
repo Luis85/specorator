@@ -34,8 +34,8 @@ inputs:
 
 | Check | Command or source | Result | Notes |
 |---|---|---|---|
-| Sync dry-run | `npm run sync:issues -- --dry-run --json` | pending | Advisory; skip with reason when `gh` access or local mirror records are unavailable. |
-| Drift check | `npm run check:issues` | pending | Advisory; warnings such as missing linked issue files are review evidence, not universal verify failures. |
+| Sync dry-run | `gh issue list --json number,title,state` (project-specific `npm run sync:issues` if defined) | pending | Advisory; skip with reason when `gh` access or local mirror records are unavailable. |
+| Drift check | Compare `issues/` filenames against open issues (project-specific `npm run check:issues` if defined) | pending | Advisory; warnings such as missing linked issue files are review evidence, not universal verify failures. |
 
 ### Issue mirror limitations
 
