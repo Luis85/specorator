@@ -106,6 +106,9 @@ export default class SpecoratorPlugin extends Plugin {
     })
   }
 
+  // Obsidian's lifecycle guarantees a single onunload() call when the plugin
+  // is disabled or the app exits, so detaching our own leaves here is the
+  // expected cleanup path despite the obsidianmd/detach-leaves rule's caution.
   // eslint-disable-next-line obsidianmd/detach-leaves
   override onunload(): void {
     this.app.workspace.detachLeavesOfType(VIEW_TYPE)
