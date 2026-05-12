@@ -129,15 +129,18 @@ if (!licenseVariants.some(existsSync)) {
   if (existsSync(wfPath)) {
     const wf = readFileSync(wfPath, 'utf8')
     for (const asset of ['manifest.json', 'main.js', 'styles.css']) {
-      if (!wf.includes(asset)) {
-        fail('release-workflow', `release.yml does not list required asset "${asset}"`)
+      // Match the asset as a standalone line (block-scalar entry) — substring
+      // match would false-positive on e.g. `require('./manifest.json')` in run steps.
+      const onOwnLine = new RegExp(`^\\s+${asset.replace('.', '\\.')}\\s*$`, 'm')
+      if (!onOwnLine.test(wf)) {
+        fail('release-workflow', `release.yml does not list required asset "${asset}" in the files block`)
       }
     }
     if (/\.zip|\.tar\.gz/i.test(wf)) {
       fail('release-workflow', 'release.yml appears to produce a zip/tarball — assets must be individual files')
     }
   } else {
-    warn('release-workflow', '.github/workflows/release.yml not found — asset check skipped')
+    fail('release-workflow', '.github/workflows/release.yml not found — cannot verify release assets will be published')
   }
 }
 
