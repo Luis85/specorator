@@ -3,7 +3,7 @@ id: c2d3e4f5-a678-4b90-c123-d4e5f6a7b8c9
 feature: "Plugin onboarding flow"
 area: POB
 slug: plugin-onboarding
-current_stage: requirements
+current_stage: design
 status: active
 last_updated: 2026-05-12
 last_agent: pm
