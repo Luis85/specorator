@@ -146,8 +146,11 @@ if (!licenseVariants.some(existsSync)) {
         fail('release-workflow', `release.yml does not list required asset "${asset}" in the files block`)
       }
     }
-    if (/\.zip|\.tar\.gz/i.test(wf)) {
-      fail('release-workflow', 'release.yml appears to produce a zip/tarball — assets must be individual files')
+    // Scope archive detection to the files block-scalar; a bare /\.zip/ test on the
+    // whole file false-positives on .zip in comments or run: scripts elsewhere.
+    const filesBlockMatch = wf.match(/^( +)files:\s*\|\s*\n((?:\1 [^\n]*\n?)*)/m)
+    if (filesBlockMatch && /\.zip|\.tar\.gz/i.test(filesBlockMatch[2])) {
+      fail('release-workflow', 'release.yml files block lists a zip/tarball — assets must be individual files')
     }
   } else {
     fail('release-workflow', '.github/workflows/release.yml not found — cannot verify release assets will be published')
