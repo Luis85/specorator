@@ -3,15 +3,15 @@ id: c2d3e4f5-a678-4b90-c123-d4e5f6a7b8c9
 feature: "Plugin onboarding flow"
 area: POB
 slug: plugin-onboarding
-current_stage: idea
+current_stage: research
 status: active
-last_updated: 2026-05-05
-last_agent: pm
+last_updated: 2026-05-12
+last_agent: analyst
 createdAt: 2026-05-05T00:00:00+02:00
 updatedAt: 2026-05-05T00:00:00+02:00
 artifacts:
   idea: complete
-  research: pending
+  research: in-progress
   requirements: pending
   design: pending
   spec: pending
@@ -29,7 +29,7 @@ artifacts:
 | Stage | Status | Artifact | Notes |
 |---|---|---|---|
 | 1 — Idea | complete | `idea.md` | |
-| 2 — Research | pending | — | |
+| 2 — Research | in-progress | — | |
 | 3 — Requirements | pending | — | |
 | 4 — Design | pending | — | |
 | 5 — Specification | pending | — | |
