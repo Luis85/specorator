@@ -15,7 +15,6 @@ import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { FeatureService } from '@/application/feature/FeatureService'
 import { FEATURE_SERVICE_KEY } from '@/ui/composables/useFeatureService'
 import { HomePageObject } from './Home.po'
-import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
 function mountHome() {
 	const ports = fakeModulePorts()
@@ -35,7 +34,7 @@ function mountHome() {
 				[WORKSPACE_PORT as unknown as symbol]: ports.workspace,
 				[NOTIFICATION_PORT as unknown as symbol]: ports.notifications,
 				[FEATURE_SERVICE_KEY as unknown as symbol]: new FeatureService(
-					async () => new FeatureRepository(ports.bridge, ports.bridge, () => DEFAULT_SETTINGS),
+					new FeatureRepository(ports.bridge, ports.bridge, ports.bridge),
 				),
 			},
 		},

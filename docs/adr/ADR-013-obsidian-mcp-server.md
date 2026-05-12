@@ -60,6 +60,20 @@ Three commitments shape the implementation in `ObsidianMcpServerAdapter`:
 - **Static well-known port (e.g., 7777).** Rejected: collisions with other MCP servers and a stable scan target. Dynamic port + loopback-only is strictly better.
 - **Letting modules register tools.** Rejected: agent capability surface is a security-relevant contract. Centralising it in the adapter keeps the audit story tractable; the trade-off is module authors file an issue against the adapter when they need a new tool.
 
+## Opt-in lifecycle (2026-05-11)
+
+The MCP server is **disabled by default**. `PluginCore` starts the server only when an `ObsidianMcpServerPort` instance is provided to its constructor (`ports.mcpServer`). If the field is absent (`undefined`), `startMcpServer` and `stopMcpServer` return immediately without error.
+
+In production, `main.ts` wires the adapter only when the user has explicitly enabled the feature. The toggle is surfaced as a plugin command pair ("Start MCP server" / "Stop MCP server") rather than a settings field, so the server lifecycle is demand-driven and does not survive plugin reload unless the command is re-issued. This avoids opening a localhost listener on every Obsidian startup for users who do not use the agent integration.
+
+| State | How reached |
+|---|---|
+| Off (default) | Plugin loads; no MCP adapter provided to `PluginCore` |
+| On | User runs "Start MCP server" command; `PluginCore.startMcpServer()` called |
+| Off again | User runs "Stop MCP server" command, or plugin unloads |
+
+`PluginCore` is the sole owner of the start/stop lifecycle. Modules cannot start or stop the server independently.
+
 ## Notes for downstream work
 
 - The chat-sidebar module (#197/#198/#199) reads `getConnectionConfig()` on startup to point the Claude CLI subprocess at the running server, and registers a UI panel that lists pending proposals via `getProposals()`.

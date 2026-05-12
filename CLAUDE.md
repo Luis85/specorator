@@ -1,4 +1,4 @@
-# CLAUDE.md
+﻿# CLAUDE.md
 
 @AGENTS.md
 @memory/constitution.md
@@ -13,9 +13,11 @@ npm run lint               # ESLint
 npm run lint:fix           # ESLint with auto-fix
 npm run format             # Prettier (write)
 npm run format:check       # Prettier (check only)
-npm run test               # Vitest once
-npm run test:watch         # Vitest watch mode
-npm run test:coverage      # Vitest + lcov coverage report
+npm run test               # Vitest unit tests (fast, no browser)
+npm run test:storybook     # Storybook/Playwright tests (requires Chromium)
+npm run test:all           # unit + storybook combined
+npm run test:watch         # Vitest unit watch mode
+npm run test:coverage      # unit tests + lcov coverage report
 npm run build              # type-check + build Obsidian plugin bundle → project root
 npm run dev:plugin         # plugin build in watch mode
 npm run build:web          # build standalone browser UI → dist-standalone/
@@ -53,21 +55,22 @@ domain ← application ← infrastructure ← ui
 
 ### Narrow ports (ADR-008)
 
-All Obsidian API calls go through five narrow ports declared in `src/domain/ports/`:
+All Obsidian API calls go through six narrow ports declared in `src/domain/ports/`:
 
 - **`SettingsPort`** — `getSettings`, `saveSettings`
 - **`VaultPort`** — `readFile`, `writeFile`, `deleteFile`, `listFiles`, `listFolders`, `fileExists`, `createFolder`
 - **`WorkspacePort`** — `openFile`
 - **`NotificationPort`** — `showError`, `showWarning`, `showSuccess`, `showInfo` (severity-typed; `showError` defaults to a sticky notice — `durationMs = 0`)
 - **`LoggerPort`** — `debug`, `info`, `warn`, `error`. Console-only; never calls `NotificationPort`. Filtered by `PluginSettings.logLevel` (default `warn`) in `ObsidianBridge`. User-facing error notifications go through `NotificationPort`/`FeedbackService`.
+- **`CommunityPluginPort`** — `isPluginEnabled(id)`, `listEnabledPluginIds()`. Used by `FeatureAvailabilityService` (REQ-0003) to detect missing community-plugin dependencies.
 
-Three runtime classes implement all five ports:
+Three runtime classes implement all six ports:
 
 - **`ObsidianBridge`** (`src/infrastructure/obsidian/`) — production, wraps `App` + `Vault`
 - **`MockBridge`** (`src/infrastructure/mock/`) — unit tests and `npm run dev`
 - **`LocalStorageBridge`** (`src/infrastructure/localstorage/`) — GitHub Pages demo
 
-Each port has its own `InjectionKey` (`SETTINGS_PORT`, `VAULT_PORT`, `WORKSPACE_PORT`, `NOTIFICATION_PORT`, `LOGGER_PORT` in `src/infrastructure/bridge/ports.ts`) and its own composable (`useSettingsPort`, `useVaultPort`, `useWorkspacePort`, `useNotificationPort`, `useLoggerPort` in `src/ui/composables/`). Consumers depend on **one port per dependency** — there is no aggregate `usePorts()`. ESLint forbids re-introducing the deleted `IBridge` / `BridgeKey` / `useBridge` symbols.
+Each port has its own `InjectionKey` (`SETTINGS_PORT`, `VAULT_PORT`, `WORKSPACE_PORT`, `NOTIFICATION_PORT`, `LOGGER_PORT`, `COMMUNITY_PLUGIN_PORT` in `src/infrastructure/bridge/ports.ts`) and its own composable (`useSettingsPort`, `useVaultPort`, `useWorkspacePort`, `useNotificationPort`, `useLoggerPort`, `useCommunityPluginPort` in `src/ui/composables/`). Consumers depend on **one port per dependency** — there is no aggregate `usePorts()`. ESLint forbids re-introducing the deleted `IBridge` / `BridgeKey` / `useBridge` symbols.
 
 Vue components must **never** import `obsidian` directly (ESLint `no-restricted-imports` enforces this).
 
@@ -101,6 +104,12 @@ The 12 stage slugs (from `src/domain/feature/FeatureStep.ts`): `idea`, `research
 - Vue Router uses `createWebHashHistory` (hash-mode) so routing works inside Obsidian's embedded view and on GitHub Pages.
 - Pinia stores hold plain DTOs only — domain class instances must not cross the store boundary.
 - UI imports use cases for business logic; UI must not import domain or infrastructure directly except for port types from `@/domain/ports` and the matching InjectionKey symbols from `@/infrastructure/bridge/ports`.
+
+### DOM construction
+
+Plugin code must not call `window.confirm` / `window.alert` / `window.prompt`. These block Obsidian's event loop and look out of place in the plugin UI. Use an Obsidian `Modal` subclass (`new (class extends Modal { onOpen() { /* … */ } })(app).open()`) for confirmation and input flows, and use `NotificationPort` for non-blocking feedback. Enforced project-wide by `no-restricted-globals`; tests, `LocalStorageBridge` (GitHub Pages demo), and Storybook are scoped out via overrides.
+
+Plugin code must not assign `innerHTML` / `outerHTML` / `insertAdjacentHTML`, and Vue templates must not use `v-html`. Build DOM with Obsidian helpers `createEl` / `createDiv` / `setText` (or `textContent` for raw DOM), which are XSS-safe by construction. Enforced by `no-restricted-properties` (TS/JS) and `vue/no-v-html` (templates), both at error severity.
 
 ### Testing conventions (ADR-009)
 

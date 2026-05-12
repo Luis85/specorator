@@ -9,10 +9,7 @@ import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { FeatureService } from '@/application/feature/FeatureService'
 
 function makeService(bridge: MockBridge): FeatureService {
-  return new FeatureService(async () => {
-    const settings = await bridge.getSettings()
-    return new FeatureRepository(bridge, bridge, () => settings)
-  })
+  return new FeatureService(new FeatureRepository(bridge, bridge, bridge))
 }
 
 function harness(bridge: MockBridge) {

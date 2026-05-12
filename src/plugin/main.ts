@@ -41,11 +41,12 @@ export default class SpecoratorPlugin extends Plugin {
       i18nMerge,
       mcpServer: new ObsidianMcpServerAdapter(
         this.bridge,
-        new FeatureRepository(this.bridge, this.bridge, () => this.settings),
+        new FeatureRepository(this.bridge, this.bridge, this.bridge),
         () => this.settings.specsFolder,
         new ObsidianMetadataCacheAdapter(this.app),
         new ObsidianCanvasAdapter(this.bridge),
       ),
+      isMcpServerEnabled: () => this.settings.mcpServerEnabled,
     })
 
     setLocale(this.settings.locale as SupportedLocale)
@@ -73,6 +74,18 @@ export default class SpecoratorPlugin extends Plugin {
       id: 'open-specorator',
       name: 'Open panel',
       callback: () => void this.activateView(),
+    })
+
+    this.addCommand({
+      id: 'start-mcp-server',
+      name: 'Start MCP server',
+      callback: () => void this.updateSettings({ mcpServerEnabled: true }),
+    })
+
+    this.addCommand({
+      id: 'stop-mcp-server',
+      name: 'Stop MCP server',
+      callback: () => void this.updateSettings({ mcpServerEnabled: false }),
     })
 
     this.addSettingTab(new SpecoratorSettingTab(this.app, this))
@@ -127,6 +140,7 @@ export default class SpecoratorPlugin extends Plugin {
 
   async updateSettings(partial: Partial<PluginSettings>): Promise<void> {
     const merged = { ...this.settings, ...partial }
+    this.settings = merged
     await this.core?.notifySettingsChanged('specorator', merged)
     const validated = (this.core?.getModuleSettings('specorator') ?? merged) as PluginSettings
     this.settings = validated

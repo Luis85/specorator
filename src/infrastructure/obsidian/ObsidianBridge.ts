@@ -115,7 +115,10 @@ export class ObsidianBridge
 
   private _track(notice: Notice): void {
     this._activeNotices.add(notice)
-    notice.noticeEl.addEventListener(
+    // messageEl introduced in Obsidian 1.8.7; fall back to noticeEl for 1.4.0–1.8.6
+    // eslint-disable-next-line @typescript-eslint/no-deprecated, @typescript-eslint/no-unnecessary-type-assertion
+    const el: HTMLElement = (notice.messageEl as unknown as HTMLElement | undefined) ?? notice.noticeEl
+    el.addEventListener(
       'animationend',
       () => {
         this._activeNotices.delete(notice)

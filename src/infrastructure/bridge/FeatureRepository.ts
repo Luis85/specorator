@@ -3,8 +3,7 @@ import type { Slug } from '@/domain/shared/Slug';
 import type { Feature } from '@/domain/feature/Feature';
 import { getStepMeta } from '@/domain/feature/FeatureStep';
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository';
-import type { VaultPort, NotificationPort } from '@/domain/ports';
-import type { PluginSettings } from '@/domain/settings/PluginSettings';
+import type { VaultPort, NotificationPort, SettingsPort } from '@/domain/ports';
 import { joinVaultPath } from '../vault/VaultPath';
 import {
 	deserializeWorkflowState,
@@ -39,7 +38,7 @@ export class FeatureRepository implements IFeatureRepository {
 	constructor(
 		private readonly vault: VaultPort,
 		private readonly notifications: NotificationPort,
-		private readonly getSettings: () => PluginSettings,
+		private readonly settingsPort: SettingsPort,
 	) {}
 
 	private checkedPath(...segments: string[]): string {
@@ -61,7 +60,7 @@ export class FeatureRepository implements IFeatureRepository {
 	}
 
 	async findAll(): Promise<Feature[]> {
-		const specsFolder = this.checkedPath(this.getSettings().specsFolder);
+		const specsFolder = this.checkedPath((await this.settingsPort.getSettings()).specsFolder);
 		const folders = await this.vault.listFolders(specsFolder);
 		const features = await Promise.all(
 			folders.map(async (folder) => {
@@ -78,7 +77,7 @@ export class FeatureRepository implements IFeatureRepository {
 	}
 
 	async findBySlug(slug: Slug): Promise<Feature | null> {
-		const specsFolder = this.getSettings().specsFolder;
+		const specsFolder = (await this.settingsPort.getSettings()).specsFolder;
 		const path = this.metaPath(specsFolder, slug.toString());
 		if (!(await this.vault.fileExists(path))) return null;
 		const content = await this.vault.readFile(path);
@@ -102,7 +101,7 @@ export class FeatureRepository implements IFeatureRepository {
 	async save(feature: Feature): Promise<Result<void>> {
 		// Snapshot specsFolder once so all paths in this multi-step write resolve
 		// to the same root, even if the user changes the setting mid-flight.
-		const specsFolder = this.getSettings().specsFolder;
+		const specsFolder = (await this.settingsPort.getSettings()).specsFolder;
 		try {
 			const folder = this.folderPath(specsFolder, feature.slug.toString());
 			await this.vault.createFolder(folder);
@@ -145,7 +144,7 @@ export class FeatureRepository implements IFeatureRepository {
 	 * is already present, preserving any manually edited content (REQ-AVS-005).
 	 */
 	async createStageFile(feature: Feature, stepNumber: number): Promise<Result<void>> {
-		const specsFolder = this.getSettings().specsFolder;
+		const specsFolder = (await this.settingsPort.getSettings()).specsFolder;
 		try {
 			const meta = getStepMeta(stepNumber);
 			if (!meta) return err(new Error(`Unknown step number: ${stepNumber}`));
@@ -169,7 +168,7 @@ export class FeatureRepository implements IFeatureRepository {
 	}
 
 	async delete(id: string): Promise<Result<void>> {
-		const specsFolder = this.getSettings().specsFolder;
+		const specsFolder = (await this.settingsPort.getSettings()).specsFolder;
 		try {
 			const feature = await this.findById(id);
 			if (!feature) return err(new Error(`Feature "${id}" not found`));

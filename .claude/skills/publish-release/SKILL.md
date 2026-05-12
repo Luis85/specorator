@@ -57,7 +57,27 @@ develop                      main
 
 ## Step-by-step process
 
-### Step 1 — Decide and announce the bump
+### Step 1 — Pre-flight gate + decide the bump
+
+**Run the pre-flight gate first.** It aborts on the first failure, so fix any reported issue before continuing.
+
+```sh
+npm run release:preflight
+```
+
+Pre-flight checks (defined in `scripts/release-preflight.mjs`):
+
+- `README.md` and `LICENSE` exist at repo root
+- No sample-plugin remnants (`SampleModal`, `SampleSettingTab`) in `src/`
+- `manifest.json` · `package.json` · `versions.json` versions are consistent (`validate-manifest.js`)
+- `manifest.version` has no `v`-prefix (Obsidian tags must be plain `X.Y.Z`)
+- `manifest.description` ≤ 250 chars, no emoji, does not start with "This plugin", ends with `.`
+- `release.yml` lists the three required individual assets (`main.js`, `manifest.json`, `styles.css`) and contains no zip/tarball step
+- Advisory: warns if `fundingUrl` is set without a live donation page
+
+If the gate exits non-zero: stop, report the errors, do not proceed to the bump.
+
+---
 
 Read the current version from `manifest.json`:
 
@@ -151,7 +171,22 @@ node -p "require('./manifest.json').version"
 
 ### Step 5 — Tag `main` HEAD and push
 
-The release workflow checks that the tag points at `main` HEAD exactly. Tag now, after the merge:
+The release workflow checks that the tag points at `main` HEAD exactly. Tag now, after the merge.
+
+First, confirm the candidate version is not already on origin (safe to run now that `manifest.version` is the new version):
+
+```sh
+npm run release:preflight -- --check-tag
+```
+
+If it fails at `[version-tag]`: the tag was pushed in a prior attempt. Delete it before re-tagging:
+
+```sh
+git push origin --delete <new-version>
+git tag -d <new-version>
+```
+
+Then tag:
 
 ```sh
 git tag <new-version>
