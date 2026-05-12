@@ -52,6 +52,15 @@ const UI_FORBIDDEN_PATTERNS = [
 
 const MAX_LINES_OPTIONS = { max: 350, skipBlankLines: true, skipComments: true };
 
+// Shared DOM-injection property bans (used in the global block and in scoped
+// overrides that carve out the window.* dialog entries for non-plugin contexts).
+const DOM_INJECTION_BANS = [
+	{ object: 'document', property: 'innerHTML', message: 'innerHTML is unsafe; use textContent or createEl().' },
+	{ property: 'innerHTML', message: 'innerHTML is unsafe; use textContent or createEl().' },
+	{ property: 'outerHTML', message: 'outerHTML is unsafe; use createEl()/replaceChildren().' },
+	{ property: 'insertAdjacentHTML', message: 'insertAdjacentHTML is unsafe; use createEl()/append().' },
+];
+
 // ADR-008: the aggregate IBridge / BridgeKey / useBridge surface was deleted
 // in favour of four narrow ports under src/domain/ports. Re-introducing any of
 // those names — even by accident — should fail lint with a clear pointer.
@@ -181,25 +190,63 @@ export default defineConfig(
 			'prefer-const': 'error',
 			complexity: ['error', 10],
 
-			// W5 rule pack — DOM injection bans
+			// W5 rule pack — DOM injection bans + dialog globals (member-call form).
+			// `no-restricted-globals` covers bare confirm()/alert()/prompt(); this
+			// block covers the window.confirm() / window.alert() / window.prompt()
+			// member-call form that `no-restricted-globals` does not reach.
+			// Non-plugin contexts (tests, LocalStorageBridge, stories) re-declare
+			// this rule with only DOM_INJECTION_BANS to preserve their carve-out.
 			'no-restricted-properties': [
 				'error',
+				...DOM_INJECTION_BANS,
 				{
-					object: 'document',
-					property: 'innerHTML',
-					message: 'innerHTML is unsafe; use textContent or createEl().',
+					object: 'window',
+					property: 'confirm',
+					message:
+						'window.confirm blocks the Obsidian event loop. Use an Obsidian Modal subclass instead.',
 				},
 				{
-					property: 'innerHTML',
-					message: 'innerHTML is unsafe; use textContent or createEl().',
+					object: 'window',
+					property: 'alert',
+					message:
+						'window.alert blocks the Obsidian event loop. Use NotificationPort or an Obsidian Modal subclass instead.',
 				},
 				{
-					property: 'outerHTML',
-					message: 'outerHTML is unsafe; use createEl()/replaceChildren().',
+					object: 'window',
+					property: 'prompt',
+					message:
+						'window.prompt blocks the Obsidian event loop. Use an Obsidian Modal subclass instead.',
+				},
+			],
+
+			// v1 shell hardening — Vue template DOM injection ban.
+			// `pluginVue.configs['flat/recommended']` sets this to "warn"; we
+			// upgrade to "error" so the no-v-html sink matches the severity of
+			// the JS/TS innerHTML bans above. See CLAUDE.md "DOM construction".
+			'vue/no-v-html': 'error',
+
+			// v1 shell hardening — forbid browser-native dialog globals.
+			// `window.confirm` / `alert` / `prompt` block Obsidian's event loop
+			// and look out-of-place in the plugin UI. Use an Obsidian `Modal`
+			// subclass (e.g. `new (class extends Modal { onOpen() { ... } })(app).open()`)
+			// instead. Tests, LocalStorageBridge demo bridge, and any other
+			// non-plugin contexts disable this rule via scoped overrides below.
+			'no-restricted-globals': [
+				'error',
+				{
+					name: 'confirm',
+					message:
+						'window.confirm blocks the Obsidian event loop. Use an Obsidian Modal subclass instead.',
 				},
 				{
-					property: 'insertAdjacentHTML',
-					message: 'insertAdjacentHTML is unsafe; use createEl()/append().',
+					name: 'alert',
+					message:
+						'window.alert blocks the Obsidian event loop. Use NotificationPort or an Obsidian Modal subclass instead.',
+				},
+				{
+					name: 'prompt',
+					message:
+						'window.prompt blocks the Obsidian event loop. Use an Obsidian Modal subclass instead.',
 				},
 			],
 
@@ -392,10 +439,14 @@ export default defineConfig(
 
 	// LocalStorageBridge: the GitHub Pages demo bridge is intentionally
 	// browser localStorage-backed; the obsidianmd ban does not apply.
+	// Re-declare no-restricted-properties keeping only DOM-injection bans so
+	// window.confirm/alert/prompt remain permitted in this context.
 	{
 		files: ['src/infrastructure/localstorage/**/*.ts'],
 		rules: {
 			'no-restricted-globals': 'off',
+			'no-alert': 'off',
+			'no-restricted-properties': ['error', ...DOM_INJECTION_BANS],
 		},
 	},
 
@@ -453,6 +504,10 @@ export default defineConfig(
 			// Empty arrow functions are used as no-op stubs in test fixtures.
 			'@typescript-eslint/no-empty-function': 'off',
 			'no-restricted-globals': 'off',
+			'no-alert': 'off',
+			// Re-declare keeping only DOM-injection bans so window.confirm/alert/prompt
+			// remain permitted in test fixtures and helpers.
+			'no-restricted-properties': ['error', ...DOM_INJECTION_BANS],
 			'no-restricted-imports': 'off',
 			complexity: 'off',
 			'max-lines': 'off',
@@ -481,7 +536,7 @@ export default defineConfig(
 	{
 		files: ['src/plugin/**/*.ts', 'src/ui/**/*.ts', 'src/ui/**/*.vue'],
 		rules: {
-			'obsidianmd/ui/sentence-case': ['error', { brands: ['Specorator'] }],
+			'obsidianmd/ui/sentence-case': ['error', { brands: ['Specorator', 'MCP'] }],
 		},
 	},
 
@@ -506,9 +561,14 @@ export default defineConfig(
 
 	// Stories + Storybook config — relax architectural-boundary rules so
 	// stories can freely import @/ui/components and @/domain types.
+	// Storybook runs in browser/Node, not in Obsidian, so dialog globals are
+	// permitted; re-declare keeping only DOM-injection bans.
 	{
 		files: ['stories/**/*.ts', '.storybook/**/*.ts'],
 		rules: {
+			'no-restricted-globals': 'off',
+			'no-alert': 'off',
+			'no-restricted-properties': ['error', ...DOM_INJECTION_BANS],
 			'no-restricted-imports': 'off',
 			'max-lines': 'off',
 			complexity: 'off',

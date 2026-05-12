@@ -7,11 +7,56 @@ describe('coreSettingsModule descriptor metadata', () => {
   it('has the expected id, settingsKey, and settingsVersion', () => {
     expect(coreSettingsModule.id).toBe('specorator')
     expect(coreSettingsModule.settingsKey).toBe('specorator')
-    expect(coreSettingsModule.settingsVersion).toBe(1)
+    expect(coreSettingsModule.settingsVersion).toBe(2)
   })
 
   it('settingsDefaults equals DEFAULT_SETTINGS', () => {
     expect(coreSettingsModule.settingsDefaults).toEqual(DEFAULT_SETTINGS)
+  })
+
+  it('defaults mcpServerEnabled to false (privacy-by-default)', () => {
+    expect(DEFAULT_SETTINGS.mcpServerEnabled).toBe(false)
+    expect(coreSettingsModule.settingsDefaults?.mcpServerEnabled).toBe(false)
+  })
+})
+
+describe('coreSettingsModule.migrate (v1 → v2 mcpServerEnabled)', () => {
+  const migrate = (fromVersion: number, blob: unknown): unknown => {
+    const fn = coreSettingsModule.migrate
+    if (!fn) throw new Error('migrate is undefined')
+    return fn(fromVersion, blob)
+  }
+
+  it('injects mcpServerEnabled=false when migrating from v0 with no value', () => {
+    const out = migrate(0, {}) as Record<string, unknown>
+    expect(out.mcpServerEnabled).toBe(false)
+  })
+
+  it('injects mcpServerEnabled=false when migrating from v1 with no value', () => {
+    const out = migrate(1, { teamMode: true }) as Record<string, unknown>
+    expect(out.mcpServerEnabled).toBe(false)
+    expect(out.teamMode).toBe(true)
+  })
+
+  it('preserves an existing mcpServerEnabled=true during migration (never flips user choice)', () => {
+    const out = migrate(0, { mcpServerEnabled: true }) as Record<string, unknown>
+    expect(out.mcpServerEnabled).toBe(true)
+  })
+
+  it('preserves an existing mcpServerEnabled=false during migration', () => {
+    const out = migrate(0, { mcpServerEnabled: false }) as Record<string, unknown>
+    expect(out.mcpServerEnabled).toBe(false)
+  })
+
+  it('does not inject when already at the target version (fromVersion >= 2)', () => {
+    const out = migrate(2, {}) as Record<string, unknown>
+    expect('mcpServerEnabled' in out).toBe(false)
+  })
+
+  it('returns a fresh object when blob is null or non-object', () => {
+    expect(migrate(0, null)).toEqual({ mcpServerEnabled: false })
+    expect(migrate(0, 'string-junk')).toEqual({ mcpServerEnabled: false })
+    expect(migrate(0, [])).toEqual({ mcpServerEnabled: false })
   })
 })
 
@@ -106,6 +151,31 @@ describe('coreSettingsModule.validateSettings', () => {
     const out = validate({ teamMode: false })
     expect(out.teamMode).toBe(false)
   })
+
+  it('defaults mcpServerEnabled to false when missing', () => {
+    const out = validate({})
+    expect(out.mcpServerEnabled).toBe(false)
+  })
+
+  it('coerces non-boolean mcpServerEnabled to false', () => {
+    const out = validate({ mcpServerEnabled: 'yes' })
+    expect(out.mcpServerEnabled).toBe(false)
+  })
+
+  it('coerces null mcpServerEnabled to false', () => {
+    const out = validate({ mcpServerEnabled: null })
+    expect(out.mcpServerEnabled).toBe(false)
+  })
+
+  it('preserves mcpServerEnabled=true when boolean', () => {
+    const out = validate({ mcpServerEnabled: true })
+    expect(out.mcpServerEnabled).toBe(true)
+  })
+
+  it('preserves mcpServerEnabled=false when boolean', () => {
+    const out = validate({ mcpServerEnabled: false })
+    expect(out.mcpServerEnabled).toBe(false)
+  })
 })
 
 describe('coreSettingsModule.settingsSchema', () => {
@@ -130,6 +200,15 @@ describe('coreSettingsModule.settingsSchema', () => {
         (DEFAULT_SETTINGS as unknown as Record<string, unknown>)[field.key],
       )
     }
+  })
+
+  it('includes a mcpServerEnabled toggle field defaulting to false', () => {
+    const field = coreSettingsModule.settingsSchema?.fields.find(
+      (f) => f.key === 'mcpServerEnabled',
+    )
+    expect(field).toBeDefined()
+    expect(field?.type).toBe('toggle')
+    expect(field?.default).toBe(false)
   })
 })
 

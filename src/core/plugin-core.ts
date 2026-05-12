@@ -14,6 +14,15 @@ export interface CorePorts {
   readonly t: TranslationPort
   readonly i18nMerge?: (locale: string, messages: Record<string, string>) => void
   readonly mcpServer?: ObsidianMcpServerPort
+  /**
+   * Predicate the host (plugin) supplies to gate the MCP server start path.
+   * `PluginCore` calls this on its auto-start (during `init`) and on the
+   * settings-toggle path. The explicit command path passes `{ force: true }`
+   * to `startMcpServer` and bypasses this gate. When undefined (e.g. in unit
+   * tests that don't care about gating), `PluginCore` treats MCP as disabled
+   * for the auto-start path — pass `() => true` to opt in.
+   */
+  readonly isMcpServerEnabled?: () => boolean
 }
 
 // ── Validation helpers ────────────────────────────────────────────────────────
@@ -185,6 +194,8 @@ export class PluginCore {
   private readonly moduleSettingsMap = new Map<string, unknown>()
   private readonly uriDispatch = new Map<string, (params: URLSearchParams) => void>()
   private _initCalled = false
+  private _mcpRunning = false
+  private _syncChain: Promise<void> = Promise.resolve()
 
   constructor(
     modules: ReadonlyArray<ModuleDescriptor>,
@@ -260,11 +271,44 @@ export class PluginCore {
 
     this.moduleSettingsMap.set(settingsKey, value)
 
-    if (mod.onSettingsChange === undefined) return
+    if (mod.onSettingsChange !== undefined) {
+      const hookResult = await tryAsync(() => Promise.resolve(mod.onSettingsChange!(value as never)))
+      if (!hookResult.ok) {
+        this.ports.logger.error('onSettingsChange failed', hookResult.error, { moduleId: mod.id })
+      }
+    }
 
-    const hookResult = await tryAsync(() => Promise.resolve(mod.onSettingsChange!(value as never)))
-    if (!hookResult.ok) {
-      this.ports.logger.error('onSettingsChange failed', hookResult.error, { moduleId: mod.id })
+    // Reconcile MCP after every settings change — the sync is a cheap no-op
+    // when desired === running, so we avoid hardcoding which module's
+    // settingsKey owns the toggle.
+    await this._syncMcpRunning()
+  }
+
+  /** True iff the MCP server is currently running under PluginCore's control. */
+  isMcpServerRunning(): boolean {
+    return this._mcpRunning
+  }
+
+  /**
+   * Enqueues a reconciliation onto a serial promise chain so that concurrent
+   * calls (e.g. rapid stop→start) never observe stale `_mcpRunning` state.
+   * Each enqueued reconciliation reads `isMcpServerEnabled()` fresh when it
+   * actually runs, so the last queued call always reflects the latest intent.
+   */
+  private _syncMcpRunning(): Promise<void> {
+    this._syncChain = this._syncChain
+      .then(() => this._doSyncMcpRunning())
+      .catch(() => { /* start/stop errors are logged inside those methods */ })
+    return this._syncChain
+  }
+
+  private async _doSyncMcpRunning(): Promise<void> {
+    if (this.ports.mcpServer === undefined) return
+    const desired = this.ports.isMcpServerEnabled?.() === true
+    if (desired && !this._mcpRunning) {
+      await this.startMcpServer()
+    } else if (!desired && this._mcpRunning) {
+      await this.stopMcpServer()
     }
   }
 
@@ -346,20 +390,42 @@ export class PluginCore {
     this.bus.emit('core:destroy-complete', { leakCount })
   }
 
-  private async startMcpServer(): Promise<void> {
+  /**
+   * Start the local MCP server.
+   *
+   * - Idempotent: no-op when already running.
+   * - Gated by `ports.isMcpServerEnabled()`.
+   * - Errors are logged via `LoggerPort` and swallowed; the server simply
+   *   remains stopped on failure.
+   */
+  async startMcpServer(): Promise<void> {
     if (this.ports.mcpServer === undefined) return
+    if (this._mcpRunning) return
+    if (this.ports.isMcpServerEnabled?.() !== true) return
+
     const result = await tryAsync(() => this.ports.mcpServer!.start())
     if (!result.ok) {
       this.ports.logger.error('MCP server start failed', result.error)
+      return
     }
+    this._mcpRunning = true
   }
 
-  private async stopMcpServer(): Promise<void> {
+  /**
+   * Stop the local MCP server. Idempotent: no-op when not running.
+   * Errors are logged but do not throw.
+   */
+  async stopMcpServer(): Promise<void> {
     if (this.ports.mcpServer === undefined) return
+    if (!this._mcpRunning) return
+
     const result = await tryAsync(() => this.ports.mcpServer!.stop())
     if (!result.ok) {
       this.ports.logger.error('MCP server stop failed', result.error)
     }
+    // Mark stopped even on adapter error: the running invariant is owned by
+    // PluginCore, and a failed stop should not strand future start calls.
+    this._mcpRunning = false
   }
 
   private async initModule(

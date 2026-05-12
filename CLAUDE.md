@@ -13,9 +13,11 @@ npm run lint               # ESLint
 npm run lint:fix           # ESLint with auto-fix
 npm run format             # Prettier (write)
 npm run format:check       # Prettier (check only)
-npm run test               # Vitest once
-npm run test:watch         # Vitest watch mode
-npm run test:coverage      # Vitest + lcov coverage report
+npm run test               # Vitest unit tests (fast, no browser)
+npm run test:storybook     # Storybook/Playwright tests (requires Chromium)
+npm run test:all           # unit + storybook combined
+npm run test:watch         # Vitest unit watch mode
+npm run test:coverage      # unit tests + lcov coverage report
 npm run build              # type-check + build Obsidian plugin bundle → project root
 npm run dev:plugin         # plugin build in watch mode
 npm run build:web          # build standalone browser UI → dist-standalone/
@@ -101,6 +103,12 @@ The 12 stage slugs (from `src/domain/feature/FeatureStep.ts`): `idea`, `research
 - Vue Router uses `createWebHashHistory` (hash-mode) so routing works inside Obsidian's embedded view and on GitHub Pages.
 - Pinia stores hold plain DTOs only — domain class instances must not cross the store boundary.
 - UI imports use cases for business logic; UI must not import domain or infrastructure directly except for port types from `@/domain/ports` and the matching InjectionKey symbols from `@/infrastructure/bridge/ports`.
+
+### DOM construction
+
+Plugin code must not call `window.confirm` / `window.alert` / `window.prompt`. These block Obsidian's event loop and look out of place in the plugin UI. Use an Obsidian `Modal` subclass (`new (class extends Modal { onOpen() { /* … */ } })(app).open()`) for confirmation and input flows, and use `NotificationPort` for non-blocking feedback. Enforced project-wide by `no-restricted-globals`; tests, `LocalStorageBridge` (GitHub Pages demo), and Storybook are scoped out via overrides.
+
+Plugin code must not assign `innerHTML` / `outerHTML` / `insertAdjacentHTML`, and Vue templates must not use `v-html`. Build DOM with Obsidian helpers `createEl` / `createDiv` / `setText` (or `textContent` for raw DOM), which are XSS-safe by construction. Enforced by `no-restricted-properties` (TS/JS) and `vue/no-v-html` (templates), both at error severity.
 
 ### Testing conventions (ADR-009)
 
