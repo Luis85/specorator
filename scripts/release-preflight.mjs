@@ -11,6 +11,11 @@ const errors = []
 /** @type {string[]} */
 const warnings = []
 
+// Pass --check-tag when manifest.version is the post-bump candidate. Without
+// it the already-tagged check is skipped — before the bump, manifest.version
+// is still the last released version, so the check would always fail.
+const checkTag = process.argv.includes('--check-tag')
+
 /**
  * @param {string} label
  * @param {string} message
@@ -71,19 +76,23 @@ if (!licenseVariants.some(existsSync)) {
   }
 }
 
-// ── 4. Version not already tagged (prevents accidental re-release) ────────────
+// ── 4. Version tag guard ──────────────────────────────────────────────────────
 {
   try {
     const manifest = JSON.parse(readFileSync('manifest.json', 'utf8'))
     const version = String(manifest.version ?? '')
     if (version) {
-      const lsRemote = spawnSync('git', ['ls-remote', '--tags', 'origin', `refs/tags/${version}`], { encoding: 'utf8' })
-      if (lsRemote.status !== 0) throw new Error(lsRemote.stderr || 'git ls-remote failed')
-      if (lsRemote.stdout.trim()) {
-        fail('version-tag', `Tag ${version} already exists on origin — bump the version before releasing`)
-      }
       if (version.startsWith('v')) {
         fail('version-tag', `manifest.version starts with "v" (${version}) — Obsidian tags must be plain X.Y.Z`)
+      }
+      if (checkTag) {
+        // Only safe to run after the version bump; manifest.version is the
+        // last released version before the bump, so this would always fire.
+        const lsRemote = spawnSync('git', ['ls-remote', '--tags', 'origin', `refs/tags/${version}`], { encoding: 'utf8' })
+        if (lsRemote.status !== 0) throw new Error(lsRemote.stderr || 'git ls-remote failed')
+        if (lsRemote.stdout.trim()) {
+          fail('version-tag', `Tag ${version} already exists on origin — bump the version before releasing`)
+        }
       }
     }
   } catch (e) {
