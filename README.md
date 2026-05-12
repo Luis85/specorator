@@ -73,6 +73,17 @@ Specorator is not yet on the Obsidian community marketplace. While in v1 alpha y
 
 > Marketplace submission will follow once BRAT distribution has validated stability. Until then, BRAT is the only supported install path.
 
+## Getting started
+
+After installing via BRAT and enabling the plugin:
+
+1. A **Specorator** icon appears in the Obsidian ribbon. Click it to open the workflow cockpit, or run **Open Specorator** from the command palette.
+2. The cockpit lists your active features. Each feature tracks its current workflow stage — from idea through to retrospective — and surfaces the next required artifact.
+3. All generated content is plain Markdown inside your vault. You can read and edit artifacts directly whether or not the plugin is loaded.
+4. The **[browser demo](https://luis85.github.io/specorator/app/)** previews the full workflow UI without installing anything.
+
+> **v1 alpha:** The plugin shell is installed and loads. Full workflow cockpit features are in active development. Functionality may be limited until v1 is complete.
+
 ## MCP server (advanced, opt-in)
 
 Specorator can expose a local Model Context Protocol (MCP) endpoint so AI clients on the same machine can read and propose changes against your vault.
