@@ -6,7 +6,6 @@ import { useSettings } from '../composables/useSettings'
 import { useNotificationPort } from '../composables/useNotificationPort'
 import { SUPPORTED_LOCALES } from '../i18n'
 import { tryAsync } from '@/domain/shared/tryAsync'
-import { toUserMessage } from '@/application/shared/errorMessages'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 
 const { t } = useI18n()
@@ -22,7 +21,7 @@ async function handleSave() {
   const result = await tryAsync(() => saveSettings({ ...settings.value }))
   saving.value = false
   if (!result.ok) {
-    notify.showError(toUserMessage(result.error))
+    notify.showError(result.error.message)
     return
   }
   saved.value = true

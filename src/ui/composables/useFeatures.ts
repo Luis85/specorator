@@ -1,23 +1,13 @@
 import { computed } from 'vue'
-import { useSettingsPort } from './useSettingsPort'
-import { useVaultPort } from './useVaultPort'
-import { useNotificationPort } from './useNotificationPort'
 import { useFeatureStore } from '../stores/featureStore'
-import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
-import { GetFeaturesUseCase } from '@/application/feature/GetFeaturesUseCase'
-import { CreateFeatureUseCase } from '@/application/feature/CreateFeatureUseCase'
-import { ActivateFeatureUseCase } from '@/application/feature/ActivateFeatureUseCase'
-import { AdvanceFeatureStageUseCase } from '@/application/feature/AdvanceFeatureStageUseCase'
-import { ArchiveFeatureUseCase } from '@/application/feature/ArchiveFeatureUseCase'
-import { tryAsync } from '@/domain/shared/tryAsync'
 import { featureDtoFromDomain } from '../types/FeatureDto'
 import type { FeatureDto } from '../types/FeatureDto'
+import { useFeatureService } from './useFeatureService'
+import { tryAsync } from '@/domain/shared/tryAsync'
 
 export function useFeatures() {
-  const settingsPort = useSettingsPort()
-  const vault = useVaultPort()
-  const notifications = useNotificationPort()
   const store = useFeatureStore()
+  const service = useFeatureService()
 
   async function withLoading<T>(fn: () => Promise<T>): Promise<T | undefined> {
     store.setLoading(true)
@@ -31,9 +21,7 @@ export function useFeatures() {
 
   async function loadFeatures(): Promise<void> {
     await withLoading(async () => {
-      const settings = await settingsPort.getSettings()
-      const repo = new FeatureRepository(vault, notifications, () => settings)
-      const result = await new GetFeaturesUseCase(repo).execute()
+      const result = await service.loadFeatures()
       if (result.ok) {
         store.setItems(result.value.map(featureDtoFromDomain))
       } else {
@@ -47,9 +35,7 @@ export function useFeatures() {
     area?: string,
   ): Promise<FeatureDto | undefined> {
     return withLoading(async () => {
-      const settings = await settingsPort.getSettings()
-      const repo = new FeatureRepository(vault, notifications, () => settings)
-      const result = await new CreateFeatureUseCase(repo).execute({ title, area })
+      const result = await service.createFeature(title, area)
       if (result.ok) {
         const dto = featureDtoFromDomain(result.value)
         store.upsert(dto)
@@ -62,9 +48,7 @@ export function useFeatures() {
 
   async function activateFeature(featureId: string): Promise<void> {
     await withLoading(async () => {
-      const settings = await settingsPort.getSettings()
-      const repo = new FeatureRepository(vault, notifications, () => settings)
-      const result = await new ActivateFeatureUseCase(repo).execute({ featureId })
+      const result = await service.activateFeature(featureId)
       if (result.ok) {
         store.upsert(featureDtoFromDomain(result.value))
       } else {
@@ -75,9 +59,7 @@ export function useFeatures() {
 
   async function archiveFeature(featureId: string): Promise<void> {
     await withLoading(async () => {
-      const settings = await settingsPort.getSettings()
-      const repo = new FeatureRepository(vault, notifications, () => settings)
-      const result = await new ArchiveFeatureUseCase(repo).execute({ featureId })
+      const result = await service.archiveFeature(featureId)
       if (result.ok) {
         store.upsert(featureDtoFromDomain(result.value))
       } else {
@@ -88,9 +70,7 @@ export function useFeatures() {
 
   async function advanceFeatureStage(featureId: string): Promise<void> {
     await withLoading(async () => {
-      const settings = await settingsPort.getSettings()
-      const repo = new FeatureRepository(vault, notifications, () => settings)
-      const result = await new AdvanceFeatureStageUseCase(repo).execute({ featureId })
+      const result = await service.advanceFeatureStage(featureId)
       if (result.ok) {
         store.upsert(featureDtoFromDomain(result.value))
       } else {

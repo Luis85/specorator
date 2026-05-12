@@ -1,7 +1,6 @@
 import { err, type Result } from '@/domain/shared/Result'
 import type { Feature } from '@/domain/feature/Feature'
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
-import type { UseCase } from '../shared/UseCase'
 
 export interface AdvanceFeatureStageInput {
   readonly featureId: string
@@ -11,7 +10,7 @@ export interface AdvanceFeatureStageInput {
  * Advance a feature to the next workflow stage.
  * Creates the new stage artifact file (if absent) and updates workflow-state.md.
  */
-export class AdvanceFeatureStageUseCase implements UseCase<AdvanceFeatureStageInput, Feature> {
+export class AdvanceFeatureStageUseCase {
   constructor(private readonly repository: IFeatureRepository) {}
 
   async execute(input: AdvanceFeatureStageInput): Promise<Result<Feature>> {

@@ -92,7 +92,7 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
 
   beforeEach(async () => {
     vault = new MockBridge(VAULT_FILES)
-    const repo = new FeatureRepository(vault, vault, () => DEFAULT_SETTINGS)
+    const repo = new FeatureRepository(vault, vault, vault)
     const metadataCache = new MockMetadataCacheAdapter()
     const canvas = new MockCanvasAdapter()
     adapter = new ObsidianMcpServerAdapter(
@@ -524,7 +524,7 @@ describe('ObsidianMcpServerAdapter — workflow tools', () => {
 
   beforeEach(async () => {
     vault = new MockBridge()
-    repo = new FeatureRepository(vault, vault, () => DEFAULT_SETTINGS)
+    repo = new FeatureRepository(vault, vault, vault)
     const metadataCache = new MockMetadataCacheAdapter()
     const canvas = new MockCanvasAdapter()
     adapter = new ObsidianMcpServerAdapter(

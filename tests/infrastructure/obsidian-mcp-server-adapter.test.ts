@@ -6,10 +6,9 @@ import { MockMetadataCacheAdapter } from '@/infrastructure/mock/MockMetadataCach
 import { MockCanvasAdapter } from '@/infrastructure/mock/MockCanvasAdapter'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
-
 function makeAdapter(files: Record<string, string> = {}): ObsidianMcpServerAdapter {
   const vault = new MockBridge(files)
-  const repo = new FeatureRepository(vault, vault, () => DEFAULT_SETTINGS)
+  const repo = new FeatureRepository(vault, vault, vault)
   const metadataCache = new MockMetadataCacheAdapter()
   const canvas = new MockCanvasAdapter()
   return new ObsidianMcpServerAdapter(

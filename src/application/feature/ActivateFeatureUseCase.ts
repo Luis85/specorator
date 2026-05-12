@@ -2,13 +2,12 @@ import { type Result } from '@/domain/shared/Result'
 import { err } from '@/domain/shared/Result'
 import type { Feature } from '@/domain/feature/Feature'
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
-import type { UseCase } from '../shared/UseCase'
 
 export interface ActivateFeatureInput {
   readonly featureId: string
 }
 
-export class ActivateFeatureUseCase implements UseCase<ActivateFeatureInput, Feature> {
+export class ActivateFeatureUseCase {
   constructor(private readonly repository: IFeatureRepository) {}
 
   async execute(input: ActivateFeatureInput): Promise<Result<Feature>> {

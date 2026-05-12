@@ -4,7 +4,6 @@ import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { MockMetadataCacheAdapter } from '@/infrastructure/mock/MockMetadataCacheAdapter'
 import { MockCanvasAdapter } from '@/infrastructure/mock/MockCanvasAdapter'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
-import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -143,7 +142,7 @@ describe('ObsidianMcpServerAdapter — workflow tools', () => {
 
   beforeEach(async () => {
     vault = new MockBridge(VAULT_FILES)
-    const repo = new FeatureRepository(vault, vault, () => DEFAULT_SETTINGS)
+    const repo = new FeatureRepository(vault, vault, vault)
     const metadataCache = new MockMetadataCacheAdapter()
     const canvas = new MockCanvasAdapter()
     adapter = new ObsidianMcpServerAdapter(
@@ -199,7 +198,7 @@ describe('ObsidianMcpServerAdapter — workflow tools', () => {
 
     it('returns empty array when specs folder has no features', async () => {
       const emptyVault = new MockBridge({})
-      const emptyRepo = new FeatureRepository(emptyVault, emptyVault, () => DEFAULT_SETTINGS)
+      const emptyRepo = new FeatureRepository(emptyVault, emptyVault, emptyVault)
       const emptyMetadataCache = new MockMetadataCacheAdapter()
       const emptyCanvas = new MockCanvasAdapter()
       const emptyAdapter = new ObsidianMcpServerAdapter(

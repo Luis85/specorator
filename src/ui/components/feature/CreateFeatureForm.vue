@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 import AppButton from '../common/AppButton.vue'
 import { useNotificationPort } from '@/ui/composables/useNotificationPort'
 import { tryAsync } from '@/domain/shared/tryAsync'
-import { toUserMessage } from '@/application/shared/errorMessages'
 
 const props = defineProps<{
   submitHandler: (payload: { title: string; area?: string }) => Promise<boolean>
@@ -34,7 +33,7 @@ async function handleSubmit() {
     title.value = ''
     area.value = ''
   } else if (!result.ok) {
-    notify.showError(toUserMessage(result.error))
+    notify.showError(result.error.message)
   }
 }
 </script>

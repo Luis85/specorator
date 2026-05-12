@@ -6,7 +6,14 @@ import { fileURLToPath } from 'node:url'
 import { resolve } from 'path'
 
 const projectRoot = fileURLToPath(new URL('.', import.meta.url))
-const alias = { '@': resolve(projectRoot, 'src') }
+const alias = {
+  '@': resolve(projectRoot, 'src'),
+  // `obsidian` ships only `.d.ts` files in node_modules — no runtime. Map the
+  // import to a lightweight stub so tests that exercise the real
+  // `ObsidianBridge` (or anything that imports from `'obsidian'`) can run.
+  // Individual tests may override with `vi.mock('obsidian', ...)`.
+  obsidian: resolve(projectRoot, 'tests/__fakes__/obsidian.stub.ts'),
+}
 
 export default defineConfig({
   resolve: { alias },

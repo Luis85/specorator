@@ -3,7 +3,6 @@ import { tryAsync } from '@/domain/shared/tryAsync'
 import { Slug } from '@/domain/shared/Slug'
 import { Feature } from '@/domain/feature/Feature'
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
-import type { UseCase } from '../shared/UseCase'
 
 export interface CreateFeatureInput {
   readonly title: string
@@ -11,7 +10,7 @@ export interface CreateFeatureInput {
   readonly area?: string
 }
 
-export class CreateFeatureUseCase implements UseCase<CreateFeatureInput, Feature> {
+export class CreateFeatureUseCase {
   constructor(private readonly repository: IFeatureRepository) {}
 
   async execute(input: CreateFeatureInput): Promise<Result<Feature>> {

@@ -2,7 +2,7 @@
 	"id": "specorator",
 	"name": "Specorator",
 	"version": "0.0.1",
-	"minAppVersion": "1.4.0",
+	"minAppVersion": "1.12.7",
 	"description": "Spec-driven workflow cockpit for agentic software development.",
 	"author": "Luis85",
 	"authorUrl": "https://github.com/Luis85",

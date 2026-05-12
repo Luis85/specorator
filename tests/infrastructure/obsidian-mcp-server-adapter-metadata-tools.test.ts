@@ -63,7 +63,7 @@ describe('ObsidianMcpServerAdapter — metadata tools', () => {
 
   beforeEach(async () => {
     const vault = new MockBridge({})
-    const repo = new FeatureRepository(vault, vault, () => DEFAULT_SETTINGS)
+    const repo = new FeatureRepository(vault, vault, vault)
     metadataCache = new MockMetadataCacheAdapter()
     const canvas = new MockCanvasAdapter()
     adapter = new ObsidianMcpServerAdapter(
