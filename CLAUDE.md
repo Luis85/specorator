@@ -1,4 +1,4 @@
-# CLAUDE.md
+﻿# CLAUDE.md
 
 @AGENTS.md
 @memory/constitution.md
@@ -55,21 +55,22 @@ domain ← application ← infrastructure ← ui
 
 ### Narrow ports (ADR-008)
 
-All Obsidian API calls go through five narrow ports declared in `src/domain/ports/`:
+All Obsidian API calls go through six narrow ports declared in `src/domain/ports/`:
 
 - **`SettingsPort`** — `getSettings`, `saveSettings`
 - **`VaultPort`** — `readFile`, `writeFile`, `deleteFile`, `listFiles`, `listFolders`, `fileExists`, `createFolder`
 - **`WorkspacePort`** — `openFile`
 - **`NotificationPort`** — `showError`, `showWarning`, `showSuccess`, `showInfo` (severity-typed; `showError` defaults to a sticky notice — `durationMs = 0`)
 - **`LoggerPort`** — `debug`, `info`, `warn`, `error`. Console-only; never calls `NotificationPort`. Filtered by `PluginSettings.logLevel` (default `warn`) in `ObsidianBridge`. User-facing error notifications go through `NotificationPort`/`FeedbackService`.
+- **`CommunityPluginPort`** — `isPluginEnabled(id)`, `listEnabledPluginIds()`. Used by `FeatureAvailabilityService` (REQ-0003) to detect missing community-plugin dependencies.
 
-Three runtime classes implement all five ports:
+Three runtime classes implement all six ports:
 
 - **`ObsidianBridge`** (`src/infrastructure/obsidian/`) — production, wraps `App` + `Vault`
 - **`MockBridge`** (`src/infrastructure/mock/`) — unit tests and `npm run dev`
 - **`LocalStorageBridge`** (`src/infrastructure/localstorage/`) — GitHub Pages demo
 
-Each port has its own `InjectionKey` (`SETTINGS_PORT`, `VAULT_PORT`, `WORKSPACE_PORT`, `NOTIFICATION_PORT`, `LOGGER_PORT` in `src/infrastructure/bridge/ports.ts`) and its own composable (`useSettingsPort`, `useVaultPort`, `useWorkspacePort`, `useNotificationPort`, `useLoggerPort` in `src/ui/composables/`). Consumers depend on **one port per dependency** — there is no aggregate `usePorts()`. ESLint forbids re-introducing the deleted `IBridge` / `BridgeKey` / `useBridge` symbols.
+Each port has its own `InjectionKey` (`SETTINGS_PORT`, `VAULT_PORT`, `WORKSPACE_PORT`, `NOTIFICATION_PORT`, `LOGGER_PORT`, `COMMUNITY_PLUGIN_PORT` in `src/infrastructure/bridge/ports.ts`) and its own composable (`useSettingsPort`, `useVaultPort`, `useWorkspacePort`, `useNotificationPort`, `useLoggerPort`, `useCommunityPluginPort` in `src/ui/composables/`). Consumers depend on **one port per dependency** — there is no aggregate `usePorts()`. ESLint forbids re-introducing the deleted `IBridge` / `BridgeKey` / `useBridge` symbols.
 
 Vue components must **never** import `obsidian` directly (ESLint `no-restricted-imports` enforces this).
 

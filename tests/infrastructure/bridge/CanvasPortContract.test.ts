@@ -1,13 +1,20 @@
+// NOTE(asymmetry): LocalStorageBridge does not implement CanvasPort —
+// the browser demo has no canvas concept.
+// ObsidianCanvasAdapter wraps VaultPort only (not the full Obsidian App) and
+// CAN be exercised in Vitest backed by MockBridge.
+// ObsidianMetadataCacheAdapter (separate port) cannot — it requires the full App.
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { CanvasPort } from '@/domain/ports'
-import { MockBridge } from '@/infrastructure/mock/MockBridge'
+import type { CanvasPort, JsonCanvasData } from '@/domain/ports'
 import { MockCanvasAdapter } from '@/infrastructure/mock/MockCanvasAdapter'
+import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { ObsidianCanvasAdapter } from '@/infrastructure/obsidian/ObsidianCanvasAdapter'
 
-// ObsidianCanvasAdapter wraps VaultPort (not the Obsidian App), so it can be
-// exercised in Vitest by backing it with MockBridge.
-// ObsidianMetadataCacheAdapter (separate port) cannot be contract-tested here —
-// it requires the full Obsidian App instance.
+const CANVAS_PATH = 'specs/search/board.canvas'
+const NON_CANVAS_PATH = 'specs/search/workflow-state.md'
+const DATA: JsonCanvasData = {
+	nodes: [{ id: 'n1', type: 'text', text: 'hello' }],
+	edges: [{ id: 'e1', fromNode: 'n1', toNode: 'n2' }],
+}
 
 interface Harness {
 	readonly name: string
@@ -22,43 +29,50 @@ function registerCanvasContract(harness: Harness): void {
 			port = harness.makePort()
 		})
 
-		it('identifies .canvas paths', () => {
-			expect(port.isCanvas('diagram.canvas')).toBe(true)
-			expect(port.isCanvas('specs/feature.canvas')).toBe(true)
+		describe('isCanvas', () => {
+			it('returns true for .canvas paths', () => {
+				expect(port.isCanvas(CANVAS_PATH)).toBe(true)
+			})
+
+			it('returns false for non-.canvas paths', () => {
+				expect(port.isCanvas(NON_CANVAS_PATH)).toBe(false)
+			})
 		})
 
-		it('rejects non-canvas paths', () => {
-			expect(port.isCanvas('notes.md')).toBe(false)
-			expect(port.isCanvas('data.json')).toBe(false)
-			expect(port.isCanvas('no-extension')).toBe(false)
+		describe('readCanvas', () => {
+			it('rejects with an error for a missing path', async () => {
+				await expect(port.readCanvas(CANVAS_PATH)).rejects.toThrow()
+			})
+
+			it('resolves with data written via writeCanvas', async () => {
+				await port.writeCanvas(CANVAS_PATH, DATA)
+				await expect(port.readCanvas(CANVAS_PATH)).resolves.toEqual(DATA)
+			})
+
+			it('returns a defensive copy — caller mutation does not affect stored data', async () => {
+				await port.writeCanvas(CANVAS_PATH, DATA)
+				const result = await port.readCanvas(CANVAS_PATH)
+				result.nodes!.push({ id: 'injected' })
+				const second = await port.readCanvas(CANVAS_PATH)
+				expect(second.nodes).toHaveLength(1)
+			})
 		})
 
-		it('throws when reading a canvas that does not exist', async () => {
-			await expect(port.readCanvas('missing.canvas')).rejects.toThrow()
-		})
+		describe('writeCanvas', () => {
+			it('overwrites previously written data', async () => {
+				const updated: JsonCanvasData = { nodes: [], edges: [] }
+				await port.writeCanvas(CANVAS_PATH, DATA)
+				await port.writeCanvas(CANVAS_PATH, updated)
+				await expect(port.readCanvas(CANVAS_PATH)).resolves.toEqual(updated)
+			})
 
-		it('reads back data written via writeCanvas', async () => {
-			const data = { nodes: [{ id: 'n1', type: 'text' }], edges: [] }
-			await port.writeCanvas('diagram.canvas', data)
-			const result = await port.readCanvas('diagram.canvas')
-			expect(result).toEqual(data)
-		})
-
-		it('writeCanvas stores an independent copy — caller mutations do not affect stored data', async () => {
-			const data = { nodes: [{ id: 'original' }], edges: [] }
-			await port.writeCanvas('diagram.canvas', data)
-			// Mutate the source after the write.
-			data.nodes[0].id = 'mutated'
-			const result = await port.readCanvas('diagram.canvas')
-			expect((result.nodes![0] as { id: string }).id).toBe('original')
-		})
-
-		it('readCanvas returns an independent copy — caller mutations do not affect stored data', async () => {
-			await port.writeCanvas('diagram.canvas', { nodes: [{ id: 'n1' }], edges: [] })
-			const first = await port.readCanvas('diagram.canvas')
-			;(first.nodes![0] as { id: string }).id = 'mutated'
-			const second = await port.readCanvas('diagram.canvas')
-			expect((second.nodes![0] as { id: string }).id).toBe('n1')
+			it('write input mutation does not affect stored data', async () => {
+				const mutable: JsonCanvasData = { nodes: [{ id: 'n1' }], edges: [] }
+				await port.writeCanvas(CANVAS_PATH, mutable)
+				mutable.nodes!.push({ id: 'injected' })
+				const result = await port.readCanvas(CANVAS_PATH)
+				expect(result.nodes).toHaveLength(1)
+			})
 		})
 	})
 }
@@ -71,4 +85,19 @@ registerCanvasContract({
 registerCanvasContract({
 	name: 'ObsidianCanvasAdapter',
 	makePort: () => new ObsidianCanvasAdapter(new MockBridge()),
+})
+
+// Mock-specific: seedCanvas shortcut and write-spy
+describe('MockCanvasAdapter — seed and write-spy', () => {
+	it('seedCanvas pre-populates data readable via readCanvas', async () => {
+		const adapter = new MockCanvasAdapter()
+		adapter.seedCanvas(CANVAS_PATH, DATA)
+		await expect(adapter.readCanvas(CANVAS_PATH)).resolves.toEqual(DATA)
+	})
+
+	it('getWritten reflects the last writeCanvas call', async () => {
+		const adapter = new MockCanvasAdapter()
+		await adapter.writeCanvas(CANVAS_PATH, DATA)
+		expect(adapter.getWritten(CANVAS_PATH)).toEqual(DATA)
+	})
 })
