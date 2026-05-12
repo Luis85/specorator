@@ -70,8 +70,9 @@ Pre-flight checks (defined in `scripts/release-preflight.mjs`):
 - `README.md` and `LICENSE` exist at repo root
 - No sample-plugin remnants (`SampleModal`, `SampleSettingTab`) in `src/`
 - `manifest.json` · `package.json` · `versions.json` versions are consistent (`validate-manifest.js`)
+- Current version is not already tagged in git (prevents accidental re-release); no `v`-prefix
 - `manifest.description` ≤ 250 chars, no emoji, does not start with "This plugin", ends with `.`
-- Release assets (`main.js`, `manifest.json`, `styles.css`) are present and non-empty
+- `release.yml` lists the three required individual assets (`main.js`, `manifest.json`, `styles.css`) and contains no zip/tarball step
 - Advisory: warns if `fundingUrl` is set without a live donation page
 
 If the gate exits non-zero: stop, report the errors, do not proceed to the bump.
