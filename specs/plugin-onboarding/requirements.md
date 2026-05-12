@@ -142,10 +142,10 @@ EARS patterns used:
 
 ---
 
-### REQ-POB-007 — Step 2: Persona empty on skip
+### REQ-POB-007 — Step 2: Persona preserved on skip
 
 - **Pattern:** event-driven
-- **Statement:** WHEN the user activates the "I'll do this later" action on Step 2, the wizard shall advance to Step 3 without saving any value to `PluginSettings.userPersona`, leaving it as its default empty string.
+- **Statement:** WHEN the user activates the "I'll do this later" action on Step 2, the wizard shall advance to Step 3 without writing to `PluginSettings.userPersona`, leaving its current value unchanged.
 - **Acceptance:**
   - Given the wizard is at Step 2 and the user has not entered any text (or has entered text but chooses skip)
   - When the user activates "I'll do this later"
