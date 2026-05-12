@@ -77,9 +77,9 @@ if (!licenseVariants.some(existsSync)) {
     const manifest = JSON.parse(readFileSync('manifest.json', 'utf8'))
     const version = String(manifest.version ?? '')
     if (version) {
-      const existing = execSync(`git tag -l "${version}"`, { encoding: 'utf8' }).trim()
+      const existing = execSync(`git ls-remote --tags origin "refs/tags/${version}"`, { encoding: 'utf8' }).trim()
       if (existing) {
-        fail('version-tag', `Tag ${version} already exists — bump the version before releasing`)
+        fail('version-tag', `Tag ${version} already exists on origin — bump the version before releasing`)
       }
       if (version.startsWith('v')) {
         fail('version-tag', `manifest.version starts with "v" (${version}) — Obsidian tags must be plain X.Y.Z`)
