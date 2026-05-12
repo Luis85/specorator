@@ -3,17 +3,14 @@ import { defineComponent, h } from 'vue'
 import { createPinia } from 'pinia'
 import { describe, expect, it, beforeEach } from 'vitest'
 import { useFeatures } from '@/ui/composables/useFeatures'
-import {
-	SETTINGS_PORT,
-	VAULT_PORT,
-	WORKSPACE_PORT,
-	NOTIFICATION_PORT,
-} from '@/infrastructure/bridge/ports'
+import { FEATURE_SERVICE_KEY } from '@/ui/composables/useFeatureService'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
-import { CreateFeatureUseCase } from '@/application/feature/CreateFeatureUseCase'
-import { ActivateFeatureUseCase } from '@/application/feature/ActivateFeatureUseCase'
-import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
+import { FeatureService } from '@/application/feature/FeatureService'
+
+function makeService(bridge: MockBridge): FeatureService {
+  return new FeatureService(new FeatureRepository(bridge, bridge, bridge))
+}
 
 function harness(bridge: MockBridge) {
   let api!: ReturnType<typeof useFeatures>
@@ -27,21 +24,18 @@ function harness(bridge: MockBridge) {
     global: {
       plugins: [createPinia()],
       provide: {
-				[SETTINGS_PORT as unknown as symbol]: bridge,
-				[VAULT_PORT as unknown as symbol]: bridge,
-				[WORKSPACE_PORT as unknown as symbol]: bridge,
-				[NOTIFICATION_PORT as unknown as symbol]: bridge,
-			},
+        [FEATURE_SERVICE_KEY as unknown as symbol]: makeService(bridge),
+      },
     },
   })
   return api
 }
 
 async function seedActiveFeature(bridge: MockBridge, title = 'Search') {
-  const repo = new FeatureRepository(bridge, bridge, () => DEFAULT_SETTINGS)
-  const created = await new CreateFeatureUseCase(repo).execute({ title })
+  const service = makeService(bridge)
+  const created = await service.createFeature(title)
   if (!created.ok) throw created.error
-  const activated = await new ActivateFeatureUseCase(repo).execute({ featureId: created.value.id })
+  const activated = await service.activateFeature(created.value.id)
   if (!activated.ok) throw activated.error
   return activated.value
 }

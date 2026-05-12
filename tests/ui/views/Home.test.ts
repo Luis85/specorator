@@ -11,6 +11,9 @@ import {
 	WORKSPACE_PORT,
 	NOTIFICATION_PORT,
 } from '@/infrastructure/bridge/ports'
+import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
+import { FeatureService } from '@/application/feature/FeatureService'
+import { FEATURE_SERVICE_KEY } from '@/ui/composables/useFeatureService'
 import { HomePageObject } from './Home.po'
 
 function mountHome() {
@@ -30,6 +33,9 @@ function mountHome() {
 				[VAULT_PORT as unknown as symbol]: ports.vault,
 				[WORKSPACE_PORT as unknown as symbol]: ports.workspace,
 				[NOTIFICATION_PORT as unknown as symbol]: ports.notifications,
+				[FEATURE_SERVICE_KEY as unknown as symbol]: new FeatureService(
+					new FeatureRepository(ports.bridge, ports.bridge, ports.bridge),
+				),
 			},
 		},
 	})

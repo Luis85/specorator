@@ -1,13 +1,12 @@
 import { type Result, err } from '@/domain/shared/Result'
 import type { Feature } from '@/domain/feature/Feature'
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
-import type { UseCase } from '../shared/UseCase'
 
 export interface ArchiveFeatureInput {
   readonly featureId: string
 }
 
-export class ArchiveFeatureUseCase implements UseCase<ArchiveFeatureInput, Feature> {
+export class ArchiveFeatureUseCase {
   constructor(private readonly repository: IFeatureRepository) {}
 
   async execute(input: ArchiveFeatureInput): Promise<Result<Feature>> {

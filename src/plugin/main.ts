@@ -41,7 +41,7 @@ export default class SpecoratorPlugin extends Plugin {
       i18nMerge,
       mcpServer: new ObsidianMcpServerAdapter(
         this.bridge,
-        new FeatureRepository(this.bridge, this.bridge, () => this.settings),
+        new FeatureRepository(this.bridge, this.bridge, this.bridge),
         () => this.settings.specsFolder,
         new ObsidianMetadataCacheAdapter(this.app),
         new ObsidianCanvasAdapter(this.bridge),

@@ -5,7 +5,6 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { setLocale } from '../i18n'
 import type { SupportedLocale } from '../i18n'
 import { tryAsync } from '@/domain/shared/tryAsync'
-import { toUserMessage } from '@/application/shared/errorMessages'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 
 export function useSettings() {
@@ -23,7 +22,7 @@ export function useSettings() {
     })
     store.setLoading(false)
     if (!result.ok) {
-      notify.showError(toUserMessage(result.error))
+      notify.showError(result.error.message)
       return
     }
   }
