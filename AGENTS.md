@@ -9,8 +9,8 @@ If a rule here disagrees with `docs/contributing.md`, the human guide wins; open
 ## 0. Read these first
 
 1. **`memory/constitution.md`** — governing principles. Override only with explicit human approval.
-2. **`.claude/memory/MEMORY.md`** *(agent-local, not in repo)* — operational memory index maintained by Claude Code per machine. Load if present; skip if absent.
-3. **`docs/specorator.md`** *(scaffold stub — not yet populated for this project)* — template for the workflow definition. Defer to the plugin's `CLAUDE.md` §Specorator workflow and the upstream `docs/specorator.md` in the agentic-workflow repo until this stub is filled in.
+2. **`.claude/memory/MEMORY.md`** *(optional — agent-local, not tracked in repo)* — operational memory index maintained by Claude Code per machine. Load if present; skip if absent.
+3. **`docs/specorator.md`** *(optional — scaffold stub, not yet populated; skip until filled in)* — future workflow definition stub. Until populated, defer to the plugin's `CLAUDE.md` §Specorator workflow and the upstream `docs/specorator.md` in the agentic-workflow repo.
 4. **Current feature's `specs/<feature>/workflow-state.md`** — active stage + what's already produced.
 
 ## 0a. Operating rules

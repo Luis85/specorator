@@ -10,7 +10,7 @@ This repo treats Codex as an autonomous topic-branch contributor. When a human a
 
    ```bash
    git fetch origin
-   git worktree add .worktrees/<slug> -b <prefix>/<slug> origin/<integration-branch>
+   git worktree add .worktrees/<slug> -b <prefix>/<slug> origin/develop
    ```
 
 4. Install the project inside the new worktree before running verification:

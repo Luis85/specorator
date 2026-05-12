@@ -113,7 +113,6 @@ The 12 stage slugs (from `src/domain/feature/FeatureStep.ts`): `idea`, `research
 
 - `src/domain/ports/` — narrow port interfaces (SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort)
 - `src/application/shared/FeedbackService.ts` — composable-layer side-effect emitter wrapping LoggerPort + NotificationPort
-- `src/application/shared/errorMessages.ts` — `toUserMessage` maps domain errors to user-friendly strings
 - `src/ui/components/ErrorBoundary.vue` — wraps `<RouterView />` in `App.vue`; logs + notifies before swallowing component errors
 - `src/domain/settings/PluginSettings.ts` — `PluginSettings` type + `DEFAULT_SETTINGS`
 - `src/infrastructure/bridge/ports.ts` — per-port InjectionKey symbols
