@@ -3,7 +3,7 @@
 // Marketplace gate checks. Run before every Specorator release.
 // Usage: npm run release:preflight
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
-import { execSync, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import { join, extname } from 'node:path'
 
 /** @type {string[]} */
@@ -77,8 +77,9 @@ if (!licenseVariants.some(existsSync)) {
     const manifest = JSON.parse(readFileSync('manifest.json', 'utf8'))
     const version = String(manifest.version ?? '')
     if (version) {
-      const existing = execSync(`git ls-remote --tags origin "refs/tags/${version}"`, { encoding: 'utf8' }).trim()
-      if (existing) {
+      const lsRemote = spawnSync('git', ['ls-remote', '--tags', 'origin', `refs/tags/${version}`], { encoding: 'utf8' })
+      if (lsRemote.status !== 0) throw new Error(lsRemote.stderr || 'git ls-remote failed')
+      if (lsRemote.stdout.trim()) {
         fail('version-tag', `Tag ${version} already exists on origin — bump the version before releasing`)
       }
       if (version.startsWith('v')) {
