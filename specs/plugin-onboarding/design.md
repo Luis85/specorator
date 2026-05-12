@@ -153,7 +153,7 @@ This section prescribes the exact state shown at every decision point. Implement
 
 | State | What is shown |
 |---|---|
-| Textarea empty (initial) | Warm invitational copy above the textarea. Three example persona cards visible below the textarea. Secondary copy: "Two to four sentences is plenty." The Continue button is enabled even when the textarea is empty (empty submit → behaves as skip, see REQ-POB-007 note; however the primary skip affordance is "I'll do this later"). |
+| Textarea empty (initial) | Warm invitational copy above the textarea. Three example persona cards visible below the textarea. Secondary copy: "Two to four sentences is plenty." The Continue button is enabled even when the textarea is empty; activating Continue with an empty textarea saves an empty string to `userPersona` per REQ-POB-006 (distinct from "I'll do this later", which preserves the prior value without writing, per REQ-POB-007). |
 | Textarea populated | Same layout; example cards remain visible until the user scrolls or proceeds. |
 | Save in-flight (after Continue) | Continue button shows a brief non-blocking indicator (wording is Part B's decision). The "I'll do this later" link is not interactive while save is in-flight. |
 | Save failure | Inline message adjacent to the Continue button: "We couldn't save your introduction right now. Try again, or skip for now." Both retry and skip remain available. No modal, no blocking overlay. |

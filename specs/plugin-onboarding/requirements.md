@@ -393,11 +393,11 @@ EARS patterns used:
 ### REQ-POB-026 — No technical terminology in user-visible onboarding strings
 
 - **Pattern:** ubiquitous
-- **Statement:** The onboarding wizard shall not display any internal identifier, port name, file path, or technical error code in any string visible to the user; all user-visible strings shall use plain language appropriate for a non-technical audience.
+- **Statement:** The onboarding wizard shall not display any internal identifier, port name, internal system file path, or technical error code in any string visible to the user; all user-visible strings shall use plain language appropriate for a non-technical audience. **Exception:** user-configured folder paths (e.g. the `specsFolder` value shown in the editable input field on Step 4) are exempt from this constraint — they are user-owned values that must be displayed as-is to allow accurate review and editing.
 - **Acceptance:**
   - Given any step in the onboarding wizard, the settings tab fields, or the sidebar nudge
   - When those elements render under any condition (success, skip, error, unavailable port)
-  - Then no string visible to the user contains terms such as "ClaudeCliPort", "SettingsPort", "VaultPort", "workflow-state.md", error codes, stack traces, or internal module names
+  - Then no string visible to the user contains terms such as "ClaudeCliPort", "SettingsPort", "VaultPort", "workflow-state.md", error codes, stack traces, or internal module names; user-configured folder paths shown in editable fields are permitted
 - **Priority:** must
 - **Satisfies:** IDEA-POB-001 (plain-language constraint throughout)
 
@@ -410,7 +410,7 @@ EARS patterns used:
 - **Acceptance:**
   - Given the standalone browser context (`npm run dev`) with `MockBridge`
   - When the user navigates through all five wizard steps
-  - Then each step renders correctly; Step 3 displays the not-ready message; Step 5 displays the AI nudge; no unhandled exceptions are thrown; the wizard completes successfully
+  - Then each step renders correctly; Step 3 displays the not-ready message (Claude unavailable); no unhandled exceptions are thrown; the wizard completes successfully and sets `onboardingComplete: true`; Step 5 may optionally display the AI nudge per REQ-POB-017 (`should`), but its absence does not constitute a failure of this requirement
 - **Priority:** must
 - **Satisfies:** IDEA-POB-001 (works in both Obsidian and standalone browser UI contexts)
 
@@ -470,7 +470,7 @@ EARS patterns used:
 
 What must be true to ship.
 
-- [ ] All `must` requirements (REQ-POB-001 through REQ-POB-029 marked `must`) pass their acceptance criteria.
+- [ ] All `must` requirements (REQ-POB-001 through REQ-POB-029 marked `must`) pass their acceptance criteria, **except REQ-POB-018 and REQ-POB-019** which are deferred to the `claude-cli-chat-sidebar` feature per ADR-017 — those requirements define the persona injection contract and cannot be satisfied until the injection site is declared in that feature.
 - [ ] All `should` requirements (REQ-POB-013, REQ-POB-017, REQ-POB-020, REQ-POB-022) are implemented or explicitly waived with documented rationale.
 - [ ] All NFRs (NFR-POB-001 through NFR-POB-010) are met or explicitly waived with an ADR.
 - [ ] Coverage thresholds (NFR-POB-003 through NFR-POB-006) pass on `npm run test:coverage`.
