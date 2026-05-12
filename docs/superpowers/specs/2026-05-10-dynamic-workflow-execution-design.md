@@ -77,6 +77,7 @@ type WorkflowFailure =
   | { kind: 'UnsupportedGraph'; reason: 'branch' | 'join' | 'multi-source' | 'multi-sink' | 'disconnected-node' | 'empty' }
   | { kind: 'CycleDetected' }
   | { kind: 'InvalidSlashCommand'; reason: 'missing-canvas' | 'unterminated-quote' | 'missing-input' | 'path-escapes-vault'; detail?: string }
+  | { kind: 'InvalidWorkflowRunsFolder'; value: string; reason: string }
   | { kind: 'StepOutputMissing'; stepIndex: number }
   | { kind: 'AgentExecutionFailed'; stepIndex: number; stderr: string }
   | { kind: 'Cancelled'; stepIndex: number }
@@ -160,7 +161,7 @@ The literal paths are produced by substituting the configured `workflowRunsFolde
 
 ## 7. Error Handling
 
-- All validation runs **before** any agent call. Pre-flight covers: slash-command parse (`InvalidSlashCommand`), canvas read + JSON parse (`CanvasNotFound`, `CanvasParseError`), node-type check (`UnsupportedCanvasNode` rejects non-`.md` file nodes and non-file node types), structural check (`MalformedCanvas` rejects duplicate node ids and dangling edge endpoints), graph shape (`UnsupportedGraph`, `CycleDetected`), every SKILL.md read + frontmatter validation (`SkillNotFound`, `InvalidSkillFormat`). Pre-flight failures return `Result.error` with no side effects (no `runDir`, no scratch files).
+- All validation runs **before** any agent call. Pre-flight covers: slash-command parse (`InvalidSlashCommand`), `workflowRunsFolder` safety check via `normalizeVaultPath` (`InvalidWorkflowRunsFolder` — rejects empty, absolute, `..` traversal, and reserved roots such as `.obsidian`), canvas read + JSON parse (`CanvasNotFound`, `CanvasParseError`), node-type check (`UnsupportedCanvasNode` rejects non-`.md` file nodes and non-file node types), structural check (`MalformedCanvas` rejects duplicate node ids and dangling edge endpoints), graph shape (`UnsupportedGraph`, `CycleDetected`), every SKILL.md read + frontmatter validation (`SkillNotFound`, `InvalidSkillFormat`). Pre-flight failures return `Result.error` with no side effects (no `runDir`, no scratch files).
 - After pre-flight passes, the use case calls `createFolder(workflowRunsFolder)` idempotently (no-op if the folder already exists) before allocating and creating the `{run-id}/` directory inside it. This ensures first-run execution succeeds in a fresh vault where `workflowRunsFolder` has never been written. `VaultPort.createFolder` is not guaranteed to create parent directories recursively, so the two-step creation is required — skipping it causes failure on a clean install.
 - Runtime failures preserve `runDir` and any scratch files written so far for inspection.
 - `NotificationPort.showError` surfaces failures with a sticky notice naming the offending node or step.
