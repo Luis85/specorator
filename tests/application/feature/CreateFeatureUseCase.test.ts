@@ -6,7 +6,7 @@ import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 function makeRepo(bridge: MockBridge) {
-  return new FeatureRepository(bridge, bridge, bridge)
+  return new FeatureRepository(bridge, bridge, () => DEFAULT_SETTINGS)
 }
 function makeUseCase(bridge: MockBridge) {
   return new CreateFeatureUseCase(makeRepo(bridge))
@@ -122,7 +122,8 @@ describe('CreateFeatureUseCase', () => {
 
   it('rejects unsafe configured specs paths before writing vault files', async () => {
     await bridge.saveSettings({ ...DEFAULT_SETTINGS, specsFolder: '../outside' })
-    const repo = makeRepo(bridge)
+    const settings = await bridge.getSettings()
+    const repo = new FeatureRepository(bridge, bridge, () => settings)
     const result = await new CreateFeatureUseCase(repo).execute({ title: 'Dark mode' })
 
     expect(result.ok).toBe(false)

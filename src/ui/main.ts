@@ -65,7 +65,10 @@ void bridge.getSettings()
     app.provide(LOGGER_PORT, bridge)
     app.provide(
       FEATURE_SERVICE_KEY,
-      new FeatureService(new FeatureRepository(bridge, bridge, bridge)),
+      new FeatureService(async () => {
+        const settings = await bridge.getSettings()
+        return new FeatureRepository(bridge, bridge, () => settings)
+      }),
     )
 
     // Set errorHandler BEFORE mount() so initial render/setup errors flow through

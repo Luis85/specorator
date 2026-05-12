@@ -58,7 +58,10 @@ export class SpecoratorView extends ItemView {
     this.vueApp.provide(LOGGER_PORT, bridge)
     this.vueApp.provide(
       FEATURE_SERVICE_KEY,
-      new FeatureService(new FeatureRepository(bridge, bridge, bridge)),
+      new FeatureService(async () => {
+        const settings = await bridge.getSettings()
+        return new FeatureRepository(bridge, bridge, () => settings)
+      }),
     )
 
     // Set errorHandler BEFORE mount() so errors thrown during initial render/setup

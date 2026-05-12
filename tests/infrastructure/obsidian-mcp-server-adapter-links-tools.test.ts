@@ -66,7 +66,7 @@ describe('ObsidianMcpServerAdapter — links tools', () => {
     vault = new MockBridge({
       'notes/foo.md': '# Foo\n\nBody',
     })
-    const repo = new FeatureRepository(vault, vault, vault)
+    const repo = new FeatureRepository(vault, vault, () => DEFAULT_SETTINGS)
     metadataCache = new MockMetadataCacheAdapter()
     const canvas = new MockCanvasAdapter()
     adapter = new ObsidianMcpServerAdapter(
