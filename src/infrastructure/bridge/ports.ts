@@ -7,6 +7,7 @@ import type {
 	LoggerPort,
 	MetadataCachePort,
 	CanvasPort,
+	CommunityPluginPort,
 } from '@/domain/ports'
 
 export const SETTINGS_PORT: InjectionKey<SettingsPort> = Symbol('SettingsPort')
@@ -16,3 +17,4 @@ export const NOTIFICATION_PORT: InjectionKey<NotificationPort> = Symbol('Notific
 export const LOGGER_PORT: InjectionKey<LoggerPort> = Symbol('LoggerPort')
 export const METADATA_CACHE_PORT: InjectionKey<MetadataCachePort> = Symbol('MetadataCachePort')
 export const CANVAS_PORT: InjectionKey<CanvasPort> = Symbol('CanvasPort')
+export const COMMUNITY_PLUGIN_PORT: InjectionKey<CommunityPluginPort> = Symbol('CommunityPluginPort')
