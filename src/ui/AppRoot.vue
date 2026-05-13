@@ -27,9 +27,15 @@ function onOpenFile(e: Event) {
   void router.push({ name: 'file', params: { filePath: path } })
 }
 
+function onNavigate(e: Event) {
+  const { path } = (e as CustomEvent<{ path: string }>).detail
+  void router.push(path)
+}
+
 onMounted(async () => {
   window.addEventListener('sp:notice', onNotice)
   window.addEventListener('sp:open-file', onOpenFile)
+  window.addEventListener('sp:navigate', onNavigate)
   const s = await settingsPort.getSettings()
   if (!s.onboardingComplete) {
     void router.push('/onboarding')
@@ -39,6 +45,7 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('sp:notice', onNotice)
   window.removeEventListener('sp:open-file', onOpenFile)
+  window.removeEventListener('sp:navigate', onNavigate)
 })
 </script>
 
