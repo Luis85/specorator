@@ -4,10 +4,12 @@ import { RouterView, useRoute, useRouter } from 'vue-router'
 import AppToast from './components/common/AppToast.vue'
 import MainLayout from './layouts/MainLayout.vue'
 import { useNotificationStore } from './stores/notificationStore'
+import { useSettingsPort } from './composables/useSettingsPort'
 
 const route = useRoute()
 const router = useRouter()
 const notificationStore = useNotificationStore()
+const settingsPort = useSettingsPort()
 
 const layout = computed<Component>(() => route.meta.layout ?? MainLayout)
 
@@ -25,9 +27,13 @@ function onOpenFile(e: Event) {
   void router.push({ name: 'file', params: { filePath: path } })
 }
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('sp:notice', onNotice)
   window.addEventListener('sp:open-file', onOpenFile)
+  const s = await settingsPort.getSettings()
+  if (!s.onboardingComplete) {
+    void router.push('/onboarding')
+  }
 })
 
 onUnmounted(() => {
