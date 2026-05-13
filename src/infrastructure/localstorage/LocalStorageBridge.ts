@@ -6,6 +6,7 @@ import type {
 	LoggerPort,
 	ActiveFileSnapshot,
 	Unsubscriber,
+	ClaudeCliPort,
 } from '@/domain/ports'
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
@@ -13,7 +14,7 @@ const FILE_PREFIX = 'specorator:file:'
 const SETTINGS_KEY = 'specorator:settings'
 
 export class LocalStorageBridge
-	implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort
+	implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, ClaudeCliPort
 {
   async readFile(path: string): Promise<string> {
     const value = localStorage.getItem(FILE_PREFIX + path)
@@ -143,4 +144,10 @@ export class LocalStorageBridge
   }
 
   /* eslint-enable obsidianmd/rule-custom-message */
+
+  // ── ClaudeCliPort ─────────────────────────────────────────────────────────
+
+  isAvailable(): Promise<boolean> {
+    return Promise.resolve(false)
+  }
 }

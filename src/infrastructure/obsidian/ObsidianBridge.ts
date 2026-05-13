@@ -8,6 +8,7 @@ import type {
 	LoggerPort,
 	ActiveFileSnapshot,
 	Unsubscriber,
+	ClaudeCliPort,
 } from '@/domain/ports'
 
 type FileManagerWithTrash = App['fileManager'] & {
@@ -15,7 +16,7 @@ type FileManagerWithTrash = App['fileManager'] & {
 }
 
 export class ObsidianBridge
-  implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort
+  implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, ClaudeCliPort
 {
   private static readonly _LEVEL_RANK: Record<string, number> = {
     debug: 0,
@@ -191,4 +192,18 @@ export class ObsidianBridge
   }
 
   /* eslint-enable obsidianmd/rule-custom-message */
+
+  // ── ClaudeCliPort ─────────────────────────────────────────────────────────
+
+  isAvailable(): Promise<boolean> {
+    const timeoutMs = 5000
+    const deadline = new Promise<boolean>((resolve) => {
+      activeWindow.setTimeout(() => { resolve(false) }, timeoutMs)
+    })
+    const { exec } = require('node:child_process') as { exec: (cmd: string, cb: (err: Error | null) => void) => void }
+    const check = new Promise<boolean>((resolve) => {
+      exec('claude --version', (err) => { resolve(err === null) })
+    })
+    return Promise.race([check, deadline])
+  }
 }

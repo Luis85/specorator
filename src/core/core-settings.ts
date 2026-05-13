@@ -49,6 +49,11 @@ export const coreSettingsModule = defineModule<PluginSettings>({
         : DEFAULT_SETTINGS.logLevel,
       mcpServerEnabled:
         typeof r.mcpServerEnabled === 'boolean' ? r.mcpServerEnabled : DEFAULT_SETTINGS.mcpServerEnabled,
+      userPersona: typeof r.userPersona === 'string' ? r.userPersona : DEFAULT_SETTINGS.userPersona,
+      onboardingComplete:
+        typeof r.onboardingComplete === 'boolean'
+          ? r.onboardingComplete
+          : DEFAULT_SETTINGS.onboardingComplete,
     }
   },
 
@@ -131,6 +136,20 @@ export const coreSettingsModule = defineModule<PluginSettings>({
         description:
           'Allow local MCP clients to access your Specorator data via 127.0.0.1. Off by default for privacy.',
         default: DEFAULT_SETTINGS.mcpServerEnabled,
+      },
+      {
+        type: 'text',
+        key: 'userPersona',
+        label: 'User persona',
+        description: 'Your role or persona, used to personalise AI interactions.',
+        default: DEFAULT_SETTINGS.userPersona,
+      },
+      {
+        type: 'toggle',
+        key: 'onboardingComplete',
+        label: 'Onboarding complete',
+        description: 'Set automatically after the setup wizard finishes.',
+        default: DEFAULT_SETTINGS.onboardingComplete,
       },
     ],
   },

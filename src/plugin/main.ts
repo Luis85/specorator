@@ -88,6 +88,14 @@ export default class SpecoratorPlugin extends Plugin {
       callback: () => void this.updateSettings({ mcpServerEnabled: false }),
     })
 
+    this.addCommand({
+      id: 're-run-setup',
+      name: 'Re-run setup',
+      callback: () => {
+        void this.updateSettings({ onboardingComplete: false }).then(() => this.activateView())
+      },
+    })
+
     this.addSettingTab(new SpecoratorSettingTab(this.app, this))
 
     this.registerObsidianProtocolHandler('specorator', (params) => {
@@ -111,6 +119,9 @@ export default class SpecoratorPlugin extends Plugin {
     // logic that reads workspace layout or vault state until layout is ready.
     this.app.workspace.onLayoutReady(() => {
       this.detectLegacyVaultLayout()
+      if (!this.settings.onboardingComplete) {
+        void this.activateView()
+      }
     })
   }
 

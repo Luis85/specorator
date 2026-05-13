@@ -10,6 +10,7 @@ import {
   WORKSPACE_PORT,
   NOTIFICATION_PORT,
   LOGGER_PORT,
+  CLAUDE_CLI_PORT,
 } from '@/infrastructure/bridge/ports'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { FeatureService } from '@/application/feature/FeatureService'
@@ -56,6 +57,7 @@ export class SpecoratorView extends ItemView {
     this.vueApp.provide(WORKSPACE_PORT, bridge)
     this.vueApp.provide(NOTIFICATION_PORT, bridge)
     this.vueApp.provide(LOGGER_PORT, bridge)
+    this.vueApp.provide(CLAUDE_CLI_PORT, bridge)
     this.vueApp.provide(
       FEATURE_SERVICE_KEY,
       new FeatureService(new FeatureRepository(bridge, bridge, bridge)),
