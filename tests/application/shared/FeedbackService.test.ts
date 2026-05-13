@@ -52,10 +52,24 @@ describe('FeedbackService.reportResult', () => {
 		expect(notify.showError).not.toHaveBeenCalled()
 	})
 
-	it('on err result: calls log.error and notify.showError with errorLabel + message', () => {
+	it('on err result: calls log.error and notify.showError with errorLabel + raw message by default', () => {
 		const log = makeFakeLogger()
 		const notify = makeFakeNotify()
 		const svc = new FeedbackService(log, notify)
+		const result = err('Title cannot be empty')
+
+		svc.reportResult(result, { operation: 'create', errorLabel: 'Create failed' })
+
+		expect(log.error).toHaveBeenCalledWith('create', result.error, undefined)
+		expect(notify.showError).toHaveBeenCalledWith('Create failed: Title cannot be empty')
+	})
+
+	it('on err result: uses translateError function when provided', () => {
+		const log = makeFakeLogger()
+		const notify = makeFakeNotify()
+		const translate = (msg: string) =>
+			msg === 'Title cannot be empty' ? 'Please enter a feature title.' : msg
+		const svc = new FeedbackService(log, notify, translate)
 		const result = err('Title cannot be empty')
 
 		svc.reportResult(result, { operation: 'create', errorLabel: 'Create failed' })
