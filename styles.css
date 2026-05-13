@@ -386,6 +386,105 @@ to { transform: rotate(360deg);
   margin: 0;
 }
 
+.specorator-root :where(.sp-onboarding__card[data-v-e8e2f4e1]) {
+	border-radius: 6px;
+	padding: 0.75rem 0.875rem;
+	cursor: pointer;
+	text-align: left;
+	font-size: 0.875rem;
+	color: var(--text-normal);
+	width: 100%;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	transition: background 0.15s;
+}
+.specorator-root :where(.sp-onboarding__card[data-v-e8e2f4e1]:hover) {
+	background: var(--background-modifier-hover);
+}
+
+.specorator-root :where(.sp-onboarding__textarea[data-v-b5554fae]) {
+	min-height: 7rem;
+	resize: vertical;
+	line-height: 1.6;
+	width: 100%;
+	padding: 0.5rem 0.75rem;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-size: 0.9375rem;
+}
+.specorator-root :where(.sp-onboarding__hint[data-v-b5554fae]) {
+	font-size: 0.875rem;
+	color: var(--text-muted);
+	margin: 0;
+}
+.specorator-root :where(.sp-onboarding__cards[data-v-b5554fae]) {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin-top: 0.25rem;
+}
+.specorator-root :where(.sp-onboarding__inline-error[data-v-b5554fae]) {
+	color: var(--text-error);
+	font-size: 0.875rem;
+	margin: 0;
+}
+.specorator-root :where(.sp-onboarding__actions[data-v-b5554fae]) {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	align-items: flex-start;
+}
+.specorator-root :where(.sp-onboarding__skip[data-v-b5554fae]) {
+	background: none;
+	border: none;
+	padding: 0;
+	cursor: pointer;
+	color: var(--text-muted);
+	font-size: 0.875rem;
+	min-width: 24px;
+	min-height: 24px;
+}
+.specorator-root :where(.sp-onboarding__skip[data-v-b5554fae]:disabled) {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.specorator-root :where(.sp-onboarding__status-region[data-v-665e4aa5]) {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+	padding: 1rem;
+	background: var(--background-secondary);
+	border-radius: 8px;
+	border: 1px solid var(--background-modifier-border);
+}
+.specorator-root :where(.sp-onboarding__status-message[data-v-665e4aa5]) {
+	font-size: 0.9375rem;
+	color: var(--text-normal);
+	margin: 0;
+}
+.specorator-root :where(.sp-onboarding__status-sub[data-v-665e4aa5]) {
+	font-size: 0.875rem;
+	color: var(--text-muted);
+	margin: 0;
+	line-height: 1.5;
+}
+.specorator-root :where(.sp-onboarding__spinner[data-v-665e4aa5]) {
+	display: inline-block;
+	width: 1rem;
+	height: 1rem;
+	border: 2px solid var(--background-modifier-border);
+	border-top-color: var(--interactive-accent);
+	border-radius: 50%;
+	animation: sp-spin-665e4aa5 0.7s linear infinite;
+}
+@keyframes sp-spin-665e4aa5 {
+to { transform: rotate(360deg);
+}
+}
+
 .specorator-root :where(.sp-onboarding[data-v-0053404f]) {
   display: flex;
   flex-direction: column;
