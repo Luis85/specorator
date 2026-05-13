@@ -79,6 +79,7 @@ Implements `IssuePort` via `VaultPort`. Owns:
 - YAML frontmatter parse/serialize for all three schemas
 - Slug collision guard (appends `-2`, `-3` etc. on conflict)
 - Malformed frontmatter returns `Result.err` — never throws
+- All user-sourced path components (issue slug, task slug, PR slug) pass through `normalizeVaultPath` (`src/infrastructure/vault/VaultPath.ts`) before forwarding to `VaultPort` — ADR-008 appendix invariant
 
 ---
 
