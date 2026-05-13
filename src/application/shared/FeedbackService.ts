@@ -1,14 +1,11 @@
 import type { LoggerPort, NotificationPort } from '@/domain/ports'
 import type { Result } from '@/domain/shared/Result'
 
-const KNOWN_MESSAGES: Record<string, string> = {
-	'Title cannot be empty': 'Please enter a feature title.',
-}
-
 export class FeedbackService {
 	constructor(
 		private readonly log: LoggerPort,
 		private readonly notify: NotificationPort,
+		private readonly translateError: (msg: string) => string = (msg) => msg,
 	) {}
 
 	reportResult<T>(
@@ -27,7 +24,7 @@ export class FeedbackService {
 			}
 		} else {
 			this.log.error(context.operation, result.error, context.logContext)
-			this.notify.showError(`${context.errorLabel}: ${(KNOWN_MESSAGES[result.error.message] ?? result.error.message)}`)
+			this.notify.showError(`${context.errorLabel}: ${this.translateError(result.error.message)}`)
 		}
 		return result
 	}
