@@ -4,6 +4,7 @@ import type {
 	WorkspacePort,
 	NotificationPort,
 	LoggerPort,
+	CommunityPluginPort,
 	ActiveFileSnapshot,
 	Unsubscriber,
 } from '@/domain/ports'
@@ -14,11 +15,12 @@ import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginS
  * Provides test helper methods for inspecting state.
  */
 export class MockBridge
-	implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort
+	implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, CommunityPluginPort
 {
   private readonly files = new Map<string, string>()
   private readonly folders = new Set<string>()
   private settings: PluginSettings = { ...DEFAULT_SETTINGS }
+  private enabledPluginIds = new Set<string>()
   private readonly noticeLog: {
     severity: 'error' | 'warning' | 'success' | 'info'
     message: string
@@ -194,5 +196,19 @@ export class MockBridge
   error(message: string, error?: unknown, context?: Record<string, unknown>): void {
     this.logEntries.push({ level: 'error', message, error, context })
     console.error(`[MockBridge] ${message}`, error, context)
+  }
+
+  // ── CommunityPluginPort ───────────────────────────────────────────────────
+
+  isPluginEnabled(id: string): boolean {
+    return this.enabledPluginIds.has(id)
+  }
+
+  listEnabledPluginIds(): string[] {
+    return Array.from(this.enabledPluginIds)
+  }
+
+  seedEnabledPlugins(ids: string[]): void {
+    this.enabledPluginIds = new Set(ids)
   }
 }

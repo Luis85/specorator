@@ -149,3 +149,39 @@ describe('ObsidianBridge.normalizePath integration', () => {
     })
   })
 })
+
+describe('ObsidianBridge — CommunityPluginPort', () => {
+  function makeBridgeWithPlugins(enabledIds: string[] = []) {
+    const { bridge, app } = makeBridge()
+    const enabledPlugins: Record<string, unknown> = {}
+    for (const id of enabledIds) enabledPlugins[id] = {}
+    ;(app as unknown as Record<string, unknown>).plugins = { enabledPlugins }
+    return { bridge, app }
+  }
+
+  it('isPluginEnabled returns true for an enabled plugin', () => {
+    const { bridge } = makeBridgeWithPlugins(['dataview', 'templater'])
+    expect(bridge.isPluginEnabled('dataview')).toBe(true)
+  })
+
+  it('isPluginEnabled returns false for a disabled plugin', () => {
+    const { bridge } = makeBridgeWithPlugins(['dataview'])
+    expect(bridge.isPluginEnabled('unknown')).toBe(false)
+  })
+
+  it('listEnabledPluginIds returns all enabled ids', () => {
+    const { bridge } = makeBridgeWithPlugins(['dataview', 'templater'])
+    expect(bridge.listEnabledPluginIds().sort()).toEqual(['dataview', 'templater'])
+  })
+
+  it('listEnabledPluginIds returns empty array when no plugins enabled', () => {
+    const { bridge } = makeBridgeWithPlugins([])
+    expect(bridge.listEnabledPluginIds()).toEqual([])
+  })
+
+  it('handles missing app.plugins gracefully', () => {
+    const { bridge } = makeBridge()
+    expect(bridge.isPluginEnabled('dataview')).toBe(false)
+    expect(bridge.listEnabledPluginIds()).toEqual([])
+  })
+})

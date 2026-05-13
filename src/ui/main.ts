@@ -17,6 +17,7 @@ import {
   WORKSPACE_PORT,
   NOTIFICATION_PORT,
   LOGGER_PORT,
+  COMMUNITY_PLUGIN_PORT,
 } from '@/infrastructure/bridge/ports'
 import { LocalStorageBridge } from '@/infrastructure/localstorage/LocalStorageBridge'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
@@ -63,6 +64,7 @@ void bridge.getSettings()
     app.provide(WORKSPACE_PORT, bridge)
     app.provide(NOTIFICATION_PORT, bridge)
     app.provide(LOGGER_PORT, bridge)
+    app.provide(COMMUNITY_PLUGIN_PORT, bridge)
     app.provide(
       FEATURE_SERVICE_KEY,
       new FeatureService(new FeatureRepository(bridge, bridge, bridge)),
