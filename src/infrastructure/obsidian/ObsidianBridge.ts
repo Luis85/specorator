@@ -197,21 +197,22 @@ export class ObsidianBridge
 
   isPluginEnabled(id: string): boolean {
     const enabled = this._getEnabledPlugins()
-    return enabled !== null && Object.prototype.hasOwnProperty.call(enabled, id)
+    return enabled !== null && enabled.has(id)
   }
 
   listEnabledPluginIds(): string[] {
     const enabled = this._getEnabledPlugins()
-    return enabled !== null ? Object.keys(enabled) : []
+    return enabled !== null ? Array.from(enabled) : []
   }
 
-  private _getEnabledPlugins(): Record<string, unknown> | null {
+  private _getEnabledPlugins(): Set<string> | null {
     // app.plugins is not in Obsidian's public TypeScript types but is a stable
-    // runtime property present since Obsidian 0.9.x. We access it via a
-    // typed interface to stay within the ESLint rules.
+    // runtime property present since Obsidian 0.9.x. enabledPlugins is a Set<string>
+    // at runtime (not a plain object). We access it via a typed interface to stay
+    // within the ESLint rules.
     interface AppWithPlugins {
       plugins?: {
-        enabledPlugins?: Record<string, unknown>
+        enabledPlugins?: Set<string>
       }
     }
     const appExt = this.app as unknown as AppWithPlugins

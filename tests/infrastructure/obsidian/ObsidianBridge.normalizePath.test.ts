@@ -153,8 +153,7 @@ describe('ObsidianBridge.normalizePath integration', () => {
 describe('ObsidianBridge — CommunityPluginPort', () => {
   function makeBridgeWithPlugins(enabledIds: string[] = []) {
     const { bridge, app } = makeBridge()
-    const enabledPlugins: Record<string, unknown> = {}
-    for (const id of enabledIds) enabledPlugins[id] = {}
+    const enabledPlugins = new Set<string>(enabledIds)
     ;(app as unknown as Record<string, unknown>).plugins = { enabledPlugins }
     return { bridge, app }
   }
