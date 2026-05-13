@@ -92,7 +92,11 @@ export default class SpecoratorPlugin extends Plugin {
       id: 're-run-setup',
       name: 'Re-run setup',
       callback: () => {
-        void this.updateSettings({ onboardingComplete: false }).then(() => this.activateView())
+        void this.updateSettings({ onboardingComplete: false }).then(() =>
+          this.activateView().then(() => {
+            activeWindow.dispatchEvent(new CustomEvent('sp:navigate', { detail: { path: '/onboarding' } }))
+          }),
+        )
       },
     })
 
@@ -120,7 +124,9 @@ export default class SpecoratorPlugin extends Plugin {
     this.app.workspace.onLayoutReady(() => {
       this.detectLegacyVaultLayout()
       if (!this.settings.onboardingComplete) {
-        void this.activateView()
+        void this.activateView().then(() => {
+          activeWindow.dispatchEvent(new CustomEvent('sp:navigate', { detail: { path: '/onboarding' } }))
+        })
       }
     })
   }

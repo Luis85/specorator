@@ -2,6 +2,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSettingsPort } from '@/ui/composables/useSettingsPort'
+import { useLoggerPort } from '@/ui/composables/useLoggerPort'
+import { tryAsync } from '@/domain/shared/tryAsync'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 import OnboardingStepIndicator from './OnboardingStepIndicator.vue'
 import OnboardingStep1Welcome from './OnboardingStep1Welcome.vue'
@@ -17,6 +19,7 @@ interface Step3Payload { claudeStatus: ClaudeStatus }
 interface Step4Payload { templateStatus: TemplateStatus; specsFolder: string }
 
 const settingsPort = useSettingsPort()
+const logger = useLoggerPort()
 const router = useRouter()
 
 const TOTAL_STEPS = 5
@@ -51,9 +54,6 @@ onMounted(async () => {
 	const s = await settingsPort.getSettings()
 	settings.value = s
 	specsFolder.value = s.specsFolder
-	if (!s.onboardingComplete) {
-		void router.push('/onboarding')
-	}
 })
 
 function applyStep2(payload: unknown): void {
@@ -88,7 +88,14 @@ function handleNext(payload?: unknown): void {
 	}
 }
 
-function handleFinish(): void {
+async function handleFinish(): Promise<void> {
+	const result = await tryAsync(async () => {
+		const current = await settingsPort.getSettings()
+		await settingsPort.saveSettings({ ...current, onboardingComplete: true })
+	}, 'Failed to mark onboarding complete')
+	if (!result.ok) {
+		logger.error('Failed to mark onboarding complete', result.error)
+	}
 	void router.push('/')
 }
 </script>
