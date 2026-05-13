@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useSettingsPort } from '@/ui/composables/useSettingsPort'
 import OnboardingNudge from './OnboardingNudge.vue'
 
+const router = useRouter()
 const settingsPort = useSettingsPort()
 const showNudge = ref(false)
 const dismissed = ref(false)
@@ -11,6 +13,10 @@ onMounted(async () => {
 	const settings = await settingsPort.getSettings()
 	showNudge.value = settings.onboardingComplete && settings.userPersona === ''
 })
+
+function goToSettings(): void {
+	void router.push('/settings')
+}
 
 function dismiss(): void {
 	dismissed.value = true
@@ -24,7 +30,7 @@ function dismiss(): void {
 		action-label="Add your introduction"
 		:dismissible="true"
 		data-testid="home-persona-nudge"
-		@action="() => {}"
+		@action="goToSettings"
 		@dismiss="dismiss"
 	/>
 </template>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useSettingsPort } from '@/ui/composables/useSettingsPort'
 import { useLoggerPort } from '@/ui/composables/useLoggerPort'
 import { tryAsync } from '@/domain/shared/tryAsync'
@@ -16,8 +17,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{ finish: [] }>()
 
+const router = useRouter()
 const settingsPort = useSettingsPort()
 const logger = useLoggerPort()
+
+function goToSettings(): void {
+	void router.push('/settings')
+}
 
 const saveError = ref<string | null>(null)
 
@@ -88,7 +94,7 @@ onMounted(async () => {
 				v-if="personaSkipped"
 				message="You can tell us about yourself any time — go to Settings and look for 'About you'."
 				action-label="Add your introduction"
-				@action="() => {}"
+				@action="goToSettings"
 			/>
 		</div>
 
