@@ -139,3 +139,149 @@ PR-1 lays the foundational infrastructure for the Claude CLI chat sidebar: the d
 | `npm audit --audit-level=high --omit=dev` | 0 vulnerabilities |
 
 **Outcome:** all gates green.
+
+---
+
+# Implementation Log — PR-3 Plugin Integration (T-CCS-031 through T-CCS-038)
+
+## Overview
+
+PR-3 wires the ClaudeCliAdapter into the Obsidian plugin lifecycle, registers
+vault file-menu and active-leaf-change event handlers that forward file references
+to the chat store, exposes `pinia`/`navigateTo`/`bumpSettingsVersion` on
+SpecoratorView, and adds the SETTINGS_VERSION_KEY reactivity bridge from settings
+tab → ChatSidebar. Setup merges PR-2 branch into this worktree first.
+
+---
+
+## Entry 8 — Merge PR-2 + resolve conflicts
+
+**Commit:** `4659327`
+**Spec reference:** pre-condition for PR-3 tasks
+
+**Files changed (conflict resolution):**
+- `src/domain/ports/ClaudeCliPort.ts` — took PR-2 full interface (query, startup, shutdown, error types)
+- `src/domain/ports/index.ts` — merged both re-export lines (ClaudeCliError class export)
+- `src/infrastructure/bridge/ports.ts` — added IS_MOBILE_KEY from PR-2
+- `src/ui/composables/useClaudeCliPort.ts` — took PR-2 strict-inject version
+- `src/domain/settings/PluginSettings.ts` — merged both: kept userPersona/onboardingComplete from HEAD plus anthropicApiKey from PR-2
+- `src/core/core-settings.ts` — merged validate/schema for all fields from both sides
+
+**Outcome:** done
+**Deviation:** none — both sides' fields preserved in the merged PluginSettings.
+
+---
+
+## Entry 9 — T-CCS-032: Bridge stubs for full ClaudeCliPort interface
+
+**Commit:** `337193c`
+**Spec reference:** SPEC-CCS-001 §5; ADR-008
+
+**Files changed:**
+- `src/infrastructure/mock/MockBridge.ts` (lines 1–18, 216–229) — added ClaudeCliQueryOptions/ClaudeCliError imports; query/startup/shutdown no-op stubs
+- `src/infrastructure/localstorage/LocalStorageBridge.ts` (lines 1–18, 170–182) — same
+- `src/infrastructure/obsidian/ObsidianBridge.ts` (lines 1–18, 233–247) — same
+
+**Outcome:** done
+**Deviation:** ObsidianBridge.query() returns ClaudeCliError{NOT_INSTALLED} because the real query path goes through ClaudeCliAdapter (provided via CLAUDE_CLI_PORT separately). ObsidianBridge keeps the old `isAvailable()` exec fallback for protocol compliance only.
+
+---
+
+## Entry 10 — T-CCS-037 (step 1): Promote SETTINGS_VERSION_KEY to ports.ts
+
+**Commit:** `474c112`
+**Spec reference:** D-CCS-003, T-CCS-037
+
+**Files changed:**
+- `src/infrastructure/bridge/ports.ts` (lines 29–33) — added `SETTINGS_VERSION_KEY: InjectionKey<Ref<number>>`
+- `src/ui/components/chat/ChatSidebar.vue` (lines 1–19) — removed local Symbol declaration; imports SETTINGS_VERSION_KEY from ports.ts
+
+**Outcome:** done
+**Deviation:** none.
+
+---
+
+## Entry 11 — T-CCS-035, T-CCS-036: SpecoratorView public API + port wiring
+
+**Commit:** `d8eba99`
+**Spec reference:** SPEC-CCS-001 §9; T-CCS-035, T-CCS-036
+
+**Files changed:**
+- `src/plugin/SpecoratorView.ts` (full rewrite, 145 lines) —
+  - Constructor now accepts `claudeCliPort: ClaudeCliPort` (3rd arg)
+  - `public pinia!: Pinia` — set in onOpen() after createPinia()
+  - `private readonly _settingsVersion = ref(0)` — reactive counter
+  - `private _router: Router | null` — stored for navigateTo()
+  - Provides: CLAUDE_CLI_PORT (adapter), IS_MOBILE_KEY (Platform.isMobile), SETTINGS_VERSION_KEY (_settingsVersion)
+  - `public navigateTo(path: string): void` — pushes to router
+  - `public bumpSettingsVersion(): void` — increments _settingsVersion
+
+**Outcome:** done
+**Deviation:** none.
+
+---
+
+## Entry 12 — T-CCS-031, T-CCS-032, T-CCS-033, T-CCS-034: main.ts plugin integration
+
+**Commit:** `93ffc9b`
+**Spec reference:** SPEC-CCS-001 §9; REQ-CCS-003, REQ-CCS-005, REQ-CCS-006, REQ-CCS-009, REQ-CCS-017
+
+**Files changed:**
+- `src/plugin/main.ts` (full rewrite, 220 lines) —
+  - Imports ClaudeCliAdapter, useChatStore
+  - `_claudeCliAdapter: ClaudeCliAdapter | null` private field
+  - `_specoratorView: SpecoratorView | null` private field
+  - onload(): creates ClaudeCliAdapter, calls startup(), registers shutdown() via this.register()
+  - registerView() factory captures view in _specoratorView
+  - registerEvent('file-menu'): adds 'Add to chat context' item → addContextFile()
+  - registerEvent('active-leaf-change'): setActiveFile() or setActiveFile(null)
+  - URI handler action='open-chat': activateView() then navigateTo('/chat')
+
+**Outcome:** done
+**Deviation:** `_specoratorView` is set by the view factory rather than passed to settings. This avoids a circular reference between main and settings.
+
+---
+
+## Entry 13 — T-CCS-037 (step 2): settings tab API key → bumpSettingsVersion
+
+**Commit:** `0d780eb`
+**Spec reference:** D-CCS-003, T-CCS-037
+
+**Files changed:**
+- `src/plugin/settings.ts` (lines 1–5, 138–165) —
+  - Imports VIEW_TYPE from SpecoratorView
+  - `_bumpAllViews()` private method: iterates getLeavesOfType(VIEW_TYPE), duck-calls bumpSettingsVersion()
+  - onChange for anthropicApiKey field now calls `_bumpAllViews()` after save
+
+**Outcome:** done
+**Deviation:** Uses duck-typing cast (unknown as Record) to call bumpSettingsVersion() without creating a direct circular import between settings.ts and SpecoratorView.ts.
+
+---
+
+## Entry 14 — T-CCS-031, T-CCS-034, T-CCS-038: plugin chat handler unit tests
+
+**Commit:** `8e111a8`
+**Spec reference:** REQ-CCS-005, REQ-CCS-006, REQ-CCS-009, TEST-CCS-001
+
+**Files changed:**
+- `tests/plugin/main.chat-handlers.test.ts` (new, 144 lines) — 9 tests for file-menu (addContextFile, dedup, isAuto=false) and active-leaf-change (setActiveFile, index 0, clear null, replace, preserve manuals)
+
+**Outcome:** done
+**Deviation:** Tests exercise callbacks as pure functions rather than mounting the full plugin lifecycle (Obsidian mocks would be required). Logic is identical to what main.ts registers.
+
+---
+
+## T-CCS-038: PR-3 gate verification
+
+**Date:** 2026-05-14
+**Results:**
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | pass |
+| `npm run lint` | pass (9 pre-existing warnings, 0 errors) |
+| `npm run test` | 805 passed (71 files) |
+| `npm run build` | pass — 538 modules |
+| `npm run build:web` | pass — 162 modules |
+
+**Outcome:** all gates green.
