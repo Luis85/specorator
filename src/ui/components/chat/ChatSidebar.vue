@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, inject } from 'vue'
-import type { InjectionKey, Ref } from 'vue'
 import { tryAsync } from '@/domain/shared/tryAsync'
 import { useChatStore } from '@/ui/stores/chatStore'
 import { useClaudeCliPort } from '@/ui/composables/useClaudeCliPort'
@@ -10,12 +9,10 @@ import { useWorkspacePort } from '@/ui/composables/useWorkspacePort'
 import { useSettingsPort } from '@/ui/composables/useSettingsPort'
 import { buildPrompt } from '@/application/chat/buildPrompt'
 import type { ContextFile } from '@/application/chat/buildPrompt'
+import { SETTINGS_VERSION_KEY } from '@/infrastructure/bridge/ports'
 import ContextFileList from './ContextFileList.vue'
 import ChatInput from './ChatInput.vue'
 import ChatResponse from './ChatResponse.vue'
-
-// Settings-version injection key (provided by SpecoratorView or defaulting to ref(0))
-const SETTINGS_VERSION_KEY: InjectionKey<Ref<number>> = Symbol('settingsVersion')
 
 const store = useChatStore()
 const claudeCliPort = useClaudeCliPort()
