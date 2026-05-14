@@ -23,20 +23,24 @@ export const coreSettingsModule = defineModule<PluginSettings>({
    * user choice.
    *
    * v2 → v3: introduces `onboardingComplete`. Default it to `true` for
-   * upgrading installs (fromVersion >= 1) so existing users are not forced
-   * through the wizard on next launch. Fresh installs (fromVersion === 0,
-   * no stored data) are left without the key so validateSettings falls
-   * through to DEFAULT_SETTINGS.onboardingComplete (false) and the wizard
-   * runs normally.
+   * upgrading installs so existing users are not forced through the wizard on
+   * next launch. "Upgrading" means fromVersion >= 1 OR fromVersion === 0 with
+   * a non-empty blob (unversioned existing installs never stored a version key
+   * and therefore arrive as v0 even though they have real settings). Fresh
+   * installs arrive as v0 with a null or empty blob and are left without the
+   * key so validateSettings falls through to DEFAULT_SETTINGS.onboardingComplete
+   * (false) and the wizard runs normally.
    */
   migrate(fromVersion: number, blob: unknown): unknown {
-    const out = (blob !== null && typeof blob === 'object' && !Array.isArray(blob)
+    const isObjectBlob = blob !== null && typeof blob === 'object' && !Array.isArray(blob)
+    const out = (isObjectBlob
       ? { ...(blob as Record<string, unknown>) }
       : {}) as Record<string, unknown>
     if (fromVersion < 2 && !('mcpServerEnabled' in out)) {
       out.mcpServerEnabled = false
     }
-    if (fromVersion >= 1 && fromVersion < 3 && !('onboardingComplete' in out)) {
+    const hadExistingData = isObjectBlob && Object.keys(blob as object).length > 0
+    if ((fromVersion >= 1 || (fromVersion === 0 && hadExistingData)) && fromVersion < 3 && !('onboardingComplete' in out)) {
       out.onboardingComplete = true
     }
     return out
