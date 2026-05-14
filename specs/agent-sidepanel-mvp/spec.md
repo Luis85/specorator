@@ -345,7 +345,7 @@ export class ClaudeSubscriptionError extends Error {
 
 All five error classes extend `Error` and are returned via `Result.error` — never thrown across a port boundary.
 
-### 2.9 `ClaudeSubscriptionTransportPort` (infra-internal, structured capability) — REQ-ASM-021, REQ-ASM-049
+### 2.9 `SubscriptionCapable` (infra-internal, structured capability) — REQ-ASM-021, REQ-ASM-049
 
 The narrow port `ClaudeCliPort` (REQ-ASM-001) is unchanged. A second, infrastructure-internal capability is exposed via a tagged `kind` discriminator on the subscription adapter and is reached only through `queryStructured` in the application layer.
 
@@ -1678,7 +1678,7 @@ Every PRD requirement and NFR is covered by at least one section above. 67 / 67.
 
 ### 14.3 Coverage summary
 
-**Total contracts traced:** 55 functional REQ-ASM + 12 NFR-ASM = **67 / 67**. No requirement is unaddressed. No spec section is unreferenced.
+**Total contracts traced:** 55 functional REQ-ASM + 12 NFR-ASM = **67 / 67**.
 
 ---
 
