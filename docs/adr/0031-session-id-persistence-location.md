@@ -204,6 +204,12 @@ session log only. The CLI's per-project NDJSON files are out of scope and out of
 - **Write contention.** If the user types fast enough to trigger overlapping
   fire-and-forget writes, they could interleave. Mitigated by serialising writes per
   log file through a per-thread mutex inside the session-log writer service.
+- **Existing-log relocation.** If a future increment moves the session-log root
+  (e.g. to a user-configurable `.specorator/chats/` setting — Increment 2), already
+  written `specs/<feature>/sessions/<id>.md` files would need a one-time migration
+  or be left in place as historical artifacts. Increment 1 ships only the canonical
+  paths, so the question does not arise yet, but Increment-2 readers should plan
+  for a no-op migration when the existing path is the default.
 
 ### Neutral
 

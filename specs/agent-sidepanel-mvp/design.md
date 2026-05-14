@@ -453,7 +453,9 @@ unchanged.
 `ContextFileList.vue`, `ContextFileChip.vue`, the Pinia store's existing
 `contextFiles` / `userText` / `response` fields, the `degradedNoKey` / `degradedSdk`
 / `degradedMobile` branches (with a new fourth branch `degradedCli` reusing the same
-template shape).
+template shape from `src/ui/components/chat/ChatDegradedState.vue` — copy that
+component's template literally and swap the i18n keys for the `chat.degradedCli*`
+namespace defined in §B3).
 
 ### B2. Design tokens
 
@@ -846,8 +848,9 @@ User clicks Send in ChatInput.vue
           //         '--verbose', '--include-partial-messages',
           //         '--append-system-prompt', stagePreamble,
           //         '--permission-mode', 'dontAsk',
-          //         '--disallowedTools', 'Read,Edit,Write,Bash,Glob,Grep,WebFetch,WebSearch',
-          //         (...resumeSessionId ? ['--resume', sessionId] : [])]
+          //         '--disallowedTools', 'Read,Edit,Write,Bash,Glob,Grep,WebFetch,WebSearch']
+          // appended only when resumeSessionId is set:
+          //   ['--resume', sessionId]
           // INVARIANT: argv does NOT contain '--bare'
         → spawn(binary, argv)
         → NdjsonLineStream.onSystemInit(({ session_id }) => thread.sessionId = session_id)
@@ -1019,9 +1022,14 @@ encapsulated entirely behind the port.
 
 Internally on the subprocess transport, the adapter exposes an additional method
 `runStructured(prompt, options)` typed at the infrastructure layer; this is *not*
-part of `ClaudeCliPort` (which is unchanged in shape) but is reachable via a downcast
-guarded by a `Symbol.hasInstance` check in `queryStructured`. The downcast is the
-single place where the port is widened, and it is unit-tested.
+part of `ClaudeCliPort` (which is unchanged in shape) but is reachable via a tagged
+discriminator check in `queryStructured`. Concretely, `ClaudeSubprocessAdapter`
+carries a `readonly kind: 'subprocess' = 'subprocess'` field, and `queryStructured`
+performs a single guard — `if (port.kind === 'subprocess') return port.runStructured(...)` —
+before calling the structured method. The SDK adapter has no such field, so the
+guard fails closed and `queryStructured` returns `err(ClaudeCliError{NOT_INSTALLED})`
+on the SDK transport. This guard is the single place where the port is widened, and
+it is unit-tested for both adapters.
 
 Alternative considered and rejected: widening `ClaudeCliPort` with a new method.
 Rejected because the SDK transport cannot implement it identically, and ADR-008's
@@ -1351,7 +1359,10 @@ onload() {
       this.sdkAdapter.startup(),
       this.subAdapter.startup(),
     ])
-    // TransportSelector decides which port to provide in the view
+    // Both adapters start up unconditionally. `subAdapter.startup()` is cheap when
+    // `claudeCliPath` is empty and autodetect fails: it sets `_available = false`
+    // and returns without spawning a process. No measurable plugin-load impact.
+    // TransportSelector decides which port to provide in the view.
   })
 
   // existing file-menu, active-leaf-change, URI, ribbon, command registrations
@@ -1401,10 +1412,22 @@ runs on `onunload()`. Streaming `ChildProcess` handles in `_streamingProc` recei
 | D-ASM-106 | Plugin never reads any file under `~/.claude/` | ToS posture (no brokering of claude.ai login). | ADR-0031 | D-ASM-009 |
 | D-ASM-107 | Trust-first vault writes via Accept/Reject proposal cards; no write before user gesture | Constitutional Article IX (Reversibility) plus NFR-ASM-011. | ADR-0032 | D-ASM-008 |
 | D-ASM-108 | Tools disabled on every subprocess invocation (`--permission-mode dontAsk --disallowedTools ...`) | Trust-first: server-side tools would bypass the client-side gate. | ADR-0030 | D-ASM-010 |
-| D-ASM-109 | Long-lived process per chat thread for streaming; short-lived per structured call | Amortise macOS signed-app spawn latency; structured calls are stateless | (no new ADR) | F3, R-ASM-003 |
+| D-ASM-109 | Long-lived process per chat thread for streaming; short-lived per structured call | Amortise macOS signed-app spawn latency; structured calls are stateless | (no new ADR — see note) | F3, R-ASM-003 |
 | D-ASM-110 | Stage-aware preamble assembled at every send; sourced from `FEATURE_STEPS`; capped at 2 000 chars | Cache-safe; stage-advance reflected immediately; no terminology drift | (no new ADR) | REQ-ASM-013, REQ-ASM-017, REQ-ASM-019, REQ-ASM-020 |
 | D-ASM-111 | `runStructured` is infrastructure-internal, reached via application-layer `queryStructured`; not a `ClaudeCliPort` method | SDK adapter cannot honour it identically; narrow-port discipline preserved | (informal) | ADR-008 |
 | D-ASM-112 | `ConfirmModalPort` is a new narrow port for the overwrite-confirmation modal | `commitProposal` must be testable without Obsidian; ADR-008 discipline | (extension of ADR-008) | REQ-ASM-044 |
+
+**Note on D-ASM-109 (no ADR).** The reviewer asked whether the long-lived-per-thread
+lifecycle warrants a standalone ADR. We hold the line for Increment 1: the decision
+is a *performance* posture (amortising spawn latency) rather than an irreversible
+architectural commitment — both adapters still implement the same `ClaudeCliPort`
+contract, and switching to short-lived-per-turn streaming would be a single-file
+change to `ClaudeSubprocessAdapter` with no port-shape or call-site impact. We will
+escalate to an ADR in Increment 2 if (a) the `_streamingProc` map grows additional
+state-management concerns (back-pressure, queueing, multi-tab fan-out) that span
+files, or (b) telemetry shows the warm-spawn assumption does not hold on a class of
+user machines we need to support. Until then, the decision remains a design-level
+implementation note, documented here and traced to R-ASM-003.
 
 ### C10. Rejected alternatives
 
@@ -1506,8 +1529,12 @@ runs on `onunload()`. Streaming `ChildProcess` handles in `_streamingProc` recei
 
 - **Q1 — Structured-vs-free-text classification.** Increment 1 treats structured
   calls as explicit (the chat UI infers from a "please create / propose a file"
-  intent or from an internal flag). A formal classifier is deferred. Tracked for
-  Increment 2.
+  intent or from an internal flag). The Increment-1 heuristic is deliberately
+  conservative and deterministic for tests: a structured call is fired when the
+  user-text (case-insensitive) matches `/\b(create|propose|generate|draft|write|add|new)\b[^.]{0,80}\.md\b/i`
+  — i.e. an intent verb within ~80 characters of an explicit `.md` filename. All
+  other prompts fire the free-text path. A formal classifier (LLM-based intent
+  detection, structured-output negotiation) is deferred to Increment 2.
 - **Q2 — Multi-thread chat in one panel.** Increment 1 supports one thread per
   panel session; the data model already accommodates multiple threads (the
   `chatThreads` map), but the Session tab UI to switch between them is Increment 3.

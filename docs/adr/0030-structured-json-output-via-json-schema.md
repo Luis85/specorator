@@ -210,7 +210,10 @@ cached so the byte-for-byte snapshot test (REQ-ASM-022 acceptance) is stable.
   `Result<CreateFileEnvelope, ProposalParseError>`. The fallback parser is its own
   exported helper for direct unit testing.
 - A snapshot test under `tests/application/chat/proposalEnvelope.test.ts` pins the
-  emitted JSON Schema string byte-for-byte (REQ-ASM-022).
+  emitted JSON Schema string byte-for-byte (REQ-ASM-022). The test normalises key
+  order (recursive `Object.keys().sort()` before serialising) so a Zod or
+  `zod-to-json-schema` minor-version bump that reorders properties without changing
+  semantics does not break the snapshot; only a genuine shape change should fail it.
 - An argument-builder test under `tests/infrastructure/obsidian/subprocess-args.test.ts`
   asserts the structured-call argv contains `--output-format json --json-schema` and
   the literal system-prompt suffix from REQ-ASM-026, and that the free-text-call argv

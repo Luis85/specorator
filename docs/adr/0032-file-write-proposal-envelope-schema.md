@@ -180,6 +180,11 @@ side-channel to write files.
 - Pros: ready for Increment-2 edit envelopes.
 - Cons: `expectedHash` is meaningful only for `editFile`/`updateFile`, not `createFile`;
   including it in Increment 1 leaks future schema concerns into present scope; defer.
+- Increment-2 hint (non-binding): when this field is added, `expectedHash` is the
+  lowercase hex-encoded SHA-256 of the on-disk file's UTF-8 bytes at the time the
+  model issued the edit. Picking the algorithm now avoids a bikeshed round when the
+  field is introduced; SHA-256 is already available via Node's built-in `crypto`
+  module with no new dependency.
 
 ## Consequences
 
