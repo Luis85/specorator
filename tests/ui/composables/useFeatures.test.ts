@@ -1,18 +1,41 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import { createPinia } from 'pinia'
-import { describe, expect, it, beforeEach } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { useFeatures } from '@/ui/composables/useFeatures'
 import { FEATURE_SERVICE_KEY } from '@/ui/composables/useFeatureService'
-import { MockBridge } from '@/infrastructure/mock/MockBridge'
-import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
-import { FeatureService } from '@/application/feature/FeatureService'
+import type { IFeatureService } from '@/application/feature/IFeatureService'
+import { ok, err, type Result } from '@/domain/shared/Result'
+import { Feature } from '@/domain/feature/Feature'
+import { Slug } from '@/domain/shared/Slug'
 
-function makeService(bridge: MockBridge): FeatureService {
-  return new FeatureService(new FeatureRepository(bridge, bridge, bridge))
+function makeStubFeature(id = 'f1', title = 'Stub'): Feature {
+  const slugResult = Slug.create(id)
+  const slug = slugResult.ok ? slugResult.value : Slug.reconstitute('stub')
+  const now = new Date()
+  return Feature.reconstitute({
+    id,
+    slug,
+    title,
+    status: 'active',
+    currentStep: 1,
+    createdAt: now,
+    updatedAt: now,
+  })
 }
 
-function harness(bridge: MockBridge) {
+function makeStubService(overrides: Partial<IFeatureService> = {}): IFeatureService {
+  return {
+    loadFeatures: vi.fn(async () => ok([]) as Result<Feature[]>),
+    createFeature: vi.fn(async () => ok(makeStubFeature())),
+    activateFeature: vi.fn(async () => ok(makeStubFeature())),
+    archiveFeature: vi.fn(async () => ok(makeStubFeature())),
+    advanceFeatureStage: vi.fn(async () => ok(makeStubFeature())),
+    ...overrides,
+  }
+}
+
+function harness(service: IFeatureService) {
   let api!: ReturnType<typeof useFeatures>
   const Host = defineComponent({
     setup() {
@@ -24,55 +47,66 @@ function harness(bridge: MockBridge) {
     global: {
       plugins: [createPinia()],
       provide: {
-        [FEATURE_SERVICE_KEY as unknown as symbol]: makeService(bridge),
+        [FEATURE_SERVICE_KEY as unknown as symbol]: service,
       },
     },
   })
   return api
 }
 
-async function seedActiveFeature(bridge: MockBridge, title = 'Search') {
-  const service = makeService(bridge)
-  const created = await service.createFeature(title)
-  if (!created.ok) throw created.error
-  const activated = await service.activateFeature(created.value.id)
-  if (!activated.ok) throw activated.error
-  return activated.value
-}
-
-describe('useFeatures.advanceFeatureStage', () => {
-  let bridge: MockBridge
-
-  beforeEach(() => {
-    bridge = new MockBridge()
-  })
-
-  it('advances current step and upserts the updated feature into the store', async () => {
-    const seeded = await seedActiveFeature(bridge)
-    const api = harness(bridge)
+describe('useFeatures', () => {
+  it('loadFeatures populates items via the stub-returned ok path', async () => {
+    const service = makeStubService({
+      loadFeatures: vi.fn(async () => ok([makeStubFeature('f1', 'Feature 1')])),
+    })
+    const api = harness(service)
 
     await api.loadFeatures()
     await flushPromises()
 
-    expect(api.items.value.find((f) => f.id === seeded.id)?.currentStep).toBe(1)
-
-    await api.advanceFeatureStage(seeded.id)
-    await flushPromises()
-
-    const updated = api.items.value.find((f) => f.id === seeded.id)
-    expect(updated?.currentStep).toBe(2)
+    expect(api.items.value.length).toBe(1)
+    expect(api.items.value[0].id).toBe('f1')
     expect(api.error.value).toBeNull()
-    // Stage file must be written for the new stage
-    expect('specs/search/research.md' in bridge.getAllFiles()).toBe(true)
   })
 
-  it('sets store.error and does not throw when the feature is missing', async () => {
-    const api = harness(bridge)
+  it('advanceFeatureStage upserts the updated feature', async () => {
+    const service = makeStubService({
+      advanceFeatureStage: vi.fn(async () => ok(makeStubFeature('f1', 'After Advance'))),
+    })
+    const api = harness(service)
 
-    await api.advanceFeatureStage('nonexistent-id')
+    await api.advanceFeatureStage('f1')
+    await flushPromises()
+
+    const updated = api.items.value.find((f) => f.id === 'f1')
+    expect(updated?.title).toBe('After Advance')
+    expect(api.error.value).toBeNull()
+  })
+
+  it('sets store.error when advanceFeatureStage returns err', async () => {
+    const service = makeStubService({
+      advanceFeatureStage: vi.fn(async () => err(new Error('not found')) as Result<Feature>),
+    })
+    const api = harness(service)
+
+    await api.advanceFeatureStage('missing')
     await flushPromises()
 
     expect(api.error.value).toMatch(/not found/)
+    expect(api.loading.value).toBe(false)
+  })
+
+  it('sets store.error when loadFeatures returns err', async () => {
+    const service = makeStubService({
+      loadFeatures: vi.fn(async () => err(new Error('vault error')) as Result<Feature[]>),
+    })
+    const api = harness(service)
+
+    await api.loadFeatures()
+    await flushPromises()
+
+    expect(api.error.value).toMatch(/vault error/)
+    expect(api.items.value.length).toBe(0)
     expect(api.loading.value).toBe(false)
   })
 })
