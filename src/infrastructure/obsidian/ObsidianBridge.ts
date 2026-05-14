@@ -10,7 +10,11 @@ import type {
 	ActiveFileSnapshot,
 	Unsubscriber,
 	ClaudeCliPort,
+	ClaudeCliQueryOptions,
 } from '@/domain/ports'
+import { ClaudeCliError } from '@/domain/ports'
+import type { Result } from '@/domain/shared/Result'
+import { err } from '@/domain/shared/Result'
 
 type FileManagerWithTrash = App['fileManager'] & {
   trashFile?: (file: TFile) => Promise<void>
@@ -222,11 +226,29 @@ export class ObsidianBridge
 
   // ── ClaudeCliPort ─────────────────────────────────────────────────────────
 
+  /**
+   * Legacy isAvailable() kept for protocol compliance.
+   * In production, ClaudeCliAdapter.isAvailable() is used instead (it is
+   * provided via CLAUDE_CLI_PORT, not ObsidianBridge). This method is only
+   * reached if someone accidentally injects ObsidianBridge as CLAUDE_CLI_PORT.
+   */
   isAvailable(): Promise<boolean> {
     type ExecFn = (cmd: string, opts: { timeout: number }, cb: (err: Error | null) => void) => void
     const { exec } = require('node:child_process') as { exec: ExecFn }
     return new Promise<boolean>((resolve) => {
       exec('claude --version', { timeout: 5000 }, (err) => { resolve(err === null) })
     })
+  }
+
+  query(_prompt: string, _options?: ClaudeCliQueryOptions): Promise<Result<string, ClaudeCliError>> {
+    return Promise.resolve(err(new ClaudeCliError('NOT_INSTALLED', 'ObsidianBridge: use ClaudeCliAdapter for queries')))
+  }
+
+  startup(): Promise<void> {
+    return Promise.resolve()
+  }
+
+  shutdown(): void {
+    // no-op stub — ClaudeCliAdapter handles its own lifecycle
   }
 }
