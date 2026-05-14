@@ -84,3 +84,31 @@ describe('MockBridge — WorkspacePort active file', () => {
     expect(handler).not.toHaveBeenCalled()
   })
 })
+
+describe('MockBridge — CommunityPluginPort', () => {
+  it('returns empty list by default', () => {
+    const bridge = new MockBridge()
+    expect(bridge.listEnabledPluginIds()).toEqual([])
+  })
+
+  it('isPluginEnabled returns false when not seeded', () => {
+    const bridge = new MockBridge()
+    expect(bridge.isPluginEnabled('dataview')).toBe(false)
+  })
+
+  it('seedEnabledPlugins populates the enabled set', () => {
+    const bridge = new MockBridge()
+    bridge.seedEnabledPlugins(['dataview', 'templater'])
+    expect(bridge.listEnabledPluginIds().sort()).toEqual(['dataview', 'templater'])
+    expect(bridge.isPluginEnabled('dataview')).toBe(true)
+    expect(bridge.isPluginEnabled('unknown')).toBe(false)
+  })
+
+  it('seedEnabledPlugins replaces previous state', () => {
+    const bridge = new MockBridge()
+    bridge.seedEnabledPlugins(['dataview'])
+    bridge.seedEnabledPlugins(['templater'])
+    expect(bridge.isPluginEnabled('dataview')).toBe(false)
+    expect(bridge.isPluginEnabled('templater')).toBe(true)
+  })
+})
