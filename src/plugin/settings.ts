@@ -1,7 +1,7 @@
 import type { App } from 'obsidian'
 import { PluginSettingTab, Setting } from 'obsidian'
 import type { ModuleDescriptor, SettingsFieldDescriptor } from '@/modules/module'
-import { VIEW_TYPE } from './SpecoratorView'
+import { VIEW_TYPE, SpecoratorView } from './SpecoratorView'
 import type SpecoratorPlugin from './main'
 
 export class SpecoratorSettingTab extends PluginSettingTab {
@@ -151,9 +151,8 @@ export class SpecoratorSettingTab extends PluginSettingTab {
    */
   private _bumpAllViews(): void {
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
-      const view = leaf.view as unknown as Record<string, unknown>
-      if (typeof view.bumpSettingsVersion === 'function') {
-        ;(view as unknown as { bumpSettingsVersion(): void }).bumpSettingsVersion()
+      if (leaf.view instanceof SpecoratorView) {
+        leaf.view.bumpSettingsVersion()
       }
     }
   }

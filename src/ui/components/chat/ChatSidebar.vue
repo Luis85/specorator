@@ -149,7 +149,7 @@ function handleUserTextUpdate(text: string): void {
 // Determine if API key is missing when unavailable
 async function isApiKeyMissing(): Promise<boolean> {
   const settings = await settingsPort.getSettings()
-  return settings.anthropicApiKey === ''
+  return settings.anthropicApiKey.trim() === ''
 }
 
 const apiKeyMissing = ref(false)
