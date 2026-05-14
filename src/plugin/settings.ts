@@ -63,6 +63,7 @@ export class SpecoratorSettingTab extends PluginSettingTab {
       .addButton((btn) =>
         btn.setButtonText('Re-run setup').onClick(async () => {
           await this.plugin.updateSettings({ onboardingComplete: false })
+          activeWindow.dispatchEvent(new CustomEvent('sp:navigate', { detail: { path: '/onboarding' } }))
         }),
       )
   }
