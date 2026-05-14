@@ -1,7 +1,6 @@
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
-import type { Result } from '@/domain/shared/Result'
+import { ok, type Result } from '@/domain/shared/Result'
 import type { Feature } from '@/domain/feature/Feature'
-import { GetFeaturesUseCase } from './GetFeaturesUseCase'
 import { CreateFeatureUseCase } from './CreateFeatureUseCase'
 import { ActivateFeatureUseCase } from './ActivateFeatureUseCase'
 import { ArchiveFeatureUseCase } from './ArchiveFeatureUseCase'
@@ -10,8 +9,9 @@ import { AdvanceFeatureStageUseCase } from './AdvanceFeatureStageUseCase'
 export class FeatureService {
   constructor(private readonly repo: IFeatureRepository) {}
 
-  loadFeatures(): Promise<Result<Feature[]>> {
-    return new GetFeaturesUseCase(this.repo).execute()
+  async loadFeatures(): Promise<Result<Feature[]>> {
+    const features = await this.repo.findAll()
+    return ok(features)
   }
 
   createFeature(title: string, area?: string): Promise<Result<Feature>> {
