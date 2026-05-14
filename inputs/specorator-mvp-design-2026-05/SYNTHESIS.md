@@ -89,7 +89,7 @@ The breakdown below is the source of truth for the GitHub issues created by this
 
 - **F1 — Spec-first foundation:** ADR pack (8 ADRs above) + `specs/specorator-mvp-workspace/` entry with `idea.md`, `research.md`, `requirements.md` (EARS), `design.md` (component breakdown), `workflow-state.md`. Unlocks every other issue.
 - **F2 — Domain layer:** Issue / Task / Proposal / Agent aggregates with invariants; repositories; `Result<T, E>` boundaries. No infra wiring; pure domain. Unblocks F3 and the use cases referenced by V-issues.
-- **F3 — Ports + mock adapters:** `GitHubPort` + `AgentRuntimePort` interfaces; `MockGitHubAdapter` + `MockAgentRuntimeAdapter` using the prototype's fixture data so `npm run dev` works end-to-end against in-memory data; `VaultPort` proposal extensions. Production adapters deferred to X1.
+- **F3 — Ports + mock adapters:** `GitHubPort` + `AgentRuntimePort` interfaces; `MockGitHubAdapter` + `MockAgentRuntimeAdapter` using the prototype's fixture data so `npm run dev` works end-to-end against in-memory data; `VaultPort` proposal extensions. Production adapters deferred to X3.
 - **F4 — UI shell:** Pinia stores, `/workspace/*` routes, theme tokens, reusable atoms (StatusPill, Avatar, ProgressBar, IconButton, Toast, ModalShell, Dropdown, DiffViewer, TypedAvatar, ActivityEventRow), test fixtures + factory helpers.
 - **F5 — GitHub auth + settings:** PAT entry UI, repo selector, settings persistence, error handling for auth failures. Conditional gate for several stories.
 
