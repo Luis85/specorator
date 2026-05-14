@@ -8,7 +8,11 @@ import type {
 	ActiveFileSnapshot,
 	Unsubscriber,
 	ClaudeCliPort,
+	ClaudeCliQueryOptions,
 } from '@/domain/ports'
+import { ClaudeCliError } from '@/domain/ports'
+import type { Result } from '@/domain/shared/Result'
+import { err } from '@/domain/shared/Result'
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
 const FILE_PREFIX = 'specorator:file:'
@@ -168,5 +172,17 @@ export class LocalStorageBridge
 
   isAvailable(): Promise<boolean> {
     return Promise.resolve(false)
+  }
+
+  query(_prompt: string, _options?: ClaudeCliQueryOptions): Promise<Result<string, ClaudeCliError>> {
+    return Promise.resolve(err(new ClaudeCliError('NOT_INSTALLED', 'LocalStorageBridge: not available')))
+  }
+
+  startup(): Promise<void> {
+    return Promise.resolve()
+  }
+
+  shutdown(): void {
+    // no-op stub
   }
 }
