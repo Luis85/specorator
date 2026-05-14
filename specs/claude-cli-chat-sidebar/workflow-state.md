@@ -5,14 +5,13 @@ area: CCS
 slug: claude-cli-chat-sidebar
 current_stage: implementation
 status: active
-last_updated: 2026-05-14
-last_agent: analyst
+last_updated: 2026-05-14last_agent: pm
 createdAt: 2026-05-05T00:00:00+02:00
 updatedAt: 2026-05-14T00:00:00+02:00
 artifacts:
   idea: complete
   research: complete
-  requirements: pending
+  requirements: complete
   design: pending
   spec: pending
   tasks: pending
@@ -30,7 +29,7 @@ artifacts:
 |---|---|---|---|
 | 1 — Idea | complete | `idea.md` | |
 | 2 — Research | complete | `research.md` | |
-| 3 — Requirements | pending | — | |
+| 3 — Requirements | complete | `requirements.md` | |
 | 4 — Design | pending | — | |
 | 5 — Specification | pending | — | |
 | 6 — Tasks | pending | — | |
