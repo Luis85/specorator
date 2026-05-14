@@ -6,12 +6,12 @@ slug: claude-cli-chat-sidebar
 current_stage: implementation
 status: active
 last_updated: 2026-05-14
-last_agent: dev
+last_agent: analyst
 createdAt: 2026-05-05T00:00:00+02:00
 updatedAt: 2026-05-14T00:00:00+02:00
 artifacts:
   idea: complete
-  research: pending
+  research: complete
   requirements: pending
   design: pending
   spec: pending
@@ -29,7 +29,7 @@ artifacts:
 | Stage | Status | Artifact | Notes |
 |---|---|---|---|
 | 1 — Idea | complete | `idea.md` | |
-| 2 — Research | pending | — | |
+| 2 — Research | complete | `research.md` | |
 | 3 — Requirements | pending | — | |
 | 4 — Design | pending | — | |
 | 5 — Specification | pending | — | |
