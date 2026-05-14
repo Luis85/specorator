@@ -11,6 +11,11 @@ import type {
 } from '@/domain/ports'
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
+function folderPrefix(parent: string): string {
+  if (parent === '') return ''
+  return parent.endsWith('/') ? parent : `${parent}/`
+}
+
 /**
  * In-memory bridge used in standalone dev mode and unit tests.
  * Provides test helper methods for inspecting state.
@@ -71,7 +76,7 @@ export class MockBridge
   }
 
   async listFolders(parent: string): Promise<string[]> {
-    const prefix = parent === '' ? '' : (parent.endsWith('/') ? parent : `${parent}/`)
+    const prefix = folderPrefix(parent)
     const names = new Set<string>()
     for (const folder of this.folders) {
       if (folder.startsWith(prefix)) {
@@ -159,7 +164,7 @@ export class MockBridge
     this.settings = { ...settings }
   }
 
-  // ── Test helpers ──────────────────────────────────────────────────────────
+  // ── Test helpers ─────────────────────────────────────────────────────────────
 
   getNotices(): {
     severity: 'error' | 'warning' | 'success' | 'info'
@@ -181,7 +186,7 @@ export class MockBridge
     this.settings = { ...this.settings, ...partial }
   }
 
-  // ── LoggerPort ────────────────────────────────────────────────────────────
+  // ── LoggerPort ───────────────────────────────────────────────────────────────
 
   debug(message: string, context?: Record<string, unknown>): void {
     this.logEntries.push({ level: 'debug', message, context })

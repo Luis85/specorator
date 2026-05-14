@@ -65,9 +65,9 @@ function skipForNow(): void {
 			v-model="personaText"
 			class="sp-onboarding__textarea"
 			aria-label="About you"
-			@input="markEdited"
 			placeholder="For example: I'm a product manager at a scale-up focusing on B2B growth. I spend most of my time on roadmap planning and stakeholder alignment."
 			data-testid="step2-textarea"
+			@input="markEdited"
 		/>
 		<p class="sp-onboarding__hint">Two to four sentences is plenty.</p>
 
