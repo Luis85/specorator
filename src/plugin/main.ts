@@ -68,12 +68,12 @@ export default class SpecoratorPlugin extends Plugin {
     // Persist any migrations that occurred during init.
     await this.saveData(this._storedData)
 
-    // T-CCS-032: Instantiate and pre-warm ClaudeCliAdapter.
+    // T-CCS-032: Instantiate ClaudeCliAdapter. startup() is deferred to onLayoutReady
+    // so it does not hold up the critical onload() path.
     this._claudeCliAdapter = new ClaudeCliAdapter(
       () => this.settings,
       this.bridge,
     )
-    await this._claudeCliAdapter.startup()
     this.register(() => { this._claudeCliAdapter?.shutdown() })
 
     this.registerView(VIEW_TYPE, (leaf) => {
@@ -175,6 +175,8 @@ export default class SpecoratorPlugin extends Plugin {
     // Workspace/vault index isn't guaranteed ready during onload(). Defer any
     // logic that reads workspace layout or vault state until layout is ready.
     this.app.workspace.onLayoutReady(() => {
+      // T-CCS-032: Pre-warm adapter here so startup() does not block onload().
+      void this._claudeCliAdapter?.startup()
       this.detectLegacyVaultLayout()
       if (!this.settings.onboardingComplete) {
         void this.activateView()
