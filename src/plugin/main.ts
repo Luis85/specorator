@@ -191,14 +191,14 @@ export default class SpecoratorPlugin extends Plugin {
     }
   }
 
-  private _dispatchNavigate(path: string): void {
+  _dispatchNavigate(path: string): void {
     const win =
       this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view?.containerEl?.ownerDocument?.defaultView ??
       activeWindow
     win.dispatchEvent(new CustomEvent('sp:navigate', { detail: { path } }))
   }
 
-  private async activateView(): Promise<void> {
+  async activateView(): Promise<void> {
     const { workspace } = this.app
 
     const existing = workspace.getLeavesOfType(VIEW_TYPE)

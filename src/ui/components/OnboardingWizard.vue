@@ -95,7 +95,6 @@ async function handleFinish(): Promise<void> {
 	}, 'Failed to mark onboarding complete')
 	if (!result.ok) {
 		logger.error('Failed to mark onboarding complete', result.error)
-		return
 	}
 	void router.push('/')
 }
