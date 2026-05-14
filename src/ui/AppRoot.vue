@@ -32,20 +32,24 @@ function onNavigate(e: Event) {
   void router.push(path)
 }
 
-onMounted(async () => {
+const stopGuard = router.beforeEach(async (to) => {
+  if (to.path === '/onboarding') return true
+  const s = await settingsPort.getSettings()
+  if (!s.onboardingComplete) return '/onboarding'
+  return true
+})
+
+onMounted(() => {
   window.addEventListener('sp:notice', onNotice)
   window.addEventListener('sp:open-file', onOpenFile)
   window.addEventListener('sp:navigate', onNavigate)
-  const s = await settingsPort.getSettings()
-  if (!s.onboardingComplete) {
-    void router.push('/onboarding')
-  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('sp:notice', onNotice)
   window.removeEventListener('sp:open-file', onOpenFile)
   window.removeEventListener('sp:navigate', onNavigate)
+  stopGuard()
 })
 </script>
 
