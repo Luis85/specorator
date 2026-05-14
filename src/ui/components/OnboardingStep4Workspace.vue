@@ -70,9 +70,14 @@ async function install(): Promise<void> {
 async function skip(): Promise<void> {
 	const folder = specsFolder.value.trim()
 	if (folder && folder !== props.initialSpecsFolder) {
-		await tryAsync(() => saveFolder())
+		const result = await tryAsync(() => saveFolder())
+		if (!result.ok) {
+			logger.error('Failed to save specs folder', result.error)
+			return
+		}
 	}
-	emit('next', { templateStatus: 'skipped', specsFolder: folder || props.initialSpecsFolder })
+	const templateStatus: TemplateStatus = workspaceStatus.value === 'ready' ? 'installed' : 'skipped'
+	emit('next', { templateStatus, specsFolder: folder || props.initialSpecsFolder })
 }
 </script>
 

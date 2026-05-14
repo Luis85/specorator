@@ -11,7 +11,7 @@ const dismissed = ref(false)
 
 onMounted(async () => {
 	const settings = await settingsPort.getSettings()
-	showNudge.value = settings.onboardingComplete && settings.userPersona === ''
+	showNudge.value = settings.onboardingComplete && settings.userPersona.trim() === ''
 })
 
 function goToSettings(): void {
