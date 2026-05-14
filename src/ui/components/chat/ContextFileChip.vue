@@ -17,7 +17,6 @@ const emit = defineEmits<{
     v-if="file.isAuto"
     class="sp-chat__chip sp-chat__chip--auto"
     data-testid="context-chip-auto"
-    role="listitem"
   >
     <span class="sp-chat__chip-indicator" aria-hidden="true">&#9632;</span>
     {{ file.label }}
@@ -30,7 +29,6 @@ const emit = defineEmits<{
     v-else
     class="sp-chat__chip sp-chat__chip--manual"
     data-testid="context-chip-manual"
-    role="listitem"
   >
     <span class="sp-chat__chip-label" :title="file.label">{{ file.label }}</span>
     <button
