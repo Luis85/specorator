@@ -47,8 +47,8 @@ function makeRepoMock(overrides: Partial<IFeatureRepository> = {}): IFeatureRepo
     findAll: vi.fn().mockResolvedValue([]),
     findBySlug: vi.fn().mockResolvedValue(null),
     findById: vi.fn().mockResolvedValue(null),
-    save: vi.fn().mockResolvedValue(ok(undefined)),
-    createStageFile: vi.fn().mockResolvedValue(ok(undefined)),
+    save: vi.fn().mockResolvedValue(ok({ ideaCreated: true })),
+    createStageFile: vi.fn().mockResolvedValue(ok({ created: true })),
     delete: vi.fn().mockResolvedValue(ok(undefined)),
     ...overrides,
   }

@@ -3,14 +3,16 @@ import type { Slug } from '@/domain/shared/Slug';
 import type { Feature } from '@/domain/feature/Feature';
 import { getStepMeta } from '@/domain/feature/FeatureStep';
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository';
-import type { VaultPort, NotificationPort, SettingsPort } from '@/domain/ports';
+import type { VaultPort, SettingsPort } from '@/domain/ports';
 import { joinVaultPath } from '../vault/VaultPath';
-import {
-	deserializeWorkflowState,
-	serializeWorkflowState,
-} from '../workflow-state/WorkflowStateDocument';
+import type { IWorkflowStateCodec } from '../workflow-state/IWorkflowStateCodec';
+import { WorkflowStateCodec } from '../workflow-state/WorkflowStateCodec';
 
 const META_FILE = 'workflow-state.md';
+
+export interface SaveResult {
+	ideaCreated: boolean;
+}
 
 /** Build a minimal stage artifact stub compatible with agentic-workflow conventions. */
 function buildStageStub(
@@ -35,11 +37,15 @@ function buildStageStub(
 // ── Repository ────────────────────────────────────────────────────────────────
 
 export class FeatureRepository implements IFeatureRepository {
+	private readonly codec: IWorkflowStateCodec;
+
 	constructor(
 		private readonly vault: VaultPort,
-		private readonly notifications: NotificationPort,
 		private readonly settingsPort: SettingsPort,
-	) {}
+		codec?: IWorkflowStateCodec,
+	) {
+		this.codec = codec ?? new WorkflowStateCodec();
+	}
 
 	private checkedPath(...segments: string[]): string {
 		const path = joinVaultPath(...segments);
@@ -67,7 +73,7 @@ export class FeatureRepository implements IFeatureRepository {
 				const path = this.checkedPath(specsFolder, folder, META_FILE);
 				try {
 					const content = await this.vault.readFile(path);
-					return deserializeWorkflowState(content);
+					return this.codec.deserialize(content);
 				} catch {
 					return null;
 				}
@@ -81,7 +87,7 @@ export class FeatureRepository implements IFeatureRepository {
 		const path = this.metaPath(specsFolder, slug.toString());
 		if (!(await this.vault.fileExists(path))) return null;
 		const content = await this.vault.readFile(path);
-		const feature = deserializeWorkflowState(content);
+		const feature = this.codec.deserialize(content);
 		// File exists but is malformed — throw so callers cannot silently overwrite it.
 		if (feature === null) {
 			throw new Error(`Spec at "${path}" exists but could not be parsed — will not overwrite.`);
@@ -97,8 +103,13 @@ export class FeatureRepository implements IFeatureRepository {
 	/**
 	 * Upsert: write workflow-state.md for a new or updated feature.
 	 * On first creation (file did not exist), also writes the idea.md stub.
+	 *
+	 * Returns a `SaveResult` whose `ideaCreated` flag is `true` when a fresh
+	 * idea.md was written, and `false` when an existing idea.md was preserved
+	 * (REQ-AVS-005 overwrite-protection). Callers in the application layer use
+	 * this flag to emit a user-facing notice via `FeedbackService.info()`.
 	 */
-	async save(feature: Feature): Promise<Result<void>> {
+	async save(feature: Feature): Promise<Result<SaveResult>> {
 		// Snapshot specsFolder once so all paths in this multi-step write resolve
 		// to the same root, even if the user changes the setting mid-flight.
 		const specsFolder = (await this.settingsPort.getSettings()).specsFolder;
@@ -107,7 +118,7 @@ export class FeatureRepository implements IFeatureRepository {
 			await this.vault.createFolder(folder);
 			const path = this.metaPath(specsFolder, feature.slug.toString());
 			const isNew = !(await this.vault.fileExists(path));
-			if (!isNew && deserializeWorkflowState(await this.vault.readFile(path)) === null) {
+			if (!isNew && this.codec.deserialize(await this.vault.readFile(path)) === null) {
 				return err(
 					new Error(`Spec at "${path}" exists but could not be parsed — will not overwrite.`),
 				);
@@ -119,20 +130,22 @@ export class FeatureRepository implements IFeatureRepository {
 			// null — CreateFeatureUseCase can retry without hitting the duplicate
 			// check.  If we wrote workflow-state.md first, an idea.md failure
 			// would leave a valid metadata file and block any retry.
+			let ideaCreated = false;
 			if (isNew) {
 				const ideaPath = this.stagePath(specsFolder, feature.slug.toString(), 'idea');
 				if (await this.vault.fileExists(ideaPath)) {
-					this.notifications.showInfo(`Specorator: idea.md already exists — keeping your version.`);
+					ideaCreated = false;
 				} else {
 					const date = feature.createdAt.toISOString().slice(0, 10);
 					await this.vault.writeFile(
 						ideaPath,
 						buildStageStub('idea', feature.slug.toString(), feature.title, date),
 					);
+					ideaCreated = true;
 				}
 			}
-			await this.vault.writeFile(path, serializeWorkflowState(feature));
-			return ok(undefined);
+			await this.vault.writeFile(path, this.codec.serialize(feature));
+			return ok({ ideaCreated });
 		} catch (e) {
 			return err(e instanceof Error ? e : new Error(String(e)));
 		}
@@ -140,10 +153,16 @@ export class FeatureRepository implements IFeatureRepository {
 
 	/**
 	 * Create the stage artifact file for the given step number, if it does not
-	 * already exist. Shows a notice and returns ok (without writing) if the file
-	 * is already present, preserving any manually edited content (REQ-AVS-005).
+	 * already exist. Returns `{ created: false }` (without writing) if the file
+	 * is already present, preserving any manually edited content
+	 * (REQ-AVS-005). Returns `{ created: true }` after writing a fresh stub.
+	 * Application-layer callers translate `created === false` into a user-facing
+	 * notice via `FeedbackService.info()`.
 	 */
-	async createStageFile(feature: Feature, stepNumber: number): Promise<Result<void>> {
+	async createStageFile(
+		feature: Feature,
+		stepNumber: number,
+	): Promise<Result<{ created: boolean }>> {
 		const specsFolder = (await this.settingsPort.getSettings()).specsFolder;
 		try {
 			const meta = getStepMeta(stepNumber);
@@ -151,17 +170,14 @@ export class FeatureRepository implements IFeatureRepository {
 
 			const path = this.stagePath(specsFolder, feature.slug.toString(), meta.slug);
 			if (await this.vault.fileExists(path)) {
-				this.notifications.showInfo(
-					`Specorator: ${meta.slug}.md already exists — keeping your version.`,
-				);
-				return ok(undefined);
+				return ok({ created: false });
 			}
 			const date = new Date().toISOString().slice(0, 10);
 			await this.vault.writeFile(
 				path,
 				buildStageStub(meta.slug, feature.slug.toString(), feature.title, date),
 			);
-			return ok(undefined);
+			return ok({ created: true });
 		} catch (e) {
 			return err(e instanceof Error ? e : new Error(String(e)));
 		}

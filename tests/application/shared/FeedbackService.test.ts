@@ -101,6 +101,27 @@ describe('FeedbackService.warn', () => {
 	})
 })
 
+describe('FeedbackService.info', () => {
+	it('calls log.info and notify.showInfo', () => {
+		const log = makeFakeLogger()
+		const notify = makeFakeNotify()
+		new FeedbackService(log, notify).info('idea.md preserved', { slug: 'dark-mode' })
+		expect(log.info).toHaveBeenCalledWith('idea.md preserved', { slug: 'dark-mode' })
+		expect(notify.showInfo).toHaveBeenCalledWith('idea.md preserved')
+	})
+
+	it('calls log.info without context and still notifies', () => {
+		const log = makeFakeLogger()
+		const notify = makeFakeNotify()
+		new FeedbackService(log, notify).info('hello')
+		expect(log.info).toHaveBeenCalledWith('hello', undefined)
+		expect(notify.showInfo).toHaveBeenCalledWith('hello')
+		expect(notify.showError).not.toHaveBeenCalled()
+		expect(notify.showWarning).not.toHaveBeenCalled()
+		expect(notify.showSuccess).not.toHaveBeenCalled()
+	})
+})
+
 describe('FeedbackService.debug', () => {
 	it('calls log.debug and NO notification', () => {
 		const log = makeFakeLogger()

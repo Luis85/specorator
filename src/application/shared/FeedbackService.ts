@@ -34,6 +34,11 @@ export class FeedbackService {
 		this.notify.showWarning(message)
 	}
 
+	info(message: string, context?: Record<string, unknown>): void {
+		this.log.info(message, context)
+		this.notify.showInfo(message)
+	}
+
 	debug(message: string, context?: Record<string, unknown>): void {
 		this.log.debug(message, context)
 	}
