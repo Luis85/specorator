@@ -56,7 +56,7 @@ export function serializeWorkflowState(feature: Feature): string {
 	].join('\n');
 }
 
-function parseWorkflowStateFrontmatter(content: string): Partial<Record<string, string>> {
+export function parseWorkflowStateFrontmatter(content: string): Partial<Record<string, string>> {
 	const match = /^---\n([\s\S]*?)\n---/.exec(content);
 	const body = match?.[1];
 	if (body === undefined) return {};

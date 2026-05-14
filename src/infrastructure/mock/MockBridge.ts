@@ -178,6 +178,19 @@ export class MockBridge
     return [...this.noticeLog]
   }
 
+  /**
+   * Test-facing accessor for the captured notice log. Returns a defensive
+   * copy so callers cannot mutate internal state. Equivalent to `getNotices()`
+   * but exposed as a property for test ergonomics (e.g. `expect(bridge.notices).toEqual([])`).
+   */
+  get notices(): readonly {
+    severity: 'error' | 'warning' | 'success' | 'info'
+    message: string
+    durationMs: number
+  }[] {
+    return [...this.noticeLog]
+  }
+
   getOpenedFile(): string | null {
     return this.openedFile
   }
