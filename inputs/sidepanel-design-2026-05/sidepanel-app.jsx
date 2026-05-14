@@ -82,7 +82,10 @@ function SPApp() {
     try { const s = localStorage.getItem('sp-vault-folders'); return s ? JSON.parse(s) : {'Projects/specorator':true,'Notes':true,'References':true}; }
     catch { return {'Projects/specorator':true,'Notes':true,'References':true}; }
   });
-  const [autonomy, setAutonomy] = React.useState(() => localStorage.getItem('sp-autonomy') || 'assisted');
+  const [autonomy, setAutonomy] = React.useState(() => {
+    try { return localStorage.getItem('sp-autonomy') || 'assisted'; }
+    catch { return 'assisted'; }
+  });
 
   const bottomRef = React.useRef(null);
   const inputRef  = React.useRef(null);

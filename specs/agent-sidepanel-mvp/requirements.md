@@ -33,7 +33,6 @@ Deferred to later increments per the design brief and idea: autonomy dial UI, va
 | **Subscription mode** | The runtime mode in which the subprocess transport is selected. Requires a discoverable `claude` binary and a logged-in CLI; no API key is read or transmitted. |
 | **File-write proposal card** | The Vue component surfaced in the chat sidebar that renders a validated structured envelope and offers Accept / Reject controls. Vault writes only fire on Accept. |
 | **Trust-first** | The constitutional posture that no model-proposed write reaches the vault without an explicit user gesture. Audit log is in-memory in Increment 1 (vault audit log deferred). |
-| **Subprocess lifecycle** | Long-lived child process per chat thread for free-text streaming (amortises macOS first-spawn latency, R-ASM-003) plus short-lived per-call processes for structured one-shot operations. |
 
 ---
 
@@ -213,7 +212,7 @@ Deferred to later increments per the design brief and idea: autonomy dial UI, va
 #### REQ-ASM-024 — Defensive parse fallback
 
 - **Pattern:** unwanted behaviour
-- **Statement:** IF `.structured_output` is absent or fails Zod validation, THEN the system shall attempt to extract the first balanced `{…}` block from `.result` and revalidate it against the Zod schema as a single defensive fallback.
+- **Statement:** IF `.structured_output` is absent or fails Zod validation, THEN the system shall attempt to extract the first balanced `{…}` block from `.result` (using brace-depth counting that correctly handles nested objects inside `content`, not a regex) and revalidate it against the Zod schema as a single defensive fallback.
 - **Priority:** must
 - **Traces:** F4 (defensive parse fallback)
 
@@ -330,7 +329,7 @@ Deferred to later increments per the design brief and idea: autonomy dial UI, va
 
 - **Pattern:** ubiquitous
 - **Statement:** The system shall write session log updates asynchronously (fire-and-forget with error surfaced to `LoggerPort.error`) so the chat UI is never blocked on disk I/O.
-- **Priority:** should
+- **Priority:** must
 - **Traces:** NFR-ASM-002 (latency)
 
 ---
@@ -414,35 +413,35 @@ Deferred to later increments per the design brief and idea: autonomy dial UI, va
 #### REQ-ASM-051 — Reuse active-file auto-context
 
 - **Pattern:** ubiquitous
-- **Statement:** REQ-ASM-051: Reuse REQ-CCS-005 unchanged (active file is added to the chat store's auto context slot when the active editor leaf changes).
+- **Statement:** The system shall reuse REQ-CCS-005 unchanged (active file is added to the chat store's auto context slot when the active editor leaf changes).
 - **Priority:** must
 - **Traces:** REQ-CCS-005
 
 #### REQ-ASM-052 — Reuse active-file clear behaviour
 
 - **Pattern:** ubiquitous
-- **Statement:** REQ-ASM-052: Reuse REQ-CCS-006 unchanged (auto context slot is cleared when no markdown file is active).
+- **Statement:** The system shall reuse REQ-CCS-006 unchanged (auto context slot is cleared when no markdown file is active).
 - **Priority:** must
 - **Traces:** REQ-CCS-006
 
 #### REQ-ASM-053 — Reuse file-menu add-to-context
 
 - **Pattern:** ubiquitous
-- **Statement:** REQ-ASM-053: Reuse REQ-CCS-009, REQ-CCS-010, REQ-CCS-011 unchanged (file-menu "Add to chat context" with no-duplicate and remove behaviour).
+- **Statement:** The system shall reuse REQ-CCS-009, REQ-CCS-010, REQ-CCS-011 unchanged (file-menu "Add to chat context" with no-duplicate and remove behaviour).
 - **Priority:** must
 - **Traces:** REQ-CCS-009, REQ-CCS-010, REQ-CCS-011
 
 #### REQ-ASM-054 — Reuse context preamble + token cap
 
 - **Pattern:** ubiquitous
-- **Statement:** REQ-ASM-054: Reuse REQ-CCS-025, REQ-CCS-026, REQ-CCS-027 unchanged (context preamble format and 50 000-token cap with LIFO manual removal and auto-file floor). The stage-aware preamble (REQ-ASM-013) is prepended *before* the CCS context preamble; the resulting concatenation is what feeds `buildPrompt()`.
+- **Statement:** The system shall reuse REQ-CCS-025, REQ-CCS-026, REQ-CCS-027 unchanged (context preamble format and 50 000-token cap with LIFO manual removal and auto-file floor). The stage-aware preamble (REQ-ASM-013) is prepended *before* the CCS context preamble; the resulting concatenation is what feeds `buildPrompt()`.
 - **Priority:** must
 - **Traces:** REQ-CCS-025, REQ-CCS-026, REQ-CCS-027
 
 #### REQ-ASM-055 — Reuse error UI and degraded-state copy patterns
 
 - **Pattern:** ubiquitous
-- **Statement:** REQ-ASM-055: Reuse REQ-CCS-016, REQ-CCS-017, REQ-CCS-018, REQ-CCS-019, REQ-CCS-020 unchanged (plain-language error mapping, userText retained on error, API-key-missing / SDK-unavailable / mobile degraded states). The CLI-not-found degraded state (REQ-ASM-009) follows the same pattern.
+- **Statement:** The system shall reuse REQ-CCS-016, REQ-CCS-017, REQ-CCS-018, REQ-CCS-019, REQ-CCS-020 unchanged (plain-language error mapping, userText retained on error, API-key-missing / SDK-unavailable / mobile degraded states). The CLI-not-found degraded state (REQ-ASM-009) follows the same pattern.
 - **Priority:** must
 - **Traces:** REQ-CCS-016, REQ-CCS-017, REQ-CCS-018, REQ-CCS-019, REQ-CCS-020
 
