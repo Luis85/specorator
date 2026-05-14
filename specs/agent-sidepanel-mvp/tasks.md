@@ -216,7 +216,7 @@ Settings tab additions and a `CLI_LAUNCH_FAILED` degraded heading.
 - **Estimate:** S
 - **Definition of done:**
   - [ ] T-ASM-012 tests pass.
-  - [ ] `implements ClaudeCliPort` declared on the class; public `readonly kind = 'subscription'` discriminator present (the `SubscriptionCapable` interface itself is declared by T-ASM-039 in PR-ASM-2 — the structural-narrowing test lives there, not here).
+  - [ ] `implements ClaudeCliPort` declared on the class; public `readonly kind = 'subscription'` discriminator present. The `SubscriptionCapable` interface (spec §2.9) is **not** declared here — it is declared in PR-ASM-2 by T-ASM-039 alongside `runStructured`. T-ASM-013 ships only the `kind` discriminator so PR-ASM-1 stands on its own; the structural-narrowing test lives in T-ASM-038 (PR-ASM-2).
   - [ ] Lint and type checks green.
 
 ### T-ASM-014 🔨 — Extend `PluginSettings` with `claudeCliPath` and `transportKind`
@@ -274,7 +274,7 @@ Settings tab additions and a `CLI_LAUNCH_FAILED` degraded heading.
 
 ### T-ASM-018 🔨 — Wire `ClaudeCliPathField` into `SpecoratorSettingTab`
 
-- **Description:** Add `renderClaudeCliPathField()` to `src/plugin/settings.ts` per SPEC §10.2: text input, autodetect and test extra-buttons, status node. `onChange` trims and calls `bumpSettingsVersion()` (existing `_bumpAllViews()` pattern). `handleAutodetect` invokes `ClaudeBinaryResolver.resolve()`. `handleTestBinary` runs `<path> --version` via `child_process.spawnSync` with a 5 s timeout.
+- **Description:** Add `renderClaudeCliPathField()` to `src/plugin/settings.ts` per SPEC §10.2: text input, autodetect and test extra-buttons, status node. `onChange` trims and calls `bumpSettingsVersion()` (existing `_bumpAllViews()` pattern). `handleAutodetect` invokes `ClaudeBinaryResolver.resolve()`. `handleTestBinary` runs `<path> --version` via `child_process.spawnSync` with a 5 s timeout — this is the **only** allowed `spawnSync` site in the plugin (spec §10.2 explicitly allow-lists it for the user-driven settings-tab handler; it is never reached on chat hot paths).
 - **Satisfies:** REQ-ASM-004, REQ-ASM-005, REQ-ASM-008
 - **Owner:** dev
 - **PR group:** PR-ASM-1
@@ -285,6 +285,7 @@ Settings tab additions and a `CLI_LAUNCH_FAILED` degraded heading.
   - [ ] `handleAutodetect` and `handleTestBinary` private methods exist.
   - [ ] `onChange` writes a trimmed value and bumps views.
   - [ ] No literal `'~/.claude/'` or `'.credentials.json'` strings anywhere in settings.ts (NFR-ASM-004).
+  - [ ] `spawnSync` appears **only** inside `handleTestBinary` (grep-asserted in T-ASM-080's scan); not invoked from any chat path.
 
 ### T-ASM-019 📐 — `degradedClaudeCliPort` constant for the `'degraded'` selector path
 
@@ -1032,7 +1033,7 @@ vault-mutation path for any model-originated write (NFR-ASM-011).
 - **Estimate:** S
 - **Definition of done:**
   - [ ] All new keys present and referenced by at least one component.
-  - [ ] Forbidden-terms test asserts the negative list across all new keys.
+  - [ ] Forbidden-terms test asserts the negative list across **all** new keys and values, with one explicit case-insensitive assertion per banned term (`subprocess`, `OAuth`, `session_id`, `stream-json`, `schema`, `Zod`, `envelope`, `token`, `API key`, `system prompt`). The word "subprocess" must not appear in any key name or translated string (NFR-ASM-009 / NFR-CCS-012 inheritance — no AI/SDK jargon in user copy).
 
 ### T-ASM-075 🔨 — Provide `CONFIRM_MODAL_PORT` and `TRANSPORT_KIND_KEY` in `SpecoratorView`
 
@@ -1507,7 +1508,7 @@ T-ASM-043, T-ASM-058, T-ASM-076) which gate the next PR's opening.
 - [x] TDD ordering: every implementation (🔨) task is preceded by a sibling test (🧪) task in the same PR.
 - [x] Owner assigned per task (`dev` for implementation / scaffolding / gate, `qa` for test tasks).
 - [x] Every PR ends with a `🚀 pre-PR gate` task (T-ASM-023, T-ASM-043, T-ASM-058, T-ASM-076, T-ASM-085).
-- [x] Every REQ-ASM-001…055 (55 functional) covered by at least one task: REQ-ASM-001 (T-001/003/011/013/020/022), REQ-ASM-002 (T-004/005/014/020/021/071/073/075), REQ-ASM-003 (T-004/005/020/021/075), REQ-ASM-004 (T-014/016/017/018), REQ-ASM-005 (T-008/009/018), REQ-ASM-006 (T-006/007), REQ-ASM-007 (T-077/078/079/080), REQ-ASM-008 (T-016/017/018/074), REQ-ASM-009 (T-003/010/011/019/073), REQ-ASM-010 (T-010/011), REQ-ASM-011 (T-024/026), REQ-ASM-012 (T-025/026), REQ-ASM-013 (T-003/029/030/040/041), REQ-ASM-014 (T-029/030/041), REQ-ASM-015 (T-025/026), REQ-ASM-016 (T-029/030), REQ-ASM-017 (T-027/028), REQ-ASM-018 (T-029/030/040/041), REQ-ASM-019 (T-029/030/040/041), REQ-ASM-020 (T-029/030), REQ-ASM-021 (T-006/007/038/039), REQ-ASM-022 (T-032/033), REQ-ASM-023 (T-031/032/033/034/035), REQ-ASM-024 (T-034/035), REQ-ASM-025 (T-031/034/035/042/082), REQ-ASM-026 (T-006/007), REQ-ASM-027 (T-006/007), REQ-ASM-028 (T-006/007), REQ-ASM-029 (T-010/011), REQ-ASM-030 (T-010/011), REQ-ASM-031 (T-002/010/011/050/051/052), REQ-ASM-032 (T-044/045), REQ-ASM-033 (T-046/048), REQ-ASM-034 (T-046/048/057), REQ-ASM-035 (T-002/003/049/050/055/056/057), REQ-ASM-036 (T-079), REQ-ASM-037 (T-002/051/052/053/054/057), REQ-ASM-038 (T-046/048), REQ-ASM-039 (T-047/048), REQ-ASM-040 (T-047/048/057), REQ-ASM-041 (T-051/052/063/064/068/070/073), REQ-ASM-042 (T-069/070/073), REQ-ASM-043 (T-065/067/072), REQ-ASM-044 (T-031/059/060/061/062/065/067), REQ-ASM-045 (T-067/072), REQ-ASM-046 (T-048/066/067), REQ-ASM-047 (T-032/033/065/067), REQ-ASM-048 (T-031/036/037/068/070), REQ-ASM-049 (T-012/013/039), REQ-ASM-050 (T-069/070/072/073), REQ-ASM-051…053 (CCS-inherited), REQ-ASM-054 (T-040/041), REQ-ASM-055 (T-072/073/074).
+- [x] Every REQ-ASM-001…055 (55 functional) covered by at least one task: REQ-ASM-001 (T-001/003/011/013/020/022), REQ-ASM-002 (T-004/005/014/020/021/071/073/075), REQ-ASM-003 (T-004/005/020/021/075), REQ-ASM-004 (T-014/016/017/018), REQ-ASM-005 (T-008/009/018), REQ-ASM-006 (T-006/007), REQ-ASM-007 (T-077/078/079/080), REQ-ASM-008 (T-016/017/018/074), REQ-ASM-009 (T-003/010/011/019/073), REQ-ASM-010 (T-010/011), REQ-ASM-011 (T-024/026), REQ-ASM-012 (T-025/026), REQ-ASM-013 (T-003/029/030/040/041), REQ-ASM-014 (T-029/030/041), REQ-ASM-015 (T-025/026), REQ-ASM-016 (T-029/030), REQ-ASM-017 (T-027/028), REQ-ASM-018 (T-029/030/040/041), REQ-ASM-019 (T-029/030/040/041), REQ-ASM-020 (T-029/030), REQ-ASM-021 (T-006/007/038/039), REQ-ASM-022 (T-032/033), REQ-ASM-023 (T-031/032/033/034/035), REQ-ASM-024 (T-034/035), REQ-ASM-025 (T-031/034/035/042/082), REQ-ASM-026 (T-006/007), REQ-ASM-027 (T-006/007), REQ-ASM-028 (T-006/007), REQ-ASM-029 (T-010/011), REQ-ASM-030 (T-010/011), REQ-ASM-031 (T-002/010/011/050/051/052), REQ-ASM-032 (T-044/045), REQ-ASM-033 (T-046/048), REQ-ASM-034 (T-046/048/057), REQ-ASM-035 (T-002/003/049/050/055/056/057), REQ-ASM-036 (T-079), REQ-ASM-037 (T-002/051/052/053/054/057), REQ-ASM-038 (T-046/048), REQ-ASM-039 (T-047/048), REQ-ASM-040 (T-047/048/057), REQ-ASM-041 (T-051/052/063/064/068/070/073), REQ-ASM-042 (T-069/070/073), REQ-ASM-043 (T-065/067/072), REQ-ASM-044 (T-031/059/060/061/062/065/067), REQ-ASM-045 (T-067/072), REQ-ASM-046 (T-048/066/067), REQ-ASM-047 (T-032/033/065/067), REQ-ASM-048 (T-031/036/037/068/070), REQ-ASM-049 (T-012/013/039), REQ-ASM-050 (T-069/070/072/073), REQ-ASM-051 (T-083, CCS-inherited via REQ-CCS-005), REQ-ASM-052 (T-083, CCS-inherited via REQ-CCS-006), REQ-ASM-053 (T-083, CCS-inherited file-menu hook), REQ-ASM-054 (T-040/041), REQ-ASM-055 (T-072/073/074).
 - [x] Every NFR-ASM-001…012 (12 NFRs) covered: NFR-ASM-001 (T-010/011/055/056), NFR-ASM-002 (T-047/048/057), NFR-ASM-003 (T-030), NFR-ASM-004 (T-009/011/018/077/078/079/080), NFR-ASM-005 (T-010/011/048/081), NFR-ASM-006 (T-010/011), NFR-ASM-007 (T-069/070), NFR-ASM-008 (T-055/056/071), NFR-ASM-009 (T-074), NFR-ASM-010 (T-008/009), NFR-ASM-011 (T-065/067/072), NFR-ASM-012 (T-010/011/081).
 - [x] Every SPEC-ASM-001 §6 / §7 / §8 / §9 / §10 / §13 element is covered by at least one task:
   - §6.1 selectTransport — T-ASM-004/005
