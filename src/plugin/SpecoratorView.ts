@@ -1,5 +1,5 @@
 import { ItemView, Platform, type WorkspaceLeaf } from 'obsidian'
-import { createApp, ref, type App as VueApp } from 'vue'
+import { createApp, ref, type App as VueApp, type Ref } from 'vue'
 import { createPinia, type Pinia } from 'pinia'
 import type { Router } from 'vue-router'
 import { router } from '@/ui/router'
@@ -20,7 +20,28 @@ import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { FeatureService } from '@/application/feature/FeatureService'
 import { FEATURE_SERVICE_KEY } from '@/ui/composables/useFeatureService'
 import type { ClaudeCliPort } from '@/domain/ports'
+import type { PluginSettings } from '@/domain/settings/PluginSettings'
+import type { TransportSelection } from '@/plugin/transport/TransportSelector'
+import { useChatStore } from '@/ui/stores/chatStore'
+import { trySync } from '@/domain/shared/tryAsync'
 import type SpecoratorPlugin from './main'
+
+/**
+ * Factory closure provided by `main.ts` (SPEC-ASM-001 §9.1). Encapsulates the
+ * four candidate ports + `cliResolved` snapshot so the view only needs to pass
+ * current settings to obtain a `TransportSelection`.
+ */
+export type SelectTransportFactory = (settings: PluginSettings) => TransportSelection
+
+/**
+ * Constructor options bag accepted by `SpecoratorView`. Optional so existing
+ * callers (and the legacy direct-port path) continue to compile while the
+ * subscription wiring rolls out.
+ */
+export interface SpecoratorViewOptions {
+  readonly subscriptionAdapter: ClaudeCliPort
+  readonly selectTransport: SelectTransportFactory
+}
 
 export const VIEW_TYPE = 'specorator'
 
@@ -36,7 +57,7 @@ export class SpecoratorView extends ItemView {
    * Set in onOpen() after createPinia().
    * Satisfies T-CCS-035.
    */
-  public pinia!: Pinia
+  public pinia: Pinia | null = null
 
   /**
    * Reactive counter. Incremented by bumpSettingsVersion() each time the
@@ -45,12 +66,37 @@ export class SpecoratorView extends ItemView {
    */
   private readonly _settingsVersion = ref(0)
 
+  /**
+   * Reactive holder for the active `ClaudeCliPort`. Mutated by
+   * `_refreshActivePort()` whenever settings change (gated by REQ-ASM-003 —
+   * skipped while a chat turn is in flight). Provided to Vue under
+   * `CLAUDE_CLI_PORT` so UI consumers stay transport-agnostic.
+   *
+   * Satisfies REQ-ASM-001, REQ-ASM-002, REQ-ASM-003.
+   */
+  private readonly _activeClaudeCliPort: Ref<ClaudeCliPort>
+
+  /**
+   * Optional subscription-transport adapter + selector closure passed by the
+   * plugin (SPEC-ASM-001 §9.1). When absent, the view falls back to the legacy
+   * direct-port path for backwards compatibility with existing tests.
+   */
+  private readonly _options: SpecoratorViewOptions | null
+
   constructor(
     leaf: WorkspaceLeaf,
     private readonly plugin: SpecoratorPlugin,
     private readonly claudeCliPort: ClaudeCliPort,
+    options?: SpecoratorViewOptions,
   ) {
     super(leaf)
+    this._options = options ?? null
+    // Seed the reactive port: when a selector is provided, derive from
+    // settings; otherwise fall back to the directly-injected SDK adapter.
+    const initial = this._options !== null
+      ? this._options.selectTransport(this.plugin.settings).port
+      : this.claudeCliPort
+    this._activeClaudeCliPort = ref(initial)
   }
 
   getViewType(): string { return VIEW_TYPE }
@@ -81,7 +127,13 @@ export class SpecoratorView extends ItemView {
     this.vueApp.provide(WORKSPACE_PORT, bridge)
     this.vueApp.provide(NOTIFICATION_PORT, bridge)
     this.vueApp.provide(LOGGER_PORT, bridge)
-    this.vueApp.provide(CLAUDE_CLI_PORT, this.claudeCliPort)
+    // Refresh the active port from the current settings just before mounting
+    // so the first frame already reflects any setting changes since ctor.
+    this._refreshActivePort()
+    // Provide the reactive ref's current value through the UI's existing
+    // injection key (SPEC §9.5). UI consumers continue to call inject() at
+    // setup time; bumpSettingsVersion() rotates the value through this ref.
+    this.vueApp.provide(CLAUDE_CLI_PORT, this._activeClaudeCliPort.value)
     this.vueApp.provide(COMMUNITY_PLUGIN_PORT, bridge)
     this.vueApp.provide(IS_MOBILE_KEY, Platform.isMobile)
     this.vueApp.provide(SETTINGS_VERSION_KEY, this._settingsVersion)
@@ -143,9 +195,57 @@ export class SpecoratorView extends ItemView {
    * Increments the settings-version reactive counter, signalling ChatSidebar
    * to re-check adapter availability. Called by the settings tab after the
    * Anthropic API key is saved.
-   * Satisfies D-CCS-003, T-CCS-037.
+   *
+   * Also re-runs the transport selector when a chat turn is NOT in flight
+   * (REQ-ASM-003). This is the documented mid-session lock — switching
+   * transport while `status === 'loading'` would orphan an in-flight query.
+   *
+   * Satisfies D-CCS-003, T-CCS-037, REQ-ASM-003.
    */
   public bumpSettingsVersion(): void {
     this._settingsVersion.value++
+    if (this._isChatLoading()) {
+      // REQ-ASM-003 — skip transport switch while a turn is in flight. The
+      // next `bumpSettingsVersion()` (or the user's next message) will pick
+      // up the new transport on the following call.
+      return
+    }
+    this._refreshActivePort()
+  }
+
+  /**
+   * Returns the currently provided `ClaudeCliPort`. Test seam for T-ASM-021;
+   * production code reads the port via Vue's `inject(CLAUDE_CLI_PORT)`.
+   */
+  public getActiveClaudeCliPort(): ClaudeCliPort {
+    return this._activeClaudeCliPort.value
+  }
+
+  /**
+   * Recompute the active transport via the injected selector factory. No-op
+   * when no factory was provided (legacy direct-port path).
+   */
+  private _refreshActivePort(): void {
+    if (this._options === null) return
+    const next = this._options.selectTransport(this.plugin.settings).port
+    if (next !== this._activeClaudeCliPort.value) {
+      this._activeClaudeCliPort.value = next
+    }
+  }
+
+  /**
+   * Best-effort read of `useChatStore().status` from the Pinia instance owned
+   * by this view. Returns `false` if pinia hasn't been initialised yet (i.e.
+   * onOpen hasn't run) — in that case there cannot be an in-flight turn.
+   */
+  private _isChatLoading(): boolean {
+    if (this.pinia === null) return false
+    const pinia = this.pinia
+    // Pinia may be torn down (onClose -> unmount). `trySync` keeps this method
+    // raw-try/catch-free per the no-try-catch-outside-infrastructure rule;
+    // a thrown error is treated as not-loading so we don't strand the next
+    // selector update.
+    const result = trySync(() => useChatStore(pinia).status === 'loading')
+    return result.ok ? result.value : false
   }
 }
