@@ -173,10 +173,17 @@ function SPApp() {
       if (e.key === 'ArrowDown') { e.preventDefault(); setAtHl(h => Math.min(h+1, fl.length-1)); return; }
       if (e.key === 'ArrowUp')   { e.preventDefault(); setAtHl(h => Math.max(h-1, 0)); return; }
       if (e.key === 'Enter')     {
-        e.preventDefault();
         const f = fl[atHl];
-        if (f && !activeIds.includes(f.id)) selectAtFile(f);
-        return;
+        // Only intercept Enter if there's a selectable result. When no
+        // matches exist (or the highlighted one is already in context),
+        // fall through to the normal send path below so users aren't
+        // stuck in @-mode with a "broken" Enter key.
+        if (f && !activeIds.includes(f.id)) {
+          e.preventDefault();
+          selectAtFile(f);
+          return;
+        }
+        // fall through
       }
       if (e.key === 'Escape') { e.preventDefault(); setAtQuery(null); return; }
     }
