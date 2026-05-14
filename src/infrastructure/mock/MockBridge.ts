@@ -4,6 +4,7 @@ import type {
 	WorkspacePort,
 	NotificationPort,
 	LoggerPort,
+	CommunityPluginPort,
 	ActiveFileSnapshot,
 	Unsubscriber,
 	ClaudeCliPort,
@@ -15,11 +16,12 @@ import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginS
  * Provides test helper methods for inspecting state.
  */
 export class MockBridge
-	implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, ClaudeCliPort
+	implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, ClaudeCliPort, CommunityPluginPort
 {
   private readonly files = new Map<string, string>()
   private readonly folders = new Set<string>()
   private settings: PluginSettings = { ...DEFAULT_SETTINGS }
+  private enabledPluginIds = new Set<string>()
   private readonly noticeLog: {
     severity: 'error' | 'warning' | 'success' | 'info'
     message: string
@@ -69,15 +71,19 @@ export class MockBridge
   }
 
   async listFolders(parent: string): Promise<string[]> {
-    const prefix = parent.endsWith('/') ? parent : `${parent}/`
+    const prefix = parent === '' ? '' : (parent.endsWith('/') ? parent : `${parent}/`)
     const names = new Set<string>()
+    for (const folder of this.folders) {
+      if (folder.startsWith(prefix)) {
+        const rest = folder.slice(prefix.length)
+        if (rest && !rest.includes('/')) names.add(rest)
+      }
+    }
     for (const path of this.files.keys()) {
-      if (path.startsWith(prefix)) {
+      if (!prefix || path.startsWith(prefix)) {
         const rest = path.slice(prefix.length)
         const firstSegment = rest.split('/')[0]
-        if (firstSegment && rest.includes('/')) {
-          names.add(firstSegment)
-        }
+        if (firstSegment && rest.includes('/')) names.add(firstSegment)
       }
     }
     return [...names]
@@ -201,5 +207,19 @@ export class MockBridge
 
   isAvailable(): Promise<boolean> {
     return Promise.resolve(false)
+  }
+
+  // ── CommunityPluginPort ───────────────────────────────────────────────────
+
+  isPluginEnabled(id: string): boolean {
+    return this.enabledPluginIds.has(id)
+  }
+
+  listEnabledPluginIds(): string[] {
+    return Array.from(this.enabledPluginIds)
+  }
+
+  seedEnabledPlugins(ids: string[]): void {
+    this.enabledPluginIds = new Set(ids)
   }
 }

@@ -22,12 +22,14 @@ const installOutcome = ref<'success' | 'failure' | null>(null)
 const folderEmpty = ref(false)
 
 onMounted(async () => {
-	const result = await tryAsync(() => vaultPort.listFiles(specsFolder.value))
-	if (result.ok) {
-		// Folder exists — features live in subfolders, so zero root files is normal
+	const folder = specsFolder.value.trim()
+	const parentPath = folder.includes('/') ? folder.slice(0, folder.lastIndexOf('/')) : ''
+	const folderName = folder.includes('/') ? folder.slice(folder.lastIndexOf('/') + 1) : folder
+	const result = await tryAsync(() => vaultPort.listFolders(parentPath))
+	if (result.ok && result.value.includes(folderName)) {
 		workspaceStatus.value = 'ready'
 	} else {
-		logger.error('Failed to check workspace status', result.error)
+		if (!result.ok) logger.error('Failed to check workspace status', result.error)
 		workspaceStatus.value = 'not-installed'
 	}
 })
@@ -54,7 +56,7 @@ async function install(): Promise<void> {
 		workspaceStatus.value = 'ready'
 		installOutcome.value = 'success'
 		// Auto-advance after a short pause
-		await new Promise<void>((resolve) => { activeWindow.setTimeout(resolve, 1500) })
+		await new Promise<void>((resolve) => { window.setTimeout(resolve, 1500) })
 		emit('next', { templateStatus: 'installed', specsFolder: specsFolder.value.trim() })
 	} else {
 		logger.error('Failed to install workspace', result.error)
