@@ -169,6 +169,18 @@ export class MockClaudeSubprocessAdapter implements ClaudeCliPort {
     this.queryLog.push(prompt)
     this._recordOptions(options)
 
+    // Mirror the real adapter's REQ-ASM-031 contract: invoke onSessionId once
+    // with `cannedSessionId` so tests exercising the capture path see the
+    // same observable as production.
+    if (options?.onSessionId !== undefined && this.cannedSessionId !== null) {
+      try {
+        options.onSessionId(this.cannedSessionId)
+      } catch {
+        // Mock mirrors the real adapter — never let a caller callback throw
+        // out of `query()`.
+      }
+    }
+
     if (this.delayMs > 0) {
       await new Promise<void>((resolve) => setTimeout(resolve, this.delayMs))
     }

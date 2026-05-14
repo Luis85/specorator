@@ -120,6 +120,12 @@ interface TurnProc {
   sessionId: SessionId | null
   /** Sticky terminal error (e.g. spawn-error before any stdout). */
   fatal: ClaudeCliError | null
+  /**
+   * Optional caller-supplied callback invoked exactly once when the first
+   * non-empty `session_id` arrives in a `system/init` event (REQ-ASM-031).
+   * Nulled out after the first invocation to enforce the single-fire contract.
+   */
+  onSessionId: ((sessionId: SessionId) => void) | null
 }
 
 interface PendingTurn {
@@ -294,7 +300,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
     // Fresh spawn per turn (Codex P1 fix, PR #325). Context continuity is
     // already encoded in `argv` via --resume when the caller supplied
     // `resumeSessionId`; no per-thread state lives on this adapter.
-    const spawned = this._spawnChild(this._binaryPath, argv)
+    const spawned = this._spawnChild(this._binaryPath, argv, options?.onSessionId ?? null)
     if (!spawned.ok) {
       return spawned
     }
@@ -593,6 +599,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
   private _spawnChild(
     binaryPath: string,
     argv: readonly string[],
+    onSessionId: ((sessionId: SessionId) => void) | null,
   ): Result<TurnProc, ClaudeCliError> {
     let child: ChildProcess
     try {
@@ -631,6 +638,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
       pending: null,
       sessionId: null,
       fatal: null,
+      onSessionId,
     }
 
     this._activeChildren.add(childLike)
@@ -736,11 +744,33 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
     }
   }
 
-  /** REQ-ASM-031 — capture `session_id` from a `system/init` event. */
+  /**
+   * REQ-ASM-031 — capture `session_id` from a `system/init` event and fire
+   * the optional caller-supplied `onSessionId` callback exactly once. The
+   * callback is cleared after the first invocation so a misbehaving CLI that
+   * emits multiple `system/init` events cannot double-call the caller.
+   */
   private _handleSystemInit(proc: TurnProc, event: Record<string, unknown>): void {
     const sid = event.session_id
-    if (typeof sid === 'string' && sid.length > 0) {
-      proc.sessionId = asSessionId(sid)
+    if (typeof sid !== 'string' || sid.length === 0) return
+    const branded = asSessionId(sid)
+    proc.sessionId = branded
+    if (proc.onSessionId !== null) {
+      const cb = proc.onSessionId
+      // Single-fire: drop the reference before invoking so a re-entrant
+      // callback (e.g. one that triggers a synthetic event) cannot recurse.
+      proc.onSessionId = null
+      try {
+        cb(branded)
+      } catch (e: unknown) {
+        // NFR-ASM-005 — never log the session id. Callback failures must not
+        // tear down the turn; surface them only as a debug log.
+        this._logger.debug('subscription.onSessionId.threw', {
+          transport: 'subscription',
+          event: 'onSessionId.threw',
+        })
+        void e
+      }
     }
   }
 
