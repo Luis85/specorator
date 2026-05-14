@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useSettingsPort } from '@/ui/composables/useSettingsPort'
 import { useLoggerPort } from '@/ui/composables/useLoggerPort'
 import { tryAsync } from '@/domain/shared/tryAsync'
@@ -18,6 +18,7 @@ const EXAMPLE_CARDS = [
 ]
 
 const personaText = ref(props.initialValue)
+watch(() => props.initialValue, (val) => { personaText.value = val })
 const isSaving = ref(false)
 const saveError = ref<string | null>(null)
 
@@ -96,7 +97,6 @@ function skipForNow(): void {
 			</button>
 			<button
 				class="sp-onboarding__skip"
-				:disabled="isSaving"
 				data-testid="step2-skip"
 				@click="skipForNow"
 			>
