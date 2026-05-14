@@ -311,7 +311,12 @@ function SPApp() {
                 {/* Action bar */}
                 <div style={{ display:'flex', alignItems:'center', gap:5, padding:'0 8px 8px' }}>
                   <button
-                    onMouseDown={e => { e.preventDefault(); setPicker(p => !p); setAtQuery(null); }}
+                    // onMouseDown preserves textarea focus (preventDefault stops the
+                    // blur); onClick handles the actual toggle so keyboard activation
+                    // (Enter / Space on a focused button → dispatches click, not
+                    // mousedown) works for keyboard-only users too.
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={() => { setPicker(p => !p); setAtQuery(null); }}
                     style={{
                       display:'flex', alignItems:'center', gap:3, padding:'2px 7px',
                       background:picker ? c.accentSoft : c.surfAlt,

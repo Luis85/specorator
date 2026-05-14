@@ -371,7 +371,7 @@ function SPFilePicker({ vault, activeIds, onAdd, onRemove, onClose }) {
     }}>
       <div style={{ padding:'7px 10px', borderBottom:`1px solid ${c.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <span style={{ fontSize:SP_T.small, fontWeight:600, color:c.text }}>Add from vault</span>
-        <button onMouseDown={e => { e.preventDefault(); onClose(); }} style={{ background:'none', border:'none', cursor:'pointer', color:c.muted, fontSize:SP_T.body, padding:0, fontFamily:SP_F }}>✕</button>
+        <button onMouseDown={e => e.preventDefault()} onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:c.muted, fontSize:SP_T.body, padding:0, fontFamily:SP_F }}>✕</button>
       </div>
       <div style={{ padding:'5px 8px', borderBottom:`1px solid ${c.borderMid}` }}>
         <div style={{ display:'flex', alignItems:'center', gap:6, background:c.inputBg, border:`1px solid ${c.border}`, borderRadius:5, padding:'4px 8px' }}>
@@ -383,7 +383,7 @@ function SPFilePicker({ vault, activeIds, onAdd, onRemove, onClose }) {
             placeholder="Search vault…"
             style={{ background:'none', border:'none', outline:'none', color:c.text, fontSize:SP_T.small, flex:1, fontFamily:SP_F }}
           />
-          {q && <button onMouseDown={e => { e.preventDefault(); setQ(''); }} style={{ background:'none', border:'none', cursor:'pointer', color:c.muted, fontSize:SP_T.meta, padding:0 }}>✕</button>}
+          {q && <button onMouseDown={e => e.preventDefault()} onClick={() => setQ('')} style={{ background:'none', border:'none', cursor:'pointer', color:c.muted, fontSize:SP_T.meta, padding:0 }}>✕</button>}
         </div>
       </div>
       <div style={{ overflowY:'auto', maxHeight:220, paddingBottom:4 }}>
@@ -400,8 +400,8 @@ function SPFilePicker({ vault, activeIds, onAdd, onRemove, onClose }) {
                   <span style={{ flex:1, fontSize:SP_T.small, color:isAct ? c.accent : c.text, fontWeight:isAct ? 500 : 400, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{f.name}</span>
                   <span style={{ fontSize:SP_T.micro, color:c.muted, flexShrink:0 }}>{f.size}</span>
                   {isAct
-                    ? <button onMouseDown={e => { e.preventDefault(); onRemove(f.id); }} style={{ background:'none', border:'none', cursor:'pointer', padding:0, color:c.muted, fontSize:9 }}>✕</button>
-                    : <button onMouseDown={e => { e.preventDefault(); onAdd(f); }} style={{ background:'none', border:`1px solid ${c.border}`, cursor:'pointer', padding:'1px 6px', borderRadius:3, fontSize:SP_T.micro, color:c.accent, lineHeight:'16px', fontFamily:SP_F }}>+</button>
+                    ? <button onMouseDown={e => e.preventDefault()} onClick={() => onRemove(f.id)} style={{ background:'none', border:'none', cursor:'pointer', padding:0, color:c.muted, fontSize:9 }}>✕</button>
+                    : <button onMouseDown={e => e.preventDefault()} onClick={() => onAdd(f)} style={{ background:'none', border:`1px solid ${c.border}`, cursor:'pointer', padding:'1px 6px', borderRadius:3, fontSize:SP_T.micro, color:c.accent, lineHeight:'16px', fontFamily:SP_F }}>+</button>
                   }
                 </div>
               );
