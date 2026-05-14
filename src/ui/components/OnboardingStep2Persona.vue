@@ -18,12 +18,16 @@ const EXAMPLE_CARDS = [
 ]
 
 const personaText = ref(props.initialValue)
-watch(() => props.initialValue, (val) => { personaText.value = val })
+let pristine = true
+watch(() => props.initialValue, (val) => { if (pristine) personaText.value = val })
 const isSaving = ref(false)
 const saveError = ref<string | null>(null)
 
+function markEdited(): void { pristine = false }
+
 function useCard(text: string): void {
 	personaText.value = text
+	pristine = false
 }
 
 async function saveAndContinue(): Promise<void> {
@@ -39,7 +43,7 @@ async function saveAndContinue(): Promise<void> {
 		saveError.value = "We couldn't save your introduction right now. Try again, or skip for now."
 		return
 	}
-	emit('next', { skipped: false })
+	emit('next', { skipped: personaText.value.trim() === '' })
 }
 
 function skipForNow(): void {
@@ -60,6 +64,7 @@ function skipForNow(): void {
 			v-model="personaText"
 			class="sp-onboarding__textarea"
 			aria-label="About you"
+			@input="markEdited"
 			placeholder="For example: I'm a product manager at a scale-up focusing on B2B growth. I spend most of my time on roadmap planning and stakeholder alignment."
 			data-testid="step2-textarea"
 		/>
