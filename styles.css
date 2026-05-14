@@ -1,11 +1,11 @@
 
 /* Screen-reader-only utility — visually hidden but readable by assistive
-   technology. Restored after the PR-ASM-1 build:web regeneration pruned
-   it (Codex P2). Consumed by ContextFileChip.vue and other components
-   that surface accessible labels without visible text. The bundler keeps
-   trimming this rule because no Vue SFC currently declares it inside a
-   scoped <style> block — it lives only as plain CSS, and the
-   SFC-hash-driven pruner doesn't see it as referenced. */
+   technology. Restored after build:web regeneration pruned it again
+   (recurring Codex P2 first seen on PR #325). The bundler keeps trimming
+   this rule because no Vue SFC declares it inside a scoped <style> block —
+   it lives only as plain CSS, and the SFC-hash-driven pruner doesn't see
+   it as referenced. Consumed by ContextFileChip.vue and other components
+   that surface accessible labels without visible text. */
 .specorator-root .sr-only {
   position: absolute;
   width: 1px;
@@ -539,7 +539,36 @@ to { transform: rotate(360deg);
   margin: 0;
 }
 
-.specorator-root :where(.sp-chat-sidebar[data-v-b0475bd3]) {
+.specorator-root :where(.sp-chat__starting-pill[data-v-b2b1ec9e]) {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  padding: 0.15rem 0.625rem;
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+  font-family: var(--font-text);
+  font-size: 0.8125rem;
+  line-height: 1.2;
+}
+
+.specorator-root :where(.sp-chat__resume-badge[data-v-4c612904]) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  background: var(--background-modifier-border);
+  color: var(--sp-resume-badge-fg, var(--interactive-accent));
+  font-size: 0.875rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.specorator-root :where(.sp-chat__resume-glyph[data-v-4c612904]) {
+  display: inline-block;
+}
+
+.specorator-root :where(.sp-chat-sidebar[data-v-ebfc2eb6]) {
   padding: 1rem;
   display: flex;
   flex-direction: column;
@@ -547,18 +576,24 @@ to { transform: rotate(360deg);
   height: 100%;
   box-sizing: border-box;
 }
-.specorator-root :where(.sp-chat__title[data-v-b0475bd3]) {
+.specorator-root :where(.sp-chat__title[data-v-ebfc2eb6]) {
   margin: 0;
   font-size: 1.125rem;
   font-weight: 700;
   color: var(--text-normal);
 }
-.specorator-root :where(.sp-chat__divider[data-v-b0475bd3]) {
+.specorator-root :where(.sp-chat__header[data-v-ebfc2eb6]) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.specorator-root :where(.sp-chat__divider[data-v-ebfc2eb6]) {
   margin: 0;
   border: none;
   border-top: 1px solid var(--background-modifier-border);
 }
-.specorator-root :where(.sp-chat__degraded[data-v-b0475bd3]) {
+.specorator-root :where(.sp-chat__degraded[data-v-ebfc2eb6]) {
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
@@ -567,13 +602,13 @@ to { transform: rotate(360deg);
   flex-direction: column;
   gap: 0.5rem;
 }
-.specorator-root :where(.sp-chat__degraded-heading[data-v-b0475bd3]) {
+.specorator-root :where(.sp-chat__degraded-heading[data-v-ebfc2eb6]) {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
   color: var(--text-normal);
 }
-.specorator-root :where(.sp-chat__degraded-body[data-v-b0475bd3]) {
+.specorator-root :where(.sp-chat__degraded-body[data-v-ebfc2eb6]) {
   margin: 0;
   font-size: 0.875rem;
   color: var(--text-muted);
