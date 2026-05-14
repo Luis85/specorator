@@ -849,8 +849,11 @@ User clicks Send in ChatInput.vue
           //         '--append-system-prompt', stagePreamble,
           //         '--permission-mode', 'dontAsk',
           //         '--disallowedTools', 'Read,Edit,Write,Bash,Glob,Grep,WebFetch,WebSearch']
-          // appended only when resumeSessionId is set:
-          //   ['--resume', sessionId]
+          // ──────────────────────────────────────────────────────────────────────
+          // Conditional resume tail (appended when resumeSessionId is non-null):
+          //   argv.push('--resume', sessionId)
+          //   ↳ this is the only argv emission of '--resume'; see §C6 INVARIANT list
+          // ──────────────────────────────────────────────────────────────────────
           // INVARIANT: argv does NOT contain '--bare'
         → spawn(binary, argv)
         → NdjsonLineStream.onSystemInit(({ session_id }) => thread.sessionId = session_id)
@@ -1023,13 +1026,31 @@ encapsulated entirely behind the port.
 Internally on the subprocess transport, the adapter exposes an additional method
 `runStructured(prompt, options)` typed at the infrastructure layer; this is *not*
 part of `ClaudeCliPort` (which is unchanged in shape) but is reachable via a tagged
-discriminator check in `queryStructured`. Concretely, `ClaudeSubprocessAdapter`
+discriminator on the adapter instance. Concretely, `ClaudeSubprocessAdapter`
 carries a `readonly kind: 'subprocess' = 'subprocess'` field, and `queryStructured`
-performs a single guard — `if (port.kind === 'subprocess') return port.runStructured(...)` —
-before calling the structured method. The SDK adapter has no such field, so the
-guard fails closed and `queryStructured` returns `err(ClaudeCliError{NOT_INSTALLED})`
-on the SDK transport. This guard is the single place where the port is widened, and
-it is unit-tested for both adapters.
+performs a single guard before calling the structured method:
+
+```ts
+// src/application/chat/queryStructured.ts (sketch)
+interface StructuredCapable extends ClaudeCliPort {
+  readonly kind: 'subprocess'
+  runStructured(prompt: string, options: StructuredOptions):
+    Promise<Result<StructuredCliRawResult, ClaudeCliError>>
+}
+
+function isStructuredCapable(port: ClaudeCliPort): port is StructuredCapable {
+  return (port as { kind?: string }).kind === 'subprocess'
+}
+
+if (!isStructuredCapable(port)) {
+  return err(new ClaudeCliError('NOT_INSTALLED', 'Structured output requires the subscription transport.'))
+}
+return port.runStructured(prompt, options)
+```
+
+The SDK adapter has no `kind` field, so the user-defined type guard fails closed
+and the SDK path returns `err(ClaudeCliError{NOT_INSTALLED})`. This guard is the
+single place where the port is widened, and it is unit-tested for both adapters.
 
 Alternative considered and rejected: widening `ClaudeCliPort` with a new method.
 Rejected because the SDK transport cannot implement it identically, and ADR-008's
