@@ -216,7 +216,7 @@ Settings tab additions and a `CLI_LAUNCH_FAILED` degraded heading.
 - **Estimate:** S
 - **Definition of done:**
   - [ ] T-ASM-012 tests pass.
-  - [ ] `implements ClaudeCliPort` and structurally satisfies `SubscriptionCapable` (declared once §2.9 lands in PR-ASM-2; in PR-ASM-1 the `kind` discriminator is present even though the interface is added later).
+  - [ ] `implements ClaudeCliPort` declared on the class; public `readonly kind = 'subscription'` discriminator present (the `SubscriptionCapable` interface itself is declared by T-ASM-039 in PR-ASM-2 — the structural-narrowing test lives there, not here).
   - [ ] Lint and type checks green.
 
 ### T-ASM-014 🔨 — Extend `PluginSettings` with `claudeCliPath` and `transportKind`
@@ -560,12 +560,12 @@ not invoked from production UI.
 - **Satisfies:** REQ-ASM-001, REQ-ASM-021, REQ-ASM-049
 - **Owner:** dev
 - **PR group:** PR-ASM-2
-- **Depends on:** T-ASM-038
+- **Depends on:** T-ASM-013, T-ASM-038
 - **Estimate:** M
 - **Definition of done:**
   - [ ] T-ASM-038 tests pass.
   - [ ] `runStructured` spawns short-lived process; never registered in `_streamingProc` (REQ-ASM-049).
-  - [ ] `SubscriptionCapable` interface declared once, both adapters narrowing test green.
+  - [ ] `SubscriptionCapable` interface declared once in `src/domain/ports/ClaudeCliPort.ts` (per spec §2.9), both adapters narrowing test green.
 
 ### T-ASM-040 🧪 — Tests for `assembleSystemPrompt` concatenation order in `ChatSidebar`
 
@@ -1149,7 +1149,20 @@ SPEC §13.4 release-blockers checklist.
   - [ ] Test asserts `data-testid="chat-response-structured-fail"` visible.
   - [ ] Test asserts raw model output does not appear in any rendered text node.
 
-### T-ASM-083 📚 — Implementation log + ADR cross-reference
+### T-ASM-083 🧪 — CCS-inheritance audit for REQ-ASM-051/052/053
+
+- **Description:** `tests/integration/ccs-inheritance.test.ts`. Verifies the active-file auto-context path inherited from CCS (REQ-CCS-005 / REQ-CCS-006) still functions under the subscription transport: (a) `setActiveFile(file)` populates the context preamble (REQ-ASM-051), (b) `setActiveFile(null)` clears it (REQ-ASM-052), (c) the file-menu "Use as chat context" action wires into the same store action (REQ-ASM-053). No new production code — pure verification that the CCS happy path is unbroken when `port.kind === 'subscription'`. Runs against `fakeModulePorts()` with the `MockClaudeSubprocessAdapter`.
+- **Satisfies:** REQ-ASM-051, REQ-ASM-052, REQ-ASM-053
+- **Owner:** qa
+- **PR group:** PR-ASM-5
+- **Depends on:** T-ASM-073
+- **Estimate:** S
+- **Definition of done:**
+  - [ ] Three assertions: `setActiveFile(file)` populates context, `setActiveFile(null)` clears it, file-menu action invokes the same store action.
+  - [ ] Subscription transport active (`port.kind === 'subscription'`) throughout the run.
+  - [ ] Zero new production code introduced by this task.
+
+### T-ASM-084 📚 — Implementation log + ADR cross-reference
 
 - **Description:** Append a per-PR section to `specs/agent-sidepanel-mvp/implementation-log.md` (created on first PR-ASM-1 commit) summarising what each PR landed and which REQ-ASM IDs closed. Cross-reference ADR-0029, 0030, 0031, 0032 in the final entry for PR-ASM-5. No new requirements implied.
 - **Satisfies:** SPEC-ASM-001 §13.1 (traceability)
@@ -1161,13 +1174,13 @@ SPEC §13.4 release-blockers checklist.
   - [ ] `implementation-log.md` has 5 sections (one per PR) plus a final closing entry.
   - [ ] Each section lists the REQ-ASM IDs closed and ADR references.
 
-### T-ASM-084 🚀 — PR-ASM-5 pre-PR gate (final)
+### T-ASM-085 🚀 — PR-ASM-5 pre-PR gate (final)
 
 - **Description:** Full pre-PR gate on PR-ASM-5 plus the SPEC §13.4 release-blockers checklist sweep.
 - **Satisfies:** SPEC-ASM-001 §13.1, §13.4
 - **Owner:** dev
 - **PR group:** PR-ASM-5
-- **Depends on:** T-ASM-078, T-ASM-079, T-ASM-080, T-ASM-081, T-ASM-082, T-ASM-083
+- **Depends on:** T-ASM-078, T-ASM-079, T-ASM-080, T-ASM-081, T-ASM-082, T-ASM-083, T-ASM-084
 - **Estimate:** S
 - **Definition of done:**
   - [ ] `npm audit --audit-level=high --omit=dev` — 0 high.
@@ -1400,22 +1413,25 @@ graph TD
     T080[T-ASM-080 grep audit test]
     T081[T-ASM-081 telemetry shape test]
     T082[T-ASM-082 structured-fail e2e test]
-    T083[T-ASM-083 implementation-log]
-    T084[T-ASM-084 final PR-ASM-5 gate]
+    T083[T-ASM-083 CCS-inheritance audit]
+    T084[T-ASM-084 implementation-log]
+    T085[T-ASM-085 final PR-ASM-5 gate]
 
     T077 --> T078
-    T078 --> T084
-    T079 --> T084
-    T080 --> T084
-    T081 --> T084
-    T082 --> T084
-    T083 --> T084
+    T078 --> T085
+    T079 --> T085
+    T080 --> T085
+    T081 --> T085
+    T082 --> T085
+    T083 --> T085
+    T084 --> T085
   end
 
   %% Cross-PR ordering — each PR merges before the next is opened.
   T023 --> T024
   T023 --> T031
   T023 --> T044
+  T013 --> T039
   T043 --> T059
   T043 --> T063
   T058 --> T077
@@ -1476,20 +1492,21 @@ T-ASM-043, T-ASM-058, T-ASM-076) which gate the next PR's opening.
 - T-ASM-080 (static grep)
 - T-ASM-081 (telemetry shape)
 - T-ASM-082 (structured-fail e2e)
-- T-ASM-083 (implementation log)
+- T-ASM-083 (CCS-inheritance audit)
+- T-ASM-084 (implementation log)
 
 ---
 
 ## Quality gate
 
-- [x] Each task has estimate S or M (no L). 84 tasks total: 73 S, 11 M.
-- [x] Each task has a stable `T-ASM-NNN` ID (T-ASM-001 through T-ASM-084, contiguous).
+- [x] Each task has estimate S or M (no L). 85 tasks total: 67 S, 18 M.
+- [x] Each task has a stable `T-ASM-NNN` ID (T-ASM-001 through T-ASM-085, contiguous).
 - [x] Each task references at least one REQ-ASM / NFR-ASM / TEST-ASM / SPEC-ASM ID.
 - [x] Dependencies explicit for every task (within and across PRs).
 - [x] Each task has a Definition of Done with concrete observable outcomes.
 - [x] TDD ordering: every implementation (🔨) task is preceded by a sibling test (🧪) task in the same PR.
 - [x] Owner assigned per task (`dev` for implementation / scaffolding / gate, `qa` for test tasks).
-- [x] Every PR ends with a `🚀 pre-PR gate` task (T-ASM-023, T-ASM-043, T-ASM-058, T-ASM-076, T-ASM-084).
+- [x] Every PR ends with a `🚀 pre-PR gate` task (T-ASM-023, T-ASM-043, T-ASM-058, T-ASM-076, T-ASM-085).
 - [x] Every REQ-ASM-001…055 (55 functional) covered by at least one task: REQ-ASM-001 (T-001/003/011/013/020/022), REQ-ASM-002 (T-004/005/014/020/021/071/073/075), REQ-ASM-003 (T-004/005/020/021/075), REQ-ASM-004 (T-014/016/017/018), REQ-ASM-005 (T-008/009/018), REQ-ASM-006 (T-006/007), REQ-ASM-007 (T-077/078/079/080), REQ-ASM-008 (T-016/017/018/074), REQ-ASM-009 (T-003/010/011/019/073), REQ-ASM-010 (T-010/011), REQ-ASM-011 (T-024/026), REQ-ASM-012 (T-025/026), REQ-ASM-013 (T-003/029/030/040/041), REQ-ASM-014 (T-029/030/041), REQ-ASM-015 (T-025/026), REQ-ASM-016 (T-029/030), REQ-ASM-017 (T-027/028), REQ-ASM-018 (T-029/030/040/041), REQ-ASM-019 (T-029/030/040/041), REQ-ASM-020 (T-029/030), REQ-ASM-021 (T-006/007/038/039), REQ-ASM-022 (T-032/033), REQ-ASM-023 (T-031/032/033/034/035), REQ-ASM-024 (T-034/035), REQ-ASM-025 (T-031/034/035/042/082), REQ-ASM-026 (T-006/007), REQ-ASM-027 (T-006/007), REQ-ASM-028 (T-006/007), REQ-ASM-029 (T-010/011), REQ-ASM-030 (T-010/011), REQ-ASM-031 (T-002/010/011/050/051/052), REQ-ASM-032 (T-044/045), REQ-ASM-033 (T-046/048), REQ-ASM-034 (T-046/048/057), REQ-ASM-035 (T-002/003/049/050/055/056/057), REQ-ASM-036 (T-079), REQ-ASM-037 (T-002/051/052/053/054/057), REQ-ASM-038 (T-046/048), REQ-ASM-039 (T-047/048), REQ-ASM-040 (T-047/048/057), REQ-ASM-041 (T-051/052/063/064/068/070/073), REQ-ASM-042 (T-069/070/073), REQ-ASM-043 (T-065/067/072), REQ-ASM-044 (T-031/059/060/061/062/065/067), REQ-ASM-045 (T-067/072), REQ-ASM-046 (T-048/066/067), REQ-ASM-047 (T-032/033/065/067), REQ-ASM-048 (T-031/036/037/068/070), REQ-ASM-049 (T-012/013/039), REQ-ASM-050 (T-069/070/072/073), REQ-ASM-051…053 (CCS-inherited), REQ-ASM-054 (T-040/041), REQ-ASM-055 (T-072/073/074).
 - [x] Every NFR-ASM-001…012 (12 NFRs) covered: NFR-ASM-001 (T-010/011/055/056), NFR-ASM-002 (T-047/048/057), NFR-ASM-003 (T-030), NFR-ASM-004 (T-009/011/018/077/078/079/080), NFR-ASM-005 (T-010/011/048/081), NFR-ASM-006 (T-010/011), NFR-ASM-007 (T-069/070), NFR-ASM-008 (T-055/056/071), NFR-ASM-009 (T-074), NFR-ASM-010 (T-008/009), NFR-ASM-011 (T-065/067/072), NFR-ASM-012 (T-010/011/081).
 - [x] Every SPEC-ASM-001 §6 / §7 / §8 / §9 / §10 / §13 element is covered by at least one task:
