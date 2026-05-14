@@ -92,11 +92,10 @@ export default class SpecoratorPlugin extends Plugin {
       id: 're-run-setup',
       name: 'Re-run setup',
       callback: () => {
-        void this.updateSettings({ onboardingComplete: false }).then(() =>
-          this.activateView().then(() => {
-            this._dispatchNavigate('/onboarding')
-          }),
-        )
+        void this.updateSettings({ onboardingComplete: false })
+          .then(() => this.activateView())
+          .then(() => { this._dispatchNavigate('/onboarding') })
+          .catch(() => { this.bridge?.showError('Failed to re-run setup. Please try again.') })
       },
     })
 
@@ -124,9 +123,9 @@ export default class SpecoratorPlugin extends Plugin {
     this.app.workspace.onLayoutReady(() => {
       this.detectLegacyVaultLayout()
       if (!this.settings.onboardingComplete) {
-        void this.activateView().then(() => {
-          this._dispatchNavigate('/onboarding')
-        })
+        void this.activateView()
+          .then(() => { this._dispatchNavigate('/onboarding') })
+          .catch(() => { this.bridge?.showError('Failed to open onboarding. Please reopen the panel.') })
       }
     })
   }
