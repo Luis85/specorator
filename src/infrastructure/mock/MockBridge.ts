@@ -71,15 +71,19 @@ export class MockBridge
   }
 
   async listFolders(parent: string): Promise<string[]> {
-    const prefix = parent.endsWith('/') ? parent : `${parent}/`
+    const prefix = parent === '' ? '' : (parent.endsWith('/') ? parent : `${parent}/`)
     const names = new Set<string>()
+    for (const folder of this.folders) {
+      if (folder.startsWith(prefix)) {
+        const rest = folder.slice(prefix.length)
+        if (rest && !rest.includes('/')) names.add(rest)
+      }
+    }
     for (const path of this.files.keys()) {
-      if (path.startsWith(prefix)) {
+      if (!prefix || path.startsWith(prefix)) {
         const rest = path.slice(prefix.length)
         const firstSegment = rest.split('/')[0]
-        if (firstSegment && rest.includes('/')) {
-          names.add(firstSegment)
-        }
+        if (firstSegment && rest.includes('/')) names.add(firstSegment)
       }
     }
     return [...names]

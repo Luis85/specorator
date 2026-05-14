@@ -77,9 +77,14 @@ describe('coreSettingsModule.migrate (v2 → v3 onboardingComplete)', () => {
     expect(out.onboardingComplete).toBe(true)
   })
 
-  it('does NOT inject onboardingComplete for a fresh install (fromVersion=0)', () => {
+  it('does NOT inject onboardingComplete for a fresh install (fromVersion=0, empty blob)', () => {
     const out = migrate(0, {}) as Record<string, unknown>
     expect('onboardingComplete' in out).toBe(false)
+  })
+
+  it('injects onboardingComplete=true for unversioned existing install (fromVersion=0, non-empty blob)', () => {
+    const out = migrate(0, { specsFolder: 'specs', locale: 'en' }) as Record<string, unknown>
+    expect(out.onboardingComplete).toBe(true)
   })
 
   it('does not inject onboardingComplete when already at v3 or later', () => {
