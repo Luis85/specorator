@@ -123,6 +123,13 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
   private _startupCompleted = false
   private _binaryPath: string | null = null
   private _shutdownCalled = false
+  /**
+   * The `settings.claudeCliPath` value used for the most recent resolve. We
+   * re-run `startup()` whenever this differs from the current setting so a
+   * user who configures the CLI path AFTER first load isn't stuck on
+   * `_available = false` until plugin reload (Codex P1).
+   */
+  private _lastResolvedClaudeCliPath: string | null = null
   private readonly _threads = new Map<string, ThreadProc>()
 
   private readonly _getSettings: () => PluginSettings
@@ -146,17 +153,30 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
   // ── Lifecycle ────────────────────────────────────────────────────────────
 
   /**
-   * Resolve the binary path and cache it. Idempotent (subsequent calls are
-   * no-ops). Never throws — any resolver failure degrades to
-   * `_available = false`. Satisfies REQ-ASM-009, NFR-ASM-006.
+   * Resolve the binary path and cache it. Idempotent on identical input —
+   * subsequent calls re-run only if `settings.claudeCliPath` has changed
+   * since the last successful resolve. Without this, a user who configures
+   * the CLI path AFTER first plugin load would have `_available === false`
+   * for the rest of the session (Codex P1, PR-ASM-1 review).
+   *
+   * Never throws — any resolver failure degrades to `_available = false`.
+   * Satisfies REQ-ASM-009, NFR-ASM-006.
    */
   async startup(): Promise<void> {
-    if (this._startupCompleted) return
+    const settings = this._getSettings()
+    // Short-circuit if we've already resolved against the current setting
+    // value. `_lastResolvedClaudeCliPath` is null sentinel for "never resolved".
+    if (
+      this._startupCompleted &&
+      this._lastResolvedClaudeCliPath === settings.claudeCliPath
+    ) {
+      return
+    }
     this._startupCompleted = true
+    this._lastResolvedClaudeCliPath = settings.claudeCliPath
 
     // Precedence: explicit settings path wins; otherwise call the injected
     // resolver. Empty string == "not configured".
-    const settings = this._getSettings()
     const explicit = settings.claudeCliPath.trim()
 
     if (explicit.length > 0) {

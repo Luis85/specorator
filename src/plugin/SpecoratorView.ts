@@ -223,6 +223,17 @@ export class SpecoratorView extends ItemView {
       // up the new transport on the following call.
       return
     }
+    // Re-run subscription-adapter startup so a freshly-configured CLI path
+    // (or a cleared one) updates `isAvailableSync()` before the selector
+    // reads it. `startup()` is idempotent on identical inputs (Codex P1).
+    // We deliberately fire-and-forget and refresh synchronously now using
+    // the current cached availability; the next bump or message will pick
+    // up the post-startup value if it differed.
+    if (this._options !== null) {
+      void this._options.subscriptionAdapter.startup().then(() => {
+        this._refreshActivePort()
+      })
+    }
     this._refreshActivePort()
   }
 
