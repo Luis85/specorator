@@ -2,6 +2,7 @@ import type { App } from 'obsidian'
 import { PluginSettingTab, Setting } from 'obsidian'
 import type { ModuleDescriptor, SettingsFieldDescriptor } from '@/modules/module'
 import type SpecoratorPlugin from './main'
+import { VIEW_TYPE } from './SpecoratorView'
 
 export class SpecoratorSettingTab extends PluginSettingTab {
   private readonly plugin: SpecoratorPlugin
@@ -63,7 +64,9 @@ export class SpecoratorSettingTab extends PluginSettingTab {
       .addButton((btn) =>
         btn.setButtonText('Re-run setup').onClick(async () => {
           await this.plugin.updateSettings({ onboardingComplete: false })
-          activeWindow.dispatchEvent(new CustomEvent('sp:navigate', { detail: { path: '/onboarding' } }))
+          const leaf = this.plugin.app.workspace.getLeavesOfType(VIEW_TYPE)[0]
+          const win = leaf?.view?.containerEl?.ownerDocument?.defaultView ?? activeWindow
+          win.dispatchEvent(new CustomEvent('sp:navigate', { detail: { path: '/onboarding' } }))
         }),
       )
   }
