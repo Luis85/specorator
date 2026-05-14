@@ -45,9 +45,9 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
    * Satisfies REQ-CCS-003, NFR-CCS-002, SPEC-CCS-001 §5.2.
    */
   async startup(): Promise<void> {
-    const key = this._getSettings().anthropicApiKey
+    const key = this._getSettings().anthropicApiKey.trim()
 
-    // Step 1: Check for empty key.
+    // Step 1: Check for empty/whitespace key.
     if (!key) {
       this._logger.warn(
         'ClaudeCliAdapter.startup(): anthropicApiKey is empty — adapter will not start',
@@ -105,20 +105,37 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
       return err(new ClaudeCliError(this._unavailableCode(), 'ClaudeCliAdapter is not available'))
     }
 
+    // Re-read key at call time so settings changes take effect without restarting the adapter.
+    const currentKey = this._getSettings().anthropicApiKey.trim()
+    if (!currentKey) {
+      return err(new ClaudeCliError('API_KEY_MISSING', 'API key is missing'))
+    }
+    process.env.ANTHROPIC_API_KEY = currentKey
+
     const timeoutMs = this._clampTimeout(options?.timeoutMs)
 
     if (options?.maxTurns !== undefined && options.maxTurns > 1) {
       this._logger.warn('ClaudeCliAdapter.query(): maxTurns > 1 is clamped to 1 in v1')
     }
 
-    const timeoutPromise = this._makeTimeoutPromise(timeoutMs)
-    const queryPromise = this._runSdkQuery(prompt)
+    const controller = new AbortController()
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
 
     try {
-      const responseText = await Promise.race([queryPromise, timeoutPromise])
+      const timeoutPromise = new Promise<never>((_resolve, reject) => {
+        // eslint-disable-next-line obsidianmd/prefer-active-window-timers
+        timeoutId = setTimeout(() => {
+          controller.abort()
+          reject(new ClaudeCliError('TIMEOUT', `Query exceeded ${timeoutMs} ms`))
+        }, timeoutMs)
+      })
+      const responseText = await Promise.race([this._runSdkQuery(prompt, controller), timeoutPromise])
       return ok(responseText)
     } catch (e: unknown) {
       return err(this._mapError(e, timeoutMs))
+    } finally {
+      clearTimeout(timeoutId)
+      controller.abort()
     }
   }
 
@@ -145,24 +162,15 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
   // ── Private helpers ───────────────────────────────────────────────────────
 
   private _unavailableCode(): 'API_KEY_MISSING' | 'NOT_INSTALLED' {
-    return this._getSettings().anthropicApiKey === '' ? 'API_KEY_MISSING' : 'NOT_INSTALLED'
+    return this._getSettings().anthropicApiKey.trim() === '' ? 'API_KEY_MISSING' : 'NOT_INSTALLED'
   }
 
   private _clampTimeout(raw?: number): number {
     return Math.min(Math.max(raw ?? 30_000, 1_000), 300_000)
   }
 
-  private _makeTimeoutPromise(timeoutMs: number): Promise<never> {
-    return new Promise<never>((_resolve, reject) => {
-      // eslint-disable-next-line obsidianmd/prefer-active-window-timers
-      setTimeout(() => {
-        reject(new ClaudeCliError('TIMEOUT', `Query exceeded ${timeoutMs} ms`))
-      }, timeoutMs)
-    })
-  }
-
-  private async _runSdkQuery(prompt: string): Promise<string> {
-    const gen = sdkQuery({ prompt, options: { maxTurns: 1 } })
+  private async _runSdkQuery(prompt: string, controller: AbortController): Promise<string> {
+    const gen = sdkQuery({ prompt, options: { maxTurns: 1, abortController: controller } })
     let resultText: string | undefined
     for await (const message of gen) {
       if (message.type === 'result' && 'result' in message) {
