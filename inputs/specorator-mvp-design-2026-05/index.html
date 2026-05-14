@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Specorator — Obsidian Plugin</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #111113; --bg-s: #17171a; --bg-m: #1c1c20;
+  --brd: rgba(255,255,255,0.07); --t0: #d0d0d6; --t1: #72727a; --t2: #3e3e46;
+  --blue: #5090cc; --green: #48aa6a; --purp: #9a6fc8; --teal: #4abcaa;
+  --f: 'Inter', system-ui, sans-serif;
+}
+html, body { height: 100%; background: var(--bg); color: var(--t0); font-family: var(--f); }
+body { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 40px; }
+
+.wrap { width: 100%; max-width: 520px; }
+
+.logo { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t2); margin-bottom: 28px; }
+.logo span { color: var(--purp); }
+
+h1 { font-size: 32px; font-weight: 300; letter-spacing: -0.6px; color: var(--t0); margin-bottom: 8px; }
+h1 strong { font-weight: 700; }
+.lead { font-size: 14px; color: var(--t1); line-height: 1.65; margin-bottom: 40px; max-width: 420px; }
+
+.cards { display: flex; flex-direction: column; gap: 10px; }
+
+.card {
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px 20px; border-radius: 9px;
+  border: 1px solid var(--brd); background: var(--bg-s);
+  text-decoration: none; transition: border-color 0.12s, background 0.12s;
+}
+.card:hover { border-color: rgba(255,255,255,0.13); background: var(--bg-m); }
+
+.card-ic {
+  width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 17px;
+}
+.ic-proto  { background: rgba(80,144,204,0.12);  color: var(--blue); }
+.ic-brief  { background: rgba(74,188,170,0.12);  color: var(--teal); }
+.ic-stories{ background: rgba(154,111,200,0.12); color: var(--purp); }
+
+.card-body { flex: 1; min-width: 0; }
+.card-title { font-size: 14px; font-weight: 600; color: var(--t0); margin-bottom: 2px; }
+.card-desc  { font-size: 12px; color: var(--t1); line-height: 1.45; }
+
+.card-arr { font-size: 14px; color: var(--t2); flex-shrink: 0; transition: color 0.1s, transform 0.1s; }
+.card:hover .card-arr { color: var(--t0); transform: translateX(3px); }
+
+.footer { margin-top: 36px; font-size: 11.5px; color: var(--t2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">Specorator <span>·</span> Obsidian Plugin</div>
+  <h1><strong>Design</strong> Package</h1>
+  <p class="lead">Full-fidelity prototype, design documentation, and user stories for the Specorator Obsidian plugin — an AI-driven issue, task, and PR workspace.</p>
+
+  <div class="cards">
+    <a class="card" href="Specorator_Screen_v2.html">
+      <div class="card-ic ic-proto">⊙</div>
+      <div class="card-body">
+        <div class="card-title">Interactive Prototype</div>
+        <div class="card-desc">Full-fidelity clickable prototype — Left Sidebar, Main View, Right Sidebar. All interactions wired.</div>
+      </div>
+      <span class="card-arr">→</span>
+    </a>
+
+    <a class="card" href="Specorator_Design_Brief.html">
+      <div class="card-ic ic-brief">◫</div>
+      <div class="card-body">
+        <div class="card-title">Design Brief</div>
+        <div class="card-desc">Component specs, visual language, interaction patterns, and design rationale for all three sections.</div>
+      </div>
+      <span class="card-arr">→</span>
+    </a>
+
+    <a class="card" href="Specorator_User_Stories.html">
+      <div class="card-ic ic-stories">✦</div>
+      <div class="card-body">
+        <div class="card-title">User Stories</div>
+        <div class="card-desc">52 user stories with acceptance criteria, priority levels, and persona mapping across all sections.</div>
+      </div>
+      <span class="card-arr">→</span>
+    </a>
+  </div>
+
+  <div class="footer">3 files · All self-contained HTML · No build step required</div>
+</div>
+</body>
+</html>

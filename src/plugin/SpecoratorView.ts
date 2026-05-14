@@ -18,6 +18,7 @@ import {
 } from '@/infrastructure/bridge/ports'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { FeatureService } from '@/application/feature/FeatureService'
+import { FeedbackService } from '@/application/shared/FeedbackService'
 import { FEATURE_SERVICE_KEY } from '@/ui/composables/useFeatureService'
 import type { ClaudeCliPort } from '@/domain/ports'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
@@ -150,9 +151,10 @@ export class SpecoratorView extends ItemView {
     this.vueApp.provide(COMMUNITY_PLUGIN_PORT, bridge)
     this.vueApp.provide(IS_MOBILE_KEY, Platform.isMobile)
     this.vueApp.provide(SETTINGS_VERSION_KEY, this._settingsVersion)
+    const featureFeedback = new FeedbackService(bridge, bridge)
     this.vueApp.provide(
       FEATURE_SERVICE_KEY,
-      new FeatureService(new FeatureRepository(bridge, bridge, bridge)),
+      new FeatureService(new FeatureRepository(bridge, bridge), featureFeedback),
     )
 
     // Set errorHandler BEFORE mount() so errors thrown during initial render/setup

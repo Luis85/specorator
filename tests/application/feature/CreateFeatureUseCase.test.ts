@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { CreateFeatureUseCase } from '@/application/feature/CreateFeatureUseCase'
 import { AdvanceFeatureStageUseCase } from '@/application/feature/AdvanceFeatureStageUseCase'
-import { ActivateFeatureUseCase } from '@/application/feature/ActivateFeatureUseCase'
+import { FeatureService } from '@/application/feature/FeatureService'
+import { FeedbackService } from '@/application/shared/FeedbackService'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 function makeRepo(bridge: MockBridge) {
-  return new FeatureRepository(bridge, bridge, bridge)
+  return new FeatureRepository(bridge, bridge)
 }
 function makeUseCase(bridge: MockBridge) {
   return new CreateFeatureUseCase(makeRepo(bridge))
@@ -68,11 +69,18 @@ describe('CreateFeatureUseCase', () => {
   it('preserves an existing idea.md and shows a notice (REQ-AVS-005)', async () => {
     await bridge.writeFile('specs/dark-mode/idea.md', '# my handwritten idea\n')
 
+    // FeedbackService must be wired in so the REQ-AVS-005 notice path actually
+    // runs — without it the assertion would silently pass on an empty notices
+    // array.
+    const feedback = new FeedbackService(bridge, bridge)
+    const useCase = new CreateFeatureUseCase(makeRepo(bridge), feedback)
+
     // Manually seed a feature folder without workflow-state.md so save() treats it as new
-    const result = await makeUseCase(bridge).execute({ title: 'Dark mode' })
+    const result = await useCase.execute({ title: 'Dark mode' })
     expect(result.ok).toBe(true)
 
     expect(bridge.getAllFiles()['specs/dark-mode/idea.md']).toBe('# my handwritten idea\n')
+    expect(bridge.getNotices().length).toBeGreaterThanOrEqual(1)
     expect(bridge.getNotices().some((n) => n.message.includes('idea.md'))).toBe(true)
   })
 
@@ -157,7 +165,7 @@ describe('FeatureRepository.delete', () => {
     if (!created.ok) return
 
     // Advance once to create research.md
-    await new ActivateFeatureUseCase(repo).execute({ featureId: created.value.id })
+    await new FeatureService(repo).activateFeature(created.value.id)
     await new AdvanceFeatureStageUseCase(repo).execute({ featureId: created.value.id })
 
     // Both files should exist before deletion
@@ -176,7 +184,7 @@ describe('FeatureRepository.delete', () => {
   })
 })
 
-describe('ActivateFeatureUseCase', () => {
+describe('FeatureService.activateFeature (integration with CreateFeatureUseCase)', () => {
   it('updates workflow-state.md for an existing feature (upsert)', async () => {
     const bridge = new MockBridge()
     const repo = makeRepo(bridge)
@@ -184,9 +192,7 @@ describe('ActivateFeatureUseCase', () => {
     expect(createResult.ok).toBe(true)
     if (!createResult.ok) return
 
-    const activateResult = await new ActivateFeatureUseCase(repo).execute({
-      featureId: createResult.value.id,
-    })
+    const activateResult = await new FeatureService(repo).activateFeature(createResult.value.id)
     expect(activateResult.ok).toBe(true)
     if (!activateResult.ok) return
 
@@ -219,9 +225,7 @@ describe('AdvanceFeatureStageUseCase', () => {
     expect(created.ok).toBe(true)
     if (!created.ok) return
 
-    const activated = await new ActivateFeatureUseCase(repo).execute({
-      featureId: created.value.id,
-    })
+    const activated = await new FeatureService(repo).activateFeature(created.value.id)
     expect(activated.ok).toBe(true)
 
     const advanced = await new AdvanceFeatureStageUseCase(repo).execute({
@@ -240,17 +244,18 @@ describe('AdvanceFeatureStageUseCase', () => {
   it('keeps an existing stage file without overwriting (REQ-AVS-005)', async () => {
     const bridge = new MockBridge()
     const repo = makeRepo(bridge)
+    const feedback = new FeedbackService(bridge, bridge)
 
-    const created = await new CreateFeatureUseCase(repo).execute({ title: 'Search' })
+    const created = await new CreateFeatureUseCase(repo, feedback).execute({ title: 'Search' })
     expect(created.ok).toBe(true)
     if (!created.ok) return
 
-    await new ActivateFeatureUseCase(repo).execute({ featureId: created.value.id })
+    await new FeatureService(repo, feedback).activateFeature(created.value.id)
 
     // Pre-seed the stage file with custom content
     await bridge.writeFile('specs/search/research.md', '# my custom research\n')
 
-    const advanced = await new AdvanceFeatureStageUseCase(repo).execute({
+    const advanced = await new AdvanceFeatureStageUseCase(repo, feedback).execute({
       featureId: created.value.id,
     })
     expect(advanced.ok).toBe(true)
@@ -258,6 +263,7 @@ describe('AdvanceFeatureStageUseCase', () => {
     // Custom file must not be overwritten
     expect(bridge.getAllFiles()['specs/search/research.md']).toBe('# my custom research\n')
     // A notice must have been shown
+    expect(bridge.getNotices().length).toBeGreaterThanOrEqual(1)
     expect(bridge.getNotices().some((n) => n.message.includes('research.md'))).toBe(true)
   })
 

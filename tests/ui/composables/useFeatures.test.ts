@@ -9,7 +9,7 @@ import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { FeatureService } from '@/application/feature/FeatureService'
 
 function makeService(bridge: MockBridge): FeatureService {
-  return new FeatureService(new FeatureRepository(bridge, bridge, bridge))
+  return new FeatureService(new FeatureRepository(bridge, bridge))
 }
 
 function harness(bridge: MockBridge) {

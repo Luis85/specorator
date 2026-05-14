@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Specorator — Design Brief</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:    #111113;
+  --bg-s:  #17171a;
+  --bg-m:  #1c1c20;
+  --bg-h:  #222228;
+  --brd:   rgba(255,255,255,0.07);
+  --brd2:  rgba(255,255,255,0.04);
+  --t0:    #d0d0d6;
+  --t1:    #72727a;
+  --t2:    #3e3e46;
+
+  --blue:   #5090cc;
+  --green:  #48aa6a;
+  --amber:  #b8832a;
+  --purp:   #9a6fc8;
+  --teal:   #4abcaa;
+  --red:    #b85050;
+
+  --f:   'Inter', system-ui, sans-serif;
+  --fm:  'JetBrains Mono', monospace;
+
+  --max: 820px;
+  --col-left: 260px;
+}
+
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--f); font-size: 14px; line-height: 1.6;
+  background: var(--bg); color: var(--t0);
+  min-height: 100vh;
+}
+
+/* ─── TOP NAV ───────────────────────────────── */
+.topnav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(17,17,19,0.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--brd);
+  display: flex; align-items: center; gap: 0;
+  padding: 0 40px; height: 48px;
+}
+.logo {
+  font-size: 13px; font-weight: 700; letter-spacing: 0.04em;
+  color: var(--t0); margin-right: 32px; white-space: nowrap;
+}
+.logo span { color: var(--purp); }
+.nav-links { display: flex; gap: 0; }
+.nav-a {
+  font-size: 12.5px; color: var(--t1); padding: 0 14px; height: 48px;
+  display: flex; align-items: center; cursor: pointer;
+  border-bottom: 2px solid transparent; transition: all 0.1s;
+  text-decoration: none; white-space: nowrap;
+}
+.nav-a:hover { color: var(--t0); }
+.nav-a.active { color: var(--t0); border-bottom-color: var(--purp); }
+.nav-badge {
+  margin-left: 6px; font-size: 9px; font-weight: 700;
+  background: rgba(154,111,200,0.15); color: var(--purp);
+  border-radius: 10px; padding: 1px 6px;
+}
+
+/* ─── PAGE LAYOUT ───────────────────────────── */
+.page { display: flex; gap: 0; max-width: 1200px; margin: 0 auto; padding: 0 40px 80px; }
+
+.toc {
+  width: var(--col-left); flex-shrink: 0;
+  position: sticky; top: 48px; align-self: flex-start;
+  padding: 32px 0 32px 0; max-height: calc(100vh - 48px); overflow-y: auto;
+}
+.toc-section { margin-bottom: 24px; }
+.toc-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em;
+  color: var(--t2); padding: 0 0 8px 0; display: block;
+}
+.toc-item {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12.5px; color: var(--t1); padding: 5px 10px 5px 0;
+  cursor: pointer; text-decoration: none; border-radius: 4px;
+  transition: color 0.1s;
+}
+.toc-item:hover { color: var(--t0); }
+.toc-item.active { color: var(--t0); }
+.toc-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--t2); flex-shrink: 0; }
+.toc-item.active .toc-dot { background: var(--purp); }
+
+.content { flex: 1; min-width: 0; padding: 40px 0 0 48px; }
+
+/* ─── SECTION HEADERS ───────────────────────── */
+.brief-section { margin-bottom: 72px; }
+
+.section-eyebrow {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--purp); margin-bottom: 8px;
+}
+.section-title {
+  font-size: 28px; font-weight: 300; color: var(--t0);
+  letter-spacing: -0.5px; line-height: 1.2; margin-bottom: 12px;
+}
+.section-title strong { font-weight: 700; }
+.section-lead {
+  font-size: 15px; color: var(--t1); line-height: 1.7; max-width: 620px;
+  margin-bottom: 36px; padding-bottom: 28px; border-bottom: 1px solid var(--brd);
+}
+
+/* ─── COMPONENT BLOCKS ──────────────────────── */
+.comp { margin-bottom: 40px; }
+.comp-hd {
+  display: flex; align-items: baseline; gap: 12px;
+  margin-bottom: 14px;
+}
+.comp-name {
+  font-size: 15px; font-weight: 600; color: var(--t0); letter-spacing: -0.2px;
+}
+.comp-tag {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+  padding: 2px 8px; border-radius: 10px;
+}
+.tag-nav   { background: rgba(80,144,204,0.12);  color: var(--blue);  }
+.tag-input { background: rgba(72,170,106,0.12);  color: var(--green); }
+.tag-state { background: rgba(184,131,42,0.12);  color: var(--amber); }
+.tag-info  { background: rgba(74,188,170,0.12);  color: var(--teal);  }
+.tag-action{ background: rgba(154,111,200,0.12); color: var(--purp);  }
+
+.comp-body {
+  background: var(--bg-s); border: 1px solid var(--brd);
+  border-radius: 8px; overflow: hidden;
+}
+
+/* property rows */
+.prop-row {
+  display: grid; grid-template-columns: 160px 1fr;
+  gap: 0; border-bottom: 1px solid var(--brd2);
+}
+.prop-row:last-child { border-bottom: none; }
+.prop-key {
+  font-size: 11.5px; font-weight: 600; color: var(--t1);
+  padding: 10px 16px; background: rgba(255,255,255,0.015);
+  border-right: 1px solid var(--brd2);
+}
+.prop-val {
+  font-size: 12.5px; color: var(--t0); padding: 10px 16px; line-height: 1.55;
+}
+.prop-val code {
+  font-family: var(--fm); font-size: 11px;
+  background: rgba(255,255,255,0.07); padding: 1px 6px; border-radius: 3px;
+  color: #c07a44;
+}
+
+/* interaction chips */
+.ix-row { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 16px; border-top: 1px solid var(--brd2); }
+.ix {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 500;
+}
+.ix-click  { background: rgba(80,144,204,0.1);  color: var(--blue);  border: 1px solid rgba(80,144,204,0.2);  }
+.ix-toggle { background: rgba(184,131,42,0.1);  color: var(--amber); border: 1px solid rgba(184,131,42,0.2);  }
+.ix-nav    { background: rgba(72,170,106,0.1);  color: var(--green); border: 1px solid rgba(72,170,106,0.2);  }
+.ix-input  { background: rgba(154,111,200,0.1); color: var(--purp);  border: 1px solid rgba(154,111,200,0.2); }
+.ix-gate   { background: rgba(74,188,170,0.1);  color: var(--teal);  border: 1px solid rgba(74,188,170,0.2);  }
+
+/* visual spec */
+.vspec {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1px; background: var(--brd2); border-top: 1px solid var(--brd2);
+}
+.vspec-item { background: var(--bg-s); padding: 12px 16px; }
+.vspec-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--t2); margin-bottom: 4px; }
+.vspec-val   { font-size: 12px; color: var(--t0); font-family: var(--fm); }
+
+/* states list */
+.states { padding: 12px 16px; border-top: 1px solid var(--brd2); display: flex; flex-direction: column; gap: 6px; }
+.state-row { display: flex; align-items: flex-start; gap: 10px; }
+.state-ic { font-size: 11px; width: 16px; text-align: center; flex-shrink: 0; padding-top: 1px; }
+.state-desc { font-size: 12.5px; color: var(--t1); line-height: 1.45; }
+.state-desc strong { color: var(--t0); font-weight: 600; }
+
+/* flow diagram */
+.flow {
+  padding: 16px 20px; border-top: 1px solid var(--brd2);
+  font-family: var(--fm); font-size: 11.5px; color: var(--t1);
+  line-height: 2;
+}
+.flow-step { display: flex; align-items: center; gap: 10px; }
+.flow-arrow { color: var(--t2); }
+.flow-hl { color: var(--t0); font-weight: 500; }
+.flow-tag {
+  font-size: 10px; padding: 1px 7px; border-radius: 10px;
+  background: rgba(154,111,200,0.1); color: var(--purp);
+  font-family: var(--f); font-weight: 600; letter-spacing: 0.04em;
+}
+
+/* divider */
+.brief-divider {
+  width: 100%; height: 1px; background: var(--brd);
+  margin: 48px 0;
+}
+
+/* subsection label */
+.sub-section-label {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.09em; color: var(--t2);
+  margin: 36px 0 20px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--brd);
+}
+
+/* note callout */
+.note {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: rgba(154,111,200,0.05); border: 1px solid rgba(154,111,200,0.18);
+  border-radius: 7px; padding: 12px 16px; margin-bottom: 20px;
+}
+.note-ic { color: var(--purp); font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+.note-text { font-size: 13px; color: var(--t1); line-height: 1.6; }
+.note-text strong { color: var(--t0); }
+
+/* color swatch row */
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 16px; border-top: 1px solid var(--brd2); }
+.swatch { display: flex; align-items: center; gap: 8px; }
+.swatch-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.swatch-name { font-size: 11.5px; color: var(--t1); }
+
+/* footer */
+.brief-footer {
+  margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--brd);
+  font-size: 12px; color: var(--t2);
+}
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="logo">Specorator <span>·</span> Design Brief</div>
+  <div class="nav-links">
+    <a class="nav-a active" href="#left-sidebar">Left Sidebar</a>
+    <a class="nav-a" href="#main-view">Main View</a>
+    <a class="nav-a" href="#right-sidebar">Right Sidebar</a>
+  </div>
+</nav>
+
+<div class="page">
+
+  <!-- TOC -->
+  <aside class="toc">
+    <div class="toc-section">
+      <span class="toc-label">Left Sidebar</span>
+      <a class="toc-item" href="#actions"><div class="toc-dot"></div>Actions</a>
+      <a class="toc-item" href="#issues-nav"><div class="toc-dot"></div>Issues Navigation</a>
+      <a class="toc-item" href="#pr-nav"><div class="toc-dot"></div>Pull Requests</a>
+      <a class="toc-item" href="#sidebar-visual"><div class="toc-dot"></div>Visual Language</a>
+    </div>
+    <div class="toc-section">
+      <span class="toc-label">Main View</span>
+      <a class="toc-item" href="#topbar"><div class="toc-dot"></div>Topbar &amp; Actbar</a>
+      <a class="toc-item" href="#issue-workspace"><div class="toc-dot"></div>Issue Workspace</a>
+      <a class="toc-item" href="#pr-detail"><div class="toc-dot"></div>PR Detail</a>
+      <a class="toc-item" href="#task-detail"><div class="toc-dot"></div>Task Detail</a>
+      <a class="toc-item" href="#activity-feed"><div class="toc-dot"></div>Activity Feed</a>
+    </div>
+    <div class="toc-section">
+      <span class="toc-label">Right Sidebar</span>
+      <a class="toc-item" href="#tasks-panel"><div class="toc-dot"></div>Tasks Panel</a>
+      <a class="toc-item" href="#agents-panel"><div class="toc-dot"></div>Agents Panel</a>
+      <a class="toc-item" href="#pr-panel"><div class="toc-dot"></div>PR Panel</a>
+      <a class="toc-item" href="#ai-footer"><div class="toc-dot"></div>AI Footer</a>
+    </div>
+  </aside>
+
+  <!-- Content -->
+  <main class="content">
+
+    <!-- ════════════════════════════════
+         SECTION 1 — LEFT SIDEBAR
+    ════════════════════════════════ -->
+    <div class="brief-section" id="left-sidebar">
+      <div class="section-eyebrow">Section 01</div>
+      <h1 class="section-title"><strong>Left Sidebar</strong></h1>
+      <p class="section-lead">The left sidebar is the workspace navigator. It provides immediate access to AI-driven actions, a list of recent issues, and an overview of open pull requests. It is intentionally narrow and dense — designed for quick scanning and single-click navigation, not detailed reading.</p>
+
+      <div class="sub-section-label" id="actions">Actions</div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Activity Feed</span>
+          <span class="comp-tag tag-nav">Navigation</span>
+          <span class="comp-tag tag-info">Global</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Purpose</span><span class="prop-val">Entry point to the global event log — all agent actions, proposals, CI events, PR openings, and task completions across the entire workspace.</span></div>
+          <div class="prop-row"><span class="prop-key">Badge</span><span class="prop-val">Shows the total event count. Teal color to distinguish from issue/PR triage badges.</span></div>
+          <div class="prop-row"><span class="prop-key">Visual</span><span class="prop-val">Teal <code>◎</code> icon, teal badge. Different from the purple AI action buttons to signal this is observational rather than directive.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-nav">→ Loads Activity Feed in main view</span>
+            <span class="ix ix-click">Deactivates all issue/PR rows</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Triage Issues / Triage PRs</span>
+          <span class="comp-tag tag-action">AI Action</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Purpose</span><span class="prop-val">Trigger an AI agent to review and prioritize the backlog of open issues or PRs, creating a focused triage task in the work queue.</span></div>
+          <div class="prop-row"><span class="prop-key">Badge</span><span class="prop-val">Purple badge showing the count of untriaged items. Communicates urgency without blocking the user.</span></div>
+          <div class="prop-row"><span class="prop-key">Feedback</span><span class="prop-val">Shows a toast notification on activation. Adds a new backlog task visible in the right panel Tasks list.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-click">Creates backlog task</span>
+            <span class="ix ix-input">Toast confirmation</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">New Issue</span>
+          <span class="comp-tag tag-input">Creation</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Purpose</span><span class="prop-val">Open the New Issue modal. Green accent differentiates it from the AI triage actions — this is a deliberate user-initiated creation event.</span></div>
+          <div class="prop-row"><span class="prop-key">Modal fields</span><span class="prop-val">Title (required), Type (feat / fix / research / chore / docs), Scope (plugin-shell / tooling / ui / infra), Description (optional), Assign Agent (optional).</span></div>
+          <div class="prop-row"><span class="prop-key">On submit</span><span class="prop-val">Injects a new <code>i-row</code> at the top of the Recent list. Shows a numbered toast. Does not navigate automatically.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-click">Opens modal overlay</span>
+            <span class="ix ix-input">Validates title on submit</span>
+            <span class="ix ix-nav">Injects row into sidebar</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sub-section-label" id="issues-nav">Issues Navigation</div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Issues Section Header</span>
+          <span class="comp-tag tag-toggle">Collapsible</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Collapse</span><span class="prop-val">Clicking the header collapses the full issues list (groups + recent rows) with a smooth <code>max-height</code> animation. Chevron flips ▾ → ›.</span></div>
+          <div class="prop-row"><span class="prop-key">Groups</span><span class="prop-val">"My Issues" and "Created Issues" are filter shortcuts. Currently show a contextual toast; in production these would apply a filter to the recent list.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-toggle">Toggle collapses/expands with animation</span>
+            <span class="ix ix-click">Group rows show toast on click</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Issue Row</span>
+          <span class="comp-tag tag-nav">Navigation</span>
+          <span class="comp-tag tag-state">Active State</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Layout</span><span class="prop-val">Type-colored avatar circle (letter) · issue number in monospace · truncated title with ellipsis.</span></div>
+          <div class="prop-row"><span class="prop-key">Active state</span><span class="prop-val">Left border accent in <code>--blue</code>, slightly elevated background, trailing <code>→</code> arrow appended via JS. Only one row active at a time.</span></div>
+          <div class="prop-row"><span class="prop-key">Navigation</span><span class="prop-val">Reads the <code>.i-num</code> text content to extract the issue number. Sets <code>S.issueId</code> and calls <code>goToIssue()</code>, which re-renders the main view and syncs the active row.</span></div>
+          <div class="prop-row"><span class="prop-key">Type colors</span><span class="prop-val">feat → muted purple, fix → muted red, research → muted teal, req → muted blue, ui → muted rose.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-nav">→ Loads issue workspace in main view</span>
+            <span class="ix ix-click">Active row state tracks S.issueId</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sub-section-label" id="pr-nav">Pull Requests</div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Pull Requests Section</span>
+          <span class="comp-tag tag-nav">Navigation</span>
+          <span class="comp-tag tag-state">Starts Collapsed</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Default state</span><span class="prop-val">Collapsed on load to keep focus on issues. Count badge visible in the header. Expands on click with the same <code>max-height</code> animation as Issues.</span></div>
+          <div class="prop-row"><span class="prop-key">PR row layout</span><span class="prop-val">Status icon (● open, ◐ draft, ✓ merged) · PR number in monospace · truncated title · colored dot indicator. Status colors: green = open, amber = draft, purple = merged.</span></div>
+          <div class="prop-row"><span class="prop-key">Navigation</span><span class="prop-val">Clicking a row sets <code>S.prId</code>, <code>S.main = 'pr'</code>, <code>S.right = 'pr'</code>. Loads both the PR detail in main and the PR action panel in the right sidebar simultaneously.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-toggle">Header toggles expand/collapse</span>
+            <span class="ix ix-nav">→ Loads PR detail + PR right panel</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sub-section-label" id="sidebar-visual">Visual Language</div>
+
+      <div class="comp">
+        <div class="comp-hd"><span class="comp-name">Sidebar Specifications</span></div>
+        <div class="comp-body">
+          <div class="vspec">
+            <div class="vspec-item"><div class="vspec-label">Width</div><div class="vspec-val">240px fixed</div></div>
+            <div class="vspec-item"><div class="vspec-label">Background</div><div class="vspec-val">--bg-s (#191919)</div></div>
+            <div class="vspec-item"><div class="vspec-label">Row height</div><div class="vspec-val">~26px (3px+3px padding)</div></div>
+            <div class="vspec-item"><div class="vspec-label">Font size</div><div class="vspec-val">11.5px rows, 10px labels</div></div>
+            <div class="vspec-item"><div class="vspec-label">Active border</div><div class="vspec-val">2px left, --blue</div></div>
+            <div class="vspec-item"><div class="vspec-label">Section labels</div><div class="vspec-val">10px, uppercase, --t2</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="brief-divider"></div>
+
+    <!-- ════════════════════════════════
+         SECTION 2 — MAIN VIEW
+    ════════════════════════════════ -->
+    <div class="brief-section" id="main-view">
+      <div class="section-eyebrow">Section 02</div>
+      <h1 class="section-title"><strong>Main View</strong></h1>
+      <p class="section-lead">The main view is the primary reading and working surface. It occupies the center column and adapts its content to four distinct states: Issue Workspace, PR Detail, Task Detail, and Activity Feed. Each state has a consistent structural grammar — eyebrow, title, meta, body — borrowed from editorial design to create a readable, information-dense layout without visual noise.</p>
+
+      <div class="sub-section-label" id="topbar">Topbar &amp; Actbar</div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Topbar (Breadcrumb)</span>
+          <span class="comp-tag tag-nav">Navigation</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Purpose</span><span class="prop-val">Shows the current location as a breadcrumb trail. Single crumb for top-level views (issue, PR, activity). Two-crumb trail for nested views (issue › task, issue › PR).</span></div>
+          <div class="prop-row"><span class="prop-key">Interactivity</span><span class="prop-val">Non-terminal crumbs are clickable and navigate up the hierarchy. Terminal crumb is styled in <code>--t0</code> and is non-interactive.</span></div>
+          <div class="prop-row"><span class="prop-key">Dynamic label</span><span class="prop-val">Reads from <code>S.issueId</code> / <code>S.prId</code> / <code>S.taskId</code> at render time. No hardcoded strings.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-nav">Parent crumb navigates up</span>
+            <span class="ix ix-click">Terminal crumb is non-interactive</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Action Bar (Actbar)</span>
+          <span class="comp-tag tag-action">Contextual Actions</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Visibility</span><span class="prop-val">Shown on Issue and PR views. Hidden on Task Detail and Activity Feed. Uses <code>hidden</code> class toggled by <code>renderMain()</code>.</span></div>
+          <div class="prop-row"><span class="prop-key">Issue actions</span><span class="prop-val">✦ Triage Issue · ⊕ Break Down Issue · ⊙ Create PR · ✎ Edit Issue</span></div>
+          <div class="prop-row"><span class="prop-key">PR actions</span><span class="prop-val">✦ Triage PR (surfacing refinement gaps)</span></div>
+          <div class="prop-row"><span class="prop-key">Button hierarchy</span><span class="prop-val">Primary AI actions use colored tints (purple = triage, teal = breakdown). Secondary actions use ghost style. Right side shows a contextual hint string.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-action">Triage queues AI backlog task</span>
+            <span class="ix ix-toggle">Breakdown shows/dismisses card</span>
+            <span class="ix ix-nav">Create PR injects into sidebar</span>
+            <span class="ix ix-click">Edit Issue opens pre-filled modal</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sub-section-label" id="issue-workspace">Issue Workspace</div>
+
+      <div class="note">
+        <span class="note-ic">✦</span>
+        <div class="note-text">The Issue Workspace is the most complex view in the product. It functions as a <strong>living brief</strong> — combining the spec, agent proposals awaiting review, task progress, and linked artifacts into a single scrollable document.</div>
+      </div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Issue Header</span>
+          <span class="comp-tag tag-info">Always Visible</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Eyebrow</span><span class="prop-val">Scope · type, e.g. <code>plugin-shell · feat</code>. Uppercase, muted, 10px.</span></div>
+          <div class="prop-row"><span class="prop-key">Title</span><span class="prop-val">20px, light weight (400). Optional subtitle in 300 weight below.</span></div>
+          <div class="prop-row"><span class="prop-key">Meta row</span><span class="prop-val">Status badge (Open/Closed) · issue number · scope label · opened timestamp. All interactive — badge toggles status, number shows toast, scope shows toast.</span></div>
+          <div class="prop-row"><span class="prop-key">Description</span><span class="prop-val">12.5px, <code>--t1</code>, up to 640px max-width. May contain inline <code>code</code> spans.</span></div>
+          <div class="prop-row"><span class="prop-key">Context block</span><span class="prop-val">Optional. Shown when <code>ISSUE.context</code> is non-empty. Contains acceptance criteria, implementation notes, etc. Has inline "Edit" shortcut. When empty, shows a dashed "+ Add context…" prompt.</span></div>
+          <div class="prop-row"><span class="prop-key">Progress bar</span><span class="prop-val">3px track, green fill. Label shows "X of N tasks complete". Agent count shown in green when agents are running.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-click">Status badge → toggle open/closed</span>
+            <span class="ix ix-click">Scope label → filter toast</span>
+            <span class="ix ix-input">Context prompt → opens Edit modal</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Review Required — Proposal Cards</span>
+          <span class="comp-tag tag-state">Amber / Attention</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Purpose</span><span class="prop-val">Surfaces agent-generated file changes for human review before committing to the vault. Each card is one proposed file creation/modification.</span></div>
+          <div class="prop-row"><span class="prop-key">Card anatomy</span><span class="prop-val">Type badge (File Created / Modified) · file path · line count · description · syntax-highlighted code preview · action buttons.</span></div>
+          <div class="prop-row"><span class="prop-key">Actions</span><span class="prop-val">View diff → opens diff modal. Accept → marks accepted, shows dimmed ghost card, updates section count. Reject → removes from pending.</span></div>
+          <div class="prop-row"><span class="prop-key">Section state</span><span class="prop-val">When all proposals reviewed, section header updates to "✓ All reviewed" in green. Accepted cards show as dimmed stubs. Section persists until navigated away.</span></div>
+          <div class="prop-row"><span class="prop-key">Data model</span><span class="prop-val">Driven by <code>PROPOSALS[]</code> array. Status field: <code>pending | accepted | rejected</code>. Re-render triggered on status change.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-click">View diff → modal with line-by-line diff</span>
+            <span class="ix ix-gate">Accept/Reject → re-renders section</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Task Sections</span>
+          <span class="comp-tag tag-state">In Progress · Up Next · Completed</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">In Progress</span><span class="prop-val">Blue indicator dot. Shows assigned agent name with green pulse dot and "Running" label. CTA button: "View →" navigates to task detail.</span></div>
+          <div class="prop-row"><span class="prop-key">Up Next</span><span class="prop-val">Grey indicator ring. Unassigned tasks show "Assign →" which opens agent picker dropdown. Queued tasks show agent name with amber dot.</span></div>
+          <div class="prop-row"><span class="prop-key">Completed</span><span class="prop-val">Collapsed by default (toggle). Green check indicator. Title has strikethrough. Reduced opacity (0.55).</span></div>
+          <div class="prop-row"><span class="prop-key">Card structure</span><span class="prop-val">Indicator circle · title + sub-line · right column (estimate + CTA). Cards are clickable — navigates to task detail.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-nav">Card click → Task Detail view</span>
+            <span class="ix ix-click">Assign → → agent picker dropdown</span>
+            <span class="ix ix-toggle">Completed section toggle</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Breakdown Card</span>
+          <span class="comp-tag tag-action">AI Suggestion</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Trigger</span><span class="prop-val">⊕ Break Down Issue in the actbar. Prepended to the main content after a 700ms analysis delay. Toggle — clicking again dismisses.</span></div>
+          <div class="prop-row"><span class="prop-key">Content</span><span class="prop-val">Purple-tinted card with numbered sub-task suggestions, each with a label, description, and time estimate. Two actions: "Create Sub-Issues" or "Add as Tasks".</span></div>
+          <div class="prop-row"><span class="prop-key">Confirmation</span><span class="prop-val">On action, card content replaces with a green success message and auto-removes after 2.4s. Tasks are appended to the Up Next section.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-toggle">Actbar button toggles card</span>
+            <span class="ix ix-input">Add as Tasks → appends to task list</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Related Files &amp; Artifacts</span>
+          <span class="comp-tag tag-info">Aggregated</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Purpose</span><span class="prop-val">Provides a complete picture of everything touched by this issue — all file changes from linked PRs plus any accepted/pending proposals. Single source of truth for what has been created or modified.</span></div>
+          <div class="prop-row"><span class="prop-key">Columns</span><span class="prop-val">Kind badge (A/M/D) · file path · source label (PR #N or Proposal) · +adds / −dels.</span></div>
+          <div class="prop-row"><span class="prop-key">Section header</span><span class="prop-val">Shows total file count badge + aggregate +/− tally.</span></div>
+          <div class="prop-row"><span class="prop-key">Clickability</span><span class="prop-val">PR file rows open the per-file diff modal. Proposal rows open the proposal diff modal.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-click">File row → per-file diff modal</span>
+            <span class="ix ix-click">Proposal file → proposal diff modal</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sub-section-label" id="pr-detail">PR Detail</div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">PR Header</span>
+          <span class="comp-tag tag-info">Compact</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Structure</span><span class="prop-val">Eyebrow (scope · pull request) · title (20px, 400 weight) · status badge + PR number + branch pill · author row (avatar + name + CI status) · diff stats bar · description paragraph.</span></div>
+          <div class="prop-row"><span class="prop-key">Description placement</span><span class="prop-val">Flows directly inside the header block, below the diff stats. No separate section heading — matches the issue view's editorial pattern.</span></div>
+          <div class="prop-row"><span class="prop-key">Diff stats bar</span><span class="prop-val">+adds in green · −dels in red · proportional colored bar · commit and file count. Visual summary before diving into files.</span></div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Changed Files</span>
+          <span class="comp-tag tag-nav">Clickable</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">File rows</span><span class="prop-val">Kind badge (A/M/D in green/amber/red) · monospace file path · +adds · −dels. Every row is clickable.</span></div>
+          <div class="prop-row"><span class="prop-key">Diff modal</span><span class="prop-val">Per-file diff with realistic synthetic content for key files. Line-numbered diff with +/- signs and colored backgrounds for add/del/context lines. Hunk header in blue.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-click">Row click → file diff modal</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Activity &amp; Discussion Timeline</span>
+          <span class="comp-tag tag-state">Chronological</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Event types</span><span class="prop-val">Opened · Commits (grouped, expandable) · CI pass/fail · Comment (with Reply) · Review (approved/changes-requested with colored border) · Merged.</span></div>
+          <div class="prop-row"><span class="prop-key">Structure</span><span class="prop-val">Thin left rail (<code>border-left: 1px solid --brd</code>) with positioned dots. Comments use full-width bordered cards. Events use inline text rows.</span></div>
+          <div class="prop-row"><span class="prop-key">Comments</span><span class="prop-val">Author avatar + name + action + timestamp. Reply button toggles inline textarea. Submit with button or Enter (Shift+Enter for newline).</span></div>
+          <div class="prop-row"><span class="prop-key">New comment</span><span class="prop-val">Fixed at the bottom of the timeline. Avatar + textarea + Clear/Comment buttons. Cmd+Enter submits. Posted comments append to the timeline and re-render the section.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-toggle">Reply → inline textarea toggle</span>
+            <span class="ix ix-input">Comment submit → appends to live timeline</span>
+            <span class="ix ix-toggle">Commits group → expandable with "Show N more"</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sub-section-label" id="task-detail">Task Detail</div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Task Detail View</span>
+          <span class="comp-tag tag-state">Metadata + Subtasks</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Breadcrumb</span><span class="prop-val">← Parent issue title #NUM. Clickable, navigates back to the issue workspace preserving <code>S.issueId</code>.</span></div>
+          <div class="prop-row"><span class="prop-key">Meta grid</span><span class="prop-val">2-column grid: Status · Estimate · Issue · Branch · Agent. All interactive.</span></div>
+          <div class="prop-row"><span class="prop-key">Status pill</span><span class="prop-val">Clickable. Cycles: To do → In Progress → Done → To do. Updates <code>TASKS</code> data and shows next-state hint. Re-renders task list in right panel.</span></div>
+          <div class="prop-row"><span class="prop-key">Agent field</span><span class="prop-val">Shows assigned agent with colored status dot and ▾ caret (click to reassign). Unassigned shows "+ Assign agent" link. Both open the agent picker dropdown.</span></div>
+          <div class="prop-row"><span class="prop-key">Issue link</span><span class="prop-val">Clickable, navigates back to the parent issue.</span></div>
+          <div class="prop-row"><span class="prop-key">Branch code</span><span class="prop-val">Click copies (shows toast).</span></div>
+          <div class="prop-row"><span class="prop-key">Subtasks</span><span class="prop-val">Checkbox rows. Click toggles done/undone state locally. Checked items get strikethrough + muted color.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-click">Status pill → cycle status</span>
+            <span class="ix ix-click">Agent field → picker dropdown</span>
+            <span class="ix ix-toggle">Subtask → local toggle</span>
+            <span class="ix ix-nav">Issue link → parent issue</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sub-section-label" id="activity-feed">Activity Feed</div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Global Activity Feed</span>
+          <span class="comp-tag tag-info">Workspace-wide</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Purpose</span><span class="prop-val">A reverse-chronological log of all meaningful events across every issue, PR, agent, and proposal in the workspace. Provides situational awareness without navigating into individual issues.</span></div>
+          <div class="prop-row"><span class="prop-key">Grouping</span><span class="prop-val">Events grouped by day (Today / Yesterday / N days ago). Each group has a bold uppercase date label above a list of event rows.</span></div>
+          <div class="prop-row"><span class="prop-key">Event row</span><span class="prop-val">Agent avatar (if agent-driven) or type icon · event description · source label (Issue #N or PR #N) · relative timestamp. Every row is clickable — navigates to the referenced issue or PR.</span></div>
+          <div class="prop-row"><span class="prop-key">Event types</span><span class="prop-val">Agent action (blue dot), Proposal created/accepted (amber/green), CI pass/fail, PR opened/merged, Task completed, Issue closed.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-nav">Event row → navigates to Issue or PR</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="brief-divider"></div>
+
+    <!-- ════════════════════════════════
+         SECTION 3 — RIGHT SIDEBAR
+    ════════════════════════════════ -->
+    <div class="brief-section" id="right-sidebar">
+      <div class="section-eyebrow">Section 03</div>
+      <h1 class="section-title"><strong>Right Sidebar</strong></h1>
+      <p class="section-lead">The right sidebar is a contextual action panel. It adapts entirely based on what is active in the main view: a task list and AI prompt when on an issue, an agent chat log when a task is selected, and a dedicated PR action panel when a pull request is open. It is the operational layer of the interface — where things get done, reviewed, and moved forward.</p>
+
+      <div class="sub-section-label" id="tasks-panel">Tasks Panel (default — Issue view)</div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Panel Header</span>
+          <span class="comp-tag tag-nav">Labeled Buttons</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Layout</span><span class="prop-val">"TASKS" uppercase label on the left. Two labeled pill buttons on the right: <code>◉ Agents</code> (green) and <code>+ Add Task</code>.</span></div>
+          <div class="prop-row"><span class="prop-key">Agents button</span><span class="prop-val">Teal-green accent. Navigates directly to the Agents panel. Makes agent status discoverable without requiring a task click.</span></div>
+          <div class="prop-row"><span class="prop-key">Add Task button</span><span class="prop-val">Toggles the quick-add form below the header. Closes on second click, Esc, or successful submit.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-nav">Agents → switches to Agents panel</span>
+            <span class="ix ix-toggle">Add Task → toggles quick-add form</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Quick-Add Task Form</span>
+          <span class="comp-tag tag-input">Inline Creation</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Trigger</span><span class="prop-val">+ Add Task button in panel header. Animates in with <code>fadeOverlay</code>. Input auto-focuses on open.</span></div>
+          <div class="prop-row"><span class="prop-key">Submit</span><span class="prop-val">Enter key or Add button. Creates task with <code>scope: 'issue'</code>, appended to Up Next. Shows toast. Updates issue progress bar.</span></div>
+          <div class="prop-row"><span class="prop-key">Cancel</span><span class="prop-val">✕ button or Esc key. Clears input and hides form.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-input">Enter → creates task, re-renders list</span>
+            <span class="ix ix-toggle">Esc / ✕ → hides form</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Task List</span>
+          <span class="comp-tag tag-nav">Scrollable</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Sections</span><span class="prop-val">Issue tasks grouped under "Issue #N" label (blue-tinted), then Backlog tasks. "View all (61)" at the bottom links to the full backlog.</span></div>
+          <div class="prop-row"><span class="prop-key">Row layout</span><span class="prop-val">Checkbox (done = green, others = grey ring) · label (strikethrough when done) · status dot · estimate · ◉ agent indicator if assigned.</span></div>
+          <div class="prop-row"><span class="prop-key">Navigation</span><span class="prop-val">Click navigates to task detail in main view and switches right panel to Agents panel.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-nav">Row click → Task Detail + Agents panel</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sub-section-label" id="agents-panel">Agents Panel</div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Agents List</span>
+          <span class="comp-tag tag-state">Running · Queued</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Header</span><span class="prop-val">"← Tasks" back button on the left (returns to Tasks panel), "Agents" label on the right.</span></div>
+          <div class="prop-row"><span class="prop-key">Agent row</span><span class="prop-val">Gradient avatar square (7px radius) · Name + Role · Current task (truncated) · Status dot (green pulse = Running, amber = Queued).</span></div>
+          <div class="prop-row"><span class="prop-key">Groups</span><span class="prop-val">Running agents first, then Queued. Section labels in uppercase.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-nav">Row click → Agent Detail / Chat</span>
+            <span class="ix ix-nav">← Tasks → returns to task list</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Agent Detail — Chat Log</span>
+          <span class="comp-tag tag-input">Live Chat</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Header</span><span class="prop-val">"← Agents" back button · agent avatar + Name + Role · Status (● Running / ● Queued).</span></div>
+          <div class="prop-row"><span class="prop-key">Message types</span><span class="prop-val">sys (purple-tinted, monospace, system instructions) · agent (blue-tinted, prose) · tool (dark bg, monospace, tool call + result) · user (subtle border, right-aligned intent).</span></div>
+          <div class="prop-row"><span class="prop-key">Typing indicator</span><span class="prop-val">Shown for live agents. Three dots with staggered opacity animation.</span></div>
+          <div class="prop-row"><span class="prop-key">Input</span><span class="prop-val">Textarea at the bottom. Enter sends (Shift+Enter for newlines). Send button activates when text is present. New messages append to the log and the log scrolls to bottom.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-input">Enter → appends user message</span>
+            <span class="ix ix-nav">← Agents → returns to agent list</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sub-section-label" id="pr-panel">PR Panel (active when a PR is selected)</div>
+
+      <div class="note">
+        <span class="note-ic">⊙</span>
+        <div class="note-text">The PR panel has <strong>no header bar</strong> — the topbar breadcrumb and sidebar active state already communicate context. The panel scrolls directly through its functional sections: Linked Issues, CI Checks, Review &amp; Merge.</div>
+      </div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Linked Issues</span>
+          <span class="comp-tag tag-nav">Conditional</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Visibility</span><span class="prop-val">Only shown if <code>pr.issueIds.length > 0</code>. Omitted entirely for PRs with no linked issue.</span></div>
+          <div class="prop-row"><span class="prop-key">Row content</span><span class="prop-val">⊙ icon · Issue number · truncated title · status dot (Open = green). Clicking navigates to the linked issue workspace.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-nav">Row click → Issue workspace</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">CI Checks</span>
+          <span class="comp-tag tag-state">Collapsible</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Default state</span><span class="prop-val">Collapsed. Header shows a live summary: <code>✓ 4/4 passing</code> (green) / <code>✕ N failing</code> (red) / <code>○ N pending</code> (amber). › chevron flips to ▾ when expanded.</span></div>
+          <div class="prop-row"><span class="prop-key">Expanded view</span><span class="prop-val">Individual check rows with ✓/✕/○ icon, check name, and status text. Each row clickable — shows a contextual toast with pass/fail detail.</span></div>
+          <div class="prop-row"><span class="prop-key">Rationale</span><span class="prop-val">Collapsed by default to keep the most actionable section (Review &amp; Merge) immediately visible without scrolling.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-toggle">Header click → expand/collapse</span>
+            <span class="ix ix-click">Check row → status detail toast</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Review &amp; Merge</span>
+          <span class="comp-tag tag-action">Gated Workflow</span>
+          <span class="comp-tag tag-gate">Merge gated by Approve</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Unified section</span><span class="prop-val">Review and Merge are a single section because they represent one continuous workflow step: review the code, then commit it. Separating them was misleading.</span></div>
+          <div class="prop-row"><span class="prop-key">Review status</span><span class="prop-val">Icon + label for current review state (◎ Review required, ✓ Approved, ◐ Draft, ⊛ Merged). Color-coded.</span></div>
+          <div class="prop-row"><span class="prop-key">Approve button</span><span class="prop-val">Visible when <code>reviewStatus !== 'approved'</code> and PR is not a draft. On click: updates <code>pr.reviewStatus</code>, re-renders panel, unlocks merge.</span></div>
+          <div class="prop-row"><span class="prop-key">Merge gate</span><span class="prop-val">Merge button only appears after Approve is clicked. Before approval: shows dimmed "Approve this PR to unlock merge". Prevents accidental unreviewed merges.</span></div>
+          <div class="prop-row"><span class="prop-key">Merge button</span><span class="prop-val">Full-width purple. Enabled only when <code>pr.checks === 'passing'</code>. On click: 800ms delay, updates PR to merged, re-renders sidebar and main, updates PR row pill in sidebar.</span></div>
+          <div class="prop-row"><span class="prop-key">Draft state</span><span class="prop-val">Shows "◐ Mark as Ready" button instead. Converts draft to open on click, re-renders both panels.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-click">Approve → unlocks merge, re-renders</span>
+            <span class="ix ix-gate">Merge gated behind approval</span>
+            <span class="ix ix-click">Merge → 800ms delay, updates state</span>
+            <span class="ix ix-click">Mark as Ready → converts draft</span>
+          </div>
+          <div class="flow">
+            <div class="flow-step"><span class="flow-hl">PR opened</span><span class="flow-arrow"> → </span><span>Review required state</span></div>
+            <div class="flow-step"><span class="flow-hl">Approve clicked</span><span class="flow-arrow"> → </span><span>reviewStatus = 'approved', merge unlocked</span></div>
+            <div class="flow-step"><span class="flow-hl">CI passes</span><span class="flow-arrow"> → </span><span>Merge button becomes active</span></div>
+            <div class="flow-step"><span class="flow-hl">Merge clicked</span><span class="flow-arrow"> → </span><span>status = 'merged', sidebar pill → purple ✓</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sub-section-label" id="ai-footer">AI Footer (all panel states)</div>
+
+      <div class="comp">
+        <div class="comp-hd">
+          <span class="comp-name">Contextual AI Input</span>
+          <span class="comp-tag tag-input">Always Present</span>
+        </div>
+        <div class="comp-body">
+          <div class="prop-row"><span class="prop-key">Tasks panel</span><span class="prop-val">Prompt: "Ask about this issue or its tasks…". Context button reads "Full context ▾". Sends a workspace-aware query.</span></div>
+          <div class="prop-row"><span class="prop-key">PR panel</span><span class="prop-val">Prompt: "Ask about PR #N…". Context button reads "PR context ▾". Scoped to the current PR's diffs and metadata.</span></div>
+          <div class="prop-row"><span class="prop-key">Textarea</span><span class="prop-val">Auto-resizes (min 34px, max 90px). Send button activates (opacity 1) when text is present. Enter submits, Shift+Enter inserts newline.</span></div>
+          <div class="prop-row"><span class="prop-key">On send</span><span class="prop-val">Clears input. Shows contextual toast: "Asking: '{first 42 chars}…'". In production, would route to the relevant agent or AI model.</span></div>
+          <div class="ix-row">
+            <span class="ix ix-input">Enter → sends query, shows toast</span>
+            <span class="ix ix-toggle">Send button activates when text is present</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="brief-footer">
+      Specorator Design Brief · Obsidian Plugin · v1 prototype
+    </div>
+
+  </main>
+</div>
+
+<script>
+// Active nav tracking
+const sections = ['left-sidebar','main-view','right-sidebar'];
+const navLinks  = document.querySelectorAll('.nav-a');
+
+window.addEventListener('scroll', () => {
+  let current = sections[0];
+  sections.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.getBoundingClientRect().top < 120) current = id;
+  });
+  navLinks.forEach(a => {
+    a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+  });
+
+  // TOC active state
+  const allToc = document.querySelectorAll('.toc-item');
+  allToc.forEach(item => {
+    const href = item.getAttribute('href');
+    if (!href) return;
+    const target = document.getElementById(href.slice(1));
+    if (!target) return;
+    const r = target.getBoundingClientRect();
+    item.classList.toggle('active', r.top < 160 && r.bottom > 0);
+  });
+});
+
+// Smooth anchor navigation
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    const target = document.getElementById(a.getAttribute('href').slice(1));
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+});
+</script>
+</body>
+</html>

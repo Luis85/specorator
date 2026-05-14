@@ -1,32 +1,53 @@
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
-import type { Result } from '@/domain/shared/Result'
+import { err, ok, type Result } from '@/domain/shared/Result'
 import type { Feature } from '@/domain/feature/Feature'
-import { GetFeaturesUseCase } from './GetFeaturesUseCase'
+import type { IFeatureService } from './IFeatureService'
+import type { FeedbackService } from '@/application/shared/FeedbackService'
 import { CreateFeatureUseCase } from './CreateFeatureUseCase'
-import { ActivateFeatureUseCase } from './ActivateFeatureUseCase'
-import { ArchiveFeatureUseCase } from './ArchiveFeatureUseCase'
 import { AdvanceFeatureStageUseCase } from './AdvanceFeatureStageUseCase'
 
-export class FeatureService {
-  constructor(private readonly repo: IFeatureRepository) {}
+export class FeatureService implements IFeatureService {
+  constructor(
+    private readonly repo: IFeatureRepository,
+    private readonly feedback?: FeedbackService,
+  ) {}
 
-  loadFeatures(): Promise<Result<Feature[]>> {
-    return new GetFeaturesUseCase(this.repo).execute()
+  async loadFeatures(): Promise<Result<Feature[]>> {
+    const features = await this.repo.findAll()
+    return ok(features)
   }
 
   createFeature(title: string, area?: string): Promise<Result<Feature>> {
-    return new CreateFeatureUseCase(this.repo).execute({ title, area })
+    return new CreateFeatureUseCase(this.repo, this.feedback).execute({ title, area })
   }
 
   activateFeature(featureId: string): Promise<Result<Feature>> {
-    return new ActivateFeatureUseCase(this.repo).execute({ featureId })
+    return this.executeTransition(featureId, (f) => f.activate())
   }
 
   archiveFeature(featureId: string): Promise<Result<Feature>> {
-    return new ArchiveFeatureUseCase(this.repo).execute({ featureId })
+    return this.executeTransition(featureId, (f) => f.archive())
   }
 
   advanceFeatureStage(featureId: string): Promise<Result<Feature>> {
-    return new AdvanceFeatureStageUseCase(this.repo).execute({ featureId })
+    return new AdvanceFeatureStageUseCase(this.repo, this.feedback).execute({ featureId })
+  }
+
+  private async executeTransition(
+    featureId: string,
+    transition: (f: Feature) => Result<Feature>,
+  ): Promise<Result<Feature>> {
+    const feature = await this.repo.findById(featureId)
+    if (!feature) {
+      return err(new Error(`Feature "${featureId}" not found`))
+    }
+
+    const transitionResult = transition(feature)
+    if (!transitionResult.ok) return transitionResult
+
+    const saveResult = await this.repo.save(transitionResult.value)
+    if (!saveResult.ok) return saveResult
+
+    return ok(transitionResult.value)
   }
 }

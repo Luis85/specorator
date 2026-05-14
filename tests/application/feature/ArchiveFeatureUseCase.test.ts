@@ -1,4 +1,4 @@
-// Tests FeatureService.activateFeature — ActivateFeatureUseCase was inlined in C2.
+// Tests FeatureService.archiveFeature — ArchiveFeatureUseCase was inlined in C2.
 import { describe, it, expect, vi } from 'vitest'
 import { FeatureService } from '@/application/feature/FeatureService'
 import { Feature } from '@/domain/feature/Feature'
@@ -54,18 +54,18 @@ function makeRepoMock(overrides: Partial<IFeatureRepository> = {}): IFeatureRepo
   }
 }
 
-describe('FeatureService.activateFeature', () => {
-  it('activates a draft feature and persists it via the repository (happy path)', async () => {
+describe('FeatureService.archiveFeature', () => {
+  it('archives a non-archived feature and persists it via the repository (happy path)', async () => {
     const draft = makeDraftFeature('feat-1', 'Search', 'search')
     const repo = makeRepoMock({
       findById: vi.fn().mockResolvedValue(draft),
     })
 
-    const result = await new FeatureService(repo).activateFeature('feat-1')
+    const result = await new FeatureService(repo).archiveFeature('feat-1')
 
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.value.status).toBe('active')
+    expect(result.value.status).toBe('archived')
     expect(result.value.id).toBe('feat-1')
     expect(result.value.slug.toString()).toBe('search')
 
@@ -74,8 +74,22 @@ describe('FeatureService.activateFeature', () => {
     expect(repo.save).toHaveBeenCalledTimes(1)
 
     const savedArg = (repo.save as ReturnType<typeof vi.fn>).mock.calls[0][0] as Feature
-    expect(savedArg.status).toBe('active')
+    expect(savedArg.status).toBe('archived')
     expect(savedArg.id).toBe('feat-1')
+  })
+
+  it('archives an active feature (happy path from active)', async () => {
+    const active = makeActiveFeature('feat-2', 'Search', 'search')
+    const repo = makeRepoMock({
+      findById: vi.fn().mockResolvedValue(active),
+    })
+
+    const result = await new FeatureService(repo).archiveFeature('feat-2')
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.status).toBe('archived')
+    expect(repo.save).toHaveBeenCalledTimes(1)
   })
 
   it('returns an error when the feature does not exist (not found)', async () => {
@@ -83,7 +97,7 @@ describe('FeatureService.activateFeature', () => {
       findById: vi.fn().mockResolvedValue(null),
     })
 
-    const result = await new FeatureService(repo).activateFeature('missing-id')
+    const result = await new FeatureService(repo).archiveFeature('missing-id')
 
     expect(result.ok).toBe(false)
     if (result.ok) return
@@ -93,33 +107,17 @@ describe('FeatureService.activateFeature', () => {
     expect(repo.save).not.toHaveBeenCalled()
   })
 
-  it('returns the domain error when the feature is already active (invalid stage)', async () => {
-    const active = makeActiveFeature('feat-2', 'Search', 'search')
-    const repo = makeRepoMock({
-      findById: vi.fn().mockResolvedValue(active),
-    })
-
-    const result = await new FeatureService(repo).activateFeature('feat-2')
-
-    expect(result.ok).toBe(false)
-    if (result.ok) return
-    expect(result.error.message).toMatch(/Cannot activate/i)
-    expect(result.error.message).toContain('active')
-    expect(repo.save).not.toHaveBeenCalled()
-  })
-
-  it('returns the domain error when the feature is archived (invalid stage)', async () => {
+  it('returns the domain error when the feature is already archived', async () => {
     const archived = makeArchivedFeature('feat-3', 'Search', 'search')
     const repo = makeRepoMock({
       findById: vi.fn().mockResolvedValue(archived),
     })
 
-    const result = await new FeatureService(repo).activateFeature('feat-3')
+    const result = await new FeatureService(repo).archiveFeature('feat-3')
 
     expect(result.ok).toBe(false)
     if (result.ok) return
-    expect(result.error.message).toMatch(/Cannot activate/i)
-    expect(result.error.message).toContain('archived')
+    expect(result.error.message).toMatch(/already archived/i)
     expect(repo.save).not.toHaveBeenCalled()
   })
 
@@ -131,7 +129,7 @@ describe('FeatureService.activateFeature', () => {
       save: vi.fn().mockResolvedValue(err(saveError)),
     })
 
-    const result = await new FeatureService(repo).activateFeature('feat-4')
+    const result = await new FeatureService(repo).archiveFeature('feat-4')
 
     expect(result.ok).toBe(false)
     if (result.ok) return

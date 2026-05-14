@@ -1,6 +1,8 @@
 import { err, type Result } from '@/domain/shared/Result'
 import type { Feature } from '@/domain/feature/Feature'
+import { getStepMeta } from '@/domain/feature/FeatureStep'
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
+import type { FeedbackService } from '@/application/shared/FeedbackService'
 
 export interface AdvanceFeatureStageInput {
   readonly featureId: string
@@ -11,7 +13,10 @@ export interface AdvanceFeatureStageInput {
  * Creates the new stage artifact file (if absent) and updates workflow-state.md.
  */
 export class AdvanceFeatureStageUseCase {
-  constructor(private readonly repository: IFeatureRepository) {}
+  constructor(
+    private readonly repository: IFeatureRepository,
+    private readonly feedback?: FeedbackService,
+  ) {}
 
   async execute(input: AdvanceFeatureStageInput): Promise<Result<Feature>> {
     const feature = await this.repository.findById(input.featureId)
@@ -34,6 +39,19 @@ export class AdvanceFeatureStageUseCase {
     if (!advanced.isComplete) {
       const fileResult = await this.repository.createStageFile(advanced, advanced.currentStep)
       if (!fileResult.ok) return fileResult
+
+      // REQ-AVS-005: the repository preserved an existing stage file. Surface
+      // a notice so the user knows their handwritten file was kept. Slug is
+      // derived from the (now-current) step so the message names the file the
+      // user actually finds untouched on disk.
+      if (!fileResult.value.created) {
+        const meta = getStepMeta(advanced.currentStep)
+        if (meta !== undefined) {
+          this.feedback?.info(
+            `Specorator: ${meta.slug}.md already exists — keeping your version.`,
+          )
+        }
+      }
     }
 
     const saveResult = await this.repository.save(advanced)

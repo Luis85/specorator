@@ -34,7 +34,7 @@ function mountHome() {
 				[WORKSPACE_PORT as unknown as symbol]: ports.workspace,
 				[NOTIFICATION_PORT as unknown as symbol]: ports.notifications,
 				[FEATURE_SERVICE_KEY as unknown as symbol]: new FeatureService(
-					new FeatureRepository(ports.bridge, ports.bridge, ports.bridge),
+					new FeatureRepository(ports.bridge, ports.bridge),
 				),
 			},
 		},
