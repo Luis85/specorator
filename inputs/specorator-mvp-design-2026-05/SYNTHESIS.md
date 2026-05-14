@@ -111,4 +111,4 @@ The breakdown below is the source of truth for the GitHub issues created by this
 - **X2 — E2E flows + a11y pass:** 5 critical Storybook+Playwright flows (proposal lifecycle, PR merge gate, multi-issue nav, task→agent chat, activity feed nav) + a11y audit (focus traps, ARIA roles, keyboard nav).
 - **X3 — Performance + production adapters:** Sidebar virtualization, append-only activity feed updates, production `GitHubAdapter` (real GitHub API) + production `AgentRuntimeAdapter` (WebSocket/SSE).
 
-Total: 1 epic + 5 foundation + 9 verticals + 3 cross-cutting = **18 issues** (epic counted separately).
+Total: 5 foundation + 9 verticals + 3 cross-cutting = **17 child issues**, tracked under the parent epic (18 GitHub issues in total).
