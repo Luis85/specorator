@@ -46,7 +46,7 @@ onMounted(async () => {
 
 <template>
 	<div class="sp-onboarding__step" data-testid="step5">
-		<h2 ref="headingRef" tabindex="-1" class="sp-onboarding__heading" data-testid="step5-heading">
+		<h2 class="sp-onboarding__heading" data-testid="step5-heading">
 			You're all set.
 		</h2>
 
