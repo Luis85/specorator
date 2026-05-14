@@ -1,19 +1,22 @@
+import type { SessionId } from '@/domain/chat/SessionId'
 import type { Result } from '@/domain/shared/Result'
 
 /**
  * Discriminator for ClaudeCliError. Each code maps to one UI copy string:
- *   NOT_INSTALLED  → "AI assistant is not available right now."
- *   API_KEY_MISSING → "Chat is not set up yet."
- *   TIMEOUT        → "That took too long. Please try again."
- *   QUERY_FAILED   → "Something went wrong. Please try again."
+ *   NOT_INSTALLED      → "AI assistant is not available right now."
+ *   API_KEY_MISSING    → "Chat is not set up yet."
+ *   TIMEOUT            → "That took too long. Please try again."
+ *   QUERY_FAILED       → "Something went wrong. Please try again."
+ *   CLI_LAUNCH_FAILED  → "Chat needs the Claude command-line tool." (SPEC-ASM-001 §2.7)
  *
- * Satisfies REQ-CCS-021.
+ * Satisfies REQ-CCS-021, REQ-ASM-009.
  */
 export type ClaudeCliErrorCode =
   | 'NOT_INSTALLED' // Binary could not be resolved or the SDK failed to start
   | 'API_KEY_MISSING' // ANTHROPIC_API_KEY was empty at query time
   | 'TIMEOUT' // No response received within timeoutMs
   | 'QUERY_FAILED' // SDK call returned an error or threw an unexpected exception
+  | 'CLI_LAUNCH_FAILED' // Subprocess spawn failed (R-ASM-002 AppArmor / userns) — SPEC-ASM-001 §2.7
 
 export class ClaudeCliError extends Error {
   public readonly name = 'ClaudeCliError'
@@ -50,6 +53,24 @@ export interface ClaudeCliQueryOptions {
    * Reserved for v2 multi-turn support.
    */
   readonly maxTurns?: number
+
+  /**
+   * Optional suffix appended to the system prompt for stage-aware context
+   * (ADR-0027, SPEC-ASM-001 §2.6 and design.md C4). The subscription transport
+   * forwards this verbatim as `--append-system-prompt <value>`; the SDK adapter
+   * ignores it. Empty strings are treated the same as `undefined` — the flag
+   * is omitted.
+   * Satisfies REQ-ASM-013.
+   */
+  readonly systemPromptSuffix?: string
+
+  /**
+   * Optional Claude session identifier used to resume an existing conversation.
+   * The subscription transport forwards this as `--resume <sessionId>`; the SDK
+   * adapter logs at debug level and ignores it (subscription transport only).
+   * Satisfies REQ-ASM-035.
+   */
+  readonly resumeSessionId?: SessionId
 }
 
 /**
