@@ -2,11 +2,15 @@ import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
 import { err, ok, type Result } from '@/domain/shared/Result'
 import type { Feature } from '@/domain/feature/Feature'
 import type { IFeatureService } from './IFeatureService'
+import type { FeedbackService } from '@/application/shared/FeedbackService'
 import { CreateFeatureUseCase } from './CreateFeatureUseCase'
 import { AdvanceFeatureStageUseCase } from './AdvanceFeatureStageUseCase'
 
 export class FeatureService implements IFeatureService {
-  constructor(private readonly repo: IFeatureRepository) {}
+  constructor(
+    private readonly repo: IFeatureRepository,
+    private readonly feedback?: FeedbackService,
+  ) {}
 
   async loadFeatures(): Promise<Result<Feature[]>> {
     const features = await this.repo.findAll()
@@ -14,7 +18,7 @@ export class FeatureService implements IFeatureService {
   }
 
   createFeature(title: string, area?: string): Promise<Result<Feature>> {
-    return new CreateFeatureUseCase(this.repo).execute({ title, area })
+    return new CreateFeatureUseCase(this.repo, this.feedback).execute({ title, area })
   }
 
   activateFeature(featureId: string): Promise<Result<Feature>> {
@@ -26,7 +30,7 @@ export class FeatureService implements IFeatureService {
   }
 
   advanceFeatureStage(featureId: string): Promise<Result<Feature>> {
-    return new AdvanceFeatureStageUseCase(this.repo).execute({ featureId })
+    return new AdvanceFeatureStageUseCase(this.repo, this.feedback).execute({ featureId })
   }
 
   private async executeTransition(
@@ -42,7 +46,6 @@ export class FeatureService implements IFeatureService {
     if (!transitionResult.ok) return transitionResult
 
     const saveResult = await this.repo.save(transitionResult.value)
-    // C3 will change save() to Result<SaveResult>; for now Result<void>'s err branch is structurally compatible with Result<Feature>'s err branch.
     if (!saveResult.ok) return saveResult
 
     return ok(transitionResult.value)
