@@ -11,6 +11,11 @@ import { promoteLegacyFlatSettings } from './loadSettings-migrate'
 import { ensureLeafLoaded } from './leafLoader'
 import { selectTransport } from './transport/TransportSelector'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
+import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord'
+import {
+  decodeChatThreadsBlob,
+  encodeChatThreadsBlob,
+} from './chatThreadsPersistence'
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
 import { ObsidianMetadataCacheAdapter } from '@/infrastructure/obsidian/ObsidianMetadataCacheAdapter'
@@ -44,6 +49,26 @@ export default class SpecoratorPlugin extends Plugin {
   private _subscriptionAdapter: ClaudeSubprocessAdapter | null = null
   /** SpecoratorView instance — set when the registered view factory runs. */
   private _specoratorView: SpecoratorView | null = null
+
+  /**
+   * Initial `chatThreads` records hydrated from plugin data at `loadSettings()`
+   * (SPEC-ASM-001 §9.3, ADR-0031). Read by `SpecoratorView.onOpen()` to seed
+   * the Pinia chat store and reset on each successful read. Malformed records
+   * are filtered out at decode time and logged at `warn` (SPEC §11.3).
+   */
+  private _initialChatThreads: ReadonlyArray<ChatThreadRecord> = []
+  /** Debounced persistence timer for `chatThreads`. SPEC §9.3 / OQ-ASM-T1. */
+  private _chatThreadsFlushTimer: number | null = null
+  /**
+   * Latest snapshot scheduled by `scheduleChatThreadsPersistence` but not yet
+   * flushed to plugin data. Kept on the class so `onunload()` can perform a
+   * final synchronous flush before the debounce timer fires — without this,
+   * a message sent within the 1 s debounce window before Obsidian exits or
+   * the plugin is disabled would silently fail to persist (Codex P1, PR #346).
+   */
+  private _pendingChatThreadsSnapshot: ReadonlyMap<string, ChatThreadRecord> | null = null
+  /** Default debounce window in milliseconds for chatThreads flushes. */
+  private static readonly _CHAT_THREADS_FLUSH_DEBOUNCE_MS = 1_000
 
   async onload(): Promise<void> {
     await this.loadSettings()
@@ -261,6 +286,21 @@ export default class SpecoratorPlugin extends Plugin {
   // expected cleanup path despite the obsidianmd/detach-leaves rule's caution.
   // eslint-disable-next-line obsidianmd/detach-leaves
   override onunload(): void {
+    // Cancel the pending debounce — we're about to flush directly below.
+    if (this._chatThreadsFlushTimer !== null) {
+      activeWindow.clearTimeout(this._chatThreadsFlushTimer)
+      this._chatThreadsFlushTimer = null
+    }
+    // Final synchronous flush of any snapshot scheduled within the debounce
+    // window but not yet written. Without this, a message sent immediately
+    // before Obsidian exits / the plugin is disabled would be lost (Codex P1,
+    // PR #346). `_flushChatThreads` is async; onunload() is fire-and-forget
+    // per Obsidian's contract, so void is correct here.
+    if (this._pendingChatThreadsSnapshot !== null) {
+      const snapshot = this._pendingChatThreadsSnapshot
+      this._pendingChatThreadsSnapshot = null
+      void this._flushChatThreads(snapshot)
+    }
     this.app.workspace.detachLeavesOfType(VIEW_TYPE)
     this.bridge?.hideAllNotices()
     // onunload() is synchronous (Obsidian contract). destroy() is fire-and-forget;
@@ -278,6 +318,66 @@ export default class SpecoratorPlugin extends Plugin {
       ...DEFAULT_SETTINGS,
       ...((this._storedData.specorator ?? {}) as Partial<PluginSettings>),
     }
+
+    // SPEC-ASM-001 §9.3 — read the `chatThreads` blob alongside settings so
+    // `SpecoratorView.onOpen()` can hydrate the chat store after the view
+    // mounts. Decoding uses the plugin bridge logger when present (typed once
+    // available in `onload()`); during `loadSettings()` we route warnings to
+    // `console.warn` because `this.bridge` is not yet constructed.
+    const specoratorBlob = (this._storedData.specorator ?? {}) as Record<string, unknown>
+    const chatThreadsBlob = specoratorBlob.chatThreads
+    this._initialChatThreads = decodeChatThreadsBlob(chatThreadsBlob, {
+      debug: () => undefined,
+      info: () => undefined,
+      warn: (msg, ctx) => { console.warn(msg, ctx ?? {}) },
+      error: (msg, ctx) => { console.error(msg, ctx ?? {}) },
+    })
+  }
+
+  /**
+   * Records hydrated from `_storedData.specorator.chatThreads` during
+   * `loadSettings()`. Consumed by `SpecoratorView.onOpen()` (SPEC §9.5 /
+   * REQ-ASM-037) to seed the Pinia chat store.
+   */
+  getInitialChatThreads(): ReadonlyArray<ChatThreadRecord> {
+    return this._initialChatThreads
+  }
+
+  /**
+   * Persists the in-memory `chatThreads` map to plugin data under
+   * `_storedData.specorator.chatThreads` (SPEC §9.3). Filters out
+   * `degraded`-transport records at encode time. Coalesces rapid mutations
+   * via a 1 s debounce (OQ-ASM-T1) to prevent disk thrashing during streaming
+   * turns.
+   *
+   * Satisfies REQ-ASM-037 / T-ASM-054.
+   */
+  scheduleChatThreadsPersistence(records: ReadonlyMap<string, ChatThreadRecord>): void {
+    const snapshot = new Map(records)
+    this._pendingChatThreadsSnapshot = snapshot
+    if (this._chatThreadsFlushTimer !== null) {
+      activeWindow.clearTimeout(this._chatThreadsFlushTimer)
+    }
+    this._chatThreadsFlushTimer = activeWindow.setTimeout(() => {
+      this._chatThreadsFlushTimer = null
+      this._pendingChatThreadsSnapshot = null
+      void this._flushChatThreads(snapshot)
+    }, SpecoratorPlugin._CHAT_THREADS_FLUSH_DEBOUNCE_MS)
+  }
+
+  /**
+   * Internal: write the encoded `chatThreads` blob into `_storedData` while
+   * preserving every other sibling key under `specorator` (PluginSettings,
+   * unrelated module data, etc.) — see SPEC §9.3 coexistence guarantee.
+   */
+  private async _flushChatThreads(
+    records: ReadonlyMap<string, ChatThreadRecord>,
+  ): Promise<void> {
+    const encoded = encodeChatThreadsBlob(records)
+    const currentSpecorator = (this._storedData.specorator ?? {}) as Record<string, unknown>
+    const nextSpecorator = { ...currentSpecorator, chatThreads: encoded }
+    this._storedData = { ...this._storedData, specorator: nextSpecorator }
+    await this.saveData(this._storedData)
   }
 
   async updateSettings(partial: Partial<PluginSettings>): Promise<void> {

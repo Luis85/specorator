@@ -2,11 +2,21 @@
  * T-CCS-012 — Tests for useChatStore() — state shape, all actions, deduplication, setActiveFile.
  * Satisfies REQ-CCS-005, REQ-CCS-006, REQ-CCS-009, REQ-CCS-013, REQ-CCS-014, REQ-CCS-016.
  * Maps to: TEST-CCS-009, TEST-CCS-STORE-001, TEST-CCS-STORE-002.
+ *
+ * T-ASM-051 — Tests for the SPEC-ASM-001 §8.1 store extensions
+ * (chatThreads, activeThreadId, proposals, streamingText, cliStartingUp,
+ *  sessionResumed plus the matching actions).
+ * Satisfies REQ-ASM-031, REQ-ASM-035, REQ-ASM-037, REQ-ASM-041, REQ-ASM-043,
+ *           REQ-ASM-045, NFR-ASM-002, R-ASM-003.
  */
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useChatStore } from '@/ui/stores/chatStore'
 import type { ContextFileEntry } from '@/ui/stores/chatStore'
+import { asSessionId } from '@/domain/chat/SessionId'
+import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord'
+import type { FileWriteProposal } from '@/application/chat/FileWriteProposal'
+import type { CreateFileEnvelope } from '@/application/chat/createFileEnvelopeSchema'
 
 function makeFile(path: string, label?: string, isAuto = false): ContextFileEntry {
   return { path, label: label ?? path, isAuto }
@@ -245,6 +255,316 @@ describe('useChatStore()', () => {
       expect(store.status).toBe('idle')
       expect(store.errorType).toBeNull()
       expect(store.truncated).toBe(false)
+    })
+  })
+
+  // ── T-ASM-051: SPEC-ASM-001 §8.1 store extensions ─────────────────────────
+  describe('ASM §8.1 extensions', () => {
+    function makeThread(
+      threadId: string,
+      overrides: Partial<ChatThreadRecord> = {},
+    ): ChatThreadRecord {
+      return {
+        threadId,
+        sessionId: null,
+        feature: null,
+        logPath: `specs/_chat/${threadId}.md`,
+        transport: 'subscription',
+        createdAt: '2026-05-14T00:00:00.000Z',
+        lastUsedAt: '2026-05-14T00:00:00.000Z',
+        ...overrides,
+      }
+    }
+
+    function makeEnvelope(
+      path = 'specs/x/idea.md',
+      content = 'body',
+    ): CreateFileEnvelope {
+      return { action: 'createFile', path, content }
+    }
+
+    function makeProposal(
+      proposalId: string,
+      overrides: Partial<FileWriteProposal> = {},
+    ): FileWriteProposal {
+      return {
+        proposalId,
+        threadId: 't1',
+        envelope: makeEnvelope(),
+        status: 'pending',
+        proposedAt: '2026-05-14T00:00:00.000Z',
+        decidedAt: null,
+        failureReason: null,
+        ...overrides,
+      }
+    }
+
+    describe('initial state', () => {
+      it('REQ-ASM-037: chatThreads is an empty Map', () => {
+        const store = useChatStore()
+        expect(store.chatThreads).toBeInstanceOf(Map)
+        expect(store.chatThreads.size).toBe(0)
+      })
+
+      it('REQ-ASM-031: activeThreadId is null', () => {
+        const store = useChatStore()
+        expect(store.activeThreadId).toBeNull()
+      })
+
+      it('REQ-ASM-041: proposals is an empty Map', () => {
+        const store = useChatStore()
+        expect(store.proposals).toBeInstanceOf(Map)
+        expect(store.proposals.size).toBe(0)
+      })
+
+      it('NFR-ASM-002: streamingText is empty string', () => {
+        const store = useChatStore()
+        expect(store.streamingText).toBe('')
+      })
+
+      it('R-ASM-003: cliStartingUp is false', () => {
+        const store = useChatStore()
+        expect(store.cliStartingUp).toBe(false)
+      })
+
+      it('REQ-ASM-035: sessionResumed is false', () => {
+        const store = useChatStore()
+        expect(store.sessionResumed).toBe(false)
+      })
+    })
+
+    describe('upsertThread', () => {
+      it('REQ-ASM-037: adds a new ChatThreadRecord keyed by threadId', () => {
+        const store = useChatStore()
+        const record = makeThread('t1')
+        store.upsertThread(record)
+        expect(store.chatThreads.size).toBe(1)
+        expect(store.chatThreads.get('t1')).toEqual(record)
+      })
+
+      it('replaces an existing record with the same threadId', () => {
+        const store = useChatStore()
+        store.upsertThread(makeThread('t1', { feature: 'a' }))
+        store.upsertThread(makeThread('t1', { feature: 'b' }))
+        expect(store.chatThreads.size).toBe(1)
+        expect(store.chatThreads.get('t1')?.feature).toBe('b')
+      })
+
+      it('keeps unrelated threads intact when upserting another', () => {
+        const store = useChatStore()
+        store.upsertThread(makeThread('t1'))
+        store.upsertThread(makeThread('t2'))
+        expect(store.chatThreads.size).toBe(2)
+        expect(store.chatThreads.has('t1')).toBe(true)
+        expect(store.chatThreads.has('t2')).toBe(true)
+      })
+    })
+
+    describe('setActiveThreadId', () => {
+      it('REQ-ASM-031: switches the active thread', () => {
+        const store = useChatStore()
+        store.setActiveThreadId('t1')
+        expect(store.activeThreadId).toBe('t1')
+      })
+
+      it('clears streamingText and sessionResumed when switching threads', () => {
+        const store = useChatStore()
+        store.appendStreamingDelta('partial reply')
+        store.setSessionResumed(true)
+        store.setActiveThreadId('t2')
+        expect(store.streamingText).toBe('')
+        expect(store.sessionResumed).toBe(false)
+      })
+
+      it('null clears the active thread and still resets transients', () => {
+        const store = useChatStore()
+        store.setActiveThreadId('t1')
+        store.appendStreamingDelta('hi')
+        store.setActiveThreadId(null)
+        expect(store.activeThreadId).toBeNull()
+        expect(store.streamingText).toBe('')
+      })
+    })
+
+    describe('captureSessionId', () => {
+      it('REQ-ASM-031: stores sessionId on the matching ChatThreadRecord', () => {
+        const store = useChatStore()
+        store.upsertThread(makeThread('t1'))
+        store.captureSessionId('t1', asSessionId('sess-abc'))
+        expect(store.chatThreads.get('t1')?.sessionId).toBe('sess-abc')
+      })
+
+      it('is a no-op when the thread is unknown', () => {
+        const store = useChatStore()
+        store.captureSessionId('ghost', asSessionId('sess-xyz'))
+        expect(store.chatThreads.size).toBe(0)
+      })
+    })
+
+    describe('markThreadUsed', () => {
+      it('REQ-ASM-037: updates lastUsedAt on the matching thread', () => {
+        const store = useChatStore()
+        store.upsertThread(
+          makeThread('t1', { lastUsedAt: '2020-01-01T00:00:00.000Z' }),
+        )
+        const before = store.chatThreads.get('t1')!.lastUsedAt
+        store.markThreadUsed('t1')
+        const after = store.chatThreads.get('t1')!.lastUsedAt
+        expect(after).not.toBe(before)
+        expect(new Date(after).getTime()).toBeGreaterThan(
+          new Date(before).getTime(),
+        )
+      })
+
+      it('is a no-op when the thread is unknown', () => {
+        const store = useChatStore()
+        store.markThreadUsed('ghost')
+        expect(store.chatThreads.size).toBe(0)
+      })
+    })
+
+    describe('appendStreamingDelta + resetStreaming', () => {
+      it('NFR-ASM-002: accumulates streaming deltas', () => {
+        const store = useChatStore()
+        store.appendStreamingDelta('Hello ')
+        store.appendStreamingDelta('world')
+        expect(store.streamingText).toBe('Hello world')
+      })
+
+      it('resetStreaming clears streamingText and sessionResumed', () => {
+        const store = useChatStore()
+        store.appendStreamingDelta('partial')
+        store.setSessionResumed(true)
+        store.resetStreaming()
+        expect(store.streamingText).toBe('')
+        expect(store.sessionResumed).toBe(false)
+      })
+    })
+
+    describe('addProposal + setProposalStatus', () => {
+      afterEach(() => {
+        vi.useRealTimers()
+      })
+
+      it('REQ-ASM-041: addProposal stores a proposal keyed by proposalId', () => {
+        const store = useChatStore()
+        const proposal = makeProposal('p1')
+        store.addProposal(proposal)
+        expect(store.proposals.size).toBe(1)
+        expect(store.proposals.get('p1')).toEqual(proposal)
+      })
+
+      it('addProposal replaces a prior proposal with the same id (idempotent)', () => {
+        const store = useChatStore()
+        store.addProposal(makeProposal('p1', { threadId: 'old' }))
+        store.addProposal(makeProposal('p1', { threadId: 'new' }))
+        expect(store.proposals.size).toBe(1)
+        expect(store.proposals.get('p1')?.threadId).toBe('new')
+      })
+
+      it('REQ-ASM-043: setProposalStatus transitions to accepted and stamps decidedAt', () => {
+        vi.useFakeTimers()
+        vi.setSystemTime(new Date('2026-05-14T12:00:00.000Z'))
+        const store = useChatStore()
+        store.addProposal(makeProposal('p1'))
+        store.setProposalStatus('p1', 'accepted')
+        const after = store.proposals.get('p1')!
+        expect(after.status).toBe('accepted')
+        expect(after.decidedAt).toBe('2026-05-14T12:00:00.000Z')
+        expect(after.failureReason).toBeNull()
+      })
+
+      it('REQ-ASM-045: setProposalStatus records failureReason when failed', () => {
+        const store = useChatStore()
+        store.addProposal(makeProposal('p1'))
+        store.setProposalStatus('p1', 'failed', 'WRITE_FAILED')
+        const after = store.proposals.get('p1')!
+        expect(after.status).toBe('failed')
+        expect(after.failureReason).toBe('WRITE_FAILED')
+        expect(after.decidedAt).not.toBeNull()
+      })
+
+      it('setProposalStatus clears failureReason on non-failed transitions', () => {
+        const store = useChatStore()
+        store.addProposal(
+          makeProposal('p1', {
+            status: 'failed',
+            failureReason: 'WRITE_FAILED',
+          }),
+        )
+        store.setProposalStatus('p1', 'rejected')
+        expect(store.proposals.get('p1')?.failureReason).toBeNull()
+      })
+
+      it('setProposalStatus on pending keeps decidedAt null', () => {
+        const store = useChatStore()
+        store.addProposal(
+          makeProposal('p1', {
+            status: 'accepted',
+            decidedAt: '2020-01-01T00:00:00.000Z',
+          }),
+        )
+        store.setProposalStatus('p1', 'pending')
+        expect(store.proposals.get('p1')?.decidedAt).toBeNull()
+      })
+
+      it('setProposalStatus is a no-op when the proposal is unknown', () => {
+        const store = useChatStore()
+        store.setProposalStatus('ghost', 'accepted')
+        expect(store.proposals.size).toBe(0)
+      })
+    })
+
+    describe('setCliStartingUp / setSessionResumed', () => {
+      it('R-ASM-003: setCliStartingUp toggles cliStartingUp', () => {
+        const store = useChatStore()
+        store.setCliStartingUp(true)
+        expect(store.cliStartingUp).toBe(true)
+        store.setCliStartingUp(false)
+        expect(store.cliStartingUp).toBe(false)
+      })
+
+      it('REQ-ASM-035: setSessionResumed toggles sessionResumed', () => {
+        const store = useChatStore()
+        store.setSessionResumed(true)
+        expect(store.sessionResumed).toBe(true)
+        store.setSessionResumed(false)
+        expect(store.sessionResumed).toBe(false)
+      })
+    })
+
+    describe('reset (extended)', () => {
+      it('reset clears all ASM §8.1 slots', () => {
+        const store = useChatStore()
+        store.upsertThread(makeThread('t1'))
+        store.setActiveThreadId('t1')
+        store.addProposal(makeProposal('p1'))
+        store.appendStreamingDelta('hi')
+        store.setCliStartingUp(true)
+        store.setSessionResumed(true)
+        store.reset()
+        expect(store.chatThreads.size).toBe(0)
+        expect(store.activeThreadId).toBeNull()
+        expect(store.proposals.size).toBe(0)
+        expect(store.streamingText).toBe('')
+        expect(store.cliStartingUp).toBe(false)
+        expect(store.sessionResumed).toBe(false)
+      })
+    })
+
+    describe('regression: existing CCS actions still work after ASM additions', () => {
+      it('addContextFile + setUserText + beginRequest + setResponse round-trip', () => {
+        const store = useChatStore()
+        store.addContextFile(makeFile('notes.md'))
+        store.setUserText('ping')
+        store.beginRequest()
+        expect(store.status).toBe('loading')
+        store.setResponse('pong', false)
+        expect(store.status).toBe('idle')
+        expect(store.response).toBe('pong')
+        expect(store.userText).toBe('ping')
+        expect(store.contextFiles).toHaveLength(1)
+      })
     })
   })
 })

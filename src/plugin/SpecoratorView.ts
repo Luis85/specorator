@@ -24,6 +24,7 @@ import type { ClaudeCliPort } from '@/domain/ports'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 import type { TransportSelection } from '@/plugin/transport/TransportSelector'
 import { useChatStore } from '@/ui/stores/chatStore'
+import { mostRecentlyUsedThreadId } from './chatThreadsPersistence'
 import { trySync } from '@/domain/shared/tryAsync'
 import type SpecoratorPlugin from './main'
 
@@ -118,6 +119,21 @@ export class SpecoratorView extends ItemView {
     setLocale(this.plugin.settings.locale as SupportedLocale)
 
     this.pinia = createPinia()
+
+    // SPEC-ASM-001 §9.5 / REQ-ASM-037 — hydrate persisted chat threads into
+    // the Pinia chat store before the view mounts. The plugin decoded the
+    // blob during `loadSettings()`; malformed records were already filtered
+    // out and logged at `warn`. `activeThreadId` is seeded to the most
+    // recently used record so the chat sidebar resumes the user's last
+    // conversation. Subscribe to subsequent mutations so any change to
+    // `chatThreads` triggers a debounced flush back to plugin data.
+    const persisted = this.plugin.getInitialChatThreads()
+    const chatStore = useChatStore(this.pinia)
+    for (const record of persisted) chatStore.upsertThread(record)
+    chatStore.setActiveThreadId(mostRecentlyUsedThreadId(persisted))
+    chatStore.$subscribe((_mutation, state) => {
+      this.plugin.scheduleChatThreadsPersistence(state.chatThreads)
+    })
 
     this.vueApp = createApp(AppRoot)
     this.vueApp.use(this.pinia)

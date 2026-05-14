@@ -508,17 +508,14 @@ describe('ClaudeSubprocessAdapter — query() happy path (REQ-ASM-029/030/031)',
     expect(spawn.calls[0].command).toBe('/fake/bin/claude')
   })
 
-  it('captures session_id from the first system/init event (REQ-ASM-031)', async () => {
+  it('invokes onSessionId exactly once with the captured session_id (REQ-ASM-031, T-ASM-050)', async () => {
     const { adapter, spawn } = makeAdapter({
       resolver: makeResolver('/fake/bin/claude'),
     })
     await adapter.startup()
 
     const onSessionId = vi.fn()
-    const promise = adapter.query('hi', {
-      onSessionId,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
+    const promise = adapter.query('hi', { onSessionId })
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -530,10 +527,80 @@ describe('ClaudeSubprocessAdapter — query() happy path (REQ-ASM-029/030/031)',
 
     const result = await promise
     expect(result.ok).toBe(true)
-    // The session id must be observable via at least one channel — either the
-    // optional callback or a public adapter getter. The exact mechanism is
-    // left to T-ASM-011; this test asserts the *capture* invariant by
-    // checking the spawn stdout was consumed without error.
+    expect(onSessionId).toHaveBeenCalledTimes(1)
+    expect(onSessionId).toHaveBeenCalledWith('abc-123')
+  })
+
+  it('omits onSessionId invocation when the caller did not supply one (T-ASM-050)', async () => {
+    // Defence-in-depth — the adapter must not synthesise a callback nor
+    // throw when `options.onSessionId` is absent. Asserted via "the test
+    // completes without an unhandled rejection".
+    const { adapter, spawn } = makeAdapter({
+      resolver: makeResolver('/fake/bin/claude'),
+    })
+    await adapter.startup()
+
+    const promise = adapter.query('hi')
+    await Promise.resolve()
+
+    const child = spawn.lastChild()
+    spawn.emitStdout(
+      child,
+      ndjson(systemInit('xyz-9'), resultEvent('ok')),
+    )
+    spawn.closeWith(child, 0)
+
+    const result = await promise
+    expect(result.ok).toBe(true)
+  })
+
+  it('fires onSessionId only once even if multiple system/init events arrive (T-ASM-050)', async () => {
+    // Single-fire contract — a misbehaving CLI emitting two `system/init`
+    // events must not double-call the caller.
+    const { adapter, spawn } = makeAdapter({
+      resolver: makeResolver('/fake/bin/claude'),
+    })
+    await adapter.startup()
+
+    const onSessionId = vi.fn()
+    const promise = adapter.query('hi', { onSessionId })
+    await Promise.resolve()
+
+    const child = spawn.lastChild()
+    spawn.emitStdout(
+      child,
+      ndjson(systemInit('first'), systemInit('second'), resultEvent('ok')),
+    )
+    spawn.closeWith(child, 0)
+
+    const result = await promise
+    expect(result.ok).toBe(true)
+    expect(onSessionId).toHaveBeenCalledTimes(1)
+    expect(onSessionId).toHaveBeenCalledWith('first')
+  })
+
+  it('swallows onSessionId callback errors without failing the turn (T-ASM-050)', async () => {
+    const { adapter, spawn } = makeAdapter({
+      resolver: makeResolver('/fake/bin/claude'),
+    })
+    await adapter.startup()
+
+    const onSessionId = vi.fn(() => {
+      throw new Error('caller bug')
+    })
+    const promise = adapter.query('hi', { onSessionId })
+    await Promise.resolve()
+
+    const child = spawn.lastChild()
+    spawn.emitStdout(
+      child,
+      ndjson(systemInit('abc-123'), resultEvent('ok')),
+    )
+    spawn.closeWith(child, 0)
+
+    const result = await promise
+    expect(result.ok).toBe(true)
+    expect(onSessionId).toHaveBeenCalledTimes(1)
   })
 
   it('returns ok with the result payload after the `result` event (REQ-ASM-030)', async () => {
@@ -849,6 +916,46 @@ describe('ClaudeSubprocessAdapter — resumeSessionId forwarding (REQ-ASM-035)',
     expect(argv).toContain('--resume')
     const idx = argv.indexOf('--resume')
     expect(argv[idx + 1]).toBe('abc-123')
+  })
+
+  it('captured sessionId threaded back as resumeSessionId emits `--resume <id>` on the next turn (TEST-ASM-034, T-ASM-049)', async () => {
+    // Full round-trip: turn 1's `onSessionId` callback hands the captured id
+    // to a caller-managed holder; turn 2's `query()` passes it back as
+    // `options.resumeSessionId`; argv must contain `--resume <id>`.
+    const { adapter, spawn } = makeAdapter({
+      resolver: makeResolver('/fake/bin/claude'),
+    })
+    await adapter.startup()
+
+    let captured: string | null = null
+    const onSessionId = vi.fn((sid: string) => {
+      captured = sid
+    })
+
+    // Turn 1 — no prior session; capture via callback.
+    const p1 = adapter.query('msg-1', { onSessionId })
+    await Promise.resolve()
+    const c1 = spawn.lastChild()
+    spawn.emitStdout(c1, ndjson(systemInit('abc-123'), resultEvent('r-1')))
+    spawn.closeWith(c1, 0)
+    await p1
+
+    expect(captured).toBe('abc-123')
+    expect(spawn.calls[0].args).not.toContain('--resume')
+
+    // Turn 2 — thread the captured id back as resumeSessionId.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p2 = adapter.query('msg-2', { resumeSessionId: captured as any })
+    await Promise.resolve()
+    const c2 = spawn.lastChild()
+    spawn.emitStdout(c2, ndjson(systemInit('def-456'), resultEvent('r-2')))
+    spawn.closeWith(c2, 0)
+    await p2
+
+    const turn2Argv = spawn.calls[1].args
+    expect(turn2Argv).toContain('--resume')
+    const idx = turn2Argv.indexOf('--resume')
+    expect(turn2Argv[idx + 1]).toBe('abc-123')
   })
 
   it('omits `--resume` when no resumeSessionId is provided (INV-5)', async () => {

@@ -71,6 +71,18 @@ export interface ClaudeCliQueryOptions {
    * Satisfies REQ-ASM-035.
    */
   readonly resumeSessionId?: SessionId
+
+  /**
+   * Optional callback invoked exactly once per `query()` call the first time a
+   * non-empty `session_id` is captured from a `system/init` event on the
+   * stream-json wire (REQ-ASM-031). The subscription transport invokes this
+   * synchronously from inside the NDJSON event handler so the caller can
+   * thread the captured id back as `resumeSessionId` on the next turn
+   * (REQ-ASM-035). The SDK adapter ignores it. Implementors must guarantee
+   * a single invocation per turn even if multiple `system/init` events arrive.
+   * Satisfies REQ-ASM-031.
+   */
+  readonly onSessionId?: (sessionId: SessionId) => void
 }
 
 /**
