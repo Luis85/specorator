@@ -100,7 +100,11 @@ function SPApp() {
   }));
   const toggleFolder = (name) => {
     setVaultFolders(prev => {
-      const next = { ...prev, [name]: !prev[name] };
+      // Derive from the effective enabled value the UI uses (missing key === enabled),
+      // not from the raw stored value — otherwise the first click on a folder with no
+      // persisted key writes `true` and the control appears stuck on.
+      const effectivelyEnabled = prev[name] !== false;
+      const next = { ...prev, [name]: !effectivelyEnabled };
       try { localStorage.setItem('sp-vault-folders', JSON.stringify(next)); } catch {}
       return next;
     });
