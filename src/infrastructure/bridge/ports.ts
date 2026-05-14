@@ -9,6 +9,7 @@ import type {
 	CanvasPort,
 	CommunityPluginPort,
 	ClaudeCliPort,
+	ConfirmModalPort,
 } from '@/domain/ports'
 
 export const SETTINGS_PORT: InjectionKey<SettingsPort> = Symbol('SettingsPort')
@@ -20,6 +21,7 @@ export const METADATA_CACHE_PORT: InjectionKey<MetadataCachePort> = Symbol('Meta
 export const CANVAS_PORT: InjectionKey<CanvasPort> = Symbol('CanvasPort')
 export const COMMUNITY_PLUGIN_PORT: InjectionKey<CommunityPluginPort> = Symbol('CommunityPluginPort')
 export const CLAUDE_CLI_PORT: InjectionKey<ClaudeCliPort> = Symbol('ClaudeCliPort')
+export const CONFIRM_MODAL_PORT: InjectionKey<ConfirmModalPort> = Symbol('ConfirmModalPort')
 export const IS_MOBILE_KEY: InjectionKey<boolean> = Symbol('IsMobile')
 /**
  * Reactive counter provided by SpecoratorView. ChatSidebar watches this to

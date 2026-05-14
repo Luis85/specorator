@@ -20,3 +20,4 @@ export type { ObsidianMcpServerPort, McpConnectionConfig } from './obsidian-mcp-
 export type { CommunityPluginPort } from './CommunityPluginPort'
 export type { ClaudeCliPort, ClaudeCliQueryOptions, ClaudeCliErrorCode } from './ClaudeCliPort'
 export { ClaudeCliError } from './ClaudeCliPort'
+export type { ConfirmModalPort, ConfirmModalRequest } from './ConfirmModalPort'
