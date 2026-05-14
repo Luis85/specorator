@@ -28,8 +28,10 @@ onMounted(async () => {
 	const result = await tryAsync(() => vaultPort.listFolders(parentPath))
 	if (result.ok && result.value.includes(folderName)) {
 		workspaceStatus.value = 'ready'
+	} else if (!result.ok) {
+		logger.error('Failed to check workspace status', result.error)
+		workspaceStatus.value = 'error'
 	} else {
-		if (!result.ok) logger.error('Failed to check workspace status', result.error)
 		workspaceStatus.value = 'not-installed'
 	}
 })
