@@ -2,7 +2,10 @@
 /* Screen-reader-only utility — visually hidden but readable by assistive
    technology. Restored after the PR-ASM-1 build:web regeneration pruned
    it (Codex P2). Consumed by ContextFileChip.vue and other components
-   that surface accessible labels without visible text. */
+   that surface accessible labels without visible text. The bundler keeps
+   trimming this rule because no Vue SFC currently declares it inside a
+   scoped <style> block — it lives only as plain CSS, and the
+   SFC-hash-driven pruner doesn't see it as referenced. */
 .specorator-root .sr-only {
   position: absolute;
   width: 1px;
@@ -503,18 +506,18 @@ to { transform: rotate(360deg);
   justify-content: flex-end;
 }
 
-.specorator-root :where(.sp-chat__response-idle[data-v-84bcf2e1]) {
+.specorator-root :where(.sp-chat__response-idle[data-v-49d7d6f8]) {
   color: var(--text-muted);
   font-size: 0.875rem;
   margin: 0;
   font-style: italic;
 }
-.specorator-root :where(.sp-chat__response-loading[data-v-84bcf2e1]) {
+.specorator-root :where(.sp-chat__response-loading[data-v-49d7d6f8]) {
   color: var(--text-muted);
   font-size: 0.875rem;
   margin: 0;
 }
-.specorator-root :where(.sp-chat__response-text[data-v-84bcf2e1]) {
+.specorator-root :where(.sp-chat__response-text[data-v-49d7d6f8]) {
   white-space: pre-wrap;
   word-break: break-word;
   font-family: var(--font-text);
@@ -522,7 +525,7 @@ to { transform: rotate(360deg);
   color: var(--text-normal);
   margin: 0;
 }
-.specorator-root :where(.sp-chat__trim-notice[data-v-84bcf2e1]) {
+.specorator-root :where(.sp-chat__trim-notice[data-v-49d7d6f8]) {
   background: var(--background-modifier-border);
   color: var(--text-warning, var(--text-muted));
   border-radius: 6px;
@@ -530,13 +533,13 @@ to { transform: rotate(360deg);
   font-size: 0.8125rem;
   margin: 0 0 0.5rem;
 }
-.specorator-root :where(.sp-chat__error[data-v-84bcf2e1]) {
+.specorator-root :where(.sp-chat__error[data-v-49d7d6f8]) {
   color: var(--text-error);
   font-size: 0.875rem;
   margin: 0;
 }
 
-.specorator-root :where(.sp-chat-sidebar[data-v-7cb4ade0]) {
+.specorator-root :where(.sp-chat-sidebar[data-v-b0475bd3]) {
   padding: 1rem;
   display: flex;
   flex-direction: column;
@@ -544,18 +547,18 @@ to { transform: rotate(360deg);
   height: 100%;
   box-sizing: border-box;
 }
-.specorator-root :where(.sp-chat__title[data-v-7cb4ade0]) {
+.specorator-root :where(.sp-chat__title[data-v-b0475bd3]) {
   margin: 0;
   font-size: 1.125rem;
   font-weight: 700;
   color: var(--text-normal);
 }
-.specorator-root :where(.sp-chat__divider[data-v-7cb4ade0]) {
+.specorator-root :where(.sp-chat__divider[data-v-b0475bd3]) {
   margin: 0;
   border: none;
   border-top: 1px solid var(--background-modifier-border);
 }
-.specorator-root :where(.sp-chat__degraded[data-v-7cb4ade0]) {
+.specorator-root :where(.sp-chat__degraded[data-v-b0475bd3]) {
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
@@ -564,13 +567,13 @@ to { transform: rotate(360deg);
   flex-direction: column;
   gap: 0.5rem;
 }
-.specorator-root :where(.sp-chat__degraded-heading[data-v-7cb4ade0]) {
+.specorator-root :where(.sp-chat__degraded-heading[data-v-b0475bd3]) {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
   color: var(--text-normal);
 }
-.specorator-root :where(.sp-chat__degraded-body[data-v-7cb4ade0]) {
+.specorator-root :where(.sp-chat__degraded-body[data-v-b0475bd3]) {
   margin: 0;
   font-size: 0.875rem;
   color: var(--text-muted);
