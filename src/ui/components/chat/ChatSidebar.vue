@@ -152,7 +152,8 @@ function handleUserTextUpdate(text: string): void {
 // Determine if API key is missing when unavailable
 async function isApiKeyMissing(): Promise<boolean> {
   const settings = await settingsPort.getSettings()
-  return settings.anthropicApiKey.trim() === ''
+  // Cast to string|undefined: legacy stored settings may lack this field at runtime.
+  return ((settings.anthropicApiKey as string | undefined) ?? '').trim() === ''
 }
 
 const apiKeyMissing = ref(false)
