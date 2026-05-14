@@ -11,12 +11,17 @@ import type {
 } from '@/domain/ports'
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
+function folderPrefix(parent: string): string {
+  if (parent === '') return ''
+  return parent.endsWith('/') ? parent : `${parent}/`
+}
+
 /**
  * In-memory bridge used in standalone dev mode and unit tests.
  * Provides test helper methods for inspecting state.
  */
 export class MockBridge
-	implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, CommunityPluginPort, ClaudeCliPort
+	implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, ClaudeCliPort, CommunityPluginPort
 {
   private readonly files = new Map<string, string>()
   private readonly folders = new Set<string>()
@@ -71,15 +76,19 @@ export class MockBridge
   }
 
   async listFolders(parent: string): Promise<string[]> {
-    const prefix = parent.endsWith('/') ? parent : `${parent}/`
+    const prefix = folderPrefix(parent)
     const names = new Set<string>()
+    for (const folder of this.folders) {
+      if (folder.startsWith(prefix)) {
+        const rest = folder.slice(prefix.length)
+        if (rest && !rest.includes('/')) names.add(rest)
+      }
+    }
     for (const path of this.files.keys()) {
-      if (path.startsWith(prefix)) {
+      if (!prefix || path.startsWith(prefix)) {
         const rest = path.slice(prefix.length)
         const firstSegment = rest.split('/')[0]
-        if (firstSegment && rest.includes('/')) {
-          names.add(firstSegment)
-        }
+        if (firstSegment && rest.includes('/')) names.add(firstSegment)
       }
     }
     return [...names]
@@ -155,7 +164,7 @@ export class MockBridge
     this.settings = { ...settings }
   }
 
-  // ── Test helpers ──────────────────────────────────────────────────────────
+  // ── Test helpers ─────────────────────────────────────────────────────────────
 
   getNotices(): {
     severity: 'error' | 'warning' | 'success' | 'info'
@@ -177,7 +186,7 @@ export class MockBridge
     this.settings = { ...this.settings, ...partial }
   }
 
-  // ── LoggerPort ────────────────────────────────────────────────────────────
+  // ── LoggerPort ───────────────────────────────────────────────────────────────
 
   debug(message: string, context?: Record<string, unknown>): void {
     this.logEntries.push({ level: 'debug', message, context })
@@ -199,6 +208,12 @@ export class MockBridge
     console.error(`[MockBridge] ${message}`, error, context)
   }
 
+  // ── ClaudeCliPort ─────────────────────────────────────────────────────────
+
+  isAvailable(): Promise<boolean> {
+    return Promise.resolve(false)
+  }
+
   // ── CommunityPluginPort ───────────────────────────────────────────────────
 
   isPluginEnabled(id: string): boolean {
@@ -211,11 +226,5 @@ export class MockBridge
 
   seedEnabledPlugins(ids: string[]): void {
     this.enabledPluginIds = new Set(ids)
-  }
-
-  // ── ClaudeCliPort ─────────────────────────────────────────────────────────
-
-  isAvailable(): Promise<boolean> {
-    return Promise.resolve(false)
   }
 }
