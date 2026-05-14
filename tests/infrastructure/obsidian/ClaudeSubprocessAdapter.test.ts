@@ -601,16 +601,17 @@ describe('ClaudeSubprocessAdapter — long-lived per thread (REQ-ASM-010)', () =
     })
     await adapter.startup()
 
-    // Three turns on the same thread. The exact threadId surface is owned by
-    // the implementation — but the adapter must accept either an explicit
-    // option or default to a single "current thread" handle in the absence of
-    // one. We exercise the default-thread reuse path.
+    // Three turns on the same thread. The adapter keeps the child alive
+    // between turns (long-lived per-thread strategy, REQ-ASM-010). Each
+    // turn's `result` event completes that turn's promise but the child
+    // process stays open for the next prompt — we do NOT emit `close`
+    // here, otherwise the adapter correctly purges the dead handle and
+    // respawns (Codex P1, see _handleClose at the bottom of the adapter).
     const turn = async (text: string, response: string) => {
       const p = adapter.query(text)
       await Promise.resolve()
       const child = spawn.lastChild()
       spawn.emitStdout(child, ndjson(systemInit('t-1'), resultEvent(response)))
-      spawn.closeWith(child, 0)
       return p
     }
 
@@ -620,6 +621,9 @@ describe('ClaudeSubprocessAdapter — long-lived per thread (REQ-ASM-010)', () =
 
     // INVARIANT (REQ-ASM-010): exactly one spawn for the streaming transport.
     expect(spawn.spawn).toHaveBeenCalledTimes(1)
+
+    // Clean up: now actually close the child so the test doesn't leak.
+    spawn.closeWith(spawn.lastChild(), 0)
   })
 })
 

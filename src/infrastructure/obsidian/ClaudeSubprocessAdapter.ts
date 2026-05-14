@@ -89,6 +89,7 @@ const SIGKILL_GRACE_MS = 200
 // Per-thread streaming-process record. One entry per long-lived child.
 // -----------------------------------------------------------------------------
 interface ThreadProc {
+  readonly threadKey: string
   readonly child: ChildProcessLike
   /** Stdout chunk buffer for line-based NDJSON reassembly (REQ-ASM-029). */
   stdoutBuffer: string
@@ -320,7 +321,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
     const existing = this._threads.get(threadKey)
     if (existing !== undefined) return ok(existing)
 
-    const spawned = this._spawnChild(binaryPath, argv)
+    const spawned = this._spawnChild(binaryPath, argv, threadKey)
     if (!spawned.ok) return spawned
     this._threads.set(threadKey, spawned.value)
     return ok(spawned.value)
@@ -334,6 +335,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
   private _spawnChild(
     binaryPath: string,
     argv: readonly string[],
+    threadKey: string,
   ): Result<ThreadProc, ClaudeCliError> {
     let child: ChildProcess
     try {
@@ -367,6 +369,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
     }
 
     const proc: ThreadProc = {
+      threadKey,
       child: childLike,
       stdoutBuffer: '',
       pending: null,
@@ -544,6 +547,10 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
         )
       }
     }
+
+    // Purge the dead handle so the next query on this thread spawns fresh
+    // rather than reusing the closed child (Codex P1, PR-ASM-1 review).
+    this._threads.delete(proc.threadKey)
 
     // No readline interface to close — stdout listeners detach with the
     // EventEmitter as the underlying process is torn down.

@@ -130,10 +130,23 @@ export class SpecoratorView extends ItemView {
     // Refresh the active port from the current settings just before mounting
     // so the first frame already reflects any setting changes since ctor.
     this._refreshActivePort()
-    // Provide the reactive ref's current value through the UI's existing
-    // injection key (SPEC §9.5). UI consumers continue to call inject() at
-    // setup time; bumpSettingsVersion() rotates the value through this ref.
-    this.vueApp.provide(CLAUDE_CLI_PORT, this._activeClaudeCliPort.value)
+    // Provide a Proxy that forwards every property access (including method
+    // calls) to `this._activeClaudeCliPort.value`. The reactive ref's value
+    // can rotate between renders (e.g. when `bumpSettingsVersion()` re-runs
+    // selectTransport), so we cannot freeze a snapshot at mount time — that
+    // would leave UI consumers on a stale adapter after transport switches.
+    // Methods are bound to the current adapter so their internal `this`
+    // references still resolve correctly. UI consumers see a normal
+    // `ClaudeCliPort` and need no changes (SPEC §9.5).
+    const ref = this._activeClaudeCliPort
+    const reactivePort = new Proxy({} as ClaudeCliPort, {
+      get(_target, prop): unknown {
+        const current = ref.value as unknown as Record<PropertyKey, unknown>
+        const value = current[prop]
+        return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(current) : value
+      },
+    })
+    this.vueApp.provide(CLAUDE_CLI_PORT, reactivePort)
     this.vueApp.provide(COMMUNITY_PLUGIN_PORT, bridge)
     this.vueApp.provide(IS_MOBILE_KEY, Platform.isMobile)
     this.vueApp.provide(SETTINGS_VERSION_KEY, this._settingsVersion)
