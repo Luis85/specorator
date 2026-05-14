@@ -1,6 +1,7 @@
-import { ItemView, type WorkspaceLeaf } from 'obsidian'
-import { createApp, type App as VueApp } from 'vue'
-import { createPinia } from 'pinia'
+import { ItemView, Platform, type WorkspaceLeaf } from 'obsidian'
+import { createApp, ref, type App as VueApp } from 'vue'
+import { createPinia, type Pinia } from 'pinia'
+import type { Router } from 'vue-router'
 import { router } from '@/ui/router'
 import { i18n, setLocale, type SupportedLocale } from '@/ui/i18n'
 import AppRoot from '@/ui/AppRoot.vue'
@@ -12,10 +13,13 @@ import {
   LOGGER_PORT,
   CLAUDE_CLI_PORT,
   COMMUNITY_PLUGIN_PORT,
+  IS_MOBILE_KEY,
+  SETTINGS_VERSION_KEY,
 } from '@/infrastructure/bridge/ports'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { FeatureService } from '@/application/feature/FeatureService'
 import { FEATURE_SERVICE_KEY } from '@/ui/composables/useFeatureService'
+import type { ClaudeCliPort } from '@/domain/ports'
 import type SpecoratorPlugin from './main'
 
 export const VIEW_TYPE = 'specorator'
@@ -24,10 +28,27 @@ export class SpecoratorView extends ItemView {
   private vueApp: VueApp | null = null
   private _onUnhandledRejection: ((e: PromiseRejectionEvent) => void) | null = null
   private _routerErrorCleanup: (() => void) | null = null
+  private _router: Router | null = null
+
+  /**
+   * Exposed so main.ts can access the Pinia instance to call store actions
+   * (e.g. addFile, setActiveFile) from Obsidian event handlers.
+   * Set in onOpen() after createPinia().
+   * Satisfies T-CCS-035.
+   */
+  public pinia!: Pinia
+
+  /**
+   * Reactive counter. Incremented by bumpSettingsVersion() each time the
+   * Anthropic API key is saved in Settings. ChatSidebar watches this to
+   * re-check adapter availability. Satisfies D-CCS-003, T-CCS-037.
+   */
+  private readonly _settingsVersion = ref(0)
 
   constructor(
     leaf: WorkspaceLeaf,
     private readonly plugin: SpecoratorPlugin,
+    private readonly claudeCliPort: ClaudeCliPort,
   ) {
     super(leaf)
   }
@@ -49,8 +70,10 @@ export class SpecoratorView extends ItemView {
 
     setLocale(this.plugin.settings.locale as SupportedLocale)
 
+    this.pinia = createPinia()
+
     this.vueApp = createApp(AppRoot)
-    this.vueApp.use(createPinia())
+    this.vueApp.use(this.pinia)
     this.vueApp.use(router)
     this.vueApp.use(i18n)
     this.vueApp.provide(SETTINGS_PORT, bridge)
@@ -58,8 +81,10 @@ export class SpecoratorView extends ItemView {
     this.vueApp.provide(WORKSPACE_PORT, bridge)
     this.vueApp.provide(NOTIFICATION_PORT, bridge)
     this.vueApp.provide(LOGGER_PORT, bridge)
-    this.vueApp.provide(CLAUDE_CLI_PORT, bridge)
+    this.vueApp.provide(CLAUDE_CLI_PORT, this.claudeCliPort)
     this.vueApp.provide(COMMUNITY_PLUGIN_PORT, bridge)
+    this.vueApp.provide(IS_MOBILE_KEY, Platform.isMobile)
+    this.vueApp.provide(SETTINGS_VERSION_KEY, this._settingsVersion)
     this.vueApp.provide(
       FEATURE_SERVICE_KEY,
       new FeatureService(new FeatureRepository(bridge, bridge, bridge)),
@@ -85,6 +110,8 @@ export class SpecoratorView extends ItemView {
       bridge.showError('Navigation failed. Please try again.')
     })
 
+    this._router = router
+
     this.vueApp.mount(mountPoint)
     return Promise.resolve()
   }
@@ -96,9 +123,29 @@ export class SpecoratorView extends ItemView {
     }
     this._routerErrorCleanup?.()
     this._routerErrorCleanup = null
+    this._router = null
     this.plugin.bridge?.hideAllNotices()
     this.vueApp?.unmount()
     this.vueApp = null
     return Promise.resolve()
+  }
+
+  /**
+   * Navigates the embedded Vue Router to the given path.
+   * No-op if the view is not currently open.
+   * Satisfies T-CCS-035 (URI handler navigation).
+   */
+  public navigateTo(path: string): void {
+    void this._router?.push(path)
+  }
+
+  /**
+   * Increments the settings-version reactive counter, signalling ChatSidebar
+   * to re-check adapter availability. Called by the settings tab after the
+   * Anthropic API key is saved.
+   * Satisfies D-CCS-003, T-CCS-037.
+   */
+  public bumpSettingsVersion(): void {
+    this._settingsVersion.value++
   }
 }
