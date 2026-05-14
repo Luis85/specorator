@@ -27,6 +27,10 @@ export class ChatResponsePO {
 		return this.wrapper.find(this.byTid('chat-response-trim-notice'))
 	}
 
+	get structuredFailEl() {
+		return this.wrapper.find(this.byTid('chat-response-structured-fail'))
+	}
+
 	hasIdle(): boolean {
 		return this.idleEl.exists()
 	}
@@ -45,6 +49,22 @@ export class ChatResponsePO {
 
 	hasTrimNotice(): boolean {
 		return this.trimNoticeEl.exists()
+	}
+
+	hasStructuredFail(): boolean {
+		return this.structuredFailEl.exists()
+	}
+
+	structuredFailRole(): string | undefined {
+		return this.structuredFailEl.attributes('role')
+	}
+
+	structuredFailAriaLive(): string | undefined {
+		return this.structuredFailEl.attributes('aria-live')
+	}
+
+	structuredFailContent(): string {
+		return this.structuredFailEl.text()
 	}
 
 	loadingRole(): string | undefined {

@@ -1,13 +1,22 @@
 /**
- * T-CCS-024 — Tests: ChatResponse — all 6 state variants and ARIA live regions.
+ * T-CCS-024 — Tests: ChatResponse — all 7 state variants and ARIA live regions.
  * Satisfies REQ-CCS-012, REQ-CCS-016, NFR-CCS-009, SPEC-CCS-001 §7.6.
+ * T-ASM-042 extends with the `structured-fail` state (REQ-ASM-025) plus
+ * the `proposalCard` named slot.
  */
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ChatResponse from '@/ui/components/chat/ChatResponse.vue'
 import { ChatResponsePO } from './ChatResponse.po'
 
-type ResponseState = 'idle' | 'loading' | 'success' | 'trimmed-success' | 'timeout' | 'error'
+type ResponseState =
+	| 'idle'
+	| 'loading'
+	| 'success'
+	| 'trimmed-success'
+	| 'timeout'
+	| 'error'
+	| 'structured-fail'
 
 function mountResponse(state: ResponseState, text?: string) {
 	const wrapper = mount(ChatResponse, {
@@ -111,6 +120,90 @@ describe('ChatResponse', () => {
 		it('shows generic error copy', () => {
 			const po = mountResponse('error')
 			expect(po.errorContent()).toContain('Something went wrong')
+		})
+	})
+
+	describe('structured-fail state (T-ASM-042, REQ-ASM-025)', () => {
+		it('renders data-testid="chat-response-structured-fail"', () => {
+			const po = mountResponse('structured-fail')
+			expect(po.hasStructuredFail()).toBe(true)
+		})
+
+		it('structured-fail element has role="alert"', () => {
+			const po = mountResponse('structured-fail')
+			expect(po.structuredFailRole()).toBe('alert')
+		})
+
+		it('structured-fail element has aria-live="assertive"', () => {
+			const po = mountResponse('structured-fail')
+			expect(po.structuredFailAriaLive()).toBe('assertive')
+		})
+
+		it('shows plain-language copy with no jargon (NFR-ASM-009 / NFR-CCS-012)', () => {
+			const po = mountResponse('structured-fail')
+			const copy = po.structuredFailContent().toLowerCase()
+			expect(copy).toContain('unexpected response')
+			// Forbidden terms per SPEC §10.3 / DESIGN §B3.
+			for (const term of [
+				'subprocess',
+				'oauth',
+				'session_id',
+				'stream-json',
+				'schema',
+				'zod',
+				'envelope',
+				'api key',
+				'system prompt',
+			]) {
+				expect(copy).not.toContain(term)
+			}
+		})
+
+		it('does not render any other state element', () => {
+			const po = mountResponse('structured-fail')
+			expect(po.hasIdle()).toBe(false)
+			expect(po.hasLoading()).toBe(false)
+			expect(po.hasText()).toBe(false)
+			expect(po.hasTrimNotice()).toBe(false)
+			expect(po.hasError()).toBe(false)
+		})
+
+		it('other states do not render the structured-fail element (mutual exclusion regression)', () => {
+			for (const state of [
+				'idle',
+				'loading',
+				'success',
+				'trimmed-success',
+				'timeout',
+				'error',
+			] as const) {
+				const po = mountResponse(state, 'Hello world')
+				expect(po.hasStructuredFail()).toBe(false)
+			}
+		})
+	})
+
+	describe('proposalCard named slot (T-ASM-042)', () => {
+		it('renders slot content alongside the success text', () => {
+			const wrapper = mount(ChatResponse, {
+				props: { state: 'success', text: 'Reply body' },
+				slots: {
+					proposalCard: '<div data-testid="stub-proposal-card">card</div>',
+				},
+			})
+			expect(wrapper.find('[data-testid="chat-response-text"]').exists()).toBe(true)
+			expect(wrapper.find('[data-testid="stub-proposal-card"]').exists()).toBe(true)
+		})
+
+		it('renders slot content alongside trimmed-success', () => {
+			const wrapper = mount(ChatResponse, {
+				props: { state: 'trimmed-success', text: 'Reply body' },
+				slots: {
+					proposalCard: '<div data-testid="stub-proposal-card">card</div>',
+				},
+			})
+			expect(wrapper.find('[data-testid="chat-response-trim-notice"]').exists()).toBe(true)
+			expect(wrapper.find('[data-testid="stub-proposal-card"]').exists()).toBe(true)
 		})
 	})
 })

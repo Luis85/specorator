@@ -1,6 +1,13 @@
 <script setup lang="ts">
 defineProps<{
-  state: 'idle' | 'loading' | 'success' | 'trimmed-success' | 'timeout' | 'error'
+  state:
+    | 'idle'
+    | 'loading'
+    | 'success'
+    | 'trimmed-success'
+    | 'timeout'
+    | 'error'
+    | 'structured-fail'
   text?: string
 }>()
 </script>
@@ -37,16 +44,14 @@ defineProps<{
       Some context was trimmed to keep the message within size limits.
     </p>
     <div class="sp-chat__response-text" data-testid="chat-response-text">{{ text }}</div>
+    <slot name="proposalCard" />
   </template>
 
   <!-- Success state -->
-  <div
-    v-else-if="state === 'success'"
-    class="sp-chat__response-text"
-    data-testid="chat-response-text"
-  >
-    {{ text }}
-  </div>
+  <template v-else-if="state === 'success'">
+    <div class="sp-chat__response-text" data-testid="chat-response-text">{{ text }}</div>
+    <slot name="proposalCard" />
+  </template>
 
   <!-- Timeout error -->
   <p
@@ -68,6 +73,17 @@ defineProps<{
     data-testid="chat-response-error"
   >
     Something went wrong. Please try again.
+  </p>
+
+  <!-- Structured-output parse failure (REQ-ASM-025) -->
+  <p
+    v-else-if="state === 'structured-fail'"
+    role="alert"
+    aria-live="assertive"
+    class="sp-chat__error"
+    data-testid="chat-response-structured-fail"
+  >
+    Assistant returned an unexpected response. Please try again.
   </p>
 </template>
 
