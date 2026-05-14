@@ -18,3 +18,5 @@ export type { MetadataCachePort, FileMetadataSnapshot } from './metadata-cache-p
 export type { CanvasPort, JsonCanvasData } from './canvas-port'
 export type { ObsidianMcpServerPort, McpConnectionConfig } from './obsidian-mcp-server-port'
 export type { CommunityPluginPort } from './CommunityPluginPort'
+export type { ClaudeCliPort, ClaudeCliQueryOptions, ClaudeCliErrorCode } from './ClaudeCliPort'
+export { ClaudeCliError } from './ClaudeCliPort'
