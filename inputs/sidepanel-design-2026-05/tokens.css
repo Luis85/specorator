@@ -1,0 +1,52 @@
+/* Design-system tokens companion to Sidepanel_Design_Brief.html.
+
+   The brief uses 28 CSS custom properties (colors, type scale, layout) that
+   are referenced via `var(--…)`. Without this stylesheet the brief renders
+   without its intended visual system. Values below match the warm paper-
+   and-ink palette the brief was designed against; tweak in place if the
+   handed-in design ever ships an authoritative tokens.css and the two
+   diverge. */
+
+:root {
+	/* ── Surfaces ────────────────────────────────────────────────────────── */
+	--paper: #f7f3ec; /* page background — warm cream */
+	--ink: #1f1d18; /* primary text — dark warm grey */
+	--on-ink: #faf7f1; /* text on dark backgrounds */
+	--on-ink-mute: rgba(250, 247, 241, 0.72);
+	--surface: #ffffff; /* cards, neutral surfaces */
+	--surface-2: #efeae0; /* alt band */
+	--surface-3: #e6dfd1; /* deeper alt band */
+	--muted: #6c655a; /* secondary text */
+	--line: #ddd6c5; /* hairline borders */
+
+	/* ── Accent (lane: define / spec-first green) ─────────────────────────── */
+	--accent: #2f9461; /* primary accent — fresh green */
+	--accent-strong: #1f6b46; /* accent for text on light wash */
+	--soft-green: #e2f1e7; /* pale wash for accent backgrounds */
+	--lane-define-soft: #b9dec7; /* accent border on soft-green */
+
+	/* ── Status washes ────────────────────────────────────────────────────── */
+	--soft-yellow: #fdf3cf; /* open-question badges */
+	--highlighter: #ffe98a; /* highlighter callout */
+
+	/* ── Typography ───────────────────────────────────────────────────────── */
+	--font-sans:
+		'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--font-mono:
+		'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+	--leading-body: 1.55;
+
+	/* ── Type scale ───────────────────────────────────────────────────────── */
+	--fs-micro: 10px;
+	--fs-eyebrow: 11px;
+	--fs-meta: 12px;
+	--fs-caption: 13px;
+	--fs-body-sm: 14px;
+	--fs-body: 15px;
+	--fs-body-lg: 17px;
+	--fs-h3-sm: 18px;
+	--fs-h3: 22px;
+
+	/* ── Layout ───────────────────────────────────────────────────────────── */
+	--gutter-page: 24px;
+}
