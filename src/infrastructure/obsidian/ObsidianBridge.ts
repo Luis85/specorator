@@ -197,7 +197,7 @@ export class ObsidianBridge
 
   isPluginEnabled(id: string): boolean {
     const enabled = this._getEnabledPlugins()
-    return enabled !== null && enabled.has(id)
+    return enabled?.has(id) ?? false
   }
 
   listEnabledPluginIds(): string[] {
