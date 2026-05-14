@@ -43,10 +43,19 @@
  * own credentials. The string literal for that directory is INTENTIONALLY
  * absent from this file; lint enforcement lives in T-ASM-049.
  *
- * `runStructured` / `queryStructured` are deferred to T-ASM-038 (PR-ASM-2).
+ * `runStructured` lands in T-ASM-039 (PR-ASM-2) and is reached only through
+ * the application-layer `queryStructured()` wrapper after the structural
+ * type guard `isSubscriptionCapable(port)` narrows the port. The method does
+ * NOT live on `ClaudeCliPort` — that interface stays at four members per
+ * ADR-008 narrow-port discipline.
  */
 import type { ChildProcess, SpawnOptions } from 'node:child_process'
 
+import { createFileEnvelopeJsonSchema } from '@/application/chat/createFileEnvelopeSchema'
+import type {
+  StructuredCliCallOptions,
+  StructuredCliRawResult,
+} from '@/application/chat/queryStructured'
 import {
   ClaudeCliError,
   type ClaudeCliPort,
@@ -326,6 +335,233 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
         textBuffer: [],
         timeoutHandle,
       }
+    })
+  }
+
+  // ── runStructured() — one-shot structured one-shot path ──────────────────
+
+  /**
+   * Structured-output one-shot. Spawns a fresh short-lived `claude` subprocess
+   * with `--output-format json --json-schema '<schema>'` (INV-4), collects the
+   * entire stdout to a buffer, `JSON.parse`s it once at close, and returns
+   * `{ result, structured_output }`. Never registered as a "streaming" child
+   * (REQ-ASM-049), but tracked in `_activeChildren` so `shutdown()` can
+   * SIGTERM mid-call.
+   *
+   * Never throws. Returns Result<StructuredCliRawResult, ClaudeCliError>; the
+   * envelope parser runs in the application-layer `queryStructured()`
+   * wrapper, which is the only caller.
+   *
+   * Satisfies REQ-ASM-021 (structured framing), REQ-ASM-049 (one-shot
+   * process), and the §4.4 error map (`JSON.parse` failure → QUERY_FAILED;
+   * non-zero exit → QUERY_FAILED).
+   */
+  async runStructured(
+    prompt: string,
+    options: StructuredCliCallOptions,
+  ): Promise<Result<StructuredCliRawResult, ClaudeCliError>> {
+    if (!this._available || this._binaryPath === null) {
+      return err(
+        new ClaudeCliError(
+          'CLI_LAUNCH_FAILED',
+          'Subscription transport is not available — Claude CLI binary not found',
+        ),
+      )
+    }
+
+    const timeoutMs = this._clampTimeout(options.timeoutMs)
+    const argv = this._buildStructuredArgv(prompt, options)
+
+    let child: ChildProcess
+    try {
+      child = this._spawn(this._binaryPath, argv, { stdio: ['pipe', 'pipe', 'pipe'] })
+    } catch (e: unknown) {
+      const code = (e as NodeJS.ErrnoException | undefined)?.code
+      this._logger.warn('subscription.structured.spawn_failed', {
+        transport: 'subscription',
+        event: 'structured.spawn_failed',
+        code: code ?? null,
+      })
+      return err(
+        new ClaudeCliError(
+          'CLI_LAUNCH_FAILED',
+          'Failed to spawn Claude CLI subprocess for structured output',
+          e,
+        ),
+      )
+    }
+
+    const childLike = child as unknown as ChildProcessLike
+    if (childLike.stdout === null) {
+      return err(
+        new ClaudeCliError(
+          'CLI_LAUNCH_FAILED',
+          'Spawned Claude CLI subprocess has no stdout',
+        ),
+      )
+    }
+
+    this._activeChildren.add(childLike)
+    return this._collectStructuredStdout(childLike, timeoutMs)
+  }
+
+  /**
+   * Wire up the one-shot stdout/close/error pipeline and resolve with either
+   * a parsed `StructuredCliRawResult` or a mapped `ClaudeCliError`. Extracted
+   * from `runStructured` to keep cyclomatic complexity below the lint
+   * threshold.
+   */
+  private _collectStructuredStdout(
+    child: ChildProcessLike,
+    timeoutMs: number,
+  ): Promise<Result<StructuredCliRawResult, ClaudeCliError>> {
+    return new Promise<Result<StructuredCliRawResult, ClaudeCliError>>((resolve) => {
+      let stdoutBuffer = ''
+      let settled = false
+
+      const settle = (r: Result<StructuredCliRawResult, ClaudeCliError>): void => {
+        if (settled) return
+        settled = true
+        // eslint-disable-next-line obsidianmd/prefer-active-window-timers -- infra layer, no Obsidian context
+        clearTimeout(timeoutHandle)
+        this._activeChildren.delete(child)
+        resolve(r)
+      }
+
+      // eslint-disable-next-line obsidianmd/prefer-active-window-timers -- infra layer, no Obsidian context
+      const timeoutHandle = setTimeout(() => {
+        if (settled) return
+        this._killChild(child)
+        settle(
+          err(
+            new ClaudeCliError(
+              'TIMEOUT',
+              `Structured query exceeded ${timeoutMs} ms`,
+            ),
+          ),
+        )
+      }, timeoutMs)
+
+      // Stdout is small and bounded — the structured path emits a single
+      // JSON object once, so buffer-and-parse-at-close is simpler and avoids
+      // the NDJSON state machine.
+      if (child.stdout !== null) {
+        child.stdout.on('data', (chunk: Buffer | string) => {
+          stdoutBuffer += typeof chunk === 'string' ? chunk : chunk.toString('utf8')
+        })
+      }
+
+      child.on('error', (errArg: unknown) => {
+        const code = (errArg as NodeJS.ErrnoException | undefined)?.code
+        this._logger.warn('subscription.structured.child_error', {
+          transport: 'subscription',
+          event: 'structured.child_error',
+          code: code ?? null,
+        })
+        settle(
+          err(
+            new ClaudeCliError(
+              'CLI_LAUNCH_FAILED',
+              'Claude CLI subprocess emitted error before completion',
+              errArg,
+            ),
+          ),
+        )
+      })
+
+      child.on('close', (...args: unknown[]) => {
+        if (settled) return
+        const exitCode = typeof args[0] === 'number' ? args[0] : null
+        settle(this._parseStructuredStdout(stdoutBuffer, exitCode))
+      })
+    })
+  }
+
+  /**
+   * Map the buffered stdout + exit code to either a parsed
+   * `StructuredCliRawResult` or the appropriate `ClaudeCliError`. Pure helper —
+   * no I/O.
+   */
+  private _parseStructuredStdout(
+    stdoutBuffer: string,
+    exitCode: number | null,
+  ): Result<StructuredCliRawResult, ClaudeCliError> {
+    if (exitCode !== null && exitCode !== 0) {
+      return err(
+        new ClaudeCliError(
+          'QUERY_FAILED',
+          `Claude CLI subprocess exited with code ${exitCode}`,
+        ),
+      )
+    }
+
+    const trimmed = stdoutBuffer.trim()
+    if (trimmed.length === 0) {
+      return err(
+        new ClaudeCliError(
+          'QUERY_FAILED',
+          'Claude CLI produced no stdout for structured query',
+        ),
+      )
+    }
+
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(trimmed)
+    } catch (e: unknown) {
+      // SPEC §4.4 — JSON.parse failure on structured stdout → QUERY_FAILED.
+      // Never log the stdout body (NFR-ASM-005 / NFR-ASM-012).
+      this._logger.warn('subscription.structured.stdout_invalid_json', {
+        transport: 'subscription',
+        event: 'structured.stdout_invalid_json',
+      })
+      return err(
+        new ClaudeCliError(
+          'QUERY_FAILED',
+          'Claude CLI produced unparseable JSON for structured query',
+          e,
+        ),
+      )
+    }
+
+    if (parsed === null || typeof parsed !== 'object') {
+      return err(
+        new ClaudeCliError(
+          'QUERY_FAILED',
+          'Claude CLI structured stdout was not a JSON object',
+        ),
+      )
+    }
+
+    const record = parsed as Record<string, unknown>
+    const resultField = typeof record.result === 'string' ? record.result : ''
+    // Pass `structured_output` through verbatim — the application-layer
+    // parser owns the Zod validation. Missing field is fine; the parser
+    // falls back to the brace-depth scan of `.result`.
+    return ok({
+      result: resultField,
+      structured_output: record.structured_output,
+    })
+  }
+
+  /**
+   * Build the argv vector for a `runStructured()` invocation. Delegates to
+   * the canonical `buildSubprocessArgs` (INV-1…INV-6); the structured-output
+   * framing is selected by passing a non-null `jsonSchema`.
+   */
+  private _buildStructuredArgv(
+    prompt: string,
+    options: StructuredCliCallOptions,
+  ): readonly string[] {
+    const resume =
+      typeof options.resumeSessionId === 'string' && options.resumeSessionId.length > 0
+        ? options.resumeSessionId
+        : null
+    return buildSubprocessArgs({
+      prompt,
+      systemPromptSuffix: options.systemPromptSuffix ?? '',
+      resumeSessionId: resume,
+      jsonSchema: createFileEnvelopeJsonSchema,
     })
   }
 
