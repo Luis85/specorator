@@ -1,6 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
+import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord'
+import type { SessionId } from '@/domain/chat/SessionId'
+import type {
+  FileWriteProposal,
+  FileWriteProposalStatus,
+} from '@/application/chat/FileWriteProposal'
+import type { CommitProposalErrorCode } from '@/application/chat/errors'
+
 /**
  * Plain DTO stored in Pinia. Does NOT include file content — content is loaded
  * on-demand at send time via VaultPort.readFile(). Satisfies D-CCS-005.
@@ -37,7 +45,8 @@ export type ChatErrorType = 'timeout' | 'query_failed'
  * Pinia store for the chat sidebar panel.
  * State holds DTOs only — no domain class instances, no file content in state.
  * Satisfies REQ-CCS-005, REQ-CCS-006, REQ-CCS-009, REQ-CCS-010,
- * REQ-CCS-013, REQ-CCS-014, REQ-CCS-016, SPEC-CCS-001 §4.
+ * REQ-CCS-013, REQ-CCS-014, REQ-CCS-016, SPEC-CCS-001 §4,
+ * and SPEC-ASM-001 §8.1 (REQ-ASM-031, REQ-ASM-035, REQ-ASM-037, REQ-ASM-041).
  */
 export const useChatStore = defineStore('chat', () => {
   /**
@@ -74,6 +83,46 @@ export const useChatStore = defineStore('chat', () => {
    * Cleared by beginRequest(). Drives trim notice in ChatResponse.
    */
   const truncated = ref<boolean>(false)
+
+  // ── ASM additions (SPEC-ASM-001 §8.1) ────────────────────────────────────
+
+  /**
+   * All known chat threads, keyed by `threadId`. Hydrated from
+   * `_storedData.specorator.chatThreads` at view mount (SPEC §9.3) and
+   * mutated by `upsertThread` / `captureSessionId` / `markThreadUsed`.
+   * REQ-ASM-037.
+   */
+  const chatThreads = ref<Map<string, ChatThreadRecord>>(new Map())
+
+  /**
+   * `threadId` of the thread the user is currently viewing, or `null` when no
+   * thread is selected. REQ-ASM-031.
+   */
+  const activeThreadId = ref<string | null>(null)
+
+  /**
+   * Unresolved or recently-decided file-write proposals, keyed by
+   * `proposalId`. REQ-ASM-041.
+   */
+  const proposals = ref<Map<string, FileWriteProposal>>(new Map())
+
+  /**
+   * Accumulated `stream_event` deltas from the active turn. Cleared by
+   * `resetStreaming()` between turns. NFR-ASM-002.
+   */
+  const streamingText = ref<string>('')
+
+  /**
+   * `true` while the subprocess adapter is performing first-run startup;
+   * drives `SubprocessStartingPill`. R-ASM-003.
+   */
+  const cliStartingUp = ref<boolean>(false)
+
+  /**
+   * `true` for the duration of the first turn after the subprocess adapter
+   * resumes a stored session id; drives `SessionResumeIndicator`. REQ-ASM-035.
+   */
+  const sessionResumed = ref<boolean>(false)
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
@@ -162,6 +211,121 @@ export const useChatStore = defineStore('chat', () => {
     status.value = 'idle'
     errorType.value = null
     truncated.value = false
+    chatThreads.value = new Map()
+    activeThreadId.value = null
+    proposals.value = new Map()
+    streamingText.value = ''
+    cliStartingUp.value = false
+    sessionResumed.value = false
+  }
+
+  // ── ASM actions (SPEC-ASM-001 §8.1) ──────────────────────────────────────
+
+  /**
+   * Adds a new `ChatThreadRecord`, or replaces an existing one with the same
+   * `threadId`. REQ-ASM-037.
+   */
+  function upsertThread(record: ChatThreadRecord): void {
+    const next = new Map(chatThreads.value)
+    next.set(record.threadId, record)
+    chatThreads.value = next
+  }
+
+  /**
+   * Switches the active thread. Passing `null` clears the selection. In both
+   * branches the per-thread transient slots (`streamingText`, `sessionResumed`)
+   * are cleared because they describe the previous thread's in-flight turn.
+   * REQ-ASM-031.
+   */
+  function setActiveThreadId(threadId: string | null): void {
+    activeThreadId.value = threadId
+    streamingText.value = ''
+    sessionResumed.value = false
+  }
+
+  /**
+   * Captures the `system/init` session id for an existing thread. No-op if
+   * the thread is unknown — the caller is expected to `upsertThread` first.
+   * REQ-ASM-031, REQ-ASM-037.
+   */
+  function captureSessionId(threadId: string, sessionId: SessionId): void {
+    const existing = chatThreads.value.get(threadId)
+    if (existing === undefined) return
+    const next = new Map(chatThreads.value)
+    next.set(threadId, { ...existing, sessionId })
+    chatThreads.value = next
+  }
+
+  /**
+   * Bumps `lastUsedAt` on the matching thread to "now" (ISO 8601 UTC). No-op
+   * if the thread is unknown. REQ-ASM-037.
+   */
+  function markThreadUsed(threadId: string): void {
+    const existing = chatThreads.value.get(threadId)
+    if (existing === undefined) return
+    const next = new Map(chatThreads.value)
+    next.set(threadId, { ...existing, lastUsedAt: new Date().toISOString() })
+    chatThreads.value = next
+  }
+
+  /**
+   * Appends a streaming-text delta. NFR-ASM-002.
+   */
+  function appendStreamingDelta(delta: string): void {
+    streamingText.value = streamingText.value + delta
+  }
+
+  /**
+   * Clears the streaming-text accumulator and the transient session-resumed
+   * indicator. Called at turn boundaries. NFR-ASM-002, REQ-ASM-035.
+   */
+  function resetStreaming(): void {
+    streamingText.value = ''
+    sessionResumed.value = false
+  }
+
+  /**
+   * Stores a new `FileWriteProposal`. Replaces any prior proposal with the
+   * same `proposalId` (idempotent re-emission is tolerated). REQ-ASM-041.
+   */
+  function addProposal(proposal: FileWriteProposal): void {
+    const next = new Map(proposals.value)
+    next.set(proposal.proposalId, proposal)
+    proposals.value = next
+  }
+
+  /**
+   * Transitions a proposal to a new lifecycle status. Stamps `decidedAt` with
+   * "now" for any non-`pending` status. Records `failureReason` only when the
+   * status transitions to `'failed'`; clears it otherwise. No-op if the
+   * proposal is unknown. REQ-ASM-043, REQ-ASM-045.
+   */
+  function setProposalStatus(
+    proposalId: string,
+    nextStatus: FileWriteProposalStatus,
+    failureReason?: CommitProposalErrorCode,
+  ): void {
+    const existing = proposals.value.get(proposalId)
+    if (existing === undefined) return
+    const decidedAt = nextStatus === 'pending' ? null : new Date().toISOString()
+    const next = new Map(proposals.value)
+    next.set(proposalId, {
+      ...existing,
+      status: nextStatus,
+      decidedAt,
+      failureReason: nextStatus === 'failed' ? (failureReason ?? null) : null,
+    })
+    proposals.value = next
+  }
+
+  /** Sets the subprocess-startup pill flag. R-ASM-003. */
+  function setCliStartingUp(value: boolean): void {
+    cliStartingUp.value = value
+  }
+
+  /** Sets the session-resumed indicator flag. REQ-ASM-035. */
+  function setSessionResumed(value: boolean): void {
+    sessionResumed.value = value
   }
 
   return {
@@ -171,6 +335,12 @@ export const useChatStore = defineStore('chat', () => {
     status,
     errorType,
     truncated,
+    chatThreads,
+    activeThreadId,
+    proposals,
+    streamingText,
+    cliStartingUp,
+    sessionResumed,
     addContextFile,
     removeContextFile,
     setActiveFile,
@@ -180,5 +350,15 @@ export const useChatStore = defineStore('chat', () => {
     setError,
     clearResponse,
     reset,
+    upsertThread,
+    setActiveThreadId,
+    captureSessionId,
+    markThreadUsed,
+    appendStreamingDelta,
+    resetStreaming,
+    addProposal,
+    setProposalStatus,
+    setCliStartingUp,
+    setSessionResumed,
   }
 })
