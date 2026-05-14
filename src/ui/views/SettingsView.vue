@@ -133,6 +133,19 @@ function update<K extends keyof PluginSettings>(key: K, value: PluginSettings[K]
           <option value="error">error</option>
         </select>
       </div>
+
+      <div class="sp-settings__field">
+        <label class="sp-settings__label" for="userPersona">About you</label>
+        <textarea
+          id="userPersona"
+          class="sp-settings__input sp-settings__textarea"
+          :value="settings.userPersona"
+          rows="4"
+          placeholder="Describe your role and what you're working on…"
+          data-testid="settings-user-persona"
+          @input="(e) => update('userPersona', (e.target as HTMLTextAreaElement).value)"
+        />
+      </div>
     </div>
 
     <div class="sp-settings__footer">
@@ -183,6 +196,13 @@ function update<K extends keyof PluginSettings>(key: K, value: PluginSettings[K]
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.sp-settings__textarea {
+  resize: vertical;
+  line-height: 1.6;
+  min-height: 6rem;
+  width: 100%;
 }
 
 .sp-settings__input,

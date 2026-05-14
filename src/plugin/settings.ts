@@ -29,7 +29,44 @@ export class SpecoratorSettingTab extends PluginSettingTab {
       }
     }
 
+    this.renderAboutYouSection()
     this.renderMcpServerStatus()
+  }
+
+  private renderAboutYouSection(): void {
+    const { containerEl } = this
+
+    new Setting(containerEl).setName('About you').setHeading()
+
+    new Setting(containerEl)
+      .setName('Your introduction')
+      .setDesc("A few sentences about your role and what you're working on. Used to personalise AI suggestions.")
+      .addTextArea((ta) =>
+        ta
+          .setValue(this.plugin.settings.userPersona)
+          .setPlaceholder("For example: I'm a product manager at a scale-up...")
+          .onChange(async (value) => {
+            await this.plugin.updateSettings({ userPersona: value })
+          }),
+      )
+
+    if (!this.plugin.settings.userPersona) {
+      containerEl.createEl('p', {
+        text: 'Add a short introduction so Specorator can tailor its suggestions to you.',
+        cls: 'setting-item-description',
+      })
+    }
+
+    new Setting(containerEl)
+      .setName('Set up Specorator again')
+      .setDesc('Start the setup wizard again to update your workspace or introduction.')
+      .addButton((btn) =>
+        btn.setButtonText('Re-run setup').onClick(async () => {
+          await this.plugin.updateSettings({ onboardingComplete: false })
+          await this.plugin.activateView()
+          this.plugin._dispatchNavigate('/onboarding')
+        }),
+      )
   }
 
   /**

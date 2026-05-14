@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import FeatureCard from '../components/feature/FeatureCard.vue'
 import CreateFeatureForm from '../components/feature/CreateFeatureForm.vue'
 import AppButton from '../components/common/AppButton.vue'
+import HomePersonaNudge from '../components/HomePersonaNudge.vue'
 import { useFeatures } from '../composables/useFeatures'
 import { useSettingsPort } from '../composables/useSettingsPort'
 import { useWorkspacePort } from '../composables/useWorkspacePort'
@@ -46,6 +47,7 @@ async function handleOpen(featureId: string) {
 
 <template>
   <div class="sp-home">
+    <HomePersonaNudge />
     <header class="sp-home__header">
       <div>
         <h1 class="sp-home__title" data-testid="home-title">{{ t('home.title') }}</h1>
