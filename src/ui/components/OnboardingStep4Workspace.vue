@@ -66,10 +66,11 @@ async function install(): Promise<void> {
 }
 
 async function skip(): Promise<void> {
-	if (specsFolder.value.trim() !== props.initialSpecsFolder) {
+	const folder = specsFolder.value.trim()
+	if (folder && folder !== props.initialSpecsFolder) {
 		await tryAsync(() => saveFolder())
 	}
-	emit('next', { templateStatus: 'skipped', specsFolder: specsFolder.value.trim() || props.initialSpecsFolder })
+	emit('next', { templateStatus: 'skipped', specsFolder: folder || props.initialSpecsFolder })
 }
 </script>
 
