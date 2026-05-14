@@ -82,15 +82,9 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
     }
 
     // Step 5: Mark adapter ready. SDK query() uses process.env.ANTHROPIC_API_KEY at call time.
-    try {
-      this._sdkReady = true
-      this._available = true
-      this._logger.info('ClaudeCliAdapter.startup(): adapter ready')
-    } catch (e: unknown) {
-      this._logger.warn('ClaudeCliAdapter.startup(): SDK client construction failed', { error: e })
-      this._available = false
-      this._sdkReady = false
-    }
+    this._sdkReady = true
+    this._available = true
+    this._logger.info('ClaudeCliAdapter.startup(): adapter ready')
   }
 
   /**
