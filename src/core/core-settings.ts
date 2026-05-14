@@ -11,7 +11,7 @@ function coerceString(value: unknown, fallback: string): string {
 export const coreSettingsModule = defineModule<PluginSettings>({
   id: 'specorator',
   settingsKey: 'specorator',
-  settingsVersion: 2,
+  settingsVersion: 3,
   settingsDefaults: { ...DEFAULT_SETTINGS },
 
   /**
@@ -21,6 +21,13 @@ export const coreSettingsModule = defineModule<PluginSettings>({
    * for upgrading installs so existing users do not silently start receiving
    * a local MCP server. Only inject when absent — never flip an existing
    * user choice.
+   *
+   * v2 → v3: introduces `onboardingComplete`. Default it to `true` for
+   * upgrading installs (fromVersion >= 1) so existing users are not forced
+   * through the wizard on next launch. Fresh installs (fromVersion === 0,
+   * no stored data) are left without the key so validateSettings falls
+   * through to DEFAULT_SETTINGS.onboardingComplete (false) and the wizard
+   * runs normally.
    */
   migrate(fromVersion: number, blob: unknown): unknown {
     const out = (blob !== null && typeof blob === 'object' && !Array.isArray(blob)
@@ -28,6 +35,9 @@ export const coreSettingsModule = defineModule<PluginSettings>({
       : {}) as Record<string, unknown>
     if (fromVersion < 2 && !('mcpServerEnabled' in out)) {
       out.mcpServerEnabled = false
+    }
+    if (fromVersion >= 1 && fromVersion < 3 && !('onboardingComplete' in out)) {
+      out.onboardingComplete = true
     }
     return out
   },
