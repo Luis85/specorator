@@ -47,17 +47,19 @@ export class LocalStorageBridge
   }
 
   async listFolders(parent: string): Promise<string[]> {
-    const prefix = FILE_PREFIX + (parent.endsWith('/') ? parent : parent + '/')
+    // When parent is '' (vault root), avoid appending '/' which would produce
+    // 'specorator:file:/' and never match stored keys like 'specorator:file:specs/…'.
+    const parentWithSlash = parent === '' ? '' : (parent.endsWith('/') ? parent : parent + '/')
+    const prefix = FILE_PREFIX + parentWithSlash
     const folders = new Set<string>()
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
-      if (key?.startsWith(prefix) === true) {
-        const filePath = key.slice(FILE_PREFIX.length)
-        const relative = filePath.slice(parent.endsWith('/') ? parent.length : parent.length + 1)
-        const slash = relative.indexOf('/')
-        if (slash !== -1) {
-          folders.add(relative.slice(0, slash))
-        }
+      if (key?.startsWith(prefix) !== true) continue
+      const filePath = key.slice(FILE_PREFIX.length)
+      const relative = filePath.slice(parentWithSlash.length)
+      const slash = relative.indexOf('/')
+      if (slash !== -1) {
+        folders.add(relative.slice(0, slash))
       }
     }
     return Array.from(folders)

@@ -92,11 +92,10 @@ export default class SpecoratorPlugin extends Plugin {
       id: 're-run-setup',
       name: 'Re-run setup',
       callback: () => {
-        void this.updateSettings({ onboardingComplete: false }).then(() =>
-          this.activateView().then(() => {
-            activeWindow.dispatchEvent(new CustomEvent('sp:navigate', { detail: { path: '/onboarding' } }))
-          }),
-        )
+        void this.updateSettings({ onboardingComplete: false })
+          .then(() => this.activateView())
+          .then(() => { this._dispatchNavigate('/onboarding') })
+          .catch(() => { this.bridge?.showError('Failed to re-run setup. Please try again.') })
       },
     })
 
@@ -124,9 +123,9 @@ export default class SpecoratorPlugin extends Plugin {
     this.app.workspace.onLayoutReady(() => {
       this.detectLegacyVaultLayout()
       if (!this.settings.onboardingComplete) {
-        void this.activateView().then(() => {
-          activeWindow.dispatchEvent(new CustomEvent('sp:navigate', { detail: { path: '/onboarding' } }))
-        })
+        void this.activateView()
+          .then(() => { this._dispatchNavigate('/onboarding') })
+          .catch(() => { this.bridge?.showError('Failed to open onboarding. Please reopen the panel.') })
       }
     })
   }
@@ -192,7 +191,14 @@ export default class SpecoratorPlugin extends Plugin {
     }
   }
 
-  private async activateView(): Promise<void> {
+  _dispatchNavigate(path: string): void {
+    const win =
+      this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view?.containerEl?.ownerDocument?.defaultView ??
+      activeWindow
+    win.dispatchEvent(new CustomEvent('sp:navigate', { detail: { path } }))
+  }
+
+  async activateView(): Promise<void> {
     const { workspace } = this.app
 
     const existing = workspace.getLeavesOfType(VIEW_TYPE)
