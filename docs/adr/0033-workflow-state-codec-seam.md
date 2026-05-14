@@ -1,5 +1,5 @@
 ---
-id: ADR-0029
+id: ADR-0033
 title: Introduce IWorkflowStateCodec to decouple FeatureRepository from YAML format
 status: accepted
 date: 2026-05-14
@@ -12,7 +12,7 @@ superseded-by: []
 tags: [infrastructure, testing, persistence]
 ---
 
-# ADR-0029 — Introduce `IWorkflowStateCodec` to decouple `FeatureRepository` from YAML format
+# ADR-0033 — Introduce `IWorkflowStateCodec` to decouple `FeatureRepository` from YAML format
 
 ## Status
 
