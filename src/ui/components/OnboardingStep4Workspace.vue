@@ -24,10 +24,11 @@ const folderEmpty = ref(false)
 onMounted(async () => {
 	const result = await tryAsync(() => vaultPort.listFiles(specsFolder.value))
 	if (result.ok) {
-		workspaceStatus.value = result.value.length > 0 ? 'ready' : 'not-installed'
+		// Folder exists — features live in subfolders, so zero root files is normal
+		workspaceStatus.value = 'ready'
 	} else {
 		logger.error('Failed to check workspace status', result.error)
-		workspaceStatus.value = 'error'
+		workspaceStatus.value = 'not-installed'
 	}
 })
 
