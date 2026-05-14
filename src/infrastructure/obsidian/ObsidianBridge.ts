@@ -223,14 +223,10 @@ export class ObsidianBridge
   // ── ClaudeCliPort ─────────────────────────────────────────────────────────
 
   isAvailable(): Promise<boolean> {
-    const timeoutMs = 5000
-    const deadline = new Promise<boolean>((resolve) => {
-      activeWindow.setTimeout(() => { resolve(false) }, timeoutMs)
+    type ExecFn = (cmd: string, opts: { timeout: number }, cb: (err: Error | null) => void) => void
+    const { exec } = require('node:child_process') as { exec: ExecFn }
+    return new Promise<boolean>((resolve) => {
+      exec('claude --version', { timeout: 5000 }, (err) => { resolve(err === null) })
     })
-    const { exec } = require('node:child_process') as { exec: (cmd: string, cb: (err: Error | null) => void) => void }
-    const check = new Promise<boolean>((resolve) => {
-      exec('claude --version', (err) => { resolve(err === null) })
-    })
-    return Promise.race([check, deadline])
   }
 }
