@@ -8,10 +8,16 @@ function coerceString(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback
 }
 
+function toMutableBlob(blob: unknown): { out: Record<string, unknown>; hadData: boolean } {
+  const isObjectBlob = blob !== null && typeof blob === 'object' && !Array.isArray(blob)
+  const out: Record<string, unknown> = isObjectBlob ? { ...(blob as Record<string, unknown>) } : {}
+  return { out, hadData: isObjectBlob && Object.keys(out).length > 0 }
+}
+
 export const coreSettingsModule = defineModule<PluginSettings>({
   id: 'specorator',
   settingsKey: 'specorator',
-  settingsVersion: 2,
+  settingsVersion: 3,
   settingsDefaults: { ...DEFAULT_SETTINGS },
 
   /**
@@ -21,13 +27,23 @@ export const coreSettingsModule = defineModule<PluginSettings>({
    * for upgrading installs so existing users do not silently start receiving
    * a local MCP server. Only inject when absent — never flip an existing
    * user choice.
+   *
+   * v2 → v3: introduces `onboardingComplete`. Default it to `true` for
+   * upgrading installs so existing users are not forced through the wizard on
+   * next launch. "Upgrading" means fromVersion >= 1 OR fromVersion === 0 with
+   * a non-empty blob (unversioned existing installs never stored a version key
+   * and therefore arrive as v0 even though they have real settings). Fresh
+   * installs arrive as v0 with a null or empty blob and are left without the
+   * key so validateSettings falls through to DEFAULT_SETTINGS.onboardingComplete
+   * (false) and the wizard runs normally.
    */
   migrate(fromVersion: number, blob: unknown): unknown {
-    const out = (blob !== null && typeof blob === 'object' && !Array.isArray(blob)
-      ? { ...(blob as Record<string, unknown>) }
-      : {}) as Record<string, unknown>
+    const { out, hadData } = toMutableBlob(blob)
     if (fromVersion < 2 && !('mcpServerEnabled' in out)) {
       out.mcpServerEnabled = false
+    }
+    if ((fromVersion >= 1 || (fromVersion === 0 && hadData)) && fromVersion < 3 && !('onboardingComplete' in out)) {
+      out.onboardingComplete = true
     }
     return out
   },
@@ -49,6 +65,11 @@ export const coreSettingsModule = defineModule<PluginSettings>({
         : DEFAULT_SETTINGS.logLevel,
       mcpServerEnabled:
         typeof r.mcpServerEnabled === 'boolean' ? r.mcpServerEnabled : DEFAULT_SETTINGS.mcpServerEnabled,
+      userPersona: typeof r.userPersona === 'string' ? r.userPersona : DEFAULT_SETTINGS.userPersona,
+      onboardingComplete:
+        typeof r.onboardingComplete === 'boolean'
+          ? r.onboardingComplete
+          : DEFAULT_SETTINGS.onboardingComplete,
     }
   },
 
@@ -131,6 +152,20 @@ export const coreSettingsModule = defineModule<PluginSettings>({
         description:
           'Allow local MCP clients to access your Specorator data via 127.0.0.1. Off by default for privacy.',
         default: DEFAULT_SETTINGS.mcpServerEnabled,
+      },
+      {
+        type: 'text',
+        key: 'userPersona',
+        label: 'User persona',
+        description: 'Your role or persona, used to personalise AI interactions.',
+        default: DEFAULT_SETTINGS.userPersona,
+      },
+      {
+        type: 'toggle',
+        key: 'onboardingComplete',
+        label: 'Onboarding complete',
+        description: 'Set automatically after the setup wizard finishes.',
+        default: DEFAULT_SETTINGS.onboardingComplete,
       },
     ],
   },

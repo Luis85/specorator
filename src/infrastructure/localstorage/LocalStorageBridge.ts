@@ -7,6 +7,7 @@ import type {
 	CommunityPluginPort,
 	ActiveFileSnapshot,
 	Unsubscriber,
+	ClaudeCliPort,
 } from '@/domain/ports'
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
@@ -15,7 +16,7 @@ const SETTINGS_KEY = 'specorator:settings'
 const ENABLED_PLUGINS_KEY = 'specorator:enabled-plugins'
 
 export class LocalStorageBridge
-	implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, CommunityPluginPort
+	implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, CommunityPluginPort, ClaudeCliPort
 {
   async readFile(path: string): Promise<string> {
     const value = localStorage.getItem(FILE_PREFIX + path)
@@ -161,5 +162,11 @@ export class LocalStorageBridge
     } catch {
       return []
     }
+  }
+
+  // ── ClaudeCliPort ─────────────────────────────────────────────────────────
+
+  isAvailable(): Promise<boolean> {
+    return Promise.resolve(false)
   }
 }

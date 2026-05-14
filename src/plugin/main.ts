@@ -88,6 +88,17 @@ export default class SpecoratorPlugin extends Plugin {
       callback: () => void this.updateSettings({ mcpServerEnabled: false }),
     })
 
+    this.addCommand({
+      id: 're-run-setup',
+      name: 'Re-run setup',
+      callback: () => {
+        void this.updateSettings({ onboardingComplete: false })
+          .then(() => this.activateView())
+          .then(() => { this._dispatchNavigate('/onboarding') })
+          .catch(() => { this.bridge?.showError('Failed to re-run setup. Please try again.') })
+      },
+    })
+
     this.addSettingTab(new SpecoratorSettingTab(this.app, this))
 
     this.registerObsidianProtocolHandler('specorator', (params) => {
@@ -111,6 +122,11 @@ export default class SpecoratorPlugin extends Plugin {
     // logic that reads workspace layout or vault state until layout is ready.
     this.app.workspace.onLayoutReady(() => {
       this.detectLegacyVaultLayout()
+      if (!this.settings.onboardingComplete) {
+        void this.activateView()
+          .then(() => { this._dispatchNavigate('/onboarding') })
+          .catch(() => { this.bridge?.showError('Failed to open onboarding. Please reopen the panel.') })
+      }
     })
   }
 
@@ -173,6 +189,13 @@ export default class SpecoratorPlugin extends Plugin {
         8000,
       )
     }
+  }
+
+  private _dispatchNavigate(path: string): void {
+    const win =
+      this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view?.containerEl?.ownerDocument?.defaultView ??
+      activeWindow
+    win.dispatchEvent(new CustomEvent('sp:navigate', { detail: { path } }))
   }
 
   private async activateView(): Promise<void> {

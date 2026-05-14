@@ -18,6 +18,8 @@ export interface PluginSettings {
 	 * command. See README "MCP server (advanced, opt-in)".
 	 */
 	readonly mcpServerEnabled: boolean
+	readonly userPersona: string
+	readonly onboardingComplete: boolean
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -30,4 +32,6 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	teamMode: false,
 	logLevel: 'warn',
 	mcpServerEnabled: false,
+	userPersona: '',
+	onboardingComplete: false,
 }

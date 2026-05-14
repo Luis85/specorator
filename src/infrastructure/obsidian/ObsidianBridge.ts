@@ -9,6 +9,7 @@ import type {
 	CommunityPluginPort,
 	ActiveFileSnapshot,
 	Unsubscriber,
+	ClaudeCliPort,
 } from '@/domain/ports'
 
 type FileManagerWithTrash = App['fileManager'] & {
@@ -16,7 +17,7 @@ type FileManagerWithTrash = App['fileManager'] & {
 }
 
 export class ObsidianBridge
-  implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, CommunityPluginPort
+  implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, CommunityPluginPort, ClaudeCliPort
 {
   private static readonly _LEVEL_RANK: Record<string, number> = {
     debug: 0,
@@ -217,5 +218,15 @@ export class ObsidianBridge
     }
     const appExt = this.app as unknown as AppWithPlugins
     return appExt.plugins?.enabledPlugins ?? null
+  }
+
+  // ── ClaudeCliPort ─────────────────────────────────────────────────────────
+
+  isAvailable(): Promise<boolean> {
+    type ExecFn = (cmd: string, opts: { timeout: number }, cb: (err: Error | null) => void) => void
+    const { exec } = require('node:child_process') as { exec: ExecFn }
+    return new Promise<boolean>((resolve) => {
+      exec('claude --version', { timeout: 5000 }, (err) => { resolve(err === null) })
+    })
   }
 }
