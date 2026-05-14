@@ -591,39 +591,68 @@ describe('ClaudeSubprocessAdapter — query() happy path (REQ-ASM-029/030/031)',
 })
 
 // =============================================================================
-// 7. query() — long-lived per thread (REQ-ASM-010, TEST-ASM-013).
+// 7. query() — spawn-per-turn with --resume chaining (REQ-ASM-010 / REQ-ASM-035,
+//    TEST-ASM-013). Codex P1 fix on PR #325: `claude -p '<prompt>'` is one-shot
+//    (prompt baked into argv; subprocess exits after responding). Reusing one
+//    long-lived child across turns silently drops turn 2/3/... prompts because
+//    nothing writes the new prompt to stdin. The fix is to spawn fresh per
+//    turn and let the caller thread `resumeSessionId` between turns.
 // =============================================================================
 
-describe('ClaudeSubprocessAdapter — long-lived per thread (REQ-ASM-010)', () => {
-  it('one spawn per thread across three same-thread turns (TEST-ASM-013)', async () => {
+describe('ClaudeSubprocessAdapter — spawn-per-turn + --resume chaining (REQ-ASM-010, REQ-ASM-035)', () => {
+  it('spawns a fresh subprocess per turn; --resume chains context (TEST-ASM-013)', async () => {
     const { adapter, spawn } = makeAdapter({
       resolver: makeResolver('/fake/bin/claude'),
     })
     await adapter.startup()
 
-    // Three turns on the same thread. The adapter keeps the child alive
-    // between turns (long-lived per-thread strategy, REQ-ASM-010). Each
-    // turn's `result` event completes that turn's promise but the child
-    // process stays open for the next prompt — we do NOT emit `close`
-    // here, otherwise the adapter correctly purges the dead handle and
-    // respawns (Codex P1, see _handleClose at the bottom of the adapter).
-    const turn = async (text: string, response: string) => {
-      const p = adapter.query(text)
+    // Three turns. After each turn we emit `close(0)` so the (correctly
+    // short-lived) child terminates as the real `claude -p` binary would.
+    // The caller (chat store / session persistence) threads the prior
+    // sessionId into the next turn's resumeSessionId.
+    const turn = async (
+      text: string,
+      response: string,
+      replySessionId: string,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      resumeSessionId?: any,
+    ) => {
+      const p = adapter.query(text, resumeSessionId ? { resumeSessionId } : undefined)
       await Promise.resolve()
       const child = spawn.lastChild()
-      spawn.emitStdout(child, ndjson(systemInit('t-1'), resultEvent(response)))
+      spawn.emitStdout(
+        child,
+        ndjson(systemInit(replySessionId), resultEvent(response)),
+      )
+      spawn.closeWith(child, 0)
       return p
     }
 
-    await turn('msg-1', 'r-1')
-    await turn('msg-2', 'r-2')
-    await turn('msg-3', 'r-3')
+    // Turn 1 — no prior session; argv must NOT contain --resume.
+    await turn('msg-1', 'r-1', 'sess-1')
+    // Turn 2 — caller passes sess-1 as resumeSessionId.
+    await turn('msg-2', 'r-2', 'sess-2', 'sess-1')
+    // Turn 3 — caller passes sess-2 as resumeSessionId (latest).
+    await turn('msg-3', 'r-3', 'sess-3', 'sess-2')
 
-    // INVARIANT (REQ-ASM-010): exactly one spawn for the streaming transport.
-    expect(spawn.spawn).toHaveBeenCalledTimes(1)
+    // INVARIANT (Codex P1 fix): one spawn PER TURN — three turns, three spawns.
+    expect(spawn.spawn).toHaveBeenCalledTimes(3)
 
-    // Clean up: now actually close the child so the test doesn't leak.
-    spawn.closeWith(spawn.lastChild(), 0)
+    // Turn 1 argv: no --resume.
+    const turn1Argv = spawn.calls[0].args
+    expect(turn1Argv).not.toContain('--resume')
+
+    // Turn 2 argv: --resume sess-1.
+    const turn2Argv = spawn.calls[1].args
+    expect(turn2Argv).toContain('--resume')
+    const turn2ResumeIdx = turn2Argv.indexOf('--resume')
+    expect(turn2Argv[turn2ResumeIdx + 1]).toBe('sess-1')
+
+    // Turn 3 argv: --resume sess-2 (latest session id, not the original).
+    const turn3Argv = spawn.calls[2].args
+    expect(turn3Argv).toContain('--resume')
+    const turn3ResumeIdx = turn3Argv.indexOf('--resume')
+    expect(turn3Argv[turn3ResumeIdx + 1]).toBe('sess-2')
   })
 })
 

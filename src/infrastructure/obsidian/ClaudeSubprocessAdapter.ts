@@ -1,18 +1,33 @@
 /**
  * T-ASM-011 — `ClaudeSubprocessAdapter`: subscription-transport implementation of
- * `ClaudeCliPort` driving the user-installed `claude` binary as a long-lived
- * child process per chat thread (REQ-ASM-010).
+ * `ClaudeCliPort` driving the user-installed `claude` binary as a short-lived
+ * child process per turn. Multi-turn continuity is achieved by forwarding
+ * `--resume <sessionId>` argv (REQ-ASM-035) supplied by the caller, NOT by
+ * reusing a long-lived process across turns.
+ *
+ * Why short-lived (Codex P1 fix, PR #325 review):
+ *   `claude -p '<prompt>'` is a one-shot invocation — the prompt is baked into
+ *   argv and the subprocess exits after responding. Reusing a single child
+ *   across turns means turn 2/3/... prompts never reach the subprocess (no one
+ *   writes them to stdin), so multi-turn conversations silently drop user input.
+ *   The fix is to spawn a fresh child per `query()` call and let the caller
+ *   thread `resumeSessionId` from the prior turn's response back into the next
+ *   turn's `ClaudeCliQueryOptions`. Session-id ownership lives in chatStore /
+ *   PR-ASM-3 session persistence — this adapter is stateless wrt threads.
  *
  * Satisfies:
  *   - REQ-ASM-001 (transport-agnostic port construction; no I/O in ctor)
  *   - REQ-ASM-006/027/028 (argv invariants delegated to `buildSubprocessArgs`)
  *   - REQ-ASM-009 (graceful degradation when the binary cannot be found)
- *   - REQ-ASM-010 (one spawn per thread, reused across turns)
+ *   - REQ-ASM-010 (one subprocess per turn; multi-turn via --resume chaining —
+ *     see Codex P1 note above; original "one spawn per thread, reused across
+ *     turns" reading of REQ-ASM-010 was incompatible with `claude -p` semantics)
  *   - REQ-ASM-013 (forward `--append-system-prompt` via argv)
  *   - REQ-ASM-029 (chunked stdout reassembled via `readline`)
  *   - REQ-ASM-030 (non-zero exit / `is_error: true` → QUERY_FAILED)
  *   - REQ-ASM-031 (capture `session_id` from `system/init`)
- *   - REQ-ASM-035 (forward `--resume <sessionId>` via argv)
+ *   - REQ-ASM-035 (forward `--resume <sessionId>` via argv — load-bearing for
+ *     multi-turn after the Codex P1 fix)
  *   - NFR-ASM-004 (never touches `~/.claude/`)
  *   - NFR-ASM-005, NFR-ASM-012 (log redaction; no prompt, binary path, or $HOME)
  *   - NFR-ASM-006 (startup never throws)
@@ -74,9 +89,6 @@ export interface ClaudeSubprocessAdapterDeps {
   readonly now?: () => number
 }
 
-/** Default key for the single implicit "current thread" handle. */
-const DEFAULT_THREAD_KEY = '__default__'
-
 /** SPEC §4.3 `_clampTimeout` floor / ceiling. */
 const MIN_TIMEOUT_MS = 1_000
 const MAX_TIMEOUT_MS = 300_000
@@ -86,14 +98,14 @@ const DEFAULT_TIMEOUT_MS = 30_000
 const SIGKILL_GRACE_MS = 200
 
 // -----------------------------------------------------------------------------
-// Per-thread streaming-process record. One entry per long-lived child.
+// Per-turn streaming-process record. One entry per spawn — short-lived; the
+// child exits as soon as the `result` event arrives (or on error / timeout).
 // -----------------------------------------------------------------------------
-interface ThreadProc {
-  readonly threadKey: string
+interface TurnProc {
   readonly child: ChildProcessLike
   /** Stdout chunk buffer for line-based NDJSON reassembly (REQ-ASM-029). */
   stdoutBuffer: string
-  /** Resolver for the in-flight query, if any. */
+  /** Resolver for this turn's pending promise, if still in flight. */
   pending: PendingTurn | null
   /** Most recently captured session id from a `system/init` event. */
   sessionId: SessionId | null
@@ -130,7 +142,12 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
    * `_available = false` until plugin reload (Codex P1).
    */
   private _lastResolvedClaudeCliPath: string | null = null
-  private readonly _threads = new Map<string, ThreadProc>()
+  /**
+   * In-flight short-lived children. We track them only so `shutdown()` can
+   * SIGTERM any subprocess mid-response. On clean close / error / timeout the
+   * child removes itself from this set.
+   */
+  private readonly _activeChildren = new Set<ChildProcessLike>()
 
   private readonly _getSettings: () => PluginSettings
   private readonly _logger: LoggerPort
@@ -220,18 +237,18 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
   }
 
   /**
-   * Synchronous SIGTERM ladder over every streaming child. Idempotent and
-   * safe to call before `startup()`. Never throws. REQ-CCS-017 family.
+   * Synchronous SIGTERM ladder over every in-flight short-lived child.
+   * Idempotent and safe to call before `startup()`. Never throws.
+   * REQ-CCS-017 family.
    */
   shutdown(): void {
     if (this._shutdownCalled) return
     this._shutdownCalled = true
 
-    for (const [key, proc] of this._threads) {
-      this._killChild(proc)
-      void key
+    for (const child of this._activeChildren) {
+      this._killChild(child)
     }
-    this._threads.clear()
+    this._activeChildren.clear()
 
     this._available = false
   }
@@ -239,10 +256,13 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
   // ── query() — free-text stream-json path ─────────────────────────────────
 
   /**
-   * Free-text streaming query. Spawns (or reuses) one long-lived `claude`
-   * subprocess per thread, writes the prompt into `-p` argv, and accumulates
-   * NDJSON events until the terminal `result` event. Returns Result<string,
-   * ClaudeCliError>; never throws.
+   * Free-text streaming query. Spawns a FRESH short-lived `claude` subprocess
+   * for each call (the CLI's `-p` mode is one-shot — see class header). The
+   * prompt is baked into argv; multi-turn continuity is the caller's
+   * responsibility via `options.resumeSessionId`, which `buildSubprocessArgs`
+   * translates to `--resume <id>` per INV-5 / REQ-ASM-035.
+   *
+   * Returns Result<string, ClaudeCliError>; never throws.
    *
    * Satisfies REQ-ASM-010, REQ-ASM-029, REQ-ASM-030, REQ-ASM-031, REQ-ASM-035.
    */
@@ -262,20 +282,19 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
     const timeoutMs = this._clampTimeout(options?.timeoutMs)
     const argv = this._buildArgv(prompt, options)
 
-    // REQ-ASM-010 — long-lived process per thread. The public port surface
-    // currently exposes a single implicit thread; multi-thread support hooks
-    // in via §2.13 when the chat-store wires per-thread query options.
-    const threadKey = DEFAULT_THREAD_KEY
-
-    const ensured = this._ensureThread(threadKey, this._binaryPath, argv)
-    if (!ensured.ok) {
-      return ensured
+    // Fresh spawn per turn (Codex P1 fix, PR #325). Context continuity is
+    // already encoded in `argv` via --resume when the caller supplied
+    // `resumeSessionId`; no per-thread state lives on this adapter.
+    const spawned = this._spawnChild(this._binaryPath, argv)
+    if (!spawned.ok) {
+      return spawned
     }
-    const proc = ensured.value
+    const proc = spawned.value
 
-    // If the prior turn left a sticky fatal error on the child (e.g. EACCES
-    // emitted before any stdout), surface it again rather than hanging.
+    // If the child has already emitted a fatal error synchronously between
+    // spawn and the await below, surface it rather than hanging.
     if (proc.fatal !== null) {
+      this._activeChildren.delete(proc.child)
       return err(proc.fatal)
     }
 
@@ -286,8 +305,8 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
       const timeoutHandle = setTimeout(() => {
         if (p.pending === null) return
         p.pending = null
-        this._killChild(p)
-        this._threads.delete(threadKey)
+        this._killChild(p.child)
+        this._activeChildren.delete(p.child)
         resolve(
           err(
             new ClaudeCliError(
@@ -330,33 +349,15 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
   }
 
   /**
-   * Look up or spawn the per-thread child. Returns the cached `ThreadProc`
-   * on success, or propagates the spawn error.
-   */
-  private _ensureThread(
-    threadKey: string,
-    binaryPath: string,
-    argv: readonly string[],
-  ): Result<ThreadProc, ClaudeCliError> {
-    const existing = this._threads.get(threadKey)
-    if (existing !== undefined) return ok(existing)
-
-    const spawned = this._spawnChild(binaryPath, argv, threadKey)
-    if (!spawned.ok) return spawned
-    this._threads.set(threadKey, spawned.value)
-    return ok(spawned.value)
-  }
-
-  /**
    * Spawn the child and wire up readline + lifecycle listeners. Synchronous
    * throws (ENOENT) → err({ CLI_LAUNCH_FAILED }). Async `error` events that
-   * fire before any pending turn become a sticky fatal on the ThreadProc.
+   * fire before the pending turn is registered become a sticky fatal on the
+   * TurnProc.
    */
   private _spawnChild(
     binaryPath: string,
     argv: readonly string[],
-    threadKey: string,
-  ): Result<ThreadProc, ClaudeCliError> {
+  ): Result<TurnProc, ClaudeCliError> {
     let child: ChildProcess
     try {
       child = this._spawn(binaryPath, argv, { stdio: ['pipe', 'pipe', 'pipe'] })
@@ -388,14 +389,15 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
       )
     }
 
-    const proc: ThreadProc = {
-      threadKey,
+    const proc: TurnProc = {
       child: childLike,
       stdoutBuffer: '',
       pending: null,
       sessionId: null,
       fatal: null,
     }
+
+    this._activeChildren.add(childLike)
 
     // Manual line-based NDJSON reassembly (REQ-ASM-029). The spec mentions
     // `readline.createInterface` but the streaming surface our tests inject
@@ -432,6 +434,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
       if (proc.pending !== null) {
         const pending = proc.pending
         proc.pending = null
+        this._activeChildren.delete(proc.child)
         pending.resolve(err(fatal))
       }
     })
@@ -452,7 +455,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
    *   - `assistant/message` → accumulate `text`
    *   - `result`          → resolve the pending turn (success or QUERY_FAILED)
    */
-  private _handleNdjsonLine(proc: ThreadProc, line: string): void {
+  private _handleNdjsonLine(proc: TurnProc, line: string): void {
     const event = this._parseNdjsonLine(line)
     if (event === null) return
 
@@ -498,7 +501,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
   }
 
   /** REQ-ASM-031 — capture `session_id` from a `system/init` event. */
-  private _handleSystemInit(proc: ThreadProc, event: Record<string, unknown>): void {
+  private _handleSystemInit(proc: TurnProc, event: Record<string, unknown>): void {
     const sid = event.session_id
     if (typeof sid === 'string' && sid.length > 0) {
       proc.sessionId = asSessionId(sid)
@@ -506,7 +509,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
   }
 
   /** Accumulate `text` deltas from `assistant/message` events into the pending turn. */
-  private _handleAssistantMessage(proc: ThreadProc, event: Record<string, unknown>): void {
+  private _handleAssistantMessage(proc: TurnProc, event: Record<string, unknown>): void {
     if (proc.pending !== null && typeof event.text === 'string') {
       proc.pending.textBuffer.push(event.text)
     }
@@ -516,7 +519,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
    * Resolve the in-flight turn from a `result` event. Maps `is_error: true`
    * to QUERY_FAILED per REQ-ASM-030.
    */
-  private _handleResult(proc: ThreadProc, event: Record<string, unknown>): void {
+  private _handleResult(proc: TurnProc, event: Record<string, unknown>): void {
     const pending = proc.pending
     if (pending === null) return
     proc.pending = null
@@ -543,10 +546,12 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 
   /**
    * Subprocess close handler. Non-zero exit while a turn is in flight →
-   * QUERY_FAILED (REQ-ASM-030). The thread entry is purged so a subsequent
-   * `query()` on the same key spawns a fresh child.
+   * QUERY_FAILED (REQ-ASM-030). The child is removed from `_activeChildren`
+   * so it no longer counts toward `shutdown()`'s SIGTERM ladder.
    */
-  private _handleClose(proc: ThreadProc, exitCode: number | null): void {
+  private _handleClose(proc: TurnProc, exitCode: number | null): void {
+    this._activeChildren.delete(proc.child)
+
     const pending = proc.pending
     if (pending !== null) {
       proc.pending = null
@@ -568,26 +573,22 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
       }
     }
 
-    // Purge the dead handle so the next query on this thread spawns fresh
-    // rather than reusing the closed child (Codex P1, PR-ASM-1 review).
-    this._threads.delete(proc.threadKey)
-
     // No readline interface to close — stdout listeners detach with the
     // EventEmitter as the underlying process is torn down.
   }
 
   /** SPEC §4.3 — SIGTERM, then SIGKILL after a short grace window. */
-  private _killChild(proc: ThreadProc): void {
+  private _killChild(child: ChildProcessLike): void {
     try {
-      proc.child.kill('SIGTERM')
+      child.kill('SIGTERM')
     } catch {
       // Ignore — child may already be gone.
     }
     // eslint-disable-next-line obsidianmd/prefer-active-window-timers -- infra layer, no Obsidian context
     const ladder = setTimeout(() => {
-      if (proc.child.killed === true) return
+      if (child.killed === true) return
       try {
-        proc.child.kill('SIGKILL')
+        child.kill('SIGKILL')
       } catch {
         // Ignore.
       }
