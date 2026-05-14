@@ -44,13 +44,6 @@ import { err, ok, type Result } from '@/domain/shared/Result'
 import { buildSubprocessArgs } from '@/infrastructure/obsidian/buildSubprocessArgs'
 
 // -----------------------------------------------------------------------------
-// Settings shape — `PluginSettings.claudeCliPath` lands in T-ASM-014. Until
-// then we read through a structural type that is forward-compatible with that
-// migration (`claudeCliPath: string`).
-// -----------------------------------------------------------------------------
-type SettingsWithCliPath = PluginSettings & { readonly claudeCliPath?: string }
-
-// -----------------------------------------------------------------------------
 // Minimal child-process surface — kept loose so the tests' EventEmitter-based
 // fake satisfies it without coercion to the full `ChildProcess` type.
 // -----------------------------------------------------------------------------
@@ -162,8 +155,8 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 
     // Precedence: explicit settings path wins; otherwise call the injected
     // resolver. Empty string == "not configured".
-    const settings = this._getSettings() as SettingsWithCliPath
-    const explicit = settings.claudeCliPath?.trim() ?? ''
+    const settings = this._getSettings()
+    const explicit = settings.claudeCliPath.trim()
 
     if (explicit.length > 0) {
       this._binaryPath = explicit
