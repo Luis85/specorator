@@ -47,6 +47,7 @@ async function saveAndContinue(): Promise<void> {
 }
 
 function skipForNow(): void {
+	if (isSaving.value) return
 	emit('next', { skipped: true })
 }
 </script>
