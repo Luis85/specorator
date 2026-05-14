@@ -33,6 +33,9 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
     private readonly metadataCache: MetadataCachePort,
     private readonly canvas: CanvasPort,
   ) {
+    // MCP callers are headless agents with no UI surface, so the use case is
+    // constructed without a FeedbackService. REQ-AVS-005 overwrite-protection
+    // notices are silently suppressed for MCP invocations by design.
     this.advanceUseCase = new AdvanceFeatureStageUseCase(repo)
   }
 

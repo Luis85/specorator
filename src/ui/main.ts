@@ -24,6 +24,7 @@ import { LocalStorageBridge } from '@/infrastructure/localstorage/LocalStorageBr
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { FeatureService } from '@/application/feature/FeatureService'
+import { FeedbackService } from '@/application/shared/FeedbackService'
 import { FEATURE_SERVICE_KEY } from './composables/useFeatureService'
 import { DEV_FIXTURES } from '@/infrastructure/mock/fixtures'
 import { createEventBus } from '@/domain/shared/event-bus'
@@ -67,9 +68,10 @@ void bridge.getSettings()
     app.provide(LOGGER_PORT, bridge)
     app.provide(CLAUDE_CLI_PORT, bridge)
     app.provide(COMMUNITY_PLUGIN_PORT, bridge)
+    const featureFeedback = new FeedbackService(bridge, bridge)
     app.provide(
       FEATURE_SERVICE_KEY,
-      new FeatureService(new FeatureRepository(bridge, bridge, bridge)),
+      new FeatureService(new FeatureRepository(bridge, bridge), featureFeedback),
     )
 
     // Set errorHandler BEFORE mount() so initial render/setup errors flow through

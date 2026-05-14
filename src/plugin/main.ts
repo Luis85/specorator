@@ -61,9 +61,13 @@ export default class SpecoratorPlugin extends Plugin {
       logger: this.bridge,
       t: translationPort,
       i18nMerge,
+      // MCP adapter intentionally does not inject FeedbackService —
+      // overwrite-protection notices are vault-side feedback, but MCP callers
+      // are headless agents with no UI surface. Notices are silently
+      // suppressed for this caller.
       mcpServer: new ObsidianMcpServerAdapter(
         this.bridge,
-        new FeatureRepository(this.bridge, this.bridge, this.bridge),
+        new FeatureRepository(this.bridge, this.bridge),
         () => this.settings.specsFolder,
         new ObsidianMetadataCacheAdapter(this.app),
         new ObsidianCanvasAdapter(this.bridge),

@@ -3,6 +3,7 @@ import { tryAsync } from '@/domain/shared/tryAsync'
 import { Slug } from '@/domain/shared/Slug'
 import { Feature } from '@/domain/feature/Feature'
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
+import type { FeedbackService } from '@/application/shared/FeedbackService'
 
 export interface CreateFeatureInput {
   readonly title: string
@@ -11,7 +12,10 @@ export interface CreateFeatureInput {
 }
 
 export class CreateFeatureUseCase {
-  constructor(private readonly repository: IFeatureRepository) {}
+  constructor(
+    private readonly repository: IFeatureRepository,
+    private readonly feedback?: FeedbackService,
+  ) {}
 
   async execute(input: CreateFeatureInput): Promise<Result<Feature>> {
     const slugResult = Slug.create(input.title)
@@ -31,6 +35,12 @@ export class CreateFeatureUseCase {
 
     const saveResult = await this.repository.save(featureResult.value)
     if (!saveResult.ok) return saveResult
+
+    // REQ-AVS-005: when idea.md already existed, the repository preserved it.
+    // Surface a notice so the user knows their handwritten file was kept.
+    if (!saveResult.value.ideaCreated) {
+      this.feedback?.info('Specorator: idea.md already exists — keeping your version.')
+    }
 
     return ok(featureResult.value)
   }

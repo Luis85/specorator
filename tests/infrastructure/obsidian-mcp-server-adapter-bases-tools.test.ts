@@ -80,7 +80,7 @@ describe('ObsidianMcpServerAdapter — bases tools', () => {
 
   beforeEach(async () => {
     vault = new MockBridge(VAULT_FILES)
-    const repo = new FeatureRepository(vault, vault, vault)
+    const repo = new FeatureRepository(vault, vault)
     const metadataCache = new MockMetadataCacheAdapter()
     const canvas = new MockCanvasAdapter()
     adapter = new ObsidianMcpServerAdapter(
