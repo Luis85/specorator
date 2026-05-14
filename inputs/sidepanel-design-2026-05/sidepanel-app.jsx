@@ -5,7 +5,7 @@ const {
   SP_T, SP_F, SP_M, makeSPColors, SPThemeCtx,
   SPHeader, SPTabBar,
   SPUserMsg, SPAgentMsg, SPTypingDots, SPFileCard, SPHintCard,
-  SPAtMention, SPFilePicker, SPContextPanel,
+  SPAtMention, SPFilePicker, SPContextPanel, SPSettingsPanel,
 } = window;
 
 const { useTweaks, TweaksPanel, TweakSection, TweakColor } = window;

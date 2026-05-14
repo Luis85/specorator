@@ -136,6 +136,10 @@ export default defineConfig(
 			'.worktrees/',
 			'.claude/',
 			'docs/',
+			// Handed-in design-intent reference material (HTML mockups + their
+			// standalone React JSX runtime). Not part of the plugin or tests;
+			// not in tsconfig; should not block CI.
+			'inputs/',
 			// Boundary-rule proof fixtures: deliberately invalid imports/
 			// syntax that the lint test exercises via the ESLint API.
 			// Not lintable as part of the daily `npm run lint` surface.
