@@ -93,7 +93,7 @@ The breakdown below is the source of truth for the GitHub issues created by this
 - **F4 — UI shell:** Pinia stores, `/workspace/*` routes, theme tokens, reusable atoms (StatusPill, Avatar, ProgressBar, IconButton, Toast, ModalShell, Dropdown, DiffViewer, TypedAvatar, ActivityEventRow), test fixtures + factory helpers.
 - **F5 — GitHub auth + settings:** PAT entry UI, repo selector, settings persistence, error handling for auth failures. Conditional gate for several stories.
 
-**Vertical slices (8 issues — parallelizable after F1–F4):**
+**Vertical slices (9 issues — parallelizable after F1–F4):**
 
 - **V1 — Left Sidebar:** Actions row, Issues section (collapsible), PRs section (collapsed by default), active-row sync to `useAppStateStore.issueId`.
 - **V2 — Main shell:** Topbar + Breadcrumb (with `prevMain` back-nav) + Actbar (visible on issue/PR only). Actbar buttons for Edit Issue + Create PR; Triage / Break Down cut.
