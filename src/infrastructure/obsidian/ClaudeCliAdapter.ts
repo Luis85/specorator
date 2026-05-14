@@ -134,6 +134,7 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
     } catch (e: unknown) {
       return err(this._mapError(e, timeoutMs))
     } finally {
+      // eslint-disable-next-line obsidianmd/prefer-active-window-timers
       clearTimeout(timeoutId)
       controller.abort()
     }
@@ -144,7 +145,7 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
    * Satisfies REQ-CCS-018, REQ-CCS-019, REQ-CCS-022, SPEC-CCS-001 §5.4.
    */
   async isAvailable(): Promise<boolean> {
-    return this._available
+    return this._available && this._getSettings().anthropicApiKey.trim() !== ''
   }
 
   /**
