@@ -108,3 +108,38 @@ describe('LocalStorageBridge', () => {
     })
   })
 })
+
+describe('LocalStorageBridge — CommunityPluginPort', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('listEnabledPluginIds returns empty array when key absent', () => {
+    const bridge = new LocalStorageBridge()
+    expect(bridge.listEnabledPluginIds()).toEqual([])
+  })
+
+  it('isPluginEnabled returns false when localStorage is empty', () => {
+    const bridge = new LocalStorageBridge()
+    expect(bridge.isPluginEnabled('dataview')).toBe(false)
+  })
+
+  it('reads plugin ids from localStorage', () => {
+    localStorage.setItem('specorator:enabled-plugins', JSON.stringify(['dataview', 'templater']))
+    const bridge = new LocalStorageBridge()
+    expect(bridge.listEnabledPluginIds().sort()).toEqual(['dataview', 'templater'])
+    expect(bridge.isPluginEnabled('dataview')).toBe(true)
+  })
+
+  it('returns empty array for invalid JSON', () => {
+    localStorage.setItem('specorator:enabled-plugins', 'not-json')
+    const bridge = new LocalStorageBridge()
+    expect(bridge.listEnabledPluginIds()).toEqual([])
+  })
+
+  it('persists across bridge instances', () => {
+    localStorage.setItem('specorator:enabled-plugins', JSON.stringify(['dataview']))
+    const bridge2 = new LocalStorageBridge()
+    expect(bridge2.isPluginEnabled('dataview')).toBe(true)
+  })
+})
