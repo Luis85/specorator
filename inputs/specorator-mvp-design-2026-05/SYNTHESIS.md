@@ -4,13 +4,13 @@ Cross-review consensus distilled from four parallel reviews (product/UX, archite
 
 ## TL;DR
 
-The MVP is a three-panel Vue/Pinia workspace inside Obsidian. Architecture fit is good (existing DDD layers absorb the new entities cleanly), but the design package implies **four new domain aggregates** (Issue, Task, Proposal, Agent), **two new narrow ports** (GitHub, AgentRuntime), and a **vault-backed proposal persistence layer**. Two HIGH user stories (US-002 Triage, US-015 Break Down) depend on a live agent runtime that is *not* in scope for MVP — defer them. GitHub PAT onboarding is a real prerequisite, not a side issue. We can ship a tight ~22-story MVP if we cut the agent-driven AI features and the visual nice-to-haves.
+The MVP is a three-panel Vue/Pinia workspace inside Obsidian. Architecture fit is good (existing DDD layers absorb the new entities cleanly), but the design package implies **four new domain aggregates** (Issue, Task, Proposal, Agent), **two new narrow ports** (GitHub, AgentRuntime), and a **vault-backed proposal persistence layer**. Two HIGH user stories (US-002 Triage, US-015 Break Down) depend on a live agent runtime that is *not* in scope for MVP — defer them. GitHub PAT onboarding is a real prerequisite, not a side issue. We can ship a tight ~26-story MVP if we cut the agent-driven AI features and the visual nice-to-haves.
 
 ## Cross-cutting decisions to record as ADRs before coding
 
 Numbered ADR slots (final numbers assigned by `/adr:new`):
 
-1. **MVP scope** — confirm the 22-story cut-line; explicitly defer agent-orchestration features (US-002, US-015).
+1. **MVP scope** — confirm the 26-story cut-line; explicitly defer agent-orchestration features (US-002, US-015).
 2. **New domain aggregates** — Issue, Task, Proposal, Agent live in `src/domain/{issue,task,proposal,agent}/` with private constructors + repositories, parallel to the existing Feature aggregate. Status transitions enforced by the aggregate (e.g. Task `todo → in-progress → done`, Proposal `pending → accepted | rejected` one-way).
 3. **GitHubPort (new narrow port)** — methods for issues, PRs, CI checks, activity, review actions. Lives at `src/domain/ports/GitHubPort.ts`. Implementations: `GitHubAdapter` (REST/GraphQL via PAT) + `MockGitHubAdapter` (prototype fixtures). Per ADR-008 — narrow, not an aggregate facade.
 4. **AgentRuntimePort (new narrow port)** — listAgents, subscribe (WebSocket/SSE), assignTask, sendMessage. Implementations: `AgentRuntimeAdapter` (real WS) + `MockAgentRuntimeAdapter` (scripted fixtures). MVP can ship with mock-only and a clear "agent runtime: not yet connected" empty state.
@@ -19,14 +19,14 @@ Numbered ADR slots (final numbers assigned by `/adr:new`):
 7. **Routing** — new `/workspace/*` routes with hash history. Path drives main view (`/workspace/issue/191`, `/workspace/pr/45`, `/workspace/task/t0`, `/workspace/activity`). Right-panel state via query param (`?right=tasks|agents|agent|pr`). Breadcrumb back-nav uses `prevMain` in store, not browser history (so closing/reopening the plugin restores a sane default).
 8. **PR merge gate enforcement** — gate (`reviewStatus === 'approved'` AND `checks === 'passing'`) is re-checked **inside `MergePullRequestUseCase`** before calling `GitHubPort.mergePullRequest`, not only in the template. UI hides/disables the button as a usability aid, but the gate lives in the application layer.
 
-## MVP scope cut (22 of 52 stories)
+## MVP scope cut (26 of 52 stories)
 
 Ship:
 - **Left Sidebar (5):** US-001 Activity feed entry · US-003 New Issue modal · US-005 Issue nav · US-010 PR nav · US-012 New-PR appears live
 - **Main view (10):** US-013 Breadcrumb · US-014 Actbar (without Triage / Break Down) · US-016 Read issue spec · US-017 Add context · US-018 Edit issue · US-020 Accept proposal · US-021 Reject proposal · US-026 Diff from issue · US-028 Diff from PR · US-031 Comment / reply
 - **Main view — navigation (3):** US-023 Assign task to agent · US-024 Task detail nav · US-029 PR ↔ linked issue
 - **Right sidebar (3):** US-039 Quick-add task · US-043 Agent chat log + send · US-044 Agent chat from task
-- **PR workflow (4):** US-037 Activity event nav · US-040 Agents panel nav · US-046 Approve PR · US-047 Merge gated by approval · US-048 Mark draft as ready (treat as 4 + 1)
+- **PR workflow (5):** US-037 Activity event nav · US-040 Agents panel nav · US-046 Approve PR · US-047 Merge gated by approval · US-048 Mark draft as ready
 
 Cut from MVP (defer to Phase 2):
 - US-002 Triage, US-004 Collapse Actions, US-006 Collapse Issues, US-008 Filter (My/Created), US-009 Sidebar issue number polish, US-011 Draft PR distinction polish, US-015 Break Down (agent-driven), US-019, US-022, US-025, US-027, US-030, US-032 — US-052 — all remaining MED/LOW polish.
