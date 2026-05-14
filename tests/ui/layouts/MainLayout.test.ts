@@ -67,6 +67,6 @@ describe('MainLayout', () => {
 
 	it('renders the top nav links', () => {
 		const po = mountLayout({ default: '<div />' })
-		expect(po.root.findAll('a').length).toBe(3)
+		expect(po.root.findAll('a').length).toBe(4) // Home + Features + Chat + Settings
 	})
 })

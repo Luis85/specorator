@@ -586,4 +586,17 @@ to   { opacity: 1; transform: translateY(0);
   height: 100vh;
   overflow: hidden;
 }
+
+/* Visually hidden but available to screen readers (REQ-CCS-011, NFR-CCS-009) */
+.specorator-root .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 /*$vite$:1*/
