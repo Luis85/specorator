@@ -41,6 +41,16 @@ export class MockClaudeCliPort implements ClaudeCliPort {
    */
   readonly queryLog: string[] = []
 
+  /**
+   * Append-only log of every options object passed to query(). Parallel to
+   * {@link queryLog}: `optionsLog[i]` is the options for prompt `queryLog[i]`.
+   * `undefined` is preserved as-is (caller passed no options).
+   *
+   * Added for T-ASM-040 so UI tests can assert the `systemPromptSuffix`
+   * threaded through by `ChatSidebar.handleSend` (REQ-ASM-013, REQ-ASM-018).
+   */
+  readonly optionsLog: (ClaudeCliQueryOptions | undefined)[] = []
+
   async startup(): Promise<void> {
     // No-op. Never throws.
   }
@@ -55,9 +65,10 @@ export class MockClaudeCliPort implements ClaudeCliPort {
 
   async query(
     prompt: string,
-    _options?: ClaudeCliQueryOptions,
+    options?: ClaudeCliQueryOptions,
   ): Promise<Result<string, ClaudeCliError>> {
     this.queryLog.push(prompt)
+    this.optionsLog.push(options)
 
     if (!this.available) {
       return err(new ClaudeCliError('NOT_INSTALLED', 'MockClaudeCliPort: not available'))

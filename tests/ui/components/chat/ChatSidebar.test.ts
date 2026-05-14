@@ -18,6 +18,7 @@ import {
 	VAULT_PORT,
 	WORKSPACE_PORT,
 	SETTINGS_PORT,
+	LOGGER_PORT,
 } from '@/infrastructure/bridge/ports'
 import { useChatStore } from '@/ui/stores/chatStore'
 import { ChatSidebarPO } from './ChatSidebar.po'
@@ -45,13 +46,22 @@ function makeGlobal(
 			[VAULT_PORT as symbol]: bridge,
 			[WORKSPACE_PORT as symbol]: bridge,
 			[SETTINGS_PORT as symbol]: bridge,
+			[LOGGER_PORT as symbol]: bridge,
 		},
 	}
 }
 
-function makeBridgeWithApiKey(apiKey: string, files: Record<string, string> = {}): MockBridge {
+function makeBridgeWithApiKey(
+	apiKey: string,
+	files: Record<string, string> = {},
+	overrides: Partial<PluginSettings> = {},
+): MockBridge {
 	const bridge = new MockBridge(files)
-	const settings: PluginSettings = { ...DEFAULT_SETTINGS, anthropicApiKey: apiKey }
+	const settings: PluginSettings = {
+		...DEFAULT_SETTINGS,
+		anthropicApiKey: apiKey,
+		...overrides,
+	}
 	vi.spyOn(bridge, 'getSettings').mockResolvedValue(settings)
 	return bridge
 }
@@ -64,6 +74,7 @@ async function mountSidebar(options: {
 	queryError?: ClaudeCliError | null
 	delayMs?: number
 	files?: Record<string, string>
+	settings?: Partial<PluginSettings>
 }) {
 	const pinia = createPinia()
 	setActivePinia(pinia)
@@ -74,7 +85,11 @@ async function mountSidebar(options: {
 	if (options.queryError !== undefined) port.queryError = options.queryError
 	if (options.delayMs !== undefined) port.delayMs = options.delayMs
 
-	const bridge = makeBridgeWithApiKey(options.apiKey ?? '', options.files ?? {})
+	const bridge = makeBridgeWithApiKey(
+		options.apiKey ?? '',
+		options.files ?? {},
+		options.settings ?? {},
+	)
 
 	const wrapper = mount(ChatSidebar, {
 		global: makeGlobal(port, bridge, options.isMobile ?? false, pinia),

@@ -7,8 +7,15 @@ import { usePlatform } from '@/ui/composables/usePlatform'
 import { useVaultPort } from '@/ui/composables/useVaultPort'
 import { useWorkspacePort } from '@/ui/composables/useWorkspacePort'
 import { useSettingsPort } from '@/ui/composables/useSettingsPort'
+import { useLoggerPort } from '@/ui/composables/useLoggerPort'
 import { buildPrompt } from '@/application/chat/buildPrompt'
 import type { ContextFile } from '@/application/chat/buildPrompt'
+import {
+  assembleSystemPrompt,
+  getActiveFeatureSlug,
+  loadWorkflowStateSnapshot,
+} from '@/application/chat/assembleSystemPrompt'
+import { buildStagePromptMap } from '@/application/chat/stagePromptMap'
 import { SETTINGS_VERSION_KEY } from '@/infrastructure/bridge/ports'
 import ContextFileList from './ContextFileList.vue'
 import ChatInput from './ChatInput.vue'
@@ -20,6 +27,14 @@ const { isMobile } = usePlatform()
 const vaultPort = useVaultPort()
 const workspacePort = useWorkspacePort()
 const settingsPort = useSettingsPort()
+const loggerPort = useLoggerPort()
+
+/**
+ * Frozen stage-prompt descriptor table. Built once per component instance and
+ * passed to `assembleSystemPrompt` on every send (REQ-ASM-019 — recomputed
+ * per send, but the descriptor source is referentially stable).
+ */
+const stagePromptMap = buildStagePromptMap()
 
 // Local reactive state
 const available = ref(false)
@@ -103,6 +118,21 @@ async function handleSend(): Promise<void> {
 
   store.beginRequest()
 
+  // Stage-aware system-prompt suffix (REQ-ASM-013, REQ-ASM-014, REQ-ASM-018,
+  // REQ-ASM-019). Recomputed every send — no caching. Resolves the active
+  // feature from the current editor file, reads its workflow-state, and
+  // assembles a one-shot stage preamble. Any failure (no active file, file
+  // not under specsFolder, vault read error, malformed frontmatter, unknown
+  // stage) falls back to an empty suffix so the send still proceeds.
+  const settings = await settingsPort.getSettings()
+  const activeFile = workspacePort.getActiveFile()
+  const slug = getActiveFeatureSlug(activeFile?.path ?? null, settings.specsFolder)
+  const snapshot =
+    slug !== null
+      ? await loadWorkflowStateSnapshot(slug, vaultPort, loggerPort, settings.specsFolder)
+      : null
+  const systemPromptSuffix = assembleSystemPrompt(snapshot, stagePromptMap)
+
   // Load file contents for all context files; failed reads yield empty content
   const loadedFiles: ContextFile[] = await Promise.all(
     store.contextFiles.map(async (entry) => {
@@ -119,7 +149,10 @@ async function handleSend(): Promise<void> {
   const { prompt, truncated } = buildPrompt(store.userText, loadedFiles)
 
   if (claudeCliPort === undefined) { store.setError('query_failed'); return }
-  const result = await claudeCliPort.query(prompt, { timeoutMs: 30_000 })
+  const result = await claudeCliPort.query(prompt, {
+    timeoutMs: 30_000,
+    systemPromptSuffix,
+  })
 
   if (result.ok) {
     store.setResponse(result.value, truncated)
