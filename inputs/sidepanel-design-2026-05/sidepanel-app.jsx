@@ -79,8 +79,17 @@ function SPApp() {
   const [picker, setPicker]     = React.useState(false);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [vaultFolders, setVaultFolders] = React.useState(() => {
-    try { const s = localStorage.getItem('sp-vault-folders'); return s ? JSON.parse(s) : {'Projects/specorator':true,'Notes':true,'References':true}; }
-    catch { return {'Projects/specorator':true,'Notes':true,'References':true}; }
+    const defaults = {'Projects/specorator':true,'Notes':true,'References':true};
+    try {
+      const s = localStorage.getItem('sp-vault-folders');
+      if (!s) return defaults;
+      const parsed = JSON.parse(s);
+      // JSON.parse can legally return null, primitives, or arrays — accept only
+      // plain object maps. Anything else falls back to defaults so the next render
+      // doesn't throw TypeError reading vaultFolders[f.path].
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return defaults;
+      return parsed;
+    } catch { return defaults; }
   });
   const [autonomy, setAutonomy] = React.useState(() => {
     try { return localStorage.getItem('sp-autonomy') || 'assisted'; }
