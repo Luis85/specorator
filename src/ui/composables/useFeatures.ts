@@ -4,6 +4,8 @@ import { featureDtoFromDomain } from '../types/FeatureDto'
 import type { FeatureDto } from '../types/FeatureDto'
 import { useFeatureService } from './useFeatureService'
 import { tryAsync } from '@/domain/shared/tryAsync'
+import type { Result } from '@/domain/shared/Result'
+import type { Feature } from '@/domain/feature/Feature'
 
 type FeatureResult =
   | { ok: true; value: Parameters<typeof featureDtoFromDomain>[0] }
@@ -33,15 +35,16 @@ export function useFeatures() {
     return undefined
   }
 
+  function syncArrayResult(result: Result<Feature[]>): void {
+    if (result.ok) {
+      store.setItems(result.value.map(featureDtoFromDomain))
+    } else {
+      store.setError(result.error.message)
+    }
+  }
+
   async function loadFeatures(): Promise<void> {
-    await withLoading(async () => {
-      const result = await service.loadFeatures()
-      if (result.ok) {
-        store.setItems(result.value.map(featureDtoFromDomain))
-      } else {
-        store.setError(result.error.message)
-      }
-    })
+    await withLoading(async () => { syncArrayResult(await service.loadFeatures()) })
   }
 
   async function createFeature(

@@ -1,4 +1,8 @@
 
+/* Screen-reader-only utility — visually hidden but readable by assistive
+   technology. Restored after the PR-ASM-1 build:web regeneration pruned
+   it (Codex P2). Consumed by ContextFileChip.vue and other components
+   that surface accessible labels without visible text. */
 .specorator-root .sr-only {
   position: absolute;
   width: 1px;

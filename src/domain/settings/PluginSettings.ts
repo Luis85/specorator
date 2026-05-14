@@ -1,3 +1,5 @@
+import type { TransportKind } from '@/domain/chat/TransportKind'
+
 /**
  * Domain-level plugin configuration. Persisted via SettingsPort and
  * read by use cases that need to resolve vault paths or behaviour flags.
@@ -31,6 +33,17 @@ export interface PluginSettings {
 	 * Satisfies REQ-CCS-001, REQ-CCS-002, NFR-CCS-005, NFR-CCS-006.
 	 */
 	readonly anthropicApiKey: string
+	/**
+	 * Absolute filesystem path to the user's `claude` binary. Empty string = unset
+	 * (auto-detect at runtime). Per SPEC-ASM-001 §2.12, REQ-ASM-004.
+	 */
+	readonly claudeCliPath: string
+	/**
+	 * Chat transport selection mode. `'auto'` applies the REQ-ASM-002 precedence
+	 * (API key → subscription/CLI → degraded). Explicit values force a specific
+	 * transport. Per SPEC-ASM-001 §2.12, REQ-ASM-002.
+	 */
+	readonly transportKind: TransportKind
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -46,4 +59,6 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	userPersona: '',
 	onboardingComplete: false,
 	anthropicApiKey: '',
+	claudeCliPath: '',
+	transportKind: 'auto',
 }

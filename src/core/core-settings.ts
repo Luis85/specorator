@@ -3,9 +3,26 @@ import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginS
 
 const VALID_LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const
 const VALID_GATE_STRICTNESS = ['strict', 'lenient'] as const
+const VALID_TRANSPORT_KINDS = ['auto', 'api-key', 'subscription', 'degraded'] as const
 
 function coerceString(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback
+}
+
+function coerceEnum<T extends string>(value: unknown, allowed: ReadonlyArray<T>, fallback: T): T {
+  return (allowed as ReadonlyArray<string>).includes(value as string) ? (value as T) : fallback
+}
+
+function coerceBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback
+}
+
+function coercePassthroughString(value: unknown, fallback: string): string {
+  return typeof value === 'string' ? value : fallback
+}
+
+function coerceTrimmedString(value: unknown, fallback: string): string {
+  return typeof value === 'string' ? value.trim() : fallback
 }
 
 function toMutableBlob(blob: unknown): { out: Record<string, unknown>; hadData: boolean } {
@@ -56,21 +73,15 @@ export const coreSettingsModule = defineModule<PluginSettings>({
       archiveFolder: coerceString(r.archiveFolder, DEFAULT_SETTINGS.archiveFolder),
       decisionsFolder: coerceString(r.decisionsFolder, DEFAULT_SETTINGS.decisionsFolder),
       constitutionFile: coerceString(r.constitutionFile, DEFAULT_SETTINGS.constitutionFile),
-      gateStrictness: (VALID_GATE_STRICTNESS as ReadonlyArray<string>).includes(r.gateStrictness as string)
-        ? r.gateStrictness!
-        : DEFAULT_SETTINGS.gateStrictness,
-      teamMode: typeof r.teamMode === 'boolean' ? r.teamMode : DEFAULT_SETTINGS.teamMode,
-      logLevel: (VALID_LOG_LEVELS as ReadonlyArray<string>).includes(r.logLevel as string)
-        ? r.logLevel!
-        : DEFAULT_SETTINGS.logLevel,
-      mcpServerEnabled:
-        typeof r.mcpServerEnabled === 'boolean' ? r.mcpServerEnabled : DEFAULT_SETTINGS.mcpServerEnabled,
-      userPersona: typeof r.userPersona === 'string' ? r.userPersona : DEFAULT_SETTINGS.userPersona,
-      onboardingComplete:
-        typeof r.onboardingComplete === 'boolean'
-          ? r.onboardingComplete
-          : DEFAULT_SETTINGS.onboardingComplete,
-      anthropicApiKey: typeof r.anthropicApiKey === 'string' ? r.anthropicApiKey : DEFAULT_SETTINGS.anthropicApiKey,
+      gateStrictness: coerceEnum(r.gateStrictness, VALID_GATE_STRICTNESS, DEFAULT_SETTINGS.gateStrictness),
+      teamMode: coerceBoolean(r.teamMode, DEFAULT_SETTINGS.teamMode),
+      logLevel: coerceEnum(r.logLevel, VALID_LOG_LEVELS, DEFAULT_SETTINGS.logLevel),
+      mcpServerEnabled: coerceBoolean(r.mcpServerEnabled, DEFAULT_SETTINGS.mcpServerEnabled),
+      userPersona: coercePassthroughString(r.userPersona, DEFAULT_SETTINGS.userPersona),
+      onboardingComplete: coerceBoolean(r.onboardingComplete, DEFAULT_SETTINGS.onboardingComplete),
+      anthropicApiKey: coercePassthroughString(r.anthropicApiKey, DEFAULT_SETTINGS.anthropicApiKey),
+      claudeCliPath: coerceTrimmedString(r.claudeCliPath, DEFAULT_SETTINGS.claudeCliPath),
+      transportKind: coerceEnum(r.transportKind, VALID_TRANSPORT_KINDS, DEFAULT_SETTINGS.transportKind),
     }
   },
 

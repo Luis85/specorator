@@ -107,6 +107,38 @@ describe('promoteLegacyFlatSettings', () => {
       'logLevel',
       'mcpServerEnabled',
       'anthropicApiKey',
+      'claudeCliPath',
+      'transportKind',
     ])
+  })
+
+  it('promotes flat claudeCliPath and transportKind into specorator sub-key (T-ASM-014 §11.4)', () => {
+    const input: Record<string, unknown> = {
+      claudeCliPath: '/usr/local/bin/claude',
+      transportKind: 'subscription',
+    }
+
+    const out = promoteLegacyFlatSettings(input)
+
+    expect(out.specorator).toEqual({
+      claudeCliPath: '/usr/local/bin/claude',
+      transportKind: 'subscription',
+    })
+    expect(out.claudeCliPath).toBe('/usr/local/bin/claude')
+    expect(out.transportKind).toBe('subscription')
+  })
+
+  it('skips re-promotion when transportKind is already nested under specorator (double-promotion guard, §11.4)', () => {
+    const input: Record<string, unknown> = {
+      specorator: { transportKind: 'auto' },
+      // Even though `transportKind` is also at the top level, the existing
+      // sub-key wins — no re-promotion happens.
+      transportKind: 'should-not-overwrite',
+    }
+
+    const out = promoteLegacyFlatSettings(input)
+
+    expect(out.specorator).toEqual({ transportKind: 'auto' })
+    expect(out.transportKind).toBe('should-not-overwrite')
   })
 })

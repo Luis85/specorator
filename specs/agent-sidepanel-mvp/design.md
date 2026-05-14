@@ -676,7 +676,7 @@ Key reuse / extension points:
 
 | Component | Responsibility |
 |---|---|
-| `ClaudeSubprocessAdapter` | Implements `ClaudeCliPort`. Spawns `claude` via `child_process.spawn`, manages one long-lived process per chat thread for streaming and one short-lived process per structured call. Consumes NDJSON via `readline`. Captures `session_id` from `system/init`. Enforces argv invariants (no `--bare`; required `--permission-mode dontAsk` etc.). See §C6 |
+| `ClaudeSubprocessAdapter` | Implements `ClaudeCliPort`. Spawns `claude` via `child_process.spawn` — a fresh short-lived process per `query()` (both free-text streaming and structured one-shot). Multi-turn continuity is achieved by forwarding `--resume <sessionId>` in argv from the caller's `ClaudeCliQueryOptions.resumeSessionId` (the prior turn's captured session id). Consumes NDJSON via `readline`. Captures `session_id` from `system/init`. Enforces argv invariants (no `--bare`; required `--permission-mode dontAsk` etc.). See §C6. (Updated post-Codex P1 on PR #325 — `claude -p` is one-shot, so a long-lived reused process would drop prompts on turn 2+.) |
 | `MockClaudeSubprocessAdapter` | Test double mirroring `MockClaudeCliPort`'s field-driven shape. See §C7 |
 | `ClaudeBinaryResolver` | Resolves the binary path: (a) Settings value if non-empty; (b) `sh -lc 'command -v claude'` on Unix; (c) `where.exe claude` on Windows; (d) returns `null`. Validates absolute path with `path.isAbsolute` |
 | `NdjsonLineStream` | Thin wrapper around `readline.createInterface(child.stdout)` exposing `onSystemInit`, `onStreamEvent`, `onResult` typed callbacks |
@@ -865,8 +865,12 @@ User clicks Send in ChatInput.vue
   → on err: store.setError(mapped)
 ```
 
-The long-lived `ChildProcess` is kept open for the chat thread's lifetime (REQ-ASM-010);
-subsequent sends write to its stdin or, if the CLI's `-p` mode is single-shot,
+Each turn spawns a fresh short-lived `ChildProcess` (REQ-ASM-010 as revised post-Codex
+P1 on PR #325). The caller threads the prior turn's captured `sessionId` back through
+`ClaudeCliQueryOptions.resumeSessionId`, which `buildSubprocessArgs` emits as
+`--resume <id>` in argv (INV-5), so the new spawn picks up the prior conversation
+state from Claude Code's own session store. The earlier "long-lived per thread,
+reuse the child" idea conflicted with `claude -p`'s one-shot argv semantics:
 re-spawn the process while caching its handle for kill-on-unload.
 
 #### Flow B — Send and receive a structured proposal
@@ -1311,8 +1315,11 @@ Key implementation rules:
 
 - **Never use `--bare`** (REQ-ASM-006, D-ASM-002). A static-string-literal assert in
   `_buildArgs` checks the final argv array.
-- **Long-lived per thread (free-text), short-lived per structured call** (REQ-ASM-010,
-  REQ-ASM-049). The `_streamingProc` map keyed by threadId enforces the first rule;
+- **Short-lived per turn (both free-text and structured), with `--resume` chaining
+  for multi-turn context** (REQ-ASM-010 as revised post-Codex P1 on PR #325;
+  REQ-ASM-049). Each `query()` spawns a fresh subprocess; the adapter's
+  `_activeChildren: Set` field exists only so `shutdown()` can SIGTERM any
+  subprocess mid-response.
   `runStructured` spawns afresh each time and does not consult the map.
 - **PATH discovery** delegated to `ClaudeBinaryResolver` (D-ASM-007). Discovery
   happens once at `startup()` if no Settings value is present.

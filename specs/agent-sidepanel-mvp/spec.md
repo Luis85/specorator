@@ -771,7 +771,7 @@ class ClaudeSubprocessAdapter implements ClaudeCliPort {
 | `startup` | `(): Promise<void>` | Idempotent. Resolves `_binaryPath` from `settings.claudeCliPath` then `deps.resolveCliPath()`; sets `_available` accordingly (REQ-ASM-009, NFR-ASM-006). |
 | `isAvailable` | `(): Promise<boolean>` | Returns `_available && _binaryPath !== null`. Never throws. |
 | `isAvailableSync` | `(): boolean` | **Class-only, not on `ClaudeCliPort`.** Returns the cached `_available` flag (set by `startup()`). Performs **no I/O**, never spawns, never throws. Used by `selectTransport()` in plugin wiring (§9.1) where a synchronous boolean is required at view-registration time. Contrast with `isAvailable()` which returns `Promise<boolean>` for the public port surface. |
-| `query` | `(prompt, options?): Promise<Result<string, ClaudeCliError>>` | Free-text stream-json path: `_spawn` long-lived process keyed by `threadId` (REQ-ASM-010), `_parseNdjson`, capture session id (REQ-ASM-031), map errors via `_mapError`. |
+| `query` | `(prompt, options?): Promise<Result<string, ClaudeCliError>>` | Free-text stream-json path: `_spawn` a fresh short-lived process per turn (REQ-ASM-010), forward `options.resumeSessionId` as `--resume <id>` via argv when present, `_parseNdjson`, capture session id (REQ-ASM-031), map errors via `_mapError`. |
 | `runStructured` | `(prompt, options): Promise<Result<StructuredCliRawResult, ClaudeCliError>>` | One-shot short-lived spawn (REQ-ASM-049). Collects entire stdout to a buffer; `JSON.parse`; returns `{ result, structured_output }`. Reached from the application layer via `queryStructured()` after `isSubscriptionCapable(port)` narrows the port. There is no `queryStructured` method on the adapter or on `ClaudeCliPort`. |
 | `shutdown` | `(): void` | Synchronous. For every entry in `_streamingProc`: `child.kill('SIGTERM')`. Clears map. Sets `_ready = false`, `_available = false`. Never throws. |
 
@@ -802,7 +802,7 @@ class ClaudeSubprocessAdapter implements ClaudeCliPort {
 
 ### 4.5 Long-lived vs. short-lived process discipline
 
-- **Free-text (`query`)**: long-lived `ChildProcess` per `threadId` (REQ-ASM-010). Reused across turns. On second and subsequent turns of the same thread, `_spawn` is called only if the prior child has exited; otherwise the existing handle is reused.
+- **Free-text (`query`)**: short-lived `ChildProcess` per turn (REQ-ASM-010). Each `query()` invocation spawns a fresh `claude -p '<prompt>'` subprocess; the prior child exits naturally after emitting its `result` event. Multi-turn continuity is provided by the caller threading the prior turn's returned `sessionId` into the next turn's `ClaudeCliQueryOptions.resumeSessionId`, which becomes `--resume <id>` in argv (INV-5). This matches `claude -p`'s one-shot argv contract; the original "reuse one long-lived process" formulation would silently drop the new prompt on turn 2+ because nothing writes it to stdin (Codex P1, PR #325).
 - **Structured (`runStructured`)**: short-lived process per call (REQ-ASM-049). Never registered in `_streamingProc`. Process exits cleanly after the single `result` event.
 
 ---
@@ -1466,7 +1466,7 @@ EARS-mapped acceptance scenarios. IDs use the `TEST-ASM-NNN` form. Format mirror
 | ID | REQ | Scenario |
 |---|---|---|
 | TEST-ASM-012 | REQ-ASM-009 | Given `claudeCliPath` points to a non-existent file / When `startup()` resolves / Then `isAvailable()` returns `false` within 500 ms. |
-| TEST-ASM-013 | REQ-ASM-010 | Given the same `threadId` across three `query()` calls / Then `spawn()` fires exactly once for streaming; subsequent calls reuse the cached `ChildProcess`. |
+| TEST-ASM-013 | REQ-ASM-010 | Given three sequential `query()` calls on one chat thread, each threading the prior turn's returned `sessionId` into the next turn's `resumeSessionId` / Then `spawn()` fires exactly three times (one per turn). Turn 1 argv contains no `--resume`. Turn 2 argv contains `--resume <session-from-turn-1>`. Turn 3 argv contains `--resume <session-from-turn-2>`. |
 | TEST-ASM-014 | REQ-ASM-029 | Given stdout split mid-line across chunks / Then `_parseNdjson` reassembles via `readline` and dispatches events by `type`. |
 | TEST-ASM-015 | REQ-ASM-030 | Given a `result` event with `is_error: true` / Then `query()` returns `Result.error` with `errorCode === 'QUERY_FAILED'`. Given exit code 1 with no result event / Then `errorCode === 'QUERY_FAILED'`. |
 | TEST-ASM-016 | REQ-ASM-031 | Given `system/init` event with `session_id='xyz'` / Then `chatThread.sessionId === 'xyz'` after `query()` resolves. |

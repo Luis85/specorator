@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { CreateFeatureUseCase } from '@/application/feature/CreateFeatureUseCase'
 import { AdvanceFeatureStageUseCase } from '@/application/feature/AdvanceFeatureStageUseCase'
-import { ActivateFeatureUseCase } from '@/application/feature/ActivateFeatureUseCase'
+import { FeatureService } from '@/application/feature/FeatureService'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
@@ -157,7 +157,7 @@ describe('FeatureRepository.delete', () => {
     if (!created.ok) return
 
     // Advance once to create research.md
-    await new ActivateFeatureUseCase(repo).execute({ featureId: created.value.id })
+    await new FeatureService(repo).activateFeature(created.value.id)
     await new AdvanceFeatureStageUseCase(repo).execute({ featureId: created.value.id })
 
     // Both files should exist before deletion
@@ -176,7 +176,7 @@ describe('FeatureRepository.delete', () => {
   })
 })
 
-describe('ActivateFeatureUseCase', () => {
+describe('FeatureService.activateFeature (integration with CreateFeatureUseCase)', () => {
   it('updates workflow-state.md for an existing feature (upsert)', async () => {
     const bridge = new MockBridge()
     const repo = makeRepo(bridge)
@@ -184,9 +184,7 @@ describe('ActivateFeatureUseCase', () => {
     expect(createResult.ok).toBe(true)
     if (!createResult.ok) return
 
-    const activateResult = await new ActivateFeatureUseCase(repo).execute({
-      featureId: createResult.value.id,
-    })
+    const activateResult = await new FeatureService(repo).activateFeature(createResult.value.id)
     expect(activateResult.ok).toBe(true)
     if (!activateResult.ok) return
 
@@ -219,9 +217,7 @@ describe('AdvanceFeatureStageUseCase', () => {
     expect(created.ok).toBe(true)
     if (!created.ok) return
 
-    const activated = await new ActivateFeatureUseCase(repo).execute({
-      featureId: created.value.id,
-    })
+    const activated = await new FeatureService(repo).activateFeature(created.value.id)
     expect(activated.ok).toBe(true)
 
     const advanced = await new AdvanceFeatureStageUseCase(repo).execute({
@@ -245,7 +241,7 @@ describe('AdvanceFeatureStageUseCase', () => {
     expect(created.ok).toBe(true)
     if (!created.ok) return
 
-    await new ActivateFeatureUseCase(repo).execute({ featureId: created.value.id })
+    await new FeatureService(repo).activateFeature(created.value.id)
 
     // Pre-seed the stage file with custom content
     await bridge.writeFile('specs/search/research.md', '# my custom research\n')

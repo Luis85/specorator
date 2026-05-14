@@ -219,13 +219,62 @@ describe('coreSettingsModule.validateSettings', () => {
     const out = validate({ mcpServerEnabled: false })
     expect(out.mcpServerEnabled).toBe(false)
   })
+
+  // T-ASM-015 — migration of new fields (REQ-ASM-002, REQ-ASM-004; SPEC-ASM-001 §11.2)
+  describe('claudeCliPath and transportKind (T-ASM-015)', () => {
+    it('defaults claudeCliPath and transportKind when old settings lack the new fields', () => {
+      const out = validate({ locale: 'en', specsFolder: 'specs' })
+      expect(out.claudeCliPath).toBe(DEFAULT_SETTINGS.claudeCliPath)
+      expect(out.claudeCliPath).toBe('')
+      expect(out.transportKind).toBe(DEFAULT_SETTINGS.transportKind)
+      expect(out.transportKind).toBe('auto')
+    })
+
+    it("coerces garbage transportKind (e.g. 'invalid') to default 'auto'", () => {
+      const out = validate({ transportKind: 'invalid' })
+      expect(out.transportKind).toBe('auto')
+    })
+
+    it.each([null, undefined, 42, true, {}, []] as const)(
+      'coerces non-string claudeCliPath (%p) to default empty string',
+      (value) => {
+        const out = validate({ claudeCliPath: value })
+        expect(out.claudeCliPath).toBe('')
+      },
+    )
+
+    it.each(['auto', 'api-key', 'subscription', 'degraded'] as const)(
+      "preserves valid transportKind '%s' (idempotent)",
+      (kind) => {
+        const out = validate({ transportKind: kind })
+        expect(out.transportKind).toBe(kind)
+      },
+    )
+
+    it('preserves and trims a valid claudeCliPath (idempotent on trimmed input)', () => {
+      const out = validate({ claudeCliPath: '/usr/local/bin/claude' })
+      expect(out.claudeCliPath).toBe('/usr/local/bin/claude')
+    })
+
+    it('trims surrounding whitespace on claudeCliPath per §11.2', () => {
+      const out = validate({ claudeCliPath: '  /opt/bin/claude  ' })
+      expect(out.claudeCliPath).toBe('/opt/bin/claude')
+    })
+  })
 })
 
 describe('coreSettingsModule.settingsSchema', () => {
   it('exposes a field descriptor for every module-driven PluginSettings key', () => {
-    // `anthropicApiKey` is rendered outside the module loop (SPEC-CCS-001 §8.3, D-CCS-002)
-    // and intentionally absent from settingsSchema.fields.
-    const manuallyRenderedKeys: ReadonlyArray<keyof PluginSettings> = ['anthropicApiKey']
+    // `anthropicApiKey` is rendered outside the module loop (SPEC-CCS-001 §8.3, D-CCS-002).
+    // `claudeCliPath` is rendered by the custom ClaudeCliPathField.vue component
+    // (SPEC-ASM-001 §7.5, T-ASM-016) and `transportKind` is not a user-facing
+    // settings field (its value is driven by transport-selection logic).
+    // All three are intentionally absent from settingsSchema.fields.
+    const manuallyRenderedKeys: ReadonlyArray<keyof PluginSettings> = [
+      'anthropicApiKey',
+      'claudeCliPath',
+      'transportKind',
+    ]
     const expected = Object.keys(DEFAULT_SETTINGS).length - manuallyRenderedKeys.length
     expect(coreSettingsModule.settingsSchema?.fields).toHaveLength(expected)
   })
