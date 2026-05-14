@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Specorator — Developer Handoff</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:   #111113; --bg-s: #17171a; --bg-m: #1c1c20; --bg-h: #222228;
+  --brd:  rgba(255,255,255,0.07); --brd2: rgba(255,255,255,0.04);
+  --t0:   #d0d0d6; --t1:   #72727a; --t2:   #3e3e46;
+  --blue: #5090cc; --green: #48aa6a; --amber: #b8832a;
+  --purp: #9a6fc8; --teal: #4abcaa;  --red:  #b85050;
+  --f:  'Inter', system-ui, sans-serif;
+  --fm: 'JetBrains Mono', monospace;
+}
+html { scroll-behavior: smooth; }
+body { font-family: var(--f); font-size: 14px; line-height: 1.6; background: var(--bg); color: var(--t0); }
+
+/* ── NAV ── */
+.topnav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(17,17,19,0.93); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--brd);
+  display: flex; align-items: center; padding: 0 40px; height: 48px; gap: 0;
+}
+.logo { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; color: var(--t0); margin-right: 32px; }
+.logo span { color: var(--purp); }
+.nav-links { display: flex; }
+.nav-a { font-size: 12.5px; color: var(--t1); padding: 0 14px; height: 48px; display: flex; align-items: center; text-decoration: none; border-bottom: 2px solid transparent; transition: all 0.1s; white-space: nowrap; }
+.nav-a:hover { color: var(--t0); }
+.nav-a.active { color: var(--t0); border-bottom-color: var(--purp); }
+
+/* ── LAYOUT ── */
+.page { display: flex; max-width: 1200px; margin: 0 auto; padding: 0 40px 80px; }
+.toc { width: 220px; flex-shrink: 0; position: sticky; top: 48px; align-self: flex-start; padding: 32px 0; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: var(--t2); padding: 0 0 7px; display: block; margin-top: 18px; }
+.toc-label:first-child { margin-top: 0; }
+.toc-a { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--t1); padding: 4px 0; text-decoration: none; transition: color 0.1s; }
+.toc-a:hover, .toc-a.active { color: var(--t0); }
+.toc-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--t2); flex-shrink: 0; }
+.toc-a.active .toc-dot { background: var(--purp); }
+.content { flex: 1; min-width: 0; padding: 40px 0 0 48px; }
+
+/* ── SECTION ── */
+.section { margin-bottom: 64px; }
+.s-eye { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--purp); margin-bottom: 8px; }
+.s-title { font-size: 26px; font-weight: 300; color: var(--t0); letter-spacing: -0.4px; margin-bottom: 10px; }
+.s-title strong { font-weight: 700; }
+.s-lead { font-size: 14px; color: var(--t1); line-height: 1.7; max-width: 640px; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid var(--brd); }
+
+.sub { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: var(--t2); padding-bottom: 8px; border-bottom: 1px solid var(--brd); margin: 36px 0 20px; }
+.divider { height: 1px; background: var(--brd); margin: 56px 0; }
+
+/* ── CODE BLOCK ── */
+pre {
+  font-family: var(--fm); font-size: 12px; line-height: 1.7;
+  background: var(--bg-s); border: 1px solid var(--brd); border-radius: 7px;
+  padding: 16px 20px; overflow-x: auto; margin-bottom: 20px; color: var(--t0);
+}
+code { font-family: var(--fm); font-size: 11.5px; background: rgba(255,255,255,0.07); padding: 1px 6px; border-radius: 3px; color: #c07a44; }
+pre code { background: none; padding: 0; border-radius: 0; color: inherit; font-size: inherit; }
+
+/* syntax */
+.kw  { color: #5b9dd9; }  /* keyword */
+.ty  { color: #4abcaa; }  /* type */
+.st  { color: #cc8866; }  /* string */
+.cm  { color: #5a7a4a; }  /* comment */
+.pn  { color: #9bbfe0; }  /* prop name */
+.nm  { color: #c8a060; }  /* number/const */
+
+/* ── PROP TABLE ── */
+.ptable { width: 100%; border: 1px solid var(--brd); border-radius: 7px; overflow: hidden; margin-bottom: 20px; }
+.ptr { display: grid; border-bottom: 1px solid var(--brd2); }
+.ptr:last-child { border-bottom: none; }
+.ptr.head { background: rgba(255,255,255,0.02); }
+.ptc { padding: 9px 14px; font-size: 12px; }
+.ptr.head .ptc { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--t2); }
+.ptc-name  { color: var(--teal); font-family: var(--fm); font-size: 11.5px; }
+.ptc-type  { color: var(--amber); font-family: var(--fm); font-size: 11.5px; }
+.ptc-desc  { color: var(--t1); font-size: 12px; }
+.ptr-4 { grid-template-columns: 160px 160px 1fr 80px; }
+.ptr-3 { grid-template-columns: 180px 160px 1fr; }
+
+/* ── FLOW DIAGRAM ── */
+.flow-block {
+  background: var(--bg-s); border: 1px solid var(--brd); border-radius: 7px;
+  padding: 14px 18px; margin-bottom: 20px; font-family: var(--fm); font-size: 12px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.flow-row { display: flex; align-items: center; gap: 10px; color: var(--t1); }
+.flow-src  { color: var(--t0); font-weight: 500; min-width: 160px; }
+.flow-arr  { color: var(--t2); flex-shrink: 0; }
+.flow-dst  { color: var(--blue); }
+.flow-note { font-size: 10.5px; color: var(--t2); margin-left: auto; font-family: var(--f); font-style: italic; }
+
+/* ── NOTE BOX ── */
+.note {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: rgba(154,111,200,0.05); border: 1px solid rgba(154,111,200,0.18);
+  border-radius: 7px; padding: 12px 16px; margin-bottom: 20px;
+}
+.note.amber { background: rgba(184,131,42,0.05); border-color: rgba(184,131,42,0.2); }
+.note.green { background: rgba(72,170,106,0.05); border-color: rgba(72,170,106,0.2); }
+.note-ic { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+.note-text { font-size: 13px; color: var(--t1); line-height: 1.6; }
+.note-text strong { color: var(--t0); }
+
+/* ── STATE PILL ── */
+.state-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.state-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;
+  border: 1px solid;
+}
+.sp-blue  { background: rgba(80,144,204,0.1);  color: var(--blue);  border-color: rgba(80,144,204,0.22); }
+.sp-green { background: rgba(72,170,106,0.1);  color: var(--green); border-color: rgba(72,170,106,0.22); }
+.sp-purp  { background: rgba(154,111,200,0.1); color: var(--purp);  border-color: rgba(154,111,200,0.22); }
+.sp-teal  { background: rgba(74,188,170,0.1);  color: var(--teal);  border-color: rgba(74,188,170,0.22); }
+.sp-amber { background: rgba(184,131,42,0.1);  color: var(--amber); border-color: rgba(184,131,42,0.22); }
+
+/* ── FILE LIST ── */
+.file-list { background: var(--bg-s); border: 1px solid var(--brd); border-radius: 7px; overflow: hidden; margin-bottom: 20px; }
+.file-item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--brd2); }
+.file-item:last-child { border-bottom: none; }
+.file-ic { font-size: 11px; font-weight: 700; width: 14px; text-align: center; flex-shrink: 0; }
+.file-path { font-family: var(--fm); font-size: 11.5px; color: var(--t0); flex: 1; }
+.file-desc { font-size: 11.5px; color: var(--t1); }
+
+/* ── FOOTER ── */
+.brief-footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--brd); font-size: 11.5px; color: var(--t2); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="logo">Specorator <span>·</span> Developer Handoff</div>
+  <div class="nav-links">
+    <a class="nav-a active" href="#overview">Overview</a>
+    <a class="nav-a" href="#data-models">Data Models</a>
+    <a class="nav-a" href="#state">State &amp; Routing</a>
+    <a class="nav-a" href="#components">Components</a>
+    <a class="nav-a" href="#interactions">Interactions</a>
+    <a class="nav-a" href="#obsidian">Obsidian Notes</a>
+  </div>
+</nav>
+
+<div class="page">
+  <aside class="toc">
+    <span class="toc-label">Overview</span>
+    <a class="toc-a" href="#goal"><div class="toc-dot"></div>Goal</a>
+    <a class="toc-a" href="#layout"><div class="toc-dot"></div>Layout</a>
+    <a class="toc-a" href="#deliverables"><div class="toc-dot"></div>Deliverables</a>
+
+    <span class="toc-label">Data Models</span>
+    <a class="toc-a" href="#model-issue"><div class="toc-dot"></div>Issue</a>
+    <a class="toc-a" href="#model-task"><div class="toc-dot"></div>Task</a>
+    <a class="toc-a" href="#model-agent"><div class="toc-dot"></div>Agent</a>
+    <a class="toc-a" href="#model-proposal"><div class="toc-dot"></div>Proposal</a>
+    <a class="toc-a" href="#model-pr"><div class="toc-dot"></div>Pull Request</a>
+    <a class="toc-a" href="#model-activity"><div class="toc-dot"></div>Activity Event</a>
+
+    <span class="toc-label">State &amp; Routing</span>
+    <a class="toc-a" href="#app-state"><div class="toc-dot"></div>App State</a>
+    <a class="toc-a" href="#main-states"><div class="toc-dot"></div>Main View States</a>
+    <a class="toc-a" href="#right-states"><div class="toc-dot"></div>Right Panel States</a>
+    <a class="toc-a" href="#nav-flows"><div class="toc-dot"></div>Navigation Flows</a>
+
+    <span class="toc-label">Components</span>
+    <a class="toc-a" href="#left-sidebar"><div class="toc-dot"></div>Left Sidebar</a>
+    <a class="toc-a" href="#main-view"><div class="toc-dot"></div>Main View</a>
+    <a class="toc-a" href="#right-sidebar"><div class="toc-dot"></div>Right Sidebar</a>
+    <a class="toc-a" href="#modals"><div class="toc-dot"></div>Modals &amp; Overlays</a>
+
+    <span class="toc-label">Interactions</span>
+    <a class="toc-a" href="#ix-proposals"><div class="toc-dot"></div>Proposals</a>
+    <a class="toc-a" href="#ix-pr-workflow"><div class="toc-dot"></div>PR Workflow</a>
+    <a class="toc-a" href="#ix-tasks"><div class="toc-dot"></div>Tasks</a>
+
+    <span class="toc-label">Obsidian Notes</span>
+    <a class="toc-a" href="#plugin-arch"><div class="toc-dot"></div>Plugin Architecture</a>
+    <a class="toc-a" href="#open-items"><div class="toc-dot"></div>Open Items</a>
+  </aside>
+
+  <main class="content">
+
+    <!-- ══ OVERVIEW ══ -->
+    <div class="section" id="overview">
+      <div class="s-eye">Section 01</div>
+      <h2 class="s-title"><strong>Overview</strong></h2>
+      <p class="s-lead">Specorator is an Obsidian plugin that provides a GitHub-integrated workspace for AI-agent-driven development. It replaces context-switching between GitHub, a task manager, and your editor with a single three-panel interface living inside Obsidian.</p>
+
+      <div class="sub" id="goal">Goal</div>
+      <p style="font-size:13.5px;color:var(--t1);line-height:1.7;max-width:640px;margin-bottom:20px">
+        The plugin surfaces issues, tasks, agent activity, and pull requests in a single pane. AI agents operate on the codebase and vault, producing proposals for the user to review and accept before any file is committed. The user never leaves Obsidian.
+      </p>
+
+      <div class="note">
+        <span class="note-ic" style="color:var(--purp)">✦</span>
+        <div class="note-text">The prototype (<code>Specorator_Screen_v2.html</code>) is a <strong>self-contained reference implementation</strong> in vanilla HTML/CSS/JS. All data, state, and render logic is contained in one file and can be read directly as a functional specification.</div>
+      </div>
+
+      <div class="sub" id="layout">Three-Panel Layout</div>
+      <div class="flow-block">
+        <div class="flow-row">
+          <span class="flow-src">Left Sidebar (240px)</span>
+          <span class="flow-arr">|</span>
+          <span class="flow-dst">Main View (flex: 1)</span>
+          <span class="flow-arr">|</span>
+          <span class="flow-dst" style="color:var(--purp)">Right Sidebar (284px)</span>
+        </div>
+        <div class="flow-row" style="margin-top:8px;font-family:var(--f);font-size:11.5px">
+          <span style="min-width:160px;color:var(--t2)">Actions · Issues · PRs</span>
+          <span style="color:var(--t2);flex-shrink:0">|</span>
+          <span style="color:var(--t2)">Issue / PR / Task / Feed</span>
+          <span style="color:var(--t2);flex-shrink:0">|</span>
+          <span style="color:var(--t2);margin-left:auto">Tasks / Agents / PR Panel</span>
+        </div>
+      </div>
+      <p style="font-size:12.5px;color:var(--t1);line-height:1.6;margin-bottom:20px">The layout is fixed — all three panels are always visible. Only the <em>content</em> of each panel changes based on what is selected. A status bar sits below all three columns.</p>
+
+      <div class="sub" id="deliverables">Deliverables in this Package</div>
+      <div class="file-list">
+        <div class="file-item">
+          <span class="file-ic" style="color:var(--blue)">⊙</span>
+          <span class="file-path">Specorator_Screen_v2.html</span>
+          <span class="file-desc">Interactive prototype — full reference implementation</span>
+        </div>
+        <div class="file-item">
+          <span class="file-ic" style="color:var(--teal)">◫</span>
+          <span class="file-path">Specorator_Design_Brief.html</span>
+          <span class="file-desc">Component specs, visual language, interaction patterns</span>
+        </div>
+        <div class="file-item">
+          <span class="file-ic" style="color:var(--purp)">✦</span>
+          <span class="file-path">Specorator_User_Stories.html</span>
+          <span class="file-desc">52 user stories with acceptance criteria</span>
+        </div>
+        <div class="file-item">
+          <span class="file-ic" style="color:var(--amber)">◎</span>
+          <span class="file-path">Specorator Handoff.html</span>
+          <span class="file-desc">This document — data models, state, components, implementation notes</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ══ DATA MODELS ══ -->
+    <div class="section" id="data-models">
+      <div class="s-eye">Section 02</div>
+      <h2 class="s-title"><strong>Data Models</strong></h2>
+      <p class="s-lead">TypeScript interface definitions derived directly from the prototype data structures. These represent the minimum viable shape for the production data layer. Fields marked optional are shown but not required for the initial implementation.</p>
+
+      <div class="sub" id="model-issue">Issue</div>
+<pre><span class="kw">interface</span> <span class="ty">Issue</span> {
+  num:         <span class="ty">number</span>;              <span class="cm">// e.g. 191</span>
+  type:        <span class="ty">IssueType</span>;           <span class="cm">// 'feat' | 'fix' | 'research' | 'chore' | 'docs' | 'req'</span>
+  scope:       <span class="ty">string</span>;             <span class="cm">// e.g. 'plugin-shell', 'ui', 'tooling'</span>
+  eyebrow:     <span class="ty">string</span>;             <span class="cm">// derived: "{scope} · {type}"</span>
+  title:       <span class="ty">string</span>;
+  subtitle?:   <span class="ty">string</span>;
+  description: <span class="ty">string</span>;             <span class="cm">// may contain basic HTML (code tags)</span>
+  context?:    <span class="ty">string</span>;             <span class="cm">// acceptance criteria, notes, constraints</span>
+  status:      <span class="st">'open'</span> | <span class="st">'closed'</span>;
+  opened:      <span class="ty">string</span>;             <span class="cm">// relative time string</span>
+  linkedPRs?:  <span class="ty">number</span>[];           <span class="cm">// PR numbers (not IDs)</span>
+}
+
+<span class="kw">type</span> <span class="ty">IssueType</span> = <span class="st">'feat'</span> | <span class="st">'fix'</span> | <span class="st">'research'</span> | <span class="st">'chore'</span> | <span class="st">'docs'</span> | <span class="st">'req'</span>;</pre>
+
+      <div class="sub" id="model-task">Task</div>
+<pre><span class="kw">interface</span> <span class="ty">Task</span> {
+  id:       <span class="ty">string</span>;                  <span class="cm">// unique, e.g. 't0', 'bd0-1234'</span>
+  label:    <span class="ty">string</span>;
+  est:      <span class="ty">string</span>;                  <span class="cm">// display string: '2h', '1d', '?'</span>
+  status:   <span class="ty">TaskStatus</span>;
+  agentId:  <span class="ty">string</span> | <span class="ty">null</span>;           <span class="cm">// references Agent.id</span>
+  scope:    <span class="st">'issue'</span> | <span class="st">'backlog'</span>;
+  issueId?: <span class="ty">number</span>;                  <span class="cm">// required when scope === 'issue'</span>
+}
+
+<span class="kw">type</span> <span class="ty">TaskStatus</span> = <span class="st">'todo'</span> | <span class="st">'in-progress'</span> | <span class="st">'done'</span>;</pre>
+
+      <div class="sub" id="model-agent">Agent</div>
+<pre><span class="kw">interface</span> <span class="ty">Agent</span> {
+  id:       <span class="ty">string</span>;                  <span class="cm">// e.g. 'forge', 'scout', 'quill'</span>
+  name:     <span class="ty">string</span>;
+  role:     <span class="ty">string</span>;                  <span class="cm">// e.g. 'Implementation', 'Dependency Review'</span>
+  status:   <span class="st">'Running'</span> | <span class="st">'Queued'</span>;
+  code:     <span class="st">'active'</span> | <span class="st">'queued'</span>;    <span class="cm">// machine-readable status</span>
+  letter:   <span class="ty">string</span>;                  <span class="cm">// single character for avatar</span>
+  grad:     <span class="ty">string</span>;                  <span class="cm">// CSS gradient for avatar background</span>
+  task:     <span class="ty">string</span>;                  <span class="cm">// current task label</span>
+  messages: <span class="ty">AgentMessage</span>[];
+  live:     <span class="ty">boolean</span>;                 <span class="cm">// true = show typing indicator</span>
+}
+
+<span class="kw">interface</span> <span class="ty">AgentMessage</span> {
+  role: <span class="st">'sys'</span> | <span class="st">'agent'</span> | <span class="st">'tool'</span> | <span class="st">'user'</span>;
+  text: <span class="ty">string</span>;
+  ts:   <span class="ty">string</span>;                      <span class="cm">// display time, e.g. '14:22'</span>
+}</pre>
+
+      <div class="sub" id="model-proposal">Proposal</div>
+<pre><span class="kw">interface</span> <span class="ty">Proposal</span> {
+  id:       <span class="ty">string</span>;
+  issueId:  <span class="ty">number</span>;
+  status:   <span class="st">'pending'</span> | <span class="st">'accepted'</span> | <span class="st">'rejected'</span>;
+  type:     <span class="ty">string</span>;                  <span class="cm">// e.g. 'File Created', 'File Modified'</span>
+  path:     <span class="ty">string</span>;                  <span class="cm">// vault-relative file path</span>
+  size:     <span class="ty">string</span>;                  <span class="cm">// e.g. '21 lines'</span>
+  agentId:  <span class="ty">string</span>;
+  desc:     <span class="ty">string</span>;
+  code:     <span class="ty">CodeToken</span>[];             <span class="cm">// tokenised for syntax highlighting</span>
+}
+
+<span class="kw">interface</span> <span class="ty">CodeToken</span> {
+  t: <span class="st">'kw'</span> | <span class="st">'ty'</span> | <span class="st">'st'</span> | <span class="st">'pn'</span> | <span class="st">'cm'</span> | <span class="st">'tx'</span> | <span class="st">'br'</span>;
+  v: <span class="ty">string</span>;
+}
+
+<span class="cm">// Proposals drive the "Review Required" section.
+// status changes from 'pending' → 'accepted' | 'rejected' trigger a re-render.
+// Accepted proposals appear in the Related Files section.</span></pre>
+
+      <div class="sub" id="model-pr">Pull Request</div>
+<pre><span class="kw">interface</span> <span class="ty">PullRequest</span> {
+  id:           <span class="ty">string</span>;              <span class="cm">// e.g. 'pr45'</span>
+  num:          <span class="ty">number</span>;
+  title:        <span class="ty">string</span>;
+  branch:       <span class="ty">string</span>;
+  base:         <span class="ty">string</span>;
+  status:       <span class="st">'open'</span> | <span class="st">'merged'</span>;
+  draft:        <span class="ty">boolean</span>;
+  issueIds:     <span class="ty">number</span>[];            <span class="cm">// linked issue numbers</span>
+  author:       <span class="ty">string</span>;
+  authorGrad:   <span class="ty">string</span>;              <span class="cm">// CSS gradient for avatar</span>
+  authorLetter: <span class="ty">string</span>;
+  opened:       <span class="ty">string</span>;             <span class="cm">// relative time string</span>
+  checks:       <span class="st">'passing'</span> | <span class="st">'failing'</span> | <span class="st">'pending'</span>;
+  reviewStatus: <span class="ty">ReviewStatus</span>;
+  additions:    <span class="ty">number</span>;
+  deletions:    <span class="ty">number</span>;
+  commits:      <span class="ty">number</span>;
+  description:  <span class="ty">string</span>;
+  files:        <span class="ty">PRFile</span>[];
+  ciChecks:     <span class="ty">CICheck</span>[];
+  activity:     <span class="ty">ActivityEvent</span>[];
+}
+
+<span class="kw">type</span>  <span class="ty">ReviewStatus</span> = <span class="st">'review-required'</span> | <span class="st">'approved'</span> | <span class="st">'draft'</span> | <span class="st">'merged'</span>;
+
+<span class="kw">interface</span> <span class="ty">PRFile</span> {
+  path:  <span class="ty">string</span>;
+  kind:  <span class="st">'created'</span> | <span class="st">'modified'</span> | <span class="st">'deleted'</span>;
+  adds:  <span class="ty">number</span>;
+  dels:  <span class="ty">number</span>;
+}
+
+<span class="kw">interface</span> <span class="ty">CICheck</span> {
+  name:   <span class="ty">string</span>;
+  status: <span class="st">'pass'</span> | <span class="st">'fail'</span> | <span class="st">'pending'</span>;
+}</pre>
+
+      <div class="sub" id="model-activity">Activity Event</div>
+<pre><span class="kw">type</span> <span class="ty">ActivityEventType</span> =
+  | <span class="st">'opened'</span> | <span class="st">'commits'</span> | <span class="st">'ci'</span> | <span class="st">'comment'</span>
+  | <span class="st">'review'</span> | <span class="st">'merged'</span> | <span class="st">'agent'</span> | <span class="st">'proposal'</span>
+  | <span class="st">'task'</span> | <span class="st">'closed'</span> | <span class="st">'pr'</span>;
+
+<span class="kw">interface</span> <span class="ty">ActivityEvent</span> {
+  type:     <span class="ty">ActivityEventType</span>;
+  ts:       <span class="ty">string</span>;              <span class="cm">// relative time or HH:MM</span>
+  author?:  <span class="ty">string</span>;
+  grad?:    <span class="ty">string</span>;              <span class="cm">// avatar gradient</span>
+  letter?:  <span class="ty">string</span>;             <span class="cm">// avatar letter</span>
+  text?:    <span class="ty">string</span>;
+  body?:    <span class="ty">string</span>;              <span class="cm">// for comment/review types</span>
+  status?:  <span class="ty">string</span>;             <span class="cm">// for ci/review types</span>
+  note?:    <span class="ty">string</span>;
+  icon?:    <span class="ty">string</span>;
+  color?:   <span class="ty">string</span>;
+  items?:   <span class="ty">CommitItem</span>[];       <span class="cm">// for 'commits' type</span>
+  issueNum?:<span class="ty">number</span>;
+  prNum?:   <span class="ty">number</span>;
+  prId?:    <span class="ty">string</span>;
+}
+
+<span class="kw">interface</span> <span class="ty">CommitItem</span> {
+  sha: <span class="ty">string</span>;  <span class="cm">// short SHA, 6–7 chars</span>
+  msg: <span class="ty">string</span>;
+  ts:  <span class="ty">string</span>;
+}</pre>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ══ STATE & ROUTING ══ -->
+    <div class="section" id="state">
+      <div class="s-eye">Section 03</div>
+      <h2 class="s-title"><strong>State &amp; Routing</strong></h2>
+      <p class="s-lead">The plugin uses a single flat state object. There is no router — <code>renderMain()</code> and <code>renderRight()</code> are called whenever state changes. Each render reads from state and generates HTML (or React elements in production) for the appropriate view.</p>
+
+      <div class="sub" id="app-state">App State Object</div>
+<pre><span class="kw">interface</span> <span class="ty">AppState</span> {
+  main:     <span class="st">'issue'</span> | <span class="st">'pr'</span> | <span class="st">'task'</span> | <span class="st">'activity'</span>;
+  right:    <span class="st">'tasks'</span> | <span class="st">'agents'</span> | <span class="st">'agent'</span> | <span class="st">'pr'</span>;
+  issueId:  <span class="ty">number</span>;        <span class="cm">// default: 191</span>
+  taskId:   <span class="ty">string</span> | <span class="ty">null</span>;
+  agentId:  <span class="ty">string</span> | <span class="ty">null</span>;
+  prId:     <span class="ty">string</span> | <span class="ty">null</span>;
+  prevMain: <span class="ty">AppState</span>[<span class="st">'main'</span>] | <span class="ty">null</span>; <span class="cm">// for breadcrumb back navigation</span>
+}</pre>
+
+      <div class="sub" id="main-states">Main View States</div>
+      <div class="state-row">
+        <span class="state-pill sp-teal">⊙ issue — Issue Workspace</span>
+        <span class="state-pill sp-blue">⊙ pr — PR Detail</span>
+        <span class="state-pill sp-purp">✦ task — Task Detail</span>
+        <span class="state-pill sp-amber">◎ activity — Activity Feed</span>
+      </div>
+      <div class="ptable">
+        <div class="ptr ptr-3 head"><div class="ptc">State</div><div class="ptc">Actbar</div><div class="ptc">Content</div></div>
+        <div class="ptr ptr-3"><div class="ptc ptc-name">issue</div><div class="ptc" style="color:var(--green);font-size:12px">Visible</div><div class="ptc ptc-desc">Issue header, proposals, tasks, linked PRs, related files</div></div>
+        <div class="ptr ptr-3"><div class="ptc ptc-name">pr</div><div class="ptc" style="color:var(--green);font-size:12px">Visible</div><div class="ptc ptc-desc">PR header + description, changed files, activity timeline</div></div>
+        <div class="ptr ptr-3"><div class="ptc ptc-name">task</div><div class="ptc" style="color:var(--t2);font-size:12px">Hidden</div><div class="ptc ptc-desc">Task title, meta grid, subtasks, notes</div></div>
+        <div class="ptr ptr-3"><div class="ptc ptc-name">activity</div><div class="ptc" style="color:var(--t2);font-size:12px">Hidden</div><div class="ptc ptc-desc">Day-grouped event log across all issues and PRs</div></div>
+      </div>
+
+      <div class="sub" id="right-states">Right Panel States</div>
+      <div class="ptable">
+        <div class="ptr ptr-3 head"><div class="ptc">State</div><div class="ptc">Trigger</div><div class="ptc">Content</div></div>
+        <div class="ptr ptr-3"><div class="ptc ptc-name">tasks</div><div class="ptc ptc-desc">Default when issue is open</div><div class="ptc ptc-desc">Task list, quick-add form, AI input footer</div></div>
+        <div class="ptr ptr-3"><div class="ptc ptc-name">agents</div><div class="ptc ptc-desc">◉ Agents button or task click</div><div class="ptc ptc-desc">Running/Queued agent list</div></div>
+        <div class="ptr ptr-3"><div class="ptc ptc-name">agent</div><div class="ptc ptc-desc">Agent row click</div><div class="ptc ptc-desc">Agent chat log + message input</div></div>
+        <div class="ptr ptr-3"><div class="ptc ptc-name">pr</div><div class="ptc ptc-desc">PR row click in sidebar</div><div class="ptc ptc-desc">Linked issues, CI checks, Review &amp; Merge, PR AI chat</div></div>
+      </div>
+
+      <div class="sub" id="nav-flows">Navigation Flows</div>
+      <div class="flow-block">
+        <div class="flow-row"><span class="flow-src">Sidebar issue row click</span><span class="flow-arr">→</span><span class="flow-dst">main='issue', right='tasks', issueId=N</span></div>
+        <div class="flow-row"><span class="flow-src">Sidebar PR row click</span><span class="flow-arr">→</span><span class="flow-dst">main='pr', right='pr', prId=X, prevMain=prev</span></div>
+        <div class="flow-row"><span class="flow-src">Task card click (in-progress)</span><span class="flow-arr">→</span><span class="flow-dst">main='task', right='agents', taskId=T</span></div>
+        <div class="flow-row"><span class="flow-src">Breadcrumb ← Issue</span><span class="flow-arr">→</span><span class="flow-dst">main='issue', prId=null, taskId=null (preserves issueId)</span></div>
+        <div class="flow-row"><span class="flow-src">Activity Feed button</span><span class="flow-arr">→</span><span class="flow-dst">main='activity' (no right panel change)</span></div>
+        <div class="flow-row"><span class="flow-src">◉ Agents button</span><span class="flow-arr">→</span><span class="flow-dst">right='agents' (main unchanged)</span></div>
+        <div class="flow-row"><span class="flow-src">Agent row click</span><span class="flow-arr">→</span><span class="flow-dst">right='agent', agentId=A</span></div>
+        <div class="flow-row"><span class="flow-src">Activity event click (issue)</span><span class="flow-arr">→</span><span class="flow-dst">main='issue', issueId=N, sidebar row activated</span></div>
+        <div class="flow-row"><span class="flow-src">Activity event click (PR)</span><span class="flow-arr">→</span><span class="flow-dst">main='pr', right='pr', prId=X</span></div>
+      </div>
+
+      <div class="note amber">
+        <span class="note-ic" style="color:var(--amber)">⚠</span>
+        <div class="note-text"><strong>Sidebar active state</strong> must always be synced to <code>S.issueId</code>. Call the sidebar sync logic in <code>goToIssue()</code> — do not hardcode an element ID. Previous bug: a hardcoded <code>getElementById('active-issue-row')</code> reset the active row to #191 on every navigation.</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ══ COMPONENTS ══ -->
+    <div class="section" id="components">
+      <div class="s-eye">Section 04</div>
+      <h2 class="s-title"><strong>Components</strong></h2>
+      <p class="s-lead">Component breakdown by panel. Each entry lists what data it consumes, what state it reads/writes, and key implementation notes. See the Design Brief for visual specs and the prototype for working reference code.</p>
+
+      <div class="sub" id="left-sidebar">Left Sidebar</div>
+      <div class="ptable">
+        <div class="ptr ptr-4 head"><div class="ptc">Component</div><div class="ptc">Data</div><div class="ptc">Notes</div><div class="ptc">Priority</div></div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">ActionRow</div>
+          <div class="ptc ptc-type">—</div>
+          <div class="ptc ptc-desc">Icon + label + badge. Each row triggers an action (no navigation). Badge count should be dynamic from the data layer.</div>
+          <div class="ptc ptc-desc" style="color:var(--green)">High</div>
+        </div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">IssueRow</div>
+          <div class="ptc ptc-type">Issue</div>
+          <div class="ptc ptc-desc">Type-colored avatar · issue num (monospace) · truncated title. Active state: left blue border + <code>→</code> appended via DOM. Active state driven by <code>S.issueId</code>, synced in <code>goToIssue()</code>.</div>
+          <div class="ptc ptc-desc" style="color:var(--green)">High</div>
+        </div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">PRRow</div>
+          <div class="ptc ptc-type">PullRequest</div>
+          <div class="ptc ptc-desc">Status icon · num · truncated title · colored dot. Starts collapsed. On click: sets <code>S.main='pr'</code>, <code>S.right='pr'</code>.</div>
+          <div class="ptc ptc-desc" style="color:var(--green)">High</div>
+        </div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">CollapsibleSection</div>
+          <div class="ptc ptc-type">—</div>
+          <div class="ptc ptc-desc">Animated max-height collapse/expand. Chevron rotates ▾↔›. Used for both Issues and Pull Requests sections.</div>
+          <div class="ptc ptc-desc" style="color:var(--amber)">Medium</div>
+        </div>
+      </div>
+
+      <div class="sub" id="main-view">Main View</div>
+      <div class="ptable">
+        <div class="ptr ptr-4 head"><div class="ptc">Component</div><div class="ptc">Data</div><div class="ptc">Notes</div><div class="ptc">Priority</div></div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">IssueHeader</div>
+          <div class="ptc ptc-type">Issue, Task[]</div>
+          <div class="ptc ptc-desc">Eyebrow · title · meta row (clickable badges) · description · optional context block · progress bar. Context block shows dashed prompt when empty. All meta chips are interactive.</div>
+          <div class="ptc ptc-desc" style="color:var(--green)">High</div>
+        </div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">ProposalCard</div>
+          <div class="ptc ptc-type">Proposal</div>
+          <div class="ptc ptc-desc">Amber-tinted card. Status drives rendering: pending = full card, accepted = dimmed stub, rejected = hidden. Accept/Reject mutate <code>proposal.status</code> and trigger re-render. Diff button opens DiffModal.</div>
+          <div class="ptc ptc-desc" style="color:var(--green)">High</div>
+        </div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">TaskCard</div>
+          <div class="ptc ptc-type">Task, Agent?</div>
+          <div class="ptc ptc-desc">Three variants by status. Indicator circle + title + agent sub-line + right column. CTA buttons: "View →" navigates to task detail, "Assign →" opens AgentPicker, "Details" is same as View.</div>
+          <div class="ptc ptc-desc" style="color:var(--green)">High</div>
+        </div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">PRHeader</div>
+          <div class="ptc ptc-type">PullRequest</div>
+          <div class="ptc ptc-desc">Eyebrow · title · status badge · branch pill · author row · diff stats bar · description paragraph (no section heading — inline in header). Matches issue header editorial pattern.</div>
+          <div class="ptc ptc-desc" style="color:var(--green)">High</div>
+        </div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">ActivityTimeline</div>
+          <div class="ptc ptc-type">ActivityEvent[]</div>
+          <div class="ptc ptc-desc">Left-rail timeline. Event types render differently: commits collapse to "N commits" row, CI events are inline, comments are bordered cards with Reply toggle, review events use colour-coded borders. New comment posts and appends without full re-render.</div>
+          <div class="ptc ptc-desc" style="color:var(--green)">High</div>
+        </div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">RelatedFiles</div>
+          <div class="ptc ptc-type">PullRequest[], Proposal[]</div>
+          <div class="ptc ptc-desc">Aggregates all files from linked PRs and proposals. Each row links to the correct diff modal. Total +/- shown in section header. Filters: PRs use <code>pr.issueIds.includes(issueId)</code>, proposals use <code>p.issueId === issueId</code>.</div>
+          <div class="ptc ptc-desc" style="color:var(--green)">High</div>
+        </div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">TaskDetail</div>
+          <div class="ptc ptc-type">Task, Agent?</div>
+          <div class="ptc ptc-desc">Meta grid with interactive fields. Status pill cycles on click. Agent field opens AgentPicker. Issue link calls goToIssue(). Branch shows copy toast. Subtask checkboxes toggle locally.</div>
+          <div class="ptc ptc-desc" style="color:var(--amber)">Medium</div>
+        </div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">ActivityFeed</div>
+          <div class="ptc ptc-type">ActivityEvent[][]</div>
+          <div class="ptc ptc-desc">Global feed grouped by day. Same event rendering as ActivityTimeline. Each row navigates to its source issue or PR. No action buttons — read-only.</div>
+          <div class="ptc ptc-desc" style="color:var(--amber)">Medium</div>
+        </div>
+      </div>
+
+      <div class="sub" id="right-sidebar">Right Sidebar</div>
+      <div class="ptable">
+        <div class="ptr ptr-4 head"><div class="ptc">Component</div><div class="ptc">Data</div><div class="ptc">Notes</div><div class="ptc">Priority</div></div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">TasksPanel</div>
+          <div class="ptc ptc-type">Task[]</div>
+          <div class="ptc ptc-desc">Header with labeled buttons (◉ Agents, + Add Task). Quick-add inline form (toggle). Task list grouped by issue vs backlog. AI input footer. Re-renders when task list mutates.</div>
+          <div class="ptc ptc-desc" style="color:var(--green)">High</div>
+        </div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">AgentChat</div>
+          <div class="ptc ptc-type">Agent</div>
+          <div class="ptc ptc-desc">Chat log with 4 message types: sys (purple), agent (blue), tool (dark monospace), user (ghost). Typing indicator for live agents. Textarea sends on Enter. Scrolls to bottom on render.</div>
+          <div class="ptc ptc-desc" style="color:var(--green)">High</div>
+        </div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">PRPanel</div>
+          <div class="ptc ptc-type">PullRequest</div>
+          <div class="ptc ptc-desc">No panel header bar. Sections: Linked Issues · CI Checks (collapsed, summary) · Review &amp; Merge (unified) · PR AI chat. Merge is gated behind Approve. All PR mutations re-render this panel.</div>
+          <div class="ptc ptc-desc" style="color:var(--green)">High</div>
+        </div>
+      </div>
+
+      <div class="sub" id="modals">Modals &amp; Overlays</div>
+      <div class="ptable">
+        <div class="ptr ptr-4 head"><div class="ptc">Modal</div><div class="ptc">Trigger</div><div class="ptc">Notes</div><div class="ptc">Priority</div></div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">NewIssueModal</div>
+          <div class="ptc ptc-desc">"New Issue" action</div>
+          <div class="ptc ptc-desc">Fields: Title, Type, Scope, Description, Assign Agent. Title required. On create: injects IssueRow into sidebar. Toast confirms.</div>
+          <div class="ptc ptc-desc" style="color:var(--green)">High</div>
+        </div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">EditIssueModal</div>
+          <div class="ptc ptc-desc">"✎ Edit Issue" actbar</div>
+          <div class="ptc ptc-desc">Pre-fills all fields from current issue. Includes "Context &amp; Notes" textarea (acceptance criteria, constraints). On save: updates issue data object, re-renders header.</div>
+          <div class="ptc ptc-desc" style="color:var(--green)">High</div>
+        </div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">DiffModal</div>
+          <div class="ptc ptc-desc">"View diff" / file row click</div>
+          <div class="ptc ptc-desc">Wide modal (660px). File header with kind badge. Line-numbered diff with hunk header. For proposals: Accept/Reject buttons in footer. For PR files: Close + branch info.</div>
+          <div class="ptc ptc-desc" style="color:var(--green)">High</div>
+        </div>
+        <div class="ptr ptr-4">
+          <div class="ptc ptc-name">AgentPicker</div>
+          <div class="ptc ptc-desc">"Assign →" / agent field</div>
+          <div class="ptc ptc-desc">Fixed-position dropdown (not modal). Lists all agents with gradient avatar, name, role, status dot. Closes on outside click. Selection mutates task.agentId and task.status.</div>
+          <div class="ptc ptc-desc" style="color:var(--amber)">Medium</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ══ INTERACTIONS ══ -->
+    <div class="section" id="interactions">
+      <div class="s-eye">Section 05</div>
+      <h2 class="s-title"><strong>Key Interactions</strong></h2>
+      <p class="s-lead">The three most complex interaction flows — proposal review, PR merge workflow, and task assignment. Each involves multi-step state mutation and conditional re-rendering.</p>
+
+      <div class="sub" id="ix-proposals">Proposal Review Flow</div>
+      <div class="flow-block">
+        <div class="flow-row"><span class="flow-src">Agent writes file</span><span class="flow-arr">→</span><span class="flow-dst">Proposal created, status='pending'</span></div>
+        <div class="flow-row"><span class="flow-src">"Review Required" shown</span><span class="flow-arr">→</span><span class="flow-dst">Amber-tinted card with code preview</span></div>
+        <div class="flow-row"><span class="flow-src">User clicks "View diff"</span><span class="flow-arr">→</span><span class="flow-dst">DiffModal opens, built from proposal.code tokens</span></div>
+        <div class="flow-row"><span class="flow-src">User clicks "Accept"</span><span class="flow-arr">→</span><span class="flow-dst">proposal.status='accepted', section re-renders</span><span class="flow-note">also triggers re-render of Related Files</span></div>
+        <div class="flow-row"><span class="flow-src">User clicks "Reject"</span><span class="flow-arr">→</span><span class="flow-dst">proposal.status='rejected', card removed from view</span></div>
+        <div class="flow-row"><span class="flow-src">All proposals reviewed</span><span class="flow-arr">→</span><span class="flow-dst">Section header shows "✓ All reviewed" in green</span></div>
+      </div>
+
+      <div class="note green">
+        <span class="note-ic" style="color:var(--green)">✓</span>
+        <div class="note-text">Accepted proposals should appear in the Related Files section at the bottom of the issue workspace. Filter: <code>PROPOSALS.filter(p =&gt; p.issueId === issueId &amp;&amp; p.status !== 'rejected')</code></div>
+      </div>
+
+      <div class="sub" id="ix-pr-workflow">PR Merge Workflow (Gated)</div>
+      <div class="flow-block">
+        <div class="flow-row"><span class="flow-src">PR opened (non-draft)</span><span class="flow-arr">→</span><span class="flow-dst">reviewStatus='review-required'</span></div>
+        <div class="flow-row"><span class="flow-src">Review &amp; Merge section</span><span class="flow-arr">→</span><span class="flow-dst">Shows Approve + Request Changes. Merge locked.</span></div>
+        <div class="flow-row"><span class="flow-src">User clicks "Approve"</span><span class="flow-arr">→</span><span class="flow-dst">reviewStatus='approved', panel re-renders</span></div>
+        <div class="flow-row"><span class="flow-src">Merge button appears</span><span class="flow-arr">→</span><span class="flow-dst">Enabled if checks='passing', disabled if not</span></div>
+        <div class="flow-row"><span class="flow-src">User clicks "Merge"</span><span class="flow-arr">→</span><span class="flow-dst">800ms delay → status='merged', sidebar pill → purple ✓</span></div>
+        <div class="flow-row"><span class="flow-src">Draft PR path</span><span class="flow-arr">→</span><span class="flow-dst">"Mark as Ready" shown instead. Converts draft=false on click.</span></div>
+      </div>
+
+      <div class="note">
+        <span class="note-ic" style="color:var(--purp)">⊛</span>
+        <div class="note-text"><strong>Merge gate rule:</strong> <code>mergeButton.visible = pr.reviewStatus === 'approved'</code>. This is intentional — the UI should prevent merging unreviewed code regardless of CI status. CI status only affects whether the visible merge button is enabled or disabled.</div>
+      </div>
+
+      <div class="sub" id="ix-tasks">Task Assignment Flow</div>
+      <div class="flow-block">
+        <div class="flow-row"><span class="flow-src">Unassigned task card</span><span class="flow-arr">→</span><span class="flow-dst">Shows "Assign →" button</span></div>
+        <div class="flow-row"><span class="flow-src">Click "Assign →"</span><span class="flow-arr">→</span><span class="flow-dst">AgentPicker dropdown positioned near button</span></div>
+        <div class="flow-row"><span class="flow-src">Select agent</span><span class="flow-arr">→</span><span class="flow-dst">task.agentId=id, task.status='in-progress'</span></div>
+        <div class="flow-row"><span class="flow-src">Re-render</span><span class="flow-arr">→</span><span class="flow-dst">Task moves to In Progress section. Right panel task list updates.</span></div>
+        <div class="flow-row"><span class="flow-src">Outside click</span><span class="flow-arr">→</span><span class="flow-dst">AgentPicker dismissed. <code>document.addEventListener('click', handler, {once:true})</code></span></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ══ OBSIDIAN NOTES ══ -->
+    <div class="section" id="obsidian">
+      <div class="s-eye">Section 06</div>
+      <h2 class="s-title"><strong>Obsidian Integration Notes</strong></h2>
+      <p class="s-lead">The prototype is a standalone HTML reference — not an Obsidian plugin. These notes bridge the gap between the prototype's static data model and the production plugin architecture.</p>
+
+      <div class="sub" id="plugin-arch">Plugin Architecture</div>
+
+      <div class="note">
+        <span class="note-ic" style="color:var(--purp)">✦</span>
+        <div class="note-text"><strong>Recommended stack:</strong> React (already used in Obsidian plugin ecosystem) + TypeScript. The three-panel layout maps well to an Obsidian <code>WorkspaceLeaf</code> per panel, or a single leaf rendering all three columns.</div>
+      </div>
+
+<pre><span class="cm">// Recommended Obsidian plugin structure</span>
+src/
+  main.ts              <span class="cm">// Plugin entry — registers views, commands, settings</span>
+  SpecoratorView.tsx   <span class="cm">// Main view component — three-panel shell</span>
+  state/
+    AppState.ts        <span class="cm">// State interface + Zustand/Jotai store</span>
+    actions.ts         <span class="cm">// State mutation functions</span>
+  components/
+    LeftSidebar.tsx
+    MainView.tsx
+    RightSidebar.tsx
+    modals/
+      NewIssueModal.tsx
+      EditIssueModal.tsx
+      DiffModal.tsx
+      AgentPicker.tsx
+  data/
+    github.ts          <span class="cm">// GitHub API integration (issues, PRs, CI)</span>
+    agents.ts          <span class="cm">// Agent WebSocket or polling</span>
+    proposals.ts       <span class="cm">// Proposal store (persist to vault)</span>
+  hooks/
+    useIssues.ts
+    useTasks.ts
+    useAgents.ts</pre>
+
+      <div class="ptable">
+        <div class="ptr ptr-3 head"><div class="ptc">Data Source</div><div class="ptc">Prototype (mock)</div><div class="ptc">Production</div></div>
+        <div class="ptr ptr-3"><div class="ptc ptc-name">Issues</div><div class="ptc ptc-desc">ISSUES_DB static object</div><div class="ptc ptc-desc">GitHub REST/GraphQL API — <code>GET /repos/{owner}/{repo}/issues</code></div></div>
+        <div class="ptr ptr-3"><div class="ptc ptc-name">Pull Requests</div><div class="ptc ptc-desc">PULL_REQUESTS array</div><div class="ptc ptc-desc">GitHub API — <code>GET /repos/{owner}/{repo}/pulls</code></div></div>
+        <div class="ptr ptr-3"><div class="ptc ptc-name">Tasks</div><div class="ptc ptc-desc">TASKS array (in-memory)</div><div class="ptc ptc-desc">Vault markdown files or frontmatter, or GitHub issue sub-tasks</div></div>
+        <div class="ptr ptr-3"><div class="ptc ptc-name">Agents</div><div class="ptc ptc-desc">AGENTS array (static)</div><div class="ptc ptc-desc">Agent process WebSocket / SSE stream</div></div>
+        <div class="ptr ptr-3"><div class="ptc ptc-name">Proposals</div><div class="ptc ptc-desc">PROPOSALS array (in-memory)</div><div class="ptc ptc-desc">Vault JSON file or frontmatter; persisted across sessions</div></div>
+        <div class="ptr ptr-3"><div class="ptc ptc-name">Activity Feed</div><div class="ptc ptc-desc">ACTIVITY_FEED static</div><div class="ptc ptc-desc">Aggregated from GitHub webhooks + agent event stream</div></div>
+        <div class="ptr ptr-3"><div class="ptc ptc-name">File Diffs</div><div class="ptc ptc-desc">FILE_DIFFS hardcoded</div><div class="ptc ptc-desc">GitHub Commits API or local git diff</div></div>
+      </div>
+
+      <div class="sub" id="open-items">Open Items &amp; Known Gaps</div>
+
+      <div class="note amber">
+        <span class="note-ic" style="color:var(--amber)">⚠</span>
+        <div class="note-text"><strong>Proposal persistence</strong> — Proposals must survive Obsidian restarts. Store as a JSON file in the vault (<code>.specorator/proposals.json</code>) and reload on plugin init. The accept/reject UI is fully designed; only the persistence layer is missing.</div>
+      </div>
+
+      <div class="note amber">
+        <span class="note-ic" style="color:var(--amber)">⚠</span>
+        <div class="note-text"><strong>Agent WebSocket</strong> — The agent chat log in the prototype is static. In production, each agent's message stream should be a live WebSocket or SSE connection. The typing indicator (<code>live: boolean</code> on Agent) should be driven by connection state.</div>
+      </div>
+
+      <div class="note amber">
+        <span class="note-ic" style="color:var(--amber)">⚠</span>
+        <div class="note-text"><strong>Issue filtering</strong> — "My Issues" and "Created Issues" currently show toasts. These need to be connected to actual GitHub API filter params: <code>?assignee=@me</code> and <code>?creator=@me</code> respectively.</div>
+      </div>
+
+      <div class="note amber">
+        <span class="note-ic" style="color:var(--amber)">⚠</span>
+        <div class="note-text"><strong>Activity Feed live updates</strong> — The feed is static in the prototype. In production, new events should be appended to the top of "Today" without a full page re-render. Recommend a React state array + append-only updates.</div>
+      </div>
+
+      <div class="note">
+        <span class="note-ic" style="color:var(--purp)">✦</span>
+        <div class="note-text"><strong>CSS tokens</strong> — All colours, fonts, and spacing are defined as CSS custom properties at <code>:root</code>. These should be mapped to Obsidian's theme variables (<code>--color-base-*</code>, <code>--font-text-*</code>) so the plugin respects the user's Obsidian theme automatically.</div>
+      </div>
+
+      <div class="note green">
+        <span class="note-ic" style="color:var(--green)">✓</span>
+        <div class="note-text"><strong>No build step for the prototype</strong> — <code>Specorator_Screen_v2.html</code> opens directly in any browser. Use it as a living spec — it is the authoritative visual and interaction reference. All data models, state logic, and render functions are fully readable in the source.</div>
+      </div>
+    </div>
+
+    <div class="brief-footer">
+      Specorator Developer Handoff · Obsidian Plugin · v1 prototype · Reference implementation: Specorator_Screen_v2.html
+    </div>
+  </main>
+</div>
+
+<script>
+const secs = ['overview','data-models','state','components','interactions','obsidian'];
+const navLinks = document.querySelectorAll('.nav-a');
+window.addEventListener('scroll', () => {
+  let cur = secs[0];
+  secs.forEach(id => { const el = document.getElementById(id); if (el && el.getBoundingClientRect().top < 120) cur = id; });
+  navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  document.querySelectorAll('.toc-a').forEach(a => {
+    const t = document.getElementById((a.getAttribute('href')||'').slice(1));
+    if (t) { const r = t.getBoundingClientRect(); a.classList.toggle('active', r.top < 160 && r.bottom > 0); }
+  });
+});
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    const t = document.getElementById(a.getAttribute('href').slice(1));
+    if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+});
+</script>
+</body>
+</html>

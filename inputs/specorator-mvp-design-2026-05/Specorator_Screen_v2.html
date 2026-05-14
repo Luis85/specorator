@@ -1,0 +1,3633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Specorator — Obsidian Plugin</title>
+<style>
+/* ─── RESET ──────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --w-l: 240px;
+  --w-r: 284px;
+
+  --bg:   #141414;
+  --bg-s: #191919;
+  --bg-m: #1e1e1e;
+  --bg-h: #232323;
+  --bg-a: #2b2b2b;
+  --brd:  rgba(255,255,255,0.065);
+  --brd2: rgba(255,255,255,0.04);
+
+  --t0: #c4c4c4;
+  --t1: #6a6a6a;
+  --t2: #3f3f3f;
+
+  --blue:  #5090cc;
+  --green: #48aa6a;
+  --amber: #b8832a;
+  --purp:  #9a6fc8;
+  --red:   #b85050;
+  --teal:  #4abcaa;
+
+  --f:  -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --fm: 'Cascadia Code', 'SF Mono', Consolas, monospace;
+}
+
+html, body {
+  height: 100%; overflow: hidden;
+  font-family: var(--f); font-size: 12px;
+  background: var(--bg); color: var(--t0); line-height: 1.4;
+}
+a { color: var(--blue); cursor: pointer; text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { font-weight: 600; }
+button { font-family: var(--f); }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.09); border-radius: 2px; }
+
+/* ─── ROOT LAYOUT ────────────────────────────── */
+.app      { display: flex; flex-direction: column; height: 100vh; }
+.app-body { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+
+/* ═══════════════════════════════════════════
+   LEFT SIDEBAR
+═══════════════════════════════════════════ */
+.sl {
+  width: var(--w-l); flex-shrink: 0;
+  background: var(--bg-s); border-right: 1px solid var(--brd);
+  display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden;
+}
+
+.s-hd {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 10px 5px 12px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--t1); user-select: none; cursor: pointer;
+}
+.s-hd:hover { color: var(--t0); }
+
+.g-row {
+  display: flex; align-items: center; gap: 5px;
+  padding: 3px 10px 3px 18px;
+  font-size: 12px; color: var(--t1); cursor: pointer; user-select: none;
+}
+.g-row:hover { background: var(--bg-h); color: var(--t0); }
+.g-chev { font-size: 9px; color: var(--t2); }
+
+.sub-lbl {
+  padding: 9px 10px 3px 12px;
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--t2);
+}
+
+.i-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 8px 3px 10px;
+  cursor: pointer; border-left: 2px solid transparent; min-width: 0;
+}
+.i-row:hover { background: var(--bg-h); }
+.i-row.active { background: var(--bg-a); border-left-color: var(--blue); }
+
+.i-ic {
+  width: 16px; height: 16px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 7px; font-weight: 800; color: #fff; flex-shrink: 0;
+}
+.i-lbl { flex: 1; font-size: 11.5px; color: var(--t0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.i-arr { font-size: 10px; color: var(--blue); flex-shrink: 0; }
+.i-num { font-size: 10px; color: var(--t2); font-family: var(--fm); flex-shrink: 0; min-width: 30px; transition: color 0.1s; }
+.i-row:hover .i-num { color: var(--t1); }
+.i-row.active .i-num { color: var(--blue); }
+
+/* PR minimal */
+.pr-row {
+  display: flex; align-items: center; gap: 7px;
+  padding: 4px 10px 4px 18px; cursor: pointer; min-width: 0;
+}
+.pr-row:hover { background: var(--bg-h); }
+.pr-row.active { background: var(--bg-a); }
+.pr-lbl { flex: 1; font-size: 11.5px; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pr-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--blue); flex-shrink: 0; }
+.pr-status { font-size: 10px; color: var(--green); flex-shrink: 0; }
+.pr-num { font-size: 10px; color: var(--t2); font-family: var(--fm); flex-shrink: 0; }
+
+.count-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 16px; height: 14px; padding: 0 4px;
+  background: rgba(255,255,255,0.07); border-radius: 7px;
+  font-size: 9px; font-weight: 600; color: var(--t1);
+}
+
+/* ═══════════════════════════════════════════
+   MAIN
+═══════════════════════════════════════════ */
+.main { flex: 1; min-width: 0; background: var(--bg-m); display: flex; flex-direction: column; overflow: hidden; }
+
+.main-topbar {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 16px; border-bottom: 1px solid var(--brd); flex-shrink: 0; min-height: 28px;
+}
+.crumb { font-size: 11.5px; color: var(--t1); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.crumb:hover { color: var(--t0); }
+.crumb.cur { color: var(--t0); cursor: default; }
+.crumb-sep { color: var(--t2); font-size: 10px; flex-shrink: 0; }
+
+.main-scroll { flex: 1; overflow-y: auto; padding: 28px 40px; }
+
+/* ─── WORKSPACE (issue view) ─────────────── */
+.ws-hdr {
+  margin-bottom: 28px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--brd);
+}
+
+.ws-eyebrow {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--t2); margin-bottom: 6px;
+}
+
+.ws-title {
+  font-size: 20px; font-weight: 400; color: var(--t0);
+  line-height: 1.25; letter-spacing: -0.3px; margin-bottom: 8px;
+}
+
+.ws-meta {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 12px; flex-wrap: wrap;
+}
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 500;
+}
+.badge-open { background: rgba(72,170,106,0.13); color: var(--green); border: 1px solid rgba(72,170,106,0.25); }
+
+.ws-num { font-size: 13px; color: var(--blue); font-weight: 500; }
+.ws-lbl { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,0.06); color: var(--t1); }
+
+.ws-scope {
+  font-size: 12.5px; color: var(--t1); line-height: 1.6;
+  margin-bottom: 14px; max-width: 640px;
+}
+
+/* Progress bar */
+.ws-prog {
+  display: flex; align-items: center; gap: 10px;
+}
+.ws-prog-track {
+  flex: 1; max-width: 280px; height: 3px;
+  background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden;
+}
+.ws-prog-fill { height: 100%; background: var(--green); border-radius: 2px; transition: width 0.3s; }
+.ws-prog-lbl { font-size: 11px; color: var(--t1); white-space: nowrap; }
+.ws-prog-agents { font-size: 11px; color: var(--t2); }
+.ws-prog-agents span { color: var(--green); }
+
+/* ─── WORKSPACE SECTIONS ─────────────────── */
+.ws-sec { margin-bottom: 28px; }
+
+.ws-sec-hd {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--t1);
+  margin-bottom: 10px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--brd2);
+}
+.ws-tag {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 16px; height: 14px; padding: 0 4px;
+  border-radius: 7px; font-size: 9px; font-weight: 700;
+  background: rgba(255,255,255,0.07); color: var(--t1);
+}
+.ws-tag.amber { background: rgba(184,131,42,0.2); color: var(--amber); }
+.ws-tag.blue  { background: rgba(80,144,204,0.2); color: var(--blue); }
+.ws-tag.green { background: rgba(72,170,106,0.15); color: var(--green); }
+
+.ws-sec-icon { font-size: 13px; }
+.ws-toggle { margin-left: auto; cursor: pointer; color: var(--t2); }
+
+/* ─── PROPOSAL CARD ──────────────────────── */
+.prop-card {
+  background: rgba(184,131,42,0.05);
+  border: 1px solid rgba(184,131,42,0.22);
+  border-radius: 7px; padding: 14px 16px;
+  margin-bottom: 8px;
+}
+.prop-top {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;
+}
+.prop-type {
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--amber);
+}
+.prop-path { font-family: var(--fm); font-size: 11px; color: var(--t0); background: rgba(255,255,255,0.07); padding: 1px 6px; border-radius: 3px; }
+.prop-size { font-size: 10.5px; color: var(--t2); margin-left: auto; }
+.prop-desc { font-size: 12.5px; color: var(--t1); line-height: 1.6; margin-bottom: 10px; }
+
+.prop-pre {
+  font-family: var(--fm); font-size: 11px;
+  background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 5px; padding: 10px 12px; margin-bottom: 12px;
+  line-height: 1.75; overflow-x: auto;
+}
+.kw { color: #5b9dd9; } .ty { color: var(--teal); } .st { color: #cc8866; }
+.pn { color: #9bbfe0; } .cm { color: #5a8a4a; }
+
+.prop-acts { display: flex; gap: 7px; }
+.btn-ghost {
+  padding: 5px 12px; border: 1px solid var(--brd); border-radius: 4px;
+  background: transparent; color: var(--t1); cursor: pointer; font-size: 11.5px;
+}
+.btn-ghost:hover { border-color: rgba(255,255,255,0.15); color: var(--t0); }
+.btn-accept {
+  padding: 5px 14px; border-radius: 4px; border: none;
+  background: rgba(72,170,106,0.18); color: var(--green); cursor: pointer; font-size: 11.5px; font-weight: 500;
+}
+.btn-accept:hover { background: rgba(72,170,106,0.28); }
+.btn-reject {
+  padding: 5px 14px; border-radius: 4px; border: none;
+  background: rgba(184,80,80,0.13); color: #c46464; cursor: pointer; font-size: 11.5px;
+}
+.btn-reject:hover { background: rgba(184,80,80,0.22); }
+
+/* ─── TASK CARDS (workspace) ─────────────── */
+.tc {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 14px; border-radius: 7px;
+  border: 1px solid var(--brd); background: rgba(255,255,255,0.02);
+  margin-bottom: 6px; cursor: pointer; transition: background 0.1s, border-color 0.1s;
+}
+.tc:hover { background: var(--bg-h); border-color: rgba(255,255,255,0.1); }
+.tc.active { background: var(--bg-a); border-color: rgba(80,144,204,0.3); }
+.tc.done-card { opacity: 0.55; cursor: default; }
+.tc.done-card:hover { background: rgba(255,255,255,0.02); }
+
+.tc-indicator {
+  width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; margin-top: 1px;
+}
+.tci-prog { background: rgba(80,144,204,0.2); color: var(--blue); border: 1px solid rgba(80,144,204,0.4); }
+.tci-todo { background: transparent; border: 1px solid var(--t2); color: var(--t2); }
+.tci-done { background: rgba(72,170,106,0.2); color: var(--green); border: 1px solid rgba(72,170,106,0.4); }
+
+.tc-body { flex: 1; min-width: 0; }
+.tc-title { font-size: 13px; color: var(--t0); font-weight: 500; margin-bottom: 3px; line-height: 1.3; }
+.tc-title.strk { text-decoration: line-through; color: var(--t2); font-weight: 400; }
+.tc-sub { font-size: 11.5px; color: var(--t1); line-height: 1.5; }
+.tc-agent-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.tc-agent-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.dot-active { background: var(--green); box-shadow: 0 0 4px rgba(72,170,106,0.6); }
+.dot-queued { background: var(--amber); }
+.tc-agent-lbl { font-size: 11px; color: var(--t1); }
+
+.tc-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+.tc-est { font-size: 11px; color: var(--t2); white-space: nowrap; }
+.tc-cta {
+  padding: 4px 11px; border-radius: 4px; border: none; cursor: pointer;
+  font-size: 11px; font-weight: 500; white-space: nowrap;
+}
+.cta-assign { background: rgba(255,255,255,0.07); color: var(--t0); }
+.cta-assign:hover { background: rgba(255,255,255,0.12); }
+.cta-view { background: rgba(80,144,204,0.12); color: var(--blue); }
+.cta-view:hover { background: rgba(80,144,204,0.2); }
+
+/* ─── TASK DETAIL (main) ─────────────────── */
+.back-crumb { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--t1); cursor: pointer; margin-bottom: 20px; }
+.back-crumb:hover { color: var(--blue); }
+
+.td-title { font-size: 22px; font-weight: 400; color: var(--t0); margin-bottom: 16px; line-height: 1.3; letter-spacing: -0.3px; }
+
+.meta-grid { display: grid; grid-template-columns: 88px 1fr; gap: 9px 14px; margin-bottom: 22px; }
+.mk { font-size: 12px; color: var(--t1); display: flex; align-items: center; }
+.mv { font-size: 12px; color: var(--t0); display: flex; align-items: center; gap: 6px; }
+
+.sp { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+.sp-prog { background: rgba(80,144,204,0.14); color: var(--blue); }
+.sp-todo { background: rgba(110,110,110,0.11); color: var(--t1); }
+.sp-done { background: rgba(72,170,106,0.14); color: var(--green); }
+
+.divl { border: none; border-top: 1px solid var(--brd); margin: 20px 0; }
+.sec-label { font-size: 13px; font-weight: 600; color: var(--t0); margin-bottom: 10px; }
+
+.sub-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 22px; }
+.subtask { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+.subtask:hover { background: var(--bg-h); }
+.s-chk { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--t2); display: flex; align-items: center; justify-content: center; font-size: 8px; flex-shrink: 0; }
+.s-chk.done { background: var(--green); border-color: var(--green); color: #fff; }
+
+.cp { font-size: 13px; line-height: 1.65; color: var(--t0); margin-bottom: 6px; }
+code { font-family: var(--fm); font-size: 11px; background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 3px; color: #c07a44; }
+
+/* ═══════════════════════════════════════════
+   RIGHT SIDEBAR
+═══════════════════════════════════════════ */
+.sr {
+  width: var(--w-r); flex-shrink: 0;
+  background: var(--bg-s); border-left: 1px solid var(--brd);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.rp { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+
+.ph {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 12px 8px; border-bottom: 1px solid var(--brd); flex-shrink: 0;
+}
+.pt { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--t1); }
+.p-acts { display: flex; gap: 6px; }
+.ic-btn { color: var(--t2); cursor: pointer; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 3px; font-size: 13px; }
+.ic-btn:hover { background: var(--bg-h); color: var(--t0); }
+.back-btn { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--blue); cursor: pointer; padding: 2px 6px; border-radius: 3px; }
+.back-btn:hover { background: rgba(80,144,204,0.1); }
+
+.pb { flex: 1; overflow-y: auto; }
+
+/* Task rows in right panel */
+.t-row { display: flex; align-items: flex-start; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--brd); cursor: pointer; }
+.t-row:hover { background: var(--bg-h); }
+.t-row.active { background: var(--bg-a); border-left: 2px solid var(--blue); padding-left: 10px; }
+
+.t-chk { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--t2); display: flex; align-items: center; justify-content: center; font-size: 8px; flex-shrink: 0; margin-top: 1px; }
+.t-chk.done { background: var(--green); border-color: var(--green); color: #fff; }
+
+.tb { flex: 1; min-width: 0; }
+.t-lbl { font-size: 12px; color: var(--t0); line-height: 1.4; }
+.t-lbl.strk { color: var(--t2); text-decoration: line-through; }
+.t-meta { display: flex; align-items: center; gap: 7px; margin-top: 3px; }
+.t-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.t-est { font-size: 10.5px; color: var(--t1); }
+.t-ai { font-size: 10px; color: var(--purp); margin-left: auto; opacity: 0.8; }
+
+.view-all { padding: 9px 12px; font-size: 11.5px; color: var(--t1); cursor: pointer; }
+.view-all:hover { color: var(--blue); }
+
+/* AI footer */
+.ai-foot { flex-shrink: 0; border-top: 1px solid var(--brd); padding: 10px 12px; }
+.ai-hint { font-size: 11px; color: var(--t2); margin-bottom: 8px; }
+.ai-inp-m { background: rgba(255,255,255,0.04); border: 1px solid var(--brd); border-radius: 5px; padding: 7px 10px; font-size: 11.5px; color: var(--t2); margin-bottom: 8px; }
+.ai-meta { display: flex; font-size: 10.5px; color: var(--t2); gap: 8px; }
+.ai-meta span { cursor: pointer; }
+.ai-meta span:hover { color: var(--t1); }
+
+/* Agents */
+.agents-sub { padding: 8px 12px 3px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--t2); }
+.ag-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--brd); cursor: pointer; }
+.ag-row:hover { background: var(--bg-h); }
+.ag-row.active { background: var(--bg-a); }
+
+.ag-ic { width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #fff; flex-shrink: 0; }
+.ag-info { flex: 1; min-width: 0; }
+.ag-name { font-size: 12.5px; font-weight: 600; color: var(--t0); }
+.ag-task { font-size: 10.5px; color: var(--t1); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ag-ind { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.ind-on  { background: var(--green); box-shadow: 0 0 4px rgba(72,170,106,0.5); }
+.ind-q   { background: var(--amber); }
+
+/* Agent detail */
+.ag-det-hd { padding: 10px 12px; border-bottom: 1px solid var(--brd); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.ag-det-name { font-size: 13px; font-weight: 600; color: var(--t0); }
+.ag-det-sub  { font-size: 10.5px; color: var(--t1); margin-top: 2px; }
+
+.chat-log { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.cmsg { display: flex; flex-direction: column; gap: 3px; }
+.cmsg-hd { display: flex; gap: 6px; align-items: baseline; font-size: 10.5px; }
+.c-role { font-weight: 600; color: var(--t1); }
+.c-ts   { color: var(--t2); }
+
+.bub { font-size: 11.5px; line-height: 1.65; padding: 8px 10px; border-radius: 6px; color: var(--t0); word-break: break-word; }
+.bub-sys   { background: rgba(154,111,200,0.06); border: 1px solid rgba(154,111,200,0.14); font-family: var(--fm); font-size: 10.5px; color: var(--t1); }
+.bub-agent { background: rgba(80,144,204,0.07); border: 1px solid rgba(80,144,204,0.15); }
+.bub-tool  { background: rgba(0,0,0,0.2); border: 1px solid var(--brd); font-family: var(--fm); font-size: 10.5px; color: var(--t1); }
+.bub-user  { background: rgba(255,255,255,0.04); border: 1px solid var(--brd); }
+
+.typing { display: flex; gap: 4px; align-items: center; padding: 10px; }
+.tdot { width: 5px; height: 5px; border-radius: 50%; background: var(--t1); animation: tp 1.4s infinite; }
+.tdot:nth-child(2) { animation-delay: 0.18s; }
+.tdot:nth-child(3) { animation-delay: 0.36s; }
+@keyframes tp { 0%,60%,100%{opacity:.2;transform:scale(1)} 30%{opacity:1;transform:scale(1.2)} }
+
+.chat-inp-area { padding: 10px 12px; border-top: 1px solid var(--brd); display: flex; gap: 7px; align-items: flex-end; flex-shrink: 0; }
+.chat-ta { flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--brd); border-radius: 5px; padding: 7px 10px; color: var(--t0); resize: none; outline: none; font-family: var(--f); font-size: 12px; line-height: 1.4; min-height: 32px; max-height: 100px; }
+.chat-ta:focus { border-color: rgba(80,144,204,0.4); }
+.chat-ta::placeholder { color: var(--t2); }
+.send-btn { width: 28px; height: 28px; border-radius: 5px; background: var(--blue); border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+.send-btn:hover { opacity: 0.85; }
+
+/* ═══════════════════════════════════════════
+   STATUS BAR
+═══════════════════════════════════════════ */
+.sbar { height: 22px; background: #161616; border-top: 1px solid var(--brd); display: flex; align-items: center; padding: 0 10px; gap: 2px; flex-shrink: 0; }
+.sb-i { display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--t2); cursor: pointer; padding: 0 5px; border-radius: 3px; white-space: nowrap; }
+.sb-i:hover { background: var(--bg-h); color: var(--t1); }
+.sb-sep { width: 1px; height: 12px; background: var(--brd); margin: 0 3px; flex-shrink: 0; }
+.ml { margin-left: auto; }
+
+/* Transitions */
+.rp > * { animation: fi 0.12s ease; }
+@keyframes fi { from{opacity:0;transform:translateY(3px)} to{opacity:1;transform:none} }
+.linked-pr {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 6px; cursor: pointer;
+  border: 1px solid rgba(80,144,204,0.2);
+  background: rgba(80,144,204,0.05);
+  transition: background 0.1s, border-color 0.1s;
+  margin-bottom: 6px;
+}
+.linked-pr:hover { background: rgba(80,144,204,0.1); border-color: rgba(80,144,204,0.35); }
+.linked-pr-num { font-size: 11px; color: var(--blue); font-family: var(--fm); font-weight: 600; flex-shrink: 0; }
+.linked-pr-title { flex: 1; font-size: 12px; color: var(--t0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.linked-pr-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 10px; font-size: 10.5px; font-weight: 500; flex-shrink: 0;
+}
+.lpr-open   { background: rgba(72,170,106,0.12);  color: var(--green); }
+.lpr-draft  { background: rgba(184,131,42,0.12);  color: var(--amber); }
+.lpr-merged { background: rgba(154,111,200,0.12); color: var(--purp);  }
+
+/* ─── PR VIEW ────────────────────────────── */
+.pr-hdr { margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--brd); }
+.pr-eyebrow { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--t2); margin-bottom: 6px; }
+.pr-title { font-size: 20px; font-weight: 400; color: var(--t0); line-height: 1.25; letter-spacing: -0.3px; margin-bottom: 10px; }
+
+.pr-meta-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.badge-merged { background: rgba(154,111,200,0.13); color: var(--purp); border: 1px solid rgba(154,111,200,0.28); }
+.badge-draft  { background: rgba(184,131,42,0.1);   color: var(--amber); border: 1px solid rgba(184,131,42,0.28); }
+.pr-branch {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--fm); font-size: 11px;
+  background: rgba(255,255,255,0.05); border: 1px solid var(--brd);
+  border-radius: 4px; padding: 2px 8px; color: var(--t1);
+}
+.pr-branch span { color: var(--t2); }
+.pr-author-row { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+.pr-avatar { width: 18px; height: 18px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 800; color: #fff; flex-shrink: 0; }
+.pr-author-lbl { font-size: 11.5px; color: var(--t1); }
+
+/* diff stats bar */
+.diff-stats { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.diff-adds { font-size: 12px; color: var(--green); font-weight: 600; }
+.diff-dels { font-size: 12px; color: var(--red);   font-weight: 600; }
+.diff-bar { flex: 1; max-width: 160px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.07); overflow: hidden; display: flex; gap: 1px; }
+.diff-bar-add { background: var(--green); border-radius: 2px 0 0 2px; }
+.diff-bar-del { background: var(--red);   border-radius: 0 2px 2px 0; }
+.diff-commits { font-size: 11px; color: var(--t2); }
+
+/* issue link */
+.pr-issue-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 5px; cursor: pointer;
+  border: 1px solid rgba(80,144,204,0.2); background: rgba(80,144,204,0.05);
+  font-size: 11.5px; color: var(--blue); transition: background 0.1s;
+  margin-bottom: 14px;
+}
+.pr-issue-link:hover { background: rgba(80,144,204,0.12); }
+
+/* CI checks */
+.ci-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--brd2); }
+.ci-row:last-child { border-bottom: none; }
+.ci-ic { font-size: 11px; width: 16px; text-align: center; flex-shrink: 0; }
+.ci-name { flex: 1; font-size: 12px; color: var(--t0); }
+.ci-status-pass    { font-size: 10.5px; color: var(--green); }
+.ci-status-fail    { font-size: 10.5px; color: var(--red);   }
+.ci-status-pending { font-size: 10.5px; color: var(--amber); }
+
+/* file list */
+.file-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--brd2); cursor: pointer; }
+.file-row:last-child { border-bottom: none; }
+.file-row:hover .file-path { color: var(--blue); }
+.file-kind { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; width: 14px; text-align: center; flex-shrink: 0; }
+.fk-mod { color: var(--amber); }
+.fk-add { color: var(--green); }
+.fk-del { color: var(--red);   }
+.file-path { flex: 1; font-family: var(--fm); font-size: 11px; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color 0.1s; }
+.file-adds { font-size: 10.5px; color: var(--green); font-weight: 600; min-width: 28px; text-align: right; }
+.file-dels { font-size: 10.5px; color: var(--red);   font-weight: 600; min-width: 28px; text-align: right; }
+
+/* review */
+.review-box { background: rgba(255,255,255,0.02); border: 1px solid var(--brd); border-radius: 6px; padding: 12px 14px; }
+.review-status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.rs-icon { font-size: 13px; }
+.rs-lbl { font-size: 12.5px; color: var(--t0); font-weight: 500; flex: 1; }
+.rs-sub { font-size: 11px; color: var(--t2); }
+
+/* ─── SIDEBAR ACTIONS ────────────────────── */
+.sl-acts {
+  padding: 4px 8px 8px 8px;
+  border-bottom: 1px solid var(--brd);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.act-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 5px; cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.1s, border-color 0.1s;
+}
+.act-row:hover {
+  background: rgba(154,111,200,0.08);
+  border-color: rgba(154,111,200,0.2);
+}
+.act-row:active { background: rgba(154,111,200,0.14); }
+.act-ic {
+  width: 20px; height: 20px; border-radius: 5px; flex-shrink: 0;
+  background: rgba(154,111,200,0.12);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: var(--purp);
+}
+.act-lbl { flex: 1; font-size: 11.5px; color: var(--t0); font-weight: 500; }
+.act-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 15px; padding: 0 5px;
+  background: rgba(154,111,200,0.1); border-radius: 7px;
+  font-size: 9px; font-weight: 600; color: var(--purp);
+}
+
+/* ─── MAIN ACTION BAR ────────────────────── */
+.main-actbar {
+  display: flex; align-items: center; gap: 9px;
+  padding: 5px 16px; border-bottom: 1px solid var(--brd);
+  background: rgba(154,111,200,0.025); flex-shrink: 0; min-height: 34px;
+}
+.main-actbar.hidden { display: none; }
+
+.abtn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 12px; border-radius: 4px; cursor: pointer;
+  font-family: var(--f); font-size: 11.5px; font-weight: 500;
+  transition: background 0.1s, border-color 0.1s; white-space: nowrap;
+}
+.abtn-triage {
+  border: 1px solid rgba(154,111,200,0.32);
+  background: rgba(154,111,200,0.09); color: var(--purp);
+}
+.abtn-triage:hover { background: rgba(154,111,200,0.17); border-color: rgba(154,111,200,0.52); }
+.abtn-breakdown {
+  border: 1px solid rgba(74,188,170,0.28);
+  background: rgba(74,188,170,0.07); color: var(--teal);
+}
+.abtn-breakdown:hover { background: rgba(74,188,170,0.14); border-color: rgba(74,188,170,0.48); }
+.abtn-secondary {
+  border: 1px solid var(--brd); background: transparent; color: var(--t1);
+}
+.abtn-secondary:hover { border-color: rgba(255,255,255,0.14); color: var(--t0); }
+
+/* ─── BREAKDOWN CARD ─────────────────────── */
+.breakdown-card {
+  background: rgba(154,111,200,0.04);
+  border: 1px solid rgba(154,111,200,0.2);
+  border-radius: 7px; padding: 14px 16px; margin-bottom: 24px;
+}
+.breakdown-hd { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+.breakdown-title {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--purp);
+}
+.breakdown-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.breakdown-item:last-of-type { border-bottom: none; }
+.breakdown-num { font-size: 12px; color: var(--purp); flex-shrink: 0; line-height: 1.5; font-weight: 600; }
+.breakdown-lbl { font-size: 12.5px; color: var(--t0); margin-bottom: 3px; font-weight: 500; }
+.breakdown-desc { font-size: 11.5px; color: var(--t1); line-height: 1.55; }
+.breakdown-acts { display: flex; gap: 7px; margin-top: 12px; flex-wrap: wrap; }
+
+.ab-divider { width: 1px; height: 14px; background: var(--brd); flex-shrink: 0; }
+.ab-hint { font-size: 11px; color: var(--t2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ─── TOAST ──────────────────────────────── */
+.toast {
+  position: fixed; bottom: 36px; left: 50%; transform: translateX(-50%);
+  background: var(--bg-a); border: 1px solid rgba(154,111,200,0.28);
+  border-radius: 7px; padding: 7px 14px; z-index: 999;
+  font-size: 11.5px; color: var(--t0);
+  display: flex; align-items: center; gap: 8px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.55); pointer-events: none; white-space: nowrap;
+  animation: toastIn 0.15s ease, toastOut 0.22s ease 2.2s forwards;
+}
+.toast-ic { color: var(--purp); font-size: 12px; }
+@keyframes toastIn  { from{opacity:0;transform:translateX(-50%) translateY(8px)} to{opacity:1;transform:translateX(-50%)} }
+@keyframes toastOut { to{opacity:0;transform:translateX(-50%) translateY(5px)} }
+
+/* ─── MODAL OVERLAY ──────────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeOverlay 0.14s ease;
+}
+.modal-overlay.hidden { display: none; }
+@keyframes fadeOverlay { from{opacity:0} to{opacity:1} }
+
+.modal {
+  background: var(--bg-m); border: 1px solid rgba(255,255,255,0.11);
+  border-radius: 10px; width: 480px; max-width: 96vw;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.65);
+  animation: modalIn 0.15s ease; overflow: hidden;
+}
+.modal.diff-modal { width: 660px; }
+@keyframes modalIn { from{opacity:0;transform:translateY(-10px) scale(0.98)} to{opacity:1;transform:none} }
+
+.modal-hd {
+  display: flex; align-items: center; gap: 10px;
+  padding: 15px 18px 13px; border-bottom: 1px solid var(--brd);
+}
+.modal-title { font-size: 14px; font-weight: 600; color: var(--t0); flex: 1; letter-spacing: -0.2px; }
+.modal-close {
+  color: var(--t2); cursor: pointer; font-size: 16px; line-height: 1;
+  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+}
+.modal-close:hover { color: var(--t0); background: var(--bg-h); }
+
+.modal-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field-lbl {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--t1);
+}
+.field-inp {
+  background: rgba(255,255,255,0.04); border: 1px solid var(--brd);
+  border-radius: 5px; padding: 8px 11px; color: var(--t0);
+  font-family: var(--f); font-size: 12.5px; outline: none;
+  transition: border-color 0.15s;
+}
+.field-inp:focus { border-color: rgba(80,144,204,0.5); background: rgba(80,144,204,0.03); }
+.field-inp::placeholder { color: var(--t2); }
+textarea.field-inp { resize: none; line-height: 1.55; }
+
+.field-row { display: flex; gap: 10px; }
+.field-row .field { flex: 1; min-width: 0; }
+
+.seg-group { display: flex; gap: 4px; flex-wrap: wrap; }
+.seg-opt {
+  padding: 4px 11px; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--brd); font-size: 11px; color: var(--t1);
+  background: transparent; font-family: var(--f);
+  transition: all 0.1s;
+}
+.seg-opt:hover { border-color: rgba(255,255,255,0.15); color: var(--t0); }
+.seg-opt.sel { border-color: rgba(80,144,204,0.5); background: rgba(80,144,204,0.13); color: var(--blue); }
+
+.modal-ft {
+  padding: 12px 18px; border-top: 1px solid var(--brd);
+  display: flex; justify-content: flex-end; align-items: center; gap: 8px;
+}
+.btn-primary {
+  padding: 6px 20px; border-radius: 5px; border: none;
+  background: var(--blue); color: #fff; cursor: pointer;
+  font-family: var(--f); font-size: 12px; font-weight: 600;
+  transition: opacity 0.1s;
+}
+.btn-primary:hover { opacity: 0.85; }
+.btn-cancel {
+  padding: 6px 14px; border-radius: 5px; border: 1px solid var(--brd);
+  background: transparent; color: var(--t1); cursor: pointer;
+  font-family: var(--f); font-size: 12px;
+}
+.btn-cancel:hover { color: var(--t0); border-color: rgba(255,255,255,0.14); }
+
+/* ─── DIFF VIEW (inside modal) ───────────────── */
+.diff-file-hd {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px; background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--brd);
+  font-family: var(--fm); font-size: 11px; color: var(--t1);
+}
+.diff-file-hd .fk-add { color: var(--green); font-weight: 700; font-size: 10px; }
+.diff-lines {
+  font-family: var(--fm); font-size: 11px; line-height: 1.75;
+  overflow-y: auto; max-height: 400px;
+}
+.dl { display: flex; }
+.dl-num { width: 38px; text-align: right; padding: 0 8px; color: var(--t2); flex-shrink: 0; user-select: none; font-size: 10px; }
+.dl-sign { width: 18px; padding: 0 2px; flex-shrink: 0; text-align: center; }
+.dl-code { flex: 1; padding: 0 10px; white-space: pre; }
+.dl-add  { background: rgba(72,170,106,0.08); }
+.dl-add .dl-sign  { color: var(--green); }
+.dl-del  { background: rgba(184,80,80,0.08); }
+.dl-del .dl-sign  { color: var(--red); }
+.dl-ctx .dl-sign  { color: transparent; }
+.diff-hunk { background: rgba(80,144,204,0.06); padding: 3px 14px; font-size: 10.5px; color: rgba(80,144,204,0.7); border-top: 1px solid rgba(80,144,204,0.1); border-bottom: 1px solid rgba(80,144,204,0.1); }
+
+/* ─── ASSIGN DROPDOWN ────────────────────────── */
+.assign-drop {
+  position: fixed; z-index: 300;
+  background: var(--bg-m); border: 1px solid rgba(255,255,255,0.11);
+  border-radius: 8px; width: 230px;
+  box-shadow: 0 10px 32px rgba(0,0,0,0.55);
+  animation: fadeOverlay 0.1s ease; overflow: hidden;
+}
+.assign-drop.hidden { display: none; }
+.assign-drop-hd {
+  padding: 8px 12px 6px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--t2); border-bottom: 1px solid var(--brd);
+}
+.assign-opt {
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 12px; cursor: pointer; transition: background 0.1s;
+}
+.assign-opt:hover { background: var(--bg-h); }
+.assign-opt-ic {
+  width: 24px; height: 24px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 800; color: #fff; flex-shrink: 0;
+}
+.assign-opt-name { font-size: 12px; color: var(--t0); font-weight: 500; }
+.assign-opt-role { font-size: 10.5px; color: var(--t1); }
+.assign-opt-status { font-size: 10px; margin-left: auto; white-space: nowrap; }
+.assign-none {
+  padding: 9px 12px; font-size: 11.5px; color: var(--t2);
+  cursor: pointer; border-top: 1px solid var(--brd);
+}
+.assign-none:hover { background: var(--bg-h); color: var(--t1); }
+
+/* ─── QUICK-ADD TASK ─────────────────────────── */
+.quick-add {
+  padding: 7px 10px; border-bottom: 1px solid var(--brd);
+  display: flex; gap: 6px; align-items: center;
+  background: rgba(80,144,204,0.035);
+  animation: fadeOverlay 0.12s ease;
+}
+.quick-add.hidden { display: none; }
+.qa-inp {
+  flex: 1; background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(80,144,204,0.35); border-radius: 4px;
+  padding: 5px 9px; color: var(--t0);
+  font-family: var(--f); font-size: 11.5px; outline: none;
+}
+.qa-inp:focus { border-color: rgba(80,144,204,0.6); }
+.qa-inp::placeholder { color: var(--t2); }
+.qa-ok {
+  padding: 5px 10px; border-radius: 4px; border: none;
+  background: rgba(80,144,204,0.2); color: var(--blue);
+  cursor: pointer; font-size: 11px; font-weight: 600; font-family: var(--f);
+  white-space: nowrap;
+}
+.qa-ok:hover { background: rgba(80,144,204,0.32); }
+.qa-cancel { color: var(--t2); cursor: pointer; font-size: 15px; line-height: 1; padding: 2px 4px; border-radius: 3px; }
+.qa-cancel:hover { color: var(--t0); background: var(--bg-h); }
+
+/* ─── MERGE BUTTON ───────────────────────────── */
+.btn-merge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 18px; border-radius: 5px; border: none;
+  background: rgba(154,111,200,0.15); color: var(--purp);
+  cursor: pointer; font-family: var(--f); font-size: 12px; font-weight: 600;
+  border: 1px solid rgba(154,111,200,0.3); transition: all 0.1s;
+}
+.btn-merge:hover { background: rgba(154,111,200,0.26); border-color: rgba(154,111,200,0.5); }
+.btn-merge:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ─── RIGHT PANEL AI FOOTER (interactive) ────── */
+.ai-inp-wrap {
+  background: rgba(255,255,255,0.04); border: 1px solid var(--brd);
+  border-radius: 6px; overflow: hidden; transition: border-color 0.15s;
+}
+.ai-inp-wrap:focus-within { border-color: rgba(80,144,204,0.4); }
+.ai-ta {
+  width: 100%; background: transparent; border: none; padding: 7px 10px;
+  color: var(--t0); resize: none; outline: none;
+  font-family: var(--f); font-size: 11.5px; line-height: 1.45;
+  min-height: 34px; max-height: 90px; display: block;
+}
+.ai-ta::placeholder { color: var(--t2); }
+.ai-ta-ft {
+  display: flex; align-items: center; padding: 4px 8px 5px;
+  border-top: 1px solid var(--brd2); gap: 6px;
+}
+.ai-ctx-btn {
+  font-size: 10.5px; color: var(--t2); cursor: pointer;
+  padding: 2px 6px; border-radius: 3px; border: 1px solid transparent;
+  background: none; font-family: var(--f);
+}
+.ai-ctx-btn:hover { color: var(--t1); border-color: var(--brd); }
+.ai-send-btn {
+  margin-left: auto; width: 22px; height: 22px; border-radius: 4px;
+  background: var(--blue); border: none; color: #fff;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; opacity: 0.5; transition: opacity 0.1s;
+}
+.ai-send-btn.ready { opacity: 1; }
+.ai-send-btn:hover { opacity: 0.8; }
+
+/* ─── PANEL ACTION BUTTONS ───────────────────── */
+.ph-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; border-radius: 4px;
+  border: 1px solid var(--brd); background: transparent;
+  color: var(--t1); cursor: pointer;
+  font-family: var(--f); font-size: 10.5px; font-weight: 500;
+  transition: all 0.1s; white-space: nowrap;
+}
+.ph-btn:hover { color: var(--t0); border-color: rgba(255,255,255,0.15); background: var(--bg-h); }
+.ph-btn.green { color: var(--green); border-color: rgba(72,170,106,0.25); }
+.ph-btn.green:hover { background: rgba(72,170,106,0.08); border-color: rgba(72,170,106,0.4); }
+
+/* ─── ISSUE CONTEXT BLOCK ────────────────────── */
+.ws-context-block {
+  background: rgba(255,255,255,0.02); border: 1px solid var(--brd);
+  border-radius: 7px; padding: 12px 14px; margin-bottom: 14px;
+}
+.ws-context-hd {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--t2); margin-bottom: 8px;
+}
+.ws-context-ta {
+  width: 100%; background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(80,144,204,0.3); border-radius: 5px;
+  padding: 8px 10px; color: var(--t0); resize: none; outline: none;
+  font-family: var(--f); font-size: 12.5px; line-height: 1.6;
+  min-height: 80px; transition: border-color 0.15s;
+}
+.ws-context-ta:focus { border-color: rgba(80,144,204,0.55); }
+.ws-context-ta::placeholder { color: var(--t2); }
+.ws-context-actions { display: flex; gap: 7px; justify-content: flex-end; margin-top: 8px; }
+.subtask { position: relative; }
+.subtask .s-chk { transition: background 0.12s, border-color 0.12s; }
+
+/* ─── PR TIMELINE ────────────────────────────── */
+.pr-timeline-section { margin-top: 28px; }
+.pr-tl-hd {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--t1);
+  margin-bottom: 18px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--brd2);
+}
+
+.tl {
+  display: flex; flex-direction: column; gap: 0;
+  position: relative; padding-left: 26px;
+}
+.tl::before {
+  content: ''; position: absolute;
+  left: 7px; top: 6px; bottom: 6px; width: 1px;
+  background: var(--brd);
+}
+
+/* generic single-line event */
+.tl-event {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 0; font-size: 11.5px; color: var(--t1);
+  position: relative; min-height: 26px;
+}
+.tl-event-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  position: absolute; left: -23px; top: 50%; transform: translateY(-50%);
+  background: var(--bg-m); border: 1.5px solid var(--t2);
+  z-index: 1;
+}
+.tl-event-dot.green  { border-color: var(--green);  background: rgba(72,170,106,0.18); }
+.tl-event-dot.blue   { border-color: var(--blue);   background: rgba(80,144,204,0.18); }
+.tl-event-dot.amber  { border-color: var(--amber);  background: rgba(184,131,42,0.18); }
+.tl-event-dot.purp   { border-color: var(--purp);   background: rgba(154,111,200,0.18); }
+.tl-event-dot.red    { border-color: var(--red);    background: rgba(184,80,80,0.18); }
+.tl-event-icon { font-size: 11px; flex-shrink: 0; }
+.tl-event-text { flex: 1; line-height: 1.4; }
+.tl-event-text strong { color: var(--t0); font-weight: 600; }
+.tl-event-ts { font-size: 10.5px; color: var(--t2); white-space: nowrap; flex-shrink: 0; }
+
+/* spacer between groups */
+.tl-spacer { height: 6px; }
+
+/* commit group */
+.tl-commits {
+  padding: 6px 0 4px 0; display: flex; flex-direction: column; gap: 3px;
+}
+.tl-commit {
+  display: flex; align-items: center; gap: 9px;
+  padding: 5px 10px; border-radius: 5px;
+  background: rgba(255,255,255,0.02); border: 1px solid var(--brd2);
+  cursor: pointer; transition: background 0.1s, border-color 0.1s;
+}
+.tl-commit:hover { background: var(--bg-h); border-color: var(--brd); }
+.tl-commit-sha {
+  font-family: var(--fm); font-size: 10.5px; color: var(--blue);
+  flex-shrink: 0; letter-spacing: 0.02em;
+}
+.tl-commit-msg { font-size: 11.5px; color: var(--t0); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tl-commit-ts  { font-size: 10.5px; color: var(--t2); flex-shrink: 0; }
+.tl-more-commits {
+  font-size: 11px; color: var(--blue); cursor: pointer; padding: 4px 10px;
+}
+.tl-more-commits:hover { text-decoration: underline; }
+
+/* comment card */
+.tl-comment { padding: 10px 0 4px; position: relative; }
+.tl-comment-av {
+  width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 800; color: #fff;
+  position: absolute; left: -26px; top: 12px; z-index: 1;
+}
+.tl-comment-hd {
+  display: flex; align-items: baseline; gap: 6px;
+  margin-bottom: 6px; flex-wrap: wrap;
+}
+.tl-comment-author { font-size: 12px; font-weight: 600; color: var(--t0); }
+.tl-comment-action { font-size: 11.5px; color: var(--t1); }
+.tl-comment-ts     { font-size: 10.5px; color: var(--t2); margin-left: auto; }
+
+.tl-comment-body {
+  background: rgba(255,255,255,0.025); border: 1px solid var(--brd);
+  border-radius: 7px; padding: 10px 13px;
+}
+.tl-comment-body.review-approve { background: rgba(72,170,106,0.06);  border-color: rgba(72,170,106,0.2); }
+.tl-comment-body.review-changes { background: rgba(184,80,80,0.05);   border-color: rgba(184,80,80,0.2); }
+.tl-comment-text { font-size: 12.5px; color: var(--t0); line-height: 1.65; }
+.tl-comment-ft {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--brd2);
+}
+.tl-reply-btn {
+  font-size: 11px; color: var(--t2); cursor: pointer;
+  background: none; border: none; font-family: var(--f); padding: 0;
+}
+.tl-reply-btn:hover { color: var(--blue); }
+
+/* inline reply box */
+.tl-reply-box {
+  margin-top: 8px; display: flex; flex-direction: column; gap: 6px;
+  animation: fadeOverlay 0.1s ease;
+}
+.tl-reply-ta {
+  width: 100%; background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(80,144,204,0.3); border-radius: 5px;
+  padding: 7px 10px; color: var(--t0); resize: none; outline: none;
+  font-family: var(--f); font-size: 12px; line-height: 1.5;
+  min-height: 54px; transition: border-color 0.15s;
+}
+.tl-reply-ta:focus { border-color: rgba(80,144,204,0.55); }
+.tl-reply-ta::placeholder { color: var(--t2); }
+.tl-reply-actions { display: flex; justify-content: flex-end; gap: 7px; }
+
+/* new comment input at bottom */
+.pr-comment-input {
+  display: flex; align-items: flex-start; gap: 11px;
+  padding-top: 20px; border-top: 1px solid var(--brd); margin-top: 20px;
+}
+.pr-comment-av {
+  width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 800; color: #fff;
+  background: linear-gradient(135deg,#404060,#606080);
+}
+.pr-comment-wrap { flex: 1; min-width: 0; }
+.pr-comment-ta {
+  width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--brd);
+  border-radius: 6px; padding: 9px 12px; color: var(--t0); resize: none;
+  font-family: var(--f); font-size: 12px; line-height: 1.5; outline: none;
+  min-height: 72px; transition: border-color 0.15s; display: block;
+}
+.pr-comment-ta:focus { border-color: rgba(80,144,204,0.45); }
+.pr-comment-ta::placeholder { color: var(--t2); }
+.pr-comment-actions {
+  display: flex; justify-content: flex-end; align-items: center;
+  gap: 8px; margin-top: 8px;
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="app-body">
+
+    <!-- ══════════ LEFT SIDEBAR ══════════ -->
+    <div class="sl">
+
+      <!-- Actions -->
+      <div class="sub-lbl" style="padding-top:12px;padding-bottom:5px;color:var(--t2)">Actions</div>
+      <div class="sl-acts">
+        <div class="act-row" onclick="showActivityFeed()" style="border-color:rgba(74,188,170,0.18)">
+          <div class="act-ic" style="background:rgba(74,188,170,0.12);color:var(--teal)">◎</div>
+          <span class="act-lbl">Activity Feed</span>
+          <span class="act-badge" style="background:rgba(74,188,170,0.1);color:var(--teal)">16</span>
+        </div>
+        <div class="act-row" onclick="triageIssues()">
+          <div class="act-ic">✦</div>
+          <span class="act-lbl">Triage Issues</span>
+          <span class="act-badge">12</span>
+        </div>
+        <div class="act-row" onclick="triagePRs()">
+          <div class="act-ic">✦</div>
+          <span class="act-lbl">Triage Pull Requests</span>
+          <span class="act-badge">4</span>
+        </div>
+        <div class="act-row" onclick="newIssue()" style="border-color:rgba(72,170,106,0.18)">
+          <div class="act-ic" style="background:rgba(72,170,106,0.13);color:var(--green)">+</div>
+          <span class="act-lbl">New Issue</span>
+        </div>
+      </div>
+
+      <div class="s-hd" style="margin-top:4px" onclick="toggleSidebarSection('issues-list')">
+        <span>Issues</span>
+        <span style="font-size:9px" id="issues-chev">▾</span>
+      </div>
+
+      <div id="issues-list">
+      <div class="g-row" onclick="showToast('◎','Showing: My Issues')"><span class="g-chev">›</span> My Issues</div>
+      <div class="g-row" onclick="showToast('◎','Showing: Created Issues')"><span class="g-chev">›</span> Created Issues</div>
+
+      <div class="sub-lbl">Recent</div>
+
+      <div class="i-row" onclick="clickIssue(this)">
+        <div class="i-ic" style="background:#456080">R</div>
+        <span class="i-num">#188</span>
+        <span class="i-lbl">requirement intake(tooling): REQ-0001 — integrate...</span>
+      </div>
+      <div class="i-row" onclick="clickIssue(this)">
+        <div class="i-ic" style="background:#5e4480">F</div>
+        <span class="i-num">#189</span>
+        <span class="i-lbl">feat(plugin-shell): MCP server — links, metadata, ca...</span>
+      </div>
+      <div class="i-row" onclick="clickIssue(this)">
+        <div class="i-ic" style="background:#5e4480">F</div>
+        <span class="i-num">#190</span>
+        <span class="i-lbl">feat(plugin-shell): MCP server — workflow tools (6 t...</span>
+      </div>
+      <div class="i-row active" onclick="clickIssue(this)">
+        <div class="i-ic" style="background:#5e4480">F</div>
+        <span class="i-num">#191</span>
+        <span class="i-lbl">feat(plugin-shell): MCP server — write proposal...</span>
+        <span class="i-arr">→</span>
+      </div>
+      <div class="i-row" onclick="clickIssue(this)">
+        <div class="i-ic" style="background:#5e4480">F</div>
+        <span class="i-num">#192</span>
+        <span class="i-lbl">feat(plugin-shell): Obsidian MCP server — native va...</span>
+      </div>
+      <div class="i-row" onclick="clickIssue(this)">
+        <div class="i-ic" style="background:#386050">R</div>
+        <span class="i-num">#185</span>
+        <span class="i-lbl">research(plugin-shell): evaluate Obsidian official CLI...</span>
+      </div>
+      <div class="i-row" onclick="clickIssue(this)">
+        <div class="i-ic" style="background:#6e3858">U</div>
+        <span class="i-num">#183</span>
+        <span class="i-lbl">feat(ui): Claude CLI chat sidebar — phase 4 increme...</span>
+      </div>
+      <div class="i-row" onclick="clickIssue(this)">
+        <div class="i-ic" style="background:#6e3858">U</div>
+        <span class="i-num">#182</span>
+        <span class="i-lbl">feat(ui): plugin onboarding flow — phase 4 increme...</span>
+      </div>
+      <div class="i-row" onclick="clickIssue(this)">
+        <div class="i-ic" style="background:#6e3858">U</div>
+        <span class="i-num">#181</span>
+        <span class="i-lbl">feat(ui): chat sidebar — live context strip, action pro...</span>
+      </div>
+      <div class="i-row" onclick="clickIssue(this)">
+        <div class="i-ic" style="background:#6e3858">U</div>
+        <span class="i-num">#180</span>
+        <span class="i-lbl">feat(ui): chat sidebar UI — layout, header, message...</span>
+      </div>
+      <div class="i-row" onclick="clickIssue(this)">
+        <div class="i-ic" style="background:#6e3858">U</div>
+        <span class="i-num">#179</span>
+        <span class="i-lbl">feat(ui): chat sidebar infrastructure — integration...</span>
+      </div>
+      <div class="i-row" onclick="clickIssue(this)">
+        <div class="i-ic" style="background:#6e3858">U</div>
+        <span class="i-num">#178</span>
+        <span class="i-lbl">feat(ui): onboarding steps 5–6 — template installati...</span>
+      </div>
+
+      </div><!-- /issues-list -->
+
+      <!-- PR — minimal -->
+      <div class="s-hd" style="margin-top:10px;border-top:1px solid var(--brd);padding-top:12px;" onclick="toggleSidebarSection('pr-list')">
+        <span>Pull Requests <span class="count-badge" id="pr-count-badge" style="margin-left:5px">4</span></span>
+        <span style="font-size:9px" id="pr-chev">›</span>
+      </div>
+      <div id="pr-list" style="max-height:0;overflow:hidden">
+      <div class="pr-row" id="pr-row-pr45" onclick="clickPRRow('pr45',this)">
+        <span class="pr-status" style="color:var(--green)">●</span>
+        <span class="pr-num">#45</span>
+        <span class="pr-lbl">feat(tooling): graphify knowledge-gra...</span>
+        <div class="pr-dot"></div>
+      </div>
+      <div class="pr-row" id="pr-row-pr44" onclick="clickPRRow('pr44',this)">
+        <span class="pr-status" style="color:var(--amber)">◐</span>
+        <span class="pr-num">#44</span>
+        <span class="pr-lbl">feat(plugin-shell): MCP write-tools sc...</span>
+        <div class="pr-dot" style="background:var(--amber)"></div>
+      </div>
+      <div class="pr-row" id="pr-row-pr43" onclick="clickPRRow('pr43',this)">
+        <span class="pr-status" style="color:var(--green)">●</span>
+        <span class="pr-num">#43</span>
+        <span class="pr-lbl">feat(ui): chat sidebar — layout, header...</span>
+        <div class="pr-dot" style="background:var(--green)"></div>
+      </div>
+      <div class="pr-row" id="pr-row-pr42" onclick="clickPRRow('pr42',this)">
+        <span class="pr-status" style="color:var(--purp)">✓</span>
+        <span class="pr-num">#42</span>
+        <span class="pr-lbl">research: Obsidian CLI evaluation report</span>
+        <div class="pr-dot" style="background:var(--purp)"></div>
+      </div>
+      </div><!-- /pr-list -->
+    </div>
+
+    <!-- ══════════ MAIN CONTENT ══════════ -->
+    <div class="main">
+      <div class="main-topbar" id="topbar"></div>
+      <div class="main-actbar hidden" id="actbar"></div>
+      <div class="main-scroll" id="main-content"></div>
+    </div>
+
+    <!-- ══════════ RIGHT SIDEBAR ══════════ -->
+    <div class="sr">
+      <div class="rp" id="right-panel"></div>
+    </div>
+
+  </div>
+
+  <div class="sbar">
+    <div class="sb-i" onclick="showToast('⎇','feat/pending-proposal')">⎇&nbsp;feat/pending-proposal</div>
+    <div class="sb-sep"></div>
+    <div class="sb-i" onclick="goToIssue()">◉&nbsp;#191&nbsp;Open</div>
+    <div class="sb-sep"></div>
+    <div class="sb-i" style="color:var(--green)" onclick="S.right='agents';renderRight()">●&nbsp;<span style="color:var(--t2)">2 agents running</span></div>
+    <div class="sb-i ml" onclick="showToast('↺','All changes synced')">↺&nbsp;Synced</div>
+    <div class="sb-sep"></div>
+    <div class="sb-i" onclick="showToast('⚙','Settings — coming soon')">⚙</div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL OVERLAY ══════════ -->
+<div class="modal-overlay hidden" id="modal-overlay" onclick="handleOverlayClick(event)">
+  <div class="modal" id="modal-box"></div>
+</div>
+
+<!-- ══════════ ASSIGN DROPDOWN ══════════ -->
+<div class="assign-drop hidden" id="assign-drop"></div>
+
+<script>
+/* ═══════════════════════════
+   DATA
+═══════════════════════════ */
+/* ═══════════════════════════
+   PULL REQUESTS DATA
+═══════════════════════════ */
+const PULL_REQUESTS = [
+  {
+    id: 'pr45',
+    num: 45,
+    title: 'feat(tooling): graphify knowledge-graph — v2.3.1 bump + API migration',
+    branch: 'feat/graphify-v2',
+    base: 'main',
+    status: 'open',
+    draft: false,
+    issueIds: [191],
+    author: 'Scout',
+    authorGrad: 'linear-gradient(135deg,#287040,#42a060)',
+    authorLetter: 'S',
+    opened: '3 hours ago',
+    checks: 'passing',
+    reviewStatus: 'review-required',
+    additions: 142,
+    deletions: 38,
+    commits: 4,
+    files: [
+      { path: 'package.json',                        adds: 2,  dels: 2,  kind: 'modified' },
+      { path: 'src/graph/KnowledgeGraph.ts',          adds: 84, dels: 21, kind: 'modified' },
+      { path: 'src/graph/adapters/graphify-v2.ts',    adds: 41, dels: 0,  kind: 'created'  },
+      { path: 'src/graph/adapters/graphify-v1.ts',    adds: 0,  dels: 15, kind: 'deleted'  },
+      { path: 'tests/graph/KnowledgeGraph.test.ts',   adds: 15, dels: 0,  kind: 'modified' },
+    ],
+    description: 'Bumps graphify from 2.1.4 → 2.3.1. Migrates KnowledgeGraph to the new builder API. Removes the deprecated v1 adapter and adds a thin compatibility shim for the transition period.',
+    ciChecks: [
+      { name: 'build',        status: 'pass' },
+      { name: 'lint',         status: 'pass' },
+      { name: 'unit tests',   status: 'pass' },
+      { name: 'type check',   status: 'pass' },
+    ],
+    activity: [
+      { type:'opened',  author:'Scout', grad:'linear-gradient(135deg,#287040,#42a060)', letter:'S', ts:'11:30' },
+      { type:'commits', items:[
+        { sha:'a3f2c1d', msg:'chore: bump graphify 2.1.4 → 2.3.1',              ts:'11:31' },
+        { sha:'b7e14c', msg:'refactor: migrate KnowledgeGraph to builder API',  ts:'11:45' },
+        { sha:'c2a09f', msg:'feat: add graphify-v2 compatibility adapter',       ts:'12:10' },
+        { sha:'d8f3b1', msg:'chore: remove deprecated v1 adapter',               ts:'12:22' },
+      ]},
+      { type:'ci', status:'pass', ts:'12:30' },
+      { type:'comment', author:'You', grad:'linear-gradient(135deg,#404060,#606080)', letter:'Y', ts:'13:05',
+        body:'Migration looks clean. One question — is there any risk of the v1 → v2 shim breaking existing integrations downstream?' },
+      { type:'comment', author:'Scout', grad:'linear-gradient(135deg,#287040,#42a060)', letter:'S', ts:'13:08',
+        body:'Minimal risk. The shim covers the one deprecated call we used (`graph.addNode()` → `graph.node().add()`). All existing tests pass against the new adapter.' },
+    ],
+  },
+  {
+    id: 'pr44',
+    num: 44,
+    title: 'feat(plugin-shell): MCP server — initial write-tools scaffold',
+    branch: 'feat/mcp-write-tools',
+    base: 'main',
+    status: 'open',
+    draft: true,
+    issueIds: [],
+    author: 'Forge',
+    authorGrad: 'linear-gradient(135deg,#3862a8,#6248b0)',
+    authorLetter: 'F',
+    opened: '1 day ago',
+    checks: 'failing',
+    reviewStatus: 'draft',
+    additions: 312,
+    deletions: 4,
+    commits: 7,
+    files: [
+      { path: 'src/mcp/tools/createNote.ts',   adds: 88, dels: 0, kind: 'created' },
+      { path: 'src/mcp/tools/updateNote.ts',   adds: 76, dels: 0, kind: 'created' },
+      { path: 'src/mcp/tools/deleteNote.ts',   adds: 62, dels: 0, kind: 'created' },
+      { path: 'src/mcp/server.ts',             adds: 86, dels: 4, kind: 'modified' },
+    ],
+    description: 'Initial scaffold for the three write tools. Still WIP — proposal queue mechanism pending (tracked in #191).',
+    ciChecks: [
+      { name: 'build',        status: 'pass' },
+      { name: 'lint',         status: 'fail' },
+      { name: 'unit tests',   status: 'pending' },
+      { name: 'type check',   status: 'pass' },
+    ],
+    activity: [
+      { type:'opened', author:'Forge', grad:'linear-gradient(135deg,#3862a8,#6248b0)', letter:'F', ts:'09:14', note:'Opened as draft — work in progress' },
+      { type:'commits', items:[
+        { sha:'e1b28d', msg:'feat: scaffold createNote MCP tool handler',        ts:'09:18' },
+        { sha:'f4c91b', msg:'feat: scaffold updateNote MCP tool handler',        ts:'10:02' },
+        { sha:'g7a44e', msg:'feat: scaffold deleteNote MCP tool handler',        ts:'10:30' },
+        { sha:'h2d57a', msg:'chore: wire write tools into MCP server registry',  ts:'11:15' },
+        { sha:'i9e88c', msg:'fix: resolve circular import in server.ts',         ts:'11:44' },
+        { sha:'j3f02d', msg:'chore: remove unused imports (lint fix)',           ts:'12:15' },
+        { sha:'k1b77a', msg:'wip: proposal queue mechanism — pending #191',      ts:'13:40' },
+      ]},
+      { type:'ci', status:'fail', check:'lint', ts:'11:50' },
+      { type:'comment', author:'You', grad:'linear-gradient(135deg,#404060,#606080)', letter:'Y', ts:'12:00',
+        body:'Lint failures in the new tool files — looks like unused imports. Clean those up before marking ready for review.' },
+      { type:'ci', status:'pass', note:'lint fixed', ts:'12:18' },
+    ],
+  },
+  {
+    id: 'pr43',
+    num: 43,
+    title: 'feat(ui): chat sidebar — layout, header, message list',
+    branch: 'feat/chat-sidebar-ui',
+    base: 'main',
+    status: 'open',
+    draft: false,
+    issueIds: [180],
+    author: 'Quill',
+    authorGrad: 'linear-gradient(135deg,#804818,#b07030)',
+    authorLetter: 'Q',
+    opened: '2 days ago',
+    checks: 'passing',
+    reviewStatus: 'approved',
+    additions: 218,
+    deletions: 12,
+    commits: 5,
+    files: [
+      { path: 'src/ui/ChatSidebar.tsx',   adds: 148, dels: 0,  kind: 'created'  },
+      { path: 'src/ui/MessageList.tsx',   adds: 62,  dels: 0,  kind: 'created'  },
+      { path: 'src/ui/styles/chat.css',   adds: 8,   dels: 12, kind: 'modified' },
+    ],
+    description: 'Implements the chat sidebar layout per the design spec. Includes header, scrollable message list, and input area.',
+    ciChecks: [
+      { name: 'build',      status: 'pass' },
+      { name: 'lint',       status: 'pass' },
+      { name: 'unit tests', status: 'pass' },
+      { name: 'type check', status: 'pass' },
+    ],
+    activity: [
+      { type:'opened', author:'Quill', grad:'linear-gradient(135deg,#804818,#b07030)', letter:'Q', ts:'2d ago' },
+      { type:'commits', items:[
+        { sha:'l8c39f', msg:'feat: initial ChatSidebar component scaffold',        ts:'2d ago' },
+        { sha:'m2e51b', msg:'feat: MessageList with scroll and virtual rendering', ts:'2d ago' },
+        { sha:'n5a72c', msg:'feat: input area with auto-resize and send button',   ts:'2d ago' },
+        { sha:'o7d14f', msg:'style: chat.css adjustments per design spec',         ts:'2d ago' },
+        { sha:'p3b96d', msg:'fix: scrollbar flicker on rapid message append',      ts:'2d ago' },
+      ]},
+      { type:'ci', status:'pass', ts:'2d ago' },
+      { type:'comment', author:'You', grad:'linear-gradient(135deg,#404060,#606080)', letter:'Y', ts:'1d ago',
+        body:'Looks great overall. One thing — the input area should stay pinned to the bottom even on very long threads. Can you verify that on overflow?' },
+      { type:'comment', author:'Quill', grad:'linear-gradient(135deg,#804818,#b07030)', letter:'Q', ts:'1d ago',
+        body:'Confirmed. MessageList uses `flex: 1; overflow-y: auto` and the input is `flex-shrink: 0`, so it always stays visible regardless of message count.' },
+      { type:'review', status:'approved', author:'You', grad:'linear-gradient(135deg,#404060,#606080)', letter:'Y', ts:'1d ago',
+        body:'LGTM — clean implementation, closely matches the design spec. Approving.' },
+    ],
+  },
+  {
+    id: 'pr42',
+    num: 42,
+    title: 'research(plugin-shell): Obsidian CLI evaluation report',
+    branch: 'research/obsidian-cli',
+    base: 'main',
+    status: 'merged',
+    draft: false,
+    issueIds: [185],
+    author: 'Scout',
+    authorGrad: 'linear-gradient(135deg,#287040,#42a060)',
+    authorLetter: 'S',
+    opened: '4 days ago',
+    checks: 'passing',
+    reviewStatus: 'merged',
+    additions: 64,
+    deletions: 0,
+    commits: 2,
+    files: [
+      { path: 'docs/research/obsidian-cli.md', adds: 64, dels: 0, kind: 'created' },
+    ],
+    description: 'Research findings on the Obsidian official CLI tooling. Evaluation covers API surface, limitations, and integration path.',
+    ciChecks: [
+      { name: 'build', status: 'pass' },
+      { name: 'lint',  status: 'pass' },
+    ],
+    activity: [
+      { type:'opened', author:'Scout', grad:'linear-gradient(135deg,#287040,#42a060)', letter:'S', ts:'4d ago' },
+      { type:'commits', items:[
+        { sha:'q4f18b', msg:'research: Obsidian CLI evaluation — initial draft',              ts:'4d ago' },
+        { sha:'r7a22d', msg:'research: API surface analysis and integration recommendations', ts:'4d ago' },
+      ]},
+      { type:'ci', status:'pass', ts:'4d ago' },
+      { type:'comment', author:'You', grad:'linear-gradient(135deg,#404060,#606080)', letter:'Y', ts:'3d ago',
+        body:'Solid writeup. The CLI limitations section is especially useful — confirms we need to go through the plugin API rather than the CLI for any vault mutations.' },
+      { type:'review', status:'approved', author:'You', grad:'linear-gradient(135deg,#404060,#606080)', letter:'Y', ts:'3d ago',
+        body:'Approving — well-researched and actionable findings.' },
+      { type:'merged', author:'You', grad:'linear-gradient(135deg,#404060,#606080)', letter:'Y', ts:'3d ago' },
+    ],
+  },
+];
+
+const TASKS = [
+  { id:'t0', label:'Implement PendingProposal type definition', est:'2h',  status:'done',        agentId:'forge',  scope:'issue', issueId:191 },
+  { id:'t1', label:'Update graphify version',                   est:'3h',  status:'in-progress', agentId:'scout',  scope:'issue', issueId:191 },
+  { id:'t2', label:'Add user manual',                           est:'4h',  status:'todo',        agentId:null,     scope:'issue', issueId:191 },
+  { id:'t3', label:'Add product landing page in Astro',         est:'1d',  status:'todo',        agentId:'quill',  scope:'issue', issueId:191 },
+  { id:'t4', label:'Write integration tests for write-tools',   est:'3h',  status:'todo',        agentId:null,     scope:'issue', issueId:191 },
+];
+
+const AGENTS = [
+  {
+    id:'forge', name:'Forge', role:'Implementation',
+    status:'Running', code:'active',
+    letter:'F', grad:'linear-gradient(135deg,#3862a8,#6248b0)',
+    task:'Implement PendingProposal type definition',
+    messages:[
+      { role:'sys',   text:'Task assigned: Implement PendingProposal type definition', ts:'14:22' },
+      { role:'agent', text:"Scanning existing type exports for conflicts before creating new definitions.", ts:'14:22' },
+      { role:'tool',  text:'read_file("src/types/index.ts")\n→ 847 lines. No existing proposal type found.', ts:'14:23' },
+      { role:'agent', text:'Creating PendingProposal.ts:\n\ntype PendingProposal = {\n  proposalId: string;\n  toolName:   string;\n  params:     unknown;\n  timestamp:  number;\n  status:     \'pending\' | \'accepted\' | \'rejected\';\n}', ts:'14:24' },
+      { role:'tool',  text:'write_file("src/types/PendingProposal.ts")\n→ Written. 21 lines.', ts:'14:24' },
+      { role:'agent', text:'Type created. Wiring proposal receipts into the 4 write-tool handlers, starting with createNote.ts.', ts:'14:25' },
+    ],
+    live:true,
+  },
+  {
+    id:'scout', name:'Scout', role:'Dependency Review',
+    status:'Running', code:'active',
+    letter:'S', grad:'linear-gradient(135deg,#287040,#42a060)',
+    task:'Update graphify version',
+    messages:[
+      { role:'sys',   text:'Task assigned: Update graphify version', ts:'14:30' },
+      { role:'agent', text:'Checking current pinned version and release notes…', ts:'14:30' },
+      { role:'tool',  text:'read_file("package.json")\n→ "graphify": "^2.1.4"', ts:'14:31' },
+      { role:'agent', text:'Latest stable is 2.3.1. Running API diff between 2.1.4 → 2.3.1. KnowledgeGraph interface changed — will surface breaking changes before committing bump.', ts:'14:31' },
+    ],
+    live:true,
+  },
+  {
+    id:'quill', name:'Quill', role:'Content',
+    status:'Queued', code:'queued',
+    letter:'Q', grad:'linear-gradient(135deg,#804818,#b07030)',
+    task:'Add product landing page in Astro',
+    messages:[
+      { role:'sys',   text:'Task assigned: Add product landing page in Astro', ts:'14:35' },
+      { role:'agent', text:'Waiting for upstream tasks to resolve before beginning the Astro scaffold.', ts:'14:35' },
+    ],
+    live:false,
+  },
+];
+
+/* ═══════════════════════════
+   PROPOSALS DATA
+═══════════════════════════ */
+const PROPOSALS = [
+  {
+    id: 'p1', issueId: 191, status: 'pending',
+    type: 'File Created', path: 'src/types/PendingProposal.ts', size: '21 lines',
+    agentId: 'forge',
+    desc: 'Forge created the PendingProposal type definition per issue spec. Review before accepting into the codebase.',
+    code: [
+      { t:'kw', v:'type' }, { t:'tx', v:' ' }, { t:'ty', v:'PendingProposal' }, { t:'tx', v:' = {' },
+      { t:'br' },
+      { t:'tx', v:'  ' }, { t:'pn', v:'proposalId' }, { t:'tx', v:': ' }, { t:'ty', v:'string' }, { t:'tx', v:';' }, { t:'br' },
+      { t:'tx', v:'  ' }, { t:'pn', v:'toolName' },   { t:'tx', v:':   ' }, { t:'ty', v:'string' }, { t:'tx', v:';' }, { t:'br' },
+      { t:'tx', v:'  ' }, { t:'pn', v:'params' },     { t:'tx', v:':     ' }, { t:'ty', v:'unknown' }, { t:'tx', v:';' }, { t:'br' },
+      { t:'tx', v:'  ' }, { t:'pn', v:'timestamp' },  { t:'tx', v:':  ' }, { t:'ty', v:'number' }, { t:'tx', v:';' }, { t:'br' },
+      { t:'tx', v:'  ' }, { t:'pn', v:'status' },     { t:'tx', v:':     ' }, { t:'st', v:"'pending'" }, { t:'tx', v:' | ' }, { t:'st', v:"'accepted'" }, { t:'tx', v:' | ' }, { t:'st', v:"'rejected'" }, { t:'tx', v:';' }, { t:'br' },
+      { t:'tx', v:'}' },
+    ],
+  },
+];
+
+function proposalCodeHTML(tokens) {
+  return tokens.map(tok => {
+    if (tok.t === 'br') return '\n';
+    const cls = { kw:'kw', ty:'ty', st:'st', pn:'pn', cm:'cm', tx:'' }[tok.t] || '';
+    return cls ? `<span class="${cls}">${esc(tok.v)}</span>` : esc(tok.v);
+  }).join('');
+}
+
+function proposalCardHTML(p) {
+  const a = p.agentId ? AGENTS.find(x => x.id === p.agentId) : null;
+  return `
+    <div class="prop-card" id="prop-${p.id}" style="transition:opacity 0.2s">
+      <div class="prop-top">
+        <span class="prop-type">${esc(p.type)}</span>
+        <code class="prop-path" style="font-family:var(--fm);font-size:11px;color:var(--t0)">${esc(p.path)}</code>
+        <span class="prop-size">${esc(p.size)}</span>
+      </div>
+      <p class="prop-desc">${esc(p.desc)}</p>
+      <pre class="prop-pre">${proposalCodeHTML(p.code)}</pre>
+      <div class="prop-acts">
+        <button class="btn-ghost" onclick="showDiffModal('${p.id}')">View diff</button>
+        <button class="btn-accept" onclick="acceptProposal('${p.id}')">Accept</button>
+        <button class="btn-reject" onclick="rejectProposal('${p.id}')">Reject</button>
+      </div>
+    </div>`;
+}
+
+/* ═══════════════════════════
+   ISSUE DATA
+═══════════════════════════ */
+const ISSUE_191 = {
+  num: 191, type: 'feat', scope: 'plugin-shell', status: 'open',
+  eyebrow: 'plugin-shell · feat',
+  title: 'MCP server — write proposal queue',
+  subtitle: '(PendingProposal mechanism)',
+  description: 'Write tools return a <code>PendingProposal</code> receipt instead of mutating the vault directly — user reviews and accepts or rejects each proposal before it is committed.',
+  context: '',
+  opened: '6 hours ago',
+};
+
+const ISSUES_DB = {
+  188: {
+    num: 188, type: 'req', scope: 'tooling', status: 'open',
+    label: 'R', labelColor: '#456080',
+    eyebrow: 'tooling · requirement',
+    title: 'REQ-0001 — integrate GitHub API for issue/PR sync',
+    description: 'Define and implement a GitHub API integration layer for bidirectional sync of issues and pull requests. Includes OAuth flow, webhook handling, and conflict resolution.',
+    context: 'Must support public and private repos. Token storage should use Obsidian\'s built-in secret store. Webhook endpoint needs to be configurable per-vault.',
+    opened: '2 days ago', linkedPRs: [],
+    tasks: [
+      { id:'i188-t0', label:'Research GitHub REST API vs GraphQL for sync', est:'3h', status:'done',        agentId:'scout' },
+      { id:'i188-t1', label:'Define data model for Issue/PR sync mapping',  est:'2h', status:'done',        agentId:'forge' },
+      { id:'i188-t2', label:'Implement OAuth flow and token storage',        est:'4h', status:'in-progress', agentId:'forge' },
+      { id:'i188-t3', label:'Build webhook listener for real-time updates',  est:'5h', status:'todo',        agentId:null    },
+      { id:'i188-t4', label:'Write integration tests for sync edge cases',   est:'3h', status:'todo',        agentId:null    },
+    ],
+  },
+  185: {
+    num: 185, type: 'research', scope: 'plugin-shell', status: 'closed',
+    label: 'R', labelColor: '#386050',
+    eyebrow: 'plugin-shell · research',
+    title: 'evaluate Obsidian official CLI tooling',
+    description: 'Evaluate feasibility and limitations of Obsidian\'s official CLI for vault operations, as an alternative to the plugin API for agent-driven mutations.',
+    context: 'Conclusion: CLI is read-only for vault content. Mutations require the plugin API. Full findings documented in PR #42 — merged.',
+    opened: '5 days ago', linkedPRs: [42],
+    tasks: [
+      { id:'i185-t0', label:'Survey available CLI commands and their scope', est:'2h', status:'done', agentId:'scout' },
+      { id:'i185-t1', label:'Test vault mutation operations via CLI',         est:'3h', status:'done', agentId:'scout' },
+      { id:'i185-t2', label:'Document findings and write recommendations',    est:'2h', status:'done', agentId:'scout' },
+    ],
+  },
+  183: {
+    num: 183, type: 'feat', scope: 'ui', status: 'open',
+    label: 'U', labelColor: '#6e3858',
+    eyebrow: 'ui · feat',
+    title: 'Claude CLI chat sidebar — phase 4 increments',
+    description: 'Phase 4 of the chat sidebar: live context strip showing active files and current issue, action proposal cards, and real-time agent status indicators.',
+    context: 'Must integrate with ChatSidebar from PR #43. Live context strip reads from Obsidian workspace state. Proposal cards reuse the PendingProposal type from #191.',
+    opened: '3 days ago', linkedPRs: [43],
+    tasks: [
+      { id:'i183-t0', label:'Scaffold sidebar component structure',                      est:'2h', status:'done',        agentId:'quill' },
+      { id:'i183-t1', label:'Implement message list with virtual scrolling',             est:'3h', status:'done',        agentId:'quill' },
+      { id:'i183-t2', label:'Add live context strip (active files, current issue)',      est:'4h', status:'in-progress', agentId:'quill' },
+      { id:'i183-t3', label:'Implement action proposal cards in sidebar',                est:'3h', status:'todo',        agentId:null    },
+      { id:'i183-t4', label:'Add agent status indicators with real-time updates',        est:'2h', status:'todo',        agentId:null    },
+      { id:'i183-t5', label:'Write E2E tests for sidebar interactions',                  est:'3h', status:'todo',        agentId:null    },
+    ],
+  },
+  192: {
+    num: 192, type: 'feat', scope: 'plugin-shell', status: 'open',
+    label: 'F', labelColor: '#5e4480',
+    eyebrow: 'plugin-shell · feat',
+    title: 'Obsidian MCP server — native validation layer',
+    description: 'Add Zod-based schema validation to all MCP tool inputs. Return structured validation errors instead of crashing on malformed parameters. Required before production use.',
+    context: '',
+    opened: '1 day ago', linkedPRs: [],
+    tasks: [
+      { id:'i192-t0', label:'Define Zod schemas for all 6 write-tool handlers',    est:'3h', status:'todo', agentId:null },
+      { id:'i192-t1', label:'Wire validation middleware into MCP request pipeline', est:'4h', status:'todo', agentId:null },
+      { id:'i192-t2', label:'Implement structured error response format',           est:'2h', status:'todo', agentId:null },
+      { id:'i192-t3', label:'Add validation tests for all edge cases',              est:'3h', status:'todo', agentId:null },
+    ],
+  },
+};
+
+const ACTIVITY_FEED = [
+  { group: 'Today', events: [
+    { ts:'14:25', type:'agent',    agent:'Forge', grad:'linear-gradient(135deg,#3862a8,#6248b0)', letter:'F', issueNum:191, text:'Wiring PendingProposal receipts into write-tool handlers', icon:'◉', color:'var(--blue)' },
+    { ts:'14:24', type:'proposal', issueNum:191,  text:'Proposal accepted: src/types/PendingProposal.ts',   icon:'✓', color:'var(--green)' },
+    { ts:'14:22', type:'agent',    agent:'Forge', grad:'linear-gradient(135deg,#3862a8,#6248b0)', letter:'F', issueNum:191, text:'Proposal created: PendingProposal type definition', icon:'↳', color:'var(--amber)' },
+    { ts:'14:30', type:'agent',    agent:'Scout', grad:'linear-gradient(135deg,#287040,#42a060)', letter:'S', issueNum:191, text:'Started: Update graphify version — checking API diff 2.1.4→2.3.1', icon:'◉', color:'var(--green)' },
+    { ts:'12:30', type:'ci',       prNum:45, prId:'pr45', issueNum:191, text:'CI checks passed on PR #45', icon:'✓', color:'var(--green)' },
+    { ts:'11:30', type:'pr',       prNum:45, prId:'pr45', agent:'Scout', grad:'linear-gradient(135deg,#287040,#42a060)', letter:'S', text:'Opened PR #45: feat(tooling): graphify v2.3.1 bump + API migration', icon:'⊙', color:'var(--blue)' },
+    { ts:'10:30', type:'agent',    agent:'Forge', grad:'linear-gradient(135deg,#3862a8,#6248b0)', letter:'F', issueNum:188, text:'Started: Implement OAuth flow and token storage (#188)', icon:'◉', color:'var(--blue)' },
+    { ts:'09:14', type:'pr',       prNum:44, prId:'pr44', agent:'Forge', grad:'linear-gradient(135deg,#3862a8,#6248b0)', letter:'F', text:'Opened draft PR #44: MCP server write-tools scaffold', icon:'◐', color:'var(--amber)' },
+  ]},
+  { group: 'Yesterday', events: [
+    { ts:'19:40', type:'review',   prNum:43, prId:'pr43', text:'PR #43 approved: feat(ui): chat sidebar layout', icon:'✓', color:'var(--green)' },
+    { ts:'18:15', type:'pr',       prNum:43, prId:'pr43', agent:'Quill', grad:'linear-gradient(135deg,#804818,#b07030)', letter:'Q', text:'Opened PR #43: chat sidebar — layout, header, message list', icon:'⊙', color:'var(--blue)' },
+    { ts:'16:00', type:'task',     agent:'Quill', grad:'linear-gradient(135deg,#804818,#b07030)', letter:'Q', issueNum:183, text:'Completed: Implement message list with virtual scrolling', icon:'✓', color:'var(--green)' },
+    { ts:'14:22', type:'task',     agent:'Quill', grad:'linear-gradient(135deg,#804818,#b07030)', letter:'Q', issueNum:183, text:'Completed: Scaffold sidebar component structure', icon:'✓', color:'var(--green)' },
+  ]},
+  { group: '3 days ago', events: [
+    { ts:'15:30', type:'merged',   prNum:42, prId:'pr42', text:'PR #42 merged: research(plugin-shell): Obsidian CLI evaluation report', icon:'⊛', color:'var(--purp)' },
+    { ts:'14:00', type:'closed',   issueNum:185, text:'Issue #185 closed — research complete, findings in PR #42', icon:'◎', color:'var(--t2)' },
+    { ts:'10:22', type:'pr',       prNum:42, prId:'pr42', agent:'Scout', grad:'linear-gradient(135deg,#287040,#42a060)', letter:'S', text:'Opened PR #42: Obsidian CLI evaluation report', icon:'⊙', color:'var(--blue)' },
+    { ts:'09:00', type:'task',     agent:'Scout', grad:'linear-gradient(135deg,#287040,#42a060)', letter:'S', issueNum:185, text:'Completed: Document findings and write recommendations', icon:'✓', color:'var(--green)' },
+  ]},
+];
+
+/* ═══════════════════════════
+   STATE
+═══════════════════════════ */
+const S = { main:'issue', right:'tasks', taskId:null, agentId:null, prId:null, prevMain:null, issueId:191 };
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ═══════════════════════════
+   PR TIMELINE
+═══════════════════════════ */
+function timelineHTML(pr) {
+  if (!pr.activity || !pr.activity.length) return '';
+
+  const items = [];
+
+  pr.activity.forEach((ev, i) => {
+    if (ev.type === 'opened') {
+      const note = ev.note ? ` <span style="color:var(--t2)">— ${esc(ev.note)}</span>` : '';
+      items.push(`
+        <div class="tl-event">
+          <div class="tl-event-dot blue"></div>
+          <div class="tl-comment-av" style="background:${ev.grad};left:-27px;top:2px;position:absolute;width:18px;height:18px;border-radius:5px;font-size:8px;font-weight:800;color:#fff;display:flex;align-items:center;justify-content:center;z-index:2">${ev.letter}</div>
+          <span class="tl-event-text"><strong>${esc(ev.author)}</strong> opened this pull request${note}</span>
+          <span class="tl-event-ts">${esc(ev.ts)}</span>
+        </div>
+        <div class="tl-spacer"></div>`);
+
+    } else if (ev.type === 'commits') {
+      const all = ev.items;
+      const visible = all.slice(0, 3);
+      const hidden  = all.slice(3);
+      const uid = 'cmts-' + i;
+      items.push(`
+        <div class="tl-event" style="margin-bottom:4px">
+          <div class="tl-event-dot"></div>
+          <span class="tl-event-text" style="color:var(--t2);font-size:11px">
+            ${all.length} commit${all.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+        <div class="tl-commits">
+          ${visible.map(c => `
+            <div class="tl-commit" onclick="showToast('○','${esc(c.sha)} — ${esc(c.msg.slice(0,40))}')">
+              <span class="tl-commit-sha">${esc(c.sha)}</span>
+              <span class="tl-commit-msg">${esc(c.msg)}</span>
+              <span class="tl-commit-ts">${esc(c.ts)}</span>
+            </div>`).join('')}
+          ${hidden.length ? `
+            <div id="${uid}-more">
+              <span class="tl-more-commits" onclick="expandCommits('${uid}',${JSON.stringify(hidden).replace(/"/g,'&quot;')})">
+                ↓ Show ${hidden.length} more commit${hidden.length !== 1 ? 's' : ''}
+              </span>
+            </div>` : ''}
+        </div>
+        <div class="tl-spacer"></div>`);
+
+    } else if (ev.type === 'ci') {
+      const pass = ev.status === 'pass';
+      const fail = ev.status === 'fail';
+      const col  = pass ? 'var(--green)' : fail ? 'var(--red)' : 'var(--amber)';
+      const icon = pass ? '✓' : fail ? '✕' : '○';
+      const note = ev.note ? ` <span style="color:var(--t2);font-size:11px">(${esc(ev.note)})</span>` : '';
+      const txt  = pass
+        ? 'All CI checks passed'
+        : fail
+        ? `CI check failed — <strong style="color:var(--red)">${esc(ev.check || 'unknown')}</strong>`
+        : 'CI checks pending';
+      items.push(`
+        <div class="tl-event">
+          <div class="tl-event-dot ${pass?'green':fail?'red':'amber'}"></div>
+          <span class="tl-event-icon" style="color:${col}">${icon}</span>
+          <span class="tl-event-text">${txt}${note}</span>
+          <span class="tl-event-ts">${esc(ev.ts||'')}</span>
+        </div>
+        <div class="tl-spacer"></div>`);
+
+    } else if (ev.type === 'comment') {
+      const cid = 'c-' + pr.id + '-' + i;
+      items.push(`
+        <div class="tl-comment" id="${cid}">
+          <div class="tl-comment-av" style="background:${ev.grad}">${ev.letter}</div>
+          <div class="tl-comment-hd">
+            <span class="tl-comment-author">${esc(ev.author)}</span>
+            <span class="tl-comment-action">commented</span>
+            <span class="tl-comment-ts">${esc(ev.ts)}</span>
+          </div>
+          <div class="tl-comment-body">
+            <div class="tl-comment-text">${esc(ev.body)}</div>
+            <div class="tl-comment-ft">
+              <button class="tl-reply-btn" onclick="toggleReply('${cid}')">↩ Reply</button>
+            </div>
+            <div class="tl-reply-box hidden" id="${cid}-reply">
+              <textarea class="tl-reply-ta" placeholder="Reply to ${esc(ev.author)}…" rows="2"
+                onkeydown="replyKey(event,'${cid}','${pr.id}')"></textarea>
+              <div class="tl-reply-actions">
+                <button class="btn-cancel" style="font-size:11px;padding:4px 10px" onclick="toggleReply('${cid}')">Cancel</button>
+                <button class="btn-primary" style="font-size:11px;padding:4px 12px" onclick="submitReply('${cid}','${pr.id}')">Reply</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="tl-spacer" style="height:10px"></div>`);
+
+    } else if (ev.type === 'review') {
+      const approve = ev.status === 'approved';
+      const boxCls  = approve ? 'review-approve' : 'review-changes';
+      const icon    = approve ? '✓' : '⊘';
+      const col     = approve ? 'var(--green)' : 'var(--red)';
+      const action  = approve ? 'approved these changes' : 'requested changes';
+      const cid = 'r-' + pr.id + '-' + i;
+      items.push(`
+        <div class="tl-comment" id="${cid}">
+          <div class="tl-comment-av" style="background:${ev.grad}">${ev.letter}</div>
+          <div class="tl-comment-hd">
+            <span class="tl-comment-author">${esc(ev.author)}</span>
+            <span class="tl-comment-action" style="color:${col}">${icon} ${action}</span>
+            <span class="tl-comment-ts">${esc(ev.ts)}</span>
+          </div>
+          <div class="tl-comment-body ${boxCls}">
+            <div class="tl-comment-text">${esc(ev.body)}</div>
+          </div>
+        </div>
+        <div class="tl-spacer" style="height:10px"></div>`);
+
+    } else if (ev.type === 'merged') {
+      items.push(`
+        <div class="tl-event">
+          <div class="tl-event-dot purp"></div>
+          <span class="tl-event-icon" style="color:var(--purp)">⊛</span>
+          <span class="tl-event-text"><strong>${esc(ev.author)}</strong> merged this pull request</span>
+          <span class="tl-event-ts">${esc(ev.ts)}</span>
+        </div>`);
+    }
+  });
+
+  return `
+    <div class="pr-timeline-section">
+      <div class="pr-tl-hd">
+        <span style="color:var(--t2)">◎</span> Activity &amp; Discussion
+        <span class="ws-tag">${pr.activity.filter(e => e.type === 'comment' || e.type === 'review').length}</span>
+      </div>
+      <div class="tl" id="tl-${pr.id}">
+        ${items.join('')}
+      </div>
+      <div class="pr-comment-input">
+        <div class="pr-comment-av">Y</div>
+        <div class="pr-comment-wrap">
+          <textarea class="pr-comment-ta" id="pr-cta-${pr.id}"
+            placeholder="Leave a comment…" rows="3"
+            onkeydown="prCommentKey(event,'${pr.id}')"></textarea>
+          <div class="pr-comment-actions">
+            <span style="font-size:11px;color:var(--t2);margin-right:auto">Markdown supported</span>
+            <button class="btn-cancel" style="font-size:11.5px" onclick="document.getElementById('pr-cta-${pr.id}').value=''">Clear</button>
+            <button class="btn-primary" style="font-size:11.5px" onclick="postComment('${pr.id}')">Comment</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ═══════════════════════════
+   PR FILE DIFF
+═══════════════════════════ */
+const FILE_DIFFS = {
+  'package.json': {
+    hunk: '@@ -12,7 +12,7 @@',
+    lines: [
+      { t:'ctx', c:'  "dependencies": {' },
+      { t:'ctx', c:'    "obsidian": "^1.4.0",' },
+      { t:'ctx', c:'    "typescript": "^5.2.0",' },
+      { t:'del', c:'    "graphify": "^2.1.4",' },
+      { t:'add', c:'    "graphify": "^2.3.1",' },
+      { t:'ctx', c:'    "zod": "^3.22.0"' },
+      { t:'ctx', c:'  }' },
+    ],
+  },
+  'src/graph/KnowledgeGraph.ts': {
+    hunk: '@@ -18,12 +18,14 @@',
+    lines: [
+      { t:'ctx', c:'import { Plugin } from "obsidian";' },
+      { t:'del', c:'import { Graph, Node } from "graphify";' },
+      { t:'add', c:'import { GraphBuilder, NodeDef } from "graphify";' },
+      { t:'ctx', c:'' },
+      { t:'ctx', c:'export class KnowledgeGraph {' },
+      { t:'del', c:'  private graph = new Graph();' },
+      { t:'add', c:'  private graph = new GraphBuilder().build();' },
+      { t:'ctx', c:'' },
+      { t:'del', c:'  addNode(id: string, data: unknown) {' },
+      { t:'del', c:'    this.graph.addNode(id, data);' },
+      { t:'del', c:'  }' },
+      { t:'add', c:'  addNode(id: string, data: unknown) {' },
+      { t:'add', c:'    this.graph.node(id).add(data as NodeDef);' },
+      { t:'add', c:'  }' },
+      { t:'ctx', c:'}' },
+    ],
+  },
+  'src/graph/adapters/graphify-v2.ts': {
+    hunk: '@@ -0,0 +1,18 @@',
+    lines: [
+      { t:'add', c:'import { GraphBuilder, NodeDef, EdgeDef } from "graphify";' },
+      { t:'add', c:'' },
+      { t:'add', c:'/** Adapter for graphify ^2.3.x builder API */' },
+      { t:'add', c:'export class GraphifyV2Adapter {' },
+      { t:'add', c:'  private builder = new GraphBuilder();' },
+      { t:'add', c:'' },
+      { t:'add', c:'  node(id: string, def: NodeDef) {' },
+      { t:'add', c:'    return this.builder.node(id).add(def);' },
+      { t:'add', c:'  }' },
+      { t:'add', c:'' },
+      { t:'add', c:'  edge(from: string, to: string, def?: EdgeDef) {' },
+      { t:'add', c:'    return this.builder.edge(from, to).add(def ?? {});' },
+      { t:'add', c:'  }' },
+      { t:'add', c:'' },
+      { t:'add', c:'  build() { return this.builder.build(); }' },
+      { t:'add', c:'}' },
+    ],
+  },
+  'src/graph/adapters/graphify-v1.ts': {
+    hunk: '@@ -1,12 +0,0 @@',
+    lines: [
+      { t:'del', c:'import { Graph } from "graphify";' },
+      { t:'del', c:'' },
+      { t:'del', c:'/** @deprecated — use GraphifyV2Adapter */' },
+      { t:'del', c:'export class GraphifyV1Adapter {' },
+      { t:'del', c:'  private graph = new Graph();' },
+      { t:'del', c:'' },
+      { t:'del', c:'  addNode(id: string, data: unknown) {' },
+      { t:'del', c:'    this.graph.addNode(id, data);' },
+      { t:'del', c:'  }' },
+      { t:'del', c:'' },
+      { t:'del', c:'  build() { return this.graph; }' },
+      { t:'del', c:'}' },
+    ],
+  },
+  'src/mcp/tools/createNote.ts': {
+    hunk: '@@ -0,0 +1,22 @@',
+    lines: [
+      { t:'add', c:'import { MCPTool, ToolResult } from "../types";' },
+      { t:'add', c:'import { PendingProposal } from "../../types/PendingProposal";' },
+      { t:'add', c:'' },
+      { t:'add', c:'export const createNote: MCPTool = {' },
+      { t:'add', c:'  name: "createNote",' },
+      { t:'add', c:'  description: "Propose creating a new note in the vault",' },
+      { t:'add', c:'  schema: { path: "string", content: "string" },' },
+      { t:'add', c:'' },
+      { t:'add', c:'  async execute(params): Promise<ToolResult> {' },
+      { t:'add', c:'    const proposal: PendingProposal = {' },
+      { t:'add', c:'      proposalId: crypto.randomUUID(),' },
+      { t:'add', c:'      toolName: "createNote",' },
+      { t:'add', c:'      params,' },
+      { t:'add', c:'      timestamp: Date.now(),' },
+      { t:'add', c:'      status: "pending",' },
+      { t:'add', c:'    };' },
+      { t:'add', c:'    return { type: "proposal", data: proposal };' },
+      { t:'add', c:'  },' },
+      { t:'add', c:'};' },
+    ],
+  },
+  'src/ui/ChatSidebar.tsx': {
+    hunk: '@@ -0,0 +1,24 @@',
+    lines: [
+      { t:'add', c:'import React, { useRef, useEffect } from "react";' },
+      { t:'add', c:'import { MessageList } from "./MessageList";' },
+      { t:'add', c:'import "./styles/chat.css";' },
+      { t:'add', c:'' },
+      { t:'add', c:'interface Props { pluginId: string; }' },
+      { t:'add', c:'' },
+      { t:'add', c:'export function ChatSidebar({ pluginId }: Props) {' },
+      { t:'add', c:'  const [messages, setMessages] = React.useState([]);' },
+      { t:'add', c:'  const [input, setInput]       = React.useState("");' },
+      { t:'add', c:'' },
+      { t:'add', c:'  const send = () => {' },
+      { t:'add', c:'    if (!input.trim()) return;' },
+      { t:'add', c:'    setMessages(m => [...m, { role: "user", text: input }]);' },
+      { t:'add', c:'    setInput("");' },
+      { t:'add', c:'  };' },
+      { t:'add', c:'' },
+      { t:'add', c:'  return (' },
+      { t:'add', c:'    <div className="chat-sidebar">' },
+      { t:'add', c:'      <MessageList messages={messages} />' },
+      { t:'add', c:'      <input value={input} onChange={e => setInput(e.target.value)}' },
+      { t:'add', c:'        onKeyDown={e => e.key === "Enter" && send()} />' },
+      { t:'add', c:'    </div>' },
+      { t:'add', c:'  );' },
+      { t:'add', c:'}' },
+    ],
+  },
+};
+
+function showFileDiff(prId, filePath) {
+  const pr   = PULL_REQUESTS.find(x => x.id === prId);
+  const file = pr?.files.find(f => f.path === filePath);
+  if (!pr || !file) return;
+
+  const diff = FILE_DIFFS[file.path];
+  const hunk = diff ? diff.hunk : `@@ -0,0 +1,${file.adds} @@`;
+  let lineNum = 1;
+
+  const rows = diff
+    ? diff.lines.map(l => {
+        const cls = l.t === 'add' ? 'dl-add' : l.t === 'del' ? 'dl-del' : 'dl-ctx';
+        const sign = l.t === 'add' ? '+' : l.t === 'del' ? '-' : ' ';
+        const num  = l.t !== 'del' ? lineNum++ : '';
+        return `<div class="dl ${cls}">
+          <span class="dl-num">${num}</span>
+          <span class="dl-sign">${sign}</span>
+          <span class="dl-code">${esc(l.c) || '&nbsp;'}</span>
+        </div>`;
+      }).join('')
+    : generateGenericDiff(file, hunk);
+
+  const kindMap = { created:['fk-add','A'], modified:['fk-mod','M'], deleted:['fk-del','D'] };
+  const [kindCls, kindLbl] = kindMap[file.kind] || ['','·'];
+
+  const box = document.getElementById('modal-box');
+  box.className = 'modal diff-modal';
+  box.innerHTML = `
+    <div class="modal-hd">
+      <span class="${kindCls}" style="font-size:11px;font-weight:700">${kindLbl}</span>
+      <span class="modal-title">${esc(file.path.split('/').pop())}</span>
+      <span style="font-size:11px;color:var(--t2);margin-left:4px">${esc(file.path.split('/').slice(0,-1).join('/'))}</span>
+      <span class="modal-close" onclick="closeModal()">✕</span>
+    </div>
+    <div class="diff-file-hd">
+      <span class="${kindCls}">${kindLbl}</span>
+      <span>${esc(file.path)}</span>
+      ${file.adds > 0 ? `<span style="color:var(--green);margin-left:auto">+${file.adds}</span>` : ''}
+      ${file.dels > 0 ? `<span style="color:var(--red)"> −${file.dels}</span>` : ''}
+    </div>
+    <div class="diff-lines">
+      <div class="diff-hunk">${esc(hunk)}</div>
+      ${rows}
+    </div>
+    <div class="modal-ft">
+      <span style="font-size:11px;color:var(--t2)">${pr.commits} commit${pr.commits!==1?'s':''} · ${esc(pr.branch)}</span>
+      <button class="btn-cancel" style="margin-left:auto" onclick="closeModal()">Close</button>
+    </div>`;
+  openModal();
+}
+
+function generateGenericDiff(file, hunk) {
+  const ext = file.path.split('.').pop();
+  const name = file.path.split('/').pop().replace(/\.[^.]+$/, '');
+  const templates = {
+    ts:   n => [`import { ${n} } from "./${n}";`, '', `export interface ${n}Options { enabled: boolean; }`, '', `export class ${n} {`, `  constructor(private opts: ${n}Options) {}`, `  run() { /* implementation */ }`, `}`],
+    tsx:  n => [`import React from "react";`, '', `interface Props { id: string; }`, '', `export function ${n}({ id }: Props) {`, `  return <div className="${n.toLowerCase()}">{id}</div>;`, `}`],
+    css:  n => [`.${n.toLowerCase()} {`, `  display: flex;`, `  flex-direction: column;`, `  gap: 8px;`, `}`, '', `.${n.toLowerCase()}:hover {`, `  opacity: 0.9;`, `}`],
+    md:   n => [`# ${n}`, '', `> Research findings and analysis.`, '', `## Summary`, ``, `Key findings from the evaluation...`, '', `## Details`, '', `See full report for specifics.`],
+    json: n => [`{`, `  "name": "${n.toLowerCase()}",`, `  "version": "1.0.0",`, `  "description": "${n} module"`, `}`],
+  };
+  const content = (templates[ext] || templates.ts)(name.replace(/[-_]/g,' ').replace(/\b\w/g,c=>c.toUpperCase()).replace(/ /g,''));
+  const type = file.kind === 'deleted' ? 'del' : 'add';
+  let num = 1;
+  return content.map(line => {
+    const n = type !== 'del' ? num++ : '';
+    const cls = type === 'add' ? 'dl-add' : 'dl-del';
+    const sign = type === 'add' ? '+' : '-';
+    return `<div class="dl ${cls}"><span class="dl-num">${n}</span><span class="dl-sign">${sign}</span><span class="dl-code">${esc(line)||'&nbsp;'}</span></div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════
+   PR VIEW (main)
+═══════════════════════════ */
+function prHTML() {
+  const pr = PULL_REQUESTS.find(x => x.id === S.prId);
+  if (!pr) return '<div style="padding:40px;color:var(--t2)">PR not found.</div>';
+
+  const total = pr.additions + pr.deletions;
+  const addPct = total > 0 ? Math.round((pr.additions / total) * 100) : 50;
+
+  const statusBadge = pr.status === 'merged'
+    ? `<span class="badge badge-merged"><span style="font-size:10px">⊛</span> Merged</span>`
+    : pr.draft
+    ? `<span class="badge badge-draft"><span style="font-size:10px">◐</span> Draft</span>`
+    : `<span class="badge badge-open"><span style="font-size:10px">⊙</span> Open</span>`;
+
+  const checksColor = { passing:'var(--green)', failing:'var(--red)', pending:'var(--amber)' }[pr.checks] || 'var(--t2)';
+  const checksIcon  = { passing:'✓', failing:'✕', pending:'○' }[pr.checks] || '·';
+
+  const reviewLabel = {
+    'review-required': { icon:'◎', col:'var(--amber)', text:'Review required' },
+    'approved':        { icon:'✓', col:'var(--green)', text:'Approved — ready to merge' },
+    'draft':           { icon:'◐', col:'var(--t2)',    text:'Work in progress' },
+    'merged':          { icon:'⊛', col:'var(--purp)',  text:'Merged' },
+  }[pr.reviewStatus] || { icon:'·', col:'var(--t2)', text:'No review' };
+
+  const linkedIssue = pr.issueIds.length
+    ? pr.issueIds.map(id => `
+        <div class="pr-issue-link" onclick="goToIssue()">
+          <span style="color:var(--t2);font-size:10px">⊙ Issue</span>
+          <span style="font-family:var(--fm);font-size:11px;color:var(--blue)">#${id}</span>
+          <span style="font-size:11.5px;color:var(--t1)">${id === 191 ? 'MCP server — write proposal queue' : '#'+id}</span>
+          <span style="font-size:10px;color:var(--t2);margin-left:auto">→</span>
+        </div>`).join('')
+    : '';
+
+  const files = pr.files.map(f => {
+    const kindMap = { created:['fk-add','A'], modified:['fk-mod','M'], deleted:['fk-del','D'] };
+    const [cls, lbl] = kindMap[f.kind] || ['','·'];
+    return `
+      <div class="file-row" onclick="showFileDiff('${pr.id}','${f.path.replace(/'/g,"\\'")}')">
+        <span class="file-kind ${cls}">${lbl}</span>
+        <span class="file-path">${esc(f.path)}</span>
+        ${f.adds > 0 ? `<span class="file-adds">+${f.adds}</span>` : '<span class="file-adds" style="opacity:0">+0</span>'}
+        ${f.dels > 0 ? `<span class="file-dels">−${f.dels}</span>` : '<span class="file-dels" style="opacity:0">−0</span>'}
+      </div>`;
+  }).join('');
+
+  const checks = pr.ciChecks.map(c => {
+    const map = { pass:['ci-status-pass','✓'], fail:['ci-status-fail','✕'], pending:['ci-status-pending','○'] };
+    const [cls, ic] = map[c.status] || ['','·'];
+    const msg = c.status === 'pass' ? `${c.name} passed` : c.status === 'fail' ? `${c.name} failed — click to view logs` : `${c.name} pending`;
+    return `
+      <div class="ci-row" style="cursor:pointer" onclick="showToast('${ic}','${esc(msg)}')">
+        <span class="ci-ic ${cls}">${ic}</span>
+        <span class="ci-name">${esc(c.name)}</span>
+        <span class="${cls}">${c.status}</span>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="pr-hdr">
+      <div class="pr-eyebrow">${esc(pr.branch.split('/')[0])} · pull request</div>
+      <div class="pr-title">${esc(pr.title)}</div>
+      <div class="pr-meta-row">
+        ${statusBadge}
+        <span class="ws-num">#${pr.num}</span>
+        <div class="pr-branch"><span>⎇</span> ${esc(pr.branch)} <span>→</span> ${esc(pr.base)}</div>
+      </div>
+      <div class="pr-author-row">
+        <div class="pr-avatar" style="background:${pr.authorGrad}">${pr.authorLetter}</div>
+        <span class="pr-author-lbl">${esc(pr.author)} opened ${esc(pr.opened)}</span>
+        <span style="font-size:11px;color:${checksColor};margin-left:10px">${checksIcon} CI ${esc(pr.checks)}</span>
+      </div>
+      <div class="diff-stats">
+        <span class="diff-adds">+${pr.additions}</span>
+        <span class="diff-dels">−${pr.deletions}</span>
+        <div class="diff-bar">
+          <div class="diff-bar-add" style="width:${addPct}%"></div>
+          <div class="diff-bar-del" style="width:${100-addPct}%"></div>
+        </div>
+        <span class="diff-commits">${pr.commits} commit${pr.commits!==1?'s':''} · ${pr.files.length} file${pr.files.length!==1?'s':''}</span>
+      </div>
+      <p class="ws-scope" style="margin-top:14px;margin-bottom:0">${esc(pr.description)}</p>
+    </div>
+
+    ${linkedIssue ? '' : ''}
+
+    <div class="ws-sec" style="margin-bottom:20px">
+      <div class="ws-sec-hd" style="margin-bottom:8px">
+        Changed Files <span class="ws-tag">${pr.files.length}</span>
+      </div>
+      <div style="background:rgba(255,255,255,0.02);border:1px solid var(--brd);border-radius:6px;padding:4px 12px">
+        ${files}
+      </div>
+    </div>
+
+    ${timelineHTML(pr)}`;
+}
+
+/* ═══════════════════════════
+   ISSUE WORKSPACE (main)
+═══════════════════════════ */
+function issueHTML() {
+  if (S.issueId !== 191) {
+    const issue = ISSUES_DB[S.issueId];
+    if (!issue) return `<div style="padding:40px;color:var(--t2)">Issue #${S.issueId} not found.</div>`;
+    return genericIssueHTML(issue);
+  }
+  const itasks = TASKS.filter(t => t.scope !== 'backlog');
+  const done  = itasks.filter(t=>t.status==='done');
+  const prog  = itasks.filter(t=>t.status==='in-progress');
+  const todo  = itasks.filter(t=>t.status==='todo');
+  const total = itasks.length;
+  const pct   = total > 0 ? Math.round((done.length/total)*100) : 0;
+
+  return `
+    <!-- Header -->
+    <div class="ws-hdr">
+      <div class="ws-eyebrow">${ISSUE_191.scope} · ${ISSUE_191.type}</div>
+      <div class="ws-title">${esc(ISSUE_191.title)}<br><span style="font-weight:300;color:var(--t1)">${esc(ISSUE_191.subtitle)}</span></div>
+      <div class="ws-meta">
+        <span class="badge badge-open" style="cursor:pointer" onclick="toggleIssueStatus()"><span style="font-size:10px">⊙</span> Open</span>
+        <span class="ws-num" style="cursor:pointer" onclick="showToast('◎','Issue #${ISSUE_191.num} — ${ISSUE_191.type}(${ISSUE_191.scope}): ${esc(ISSUE_191.title)}')">#${ISSUE_191.num}</span>
+        <span class="ws-lbl" style="cursor:pointer" onclick="showToast('◎','Filter by scope: ${ISSUE_191.scope}')">${ISSUE_191.scope}</span>
+        <span style="font-size:11px;color:var(--t2)">·  opened ${ISSUE_191.opened}</span>
+      </div>
+      <p class="ws-scope">${ISSUE_191.description}</p>
+      ${ISSUE_191.context ? `
+        <div class="ws-context-block">
+          <div class="ws-context-hd">
+            <span>◎ Context &amp; Notes</span>
+            <span style="margin-left:auto;cursor:pointer;color:var(--blue);font-size:10px;text-transform:none;letter-spacing:0;font-weight:400" onclick="editIssue()">Edit</span>
+          </div>
+          <p style="font-size:12.5px;color:var(--t1);line-height:1.65;white-space:pre-wrap">${esc(ISSUE_191.context)}</p>
+        </div>` : `
+        <div style="margin-bottom:14px">
+          <span style="font-size:11.5px;color:var(--t2);cursor:pointer;border-bottom:1px dashed rgba(255,255,255,0.1)" onclick="editIssue()">+ Add context, acceptance criteria or notes…</span>
+        </div>`}</p>
+      <div class="ws-prog">
+        <div class="ws-prog-track"><div class="ws-prog-fill" style="width:${pct}%"></div></div>
+        <span class="ws-prog-lbl">${done.length} of ${total} tasks complete</span>
+        <span style="color:var(--t2);margin-left:6px;">·</span>
+        <span style="font-size:11px;color:var(--green)">● 2 agents running</span>
+      </div>
+    </div>
+
+    <!-- Review Required -->
+    ${(()=>{
+      const pending = PROPOSALS.filter(p => p.issueId === 191 && p.status === 'pending');
+      const accepted = PROPOSALS.filter(p => p.issueId === 191 && p.status === 'accepted');
+      if (!pending.length && !accepted.length) return '';
+      return `
+        <div class="ws-sec">
+          <div class="ws-sec-hd">
+            <span class="ws-sec-icon" style="color:var(--amber)">↳</span>
+            Review Required
+            ${pending.length ? `<span class="ws-tag amber">${pending.length}</span>` : '<span class="ws-tag green">✓ All reviewed</span>'}
+          </div>
+          ${pending.map(p => proposalCardHTML(p)).join('')}
+          ${accepted.map(p => `
+            <div class="prop-card" style="opacity:0.45;pointer-events:none">
+              <div class="prop-top">
+                <span class="prop-type" style="color:var(--green)">✓ Accepted</span>
+                <code class="prop-path" style="font-family:var(--fm);font-size:11px;color:var(--t1)">${esc(p.path)}</code>
+                <span class="prop-size">${esc(p.size)}</span>
+              </div>
+            </div>`).join('')}
+        </div>`;
+    })()}
+
+    <!-- In Progress -->
+    ${prog.length ? `
+    <div class="ws-sec">
+      <div class="ws-sec-hd">
+        In Progress
+        <span class="ws-tag blue">${prog.length}</span>
+      </div>
+      ${prog.map(t => taskCard(t)).join('')}
+    </div>` : ''}
+
+    <!-- Up Next -->
+    ${todo.length ? `
+    <div class="ws-sec">
+      <div class="ws-sec-hd">
+        Up Next
+        <span class="ws-tag">${todo.length}</span>
+      </div>
+      ${todo.map(t => taskCard(t)).join('')}
+    </div>` : ''}
+
+    <!-- Done -->
+    ${done.length ? `
+    <div class="ws-sec">
+      <div class="ws-sec-hd" style="cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+        Completed
+        <span class="ws-tag green">${done.length}</span>
+        <span class="ws-toggle">›</span>
+      </div>
+      <div style="display:none">
+        ${done.map(t => taskCard(t)).join('')}
+      </div>
+    </div>` : ''}
+
+    <!-- Linked Pull Requests -->
+    ${(()=>{
+      const linked = PULL_REQUESTS.filter(pr => pr.issueIds.includes(191));
+      if (!linked.length) return '';
+      const statusBadgeCls = pr => pr.status==='merged' ? 'lpr-merged' : pr.draft ? 'lpr-draft' : 'lpr-open';
+      const statusTxt      = pr => pr.status==='merged' ? '⊛ Merged' : pr.draft ? '◐ Draft' : '⊙ Open';
+      return `
+        <div class="ws-sec">
+          <div class="ws-sec-hd">
+            <span class="ws-sec-icon" style="color:var(--blue)">⊙</span>
+            Pull Requests
+            <span class="ws-tag blue">${linked.length}</span>
+          </div>
+          ${linked.map(pr => `
+            <div class="linked-pr" onclick="clickPRRow('${pr.id}',null)">
+              <span class="linked-pr-num">#${pr.num}</span>
+              <span class="linked-pr-title">${esc(pr.title)}</span>
+              <span class="linked-pr-badge ${statusBadgeCls(pr)}">${statusTxt(pr)}</span>
+            </div>`).join('')}
+        </div>`;
+    })()}
+
+    <!-- Related Files & Artifacts -->
+    ${(()=>{
+      const linkedPRs = PULL_REQUESTS.filter(pr => pr.issueIds.includes(191));
+      const allFiles = [];
+      linkedPRs.forEach(pr => {
+        pr.files.forEach(f => allFiles.push({ ...f, prId: pr.id, source: `PR #${pr.num}` }));
+      });
+      PROPOSALS.filter(p => p.issueId === 191).forEach(p => {
+        const adds = parseInt(p.size) || 0;
+        allFiles.push({ path: p.path, kind: 'created', adds, dels: 0, prId: null, proposalId: p.id, source: `Proposal · ${p.status}` });
+      });
+      if (!allFiles.length) return '';
+
+      const rows = allFiles.map(f => {
+        const kindMap = { created:['fk-add','A'], modified:['fk-mod','M'], deleted:['fk-del','D'] };
+        const [cls, lbl] = kindMap[f.kind] || ['','·'];
+        const onclick = f.prId
+          ? `showFileDiff('${f.prId}','${f.path.replace(/'/g,"\\'")}')`
+          : f.proposalId
+          ? `showDiffModal('${f.proposalId}')`
+          : '';
+        return `
+          <div class="file-row" ${onclick ? `onclick="${onclick}" style="cursor:pointer"` : ''}>
+            <span class="file-kind ${cls}">${lbl}</span>
+            <span class="file-path">${esc(f.path)}</span>
+            <span style="font-size:10px;color:var(--t2);margin-left:auto;white-space:nowrap;padding-left:10px">${esc(f.source)}</span>
+            ${f.adds > 0 ? `<span class="file-adds">+${f.adds}</span>` : '<span class="file-adds" style="opacity:0">·</span>'}
+            ${f.dels > 0 ? `<span class="file-dels">−${f.dels}</span>` : '<span class="file-dels" style="opacity:0">·</span>'}
+          </div>`;
+      }).join('');
+
+      const totalAdds = allFiles.reduce((s,f) => s + (f.adds||0), 0);
+      const totalDels = allFiles.reduce((s,f) => s + (f.dels||0), 0);
+
+      return `
+        <div class="ws-sec">
+          <div class="ws-sec-hd">
+            <span class="ws-sec-icon" style="color:var(--teal)">◫</span>
+            Related Files &amp; Artifacts
+            <span class="ws-tag">${allFiles.length}</span>
+            <span style="margin-left:auto;font-size:10.5px;font-weight:400;text-transform:none;letter-spacing:0">
+              <span style="color:var(--green)">+${totalAdds}</span>
+              <span style="color:var(--red)"> −${totalDels}</span>
+            </span>
+          </div>
+          <div style="background:rgba(255,255,255,0.02);border:1px solid var(--brd);border-radius:6px;padding:4px 12px">
+            ${rows}
+          </div>
+        </div>`;
+    })()}`;
+}
+
+function taskCard(t) {
+  const a = t.agentId ? AGENTS.find(x=>x.id===t.agentId) : null;
+  const isDone = t.status === 'done';
+  const isProgress = t.status === 'in-progress';
+
+  const indCls = isDone ? 'tci-done' : isProgress ? 'tci-prog' : 'tci-todo';
+  const indTxt = isDone ? '✓' : isProgress ? '●' : '';
+
+  let subLine = '';
+  let agentRow = '';
+  let cta = '';
+
+  if (isProgress && a) {
+    subLine = `<div class="tc-sub">${esc(a.name)} is reviewing changes and preparing the update.</div>`;
+    agentRow = `<div class="tc-agent-row"><div class="tc-agent-dot dot-active"></div><span class="tc-agent-lbl">${esc(a.name)} · Running</span></div>`;
+    cta = `<button class="tc-cta cta-view" onclick="clickTask('${t.id}');event.stopPropagation()">View →</button>`;
+  } else if (t.status === 'todo' && a) {
+    subLine = `<div class="tc-sub">${esc(a.name)} queued — starts after preceding tasks complete.</div>`;
+    agentRow = `<div class="tc-agent-row"><div class="tc-agent-dot dot-queued"></div><span class="tc-agent-lbl">${esc(a.name)} · Queued</span></div>`;
+    cta = `<button class="tc-cta cta-assign" onclick="clickTask('${t.id}');event.stopPropagation()">Details</button>`;
+  } else if (t.status === 'todo') {
+    subLine = `<div class="tc-sub" style="color:var(--t2)">No agent assigned — requires manual start or assignment.</div>`;
+    cta = `<button class="tc-cta cta-assign" onclick="assignTaskUI('${t.id}',this);event.stopPropagation()">Assign →</button>`;
+  } else if (isDone) {
+    subLine = `<div class="tc-sub" style="color:var(--t2)">Completed by ${esc(a ? a.name : 'agent')}.</div>`;
+  }
+
+  return `
+    <div class="tc ${isDone?'done-card':''} ${S.taskId===t.id?'active':''}" onclick="clickTask('${t.id}')">
+      <div class="tc-indicator ${indCls}">${indTxt}</div>
+      <div class="tc-body">
+        <div class="tc-title ${isDone?'strk':''}">${esc(t.label)}</div>
+        ${subLine}
+        ${agentRow}
+      </div>
+      <div class="tc-right">
+        <span class="tc-est">${esc(t.est)}</span>
+        ${cta}
+      </div>
+    </div>`;
+}
+
+/* ═══════════════════════════
+   TASK DETAIL (main)
+═══════════════════════════ */
+function taskDetailHTML(t) {
+  const a = t.agentId ? AGENTS.find(x=>x.id===t.agentId) : null;
+  const subs = [
+    { done:true,  text:'Read current implementation of affected write tools' },
+    { done:true,  text:'Identify all vault-mutation points requiring proposal wrapping' },
+    { done:false, text:'Return PendingProposal receipt from createNote handler' },
+    { done:false, text:'Return PendingProposal receipt from updateNote handler' },
+    { done:false, text:'Wire ProposalStore singleton and persistence layer' },
+    { done:false, text:'Write unit tests for proposal accept/reject lifecycle' },
+  ];
+  const statusCycle = { done:'todo', 'in-progress':'done', todo:'in-progress' };
+  const pillCls = {done:'sp-done','in-progress':'sp-prog',todo:'sp-todo'}[t.status]||'sp-todo';
+  const pillTxt = {done:'✓ Done','in-progress':'● In Progress',todo:'○ To do'}[t.status]||'○ To do';
+  const nextStatus = statusCycle[t.status] || 'todo';
+  const nextTxt = { done:'Mark Done', 'in-progress':'Mark In Progress', todo:'Mark To Do' }[nextStatus];
+
+  const agentField = a
+    ? `<span class="mv" style="cursor:pointer;gap:6px" onclick="assignTaskUI('${t.id}',this)" title="Change agent">
+        <span style="color:${a.code==='active'?'var(--green)':'var(--amber)'}">●</span> ${esc(a.name)}
+        <span style="font-size:10px;color:var(--t2)">▾</span>
+       </span>`
+    : `<span class="mv" style="cursor:pointer;color:var(--blue)" onclick="assignTaskUI('${t.id}',this)">
+        + Assign agent
+       </span>`;
+
+  return `
+    <div class="back-crumb" onclick="goToIssue()">← MCP server — write proposal queue &nbsp;<span style="color:var(--t2)">#191</span></div>
+    <div class="td-title">${esc(t.label)}</div>
+    <div class="meta-grid">
+      <span class="mk">Status</span>
+      <span class="mv">
+        <span class="sp ${pillCls}" style="cursor:pointer" onclick="cycleTaskStatus('${t.id}')" title="Click to cycle status">${pillTxt}</span>
+        <span style="font-size:10.5px;color:var(--t2);margin-left:4px">→ ${esc(nextTxt)}</span>
+      </span>
+      <span class="mk">Estimate</span>  <span class="mv">${esc(t.est)}</span>
+      <span class="mk">Issue</span>
+      <span class="mv"><a style="cursor:pointer" onclick="goToIssue()">#191 — MCP write proposal queue</a></span>
+      <span class="mk">Branch</span>
+      <span class="mv">
+        <code style="cursor:pointer" onclick="showToast('⎇','Copied: feat/pending-proposal-mechanism')">feat/pending-proposal-mechanism</code>
+      </span>
+      <span class="mk">Agent</span>${agentField}
+    </div>
+    <hr class="divl">
+    <div class="sec-label">Subtasks</div>
+    <div class="sub-list">
+      ${subs.map((s,i)=>`
+        <div class="subtask" onclick="toggleSubtask(this,${i})" data-done="${s.done}">
+          <div class="s-chk ${s.done?'done':''}">${s.done?'✓':''}</div>
+          <span style="${s.done?'color:var(--t2);text-decoration:line-through;':''}">${esc(s.text)}</span>
+        </div>`).join('')}
+    </div>
+    <hr class="divl">
+    <div class="sec-label">Notes</div>
+    <p class="cp">Write tools must return a <code>PendingProposal</code> receipt rather than executing vault mutations directly. The <code>ProposalStore</code> persists proposals and exposes an accept/reject API consumed by the sidebar.</p>`;
+}
+
+/* ═══════════════════════════
+   RIGHT PANEL HTML
+═══════════════════════════ */
+function tasksHTML() {
+  const issueTasks   = TASKS.filter(t => t.scope !== 'backlog');
+  const backlogTasks = TASKS.filter(t => t.scope === 'backlog');
+
+  const renderRow = t => {
+    const dotC = t.status==='done' ? 'var(--t2)' : t.status==='in-progress' ? 'var(--green)' : 'rgba(255,255,255,0.18)';
+    return `
+      <div class="t-row ${S.taskId===t.id?'active':''}" onclick="clickTask('${t.id}')">
+        <div class="t-chk ${t.status==='done'?'done':''}">${t.status==='done'?'✓':''}</div>
+        <div class="tb">
+          <div class="t-lbl ${t.status==='done'?'strk':''}">${esc(t.label)}</div>
+          <div class="t-meta">
+            <div class="t-dot" style="background:${dotC}"></div>
+            <span class="t-est">${esc(t.est)}</span>
+            ${t.agentId ? `<span class="t-ai" style="margin-left:auto" title="Agent assigned">◉</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+  };
+
+  return `
+    <div class="ph">
+      <span class="pt">Tasks</span>
+      <div class="p-acts">
+        <button class="ph-btn green" onclick="goToAgents()">◉ Agents</button>
+        <button class="ph-btn" onclick="toggleQuickAdd()">+ Add Task</button>
+      </div>
+    </div>
+    <div class="quick-add hidden" id="quick-add">
+      <input class="qa-inp" id="qa-inp" placeholder="Task title…" onkeydown="qaKey(event)" oninput="qaInput(this)">
+      <button class="qa-ok" onclick="submitQuickAdd()">Add</button>
+      <span class="qa-cancel" onclick="toggleQuickAdd()" title="Cancel">✕</span>
+    </div>
+    <div class="pb">
+      ${issueTasks.length ? `
+        <div class="agents-sub" style="color:rgba(80,144,204,0.65)">Issue #191</div>
+        ${issueTasks.map(renderRow).join('')}` : ''}
+      ${backlogTasks.length ? `
+        <div class="agents-sub" style="${issueTasks.length ? 'margin-top:8px' : ''}">Backlog</div>
+        ${backlogTasks.map(renderRow).join('')}` : ''}
+      <div class="view-all" onclick="showToast('◎','61 tasks total — full task view coming soon')">View all (61)</div>
+    </div>
+    <div class="ai-foot">
+      <div class="ai-hint">Ask about this issue or its tasks…</div>
+      <div class="ai-inp-wrap">
+        <textarea class="ai-ta" id="ai-ta" placeholder="Ask anything about #191…" rows="1"
+          oninput="aiTaInput(this)" onkeydown="aiTaKey(event)"></textarea>
+        <div class="ai-ta-ft">
+          <button class="ai-ctx-btn">Full context ▾</button>
+          <button class="ai-send-btn" id="ai-send-btn" onclick="sendAiMsg()">↑</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function agentsHTML() {
+  const active = AGENTS.filter(a=>a.code==='active');
+  const queued = AGENTS.filter(a=>a.code==='queued');
+  const row = a => `
+    <div class="ag-row ${S.agentId===a.id?'active':''}" onclick="clickAgent('${a.id}')">
+      <div class="ag-ic" style="background:${a.grad}">${a.letter}</div>
+      <div class="ag-info">
+        <div class="ag-name">${esc(a.name)} <span style="font-size:10px;font-weight:400;color:var(--t2)">${esc(a.role)}</span></div>
+        <div class="ag-task">${esc(a.task)}</div>
+      </div>
+      <div class="ag-ind ${a.code==='active'?'ind-on':'ind-q'}"></div>
+    </div>`;
+
+  return `
+    <div class="ph">
+      <div class="back-btn" onclick="goToTasks()">← Tasks</div>
+      <span class="pt" style="font-size:10px">Agents</span>
+    </div>
+    <div class="pb">
+      <div class="agents-sub">Running</div>
+      ${active.map(row).join('')}
+      <div class="agents-sub" style="margin-top:8px">Queued</div>
+      ${queued.map(row).join('')}
+    </div>`;
+}
+
+function agentDetailHTML() {
+  const a = AGENTS.find(x=>x.id===S.agentId);
+  if (!a) return '';
+  const roleLbl = { sys:'System', agent:a.name, tool:'Tool', user:'You' };
+  const bubCls  = { sys:'bub-sys', agent:'bub-agent', tool:'bub-tool', user:'bub-user' };
+
+  const msgs = a.messages.map(m=>`
+    <div class="cmsg">
+      <div class="cmsg-hd">
+        <span class="c-role">${esc(roleLbl[m.role]||m.role)}</span>
+        <span class="c-ts">${esc(m.ts)}</span>
+      </div>
+      <div class="bub ${bubCls[m.role]||''}">${esc(m.text).replace(/\n/g,'<br>')}</div>
+    </div>`).join('');
+
+  const typing = a.live ? `
+    <div class="cmsg">
+      <div class="cmsg-hd"><span class="c-role">${esc(a.name)}</span><span class="c-ts">now</span></div>
+      <div class="bub bub-agent typing"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div>
+    </div>` : '';
+
+  return `
+    <div class="ph"><div class="back-btn" onclick="goToAgents()">← Agents</div></div>
+    <div class="ag-det-hd">
+      <div class="ag-ic" style="background:${a.grad}">${a.letter}</div>
+      <div>
+        <div class="ag-det-name">${esc(a.name)}</div>
+        <div class="ag-det-sub">${esc(a.role)} · <span style="color:${a.code==='active'?'var(--green)':'var(--amber)'}">● ${esc(a.status)}</span></div>
+      </div>
+    </div>
+    <div class="chat-log" id="chat-log">${msgs}${typing}</div>
+    <div class="chat-inp-area">
+      <textarea class="chat-ta" placeholder="Message ${esc(a.name)}…" rows="1" onkeydown="chatKey(event,this)"></textarea>
+      <button class="send-btn" onclick="sendMsg(this)">↑</button>
+    </div>`;
+}
+
+/* ═══════════════════════════
+   PR RIGHT PANEL
+═══════════════════════════ */
+function prPanelHTML() {
+  const pr = PULL_REQUESTS.find(x => x.id === S.prId);
+  if (!pr) return tasksHTML();
+
+  const checksColor = { passing:'var(--green)', failing:'var(--red)', pending:'var(--amber)' }[pr.checks] || 'var(--t2)';
+  const checksIcon  = { passing:'✓', failing:'✕', pending:'○' }[pr.checks] || '·';
+
+  const reviewLabel = {
+    'review-required': { icon:'◎', col:'var(--amber)', text:'Review required' },
+    'approved':        { icon:'✓', col:'var(--green)', text:'Approved' },
+    'draft':           { icon:'◐', col:'var(--t2)',    text:'Work in progress' },
+    'merged':          { icon:'⊛', col:'var(--purp)',  text:'Merged' },
+  }[pr.reviewStatus] || { icon:'·', col:'var(--t2)', text:'' };
+
+  const ciRows = pr.ciChecks.map(c => {
+    const m = { pass:['ci-status-pass','✓'], fail:['ci-status-fail','✕'], pending:['ci-status-pending','○'] };
+    const [cls, ic] = m[c.status] || ['','·'];
+    return `
+      <div class="ci-row" style="cursor:pointer" onclick="showToast('${ic}','${esc(c.name)}: ${c.status}')">
+        <span class="ci-ic ${cls}">${ic}</span>
+        <span class="ci-name">${esc(c.name)}</span>
+        <span class="${cls}">${c.status}</span>
+      </div>`;
+  }).join('');
+
+  const linkedIssues = pr.issueIds.map(id => {
+    const label = id === 191 ? 'MCP server — write proposal queue' : 'Issue #' + id;
+    return `
+      <div class="t-row" onclick="goToIssue()" style="cursor:pointer">
+        <div class="t-chk" style="border-color:var(--blue);color:var(--blue);font-size:9px">⊙</div>
+        <div class="tb">
+          <div class="t-lbl">#${id} ${esc(label)}</div>
+          <div class="t-meta"><div class="t-dot" style="background:var(--green)"></div><span class="t-est">Open</span></div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const total = pr.additions + pr.deletions;
+  const addPct = total > 0 ? Math.round(pr.additions / total * 100) : 50;
+  const commentCount = (pr.activity || []).filter(e => e.type==='comment'||e.type==='review').length;
+
+  // Review actions
+  let reviewActions = '';
+  if (pr.status === 'merged') {
+    reviewActions = `<span style="font-size:11px;color:var(--t2)">Merged into ${esc(pr.base)}</span>`;
+  } else if (!pr.draft) {
+    reviewActions = `
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        ${pr.reviewStatus==='approved'
+          ? `<button class="btn-accept" style="font-size:11px;padding:4px 10px" disabled>✓ Approved</button>`
+          : `<button class="btn-accept" style="font-size:11px;padding:4px 10px" onclick="approvePR('${pr.id}',this)">Approve</button>`}
+        <button class="btn-ghost" style="font-size:11px" onclick="requestChangesPR('${pr.id}',this)">Request changes</button>
+      </div>`;
+  }
+
+  // Merge action
+  let mergeAction = '';
+  if (pr.status === 'merged') {
+    mergeAction = `
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="color:var(--purp)">⊛</span>
+        <span style="font-size:11.5px;color:var(--t1)">Merged into <strong style="color:var(--t0)">${esc(pr.base)}</strong></span>
+      </div>`;
+  } else if (pr.draft) {
+    mergeAction = `
+      <div style="font-size:11px;color:var(--t2);margin-bottom:7px">Convert to open PR to enable merge.</div>
+      <button class="btn-merge" style="width:100%;justify-content:center;font-size:11.5px;background:rgba(184,131,42,0.13);color:var(--amber);border-color:rgba(184,131,42,0.28)"
+        onclick="markPRReady('${pr.id}',this)">◐ Mark as Ready</button>`;
+  } else if (pr.reviewStatus !== 'approved') {
+    // Gate: merge locked until approved
+    mergeAction = `
+      <div style="display:flex;align-items:center;gap:8px;padding:2px 0;opacity:0.5">
+        <span style="font-size:14px;color:var(--t2)">⊛</span>
+        <span style="font-size:11.5px;color:var(--t2)">Approve this PR to unlock merge</span>
+      </div>`;
+  } else {
+    const canMerge = pr.checks === 'passing';
+    mergeAction = `
+      <div style="font-size:11px;color:var(--t2);margin-bottom:7px">
+        ${canMerge ? `✓ Ready · merging into <code style="font-family:var(--fm);font-size:10px;background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px;color:#c07a44">${esc(pr.base)}</code>` : '⚠ CI must pass before merging.'}
+      </div>
+      <button class="btn-merge" id="merge-btn-${pr.id}" style="width:100%;justify-content:center;font-size:11.5px"
+        ${canMerge ? `onclick="mergePR('${pr.id}',this)"` : 'disabled style="width:100%;justify-content:center;font-size:11.5px;opacity:0.4;cursor:not-allowed"'}>⊛ Merge pull request</button>`;
+  }
+
+  return `
+    <div class="pb" style="flex:1;overflow-y:auto">
+
+      ${linkedIssues ? `
+        <div class="agents-sub">Linked Issues</div>
+        ${linkedIssues}` : ''}
+
+      <!-- CI Checks — collapsible -->
+      ${(()=>{
+        const passing = pr.ciChecks.filter(c=>c.status==='pass').length;
+        const failing = pr.ciChecks.filter(c=>c.status==='fail').length;
+        const pending = pr.ciChecks.filter(c=>c.status==='pending').length;
+        const total   = pr.ciChecks.length;
+        const summary = failing > 0
+          ? `<span style="color:var(--red);font-size:10.5px">✕ ${failing} failing</span>`
+          : pending > 0
+          ? `<span style="color:var(--amber);font-size:10.5px">○ ${pending} pending</span>`
+          : `<span style="color:var(--green);font-size:10.5px">✓ ${passing}/${total} passing</span>`;
+        const cid = 'ci-rows-' + pr.id;
+        return `
+          <div style="display:flex;align-items:center;gap:6px;padding:6px 12px 5px;cursor:pointer;user-select:none;border-top:1px solid var(--brd)"
+            onclick="(()=>{const el=document.getElementById('${cid}');const ch=this.querySelector('.ci-chev');const open=el.style.display!=='none';el.style.display=open?'none':'';ch.textContent=open?'›':'▾';})()">
+            <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--t2);flex:1">CI Checks</span>
+            ${summary}
+            <span class="ci-chev" style="font-size:9px;color:var(--t2)">›</span>
+          </div>
+          <div id="${cid}" style="display:none;padding:0 12px 6px">${ciRows}</div>`;
+      })()}
+
+      <!-- Review & Merge — unified -->
+      <div style="border-top:1px solid var(--brd);padding:8px 12px 10px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--t2);margin-bottom:8px">Review &amp; Merge</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <span style="color:${reviewLabel.col}">${reviewLabel.icon}</span>
+          <span style="font-size:12px;color:var(--t0)">${reviewLabel.text}</span>
+        </div>
+        ${reviewActions}
+        <div style="height:1px;background:var(--brd2);margin:10px 0"></div>
+        ${mergeAction}
+      </div>
+
+    </div>
+
+    <div class="ai-foot">
+      <div class="ai-hint">Ask about PR #${pr.num}…</div>
+      <div class="ai-inp-wrap">
+        <textarea class="ai-ta" id="pr-panel-ta" placeholder="What does this PR change?" rows="1"
+          oninput="aiTaInput(this)" onkeydown="prPanelChatKey(event,'${pr.id}')"></textarea>
+        <div class="ai-ta-ft">
+          <button class="ai-ctx-btn">PR context ▾</button>
+          <button class="ai-send-btn" id="pr-panel-send" onclick="prPanelChat('${pr.id}')">↑</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ═══════════════════════════
+   GENERIC ISSUE WORKSPACE
+═══════════════════════════ */
+function genericIssueHTML(issue) {
+  const tasks   = issue.tasks || [];
+  const done    = tasks.filter(t => t.status==='done');
+  const prog    = tasks.filter(t => t.status==='in-progress');
+  const todo    = tasks.filter(t => t.status==='todo');
+  const total   = tasks.length;
+  const pct     = total > 0 ? Math.round(done.length/total*100) : 0;
+
+  const statusBadge = issue.status === 'closed'
+    ? `<span class="badge" style="background:rgba(154,111,200,0.12);color:var(--purp);border:1px solid rgba(154,111,200,0.22)"><span style="font-size:10px">◎</span> Closed</span>`
+    : `<span class="badge badge-open"><span style="font-size:10px">⊙</span> Open</span>`;
+
+  const linkedPRs = PULL_REQUESTS.filter(pr => (issue.linkedPRs||[]).includes(pr.num));
+
+  const tc = (t) => {
+    const a = t.agentId ? AGENTS.find(x=>x.id===t.agentId) : null;
+    const isDone = t.status==='done', isP = t.status==='in-progress';
+    const indCls = isDone?'tci-done':isP?'tci-prog':'tci-todo';
+    const indTxt = isDone?'✓':isP?'●':'';
+    let agentRow = '';
+    if (a && isP)              agentRow = `<div class="tc-agent-row"><div class="tc-agent-dot dot-active"></div><span class="tc-agent-lbl">${esc(a.name)} · Running</span></div>`;
+    else if (a && !isDone)     agentRow = `<div class="tc-agent-row"><div class="tc-agent-dot dot-queued"></div><span class="tc-agent-lbl">${esc(a.name)} · Queued</span></div>`;
+    return `
+      <div class="tc ${isDone?'done-card':''}">
+        <div class="tc-indicator ${indCls}">${indTxt}</div>
+        <div class="tc-body">
+          <div class="tc-title ${isDone?'strk':''}">${esc(t.label)}</div>
+          ${agentRow}
+        </div>
+        <div class="tc-right"><span class="tc-est">${esc(t.est)}</span></div>
+      </div>`;
+  };
+
+  return `
+    <div class="ws-hdr">
+      <div class="ws-eyebrow">${esc(issue.eyebrow)}</div>
+      <div class="ws-title">${esc(issue.title)}</div>
+      <div class="ws-meta">
+        ${statusBadge}
+        <span class="ws-num">#${issue.num}</span>
+        <span class="ws-lbl">${esc(issue.scope)}</span>
+        <span style="font-size:11px;color:var(--t2)">· opened ${esc(issue.opened)}</span>
+      </div>
+      <p class="ws-scope">${esc(issue.description)}</p>
+      ${issue.context ? `
+        <div class="ws-context-block">
+          <div class="ws-context-hd"><span>◎ Context &amp; Notes</span></div>
+          <p style="font-size:12.5px;color:var(--t1);line-height:1.65;margin:0">${esc(issue.context)}</p>
+        </div>` : ''}
+      ${total ? `
+        <div class="ws-prog">
+          <div class="ws-prog-track"><div class="ws-prog-fill" style="width:${pct}%"></div></div>
+          <span class="ws-prog-lbl">${done.length} of ${total} tasks complete</span>
+          ${prog.length ? `<span style="color:var(--t2)">·</span><span style="font-size:11px;color:var(--green)">● ${prog.length} agent${prog.length!==1?'s':''} running</span>` : ''}
+        </div>` : ''}
+    </div>
+
+    ${prog.length ? `<div class="ws-sec"><div class="ws-sec-hd">In Progress <span class="ws-tag blue">${prog.length}</span></div>${prog.map(tc).join('')}</div>` : ''}
+    ${todo.length ? `<div class="ws-sec"><div class="ws-sec-hd">Up Next <span class="ws-tag">${todo.length}</span></div>${todo.map(tc).join('')}</div>` : ''}
+    ${done.length ? `
+      <div class="ws-sec">
+        <div class="ws-sec-hd" style="cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+          Completed <span class="ws-tag green">${done.length}</span><span class="ws-toggle">›</span>
+        </div>
+        <div ${issue.status==='closed'?'':'style="display:none"'}>${done.map(tc).join('')}</div>
+      </div>` : ''}
+
+    ${linkedPRs.length ? `
+      <div class="ws-sec">
+        <div class="ws-sec-hd"><span class="ws-sec-icon" style="color:var(--blue)">⊙</span> Pull Requests <span class="ws-tag blue">${linkedPRs.length}</span></div>
+        ${linkedPRs.map(pr => {
+          const cls = pr.status==='merged'?'lpr-merged':pr.draft?'lpr-draft':'lpr-open';
+          const txt = pr.status==='merged'?'⊛ Merged':pr.draft?'◐ Draft':'⊙ Open';
+          return `<div class="linked-pr" onclick="clickPRRow('${pr.id}',null)">
+            <span class="linked-pr-num">#${pr.num}</span>
+            <span class="linked-pr-title">${esc(pr.title)}</span>
+            <span class="linked-pr-badge ${cls}">${txt}</span>
+          </div>`;
+        }).join('')}
+      </div>` : ''}`;
+}
+
+/* ═══════════════════════════
+   ACTIVITY FEED
+═══════════════════════════ */
+function activityFeedHTML() {
+  const groups = ACTIVITY_FEED.map(group => {
+    const rows = group.events.map(ev => {
+      const hasAv = ev.letter && ev.grad;
+      const navCode = ev.prId
+        ? `onclick="clickPRRow('${ev.prId}',null)"`
+        : ev.issueNum
+        ? `onclick="clickIssueNum(${ev.issueNum})"`
+        : '';
+      return `
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--brd2);cursor:pointer;transition:background 0.1s;border-radius:4px;margin:0 -6px;padding-left:6px;padding-right:6px" ${navCode}
+          onmouseenter="this.style.background='var(--bg-h)'" onmouseleave="this.style.background=''">
+          ${hasAv
+            ? `<div style="width:22px;height:22px;border-radius:6px;background:${ev.grad};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;flex-shrink:0;margin-top:1px">${ev.letter}</div>`
+            : `<div style="width:22px;text-align:center;font-size:12px;color:${ev.color||'var(--t2)'};flex-shrink:0;margin-top:2px;line-height:1">${ev.icon||'·'}</div>`}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;color:var(--t0);line-height:1.45">${esc(ev.text)}</div>
+            <div style="font-size:10.5px;color:var(--t2);margin-top:2px">${ev.issueNum?`Issue #${ev.issueNum}`:ev.prNum?`PR #${ev.prNum}`:''}</div>
+          </div>
+          <span style="font-size:10.5px;color:var(--t2);white-space:nowrap;flex-shrink:0">${esc(ev.ts)}</span>
+        </div>`;
+    }).join('');
+    return `
+      <div style="margin-bottom:28px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--t2);padding:0 0 8px;border-bottom:1px solid var(--brd);margin-bottom:2px">${esc(group.group)}</div>
+        ${rows}
+      </div>`;
+  }).join('');
+
+  const total = ACTIVITY_FEED.reduce((n,g)=>n+g.events.length,0);
+  return `
+    <div class="ws-hdr" style="margin-bottom:24px;padding-bottom:18px">
+      <div class="ws-eyebrow">workspace</div>
+      <div class="ws-title">Activity Feed</div>
+      <div class="ws-meta" style="margin-bottom:0">
+        <span class="ws-num" style="cursor:default">${total} events</span>
+        <span style="font-size:11px;color:var(--green)">● Live</span>
+      </div>
+    </div>
+    ${groups}`;
+}
+
+/* ═══════════════════════════
+   RENDER
+═══════════════════════════ */
+function renderMain() {
+  const mc = document.getElementById('main-content');
+  const tb = document.getElementById('topbar');
+  const ab = document.getElementById('actbar');
+
+  if (S.main === 'issue') {
+    const cur = S.issueId === 191 ? ISSUE_191 : ISSUES_DB[S.issueId];
+    const label = cur ? `${cur.eyebrow}: ${cur.title}` : `Issue #${S.issueId}`;
+    tb.innerHTML = `<span class="crumb cur">${esc(label)}</span>`;
+    ab.classList.remove('hidden');
+    ab.innerHTML = `
+      <button class="abtn abtn-triage" onclick="triageCurrentIssue()">✦&thinsp;Triage Issue</button>
+      <button class="abtn abtn-breakdown" onclick="breakdownCurrentIssue()">⊕&thinsp;Break Down Issue</button>
+      <button class="abtn abtn-secondary" onclick="createPRFromIssue()">⊙&thinsp;Create PR</button>
+      <button class="abtn abtn-secondary" onclick="editIssue()">✎&thinsp;Edit Issue</button>
+      <div class="ab-divider"></div>
+      <span class="ab-hint">Analyze or break down Issue #${S.issueId} into sub-tasks</span>`;
+    mc.innerHTML = issueHTML();
+    mc.scrollTop = 0;
+
+  } else if (S.main === 'activity') {
+    tb.innerHTML = `<span class="crumb cur">Activity Feed</span>`;
+    ab.classList.add('hidden');
+    mc.innerHTML = activityFeedHTML();
+    mc.scrollTop = 0;
+
+  } else if (S.main === 'pr') {
+    const pr = PULL_REQUESTS.find(x => x.id === S.prId);
+    const label = pr ? `PR #${pr.num}` : 'Pull Request';
+    const fromIssue = S.prevMain === 'issue';
+    tb.innerHTML = fromIssue
+      ? `<span class="crumb" onclick="goToIssue()">feat(plugin-shell): write proposal queue</span>
+         <span class="crumb-sep">›</span>
+         <span class="crumb cur">${esc(label)} ${pr ? '— ' + pr.title.slice(0,42) + '…' : ''}</span>`
+      : `<span class="crumb cur">${esc(label)} ${pr ? '— ' + pr.title.slice(0,52) + '…' : ''}</span>`;
+    ab.classList.remove('hidden');
+    ab.innerHTML = `
+      <button class="abtn abtn-triage" onclick="triageCurrentIssue()" style="--purp:#9a6fc8">✦&thinsp;Triage PR</button>
+      <div class="ab-divider"></div>
+      <span class="ab-hint">Analyze and surface refinement gaps for PR #${pr ? pr.num : ''}</span>`;
+    mc.innerHTML = prHTML();
+    mc.scrollTop = 0;
+
+  } else {
+    const t = TASKS.find(x=>x.id===S.taskId);
+    tb.innerHTML = `
+      <span class="crumb" onclick="goToIssue()">feat(plugin-shell): write proposal queue</span>
+      <span class="crumb-sep">›</span>
+      <span class="crumb cur" style="max-width:200px">${esc(t.label)}</span>`;
+    ab.classList.add('hidden');
+    ab.innerHTML = '';
+    mc.innerHTML = taskDetailHTML(t);
+    mc.scrollTop = 0;
+  }
+}
+
+function renderRight() {
+  const rp = document.getElementById('right-panel');
+  if      (S.right==='tasks')  rp.innerHTML = tasksHTML();
+  else if (S.right==='agents') rp.innerHTML = agentsHTML();
+  else if (S.right==='pr')     rp.innerHTML = prPanelHTML();
+  else if (S.right==='agent')  {
+    rp.innerHTML = agentDetailHTML();
+    const log = document.getElementById('chat-log');
+    if (log) log.scrollTop = log.scrollHeight;
+  }
+}
+
+/* ═══════════════════════════
+   ACTIONS
+═══════════════════════════ */
+function clickTask(id) {
+  const t = TASKS.find(x=>x.id===id);
+  if (!t) return;
+  S.taskId = id;
+  if (t.scope === 'backlog') {
+    S.right = 'tasks';
+    renderRight();
+  } else {
+    S.main='task'; S.right='agents'; S.agentId=null;
+    renderMain(); renderRight();
+  }
+}
+function clickAgent(id) {
+  S.agentId=id; S.right='agent'; renderRight();
+}
+function goToIssue() {
+  S.main='issue'; S.taskId=null; S.prId=null; S.prevMain=null; S.right='tasks'; S.agentId=null;
+  renderMain(); renderRight();
+  // sync sidebar active state with current S.issueId
+  document.querySelectorAll('.pr-row').forEach(r => r.classList.remove('active'));
+  document.querySelectorAll('.i-row').forEach(r => {
+    r.classList.remove('active');
+    const arr = r.querySelector('.i-arr');
+    if (arr) arr.remove();
+    const numEl = r.querySelector('.i-num');
+    if (numEl && parseInt(numEl.textContent.replace('#','').trim()) === S.issueId) {
+      r.classList.add('active');
+      const a = document.createElement('span');
+      a.className = 'i-arr'; a.textContent = '→'; r.appendChild(a);
+    }
+  });
+}
+function goToTasks() {
+  S.right='tasks'; S.agentId=null; renderRight();
+}
+function goToAgents() {
+  S.right='agents'; S.agentId=null; renderRight();
+}
+function clickIssue(row) {
+  document.querySelectorAll('.i-row').forEach(r => {
+    r.classList.remove('active');
+    const arr = r.querySelector('.i-arr');
+    if (arr) arr.remove();
+  });
+  document.querySelectorAll('.pr-row').forEach(r => r.classList.remove('active'));
+  row.classList.add('active');
+  if (!row.querySelector('.i-arr')) {
+    const a = document.createElement('span');
+    a.className='i-arr'; a.textContent='→'; row.appendChild(a);
+  }
+  const numEl = row.querySelector('.i-num');
+  const num = numEl ? parseInt(numEl.textContent.replace('#','').trim()) : 191;
+  S.issueId = (num === 191 || ISSUES_DB[num]) ? num : 191;
+  goToIssue();
+}
+
+function clickIssueNum(num) {
+  S.issueId = (num === 191 || ISSUES_DB[num]) ? num : 191;
+  document.querySelectorAll('.i-row').forEach(r => {
+    r.classList.remove('active');
+    const arr = r.querySelector('.i-arr');
+    if (arr) arr.remove();
+    const numEl = r.querySelector('.i-num');
+    if (numEl && parseInt(numEl.textContent.replace('#','').trim()) === num) {
+      r.classList.add('active');
+      const a = document.createElement('span');
+      a.className='i-arr'; a.textContent='→'; r.appendChild(a);
+    }
+  });
+  document.querySelectorAll('.pr-row').forEach(r => r.classList.remove('active'));
+  S.main='issue'; S.prId=null; S.prevMain=null; S.right='tasks'; S.agentId=null;
+  renderMain(); renderRight();
+}
+
+function showActivityFeed() {
+  S.main = 'activity'; S.prId = null; S.taskId = null;
+  document.querySelectorAll('.i-row').forEach(r => { r.classList.remove('active'); const a=r.querySelector('.i-arr'); if(a)a.remove(); });
+  document.querySelectorAll('.pr-row').forEach(r => r.classList.remove('active'));
+  renderMain();
+}
+
+function clickPRRow(prId, row) {
+  document.querySelectorAll('.pr-row').forEach(r => r.classList.remove('active'));
+  document.querySelectorAll('.i-row').forEach(r => {
+    r.classList.remove('active');
+    const arr = r.querySelector('.i-arr');
+    if (arr) arr.remove();
+  });
+  if (row) { row.classList.add('active'); }
+  else {
+    const el = document.getElementById('pr-row-' + prId);
+    if (el) el.classList.add('active');
+  }
+  S.prevMain = S.main;
+  S.prId = prId; S.main = 'pr'; S.taskId = null; S.agentId = null; S.right = 'pr';
+  renderMain(); renderRight();
+}
+function acceptProposal(id) {
+  const p = PROPOSALS.find(x => x.id === id);
+  if (!p) return;
+  p.status = 'accepted';
+  showToast('✓', `Accepted: ${p.path.split('/').pop()}`);
+  if (S.main === 'issue') { const mc = document.getElementById('main-content'); if (mc) { const sc = mc.scrollTop; mc.innerHTML = issueHTML(); mc.scrollTop = sc; } }
+}
+function rejectProposal(id) {
+  const p = PROPOSALS.find(x => x.id === id);
+  if (!p) return;
+  p.status = 'rejected';
+  showToast('✕', `Rejected: ${p.path.split('/').pop()}`);
+  if (S.main === 'issue') { const mc = document.getElementById('main-content'); if (mc) { const sc = mc.scrollTop; mc.innerHTML = issueHTML(); mc.scrollTop = sc; } }
+}
+function chatKey(e,ta) {
+  if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); sendMsg(ta.nextElementSibling); }
+}
+function sendMsg(btn) {
+  const ta=btn.previousElementSibling, txt=ta.value.trim();
+  if (!txt) return;
+  const a=AGENTS.find(x=>x.id===S.agentId);
+  if (!a) return;
+  a.messages.push({ role:'user', text:txt, ts:new Date().toTimeString().slice(0,5) });
+  ta.value='';
+  renderRight();
+}
+
+/* ═══════════════════════════
+   TASK STATUS CYCLE
+═══════════════════════════ */
+function cycleTaskStatus(taskId) {
+  const t = TASKS.find(x => x.id === taskId);
+  if (!t) return;
+  const cycle = { todo:'in-progress', 'in-progress':'done', done:'todo' };
+  t.status = cycle[t.status] || 'todo';
+  const labels = { todo:'To Do', 'in-progress':'In Progress', done:'Done' };
+  showToast('●', `Status → ${labels[t.status]}`);
+  // re-render task detail
+  const mc = document.getElementById('main-content');
+  if (mc && S.main === 'task') { mc.innerHTML = taskDetailHTML(t); }
+  if (S.right === 'tasks') renderRight();
+}
+
+/* ═══════════════════════════
+   SIDEBAR COLLAPSIBLES
+═══════════════════════════ */
+const _sidebarState = { 'issues-list': true, 'pr-list': false };
+
+function toggleSidebarSection(id) {
+  const el   = document.getElementById(id);
+  const chev = document.getElementById(id === 'issues-list' ? 'issues-chev' : 'pr-chev');
+  if (!el) return;
+  const isOpen = _sidebarState[id];
+  _sidebarState[id] = !isOpen;
+  if (isOpen) {
+    el.style.overflow = 'hidden';
+    el.style.maxHeight = el.scrollHeight + 'px';
+    requestAnimationFrame(() => { el.style.transition = 'max-height 0.22s ease'; el.style.maxHeight = '0'; });
+    if (chev) chev.textContent = '›';
+  } else {
+    el.style.maxHeight = el.scrollHeight + 'px';
+    el.style.transition = 'max-height 0.22s ease';
+    if (chev) chev.textContent = '▾';
+    setTimeout(() => { el.style.maxHeight = ''; el.style.overflow = ''; el.style.transition = ''; }, 240);
+  }
+}
+
+// Init PR section as collapsed
+document.addEventListener('DOMContentLoaded', () => {
+  const prList = document.getElementById('pr-list');
+  if (prList) { prList.style.maxHeight = '0'; prList.style.overflow = 'hidden'; }
+});
+
+/* ═══════════════════════════
+   ISSUE HEADER INTERACTIONS
+═══════════════════════════ */
+function toggleIssueStatus() {
+  showToast('⊙', 'Issue #191 closed — moved to Done');
+}
+
+/* ═══════════════════════════
+   TRIAGE ACTIONS
+═══════════════════════════ */
+function triageIssues() {
+  const id = 'triage-iss-' + Date.now();
+  TASKS.unshift({ id, label: 'Triage Issues backlog', est: '30m', status: 'todo', agentId: null, scope: 'backlog' });
+  showToast('✦', 'Triage Issues task created');
+  if (S.right === 'tasks') renderRight();
+}
+
+function triagePRs() {
+  const id = 'triage-prs-' + Date.now();
+  TASKS.unshift({ id, label: 'Triage Pull Requests backlog', est: '20m', status: 'todo', agentId: null, scope: 'backlog' });
+  showToast('✦', 'Triage Pull Requests task created');
+  if (S.right === 'tasks') renderRight();
+}
+
+function triageCurrentIssue() {
+  const ab = document.getElementById('actbar');
+  const btn = ab ? ab.querySelector('.abtn-triage') : null;
+  if (btn) { btn.textContent = '✦\u2009Queuing…'; btn.disabled = true; btn.style.opacity = '0.6'; }
+  setTimeout(() => {
+    const id = 'triage-cur-' + Date.now();
+    TASKS.unshift({ id, label: 'Triage & refine Issue #191', est: '20m', status: 'todo', agentId: null, scope: 'issue', issueId: 191 });
+    showToast('✦', 'Triage task queued for Issue #191');
+    if (btn) { btn.textContent = '✦\u2009Triage Issue'; btn.disabled = false; btn.style.opacity = ''; }
+    if (S.right === 'tasks') renderRight();
+  }, 600);
+}
+
+function breakdownCurrentIssue() {
+  const ab = document.getElementById('actbar');
+  const btn = ab ? ab.querySelector('.abtn-breakdown') : null;
+
+  // Toggle: if card already visible, dismiss it
+  const existing = document.getElementById('breakdown-card');
+  if (existing) { existing.remove(); return; }
+
+  if (btn) { btn.textContent = '⊕\u2009Analyzing…'; btn.disabled = true; btn.style.opacity = '0.6'; }
+  setTimeout(() => {
+    if (btn) { btn.textContent = '⊕\u2009Break Down Issue'; btn.disabled = false; btn.style.opacity = ''; }
+    const mc = document.getElementById('main-content');
+    if (!mc) return;
+    const card = document.createElement('div');
+    card.id = 'breakdown-card';
+    card.className = 'breakdown-card';
+    card.innerHTML = `
+      <div class="breakdown-hd">
+        <span style="color:var(--purp);font-size:12px">⊕</span>
+        <span class="breakdown-title">Issue Breakdown</span>
+        <span style="font-size:11px;color:var(--t2);margin-left:2px">· AI Suggestion · #191</span>
+        <span style="margin-left:auto;cursor:pointer;color:var(--t2);font-size:11px;padding:2px 4px;border-radius:3px" onmouseenter="this.style.color='var(--t0)'" onmouseleave="this.style.color='var(--t2)'" onclick="document.getElementById('breakdown-card').remove()">✕</span>
+      </div>
+      <p style="font-size:11.5px;color:var(--t1);margin-bottom:10px;line-height:1.6">Suggested split into 3 focused sub-tasks, each independently shippable:</p>
+      <div class="breakdown-item">
+        <span class="breakdown-num">①</span>
+        <div style="flex:1;min-width:0">
+          <div class="breakdown-lbl">Implement ProposalStore singleton</div>
+          <div class="breakdown-desc">Store, retrieve and persist PendingProposal objects. Wire accept/reject lifecycle with event emission.</div>
+        </div>
+        <span style="font-size:10px;color:var(--t2);white-space:nowrap;padding-top:2px">~3h</span>
+      </div>
+      <div class="breakdown-item">
+        <span class="breakdown-num">②</span>
+        <div style="flex:1;min-width:0">
+          <div class="breakdown-lbl">Wrap write-tool handlers</div>
+          <div class="breakdown-desc">createNote, updateNote, deleteNote return PendingProposal receipts instead of mutating the vault directly.</div>
+        </div>
+        <span style="font-size:10px;color:var(--t2);white-space:nowrap;padding-top:2px">~4h</span>
+      </div>
+      <div class="breakdown-item">
+        <span class="breakdown-num">③</span>
+        <div style="flex:1;min-width:0">
+          <div class="breakdown-lbl">Write acceptance tests</div>
+          <div class="breakdown-desc">Unit tests covering proposal creation, accept path, reject path, and store persistence across sessions.</div>
+        </div>
+        <span style="font-size:10px;color:var(--t2);white-space:nowrap;padding-top:2px">~3h</span>
+      </div>
+      <div class="breakdown-acts">
+        <button class="btn-accept" onclick="acceptBreakdown(this)">Create Sub-Issues</button>
+        <button class="btn-ghost" onclick="addBreakdownAsTasks(this)">Add as Tasks</button>
+        <button class="btn-ghost" onclick="document.getElementById('breakdown-card').remove()">Dismiss</button>
+      </div>`;
+    mc.prepend(card);
+    card.scrollIntoView && mc.scrollTo({ top: 0, behavior: 'smooth' });
+  }, 700);
+}
+
+function acceptBreakdown(btn) {
+  const card = document.getElementById('breakdown-card');
+  if (!card) return;
+  card.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;color:var(--green)">✓ <span>3 sub-issues queued for creation — they will appear in the Issues list once generated.</span></div>`;
+  setTimeout(() => card.remove(), 2800);
+}
+
+function addBreakdownAsTasks(btn) {
+  const newTasks = [
+    { id:'bd0-'+Date.now(), label:'Implement ProposalStore singleton', est:'3h', status:'todo', agentId:null, scope:'issue', issueId:191 },
+    { id:'bd1-'+Date.now(), label:'Wrap write-tool handlers',           est:'4h', status:'todo', agentId:null, scope:'issue', issueId:191 },
+    { id:'bd2-'+Date.now(), label:'Write acceptance tests',             est:'3h', status:'todo', agentId:null, scope:'issue', issueId:191 },
+  ];
+  newTasks.forEach(t => TASKS.push(t));
+  const card = document.getElementById('breakdown-card');
+  if (card) {
+    card.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;color:var(--green)">✓ <span>3 tasks added to the task list for Issue #191.</span></div>`;
+    setTimeout(() => card.remove(), 2400);
+  }
+  if (S.right === 'tasks') renderRight();
+  // Re-render issue workspace to update progress counts
+  if (S.main === 'issue') {
+    const mc = document.getElementById('main-content');
+    if (mc) { const scroll = mc.scrollTop; mc.innerHTML = issueHTML(); mc.scrollTop = scroll; }
+  }
+}
+
+function showToast(icon, msg) {
+  const old = document.querySelector('.toast');
+  if (old) old.remove();
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `<span class="toast-ic">${icon}</span><span>${esc(msg)}</span>`;
+  document.body.appendChild(el);
+  setTimeout(() => { if (el.parentNode) el.remove(); }, 2600);
+}
+
+/* ═══════════════════════════
+   NEW ISSUE MODAL
+═══════════════════════════ */
+const MODAL_STATE = { type: null, issueType: 'feat', issueScope: 'plugin-shell', assignAgent: null };
+
+function newIssue() {
+  MODAL_STATE.type = 'new-issue';
+  MODAL_STATE.issueType = 'feat';
+  MODAL_STATE.issueScope = 'plugin-shell';
+  MODAL_STATE.assignAgent = null;
+  const box = document.getElementById('modal-box');
+  box.className = 'modal';
+  box.innerHTML = `
+    <div class="modal-hd">
+      <span style="color:var(--green);font-size:13px">+</span>
+      <span class="modal-title">New Issue</span>
+      <span class="modal-close" onclick="closeModal()">✕</span>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label class="field-lbl">Title</label>
+        <input class="field-inp" id="ni-title" placeholder="feat(scope): short description…" autocomplete="off">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label class="field-lbl">Type</label>
+          <div class="seg-group" id="ni-type">
+            ${['feat','fix','research','chore','docs'].map(t =>
+              `<button class="seg-opt${t==='feat'?' sel':''}" onclick="selectSeg(this,'ni-type','${t}')">${t}</button>`
+            ).join('')}
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-lbl">Scope</label>
+          <div class="seg-group" id="ni-scope">
+            ${['plugin-shell','tooling','ui','infra'].map(s =>
+              `<button class="seg-opt${s==='plugin-shell'?' sel':''}" onclick="selectSeg(this,'ni-scope','${s}')">${s}</button>`
+            ).join('')}
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-lbl">Description <span style="text-transform:none;font-weight:400;color:var(--t2)">(optional)</span></label>
+        <textarea class="field-inp" id="ni-desc" rows="3" placeholder="What needs to be done and why…"></textarea>
+      </div>
+      <div class="field">
+        <label class="field-lbl">Assign Agent <span style="text-transform:none;font-weight:400;color:var(--t2)">(optional)</span></label>
+        <div class="seg-group" id="ni-agent">
+          <button class="seg-opt sel" onclick="selectSeg(this,'ni-agent',null)">None</button>
+          ${AGENTS.map(a =>
+            `<button class="seg-opt" onclick="selectSeg(this,'ni-agent','${a.id}')">${a.name}</button>`
+          ).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="createIssue()">Create Issue</button>
+    </div>`;
+  openModal();
+}
+
+function selectSeg(el, groupId, val) {
+  document.querySelectorAll(`#${groupId} .seg-opt`).forEach(b => b.classList.remove('sel'));
+  el.classList.add('sel');
+  if (groupId === 'ni-type')  MODAL_STATE.issueType  = val;
+  if (groupId === 'ni-scope') MODAL_STATE.issueScope = val;
+  if (groupId === 'ni-agent') MODAL_STATE.assignAgent = val;
+}
+
+function createIssue() {
+  const title = document.getElementById('ni-title').value.trim();
+  if (!title) {
+    document.getElementById('ni-title').focus();
+    document.getElementById('ni-title').style.borderColor = 'rgba(184,80,80,0.6)';
+    return;
+  }
+  const nextNum = 193;
+  const typeColors = { feat:'#5e4480', fix:'#703838', research:'#386050', chore:'#4a4a4a', docs:'#456080' };
+  const letter = MODAL_STATE.issueType[0].toUpperCase();
+  const bg = typeColors[MODAL_STATE.issueType] || '#4a4a4a';
+  const fullTitle = `${MODAL_STATE.issueType}(${MODAL_STATE.issueScope}): ${title}`;
+
+  // Inject into sidebar
+  const sl = document.querySelector('.sl');
+  const subLbl = [...sl.querySelectorAll('.sub-lbl')].find(el => el.textContent.trim() === 'Recent');
+  if (subLbl) {
+    const row = document.createElement('div');
+    row.className = 'i-row';
+    row.innerHTML = `
+      <div class="i-ic" style="background:${bg}">${letter}</div>
+      <span class="i-num">#${nextNum}</span>
+      <span class="i-lbl">${esc(fullTitle)}</span>`;
+    row.onclick = function() { clickIssue(this); };
+    subLbl.after(row);
+  }
+
+  closeModal();
+  showToast('+', `Issue #${nextNum} created`);
+}
+
+function openModal() {
+  document.getElementById('modal-overlay').classList.remove('hidden');
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+}
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+}
+
+/* ═══════════════════════════
+   DIFF MODAL
+═══════════════════════════ */
+function showDiffModal(proposalId) {
+  const p = proposalId ? PROPOSALS.find(x => x.id === proposalId) : PROPOSALS.find(x => x.status === 'pending');
+  const box = document.getElementById('modal-box');
+  box.className = 'modal diff-modal';
+  const diffLines = p ? p.code.map((tok, i) => {
+    if (tok.t === 'br') return null;
+    return null; // handled below
+  }).filter(Boolean) : [];
+
+  // Build diff from proposal tokens line by line
+  const rawLines = p ? proposalCodeHTML(p.code).split('\n') : [];
+  const diffHTML = `<div class="diff-hunk">@@ -0,0 +1,${rawLines.length} @@</div>` +
+    rawLines.map((line, i) => `
+      <div class="dl dl-add">
+        <span class="dl-num">${i + 1}</span>
+        <span class="dl-sign">+</span>
+        <span class="dl-code">${line || '&nbsp;'}</span>
+      </div>`).join('');
+
+  box.innerHTML = `
+    <div class="modal-hd">
+      <span style="color:var(--green);font-size:12px;font-weight:700">A</span>
+      <span class="modal-title">File Diff — ${p ? esc(p.path.split('/').pop()) : 'Proposal'}</span>
+      <span class="modal-close" onclick="closeModal()">✕</span>
+    </div>
+    <div class="diff-file-hd">
+      <span class="fk-add">A</span>
+      <span style="font-size:11px;color:var(--t0)">${p ? esc(p.path) : ''}</span>
+      <span style="margin-left:auto;color:var(--green)">+${rawLines.length}</span>
+    </div>
+    <div class="diff-lines">${diffHTML}</div>
+    <div class="modal-ft">
+      <button class="btn-cancel" onclick="closeModal()">Close</button>
+      ${p && p.status === 'pending' ? `
+        <button class="btn-reject" style="padding:6px 14px;font-size:12px" onclick="closeModal();rejectProposal('${p.id}')">Reject</button>
+        <button class="btn-accept" style="padding:6px 16px;font-size:12px" onclick="closeModal();acceptProposal('${p.id}')">Accept Changes</button>
+      ` : `<span style="font-size:11px;color:var(--green)">✓ Already ${p ? p.status : 'reviewed'}</span>`}
+    </div>`;
+  openModal();
+}
+
+/* ═══════════════════════════
+   ASSIGN TASK
+═══════════════════════════ */
+let _assignTaskId = null;
+function assignTaskUI(taskId, btn) {
+  _assignTaskId = taskId;
+  const drop = document.getElementById('assign-drop');
+  const rect = btn.getBoundingClientRect();
+  drop.innerHTML = `
+    <div class="assign-drop-hd">Assign Agent</div>
+    ${AGENTS.map(a => `
+      <div class="assign-opt" onclick="doAssign('${taskId}','${a.id}')">
+        <div class="assign-opt-ic" style="background:${a.grad}">${a.letter}</div>
+        <div style="flex:1;min-width:0">
+          <div class="assign-opt-name">${esc(a.name)}</div>
+          <div class="assign-opt-role">${esc(a.role)}</div>
+        </div>
+        <span class="assign-opt-status" style="color:${a.code==='active'?'var(--green)':'var(--amber)'}">● ${esc(a.status)}</span>
+      </div>`).join('')}
+    <div class="assign-none" onclick="dismissAssignDrop()">Cancel</div>`;
+  drop.style.top  = (rect.bottom + 4) + 'px';
+  drop.style.left = Math.min(rect.left, window.innerWidth - 240) + 'px';
+  drop.classList.remove('hidden');
+  setTimeout(() => document.addEventListener('click', outsideAssignClick, { once: true }), 10);
+}
+function outsideAssignClick(e) {
+  const drop = document.getElementById('assign-drop');
+  if (!drop.contains(e.target)) dismissAssignDrop();
+}
+function dismissAssignDrop() {
+  document.getElementById('assign-drop').classList.add('hidden');
+}
+function doAssign(taskId, agentId) {
+  const t = TASKS.find(x => x.id === taskId);
+  const a = AGENTS.find(x => x.id === agentId);
+  if (!t || !a) return;
+  t.agentId = agentId;
+  t.status = 'in-progress';
+  dismissAssignDrop();
+  showToast('◉', `${a.name} assigned to "${t.label.slice(0,32)}…"`);
+  if (S.main === 'issue') renderMain();
+  if (S.right === 'tasks') renderRight();
+}
+
+/* ═══════════════════════════
+   QUICK-ADD TASK
+═══════════════════════════ */
+function toggleQuickAdd() {
+  const qa = document.getElementById('quick-add');
+  const inp = document.getElementById('qa-inp');
+  if (!qa) return;
+  const hidden = qa.classList.toggle('hidden');
+  if (!hidden && inp) { inp.value = ''; inp.focus(); }
+}
+function qaKey(e) {
+  if (e.key === 'Enter') submitQuickAdd();
+  if (e.key === 'Escape') toggleQuickAdd();
+}
+function qaInput(inp) {
+  // optional: live validation
+}
+function submitQuickAdd() {
+  const inp = document.getElementById('qa-inp');
+  if (!inp) return;
+  const val = inp.value.trim();
+  if (!val) { inp.focus(); return; }
+  const id = 'qa-' + Date.now();
+  TASKS.push({ id, label: val, est: '?', status: 'todo', agentId: null, scope: 'issue', issueId: 191 });
+  toggleQuickAdd();
+  showToast('+', `Task added: "${val.slice(0,36)}"`);
+  if (S.right === 'tasks') renderRight();
+  if (S.main === 'issue') {
+    const mc = document.getElementById('main-content');
+    if (mc) { const sc = mc.scrollTop; mc.innerHTML = issueHTML(); mc.scrollTop = sc; }
+  }
+}
+
+/* ═══════════════════════════
+   AI FOOTER INPUT
+═══════════════════════════ */
+function aiTaInput(ta) {
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 90) + 'px';
+  const btn = document.getElementById('ai-send-btn');
+  if (btn) btn.classList.toggle('ready', ta.value.trim().length > 0);
+}
+function aiTaKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAiMsg(); }
+}
+function sendAiMsg() {
+  const ta = document.getElementById('ai-ta');
+  if (!ta) return;
+  const txt = ta.value.trim();
+  if (!txt) return;
+  ta.value = '';
+  ta.style.height = '';
+  const btn = document.getElementById('ai-send-btn');
+  if (btn) btn.classList.remove('ready');
+  showToast('✦', `Asking: "${txt.slice(0, 42)}…"`);
+}
+
+/* ═══════════════════════════
+   PR ACTIONS
+═══════════════════════════ */
+function approvePR(prId, btn) {
+  const pr = PULL_REQUESTS.find(x => x.id === prId);
+  if (!pr) return;
+  pr.reviewStatus = 'approved';
+  showToast('✓', `PR #${pr.num} approved`);
+  if (S.right === 'pr') renderRight();
+  else { btn.textContent = '✓ Approved'; btn.disabled = true; }
+}
+
+function requestChangesPR(prId, btn) {
+  const pr = PULL_REQUESTS.find(x => x.id === prId);
+  if (!pr) return;
+  pr.reviewStatus = 'review-required';
+  showToast('◎', `Changes requested on PR #${pr.num}`);
+  if (S.right === 'pr') renderRight();
+  else { btn.textContent = 'Changes requested ✓'; btn.disabled = true; }
+}
+
+function mergePR(prId, btn) {
+  const pr = PULL_REQUESTS.find(x => x.id === prId);
+  if (!pr) return;
+  if (btn) { btn.textContent = '⊛ Merging…'; btn.disabled = true; }
+  setTimeout(() => {
+    pr.status = 'merged'; pr.reviewStatus = 'merged';
+    const row = document.getElementById('pr-row-' + prId);
+    if (row) {
+      const dot  = row.querySelector('.pr-dot');
+      const stat = row.querySelector('.pr-status');
+      if (dot)  dot.style.background = 'var(--purp)';
+      if (stat) { stat.textContent = '✓'; stat.style.color = 'var(--purp)'; }
+    }
+    showToast('⊛', `PR #${pr.num} merged into ${pr.base}`);
+    renderMain();
+    if (S.right === 'pr') renderRight();
+  }, 800);
+}
+
+function markPRReady(prId, btn) {
+  const pr = PULL_REQUESTS.find(x => x.id === prId);
+  if (!pr) return;
+  if (btn) { btn.textContent = '◐ Converting…'; btn.disabled = true; }
+  setTimeout(() => {
+    pr.draft = false; pr.reviewStatus = 'review-required';
+    const row = document.getElementById('pr-row-' + prId);
+    if (row) {
+      const stat = row.querySelector('.pr-status');
+      const dot  = row.querySelector('.pr-dot');
+      if (stat) { stat.textContent = '●'; stat.style.color = 'var(--green)'; }
+      if (dot)  dot.style.background = 'var(--blue)';
+    }
+    showToast('⊙', `PR #${pr.num} is now open and ready for review`);
+    renderMain();
+    if (S.right === 'pr') renderRight();
+  }, 600);
+}
+
+function goBackFromPR() {
+  S.right = 'tasks';
+  renderRight();
+}
+function prPanelChatKey(e, prId) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); prPanelChat(prId); }
+}
+function prPanelChat(prId) {
+  const ta  = document.getElementById('pr-panel-ta');
+  const txt = ta ? ta.value.trim() : '';
+  if (!txt) { if (ta) ta.focus(); return; }
+  const pr = PULL_REQUESTS.find(x => x.id === prId);
+  if (!pr) return;
+  if (ta) { ta.value = ''; ta.style.height = ''; }
+  const sendBtn = document.getElementById('pr-panel-send');
+  if (sendBtn) sendBtn.classList.remove('ready');
+  showToast('✦', `Asking about PR #${pr.num}: "${txt.slice(0,40)}…"`);
+}
+
+function createPRFromIssue() {
+  showToast('⊙', 'Creating PR from Issue #191…');
+  setTimeout(() => {
+    const id = 'pr-new-' + Date.now();
+    const newPR = {
+      id, num: 46,
+      title: 'feat(plugin-shell): MCP server — write proposal queue',
+      branch: 'feat/pending-proposal-mechanism', base: 'main',
+      status: 'open', draft: true, issueIds: [191],
+      author: 'You', authorGrad: 'linear-gradient(135deg,#404060,#606080)', authorLetter: 'Y',
+      opened: 'just now', checks: 'pending', reviewStatus: 'draft',
+      additions: 0, deletions: 0, commits: 0,
+      files: [], description: 'Draft PR created from Issue #191. No commits yet.',
+      ciChecks: [{ name: 'build', status: 'pending' }], activity: [],
+    };
+    PULL_REQUESTS.unshift(newPR);
+    const prList = document.getElementById('pr-list');
+    if (prList) {
+      const row = document.createElement('div');
+      row.className = 'pr-row'; row.id = 'pr-row-' + id;
+      row.innerHTML = `<span class="pr-status" style="color:var(--amber)">◐</span>
+        <span class="pr-num">#46</span>
+        <span class="pr-lbl">feat(plugin-shell): write proposal queue</span>
+        <div class="pr-dot" style="background:var(--amber)"></div>`;
+      row.onclick = function() { clickPRRow(id, this); };
+      prList.prepend(row);
+    }
+    showToast('⊙', 'Draft PR #46 created — no commits yet');
+  }, 700);
+}
+
+/* ═══════════════════════════
+   SUBTASK TOGGLE
+═══════════════════════════ */
+function toggleSubtask(el, idx) {
+  const isDone = el.dataset.done === 'true';
+  el.dataset.done = !isDone;
+  const chk  = el.querySelector('.s-chk');
+  const text = el.querySelector('span');
+  if (!isDone) {
+    chk.classList.add('done'); chk.textContent = '✓';
+    if (text) { text.style.color = 'var(--t2)'; text.style.textDecoration = 'line-through'; }
+  } else {
+    chk.classList.remove('done'); chk.textContent = '';
+    if (text) { text.style.color = ''; text.style.textDecoration = ''; }
+  }
+}
+
+/* ═══════════════════════════
+   TIMELINE INTERACTIONS
+═══════════════════════════ */
+function toggleReply(cid) {
+  const box = document.getElementById(cid + '-reply');
+  if (!box) return;
+  const isHidden = box.classList.toggle('hidden');
+  if (!isHidden) {
+    const ta = box.querySelector('.tl-reply-ta');
+    if (ta) { ta.value = ''; ta.focus(); }
+  }
+}
+
+function replyKey(e, cid, prId) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitReply(cid, prId); }
+  if (e.key === 'Escape') toggleReply(cid);
+}
+
+function submitReply(cid, prId) {
+  const box = document.getElementById(cid + '-reply');
+  if (!box) return;
+  const ta  = box.querySelector('.tl-reply-ta');
+  const txt = ta ? ta.value.trim() : '';
+  if (!txt) { if (ta) ta.focus(); return; }
+
+  const pr = PULL_REQUESTS.find(x => x.id === prId);
+  if (pr) {
+    pr.activity.push({
+      type: 'comment', author: 'You',
+      grad: 'linear-gradient(135deg,#404060,#606080)', letter: 'Y',
+      ts: new Date().toTimeString().slice(0,5), body: txt,
+    });
+  }
+  toggleReply(cid);
+  showToast('◎', 'Reply posted');
+  // re-render just the timeline
+  const tlEl = document.getElementById('tl-' + prId);
+  if (tlEl && pr) {
+    const section = tlEl.closest('.pr-timeline-section');
+    if (section) section.outerHTML = timelineHTML(pr);
+  }
+}
+
+function prCommentKey(e, prId) {
+  if (e.key === 'Enter' && e.metaKey) { e.preventDefault(); postComment(prId); }
+}
+
+function postComment(prId) {
+  const ta  = document.getElementById('pr-cta-' + prId);
+  const txt = ta ? ta.value.trim() : '';
+  if (!txt) { if (ta) ta.focus(); return; }
+
+  const pr = PULL_REQUESTS.find(x => x.id === prId);
+  if (!pr) return;
+  pr.activity.push({
+    type: 'comment', author: 'You',
+    grad: 'linear-gradient(135deg,#404060,#606080)', letter: 'Y',
+    ts: new Date().toTimeString().slice(0,5), body: txt,
+  });
+  if (ta) ta.value = '';
+  showToast('◎', 'Comment posted');
+  // re-render the timeline section
+  const tlEl = document.getElementById('tl-' + prId);
+  if (tlEl) {
+    const section = tlEl.closest('.pr-timeline-section');
+    if (section) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = timelineHTML(pr);
+      section.replaceWith(tmp.firstElementChild);
+    }
+  }
+}
+
+function expandCommits(uid, commits) {
+  const el = document.getElementById(uid + '-more');
+  if (!el) return;
+  const rows = commits.map(c => `
+    <div class="tl-commit" onclick="showToast('○','${c.sha} — ${c.msg.slice(0,40)}')">
+      <span class="tl-commit-sha">${esc(c.sha)}</span>
+      <span class="tl-commit-msg">${esc(c.msg)}</span>
+      <span class="tl-commit-ts">${esc(c.ts)}</span>
+    </div>`).join('');
+  el.outerHTML = rows;
+}
+
+/* ═══════════════════════════
+   EDIT ISSUE
+═══════════════════════════ */
+function editIssue() {
+  const box = document.getElementById('modal-box');
+  box.className = 'modal';
+  box.innerHTML = `
+    <div class="modal-hd">
+      <span style="color:var(--blue);font-size:13px">✎</span>
+      <span class="modal-title">Edit Issue #${ISSUE_191.num}</span>
+      <span class="modal-close" onclick="closeModal()">✕</span>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label class="field-lbl">Title</label>
+        <input class="field-inp" id="ei-title" value="${esc(ISSUE_191.title)}" autocomplete="off">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label class="field-lbl">Type</label>
+          <div class="seg-group" id="ei-type">
+            ${['feat','fix','research','chore','docs'].map(t =>
+              `<button class="seg-opt${t===ISSUE_191.type?' sel':''}" onclick="selectSeg(this,'ei-type','${t}');ISSUE_191.type='${t}'">${t}</button>`
+            ).join('')}
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-lbl">Scope</label>
+          <div class="seg-group" id="ei-scope">
+            ${['plugin-shell','tooling','ui','infra'].map(s =>
+              `<button class="seg-opt${s===ISSUE_191.scope?' sel':''}" onclick="selectSeg(this,'ei-scope','${s}');ISSUE_191.scope='${s}'">${s}</button>`
+            ).join('')}
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-lbl">Description</label>
+        <textarea class="field-inp" id="ei-desc" rows="3">${ISSUE_191.description.replace(/<[^>]+>/g,'')}</textarea>
+      </div>
+      <div class="field">
+        <label class="field-lbl">Context &amp; Notes
+          <span style="text-transform:none;font-weight:400;color:var(--t2);margin-left:4px">— acceptance criteria, technical details, links…</span>
+        </label>
+        <textarea class="field-inp" id="ei-context" rows="5"
+          placeholder="Add implementation notes, acceptance criteria, related issues, or any additional context for agents and collaborators…">${esc(ISSUE_191.context)}</textarea>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <span style="font-size:10.5px;color:var(--t2)">Changes visible to all agents</span>
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="updateIssue()">Update Issue</button>
+    </div>`;
+  openModal();
+  // focus context if empty
+  setTimeout(() => {
+    const ctx = document.getElementById('ei-context');
+    if (ctx && !ISSUE_191.context) ctx.focus();
+    else document.getElementById('ei-title')?.focus();
+  }, 80);
+}
+
+function updateIssue() {
+  const title   = document.getElementById('ei-title')?.value.trim();
+  const desc    = document.getElementById('ei-desc')?.value.trim();
+  const context = document.getElementById('ei-context')?.value.trim();
+  if (!title) {
+    document.getElementById('ei-title').style.borderColor = 'rgba(184,80,80,0.6)';
+    return;
+  }
+  ISSUE_191.title   = title;
+  ISSUE_191.description = desc || ISSUE_191.description;
+  ISSUE_191.context = context;
+  closeModal();
+  showToast('✓', 'Issue #191 updated');
+  if (S.main === 'issue') {
+    const mc = document.getElementById('main-content');
+    if (mc) { const sc = mc.scrollTop; mc.innerHTML = issueHTML(); mc.scrollTop = sc; }
+  }
+}
+
+/* ═══════════════════════════
+   INIT
+═══════════════════════════ */
+renderMain();
+renderRight();
+</script>
+</body>
+</html>
