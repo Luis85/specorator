@@ -94,7 +94,7 @@ export default class SpecoratorPlugin extends Plugin {
       callback: () => {
         void this.updateSettings({ onboardingComplete: false }).then(() =>
           this.activateView().then(() => {
-            activeWindow.dispatchEvent(new CustomEvent('sp:navigate', { detail: { path: '/onboarding' } }))
+            this._dispatchNavigate('/onboarding')
           }),
         )
       },
@@ -125,7 +125,7 @@ export default class SpecoratorPlugin extends Plugin {
       this.detectLegacyVaultLayout()
       if (!this.settings.onboardingComplete) {
         void this.activateView().then(() => {
-          activeWindow.dispatchEvent(new CustomEvent('sp:navigate', { detail: { path: '/onboarding' } }))
+          this._dispatchNavigate('/onboarding')
         })
       }
     })
@@ -190,6 +190,13 @@ export default class SpecoratorPlugin extends Plugin {
         8000,
       )
     }
+  }
+
+  private _dispatchNavigate(path: string): void {
+    const win =
+      this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view?.containerEl?.ownerDocument?.defaultView ??
+      activeWindow
+    win.dispatchEvent(new CustomEvent('sp:navigate', { detail: { path } }))
   }
 
   private async activateView(): Promise<void> {
