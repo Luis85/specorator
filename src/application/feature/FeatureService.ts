@@ -1,10 +1,11 @@
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
 import { err, ok, type Result } from '@/domain/shared/Result'
 import type { Feature } from '@/domain/feature/Feature'
+import type { IFeatureService } from './IFeatureService'
 import { CreateFeatureUseCase } from './CreateFeatureUseCase'
 import { AdvanceFeatureStageUseCase } from './AdvanceFeatureStageUseCase'
 
-export class FeatureService {
+export class FeatureService implements IFeatureService {
   constructor(private readonly repo: IFeatureRepository) {}
 
   async loadFeatures(): Promise<Result<Feature[]>> {
