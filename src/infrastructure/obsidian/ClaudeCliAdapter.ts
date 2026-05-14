@@ -45,6 +45,9 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
    * Satisfies REQ-CCS-003, NFR-CCS-002, SPEC-CCS-001 §5.2.
    */
   async startup(): Promise<void> {
+    // Idempotency guard: shutdown() resets _sdkReady, so a post-shutdown re-start is allowed.
+    if (this._sdkReady) return
+
     const key = this._getSettings().anthropicApiKey.trim()
 
     // Step 1: Check for empty/whitespace key.
