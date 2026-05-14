@@ -6,6 +6,7 @@ import type {
 	WorkspacePort,
 	NotificationPort,
 	LoggerPort,
+	CommunityPluginPort,
 	ActiveFileSnapshot,
 	Unsubscriber,
 	ClaudeCliPort,
@@ -16,7 +17,7 @@ type FileManagerWithTrash = App['fileManager'] & {
 }
 
 export class ObsidianBridge
-  implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, ClaudeCliPort
+  implements SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, ClaudeCliPort, CommunityPluginPort
 {
   private static readonly _LEVEL_RANK: Record<string, number> = {
     debug: 0,
@@ -196,14 +197,36 @@ export class ObsidianBridge
   // ── ClaudeCliPort ─────────────────────────────────────────────────────────
 
   isAvailable(): Promise<boolean> {
-    const timeoutMs = 5000
-    const deadline = new Promise<boolean>((resolve) => {
-      activeWindow.setTimeout(() => { resolve(false) }, timeoutMs)
+    type ExecFn = (cmd: string, opts: { timeout: number }, cb: (err: Error | null) => void) => void
+    const { exec } = require('node:child_process') as { exec: ExecFn }
+    return new Promise<boolean>((resolve) => {
+      exec('claude --version', { timeout: 5000 }, (err) => { resolve(err === null) })
     })
-    const { exec } = require('node:child_process') as { exec: (cmd: string, cb: (err: Error | null) => void) => void }
-    const check = new Promise<boolean>((resolve) => {
-      exec('claude --version', (err) => { resolve(err === null) })
-    })
-    return Promise.race([check, deadline])
+  }
+
+  // ── CommunityPluginPort ───────────────────────────────────────────────────
+
+  isPluginEnabled(id: string): boolean {
+    const enabled = this._getEnabledPlugins()
+    return enabled?.has(id) ?? false
+  }
+
+  listEnabledPluginIds(): string[] {
+    const enabled = this._getEnabledPlugins()
+    return enabled !== null ? Array.from(enabled) : []
+  }
+
+  private _getEnabledPlugins(): Set<string> | null {
+    // app.plugins is not in Obsidian's public TypeScript types but is a stable
+    // runtime property present since Obsidian 0.9.x. enabledPlugins is a Set<string>
+    // at runtime (not a plain object). We access it via a typed interface to stay
+    // within the ESLint rules.
+    interface AppWithPlugins {
+      plugins?: {
+        enabledPlugins?: Set<string>
+      }
+    }
+    const appExt = this.app as unknown as AppWithPlugins
+    return appExt.plugins?.enabledPlugins ?? null
   }
 }

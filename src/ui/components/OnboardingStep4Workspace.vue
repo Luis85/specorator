@@ -19,7 +19,7 @@ const specsFolder = ref(props.initialSpecsFolder)
 const workspaceStatus = ref<WorkspaceStatus>('checking')
 const isInstalling = ref(false)
 const installOutcome = ref<'success' | 'failure' | null>(null)
-const folderEmpty = ref(false)
+const folderEmpty = ref(specsFolder.value.trim() === '')
 
 onMounted(async () => {
 	const folder = specsFolder.value.trim()

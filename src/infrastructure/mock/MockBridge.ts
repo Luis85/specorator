@@ -164,7 +164,7 @@ export class MockBridge
     this.settings = { ...settings }
   }
 
-  // ── Test helpers ─────────────────────────────────────────────────────────────
+  // ── Test helpers ──────────────────────────────────────────────────────────
 
   getNotices(): {
     severity: 'error' | 'warning' | 'success' | 'info'
@@ -186,7 +186,7 @@ export class MockBridge
     this.settings = { ...this.settings, ...partial }
   }
 
-  // ── LoggerPort ───────────────────────────────────────────────────────────────
+  // ── LoggerPort ────────────────────────────────────────────────────────────
 
   debug(message: string, context?: Record<string, unknown>): void {
     this.logEntries.push({ level: 'debug', message, context })
