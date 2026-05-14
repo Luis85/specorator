@@ -88,18 +88,11 @@
 <div id="root"></div>
 
 <!--
-  Static design-intent reference only.
-
-  The three local scripts below (tweaks-panel.jsx, sidepanel-components.jsx,
-  sidepanel-app.jsx) were NOT shipped with the design handoff and are
-  intentionally not committed to this repository. Opening this file in a
-  browser will therefore render the faux Obsidian editor backdrop and an
-  empty <div id="root"></div> — the interactive React mount is absent by
-  design.
-
-  This file is kept as the canonical visual reference for panel anatomy,
-  layout, and the design tokens applied via inline CSS. For runtime
-  behaviour, see specs/agent-sidepanel-mvp/design.md (Part B — UI).
+  Interactive design-intent mockup. Open this file in a browser to see
+  the panel running against a faux Obsidian editor backdrop. The three
+  scripts below provide the React mount; they sit alongside this file
+  in inputs/sidepanel-design-2026-05/. Babel-standalone transpiles the
+  JSX at load time — no build step required.
 -->
 <script type="text/babel" src="tweaks-panel.jsx"></script>
 <script type="text/babel" src="sidepanel-components.jsx"></script>
