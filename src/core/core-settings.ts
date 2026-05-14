@@ -49,6 +49,7 @@ export const coreSettingsModule = defineModule<PluginSettings>({
         : DEFAULT_SETTINGS.logLevel,
       mcpServerEnabled:
         typeof r.mcpServerEnabled === 'boolean' ? r.mcpServerEnabled : DEFAULT_SETTINGS.mcpServerEnabled,
+      anthropicApiKey: typeof r.anthropicApiKey === 'string' ? r.anthropicApiKey : DEFAULT_SETTINGS.anthropicApiKey,
     }
   },
 
