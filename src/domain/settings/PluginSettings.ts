@@ -20,6 +20,17 @@ export interface PluginSettings {
 	readonly mcpServerEnabled: boolean
 	readonly userPersona: string
 	readonly onboardingComplete: boolean
+	/**
+	 * Anthropic API key. Written to process.env.ANTHROPIC_API_KEY at plugin load time
+	 * and used solely to initialise ClaudeCliAdapter. Never written to any vault file.
+	 * Never logged. Stored in the plugin data blob (Obsidian's this.saveData()).
+	 *
+	 * Security note: Obsidian Sync will include this key if the user has Sync enabled.
+	 * A notice in the settings tab informs users of this (REQ-CCS-001, C.7).
+	 *
+	 * Satisfies REQ-CCS-001, REQ-CCS-002, NFR-CCS-005, NFR-CCS-006.
+	 */
+	readonly anthropicApiKey: string
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -34,4 +45,5 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	mcpServerEnabled: false,
 	userPersona: '',
 	onboardingComplete: false,
+	anthropicApiKey: '',
 }

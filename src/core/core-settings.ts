@@ -70,6 +70,7 @@ export const coreSettingsModule = defineModule<PluginSettings>({
         typeof r.onboardingComplete === 'boolean'
           ? r.onboardingComplete
           : DEFAULT_SETTINGS.onboardingComplete,
+      anthropicApiKey: typeof r.anthropicApiKey === 'string' ? r.anthropicApiKey : DEFAULT_SETTINGS.anthropicApiKey,
     }
   },
 
