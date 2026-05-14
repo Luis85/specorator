@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Specorator — Sidepanel Design Brief</title>
+  <link rel="stylesheet" href="tokens.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: var(--fs-body);
+      line-height: var(--leading-body);
+    }
+
+    /* ── Layout ── */
+    .page      { max-width: 900px; margin: 0 auto; padding: 64px var(--gutter-page) 120px; }
+    .two-col   { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    @media (max-width: 640px) { .two-col, .three-col { grid-template-columns: 1fr; } }
+
+    /* ── Section bands ── */
+    .band-ink  { background: var(--ink); color: var(--on-ink); }
+    .band-alt  { background: var(--surface-2); }
+    .band-green { background: var(--soft-green); }
+
+    /* ── Hero ── */
+    .hero { padding: 72px 0 56px; border-bottom: 1px solid var(--line); }
+    .hero-meta {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 20px;
+    }
+    .hero-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--soft-green); color: var(--accent-strong);
+      border: 1px solid var(--lane-define-soft); border-radius: 999px;
+      font-size: var(--fs-micro); font-weight: 800; letter-spacing: .08em;
+      text-transform: uppercase; padding: 3px 10px;
+    }
+    .hero-pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+    .hero-date { font-size: var(--fs-meta); color: var(--muted); }
+    .hero h1 { font-size: clamp(34px, 5vw, 56px); font-weight: 800; letter-spacing: -.02em; line-height: 1.05; margin-bottom: 16px; }
+    .hero h1 span { color: var(--accent); }
+    .hero-lead { font-size: var(--fs-body-lg); color: var(--muted); max-width: 580px; line-height: 1.6; }
+
+    /* ── Section headers ── */
+    .section { padding: 56px 0 0; }
+    .section + .section { border-top: 1px solid var(--line); margin-top: 56px; }
+    .eyebrow {
+      font-size: var(--fs-eyebrow); font-weight: 800; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--accent-strong);
+      margin-bottom: 10px;
+    }
+    .section-title { font-size: var(--fs-h3); font-weight: 800; margin-bottom: 8px; letter-spacing: -.01em; }
+    .section-lead { font-size: var(--fs-body-sm); color: var(--muted); margin-bottom: 28px; line-height: 1.6; max-width: 640px; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 12px; padding: 20px;
+    }
+    .card-title { font-size: var(--fs-caption); font-weight: 700; margin-bottom: 6px; }
+    .card-body  { font-size: var(--fs-meta); color: var(--muted); line-height: 1.6; }
+
+    .card-accent {
+      background: var(--soft-green); border-color: var(--lane-define-soft);
+    }
+    .card-accent .card-title { color: var(--accent-strong); }
+
+    .card-ink {
+      background: var(--ink); border-color: transparent;
+      color: var(--on-ink);
+    }
+    .card-ink .card-title { color: var(--on-ink); }
+    .card-ink .card-body  { color: var(--on-ink-mute); }
+
+    /* ── Principle cards ── */
+    .principle {
+      display: flex; gap: 14px; align-items: flex-start;
+      padding: 16px 18px; border-radius: 10px;
+      background: var(--surface); border: 1px solid var(--line);
+    }
+    .principle-num {
+      width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+      background: var(--soft-green); border: 1px solid var(--lane-define-soft);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 800; color: var(--accent-strong);
+    }
+    .principle h4 { font-size: var(--fs-caption); font-weight: 700; margin-bottom: 3px; }
+    .principle p  { font-size: var(--fs-meta); color: var(--muted); line-height: 1.55; }
+
+    /* ── Panel mockup ── */
+    .panel-wrap {
+      background: #11121e; border-radius: 12px; padding: 2px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.35); overflow: hidden;
+    }
+    .panel {
+      width: 100%; background: #1e1e2e;
+      font-family: var(--font-sans); font-size: 12px; color: #c9d1d9;
+      border-radius: 10px; overflow: hidden;
+    }
+    .p-header { background: #16161f; padding: 8px 12px 7px; }
+    .p-row    { display: flex; align-items: center; gap: 7px; height: 38px; }
+    .p-avatar { width: 20px; height: 20px; border-radius: 5px; background: rgba(149,128,248,.2); border: 1px solid rgba(149,128,248,.4); display: flex; align-items: center; justify-content: center; font-size: 7px; font-weight: 800; color: #9580f8; flex-shrink: 0; font-family: var(--font-mono); }
+    .p-name   { font-size: 11px; font-weight: 700; color: #c9d1d9; }
+    .p-type   { font-size: 8px; color: #72729a; }
+    .p-dot    { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; flex-shrink: 0; }
+    .p-status { font-size: 9px; color: #72729a; }
+    .p-btn    { margin-left: auto; font-size: 8px; color: #72729a; border: 1px solid #38385a; border-radius: 3px; padding: 1px 5px; display: flex; align-items: center; gap: 2px; }
+    .p-hint   { font-size: 8px; color: #72729a; padding-bottom: 6px; display: flex; gap: 4px; }
+    .p-hint-accent { color: #9580f8; font-weight: 500; }
+    .p-tabs   { display: flex; border-bottom: 1px solid #38385a; }
+    .p-tab    { padding: 6px 12px; font-size: 10px; color: #72729a; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .p-tab.on { color: #9580f8; font-weight: 600; border-bottom-color: #9580f8; }
+    .p-msgs   { padding: 8px 0; display: flex; flex-direction: column; gap: 5px; }
+    .p-agent-msg { display: flex; gap: 6px; padding: 0 10px; }
+    .p-agent-av  { width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg, #9580f8, #9580f8aa); color: #fff; font-size: 8px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .p-bubble { background: #252535; border: 1px solid #38385a; border-radius: 2px 10px 10px 10px; padding: 6px 8px; font-size: 10px; line-height: 1.5; color: #c9d1d9; flex: 1; }
+    .p-user-msg { display: flex; justify-content: flex-end; padding: 0 10px; }
+    .p-user-bubble { background: #3d2f6e; color: #e0d8ff; border-radius: 10px 10px 2px 10px; padding: 5px 8px; font-size: 10px; max-width: 75%; line-height: 1.4; }
+    .p-input-wrap { margin: 6px 10px 10px; background: #252535; border: 1px solid #38385a; border-radius: 8px; overflow: hidden; }
+    .p-input-field { padding: 7px 10px 3px; font-size: 9px; color: #72729a; }
+    .p-input-bar { display: flex; align-items: center; gap: 5px; padding: 0 6px 6px; }
+    .p-attach { font-size: 8px; color: #72729a; border: 1px solid #38385a; border-radius: 3px; padding: 1px 5px; }
+    .p-at-hint { font-size: 8px; color: #72729a; }
+    .p-at-code { color: #9580f8; font-family: var(--font-mono); }
+    .p-send { margin-left: auto; width: 20px; height: 20px; background: #9580f8; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #fff; }
+
+    /* ── Interaction diagram ── */
+    .flow { display: flex; align-items: flex-start; gap: 0; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+    .flow-step {
+      flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 0;
+    }
+    .flow-node {
+      width: 100px; min-height: 52px; border-radius: 8px; padding: 8px 10px;
+      background: var(--surface); border: 1px solid var(--line);
+      font-size: 11px; font-weight: 600; text-align: center; line-height: 1.4;
+    }
+    .flow-node.accent { background: var(--soft-green); border-color: var(--lane-define-soft); color: var(--accent-strong); }
+    .flow-node.dark { background: var(--ink); color: var(--on-ink); border-color: transparent; }
+    .flow-arrow {
+      width: 28px; height: 52px; display: flex; align-items: center; justify-content: center;
+      font-size: 14px; color: var(--muted); flex-shrink: 0;
+    }
+
+    /* ── Decision table ── */
+    .decision-table { width: 100%; border-collapse: collapse; font-size: var(--fs-meta); }
+    .decision-table th {
+      text-align: left; font-weight: 700; font-size: var(--fs-eyebrow);
+      letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+      padding: 8px 12px; border-bottom: 2px solid var(--line);
+    }
+    .decision-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .decision-table tr:last-child td { border-bottom: none; }
+    .decision-table .d-id { color: var(--accent-strong); font-family: var(--font-mono); font-weight: 600; white-space: nowrap; }
+    .decision-table .d-title { font-weight: 600; }
+    .decision-table .d-body { color: var(--muted); line-height: 1.5; }
+
+    /* ── OQ table ── */
+    .oq-item { display: flex; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); align-items: flex-start; }
+    .oq-item:last-child { border-bottom: none; }
+    .oq-id { font-family: var(--font-mono); font-size: var(--fs-meta); font-weight: 700; color: var(--accent-strong); white-space: nowrap; min-width: 44px; padding-top: 1px; }
+    .oq-content { flex: 1; }
+    .oq-q { font-weight: 600; font-size: var(--fs-caption); margin-bottom: 4px; }
+    .oq-a { font-size: var(--fs-meta); color: var(--muted); line-height: 1.5; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; font-size: 10px; font-weight: 700; padding: 2px 8px; }
+    .badge-resolved   { background: var(--soft-green); color: var(--accent-strong); border: 1px solid var(--lane-define-soft); }
+    .badge-open       { background: var(--soft-yellow); color: #7a5a00; border: 1px solid #f9e3a0; }
+    .badge-deferred   { background: var(--surface-3); color: var(--muted); border: 1px solid var(--line); }
+
+    /* ── Scope table ── */
+    .scope-grid { display: flex; flex-direction: column; gap: 3px; }
+    .scope-row  { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 7px; font-size: var(--fs-meta); }
+    .scope-row.in  { background: var(--soft-green); }
+    .scope-row.out { background: var(--surface-3); }
+    .scope-icon { width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+    .scope-icon.in  { background: var(--accent); color: #fff; }
+    .scope-icon.out { background: var(--line); color: var(--muted); }
+    .scope-label { font-weight: 500; flex: 1; }
+    .scope-row.in  .scope-label { color: var(--accent-strong); }
+    .scope-row.out .scope-label { color: var(--muted); }
+    .scope-tag { font-size: 10px; color: var(--muted); font-style: italic; }
+
+    /* ── Autonomy levels ── */
+    .autonomy-level { padding: 14px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); }
+    .autonomy-level h4 { font-size: var(--fs-caption); font-weight: 700; margin-bottom: 3px; }
+    .autonomy-level p  { font-size: var(--fs-meta); color: var(--muted); line-height: 1.5; }
+    .autonomy-level.active { background: var(--soft-green); border-color: var(--lane-define-soft); }
+    .autonomy-level.active h4 { color: var(--accent-strong); }
+
+    /* ── Next steps ── */
+    .next-item { display: flex; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+    .next-item:last-child { border-bottom: none; }
+    .next-num { width: 24px; height: 24px; border-radius: 6px; background: var(--ink); color: var(--on-ink); font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .next-content h4 { font-size: var(--fs-caption); font-weight: 700; margin-bottom: 4px; }
+    .next-content p  { font-size: var(--fs-meta); color: var(--muted); line-height: 1.55; }
+
+    /* ── Highlighter callout ── */
+    .hl-box {
+      background: var(--highlighter); color: var(--ink); border-radius: 10px;
+      padding: 20px 22px; margin: 28px 0;
+    }
+    .hl-box h3 { font-size: var(--fs-h3-sm); font-weight: 800; margin-bottom: 6px; letter-spacing: -.01em; }
+    .hl-box p  { font-size: var(--fs-body-sm); line-height: 1.6; color: rgba(23,32,27,.75); }
+
+    /* ── Footer ── */
+    .brief-footer {
+      margin-top: 80px; padding-top: 24px;
+      border-top: 1px solid var(--line);
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: var(--fs-meta); color: var(--muted);
+    }
+    .brief-footer .brand { font-weight: 800; color: var(--ink); letter-spacing: -.01em; }
+
+    /* ── Util ── */
+    .mt-16 { margin-top: 16px; }
+    .mt-24 { margin-top: 24px; }
+    .mt-32 { margin-top: 32px; }
+    strong { font-weight: 600; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── Hero ── -->
+  <div class="hero">
+    <div class="hero-meta">
+      <span class="hero-pill">MVP · Increment 1</span>
+      <span class="hero-date">May 2026</span>
+    </div>
+    <h1>Specorator<br><span>Agent Sidepanel</span></h1>
+    <p class="hero-lead">A Cursor-like AI writing assistant embedded in Obsidian's right sidebar — scoped to software spec writing, with trust-first design at every step.</p>
+  </div>
+
+  <!-- ── Highlighter callout ── -->
+  <div class="hl-box">
+    <h3>User Goal · Increment 1</h3>
+    <p>Have an AI chat available inside Obsidian on which I can pull files from my vault as context, ask questions, and get answers grounded in my actual notes.</p>
+  </div>
+
+  <!-- ── Principles ── -->
+  <div class="section">
+    <div class="eyebrow">Design Principles</div>
+    <h2 class="section-title">How the agent is designed to behave</h2>
+    <p class="section-lead">Three principles that govern every interaction pattern and UI decision.</p>
+    <div class="three-col">
+      <div class="principle">
+        <div class="principle-num">1</div>
+        <div>
+          <h4>Trust-first</h4>
+          <p>The agent confirms before every file write, commit, or PR. Nothing happens without explicit user approval.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="principle-num">2</div>
+        <div>
+          <h4>Transparent</h4>
+          <p>Streaming step logs show exactly what the agent is doing. No black-box generation.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="principle-num">3</div>
+        <div>
+          <h4>Scoped</h4>
+          <p>The agent is focused on one feature at a time. Context is explicit and user-controlled.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Panel Anatomy ── -->
+  <div class="section">
+    <div class="eyebrow">Panel Anatomy</div>
+    <h2 class="section-title">What the panel contains</h2>
+    <p class="section-lead">The sidepanel lives in Obsidian's right sidebar at 320px width. It is always visible, never occluding the editor.</p>
+    <div class="two-col" style="align-items: start;">
+      <div>
+        <div class="panel-wrap">
+          <div class="panel">
+            <div class="p-header">
+              <div class="p-row">
+                <div class="p-avatar">SW</div>
+                <div>
+                  <div class="p-name">Spec Writer</div>
+                  <div class="p-type">Writing assistant</div>
+                </div>
+                <div class="p-dot"></div>
+                <div class="p-status">Ready</div>
+                <div class="p-btn">⚙ Settings</div>
+              </div>
+              <div class="p-hint">
+                <span>Confirms before:</span>
+                <span class="p-hint-accent">file writes · commits · PRs</span>
+              </div>
+            </div>
+            <div class="p-tabs">
+              <div class="p-tab on">Chat</div>
+              <div class="p-tab">Context <span style="font-size:8px;background:rgba(149,128,248,.15);color:#9580f8;border-radius:6px;padding:0 4px;margin-left:2px;">2</span></div>
+            </div>
+            <div class="p-msgs">
+              <div class="p-agent-msg">
+                <div class="p-agent-av">S</div>
+                <div class="p-bubble">Based on <strong>agent-panel-spec.md</strong> and <strong>architecture-notes.md</strong>: the spec describes a trust-first AI panel. Want me to draft a PRD?</div>
+              </div>
+              <div class="p-user-msg">
+                <div class="p-user-bubble">Yes, draft the PRD</div>
+              </div>
+            </div>
+            <div class="p-input-wrap">
+              <div class="p-input-field">Message Specorator…</div>
+              <div class="p-input-bar">
+                <div class="p-attach">↓ Attach</div>
+                <div class="p-at-hint">or <span class="p-at-code">@file</span></div>
+                <div class="p-send">↑</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card">
+          <div class="card-title">① Header</div>
+          <div class="card-body">Agent name · type · status dot · Settings button · Autonomy hint showing confirmation scope.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">② Tab bar</div>
+          <div class="card-body">Chat and Context tabs. The Context tab shows a live badge counting files in context.</div>
+        </div>
+        <div class="card card-accent">
+          <div class="card-title">③ Chat thread</div>
+          <div class="card-body">User + agent messages. Agent responses render Markdown — bold, lists, inline code. File cards appear inline when context is added.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">④ Unified input</div>
+          <div class="card-body">Textarea + action bar in one rounded container. Attach button · @file hint · send (↑). Border highlights on @-mention.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">⑤ Context tab</div>
+          <div class="card-body">Active files list with space pressure bar. Vault browser below with folder filter applied from Settings.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Key Interactions ── -->
+  <div class="section">
+    <div class="eyebrow">Key Interactions</div>
+    <h2 class="section-title">How users add context</h2>
+    <p class="section-lead">Two primary paths for adding vault files as context. Both are keyboard-first and non-disruptive.</p>
+
+    <div class="two-col mt-16">
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px;">Path A — @-mention</div>
+        <div class="flow">
+          <div class="flow-step"><div class="flow-node accent">Type @</div></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-node">Popup appears,<br>filters live</div></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-node accent">↵ or click<br>to add</div></div>
+        </div>
+        <div class="card-body mt-16">Keyboard-navigable (↑↓ · ↵ · ⎋). Popup stays open while typing; textarea never loses focus. Filtered by enabled folders from Settings.</div>
+      </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px;">Path B — Attach button</div>
+        <div class="flow">
+          <div class="flow-step"><div class="flow-node accent">↓ Attach</div></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-node">Vault browser<br>with search</div></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-node accent">+ button<br>to add</div></div>
+        </div>
+        <div class="card-body mt-16">Floating picker above the input. Searchable tree grouped by folder. Can add multiple files before closing. Respects folder filters from Settings.</div>
+      </div>
+    </div>
+
+    <div class="mt-24">
+      <div class="card">
+        <div class="card-title" style="margin-bottom:8px;">When a file is added</div>
+        <div class="card-body">A <strong>file card</strong> appears inline in the chat thread as a record of what was loaded. The file is now part of the active context — all subsequent messages can reference it. Remove via ✕ on the card, the Context tab, or the context strip.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Settings ── -->
+  <div class="section">
+    <div class="eyebrow">Settings</div>
+    <h2 class="section-title">What users can configure</h2>
+    <p class="section-lead">Settings persist to localStorage. Two sections: Autonomy (how often the agent asks for approval) and Vault Browser (which folders are visible).</p>
+
+    <div class="two-col mt-16">
+      <div>
+        <div class="section-title" style="font-size:16px;margin-bottom:14px;">Autonomy level</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div class="autonomy-level">
+            <h4>Supervised</h4>
+            <p>Confirms before every action — writes, commits, reads, generation triggers.</p>
+          </div>
+          <div class="autonomy-level active">
+            <h4>Assisted <span style="font-size:10px;font-weight:600;color:var(--accent);">← default</span></h4>
+            <p>Confirms before file writes, commits, and PRs. Reads and searches run silently.</p>
+          </div>
+          <div class="autonomy-level">
+            <h4>Autonomous</h4>
+            <p>Acts without asking. Header hint updates to "Running without confirmation."</p>
+          </div>
+        </div>
+        <p style="font-size:var(--fs-meta);color:var(--muted);margin-top:10px;line-height:1.5;">OQ-3 resolved: Autonomy is a single global dial, not per-action. Simplifies the mental model.</p>
+      </div>
+      <div>
+        <div class="section-title" style="font-size:16px;margin-bottom:14px;">Vault browser filter</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+              <div class="card-title">Projects/specorator</div>
+              <span style="font-size:10px;color:var(--accent);font-weight:700;">ON</span>
+            </div>
+            <div class="card-body">3 files · core spec notes</div>
+          </div>
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+              <div class="card-title">Notes</div>
+              <span style="font-size:10px;color:var(--accent);font-weight:700;">ON</span>
+            </div>
+            <div class="card-body">3 files · meetings, decisions log</div>
+          </div>
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+              <div class="card-title">References</div>
+              <span style="font-size:10px;color:var(--muted);font-weight:700;">OFF</span>
+            </div>
+            <div class="card-body">2 files · disabled to reduce noise</div>
+          </div>
+        </div>
+        <p style="font-size:var(--fs-meta);color:var(--muted);margin-top:10px;line-height:1.5;">Disabled folders disappear from @ search, Attach picker, and Context tab vault browser. Files already in context are unaffected.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Scope ── -->
+  <div class="section">
+    <div class="eyebrow">Increment Scope</div>
+    <h2 class="section-title">What's in and out</h2>
+    <p class="section-lead">Increment 1 is intentionally narrow — the user goal is AI chat with vault context. Everything else is deferred.</p>
+
+    <div class="two-col mt-16">
+      <div>
+        <div class="section-title" style="font-size:14px;color:var(--accent-strong);margin-bottom:12px;">✓ In scope</div>
+        <div class="scope-grid">
+          <div class="scope-row in"><div class="scope-icon in">✓</div><div class="scope-label">AI chat with simulated streaming</div></div>
+          <div class="scope-row in"><div class="scope-icon in">✓</div><div class="scope-label">@ mention context picker</div></div>
+          <div class="scope-row in"><div class="scope-icon in">✓</div><div class="scope-label">Attach button + vault browser</div></div>
+          <div class="scope-row in"><div class="scope-icon in">✓</div><div class="scope-label">Context tab with pressure bar</div></div>
+          <div class="scope-row in"><div class="scope-icon in">✓</div><div class="scope-label">Settings: autonomy + folder filter</div></div>
+          <div class="scope-row in"><div class="scope-icon in">✓</div><div class="scope-label">Markdown rendering in messages</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="section-title" style="font-size:14px;color:var(--muted);margin-bottom:12px;">⊘ Deferred</div>
+        <div class="scope-grid">
+          <div class="scope-row out"><div class="scope-icon out">−</div><div class="scope-label">Stage tracker</div><span class="scope-tag">Increment 2</span></div>
+          <div class="scope-row out"><div class="scope-icon out">−</div><div class="scope-label">Streaming step log</div><span class="scope-tag">Increment 2</span></div>
+          <div class="scope-row out"><div class="scope-icon out">−</div><div class="scope-label">Tasks tab</div><span class="scope-tag">Increment 3</span></div>
+          <div class="scope-row out"><div class="scope-icon out">−</div><div class="scope-label">Session tab + undo window</div><span class="scope-tag">Increment 3</span></div>
+          <div class="scope-row out"><div class="scope-icon out">−</div><div class="scope-label">Approval / PR flows</div><span class="scope-tag">Increment 3</span></div>
+          <div class="scope-row out"><div class="scope-icon out">−</div><div class="scope-label">Slash command palette</div><span class="scope-tag">Increment 4</span></div>
+          <div class="scope-row out"><div class="scope-icon out">−</div><div class="scope-label">Real Claude API integration</div><span class="scope-tag">Engineering</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Design Decisions ── -->
+  <div class="section">
+    <div class="eyebrow">Design Decisions</div>
+    <h2 class="section-title">Key choices and rationale</h2>
+    <p class="section-lead">Decisions made during this increment, captured for the engineering handoff.</p>
+    <table class="decision-table mt-16">
+      <thead>
+        <tr>
+          <th style="width:60px;">ID</th>
+          <th style="width:180px;">Decision</th>
+          <th>Rationale</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="d-id">D-01</td>
+          <td class="d-title">Right sidebar, always visible</td>
+          <td class="d-body">Never occludes the editor. Obsidian convention. Agent is a persistent co-pilot, not a modal interruption.</td>
+        </tr>
+        <tr>
+          <td class="d-id">D-02</td>
+          <td class="d-title">Chat tab + Context tab only (MVP)</td>
+          <td class="d-body">Cleanest surface for increment 1. Tasks and Session add complexity only justified once the core chat loop is validated.</td>
+        </tr>
+        <tr>
+          <td class="d-id">D-03</td>
+          <td class="d-title">Unified input container</td>
+          <td class="d-body">Textarea and action bar (Attach · @file · send) live inside a single rounded container, matching Claude.ai's pattern. Reduces visual noise vs. separate toolbar row.</td>
+        </tr>
+        <tr>
+          <td class="d-id">D-04</td>
+          <td class="d-title">onMouseDown (not onClick) for popups</td>
+          <td class="d-body">Prevents textarea blur when user clicks @-mention results. Standard autocomplete pattern — textarea stays focused throughout selection.</td>
+        </tr>
+        <tr>
+          <td class="d-id">D-05</td>
+          <td class="d-title">File cards in chat thread</td>
+          <td class="d-body">When a file is added to context, a card appears inline in the conversation. Creates an audit trail of what context was loaded and when.</td>
+        </tr>
+        <tr>
+          <td class="d-id">D-06</td>
+          <td class="d-title">Global autonomy dial</td>
+          <td class="d-body">OQ-3 resolved. Single global setting is simpler than per-action toggles. Power users can switch to Autonomous; cautious users stay Supervised. Assisted is the safe default.</td>
+        </tr>
+        <tr>
+          <td class="d-id">D-07</td>
+          <td class="d-title">Vault folder filter in Settings</td>
+          <td class="d-body">Large vaults create noise in @ search and vault browser. Filter reduces cognitive load. Files already in context are not affected by toggling folders off.</td>
+        </tr>
+        <tr>
+          <td class="d-id">D-08</td>
+          <td class="d-title">Markdown rendering in agent messages</td>
+          <td class="d-body">Agent responses reference file names, use numbered lists for next steps, and inline code for slash commands. Rendering these makes responses scannable.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Open Questions ── -->
+  <div class="section">
+    <div class="eyebrow">Open Questions</div>
+    <h2 class="section-title">Outstanding decisions</h2>
+    <p class="section-lead">Status of all OQs raised during design.</p>
+    <div class="mt-16">
+      <div class="oq-item">
+        <div class="oq-id">OQ-1</div>
+        <div class="oq-content">
+          <div class="oq-q">Should the agent auto-detect feature scope from the active Obsidian file?</div>
+          <div class="oq-a" style="margin-bottom:6px;">Yes — the agent should read the currently open note and infer the feature context automatically. No manual scope selection needed.</div>
+          <span class="badge badge-resolved">✓ Resolved</span>
+        </div>
+      </div>
+      <div class="oq-item">
+        <div class="oq-id">OQ-2</div>
+        <div class="oq-content">
+          <div class="oq-q">How do we handle context drift across long sessions?</div>
+          <div class="oq-a" style="margin-bottom:6px;">Proposal needed. Candidates: (a) session-scoped context that resets on panel reopen, (b) persistent context with a staleness indicator, (c) explicit "new session" action that clears context. This will be designed in the Session increment.</div>
+          <span class="badge badge-open">Proposal needed</span>
+        </div>
+      </div>
+      <div class="oq-item">
+        <div class="oq-id">OQ-3</div>
+        <div class="oq-content">
+          <div class="oq-q">Autonomy dial — per-action granularity or single global setting?</div>
+          <div class="oq-a" style="margin-bottom:6px;">Global. Three levels: Supervised · Assisted · Autonomous. Simpler mental model. Per-action granularity can be added later if needed.</div>
+          <span class="badge badge-resolved">✓ Resolved</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Next increments ── -->
+  <div class="section">
+    <div class="eyebrow">Next Steps</div>
+    <h2 class="section-title">Increment roadmap</h2>
+    <p class="section-lead">What follows this increment, in priority order.</p>
+    <div class="mt-16">
+      <div class="next-item">
+        <div class="next-num">2</div>
+        <div class="next-content">
+          <h4>Generation + streaming step log</h4>
+          <p>Real Claude API integration. Streaming step log (pending → active → done rows) replaces the typing indicator for multi-step generation. Redirect and Stop controls. Intent preview card before vault writes.</p>
+        </div>
+      </div>
+      <div class="next-item">
+        <div class="next-num">3</div>
+        <div class="next-content">
+          <h4>Tasks + Session tabs</h4>
+          <p>Background task queue with dependency tracking. Session timeline with undo window. Export session summary to vault. Context drift strategy (OQ-2) designed here.</p>
+        </div>
+      </div>
+      <div class="next-item">
+        <div class="next-num">4</div>
+        <div class="next-content">
+          <h4>Slash command palette + approval flows</h4>
+          <p>/gen-prd · /gen-issue · /review · /triage etc. Approval card for vault writes and commits. PR lifecycle card (Draft → Review requested → Merged).</p>
+        </div>
+      </div>
+      <div class="next-item">
+        <div class="next-num">5</div>
+        <div class="next-content">
+          <h4>Stage tracker + lifecycle gate</h4>
+          <p>Init → Spec → Review → PR → Done tracker. Gate review with pass/fail criteria. Stage-aware hint cards. Auto-advance on PRD approval.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Footer ── -->
+  <div class="brief-footer">
+    <span class="brand">Specorator</span>
+    <span>Agent Sidepanel · Design Brief · v1 · May 2026</span>
+  </div>
+
+</div>
+</body>
+</html>

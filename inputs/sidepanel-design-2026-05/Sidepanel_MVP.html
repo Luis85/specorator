@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Specorator — Sidepanel MVP</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script>
+    var TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{ "accentColor": "#9580f8" }/*EDITMODE-END*/;
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100vh; overflow: hidden; display: flex; background: #0f1018; }
+
+    /* Fake Obsidian editor backdrop */
+    #editor-bg {
+      flex: 1; background: #13141f; padding: 40px 48px;
+      overflow: hidden; pointer-events: none; user-select: none;
+      border-right: 1px solid #1e1e2e;
+    }
+    #editor-bg .editor-content {
+      font-family: 'JetBrains Mono', monospace; font-size: 13px;
+      line-height: 1.9; color: #2a2a48;
+    }
+    #editor-bg .h1       { color: #3d3d62; font-size: 17px; font-weight: 700; margin-bottom: 4px; letter-spacing: -0.3px; }
+    #editor-bg .meta     { color: #26263a; font-size: 11px; margin-bottom: 20px; letter-spacing: 0.2px; }
+    #editor-bg .h2       { color: #32325a; font-size: 13px; font-weight: 700; margin-bottom: 5px; margin-top: 18px; }
+    #editor-bg .body     { color: #2c2c48; margin-bottom: 1px; }
+    #editor-bg .dim      { color: #20203a; margin-bottom: 2px; }
+    #editor-bg .hl       { color: #3a3a60; font-weight: 600; }
+    #editor-bg .resolved   { color: #1e4a30; font-style: italic; }
+    #editor-bg .unresolved { color: #3a2e1a; font-style: italic; }
+
+    /* Sidepanel */
+    #root { width: 320px; flex-shrink: 0; height: 100vh; }
+
+    /* Global keyframes */
+    @keyframes blink    { 0%,100%{opacity:1} 50%{opacity:0} }
+    @keyframes fadein   { from{opacity:0;transform:translateY(3px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes dotpulse { 0%,80%,100%{transform:scale(0.5);opacity:0.3} 40%{transform:scale(1);opacity:1} }
+
+    ::-webkit-scrollbar       { width: 3px; height: 3px; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+
+    textarea::placeholder { color: #72729a; }
+    input::placeholder    { color: #72729a; }
+    button { font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif; }
+  </style>
+</head>
+<body>
+
+<!-- Fake editor — design brief -->
+<div id="editor-bg">
+  <div class="editor-content">
+    <div class="h1"># Specorator — Agent Panel</div>
+    <div class="meta">Design Brief · v1 · May 2026 · Status: In progress</div>
+
+    <div class="h2">## Problem</div>
+    <div class="body">Builders writing software specs switch constantly between their notes,</div>
+    <div class="body">code, and AI tools. There is no single surface that holds the full</div>
+    <div class="body">context of a feature — from idea to merged PR.</div>
+
+    <div class="h2">## User Goal</div>
+    <div class="body">A Cursor-like AI workflow, native inside Obsidian — scoped to spec</div>
+    <div class="body">writing, with human approval gates before any vault write or commit.</div>
+
+    <div class="h2">## Design Principles</div>
+    <div class="body">1. <span class="hl">Trust-first</span> — confirm before every file write, commit, or PR</div>
+    <div class="body">2. <span class="hl">Transparent</span> — streaming step log shows exactly what the agent is doing</div>
+    <div class="body">3. <span class="hl">Scoped</span> — agent is focused on one feature at a time</div>
+
+    <div class="h2">## Scope · Increment 1</div>
+    <div class="body">→ AI chat with vault file context (@ and Attach)</div>
+    <div class="body">→ Context tab: add, remove, browse vault files</div>
+    <div class="body dim">↳ Streaming step log, Tasks, Session — deferred</div>
+
+    <div class="h2">## Open Questions</div>
+    <div class="dim">OQ-1 · Should the agent auto-detect feature scope? <span class="resolved">→ Yes ✓</span></div>
+    <div class="dim">OQ-2 · How do we handle context drift across sessions? <span class="unresolved">→ Proposal needed</span></div>
+    <div class="dim">OQ-3 · Autonomy dial — per-action or global? <span class="resolved">→ Global ✓</span></div>
+  </div>
+</div>
+
+<div id="root"></div>
+
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="sidepanel-components.jsx"></script>
+<script type="text/babel" src="sidepanel-app.jsx"></script>
+</body>
+</html>
