@@ -6,15 +6,19 @@
  *  - WorkflowStateSnapshot — minimal frontmatter projection (REQ-ASM-012)
  *  - loadWorkflowStateSnapshot — reads + parses `workflow-state.md` via VaultPort;
  *      never throws; warns once on any failure (REQ-ASM-012, REQ-ASM-015)
+ *  - assembleSystemPrompt — pure; builds the stage preamble forwarded to the
+ *      CLI via `--append-system-prompt` (T-ASM-030; REQ-ASM-013, REQ-ASM-014,
+ *      REQ-ASM-016, REQ-ASM-018, REQ-ASM-019, REQ-ASM-020).
  *
- * Satisfies T-ASM-026 (REQ-ASM-011, REQ-ASM-012, REQ-ASM-015).
- * Spec: specs/agent-sidepanel-mvp/spec.md §6.2.
+ * Satisfies T-ASM-026 + T-ASM-030.
+ * Spec: specs/agent-sidepanel-mvp/spec.md §3.2 + §6.2.
  */
 import type { VaultPort } from '@/domain/ports/VaultPort'
 import type { LoggerPort } from '@/domain/ports/LoggerPort'
 import { FEATURE_STEPS } from '@/domain/feature/FeatureStep'
 import { parseWorkflowStateFrontmatter } from '@/infrastructure/workflow-state/WorkflowStateDocument'
 import { tryAsync } from '@/domain/shared/tryAsync'
+import type { StagePromptMap } from '@/application/chat/stagePromptMap'
 
 /**
  * Minimal projection of `workflow-state.md` consumed by `assembleSystemPrompt`.
@@ -113,6 +117,56 @@ export async function loadWorkflowStateSnapshot(
   }
 
   return { feature: slug, stage, status }
+}
+
+/**
+ * Default upper bound on the assembled preamble length (REQ-ASM-020). The cap
+ * protects the CLI subprocess argv from accidentally ballooning when a stage
+ * description grows beyond expectations.
+ */
+const DEFAULT_MAX_CHARS = 2_000
+
+/**
+ * Builds the stage-aware preamble forwarded to the CLI via
+ * `--append-system-prompt` (REQ-ASM-013). Pure — no I/O, no caching, no
+ * dependency on `VaultPort` or `LoggerPort`. Recomputed on every send so a
+ * stage change between sends is reflected without invalidation (REQ-ASM-019).
+ *
+ * Algorithm (spec §3.2 steps 1–7):
+ *  1. `snapshot === null` → return `''` (REQ-ASM-014; caller omits the argv
+ *     flag entirely when the result is empty).
+ *  2. `descriptor = stageMap.get(snapshot.stage)`.
+ *  3. `descriptor === null` → return `''` (unknown stage; REQ-ASM-015
+ *     graceful fallback).
+ *  4. Compose the body from `feature` + `displayName` + `oneLineDescription`.
+ *     Reads only those three fields — no other snapshot or workflow-state
+ *     content reaches the body (REQ-ASM-016).
+ *  5. If `body.length <= maxChars` → return `body`.
+ *  6. Sentence-boundary trim: `body.lastIndexOf('. ', maxChars - 1)`. If a
+ *     boundary exists → slice up to and including the period.
+ *  7. Otherwise → hard slice at `maxChars` (REQ-ASM-020).
+ */
+export function assembleSystemPrompt(
+  snapshot: WorkflowStateSnapshot | null,
+  stageMap: StagePromptMap,
+  options?: { readonly maxChars?: number },
+): string {
+  if (snapshot === null) return ''
+
+  const descriptor = stageMap.get(snapshot.stage)
+  if (descriptor === null) return ''
+
+  const body =
+    `You are assisting with feature "${snapshot.feature}" at the ` +
+    `"${descriptor.displayName}" stage.\n${descriptor.oneLineDescription}`
+
+  const maxChars = options?.maxChars ?? DEFAULT_MAX_CHARS
+  if (body.length <= maxChars) return body
+
+  const boundary = body.lastIndexOf('. ', maxChars - 1)
+  if (boundary >= 0) return body.slice(0, boundary + 1)
+
+  return body.slice(0, maxChars)
 }
 
 /**
