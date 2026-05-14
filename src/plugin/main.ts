@@ -1,14 +1,24 @@
 import { Plugin, TFolder } from 'obsidian'
+// SPEC-ASM-001 §9.1 — `child_process.spawn` is imported statically at the top
+// of this file so the subscription adapter's constructor in `onload()` has no
+// dynamic-import sites. The ESLint guard for unbundled `child_process` is
+// satisfied because this is the plugin entry, which always runs in Electron.
+import { spawn } from 'node:child_process'
+import * as os from 'node:os'
 import { SpecoratorView, VIEW_TYPE } from './SpecoratorView'
 import { SpecoratorSettingTab } from './settings'
 import { promoteLegacyFlatSettings } from './loadSettings-migrate'
 import { ensureLeafLoaded } from './leafLoader'
+import { selectTransport } from './transport/TransportSelector'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
 import { ObsidianMetadataCacheAdapter } from '@/infrastructure/obsidian/ObsidianMetadataCacheAdapter'
 import { ObsidianCanvasAdapter } from '@/infrastructure/obsidian/ObsidianCanvasAdapter'
 import { ClaudeCliAdapter } from '@/infrastructure/obsidian/ClaudeCliAdapter'
+import { ClaudeSubprocessAdapter, type SpawnFn } from '@/infrastructure/obsidian/ClaudeSubprocessAdapter'
+import { ClaudeBinaryResolver, type SpawnFn as ResolverSpawnFn } from '@/infrastructure/obsidian/ClaudeBinaryResolver'
+import { degradedClaudeCliPort } from '@/infrastructure/bridge/degradedClaudeCliPort'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { PluginCore } from '@/core/plugin-core'
 import { ALL_MODULES, type ModuleDescriptor } from '@/modules'
@@ -25,6 +35,12 @@ export default class SpecoratorPlugin extends Plugin {
   private _storedData: Record<string, unknown> = {}
   /** ClaudeCliAdapter instance — created in onload(), destroyed in onunload(). */
   private _claudeCliAdapter: ClaudeCliAdapter | null = null
+  /**
+   * Subscription-transport adapter — created in onload(), shut down in
+   * onunload() via `this.register(() => adapter.shutdown())`.
+   * Satisfies SPEC-ASM-001 §9.1.
+   */
+  private _subscriptionAdapter: ClaudeSubprocessAdapter | null = null
   /** SpecoratorView instance — set when the registered view factory runs. */
   private _specoratorView: SpecoratorView | null = null
 
@@ -76,8 +92,51 @@ export default class SpecoratorPlugin extends Plugin {
     )
     this.register(() => { this._claudeCliAdapter?.shutdown() })
 
+    // T-ASM-020 / SPEC-ASM-001 §9.1 — subscription-transport adapter. The
+    // `resolveCliPath` closure constructs a fresh `ClaudeBinaryResolver` per
+    // call so PATH changes between Settings-tab "Autodetect" clicks are
+    // honoured (T-ASM-009 design note). The static `spawn` import above keeps
+    // this constructor call free of dynamic-import sites.
+    const resolverPlatform: 'darwin' | 'linux' | 'win32' =
+      os.platform() === 'win32' ? 'win32' : os.platform() === 'darwin' ? 'darwin' : 'linux'
+    // Wrap the imported `spawn` in a typed lambda so TS picks the
+    // `(command, args, options?) => ChildProcess` overload that matches the
+    // adapter's `SpawnFn` signature (the bare `spawn` import resolves to a
+    // multi-overload union TS narrows incorrectly here).
+    const spawnFn: SpawnFn = (command, args, options) =>
+      options === undefined
+        ? spawn(command, args as string[])
+        : spawn(command, args as string[], options)
+    const resolverSpawnFn: ResolverSpawnFn = (command, args, options) =>
+      options === undefined
+        ? spawn(command, args as string[])
+        : spawn(command, args as string[], options)
+    this._subscriptionAdapter = new ClaudeSubprocessAdapter({
+      getSettings: () => this.settings,
+      logger: this.bridge,
+      resolveCliPath: () => new ClaudeBinaryResolver({
+        spawn: resolverSpawnFn,
+        platform: resolverPlatform,
+      }).resolve(),
+      spawn: spawnFn,
+      now: () => Date.now(),
+    })
+    this.register(() => { this._subscriptionAdapter?.shutdown() })
+
     this.registerView(VIEW_TYPE, (leaf) => {
-      const view = new SpecoratorView(leaf, this, this._claudeCliAdapter!)
+      const view = new SpecoratorView(leaf, this, this._claudeCliAdapter!, {
+        subscriptionAdapter: this._subscriptionAdapter!,
+        selectTransport: (settings) =>
+          selectTransport(settings, {
+            sdkAdapter: this._claudeCliAdapter!,
+            subscriptionAdapter: this._subscriptionAdapter!,
+            degradedPort: degradedClaudeCliPort,
+            // Synchronous projection — see SPEC-ASM-001 §3.1 closing note and
+            // ClaudeSubprocessAdapter.isAvailableSync(). Evaluated at every
+            // selector call so post-startup() availability is honoured.
+            cliResolved: this._subscriptionAdapter!.isAvailableSync(),
+          }),
+      })
       this._specoratorView = view
       return view
     })
@@ -175,8 +234,13 @@ export default class SpecoratorPlugin extends Plugin {
     // Workspace/vault index isn't guaranteed ready during onload(). Defer any
     // logic that reads workspace layout or vault state until layout is ready.
     this.app.workspace.onLayoutReady(() => {
-      // T-CCS-032: Pre-warm adapter here so startup() does not block onload().
-      void this._claudeCliAdapter?.startup()
+      // T-CCS-032 / T-ASM-020 / SPEC-ASM-001 §9.2 — pre-warm both adapters in
+      // parallel so startup() does not block onload(). Each adapter handles
+      // its own failures internally (REQ-ASM-009, NFR-ASM-006).
+      void Promise.all([
+        this._claudeCliAdapter?.startup(),
+        this._subscriptionAdapter?.startup(),
+      ])
       this.detectLegacyVaultLayout()
       if (!this.settings.onboardingComplete) {
         void this.activateView()

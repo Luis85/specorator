@@ -103,12 +103,12 @@ Deferred to later increments per the design brief and idea: autonomy dial UI, va
 - **Priority:** must
 - **Traces:** IDEA-ASM-001 (research question — CLI-not-installed surface); D-ASM-007
 
-#### REQ-ASM-010 — Subprocess long-lived per thread
+#### REQ-ASM-010 — Subprocess lifecycle: short-lived per turn with `--resume` chaining
 
 - **Pattern:** state-driven
-- **Statement:** WHILE a chat thread is open in subscription mode, the system shall maintain at most one long-lived `ChildProcess` for that thread's free-text streaming and reuse it turn-to-turn; structured one-shot proposals shall use a short-lived process per call.
+- **Statement:** WHILE a chat thread is open in subscription mode, the system shall spawn a fresh short-lived `ChildProcess` for each turn (free-text or structured) — running `claude -p '<prompt>'` to completion — and preserve multi-turn context by forwarding `--resume <sessionId>` in the next turn's argv, where the session id is captured from the prior turn's `system/init` event and threaded through `ClaudeCliQueryOptions.resumeSessionId` by the caller.
 - **Priority:** must
-- **Traces:** R-ASM-003 (spawn latency mitigation); F3 (process lifecycle)
+- **Traces:** R-ASM-003 (spawn latency mitigated by argv-level resume rather than long-lived process); F3 (process lifecycle); Codex P1 review on PR #325 (the original "long-lived per thread, reused across turns" formulation was incompatible with `claude -p` one-shot argv semantics; the prompt would never reach a reused subprocess).
 
 ---
 

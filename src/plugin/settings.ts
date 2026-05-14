@@ -1,5 +1,9 @@
 import type { App } from 'obsidian'
 import { PluginSettingTab, Setting } from 'obsidian'
+import * as path from 'node:path'
+import { spawn, spawnSync } from 'node:child_process'
+import { ClaudeBinaryResolver, type ResolverPlatform } from '@/infrastructure/obsidian/ClaudeBinaryResolver'
+import { tryAsync, trySync } from '@/domain/shared/tryAsync'
 import type { ModuleDescriptor, SettingsFieldDescriptor } from '@/modules/module'
 import { VIEW_TYPE, SpecoratorView } from './SpecoratorView'
 import type SpecoratorPlugin from './main'
@@ -33,6 +37,7 @@ export class SpecoratorSettingTab extends PluginSettingTab {
     this.renderAboutYouSection()
     this.renderMcpServerStatus()
     this.renderAnthropicKeyField()
+    this.renderClaudeCliPathField(containerEl)
   }
 
   private renderAboutYouSection(): void {
@@ -179,6 +184,138 @@ export class SpecoratorSettingTab extends PluginSettingTab {
             this._bumpAllViews()
           })
       })
+  }
+
+  /**
+   * Renders the "Claude CLI path" Settings field per SPEC-ASM-001 §10.2.
+   *
+   * Satisfies REQ-ASM-004 (field present), REQ-ASM-005 (autodetect surface),
+   * REQ-ASM-008 (verbatim ToS disclosure copy below the input).
+   *
+   *   - Text input: data-testid `settings-claude-cli-path-input`, trimmed on
+   *     change, persisted via `plugin.updateSettings({ claudeCliPath })`,
+   *     bumps every open SpecoratorView leaf so the transport selector re-runs.
+   *   - Autodetect button: delegates to `ClaudeBinaryResolver.resolve()`
+   *     (REQ-ASM-004, REQ-ASM-005). Writes success / failure copy to the
+   *     inline status node.
+   *   - Test button: spawns `<path> --version` via `spawnSync` with a 5-second
+   *     timeout. This is the ONLY allowed `spawnSync` site in the plugin
+   *     (spec §10.2 explicitly allow-lists it for this user-driven handler;
+   *     it is never reached on chat hot paths) (T-ASM-018 DoD).
+   *   - Description: literal REQ-ASM-008 disclosure copy. The user's home
+   *     Claude directory and its credentials file are never referenced from
+   *     this file (NFR-ASM-004).
+   */
+  private renderClaudeCliPathField(containerEl: HTMLElement): void {
+    let statusEl: HTMLElement | null = null
+    let textInput: HTMLInputElement | null = null
+
+    new Setting(containerEl)
+      .setName('Claude CLI path')
+      .setDesc('Absolute path to the `claude` command-line tool installed on this device.')
+      .addText((text) => {
+        text.inputEl.setAttribute('data-testid', 'settings-claude-cli-path-input')
+        textInput = text.inputEl
+        text.setPlaceholder('/usr/local/bin/claude')
+        text.setValue(this.plugin.settings.claudeCliPath)
+        text.onChange(async (raw) => {
+          const trimmed = raw.trim()
+          if (trimmed !== this.plugin.settings.claudeCliPath) {
+            await this.plugin.updateSettings({ claudeCliPath: trimmed })
+            this._bumpAllViews()
+          }
+        })
+      })
+      .addExtraButton((b) => {
+        b.extraSettingsEl.setAttribute('data-testid', 'settings-claude-cli-path-autodetect')
+        b.setIcon('search')
+        b.setTooltip('Autodetect claude CLI path')
+        b.onClick(() => {
+          void this.handleAutodetect(textInput, statusEl)
+        })
+      })
+      .addExtraButton((b) => {
+        b.extraSettingsEl.setAttribute('data-testid', 'settings-claude-cli-path-test')
+        b.setIcon('check')
+        b.setTooltip('Test claude CLI path')
+        b.onClick(() => {
+          this.handleTestBinary(statusEl)
+        })
+      })
+
+    const desc = containerEl.createDiv({ cls: 'setting-item-description' })
+    desc.setAttribute('data-testid', 'settings-claude-cli-path-description')
+    desc.setText(
+      'Specorator does not handle your Claude.ai credentials. The `claude` CLI you installed manages its own login.',
+    )
+
+    statusEl = containerEl.createDiv({ cls: 'setting-item-description' })
+    statusEl.setAttribute('data-testid', 'settings-claude-cli-path-status')
+    statusEl.setText('')
+  }
+
+  /**
+   * Autodetect handler — runs `ClaudeBinaryResolver.resolve()`, writes the
+   * result back into the input on success, and reports outcome via the
+   * inline status node (REQ-ASM-004, REQ-ASM-005).
+   */
+  private async handleAutodetect(
+    input: HTMLInputElement | null,
+    statusEl: HTMLElement | null,
+  ): Promise<void> {
+    this._setStatus(statusEl, 'Searching for the claude CLI on your path…')
+    const platform = process.platform as ResolverPlatform
+    const outcome = await tryAsync(() => new ClaudeBinaryResolver({ spawn, platform }).resolve())
+    if (!outcome.ok) {
+      this._setStatus(statusEl, 'Autodetect failed.')
+      return
+    }
+    const resolved = outcome.value
+    if (resolved === null) {
+      this._setStatus(statusEl, 'Could not find the claude CLI on your path.')
+      return
+    }
+    if (input !== null) {
+      input.value = resolved
+      input.dispatchEvent(new Event('input'))
+    }
+    await this.plugin.updateSettings({ claudeCliPath: resolved })
+    this._bumpAllViews()
+    this._setStatus(statusEl, `Found: ${resolved}`)
+  }
+
+  /**
+   * Test-binary handler — spawns `<path> --version` synchronously with a 5 s
+   * timeout. SPEC §10.2 explicitly allow-lists this single `spawnSync` site
+   * for the user-driven settings-tab handler. It is never called on any chat
+   * hot path.
+   */
+  private handleTestBinary(statusEl: HTMLElement | null): void {
+    const stored = this.plugin.settings.claudeCliPath.trim()
+    if (stored === '' || !path.isAbsolute(stored)) {
+      this._setStatus(statusEl, 'Enter an absolute path before testing.')
+      return
+    }
+    const outcome = trySync(() =>
+      spawnSync(stored, ['--version'], { timeout: 5_000, encoding: 'utf8' }),
+    )
+    this._setStatus(statusEl, this._describeTestOutcome(outcome))
+  }
+
+  private _describeTestOutcome(
+    outcome: ReturnType<typeof trySync<ReturnType<typeof spawnSync>>>,
+  ): string {
+    if (!outcome.ok) return 'Test failed.'
+    const result = outcome.value
+    if (result.error !== undefined || result.status !== 0) {
+      return 'Test failed — the binary did not respond.'
+    }
+    const version = String(result.stdout).trim()
+    return version.length > 0 ? version : 'Test passed.'
+  }
+
+  private _setStatus(statusEl: HTMLElement | null, text: string): void {
+    if (statusEl !== null) statusEl.setText(text)
   }
 
   /**
