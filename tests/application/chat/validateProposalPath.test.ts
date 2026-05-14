@@ -123,6 +123,26 @@ describe('validateProposalPath — CONTAINS_DOTDOT (TEST-ASM-030)', () => {
     }
   })
 
+  it("returns err(CONTAINS_DOTDOT) for backslash traversal '..\\\\escape.md' (Codex P1 regression)", () => {
+    // Regression: prior to the split(/[/\\]/) fix on line 96, this input
+    // bypassed step 3 (the split-on-'/' didn't match the backslash form)
+    // and got silently normalised to '../escape.md' at step 5, escaping
+    // the vault root. Codex P1 on PR #345.
+    const result = validateProposalPath(envelopeWith('..\\escape.md'), 'workspace')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error.kind).toBe('CONTAINS_DOTDOT')
+    }
+  })
+
+  it("returns err(CONTAINS_DOTDOT) for backslash interior segment 'specs\\\\..\\\\..\\\\etc.md' (Codex P1 regression)", () => {
+    const result = validateProposalPath(envelopeWith('specs\\..\\..\\etc.md'), 'workspace')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error.kind).toBe('CONTAINS_DOTDOT')
+    }
+  })
+
   it("returns err(CONTAINS_DOTDOT) for an interior '..' segment", () => {
     const result = validateProposalPath(
       envelopeWith('specs/../../etc/passwd.md'),

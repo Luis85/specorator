@@ -93,7 +93,10 @@ export function validateProposalPath(
   }
 
   // 3. Any '..' segment is forbidden (defence against vault escape).
-  if (path.split('/').includes('..')) {
+  //    Split on BOTH separators — backslash-form inputs like `..\\escape.md`
+  //    would otherwise bypass this check and then get normalised to
+  //    `../escape.md` at step 5, escaping the vault root (Codex P1, PR #345).
+  if (path.split(/[/\\]/).includes('..')) {
     return err(
       new PathValidationError(
         'CONTAINS_DOTDOT',
