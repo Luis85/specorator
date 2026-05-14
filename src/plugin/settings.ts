@@ -30,6 +30,7 @@ export class SpecoratorSettingTab extends PluginSettingTab {
     }
 
     this.renderMcpServerStatus()
+    this.renderAnthropicKeyField()
   }
 
   /**
@@ -108,6 +109,39 @@ export class SpecoratorSettingTab extends PluginSettingTab {
         break
       }
     }
+  }
+
+  /**
+   * Renders the Anthropic API key password field outside the module-driven settings loop.
+   * Satisfies REQ-CCS-001, NFR-CCS-006, SPEC-CCS-001 §8.3.
+   *
+   * The key is stored in the plugin data blob (not in any vault file).
+   * `inputEl.type = 'password'` masks the value (NFR-CCS-006).
+   * `autocomplete = 'off'` prevents browser/OS autofill.
+   * onChange handler trims whitespace before saving.
+   */
+  private renderAnthropicKeyField(): void {
+    new Setting(this.containerEl)
+      .setName('Anthropic key')
+      .setDesc(
+        "Required to use the AI assistant. Stored in this device's plugin settings. " +
+          'If you use Obsidian Sync, your key will be included in the sync — use a key scoped to your personal devices.',
+      )
+      .addText((text) => {
+        text.inputEl.type = 'password'
+        text.inputEl.autocomplete = 'off'
+        text.inputEl.setAttribute('data-testid', 'settings-anthropic-key')
+        text
+          // eslint-disable-next-line obsidianmd/ui/sentence-case
+          .setPlaceholder('sk-ant-…')
+          .setValue(this.plugin.settings.anthropicApiKey)
+          .onChange(async (value) => {
+            await this.plugin.updateSettings({ anthropicApiKey: value.trim() })
+            // T-CCS-036 (PR-3): bump settings version on all open SpecoratorView leaves.
+            // The bumpSettingsVersion() call-site is wired in PR-3/T-CCS-036
+            // when SpecoratorView.bumpSettingsVersion() is added.
+          })
+      })
   }
 
   private async saveField(mod: ModuleDescriptor, key: string, value: unknown): Promise<void> {

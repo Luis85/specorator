@@ -5,8 +5,8 @@ area: CCS
 slug: claude-cli-chat-sidebar
 current_stage: idea
 status: active
-last_updated: 2026-05-05
-last_agent: pm
+last_updated: 2026-05-14
+last_agent: dev
 createdAt: 2026-05-05T00:00:00+02:00
 updatedAt: 2026-05-05T00:00:00+02:00
 artifacts:
@@ -16,7 +16,7 @@ artifacts:
   design: pending
   spec: pending
   tasks: pending
-  implementation-log: pending
+  implementation-log: in-progress
   test-plan: pending
   test-report: pending
   review: pending
@@ -34,7 +34,7 @@ artifacts:
 | 4 — Design | pending | — | |
 | 5 — Specification | pending | — | |
 | 6 — Tasks | pending | — | |
-| 7 — Implementation | pending | — | |
+| 7 — Implementation | in-progress | `implementation-log.md` (PR-1 done, PR-2/PR-3 pending) | |
 | 8 — Testing | pending | — | |
 | 9 — Review | pending | — | |
 | 10 — Release | pending | — | |
@@ -49,6 +49,7 @@ Blocked on Phase 3 gate: #11 (plugin shell) must be closed. W13 (#163) narrow po
 | Date | From | To | Note |
 |---|---|---|---|
 | 2026-05-05 | pm | — | Spec entry created to satisfy Phase 4 spec-first gate; idea authored based on #161 |
+| 2026-05-14 | dev | dev (next PR) | PR-1 Infrastructure complete (T-CCS-001–T-CCS-015, T-CCS-016 gate passed). 7 commits on worktree-agent-a61e399c3169d813a. implementation-log.md in-progress (PR-2 sidebar UI and PR-3 MCP wiring remain). |
 
 ## Open clarifications
 

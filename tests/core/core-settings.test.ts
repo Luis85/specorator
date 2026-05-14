@@ -222,15 +222,17 @@ describe('coreSettingsModule.validateSettings', () => {
 })
 
 describe('coreSettingsModule.settingsSchema', () => {
-  it('exposes a field descriptor for every PluginSettings key', () => {
-    const expected = Object.keys(DEFAULT_SETTINGS).length
+  it('exposes a field descriptor for every module-driven PluginSettings key', () => {
+    // `anthropicApiKey` is rendered outside the module loop (SPEC-CCS-001 §8.3, D-CCS-002)
+    // and intentionally absent from settingsSchema.fields.
+    const manuallyRenderedKeys: ReadonlyArray<keyof PluginSettings> = ['anthropicApiKey']
+    const expected = Object.keys(DEFAULT_SETTINGS).length - manuallyRenderedKeys.length
     expect(coreSettingsModule.settingsSchema?.fields).toHaveLength(expected)
   })
 
   it('every field key is a valid PluginSettings key', () => {
     const validKeys = Object.keys(DEFAULT_SETTINGS) as ReadonlyArray<keyof PluginSettings>
     const fieldKeys = coreSettingsModule.settingsSchema?.fields.map((f) => f.key) ?? []
-    expect(fieldKeys).toHaveLength(validKeys.length)
     for (const k of fieldKeys) {
       expect(validKeys).toContain(k as keyof PluginSettings)
     }
