@@ -63,7 +63,7 @@ export class MockClaudeCliPort implements ClaudeCliPort {
       return err(new ClaudeCliError('NOT_INSTALLED', 'MockClaudeCliPort: not available'))
     }
 
-    await sleep(this.delayMs)
+    if (this.delayMs > 0) await sleep(this.delayMs)
 
     if (this.queryError !== null) {
       return err(this.queryError)
