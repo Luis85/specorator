@@ -8,6 +8,12 @@ function coerceString(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback
 }
 
+function toMutableBlob(blob: unknown): { out: Record<string, unknown>; hadData: boolean } {
+  const isObjectBlob = blob !== null && typeof blob === 'object' && !Array.isArray(blob)
+  const out: Record<string, unknown> = isObjectBlob ? { ...(blob as Record<string, unknown>) } : {}
+  return { out, hadData: isObjectBlob && Object.keys(out).length > 0 }
+}
+
 export const coreSettingsModule = defineModule<PluginSettings>({
   id: 'specorator',
   settingsKey: 'specorator',
@@ -32,15 +38,11 @@ export const coreSettingsModule = defineModule<PluginSettings>({
    * (false) and the wizard runs normally.
    */
   migrate(fromVersion: number, blob: unknown): unknown {
-    const isObjectBlob = blob !== null && typeof blob === 'object' && !Array.isArray(blob)
-    const out = (isObjectBlob
-      ? { ...(blob as Record<string, unknown>) }
-      : {}) as Record<string, unknown>
+    const { out, hadData } = toMutableBlob(blob)
     if (fromVersion < 2 && !('mcpServerEnabled' in out)) {
       out.mcpServerEnabled = false
     }
-    const hadExistingData = isObjectBlob && Object.keys(blob as object).length > 0
-    if ((fromVersion >= 1 || (fromVersion === 0 && hadExistingData)) && fromVersion < 3 && !('onboardingComplete' in out)) {
+    if ((fromVersion >= 1 || (fromVersion === 0 && hadData)) && fromVersion < 3 && !('onboardingComplete' in out)) {
       out.onboardingComplete = true
     }
     return out
