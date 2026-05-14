@@ -21,7 +21,7 @@ Implementation-ready contracts for Increment 1 of the Agent Sidepanel design bri
 
 ### 1.1 What this spec covers
 
-- A second transport (`ClaudeSubscriptionTransportAdapter`) that spawns the user's local `claude` binary behind the existing `ClaudeCliPort` narrow port (REQ-ASM-001, ADR-0029).
+- A second transport (`ClaudeSubprocessAdapter`) that spawns the user's local `claude` binary behind the existing `ClaudeCliPort` narrow port (REQ-ASM-001, ADR-0029).
 - A deterministic transport selector (`selectTransport`) and the plugin-wiring seam that supplies the chosen port through `CLAUDE_CLI_PORT` (REQ-ASM-002, REQ-ASM-003).
 - A stage-aware system prompt assembled from `specs/<slug>/workflow-state.md` and prepended via `--append-system-prompt` (REQ-ASM-011…020).
 - A structured-output pipeline producing validated `CreateFileEnvelope` proposals via `--output-format json --json-schema` and Zod revalidation (REQ-ASM-021…030, ADR-0030).
@@ -250,15 +250,16 @@ export type ClaudeCliErrorCode =
   | 'TIMEOUT'
   | 'QUERY_FAILED'
   | 'CLI_LAUNCH_FAILED'       // NEW — spawn failed (R-ASM-002 AppArmor/userns)
-  | 'STRUCTURED_PARSE_FAILED' // NEW — Zod + fallback both failed
 ```
+
+`STRUCTURED_PARSE_FAILED` is **not** a `ClaudeCliErrorCode`. It lives on `EnvelopeParseError.errorCode` (§2.8) because parse failure is an application-layer concern, not a transport concern. Surfacing the two distinct errors to the same UI copy is the responsibility of `ChatResponse.vue` (§7.8), which inspects `error.name` to choose the message.
 
 UI copy mapping (extends the CCS table):
 
 | Code | Displayed as |
 |---|---|
 | `CLI_LAUNCH_FAILED` | "Chat needs the Claude command-line tool." (REQ-ASM-009) |
-| `STRUCTURED_PARSE_FAILED` | "Assistant returned an unexpected response. Please try again." (REQ-ASM-025) |
+| `EnvelopeParseError` (any `kind`) | "Assistant returned an unexpected response. Please try again." (REQ-ASM-025) |
 
 ### 2.8 `ClaudeSubscriptionError` and parse / commit errors — REQ-ASM-023, REQ-ASM-025, REQ-ASM-044, REQ-ASM-048
 
@@ -676,7 +677,7 @@ Algorithm:
 2. **Folder hint (REQ-ASM-047).** If `proposal.envelope.folderHint` is a non-empty string:
    - `try { await deps.vault.createFolder(proposal.envelope.folderHint) } catch (e) { return err(new CommitProposalError('FOLDER_CREATE_FAILED', 'Could not create folder.', e)) }` (idempotent at the port level; ENOENT-on-already-exists is swallowed by the bridge).
 3. **Write (REQ-ASM-043).** `try { await deps.vault.writeFile(proposal.envelope.path, proposal.envelope.content) } catch (e) { return err(new CommitProposalError('WRITE_FAILED', 'Could not write file.', e)) }`.
-4. **Audit log (REQ-ASM-046).** `await deps.sessionLog.appendProposalDecision({ thread, proposal, decision: 'accepted', decidedAt: deps.nowIso() }).catch((e) => { deps.logger.error('SessionLog append failed', { redactedSessionId: redact(thread.sessionId) }, e) })`. Append failure does **not** roll back the write (REQ-ASM-040 — log writes are fire-and-forget at the call boundary, but `commitFileWriteProposal` awaits inline so the audit row is durable before reporting success).
+4. **Audit log (REQ-ASM-046).** `try { await deps.sessionLog.appendProposalDecision({ thread, proposal, decision: 'accepted', decidedAt: deps.nowIso() }) } catch (e) { deps.logger.error('SessionLog append failed', { redactedSessionId: redact(thread.sessionId) }, e); return err(new CommitProposalError('SESSION_LOG_FAILED', 'Audit log write failed.', e)) }`. The audit row is awaited inline and a failure surfaces to the caller as `Result.error` — a vault-mutating action without its audit row is treated as a hard failure (REQ-ASM-046, §13.4). The vault write is not rolled back; the caller may retry or escalate. This is the single departure from the §6.7 fire-and-forget rule, which applies to non-critical-path `appendUserAssistant` writes only.
 5. Return `ok(undefined)`.
 
 **Reject path** is a separate function:
@@ -733,9 +734,9 @@ Pure. Single source of truth for argv assembly. Algorithm:
 
 ---
 
-## §4 — `ClaudeSubscriptionTransportAdapter` class outline
+## §4 — `ClaudeSubprocessAdapter` class outline
 
-**File:** `src/infrastructure/obsidian/ClaudeSubscriptionTransportAdapter.ts`
+**File:** `src/infrastructure/obsidian/ClaudeSubprocessAdapter.ts`
 **Implements:** `ClaudeCliPort` and (structurally) `SubscriptionCapable` via a public `readonly kind = 'subscription'`.
 
 **ToS posture (verbatim, NFR-ASM-004):** this class never reads, opens, copies, transmits, persists, or watches `~/.claude/.credentials.json` or any file under `~/.claude/`. The only interaction with `~/.claude/` is that the spawned `claude` binary, executing under the user's own UID, may read its own credentials as part of the user's own invocation — this is the user's tool, not the plugin's read.
@@ -743,7 +744,7 @@ Pure. Single source of truth for argv assembly. Algorithm:
 ### 4.1 Constructor and fields
 
 ```typescript
-export interface ClaudeSubscriptionTransportAdapterDeps {
+export interface ClaudeSubprocessAdapterDeps {
   readonly getSettings: () => PluginSettings
   readonly logger: LoggerPort
   readonly resolveCliPath: () => Promise<string | null> // injectable for tests
@@ -751,7 +752,7 @@ export interface ClaudeSubscriptionTransportAdapterDeps {
   readonly now: () => number
 }
 
-class ClaudeSubscriptionTransportAdapter implements ClaudeCliPort {
+class ClaudeSubprocessAdapter implements ClaudeCliPort {
   public readonly kind = 'subscription' as const
 
   private _available = false
@@ -759,7 +760,7 @@ class ClaudeSubscriptionTransportAdapter implements ClaudeCliPort {
   private _binaryPath: string | null = null
   private _streamingProc = new Map<string, ChildProcess>() // keyed by threadId
 
-  constructor(private readonly deps: ClaudeSubscriptionTransportAdapterDeps) {}
+  constructor(private readonly deps: ClaudeSubprocessAdapterDeps) {}
 }
 ```
 
@@ -769,9 +770,9 @@ class ClaudeSubscriptionTransportAdapter implements ClaudeCliPort {
 |---|---|---|
 | `startup` | `(): Promise<void>` | Idempotent. Resolves `_binaryPath` from `settings.claudeCliPath` then `deps.resolveCliPath()`; sets `_available` accordingly (REQ-ASM-009, NFR-ASM-006). |
 | `isAvailable` | `(): Promise<boolean>` | Returns `_available && _binaryPath !== null`. Never throws. |
+| `isAvailableSync` | `(): boolean` | **Class-only, not on `ClaudeCliPort`.** Returns the cached `_available` flag (set by `startup()`). Performs **no I/O**, never spawns, never throws. Used by `selectTransport()` in plugin wiring (§9.1) where a synchronous boolean is required at view-registration time. Contrast with `isAvailable()` which returns `Promise<boolean>` for the public port surface. |
 | `query` | `(prompt, options?): Promise<Result<string, ClaudeCliError>>` | Free-text stream-json path: `_spawn` long-lived process keyed by `threadId` (REQ-ASM-010), `_parseNdjson`, capture session id (REQ-ASM-031), map errors via `_mapError`. |
-| `queryStructured` | (alias on the adapter; same signature as `runStructured`) | Convenience pass-through used by `queryStructured` application service; identical to `runStructured`. |
-| `runStructured` | `(prompt, options): Promise<Result<StructuredCliRawResult, ClaudeCliError>>` | One-shot short-lived spawn (REQ-ASM-049). Collects entire stdout to a buffer; `JSON.parse`; returns `{ result, structured_output }`. |
+| `runStructured` | `(prompt, options): Promise<Result<StructuredCliRawResult, ClaudeCliError>>` | One-shot short-lived spawn (REQ-ASM-049). Collects entire stdout to a buffer; `JSON.parse`; returns `{ result, structured_output }`. Reached from the application layer via `queryStructured()` after `isSubscriptionCapable(port)` narrows the port. There is no `queryStructured` method on the adapter or on `ClaudeCliPort`. |
 | `shutdown` | `(): void` | Synchronous. For every entry in `_streamingProc`: `child.kill('SIGTERM')`. Clears map. Sets `_ready = false`, `_available = false`. Never throws. |
 
 ### 4.3 Private helpers
@@ -806,9 +807,9 @@ class ClaudeSubscriptionTransportAdapter implements ClaudeCliPort {
 
 ---
 
-## §5 — `MockClaudeSubscriptionTransport`
+## §5 — `MockClaudeSubprocessAdapter`
 
-**File:** `src/infrastructure/mock/MockClaudeSubscriptionTransport.ts`
+**File:** `src/infrastructure/mock/MockClaudeSubprocessAdapter.ts`
 **Implements:** `ClaudeCliPort` and `SubscriptionCapable` (`readonly kind = 'subscription'`).
 
 Mirrors the field-driven pattern from `MockClaudeCliPort` (CCS SPEC §6). Used by `fakeModulePorts()` (ADR-009) to exercise structured-output, session capture, and proposal flows without a real `claude` binary.
@@ -833,13 +834,13 @@ Mirrors the field-driven pattern from `MockClaudeCliPort` (CCS SPEC §6). Used b
 {
   action: 'createFile',
   path: 'specs/mock/idea.md',
-  content: '# Mock idea\n\nGenerated by MockClaudeSubscriptionTransport.\n',
+  content: '# Mock idea\n\nGenerated by MockClaudeSubprocessAdapter.\n',
   rationale: 'Demonstrates a valid createFile proposal for tests.',
   folderHint: 'specs/mock',
 }
 ```
 
-`startup()` is a no-op. `shutdown()` clears `queryLog` and `argsLog`.
+`startup()` is a no-op. `shutdown()` clears `queryLog` and `argsLog`. `isAvailableSync()` returns the `available` field synchronously (mirrors the adapter's class-only synchronous accessor; performs no I/O).
 
 ---
 
@@ -1231,11 +1232,14 @@ Not created in Increment 1. All proposal state lives on `useChatStore.proposals`
 ```typescript
 // After existing `_claudeCliAdapter` instantiation:
 
-this._subscriptionAdapter = new ClaudeSubscriptionTransportAdapter({
+// `child_process` is imported statically at the top of the file:
+//   import { spawn } from 'child_process'
+// so this constructor call has no dynamic-import in `onload()`.
+this._subscriptionAdapter = new ClaudeSubprocessAdapter({
   getSettings: () => this.settings,
   logger: this.bridge,
   resolveCliPath: () => new ClaudeBinaryResolver(this.app).resolve(),
-  spawn: (await import('child_process')).spawn,
+  spawn,
   now: () => Date.now(),
 })
 this.register(() => { this._subscriptionAdapter?.shutdown() })
@@ -1575,7 +1579,7 @@ The plugin code does **not** read `~/.claude/.credentials.json` or any file unde
 
 1. The `no-claude-home-reads` ESLint rule (§13.2).
 2. The integration test `tests/integration/no-claude-home.test.ts` (TEST-ASM-051) that monitors `fs` reads at runtime.
-3. The `ClaudeSubscriptionTransportAdapter` class JSDoc (§4) restates the posture as a hard invariant on the adapter.
+3. The `ClaudeSubprocessAdapter` class JSDoc (§4) restates the posture as a hard invariant on the adapter.
 
 Spawning the user's own `claude` binary does **not** count as a plugin read of `~/.claude/` — the binary runs as the user, reads its own credentials as the user, and the plugin neither observes nor intercepts those reads.
 
