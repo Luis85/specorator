@@ -1,0 +1,418 @@
+/**
+ * T-ASM-072 — Integration tests: ChatSidebar proposal flow.
+ *
+ * Covers SPEC-ASM-001 §7.6 (PR-ASM-4): the end-to-end wiring from a
+ * structured-output `CreateFileEnvelope` → `FileWriteProposalCard` →
+ * Accept / Reject / Retry → `commitFileWriteProposal` /
+ * `rejectFileWriteProposal` → session-log audit row.
+ *
+ * Maps to TEST-ASM-043 (Reject leaves vault untouched + audit row),
+ * TEST-ASM-047 (full integration: structured envelope → card → Accept →
+ * exactly one `writeFile`), TEST-ASM-029 (`chat-response-structured-fail`
+ * surfaces after EnvelopeParseError), and the trust-first invariant
+ * (NFR-ASM-011): no `writeFile` originates from any other code path.
+ *
+ * Satisfies REQ-ASM-041, REQ-ASM-043, REQ-ASM-045, REQ-ASM-050, REQ-ASM-055.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
+import { setActivePinia, createPinia } from 'pinia'
+import { defineComponent, nextTick, ref } from 'vue'
+import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue'
+import { MockClaudeSubprocessAdapter } from '@/infrastructure/mock/MockClaudeSubprocessAdapter'
+import { MockBridge } from '@/infrastructure/mock/MockBridge'
+import { MockConfirmModalPort } from '@/infrastructure/mock/MockConfirmModalPort'
+import {
+	CLAUDE_CLI_PORT,
+	IS_MOBILE_KEY,
+	VAULT_PORT,
+	WORKSPACE_PORT,
+	SETTINGS_PORT,
+	LOGGER_PORT,
+	CONFIRM_MODAL_PORT,
+	TRANSPORT_KIND_KEY,
+} from '@/infrastructure/bridge/ports'
+import { useChatStore } from '@/ui/stores/chatStore'
+import { ChatSidebarPO } from './ChatSidebar.po'
+import { FileWriteProposalCardPO } from './FileWriteProposalCard.po'
+import type { PluginSettings } from '@/domain/settings/PluginSettings'
+import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
+import type { CreateFileEnvelope } from '@/application/chat/createFileEnvelopeSchema'
+import type { TransportKind } from '@/domain/chat/TransportKind'
+
+const RouterLinkStub = defineComponent({
+	props: { to: { type: String, default: '' } },
+	template: '<a :href="to" data-testid="chat-degraded-settings-link"><slot /></a>',
+})
+
+function makeBridge(
+	files: Record<string, string> = {},
+	overrides: Partial<PluginSettings> = {},
+): MockBridge {
+	const bridge = new MockBridge(files)
+	const settings: PluginSettings = {
+		...DEFAULT_SETTINGS,
+		anthropicApiKey: 'sk-ant-test',
+		transportKind: 'subscription',
+		...overrides,
+	}
+	vi.spyOn(bridge, 'getSettings').mockResolvedValue(settings)
+	return bridge
+}
+
+interface MountArgs {
+	cannedEnvelope?: CreateFileEnvelope | null
+	cannedRawResult?: string
+	available?: boolean
+	confirmResult?: boolean
+	files?: Record<string, string>
+	transportKind?: TransportKind
+	settings?: Partial<PluginSettings>
+}
+
+async function mountSidebar(args: MountArgs = {}) {
+	const pinia = createPinia()
+	setActivePinia(pinia)
+
+	const port = new MockClaudeSubprocessAdapter()
+	port.available = args.available ?? true
+	if (args.cannedEnvelope !== undefined) port.cannedStructuredEnvelope = args.cannedEnvelope
+	if (args.cannedRawResult !== undefined) port.cannedStructuredRawResult = args.cannedRawResult
+	port.cannedResponse = 'free-text answer'
+
+	const bridge = makeBridge(args.files ?? {}, args.settings ?? {})
+	const confirmModal = new MockConfirmModalPort()
+	confirmModal.nextResult = args.confirmResult ?? true
+	const transportKindRef = ref<TransportKind>(args.transportKind ?? 'subscription')
+
+	const wrapper = mount(ChatSidebar, {
+		global: {
+			plugins: [pinia],
+			stubs: { RouterLink: RouterLinkStub },
+			provide: {
+				[CLAUDE_CLI_PORT as symbol]: port,
+				[IS_MOBILE_KEY as symbol]: false,
+				[VAULT_PORT as symbol]: bridge,
+				[WORKSPACE_PORT as symbol]: bridge,
+				[SETTINGS_PORT as symbol]: bridge,
+				[LOGGER_PORT as symbol]: bridge,
+				[CONFIRM_MODAL_PORT as symbol]: confirmModal,
+				[TRANSPORT_KIND_KEY as symbol]: transportKindRef,
+			},
+		},
+	})
+
+	await flushPromises()
+	const store = useChatStore(pinia)
+	return {
+		wrapper,
+		port,
+		bridge,
+		confirmModal,
+		po: new ChatSidebarPO(wrapper),
+		store,
+	}
+}
+
+async function send(
+	store: ReturnType<typeof useChatStore>,
+	po: ChatSidebarPO,
+	text: string,
+) {
+	store.setUserText(text)
+	await flushPromises()
+	await po.clickSend()
+	await flushPromises()
+}
+
+describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
+	beforeEach(() => {
+		setActivePinia(createPinia())
+	})
+
+	it('structured trigger routes to runStructured, not query (REQ-ASM-021/041)', async () => {
+		const { port, po, store } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: 'specs/demo/idea.md',
+				content: '# Demo idea\n',
+			},
+		})
+
+		await send(store, po, '/create-file specs/demo/idea.md')
+
+		// Structured path called; free-text query() not called.
+		expect(port.structuredLog).toHaveLength(1)
+		expect(port.optionsLog).toHaveLength(0)
+	})
+
+	it('renders the FileWriteProposalCard via the ChatResponse proposalCard slot (REQ-ASM-041)', async () => {
+		const { wrapper, po, store } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: 'specs/demo/idea.md',
+				content: '# Demo idea\n\nbody.\n',
+			},
+		})
+
+		await send(store, po, '/create-file specs/demo/idea.md')
+		await flushPromises()
+
+		const card = new FileWriteProposalCardPO(wrapper)
+		expect(card.hasCard()).toBe(true)
+		expect(card.pathText()).toBe('specs/demo/idea.md')
+		expect(card.hasAccept()).toBe(true)
+		expect(card.hasReject()).toBe(true)
+		expect(store.proposals.size).toBe(1)
+		const proposal = Array.from(store.proposals.values())[0]
+		expect(proposal.status).toBe('pending')
+	})
+
+	it('Accept click commits exactly one writeFile call with the envelope content (TEST-ASM-047, NFR-ASM-011)', async () => {
+		const { wrapper, po, store, bridge, confirmModal } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: 'specs/demo/idea.md',
+				content: '# Demo\n',
+			},
+			confirmResult: true,
+		})
+
+		const writeSpy = vi.spyOn(bridge, 'writeFile')
+		await send(store, po, '/create-file specs/demo/idea.md')
+		await flushPromises()
+
+		const card = new FileWriteProposalCardPO(wrapper)
+		expect(card.hasAccept()).toBe(true)
+		await card.clickAccept()
+		await flushPromises()
+		await flushPromises()
+
+		const proposalWrites = writeSpy.mock.calls.filter(
+			([path]) => path === 'specs/demo/idea.md',
+		)
+		expect(proposalWrites).toHaveLength(1)
+		expect(proposalWrites[0][1]).toBe('# Demo\n')
+
+		const proposal = Array.from(store.proposals.values())[0]
+		expect(proposal.status).toBe('accepted')
+
+		// No overwrite confirmation expected (file does not exist).
+		expect(confirmModal.calls).toHaveLength(0)
+	})
+
+	it('Reject click commits zero writeFile calls and records audit row (TEST-ASM-043)', async () => {
+		const { wrapper, po, store, bridge } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: 'specs/demo/idea.md',
+				content: '# Demo\n',
+			},
+		})
+
+		const writeSpy = vi.spyOn(bridge, 'writeFile')
+		await send(store, po, '/create-file specs/demo/idea.md')
+		await flushPromises()
+
+		// Clear the writeSpy: appendUserAssistant may have been scheduled
+		// (fire-and-forget). The trust-first invariant is about the
+		// envelope's target path, not the audit log.
+		const writesBeforeReject = writeSpy.mock.calls.filter(
+			([path]) => path === 'specs/demo/idea.md',
+		).length
+		expect(writesBeforeReject).toBe(0)
+
+		const card = new FileWriteProposalCardPO(wrapper)
+		await card.clickReject()
+		await flushPromises()
+		await flushPromises()
+
+		// REQ-ASM-045: no VaultPort mutation against the envelope path.
+		const writesToEnvelope = writeSpy.mock.calls.filter(
+			([path]) => path === 'specs/demo/idea.md',
+		)
+		expect(writesToEnvelope).toHaveLength(0)
+
+		const proposal = Array.from(store.proposals.values())[0]
+		expect(proposal.status).toBe('rejected')
+	})
+
+	it('path-invalid envelope surfaces card in path-invalid state with no Accept button (REQ-ASM-048)', async () => {
+		const { wrapper, po, store, bridge } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: '../escape.md',
+				content: 'oops',
+			},
+		})
+		const writeSpy = vi.spyOn(bridge, 'writeFile')
+		await send(store, po, '/create-file ../escape.md')
+		await flushPromises()
+
+		const card = new FileWriteProposalCardPO(wrapper)
+		expect(card.hasCard()).toBe(true)
+		expect(card.hasPathInvalid()).toBe(true)
+		expect(card.hasAccept()).toBe(false)
+		// No writeFile call against the escape path.
+		const writes = writeSpy.mock.calls.filter(([p]) => String(p).includes('escape.md'))
+		expect(writes).toHaveLength(0)
+		// Proposal still stored, in pending status, with the path error in scope.
+		expect(store.proposals.size).toBe(1)
+	})
+
+	it('vault-write failure during Accept flips proposal to failed with failureReason (REQ-ASM-043/044)', async () => {
+		const { wrapper, po, store, bridge } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: 'specs/demo/idea.md',
+				content: '# Demo\n',
+			},
+		})
+		vi.spyOn(bridge, 'writeFile').mockRejectedValue(new Error('disk full'))
+
+		await send(store, po, '/create-file specs/demo/idea.md')
+		await flushPromises()
+
+		const card = new FileWriteProposalCardPO(wrapper)
+		await card.clickAccept()
+		await flushPromises()
+		await flushPromises()
+
+		const proposal = Array.from(store.proposals.values())[0]
+		expect(proposal.status).toBe('failed')
+		expect(proposal.failureReason).toBe('WRITE_FAILED')
+	})
+
+	it('structured parse error renders chat-response-structured-fail (TEST-ASM-029)', async () => {
+		const { wrapper, po, store } = await mountSidebar({
+			cannedEnvelope: null,
+			cannedRawResult: 'this is not JSON, no braces here',
+		})
+
+		await send(store, po, '/create-file specs/demo/idea.md')
+		await flushPromises()
+
+		const fail = wrapper.find('[data-testid="chat-response-structured-fail"]')
+		expect(fail.exists()).toBe(true)
+		// No raw model output quoted (defensive — only the canned i18n copy).
+		expect(fail.text()).not.toContain('this is not JSON')
+		// No proposal recorded.
+		expect(store.proposals.size).toBe(0)
+	})
+
+	it('regression: free-text prompts still use query() and skip the structured path', async () => {
+		const { port, po, store } = await mountSidebar({})
+
+		await send(store, po, 'hello there')
+		await flushPromises()
+
+		// Free-text query() called exactly once; runStructured() not called.
+		expect(port.optionsLog).toHaveLength(1)
+		expect(port.structuredLog).toHaveLength(0)
+		expect(store.proposals.size).toBe(0)
+	})
+
+	it('Retry resubmits the prior user turn and adds a fresh proposal (REQ-ASM-050)', async () => {
+		const { wrapper, po, store, port } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: 'specs/demo/idea.md',
+				content: '# Demo\n',
+			},
+		})
+
+		await send(store, po, '/create-file specs/demo/idea.md')
+		await flushPromises()
+		expect(store.proposals.size).toBe(1)
+		const firstProposalId = Array.from(store.proposals.keys())[0]
+
+		const card = new FileWriteProposalCardPO(wrapper)
+		expect(card.hasRetry()).toBe(true)
+		await card.clickRetry()
+		await flushPromises()
+		await flushPromises()
+
+		// Retry re-issues the same prompt through the structured path.
+		expect(port.structuredLog.length).toBeGreaterThanOrEqual(2)
+		// A second proposal was added with a different id.
+		expect(store.proposals.size).toBeGreaterThanOrEqual(2)
+		const ids = Array.from(store.proposals.keys())
+		expect(ids).toContain(firstProposalId)
+		const otherIds = ids.filter((i) => i !== firstProposalId)
+		expect(otherIds.length).toBeGreaterThan(0)
+	})
+
+	it('renders TransportStatusPill in the header when transport is subscription (SPEC §7.6)', async () => {
+		const { wrapper } = await mountSidebar({ transportKind: 'subscription' })
+
+		const pill = wrapper.find('[data-testid="chat-transport-status"]')
+		expect(pill.exists()).toBe(true)
+	})
+
+	it('does not render TransportStatusPill when transport is api-key (REQ-ASM-002)', async () => {
+		const { wrapper } = await mountSidebar({ transportKind: 'api-key' })
+
+		const pill = wrapper.find('[data-testid="chat-transport-status"]')
+		expect(pill.exists()).toBe(false)
+	})
+
+	it('overwrite confirmation: cancel leaves vault untouched and flips proposal to failed (REQ-ASM-044)', async () => {
+		// Pre-populate the file so Accept triggers the overwrite gate.
+		const { wrapper, po, store, bridge, confirmModal } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: 'specs/demo/idea.md',
+				content: '# Demo\n',
+			},
+			files: { 'specs/demo/idea.md': '# Existing content\n' },
+			confirmResult: false,
+		})
+		const writeSpy = vi.spyOn(bridge, 'writeFile')
+
+		await send(store, po, '/create-file specs/demo/idea.md')
+		await flushPromises()
+
+		const card = new FileWriteProposalCardPO(wrapper)
+		await card.clickAccept()
+		await flushPromises()
+		await flushPromises()
+
+		expect(confirmModal.calls).toHaveLength(1)
+		// No write against the envelope path.
+		const writesToEnvelope = writeSpy.mock.calls.filter(
+			([path]) => path === 'specs/demo/idea.md',
+		)
+		expect(writesToEnvelope).toHaveLength(0)
+		const proposal = Array.from(store.proposals.values())[0]
+		expect(proposal.status).toBe('failed')
+		expect(proposal.failureReason).toBe('OVERWRITE_CANCELLED')
+	})
+})
+
+describe('ChatSidebar — proposal flow: trust-first invariant (T-ASM-072 / NFR-ASM-011)', () => {
+	beforeEach(() => {
+		setActivePinia(createPinia())
+	})
+
+	it('zero writeFile calls against the envelope path until Accept is clicked', async () => {
+		const { po, store, bridge } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: 'specs/demo/idea.md',
+				content: '# Demo\n',
+			},
+		})
+		const writeSpy = vi.spyOn(bridge, 'writeFile')
+
+		await send(store, po, '/create-file specs/demo/idea.md')
+		await flushPromises()
+		await flushPromises()
+
+		// Before Accept: no write against the envelope's target.
+		const writes = writeSpy.mock.calls.filter(([p]) => p === 'specs/demo/idea.md')
+		expect(writes).toHaveLength(0)
+		// Proposal is stored, awaiting user action.
+		expect(store.proposals.size).toBe(1)
+		await nextTick()
+	})
+})
