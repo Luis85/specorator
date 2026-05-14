@@ -8,11 +8,13 @@ import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
 import { ObsidianMetadataCacheAdapter } from '@/infrastructure/obsidian/ObsidianMetadataCacheAdapter'
 import { ObsidianCanvasAdapter } from '@/infrastructure/obsidian/ObsidianCanvasAdapter'
+import { ClaudeCliAdapter } from '@/infrastructure/obsidian/ClaudeCliAdapter'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { PluginCore } from '@/core/plugin-core'
 import { ALL_MODULES, type ModuleDescriptor } from '@/modules'
 import { i18nMerge, i18nTranslate, setLocale, type SupportedLocale } from '@/ui/i18n'
 import type { TranslationPort } from '@/domain/ports'
+import { useChatStore } from '@/ui/stores/chatStore'
 
 export default class SpecoratorPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS }
@@ -21,6 +23,10 @@ export default class SpecoratorPlugin extends Plugin {
 
   /** Full stored data blob: specorator sub-key + per-module sub-keys + _moduleVersions. */
   private _storedData: Record<string, unknown> = {}
+  /** ClaudeCliAdapter instance — created in onload(), destroyed in onunload(). */
+  private _claudeCliAdapter: ClaudeCliAdapter | null = null
+  /** SpecoratorView instance — set when the registered view factory runs. */
+  private _specoratorView: SpecoratorView | null = null
 
   async onload(): Promise<void> {
     await this.loadSettings()
@@ -62,7 +68,19 @@ export default class SpecoratorPlugin extends Plugin {
     // Persist any migrations that occurred during init.
     await this.saveData(this._storedData)
 
-    this.registerView(VIEW_TYPE, (leaf) => new SpecoratorView(leaf, this))
+    // T-CCS-032: Instantiate ClaudeCliAdapter. startup() is deferred to onLayoutReady
+    // so it does not hold up the critical onload() path.
+    this._claudeCliAdapter = new ClaudeCliAdapter(
+      () => this.settings,
+      this.bridge,
+    )
+    this.register(() => { this._claudeCliAdapter?.shutdown() })
+
+    this.registerView(VIEW_TYPE, (leaf) => {
+      const view = new SpecoratorView(leaf, this, this._claudeCliAdapter!)
+      this._specoratorView = view
+      return view
+    })
 
     this.addRibbonIcon('layout-dashboard', 'Open Specorator', () => {
       void this.activateView()
@@ -101,14 +119,50 @@ export default class SpecoratorPlugin extends Plugin {
 
     this.addSettingTab(new SpecoratorSettingTab(this.app, this))
 
+    // T-CCS-031: Right-click "Add to chat context" menu item on vault files.
+    this.registerEvent(
+      this.app.workspace.on('file-menu', (menu, file) => {
+        menu.addItem((item) => {
+          item
+            .setTitle('Add to chat context')
+            .setIcon('message-square-plus')
+            .onClick(() => {
+              void this.activateView().then(() => {
+                if (this._specoratorView?.pinia) {
+                  const store = useChatStore(this._specoratorView.pinia)
+                  store.addContextFile({ path: file.path, label: file.name, isAuto: false })
+                }
+              })
+            })
+        })
+      }),
+    )
+
+    // T-CCS-034: Track the active file and update the store's auto context slot.
+    this.registerEvent(
+      this.app.workspace.on('active-leaf-change', () => {
+        const activeFile = this.app.workspace.getActiveFile()
+        if (this._specoratorView?.pinia) {
+          const store = useChatStore(this._specoratorView.pinia)
+          if (activeFile) {
+            store.setActiveFile({ path: activeFile.path, label: activeFile.name, isAuto: true })
+          } else {
+            store.setActiveFile(null)
+          }
+        }
+      }),
+    )
+
     this.registerObsidianProtocolHandler('specorator', (params) => {
       const searchParams = new URLSearchParams(Object.entries(params))
       if (this.core?.handleUri(searchParams) === true) return
 
-      // v1 stub handlers — replaced by module uriActions when the owning module is built
+      // T-CCS-033: Navigate to /chat when action=open-chat.
       const action = params.action
       if (action === 'open-chat' || action === 'focus-chat') {
-        void this.activateView()
+        void this.activateView().then(() => {
+          this._specoratorView?.navigateTo('/chat')
+        })
         return
       }
       if (action === 'send-message' || action === 'open-workflow') {
@@ -121,6 +175,8 @@ export default class SpecoratorPlugin extends Plugin {
     // Workspace/vault index isn't guaranteed ready during onload(). Defer any
     // logic that reads workspace layout or vault state until layout is ready.
     this.app.workspace.onLayoutReady(() => {
+      // T-CCS-032: Pre-warm adapter here so startup() does not block onload().
+      void this._claudeCliAdapter?.startup()
       this.detectLegacyVaultLayout()
       if (!this.settings.onboardingComplete) {
         void this.activateView()

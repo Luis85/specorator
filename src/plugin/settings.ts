@@ -1,6 +1,7 @@
 import type { App } from 'obsidian'
 import { PluginSettingTab, Setting } from 'obsidian'
 import type { ModuleDescriptor, SettingsFieldDescriptor } from '@/modules/module'
+import { VIEW_TYPE, SpecoratorView } from './SpecoratorView'
 import type SpecoratorPlugin from './main'
 
 export class SpecoratorSettingTab extends PluginSettingTab {
@@ -174,11 +175,23 @@ export class SpecoratorSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.anthropicApiKey)
           .onChange(async (value) => {
             await this.plugin.updateSettings({ anthropicApiKey: value.trim() })
-            // T-CCS-036 (PR-3): bump settings version on all open SpecoratorView leaves.
-            // The bumpSettingsVersion() call-site is wired in PR-3/T-CCS-036
-            // when SpecoratorView.bumpSettingsVersion() is added.
+            // T-CCS-037: signal ChatSidebar to re-check adapter availability.
+            this._bumpAllViews()
           })
       })
+  }
+
+  /**
+   * Calls bumpSettingsVersion() on every open SpecoratorView leaf so that
+   * ChatSidebar re-checks adapter availability after the API key changes.
+   * Satisfies T-CCS-037, D-CCS-003.
+   */
+  private _bumpAllViews(): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+      if (leaf.view instanceof SpecoratorView) {
+        leaf.view.bumpSettingsVersion()
+      }
+    }
   }
 
   private async saveField(mod: ModuleDescriptor, key: string, value: unknown): Promise<void> {
