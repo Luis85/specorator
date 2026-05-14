@@ -1,4 +1,4 @@
-import type { ClaudeCliPort, ClaudeCliQueryOptions, ClaudeCliErrorCode } from '@/domain/ports'
+import type { ClaudeCliPort, ClaudeCliQueryOptions } from '@/domain/ports'
 import { ClaudeCliError } from '@/domain/ports'
 import { err, type Result } from '@/domain/shared/Result'
 
@@ -16,15 +16,9 @@ import { err, type Result } from '@/domain/shared/Result'
  * mutation in test harnesses surfaces immediately.
  */
 
-// `CLI_LAUNCH_FAILED` is the spec-mandated code (SPEC §2.7) but is not added
-// to the `ClaudeCliErrorCode` union until T-ASM-003 lands. The cast keeps
-// T-ASM-019 self-contained per its batching constraints; T-ASM-003 widens the
-// union and the cast becomes a no-op.
-const CLI_LAUNCH_FAILED = 'CLI_LAUNCH_FAILED' as unknown as ClaudeCliErrorCode
-
 function makeError(): ClaudeCliError {
   return new ClaudeCliError(
-    CLI_LAUNCH_FAILED,
+    'CLI_LAUNCH_FAILED',
     'Chat needs the Claude command-line tool.',
   )
 }
