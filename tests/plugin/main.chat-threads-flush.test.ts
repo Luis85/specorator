@@ -92,11 +92,17 @@ function makePlugin(initialData: Record<string, unknown>): {
   plugin._storedData = { ...initialData }
   plugin._initialChatThreads = []
   plugin._chatThreadsFlushTimer = null
+  plugin._pendingChatThreadsSnapshot = null
   plugin.loadData = vi.fn(async () => initialData)
   plugin.saveData = vi.fn(async (data: Record<string, unknown>) => {
     state.blob = data
     state.saveCount += 1
   })
+  // Stub the minimum App surface that `onunload()` reaches into so the
+  // unload-flush regression tests don't NPE on `app.workspace`. The
+  // detachLeavesOfType call is a no-op for these tests — we're only
+  // exercising the chatThreads flush path.
+  plugin.app = { workspace: { detachLeavesOfType: vi.fn() } }
   return { plugin: plugin as unknown as SpecoratorPlugin, state }
 }
 
@@ -238,6 +244,46 @@ describe('scheduleChatThreadsPersistence — debounced flush (T-ASM-054)', () =>
     const chatThreads = specorator.chatThreads as Record<string, unknown>
     expect(Object.keys(chatThreads)).toEqual(['keep'])
     expect(chatThreads.drop).toBeUndefined()
+  })
+
+  it('flushes the pending snapshot in onunload() before timer fires (Codex P1 regression)', async () => {
+    // Codex P1, PR #346: a message sent within the 1 s debounce window
+    // must be persisted if Obsidian exits or the plugin is disabled before
+    // the timer fires. Prior to the fix, onunload() cleared the timer but
+    // never flushed the pending snapshot — the just-sent thread was lost.
+    const { plugin, state } = makePlugin({ specorator: {} })
+    const recent = makeRecord({ threadId: 'just-sent', transport: 'subscription' })
+
+    plugin.scheduleChatThreadsPersistence(
+      new Map<string, ChatThreadRecord>([['just-sent', recent]]),
+    )
+
+    // Advance time only partially — the debounce hasn't fired yet.
+    await vi.advanceTimersByTimeAsync(500)
+    expect(state.blob).toBeNull()
+
+    // User closes Obsidian. The fix flushes the pending snapshot directly.
+    plugin.onunload()
+    // _flushChatThreads is async (Obsidian's onunload contract is fire-
+    // and-forget, so we use void in the impl) — flush microtasks to
+    // observe the write.
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const specorator = state.blob?.specorator as Record<string, unknown>
+    const chatThreads = specorator.chatThreads as Record<string, unknown>
+    expect(Object.keys(chatThreads)).toEqual(['just-sent'])
+  })
+
+  it('is a no-op in onunload() when no flush is pending', async () => {
+    const { plugin, state } = makePlugin({ specorator: {} })
+
+    // No scheduleChatThreadsPersistence call — no pending snapshot.
+    plugin.onunload()
+    await Promise.resolve()
+
+    // saveData was never called; the blob is whatever was already on disk.
+    expect(state.blob).toBeNull()
   })
 })
 

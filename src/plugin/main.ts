@@ -59,6 +59,14 @@ export default class SpecoratorPlugin extends Plugin {
   private _initialChatThreads: ReadonlyArray<ChatThreadRecord> = []
   /** Debounced persistence timer for `chatThreads`. SPEC §9.3 / OQ-ASM-T1. */
   private _chatThreadsFlushTimer: number | null = null
+  /**
+   * Latest snapshot scheduled by `scheduleChatThreadsPersistence` but not yet
+   * flushed to plugin data. Kept on the class so `onunload()` can perform a
+   * final synchronous flush before the debounce timer fires — without this,
+   * a message sent within the 1 s debounce window before Obsidian exits or
+   * the plugin is disabled would silently fail to persist (Codex P1, PR #346).
+   */
+  private _pendingChatThreadsSnapshot: ReadonlyMap<string, ChatThreadRecord> | null = null
   /** Default debounce window in milliseconds for chatThreads flushes. */
   private static readonly _CHAT_THREADS_FLUSH_DEBOUNCE_MS = 1_000
 
@@ -278,9 +286,20 @@ export default class SpecoratorPlugin extends Plugin {
   // expected cleanup path despite the obsidianmd/detach-leaves rule's caution.
   // eslint-disable-next-line obsidianmd/detach-leaves
   override onunload(): void {
+    // Cancel the pending debounce — we're about to flush directly below.
     if (this._chatThreadsFlushTimer !== null) {
       activeWindow.clearTimeout(this._chatThreadsFlushTimer)
       this._chatThreadsFlushTimer = null
+    }
+    // Final synchronous flush of any snapshot scheduled within the debounce
+    // window but not yet written. Without this, a message sent immediately
+    // before Obsidian exits / the plugin is disabled would be lost (Codex P1,
+    // PR #346). `_flushChatThreads` is async; onunload() is fire-and-forget
+    // per Obsidian's contract, so void is correct here.
+    if (this._pendingChatThreadsSnapshot !== null) {
+      const snapshot = this._pendingChatThreadsSnapshot
+      this._pendingChatThreadsSnapshot = null
+      void this._flushChatThreads(snapshot)
     }
     this.app.workspace.detachLeavesOfType(VIEW_TYPE)
     this.bridge?.hideAllNotices()
@@ -335,11 +354,13 @@ export default class SpecoratorPlugin extends Plugin {
    */
   scheduleChatThreadsPersistence(records: ReadonlyMap<string, ChatThreadRecord>): void {
     const snapshot = new Map(records)
+    this._pendingChatThreadsSnapshot = snapshot
     if (this._chatThreadsFlushTimer !== null) {
       activeWindow.clearTimeout(this._chatThreadsFlushTimer)
     }
     this._chatThreadsFlushTimer = activeWindow.setTimeout(() => {
       this._chatThreadsFlushTimer = null
+      this._pendingChatThreadsSnapshot = null
       void this._flushChatThreads(snapshot)
     }, SpecoratorPlugin._CHAT_THREADS_FLUSH_DEBOUNCE_MS)
   }
