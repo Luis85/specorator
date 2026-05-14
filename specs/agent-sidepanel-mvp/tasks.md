@@ -754,7 +754,7 @@ visible UI surfaces: `SessionResumeIndicator.vue` and
 - **Depends on:** T-ASM-052
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] Three scenarios (present, missing, malformed) covered.
+  - [x] Three scenarios (present, missing, malformed) covered.
 
 ### T-ASM-054 🔨 — Plugin-data blob: read/write `chatThreads` map
 
@@ -765,9 +765,9 @@ visible UI surfaces: `SessionResumeIndicator.vue` and
 - **Depends on:** T-ASM-053
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] T-ASM-053 tests pass.
-  - [ ] Malformed records filtered + logged at `warn` per §11.3.
-  - [ ] Debounced flush prevents disk thrashing.
+  - [x] T-ASM-053 tests pass.
+  - [x] Malformed records filtered + logged at `warn` per §11.3.
+  - [x] Debounced flush prevents disk thrashing.
 
 ### T-ASM-055 🧪 — Tests for `SessionResumeIndicator.vue` and `SubprocessStartingPill.vue`
 
