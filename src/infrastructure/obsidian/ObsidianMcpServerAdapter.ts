@@ -10,6 +10,7 @@ import type {
 } from '@/domain/ports'
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
 import { AdvanceFeatureStageUseCase } from '@/application/feature/AdvanceFeatureStageUseCase'
+import type { FeedbackService } from '@/application/shared/FeedbackService'
 import { ProposalStore, type PendingProposal } from './ProposalStore'
 import {
   registerVaultAndFeatureTools,
@@ -32,11 +33,12 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
     private readonly specsFolder: () => string,
     private readonly metadataCache: MetadataCachePort,
     private readonly canvas: CanvasPort,
+    private readonly feedback?: FeedbackService,
   ) {
-    // MCP callers are headless agents with no UI surface, so the use case is
-    // constructed without a FeedbackService. REQ-AVS-005 overwrite-protection
-    // notices are silently suppressed for MCP invocations by design.
-    this.advanceUseCase = new AdvanceFeatureStageUseCase(repo)
+    // REQ-AVS-005: thread FeedbackService through to AdvanceFeatureStageUseCase
+    // so overwrite-protection notices fire consistently on the MCP path (when
+    // an existing stage file is preserved during accept).
+    this.advanceUseCase = new AdvanceFeatureStageUseCase(repo, feedback)
   }
 
   // Off-port by design: called directly by the sidebar module, not via MCP.
@@ -95,6 +97,7 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
       this.proposalStore,
       this.specsFolder,
       this.advanceUseCase,
+      this.feedback,
     )
     registerMetadataTools(mcp, this.metadataCache)
     registerLinksTools(mcp, this.vault, this.metadataCache, this.proposalStore)

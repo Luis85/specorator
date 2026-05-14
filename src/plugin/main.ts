@@ -20,6 +20,7 @@ import { ClaudeSubprocessAdapter, type SpawnFn } from '@/infrastructure/obsidian
 import { ClaudeBinaryResolver, type SpawnFn as ResolverSpawnFn } from '@/infrastructure/obsidian/ClaudeBinaryResolver'
 import { degradedClaudeCliPort } from '@/infrastructure/bridge/degradedClaudeCliPort'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
+import { FeedbackService } from '@/application/shared/FeedbackService'
 import { PluginCore } from '@/core/plugin-core'
 import { ALL_MODULES, type ModuleDescriptor } from '@/modules'
 import { i18nMerge, i18nTranslate, setLocale, type SupportedLocale } from '@/ui/i18n'
@@ -61,16 +62,17 @@ export default class SpecoratorPlugin extends Plugin {
       logger: this.bridge,
       t: translationPort,
       i18nMerge,
-      // MCP adapter intentionally does not inject FeedbackService —
-      // overwrite-protection notices are vault-side feedback, but MCP callers
-      // are headless agents with no UI surface. Notices are silently
-      // suppressed for this caller.
+      // REQ-AVS-005: inject FeedbackService into the MCP adapter so
+      // overwrite-protection notices fire consistently on both the UI and MCP
+      // code paths. Without this, MCP-driven `workflow_create_artifact` and
+      // `workflow_propose_advance` accepts silently preserve existing files.
       mcpServer: new ObsidianMcpServerAdapter(
         this.bridge,
         new FeatureRepository(this.bridge, this.bridge),
         () => this.settings.specsFolder,
         new ObsidianMetadataCacheAdapter(this.app),
         new ObsidianCanvasAdapter(this.bridge),
+        new FeedbackService(this.bridge, this.bridge),
       ),
       isMcpServerEnabled: () => this.settings.mcpServerEnabled,
     })

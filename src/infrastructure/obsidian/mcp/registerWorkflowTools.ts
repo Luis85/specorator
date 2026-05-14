@@ -5,6 +5,7 @@ import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
 import { FEATURE_STEPS, getAllStepMeta, getStepMeta } from '@/domain/feature/FeatureStep'
 import { Slug } from '@/domain/shared/Slug'
 import type { AdvanceFeatureStageUseCase } from '@/application/feature/AdvanceFeatureStageUseCase'
+import type { FeedbackService } from '@/application/shared/FeedbackService'
 import type { ProposalStore } from '../ProposalStore'
 import { joinVaultPath, ok } from './shared'
 
@@ -15,6 +16,7 @@ export function registerWorkflowTools(
   store: ProposalStore,
   specsFolder: () => string,
   advanceUseCase: AdvanceFeatureStageUseCase,
+  feedback?: FeedbackService,
 ): void {
   mcp.registerTool(
     'workflow_get_state',
@@ -105,6 +107,16 @@ export function registerWorkflowTools(
         if (!fresh) throw new Error(`Feature no longer exists: ${slug}`)
         const result = await repo.createStageFile(fresh, stageIndex + 1)
         if (!result.ok) throw result.error
+        // REQ-AVS-005: the repository preserved an existing stage file. Surface
+        // a notice so the user knows their handwritten file was kept.
+        if (!result.value.created) {
+          const meta = getStepMeta(stageIndex + 1)
+          if (meta !== undefined) {
+            feedback?.info(
+              `Specorator: ${meta.slug}.md already exists — keeping your version.`,
+            )
+          }
+        }
       })
       return ok({ proposalId, status: 'pending' })
     },

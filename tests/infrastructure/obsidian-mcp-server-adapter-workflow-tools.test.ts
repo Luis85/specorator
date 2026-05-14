@@ -4,6 +4,7 @@ import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { MockMetadataCacheAdapter } from '@/infrastructure/mock/MockMetadataCacheAdapter'
 import { MockCanvasAdapter } from '@/infrastructure/mock/MockCanvasAdapter'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
+import { FeedbackService } from '@/application/shared/FeedbackService'
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -145,12 +146,14 @@ describe('ObsidianMcpServerAdapter — workflow tools', () => {
     const repo = new FeatureRepository(vault, vault)
     const metadataCache = new MockMetadataCacheAdapter()
     const canvas = new MockCanvasAdapter()
+    const feedback = new FeedbackService(vault, vault)
     adapter = new ObsidianMcpServerAdapter(
       vault,
       repo,
       () => SPECS_FOLDER,
       metadataCache,
       canvas,
+      feedback,
     )
     ;({ port } = await adapter.start())
     await initMcp(port)
@@ -294,6 +297,59 @@ describe('ObsidianMcpServerAdapter — workflow tools', () => {
       // workflow-state.md must remain unchanged
       const state = await vault.readFile('specs/dark-mode/workflow-state.md')
       expect(state).toContain('currentStep: 3')
+    })
+
+    // REQ-AVS-005: when the next stage file already exists, accepting the
+    // proposal must surface an overwrite-protection notice on the MCP path
+    // (parity with the UI path). Regression guard: previously the MCP adapter
+    // wired AdvanceFeatureStageUseCase without a FeedbackService, so accept
+    // silently preserved the file with no user feedback.
+    it('surfaces REQ-AVS-005 notice when the next stage file already exists (accept)', async () => {
+      // Pre-populate requirements.md so advance from step 3 → step 4 (design)
+      // would not trigger preservation. Instead, pre-populate design.md and
+      // first advance to step 4, then advance once more so design.md is
+      // present and gets preserved. Simpler: pre-populate the file for the
+      // NEXT step from currentStep 3 — which is design.md.
+      await vault.writeFile(
+        'specs/dark-mode/design.md',
+        '# Hand-written design notes (must be preserved)\n',
+      )
+
+      const queueResp = await callTool(port, 'workflow_propose_advance', { slug: 'dark-mode' })
+      const queued = parseToolResult(queueResp) as { proposalId: string }
+
+      // Accept the proposal — this runs the mutate closure, which calls
+      // AdvanceFeatureStageUseCase.execute(). The use case sees that
+      // createStageFile returned { created: false } and emits the notice
+      // through FeedbackService → MockBridge.showInfo().
+      await adapter.acceptProposal(queued.proposalId)
+
+      const notices = vault.getNotices()
+      const preservation = notices.find(
+        (n) => n.severity === 'info' && n.message.includes('design.md already exists'),
+      )
+      expect(preservation).toBeDefined()
+
+      // The handwritten file must remain untouched.
+      const preserved = await vault.readFile('specs/dark-mode/design.md')
+      expect(preserved).toContain('Hand-written design notes')
+    })
+
+    it('surfaces REQ-AVS-005 notice on workflow_create_artifact accept when the file exists', async () => {
+      // idea.md already exists in the fixture for dark-mode.
+      const queueResp = await callTool(port, 'workflow_create_artifact', {
+        slug: 'dark-mode',
+        stage: 'idea',
+      })
+      const queued = parseToolResult(queueResp) as { proposalId: string }
+
+      await adapter.acceptProposal(queued.proposalId)
+
+      const notices = vault.getNotices()
+      const preservation = notices.find(
+        (n) => n.severity === 'info' && n.message.includes('idea.md already exists'),
+      )
+      expect(preservation).toBeDefined()
     })
   })
 })
