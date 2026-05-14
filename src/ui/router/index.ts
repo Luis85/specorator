@@ -4,6 +4,7 @@ import HomeView from '../views/HomeView.vue'
 import FeaturesView from '../views/FeaturesView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import FileView from '../views/FileView.vue'
+import ChatSidebarView from '../views/ChatSidebarView.vue'
 import MainLayout from '../layouts/MainLayout.vue'
 import OnboardingWizard from '../components/OnboardingWizard.vue'
 
@@ -19,6 +20,7 @@ export const router = createRouter({
     { path: '/', name: 'home', component: HomeView, meta: { layout: MainLayout } },
     { path: '/features', name: 'features', component: FeaturesView, meta: { layout: MainLayout } },
     { path: '/settings', name: 'settings', component: SettingsView, meta: { layout: MainLayout } },
+    { path: '/chat', name: 'chat', component: ChatSidebarView, meta: { layout: MainLayout } },
     { path: '/file/:filePath(.*)', name: 'file', component: FileView, meta: { layout: MainLayout } },
     { path: '/onboarding', name: 'onboarding', component: OnboardingWizard },
   ],
