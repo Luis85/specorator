@@ -33,6 +33,7 @@ const inputRef = ref<InstanceType<typeof ChatInput> | null>(null)
 // Settings-version watcher (D-CCS-003)
 const settingsVersion = inject(SETTINGS_VERSION_KEY, ref(0))
 watch(settingsVersion, async () => {
+  if (claudeCliPort === undefined) return
   available.value = await claudeCliPort.isAvailable()
 })
 
@@ -58,7 +59,9 @@ function focusTextarea(): void {
 }
 
 onMounted(async () => {
-  available.value = await claudeCliPort.isAvailable()
+  if (claudeCliPort !== undefined) {
+    available.value = await claudeCliPort.isAvailable()
+  }
   availabilityChecked.value = true
 
   // Subscribe to active file changes
@@ -118,6 +121,7 @@ async function handleSend(): Promise<void> {
 
   const { prompt, truncated } = buildPrompt(store.userText, loadedFiles)
 
+  if (claudeCliPort === undefined) { store.setError('query_failed'); return }
   const result = await claudeCliPort.query(prompt, { timeoutMs: 30_000 })
 
   if (result.ok) {
