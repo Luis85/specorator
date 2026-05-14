@@ -5,10 +5,8 @@ import { getStepMeta } from '@/domain/feature/FeatureStep';
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository';
 import type { VaultPort, SettingsPort } from '@/domain/ports';
 import { joinVaultPath } from '../vault/VaultPath';
-import {
-	deserializeWorkflowState,
-	serializeWorkflowState,
-} from '../workflow-state/WorkflowStateDocument';
+import type { IWorkflowStateCodec } from '../workflow-state/IWorkflowStateCodec';
+import { WorkflowStateCodec } from '../workflow-state/WorkflowStateCodec';
 
 const META_FILE = 'workflow-state.md';
 
@@ -39,10 +37,15 @@ function buildStageStub(
 // ── Repository ────────────────────────────────────────────────────────────────
 
 export class FeatureRepository implements IFeatureRepository {
+	private readonly codec: IWorkflowStateCodec;
+
 	constructor(
 		private readonly vault: VaultPort,
 		private readonly settingsPort: SettingsPort,
-	) {}
+		codec?: IWorkflowStateCodec,
+	) {
+		this.codec = codec ?? new WorkflowStateCodec();
+	}
 
 	private checkedPath(...segments: string[]): string {
 		const path = joinVaultPath(...segments);
@@ -70,7 +73,7 @@ export class FeatureRepository implements IFeatureRepository {
 				const path = this.checkedPath(specsFolder, folder, META_FILE);
 				try {
 					const content = await this.vault.readFile(path);
-					return deserializeWorkflowState(content);
+					return this.codec.deserialize(content);
 				} catch {
 					return null;
 				}
@@ -84,7 +87,7 @@ export class FeatureRepository implements IFeatureRepository {
 		const path = this.metaPath(specsFolder, slug.toString());
 		if (!(await this.vault.fileExists(path))) return null;
 		const content = await this.vault.readFile(path);
-		const feature = deserializeWorkflowState(content);
+		const feature = this.codec.deserialize(content);
 		// File exists but is malformed — throw so callers cannot silently overwrite it.
 		if (feature === null) {
 			throw new Error(`Spec at "${path}" exists but could not be parsed — will not overwrite.`);
@@ -115,7 +118,7 @@ export class FeatureRepository implements IFeatureRepository {
 			await this.vault.createFolder(folder);
 			const path = this.metaPath(specsFolder, feature.slug.toString());
 			const isNew = !(await this.vault.fileExists(path));
-			if (!isNew && deserializeWorkflowState(await this.vault.readFile(path)) === null) {
+			if (!isNew && this.codec.deserialize(await this.vault.readFile(path)) === null) {
 				return err(
 					new Error(`Spec at "${path}" exists but could not be parsed — will not overwrite.`),
 				);
@@ -141,7 +144,7 @@ export class FeatureRepository implements IFeatureRepository {
 					ideaCreated = true;
 				}
 			}
-			await this.vault.writeFile(path, serializeWorkflowState(feature));
+			await this.vault.writeFile(path, this.codec.serialize(feature));
 			return ok({ ideaCreated });
 		} catch (e) {
 			return err(e instanceof Error ? e : new Error(String(e)));
