@@ -105,6 +105,8 @@ describe('promoteLegacyFlatSettings', () => {
       'gateStrictness',
       'teamMode',
       'logLevel',
+      'mcpServerEnabled',
+      'anthropicApiKey',
     ])
   })
 })

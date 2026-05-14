@@ -373,6 +373,15 @@ export default defineConfig(
 		},
 	},
 
+	// Mock infrastructure — runs in browser/test contexts (not inside Obsidian's
+	// popout windows), so the activeWindow timer rule does not apply.
+	{
+		files: ['src/infrastructure/mock/**/*.ts', 'src/infrastructure/localstorage/**/*.ts'],
+		rules: {
+			'obsidianmd/prefer-active-window-timers': 'off',
+		},
+	},
+
 	// UI layer — must not reach into infrastructure. Also runs in plain
 	// browser via the standalone build, so popout-window-only rules from
 	// the obsidianmd plugin don't apply here.

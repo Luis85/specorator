@@ -10,6 +10,8 @@ export const PLUGIN_SETTINGS_KEYS: ReadonlyArray<keyof PluginSettings> = [
   'gateStrictness',
   'teamMode',
   'logLevel',
+  'mcpServerEnabled',
+  'anthropicApiKey',
 ]
 
 /**

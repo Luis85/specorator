@@ -13,6 +13,9 @@ function makePort(available: boolean | 'throw'): ClaudeCliPort {
 		isAvailable: available === 'throw'
 			? vi.fn().mockRejectedValue(new Error('boom'))
 			: vi.fn().mockResolvedValue(available),
+		query: vi.fn().mockResolvedValue({ ok: false, error: new Error('stub') }),
+		startup: vi.fn().mockResolvedValue(undefined),
+		shutdown: vi.fn(),
 	}
 }
 
