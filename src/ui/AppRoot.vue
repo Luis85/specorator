@@ -66,6 +66,24 @@ onUnmounted(() => {
 .specorator-root *::after {
   box-sizing: border-box;
 }
+
+/* Global utility: visually-hidden but screen-reader-readable. Kept here in
+   AppRoot's unscoped <style> block so the SFC-driven build pipeline tracks
+   the rule and emits it into styles.css on every regeneration. Previously
+   lived as plain CSS in styles.css and got pruned on every build:web run
+   (recurring Codex P2). Consumed by ContextFileChip.vue and any other
+   component that surfaces accessible labels without visible text. */
+.specorator-root .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 </style>
 
 <!-- Standalone-only variables are imported by main.ts and scoped to .specorator-root.
