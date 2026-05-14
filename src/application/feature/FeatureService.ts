@@ -1,9 +1,7 @@
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
-import { ok, type Result } from '@/domain/shared/Result'
+import { err, ok, type Result } from '@/domain/shared/Result'
 import type { Feature } from '@/domain/feature/Feature'
 import { CreateFeatureUseCase } from './CreateFeatureUseCase'
-import { ActivateFeatureUseCase } from './ActivateFeatureUseCase'
-import { ArchiveFeatureUseCase } from './ArchiveFeatureUseCase'
 import { AdvanceFeatureStageUseCase } from './AdvanceFeatureStageUseCase'
 
 export class FeatureService {
@@ -19,14 +17,33 @@ export class FeatureService {
   }
 
   activateFeature(featureId: string): Promise<Result<Feature>> {
-    return new ActivateFeatureUseCase(this.repo).execute({ featureId })
+    return this.executeTransition(featureId, (f) => f.activate())
   }
 
   archiveFeature(featureId: string): Promise<Result<Feature>> {
-    return new ArchiveFeatureUseCase(this.repo).execute({ featureId })
+    return this.executeTransition(featureId, (f) => f.archive())
   }
 
   advanceFeatureStage(featureId: string): Promise<Result<Feature>> {
     return new AdvanceFeatureStageUseCase(this.repo).execute({ featureId })
+  }
+
+  private async executeTransition(
+    featureId: string,
+    transition: (f: Feature) => Result<Feature>,
+  ): Promise<Result<Feature>> {
+    const feature = await this.repo.findById(featureId)
+    if (!feature) {
+      return err(new Error(`Feature "${featureId}" not found`))
+    }
+
+    const transitionResult = transition(feature)
+    if (!transitionResult.ok) return transitionResult
+
+    const saveResult = await this.repo.save(transitionResult.value)
+    // C3 will change save() to Result<SaveResult>; for now Result<void>'s err branch is structurally compatible with Result<Feature>'s err branch.
+    if (!saveResult.ok) return saveResult
+
+    return ok(transitionResult.value)
   }
 }
