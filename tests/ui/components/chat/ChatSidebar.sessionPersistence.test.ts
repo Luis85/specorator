@@ -134,6 +134,7 @@ async function mountSidebar(args: {
 		args.resolvedTransportKind ??
 		(args.settings?.transportKind === 'subscription' ? 'subscription' : 'api-key')
 
+	const transportKindRef = ref<TransportKind>(resolvedKind)
 	const wrapper = mount(ChatSidebar, {
 		global: {
 			plugins: [pinia],
@@ -145,14 +146,14 @@ async function mountSidebar(args: {
 				[WORKSPACE_PORT as symbol]: bridge,
 				[SETTINGS_PORT as symbol]: bridge,
 				[LOGGER_PORT as symbol]: bridge,
-				[TRANSPORT_KIND_KEY as symbol]: ref<TransportKind>(resolvedKind),
+				[TRANSPORT_KIND_KEY as symbol]: transportKindRef,
 			},
 		},
 	})
 
 	await flushPromises()
 	const store = useChatStore(pinia)
-	return { wrapper, port, bridge, po: new ChatSidebarPO(wrapper), store }
+	return { wrapper, port, bridge, po: new ChatSidebarPO(wrapper), store, transportKindRef }
 }
 
 async function send(store: ReturnType<typeof useChatStore>, po: ChatSidebarPO, text: string) {
@@ -224,6 +225,43 @@ describe('ChatSidebar — session-persistence wiring (T-ASM-057)', () => {
 		await send(store, po, 'hello')
 		const threadId = store.activeThreadId!
 		expect(store.chatThreads.get(threadId)?.transport).toBe('api-key')
+	})
+
+	it('rotates the active thread when the resolved transport changes (Codex P2, PR #350)', async () => {
+		// Start under subscription transport — first send creates a thread.
+		const { po, store, transportKindRef } = await mountSidebar({
+			settings: { transportKind: 'auto' },
+			resolvedTransportKind: 'subscription',
+		})
+		await send(store, po, 'hello')
+		const firstThreadId = store.activeThreadId!
+		expect(store.chatThreads.get(firstThreadId)?.transport).toBe('subscription')
+
+		// User switches transport between turns (selector resolves to api-key now).
+		transportKindRef.value = 'api-key'
+		await send(store, po, 'second turn')
+
+		// The active thread must have rotated — resuming the previous thread's
+		// sessionId under a different transport would produce incoherent
+		// context and audit metadata.
+		const secondThreadId = store.activeThreadId!
+		expect(secondThreadId).not.toBe(firstThreadId)
+		expect(store.chatThreads.get(secondThreadId)?.transport).toBe('api-key')
+		// The original subscription thread is preserved in the map (history is
+		// not deleted — only the active-thread pointer rotates).
+		expect(store.chatThreads.get(firstThreadId)?.transport).toBe('subscription')
+	})
+
+	it('does NOT rotate when the resolved transport stays the same across sends', async () => {
+		const { po, store } = await mountSidebar({
+			settings: { transportKind: 'auto' },
+			resolvedTransportKind: 'subscription',
+		})
+		await send(store, po, 'first')
+		const firstId = store.activeThreadId!
+		await send(store, po, 'second')
+		const secondId = store.activeThreadId!
+		expect(secondId).toBe(firstId)
 	})
 
 	it('second send on the same thread forwards resumeSessionId and flashes sessionResumed (REQ-ASM-035)', async () => {

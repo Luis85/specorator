@@ -116,19 +116,30 @@ export function validateProposalPath(
     )
   }
 
-  // 5. Vault-root containment. Compute resolved vs root using POSIX
-  //    normalisation (no filesystem access, no `..` flattening). Because
-  //    step 3 already rejected `..` segments, this check primarily catches
-  //    pathological compositions that survive normalisation.
-  const resolved = posixNormalize(vaultRoot + '/' + path)
-  const root = posixNormalize(vaultRoot + '/')
-  if (!resolved.startsWith(root)) {
-    return err(
-      new PathValidationError(
-        'ESCAPES_VAULT_ROOT',
-        `Path resolves outside the vault root: ${path}`,
-      ),
-    )
+  // 5. Specs-folder containment. The path must be vault-relative AND start
+  //    with the configured specs folder (Codex P1, PR #350). Previously this
+  //    check composed `vaultRoot + '/' + path` and tested the composition's
+  //    prefix — trivially satisfied for any non-`..` relative path, so a
+  //    sibling-folder path slipped through and could write outside `specs/`.
+  //    Now the check is direct: the proposal's path itself must start with
+  //    `<specsFolder>/`. An empty `specsFolder` (vault-root config) accepts
+  //    any non-escaping path. The variable name remains `vaultRoot` for
+  //    backwards compatibility with the historic signature; the semantics
+  //    are "the containment root for proposals" — i.e. the specs folder.
+  const normalisedRoot = posixNormalize(vaultRoot)
+  const normalisedPath = posixNormalize(path)
+  if (normalisedRoot.length > 0) {
+    const requiredPrefix = normalisedRoot.endsWith('/')
+      ? normalisedRoot
+      : normalisedRoot + '/'
+    if (!normalisedPath.startsWith(requiredPrefix)) {
+      return err(
+        new PathValidationError(
+          'ESCAPES_VAULT_ROOT',
+          `Path is not under the configured specs folder '${vaultRoot}': ${path}`,
+        ),
+      )
+    }
   }
 
   // 6. All checks passed.

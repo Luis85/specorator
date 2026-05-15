@@ -301,8 +301,16 @@ function resolveActiveThread(args: {
 }): { threadId: string; resumeSessionId: SessionId | undefined; isResumedTurn: boolean } {
   const nowIso = new Date().toISOString()
   let threadId = store.activeThreadId
-  if (threadId === null || !store.chatThreads.has(threadId)) {
-    threadId = threadId ?? generateThreadId()
+  const existing = threadId !== null ? store.chatThreads.get(threadId) : undefined
+  // Rotate when the active thread's transport no longer matches the resolved
+  // transport for this turn (Codex P2, PR #350). Resuming a session id that
+  // was minted under a different transport produces incoherent context and
+  // audit metadata, so we mint a fresh thread instead of carrying state
+  // across the transport boundary.
+  const transportMismatch =
+    existing !== undefined && existing.transport !== args.transport
+  if (threadId === null || existing === undefined || transportMismatch) {
+    threadId = generateThreadId()
     const fresh: ChatThreadRecord = {
       threadId,
       sessionId: null,
