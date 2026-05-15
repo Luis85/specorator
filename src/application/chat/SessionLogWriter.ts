@@ -53,6 +53,28 @@ export interface SessionLogProposalInput {
 }
 
 /**
+ * Thrown by {@link SessionLogWriter.appendProposalDecision} when the
+ * caller-supplied thread has no captured `session_id`. Audit rows are
+ * load-bearing (REQ-ASM-046) — the commit pipeline must surface this as a
+ * hard failure (`SESSION_LOG_FAILED`) so a vault write is not reported
+ * successful while its decision row is silently dropped.
+ *
+ * Free-text turns (`appendUserAssistant`) remain fire-and-forget per
+ * REQ-ASM-040 and continue to drop the write with a debug log when no
+ * session id is present — they do not throw this error.
+ */
+export class SessionLogNoSessionError extends Error {
+  public readonly name = 'SessionLogNoSessionError'
+
+  constructor(threadId: string) {
+    super(
+      `SessionLogWriter: cannot append proposal decision — thread ${threadId} has no captured session_id`,
+    )
+    Object.setPrototypeOf(this, new.target.prototype)
+  }
+}
+
+/**
  * Redact a session id to its first 8 characters (NFR-ASM-005). Returns
  * `'<none>'` when `null` so log lines remain deterministic. Pure helper, kept
  * private to the module so callers cannot accidentally surface raw ids.
@@ -174,10 +196,22 @@ function formatTurnBlock(turn: { readonly user: string; readonly assistant: stri
   ].join('\n')
 }
 
+/**
+ * Decision value for a `## proposal` audit row.
+ *
+ *   - `accepted` — user clicked Accept and the vault write landed.
+ *   - `rejected` — user clicked Reject (or cancelled the overwrite modal).
+ *   - `failed`   — user clicked Accept but the vault write failed; the audit
+ *                  row mirrors the terminal failure state so the session log
+ *                  reflects every decided outcome (trust-first invariant —
+ *                  SPEC-ASM-001 §3.6 step 3, REQ-ASM-046).
+ */
+export type ProposalDecisionValue = 'accepted' | 'rejected' | 'failed'
+
 /** Body text for a `## proposal` audit block (REQ-ASM-046). */
 function formatProposalBlock(args: {
   readonly path: string
-  readonly decision: 'accepted' | 'rejected'
+  readonly decision: ProposalDecisionValue
   readonly decidedAt: string
   readonly rationale: string | undefined
 }): string {
@@ -252,12 +286,24 @@ export class SessionLogWriter {
    * Fire-and-forget: serialises onto the per-log-file mutex and never rejects.
    * Errors are routed to `logger.error` with a redacted `sessionId`
    * (NFR-ASM-005). Callers do **not** await (T-ASM-048 DoD).
+   *
+   * REQ-ASM-040: when the thread has no captured `session_id`, drops the
+   * write with a debug log and resolves successfully — the free-text path
+   * tolerates a missing session for the first turn.
    */
   appendUserAssistant(
     thread: ChatThreadRecord,
     turn: { readonly user: string; readonly assistant: string },
   ): Promise<void> {
-    return this.enqueue(thread, async (resolvedPath) => {
+    if (thread.sessionId === null) {
+      // No `session_id` captured yet — drop with a debug line, do NOT throw
+      // (matches REQ-ASM-040 fire-and-forget contract).
+      this.logger.debug('SessionLogWriter: drop write (no sessionId)', {
+        threadId: thread.threadId,
+      })
+      return Promise.resolve()
+    }
+    return this._runQueued(thread, async (resolvedPath) => {
       const at = this.nowIso()
       const exists = await this.vault.fileExists(resolvedPath)
       if (!exists) {
@@ -268,6 +314,15 @@ export class SessionLogWriter {
       const updated = rewriteUpdated(existing, at)
       const next = `${updated.endsWith('\n') ? updated : `${updated}\n`}${formatTurnBlock(turn, at)}`
       await this.vault.writeFile(resolvedPath, next)
+    }).catch((thrown: unknown) => {
+      // Fire-and-forget swallow — route to logger.error with a redacted
+      // sessionId (NFR-ASM-005) and resolve successfully so external callers
+      // never see a rejection (REQ-ASM-040).
+      this.logger.error(
+        'SessionLogWriter append failed',
+        thrown instanceof Error ? thrown : new Error(String(thrown)),
+        { redactedSessionId: redactSessionId(thread.sessionId) },
+      )
     })
   }
 
@@ -276,14 +331,33 @@ export class SessionLogWriter {
    * — the proposal-commit pipeline treats a missing audit row as a hard
    * failure. Internal queueing still goes through the same mutex so we keep a
    * single linearised history per log file.
+   *
+   * **Unlike `appendUserAssistant`, this method rejects** on either:
+   *   - missing `session_id` on the thread (throws {@link SessionLogNoSessionError}); or
+   *   - underlying `VaultPort.writeFile` / `readFile` failure (re-thrown).
+   *
+   * The commit pipeline surfaces both as `SESSION_LOG_FAILED` so the user
+   * never sees a vault-mutating action reported successful while its audit
+   * row was silently dropped (trust-first invariant, NFR-ASM-011).
    */
   appendProposalDecision(args: {
     readonly thread: ChatThreadRecord
     readonly proposal: SessionLogProposalInput
-    readonly decision: 'accepted' | 'rejected'
+    readonly decision: ProposalDecisionValue
     readonly decidedAt: string
   }): Promise<void> {
-    return this.enqueue(args.thread, async (resolvedPath) => {
+    if (args.thread.sessionId === null) {
+      // Audit-row writes are load-bearing — surface the missing session as a
+      // hard failure rather than silently dropping. The commit pipeline maps
+      // this to `SESSION_LOG_FAILED`.
+      this.logger.error(
+        'SessionLogWriter.appendProposalDecision: no sessionId',
+        new SessionLogNoSessionError(args.thread.threadId),
+        { threadId: args.thread.threadId },
+      )
+      return Promise.reject(new SessionLogNoSessionError(args.thread.threadId))
+    }
+    return this._runQueued(args.thread, async (resolvedPath) => {
       const exists = await this.vault.fileExists(resolvedPath)
       const block = formatProposalBlock({
         path: args.proposal.envelope.path,
@@ -303,24 +377,24 @@ export class SessionLogWriter {
   }
 
   /**
-   * Wraps the `op` in the per-log mutex and a top-level catch that routes
-   * failures to `logger.error`. Resolves the conflict-suffix path once per
-   * sessionId.
+   * Wraps the `op` in the per-log mutex. Resolves the conflict-suffix path
+   * once per sessionId and ensures the parent folder exists. **Rethrows** any
+   * failure so the caller decides whether to swallow (fire-and-forget for
+   * `appendUserAssistant` per REQ-ASM-040) or surface (load-bearing for
+   * `appendProposalDecision` per REQ-ASM-046).
    *
-   * `appendProposalDecision` callers await this promise (REQ-ASM-046);
-   * `appendUserAssistant` callers do not (REQ-ASM-040).
+   * Pre-condition: `thread.sessionId !== null`. Both public callers check
+   * this before invoking `_runQueued`.
    */
-  private enqueue(
+  private _runQueued(
     thread: ChatThreadRecord,
     op: (resolvedPath: string) => Promise<void>,
   ): Promise<void> {
+    // Type-narrow: both callers gate on `sessionId !== null` already, but a
+    // defensive runtime assertion keeps this method total even if a future
+    // caller forgets.
     if (thread.sessionId === null) {
-      // No `session_id` captured yet — the writer cannot resolve a path
-      // (RES-ASM-001 §F1). Surface as a debug line and drop the write.
-      this.logger.debug('SessionLogWriter: drop write (no sessionId)', {
-        threadId: thread.threadId,
-      })
-      return Promise.resolve()
+      return Promise.reject(new SessionLogNoSessionError(thread.threadId))
     }
     const sessionId = thread.sessionId
     const basePath = resolveSessionLogPath(thread.feature, sessionId, this.specsFolder)
@@ -328,21 +402,18 @@ export class SessionLogWriter {
     const previous = this.mutex.get(queueKey) ?? Promise.resolve()
     const next = previous
       .catch(() => {
-        // Prior op failed; we've already logged. Reset the chain so this op
-        // still runs.
+        // Prior op failed; the original caller has already received that
+        // rejection (or swallowed it). Reset the chain so this op still runs.
       })
       .then(async () => {
         const resolvedPath = await this.resolveConflictSuffix(basePath, sessionId)
         await this.ensureParentFolder(resolvedPath)
         await op(resolvedPath)
       })
-      .catch((thrown: unknown) => {
-        this.logger.error(
-          'SessionLogWriter append failed',
-          thrown instanceof Error ? thrown : new Error(String(thrown)),
-          { redactedSessionId: redactSessionId(sessionId) },
-        )
-      })
+    // Store the chain on the mutex; subsequent enqueues link off this `next`.
+    // We deliberately do NOT swallow rejections here — the queue must propagate
+    // failure to the caller, while still allowing follow-on writes to proceed
+    // (the `.catch(() => {})` above on the next iteration handles chain reset).
     this.mutex.set(queueKey, next)
     return next
   }
