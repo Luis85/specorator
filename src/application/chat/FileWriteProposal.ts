@@ -50,4 +50,12 @@ export interface FileWriteProposal {
 
   /** Commit-time failure reason; populated when `status === 'failed'`, else `null`. */
   readonly failureReason: CommitProposalErrorCode | null
+
+  /**
+   * The user-typed message that produced this proposal. Stored on the
+   * proposal so the per-card Retry button can resubmit the exact prompt
+   * that authored this envelope, even when newer prompts (and newer
+   * proposals) have arrived on the same thread since (Codex P2, PR #347).
+   */
+  readonly originPrompt: string
 }

@@ -37,6 +37,7 @@ function makeProposal(overrides: {
 		proposedAt: '2026-05-14T12:00:00.000Z',
 		decidedAt: overrides.status && overrides.status !== 'pending' ? '2026-05-14T12:00:01.000Z' : null,
 		failureReason: overrides.failureReason ?? null,
+		originPrompt: '/create-file notes/new-file.md',
 	}
 }
 

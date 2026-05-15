@@ -81,6 +81,7 @@ function makeProposal(opts: {
     proposedAt: '2026-05-14T12:00:00.000Z',
     decidedAt: null,
     failureReason: null,
+    originPrompt: '/create-file specs/foo/idea.md',
   }
 }
 

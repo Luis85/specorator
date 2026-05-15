@@ -126,6 +126,15 @@ const proposalPathErrors = ref<Map<string, PathValidationError>>(new Map())
 // Last user turn (for Retry — REQ-ASM-050). Captured on each send.
 const lastUserTurn = ref<string>('')
 
+/**
+ * Proposal IDs whose commit is currently in flight. Used by
+ * `handleAcceptProposal` to guard against re-entrant clicks (a fast
+ * double-click could fire `commitFileWriteProposal` twice for the same
+ * proposal, producing duplicate vault writes / audit rows — Codex P1,
+ * PR #347). Cleared on terminal status flip.
+ */
+const inFlightAccepts = new Set<string>()
+
 // Settings-version watcher (D-CCS-003)
 const settingsVersion = inject(SETTINGS_VERSION_KEY, ref(0))
 watch(settingsVersion, async () => {
@@ -364,6 +373,7 @@ function addProposalFromEnvelope(args: {
   envelope: CreateFileEnvelope
   threadId: string
   pathError: PathValidationError | null
+  originPrompt: string
 }): FileWriteProposal {
   const proposalId = generateProposalId()
   const proposal: FileWriteProposal = {
@@ -374,6 +384,7 @@ function addProposalFromEnvelope(args: {
     proposedAt: new Date().toISOString(),
     decidedAt: null,
     failureReason: null,
+    originPrompt: args.originPrompt,
   }
   store.addProposal(proposal)
   if (args.pathError !== null) {
@@ -457,6 +468,7 @@ async function handleStructuredSend(args: {
     envelope,
     threadId: args.threadId,
     pathError,
+    originPrompt: args.userMessage,
   })
 
   // Mirror the structured turn to the session log too (the assistant body is
@@ -580,8 +592,18 @@ function findProposal(proposalId: string): FileWriteProposal | null {
  * UI cannot bypass it.
  */
 async function handleAcceptProposal(payload: { proposalId: string }): Promise<void> {
+  // Re-entrant guard (Codex P1, PR #347). A fast double-click on Accept could
+  // fire two commits for the same proposal before the first promise resolves;
+  // the second one would race the vault write + audit row. Two guards:
+  //   1. The terminal-status check below rejects clicks on proposals that
+  //      already moved out of `pending`.
+  //   2. The `inFlightAccepts` Set rejects clicks while the first commit is
+  //      still in flight (between click 1 and the `setProposalStatus` call
+  //      that flips the status to a terminal value).
+  if (inFlightAccepts.has(payload.proposalId)) return
   const proposal = findProposal(payload.proposalId)
   if (proposal === null) return
+  if (proposal.status !== 'pending') return
   const thread = store.chatThreads.get(proposal.threadId)
   if (thread === undefined) return
   if (confirmModalPort === undefined) {
@@ -593,6 +615,7 @@ async function handleAcceptProposal(payload: { proposalId: string }): Promise<vo
     store.setProposalStatus(payload.proposalId, 'failed', 'WRITE_FAILED')
     return
   }
+  inFlightAccepts.add(payload.proposalId)
   const writer = await sessionLogWriterFactory.getWriter()
   const result = await commitFileWriteProposal(proposal, thread, {
     vault: vaultPort,
@@ -602,6 +625,7 @@ async function handleAcceptProposal(payload: { proposalId: string }): Promise<vo
     i18n: inlineTranslator,
     nowIso: () => new Date().toISOString(),
   })
+  inFlightAccepts.delete(payload.proposalId)
   if (result.ok) {
     store.setProposalStatus(payload.proposalId, 'accepted')
   } else {
@@ -636,9 +660,15 @@ async function handleRejectProposal(payload: { proposalId: string }): Promise<vo
  * same `handleSend` pathway. Previous proposals stay in the audit trail
  * unchanged — `addProposalFromEnvelope` always uses a fresh proposalId.
  */
-async function handleRetryProposal(_payload: { proposalId: string }): Promise<void> {
-  if (lastUserTurn.value.trim() === '') return
-  store.setUserText(lastUserTurn.value)
+async function handleRetryProposal(payload: { proposalId: string }): Promise<void> {
+  // Resubmit the exact prompt that authored THIS proposal — not the global
+  // `lastUserTurn`. With multiple proposal cards in a thread, retrying an
+  // older card would otherwise resend a newer prompt and regenerate an
+  // unrelated proposal (Codex P2, PR #347).
+  const proposal = findProposal(payload.proposalId)
+  const promptText = proposal?.originPrompt ?? lastUserTurn.value
+  if (promptText.trim() === '') return
+  store.setUserText(promptText)
   await handleSend()
 }
 
