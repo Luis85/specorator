@@ -210,7 +210,7 @@ describe('queryStructured (SPEC §6.6)', () => {
     }
   })
 
-  it('forwards the options bag verbatim to runStructured', async () => {
+  it('forwards the options bag to runStructured (systemPromptSuffix gets the JSON-only guard appended, Codex P2 fix)', async () => {
     const mock = new MockClaudeSubprocessAdapter()
     mock.available = true
 
@@ -220,11 +220,30 @@ describe('queryStructured (SPEC §6.6)', () => {
       timeoutMs: 5000,
     })
 
-    expect(mock.structuredLog[0]?.options).toEqual({
-      systemPromptSuffix: 'PRE',
-      resumeSessionId: 'sess-1',
-      timeoutMs: 5000,
-    })
+    const entry = mock.structuredLog[0]
+    expect(entry).toBeDefined()
+    const opts = entry.options
+    expect(opts.resumeSessionId).toBe('sess-1')
+    expect(opts.timeoutMs).toBe(5000)
+    // The caller's suffix is preserved as a prefix; the structured guard is
+    // appended so the model returns an object-only response.
+    const suffix = opts.systemPromptSuffix ?? ''
+    expect(suffix.startsWith('PRE')).toBe(true)
+    expect(suffix).toContain('JSON object')
+    expect(suffix).toContain('Do not include any prose')
+  })
+
+  it('appends the JSON-only guard even when no caller suffix is provided (Codex P2 fix)', async () => {
+    const mock = new MockClaudeSubprocessAdapter()
+    mock.available = true
+
+    await queryStructured(mock, 'p', {})
+
+    const entry = mock.structuredLog[0]
+    expect(entry).toBeDefined()
+    const suffix = entry.options.systemPromptSuffix ?? ''
+    expect(suffix).toContain('JSON object')
+    expect(suffix).toContain('Do not include any prose')
   })
 })
 

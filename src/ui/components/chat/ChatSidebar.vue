@@ -765,7 +765,30 @@ watch(available, async () => {
     <!-- Not yet checked (avoid flash of wrong state) -->
     <template v-else-if="!availabilityChecked" />
 
-    <!-- API key missing degraded state (REQ-CCS-018) -->
+    <!--
+      Subscription-transport CLI missing (Codex P2, PR #347). When the user
+      has selected the subscription transport, the API key is irrelevant —
+      availability depends on the locally-installed `claude` binary. Show
+      CLI-install guidance instead of the (useless) API-key copy, even if
+      `apiKeyMissing` happens to be true.
+    -->
+    <div
+      v-else-if="!available && transportKind === 'subscription'"
+      class="sp-chat__degraded"
+    >
+      <h3
+        class="sp-chat__degraded-heading"
+        tabindex="-1"
+        data-testid="chat-degraded-heading"
+      >
+        Claude CLI is not available.
+      </h3>
+      <p class="sp-chat__degraded-body">
+        The subscription transport needs the Claude CLI installed locally. Install Claude Code on this device, then reopen this view.
+      </p>
+    </div>
+
+    <!-- API key missing degraded state (REQ-CCS-018) — api-key transport only. -->
     <div v-else-if="!available && apiKeyMissing" class="sp-chat__degraded">
       <h3
         class="sp-chat__degraded-heading"
