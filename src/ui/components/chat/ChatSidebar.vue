@@ -274,8 +274,12 @@ async function computeStagePromptContext(
  * Load file contents for all context files; failed reads yield empty content.
  */
 async function loadContextFileBodies(): Promise<ContextFile[]> {
+  // Use the path-deduped view so a file present in both the auto slot and a
+  // manual entry is included exactly once in the prompt budget (Codex P2
+  // follow-up, PR #351). The underlying manual entry stays in state and
+  // resurfaces when the auto slot moves away.
   return Promise.all(
-    store.contextFiles.map(async (entry) => {
+    store.effectiveContextFiles.map(async (entry) => {
       const readResult = await tryAsync(() => vaultPort.readFile(entry.path))
       return {
         path: entry.path,
@@ -833,7 +837,7 @@ watch(available, async () => {
       </div>
 
       <ContextFileList
-        :files="store.contextFiles"
+        :files="store.effectiveContextFiles"
         :disabled="store.status === 'loading'"
         @remove="handleRemoveFile"
       />
