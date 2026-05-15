@@ -223,6 +223,15 @@ const responseState = computed<ResponseState>(() => {
   if (store.status === 'error') {
     return store.errorType === 'timeout' ? 'timeout' : 'error'
   }
+  // Pending proposal cards take precedence over the structured-fail banner
+  // (Codex P2 fix). A parse failure on a later /create-file turn must not
+  // hide still-actionable Accept/Reject controls for proposals already on
+  // screen — otherwise the user is stranded mid-decision and has to send
+  // another message just to recover the controls.
+  const hasPendingProposal = activeThreadProposals.value.some(
+    (entry) => entry.proposal.status === 'pending',
+  )
+  if (hasPendingProposal) return 'success'
   if (structuredFail.value) return 'structured-fail'
   if (store.response !== null) {
     return store.truncated ? 'trimmed-success' : 'success'

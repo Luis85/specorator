@@ -333,6 +333,37 @@ describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
 		expect(store.proposals.size).toBe(0)
 	})
 
+	it('pending proposal card stays actionable when a later send produces a structured-parse failure (Codex P2 fix)', async () => {
+		const { wrapper, po, store, port } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: 'specs/demo/idea.md',
+				content: '# Demo idea\n',
+			},
+		})
+
+		// 1. First send: valid envelope → pending proposal card.
+		await send(store, po, '/create-file specs/demo/idea.md')
+		await flushPromises()
+		expect(store.proposals.size).toBe(1)
+		const firstProposalId = Array.from(store.proposals.keys())[0]
+		expect(store.proposals.get(firstProposalId)?.status).toBe('pending')
+
+		// 2. Second send on the same thread: parse failure.
+		port.cannedStructuredEnvelope = null
+		port.cannedStructuredRawResult = 'not JSON here'
+		await send(store, po, '/create-file specs/demo/other.md')
+		await flushPromises()
+
+		// The pending card from send #1 must still render with Accept/Reject —
+		// the structured-fail banner must not preempt actionable proposals.
+		const fail = wrapper.find('[data-testid="chat-response-structured-fail"]')
+		expect(fail.exists()).toBe(false)
+		const card = new FileWriteProposalCardPO(wrapper)
+		expect(card.hasAccept()).toBe(true)
+		expect(card.hasReject()).toBe(true)
+	})
+
 	it('regression: free-text prompts still use query() and skip the structured path', async () => {
 		const { port, po, store } = await mountSidebar({})
 
