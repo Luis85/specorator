@@ -227,10 +227,15 @@ const responseState = computed<ResponseState>(() => {
   // on screen — otherwise the user is stranded mid-decision and loses access
   // to the controls until another successful turn occurs. The `loading`
   // state still wins so an in-flight turn is signalled.
-  const hasPendingProposal = activeThreadProposals.value.some(
-    (entry) => entry.proposal.status === 'pending',
+  //
+  // Path-invalid proposals are excluded: they render as a non-interactive
+  // error message (no Accept/Reject buttons) and stay `pending` indefinitely,
+  // so treating them as "actionable" would suppress error banners with no
+  // benefit to the user (Codex P2, PR #347).
+  const hasActionablePendingProposal = activeThreadProposals.value.some(
+    (entry) => entry.proposal.status === 'pending' && entry.pathError === null,
   )
-  if (hasPendingProposal) return 'success'
+  if (hasActionablePendingProposal) return 'success'
   if (store.status === 'error') {
     return store.errorType === 'timeout' ? 'timeout' : 'error'
   }

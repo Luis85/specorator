@@ -352,6 +352,30 @@ describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
 		expect(store.proposals.size).toBe(1)
 	})
 
+	it('path-invalid pending proposals do NOT suppress later error banners (Codex P2 fix)', async () => {
+		const { wrapper, po, store } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: '../escape.md',
+				content: 'oops',
+			},
+		})
+
+		// Land a path-invalid pending proposal (no Accept/Reject controls).
+		await send(store, po, '/create-file ../escape.md')
+		await flushPromises()
+		expect(store.proposals.size).toBe(1)
+
+		// A subsequent send that errors out must still surface the error
+		// banner — the path-invalid card is non-actionable and should not
+		// preempt user-visible failure feedback.
+		store.setError('query_failed')
+		await flushPromises()
+
+		const errorBanner = wrapper.find('[data-testid="chat-response-error"]')
+		expect(errorBanner.exists()).toBe(true)
+	})
+
 	it('vault-write failure during Accept flips proposal to failed with failureReason (REQ-ASM-043/044)', async () => {
 		const { wrapper, po, store, bridge } = await mountSidebar({
 			cannedEnvelope: {
