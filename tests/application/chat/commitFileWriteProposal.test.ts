@@ -307,10 +307,11 @@ describe('commitFileWriteProposal — error codes (T-ASM-066)', () => {
     expect(writeSpy.mock.calls.filter(([p]) => p === 'specs/foo/idea.md')).toHaveLength(0)
   })
 
-  it('returns FOLDER_CREATE_FAILED when createFolder for the hint throws', async () => {
+  it('returns FOLDER_CREATE_FAILED when createFolder for the hint throws and appends a failed audit row (Codex P2 fix)', async () => {
     const proposal = makeProposal({
       path: 'specs/new/idea.md',
       folderHint: 'specs/new',
+      rationale: 'because-folder',
     })
     const failingVault = {
       ...ports.vault,
@@ -325,7 +326,14 @@ describe('commitFileWriteProposal — error codes (T-ASM-066)', () => {
       listFiles: ports.vault.listFiles.bind(ports.vault),
       listFolders: ports.vault.listFolders.bind(ports.vault),
     }
-    const deps = makeDeps(ports, { vault: failingVault })
+    const sessionLog = new SessionLogWriter(
+      ports.vault,
+      ports.logger,
+      'specs',
+      () => FIXED_NOW,
+    )
+    const appendSpy = vi.spyOn(sessionLog, 'appendProposalDecision')
+    const deps = makeDeps(ports, { vault: failingVault, sessionLog })
 
     const result = await commitFileWriteProposal(proposal, makeThread(), deps)
 
@@ -337,6 +345,49 @@ describe('commitFileWriteProposal — error codes (T-ASM-066)', () => {
     expect(
       failingVault.writeFile.mock.calls.some(([p]) => p === 'specs/new/idea.md'),
     ).toBe(false)
+    // Codex P2 — terminal failure still mirrors to the audit log.
+    expect(appendSpy).toHaveBeenCalledTimes(1)
+    const args = appendSpy.mock.calls[0][0]
+    expect(args.decision).toBe('failed')
+    expect(args.proposal.envelope.path).toBe('specs/new/idea.md')
+    expect(args.proposal.envelope.rationale).toBe('because-folder')
+  })
+
+  it('returns WRITE_FAILED with a failed audit row when fileExists rejects (Codex P2 fix)', async () => {
+    const proposal = makeProposal({
+      path: 'specs/foo/idea.md',
+      content: 'body',
+      rationale: 'because-probe',
+    })
+    const sessionLog = new SessionLogWriter(
+      ports.vault,
+      ports.logger,
+      'specs',
+      () => FIXED_NOW,
+    )
+    const appendSpy = vi.spyOn(sessionLog, 'appendProposalDecision')
+    const existsSpy = vi
+      .spyOn(ports.vault, 'fileExists')
+      .mockImplementationOnce(async () => {
+        throw new Error('boom: permission denied')
+      })
+    const writeSpy = vi.spyOn(ports.vault, 'writeFile')
+    const deps = makeDeps(ports, { sessionLog })
+
+    const result = await commitFileWriteProposal(proposal, makeThread(), deps)
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error.errorCode).toBe('WRITE_FAILED')
+    expect(existsSpy.mock.calls[0]?.[0]).toBe('specs/foo/idea.md')
+    // No vault mutation occurred on the envelope path after the probe failed.
+    expect(writeSpy.mock.calls.some(([p]) => p === 'specs/foo/idea.md')).toBe(false)
+    // Codex P2 — terminal failure still mirrors to the audit log.
+    expect(appendSpy).toHaveBeenCalledTimes(1)
+    const args = appendSpy.mock.calls[0][0]
+    expect(args.decision).toBe('failed')
+    expect(args.proposal.envelope.path).toBe('specs/foo/idea.md')
+    expect(args.proposal.envelope.rationale).toBe('because-probe')
   })
 
   it('returns WRITE_FAILED when vault.writeFile throws on the envelope path and appends a failed audit row (Codex P2 fix)', async () => {

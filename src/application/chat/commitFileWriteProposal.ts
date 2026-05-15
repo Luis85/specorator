@@ -26,11 +26,14 @@
  *      user cancels, append a `rejected` audit row and return
  *      `err(OVERWRITE_CANCELLED)`. **No further VaultPort calls.**
  *   2. **Folder hint (REQ-ASM-047).** If `envelope.folderHint` is a non-empty
- *      string, call `vault.createFolder`. On error → `err(FOLDER_CREATE_FAILED)`.
+ *      string, call `vault.createFolder`. On error → `err(FOLDER_CREATE_FAILED)`
+ *      AFTER firing a best-effort `decision: 'failed'` audit row.
  *   3. **Write (REQ-ASM-043).** Call `vault.writeFile`. On error → `err(WRITE_FAILED)`
- *      AFTER firing an audit row with decision `'rejected'` and rationale
+ *      AFTER firing an audit row with decision `'failed'` and rationale
  *      preserved (the audit row is best-effort here — its own failure does not
- *      override the original write failure).
+ *      override the original write failure). The same trust-first audit
+ *      invariant applies to the `fileExists` probe in step 1: a rejection
+ *      surfaces as `WRITE_FAILED` and still mirrors a `'failed'` audit row.
  *   4. **Audit log (REQ-ASM-046).** Append a `## proposal` decision block with
  *      `decision: 'accepted'`. Awaited inline — a missing audit row for a
  *      vault-mutating action is treated as a hard failure (`SESSION_LOG_FAILED`).
@@ -110,6 +113,20 @@ export async function commitFileWriteProposal(
   //    confirmed-true result only.
   const existsResult = await tryAsync(() => deps.vault.fileExists(envelope.path))
   if (!existsResult.ok) {
+    // Trust-first invariant: every terminal state mirrors to the session log
+    // (SPEC-ASM-001 §3.6, REQ-ASM-046). Best-effort here — the underlying
+    // vault probe already failed; an audit-row failure must not override the
+    // original error code surfaced to the user.
+    await tryAsync(() =>
+      deps.sessionLog.appendProposalDecision({
+        thread,
+        proposal: {
+          envelope: { path: envelope.path, rationale },
+        },
+        decision: 'failed',
+        decidedAt: deps.nowIso(),
+      }),
+    )
     return err(
       new CommitProposalError(
         'WRITE_FAILED',
@@ -153,6 +170,19 @@ export async function commitFileWriteProposal(
   if (folderHint !== undefined && folderHint.length > 0) {
     const folderResult = await tryAsync(() => deps.vault.createFolder(folderHint))
     if (!folderResult.ok) {
+      // Trust-first invariant: terminal-failure outcomes mirror to the
+      // session log (REQ-ASM-046). Best-effort — folder creation already
+      // failed; an audit-row failure must not override the original error.
+      await tryAsync(() =>
+        deps.sessionLog.appendProposalDecision({
+          thread,
+          proposal: {
+            envelope: { path: envelope.path, rationale },
+          },
+          decision: 'failed',
+          decidedAt: deps.nowIso(),
+        }),
+      )
       return err(
         new CommitProposalError(
           'FOLDER_CREATE_FAILED',
