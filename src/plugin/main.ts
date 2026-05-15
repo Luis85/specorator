@@ -1,4 +1,4 @@
-import { Plugin, TFolder } from 'obsidian'
+import { Plugin, TFile, TFolder } from 'obsidian'
 // SPEC-ASM-001 §9.1 — `child_process.spawn` is imported statically at the top
 // of this file so the subscription adapter's constructor in `onload()` has no
 // dynamic-import sites. The ESLint guard for unbundled `child_process` is
@@ -234,6 +234,12 @@ export default class SpecoratorPlugin extends Plugin {
     // T-CCS-031: Right-click "Add to chat context" menu item on vault files.
     this.registerEvent(
       this.app.workspace.on('file-menu', (menu, file) => {
+        // Restrict the "Add to chat context" entry to actual files. The
+        // `file-menu` event also fires for folders (TAbstractFile is the
+        // union); adding a folder path would produce a context entry that
+        // fails silently at `readFile` time and wastes prompt budget
+        // (Codex P2, PR #350).
+        if (!(file instanceof TFile)) return
         menu.addItem((item) => {
           item
             .setTitle('Add to chat context')
