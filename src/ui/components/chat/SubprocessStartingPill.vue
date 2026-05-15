@@ -10,9 +10,13 @@
  * The component is purely presentational; the parent (ChatSidebar)
  * binds `visible` from `chatStore.cliStartingUp`.
  */
+import { useI18n } from 'vue-i18n'
+
 defineProps<{
   visible: boolean
 }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
@@ -23,7 +27,7 @@ defineProps<{
     role="status"
     aria-live="polite"
   >
-    Starting up the Claude tool…
+    {{ t('chat.subscription.startingPill') }}
   </span>
 </template>
 

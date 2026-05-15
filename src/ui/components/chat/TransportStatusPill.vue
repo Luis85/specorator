@@ -14,11 +14,14 @@
  * The component is purely presentational; the parent (ChatSidebar)
  * binds `kind` from the `TRANSPORT_KIND_KEY` injection.
  */
+import { useI18n } from 'vue-i18n'
 import type { TransportKind } from '@/domain/chat/TransportKind'
 
 defineProps<{
 	kind: TransportKind
 }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
@@ -29,7 +32,7 @@ defineProps<{
 		role="status"
 		aria-live="polite"
 	>
-		Using your installed Claude tool.
+		{{ t('chat.subscription.statusPill') }}
 	</span>
 </template>
 
