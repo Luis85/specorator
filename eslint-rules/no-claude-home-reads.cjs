@@ -54,23 +54,42 @@ function stringValueOf(node) {
 }
 
 function isProcessEnvHomeNode(node) {
-  // process.env.HOME or process.env['HOME']
-  if (!node || node.type !== 'MemberExpression') return false
+  if (!node) return false
+  // `process.env?.HOME` parses to a `ChainExpression` wrapping the
+  // underlying MemberExpression; unwrap one level so optional-chained
+  // forms aren't a bypass (Codex P1, PR #348).
+  const inner = node.type === 'ChainExpression' ? node.expression : node
+  if (!inner || inner.type !== 'MemberExpression') return false
+  // The `process.env` part can itself be optional-chained
+  // (e.g. `process?.env.HOME`), so unwrap the inner object too.
+  const objectExpr =
+    inner.object.type === 'ChainExpression'
+      ? inner.object.expression
+      : inner.object
   const objectIsProcessEnv =
-    node.object.type === 'MemberExpression' &&
-    node.object.object.type === 'Identifier' &&
-    node.object.object.name === 'process' &&
-    node.object.property.type === 'Identifier' &&
-    node.object.property.name === 'env'
+    objectExpr.type === 'MemberExpression' &&
+    objectExpr.object.type === 'Identifier' &&
+    objectExpr.object.name === 'process' &&
+    objectExpr.property.type === 'Identifier' &&
+    objectExpr.property.name === 'env'
   if (!objectIsProcessEnv) return false
-  if (node.property.type === 'Identifier') return node.property.name === 'HOME'
-  if (isStringLiteral(node.property)) return node.property.value === 'HOME'
+  if (inner.property.type === 'Identifier') return inner.property.name === 'HOME'
+  if (isStringLiteral(inner.property)) return inner.property.value === 'HOME'
   return false
 }
 
 function isOsHomedirCall(node) {
-  if (!node || node.type !== 'CallExpression') return false
-  const callee = node.callee
+  if (!node) return false
+  // Same optional-chain unwrap for `os?.homedir()` (Codex P1, PR #348).
+  const inner = node.type === 'ChainExpression' ? node.expression : node
+  if (!inner || inner.type !== 'CallExpression') return false
+  const calleeRaw = inner.callee
+  // The callee itself may be optional-chained (`os?.homedir`); unwrap.
+  const callee =
+    calleeRaw && calleeRaw.type === 'ChainExpression'
+      ? calleeRaw.expression
+      : calleeRaw
+  if (!callee) return false
   if (
     callee.type === 'MemberExpression' &&
     callee.object.type === 'Identifier' &&

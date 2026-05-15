@@ -113,6 +113,27 @@ ruleTester.run('no-claude-home-reads', rule, {
       code: 'const p = `${os.homedir()}/.claude/sessions`',
       errors: [{ messageId: 'forbidden' }],
     },
+    // Codex P1 round 2 (PR #348) — optional-chained HOME lookups.
+    {
+      code: "const p = process.env?.HOME + '/.claude'",
+      errors: [{ messageId: 'forbidden' }],
+    },
+    {
+      code: 'const p = `${process.env?.HOME}/.claude`',
+      errors: [{ messageId: 'forbidden' }],
+    },
+    {
+      code: 'const p = `${process?.env.HOME}/.claude`',
+      errors: [{ messageId: 'forbidden' }],
+    },
+    {
+      code: 'const p = `${os?.homedir()}/.claude`',
+      errors: [{ messageId: 'forbidden' }],
+    },
+    {
+      code: "const p = path.join(os?.homedir(), '.claude')",
+      errors: [{ messageId: 'forbidden' }],
+    },
   ],
 })
 
