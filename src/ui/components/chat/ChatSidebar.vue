@@ -664,7 +664,21 @@ async function handleAcceptProposal(payload: { proposalId: string }): Promise<vo
     // validated at creation time, but settings can change between
     // creation and accept — re-checking here prevents a stale proposal
     // from bypassing containment after a specsFolder change.
-    const currentSettings = await settingsPort.getSettings()
+    //
+    // `getSettings()` can reject under a bridge/vault error; wrap it via
+    // `tryAsync` so a transient failure does not strand the proposal in
+    // `pending` (Codex P2 #3, PR #350). On read failure we fail the
+    // Accept rather than committing under stale settings.
+    const settingsResult = await tryAsync(() => settingsPort.getSettings())
+    if (!settingsResult.ok) {
+      loggerPort.warn('handleAcceptProposal: settingsPort.getSettings() failed during revalidation', {
+        proposalId: payload.proposalId,
+        reason: settingsResult.error.message,
+      })
+      store.setProposalStatus(payload.proposalId, 'failed', 'WRITE_FAILED')
+      return
+    }
+    const currentSettings = settingsResult.value
     const revalidation = validateProposalPath(proposal.envelope, currentSettings.specsFolder)
     if (!revalidation.ok) {
       const next = new Map(proposalPathErrors.value)

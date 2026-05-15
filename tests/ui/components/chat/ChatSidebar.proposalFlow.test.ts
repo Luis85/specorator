@@ -330,6 +330,31 @@ describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
 		expect(appendCalls.length).toBeGreaterThanOrEqual(1)
 	})
 
+	it('still flips the proposal to failed when settingsPort.getSettings() rejects at Accept time (Codex P2 #3, PR #350)', async () => {
+		const { wrapper, po, store, bridge } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: 'specs/demo/idea.md',
+				content: '# Demo\n',
+			},
+			settings: { specsFolder: 'specs' },
+		})
+		await send(store, po, '/create-file specs/demo/idea.md')
+		await flushPromises()
+		const proposalId = Array.from(store.proposals.keys())[0]
+
+		// `getSettings()` rejects at Accept time. The handler must not
+		// propagate the rejection — it must catch it and flip the proposal
+		// to `failed` so the user is not stranded.
+		vi.spyOn(bridge, 'getSettings').mockRejectedValueOnce(new Error('boom: settings read failed'))
+
+		const card = new FileWriteProposalCardPO(wrapper)
+		await card.clickAccept()
+		await flushPromises()
+
+		expect(store.proposals.get(proposalId)?.status).toBe('failed')
+	})
+
 	it('still flips the proposal to failed when the revalidation audit mirror itself throws (Codex P2 #2, PR #350)', async () => {
 		// Same scenario as above (settings change between proposal and
 		// Accept), but the session-log writer's `appendProposalDecision`
