@@ -75,6 +75,14 @@ export default class SpecoratorPlugin extends Plugin {
    * the plugin is disabled would silently fail to persist (Codex P1, PR #346).
    */
   private _pendingChatThreadsSnapshot: ReadonlyMap<string, ChatThreadRecord> | null = null
+  /**
+   * Tail of the chat-thread flush chain. Each new flush is chained off the
+   * previous one's settled promise so writes are strictly serialised: an
+   * older snapshot can never resolve AFTER a newer snapshot and clobber it
+   * (Codex P1, PR #350). Initialised to a settled promise so the first
+   * flush attaches without an extra branch.
+   */
+  private _chatThreadsFlushQueue: Promise<void> = Promise.resolve()
   /** Default debounce window in milliseconds for chatThreads flushes. */
   private static readonly _CHAT_THREADS_FLUSH_DEBOUNCE_MS = 1_000
 
@@ -313,7 +321,13 @@ export default class SpecoratorPlugin extends Plugin {
     if (this._pendingChatThreadsSnapshot !== null) {
       const snapshot = this._pendingChatThreadsSnapshot
       this._pendingChatThreadsSnapshot = null
-      void this._flushChatThreads(snapshot)
+      // Tail-chain so an in-flight debounced flush finishes before this
+      // final write (Codex P1, PR #350). Without this, the final flush
+      // could race a still-resolving prior flush and lose its update.
+      this._chatThreadsFlushQueue = this._chatThreadsFlushQueue
+        .catch(() => undefined)
+        .then(() => this._flushChatThreads(snapshot))
+      void this._chatThreadsFlushQueue
     }
     this.app.workspace.detachLeavesOfType(VIEW_TYPE)
     this.bridge?.hideAllNotices()
@@ -375,7 +389,15 @@ export default class SpecoratorPlugin extends Plugin {
     this._chatThreadsFlushTimer = activeWindow.setTimeout(() => {
       this._chatThreadsFlushTimer = null
       this._pendingChatThreadsSnapshot = null
-      void this._flushChatThreads(snapshot)
+      // Serialise via the tail-chained queue so older snapshots can never
+      // resolve after newer ones (Codex P1, PR #350). `.catch(() => undefined)`
+      // keeps the chain alive past a transient saveData failure — the next
+      // flush should still attempt to write, not be silently swallowed by a
+      // rejected predecessor.
+      this._chatThreadsFlushQueue = this._chatThreadsFlushQueue
+        .catch(() => undefined)
+        .then(() => this._flushChatThreads(snapshot))
+      void this._chatThreadsFlushQueue
     }, SpecoratorPlugin._CHAT_THREADS_FLUSH_DEBOUNCE_MS)
   }
 

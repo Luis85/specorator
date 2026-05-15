@@ -1,5 +1,5 @@
 import { ItemView, Platform, type WorkspaceLeaf } from 'obsidian'
-import { createApp, ref, type App as VueApp, type Ref } from 'vue'
+import { createApp, ref, watch, type App as VueApp, type Ref } from 'vue'
 import { createPinia, type Pinia } from 'pinia'
 import type { Router } from 'vue-router'
 import { router } from '@/ui/router'
@@ -108,6 +108,19 @@ export class SpecoratorView extends ItemView {
    */
   private readonly _options: SpecoratorViewOptions | null
 
+  /**
+   * Set by `bumpSettingsVersion()` when called mid-turn (status === 'loading').
+   * The watcher installed in `onOpen()` consumes the flag when the chat
+   * status transitions back out of 'loading' and applies the deferred
+   * transport refresh (Codex P1, PR #350). Without this, a settings change
+   * made during a long-running request would silently never apply until
+   * the user saved settings again or reloaded the plugin.
+   */
+  private _pendingSettingsRefresh = false
+
+  /** Disposer for the chat-status watcher; set in `onOpen()`, called in `onClose()`. */
+  private _statusWatchStop: (() => void) | null = null
+
   constructor(
     leaf: WorkspaceLeaf,
     private readonly plugin: SpecoratorPlugin,
@@ -167,6 +180,8 @@ export class SpecoratorView extends ItemView {
     chatStore.$subscribe((_mutation, state) => {
       this.plugin.scheduleChatThreadsPersistence(state.chatThreads)
     })
+
+    this._installPendingRefreshWatcher()
 
     this.vueApp = createApp(AppRoot)
     this.vueApp.use(this.pinia)
@@ -254,6 +269,9 @@ export class SpecoratorView extends ItemView {
     this._routerErrorCleanup?.()
     this._routerErrorCleanup = null
     this._router = null
+    this._statusWatchStop?.()
+    this._statusWatchStop = null
+    this._pendingSettingsRefresh = false
     this.plugin.bridge?.hideAllNotices()
     this.vueApp?.unmount()
     this.vueApp = null
@@ -283,11 +301,49 @@ export class SpecoratorView extends ItemView {
   public bumpSettingsVersion(): void {
     this._settingsVersion.value++
     if (this._isChatLoading()) {
-      // REQ-ASM-003 — skip transport switch while a turn is in flight. The
-      // next `bumpSettingsVersion()` (or the user's next message) will pick
-      // up the new transport on the following call.
+      // REQ-ASM-003 — skip transport switch while a turn is in flight. Record
+      // the deferred-refresh intent; the status watcher in `onOpen()` will
+      // re-invoke `_applyTransportRefresh()` when the turn ends, so the
+      // user's settings change is never silently dropped (Codex P1, PR #350).
+      this._pendingSettingsRefresh = true
       return
     }
+    this._applyTransportRefresh()
+  }
+
+  /**
+   * Install the chat-status watcher that consumes
+   * `_pendingSettingsRefresh` when an in-flight turn ends (Codex P1, PR #350).
+   * Called from `onOpen()`; also re-exposed (public) so unit tests can wire
+   * the watcher manually after seeding `this.pinia` without going through
+   * the full mount path.
+   */
+  public _installPendingRefreshWatcher(): void {
+    if (this.pinia === null) return
+    if (this._statusWatchStop !== null) return
+    const chatStore = useChatStore(this.pinia)
+    this._statusWatchStop = watch(
+      () => chatStore.status,
+      (next, prev) => {
+        if (prev === 'loading' && next !== 'loading' && this._pendingSettingsRefresh) {
+          this._pendingSettingsRefresh = false
+          this._applyTransportRefresh()
+        }
+      },
+      // Sync flush so the deferred refresh applies in the same microtask
+      // that transitions status out of 'loading'. Without this, the
+      // transport could stay stale for an extra event-loop turn (and the
+      // unit test would race the scheduler).
+      { flush: 'sync' },
+    )
+  }
+
+  /**
+   * Run the adapter `startup()` + `_refreshActivePort()` sequence. Extracted
+   * from `bumpSettingsVersion()` so the chat-status watcher can apply a
+   * deferred refresh when an in-flight turn ends (Codex P1, PR #350).
+   */
+  private _applyTransportRefresh(): void {
     // Re-run BOTH adapters' startup so a freshly-configured API key (api-key
     // path) or CLI path (subscription path) updates each port's
     // `isAvailable()` / `isAvailableSync()` before the selector reads it.

@@ -93,6 +93,7 @@ function makePlugin(initialData: Record<string, unknown>): {
   plugin._initialChatThreads = []
   plugin._chatThreadsFlushTimer = null
   plugin._pendingChatThreadsSnapshot = null
+  plugin._chatThreadsFlushQueue = Promise.resolve()
   plugin.loadData = vi.fn(async () => initialData)
   plugin.saveData = vi.fn(async (data: Record<string, unknown>) => {
     state.blob = data
@@ -284,6 +285,81 @@ describe('scheduleChatThreadsPersistence — debounced flush (T-ASM-054)', () =>
 
     // saveData was never called; the blob is whatever was already on disk.
     expect(state.blob).toBeNull()
+  })
+
+  it('serialises flushes so a slow earlier saveData cannot overwrite a newer one (Codex P1, PR #350)', async () => {
+    // Build a plugin with a saveData that records the order it was INVOKED in,
+    // and resolves on demand. Older flushes must complete (resolve) before
+    // newer ones start.
+    const state: SavedState = { blob: null, saveCount: 0 }
+    const plugin = Object.create(SpecoratorPlugin.prototype) as Record<string, unknown>
+    plugin._storedData = { specorator: { locale: 'en' } }
+    plugin._initialChatThreads = []
+    plugin._chatThreadsFlushTimer = null
+    plugin._pendingChatThreadsSnapshot = null
+    plugin._chatThreadsFlushQueue = Promise.resolve()
+    plugin.app = { workspace: { detachLeavesOfType: vi.fn() } }
+    plugin.loadData = vi.fn(async () => ({}))
+
+    const writeOrder: string[] = []
+    const pendingResolvers: Array<() => void> = []
+    plugin.saveData = vi.fn(async (data: Record<string, unknown>) => {
+      const specorator = (data.specorator ?? {}) as Record<string, unknown>
+      const threads = (specorator.chatThreads ?? {}) as Record<string, unknown>
+      const ids = Object.keys(threads).sort().join(',')
+      writeOrder.push(`start:${ids}`)
+      await new Promise<void>((resolve) => pendingResolvers.push(resolve))
+      writeOrder.push(`finish:${ids}`)
+      state.blob = data
+      state.saveCount += 1
+    })
+
+    const view = plugin as unknown as SpecoratorPlugin
+
+    // Schedule snapshot A, fire its debounce, then schedule snapshot B and
+    // fire its debounce. Both saveData calls are awaiting their resolvers.
+    view.scheduleChatThreadsPersistence(new Map([['t1', makeRecord({ threadId: 't1' })]]))
+    await vi.advanceTimersByTimeAsync(1_000)
+    // A has started; its saveData is parked.
+    expect(writeOrder).toEqual(['start:t1'])
+
+    view.scheduleChatThreadsPersistence(
+      new Map([
+        ['t1', makeRecord({ threadId: 't1' })],
+        ['t2', makeRecord({ threadId: 't2', sessionId: asSessionId('s2'), transport: 'api-key' })],
+      ]),
+    )
+    await vi.advanceTimersByTimeAsync(1_000)
+    // Critical: B has NOT started yet — it is queued behind A. The tail-
+    // chain forces B to wait for A's resolution before its saveData runs.
+    expect(writeOrder).toEqual(['start:t1'])
+
+    // Resolve A.
+    pendingResolvers[0]?.()
+    await vi.runAllTimersAsync()
+    await Promise.resolve()
+    await Promise.resolve()
+    // Now B has started.
+    expect(writeOrder).toContain('finish:t1')
+    expect(writeOrder.find((s) => s.startsWith('start:t1,t2'))).toBe('start:t1,t2')
+
+    // Resolve B.
+    pendingResolvers[1]?.()
+    await vi.runAllTimersAsync()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // Final order: A start → A finish → B start → B finish. Last-write-wins
+    // honoured: the persisted blob is B (the newer snapshot), not A.
+    expect(writeOrder).toEqual([
+      'start:t1',
+      'finish:t1',
+      'start:t1,t2',
+      'finish:t1,t2',
+    ])
+    const specorator = state.blob?.specorator as Record<string, unknown>
+    const threads = specorator.chatThreads as Record<string, unknown>
+    expect(Object.keys(threads).sort()).toEqual(['t1', 't2'])
   })
 })
 

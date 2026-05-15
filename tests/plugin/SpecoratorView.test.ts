@@ -355,6 +355,37 @@ describe('SpecoratorView.bumpSettingsVersion() mid-turn guard (REQ-ASM-003)', ()
     expect(activePort(view)).not.toBe(fixture.sdkAdapter)
   })
 
+  it('auto-applies the deferred refresh when the turn ends (no manual second bump required) — Codex P1, PR #350', async () => {
+    const fixture = makeFixture(
+      { transportKind: 'auto', anthropicApiKey: '' },
+      /* cliResolved */ false,
+    )
+
+    const view = makeView(fixture)
+    view.pinia = pinia
+    // Install the deferred-refresh watcher the way `onOpen()` would.
+    view._installPendingRefreshWatcher()
+
+    const store = useChatStore(pinia)
+    // Mid-turn settings change.
+    store.beginRequest()
+    fixture.plugin.settings = makeSettings({
+      transportKind: 'auto',
+      anthropicApiKey: 'sk-mid-turn',
+    })
+    view.bumpSettingsVersion()
+    expect(activePort(view)).toBe(fixture.degradedPort)
+
+    // Turn finishes — the watcher MUST automatically apply the deferred
+    // refresh without a second `bumpSettingsVersion()` call.
+    store.setResponse('hello', false)
+    // Allow Vue's reactive scheduler to flush the watcher callback.
+    const { nextTick } = await import('vue')
+    await nextTick()
+
+    expect(activePort(view)).toBe(fixture.sdkAdapter)
+  })
+
   it('picks up the deferred change on the NEXT bump after the turn settles', () => {
     const fixture = makeFixture(
       { transportKind: 'auto', anthropicApiKey: '' },
