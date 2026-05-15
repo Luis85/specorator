@@ -147,6 +147,91 @@ describe('useChatStore()', () => {
       store.setActiveFile(null)
       expect(store.contextFiles).toHaveLength(1)
     })
+
+    it('keeps unrelated manual entries when promoting a different file (Codex P2, PR #350)', () => {
+      const store = useChatStore()
+      store.addContextFile(makeFile('notes/a.md', 'a.md', false))
+      store.addContextFile(makeFile('notes/b.md', 'b.md', false))
+      // Focus a file that does NOT match either manual entry.
+      store.setActiveFile(makeFile('notes/c.md', 'c.md', true))
+
+      expect(store.contextFiles).toHaveLength(3)
+      expect(store.contextFiles[0]).toMatchObject({ path: 'notes/c.md', isAuto: true })
+      expect(store.contextFiles.slice(1).map((f) => f.path)).toEqual([
+        'notes/a.md',
+        'notes/b.md',
+      ])
+    })
+
+    it('preserves a same-path manual entry across active-file changes (Codex P2 follow-up, PR #351)', () => {
+      const store = useChatStore()
+      // Manual entry for X.
+      store.addContextFile(makeFile('notes/x.md', 'x.md', false))
+
+      // Focus X — the manual entry must NOT be deleted, just hidden behind
+      // the auto slot for `effectiveContextFiles` consumers.
+      store.setActiveFile(makeFile('notes/x.md', 'x.md', true))
+      expect(store.contextFiles).toHaveLength(2)
+      expect(store.contextFiles.some((f) => f.isAuto && f.path === 'notes/x.md')).toBe(
+        true,
+      )
+      expect(
+        store.contextFiles.some((f) => !f.isAuto && f.path === 'notes/x.md'),
+      ).toBe(true)
+
+      // Clear the auto slot — the manual entry resurfaces.
+      store.setActiveFile(null)
+      expect(store.contextFiles).toHaveLength(1)
+      expect(store.contextFiles[0]).toMatchObject({
+        path: 'notes/x.md',
+        isAuto: false,
+      })
+    })
+  })
+
+  describe('effectiveContextFiles (Codex P2 follow-up, PR #351)', () => {
+    it('dedupes by path when a manual and auto entry share the same vault path', () => {
+      const store = useChatStore()
+      store.addContextFile(makeFile('notes/x.md', 'x.md', false))
+      store.setActiveFile(makeFile('notes/x.md', 'x.md', true))
+
+      // One chip / one prompt-body inclusion.
+      expect(store.effectiveContextFiles).toHaveLength(1)
+      // Auto wins — the deduped view exposes the auto-styled entry so the
+      // chip renders without a remove button.
+      expect(store.effectiveContextFiles[0]).toMatchObject({
+        path: 'notes/x.md',
+        isAuto: true,
+      })
+    })
+
+    it('keeps distinct-path manual + auto entries side-by-side', () => {
+      const store = useChatStore()
+      store.addContextFile(makeFile('notes/manual.md', 'manual.md', false))
+      store.setActiveFile(makeFile('notes/auto.md', 'auto.md', true))
+
+      expect(store.effectiveContextFiles).toHaveLength(2)
+      expect(store.effectiveContextFiles.map((f) => f.path)).toEqual([
+        'notes/auto.md',
+        'notes/manual.md',
+      ])
+    })
+
+    it('exposes the manual entry again after the auto slot is cleared', () => {
+      const store = useChatStore()
+      store.addContextFile(makeFile('notes/x.md', 'x.md', false))
+      store.setActiveFile(makeFile('notes/x.md', 'x.md', true))
+      expect(store.effectiveContextFiles[0]?.isAuto).toBe(true)
+
+      store.setActiveFile(null)
+
+      // Auto gone, manual surfaces in the deduped view.
+      expect(store.effectiveContextFiles).toHaveLength(1)
+      expect(store.effectiveContextFiles[0]).toMatchObject({
+        path: 'notes/x.md',
+        isAuto: false,
+      })
+    })
   })
 
   describe('setUserText', () => {

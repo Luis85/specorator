@@ -291,6 +291,27 @@ describe('SpecoratorView.bumpSettingsVersion() re-runs the selector (REQ-ASM-002
 
     expect(activePort(view)).toBe(fixture.subscriptionAdapter)
   })
+
+  it('also re-runs startup() on the api-key (SDK) adapter so first-time key setup activates in-session (Codex P1, PR #350)', () => {
+    const fixture = makeFixture(
+      { transportKind: 'api-key', anthropicApiKey: '' },
+      /* cliResolved */ false,
+    )
+    const view = makeView(fixture)
+
+    // Save the API key in-session, then bump.
+    fixture.plugin.settings = makeSettings({
+      transportKind: 'api-key',
+      anthropicApiKey: 'sk-just-saved',
+    })
+    view.bumpSettingsVersion()
+
+    // Before the fix, only the subscription adapter's startup() ran. Both
+    // must now be invoked so the SDK adapter re-checks its availability
+    // with the freshly-configured key.
+    expect(fixture.sdkAdapter.startup).toHaveBeenCalled()
+    expect(fixture.subscriptionAdapter.startup).toHaveBeenCalled()
+  })
 })
 
 describe('SpecoratorView.bumpSettingsVersion() mid-turn guard (REQ-ASM-003)', () => {

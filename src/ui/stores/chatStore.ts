@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord'
 import type { SessionId } from '@/domain/chat/SessionId'
@@ -147,7 +147,11 @@ export const useChatStore = defineStore('chat', () => {
    * If file is non-null, forces isAuto=true, removes any existing auto entry,
    * then inserts it at index 0.
    * If file is null, removes any existing auto entry.
-   * Does not affect manual entries.
+   * Manual entries are NEVER mutated — focusing a file that's already manually
+   * pinned does not delete the manual entry; the manual stays in state so it
+   * resurfaces when the auto slot moves away. Duplicate-display / duplicate-
+   * prompt-body concerns are handled at the read site via `effectiveContextFiles`
+   * (Codex P2 follow-up, PR #351).
    */
   function setActiveFile(file: ContextFileEntry | null): void {
     const manuals = contextFiles.value.filter((f) => !f.isAuto)
@@ -328,8 +332,31 @@ export const useChatStore = defineStore('chat', () => {
     sessionResumed.value = value
   }
 
+  /**
+   * Path-deduped view of `contextFiles`. When the same vault path appears in
+   * both the auto slot and a manual entry (the user focused a file they had
+   * already pinned), the auto entry wins and the manual entry is hidden —
+   * one chip, one prompt-body inclusion. The manual entry stays in
+   * `contextFiles` so it resurfaces when the auto slot moves to a different
+   * file or is cleared (Codex P2 follow-up, PR #351).
+   *
+   * Consumers that drive prompt assembly or chip rendering should read this
+   * computed rather than `contextFiles` directly.
+   */
+  const effectiveContextFiles = computed<readonly ContextFileEntry[]>(() => {
+    const seen = new Set<string>()
+    const out: ContextFileEntry[] = []
+    for (const entry of contextFiles.value) {
+      if (seen.has(entry.path)) continue
+      seen.add(entry.path)
+      out.push(entry)
+    }
+    return out
+  })
+
   return {
     contextFiles,
+    effectiveContextFiles,
     userText,
     response,
     status,
