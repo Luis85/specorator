@@ -44,6 +44,10 @@ ruleTester.run('no-claude-home-reads', rule, {
     // Template literal with unrelated quasi after HOME.
     'const p = `${process.env.HOME}/.config/foo`',
     'const p = `${os.homedir()}/.config`',
+    // Unrelated `.join` calls (Array.prototype.join, etc.) must NOT trip.
+    "const s = ['a','b'].join(',')",
+    "const p = path.posix.join(os.homedir(), '.config')",
+    "const p = join('foo', 'bar')",
   ],
   invalid: [
     // Pattern 1 — literal `'~/.claude/'`.
@@ -132,6 +136,39 @@ ruleTester.run('no-claude-home-reads', rule, {
     },
     {
       code: "const p = path.join(os?.homedir(), '.claude')",
+      errors: [{ messageId: 'forbidden' }],
+    },
+    // Codex P1 round 3 (PR #348) — broader HOME / join shapes.
+    // Bracket-property env access.
+    {
+      code: "const p = process['env'].HOME + '/.claude'",
+      errors: [{ messageId: 'forbidden' }],
+    },
+    {
+      code: "const p = process.env['HOME'] + '/.claude'",
+      errors: [{ messageId: 'forbidden' }],
+    },
+    // Deeper `globalThis.process.env.HOME` chain.
+    {
+      code: "const p = globalThis.process.env.HOME + '/.claude'",
+      errors: [{ messageId: 'forbidden' }],
+    },
+    {
+      code: 'const p = `${globalThis.process.env.HOME}/.claude`',
+      errors: [{ messageId: 'forbidden' }],
+    },
+    // `path.posix.join` and `path.win32.join` aliases.
+    {
+      code: "const p = path.posix.join(os.homedir(), '.claude')",
+      errors: [{ messageId: 'forbidden' }],
+    },
+    {
+      code: "const p = path.win32.join(os.homedir(), '.claude')",
+      errors: [{ messageId: 'forbidden' }],
+    },
+    // Destructured `join` from node:path.
+    {
+      code: "const p = join(os.homedir(), '.claude')",
       errors: [{ messageId: 'forbidden' }],
     },
   ],

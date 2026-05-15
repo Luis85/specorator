@@ -53,54 +53,55 @@ function stringValueOf(node) {
   return null
 }
 
-function isProcessEnvHomeNode(node) {
-  if (!node) return false
-  // `process.env?.HOME` parses to a `ChainExpression` wrapping the
-  // underlying MemberExpression; unwrap one level so optional-chained
-  // forms aren't a bypass (Codex P1, PR #348).
-  const inner = node.type === 'ChainExpression' ? node.expression : node
-  if (!inner || inner.type !== 'MemberExpression') return false
-  // The `process.env` part can itself be optional-chained
-  // (e.g. `process?.env.HOME`), so unwrap the inner object too.
-  const objectExpr =
-    inner.object.type === 'ChainExpression'
-      ? inner.object.expression
-      : inner.object
-  const objectIsProcessEnv =
-    objectExpr.type === 'MemberExpression' &&
-    objectExpr.object.type === 'Identifier' &&
-    objectExpr.object.name === 'process' &&
-    objectExpr.property.type === 'Identifier' &&
-    objectExpr.property.name === 'env'
-  if (!objectIsProcessEnv) return false
-  if (inner.property.type === 'Identifier') return inner.property.name === 'HOME'
-  if (isStringLiteral(inner.property)) return inner.property.value === 'HOME'
+/** Strip ChainExpression wrappers (for optional-chained forms). */
+function unwrapChain(node) {
+  let cur = node
+  while (cur && cur.type === 'ChainExpression') cur = cur.expression
+  return cur
+}
+
+/** Returns true if `member.property` resolves to the string `name`, whether
+ *  written as an identifier or as a computed string literal. */
+function isPropertyNamed(member, name) {
+  if (member.property.type === 'Identifier') return member.property.name === name
+  if (isStringLiteral(member.property)) return member.property.value === name
   return false
 }
 
+/** Returns true if `node` ultimately references the global `process`
+ *  identifier — either as a bare `process` or as the tail of a member
+ *  expression like `globalThis.process` / `window.process` (Codex P1, PR #348). */
+function isProcessReference(node) {
+  const cur = unwrapChain(node)
+  if (!cur) return false
+  if (cur.type === 'Identifier' && cur.name === 'process') return true
+  if (cur.type === 'MemberExpression' && isPropertyNamed(cur, 'process')) return true
+  return false
+}
+
+/** Returns true if `node` is any form of `<process>.env`, including
+ *  bracket-property access and deeper chains. */
+function isProcessEnvAccess(node) {
+  const cur = unwrapChain(node)
+  if (!cur || cur.type !== 'MemberExpression') return false
+  if (!isPropertyNamed(cur, 'env')) return false
+  return isProcessReference(cur.object)
+}
+
+function isProcessEnvHomeNode(node) {
+  const cur = unwrapChain(node)
+  if (!cur || cur.type !== 'MemberExpression') return false
+  if (!isPropertyNamed(cur, 'HOME')) return false
+  return isProcessEnvAccess(cur.object)
+}
+
 function isOsHomedirCall(node) {
-  if (!node) return false
-  // Same optional-chain unwrap for `os?.homedir()` (Codex P1, PR #348).
-  const inner = node.type === 'ChainExpression' ? node.expression : node
-  if (!inner || inner.type !== 'CallExpression') return false
-  const calleeRaw = inner.callee
-  // The callee itself may be optional-chained (`os?.homedir`); unwrap.
-  const callee =
-    calleeRaw && calleeRaw.type === 'ChainExpression'
-      ? calleeRaw.expression
-      : calleeRaw
+  const cur = unwrapChain(node)
+  if (!cur || cur.type !== 'CallExpression') return false
+  const callee = unwrapChain(cur.callee)
   if (!callee) return false
-  if (
-    callee.type === 'MemberExpression' &&
-    callee.object.type === 'Identifier' &&
-    callee.object.name === 'os' &&
-    callee.property.type === 'Identifier' &&
-    callee.property.name === 'homedir'
-  ) {
-    return true
-  }
-  // Also catch destructured `homedir()` if called directly.
   if (callee.type === 'Identifier' && callee.name === 'homedir') return true
+  if (callee.type === 'MemberExpression' && isPropertyNamed(callee, 'homedir')) return true
   return false
 }
 
@@ -141,19 +142,27 @@ function templateInterpolatesClaudeDir(node) {
   return false
 }
 
+/**
+ * Returns true if `node` is a call to any `join`-named function: bare
+ * `join(...)` (destructured from `node:path`), `path.join(...)`,
+ * `path.posix.join(...)`, `path.win32.join(...)`, or any chain ending in
+ * `.join` (Codex P1 PR #348 — closes the `path.join`-only bypass).
+ */
+function isJoinCallNode(node) {
+  const cur = unwrapChain(node)
+  if (!cur || cur.type !== 'CallExpression') return false
+  const callee = unwrapChain(cur.callee)
+  if (!callee) return false
+  if (callee.type === 'Identifier' && callee.name === 'join') return true
+  if (callee.type === 'MemberExpression' && isPropertyNamed(callee, 'join')) return true
+  return false
+}
+
 function isPathJoinClaudeCall(node) {
-  // path.join(os.homedir(), '.claude', ...) or path.join(homedir(), '.claude').
-  if (node.type !== 'CallExpression') return false
-  const callee = node.callee
-  const isPathJoin =
-    callee.type === 'MemberExpression' &&
-    callee.object.type === 'Identifier' &&
-    callee.object.name === 'path' &&
-    callee.property.type === 'Identifier' &&
-    callee.property.name === 'join'
-  if (!isPathJoin) return false
-  const firstArg = node.arguments[0]
-  const secondArg = node.arguments[1]
+  if (!isJoinCallNode(node)) return false
+  const call = unwrapChain(node)
+  const firstArg = call.arguments[0]
+  const secondArg = call.arguments[1]
   if (firstArg === undefined || secondArg === undefined) return false
   if (!isOsHomedirCall(firstArg) && !isProcessEnvHomeNode(firstArg)) return false
   const secondValue = stringValueOf(secondArg)
