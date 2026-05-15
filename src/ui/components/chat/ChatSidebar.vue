@@ -659,6 +659,20 @@ async function handleAcceptProposal(payload: { proposalId: string }): Promise<vo
   // project's `no-restricted-syntax` rule forbids raw try/catch (and the
   // same applies to try/finally) outside `src/infrastructure/**`.
   await (async () => {
+    // Re-validate the envelope path against the CURRENT specs folder
+    // before any vault mutation (Codex P2, PR #350). The proposal was
+    // validated at creation time, but settings can change between
+    // creation and accept — re-checking here prevents a stale proposal
+    // from bypassing containment after a specsFolder change.
+    const currentSettings = await settingsPort.getSettings()
+    const revalidation = validateProposalPath(proposal.envelope, currentSettings.specsFolder)
+    if (!revalidation.ok) {
+      const next = new Map(proposalPathErrors.value)
+      next.set(payload.proposalId, revalidation.error)
+      proposalPathErrors.value = next
+      store.setProposalStatus(payload.proposalId, 'failed', 'WRITE_FAILED')
+      return
+    }
     const writer = await sessionLogWriterFactory.getWriter()
     const result = await commitFileWriteProposal(proposal, thread, {
       vault: vaultPort,
