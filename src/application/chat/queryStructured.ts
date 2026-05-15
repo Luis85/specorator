@@ -27,6 +27,7 @@
  *
  * Satisfies REQ-ASM-001, REQ-ASM-021, REQ-ASM-049.
  */
+import type { SessionId } from '@/domain/chat/SessionId'
 import {
   ClaudeCliError,
   type ClaudeCliPort,
@@ -61,6 +62,20 @@ export interface StructuredCliCallOptions {
   readonly systemPromptSuffix?: string
   readonly resumeSessionId?: string
   readonly timeoutMs?: number
+  /**
+   * Optional caller-supplied callback invoked exactly once when the structured
+   * call's response envelope yields a non-empty `session_id`. Mirrors the
+   * free-text `ClaudeCliQueryOptions.onSessionId` contract (REQ-ASM-031): the
+   * callback must be invoked before the wrapper's promise resolves so the
+   * caller can persist the session id alongside the resolved envelope.
+   *
+   * Load-bearing for proposals (REQ-ASM-046) — without it, a thread that
+   * starts with `/create-file` keeps `thread.sessionId === null` and the
+   * subsequent `appendProposalDecision` would reject with
+   * `SessionLogNoSessionError`, surfacing the trust-first violation as
+   * `SESSION_LOG_FAILED` instead of silently dropping the audit row.
+   */
+  readonly onSessionId?: (sessionId: SessionId) => void
 }
 
 /**

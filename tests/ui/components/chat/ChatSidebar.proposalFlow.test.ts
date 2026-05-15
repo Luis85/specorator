@@ -22,6 +22,7 @@ import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue'
 import { MockClaudeSubprocessAdapter } from '@/infrastructure/mock/MockClaudeSubprocessAdapter'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { MockConfirmModalPort } from '@/infrastructure/mock/MockConfirmModalPort'
+import { asSessionId } from '@/domain/chat/SessionId'
 import {
 	CLAUDE_CLI_PORT,
 	IS_MOBILE_KEY,
@@ -79,6 +80,11 @@ async function mountSidebar(args: MountArgs = {}) {
 	if (args.cannedEnvelope !== undefined) port.cannedStructuredEnvelope = args.cannedEnvelope
 	if (args.cannedRawResult !== undefined) port.cannedStructuredRawResult = args.cannedRawResult
 	port.cannedResponse = 'free-text answer'
+	// REQ-ASM-031 / REQ-ASM-046 — pre-seed a session id so the structured path's
+	// `onSessionId` callback fires and the subsequent `appendProposalDecision`
+	// finds a non-null `thread.sessionId`. Without this every accept would map
+	// to `SESSION_LOG_FAILED` via `SessionLogNoSessionError`.
+	port.cannedSessionId = asSessionId('11111111-2222-3333-4444-555555555555')
 
 	const bridge = makeBridge(args.files ?? {}, args.settings ?? {})
 	const confirmModal = new MockConfirmModalPort()
@@ -144,6 +150,33 @@ describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
 		// Structured path called; free-text query() not called.
 		expect(port.structuredLog).toHaveLength(1)
 		expect(port.optionsLog).toHaveLength(0)
+	})
+
+	it('structured branch passes onSessionId so thread.sessionId is captured (Codex P1 #2 fix, REQ-ASM-031/046)', async () => {
+		const { port, po, store } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: 'specs/demo/idea.md',
+				content: '# Demo\n',
+			},
+		})
+
+		await send(store, po, '/create-file specs/demo/idea.md')
+		await flushPromises()
+
+		// The structured call must receive `onSessionId` in its options bag —
+		// without it, the proposal-commit pipeline rejects with
+		// `SESSION_LOG_FAILED` because `appendProposalDecision` cannot append
+		// against a `sessionId === null` thread.
+		expect(port.structuredLog).toHaveLength(1)
+		expect(typeof port.structuredLog[0].options.onSessionId).toBe('function')
+
+		// And the resulting thread now has the captured session id.
+		const threadId = store.activeThreadId
+		expect(threadId).not.toBeNull()
+		const thread = store.chatThreads.get(threadId!)
+		expect(thread).toBeDefined()
+		expect(thread!.sessionId).toBe('11111111-2222-3333-4444-555555555555')
 	})
 
 	it('renders the FileWriteProposalCard via the ChatResponse proposalCard slot (REQ-ASM-041)', async () => {

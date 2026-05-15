@@ -338,16 +338,29 @@ describe('commitFileWriteProposal — error codes (T-ASM-066)', () => {
     ).toBe(false)
   })
 
-  it('returns WRITE_FAILED when vault.writeFile throws on the envelope path', async () => {
-    const proposal = makeProposal({ path: 'specs/foo/idea.md', content: 'body' })
+  it('returns WRITE_FAILED when vault.writeFile throws on the envelope path and appends a failed audit row (Codex P2 fix)', async () => {
+    const proposal = makeProposal({
+      path: 'specs/foo/idea.md',
+      content: 'body',
+      rationale: 'because-spec',
+    })
+    // Track every appendProposalDecision call against a real SessionLogWriter
+    // so we can verify the failed audit row is appended without coupling to
+    // the underlying vault wire format. The vault.writeFile remains spied to
+    // make the envelope write fail.
+    const sessionLog = new SessionLogWriter(
+      ports.vault,
+      ports.logger,
+      'specs',
+      () => FIXED_NOW,
+    )
+    const appendSpy = vi.spyOn(sessionLog, 'appendProposalDecision')
     const writeSpy = vi
       .spyOn(ports.vault, 'writeFile')
-      .mockImplementationOnce(async (p: string) => {
-        if (p === 'specs/foo/idea.md') {
-          throw new Error('boom: disk full')
-        }
+      .mockImplementationOnce(async () => {
+        throw new Error('boom: disk full')
       })
-    const deps = makeDeps(ports)
+    const deps = makeDeps(ports, { sessionLog })
 
     const result = await commitFileWriteProposal(proposal, makeThread(), deps)
 
@@ -355,8 +368,40 @@ describe('commitFileWriteProposal — error codes (T-ASM-066)', () => {
     if (result.ok) return
     expect(result.error.errorCode).toBe('WRITE_FAILED')
     expect(result.error.cause).toBeInstanceOf(Error)
-    // The first writeFile call was the failing envelope write.
     expect(writeSpy.mock.calls[0]?.[0]).toBe('specs/foo/idea.md')
+
+    // Codex P2 — trust-first invariant: a failed terminal state must still
+    // mirror to the audit log so the session history reflects the decided
+    // outcome. The audit row carries `decision: failed` plus the rationale.
+    expect(appendSpy).toHaveBeenCalledTimes(1)
+    const args = appendSpy.mock.calls[0][0]
+    expect(args.decision).toBe('failed')
+    expect(args.proposal.envelope.path).toBe('specs/foo/idea.md')
+    expect(args.proposal.envelope.rationale).toBe('because-spec')
+  })
+
+  it('WRITE_FAILED is preserved even when the failed-audit-row append itself fails (P2 best-effort)', async () => {
+    const proposal = makeProposal({ path: 'specs/foo/idea.md', content: 'body' })
+    const sessionLog = new SessionLogWriter(
+      ports.vault,
+      ports.logger,
+      'specs',
+      () => FIXED_NOW,
+    )
+    // Both the envelope write AND the audit-row append fail. The original
+    // WRITE_FAILED code must NOT be overridden — the audit row append is
+    // best-effort in this terminal branch.
+    vi.spyOn(ports.vault, 'writeFile').mockRejectedValue(new Error('boom: disk full'))
+    vi.spyOn(sessionLog, 'appendProposalDecision').mockRejectedValueOnce(
+      new Error('audit row offline'),
+    )
+    const deps = makeDeps(ports, { sessionLog })
+
+    const result = await commitFileWriteProposal(proposal, makeThread(), deps)
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error.errorCode).toBe('WRITE_FAILED')
   })
 
   it('returns SESSION_LOG_FAILED when the audit-row append rejects', async () => {

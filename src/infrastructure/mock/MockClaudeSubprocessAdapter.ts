@@ -209,6 +209,21 @@ export class MockClaudeSubprocessAdapter implements ClaudeCliPort {
     this.queryLog.push(prompt)
     this.structuredLog.push({ prompt, options })
 
+    // Mirror the real adapter's REQ-ASM-031 contract for the structured path:
+    // when the caller supplies `onSessionId` AND a `cannedSessionId` has been
+    // configured, fire the callback exactly once before resolving. This is
+    // load-bearing for the proposal-commit pipeline — without it, the active
+    // thread keeps `sessionId === null` and `appendProposalDecision` rejects
+    // with `SessionLogNoSessionError`.
+    if (options.onSessionId !== undefined && this.cannedSessionId !== null) {
+      try {
+        options.onSessionId(this.cannedSessionId)
+      } catch {
+        // Mock mirrors the real adapter — never let a caller callback throw
+        // out of `runStructured()`.
+      }
+    }
+
     if (this.delayMs > 0) {
       await new Promise<void>((resolve) => setTimeout(resolve, this.delayMs))
     }

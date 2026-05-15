@@ -397,6 +397,7 @@ async function handleStructuredSend(args: {
   isResumedTurn: boolean
   threadId: string
   userMessage: string
+  onSessionId: (id: SessionId) => void
 }): Promise<void> {
   if (claudeCliPort === undefined) {
     store.setError('query_failed')
@@ -406,6 +407,12 @@ async function handleStructuredSend(args: {
     timeoutMs: 30_000,
     systemPromptSuffix: args.systemPromptSuffix,
     resumeSessionId: args.resumeSessionId,
+    // REQ-ASM-031 / REQ-ASM-046 — load-bearing: structured threads must
+    // capture session_id so the subsequent `appendProposalDecision` finds a
+    // non-null sessionId. Without this, the audit row would reject with
+    // `SessionLogNoSessionError` and the commit pipeline would surface
+    // `SESSION_LOG_FAILED` even though the model itself succeeded.
+    onSessionId: args.onSessionId,
   }
   store.setCliStartingUp(true)
   const structuredResult = await queryStructured(claudeCliPort, args.prompt, options)
@@ -516,6 +523,7 @@ async function handleSend(): Promise<void> {
       isResumedTurn,
       threadId,
       userMessage,
+      onSessionId,
     })
     await nextTick()
     focusTextarea()

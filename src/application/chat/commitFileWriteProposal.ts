@@ -168,6 +168,20 @@ export async function commitFileWriteProposal(
     deps.vault.writeFile(envelope.path, envelope.content),
   )
   if (!writeResult.ok) {
+    // Trust-first invariant: every terminal state mirrors to the session log
+    // (SPEC-ASM-001 §3.6 step 3, REQ-ASM-046). Best-effort here — the vault
+    // write already failed; an audit-row failure must not compound the
+    // original failure or override its error code.
+    await tryAsync(() =>
+      deps.sessionLog.appendProposalDecision({
+        thread,
+        proposal: {
+          envelope: { path: envelope.path, rationale },
+        },
+        decision: 'failed',
+        decidedAt: deps.nowIso(),
+      }),
+    )
     return err(
       new CommitProposalError('WRITE_FAILED', 'Could not write file.', writeResult.error),
     )
