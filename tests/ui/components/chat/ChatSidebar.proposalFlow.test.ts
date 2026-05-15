@@ -319,6 +319,15 @@ describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
 		// Proposal moved to a terminal failure state — no vault mutation
 		// happened.
 		expect(store.proposals.get(proposalId)?.status).toBe('failed')
+
+		// Codex P2 follow-up — the terminal failure must mirror to the
+		// session log so the audit trail records the rejected Accept.
+		// `appendProposalDecision` writes a `## proposal` block under the
+		// thread's session log path; we observe the write via writeSpy.
+		const appendCalls = writeSpy.mock.calls.filter(([p]) =>
+			typeof p === 'string' && p.endsWith('.md') && p.includes('sessions/'),
+		)
+		expect(appendCalls.length).toBeGreaterThanOrEqual(1)
 	})
 
 	it('Reject is a no-op while an Accept commit is still in flight on the same proposal (Codex P1 fix)', async () => {

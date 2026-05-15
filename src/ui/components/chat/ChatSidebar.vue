@@ -670,6 +670,30 @@ async function handleAcceptProposal(payload: { proposalId: string }): Promise<vo
       const next = new Map(proposalPathErrors.value)
       next.set(payload.proposalId, revalidation.error)
       proposalPathErrors.value = next
+      // Mirror the terminal failure to the session log so the audit trail
+      // stays complete (Codex P2 follow-up, PR #350). The trust-first
+      // invariant requires every terminal proposal outcome to appear in
+      // the session log; the existing commit-pipeline failure branches
+      // already enforce this for in-pipeline errors, but the Accept-time
+      // revalidation rejects BEFORE commit runs, so we mirror here.
+      // Best-effort — a logging failure must not block the user-visible
+      // status flip.
+      const writer = await sessionLogWriterFactory.getWriter()
+      await writer
+        .appendProposalDecision({
+          thread,
+          proposal: {
+            envelope: { path: proposal.envelope.path, rationale: undefined },
+          },
+          decision: 'failed',
+          decidedAt: new Date().toISOString(),
+        })
+        .catch((thrown: unknown) => {
+          loggerPort.warn('handleAcceptProposal: revalidation-failed audit append failed', {
+            proposalId: payload.proposalId,
+            reason: thrown instanceof Error ? thrown.message : String(thrown),
+          })
+        })
       store.setProposalStatus(payload.proposalId, 'failed', 'WRITE_FAILED')
       return
     }
