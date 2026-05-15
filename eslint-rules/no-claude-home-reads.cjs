@@ -25,7 +25,12 @@
 'use strict'
 
 const FORBIDDEN_LITERAL_PATTERNS = [
-  { regex: /~\/\.claude\//, label: '~/.claude/' },
+  // Match both `~/.claude` (bare directory reference) and `~/.claude/`
+  // (path under the directory). Codex P2 PR #348 — without the trailing
+  // slash the literal previously slipped through. The lookahead requires
+  // the next character to be a non-identifier so `~/.claude-foo` won't
+  // false-positive.
+  { regex: /~\/\.claude(?![a-zA-Z0-9_-])/, label: '~/.claude' },
   { regex: /\.credentials\.json/, label: '.credentials.json' },
   { regex: /CLAUDE_CODE_OAUTH_TOKEN/, label: 'CLAUDE_CODE_OAUTH_TOKEN' },
 ]
@@ -96,6 +101,27 @@ function concatenatesClaudeDir(node) {
   return false
 }
 
+/**
+ * Template-literal shape: `${process.env.HOME}/.claude` or
+ * `${os.homedir()}/.claude/sessions`. Returns true when ANY expression in
+ * the template is a HOME-shaped node AND the adjacent quasi (the literal
+ * segment immediately following that expression) starts with `/.claude`
+ * (Codex P1, PR #348 — closes the BinaryExpression-only bypass).
+ */
+function templateInterpolatesClaudeDir(node) {
+  if (node.type !== 'TemplateLiteral') return false
+  for (let i = 0; i < node.expressions.length; i += 1) {
+    const expr = node.expressions[i]
+    if (!isProcessEnvHomeNode(expr) && !isOsHomedirCall(expr)) continue
+    const trailingQuasi = node.quasis[i + 1]
+    if (trailingQuasi === undefined) continue
+    if (/^\/?\.claude(?:\/|$|[^a-zA-Z0-9_-])/.test(trailingQuasi.value.cooked)) {
+      return true
+    }
+  }
+  return false
+}
+
 function isPathJoinClaudeCall(node) {
   // path.join(os.homedir(), '.claude', ...) or path.join(homedir(), '.claude').
   if (node.type !== 'CallExpression') return false
@@ -147,9 +173,29 @@ module.exports = {
         checkStringValue(node, node.value)
       },
       TemplateLiteral(node) {
+        // Pattern A: the literal quasis spell out a forbidden token
+        // (e.g. `~/.claude/foo`). Same surface as a string literal.
         const value = stringValueOf(node)
-        if (value === null) return
-        checkStringValue(node, value)
+        if (value !== null) {
+          for (const { regex, label } of FORBIDDEN_LITERAL_PATTERNS) {
+            if (regex.test(value)) {
+              context.report({ node, messageId: 'forbidden', data: { label } })
+              return
+            }
+          }
+        }
+        // Pattern B: `${process.env.HOME}/.claude` or `${os.homedir()}/.claude`
+        // — the HOME-shaped expression interpolates into a quasi that starts
+        // with `/.claude` (Codex P1, PR #348).
+        if (templateInterpolatesClaudeDir(node)) {
+          context.report({
+            node,
+            messageId: 'forbidden',
+            data: {
+              label: '~/.claude/ (via template literal with process.env.HOME / os.homedir())',
+            },
+          })
+        }
       },
       BinaryExpression(node) {
         if (concatenatesClaudeDir(node)) {

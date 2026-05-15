@@ -38,6 +38,12 @@ ruleTester.run('no-claude-home-reads', rule, {
     "const p = path.join(os.homedir(), '.config')",
     "const p = process.env.HOME + '/.config'",
     "const p = path.join('foo', 'bar', 'baz')",
+    // Identifier-like suffix on `.claude` (e.g. `~/.claude-cli-bin`) is a
+    // different directory and must NOT trip the rule.
+    "const p = '~/.claude-cli-bin'",
+    // Template literal with unrelated quasi after HOME.
+    'const p = `${process.env.HOME}/.config/foo`',
+    'const p = `${os.homedir()}/.config`',
   ],
   invalid: [
     // Pattern 1 — literal `'~/.claude/'`.
@@ -83,6 +89,28 @@ ruleTester.run('no-claude-home-reads', rule, {
     },
     {
       code: "const p = path.join(os.homedir(), '.claude/sessions')",
+      errors: [{ messageId: 'forbidden' }],
+    },
+    // Codex P2 (PR #348) — bare `~/.claude` (no trailing slash) must also fire.
+    {
+      code: "const p = '~/.claude'",
+      errors: [{ messageId: 'forbidden' }],
+    },
+    // Codex P1 (PR #348) — template literal `${process.env.HOME}/.claude`.
+    {
+      code: 'const p = `${process.env.HOME}/.claude`',
+      errors: [{ messageId: 'forbidden' }],
+    },
+    {
+      code: 'const p = `${process.env.HOME}/.claude/sessions`',
+      errors: [{ messageId: 'forbidden' }],
+    },
+    {
+      code: 'const p = `${os.homedir()}/.claude`',
+      errors: [{ messageId: 'forbidden' }],
+    },
+    {
+      code: 'const p = `${os.homedir()}/.claude/sessions`',
       errors: [{ messageId: 'forbidden' }],
     },
   ],
