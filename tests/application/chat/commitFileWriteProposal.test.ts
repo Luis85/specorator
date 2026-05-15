@@ -303,6 +303,26 @@ describe('commitFileWriteProposal — folder hint (T-ASM-065 / TEST-ASM-045)', (
     expect(Math.min(...derivedCalls)).toBeLessThan(envelopeWriteOrder)
   })
 
+  it('normalises backslash separators when deriving the parent folder (Codex P1 fix)', async () => {
+    const createFolderSpy = vi.spyOn(ports.vault, 'createFolder')
+    // Backslash-delimited path slips through `validateProposalPath`; the
+    // parent-folder derivation must normalise so it matches the vault-
+    // adapter's canonical forward-slash form.
+    const proposal = makeProposal({ path: 'specs\\new-feature\\idea.md' })
+    const deps = makeDeps(ports)
+
+    await commitFileWriteProposal(proposal, makeThread(), deps)
+
+    // The normalised parent `specs/new-feature` was created — NOT the
+    // backslash-form, NOT skipped.
+    expect(
+      createFolderSpy.mock.calls.some(([p]) => p === 'specs/new-feature'),
+    ).toBe(true)
+    expect(
+      createFolderSpy.mock.calls.some(([p]) => p === 'specs\\new-feature'),
+    ).toBe(false)
+  })
+
   it('skips createFolder entirely for vault-root paths (no parent to derive)', async () => {
     const createFolderSpy = vi.spyOn(ports.vault, 'createFolder')
     // No slash → no parent folder to derive.

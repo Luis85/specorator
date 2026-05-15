@@ -95,14 +95,21 @@ function optionalString(
 
 /**
  * Extract the parent folder of a vault-relative path. Returns `null` for paths
- * at the vault root (no slash) so callers can skip the folder-creation step.
+ * at the vault root (no separator) so callers can skip the folder-creation
+ * step. Backslashes are normalised to forward slashes first so backslash-
+ * delimited paths (e.g. `'specs\\new-feature\\idea.md'`) derive the same
+ * parent that `VaultPort.writeFile` will later create the file under — the
+ * vault adapters normalise on write, and `validateProposalPath` permits both
+ * separators (Codex P1, PR #347).
  *
  * Example: `'specs/new-feature/idea.md'` → `'specs/new-feature'`.
+ * Example: `'specs\\new-feature\\idea.md'` → `'specs/new-feature'`.
  */
 function parentFolderFromPath(path: string): string | null {
-  const idx = path.lastIndexOf('/')
+  const normalised = path.replace(/\\/g, '/')
+  const idx = normalised.lastIndexOf('/')
   if (idx <= 0) return null
-  return path.slice(0, idx)
+  return normalised.slice(0, idx)
 }
 
 /**
