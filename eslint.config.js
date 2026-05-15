@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'eslint/config';
 import js from '@eslint/js';
@@ -6,6 +7,16 @@ import pluginVue from 'eslint-plugin-vue';
 import obsidianmd from 'eslint-plugin-obsidianmd';
 import tseslint from 'typescript-eslint';
 import globals from 'globals';
+
+// Project-local ESLint rules (T-ASM-078). Loaded via CommonJS `require`
+// because ESLint rules use `module.exports`; this repo's package.json is
+// `"type": "module"` so the rule files use the `.cjs` extension. The
+// `require` call returns `any`; suppress the type-aware lint here because
+// ESLint config is plain JS with no type information for the rule's
+// internal shape.
+const localRequire = createRequire(import.meta.url);
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+const noClaudeHomeReadsRule = localRequire('./eslint-rules/no-claude-home-reads.cjs');
 
 const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
 
@@ -103,6 +114,26 @@ export default defineConfig(
 	// rule blocks below can override anything that conflicts with our setup.
 	...obsidianmd.configs.recommended,
 
+	// Project-local rules (T-ASM-078). The `local/no-claude-home-reads` rule
+	// bans every code path that would read from `~/.claude/` or shell out
+	// with `CLAUDE_CODE_OAUTH_TOKEN` in the spawned env (SPEC-ASM-001 §13.2,
+	// NFR-ASM-004). Scoped to `src/**` only — tests, inputs, and docs are
+	// allowed to mention these strings for fixture / documentation purposes.
+	{
+		files: ['src/**/*.ts', 'src/**/*.js', 'src/**/*.vue'],
+		plugins: {
+			local: {
+				rules: {
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+					'no-claude-home-reads': noClaudeHomeReadsRule,
+				},
+			},
+		},
+		rules: {
+			'local/no-claude-home-reads': 'error',
+		},
+	},
+
 	// Wire @typescript-eslint/parser into vue-eslint-parser for <script lang="ts">
 	// and provide browser + node globals so DOM types are recognised
 	{
@@ -149,6 +180,10 @@ export default defineConfig(
 			// Node-side build/release scripts: not part of the type-aware lint
 			// surface (they run in Node, not in the plugin/UI build).
 			'scripts/**',
+			// Project-local ESLint rules and their RuleTester suite. CommonJS
+			// .cjs files; the type-aware TS rules can't lint them (no
+			// tsconfig coverage). Validated by `npm run lint:rules`.
+			'eslint-rules/**',
 			'version-bump.js',
 			// Sub-projects under sites/ have their own ESLint setups.
 			'sites/**',

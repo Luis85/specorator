@@ -126,6 +126,8 @@ interface TurnProc {
    * Nulled out after the first invocation to enforce the single-fire contract.
    */
   onSessionId: ((sessionId: SessionId) => void) | null
+  /** Monotonic clock at spawn time — used for completion-telemetry durationMs (T-ASM-081). */
+  startTimeMs: number
 }
 
 interface PendingTurn {
@@ -422,6 +424,9 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
     timeoutMs: number,
     options: StructuredCliCallOptions,
   ): Promise<Result<StructuredCliRawResult, ClaudeCliError>> {
+    const startTimeMs = Date.now()
+    let capturedSessionId: SessionId | null = null
+    let lastExitCode: number | null = null
     return new Promise<Result<StructuredCliRawResult, ClaudeCliError>>((resolve) => {
       let stdoutBuffer = ''
       let settled = false
@@ -432,6 +437,12 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
         // eslint-disable-next-line obsidianmd/prefer-active-window-timers -- infra layer, no Obsidian context
         clearTimeout(timeoutHandle)
         this._activeChildren.delete(child)
+        this._emitCompletionTelemetry({
+          kind: 'structured',
+          sessionId: capturedSessionId,
+          startTimeMs,
+          exitCode: lastExitCode,
+        })
         resolve(r)
       }
 
@@ -479,20 +490,24 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
       child.on('close', (...args: unknown[]) => {
         if (settled) return
         const exitCode = typeof args[0] === 'number' ? args[0] : null
+        lastExitCode = exitCode
         const parsed = this._parseStructuredStdout(stdoutBuffer, exitCode)
         // REQ-ASM-031 / REQ-ASM-046 — surface `session_id` to the caller so the
         // structured branch can capture it on the active thread before the
         // promise resolves. Best-effort: an `options.onSessionId` callback
         // throwing must not derail the structured result.
-        if (parsed.ok && options.onSessionId !== undefined) {
+        if (parsed.ok) {
           const sid = this._extractStructuredSessionId(stdoutBuffer)
           if (sid !== null) {
-            try {
-              options.onSessionId(sid)
-            } catch {
-              // NFR-ASM-005 — never log the session id. Callback failures must
-              // not tear down the structured turn; suppressed silently here
-              // (a misbehaving caller cannot be observed by this adapter).
+            capturedSessionId = sid
+            if (options.onSessionId !== undefined) {
+              try {
+                options.onSessionId(sid)
+              } catch {
+                // NFR-ASM-005 — never log the session id. Callback failures must
+                // not tear down the structured turn; suppressed silently here
+                // (a misbehaving caller cannot be observed by this adapter).
+              }
             }
           }
         }
@@ -679,6 +694,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
       sessionId: null,
       fatal: null,
       onSessionId,
+      startTimeMs: Date.now(),
     }
 
     this._activeChildren.add(childLike)
@@ -857,6 +873,12 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
    */
   private _handleClose(proc: TurnProc, exitCode: number | null): void {
     this._activeChildren.delete(proc.child)
+    this._emitCompletionTelemetry({
+      kind: 'query',
+      sessionId: proc.sessionId,
+      startTimeMs: proc.startTimeMs,
+      exitCode,
+    })
 
     const pending = proc.pending
     if (pending !== null) {
@@ -881,6 +903,31 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 
     // No readline interface to close — stdout listeners detach with the
     // EventEmitter as the underlying process is torn down.
+  }
+
+  /**
+   * Emit a single completion-telemetry debug event (T-ASM-081, NFR-ASM-005,
+   * NFR-ASM-012). The payload shape is fixed:
+   *
+   *   { transport: 'subscription', sessionId: '<redacted>' | null,
+   *     durationMs: number, exitCode: number | null }
+   *
+   * No prompt body, no binary path, no `$HOME`. The session id is
+   * deliberately redacted to the literal `'<redacted>'` when present —
+   * telemetry only needs to know "a session was attached", not the value.
+   */
+  private _emitCompletionTelemetry(args: {
+    readonly kind: 'query' | 'structured'
+    readonly sessionId: SessionId | null
+    readonly startTimeMs: number
+    readonly exitCode: number | null
+  }): void {
+    this._logger.debug(`subscription.${args.kind}.complete`, {
+      transport: 'subscription',
+      sessionId: args.sessionId === null ? null : '<redacted>',
+      durationMs: Date.now() - args.startTimeMs,
+      exitCode: args.exitCode,
+    })
   }
 
   /** SPEC §4.3 — SIGTERM, then SIGKILL after a short grace window. */

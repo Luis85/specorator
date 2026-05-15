@@ -13,6 +13,7 @@
 		"typecheck": "vue-tsc --noEmit -p tsconfig.lint.json",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
+		"lint:rules": "node eslint-rules/__tests__/no-claude-home-reads.test.cjs",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"test": "vitest run --configLoader runner --project unit",
