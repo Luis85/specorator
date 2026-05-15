@@ -11,7 +11,6 @@ main.js.map
 docs/api/
 coverage/
 storybook-static/
-sites/specorator/.astro/
 
 # Graph output itself (prevent circular indexing)
 graphify-out/
@@ -31,8 +30,27 @@ package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
-# Corpus scope: exclude tests, stories, scripts, and HTML design exports (not root index.html)
+# Corpus scope: exclude tests, stories, scripts, and HTML design exports
 tests/
 stories/
 scripts/
 docs/design/**/*.html
+
+# Agent/tool runtime dirs (large, not source)
+.worktrees/
+.claude/
+.git/
+
+# CI/CD and tooling config dirs
+.github/
+.githooks/
+.codex/
+.specorator/
+.storybook/
+eslint-rules/
+
+# Out-of-scope content dirs
+inputs/
+memory/
+site/
+sites/
