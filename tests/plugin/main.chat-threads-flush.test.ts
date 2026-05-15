@@ -287,6 +287,31 @@ describe('scheduleChatThreadsPersistence — debounced flush (T-ASM-054)', () =>
     expect(state.blob).toBeNull()
   })
 
+  it('refreshes getInitialChatThreads() in-session so a panel reopen sees the latest threads (Codex P1, PR #350)', () => {
+    // No fake timers needed — we only verify the synchronous side-effect of
+    // `scheduleChatThreadsPersistence` updating the in-memory snapshot.
+    const { plugin } = makePlugin({
+      specorator: { locale: 'en' },
+    })
+    // Initial state: empty.
+    expect(plugin.getInitialChatThreads()).toEqual([])
+
+    // User mutates the in-memory map; persistence is scheduled.
+    const map = new Map<string, ChatThreadRecord>([
+      ['t1', makeRecord({ threadId: 't1' })],
+      ['t2', makeRecord({ threadId: 't2', sessionId: asSessionId('s2'), transport: 'api-key' })],
+    ])
+    plugin.scheduleChatThreadsPersistence(map)
+
+    // Without leaving the session: a panel reopen would call
+    // `getInitialChatThreads()` again. It must reflect the LATEST scheduled
+    // state, not the empty load-time snapshot — otherwise rehydrate would
+    // restore stale state and the next mutation would persist the stale map
+    // back to disk, losing newer threads.
+    const refreshed = plugin.getInitialChatThreads()
+    expect(refreshed.map((r) => r.threadId).sort()).toEqual(['t1', 't2'])
+  })
+
   it('serialises flushes so a slow earlier saveData cannot overwrite a newer one (Codex P1, PR #350)', async () => {
     // Build a plugin with a saveData that records the order it was INVOKED in,
     // and resolves on demand. Older flushes must complete (resolve) before
