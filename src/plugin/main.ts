@@ -17,6 +17,7 @@ import {
   encodeChatThreadsBlob,
 } from './chatThreadsPersistence'
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
+import { ObsidianConfirmModalAdapter } from '@/infrastructure/obsidian/ObsidianConfirmModalAdapter'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
 import { ObsidianMetadataCacheAdapter } from '@/infrastructure/obsidian/ObsidianMetadataCacheAdapter'
 import { ObsidianCanvasAdapter } from '@/infrastructure/obsidian/ObsidianCanvasAdapter'
@@ -47,6 +48,13 @@ export default class SpecoratorPlugin extends Plugin {
    * Satisfies SPEC-ASM-001 §9.1.
    */
   private _subscriptionAdapter: ClaudeSubprocessAdapter | null = null
+  /**
+   * Production-grade `ConfirmModalPort` (REQ-ASM-044, ADR-0032). Constructed
+   * once in `onload()` and provided to Vue via `SpecoratorView`'s options bag
+   * so the proposal-flow accept-confirmation prompt can be rendered without
+   * leaking `obsidian` imports into the UI layer. Satisfies SPEC-ASM-001 §9.1.
+   */
+  private _confirmModalAdapter: ObsidianConfirmModalAdapter | null = null
   /** SpecoratorView instance — set when the registered view factory runs. */
   private _specoratorView: SpecoratorView | null = null
 
@@ -154,9 +162,15 @@ export default class SpecoratorPlugin extends Plugin {
     })
     this.register(() => { this._subscriptionAdapter?.shutdown() })
 
+    // T-ASM-075 / SPEC-ASM-001 §9.1 — production-grade confirmation modal.
+    // Stateless wrapper; no startup() / shutdown() required. Constructed here
+    // so SpecoratorView can provide it under `CONFIRM_MODAL_PORT` (§9.5).
+    this._confirmModalAdapter = new ObsidianConfirmModalAdapter(this.app)
+
     this.registerView(VIEW_TYPE, (leaf) => {
       const view = new SpecoratorView(leaf, this, this._claudeCliAdapter!, {
         subscriptionAdapter: this._subscriptionAdapter!,
+        confirmModalAdapter: this._confirmModalAdapter!,
         selectTransport: (settings) =>
           selectTransport(settings, {
             sdkAdapter: this._claudeCliAdapter!,
