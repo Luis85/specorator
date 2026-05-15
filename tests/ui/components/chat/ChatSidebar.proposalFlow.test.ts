@@ -330,6 +330,44 @@ describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
 		expect(appendCalls.length).toBeGreaterThanOrEqual(1)
 	})
 
+	it('still flips the proposal to failed when the revalidation audit mirror itself throws (Codex P2 #2, PR #350)', async () => {
+		// Same scenario as above (settings change between proposal and
+		// Accept), but the session-log writer's `appendProposalDecision`
+		// is forced to reject. The user-visible status flip must still
+		// run — a transient logging failure cannot strand a rejected
+		// proposal in `pending`.
+		const { wrapper, po, store, bridge } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: 'specs/demo/idea.md',
+				content: '# Demo\n',
+			},
+			settings: { specsFolder: 'specs' },
+		})
+		await send(store, po, '/create-file specs/demo/idea.md')
+		await flushPromises()
+		const proposalId = Array.from(store.proposals.keys())[0]
+
+		// Stale containment + writer fails on every audit append.
+		vi.spyOn(bridge, 'getSettings').mockResolvedValue({
+			...DEFAULT_SETTINGS,
+			anthropicApiKey: 'sk-ant-test',
+			transportKind: 'subscription',
+			specsFolder: 'notes',
+		})
+		vi.spyOn(bridge, 'writeFile').mockImplementation(async () => {
+			throw new Error('boom: audit write rejected')
+		})
+
+		const card = new FileWriteProposalCardPO(wrapper)
+		await card.clickAccept()
+		await flushPromises()
+
+		// Despite the audit-write throw, the proposal still flips to
+		// `failed` — the user is not stranded.
+		expect(store.proposals.get(proposalId)?.status).toBe('failed')
+	})
+
 	it('Reject is a no-op while an Accept commit is still in flight on the same proposal (Codex P1 fix)', async () => {
 		const { wrapper, po, store, bridge } = await mountSidebar({
 			cannedEnvelope: {

@@ -676,11 +676,16 @@ async function handleAcceptProposal(payload: { proposalId: string }): Promise<vo
       // the session log; the existing commit-pipeline failure branches
       // already enforce this for in-pipeline errors, but the Accept-time
       // revalidation rejects BEFORE commit runs, so we mirror here.
-      // Best-effort — a logging failure must not block the user-visible
-      // status flip.
-      const writer = await sessionLogWriterFactory.getWriter()
-      await writer
-        .appendProposalDecision({
+      //
+      // Best-effort across the FULL chain — both `getWriter()` (which can
+      // reject if e.g. settings read fails) AND `appendProposalDecision`
+      // are caught so the user-visible status flip always runs. Without
+      // this, a transient writer-acquisition failure would leave the
+      // proposal stuck pending despite the rejected Accept (Codex P2 #2,
+      // PR #350).
+      await (async () => {
+        const writer = await sessionLogWriterFactory.getWriter()
+        await writer.appendProposalDecision({
           thread,
           proposal: {
             envelope: { path: proposal.envelope.path, rationale: undefined },
@@ -688,12 +693,12 @@ async function handleAcceptProposal(payload: { proposalId: string }): Promise<vo
           decision: 'failed',
           decidedAt: new Date().toISOString(),
         })
-        .catch((thrown: unknown) => {
-          loggerPort.warn('handleAcceptProposal: revalidation-failed audit append failed', {
-            proposalId: payload.proposalId,
-            reason: thrown instanceof Error ? thrown.message : String(thrown),
-          })
+      })().catch((thrown: unknown) => {
+        loggerPort.warn('handleAcceptProposal: revalidation-failed audit mirror failed', {
+          proposalId: payload.proposalId,
+          reason: thrown instanceof Error ? thrown.message : String(thrown),
         })
+      })
       store.setProposalStatus(payload.proposalId, 'failed', 'WRITE_FAILED')
       return
     }
