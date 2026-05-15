@@ -346,6 +346,7 @@ describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
 		// `getSettings()` rejects at Accept time. The handler must not
 		// propagate the rejection — it must catch it and flip the proposal
 		// to `failed` so the user is not stranded.
+		const writeSpy = vi.spyOn(bridge, 'writeFile')
 		vi.spyOn(bridge, 'getSettings').mockRejectedValueOnce(new Error('boom: settings read failed'))
 
 		const card = new FileWriteProposalCardPO(wrapper)
@@ -353,6 +354,13 @@ describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
 		await flushPromises()
 
 		expect(store.proposals.get(proposalId)?.status).toBe('failed')
+		// Codex P2 #4 — terminal failure must mirror to the session log
+		// regardless of which pre-commit branch rejected (settings read,
+		// revalidation, …). One audit row should land under sessions/.
+		const auditCalls = writeSpy.mock.calls.filter(([p]) =>
+			typeof p === 'string' && p.endsWith('.md') && p.includes('sessions/'),
+		)
+		expect(auditCalls.length).toBeGreaterThanOrEqual(1)
 	})
 
 	it('still flips the proposal to failed when the revalidation audit mirror itself throws (Codex P2 #2, PR #350)', async () => {
