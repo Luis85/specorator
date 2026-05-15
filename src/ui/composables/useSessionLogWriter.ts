@@ -39,17 +39,26 @@ export function useSessionLogWriter(): UseSessionLogWriter {
 	const logger = useLoggerPort()
 	const settings = useSettingsPort()
 	let cached: SessionLogWriter | null = null
+	let cachedSpecsFolder: string | null = null
 
 	return {
 		async getWriter(): Promise<SessionLogWriter> {
-			if (cached !== null) return cached
 			const current = await settings.getSettings()
+			// Invalidate the cached writer when the configured specs folder has
+			// changed mid-session (Codex P2, PR #350). Without this, a user
+			// who changes the Specs folder in settings keeps writing session
+			// logs to the old folder while stage/context resolution uses the
+			// new one, splitting history across roots.
+			if (cached !== null && cachedSpecsFolder === current.specsFolder) {
+				return cached
+			}
 			cached = new SessionLogWriter(
 				vault,
 				logger,
 				current.specsFolder,
 				() => new Date().toISOString(),
 			)
+			cachedSpecsFolder = current.specsFolder
 			return cached
 		},
 	}

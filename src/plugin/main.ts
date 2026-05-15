@@ -295,11 +295,18 @@ export default class SpecoratorPlugin extends Plugin {
     this.app.workspace.onLayoutReady(() => {
       // T-CCS-032 / T-ASM-020 / SPEC-ASM-001 §9.2 — pre-warm both adapters in
       // parallel so startup() does not block onload(). Each adapter handles
-      // its own failures internally (REQ-ASM-009, NFR-ASM-006).
+      // its own failures internally (REQ-ASM-009, NFR-ASM-006). Once startup
+      // resolves, bump the settings version so any already-open
+      // SpecoratorView re-runs `selectTransport()` with the freshly-resolved
+      // CLI availability — without this, a cold-load panel that mounted
+      // before startup finished stays stuck on the initial `isAvailableSync`
+      // snapshot (Codex P1, PR #350).
       void Promise.all([
         this._claudeCliAdapter?.startup(),
         this._subscriptionAdapter?.startup(),
-      ])
+      ]).then(() => {
+        this._specoratorView?.bumpSettingsVersion()
+      })
       this.detectLegacyVaultLayout()
       if (!this.settings.onboardingComplete) {
         void this.activateView()
