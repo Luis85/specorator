@@ -63,9 +63,9 @@ describe('posixNormalize', () => {
 })
 
 describe('validateProposalPath — happy path (TEST-ASM-030 baseline)', () => {
-  it('returns ok(envelope) for a valid vault-relative .md path under the root', () => {
+  it('returns ok(envelope) for a valid path under the configured specs folder', () => {
     const env = envelopeWith('specs/foo/idea.md')
-    const result = validateProposalPath(env, 'workspace')
+    const result = validateProposalPath(env, 'specs')
     expect(result.ok).toBe(true)
     if (result.ok) {
       // Round-trips the original envelope unchanged.
@@ -77,7 +77,30 @@ describe('validateProposalPath — happy path (TEST-ASM-030 baseline)', () => {
     // A literal single dot in a deeper path is not rejected — it is just
     // normalised away when composing the resolved path.
     const env = envelopeWith('specs/foo/idea.md')
-    const result = validateProposalPath(env, 'workspace')
+    const result = validateProposalPath(env, 'specs')
+    expect(result.ok).toBe(true)
+  })
+
+  it("rejects a path NOT under the configured specs folder (Codex P1, PR #350)", () => {
+    // Prior to the fix this would silently pass — the old check composed
+    // the proposed path under the root and tested the composition's
+    // prefix, which was trivially satisfied. Now the path itself must
+    // start with the configured specs folder.
+    const env = envelopeWith('notes/todo.md')
+    const result = validateProposalPath(env, 'specs')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error.kind).toBe('ESCAPES_VAULT_ROOT')
+    }
+  })
+
+  it('accepts any non-escaping path when the root is the empty string (vault-root config)', () => {
+    // With an empty specs-folder setting, no prefix is enforced — the
+    // earlier checks (LEADING_SLASH, CONTAINS_DOTDOT, BAD_EXTENSION) are
+    // still active. This preserves backwards compatibility for the
+    // standalone browser UI that doesn't configure a specs folder.
+    const env = envelopeWith('any-file.md')
+    const result = validateProposalPath(env, '')
     expect(result.ok).toBe(true)
   })
 })
@@ -173,25 +196,27 @@ describe('validateProposalPath — BAD_EXTENSION', () => {
   })
 })
 
-describe('validateProposalPath — ESCAPES_VAULT_ROOT', () => {
-  it("returns err(ESCAPES_VAULT_ROOT) when the normalised resolved path does not have the normalised root as prefix", () => {
-    // The ESCAPES_VAULT_ROOT branch in SPEC §3.4 step 5 is a defence-in-depth
-    // guard that fires when `posixNormalize(vaultRoot + '/' + path)` does NOT
-    // start with `posixNormalize(vaultRoot + '/')`. Because step 3 already
-    // rejects any path with a `..` segment, the branch is hard to reach with
-    // a "normal" vault root — but it is reachable when the vault root itself
-    // contains `.` segments that normalise asymmetrically.
-    //
-    // Construction: vaultRoot='.', path='b.md'.
-    //   resolved = posixNormalize('./b.md')  → 'b.md'
-    //   root     = posixNormalize('./')      → '/'   (trailing slash preserved)
-    //   'b.md'.startsWith('/') → false → ESCAPES_VAULT_ROOT.
-    const result = validateProposalPath(envelopeWith('b.md'), '.')
+describe('validateProposalPath — ESCAPES_VAULT_ROOT (Codex P1, PR #350)', () => {
+  it("rejects a sibling-prefix collision (e.g. 'specs2/foo.md' under root 'specs')", () => {
+    // The classic prefix-collision attack: 'specs2' shares a leading
+    // substring with 'specs' but is a sibling directory. The check must
+    // require a trailing slash on the root prefix so 'specs2/foo.md'
+    // does NOT satisfy 'specs/'.
+    const result = validateProposalPath(envelopeWith('specs2/foo.md'), 'specs')
     expect(result.ok).toBe(false)
     if (!result.ok) {
-      expect(result.error).toBeInstanceOf(PathValidationError)
       expect(result.error.kind).toBe('ESCAPES_VAULT_ROOT')
       expect(result.error.errorCode).toBe('PATH_INVALID')
+    }
+  })
+
+  it('rejects a vault-root path when a specs folder is configured', () => {
+    // Even a non-traversal, non-leading-slash path is rejected when it
+    // does not live under the specs folder.
+    const result = validateProposalPath(envelopeWith('todo.md'), 'specs')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error.kind).toBe('ESCAPES_VAULT_ROOT')
     }
   })
 })
