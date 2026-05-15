@@ -264,7 +264,7 @@ describe('commitFileWriteProposal — folder hint (T-ASM-065 / TEST-ASM-045)', (
     expect(Math.min(...hintCalls)).toBeLessThan(envelopeWriteOrder)
   })
 
-  it('skips createFolder when folderHint is absent or empty', async () => {
+  it('never calls createFolder with an empty path when folderHint is empty', async () => {
     const createFolderSpy = vi.spyOn(ports.vault, 'createFolder')
     const proposal = makeProposal({ path: 'specs/foo/idea.md', folderHint: '' })
     const deps = makeDeps(ports)
@@ -277,6 +277,46 @@ describe('commitFileWriteProposal — folder hint (T-ASM-065 / TEST-ASM-045)', (
     expect(
       createFolderSpy.mock.calls.some(([p]) => p === ''),
     ).toBe(false)
+  })
+
+  it('derives parent folder from envelope.path when no folderHint is provided (Codex P1 fix)', async () => {
+    const createFolderSpy = vi.spyOn(ports.vault, 'createFolder')
+    const writeSpy = vi.spyOn(ports.vault, 'writeFile')
+    // No folderHint — the real structured-envelope schema is strict to
+    // action/path/content, so the implementation must derive the parent.
+    const proposal = makeProposal({ path: 'specs/new-feature/idea.md' })
+    const deps = makeDeps(ports)
+
+    const result = await commitFileWriteProposal(proposal, makeThread(), deps)
+    expect(result.ok).toBe(true)
+
+    // Derived `specs/new-feature` was created before the envelope write.
+    const derivedCalls = createFolderSpy.mock.invocationCallOrder.filter(
+      (_order, i) => createFolderSpy.mock.calls[i]?.[0] === 'specs/new-feature',
+    )
+    expect(derivedCalls.length).toBeGreaterThanOrEqual(1)
+    const envelopeWriteCallIndex = writeSpy.mock.calls.findIndex(
+      ([p]) => p === 'specs/new-feature/idea.md',
+    )
+    expect(envelopeWriteCallIndex).toBeGreaterThanOrEqual(0)
+    const envelopeWriteOrder = writeSpy.mock.invocationCallOrder[envelopeWriteCallIndex]
+    expect(Math.min(...derivedCalls)).toBeLessThan(envelopeWriteOrder)
+  })
+
+  it('skips createFolder entirely for vault-root paths (no parent to derive)', async () => {
+    const createFolderSpy = vi.spyOn(ports.vault, 'createFolder')
+    // No slash → no parent folder to derive.
+    const proposal = makeProposal({ path: 'root-file.md' })
+    const deps = makeDeps(ports)
+
+    const result = await commitFileWriteProposal(proposal, makeThread(), deps)
+    expect(result.ok).toBe(true)
+
+    // No createFolder call for a derived parent (the SessionLogWriter may
+    // still create its own parent folder — that one is `specs`, not the
+    // envelope's; we just assert no empty / root-style createFolder call
+    // landed against the envelope).
+    expect(createFolderSpy.mock.calls.some(([p]) => p === '' || p === '/')).toBe(false)
   })
 })
 

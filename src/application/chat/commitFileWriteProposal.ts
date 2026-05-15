@@ -25,9 +25,12 @@
  *      show the `ConfirmModalPort` with translated title/body/labels. If the
  *      user cancels, append a `rejected` audit row and return
  *      `err(OVERWRITE_CANCELLED)`. **No further VaultPort calls.**
- *   2. **Folder hint (REQ-ASM-047).** If `envelope.folderHint` is a non-empty
- *      string, call `vault.createFolder`. On error → `err(FOLDER_CREATE_FAILED)`
- *      AFTER firing a best-effort `decision: 'failed'` audit row.
+ *   2. **Folder creation (REQ-ASM-047).** Derive the parent folder from
+ *      `envelope.path` (or use `envelope.folderHint` if present in a future
+ *      schema) and call `vault.createFolder`. The call is idempotent in both
+ *      production adapters — an already-existing folder is a no-op. On error
+ *      → `err(FOLDER_CREATE_FAILED)` AFTER firing a best-effort
+ *      `decision: 'failed'` audit row.
  *   3. **Write (REQ-ASM-043).** Call `vault.writeFile`. On error → `err(WRITE_FAILED)`
  *      AFTER firing an audit row with decision `'failed'` and rationale
  *      preserved (the audit row is best-effort here — its own failure does not
@@ -88,6 +91,18 @@ function optionalString(
   const record = envelope as unknown as Record<string, unknown>
   const value = record[key]
   return typeof value === 'string' ? value : undefined
+}
+
+/**
+ * Extract the parent folder of a vault-relative path. Returns `null` for paths
+ * at the vault root (no slash) so callers can skip the folder-creation step.
+ *
+ * Example: `'specs/new-feature/idea.md'` → `'specs/new-feature'`.
+ */
+function parentFolderFromPath(path: string): string | null {
+  const idx = path.lastIndexOf('/')
+  if (idx <= 0) return null
+  return path.slice(0, idx)
 }
 
 /**
@@ -165,10 +180,22 @@ export async function commitFileWriteProposal(
     }
   }
 
-  // 2. Folder hint (REQ-ASM-047). Only run when present + non-empty.
-  const folderHint = optionalString(envelope, 'folderHint')
-  if (folderHint !== undefined && folderHint.length > 0) {
-    const folderResult = await tryAsync(() => deps.vault.createFolder(folderHint))
+  // 2. Folder creation (REQ-ASM-047). The structured envelope schema is strict
+  //    to `action/path/content` (no `folderHint`), so we derive the parent
+  //    folder from `envelope.path` directly. If the model ever supplies an
+  //    explicit `folderHint` via a future schema, that wins; otherwise we
+  //    ensure the parent of `envelope.path` exists. `createFolder` is
+  //    idempotent in both production adapters (ObsidianBridge guards on
+  //    `TFolder`, MockBridge uses `Set.add`), so calling it on an existing
+  //    folder is a no-op — any error here represents a genuine creation
+  //    failure (Codex P1, PR #347).
+  const explicitHint = optionalString(envelope, 'folderHint')
+  const folderToEnsure =
+    explicitHint !== undefined && explicitHint.length > 0
+      ? explicitHint
+      : parentFolderFromPath(envelope.path)
+  if (folderToEnsure !== null && folderToEnsure.length > 0) {
+    const folderResult = await tryAsync(() => deps.vault.createFolder(folderToEnsure))
     if (!folderResult.ok) {
       // Trust-first invariant: terminal-failure outcomes mirror to the
       // session log (REQ-ASM-046). Best-effort — folder creation already
@@ -186,7 +213,7 @@ export async function commitFileWriteProposal(
       return err(
         new CommitProposalError(
           'FOLDER_CREATE_FAILED',
-          `Could not create folder: ${folderHint}`,
+          `Could not create folder: ${folderToEnsure}`,
           folderResult.error,
         ),
       )
