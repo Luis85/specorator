@@ -641,7 +641,7 @@ to { transform: rotate(360deg);
   color: var(--sp-proposal-warning, var(--text-warning, var(--text-muted)));
 }
 
-.specorator-root :where(.sp-chat-sidebar[data-v-231d4594]) {
+.specorator-root :where(.sp-chat-sidebar[data-v-5df8201f]) {
   padding: 1rem;
   display: flex;
   flex-direction: column;
@@ -649,24 +649,24 @@ to { transform: rotate(360deg);
   height: 100%;
   box-sizing: border-box;
 }
-.specorator-root :where(.sp-chat__title[data-v-231d4594]) {
+.specorator-root :where(.sp-chat__title[data-v-5df8201f]) {
   margin: 0;
   font-size: 1.125rem;
   font-weight: 700;
   color: var(--text-normal);
 }
-.specorator-root :where(.sp-chat__header[data-v-231d4594]) {
+.specorator-root :where(.sp-chat__header[data-v-5df8201f]) {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
 }
-.specorator-root :where(.sp-chat__divider[data-v-231d4594]) {
+.specorator-root :where(.sp-chat__divider[data-v-5df8201f]) {
   margin: 0;
   border: none;
   border-top: 1px solid var(--background-modifier-border);
 }
-.specorator-root :where(.sp-chat__degraded[data-v-231d4594]) {
+.specorator-root :where(.sp-chat__degraded[data-v-5df8201f]) {
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
@@ -675,13 +675,13 @@ to { transform: rotate(360deg);
   flex-direction: column;
   gap: 0.5rem;
 }
-.specorator-root :where(.sp-chat__degraded-heading[data-v-231d4594]) {
+.specorator-root :where(.sp-chat__degraded-heading[data-v-5df8201f]) {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
   color: var(--text-normal);
 }
-.specorator-root :where(.sp-chat__degraded-body[data-v-231d4594]) {
+.specorator-root :where(.sp-chat__degraded-body[data-v-5df8201f]) {
   margin: 0;
   font-size: 0.875rem;
   color: var(--text-muted);
