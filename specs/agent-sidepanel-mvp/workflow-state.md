@@ -3,12 +3,12 @@ id: c8f9a3b2-d4e5-4f67-89ab-cdef01234567
 feature: "Agent Sidepanel MVP"
 area: ASM
 slug: agent-sidepanel-mvp
-current_stage: tasks
-status: active
-last_updated: 2026-05-14
-last_agent: planner
+current_stage: retrospective
+status: complete
+last_updated: 2026-05-15
+last_agent: retrospective
 createdAt: 2026-05-14T00:00:00+02:00
-updatedAt: 2026-05-14T00:00:00+02:00
+updatedAt: 2026-05-15T13:00:00+02:00
 artifacts:
   idea: complete
   research: complete
@@ -16,12 +16,12 @@ artifacts:
   design: complete
   spec: complete
   tasks: complete
-  implementation-log: pending
-  test-plan: pending
-  test-report: pending
-  review: pending
-  release-notes: pending
-  retrospective: pending
+  implementation-log: complete
+  test-plan: complete
+  test-report: complete
+  review: complete
+  release-notes: complete
+  retrospective: complete
 ---
 
 ## Stage progress
@@ -34,15 +34,15 @@ artifacts:
 | 4 — Design | complete | `design.md` + 4 ADRs (0029-0032) | DESIGN-ASM-001 · Parts A/B/C; ADRs cover transport split, JSON discipline, session-id location, file-write envelope |
 | 5 — Specification | complete | `spec.md` | SPEC-ASM-001 · 9.8k words, 20+ TS interfaces, 52 TEST-ASM scenarios, 67/67 coverage |
 | 6 — Tasks | complete | `tasks.md` | TASKS-ASM-001 · 85 tasks across 5 PRs (PR-ASM-1..5), zero L, 67/67 coverage, TDD-paired |
-| 7 — Implementation | pending | — | PR-ASM-1..5 dispatch order; each chunk lands as its own PR cut from develop |
-| 8 — Testing | pending | — | Per-PR test gates inline; cross-cutting integration tests in PR-ASM-5 |
-| 9 — Review | pending | — | Per-PR Codex review + qa sign-off |
-| 10 — Release | pending | — | Final release notes after PR-ASM-5 merges |
-| 11 — Retrospective | pending | — | Cross-PR retrospective once Increment 1 ships |
+| 7 — Implementation | complete | `implementation-log.md` | All 5 PRs merged to `develop`: #325 (PR-ASM-1), #345 (PR-ASM-2), #346 (PR-ASM-3), #347 (PR-ASM-4), #348 (PR-ASM-5) |
+| 8 — Testing | complete | inline test gates per PR | 1375/1375 unit tests passing on `develop`; cross-cutting integration tests landed in PR-ASM-5 |
+| 9 — Review | complete | Codex review threads on each PR | Each PR went through ≥2 Codex passes; every P1 finding addressed before merge |
+| 10 — Release | complete | `release-notes.md` | `develop → demo` promotion 2026-05-15 |
+| 11 — Retrospective | complete | `retrospective.md` | Cross-PR retro: what worked, what hurt, what changes for next time |
 
 ## Blocks
 
-None — Stage 6 (Tasks) complete. Awaiting implementation kickoff (PR-ASM-1).
+None — Increment 1 shipped. Future increments tracked separately.
 
 ## Hand-off notes
 
@@ -54,9 +54,13 @@ None — Stage 6 (Tasks) complete. Awaiting implementation kickoff (PR-ASM-1).
 | 2026-05-14 | architect | architect | Stage-4 Design complete: `design.md` (10.3k words, Parts A/B/C); ADRs 0029 (transport split), 0030 (JSON discipline + Zod), 0031 (session-id location + no-claude-home-reads ESLint rule), 0032 (file-write proposal envelope). 67/67 requirements coverage. |
 | 2026-05-14 | architect | planner | `spec.md` complete: implementation-ready contract with 20+ TS interfaces (TransportKind, SessionId branded, StructuredEnvelope union, FileWriteProposal, ClaudeSubscriptionTransportPort, ConfirmModalPort, error types, PluginSettings + ChatStore extensions), 52 TEST-ASM scenarios, INV-1..INV-6 argv invariants, all REQ-ASM + NFR-ASM mapped to spec sections + tests. |
 | 2026-05-14 | planner | dev | `tasks.md` complete: 85 contiguous tasks (T-ASM-001..085) across 5 mergeable PRs. PR-ASM-1 (subscription adapter + transport selector, 23 tasks), PR-ASM-2 (stage prompt + structured envelope, 20 tasks), PR-ASM-3 (session persistence + audit log, 15 tasks), PR-ASM-4 (file-write proposal + ConfirmModalPort, 18 tasks), PR-ASM-5 (ESLint rule + integration + release polish, 9 tasks). TDD-paired, zero L estimates, 67/67 coverage. Three non-blocking OQs documented inline. |
+| 2026-05-15 | dev | qa | All 5 PR-ASM PRs merged. 1375/1375 tests green. SPEC §13.4 release-blockers checklist verified in PR-ASM-5 (#348). |
+| 2026-05-15 | qa | release-manager | Cross-PR review complete. Every P1 Codex finding addressed; no carry-over P1s. `develop` ready for `demo` promotion. |
+| 2026-05-15 | release-manager | retrospective | `release-notes.md` written for Increment 1. `develop → demo` PR opened. |
+| 2026-05-15 | retrospective | — | `retrospective.md` captured cross-PR learnings; workflow state marked complete. |
 
 ## Open clarifications
 
-- **OQ-ASM-T1** (PR-ASM-3): `chatThreads` flush cadence — planner assumed 1 s debounced; can be revisited during PR-ASM-3 implementation if SPEC §9.3 needs to pin it.
-- **OQ-ASM-T2** (PR-ASM-4): proposal-card unmount focus target — planner assumed return to ChatInput textarea; revisit during PR-ASM-4 UI design if a11y testing reveals a better target.
-- **OQ-ASM-T3** (PR-ASM-4): potential opt-in eager-flush for `appendUserAssistant` — additive, not blocking PR-ASM-4.
+- **OQ-ASM-T1** (PR-ASM-3): `chatThreads` flush cadence — planner assumed 1 s debounced; implementation landed with that cadence + onunload-synchronous-flush after Codex P1. Closed.
+- **OQ-ASM-T2** (PR-ASM-4): proposal-card unmount focus target — implementation returns focus to ChatInput textarea. Holds for now; a11y testing on real surfaces could revisit.
+- **OQ-ASM-T3** (PR-ASM-4): potential opt-in eager-flush for `appendUserAssistant` — not pursued. The current fire-and-forget contract held up; revisit only if a real workflow needs it.
