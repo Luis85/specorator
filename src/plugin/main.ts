@@ -400,7 +400,16 @@ export default class SpecoratorPlugin extends Plugin {
     await this.core?.notifySettingsChanged('specorator', merged)
     const validated = (this.core?.getModuleSettings('specorator') ?? merged) as PluginSettings
     this.settings = validated
-    this._storedData = { ...this._storedData, specorator: { ...validated } }
+    // Merge into the existing specorator blob rather than overwriting it.
+    // Sibling keys under `specorator` (e.g. `chatThreads` from
+    // `_persistChatThreads`) must survive a settings save (Codex P1, PR #350);
+    // a bare `{ ...validated }` here would drop them and the next plugin
+    // reload couldn't restore prior chat sessions.
+    const currentSpecorator = (this._storedData.specorator ?? {}) as Record<string, unknown>
+    this._storedData = {
+      ...this._storedData,
+      specorator: { ...currentSpecorator, ...validated },
+    }
     await this.saveData(this._storedData)
   }
 

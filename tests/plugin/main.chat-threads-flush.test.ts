@@ -317,3 +317,77 @@ describe('getInitialChatThreads — read path (T-ASM-053)', () => {
     expect(plugin.getInitialChatThreads()).toEqual([])
   })
 })
+
+describe('updateSettings preserves sibling keys under specorator (Codex P1, PR #350)', () => {
+  it('does not clobber chatThreads when settings are saved', async () => {
+    // Pre-seed _storedData with both PluginSettings AND a chatThreads blob —
+    // exactly what `_persistChatThreads` writes alongside the settings.
+    const initialData = {
+      specorator: {
+        locale: 'en',
+        specsFolder: 'specs',
+        anthropicApiKey: '',
+        claudeCliPath: '',
+        transportKind: 'auto',
+        chatThreads: {
+          t1: {
+            threadId: 't1',
+            sessionId: 's1',
+            feature: 'foo',
+            logPath: 'specs/foo/sessions/s1.md',
+            transport: 'subscription',
+            createdAt: '2026-05-14T10:00:00.000Z',
+            lastUsedAt: '2026-05-14T10:00:00.000Z',
+          },
+        },
+      },
+    }
+    const { plugin, state } = makePlugin(initialData)
+    await plugin.loadSettings()
+    // Pre-fix the seeded settings on the plugin so `updateSettings`'s base
+    // merge mirrors the production load path.
+    plugin.settings = {
+      ...(plugin.settings as unknown as Record<string, unknown>),
+      ...(initialData.specorator as Record<string, unknown>),
+    } as unknown as typeof plugin.settings
+
+    // Save a settings change. No `core` is wired here, so `getModuleSettings`
+    // returns undefined and the function falls back to the merged settings —
+    // mirrors the production code path's validation fallback.
+    await plugin.updateSettings({ transportKind: 'api-key' })
+
+    // The saved blob must still carry the chatThreads sibling.
+    const saved = state.blob as { specorator?: Record<string, unknown> }
+    expect(saved.specorator).toBeDefined()
+    expect(saved.specorator?.chatThreads).toBeDefined()
+    expect(saved.specorator?.chatThreads).toEqual(initialData.specorator.chatThreads)
+    // And the settings change actually landed.
+    expect(saved.specorator?.transportKind).toBe('api-key')
+  })
+
+  it('overwrites a settings key when partial updates it (still merging — settings keys win over the existing blob)', async () => {
+    const initialData = {
+      specorator: {
+        locale: 'en',
+        specsFolder: 'specs',
+        anthropicApiKey: 'old-key',
+        claudeCliPath: '',
+        transportKind: 'auto',
+      },
+    }
+    const { plugin, state } = makePlugin(initialData)
+    await plugin.loadSettings()
+    plugin.settings = {
+      ...(plugin.settings as unknown as Record<string, unknown>),
+      ...(initialData.specorator as Record<string, unknown>),
+    } as unknown as typeof plugin.settings
+
+    await plugin.updateSettings({ anthropicApiKey: 'new-key' })
+
+    const saved = state.blob as { specorator?: Record<string, unknown> }
+    expect(saved.specorator?.anthropicApiKey).toBe('new-key')
+    // Other settings keys preserved.
+    expect(saved.specorator?.locale).toBe('en')
+    expect(saved.specorator?.specsFolder).toBe('specs')
+  })
+})
