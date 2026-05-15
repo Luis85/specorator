@@ -295,6 +295,7 @@ describe('useChatStore()', () => {
         proposedAt: '2026-05-14T00:00:00.000Z',
         decidedAt: null,
         failureReason: null,
+        originPrompt: '/create-file t1.md',
         ...overrides,
       }
     }

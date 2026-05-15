@@ -408,7 +408,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
     }
 
     this._activeChildren.add(childLike)
-    return this._collectStructuredStdout(childLike, timeoutMs)
+    return this._collectStructuredStdout(childLike, timeoutMs, options)
   }
 
   /**
@@ -420,6 +420,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
   private _collectStructuredStdout(
     child: ChildProcessLike,
     timeoutMs: number,
+    options: StructuredCliCallOptions,
   ): Promise<Result<StructuredCliRawResult, ClaudeCliError>> {
     return new Promise<Result<StructuredCliRawResult, ClaudeCliError>>((resolve) => {
       let stdoutBuffer = ''
@@ -478,9 +479,48 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
       child.on('close', (...args: unknown[]) => {
         if (settled) return
         const exitCode = typeof args[0] === 'number' ? args[0] : null
-        settle(this._parseStructuredStdout(stdoutBuffer, exitCode))
+        const parsed = this._parseStructuredStdout(stdoutBuffer, exitCode)
+        // REQ-ASM-031 / REQ-ASM-046 — surface `session_id` to the caller so the
+        // structured branch can capture it on the active thread before the
+        // promise resolves. Best-effort: an `options.onSessionId` callback
+        // throwing must not derail the structured result.
+        if (parsed.ok && options.onSessionId !== undefined) {
+          const sid = this._extractStructuredSessionId(stdoutBuffer)
+          if (sid !== null) {
+            try {
+              options.onSessionId(sid)
+            } catch {
+              // NFR-ASM-005 — never log the session id. Callback failures must
+              // not tear down the structured turn; suppressed silently here
+              // (a misbehaving caller cannot be observed by this adapter).
+            }
+          }
+        }
+        settle(parsed)
       })
     })
+  }
+
+  /**
+   * Re-parse the structured stdout to extract the top-level `session_id` field
+   * for the REQ-ASM-031 capture callback. Returns `null` when the field is
+   * absent or non-string. Kept tolerant — `_parseStructuredStdout` has already
+   * resolved success status; this method only adds the capture side-effect.
+   */
+  private _extractStructuredSessionId(stdoutBuffer: string): SessionId | null {
+    const trimmed = stdoutBuffer.trim()
+    if (trimmed.length === 0) return null
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(trimmed)
+    } catch {
+      return null
+    }
+    if (parsed === null || typeof parsed !== 'object') return null
+    const record = parsed as Record<string, unknown>
+    const sid = record.session_id
+    if (typeof sid !== 'string' || sid.length === 0) return null
+    return asSessionId(sid)
   }
 
   /**

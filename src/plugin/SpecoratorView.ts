@@ -13,15 +13,18 @@ import {
   LOGGER_PORT,
   CLAUDE_CLI_PORT,
   COMMUNITY_PLUGIN_PORT,
+  CONFIRM_MODAL_PORT,
   IS_MOBILE_KEY,
   SETTINGS_VERSION_KEY,
+  TRANSPORT_KIND_KEY,
 } from '@/infrastructure/bridge/ports'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { FeatureService } from '@/application/feature/FeatureService'
 import { FeedbackService } from '@/application/shared/FeedbackService'
 import { FEATURE_SERVICE_KEY } from '@/ui/composables/useFeatureService'
-import type { ClaudeCliPort } from '@/domain/ports'
+import type { ClaudeCliPort, ConfirmModalPort } from '@/domain/ports'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
+import type { TransportKind } from '@/domain/chat/TransportKind'
 import type { TransportSelection } from '@/plugin/transport/TransportSelector'
 import { useChatStore } from '@/ui/stores/chatStore'
 import { mostRecentlyUsedThreadId } from './chatThreadsPersistence'
@@ -43,6 +46,17 @@ export type SelectTransportFactory = (settings: PluginSettings) => TransportSele
 export interface SpecoratorViewOptions {
   readonly subscriptionAdapter: ClaudeCliPort
   readonly selectTransport: SelectTransportFactory
+  /**
+   * Production-grade modal adapter (`ObsidianConfirmModalAdapter`) constructed
+   * in `main.ts`'s `onload()` (SPEC-ASM-001 §9.1). Provided to Vue under
+   * `CONFIRM_MODAL_PORT` so `ChatSidebar`'s proposal-confirmation flow can
+   * prompt the user without importing `obsidian` (REQ-ASM-044, ADR-0032).
+   *
+   * Optional so unit tests that exercise the view without proposal flows can
+   * continue to omit it; the provide is still issued unconditionally below
+   * (Vue tolerates `undefined`).
+   */
+  readonly confirmModalAdapter?: ConfirmModalPort
 }
 
 export const VIEW_TYPE = 'specorator'
@@ -79,6 +93,15 @@ export class SpecoratorView extends ItemView {
   private readonly _activeClaudeCliPort: Ref<ClaudeCliPort>
 
   /**
+   * Reactive holder for the resolved `TransportKind`. Mirrors
+   * `selectTransport(settings).kind` and is refreshed by `_refreshActivePort()`
+   * (REQ-ASM-002). Provided to Vue under `TRANSPORT_KIND_KEY` so
+   * `ChatSidebar`'s `TransportStatusPill` and degraded-template branches
+   * re-render reactively when the user switches transport (SPEC §10.1).
+   */
+  private readonly _activeTransportKind: Ref<TransportKind>
+
+  /**
    * Optional subscription-transport adapter + selector closure passed by the
    * plugin (SPEC-ASM-001 §9.1). When absent, the view falls back to the legacy
    * direct-port path for backwards compatibility with existing tests.
@@ -95,10 +118,20 @@ export class SpecoratorView extends ItemView {
     this._options = options ?? null
     // Seed the reactive port: when a selector is provided, derive from
     // settings; otherwise fall back to the directly-injected SDK adapter.
-    const initial = this._options !== null
-      ? this._options.selectTransport(this.plugin.settings).port
+    const initialSelection = this._options !== null
+      ? this._options.selectTransport(this.plugin.settings)
+      : null
+    const initialPort = initialSelection !== null
+      ? initialSelection.port
       : this.claudeCliPort
-    this._activeClaudeCliPort = ref(initial)
+    this._activeClaudeCliPort = ref(initialPort)
+    // When no selector is wired (legacy path), default the kind to 'degraded'
+    // — UI consumers reading `TRANSPORT_KIND_KEY` see a concrete value and
+    // never `undefined`.
+    const initialKind: TransportKind = initialSelection !== null
+      ? initialSelection.kind
+      : 'degraded'
+    this._activeTransportKind = ref(initialKind)
   }
 
   getViewType(): string { return VIEW_TYPE }
@@ -165,6 +198,20 @@ export class SpecoratorView extends ItemView {
     })
     this.vueApp.provide(CLAUDE_CLI_PORT, reactivePort)
     this.vueApp.provide(COMMUNITY_PLUGIN_PORT, bridge)
+    // REQ-ASM-044 / SPEC-ASM-001 §9.5 — production-grade confirmation modal
+    // for proposal-flow accepts. `ChatSidebar` injects this via
+    // `useConfirmModalPort()` (PR-ASM-4 batch 7). The provide is
+    // SPEC-ASM-001 §9.5 — provide the production confirm-modal adapter for
+    // proposal-accept flows. Only registered when an adapter was supplied so
+    // `useConfirmModalPort` throws a clear 'not provided' error in legacy
+    // tests that omit it. Consumers reach for this only when surfacing the
+    // overwrite modal in `commitFileWriteProposal` (REQ-ASM-044).
+    if (this._options?.confirmModalAdapter !== undefined) {
+      this.vueApp.provide(CONFIRM_MODAL_PORT, this._options.confirmModalAdapter)
+    }
+    // SPEC-ASM-001 §10.1 — reactive transport-kind ref. ChatSidebar consumes
+    // this to drive `TransportStatusPill` + degraded-template branches.
+    this.vueApp.provide(TRANSPORT_KIND_KEY, this._activeTransportKind)
     this.vueApp.provide(IS_MOBILE_KEY, Platform.isMobile)
     this.vueApp.provide(SETTINGS_VERSION_KEY, this._settingsVersion)
     const featureFeedback = new FeedbackService(bridge, bridge)
@@ -264,14 +311,25 @@ export class SpecoratorView extends ItemView {
   }
 
   /**
+   * Returns the currently provided `TransportKind`. Test seam for T-ASM-075;
+   * production code reads the kind via Vue's `inject(TRANSPORT_KIND_KEY)`.
+   */
+  public getActiveTransportKind(): TransportKind {
+    return this._activeTransportKind.value
+  }
+
+  /**
    * Recompute the active transport via the injected selector factory. No-op
    * when no factory was provided (legacy direct-port path).
    */
   private _refreshActivePort(): void {
     if (this._options === null) return
-    const next = this._options.selectTransport(this.plugin.settings).port
-    if (next !== this._activeClaudeCliPort.value) {
-      this._activeClaudeCliPort.value = next
+    const selection = this._options.selectTransport(this.plugin.settings)
+    if (selection.port !== this._activeClaudeCliPort.value) {
+      this._activeClaudeCliPort.value = selection.port
+    }
+    if (selection.kind !== this._activeTransportKind.value) {
+      this._activeTransportKind.value = selection.kind
     }
   }
 

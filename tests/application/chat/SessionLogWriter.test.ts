@@ -25,6 +25,7 @@ import { fakeModulePorts, type FakePorts } from '../../__fakes__/fake-ports'
 import { resolveSessionLogPath } from '@/application/chat/sessionLogPath'
 import {
   SessionLogWriter,
+  SessionLogNoSessionError,
   type SessionLogProposalInput,
 } from '@/application/chat/SessionLogWriter'
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord'
@@ -386,14 +387,14 @@ describe('SessionLogWriter.appendProposalDecision (REQ-ASM-046)', () => {
     expect(written).toContain('- rationale: because-spec')
   })
 
-  it('appendProposalDecision is awaited inline and surfaces write failures via logger.error', async () => {
+  it('appendProposalDecision rejects when the underlying writeFile throws (audit row load-bearing per REQ-ASM-046)', async () => {
     const thread = makeThread()
     vi.spyOn(ports.vault, 'writeFile').mockRejectedValue(new Error('boom'))
 
     const writer = makeWriter(ports)
-    // The DoD says the caller (commitFileWriteProposal in PR-ASM-4) awaits
-    // this promise. The writer itself never rejects — the caller infers
-    // success from logger output or a future Result wrapper.
+    // Codex P1 #1 fix: audit-row failures must propagate to the caller so the
+    // commit pipeline maps them to `SESSION_LOG_FAILED`. A vault write must
+    // not be reported successful while its audit row is silently dropped.
     await expect(
       writer.appendProposalDecision({
         thread,
@@ -401,6 +402,35 @@ describe('SessionLogWriter.appendProposalDecision (REQ-ASM-046)', () => {
         decision: 'rejected',
         decidedAt: '2026-05-14T10:00:00.000Z',
       }),
+    ).rejects.toThrow('boom')
+  })
+
+  it('appendProposalDecision rejects with SessionLogNoSessionError when thread.sessionId is null', async () => {
+    const thread = makeThread({ sessionId: null })
+
+    const writer = makeWriter(ports)
+    await expect(
+      writer.appendProposalDecision({
+        thread,
+        proposal: { envelope: { path: 'a.md' } },
+        decision: 'rejected',
+        decidedAt: '2026-05-14T10:00:00.000Z',
+      }),
+    ).rejects.toThrow(SessionLogNoSessionError)
+    // No vault write attempted — the missing session is gated before queueing.
+    expect(ports.logger.error).toHaveBeenCalled()
+  })
+
+  it('appendUserAssistant still resolves successfully when the underlying writeFile throws (fire-and-forget per REQ-ASM-040)', async () => {
+    const thread = makeThread()
+    vi.spyOn(ports.vault, 'writeFile').mockRejectedValue(new Error('boom'))
+
+    const writer = makeWriter(ports)
+    // Regression: refactoring `appendProposalDecision` to reject must not
+    // change the fire-and-forget contract of `appendUserAssistant`. Free-text
+    // turn mirroring stays resilient — failures route to logger.error.
+    await expect(
+      writer.appendUserAssistant(thread, { user: 'u', assistant: 'a' }),
     ).resolves.toBeUndefined()
     expect(ports.logger.error).toHaveBeenCalledTimes(1)
   })

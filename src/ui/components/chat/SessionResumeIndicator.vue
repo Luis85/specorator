@@ -4,15 +4,19 @@
  * header when the current thread was resumed from a stored sessionId.
  *
  * Satisfies SPEC-ASM-001 §7.3 (REQ-ASM-035, NFR-ASM-001, NFR-ASM-008).
- * Plain-language copy per DESIGN-ASM-001 §B3:
- *   chat.subscription.resumeAriaLabel = "Continuing prior conversation"
+ * Plain-language copy per DESIGN-ASM-001 §B3 — see `chat.session.resumeAriaLabel`
+ * in `src/ui/i18n/locales/{en,de}.ts`.
  *
  * The component is purely presentational; the parent (ChatSidebar)
  * binds `resumed` from `chatStore.sessionResumed`.
  */
+import { useI18n } from 'vue-i18n'
+
 defineProps<{
   resumed: boolean
 }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
@@ -20,7 +24,7 @@ defineProps<{
     v-if="resumed"
     class="sp-chat__resume-badge"
     data-testid="chat-session-resume"
-    aria-label="Continuing prior conversation"
+    :aria-label="t('chat.session.resumeAriaLabel')"
   >
     <span
       aria-hidden="true"

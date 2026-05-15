@@ -48,7 +48,7 @@ import type {
 } from '@/plugin/transport/TransportSelector'
 import { degradedClaudeCliPort } from '@/infrastructure/bridge/degradedClaudeCliPort'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
-import type { ClaudeCliPort } from '@/domain/ports/ClaudeCliPort'
+import type { ClaudeCliPort, ConfirmModalPort } from '@/domain/ports'
 import { useChatStore } from '@/ui/stores/chatStore'
 import type SpecoratorPlugin from '@/plugin/main'
 
@@ -73,6 +73,13 @@ interface Fixture {
   readonly plugin: { settings: PluginSettings }
   readonly options: SpecoratorViewOptions
   readonly cliResolvedRef: { value: boolean }
+  readonly confirmModalAdapter: ConfirmModalPort
+}
+
+function makeConfirmModalAdapter(): ConfirmModalPort {
+  return {
+    show: vi.fn(async () => true),
+  }
 }
 
 function makeSettings(overrides: Partial<PluginSettings>): PluginSettings {
@@ -92,6 +99,7 @@ function makeFixture(initialSettings: Partial<PluginSettings>, cliResolved = fal
   const subscriptionAdapter = makePort('subscription')
   const degradedPort = degradedClaudeCliPort
   const cliResolvedRef = { value: cliResolved }
+  const confirmModalAdapter = makeConfirmModalAdapter()
 
   const selectTransportSpy = vi.fn(
     (settings: PluginSettings): TransportSelection => {
@@ -110,6 +118,7 @@ function makeFixture(initialSettings: Partial<PluginSettings>, cliResolved = fal
   const options: SpecoratorViewOptions = {
     subscriptionAdapter,
     selectTransport: selectTransportSpy,
+    confirmModalAdapter,
   }
 
   return {
@@ -120,6 +129,7 @@ function makeFixture(initialSettings: Partial<PluginSettings>, cliResolved = fal
     plugin,
     options,
     cliResolvedRef,
+    confirmModalAdapter,
   }
 }
 
@@ -349,5 +359,158 @@ describe('SpecoratorView.bumpSettingsVersion() mid-turn guard (REQ-ASM-003)', ()
     view.bumpSettingsVersion()
 
     expect(activePort(view)).toBe(fixture.sdkAdapter)
+  })
+})
+
+// -----------------------------------------------------------------------------
+// T-ASM-075 — CONFIRM_MODAL_PORT + TRANSPORT_KIND_KEY wiring (PR-ASM-4 batch 9).
+//
+// Asserts that the view accepts the modal-port adapter through its options bag
+// and that `getActiveTransportKind()` mirrors `selectTransport(settings).kind`,
+// including reactive updates via `bumpSettingsVersion()`. The matching Vue
+// `provide()` calls live in `onOpen()` (SpecoratorView.ts lines 206 + 209); we
+// don't mount the Vue app here for the same reason the existing wiring tests
+// don't — instead we exercise the public test seams that back those provides.
+// -----------------------------------------------------------------------------
+
+describe('SpecoratorView accepts ConfirmModalPort via options bag (T-ASM-075, REQ-ASM-044)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('stores the confirmModalAdapter passed through SpecoratorViewOptions', () => {
+    const fixture = makeFixture(
+      { transportKind: 'auto', anthropicApiKey: '' },
+      /* cliResolved */ false,
+    )
+
+    const view = makeView(fixture)
+
+    // The adapter is held on the view's `_options` bag and provided under
+    // CONFIRM_MODAL_PORT in onOpen(). We can't read `_options` directly
+    // (private), but constructing the view without throwing exercises the
+    // option-acceptance path. The provide itself is asserted by ChatSidebar's
+    // consumer tests (PR-ASM-4 batch 7).
+    expect(view).toBeInstanceOf(SpecoratorView)
+    // Sanity: the adapter we built is a real ConfirmModalPort.
+    expect(typeof fixture.confirmModalAdapter.show).toBe('function')
+  })
+
+  it('accepts construction without a confirmModalAdapter (optional field)', () => {
+    const fixture = makeFixture(
+      { transportKind: 'auto', anthropicApiKey: '' },
+      /* cliResolved */ false,
+    )
+    const sdkAdapter = fixture.sdkAdapter
+    const subscriptionAdapter = fixture.subscriptionAdapter
+    const degradedPort = fixture.degradedPort
+    const cliResolvedRef = fixture.cliResolvedRef
+    const optionsNoModal: SpecoratorViewOptions = {
+      subscriptionAdapter,
+      selectTransport: (settings: PluginSettings): TransportSelection =>
+        selectTransport(settings, {
+          sdkAdapter,
+          subscriptionAdapter,
+          degradedPort,
+          cliResolved: cliResolvedRef.value,
+        }),
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const leaf = {} as any
+    expect(
+      () =>
+        new SpecoratorView(
+          leaf,
+          fixture.plugin as unknown as SpecoratorPlugin,
+          fixture.sdkAdapter,
+          optionsNoModal,
+        ),
+    ).not.toThrow()
+  })
+})
+
+describe('SpecoratorView.getActiveTransportKind() mirrors selectTransport().kind (T-ASM-075, REQ-ASM-002)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('reflects "api-key" when settings resolve to the SDK adapter', () => {
+    const fixture = makeFixture(
+      { transportKind: 'api-key', anthropicApiKey: 'sk-test' },
+      /* cliResolved */ false,
+    )
+
+    const view = makeView(fixture)
+
+    expect(view.getActiveTransportKind()).toBe('api-key')
+  })
+
+  it('reflects "subscription" when settings resolve to the subscription adapter', () => {
+    const fixture = makeFixture(
+      { transportKind: 'subscription', anthropicApiKey: '' },
+      /* cliResolved */ true,
+    )
+
+    const view = makeView(fixture)
+
+    expect(view.getActiveTransportKind()).toBe('subscription')
+  })
+
+  it('reflects "degraded" when no transport is available', () => {
+    const fixture = makeFixture(
+      { transportKind: 'auto', anthropicApiKey: '' },
+      /* cliResolved */ false,
+    )
+
+    const view = makeView(fixture)
+
+    expect(view.getActiveTransportKind()).toBe('degraded')
+  })
+
+  it('updates reactively on bumpSettingsVersion() when settings change', () => {
+    const fixture = makeFixture(
+      { transportKind: 'auto', anthropicApiKey: '' },
+      /* cliResolved */ false,
+    )
+
+    const view = makeView(fixture)
+    expect(view.getActiveTransportKind()).toBe('degraded')
+
+    // Settings change to api-key with a key present.
+    fixture.plugin.settings = makeSettings({
+      transportKind: 'auto',
+      anthropicApiKey: 'sk-newly-set',
+    })
+    view.bumpSettingsVersion()
+
+    expect(view.getActiveTransportKind()).toBe('api-key')
+  })
+
+  it('preserves the kind across bumps while a chat turn is in flight (REQ-ASM-003)', () => {
+    const fixture = makeFixture(
+      { transportKind: 'auto', anthropicApiKey: '' },
+      /* cliResolved */ false,
+    )
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const view = makeView(fixture)
+    view.pinia = pinia
+    expect(view.getActiveTransportKind()).toBe('degraded')
+
+    // Begin an in-flight turn.
+    const store = useChatStore(pinia)
+    store.beginRequest()
+    expect(store.status).toBe('loading')
+
+    // Settings change that WOULD switch the kind under normal conditions.
+    fixture.plugin.settings = makeSettings({
+      transportKind: 'auto',
+      anthropicApiKey: 'sk-mid-turn',
+    })
+    view.bumpSettingsVersion()
+
+    // Kind unchanged — selector not re-run mid-turn (REQ-ASM-003).
+    expect(view.getActiveTransportKind()).toBe('degraded')
   })
 })

@@ -27,6 +27,7 @@
  *
  * Satisfies REQ-ASM-001, REQ-ASM-021, REQ-ASM-049.
  */
+import type { SessionId } from '@/domain/chat/SessionId'
 import {
   ClaudeCliError,
   type ClaudeCliPort,
@@ -61,6 +62,20 @@ export interface StructuredCliCallOptions {
   readonly systemPromptSuffix?: string
   readonly resumeSessionId?: string
   readonly timeoutMs?: number
+  /**
+   * Optional caller-supplied callback invoked exactly once when the structured
+   * call's response envelope yields a non-empty `session_id`. Mirrors the
+   * free-text `ClaudeCliQueryOptions.onSessionId` contract (REQ-ASM-031): the
+   * callback must be invoked before the wrapper's promise resolves so the
+   * caller can persist the session id alongside the resolved envelope.
+   *
+   * Load-bearing for proposals (REQ-ASM-046) — without it, a thread that
+   * starts with `/create-file` keeps `thread.sessionId === null` and the
+   * subsequent `appendProposalDecision` would reject with
+   * `SessionLogNoSessionError`, surfacing the trust-first violation as
+   * `SESSION_LOG_FAILED` instead of silently dropping the audit row.
+   */
+  readonly onSessionId?: (sessionId: SessionId) => void
 }
 
 /**
@@ -97,6 +112,24 @@ export function isSubscriptionCapable(port: ClaudeCliPort): port is Subscription
 }
 
 /**
+ * Structured-output guard phrase appended to every structured call's system
+ * prompt suffix. The `--output-format json --json-schema` flags constrain the
+ * shape, but in practice models will sometimes emit prose or code fences
+ * around the JSON object — that prose then trips `parseStructuredEnvelope`
+ * and surfaces as `EnvelopeParseError`/`structured-fail` even when the
+ * user's command was valid. Pinning the contract in the system prompt makes
+ * the model far more likely to return an object-only response (Codex P2,
+ * PR #347).
+ *
+ * Centralised here so every caller of `queryStructured` inherits the guard
+ * without having to remember to append it themselves.
+ */
+export const STRUCTURED_OUTPUT_GUARD_SUFFIX =
+  '\n\nRespond with a single JSON object that conforms to the provided schema. ' +
+  'Do not include any prose, explanation, code fences, or markdown formatting ' +
+  'before or after the JSON object.'
+
+/**
  * Application-layer wrapper around the structured-output path. See module
  * header and SPEC §6.6 for the algorithm. Never throws. The error union
  * surfaces:
@@ -118,7 +151,16 @@ export async function queryStructured(
     )
   }
 
-  const raw = await port.runStructured(prompt, options)
+  // Always pin the JSON-only guard on the system prompt suffix so the model
+  // returns an object-only response (Codex P2, PR #347). The stage preamble
+  // composed by `assembleSystemPrompt` (when present) precedes the guard.
+  const callerSuffix = options.systemPromptSuffix ?? ''
+  const mergedOptions: StructuredCliCallOptions = {
+    ...options,
+    systemPromptSuffix: callerSuffix + STRUCTURED_OUTPUT_GUARD_SUFFIX,
+  }
+
+  const raw = await port.runStructured(prompt, mergedOptions)
   if (!raw.ok) {
     return err(raw.error)
   }

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, inject } from 'vue'
+import { useI18n } from 'vue-i18n'
+import type { Ref } from 'vue'
 import { tryAsync } from '@/domain/shared/tryAsync'
 import { useChatStore } from '@/ui/stores/chatStore'
 import { useClaudeCliPort } from '@/ui/composables/useClaudeCliPort'
@@ -17,14 +19,39 @@ import {
   loadWorkflowStateSnapshot,
 } from '@/application/chat/assembleSystemPrompt'
 import { buildStagePromptMap } from '@/application/chat/stagePromptMap'
-import { SETTINGS_VERSION_KEY } from '@/infrastructure/bridge/ports'
+import {
+  CONFIRM_MODAL_PORT,
+  SETTINGS_VERSION_KEY,
+  TRANSPORT_KIND_KEY,
+} from '@/infrastructure/bridge/ports'
 import type { SessionId } from '@/domain/chat/SessionId'
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord'
+import type { ConfirmModalPort, TranslationPort } from '@/domain/ports'
+import type { TransportKind } from '@/domain/chat/TransportKind'
+import {
+  queryStructured,
+  type StructuredCliCallOptions,
+} from '@/application/chat/queryStructured'
+import { proposeFileWrite } from '@/application/chat/proposeFileWrite'
+import { validateProposalPath } from '@/application/chat/validateProposalPath'
+import {
+  commitFileWriteProposal,
+  rejectFileWriteProposal,
+} from '@/application/chat/commitFileWriteProposal'
+import type { FileWriteProposal } from '@/application/chat/FileWriteProposal'
+import type { CreateFileEnvelope } from '@/application/chat/createFileEnvelopeSchema'
+import { EnvelopeParseError } from '@/application/chat/errors'
+import type {
+  PathValidationError,
+  CommitProposalErrorCode,
+} from '@/application/chat/errors'
 import ContextFileList from './ContextFileList.vue'
 import ChatInput from './ChatInput.vue'
 import ChatResponse from './ChatResponse.vue'
 import SubprocessStartingPill from './SubprocessStartingPill.vue'
 import SessionResumeIndicator from './SessionResumeIndicator.vue'
+import TransportStatusPill from './TransportStatusPill.vue'
+import FileWriteProposalCard from './FileWriteProposalCard.vue'
 
 const store = useChatStore()
 const claudeCliPort = useClaudeCliPort()
@@ -36,14 +63,43 @@ const loggerPort = useLoggerPort()
 const sessionLogWriterFactory = useSessionLogWriter()
 
 /**
- * Generate a UUID for new thread ids. Falls back to a timestamp-keyed value
- * when `crypto.randomUUID` is missing (older test environments). The fallback
- * is collision-resistant enough for in-memory thread maps within a session.
+ * Optional injections wired by `SpecoratorView` (PR-ASM-4 batch 9). Both are
+ * optional so unit tests and the standalone browser UI can mount the sidebar
+ * without providing them — the proposal flow simply degrades gracefully when
+ * `ConfirmModalPort` is missing (overwrite confirmation cannot be shown).
  */
-function generateThreadId(): string {
+const confirmModalPort = inject<ConfirmModalPort | undefined>(CONFIRM_MODAL_PORT, undefined)
+const transportKindRef = inject<Ref<TransportKind> | undefined>(TRANSPORT_KIND_KEY, undefined)
+
+/**
+ * Vue-i18n composable wired to the EN/DE catalogues in `src/ui/i18n/locales/`.
+ * The commit pipeline expects a `TranslationPort`, so we adapt `useI18n().t`
+ * to the port shape (T-ASM-074).
+ */
+const { t: tI18n } = useI18n()
+const inlineTranslator: TranslationPort = {
+  t(key: string, params?: Record<string, unknown>): string {
+    return tI18n(key, params ?? {})
+  },
+}
+
+/**
+ * Generate a UUID for new thread / proposal ids. Falls back to a timestamp-keyed
+ * value when `crypto.randomUUID` is missing (older test environments). The
+ * fallback is collision-resistant enough for in-memory maps within a session.
+ */
+function generateUuid(prefix: string): string {
   const c = globalThis.crypto as { randomUUID?: () => string } | undefined
   if (c?.randomUUID !== undefined) return c.randomUUID()
-  return `thread-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+function generateThreadId(): string {
+  return generateUuid('thread')
+}
+
+function generateProposalId(): string {
+  return generateUuid('proposal')
 }
 
 /**
@@ -58,6 +114,27 @@ const available = ref(false)
 const availabilityChecked = ref(false)
 const containerEl = ref<HTMLElement | null>(null)
 const inputRef = ref<InstanceType<typeof ChatInput> | null>(null)
+
+// Structured-output parse failure flag (REQ-ASM-025). Cleared on every new
+// send; surfaced via ChatResponse `state='structured-fail'`.
+const structuredFail = ref(false)
+
+// Per-proposal path-validation errors (REQ-ASM-048). Keyed by proposalId; a
+// non-null entry forces the card into its 'path-invalid' state.
+const proposalPathErrors = ref<Map<string, PathValidationError>>(new Map())
+
+// Last user turn (for Retry — REQ-ASM-050). Captured on each send.
+const lastUserTurn = ref<string>('')
+
+/**
+ * Proposal IDs whose decision (Accept or Reject) is currently in flight. Used
+ * by both `handleAcceptProposal` and `handleRejectProposal` to guard against
+ * re-entrant clicks and against cross-decision races: a user who clicks
+ * Accept and then quickly clicks Reject must NOT produce contradictory
+ * audit rows — the second click is a no-op while the first is still
+ * resolving (Codex P1, PR #347). Cleared on terminal status flip.
+ */
+const inFlightDecisions = new Set<string>()
 
 // Settings-version watcher (D-CCS-003)
 const settingsVersion = inject(SETTINGS_VERSION_KEY, ref(0))
@@ -112,17 +189,64 @@ onUnmounted(() => {
   unsubscribeActiveFile?.()
 })
 
+// Transport kind for the pill (REQ-ASM-002). Defaults to 'api-key' when no
+// reactive ref is provided — keeps unit tests and standalone UI working.
+const transportKind = computed<TransportKind>(() => transportKindRef?.value ?? 'api-key')
+
+// Pending proposals for the active thread; surfaces them into the proposalCard
+// slot on ChatResponse. Each entry pairs the proposal DTO with its (optional)
+// path-validation error so the card can render the 'path-invalid' state.
+const activeThreadProposals = computed<
+  ReadonlyArray<{ proposal: FileWriteProposal; pathError: PathValidationError | null }>
+>(() => {
+  const tid = store.activeThreadId
+  if (tid === null) return []
+  const out: { proposal: FileWriteProposal; pathError: PathValidationError | null }[] = []
+  for (const p of store.proposals.values()) {
+    if (p.threadId !== tid) continue
+    out.push({ proposal: p, pathError: proposalPathErrors.value.get(p.proposalId) ?? null })
+  }
+  return out
+})
+
 // Determine chat response state from store
-type ResponseState = 'idle' | 'loading' | 'success' | 'trimmed-success' | 'timeout' | 'error'
+type ResponseState =
+  | 'idle'
+  | 'loading'
+  | 'success'
+  | 'trimmed-success'
+  | 'timeout'
+  | 'error'
+  | 'structured-fail'
 
 const responseState = computed<ResponseState>(() => {
   if (store.status === 'loading') return 'loading'
+  // Pending proposal cards take precedence over error/timeout/structured-fail
+  // banners (Codex P2, PR #347). A failed or parse-erroring later turn must
+  // not hide still-actionable Accept/Reject controls for proposals already
+  // on screen — otherwise the user is stranded mid-decision and loses access
+  // to the controls until another successful turn occurs. The `loading`
+  // state still wins so an in-flight turn is signalled.
+  //
+  // Path-invalid proposals are excluded: they render as a non-interactive
+  // error message (no Accept/Reject buttons) and stay `pending` indefinitely,
+  // so treating them as "actionable" would suppress error banners with no
+  // benefit to the user (Codex P2, PR #347).
+  const hasActionablePendingProposal = activeThreadProposals.value.some(
+    (entry) => entry.proposal.status === 'pending' && entry.pathError === null,
+  )
+  if (hasActionablePendingProposal) return 'success'
   if (store.status === 'error') {
     return store.errorType === 'timeout' ? 'timeout' : 'error'
   }
+  if (structuredFail.value) return 'structured-fail'
   if (store.response !== null) {
     return store.truncated ? 'trimmed-success' : 'success'
   }
+  // Render success state (empty text) when there are non-pending proposals
+  // on the thread so the proposalCard slot is mounted alongside the
+  // (potentially empty) response.
+  if (activeThreadProposals.value.length > 0) return 'success'
   return 'idle'
 })
 
@@ -245,6 +369,140 @@ function applySuccessfulTurn(args: {
   })
 }
 
+/**
+ * Heuristic for routing a user message to the structured-output path. Trust-
+ * first proposals require the user to explicitly request a file creation via
+ * a slash command (`/create-file` or `/create`). Free-text prompts that
+ * happen to mention "create file" continue to use `query()` — keeps the
+ * structured path opt-in so existing chat flows are unaffected.
+ */
+function isStructuredIntent(message: string): boolean {
+  const trimmed = message.trim().toLowerCase()
+  return trimmed.startsWith('/create-file') || trimmed.startsWith('/create ')
+}
+
+/**
+ * Build a FileWriteProposal DTO from a validated envelope and add it to the
+ * store. Records any path-validation error against the proposal so the card
+ * renders in 'path-invalid' state (REQ-ASM-048).
+ */
+function addProposalFromEnvelope(args: {
+  envelope: CreateFileEnvelope
+  threadId: string
+  pathError: PathValidationError | null
+  originPrompt: string
+}): FileWriteProposal {
+  const proposalId = generateProposalId()
+  const proposal: FileWriteProposal = {
+    proposalId,
+    threadId: args.threadId,
+    envelope: args.envelope,
+    status: 'pending',
+    proposedAt: new Date().toISOString(),
+    decidedAt: null,
+    failureReason: null,
+    originPrompt: args.originPrompt,
+  }
+  store.addProposal(proposal)
+  if (args.pathError !== null) {
+    const next = new Map(proposalPathErrors.value)
+    next.set(proposalId, args.pathError)
+    proposalPathErrors.value = next
+  }
+  return proposal
+}
+
+/**
+ * Structured-output branch of `handleSend`. Calls `queryStructured`, runs the
+ * read-only `proposeFileWrite` to check existence, validates the path, and
+ * adds a `FileWriteProposal` to the store. Renders the structured-fail state
+ * on parse error (REQ-ASM-025).
+ */
+async function handleStructuredSend(args: {
+  prompt: string
+  systemPromptSuffix: string
+  resumeSessionId: SessionId | undefined
+  isResumedTurn: boolean
+  threadId: string
+  userMessage: string
+  truncated: boolean
+  onSessionId: (id: SessionId) => void
+}): Promise<void> {
+  if (claudeCliPort === undefined) {
+    store.setError('query_failed')
+    return
+  }
+  const options: StructuredCliCallOptions = {
+    timeoutMs: 30_000,
+    systemPromptSuffix: args.systemPromptSuffix,
+    resumeSessionId: args.resumeSessionId,
+    // REQ-ASM-031 / REQ-ASM-046 — load-bearing: structured threads must
+    // capture session_id so the subsequent `appendProposalDecision` finds a
+    // non-null sessionId. Without this, the audit row would reject with
+    // `SessionLogNoSessionError` and the commit pipeline would surface
+    // `SESSION_LOG_FAILED` even though the model itself succeeded.
+    onSessionId: args.onSessionId,
+  }
+  store.setCliStartingUp(true)
+  const structuredResult = await queryStructured(claudeCliPort, args.prompt, options)
+  store.setCliStartingUp(false)
+
+  if (!structuredResult.ok) {
+    if (structuredResult.error instanceof EnvelopeParseError) {
+      // Parse failure — surface 'structured-fail' state (REQ-ASM-025) but do
+      // not register an error on the store (separate UX from CLI errors).
+      structuredFail.value = true
+      store.setResponse('', false)
+      return
+    }
+    // Transport-level error from queryStructured → same error mapping as the
+    // free-text path.
+    const code = structuredResult.error.errorCode
+    store.setError(code === 'TIMEOUT' ? 'timeout' : 'query_failed')
+    return
+  }
+
+  const envelope = structuredResult.value
+
+  // Read-only preview (REQ-ASM-041). Failure to read the vault is non-fatal:
+  // we still surface the proposal so the user can decide; the commit path
+  // re-checks file existence.
+  const previewResult = await proposeFileWrite(envelope, vaultPort)
+  if (!previewResult.ok) {
+    loggerPort.warn('proposeFileWrite failed; rendering proposal without preview', {
+      path: envelope.path,
+      reason: previewResult.error.message,
+    })
+  }
+
+  // Defence-in-depth path validation (REQ-ASM-048). On failure we still add
+  // the proposal so the user sees the rejection in-context, but with a
+  // `pathValidationError` that forces the card into 'path-invalid' state.
+  const settings = await settingsPort.getSettings()
+  const validationResult = validateProposalPath(envelope, settings.specsFolder)
+  const pathError = validationResult.ok ? null : validationResult.error
+
+  addProposalFromEnvelope({
+    envelope,
+    threadId: args.threadId,
+    pathError,
+    originPrompt: args.userMessage,
+  })
+
+  // Mirror the structured turn to the session log too (the assistant body is
+  // an empty string — the proposal card replaces the prose). The `truncated`
+  // flag is forwarded from `buildPrompt` so the proposal turn surfaces the
+  // same context-trim warning the free-text path does — users must see when
+  // a proposal was generated from clipped context (Codex P2, PR #347).
+  applySuccessfulTurn({
+    threadId: args.threadId,
+    isResumedTurn: args.isResumedTurn,
+    userMessage: args.userMessage,
+    assistantResponse: '',
+    truncated: args.truncated,
+  })
+}
+
 // Send handler
 async function handleSend(): Promise<void> {
   const text = store.userText.trim()
@@ -256,6 +514,10 @@ async function handleSend(): Promise<void> {
   // the session log post-turn — beginRequest does not clear userText, but the
   // success branch below does.
   const userMessage = store.userText
+  lastUserTurn.value = userMessage
+
+  // Clear any prior structured-fail flag at every new send.
+  structuredFail.value = false
 
   store.beginRequest()
 
@@ -281,6 +543,24 @@ async function handleSend(): Promise<void> {
 
   if (claudeCliPort === undefined) {
     store.setError('query_failed')
+    return
+  }
+
+  // Structured path (REQ-ASM-021/041). Opt-in via slash command — keeps the
+  // free-text path completely unchanged for regular prompts.
+  if (isStructuredIntent(userMessage)) {
+    await handleStructuredSend({
+      prompt,
+      systemPromptSuffix,
+      resumeSessionId,
+      isResumedTurn,
+      threadId,
+      userMessage,
+      truncated,
+      onSessionId,
+    })
+    await nextTick()
+    focusTextarea()
     return
   }
 
@@ -319,6 +599,117 @@ async function handleSend(): Promise<void> {
   }
   await nextTick()
   focusTextarea()
+}
+
+/**
+ * Look up a proposal by id. Returns `null` if missing (e.g. cleared by reset).
+ */
+function findProposal(proposalId: string): FileWriteProposal | null {
+  return store.proposals.get(proposalId) ?? null
+}
+
+/**
+ * Accept handler (REQ-ASM-043). `commitFileWriteProposal` is the **only**
+ * sanctioned vault-mutation path for an LLM proposal (NFR-ASM-011); the card
+ * UI cannot bypass it.
+ */
+async function handleAcceptProposal(payload: { proposalId: string }): Promise<void> {
+  // Concurrency guard (Codex P1, PR #347). The `inFlightDecisions` Set
+  // guards Accept against re-entrance AND against a cross-decision race
+  // where the user clicks Reject while an Accept commit is still in
+  // flight — both paths share the same set so the second click is a
+  // no-op until the first resolves. The terminal-status check below
+  // covers the post-resolution case (status already moved out of
+  // `pending`).
+  if (inFlightDecisions.has(payload.proposalId)) return
+  const proposal = findProposal(payload.proposalId)
+  if (proposal === null) return
+  if (proposal.status !== 'pending') return
+  const thread = store.chatThreads.get(proposal.threadId)
+  if (thread === undefined) return
+  // Note: the optional `confirmModalPort` is forwarded unconditionally; the
+  // commit pipeline only fails when the target path already exists AND no
+  // modal is available (the overwrite-gate path needs interactive consent).
+  // Non-overwrite Accepts succeed in environments without the optional port
+  // (Codex P2, PR #347).
+  inFlightDecisions.add(payload.proposalId)
+  // Always clear the in-flight lock — a thrown downstream call (e.g.
+  // `getWriter()`) would otherwise leave the proposal permanently locked
+  // (Codex P2, PR #347). Uses `Promise.prototype.finally` because the
+  // project's `no-restricted-syntax` rule forbids raw try/catch (and the
+  // same applies to try/finally) outside `src/infrastructure/**`.
+  await (async () => {
+    const writer = await sessionLogWriterFactory.getWriter()
+    const result = await commitFileWriteProposal(proposal, thread, {
+      vault: vaultPort,
+      logger: loggerPort,
+      sessionLog: writer,
+      confirmModal: confirmModalPort,
+      i18n: inlineTranslator,
+      nowIso: () => new Date().toISOString(),
+    })
+    if (result.ok) {
+      store.setProposalStatus(payload.proposalId, 'accepted')
+    } else {
+      const code: CommitProposalErrorCode = result.error.errorCode
+      store.setProposalStatus(payload.proposalId, 'failed', code)
+    }
+  })().finally(() => {
+    inFlightDecisions.delete(payload.proposalId)
+  })
+}
+
+/**
+ * Reject handler (REQ-ASM-045). Never touches the vault — only writes an
+ * audit row via `rejectFileWriteProposal`. Shares the `inFlightDecisions`
+ * concurrency guard with Accept so a Reject click cannot append a
+ * contradictory audit row while an Accept commit is still resolving for
+ * the same proposal (Codex P1, PR #347).
+ */
+async function handleRejectProposal(payload: { proposalId: string }): Promise<void> {
+  if (inFlightDecisions.has(payload.proposalId)) return
+  const proposal = findProposal(payload.proposalId)
+  if (proposal === null) return
+  if (proposal.status !== 'pending') return
+  const thread = store.chatThreads.get(proposal.threadId)
+  if (thread === undefined) {
+    store.setProposalStatus(payload.proposalId, 'rejected')
+    return
+  }
+  inFlightDecisions.add(payload.proposalId)
+  // Always clear the in-flight lock — a thrown downstream call (e.g.
+  // `getWriter()`) would otherwise leave the proposal permanently locked
+  // (Codex P2, PR #347). See `handleAcceptProposal` for the `Promise.finally`
+  // pattern rationale (project rule forbids raw try/catch outside
+  // `src/infrastructure/**`).
+  await (async () => {
+    const writer = await sessionLogWriterFactory.getWriter()
+    await rejectFileWriteProposal(proposal, thread, {
+      sessionLog: writer,
+      logger: loggerPort,
+      nowIso: () => new Date().toISOString(),
+    })
+    store.setProposalStatus(payload.proposalId, 'rejected')
+  })().finally(() => {
+    inFlightDecisions.delete(payload.proposalId)
+  })
+}
+
+/**
+ * Retry handler (REQ-ASM-050). Re-issues the prior user turn through the
+ * same `handleSend` pathway. Previous proposals stay in the audit trail
+ * unchanged — `addProposalFromEnvelope` always uses a fresh proposalId.
+ */
+async function handleRetryProposal(payload: { proposalId: string }): Promise<void> {
+  // Resubmit the exact prompt that authored THIS proposal — not the global
+  // `lastUserTurn`. With multiple proposal cards in a thread, retrying an
+  // older card would otherwise resend a newer prompt and regenerate an
+  // unrelated proposal (Codex P2, PR #347).
+  const proposal = findProposal(payload.proposalId)
+  const promptText = proposal?.originPrompt ?? lastUserTurn.value
+  if (promptText.trim() === '') return
+  store.setUserText(promptText)
+  await handleSend()
 }
 
 function handleRemoveFile(event: { path: string }): void {
@@ -374,7 +765,30 @@ watch(available, async () => {
     <!-- Not yet checked (avoid flash of wrong state) -->
     <template v-else-if="!availabilityChecked" />
 
-    <!-- API key missing degraded state (REQ-CCS-018) -->
+    <!--
+      Subscription-transport CLI missing (Codex P2, PR #347). When the user
+      has selected the subscription transport, the API key is irrelevant —
+      availability depends on the locally-installed `claude` binary. Show
+      CLI-install guidance instead of the (useless) API-key copy, even if
+      `apiKeyMissing` happens to be true.
+    -->
+    <div
+      v-else-if="!available && transportKind === 'subscription'"
+      class="sp-chat__degraded"
+    >
+      <h3
+        class="sp-chat__degraded-heading"
+        tabindex="-1"
+        data-testid="chat-degraded-heading"
+      >
+        Claude CLI is not available.
+      </h3>
+      <p class="sp-chat__degraded-body">
+        The subscription transport needs the Claude CLI installed locally. Install Claude Code on this device, then reopen this view.
+      </p>
+    </div>
+
+    <!-- API key missing degraded state (REQ-CCS-018) — api-key transport only. -->
     <div v-else-if="!available && apiKeyMissing" class="sp-chat__degraded">
       <h3
         class="sp-chat__degraded-heading"
@@ -415,6 +829,7 @@ watch(available, async () => {
         <h2 class="sp-chat__title">Ask Claude.</h2>
         <SessionResumeIndicator :resumed="store.sessionResumed" />
         <SubprocessStartingPill :visible="store.cliStartingUp" />
+        <TransportStatusPill :kind="transportKind" />
       </div>
 
       <ContextFileList
@@ -439,7 +854,19 @@ watch(available, async () => {
       <ChatResponse
         :state="responseState"
         :text="store.response ?? undefined"
-      />
+      >
+        <template #proposalCard>
+          <FileWriteProposalCard
+            v-for="entry in activeThreadProposals"
+            :key="entry.proposal.proposalId"
+            :proposal="entry.proposal"
+            :path-validation-error="entry.pathError"
+            @accept="handleAcceptProposal"
+            @reject="handleRejectProposal"
+            @retry="handleRetryProposal"
+          />
+        </template>
+      </ChatResponse>
     </template>
   </div>
 </template>

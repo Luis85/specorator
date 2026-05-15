@@ -116,6 +116,27 @@ export class CommitProposalError extends Error {
 }
 
 /**
+ * Raised when {@link VaultPort.fileExists} (or, in Increment 2, `readFile`)
+ * throws while `proposeFileWrite` is inspecting a proposal target. `errorCode`
+ * is fixed at `'VAULT_READ_FAILED'`; the underlying cause is preserved on
+ * `cause` for logging.
+ *
+ * Read-only failure mode — separate from {@link CommitProposalError} because
+ * the propose path never mutates the vault (SPEC-ASM-001 §3.5, REQ-ASM-041).
+ *
+ * Satisfies REQ-ASM-041.
+ */
+export class VaultReadError extends Error {
+  public readonly name = 'VaultReadError'
+  public readonly errorCode = 'VAULT_READ_FAILED' as const
+
+  constructor(message: string, public readonly cause?: unknown) {
+    super(message)
+    Object.setPrototypeOf(this, new.target.prototype)
+  }
+}
+
+/**
  * Discriminator for {@link ClaudeSubscriptionError}. Identifies the
  * subscription-transport failure mode; the adapter composes this into a
  * `ClaudeCliError` before surfacing to the UI (SPEC-ASM-001 §2.8).

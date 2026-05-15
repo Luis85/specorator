@@ -145,6 +145,45 @@ describe('ChatSidebar', () => {
 		})
 	})
 
+	describe('subscription-transport degraded copy (Codex P2 fix)', () => {
+		it('shows CLI-install guidance when transport=subscription, available=false, regardless of apiKeyMissing', async () => {
+			const { ref, defineComponent } = await import('vue')
+			const { TRANSPORT_KIND_KEY } = await import('@/infrastructure/bridge/ports')
+			const pinia = createPinia()
+			setActivePinia(pinia)
+			const port = new MockClaudeCliPort()
+			port.available = false
+			// Empty API key — would otherwise trigger the api-key copy.
+			const bridge = makeBridgeWithApiKey('', {})
+			const RouterLinkLocal = defineComponent({
+				props: ['to'],
+				template: '<a :href="to" data-testid="chat-degraded-settings-link"><slot /></a>',
+			})
+			const wrapper = mount(ChatSidebar, {
+				global: {
+					plugins: [pinia],
+					stubs: { RouterLink: RouterLinkLocal },
+					provide: {
+						[CLAUDE_CLI_PORT as symbol]: port,
+						[IS_MOBILE_KEY as symbol]: false,
+						[VAULT_PORT as symbol]: bridge,
+						[WORKSPACE_PORT as symbol]: bridge,
+						[SETTINGS_PORT as symbol]: bridge,
+						[LOGGER_PORT as symbol]: bridge,
+						[TRANSPORT_KIND_KEY as symbol]: ref<'subscription' | 'api-key'>('subscription'),
+					},
+				},
+			})
+			await flushPromises()
+			const po = new ChatSidebarPO(wrapper)
+
+			expect(po.hasDegradedHeading()).toBe(true)
+			// Subscription failures must NOT show the "add Anthropic key" copy.
+			expect(po.degradedHeadingText()).not.toContain('Chat is not set up yet')
+			expect(po.degradedHeadingText()).toContain('Claude CLI is not available')
+		})
+	})
+
 	describe('TEST-CCS-004: ready state', () => {
 		it('renders textarea and send button when available=true', async () => {
 			const { po } = await mountSidebar({ available: true })
