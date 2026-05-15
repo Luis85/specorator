@@ -127,13 +127,14 @@ const proposalPathErrors = ref<Map<string, PathValidationError>>(new Map())
 const lastUserTurn = ref<string>('')
 
 /**
- * Proposal IDs whose commit is currently in flight. Used by
- * `handleAcceptProposal` to guard against re-entrant clicks (a fast
- * double-click could fire `commitFileWriteProposal` twice for the same
- * proposal, producing duplicate vault writes / audit rows — Codex P1,
- * PR #347). Cleared on terminal status flip.
+ * Proposal IDs whose decision (Accept or Reject) is currently in flight. Used
+ * by both `handleAcceptProposal` and `handleRejectProposal` to guard against
+ * re-entrant clicks and against cross-decision races: a user who clicks
+ * Accept and then quickly clicks Reject must NOT produce contradictory
+ * audit rows — the second click is a no-op while the first is still
+ * resolving (Codex P1, PR #347). Cleared on terminal status flip.
  */
-const inFlightAccepts = new Set<string>()
+const inFlightDecisions = new Set<string>()
 
 // Settings-version watcher (D-CCS-003)
 const settingsVersion = inject(SETTINGS_VERSION_KEY, ref(0))
@@ -601,15 +602,14 @@ function findProposal(proposalId: string): FileWriteProposal | null {
  * UI cannot bypass it.
  */
 async function handleAcceptProposal(payload: { proposalId: string }): Promise<void> {
-  // Re-entrant guard (Codex P1, PR #347). A fast double-click on Accept could
-  // fire two commits for the same proposal before the first promise resolves;
-  // the second one would race the vault write + audit row. Two guards:
-  //   1. The terminal-status check below rejects clicks on proposals that
-  //      already moved out of `pending`.
-  //   2. The `inFlightAccepts` Set rejects clicks while the first commit is
-  //      still in flight (between click 1 and the `setProposalStatus` call
-  //      that flips the status to a terminal value).
-  if (inFlightAccepts.has(payload.proposalId)) return
+  // Concurrency guard (Codex P1, PR #347). The `inFlightDecisions` Set
+  // guards Accept against re-entrance AND against a cross-decision race
+  // where the user clicks Reject while an Accept commit is still in
+  // flight — both paths share the same set so the second click is a
+  // no-op until the first resolves. The terminal-status check below
+  // covers the post-resolution case (status already moved out of
+  // `pending`).
+  if (inFlightDecisions.has(payload.proposalId)) return
   const proposal = findProposal(payload.proposalId)
   if (proposal === null) return
   if (proposal.status !== 'pending') return
@@ -624,7 +624,7 @@ async function handleAcceptProposal(payload: { proposalId: string }): Promise<vo
     store.setProposalStatus(payload.proposalId, 'failed', 'WRITE_FAILED')
     return
   }
-  inFlightAccepts.add(payload.proposalId)
+  inFlightDecisions.add(payload.proposalId)
   const writer = await sessionLogWriterFactory.getWriter()
   const result = await commitFileWriteProposal(proposal, thread, {
     vault: vaultPort,
@@ -634,7 +634,7 @@ async function handleAcceptProposal(payload: { proposalId: string }): Promise<vo
     i18n: inlineTranslator,
     nowIso: () => new Date().toISOString(),
   })
-  inFlightAccepts.delete(payload.proposalId)
+  inFlightDecisions.delete(payload.proposalId)
   if (result.ok) {
     store.setProposalStatus(payload.proposalId, 'accepted')
   } else {
@@ -645,22 +645,29 @@ async function handleAcceptProposal(payload: { proposalId: string }): Promise<vo
 
 /**
  * Reject handler (REQ-ASM-045). Never touches the vault — only writes an
- * audit row via `rejectFileWriteProposal`.
+ * audit row via `rejectFileWriteProposal`. Shares the `inFlightDecisions`
+ * concurrency guard with Accept so a Reject click cannot append a
+ * contradictory audit row while an Accept commit is still resolving for
+ * the same proposal (Codex P1, PR #347).
  */
 async function handleRejectProposal(payload: { proposalId: string }): Promise<void> {
+  if (inFlightDecisions.has(payload.proposalId)) return
   const proposal = findProposal(payload.proposalId)
   if (proposal === null) return
+  if (proposal.status !== 'pending') return
   const thread = store.chatThreads.get(proposal.threadId)
   if (thread === undefined) {
     store.setProposalStatus(payload.proposalId, 'rejected')
     return
   }
+  inFlightDecisions.add(payload.proposalId)
   const writer = await sessionLogWriterFactory.getWriter()
   await rejectFileWriteProposal(proposal, thread, {
     sessionLog: writer,
     logger: loggerPort,
     nowIso: () => new Date().toISOString(),
   })
+  inFlightDecisions.delete(payload.proposalId)
   store.setProposalStatus(payload.proposalId, 'rejected')
 }
 

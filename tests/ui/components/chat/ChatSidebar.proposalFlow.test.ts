@@ -270,6 +270,56 @@ describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
 		expect(proposal.status).toBe('rejected')
 	})
 
+	it('Reject is a no-op while an Accept commit is still in flight on the same proposal (Codex P1 fix)', async () => {
+		const { wrapper, po, store, bridge } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: 'specs/demo/idea.md',
+				content: '# Demo\n',
+			},
+		})
+
+		await send(store, po, '/create-file specs/demo/idea.md')
+		await flushPromises()
+		const proposalId = Array.from(store.proposals.keys())[0]
+		expect(store.proposals.get(proposalId)?.status).toBe('pending')
+
+		// Stall `vault.writeFile` so the Accept commit hangs mid-flight.
+		// While it is suspended, click Reject and assert it is a no-op:
+		// no `rejected` audit row, no status flip, no contradictory final
+		// state. Releasing the deferred lets Accept finish cleanly.
+		let releaseWrite: () => void = () => {}
+		const writeDeferred = new Promise<void>((resolve) => {
+			releaseWrite = resolve
+		})
+		const writeSpy = vi.spyOn(bridge, 'writeFile').mockImplementationOnce(async () => {
+			await writeDeferred
+		})
+
+		const card = new FileWriteProposalCardPO(wrapper)
+		// Fire Accept (do NOT await — the writeFile promise is stalled).
+		void card.clickAccept()
+		await Promise.resolve()
+		await Promise.resolve()
+		// Reject while Accept is mid-flight — must be a no-op.
+		await card.clickReject()
+		await flushPromises()
+
+		// Reject did NOT take effect — status is still pending; no
+		// `rejected` audit row landed.
+		expect(store.proposals.get(proposalId)?.status).toBe('pending')
+
+		// Release the Accept commit; it now resolves normally.
+		releaseWrite()
+		await flushPromises()
+		await flushPromises()
+		expect(store.proposals.get(proposalId)?.status).toBe('accepted')
+		// Exactly one vault writeFile call against the envelope path.
+		expect(
+			writeSpy.mock.calls.filter(([path]) => path === 'specs/demo/idea.md'),
+		).toHaveLength(1)
+	})
+
 	it('path-invalid envelope surfaces card in path-invalid state with no Accept button (REQ-ASM-048)', async () => {
 		const { wrapper, po, store, bridge } = await mountSidebar({
 			cannedEnvelope: {
