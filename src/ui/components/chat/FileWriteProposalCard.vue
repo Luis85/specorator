@@ -20,8 +20,11 @@
  * interpolation inside `<pre>`.
  */
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { FileWriteProposal } from '@/application/chat/FileWriteProposal'
 import type { PathValidationError } from '@/application/chat/errors'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   proposal: FileWriteProposal
@@ -73,9 +76,9 @@ const showsRetry = computed(
     renderState.value === 'failed',
 )
 
-const acceptAriaLabel = computed(() => `Accept proposed file ${path.value}`)
-const rejectAriaLabel = computed(() => `Reject proposed file ${path.value}`)
-const retryAriaLabel = computed(() => `Generate another proposal for ${path.value}`)
+const acceptAriaLabel = computed(() => t('chat.proposal.acceptAriaLabel', { path: path.value }))
+const rejectAriaLabel = computed(() => t('chat.proposal.rejectAriaLabel', { path: path.value }))
+const retryAriaLabel = computed(() => t('chat.proposal.retryAriaLabel', { path: path.value }))
 
 function onAccept(): void {
   emit('accept', { proposalId: props.proposal.proposalId })
@@ -103,7 +106,7 @@ onMounted(() => {
     class="sp-proposal-card"
     data-testid="proposal-card"
     role="region"
-    aria-label="File creation proposal"
+    :aria-label="t('chat.proposal.regionAriaLabel')"
   >
     <h3
       ref="headingEl"
@@ -111,16 +114,16 @@ onMounted(() => {
       data-testid="proposal-card-heading"
       tabindex="-1"
     >
-      Proposed new file
+      {{ t('chat.proposal.pendingHeading') }}
     </h3>
 
     <p class="sp-proposal-card__path-row">
-      <span class="sp-proposal-card__label">File:</span>
+      <span class="sp-proposal-card__label">{{ t('chat.proposal.pathLabel') }}</span>
       <code data-testid="proposal-card-path">{{ path }}</code>
     </p>
 
     <template v-if="showsPreview">
-      <p class="sp-proposal-card__label">Content</p>
+      <p class="sp-proposal-card__label">{{ t('chat.proposal.contentLabel') }}</p>
       <pre
         class="sp-proposal-card__content"
         data-testid="proposal-card-content-preview"
@@ -133,7 +136,7 @@ onMounted(() => {
 
         @click="toggleShowMore"
       >
-        {{ showFullContent ? 'Show preview' : 'Show full content' }}
+        {{ showFullContent ? t('chat.proposal.showPreview') : t('chat.proposal.showFullContent') }}
       </button>
     </template>
 
@@ -146,7 +149,7 @@ onMounted(() => {
         :aria-label="acceptAriaLabel"
         @click="onAccept"
       >
-        Accept
+        {{ t('chat.proposal.acceptButton') }}
       </button>
       <button
         ref="rejectButtonEl"
@@ -156,7 +159,7 @@ onMounted(() => {
         :aria-label="rejectAriaLabel"
         @click="onReject"
       >
-        Reject
+        {{ t('chat.proposal.rejectButton') }}
       </button>
       <button
         v-if="showsRetry"
@@ -166,7 +169,7 @@ onMounted(() => {
         :aria-label="retryAriaLabel"
         @click="onRetry"
       >
-        Try again
+        {{ t('chat.proposal.retryButton') }}
       </button>
     </div>
 
@@ -175,7 +178,7 @@ onMounted(() => {
       class="sp-proposal-card__accepted-body"
       data-testid="proposal-card-accepted-body"
     >
-      Saved to '{{ path }}'.
+      {{ t('chat.proposal.acceptedBody', { path }) }}
     </p>
 
     <template v-if="renderState === 'rejected'">
@@ -183,7 +186,7 @@ onMounted(() => {
         class="sp-proposal-card__rejected-body"
         data-testid="proposal-card-rejected-body"
       >
-        Discarded — no changes were made.
+        {{ t('chat.proposal.rejectedBody') }}
       </p>
       <button
         v-if="showsRetry"
@@ -193,7 +196,7 @@ onMounted(() => {
         :aria-label="retryAriaLabel"
         @click="onRetry"
       >
-        Try again
+        {{ t('chat.proposal.retryButton') }}
       </button>
     </template>
 
@@ -202,7 +205,7 @@ onMounted(() => {
         class="sp-proposal-card__failed-body"
         data-testid="proposal-card-failed-body"
       >
-        Could not save the file. Please try again.
+        {{ t('chat.proposal.failedBody') }}
       </p>
       <button
         v-if="showsRetry"
@@ -212,7 +215,7 @@ onMounted(() => {
         :aria-label="retryAriaLabel"
         @click="onRetry"
       >
-        Try again
+        {{ t('chat.proposal.retryButton') }}
       </button>
     </template>
 
@@ -221,7 +224,7 @@ onMounted(() => {
       class="sp-proposal-card__path-invalid"
       data-testid="proposal-card-path-invalid"
     >
-      That path isn't valid for this vault.
+      {{ t('chat.proposal.pathInvalidBody') }}
     </p>
   </section>
 </template>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
 defineProps<{
   state:
     | 'idle'
@@ -10,6 +12,8 @@ defineProps<{
     | 'structured-fail'
   text?: string
 }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
@@ -19,7 +23,7 @@ defineProps<{
     class="sp-chat__response-idle"
     data-testid="chat-response-idle"
   >
-    (Response will appear here.)
+    {{ t('chat.responsePlaceholder') }}
   </p>
 
   <!-- Loading state -->
@@ -30,7 +34,7 @@ defineProps<{
     class="sp-chat__response-loading"
     data-testid="chat-response-loading"
   >
-    Thinking…
+    {{ t('chat.responseLoading') }}
   </div>
 
   <!-- Success state with optional trim notice -->
@@ -41,7 +45,7 @@ defineProps<{
       class="sp-chat__trim-notice"
       data-testid="chat-response-trim-notice"
     >
-      Some context was trimmed to keep the message within size limits.
+      {{ t('chat.responseTrimmed') }}
     </p>
     <div class="sp-chat__response-text" data-testid="chat-response-text">{{ text }}</div>
     <slot name="proposalCard" />
@@ -61,7 +65,7 @@ defineProps<{
     class="sp-chat__error"
     data-testid="chat-response-error"
   >
-    That took too long. Please try again.
+    {{ t('chat.responseTimeout') }}
   </p>
 
   <!-- Generic error -->
@@ -72,7 +76,7 @@ defineProps<{
     class="sp-chat__error"
     data-testid="chat-response-error"
   >
-    Something went wrong. Please try again.
+    {{ t('chat.responseError') }}
   </p>
 
   <!-- Structured-output parse failure (REQ-ASM-025) -->
@@ -83,7 +87,7 @@ defineProps<{
     class="sp-chat__error"
     data-testid="chat-response-structured-fail"
   >
-    Assistant returned an unexpected response. Please try again.
+    {{ t('chat.response.structuredFail') }}
   </p>
 </template>
 

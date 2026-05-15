@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, inject } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { Ref } from 'vue'
 import { tryAsync } from '@/domain/shared/tryAsync'
 import { useChatStore } from '@/ui/stores/chatStore'
@@ -71,26 +72,14 @@ const confirmModalPort = inject<ConfirmModalPort | undefined>(CONFIRM_MODAL_PORT
 const transportKindRef = inject<Ref<TransportKind> | undefined>(TRANSPORT_KIND_KEY, undefined)
 
 /**
- * Inline TranslationPort stub used by the commit pipeline. The i18n keys land
- * in T-ASM-074 (batch 8); for now we surface the literal copy from SPEC §B3 so
- * the modal still has meaningful labels when invoked.
+ * Vue-i18n composable wired to the EN/DE catalogues in `src/ui/i18n/locales/`.
+ * The commit pipeline expects a `TranslationPort`, so we adapt `useI18n().t`
+ * to the port shape (T-ASM-074).
  */
+const { t: tI18n } = useI18n()
 const inlineTranslator: TranslationPort = {
   t(key: string, params?: Record<string, unknown>): string {
-    const rawPath = params?.path
-    const path = typeof rawPath === 'string' ? rawPath : ''
-    switch (key) {
-      case 'chat.proposal.overwriteTitle':
-        return 'Overwrite existing file?'
-      case 'chat.proposal.overwriteBody':
-        return `'${path}' already exists. Replace it with the new content?`
-      case 'chat.proposal.overwriteConfirm':
-        return 'Replace'
-      case 'chat.proposal.overwriteCancel':
-        return 'Keep existing'
-      default:
-        return key
-    }
+    return tI18n(key, params ?? {})
   },
 }
 
