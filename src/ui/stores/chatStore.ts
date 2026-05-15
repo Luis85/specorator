@@ -147,7 +147,10 @@ export const useChatStore = defineStore('chat', () => {
    * If file is non-null, forces isAuto=true, removes any existing auto entry,
    * then inserts it at index 0.
    * If file is null, removes any existing auto entry.
-   * Does not affect manual entries.
+   * Manual entries are preserved EXCEPT a manual entry whose path equals the
+   * incoming auto entry is dropped — the active-file gets promoted to the
+   * auto slot to avoid duplicate context chips and double-counted prompt
+   * body that would waste the prompt budget (Codex P2, PR #350).
    */
   function setActiveFile(file: ContextFileEntry | null): void {
     const manuals = contextFiles.value.filter((f) => !f.isAuto)
@@ -155,7 +158,8 @@ export const useChatStore = defineStore('chat', () => {
       contextFiles.value = manuals
     } else {
       const entry: ContextFileEntry = { ...file, isAuto: true }
-      contextFiles.value = [entry, ...manuals]
+      const dedupedManuals = manuals.filter((m) => m.path !== entry.path)
+      contextFiles.value = [entry, ...dedupedManuals]
     }
   }
 

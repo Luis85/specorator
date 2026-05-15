@@ -147,6 +147,37 @@ describe('useChatStore()', () => {
       store.setActiveFile(null)
       expect(store.contextFiles).toHaveLength(1)
     })
+
+    it('drops a same-path manual entry when promoting it to the auto slot (Codex P2, PR #350)', () => {
+      const store = useChatStore()
+      // Manual entry for X.
+      store.addContextFile(makeFile('notes/x.md', 'x.md', false))
+      expect(store.contextFiles).toHaveLength(1)
+      // Now focus X — promotion to the auto slot must NOT duplicate the
+      // entry (one chip, one prompt-body inclusion).
+      store.setActiveFile(makeFile('notes/x.md', 'x.md', true))
+
+      expect(store.contextFiles).toHaveLength(1)
+      expect(store.contextFiles[0]).toMatchObject({
+        path: 'notes/x.md',
+        isAuto: true,
+      })
+    })
+
+    it('keeps unrelated manual entries when promoting a different file (Codex P2, PR #350)', () => {
+      const store = useChatStore()
+      store.addContextFile(makeFile('notes/a.md', 'a.md', false))
+      store.addContextFile(makeFile('notes/b.md', 'b.md', false))
+      // Focus a file that does NOT match either manual entry.
+      store.setActiveFile(makeFile('notes/c.md', 'c.md', true))
+
+      expect(store.contextFiles).toHaveLength(3)
+      expect(store.contextFiles[0]).toMatchObject({ path: 'notes/c.md', isAuto: true })
+      expect(store.contextFiles.slice(1).map((f) => f.path)).toEqual([
+        'notes/a.md',
+        'notes/b.md',
+      ])
+    })
   })
 
   describe('setUserText', () => {
