@@ -71,7 +71,7 @@ export interface CommitFileWriteDeps {
   readonly vault: VaultPort
   readonly logger: LoggerPort
   readonly sessionLog: SessionLogWriter
-  readonly confirmModal: ConfirmModalPort
+  readonly confirmModal: ConfirmModalPort | undefined
   readonly i18n: TranslationPort
   readonly nowIso: () => string
 }
@@ -151,6 +151,30 @@ export async function commitFileWriteProposal(
     )
   }
   if (existsResult.value) {
+    // The overwrite gate (REQ-ASM-044) requires an interactive modal. When
+    // `confirmModal` is not provided (e.g. standalone UI / tests that omit
+    // the optional injection), we cannot obtain consent for an overwrite —
+    // treat that as a hard fail rather than silently writing. Non-overwrite
+    // Accepts continue to work without a modal, since this branch only runs
+    // when the target path already exists (Codex P2, PR #347).
+    if (deps.confirmModal === undefined) {
+      await tryAsync(() =>
+        deps.sessionLog.appendProposalDecision({
+          thread,
+          proposal: {
+            envelope: { path: envelope.path, rationale },
+          },
+          decision: 'failed',
+          decidedAt: deps.nowIso(),
+        }),
+      )
+      return err(
+        new CommitProposalError(
+          'WRITE_FAILED',
+          `Cannot prompt overwrite confirmation: no ConfirmModalPort available for existing path ${envelope.path}.`,
+        ),
+      )
+    }
     const confirmed = await deps.confirmModal.show({
       title: deps.i18n.t('chat.proposal.overwriteTitle'),
       body: deps.i18n.t('chat.proposal.overwriteBody', { path: envelope.path }),

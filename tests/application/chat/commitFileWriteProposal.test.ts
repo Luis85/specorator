@@ -331,6 +331,56 @@ describe('commitFileWriteProposal — error codes (T-ASM-066)', () => {
     ports = fakeModulePorts()
   })
 
+  it('succeeds without a ConfirmModalPort when the target path does not exist (Codex P2 fix)', async () => {
+    // Brand-new path → no overwrite gate is needed, so the missing modal
+    // must not block the Accept. Standalone UI / test harnesses that
+    // intentionally omit the optional port can still commit proposals.
+    const deps = makeDeps(ports, { confirmModal: undefined })
+    const writeSpy = vi.spyOn(ports.vault, 'writeFile')
+    const proposal = makeProposal({ path: 'specs/new-feature/idea.md', content: '# hi\n' })
+
+    const result = await commitFileWriteProposal(proposal, makeThread(), deps)
+
+    expect(result.ok).toBe(true)
+    expect(
+      writeSpy.mock.calls.filter(([p]) => p === 'specs/new-feature/idea.md'),
+    ).toHaveLength(1)
+  })
+
+  it('returns WRITE_FAILED with a failed audit row when no ConfirmModalPort is available AND the target path already exists (Codex P2 fix)', async () => {
+    await ports.bridge.writeFile('specs/foo/idea.md', 'old')
+    const sessionLog = new SessionLogWriter(
+      ports.vault,
+      ports.logger,
+      'specs',
+      () => FIXED_NOW,
+    )
+    const appendSpy = vi.spyOn(sessionLog, 'appendProposalDecision')
+    const deps = makeDeps(ports, { confirmModal: undefined, sessionLog })
+    const writeSpy = vi.spyOn(ports.vault, 'writeFile')
+    const proposal = makeProposal({
+      path: 'specs/foo/idea.md',
+      content: 'new',
+      rationale: 'because-no-modal',
+    })
+
+    const result = await commitFileWriteProposal(proposal, makeThread(), deps)
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error.errorCode).toBe('WRITE_FAILED')
+    // No vault write happened on the envelope path — no consent could be
+    // obtained for the overwrite.
+    expect(writeSpy.mock.calls.some(([p]) => p === 'specs/foo/idea.md')).toBe(false)
+    // Trust-first invariant: the terminal failure still mirrors to the
+    // session log so the audit trail is complete.
+    expect(appendSpy).toHaveBeenCalledTimes(1)
+    const args = appendSpy.mock.calls[0][0]
+    expect(args.decision).toBe('failed')
+    expect(args.proposal.envelope.path).toBe('specs/foo/idea.md')
+    expect(args.proposal.envelope.rationale).toBe('because-no-modal')
+  })
+
   it('returns OVERWRITE_CANCELLED when the user cancels the modal and skips the write', async () => {
     await ports.bridge.writeFile('specs/foo/idea.md', 'old')
     const modal = new MockConfirmModalPort() // nextResult = false

@@ -221,24 +221,26 @@ type ResponseState =
 
 const responseState = computed<ResponseState>(() => {
   if (store.status === 'loading') return 'loading'
-  if (store.status === 'error') {
-    return store.errorType === 'timeout' ? 'timeout' : 'error'
-  }
-  // Pending proposal cards take precedence over the structured-fail banner
-  // (Codex P2 fix). A parse failure on a later /create-file turn must not
-  // hide still-actionable Accept/Reject controls for proposals already on
-  // screen — otherwise the user is stranded mid-decision and has to send
-  // another message just to recover the controls.
+  // Pending proposal cards take precedence over error/timeout/structured-fail
+  // banners (Codex P2, PR #347). A failed or parse-erroring later turn must
+  // not hide still-actionable Accept/Reject controls for proposals already
+  // on screen — otherwise the user is stranded mid-decision and loses access
+  // to the controls until another successful turn occurs. The `loading`
+  // state still wins so an in-flight turn is signalled.
   const hasPendingProposal = activeThreadProposals.value.some(
     (entry) => entry.proposal.status === 'pending',
   )
   if (hasPendingProposal) return 'success'
+  if (store.status === 'error') {
+    return store.errorType === 'timeout' ? 'timeout' : 'error'
+  }
   if (structuredFail.value) return 'structured-fail'
   if (store.response !== null) {
     return store.truncated ? 'trimmed-success' : 'success'
   }
-  // Render success state (empty text) when there are pending proposals so the
-  // proposalCard slot is mounted alongside the (potentially empty) response.
+  // Render success state (empty text) when there are non-pending proposals
+  // on the thread so the proposalCard slot is mounted alongside the
+  // (potentially empty) response.
   if (activeThreadProposals.value.length > 0) return 'success'
   return 'idle'
 })
@@ -620,32 +622,36 @@ async function handleAcceptProposal(payload: { proposalId: string }): Promise<vo
   if (proposal.status !== 'pending') return
   const thread = store.chatThreads.get(proposal.threadId)
   if (thread === undefined) return
-  if (confirmModalPort === undefined) {
-    // No modal port available → cannot honour REQ-ASM-044 overwrite gate.
-    // Surface as a failed proposal rather than silently writing.
-    loggerPort.warn('ConfirmModalPort missing; cannot commit proposal', {
-      proposalId: payload.proposalId,
-    })
-    store.setProposalStatus(payload.proposalId, 'failed', 'WRITE_FAILED')
-    return
-  }
+  // Note: the optional `confirmModalPort` is forwarded unconditionally; the
+  // commit pipeline only fails when the target path already exists AND no
+  // modal is available (the overwrite-gate path needs interactive consent).
+  // Non-overwrite Accepts succeed in environments without the optional port
+  // (Codex P2, PR #347).
   inFlightDecisions.add(payload.proposalId)
-  const writer = await sessionLogWriterFactory.getWriter()
-  const result = await commitFileWriteProposal(proposal, thread, {
-    vault: vaultPort,
-    logger: loggerPort,
-    sessionLog: writer,
-    confirmModal: confirmModalPort,
-    i18n: inlineTranslator,
-    nowIso: () => new Date().toISOString(),
+  // Always clear the in-flight lock — a thrown downstream call (e.g.
+  // `getWriter()`) would otherwise leave the proposal permanently locked
+  // (Codex P2, PR #347). Uses `Promise.prototype.finally` because the
+  // project's `no-restricted-syntax` rule forbids raw try/catch (and the
+  // same applies to try/finally) outside `src/infrastructure/**`.
+  await (async () => {
+    const writer = await sessionLogWriterFactory.getWriter()
+    const result = await commitFileWriteProposal(proposal, thread, {
+      vault: vaultPort,
+      logger: loggerPort,
+      sessionLog: writer,
+      confirmModal: confirmModalPort,
+      i18n: inlineTranslator,
+      nowIso: () => new Date().toISOString(),
+    })
+    if (result.ok) {
+      store.setProposalStatus(payload.proposalId, 'accepted')
+    } else {
+      const code: CommitProposalErrorCode = result.error.errorCode
+      store.setProposalStatus(payload.proposalId, 'failed', code)
+    }
+  })().finally(() => {
+    inFlightDecisions.delete(payload.proposalId)
   })
-  inFlightDecisions.delete(payload.proposalId)
-  if (result.ok) {
-    store.setProposalStatus(payload.proposalId, 'accepted')
-  } else {
-    const code: CommitProposalErrorCode = result.error.errorCode
-    store.setProposalStatus(payload.proposalId, 'failed', code)
-  }
 }
 
 /**
@@ -666,14 +672,22 @@ async function handleRejectProposal(payload: { proposalId: string }): Promise<vo
     return
   }
   inFlightDecisions.add(payload.proposalId)
-  const writer = await sessionLogWriterFactory.getWriter()
-  await rejectFileWriteProposal(proposal, thread, {
-    sessionLog: writer,
-    logger: loggerPort,
-    nowIso: () => new Date().toISOString(),
+  // Always clear the in-flight lock — a thrown downstream call (e.g.
+  // `getWriter()`) would otherwise leave the proposal permanently locked
+  // (Codex P2, PR #347). See `handleAcceptProposal` for the `Promise.finally`
+  // pattern rationale (project rule forbids raw try/catch outside
+  // `src/infrastructure/**`).
+  await (async () => {
+    const writer = await sessionLogWriterFactory.getWriter()
+    await rejectFileWriteProposal(proposal, thread, {
+      sessionLog: writer,
+      logger: loggerPort,
+      nowIso: () => new Date().toISOString(),
+    })
+    store.setProposalStatus(payload.proposalId, 'rejected')
+  })().finally(() => {
+    inFlightDecisions.delete(payload.proposalId)
   })
-  inFlightDecisions.delete(payload.proposalId)
-  store.setProposalStatus(payload.proposalId, 'rejected')
 }
 
 /**

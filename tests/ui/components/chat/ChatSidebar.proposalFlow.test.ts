@@ -450,6 +450,34 @@ describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
 		expect(store.truncated).toBe(true)
 	})
 
+	it('pending proposal cards stay visible after a later send error (Codex P2 fix)', async () => {
+		const { wrapper, po, store } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: 'specs/demo/idea.md',
+				content: '# Demo\n',
+			},
+		})
+
+		// 1. Valid envelope → pending proposal card surfaces.
+		await send(store, po, '/create-file specs/demo/idea.md')
+		await flushPromises()
+		expect(store.proposals.size).toBe(1)
+
+		// 2. Force the next send into the `error` state.
+		store.setError('query_failed')
+		await flushPromises()
+
+		// The error banner must NOT preempt the actionable pending card.
+		// Without this fix, `responseState` returned `'error'` and the
+		// proposalCard slot was unmounted, stranding the user.
+		const errorState = wrapper.find('[data-testid="chat-response-error"]')
+		expect(errorState.exists()).toBe(false)
+		const card = new FileWriteProposalCardPO(wrapper)
+		expect(card.hasAccept()).toBe(true)
+		expect(card.hasReject()).toBe(true)
+	})
+
 	it('regression: free-text prompts still use query() and skip the structured path', async () => {
 		const { port, po, store } = await mountSidebar({})
 
