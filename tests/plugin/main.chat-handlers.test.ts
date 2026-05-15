@@ -11,6 +11,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import { TFile, TFolder } from 'obsidian'
 import { useChatStore } from '@/ui/stores/chatStore'
 
 // ── helpers extracted from main.ts handler logic ─────────────────────────────
@@ -83,6 +84,46 @@ describe('T-CCS-031: file-menu "Add to chat context" handler', () => {
     handleAddToContext(store, { path: 'notes/bar.md', name: 'bar.md' })
 
     expect(store.contextFiles[0].isAuto).toBe(false)
+  })
+
+  describe('TFile / TFolder guard (Codex P2, PR #350)', () => {
+    /**
+     * Mirrors the production guard wired in `main.ts`'s file-menu handler:
+     * the `file-menu` event fires for both files and folders, and the
+     * production code now skips registration when the entry isn't a TFile
+     * so a folder path never ends up as an unreadable context entry.
+     */
+    function registerIfFile(
+      store: ReturnType<typeof useChatStore>,
+      entry: unknown,
+    ): boolean {
+      if (!(entry instanceof TFile)) return false
+      handleAddToContext(store, { path: entry.path, name: entry.name })
+      return true
+    }
+
+    it('adds the entry to context when invoked on a TFile', () => {
+      const store = useChatStore()
+      const file = new TFile()
+      file.path = 'notes/a.md'
+      file.name = 'a.md'
+      const added = registerIfFile(store, file)
+
+      expect(added).toBe(true)
+      expect(store.contextFiles).toHaveLength(1)
+      expect(store.contextFiles[0]).toMatchObject({ path: 'notes/a.md', isAuto: false })
+    })
+
+    it('does NOT add a folder to context (TFolder rejected)', () => {
+      const store = useChatStore()
+      const folder = new TFolder()
+      folder.path = 'notes'
+      folder.name = 'notes'
+      const added = registerIfFile(store, folder)
+
+      expect(added).toBe(false)
+      expect(store.contextFiles).toEqual([])
+    })
   })
 })
 

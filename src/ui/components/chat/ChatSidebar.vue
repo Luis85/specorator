@@ -535,8 +535,16 @@ async function handleSend(): Promise<void> {
   const { slug, systemPromptSuffix } = await computeStagePromptContext(settings.specsFolder)
 
   // ── Session-persistence wiring (T-ASM-057, REQ-ASM-031/034/035/037/040) ──
+  // Use the resolved active transport (from `transportKindRef`), NOT the
+  // raw `settings.transportKind`. Under `transportKind === 'auto'` the
+  // selector may resolve to either subscription or api-key depending on
+  // CLI / API-key availability — recording the setting's raw value here
+  // would persist `'api-key'` even when the turn actually ran through the
+  // subscription adapter, polluting audit logs and resume metadata
+  // (Codex P2, PR #350).
+  const resolvedKind = transportKind.value
   const transport: 'api-key' | 'subscription' =
-    settings.transportKind === 'subscription' ? 'subscription' : 'api-key'
+    resolvedKind === 'subscription' ? 'subscription' : 'api-key'
   const { threadId, resumeSessionId, isResumedTurn } = resolveActiveThread({ slug, transport })
   const onSessionId = (id: SessionId): void => {
     store.captureSessionId(threadId, id)

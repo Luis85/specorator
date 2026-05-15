@@ -20,7 +20,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
-import { defineComponent, nextTick } from 'vue'
+import { defineComponent, nextTick, ref } from 'vue'
 import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue'
 import type { ClaudeCliPort, ClaudeCliQueryOptions } from '@/domain/ports/ClaudeCliPort'
 import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort'
@@ -36,7 +36,9 @@ import {
 	WORKSPACE_PORT,
 	SETTINGS_PORT,
 	LOGGER_PORT,
+	TRANSPORT_KIND_KEY,
 } from '@/infrastructure/bridge/ports'
+import type { TransportKind } from '@/domain/chat/TransportKind'
 import { useChatStore } from '@/ui/stores/chatStore'
 import { ChatSidebarPO } from './ChatSidebar.po'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
@@ -106,6 +108,15 @@ async function mountSidebar(args: {
 	files?: Record<string, string>
 	activeFile?: { path: string; basename: string; extension: string } | null
 	queryError?: ClaudeCliError | null
+	/**
+	 * Resolved transport kind injected via `TRANSPORT_KIND_KEY` (mirrors
+	 * production: SpecoratorView's selector resolves the setting + CLI
+	 * availability to a concrete kind). Defaults to `'subscription'` when
+	 * `settings.transportKind === 'subscription'`, else `'api-key'`.
+	 * Tests that want to assert the auto-resolved kind can override this
+	 * directly (Codex P2, PR #350).
+	 */
+	resolvedTransportKind?: TransportKind
 } = {}) {
 	const pinia = createPinia()
 	setActivePinia(pinia)
@@ -119,6 +130,10 @@ async function mountSidebar(args: {
 	const bridge = makeBridge(args.files ?? {}, args.settings ?? {})
 	if (args.activeFile !== undefined) bridge.setActiveFile(args.activeFile)
 
+	const resolvedKind: TransportKind =
+		args.resolvedTransportKind ??
+		(args.settings?.transportKind === 'subscription' ? 'subscription' : 'api-key')
+
 	const wrapper = mount(ChatSidebar, {
 		global: {
 			plugins: [pinia],
@@ -130,6 +145,7 @@ async function mountSidebar(args: {
 				[WORKSPACE_PORT as symbol]: bridge,
 				[SETTINGS_PORT as symbol]: bridge,
 				[LOGGER_PORT as symbol]: bridge,
+				[TRANSPORT_KIND_KEY as symbol]: ref<TransportKind>(resolvedKind),
 			},
 		},
 	})
@@ -181,6 +197,30 @@ describe('ChatSidebar — session-persistence wiring (T-ASM-057)', () => {
 
 	it('records transport="api-key" by default when settings.transportKind is not "subscription" (SPEC §7.6)', async () => {
 		const { po, store } = await mountSidebar({})
+		await send(store, po, 'hello')
+		const threadId = store.activeThreadId!
+		expect(store.chatThreads.get(threadId)?.transport).toBe('api-key')
+	})
+
+	it('records the RESOLVED active transport, not the raw setting — auto→subscription (Codex P2, PR #350)', async () => {
+		// settings.transportKind = 'auto' but the selector resolved to
+		// 'subscription' (e.g. no API key configured but the CLI is
+		// available). The thread record must reflect what actually ran,
+		// not the raw setting value.
+		const { po, store } = await mountSidebar({
+			settings: { transportKind: 'auto', anthropicApiKey: '' },
+			resolvedTransportKind: 'subscription',
+		})
+		await send(store, po, 'hello')
+		const threadId = store.activeThreadId!
+		expect(store.chatThreads.get(threadId)?.transport).toBe('subscription')
+	})
+
+	it('records api-key when the resolved kind is api-key under auto mode (mirror of the above)', async () => {
+		const { po, store } = await mountSidebar({
+			settings: { transportKind: 'auto', anthropicApiKey: 'sk-test' },
+			resolvedTransportKind: 'api-key',
+		})
 		await send(store, po, 'hello')
 		const threadId = store.activeThreadId!
 		expect(store.chatThreads.get(threadId)?.transport).toBe('api-key')
