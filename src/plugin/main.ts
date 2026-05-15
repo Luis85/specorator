@@ -383,6 +383,12 @@ export default class SpecoratorPlugin extends Plugin {
   scheduleChatThreadsPersistence(records: ReadonlyMap<string, ChatThreadRecord>): void {
     const snapshot = new Map(records)
     this._pendingChatThreadsSnapshot = snapshot
+    // Refresh the rehydrate-on-reopen snapshot so a panel close/reopen in the
+    // same plugin session sees the latest threads, not the stale set captured
+    // at `loadSettings()` time (Codex P1, PR #350). Without this, reopening
+    // the panel after thread mutations would restore the stale map and the
+    // next mutation would persist it back, losing newer conversations.
+    this._initialChatThreads = Array.from(snapshot.values())
     if (this._chatThreadsFlushTimer !== null) {
       activeWindow.clearTimeout(this._chatThreadsFlushTimer)
     }

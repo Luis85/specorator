@@ -1,6 +1,13 @@
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 
-/** Keys that belong to the flat PluginSettings namespace (W7 storage migration). */
+/** Keys that belong to the flat PluginSettings namespace (W7 storage migration).
+ *
+ *  Must list every PluginSettings field that could exist at the top level of a
+ *  legacy (pre-W7) data blob. Missing keys are silently dropped during the
+ *  flat→nested migration and the user is forced through onboarding again
+ *  (Codex P2, PR #350) — `userPersona` and `onboardingComplete` were
+ *  previously omitted, costing upgraded users their persona selection.
+ */
 export const PLUGIN_SETTINGS_KEYS: ReadonlyArray<keyof PluginSettings> = [
   'locale',
   'specsFolder',
@@ -11,6 +18,8 @@ export const PLUGIN_SETTINGS_KEYS: ReadonlyArray<keyof PluginSettings> = [
   'teamMode',
   'logLevel',
   'mcpServerEnabled',
+  'userPersona',
+  'onboardingComplete',
   'anthropicApiKey',
   'claudeCliPath',
   'transportKind',

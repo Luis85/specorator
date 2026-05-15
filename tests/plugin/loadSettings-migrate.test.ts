@@ -106,10 +106,26 @@ describe('promoteLegacyFlatSettings', () => {
       'teamMode',
       'logLevel',
       'mcpServerEnabled',
+      'userPersona',
+      'onboardingComplete',
       'anthropicApiKey',
       'claudeCliPath',
       'transportKind',
     ])
+  })
+
+  it('migrates legacy flat userPersona + onboardingComplete into the specorator sub-key (Codex P2, PR #350)', () => {
+    const legacy = {
+      locale: 'en',
+      userPersona: 'product-manager',
+      onboardingComplete: true,
+    }
+    const promoted = promoteLegacyFlatSettings(legacy)
+    const specorator = promoted.specorator as Record<string, unknown>
+    expect(specorator.userPersona).toBe('product-manager')
+    expect(specorator.onboardingComplete).toBe(true)
+    // Sanity check: locale also still migrated.
+    expect(specorator.locale).toBe('en')
   })
 
   it('promotes flat claudeCliPath and transportKind into specorator sub-key (T-ASM-014 §11.4)', () => {
