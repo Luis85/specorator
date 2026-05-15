@@ -18,6 +18,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { defineComponent, nextTick, ref } from 'vue'
+
+// Mock buildPrompt so individual tests can force the `truncated` flag
+// without setting up oversized context files. Default mirrors the real
+// happy path: pass through the user text with `truncated: false`.
+vi.mock('@/application/chat/buildPrompt', () => ({
+	buildPrompt: vi.fn((userText: string) => ({ prompt: userText, truncated: false })),
+}))
+import { buildPrompt } from '@/application/chat/buildPrompt'
+
 import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue'
 import { MockClaudeSubprocessAdapter } from '@/infrastructure/mock/MockClaudeSubprocessAdapter'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
@@ -412,6 +421,33 @@ describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
 		const card = new FileWriteProposalCardPO(wrapper)
 		expect(card.hasAccept()).toBe(true)
 		expect(card.hasReject()).toBe(true)
+	})
+
+	it('forwards the buildPrompt truncated flag through the structured success path (Codex P2 fix)', async () => {
+		// Force buildPrompt to report truncation for this turn — simulates
+		// large context files being clipped to fit the prompt budget.
+		vi.mocked(buildPrompt).mockReturnValueOnce({
+			prompt: '/create-file specs/demo/idea.md',
+			truncated: true,
+		})
+
+		const { po, store } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: 'specs/demo/idea.md',
+				content: '# Demo\n',
+			},
+		})
+
+		await send(store, po, '/create-file specs/demo/idea.md')
+		await flushPromises()
+
+		// REQ-ASM-024 transparency: the structured proposal turn must surface
+		// the same trim warning the free-text path does. Before the Codex P2
+		// fix, the structured success branch hardcoded `truncated: false` and
+		// users got no warning that the proposal was generated from clipped
+		// context.
+		expect(store.truncated).toBe(true)
 	})
 
 	it('regression: free-text prompts still use query() and skip the structured path', async () => {

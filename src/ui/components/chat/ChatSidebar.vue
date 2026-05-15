@@ -418,6 +418,7 @@ async function handleStructuredSend(args: {
   isResumedTurn: boolean
   threadId: string
   userMessage: string
+  truncated: boolean
   onSessionId: (id: SessionId) => void
 }): Promise<void> {
   if (claudeCliPort === undefined) {
@@ -482,13 +483,16 @@ async function handleStructuredSend(args: {
   })
 
   // Mirror the structured turn to the session log too (the assistant body is
-  // an empty string — the proposal card replaces the prose).
+  // an empty string — the proposal card replaces the prose). The `truncated`
+  // flag is forwarded from `buildPrompt` so the proposal turn surfaces the
+  // same context-trim warning the free-text path does — users must see when
+  // a proposal was generated from clipped context (Codex P2, PR #347).
   applySuccessfulTurn({
     threadId: args.threadId,
     isResumedTurn: args.isResumedTurn,
     userMessage: args.userMessage,
     assistantResponse: '',
-    truncated: false,
+    truncated: args.truncated,
   })
 }
 
@@ -545,6 +549,7 @@ async function handleSend(): Promise<void> {
       isResumedTurn,
       threadId,
       userMessage,
+      truncated,
       onSessionId,
     })
     await nextTick()
