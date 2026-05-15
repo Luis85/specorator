@@ -180,45 +180,11 @@ export async function commitFileWriteProposal(
     }
   }
 
-  // 2. Folder creation (REQ-ASM-047). The structured envelope schema is strict
-  //    to `action/path/content` (no `folderHint`), so we derive the parent
-  //    folder from `envelope.path` directly. If the model ever supplies an
-  //    explicit `folderHint` via a future schema, that wins; otherwise we
-  //    ensure the parent of `envelope.path` exists. `createFolder` is
-  //    idempotent in both production adapters (ObsidianBridge guards on
-  //    `TFolder`, MockBridge uses `Set.add`), so calling it on an existing
-  //    folder is a no-op — any error here represents a genuine creation
-  //    failure (Codex P1, PR #347).
-  const explicitHint = optionalString(envelope, 'folderHint')
-  const folderToEnsure =
-    explicitHint !== undefined && explicitHint.length > 0
-      ? explicitHint
-      : parentFolderFromPath(envelope.path)
-  if (folderToEnsure !== null && folderToEnsure.length > 0) {
-    const folderResult = await tryAsync(() => deps.vault.createFolder(folderToEnsure))
-    if (!folderResult.ok) {
-      // Trust-first invariant: terminal-failure outcomes mirror to the
-      // session log (REQ-ASM-046). Best-effort — folder creation already
-      // failed; an audit-row failure must not override the original error.
-      await tryAsync(() =>
-        deps.sessionLog.appendProposalDecision({
-          thread,
-          proposal: {
-            envelope: { path: envelope.path, rationale },
-          },
-          decision: 'failed',
-          decidedAt: deps.nowIso(),
-        }),
-      )
-      return err(
-        new CommitProposalError(
-          'FOLDER_CREATE_FAILED',
-          `Could not create folder: ${folderToEnsure}`,
-          folderResult.error,
-        ),
-      )
-    }
-  }
+  // 2. Folder creation (REQ-ASM-047). Extracted to `ensureParentFolder` so the
+  //    main pipeline stays under the complexity cap. See helper docstring for
+  //    the derivation strategy and trust-first audit invariant.
+  const folderResult = await ensureParentFolder(envelope, thread, rationale, deps)
+  if (!folderResult.ok) return folderResult
 
   // 3. Write (REQ-ASM-043). The single vault-mutation site for an LLM proposal.
   const writeResult = await tryAsync(() =>
@@ -270,6 +236,54 @@ export async function commitFileWriteProposal(
 
   // 5. Success.
   return ok(undefined)
+}
+
+/**
+ * Ensure the parent folder of `envelope.path` exists (REQ-ASM-047).
+ *
+ * If the envelope carries an explicit `folderHint` (future schema), that
+ * wins. Otherwise the parent is derived from `envelope.path`. The call to
+ * `vault.createFolder` is idempotent in both production adapters
+ * (ObsidianBridge guards on `TFolder`, MockBridge uses `Set.add`), so calling
+ * it on an existing folder is a no-op — any error here represents a genuine
+ * creation failure.
+ *
+ * On failure, mirrors a best-effort `decision: 'failed'` audit row before
+ * returning `err(FOLDER_CREATE_FAILED)` — the audit-row append is wrapped in
+ * `tryAsync` so a secondary failure cannot override the original error code
+ * surfaced to the user (Codex P1, PR #347).
+ */
+async function ensureParentFolder(
+  envelope: FileWriteProposal['envelope'],
+  thread: ChatThreadRecord,
+  rationale: string | undefined,
+  deps: CommitFileWriteDeps,
+): Promise<Result<void, CommitProposalError>> {
+  const explicitHint = optionalString(envelope, 'folderHint')
+  const folderToEnsure =
+    explicitHint !== undefined && explicitHint.length > 0
+      ? explicitHint
+      : parentFolderFromPath(envelope.path)
+  if (folderToEnsure === null || folderToEnsure.length === 0) return ok(undefined)
+  const folderResult = await tryAsync(() => deps.vault.createFolder(folderToEnsure))
+  if (folderResult.ok) return ok(undefined)
+  await tryAsync(() =>
+    deps.sessionLog.appendProposalDecision({
+      thread,
+      proposal: {
+        envelope: { path: envelope.path, rationale },
+      },
+      decision: 'failed',
+      decidedAt: deps.nowIso(),
+    }),
+  )
+  return err(
+    new CommitProposalError(
+      'FOLDER_CREATE_FAILED',
+      `Could not create folder: ${folderToEnsure}`,
+      folderResult.error,
+    ),
+  )
 }
 
 /**
