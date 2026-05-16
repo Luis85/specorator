@@ -193,6 +193,21 @@ export class MockClaudeCliPort implements ClaudeCliPort {
 			yield { type: 'session-id', sessionId: this.cannedSessionId };
 			MockClaudeCliPort._fireOnSessionId(options, this.cannedSessionId);
 		}
+		yield* this._streamChunks(options);
+	}
+
+	/**
+	 * Yield each scripted text chunk with an interruptible inter-chunk sleep
+	 * and a final abort re-check before the terminal `done`. Extracted from
+	 * `queryStream` to keep its cyclomatic complexity below the lint cap.
+	 *
+	 * Codex P2 on PR #370: the post-loop re-check covers the race where
+	 * abort fires during the FINAL chunk's `streamChunkDelayMs` — the loop
+	 * has already exited so the top-of-loop guard wouldn't run.
+	 */
+	private async *_streamChunks(
+		options: ClaudeCliStreamOptions | undefined,
+	): AsyncIterable<StreamDelta> {
 		const chunks =
 			this.cannedStreamChunks.length > 0 ? this.cannedStreamChunks : [this.cannedResponse];
 		for (const chunk of chunks) {
@@ -202,6 +217,10 @@ export class MockClaudeCliPort implements ClaudeCliPort {
 			}
 			yield { type: 'text', text: chunk };
 			await interruptibleSleep(this.streamChunkDelayMs, options?.signal);
+		}
+		if (MockClaudeCliPort._isAborted(options)) {
+			yield MockClaudeCliPort._abortDelta();
+			return;
 		}
 		yield { type: 'done' };
 	}
