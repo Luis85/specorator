@@ -139,6 +139,9 @@ export default {
     response: {
       structuredFail: 'Assistant returned an unexpected response. Please try again.',
     },
+    compactBoundary: {
+      notice: 'Earlier conversation was summarised to save space.',
+    },
   },
   agent: {
     title: 'Specorator agent',

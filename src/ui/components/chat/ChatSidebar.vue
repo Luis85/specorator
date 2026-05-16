@@ -777,8 +777,11 @@ function applyNonTerminalDelta(
 			});
 			return;
 		case 'compact-boundary':
-			// Surfaced as a synthetic system entry by `MessageList.vue`;
-			// no in-flight store mutation needed.
+			// Push a synthetic notice into the per-thread compact-boundary
+			// log so `MessageList.vue` can render an inline divider. Without
+			// this the auto-compaction event was invisible — hiding a
+			// critical history-rewrite transition (Codex P2 on PR #379).
+			store.appendCompactBoundaryNotice(threadId, { reason: delta.reason });
 			return;
 	}
 }

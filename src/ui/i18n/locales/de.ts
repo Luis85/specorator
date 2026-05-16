@@ -139,6 +139,9 @@ export default {
     response: {
       structuredFail: 'Der Assistent hat eine unerwartete Antwort zurückgegeben. Bitte versuche es erneut.',
     },
+    compactBoundary: {
+      notice: 'Frühere Konversation wurde zusammengefasst, um Platz zu sparen.',
+    },
   },
   agent: {
     title: 'Specorator Agent',
