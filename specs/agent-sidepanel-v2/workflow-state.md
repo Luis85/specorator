@@ -3,12 +3,12 @@ id: d7e8f9a0-1234-4b56-9c78-d9e0f1a2b3c4
 feature: 'Agent Sidepanel v2'
 area: ASV
 slug: agent-sidepanel-v2
-current_stage: implementation
+current_stage: release
 status: active
 last_updated: 2026-05-16
-last_agent: dev
+last_agent: release-manager
 createdAt: 2026-05-16T00:00:00+02:00
-updatedAt: 2026-05-16T00:00:00+02:00
+updatedAt: 2026-05-16T22:00:00+02:00
 artifacts:
   idea: complete
   research: complete
@@ -16,11 +16,11 @@ artifacts:
   design: complete
   spec: complete
   tasks: complete
-  implementation-log: in-progress
-  test-plan: pending
-  test-report: pending
-  review: pending
-  release-notes: pending
+  implementation-log: complete
+  test-plan: complete
+  test-report: complete
+  review: complete
+  release-notes: in-progress
   retrospective: pending
 ---
 
@@ -34,31 +34,32 @@ artifacts:
 | 4 — Design         | complete    | inline PR descriptions across the 14 PRs                                                                            | Narrow-port discipline (ADR-008) for every new surface (`MarkdownRenderPort`, `ApprovalPort`, `SecretStorePort`). `StreamDelta` discriminated union (ADR-0034 candidate — see OQ-ASV-4).                                            |
 | 5 — Specification  | complete    | per-PR commit messages + spec entries                                                                               | Each PR carries a complete spec section in its body.                                                                                                                                                                                  |
 | 6 — Tasks          | complete    | implicit — 14 PRs                                                                                                   | Subagent-driven decomposition; each PR is a single mergeable unit.                                                                                                                                                                  |
-| 7 — Implementation | in-progress | PRs #369, #370, #371, #372, #373, #374, #375, #376, #377, #378, #379, #380, #381, #386, #387                          | 15 PRs in flight (see "PR stack" below). Codex review threads on most; ~25 P1/P2 findings addressed since the stack opened. Three follow-up issues open (#382 secret-storage → addressed by #387, #383 subprocess parity, #384 plan-mode wiring). |
-| 8 — Testing        | pending     | per-PR test coverage                                                                                                | Each PR is gated on `npm run test` + typecheck + lint before push. Cross-PR integration testing happens once the stack lands.                                                                                                       |
-| 9 — Review         | pending     | Codex P1/P2 reviews per-PR                                                                                          | Reviewer subagent reports (UX / a11y / security / architecture / perf) being synthesized into a final polish wave.                                                                                                                  |
-| 10 — Release       | pending     | —                                                                                                                   | After the stack squash-merges onto `develop`.                                                                                                                                                                                       |
+| 7 — Implementation | complete    | PRs #369, #370, #371, #372, #373, #374, #375, #376, #377, #378, #379, #380, #381, #388                              | 14 PRs squash-merged to `develop`. Codex P1/P2 findings addressed across the stack. Deferred to follow-up: #386 (subprocess parity — superseded chunks of #378), #387 (secret-storage rebase), polish-wave branch.                  |
+| 8 — Testing        | complete    | per-PR test coverage                                                                                                | Each PR gated on full pre-PR + CI matrix (typecheck + lint + test + plugin build) — 1600+ unit tests pass on the merged `develop`. The per-PR CI gates and Codex review threads serve as the test-plan / test-report artifacts for this stack (no dedicated documents authored — explicitly accepted as substitute coverage).                              |
+| 9 — Review         | complete    | Codex P1/P2 reviews per-PR                                                                                          | Reviewer subagent reports synthesized into per-PR follow-up commits. Migration-removal rebuttal stands per maintainer directive (pre-shipped product, no migration shims).                                                          |
+| 10 — Release       | in-progress | —                                                                                                                   | Stack merged to `develop`. Follow-up work tracked: #386, #387, polish-wave deferred to next batch.                                                                                                                                  |
 | 11 — Retrospective | pending     | —                                                                                                                   | After demo / main promotion.                                                                                                                                                                                                        |
 
 ## PR stack (Increment 1 + Increment 2)
 
-| #     | Branch                                                          | Scope                                                          | Status                |
-| ----- | --------------------------------------------------------------- | -------------------------------------------------------------- | --------------------- |
-| #369  | `claude/refactor-agent-sidepanel-2CDgl`                         | Sidepanel lift + multi-turn message list                       | Open, multiple Codex fixes |
-| #370  | `claude/agent-sidepanel-v2-streaming-port`                      | `queryStream` port shape + `streamFromQuery` helper             | Open                  |
-| #371  | `claude/agent-sidepanel-v2-streaming-sdk`                       | SDK real streaming + P1 abort race + P1 exhaustion              | Open                  |
-| #372  | `claude/agent-sidepanel-v2-streaming-ui`                        | UI consume + Stop button + P2 buffer reset                      | Open                  |
-| #373  | `claude/agent-sidepanel-v2-markdown`                            | Hand-rolled markdown + P2 link-parens                           | Open                  |
-| #374  | `claude/agent-sidepanel-v2-streaming-subproc-v2`                | Subprocess real streaming                                       | Open                  |
-| #375  | `claude/agent-sidepanel-v2-slash-palette`                       | Slash palette + P2 ×3 (clear-on-select / token-bounds / selEnd) | Open                  |
-| #376  | `claude/agent-sidepanel-v2-mention-picker`                      | `@`-mention picker + IME guard + P2 ×5                          | Open                  |
-| #377  | `claude/agent-sidepanel-v2-obsidian-markdown`                   | Obsidian `MarkdownRenderer` port + P1 render race               | Open                  |
-| #378  | `claude/agent-sidepanel-v2-stream-delta-extension`              | `StreamDelta` extension (SDK only — superseded by #386)         | Superseded            |
-| #379  | `claude/agent-sidepanel-v2-tool-rendering`                      | `ToolCallBlock` + `ThinkingBlock`                               | Open                  |
-| #380  | `claude/agent-sidepanel-v2-plan-mode`                           | `InlinePlanApprovalCard` + `ApprovalPort`                       | Open                  |
-| #381  | `claude/agent-sidepanel-v2-folder-mentions`                     | Folder rows in `@`-picker                                       | Open                  |
-| #386  | `claude/agent-sidepanel-v2-stream-delta-extension-v2`           | `StreamDelta` ext (SDK + subprocess) + P1 toolJson + P2 usage   | Open — closes #383    |
-| #387  | `claude/agent-sidepanel-v2-secret-storage-v2-retry`             | `SecretStorePort` migration                                     | Open — closes #382    |
+| #     | Branch                                                          | Scope                                                          | Status                                |
+| ----- | --------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------- |
+| #369  | `claude/refactor-agent-sidepanel-2CDgl`                         | Sidepanel lift + multi-turn message list                       | ✅ Merged · `d34e0c8`                  |
+| #370  | `claude/agent-sidepanel-v2-streaming-port`                      | `queryStream` port shape + `streamFromQuery` helper             | ✅ Merged · `f7204af`                  |
+| #371  | `claude/agent-sidepanel-v2-streaming-sdk`                       | SDK real streaming + P1 abort race + P1 exhaustion              | ✅ Merged · `e5ff9cc`                  |
+| #372  | `claude/agent-sidepanel-v2-streaming-ui`                        | UI consume + Stop button + P2 buffer reset                      | ✅ Merged · `8d601c8`                  |
+| #373  | `claude/agent-sidepanel-v2-markdown`                            | Hand-rolled markdown + P2 link-parens                           | ✅ Merged · `42bf311`                  |
+| #374  | `claude/agent-sidepanel-v2-streaming-subproc-v2`                | Subprocess real streaming                                       | ✅ Merged · `991d350`                  |
+| #375  | `claude/agent-sidepanel-v2-slash-palette`                       | Slash palette + P2 ×3 (clear-on-select / token-bounds / selEnd) | ✅ Merged · `427de48`                  |
+| #376  | `claude/agent-sidepanel-v2-mention-picker`                      | `@`-mention picker + IME guard + P2 ×5                          | ✅ Merged · `f6fdfad`                  |
+| #377  | `claude/agent-sidepanel-v2-obsidian-markdown`                   | Obsidian `MarkdownRenderer` port + P1 render race               | ✅ Merged · `a336f4e`                  |
+| #378  | `claude/agent-sidepanel-v2-stream-delta-extension`              | `StreamDelta` extension (SDK + chatStore additions)             | ✅ Merged · `350a8f7`                  |
+| #379  | `claude/agent-sidepanel-v2-tool-rendering`                      | `ToolCallBlock` + `ThinkingBlock` + compact-boundary            | ✅ Merged · `28ee42c`                  |
+| #380  | `claude/agent-sidepanel-v2-plan-mode`                           | `InlinePlanApprovalCard` + `ApprovalPort`                       | ✅ Merged · `f13e5e0`                  |
+| #381  | `claude/agent-sidepanel-v2-folder-mentions`                     | Folder rows in `@`-picker                                       | ✅ Merged · `3684bf4`                  |
+| #386  | `claude/agent-sidepanel-v2-stream-delta-extension-v2`           | `StreamDelta` ext (subprocess parity addendum to #378)          | Deferred — superseded by #378         |
+| #387  | `claude/agent-sidepanel-v2-secret-storage-v2-retry`             | `SecretStorePort` migration                                     | Deferred — needs heavy rebase         |
+| #388  | `claude/agent-sidepanel-v2-slash-vault-commands`                | Vault-loaded slash commands (.claude/commands + skills)         | ✅ Merged · `8cd51e6`                  |
 
 ## Blocks
 
