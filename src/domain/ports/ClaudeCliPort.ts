@@ -201,8 +201,17 @@ export interface ClaudeCliPort {
  * `LocalStorageBridge`, and the bridge stubs on the real adapters in
  * PR-ASV-2-port.
  *
- * Honours `options.signal` by short-circuiting to an `error` delta if the
- * signal is pre-aborted.
+ * Honours `options.signal` in two phases:
+ *   1. Pre-flight: if the signal is already aborted, yield an error delta
+ *      without invoking `query` at all.
+ *   2. Mid-flight: while `query()` is in flight, listen for an abort and
+ *      race the result against the abort event. On abort, yield the error
+ *      delta and return immediately — the underlying `query()` call is
+ *      orphaned (it cannot be cancelled because the legacy contract has no
+ *      signal parameter), but the iterable's contract is honoured.
+ *
+ * Codex P2 on PR #370: the original implementation only checked pre-flight,
+ * which broke cancellation semantics for stub-delegating adapters.
  */
 export async function* streamFromQuery(
 	query: (
@@ -212,14 +221,45 @@ export async function* streamFromQuery(
 	prompt: string,
 	options?: ClaudeCliStreamOptions,
 ): AsyncIterable<StreamDelta> {
+	const abortDelta = (): StreamDelta => ({
+		type: 'error',
+		error: new ClaudeCliError('QUERY_FAILED', 'Request was aborted'),
+	});
+
 	if (options?.signal?.aborted === true) {
-		yield {
-			type: 'error',
-			error: new ClaudeCliError('QUERY_FAILED', 'Request was aborted before send'),
-		};
+		yield abortDelta();
 		return;
 	}
-	const result = await query(prompt, options);
+
+	const queryPromise = query(prompt, options);
+	const signal = options?.signal;
+	if (signal !== undefined) {
+		const ABORTED = Symbol('aborted');
+		const abortPromise = new Promise<typeof ABORTED>((resolve) => {
+			signal.addEventListener(
+				'abort',
+				() => {
+					resolve(ABORTED);
+				},
+				{ once: true },
+			);
+		});
+		const winner = await Promise.race([queryPromise, abortPromise]);
+		if (winner === ABORTED) {
+			yield abortDelta();
+			return;
+		}
+		const result = winner;
+		if (!result.ok) {
+			yield { type: 'error', error: result.error };
+			return;
+		}
+		yield { type: 'text', text: result.value };
+		yield { type: 'done' };
+		return;
+	}
+
+	const result = await queryPromise;
 	if (!result.ok) {
 		yield { type: 'error', error: result.error };
 		return;
