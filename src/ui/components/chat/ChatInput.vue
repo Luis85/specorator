@@ -131,10 +131,20 @@ function commitMention(candidate: MentionCandidate): void {
   const queryEnd = at + 1 + picker.query.value.length
   const before = props.modelValue.slice(0, at)
   const after = props.modelValue.slice(queryEnd)
-  const token = `@${basenameOf(candidate.path)} `
+  // PR-ASV-4-folders: folders commit as `@<name>/` (no trailing space,
+  // user keeps typing into the folder) and do NOT emit
+  // `add-context-file` — folders aren't context chips, only files are.
+  // Files keep the original `@<filename> ` shape (trailing space) and
+  // still emit the chip-creation event.
+  const token =
+    candidate.kind === 'folder'
+      ? `@${basenameOf(candidate.path)}/`
+      : `@${basenameOf(candidate.path)} `
   const next = `${before}${token}${after}`
   emit('update:modelValue', next)
-  emit('add-context-file', candidate)
+  if (candidate.kind === 'file') {
+    emit('add-context-file', candidate)
+  }
   picker.close()
   // Restore caret after the inserted token. Wrapped in a microtask
   // because the textarea value updates after the parent re-renders.

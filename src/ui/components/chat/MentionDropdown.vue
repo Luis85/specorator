@@ -33,16 +33,24 @@ const emit = defineEmits<{
 	>
 		<li
 			v-for="(candidate, index) in results"
-			:key="candidate.path"
+			:key="`${candidate.kind}:${candidate.path}`"
 			class="sp-mention-dropdown__item"
 			:class="{ 'sp-mention-dropdown__item--selected': index === selectedIndex }"
 			role="option"
 			:aria-selected="index === selectedIndex"
 			:data-testid="`mention-option-${index}`"
+			:data-kind="candidate.kind"
 			@mousedown.prevent="emit('select', candidate)"
 			@mouseenter="emit('hover', index)"
 		>
-			<span class="sp-mention-dropdown__name">{{ candidate.name }}</span>
+			<span class="sp-mention-dropdown__name">
+				<span v-if="candidate.kind === 'folder'" aria-hidden="true">📁 </span>
+				<!-- PR-ASV-4-folders: folders render with a trailing slash so the
+					user can distinguish e.g. `notes.md` (file) from `notes/`
+					(folder) at a glance, mirroring the inline-token suffix
+					inserted by `ChatInput.commitMention`. -->
+				{{ candidate.kind === 'folder' ? `${candidate.name}/` : candidate.name }}
+			</span>
 			<span class="sp-mention-dropdown__path">{{ candidate.path }}</span>
 		</li>
 	</ul>

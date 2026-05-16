@@ -22,6 +22,7 @@ import { ref, computed, type Ref } from 'vue'
 import type { VaultPort } from '@/domain/ports'
 import {
 	collectVaultFiles,
+	collectVaultFolders,
 	matchAndRank,
 	prepareCandidates,
 	type MentionCandidate,
@@ -138,8 +139,14 @@ export function useMentionPicker(vault: VaultPort): UseMentionPicker {
 	 * keystroke re-enter the `cached === null` branch and start a second
 	 * concurrent recursive walk. Reused across all searches in the open
 	 * session; cleared on close alongside `cached`.
+	 *
+	 * PR-ASV-4-folders: the shared scan now resolves to BOTH files and
+	 * folders so a single recursive walk feeds the kind-aware dropdown.
 	 */
-	let inFlightScan: Promise<readonly string[]> | null = null
+	let inFlightScan: Promise<{
+		files: readonly string[]
+		folders: readonly string[]
+	}> | null = null
 
 	function clearDebounce(): void {
 		if (debounceTimer !== null) {
@@ -170,17 +177,28 @@ export function useMentionPicker(vault: VaultPort): UseMentionPicker {
 			// — every later keystroke awaited the same rejection and the
 			// picker rendered empty results until close/reopen instead of
 			// retrying on the next debounced call.
-			inFlightScan ??= collectVaultFiles(vault, '').catch((err: unknown) => {
-				inFlightScan = null
-				throw err
-			})
-			const paths = await inFlightScan
+			//
+			// PR-ASV-4-folders: parallelise the file + folder walks so the
+			// dropdown shows both kinds after a single debounced tick.
+			// `Promise.all` short-circuits to the rejection branch on
+			// either failure, preserving the retry-on-next-keystroke
+			// behaviour established for the file-only scan.
+			inFlightScan ??= Promise.all([
+				collectVaultFiles(vault, ''),
+				collectVaultFolders(vault, ''),
+			])
+				.then(([files, folders]) => ({ files, folders }))
+				.catch((err: unknown) => {
+					inFlightScan = null
+					throw err
+				})
+			const { files, folders } = await inFlightScan
 			// Drop the result if the user has typed past this open session
 			// (e.g. escape + new `@`) — `searchSeq` was bumped past `seq`.
 			if (seq !== searchSeq) return
 			// Only the first awaiter populates `cached`; subsequent
 			// awaiters see the populated cache and skip the assignment.
-			cached ??= prepareCandidates(paths)
+			cached ??= prepareCandidates({ files, folders })
 		}
 		if (seq !== searchSeq) return
 		const ranked = matchAndRank(cached, q)

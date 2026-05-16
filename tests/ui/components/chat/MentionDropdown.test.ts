@@ -13,9 +13,9 @@ import type { MentionCandidate } from '@/application/chat/vaultFileSearch'
 import { MentionDropdownPO } from './MentionDropdown.po'
 
 const candidates: MentionCandidate[] = [
-	{ path: 'specs/foo/idea.md', name: 'idea.md' },
-	{ path: 'specs/foo/requirements.md', name: 'requirements.md' },
-	{ path: 'specs/bar/idea.md', name: 'idea.md' },
+	{ path: 'specs/foo/idea.md', name: 'idea.md', kind: 'file' },
+	{ path: 'specs/foo/requirements.md', name: 'requirements.md', kind: 'file' },
+	{ path: 'specs/bar/idea.md', name: 'idea.md', kind: 'file' },
 ]
 
 function mountDropdown(props: {
@@ -63,5 +63,38 @@ describe('MentionDropdown', () => {
 		const emitted = po.emitted('hover') as number[][]
 		expect(emitted).toBeTruthy()
 		expect(emitted[0][0]).toBe(1)
+	})
+
+	/**
+	 * PR-ASV-4-folders — folder rows render with a trailing slash and a
+	 * `data-kind="folder"` discriminator so the consumer (`ChatInput`) can
+	 * branch in `commitMention`. Files keep their bare basename rendering.
+	 */
+	describe('folder rows', () => {
+		it('renders a folder row with a trailing slash suffix', () => {
+			const po = mountDropdown({
+				results: [{ path: 'specs', name: 'specs', kind: 'folder' }],
+				selectedIndex: 0,
+			})
+			expect(po.optionCount()).toBe(1)
+			expect(po.optionLabel(0)).toContain('specs/')
+			expect(po.optionKind(0)).toBe('folder')
+		})
+
+		it('mixes files and folders in the provided order', () => {
+			const mixed: MentionCandidate[] = [
+				{ path: 'specs/foo/idea.md', name: 'idea.md', kind: 'file' },
+				{ path: 'specs', name: 'specs', kind: 'folder' },
+				{ path: 'specs/foo', name: 'foo', kind: 'folder' },
+			]
+			const po = mountDropdown({ results: mixed, selectedIndex: 0 })
+			expect(po.optionCount()).toBe(3)
+			expect(po.optionKind(0)).toBe('file')
+			expect(po.optionKind(1)).toBe('folder')
+			expect(po.optionKind(2)).toBe('folder')
+			expect(po.optionLabel(0)).toContain('idea.md')
+			expect(po.optionLabel(1)).toContain('specs/')
+			expect(po.optionLabel(2)).toContain('foo/')
+		})
 	})
 })
