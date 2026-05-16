@@ -65,4 +65,26 @@ describe('WorkflowStateDocument', () => {
 		expect(content).toContain('  idea: complete');
 		expect(deserializeWorkflowState(content)?.id).toBe('serialize-id');
 	});
+
+	it.each([
+		['trailing backslash', 'foo\\'],
+		['embedded backslash', 'a\\b'],
+		['backslash and quote', 'a\\"b'],
+		['double backslash', 'a\\\\b'],
+	])('round-trips a title with %s', (_label, title) => {
+		const feature = Feature.reconstitute({
+			id: 'roundtrip-id',
+			slug: Slug.reconstitute('roundtrip'),
+			title,
+			area: 'RT',
+			status: 'draft',
+			currentStep: 1,
+			createdAt: new Date('2026-05-16T10:00:00.000Z'),
+			updatedAt: new Date('2026-05-16T11:00:00.000Z'),
+		});
+
+		const parsed = deserializeWorkflowState(serializeWorkflowState(feature));
+
+		expect(parsed?.title).toBe(title);
+	});
 });

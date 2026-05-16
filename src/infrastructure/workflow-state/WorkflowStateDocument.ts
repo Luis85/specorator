@@ -40,7 +40,7 @@ export function serializeWorkflowState(feature: Feature): string {
 		'---',
 		`id: ${p.id}`,
 		`slug: ${p.slug}`,
-		`feature: "${p.title.replace(/"/g, '\\"')}"`,
+		`feature: "${p.title.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`,
 		`area: "${area}"`,
 		`status: ${p.status}`,
 		`currentStep: ${p.currentStep}`,
@@ -86,7 +86,7 @@ export function parseWorkflowStateFrontmatter(content: string): Partial<Record<s
 }
 
 function parseScalar(raw: string): string {
-	if (raw.startsWith('"')) return raw.slice(1, raw.lastIndexOf('"')).replace(/\\"/g, '"');
+	if (raw.startsWith('"')) return raw.slice(1, raw.lastIndexOf('"')).replace(/\\(["\\])/g, '$1');
 	if (raw.startsWith("'")) return raw.slice(1, raw.lastIndexOf("'")).replace(/''/g, "'");
 	return raw;
 }
