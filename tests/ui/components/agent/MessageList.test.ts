@@ -102,6 +102,51 @@ describe('MessageList', () => {
 		expect(po.userMessages()[0].text()).toContain('B-user');
 	});
 
+	it('renders bold markdown in an assistant turn (PR-ASV-7)', () => {
+		const store = useChatStore();
+		const tid = 'thread-bold';
+		store.appendMessage(msg(tid, 'assistant', { text: 'Make it **really** clear.' }));
+		const { po } = mountList(tid);
+		const blocks = po.markdownBlocks();
+		expect(blocks).toHaveLength(1);
+		expect(blocks[0].findAll('strong')).toHaveLength(1);
+		expect(blocks[0].find('strong').text()).toBe('really');
+	});
+
+	it('renders inline code from backticks (PR-ASV-7)', () => {
+		const store = useChatStore();
+		const tid = 'thread-inline-code';
+		store.appendMessage(msg(tid, 'assistant', { text: 'Run `npm test` first.' }));
+		const { po } = mountList(tid);
+		const inline = po
+			.markdownBlocks()[0]
+			.findAll('code')
+			.filter((c) => c.element.parentElement?.tagName !== 'PRE');
+		expect(inline).toHaveLength(1);
+		expect(inline[0].text()).toBe('npm test');
+	});
+
+	it('renders fenced code blocks from triple-backtick fences (PR-ASV-7)', () => {
+		const store = useChatStore();
+		const tid = 'thread-fence';
+		store.appendMessage(msg(tid, 'assistant', { text: '```ts\nconst x = 1;\n```' }));
+		const { po } = mountList(tid);
+		const pre = po.markdownBlocks()[0].findAll('pre');
+		expect(pre).toHaveLength(1);
+		expect(pre[0].find('code').text()).toBe('const x = 1;');
+	});
+
+	it('escapes embedded HTML in message text (PR-ASV-7 XSS safety)', () => {
+		const store = useChatStore();
+		const tid = 'thread-xss';
+		store.appendMessage(msg(tid, 'assistant', { text: '<script>alert(1)</script>' }));
+		const { po } = mountList(tid);
+		const html = po.markdownBlocks()[0].html();
+		expect(html).toContain('&lt;script&gt;');
+		expect(html).not.toContain('<script>alert(1)</script>');
+		expect(po.markdownBlocks()[0].findAll('script')).toHaveLength(0);
+	});
+
 	it('exposes role="log" with the aria-live="polite" hint on the scroll container', () => {
 		const store = useChatStore();
 		const tid = 'thread-aria';
