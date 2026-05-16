@@ -959,6 +959,17 @@ function handleUserTextUpdate(text: string): void {
  * remove button — auto chips are reserved for the active editor file.
  */
 function handleAddContextFile(candidate: { path: string; name: string }): void {
+	// Codex P2 on PR #376: `store.addContextFile` is a no-op when the path
+	// already exists. If the user mentions a file that currently lives
+	// ONLY as the auto-context chip, the explicit mention is silently
+	// dropped — then when the active editor file later changes,
+	// `setActiveFile` removes the old auto entry and the user's mention
+	// disappears from context. Promote the auto entry to a manual one so
+	// the explicit mention survives editor rotation.
+	const existing = store.contextFiles.find((f) => f.path === candidate.path);
+	if (existing?.isAuto === true) {
+		store.removeContextFile(candidate.path);
+	}
 	store.addContextFile({
 		path: candidate.path,
 		label: candidate.name,
