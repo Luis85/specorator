@@ -227,7 +227,7 @@ describe('useSlashPalette', () => {
 				'---\ndescription: Audit something.\n---\n\nAudit body.',
 			);
 			await ports.vault.writeFile(
-				'.claude/skills/publish-release.md',
+				'.claude/skills/publish-release/SKILL.md',
 				'---\ndescription: Walk a release.\n---\n\nRelease body.',
 			);
 			const palette = useSlashPalette({
@@ -250,7 +250,7 @@ describe('useSlashPalette', () => {
 				'---\ndescription: A command.\n---\n\nBody.',
 			);
 			await ports.vault.writeFile(
-				'.claude/skills/skill-one.md',
+				'.claude/skills/skill-one/SKILL.md',
 				'---\ndescription: A skill.\n---\n\nBody.',
 			);
 			const palette = useSlashPalette({

@@ -55,9 +55,9 @@ describe('loadVaultSlashCommands', () => {
 		expect(cmd.agent).toBe('research');
 	});
 
-	it('loads a skill file from .claude/skills with id `skills:<name>`', async () => {
+	it('loads a skill from `.claude/skills/<slug>/SKILL.md` with id `skills:<slug>`', async () => {
 		const ports = seed({
-			'.claude/skills/publish-release.md': [
+			'.claude/skills/publish-release/SKILL.md': [
 				'---',
 				'description: Walk through a release.',
 				'---',
@@ -70,6 +70,36 @@ describe('loadVaultSlashCommands', () => {
 		expect(result[0].source).toBe('vault-skill');
 		expect(result[0].id).toBe('skills:publish-release');
 		expect(result[0].name).toBe('publish-release');
+		expect(result[0].body).toContain('Body of the skill.');
+	});
+
+	it('skips skill folders that do not contain a SKILL.md (logs debug, no warn)', async () => {
+		const ports = seed({
+			// A sibling file inside the folder but no SKILL.md.
+			'.claude/skills/half-baked/notes.md': '---\ndescription: Notes.\n---\n\nBody',
+		});
+		const result = await loadVaultSlashCommands(ports.vault, ports.logger);
+		expect(result).toEqual([]);
+		// No warn — missing SKILL.md is a benign skip, not a malformed file.
+		expect(ports.logger.warn).not.toHaveBeenCalled();
+	});
+
+	it('does not load skills from a flat `.claude/skills/<slug>.md` file', async () => {
+		const ports = seed({
+			'.claude/skills/legacy-flat.md': '---\ndescription: Legacy flat layout.\n---\n\nBody',
+		});
+		const result = await loadVaultSlashCommands(ports.vault, ports.logger);
+		expect(result).toEqual([]);
+	});
+
+	it('loads multiple skills, each from its own folder', async () => {
+		const ports = seed({
+			'.claude/skills/alpha/SKILL.md': '---\ndescription: Alpha.\n---\n\nAlpha body',
+			'.claude/skills/beta/SKILL.md': '---\ndescription: Beta.\n---\n\nBeta body',
+		});
+		const result = await loadVaultSlashCommands(ports.vault, ports.logger);
+		const ids = result.map((c) => c.id).sort();
+		expect(ids).toEqual(['skills:alpha', 'skills:beta']);
 	});
 
 	it('skips files with missing description and warns', async () => {
@@ -109,7 +139,7 @@ describe('loadVaultSlashCommands', () => {
 
 	it('skips skills with disable-model-invocation: true', async () => {
 		const ports = seed({
-			'.claude/skills/disabled.md': [
+			'.claude/skills/disabled/SKILL.md': [
 				'---',
 				'description: Disabled skill.',
 				'disable-model-invocation: true',
@@ -157,7 +187,7 @@ describe('loadVaultSlashCommands', () => {
 	it('combines commands and skills in one result', async () => {
 		const ports = seed({
 			'.claude/commands/a.md': '---\ndescription: A.\n---\n\nA body',
-			'.claude/skills/b.md': '---\ndescription: B.\n---\n\nB body',
+			'.claude/skills/b/SKILL.md': '---\ndescription: B.\n---\n\nB body',
 		});
 		const result = await loadVaultSlashCommands(ports.vault, ports.logger);
 		const ids = result.map((c) => c.id).sort();

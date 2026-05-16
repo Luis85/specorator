@@ -6,7 +6,7 @@
  *
  * Domain layer (ADR-008): no `obsidian` imports. Built-ins are encoded as
  * frozen TypeScript values; vault commands (`.claude/commands/*.md`) and skills
- * (`.claude/skills/*.md`) are loaded at runtime by
+ * (`.claude/skills/<slug>/SKILL.md`) are loaded at runtime by
  * `loadVaultSlashCommands` (application layer). A future `'sdk'` variant
  * (PR-ASV-6) will load commands from the Anthropic Agent SDK's
  * `supportedCommands()` probe.
@@ -49,7 +49,7 @@ export interface SlashCommand {
  * Source of a slash command:
  *  - `'builtin'` — shipped with the plugin, dispatched via `SlashCommandAction`
  *  - `'vault-command'` — loaded from `.claude/commands/*.md`
- *  - `'vault-skill'` — loaded from `.claude/skills/*.md`
+ *  - `'vault-skill'` — loaded from `.claude/skills/<slug>/SKILL.md`
  */
 export type SlashCommandKind = 'builtin' | 'vault-command' | 'vault-skill';
 

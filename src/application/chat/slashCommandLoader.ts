@@ -3,9 +3,15 @@ import type { SlashCommand } from '@/domain/chat/SlashCommand';
 
 /**
  * Vault-loaded slash command parsed from `.claude/commands/*.md` (a "command")
- * or `.claude/skills/*.md` (a "skill"). Mirrors Claudian's pattern: each file
- * carries YAML frontmatter describing the command, followed by a body that
- * becomes the prompt template when the user picks the entry.
+ * or `.claude/skills/<slug>/SKILL.md` (a "skill"). Mirrors Claudian's pattern:
+ * each file carries YAML frontmatter describing the command, followed by a
+ * body that becomes the prompt template when the user picks the entry.
+ *
+ * Commands are scanned flat (`.claude/commands/*.md`). Skills use the
+ * directory layout documented in `AGENTS.md` — each skill lives under
+ * `.claude/skills/<slug>/SKILL.md`, so the loader enumerates child folders
+ * and reads each folder's `SKILL.md` if present. Skill folders without a
+ * `SKILL.md` are skipped silently with a `debug` breadcrumb.
  *
  * Frontmatter contract (matches Claudian):
  *   description           — short subtitle for the palette (required)
@@ -20,8 +26,6 @@ import type { SlashCommand } from '@/domain/chat/SlashCommand';
  * Files with unparseable frontmatter, missing `description`, or
  * `user-invocable: false` are silently skipped with a `loggerPort.warn`
  * breadcrumb. Skills with `disable-model-invocation: true` are also skipped.
- *
- * Scan is flat (no recursion) — matches Claudian's behaviour.
  *
  * Stays in the application layer (ADR-008): depends only on `VaultPort` +
  * `LoggerPort`; no `obsidian` imports.
@@ -47,6 +51,7 @@ export interface VaultSlashCommand {
 
 const COMMANDS_FOLDER = '.claude/commands';
 const SKILLS_FOLDER = '.claude/skills';
+const SKILL_MANIFEST = 'SKILL.md';
 
 /**
  * Load all vault slash commands and skills. Resolves to an empty array when
@@ -61,7 +66,7 @@ export async function loadVaultSlashCommands(
 	loggerPort?: LoggerPort,
 ): Promise<readonly VaultSlashCommand[]> {
 	const commandFiles = await listMarkdownFilesSafe(vault, COMMANDS_FOLDER, loggerPort);
-	const skillFiles = await listMarkdownFilesSafe(vault, SKILLS_FOLDER, loggerPort);
+	const skillFiles = await listSkillManifestsSafe(vault, SKILLS_FOLDER, loggerPort);
 
 	const results: VaultSlashCommand[] = [];
 	for (const path of commandFiles) {
@@ -89,6 +94,40 @@ async function listMarkdownFilesSafe(
 }
 
 /**
+ * Enumerate skill folders under `parent` and return the `<folder>/SKILL.md`
+ * path for each folder that actually contains a `SKILL.md`. Skill folders
+ * without a manifest are skipped silently with a `debug` breadcrumb — matches
+ * the directory layout documented in `AGENTS.md` (e.g.
+ * `.claude/skills/publish-release/SKILL.md`).
+ */
+async function listSkillManifestsSafe(
+	vault: VaultPort,
+	parent: string,
+	logger: LoggerPort | undefined,
+): Promise<readonly string[]> {
+	const folders = await safeListFolders(vault, parent);
+	if (folders === null) {
+		logger?.debug('loadVaultSlashCommands: skills folder not listable', { folder: parent });
+		return [];
+	}
+	const manifests: string[] = [];
+	for (const folder of folders) {
+		const manifestPath = `${parent}/${folder}/${SKILL_MANIFEST}`;
+		const exists = await Promise.resolve()
+			.then(() => vault.fileExists(manifestPath))
+			.catch(() => false);
+		if (exists) {
+			manifests.push(manifestPath);
+		} else {
+			logger?.debug('loadVaultSlashCommands: skill folder missing SKILL.md', {
+				folder: `${parent}/${folder}`,
+			});
+		}
+	}
+	return manifests;
+}
+
+/**
  * Wrap `vault.listFiles` so a missing folder does not surface as a thrown
  * error. Returns `null` on any failure (folder absent, permissions, …) — the
  * caller treats `null` as an empty folder.
@@ -96,6 +135,21 @@ async function listMarkdownFilesSafe(
 async function safeListFiles(vault: VaultPort, folder: string): Promise<readonly string[] | null> {
 	const recovered = await Promise.resolve()
 		.then(() => vault.listFiles(folder))
+		.catch(() => null);
+	return recovered;
+}
+
+/**
+ * Wrap `vault.listFolders` so a missing parent folder does not surface as a
+ * thrown error. Returns `null` on any failure — the caller treats `null` as
+ * an empty folder.
+ */
+async function safeListFolders(
+	vault: VaultPort,
+	parent: string,
+): Promise<readonly string[] | null> {
+	const recovered = await Promise.resolve()
+		.then(() => vault.listFolders(parent))
 		.catch(() => null);
 	return recovered;
 }
@@ -176,7 +230,7 @@ async function loadOne(
 	const gated = applyVisibilityGates(parsed.frontmatter, source, path, logger);
 	if (gated === null) return null;
 
-	const name = basenameWithoutExt(path);
+	const name = source === 'vault-skill' ? skillSlugFromPath(path) : basenameWithoutExt(path);
 	const slugKey = source === 'vault-command' ? 'commands' : 'skills';
 	const command: VaultSlashCommand = {
 		source,
@@ -291,6 +345,20 @@ function basenameWithoutExt(path: string): string {
 	const base = slash === -1 ? path : path.slice(slash + 1);
 	const dot = base.lastIndexOf('.');
 	return dot === -1 ? base : base.slice(0, dot);
+}
+
+/**
+ * Derive a skill slug from its manifest path. For
+ * `.claude/skills/<slug>/SKILL.md` the slug is the parent folder name.
+ * Falls back to the basename if the path does not match the expected shape
+ * (defensive — the loader should never reach this branch in production).
+ */
+function skillSlugFromPath(path: string): string {
+	const segments = path.split('/').filter((s) => s !== '');
+	if (segments.length >= 2 && segments[segments.length - 1].toLowerCase() === 'skill.md') {
+		return segments[segments.length - 2];
+	}
+	return basenameWithoutExt(path);
 }
 
 /**

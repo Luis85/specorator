@@ -25,8 +25,8 @@ import { VAULT_PORT, LOGGER_PORT } from '@/infrastructure/bridge/ports';
  * `specs/agent-sidepanel-v2/research.md` D-ASV-2.
  *
  * Built-ins are stable; vault commands (`.claude/commands/*.md` and
- * `.claude/skills/*.md`) are refreshed each time the palette opens so vault
- * edits between sessions are picked up. The refresh is fire-and-forget — the
+ * `.claude/skills/<slug>/SKILL.md`) are refreshed each time the palette opens
+ * so vault edits between sessions are picked up. The refresh is fire-and-forget — the
  * dropdown shows built-ins immediately and re-renders when vault commands
  * arrive.
  */
