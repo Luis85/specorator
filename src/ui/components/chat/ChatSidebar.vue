@@ -334,6 +334,14 @@ function mintRotatedThread(args: {
 	store.setActiveThreadId(threadId);
 	if (args.previousThreadId !== null && args.previousThreadId !== threadId) {
 		store.clearThreadMessages(args.previousThreadId);
+		// Codex P2 (PR #369, fifth review): also evict the previous
+		// thread's proposals on automatic rotation, mirroring the same
+		// fix on the "New conversation" handler. With no thread switcher
+		// in Increment 1, proposals (including `envelope.content`
+		// payloads) become unreachable but stay resident; repeated
+		// `/create` turns across feature switches accumulated unbounded
+		// hidden state.
+		store.clearThreadProposals(args.previousThreadId);
 	}
 	return threadId;
 }
