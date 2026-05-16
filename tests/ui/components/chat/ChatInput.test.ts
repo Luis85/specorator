@@ -200,6 +200,7 @@ describe('ChatInput', () => {
 			expect(added[0][0]).toEqual({
 				path: 'specs/bar/requirements.md',
 				name: 'requirements.md',
+				kind: 'file',
 			})
 		})
 
@@ -243,6 +244,33 @@ describe('ChatInput', () => {
 			await po.pressKey('Enter', { ctrl: true })
 
 			expect(po.emitted('send')).toBeTruthy()
+			expect(po.emitted('add-context-file')).toBeFalsy()
+		})
+
+		/**
+		 * PR-ASV-4-folders — selecting a folder commits as `@<name>/`
+		 * (trailing slash, no trailing space — user keeps typing to narrow)
+		 * and must NOT emit `add-context-file`. Folders aren't context
+		 * chips; only files are.
+		 */
+		it('selecting a folder rewrites to `@<name>/` and skips add-context-file', async () => {
+			const po = mountChatInput(
+				{ modelValue: '', disabled: false, loading: false },
+				FILES,
+			)
+			await po.typeAndMoveCaretToEnd('@spec')
+			await vi.advanceTimersByTimeAsync(MENTION_DEBOUNCE_MS + 1)
+			await flushPromises()
+			expect(po.mentionDropdownExists()).toBe(true)
+			// The first row is the `specs` folder (prefix-matches `spec`;
+			// files don't prefix-match the basename here).
+			const firstLabel = po.wrapper.find('[data-testid="mention-option-0"]').text()
+			expect(firstLabel).toContain('specs/')
+			await po.pressKey('Enter')
+
+			const updates = po.emitted('update:modelValue') as string[][]
+			const lastValue = updates[updates.length - 1][0]
+			expect(lastValue).toBe('@specs/')
 			expect(po.emitted('add-context-file')).toBeFalsy()
 		})
 	})

@@ -102,9 +102,10 @@ describe('useMentionPicker', () => {
 	})
 
 	it('arrow-down + arrow-up wrap selection', async () => {
-		const picker = useMentionPicker(
-			makeBridge(['notes/a.md', 'notes/b.md', 'notes/c.md']),
-		)
+		// Root-level files only — keeps `collectVaultFolders` empty so the
+		// result count is exactly 3 (PR-ASV-4-folders no longer surfaces
+		// `notes/` alongside the three notes files).
+		const picker = useMentionPicker(makeBridge(['a.md', 'b.md', 'c.md']))
 		picker.handleInput('@', 1)
 		await vi.advanceTimersByTimeAsync(MENTION_DEBOUNCE_MS + 1)
 		expect(picker.selectedIndex.value).toBe(0)

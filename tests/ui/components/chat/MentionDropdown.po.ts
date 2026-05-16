@@ -28,6 +28,14 @@ export class MentionDropdownPO {
 		return this.optionAt(index).attributes('aria-selected') === 'true'
 	}
 
+	optionKind(index: number): string | undefined {
+		return this.optionAt(index).attributes('data-kind')
+	}
+
+	optionLabel(index: number): string {
+		return this.optionAt(index).text()
+	}
+
 	async clickOption(index: number): Promise<void> {
 		await this.optionAt(index).trigger('mousedown')
 	}
