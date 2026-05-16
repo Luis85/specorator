@@ -9,10 +9,9 @@
  * sidepanel-only chrome on top.
  *
  * Lifts the chat into its own Obsidian `ItemView` per IDEA-ASV-001 / specs/
- * agent-sidepanel-v2/idea.md. Slash-command palette, `@`-file mentions, and
- * streaming land in Increment 2+.
+ * agent-sidepanel-v2/idea.md. Slash-command palette landed in PR-ASV-3.
  */
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useChatStore } from '@/ui/stores/chatStore';
 import { useNotificationStore } from '@/ui/stores/notificationStore';
 import { onMounted, onUnmounted } from 'vue';
@@ -21,6 +20,8 @@ import ErrorBoundary from '@/ui/components/ErrorBoundary.vue';
 import AgentSidepanelHeader from '@/ui/components/agent/AgentSidepanelHeader.vue';
 import MessageList from '@/ui/components/agent/MessageList.vue';
 import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue';
+import type { SlashCommand } from '@/domain/chat/SlashCommand';
+import { BUILT_IN_SLASH_COMMANDS } from '@/application/chat/builtInSlashCommands';
 
 const store = useChatStore();
 const notificationStore = useNotificationStore();
@@ -32,6 +33,16 @@ const activeFeature = computed(() => {
 	if (tid === null) return null;
 	return store.chatThreads.get(tid)?.feature ?? null;
 });
+
+/**
+ * Whether the inline `/help` panel is open. Toggled by the `'help'` slash
+ * command (PR-ASV-3, D-ASV-2). Lives on the root rather than `ChatSidebar`
+ * because the help panel is a sidepanel-level affordance — it sits above the
+ * chat surface, not inside the input area.
+ */
+const helpOpen = ref(false);
+
+const helpCommands = computed<readonly SlashCommand[]>(() => BUILT_IN_SLASH_COMMANDS);
 
 function onNotice(e: Event): void {
 	const { message, durationMs } = (
@@ -77,6 +88,37 @@ function handleNewConversation(): void {
 	store.setUserText('');
 }
 
+/**
+ * Dispatch a slash-command selection emitted by `ChatSidebar` (PR-ASV-3,
+ * D-ASV-2). The action ids form a closed switch — every variant of
+ * `SlashCommandAction` must have a branch. Future work (vault / SDK commands)
+ * will introduce new action ids that need branches here.
+ */
+function handleSelectCommand(command: SlashCommand): void {
+	switch (command.action) {
+		case 'clear-input':
+			store.setUserText('');
+			return;
+		case 'new-conversation':
+			// Mirror the header button's guard rail so the keyboard-driven
+			// dispatch can't strand an in-flight response on a cleared thread
+			// (Codex P1, PR #369 second review).
+			if (store.status === 'loading') return;
+			handleNewConversation();
+			return;
+		case 'help':
+			helpOpen.value = true;
+			return;
+		case 'advance-stage':
+			notificationStore.addNotice('Not yet implemented in v2', 4000);
+			return;
+	}
+}
+
+function closeHelp(): void {
+	helpOpen.value = false;
+}
+
 onMounted(() => {
 	window.addEventListener('sp:notice', onNotice);
 });
@@ -95,9 +137,42 @@ onUnmounted(() => {
 				:request-in-flight="isRequestInFlight"
 				@new-conversation="handleNewConversation"
 			/>
+			<div
+				v-if="helpOpen"
+				class="sp-agent__help"
+				role="region"
+				aria-label="Slash command help"
+				data-testid="agent-help-panel"
+			>
+				<header class="sp-agent__help-header">
+					<span class="sp-agent__help-title" data-testid="agent-help-title">
+						Available slash commands
+					</span>
+					<button
+						type="button"
+						class="sp-agent__help-close"
+						data-testid="agent-help-close"
+						aria-label="Close help"
+						@click="closeHelp"
+					>
+						Close
+					</button>
+				</header>
+				<ul class="sp-agent__help-list" data-testid="agent-help-list">
+					<li
+						v-for="command in helpCommands"
+						:key="command.name"
+						class="sp-agent__help-item"
+						:data-testid="`agent-help-item-${command.name}`"
+					>
+						<span class="sp-agent__help-name">/{{ command.name }}</span>
+						<span class="sp-agent__help-description">{{ command.description }}</span>
+					</li>
+				</ul>
+			</div>
 			<div class="sp-agent__body">
 				<MessageList :thread-id="activeThreadId" />
-				<ChatSidebar />
+				<ChatSidebar @select-command="handleSelectCommand" />
 			</div>
 		</ErrorBoundary>
 		<AppToast />
@@ -117,5 +192,67 @@ onUnmounted(() => {
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
+}
+
+.sp-agent__help {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	padding: 0.75rem 1rem;
+	background: var(--background-secondary);
+	border-bottom: 1px solid var(--background-modifier-border);
+	flex-shrink: 0;
+}
+
+.sp-agent__help-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.sp-agent__help-title {
+	font-size: 0.875rem;
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.sp-agent__help-close {
+	font-size: 0.75rem;
+	font-weight: 500;
+	padding: 0.2rem 0.5rem;
+	border-radius: 4px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	cursor: pointer;
+}
+
+.sp-agent__help-close:hover {
+	background: var(--interactive-hover);
+}
+
+.sp-agent__help-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.sp-agent__help-item {
+	display: flex;
+	gap: 0.5rem;
+	font-size: 0.8125rem;
+	color: var(--text-normal);
+}
+
+.sp-agent__help-name {
+	font-weight: 600;
+	min-width: 7rem;
+}
+
+.sp-agent__help-description {
+	color: var(--text-muted);
 }
 </style>

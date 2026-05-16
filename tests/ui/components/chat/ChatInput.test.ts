@@ -274,4 +274,118 @@ describe('ChatInput', () => {
 			expect(po.emitted('add-context-file')).toBeFalsy()
 		})
 	})
+
+	describe('slash-command palette (PR-ASV-3)', () => {
+		it('does not render the dropdown before any `/` is typed', () => {
+			const po = mountChatInput({ modelValue: '', disabled: false, loading: false })
+			expect(po.hasDropdown()).toBe(false)
+		})
+
+		it('opens the dropdown when `/` is typed at position 0', async () => {
+			const po = mountChatInput({ modelValue: '', disabled: false, loading: false })
+			await po.typeAndMoveCaret('/')
+			expect(po.hasDropdown()).toBe(true)
+		})
+
+		it('opens the dropdown when `/` follows whitespace', async () => {
+			const po = mountChatInput({ modelValue: '', disabled: false, loading: false })
+			await po.typeAndMoveCaret('hello /')
+			expect(po.hasDropdown()).toBe(true)
+		})
+
+		it('does NOT open when `/` follows a non-whitespace character', async () => {
+			const po = mountChatInput({ modelValue: '', disabled: false, loading: false })
+			await po.typeAndMoveCaret('path/to/file')
+			expect(po.hasDropdown()).toBe(false)
+		})
+
+		it('filters items as the user types the query', async () => {
+			const po = mountChatInput({ modelValue: '', disabled: false, loading: false })
+			await po.typeAndMoveCaret('/cle')
+			expect(po.dropdownItem('clear').exists()).toBe(true)
+			expect(po.dropdownItem('help').exists()).toBe(false)
+			expect(po.dropdownItem('new').exists()).toBe(false)
+		})
+
+		it('shows the empty placeholder when no commands match', async () => {
+			const po = mountChatInput({ modelValue: '', disabled: false, loading: false })
+			await po.typeAndMoveCaret('/xyzzy')
+			expect(po.hasDropdown()).toBe(true)
+			expect(po.dropdownEmpty.exists()).toBe(true)
+		})
+
+		it('closes when a whitespace is typed after the trigger', async () => {
+			const po = mountChatInput({ modelValue: '', disabled: false, loading: false })
+			await po.typeAndMoveCaret('/cle')
+			expect(po.hasDropdown()).toBe(true)
+			await po.typeAndMoveCaret('/cle ')
+			expect(po.hasDropdown()).toBe(false)
+		})
+
+		describe('keyboard navigation', () => {
+			it('ArrowDown moves the highlight forward', async () => {
+				const po = mountChatInput({ modelValue: '', disabled: false, loading: false })
+				await po.typeAndMoveCaret('/')
+				// First item is highlighted by default
+				expect(po.dropdownItem('clear').attributes('aria-selected')).toBe('true')
+				await po.pressKey('ArrowDown')
+				expect(po.dropdownItem('clear').attributes('aria-selected')).toBe('false')
+				expect(po.dropdownItem('new').attributes('aria-selected')).toBe('true')
+			})
+
+			it('ArrowUp from index 0 wraps to the last entry', async () => {
+				const po = mountChatInput({ modelValue: '', disabled: false, loading: false })
+				await po.typeAndMoveCaret('/')
+				const items = po.dropdownItems()
+				expect(items.length).toBeGreaterThan(0)
+				await po.pressKey('ArrowUp')
+				// Last item should now be aria-selected
+				expect(items[items.length - 1].attributes('aria-selected')).toBe('true')
+			})
+
+			it('Escape closes the palette', async () => {
+				const po = mountChatInput({ modelValue: '', disabled: false, loading: false })
+				await po.typeAndMoveCaret('/')
+				expect(po.hasDropdown()).toBe(true)
+				await po.pressKey('Escape')
+				expect(po.hasDropdown()).toBe(false)
+			})
+		})
+
+		describe('selection emits', () => {
+			it('Enter on a highlighted entry emits select-command and does NOT emit send', async () => {
+				const po = mountChatInput({ modelValue: '/', disabled: false, loading: false })
+				await po.typeAndMoveCaret('/')
+				await po.pressKey('Enter', { ctrl: true })
+				expect(po.emitted('send')).toBeFalsy()
+				const emitted = po.emitted('select-command') as Array<[{ name: string }]> | undefined
+				expect(emitted).toBeTruthy()
+				expect(emitted?.[0][0].name).toBe('clear')
+			})
+
+			it('Tab selects the highlighted entry', async () => {
+				const po = mountChatInput({ modelValue: '', disabled: false, loading: false })
+				await po.typeAndMoveCaret('/')
+				await po.pressKey('Tab')
+				const emitted = po.emitted('select-command') as Array<[{ name: string }]> | undefined
+				expect(emitted).toBeTruthy()
+				expect(emitted?.[0][0].name).toBe('clear')
+			})
+
+			it('clicking an item emits select-command for that command', async () => {
+				const po = mountChatInput({ modelValue: '', disabled: false, loading: false })
+				await po.typeAndMoveCaret('/')
+				await po.dropdownItem('new').trigger('mousedown')
+				const emitted = po.emitted('select-command') as Array<[{ name: string }]> | undefined
+				expect(emitted).toBeTruthy()
+				expect(emitted?.[0][0].name).toBe('new')
+			})
+
+			it('Ctrl+Enter still fires send when the palette is closed', async () => {
+				const po = mountChatInput({ modelValue: 'hello', disabled: false, loading: false })
+				await po.pressKey('Enter', { ctrl: true })
+				expect(po.emitted('send')).toBeTruthy()
+			})
+		})
+	})
 })
