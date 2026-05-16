@@ -102,8 +102,20 @@ function scrubSlashTrigger(): void {
 	if (ta === null) return;
 	const trigger = detectSlashTrigger(ta.value, ta.selectionStart);
 	if (trigger === null) return;
+	// Codex P2 (second pass) on PR #375: `detectSlashTrigger` slices to the
+	// CURRENT caret, but the user may have moved the caret left inside the
+	// token (e.g. typed `/help`, ArrowLeft once, Enter). The trigger's
+	// captured `endIndex` is the caret, not the end of the token — that
+	// leaves trailing characters of `/<query>` behind after scrub. Walk
+	// forward from `endIndex` through any non-whitespace characters to find
+	// the true token end. Whitespace acts as the boundary because a
+	// whitespace after `/` would have already aborted trigger detection.
+	let tokenEnd = trigger.endIndex;
+	while (tokenEnd < props.modelValue.length && !/\s/.test(props.modelValue[tokenEnd] ?? '')) {
+		tokenEnd++;
+	}
 	const before = props.modelValue.slice(0, trigger.slashIndex);
-	const after = props.modelValue.slice(trigger.endIndex);
+	const after = props.modelValue.slice(tokenEnd);
 	const next = `${before}${after}`;
 	emit('update:modelValue', next);
 	void Promise.resolve().then(() => {
