@@ -7,11 +7,14 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import ChatInput from '@/ui/components/chat/ChatInput.vue';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
-import { VAULT_PORT } from '@/infrastructure/bridge/ports';
+import { VAULT_PORT, LOGGER_PORT } from '@/infrastructure/bridge/ports';
 import { MENTION_DEBOUNCE_MS } from '@/ui/composables/useMentionPicker';
 import { ChatInputPO } from './ChatInput.po';
+import type { SlashCommand } from '@/domain/chat/SlashCommand';
+import { fakeModulePorts } from '@/../tests/__fakes__/fake-ports';
 
 function mountChatInput(
 	props: { modelValue: string; disabled: boolean; loading: boolean },
