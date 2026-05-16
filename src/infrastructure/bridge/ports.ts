@@ -11,6 +11,7 @@ import type {
 	ClaudeCliPort,
 	ConfirmModalPort,
 } from '@/domain/ports'
+import type { MarkdownRenderPort } from '@/domain/ports/MarkdownRenderPort'
 import type { TransportKind } from '@/domain/chat/TransportKind'
 
 export const SETTINGS_PORT: InjectionKey<SettingsPort> = Symbol('SettingsPort')
@@ -23,6 +24,14 @@ export const CANVAS_PORT: InjectionKey<CanvasPort> = Symbol('CanvasPort')
 export const COMMUNITY_PLUGIN_PORT: InjectionKey<CommunityPluginPort> = Symbol('CommunityPluginPort')
 export const CLAUDE_CLI_PORT: InjectionKey<ClaudeCliPort> = Symbol('ClaudeCliPort')
 export const CONFIRM_MODAL_PORT: InjectionKey<ConfirmModalPort> = Symbol('ConfirmModalPort')
+/**
+ * Optional `MarkdownRenderPort` provided by the Obsidian view. When
+ * present, `MarkdownBlock.vue` delegates rendering to Obsidian's native
+ * `MarkdownRenderer.render` (GFM tables, code highlighting, math,
+ * wikilinks, mermaid). When absent (tests / standalone web demo),
+ * `MarkdownBlock` falls back to the hand-rolled VNode parser.
+ */
+export const MARKDOWN_RENDER_PORT: InjectionKey<MarkdownRenderPort> = Symbol('MarkdownRenderPort')
 /**
  * Reactive transport kind provided by `SpecoratorView` (SPEC-ASM-001 §10.1).
  * Consumed by `ChatSidebar` to drive `TransportStatusPill` and the
