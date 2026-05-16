@@ -58,7 +58,6 @@ import type {
 } from '@/application/chat/queryStructured';
 import {
 	ClaudeCliError,
-	streamFromQuery,
 	type ClaudeCliPort,
 	type ClaudeCliQueryOptions,
 	type ClaudeCliStreamOptions,
@@ -110,6 +109,88 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const SIGKILL_GRACE_MS = 200;
 
 // -----------------------------------------------------------------------------
+// Push-channel — drives the streaming `queryStream` async iterable from the
+// event-emitter-style stdout pump on the child process. Buffers deltas pushed
+// before a consumer is iterating; surfaces the terminal-complete signal as the
+// iterator's `done: true`. Single-producer/single-consumer; ordering is
+// preserved.
+// -----------------------------------------------------------------------------
+interface PushChannel<T> {
+	push: (delta: T) => void;
+	complete: () => void;
+	iterate: () => AsyncIterable<T>;
+}
+
+function createPushChannel<T>(): PushChannel<T> {
+	const buffer: T[] = [];
+	let completed = false;
+	let waiting: ((r: IteratorResult<T>) => void) | null = null;
+
+	const push = (delta: T): void => {
+		if (completed) return;
+		if (waiting !== null) {
+			const resume = waiting;
+			waiting = null;
+			resume({ value: delta, done: false });
+			return;
+		}
+		buffer.push(delta);
+	};
+
+	const complete = (): void => {
+		if (completed) return;
+		completed = true;
+		if (waiting !== null) {
+			const resume = waiting;
+			waiting = null;
+			resume({ value: undefined, done: true });
+		}
+	};
+
+	const iterate = (): AsyncIterable<T> => ({
+		[Symbol.asyncIterator](): AsyncIterator<T> {
+			return {
+				next(): Promise<IteratorResult<T>> {
+					if (buffer.length > 0) {
+						const value = buffer.shift() as T;
+						return Promise.resolve({ value, done: false });
+					}
+					if (completed) {
+						return Promise.resolve({ value: undefined, done: true });
+					}
+					return new Promise<IteratorResult<T>>((resolve) => {
+						waiting = resolve;
+					});
+				},
+			};
+		},
+	});
+
+	return { push, complete, iterate };
+}
+
+// -----------------------------------------------------------------------------
+// Streaming sink — the NDJSON event handlers push StreamDeltas into this
+// sink rather than buffering text. One sink per spawned child; nulled out
+// after the terminal delta so re-entrant or post-terminal events become
+// no-ops (REQ-ASM-031 single-fire is enforced here for session-id too).
+// -----------------------------------------------------------------------------
+interface StreamSink {
+	/** Push a `text` delta. */
+	pushText: (text: string) => void;
+	/** Push a `session-id` delta. Single-fire: subsequent calls are ignored. */
+	pushSessionId: (sessionId: SessionId) => void;
+	/** Push the terminal `done` delta and close the stream. Single-fire. */
+	pushDone: () => void;
+	/** Push a terminal `error` delta and close the stream. Single-fire. */
+	pushError: (error: ClaudeCliError) => void;
+	/** True after `pushDone` / `pushError` have fired. */
+	terminated: () => boolean;
+	/** True after at least one `text` delta has been pushed. */
+	hasText: () => boolean;
+}
+
+// -----------------------------------------------------------------------------
 // Per-turn streaming-process record. One entry per spawn — short-lived; the
 // child exits as soon as the `result` event arrives (or on error / timeout).
 // -----------------------------------------------------------------------------
@@ -117,12 +198,10 @@ interface TurnProc {
 	readonly child: ChildProcessLike;
 	/** Stdout chunk buffer for line-based NDJSON reassembly (REQ-ASM-029). */
 	stdoutBuffer: string;
-	/** Resolver for this turn's pending promise, if still in flight. */
-	pending: PendingTurn | null;
+	/** Streaming sink — every NDJSON event becomes one or more pushes. */
+	sink: StreamSink;
 	/** Most recently captured session id from a `system/init` event. */
 	sessionId: SessionId | null;
-	/** Sticky terminal error (e.g. spawn-error before any stdout). */
-	fatal: ClaudeCliError | null;
 	/**
 	 * Optional caller-supplied callback invoked exactly once when the first
 	 * non-empty `session_id` arrives in a `system/init` event (REQ-ASM-031).
@@ -131,12 +210,6 @@ interface TurnProc {
 	onSessionId: ((sessionId: SessionId) => void) | null;
 	/** Monotonic clock at spawn time — used for completion-telemetry durationMs (T-ASM-081). */
 	startTimeMs: number;
-}
-
-interface PendingTurn {
-	readonly resolve: (r: Result<string, ClaudeCliError>) => void;
-	readonly textBuffer: string[];
-	readonly timeoutHandle: ReturnType<typeof setTimeout>;
 }
 
 /**
@@ -271,36 +344,34 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 	}
 
 	/**
-	 * Streaming variant of `query()` (IDEA-ASV-001 Increment 2, PR-ASV-2-port).
+	 * Streaming variant of `query()` (IDEA-ASV-001 Increment 2, PR-ASV-2-subproc).
 	 *
-	 * This first PR-A implementation is the **bridge stub**: it delegates to
-	 * the existing `query()` method (which already consumes the subprocess
-	 * stream-json output internally via `_handleNdjsonLine`) and emits the
-	 * resolved text as a single `text` delta followed by `done`. Real
-	 * incremental delta emission — yielding each `assistant/message` event
-	 * as a `text` delta as it arrives off stdout — lands in PR-ASV-2-subproc
-	 * where `_spawnChild`'s NDJSON loop is refactored to push deltas via an
-	 * async iterable instead of accumulating in `pending.textBuffer`.
+	 * Yields each `assistant/message` event as a `text` delta as it arrives off
+	 * stdout, the first `system/init` event as a `session-id` delta, and the
+	 * final `result` event as either `done` (`is_error: false`) or `error`
+	 * (`is_error: true`). Subprocess spawn failures, non-zero exits, timeouts,
+	 * and caller-driven abort all surface as a terminal `error` delta — never
+	 * throws.
 	 *
-	 * Honours `options.signal`: a pre-aborted signal short-circuits to an
-	 * error delta without spawning a subprocess; the underlying `query()`
-	 * does not yet wire mid-flight abort, but the stub method shape is
-	 * stable so the refactor is non-breaking for call sites.
+	 * Honours `options.signal`:
+	 *   - pre-aborted → short-circuits to a single `error` delta without spawning;
+	 *   - mid-flight abort → SIGTERMs the child (SIGKILL @ 200ms ladder) and
+	 *     emits the terminal `error` delta;
+	 *   - the listener-after-pre-flight race window is closed by an explicit
+	 *     re-check of `signal.aborted` after `addEventListener` (Codex P2).
 	 */
 	queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
-		return streamFromQuery((p, o) => this.query(p, o), prompt, options);
+		return this._runStream(prompt, options);
 	}
 
 	// ── query() — free-text stream-json path ─────────────────────────────────
 
 	/**
-	 * Free-text streaming query. Spawns a FRESH short-lived `claude` subprocess
-	 * for each call (the CLI's `-p` mode is one-shot — see class header). The
-	 * prompt is baked into argv; multi-turn continuity is the caller's
-	 * responsibility via `options.resumeSessionId`, which `buildSubprocessArgs`
-	 * translates to `--resume <id>` per INV-5 / REQ-ASM-035.
-	 *
-	 * Returns Result<string, ClaudeCliError>; never throws.
+	 * Free-text query. Layered on top of `queryStream()` — collects every
+	 * `text` delta into a single string. Existing free-text call sites stay
+	 * unchanged (same `Result<string, ClaudeCliError>` shape, same error
+	 * mapping). Mirrors the SDK adapter's `query()` ↔ `queryStream()`
+	 * decomposition introduced in PR-ASV-2-sdk.
 	 *
 	 * Satisfies REQ-ASM-010, REQ-ASM-029, REQ-ASM-030, REQ-ASM-031, REQ-ASM-035.
 	 */
@@ -308,56 +379,19 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 		prompt: string,
 		options?: ClaudeCliQueryOptions,
 	): Promise<Result<string, ClaudeCliError>> {
-		if (!this._available || this._binaryPath === null) {
-			return err(
-				new ClaudeCliError(
-					'CLI_LAUNCH_FAILED',
-					'Subscription transport is not available — Claude CLI binary not found',
-				),
-			);
+		const chunks: string[] = [];
+		for await (const delta of this.queryStream(prompt, options)) {
+			if (delta.type === 'text') {
+				chunks.push(delta.text);
+			} else if (delta.type === 'error') {
+				return err(delta.error);
+			} else if (delta.type === 'done') {
+				return ok(chunks.join(''));
+			}
 		}
-
-		const timeoutMs = this._clampTimeout(options?.timeoutMs);
-		const argv = this._buildArgv(prompt, options);
-
-		// Fresh spawn per turn (Codex P1 fix, PR #325). Context continuity is
-		// already encoded in `argv` via --resume when the caller supplied
-		// `resumeSessionId`; no per-thread state lives on this adapter.
-		const spawned = this._spawnChild(this._binaryPath, argv, options?.onSessionId ?? null);
-		if (!spawned.ok) {
-			return spawned;
-		}
-		const proc = spawned.value;
-
-		// If the child has already emitted a fatal error synchronously between
-		// spawn and the await below, surface it rather than hanging.
-		if (proc.fatal !== null) {
-			this._activeChildren.delete(proc.child);
-			return err(proc.fatal);
-		}
-
-		return new Promise<Result<string, ClaudeCliError>>((resolve) => {
-			const p = proc;
-
-			// eslint-disable-next-line obsidianmd/prefer-active-window-timers -- infra layer, no Obsidian context
-			const timeoutHandle = setTimeout(() => {
-				if (p.pending === null) return;
-				p.pending = null;
-				this._killChild(p.child);
-				this._activeChildren.delete(p.child);
-				resolve(err(new ClaudeCliError('TIMEOUT', `Subscription query exceeded ${timeoutMs} ms`)));
-			}, timeoutMs);
-
-			p.pending = {
-				resolve: (r) => {
-					// eslint-disable-next-line obsidianmd/prefer-active-window-timers -- infra layer, no Obsidian context
-					clearTimeout(timeoutHandle);
-					resolve(r);
-				},
-				textBuffer: [],
-				timeoutHandle,
-			};
-		});
+		// Iterator exhausted without `done` — mirrors the SDK adapter's
+		// defensive fallback.
+		return err(new ClaudeCliError('QUERY_FAILED', 'Subprocess closed before result event'));
 	}
 
 	// ── runStructured() — one-shot structured one-shot path ──────────────────
@@ -621,6 +655,168 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 		});
 	}
 
+	// ── Streaming pipeline ───────────────────────────────────────────────────
+
+	/**
+	 * Orchestrator for `queryStream`: handles availability + pre-abort
+	 * preflight, builds argv, spawns the child, wires the abort/timeout
+	 * listeners, and delegates the actual iteration to a push-channel-driven
+	 * consumer.
+	 */
+	private async *_runStream(
+		prompt: string,
+		options?: ClaudeCliStreamOptions,
+	): AsyncIterable<StreamDelta> {
+		const pre = this._preflightStream(options);
+		if (pre !== null) {
+			yield pre;
+			return;
+		}
+
+		const channel = createPushChannel<StreamDelta>();
+		const sink = ClaudeSubprocessAdapter._sinkFromChannel(channel);
+		const argv = this._buildArgv(prompt, options);
+
+		// _preflightStream above guarantees _binaryPath !== null here.
+		const spawned = this._spawnChild(
+			this._binaryPath!,
+			argv,
+			options?.onSessionId ?? null,
+			sink,
+		);
+		if (!spawned.ok) {
+			yield { type: 'error', error: spawned.error };
+			return;
+		}
+		const proc = spawned.value;
+
+		const timeoutMs = this._clampTimeout(options?.timeoutMs);
+		const timeoutHandle = this._installStreamTimeout(proc, sink, timeoutMs);
+		const detachAbort = this._installStreamAbort(proc, sink, options?.signal);
+
+		try {
+			yield* channel.iterate();
+		} finally {
+			// eslint-disable-next-line obsidianmd/prefer-active-window-timers -- infra layer, no Obsidian context
+			clearTimeout(timeoutHandle);
+			detachAbort();
+			if (!sink.terminated()) {
+				this._killChild(proc.child);
+				this._activeChildren.delete(proc.child);
+				channel.complete();
+			}
+		}
+	}
+
+	/**
+	 * Synchronous pre-flight gate for `queryStream`. Returns a terminal error
+	 * delta when the adapter is unavailable or the signal is already aborted,
+	 * or `null` to proceed with the spawn.
+	 */
+	private _preflightStream(options: ClaudeCliStreamOptions | undefined): StreamDelta | null {
+		if (!this._available || this._binaryPath === null) {
+			return {
+				type: 'error',
+				error: new ClaudeCliError(
+					'CLI_LAUNCH_FAILED',
+					'Subscription transport is not available — Claude CLI binary not found',
+				),
+			};
+		}
+		if (options?.signal?.aborted === true) {
+			return {
+				type: 'error',
+				error: new ClaudeCliError('QUERY_FAILED', 'Request was aborted before send'),
+			};
+		}
+		return null;
+	}
+
+	/**
+	 * Install the per-turn timeout. On expiry the child is SIGTERMed and the
+	 * sink receives a terminal `TIMEOUT` error. Returns the timeout handle so
+	 * the caller can `clearTimeout` once the stream completes normally.
+	 */
+	private _installStreamTimeout(
+		proc: TurnProc,
+		sink: StreamSink,
+		timeoutMs: number,
+	): ReturnType<typeof setTimeout> {
+		// eslint-disable-next-line obsidianmd/prefer-active-window-timers -- infra layer, no Obsidian context
+		return setTimeout(() => {
+			if (sink.terminated()) return;
+			this._killChild(proc.child);
+			sink.pushError(
+				new ClaudeCliError('TIMEOUT', `Subscription query exceeded ${timeoutMs} ms`),
+			);
+		}, timeoutMs);
+	}
+
+	/**
+	 * Wire the caller's abort signal: SIGTERMs the child and emits the
+	 * terminal `error` delta. Codex P2: re-check `aborted` AFTER attaching the
+	 * listener because `AbortSignal` does not replay events. Returns a detach
+	 * function safe to call from the orchestrator's `finally` block.
+	 */
+	private _installStreamAbort(
+		proc: TurnProc,
+		sink: StreamSink,
+		signal: AbortSignal | undefined,
+	): () => void {
+		const onAbort = (): void => {
+			if (sink.terminated()) return;
+			this._killChild(proc.child);
+			sink.pushError(new ClaudeCliError('QUERY_FAILED', 'Request was aborted'));
+		};
+		if (signal === undefined) return () => undefined;
+		signal.addEventListener('abort', onAbort, { once: true });
+		if (signal.aborted) onAbort();
+		return () => {
+			signal.removeEventListener('abort', onAbort);
+		};
+	}
+
+	/**
+	 * Build a single-fire StreamSink that forwards deltas into the provided
+	 * push channel. `done` and `error` close the channel and mark the sink
+	 * terminated so late-arriving NDJSON events become no-ops.
+	 */
+	private static _sinkFromChannel(channel: PushChannel<StreamDelta>): StreamSink {
+		let sessionIdEmitted = false;
+		let textEmitted = false;
+		let done = false;
+		return {
+			pushText(text: string) {
+				if (done) return;
+				textEmitted = true;
+				channel.push({ type: 'text', text });
+			},
+			pushSessionId(sessionId: SessionId) {
+				if (done || sessionIdEmitted) return;
+				sessionIdEmitted = true;
+				channel.push({ type: 'session-id', sessionId });
+			},
+			pushDone() {
+				if (done) return;
+				done = true;
+				channel.push({ type: 'done' });
+				channel.complete();
+			},
+			pushError(error: ClaudeCliError) {
+				if (done) return;
+				done = true;
+				channel.push({ type: 'error', error });
+				channel.complete();
+			},
+			terminated() {
+				return done;
+			},
+			hasText() {
+				return textEmitted;
+			},
+		};
+	}
+
 	// ── Private helpers ──────────────────────────────────────────────────────
 
 	/** Build the argv vector for a `query()` invocation. Extracted for complexity. */
@@ -643,13 +839,15 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 	/**
 	 * Spawn the child and wire up readline + lifecycle listeners. Synchronous
 	 * throws (ENOENT) → err({ CLI_LAUNCH_FAILED }). Async `error` events that
-	 * fire before the pending turn is registered become a sticky fatal on the
-	 * TurnProc.
+	 * fire before a terminal sink delta become a sink `error` delta. NDJSON
+	 * `assistant/message`, `system/init`, and `result` events push directly
+	 * into the supplied `sink`.
 	 */
 	private _spawnChild(
 		binaryPath: string,
 		argv: readonly string[],
 		onSessionId: ((sessionId: SessionId) => void) | null,
+		sink: StreamSink,
 	): Result<TurnProc, ClaudeCliError> {
 		let child: ChildProcess;
 		try {
@@ -678,33 +876,44 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 		const proc: TurnProc = {
 			child: childLike,
 			stdoutBuffer: '',
-			pending: null,
+			sink,
 			sessionId: null,
-			fatal: null,
 			onSessionId,
 			startTimeMs: Date.now(),
 		};
 
 		this._activeChildren.add(childLike);
+		this._wireChildListeners(proc);
 
-		// Manual line-based NDJSON reassembly (REQ-ASM-029). The spec mentions
-		// `readline.createInterface` but the streaming surface our tests inject
-		// (and what Obsidian's plugin host hands us in some packaging modes) is
-		// a plain EventEmitter without the `.pause/.resume` methods readline
-		// requires. Buffer-and-split keeps the semantics identical: chunks split
-		// mid-line are concatenated, then any complete `\n`-terminated lines are
-		// dispatched in order.
-		childLike.stdout.on('data', (chunk: Buffer | string) => {
-			const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-			proc.stdoutBuffer += text;
-			let newlineIdx = proc.stdoutBuffer.indexOf('\n');
-			while (newlineIdx !== -1) {
-				const line = proc.stdoutBuffer.slice(0, newlineIdx);
-				proc.stdoutBuffer = proc.stdoutBuffer.slice(newlineIdx + 1);
-				this._handleNdjsonLine(proc, line);
-				newlineIdx = proc.stdoutBuffer.indexOf('\n');
-			}
-		});
+		return ok(proc);
+	}
+
+	/**
+	 * Wire stdout / error / close listeners onto the spawned child. Extracted
+	 * from `_spawnChild` to keep its cyclomatic complexity below the lint cap.
+	 */
+	private _wireChildListeners(proc: TurnProc): void {
+		const childLike = proc.child;
+		const stdout = childLike.stdout;
+		if (stdout !== null) {
+			// Manual line-based NDJSON reassembly (REQ-ASM-029). The streaming
+			// surface our tests inject (and what Obsidian's plugin host hands us
+			// in some packaging modes) is a plain EventEmitter without the
+			// `.pause/.resume` methods readline requires. Buffer-and-split keeps
+			// the semantics identical: chunks split mid-line are concatenated,
+			// then any complete `\n`-terminated lines are dispatched in order.
+			stdout.on('data', (chunk: Buffer | string) => {
+				const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+				proc.stdoutBuffer += text;
+				let newlineIdx = proc.stdoutBuffer.indexOf('\n');
+				while (newlineIdx !== -1) {
+					const line = proc.stdoutBuffer.slice(0, newlineIdx);
+					proc.stdoutBuffer = proc.stdoutBuffer.slice(newlineIdx + 1);
+					this._handleNdjsonLine(proc, line);
+					newlineIdx = proc.stdoutBuffer.indexOf('\n');
+				}
+			});
+		}
 
 		childLike.on('error', (errArg: unknown) => {
 			const code = (errArg as NodeJS.ErrnoException | undefined)?.code;
@@ -713,35 +922,30 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 				event: 'child.error',
 				code: code ?? null,
 			});
-			const fatal = new ClaudeCliError(
-				'CLI_LAUNCH_FAILED',
-				'Claude CLI subprocess emitted error before completion',
-				errArg,
+			if (proc.sink.terminated()) return;
+			this._activeChildren.delete(proc.child);
+			proc.sink.pushError(
+				new ClaudeCliError(
+					'CLI_LAUNCH_FAILED',
+					'Claude CLI subprocess emitted error before completion',
+					errArg,
+				),
 			);
-			proc.fatal = fatal;
-			if (proc.pending !== null) {
-				const pending = proc.pending;
-				proc.pending = null;
-				this._activeChildren.delete(proc.child);
-				pending.resolve(err(fatal));
-			}
 		});
 
 		childLike.on('close', (...args: unknown[]) => {
 			const exitCode = typeof args[0] === 'number' ? args[0] : null;
 			this._handleClose(proc, exitCode);
 		});
-
-		return ok(proc);
 	}
 
 	/**
 	 * NDJSON dispatch (SPEC §4.3 `_parseNdjson`). Unparseable lines are dropped
 	 * silently (debug log without payload). Recognised events:
 	 *
-	 *   - `system/init`     → capture `session_id`
-	 *   - `assistant/message` → accumulate `text`
-	 *   - `result`          → resolve the pending turn (success or QUERY_FAILED)
+	 *   - `system/init`     → push session-id delta
+	 *   - `assistant/message` → push text delta
+	 *   - `result`          → push `done` / `error` delta
 	 */
 	private _handleNdjsonLine(proc: TurnProc, line: string): void {
 		const event = this._parseNdjsonLine(line);
@@ -793,12 +997,17 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 	 * the optional caller-supplied `onSessionId` callback exactly once. The
 	 * callback is cleared after the first invocation so a misbehaving CLI that
 	 * emits multiple `system/init` events cannot double-call the caller.
+	 *
+	 * The sink itself also enforces single-fire of `session-id` deltas as a
+	 * defence-in-depth — even if a future change to this method calls
+	 * `pushSessionId` more than once, the consumer sees exactly one delta.
 	 */
 	private _handleSystemInit(proc: TurnProc, event: Record<string, unknown>): void {
 		const sid = event.session_id;
 		if (typeof sid !== 'string' || sid.length === 0) return;
 		const branded = asSessionId(sid);
 		proc.sessionId = branded;
+		proc.sink.pushSessionId(branded);
 		if (proc.onSessionId !== null) {
 			const cb = proc.onSessionId;
 			// Single-fire: drop the reference before invoking so a re-entrant
@@ -818,37 +1027,41 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 		}
 	}
 
-	/** Accumulate `text` deltas from `assistant/message` events into the pending turn. */
+	/** Forward `text` deltas from `assistant/message` events into the sink. */
 	private _handleAssistantMessage(proc: TurnProc, event: Record<string, unknown>): void {
-		if (proc.pending !== null && typeof event.text === 'string') {
-			proc.pending.textBuffer.push(event.text);
-		}
+		if (typeof event.text !== 'string') return;
+		proc.sink.pushText(event.text);
 	}
 
 	/**
 	 * Resolve the in-flight turn from a `result` event. Maps `is_error: true`
-	 * to QUERY_FAILED per REQ-ASM-030.
+	 * to QUERY_FAILED per REQ-ASM-030. If no `assistant/message` deltas have
+	 * arrived (degenerate CLI emitting only `result`), the `result.result`
+	 * string is forwarded as a fallback `text` delta before `done`.
 	 */
 	private _handleResult(proc: TurnProc, event: Record<string, unknown>): void {
-		const pending = proc.pending;
-		if (pending === null) return;
-		proc.pending = null;
+		if (proc.sink.terminated()) return;
 
 		const isError = event.is_error === true;
 		if (isError) {
-			pending.resolve(
-				err(
-					new ClaudeCliError('QUERY_FAILED', 'Claude CLI returned result event with is_error=true'),
-				),
+			proc.sink.pushError(
+				new ClaudeCliError('QUERY_FAILED', 'Claude CLI returned result event with is_error=true'),
 			);
 			return;
 		}
 
-		// Prefer explicit `result` payload from the event; fall back to the
-		// accumulated assistant deltas (covers transports that omit the field).
-		const explicit = typeof event.result === 'string' ? event.result : null;
-		const text = explicit ?? pending.textBuffer.join('');
-		pending.resolve(ok(text));
+		// Defensive fallback for transports that emit `result.result` without
+		// preceding `assistant/message` deltas — surface the result text as a
+		// single `text` delta so `query()`'s text-collecting wrapper still
+		// returns the response body. Skipped when assistant text already
+		// arrived, otherwise the response body would be duplicated.
+		if (!proc.sink.hasText()) {
+			const explicit = typeof event.result === 'string' ? event.result : null;
+			if (explicit !== null && explicit.length > 0) {
+				proc.sink.pushText(explicit);
+			}
+		}
+		proc.sink.pushDone();
 	}
 
 	/**
@@ -865,29 +1078,22 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 			exitCode,
 		});
 
-		const pending = proc.pending;
-		if (pending !== null) {
-			proc.pending = null;
-			if (exitCode !== null && exitCode !== 0) {
-				pending.resolve(
-					err(
-						new ClaudeCliError(
-							'QUERY_FAILED',
-							`Claude CLI subprocess exited with code ${exitCode}`,
-						),
-					),
-				);
-			} else if (proc.fatal === null) {
-				// Clean close with a pending turn (no result event) — treat as
-				// QUERY_FAILED rather than hanging.
-				pending.resolve(
-					err(new ClaudeCliError('QUERY_FAILED', 'Subprocess closed before result event')),
-				);
-			}
+		if (proc.sink.terminated()) return;
+		if (exitCode !== null && exitCode !== 0) {
+			proc.sink.pushError(
+				new ClaudeCliError(
+					'QUERY_FAILED',
+					`Claude CLI subprocess exited with code ${exitCode}`,
+				),
+			);
+			return;
 		}
-
-		// No readline interface to close — stdout listeners detach with the
-		// EventEmitter as the underlying process is torn down.
+		// Clean close with no terminal delta — treat as QUERY_FAILED rather
+		// than hanging (mirrors the pre-refactor "Subprocess closed before
+		// result event" branch).
+		proc.sink.pushError(
+			new ClaudeCliError('QUERY_FAILED', 'Subprocess closed before result event'),
+		);
 	}
 
 	/**
