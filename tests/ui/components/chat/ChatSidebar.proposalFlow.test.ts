@@ -279,6 +279,128 @@ describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
 		expect(proposal.status).toBe('rejected')
 	})
 
+	it('re-validates the envelope path at Accept time against the CURRENT specs folder (Codex P2, PR #350)', async () => {
+		// Generate a proposal under specsFolder='specs'.
+		const { wrapper, po, store, bridge } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: 'specs/demo/idea.md',
+				content: '# Demo\n',
+			},
+			settings: { specsFolder: 'specs' },
+		})
+		await send(store, po, '/create-file specs/demo/idea.md')
+		await flushPromises()
+		const proposalId = Array.from(store.proposals.keys())[0]
+		expect(store.proposals.get(proposalId)?.status).toBe('pending')
+
+		// Change specsFolder BEFORE the user clicks Accept. The pending
+		// envelope ('specs/demo/idea.md') is now outside the configured
+		// containment root ('notes/'). Without the re-validation, the
+		// commit pipeline would write the file anyway — the path-validation
+		// guard only ran at proposal-creation time.
+		vi.spyOn(bridge, 'getSettings').mockResolvedValue({
+			...DEFAULT_SETTINGS,
+			anthropicApiKey: 'sk-ant-test',
+			transportKind: 'subscription',
+			specsFolder: 'notes',
+		})
+		const writeSpy = vi.spyOn(bridge, 'writeFile')
+
+		const card = new FileWriteProposalCardPO(wrapper)
+		await card.clickAccept()
+		await flushPromises()
+
+		// Accept must NOT have written the envelope to its original path
+		// (the path no longer lives under the configured specs folder).
+		expect(
+			writeSpy.mock.calls.some(([p]) => p === 'specs/demo/idea.md'),
+		).toBe(false)
+		// Proposal moved to a terminal failure state — no vault mutation
+		// happened.
+		expect(store.proposals.get(proposalId)?.status).toBe('failed')
+
+		// Codex P2 follow-up — the terminal failure must mirror to the
+		// session log so the audit trail records the rejected Accept.
+		// `appendProposalDecision` writes a `## proposal` block under the
+		// thread's session log path; we observe the write via writeSpy.
+		const appendCalls = writeSpy.mock.calls.filter(([p]) =>
+			typeof p === 'string' && p.endsWith('.md') && p.includes('sessions/'),
+		)
+		expect(appendCalls.length).toBeGreaterThanOrEqual(1)
+	})
+
+	it('still flips the proposal to failed when settingsPort.getSettings() rejects at Accept time (Codex P2 #3, PR #350)', async () => {
+		const { wrapper, po, store, bridge } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: 'specs/demo/idea.md',
+				content: '# Demo\n',
+			},
+			settings: { specsFolder: 'specs' },
+		})
+		await send(store, po, '/create-file specs/demo/idea.md')
+		await flushPromises()
+		const proposalId = Array.from(store.proposals.keys())[0]
+
+		// `getSettings()` rejects at Accept time. The handler must not
+		// propagate the rejection — it must catch it and flip the proposal
+		// to `failed` so the user is not stranded.
+		const writeSpy = vi.spyOn(bridge, 'writeFile')
+		vi.spyOn(bridge, 'getSettings').mockRejectedValueOnce(new Error('boom: settings read failed'))
+
+		const card = new FileWriteProposalCardPO(wrapper)
+		await card.clickAccept()
+		await flushPromises()
+
+		expect(store.proposals.get(proposalId)?.status).toBe('failed')
+		// Codex P2 #4 — terminal failure must mirror to the session log
+		// regardless of which pre-commit branch rejected (settings read,
+		// revalidation, …). One audit row should land under sessions/.
+		const auditCalls = writeSpy.mock.calls.filter(([p]) =>
+			typeof p === 'string' && p.endsWith('.md') && p.includes('sessions/'),
+		)
+		expect(auditCalls.length).toBeGreaterThanOrEqual(1)
+	})
+
+	it('still flips the proposal to failed when the revalidation audit mirror itself throws (Codex P2 #2, PR #350)', async () => {
+		// Same scenario as above (settings change between proposal and
+		// Accept), but the session-log writer's `appendProposalDecision`
+		// is forced to reject. The user-visible status flip must still
+		// run — a transient logging failure cannot strand a rejected
+		// proposal in `pending`.
+		const { wrapper, po, store, bridge } = await mountSidebar({
+			cannedEnvelope: {
+				action: 'createFile',
+				path: 'specs/demo/idea.md',
+				content: '# Demo\n',
+			},
+			settings: { specsFolder: 'specs' },
+		})
+		await send(store, po, '/create-file specs/demo/idea.md')
+		await flushPromises()
+		const proposalId = Array.from(store.proposals.keys())[0]
+
+		// Stale containment + writer fails on every audit append.
+		vi.spyOn(bridge, 'getSettings').mockResolvedValue({
+			...DEFAULT_SETTINGS,
+			anthropicApiKey: 'sk-ant-test',
+			transportKind: 'subscription',
+			specsFolder: 'notes',
+		})
+		vi.spyOn(bridge, 'writeFile').mockImplementation(async () => {
+			throw new Error('boom: audit write rejected')
+		})
+
+		const card = new FileWriteProposalCardPO(wrapper)
+		await card.clickAccept()
+		await flushPromises()
+
+		// Despite the audit-write throw, the proposal still flips to
+		// `failed` — the user is not stranded.
+		expect(store.proposals.get(proposalId)?.status).toBe('failed')
+	})
+
 	it('Reject is a no-op while an Accept commit is still in flight on the same proposal (Codex P1 fix)', async () => {
 		const { wrapper, po, store, bridge } = await mountSidebar({
 			cannedEnvelope: {

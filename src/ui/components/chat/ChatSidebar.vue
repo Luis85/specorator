@@ -622,6 +622,38 @@ async function handleSend(): Promise<void> {
 }
 
 /**
+ * Mirror a terminal proposal failure to the session log (best-effort).
+ * Used by `handleAcceptProposal`'s pre-commit failure branches
+ * (settings-read, revalidation, …) so every terminal outcome carries an
+ * audit row regardless of which step rejected. Both `getWriter()` AND
+ * `appendProposalDecision` are caught; a logging failure must never
+ * block the user-visible status flip (Codex trust-first invariant,
+ * PR #350).
+ */
+async function mirrorTerminalProposalFailure(
+  proposal: FileWriteProposal,
+  thread: ChatThreadRecord,
+  context: string,
+): Promise<void> {
+  await (async () => {
+    const writer = await sessionLogWriterFactory.getWriter()
+    await writer.appendProposalDecision({
+      thread,
+      proposal: {
+        envelope: { path: proposal.envelope.path, rationale: undefined },
+      },
+      decision: 'failed',
+      decidedAt: new Date().toISOString(),
+    })
+  })().catch((thrown: unknown) => {
+    loggerPort.warn(`handleAcceptProposal: ${context} audit mirror failed`, {
+      proposalId: proposal.proposalId,
+      reason: thrown instanceof Error ? thrown.message : String(thrown),
+    })
+  })
+}
+
+/**
  * Look up a proposal by id. Returns `null` if missing (e.g. cleared by reset).
  */
 function findProposal(proposalId: string): FileWriteProposal | null {
@@ -659,6 +691,39 @@ async function handleAcceptProposal(payload: { proposalId: string }): Promise<vo
   // project's `no-restricted-syntax` rule forbids raw try/catch (and the
   // same applies to try/finally) outside `src/infrastructure/**`.
   await (async () => {
+    // Re-validate the envelope path against the CURRENT specs folder
+    // before any vault mutation (Codex P2, PR #350). The proposal was
+    // validated at creation time, but settings can change between
+    // creation and accept — re-checking here prevents a stale proposal
+    // from bypassing containment after a specsFolder change.
+    //
+    // `getSettings()` can reject under a bridge/vault error; wrap it via
+    // `tryAsync` so a transient failure does not strand the proposal in
+    // `pending` (Codex P2 #3, PR #350). On read failure we fail the
+    // Accept rather than committing under stale settings.
+    const settingsResult = await tryAsync(() => settingsPort.getSettings())
+    if (!settingsResult.ok) {
+      loggerPort.warn('handleAcceptProposal: settingsPort.getSettings() failed during revalidation', {
+        proposalId: payload.proposalId,
+        reason: settingsResult.error.message,
+      })
+      // Mirror the terminal failure to the session log so the audit
+      // trail stays complete even when the pre-commit settings read
+      // rejects (Codex P2 #4, PR #350).
+      await mirrorTerminalProposalFailure(proposal, thread, 'settings-read-failed')
+      store.setProposalStatus(payload.proposalId, 'failed', 'WRITE_FAILED')
+      return
+    }
+    const currentSettings = settingsResult.value
+    const revalidation = validateProposalPath(proposal.envelope, currentSettings.specsFolder)
+    if (!revalidation.ok) {
+      const next = new Map(proposalPathErrors.value)
+      next.set(payload.proposalId, revalidation.error)
+      proposalPathErrors.value = next
+      await mirrorTerminalProposalFailure(proposal, thread, 'revalidation-failed')
+      store.setProposalStatus(payload.proposalId, 'failed', 'WRITE_FAILED')
+      return
+    }
     const writer = await sessionLogWriterFactory.getWriter()
     const result = await commitFileWriteProposal(proposal, thread, {
       vault: vaultPort,
