@@ -29,7 +29,13 @@ import {
   type StructuredCliRawResult,
 } from '@/application/chat/queryStructured'
 import { EnvelopeParseError } from '@/application/chat/errors'
-import { ClaudeCliError, type ClaudeCliPort } from '@/domain/ports/ClaudeCliPort'
+import {
+  ClaudeCliError,
+  streamFromQuery,
+  type ClaudeCliPort,
+  type ClaudeCliStreamOptions,
+  type StreamDelta,
+} from '@/domain/ports/ClaudeCliPort'
 import { ok, type Result } from '@/domain/shared/Result'
 import { degradedClaudeCliPort } from '@/infrastructure/bridge/degradedClaudeCliPort'
 import { MockClaudeSubprocessAdapter } from '@/infrastructure/mock/MockClaudeSubprocessAdapter'
@@ -53,6 +59,9 @@ function makeSdkLikePort(): ClaudeCliPort {
     },
     shutdown() {
       /* no-op */
+    },
+    queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
+      return streamFromQuery(async () => ok(''), prompt, options)
     },
   }
 }
@@ -168,6 +177,9 @@ describe('queryStructured (SPEC §6.6)', () => {
       },
       shutdown() {
         /* no-op */
+      },
+      queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
+        return streamFromQuery(async () => ok(''), prompt, options)
       },
       async runStructured() {
         return ok({

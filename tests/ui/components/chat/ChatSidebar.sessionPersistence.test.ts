@@ -22,8 +22,13 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { defineComponent, nextTick, ref } from 'vue'
 import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue'
-import type { ClaudeCliPort, ClaudeCliQueryOptions } from '@/domain/ports/ClaudeCliPort'
-import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort'
+import type {
+	ClaudeCliPort,
+	ClaudeCliQueryOptions,
+	ClaudeCliStreamOptions,
+	StreamDelta,
+} from '@/domain/ports/ClaudeCliPort'
+import { ClaudeCliError, streamFromQuery } from '@/domain/ports/ClaudeCliPort'
 import type { Result } from '@/domain/shared/Result'
 import { ok, err } from '@/domain/shared/Result'
 import { asSessionId } from '@/domain/chat/SessionId'
@@ -83,6 +88,10 @@ class ScriptedClaudeCliPort implements ClaudeCliPort {
 		}
 		if (this.queryError !== null) return err(this.queryError)
 		return ok(this.cannedResponse)
+	}
+
+	queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
+		return streamFromQuery((p, o) => this.query(p, o), prompt, options)
 	}
 }
 

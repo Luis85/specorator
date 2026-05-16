@@ -36,7 +36,12 @@ import type {
 } from '@/plugin/transport/TransportSelector';
 import { degradedClaudeCliPort } from '@/infrastructure/bridge/degradedClaudeCliPort';
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings';
-import type { ClaudeCliPort, ConfirmModalPort } from '@/domain/ports';
+import type {
+	ClaudeCliPort,
+	ClaudeCliStreamOptions,
+	ConfirmModalPort,
+	StreamDelta,
+} from '@/domain/ports';
 import type SpecoratorPlugin from '@/plugin/main';
 
 function makePort(label: string): ClaudeCliPort {
@@ -45,6 +50,11 @@ function makePort(label: string): ClaudeCliPort {
 		isAvailable: vi.fn(async () => true),
 		startup: vi.fn(async () => undefined),
 		shutdown: vi.fn(() => undefined),
+		queryStream: vi.fn(
+			(_prompt: string, _options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> => {
+				return (async function* (): AsyncGenerator<StreamDelta> {})();
+			},
+		),
 	};
 }
 

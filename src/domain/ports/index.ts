@@ -7,17 +7,23 @@
  * appears to need a "VaultAndNotificationPort", it needs two
  * dependencies, not a new aggregate type.
  */
-export type { SettingsPort } from './SettingsPort'
-export type { VaultPort } from './VaultPort'
-export type { WorkspacePort, ActiveFileSnapshot } from './WorkspacePort'
-export type { NotificationPort } from './NotificationPort'
-export type { LoggerPort } from './LoggerPort'
-export type { TranslationPort } from './TranslationPort'
-export type { Unsubscriber } from './shared'
-export type { MetadataCachePort, FileMetadataSnapshot } from './metadata-cache-port'
-export type { CanvasPort, JsonCanvasData } from './canvas-port'
-export type { ObsidianMcpServerPort, McpConnectionConfig } from './obsidian-mcp-server-port'
-export type { CommunityPluginPort } from './CommunityPluginPort'
-export type { ClaudeCliPort, ClaudeCliQueryOptions, ClaudeCliErrorCode } from './ClaudeCliPort'
-export { ClaudeCliError } from './ClaudeCliPort'
-export type { ConfirmModalPort, ConfirmModalRequest } from './ConfirmModalPort'
+export type { SettingsPort } from './SettingsPort';
+export type { VaultPort } from './VaultPort';
+export type { WorkspacePort, ActiveFileSnapshot } from './WorkspacePort';
+export type { NotificationPort } from './NotificationPort';
+export type { LoggerPort } from './LoggerPort';
+export type { TranslationPort } from './TranslationPort';
+export type { Unsubscriber } from './shared';
+export type { MetadataCachePort, FileMetadataSnapshot } from './metadata-cache-port';
+export type { CanvasPort, JsonCanvasData } from './canvas-port';
+export type { ObsidianMcpServerPort, McpConnectionConfig } from './obsidian-mcp-server-port';
+export type { CommunityPluginPort } from './CommunityPluginPort';
+export type {
+	ClaudeCliPort,
+	ClaudeCliQueryOptions,
+	ClaudeCliStreamOptions,
+	ClaudeCliErrorCode,
+	StreamDelta,
+} from './ClaudeCliPort';
+export { ClaudeCliError, streamFromQuery } from './ClaudeCliPort';
+export type { ConfirmModalPort, ConfirmModalRequest } from './ConfirmModalPort';
