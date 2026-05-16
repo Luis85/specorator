@@ -57,7 +57,19 @@ function tryCommitFromKey(event: KeyboardEvent): boolean {
  * complexity budget.
  */
 function handlePickerKey(event: KeyboardEvent): boolean {
-  if (!picker.open.value || !picker.hasResults.value) return false
+  // Codex P2 on PR #376: Escape must dismiss the picker even when the
+  // result list is empty (zero matches OR a scan error cleared results).
+  // The previous guard required BOTH `open` and `hasResults`, so users
+  // were stranded with no keyboard way to leave mention mode until
+  // blur or further text changes.
+  if (!picker.open.value) return false
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    picker.close()
+    return true
+  }
+  // Navigation and commit keys still require results to be useful.
+  if (!picker.hasResults.value) return false
   if (event.key === 'ArrowDown') {
     event.preventDefault()
     picker.moveSelectionDown()
@@ -66,11 +78,6 @@ function handlePickerKey(event: KeyboardEvent): boolean {
   if (event.key === 'ArrowUp') {
     event.preventDefault()
     picker.moveSelectionUp()
-    return true
-  }
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    picker.close()
     return true
   }
   if (event.key === 'Tab' || event.key === 'Enter') {
