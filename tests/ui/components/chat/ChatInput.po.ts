@@ -89,6 +89,49 @@ export class ChatInputPO {
 		await this.sendButton.trigger('click')
 	}
 
+	get dropdown() {
+		return this.wrapper.find(this.byTid('slash-command-dropdown'))
+	}
+
+	get dropdownEmpty() {
+		return this.wrapper.find(this.byTid('slash-command-empty'))
+	}
+
+	hasDropdown(): boolean {
+		return this.dropdown.exists()
+	}
+
+	dropdownItem(name: string) {
+		return this.wrapper.find(this.byTid(`slash-command-item-${name}`))
+	}
+
+	dropdownItems() {
+		return this.wrapper.findAll('[role="option"]')
+	}
+
+	/**
+	 * Simulate typing into the textarea AND set the caret to end-of-string,
+	 * since `setValue` does not synthesise caret position. The component reads
+	 * `selectionStart` to detect the slash trigger, so tests must move the
+	 * caret explicitly.
+	 */
+	async typeAndMoveCaret(value: string, caret?: number): Promise<void> {
+		const el = this.textarea.element as HTMLTextAreaElement
+		el.value = value
+		const pos = caret ?? value.length
+		el.selectionStart = pos
+		el.selectionEnd = pos
+		await this.textarea.trigger('input')
+	}
+
+	async pressKey(key: string, opts: { ctrl?: boolean; meta?: boolean } = {}): Promise<void> {
+		await this.textarea.trigger('keydown', {
+			key,
+			ctrlKey: opts.ctrl ?? false,
+			metaKey: opts.meta ?? false,
+		})
+	}
+
 	emitted(name: string): unknown {
 		return this.wrapper.emitted(name)
 	}
