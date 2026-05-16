@@ -474,26 +474,34 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 		if (index < 0) return;
 		const block = event.content_block;
 		if (block === undefined) return;
-		if (block.type === 'tool_use') {
-			const blockId = `${state.turnId}-${index}`;
+		const blockId = `${state.turnId}-${index}`;
+		// Codex P2 on PR #378: any block whose `type` ends with `_tool_use`
+		// or equals `tool_use` is part of the tool-use lifecycle (covers
+		// `tool_use`, `server_tool_use`, future Anthropic-API variants).
+		// The previous strict equality dropped non-`tool_use` variants and
+		// their subsequent `input_json_delta` chunks vanished.
+		if (typeof block.type === 'string' && block.type.endsWith('tool_use')) {
 			state.blockKinds.set(index, { kind: 'tool_use', blockId });
-			const initialJson = typeof block.input === 'object' && block.input !== null
-				? JSON.stringify(block.input)
-				: '';
+			// Codex P1 on PR #378: do NOT seed `inputJson` with the
+			// block-start payload. The SDK ships an empty `{}` placeholder
+			// at start and the real JSON arrives via `input_json_delta`.
+			// Seeding `JSON.stringify({})` corrupted callers that
+			// concatenate by `blockId` — final reconstruction was
+			// `"{}" + "<partial>"` which is unparseable.
 			deltas.push({
 				type: 'tool-use-start',
 				blockId,
 				toolName: typeof block.name === 'string' ? block.name : 'unknown',
-				inputJson: initialJson,
+				inputJson: '',
 			});
 			return;
 		}
 		if (block.type === 'thinking') {
-			state.blockKinds.set(index, { kind: 'thinking', blockId: `${state.turnId}-${index}` });
+			state.blockKinds.set(index, { kind: 'thinking', blockId });
 			return;
 		}
 		// Text blocks need no start delta — `text_delta` handler accumulates.
-		state.blockKinds.set(index, { kind: 'text', blockId: `${state.turnId}-${index}` });
+		state.blockKinds.set(index, { kind: 'text', blockId });
 	}
 
 	private static _handleBlockDelta(
