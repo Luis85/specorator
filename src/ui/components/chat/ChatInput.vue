@@ -87,6 +87,12 @@ function handlePickerKey(event: KeyboardEvent): boolean {
 }
 
 function handleKeydown(event: KeyboardEvent): void {
+  // IME-composition guard (top-4 from comparative review). `isComposing`
+  // is `true` while a Japanese/Chinese/Korean IME is mid-composition;
+  // pressing Enter to commit the composition must NOT trigger send /
+  // commit-mention / dismiss-picker. `keyCode === 229` is the legacy IME
+  // indicator for older browsers — defence in depth.
+  if (event.isComposing || event.keyCode === 229) return
   if (handlePickerKey(event)) return
   if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
     if (!props.disabled && !props.loading) {

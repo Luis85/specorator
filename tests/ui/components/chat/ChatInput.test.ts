@@ -85,6 +85,22 @@ describe('ChatInput', () => {
 			await po.triggerSendKey(true)
 			expect(po.emitted('send')).toBeFalsy()
 		})
+
+		// IME-composition guard (top-4 from comparative review): Enter
+		// committed by a Japanese/Chinese/Korean IME must NOT trigger send.
+		it('Ctrl+Enter does not emit send while an IME is composing', async () => {
+			const po = mountChatInput({ modelValue: 'こんにち', disabled: false, loading: false })
+			const ta = po.textarea
+			await ta.trigger('keydown', { key: 'Enter', ctrlKey: true, isComposing: true })
+			expect(po.emitted('send')).toBeFalsy()
+		})
+
+		it('Ctrl+Enter does not emit send when legacy keyCode === 229 fires', async () => {
+			const po = mountChatInput({ modelValue: '中文', disabled: false, loading: false })
+			const ta = po.textarea
+			await ta.trigger('keydown', { key: 'Enter', ctrlKey: true, keyCode: 229 })
+			expect(po.emitted('send')).toBeFalsy()
+		})
 	})
 
 	describe('disabled state', () => {
