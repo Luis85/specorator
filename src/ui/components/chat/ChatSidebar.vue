@@ -951,6 +951,21 @@ function handleUserTextUpdate(text: string): void {
 	store.setUserText(text);
 }
 
+/**
+ * Mention-picker selection (PR-ASV-4 / D-ASV-3). `ChatInput` already
+ * replaces the `@<query>` text fragment inline; the sidebar's job is to
+ * create the matching context-file chip via `store.addContextFile`. The
+ * chip stays `isAuto: false` so the user can dismiss it with the chip's
+ * remove button — auto chips are reserved for the active editor file.
+ */
+function handleAddContextFile(candidate: { path: string; name: string }): void {
+	store.addContextFile({
+		path: candidate.path,
+		label: candidate.name,
+		isAuto: false,
+	});
+}
+
 // Determine if API key is missing when unavailable
 async function isApiKeyMissing(): Promise<boolean> {
 	const settings = await settingsPort.getSettings();
@@ -1073,6 +1088,7 @@ watch(available, async () => {
 				:loading="store.status === 'loading'"
 				@update:model-value="handleUserTextUpdate"
 				@send="handleSend"
+				@add-context-file="handleAddContextFile"
 			/>
 
 			<hr class="sp-chat__divider" />

@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onBeforeUnmount } from 'vue'
+import { useVaultPort } from '@/ui/composables/useVaultPort'
+import { useMentionPicker } from '@/ui/composables/useMentionPicker'
+import type { MentionCandidate } from '@/application/chat/vaultFileSearch'
+import { basenameOf } from '@/application/chat/vaultFileSearch'
+import MentionDropdown from './MentionDropdown.vue'
 
 const props = defineProps<{
   modelValue: string
@@ -10,13 +15,72 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: string]
   send: []
+  /**
+   * Emitted alongside `update:modelValue` when the user accepts a mention
+   * candidate. The consumer is responsible for invoking
+   * `chatStore.addContextFile` so a context-file chip is created
+   * (PR-ASV-4 / D-ASV-3 — the inline token and the chip travel together).
+   */
+  'add-context-file': [candidate: MentionCandidate]
 }>()
 
 const textareaEl = ref<HTMLTextAreaElement | null>(null)
+const vaultPort = useVaultPort()
+const picker = useMentionPicker(vaultPort)
 
 defineExpose({ textareaEl })
 
+onBeforeUnmount(() => {
+  // Cancel any pending debounce / discard in-flight scans so timer
+  // callbacks do not fire against an unmounted reactive ref.
+  picker.close()
+})
+
+/**
+ * Tab / non-modifier Enter handler for the open picker — consume to
+ * commit; otherwise let the caller treat the event normally. Split out
+ * to keep `handlePickerKey` under the project's complexity budget.
+ */
+function tryCommitFromKey(event: KeyboardEvent): boolean {
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) return false
+  const selection = picker.currentSelection()
+  if (selection === null) return false
+  event.preventDefault()
+  commitMention(selection)
+  return true
+}
+
+/**
+ * Picker keyboard handler. Returns `true` if the event was consumed —
+ * the caller skips its own send handling in that case. Kept as a
+ * separate function so `handleKeydown` stays within the project's
+ * complexity budget.
+ */
+function handlePickerKey(event: KeyboardEvent): boolean {
+  if (!picker.open.value || !picker.hasResults.value) return false
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    picker.moveSelectionDown()
+    return true
+  }
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    picker.moveSelectionUp()
+    return true
+  }
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    picker.close()
+    return true
+  }
+  if (event.key === 'Tab' || event.key === 'Enter') {
+    return tryCommitFromKey(event)
+  }
+  return false
+}
+
 function handleKeydown(event: KeyboardEvent): void {
+  if (handlePickerKey(event)) return
   if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
     if (!props.disabled && !props.loading) {
       event.preventDefault()
@@ -26,7 +90,47 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 
 function handleInput(event: Event): void {
-  emit('update:modelValue', (event.target as HTMLTextAreaElement).value)
+  const ta = event.target as HTMLTextAreaElement
+  emit('update:modelValue', ta.value)
+  picker.handleInput(ta.value, ta.selectionStart)
+}
+
+function commitMention(candidate: MentionCandidate): void {
+  const ta = textareaEl.value
+  // Replace the `@<query>` fragment with `@<filename> ` (with trailing
+  // space) in the textarea value. We compute the new value from the
+  // current `modelValue` + the trigger's `atIndex` so the replacement is
+  // deterministic regardless of where the picker was opened.
+  const at = picker.atIndex.value
+  if (at < 0) {
+    picker.close()
+    return
+  }
+  const before = props.modelValue.slice(0, at)
+  const caret = ta?.selectionStart ?? props.modelValue.length
+  const after = props.modelValue.slice(caret)
+  const token = `@${basenameOf(candidate.path)} `
+  const next = `${before}${token}${after}`
+  emit('update:modelValue', next)
+  emit('add-context-file', candidate)
+  picker.close()
+  // Restore caret after the inserted token. Wrapped in a microtask
+  // because the textarea value updates after the parent re-renders.
+  void Promise.resolve().then(() => {
+    const el = textareaEl.value
+    if (el === null) return
+    const pos = before.length + token.length
+    el.focus()
+    el.setSelectionRange(pos, pos)
+  })
+}
+
+function onDropdownSelect(candidate: MentionCandidate): void {
+  commitMention(candidate)
+}
+
+function onDropdownHover(index: number): void {
+  picker.setSelectedIndex(index)
 }
 </script>
 
@@ -39,11 +143,23 @@ function handleInput(event: Event): void {
       :readonly="disabled"
       :aria-label="'Message'"
       aria-multiline="true"
+      :aria-expanded="picker.open.value"
+      aria-autocomplete="list"
+      :aria-controls="picker.open.value ? 'mention-dropdown' : undefined"
       placeholder="Ask anything about your work…"
       rows="3"
       data-testid="chat-input-textarea"
       @input="handleInput"
       @keydown="handleKeydown"
+      @blur="picker.close()"
+    />
+    <MentionDropdown
+      v-if="picker.open.value"
+      id="mention-dropdown"
+      :results="picker.results.value"
+      :selected-index="picker.selectedIndex.value"
+      @select="onDropdownSelect"
+      @hover="onDropdownHover"
     />
     <div class="sp-chat__input-actions">
       <button
@@ -66,6 +182,7 @@ function handleInput(event: Event): void {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  position: relative;
 }
 
 .sp-chat__textarea {

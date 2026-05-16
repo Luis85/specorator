@@ -1,14 +1,31 @@
 /**
  * T-CCS-022 — Tests: ChatInput — v-model, disabled state, send via Ctrl+Enter, button states.
  * Satisfies REQ-CCS-013, REQ-CCS-014, REQ-CCS-015, NFR-CCS-009, SPEC-CCS-001 §7.5.
+ *
+ * Mention-picker tests (PR-ASV-4 / D-ASV-3) live in the
+ * `describe('mention picker', ...)` block at the bottom.
  */
-import { describe, it, expect } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
 import ChatInput from '@/ui/components/chat/ChatInput.vue'
+import { MockBridge } from '@/infrastructure/mock/MockBridge'
+import { VAULT_PORT } from '@/infrastructure/bridge/ports'
+import { MENTION_DEBOUNCE_MS } from '@/ui/composables/useMentionPicker'
 import { ChatInputPO } from './ChatInput.po'
 
-function mountChatInput(props: { modelValue: string; disabled: boolean; loading: boolean }) {
-	const wrapper = mount(ChatInput, { props })
+function mountChatInput(
+	props: { modelValue: string; disabled: boolean; loading: boolean },
+	files: Record<string, string> = {},
+) {
+	const bridge = new MockBridge(files)
+	const wrapper = mount(ChatInput, {
+		props,
+		global: {
+			provide: {
+				[VAULT_PORT as symbol]: bridge,
+			},
+		},
+	})
 	return new ChatInputPO(wrapper)
 }
 
@@ -96,6 +113,121 @@ describe('ChatInput', () => {
 		it('when loading=true, button shows "Asking…" label', () => {
 			const po = mountChatInput({ modelValue: '', disabled: false, loading: true })
 			expect(po.sendButtonText()).toContain('Asking')
+		})
+	})
+
+	/**
+	 * PR-ASV-4 / D-ASV-3 — `@`-file mention picker integration tests.
+	 *
+	 * Cover the end-to-end keystroke flow: type `@req`, see a
+	 * `requirements.md` candidate, press Enter, expect the inline text
+	 * replacement AND the `add-context-file` event emitted (which
+	 * `ChatSidebar.handleAddContextFile` then routes to
+	 * `chatStore.addContextFile`).
+	 */
+	describe('mention picker', () => {
+		const FILES = {
+			'specs/foo/idea.md': '',
+			'specs/foo/requirements.md': '',
+			'specs/bar/requirements.md': '',
+		}
+
+		beforeEach(() => {
+			vi.useFakeTimers()
+		})
+
+		afterEach(() => {
+			vi.useRealTimers()
+		})
+
+		it('opens the mention dropdown when the user types `@`', async () => {
+			const po = mountChatInput(
+				{ modelValue: '', disabled: false, loading: false },
+				FILES,
+			)
+			await po.typeAndMoveCaretToEnd('@')
+			expect(po.mentionDropdownExists()).toBe(false)
+			await vi.advanceTimersByTimeAsync(MENTION_DEBOUNCE_MS + 1)
+			await flushPromises()
+			expect(po.mentionDropdownExists()).toBe(true)
+		})
+
+		it('typing `@req` surfaces a requirements.md candidate', async () => {
+			const po = mountChatInput(
+				{ modelValue: '', disabled: false, loading: false },
+				FILES,
+			)
+			await po.typeAndMoveCaretToEnd('@req')
+			await vi.advanceTimersByTimeAsync(MENTION_DEBOUNCE_MS + 1)
+			await flushPromises()
+			expect(po.mentionDropdownExists()).toBe(true)
+			const text = po.wrapper.find('[data-testid="mention-option-0"]').text()
+			expect(text).toContain('requirements.md')
+		})
+
+		it('Enter commits the selection: replaces `@req` and emits `add-context-file`', async () => {
+			const po = mountChatInput(
+				{ modelValue: '', disabled: false, loading: false },
+				FILES,
+			)
+			await po.typeAndMoveCaretToEnd('@req')
+			await vi.advanceTimersByTimeAsync(MENTION_DEBOUNCE_MS + 1)
+			await flushPromises()
+			await po.pressKey('Enter')
+
+			const updates = po.emitted('update:modelValue') as string[][]
+			const lastValue = updates[updates.length - 1][0]
+			expect(lastValue).toBe('@requirements.md ')
+
+			const added = po.emitted('add-context-file') as Array<[{ path: string; name: string }]>
+			expect(added).toBeTruthy()
+			expect(added[0][0]).toEqual({
+				path: 'specs/bar/requirements.md',
+				name: 'requirements.md',
+			})
+		})
+
+		it('Escape closes the dropdown without committing', async () => {
+			const po = mountChatInput(
+				{ modelValue: '', disabled: false, loading: false },
+				FILES,
+			)
+			await po.typeAndMoveCaretToEnd('@req')
+			await vi.advanceTimersByTimeAsync(MENTION_DEBOUNCE_MS + 1)
+			await flushPromises()
+			await po.pressKey('Escape')
+			expect(po.mentionDropdownExists()).toBe(false)
+			expect(po.emitted('add-context-file')).toBeFalsy()
+		})
+
+		it('ArrowDown moves selection and Enter commits the new highlight', async () => {
+			const po = mountChatInput(
+				{ modelValue: '', disabled: false, loading: false },
+				FILES,
+			)
+			await po.typeAndMoveCaretToEnd('@req')
+			await vi.advanceTimersByTimeAsync(MENTION_DEBOUNCE_MS + 1)
+			await flushPromises()
+			await po.pressKey('ArrowDown')
+			await po.pressKey('Enter')
+
+			const added = po.emitted('add-context-file') as Array<[{ path: string; name: string }]>
+			expect(added).toBeTruthy()
+			expect(added[0][0].path).toBe('specs/foo/requirements.md')
+		})
+
+		it('Ctrl+Enter still emits `send` instead of committing the mention', async () => {
+			const po = mountChatInput(
+				{ modelValue: '', disabled: false, loading: false },
+				FILES,
+			)
+			await po.typeAndMoveCaretToEnd('@req')
+			await vi.advanceTimersByTimeAsync(MENTION_DEBOUNCE_MS + 1)
+			await flushPromises()
+			await po.pressKey('Enter', { ctrl: true })
+
+			expect(po.emitted('send')).toBeTruthy()
+			expect(po.emitted('add-context-file')).toBeFalsy()
 		})
 	})
 })
