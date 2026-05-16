@@ -339,14 +339,48 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 			return { deltas, terminal: false };
 		}
 		if (message.type === 'result') {
-			if (!state.textEmitted) {
-				const fallback = ClaudeCliAdapter._extractResultText(message);
-				if (fallback !== null) deltas.push({ type: 'text', text: fallback });
-			}
-			deltas.push({ type: 'done' });
-			return { deltas, terminal: true };
+			return ClaudeCliAdapter._dispatchResult(message, state);
 		}
 		return { deltas, terminal: false };
+	}
+
+	/**
+	 * Result-message dispatch (extracted from `_dispatchMessage` to keep its
+	 * cyclomatic complexity below the lint cap).
+	 *
+	 * Codex P1 (PR #371): `result` messages discriminate on `subtype`. Only
+	 * `'success'` is a real success; the error variants
+	 * (`error_during_execution`, `error_max_turns`, `error_max_budget_usd`,
+	 * `error_max_structured_output_retries`) must surface as a terminal
+	 * `error` delta — otherwise the stream would resolve as success with
+	 * an empty body and `query()` would return `ok('')` instead of
+	 * `err(QUERY_FAILED)`.
+	 */
+	private static _dispatchResult(
+		message: SdkMessage,
+		state: { textEmitted: boolean },
+	): { deltas: StreamDelta[]; terminal: boolean } {
+		if (typeof message.subtype === 'string' && message.subtype !== 'success') {
+			return {
+				deltas: [
+					{
+						type: 'error',
+						error: new ClaudeCliError(
+							'QUERY_FAILED',
+							`SDK returned result error: ${message.subtype}`,
+						),
+					},
+				],
+				terminal: true,
+			};
+		}
+		const deltas: StreamDelta[] = [];
+		if (!state.textEmitted) {
+			const fallback = ClaudeCliAdapter._extractResultText(message);
+			if (fallback !== null) deltas.push({ type: 'text', text: fallback });
+		}
+		deltas.push({ type: 'done' });
+		return { deltas, terminal: true };
 	}
 
 	private static _extractSessionId(message: { session_id?: unknown }): SessionId | null {
