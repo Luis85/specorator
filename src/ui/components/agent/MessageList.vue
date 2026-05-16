@@ -26,16 +26,26 @@ const messages = computed(() => {
 	return store.messages.get(props.threadId) ?? [];
 });
 
+/**
+ * Streaming in-flight indicator. While `chatStore.status === 'loading'` and
+ * `chatStore.streamingText` is non-empty, the message list appends a
+ * synthetic streaming-assistant bubble to render text deltas as they arrive
+ * (PR-ASV-2-ui). The bubble does not have a stable `ChatMessage.id` because
+ * it is replaced by the real `appendMessage` once the stream resolves.
+ */
+const streamingText = computed<string>(() => store.streamingText);
+const isStreaming = computed<boolean>(
+	() => store.status === 'loading' && streamingText.value.length > 0,
+);
+
 const scrollContainer = ref<HTMLElement | null>(null);
 
-// Watches array length only — appendMessage in Increment 1 never mutates the
-// trailing message in place. Increment 2 (streaming responses, see
-// specs/agent-sidepanel-v2/idea.md "Out of scope" → streaming) will mutate
-// the last assistant message's `text` as deltas arrive; this watcher will
-// need to also observe the last entry's text length, or switch to a deep
-// watch with a debounce, to keep auto-scroll honest during streaming turns.
+// Track BOTH the message-array length AND the streaming-text length so the
+// scroll position follows live deltas during a streaming turn. Without the
+// second observed value, the scroll watcher only fires at turn boundaries
+// (appendMessage) and the user has to scroll manually as Claude streams.
 watch(
-	() => messages.value.length,
+	[() => messages.value.length, () => streamingText.value.length],
 	async () => {
 		await nextTick();
 		const el = scrollContainer.value;
@@ -47,7 +57,7 @@ watch(
 
 <template>
 	<div
-		v-if="messages.length > 0"
+		v-if="messages.length > 0 || isStreaming"
 		ref="scrollContainer"
 		class="sp-agent-messages"
 		data-testid="agent-message-list"
@@ -77,6 +87,23 @@ watch(
 				>
 					{{ t('agent.contextTrimmed') }}
 				</p>
+			</div>
+		</article>
+		<article
+			v-if="isStreaming"
+			class="sp-agent-message sp-agent-message--assistant sp-agent-message--streaming"
+			data-testid="agent-message-streaming"
+		>
+			<header class="sp-agent-message__role">
+				{{ t('agent.roleAssistant') }}
+			</header>
+			<div class="sp-agent-message__body">
+				<pre class="sp-agent-message__text">{{ streamingText }}</pre>
+				<span
+					class="sp-agent-message__cursor"
+					aria-hidden="true"
+					data-testid="agent-message-streaming-cursor"
+				>▍</span>
 			</div>
 		</article>
 	</div>
@@ -160,5 +187,22 @@ watch(
 	margin: 0;
 	font-size: 0.75rem;
 	color: var(--text-faint);
+}
+
+.sp-agent-message--streaming {
+	opacity: 0.95;
+}
+
+.sp-agent-message__cursor {
+	display: inline-block;
+	font-size: 0.875rem;
+	color: var(--text-accent);
+	animation: sp-agent-message__blink 1s steps(2, start) infinite;
+}
+
+@keyframes sp-agent-message__blink {
+	to {
+		visibility: hidden;
+	}
 }
 </style>

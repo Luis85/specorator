@@ -176,6 +176,13 @@ export class MockClaudeCliPort implements ClaudeCliPort {
 	async *queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
 		this.streamLog.push(prompt);
 		this.streamOptionsLog.push(options);
+		// PR-ASV-2-ui: `ChatSidebar.handleSend` switched from `query()` to
+		// `queryStream()`. Existing tests assert against `queryLog` /
+		// `optionsLog` (the legacy non-streaming log) — mirror to those
+		// arrays so backward-compatible inspection points keep working
+		// without forcing 10+ tests to migrate to `streamLog`.
+		this.queryLog.push(prompt);
+		this.optionsLog.push(options);
 
 		if (!this.available) {
 			yield {
