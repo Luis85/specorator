@@ -135,6 +135,42 @@ describe('ChatSidebar', () => {
 			const { po } = await mountSidebar({ available: false, apiKey: '' })
 			expect(po.hasTextarea()).toBe(false)
 		})
+
+		it('clicking the settings CTA invokes the injected openPluginSettings (Codex P2, PR #350)', async () => {
+			// The in-app Vue `/settings` route does not expose the Anthropic key
+			// or transport fields, so the recovery CTA must call the function
+			// SpecoratorView provides under OPEN_PLUGIN_SETTINGS_KEY — that
+			// function opens Obsidian's plugin settings tab in production.
+			const { OPEN_PLUGIN_SETTINGS_KEY } = await import('@/infrastructure/bridge/ports')
+			const pinia = createPinia()
+			setActivePinia(pinia)
+			const port = new MockClaudeCliPort()
+			port.available = false
+			const bridge = makeBridgeWithApiKey('', {})
+			const openPluginSettings = vi.fn()
+			const wrapper = mount(ChatSidebar, {
+				global: {
+					plugins: [pinia],
+					stubs: { RouterLink: RouterLinkStub },
+					provide: {
+						[CLAUDE_CLI_PORT as symbol]: port,
+						[IS_MOBILE_KEY as symbol]: false,
+						[VAULT_PORT as symbol]: bridge,
+						[WORKSPACE_PORT as symbol]: bridge,
+						[SETTINGS_PORT as symbol]: bridge,
+						[LOGGER_PORT as symbol]: bridge,
+						[OPEN_PLUGIN_SETTINGS_KEY as symbol]: openPluginSettings,
+					},
+				},
+			})
+			await flushPromises()
+
+			const cta = wrapper.find('[data-testid="chat-degraded-settings-link"]')
+			expect(cta.exists()).toBe(true)
+			await cta.trigger('click')
+
+			expect(openPluginSettings).toHaveBeenCalledTimes(1)
+		})
 	})
 
 	describe('TEST-CCS-019: SDK unavailable degraded state', () => {

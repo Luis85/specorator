@@ -23,6 +23,7 @@ import {
   CONFIRM_MODAL_PORT,
   SETTINGS_VERSION_KEY,
   TRANSPORT_KIND_KEY,
+  OPEN_PLUGIN_SETTINGS_KEY,
 } from '@/infrastructure/bridge/ports'
 import type { SessionId } from '@/domain/chat/SessionId'
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord'
@@ -70,6 +71,14 @@ const sessionLogWriterFactory = useSessionLogWriter()
  */
 const confirmModalPort = inject<ConfirmModalPort | undefined>(CONFIRM_MODAL_PORT, undefined)
 const transportKindRef = inject<Ref<TransportKind> | undefined>(TRANSPORT_KIND_KEY, undefined)
+// Routes the chat-degraded recovery CTA to Obsidian's plugin settings tab
+// (Codex P2, PR #350). Defaults to a no-op so unit tests and the standalone
+// browser UI — which do not have Obsidian's `App` available — can mount the
+// sidebar without crashing when the button is clicked.
+const noopOpenPluginSettings = (): void => {
+  /* default for unit tests and the standalone browser UI */
+}
+const openPluginSettings = inject<() => void>(OPEN_PLUGIN_SETTINGS_KEY, noopOpenPluginSettings)
 
 /**
  * Vue-i18n composable wired to the EN/DE catalogues in `src/ui/i18n/locales/`.
@@ -898,13 +907,14 @@ watch(available, async () => {
       <p class="sp-chat__degraded-body">
         To use this feature, add your Anthropic key in Settings. Your key is stored privately on this device and is never shared.
       </p>
-      <RouterLink
+      <button
+        type="button"
         class="sp-btn sp-btn--secondary sp-btn--md"
-        to="/settings"
         data-testid="chat-degraded-settings-link"
+        @click="openPluginSettings"
       >
         Open settings
-      </RouterLink>
+      </button>
     </div>
 
     <!-- SDK unavailable degraded state (REQ-CCS-019) -->

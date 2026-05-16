@@ -38,3 +38,16 @@ export const IS_MOBILE_KEY: InjectionKey<boolean> = Symbol('IsMobile')
  * Satisfies D-CCS-003, T-CCS-037.
  */
 export const SETTINGS_VERSION_KEY: InjectionKey<Ref<number>> = Symbol('settingsVersion')
+
+/**
+ * Provided by `SpecoratorView` so `ChatSidebar`'s degraded-state CTA can open
+ * Obsidian's plugin settings tab — the only surface that actually exposes the
+ * Anthropic API key and transport fields. The in-app Vue `/settings` route
+ * does not edit those fields, so routing the recovery CTA there strands users
+ * in the first-run / missing-key case (Codex P2, PR #350).
+ *
+ * The function is provided as a no-op default by callers that do not have
+ * access to Obsidian's `App` (unit tests, standalone browser UI), so consumers
+ * can call it unconditionally.
+ */
+export const OPEN_PLUGIN_SETTINGS_KEY: InjectionKey<() => void> = Symbol('openPluginSettings')

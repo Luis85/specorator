@@ -19,6 +19,7 @@ import {
   LOGGER_PORT,
   CLAUDE_CLI_PORT,
   COMMUNITY_PLUGIN_PORT,
+  OPEN_PLUGIN_SETTINGS_KEY,
 } from '@/infrastructure/bridge/ports'
 import { LocalStorageBridge } from '@/infrastructure/localstorage/LocalStorageBridge'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
@@ -68,6 +69,15 @@ void bridge.getSettings()
     app.provide(LOGGER_PORT, bridge)
     app.provide(CLAUDE_CLI_PORT, bridge)
     app.provide(COMMUNITY_PLUGIN_PORT, bridge)
+    // The Obsidian build provides this via `SpecoratorView.onOpen()` and
+    // opens the real plugin settings tab. In the standalone browser UI
+    // there is no Obsidian `App`, so route to the in-app Vue `/settings`
+    // page — that's the same destination the previous `<RouterLink>` had,
+    // so this preserves the prior behaviour rather than degrading to a
+    // no-op (Codex P2, PR #365).
+    app.provide(OPEN_PLUGIN_SETTINGS_KEY, () => {
+      void router.push('/settings')
+    })
     const featureFeedback = new FeedbackService(bridge, bridge)
     app.provide(
       FEATURE_SERVICE_KEY,

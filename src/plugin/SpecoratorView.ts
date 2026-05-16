@@ -17,6 +17,7 @@ import {
   IS_MOBILE_KEY,
   SETTINGS_VERSION_KEY,
   TRANSPORT_KIND_KEY,
+  OPEN_PLUGIN_SETTINGS_KEY,
 } from '@/infrastructure/bridge/ports'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { FeatureService } from '@/application/feature/FeatureService'
@@ -229,6 +230,22 @@ export class SpecoratorView extends ItemView {
     this.vueApp.provide(TRANSPORT_KIND_KEY, this._activeTransportKind)
     this.vueApp.provide(IS_MOBILE_KEY, Platform.isMobile)
     this.vueApp.provide(SETTINGS_VERSION_KEY, this._settingsVersion)
+    // Codex P2 (PR #350): the in-app Vue `/settings` route does not expose
+    // the Anthropic key or transport fields, so the chat-degraded recovery
+    // CTA needs to open Obsidian's plugin settings tab directly. Capture
+    // `App` + plugin id from the plugin instance and bind a no-arg
+    // function ChatSidebar can call from a click handler.
+    this.vueApp.provide(OPEN_PLUGIN_SETTINGS_KEY, () => {
+      // `App.setting` is an Obsidian internal but is the canonical way to
+      // open the settings modal from plugin code; the same pattern is used
+      // by the official `obsidian-tasks` and `dataview` plugins.
+      const setting = (this.plugin.app as unknown as {
+        setting?: { open: () => void; openTabById: (id: string) => void }
+      }).setting
+      if (setting === undefined) return
+      setting.open()
+      setting.openTabById(this.plugin.manifest.id)
+    })
     const featureFeedback = new FeedbackService(bridge, bridge)
     this.vueApp.provide(
       FEATURE_SERVICE_KEY,
