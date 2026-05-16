@@ -412,6 +412,25 @@ describe('SpecoratorView.bumpSettingsVersion() mid-turn guard (REQ-ASM-003)', ()
 
     expect(activePort(view)).toBe(fixture.sdkAdapter)
   })
+
+  it('clears `pinia` on close so plugin workspace handlers stop mutating the unmounted store — Codex P2, PR #350', async () => {
+    const fixture = makeFixture(
+      { transportKind: 'auto', anthropicApiKey: '' },
+      /* cliResolved */ false,
+    )
+
+    const view = makeView(fixture)
+    view.pinia = pinia
+    expect(view.pinia).not.toBeNull()
+
+    await view.onClose()
+
+    // Plugin-level `active-leaf-change` / `file-menu` handlers gate on
+    // `this._specoratorView?.pinia`. Nulling the field turns those gates
+    // false so background workspace events do not mutate a store whose Vue
+    // app has been unmounted.
+    expect(view.pinia).toBeNull()
+  })
 })
 
 // -----------------------------------------------------------------------------

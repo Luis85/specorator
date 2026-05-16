@@ -275,6 +275,11 @@ export class SpecoratorView extends ItemView {
     this.plugin.bridge?.hideAllNotices()
     this.vueApp?.unmount()
     this.vueApp = null
+    // Drop the Pinia instance so plugin-level workspace handlers that gate on
+    // `this._specoratorView?.pinia` (file-menu, active-leaf-change) stop
+    // mutating a store whose Vue app has been unmounted. A fresh Pinia is
+    // created on the next `onOpen()` (Codex P2, PR #350).
+    this.pinia = null
     return Promise.resolve()
   }
 
