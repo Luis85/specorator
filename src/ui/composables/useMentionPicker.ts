@@ -132,6 +132,14 @@ export function useMentionPicker(vault: VaultPort): UseMentionPicker {
 	 * and overwrite the fresher results.
 	 */
 	let searchSeq = 0
+	/**
+	 * Shared in-flight vault-scan promise (Codex P2 on PR #376). Without
+	 * this, a slow `collectVaultFiles` could let a second debounced
+	 * keystroke re-enter the `cached === null` branch and start a second
+	 * concurrent recursive walk. Reused across all searches in the open
+	 * session; cleared on close alongside `cached`.
+	 */
+	let inFlightScan: Promise<readonly string[]> | null = null
 
 	function clearDebounce(): void {
 		if (debounceTimer !== null) {
@@ -149,11 +157,20 @@ export function useMentionPicker(vault: VaultPort): UseMentionPicker {
 
 	async function runSearch(seq: number, q: string): Promise<void> {
 		if (cached === null) {
-			const paths = await collectVaultFiles(vault, '')
+			// Codex P2 on PR #376: share a single in-flight scan promise.
+			// `collectVaultFiles` is a recursive walk and the user can
+			// type faster than the scan resolves. The previous
+			// implementation kicked off a fresh walk on every debounced
+			// search until the first one populated `cached`, leading to
+			// N concurrent root scans on a large vault.
+			inFlightScan ??= collectVaultFiles(vault, '')
+			const paths = await inFlightScan
 			// Drop the result if the user has typed past this open session
 			// (e.g. escape + new `@`) — `searchSeq` was bumped past `seq`.
 			if (seq !== searchSeq) return
-			cached = prepareCandidates(paths)
+			// Only the first awaiter populates `cached`; subsequent
+			// awaiters see the populated cache and skip the assignment.
+			cached ??= prepareCandidates(paths)
 		}
 		if (seq !== searchSeq) return
 		const ranked = matchAndRank(cached, q)
@@ -180,7 +197,10 @@ export function useMentionPicker(vault: VaultPort): UseMentionPicker {
 		query.value = trigger.query
 		// Invalidate the candidate cache on each fresh open — picks up
 		// vault writes that landed between picker sessions (per the brief).
-		if (!wasOpen) cached = null
+		if (!wasOpen) {
+			cached = null
+			inFlightScan = null
+		}
 		scheduleSearch(trigger.query)
 	}
 
@@ -191,6 +211,7 @@ export function useMentionPicker(vault: VaultPort): UseMentionPicker {
 		selectedIndex.value = 0
 		atIndex.value = -1
 		cached = null
+		inFlightScan = null
 		clearDebounce()
 		// Bump the sequence so any in-flight scan promise is discarded.
 		searchSeq++
