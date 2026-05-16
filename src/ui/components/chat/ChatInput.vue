@@ -91,6 +91,13 @@ function handleKeydown(event: KeyboardEvent): void {
   if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
     if (!props.disabled && !props.loading) {
       event.preventDefault()
+      // Codex P2 on PR #376: close the mention picker before the send.
+      // Without this, the dropdown stays mounted on a now-readonly
+      // textarea during loading, and a subsequent Enter/Tab can commit
+      // a mention mid-request and mutate `modelValue` / `contextFiles`
+      // while the send is in flight — breaking the disabled-input
+      // contract and leaving stale UI behind after submit.
+      if (picker.open.value) picker.close()
       emit('send')
     }
   }
