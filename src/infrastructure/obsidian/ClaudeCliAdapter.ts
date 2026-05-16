@@ -61,6 +61,17 @@ interface StreamState {
 	turnId: string;
 	sessionIdEmitted: boolean;
 	textEmitted: boolean;
+	/**
+	 * Monotonic message-index within the stream. Bumped on every
+	 * `message_start` event. Codex P1 (PR #378): Anthropic's
+	 * `content_block_*` indices are scoped to a single message and can
+	 * restart at 0 on later `message_start` events in the same streamed
+	 * turn (multi-step tool loops). Without a per-message discriminator,
+	 * distinct tool calls could reuse the same `blockId` and downstream
+	 * accumulators keyed by `blockId` would merge deltas into the wrong
+	 * entry. `blockId` is now `${turnId}-${messageSeq}-${index}`.
+	 */
+	messageSeq: number;
 	blockKinds: Map<number, { kind: 'text' | 'thinking' | 'tool_use'; blockId: string }>;
 }
 
@@ -351,6 +362,7 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 			turnId: crypto.randomUUID(),
 			sessionIdEmitted: false,
 			textEmitted: false,
+			messageSeq: 0,
 			blockKinds: new Map(),
 		};
 		for (;;) {
@@ -437,6 +449,16 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 		// carry `usage` at the message root. Read both because some
 		// Anthropic-compatible endpoints push usage only on `message_delta`.
 		if (event.type === 'message_start' || event.type === 'message_delta') {
+			// Codex P1 on PR #378: bump `messageSeq` AND reset `blockKinds`
+			// on every `message_start` so subsequent `content_block_start`
+			// events get a fresh blockId namespace. Anthropic's
+			// content-block index resets to 0 per message; without this
+			// reset, a second message in the same stream (multi-step tool
+			// loop) would overwrite the first message's entries.
+			if (event.type === 'message_start') {
+				state.messageSeq++;
+				state.blockKinds = new Map();
+			}
 			const usage = ClaudeCliAdapter._extractUsage(event);
 			if (usage !== null) deltas.push(usage);
 			return { deltas, terminal: false };
@@ -474,7 +496,10 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 		if (index < 0) return;
 		const block = event.content_block;
 		if (block === undefined) return;
-		const blockId = `${state.turnId}-${index}`;
+		// Codex P1 on PR #378: include `messageSeq` so multi-step tool
+		// loops (where content-block indices restart at 0 per message)
+		// produce unique blockIds across the whole stream.
+		const blockId = `${state.turnId}-${state.messageSeq}-${index}`;
 		// Codex P2 on PR #378: any block whose `type` ends with `_tool_use`
 		// or equals `tool_use` is part of the tool-use lifecycle (covers
 		// `tool_use`, `server_tool_use`, future Anthropic-API variants).
