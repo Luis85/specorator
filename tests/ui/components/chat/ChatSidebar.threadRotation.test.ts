@@ -14,7 +14,10 @@ import type {
 	ClaudeCliPort,
 	ClaudeCliQueryOptions,
 	ClaudeCliError,
+	ClaudeCliStreamOptions,
+	StreamDelta,
 } from '@/domain/ports/ClaudeCliPort';
+import { streamFromQuery } from '@/domain/ports/ClaudeCliPort';
 import type { Result } from '@/domain/shared/Result';
 import { ok } from '@/domain/shared/Result';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
@@ -52,6 +55,9 @@ class FixedClaudeCliPort implements ClaudeCliPort {
 		_options?: ClaudeCliQueryOptions,
 	): Promise<Result<string, ClaudeCliError>> {
 		return ok('assistant reply');
+	}
+	queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
+		return streamFromQuery((p, o) => this.query(p, o), prompt, options);
 	}
 }
 

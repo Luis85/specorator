@@ -4,7 +4,7 @@ import { createTestingPinia } from '@pinia/testing'
 import OnboardingStep3ClaudeCheck from '@/ui/components/OnboardingStep3ClaudeCheck.vue'
 import { CLAUDE_CLI_PORT, LOGGER_PORT } from '@/infrastructure/bridge/ports'
 import { OnboardingStep3ClaudeCheckPO } from './OnboardingStep3ClaudeCheck.po'
-import type { ClaudeCliPort } from '@/domain/ports'
+import type { ClaudeCliPort, ClaudeCliStreamOptions, StreamDelta } from '@/domain/ports'
 
 const mockLogger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }
 
@@ -16,6 +16,11 @@ function makePort(available: boolean | 'throw'): ClaudeCliPort {
 		query: vi.fn().mockResolvedValue({ ok: false, error: new Error('stub') }),
 		startup: vi.fn().mockResolvedValue(undefined),
 		shutdown: vi.fn(),
+		queryStream: vi.fn(
+			(_prompt: string, _options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> => {
+				return (async function* (): AsyncGenerator<StreamDelta> {})()
+			},
+		),
 	}
 }
 

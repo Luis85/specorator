@@ -79,6 +79,11 @@ function makeMockPort(label: string): ClaudeCliPort {
     shutdown: () => {
       throw new Error(`mock port "${label}" .shutdown() must not be called by selectTransport`)
     },
+    queryStream: () => {
+      throw new Error(
+        `mock port "${label}" .queryStream() must not be called by selectTransport`,
+      )
+    },
   }
 }
 

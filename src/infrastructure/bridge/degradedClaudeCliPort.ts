@@ -1,6 +1,11 @@
-import type { ClaudeCliPort, ClaudeCliQueryOptions } from '@/domain/ports'
-import { ClaudeCliError } from '@/domain/ports'
-import { err, type Result } from '@/domain/shared/Result'
+import type {
+	ClaudeCliPort,
+	ClaudeCliQueryOptions,
+	ClaudeCliStreamOptions,
+	StreamDelta,
+} from '@/domain/ports';
+import { ClaudeCliError } from '@/domain/ports';
+import { err, type Result } from '@/domain/shared/Result';
 
 /**
  * Singleton `ClaudeCliPort` returned by `selectTransport` whenever the
@@ -17,29 +22,34 @@ import { err, type Result } from '@/domain/shared/Result'
  */
 
 function makeError(): ClaudeCliError {
-  return new ClaudeCliError(
-    'CLI_LAUNCH_FAILED',
-    'Chat needs the Claude command-line tool.',
-  )
+	return new ClaudeCliError('CLI_LAUNCH_FAILED', 'Chat needs the Claude command-line tool.');
 }
 
 export const degradedClaudeCliPort: ClaudeCliPort = Object.freeze({
-  query(
-    _prompt: string,
-    _options?: ClaudeCliQueryOptions,
-  ): Promise<Result<string, ClaudeCliError>> {
-    return Promise.resolve(err(makeError()))
-  },
+	query(
+		_prompt: string,
+		_options?: ClaudeCliQueryOptions,
+	): Promise<Result<string, ClaudeCliError>> {
+		return Promise.resolve(err(makeError()));
+	},
 
-  isAvailable(): Promise<boolean> {
-    return Promise.resolve(false)
-  },
+	isAvailable(): Promise<boolean> {
+		return Promise.resolve(false);
+	},
 
-  startup(): Promise<void> {
-    return Promise.resolve()
-  },
+	startup(): Promise<void> {
+		return Promise.resolve();
+	},
 
-  shutdown(): void {
-    /* no-op */
-  },
-})
+	shutdown(): void {
+		/* no-op */
+	},
+
+	// eslint-disable-next-line @typescript-eslint/require-await
+	async *queryStream(
+		_prompt: string,
+		_options?: ClaudeCliStreamOptions,
+	): AsyncIterable<StreamDelta> {
+		yield { type: 'error', error: makeError() };
+	},
+});
