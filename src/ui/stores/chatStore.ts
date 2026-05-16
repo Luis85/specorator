@@ -283,6 +283,26 @@ export const useChatStore = defineStore('chat', () => {
 		messages.value = next;
 	}
 
+	/**
+	 * Drops every `FileWriteProposal` whose `threadId` matches. Pairs with
+	 * `clearThreadMessages` for the "New conversation" reset path — Codex
+	 * P2 on PR #369: without this, proposals (including their
+	 * `envelope.content` payloads) accumulated unreachably across
+	 * `/create` + reset cycles since there's no thread switcher in
+	 * Increment 1 to revisit them.
+	 */
+	function clearThreadProposals(threadId: string): void {
+		let mutated = false;
+		const next = new Map(proposals.value);
+		for (const [proposalId, proposal] of proposals.value) {
+			if (proposal.threadId === threadId) {
+				next.delete(proposalId);
+				mutated = true;
+			}
+		}
+		if (mutated) proposals.value = next;
+	}
+
 	// ── ASM actions (SPEC-ASM-001 §8.1) ──────────────────────────────────────
 
 	/**
@@ -451,6 +471,7 @@ export const useChatStore = defineStore('chat', () => {
 		setSessionResumed,
 		appendMessage,
 		clearThreadMessages,
+		clearThreadProposals,
 		setStructuredFail,
 	};
 });

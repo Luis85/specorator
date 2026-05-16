@@ -749,4 +749,46 @@ describe('useChatStore()', () => {
 			expect(store.structuredFail).toBe(false);
 		});
 	});
+
+	describe('Codex P2 (PR #369, fourth review) — clearThreadProposals', () => {
+		function makeP(proposalId: string, threadId: string) {
+			return {
+				proposalId,
+				threadId,
+				envelope: { action: 'createFile' as const, path: `specs/${proposalId}.md`, content: 'x' },
+				status: 'pending' as const,
+				proposedAt: '2026-05-16T00:00:00Z',
+				decidedAt: null,
+				failureReason: null,
+				originPrompt: '/create',
+			}
+		}
+
+		it('drops only the proposals scoped to the given thread', () => {
+			const store = useChatStore()
+			store.addProposal(makeP('p1', 'thread-A'))
+			store.addProposal(makeP('p2', 'thread-A'))
+			store.addProposal(makeP('p3', 'thread-B'))
+			store.clearThreadProposals('thread-A')
+			expect(store.proposals.size).toBe(1)
+			expect(store.proposals.has('p3')).toBe(true)
+			expect(store.proposals.has('p1')).toBe(false)
+			expect(store.proposals.has('p2')).toBe(false)
+		})
+
+		it('is a no-op when no proposals match the thread id', () => {
+			const store = useChatStore()
+			store.addProposal(makeP('p1', 'thread-A'))
+			const before = store.proposals
+			store.clearThreadProposals('unknown')
+			// Same map reference — no rebuild happened.
+			expect(store.proposals).toBe(before)
+		})
+
+		it('is a no-op when the store has zero proposals', () => {
+			const store = useChatStore()
+			store.clearThreadProposals('any')
+			expect(store.proposals.size).toBe(0)
+		})
+	})
 });

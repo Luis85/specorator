@@ -65,6 +65,12 @@ function handleNewConversation(): void {
 	const previousThreadId = store.activeThreadId;
 	if (previousThreadId !== null) {
 		store.clearThreadMessages(previousThreadId);
+		// Codex P2 (PR #369, fourth review): evict the previous thread's
+		// `FileWriteProposal` entries too. They're unreachable after the
+		// thread rotates (Increment 1 ships no thread switcher), but
+		// `envelope.content` payloads can be sizeable — repeated
+		// `/create` + reset cycles accumulated unbounded hidden state.
+		store.clearThreadProposals(previousThreadId);
 	}
 	store.setActiveThreadId(null);
 	store.clearResponse();
