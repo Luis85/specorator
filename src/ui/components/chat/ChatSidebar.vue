@@ -302,14 +302,29 @@ function resolveActiveThread(args: {
   const nowIso = new Date().toISOString()
   let threadId = store.activeThreadId
   const existing = threadId !== null ? store.chatThreads.get(threadId) : undefined
-  // Rotate when the active thread's transport no longer matches the resolved
-  // transport for this turn (Codex P2, PR #350). Resuming a session id that
-  // was minted under a different transport produces incoherent context and
-  // audit metadata, so we mint a fresh thread instead of carrying state
-  // across the transport boundary.
+  // Rotate when the active thread's transport OR feature slug no longer
+  // matches the resolved values for this turn (Codex P2, PR #350).
+  //
+  // - Transport mismatch: resuming a session id that was minted under a
+  //   different transport produces incoherent context and audit metadata.
+  // - Feature mismatch: session-log paths are derived from `thread.feature`,
+  //   so reusing a `specs/foo/` thread for a turn against `specs/bar/`
+  //   would append the bar turn under the foo session log and corrupt
+  //   per-feature traceability + resume metadata.
+  //
+  // In either case we mint a fresh thread rather than carry stale
+  // metadata. The original thread stays in `chatThreads` (history is
+  // preserved); only the active-thread pointer rotates.
   const transportMismatch =
     existing !== undefined && existing.transport !== args.transport
-  if (threadId === null || existing === undefined || transportMismatch) {
+  const featureMismatch =
+    existing !== undefined && existing.feature !== args.slug
+  if (
+    threadId === null ||
+    existing === undefined ||
+    transportMismatch ||
+    featureMismatch
+  ) {
     threadId = generateThreadId()
     const fresh: ChatThreadRecord = {
       threadId,

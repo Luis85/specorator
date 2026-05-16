@@ -264,6 +264,43 @@ describe('ChatSidebar — session-persistence wiring (T-ASM-057)', () => {
 		expect(secondId).toBe(firstId)
 	})
 
+	it('rotates the active thread when the active feature slug changes (Codex P2, PR #350)', async () => {
+		// First send under feature 'foo' — creates a thread tagged for foo.
+		const { po, store, bridge } = await mountSidebar({
+			settings: { specsFolder: 'specs' },
+			activeFile: { path: 'specs/foo/idea.md', basename: 'idea', extension: 'md' },
+		})
+		await send(store, po, 'hello from foo')
+		const fooThreadId = store.activeThreadId!
+		expect(store.chatThreads.get(fooThreadId)?.feature).toBe('foo')
+
+		// User opens a file under a different feature. The next send must
+		// rotate the active thread — otherwise the session-log path (derived
+		// from `thread.feature`) would write the bar turn under the foo log
+		// and corrupt per-feature traceability.
+		bridge.setActiveFile({ path: 'specs/bar/idea.md', basename: 'idea', extension: 'md' })
+		await flushPromises()
+		await send(store, po, 'hello from bar')
+
+		const barThreadId = store.activeThreadId!
+		expect(barThreadId).not.toBe(fooThreadId)
+		expect(store.chatThreads.get(barThreadId)?.feature).toBe('bar')
+		// History preserved — the foo thread still exists in the map.
+		expect(store.chatThreads.get(fooThreadId)?.feature).toBe('foo')
+	})
+
+	it('does NOT rotate when the feature slug stays the same across sends', async () => {
+		const { po, store } = await mountSidebar({
+			settings: { specsFolder: 'specs' },
+			activeFile: { path: 'specs/foo/idea.md', basename: 'idea', extension: 'md' },
+		})
+		await send(store, po, 'first')
+		const firstId = store.activeThreadId!
+		await send(store, po, 'second')
+		const secondId = store.activeThreadId!
+		expect(secondId).toBe(firstId)
+	})
+
 	it('second send on the same thread forwards resumeSessionId and flashes sessionResumed (REQ-ASM-035)', async () => {
 		const firstId = asSessionId('sess-first-1234567')
 		const { po, port, store } = await mountSidebar({
