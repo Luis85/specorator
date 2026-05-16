@@ -49,12 +49,23 @@ defineExpose({ textareaEl, palette });
  * substring (everything after the `/`, no leading slash) when the trigger is
  * either at position 0 or preceded by whitespace; otherwise `null`.
  */
-function detectSlashTrigger(value: string, caret: number): string | null {
+interface SlashTriggerMatch {
+	/** Substring captured after the `/` up to the caret (no leading slash). */
+	readonly query: string;
+	/** Index of the `/` character in the textarea value. */
+	readonly slashIndex: number;
+	/** Caret position at the time of detection (end of the `/<query>` span). */
+	readonly endIndex: number;
+}
+
+function detectSlashTrigger(value: string, caret: number): SlashTriggerMatch | null {
 	if (caret < 1) return null;
 	const prefix = value.slice(0, caret);
 	const match = /(?:^|\s)\/([^\s]*)$/.exec(prefix);
 	if (match === null) return null;
-	return match[1];
+	const query = match[1];
+	const slashIndex = caret - query.length - 1;
+	return { query, slashIndex, endIndex: caret };
 }
 
 function syncPaletteFromTextarea(): void {
@@ -63,19 +74,49 @@ function syncPaletteFromTextarea(): void {
 		palette.close();
 		return;
 	}
-	const query = detectSlashTrigger(ta.value, ta.selectionStart);
-	if (query === null) {
+	const trigger = detectSlashTrigger(ta.value, ta.selectionStart);
+	if (trigger === null) {
 		if (palette.isOpen.value) palette.close();
 		return;
 	}
 	if (palette.isOpen.value) {
-		palette.setQuery(query);
+		palette.setQuery(trigger.query);
 	} else {
-		palette.open(query);
+		palette.open(trigger.query);
 	}
 }
 
+/**
+ * Codex P2 on PR #375: clear the `/<query>` token from the textarea
+ * before dispatching the command, so non-clearing commands like `/help`
+ * and `/advance-stage` don't leave the literal slash text behind — the
+ * next Ctrl/Cmd+Enter would otherwise send the command text to the model
+ * as a regular prompt.
+ *
+ * Uses the trigger's own `slashIndex` + `endIndex` (NOT the current
+ * caret) so the replacement stays correct even if the user moved the
+ * caret with ArrowLeft/Right while the dropdown was open.
+ */
+function scrubSlashTrigger(): void {
+	const ta = textareaEl.value;
+	if (ta === null) return;
+	const trigger = detectSlashTrigger(ta.value, ta.selectionStart);
+	if (trigger === null) return;
+	const before = props.modelValue.slice(0, trigger.slashIndex);
+	const after = props.modelValue.slice(trigger.endIndex);
+	const next = `${before}${after}`;
+	emit('update:modelValue', next);
+	void Promise.resolve().then(() => {
+		const el = textareaEl.value;
+		if (el === null) return;
+		const pos = before.length;
+		el.focus();
+		el.setSelectionRange(pos, pos);
+	});
+}
+
 function handleSelectFromPalette(command: SlashCommand): void {
+	scrubSlashTrigger();
 	palette.close();
 	emit('select-command', command);
 	textareaEl.value?.focus();
@@ -112,6 +153,7 @@ function handlePaletteKeydown(event: KeyboardEvent): boolean {
 		const command = palette.select();
 		if (command !== null) {
 			event.preventDefault();
+			scrubSlashTrigger();
 			palette.close();
 			emit('select-command', command);
 			return true;
