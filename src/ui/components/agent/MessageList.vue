@@ -11,8 +11,21 @@
  */
 import { computed, nextTick, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useChatStore } from '@/ui/stores/chatStore';
+import { useChatStore, type CompactBoundaryNoticeDto } from '@/ui/stores/chatStore';
+import type { ChatMessage } from '@/domain/chat/ChatMessage';
 import MarkdownBlock from '@/ui/components/agent/MarkdownBlock.vue';
+import ThinkingBlock from './ThinkingBlock.vue';
+import ToolCallBlock from './ToolCallBlock.vue';
+
+/**
+ * Discriminated union for the interleaved transcript: either a real
+ * `ChatMessage` turn or a synthetic `compact-boundary` notice (Codex P2 on
+ * PR #379). Ordered by `createdAt` so the divider appears at the point where
+ * the SDK auto-compacted history.
+ */
+type TranscriptEntry =
+	| { readonly kind: 'message'; readonly message: ChatMessage }
+	| { readonly kind: 'compact-boundary'; readonly notice: CompactBoundaryNoticeDto };
 
 const props = defineProps<{
 	/** Active thread id, or `null` when no thread is selected. */
@@ -28,6 +41,37 @@ const messages = computed(() => {
 });
 
 /**
+ * Per-thread `compact-boundary` notices for the active thread (Codex P2 on
+ * PR #379). Empty when no compaction has occurred or no thread is selected.
+ */
+const compactBoundaries = computed<readonly CompactBoundaryNoticeDto[]>(() => {
+	if (props.threadId === null) return [];
+	return store.compactBoundaries.get(props.threadId) ?? [];
+});
+
+/**
+ * Merged, time-ordered transcript of real messages and synthetic
+ * compact-boundary notices. `createdAt` is the ordering key — notices fall
+ * naturally between the turn that triggered them and the next turn.
+ */
+const transcript = computed<readonly TranscriptEntry[]>(() => {
+	const entries: TranscriptEntry[] = [];
+	for (const m of messages.value) entries.push({ kind: 'message', message: m });
+	for (const n of compactBoundaries.value)
+		entries.push({ kind: 'compact-boundary', notice: n });
+	entries.sort((a, b) => {
+		const aAt = a.kind === 'message' ? a.message.createdAt : a.notice.createdAt;
+		const bAt = b.kind === 'message' ? b.message.createdAt : b.notice.createdAt;
+		return aAt < bAt ? -1 : aAt > bAt ? 1 : 0;
+	});
+	return entries;
+});
+
+const hasContent = computed<boolean>(
+	() => messages.value.length > 0 || compactBoundaries.value.length > 0,
+);
+
+/**
  * Streaming in-flight indicator. While `chatStore.status === 'loading'` and
  * `chatStore.streamingText` is non-empty, the message list appends a
  * synthetic streaming-assistant bubble to render text deltas as they arrive
@@ -35,27 +79,49 @@ const messages = computed(() => {
  * it is replaced by the real `appendMessage` once the stream resolves.
  */
 const streamingText = computed<string>(() => store.streamingText);
+const streamingThinking = computed<string>(() => store.streamingThinking);
+const streamingToolCalls = computed(() => Array.from(store.streamingToolCalls.entries()));
 const isStreaming = computed<boolean>(
-	() => store.status === 'loading' && streamingText.value.length > 0,
+	() =>
+		store.status === 'loading' &&
+		(streamingText.value.length > 0 ||
+			streamingThinking.value.length > 0 ||
+			streamingToolCalls.value.length > 0),
 );
 
 const scrollContainer = ref<HTMLElement | null>(null);
 
-// Track BOTH the message-array length AND the streaming-text length so the
-// scroll position follows live deltas during a streaming turn. Without the
-// second observed value, the scroll watcher only fires at turn boundaries
-// (appendMessage) and the user has to scroll manually as Claude streams.
-watch([() => messages.value.length, () => streamingText.value.length], async () => {
-	await nextTick();
-	const el = scrollContainer.value;
-	if (el === null) return;
-	el.scrollTop = el.scrollHeight;
+// Track message length, streaming text/thinking lengths, and tool-call inputJson byte-length
+// (Codex P2 PR #379: observing only `streamingToolCalls.length` missed deltas to existing blocks).
+const streamingToolCallsLength = computed(() => {
+	let total = streamingToolCalls.value.length;
+	for (const [, call] of streamingToolCalls.value) {
+		total += call.inputJson.length;
+	}
+	return total;
 });
+
+
+watch(
+	[
+		() => messages.value.length,
+		() => compactBoundaries.value.length,
+		() => streamingText.value.length,
+		() => streamingThinking.value.length,
+		streamingToolCallsLength,
+	],
+	async () => {
+		await nextTick();
+		const el = scrollContainer.value;
+		if (el === null) return;
+		el.scrollTop = el.scrollHeight;
+	},
+);
 </script>
 
 <template>
 	<div
-		v-if="messages.length > 0 || isStreaming"
+		v-if="hasContent || isStreaming"
 		ref="scrollContainer"
 		class="sp-agent-messages"
 		data-testid="agent-message-list"
@@ -63,34 +129,49 @@ watch([() => messages.value.length, () => streamingText.value.length], async () 
 		:aria-label="t('agent.messageListAriaLabel')"
 		aria-live="polite"
 	>
-		<article
-			v-for="message in messages"
-			:key="message.id"
-			class="sp-agent-message"
-			:class="`sp-agent-message--${message.role}`"
-			:data-testid="`agent-message-${message.role}`"
-		>
-			<header class="sp-agent-message__role" data-testid="agent-message-role">
-				{{ message.role === 'user' ? t('agent.roleUser') : t('agent.roleAssistant') }}
-			</header>
-			<div class="sp-agent-message__body" data-testid="agent-message-body">
-				<MarkdownBlock
-					v-if="message.text.length > 0"
-					class="sp-agent-message__text"
-					:text="message.text"
-				/>
-				<p v-else class="sp-agent-message__empty" data-testid="agent-message-empty">
-					{{ t('agent.assistantEmpty') }}
-				</p>
-				<p
-					v-if="message.truncated === true"
-					class="sp-agent-message__trim-note"
-					data-testid="agent-message-trim-note"
-				>
-					{{ t('agent.contextTrimmed') }}
-				</p>
+		<template v-for="entry in transcript">
+			<article
+				v-if="entry.kind === 'message'"
+				:key="entry.message.id"
+				class="sp-agent-message"
+				:class="`sp-agent-message--${entry.message.role}`"
+				:data-testid="`agent-message-${entry.message.role}`"
+			>
+				<header class="sp-agent-message__role" data-testid="agent-message-role">
+					{{ entry.message.role === 'user' ? t('agent.roleUser') : t('agent.roleAssistant') }}
+				</header>
+				<div class="sp-agent-message__body" data-testid="agent-message-body">
+					<MarkdownBlock
+						v-if="entry.message.text.length > 0"
+						class="sp-agent-message__text"
+						:text="entry.message.text"
+					/>
+					<p v-else class="sp-agent-message__empty" data-testid="agent-message-empty">
+						{{ t('agent.assistantEmpty') }}
+					</p>
+					<p
+						v-if="entry.message.truncated === true"
+						class="sp-agent-message__trim-note"
+						data-testid="agent-message-trim-note"
+					>
+						{{ t('agent.contextTrimmed') }}
+					</p>
+				</div>
+			</article>
+			<div
+				v-else
+				:key="entry.notice.id"
+				class="sp-agent-compact-boundary"
+				data-testid="compact-boundary-notice"
+				role="status"
+			>
+				<span class="sp-agent-compact-boundary__line" aria-hidden="true"></span>
+				<span class="sp-agent-compact-boundary__label">
+					{{ t('chat.compactBoundary.notice') }}
+				</span>
+				<span class="sp-agent-compact-boundary__line" aria-hidden="true"></span>
 			</div>
-		</article>
+		</template>
 		<article
 			v-if="isStreaming"
 			class="sp-agent-message sp-agent-message--assistant sp-agent-message--streaming"
@@ -100,7 +181,19 @@ watch([() => messages.value.length, () => streamingText.value.length], async () 
 				{{ t('agent.roleAssistant') }}
 			</header>
 			<div class="sp-agent-message__body">
-				<MarkdownBlock class="sp-agent-message__text" :text="streamingText" />
+				<ThinkingBlock :text="streamingThinking" />
+				<ToolCallBlock
+					v-for="[blockId, call] in streamingToolCalls"
+					:key="blockId"
+					:tool-name="call.toolName"
+					:input-json="call.inputJson"
+					:done="call.done"
+				/>
+				<MarkdownBlock
+					v-if="streamingText.length > 0"
+					class="sp-agent-message__text"
+					:text="streamingText"
+				/>
 				<span
 					class="sp-agent-message__cursor"
 					aria-hidden="true"
@@ -193,6 +286,27 @@ watch([() => messages.value.length, () => streamingText.value.length], async () 
 
 .sp-agent-message--streaming {
 	opacity: 0.95;
+}
+
+.sp-agent-compact-boundary {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin: 0.25rem 0;
+	color: var(--text-faint);
+	font-size: 0.75rem;
+	font-style: italic;
+	text-align: center;
+}
+
+.sp-agent-compact-boundary__line {
+	flex: 1 1 auto;
+	height: 1px;
+	background: var(--background-modifier-border);
+}
+
+.sp-agent-compact-boundary__label {
+	flex: 0 0 auto;
 }
 
 .sp-agent-message__cursor {

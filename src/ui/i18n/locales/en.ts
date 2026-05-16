@@ -139,6 +139,9 @@ export default {
     response: {
       structuredFail: 'Assistant returned an unexpected response. Please try again.',
     },
+    compactBoundary: {
+      notice: 'Earlier conversation was summarised to save space.',
+    },
   },
   agent: {
     title: 'Specorator agent',
@@ -154,5 +157,10 @@ export default {
     contextTrimmed: 'Some context was trimmed to keep the message within size limits.',
     assistantEmpty: '(No text — see the proposal card below.)',
     emptyHistory: "Ask Claude anything — your conversation will appear here.",
+    thinking: 'Thinking',
+    toolDone: 'Tool finished',
+    toolStreaming: 'Tool running',
+    toolWaitingForInput: 'Waiting for tool input…',
+    streamingResponse: 'Assistant is replying…',
   },
 } as const

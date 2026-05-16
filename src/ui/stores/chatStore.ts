@@ -4,6 +4,32 @@ import { computed, ref } from 'vue';
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
 import type { SessionId } from '@/domain/chat/SessionId';
+
+/**
+ * Plain DTO for a `compact-boundary` synthetic notice rendered inline in the
+ * thread's message log. Emitted by the SDK / subprocess transport via
+ * `StreamDelta { type: 'compact-boundary' }` when the underlying agent
+ * auto-compacted prior context; surfaces a visible "history was rewritten"
+ * marker so the user can tell that messages above the divider may no longer
+ * be in the model's working set. Codex P2 on PR #379.
+ *
+ * Lives in a per-thread map separate from `ChatMessage` so the existing
+ * `role: 'user' | 'assistant'` discriminator stays untouched.
+ */
+export interface CompactBoundaryNoticeDto {
+	/** Stable id used as `:key` in lists. UUID v4 from `crypto.randomUUID()`. */
+	readonly id: string;
+	/** Thread the boundary belongs to. */
+	readonly threadId: string;
+	/** ISO 8601 UTC timestamp recorded when the delta was received. */
+	readonly createdAt: string;
+	/**
+	 * Optional reason string forwarded from the SDK
+	 * (`SDKCompactBoundaryMessage`). May be undefined; the UI falls back to
+	 * the generic i18n notice when missing.
+	 */
+	readonly reason?: string;
+}
 import type {
 	FileWriteProposal,
 	FileWriteProposalStatus,
@@ -160,6 +186,17 @@ export const useChatStore = defineStore('chat', () => {
 	const messages = ref<Map<string, ChatMessage[]>>(new Map());
 
 	/**
+	 * Per-thread synthetic `compact-boundary` notices, keyed by `threadId`.
+	 * Each entry marks the point where the SDK auto-compacted prior context
+	 * (StreamDelta `compact-boundary`). Rendered inline by `MessageList.vue`
+	 * so users see when conversation history may have been rewritten.
+	 * Memory-only — boundaries are not persisted across restarts because the
+	 * vault session log already captures the underlying SDK event.
+	 * Codex P2 on PR #379.
+	 */
+	const compactBoundaries = ref<Map<string, CompactBoundaryNoticeDto[]>>(new Map());
+
+	/**
 	 * Structured-output parse-failure flag (REQ-ASM-025). Set by `ChatSidebar`
 	 * when `queryStructured()` returns an `EnvelopeParseError`; surfaced via
 	 * `ChatResponse` state `'structured-fail'`. Lives in the store (not in
@@ -281,6 +318,7 @@ export const useChatStore = defineStore('chat', () => {
 		cliStartingUp.value = false;
 		sessionResumed.value = false;
 		messages.value = new Map();
+		compactBoundaries.value = new Map();
 		structuredFail.value = false;
 	}
 
@@ -305,10 +343,43 @@ export const useChatStore = defineStore('chat', () => {
 	 * (transport + session_id continuity) but starts the visible log fresh.
 	 */
 	function clearThreadMessages(threadId: string): void {
-		if (!messages.value.has(threadId)) return;
-		const next = new Map(messages.value);
-		next.delete(threadId);
-		messages.value = next;
+		if (messages.value.has(threadId)) {
+			const next = new Map(messages.value);
+			next.delete(threadId);
+			messages.value = next;
+		}
+		if (compactBoundaries.value.has(threadId)) {
+			const next = new Map(compactBoundaries.value);
+			next.delete(threadId);
+			compactBoundaries.value = next;
+		}
+	}
+
+	/**
+	 * Append a `compact-boundary` notice to the active thread's notice log.
+	 * Idempotent on `id` collision. Creates the bucket lazily for unseen
+	 * thread ids. Used by `ChatSidebar.applyNonTerminalDelta` when the
+	 * transport emits a `StreamDelta { type: 'compact-boundary' }` so that
+	 * `MessageList.vue` can render the divider inline with the conversation.
+	 * Codex P2 on PR #379.
+	 */
+	function appendCompactBoundaryNotice(
+		threadId: string,
+		payload: { reason?: string },
+	): void {
+		const bucket = compactBoundaries.value.get(threadId) ?? [];
+		const entry: CompactBoundaryNoticeDto = {
+			id:
+				typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+					? crypto.randomUUID()
+					: `cb-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+			threadId,
+			createdAt: new Date().toISOString(),
+			reason: payload.reason,
+		};
+		const next = new Map(compactBoundaries.value);
+		next.set(threadId, [...bucket, entry]);
+		compactBoundaries.value = next;
 	}
 
 	/**
@@ -542,6 +613,7 @@ export const useChatStore = defineStore('chat', () => {
 		cliStartingUp,
 		sessionResumed,
 		messages,
+		compactBoundaries,
 		structuredFail,
 		addContextFile,
 		removeContextFile,
@@ -570,6 +642,7 @@ export const useChatStore = defineStore('chat', () => {
 		appendMessage,
 		clearThreadMessages,
 		clearThreadProposals,
+		appendCompactBoundaryNotice,
 		setStructuredFail,
 	};
 });

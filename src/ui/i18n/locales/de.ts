@@ -139,6 +139,9 @@ export default {
     response: {
       structuredFail: 'Der Assistent hat eine unerwartete Antwort zurückgegeben. Bitte versuche es erneut.',
     },
+    compactBoundary: {
+      notice: 'Frühere Konversation wurde zusammengefasst, um Platz zu sparen.',
+    },
   },
   agent: {
     title: 'Specorator Agent',
@@ -154,5 +157,10 @@ export default {
     contextTrimmed: 'Ein Teil des Kontexts wurde gekürzt, damit die Nachricht im Größenlimit bleibt.',
     assistantEmpty: '(Kein Text — siehe Vorschlagskarte unten.)',
     emptyHistory: 'Frag Claude etwas — dein Gespräch erscheint hier.',
+    thinking: 'Denkt nach',
+    toolDone: 'Werkzeug abgeschlossen',
+    toolStreaming: 'Werkzeug läuft',
+    toolWaitingForInput: 'Warte auf Werkzeug-Eingabe…',
+    streamingResponse: 'Assistent antwortet…',
   },
 } as const

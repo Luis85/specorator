@@ -31,12 +31,11 @@ export class MessageListPO {
 		return this.wrapper.findAll(this.byTid('agent-message-empty'));
 	}
 
-	/**
-	 * Returns the rendered HTML of all markdown bodies in the active thread.
-	 * Used to assert markdown features (bold, code, code blocks) and to verify
-	 * that potentially unsafe input was escaped.
-	 */
 	markdownBlocks() {
 		return this.wrapper.findAll(this.byTid('agent-markdown-block'));
+	}
+
+	compactBoundaryNotices() {
+		return this.wrapper.findAll(this.byTid('compact-boundary-notice'));
 	}
 }
