@@ -128,7 +128,61 @@ export interface ClaudeCliStreamOptions extends ClaudeCliQueryOptions {
  */
 export type StreamDelta =
 	| { readonly type: 'text'; readonly text: string }
+	/**
+	 * Incremental thinking-mode text from an extended-thinking turn. Emitted
+	 * alongside `text` when the model reasons before answering. UI may render
+	 * this in a collapsed `<details>` block above the streaming bubble.
+	 */
+	| { readonly type: 'thinking'; readonly text: string }
 	| { readonly type: 'session-id'; readonly sessionId: SessionId }
+	/**
+	 * First sighting of a tool-use content block. `blockId` is a per-stream
+	 * identifier (NOT the SDK's `id` field) so callers can correlate the
+	 * subsequent `tool-use-input-delta` and `tool-use-stop` deltas back to
+	 * this block. `inputJson` is the initial partial JSON fragment (often
+	 * empty until the next `input_json_delta`).
+	 */
+	| {
+			readonly type: 'tool-use-start';
+			readonly blockId: string;
+			readonly toolName: string;
+			readonly inputJson: string;
+	  }
+	/**
+	 * Additional partial JSON for the tool's `input` field. Callers
+	 * concatenate `inputJson` strings keyed by `blockId` to reconstruct
+	 * the full tool argument payload (which may need JSON-repair until
+	 * `tool-use-stop`).
+	 */
+	| {
+			readonly type: 'tool-use-input-delta';
+			readonly blockId: string;
+			readonly inputJson: string;
+	  }
+	/**
+	 * Terminal marker for a tool-use block. The accumulated `inputJson`
+	 * for `blockId` is now complete and safe to `JSON.parse`.
+	 */
+	| { readonly type: 'tool-use-stop'; readonly blockId: string }
+	/**
+	 * Conversation-compaction boundary (SDK `SDKCompactBoundaryMessage`).
+	 * Long sessions silently rewrite history when the SDK auto-compacts;
+	 * the UI surfaces this as a synthetic system message in the transcript
+	 * so the user knows context older than this point may no longer be
+	 * present in the model's view.
+	 */
+	| { readonly type: 'compact-boundary'; readonly reason?: string }
+	/**
+	 * Token usage telemetry from `message_start` / `message_delta`. Some
+	 * Anthropic-compatible endpoints push usage on `message_start` (where
+	 * `output_tokens` is 0) and update on `message_delta`; consumers should
+	 * treat the latest non-zero values as authoritative.
+	 */
+	| {
+			readonly type: 'usage';
+			readonly inputTokens: number;
+			readonly outputTokens: number;
+	  }
 	| { readonly type: 'done' }
 	| { readonly type: 'error'; readonly error: ClaudeCliError };
 

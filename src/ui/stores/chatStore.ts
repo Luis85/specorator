@@ -114,6 +114,31 @@ export const useChatStore = defineStore('chat', () => {
 	const streamingText = ref<string>('');
 
 	/**
+	 * Accumulated `thinking` deltas from the active turn (extended-
+	 * thinking models). Drives a collapsed `<details>` block in the
+	 * streaming bubble. PR-ASV-2-delta-extension.
+	 */
+	const streamingThinking = ref<string>('');
+
+	/**
+	 * In-flight tool-use blocks keyed by `StreamDelta.blockId`. Each
+	 * entry accumulates `inputJson` deltas; the UI may render a
+	 * "running ⏳ ToolName" indicator on `tool-use-start` and finalise
+	 * on `tool-use-stop`. PR-ASV-2-delta-extension.
+	 */
+	const streamingToolCalls = ref<Map<string, { toolName: string; inputJson: string; done: boolean }>>(new Map());
+
+	/**
+	 * Most recent token-usage telemetry from the SDK / subprocess
+	 * (`message_start` + `message_delta` carrying `usage`). Drives a
+	 * future context-meter UI. Null until the first emission per turn;
+	 * accumulating values are replaced (last-write-wins, mirroring
+	 * Claudian's approach for endpoints that put zero values on
+	 * `message_start`). PR-ASV-2-delta-extension.
+	 */
+	const lastUsage = ref<{ inputTokens: number; outputTokens: number } | null>(null);
+
+	/**
 	 * `true` while the subprocess adapter is performing first-run startup;
 	 * drives `SubprocessStartingPill`. R-ASM-003.
 	 */
@@ -250,6 +275,9 @@ export const useChatStore = defineStore('chat', () => {
 		activeThreadId.value = null;
 		proposals.value = new Map();
 		streamingText.value = '';
+		streamingThinking.value = '';
+		streamingToolCalls.value = new Map();
+		lastUsage.value = null;
 		cliStartingUp.value = false;
 		sessionResumed.value = false;
 		messages.value = new Map();
@@ -324,6 +352,9 @@ export const useChatStore = defineStore('chat', () => {
 	function setActiveThreadId(threadId: string | null): void {
 		activeThreadId.value = threadId;
 		streamingText.value = '';
+		streamingThinking.value = '';
+		streamingToolCalls.value = new Map();
+		lastUsage.value = null;
 		sessionResumed.value = false;
 	}
 
@@ -362,10 +393,69 @@ export const useChatStore = defineStore('chat', () => {
 	/**
 	 * Clears the streaming-text accumulator and the transient session-resumed
 	 * indicator. Called at turn boundaries. NFR-ASM-002, REQ-ASM-035.
+	 *
+	 * Also clears the PR-ASV-2-delta-extension fields: thinking-text
+	 * accumulator, tool-call map, and the per-turn usage telemetry — each
+	 * new turn starts with a clean slate.
 	 */
 	function resetStreaming(): void {
 		streamingText.value = '';
+		streamingThinking.value = '';
+		streamingToolCalls.value = new Map();
+		lastUsage.value = null;
 		sessionResumed.value = false;
+	}
+
+	/**
+	 * Append a thinking-delta to the in-flight extended-thinking buffer.
+	 * PR-ASV-2-delta-extension.
+	 */
+	function appendStreamingThinking(delta: string): void {
+		streamingThinking.value = streamingThinking.value + delta;
+	}
+
+	/**
+	 * Mark a fresh tool-use block in the in-flight call table.
+	 * PR-ASV-2-delta-extension.
+	 */
+	function startStreamingToolCall(blockId: string, toolName: string, initialJson: string): void {
+		const next = new Map(streamingToolCalls.value);
+		next.set(blockId, { toolName, inputJson: initialJson, done: false });
+		streamingToolCalls.value = next;
+	}
+
+	/**
+	 * Append partial JSON to an in-flight tool-use block's `input` field.
+	 * No-op when `blockId` is unknown (defensive against out-of-order
+	 * deltas). PR-ASV-2-delta-extension.
+	 */
+	function appendStreamingToolCallInput(blockId: string, partialJson: string): void {
+		const existing = streamingToolCalls.value.get(blockId);
+		if (existing === undefined) return;
+		const next = new Map(streamingToolCalls.value);
+		next.set(blockId, { ...existing, inputJson: existing.inputJson + partialJson });
+		streamingToolCalls.value = next;
+	}
+
+	/**
+	 * Mark a tool-use block as fully streamed (the SDK's
+	 * `content_block_stop` arrived). The accumulated `inputJson` is now
+	 * safe to `JSON.parse`. PR-ASV-2-delta-extension.
+	 */
+	function finishStreamingToolCall(blockId: string): void {
+		const existing = streamingToolCalls.value.get(blockId);
+		if (existing === undefined) return;
+		const next = new Map(streamingToolCalls.value);
+		next.set(blockId, { ...existing, done: true });
+		streamingToolCalls.value = next;
+	}
+
+	/**
+	 * Update the latest usage telemetry snapshot.
+	 * PR-ASV-2-delta-extension.
+	 */
+	function setLastUsage(usage: { inputTokens: number; outputTokens: number }): void {
+		lastUsage.value = usage;
 	}
 
 	/**
@@ -446,6 +536,9 @@ export const useChatStore = defineStore('chat', () => {
 		activeThreadId,
 		proposals,
 		streamingText,
+		streamingThinking,
+		streamingToolCalls,
+		lastUsage,
 		cliStartingUp,
 		sessionResumed,
 		messages,
@@ -464,6 +557,11 @@ export const useChatStore = defineStore('chat', () => {
 		captureSessionId,
 		markThreadUsed,
 		appendStreamingDelta,
+		appendStreamingThinking,
+		startStreamingToolCall,
+		appendStreamingToolCallInput,
+		finishStreamingToolCall,
+		setLastUsage,
 		resetStreaming,
 		addProposal,
 		setProposalStatus,

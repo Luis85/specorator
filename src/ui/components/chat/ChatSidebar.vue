@@ -748,10 +748,11 @@ async function consumeStream(args: {
 				store.captureSessionId(args.threadId, delta.sessionId);
 			} else if (delta.type === 'done') {
 				return { kind: 'done' as const, text: chunks.join('') };
-			} else {
-				// delta.type === 'error' — the only remaining variant.
+			} else if (delta.type === 'error') {
 				return { kind: 'error' as const, errorCode: delta.error.errorCode };
 			}
+			// Other delta variants (thinking, tool-use-*, compact, usage) are
+			// rendered separately by MessageList and don't terminate the stream.
 		}
 		return { kind: 'incomplete' as const, text: chunks.join('') };
 	});
