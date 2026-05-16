@@ -14,6 +14,29 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * Sleep for `ms` milliseconds, but return early as soon as `signal` fires.
+ * Used by `queryStream` so streaming-call callers who cancel during a
+ * scripted `delayMs` / `streamChunkDelayMs` get prompt feedback rather
+ * than waiting out the full sleep (Codex P2 on PR #370 against the
+ * subprocess mock — the same race semantics apply here).
+ */
+function interruptibleSleep(ms: number, signal: AbortSignal | undefined): Promise<void> {
+	if (ms <= 0) return Promise.resolve();
+	if (signal === undefined) return sleep(ms);
+	return new Promise<void>((resolve) => {
+		const t = setTimeout(() => {
+			signal.removeEventListener('abort', onAbort);
+			resolve();
+		}, ms);
+		const onAbort = (): void => {
+			clearTimeout(t);
+			resolve();
+		};
+		signal.addEventListener('abort', onAbort, { once: true });
+	});
+}
+
+/**
  * Stub implementation of ClaudeCliPort for use in dev mode and unit tests.
  * Satisfies REQ-CCS-022, NFR-CCS-004, SPEC-CCS-001 §6.
  *
@@ -153,13 +176,17 @@ export class MockClaudeCliPort implements ClaudeCliPort {
 			};
 			return;
 		}
-		if (this.delayMs > 0) await sleep(this.delayMs);
-		if (this.queryError !== null) {
-			yield { type: 'error', error: this.queryError };
-			return;
-		}
+		// Sleeps race against the abort signal so a user-initiated cancel
+		// during `delayMs` returns control promptly rather than waiting out
+		// the full sleep (Codex P2, PR #370 — same pattern as the subprocess
+		// mock).
+		await interruptibleSleep(this.delayMs, options?.signal);
 		if (MockClaudeCliPort._isAborted(options)) {
 			yield MockClaudeCliPort._abortDelta();
+			return;
+		}
+		if (this.queryError !== null) {
+			yield { type: 'error', error: this.queryError };
 			return;
 		}
 		if (this.cannedSessionId !== null) {
@@ -174,7 +201,7 @@ export class MockClaudeCliPort implements ClaudeCliPort {
 				return;
 			}
 			yield { type: 'text', text: chunk };
-			if (this.streamChunkDelayMs > 0) await sleep(this.streamChunkDelayMs);
+			await interruptibleSleep(this.streamChunkDelayMs, options?.signal);
 		}
 		yield { type: 'done' };
 	}

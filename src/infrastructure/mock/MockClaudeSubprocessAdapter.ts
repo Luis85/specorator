@@ -28,8 +28,9 @@ import type {
 	ClaudeCliQueryOptions,
 	ClaudeCliStreamOptions,
 	StreamDelta,
+	ClaudeCliError,
 } from '@/domain/ports/ClaudeCliPort';
-import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort';
+import { streamFromQuery } from '@/domain/ports/ClaudeCliPort';
 import type { Result } from '@/domain/shared/Result';
 import { err, ok } from '@/domain/shared/Result';
 
@@ -201,26 +202,14 @@ export class MockClaudeSubprocessAdapter implements ClaudeCliPort {
 	 * Honours `options.signal`: a pre-aborted signal short-circuits to an
 	 * error delta.
 	 */
-	async *queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
-		if (options?.signal?.aborted === true) {
-			yield {
-				type: 'error',
-				error: new ClaudeCliError('QUERY_FAILED', 'MockClaudeSubprocessAdapter: aborted'),
-			};
-			return;
-		}
-		const result = await this.query(prompt, options);
-		if (!result.ok) {
-			yield { type: 'error', error: result.error };
-			return;
-		}
-		if (this.cannedSessionId !== null && options?.onSessionId === undefined) {
-			// Surface session-id via the stream when no callback was provided
-			// (the callback path already fired inside `query()` above).
-			yield { type: 'session-id', sessionId: this.cannedSessionId };
-		}
-		yield { type: 'text', text: result.value };
-		yield { type: 'done' };
+	queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
+		// Delegating to `streamFromQuery` instead of a hand-rolled body covers
+		// the Codex P2 mid-flight-abort gap (PR #370 review on
+		// `MockClaudeSubprocessAdapter`). The helper races the `query()`
+		// promise against an abort-signal event, so aborting while `delayMs`
+		// is elapsing terminates the stream with an `error` delta rather
+		// than emitting `text` / `done`.
+		return streamFromQuery((p, o) => this.query(p, o), prompt, options);
 	}
 
 	/**
