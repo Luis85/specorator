@@ -13,12 +13,22 @@
  */
 import { useI18n } from 'vue-i18n';
 
-defineProps<{
-	/** Current active thread's `feature` slug, or `null` when no thread / no feature. */
-	activeFeature: string | null;
-	/** Whether a thread is currently selected. Drives the "New conversation" button's enabled state. */
-	hasActiveThread: boolean;
-}>();
+const props = withDefaults(
+	defineProps<{
+		/** Current active thread's `feature` slug, or `null` when no thread / no feature. */
+		activeFeature: string | null;
+		/** Whether a thread is currently selected. */
+		hasActiveThread: boolean;
+		/**
+		 * Whether a chat turn is currently in flight (`store.status === 'loading'`).
+		 * Disables the new-conversation control so the user can't reset the thread
+		 * mid-request and strand the in-flight response on a no-longer-active thread
+		 * (Codex P1 finding, PR #369 second-pass review).
+		 */
+		requestInFlight?: boolean;
+	}>(),
+	{ requestInFlight: false },
+);
 
 const emit = defineEmits<{
 	'new-conversation': [];
@@ -41,7 +51,7 @@ function handleNewConversation(): void {
 				type="button"
 				class="sp-agent-header__action"
 				data-testid="agent-header-new-conversation"
-				:disabled="!hasActiveThread"
+				:disabled="!props.hasActiveThread || props.requestInFlight"
 				:aria-label="t('agent.newConversationAriaLabel')"
 				@click="handleNewConversation"
 			>

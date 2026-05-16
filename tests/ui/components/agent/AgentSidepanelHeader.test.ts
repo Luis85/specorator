@@ -9,7 +9,11 @@ import AgentSidepanelHeader from '@/ui/components/agent/AgentSidepanelHeader.vue
 import { i18n } from '@/ui/i18n';
 import { AgentSidepanelHeaderPO } from './AgentSidepanelHeader.po';
 
-function mountHeader(props: { activeFeature: string | null; hasActiveThread: boolean }) {
+function mountHeader(props: {
+	activeFeature: string | null;
+	hasActiveThread: boolean;
+	requestInFlight?: boolean;
+}) {
 	const wrapper = mount(AgentSidepanelHeader, {
 		global: { plugins: [i18n] },
 		props,
@@ -66,6 +70,40 @@ describe('AgentSidepanelHeader', () => {
 			const { wrapper, po } = mountHeader({ activeFeature: null, hasActiveThread: false });
 			await po.clickNewConversation();
 			expect(wrapper.emitted('new-conversation')).toBeUndefined();
+		});
+
+		// Codex P1 (PR #369 second review): mid-request reset would strand
+		// the in-flight response on a no-longer-active thread.
+		it('is disabled while a chat turn is in flight even when a thread is active', () => {
+			const { po } = mountHeader({
+				activeFeature: 'foo',
+				hasActiveThread: true,
+				requestInFlight: true,
+			});
+			expect(po.newConversationDisabled()).toBe(true);
+		});
+
+		it('does not emit while requestInFlight is true', async () => {
+			const { wrapper, po } = mountHeader({
+				activeFeature: 'foo',
+				hasActiveThread: true,
+				requestInFlight: true,
+			});
+			await po.clickNewConversation();
+			expect(wrapper.emitted('new-conversation')).toBeUndefined();
+		});
+
+		it('toggles disabled when requestInFlight transitions in either direction', async () => {
+			const { wrapper, po } = mountHeader({
+				activeFeature: 'foo',
+				hasActiveThread: true,
+				requestInFlight: false,
+			});
+			expect(po.newConversationDisabled()).toBe(false);
+			await wrapper.setProps({ requestInFlight: true });
+			expect(po.newConversationDisabled()).toBe(true);
+			await wrapper.setProps({ requestInFlight: false });
+			expect(po.newConversationDisabled()).toBe(false);
 		});
 	});
 });

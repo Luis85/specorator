@@ -26,6 +26,7 @@ const store = useChatStore();
 const notificationStore = useNotificationStore();
 
 const activeThreadId = computed(() => store.activeThreadId);
+const isRequestInFlight = computed(() => store.status === 'loading');
 const activeFeature = computed(() => {
 	const tid = store.activeThreadId;
 	if (tid === null) return null;
@@ -44,6 +45,16 @@ function onNotice(e: Event): void {
 }
 
 function handleNewConversation(): void {
+	// Codex P1 (PR #369, second review): block the reset while a turn is in
+	// flight. Without this guard the user can click "New conversation" mid-
+	// request — `handleSend()` keeps running and `applySuccessfulTurn` then
+	// writes its result against the cleared thread id, leaving the proposal/
+	// message output inaccessible while the next conversation starts with
+	// stale content. The header button is also disabled when loading; this
+	// is the defence-in-depth check in case a future entry point (URI
+	// action, keyboard shortcut, command palette) invokes the handler
+	// directly.
+	if (store.status === 'loading') return;
 	// Codex P2 (PR #369): Increment 1 ships no thread switcher, so once the
 	// active thread is cleared its message bucket becomes unreachable. Drop
 	// it before rotating `activeThreadId` to prevent unbounded in-memory
@@ -75,6 +86,7 @@ onUnmounted(() => {
 			<AgentSidepanelHeader
 				:active-feature="activeFeature"
 				:has-active-thread="activeThreadId !== null"
+				:request-in-flight="isRequestInFlight"
 				@new-conversation="handleNewConversation"
 			/>
 			<div class="sp-agent__body">
