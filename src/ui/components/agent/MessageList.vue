@@ -12,6 +12,7 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useChatStore } from '@/ui/stores/chatStore';
+import MarkdownBlock from '@/ui/components/agent/MarkdownBlock.vue';
 
 const props = defineProps<{
 	/** Active thread id, or `null` when no thread is selected. */
@@ -44,15 +45,12 @@ const scrollContainer = ref<HTMLElement | null>(null);
 // scroll position follows live deltas during a streaming turn. Without the
 // second observed value, the scroll watcher only fires at turn boundaries
 // (appendMessage) and the user has to scroll manually as Claude streams.
-watch(
-	[() => messages.value.length, () => streamingText.value.length],
-	async () => {
-		await nextTick();
-		const el = scrollContainer.value;
-		if (el === null) return;
-		el.scrollTop = el.scrollHeight;
-	},
-);
+watch([() => messages.value.length, () => streamingText.value.length], async () => {
+	await nextTick();
+	const el = scrollContainer.value;
+	if (el === null) return;
+	el.scrollTop = el.scrollHeight;
+});
 </script>
 
 <template>
@@ -76,7 +74,11 @@ watch(
 				{{ message.role === 'user' ? t('agent.roleUser') : t('agent.roleAssistant') }}
 			</header>
 			<div class="sp-agent-message__body" data-testid="agent-message-body">
-				<pre v-if="message.text.length > 0" class="sp-agent-message__text">{{ message.text }}</pre>
+				<MarkdownBlock
+					v-if="message.text.length > 0"
+					class="sp-agent-message__text"
+					:text="message.text"
+				/>
 				<p v-else class="sp-agent-message__empty" data-testid="agent-message-empty">
 					{{ t('agent.assistantEmpty') }}
 				</p>
@@ -98,12 +100,13 @@ watch(
 				{{ t('agent.roleAssistant') }}
 			</header>
 			<div class="sp-agent-message__body">
-				<pre class="sp-agent-message__text">{{ streamingText }}</pre>
+				<MarkdownBlock class="sp-agent-message__text" :text="streamingText" />
 				<span
 					class="sp-agent-message__cursor"
 					aria-hidden="true"
 					data-testid="agent-message-streaming-cursor"
-				>▍</span>
+					>▍</span
+				>
 			</div>
 		</article>
 	</div>
@@ -172,7 +175,6 @@ watch(
 	font-family: inherit;
 	font-size: 0.875rem;
 	color: var(--text-normal);
-	white-space: pre-wrap;
 	word-break: break-word;
 }
 
