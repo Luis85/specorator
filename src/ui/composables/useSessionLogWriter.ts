@@ -53,30 +53,31 @@ export function useSessionLogWriter(): UseSessionLogWriter {
 	return {
 		getWriter(): Promise<SessionLogWriter> {
 			if (inFlight !== null) return inFlight
-			inFlight = (async () => {
-				try {
-					const current = await settings.getSettings()
-					// Invalidate the cached writer when the configured specs folder has
-					// changed mid-session (Codex P2, PR #350). Without this, a user
-					// who changes the Specs folder in settings keeps writing session
-					// logs to the old folder while stage/context resolution uses the
-					// new one, splitting history across roots.
-					if (cached === null || cachedSpecsFolder !== current.specsFolder) {
-						cached = new SessionLogWriter(
-							vault,
-							logger,
-							current.specsFolder,
-							() => new Date().toISOString(),
-						)
-						cachedSpecsFolder = current.specsFolder
-					}
-					return cached
-				} finally {
-					// Clear so a subsequent specsFolder change can be re-detected on
-					// the next call. The cache itself survives across these resets.
-					inFlight = null
+			const pending = (async (): Promise<SessionLogWriter> => {
+				const current = await settings.getSettings()
+				// Invalidate the cached writer when the configured specs folder has
+				// changed mid-session (Codex P2, PR #350). Without this, a user
+				// who changes the Specs folder in settings keeps writing session
+				// logs to the old folder while stage/context resolution uses the
+				// new one, splitting history across roots.
+				if (cached === null || cachedSpecsFolder !== current.specsFolder) {
+					cached = new SessionLogWriter(
+						vault,
+						logger,
+						current.specsFolder,
+						() => new Date().toISOString(),
+					)
+					cachedSpecsFolder = current.specsFolder
 				}
+				return cached
 			})()
+			// Clear `inFlight` once construction settles so a subsequent
+			// `specsFolder` change can be re-detected on the next call. `.finally`
+			// preserves both resolution value and rejection, and avoids a raw
+			// try/finally block (`no-restricted-syntax` rule).
+			inFlight = pending.finally(() => {
+				inFlight = null
+			})
 			return inFlight
 		},
 	}
