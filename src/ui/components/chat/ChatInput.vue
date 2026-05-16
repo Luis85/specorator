@@ -96,19 +96,21 @@ function handleInput(event: Event): void {
 }
 
 function commitMention(candidate: MentionCandidate): void {
-  const ta = textareaEl.value
-  // Replace the `@<query>` fragment with `@<filename> ` (with trailing
-  // space) in the textarea value. We compute the new value from the
-  // current `modelValue` + the trigger's `atIndex` so the replacement is
-  // deterministic regardless of where the picker was opened.
+  // Codex P2 on PR #376: replace the `@<query>` span using trigger
+  // bounds, NOT the current caret. The picker may stay open while the
+  // user moves the caret with ArrowLeft/ArrowRight; using
+  // `ta.selectionStart` would slice the wrong suffix and leak the old
+  // query (or unrelated text) into the prompt. `picker.atIndex` is the
+  // `@`, and `picker.atIndex + 1 + picker.query.length` is the end of
+  // the detected token at the time the picker last opened/updated.
   const at = picker.atIndex.value
   if (at < 0) {
     picker.close()
     return
   }
+  const queryEnd = at + 1 + picker.query.value.length
   const before = props.modelValue.slice(0, at)
-  const caret = ta?.selectionStart ?? props.modelValue.length
-  const after = props.modelValue.slice(caret)
+  const after = props.modelValue.slice(queryEnd)
   const token = `@${basenameOf(candidate.path)} `
   const next = `${before}${token}${after}`
   emit('update:modelValue', next)
