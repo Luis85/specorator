@@ -760,7 +760,58 @@ to   { opacity: 1; transform: translateY(0);
 	font-style: italic;
 }
 
-.specorator-root :where(.sp-agent-messages[data-v-289bf981]) {
+.specorator-root :where(.sp-markdown[data-v-b1397c03]) {
+	font-size: 0.875rem;
+	color: var(--text-normal);
+	word-break: break-word;
+}
+.specorator-root :where(.sp-markdown[data-v-b1397c03] .sp-markdown__p) {
+	margin: 0 0 0.5rem;
+	white-space: pre-wrap;
+}
+.specorator-root :where(.sp-markdown[data-v-b1397c03] .sp-markdown__p:last-child) {
+	margin-bottom: 0;
+}
+.specorator-root :where(.sp-markdown[data-v-b1397c03] .sp-markdown__pre) {
+	margin: 0 0 0.5rem;
+	padding: 0.5rem 0.625rem;
+	border-radius: 4px;
+	background: var(--background-primary-alt, var(--background-primary));
+	border: 1px solid var(--background-modifier-border);
+	overflow-x: auto;
+	font-size: 0.8125rem;
+}
+.specorator-root :where(.sp-markdown[data-v-b1397c03] .sp-markdown__pre-code) {
+	font-family: var(--font-monospace, ui-monospace, monospace);
+	white-space: pre;
+}
+.specorator-root :where(.sp-markdown[data-v-b1397c03] .sp-markdown__code) {
+	padding: 0.05rem 0.25rem;
+	border-radius: 3px;
+	background: var(--background-modifier-border);
+	font-family: var(--font-monospace, ui-monospace, monospace);
+	font-size: 0.85em;
+}
+.specorator-root :where(.sp-markdown[data-v-b1397c03] .sp-markdown__blockquote) {
+	margin: 0 0 0.5rem;
+	padding: 0.25rem 0.625rem;
+	border-left: 3px solid var(--background-modifier-border);
+	color: var(--text-muted);
+	white-space: pre-wrap;
+}
+.specorator-root :where(.sp-markdown[data-v-b1397c03] .sp-markdown__list) {
+	margin: 0 0 0.5rem;
+	padding-left: 1.25rem;
+}
+.specorator-root :where(.sp-markdown[data-v-b1397c03] .sp-markdown__li) {
+	margin: 0 0 0.125rem;
+}
+.specorator-root :where(.sp-markdown[data-v-b1397c03] .sp-markdown__link) {
+	color: var(--text-accent);
+	text-decoration: underline;
+}
+
+.specorator-root :where(.sp-agent-messages[data-v-25c3bb88]) {
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow-y: auto;
@@ -769,21 +820,21 @@ to   { opacity: 1; transform: translateY(0);
 	flex-direction: column;
 	gap: 0.75rem;
 }
-.specorator-root :where(.sp-agent-messages--empty[data-v-289bf981]) {
+.specorator-root :where(.sp-agent-messages--empty[data-v-25c3bb88]) {
 	flex: 0 0 auto;
 	padding: 1.25rem 1rem 0;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 }
-.specorator-root :where(.sp-agent-messages__empty-body[data-v-289bf981]) {
+.specorator-root :where(.sp-agent-messages__empty-body[data-v-25c3bb88]) {
 	margin: 0;
 	font-size: 0.8125rem;
 	color: var(--text-muted);
 	text-align: center;
 	font-style: italic;
 }
-.specorator-root :where(.sp-agent-message[data-v-289bf981]) {
+.specorator-root :where(.sp-agent-message[data-v-25c3bb88]) {
 	display: flex;
 	flex-direction: column;
 	gap: 0.25rem;
@@ -792,50 +843,49 @@ to   { opacity: 1; transform: translateY(0);
 	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 }
-.specorator-root :where(.sp-agent-message--user[data-v-289bf981]) {
+.specorator-root :where(.sp-agent-message--user[data-v-25c3bb88]) {
 	background: var(--background-secondary-alt, var(--background-secondary));
 }
-.specorator-root :where(.sp-agent-message__role[data-v-289bf981]) {
+.specorator-root :where(.sp-agent-message__role[data-v-25c3bb88]) {
 	font-size: 0.6875rem;
 	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 	color: var(--text-muted);
 }
-.specorator-root :where(.sp-agent-message__body[data-v-289bf981]) {
+.specorator-root :where(.sp-agent-message__body[data-v-25c3bb88]) {
 	display: flex;
 	flex-direction: column;
 	gap: 0.25rem;
 }
-.specorator-root :where(.sp-agent-message__text[data-v-289bf981]) {
+.specorator-root :where(.sp-agent-message__text[data-v-25c3bb88]) {
 	margin: 0;
 	font-family: inherit;
 	font-size: 0.875rem;
 	color: var(--text-normal);
-	white-space: pre-wrap;
 	word-break: break-word;
 }
-.specorator-root :where(.sp-agent-message__empty[data-v-289bf981]) {
+.specorator-root :where(.sp-agent-message__empty[data-v-25c3bb88]) {
 	margin: 0;
 	font-size: 0.8125rem;
 	color: var(--text-muted);
 	font-style: italic;
 }
-.specorator-root :where(.sp-agent-message__trim-note[data-v-289bf981]) {
+.specorator-root :where(.sp-agent-message__trim-note[data-v-25c3bb88]) {
 	margin: 0;
 	font-size: 0.75rem;
 	color: var(--text-faint);
 }
-.specorator-root :where(.sp-agent-message--streaming[data-v-289bf981]) {
+.specorator-root :where(.sp-agent-message--streaming[data-v-25c3bb88]) {
 	opacity: 0.95;
 }
-.specorator-root :where(.sp-agent-message__cursor[data-v-289bf981]) {
+.specorator-root :where(.sp-agent-message__cursor[data-v-25c3bb88]) {
 	display: inline-block;
 	font-size: 0.875rem;
 	color: var(--text-accent);
-	animation: sp-agent-message__blink-289bf981 1s steps(2, start) infinite;
+	animation: sp-agent-message__blink-25c3bb88 1s steps(2, start) infinite;
 }
-@keyframes sp-agent-message__blink-289bf981 {
+@keyframes sp-agent-message__blink-25c3bb88 {
 to {
 		visibility: hidden;
 }
