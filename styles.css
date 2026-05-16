@@ -1199,7 +1199,7 @@ to {
  * parent: in the agent sidepanel the parent gives ChatSidebar `flex: 0 0
  * auto` and `MessageList` takes the remaining grow space.
  */
-.specorator-root :where(.sp-chat-sidebar[data-v-a2962cc1]) {
+.specorator-root :where(.sp-chat-sidebar[data-v-22efcdd3]) {
 	padding: 1rem;
 	display: flex;
 	flex-direction: column;
@@ -1207,24 +1207,24 @@ to {
 	box-sizing: border-box;
 	flex-shrink: 0;
 }
-.specorator-root :where(.sp-chat__title[data-v-a2962cc1]) {
+.specorator-root :where(.sp-chat__title[data-v-22efcdd3]) {
 	margin: 0;
 	font-size: 1.125rem;
 	font-weight: 700;
 	color: var(--text-normal);
 }
-.specorator-root :where(.sp-chat__header[data-v-a2962cc1]) {
+.specorator-root :where(.sp-chat__header[data-v-22efcdd3]) {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
 	flex-wrap: wrap;
 }
-.specorator-root :where(.sp-chat__divider[data-v-a2962cc1]) {
+.specorator-root :where(.sp-chat__divider[data-v-22efcdd3]) {
 	margin: 0;
 	border: none;
 	border-top: 1px solid var(--background-modifier-border);
 }
-.specorator-root :where(.sp-chat__stop[data-v-a2962cc1]) {
+.specorator-root :where(.sp-chat__stop[data-v-22efcdd3]) {
 	margin-left: auto;
 	font-size: 0.75rem;
 	font-weight: 500;
@@ -1238,10 +1238,10 @@ to {
 		background-color 0.15s,
 		border-color 0.15s;
 }
-.specorator-root :where(.sp-chat__stop[data-v-a2962cc1]:hover) {
+.specorator-root :where(.sp-chat__stop[data-v-22efcdd3]:hover) {
 	background: var(--background-modifier-error-hover, var(--interactive-hover));
 }
-.specorator-root :where(.sp-chat__degraded[data-v-a2962cc1]) {
+.specorator-root :where(.sp-chat__degraded[data-v-22efcdd3]) {
 	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 8px;
@@ -1250,13 +1250,13 @@ to {
 	flex-direction: column;
 	gap: 0.5rem;
 }
-.specorator-root :where(.sp-chat__degraded-heading[data-v-a2962cc1]) {
+.specorator-root :where(.sp-chat__degraded-heading[data-v-22efcdd3]) {
 	margin: 0;
 	font-size: 1rem;
 	font-weight: 600;
 	color: var(--text-normal);
 }
-.specorator-root :where(.sp-chat__degraded-body[data-v-a2962cc1]) {
+.specorator-root :where(.sp-chat__degraded-body[data-v-22efcdd3]) {
 	margin: 0;
 	font-size: 0.875rem;
 	color: var(--text-muted);
