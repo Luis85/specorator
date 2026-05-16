@@ -1,4 +1,4 @@
-import { Plugin, TFile, TFolder } from 'obsidian'
+import { Plugin, TFile } from 'obsidian'
 // SPEC-ASM-001 §9.1 — `child_process.spawn` is imported statically at the top
 // of this file so the subscription adapter's constructor in `onload()` has no
 // dynamic-import sites. The ESLint guard for unbundled `child_process` is
@@ -7,7 +7,6 @@ import { spawn } from 'node:child_process'
 import * as os from 'node:os'
 import { SpecoratorView, VIEW_TYPE } from './SpecoratorView'
 import { SpecoratorSettingTab } from './settings'
-import { promoteLegacyFlatSettings } from './loadSettings-migrate'
 import { ensureLeafLoaded } from './leafLoader'
 import { selectTransport } from './transport/TransportSelector'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
@@ -307,7 +306,6 @@ export default class SpecoratorPlugin extends Plugin {
       ]).then(() => {
         this._specoratorView?.bumpSettingsVersion()
       })
-      this.detectLegacyVaultLayout()
       if (!this.settings.onboardingComplete) {
         void this.activateView()
           .then(() => { this._dispatchNavigate('/onboarding') })
@@ -351,9 +349,7 @@ export default class SpecoratorPlugin extends Plugin {
 
   async loadSettings(): Promise<void> {
     const stored = (await this.loadData()) as Record<string, unknown> | null
-    const raw: Record<string, unknown> = { ...(stored ?? {}) }
-
-    this._storedData = promoteLegacyFlatSettings(raw)
+    this._storedData = { ...(stored ?? {}) }
 
     this.settings = {
       ...DEFAULT_SETTINGS,
@@ -462,23 +458,6 @@ export default class SpecoratorPlugin extends Plugin {
     const validated = (this.core?.getModuleSettings(settingsKey) ?? merged) as Record<string, unknown>
     this._storedData = { ...this._storedData, [settingsKey]: validated }
     await this.saveData(this._storedData)
-  }
-
-  /**
-   * DESIGN-AVS-001: If the vault has a `features/` folder but not a `specs/`
-   * folder, show a one-time notice informing the user to rename it.
-   */
-  private detectLegacyVaultLayout(): void {
-    if (!this.bridge) return
-    const hasFeaturesFolder = this.app.vault.getAbstractFileByPath('features') instanceof TFolder
-    const hasSpecsFolder = this.app.vault.getAbstractFileByPath(this.settings.specsFolder) instanceof TFolder
-    if (hasFeaturesFolder && !hasSpecsFolder) {
-      this.bridge.showWarning(
-        `This vault uses the old \`features/\` folder. ` +
-          `Please rename it to \`${this.settings.specsFolder}/\` or update the Specs folder setting.`,
-        8000,
-      )
-    }
   }
 
   _dispatchNavigate(path: string): void {

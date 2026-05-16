@@ -4,10 +4,9 @@ import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginS
 import { fakeModulePorts } from '../__fakes__/fake-ports'
 
 describe('coreSettingsModule descriptor metadata', () => {
-  it('has the expected id, settingsKey, and settingsVersion', () => {
+  it('has the expected id and settingsKey', () => {
     expect(coreSettingsModule.id).toBe('specorator')
     expect(coreSettingsModule.settingsKey).toBe('specorator')
-    expect(coreSettingsModule.settingsVersion).toBe(3)
   })
 
   it('settingsDefaults equals DEFAULT_SETTINGS', () => {
@@ -17,89 +16,6 @@ describe('coreSettingsModule descriptor metadata', () => {
   it('defaults mcpServerEnabled to false (privacy-by-default)', () => {
     expect(DEFAULT_SETTINGS.mcpServerEnabled).toBe(false)
     expect(coreSettingsModule.settingsDefaults?.mcpServerEnabled).toBe(false)
-  })
-})
-
-describe('coreSettingsModule.migrate (v1 → v2 mcpServerEnabled)', () => {
-  const migrate = (fromVersion: number, blob: unknown): unknown => {
-    const fn = coreSettingsModule.migrate
-    if (!fn) throw new Error('migrate is undefined')
-    return fn(fromVersion, blob)
-  }
-
-  it('injects mcpServerEnabled=false when migrating from v0 with no value', () => {
-    const out = migrate(0, {}) as Record<string, unknown>
-    expect(out.mcpServerEnabled).toBe(false)
-  })
-
-  it('injects mcpServerEnabled=false when migrating from v1 with no value', () => {
-    const out = migrate(1, { teamMode: true }) as Record<string, unknown>
-    expect(out.mcpServerEnabled).toBe(false)
-    expect(out.teamMode).toBe(true)
-  })
-
-  it('preserves an existing mcpServerEnabled=true during migration (never flips user choice)', () => {
-    const out = migrate(0, { mcpServerEnabled: true }) as Record<string, unknown>
-    expect(out.mcpServerEnabled).toBe(true)
-  })
-
-  it('preserves an existing mcpServerEnabled=false during migration', () => {
-    const out = migrate(0, { mcpServerEnabled: false }) as Record<string, unknown>
-    expect(out.mcpServerEnabled).toBe(false)
-  })
-
-  it('does not inject when already at the target version (fromVersion >= 2)', () => {
-    const out = migrate(2, {}) as Record<string, unknown>
-    expect('mcpServerEnabled' in out).toBe(false)
-  })
-
-  it('returns a fresh object when blob is null or non-object', () => {
-    expect(migrate(0, null)).toEqual({ mcpServerEnabled: false })
-    expect(migrate(0, 'string-junk')).toEqual({ mcpServerEnabled: false })
-    expect(migrate(0, [])).toEqual({ mcpServerEnabled: false })
-  })
-})
-
-describe('coreSettingsModule.migrate (v2 → v3 onboardingComplete)', () => {
-  const migrate = (fromVersion: number, blob: unknown): unknown => {
-    const fn = coreSettingsModule.migrate
-    if (!fn) throw new Error('migrate is undefined')
-    return fn(fromVersion, blob)
-  }
-
-  it('injects onboardingComplete=true when upgrading from v1 (existing install)', () => {
-    const out = migrate(1, { specsFolder: 'specs' }) as Record<string, unknown>
-    expect(out.onboardingComplete).toBe(true)
-  })
-
-  it('injects onboardingComplete=true when upgrading from v2 (existing install)', () => {
-    const out = migrate(2, { specsFolder: 'specs' }) as Record<string, unknown>
-    expect(out.onboardingComplete).toBe(true)
-  })
-
-  it('does NOT inject onboardingComplete for a fresh install (fromVersion=0, empty blob)', () => {
-    const out = migrate(0, {}) as Record<string, unknown>
-    expect('onboardingComplete' in out).toBe(false)
-  })
-
-  it('injects onboardingComplete=true for unversioned existing install (fromVersion=0, non-empty blob)', () => {
-    const out = migrate(0, { specsFolder: 'specs', locale: 'en' }) as Record<string, unknown>
-    expect(out.onboardingComplete).toBe(true)
-  })
-
-  it('does not inject onboardingComplete when already at v3 or later', () => {
-    const out = migrate(3, {}) as Record<string, unknown>
-    expect('onboardingComplete' in out).toBe(false)
-  })
-
-  it('preserves existing onboardingComplete=false when upgrading', () => {
-    const out = migrate(2, { onboardingComplete: false }) as Record<string, unknown>
-    expect(out.onboardingComplete).toBe(false)
-  })
-
-  it('preserves existing onboardingComplete=true when upgrading', () => {
-    const out = migrate(2, { onboardingComplete: true }) as Record<string, unknown>
-    expect(out.onboardingComplete).toBe(true)
   })
 })
 

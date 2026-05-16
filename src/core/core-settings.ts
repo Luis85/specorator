@@ -25,45 +25,10 @@ function coerceTrimmedString(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value.trim() : fallback
 }
 
-function toMutableBlob(blob: unknown): { out: Record<string, unknown>; hadData: boolean } {
-  const isObjectBlob = blob !== null && typeof blob === 'object' && !Array.isArray(blob)
-  const out: Record<string, unknown> = isObjectBlob ? { ...(blob as Record<string, unknown>) } : {}
-  return { out, hadData: isObjectBlob && Object.keys(out).length > 0 }
-}
-
 export const coreSettingsModule = defineModule<PluginSettings>({
   id: 'specorator',
   settingsKey: 'specorator',
-  settingsVersion: 3,
   settingsDefaults: { ...DEFAULT_SETTINGS },
-
-  /**
-   * Migrate stored settings forward to the current schema version.
-   *
-   * v1 → v2: introduces `mcpServerEnabled`. Default it to `false` (opt-out)
-   * for upgrading installs so existing users do not silently start receiving
-   * a local MCP server. Only inject when absent — never flip an existing
-   * user choice.
-   *
-   * v2 → v3: introduces `onboardingComplete`. Default it to `true` for
-   * upgrading installs so existing users are not forced through the wizard on
-   * next launch. "Upgrading" means fromVersion >= 1 OR fromVersion === 0 with
-   * a non-empty blob (unversioned existing installs never stored a version key
-   * and therefore arrive as v0 even though they have real settings). Fresh
-   * installs arrive as v0 with a null or empty blob and are left without the
-   * key so validateSettings falls through to DEFAULT_SETTINGS.onboardingComplete
-   * (false) and the wizard runs normally.
-   */
-  migrate(fromVersion: number, blob: unknown): unknown {
-    const { out, hadData } = toMutableBlob(blob)
-    if (fromVersion < 2 && !('mcpServerEnabled' in out)) {
-      out.mcpServerEnabled = false
-    }
-    if ((fromVersion >= 1 || (fromVersion === 0 && hadData)) && fromVersion < 3 && !('onboardingComplete' in out)) {
-      out.onboardingComplete = true
-    }
-    return out
-  },
 
   validateSettings(raw: unknown): PluginSettings {
     const r = (raw ?? {}) as Partial<PluginSettings>
