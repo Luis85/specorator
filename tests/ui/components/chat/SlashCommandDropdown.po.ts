@@ -55,6 +55,16 @@ export class SlashCommandDropdownPO {
 		return this.itemByName(name).find(this.byTid('slash-command-description')).text();
 	}
 
+	itemSourceLabel(name: string): string | null {
+		const source = this.wrapper.find(this.byTid(`slash-command-source-${name}`));
+		return source.exists() ? source.text() : null;
+	}
+
+	itemHintText(name: string): string | null {
+		const hint = this.wrapper.find(this.byTid(`slash-command-hint-${name}`));
+		return hint.exists() ? hint.text() : null;
+	}
+
 	async clickItem(name: string): Promise<void> {
 		await this.itemByName(name).trigger('mousedown');
 	}

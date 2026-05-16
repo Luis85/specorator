@@ -112,6 +112,14 @@ function handleSelectCommand(command: SlashCommand): void {
 		case 'advance-stage':
 			notificationStore.addNotice('Not yet implemented in v2', 4000);
 			return;
+		case 'vault-prompt':
+			// Vault-loaded command/skill: insert the prompt body into the
+			// chat textarea for the user to review/edit before sending. We
+			// do NOT auto-send — the body is a template, not a final prompt.
+			if (command.body !== undefined) {
+				store.setUserText(command.body);
+			}
+			return;
 	}
 }
 
