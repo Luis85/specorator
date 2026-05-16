@@ -725,6 +725,64 @@ async function handleSend(): Promise<void> {
 	focusTextarea();
 }
 
+type DrainOutcome =
+	| { kind: 'done'; text: string }
+	| { kind: 'error'; errorCode: ClaudeCliErrorCode };
+
+/**
+ * Dispatch one delta to the store and return a terminal outcome when the
+ * stream is over. Extracted from `consumeStream` to keep the async-iterator
+ * loop under the project's complexity budget.
+ */
+function applyStreamDelta(
+	delta: StreamDelta,
+	chunks: string[],
+	threadId: string,
+): DrainOutcome | null {
+	if (delta.type === 'done') return { kind: 'done', text: chunks.join('') };
+	if (delta.type === 'error') return { kind: 'error', errorCode: delta.error.errorCode };
+	applyNonTerminalDelta(delta, chunks, threadId);
+	return null;
+}
+
+function applyNonTerminalDelta(
+	delta: Exclude<StreamDelta, { type: 'done' } | { type: 'error' }>,
+	chunks: string[],
+	threadId: string,
+): void {
+	switch (delta.type) {
+		case 'text':
+			chunks.push(delta.text);
+			store.appendStreamingDelta(delta.text);
+			return;
+		case 'session-id':
+			store.captureSessionId(threadId, delta.sessionId);
+			return;
+		case 'thinking':
+			store.appendStreamingThinking(delta.text);
+			return;
+		case 'tool-use-start':
+			store.startStreamingToolCall(delta.blockId, delta.toolName, delta.inputJson);
+			return;
+		case 'tool-use-input-delta':
+			store.appendStreamingToolCallInput(delta.blockId, delta.inputJson);
+			return;
+		case 'tool-use-stop':
+			store.finishStreamingToolCall(delta.blockId);
+			return;
+		case 'usage':
+			store.setLastUsage({
+				inputTokens: delta.inputTokens,
+				outputTokens: delta.outputTokens,
+			});
+			return;
+		case 'compact-boundary':
+			// Surfaced as a synthetic system entry by `MessageList.vue`;
+			// no in-flight store mutation needed.
+			return;
+	}
+}
+
 /**
  * Drain `queryStream` to a terminal delta. Accumulates `text` deltas into
  * `store.streamingText` so `MessageList.vue` can render the in-flight
@@ -739,30 +797,20 @@ async function consumeStream(args: {
 	threadId: string;
 }): Promise<{ kind: 'success'; text: string } | { kind: 'error'; errorCode: ClaudeCliErrorCode }> {
 	const chunks: string[] = [];
-	const drained = await tryAsync(async () => {
+	const drained = await tryAsync(async (): Promise<DrainOutcome | null> => {
 		for await (const delta of args.stream) {
-			if (delta.type === 'text') {
-				chunks.push(delta.text);
-				store.appendStreamingDelta(delta.text);
-			} else if (delta.type === 'session-id') {
-				store.captureSessionId(args.threadId, delta.sessionId);
-			} else if (delta.type === 'done') {
-				return { kind: 'done' as const, text: chunks.join('') };
-			} else if (delta.type === 'error') {
-				return { kind: 'error' as const, errorCode: delta.error.errorCode };
-			}
-			// Other delta variants (thinking, tool-use-*, compact, usage) are
-			// rendered separately by MessageList and don't terminate the stream.
+			const terminal = applyStreamDelta(delta, chunks, args.threadId);
+			if (terminal !== null) return terminal;
 		}
-		return { kind: 'incomplete' as const, text: chunks.join('') };
+		return null;
 	});
 	if (!drained.ok) {
 		return { kind: 'error', errorCode: 'QUERY_FAILED' };
 	}
 	const outcome = drained.value;
+	if (outcome === null) return { kind: 'error', errorCode: 'QUERY_FAILED' };
 	if (outcome.kind === 'done') return { kind: 'success', text: outcome.text };
-	if (outcome.kind === 'error') return { kind: 'error', errorCode: outcome.errorCode };
-	return { kind: 'error', errorCode: 'QUERY_FAILED' };
+	return { kind: 'error', errorCode: outcome.errorCode };
 }
 
 /**

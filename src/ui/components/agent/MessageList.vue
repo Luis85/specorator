@@ -13,6 +13,8 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useChatStore } from '@/ui/stores/chatStore';
 import MarkdownBlock from '@/ui/components/agent/MarkdownBlock.vue';
+import ThinkingBlock from './ThinkingBlock.vue';
+import ToolCallBlock from './ToolCallBlock.vue';
 
 const props = defineProps<{
 	/** Active thread id, or `null` when no thread is selected. */
@@ -35,22 +37,33 @@ const messages = computed(() => {
  * it is replaced by the real `appendMessage` once the stream resolves.
  */
 const streamingText = computed<string>(() => store.streamingText);
+const streamingThinking = computed<string>(() => store.streamingThinking);
+const streamingToolCalls = computed(() => Array.from(store.streamingToolCalls.entries()));
 const isStreaming = computed<boolean>(
-	() => store.status === 'loading' && streamingText.value.length > 0,
+	() =>
+		store.status === 'loading' &&
+		(streamingText.value.length > 0 ||
+			streamingThinking.value.length > 0 ||
+			streamingToolCalls.value.length > 0),
 );
 
 const scrollContainer = ref<HTMLElement | null>(null);
 
-// Track BOTH the message-array length AND the streaming-text length so the
-// scroll position follows live deltas during a streaming turn. Without the
-// second observed value, the scroll watcher only fires at turn boundaries
-// (appendMessage) and the user has to scroll manually as Claude streams.
-watch([() => messages.value.length, () => streamingText.value.length], async () => {
-	await nextTick();
-	const el = scrollContainer.value;
-	if (el === null) return;
-	el.scrollTop = el.scrollHeight;
-});
+// Track message-array length and streaming text/thinking/tool-call lengths.
+watch(
+	[
+		() => messages.value.length,
+		() => streamingText.value.length,
+		() => streamingThinking.value.length,
+		() => streamingToolCalls.value.length,
+	],
+	async () => {
+		await nextTick();
+		const el = scrollContainer.value;
+		if (el === null) return;
+		el.scrollTop = el.scrollHeight;
+	},
+);
 </script>
 
 <template>
@@ -100,7 +113,19 @@ watch([() => messages.value.length, () => streamingText.value.length], async () 
 				{{ t('agent.roleAssistant') }}
 			</header>
 			<div class="sp-agent-message__body">
-				<MarkdownBlock class="sp-agent-message__text" :text="streamingText" />
+				<ThinkingBlock :text="streamingThinking" />
+				<ToolCallBlock
+					v-for="[blockId, call] in streamingToolCalls"
+					:key="blockId"
+					:tool-name="call.toolName"
+					:input-json="call.inputJson"
+					:done="call.done"
+				/>
+				<MarkdownBlock
+					v-if="streamingText.length > 0"
+					class="sp-agent-message__text"
+					:text="streamingText"
+				/>
 				<span
 					class="sp-agent-message__cursor"
 					aria-hidden="true"
