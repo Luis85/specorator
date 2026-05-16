@@ -10,74 +10,89 @@ updated: 2026-05-16
 references:
   - specs/terminal-sidepanel/idea.md
   - specs/claude-cli-chat-sidebar/idea.md
+depends_on:
+  - IDEA-TSP-001
 ---
 
 ## Problem statement
 
-A transparent `claude` interactive session embedded in the Obsidian sidepanel (IDEA-TSP-001) is a strong baseline but treats Claude as a black box: the model has no awareness of the active note, the user's selection, which files the user has open, or where the vault root sits. The user must paste paths, copy text, and narrate context by hand — exactly the friction the plugin exists to remove. Claude Code already ships a documented IDE integration protocol (used by the VS Code and JetBrains plugins, and reverse-engineered by Neovim, Emacs, Nova, and at least one Obsidian community plugin) that solves this by exposing a local WebSocket MCP server. When the CLI is launched with the right environment variables, it discovers the IDE through a lock file in `~/.claude/ide/`, authenticates, and gains access to a fixed set of editor-state tools (`getCurrentSelection`, `getOpenEditors`, `getWorkspaceFolders`, `openFile`, `openDiff`, etc.) plus inbound notifications (`selection_changed`, `at_mentioned`). This feature wires that protocol to the Obsidian workspace so the embedded terminal session is no longer transparent — it is ambient-context-aware in the same way the VS Code and JetBrains integrations are.
+An embedded `claude` interactive session in the Obsidian sidepanel (IDEA-TSP-001) cannot see the user's active note, current selection, list of open tabs, or vault root. Every turn of conversation forces the user to copy text, paste paths, and narrate context the model could have read for itself. The two existing AI surfaces in this plugin — the chat sidebar (IDEA-CCS-001) and the planned terminal panel — both inherit this blindness. Specorator needs a way to give Claude the same ambient awareness of the Obsidian workspace that the official VS Code and JetBrains plugins give Claude of those IDEs.
 
 ## Primary users
 
-- **Developers and technical PMs** already using the terminal sidepanel (IDEA-TSP-001) who want Claude to see the active note and selection without re-pasting them every turn.
-- **Plugin authors and contributors** who want to ask Claude about the file they are currently editing, request a diff against it, and accept or reject the change without leaving Obsidian.
-- **Any vault user** who runs Claude Code locally and expects the same "Cursor-like" awareness they get in their code editor when they bring their notes into the picture.
+- **Developers and technical PMs** already using or planning to use the terminal sidepanel (IDEA-TSP-001) who want Claude's responses to be grounded in the note they are currently editing, not in pasted snippets.
+- **Plugin contributors** who want to ask Claude about the file under the cursor and accept or reject a proposed change without leaving Obsidian.
+- *Non-goal users:* non-technical founders and PMs covered by IDEA-CCS-001 — their interaction surface stays the chat sidebar; this feature is desktop + CLI-installed only.
 
 ## Success criteria
 
-- Opening the terminal sidepanel with Claude installed launches an interactive session **and** simultaneously starts a localhost WebSocket MCP server bound to `127.0.0.1` on a random high port.
-- Before the `claude` subprocess is spawned, the plugin writes `~/.claude/ide/<port>.lock` (mode `0600` in a `0700` directory) containing the documented schema: `pid`, `workspaceFolders`, `ideName: "Obsidian"`, `transport: "ws"`, and a per-session UUID `authToken`.
-- The plugin sets `CLAUDE_CODE_SSE_PORT=<port>` and `ENABLE_IDE_INTEGRATION=true` in the environment of the spawned subprocess so Claude auto-discovers the bridge.
-- Claude can call at least the core five tools and receive correct Obsidian state: `getCurrentSelection`, `getLatestSelection`, `getOpenEditors`, `getWorkspaceFolders`, `openFile`.
-- The plugin handles `openDiff` by rendering a side-by-side diff modal inside Obsidian, blocks the JSON-RPC response until the user accepts or rejects, and returns `FILE_SAVED` or `DIFF_REJECTED` to Claude exactly as the protocol specifies.
-- The plugin emits `selection_changed` notifications (debounced at 150 ms) when the active editor's selection or active leaf changes.
-- The existing "Add to chat context" right-click action (REQ-CCS-009) sends an `at_mentioned` notification to Claude in addition to its current chat-sidebar effect, so Claude is told about the file the user just pinned.
-- WebSocket upgrade requests without a valid `x-claude-code-ide-authorization` header matching the session `authToken` are rejected with HTTP 401 (CVE-2025-52882 mitigation).
-- When the terminal panel closes or the plugin unloads, the WebSocket server is stopped, the lock file is deleted, and any in-flight `openDiff` deferrals resolve as `DIFF_REJECTED` so Claude is not left hanging.
-- Without Claude CLI installed, the bridge still starts (so other Claude clients on the same machine could connect) but the terminal panel shows the existing TSP not-installed message; the two states are independent.
+- With the terminal panel open and `claude` running, Claude responds correctly to questions that depend on knowing which note is currently active, what is selected in it, and which other notes are open — without the user typing or pasting that context.
+- Claude can request to open a note in Obsidian and the correct note opens in the workspace.
+- Claude can propose a change to a vault file; the user sees a side-by-side diff inside Obsidian, accepts or rejects, and Claude is told the outcome.
+- Adding a file to chat context via the existing right-click action (REQ-CCS-009) makes the same file visible to the Claude session running in the terminal.
+- When `claude` is not installed, the terminal panel's existing not-installed message is shown; the bridge silently does not start. The two surfaces degrade independently.
+- The bridge has no perceptible effect on Obsidian startup time and no perceptible effect on responsiveness during normal note editing.
+- Closing the terminal panel, unloading the plugin, or quitting Obsidian leaves no orphan processes, no listening sockets, and no stale state in `~/.claude/ide/`.
+- A second Obsidian window or a concurrent VS Code / JetBrains session on the same machine does not interfere with this bridge and is not interfered with by it.
 
 ## Constraints
 
-- **Builds on IDEA-TSP-001.** The terminal sidepanel is a prerequisite. If `terminal-sidepanel` ships without the bridge, this feature layers on top; if both are merged together, the bridge launches alongside the PTY. No reimplementation of PTY or xterm.js work.
-- **Narrow port (ADR-008).** A new domain port `IDEServerPort` declares `start(workspaceFolders)`, `stop()`, `isRunning()`, `notify(method, params)`, and `onToolCall(handler)`. No call site imports `ws`, `http`, or Node networking primitives.
-- **Tool-handler boundary.** A separate `IDEToolHandlerPort` (or an `IDEServerPort` constructor parameter) routes inbound `tools/call` JSON-RPC requests to Obsidian state via `WorkspacePort`, `VaultPort`, and a new diff-modal helper. Vue components and the domain layer never see raw JSON-RPC.
-- **Auth correctness.** The `authToken` is a v4 UUID generated per session, written to the lock file with `chmod 0600`, validated on every WebSocket upgrade, and never logged. Compare in constant time to defeat timing attacks.
-- **Localhost only.** Server binds to `127.0.0.1` (not `0.0.0.0`); reject upgrades from any non-loopback `Host` header.
-- **Reverse-engineered protocol.** The schema is not contractually guaranteed by Anthropic. Tool handlers must validate inbound shapes (Zod or hand-rolled) and degrade gracefully on unknown fields. A single tool-name registry isolates protocol drift to one file.
-- **No mobile.** The bridge requires Node networking and a localhost subprocess — desktop Electron only. The standalone browser UI and mobile platforms must hide the feature entirely.
-- **Mocks for dev.** `MockIDEServerPort` records calls and lets tests assert tool routing without opening a socket. The bridge must not start in MockBridge or LocalStorageBridge contexts.
-- **Existing chat sidebar untouched.** The `claude-cli-chat-sidebar` feature continues to work via the SDK's `query()` headless path; this bridge does not alter `ClaudeCliPort` or `ClaudeCliAdapter`.
+- **Depends on IDEA-TSP-001.** The terminal sidepanel is the spawn site; this feature does not duplicate PTY work. TSP must expose a hook for the bridge to inject environment variables into the spawned child before this feature reaches design.
+- **Narrow ports (ADR-008).** Two new domain ports — one for the network server's lifecycle, one for the diff-confirmation modal (mirroring `ConfirmModalPort`). Tool dispatch is an application-layer service (a use case per protocol verb), not a port. Domain layer never imports `ws`, `http`, `obsidian`, or Vue.
+- **Result type (ADR-004).** All fallible port methods return `Promise<Result<T, E>>` with discriminated error codes.
+- **No new domain concepts leak into UI.** The diff modal is built with Obsidian helpers (`createEl`, `setText`) per the no-`innerHTML` / no-`v-html` rules in CLAUDE.md.
+- **No `window.confirm`/`alert`/`prompt`.** Accept/reject flow uses an Obsidian `Modal` subclass behind a port, consistent with the existing `ConfirmModalPort` pattern.
+- **Localhost-only network surface.** The WebSocket server binds to the loopback interface, validates the upgrade authorisation header before completing the handshake, rejects browser-origin requests, and is unreachable from outside the local machine. CVE-2025-52882 mitigations are the floor, not the ceiling.
+- **Vault-scoped path validation.** Inbound tool calls that name a filesystem path are resolved and rejected unless they fall inside the active vault root. `VaultPort` semantics extend to the bridge.
+- **No mutation of the plugin's own `process.env`.** Environment variables for Claude are passed through the spawn's `env` option only.
+- **Reverse-engineered protocol.** The wire format is not contractually guaranteed by Anthropic. Inbound message shapes are validated, unknown fields are tolerated, and protocol drift is isolated to one adapter.
+- **No mobile, no browser.** The bridge is disabled in MockBridge and LocalStorageBridge contexts and on Obsidian mobile. Composables resolve to a no-op stub in those environments so call sites do not need to branch.
 
 ## Research questions
 
-- Which Node WebSocket implementation is acceptable inside an Obsidian plugin bundle — `ws` (most common, MIT, no native deps) vs. a hand-rolled server using `http.createServer` + the upgrade handshake from `crypto.createHash('sha1')`? Bundle size and CSP/sandbox compatibility decide.
-- The protocol spec is reverse-engineered from `coder/claudecode.nvim`'s `PROTOCOL.md`. What is the minimum tool surface Claude Code actually invokes during a normal session? `getCurrentSelection`, `getOpenEditors`, `openDiff` are confirmed; the rest may be optional. Cap the v1 surface to what proves out the bridge.
-- How does `openDiff`'s blocking semantics interact with Obsidian's `Modal` lifecycle? The protocol expects the JSON-RPC response to be deferred until the user clicks accept or reject. Pattern: keep a `Map<requestId, deferredResolve>` and complete it from the modal's `onClose` handler.
-- `checkDocumentDirty` and `saveDocument` assume an IDE that does not autosave. Obsidian autosaves. What is the right answer — always report `isDirty: false`, or track unsaved edits via the `editor-change` event?
-- `getDiagnostics` expects language-server style errors. The vault has no LSP. Return an empty array, or attempt a markdown linter integration (out of scope for v1)?
-- The `executeCode` tool runs Python in a Jupyter kernel. Should the bridge stub it with a "not supported" response, or omit it from `tools/list` entirely?
-- Where should the diff modal accept-action persist its result — overwrite the vault file directly via `VaultPort.writeFile`, or stage it through a workflow review queue?
-- Will running the bridge on a port collide with a concurrent VS Code or JetBrains IDE on the same machine? Both write to `~/.claude/ide/`. Confirm Claude's discovery logic picks the lock file whose port matches `CLAUDE_CODE_SSE_PORT` and ignores siblings.
+### Protocol and integration
+- The MCP `initialize` handshake's `protocolVersion`, `capabilities`, and `serverInfo` payload for this protocol family are pinned at `2024-11-05` by every open-source reverse-engineered implementation we have seen — confirm this is what the current `claude` CLI accepts and whether it will accept the next MCP version when negotiating.
+- Which subset of the twelve protocol tools does Claude Code actually invoke during normal interactive use, and which are dead weight for a v1 surface?
+- How does Claude resolve which lockfile to use when multiple are present in `~/.claude/ide/`? Confirm `CLAUDE_CODE_SSE_PORT` strictly disambiguates and there is no silent first-lockfile-wins fallback.
+- `selection_changed` and `at_mentioned` debounce windows are implementation-defined across known clients; what window does Specorator want?
+
+### Failure modes and lifecycle
+- After an unclean Obsidian exit, who reaps stale lockfiles in `~/.claude/ide/`? Per-startup sweep that validates `pid` liveness is the working hypothesis — confirm cross-platform.
+- What happens to an in-flight `openDiff` if the WebSocket disconnects, the plugin unloads, or the modal is dismissed without a decision? Default-reject is the working answer; confirm Claude tolerates it.
+- Does the bridge's lifecycle belong to the terminal panel (start on panel open, stop on close) or to `PluginCore` (start on plugin load, stop on unload)? ADR target.
+- How does the bridge co-exist with an Obsidian session that has multiple windows or multiple vaults open simultaneously?
+
+### Security
+- Beyond the loopback bind, `Origin` rejection, and the per-session UUID auth header, what additional defence in depth is justified — message-size caps, in-flight diff cap, connection cap, rate limits?
+- The auth token sits in a file readable by any process running as the current user. Document this same-UID threat boundary and confirm it is acceptable for v1.
+- On Windows, file mode bits are meaningless; what is the right ACL story for the lockfile and its parent directory? Or accept that the same-UID boundary is the practical floor on every platform?
+- How is autosave (Obsidian) reconciled with `checkDocumentDirty` and `saveDocument` (assume manual save)? Hard-code `isDirty: false` is the working answer.
+
+### UX and integration with existing features
+- `openDiff` accept path: should the bridge write via `VaultPort.writeFile` directly, or route through the existing `proposeFileWrite` / `commitFileWriteProposal` envelope (per ADR-0032)?
+- The "Add to chat context" file-menu action (REQ-CCS-009) currently mutates chat-store state. Should the bridge subscribe to a domain event emitted by that action, or should the action be lifted into an event-bus emitter that both the chat sidebar and the bridge consume?
+- Which WebSocket library to bundle, what does it cost the plugin bundle, and is there any precedent in the existing Specorator dependency graph?
+- Which Obsidian editor event surface gives a reliable "selection changed" signal — `editor-change`, `active-leaf-change`, or a CodeMirror 6 `EditorView.updateListener` registered via `registerEditorExtension`?
 
 ## Preliminary scope
 
-**In scope:**
-- `IDEServerPort` narrow domain port (`src/domain/ports/IDEServerPort.ts`).
-- `LocalIDEServer` infrastructure implementation using `ws` (or hand-rolled handshake) — lock file write/delete, auth header validation, `127.0.0.1` binding, JSON-RPC 2.0 framing, MCP `initialize` / `tools/list` / `tools/call` handlers, deferred-response support for blocking tools.
-- `ObsidianIDEToolHandlers` (infrastructure/obsidian) implementing the five core tools (`getCurrentSelection`, `getLatestSelection`, `getOpenEditors`, `getWorkspaceFolders`, `openFile`) and `openDiff` plus the cleanup tools (`close_tab`, `closeAllDiffTabs`).
-- Stub responses for `checkDocumentDirty`, `saveDocument`, `getDiagnostics`, `executeCode` so Claude never receives a JSON-RPC error from a `tools/list`-advertised tool.
-- `IDEDiffModal` Vue/Obsidian modal — side-by-side or unified diff view, accept/reject buttons, blocks the underlying tool-call response until dismissed.
-- Notification emitters: workspace `active-leaf-change` and editor selection events → debounced `selection_changed` over WS.
-- `at_mentioned` notification on the existing "Add to chat context" file-menu action.
-- Env-var injection (`CLAUDE_CODE_SSE_PORT`, `ENABLE_IDE_INTEGRATION`) in the terminal sidepanel's PTY spawn call (extends IDEA-TSP-001 wiring).
-- Server lifecycle hooks: start on panel open, stop on panel close and `onunload`; clean up the lock file in both paths and on unexpected exit.
-- `MockIDEServerPort` for dev/test; bridge disabled in MockBridge and LocalStorageBridge contexts.
+**In scope**
+- Two new domain ports — one for the local server's lifecycle, one for the diff confirmation modal — plus their adapter implementations and no-op stubs for MockBridge/LocalStorageBridge.
+- An application-layer dispatcher with one use case per protocol tool, routing inbound tool calls through `WorkspacePort`, `VaultPort`, and the new diff-modal port.
+- A side-by-side diff modal built with Obsidian primitives, blocking the in-flight tool response until the user decides.
+- The full set of inbound tool verbs declared in the protocol, with the editor-state and file-action verbs (selection, open editors, workspace folders, open file, open diff, close tab) wired to Obsidian state, and the autosave/diagnostics/Jupyter verbs answered with documented no-op or "not supported" responses so Claude never receives an unknown-tool error.
+- IDE-side notifications mapped from Obsidian workspace and editor events.
+- An environment-variable hand-off to the terminal panel's spawn call so Claude discovers the bridge automatically.
+- Lockfile lifecycle: write before spawn, delete on shutdown, sweep stale entries on next start.
+- Cross-vault and multi-window safety — each Obsidian instance runs its own bridge on its own port, ignores siblings.
 
-**Out of scope:**
-- `getDiagnostics` integration with any real linter — return `[]`.
-- `executeCode` Jupyter execution — return `not supported`.
-- Multi-tab diff queueing or persistent review history — each `openDiff` is a single modal lifetime.
-- Cross-vault or multi-root workspace support — `getWorkspaceFolders` returns the single vault root.
-- Sharing the bridge between the chat sidebar and the terminal panel (the user has chosen 4A; 4B/dual-runtime is a follow-on scope).
-- Windows PTY support inherits from IDEA-TSP-001's out-of-scope list; the bridge itself is platform-portable, but the terminal it accompanies is not.
+**Out of scope**
+- Real language-server diagnostics or markdown-linter integration.
+- Jupyter / `executeCode` integration.
+- Persistence of accepted diffs as a review queue or history.
+- A second runtime path — running the bridge alongside the headless chat sidebar (IDEA-CCS-001) instead of the terminal panel. That is a follow-on scope.
+- Multi-root workspaces — `getWorkspaceFolders` returns the single vault root.
 - Sharing connection state across plugin reloads or vault switches.
-- Authentication beyond the per-session UUID (no OAuth, no API-key-derived tokens).
+- Authentication beyond the per-session UUID — no OAuth, no API-key-derived tokens.
+- Windows PTY support (inherits from IDEA-TSP-001's out-of-scope list).
+- Sharing the bridge port across Obsidian windows or with non-Claude clients.
