@@ -20,7 +20,7 @@ artifacts:
   test-plan: pending
   test-report: pending
   review: complete
-  release-notes: pending
+  release-notes: in-progress
   retrospective: pending
 ---
 
