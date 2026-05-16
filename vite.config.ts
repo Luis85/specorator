@@ -99,6 +99,12 @@ export default defineConfig(({ mode }) => {
 			resolve: { alias },
 			define: {
 				'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
+				// Rolldown's CJS output mangles `import.meta.url` to `{}.url` (undefined),
+				// crashing deps that call `createRequire(import.meta.url)` at module top-level
+				// (e.g. @anthropic-ai/claude-agent-sdk). Substitute a runtime expression that
+				// yields a valid file URL for an existing file — `createRequire` and
+				// `fileURLToPath` both accept it.
+				'import.meta.url': 'require("url").pathToFileURL(process.execPath).href',
 			},
 			build: {
 				lib: {
