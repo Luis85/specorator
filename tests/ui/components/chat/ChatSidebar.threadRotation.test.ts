@@ -10,8 +10,11 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
 import { defineComponent, ref } from 'vue';
 import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue';
-import type { ClaudeCliPort, ClaudeCliQueryOptions } from '@/domain/ports/ClaudeCliPort';
-import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort';
+import type {
+	ClaudeCliPort,
+	ClaudeCliQueryOptions,
+	ClaudeCliError,
+} from '@/domain/ports/ClaudeCliPort';
 import type { Result } from '@/domain/shared/Result';
 import { ok } from '@/domain/shared/Result';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';

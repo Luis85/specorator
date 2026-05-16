@@ -308,55 +308,63 @@ async function loadContextFileBodies(): Promise<ContextFile[]> {
 }
 
 /**
+ * Mint a fresh thread record for this turn and evict the previous thread's
+ * in-memory message bucket (Codex P2 on PR #369). The `ChatThreadRecord`
+ * for the previous thread is intentionally preserved in `chatThreads` —
+ * a future thread-switcher UI can still resume its session_id — but the
+ * UI-only message bucket would otherwise accumulate unreachably.
+ */
+function mintRotatedThread(args: {
+	previousThreadId: string | null;
+	slug: string | null;
+	transport: 'api-key' | 'subscription';
+	nowIso: string;
+}): string {
+	const threadId = generateThreadId();
+	const fresh: ChatThreadRecord = {
+		threadId,
+		sessionId: null,
+		feature: args.slug,
+		logPath: '',
+		transport: args.transport,
+		createdAt: args.nowIso,
+		lastUsedAt: args.nowIso,
+	};
+	store.upsertThread(fresh);
+	store.setActiveThreadId(threadId);
+	if (args.previousThreadId !== null && args.previousThreadId !== threadId) {
+		store.clearThreadMessages(args.previousThreadId);
+	}
+	return threadId;
+}
+
+/**
  * Resolve (or lazily create) the active `ChatThreadRecord`. Returns the
  * thread id and whether this turn carries a resume session id (REQ-ASM-035).
+ *
+ * Rotates when the active thread's transport OR feature slug no longer
+ * matches the resolved values for this turn (Codex P2, PR #350):
+ *   - transport mismatch: resuming a session id from a different transport
+ *     produces incoherent context and audit metadata;
+ *   - feature mismatch: session-log paths are derived from `thread.feature`,
+ *     so reusing a `specs/foo/` thread for a `specs/bar/` turn would corrupt
+ *     per-feature traceability + resume metadata.
  */
 function resolveActiveThread(args: {
 	slug: string | null;
 	transport: 'api-key' | 'subscription';
 }): { threadId: string; resumeSessionId: SessionId | undefined; isResumedTurn: boolean } {
 	const nowIso = new Date().toISOString();
-	let threadId = store.activeThreadId;
-	const existing = threadId !== null ? store.chatThreads.get(threadId) : undefined;
-	// Rotate when the active thread's transport OR feature slug no longer
-	// matches the resolved values for this turn (Codex P2, PR #350).
-	//
-	// - Transport mismatch: resuming a session id that was minted under a
-	//   different transport produces incoherent context and audit metadata.
-	// - Feature mismatch: session-log paths are derived from `thread.feature`,
-	//   so reusing a `specs/foo/` thread for a turn against `specs/bar/`
-	//   would append the bar turn under the foo session log and corrupt
-	//   per-feature traceability + resume metadata.
-	//
-	// In either case we mint a fresh thread rather than carry stale
-	// metadata. The original thread stays in `chatThreads` (history is
-	// preserved); only the active-thread pointer rotates.
-	const transportMismatch = existing !== undefined && existing.transport !== args.transport;
-	const featureMismatch = existing !== undefined && existing.feature !== args.slug;
-	if (threadId === null || existing === undefined || transportMismatch || featureMismatch) {
-		const previousThreadId = threadId;
-		threadId = generateThreadId();
-		const fresh: ChatThreadRecord = {
-			threadId,
-			sessionId: null,
-			feature: args.slug,
-			logPath: '',
-			transport: args.transport,
-			createdAt: nowIso,
-			lastUsedAt: nowIso,
-		};
-		store.upsertThread(fresh);
-		store.setActiveThreadId(threadId);
-		// Codex P2 (PR #369): drop the previous thread's in-memory message
-		// bucket on automatic rotation. The `ChatThreadRecord` stays in
-		// `chatThreads` (so a future thread-switcher UI can still resume the
-		// session id), but the messages are UI-only and would otherwise
-		// accumulate unreachably as the user moves between features /
-		// transports across a long session.
-		if (previousThreadId !== null && previousThreadId !== threadId) {
-			store.clearThreadMessages(previousThreadId);
-		}
-	}
+	const previousThreadId = store.activeThreadId;
+	const existing =
+		previousThreadId !== null ? store.chatThreads.get(previousThreadId) : undefined;
+	const shouldRotate =
+		previousThreadId === null ||
+		existing?.transport !== args.transport ||
+		existing.feature !== args.slug;
+	const threadId = shouldRotate
+		? mintRotatedThread({ previousThreadId, slug: args.slug, transport: args.transport, nowIso })
+		: previousThreadId;
 	const record = store.chatThreads.get(threadId);
 	const resumeSessionId = record?.sessionId ?? undefined;
 	return { threadId, resumeSessionId, isResumedTurn: resumeSessionId !== undefined };
@@ -997,13 +1005,22 @@ watch(available, async () => {
 </template>
 
 <style scoped>
+/*
+ * Sized to content rather than `height: 100%` so the component composes
+ * naturally inside `AgentSidepanelRoot` where it sits beneath a scrollable
+ * `MessageList`. Hard 100% height made the input/response area extend past
+ * the sidepanel viewport once history accumulated, clipping the active
+ * controls (Codex P1 on PR #369). Vertical stacking is now driven by the
+ * parent: in the agent sidepanel the parent gives ChatSidebar `flex: 0 0
+ * auto` and `MessageList` takes the remaining grow space.
+ */
 .sp-chat-sidebar {
 	padding: 1rem;
 	display: flex;
 	flex-direction: column;
 	gap: 0.75rem;
-	height: 100%;
 	box-sizing: border-box;
+	flex-shrink: 0;
 }
 
 .sp-chat__title {
