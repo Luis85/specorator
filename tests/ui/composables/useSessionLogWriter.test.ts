@@ -104,4 +104,28 @@ describe('useSessionLogWriter', () => {
 
 		expect(after).toBe(before)
 	})
+
+	it('returns the same writer instance for concurrent first-time callers (Codex P1, PR #350)', async () => {
+		// Hold settings.getSettings() until both callers are waiting on it. Without
+		// the in-flight serialization, both callers would resume past the await
+		// observing cached === null and construct two different SessionLogWriter
+		// instances — each carrying its own per-file mutex map, so concurrent
+		// appends to the same log could interleave and drop entries.
+		const bridge = new MockBridge()
+		let resolveSettings!: (v: PluginSettings) => void
+		const settingsPromise = new Promise<PluginSettings>((resolve) => {
+			resolveSettings = resolve
+		})
+		bridge.getSettings = () => settingsPromise
+
+		const { composable } = mountHost(bridge)
+		const firstPending = composable.getWriter()
+		const secondPending = composable.getWriter()
+
+		// Both callers are now suspended on the same settings promise.
+		resolveSettings({ ...DEFAULT_SETTINGS, specsFolder: 'specs' })
+
+		const [first, second] = await Promise.all([firstPending, secondPending])
+		expect(second).toBe(first)
+	})
 })

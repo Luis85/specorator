@@ -40,26 +40,45 @@ export function useSessionLogWriter(): UseSessionLogWriter {
 	const settings = useSettingsPort()
 	let cached: SessionLogWriter | null = null
 	let cachedSpecsFolder: string | null = null
+	// Shared in-flight initialization promise (Codex P1, PR #350). Without
+	// this, two concurrent callers each `await settings.getSettings()` before
+	// reading `cached`; both can observe `cached === null` and construct
+	// different SessionLogWriter instances. Because the per-log-file mutex
+	// lives on each writer instance, the two writers do not coordinate locks
+	// and can interleave read/append/write cycles on the same log, dropping
+	// entries. Gating the construction path behind a single Promise ensures
+	// every concurrent caller gets the same writer.
+	let inFlight: Promise<SessionLogWriter> | null = null
 
 	return {
-		async getWriter(): Promise<SessionLogWriter> {
-			const current = await settings.getSettings()
-			// Invalidate the cached writer when the configured specs folder has
-			// changed mid-session (Codex P2, PR #350). Without this, a user
-			// who changes the Specs folder in settings keeps writing session
-			// logs to the old folder while stage/context resolution uses the
-			// new one, splitting history across roots.
-			if (cached !== null && cachedSpecsFolder === current.specsFolder) {
+		getWriter(): Promise<SessionLogWriter> {
+			if (inFlight !== null) return inFlight
+			const pending = (async (): Promise<SessionLogWriter> => {
+				const current = await settings.getSettings()
+				// Invalidate the cached writer when the configured specs folder has
+				// changed mid-session (Codex P2, PR #350). Without this, a user
+				// who changes the Specs folder in settings keeps writing session
+				// logs to the old folder while stage/context resolution uses the
+				// new one, splitting history across roots.
+				if (cached === null || cachedSpecsFolder !== current.specsFolder) {
+					cached = new SessionLogWriter(
+						vault,
+						logger,
+						current.specsFolder,
+						() => new Date().toISOString(),
+					)
+					cachedSpecsFolder = current.specsFolder
+				}
 				return cached
-			}
-			cached = new SessionLogWriter(
-				vault,
-				logger,
-				current.specsFolder,
-				() => new Date().toISOString(),
-			)
-			cachedSpecsFolder = current.specsFolder
-			return cached
+			})()
+			// Clear `inFlight` once construction settles so a subsequent
+			// `specsFolder` change can be re-detected on the next call. `.finally`
+			// preserves both resolution value and rejection, and avoids a raw
+			// try/finally block (`no-restricted-syntax` rule).
+			inFlight = pending.finally(() => {
+				inFlight = null
+			})
+			return inFlight
 		},
 	}
 }
