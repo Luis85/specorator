@@ -3,20 +3,20 @@ id: d7e8f9a0-1234-4b56-9c78-d9e0f1a2b3c4
 feature: 'Agent Sidepanel v2'
 area: ASV
 slug: agent-sidepanel-v2
-current_stage: idea
+current_stage: implementation
 status: active
 last_updated: 2026-05-16
-last_agent: pm
+last_agent: dev
 createdAt: 2026-05-16T00:00:00+02:00
 updatedAt: 2026-05-16T00:00:00+02:00
 artifacts:
   idea: complete
-  research: pending
-  requirements: pending
-  design: pending
-  spec: pending
-  tasks: pending
-  implementation-log: pending
+  research: complete
+  requirements: complete
+  design: complete
+  spec: complete
+  tasks: complete
+  implementation-log: in-progress
   test-plan: pending
   test-report: pending
   review: pending
@@ -26,19 +26,39 @@ artifacts:
 
 ## Stage progress
 
-| Stage              | Status   | Artifact  | Notes                                                                                   |
-| ------------------ | -------- | --------- | --------------------------------------------------------------------------------------- |
-| 1 — Idea           | complete | `idea.md` | IDEA-ASV-001 — Lift chat into its own dedicated sidepanel + adopt Claudian-inspired UX. |
-| 2 — Research       | pending  | —         |                                                                                         |
-| 3 — Requirements   | pending  | —         |                                                                                         |
-| 4 — Design         | pending  | —         |                                                                                         |
-| 5 — Specification  | pending  | —         |                                                                                         |
-| 6 — Tasks          | pending  | —         |                                                                                         |
-| 7 — Implementation | pending  | —         | PR-ASV-1 (structural lift) will land first on `claude/refactor-agent-sidepanel-2CDgl`.  |
-| 8 — Testing        | pending  | —         |                                                                                         |
-| 9 — Review         | pending  | —         |                                                                                         |
-| 10 — Release       | pending  | —         |                                                                                         |
-| 11 — Retrospective | pending  | —         |                                                                                         |
+| Stage              | Status      | Artifact                                                                                                            | Notes                                                                                                                                                                                                                                |
+| ------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1 — Idea           | complete    | `idea.md`                                                                                                           | IDEA-ASV-001 — Dedicated sidepanel + Claudian-inspired UX.                                                                                                                                                                           |
+| 2 — Research       | complete    | inline in `workflow-state.md` ("Increment 2+ research wave")                                                        | Two research subagents: Claudian-issue mining + Specorator-vs-Claudian gap analysis. Five reviewer subagents (UX, a11y, security, performance pending, architecture) on the v2 PR stack.                                            |
+| 3 — Requirements   | complete    | implicit — derived from Claudian feature-set scoped to Claude                                                       | Captured in tracking issue #385 (parity checklist). Explicit non-goals documented.                                                                                                                                                  |
+| 4 — Design         | complete    | inline PR descriptions across the 14 PRs                                                                            | Narrow-port discipline (ADR-008) for every new surface (`MarkdownRenderPort`, `ApprovalPort`, `SecretStorePort`). `StreamDelta` discriminated union (ADR-0034 candidate — see OQ-ASV-4).                                            |
+| 5 — Specification  | complete    | per-PR commit messages + spec entries                                                                               | Each PR carries a complete spec section in its body.                                                                                                                                                                                  |
+| 6 — Tasks          | complete    | implicit — 14 PRs                                                                                                   | Subagent-driven decomposition; each PR is a single mergeable unit.                                                                                                                                                                  |
+| 7 — Implementation | in-progress | PRs #369, #370, #371, #372, #373, #374, #375, #376, #377, #378, #379, #380, #381, #386, #387                          | 15 PRs in flight (see "PR stack" below). Codex review threads on most; ~25 P1/P2 findings addressed since the stack opened. Three follow-up issues open (#382 secret-storage → addressed by #387, #383 subprocess parity, #384 plan-mode wiring). |
+| 8 — Testing        | pending     | per-PR test coverage                                                                                                | Each PR is gated on `npm run test` + typecheck + lint before push. Cross-PR integration testing happens once the stack lands.                                                                                                       |
+| 9 — Review         | pending     | Codex P1/P2 reviews per-PR                                                                                          | Reviewer subagent reports (UX / a11y / security / architecture / perf) being synthesized into a final polish wave.                                                                                                                  |
+| 10 — Release       | pending     | —                                                                                                                   | After the stack squash-merges onto `develop`.                                                                                                                                                                                       |
+| 11 — Retrospective | pending     | —                                                                                                                   | After demo / main promotion.                                                                                                                                                                                                        |
+
+## PR stack (Increment 1 + Increment 2)
+
+| #     | Branch                                                          | Scope                                                          | Status                |
+| ----- | --------------------------------------------------------------- | -------------------------------------------------------------- | --------------------- |
+| #369  | `claude/refactor-agent-sidepanel-2CDgl`                         | Sidepanel lift + multi-turn message list                       | Open, multiple Codex fixes |
+| #370  | `claude/agent-sidepanel-v2-streaming-port`                      | `queryStream` port shape + `streamFromQuery` helper             | Open                  |
+| #371  | `claude/agent-sidepanel-v2-streaming-sdk`                       | SDK real streaming + P1 abort race + P1 exhaustion              | Open                  |
+| #372  | `claude/agent-sidepanel-v2-streaming-ui`                        | UI consume + Stop button + P2 buffer reset                      | Open                  |
+| #373  | `claude/agent-sidepanel-v2-markdown`                            | Hand-rolled markdown + P2 link-parens                           | Open                  |
+| #374  | `claude/agent-sidepanel-v2-streaming-subproc-v2`                | Subprocess real streaming                                       | Open                  |
+| #375  | `claude/agent-sidepanel-v2-slash-palette`                       | Slash palette + P2 ×3 (clear-on-select / token-bounds / selEnd) | Open                  |
+| #376  | `claude/agent-sidepanel-v2-mention-picker`                      | `@`-mention picker + IME guard + P2 ×5                          | Open                  |
+| #377  | `claude/agent-sidepanel-v2-obsidian-markdown`                   | Obsidian `MarkdownRenderer` port + P1 render race               | Open                  |
+| #378  | `claude/agent-sidepanel-v2-stream-delta-extension`              | `StreamDelta` extension (SDK only — superseded by #386)         | Superseded            |
+| #379  | `claude/agent-sidepanel-v2-tool-rendering`                      | `ToolCallBlock` + `ThinkingBlock`                               | Open                  |
+| #380  | `claude/agent-sidepanel-v2-plan-mode`                           | `InlinePlanApprovalCard` + `ApprovalPort`                       | Open                  |
+| #381  | `claude/agent-sidepanel-v2-folder-mentions`                     | Folder rows in `@`-picker                                       | Open                  |
+| #386  | `claude/agent-sidepanel-v2-stream-delta-extension-v2`           | `StreamDelta` ext (SDK + subprocess) + P1 toolJson + P2 usage   | Open — closes #383    |
+| #387  | `claude/agent-sidepanel-v2-secret-storage-v2-retry`             | `SecretStorePort` migration                                     | Open — closes #382    |
 
 ## Blocks
 
@@ -51,6 +71,7 @@ None.
 | 2026-05-16 | pm   | dev | Spec entry created on `claude/refactor-agent-sidepanel-2CDgl` to track the agent-sidepanel v2 work. Increment 1 of v2 is a pure structural lift: extract chat into its own `ItemView` (`VIEW_TYPE = 'specorator-agent'`), remove `/chat` from `MainLayout` tab nav, preserve every existing REQ-CCS / REQ-ASM behaviour. Claudian-style UX features (multi-turn message list, streaming, slash-command palette, @file mentions) land as Increment 2+.                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 2026-05-16 | dev  | qa  | PR-ASV-1 landed structural lift + multi-turn message list. New surfaces: `AgentSidepanelView` (`VIEW_TYPE_AGENT = 'specorator-agent'`), `AgentSidepanelRoot.vue`, `AgentSidepanelHeader.vue`, `MessageList.vue`, `ChatMessage` DTO + `appendMessage`/`clearThreadMessages` store actions. Removed: `/chat` route, `ChatSidebarView.vue`, `nav.chat` i18n key. URI handler reroutes `open-chat`/`focus-chat` to the new sidepanel. 1445 tests pass (34 new), typecheck clean, plugin build and standalone web build pass. Streaming, slash palette, `@`-mentions, stop-button still deferred to Increment 2.                                                                                                                                                                                                                                                                                                |
 | 2026-05-16 | dev  | dev | PR-ASV-1 post-open polish: Codex P2 (clear prior thread's message bucket on "New conversation") fixed by `handleNewConversation` calling `clearThreadMessages(prev)` before rotating `activeThreadId`. Internal-review P1 #2 closed by `tests/plugin/main.uri-handler.test.ts` covering all action branches (`open-chat`, `focus-chat`, `open-agent`, deferred, unknown, core short-circuit). Internal-review P2 #5 (MessageList scroll watcher will miss streaming deltas) documented inline as a forward-looking comment. Deferred: P1 #1 / P2 #6 (`SpecoratorView` retains a now-vestigial chat-thread hydration + status watcher — harmless dead code in production but load-bearing in `tests/plugin/SpecoratorView.test.ts`; clean up in a follow-up refactor PR before Increment 2). P3 polish (i18n unused keys, hard-coded `getDisplayText`, single timestamp for user+assistant turns) deferred. |
+| 2026-05-16 | dev  | dev | Increment 2 wave landed across 11 PRs (streaming port → tool rendering → plan-mode card → folder mentions → SecretStorage). Five reviewer subagents (UX / a11y / security / performance / architecture) dispatched in parallel. Findings consolidated for a polish-wave dispatch — see "Reviewer findings" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 ## Open clarifications
 
