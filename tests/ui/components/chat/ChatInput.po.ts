@@ -124,14 +124,6 @@ export class ChatInputPO {
 		await this.textarea.trigger('input')
 	}
 
-	async pressKey(key: string, opts: { ctrl?: boolean; meta?: boolean } = {}): Promise<void> {
-		await this.textarea.trigger('keydown', {
-			key,
-			ctrlKey: opts.ctrl ?? false,
-			metaKey: opts.meta ?? false,
-		})
-	}
-
 	emitted(name: string): unknown {
 		return this.wrapper.emitted(name)
 	}
