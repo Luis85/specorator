@@ -3,7 +3,6 @@ export default {
     home: 'Start',
     features: 'Features',
     settings: 'Einstellungen',
-    chat: 'Chat',
   },
   home: {
     title: 'Specorator',
@@ -138,5 +137,20 @@ export default {
     response: {
       structuredFail: 'Der Assistent hat eine unerwartete Antwort zurückgegeben. Bitte versuche es erneut.',
     },
+  },
+  agent: {
+    title: 'Specorator Agent',
+    openCommand: 'Agent-Seitenleiste öffnen',
+    ribbonTooltip: 'Specorator-Agent öffnen',
+    newConversation: 'Neue Unterhaltung',
+    newConversationAriaLabel: 'Eine neue Unterhaltung starten',
+    featureScope: 'Im Fokus: {slug}',
+    noFeatureInFocus: 'Kein Feature im Fokus',
+    messageListAriaLabel: 'Gesprächsverlauf',
+    roleUser: 'Du',
+    roleAssistant: 'Claude',
+    contextTrimmed: 'Ein Teil des Kontexts wurde gekürzt, damit die Nachricht im Größenlimit bleibt.',
+    assistantEmpty: '(Kein Text — siehe Vorschlagskarte unten.)',
+    emptyHistory: 'Frag Claude etwas — dein Gespräch erscheint hier.',
   },
 } as const

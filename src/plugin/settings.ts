@@ -6,6 +6,7 @@ import { ClaudeBinaryResolver, type ResolverPlatform } from '@/infrastructure/ob
 import { tryAsync, trySync } from '@/domain/shared/tryAsync'
 import type { ModuleDescriptor, SettingsFieldDescriptor } from '@/modules/module'
 import { VIEW_TYPE, SpecoratorView } from './SpecoratorView'
+import { VIEW_TYPE_AGENT, AgentSidepanelView } from './AgentSidepanelView'
 import type SpecoratorPlugin from './main'
 
 export class SpecoratorSettingTab extends PluginSettingTab {
@@ -319,13 +320,20 @@ export class SpecoratorSettingTab extends PluginSettingTab {
   }
 
   /**
-   * Calls bumpSettingsVersion() on every open SpecoratorView leaf so that
-   * ChatSidebar re-checks adapter availability after the API key changes.
+   * Calls bumpSettingsVersion() on every open Specorator view leaf so the
+   * chat re-checks adapter availability after the API key (or CLI path)
+   * changes. Covers both the legacy `SpecoratorView` (kept for the tabbed
+   * shell) and the new dedicated `AgentSidepanelView` (IDEA-ASV-001).
    * Satisfies T-CCS-037, D-CCS-003.
    */
   private _bumpAllViews(): void {
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
       if (leaf.view instanceof SpecoratorView) {
+        leaf.view.bumpSettingsVersion()
+      }
+    }
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_AGENT)) {
+      if (leaf.view instanceof AgentSidepanelView) {
         leaf.view.bumpSettingsVersion()
       }
     }

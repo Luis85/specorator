@@ -3,7 +3,6 @@ export default {
     home: 'Home',
     features: 'Features',
     settings: 'Settings',
-    chat: 'Chat',
   },
   home: {
     title: 'Specorator',
@@ -138,5 +137,20 @@ export default {
     response: {
       structuredFail: 'Assistant returned an unexpected response. Please try again.',
     },
+  },
+  agent: {
+    title: 'Specorator agent',
+    openCommand: 'Open agent sidepanel',
+    ribbonTooltip: 'Open Specorator agent',
+    newConversation: 'New conversation',
+    newConversationAriaLabel: 'Start a new conversation',
+    featureScope: 'In focus: {slug}',
+    noFeatureInFocus: 'No feature in focus',
+    messageListAriaLabel: 'Conversation history',
+    roleUser: 'You',
+    roleAssistant: 'Claude',
+    contextTrimmed: 'Some context was trimmed to keep the message within size limits.',
+    assistantEmpty: '(No text — see the proposal card below.)',
+    emptyHistory: "Ask Claude anything — your conversation will appear here.",
   },
 } as const

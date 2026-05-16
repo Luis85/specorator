@@ -1,0 +1,121 @@
+<script setup lang="ts">
+/**
+ * Root component mounted by `AgentSidepanelView` (`VIEW_TYPE = 'specorator-agent'`).
+ *
+ * Single-purpose surface: no router, no nav tabs. Hosts the agent chat shell
+ * (header + message history + input). The existing `ChatSidebar.vue` engine
+ * is reused verbatim for its send/proposal/transport handling — this root
+ * adds the new conversation header, the multi-turn message history, and any
+ * sidepanel-only chrome on top.
+ *
+ * Lifts the chat into its own Obsidian `ItemView` per IDEA-ASV-001 / specs/
+ * agent-sidepanel-v2/idea.md. Slash-command palette, `@`-file mentions, and
+ * streaming land in Increment 2+.
+ */
+import { computed } from 'vue';
+import { useChatStore } from '@/ui/stores/chatStore';
+import { useNotificationStore } from '@/ui/stores/notificationStore';
+import { onMounted, onUnmounted } from 'vue';
+import AppToast from '@/ui/components/common/AppToast.vue';
+import ErrorBoundary from '@/ui/components/ErrorBoundary.vue';
+import AgentSidepanelHeader from '@/ui/components/agent/AgentSidepanelHeader.vue';
+import MessageList from '@/ui/components/agent/MessageList.vue';
+import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue';
+
+const store = useChatStore();
+const notificationStore = useNotificationStore();
+
+const activeThreadId = computed(() => store.activeThreadId);
+const isRequestInFlight = computed(() => store.status === 'loading');
+const activeFeature = computed(() => {
+	const tid = store.activeThreadId;
+	if (tid === null) return null;
+	return store.chatThreads.get(tid)?.feature ?? null;
+});
+
+function onNotice(e: Event): void {
+	const { message, durationMs } = (
+		e as CustomEvent<{
+			severity: 'error' | 'warning' | 'success' | 'info';
+			message: string;
+			durationMs: number;
+		}>
+	).detail;
+	notificationStore.addNotice(message, durationMs);
+}
+
+function handleNewConversation(): void {
+	// Codex P1 (PR #369, second review): block the reset while a turn is in
+	// flight. Without this guard the user can click "New conversation" mid-
+	// request — `handleSend()` keeps running and `applySuccessfulTurn` then
+	// writes its result against the cleared thread id, leaving the proposal/
+	// message output inaccessible while the next conversation starts with
+	// stale content. The header button is also disabled when loading; this
+	// is the defence-in-depth check in case a future entry point (URI
+	// action, keyboard shortcut, command palette) invokes the handler
+	// directly.
+	if (store.status === 'loading') return;
+	// Codex P2 (PR #369): Increment 1 ships no thread switcher, so once the
+	// active thread is cleared its message bucket becomes unreachable. Drop
+	// it before rotating `activeThreadId` to prevent unbounded in-memory
+	// growth across long sessions. The `ChatThreadRecord` itself stays in
+	// `chatThreads` so the subscription transport can still `--resume <id>`
+	// from the persisted session_id when a future increment surfaces a
+	// thread switcher UI.
+	const previousThreadId = store.activeThreadId;
+	if (previousThreadId !== null) {
+		store.clearThreadMessages(previousThreadId);
+		// Codex P2 (PR #369, fourth review): evict the previous thread's
+		// `FileWriteProposal` entries too. They're unreachable after the
+		// thread rotates (Increment 1 ships no thread switcher), but
+		// `envelope.content` payloads can be sizeable — repeated
+		// `/create` + reset cycles accumulated unbounded hidden state.
+		store.clearThreadProposals(previousThreadId);
+	}
+	store.setActiveThreadId(null);
+	store.clearResponse();
+	store.setUserText('');
+}
+
+onMounted(() => {
+	window.addEventListener('sp:notice', onNotice);
+});
+
+onUnmounted(() => {
+	window.removeEventListener('sp:notice', onNotice);
+});
+</script>
+
+<template>
+	<div class="sp-agent" data-testid="agent-sidepanel">
+		<ErrorBoundary>
+			<AgentSidepanelHeader
+				:active-feature="activeFeature"
+				:has-active-thread="activeThreadId !== null"
+				:request-in-flight="isRequestInFlight"
+				@new-conversation="handleNewConversation"
+			/>
+			<div class="sp-agent__body">
+				<MessageList :thread-id="activeThreadId" />
+				<ChatSidebar />
+			</div>
+		</ErrorBoundary>
+		<AppToast />
+	</div>
+</template>
+
+<style scoped>
+.sp-agent {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	overflow: hidden;
+}
+
+.sp-agent__body {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+</style>
