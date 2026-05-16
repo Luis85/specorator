@@ -325,5 +325,39 @@ describe('useSlashPalette', () => {
 			// Built-ins still searchable; no throw.
 			expect(palette.matchedCommands.value.map((c) => c.name)).toEqual(['clear', 'new', 'help']);
 		});
+
+		it('drops a stale vault read when a newer refresh has already resolved (Codex P2)', async () => {
+			// Two concurrent reads: the first is slow, the second is fast. The
+			// fast one resolves first and commits its result. The slow one
+			// finishes after but its older data must NOT clobber the newer
+			// state — `latestRefreshSeq` makes the slow promise a no-op.
+			const ports = fakeModulePorts();
+			await ports.vault.writeFile(
+				'.claude/commands/old.md',
+				'---\ndescription: Stale.\n---\n\nold body',
+			);
+			const palette = useSlashPalette({
+				commands: FIXTURE_COMMANDS,
+				vault: ports.vault,
+				logger: ports.logger,
+			});
+
+			palette.open('');
+			const slowReadStarted = palette.refreshVaultCommands();
+			// Mutate the vault between the two refreshes so the second one
+			// sees a different command set.
+			await ports.vault.deleteFile('.claude/commands/old.md');
+			await ports.vault.writeFile(
+				'.claude/commands/fresh.md',
+				'---\ndescription: Fresh.\n---\n\nfresh body',
+			);
+			await palette.refreshVaultCommands();
+			// Now let the slow read finish — it should NOT overwrite `fresh`.
+			await slowReadStarted;
+			await nextTick();
+			const names = palette.matchedCommands.value.map((c) => c.name).sort();
+			expect(names).toContain('fresh');
+			expect(names).not.toContain('old');
+		});
 	});
 });

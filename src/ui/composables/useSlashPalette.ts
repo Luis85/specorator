@@ -99,6 +99,12 @@ export function useSlashPalette(options?: UseSlashPaletteOptions): UseSlashPalet
 	const queryRef: Ref<string> = ref('');
 	const selectedIndexRef: Ref<number> = ref(-1);
 	const vaultCommandsRef: Ref<readonly SlashCommand[]> = ref([]);
+	// Codex P2 (PR #388): monotonically-incrementing token. Each
+	// `refreshVaultCommands()` call captures the current value and only
+	// commits its result if the token has not been bumped by a later call.
+	// Prevents an older, slower vault read from clobbering a newer one when
+	// the palette is rapidly reopened.
+	let latestRefreshSeq = 0;
 
 	const commands = computed<readonly SlashCommand[]>(() => [
 		...builtIns,
@@ -123,7 +129,11 @@ export function useSlashPalette(options?: UseSlashPaletteOptions): UseSlashPalet
 
 	async function refreshVaultCommands(): Promise<void> {
 		if (vault === undefined) return;
+		const seq = ++latestRefreshSeq;
 		const loaded = await loadVaultSlashCommands(vault, logger);
+		// Drop the result if a newer refresh has been kicked off in the
+		// meantime — its eventual completion will commit the up-to-date set.
+		if (seq !== latestRefreshSeq) return;
 		vaultCommandsRef.value = Object.freeze(loaded.map((c) => toSlashCommand(c)));
 		// Re-clamp selection in case the loaded set changed which entries match
 		// the current query (e.g. brand-new vault entries widened the result).
