@@ -760,19 +760,19 @@ to   { opacity: 1; transform: translateY(0);
 	font-style: italic;
 }
 
-.specorator-root :where(.sp-markdown[data-v-b1397c03]) {
+.specorator-root :where(.sp-markdown[data-v-7f656229]) {
 	font-size: 0.875rem;
 	color: var(--text-normal);
 	word-break: break-word;
 }
-.specorator-root :where(.sp-markdown[data-v-b1397c03] .sp-markdown__p) {
+.specorator-root :where(.sp-markdown[data-v-7f656229] .sp-markdown__p) {
 	margin: 0 0 0.5rem;
 	white-space: pre-wrap;
 }
-.specorator-root :where(.sp-markdown[data-v-b1397c03] .sp-markdown__p:last-child) {
+.specorator-root :where(.sp-markdown[data-v-7f656229] .sp-markdown__p:last-child) {
 	margin-bottom: 0;
 }
-.specorator-root :where(.sp-markdown[data-v-b1397c03] .sp-markdown__pre) {
+.specorator-root :where(.sp-markdown[data-v-7f656229] .sp-markdown__pre) {
 	margin: 0 0 0.5rem;
 	padding: 0.5rem 0.625rem;
 	border-radius: 4px;
@@ -781,32 +781,32 @@ to   { opacity: 1; transform: translateY(0);
 	overflow-x: auto;
 	font-size: 0.8125rem;
 }
-.specorator-root :where(.sp-markdown[data-v-b1397c03] .sp-markdown__pre-code) {
+.specorator-root :where(.sp-markdown[data-v-7f656229] .sp-markdown__pre-code) {
 	font-family: var(--font-monospace, ui-monospace, monospace);
 	white-space: pre;
 }
-.specorator-root :where(.sp-markdown[data-v-b1397c03] .sp-markdown__code) {
+.specorator-root :where(.sp-markdown[data-v-7f656229] .sp-markdown__code) {
 	padding: 0.05rem 0.25rem;
 	border-radius: 3px;
 	background: var(--background-modifier-border);
 	font-family: var(--font-monospace, ui-monospace, monospace);
 	font-size: 0.85em;
 }
-.specorator-root :where(.sp-markdown[data-v-b1397c03] .sp-markdown__blockquote) {
+.specorator-root :where(.sp-markdown[data-v-7f656229] .sp-markdown__blockquote) {
 	margin: 0 0 0.5rem;
 	padding: 0.25rem 0.625rem;
 	border-left: 3px solid var(--background-modifier-border);
 	color: var(--text-muted);
 	white-space: pre-wrap;
 }
-.specorator-root :where(.sp-markdown[data-v-b1397c03] .sp-markdown__list) {
+.specorator-root :where(.sp-markdown[data-v-7f656229] .sp-markdown__list) {
 	margin: 0 0 0.5rem;
 	padding-left: 1.25rem;
 }
-.specorator-root :where(.sp-markdown[data-v-b1397c03] .sp-markdown__li) {
+.specorator-root :where(.sp-markdown[data-v-7f656229] .sp-markdown__li) {
 	margin: 0 0 0.125rem;
 }
-.specorator-root :where(.sp-markdown[data-v-b1397c03] .sp-markdown__link) {
+.specorator-root :where(.sp-markdown[data-v-7f656229] .sp-markdown__link) {
 	color: var(--text-accent);
 	text-decoration: underline;
 }
