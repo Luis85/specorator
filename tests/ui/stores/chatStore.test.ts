@@ -653,4 +653,81 @@ describe('useChatStore()', () => {
       })
     })
   })
+
+  describe('IDEA-ASV-001 — multi-turn message log', () => {
+    function makeMessage(threadId: string, role: 'user' | 'assistant', overrides: { id?: string; text?: string; truncated?: boolean } = {}) {
+      return {
+        id: overrides.id ?? `m-${role}-${threadId}-${Math.random().toString(36).slice(2)}`,
+        threadId,
+        role,
+        text: overrides.text ?? `${role} text`,
+        createdAt: '2026-05-16T00:00:00Z',
+        truncated: overrides.truncated,
+      } as const
+    }
+
+    it('initial state has an empty messages Map', () => {
+      const store = useChatStore()
+      expect(store.messages.size).toBe(0)
+    })
+
+    it('appendMessage creates a fresh bucket for a new thread', () => {
+      const store = useChatStore()
+      store.appendMessage(makeMessage('t-A', 'user', { id: 'm1' }))
+      expect(store.messages.get('t-A')).toHaveLength(1)
+      expect(store.messages.get('t-A')?.[0]?.id).toBe('m1')
+    })
+
+    it('appendMessage preserves insertion order across roles', () => {
+      const store = useChatStore()
+      store.appendMessage(makeMessage('t-A', 'user', { id: 'u1' }))
+      store.appendMessage(makeMessage('t-A', 'assistant', { id: 'a1' }))
+      store.appendMessage(makeMessage('t-A', 'user', { id: 'u2' }))
+      const bucket = store.messages.get('t-A') ?? []
+      expect(bucket.map((m) => m.id)).toEqual(['u1', 'a1', 'u2'])
+    })
+
+    it('appendMessage is idempotent on id collision (no double-record on retry)', () => {
+      const store = useChatStore()
+      store.appendMessage(makeMessage('t-A', 'user', { id: 'same' }))
+      store.appendMessage(makeMessage('t-A', 'user', { id: 'same', text: 'second copy' }))
+      const bucket = store.messages.get('t-A') ?? []
+      expect(bucket).toHaveLength(1)
+      expect(bucket[0]?.text).toBe('user text')
+    })
+
+    it('appendMessage isolates messages between threads', () => {
+      const store = useChatStore()
+      store.appendMessage(makeMessage('t-A', 'user', { id: 'a-user' }))
+      store.appendMessage(makeMessage('t-B', 'user', { id: 'b-user' }))
+      expect(store.messages.get('t-A')).toHaveLength(1)
+      expect(store.messages.get('t-B')).toHaveLength(1)
+      expect(store.messages.get('t-A')?.[0]?.id).toBe('a-user')
+    })
+
+    it('clearThreadMessages drops the bucket for the named thread only', () => {
+      const store = useChatStore()
+      store.appendMessage(makeMessage('t-A', 'user'))
+      store.appendMessage(makeMessage('t-B', 'user'))
+      store.clearThreadMessages('t-A')
+      expect(store.messages.has('t-A')).toBe(false)
+      expect(store.messages.get('t-B')).toHaveLength(1)
+    })
+
+    it('clearThreadMessages is a no-op for unknown thread ids', () => {
+      const store = useChatStore()
+      store.appendMessage(makeMessage('t-A', 'user'))
+      const before = store.messages.size
+      store.clearThreadMessages('does-not-exist')
+      expect(store.messages.size).toBe(before)
+    })
+
+    it('reset() clears the messages Map', () => {
+      const store = useChatStore()
+      store.appendMessage(makeMessage('t-A', 'user'))
+      store.appendMessage(makeMessage('t-B', 'user'))
+      store.reset()
+      expect(store.messages.size).toBe(0)
+    })
+  })
 })

@@ -18,9 +18,6 @@ const { t } = useI18n()
       <RouterLink class="sp-layout__nav-link" to="/settings" active-class="sp-layout__nav-link--active">
         {{ t('nav.settings') }}
       </RouterLink>
-      <RouterLink class="sp-layout__nav-link" to="/chat" active-class="sp-layout__nav-link--active" data-testid="nav-link-chat">
-        {{ t('nav.chat') }}
-      </RouterLink>
     </nav>
 
     <header v-if="$slots.header" class="sp-layout__header" data-testid="layout-main-header">

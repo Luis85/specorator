@@ -67,6 +67,9 @@ describe('MainLayout', () => {
 
 	it('renders the top nav links', () => {
 		const po = mountLayout({ default: '<div />' })
-		expect(po.root.findAll('a').length).toBe(4) // Home + Features + Chat + Settings
+		// Home + Features + Settings. Chat was lifted into the dedicated
+		// `AgentSidepanelView` (`VIEW_TYPE = 'specorator-agent'`,
+		// IDEA-ASV-001) and no longer participates in the tabbed shell.
+		expect(po.root.findAll('a').length).toBe(3)
 	})
 })

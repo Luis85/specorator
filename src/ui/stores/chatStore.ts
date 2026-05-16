@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord'
+import type { ChatMessage } from '@/domain/chat/ChatMessage'
 import type { SessionId } from '@/domain/chat/SessionId'
 import type {
   FileWriteProposal,
@@ -124,6 +125,15 @@ export const useChatStore = defineStore('chat', () => {
    */
   const sessionResumed = ref<boolean>(false)
 
+  /**
+   * Per-thread in-memory message log (IDEA-ASV-001, agent-sidepanel-v2
+   * Increment 2). Drives the multi-turn `MessageList.vue` rendering in the
+   * dedicated agent sidepanel. Memory-only: thread metadata persists across
+   * restarts via `chatThreads`, but full message bodies do not — the vault
+   * session log is the canonical mirror (REQ-ASM-040).
+   */
+  const messages = ref<Map<string, ChatMessage[]>>(new Map())
+
   // ── Actions ──────────────────────────────────────────────────────────────
 
   /**
@@ -221,6 +231,34 @@ export const useChatStore = defineStore('chat', () => {
     streamingText.value = ''
     cliStartingUp.value = false
     sessionResumed.value = false
+    messages.value = new Map()
+  }
+
+  /**
+   * Appends a single `ChatMessage` to the per-thread message log. Creates
+   * the bucket lazily for unseen `threadId`s. Idempotent on `id` collision
+   * (a second append with the same id is a no-op) so retries cannot
+   * double-record. IDEA-ASV-001 (agent-sidepanel-v2 Increment 2).
+   */
+  function appendMessage(message: ChatMessage): void {
+    const bucket = messages.value.get(message.threadId) ?? []
+    if (bucket.some((m) => m.id === message.id)) return
+    const next = new Map(messages.value)
+    next.set(message.threadId, [...bucket, message])
+    messages.value = next
+  }
+
+  /**
+   * Drops every message for the given thread. Called by the
+   * "New conversation" action in the sidepanel header when the user closes
+   * out a thread context — Increment 2 retains the `ChatThreadRecord`
+   * (transport + session_id continuity) but starts the visible log fresh.
+   */
+  function clearThreadMessages(threadId: string): void {
+    if (!messages.value.has(threadId)) return
+    const next = new Map(messages.value)
+    next.delete(threadId)
+    messages.value = next
   }
 
   // ── ASM actions (SPEC-ASM-001 §8.1) ──────────────────────────────────────
@@ -368,6 +406,7 @@ export const useChatStore = defineStore('chat', () => {
     streamingText,
     cliStartingUp,
     sessionResumed,
+    messages,
     addContextFile,
     removeContextFile,
     setActiveFile,
@@ -387,5 +426,7 @@ export const useChatStore = defineStore('chat', () => {
     setProposalStatus,
     setCliStartingUp,
     setSessionResumed,
+    appendMessage,
+    clearThreadMessages,
   }
 })

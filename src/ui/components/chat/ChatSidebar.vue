@@ -110,6 +110,15 @@ function generateProposalId(): string {
 }
 
 /**
+ * Unique id for an in-memory `ChatMessage` (IDEA-ASV-001, agent-sidepanel-v2
+ * Increment 2). The id is opaque to callers and used purely as a Vue `:key`
+ * in `MessageList.vue`; thread continuity is carried by `threadId`.
+ */
+function generateMessageId(): string {
+  return globalThis.crypto.randomUUID()
+}
+
+/**
  * Frozen stage-prompt descriptor table. Built once per component instance and
  * passed to `assembleSystemPrompt` on every send (REQ-ASM-019 — recomputed
  * per send, but the descriptor source is referentially stable).
@@ -396,6 +405,27 @@ function applySuccessfulTurn(args: {
     // Flash the resume indicator for this turn only (REQ-ASM-035).
     store.setSessionResumed(true)
   }
+  // Mirror this turn to the multi-turn in-memory message log
+  // (IDEA-ASV-001, agent-sidepanel-v2 Increment 2). The user turn is
+  // appended first; the assistant turn carries the `truncated` flag so the
+  // message list can render the per-turn "context trimmed" notice without
+  // depending on `store.truncated` (which only describes the latest turn).
+  const nowIso = new Date().toISOString()
+  store.appendMessage({
+    id: generateMessageId(),
+    threadId: args.threadId,
+    role: 'user',
+    text: args.userMessage,
+    createdAt: nowIso,
+  })
+  store.appendMessage({
+    id: generateMessageId(),
+    threadId: args.threadId,
+    role: 'assistant',
+    text: args.assistantResponse,
+    createdAt: nowIso,
+    truncated: args.truncated,
+  })
   mirrorTurnToVault({
     threadId: args.threadId,
     userMessage: args.userMessage,

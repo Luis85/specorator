@@ -6,6 +6,7 @@ import { Plugin, TFile, TFolder } from 'obsidian'
 import { spawn } from 'node:child_process'
 import * as os from 'node:os'
 import { SpecoratorView, VIEW_TYPE } from './SpecoratorView'
+import { AgentSidepanelView, VIEW_TYPE_AGENT } from './AgentSidepanelView'
 import { SpecoratorSettingTab } from './settings'
 import { promoteLegacyFlatSettings } from './loadSettings-migrate'
 import { ensureLeafLoaded } from './leafLoader'
@@ -57,6 +58,13 @@ export default class SpecoratorPlugin extends Plugin {
   private _confirmModalAdapter: ObsidianConfirmModalAdapter | null = null
   /** SpecoratorView instance — set when the registered view factory runs. */
   private _specoratorView: SpecoratorView | null = null
+  /**
+   * AgentSidepanelView instance — set when its registered view factory runs.
+   * Hosts the dedicated agent chat sidepanel (IDEA-ASV-001 / specs/
+   * agent-sidepanel-v2). Owns its own Vue app + Pinia, separate from the
+   * tabbed `SpecoratorView`.
+   */
+  private _agentSidepanelView: AgentSidepanelView | null = null
 
   /**
    * Initial `chatThreads` records hydrated from plugin data at `loadSettings()`
@@ -194,8 +202,32 @@ export default class SpecoratorPlugin extends Plugin {
       return view
     })
 
+    // IDEA-ASV-001 — dedicated agent sidepanel view. Single-purpose: hosts
+    // the chat UI without the tabbed shell. Reuses the same transport
+    // selector + adapters as the legacy embed so behaviour is bit-for-bit
+    // preserved.
+    this.registerView(VIEW_TYPE_AGENT, (leaf) => {
+      const view = new AgentSidepanelView(leaf, this, this._claudeCliAdapter!, {
+        subscriptionAdapter: this._subscriptionAdapter!,
+        confirmModalAdapter: this._confirmModalAdapter!,
+        selectTransport: (settings) =>
+          selectTransport(settings, {
+            sdkAdapter: this._claudeCliAdapter!,
+            subscriptionAdapter: this._subscriptionAdapter!,
+            degradedPort: degradedClaudeCliPort,
+            cliResolved: this._subscriptionAdapter!.isAvailableSync(),
+          }),
+      })
+      this._agentSidepanelView = view
+      return view
+    })
+
     this.addRibbonIcon('layout-dashboard', 'Open Specorator', () => {
       void this.activateView()
+    })
+
+    this.addRibbonIcon('bot', 'Open Specorator agent', () => {
+      void this.activateAgentSidepanel()
     })
 
     this.addCommand({
@@ -204,6 +236,13 @@ export default class SpecoratorPlugin extends Plugin {
       id: 'open-specorator',
       name: 'Open panel',
       callback: () => void this.activateView(),
+    })
+
+    this.addCommand({
+      // eslint-disable-next-line obsidianmd/commands/no-plugin-id-in-command-id
+      id: 'open-agent-sidepanel',
+      name: 'Open agent sidepanel',
+      callback: () => void this.activateAgentSidepanel(),
     })
 
     this.addCommand({
@@ -232,22 +271,20 @@ export default class SpecoratorPlugin extends Plugin {
     this.addSettingTab(new SpecoratorSettingTab(this.app, this))
 
     // T-CCS-031: Right-click "Add to chat context" menu item on vault files.
+    // Targets the dedicated agent sidepanel (IDEA-ASV-001) — the chat
+    // store now lives in `_agentSidepanelView.pinia`, not the tabbed
+    // `_specoratorView`.
     this.registerEvent(
       this.app.workspace.on('file-menu', (menu, file) => {
-        // Restrict the "Add to chat context" entry to actual files. The
-        // `file-menu` event also fires for folders (TAbstractFile is the
-        // union); adding a folder path would produce a context entry that
-        // fails silently at `readFile` time and wastes prompt budget
-        // (Codex P2, PR #350).
         if (!(file instanceof TFile)) return
         menu.addItem((item) => {
           item
             .setTitle('Add to chat context')
             .setIcon('message-square-plus')
             .onClick(() => {
-              void this.activateView().then(() => {
-                if (this._specoratorView?.pinia) {
-                  const store = useChatStore(this._specoratorView.pinia)
+              void this.activateAgentSidepanel().then(() => {
+                if (this._agentSidepanelView?.pinia) {
+                  const store = useChatStore(this._agentSidepanelView.pinia)
                   store.addContextFile({ path: file.path, label: file.name, isAuto: false })
                 }
               })
@@ -260,8 +297,8 @@ export default class SpecoratorPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on('active-leaf-change', () => {
         const activeFile = this.app.workspace.getActiveFile()
-        if (this._specoratorView?.pinia) {
-          const store = useChatStore(this._specoratorView.pinia)
+        if (this._agentSidepanelView?.pinia) {
+          const store = useChatStore(this._agentSidepanelView.pinia)
           if (activeFile) {
             store.setActiveFile({ path: activeFile.path, label: activeFile.name, isAuto: true })
           } else {
@@ -275,12 +312,13 @@ export default class SpecoratorPlugin extends Plugin {
       const searchParams = new URLSearchParams(Object.entries(params))
       if (this.core?.handleUri(searchParams) === true) return
 
-      // T-CCS-033: Navigate to /chat when action=open-chat.
+      // The `open-chat`/`focus-chat` URI actions historically navigated the
+      // tabbed view to `/chat`. v2 routes them to the dedicated agent
+      // sidepanel so external integrations (Obsidian Web, URI bookmarks)
+      // continue to work without changes (IDEA-ASV-001).
       const action = params.action
-      if (action === 'open-chat' || action === 'focus-chat') {
-        void this.activateView().then(() => {
-          this._specoratorView?.navigateTo('/chat')
-        })
+      if (action === 'open-chat' || action === 'focus-chat' || action === 'open-agent') {
+        void this.activateAgentSidepanel()
         return
       }
       if (action === 'send-message' || action === 'open-workflow') {
@@ -306,6 +344,7 @@ export default class SpecoratorPlugin extends Plugin {
         this._subscriptionAdapter?.startup(),
       ]).then(() => {
         this._specoratorView?.bumpSettingsVersion()
+        this._agentSidepanelView?.bumpSettingsVersion()
       })
       this.detectLegacyVaultLayout()
       if (!this.settings.onboardingComplete) {
@@ -343,6 +382,7 @@ export default class SpecoratorPlugin extends Plugin {
       void this._chatThreadsFlushQueue
     }
     this.app.workspace.detachLeavesOfType(VIEW_TYPE)
+    this.app.workspace.detachLeavesOfType(VIEW_TYPE_AGENT)
     this.bridge?.hideAllNotices()
     // onunload() is synchronous (Obsidian contract). destroy() is fire-and-forget;
     // module destroy() implementations must be fast and non-critical.
@@ -501,6 +541,28 @@ export default class SpecoratorPlugin extends Plugin {
     const leaf = workspace.getRightLeaf(false)
     if (leaf === null) return
     await leaf.setViewState({ type: VIEW_TYPE, active: true })
+    void workspace.revealLeaf(leaf)
+  }
+
+  /**
+   * Open (or reveal) the dedicated Specorator agent sidepanel
+   * (IDEA-ASV-001 / `VIEW_TYPE_AGENT`). Mirrors `activateView()` but targets
+   * the agent leaf. Defaults to the right sidebar to match the Obsidian
+   * sidepanel idiom; if a user moved the leaf elsewhere it stays there.
+   */
+  async activateAgentSidepanel(): Promise<void> {
+    const { workspace } = this.app
+
+    const existing = workspace.getLeavesOfType(VIEW_TYPE_AGENT)
+    if (existing.length > 0) {
+      await ensureLeafLoaded(existing[0])
+      void workspace.revealLeaf(existing[0])
+      return
+    }
+
+    const leaf = workspace.getRightLeaf(false)
+    if (leaf === null) return
+    await leaf.setViewState({ type: VIEW_TYPE_AGENT, active: true })
     void workspace.revealLeaf(leaf)
   }
 }
