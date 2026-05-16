@@ -3,7 +3,7 @@ title: Supply-chain hardening policy
 doc_type: policy
 status: active
 owner: maintainers
-last_reviewed: 2026-05-02
+last_reviewed: 2026-05-16
 ---
 
 # Supply-chain hardening policy
@@ -34,6 +34,13 @@ This document records the controls Specorator applies to its dependency graph an
 - Fails the PR check if the diff introduces any dependency with a `high` or `critical` advisory.
 - Fails the PR check if the diff introduces any GPL-family license (`GPL-2.0`, `GPL-3.0`, `AGPL-1.0`, `AGPL-3.0`, in `-only` and `-or-later` variants).
 - Posts a summary comment on the PR when it fails so the author can see the offending package without digging through logs.
+
+### CodeQL static analysis
+
+`.github/workflows/codeql.yml` runs the GitHub CodeQL analyzer for `javascript-typescript` on push and pull request to `develop`, `demo`, and `main`, plus a weekly cron.
+
+- Findings are uploaded to GitHub code-scanning and appear in the Security tab.
+- Treated as advisory: a CodeQL alert does not block merge automatically, but reviewers should triage new high-severity findings before approving.
 
 ### OpenSSF Scorecard
 
@@ -81,6 +88,8 @@ When a PR adds a new runtime dependency (`dependencies` in `package.json`, not `
 ### Workflow / action changes
 
 - Any new `uses:` line must be pinned to a SHA in the same PR that introduces it. CI does not enforce this directly today; reviewers do.
+- Top-level `permissions:` in a workflow is `contents: read` (or stricter). Any `write` scope is declared at the job that needs it, not at the workflow root, so unrelated jobs do not inherit it.
+- Every `actions/checkout` step sets `persist-credentials: false` unless the job needs to push back to the repository, so the `GITHUB_TOKEN` is not left in the runner's git config for subsequent steps.
 - Granting a workflow `write` permission requires an explicit comment in the PR explaining what is written and why a `read` token is insufficient.
 
 ## Threat model assumptions
