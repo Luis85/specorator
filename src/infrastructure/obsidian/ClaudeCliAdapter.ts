@@ -6,11 +6,26 @@ import type {
 	ClaudeCliStreamOptions,
 	StreamDelta,
 } from '@/domain/ports/ClaudeCliPort';
-import { ClaudeCliError, streamFromQuery } from '@/domain/ports/ClaudeCliPort';
+import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort';
 import type { Result } from '@/domain/shared/Result';
 import { ok, err } from '@/domain/shared/Result';
+import { asSessionId, type SessionId } from '@/domain/chat/SessionId';
 import type { LoggerPort } from '@/domain/ports';
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
+
+/**
+ * Loosely-typed view of the SDK message union. Only the fields actually
+ * dispatched in `_dispatchMessage` are listed — keeps the file decoupled
+ * from the SDK's full `SDKMessage` shape so a version bump that adds new
+ * variants doesn't break our build.
+ */
+interface SdkMessage {
+	type?: string;
+	subtype?: string;
+	session_id?: unknown;
+	event?: unknown;
+	result?: unknown;
+}
 
 /**
  * Production implementation of ClaudeCliPort using @anthropic-ai/claude-agent-sdk.
@@ -96,52 +111,33 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 
 	/**
 	 * Send a prompt to Claude via the SDK. Returns Result<string, ClaudeCliError>.
-	 * Never throws. Satisfies REQ-CCS-013, REQ-CCS-016, NFR-CCS-003, SPEC-CCS-001 §5.3.
+	 * Never throws. Now layered on top of `queryStream()` — collects every
+	 * `text` delta into a single string so existing free-text call sites stay
+	 * unchanged. The Codex P1 audit / NFR-CCS-003 timeout + abort behaviour
+	 * is inherited from `queryStream()`.
+	 *
+	 * Satisfies REQ-CCS-013, REQ-CCS-016, NFR-CCS-003, SPEC-CCS-001 §5.3.
 	 */
 	async query(
 		prompt: string,
 		options?: ClaudeCliQueryOptions,
 	): Promise<Result<string, ClaudeCliError>> {
-		if (!this._available) {
-			return err(new ClaudeCliError(this._unavailableCode(), 'ClaudeCliAdapter is not available'));
-		}
-
-		// Re-read key at call time so settings changes take effect without restarting the adapter.
-		const currentKey = this._getSettings().anthropicApiKey.trim();
-		if (!currentKey) {
-			return err(new ClaudeCliError('API_KEY_MISSING', 'API key is missing'));
-		}
-		process.env.ANTHROPIC_API_KEY = currentKey;
-
-		const timeoutMs = this._clampTimeout(options?.timeoutMs);
-
 		if (options?.maxTurns !== undefined && options.maxTurns > 1) {
 			this._logger.warn('ClaudeCliAdapter.query(): maxTurns > 1 is clamped to 1 in v1');
 		}
-
-		const controller = new AbortController();
-		let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-		try {
-			const timeoutPromise = new Promise<never>((_resolve, reject) => {
-				// eslint-disable-next-line obsidianmd/prefer-active-window-timers
-				timeoutId = setTimeout(() => {
-					controller.abort();
-					reject(new ClaudeCliError('TIMEOUT', `Query exceeded ${timeoutMs} ms`));
-				}, timeoutMs);
-			});
-			const responseText = await Promise.race([
-				this._runSdkQuery(prompt, controller),
-				timeoutPromise,
-			]);
-			return ok(responseText);
-		} catch (e: unknown) {
-			return err(this._mapError(e, timeoutMs));
-		} finally {
-			// eslint-disable-next-line obsidianmd/prefer-active-window-timers
-			clearTimeout(timeoutId);
-			controller.abort();
+		const chunks: string[] = [];
+		for await (const delta of this.queryStream(prompt, options)) {
+			if (delta.type === 'text') {
+				chunks.push(delta.text);
+			} else if (delta.type === 'error') {
+				return err(delta.error);
+			} else if (delta.type === 'done') {
+				return ok(chunks.join(''));
+			}
 		}
+		// Iterator exhausted without `done` — treat as failure (mirrors the
+		// original `_runSdkQuery` "No result message" behaviour).
+		return err(new ClaudeCliError('QUERY_FAILED', 'No result message received from SDK'));
 	}
 
 	/**
@@ -165,23 +161,226 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 	}
 
 	/**
-	 * Streaming variant of `query()` (IDEA-ASV-001 Increment 2, PR-ASV-2-port).
+	 * Streaming variant of `query()` (IDEA-ASV-001 Increment 2, PR-ASV-2-sdk).
 	 *
-	 * This first PR-A implementation is the **bridge stub**: it delegates to
-	 * the existing `query()` method and emits the resolved text as a single
-	 * `text` delta followed by `done`. Real per-token streaming (which the
-	 * Anthropic SDK natively supports through its `result`+`stream_event`
-	 * messages) lands in PR-ASV-2-sdk; this stub keeps the surface area
-	 * consistent so call sites can migrate to `queryStream()` without waiting
-	 * for the SDK refactor.
+	 * Emits real per-token text deltas by consuming the Anthropic Agent SDK's
+	 * `stream_event` messages (`includePartialMessages: true`). The SDK emits
+	 * an async generator of `SDKMessage`:
+	 *   - `system` (subtype `'init'`)            → captured `session_id` → `session-id` delta
+	 *   - `stream_event` with `content_block_delta` carrying a `text_delta`
+	 *                                           → `text` delta
+	 *   - `result`                              → `done`
 	 *
-	 * Honours `options.signal`: a pre-aborted signal short-circuits to an
-	 * error delta without invoking the SDK; mid-flight abort is fielded by
-	 * the underlying `query()` (the SDK supports `abortController` natively
-	 * — wired through `_runSdkQuery` already).
+	 * The caller's `options.signal` is wired into the SDK's `abortController`;
+	 * aborting mid-stream causes the generator to throw, which the catch
+	 * branch maps to a `QUERY_FAILED` error delta. Timeout follows the same
+	 * pattern as `query()`: a separate Promise rejects on the deadline and
+	 * aborts the SDK controller, then the catch maps it to `TIMEOUT`.
+	 *
+	 * Never throws. Mid-flight errors are delivered as a terminal `error`
+	 * delta; a successful turn emits a final `done`.
 	 */
-	queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
-		return streamFromQuery((p, o) => this.query(p, o), prompt, options);
+	queryStream(
+		prompt: string,
+		options?: ClaudeCliStreamOptions,
+	): AsyncIterable<StreamDelta> {
+		const pre = this._preflightStream(options);
+		if (pre !== null) return ClaudeCliAdapter._singleDelta(pre);
+		return this._runStream(prompt, options);
+	}
+
+	/**
+	 * Single-yield iterable helper — wraps one `StreamDelta` into an
+	 * `AsyncIterable` for the early-error paths in `queryStream`.
+	 */
+	private static _singleDelta(delta: StreamDelta): AsyncIterable<StreamDelta> {
+		return (async function* (): AsyncGenerator<StreamDelta> {
+			yield delta;
+		})();
+	}
+
+	/**
+	 * Synchronous pre-flight checks. Returns the terminal error delta to
+	 * emit before any SDK call, or `null` if the dispatch is allowed.
+	 */
+	private _preflightStream(options: ClaudeCliStreamOptions | undefined): StreamDelta | null {
+		if (!this._available) {
+			return {
+				type: 'error',
+				error: new ClaudeCliError(this._unavailableCode(), 'ClaudeCliAdapter is not available'),
+			};
+		}
+		const currentKey = this._getSettings().anthropicApiKey.trim();
+		if (currentKey === '') {
+			return { type: 'error', error: new ClaudeCliError('API_KEY_MISSING', 'API key is missing') };
+		}
+		process.env.ANTHROPIC_API_KEY = currentKey;
+		if (options?.signal?.aborted === true) {
+			return { type: 'error', error: new ClaudeCliError('QUERY_FAILED', 'Aborted before send') };
+		}
+		return null;
+	}
+
+	private async *_runStream(
+		prompt: string,
+		options?: ClaudeCliStreamOptions,
+	): AsyncIterable<StreamDelta> {
+		const timeoutMs = this._clampTimeout(options?.timeoutMs);
+		const controller = new AbortController();
+		const onAbort = (): void => {
+			controller.abort();
+		};
+		options?.signal?.addEventListener('abort', onAbort);
+		const timeout = ClaudeCliAdapter._makeTimeout(timeoutMs, controller);
+		try {
+			yield* this._streamSdk(prompt, controller, options, timeout);
+		} catch (e: unknown) {
+			yield { type: 'error', error: this._mapError(e, timeoutMs) };
+		} finally {
+			timeout.clear();
+			options?.signal?.removeEventListener('abort', onAbort);
+			controller.abort();
+		}
+	}
+
+	private static _makeTimeout(
+		timeoutMs: number,
+		controller: AbortController,
+	): { promise: Promise<never>; clear: () => void } {
+		let timeoutId: ReturnType<typeof setTimeout> | undefined;
+		const promise = new Promise<never>((_resolve, reject) => {
+			// eslint-disable-next-line obsidianmd/prefer-active-window-timers
+			timeoutId = setTimeout(() => {
+				controller.abort();
+				reject(new ClaudeCliError('TIMEOUT', `Query exceeded ${timeoutMs} ms`));
+			}, timeoutMs);
+		});
+		// Swallow unhandled-rejection on the dangling timeout promise.
+		promise.catch(() => undefined);
+		return {
+			promise,
+			clear: (): void => {
+				if (timeoutId !== undefined) {
+					// eslint-disable-next-line obsidianmd/prefer-active-window-timers
+					clearTimeout(timeoutId);
+				}
+			},
+		};
+	}
+
+	/**
+	 * Inner SDK consumer for `queryStream()`. Races each `gen.next()` call
+	 * against the timeout promise so a hanging SDK call surfaces as a
+	 * terminal `TIMEOUT` error rather than blocking the generator.
+	 *
+	 * Dispatch table:
+	 *   - `system` (subtype `'init'`)      → at most one `session-id` delta
+	 *   - `stream_event` `content_block_delta` `text_delta` → `text` delta
+	 *   - `assistant`                      → fallback text delta if no
+	 *                                        `stream_event` text arrived
+	 *   - `result`                         → fallback text from
+	 *                                        `result.result`, then `done`
+	 *
+	 * The fallback paths cover degenerate SDK callers (tests that emit only
+	 * `result`) and degraded production scenarios where
+	 * `includePartialMessages` is silently ignored.
+	 */
+	private async *_streamSdk(
+		prompt: string,
+		controller: AbortController,
+		options: ClaudeCliStreamOptions | undefined,
+		timeout: { promise: Promise<never>; clear: () => void },
+	): AsyncIterable<StreamDelta> {
+		const gen = sdkQuery({
+			prompt,
+			options: {
+				maxTurns: 1,
+				abortController: controller,
+				includePartialMessages: true,
+			},
+		});
+		const state = { sessionIdEmitted: false, textEmitted: false };
+		for (;;) {
+			const next = await Promise.race([gen.next(), timeout.promise]);
+			if (next.done === true) return;
+			const out = this._dispatchMessage(next.value, state, options);
+			for (const delta of out.deltas) yield delta;
+			if (out.terminal) return;
+		}
+	}
+
+	/**
+	 * Pure message dispatch helper. Returns the deltas to emit for one SDK
+	 * message and whether the stream should terminate after them. Keeping
+	 * this side-effect-free (modulo the `onSessionId` callback, which the
+	 * port contract demands) lets the outer loop stay simple.
+	 */
+	private _dispatchMessage(
+		message: SdkMessage,
+		state: { sessionIdEmitted: boolean; textEmitted: boolean },
+		options: ClaudeCliStreamOptions | undefined,
+	): { deltas: StreamDelta[]; terminal: boolean } {
+		const deltas: StreamDelta[] = [];
+		if (message.type === 'system' && message.subtype === 'init') {
+			const sid = ClaudeCliAdapter._extractSessionId(message);
+			if (sid !== null && !state.sessionIdEmitted) {
+				state.sessionIdEmitted = true;
+				deltas.push({ type: 'session-id', sessionId: sid });
+				ClaudeCliAdapter._fireOnSessionId(options, sid);
+			}
+			return { deltas, terminal: false };
+		}
+		if (message.type === 'stream_event') {
+			const text = ClaudeCliAdapter._extractStreamText(message);
+			if (text !== null) {
+				state.textEmitted = true;
+				deltas.push({ type: 'text', text });
+			}
+			return { deltas, terminal: false };
+		}
+		if (message.type === 'result') {
+			if (!state.textEmitted) {
+				const fallback = ClaudeCliAdapter._extractResultText(message);
+				if (fallback !== null) deltas.push({ type: 'text', text: fallback });
+			}
+			deltas.push({ type: 'done' });
+			return { deltas, terminal: true };
+		}
+		return { deltas, terminal: false };
+	}
+
+	private static _extractSessionId(message: { session_id?: unknown }): SessionId | null {
+		const raw = message.session_id;
+		if (typeof raw !== 'string' || raw.length === 0) return null;
+		return asSessionId(raw);
+	}
+
+	private static _fireOnSessionId(
+		options: ClaudeCliStreamOptions | undefined,
+		sid: SessionId,
+	): void {
+		if (options?.onSessionId === undefined) return;
+		try {
+			options.onSessionId(sid);
+		} catch {
+			/* Mirror subprocess adapter — swallow callback errors. */
+		}
+	}
+
+	private static _extractStreamText(message: { event?: unknown }): string | null {
+		if (typeof message.event !== 'object' || message.event === null) return null;
+		const event = message.event as { type?: string; delta?: { type?: string; text?: string } };
+		if (event.type !== 'content_block_delta') return null;
+		if (event.delta?.type !== 'text_delta') return null;
+		const text = event.delta.text;
+		return typeof text === 'string' && text.length > 0 ? text : null;
+	}
+
+	private static _extractResultText(message: { result?: unknown }): string | null {
+		if (typeof message.result === 'string' && message.result.length > 0) {
+			return message.result;
+		}
+		return null;
 	}
 
 	// ── Private helpers ───────────────────────────────────────────────────────
@@ -192,20 +391,6 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 
 	private _clampTimeout(raw?: number): number {
 		return Math.min(Math.max(raw ?? 30_000, 1_000), 300_000);
-	}
-
-	private async _runSdkQuery(prompt: string, controller: AbortController): Promise<string> {
-		const gen = sdkQuery({ prompt, options: { maxTurns: 1, abortController: controller } });
-		let resultText: string | undefined;
-		for await (const message of gen) {
-			if (message.type === 'result' && 'result' in message) {
-				resultText = String(message.result);
-			}
-		}
-		if (resultText === undefined) {
-			throw new Error('No result message received from SDK');
-		}
-		return resultText;
 	}
 
 	private _mapError(e: unknown, timeoutMs: number): ClaudeCliError {
