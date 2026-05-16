@@ -348,16 +348,36 @@ const blocks = computed<Block[]>(() => parseBlocks(props.text));
 const renderPort = inject<MarkdownRenderPort | undefined>(MARKDOWN_RENDER_PORT, undefined);
 const nativeContainer = ref<HTMLElement | null>(null);
 let nativeDisposer: (() => void) | null = null;
+/**
+ * Monotonic render sequence (Codex P1 on PR #377). `renderPort.render`
+ * is async, so rapid `text` updates (e.g. streaming assistant tokens
+ * during PR-ASV-2-ui) could land out of order: an older render
+ * resolving after a newer one would repaint stale markdown AND
+ * overwrite `nativeDisposer`, leaking the newer Obsidian Component's
+ * listeners + child widgets. Each render captures `seq` on dispatch
+ * and discards itself on resolve if `latestSeq` has moved past it.
+ */
+let latestSeq = 0;
 
 async function rerenderNative(): Promise<void> {
 	if (renderPort === undefined) return;
 	const el = nativeContainer.value;
 	if (el === null) return;
+	const seq = ++latestSeq;
+	// Dispose the prior render synchronously so its DOM + listeners are
+	// gone before the next render starts writing into the container.
 	if (nativeDisposer !== null) {
 		nativeDisposer();
 		nativeDisposer = null;
 	}
-	nativeDisposer = await renderPort.render({ markdown: props.text, container: el });
+	const disposer = await renderPort.render({ markdown: props.text, container: el });
+	// If a newer render started while this one was awaiting, drop this
+	// result: dispose its DOM and leave `nativeDisposer` untouched.
+	if (seq !== latestSeq) {
+		disposer();
+		return;
+	}
+	nativeDisposer = disposer;
 }
 
 watch(
@@ -369,6 +389,10 @@ watch(
 );
 
 onBeforeUnmount(() => {
+	// Bump latestSeq so any in-flight render's tail recognises it lost
+	// the race and disposes itself rather than touching the freed
+	// container.
+	latestSeq++;
 	if (nativeDisposer !== null) {
 		nativeDisposer();
 		nativeDisposer = null;
