@@ -760,7 +760,7 @@ to   { opacity: 1; transform: translateY(0);
 	font-style: italic;
 }
 
-.specorator-root :where(.sp-agent-messages[data-v-0aef9ad0]) {
+.specorator-root :where(.sp-agent-messages[data-v-289bf981]) {
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow-y: auto;
@@ -769,21 +769,21 @@ to   { opacity: 1; transform: translateY(0);
 	flex-direction: column;
 	gap: 0.75rem;
 }
-.specorator-root :where(.sp-agent-messages--empty[data-v-0aef9ad0]) {
+.specorator-root :where(.sp-agent-messages--empty[data-v-289bf981]) {
 	flex: 0 0 auto;
 	padding: 1.25rem 1rem 0;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 }
-.specorator-root :where(.sp-agent-messages__empty-body[data-v-0aef9ad0]) {
+.specorator-root :where(.sp-agent-messages__empty-body[data-v-289bf981]) {
 	margin: 0;
 	font-size: 0.8125rem;
 	color: var(--text-muted);
 	text-align: center;
 	font-style: italic;
 }
-.specorator-root :where(.sp-agent-message[data-v-0aef9ad0]) {
+.specorator-root :where(.sp-agent-message[data-v-289bf981]) {
 	display: flex;
 	flex-direction: column;
 	gap: 0.25rem;
@@ -792,22 +792,22 @@ to   { opacity: 1; transform: translateY(0);
 	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 }
-.specorator-root :where(.sp-agent-message--user[data-v-0aef9ad0]) {
+.specorator-root :where(.sp-agent-message--user[data-v-289bf981]) {
 	background: var(--background-secondary-alt, var(--background-secondary));
 }
-.specorator-root :where(.sp-agent-message__role[data-v-0aef9ad0]) {
+.specorator-root :where(.sp-agent-message__role[data-v-289bf981]) {
 	font-size: 0.6875rem;
 	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 	color: var(--text-muted);
 }
-.specorator-root :where(.sp-agent-message__body[data-v-0aef9ad0]) {
+.specorator-root :where(.sp-agent-message__body[data-v-289bf981]) {
 	display: flex;
 	flex-direction: column;
 	gap: 0.25rem;
 }
-.specorator-root :where(.sp-agent-message__text[data-v-0aef9ad0]) {
+.specorator-root :where(.sp-agent-message__text[data-v-289bf981]) {
 	margin: 0;
 	font-family: inherit;
 	font-size: 0.875rem;
@@ -815,16 +815,30 @@ to   { opacity: 1; transform: translateY(0);
 	white-space: pre-wrap;
 	word-break: break-word;
 }
-.specorator-root :where(.sp-agent-message__empty[data-v-0aef9ad0]) {
+.specorator-root :where(.sp-agent-message__empty[data-v-289bf981]) {
 	margin: 0;
 	font-size: 0.8125rem;
 	color: var(--text-muted);
 	font-style: italic;
 }
-.specorator-root :where(.sp-agent-message__trim-note[data-v-0aef9ad0]) {
+.specorator-root :where(.sp-agent-message__trim-note[data-v-289bf981]) {
 	margin: 0;
 	font-size: 0.75rem;
 	color: var(--text-faint);
+}
+.specorator-root :where(.sp-agent-message--streaming[data-v-289bf981]) {
+	opacity: 0.95;
+}
+.specorator-root :where(.sp-agent-message__cursor[data-v-289bf981]) {
+	display: inline-block;
+	font-size: 0.875rem;
+	color: var(--text-accent);
+	animation: sp-agent-message__blink-289bf981 1s steps(2, start) infinite;
+}
+@keyframes sp-agent-message__blink-289bf981 {
+to {
+		visibility: hidden;
+}
 }
 
 .specorator-root :where(.sp-chat__chip[data-v-b92cd9d4]) {
@@ -1098,7 +1112,7 @@ to   { opacity: 1; transform: translateY(0);
  * parent: in the agent sidepanel the parent gives ChatSidebar `flex: 0 0
  * auto` and `MessageList` takes the remaining grow space.
  */
-.specorator-root :where(.sp-chat-sidebar[data-v-4fcb94ff]) {
+.specorator-root :where(.sp-chat-sidebar[data-v-bc55d886]) {
 	padding: 1rem;
 	display: flex;
 	flex-direction: column;
@@ -1106,24 +1120,41 @@ to   { opacity: 1; transform: translateY(0);
 	box-sizing: border-box;
 	flex-shrink: 0;
 }
-.specorator-root :where(.sp-chat__title[data-v-4fcb94ff]) {
+.specorator-root :where(.sp-chat__title[data-v-bc55d886]) {
 	margin: 0;
 	font-size: 1.125rem;
 	font-weight: 700;
 	color: var(--text-normal);
 }
-.specorator-root :where(.sp-chat__header[data-v-4fcb94ff]) {
+.specorator-root :where(.sp-chat__header[data-v-bc55d886]) {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
 	flex-wrap: wrap;
 }
-.specorator-root :where(.sp-chat__divider[data-v-4fcb94ff]) {
+.specorator-root :where(.sp-chat__divider[data-v-bc55d886]) {
 	margin: 0;
 	border: none;
 	border-top: 1px solid var(--background-modifier-border);
 }
-.specorator-root :where(.sp-chat__degraded[data-v-4fcb94ff]) {
+.specorator-root :where(.sp-chat__stop[data-v-bc55d886]) {
+	margin-left: auto;
+	font-size: 0.75rem;
+	font-weight: 500;
+	padding: 0.25rem 0.625rem;
+	border-radius: 4px;
+	border: 1px solid var(--background-modifier-error-border, var(--background-modifier-border));
+	background: var(--background-modifier-error, var(--background-secondary));
+	color: var(--text-on-accent, var(--text-normal));
+	cursor: pointer;
+	transition:
+		background-color 0.15s,
+		border-color 0.15s;
+}
+.specorator-root :where(.sp-chat__stop[data-v-bc55d886]:hover) {
+	background: var(--background-modifier-error-hover, var(--interactive-hover));
+}
+.specorator-root :where(.sp-chat__degraded[data-v-bc55d886]) {
 	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 8px;
@@ -1132,13 +1163,13 @@ to   { opacity: 1; transform: translateY(0);
 	flex-direction: column;
 	gap: 0.5rem;
 }
-.specorator-root :where(.sp-chat__degraded-heading[data-v-4fcb94ff]) {
+.specorator-root :where(.sp-chat__degraded-heading[data-v-bc55d886]) {
 	margin: 0;
 	font-size: 1rem;
 	font-weight: 600;
 	color: var(--text-normal);
 }
-.specorator-root :where(.sp-chat__degraded-body[data-v-4fcb94ff]) {
+.specorator-root :where(.sp-chat__degraded-body[data-v-bc55d886]) {
 	margin: 0;
 	font-size: 0.875rem;
 	color: var(--text-muted);
