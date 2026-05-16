@@ -46,13 +46,22 @@ export class LocalStorageBridge
 	}
 
 	async listFiles(folder: string): Promise<string[]> {
-		const prefix = FILE_PREFIX + (folder.endsWith('/') ? folder : folder + '/');
+		// Codex P1 on PR #376: empty-string root must enumerate top-level
+		// files. The previous prefix `FILE_PREFIX + '/'` matched none of the
+		// stored `specorator:file:<path>` keys (they have no leading slash),
+		// breaking the `@`-mention picker in standalone/web mode where it
+		// kicked off a recursive vault walk from `''`.
+		const isRoot = folder === '';
+		const prefix = isRoot
+			? FILE_PREFIX
+			: FILE_PREFIX + (folder.endsWith('/') ? folder : folder + '/');
+		const stripLength = isRoot ? 0 : folder.endsWith('/') ? folder.length : folder.length + 1;
 		const results: string[] = [];
 		for (let i = 0; i < localStorage.length; i++) {
 			const key = localStorage.key(i);
 			if (key?.startsWith(prefix) === true) {
 				const filePath = key.slice(FILE_PREFIX.length);
-				const relative = filePath.slice(folder.endsWith('/') ? folder.length : folder.length + 1);
+				const relative = filePath.slice(stripLength);
 				if (!relative.includes('/')) results.push(filePath);
 			}
 		}
@@ -60,13 +69,18 @@ export class LocalStorageBridge
 	}
 
 	async listFolders(parent: string): Promise<string[]> {
-		const prefix = FILE_PREFIX + (parent.endsWith('/') ? parent : parent + '/');
+		// Codex P1 on PR #376: symmetric fix for the empty-root case.
+		const isRoot = parent === '';
+		const prefix = isRoot
+			? FILE_PREFIX
+			: FILE_PREFIX + (parent.endsWith('/') ? parent : parent + '/');
+		const stripLength = isRoot ? 0 : parent.endsWith('/') ? parent.length : parent.length + 1;
 		const folders = new Set<string>();
 		for (let i = 0; i < localStorage.length; i++) {
 			const key = localStorage.key(i);
 			if (key?.startsWith(prefix) === true) {
 				const filePath = key.slice(FILE_PREFIX.length);
-				const relative = filePath.slice(parent.endsWith('/') ? parent.length : parent.length + 1);
+				const relative = filePath.slice(stripLength);
 				const slash = relative.indexOf('/');
 				if (slash !== -1) {
 					folders.add(relative.slice(0, slash));

@@ -81,6 +81,12 @@ export class MockBridge
 	}
 
 	async listFiles(folder: string): Promise<string[]> {
+		// Root listing: top-level files have no `/` in their path. Honours
+		// `listFiles('')` symmetry with Obsidian's `vault.getAbstractFileByPath('/')`
+		// (PR-ASV-4, recursive walker for the @-mention picker).
+		if (folder === '') {
+			return [...this.files.keys()].filter((p) => !p.includes('/'));
+		}
 		const prefix = folder.endsWith('/') ? folder : `${folder}/`;
 		return [...this.files.keys()].filter((p) => {
 			if (!p.startsWith(prefix)) return false;

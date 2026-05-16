@@ -1,10 +1,40 @@
 import type { VueWrapper } from '@vue/test-utils'
 
 export class ChatInputPO {
-	constructor(private readonly wrapper: VueWrapper) {}
+	constructor(public readonly wrapper: VueWrapper) {}
 
 	private byTid(tid: string) {
 		return `[data-testid="${tid}"]`
+	}
+
+	mentionDropdownExists(): boolean {
+		return this.wrapper.find(this.byTid('mention-dropdown')).exists()
+	}
+
+	mentionOptionAt(index: number) {
+		return this.wrapper.find(this.byTid(`mention-option-${index}`))
+	}
+
+	mentionOptionPaths(): string[] {
+		return this.wrapper.findAll('[role="option"]').map((el) => {
+			const path = el.find('[data-testid^="mention-option-"] > :last-child')
+			return path.exists() ? path.text() : ''
+		})
+	}
+
+	async typeAndMoveCaretToEnd(value: string): Promise<void> {
+		const el = this.textarea.element as HTMLTextAreaElement
+		el.value = value
+		el.setSelectionRange(value.length, value.length)
+		await this.textarea.trigger('input')
+	}
+
+	async pressKey(key: string, modifiers: { ctrl?: boolean; meta?: boolean } = {}): Promise<void> {
+		await this.textarea.trigger('keydown', {
+			key,
+			ctrlKey: modifiers.ctrl ?? false,
+			metaKey: modifiers.meta ?? false,
+		})
 	}
 
 	get textarea() {
