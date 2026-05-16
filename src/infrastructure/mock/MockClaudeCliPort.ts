@@ -19,10 +19,18 @@ function sleep(ms: number): Promise<void> {
  * scripted `delayMs` / `streamChunkDelayMs` get prompt feedback rather
  * than waiting out the full sleep (Codex P2 on PR #370 against the
  * subprocess mock — the same race semantics apply here).
+ *
+ * Pre-aborted signals short-circuit immediately: `AbortSignal` does NOT
+ * replay the `abort` event to listeners added after the signal is already
+ * aborted, so we must check `signal.aborted` BEFORE installing the
+ * listener — otherwise an abort that happened between two streamed
+ * chunks (or before the first `interruptibleSleep` call) would block
+ * for the full sleep window (Codex P2 on PR #370 second pass).
  */
 function interruptibleSleep(ms: number, signal: AbortSignal | undefined): Promise<void> {
 	if (ms <= 0) return Promise.resolve();
 	if (signal === undefined) return sleep(ms);
+	if (signal.aborted) return Promise.resolve();
 	return new Promise<void>((resolve) => {
 		const t = setTimeout(() => {
 			signal.removeEventListener('abort', onAbort);
