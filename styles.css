@@ -970,7 +970,7 @@ to {
   color: var(--text-muted);
 }
 
-.specorator-root :where(.sp-mention-dropdown[data-v-ace43c9f]) {
+.specorator-root :where(.sp-mention-dropdown[data-v-b7654c6a]) {
 	list-style: none;
 	margin: 0;
 	padding: 0.25rem 0;
@@ -983,7 +983,7 @@ to {
 	font-family: var(--font-text);
 	font-size: 0.8125rem;
 }
-.specorator-root :where(.sp-mention-dropdown__item[data-v-ace43c9f]) {
+.specorator-root :where(.sp-mention-dropdown__item[data-v-b7654c6a]) {
 	display: flex;
 	flex-direction: column;
 	gap: 0.125rem;
@@ -991,14 +991,14 @@ to {
 	cursor: pointer;
 	color: var(--text-normal);
 }
-.specorator-root :where(.sp-mention-dropdown__item--selected[data-v-ace43c9f]),
-.specorator-root :where(.sp-mention-dropdown__item[data-v-ace43c9f]:hover) {
+.specorator-root :where(.sp-mention-dropdown__item--selected[data-v-b7654c6a]),
+.specorator-root :where(.sp-mention-dropdown__item[data-v-b7654c6a]:hover) {
 	background: var(--background-modifier-hover);
 }
-.specorator-root :where(.sp-mention-dropdown__name[data-v-ace43c9f]) {
+.specorator-root :where(.sp-mention-dropdown__name[data-v-b7654c6a]) {
 	font-weight: 600;
 }
-.specorator-root :where(.sp-mention-dropdown__path[data-v-ace43c9f]) {
+.specorator-root :where(.sp-mention-dropdown__path[data-v-b7654c6a]) {
 	color: var(--text-muted);
 	font-size: 0.75rem;
 	overflow: hidden;
@@ -1006,13 +1006,13 @@ to {
 	white-space: nowrap;
 }
 
-.specorator-root :where(.sp-chat__input-area[data-v-950e70df]) {
+.specorator-root :where(.sp-chat__input-area[data-v-65cc6585]) {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   position: relative;
 }
-.specorator-root :where(.sp-chat__textarea[data-v-950e70df]) {
+.specorator-root :where(.sp-chat__textarea[data-v-65cc6585]) {
   width: 100%;
   min-height: 4.5rem;
   max-height: 8rem;
@@ -1027,11 +1027,11 @@ to {
   font-size: 0.875rem;
   box-sizing: border-box;
 }
-.specorator-root :where(.sp-chat__textarea[data-v-950e70df]:focus) {
+.specorator-root :where(.sp-chat__textarea[data-v-65cc6585]:focus) {
   outline: none;
   border-color: var(--interactive-accent);
 }
-.specorator-root :where(.sp-chat__input-actions[data-v-950e70df]) {
+.specorator-root :where(.sp-chat__input-actions[data-v-65cc6585]) {
   display: flex;
   justify-content: flex-end;
 }
