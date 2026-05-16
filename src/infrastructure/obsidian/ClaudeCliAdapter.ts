@@ -313,7 +313,21 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 		const state = { sessionIdEmitted: false, textEmitted: false };
 		for (;;) {
 			const next = await Promise.race([gen.next(), timeout.promise]);
-			if (next.done === true) return;
+			if (next.done === true) {
+				// Codex P1 on PR #371: the SDK generator can close without
+				// emitting a `result` message (abnormal SDK completion or a
+				// clean-exit abort path). The `queryStream()` contract
+				// requires every stream to end with `done` or `error`; without
+				// a terminal delta here, direct streaming callers never
+				// observe the turn end and `inFlightAbort` / `streamingText`
+				// stay stuck. Surface as `QUERY_FAILED` so callers can clear
+				// in-flight state via the existing error branch.
+				yield {
+					type: 'error',
+					error: new ClaudeCliError('QUERY_FAILED', 'SDK stream ended without result'),
+				};
+				return;
+			}
 			const out = this._dispatchMessage(next.value, state, options);
 			for (const delta of out.deltas) yield delta;
 			if (out.terminal) return;
