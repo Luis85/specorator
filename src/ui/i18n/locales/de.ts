@@ -162,5 +162,14 @@ export default {
     toolStreaming: 'Werkzeug läuft',
     toolWaitingForInput: 'Warte auf Werkzeug-Eingabe…',
     streamingResponse: 'Assistent antwortet…',
+    planApprovalAriaLabel: 'Plan-Freigabe',
+    planApprovalHeading: 'Plan zur Freigabe',
+    planApprovalPermissions: 'Angeforderte Werkzeuge: {tools}',
+    planApprovalRevisePlaceholder: 'Beschreibe, was sich ändern soll, und drücke Enter…',
+    planApproval: {
+      implement: 'Plan umsetzen',
+      revise: 'Überarbeitung senden',
+      cancel: 'Abbrechen',
+    },
   },
 } as const

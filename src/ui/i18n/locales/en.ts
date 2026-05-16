@@ -162,5 +162,14 @@ export default {
     toolStreaming: 'Tool running',
     toolWaitingForInput: 'Waiting for tool input…',
     streamingResponse: 'Assistant is replying…',
+    planApprovalAriaLabel: 'Plan approval',
+    planApprovalHeading: 'Plan for your approval',
+    planApprovalPermissions: 'Requested tools: {tools}',
+    planApprovalRevisePlaceholder: 'Describe what should change, then press Enter…',
+    planApproval: {
+      implement: 'Implement plan',
+      revise: 'Send revision',
+      cancel: 'Cancel',
+    },
   },
 } as const
