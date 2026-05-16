@@ -66,3 +66,36 @@ External reference: https://github.com/YishenTu/claudian. The four headline Clau
 - **Slash-command palette (REQ-ASV-051 candidate):** Claudian uses `src/shared/components/SlashCommandDropdown.ts` with a backward-scan trigger (`/` at position 0 OR preceded by whitespace) and three command-source layers (built-ins from TS, SDK-probed via `conversation.supportedCommands()`, vault fallback from `.claude/commands/*.md`). Frontmatter schema: `description`, `argument-hint`, `allowed-tools`, `model`, `disable-model-invocation`, `user-invocable`, `context`, `agent`, `hooks`. Specorator port: new `CommandCatalogPort` in `src/domain/ports/`, `useSlashPalette()` composable, `ChatInput.vue` keystroke handler. Smallest viable PR: built-ins only (`/clear`, `/new-conversation`, `/advance-stage`), no SDK probe.
 - **`@`-mention picker (REQ-ASV-052 candidate):** Claudian's `MentionDropdownController` debounces 200ms, scans backward from caret for `@` at position-0-or-after-whitespace, and lists vault files (`VaultMentionCache` with lazy-dirty invalidation) + agents/MCP/external-context via submenus. Sort: prefix-match → mtime → type → path; capped 50 folders / 100 files. Specorator port: new `VaultMentionPort` wrapping the existing `VaultPort.listFiles/listFolders` + mtime, `useMentionPicker.ts` composable, `attachedFiles` DTO on `chatStore`. Smallest viable PR: vault files only, no caching layer.
 - **Plan mode + inline approval (REQ-ASV-053 candidate):** Plan Mode is a Claude Code CLI/SDK concern, not a plugin feature — the plugin reacts to `ExitPlanMode` tool calls via `setExitPlanModeCallback()`. The inline approval card pattern (`Implement / Revise / Cancel` keyboard list) overlaps with our existing `FileWriteProposalCard` (REQ-ASM-044) but is orthogonal in scope: Plan approval is whole-plan; ours is per-file. Consolidation candidate via a unified `ApprovalPort`. Smallest viable PR: just the `InlinePlanApprovalCard.vue` Vue component + `ApprovalPort.requestPlanApproval()` wired to a no-op mock — exercises the keyboard/Vue patterns without depending on the streaming port.
+
+## Increment 2+ research wave (2026-05-16, post-streaming)
+
+Two follow-up research subagents mined Claudian's GitHub history + did a side-by-side gap analysis after PRs #370–#376 landed. Output captured here so future implementers don't re-research.
+
+### Top-5 remaining gaps (priority order)
+
+1. **Obsidian `MarkdownRenderer` port (P1).** Hand-rolled `MarkdownBlock.vue` parser misses GFM tables, code syntax highlighting, math (`$...$` / `$$...$$`), wikilinks, image embeds, mermaid. Single highest-leverage change. Pattern: new `MarkdownRenderPort` in `src/domain/ports/`, `ObsidianMarkdownRenderAdapter` wraps `MarkdownRenderer.render(this.app, …)`, `MockMarkdownRenderAdapter` keeps the hand-rolled parser for jsdom unit tests.
+2. **`StreamDelta` union extension (P1).** Today: `text | session-id | done | error`. Missing: `thinking | tool-use-start | tool-use-input-delta | tool-use-stop | compact-boundary | usage`. Gates tool-call rendering and plan-mode wiring. Touches `ClaudeCliPort.ts`, both adapters (`ClaudeCliAdapter._dispatchMessage`, `ClaudeSubprocessAdapter._handleNdjsonLine`), both mocks, and `ChatSidebar.consumeStream`.
+3. **Tool-call + thinking rendering (P1).** Build `src/ui/components/chat/tool-call/ToolCallBlock.vue` dispatching on `tool_use.name`. Five renderers cover ~90% of real traffic: Bash / Read / Write / Edit / TodoWrite. Plus `ThinkingBlock.vue` (collapsed `<details>` showing thinking deltas). Depends on #2.
+4. **IME `isComposing` guard + folder mentions in `@`-picker.** IME guard shipped on `claude/agent-sidepanel-v2-mention-picker` 2026-05-16. Folder mentions deferred — extend `vaultFileSearch.ts` with `kind: 'file' | 'folder'`, render `@<name>/` for folders, no chip on folder selection.
+5. **Subprocess polish.** Audit `ClaudeBinaryResolver` PATH discovery against Claudian's list (volta / asdf / npm_config_prefix / native + global node_modules entries). Ensure `options.signal.abort()` reaches `_killChild` mid-flight (not just on timeout).
+
+### Lessons from Claudian's bug history (defer if not currently affecting us)
+
+- **Stream dedup.** Claudian PR [#510](https://github.com/YishenTu/claudian/pull/510): when `--include-partial-messages` emits the same block in both `content_block_delta` and `content_block_stop`, naïve consumers double-render. **Verify** our reducer dedup once tool-call rendering lands.
+- **Stop-hook loop.** Claudian PR [#502](https://github.com/YishenTu/claudian/pull/502) / issue [#624](https://github.com/YishenTu/claudian/issues/624): the Stop hook fires AFTER a turn naturally ends; if treated as user-abort it causes infinite re-prompts. **Our SDK path is immune** (we don't run the Claude Code CLI hook subsystem). Subprocess path: verify we ignore Stop-hook events post-`result`.
+- **Math during streaming kills perf.** Claudian PR [#608](https://github.com/YishenTu/claudian/pull/608): defer math rendering to end-of-message. Applies when we add KaTeX support to `MarkdownBlock` (gap #1 above).
+- **JSONL transcript tailing.** Claudian issue [#637](https://github.com/YishenTu/claudian/issues/637): full-file reread every 100ms → 399% CPU. We don't tail JSONL today. **Avoid if** we add a session-log viewer.
+- **Windows reserved filenames.** Claudian PR [#612](https://github.com/YishenTu/claudian/pull/612) had to rename a folder `aux` → `auxiliary`. **Audit** our `.claude/` + `templates/` tree before any Windows-user rollout.
+- **Configurable send shortcut.** Claudian PR [#643](https://github.com/YishenTu/claudian/pull/643): users want Enter=newline / Cmd+Enter=send vs. Enter=send / Shift+Enter=newline. **Defer** until a Windows / macOS keyboard-preferences ADR.
+- **`outputStyle` settings propagation.** Claudian issue [#544](https://github.com/YishenTu/claudian/issues/544). **Defer** — the SDK adapter inherits `~/.claude/settings.json` automatically; subprocess path stays unaffected because we never start under a user's claude settings file by design (NFR-ASM-004).
+- **`compactionControl.enabled` default.** Claudian issue [#598](https://github.com/YishenTu/claudian/issues/598): the SDK's compaction default has flipped between releases. **Verified** in our pinned SDK: no public `compactionControl` option exposed; compact boundaries are emitted via `SDKCompactBoundaryMessage`. Add a delta handler for that event (covered by gap #2).
+- **Tier-alias model leaks to provider.** Claudian issue [#578](https://github.com/YishenTu/claudian/issues/578): bare `"opus"` returns 429 from non-Anthropic endpoints. **N/A today** (no model picker); revisit if we add one.
+
+### Out of scope for v2 (explicit non-goals)
+
+- Multi-provider routing (Codex, Opencode, ACP). Locked to `@anthropic-ai/claude-agent-sdk` + local CLI per ADR-0029.
+- `BangBashService` / shell-passthrough — security posture forbids.
+- Image embeds / paste-from-clipboard — workflow plugin, not a chat-first product.
+- External context directories — H-ACD principle requires vault as operating environment.
+- `BrowserSelectionController` / Canvas selection — handled by a separate spec (Canvas tool group).
+- Mobile support — desktop-only is a hard constraint of both transports.
