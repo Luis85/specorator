@@ -227,22 +227,25 @@ function handlePickerKey(event: KeyboardEvent): boolean {
 	return false;
 }
 
+function tryHandleSendKey(event: KeyboardEvent): boolean {
+	if (event.key !== 'Enter') return false;
+	if (!(event.ctrlKey || event.metaKey)) return false;
+	if (props.disabled || props.loading) return false;
+	event.preventDefault();
+	if (picker.open.value) picker.close();
+	if (palette.isOpen.value) palette.close();
+	emit('send');
+	return true;
+}
+
 function handleKeydown(event: KeyboardEvent): void {
 	// IME-composition guard. `isComposing` is true while a Japanese/Chinese/
 	// Korean IME is mid-composition; pressing Enter to commit must NOT
-	// trigger send / commit-mention / dismiss-palette. `keyCode === 229`
-	// is the legacy IME indicator.
+	// trigger send / commit-mention / dismiss-palette.
 	if (event.isComposing || event.keyCode === 229) return;
 	if (handlePickerKey(event)) return;
 	if (handlePaletteKeydown(event)) return;
-	if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-		if (!props.disabled && !props.loading) {
-			event.preventDefault();
-			if (picker.open.value) picker.close();
-			if (palette.isOpen.value) palette.close();
-			emit('send');
-		}
-	}
+	tryHandleSendKey(event);
 }
 
 function handleInput(event: Event): void {
