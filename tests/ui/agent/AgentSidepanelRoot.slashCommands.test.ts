@@ -98,6 +98,23 @@ const ChatSidebarStub = defineComponent({
 					},
 					'emit advance',
 				),
+				h(
+					'button',
+					{
+						type: 'button',
+						'data-testid': 'stub-emit-vault-prompt',
+						onClick: () => {
+							emitCommand({
+								name: 'draft',
+								description: 'Draft a note.',
+								kind: 'vault-command',
+								action: 'vault-prompt',
+								body: 'Draft prompt body',
+							});
+						},
+					},
+					'emit vault prompt',
+				),
 			]);
 	},
 });
@@ -237,6 +254,18 @@ describe('AgentSidepanelRoot — slash command dispatch (PR-ASV-3)', () => {
 			await wrapper.find('[data-testid="stub-emit-advance"]').trigger('click');
 			expect(notificationStore.notices).toHaveLength(1);
 			expect(notificationStore.notices[0].message.toLowerCase()).toContain('not yet implemented');
+		});
+	});
+
+	describe('vault-prompt action (PR-ASV-3 follow-up)', () => {
+		it('inserts the prompt body into userText and does not auto-send', async () => {
+			const { wrapper, chatStore } = mountRoot();
+			expect(chatStore.userText).toBe('');
+			await wrapper.find('[data-testid="stub-emit-vault-prompt"]').trigger('click');
+			expect(chatStore.userText).toBe('Draft prompt body');
+			// Send is the user's next action; the dispatcher must not have
+			// triggered an LLM request itself.
+			expect(chatStore.status).not.toBe('loading');
 		});
 	});
 });

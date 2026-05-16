@@ -103,6 +103,50 @@ describe('SlashCommandDropdown', () => {
 		});
 	});
 
+	describe('vault-loaded source labels and argument hints', () => {
+		const VAULT_CMD: SlashCommand = Object.freeze({
+			name: 'review',
+			description: 'Run a code review.',
+			kind: 'vault-command',
+			action: 'vault-prompt',
+			body: 'Review prompt body.',
+			argumentHint: '[path/to/file]',
+		});
+
+		const VAULT_SKILL: SlashCommand = Object.freeze({
+			name: 'publish-release',
+			description: 'Walk through a release.',
+			kind: 'vault-skill',
+			action: 'vault-prompt',
+			body: 'Release prompt body.',
+		});
+
+		it('renders the (command) source label for vault commands', () => {
+			const { po } = mountDropdown({ commands: [VAULT_CMD], selectedIndex: 0 });
+			expect(po.itemSourceLabel('review')).toBe('(command)');
+		});
+
+		it('renders the (skill) source label for vault skills', () => {
+			const { po } = mountDropdown({ commands: [VAULT_SKILL], selectedIndex: 0 });
+			expect(po.itemSourceLabel('publish-release')).toBe('(skill)');
+		});
+
+		it('omits the source label for built-ins', () => {
+			const { po } = mountDropdown({ commands: [CLEAR], selectedIndex: 0 });
+			expect(po.itemSourceLabel('clear')).toBeNull();
+		});
+
+		it('renders the argument hint after the description', () => {
+			const { po } = mountDropdown({ commands: [VAULT_CMD], selectedIndex: 0 });
+			expect(po.itemHintText('review')).toBe('[path/to/file]');
+		});
+
+		it('omits the hint when argumentHint is absent', () => {
+			const { po } = mountDropdown({ commands: [VAULT_SKILL], selectedIndex: 0 });
+			expect(po.itemHintText('publish-release')).toBeNull();
+		});
+	});
+
 	describe('emits', () => {
 		it('emits "select" with the clicked command (mousedown)', async () => {
 			const { wrapper, po } = mountDropdown({

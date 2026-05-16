@@ -42,6 +42,12 @@ function handleMouseEnter(index: number): void {
 function isSelected(index: number): boolean {
 	return index === props.selectedIndex;
 }
+
+function sourceLabel(command: SlashCommand): string | null {
+	if (command.kind === 'vault-command') return 'command';
+	if (command.kind === 'vault-skill') return 'skill';
+	return null;
+}
 </script>
 
 <template>
@@ -72,9 +78,23 @@ function isSelected(index: number): boolean {
 			>
 				<span class="sp-slash-dropdown__name" data-testid="slash-command-name">
 					/{{ command.name }}
+					<span
+						v-if="sourceLabel(command) !== null"
+						class="sp-slash-dropdown__source"
+						:data-testid="`slash-command-source-${command.name}`"
+					>
+						({{ sourceLabel(command) }})
+					</span>
 				</span>
 				<span class="sp-slash-dropdown__description" data-testid="slash-command-description">
-					{{ command.description }}
+					{{ command.description
+					}}<template v-if="command.argumentHint">
+						<span
+							class="sp-slash-dropdown__hint"
+							:data-testid="`slash-command-hint-${command.name}`"
+							>{{ command.argumentHint }}</span
+						></template
+					>
 				</span>
 			</li>
 		</ul>
@@ -120,6 +140,18 @@ function isSelected(index: number): boolean {
 	font-size: 0.875rem;
 	font-weight: 600;
 	color: var(--text-normal);
+}
+
+.sp-slash-dropdown__source {
+	margin-left: 0.375rem;
+	font-size: 0.75rem;
+	font-weight: 400;
+	color: var(--text-muted);
+}
+
+.sp-slash-dropdown__hint {
+	color: var(--text-faint, var(--text-muted));
+	font-style: italic;
 }
 
 .sp-slash-dropdown__description {
