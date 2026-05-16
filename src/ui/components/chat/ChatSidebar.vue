@@ -84,22 +84,20 @@ const inlineTranslator: TranslationPort = {
 }
 
 /**
- * Generate a UUID for new thread / proposal ids. Falls back to a timestamp-keyed
- * value when `crypto.randomUUID` is missing (older test environments). The
- * fallback is collision-resistant enough for in-memory maps within a session.
+ * Generate an id for a new thread / proposal using the Web Crypto API.
+ * `crypto.randomUUID()` is available in every environment this plugin runs in
+ * (Obsidian's Electron, modern browsers for the standalone UI, and Node ≥19
+ * for tests). The previous `Math.random()` fallback was dead code in
+ * production — it only ran when `crypto.randomUUID` was undefined, which
+ * never occurs in supported environments — and CodeQL flagged it as
+ * insecure randomness, so it has been removed (CodeQL alert on PR #350).
  */
-function generateUuid(prefix: string): string {
-  const c = globalThis.crypto as { randomUUID?: () => string } | undefined
-  if (c?.randomUUID !== undefined) return c.randomUUID()
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-}
-
 function generateThreadId(): string {
-  return generateUuid('thread')
+  return globalThis.crypto.randomUUID()
 }
 
 function generateProposalId(): string {
-  return generateUuid('proposal')
+  return globalThis.crypto.randomUUID()
 }
 
 /**
