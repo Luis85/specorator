@@ -620,6 +620,14 @@ async function handleSend(): Promise<void> {
 
 	// Clear any prior structured-fail flag at every new send.
 	store.setStructuredFail(false);
+	// Codex P2 on PR #372: reset the streaming buffer BEFORE the structured/
+	// free-text branch split so every new send starts from empty streaming
+	// state. Without this, a previous streamed reply could leave
+	// `streamingText` populated when the next turn is routed through
+	// `handleStructuredSend()` — during that turn `store.status === 'loading'`,
+	// so `MessageList.vue` would treat the stale text as an active stream and
+	// render the old assistant output as the current response.
+	store.resetStreaming();
 
 	store.beginRequest();
 
@@ -683,7 +691,6 @@ async function handleSend(): Promise<void> {
 	// `inFlightAbort` ref lets the Stop button cancel mid-stream.
 	const abortController = new AbortController();
 	inFlightAbort.value = abortController;
-	store.resetStreaming();
 	const streamResult = await consumeStream({
 		stream: claudeCliPort.queryStream(prompt, {
 			timeoutMs: 30_000,
