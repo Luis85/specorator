@@ -100,7 +100,15 @@ function syncPaletteFromTextarea(): void {
 function scrubSlashTrigger(): void {
 	const ta = textareaEl.value;
 	if (ta === null) return;
-	const trigger = detectSlashTrigger(ta.value, ta.selectionStart);
+	// Codex P2 (third pass) on PR #375: use `selectionEnd`, NOT
+	// `selectionStart`. When a selection exists (e.g. after Ctrl+A),
+	// `selectionStart` is `0` while `selectionEnd` is the visual caret
+	// end. The trigger detector slices the prefix up to its caret arg,
+	// so `selectionStart = 0` made it return null and the scrub was a
+	// no-op — `/help` + Ctrl+A + Enter left the slash text behind.
+	// `selectionEnd` is the actual caret position both with and without
+	// a selection, matching `selectionStart` when no range is active.
+	const trigger = detectSlashTrigger(ta.value, ta.selectionEnd);
 	if (trigger === null) return;
 	// Codex P2 (second pass) on PR #375: `detectSlashTrigger` slices to the
 	// CURRENT caret, but the user may have moved the caret left inside the
