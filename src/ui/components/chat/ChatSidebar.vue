@@ -27,7 +27,12 @@ import {
 } from '@/infrastructure/bridge/ports';
 import type { SessionId } from '@/domain/chat/SessionId';
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord';
-import type { ConfirmModalPort, TranslationPort } from '@/domain/ports';
+import type {
+	ConfirmModalPort,
+	TranslationPort,
+	StreamDelta,
+	ClaudeCliErrorCode,
+} from '@/domain/ports';
 import type { TransportKind } from '@/domain/chat/TransportKind';
 import { queryStructured, type StructuredCliCallOptions } from '@/application/chat/queryStructured';
 import { proposeFileWrite } from '@/application/chat/proposeFileWrite';
@@ -137,6 +142,20 @@ const proposalPathErrors = ref<Map<string, PathValidationError>>(new Map());
 
 // Last user turn (for Retry — REQ-ASM-050). Captured on each send.
 const lastUserTurn = ref<string>('');
+
+/**
+ * `AbortController` for the in-flight streaming turn (PR-ASV-2-ui). Non-null
+ * while `handleSend` is consuming `queryStream`; cleared on terminal delta.
+ * Drives the "Stop generation" button: clicking it calls `.abort()` which
+ * propagates through the port's stream options to the underlying adapter
+ * (subprocess kill or SDK abort), then the stream emits a terminal `error`
+ * delta and the handler surfaces a `query_failed` status.
+ */
+const inFlightAbort = ref<AbortController | null>(null);
+
+function handleStopGeneration(): void {
+	inFlightAbort.value?.abort();
+}
 
 /**
  * Proposal IDs whose decision (Accept or Reject) is currently in flight. Used
@@ -657,39 +676,85 @@ async function handleSend(): Promise<void> {
 
 	// Cold-spawn pill (R-ASM-003). Cleared on completion or error.
 	store.setCliStartingUp(true);
-	const queryResult = await tryAsync(() =>
-		claudeCliPort.query(prompt, {
+	// IDEA-ASV-001 Increment 2 (PR-ASV-2-ui): consume the streaming
+	// `queryStream` rather than the non-streaming `query`. Text deltas
+	// accumulate into `store.streamingText` so `MessageList.vue` can
+	// render the in-flight assistant turn live. The exposed
+	// `inFlightAbort` ref lets the Stop button cancel mid-stream.
+	const abortController = new AbortController();
+	inFlightAbort.value = abortController;
+	store.resetStreaming();
+	const streamResult = await consumeStream({
+		stream: claudeCliPort.queryStream(prompt, {
 			timeoutMs: 30_000,
 			systemPromptSuffix,
 			resumeSessionId,
 			onSessionId,
+			signal: abortController.signal,
 		}),
-	);
+		threadId,
+	});
+	inFlightAbort.value = null;
 	store.setCliStartingUp(false);
 
-	if (!queryResult.ok) {
-		// `claudeCliPort.query` is contracted never to throw (returns a Result),
-		// but a rogue mock or future regression could; fall back to query_failed.
-		store.setError('query_failed');
-		await nextTick();
-		focusTextarea();
-		return;
-	}
-
-	const result = queryResult.value;
-	if (result.ok) {
+	if (streamResult.kind === 'success') {
 		applySuccessfulTurn({
 			threadId,
 			isResumedTurn,
 			userMessage,
-			assistantResponse: result.value,
+			assistantResponse: streamResult.text,
 			truncated,
 		});
 	} else {
-		store.setError(result.error.errorCode === 'TIMEOUT' ? 'timeout' : 'query_failed');
+		store.setError(streamResult.errorCode === 'TIMEOUT' ? 'timeout' : 'query_failed');
 	}
+	// Don't call `store.resetStreaming()` here — that also clears
+	// `sessionResumed`, which `applySuccessfulTurn` may have just set
+	// (REQ-ASM-035 flash-once contract). `streamingText` is cleared by the
+	// next turn's `resetStreaming()` at the top of `handleSend`; in the
+	// interim the streaming bubble in `MessageList` is gated on
+	// `store.status === 'loading'` so it stays hidden in the success state.
 	await nextTick();
 	focusTextarea();
+}
+
+/**
+ * Drain `queryStream` to a terminal delta. Accumulates `text` deltas into
+ * `store.streamingText` so `MessageList.vue` can render the in-flight
+ * assistant turn token-by-token. Returns a normalised result describing
+ * how the stream terminated:
+ *   - `success` with the joined text on a `done` delta
+ *   - `error` with the error code on an `error` delta
+ * Never throws — a rogue iterable that throws is treated as `query_failed`.
+ */
+async function consumeStream(args: {
+	stream: AsyncIterable<StreamDelta>;
+	threadId: string;
+}): Promise<{ kind: 'success'; text: string } | { kind: 'error'; errorCode: ClaudeCliErrorCode }> {
+	const chunks: string[] = [];
+	const drained = await tryAsync(async () => {
+		for await (const delta of args.stream) {
+			if (delta.type === 'text') {
+				chunks.push(delta.text);
+				store.appendStreamingDelta(delta.text);
+			} else if (delta.type === 'session-id') {
+				store.captureSessionId(args.threadId, delta.sessionId);
+			} else if (delta.type === 'done') {
+				return { kind: 'done' as const, text: chunks.join('') };
+			} else {
+				// delta.type === 'error' — the only remaining variant.
+				return { kind: 'error' as const, errorCode: delta.error.errorCode };
+			}
+		}
+		return { kind: 'incomplete' as const, text: chunks.join('') };
+	});
+	if (!drained.ok) {
+		return { kind: 'error', errorCode: 'QUERY_FAILED' };
+	}
+	const outcome = drained.value;
+	if (outcome.kind === 'done') return { kind: 'success', text: outcome.text };
+	if (outcome.kind === 'error') return { kind: 'error', errorCode: outcome.errorCode };
+	return { kind: 'error', errorCode: 'QUERY_FAILED' };
 }
 
 /**
@@ -974,6 +1039,16 @@ watch(available, async () => {
 				<SessionResumeIndicator :resumed="store.sessionResumed" />
 				<SubprocessStartingPill :visible="store.cliStartingUp" />
 				<TransportStatusPill :kind="transportKind" />
+				<button
+					v-if="inFlightAbort !== null"
+					type="button"
+					class="sp-chat__stop"
+					data-testid="chat-stop-generation"
+					:aria-label="$t('chat.stopGenerationAriaLabel')"
+					@click="handleStopGeneration"
+				>
+					{{ $t('chat.stopGeneration') }}
+				</button>
 			</div>
 
 			<ContextFileList
@@ -1049,6 +1124,25 @@ watch(available, async () => {
 	margin: 0;
 	border: none;
 	border-top: 1px solid var(--background-modifier-border);
+}
+
+.sp-chat__stop {
+	margin-left: auto;
+	font-size: 0.75rem;
+	font-weight: 500;
+	padding: 0.25rem 0.625rem;
+	border-radius: 4px;
+	border: 1px solid var(--background-modifier-error-border, var(--background-modifier-border));
+	background: var(--background-modifier-error, var(--background-secondary));
+	color: var(--text-on-accent, var(--text-normal));
+	cursor: pointer;
+	transition:
+		background-color 0.15s,
+		border-color 0.15s;
+}
+
+.sp-chat__stop:hover {
+	background: var(--background-modifier-error-hover, var(--interactive-hover));
 }
 
 .sp-chat__degraded {

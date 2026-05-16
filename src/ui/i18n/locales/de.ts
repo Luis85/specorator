@@ -134,6 +134,8 @@ export default {
     session: {
       resumeAriaLabel: 'Vorheriges Gespräch wird fortgesetzt',
     },
+    stopGeneration: 'Stopp',
+    stopGenerationAriaLabel: 'Antwortgenerierung stoppen',
     response: {
       structuredFail: 'Der Assistent hat eine unerwartete Antwort zurückgegeben. Bitte versuche es erneut.',
     },

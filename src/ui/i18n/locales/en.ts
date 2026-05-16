@@ -131,6 +131,8 @@ export default {
       statusPill: 'Using your installed Claude tool.',
       startingPill: 'Starting up the Claude tool…',
     },
+    stopGeneration: 'Stop',
+    stopGenerationAriaLabel: 'Stop generating the response',
     session: {
       resumeAriaLabel: 'Continuing prior conversation',
     },
