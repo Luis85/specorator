@@ -28,6 +28,12 @@ const messages = computed(() => {
 
 const scrollContainer = ref<HTMLElement | null>(null);
 
+// Watches array length only — appendMessage in Increment 1 never mutates the
+// trailing message in place. Increment 2 (streaming responses, see
+// specs/agent-sidepanel-v2/idea.md "Out of scope" → streaming) will mutate
+// the last assistant message's `text` as deltas arrive; this watcher will
+// need to also observe the last entry's text length, or switch to a deep
+// watch with a debounce, to keep auto-scroll honest during streaming turns.
 watch(
 	() => messages.value.length,
 	async () => {

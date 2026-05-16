@@ -44,6 +44,17 @@ function onNotice(e: Event): void {
 }
 
 function handleNewConversation(): void {
+	// Codex P2 (PR #369): Increment 1 ships no thread switcher, so once the
+	// active thread is cleared its message bucket becomes unreachable. Drop
+	// it before rotating `activeThreadId` to prevent unbounded in-memory
+	// growth across long sessions. The `ChatThreadRecord` itself stays in
+	// `chatThreads` so the subscription transport can still `--resume <id>`
+	// from the persisted session_id when a future increment surfaces a
+	// thread switcher UI.
+	const previousThreadId = store.activeThreadId;
+	if (previousThreadId !== null) {
+		store.clearThreadMessages(previousThreadId);
+	}
 	store.setActiveThreadId(null);
 	store.clearResponse();
 	store.setUserText('');
