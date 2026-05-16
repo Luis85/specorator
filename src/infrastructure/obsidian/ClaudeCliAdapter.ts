@@ -231,6 +231,17 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 			controller.abort();
 		};
 		options?.signal?.addEventListener('abort', onAbort);
+		// Codex P2 (PR #371): `_preflightStream` runs eagerly when `queryStream`
+		// is invoked, but the caller may abort between that pre-flight and the
+		// listener registration above. `AbortSignal` does not replay events to
+		// listeners added after the abort. Re-check `aborted` after registering
+		// the listener so that race window doesn't end up running the SDK call
+		// against a signal the caller has already cancelled.
+		if (options?.signal?.aborted === true) {
+			options.signal.removeEventListener('abort', onAbort);
+			yield { type: 'error', error: new ClaudeCliError('QUERY_FAILED', 'Aborted before send') };
+			return;
+		}
 		const timeout = ClaudeCliAdapter._makeTimeout(timeoutMs, controller);
 		try {
 			yield* this._streamSdk(prompt, controller, options, timeout);
