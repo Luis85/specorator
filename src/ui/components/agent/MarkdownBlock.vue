@@ -27,7 +27,9 @@
  *     emitted without an `href` attribute so they cannot smuggle
  *     `javascript:` URIs.
  */
-import { computed, h, type VNode } from 'vue';
+import { computed, h, inject, onBeforeUnmount, ref, watch, type VNode } from 'vue';
+import { MARKDOWN_RENDER_PORT } from '@/infrastructure/bridge/ports';
+import type { MarkdownRenderPort } from '@/domain/ports/MarkdownRenderPort';
 
 const props = defineProps<{
 	/** Raw markdown source to render. May be empty. */
@@ -334,10 +336,54 @@ function renderBlock(block: Block): VNode {
 }
 
 const blocks = computed<Block[]>(() => parseBlocks(props.text));
+
+/**
+ * Optional `MarkdownRenderPort` (top-1 gap from comparative review).
+ * Provided only by the Obsidian view (`AgentSidepanelView.onOpen`); when
+ * present we hand `text` off to `MarkdownRenderer.render` for full GFM
+ * tables, code syntax highlighting, math, wikilinks, image embeds,
+ * mermaid. When absent (tests, GitHub Pages standalone), we fall back
+ * to the hand-rolled VNode tree below.
+ */
+const renderPort = inject<MarkdownRenderPort | undefined>(MARKDOWN_RENDER_PORT, undefined);
+const nativeContainer = ref<HTMLElement | null>(null);
+let nativeDisposer: (() => void) | null = null;
+
+async function rerenderNative(): Promise<void> {
+	if (renderPort === undefined) return;
+	const el = nativeContainer.value;
+	if (el === null) return;
+	if (nativeDisposer !== null) {
+		nativeDisposer();
+		nativeDisposer = null;
+	}
+	nativeDisposer = await renderPort.render({ markdown: props.text, container: el });
+}
+
+watch(
+	() => props.text,
+	() => {
+		void rerenderNative();
+	},
+	{ immediate: true, flush: 'post' },
+);
+
+onBeforeUnmount(() => {
+	if (nativeDisposer !== null) {
+		nativeDisposer();
+		nativeDisposer = null;
+	}
+});
 </script>
 
 <template>
-	<div class="sp-markdown" data-testid="agent-markdown-block">
+	<div
+		v-if="renderPort !== undefined"
+		ref="nativeContainer"
+		class="sp-markdown sp-markdown--native"
+		data-testid="agent-markdown-block"
+	/>
+	<div v-else class="sp-markdown" data-testid="agent-markdown-block">
 		<component :is="renderBlock(block)" v-for="(block, index) in blocks" :key="index" />
 	</div>
 </template>

@@ -12,11 +12,13 @@ import {
 	CLAUDE_CLI_PORT,
 	COMMUNITY_PLUGIN_PORT,
 	CONFIRM_MODAL_PORT,
+	MARKDOWN_RENDER_PORT,
 	IS_MOBILE_KEY,
 	SETTINGS_VERSION_KEY,
 	TRANSPORT_KIND_KEY,
 	OPEN_PLUGIN_SETTINGS_KEY,
 } from '@/infrastructure/bridge/ports';
+import { ObsidianMarkdownRenderAdapter } from '@/infrastructure/obsidian/ObsidianMarkdownRenderAdapter';
 import type { ClaudeCliPort, ConfirmModalPort } from '@/domain/ports';
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
 import type { TransportKind } from '@/domain/chat/TransportKind';
@@ -167,6 +169,15 @@ export class AgentSidepanelView extends ItemView {
 		if (this._options?.confirmModalAdapter !== undefined) {
 			this.vueApp.provide(CONFIRM_MODAL_PORT, this._options.confirmModalAdapter);
 		}
+		// Top-1 gap from the comparative review: hand markdown rendering to
+		// Obsidian's native `MarkdownRenderer` so messages get GFM tables,
+		// syntax-highlighted code blocks, math, wikilinks, image embeds,
+		// and mermaid. `MarkdownBlock.vue` falls back to a hand-rolled
+		// parser when this port is absent (tests / standalone web demo).
+		this.vueApp.provide(
+			MARKDOWN_RENDER_PORT,
+			new ObsidianMarkdownRenderAdapter(this.plugin.app),
+		);
 		this.vueApp.provide(TRANSPORT_KIND_KEY, this._activeTransportKind);
 		this.vueApp.provide(IS_MOBILE_KEY, Platform.isMobile);
 		this.vueApp.provide(SETTINGS_VERSION_KEY, this._settingsVersion);
