@@ -163,7 +163,17 @@ export function useMentionPicker(vault: VaultPort): UseMentionPicker {
 			// implementation kicked off a fresh walk on every debounced
 			// search until the first one populated `cached`, leading to
 			// N concurrent root scans on a large vault.
-			inFlightScan ??= collectVaultFiles(vault, '')
+			//
+			// Codex P2 (second pass) on PR #376: chain a `.catch` that
+			// resets `inFlightScan` on rejection. Otherwise one transient
+			// `collectVaultFiles` failure left the rejected promise stuck
+			// — every later keystroke awaited the same rejection and the
+			// picker rendered empty results until close/reopen instead of
+			// retrying on the next debounced call.
+			inFlightScan ??= collectVaultFiles(vault, '').catch((err: unknown) => {
+				inFlightScan = null
+				throw err
+			})
 			const paths = await inFlightScan
 			// Drop the result if the user has typed past this open session
 			// (e.g. escape + new `@`) — `searchSeq` was bumped past `seq`.
