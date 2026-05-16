@@ -200,7 +200,24 @@ function matchLink(source: string, i: number): InlineMatch | null {
 	if (source[i] !== '[') return null;
 	const labelEnd = source.indexOf(']', i + 1);
 	if (labelEnd === -1 || source[labelEnd + 1] !== '(') return null;
-	const hrefEnd = source.indexOf(')', labelEnd + 2);
+	// Codex P2 on PR #373: walk the URL with parenthesis balancing so links
+	// whose href contains parens (e.g. `[spec](https://example.com/foo(bar))`)
+	// don't get truncated at the first `)`. Tracks nesting depth; the
+	// matching close-paren for the outer `(` is depth 0 → -1 transition.
+	let depth = 0;
+	let hrefEnd = -1;
+	for (let j = labelEnd + 2; j < source.length; j++) {
+		const ch = source[j];
+		if (ch === '(') {
+			depth++;
+		} else if (ch === ')') {
+			if (depth === 0) {
+				hrefEnd = j;
+				break;
+			}
+			depth--;
+		}
+	}
 	if (hrefEnd === -1) return null;
 	const label = source.slice(i + 1, labelEnd);
 	const href = source.slice(labelEnd + 2, hrefEnd);

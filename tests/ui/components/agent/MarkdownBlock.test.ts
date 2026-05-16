@@ -97,6 +97,26 @@ describe('MarkdownBlock', () => {
 		expect(links[0].text()).toBe('bad');
 	});
 
+	// Codex P2 on PR #373: previously the parser stopped at the first `)`,
+	// truncating URLs that contain balanced parentheses (common in
+	// Wikipedia / docs URLs).
+	it('parses balanced parentheses inside a link URL', () => {
+		const { po } = mountBlock('See [spec](https://example.com/foo(bar)) here.');
+		const links = po.links();
+		expect(links).toHaveLength(1);
+		expect(links[0].text()).toBe('spec');
+		expect(links[0].attributes('href')).toBe('https://example.com/foo(bar)');
+	});
+
+	it('parses nested balanced parens inside a link URL', () => {
+		const { po } = mountBlock('Read [it](https://en.wikipedia.org/wiki/Foo_(disambiguation)) now.');
+		const links = po.links();
+		expect(links).toHaveLength(1);
+		expect(links[0].attributes('href')).toBe(
+			'https://en.wikipedia.org/wiki/Foo_(disambiguation)',
+		);
+	});
+
 	it('renders an unordered list', () => {
 		const { po } = mountBlock('- one\n- two\n- three');
 		expect(po.unorderedLists()).toHaveLength(1);
