@@ -49,13 +49,23 @@ const isStreaming = computed<boolean>(
 
 const scrollContainer = ref<HTMLElement | null>(null);
 
-// Track message-array length and streaming text/thinking/tool-call lengths.
+// Track message length, streaming text/thinking lengths, and tool-call inputJson byte-length
+// (Codex P2 PR #379: observing only `streamingToolCalls.length` missed deltas to existing blocks).
+const streamingToolCallsLength = computed(() => {
+	let total = streamingToolCalls.value.length;
+	for (const [, call] of streamingToolCalls.value) {
+		total += call.inputJson.length;
+	}
+	return total;
+});
+
+
 watch(
 	[
 		() => messages.value.length,
 		() => streamingText.value.length,
 		() => streamingThinking.value.length,
-		() => streamingToolCalls.value.length,
+		streamingToolCallsLength,
 	],
 	async () => {
 		await nextTick();
