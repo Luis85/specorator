@@ -439,6 +439,13 @@ export default class SpecoratorPlugin extends Plugin {
             specorator: { ...currentSpecorator, chatThreads },
           }
         },
+        // Codex P1 round-2 (PR #408): symmetric to `onChatThreadsPersisted`.
+        // Without this, the adapter would `await host.loadData()` at flush
+        // time and merge `chatThreads` into a pre-`updateSettings` disk
+        // blob, silently rolling back any in-flight settings save (or
+        // vice versa, depending on write order). Returning `this._storedData`
+        // makes both writers share one source of truth.
+        readHostData: () => this._storedData,
       },
     )
   }

@@ -520,3 +520,133 @@ describe('ObsidianChatThreadsRepository — onChatThreadsPersisted hook (Codex P
     expect(mirroredThreads.t1).toBeDefined()
   })
 })
+
+/**
+ * Codex P1 round-2, PR #408 — symmetric race to `onChatThreadsPersisted`.
+ * Without a shared read-source, `_flushChatThreads` reads from disk via
+ * `await host.loadData()` and merges `chatThreads` into a snapshot that
+ * may already be stale relative to an in-flight `updateSettings` /
+ * `updateModuleSettings` write — the chat-threads flush then writes the
+ * stale settings blob back, silently rolling back the just-made settings
+ * change. The fix is a read-through closure that returns the host's live
+ * `_storedData` so both writers share one source of truth.
+ */
+describe('ObsidianChatThreadsRepository — readHostData hook (Codex P1 round-2)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('reads sibling keys from readHostData(), preserving in-flight settings writes', async () => {
+    // Simulate the race: disk still holds the pre-settings blob (an
+    // updateSettings call has mutated `_storedData` but its saveData has
+    // not yet landed). The chat-threads flush MUST see the new setting
+    // via the read-through closure, not the stale disk blob.
+    const storedData: { current: Record<string, unknown> } = {
+      current: { specorator: { someSetting: 'old-value', chatThreads: {} } },
+    }
+    const diskBlob: { current: Record<string, unknown> | null } = {
+      // Disk is intentionally stale: pre-settings-write snapshot.
+      current: { specorator: { someSetting: 'old-value', chatThreads: {} } },
+    }
+    const host: ObsidianPluginDataHost = {
+      loadData: vi.fn(async () => diskBlob.current),
+      saveData: vi.fn(async (data: Record<string, unknown>) => {
+        diskBlob.current = data
+      }),
+      setActiveTimeout: (cb, ms) => globalThis.setTimeout(cb, ms) as unknown as number,
+      clearActiveTimeout: (id) => { globalThis.clearTimeout(id) },
+    }
+    const repo = new ObsidianChatThreadsRepository(host, silentLogger(), {
+      readHostData: () => storedData.current,
+      onChatThreadsPersisted: (chatThreads) => {
+        const currentSpec = (storedData.current.specorator ?? {}) as Record<string, unknown>
+        storedData.current = {
+          ...storedData.current,
+          specorator: { ...currentSpec, chatThreads },
+        }
+      },
+    })
+
+    // 1. user mutates a setting directly on the host cache (simulating
+    //    `updateSettings({ someSetting: 'new-value' })` mid-flight — the
+    //    cache is mutated *before* saveData resolves).
+    const specBefore = storedData.current.specorator as Record<string, unknown>
+    storedData.current = {
+      ...storedData.current,
+      specorator: { ...specBefore, someSetting: 'new-value' },
+    }
+
+    // 2. chat-threads flush fires.
+    await repo.save(new Map([['t1', makeRecord({ threadId: 't1' })]]))
+    await vi.advanceTimersByTimeAsync(1_000)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // 3. the disk write must preserve the NEW setting, not the stale one.
+    const flushedSpecorator = (diskBlob.current!).specorator as Record<string, unknown>
+    expect(flushedSpecorator.someSetting).toBe('new-value')
+    // ...and chatThreads must also land.
+    expect(flushedSpecorator.chatThreads).toHaveProperty('t1')
+    // 4. loadData was NEVER consulted at flush time — the closure short-circuits it.
+    expect((host.loadData as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0)
+  })
+
+  it('falls back to host.loadData() when no readHostData closure is provided', async () => {
+    // Regression guard for the no-closure path (existing bare-host tests).
+    const state: HarnessState = {
+      blob: { specorator: { someSetting: 'from-disk', chatThreads: {} } },
+      saveCount: 0,
+    }
+    const host: ObsidianPluginDataHost = {
+      loadData: vi.fn(async () => state.blob),
+      saveData: vi.fn(async (data: Record<string, unknown>) => {
+        state.blob = data
+        state.saveCount += 1
+      }),
+      setActiveTimeout: (cb, ms) => globalThis.setTimeout(cb, ms) as unknown as number,
+      clearActiveTimeout: (id) => { globalThis.clearTimeout(id) },
+    }
+    const repo = new ObsidianChatThreadsRepository(host, silentLogger())
+    await repo.save(new Map([['t1', makeRecord({ threadId: 't1' })]]))
+    await vi.advanceTimersByTimeAsync(1_000)
+    await Promise.resolve()
+    await Promise.resolve()
+    // loadData WAS used (fallback branch).
+    expect((host.loadData as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(1)
+    const specorator = state.blob?.specorator as Record<string, unknown>
+    expect(specorator.someSetting).toBe('from-disk')
+    expect(specorator.chatThreads).toHaveProperty('t1')
+  })
+
+  it('falls back to host.loadData() when readHostData() returns null/undefined/non-object', async () => {
+    // Defensive: a host that hasn't hydrated its cache yet returns null —
+    // the adapter must NOT call `.specorator` on null and crash.
+    const state: HarnessState = {
+      blob: { specorator: { someSetting: 'disk', chatThreads: {} } },
+      saveCount: 0,
+    }
+    const host: ObsidianPluginDataHost = {
+      loadData: vi.fn(async () => state.blob),
+      saveData: vi.fn(async (data: Record<string, unknown>) => {
+        state.blob = data
+        state.saveCount += 1
+      }),
+      setActiveTimeout: (cb, ms) => globalThis.setTimeout(cb, ms) as unknown as number,
+      clearActiveTimeout: (id) => { globalThis.clearTimeout(id) },
+    }
+    const repo = new ObsidianChatThreadsRepository(host, silentLogger(), {
+      readHostData: () => null,
+    })
+    await repo.save(new Map([['t1', makeRecord({ threadId: 't1' })]]))
+    await vi.advanceTimersByTimeAsync(1_000)
+    await Promise.resolve()
+    await Promise.resolve()
+    const specorator = state.blob?.specorator as Record<string, unknown>
+    // Falls back to disk → sibling key 'someSetting' from disk is preserved.
+    expect(specorator.someSetting).toBe('disk')
+    expect(specorator.chatThreads).toHaveProperty('t1')
+  })
+})

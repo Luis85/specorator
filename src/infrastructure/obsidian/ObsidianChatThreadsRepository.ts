@@ -44,6 +44,26 @@ export type OnChatThreadsPersisted = (
 ) => void
 
 /**
+ * Optional constructor hook returning the host plugin's live in-memory
+ * data cache (`SpecoratorPlugin._storedData`). Codex P1 round-2 (PR #408):
+ * the symmetric race to `OnChatThreadsPersisted`. Without a shared
+ * read-source, `_flushChatThreads` reads `await host.loadData()` and merges
+ * its `chatThreads` into a disk blob that may already be stale relative to
+ * an in-flight `updateSettings` / `updateModuleSettings` write — the chat
+ * flush then writes that stale settings blob back, silently rolling back
+ * the just-made settings change (or vice versa, depending on timing).
+ *
+ * When provided, the adapter prefers this synchronous read of the host
+ * cache over `host.loadData()` so both writers share `_storedData` as the
+ * single source of truth. The worst case degrades to "two writes hit disk
+ * in unpredictable order with the same up-to-date payload" — convergent,
+ * not destructive. Returning `null`/`undefined`/non-object falls back to
+ * `host.loadData()` so callers that haven't hydrated their cache yet still
+ * get correct behaviour.
+ */
+export type ReadHostData = () => Record<string, unknown> | null | undefined
+
+/**
  * Production `ChatThreadsRepositoryPort` adapter (WP-14). Lifts the
  * persistence side-channel that previously lived on
  * `SpecoratorPlugin.scheduleChatThreadsPersistence` (`src/plugin/main.ts`)
@@ -71,6 +91,12 @@ export type OnChatThreadsPersisted = (
  *     plugin can mirror it into its own data cache and prevent later
  *     `saveData(this._storedData)` calls from rolling back chat history
  *     (Codex P1, PR #408).
+ *   - When the host provides `readHostData()`, the flush reads sibling
+ *     keys from the host's in-memory `_storedData` cache instead of disk
+ *     (Codex P1 round-2, PR #408). This closes the symmetric race against
+ *     `OnChatThreadsPersisted`: settings saves and chat-threads flushes
+ *     share one source of truth, so neither can clobber the other by
+ *     merging into a pre-write disk blob.
  *
  * Satisfies REQ-ASM-037, SPEC-ASM-001 §9.3, ADR-0031.
  */
@@ -83,6 +109,7 @@ export class ObsidianChatThreadsRepository implements ChatThreadsRepositoryPort 
   private _flushQueue: Promise<void> = Promise.resolve()
   private readonly _debounceMs: number
   private readonly _onChatThreadsPersisted: OnChatThreadsPersisted | null
+  private readonly _readHostData: ReadHostData | null
 
   constructor(
     private readonly host: ObsidianPluginDataHost,
@@ -90,10 +117,12 @@ export class ObsidianChatThreadsRepository implements ChatThreadsRepositoryPort 
     opts: {
       debounceMs?: number
       onChatThreadsPersisted?: OnChatThreadsPersisted
+      readHostData?: ReadHostData
     } = {},
   ) {
     this._debounceMs = opts.debounceMs ?? ObsidianChatThreadsRepository.DEFAULT_DEBOUNCE_MS
     this._onChatThreadsPersisted = opts.onChatThreadsPersisted ?? null
+    this._readHostData = opts.readHostData ?? null
   }
 
   /**
@@ -172,8 +201,16 @@ export class ObsidianChatThreadsRepository implements ChatThreadsRepositoryPort 
   /**
    * Internal: write the encoded `chatThreads` blob into the stored data
    * while preserving every other sibling key under `specorator` (SPEC §9.3).
-   * Re-reads `loadData()` at flush time so concurrent settings writes from
-   * other code paths are not lost.
+   *
+   * Read source (Codex P1 round-2, PR #408):
+   *   1. When the host provides `readHostData()`, read from the host's
+   *      in-memory `_storedData` cache. This is the same object the
+   *      plugin's `updateSettings` / `updateModuleSettings` mutates, so
+   *      both writers share a single source of truth and an in-flight
+   *      settings save cannot be silently rolled back by a chat-threads
+   *      flush that merged into a stale disk blob (and vice versa).
+   *   2. Otherwise fall back to `await host.loadData()` (preserves the
+   *      no-closure code path used by tests with a bare host wiring).
    *
    * After a successful `saveData()` resolve, invokes
    * `_onChatThreadsPersisted(encoded)` so the host plugin can mirror the
@@ -185,7 +222,11 @@ export class ObsidianChatThreadsRepository implements ChatThreadsRepositoryPort 
     records: ReadonlyMap<string, ChatThreadRecord>,
   ): Promise<void> {
     const encoded = encodeChatThreadsBlob(records)
-    const stored = ((await this.host.loadData()) as Record<string, unknown> | null) ?? {}
+    const fromHost = this._readHostData?.()
+    const stored: Record<string, unknown> =
+      fromHost !== null && fromHost !== undefined && typeof fromHost === 'object'
+        ? fromHost
+        : ((await this.host.loadData()) as Record<string, unknown> | null) ?? {}
     const currentSpecorator = (stored.specorator ?? {}) as Record<string, unknown>
     const nextSpecorator = { ...currentSpecorator, chatThreads: encoded }
     const nextStored: Record<string, unknown> = { ...stored, specorator: nextSpecorator }

@@ -72,6 +72,51 @@ npm run build:web                          # OK
 npm run docs:api                           # 0 errors, 1 pre-existing typedoc link warning
 ```
 
+### Iteration 5 — Codex P1 round-2 (PR #408 review feedback)
+
+Codex flagged a third real race symmetric to P1.1: `_flushChatThreads`
+rebuilt the disk blob from `await host.loadData()` and overwrote it. If
+an `updateSettings` / `updateModuleSettings` call had mutated
+`_storedData` but its `saveData` was still in flight, `loadData()`
+returned the pre-settings disk blob → the chat-threads flush merged its
+new `chatThreads` into that stale snapshot → wrote back → silently rolled
+back the in-flight settings change (or vice versa, depending on write
+order). Round-1's `OnChatThreadsPersisted` fixed the symmetric *write*
+path; this iteration fixes the *read* path.
+
+Fixes:
+
+- New optional `ReadHostData` constructor closure on
+  `ObsidianChatThreadsRepository`. Signature:
+  `readHostData?: () => Record<string, unknown> | null | undefined`.
+- `_flushChatThreads` prefers `readHostData()` over `host.loadData()`
+  when the closure is provided and returns a non-null object. Falls back
+  to `loadData()` otherwise (preserves the no-closure path used by
+  existing bare-host tests and defensively handles a host whose cache
+  hasn't hydrated yet).
+- `src/plugin/main.ts` wires `readHostData: () => this._storedData`
+  alongside the existing `onChatThreadsPersisted`. Both writers
+  (`updateSettings` / `updateModuleSettings` and the chat-threads flush)
+  now share `_storedData` as the single source of truth. Worst-case
+  race degrades to "two writes hit disk in unpredictable order with the
+  same up-to-date payload" — convergent, not destructive.
+- New tests under `readHostData hook (Codex P1 round-2)` (×3): the race
+  reproducer (in-flight settings mutation survives the chat-threads
+  flush, `loadData` is never called), the no-closure fallback regression
+  guard, and the null-return defensive fallback.
+
+Pre-PR gate:
+
+```
+npm audit --audit-level=high --omit=dev  # 0 vulnerabilities
+npm run typecheck                          # clean
+npm run lint                               # 0 errors, 24 pre-existing warnings
+npm run test                               # 1892 / 1892 pass (was 1889; +3 new)
+npm run build                              # OK
+npm run build:web                          # OK
+npm run docs:api                           # 0 errors, 1 pre-existing typedoc link warning
+```
+
 ## Carry-out items
 
 _None._
