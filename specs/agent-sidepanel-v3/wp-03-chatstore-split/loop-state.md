@@ -2,6 +2,10 @@
 
 Updated by the implementer subagent each RALPH iteration. The brief is `brief.md` in this folder.
 
+> **Worktree context** — "Done" entries below describe work performed on `claude/asv3-wp03-chatstore-split` inside `.worktrees/asv3-wp03/`, not on this branch (`claude/improve-sidepanel-chat-8pgcT`). PR #395 only ships `specs/**` files.
+
+> **⚠️ Brief updated since iteration 4** — `brief.md` now (commit `90ec4be`, 2026-05-17) requires `npm audit --audit-level=high --omit=dev` and `npm run docs:api` in addition to the typecheck/lint/test/build/build:web run that iteration 4 reported green. **Before opening the PR, run those two extra gates and append an iteration 5 entry recording the result.** Otherwise CI on the WP-3 PR will fail required checks.
+
 ## Iterations
 
 ### Iteration 1 — field-to-store map + new store files
