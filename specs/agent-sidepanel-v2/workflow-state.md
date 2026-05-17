@@ -3,12 +3,12 @@ id: d7e8f9a0-1234-4b56-9c78-d9e0f1a2b3c4
 feature: 'Agent Sidepanel v2'
 area: ASV
 slug: agent-sidepanel-v2
-current_stage: release
+current_stage: retrospective
 status: active
-last_updated: 2026-05-16
+last_updated: 2026-05-17
 last_agent: release-manager
 createdAt: 2026-05-16T00:00:00+02:00
-updatedAt: 2026-05-16T22:00:00+02:00
+updatedAt: 2026-05-17T08:00:00+02:00
 artifacts:
   idea: complete
   research: complete
@@ -20,7 +20,7 @@ artifacts:
   test-plan: complete
   test-report: complete
   review: complete
-  release-notes: in-progress
+  release-notes: complete
   retrospective: pending
 ---
 
@@ -34,10 +34,10 @@ artifacts:
 | 4 — Design         | complete    | inline PR descriptions across the 14 PRs                                                                            | Narrow-port discipline (ADR-008) for every new surface (`MarkdownRenderPort`, `ApprovalPort`, `SecretStorePort`). `StreamDelta` discriminated union (ADR-0034 candidate — see OQ-ASV-4).                                            |
 | 5 — Specification  | complete    | per-PR commit messages + spec entries                                                                               | Each PR carries a complete spec section in its body.                                                                                                                                                                                  |
 | 6 — Tasks          | complete    | implicit — 14 PRs                                                                                                   | Subagent-driven decomposition; each PR is a single mergeable unit.                                                                                                                                                                  |
-| 7 — Implementation | complete    | PRs #369, #370, #371, #372, #373, #374, #375, #376, #377, #378, #379, #380, #381, #388                              | 14 PRs squash-merged to `develop`. Codex P1/P2 findings addressed across the stack. Deferred to follow-up: #386 (subprocess parity — superseded chunks of #378), #387 (secret-storage rebase), polish-wave branch.                  |
+| 7 — Implementation | complete    | PRs #369, #370, #371, #372, #373, #374, #375, #376, #377, #378, #379, #380, #381, #386, #387, #388, #391             | 17 PRs squash-merged to `develop`. Codex P1/P2 findings addressed across the stack. Migration-removal rebuttals stand per maintainer directive (pre-shipped product, no migration shims).                                          |
 | 8 — Testing        | complete    | per-PR test coverage                                                                                                | Each PR gated on full pre-PR + CI matrix (typecheck + lint + test + plugin build) — 1600+ unit tests pass on the merged `develop`. The per-PR CI gates and Codex review threads serve as the test-plan / test-report artifacts for this stack (no dedicated documents authored — explicitly accepted as substitute coverage).                              |
 | 9 — Review         | complete    | Codex P1/P2 reviews per-PR                                                                                          | Reviewer subagent reports synthesized into per-PR follow-up commits. Migration-removal rebuttal stands per maintainer directive (pre-shipped product, no migration shims).                                                          |
-| 10 — Release       | in-progress | —                                                                                                                   | Stack merged to `develop`. Follow-up work tracked: #386, #387, polish-wave deferred to next batch.                                                                                                                                  |
+| 10 — Release       | complete    | per-PR descriptions across 17 merged PRs                                                                            | Stack fully merged to `develop` (including the three deferred PRs and the polish-wave subset). The squash-merge commit bodies serve as the release-notes artifact.                                                                  |
 | 11 — Retrospective | pending     | —                                                                                                                   | After demo / main promotion.                                                                                                                                                                                                        |
 
 ## PR stack (Increment 1 + Increment 2)
@@ -57,9 +57,10 @@ artifacts:
 | #379  | `claude/agent-sidepanel-v2-tool-rendering`                      | `ToolCallBlock` + `ThinkingBlock` + compact-boundary            | ✅ Merged · `28ee42c`                  |
 | #380  | `claude/agent-sidepanel-v2-plan-mode`                           | `InlinePlanApprovalCard` + `ApprovalPort`                       | ✅ Merged · `f13e5e0`                  |
 | #381  | `claude/agent-sidepanel-v2-folder-mentions`                     | Folder rows in `@`-picker                                       | ✅ Merged · `3684bf4`                  |
-| #386  | `claude/agent-sidepanel-v2-stream-delta-extension-v2`           | `StreamDelta` ext (subprocess parity addendum to #378)          | Deferred — superseded by #378         |
-| #387  | `claude/agent-sidepanel-v2-secret-storage-v2-retry`             | `SecretStorePort` migration                                     | Deferred — needs heavy rebase         |
+| #386  | `claude/agent-sidepanel-v2-stream-delta-extension-v2`           | Subprocess parity for `StreamDelta` extension (Codex P1/P2)     | ✅ Merged · `db6093b`                  |
+| #387  | `claude/agent-sidepanel-v2-secret-storage-v2-retry`             | `SecretStorePort` — Anthropic key in OS keychain                | ✅ Merged · `e603b0f`                  |
 | #388  | `claude/agent-sidepanel-v2-slash-vault-commands`                | Vault-loaded slash commands (.claude/commands + skills)         | ✅ Merged · `8cd51e6`                  |
+| #391  | `claude/agent-sidepanel-v2-polish-wave`                         | i18n + port file PascalCase renames (polish-wave subset)        | ✅ Merged · `542515b`                  |
 
 ## Blocks
 
@@ -73,6 +74,7 @@ None.
 | 2026-05-16 | dev  | qa  | PR-ASV-1 landed structural lift + multi-turn message list. New surfaces: `AgentSidepanelView` (`VIEW_TYPE_AGENT = 'specorator-agent'`), `AgentSidepanelRoot.vue`, `AgentSidepanelHeader.vue`, `MessageList.vue`, `ChatMessage` DTO + `appendMessage`/`clearThreadMessages` store actions. Removed: `/chat` route, `ChatSidebarView.vue`, `nav.chat` i18n key. URI handler reroutes `open-chat`/`focus-chat` to the new sidepanel. 1445 tests pass (34 new), typecheck clean, plugin build and standalone web build pass. Streaming, slash palette, `@`-mentions, stop-button still deferred to Increment 2.                                                                                                                                                                                                                                                                                                |
 | 2026-05-16 | dev  | dev | PR-ASV-1 post-open polish: Codex P2 (clear prior thread's message bucket on "New conversation") fixed by `handleNewConversation` calling `clearThreadMessages(prev)` before rotating `activeThreadId`. Internal-review P1 #2 closed by `tests/plugin/main.uri-handler.test.ts` covering all action branches (`open-chat`, `focus-chat`, `open-agent`, deferred, unknown, core short-circuit). Internal-review P2 #5 (MessageList scroll watcher will miss streaming deltas) documented inline as a forward-looking comment. Deferred: P1 #1 / P2 #6 (`SpecoratorView` retains a now-vestigial chat-thread hydration + status watcher — harmless dead code in production but load-bearing in `tests/plugin/SpecoratorView.test.ts`; clean up in a follow-up refactor PR before Increment 2). P3 polish (i18n unused keys, hard-coded `getDisplayText`, single timestamp for user+assistant turns) deferred. |
 | 2026-05-16 | dev  | dev | Increment 2 wave landed across 11 PRs (streaming port → tool rendering → plan-mode card → folder mentions → SecretStorage). Five reviewer subagents (UX / a11y / security / performance / architecture) dispatched in parallel. Findings consolidated for a polish-wave dispatch — see "Reviewer findings" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 2026-05-17 | dev  | dev | Mop-up wave: the three deferred PRs all landed on `develop`. #386 (`db6093b`) reimplemented subprocess parity for the v2 `StreamDelta` union on top of #378's SDK-only base, with the Codex P1 inputJson seed + P2 partial-usage-merge fixes baked in. #387 (`e603b0f`) reimplemented `SecretStorePort` cleanly on current develop — `anthropicApiKey` removed from `PluginSettings`, `_apiKeyCache` hydrated from `App.secretStorage` in `loadSettings()`, transport selector takes `apiKeyPresent: boolean` in `deps`. #391 ports the still-meaningful subset of the polish-wave (de.ts translation, six new i18n keys, three kebab→PascalCase port file renames); the larger template / store / view diffs were dropped because their base predates the mention-picker + slash-palette work. 1685 tests pass; ESLint 0 errors; plugin + standalone web builds clean across all three. |
 
 ## Open clarifications
 
