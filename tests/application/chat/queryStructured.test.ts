@@ -1,9 +1,8 @@
 /**
- * T-ASM-038 — Tests for `isSubscriptionCapable` (structural type guard) and
- * `queryStructured` (application-layer wrapper around the subscription
- * adapter's structured-output path).
+ * T-ASM-038 — Tests for `queryStructured` (application-layer wrapper around
+ * the subscription adapter's structured-output path).
  *
- * Spec reference: SPEC-ASM-001 §2.9 (`SubscriptionCapable`) and §6.6
+ * Spec reference: SPEC-ASM-001 §2.9 (port-as-runStructured-owner) and §6.6
  * (`queryStructured` algorithm).
  *
  * Maps to:
@@ -12,18 +11,25 @@
  *   - REQ-ASM-049  (one-shot proposal process; mock asserts a single `runStructured` call)
  *
  * Notes:
- *   - The SDK adapter (`ClaudeCliAdapter`) has no `kind` field — the guard must fail
- *     closed for it. We exercise this with a structural fake rather than importing the
- *     real SDK adapter, to keep this suite hermetic and free of Anthropic SDK initialisation.
- *   - The `degradedClaudeCliPort` sentinel is a frozen no-op stub with no `kind` field —
- *     also covered by the negative branch of `isSubscriptionCapable`.
- *   - The happy / error / fallback paths are exercised through `MockClaudeSubprocessAdapter`,
- *     whose `runStructured` mirrors the production surface.
+ *   - The SDK adapter (`ClaudeCliAdapter`) does NOT implement `runStructured`
+ *     — the `typeof port.runStructured === 'function'` check inside
+ *     `queryStructured` must fail closed for it. We exercise this with a
+ *     structural fake rather than importing the real SDK adapter, to keep
+ *     this suite hermetic and free of Anthropic SDK initialisation.
+ *   - The `degradedClaudeCliPort` sentinel is a frozen no-op stub with no
+ *     `runStructured` method — also covered by the negative branch.
+ *   - The happy / error / fallback paths are exercised through
+ *     `MockClaudeSubprocessAdapter`, whose `runStructured` mirrors the
+ *     production surface.
+ *
+ * Reshaped in WP-12 (Arch review #3): the `isSubscriptionCapable` guard and
+ * the `streamFromQuery` shim are gone — `runStructured` lives on the port
+ * directly, and non-streaming converge-to-string callers use
+ * `collectStream(port.queryStream(...))`.
  */
 import { describe, it, expect } from 'vitest'
 
 import {
-  isSubscriptionCapable,
   queryStructured,
   type StructuredCliCallOptions,
   type StructuredCliRawResult,
@@ -31,7 +37,6 @@ import {
 import { EnvelopeParseError } from '@/application/chat/errors'
 import {
   ClaudeCliError,
-  streamFromQuery,
   type ClaudeCliPort,
   type ClaudeCliStreamOptions,
   type StreamDelta,
@@ -41,82 +46,47 @@ import { degradedClaudeCliPort } from '@/infrastructure/bridge/degradedClaudeCli
 import { MockClaudeSubprocessAdapter } from '@/infrastructure/mock/MockClaudeSubprocessAdapter'
 
 // -----------------------------------------------------------------------------
-// Minimal structural fake for the SDK adapter (`ClaudeCliAdapter` has no
-// `kind` field). We don't import the real adapter — keeps the suite hermetic
-// and avoids pulling the Anthropic SDK into a pure-application test.
+// Minimal structural fake for the SDK adapter. `ClaudeCliAdapter` does not
+// implement `runStructured`, so the application-layer narrowing check
+// (`typeof port.runStructured === 'function'`) must fail closed for it. We
+// don't import the real adapter — keeps the suite hermetic and avoids pulling
+// the Anthropic SDK into a pure-application test.
 // -----------------------------------------------------------------------------
 
 function makeSdkLikePort(): ClaudeCliPort {
   return {
-    async query() {
-      return ok('')
-    },
     async isAvailable() {
       return true
     },
-    async startup() {
-      /* no-op */
+    async *queryStream(
+      _prompt: string,
+      _options?: ClaudeCliStreamOptions,
+    ): AsyncIterable<StreamDelta> {
+      yield { type: 'done' }
     },
-    shutdown() {
-      /* no-op */
-    },
-    queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
-      return streamFromQuery(async () => ok(''), prompt, options)
-    },
+    // No `runStructured` — that's the point of this fake.
   }
 }
 
 // =============================================================================
-// 1. `isSubscriptionCapable` — structural type guard.
-// =============================================================================
-
-describe('isSubscriptionCapable (SPEC §2.9)', () => {
-  it('returns true for a port with kind === "subscription" and a runStructured method', () => {
-    const port = new MockClaudeSubprocessAdapter()
-    expect(isSubscriptionCapable(port)).toBe(true)
-  })
-
-  it('returns false for an SDK-shaped port without `kind`', () => {
-    const port = makeSdkLikePort()
-    expect(isSubscriptionCapable(port)).toBe(false)
-  })
-
-  it('returns false for the degradedClaudeCliPort sentinel', () => {
-    expect(isSubscriptionCapable(degradedClaudeCliPort)).toBe(false)
-  })
-
-  it('returns false when kind is "subscription" but runStructured is missing', () => {
-    // Partial mock that sets the tag but omits the method — the guard must
-    // require both. Cast through `unknown` so the type system models the
-    // structural-check failure at runtime.
-    const partial = {
-      kind: 'subscription' as const,
-      async query() {
-        return ok('')
-      },
-      async isAvailable() {
-        return true
-      },
-      async startup() {
-        /* no-op */
-      },
-      shutdown() {
-        /* no-op */
-      },
-    }
-    expect(isSubscriptionCapable(partial as unknown as ClaudeCliPort)).toBe(false)
-  })
-})
-
-// =============================================================================
-// 2. `queryStructured` — algorithm from SPEC §6.6.
+// 1. `queryStructured` — algorithm from SPEC §6.6.
 // =============================================================================
 
 describe('queryStructured (SPEC §6.6)', () => {
-  it('non-subscription-capable port → err(ClaudeCliError{ NOT_INSTALLED })', async () => {
+  it('non-subscription-capable port (no runStructured) → err(ClaudeCliError{ NOT_INSTALLED })', async () => {
     const port = makeSdkLikePort()
 
     const result = await queryStructured(port, 'hello', {})
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toBeInstanceOf(ClaudeCliError)
+      expect((result.error as ClaudeCliError).errorCode).toBe('NOT_INSTALLED')
+    }
+  })
+
+  it('degradedClaudeCliPort sentinel → err(ClaudeCliError{ NOT_INSTALLED })', async () => {
+    const result = await queryStructured(degradedClaudeCliPort, 'hello', {})
 
     expect(result.ok).toBe(false)
     if (!result.ok) {
@@ -159,27 +129,19 @@ describe('queryStructured (SPEC §6.6)', () => {
   it('invalid structured_output → err(EnvelopeParseError{ PRIMARY_ZOD_FAILED })', async () => {
     // Bypass the typed default and stuff a shape the Zod schema will reject.
     const port: ClaudeCliPort & {
-      kind: 'subscription'
       runStructured: (
         p: string,
         o: StructuredCliCallOptions,
       ) => Promise<Result<StructuredCliRawResult, ClaudeCliError>>
     } = {
-      kind: 'subscription',
-      async query() {
-        return ok('')
-      },
       async isAvailable() {
         return true
       },
-      async startup() {
-        /* no-op */
-      },
-      shutdown() {
-        /* no-op */
-      },
-      queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
-        return streamFromQuery(async () => ok(''), prompt, options)
+      async *queryStream(
+        _prompt: string,
+        _options?: ClaudeCliStreamOptions,
+      ): AsyncIterable<StreamDelta> {
+        yield { type: 'done' }
       },
       async runStructured() {
         return ok({
@@ -260,7 +222,7 @@ describe('queryStructured (SPEC §6.6)', () => {
 })
 
 // =============================================================================
-// 3. Argv invariants — the structured path must use `--output-format json`
+// 2. Argv invariants — the structured path must use `--output-format json`
 //    and `--json-schema` (INV-4). This is asserted directly against the
 //    canonical `buildSubprocessArgs` so the test stays decoupled from
 //    `ClaudeSubprocessAdapter` internals; it confirms the inputs the adapter

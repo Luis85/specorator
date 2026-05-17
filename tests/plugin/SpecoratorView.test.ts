@@ -63,21 +63,38 @@ import type SpecoratorPlugin from '@/plugin/main'
 
 function makePort(label: string): ClaudeCliPort {
   return {
-    query: vi.fn(async () => ({ ok: true as const, value: `from-${label}` })),
     isAvailable: vi.fn(async () => true),
-    startup: vi.fn(async () => undefined),
-    shutdown: vi.fn(() => undefined),
     queryStream: vi.fn(
       (_prompt: string, _options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> => {
-        return (async function* (): AsyncGenerator<StreamDelta> {})()
+        return (async function* (): AsyncGenerator<StreamDelta> {
+          yield { type: 'text', text: `from-${label}` }
+          yield { type: 'done' }
+        })()
       },
     ),
+  }
+}
+
+interface MockLifecycle {
+  startup: ReturnType<typeof vi.fn> & (() => Promise<void>)
+  shutdown: ReturnType<typeof vi.fn> & (() => void)
+}
+
+function makeLifecycle(): MockLifecycle {
+  // vi.fn() with a typed implementation is structurally a callable Mock; the
+  // intersection cast pins the return type for `TransportLifecyclePort` while
+  // preserving the `.toHaveBeenCalled()` matcher surface.
+  return {
+    startup: vi.fn(async () => undefined) as MockLifecycle['startup'],
+    shutdown: vi.fn(() => undefined) as MockLifecycle['shutdown'],
   }
 }
 
 interface Fixture {
   readonly sdkAdapter: ClaudeCliPort
   readonly subscriptionAdapter: ClaudeCliPort
+  readonly sdkLifecycle: MockLifecycle
+  readonly subscriptionLifecycle: MockLifecycle
   readonly degradedPort: ClaudeCliPort
   readonly selectTransportSpy: ReturnType<typeof vi.fn>
   readonly plugin: { settings: PluginSettings }
@@ -114,6 +131,8 @@ interface FixtureOptions {
 function makeFixture(opts: FixtureOptions = {}): Fixture {
   const sdkAdapter = makePort('sdk')
   const subscriptionAdapter = makePort('subscription')
+  const sdkLifecycle = makeLifecycle()
+  const subscriptionLifecycle = makeLifecycle()
   const degradedPort = degradedClaudeCliPort
   const cliResolvedRef = { value: opts.cliResolved ?? false }
   const apiKeyPresentRef = { value: opts.apiKeyPresent ?? false }
@@ -140,11 +159,15 @@ function makeFixture(opts: FixtureOptions = {}): Fixture {
     subscriptionAdapter,
     selectTransport: selectTransportSpy,
     confirmModalAdapter,
+    sdkLifecycle,
+    subscriptionLifecycle,
   }
 
   return {
     sdkAdapter,
     subscriptionAdapter,
+    sdkLifecycle,
+    subscriptionLifecycle,
     degradedPort,
     selectTransportSpy,
     plugin,
@@ -301,8 +324,8 @@ describe('SpecoratorView.bumpSettingsVersion() re-runs the selector (REQ-ASM-002
     // Before the fix, only the subscription adapter's startup() ran. Both
     // must now be invoked so the SDK adapter re-checks its availability
     // with the freshly-configured key.
-    expect(fixture.sdkAdapter.startup).toHaveBeenCalled()
-    expect(fixture.subscriptionAdapter.startup).toHaveBeenCalled()
+    expect(fixture.sdkLifecycle.startup).toHaveBeenCalled()
+    expect(fixture.subscriptionLifecycle.startup).toHaveBeenCalled()
   })
 })
 

@@ -211,6 +211,11 @@ export default class SpecoratorPlugin extends Plugin {
       const view = new SpecoratorView(leaf, this, this._claudeCliAdapter!, {
         subscriptionAdapter: this._subscriptionAdapter!,
         confirmModalAdapter: this._confirmModalAdapter!,
+        // WP-12: lifecycle is its own port; pass the adapter instances under
+        // their `TransportLifecyclePort` contract so the view can `startup()`
+        // them on settings bumps without depending on `ClaudeCliPort`.
+        sdkLifecycle: this._claudeCliAdapter!,
+        subscriptionLifecycle: this._subscriptionAdapter!,
         selectTransport: (settings) =>
           selectTransport(settings, {
             sdkAdapter: this._claudeCliAdapter!,
@@ -238,6 +243,8 @@ export default class SpecoratorPlugin extends Plugin {
       const view = new AgentSidepanelView(leaf, this, this._claudeCliAdapter!, {
         subscriptionAdapter: this._subscriptionAdapter!,
         confirmModalAdapter: this._confirmModalAdapter!,
+        sdkLifecycle: this._claudeCliAdapter!,
+        subscriptionLifecycle: this._subscriptionAdapter!,
         selectTransport: (settings) =>
           selectTransport(settings, {
             sdkAdapter: this._claudeCliAdapter!,

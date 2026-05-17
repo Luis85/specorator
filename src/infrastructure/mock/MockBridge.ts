@@ -8,13 +8,10 @@ import type {
 	ActiveFileSnapshot,
 	Unsubscriber,
 	ClaudeCliPort,
-	ClaudeCliQueryOptions,
 	ClaudeCliStreamOptions,
 	StreamDelta,
 } from '@/domain/ports';
-import { ClaudeCliError, streamFromQuery } from '@/domain/ports';
-import type { Result } from '@/domain/shared/Result';
-import { err } from '@/domain/shared/Result';
+import { ClaudeCliError } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
 
 function folderPrefix(parent: string): string {
@@ -246,23 +243,14 @@ export class MockBridge
 		return Promise.resolve(false);
 	}
 
-	query(
+	async *queryStream(
 		_prompt: string,
-		_options?: ClaudeCliQueryOptions,
-	): Promise<Result<string, ClaudeCliError>> {
-		return Promise.resolve(err(new ClaudeCliError('NOT_INSTALLED', 'MockBridge: not available')));
-	}
-
-	queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
-		return streamFromQuery((p, o) => this.query(p, o), prompt, options);
-	}
-
-	startup(): Promise<void> {
-		return Promise.resolve();
-	}
-
-	shutdown(): void {
-		// no-op stub
+		_options?: ClaudeCliStreamOptions,
+	): AsyncIterable<StreamDelta> {
+		yield {
+			type: 'error',
+			error: new ClaudeCliError('NOT_INSTALLED', 'MockBridge: not available'),
+		};
 	}
 
 	// ── CommunityPluginPort ───────────────────────────────────────────────────

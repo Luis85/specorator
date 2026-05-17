@@ -43,19 +43,15 @@
  * own credentials. The string literal for that directory is INTENTIONALLY
  * absent from this file; lint enforcement lives in T-ASM-049.
  *
- * `runStructured` lands in T-ASM-039 (PR-ASM-2) and is reached only through
- * the application-layer `queryStructured()` wrapper after the structural
- * type guard `isSubscriptionCapable(port)` narrows the port. The method does
- * NOT live on `ClaudeCliPort` — that interface stays at four members per
- * ADR-008 narrow-port discipline.
+ * `runStructured` is reached through the application-layer `queryStructured()`
+ * wrapper. WP-12 (Arch review #3) folded `runStructured` onto `ClaudeCliPort`
+ * itself as an *optional* method — the application layer narrows via
+ * `typeof port.runStructured === 'function'`, and the SDK adapter simply
+ * does not implement it.
  */
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
 
 import { createFileEnvelopeJsonSchema } from '@/application/chat/createFileEnvelopeSchema';
-import type {
-	StructuredCliCallOptions,
-	StructuredCliRawResult,
-} from '@/application/chat/queryStructured';
 import {
 	StreamDeltaReducer,
 	type RawClaudeEvent,
@@ -64,11 +60,13 @@ import {
 import {
 	ClaudeCliError,
 	type ClaudeCliPort,
-	type ClaudeCliQueryOptions,
 	type ClaudeCliStreamOptions,
 	type StreamDelta,
+	type StructuredCliCallOptions,
+	type StructuredCliRawResult,
 } from '@/domain/ports/ClaudeCliPort';
 import type { LoggerPort } from '@/domain/ports/LoggerPort';
+import type { TransportLifecyclePort } from '@/domain/ports/TransportLifecyclePort';
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
 import { asSessionId, type SessionId } from '@/domain/chat/SessionId';
 import { err, ok, type Result } from '@/domain/shared/Result';
@@ -206,12 +204,17 @@ interface TurnProc {
 /**
  * Implementation note (REQ-ASM-001, REQ-ASM-009, REQ-ASM-010).
  *
- * `kind` is intentionally declared so that downstream `selectTransport` and
- * `isSubscriptionCapable()` narrowing (§2.1 / §9.1) can identify this adapter
- * structurally without an `instanceof` check that would force a domain ⇄
- * infrastructure import.
+ * `kind` is intentionally declared so `selectTransport` can identify this
+ * adapter structurally without an `instanceof` check that would force a
+ * domain ⇄ infrastructure import. Subscription-capability narrowing in the
+ * application layer (`queryStructured()`) keys off the presence of
+ * `runStructured` rather than `kind` — see WP-12 (Arch review #3).
+ *
+ * Also implements `TransportLifecyclePort` (`startup` / `shutdown`) — split
+ * off `ClaudeCliPort` in WP-12 so the per-turn streaming surface stays
+ * narrow per ADR-008 *responsibility* spirit.
  */
-export class ClaudeSubprocessAdapter implements ClaudeCliPort {
+export class ClaudeSubprocessAdapter implements ClaudeCliPort, TransportLifecyclePort {
 	public readonly kind = 'subscription' as const;
 
 	// Internal state — all I/O-free at construction time.
@@ -353,36 +356,6 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 	 */
 	queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
 		return this._runStream(prompt, options);
-	}
-
-	// ── query() — free-text stream-json path ─────────────────────────────────
-
-	/**
-	 * Free-text query. Layered on top of `queryStream()` — collects every
-	 * `text` delta into a single string. Existing free-text call sites stay
-	 * unchanged (same `Result<string, ClaudeCliError>` shape, same error
-	 * mapping). Mirrors the SDK adapter's `query()` ↔ `queryStream()`
-	 * decomposition introduced in PR-ASV-2-sdk.
-	 *
-	 * Satisfies REQ-ASM-010, REQ-ASM-029, REQ-ASM-030, REQ-ASM-031, REQ-ASM-035.
-	 */
-	async query(
-		prompt: string,
-		options?: ClaudeCliQueryOptions,
-	): Promise<Result<string, ClaudeCliError>> {
-		const chunks: string[] = [];
-		for await (const delta of this.queryStream(prompt, options)) {
-			if (delta.type === 'text') {
-				chunks.push(delta.text);
-			} else if (delta.type === 'error') {
-				return err(delta.error);
-			} else if (delta.type === 'done') {
-				return ok(chunks.join(''));
-			}
-		}
-		// Iterator exhausted without `done` — mirrors the SDK adapter's
-		// defensive fallback.
-		return err(new ClaudeCliError('QUERY_FAILED', 'Subprocess closed before result event'));
 	}
 
 	// ── runStructured() — one-shot structured one-shot path ──────────────────
@@ -778,7 +751,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 	/** Build the argv vector for a `query()` invocation. Extracted for complexity. */
 	private _buildArgv(
 		prompt: string,
-		options: ClaudeCliQueryOptions | undefined,
+		options: ClaudeCliStreamOptions | undefined,
 	): readonly string[] {
 		const resume =
 			typeof options?.resumeSessionId === 'string' && options.resumeSessionId.length > 0

@@ -11,6 +11,7 @@ import type {
 	ClaudeCliPort,
 	ConfirmModalPort,
 	SecretStorePort,
+	TransportLifecyclePort,
 } from '@/domain/ports'
 import type { MarkdownRenderPort } from '@/domain/ports/MarkdownRenderPort'
 import type { TransportKind } from '@/domain/chat/TransportKind'
@@ -24,6 +25,16 @@ export const METADATA_CACHE_PORT: InjectionKey<MetadataCachePort> = Symbol('Meta
 export const CANVAS_PORT: InjectionKey<CanvasPort> = Symbol('CanvasPort')
 export const COMMUNITY_PLUGIN_PORT: InjectionKey<CommunityPluginPort> = Symbol('CommunityPluginPort')
 export const CLAUDE_CLI_PORT: InjectionKey<ClaudeCliPort> = Symbol('ClaudeCliPort')
+/**
+ * Lifecycle (`startup` / `shutdown`) for the active streaming transport.
+ * Split off `ClaudeCliPort` in WP-12 (Arch review #3) — see
+ * `src/domain/ports/TransportLifecyclePort.ts`. One concrete production caller
+ * (`AgentSidepanelView` / `SpecoratorView` settings-bump path); shutdown is
+ * driven by `main.ts`'s `register(() => adapter.shutdown())` hook.
+ */
+export const TRANSPORT_LIFECYCLE_PORT: InjectionKey<TransportLifecyclePort> = Symbol(
+	'TransportLifecyclePort',
+)
 export const CONFIRM_MODAL_PORT: InjectionKey<ConfirmModalPort> = Symbol('ConfirmModalPort')
 /**
  * OS-keychain-backed secret store (ADR-008). Production wraps Obsidian's

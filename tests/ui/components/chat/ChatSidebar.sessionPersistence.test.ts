@@ -28,9 +28,7 @@ import type {
 	ClaudeCliStreamOptions,
 	StreamDelta,
 } from '@/domain/ports/ClaudeCliPort'
-import { ClaudeCliError, streamFromQuery } from '@/domain/ports/ClaudeCliPort'
-import type { Result } from '@/domain/shared/Result'
-import { ok, err } from '@/domain/shared/Result'
+import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort'
 import { asSessionId } from '@/domain/chat/SessionId'
 import type { SessionId } from '@/domain/chat/SessionId'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
@@ -69,29 +67,28 @@ class ScriptedClaudeCliPort implements ClaudeCliPort {
 	readonly queryLog: string[] = []
 	readonly optionsLog: (ClaudeCliQueryOptions | undefined)[] = []
 
-	async startup(): Promise<void> {}
-	shutdown(): void {}
 	async isAvailable(): Promise<boolean> {
 		return this.available
 	}
 
-	async query(
+	async *queryStream(
 		prompt: string,
-		options?: ClaudeCliQueryOptions,
-	): Promise<Result<string, ClaudeCliError>> {
+		options?: ClaudeCliStreamOptions,
+	): AsyncIterable<StreamDelta> {
 		this.queryLog.push(prompt)
 		this.optionsLog.push(options)
 		const callIndex = this.queryLog.length - 1
 		const scripted = this.scriptedSessionIds[callIndex] ?? null
 		if (scripted !== null && options?.onSessionId) {
 			options.onSessionId(scripted)
+			yield { type: 'session-id', sessionId: scripted }
 		}
-		if (this.queryError !== null) return err(this.queryError)
-		return ok(this.cannedResponse)
-	}
-
-	queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
-		return streamFromQuery((p, o) => this.query(p, o), prompt, options)
+		if (this.queryError !== null) {
+			yield { type: 'error', error: this.queryError }
+			return
+		}
+		yield { type: 'text', text: this.cannedResponse }
+		yield { type: 'done' }
 	}
 }
 
@@ -341,10 +338,12 @@ describe('ChatSidebar — session-persistence wiring (T-ASM-057)', () => {
 			release = resolve
 		})
 		const { po, store, port } = await mountSidebar({})
-		const originalQuery = port.query.bind(port)
-		port.query = async (prompt, options) => {
-			await gate
-			return originalQuery(prompt, options)
+		const originalStream = port.queryStream.bind(port)
+		port.queryStream = (prompt, options): AsyncIterable<StreamDelta> => {
+			return (async function* (): AsyncGenerator<StreamDelta> {
+				await gate
+				yield* originalStream(prompt, options)
+			})()
 		}
 
 		expect(store.cliStartingUp).toBe(false)
@@ -352,7 +351,7 @@ describe('ChatSidebar — session-persistence wiring (T-ASM-057)', () => {
 		store.setUserText('go')
 		await flushPromises()
 		const sendPromise = po.clickSend()
-		// Microtasks flushed; query is awaiting the gate now.
+		// Microtasks flushed; queryStream is awaiting the gate now.
 		await flushPromises()
 		expect(store.cliStartingUp).toBe(true)
 
