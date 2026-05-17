@@ -42,6 +42,19 @@ Project-wide `npm run typecheck` is still red because `chatStore.ts` still exist
 
 Ran `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build`, `npm run build:web` — all green.
 
+### Iteration 5 — Updated brief gates (`npm audit` + `npm run docs:api`)
+
+Per the iteration-5 advisory in the brief revision, also ran the two extra gates:
+
+- `npm audit --audit-level=high --omit=dev` → `found 0 vulnerabilities`.
+- `npm run docs:api` → succeeds. One pre-existing TypeDoc warning ("Failed to resolve link to `VaultPort.fileExists` in comment for `application/chat/errors.VaultReadError`") is unrelated to WP-3 and predates this branch.
+
+Also ran `npm run test:coverage` end-to-end — Statements 92.21%, Branches 85.66%, Functions 89.39%, Lines 93.5%. Well above the 80/70/80/80 thresholds. Coverage is improved overall because the five new test files (4 stores + 1 composable) exercise the same surface that the deleted `chatStore.test.ts` did, plus the gap tests for UX #15 / Testing F8.
+
+Extra implementation note added during iteration 5:
+
+- Created `tests/__fakes__/chatStoresFacade.ts` — a Proxy-based test-only facade that exposes the four split stores under a single name to keep the older test files (proposalFlow, sessionPersistence, threadRotation, slashCommands, main.chat-handlers, SpecoratorView, chatThreadsPersistence, ccs-inheritance) unchanged except for the import + constructor. New tests must depend on the four stores individually (see `tests/ui/stores/*.test.ts`).
+
 ## Field-to-store map
 
 | Old `chatStore` field/action | New store | Notes |
