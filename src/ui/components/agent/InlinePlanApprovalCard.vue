@@ -60,6 +60,13 @@ function handleCompositionEnd(): void {
 	isImeComposing.value = false;
 }
 
+function handleReviseBlur(): void {
+	// Defensive reset: Safari can blur a composition without firing
+	// compositionend. Clear the latch so the guard doesn't stay true
+	// forever (would ignore every subsequent keydown on the textarea).
+	isImeComposing.value = false;
+}
+
 function commit(decision: PlanDecision): void {
 	if (resolved.value) return;
 	resolved.value = true;
@@ -209,6 +216,7 @@ onBeforeUnmount(() => {
 			@keydown.stop="handleReviseKeydown"
 			@compositionstart="handleCompositionStart"
 			@compositionend="handleCompositionEnd"
+			@blur="handleReviseBlur"
 		/>
 	</section>
 </template>

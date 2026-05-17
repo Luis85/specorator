@@ -118,6 +118,19 @@ describe('ChatInput', () => {
 			await ta.trigger('keydown', { key: 'Enter', ctrlKey: true });
 			expect(po.emitted('send')).toBeTruthy();
 		});
+
+		it('blur defensively releases the IME guard if compositionend never fires', async () => {
+			// Safari can blur or cancel a composition session without firing
+			// compositionend. The blur handler must reset the latch so the
+			// guard does not stay true forever (which would ignore every
+			// subsequent keydown until the component remounts).
+			const po = mountChatInput({ modelValue: '中文', disabled: false, loading: false });
+			const ta = po.textarea;
+			await ta.trigger('compositionstart');
+			await ta.trigger('blur');
+			await ta.trigger('keydown', { key: 'Enter', ctrlKey: true });
+			expect(po.emitted('send')).toBeTruthy();
+		});
 	});
 
 	describe('disabled state', () => {

@@ -294,6 +294,10 @@ function handleKeyup(event: KeyboardEvent): void {
 function handleBlur(): void {
 	if (palette.isOpen.value) palette.close();
 	picker.close();
+	// Defensive: Safari can blur or cancel a composition session without
+	// firing compositionend. Without this reset the guard would latch
+	// `true` forever and every subsequent keydown would be ignored.
+	isImeComposing.value = false;
 }
 
 function commitMention(candidate: MentionCandidate): void {
