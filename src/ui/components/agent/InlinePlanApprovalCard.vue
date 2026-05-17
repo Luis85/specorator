@@ -44,6 +44,22 @@ const resolved = ref(false);
 const textareaEl = ref<HTMLTextAreaElement | null>(null);
 const rootEl = ref<HTMLElement | null>(null);
 
+/**
+ * Tracks whether the revise textarea is currently inside an IME composition
+ * session. Driven by the W3C `compositionstart` / `compositionend` events
+ * (see ChatInput.vue for the full rationale — Safari's confirm-Enter path
+ * reports `event.isComposing === false` while composition is still active).
+ */
+const isImeComposing = ref(false);
+
+function handleCompositionStart(): void {
+	isImeComposing.value = true;
+}
+
+function handleCompositionEnd(): void {
+	isImeComposing.value = false;
+}
+
 function commit(decision: PlanDecision): void {
 	if (resolved.value) return;
 	resolved.value = true;
@@ -104,11 +120,10 @@ async function handleRowEnter(): Promise<void> {
 
 function handleReviseKeydown(event: KeyboardEvent): void {
 	if (resolved.value) return;
-	// IME-composition guard. Some Safari paths report `isComposing === false`
-	// on the confirm-Enter keydown while `event.key === 'Process'` still flags
-	// the event as IME-handling. Both checks needed to avoid committing partial
-	// CJK text mid-composition.
-	if (event.isComposing || event.key === 'Process') return;
+	// IME-composition guard. See ChatInput.vue for the full rationale: tracking
+	// composition state via the W3C events covers every browser's IME path
+	// (including Safari's buggy confirm-Enter) with no deprecated APIs.
+	if (event.isComposing || isImeComposing.value) return;
 	if (event.key === 'Escape') {
 		event.preventDefault();
 		collapseRevise();
@@ -192,6 +207,8 @@ onBeforeUnmount(() => {
 			:placeholder="t('agent.planApprovalRevisePlaceholder')"
 			rows="3"
 			@keydown.stop="handleReviseKeydown"
+			@compositionstart="handleCompositionStart"
+			@compositionend="handleCompositionEnd"
 		/>
 	</section>
 </template>

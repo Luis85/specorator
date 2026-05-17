@@ -42,6 +42,24 @@ const vaultPort = useVaultPort();
 const picker = useMentionPicker(vaultPort);
 const palette = useSlashPalette();
 
+/**
+ * Tracks whether the textarea is currently inside a composition session.
+ * Driven by the W3C `compositionstart` / `compositionend` events on the
+ * textarea. Used by `handleKeydown` as a defence-in-depth check around
+ * `event.isComposing` because Safari has IME paths where the confirm-Enter
+ * keydown reports `isComposing === false` while composition is still
+ * logically active (compositionend has not yet fired).
+ */
+const isImeComposing = ref(false);
+
+function handleCompositionStart(): void {
+	isImeComposing.value = true;
+}
+
+function handleCompositionEnd(): void {
+	isImeComposing.value = false;
+}
+
 defineExpose({ textareaEl, palette });
 
 /**
@@ -239,12 +257,13 @@ function tryHandleSendKey(event: KeyboardEvent): boolean {
 }
 
 function handleKeydown(event: KeyboardEvent): void {
-	// IME-composition guard. `isComposing` is true while a Japanese/Chinese/
-	// Korean IME is mid-composition; pressing Enter to commit must NOT
-	// trigger send / commit-mention / dismiss-palette. Some Safari paths
-	// report `isComposing === false` on the confirm-Enter keydown but
-	// `event.key === 'Process'` still flags the event as IME-handling.
-	if (event.isComposing || event.key === 'Process') return;
+	// IME-composition guard. `event.isComposing` catches the first keydown
+	// of a new composition (compositionstart may not have fired yet on that
+	// event). `isImeComposing` (driven by compositionstart/compositionend)
+	// catches the rest, including Safari's buggy confirm-Enter where
+	// `event.isComposing` reports false while composition is still active.
+	// Together they cover every browser's IME path with no deprecated APIs.
+	if (event.isComposing || isImeComposing.value) return;
 	if (handlePickerKey(event)) return;
 	if (handlePaletteKeydown(event)) return;
 	tryHandleSendKey(event);
@@ -343,6 +362,8 @@ function onDropdownHover(index: number): void {
 				@keyup="handleKeyup"
 				@click="handleClick"
 				@blur="handleBlur"
+				@compositionstart="handleCompositionStart"
+				@compositionend="handleCompositionEnd"
 			/>
 			<MentionDropdown
 				v-if="picker.open.value"

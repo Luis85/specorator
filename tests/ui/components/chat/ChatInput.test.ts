@@ -96,11 +96,27 @@ describe('ChatInput', () => {
 			expect(po.emitted('send')).toBeFalsy();
 		});
 
-		it('Ctrl+Enter does not emit send when key === \'Process\' fires (Safari IME path)', async () => {
+		it('Ctrl+Enter does not emit send during Safari IME path (isComposing false after compositionstart)', async () => {
+			// Reproduces the Safari bug: compositionstart has fired, but the
+			// confirm-Enter keydown arrives with `isComposing === false`. The
+			// component must still suppress send because the composition session
+			// is logically still active (compositionend has not yet fired).
 			const po = mountChatInput({ modelValue: '中文', disabled: false, loading: false });
 			const ta = po.textarea;
-			await ta.trigger('keydown', { key: 'Process', ctrlKey: true });
+			await ta.trigger('compositionstart');
+			await ta.trigger('keydown', { key: 'Enter', ctrlKey: true });
 			expect(po.emitted('send')).toBeFalsy();
+		});
+
+		it('Ctrl+Enter emits send again after compositionend', async () => {
+			// Once compositionend fires, the textarea is no longer inside an IME
+			// session and subsequent Ctrl+Enter must work normally.
+			const po = mountChatInput({ modelValue: '中文', disabled: false, loading: false });
+			const ta = po.textarea;
+			await ta.trigger('compositionstart');
+			await ta.trigger('compositionend');
+			await ta.trigger('keydown', { key: 'Enter', ctrlKey: true });
+			expect(po.emitted('send')).toBeTruthy();
 		});
 	});
 
