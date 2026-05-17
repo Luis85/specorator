@@ -401,6 +401,83 @@ to drive their drain in parallel with the Vue teardown cascade.
 - `npm run build:web` ✅
 - `npm run docs:api` ✅ (2 pre-existing TypeDoc warnings unrelated)
 
+### Iteration 7 (2026-05-17) — Codex P2 round-3 (PR #406)
+
+**Trigger** — Codex review on PR #406 round-2 patch flagged a follow-on
+P2 finding (thread `3254908179`, line 161 of `useSessionLogMirror.ts`):
+
+> When `specsFolder` changes, this branch removes the previous `cached`
+> mirror from `activeMirrors` and replaces it without draining the old
+> writer first. Because `SessionLogWriter` defers frontmatter writes
+> with a debounce, the old mirror can still hold a pending `updated:`
+> flush; after it is deregistered, `flushAllActiveSessionLogMirrors()`
+> during plugin teardown will skip it, so closing/disabling the plugin
+> within that debounce window can drop the latest frontmatter update
+> for the old path.
+
+Reproduction: a user with `specsFolder = "specs"` runs a turn (body
+lands via `appendFile`, debounced flush scheduled). They then change
+the configured Specs folder in settings. The composable's invalidation
+branch constructs mirror M2 against the new root and removes M1 from
+`activeMirrors` — but M1 still owns a pending `updated:` flush for the
+old path. If the plugin tears down inside the debounce window,
+`flushAllActiveSessionLogMirrors()` cannot reach M1 and the latest
+frontmatter snapshot for the old path is lost.
+
+**Architectural fix** — drain the retiring mirror **before**
+deregistering it.
+
+- `useSessionLogMirror.ts`: the `specsFolder`-invalidation branch now
+  calls `void cached.flushAll()` immediately before
+  `activeMirrors.delete(cached)`. Fire-and-forget mirrors the shape
+  used by the existing `onBeforeUnmount` hook in the same file — the
+  call site lives inside the synchronous `inFlight` Promise constructor
+  and cannot `await` without serialising every subsequent
+  `getMirror()` caller behind the old debounce window. The writer's
+  per-path mutex + bounded re-drain loop (round-3 fix) completes the
+  drain on microtasks.
+
+**Order invariant**
+
+Drain THEN deregister: the drain call is async and the registry
+deletion is synchronous, so there is a microtask window where both
+this branch and `flushAllActiveSessionLogMirrors()` can see the
+mirror. That overlap is safe because `flushAll()` is idempotent — the
+writer's bounded re-drain loop folds concurrent invocations into a
+single per-path flush. The reverse order (deregister then drain) is
+what the bug reproduces; this order closes the gap.
+
+The fix composes with every prior fix:
+- Round-1 (`flushAll()` API) — consumed here.
+- Round-2 (per-path mutex) — keeps the swap-time flush race-free.
+- Round-3 (bounded re-drain) — handles fields armed during in-flight.
+- Round-4 (preserve-on-malformed-frontmatter) — orthogonal.
+- P2 round-2 (`onBeforeUnmount` + `flushAllActiveSessionLogMirrors`)
+  — covered the unmount + plugin-teardown surfaces; this iteration
+  closes the third teardown surface (mirror retirement on settings
+  change).
+
+**Tests**
+
+- `tests/ui/composables/useSessionLogMirror.test.ts` (+1 test):
+  "drains the retired mirror when specsFolder changes mid-session".
+  Mounts the host with `specsFolder="specs"`, awaits a mirror, spies
+  `flushAll`, flips the setting to `"docs/specs"`, awaits a second
+  mirror, asserts the new mirror is a fresh instance AND that the old
+  mirror's `flushAll` was invoked exactly once.
+- Verified the test FAILS on the round-2 code (`90882f2`) — flushAll
+  call count is 0 — and PASSES on the round-3 fix.
+
+**Gate status (final)** — all green:
+
+- `npm audit --audit-level=high --omit=dev` ✅ 0 vulnerabilities
+- `npm run typecheck` ✅
+- `npm run lint` ✅ 0 errors (25 pre-existing warnings)
+- `npm run test` ✅ 1893 / 1893 passing (+1 vs P2 round-2)
+- `npm run build` ✅
+- `npm run build:web` ✅
+- `npm run docs:api` ✅ (2 pre-existing TypeDoc warnings unrelated)
+
 ## Carry-out items
 
 _None._

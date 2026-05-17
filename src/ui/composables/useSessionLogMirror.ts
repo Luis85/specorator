@@ -156,7 +156,35 @@ export function useSessionLogMirror(): UseSessionLogMirror {
 					// `flushAll()` on a writer the composable has already
 					// abandoned. The new mirror's `flushAll()` covers the
 					// pending state of the path under the new specsFolder.
+					//
+					// Codex P2 round-3 (PR #406): drain the retiring mirror
+					// **before** removing it from `activeMirrors`. The
+					// underlying `SessionLogWriter` debounces the `updated:`
+					// frontmatter rewrite for up to 30 s after every turn
+					// append; without an explicit drain here, M1 keeps its
+					// pending flush but is no longer reachable from
+					// `flushAllActiveSessionLogMirrors()` — if the plugin
+					// tears down inside the debounce window, the latest
+					// frontmatter update for the old path is dropped.
+					//
+					// Fire-and-forget mirrors the `onBeforeUnmount` shape
+					// below: this call site is inside the synchronous
+					// `inFlight` Promise constructor and cannot `await`
+					// without serialising every subsequent `getMirror()`
+					// caller behind the old debounce window. The writer's
+					// per-path mutex + bounded re-drain loop completes the
+					// work on microtasks regardless.
+					//
+					// Order matters: drain THEN deregister. The drain is
+					// async and the deregistration is synchronous, so there
+					// is a microtask window where both this branch and
+					// `flushAllActiveSessionLogMirrors()` can see the
+					// mirror. That overlap is fine because `flushAll()` is
+					// idempotent — the writer's bounded re-drain loop folds
+					// any concurrent invocations into a single per-path
+					// flush.
 					if (cached !== null) {
+						void cached.flushAll()
 						activeMirrors.delete(cached)
 					}
 					cached = createSessionLogMirror(

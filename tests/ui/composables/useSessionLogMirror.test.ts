@@ -101,6 +101,32 @@ describe('useSessionLogMirror', () => {
 		expect(after).not.toBe(before)
 	})
 
+	it('drains the retired mirror when specsFolder changes mid-session (Codex P2 round-3, PR #406)', async () => {
+		// Repro: when the user changes the configured `specsFolder` mid-session,
+		// the composable replaces the cached mirror M1 with a fresh M2 bound to
+		// the new root. SessionLogWriter's `updated:` frontmatter rewrite is
+		// debounced up to 30 s after every turn, so M1 may still own a pending
+		// flush when it is retired. Before this fix M1 was deregistered from
+		// `activeMirrors` without `flushAll()` being called, so a plugin
+		// teardown inside that debounce window would silently drop M1's
+		// frontmatter update for the old path. The composable must drain the
+		// retiring mirror before swapping it out.
+		const bridge = makeBridgeWithSpecsFolder('specs')
+		const { composable } = mountHost(bridge)
+
+		const before = await composable.getMirror()
+		const flushSpy = vi.spyOn(before, 'flushAll')
+
+		// User changes the Specs folder in settings mid-session.
+		;(bridge as unknown as { __setSpecsFolder: (s: string) => void }).__setSpecsFolder(
+			'docs/specs',
+		)
+
+		const after = await composable.getMirror()
+		expect(after).not.toBe(before)
+		expect(flushSpy).toHaveBeenCalledTimes(1)
+	})
+
 	it('does not invalidate when specsFolder is set to the same value again', async () => {
 		const bridge = makeBridgeWithSpecsFolder('specs')
 		const { composable } = mountHost(bridge)
