@@ -838,6 +838,216 @@ describe('SessionLogWriter O(turn) append (WP-5 DoD)', () => {
   })
 })
 
+describe('SessionLogWriter malformed-frontmatter seed (Codex P1 round-4)', () => {
+  // Reproduction of the data-destruction bug introduced by the WP-5 cache
+  // rework. When `seedCache` saw an existing log whose frontmatter could
+  // not be parsed (e.g. the user manually edited the file in Obsidian and
+  // accidentally broke a YAML delimiter, or saved raw text without a
+  // frontmatter block), the previous fallback rewrote the file with
+  // `frontmatter` only — silently truncating every prior turn on disk.
+  // The fix preserves the existing blob verbatim by treating it as opaque
+  // body content under a fresh frontmatter.
+  //
+  // The `seedCache` malformed branch is reached only when the resolved
+  // path points at a file whose frontmatter does not parse. The public
+  // `resolveConflictSuffix` walk would normally re-route past such a file
+  // (treating it as a session-id conflict), so to reach the destructive
+  // code path deterministically we pre-populate the writer's
+  // `resolvedPaths` memoisation so the conflict walk is bypassed and the
+  // seed cache hits the malformed file directly.
+  let ports: FakePorts
+
+  beforeEach(() => {
+    ports = fakeModulePorts()
+  })
+
+  /**
+   * Pre-populate the writer's private `resolvedPaths` so the conflict-walk
+   * is bypassed and `seedCache` hits the target file. Without this, the
+   * conflict-suffix loop would route the first append to `<base>-2.md`
+   * and the destructive `seedCache` branch would never be exercised.
+   * Hitting private state via a typed cast is the surgical option — the
+   * malformed branch is otherwise reachable only by an out-of-band file
+   * edit racing the writer's own readFile, which a unit test cannot
+   * stage reliably.
+   */
+  function primeResolvedPath(
+    writer: SessionLogWriter,
+    sessionId: string,
+    path: string,
+  ): void {
+    const map = (writer as unknown as {
+      resolvedPaths: Map<string, string>
+    }).resolvedPaths
+    map.set(sessionId, path)
+  }
+
+  it('preserves the existing file content when the on-disk frontmatter is malformed', async () => {
+    const thread = makeThread({ sessionId: 'mine', feature: 'foo' })
+    const path = 'specs/foo/sessions/mine.md'
+
+    // Malformed frontmatter: opening `---` but no closing `---` line. Then
+    // three turns of body content the user must not lose.
+    const malformedFile = [
+      '---',
+      "session_id: 'mine'",
+      'bad yaml: { unterminated',
+      '## user',
+      '<!-- at: 2026-05-14T09:00:00.000Z -->',
+      '',
+      'turn-one-user-content',
+      '',
+      '## assistant',
+      '<!-- at: 2026-05-14T09:00:00.000Z -->',
+      '',
+      'turn-one-assistant-content',
+      '',
+      '## user',
+      '<!-- at: 2026-05-14T09:05:00.000Z -->',
+      '',
+      'turn-two-user-content',
+      '',
+      '## assistant',
+      '<!-- at: 2026-05-14T09:05:00.000Z -->',
+      '',
+      'turn-two-assistant-content',
+      '',
+      '## user',
+      '<!-- at: 2026-05-14T09:10:00.000Z -->',
+      '',
+      'turn-three-user-content',
+      '',
+      '## assistant',
+      '<!-- at: 2026-05-14T09:10:00.000Z -->',
+      '',
+      'turn-three-assistant-content',
+      '',
+    ].join('\n')
+    await ports.vault.writeFile(path, malformedFile)
+
+    const writer = makeWriter(ports, () => '2026-05-14T10:00:00.000Z')
+    primeResolvedPath(writer, thread.sessionId!, path)
+    await writer.appendUserAssistant(thread, {
+      user: 'new-turn-user',
+      assistant: 'new-turn-assistant',
+    })
+
+    const after = await ports.vault.readFile(path)
+
+    // Critical invariant: every byte of the original (malformed) file
+    // must still appear in the new file. Truncation = data loss.
+    expect(after).toContain(malformedFile)
+
+    // The new frontmatter is prepended.
+    expect(after.startsWith('---\n')).toBe(true)
+    expect(after).toMatch(/session_id: 'mine'/)
+    expect(after).toMatch(/created: '2026-05-14T10:00:00\.000Z'/)
+    expect(after).toMatch(/updated: '2026-05-14T10:00:00\.000Z'/)
+
+    // The new turn body is appended on top.
+    expect(after).toContain('new-turn-user')
+    expect(after).toContain('new-turn-assistant')
+
+    // The implementation logs `warn` for the malformed-frontmatter event
+    // so a maintainer can spot it in the console.
+    const warnCall = (ports.logger.warn as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => String(call[0]).includes('malformed frontmatter'),
+    )
+    expect(warnCall).toBeDefined()
+  })
+
+  it('preserves existing content when the file has no frontmatter at all (raw text body)', async () => {
+    const thread = makeThread({ sessionId: 'mine', feature: 'foo' })
+    const path = 'specs/foo/sessions/mine.md'
+
+    // User opened the file in a plain text editor and saved it without a
+    // frontmatter block — just raw markdown notes.
+    const rawText = [
+      '# My personal notes on this session',
+      '',
+      'I wanted to remember that the assistant said something useful here.',
+      '',
+      'Important details I do not want to lose.',
+      '',
+    ].join('\n')
+    await ports.vault.writeFile(path, rawText)
+
+    const writer = makeWriter(ports, () => '2026-05-14T10:00:00.000Z')
+    primeResolvedPath(writer, thread.sessionId!, path)
+    await writer.appendUserAssistant(thread, {
+      user: 'fresh-user',
+      assistant: 'fresh-assistant',
+    })
+
+    const after = await ports.vault.readFile(path)
+
+    // Original raw text must survive byte-for-byte.
+    expect(after).toContain(rawText)
+
+    // Fresh frontmatter prepended.
+    expect(after.startsWith('---\n')).toBe(true)
+    expect(after).toMatch(/session_id: 'mine'/)
+
+    // The new turn body lands too.
+    expect(after).toContain('fresh-user')
+    expect(after).toContain('fresh-assistant')
+  })
+
+  it('a subsequent turn plus flush preserves both the original content and every new turn', async () => {
+    const thread = makeThread({ sessionId: 'mine', feature: 'foo' })
+    const path = 'specs/foo/sessions/mine.md'
+
+    const malformedFile = [
+      '---',
+      "session_id: 'mine'",
+      'broken: yaml{',
+      'turn-one-marker',
+      'turn-two-marker',
+      'turn-three-marker',
+      '',
+    ].join('\n')
+    await ports.vault.writeFile(path, malformedFile)
+
+    const stamps: ReadonlyArray<string> = [
+      '2026-05-14T10:00:00.000Z',
+      '2026-05-14T10:05:00.000Z',
+    ]
+    let idx = 0
+    const writer = makeWriter(ports, () => {
+      const next = stamps[idx] ?? '2026-05-14T10:05:00.000Z'
+      idx += 1
+      return next
+    })
+    primeResolvedPath(writer, thread.sessionId!, path)
+
+    // Turn 1 (seed path takes the malformed fallback).
+    await writer.appendUserAssistant(thread, {
+      user: 'append-turn1-user',
+      assistant: 'append-turn1-assistant',
+    })
+    // Turn 2 (hot path append).
+    await writer.appendUserAssistant(thread, {
+      user: 'append-turn2-user',
+      assistant: 'append-turn2-assistant',
+    })
+    await writer.flushAll()
+
+    const after = await ports.vault.readFile(path)
+
+    // Original three markers still on disk.
+    expect(after).toContain('turn-one-marker')
+    expect(after).toContain('turn-two-marker')
+    expect(after).toContain('turn-three-marker')
+    // Both new turns landed.
+    expect(after).toContain('append-turn1-user')
+    expect(after).toContain('append-turn1-assistant')
+    expect(after).toContain('append-turn2-user')
+    expect(after).toContain('append-turn2-assistant')
+    // Frontmatter `updated:` advanced to turn 2 after the flush.
+    expect(after).toContain("updated: '2026-05-14T10:05:00.000Z'")
+  })
+})
+
 describe('SessionLogWriter.appendProposalDecision (REQ-ASM-046)', () => {
   let ports: FakePorts
 

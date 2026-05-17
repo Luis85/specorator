@@ -227,6 +227,83 @@ silently dropping the new `updated:` snapshot.
 - `npm run build:web` ✅
 - `npm run docs:api` ✅ (2 pre-existing TypeDoc warnings unrelated)
 
+### Iteration 5 (2026-05-17) — Codex P1 round-4 (PR #406)
+
+**Trigger** — Codex review on PR #406 round-3 patch flagged a new P1
+finding (thread `3254865902`, line 1008 of `SessionLogWriter.ts`):
+
+> When `seedCache` sees an existing session log whose frontmatter cannot
+> be parsed, this branch rewrites the file with `frontmatter` only
+> before appending the new turn. In that scenario (for example, a
+> manually edited or partially corrupted log), all pre-existing body
+> content is deleted, so historical turns are lost on the next write.
+> The fallback should keep the existing file content as body data (or
+> move aside/conflict) instead of truncating it.
+
+Reproduction: a user manually edits `specs/<feature>/sessions/<id>.md`
+in Obsidian and accidentally breaks a YAML delimiter (or saves raw
+text without a frontmatter block). On the next turn, `seedCache`
+reads the file, `splitFrontmatterAndBody` returns null, and the
+previous fallback wrote `${frontmatter}` only — silently truncating
+every prior turn the user had on disk. The worst kind of data loss
+because it's triggered by a user trying to be helpful.
+
+**Architectural fix** — preserve the existing blob verbatim under a
+fresh frontmatter.
+
+- `seedCache`: when the on-disk frontmatter is malformed
+  (`splitFrontmatterAndBody(existing) === null`), the new fallback
+  writes `${frontmatter}${existing}` instead of `${frontmatter}`.
+  The user's data survives byte-for-byte; the file structure is
+  unusual (new frontmatter window + old malformed bytes inside the
+  body) but every byte is recoverable. Subsequent reads parse the
+  new frontmatter cleanly.
+- `bodyEndsWithNewline` is derived from the preserved blob's tail
+  so the next `appendBlock` composes a correct separator before
+  the next turn block.
+- Logs `warn` (with the resolved path and redacted sessionId) on
+  every entry to the malformed-frontmatter branch — the next
+  maintainer sees the unusual event in the console.
+
+The fix is internal to `seedCache`; no public API change. The four
+prior fixes (P1 rounds 1–3, P2) keep working.
+
+**Tests**
+
+- Three new regression tests in
+  `tests/application/chat/SessionLogWriter.test.ts` under
+  `SessionLogWriter malformed-frontmatter seed (Codex P1 round-4)`:
+  1. Existing file with malformed frontmatter (opening `---` but no
+     closing fence) + 3 turns of body. Assert: every byte of the
+     original survives; new frontmatter is prepended; new turn body
+     is appended on top; `logger.warn` fires for malformed
+     frontmatter.
+  2. Existing file with no frontmatter at all (raw text body). Same
+     expectation: original text survives verbatim under a fresh
+     frontmatter.
+  3. Two-turn sequence + `flushAll()`: both new turns AND every
+     original marker remain on disk; `updated:` advances to turn 2.
+- A small `primeResolvedPath` helper pre-populates the writer's
+  private `resolvedPaths` so the conflict-suffix walk is bypassed
+  and `seedCache` hits the malformed file directly. Without this,
+  `resolveConflictSuffix` would route the first append to
+  `<base>-2.md` (the malformed file would be treated as a
+  session-id conflict) and the destructive `seedCache` branch
+  would never be exercised by a unit test.
+- Verified the new tests FAIL on the round-3 code (`c272857`) —
+  every original turn marker disappears and the malformed file is
+  rewritten with `frontmatter` only — and PASS on the round-4 fix.
+
+**Gate status (final)** — all green:
+
+- `npm audit --audit-level=high --omit=dev` ✅ 0 vulnerabilities
+- `npm run typecheck` ✅
+- `npm run lint` ✅ 0 errors (25 pre-existing warnings)
+- `npm run test` ✅ 1884 / 1884 passing (+3 vs round-3)
+- `npm run build` ✅
+- `npm run build:web` ✅
+- `npm run docs:api` ✅ (2 pre-existing TypeDoc warnings unrelated)
+
 ## Carry-out items
 
 _None._

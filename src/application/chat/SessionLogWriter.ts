@@ -994,9 +994,27 @@ export class SessionLogWriter {
     const existing = await this.vault.readFile(resolvedPath)
     const split = splitFrontmatterAndBody(existing)
     if (split === null) {
-      // Defensive: the file exists but the frontmatter is malformed.
-      // Treat as fresh — preserves the user's first-turn append rather than
-      // silently dropping it.
+      // Codex P1 round-4 (2026-05-17): the file exists but the frontmatter
+      // is malformed (e.g. the user manually edited the log in Obsidian and
+      // broke a YAML delimiter, or the file is raw text with no frontmatter
+      // at all). The previous behaviour rewrote the file with `frontmatter`
+      // only before appending the new turn, which **silently truncated every
+      // prior turn the user had on disk** — the worst kind of data loss,
+      // because it's triggered by the user trying to be helpful.
+      //
+      // The safe fallback is to treat the entire on-disk blob as opaque
+      // body data and prepend a fresh frontmatter. The user's data is
+      // preserved verbatim; the file structure is unusual (new frontmatter
+      // + old malformed bytes inside the body window) but every byte is
+      // recoverable by hand. Subsequent reads parse the new frontmatter,
+      // and the malformed window survives as body content.
+      this.logger.warn(
+        'SessionLogWriter: seed found malformed frontmatter; preserving body verbatim',
+        {
+          path: resolvedPath,
+          redactedSessionId: redactSessionId(thread.sessionId),
+        },
+      )
       const fields: FrontmatterFields = {
         session_id: thread.sessionId ?? '',
         feature: thread.feature,
@@ -1005,8 +1023,20 @@ export class SessionLogWriter {
         updated: at,
       }
       const frontmatter = buildFrontmatter(fields)
-      await this.vault.writeFile(resolvedPath, frontmatter)
-      return { fields, bodyEndsWithNewline: true }
+      // `buildFrontmatter` already terminates with `---\n`. Append the
+      // existing blob verbatim — no extra separator. If `existing` happens
+      // to start with `---`, the resulting file has the new frontmatter,
+      // then the old (malformed) frontmatter as body content, which parses
+      // cleanly via `splitFrontmatterAndBody` (the first `---` opens the
+      // new block, and the closing `---\n` of the new block ends it before
+      // the malformed bytes start).
+      await this.vault.writeFile(resolvedPath, `${frontmatter}${existing}`)
+      // `bodyEndsWithNewline` reflects the tail of the preserved blob so
+      // the next `appendBlock` composes a correct separator.
+      return {
+        fields,
+        bodyEndsWithNewline: existing === '' || existing.endsWith('\n'),
+      }
     }
     const parsedSessionId =
       extractSessionIdFromFrontmatter(existing) ?? thread.sessionId ?? ''
