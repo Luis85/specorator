@@ -57,6 +57,11 @@ import type {
 	StructuredCliRawResult,
 } from '@/application/chat/queryStructured';
 import {
+	StreamDeltaReducer,
+	type RawClaudeEvent,
+	type RawStreamEventInner,
+} from '@/application/chat/StreamDeltaReducer';
+import {
 	ClaudeCliError,
 	type ClaudeCliPort,
 	type ClaudeCliQueryOptions,
@@ -170,48 +175,22 @@ function createPushChannel<T>(): PushChannel<T> {
 }
 
 // -----------------------------------------------------------------------------
-// Streaming sink — the NDJSON event handlers push StreamDeltas into this
-// sink rather than buffering text. One sink per spawned child; nulled out
-// after the terminal delta so re-entrant or post-terminal events become
-// no-ops (REQ-ASM-031 single-fire is enforced here for session-id too).
-// -----------------------------------------------------------------------------
-interface StreamSink {
-	/** Push a `text` delta. */
-	pushText: (text: string) => void;
-	/** Push a `thinking` delta. */
-	pushThinking: (text: string) => void;
-	/** Push a `tool-use-start` delta. */
-	pushToolUseStart: (blockId: string, toolName: string, inputJson: string) => void;
-	/** Push a `tool-use-input-delta` delta. */
-	pushToolUseInputDelta: (blockId: string, inputJson: string) => void;
-	/** Push a `tool-use-stop` delta. */
-	pushToolUseStop: (blockId: string) => void;
-	/** Push a `compact-boundary` delta. Optional reason. */
-	pushCompactBoundary: (reason?: string) => void;
-	/** Push a `usage` delta. */
-	pushUsage: (inputTokens: number, outputTokens: number) => void;
-	/** Push a `session-id` delta. Single-fire: subsequent calls are ignored. */
-	pushSessionId: (sessionId: SessionId) => void;
-	/** Push the terminal `done` delta and close the stream. Single-fire. */
-	pushDone: () => void;
-	/** Push a terminal `error` delta and close the stream. Single-fire. */
-	pushError: (error: ClaudeCliError) => void;
-	/** True after `pushDone` / `pushError` have fired. */
-	terminated: () => boolean;
-	/** True after at least one `text` delta has been pushed. */
-	hasText: () => boolean;
-}
-
-// -----------------------------------------------------------------------------
 // Per-turn streaming-process record. One entry per spawn — short-lived; the
 // child exits as soon as the `result` event arrives (or on error / timeout).
+//
+// The wire→`StreamDelta` translation lives in `StreamDeltaReducer` (ADR-0034).
+// This struct only carries the per-spawn glue: the spawned child, its stdout
+// buffer, the per-turn reducer, the push channel that feeds the iterable, and
+// the optional `onSessionId` single-fire callback.
 // -----------------------------------------------------------------------------
 interface TurnProc {
 	readonly child: ChildProcessLike;
 	/** Stdout chunk buffer for line-based NDJSON reassembly (REQ-ASM-029). */
 	stdoutBuffer: string;
-	/** Streaming sink — every NDJSON event becomes one or more pushes. */
-	sink: StreamSink;
+	/** Per-stream codec — owns blockId / messageSeq / usage merge / dedup. */
+	readonly reducer: StreamDeltaReducer;
+	/** Push channel — each delta emitted by the reducer goes here. */
+	readonly channel: PushChannel<StreamDelta>;
 	/** Most recently captured session id from a `system/init` event. */
 	sessionId: SessionId | null;
 	/**
@@ -222,29 +201,6 @@ interface TurnProc {
 	onSessionId: ((sessionId: SessionId) => void) | null;
 	/** Monotonic clock at spawn time — used for completion-telemetry durationMs (T-ASM-081). */
 	startTimeMs: number;
-	/**
-	 * Per-stream turn identifier used to mint stable `blockId`s of the form
-	 * `${turnId}-${index}` from SDK-style `content_block_*` events
-	 * (PR-ASV-2-delta-extension). One per spawn — concurrent turns can never
-	 * produce colliding blockIds.
-	 */
-	turnId: string;
-	/**
-	 * Map from `content_block_*` event `.index` → stable `blockId` for the
-	 * active tool-use blocks in this turn. Populated on
-	 * `content_block_start` (tool_use), consulted on `input_json_delta` and
-	 * `content_block_stop`, and pruned on stop so a re-used index does not
-	 * leak the previous block's id.
-	 */
-	toolBlockIds: Map<number, string>;
-	/**
-	 * Last-emitted usage frame for this stream. Codex P2 on PR #386: partial
-	 * `message_delta.usage` frames often contain only the field(s) that
-	 * changed (typically `output_tokens` only); missing fields are
-	 * implicitly "unchanged", NOT zero. Merge against this snapshot
-	 * instead of zero-filling. Parity with SDK adapter (`DispatchState.lastUsage`).
-	 */
-	lastUsage: { input: number; output: number } | null;
 }
 
 /**
@@ -709,7 +665,9 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 		}
 
 		const channel = createPushChannel<StreamDelta>();
-		const sink = ClaudeSubprocessAdapter._sinkFromChannel(channel);
+		const reducer = new StreamDeltaReducer({
+			turnId: ClaudeSubprocessAdapter._randomTurnId(),
+		});
 		const argv = this._buildArgv(prompt, options);
 
 		// _preflightStream above guarantees _binaryPath !== null here.
@@ -717,7 +675,8 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 			this._binaryPath!,
 			argv,
 			options?.onSessionId ?? null,
-			sink,
+			reducer,
+			channel,
 		);
 		if (!spawned.ok) {
 			yield { type: 'error', error: spawned.error };
@@ -726,8 +685,8 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 		const proc = spawned.value;
 
 		const timeoutMs = this._clampTimeout(options?.timeoutMs);
-		const timeoutHandle = this._installStreamTimeout(proc, sink, timeoutMs);
-		const detachAbort = this._installStreamAbort(proc, sink, options?.signal);
+		const timeoutHandle = this._installStreamTimeout(proc, timeoutMs);
+		const detachAbort = this._installStreamAbort(proc, options?.signal);
 
 		try {
 			yield* channel.iterate();
@@ -735,7 +694,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 			// eslint-disable-next-line obsidianmd/prefer-active-window-timers -- infra layer, no Obsidian context
 			clearTimeout(timeoutHandle);
 			detachAbort();
-			if (!sink.terminated()) {
+			if (!proc.reducer.terminated) {
 				this._killChild(proc.child);
 				this._activeChildren.delete(proc.child);
 				channel.complete();
@@ -769,19 +728,20 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 
 	/**
 	 * Install the per-turn timeout. On expiry the child is SIGTERMed and the
-	 * sink receives a terminal `TIMEOUT` error. Returns the timeout handle so
-	 * the caller can `clearTimeout` once the stream completes normally.
+	 * reducer emits a terminal `TIMEOUT` error through `_emitTerminalError`.
+	 * Returns the timeout handle so the caller can `clearTimeout` once the
+	 * stream completes normally.
 	 */
 	private _installStreamTimeout(
 		proc: TurnProc,
-		sink: StreamSink,
 		timeoutMs: number,
 	): ReturnType<typeof setTimeout> {
 		// eslint-disable-next-line obsidianmd/prefer-active-window-timers -- infra layer, no Obsidian context
 		return setTimeout(() => {
-			if (sink.terminated()) return;
+			if (proc.reducer.terminated) return;
 			this._killChild(proc.child);
-			sink.pushError(
+			this._emitTerminalError(
+				proc,
 				new ClaudeCliError('TIMEOUT', `Subscription query exceeded ${timeoutMs} ms`),
 			);
 		}, timeoutMs);
@@ -795,88 +755,21 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 	 */
 	private _installStreamAbort(
 		proc: TurnProc,
-		sink: StreamSink,
 		signal: AbortSignal | undefined,
 	): () => void {
 		const onAbort = (): void => {
-			if (sink.terminated()) return;
+			if (proc.reducer.terminated) return;
 			this._killChild(proc.child);
-			sink.pushError(new ClaudeCliError('QUERY_FAILED', 'Request was aborted'));
+			this._emitTerminalError(
+				proc,
+				new ClaudeCliError('QUERY_FAILED', 'Request was aborted'),
+			);
 		};
 		if (signal === undefined) return () => undefined;
 		signal.addEventListener('abort', onAbort, { once: true });
 		if (signal.aborted) onAbort();
 		return () => {
 			signal.removeEventListener('abort', onAbort);
-		};
-	}
-
-	/**
-	 * Build a single-fire StreamSink that forwards deltas into the provided
-	 * push channel. `done` and `error` close the channel and mark the sink
-	 * terminated so late-arriving NDJSON events become no-ops.
-	 */
-	private static _sinkFromChannel(channel: PushChannel<StreamDelta>): StreamSink {
-		let sessionIdEmitted = false;
-		let textEmitted = false;
-		let done = false;
-		return {
-			pushText(text: string) {
-				if (done) return;
-				textEmitted = true;
-				channel.push({ type: 'text', text });
-			},
-			pushThinking(text: string) {
-				if (done) return;
-				channel.push({ type: 'thinking', text });
-			},
-			pushToolUseStart(blockId: string, toolName: string, inputJson: string) {
-				if (done) return;
-				channel.push({ type: 'tool-use-start', blockId, toolName, inputJson });
-			},
-			pushToolUseInputDelta(blockId: string, inputJson: string) {
-				if (done) return;
-				channel.push({ type: 'tool-use-input-delta', blockId, inputJson });
-			},
-			pushToolUseStop(blockId: string) {
-				if (done) return;
-				channel.push({ type: 'tool-use-stop', blockId });
-			},
-			pushCompactBoundary(reason?: string) {
-				if (done) return;
-				if (reason === undefined) {
-					channel.push({ type: 'compact-boundary' });
-				} else {
-					channel.push({ type: 'compact-boundary', reason });
-				}
-			},
-			pushUsage(inputTokens: number, outputTokens: number) {
-				if (done) return;
-				channel.push({ type: 'usage', inputTokens, outputTokens });
-			},
-			pushSessionId(sessionId: SessionId) {
-				if (done || sessionIdEmitted) return;
-				sessionIdEmitted = true;
-				channel.push({ type: 'session-id', sessionId });
-			},
-			pushDone() {
-				if (done) return;
-				done = true;
-				channel.push({ type: 'done' });
-				channel.complete();
-			},
-			pushError(error: ClaudeCliError) {
-				if (done) return;
-				done = true;
-				channel.push({ type: 'error', error });
-				channel.complete();
-			},
-			terminated() {
-				return done;
-			},
-			hasText() {
-				return textEmitted;
-			},
 		};
 	}
 
@@ -902,15 +795,16 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 	/**
 	 * Spawn the child and wire up readline + lifecycle listeners. Synchronous
 	 * throws (ENOENT) → err({ CLI_LAUNCH_FAILED }). Async `error` events that
-	 * fire before a terminal sink delta become a sink `error` delta. NDJSON
-	 * `assistant/message`, `system/init`, and `result` events push directly
-	 * into the supplied `sink`.
+	 * fire before a terminal delta become a reducer error delta. NDJSON
+	 * events are translated to `RawClaudeEvent`s and handed to the reducer;
+	 * every delta the reducer returns is pushed into the channel.
 	 */
 	private _spawnChild(
 		binaryPath: string,
 		argv: readonly string[],
 		onSessionId: ((sessionId: SessionId) => void) | null,
-		sink: StreamSink,
+		reducer: StreamDeltaReducer,
+		channel: PushChannel<StreamDelta>,
 	): Result<TurnProc, ClaudeCliError> {
 		let child: ChildProcess;
 		try {
@@ -939,13 +833,11 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 		const proc: TurnProc = {
 			child: childLike,
 			stdoutBuffer: '',
-			sink,
+			reducer,
+			channel,
 			sessionId: null,
 			onSessionId,
 			startTimeMs: Date.now(),
-			turnId: ClaudeSubprocessAdapter._randomTurnId(),
-			toolBlockIds: new Map<number, string>(),
-			lastUsage: null,
 		};
 
 		this._activeChildren.add(childLike);
@@ -988,9 +880,10 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 				event: 'child.error',
 				code: code ?? null,
 			});
-			if (proc.sink.terminated()) return;
+			if (proc.reducer.terminated) return;
 			this._activeChildren.delete(proc.child);
-			proc.sink.pushError(
+			this._emitTerminalError(
+				proc,
 				new ClaudeCliError(
 					'CLI_LAUNCH_FAILED',
 					'Claude CLI subprocess emitted error before completion',
@@ -1006,239 +899,140 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 	}
 
 	/**
-	 * NDJSON dispatch (SPEC §4.3 `_parseNdjson`). Unparseable lines are dropped
-	 * silently (debug log without payload). Recognised events:
+	 * Parse one NDJSON line, translate it to a `RawClaudeEvent`, hand the
+	 * event to the reducer, and push every emitted delta into the channel.
+	 * Unparseable lines are dropped silently (debug log without payload).
 	 *
-	 *   - `system/init`                         → push session-id delta
-	 *   - `assistant/message`                   → push text delta
-	 *   - `result`                              → push `done` / `error` delta
-	 *
-	 * PR-ASV-2-delta-extension extends the dispatch with the SDK-style
-	 * `stream_event` envelope so the subprocess transport reaches feature
-	 * parity with the in-process SDK adapter:
-	 *
-	 *   - `system` (subtype `'compact_boundary'`)            → compact-boundary
-	 *   - `stream_event` `content_block_start` (tool_use)    → tool-use-start
-	 *   - `stream_event` `content_block_delta` `text_delta`  → text
-	 *   - `stream_event` `content_block_delta` `thinking_delta` → thinking
-	 *   - `stream_event` `content_block_delta` `input_json_delta` → tool-use-input-delta
-	 *   - `stream_event` `content_block_stop` (tool_use)     → tool-use-stop
-	 *   - `stream_event` `message_start` / `message_delta`
-	 *     with `.usage`                                      → usage
+	 * The recognised wire shapes are documented on `_ndjsonToRawEvent`. New
+	 * wire events should be added there, NOT here.
 	 */
 	private _handleNdjsonLine(proc: TurnProc, line: string): void {
 		const event = this._parseNdjsonLine(line);
 		if (event === null) return;
-
-		const eventType = typeof event.type === 'string' ? event.type : '';
-
-		if (eventType === 'system/init') {
-			this._handleSystemInit(proc, event);
-		} else if (eventType === 'assistant/message') {
-			this._handleAssistantMessage(proc, event);
-		} else if (eventType === 'result') {
-			this._handleResult(proc, event);
-		} else if (eventType === 'system') {
-			this._handleSystemEvent(proc, event);
-		} else if (eventType === 'stream_event') {
-			this._handleStreamEvent(proc, event);
-		}
-		// Unknown event types are ignored (forward-compat with new CLI events).
+		const raw = ClaudeSubprocessAdapter._ndjsonToRawEvent(event);
+		if (raw === null) return;
+		this._emitFromReducer(proc, raw);
 	}
 
 	/**
-	 * Dispatch the SDK-style `system` envelope. The `'init'` subtype is also
-	 * handled here (in addition to the legacy `system/init` event type) so the
-	 * subprocess transport can consume either wire format. The `'compact_boundary'`
-	 * subtype emits a `compact-boundary` delta with the optional `reason` /
-	 * `trigger` field.
+	 * Translate one NDJSON record into a `RawClaudeEvent` for the codec seam.
+	 * The subprocess transport emits a mix of legacy (`system/init`,
+	 * `assistant/message`) and SDK-style (`system`/`stream_event`) shapes;
+	 * this is the single place that normalises both into the reducer's
+	 * input alphabet.
+	 *
+	 * Returns `null` for unknown event types (forward-compat with new CLI
+	 * events) and for malformed `system` envelopes with no recognised subtype.
 	 */
-	private _handleSystemEvent(proc: TurnProc, event: Record<string, unknown>): void {
-		const subtype = typeof event.subtype === 'string' ? event.subtype : '';
-		if (subtype === 'init') {
-			this._handleSystemInit(proc, event);
-			return;
+	private static _ndjsonToRawEvent(
+		event: Record<string, unknown>,
+	): RawClaudeEvent | null {
+		const eventType = typeof event.type === 'string' ? event.type : '';
+		if (eventType === 'system/init') return ClaudeSubprocessAdapter._systemInitRaw(event);
+		if (eventType === 'assistant/message') {
+			const text = typeof event.text === 'string' ? event.text : '';
+			return { kind: 'assistant-message', text };
 		}
+		if (eventType === 'result') return ClaudeSubprocessAdapter._resultRaw(event);
+		if (eventType === 'system') return ClaudeSubprocessAdapter._systemEnvelopeRaw(event);
+		if (eventType === 'stream_event') return ClaudeSubprocessAdapter._streamEventRaw(event);
+		return null;
+	}
+
+	private static _resultRaw(event: Record<string, unknown>): RawClaudeEvent {
+		const subtype = typeof event.subtype === 'string' ? event.subtype : undefined;
+		const result = typeof event.result === 'string' ? event.result : undefined;
+		const isError = event.is_error === true ? true : undefined;
+		return { kind: 'result', subtype, result, is_error: isError };
+	}
+
+	private static _streamEventRaw(event: Record<string, unknown>): RawClaudeEvent {
+		const inner =
+			typeof event.event === 'object' && event.event !== null
+				? (event.event as RawStreamEventInner)
+				: (event as RawStreamEventInner);
+		return { kind: 'stream-event', event: inner };
+	}
+
+	private static _systemInitRaw(event: Record<string, unknown>): RawClaudeEvent {
+		const sid =
+			typeof event.session_id === 'string' && event.session_id.length > 0
+				? event.session_id
+				: null;
+		return { kind: 'system-init', sessionId: sid };
+	}
+
+	private static _systemEnvelopeRaw(event: Record<string, unknown>): RawClaudeEvent | null {
+		const subtype = typeof event.subtype === 'string' ? event.subtype : '';
+		if (subtype === 'init') return ClaudeSubprocessAdapter._systemInitRaw(event);
 		if (subtype === 'compact_boundary') {
 			const reasonRaw = event.reason ?? event.trigger;
 			const reason =
 				typeof reasonRaw === 'string' && reasonRaw.length > 0 ? reasonRaw : undefined;
-			proc.sink.pushCompactBoundary(reason);
+			if (reason === undefined) return { kind: 'system-compact-boundary' };
+			return { kind: 'system-compact-boundary', reason };
 		}
+		return null;
 	}
 
 	/**
-	 * Dispatch the SDK-style `stream_event` envelope. The Anthropic SDK nests
-	 * the raw Anthropic event under `event.event`; the subprocess transport
-	 * may also produce a flatter form where the event fields sit directly on
-	 * the line. We accept both — when `event.event` is an object, dispatch
-	 * uses it; otherwise we treat the outer envelope itself as the event.
+	 * Hand a `RawClaudeEvent` to the reducer, push every emitted delta into
+	 * the channel, fire the `onSessionId` callback exactly once when the
+	 * reducer emits its `session-id` delta, capture the session id for
+	 * telemetry, and complete the channel when the reducer terminates.
 	 */
-	private _handleStreamEvent(proc: TurnProc, envelope: Record<string, unknown>): void {
-		const inner =
-			typeof envelope.event === 'object' && envelope.event !== null
-				? (envelope.event as Record<string, unknown>)
-				: envelope;
-		const innerType = typeof inner.type === 'string' ? inner.type : '';
-		if (innerType === 'content_block_start') {
-			this._handleContentBlockStart(proc, inner);
-		} else if (innerType === 'content_block_delta') {
-			this._handleContentBlockDelta(proc, inner);
-		} else if (innerType === 'content_block_stop') {
-			this._handleContentBlockStop(proc, inner);
-		} else if (innerType === 'message_start' || innerType === 'message_delta') {
-			this._handleStreamUsage(proc, inner);
+	private _emitFromReducer(proc: TurnProc, raw: RawClaudeEvent): void {
+		if (proc.reducer.terminated) return;
+		const deltas = proc.reducer.consume(raw);
+		let terminal = false;
+		for (const delta of deltas) {
+			if (delta.type === 'session-id') {
+				proc.sessionId = delta.sessionId;
+				this._fireOnSessionId(proc, delta.sessionId);
+			}
+			if (delta.type === 'done' || delta.type === 'error') terminal = true;
+			proc.channel.push(delta);
 		}
+		// `done` / `error` are always terminal — close the channel so the
+		// iterable's caller sees the stream end.
+		if (terminal) proc.channel.complete();
 	}
 
 	/**
-	 * Open a tool_use content block (text / thinking blocks need no
-	 * dedicated start delta — their first delta carries everything the
-	 * consumer needs). Builds a stable `blockId` from the per-turn `turnId`
-	 * and the SDK-supplied `index` and tracks it in `proc.toolBlockIds` so
-	 * subsequent `input_json_delta` / `content_block_stop` events can correlate.
+	 * Emit a terminal `error` delta through the reducer (so the dedup /
+	 * single-fire invariants stay in one place) and complete the channel.
+	 * Safe to call repeatedly — the reducer is idempotent post-termination.
 	 */
-	private _handleContentBlockStart(proc: TurnProc, event: Record<string, unknown>): void {
-		const block = event.content_block;
-		if (typeof block !== 'object' || block === null) return;
-		const blockRecord = block as Record<string, unknown>;
-		if (blockRecord.type !== 'tool_use') return;
-		const index = ClaudeSubprocessAdapter._extractIndex(event);
-		if (index === null) return;
-		const blockId = `${proc.turnId}-${index}`;
-		proc.toolBlockIds.set(index, blockId);
-		const toolName = typeof blockRecord.name === 'string' ? blockRecord.name : '';
-		// Codex P1 on PR #386: `content_block_start` `input` is a placeholder
-		// (commonly `{}`); the real payload arrives via subsequent
-		// `input_json_delta.partial_json` chunks. Seeding with the
-		// placeholder produced invalid JSON (`{}{"command":...}`) by
-		// `tool-use-stop`. Always seed empty. Parity with SDK adapter
-		// (`ClaudeCliAdapter._dispatchContentBlockStart`).
-		proc.sink.pushToolUseStart(blockId, toolName, '');
+	private _emitTerminalError(proc: TurnProc, error: ClaudeCliError): void {
+		for (const delta of proc.reducer.emitError(error)) {
+			proc.channel.push(delta);
+		}
+		proc.channel.complete();
 	}
 
 	/**
-	 * Dispatch the three inner `content_block_delta` variants we care about:
-	 * `text_delta`, `thinking_delta`, `input_json_delta`. Anything else is a
-	 * no-op (e.g. citations) — additive contract. Extracted into per-variant
-	 * helpers to keep cyclomatic complexity below the lint cap.
+	 * REQ-ASM-031 — fire the optional caller-supplied `onSessionId` callback
+	 * exactly once. The callback is cleared after the first invocation so a
+	 * misbehaving CLI that emits multiple `system/init` events cannot
+	 * double-call the caller. The reducer also enforces session-id
+	 * single-fire at the delta level (defence-in-depth).
 	 */
-	private _handleContentBlockDelta(proc: TurnProc, event: Record<string, unknown>): void {
-		const delta = event.delta;
-		if (typeof delta !== 'object' || delta === null) return;
-		const deltaRecord = delta as Record<string, unknown>;
-		const deltaType = typeof deltaRecord.type === 'string' ? deltaRecord.type : '';
-		if (deltaType === 'text_delta') {
-			this._dispatchTextDelta(proc, deltaRecord);
-		} else if (deltaType === 'thinking_delta') {
-			this._dispatchThinkingDelta(proc, deltaRecord);
-		} else if (deltaType === 'input_json_delta') {
-			this._dispatchInputJsonDelta(proc, event, deltaRecord);
+	private _fireOnSessionId(proc: TurnProc, sid: SessionId): void {
+		if (proc.onSessionId === null) return;
+		const cb = proc.onSessionId;
+		proc.onSessionId = null;
+		try {
+			cb(sid);
+		} catch (e: unknown) {
+			// NFR-ASM-005 — never log the session id. Callback failures must
+			// not tear down the turn; surface them only as a debug log.
+			this._logger.debug('subscription.onSessionId.threw', {
+				transport: 'subscription',
+				event: 'onSessionId.threw',
+			});
+			void e;
 		}
 	}
-
-	private _dispatchTextDelta(proc: TurnProc, deltaRecord: Record<string, unknown>): void {
-		const text = typeof deltaRecord.text === 'string' ? deltaRecord.text : '';
-		if (text.length > 0) proc.sink.pushText(text);
-	}
-
-	private _dispatchThinkingDelta(proc: TurnProc, deltaRecord: Record<string, unknown>): void {
-		const text = typeof deltaRecord.thinking === 'string' ? deltaRecord.thinking : '';
-		if (text.length > 0) proc.sink.pushThinking(text);
-	}
-
-	private _dispatchInputJsonDelta(
-		proc: TurnProc,
-		event: Record<string, unknown>,
-		deltaRecord: Record<string, unknown>,
-	): void {
-		const index = ClaudeSubprocessAdapter._extractIndex(event);
-		if (index === null) return;
-		const blockId = proc.toolBlockIds.get(index);
-		if (blockId === undefined) return;
-		const partial =
-			typeof deltaRecord.partial_json === 'string' ? deltaRecord.partial_json : '';
-		proc.sink.pushToolUseInputDelta(blockId, partial);
-	}
-
-	/** Close a tool_use content block. Non-tool indices are no-ops. */
-	private _handleContentBlockStop(proc: TurnProc, event: Record<string, unknown>): void {
-		const index = ClaudeSubprocessAdapter._extractIndex(event);
-		if (index === null) return;
-		const blockId = proc.toolBlockIds.get(index);
-		if (blockId === undefined) return;
-		proc.toolBlockIds.delete(index);
-		proc.sink.pushToolUseStop(blockId);
-	}
-
-	/**
-	 * Pull `input_tokens` / `output_tokens` out of a `message_start` /
-	 * `message_delta` frame. `message_start` nests the usage under
-	 * `event.message.usage`; `message_delta` puts it directly on `event.usage`.
-	 */
-	private _handleStreamUsage(proc: TurnProc, event: Record<string, unknown>): void {
-		const usage = ClaudeSubprocessAdapter._extractUsageObject(event);
-		if (usage === null) return;
-		const partial = ClaudeSubprocessAdapter._readPartialUsage(usage);
-		if (partial === null) return;
-		// Codex P2 on PR #386: `message_delta.usage` frames typically include
-		// only the field(s) that changed (often `output_tokens` only).
-		// Missing fields mean "unchanged from the prior frame", NOT zero —
-		// coercing to zero overwrote a previously-captured `input_tokens: N`
-		// with `0`. Merge against `proc.lastUsage` instead. Parity with SDK
-		// adapter (`ClaudeCliAdapter._dispatchUsage`).
-		const prior = proc.lastUsage ?? { input: 0, output: 0 };
-		const merged = {
-			input: partial.input ?? prior.input,
-			output: partial.output ?? prior.output,
-		};
-		// Suppress redundant emits — a `message_delta` that brings no new
-		// info shouldn't generate a delta.
-		if (
-			proc.lastUsage !== null &&
-			merged.input === proc.lastUsage.input &&
-			merged.output === proc.lastUsage.output
-		) {
-			return;
-		}
-		proc.lastUsage = merged;
-		proc.sink.pushUsage(merged.input, merged.output);
-	}
-
-	private static _extractUsageObject(
-		event: Record<string, unknown>,
-	): Record<string, unknown> | null {
-		const direct = event.usage;
-		if (typeof direct === 'object' && direct !== null) {
-			return direct as Record<string, unknown>;
-		}
-		const messageField = event.message;
-		if (typeof messageField !== 'object' || messageField === null) return null;
-		const nested = (messageField as Record<string, unknown>).usage;
-		if (typeof nested !== 'object' || nested === null) return null;
-		return nested as Record<string, unknown>;
-	}
-
-	/**
-	 * Read possibly-partial usage fields. Each field is `null` when missing
-	 * (so the caller merges against prior state) rather than coerced to 0.
-	 * Returns `null` for the whole frame when neither field is present.
-	 */
-	private static _readPartialUsage(
-		usage: Record<string, unknown>,
-	): { input: number | null; output: number | null } | null {
-		const input = typeof usage.input_tokens === 'number' ? usage.input_tokens : null;
-		const output = typeof usage.output_tokens === 'number' ? usage.output_tokens : null;
-		if (input === null && output === null) return null;
-		return { input, output };
-	}
-
-	/** Pull a finite numeric `index` field off an SDK content_block event. */
-	private static _extractIndex(event: Record<string, unknown>): number | null {
-		const raw = event.index;
-		return typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
-	}
-
 
 	/**
 	 * Mint a per-turn id used to namespace `blockId`s within one `queryStream`
@@ -1288,78 +1082,6 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 	}
 
 	/**
-	 * REQ-ASM-031 — capture `session_id` from a `system/init` event and fire
-	 * the optional caller-supplied `onSessionId` callback exactly once. The
-	 * callback is cleared after the first invocation so a misbehaving CLI that
-	 * emits multiple `system/init` events cannot double-call the caller.
-	 *
-	 * The sink itself also enforces single-fire of `session-id` deltas as a
-	 * defence-in-depth — even if a future change to this method calls
-	 * `pushSessionId` more than once, the consumer sees exactly one delta.
-	 */
-	private _handleSystemInit(proc: TurnProc, event: Record<string, unknown>): void {
-		const sid = event.session_id;
-		if (typeof sid !== 'string' || sid.length === 0) return;
-		const branded = asSessionId(sid);
-		proc.sessionId = branded;
-		proc.sink.pushSessionId(branded);
-		if (proc.onSessionId !== null) {
-			const cb = proc.onSessionId;
-			// Single-fire: drop the reference before invoking so a re-entrant
-			// callback (e.g. one that triggers a synthetic event) cannot recurse.
-			proc.onSessionId = null;
-			try {
-				cb(branded);
-			} catch (e: unknown) {
-				// NFR-ASM-005 — never log the session id. Callback failures must not
-				// tear down the turn; surface them only as a debug log.
-				this._logger.debug('subscription.onSessionId.threw', {
-					transport: 'subscription',
-					event: 'onSessionId.threw',
-				});
-				void e;
-			}
-		}
-	}
-
-	/** Forward `text` deltas from `assistant/message` events into the sink. */
-	private _handleAssistantMessage(proc: TurnProc, event: Record<string, unknown>): void {
-		if (typeof event.text !== 'string') return;
-		proc.sink.pushText(event.text);
-	}
-
-	/**
-	 * Resolve the in-flight turn from a `result` event. Maps `is_error: true`
-	 * to QUERY_FAILED per REQ-ASM-030. If no `assistant/message` deltas have
-	 * arrived (degenerate CLI emitting only `result`), the `result.result`
-	 * string is forwarded as a fallback `text` delta before `done`.
-	 */
-	private _handleResult(proc: TurnProc, event: Record<string, unknown>): void {
-		if (proc.sink.terminated()) return;
-
-		const isError = event.is_error === true;
-		if (isError) {
-			proc.sink.pushError(
-				new ClaudeCliError('QUERY_FAILED', 'Claude CLI returned result event with is_error=true'),
-			);
-			return;
-		}
-
-		// Defensive fallback for transports that emit `result.result` without
-		// preceding `assistant/message` deltas — surface the result text as a
-		// single `text` delta so `query()`'s text-collecting wrapper still
-		// returns the response body. Skipped when assistant text already
-		// arrived, otherwise the response body would be duplicated.
-		if (!proc.sink.hasText()) {
-			const explicit = typeof event.result === 'string' ? event.result : null;
-			if (explicit !== null && explicit.length > 0) {
-				proc.sink.pushText(explicit);
-			}
-		}
-		proc.sink.pushDone();
-	}
-
-	/**
 	 * Subprocess close handler. Non-zero exit while a turn is in flight →
 	 * QUERY_FAILED (REQ-ASM-030). The child is removed from `_activeChildren`
 	 * so it no longer counts toward `shutdown()`'s SIGTERM ladder.
@@ -1373,9 +1095,10 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 			exitCode,
 		});
 
-		if (proc.sink.terminated()) return;
+		if (proc.reducer.terminated) return;
 		if (exitCode !== null && exitCode !== 0) {
-			proc.sink.pushError(
+			this._emitTerminalError(
+				proc,
 				new ClaudeCliError(
 					'QUERY_FAILED',
 					`Claude CLI subprocess exited with code ${exitCode}`,
@@ -1386,7 +1109,8 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 		// Clean close with no terminal delta — treat as QUERY_FAILED rather
 		// than hanging (mirrors the pre-refactor "Subprocess closed before
 		// result event" branch).
-		proc.sink.pushError(
+		this._emitTerminalError(
+			proc,
 			new ClaudeCliError('QUERY_FAILED', 'Subprocess closed before result event'),
 		);
 	}
