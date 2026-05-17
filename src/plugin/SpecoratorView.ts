@@ -30,7 +30,9 @@ import type { TransportKind } from '@/domain/chat/TransportKind'
 import type { TransportSelection } from '@/plugin/transport/TransportSelector'
 import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore'
 import { useMessagesStore } from '@/ui/stores/messagesStore'
-import { mostRecentlyUsedThreadId } from './chatThreadsPersistence'
+import { mostRecentlyUsedThreadId } from '@/infrastructure/chat/chatThreadsCodec'
+import type { ChatThreadsRepositoryPort } from '@/domain/ports/ChatThreadsRepositoryPort'
+import { CHAT_THREADS_REPO } from '@/infrastructure/bridge/ports'
 import { trySync } from '@/domain/shared/tryAsync'
 import type SpecoratorPlugin from './main'
 
@@ -49,6 +51,14 @@ export type SelectTransportFactory = (settings: PluginSettings) => TransportSele
 export interface SpecoratorViewOptions {
   readonly subscriptionAdapter: ClaudeCliPort
   readonly selectTransport: SelectTransportFactory
+  /**
+   * Persistence port for the `chatThreads` map (SPEC-ASM-001 §9.3,
+   * WP-14). When provided, `onOpen()` calls `load()` to seed the chat-threads
+   * store and forwards subsequent mutations to `save()`. Optional so legacy
+   * test wiring continues to compile; absent → no persistence (store starts
+   * empty, mutations are not persisted).
+   */
+  readonly chatThreadsRepo?: ChatThreadsRepositoryPort
   /**
    * Production-grade modal adapter (`ObsidianConfirmModalAdapter`) constructed
    * in `main.ts`'s `onload()` (SPEC-ASM-001 §9.1). Provided to Vue under
@@ -164,7 +174,7 @@ export class SpecoratorView extends ItemView {
   getDisplayText(): string { return 'Specorator' }
   getIcon(): string { return 'layout-dashboard' }
 
-  onOpen(): Promise<void> {
+  async onOpen(): Promise<void> {
     const container = this.containerEl.children[1] as HTMLElement
     container.empty()
 
@@ -180,19 +190,23 @@ export class SpecoratorView extends ItemView {
     this.pinia = createPinia()
 
     // SPEC-ASM-001 §9.5 / REQ-ASM-037 — hydrate persisted chat threads into
-    // the Pinia chat store before the view mounts. The plugin decoded the
-    // blob during `loadSettings()`; malformed records were already filtered
-    // out and logged at `warn`. `activeThreadId` is seeded to the most
-    // recently used record so the chat sidebar resumes the user's last
-    // conversation. Subscribe to subsequent mutations so any change to
-    // `chatThreads` triggers a debounced flush back to plugin data.
-    const persisted = this.plugin.getInitialChatThreads()
+    // the Pinia chat store before the view mounts. WP-14 lifted the
+    // persistence side-channel onto `ChatThreadsRepositoryPort`: load via
+    // `repo.load()`, then subscribe + forward mutations to `repo.save()`.
+    // The codec drops malformed records and logs at `warn` (SPEC §11.3).
+    // `activeThreadId` is seeded to the most recently used record so the
+    // chat sidebar resumes the user's last conversation.
     const threadsStore = useChatThreadsStore(this.pinia)
-    for (const record of persisted) threadsStore.upsertThread(record)
-    threadsStore.setActiveThreadId(mostRecentlyUsedThreadId(persisted))
-    threadsStore.$subscribe((_mutation, state) => {
-      this.plugin.scheduleChatThreadsPersistence(state.chatThreads)
-    })
+    const repo = this._options?.chatThreadsRepo
+    if (repo !== undefined) {
+      const persistedMap = await repo.load()
+      const persistedList = Array.from(persistedMap.values())
+      for (const record of persistedList) threadsStore.upsertThread(record)
+      threadsStore.setActiveThreadId(mostRecentlyUsedThreadId(persistedList))
+      threadsStore.$subscribe((_mutation, state) => {
+        void repo.save(state.chatThreads)
+      })
+    }
 
     this._installPendingRefreshWatcher()
 
@@ -228,6 +242,9 @@ export class SpecoratorView extends ItemView {
     this.vueApp.provide(COMMUNITY_PLUGIN_PORT, bridge)
     if (this.plugin.secretStore !== null) {
       this.vueApp.provide(SECRET_STORE_PORT, this.plugin.secretStore)
+    }
+    if (this._options?.chatThreadsRepo !== undefined) {
+      this.vueApp.provide(CHAT_THREADS_REPO, this._options.chatThreadsRepo)
     }
     // REQ-ASM-044 / SPEC-ASM-001 §9.5 — production-grade confirmation modal
     // for proposal-flow accepts. `ChatSidebar` injects this via
@@ -290,7 +307,6 @@ export class SpecoratorView extends ItemView {
     this._router = router
 
     this.vueApp.mount(mountPoint)
-    return Promise.resolve()
   }
 
   onClose(): Promise<void> {

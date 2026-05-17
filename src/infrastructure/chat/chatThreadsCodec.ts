@@ -3,7 +3,7 @@ import { asSessionId } from '@/domain/chat/SessionId'
 import type { LoggerPort } from '@/domain/ports/LoggerPort'
 
 /**
- * Pure helpers for the `chatThreads` plugin-data blob defined by
+ * Pure codec helpers for the `chatThreads` plugin-data blob defined by
  * SPEC-ASM-001 §9.3 (REQ-ASM-037, ADR-0031).
  *
  * The blob lives under `_storedData.specorator.chatThreads` and serialises the
@@ -17,7 +17,11 @@ import type { LoggerPort } from '@/domain/ports/LoggerPort'
  *   - `transport === 'degraded'` records are not persisted (degraded threads
  *     have no resumable session and are user-session-scoped).
  *
- * No `obsidian` imports — pure functions consumed by `main.ts`.
+ * No `obsidian` imports — pure functions consumed by the
+ * `ChatThreadsRepositoryPort` adapters (`ObsidianChatThreadsRepository`,
+ * `MockChatThreadsRepository`). Relocated from `src/plugin/chatThreadsPersistence.ts`
+ * in WP-14 so the codec sits in `infrastructure/` and the persistence
+ * adapters can share it.
  */
 
 /** JSON-friendly serialisation of a `ChatThreadRecord`. */

@@ -2,6 +2,7 @@ import { vi } from 'vitest'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { MockMetadataCacheAdapter } from '@/infrastructure/mock/MockMetadataCacheAdapter'
 import { MockCanvasAdapter } from '@/infrastructure/mock/MockCanvasAdapter'
+import { MockChatThreadsRepository } from '@/infrastructure/mock/MockChatThreadsRepository'
 import type {
   SettingsPort,
   VaultPort,
@@ -37,12 +38,14 @@ export interface FakePorts {
   readonly bridge: MockBridge
   readonly metadataCache: MockMetadataCacheAdapter
   readonly canvas: MockCanvasAdapter
+  readonly chatThreadsRepo: MockChatThreadsRepository
 }
 
 export function fakeModulePorts(): FakePorts {
   const bridge = new MockBridge()
   const metadataCache = new MockMetadataCacheAdapter()
   const canvas = new MockCanvasAdapter()
+  const chatThreadsRepo = new MockChatThreadsRepository()
   return {
     settings: bridge,
     vault: bridge,
@@ -60,5 +63,6 @@ export function fakeModulePorts(): FakePorts {
     bridge,
     metadataCache,
     canvas,
+    chatThreadsRepo,
   }
 }

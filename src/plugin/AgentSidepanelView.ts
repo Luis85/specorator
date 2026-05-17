@@ -26,7 +26,9 @@ import type { TransportKind } from '@/domain/chat/TransportKind';
 import type { TransportSelection } from '@/plugin/transport/TransportSelector';
 import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore';
 import { useMessagesStore } from '@/ui/stores/messagesStore';
-import { mostRecentlyUsedThreadId } from './chatThreadsPersistence';
+import { mostRecentlyUsedThreadId } from '@/infrastructure/chat/chatThreadsCodec';
+import type { ChatThreadsRepositoryPort } from '@/domain/ports/ChatThreadsRepositoryPort';
+import { CHAT_THREADS_REPO } from '@/infrastructure/bridge/ports';
 import { trySync } from '@/domain/shared/tryAsync';
 import type SpecoratorPlugin from './main';
 
@@ -42,6 +44,13 @@ export interface AgentSidepanelViewOptions {
 	readonly subscriptionAdapter: ClaudeCliPort;
 	readonly selectTransport: SelectAgentTransportFactory;
 	readonly confirmModalAdapter?: ConfirmModalPort;
+	/**
+	 * Persistence port for the `chatThreads` map (SPEC-ASM-001 §9.3, WP-14).
+	 * When provided, `onOpen()` calls `load()` to seed the chat-threads store
+	 * and forwards subsequent mutations to `save()`. Optional so legacy test
+	 * wiring continues to compile.
+	 */
+	readonly chatThreadsRepo?: ChatThreadsRepositoryPort;
 	/**
 	 * Optional lifecycle handles for the SDK and subscription transports.
 	 * Split off `ClaudeCliPort` in WP-12 (Arch review #3) — `startup`/`shutdown`
@@ -126,7 +135,7 @@ export class AgentSidepanelView extends ItemView {
 		return 'message-square';
 	}
 
-	onOpen(): Promise<void> {
+	async onOpen(): Promise<void> {
 		const container = this.containerEl.children[1] as HTMLElement;
 		container.empty();
 
@@ -141,19 +150,23 @@ export class AgentSidepanelView extends ItemView {
 
 		this.pinia = createPinia();
 
-		// Hydrate persisted chat threads. The plugin decoded the blob during
-		// `loadSettings()`; malformed records were already filtered out and
-		// logged at `warn`. Seed `activeThreadId` to the most recently used
-		// record so the panel resumes the user's last conversation on reopen.
-		// Subscribe to subsequent mutations so any change to `chatThreads`
-		// triggers the plugin's debounced flush.
-		const persisted = this.plugin.getInitialChatThreads();
+		// Hydrate persisted chat threads via the `ChatThreadsRepositoryPort`
+		// (WP-14 — lifted off `plugin.scheduleChatThreadsPersistence`). The
+		// codec drops malformed records and logs at `warn` (SPEC §11.3). Seed
+		// `activeThreadId` to the most recently used record so the panel
+		// resumes the user's last conversation on reopen. Subscribe to
+		// subsequent mutations and forward to `repo.save()`.
 		const threadsStore = useChatThreadsStore(this.pinia);
-		for (const record of persisted) threadsStore.upsertThread(record);
-		threadsStore.setActiveThreadId(mostRecentlyUsedThreadId(persisted));
-		threadsStore.$subscribe((_mutation, state) => {
-			this.plugin.scheduleChatThreadsPersistence(state.chatThreads);
-		});
+		const repo = this._options?.chatThreadsRepo;
+		if (repo !== undefined) {
+			const persistedMap = await repo.load();
+			const persistedList = Array.from(persistedMap.values());
+			for (const record of persistedList) threadsStore.upsertThread(record);
+			threadsStore.setActiveThreadId(mostRecentlyUsedThreadId(persistedList));
+			threadsStore.$subscribe((_mutation, state) => {
+				void repo.save(state.chatThreads);
+			});
+		}
 
 		this._installPendingRefreshWatcher();
 
@@ -180,6 +193,9 @@ export class AgentSidepanelView extends ItemView {
 		this.vueApp.provide(COMMUNITY_PLUGIN_PORT, bridge);
 		if (this.plugin.secretStore !== null) {
 			this.vueApp.provide(SECRET_STORE_PORT, this.plugin.secretStore);
+		}
+		if (this._options?.chatThreadsRepo !== undefined) {
+			this.vueApp.provide(CHAT_THREADS_REPO, this._options.chatThreadsRepo);
 		}
 		if (this._options?.confirmModalAdapter !== undefined) {
 			this.vueApp.provide(CONFIRM_MODAL_PORT, this._options.confirmModalAdapter);
@@ -219,7 +235,6 @@ export class AgentSidepanelView extends ItemView {
 		window.addEventListener('unhandledrejection', this._onUnhandledRejection);
 
 		this.vueApp.mount(mountPoint);
-		return Promise.resolve();
 	}
 
 	onClose(): Promise<void> {

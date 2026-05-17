@@ -17,7 +17,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { getChatStoresFacade } from '../__fakes__/chatStoresFacade'
+import { getChatStoresFacade } from '../../__fakes__/chatStoresFacade'
 import { asSessionId } from '@/domain/chat/SessionId'
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord'
 import type { LoggerPort } from '@/domain/ports/LoggerPort'
@@ -27,7 +27,7 @@ import {
   mostRecentlyUsedThreadId,
   parseChatThreadRecord,
   type SerialisedChatThreadRecord,
-} from '@/plugin/chatThreadsPersistence'
+} from '@/infrastructure/chat/chatThreadsCodec'
 
 function makeLogger(): LoggerPort {
   return {

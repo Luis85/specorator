@@ -12,6 +12,7 @@ import type {
 	ConfirmModalPort,
 	SecretStorePort,
 	TransportLifecyclePort,
+	ChatThreadsRepositoryPort,
 } from '@/domain/ports'
 import type { MarkdownRenderPort } from '@/domain/ports/MarkdownRenderPort'
 import type { TransportKind } from '@/domain/chat/TransportKind'
@@ -43,6 +44,18 @@ export const CONFIRM_MODAL_PORT: InjectionKey<ConfirmModalPort> = Symbol('Confir
  * branch without reading the synced `PluginSettings` blob.
  */
 export const SECRET_STORE_PORT: InjectionKey<SecretStorePort> = Symbol('SecretStorePort')
+/**
+ * Persistence port for the `chatThreads` map (SPEC-ASM-001 §9.3, REQ-ASM-037).
+ * Owned by views: `SpecoratorView.onOpen()` / `AgentSidepanelView.onOpen()`
+ * call `load()` to seed the Pinia chat-threads store, then subscribe to the
+ * store and forward mutations to `save()`. WP-14 lifted this off the plugin
+ * layer's `scheduleChatThreadsPersistence` side-channel into a narrow port
+ * (ADR-008) so the codec lives in `infrastructure/chat/` and the production
+ * adapter (`ObsidianChatThreadsRepository`) owns the debounce.
+ */
+export const CHAT_THREADS_REPO: InjectionKey<ChatThreadsRepositoryPort> = Symbol(
+	'ChatThreadsRepositoryPort',
+)
 /**
  * Optional `MarkdownRenderPort` provided by the Obsidian view. When
  * present, `MarkdownBlock.vue` delegates rendering to Obsidian's native
