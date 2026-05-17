@@ -20,12 +20,15 @@ import {
   CLAUDE_CLI_PORT,
   COMMUNITY_PLUGIN_PORT,
   SECRET_STORE_PORT,
+  MARKDOWN_RENDER_PORT,
   OPEN_PLUGIN_SETTINGS_KEY,
 } from '@/infrastructure/bridge/ports'
 import { LocalStorageBridge } from '@/infrastructure/localstorage/LocalStorageBridge'
 import { LocalStorageSecretStore } from '@/infrastructure/localstorage/LocalStorageSecretStore'
+import { LocalStorageMarkdownRenderPort } from '@/infrastructure/localstorage/LocalStorageMarkdownRenderPort'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { MockSecretStore } from '@/infrastructure/mock/MockSecretStore'
+import { MockMarkdownRenderPort } from '@/infrastructure/mock/MockMarkdownRenderPort'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { FeatureService } from '@/application/feature/FeatureService'
 import { FeedbackService } from '@/application/shared/FeedbackService'
@@ -38,6 +41,9 @@ import type { TranslationPort } from '@/domain/ports'
 
 const bridge = import.meta.env.PROD ? new LocalStorageBridge() : new MockBridge(DEV_FIXTURES)
 const secretStore = import.meta.env.PROD ? new LocalStorageSecretStore() : new MockSecretStore()
+const markdownRenderPort = import.meta.env.PROD
+  ? new LocalStorageMarkdownRenderPort()
+  : new MockMarkdownRenderPort()
 const mountPoint = document.querySelector('#app')
 
 mountPoint?.classList.add('specorator-root')
@@ -74,6 +80,7 @@ void bridge.getSettings()
     app.provide(CLAUDE_CLI_PORT, bridge)
     app.provide(COMMUNITY_PLUGIN_PORT, bridge)
     app.provide(SECRET_STORE_PORT, secretStore)
+    app.provide(MARKDOWN_RENDER_PORT, markdownRenderPort)
     // The Obsidian build provides this via `SpecoratorView.onOpen()` and
     // opens the real plugin settings tab. In the standalone browser UI
     // there is no Obsidian `App`, so route to the in-app Vue `/settings`

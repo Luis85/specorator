@@ -15,11 +15,18 @@ import { i18n } from '@/ui/i18n';
 import { useMessagesStore } from '@/ui/stores/messagesStore';
 import { useStreamingTurnStore } from '@/ui/stores/streamingTurnStore';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
+import { MARKDOWN_RENDER_PORT } from '@/infrastructure/bridge/ports';
+import { MockMarkdownRenderPort } from '@/infrastructure/mock/MockMarkdownRenderPort';
 import { MessageListPO } from './MessageList.po';
 
 function mountList(threadId: string | null) {
 	const wrapper = mount(MessageList, {
-		global: { plugins: [i18n] },
+		global: {
+			plugins: [i18n],
+			provide: {
+				[MARKDOWN_RENDER_PORT as symbol]: new MockMarkdownRenderPort(),
+			},
+		},
 		props: { threadId },
 	});
 	return { wrapper, po: new MessageListPO(wrapper) };
@@ -46,7 +53,12 @@ function mountWithScrollMetrics(
 	// eslint-disable-next-line obsidianmd/prefer-active-doc -- test-only mount
 	const attachTarget = document.body;
 	const wrapper = mount(MessageList, {
-		global: { plugins: [i18n] },
+		global: {
+			plugins: [i18n],
+			provide: {
+				[MARKDOWN_RENDER_PORT as symbol]: new MockMarkdownRenderPort(),
+			},
+		},
 		props: { threadId },
 		attachTo: attachTarget,
 	});
@@ -223,6 +235,26 @@ describe('MessageList', () => {
 		expect(bubble.attributes('aria-live')).toBe('off');
 	});
 
+	it('streaming bubble renders raw <pre> text and skips the markdown port (WP-4)', () => {
+		const store = useMessagesStore();
+		const tid = 'thread-streaming-bypass';
+		store.appendMessage(msg(tid, 'user', { text: 'Hi' }));
+		store.beginRequest();
+		const streamingStore = useStreamingTurnStore();
+		// Source contains `**bold**` markdown; the bypass MUST NOT parse it.
+		streamingStore.appendStreamingDelta('partial **bold** delta');
+		const { wrapper } = mountList(tid);
+		const bubble = wrapper.find('[data-testid="agent-message-streaming"]');
+		expect(bubble.exists()).toBe(true);
+		// The in-flight MarkdownBlock renders as <pre>, not the port <div>.
+		const streamingBlock = bubble.find('[data-testid="agent-markdown-block"]');
+		expect(streamingBlock.exists()).toBe(true);
+		expect(streamingBlock.element.tagName).toBe('PRE');
+		expect(streamingBlock.text()).toContain('**bold**');
+		// No port-rendered <strong> markup during streaming.
+		expect(bubble.findAll('strong')).toHaveLength(0);
+	});
+
 	it('announces ONCE per completed assistant turn (WP-7 a11y #1)', async () => {
 		// Mount MessageList with an injected announcer; spy on `announce` and
 		// assert exactly one call fires when a completed assistant message
@@ -263,7 +295,14 @@ describe('MessageList', () => {
 				return h(MessageList, { threadId: tid });
 			},
 		});
-		mount(Host, { global: { plugins: [i18n] } });
+		mount(Host, {
+			global: {
+				plugins: [i18n],
+				provide: {
+					[MARKDOWN_RENDER_PORT as symbol]: new MockMarkdownRenderPort(),
+				},
+			},
+		});
 		// Initial mount with one user message; no assistant transition yet.
 		expect(spy).not.toHaveBeenCalled();
 

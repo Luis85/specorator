@@ -12,11 +12,18 @@ import MessageList from '@/ui/components/agent/MessageList.vue';
 import { i18n } from '@/ui/i18n';
 import { useMessagesStore } from '@/ui/stores/messagesStore';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
+import { MARKDOWN_RENDER_PORT } from '@/infrastructure/bridge/ports';
+import { MockMarkdownRenderPort } from '@/infrastructure/mock/MockMarkdownRenderPort';
 import { MessageListCompactBoundaryPO } from './MessageList.compactBoundary.po';
 
 function mountList(threadId: string | null) {
 	const wrapper = mount(MessageList, {
-		global: { plugins: [i18n] },
+		global: {
+			plugins: [i18n],
+			provide: {
+				[MARKDOWN_RENDER_PORT as symbol]: new MockMarkdownRenderPort(),
+			},
+		},
 		props: { threadId },
 	});
 	return { wrapper, po: new MessageListCompactBoundaryPO(wrapper) };

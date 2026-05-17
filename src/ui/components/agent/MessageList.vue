@@ -360,6 +360,7 @@ watch(
 					v-if="streamingText.length > 0"
 					class="sp-agent-message__text"
 					:text="streamingText"
+					:streaming="true"
 				/>
 				<span
 					class="sp-agent-message__cursor"

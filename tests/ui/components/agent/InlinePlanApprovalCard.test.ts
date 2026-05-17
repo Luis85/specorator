@@ -7,6 +7,8 @@ import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import InlinePlanApprovalCard from '@/ui/components/agent/InlinePlanApprovalCard.vue';
 import { i18n } from '@/ui/i18n';
+import { MARKDOWN_RENDER_PORT } from '@/infrastructure/bridge/ports';
+import { MockMarkdownRenderPort } from '@/infrastructure/mock/MockMarkdownRenderPort';
 import { InlinePlanApprovalCardPO } from './InlinePlanApprovalCard.po';
 
 function mountCard(
@@ -23,7 +25,12 @@ function mountCard(
 	} = {},
 ) {
 	return mount(InlinePlanApprovalCard, {
-		global: { plugins: [i18n] },
+		global: {
+			plugins: [i18n],
+			provide: {
+				[MARKDOWN_RENDER_PORT as symbol]: new MockMarkdownRenderPort(),
+			},
+		},
 		// eslint-disable-next-line obsidianmd/prefer-active-doc -- jsdom test runner has no Obsidian popout windows.
 		attachTo: document.body,
 		props: {
@@ -169,8 +176,13 @@ describe('InlinePlanApprovalCard', () => {
 	});
 
 	describe('UX #19 (WP-8) — plan body renders through MarkdownBlock', () => {
-		it('renders the plan markdown via MarkdownBlock instead of a raw <pre>', () => {
+		it('renders the plan markdown via MarkdownBlock instead of a raw <pre>', async () => {
 			const w = mountCard({ planMarkdown: 'Step **one** is bold.' });
+			// MarkdownBlock now writes DOM via the async port; flush the
+			// post-watch tick + the awaited render's microtask before
+			// asserting on the rendered tree.
+			await nextTick();
+			await nextTick();
 			const plan = w.find('[data-testid="agent-plan-approval-plan"]');
 			expect(plan.exists()).toBe(true);
 			// MarkdownBlock emits the formatted HTML; bold markdown should
