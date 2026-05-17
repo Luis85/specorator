@@ -6,7 +6,7 @@ slug: agent-sidepanel-v3
 current_stage: implementation-log
 status: active
 last_updated: 2026-05-17
-last_agent: pm
+last_agent: dev
 createdAt: 2026-05-17T00:00:00+02:00
 updatedAt: 2026-05-17T00:00:00+02:00
 artifacts:
@@ -71,3 +71,4 @@ None.
 | Date | From | To | Note |
 | --- | --- | --- | --- |
 | 2026-05-17 | pm | dev | Six parallel reviewer subagents completed against the agent-sidepanel-v2 stack on `develop`. Findings consolidated into 15 work packages. Lanes 1 (Spine) and 2 (Store + UX) launched first per PM direction. Each implementer subagent runs a RALPH loop scoped to its WP folder; one PR per WP, all targeting `develop`. |
+| 2026-05-17 | dev | dev | **WP-3 merged** (PR [#396](https://github.com/Luis85/specorator/pull/396)). WP-2 (`ChatTurnOrchestrator`) unblocked; brief written; implementer subagent dispatched on `claude/asv3-wp02-chat-turn-orchestrator`. WP-1 codec seam (PR [#397](https://github.com/Luis85/specorator/pull/397)) still in review; once it merges, WP-11 + WP-12 will launch in parallel on the Spine lane. |

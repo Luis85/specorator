@@ -6,9 +6,9 @@
 
 | # | Title | Lane | Status | Depends on | Branch |
 | --- | --- | --- | --- | --- | --- |
-| WP-1 | StreamDelta codec seam + subprocess dedup | Spine | in-progress | — | `claude/asv3-wp01-stream-codec-seam` |
-| WP-2 | ChatTurnOrchestrator + drop doubled output panel | Store + UX | queued | WP-3 | `claude/asv3-wp02-chat-turn-orchestrator` |
-| WP-3 | chatStore → Threads / StreamingTurn / Proposals | Store + UX | in-progress | — | `claude/asv3-wp03-chatstore-split` |
+| WP-1 | StreamDelta codec seam + subprocess dedup | Spine | review (PR [#397](https://github.com/Luis85/specorator/pull/397)) | — | `claude/asv3-wp01-stream-codec-seam` |
+| WP-2 | ChatTurnOrchestrator + drop doubled output panel | Store + UX | in-progress | WP-3 ✓ | `claude/asv3-wp02-chat-turn-orchestrator` |
+| WP-3 | chatStore → Threads / StreamingTurn / Proposals | Store + UX | **merged** ([#396](https://github.com/Luis85/specorator/pull/396)) | — | `claude/asv3-wp03-chatstore-split` |
 | WP-4 | Markdown port as only path + bypass during stream + safeHref tighten | Markdown | queued | — | `claude/asv3-wp04-markdown-hardening` |
 | WP-5 | SessionLogWriter O(turn) append + Mirror facade | Log | queued | — | `claude/asv3-wp05-session-log-append` |
 | WP-6 | VueSidepanelHost + ReactiveClaudeCliPort + resolve OQ-ASV-3 | Mount | queued | — | `claude/asv3-wp06-mount-unification` |
