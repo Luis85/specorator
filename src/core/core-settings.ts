@@ -79,7 +79,6 @@ export const coreSettingsModule = defineModule<PluginSettings>({
       mcpServerEnabled: coerceBoolean(r.mcpServerEnabled, DEFAULT_SETTINGS.mcpServerEnabled),
       userPersona: coercePassthroughString(r.userPersona, DEFAULT_SETTINGS.userPersona),
       onboardingComplete: coerceBoolean(r.onboardingComplete, DEFAULT_SETTINGS.onboardingComplete),
-      anthropicApiKey: coercePassthroughString(r.anthropicApiKey, DEFAULT_SETTINGS.anthropicApiKey),
       claudeCliPath: coerceTrimmedString(r.claudeCliPath, DEFAULT_SETTINGS.claudeCliPath),
       transportKind: coerceEnum(r.transportKind, VALID_TRANSPORT_KINDS, DEFAULT_SETTINGS.transportKind),
     }

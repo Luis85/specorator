@@ -67,7 +67,6 @@ function makeBridge(
 	const bridge = new MockBridge(files)
 	const merged: PluginSettings = {
 		...DEFAULT_SETTINGS,
-		anthropicApiKey: 'sk-ant-test',
 		...settings,
 	}
 	vi.spyOn(bridge, 'getSettings').mockResolvedValue(merged)

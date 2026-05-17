@@ -102,7 +102,6 @@ function makeBridge(
 	const bridge = new MockBridge(files)
 	const settings: PluginSettings = {
 		...DEFAULT_SETTINGS,
-		anthropicApiKey: 'sk-ant-test',
 		...overrides,
 	}
 	vi.spyOn(bridge, 'getSettings').mockResolvedValue(settings)
@@ -218,7 +217,7 @@ describe('ChatSidebar — session-persistence wiring (T-ASM-057)', () => {
 		// available). The thread record must reflect what actually ran,
 		// not the raw setting value.
 		const { po, store } = await mountSidebar({
-			settings: { transportKind: 'auto', anthropicApiKey: '' },
+			settings: { transportKind: 'auto' },
 			resolvedTransportKind: 'subscription',
 		})
 		await send(store, po, 'hello')
@@ -228,7 +227,7 @@ describe('ChatSidebar — session-persistence wiring (T-ASM-057)', () => {
 
 	it('records api-key when the resolved kind is api-key under auto mode (mirror of the above)', async () => {
 		const { po, store } = await mountSidebar({
-			settings: { transportKind: 'auto', anthropicApiKey: 'sk-test' },
+			settings: { transportKind: 'auto' },
 			resolvedTransportKind: 'api-key',
 		})
 		await send(store, po, 'hello')

@@ -11,7 +11,6 @@ import type { Result } from '@/domain/shared/Result';
 import { ok, err } from '@/domain/shared/Result';
 import { asSessionId, type SessionId } from '@/domain/chat/SessionId';
 import type { LoggerPort } from '@/domain/ports';
-import type { PluginSettings } from '@/domain/settings/PluginSettings';
 
 /**
  * Loosely-typed view of the SDK message union. Only the fields actually
@@ -85,19 +84,25 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 	private _available = false;
 	/** Indicates whether SDK has been initialized. */
 	private _sdkReady = false;
-	/** Getter for current plugin settings. Injected; never stored as a snapshot. */
-	private readonly _getSettings: () => PluginSettings;
+	/**
+	 * Sync accessor for the Anthropic API key. Injected by the plugin layer so
+	 * `_apiKeyCache` (hydrated from `SecretStorePort` at `loadSettings()` time)
+	 * stays the single source of truth — the SDK call sites must remain
+	 * synchronous, so we cannot call the async `secretStorage.getSecret()` on
+	 * each request.
+	 */
+	private readonly _getApiKey: () => string;
 	/** Logger for internal diagnostics. Never logs the API key value. */
 	private readonly _logger: LoggerPort;
 	/** Binary resolver — injectable for testability (defaults to require.resolve). */
 	private readonly _resolveCliPath: () => string;
 
 	constructor(
-		getSettings: () => PluginSettings,
+		getApiKey: () => string,
 		logger: LoggerPort,
 		resolveCliPath?: () => string,
 	) {
-		this._getSettings = getSettings;
+		this._getApiKey = getApiKey;
 		this._logger = logger;
 		this._resolveCliPath =
 			resolveCliPath ??
@@ -116,12 +121,12 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 		// Idempotency guard: shutdown() resets _sdkReady, so a post-shutdown re-start is allowed.
 		if (this._sdkReady) return;
 
-		const key = this._getSettings().anthropicApiKey.trim();
+		const key = this._getApiKey().trim();
 
 		// Step 1: Check for empty/whitespace key.
 		if (!key) {
 			this._logger.warn(
-				'ClaudeCliAdapter.startup(): anthropicApiKey is empty — adapter will not start',
+				'ClaudeCliAdapter.startup(): Anthropic API key is empty — adapter will not start',
 			);
 			this._available = false;
 			return;
@@ -193,7 +198,7 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 	 * Satisfies REQ-CCS-018, REQ-CCS-019, REQ-CCS-022, SPEC-CCS-001 §5.4.
 	 */
 	async isAvailable(): Promise<boolean> {
-		return this._available && this._getSettings().anthropicApiKey.trim() !== '';
+		return this._available && this._getApiKey().trim() !== '';
 	}
 
 	/**
@@ -258,7 +263,7 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 				error: new ClaudeCliError(this._unavailableCode(), 'ClaudeCliAdapter is not available'),
 			};
 		}
-		const currentKey = this._getSettings().anthropicApiKey.trim();
+		const currentKey = this._getApiKey().trim();
 		if (currentKey === '') {
 			return { type: 'error', error: new ClaudeCliError('API_KEY_MISSING', 'API key is missing') };
 		}
@@ -659,7 +664,7 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 	// ── Private helpers ───────────────────────────────────────────────────────
 
 	private _unavailableCode(): 'API_KEY_MISSING' | 'NOT_INSTALLED' {
-		return this._getSettings().anthropicApiKey.trim() === '' ? 'API_KEY_MISSING' : 'NOT_INSTALLED';
+		return this._getApiKey().trim() === '' ? 'API_KEY_MISSING' : 'NOT_INSTALLED';
 	}
 
 	private _clampTimeout(raw?: number): number {

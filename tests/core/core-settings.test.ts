@@ -265,13 +265,12 @@ describe('coreSettingsModule.validateSettings', () => {
 
 describe('coreSettingsModule.settingsSchema', () => {
   it('exposes a field descriptor for every module-driven PluginSettings key', () => {
-    // `anthropicApiKey` is rendered outside the module loop (SPEC-CCS-001 §8.3, D-CCS-002).
     // `claudeCliPath` is rendered by the custom ClaudeCliPathField.vue component
     // (SPEC-ASM-001 §7.5, T-ASM-016) and `transportKind` is not a user-facing
     // settings field (its value is driven by transport-selection logic).
-    // All three are intentionally absent from settingsSchema.fields.
+    // The Anthropic key is no longer on PluginSettings — it lives in
+    // `SecretStorePort` and is rendered outside the module loop.
     const manuallyRenderedKeys: ReadonlyArray<keyof PluginSettings> = [
-      'anthropicApiKey',
       'claudeCliPath',
       'transportKind',
     ]

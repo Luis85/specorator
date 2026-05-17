@@ -159,7 +159,7 @@ describe('scheduleChatThreadsPersistence — debounced flush (T-ASM-054)', () =>
 
   it('writes a single blob after the 1 s debounce window expires', async () => {
     const { plugin, state } = makePlugin({
-      specorator: { locale: 'en', specsFolder: 'specs', anthropicApiKey: '' },
+      specorator: { locale: 'en', specsFolder: 'specs' },
     })
     const map = new Map<string, ChatThreadRecord>([['t1', makeRecord({ threadId: 't1' })]])
 
@@ -203,7 +203,6 @@ describe('scheduleChatThreadsPersistence — debounced flush (T-ASM-054)', () =>
       specorator: {
         locale: 'en',
         specsFolder: 'specs',
-        anthropicApiKey: 'sk-test',
         claudeCliPath: '/usr/local/bin/claude',
         transportKind: 'auto',
       },
@@ -216,7 +215,6 @@ describe('scheduleChatThreadsPersistence — debounced flush (T-ASM-054)', () =>
     const specorator = state.blob?.specorator as Record<string, unknown>
     expect(specorator.locale).toBe('en')
     expect(specorator.specsFolder).toBe('specs')
-    expect(specorator.anthropicApiKey).toBe('sk-test')
     expect(specorator.claudeCliPath).toBe('/usr/local/bin/claude')
     expect(specorator.transportKind).toBe('auto')
     // Sibling top-level keys outside `specorator` survive too.
@@ -427,7 +425,6 @@ describe('updateSettings preserves sibling keys under specorator (Codex P1, PR #
       specorator: {
         locale: 'en',
         specsFolder: 'specs',
-        anthropicApiKey: '',
         claudeCliPath: '',
         transportKind: 'auto',
         chatThreads: {
@@ -471,7 +468,6 @@ describe('updateSettings preserves sibling keys under specorator (Codex P1, PR #
       specorator: {
         locale: 'en',
         specsFolder: 'specs',
-        anthropicApiKey: 'old-key',
         claudeCliPath: '',
         transportKind: 'auto',
       },
@@ -483,12 +479,11 @@ describe('updateSettings preserves sibling keys under specorator (Codex P1, PR #
       ...(initialData.specorator as Record<string, unknown>),
     } as unknown as typeof plugin.settings
 
-    await plugin.updateSettings({ anthropicApiKey: 'new-key' })
+    await plugin.updateSettings({ specsFolder: 'notes' })
 
     const saved = state.blob as { specorator?: Record<string, unknown> }
-    expect(saved.specorator?.anthropicApiKey).toBe('new-key')
+    expect(saved.specorator?.specsFolder).toBe('notes')
     // Other settings keys preserved.
     expect(saved.specorator?.locale).toBe('en')
-    expect(saved.specorator?.specsFolder).toBe('specs')
   })
 })

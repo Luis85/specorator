@@ -9,6 +9,8 @@ import { usePlatform } from '@/ui/composables/usePlatform';
 import { useVaultPort } from '@/ui/composables/useVaultPort';
 import { useWorkspacePort } from '@/ui/composables/useWorkspacePort';
 import { useSettingsPort } from '@/ui/composables/useSettingsPort';
+import { useSecretStorePort } from '@/ui/composables/useSecretStorePort';
+import { SECRET_ID_ANTHROPIC } from '@/domain/ports';
 import { useLoggerPort } from '@/ui/composables/useLoggerPort';
 import { useSessionLogWriter } from '@/ui/composables/useSessionLogWriter';
 import { buildPrompt } from '@/application/chat/buildPrompt';
@@ -64,6 +66,7 @@ const { isMobile } = usePlatform();
 const vaultPort = useVaultPort();
 const workspacePort = useWorkspacePort();
 const settingsPort = useSettingsPort();
+const secretStorePort = useSecretStorePort();
 const loggerPort = useLoggerPort();
 const sessionLogWriterFactory = useSessionLogWriter();
 
@@ -1035,11 +1038,16 @@ function handleSelectCommand(command: SlashCommand): void {
 	emit('select-command', command);
 }
 
-// Determine if API key is missing when unavailable
+// Determine if API key is missing when unavailable. Reads from
+// `SecretStorePort` (OS keychain) since the Anthropic key no longer lives in
+// the synced `PluginSettings` blob. Codex P2: wrap in `tryAsync` so a
+// transient keychain error degrades to "missing" (the same fallback the
+// `available === false` branch produces) instead of bubbling up.
 async function isApiKeyMissing(): Promise<boolean> {
-	const settings = await settingsPort.getSettings();
-	// Cast to string|undefined: legacy stored settings may lack this field at runtime.
-	return ((settings.anthropicApiKey as string | undefined) ?? '').trim() === '';
+	if (!secretStorePort.available) return true;
+	const outcome = await tryAsync(() => secretStorePort.getSecret(SECRET_ID_ANTHROPIC));
+	if (!outcome.ok) return true;
+	return (outcome.value ?? '').trim() === '';
 }
 
 const apiKeyMissing = ref(false);

@@ -14,6 +14,7 @@ import {
   CLAUDE_CLI_PORT,
   COMMUNITY_PLUGIN_PORT,
   CONFIRM_MODAL_PORT,
+  SECRET_STORE_PORT,
   IS_MOBILE_KEY,
   SETTINGS_VERSION_KEY,
   TRANSPORT_KIND_KEY,
@@ -214,6 +215,9 @@ export class SpecoratorView extends ItemView {
     })
     this.vueApp.provide(CLAUDE_CLI_PORT, reactivePort)
     this.vueApp.provide(COMMUNITY_PLUGIN_PORT, bridge)
+    if (this.plugin.secretStore !== null) {
+      this.vueApp.provide(SECRET_STORE_PORT, this.plugin.secretStore)
+    }
     // REQ-ASM-044 / SPEC-ASM-001 §9.5 — production-grade confirmation modal
     // for proposal-flow accepts. `ChatSidebar` injects this via
     // `useConfirmModalPort()` (PR-ASM-4 batch 7). The provide is

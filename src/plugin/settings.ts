@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { ClaudeBinaryResolver, type ResolverPlatform } from '@/infrastructure/obsidian/ClaudeBinaryResolver'
 import { tryAsync, trySync } from '@/domain/shared/tryAsync'
+import { SECRET_ID_ANTHROPIC } from '@/domain/ports'
 import type { ModuleDescriptor, SettingsFieldDescriptor } from '@/modules/module'
 import { VIEW_TYPE, SpecoratorView } from './SpecoratorView'
 import { VIEW_TYPE_AGENT, AgentSidepanelView } from './AgentSidepanelView'
@@ -159,30 +160,47 @@ export class SpecoratorSettingTab extends PluginSettingTab {
    * Renders the Anthropic API key password field outside the module-driven settings loop.
    * Satisfies REQ-CCS-001, NFR-CCS-006, SPEC-CCS-001 §8.3.
    *
-   * The key is stored in the plugin data blob (not in any vault file).
+   * The key is stored in Obsidian's `App.secretStorage` (desktop ≥1.11.4) via
+   * `SecretStorePort`, NOT in the synced `PluginSettings` blob — the latter is
+   * mirrored by Obsidian Sync and would leak the key across devices.
    * `inputEl.type = 'password'` masks the value (NFR-CCS-006).
    * `autocomplete = 'off'` prevents browser/OS autofill.
    * onChange handler trims whitespace before saving.
    */
   private renderAnthropicKeyField(): void {
+    const secretStore = this.plugin.secretStore
+    const writable = secretStore?.available ?? false
+    const desc = writable
+      ? "Required to use the AI assistant. Stored in this device's OS keychain (not synced)."
+      : "Required to use the AI assistant. This Obsidian build does not expose the OS keychain, so the field is read-only here."
+
     new Setting(this.containerEl)
       .setName('Anthropic key')
-      .setDesc(
-        "Required to use the AI assistant. Stored in this device's plugin settings. " +
-          'If you use Obsidian Sync, your key will be included in the sync — use a key scoped to your personal devices.',
-      )
+      .setDesc(desc)
       .addText((text) => {
         text.inputEl.type = 'password'
         text.inputEl.autocomplete = 'off'
         text.inputEl.setAttribute('data-testid', 'settings-anthropic-key')
+        if (!writable) {
+          text.inputEl.disabled = true
+        }
         text
           // eslint-disable-next-line obsidianmd/ui/sentence-case
           .setPlaceholder('sk-ant-…')
-          .setValue(this.plugin.settings.anthropicApiKey)
+          .setValue(this.plugin.getApiKeyCache())
           .onChange(async (value) => {
-            await this.plugin.updateSettings({ anthropicApiKey: value.trim() })
-            // T-CCS-037: signal ChatSidebar to re-check adapter availability.
-            this._bumpAllViews()
+            const store = secretStore
+            if (store === null) return
+            if (!store.available) return
+            // Codex P2: persisting via the OS keychain can fail (locked
+            // keychain, OS denial). Surface as a no-op rather than throwing
+            // out of the onChange handler — the input keeps the user's
+            // typed value but `_apiKeyCache` is unchanged on error.
+            const outcome = await tryAsync(() =>
+              store.setSecret(SECRET_ID_ANTHROPIC, value.trim()),
+            )
+            if (!outcome.ok) return
+            await this.plugin.refreshApiKeyCache()
           })
       })
   }

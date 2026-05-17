@@ -65,7 +65,6 @@ function makeBridge(): MockBridge {
 	const bridge = new MockBridge();
 	const settings: PluginSettings = {
 		...DEFAULT_SETTINGS,
-		anthropicApiKey: 'sk-ant-test',
 	};
 	vi.spyOn(bridge, 'getSettings').mockResolvedValue(settings);
 	return bridge;

@@ -353,7 +353,6 @@ describe('settings + chatThreads coexistence (T-ASM-053 / SPEC §9.3)', () => {
       specorator: {
         locale: 'en',
         specsFolder: 'specs',
-        anthropicApiKey: 'sk-test',
         claudeCliPath: '/usr/local/bin/claude',
         transportKind: 'auto',
       },
@@ -377,7 +376,6 @@ describe('settings + chatThreads coexistence (T-ASM-053 / SPEC §9.3)', () => {
     // PluginSettings keys preserved.
     expect((nextStored.specorator as Record<string, unknown>).locale).toBe('en')
     expect((nextStored.specorator as Record<string, unknown>).specsFolder).toBe('specs')
-    expect((nextStored.specorator as Record<string, unknown>).anthropicApiKey).toBe('sk-test')
     expect((nextStored.specorator as Record<string, unknown>).claudeCliPath).toBe('/usr/local/bin/claude')
     // chatThreads attached as sibling key under specorator.
     expect((nextStored.specorator as Record<string, unknown>).chatThreads).toEqual({

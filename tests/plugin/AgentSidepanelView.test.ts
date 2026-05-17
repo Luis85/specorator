@@ -70,6 +70,7 @@ interface Fixture {
 	readonly plugin: { settings: PluginSettings };
 	readonly options: AgentSidepanelViewOptions;
 	readonly cliResolvedRef: { value: boolean };
+	readonly apiKeyPresentRef: { value: boolean };
 	readonly confirmModalAdapter: ConfirmModalPort;
 }
 
@@ -77,11 +78,18 @@ function makeConfirmModalAdapter(): ConfirmModalPort {
 	return { show: vi.fn(async () => true) };
 }
 
-function makeFixture(initialSettings: Partial<PluginSettings>, cliResolved = false): Fixture {
+interface FixtureOptions {
+	readonly transportKind?: PluginSettings['transportKind'];
+	readonly apiKeyPresent?: boolean;
+	readonly cliResolved?: boolean;
+}
+
+function makeFixture(opts: FixtureOptions = {}): Fixture {
 	const sdkAdapter = makePort('sdk');
 	const subscriptionAdapter = makePort('subscription');
 	const degradedPort = degradedClaudeCliPort;
-	const cliResolvedRef = { value: cliResolved };
+	const cliResolvedRef = { value: opts.cliResolved ?? false };
+	const apiKeyPresentRef = { value: opts.apiKeyPresent ?? false };
 	const confirmModalAdapter = makeConfirmModalAdapter();
 
 	const selectTransportSpy = vi.fn((settings: PluginSettings): TransportSelection => {
@@ -90,11 +98,14 @@ function makeFixture(initialSettings: Partial<PluginSettings>, cliResolved = fal
 			subscriptionAdapter,
 			degradedPort,
 			cliResolved: cliResolvedRef.value,
+			apiKeyPresent: apiKeyPresentRef.value,
 		};
 		return selectTransport(settings, deps);
 	});
 
-	const plugin = { settings: makeSettings(initialSettings) };
+	const plugin = {
+		settings: makeSettings(opts.transportKind !== undefined ? { transportKind: opts.transportKind } : {}),
+	};
 
 	const options: AgentSidepanelViewOptions = {
 		subscriptionAdapter,
@@ -110,6 +121,7 @@ function makeFixture(initialSettings: Partial<PluginSettings>, cliResolved = fal
 		plugin,
 		options,
 		cliResolvedRef,
+		apiKeyPresentRef,
 		confirmModalAdapter,
 	};
 }
@@ -162,37 +174,33 @@ describe('AgentSidepanelView transport wiring', () => {
 	});
 
 	it('passes plugin.settings to the selector at construction time', () => {
-		const fixture = makeFixture({ transportKind: 'auto', anthropicApiKey: 'sk-live-abc' }, false);
+		const fixture = makeFixture({ transportKind: 'auto', apiKeyPresent: true, cliResolved: false });
 		makeView(fixture);
 		expect(fixture.selectTransportSpy).toHaveBeenCalledTimes(1);
 		const callArg = fixture.selectTransportSpy.mock.calls[0][0] as PluginSettings;
-		expect(callArg.anthropicApiKey).toBe('sk-live-abc');
 		expect(callArg.transportKind).toBe('auto');
 	});
 
 	it('transportKind="api-key" + key present → resolves to sdkAdapter', () => {
-		const fixture = makeFixture(
-			{ transportKind: 'api-key', anthropicApiKey: 'sk-test-key' },
-			false,
-		);
+		const fixture = makeFixture({ transportKind: 'api-key', apiKeyPresent: true, cliResolved: false });
 		const view = makeView(fixture);
 		expect(activePort(view)).toBe(fixture.sdkAdapter);
 	});
 
 	it('transportKind="subscription" + cliResolved=true → resolves to subscriptionAdapter', () => {
-		const fixture = makeFixture({ transportKind: 'subscription', anthropicApiKey: '' }, true);
+		const fixture = makeFixture({ transportKind: 'subscription', apiKeyPresent: false, cliResolved: true });
 		const view = makeView(fixture);
 		expect(activePort(view)).toBe(fixture.subscriptionAdapter);
 	});
 
 	it('fully degraded (auto + empty key + cliResolved=false) → resolves to degradedPort', () => {
-		const fixture = makeFixture({ transportKind: 'auto', anthropicApiKey: '' }, false);
+		const fixture = makeFixture({ transportKind: 'auto', apiKeyPresent: false, cliResolved: false });
 		const view = makeView(fixture);
 		expect(activePort(view)).toBe(fixture.degradedPort);
 	});
 
 	it('getActiveTransportKind() mirrors the selector verdict', () => {
-		const fixture = makeFixture({ transportKind: 'api-key', anthropicApiKey: 'sk' }, false);
+		const fixture = makeFixture({ transportKind: 'api-key', apiKeyPresent: true, cliResolved: false });
 		const view = makeView(fixture);
 		expect(view.getActiveTransportKind()).toBe('api-key');
 	});
@@ -204,7 +212,7 @@ describe('AgentSidepanelView.bumpSettingsVersion()', () => {
 	});
 
 	it('re-runs the selector when called', () => {
-		const fixture = makeFixture({ transportKind: 'api-key', anthropicApiKey: 'sk' }, false);
+		const fixture = makeFixture({ transportKind: 'api-key', apiKeyPresent: true, cliResolved: false });
 		const view = makeView(fixture);
 		expect(fixture.selectTransportSpy).toHaveBeenCalledTimes(1);
 		view.bumpSettingsVersion();
@@ -214,7 +222,7 @@ describe('AgentSidepanelView.bumpSettingsVersion()', () => {
 	});
 
 	it('reflects a transport change made between two bumpSettingsVersion calls', () => {
-		const fixture = makeFixture({ transportKind: 'subscription', anthropicApiKey: '' }, false);
+		const fixture = makeFixture({ transportKind: 'subscription', apiKeyPresent: false, cliResolved: false });
 		const view = makeView(fixture);
 		// At construction cliResolved=false → degraded
 		expect(activePort(view)).toBe(fixture.degradedPort);

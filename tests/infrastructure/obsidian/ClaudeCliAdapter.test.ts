@@ -6,8 +6,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort'
-import type { PluginSettings } from '@/domain/settings/PluginSettings'
-import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
 // We mock the SDK module so no real subprocess is spawned in unit tests.
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
@@ -16,10 +14,6 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
 
 // Import after mocks are set up
 const { ClaudeCliAdapter } = await import('@/infrastructure/obsidian/ClaudeCliAdapter')
-
-function makeSettings(overrides: Partial<PluginSettings> = {}): PluginSettings {
-  return { ...DEFAULT_SETTINGS, ...overrides }
-}
 
 /** Returns an async generator that yields one SDKResultSuccess message. */
 async function* makeSuccessGen(resultText: string) {
@@ -41,11 +35,11 @@ async function* makeHangingGen() {
 
 describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter', () => {
   let bridge: MockBridge
-  let getSettings: () => PluginSettings
+  let getApiKey: () => string
 
   beforeEach(() => {
     bridge = new MockBridge()
-    getSettings = () => makeSettings()
+    getApiKey = () => ''
     vi.clearAllMocks()
   })
 
@@ -54,27 +48,26 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
   })
 
   describe('startup()', () => {
-    // (a) startup() with empty key: sets _available=false, returns without throwing
-    it('with empty anthropicApiKey: _available=false, does not throw', async () => {
-      getSettings = () => makeSettings({ anthropicApiKey: '' })
-      const adapter = new ClaudeCliAdapter(getSettings, bridge)
+    it('with empty key: _available=false, does not throw', async () => {
+      getApiKey = () => ''
+      const adapter = new ClaudeCliAdapter(getApiKey, bridge)
       await expect(adapter.startup()).resolves.toBeUndefined()
       expect(await adapter.isAvailable()).toBe(false)
     })
 
     it('with empty key: logs a warn and does not proceed', async () => {
-      getSettings = () => makeSettings({ anthropicApiKey: '' })
-      const adapter = new ClaudeCliAdapter(getSettings, bridge)
+      getApiKey = () => ''
+      const adapter = new ClaudeCliAdapter(getApiKey, bridge)
       await adapter.startup()
       const warnLogs = bridge.logEntries.filter((e) => e.level === 'warn')
       expect(warnLogs.length).toBeGreaterThan(0)
-      expect(warnLogs[0].message).toContain('anthropicApiKey is empty')
+      expect(warnLogs[0].message).toContain('Anthropic API key is empty')
     })
 
     // (b) startup() with key but resolver throws: _available=false, does not throw — TEST-CCS-025
     it('with key but resolver throws: _available=false, does not throw', async () => {
-      getSettings = () => makeSettings({ anthropicApiKey: 'sk-ant-test' })
-      const adapter = new ClaudeCliAdapter(getSettings, bridge, () => {
+      getApiKey = () => 'sk-ant-test'
+      const adapter = new ClaudeCliAdapter(getApiKey, bridge, () => {
         throw new Error('MODULE_NOT_FOUND')
       })
       await expect(adapter.startup()).resolves.toBeUndefined()
@@ -83,10 +76,9 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
       expect(warnLogs.some((e) => e.message.includes('binary not found'))).toBe(true)
     })
 
-    // (c) startup() success: _available=true
     it('with key and valid resolver: _available=true after startup', async () => {
-      getSettings = () => makeSettings({ anthropicApiKey: 'sk-ant-test' })
-      const adapter = new ClaudeCliAdapter(getSettings, bridge, () => '/fake/claude')
+      getApiKey = () => 'sk-ant-test'
+      const adapter = new ClaudeCliAdapter(getApiKey, bridge, () => '/fake/claude')
       await adapter.startup()
       expect(await adapter.isAvailable()).toBe(true)
     })
@@ -94,9 +86,9 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
     // TEST-CCS-002: env key set before SDK usage
     it('sets process.env.ANTHROPIC_API_KEY before binary resolution — TEST-CCS-002', async () => {
       const apiKey = 'sk-ant-env-test'
-      getSettings = () => makeSettings({ anthropicApiKey: apiKey })
+      getApiKey = () => apiKey
       let capturedEnv: string | undefined
-      const adapter = new ClaudeCliAdapter(getSettings, bridge, () => {
+      const adapter = new ClaudeCliAdapter(getApiKey, bridge, () => {
         capturedEnv = process.env.ANTHROPIC_API_KEY
         return '/fake/claude'
       })
@@ -105,27 +97,25 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
     })
   })
 
-  // (d) isAvailable() returns this._available
   describe('isAvailable()', () => {
     it('returns false before startup', async () => {
-      getSettings = () => makeSettings({ anthropicApiKey: 'sk-ant-test' })
-      const adapter = new ClaudeCliAdapter(getSettings, bridge, () => '/fake/claude')
+      getApiKey = () => 'sk-ant-test'
+      const adapter = new ClaudeCliAdapter(getApiKey, bridge, () => '/fake/claude')
       expect(await adapter.isAvailable()).toBe(false)
     })
 
     it('returns true after successful startup', async () => {
-      getSettings = () => makeSettings({ anthropicApiKey: 'sk-ant-test' })
-      const adapter = new ClaudeCliAdapter(getSettings, bridge, () => '/fake/claude')
+      getApiKey = () => 'sk-ant-test'
+      const adapter = new ClaudeCliAdapter(getApiKey, bridge, () => '/fake/claude')
       await adapter.startup()
       expect(await adapter.isAvailable()).toBe(true)
     })
   })
 
-  // (e) query() when unavailable + empty key returns err(API_KEY_MISSING)
   describe('query() when not available', () => {
     it('with empty key returns err(API_KEY_MISSING)', async () => {
-      getSettings = () => makeSettings({ anthropicApiKey: '' })
-      const adapter = new ClaudeCliAdapter(getSettings, bridge)
+      getApiKey = () => ''
+      const adapter = new ClaudeCliAdapter(getApiKey, bridge)
       const result = await adapter.query('test prompt')
       expect(result.ok).toBe(false)
       if (result.ok) return
@@ -133,10 +123,9 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
       expect(result.error.errorCode).toBe('API_KEY_MISSING')
     })
 
-    // (f) query() when unavailable + non-empty key returns err(NOT_INSTALLED)
     it('with non-empty key but not started returns err(NOT_INSTALLED)', async () => {
-      getSettings = () => makeSettings({ anthropicApiKey: 'sk-ant-test' })
-      const adapter = new ClaudeCliAdapter(getSettings, bridge)
+      getApiKey = () => 'sk-ant-test'
+      const adapter = new ClaudeCliAdapter(getApiKey, bridge)
       const result = await adapter.query('test prompt')
       expect(result.ok).toBe(false)
       if (result.ok) return
@@ -145,11 +134,10 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
     })
   })
 
-  // (g) query() success path
   describe('query() success path', () => {
     it('returns ok(responseText) from SDK result message', async () => {
-      getSettings = () => makeSettings({ anthropicApiKey: 'sk-ant-test' })
-      const adapter = new ClaudeCliAdapter(getSettings, bridge, () => '/fake/claude')
+      getApiKey = () => 'sk-ant-test'
+      const adapter = new ClaudeCliAdapter(getApiKey, bridge, () => '/fake/claude')
       await adapter.startup()
 
       const sdkModule = await import('@anthropic-ai/claude-agent-sdk')
@@ -164,12 +152,11 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
     })
   })
 
-  // (g) query() timeout race — TEST-CCS-016
   describe('query() timeout', () => {
     it('returns err(TIMEOUT) when query exceeds timeoutMs', async () => {
       vi.useFakeTimers()
-      getSettings = () => makeSettings({ anthropicApiKey: 'sk-ant-test' })
-      const adapter = new ClaudeCliAdapter(getSettings, bridge, () => '/fake/claude')
+      getApiKey = () => 'sk-ant-test'
+      const adapter = new ClaudeCliAdapter(getApiKey, bridge, () => '/fake/claude')
       await adapter.startup()
 
       const sdkModule = await import('@anthropic-ai/claude-agent-sdk')
@@ -187,11 +174,10 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
     })
   })
 
-  // (h) query() SDK error mapped to QUERY_FAILED
   describe('query() SDK error mapping', () => {
     it('maps generic SDK error to QUERY_FAILED', async () => {
-      getSettings = () => makeSettings({ anthropicApiKey: 'sk-ant-test' })
-      const adapter = new ClaudeCliAdapter(getSettings, bridge, () => '/fake/claude')
+      getApiKey = () => 'sk-ant-test'
+      const adapter = new ClaudeCliAdapter(getApiKey, bridge, () => '/fake/claude')
       await adapter.startup()
 
       const sdkModule = await import('@anthropic-ai/claude-agent-sdk')
@@ -206,8 +192,8 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
     })
 
     it('maps authentication error to API_KEY_MISSING', async () => {
-      getSettings = () => makeSettings({ anthropicApiKey: 'sk-ant-test' })
-      const adapter = new ClaudeCliAdapter(getSettings, bridge, () => '/fake/claude')
+      getApiKey = () => 'sk-ant-test'
+      const adapter = new ClaudeCliAdapter(getApiKey, bridge, () => '/fake/claude')
       await adapter.startup()
 
       const sdkModule = await import('@anthropic-ai/claude-agent-sdk')
@@ -224,11 +210,10 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
     })
   })
 
-  // (i) shutdown() — TEST-CCS-017
   describe('shutdown()', () => {
     it('sets _available=false after shutdown', async () => {
-      getSettings = () => makeSettings({ anthropicApiKey: 'sk-ant-test' })
-      const adapter = new ClaudeCliAdapter(getSettings, bridge, () => '/fake/claude')
+      getApiKey = () => 'sk-ant-test'
+      const adapter = new ClaudeCliAdapter(getApiKey, bridge, () => '/fake/claude')
       await adapter.startup()
       expect(await adapter.isAvailable()).toBe(true)
       adapter.shutdown()
@@ -236,13 +221,13 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
     })
 
     it('does not throw when called before startup', () => {
-      const adapter = new ClaudeCliAdapter(getSettings, bridge)
+      const adapter = new ClaudeCliAdapter(getApiKey, bridge)
       expect(() => { adapter.shutdown() }).not.toThrow()
     })
 
     it('logs at debug level when adapter was active', async () => {
-      getSettings = () => makeSettings({ anthropicApiKey: 'sk-ant-test' })
-      const adapter = new ClaudeCliAdapter(getSettings, bridge, () => '/fake/claude')
+      getApiKey = () => 'sk-ant-test'
+      const adapter = new ClaudeCliAdapter(getApiKey, bridge, () => '/fake/claude')
       await adapter.startup()
       bridge.logEntries.length = 0
       adapter.shutdown()
