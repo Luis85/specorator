@@ -254,18 +254,23 @@ onBeforeUnmount(() => {
 		</p>
 		<!--
 			WP-7 A11y #2: radiogroup + radio semantics so the row list matches the
-			WAI-ARIA APG arrow-keys pattern. Tabindex follows the active-descendant
-			model: focused row has `tabindex="0"`, the rest `tabindex="-1"`. The
-			root `<section>` keeps `tabindex="0"` and owns the keydown handler so
-			the user can land on it via the previous-focus capture.
+			WAI-ARIA APG arrow-keys pattern. The root `<section>` owns keydown so
+			the user can land on it via previous-focus capture; the radiogroup's
+			`aria-activedescendant` points at the currently-checked row's id so
+			SRs announce the option that was just arrowed onto (Codex P2 round-3
+			on PR #402 — without this, ArrowUp/Down only updated `aria-checked`
+			but assistive tech could miss the change because focus stayed on the
+			section).
 		-->
 		<ul
 			class="sp-plan-approval__rows"
 			role="radiogroup"
 			:aria-label="t('agent.planApprovalAriaLabel')"
+			:aria-activedescendant="`agent-plan-approval-row-${focusedRow}`"
 		>
 			<li
 				v-for="row in rows"
+				:id="`agent-plan-approval-row-${row}`"
 				:key="row"
 				class="sp-plan-approval__row"
 				:class="{ 'sp-plan-approval__row--focused': focusedRow === row }"

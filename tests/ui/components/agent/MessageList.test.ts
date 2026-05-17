@@ -10,7 +10,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
-import { nextTick } from 'vue';
 import MessageList from '@/ui/components/agent/MessageList.vue';
 import { i18n } from '@/ui/i18n';
 import { useMessagesStore } from '@/ui/stores/messagesStore';
