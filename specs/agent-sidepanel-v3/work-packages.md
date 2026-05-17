@@ -12,8 +12,8 @@
 | WP-4 | Markdown port as only path + bypass during stream + safeHref tighten | Markdown | queued | — | `claude/asv3-wp04-markdown-hardening` |
 | WP-5 | SessionLogWriter O(turn) append + Mirror facade | Log | queued | — | `claude/asv3-wp05-session-log-append` |
 | WP-6 | VueSidepanelHost + ReactiveClaudeCliPort + resolve OQ-ASV-3 | Mount | queued | — | `claude/asv3-wp06-mount-unification` |
-| WP-7 | A11y P1 wave: live regions, focus, combobox, focus-return, Esc-aborts | Store + UX | queued | WP-3 | `claude/asv3-wp07-a11y-p1-wave` |
-| WP-8 | UX polish wave: inline /help, scroll-pin, empty state, Stop, plan persistence, pills, EN strings, ContextFileChip | Store + UX | queued | WP-2 | `claude/asv3-wp08-ux-polish-wave` |
+| WP-7 | A11y P1 wave: live regions, focus, combobox, focus-return, Esc-aborts | Store + UX | in-progress | WP-2 ✓ | `claude/asv3-wp07-a11y-p1-wave` |
+| WP-8 | UX polish wave: inline /help, scroll-pin, empty state, Stop, plan persistence, pills, EN strings, ContextFileChip | Store + UX | in-progress | WP-2 ✓ | `claude/asv3-wp08-ux-polish-wave` |
 | WP-9 | Security hardening pass | Security | queued | — | `claude/asv3-wp09-security-hardening` |
 | WP-10 | Perf: tool-call shallowRef, chunk-array, scroll rAF, mention/slash caches, buffer cap | Perf | queued | WP-2, WP-3 | `claude/asv3-wp10-perf-hardening` |
 | WP-11 | ClaudeSubprocessAdapter split (Lifecycle / NdjsonChannel / runStructured) | Spine | in-progress | WP-1 ✓ | `claude/asv3-wp11-subprocess-split` |
