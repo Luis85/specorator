@@ -32,6 +32,7 @@ import {
   SessionLogWriter,
   type ProposalDecisionValue,
   type SessionLogProposalInput,
+  type SessionLogWriterOptions,
 } from './SessionLogWriter'
 
 /**
@@ -90,6 +91,17 @@ export class SessionLogMirror {
   ensureSessionsFolder(feature: string | null): Promise<void> {
     return this.writer.ensureSessionsFolder(feature)
   }
+
+  /**
+   * Drain every pending debounced frontmatter flush owned by the underlying
+   * writer (Codex P1+P2 round-1 fix). Production callers invoke this on
+   * plugin teardown so the last few turns' `updated:` timestamps land on
+   * disk before the writer goes away. Tests invoke it to assert the
+   * post-flush state. Safe to call concurrently.
+   */
+  flushAll(): Promise<void> {
+    return this.writer.flushAll()
+  }
 }
 
 /**
@@ -98,12 +110,20 @@ export class SessionLogMirror {
  * a {@link SessionLogMirror}. Keeps the writer construction call site inside
  * `src/application/chat/` so the WP-5 lint rule that bans direct
  * {@link SessionLogWriter} imports outside this folder stays effective.
+ *
+ * `options.flushDebounceMs` controls the WP-5 frontmatter debounce window
+ * (default 30 s). Tests pass `0` to flush on the next microtask; production
+ * wiring leaves this at the default and relies on `flushAll()` for
+ * deterministic teardown.
  */
 export function createSessionLogMirror(
   vault: VaultPort,
   logger: LoggerPort,
   specsFolder: string,
   nowIso: () => string,
+  options: SessionLogWriterOptions = {},
 ): SessionLogMirror {
-  return new SessionLogMirror(new SessionLogWriter(vault, logger, specsFolder, nowIso))
+  return new SessionLogMirror(
+    new SessionLogWriter(vault, logger, specsFolder, nowIso, options),
+  )
 }

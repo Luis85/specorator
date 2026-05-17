@@ -313,6 +313,7 @@ describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
 			specsFolder: 'notes',
 		})
 		const writeSpy = vi.spyOn(bridge, 'writeFile')
+		const appendSpy = vi.spyOn(bridge, 'appendFile')
 
 		const card = new FileWriteProposalCardPO(wrapper)
 		await card.clickAccept()
@@ -329,12 +330,12 @@ describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
 
 		// Codex P2 follow-up — the terminal failure must mirror to the
 		// session log so the audit trail records the rejected Accept.
-		// `appendProposalDecision` writes a `## proposal` block under the
-		// thread's session log path; we observe the write via writeSpy.
-		const appendCalls = writeSpy.mock.calls.filter(([p]) =>
+		// `appendProposalDecision` lands a `## proposal` block via `appendFile`
+		// on the session log path (Codex P1+P2 round-1 hot path).
+		const auditAppends = appendSpy.mock.calls.filter(([p]) =>
 			typeof p === 'string' && p.endsWith('.md') && p.includes('sessions/'),
 		)
-		expect(appendCalls.length).toBeGreaterThanOrEqual(1)
+		expect(auditAppends.length).toBeGreaterThanOrEqual(1)
 	})
 
 	it('still flips the proposal to failed when settingsPort.getSettings() rejects at Accept time (Codex P2 #3, PR #350)', async () => {
@@ -353,7 +354,7 @@ describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
 		// `getSettings()` rejects at Accept time. The handler must not
 		// propagate the rejection — it must catch it and flip the proposal
 		// to `failed` so the user is not stranded.
-		const writeSpy = vi.spyOn(bridge, 'writeFile')
+		const appendSpy = vi.spyOn(bridge, 'appendFile')
 		vi.spyOn(bridge, 'getSettings').mockRejectedValueOnce(new Error('boom: settings read failed'))
 
 		const card = new FileWriteProposalCardPO(wrapper)
@@ -363,11 +364,12 @@ describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
 		expect(store.proposals.get(proposalId)?.status).toBe('failed')
 		// Codex P2 #4 — terminal failure must mirror to the session log
 		// regardless of which pre-commit branch rejected (settings read,
-		// revalidation, …). One audit row should land under sessions/.
-		const auditCalls = writeSpy.mock.calls.filter(([p]) =>
+		// revalidation, …). The audit row lands via `appendFile` on the
+		// session log path (Codex P1+P2 round-1 hot path).
+		const auditAppends = appendSpy.mock.calls.filter(([p]) =>
 			typeof p === 'string' && p.endsWith('.md') && p.includes('sessions/'),
 		)
-		expect(auditCalls.length).toBeGreaterThanOrEqual(1)
+		expect(auditAppends.length).toBeGreaterThanOrEqual(1)
 	})
 
 	it('still flips the proposal to failed when the revalidation audit mirror itself throws (Codex P2 #2, PR #350)', async () => {

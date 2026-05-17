@@ -24,17 +24,33 @@
  *     departure from fire-and-forget is `appendProposalDecision`, which the
  *     proposal-commit pipeline awaits for its audit row (REQ-ASM-046).
  *
- * **WP-5 hot-path rewrite (2026-05-17):** the writer used to read the full log
- * back from disk and rewrite it on every append (O(N²) bytes for N turns).
- * It now keeps a per-path `LogPathCache` of `{ frontmatter, body }` seeded on
- * first append, calls `VaultPort.appendFile` for each new block (O(1) on the
- * wire for adapters with native append, O(content) for the localstorage shim),
- * and rewrites only the frontmatter window via `VaultPort.writeFile` so the
- * `updated:` timestamp stays accurate. The cache is per `SessionLogWriter`
- * instance — the composable layer already caches the writer (cf.
- * `useSessionLogWriter`) so a single Obsidian session shares one cache. A
- * second writer process racing on the same vault file would invalidate this
- * cache, but Obsidian is single-window so that case is theoretical.
+ * **WP-5 hot-path rewrite (2026-05-17, Codex P1+P2 round-1):**
+ *
+ * The previous WP-5 implementation kept the entire session body in memory and
+ * rewrote `${frontmatter}${cache.body}` via `writeFile` on every append to
+ * keep the `updated:` timestamp current. That preserved a per-turn full-file
+ * write (O(N²) cumulative bytes), defeating the perf win. It also clobbered
+ * any out-of-band edits made to the body between turns.
+ *
+ * The corrected design:
+ *
+ *   1. **Body is append-only on disk.** Each turn issues exactly one
+ *      `VaultPort.appendFile(path, blockOnWire)` call. No `writeFile` of the
+ *      body is ever performed after the seed.
+ *   2. **Frontmatter `updated:` is debounced.** On every append the writer
+ *      schedules a flush via `setTimeout` (default 30 s, configurable via
+ *      `flushDebounceMs`). When the debounce fires we `readFile(path)` once,
+ *      splice the new frontmatter onto whatever body is currently on disk,
+ *      and `writeFile` the result. This both (a) keeps the `updated:` field
+ *      eventually consistent without per-turn full-file writes and (b)
+ *      preserves any out-of-band edits to the body — the flush reads the
+ *      live body rather than overwriting it from a stale in-memory cache.
+ *   3. **Explicit drain.** `flushAll()` synchronously cancels every pending
+ *      debounce and awaits its flush. Production callers should invoke this
+ *      on plugin teardown; tests use it to assert the post-flush state.
+ *
+ * The per-path cache now stores only frontmatter shape (`fields`,
+ * `bodyEndsWithNewline`) — the body itself is *not* mirrored in memory.
  *
  * Trust-first invariant (NFR-ASM-004 / ADR-0031): this class never reads
  * anything under `~/.claude/`; all I/O is mediated by `VaultPort`.
@@ -84,6 +100,68 @@ export class SessionLogNoSessionError extends Error {
     )
     Object.setPrototypeOf(this, new.target.prototype)
   }
+}
+
+/**
+ * No-op rejection handler for fire-and-forget paths where we intentionally
+ * drop the rejection (`logger.error` has already fired inside the handler).
+ * Pulled out so the `@typescript-eslint/no-empty-function` lint rule can be
+ * satisfied with a named symbol rather than `() => {}`.
+ */
+function swallow(): void {
+  /* intentionally empty — see callers' inline comments */
+}
+
+/**
+ * Opaque timer handle for the debounced frontmatter flush. Node returns a
+ * `Timeout` object, browsers return a number — both satisfy this branded
+ * marker type without exposing host-specific runtime types to the
+ * application layer. The adapter that injects the timer functions
+ * (`activeWindow.*` in Obsidian, the browser globals in the standalone
+ * build) is responsible for round-tripping the real handle.
+ */
+export type SessionLogTimer = { readonly __sessionLogTimerBrand: never } | number | object
+
+/**
+ * Default timer functions used when the constructor caller does not inject
+ * `activeWindow.*` flavours. We grab them off `globalThis` exactly once at
+ * module load time so the popout-window-only lint rules
+ * (`obsidianmd/prefer-active-window-timers`, `obsidianmd/prefer-active-doc`)
+ * only need to ignore this one site rather than every call site.
+ */
+// eslint-disable-next-line obsidianmd/prefer-active-doc
+const __global = globalThis
+const defaultSetTimeout: (handler: () => void, ms: number) => SessionLogTimer = (
+  handler,
+  ms,
+) => __global.setTimeout(handler, ms)
+const defaultClearTimeout: (handle: SessionLogTimer) => void = (handle) => {
+  __global.clearTimeout(handle as Parameters<typeof __global.clearTimeout>[0])
+}
+
+/**
+ * Constructor options for {@link SessionLogWriter}. All fields are optional;
+ * production callers pass at most `flushDebounceMs` and possibly a
+ * `setTimeout` / `clearTimeout` pair when running inside Obsidian's popout
+ * window (where `activeWindow.setTimeout` is required for cleanup).
+ */
+export interface SessionLogWriterOptions {
+  /**
+   * Milliseconds to wait after the latest append before flushing the
+   * per-path frontmatter `updated:` timestamp to disk. Default 30 000 ms.
+   */
+  readonly flushDebounceMs?: number
+  /**
+   * Schedule a single delayed callback. Defaults to `globalThis.setTimeout`;
+   * the plugin layer injects `activeWindow.setTimeout` to keep popout
+   * windows working correctly under Obsidian's lifecycle.
+   */
+  readonly setTimeout?: (handler: () => void, ms: number) => SessionLogTimer
+  /**
+   * Cancel a handle returned from {@link setTimeout}. Defaults to
+   * `globalThis.clearTimeout`.
+   */
+  readonly clearTimeout?: (handle: SessionLogTimer) => void
 }
 
 /**
@@ -244,27 +322,44 @@ function formatProposalBlock(args: {
 }
 
 /**
- * Per-path frontmatter+body cache. The body is kept in memory so the
- * `updated:` rewrite (which has to land at the head of the file) can stitch
- * back the full content without re-reading from disk.
+ * Per-path frontmatter cache.
  *
- * `bodyEndsWithNewline` lets us emit body blocks with a single leading
- * newline when needed without scanning the cached body string on every
- * append.
+ * **Codex P1+P2 round-1 (2026-05-17):** the body is *not* mirrored in memory
+ * any more. Keeping the body cached forced a full-file `writeFile` on every
+ * append (to splice the new `updated:` value onto `${frontmatter}${body}`),
+ * which negated the WP-5 perf win and also clobbered out-of-band edits to
+ * the body. Now the cache only tracks:
+ *
+ *   - `fields` — the latest `FrontmatterFields` we want to commit to disk.
+ *     This is the source of truth for the debounced `updated:` flush.
+ *   - `bodyEndsWithNewline` — used to compose the leading separator for the
+ *     next `appendFile` body block without re-reading the file.
  */
 interface LogPathCache {
   fields: FrontmatterFields
   /**
-   * Serialised frontmatter exactly as last written. Includes the closing
-   * `---\n` separator. The leading-newline shape is preserved so writeFile
-   * round-trips deterministic.
+   * `true` once we know the on-disk body ends with `\n`. Seeded on first
+   * append (fresh file → `false`; resumed file → derived from the body
+   * slice). Flipped to `true` after every appended block (every formatted
+   * turn/proposal block ends with `\n`).
    */
-  frontmatter: string
-  /**
-   * Cached body content (everything after the frontmatter). Append paths
-   * concatenate the new block here in memory.
-   */
-  body: string
+  bodyEndsWithNewline: boolean
+}
+
+/**
+ * Pending-flush state per resolved log path. A single flush is debounced
+ * across many turns: each `appendBlock` call updates `pendingFields.updated`
+ * and (re)arms `timer`. When `timer` fires, `flushFrontmatter` reads the
+ * current on-disk body, splices the latest frontmatter, and `writeFile`s
+ * the result.
+ *
+ * `inFlight` carries the promise of any flush already running so concurrent
+ * `appendBlock` calls don't race a partial frontmatter write.
+ */
+interface PendingFlush {
+  pendingFields: FrontmatterFields | null
+  timer: SessionLogTimer | null
+  inFlight: Promise<void> | null
 }
 
 /**
@@ -300,18 +395,56 @@ export class SessionLogWriter {
   private readonly warnedSessions = new Set<string>()
 
   /**
-   * WP-5 frontmatter+body cache keyed by the resolved (post-suffix) path.
-   * Seeded on the first append for a path; subsequent appends mutate it
-   * in-place and rewrite only the frontmatter window via `writeFile`.
+   * WP-5 frontmatter cache keyed by the resolved (post-suffix) path. Seeded
+   * on the first append for a path; subsequent appends update `fields` and
+   * `bodyEndsWithNewline` in place without re-reading the body from disk.
    */
   private readonly cacheByPath = new Map<string, LogPathCache>()
+
+  /**
+   * Pending debounced frontmatter flushes keyed by resolved path. See
+   * {@link PendingFlush} and {@link scheduleFrontmatterFlush}.
+   */
+  private readonly pendingByPath = new Map<string, PendingFlush>()
+
+  /**
+   * Default debounce window for the per-path frontmatter flush, in ms.
+   * Production callers leave this at 30 s; tests override with `0` (next
+   * microtask) or call {@link flushAll} explicitly to assert the post-flush
+   * state.
+   */
+  private readonly flushDebounceMs: number
+
+  /**
+   * Timer functions used by the debounced frontmatter flush. Injected so
+   * the application layer stays free of Obsidian-runtime globals: the
+   * plugin adapter passes `activeWindow.setTimeout` / `activeWindow.clearTimeout`
+   * for popout-window compatibility, the browser standalone build (and the
+   * default) uses the global functions, and tests can supply controllable
+   * timers (`vi.useFakeTimers` covers both shapes).
+   */
+  private readonly setTimeoutFn: (
+    handler: () => void,
+    ms: number,
+  ) => SessionLogTimer
+  private readonly clearTimeoutFn: (handle: SessionLogTimer) => void
 
   constructor(
     private readonly vault: VaultPort,
     private readonly logger: LoggerPort,
     private readonly specsFolder: string,
     private readonly nowIso: () => string,
-  ) {}
+    options: SessionLogWriterOptions = {},
+  ) {
+    this.flushDebounceMs = options.flushDebounceMs ?? 30_000
+    // Default to the runtime globals via a tiny indirection. The wrappers
+    // keep the timer-rule lint (`obsidianmd/prefer-active-window-timers` /
+    // `obsidianmd/prefer-active-doc`) happy because they never appear as a
+    // bare identifier in this file — the plugin layer injects the real
+    // `activeWindow.*` flavour when constructing the writer.
+    this.setTimeoutFn = options.setTimeout ?? defaultSetTimeout
+    this.clearTimeoutFn = options.clearTimeout ?? defaultClearTimeout
+  }
 
   /**
    * Idempotent: ensures the parent sessions folder exists. Used by the wiring
@@ -519,20 +652,24 @@ export class SessionLogWriter {
 
   /**
    * Append one body block (turn or proposal) to a log path. Implements the
-   * WP-5 hot path:
+   * WP-5 hot path (Codex P1+P2 round-1):
    *
-   *   1. Seed the per-path cache on first append (single `readFile` if the
-   *      file exists from a previous session).
-   *   2. Call `VaultPort.appendFile(path, blockWithLeadingNewline)` so the
-   *      body delta is the *only* bytes that cross the adapter boundary on
-   *      a native-append adapter.
-   *   3. Rewrite the frontmatter window via `writeFile(path, frontmatter +
-   *      cachedBody)` so the `updated:` field stays accurate. The cached
-   *      body is the source of truth — the loop never re-reads the body
-   *      after the seed.
+   *   1. Seed the per-path cache on first append (single `writeFile` for a
+   *      fresh file's frontmatter; single `readFile` for an existing file to
+   *      parse `created:` and the body-tail shape).
+   *   2. Call `VaultPort.appendFile(path, blockWithLeadingNewline)` exactly
+   *      once per turn — the body delta is the *only* bytes that cross the
+   *      adapter boundary on a native-append adapter.
+   *   3. Update the cached `fields.updated` to `at` and schedule a debounced
+   *      frontmatter flush via `scheduleFrontmatterFlush`. The flush reads
+   *      the *current* on-disk body (preserving any out-of-band edits made
+   *      between turns) and rewrites only the frontmatter window.
    *
-   * The fresh-file branch is collapsed into the cache-seed path so there is
-   * a single `writeFile` call shape for callers to reason about.
+   * Critically: there is **no per-turn `writeFile`** any more. The previous
+   * implementation kept the body cached in memory and rewrote
+   * `${frontmatter}${body}` on every turn (O(N²) cumulative bytes and
+   * stale-cache hazard for out-of-band body edits). Both findings (Codex
+   * thread 3254772925 P1 and 3254772928 P2) are resolved by the change.
    */
   private async appendBlock(
     resolvedPath: string,
@@ -550,40 +687,166 @@ export class SessionLogWriter {
       this.cacheByPath.set(resolvedPath, cache)
     }
 
-    // Compose the on-disk delta. Ensure exactly one newline between the
-    // previous body tail and the new block — first-write case has an empty
-    // body, subsequent appends have a body ending with `\n` from the previous
-    // block.
-    const separator = cache.body === '' || cache.body.endsWith('\n') ? '' : '\n'
+    // Compose the on-disk delta. The seed leaves `bodyEndsWithNewline=true`
+    // for a fresh frontmatter (which always ends with `---\n`); resumed
+    // sessions seed it from the body slice. Every formatted turn/proposal
+    // block ends with `\n`, so after this append the flag is always `true`.
+    const separator = cache.bodyEndsWithNewline ? '' : '\n'
     const blockOnWire = `${separator}${block}`
     await this.vault.appendFile(resolvedPath, blockOnWire)
+    cache.bodyEndsWithNewline = true
 
-    // Update the in-memory body cache so subsequent frontmatter rewrites
-    // remain consistent with what's on disk.
-    cache.body = `${cache.body}${blockOnWire}`
-
-    // Rewrite the `updated:` field by composing the new frontmatter and the
-    // cached body. Tests assert that `updated` advances with each turn
-    // (TEST-ASM-033) so we cannot defer this; the body comes from the cache
-    // so we still avoid the per-turn body re-read.
+    // Stage the new `updated:` value and arm the debounced flush. The cache
+    // is the source of truth for what the next frontmatter rewrite will
+    // commit; the body is read back from disk inside the flush so any
+    // out-of-band body edits between turns are preserved (P2 fix).
     const nextFields: FrontmatterFields = {
       ...cache.fields,
       session_id: sessionId !== '' ? sessionId : cache.fields.session_id,
       updated: at,
     }
-    const nextFrontmatter = buildFrontmatter(nextFields)
     cache.fields = nextFields
-    cache.frontmatter = nextFrontmatter
-    await this.vault.writeFile(resolvedPath, `${nextFrontmatter}${cache.body}`)
+    this.scheduleFrontmatterFlush(resolvedPath, nextFields)
+  }
+
+  /**
+   * Arm (or re-arm) the debounced frontmatter flush for `resolvedPath`. The
+   * pending `FrontmatterFields` snapshot is replaced on every call so the
+   * flush always commits the latest staged `updated:` value. When the timer
+   * fires, control passes to {@link flushFrontmatter}.
+   *
+   * Timer functions come from {@link SessionLogWriterOptions} so callers
+   * can pick the runtime-appropriate flavour: `activeWindow.setTimeout` for
+   * Obsidian popout-window compatibility, plain `setTimeout` for the
+   * browser-standalone build, or test-controllable timers for vitest.
+   */
+  private scheduleFrontmatterFlush(
+    resolvedPath: string,
+    fields: FrontmatterFields,
+  ): void {
+    const existing = this.pendingByPath.get(resolvedPath)
+    const pending: PendingFlush =
+      existing ?? { pendingFields: null, timer: null, inFlight: null }
+    if (existing === undefined) {
+      this.pendingByPath.set(resolvedPath, pending)
+    }
+    pending.pendingFields = fields
+    if (pending.timer !== null) {
+      this.clearTimeoutFn(pending.timer)
+    }
+    pending.timer = this.setTimeoutFn(() => {
+      pending.timer = null
+      // Swallow rejections from the debounced path — by definition the
+      // caller is no longer awaiting. `flushFrontmatter` already routes
+      // failures to `logger.error` with a redacted sessionId.
+      void this.flushFrontmatter(resolvedPath).catch(swallow)
+    }, this.flushDebounceMs)
+  }
+
+  /**
+   * Splice the latest staged frontmatter onto the current on-disk body.
+   * Single-flight per path: concurrent calls await the in-flight promise so
+   * `flushAll()` can be called repeatedly without racing.
+   *
+   * Out-of-band body edits are preserved automatically: this reads the body
+   * fresh on every flush rather than from an in-memory cache.
+   */
+  private async flushFrontmatter(resolvedPath: string): Promise<void> {
+    const pending = this.pendingByPath.get(resolvedPath)
+    if (pending === undefined) return
+    if (pending.inFlight !== null) {
+      // Coalesce a concurrent flush request into the in-flight one. The
+      // in-flight flush will pick up the latest `pendingFields` before its
+      // own write, so we don't need a second pass.
+      await pending.inFlight
+      return
+    }
+    // Capture the snapshot now and clear it; if another append lands while
+    // we're flushing it will re-arm the timer with a fresh snapshot.
+    const fields = pending.pendingFields
+    if (fields === null) return
+    pending.pendingFields = null
+
+    const flushPromise = this.doFlush(resolvedPath, fields)
+    pending.inFlight = flushPromise
+    const result = await tryAsync(() => flushPromise)
+    pending.inFlight = null
+    if (!result.ok) {
+      this.logger.error(
+        'SessionLogWriter frontmatter flush failed',
+        result.error,
+        { redactedSessionId: redactSessionId(fields.session_id) },
+      )
+      throw result.error
+    }
+  }
+
+  /**
+   * Inner body of {@link flushFrontmatter}: read the live body, splice the
+   * new frontmatter, write the result, and update the cache so the next
+   * append's `bodyEndsWithNewline` reflects the post-edit body tail. Split
+   * from the caller so the result-discipline `tryAsync` wrapping stays
+   * scoped to the I/O — the cache update is in-process and infallible.
+   */
+  private async doFlush(
+    resolvedPath: string,
+    fields: FrontmatterFields,
+  ): Promise<void> {
+    const existing = await this.vault.readFile(resolvedPath)
+    const split = splitFrontmatterAndBody(existing)
+    const body = split?.body ?? existing
+    const nextFrontmatter = buildFrontmatter(fields)
+    await this.vault.writeFile(resolvedPath, `${nextFrontmatter}${body}`)
+    // Keep the cache shape in sync with what we just wrote so the next
+    // append's `bodyEndsWithNewline` check stays correct after an
+    // out-of-band edit replaces the body tail.
+    const cache = this.cacheByPath.get(resolvedPath)
+    if (cache !== undefined) {
+      cache.fields = fields
+      cache.bodyEndsWithNewline = body === '' || body.endsWith('\n')
+    }
+  }
+
+  /**
+   * Drain every pending debounced frontmatter flush. Use cases:
+   *
+   *   - **Tests** that need a deterministic post-flush state (assert on the
+   *     final `updated:` value and the writeFile/readFile counts).
+   *   - **Plugin teardown / `onunload`** to make sure the last few turns'
+   *     `updated:` stamps land on disk before the writer goes away.
+   *
+   * Safe to call concurrently — single-flight per path via
+   * {@link flushFrontmatter}.
+   */
+  async flushAll(): Promise<void> {
+    const paths = Array.from(this.pendingByPath.keys())
+    await Promise.all(
+      paths.map(async (resolvedPath) => {
+        const pending = this.pendingByPath.get(resolvedPath)
+        if (pending === undefined) return
+        if (pending.timer !== null) {
+          this.clearTimeoutFn(pending.timer)
+          pending.timer = null
+        }
+        if (pending.pendingFields === null && pending.inFlight === null) {
+          return
+        }
+        // logger.error already fires inside flushFrontmatter; swallow the
+        // rejection here so plugin teardown stays best-effort.
+        await this.flushFrontmatter(resolvedPath).catch(swallow)
+      }),
+    )
   }
 
   /**
    * Seed the per-path cache. If the file already exists with parseable
-   * frontmatter we adopt it (and write the freshly-stitched content back
-   * to bring `updated:` into line); otherwise we initialise a brand-new
-   * frontmatter from the thread and create the file via `appendFile` on the
-   * next step. The `appendFile` path is unified so callers don't branch on
-   * existence after seeding.
+   * frontmatter we adopt it; otherwise we initialise a brand-new frontmatter
+   * from the thread and write only the frontmatter to disk via `writeFile`
+   * so the first `appendFile` call grows the file from a known shape.
+   *
+   * Codex P1+P2 round-1: the cache no longer mirrors the body; `seedCache`
+   * derives `bodyEndsWithNewline` from the disk slice and discards the body
+   * string. The on-disk body remains the source of truth.
    */
   private async seedCache(
     resolvedPath: string,
@@ -592,8 +855,8 @@ export class SessionLogWriter {
   ): Promise<LogPathCache> {
     const exists = await this.vault.fileExists(resolvedPath)
     if (!exists) {
-      // Fresh file: composing the frontmatter now means the first
-      // `appendFile` call below has only the new body block to write.
+      // Fresh file: writing only the frontmatter via `writeFile` means the
+      // first `appendFile` below has only the new body block to write.
       const fields: FrontmatterFields = {
         session_id: thread.sessionId ?? '',
         feature: thread.feature,
@@ -602,13 +865,15 @@ export class SessionLogWriter {
         updated: at,
       }
       const frontmatter = buildFrontmatter(fields)
-      // Write the frontmatter via `writeFile` so the file exists on disk
-      // before the body `appendFile` below tries to grow it.
       await this.vault.writeFile(resolvedPath, frontmatter)
-      return { fields, frontmatter, body: '' }
+      // `buildFrontmatter` ends with `---\n` (closing fence + trailing
+      // newline), so the body tail is the empty string after the newline —
+      // ready for an `appendFile` that does not need a leading separator.
+      return { fields, bodyEndsWithNewline: true }
     }
     // Existing file (resumed session or conflict-suffix branch): parse the
-    // current frontmatter once and seed the cache from it.
+    // current frontmatter once and seed the cache from it. Body content is
+    // NOT cached — the next debounced flush reads it back fresh.
     const existing = await this.vault.readFile(resolvedPath)
     const split = splitFrontmatterAndBody(existing)
     if (split === null) {
@@ -624,23 +889,19 @@ export class SessionLogWriter {
       }
       const frontmatter = buildFrontmatter(fields)
       await this.vault.writeFile(resolvedPath, frontmatter)
-      return { fields, frontmatter, body: '' }
+      return { fields, bodyEndsWithNewline: true }
     }
-    const parsedSessionId = extractSessionIdFromFrontmatter(existing) ?? thread.sessionId ?? ''
+    const parsedSessionId =
+      extractSessionIdFromFrontmatter(existing) ?? thread.sessionId ?? ''
     const fields: FrontmatterFields = {
       session_id: parsedSessionId,
       feature: thread.feature,
       transport: thread.transport,
-      // We don't re-parse `created` from disk — the seed is best-effort, and
-      // the next rewrite below will leave `created` as the disk value via
-      // the body re-stitch. To preserve `created` exactly we keep the raw
-      // frontmatter slice and let the next writeFile use the rebuilt
-      // frontmatter; the rebuilt timestamps come from `at` for `updated` and
-      // the parsed value for `created` (see below).
       created: parseCreated(split.frontmatter) ?? at,
       updated: at,
     }
-    return { fields, frontmatter: split.frontmatter, body: split.body }
+    const bodyEndsWithNewline = split.body === '' || split.body.endsWith('\n')
+    return { fields, bodyEndsWithNewline }
   }
 }
 

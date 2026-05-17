@@ -56,8 +56,20 @@ function makeWriter(
   ports: FakePorts,
   nowIso: () => string = () => '2026-05-14T10:00:00.000Z',
   specsFolder = 'specs',
+  options: { readonly flushDebounceMs?: number } = {},
 ): SessionLogWriter {
-  return new SessionLogWriter(ports.vault, ports.logger, specsFolder, nowIso)
+  // Codex P1+P2 round-1: tests default to a long debounce window so the
+  // frontmatter flush stays unobservable unless the test explicitly calls
+  // `writer.flushAll()`. This keeps the I/O accounting assertions
+  // deterministic — they observe the pre-flush shape (no spurious writeFile
+  // calls from a stray timer firing during a long-running test).
+  return new SessionLogWriter(
+    ports.vault,
+    ports.logger,
+    specsFolder,
+    nowIso,
+    { flushDebounceMs: options.flushDebounceMs ?? 60_000 },
+  )
 }
 
 describe('SessionLogWriter.appendUserAssistant — happy path (T-ASM-046)', () => {
@@ -95,7 +107,12 @@ describe('SessionLogWriter.appendUserAssistant — happy path (T-ASM-046)', () =
     expect(body).toContain('hello')
   })
 
-  it('on a subsequent turn, writeFile is called once with appended content and updated > created (TEST-ASM-033)', async () => {
+  it('subsequent turns advance `updated` after a flush; body stays intact (TEST-ASM-033)', async () => {
+    // Codex P1+P2 round-1: per-turn `writeFile` was removed from the hot
+    // path. The `updated:` timestamp now lands on disk via a debounced
+    // frontmatter flush — `appendFile` carries the body delta on the wire
+    // for every turn. Tests force the flush with `flushAll()` to assert the
+    // post-flush state deterministically.
     const thread = makeThread()
     const timestamps: ReadonlyArray<string> = [
       '2026-05-14T10:00:00.000Z',
@@ -112,9 +129,21 @@ describe('SessionLogWriter.appendUserAssistant — happy path (T-ASM-046)', () =
 
     // Spy on writeFile for the second turn so we can count calls precisely.
     const writeSpy = vi.spyOn(ports.vault, 'writeFile')
+    const appendSpy = vi.spyOn(ports.vault, 'appendFile')
     await writer.appendUserAssistant(thread, { user: 'turn2-u', assistant: 'turn2-a' })
 
+    // The hot path is body-append only — no writeFile per turn.
+    expect(writeSpy).toHaveBeenCalledTimes(0)
+    expect(appendSpy).toHaveBeenCalledTimes(1)
+
+    // Drain the debounced frontmatter flush. After flushing, exactly one
+    // writeFile lands (the frontmatter rewrite) preceded by one readFile
+    // (to splice the new frontmatter onto the on-disk body — P2 fix).
+    const readSpy = vi.spyOn(ports.vault, 'readFile')
+    await writer.flushAll()
     expect(writeSpy).toHaveBeenCalledTimes(1)
+    expect(readSpy).toHaveBeenCalledTimes(1)
+
     const path = resolveSessionLogPath(thread.feature, thread.sessionId!, 'specs')
     const written = await ports.vault.readFile(path)
     // Both turns survived.
@@ -379,12 +408,19 @@ describe('SessionLogWriter O(turn) append (WP-5 DoD)', () => {
     ports = fakeModulePorts()
   })
 
-  it('100 turns produce 100 appendFile calls and ≤ 1 readFile call (no per-turn body re-read)', async () => {
-    // WP-5 closes the O(N²) trigger from the 2026-05-17 audit: the writer
-    // used to call `readFile(path)` and `writeFile(path, fullContent)` on
-    // every append, so 100 turns paid 100 reads × 100 bytes-of-history
-    // cumulative. After WP-5 the body is cached in memory after the seed
-    // and each turn pays exactly one `appendFile` for the new block.
+  it('100 turns produce 100 appendFile calls, 1 seed writeFile, 0 readFile before flush (Codex P1+P2 round-1)', async () => {
+    // Codex P1+P2 round-1 closes the O(N²) trigger that survived the first
+    // WP-5 attempt: the writer used to call `writeFile(path, fullContent)`
+    // on every append so cumulative write volume stayed O(N²). After
+    // round-1 the body is append-only on disk:
+    //   - body delta → exactly one `appendFile` per turn (O(1) on the wire
+    //     for a native-append adapter).
+    //   - frontmatter `updated:` → debounced flush, draining only on
+    //     `flushAll()` or after the configured debounce window.
+    // The fresh-thread path therefore pays exactly:
+    //   - 1 writeFile (seed frontmatter)
+    //   - 100 appendFile (the 100 turn blocks)
+    //   - 0 readFile (no resume; no flush)
     const thread = makeThread()
     let tick = 0
     const writer = makeWriter(ports, () => {
@@ -400,11 +436,11 @@ describe('SessionLogWriter O(turn) append (WP-5 DoD)', () => {
     }
 
     expect(ports.bridge.calls.appendFile).toHaveLength(100)
-    // The fresh-thread path does not require any read: `fileExists` returns
-    // false and the writer goes straight to `writeFile(frontmatter)` then
-    // `appendFile(body)`. We assert "at most one" so a single defensive
-    // seed-read on resumed sessions remains permitted by the contract.
-    expect(ports.bridge.calls.readFile.length).toBeLessThanOrEqual(1)
+    // Exactly one writeFile — the seed. The 100 follow-on turns add zero
+    // writeFile calls until the debounced flush drains.
+    expect(ports.bridge.calls.writeFile).toHaveLength(1)
+    // Fresh thread → no readFile until `flushAll()` runs.
+    expect(ports.bridge.calls.readFile).toHaveLength(0)
     // All 100 user/assistant turns survived round-trip on disk.
     const finalPath = ports.bridge.calls.appendFile[0]?.path ?? ''
     const finalContent = await ports.vault.readFile(finalPath)
@@ -412,6 +448,14 @@ describe('SessionLogWriter O(turn) append (WP-5 DoD)', () => {
     expect(finalContent).toContain('u-99')
     expect(finalContent).toContain('a-0')
     expect(finalContent).toContain('a-99')
+
+    // Drain the pending frontmatter flush: one readFile (to splice the new
+    // frontmatter over the live body) and one writeFile (the rewrite).
+    const readBefore = ports.bridge.calls.readFile.length
+    const writeBefore = ports.bridge.calls.writeFile.length
+    await writer.flushAll()
+    expect(ports.bridge.calls.readFile.length - readBefore).toBe(1)
+    expect(ports.bridge.calls.writeFile.length - writeBefore).toBe(1)
   })
 
   it('resumed-session path: a single readFile seeds the cache, then appends scale O(1)', async () => {
@@ -456,6 +500,55 @@ describe('SessionLogWriter O(turn) append (WP-5 DoD)', () => {
     // What matters for O(turn) closure is that reads do NOT scale with the
     // turn count — pre-WP-5 this was 10 reads on top of the suffix probe.
     expect(ports.bridge.calls.readFile.length).toBeLessThanOrEqual(2)
+    // No per-turn writeFile either: the seed file already existed, so the
+    // only writeFile to land before the flush is zero.
+    expect(ports.bridge.calls.writeFile).toHaveLength(0)
+  })
+
+  it('out-of-band body edits between turns survive the debounced flush (Codex P2)', async () => {
+    // P2: once a path is cached, the previous implementation rewrote the
+    // body wholesale from the in-memory cache, clobbering any out-of-band
+    // edits made on disk between turns. The round-1 fix reads the live body
+    // back from disk on every flush so manual edits are preserved.
+    const thread = makeThread()
+    const stamps: ReadonlyArray<string> = [
+      '2026-05-14T10:00:00.000Z',
+      '2026-05-14T10:05:00.000Z',
+    ]
+    let stampIdx = 0
+    const writer = makeWriter(ports, () => {
+      const next = stamps[stampIdx] ?? '2026-05-14T10:05:00.000Z'
+      stampIdx += 1
+      return next
+    })
+
+    // Seed + turn 1.
+    await writer.appendUserAssistant(thread, { user: 'u1', assistant: 'a1' })
+    const path = resolveSessionLogPath(thread.feature, thread.sessionId!, 'specs')
+
+    // External actor edits the body (e.g. the user manually annotates the
+    // log in Obsidian) between turns.
+    const beforeEdit = await ports.vault.readFile(path)
+    const fenceIdx = beforeEdit.indexOf('\n---', 4)
+    expect(fenceIdx).toBeGreaterThan(0)
+    const frontmatterSlice = beforeEdit.slice(0, fenceIdx + '\n---\n'.length)
+    const bodySlice = beforeEdit.slice(fenceIdx + '\n---\n'.length)
+    const annotated = `${bodySlice}## annotation\n<!-- user-edit -->\n\nmanual note\n`
+    await ports.vault.writeFile(path, `${frontmatterSlice}${annotated}`)
+
+    // Turn 2 uses the second timestamp from the sequence; flush drains.
+    await writer.appendUserAssistant(thread, { user: 'u2', assistant: 'a2' })
+    await writer.flushAll()
+
+    const after = await ports.vault.readFile(path)
+    // Out-of-band annotation survived the frontmatter rewrite.
+    expect(after).toContain('## annotation')
+    expect(after).toContain('manual note')
+    // Turn 2 body landed.
+    expect(after).toContain('u2')
+    expect(after).toContain('a2')
+    // Frontmatter `updated:` advanced to the turn-2 timestamp.
+    expect(after).toContain("updated: '2026-05-14T10:05:00.000Z'")
   })
 })
 

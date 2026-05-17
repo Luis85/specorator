@@ -89,13 +89,28 @@ Internally calls the writer. The facade does not add new error shapes; it only r
 - [ ] `npm run build` + `npm run build:web` succeed.
 - [ ] `npm run docs:api` succeeds.
 - [ ] `npm run test:coverage` — `SessionLogWriter` statement coverage rises from 83.21% to ≥ 90% (the audit gap).
-- [ ] **O(turn) closed**: a new test in `SessionLogWriter.test.ts` mirrors 100 turns to a single thread and asserts `mockBridge.calls.appendFile.length === 100` and `mockBridge.calls.readFile.length === 1` (a single seeding read). Without the fix, this is 100/100.
+- [ ] **O(turn) closed (Codex P1+P2 round-1)**: a test in `SessionLogWriter.test.ts` mirrors 100 turns to a single thread and asserts the new contract:
+  - `mockBridge.calls.appendFile.length === 100` (one body delta per turn).
+  - `mockBridge.calls.writeFile.length === 1` (seed frontmatter only — **no per-turn writeFile**).
+  - `mockBridge.calls.readFile.length === 0` (fresh thread; no reads until flush).
+  - After `await writer.flushAll()`: `+1 readFile` and `+1 writeFile` (the debounced frontmatter rewrite splices over the on-disk body — preserving any out-of-band edits, which is the P2 fix).
 - [ ] **Mirror facade exists** and is the single caller of `SessionLogWriter` from outside `src/application/chat/`. Direct writer imports outside the application/chat folder fail typecheck (private export pattern, or an ESLint scope rule — pick the simpler).
 - [ ] PR opened against `develop`, title `perf(asv3): SessionLogWriter O(turn) append + Mirror facade (WP-5)`, body cites the audit's 83% coverage gap and the O(n²) trigger.
 
 ## Risks / known unknowns
 
 The Obsidian `Vault.adapter.append` API exists on `DataAdapter` (Obsidian's internal interface) — confirm it's exposed on `App.vault.adapter` and not just a private path. If only `Vault.process` is public, fall back to a per-adapter read-modify-write inside the Obsidian adapter only (still wins because the writer no longer reads the body on every turn, but the wire cost stays O(N) in that adapter). Worst case the perf win is concentrated in adapters that DO support native append (Mock + LocalStorage) — file a carry-out for the Obsidian adapter to land its own `appendFile` once the runtime API is confirmed. The frontmatter cache is a thread-local in-memory hash; a second plugin process (impossible in Obsidian's single-window model, but worth noting) racing on the same vault file would invalidate it — accept this trade-off and document in the JSDoc.
+
+### Fixed in Codex P1+P2 round-1 (2026-05-17)
+
+The original iteration-1 implementation passed the surface DoD (`appendFile` was called per turn) but *also* called `writeFile(${frontmatter}${cache.body})` once per turn to advance the `updated:` field — keeping cumulative write volume at O(N²) and clobbering any out-of-band body edits between turns (the P2 hazard). The corrected design:
+
+- **Body is append-only on disk.** Each turn: exactly one `VaultPort.appendFile`. No per-turn body `writeFile`.
+- **Frontmatter `updated:` is debounced.** `setTimeout` (default 30 s, configurable via `flushDebounceMs`) coalesces many turns into one frontmatter rewrite. The flush reads the live body from disk and splices the new frontmatter — so out-of-band edits to the body survive (P2 fix).
+- **Explicit drain.** `SessionLogMirror.flushAll()` cancels pending debounces and runs the flush synchronously. Production callers should drive this on plugin teardown; tests use it to assert post-flush state deterministically.
+- **In-memory cache shape changed.** The cache no longer mirrors the body in memory; it only tracks the latest `FrontmatterFields` and a `bodyEndsWithNewline` boolean to compute the next append's leading separator.
+
+The pre-round-1 DoD wording (which compared "100 readFile + 100 writeFile" against the bug) is misleading — `writeFile` was still being called 100 times after the original fix. The DoD section above now reflects the correct counts.
 
 ## RALPH iteration template
 
