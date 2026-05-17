@@ -95,42 +95,6 @@ describe('ChatInput', () => {
 			await ta.trigger('keydown', { key: 'Enter', ctrlKey: true, isComposing: true });
 			expect(po.emitted('send')).toBeFalsy();
 		});
-
-		it('Ctrl+Enter does not emit send during Safari IME path (isComposing false after compositionstart)', async () => {
-			// Reproduces the Safari bug: compositionstart has fired, but the
-			// confirm-Enter keydown arrives with `isComposing === false`. The
-			// component must still suppress send because the composition session
-			// is logically still active (compositionend has not yet fired).
-			const po = mountChatInput({ modelValue: '中文', disabled: false, loading: false });
-			const ta = po.textarea;
-			await ta.trigger('compositionstart');
-			await ta.trigger('keydown', { key: 'Enter', ctrlKey: true });
-			expect(po.emitted('send')).toBeFalsy();
-		});
-
-		it('Ctrl+Enter emits send again after compositionend', async () => {
-			// Once compositionend fires, the textarea is no longer inside an IME
-			// session and subsequent Ctrl+Enter must work normally.
-			const po = mountChatInput({ modelValue: '中文', disabled: false, loading: false });
-			const ta = po.textarea;
-			await ta.trigger('compositionstart');
-			await ta.trigger('compositionend');
-			await ta.trigger('keydown', { key: 'Enter', ctrlKey: true });
-			expect(po.emitted('send')).toBeTruthy();
-		});
-
-		it('blur defensively releases the IME guard if compositionend never fires', async () => {
-			// Safari can blur or cancel a composition session without firing
-			// compositionend. The blur handler must reset the latch so the
-			// guard does not stay true forever (which would ignore every
-			// subsequent keydown until the component remounts).
-			const po = mountChatInput({ modelValue: '中文', disabled: false, loading: false });
-			const ta = po.textarea;
-			await ta.trigger('compositionstart');
-			await ta.trigger('blur');
-			await ta.trigger('keydown', { key: 'Enter', ctrlKey: true });
-			expect(po.emitted('send')).toBeTruthy();
-		});
 	});
 
 	describe('disabled state', () => {

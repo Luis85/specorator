@@ -42,24 +42,6 @@ const vaultPort = useVaultPort();
 const picker = useMentionPicker(vaultPort);
 const palette = useSlashPalette();
 
-/**
- * Tracks whether the textarea is currently inside a composition session.
- * Driven by the W3C `compositionstart` / `compositionend` events on the
- * textarea. Used by `handleKeydown` as a defence-in-depth check around
- * `event.isComposing` because Safari has IME paths where the confirm-Enter
- * keydown reports `isComposing === false` while composition is still
- * logically active (compositionend has not yet fired).
- */
-const isImeComposing = ref(false);
-
-function handleCompositionStart(): void {
-	isImeComposing.value = true;
-}
-
-function handleCompositionEnd(): void {
-	isImeComposing.value = false;
-}
-
 defineExpose({ textareaEl, palette });
 
 /**
@@ -257,13 +239,16 @@ function tryHandleSendKey(event: KeyboardEvent): boolean {
 }
 
 function handleKeydown(event: KeyboardEvent): void {
-	// IME-composition guard. `event.isComposing` catches the first keydown
-	// of a new composition (compositionstart may not have fired yet on that
-	// event). `isImeComposing` (driven by compositionstart/compositionend)
-	// catches the rest, including Safari's buggy confirm-Enter where
-	// `event.isComposing` reports false while composition is still active.
-	// Together they cover every browser's IME path with no deprecated APIs.
-	if (event.isComposing || isImeComposing.value) return;
+	// IME-composition guard: while an IME (Japanese/Chinese/Korean) is
+	// composing, Enter commits the candidate and must not trigger send.
+	// Spec-compliant browsers (Chromium/Firefox/Obsidian's Electron) report
+	// `event.isComposing` correctly throughout composition.
+	//
+	// Safari has a documented ordering bug where `compositionend` can fire
+	// BEFORE the confirm-Enter keydown, leaving `isComposing` false on that
+	// keydown. We deliberately do not defend that case — see docs/non-goals.md
+	// (CJK/Safari on the standalone-web demo is an explicit non-goal).
+	if (event.isComposing) return;
 	if (handlePickerKey(event)) return;
 	if (handlePaletteKeydown(event)) return;
 	tryHandleSendKey(event);
@@ -294,10 +279,6 @@ function handleKeyup(event: KeyboardEvent): void {
 function handleBlur(): void {
 	if (palette.isOpen.value) palette.close();
 	picker.close();
-	// Defensive: Safari can blur or cancel a composition session without
-	// firing compositionend. Without this reset the guard would latch
-	// `true` forever and every subsequent keydown would be ignored.
-	isImeComposing.value = false;
 }
 
 function commitMention(candidate: MentionCandidate): void {
@@ -366,8 +347,6 @@ function onDropdownHover(index: number): void {
 				@keyup="handleKeyup"
 				@click="handleClick"
 				@blur="handleBlur"
-				@compositionstart="handleCompositionStart"
-				@compositionend="handleCompositionEnd"
 			/>
 			<MentionDropdown
 				v-if="picker.open.value"

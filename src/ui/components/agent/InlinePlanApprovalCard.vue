@@ -44,29 +44,6 @@ const resolved = ref(false);
 const textareaEl = ref<HTMLTextAreaElement | null>(null);
 const rootEl = ref<HTMLElement | null>(null);
 
-/**
- * Tracks whether the revise textarea is currently inside an IME composition
- * session. Driven by the W3C `compositionstart` / `compositionend` events
- * (see ChatInput.vue for the full rationale — Safari's confirm-Enter path
- * reports `event.isComposing === false` while composition is still active).
- */
-const isImeComposing = ref(false);
-
-function handleCompositionStart(): void {
-	isImeComposing.value = true;
-}
-
-function handleCompositionEnd(): void {
-	isImeComposing.value = false;
-}
-
-function handleReviseBlur(): void {
-	// Defensive reset: Safari can blur a composition without firing
-	// compositionend. Clear the latch so the guard doesn't stay true
-	// forever (would ignore every subsequent keydown on the textarea).
-	isImeComposing.value = false;
-}
-
 function commit(decision: PlanDecision): void {
 	if (resolved.value) return;
 	resolved.value = true;
@@ -127,10 +104,10 @@ async function handleRowEnter(): Promise<void> {
 
 function handleReviseKeydown(event: KeyboardEvent): void {
 	if (resolved.value) return;
-	// IME-composition guard. See ChatInput.vue for the full rationale: tracking
-	// composition state via the W3C events covers every browser's IME path
-	// (including Safari's buggy confirm-Enter) with no deprecated APIs.
-	if (event.isComposing || isImeComposing.value) return;
+	// IME-composition guard. See docs/non-goals.md — CJK/Safari on the
+	// standalone-web demo is an explicit non-goal; Obsidian's Electron
+	// baseline honors `event.isComposing` correctly throughout composition.
+	if (event.isComposing) return;
 	if (event.key === 'Escape') {
 		event.preventDefault();
 		collapseRevise();
@@ -214,9 +191,6 @@ onBeforeUnmount(() => {
 			:placeholder="t('agent.planApprovalRevisePlaceholder')"
 			rows="3"
 			@keydown.stop="handleReviseKeydown"
-			@compositionstart="handleCompositionStart"
-			@compositionend="handleCompositionEnd"
-			@blur="handleReviseBlur"
 		/>
 	</section>
 </template>
