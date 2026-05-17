@@ -6,7 +6,7 @@
 
 | # | Title | Lane | Status | Depends on | Branch |
 | --- | --- | --- | --- | --- | --- |
-| WP-1 | StreamDelta codec seam + subprocess dedup | Spine | review (PR [#397](https://github.com/Luis85/specorator/pull/397)) | — | `claude/asv3-wp01-stream-codec-seam` |
+| WP-1 | StreamDelta codec seam + subprocess dedup | Spine | **merged** ([#397](https://github.com/Luis85/specorator/pull/397)) | — | `claude/asv3-wp01-stream-codec-seam` |
 | WP-2 | ChatTurnOrchestrator + drop doubled output panel | Store + UX | in-progress | WP-3 ✓ | `claude/asv3-wp02-chat-turn-orchestrator` |
 | WP-3 | chatStore → Threads / StreamingTurn / Proposals | Store + UX | **merged** ([#396](https://github.com/Luis85/specorator/pull/396)) | — | `claude/asv3-wp03-chatstore-split` |
 | WP-4 | Markdown port as only path + bypass during stream + safeHref tighten | Markdown | queued | — | `claude/asv3-wp04-markdown-hardening` |
@@ -16,8 +16,8 @@
 | WP-8 | UX polish wave: inline /help, scroll-pin, empty state, Stop, plan persistence, pills, EN strings, ContextFileChip | Store + UX | queued | WP-2 | `claude/asv3-wp08-ux-polish-wave` |
 | WP-9 | Security hardening pass | Security | queued | — | `claude/asv3-wp09-security-hardening` |
 | WP-10 | Perf: tool-call shallowRef, chunk-array, scroll rAF, mention/slash caches, buffer cap | Perf | queued | WP-2, WP-3 | `claude/asv3-wp10-perf-hardening` |
-| WP-11 | ClaudeSubprocessAdapter split (Lifecycle / NdjsonChannel / runStructured) | Spine | queued | WP-1 | `claude/asv3-wp11-subprocess-split` |
-| WP-12 | ClaudeCliPort: queryStream-only + lifecycle port | Spine | queued | WP-1 | `claude/asv3-wp12-claudecli-port-cleanup` |
+| WP-11 | ClaudeSubprocessAdapter split (Lifecycle / NdjsonChannel / runStructured) | Spine | in-progress | WP-1 ✓ | `claude/asv3-wp11-subprocess-split` |
+| WP-12 | ClaudeCliPort: queryStream-only + lifecycle port | Spine | in-progress | WP-1 ✓ | `claude/asv3-wp12-claudecli-port-cleanup` |
 | WP-13 | Test catch-up: secret store, markdown adapter, POs, slash loader edges | Tests | queued | — | `claude/asv3-wp13-test-catchup` |
 | WP-14 | ChatThreadsRepository port + domain VO tests | Tests | queued | — | `claude/asv3-wp14-chat-threads-repo` |
 | WP-15 | degradedClaudeCliPort → first-class adapter + TurnInputBuilder | Cleanup | queued | WP-2 | `claude/asv3-wp15-degraded-port-and-turninput` |
