@@ -48,18 +48,18 @@ const { t } = useI18n();
 
 // WP-7 A11y #3: shared combobox wiring for the textarea — both the slash
 // palette and the @-mention picker resolve to the same ARIA attribute set.
-// Slash command names can be vault-derived (spaces / dots / slashes) and must
-// be slugged before they can be used in an HTML id that `aria-activedescendant`
-// resolves through `getElementById`. SlashCommandDropdown uses the same helper.
-import { slashCommandSlug } from './slashCommandSlug';
+// Use index-based IDs so duplicates are impossible even when two commands
+// share a name (e.g. built-in `/help` plus vault `.claude/commands/help.md`,
+// since useSlashPalette concatenates both lists). SlashCommandDropdown
+// renders the matching `id="slash-command-item-${index}"` per row.
 const currentPicker = computed<{ controls: string; activeDescendant?: string } | null>(() => {
 	if (palette.isOpen.value) {
 		const cmds = palette.matchedCommands.value;
 		const idx = palette.selectedIndex.value;
-		const name = idx >= 0 && idx < cmds.length ? cmds[idx]?.name : undefined;
+		const hasIdx = idx >= 0 && idx < cmds.length;
 		return {
 			controls: 'slash-command-dropdown',
-			activeDescendant: name !== undefined ? `slash-command-item-${slashCommandSlug(name)}` : undefined,
+			activeDescendant: hasIdx ? `slash-command-item-${idx}` : undefined,
 		};
 	}
 	if (picker.open.value) {

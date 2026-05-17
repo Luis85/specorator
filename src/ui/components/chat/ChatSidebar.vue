@@ -283,6 +283,16 @@ async function handleSend(): Promise<void> {
 	streamingStore.resetStreaming();
 	messagesStore.beginRequest();
 
+	// WP-7 A11y #5 Codex P2: mint a preflight AbortController SYNCHRONOUSLY so
+	// Escape works during the `buildTurnInput()` vault-read window. The
+	// orchestrator's `onAbortController` callback replaces this with its own
+	// streaming controller once it mints one — `handleStopGeneration()` aborts
+	// whichever is current. Without this, the announcement below promises
+	// "Press Escape to stop" but Escape was a no-op until the controller
+	// arrived (Codex P2 on PR #402).
+	const preflightController = new AbortController();
+	inFlightAbort.value = preflightController;
+
 	// WP-7 A11y #5: announce ONCE at the start of the turn so SR users learn
 	// that (a) a response is generating and (b) Escape aborts it. The Stop
 	// button itself carries `aria-keyshortcuts="Escape"` for the same hint
@@ -308,10 +318,21 @@ async function handleSend(): Promise<void> {
 		logger: loggerPort,
 	});
 
+	// Preflight Escape (Codex P2 on PR #402): if the user pressed Escape during
+	// the vault reads above, the preflight controller is aborted. Bail out
+	// before invoking the orchestrator so the turn never starts.
+	if (preflightController.signal.aborted) {
+		inFlightAbort.value = null;
+		messagesStore.clearResponse();
+		await nextTick();
+		focusTextarea();
+		return;
+	}
+
 	// `onAbortController` fires the moment the orchestrator mints the
 	// streaming controller — before any delta arrives. Plugging it into
-	// `inFlightAbort` makes the "Stop generation" button visible for the
-	// duration of the stream, matching the pre-refactor behaviour.
+	// `inFlightAbort` replaces the preflight controller with the streaming
+	// one, so `handleStopGeneration` keeps aborting whichever is current.
 	const result = await getOrchestrator().sendTurn(input, {
 		onAbortController: (controller) => {
 			inFlightAbort.value = controller;

@@ -110,14 +110,17 @@ describe('SlashCommandDropdown', () => {
 			expect(po.root.attributes('id')).toBe('slash-command-dropdown');
 		});
 
-		it('each option carries id="slash-command-item-${name}" for aria-activedescendant (WP-7 a11y #3)', () => {
+		it('each option carries id="slash-command-item-${index}" for aria-activedescendant (WP-7 a11y #3)', () => {
+			// Codex P2 follow-up: index-based ids (not name-based) so duplicates
+			// are impossible when two commands share a name (e.g. built-in /help
+			// alongside vault `.claude/commands/help.md`).
 			const { po } = mountDropdown({
 				commands: [CLEAR, NEW, HELP],
 				selectedIndex: 0,
 			});
-			expect(po.itemByName('clear').attributes('id')).toBe('slash-command-item-clear');
-			expect(po.itemByName('new').attributes('id')).toBe('slash-command-item-new');
-			expect(po.itemByName('help').attributes('id')).toBe('slash-command-item-help');
+			expect(po.itemByName('clear').attributes('id')).toBe('slash-command-item-0');
+			expect(po.itemByName('new').attributes('id')).toBe('slash-command-item-1');
+			expect(po.itemByName('help').attributes('id')).toBe('slash-command-item-2');
 		});
 	});
 

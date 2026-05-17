@@ -452,7 +452,7 @@ describe('ChatInput', () => {
 			const ta = po.textarea;
 			expect(ta.attributes('aria-expanded')).toBe('true');
 			expect(ta.attributes('aria-controls')).toBe('slash-command-dropdown');
-			expect(ta.attributes('aria-activedescendant')).toBe('slash-command-item-clear');
+			expect(ta.attributes('aria-activedescendant')).toBe('slash-command-item-0');
 		});
 
 		it('aria-controls + aria-activedescendant flip to the mention picker when it opens', async () => {
