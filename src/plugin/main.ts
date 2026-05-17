@@ -35,7 +35,7 @@ import { ALL_MODULES, type ModuleDescriptor } from '@/modules'
 import { i18nMerge, i18nTranslate, setLocale, type SupportedLocale } from '@/ui/i18n'
 import type { SecretStorePort, TranslationPort } from '@/domain/ports'
 import { SECRET_ID_ANTHROPIC } from '@/domain/ports'
-import { useChatStore } from '@/ui/stores/chatStore'
+import { useMessagesStore } from '@/ui/stores/messagesStore'
 
 export default class SpecoratorPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS }
@@ -313,8 +313,8 @@ export default class SpecoratorPlugin extends Plugin {
             .onClick(() => {
               void this.activateAgentSidepanel().then(() => {
                 if (this._agentSidepanelView?.pinia) {
-                  const store = useChatStore(this._agentSidepanelView.pinia)
-                  store.addContextFile({ path: file.path, label: file.name, isAuto: false })
+                  const messagesStore = useMessagesStore(this._agentSidepanelView.pinia)
+                  messagesStore.addContextFile({ path: file.path, label: file.name, isAuto: false })
                 }
               })
             })
@@ -327,11 +327,11 @@ export default class SpecoratorPlugin extends Plugin {
       this.app.workspace.on('active-leaf-change', () => {
         const activeFile = this.app.workspace.getActiveFile()
         if (this._agentSidepanelView?.pinia) {
-          const store = useChatStore(this._agentSidepanelView.pinia)
+          const messagesStore = useMessagesStore(this._agentSidepanelView.pinia)
           if (activeFile) {
-            store.setActiveFile({ path: activeFile.path, label: activeFile.name, isAuto: true })
+            messagesStore.setActiveFile({ path: activeFile.path, label: activeFile.name, isAuto: true })
           } else {
-            store.setActiveFile(null)
+            messagesStore.setActiveFile(null)
           }
         }
       }),

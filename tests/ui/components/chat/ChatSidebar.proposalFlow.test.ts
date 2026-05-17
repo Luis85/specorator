@@ -45,7 +45,7 @@ import {
 	TRANSPORT_KIND_KEY,
 	SECRET_STORE_PORT,
 } from '@/infrastructure/bridge/ports'
-import { useChatStore } from '@/ui/stores/chatStore'
+import { getChatStoresFacade } from '../../../__fakes__/chatStoresFacade'
 import { ChatSidebarPO } from './ChatSidebar.po'
 import { FileWriteProposalCardPO } from './FileWriteProposalCard.po'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
@@ -126,7 +126,7 @@ async function mountSidebar(args: MountArgs = {}) {
 	})
 
 	await flushPromises()
-	const store = useChatStore(pinia)
+	const store = getChatStoresFacade(pinia)
 	return {
 		wrapper,
 		port,
@@ -138,7 +138,7 @@ async function mountSidebar(args: MountArgs = {}) {
 }
 
 async function send(
-	store: ReturnType<typeof useChatStore>,
+	store: ReturnType<typeof getChatStoresFacade>,
 	po: ChatSidebarPO,
 	text: string,
 ) {

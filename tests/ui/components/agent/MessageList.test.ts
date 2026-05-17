@@ -11,7 +11,7 @@ import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import MessageList from '@/ui/components/agent/MessageList.vue';
 import { i18n } from '@/ui/i18n';
-import { useChatStore } from '@/ui/stores/chatStore';
+import { useMessagesStore } from '@/ui/stores/messagesStore';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
 import { MessageListPO } from './MessageList.po';
 
@@ -57,7 +57,7 @@ describe('MessageList', () => {
 	});
 
 	it('renders user and assistant turns for the active thread', async () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		const tid = 'thread-1';
 		store.appendMessage(msg(tid, 'user', { text: 'Hi there.' }));
 		store.appendMessage(msg(tid, 'assistant', { text: 'Hello!' }));
@@ -71,7 +71,7 @@ describe('MessageList', () => {
 	});
 
 	it('renders the per-message trim notice when an assistant turn was truncated', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		const tid = 'thread-trim';
 		store.appendMessage(msg(tid, 'user', { text: 'Q' }));
 		store.appendMessage(msg(tid, 'assistant', { text: 'A', truncated: true }));
@@ -81,7 +81,7 @@ describe('MessageList', () => {
 	});
 
 	it('renders the empty-text placeholder when an assistant turn has no body', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		const tid = 'thread-proposal-only';
 		store.appendMessage(msg(tid, 'user', { text: 'Make me a file' }));
 		store.appendMessage(msg(tid, 'assistant', { text: '' }));
@@ -91,7 +91,7 @@ describe('MessageList', () => {
 	});
 
 	it('only renders messages from the active thread (isolation)', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		store.appendMessage(msg('thread-a', 'user', { text: 'A-user' }));
 		store.appendMessage(msg('thread-a', 'assistant', { text: 'A-assistant' }));
 		store.appendMessage(msg('thread-b', 'user', { text: 'B-user' }));
@@ -103,7 +103,7 @@ describe('MessageList', () => {
 	});
 
 	it('renders bold markdown in an assistant turn (PR-ASV-7)', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		const tid = 'thread-bold';
 		store.appendMessage(msg(tid, 'assistant', { text: 'Make it **really** clear.' }));
 		const { po } = mountList(tid);
@@ -114,7 +114,7 @@ describe('MessageList', () => {
 	});
 
 	it('renders inline code from backticks (PR-ASV-7)', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		const tid = 'thread-inline-code';
 		store.appendMessage(msg(tid, 'assistant', { text: 'Run `npm test` first.' }));
 		const { po } = mountList(tid);
@@ -127,7 +127,7 @@ describe('MessageList', () => {
 	});
 
 	it('renders fenced code blocks from triple-backtick fences (PR-ASV-7)', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		const tid = 'thread-fence';
 		store.appendMessage(msg(tid, 'assistant', { text: '```ts\nconst x = 1;\n```' }));
 		const { po } = mountList(tid);
@@ -137,7 +137,7 @@ describe('MessageList', () => {
 	});
 
 	it('escapes embedded HTML in message text (PR-ASV-7 XSS safety)', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		const tid = 'thread-xss';
 		store.appendMessage(msg(tid, 'assistant', { text: '<script>alert(1)</script>' }));
 		const { po } = mountList(tid);
@@ -148,7 +148,7 @@ describe('MessageList', () => {
 	});
 
 	it('exposes role="log" with the aria-live="polite" hint on the scroll container', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		const tid = 'thread-aria';
 		store.appendMessage(msg(tid, 'user'));
 		const { po } = mountList(tid);

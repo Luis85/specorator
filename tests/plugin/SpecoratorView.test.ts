@@ -54,7 +54,7 @@ import type {
   ConfirmModalPort,
   StreamDelta,
 } from '@/domain/ports'
-import { useChatStore } from '@/ui/stores/chatStore'
+import { getChatStoresFacade } from '../__fakes__/chatStoresFacade'
 import type SpecoratorPlugin from '@/plugin/main'
 
 // -----------------------------------------------------------------------------
@@ -323,8 +323,8 @@ describe('SpecoratorView.bumpSettingsVersion() mid-turn guard (REQ-ASM-003)', ()
     const initialPort = activePort(view)
     expect(initialPort).toBe(fixture.degradedPort)
 
-    // Mark an in-flight turn so `useChatStore(pinia).status === 'loading'`.
-    const store = useChatStore(pinia)
+    // Mark an in-flight turn so `getChatStoresFacade(pinia).status === 'loading'`.
+    const store = getChatStoresFacade(pinia)
     store.beginRequest()
     expect(store.status).toBe('loading')
 
@@ -349,7 +349,7 @@ describe('SpecoratorView.bumpSettingsVersion() mid-turn guard (REQ-ASM-003)', ()
     // Install the deferred-refresh watcher the way `onOpen()` would.
     view._installPendingRefreshWatcher()
 
-    const store = useChatStore(pinia)
+    const store = getChatStoresFacade(pinia)
     // Mid-turn settings change.
     store.beginRequest()
     fixture.apiKeyPresentRef.value = true
@@ -371,7 +371,7 @@ describe('SpecoratorView.bumpSettingsVersion() mid-turn guard (REQ-ASM-003)', ()
 
     const view = makeView(fixture)
     view.pinia = pinia
-    const store = useChatStore(pinia)
+    const store = getChatStoresFacade(pinia)
 
     // Mid-turn: bump is a no-op for the selector.
     store.beginRequest()
@@ -520,7 +520,7 @@ describe('SpecoratorView.getActiveTransportKind() mirrors selectTransport().kind
     expect(view.getActiveTransportKind()).toBe('degraded')
 
     // Begin an in-flight turn.
-    const store = useChatStore(pinia)
+    const store = getChatStoresFacade(pinia)
     store.beginRequest()
     expect(store.status).toBe('loading')
 

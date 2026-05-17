@@ -3,7 +3,10 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick, inject } from '
 import { useI18n } from 'vue-i18n';
 import type { Ref } from 'vue';
 import { tryAsync } from '@/domain/shared/tryAsync';
-import { useChatStore } from '@/ui/stores/chatStore';
+import { useMessagesStore } from '@/ui/stores/messagesStore';
+import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore';
+import { useStreamingTurnStore } from '@/ui/stores/streamingTurnStore';
+import { useProposalStore } from '@/ui/stores/proposalStore';
 import { useClaudeCliPort } from '@/ui/composables/useClaudeCliPort';
 import { usePlatform } from '@/ui/composables/usePlatform';
 import { useVaultPort } from '@/ui/composables/useVaultPort';
@@ -60,7 +63,10 @@ const emit = defineEmits<{
 	'select-command': [command: SlashCommand];
 }>();
 
-const store = useChatStore();
+const messagesStore = useMessagesStore();
+const threadsStore = useChatThreadsStore();
+const streamingStore = useStreamingTurnStore();
+const proposalStore = useProposalStore();
 const claudeCliPort = useClaudeCliPort();
 const { isMobile } = usePlatform();
 const vaultPort = useVaultPort();
@@ -189,13 +195,13 @@ function updateActiveFile(
 	snapshot: { path: string; basename: string; extension: string } | null,
 ): void {
 	if (snapshot !== null) {
-		store.setActiveFile({
+		messagesStore.setActiveFile({
 			path: snapshot.path,
 			label: `${snapshot.basename}.${snapshot.extension}`,
 			isAuto: true,
 		});
 	} else {
-		store.setActiveFile(null);
+		messagesStore.setActiveFile(null);
 	}
 }
 
@@ -242,10 +248,10 @@ const transportKind = computed<TransportKind>(() => transportKindRef?.value ?? '
 const activeThreadProposals = computed<
 	ReadonlyArray<{ proposal: FileWriteProposal; pathError: PathValidationError | null }>
 >(() => {
-	const tid = store.activeThreadId;
+	const tid = threadsStore.activeThreadId;
 	if (tid === null) return [];
 	const out: { proposal: FileWriteProposal; pathError: PathValidationError | null }[] = [];
-	for (const p of store.proposals.values()) {
+	for (const p of proposalStore.proposals.values()) {
 		if (p.threadId !== tid) continue;
 		out.push({ proposal: p, pathError: proposalPathErrors.value.get(p.proposalId) ?? null });
 	}
@@ -263,7 +269,7 @@ type ResponseState =
 	| 'structured-fail';
 
 const responseState = computed<ResponseState>(() => {
-	if (store.status === 'loading') return 'loading';
+	if (messagesStore.status === 'loading') return 'loading';
 	// Pending proposal cards take precedence over error/timeout/structured-fail
 	// banners (Codex P2, PR #347). A failed or parse-erroring later turn must
 	// not hide still-actionable Accept/Reject controls for proposals already
@@ -279,12 +285,12 @@ const responseState = computed<ResponseState>(() => {
 		(entry) => entry.proposal.status === 'pending' && entry.pathError === null,
 	);
 	if (hasActionablePendingProposal) return 'success';
-	if (store.status === 'error') {
-		return store.errorType === 'timeout' ? 'timeout' : 'error';
+	if (messagesStore.status === 'error') {
+		return messagesStore.errorType === 'timeout' ? 'timeout' : 'error';
 	}
-	if (store.structuredFail) return 'structured-fail';
-	if (store.response !== null) {
-		return store.truncated ? 'trimmed-success' : 'success';
+	if (messagesStore.structuredFail) return 'structured-fail';
+	if (messagesStore.response !== null) {
+		return messagesStore.truncated ? 'trimmed-success' : 'success';
 	}
 	// Render success state (empty text) when there are non-pending proposals
 	// on the thread so the proposalCard slot is mounted alongside the
@@ -322,7 +328,7 @@ async function loadContextFileBodies(): Promise<ContextFile[]> {
 	// follow-up, PR #351). The underlying manual entry stays in state and
 	// resurfaces when the auto slot moves away.
 	return Promise.all(
-		store.effectiveContextFiles.map(async (entry) => {
+		messagesStore.effectiveContextFiles.map(async (entry) => {
 			const readResult = await tryAsync(() => vaultPort.readFile(entry.path));
 			return {
 				path: entry.path,
@@ -357,10 +363,10 @@ function mintRotatedThread(args: {
 		createdAt: args.nowIso,
 		lastUsedAt: args.nowIso,
 	};
-	store.upsertThread(fresh);
-	store.setActiveThreadId(threadId);
+	threadsStore.upsertThread(fresh);
+	threadsStore.setActiveThreadId(threadId);
 	if (args.previousThreadId !== null && args.previousThreadId !== threadId) {
-		store.clearThreadMessages(args.previousThreadId);
+		messagesStore.clearThreadMessages(args.previousThreadId);
 		// Codex P2 (PR #369, fifth review): also evict the previous
 		// thread's proposals on automatic rotation, mirroring the same
 		// fix on the "New conversation" handler. With no thread switcher
@@ -368,7 +374,7 @@ function mintRotatedThread(args: {
 		// payloads) become unreachable but stay resident; repeated
 		// `/create` turns across feature switches accumulated unbounded
 		// hidden state.
-		store.clearThreadProposals(args.previousThreadId);
+		proposalStore.clearThreadProposals(args.previousThreadId);
 	}
 	return threadId;
 }
@@ -390,9 +396,9 @@ function resolveActiveThread(args: {
 	transport: 'api-key' | 'subscription';
 }): { threadId: string; resumeSessionId: SessionId | undefined; isResumedTurn: boolean } {
 	const nowIso = new Date().toISOString();
-	const previousThreadId = store.activeThreadId;
+	const previousThreadId = threadsStore.activeThreadId;
 	const existing =
-		previousThreadId !== null ? store.chatThreads.get(previousThreadId) : undefined;
+		previousThreadId !== null ? threadsStore.chatThreads.get(previousThreadId) : undefined;
 	const shouldRotate =
 		previousThreadId === null ||
 		existing?.transport !== args.transport ||
@@ -400,7 +406,7 @@ function resolveActiveThread(args: {
 	const threadId = shouldRotate
 		? mintRotatedThread({ previousThreadId, slug: args.slug, transport: args.transport, nowIso })
 		: previousThreadId;
-	const record = store.chatThreads.get(threadId);
+	const record = threadsStore.chatThreads.get(threadId);
 	const resumeSessionId = record?.sessionId ?? undefined;
 	return { threadId, resumeSessionId, isResumedTurn: resumeSessionId !== undefined };
 }
@@ -416,7 +422,7 @@ function mirrorTurnToVault(args: {
 	userMessage: string;
 	assistantResponse: string;
 }): void {
-	const thread = store.chatThreads.get(args.threadId);
+	const thread = threadsStore.chatThreads.get(args.threadId);
 	if (thread === undefined) return;
 	void sessionLogWriterFactory
 		.getWriter()
@@ -444,27 +450,27 @@ function applySuccessfulTurn(args: {
 	assistantResponse: string;
 	truncated: boolean;
 }): void {
-	store.setResponse(args.assistantResponse, args.truncated);
-	store.setUserText('');
-	store.markThreadUsed(args.threadId);
+	messagesStore.setResponse(args.assistantResponse, args.truncated);
+	messagesStore.setUserText('');
+	threadsStore.markThreadUsed(args.threadId);
 	if (args.isResumedTurn) {
 		// Flash the resume indicator for this turn only (REQ-ASM-035).
-		store.setSessionResumed(true);
+		streamingStore.setSessionResumed(true);
 	}
 	// Mirror this turn to the multi-turn in-memory message log
 	// (IDEA-ASV-001, agent-sidepanel-v2 Increment 2). The user turn is
 	// appended first; the assistant turn carries the `truncated` flag so the
 	// message list can render the per-turn "context trimmed" notice without
-	// depending on `store.truncated` (which only describes the latest turn).
+	// depending on `messagesStore.truncated` (which only describes the latest turn).
 	const nowIso = new Date().toISOString();
-	store.appendMessage({
+	messagesStore.appendMessage({
 		id: generateMessageId(),
 		threadId: args.threadId,
 		role: 'user',
 		text: args.userMessage,
 		createdAt: nowIso,
 	});
-	store.appendMessage({
+	messagesStore.appendMessage({
 		id: generateMessageId(),
 		threadId: args.threadId,
 		role: 'assistant',
@@ -513,7 +519,7 @@ function addProposalFromEnvelope(args: {
 		failureReason: null,
 		originPrompt: args.originPrompt,
 	};
-	store.addProposal(proposal);
+	proposalStore.addProposal(proposal);
 	if (args.pathError !== null) {
 		const next = new Map(proposalPathErrors.value);
 		next.set(proposalId, args.pathError);
@@ -539,7 +545,7 @@ async function handleStructuredSend(args: {
 	onSessionId: (id: SessionId) => void;
 }): Promise<void> {
 	if (claudeCliPort === undefined) {
-		store.setError('query_failed');
+		messagesStore.setError('query_failed');
 		return;
 	}
 	const options: StructuredCliCallOptions = {
@@ -553,22 +559,22 @@ async function handleStructuredSend(args: {
 		// `SESSION_LOG_FAILED` even though the model itself succeeded.
 		onSessionId: args.onSessionId,
 	};
-	store.setCliStartingUp(true);
+	streamingStore.setCliStartingUp(true);
 	const structuredResult = await queryStructured(claudeCliPort, args.prompt, options);
-	store.setCliStartingUp(false);
+	streamingStore.setCliStartingUp(false);
 
 	if (!structuredResult.ok) {
 		if (structuredResult.error instanceof EnvelopeParseError) {
 			// Parse failure — surface 'structured-fail' state (REQ-ASM-025) but do
 			// not register an error on the store (separate UX from CLI errors).
-			store.setStructuredFail(true);
-			store.setResponse('', false);
+			messagesStore.setStructuredFail(true);
+			messagesStore.setResponse('', false);
 			return;
 		}
 		// Transport-level error from queryStructured → same error mapping as the
 		// free-text path.
 		const code = structuredResult.error.errorCode;
-		store.setError(code === 'TIMEOUT' ? 'timeout' : 'query_failed');
+		messagesStore.setError(code === 'TIMEOUT' ? 'timeout' : 'query_failed');
 		return;
 	}
 
@@ -615,29 +621,29 @@ async function handleStructuredSend(args: {
 
 // Send handler
 async function handleSend(): Promise<void> {
-	const text = store.userText.trim();
+	const text = messagesStore.userText.trim();
 	if (!text) return; // REQ-CCS-015: empty text guard
-	if (store.status === 'loading') return;
+	if (messagesStore.status === 'loading') return;
 	if (!available.value) return;
 
 	// Snapshot the raw user text *before* beginRequest() so we can mirror it to
 	// the session log post-turn — beginRequest does not clear userText, but the
 	// success branch below does.
-	const userMessage = store.userText;
+	const userMessage = messagesStore.userText;
 	lastUserTurn.value = userMessage;
 
 	// Clear any prior structured-fail flag at every new send.
-	store.setStructuredFail(false);
+	messagesStore.setStructuredFail(false);
 	// Codex P2 on PR #372: reset the streaming buffer BEFORE the structured/
 	// free-text branch split so every new send starts from empty streaming
 	// state. Without this, a previous streamed reply could leave
 	// `streamingText` populated when the next turn is routed through
-	// `handleStructuredSend()` — during that turn `store.status === 'loading'`,
+	// `handleStructuredSend()` — during that turn `messagesStore.status === 'loading'`,
 	// so `MessageList.vue` would treat the stale text as an active stream and
 	// render the old assistant output as the current response.
-	store.resetStreaming();
+	streamingStore.resetStreaming();
 
-	store.beginRequest();
+	messagesStore.beginRequest();
 
 	// Stage-aware system-prompt suffix (REQ-ASM-013, REQ-ASM-014, REQ-ASM-018,
 	// REQ-ASM-019). Recomputed every send — no caching. Resolves the active
@@ -661,14 +667,14 @@ async function handleSend(): Promise<void> {
 		resolvedKind === 'subscription' ? 'subscription' : 'api-key';
 	const { threadId, resumeSessionId, isResumedTurn } = resolveActiveThread({ slug, transport });
 	const onSessionId = (id: SessionId): void => {
-		store.captureSessionId(threadId, id);
+		threadsStore.captureSessionId(threadId, id);
 	};
 
 	const loadedFiles = await loadContextFileBodies();
-	const { prompt, truncated } = buildPrompt(store.userText, loadedFiles);
+	const { prompt, truncated } = buildPrompt(messagesStore.userText, loadedFiles);
 
 	if (claudeCliPort === undefined) {
-		store.setError('query_failed');
+		messagesStore.setError('query_failed');
 		return;
 	}
 
@@ -691,10 +697,10 @@ async function handleSend(): Promise<void> {
 	}
 
 	// Cold-spawn pill (R-ASM-003). Cleared on completion or error.
-	store.setCliStartingUp(true);
+	streamingStore.setCliStartingUp(true);
 	// IDEA-ASV-001 Increment 2 (PR-ASV-2-ui): consume the streaming
 	// `queryStream` rather than the non-streaming `query`. Text deltas
-	// accumulate into `store.streamingText` so `MessageList.vue` can
+	// accumulate into `streamingStore.streamingText` so `MessageList.vue` can
 	// render the in-flight assistant turn live. The exposed
 	// `inFlightAbort` ref lets the Stop button cancel mid-stream.
 	const abortController = new AbortController();
@@ -710,7 +716,7 @@ async function handleSend(): Promise<void> {
 		threadId,
 	});
 	inFlightAbort.value = null;
-	store.setCliStartingUp(false);
+	streamingStore.setCliStartingUp(false);
 
 	if (streamResult.kind === 'success') {
 		applySuccessfulTurn({
@@ -721,14 +727,14 @@ async function handleSend(): Promise<void> {
 			truncated,
 		});
 	} else {
-		store.setError(streamResult.errorCode === 'TIMEOUT' ? 'timeout' : 'query_failed');
+		messagesStore.setError(streamResult.errorCode === 'TIMEOUT' ? 'timeout' : 'query_failed');
 	}
-	// Don't call `store.resetStreaming()` here — that also clears
+	// Don't call `streamingStore.resetStreaming()` here — that also clears
 	// `sessionResumed`, which `applySuccessfulTurn` may have just set
 	// (REQ-ASM-035 flash-once contract). `streamingText` is cleared by the
 	// next turn's `resetStreaming()` at the top of `handleSend`; in the
 	// interim the streaming bubble in `MessageList` is gated on
-	// `store.status === 'loading'` so it stays hidden in the success state.
+	// `messagesStore.status === 'loading'` so it stays hidden in the success state.
 	await nextTick();
 	focusTextarea();
 }
@@ -761,25 +767,25 @@ function applyNonTerminalDelta(
 	switch (delta.type) {
 		case 'text':
 			chunks.push(delta.text);
-			store.appendStreamingDelta(delta.text);
+			streamingStore.appendStreamingDelta(delta.text);
 			return;
 		case 'session-id':
-			store.captureSessionId(threadId, delta.sessionId);
+			threadsStore.captureSessionId(threadId, delta.sessionId);
 			return;
 		case 'thinking':
-			store.appendStreamingThinking(delta.text);
+			streamingStore.appendStreamingThinking(delta.text);
 			return;
 		case 'tool-use-start':
-			store.startStreamingToolCall(delta.blockId, delta.toolName, delta.inputJson);
+			streamingStore.startStreamingToolCall(delta.blockId, delta.toolName, delta.inputJson);
 			return;
 		case 'tool-use-input-delta':
-			store.appendStreamingToolCallInput(delta.blockId, delta.inputJson);
+			streamingStore.appendStreamingToolCallInput(delta.blockId, delta.inputJson);
 			return;
 		case 'tool-use-stop':
-			store.finishStreamingToolCall(delta.blockId);
+			streamingStore.finishStreamingToolCall(delta.blockId);
 			return;
 		case 'usage':
-			store.setLastUsage({
+			streamingStore.setLastUsage({
 				inputTokens: delta.inputTokens,
 				outputTokens: delta.outputTokens,
 			});
@@ -789,14 +795,14 @@ function applyNonTerminalDelta(
 			// log so `MessageList.vue` can render an inline divider. Without
 			// this the auto-compaction event was invisible — hiding a
 			// critical history-rewrite transition (Codex P2 on PR #379).
-			store.appendCompactBoundaryNotice(threadId, { reason: delta.reason });
+			messagesStore.appendCompactBoundaryNotice(threadId, { reason: delta.reason });
 			return;
 	}
 }
 
 /**
  * Drain `queryStream` to a terminal delta. Accumulates `text` deltas into
- * `store.streamingText` so `MessageList.vue` can render the in-flight
+ * `streamingStore.streamingText` so `MessageList.vue` can render the in-flight
  * assistant turn token-by-token. Returns a normalised result describing
  * how the stream terminated:
  *   - `success` with the joined text on a `done` delta
@@ -860,7 +866,7 @@ async function mirrorTerminalProposalFailure(
  * Look up a proposal by id. Returns `null` if missing (e.g. cleared by reset).
  */
 function findProposal(proposalId: string): FileWriteProposal | null {
-	return store.proposals.get(proposalId) ?? null;
+	return proposalStore.proposals.get(proposalId) ?? null;
 }
 
 /**
@@ -880,7 +886,7 @@ async function handleAcceptProposal(payload: { proposalId: string }): Promise<vo
 	const proposal = findProposal(payload.proposalId);
 	if (proposal === null) return;
 	if (proposal.status !== 'pending') return;
-	const thread = store.chatThreads.get(proposal.threadId);
+	const thread = threadsStore.chatThreads.get(proposal.threadId);
 	if (thread === undefined) return;
 	// Note: the optional `confirmModalPort` is forwarded unconditionally; the
 	// commit pipeline only fails when the target path already exists AND no
@@ -917,7 +923,7 @@ async function handleAcceptProposal(payload: { proposalId: string }): Promise<vo
 			// trail stays complete even when the pre-commit settings read
 			// rejects (Codex P2 #4, PR #350).
 			await mirrorTerminalProposalFailure(proposal, thread, 'settings-read-failed');
-			store.setProposalStatus(payload.proposalId, 'failed', 'WRITE_FAILED');
+			proposalStore.setProposalStatus(payload.proposalId, 'failed', 'WRITE_FAILED');
 			return;
 		}
 		const currentSettings = settingsResult.value;
@@ -927,7 +933,7 @@ async function handleAcceptProposal(payload: { proposalId: string }): Promise<vo
 			next.set(payload.proposalId, revalidation.error);
 			proposalPathErrors.value = next;
 			await mirrorTerminalProposalFailure(proposal, thread, 'revalidation-failed');
-			store.setProposalStatus(payload.proposalId, 'failed', 'WRITE_FAILED');
+			proposalStore.setProposalStatus(payload.proposalId, 'failed', 'WRITE_FAILED');
 			return;
 		}
 		const writer = await sessionLogWriterFactory.getWriter();
@@ -940,10 +946,10 @@ async function handleAcceptProposal(payload: { proposalId: string }): Promise<vo
 			nowIso: () => new Date().toISOString(),
 		});
 		if (result.ok) {
-			store.setProposalStatus(payload.proposalId, 'accepted');
+			proposalStore.setProposalStatus(payload.proposalId, 'accepted');
 		} else {
 			const code: CommitProposalErrorCode = result.error.errorCode;
-			store.setProposalStatus(payload.proposalId, 'failed', code);
+			proposalStore.setProposalStatus(payload.proposalId, 'failed', code);
 		}
 	})().finally(() => {
 		inFlightDecisions.delete(payload.proposalId);
@@ -962,9 +968,9 @@ async function handleRejectProposal(payload: { proposalId: string }): Promise<vo
 	const proposal = findProposal(payload.proposalId);
 	if (proposal === null) return;
 	if (proposal.status !== 'pending') return;
-	const thread = store.chatThreads.get(proposal.threadId);
+	const thread = threadsStore.chatThreads.get(proposal.threadId);
 	if (thread === undefined) {
-		store.setProposalStatus(payload.proposalId, 'rejected');
+		proposalStore.setProposalStatus(payload.proposalId, 'rejected');
 		return;
 	}
 	inFlightDecisions.add(payload.proposalId);
@@ -980,7 +986,7 @@ async function handleRejectProposal(payload: { proposalId: string }): Promise<vo
 			logger: loggerPort,
 			nowIso: () => new Date().toISOString(),
 		});
-		store.setProposalStatus(payload.proposalId, 'rejected');
+		proposalStore.setProposalStatus(payload.proposalId, 'rejected');
 	})().finally(() => {
 		inFlightDecisions.delete(payload.proposalId);
 	});
@@ -999,31 +1005,31 @@ async function handleRetryProposal(payload: { proposalId: string }): Promise<voi
 	const proposal = findProposal(payload.proposalId);
 	const promptText = proposal?.originPrompt ?? lastUserTurn.value;
 	if (promptText.trim() === '') return;
-	store.setUserText(promptText);
+	messagesStore.setUserText(promptText);
 	await handleSend();
 }
 
 function handleRemoveFile(event: { path: string }): void {
-	store.removeContextFile(event.path);
+	messagesStore.removeContextFile(event.path);
 }
 
 function handleUserTextUpdate(text: string): void {
-	store.setUserText(text);
+	messagesStore.setUserText(text);
 }
 
 /**
  * Mention-picker selection (PR-ASV-4 / D-ASV-3). `ChatInput` already
  * replaces the `@<query>` text fragment inline; the sidebar's job is to
- * create the matching context-file chip via `store.addContextFile`.
+ * create the matching context-file chip via `messagesStore.addContextFile`.
  */
 function handleAddContextFile(candidate: { path: string; name: string }): void {
 	// Codex P2 on PR #376: promote auto entry to manual so explicit mention
 	// survives editor rotation.
-	const existing = store.contextFiles.find((f) => f.path === candidate.path);
+	const existing = messagesStore.contextFiles.find((f) => f.path === candidate.path);
 	if (existing?.isAuto === true) {
-		store.removeContextFile(candidate.path);
+		messagesStore.removeContextFile(candidate.path);
 	}
-	store.addContextFile({
+	messagesStore.addContextFile({
 		path: candidate.path,
 		label: candidate.name,
 		isAuto: false,
@@ -1135,8 +1141,8 @@ watch(available, async () => {
 		<template v-else>
 			<div class="sp-chat__header">
 				<h2 class="sp-chat__title">Ask Claude.</h2>
-				<SessionResumeIndicator :resumed="store.sessionResumed" />
-				<SubprocessStartingPill :visible="store.cliStartingUp" />
+				<SessionResumeIndicator :resumed="streamingStore.sessionResumed" />
+				<SubprocessStartingPill :visible="streamingStore.cliStartingUp" />
 				<TransportStatusPill :kind="transportKind" />
 				<button
 					v-if="inFlightAbort !== null"
@@ -1151,8 +1157,8 @@ watch(available, async () => {
 			</div>
 
 			<ContextFileList
-				:files="store.effectiveContextFiles"
-				:disabled="store.status === 'loading'"
+				:files="messagesStore.effectiveContextFiles"
+				:disabled="messagesStore.status === 'loading'"
 				@remove="handleRemoveFile"
 			/>
 
@@ -1160,9 +1166,9 @@ watch(available, async () => {
 
 			<ChatInput
 				ref="inputRef"
-				:model-value="store.userText"
-				:disabled="store.status === 'loading'"
-				:loading="store.status === 'loading'"
+				:model-value="messagesStore.userText"
+				:disabled="messagesStore.status === 'loading'"
+				:loading="messagesStore.status === 'loading'"
 				@update:model-value="handleUserTextUpdate"
 				@send="handleSend"
 				@add-context-file="handleAddContextFile"
@@ -1171,7 +1177,7 @@ watch(available, async () => {
 
 			<hr class="sp-chat__divider" />
 
-			<ChatResponse :state="responseState" :text="store.response ?? undefined">
+			<ChatResponse :state="responseState" :text="messagesStore.response ?? undefined">
 				<template #proposalCard>
 					<FileWriteProposalCard
 						v-for="entry in activeThreadProposals"
