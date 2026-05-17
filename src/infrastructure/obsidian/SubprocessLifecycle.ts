@@ -95,7 +95,10 @@ export class SubprocessLifecycle {
 			child = this._spawn(binaryPath, argv, { stdio: ['pipe', 'pipe', 'pipe'] });
 		} catch (e: unknown) {
 			const code = (e as NodeJS.ErrnoException | undefined)?.code;
-			this._logger.warn(`subscription.${event.replace('.', '_')}`, {
+			// Preserve the dotted event-key format so dashboards / alerts keyed
+			// on the prior `subscription.spawn.failed` / `subscription.structured.spawn_failed`
+			// names continue to match. Do NOT collapse dots into underscores.
+			this._logger.warn(`subscription.${event}`, {
 				transport: 'subscription',
 				event,
 				code: code ?? null,

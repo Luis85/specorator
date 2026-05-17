@@ -131,18 +131,19 @@ export function createNdjsonChannel<T>(opts: NdjsonChannelOptions): NdjsonChanne
 			newlineIdx = stdoutBuffer.indexOf('\n');
 		}
 
-		// Cap enforcement — measure the JS-string length (chars). For NDJSON
-		// from a CLI this is close enough to bytes for the protection goal
-		// (kill the pathology, not measure precisely). Tests configure a
-		// small cap so the rounding does not matter.
-		if (stdoutBuffer.length > maxBytes) {
+		// Cap enforcement — measure UTF-8 byte length, not JS string char count.
+		// Non-ASCII content (emoji, CJK) can have a chars-to-bytes ratio of 1:4,
+		// so a pathological 4-MiB-of-chars CJK blob is up to 16 MiB on the wire.
+		// Measuring bytes (`Buffer.byteLength(..., 'utf8')`) keeps the cap honest
+		// against the real wire-payload size that perf-F-8 was protecting against.
+		const bufferBytes = Buffer.byteLength(stdoutBuffer, 'utf8');
+		if (bufferBytes > maxBytes) {
 			overflowed = true;
 			overflowCount += 1;
-			const bytes = stdoutBuffer.length;
 			stdoutBuffer = '';
 			if (opts.onOverflow !== undefined) {
 				try {
-					opts.onOverflow(bytes);
+					opts.onOverflow(bufferBytes);
 				} catch {
 					// Callback errors must not crash the stdout pump.
 				}
