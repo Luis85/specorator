@@ -7,7 +7,7 @@
 | # | Title | Lane | Status | Depends on | Branch |
 | --- | --- | --- | --- | --- | --- |
 | WP-1 | StreamDelta codec seam + subprocess dedup | Spine | **merged** ([#397](https://github.com/Luis85/specorator/pull/397)) | — | `claude/asv3-wp01-stream-codec-seam` |
-| WP-2 | ChatTurnOrchestrator + drop doubled output panel | Store + UX | in-progress | WP-3 ✓ | `claude/asv3-wp02-chat-turn-orchestrator` |
+| WP-2 | ChatTurnOrchestrator + drop doubled output panel | Store + UX | **merged** ([#400](https://github.com/Luis85/specorator/pull/400)) | WP-3 ✓ | `claude/asv3-wp02-chat-turn-orchestrator` |
 | WP-3 | chatStore → Threads / StreamingTurn / Proposals | Store + UX | **merged** ([#396](https://github.com/Luis85/specorator/pull/396)) | — | `claude/asv3-wp03-chatstore-split` |
 | WP-4 | Markdown port as only path + bypass during stream + safeHref tighten | Markdown | queued | — | `claude/asv3-wp04-markdown-hardening` |
 | WP-5 | SessionLogWriter O(turn) append + Mirror facade | Log | queued | — | `claude/asv3-wp05-session-log-append` |
