@@ -36,6 +36,7 @@ import { i18nMerge, i18nTranslate, setLocale, type SupportedLocale } from '@/ui/
 import type { SecretStorePort, TranslationPort } from '@/domain/ports'
 import { SECRET_ID_ANTHROPIC } from '@/domain/ports'
 import { useMessagesStore } from '@/ui/stores/messagesStore'
+import { flushAllActiveSessionLogMirrors } from '@/ui/composables/useSessionLogMirror'
 
 export default class SpecoratorPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS }
@@ -419,6 +420,17 @@ export default class SpecoratorPlugin extends Plugin {
     }
     this.app.workspace.detachLeavesOfType(VIEW_TYPE)
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_AGENT)
+    // Codex P2 round-2 (PR #406): drain every live `SessionLogMirror`
+    // before the plugin tears down. `useSessionLogMirror`'s own
+    // `onBeforeUnmount` hook catches the sidebar-close path, but the
+    // app-exit / plugin-disable path runs through this `onunload()` and
+    // Vue's component unmount cannot await inside its synchronous
+    // teardown phase. Calling the module-level drain here lets the
+    // pending debounced `updated:` frontmatter writes land on disk via
+    // the writer's own per-path mutex. `onunload()` is fire-and-forget
+    // per Obsidian's contract (matching the existing chat-threads flush
+    // pattern above), so `void` is correct.
+    void flushAllActiveSessionLogMirrors()
     this.bridge?.hideAllNotices()
     // onunload() is synchronous (Obsidian contract). destroy() is fire-and-forget;
     // module destroy() implementations must be fast and non-critical.

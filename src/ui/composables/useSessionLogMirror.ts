@@ -23,6 +23,7 @@
  * mirror facade. The writer class is imported solely for construction; UI
  * callers receive a `SessionLogMirror` only (WP-5 DoD).
  */
+import { getCurrentInstance, onBeforeUnmount } from 'vue'
 import {
 	createSessionLogMirror,
 	type SessionLogMirror,
@@ -41,6 +42,46 @@ export interface UseSessionLogMirror {
 	getMirror(): Promise<SessionLogMirror>
 }
 
+/**
+ * Module-level registry of live mirrors owned by `useSessionLogMirror`
+ * consumers. Populated when the composable lazily constructs a mirror,
+ * cleared when the host component's `onBeforeUnmount` fires (Codex P2 round-2,
+ * PR #406).
+ *
+ * The plugin teardown path (`SpecoratorPlugin.onunload`) consults
+ * {@link flushAllActiveSessionLogMirrors} below to drain any pending
+ * debounced frontmatter flush before Obsidian tears the plugin down. The
+ * composable's own `onBeforeUnmount` catches the sidebar-close path, but the
+ * app-exit / plugin-disable path can run **before** Vue's unmount completes
+ * — the registry gives `onunload` a single synchronous handle on the live
+ * writers without coupling the plugin layer to Vue's component lifecycle.
+ *
+ * The set is module-scoped because all instances of `useSessionLogMirror`
+ * within a single Obsidian session share the same module load and the
+ * plugin layer has no other handle into the composable's closure. A
+ * `WeakRef`/`FinalizationRegistry` variant was considered and rejected:
+ * finalizer timing is non-deterministic across runtimes, and the explicit
+ * deregister-on-unmount path is straightforward and predictable.
+ */
+const activeMirrors = new Set<SessionLogMirror>()
+
+/**
+ * Drain every live `SessionLogMirror` registered by an in-flight
+ * `useSessionLogMirror` consumer. Called from `SpecoratorPlugin.onunload()`
+ * so the last few turns' `updated:` timestamps land on disk before the
+ * plugin / Obsidian tears down. Safe to call when the set is empty (no-op).
+ *
+ * Each mirror's `flushAll()` is independent — failures on one path are
+ * already routed to `logger.error` inside the writer, so we use
+ * `Promise.allSettled` to make sure a single failing path cannot strand
+ * the others.
+ */
+export function flushAllActiveSessionLogMirrors(): Promise<void> {
+	if (activeMirrors.size === 0) return Promise.resolve()
+	const drains = Array.from(activeMirrors, (mirror) => mirror.flushAll())
+	return Promise.allSettled(drains).then(() => undefined)
+}
+
 export function useSessionLogMirror(): UseSessionLogMirror {
 	const vault = useVaultPort()
 	const logger = useLoggerPort()
@@ -57,6 +98,48 @@ export function useSessionLogMirror(): UseSessionLogMirror {
 	// caller gets the same mirror.
 	let inFlight: Promise<SessionLogMirror> | null = null
 
+	// Codex P2 round-2 (PR #406): drain the debounced frontmatter flush on
+	// component teardown. The underlying `SessionLogWriter` debounces the
+	// `updated:` frontmatter rewrite for up to 30 s after every turn append
+	// (the body itself lands on disk synchronously via `appendFile`). If the
+	// sidebar unmounts inside that window, the in-memory `pendingFields`
+	// snapshot is dropped and the next session load shows the new turn body
+	// against a stale `updated:` timestamp.
+	//
+	// Registering `onBeforeUnmount` here is safe because `useSessionLogMirror`
+	// is consumed exactly once per `ChatSidebar` mount (no `provide`/`inject`
+	// fan-out, no aggregate composable). The cached mirror lives in this
+	// closure and is not shared with any other consumer, so draining on the
+	// only consumer's unmount cannot strand another caller's pending work.
+	//
+	// `onBeforeUnmount`'s callback executes synchronously inside Vue's
+	// teardown phase; it cannot `await`. We fire-and-forget the async
+	// `flushAll()` via `void` — the underlying writer drains through its
+	// per-path mutex, which is independent of the Vue lifecycle, so the
+	// final write proceeds on the microtask queue even though the
+	// component has already detached. Errors are swallowed: by the time we
+	// hit teardown the panel is gone, so there is no UI surface for a
+	// notification and the writer already routes failures to
+	// `logger.error` internally.
+	//
+	// `getCurrentInstance()` returns null in the standalone browser harness
+	// when the composable is called outside `setup()` (e.g. test scaffolding
+	// that constructs the composable in a `beforeEach` without a host
+	// component). Guard the hook so calling sites without a component
+	// instance still work.
+	if (getCurrentInstance() !== null) {
+		onBeforeUnmount(() => {
+			if (cached === null) return
+			// Drop the registry entry first so the plugin's onunload drain
+			// does not double-flush a mirror that this hook is already
+			// retiring. The drain itself is fire-and-forget for the same
+			// reasons documented above — the composable cannot await inside
+			// Vue's synchronous teardown phase.
+			activeMirrors.delete(cached)
+			void cached.flushAll()
+		})
+	}
+
 	return {
 		getMirror(): Promise<SessionLogMirror> {
 			if (inFlight !== null) return inFlight
@@ -68,6 +151,14 @@ export function useSessionLogMirror(): UseSessionLogMirror {
 				// session logs to the old folder while stage/context resolution
 				// uses the new one, splitting history across roots.
 				if (cached === null || cachedSpecsFolder !== current.specsFolder) {
+					// Retire the previous mirror's registry entry before
+					// replacing it so the plugin-level drain does not call
+					// `flushAll()` on a writer the composable has already
+					// abandoned. The new mirror's `flushAll()` covers the
+					// pending state of the path under the new specsFolder.
+					if (cached !== null) {
+						activeMirrors.delete(cached)
+					}
 					cached = createSessionLogMirror(
 						vault,
 						logger,
@@ -75,6 +166,7 @@ export function useSessionLogMirror(): UseSessionLogMirror {
 						() => new Date().toISOString(),
 					)
 					cachedSpecsFolder = current.specsFolder
+					activeMirrors.add(cached)
 				}
 				return cached
 			})()

@@ -304,6 +304,103 @@ prior fixes (P1 rounds 1–3, P2) keep working.
 - `npm run build:web` ✅
 - `npm run docs:api` ✅ (2 pre-existing TypeDoc warnings unrelated)
 
+### Iteration 6 (2026-05-17) — Codex P2 round-2 (PR #406)
+
+**Trigger** — Codex review on PR #406 round-4 patch flagged a new P2
+finding (thread `3254886910`, line 49 of `useSessionLogMirror.ts`):
+
+> `useSessionLogMirror` now builds a writer that debounces frontmatter
+> updates, but this composable never registers a teardown path
+> (`flushAll`) for the cached mirror. If the sidebar/plugin is closed
+> (or the app exits) within the debounce window after a turn append,
+> the turn body is already on disk but the latest `updated:` frontmatter
+> value can be lost because it was only staged in memory.
+
+Reproduction: a user sends a chat turn (`appendUserAssistant` → body
+lands via `appendFile`, debounced frontmatter flush scheduled 30 s
+out), then closes the sidebar (composable unmounts → mirror reference
+garbage-collected → debounce timer cleared but pending `updated:`
+never written). Next session load shows the new turn body with a
+stale `updated:` timestamp.
+
+**Architectural fix** — drain at both teardown surfaces.
+
+- `useSessionLogMirror.ts`:
+  - New `onBeforeUnmount` hook (registered only when
+    `getCurrentInstance() !== null`) calls `void cached.flushAll()`.
+    Vue's teardown is synchronous and cannot await; the writer's
+    per-path mutex completes the drain on microtasks.
+  - New module-level `activeMirrors = Set<SessionLogMirror>()` registry.
+    Every constructed mirror is added on creation and removed in three
+    places: (a) the unmount hook, (b) the `specsFolder`-invalidation
+    branch in `getMirror()` so a retired mirror cannot strand the
+    plugin-level drain, (c) the unmount hook deregisters BEFORE the
+    fire-and-forget `flushAll()` so the plugin-level drain cannot
+    double-flush a retiring mirror.
+  - New exported `flushAllActiveSessionLogMirrors()` returns a
+    `Promise.allSettled`-fronted drain across every live mirror.
+    Independent failures on one path cannot strand the others.
+- `src/plugin/main.ts`:
+  - `onunload()` invokes `void flushAllActiveSessionLogMirrors()`
+    immediately after `detachLeavesOfType(...)` and before
+    `bridge.hideAllNotices()`. The fire-and-forget shape matches the
+    sibling `chatThreads` flush pattern (Codex P1, PR #346); Obsidian's
+    `onunload` contract is synchronous so we cannot await.
+
+The fix composes with all four prior fixes:
+- Round-1 (`flushAll()` API) — consumed by both teardown surfaces.
+- Round-2 (per-path mutex covers flush) — keeps the unmount-time
+  flush race-free against a still-in-flight `appendBlock`.
+- Round-3 (bounded re-drain loop on `flushAll`) — guarantees
+  pendingFields armed during in-flight flushes are caught even when
+  the drain is invoked from a synchronous teardown phase.
+- Round-4 (preserve-on-malformed-frontmatter) — orthogonal; this
+  fix touches no `seedCache` paths.
+
+**Tests**
+
+- `tests/ui/composables/useSessionLogMirror.test.ts` (+5 tests):
+  - "drains the cached mirror on component unmount" — mount the
+    host, get the mirror, spy `flushAll`, unmount, assert one call.
+  - "does not call flushAll on unmount when no mirror was ever
+    constructed" — proves the lazy path is a no-op.
+  - "flushAllActiveSessionLogMirrors drains every live mirror" —
+    plugin-level contract: two mounts, two mirrors, drain both.
+  - "unmounting deregisters the mirror so plugin teardown does not
+    double-flush" — order invariant inside the unmount hook.
+  - "writes the turn body via appendFile and the teardown drain
+    materialises the updated frontmatter" — end-to-end: mirror a
+    turn, sanity-check the `appendFile` call, unmount, drain
+    microtasks, assert on-disk frontmatter has an `updated:` field.
+- `tests/plugin/main.session-log-flush.test.ts` (new file, +3 tests):
+  - "calls flushAllActiveSessionLogMirrors() exactly once on unload"
+    — load-bearing assertion; mocks the composable module so the
+    drain function is a spy.
+  - "invokes the drain even when no chatThreads flush is pending" —
+    proves the two teardown surfaces are independent.
+  - "drains the session-log mirror before forwarding to
+    bridge.hideAllNotices" — order invariant.
+
+**Architectural insight** — the mirror is **per-`ChatSidebar`-mount**
+(not a global singleton). `useSessionLogMirror()` is called exactly
+once from `ChatSidebar.vue`'s `<script setup>`, so the cached mirror
+lives in that composable closure and is not shared via `provide`/
+`inject`. The unmount hook is straightforward (one consumer = one
+flush). The plugin-level registry exists not because of fan-out but
+because Obsidian's `onunload` runs synchronously and cannot await Vue's
+component unmount lifecycle — it needs a direct handle to the writers
+to drive their drain in parallel with the Vue teardown cascade.
+
+**Gate status (final)** — all green:
+
+- `npm audit --audit-level=high --omit=dev` ✅ 0 vulnerabilities
+- `npm run typecheck` ✅
+- `npm run lint` ✅ 0 errors (25 pre-existing warnings)
+- `npm run test` ✅ 1892 / 1892 passing (+8 vs round-4)
+- `npm run build` ✅
+- `npm run build:web` ✅
+- `npm run docs:api` ✅ (2 pre-existing TypeDoc warnings unrelated)
+
 ## Carry-out items
 
 _None._
