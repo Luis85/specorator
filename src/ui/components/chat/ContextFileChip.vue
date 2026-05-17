@@ -48,6 +48,14 @@ const emit = defineEmits<{
 
 <style scoped>
 .sp-chat__chip {
+  /*
+   * UX #14 (WP-8): chips were `max-width: 14rem` on the label which clipped
+   * silently at narrow sidepanel widths. Switch to flex-based shrinking so
+   * the chip yields proportionally to the row, with a generous lower bound
+   * to keep at least the basename readable. The parent `ContextFileList`
+   * controls how many chips render before the `+N more` overflow chip
+   * takes over (see `VISIBLE_CHIP_LIMIT`).
+   */
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -55,6 +63,8 @@ const emit = defineEmits<{
   padding: 0.1rem 0.5rem;
   font-size: 0.8125rem;
   font-family: var(--font-text);
+  max-width: 100%;
+  min-width: 0;
 }
 
 .sp-chat__chip--auto {
@@ -85,7 +95,13 @@ const emit = defineEmits<{
 }
 
 .sp-chat__chip-label {
-  max-width: 14rem;
+  /*
+   * UX #14 (WP-8): the fixed `max-width: 14rem` clipped chips silently at
+   * narrow widths. Use flex-based shrinking; the parent row controls
+   * overall layout via `min-width: 0` propagation.
+   */
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

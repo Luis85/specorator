@@ -16,20 +16,54 @@
  *
  * Idempotent: once a decision is emitted, subsequent commits are no-ops
  * (mirrors Claudian's `resolved` guard).
+ *
+ * WP-8 changes:
+ *   - UX #19: plan markdown renders through `MarkdownBlock` (delegates to
+ *     the project's markdown port) instead of a literal `<pre>` block.
+ *   - UX #12: closing the sidepanel mid-plan no longer silently cancels.
+ *     The parent persists pending plans via the optional `persistKey` +
+ *     `pending-changed` emit so unresolved plans re-surface on remount.
+ *     When the host explicitly sets `persistOnUnmount` (the default),
+ *     unmount is treated as "card disappeared from view" — NOT a
+ *     decision; the plan is preserved as pending for the next mount. The
+ *     prior behaviour (`onBeforeUnmount` auto-cancel) is reserved for
+ *     the test-only `persistOnUnmount={false}` path that doesn't have a
+ *     persistence host.
  */
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { PlanDecision } from '@/domain/chat/PlanApproval';
+import MarkdownBlock from '@/ui/components/agent/MarkdownBlock.vue';
 
-const props = defineProps<{
-	/** Plan content as markdown. Rendered into the card body. */
-	planMarkdown: string;
-	/** Optional permissions the model is requesting. */
-	allowedPrompts?: readonly string[];
-}>();
+const props = withDefaults(
+	defineProps<{
+		/** Plan content as markdown. Rendered into the card body via MarkdownBlock. */
+		planMarkdown: string;
+		/** Optional permissions the model is requesting. */
+		allowedPrompts?: readonly string[];
+		/**
+		 * UX #12 (WP-8). When `true` (default), unmount without an explicit
+		 * decision is treated as a transient hide — the parent is informed via
+		 * `pending-changed` so it can persist the plan and re-surface it on
+		 * remount. When `false`, unmount auto-cancels (legacy behaviour for
+		 * tests that don't wire a persistence host).
+		 */
+		persistOnUnmount?: boolean;
+	}>(),
+	{
+		allowedPrompts: undefined,
+		persistOnUnmount: true,
+	},
+);
 
 const emit = defineEmits<{
 	decide: [decision: PlanDecision];
+	/**
+	 * Emitted on mount with `true` and on resolve / unmount-cancel with
+	 * `false`. Parents persist the boolean via `ApprovalPort` so unresolved
+	 * plans re-surface on remount (UX #12, WP-8).
+	 */
+	'pending-changed': [pending: boolean];
 }>();
 
 const { t } = useI18n();
@@ -48,6 +82,7 @@ function commit(decision: PlanDecision): void {
 	if (resolved.value) return;
 	resolved.value = true;
 	emit('decide', decision);
+	emit('pending-changed', false);
 }
 
 function moveSelection(delta: number): void {
@@ -131,11 +166,25 @@ const hasPermissions = computed(
 	() => props.allowedPrompts !== undefined && props.allowedPrompts.length > 0,
 );
 
+onMounted(() => {
+	// Tell the host the card is awaiting a decision so it can persist the
+	// pending plan and re-surface it on a future remount (UX #12, WP-8).
+	emit('pending-changed', true);
+});
+
 onBeforeUnmount(() => {
-	if (!resolved.value) {
-		resolved.value = true;
-		emit('decide', { type: 'cancel' });
+	if (resolved.value) return;
+	if (props.persistOnUnmount) {
+		// UX #12 (WP-8): unmount is a transient hide, not a decision. The
+		// parent has already stashed the pending plan via the on-mount
+		// `pending-changed` emit; do nothing else here.
+		return;
 	}
+	// Legacy fallback (e.g. tests without a persistence host) — preserves
+	// the prior "auto-cancel on unmount" semantics.
+	resolved.value = true;
+	emit('decide', { type: 'cancel' });
+	emit('pending-changed', false);
 });
 </script>
 
@@ -153,10 +202,17 @@ onBeforeUnmount(() => {
 			<span class="sp-plan-approval__icon" aria-hidden="true">📋</span>
 			<span>{{ t('agent.planApprovalHeading') }}</span>
 		</header>
-		<pre
+		<!--
+      UX #19 (WP-8): plan body is markdown; render through the project's
+      MarkdownBlock so headings/lists/code render properly instead of as a
+      literal `<pre>` block.
+    -->
+		<div
 			class="sp-plan-approval__plan"
 			data-testid="agent-plan-approval-plan"
-		>{{ planMarkdown }}</pre>
+		>
+			<MarkdownBlock :text="planMarkdown" />
+		</div>
 		<p
 			v-if="hasPermissions"
 			class="sp-plan-approval__permissions"
@@ -225,7 +281,6 @@ onBeforeUnmount(() => {
 	border-radius: 4px;
 	font-family: inherit;
 	font-size: 0.8125rem;
-	white-space: pre-wrap;
 	max-height: 240px;
 	overflow-y: auto;
 }

@@ -132,6 +132,24 @@ function focusTextarea(): void {
 	ta?.focus();
 }
 
+/**
+ * UX #11 (WP-8) Codex P2: focus the textarea AND dispatch a synthetic
+ * `input` event so `ChatInput`'s `handleInput` runs — which is what opens
+ * the slash palette / @-mention picker based on the leading character.
+ * External `setUserText` alone updates the model but doesn't fire the
+ * textarea's `@input` handler, so the picker would stay closed after a
+ * starter-tile click.
+ */
+function focusInputForTilePrefill(): void {
+	const ta = inputRef.value?.textareaEl as HTMLTextAreaElement | null | undefined;
+	if (ta === null || ta === undefined) return;
+	ta.focus();
+	ta.setSelectionRange(ta.value.length, ta.value.length);
+	ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+defineExpose({ focusInputForTilePrefill });
+
 onMounted(async () => {
 	if (claudeCliPort !== undefined) {
 		available.value = await claudeCliPort.isAvailable();
@@ -393,7 +411,7 @@ watch(available, async () => {
 		<!-- Ready state -->
 		<template v-else>
 			<div class="sp-chat__header">
-				<h2 class="sp-chat__title">Ask Claude.</h2>
+				<h2 class="sp-chat__title">{{ $t('chat.title') }}</h2>
 				<SessionResumeIndicator :resumed="streamingStore.sessionResumed" />
 				<SubprocessStartingPill :visible="streamingStore.cliStartingUp" />
 				<TransportStatusPill :kind="transportKind" />
@@ -498,15 +516,20 @@ watch(available, async () => {
 	border-top: 1px solid var(--background-modifier-border);
 }
 
+/*
+ * UX #16 (WP-8): Stop just aborts a stream — it is not a destructive
+ * confirmation. Render with neutral chrome (secondary background, normal
+ * border) so the visual weight matches the consequence.
+ */
 .sp-chat__stop {
 	margin-left: auto;
 	font-size: 0.75rem;
 	font-weight: 500;
 	padding: 0.25rem 0.625rem;
 	border-radius: 4px;
-	border: 1px solid var(--background-modifier-error-border, var(--background-modifier-border));
-	background: var(--background-modifier-error, var(--background-secondary));
-	color: var(--text-on-accent, var(--text-normal));
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	color: var(--text-normal);
 	cursor: pointer;
 	transition:
 		background-color 0.15s,
@@ -514,6 +537,6 @@ watch(available, async () => {
 }
 
 .sp-chat__stop:hover {
-	background: var(--background-modifier-error-hover, var(--interactive-hover));
+	background: var(--interactive-hover);
 }
 </style>

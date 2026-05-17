@@ -2,14 +2,27 @@
 /**
  * Renders the multi-turn message history for the active thread (IDEA-ASV-001,
  * agent-sidepanel-v2 Increment 2). Reads `messages.get(threadId) ?? []` from
- * the chat store. Scrolls to the bottom on every new message so the most
- * recent turn is always in view.
+ * the chat store.
+ *
+ * WP-8 changes:
+ *   - UX #8 — scroll auto-pinning is now bottom-aware. We track whether the
+ *     user is "at the bottom" of the scroll container (within a small
+ *     tolerance). New deltas only auto-scroll when the user is already at
+ *     the bottom; otherwise a floating "↓ New messages" pill appears so the
+ *     reader can jump down on demand without being yanked mid-read. The
+ *     scrollTop write is coalesced through `requestAnimationFrame` so
+ *     bursts of streaming-text deltas (common during PR-ASV-2-ui) don't
+ *     thrash the scroll position.
+ *   - UX #11 — the empty state used to be a single italic line. It now
+ *     renders four starter-tile affordances; clicking a tile pre-fills the
+ *     chat textarea via the `tile-action` emit so the user can edit and
+ *     send.
  *
  * Visual reference: Claudian's per-tab message list
  * (https://github.com/YishenTu/claudian) rendered with Vue 3 SFCs instead of
  * imperative DOM (ADR-003).
  */
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMessagesStore, type CompactBoundaryNoticeDto } from '@/ui/stores/messagesStore';
 import { useStreamingTurnStore } from '@/ui/stores/streamingTurnStore';
@@ -28,9 +41,20 @@ type TranscriptEntry =
 	| { readonly kind: 'message'; readonly message: ChatMessage }
 	| { readonly kind: 'compact-boundary'; readonly notice: CompactBoundaryNoticeDto };
 
+type EmptyTileKey = 'slash' | 'mention' | 'send' | 'escape';
+
 const props = defineProps<{
 	/** Active thread id, or `null` when no thread is selected. */
 	threadId: string | null;
+}>();
+
+const emit = defineEmits<{
+	/**
+	 * UX #11 (WP-8). Fired when the user clicks a starter tile in the
+	 * empty state; the host (AgentSidepanelRoot) pre-fills the textarea
+	 * with the corresponding prompt fragment.
+	 */
+	'tile-action': [key: EmptyTileKey];
 }>();
 
 const messagesStore = useMessagesStore();
@@ -103,6 +127,85 @@ const streamingToolCallsLength = computed(() => {
 	return total;
 });
 
+/**
+ * UX #8 (WP-8). Bottom-aware auto-scroll.
+ *
+ * `isAtBottom` follows the user's scroll position; we read it via a
+ * passive `scroll` listener and treat anything within `BOTTOM_TOLERANCE_PX`
+ * of the maximum as "at the bottom". When new content arrives:
+ *   - if `isAtBottom` → coalesce a scrollTop write into the next rAF.
+ *   - otherwise → flip `showNewMessagesPill` so the user can jump down.
+ *
+ * The rAF coalescing also keeps WP-10 perf goals happy (one DOM write per
+ * frame even under streaming bursts). WP-10 docs note: this rAF lives in
+ * WP-8 by agreement, NOT in WP-10.
+ */
+const BOTTOM_TOLERANCE_PX = 32;
+const isAtBottom = ref(true);
+const showNewMessagesPill = ref(false);
+let scrollRafHandle: number | null = null;
+let pendingScrollToBottom = false;
+
+function measureIsAtBottom(): boolean {
+	const el = scrollContainer.value;
+	if (el === null) return true;
+	const distanceFromBottom = el.scrollHeight - (el.scrollTop + el.clientHeight);
+	return distanceFromBottom <= BOTTOM_TOLERANCE_PX;
+}
+
+function handleScroll(): void {
+	const atBottom = measureIsAtBottom();
+	isAtBottom.value = atBottom;
+	if (atBottom) showNewMessagesPill.value = false;
+}
+
+function scheduleScrollToBottom(): void {
+	pendingScrollToBottom = true;
+	if (scrollRafHandle !== null) return;
+	const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null;
+	const runner = (): void => {
+		scrollRafHandle = null;
+		if (!pendingScrollToBottom) return;
+		pendingScrollToBottom = false;
+		const el = scrollContainer.value;
+		if (el === null) return;
+		el.scrollTop = el.scrollHeight;
+		// Manually reset; otherwise jsdom-style envs that don't dispatch
+		// `scroll` events on programmatic writes leave the pill stuck.
+		isAtBottom.value = true;
+		showNewMessagesPill.value = false;
+	};
+	if (raf !== null) {
+		scrollRafHandle = raf(runner);
+	} else {
+		// SSR / non-browser env fallback — flush synchronously.
+		runner();
+	}
+}
+
+function jumpToBottom(): void {
+	const el = scrollContainer.value;
+	if (el === null) return;
+	el.scrollTop = el.scrollHeight;
+	isAtBottom.value = true;
+	showNewMessagesPill.value = false;
+}
+
+/**
+ * Codex P2 on PR #403: `isAtBottom` is only updated by `@scroll`, so the
+ * value from one thread leaks into the next when the user switches threads
+ * (this component is not remounted on threadId change). Reset to the
+ * "fresh thread" default whenever threadId changes: at-bottom + pill hidden.
+ * The auto-scroll watcher below then picks the at-bottom branch for the
+ * first content tick of the new thread.
+ */
+watch(
+	() => props.threadId,
+	() => {
+		isAtBottom.value = true;
+		showNewMessagesPill.value = false;
+	},
+);
 
 watch(
 	[
@@ -116,9 +219,36 @@ watch(
 		await nextTick();
 		const el = scrollContainer.value;
 		if (el === null) return;
-		el.scrollTop = el.scrollHeight;
+		// Recompute distance because new content may have just landed; the
+		// stored `isAtBottom` reflects the user's last observed position.
+		if (isAtBottom.value) {
+			scheduleScrollToBottom();
+		} else {
+			showNewMessagesPill.value = true;
+		}
 	},
 );
+
+onBeforeUnmount(() => {
+	if (scrollRafHandle !== null) {
+		const cancel =
+			typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null;
+		if (cancel !== null) cancel(scrollRafHandle);
+		scrollRafHandle = null;
+	}
+	pendingScrollToBottom = false;
+});
+
+const emptyTiles: ReadonlyArray<{ key: EmptyTileKey; labelKey: string }> = [
+	{ key: 'slash', labelKey: 'agent.emptyStateTiles.slash' },
+	{ key: 'mention', labelKey: 'agent.emptyStateTiles.mention' },
+	{ key: 'send', labelKey: 'agent.emptyStateTiles.send' },
+	{ key: 'escape', labelKey: 'agent.emptyStateTiles.escape' },
+];
+
+function handleTileClick(key: EmptyTileKey): void {
+	emit('tile-action', key);
+}
 </script>
 
 <template>
@@ -130,6 +260,7 @@ watch(
 		role="log"
 		:aria-label="t('agent.messageListAriaLabel')"
 		aria-live="polite"
+		@scroll.passive="handleScroll"
 	>
 		<template v-for="entry in transcript">
 			<article
@@ -204,14 +335,47 @@ watch(
 				>
 			</div>
 		</article>
+		<button
+			v-if="showNewMessagesPill"
+			type="button"
+			class="sp-agent-messages__new-pill"
+			data-testid="agent-message-new-pill"
+			:aria-label="t('agent.newMessagesPillAriaLabel')"
+			@click="jumpToBottom"
+		>
+			{{ t('agent.newMessagesPill') }}
+		</button>
 	</div>
 	<div v-else class="sp-agent-messages--empty" data-testid="agent-message-list-empty">
 		<p class="sp-agent-messages__empty-body">{{ t('agent.emptyHistory') }}</p>
+		<p
+			class="sp-agent-messages__empty-tiles-heading"
+			data-testid="agent-message-list-empty-tiles-heading"
+		>
+			{{ t('agent.emptyStateTiles.heading') }}
+		</p>
+		<ul
+			class="sp-agent-messages__empty-tiles"
+			data-testid="agent-message-list-empty-tiles"
+			role="list"
+		>
+			<li v-for="tile in emptyTiles" :key="tile.key" role="listitem">
+				<button
+					type="button"
+					class="sp-agent-messages__empty-tile"
+					:data-testid="`agent-message-list-empty-tile-${tile.key}`"
+					@click="handleTileClick(tile.key)"
+				>
+					{{ t(tile.labelKey) }}
+				</button>
+			</li>
+		</ul>
 	</div>
 </template>
 
 <style scoped>
 .sp-agent-messages {
+	position: relative;
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow-y: auto;
@@ -225,8 +389,9 @@ watch(
 	flex: 0 0 auto;
 	padding: 1.25rem 1rem 0;
 	display: flex;
-	align-items: center;
-	justify-content: center;
+	flex-direction: column;
+	gap: 0.625rem;
+	align-items: stretch;
 }
 
 .sp-agent-messages__empty-body {
@@ -235,6 +400,49 @@ watch(
 	color: var(--text-muted);
 	text-align: center;
 	font-style: italic;
+}
+
+.sp-agent-messages__empty-tiles-heading {
+	margin: 0;
+	font-size: 0.75rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--text-faint, var(--text-muted));
+	text-align: center;
+}
+
+.sp-agent-messages__empty-tiles {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 0.375rem;
+}
+
+.sp-agent-messages__empty-tile {
+	width: 100%;
+	min-height: 3rem;
+	padding: 0.5rem 0.625rem;
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: 0.8125rem;
+	font-family: var(--font-text);
+	text-align: left;
+	cursor: pointer;
+	transition:
+		background-color 0.15s,
+		border-color 0.15s;
+}
+
+.sp-agent-messages__empty-tile:hover,
+.sp-agent-messages__empty-tile:focus {
+	background: var(--interactive-hover);
+	border-color: var(--interactive-accent);
+	outline: none;
 }
 
 .sp-agent-message {
@@ -322,5 +530,32 @@ watch(
 	to {
 		visibility: hidden;
 	}
+}
+
+/*
+ * UX #8 (WP-8): floating "↓ New messages" pill anchored to the bottom-
+ * centre of the scroll container. Visible only when new content arrived
+ * while the user was scrolled away from the bottom.
+ */
+.sp-agent-messages__new-pill {
+	position: sticky;
+	bottom: 0.5rem;
+	margin: 0 auto;
+	align-self: center;
+	padding: 0.25rem 0.75rem;
+	border-radius: 9999px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: 0.75rem;
+	font-weight: 500;
+	cursor: pointer;
+	box-shadow: var(--shadow-s, 0 2px 6px rgba(0, 0, 0, 0.15));
+}
+
+.sp-agent-messages__new-pill:hover,
+.sp-agent-messages__new-pill:focus {
+	background: var(--interactive-hover);
+	outline: none;
 }
 </style>

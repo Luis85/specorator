@@ -44,6 +44,12 @@ describe('SessionResumeIndicator', () => {
 			expect(po.glyphText()).toBe('↻')
 		})
 
+		it('UX #17 (WP-8): renders a visible "Resumed" text label alongside the glyph', () => {
+			const po = mountIndicator(true)
+			expect(po.hasLabel()).toBe(true)
+			expect(po.labelText()).toBe('Resumed')
+		})
+
 		it('contains no AI/SDK jargon in aria-label (NFR-CCS-012 inheritance)', () => {
 			const po = mountIndicator(true)
 			const label = (po.ariaLabel() ?? '').toLowerCase()
