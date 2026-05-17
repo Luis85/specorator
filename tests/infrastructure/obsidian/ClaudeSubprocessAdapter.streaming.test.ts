@@ -346,3 +346,169 @@ describe('ClaudeSubprocessAdapter.queryStream — subprocess exit code', () => {
 		}
 	});
 });
+
+// =============================================================================
+// 7. PR-ASV-2-delta-extension — extended StreamDelta variants
+// =============================================================================
+
+function streamEvent(inner: Record<string, unknown>): Record<string, unknown> {
+	return { type: 'stream_event', event: inner };
+}
+
+describe('ClaudeSubprocessAdapter.queryStream — extended StreamDelta variants', () => {
+	it('emits a `thinking` delta on a thinking_delta stream event', async () => {
+		const { adapter, spawn } = await makeAdapter();
+		const collected = collect(adapter.queryStream('hi'));
+		await Promise.resolve();
+		const child = spawn.lastChild();
+
+		spawn.emitStdout(
+			child,
+			ndjson(
+				streamEvent({
+					type: 'content_block_delta',
+					index: 0,
+					delta: { type: 'thinking_delta', thinking: 'reasoning ' },
+				}),
+				resultEvent('ok'),
+			),
+		);
+		spawn.closeWith(child, 0);
+
+		const deltas = await collected;
+		const thinking = deltas.filter(
+			(d): d is Extract<StreamDelta, { type: 'thinking' }> => d.type === 'thinking',
+		);
+		expect(thinking).toHaveLength(1);
+		expect(thinking[0].text).toBe('reasoning ');
+	});
+
+	it('emits `tool-use-start` / `tool-use-input-delta` / `tool-use-stop` keyed by blockId', async () => {
+		const { adapter, spawn } = await makeAdapter();
+		const collected = collect(adapter.queryStream('hi'));
+		await Promise.resolve();
+		const child = spawn.lastChild();
+
+		spawn.emitStdout(
+			child,
+			ndjson(
+				streamEvent({
+					type: 'content_block_start',
+					index: 1,
+					content_block: { type: 'tool_use', name: 'Bash', input: {} },
+				}),
+				streamEvent({
+					type: 'content_block_delta',
+					index: 1,
+					delta: { type: 'input_json_delta', partial_json: '{"command":"' },
+				}),
+				streamEvent({
+					type: 'content_block_delta',
+					index: 1,
+					delta: { type: 'input_json_delta', partial_json: 'ls"}' },
+				}),
+				streamEvent({ type: 'content_block_stop', index: 1 }),
+				resultEvent('ok'),
+			),
+		);
+		spawn.closeWith(child, 0);
+
+		const deltas = await collected;
+		const start = deltas.find(
+			(d): d is Extract<StreamDelta, { type: 'tool-use-start' }> =>
+				d.type === 'tool-use-start',
+		);
+		const inputDeltas = deltas.filter(
+			(d): d is Extract<StreamDelta, { type: 'tool-use-input-delta' }> =>
+				d.type === 'tool-use-input-delta',
+		);
+		const stops = deltas.filter(
+			(d): d is Extract<StreamDelta, { type: 'tool-use-stop' }> => d.type === 'tool-use-stop',
+		);
+		expect(start).toBeDefined();
+		expect(start!.toolName).toBe('Bash');
+		expect(inputDeltas).toHaveLength(2);
+		expect(inputDeltas[0].blockId).toBe(start!.blockId);
+		expect(inputDeltas[0].inputJson).toBe('{"command":"');
+		expect(inputDeltas[1].inputJson).toBe('ls"}');
+		expect(stops).toHaveLength(1);
+		expect(stops[0].blockId).toBe(start!.blockId);
+	});
+
+	it('emits a `compact-boundary` delta on a system compact_boundary event', async () => {
+		const { adapter, spawn } = await makeAdapter();
+		const collected = collect(adapter.queryStream('hi'));
+		await Promise.resolve();
+		const child = spawn.lastChild();
+
+		spawn.emitStdout(
+			child,
+			ndjson(
+				{ type: 'system', subtype: 'compact_boundary', reason: 'token_budget' },
+				resultEvent('ok'),
+			),
+		);
+		spawn.closeWith(child, 0);
+
+		const deltas = await collected;
+		const compacts = deltas.filter(
+			(d): d is Extract<StreamDelta, { type: 'compact-boundary' }> =>
+				d.type === 'compact-boundary',
+		);
+		expect(compacts).toHaveLength(1);
+		expect(compacts[0].reason).toBe('token_budget');
+	});
+
+	it('emits a `usage` delta on a message_start frame carrying usage', async () => {
+		const { adapter, spawn } = await makeAdapter();
+		const collected = collect(adapter.queryStream('hi'));
+		await Promise.resolve();
+		const child = spawn.lastChild();
+
+		spawn.emitStdout(
+			child,
+			ndjson(
+				streamEvent({
+					type: 'message_start',
+					message: { usage: { input_tokens: 11, output_tokens: 22 } },
+				}),
+				resultEvent('ok'),
+			),
+		);
+		spawn.closeWith(child, 0);
+
+		const deltas = await collected;
+		const usages = deltas.filter(
+			(d): d is Extract<StreamDelta, { type: 'usage' }> => d.type === 'usage',
+		);
+		expect(usages).toHaveLength(1);
+		expect(usages[0].inputTokens).toBe(11);
+		expect(usages[0].outputTokens).toBe(22);
+	});
+
+	it('emits a `usage` delta on a message_delta frame with outer usage', async () => {
+		const { adapter, spawn } = await makeAdapter();
+		const collected = collect(adapter.queryStream('hi'));
+		await Promise.resolve();
+		const child = spawn.lastChild();
+
+		spawn.emitStdout(
+			child,
+			ndjson(
+				streamEvent({
+					type: 'message_delta',
+					usage: { input_tokens: 1, output_tokens: 99 },
+				}),
+				resultEvent('ok'),
+			),
+		);
+		spawn.closeWith(child, 0);
+
+		const deltas = await collected;
+		const usages = deltas.filter(
+			(d): d is Extract<StreamDelta, { type: 'usage' }> => d.type === 'usage',
+		);
+		expect(usages).toHaveLength(1);
+		expect(usages[0].outputTokens).toBe(99);
+	});
+});
