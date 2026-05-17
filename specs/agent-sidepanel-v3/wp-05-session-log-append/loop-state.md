@@ -156,6 +156,77 @@ overwritten by the stale body snapshot.
 - `npm run build:web` ✅
 - `npm run docs:api` ✅ (2 pre-existing TypeDoc warnings unrelated)
 
+### Iteration 4 (2026-05-17) — Codex P1 round-3 (PR #406)
+
+**Trigger** — Codex review on PR #406 round-2 patch flagged a new P1
+finding (thread `3254834436`, line 830 of `SessionLogWriter.ts`):
+
+> When `flushFrontmatter` is called while another flush is already
+> `inFlight`, this branch just awaits the existing promise and returns.
+> If a new append arrives during that in-flight flush,
+> `pending.pendingFields` is updated and `flushAll()` may clear its
+> timer, then hit this early return; the new frontmatter snapshot is
+> left pending with no timer and never written. In plugin teardown (the
+> documented `flushAll()` use case), this can silently drop the latest
+> `updated:` timestamp despite the turn body being appended, so
+> `flushFrontmatter` should re-check `pendingFields` after awaiting and
+> perform another flush pass if needed.
+
+Reproduction confirmed. The bug surfaces when an `appendBlock` is
+queued in the mutex AHEAD of a flush's `doFlush` (timer fires after
+the appendBlock's mutex op started but before it reached
+`scheduleFrontmatterFlush`). The flush then captures + nulls
+`pendingFields` synchronously and queues `doFlush` BEHIND the pending
+append, so the append's subsequent `scheduleFrontmatterFlush` repopulates
+`pendingFields` DURING the in-flight flush. If `flushAll` is called
+mid-flight (plugin teardown), it clears the re-armed timer and calls
+`flushFrontmatter`, which sees `inFlight !== null` and returns early —
+silently dropping the new `updated:` snapshot.
+
+**Architectural fix** — two complementary defences.
+
+- `flushFrontmatter`: after `await pending.inFlight`, re-check
+  `pending.pendingFields`. If non-null, recurse through the fresh path
+  so the queued snapshot lands on disk. Each `pendingFields` update is
+  monotonic (every append replaces it with a strictly newer snapshot),
+  so the recursion converges in at most 1–2 passes.
+- `flushAll`: drain in a bounded loop (cap 4 passes). After each
+  `flushFrontmatter` call, re-check timer + `pendingFields` +
+  `inFlight`; clear any re-armed timer and flush again until the path
+  observes a steady state. Together with the `flushFrontmatter` fix
+  this guarantees no `updated:` snapshot survives teardown.
+
+**Tests**
+
+- New regression test in
+  `tests/application/chat/SessionLogWriter.test.ts`:
+  "flushAll() drains pendingFields armed during an in-flight flush
+  (Codex P1 round-3)". Sequence:
+  1. Park `appendFile` so turn 2's mutex op parks mid-`appendBlock`
+     before its `scheduleFrontmatterFlush` fires.
+  2. Let turn 1's debounce timer fire — the flush queues `doFlush`
+     AFTER the parked turn 2 in the mutex.
+  3. Release `appendFile` → turn 2's `scheduleFrontmatterFlush` runs
+     (pendingFields=B, timer re-armed).
+  4. Park `readFile` so `doFlush` enters the in-flight state.
+  5. Call `flushAll()` — pre-fix it returns early after awaiting the
+     in-flight flush.
+  6. Release `readFile`. Assert the on-disk frontmatter `updated:`
+     advanced to turn 2's timestamp, not turn 1's.
+  Verified the test FAILS on the round-2 code (`570b1c0`) — final
+  `updated:` field reads turn 1's timestamp — and PASSES on the
+  round-3 fix.
+
+**Gate status (final)** — all green:
+
+- `npm audit --audit-level=high --omit=dev` ✅ 0 vulnerabilities
+- `npm run typecheck` ✅
+- `npm run lint` ✅ 0 errors (25 pre-existing warnings)
+- `npm run test` ✅ 1881 / 1881 passing (+1 vs round-2)
+- `npm run build` ✅
+- `npm run build:web` ✅
+- `npm run docs:api` ✅ (2 pre-existing TypeDoc warnings unrelated)
+
 ## Carry-out items
 
 _None._

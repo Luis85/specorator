@@ -818,15 +818,43 @@ export class SessionLogWriter {
    *
    * Out-of-band body edits are preserved automatically: this reads the body
    * fresh on every flush rather than from an in-memory cache.
+   *
+   * **Codex P1 round-3 (2026-05-17):** when a `flushAll()` invocation
+   * (typically plugin teardown) arrives while another flush is already
+   * `inFlight`, we used to `await` the in-flight promise and return
+   * unconditionally. But `flushAll()` synchronously clears the debounce
+   * timer before calling this method, so any `pending.pendingFields`
+   * snapshot that arrived mid-flight is left armed with no timer to fire
+   * it. The result: the latest `updated:` timestamp is silently dropped on
+   * teardown even though the turn body itself was already written via
+   * `appendFile`. The fix re-checks `pending.pendingFields` after awaiting
+   * and runs another flush pass if a new snapshot landed during the wait.
+   * Each `pendingFields` change is a monotonic forward update (every
+   * append replaces the field with the latest `at`-derived snapshot), so
+   * worst-case one extra pass lands the latest fields.
    */
   private async flushFrontmatter(resolvedPath: string): Promise<void> {
     const pending = this.pendingByPath.get(resolvedPath)
     if (pending === undefined) return
     if (pending.inFlight !== null) {
-      // Coalesce a concurrent flush request into the in-flight one. The
-      // in-flight flush will pick up the latest `pendingFields` before its
-      // own write, so we don't need a second pass.
       await pending.inFlight
+      // After the in-flight flush settles, check whether `pendingFields`
+      // is still set. The in-flight flush nulls its own `pendingFields`
+      // snapshot at the start of its fresh path, so any non-null value
+      // here is *new* state armed by an append that landed either before
+      // we entered this branch (the snapshot was already there when this
+      // call arrived) or during the await (a mid-flight `appendBlock`).
+      // Both cases need another flush pass — `flushAll()` synchronously
+      // clears the debounce timer before invoking this method, so without
+      // the re-entry, the latest `updated:` timestamp is silently dropped
+      // even though the turn body itself was already appended. Each
+      // append replaces `pendingFields` with a strictly newer snapshot,
+      // so the recursion converges in at most 1–2 passes worst-case (one
+      // pass to write the current snapshot, one more pass if yet another
+      // append races the writeFile).
+      if (pending.pendingFields !== null) {
+        return this.flushFrontmatter(resolvedPath)
+      }
       return
     }
     // Capture the snapshot now and clear it; if another append lands while
@@ -895,18 +923,34 @@ export class SessionLogWriter {
     const paths = Array.from(this.pendingByPath.keys())
     await Promise.all(
       paths.map(async (resolvedPath) => {
-        const pending = this.pendingByPath.get(resolvedPath)
-        if (pending === undefined) return
-        if (pending.timer !== null) {
-          this.clearTimeoutFn(pending.timer)
-          pending.timer = null
+        // Codex P1 round-3 (2026-05-17): drain in a loop so any
+        // `pendingFields` snapshot armed *during* the flush (either because
+        // the flush was already in-flight when we entered, or because an
+        // `appendBlock` landed mid-flush and re-armed the debounce) still
+        // lands on disk before `flushAll()` returns. Without this, plugin
+        // teardown silently drops the latest `updated:` timestamp even
+        // though the turn body itself was already appended. Each iteration
+        // makes monotonic forward progress (every append replaces
+        // `pendingFields` with a strictly newer snapshot), so this loop
+        // converges in at most 1–2 extra passes worst-case. Bound the
+        // loop to a small constant so a logic regression cannot spin
+        // forever; in practice the second iteration always observes
+        // `pendingFields === null` because each pass writes whatever is
+        // queued and no new appends arrive during teardown.
+        for (let pass = 0; pass < 4; pass += 1) {
+          const pending = this.pendingByPath.get(resolvedPath)
+          if (pending === undefined) return
+          if (pending.timer !== null) {
+            this.clearTimeoutFn(pending.timer)
+            pending.timer = null
+          }
+          if (pending.pendingFields === null && pending.inFlight === null) {
+            return
+          }
+          // logger.error already fires inside flushFrontmatter; swallow the
+          // rejection here so plugin teardown stays best-effort.
+          await this.flushFrontmatter(resolvedPath).catch(swallow)
         }
-        if (pending.pendingFields === null && pending.inFlight === null) {
-          return
-        }
-        // logger.error already fires inside flushFrontmatter; swallow the
-        // rejection here so plugin teardown stays best-effort.
-        await this.flushFrontmatter(resolvedPath).catch(swallow)
       }),
     )
   }

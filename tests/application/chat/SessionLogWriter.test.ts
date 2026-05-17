@@ -664,6 +664,178 @@ describe('SessionLogWriter O(turn) append (WP-5 DoD)', () => {
     // turn 0 (seed), turn 1, turn 2 → at least three appendFile calls.
     expect(ports.bridge.calls.appendFile.length).toBeGreaterThanOrEqual(3)
   })
+
+  it('flushAll() drains pendingFields armed during an in-flight flush (Codex P1 round-3)', async () => {
+    // Reproduction of the teardown drop introduced by the P1 round-2
+    // debounced-flush design. The bug only manifests when an appendBlock
+    // is queued AHEAD of the flush's `doFlush` in the per-path mutex, so
+    // its `scheduleFrontmatterFlush` runs *during* the flush's
+    // `await tryAsync(() => flushPromise)` (after `pendingFields` was
+    // cleared but before `doFlush` actually runs). To force that order
+    // deterministically we park turn 2's `appendFile` so it sits in the
+    // mutex with its op started but its body not yet appended, then fire
+    // the timer for turn 1's flush. Sequence:
+    //
+    //   t=0  Turn 1 awaited. pendingFields=A, debounce timer armed.
+    //   t=1  Turn 2 fired (not awaited). Its mutex op starts, calls
+    //        appendBlock, calls `appendFile` which parks on a barrier.
+    //        `scheduleFrontmatterFlush` has NOT been called yet —
+    //        pendingFields is still A.
+    //   t=2  Turn 1's debounce timer fires. flushFrontmatter starts:
+    //        captures fields=A, clears pendingFields, _enqueue(doFlush)
+    //        queues doFlush AFTER turn 2 in the mutex, sets inFlight.
+    //        Yields at `await tryAsync(...)`.
+    //   t=3  Test releases the appendFile barrier. Turn 2's op resumes:
+    //        appendFile returns, `scheduleFrontmatterFlush` runs →
+    //        pendingFields=B, debounce timer re-armed.
+    //   t=4  Turn 2's mutex op completes. doFlush runs in mutex; its
+    //        readFile parks on a second barrier so doFlush is in-flight.
+    //   t=5  Test calls `flushAll()`. It clears the re-armed timer (so
+    //        B's pendingFields has no timer left) and calls
+    //        flushFrontmatter, which sees inFlight !== null and awaits.
+    //   t=6  Test releases the readFile barrier. doFlush completes
+    //        (writes A's frontmatter). inFlight is nulled.
+    //   t=7  Pre-fix: the flushAll-spawned flushFrontmatter returned
+    //        early after its await — pendingFields=B is left armed with
+    //        no timer, silently dropped on teardown. The on-disk
+    //        `updated:` field still reads A's timestamp even though B's
+    //        turn body was already on disk via appendFile.
+    //
+    // Post-fix: after awaiting, flushFrontmatter re-checks pendingFields
+    // and recurses on the fresh path to commit B. The flushAll loop also
+    // iterates until pendingFields is null. Either change alone fixes
+    // the documented case; together they bound the drain to ≤ 2 passes.
+    const thread = makeThread()
+    const stamps: ReadonlyArray<string> = [
+      '2026-05-14T10:00:00.000Z', // seed (turn 0)
+      '2026-05-14T10:01:00.000Z', // turn 1 — fields A
+      '2026-05-14T10:02:00.000Z', // turn 2 — fields B (must survive)
+    ]
+    let stampIdx = 0
+    const writer = makeWriter(
+      ports,
+      () => {
+        const next = stamps[stampIdx] ?? '2026-05-14T10:00:00.000Z'
+        stampIdx += 1
+        return next
+      },
+      'specs',
+      // Tight debounce — the test drives every yield explicitly via
+      // barriers, so we don't rely on wall-clock timing.
+      { flushDebounceMs: 0 },
+    )
+
+    // Seed (turn 0) — warm the cache and conflict-suffix resolver.
+    await writer.appendUserAssistant(thread, { user: 'u0', assistant: 'a0' })
+    // Drain the seed's debounce flush before we install barriers, so the
+    // subsequent readFile/appendFile spies only catch the turn-1/turn-2
+    // sequence we care about.
+    await writer.flushAll()
+
+    // Barrier #1: park the THIRD appendFile (seed=1, turn1=2, turn2=3)
+    // so turn 2's appendBlock sits in the mutex with its body not yet on
+    // disk — its scheduleFrontmatterFlush will be deferred until release.
+    const realAppendFile = ports.vault.appendFile.bind(ports.vault)
+    let appendFileCount = 0
+    let releaseAppend: () => void = () => undefined
+    const appendGate = new Promise<void>((r) => {
+      releaseAppend = r
+    })
+    let appendParkedSignal: () => void = () => undefined
+    const appendParked = new Promise<void>((r) => {
+      appendParkedSignal = r
+    })
+    vi.spyOn(ports.vault, 'appendFile').mockImplementation(
+      async (p: string, c: string) => {
+        appendFileCount += 1
+        if (appendFileCount === 2) {
+          appendParkedSignal()
+          await appendGate
+        }
+        return realAppendFile(p, c)
+      },
+    )
+
+    // Barrier #2: park the FIRST post-seed readFile (the flush's body
+    // read), so doFlush stays in-flight while we call flushAll.
+    const realReadFile = ports.vault.readFile.bind(ports.vault)
+    let readFileParked = false
+    let releaseRead: () => void = () => undefined
+    const readGate = new Promise<void>((r) => {
+      releaseRead = r
+    })
+    let readParkedSignal: () => void = () => undefined
+    const readParked = new Promise<void>((r) => {
+      readParkedSignal = r
+    })
+    vi.spyOn(ports.vault, 'readFile').mockImplementation(async (p: string) => {
+      if (!readFileParked && p.endsWith('.md')) {
+        readFileParked = true
+        readParkedSignal()
+        await readGate
+      }
+      return realReadFile(p)
+    })
+
+    // Turn 1: await — its appendFile is call #1 (not parked), and after
+    // it returns, pendingFields=A and the debounce timer is armed.
+    // Pre-arrange: rebind appendFileCount logic to treat THIS call as #2
+    // would require renumbering. Simpler: count starts at 0 already; the
+    // seed used the real appendFile, which our spy installs AFTER. So
+    // appendFileCount===1 is turn 1 (no park), appendFileCount===2 is
+    // turn 2 (parked). Good.
+    await writer.appendUserAssistant(thread, { user: 'u1', assistant: 'a1' })
+
+    // Turn 2: kick off without awaiting. Its mutex op runs as a
+    // microtask; appendBlock calls appendFile (call #2) → parks.
+    const turn2 = writer.appendUserAssistant(thread, {
+      user: 'u2',
+      assistant: 'a2',
+    })
+
+    // Wait until turn 2 is actually parked at appendFile — i.e. the
+    // mutex op for turn 2 has started but its scheduleFrontmatterFlush
+    // has not yet run.
+    await appendParked
+
+    // Now turn 1's debounce timer is armed (0ms). The next macrotask
+    // tick fires it. Yield repeatedly so the timer callback definitely
+    // runs and the flush's _enqueue queues doFlush AFTER turn 2 in the
+    // mutex.
+    for (let i = 0; i < 4; i += 1) {
+      await Promise.resolve()
+      // eslint-disable-next-line obsidianmd/prefer-active-window-timers
+      await new Promise<void>((r) => setTimeout(r, 0))
+    }
+
+    // Release turn 2's appendFile. Turn 2 finishes: scheduleFrontmatterFlush
+    // sets pendingFields=B and arms a new debounce timer. Then the mutex
+    // chain advances to doFlush, whose readFile hits barrier #2 and parks.
+    releaseAppend()
+
+    // Wait for doFlush to enter readFile (= flush is in-flight).
+    await readParked
+
+    // Now drive the teardown. flushAll clears the (re-armed) timer for B
+    // and calls flushFrontmatter, which sees inFlight !== null and
+    // awaits. Pre-fix it returns without ever flushing B.
+    const teardown = writer.flushAll()
+
+    // Release readFile so doFlush completes. Everything drains.
+    releaseRead()
+    await Promise.all([turn2, teardown])
+
+    // Read the on-disk content after teardown. Turn 2's body is present
+    // (appendFile already landed). The critical post-fix invariant: the
+    // frontmatter `updated:` field advanced to turn 2's timestamp,
+    // proving B's snapshot was not silently dropped.
+    const path = resolveSessionLogPath(thread.feature, thread.sessionId!, 'specs')
+    const finalContent = await realReadFile(path)
+    expect(finalContent).toContain('u2')
+    expect(finalContent).toContain('a2')
+    expect(finalContent).toContain("updated: '2026-05-14T10:02:00.000Z'")
+    expect(finalContent).not.toMatch(/updated: '2026-05-14T10:01:00\.000Z'/)
+  })
 })
 
 describe('SessionLogWriter.appendProposalDecision (REQ-ASM-046)', () => {
