@@ -46,13 +46,13 @@ import type SpecoratorPlugin from '@/plugin/main';
 
 function makePort(label: string): ClaudeCliPort {
 	return {
-		query: vi.fn(async () => ({ ok: true as const, value: `from-${label}` })),
 		isAvailable: vi.fn(async () => true),
-		startup: vi.fn(async () => undefined),
-		shutdown: vi.fn(() => undefined),
 		queryStream: vi.fn(
 			(_prompt: string, _options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> => {
-				return (async function* (): AsyncGenerator<StreamDelta> {})();
+				return (async function* (): AsyncGenerator<StreamDelta> {
+					yield { type: 'text', text: `from-${label}` };
+					yield { type: 'done' };
+				})();
 			},
 		),
 	};

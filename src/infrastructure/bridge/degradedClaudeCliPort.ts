@@ -1,11 +1,9 @@
 import type {
 	ClaudeCliPort,
-	ClaudeCliQueryOptions,
 	ClaudeCliStreamOptions,
 	StreamDelta,
 } from '@/domain/ports';
 import { ClaudeCliError } from '@/domain/ports';
-import { err, type Result } from '@/domain/shared/Result';
 
 /**
  * Singleton `ClaudeCliPort` returned by `selectTransport` whenever the
@@ -14,6 +12,11 @@ import { err, type Result } from '@/domain/shared/Result';
  * selector's `kind === 'degraded'`, but if any consumer accidentally invokes
  * the port, this stub fails fast with `CLI_LAUNCH_FAILED` rather than
  * crashing or making a network call.
+ *
+ * WP-12: surface narrowed to the new `ClaudeCliPort` shape (`isAvailable` +
+ * `queryStream`; no `query`, no lifecycle methods). The degraded port
+ * intentionally does not expose `runStructured` — its absence is what
+ * `queryStructured()` keys off when the transport is degraded.
  *
  * Satisfies REQ-ASM-002, REQ-ASM-009.
  *
@@ -26,23 +29,8 @@ function makeError(): ClaudeCliError {
 }
 
 export const degradedClaudeCliPort: ClaudeCliPort = Object.freeze({
-	query(
-		_prompt: string,
-		_options?: ClaudeCliQueryOptions,
-	): Promise<Result<string, ClaudeCliError>> {
-		return Promise.resolve(err(makeError()));
-	},
-
 	isAvailable(): Promise<boolean> {
 		return Promise.resolve(false);
-	},
-
-	startup(): Promise<void> {
-		return Promise.resolve();
-	},
-
-	shutdown(): void {
-		/* no-op */
 	},
 
 	// eslint-disable-next-line @typescript-eslint/require-await

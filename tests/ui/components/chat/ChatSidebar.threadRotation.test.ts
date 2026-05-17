@@ -12,14 +12,9 @@ import { defineComponent, ref } from 'vue';
 import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue';
 import type {
 	ClaudeCliPort,
-	ClaudeCliQueryOptions,
-	ClaudeCliError,
 	ClaudeCliStreamOptions,
 	StreamDelta,
 } from '@/domain/ports/ClaudeCliPort';
-import { streamFromQuery } from '@/domain/ports/ClaudeCliPort';
-import type { Result } from '@/domain/shared/Result';
-import { ok } from '@/domain/shared/Result';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
 import {
 	CLAUDE_CLI_PORT,
@@ -45,19 +40,15 @@ const RouterLinkStub = defineComponent({
 
 class FixedClaudeCliPort implements ClaudeCliPort {
 	available = true;
-	async startup(): Promise<void> {}
-	shutdown(): void {}
 	async isAvailable(): Promise<boolean> {
 		return this.available;
 	}
-	async query(
+	async *queryStream(
 		_prompt: string,
-		_options?: ClaudeCliQueryOptions,
-	): Promise<Result<string, ClaudeCliError>> {
-		return ok('assistant reply');
-	}
-	queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
-		return streamFromQuery((p, o) => this.query(p, o), prompt, options);
+		_options?: ClaudeCliStreamOptions,
+	): AsyncIterable<StreamDelta> {
+		yield { type: 'text', text: 'assistant reply' };
+		yield { type: 'done' };
 	}
 }
 

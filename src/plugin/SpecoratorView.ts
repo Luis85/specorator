@@ -24,7 +24,7 @@ import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { FeatureService } from '@/application/feature/FeatureService'
 import { FeedbackService } from '@/application/shared/FeedbackService'
 import { FEATURE_SERVICE_KEY } from '@/ui/composables/useFeatureService'
-import type { ClaudeCliPort, ConfirmModalPort } from '@/domain/ports'
+import type { ClaudeCliPort, ConfirmModalPort, TransportLifecyclePort } from '@/domain/ports'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 import type { TransportKind } from '@/domain/chat/TransportKind'
 import type { TransportSelection } from '@/plugin/transport/TransportSelector'
@@ -60,6 +60,16 @@ export interface SpecoratorViewOptions {
    * (Vue tolerates `undefined`).
    */
   readonly confirmModalAdapter?: ConfirmModalPort
+  /**
+   * Lifecycle handles for the SDK and subscription transports. WP-12 split
+   * `startup`/`shutdown` off `ClaudeCliPort` onto the dedicated
+   * `TransportLifecyclePort`. The plugin layer owns the adapter instances
+   * and passes the same objects under both contracts. Optional so legacy
+   * test wiring that omitted lifecycle continues to compile; missing
+   * handles result in a no-op refresh.
+   */
+  readonly sdkLifecycle?: TransportLifecyclePort
+  readonly subscriptionLifecycle?: TransportLifecyclePort
 }
 
 export const VIEW_TYPE = 'specorator'
@@ -378,11 +388,15 @@ export class SpecoratorView extends ItemView {
     // deliberately fire-and-forget and refresh synchronously now using the
     // current cached availability; the post-startup refresh below picks up
     // any new value when each resolves.
-    void this.claudeCliPort.startup().then(() => {
-      this._refreshActivePort()
-    })
-    if (this._options !== null) {
-      void this._options.subscriptionAdapter.startup().then(() => {
+    const sdkLifecycle = this._options?.sdkLifecycle
+    if (sdkLifecycle !== undefined) {
+      void sdkLifecycle.startup().then(() => {
+        this._refreshActivePort()
+      })
+    }
+    const subscriptionLifecycle = this._options?.subscriptionLifecycle
+    if (subscriptionLifecycle !== undefined) {
+      void subscriptionLifecycle.startup().then(() => {
         this._refreshActivePort()
       })
     }

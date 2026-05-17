@@ -11,17 +11,16 @@
  *   - NFR-ASM-006 (startup never throws)
  *   - NFR-ASM-007 (shutdown is idempotent / no-op-safe)
  *
- * Tests will fail with "Cannot find module" until T-ASM-013 lands the
- * implementation at `src/infrastructure/mock/MockClaudeSubprocessAdapter.ts`.
- *
- * Reference: `tests/infrastructure/mock/MockClaudeCliPort.test.ts`,
- *            `src/infrastructure/obsidian/ClaudeSubprocessAdapter.ts`.
+ * Reshaped in WP-12 (Arch review #3): the deleted `query()` method on the
+ * port is now `collectStream(port.queryStream(...))` from
+ * `@/application/chat/collectStream`.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 import { MockClaudeSubprocessAdapter } from '@/infrastructure/mock/MockClaudeSubprocessAdapter'
 import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort'
 import { asSessionId } from '@/domain/chat/SessionId'
+import { collectStream } from '@/application/chat/collectStream'
 
 describe('REQ-ASM-001 / REQ-ASM-031: MockClaudeSubprocessAdapter', () => {
   let mock: MockClaudeSubprocessAdapter
@@ -74,19 +73,19 @@ describe('REQ-ASM-001 / REQ-ASM-031: MockClaudeSubprocessAdapter', () => {
     }).not.toThrow()
   })
 
-  // ── query() — observability ─────────────────────────────────────────────
+  // ── queryStream() — observability ──────────────────────────────────────
 
-  it('query() appends to queryLog even when available === false (test observability)', async () => {
+  it('queryStream() appends to queryLog even when available === false (test observability)', async () => {
     mock.available = false
-    await mock.query('observed-while-unavailable')
+    await collectStream(mock.queryStream('observed-while-unavailable'))
     expect(mock.queryLog).toContain('observed-while-unavailable')
   })
 
-  it('query() returns ok(cannedResponse) when available and no queryError', async () => {
+  it('queryStream() returns ok(cannedResponse) when available and no queryError', async () => {
     mock.available = true
     mock.cannedResponse = 'hello from mock subscription'
 
-    const result = await mock.query('any prompt')
+    const result = await collectStream(mock.queryStream('any prompt'))
 
     expect(result.ok).toBe(true)
     if (!result.ok) return
@@ -94,13 +93,13 @@ describe('REQ-ASM-001 / REQ-ASM-031: MockClaudeSubprocessAdapter', () => {
     expect(mock.queryLog).toContain('any prompt')
   })
 
-  it('query() returns err(queryError) when set, regardless of cannedResponse', async () => {
+  it('queryStream() returns err(queryError) when set, regardless of cannedResponse', async () => {
     mock.available = true
     mock.cannedResponse = 'should-not-be-returned'
     const simulated = new ClaudeCliError('QUERY_FAILED', 'simulated subprocess failure')
     mock.queryError = simulated
 
-    const result = await mock.query('prompt')
+    const result = await collectStream(mock.queryStream('prompt'))
 
     expect(result.ok).toBe(false)
     if (result.ok) return
@@ -120,12 +119,12 @@ describe('REQ-ASM-001 / REQ-ASM-031: MockClaudeSubprocessAdapter', () => {
       vi.useRealTimers()
     })
 
-    it('causes query() to await the configured delay before resolving', async () => {
+    it('causes queryStream() to await the configured delay before resolving', async () => {
       mock.available = true
       mock.delayMs = 250
 
       let settled = false
-      const pending = mock.query('delayed').then((r) => {
+      const pending = collectStream(mock.queryStream('delayed')).then((r: unknown) => {
         settled = true
         return r
       })
@@ -136,7 +135,7 @@ describe('REQ-ASM-001 / REQ-ASM-031: MockClaudeSubprocessAdapter', () => {
 
       // Cross the threshold — promise resolves.
       await vi.advanceTimersByTimeAsync(1)
-      const result = await pending
+      const result = (await pending) as { ok: boolean }
       expect(settled).toBe(true)
       expect(result.ok).toBe(true)
     })
@@ -148,12 +147,14 @@ describe('REQ-ASM-001 / REQ-ASM-031: MockClaudeSubprocessAdapter', () => {
     expect(mock.cannedSessionId).toBeNull()
   })
 
-  it('exposes the configured cannedSessionId after a successful query()', async () => {
+  it('exposes the configured cannedSessionId after a successful queryStream()', async () => {
     mock.available = true
     const sid = asSessionId('mock-session-abc123')
     mock.cannedSessionId = sid
 
-    const result = await mock.query('prompt that captures a session')
+    const result = await collectStream(
+      mock.queryStream('prompt that captures a session'),
+    )
 
     expect(result.ok).toBe(true)
     expect(mock.cannedSessionId).toBe(sid)
@@ -161,11 +162,11 @@ describe('REQ-ASM-001 / REQ-ASM-031: MockClaudeSubprocessAdapter', () => {
 
   // ── option recording for assertions ─────────────────────────────────────
 
-  it('records resumeSessionId from query() options onto queryLog entry', async () => {
+  it('records resumeSessionId from queryStream() options onto queryLog entry', async () => {
     mock.available = true
     const sid = asSessionId('mock-resume-xyz')
 
-    await mock.query('resume-prompt', { resumeSessionId: sid })
+    await collectStream(mock.queryStream('resume-prompt', { resumeSessionId: sid }))
 
     // queryLog is the canonical surface for prompt-string assertions.
     expect(mock.queryLog).toContain('resume-prompt')
@@ -178,12 +179,14 @@ describe('REQ-ASM-001 / REQ-ASM-031: MockClaudeSubprocessAdapter', () => {
     expect(serialised).toContain('mock-resume-xyz')
   })
 
-  it('records systemPromptSuffix from query() options', async () => {
+  it('records systemPromptSuffix from queryStream() options', async () => {
     mock.available = true
 
-    await mock.query('stage-aware prompt', {
-      systemPromptSuffix: 'STAGE_SUFFIX::idea',
-    })
+    await collectStream(
+      mock.queryStream('stage-aware prompt', {
+        systemPromptSuffix: 'STAGE_SUFFIX::idea',
+      }),
+    )
 
     expect(mock.queryLog).toContain('stage-aware prompt')
 

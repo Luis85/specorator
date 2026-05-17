@@ -48,6 +48,7 @@ import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort'
 import type { LoggerPort } from '@/domain/ports/LoggerPort'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
+import { collectStream } from '@/application/chat/collectStream'
 
 // Module-under-test (created in T-ASM-011). Tests fail with
 // "Cannot find module '@/infrastructure/obsidian/ClaudeSubprocessAdapter'" until then.
@@ -432,7 +433,7 @@ describe('ClaudeSubprocessAdapter — shutdown() (REQ-CCS-017 family)', () => {
 
     // Kick off a streaming query whose response never arrives — registers a
     // streaming child in _streamingProc.
-    void adapter.query('hello', { resumeSessionId: undefined })
+    void collectStream(adapter.queryStream('hello', { resumeSessionId: undefined }))
     await Promise.resolve() // let spawn fire
     const streamingChild = spawn.lastChild()
 
@@ -472,7 +473,7 @@ describe('ClaudeSubprocessAdapter — query() unavailability (REQ-ASM-009)', () 
     })
     await adapter.startup()
 
-    const result = await adapter.query('hello')
+    const result = await collectStream(adapter.queryStream('hello'))
 
     expect(result.ok).toBe(false)
     if (!result.ok) {
@@ -497,7 +498,7 @@ describe('ClaudeSubprocessAdapter — query() happy path (REQ-ASM-029/030/031)',
     })
     await adapter.startup()
 
-    const promise = adapter.query('hello world')
+    const promise = collectStream(adapter.queryStream('hello world'))
     await Promise.resolve() // let the spawn settle
 
     const child = spawn.lastChild()
@@ -515,7 +516,7 @@ describe('ClaudeSubprocessAdapter — query() happy path (REQ-ASM-029/030/031)',
     await adapter.startup()
 
     const onSessionId = vi.fn()
-    const promise = adapter.query('hi', { onSessionId })
+    const promise = collectStream(adapter.queryStream('hi', { onSessionId }))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -540,7 +541,7 @@ describe('ClaudeSubprocessAdapter — query() happy path (REQ-ASM-029/030/031)',
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -563,7 +564,7 @@ describe('ClaudeSubprocessAdapter — query() happy path (REQ-ASM-029/030/031)',
     await adapter.startup()
 
     const onSessionId = vi.fn()
-    const promise = adapter.query('hi', { onSessionId })
+    const promise = collectStream(adapter.queryStream('hi', { onSessionId }))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -588,7 +589,7 @@ describe('ClaudeSubprocessAdapter — query() happy path (REQ-ASM-029/030/031)',
     const onSessionId = vi.fn(() => {
       throw new Error('caller bug')
     })
-    const promise = adapter.query('hi', { onSessionId })
+    const promise = collectStream(adapter.queryStream('hi', { onSessionId }))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -609,7 +610,7 @@ describe('ClaudeSubprocessAdapter — query() happy path (REQ-ASM-029/030/031)',
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -641,7 +642,7 @@ describe('ClaudeSubprocessAdapter — query() happy path (REQ-ASM-029/030/031)',
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -684,7 +685,7 @@ describe('ClaudeSubprocessAdapter — spawn-per-turn + --resume chaining (REQ-AS
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       resumeSessionId?: any,
     ) => {
-      const p = adapter.query(text, resumeSessionId ? { resumeSessionId } : undefined)
+      const p = collectStream(adapter.queryStream(text, resumeSessionId ? { resumeSessionId } : undefined))
       await Promise.resolve()
       const child = spawn.lastChild()
       spawn.emitStdout(
@@ -736,7 +737,7 @@ describe('ClaudeSubprocessAdapter — timeout (SPEC §4.4)', () => {
     })
     await adapter.startup()
 
-    const promise = adapter.query('hangs forever', { timeoutMs: 1_500 })
+    const promise = collectStream(adapter.queryStream('hangs forever', { timeoutMs: 1_500 }))
     await Promise.resolve() // let the spawn settle
 
     const child = spawn.lastChild()
@@ -772,7 +773,7 @@ describe('ClaudeSubprocessAdapter — spawn error (SPEC §4.4)', () => {
     })
     await adapter.startup()
 
-    const result = await adapter.query('hi')
+    const result = await collectStream(adapter.queryStream('hi'))
 
     expect(result.ok).toBe(false)
     if (!result.ok) {
@@ -786,7 +787,7 @@ describe('ClaudeSubprocessAdapter — spawn error (SPEC §4.4)', () => {
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -816,7 +817,7 @@ describe('ClaudeSubprocessAdapter — non-success exits (REQ-ASM-030, TEST-ASM-0
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -836,7 +837,7 @@ describe('ClaudeSubprocessAdapter — non-success exits (REQ-ASM-030, TEST-ASM-0
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -866,7 +867,7 @@ describe('ClaudeSubprocessAdapter — invalid NDJSON (SPEC §4.3)', () => {
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -900,11 +901,11 @@ describe('ClaudeSubprocessAdapter — resumeSessionId forwarding (REQ-ASM-035)',
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi', {
+    const promise = collectStream(adapter.queryStream('hi', {
       // SessionId is a branded string — cast at the test boundary only.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       resumeSessionId: 'abc-123' as any,
-    })
+    }))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -933,7 +934,7 @@ describe('ClaudeSubprocessAdapter — resumeSessionId forwarding (REQ-ASM-035)',
     })
 
     // Turn 1 — no prior session; capture via callback.
-    const p1 = adapter.query('msg-1', { onSessionId })
+    const p1 = collectStream(adapter.queryStream('msg-1', { onSessionId }))
     await Promise.resolve()
     const c1 = spawn.lastChild()
     spawn.emitStdout(c1, ndjson(systemInit('abc-123'), resultEvent('r-1')))
@@ -945,7 +946,7 @@ describe('ClaudeSubprocessAdapter — resumeSessionId forwarding (REQ-ASM-035)',
 
     // Turn 2 — thread the captured id back as resumeSessionId.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const p2 = adapter.query('msg-2', { resumeSessionId: captured as any })
+    const p2 = collectStream(adapter.queryStream('msg-2', { resumeSessionId: captured as any }))
     await Promise.resolve()
     const c2 = spawn.lastChild()
     spawn.emitStdout(c2, ndjson(systemInit('def-456'), resultEvent('r-2')))
@@ -964,7 +965,7 @@ describe('ClaudeSubprocessAdapter — resumeSessionId forwarding (REQ-ASM-035)',
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -989,7 +990,7 @@ describe('ClaudeSubprocessAdapter — systemPromptSuffix forwarding (REQ-ASM-013
     await adapter.startup()
 
     const suffix = 'You are operating on feature "demo" at stage "idea".'
-    const promise = adapter.query('hi', { systemPromptSuffix: suffix })
+    const promise = collectStream(adapter.queryStream('hi', { systemPromptSuffix: suffix }))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -1009,7 +1010,7 @@ describe('ClaudeSubprocessAdapter — systemPromptSuffix forwarding (REQ-ASM-013
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi', { systemPromptSuffix: '' })
+    const promise = collectStream(adapter.queryStream('hi', { systemPromptSuffix: '' }))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -1034,7 +1035,7 @@ describe('ClaudeSubprocessAdapter — argv invariants (REQ-ASM-006/027/028)', ()
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
     const child = spawn.lastChild()
     spawn.emitStdout(child, ndjson(systemInit('s'), resultEvent('ok')))
@@ -1052,7 +1053,7 @@ describe('ClaudeSubprocessAdapter — argv invariants (REQ-ASM-006/027/028)', ()
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
     const child = spawn.lastChild()
     spawn.emitStdout(child, ndjson(systemInit('s'), resultEvent('ok')))
@@ -1074,7 +1075,7 @@ describe('ClaudeSubprocessAdapter — argv invariants (REQ-ASM-006/027/028)', ()
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
     const child = spawn.lastChild()
     spawn.emitStdout(child, ndjson(systemInit('s'), resultEvent('ok')))
@@ -1103,11 +1104,11 @@ describe('ClaudeSubprocessAdapter — ToS posture (NFR-ASM-004, ADR-0031)', () =
     })
     await adapter.startup()
 
-    const promise = adapter.query('hello', {
+    const promise = collectStream(adapter.queryStream('hello', {
       systemPromptSuffix: 'context',
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       resumeSessionId: 'sess-x' as any,
-    })
+    }))
     await Promise.resolve()
     const child = spawn.lastChild()
     spawn.emitStdout(child, ndjson(systemInit('sess-x'), resultEvent('ok')))
@@ -1133,7 +1134,7 @@ describe('ClaudeSubprocessAdapter — ToS posture (NFR-ASM-004, ADR-0031)', () =
     })
     await adapter.startup()
 
-    const promise = adapter.query('hello')
+    const promise = collectStream(adapter.queryStream('hello'))
     await Promise.resolve()
     const child = spawn.lastChild()
     spawn.emitStdout(child, ndjson(systemInit('s'), resultEvent('ok')))
@@ -1167,7 +1168,7 @@ describe('ClaudeSubprocessAdapter — log redaction (NFR-ASM-005, NFR-ASM-012)',
     await adapter.startup()
 
     const prompt = 'SECRET-USER-INTENT-DO-NOT-LOG'
-    const promise = adapter.query(prompt)
+    const promise = collectStream(adapter.queryStream(prompt))
     await Promise.resolve()
     const child = spawn.lastChild()
     spawn.emitStdout(child, ndjson(systemInit('s'), resultEvent('ok')))
