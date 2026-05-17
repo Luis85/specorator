@@ -171,6 +171,29 @@ ruleTester.run('no-claude-home-reads', rule, {
       code: "const p = join(os.homedir(), '.claude')",
       errors: [{ messageId: 'forbidden' }],
     },
+    // WP-9 Track 4 — explicit homedir() + '.claude' concatenation forms.
+    // These exercise the same `concatenatesClaudeDir` branch but with the
+    // brief's exact patterns, locking in the invariant under WP-9 sign-off.
+    {
+      code: "const p = homedir() + '/.claude'",
+      errors: [{ messageId: 'forbidden' }],
+    },
+    {
+      code: "const p = homedir() + '/.claude/sessions'",
+      errors: [{ messageId: 'forbidden' }],
+    },
+    {
+      code: "const p = os.homedir() + '/.claude'",
+      errors: [{ messageId: 'forbidden' }],
+    },
+    {
+      code: "const p = '/.claude/' + homedir()",
+      errors: [{ messageId: 'forbidden' }],
+    },
+    {
+      code: 'const p = `${homedir()}/.claude`',
+      errors: [{ messageId: 'forbidden' }],
+    },
   ],
 })
 
