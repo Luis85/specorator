@@ -20,7 +20,6 @@ export const PLUGIN_SETTINGS_KEYS: ReadonlyArray<keyof PluginSettings> = [
   'mcpServerEnabled',
   'userPersona',
   'onboardingComplete',
-  'anthropicApiKey',
   'claudeCliPath',
   'transportKind',
 ]

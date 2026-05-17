@@ -11,13 +11,9 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
-describe('REQ-CCS-001, NFR-CCS-005: PluginSettings anthropicApiKey field', () => {
-  it('DEFAULT_SETTINGS has anthropicApiKey as empty string', () => {
-    expect(DEFAULT_SETTINGS.anthropicApiKey).toBe('')
-  })
-
-  it('DEFAULT_SETTINGS.anthropicApiKey is a string type', () => {
-    expect(typeof DEFAULT_SETTINGS.anthropicApiKey).toBe('string')
+describe('REQ-CCS-001, NFR-CCS-005: Anthropic API key storage', () => {
+  it('PluginSettings does not declare anthropicApiKey (key now lives in SecretStorePort)', () => {
+    expect((DEFAULT_SETTINGS as unknown as Record<string, unknown>).anthropicApiKey).toBeUndefined()
   })
 })
 
@@ -29,7 +25,7 @@ describe('NFR-CCS-006: Settings tab API key field security contract', () => {
     expect(trimmed).toBe('sk-ant-test')
   })
 
-  it('empty string after trim disables adapter (anthropicApiKey = "")', () => {
+  it('empty string after trim disables adapter', () => {
     const rawValue = '   '
     const trimmed = rawValue.trim()
     expect(trimmed).toBe('')

@@ -13,6 +13,7 @@ import {
 	COMMUNITY_PLUGIN_PORT,
 	CONFIRM_MODAL_PORT,
 	MARKDOWN_RENDER_PORT,
+	SECRET_STORE_PORT,
 	IS_MOBILE_KEY,
 	SETTINGS_VERSION_KEY,
 	TRANSPORT_KIND_KEY,
@@ -166,6 +167,9 @@ export class AgentSidepanelView extends ItemView {
 		});
 		this.vueApp.provide(CLAUDE_CLI_PORT, reactivePort);
 		this.vueApp.provide(COMMUNITY_PLUGIN_PORT, bridge);
+		if (this.plugin.secretStore !== null) {
+			this.vueApp.provide(SECRET_STORE_PORT, this.plugin.secretStore);
+		}
 		if (this._options?.confirmModalAdapter !== undefined) {
 			this.vueApp.provide(CONFIRM_MODAL_PORT, this._options.confirmModalAdapter);
 		}

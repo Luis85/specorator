@@ -27,3 +27,5 @@ export type {
 } from './ClaudeCliPort';
 export { ClaudeCliError, streamFromQuery } from './ClaudeCliPort';
 export type { ConfirmModalPort, ConfirmModalRequest } from './ConfirmModalPort';
+export type { SecretStorePort } from './SecretStorePort';
+export { SECRET_ID_ANTHROPIC } from './SecretStorePort';

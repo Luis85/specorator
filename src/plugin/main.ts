@@ -22,6 +22,7 @@ import { ObsidianConfirmModalAdapter } from '@/infrastructure/obsidian/ObsidianC
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
 import { ObsidianMetadataCacheAdapter } from '@/infrastructure/obsidian/ObsidianMetadataCacheAdapter'
 import { ObsidianCanvasAdapter } from '@/infrastructure/obsidian/ObsidianCanvasAdapter'
+import { ObsidianSecretStoreAdapter } from '@/infrastructure/obsidian/ObsidianSecretStoreAdapter'
 import { ClaudeCliAdapter } from '@/infrastructure/obsidian/ClaudeCliAdapter'
 import { ClaudeSubprocessAdapter, type SpawnFn } from '@/infrastructure/obsidian/ClaudeSubprocessAdapter'
 import { ClaudeBinaryResolver, type SpawnFn as ResolverSpawnFn } from '@/infrastructure/obsidian/ClaudeBinaryResolver'
@@ -31,13 +32,32 @@ import { FeedbackService } from '@/application/shared/FeedbackService'
 import { PluginCore } from '@/core/plugin-core'
 import { ALL_MODULES, type ModuleDescriptor } from '@/modules'
 import { i18nMerge, i18nTranslate, setLocale, type SupportedLocale } from '@/ui/i18n'
-import type { TranslationPort } from '@/domain/ports'
+import type { SecretStorePort, TranslationPort } from '@/domain/ports'
+import { SECRET_ID_ANTHROPIC } from '@/domain/ports'
 import { useChatStore } from '@/ui/stores/chatStore'
 
 export default class SpecoratorPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS }
   core: PluginCore | null = null
   bridge: ObsidianBridge | null = null
+  /**
+   * Secret-store adapter wrapping `App.secretStorage` (desktop ≥1.11.4).
+   * `available === false` on mobile and older desktop builds; consumers
+   * fall through to the degraded transport via the empty `_apiKeyCache`.
+   * Constructed in `loadSettings()` before any consumer needs the key.
+   */
+  secretStore: SecretStorePort | null = null
+  /**
+   * Synchronous Anthropic-API-key cache hydrated from `secretStore` at
+   * `loadSettings()` time. `ClaudeCliAdapter` and the `selectTransport`
+   * closure close over the `_apiKeyCache.trim() !== ''` projection so the
+   * SPEC-ASM-001 §3.1 synchronous purity invariant holds — the async
+   * `secretStorage.getSecret()` is never called on a chat hot path.
+   *
+   * Refreshed by `refreshApiKeyCache()` after the settings tab persists a
+   * new value (T-CCS-037).
+   */
+  private _apiKeyCache = ''
 
   /** Full stored data blob: specorator sub-key + per-module sub-keys + _moduleVersions. */
   private _storedData: Record<string, unknown> = {}
@@ -140,9 +160,12 @@ export default class SpecoratorPlugin extends Plugin {
     await this.saveData(this._storedData)
 
     // T-CCS-032: Instantiate ClaudeCliAdapter. startup() is deferred to onLayoutReady
-    // so it does not hold up the critical onload() path.
+    // so it does not hold up the critical onload() path. The Anthropic API
+    // key is sourced from `_apiKeyCache` (hydrated from `SecretStorePort` in
+    // `loadSettings()`); the sync accessor keeps the SDK call sites off the
+    // async keychain path.
     this._claudeCliAdapter = new ClaudeCliAdapter(
-      () => this.settings,
+      () => this._apiKeyCache,
       this.bridge,
     )
     this.register(() => { this._claudeCliAdapter?.shutdown() })
@@ -196,6 +219,10 @@ export default class SpecoratorPlugin extends Plugin {
             // ClaudeSubprocessAdapter.isAvailableSync(). Evaluated at every
             // selector call so post-startup() availability is honoured.
             cliResolved: this._subscriptionAdapter!.isAvailableSync(),
+            // Synchronous projection of `SecretStorePort.getSecret(...)`
+            // captured in `_apiKeyCache`. Re-read on every selector call so
+            // a key saved mid-session is honoured.
+            apiKeyPresent: this._apiKeyCache.trim() !== '',
           }),
       })
       this._specoratorView = view
@@ -216,6 +243,7 @@ export default class SpecoratorPlugin extends Plugin {
             subscriptionAdapter: this._subscriptionAdapter!,
             degradedPort: degradedClaudeCliPort,
             cliResolved: this._subscriptionAdapter!.isAvailableSync(),
+            apiKeyPresent: this._apiKeyCache.trim() !== '',
           }),
       })
       this._agentSidepanelView = view
@@ -400,6 +428,8 @@ export default class SpecoratorPlugin extends Plugin {
       ...((this._storedData.specorator ?? {}) as Partial<PluginSettings>),
     }
 
+    await this._initializeSecretStore()
+
     // SPEC-ASM-001 §9.3 — read the `chatThreads` blob alongside settings so
     // `SpecoratorView.onOpen()` can hydrate the chat store after the view
     // mounts. Decoding uses the plugin bridge logger when present (typed once
@@ -413,6 +443,45 @@ export default class SpecoratorPlugin extends Plugin {
       warn: (msg, ctx) => { console.warn(msg, ctx ?? {}) },
       error: (msg, ctx) => { console.error(msg, ctx ?? {}) },
     })
+  }
+
+  /**
+   * Construct the secret-store adapter and hydrate `_apiKeyCache` from it.
+   * On desktop ≥1.11.4 `app.secretStorage` is present and any previously
+   * stored Anthropic key is loaded into the cache. On mobile / older
+   * desktop builds `available === false` and the cache stays empty — chat
+   * falls back to degraded mode (see settings tab).
+   */
+  private async _initializeSecretStore(): Promise<void> {
+    this.secretStore = new ObsidianSecretStoreAdapter(this.app)
+    this._apiKeyCache = this.secretStore.available
+      ? ((await this.secretStore.getSecret(SECRET_ID_ANTHROPIC)) ?? '')
+      : ''
+  }
+
+  /**
+   * Read-only accessor exposing the cached Anthropic API key for callers
+   * that need a sync value (settings UI test hooks, transport selector
+   * closures). Returns `''` when no key is configured or when running on a
+   * build without `App.secretStorage`.
+   */
+  getApiKeyCache(): string {
+    return this._apiKeyCache
+  }
+
+  /**
+   * Re-read the Anthropic API key from {@link secretStore} after the settings
+   * tab persists a new value, and bump the in-view settings version so
+   * `ChatSidebar` re-checks adapter availability. Safe to call when the views
+   * are closed (the bump is a no-op).
+   */
+  async refreshApiKeyCache(): Promise<void> {
+    if (this.secretStore === null) return
+    this._apiKeyCache = this.secretStore.available
+      ? ((await this.secretStore.getSecret(SECRET_ID_ANTHROPIC)) ?? '')
+      : ''
+    this._specoratorView?.bumpSettingsVersion()
+    this._agentSidepanelView?.bumpSettingsVersion()
   }
 
   /**

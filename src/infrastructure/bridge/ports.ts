@@ -10,6 +10,7 @@ import type {
 	CommunityPluginPort,
 	ClaudeCliPort,
 	ConfirmModalPort,
+	SecretStorePort,
 } from '@/domain/ports'
 import type { MarkdownRenderPort } from '@/domain/ports/MarkdownRenderPort'
 import type { TransportKind } from '@/domain/chat/TransportKind'
@@ -24,6 +25,13 @@ export const CANVAS_PORT: InjectionKey<CanvasPort> = Symbol('CanvasPort')
 export const COMMUNITY_PLUGIN_PORT: InjectionKey<CommunityPluginPort> = Symbol('CommunityPluginPort')
 export const CLAUDE_CLI_PORT: InjectionKey<ClaudeCliPort> = Symbol('ClaudeCliPort')
 export const CONFIRM_MODAL_PORT: InjectionKey<ConfirmModalPort> = Symbol('ConfirmModalPort')
+/**
+ * OS-keychain-backed secret store (ADR-008). Production wraps Obsidian's
+ * `App.secretStorage` (desktop ≥1.11.4); `available === false` on mobile and
+ * older desktop builds. Used by `ChatSidebar` to detect the missing-API-key
+ * branch without reading the synced `PluginSettings` blob.
+ */
+export const SECRET_STORE_PORT: InjectionKey<SecretStorePort> = Symbol('SecretStorePort')
 /**
  * Optional `MarkdownRenderPort` provided by the Obsidian view. When
  * present, `MarkdownBlock.vue` delegates rendering to Obsidian's native

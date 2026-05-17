@@ -83,6 +83,7 @@ interface Fixture {
   readonly plugin: { settings: PluginSettings }
   readonly options: SpecoratorViewOptions
   readonly cliResolvedRef: { value: boolean }
+  readonly apiKeyPresentRef: { value: boolean }
   readonly confirmModalAdapter: ConfirmModalPort
 }
 
@@ -104,11 +105,18 @@ function makeSettings(overrides: Partial<PluginSettings>): PluginSettings {
  * fly so the `bumpSettingsVersion` re-run test can change the world between
  * calls without rebuilding everything.
  */
-function makeFixture(initialSettings: Partial<PluginSettings>, cliResolved = false): Fixture {
+interface FixtureOptions {
+  readonly transportKind?: PluginSettings['transportKind']
+  readonly apiKeyPresent?: boolean
+  readonly cliResolved?: boolean
+}
+
+function makeFixture(opts: FixtureOptions = {}): Fixture {
   const sdkAdapter = makePort('sdk')
   const subscriptionAdapter = makePort('subscription')
   const degradedPort = degradedClaudeCliPort
-  const cliResolvedRef = { value: cliResolved }
+  const cliResolvedRef = { value: opts.cliResolved ?? false }
+  const apiKeyPresentRef = { value: opts.apiKeyPresent ?? false }
   const confirmModalAdapter = makeConfirmModalAdapter()
 
   const selectTransportSpy = vi.fn(
@@ -118,12 +126,15 @@ function makeFixture(initialSettings: Partial<PluginSettings>, cliResolved = fal
         subscriptionAdapter,
         degradedPort,
         cliResolved: cliResolvedRef.value,
+        apiKeyPresent: apiKeyPresentRef.value,
       }
       return selectTransport(settings, deps)
     },
   )
 
-  const plugin = { settings: makeSettings(initialSettings) }
+  const plugin = {
+    settings: makeSettings(opts.transportKind !== undefined ? { transportKind: opts.transportKind } : {}),
+  }
 
   const options: SpecoratorViewOptions = {
     subscriptionAdapter,
@@ -139,6 +150,7 @@ function makeFixture(initialSettings: Partial<PluginSettings>, cliResolved = fal
     plugin,
     options,
     cliResolvedRef,
+    apiKeyPresentRef,
     confirmModalAdapter,
   }
 }
@@ -183,28 +195,22 @@ describe('SpecoratorView wiring — selectTransport receives the correct deps (T
     setActivePinia(createPinia())
   })
 
-  it('passes the api-key + cliResolved snapshot to the selector at construction time', () => {
-    const fixture = makeFixture(
-      { transportKind: 'auto', anthropicApiKey: 'sk-live-abc' },
-      /* cliResolved */ false,
-    )
+  it('passes the transport-kind setting + cliResolved + apiKeyPresent snapshot to the selector at construction time', () => {
+    const fixture = makeFixture({ transportKind: 'auto', apiKeyPresent: true, cliResolved: false })
 
     makeView(fixture)
 
     expect(fixture.selectTransportSpy).toHaveBeenCalledTimes(1)
-    // The view passes `plugin.settings` directly; the selector closure injects
-    // the four port deps. We assert via the verdict (covered below) plus the
-    // settings argument shape here.
+    // The view passes `plugin.settings` directly (the API key now lives in
+    // `SecretStorePort`, not on `PluginSettings`); the selector closure
+    // injects the four port deps plus `apiKeyPresent` derived from the
+    // plugin's `_apiKeyCache`. Verify the settings arg carries `transportKind`.
     const callArg = fixture.selectTransportSpy.mock.calls[0][0] as PluginSettings
-    expect(callArg.anthropicApiKey).toBe('sk-live-abc')
     expect(callArg.transportKind).toBe('auto')
   })
 
   it('R2 wiring — transportKind="api-key" + key present → getActiveClaudeCliPort returns sdkAdapter', () => {
-    const fixture = makeFixture(
-      { transportKind: 'api-key', anthropicApiKey: 'sk-test-key' },
-      /* cliResolved */ false,
-    )
+    const fixture = makeFixture({ transportKind: 'api-key', apiKeyPresent: true, cliResolved: false })
 
     const view = makeView(fixture)
 
@@ -212,10 +218,7 @@ describe('SpecoratorView wiring — selectTransport receives the correct deps (T
   })
 
   it('R4 wiring — transportKind="subscription" + cliResolved=true → returns subscriptionAdapter', () => {
-    const fixture = makeFixture(
-      { transportKind: 'subscription', anthropicApiKey: '' },
-      /* cliResolved */ true,
-    )
+    const fixture = makeFixture({ transportKind: 'subscription', apiKeyPresent: false, cliResolved: true })
 
     const view = makeView(fixture)
 
@@ -223,10 +226,7 @@ describe('SpecoratorView wiring — selectTransport receives the correct deps (T
   })
 
   it('R7 wiring — transportKind="auto" + empty key + cliResolved=true → returns subscriptionAdapter', () => {
-    const fixture = makeFixture(
-      { transportKind: 'auto', anthropicApiKey: '' },
-      /* cliResolved */ true,
-    )
+    const fixture = makeFixture({ transportKind: 'auto', apiKeyPresent: false, cliResolved: true })
 
     const view = makeView(fixture)
 
@@ -234,10 +234,7 @@ describe('SpecoratorView wiring — selectTransport receives the correct deps (T
   })
 
   it('R8 wiring — fully degraded conditions (auto + empty key + cliResolved=false) → returns degradedPort', () => {
-    const fixture = makeFixture(
-      { transportKind: 'auto', anthropicApiKey: '' },
-      /* cliResolved */ false,
-    )
+    const fixture = makeFixture({ transportKind: 'auto', apiKeyPresent: false, cliResolved: false })
 
     const view = makeView(fixture)
 
@@ -245,10 +242,7 @@ describe('SpecoratorView wiring — selectTransport receives the correct deps (T
   })
 
   it('R6 wiring — transportKind="auto" + key present + cliResolved=true → api-key beats subscription (sdkAdapter)', () => {
-    const fixture = makeFixture(
-      { transportKind: 'auto', anthropicApiKey: 'sk-prefers-api' },
-      /* cliResolved */ true,
-    )
+    const fixture = makeFixture({ transportKind: 'auto', apiKeyPresent: true, cliResolved: true })
 
     const view = makeView(fixture)
 
@@ -262,10 +256,7 @@ describe('SpecoratorView.bumpSettingsVersion() re-runs the selector (REQ-ASM-002
   })
 
   it('re-invokes selectTransport when settings change between bumps', () => {
-    const fixture = makeFixture(
-      { transportKind: 'auto', anthropicApiKey: '' },
-      /* cliResolved */ false,
-    )
+    const fixture = makeFixture({ transportKind: 'auto', apiKeyPresent: false, cliResolved: false })
 
     const view = makeView(fixture)
     // Initial: degraded (auto + no key + no cli).
@@ -273,23 +264,19 @@ describe('SpecoratorView.bumpSettingsVersion() re-runs the selector (REQ-ASM-002
     expect(fixture.selectTransportSpy).toHaveBeenCalledTimes(1)
 
     // Mutate the underlying settings object (this is how main.ts persists —
-    // see `updateSettings()` which assigns to `this.settings`).
-    fixture.plugin.settings = makeSettings({
-      transportKind: 'auto',
-      anthropicApiKey: 'sk-just-saved',
-    })
+    // see `updateSettings()` which assigns to `this.settings`). The API key
+    // now lives in `SecretStorePort`, so flip `apiKeyPresentRef` instead of
+    // mutating `plugin.settings.anthropicApiKey`.
+    fixture.apiKeyPresentRef.value = true
     view.bumpSettingsVersion()
 
     expect(fixture.selectTransportSpy).toHaveBeenCalledTimes(2)
-    // New verdict reflects the updated settings.
+    // New verdict reflects the updated key cache.
     expect(activePort(view)).toBe(fixture.sdkAdapter)
   })
 
   it('reflects an `isAvailableSync()` flip (cliResolved toggled true) on the next bump', () => {
-    const fixture = makeFixture(
-      { transportKind: 'subscription', anthropicApiKey: '' },
-      /* cliResolved */ false,
-    )
+    const fixture = makeFixture({ transportKind: 'subscription', apiKeyPresent: false, cliResolved: false })
 
     const view = makeView(fixture)
     // Subscription forced but CLI not resolved → degraded (R5).
@@ -303,17 +290,12 @@ describe('SpecoratorView.bumpSettingsVersion() re-runs the selector (REQ-ASM-002
   })
 
   it('also re-runs startup() on the api-key (SDK) adapter so first-time key setup activates in-session (Codex P1, PR #350)', () => {
-    const fixture = makeFixture(
-      { transportKind: 'api-key', anthropicApiKey: '' },
-      /* cliResolved */ false,
-    )
+    const fixture = makeFixture({ transportKind: 'api-key', apiKeyPresent: false, cliResolved: false })
     const view = makeView(fixture)
 
-    // Save the API key in-session, then bump.
-    fixture.plugin.settings = makeSettings({
-      transportKind: 'api-key',
-      anthropicApiKey: 'sk-just-saved',
-    })
+    // Save the API key in-session, then bump. Reflects `refreshApiKeyCache()`
+    // having repopulated `_apiKeyCache` from the keychain.
+    fixture.apiKeyPresentRef.value = true
     view.bumpSettingsVersion()
 
     // Before the fix, only the subscription adapter's startup() ran. Both
@@ -333,10 +315,7 @@ describe('SpecoratorView.bumpSettingsVersion() mid-turn guard (REQ-ASM-003)', ()
   })
 
   it('does NOT swap the active port while chatStore.status === "loading"', () => {
-    const fixture = makeFixture(
-      { transportKind: 'auto', anthropicApiKey: '' },
-      /* cliResolved */ false,
-    )
+    const fixture = makeFixture({ transportKind: 'auto', apiKeyPresent: false, cliResolved: false })
 
     const view = makeView(fixture)
     // Inject the same pinia the test owns so `_isChatLoading()` reads our store.
@@ -350,10 +329,7 @@ describe('SpecoratorView.bumpSettingsVersion() mid-turn guard (REQ-ASM-003)', ()
     expect(store.status).toBe('loading')
 
     // Settings change that WOULD swap to sdkAdapter under normal conditions.
-    fixture.plugin.settings = makeSettings({
-      transportKind: 'auto',
-      anthropicApiKey: 'sk-in-flight',
-    })
+    fixture.apiKeyPresentRef.value = true
 
     const callsBefore = fixture.selectTransportSpy.mock.calls.length
     view.bumpSettingsVersion()
@@ -366,10 +342,7 @@ describe('SpecoratorView.bumpSettingsVersion() mid-turn guard (REQ-ASM-003)', ()
   })
 
   it('auto-applies the deferred refresh when the turn ends (no manual second bump required) — Codex P1, PR #350', async () => {
-    const fixture = makeFixture(
-      { transportKind: 'auto', anthropicApiKey: '' },
-      /* cliResolved */ false,
-    )
+    const fixture = makeFixture({ transportKind: 'auto', apiKeyPresent: false, cliResolved: false })
 
     const view = makeView(fixture)
     view.pinia = pinia
@@ -379,10 +352,7 @@ describe('SpecoratorView.bumpSettingsVersion() mid-turn guard (REQ-ASM-003)', ()
     const store = useChatStore(pinia)
     // Mid-turn settings change.
     store.beginRequest()
-    fixture.plugin.settings = makeSettings({
-      transportKind: 'auto',
-      anthropicApiKey: 'sk-mid-turn',
-    })
+    fixture.apiKeyPresentRef.value = true
     view.bumpSettingsVersion()
     expect(activePort(view)).toBe(fixture.degradedPort)
 
@@ -397,10 +367,7 @@ describe('SpecoratorView.bumpSettingsVersion() mid-turn guard (REQ-ASM-003)', ()
   })
 
   it('picks up the deferred change on the NEXT bump after the turn settles', () => {
-    const fixture = makeFixture(
-      { transportKind: 'auto', anthropicApiKey: '' },
-      /* cliResolved */ false,
-    )
+    const fixture = makeFixture({ transportKind: 'auto', apiKeyPresent: false, cliResolved: false })
 
     const view = makeView(fixture)
     view.pinia = pinia
@@ -408,10 +375,7 @@ describe('SpecoratorView.bumpSettingsVersion() mid-turn guard (REQ-ASM-003)', ()
 
     // Mid-turn: bump is a no-op for the selector.
     store.beginRequest()
-    fixture.plugin.settings = makeSettings({
-      transportKind: 'auto',
-      anthropicApiKey: 'sk-queued',
-    })
+    fixture.apiKeyPresentRef.value = true
     view.bumpSettingsVersion()
     expect(activePort(view)).toBe(fixture.degradedPort)
 
@@ -424,10 +388,7 @@ describe('SpecoratorView.bumpSettingsVersion() mid-turn guard (REQ-ASM-003)', ()
   })
 
   it('clears `pinia` on close so plugin workspace handlers stop mutating the unmounted store — Codex P2, PR #350', async () => {
-    const fixture = makeFixture(
-      { transportKind: 'auto', anthropicApiKey: '' },
-      /* cliResolved */ false,
-    )
+    const fixture = makeFixture({ transportKind: 'auto', apiKeyPresent: false, cliResolved: false })
 
     const view = makeView(fixture)
     view.pinia = pinia
@@ -460,10 +421,7 @@ describe('SpecoratorView accepts ConfirmModalPort via options bag (T-ASM-075, RE
   })
 
   it('stores the confirmModalAdapter passed through SpecoratorViewOptions', () => {
-    const fixture = makeFixture(
-      { transportKind: 'auto', anthropicApiKey: '' },
-      /* cliResolved */ false,
-    )
+    const fixture = makeFixture({ transportKind: 'auto', apiKeyPresent: false, cliResolved: false })
 
     const view = makeView(fixture)
 
@@ -478,14 +436,12 @@ describe('SpecoratorView accepts ConfirmModalPort via options bag (T-ASM-075, RE
   })
 
   it('accepts construction without a confirmModalAdapter (optional field)', () => {
-    const fixture = makeFixture(
-      { transportKind: 'auto', anthropicApiKey: '' },
-      /* cliResolved */ false,
-    )
+    const fixture = makeFixture({ transportKind: 'auto', apiKeyPresent: false, cliResolved: false })
     const sdkAdapter = fixture.sdkAdapter
     const subscriptionAdapter = fixture.subscriptionAdapter
     const degradedPort = fixture.degradedPort
     const cliResolvedRef = fixture.cliResolvedRef
+    const apiKeyPresentRef = fixture.apiKeyPresentRef
     const optionsNoModal: SpecoratorViewOptions = {
       subscriptionAdapter,
       selectTransport: (settings: PluginSettings): TransportSelection =>
@@ -494,6 +450,7 @@ describe('SpecoratorView accepts ConfirmModalPort via options bag (T-ASM-075, RE
           subscriptionAdapter,
           degradedPort,
           cliResolved: cliResolvedRef.value,
+          apiKeyPresent: apiKeyPresentRef.value,
         }),
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -516,10 +473,7 @@ describe('SpecoratorView.getActiveTransportKind() mirrors selectTransport().kind
   })
 
   it('reflects "api-key" when settings resolve to the SDK adapter', () => {
-    const fixture = makeFixture(
-      { transportKind: 'api-key', anthropicApiKey: 'sk-test' },
-      /* cliResolved */ false,
-    )
+    const fixture = makeFixture({ transportKind: 'api-key', apiKeyPresent: true, cliResolved: false })
 
     const view = makeView(fixture)
 
@@ -527,10 +481,7 @@ describe('SpecoratorView.getActiveTransportKind() mirrors selectTransport().kind
   })
 
   it('reflects "subscription" when settings resolve to the subscription adapter', () => {
-    const fixture = makeFixture(
-      { transportKind: 'subscription', anthropicApiKey: '' },
-      /* cliResolved */ true,
-    )
+    const fixture = makeFixture({ transportKind: 'subscription', apiKeyPresent: false, cliResolved: true })
 
     const view = makeView(fixture)
 
@@ -538,10 +489,7 @@ describe('SpecoratorView.getActiveTransportKind() mirrors selectTransport().kind
   })
 
   it('reflects "degraded" when no transport is available', () => {
-    const fixture = makeFixture(
-      { transportKind: 'auto', anthropicApiKey: '' },
-      /* cliResolved */ false,
-    )
+    const fixture = makeFixture({ transportKind: 'auto', apiKeyPresent: false, cliResolved: false })
 
     const view = makeView(fixture)
 
@@ -549,29 +497,21 @@ describe('SpecoratorView.getActiveTransportKind() mirrors selectTransport().kind
   })
 
   it('updates reactively on bumpSettingsVersion() when settings change', () => {
-    const fixture = makeFixture(
-      { transportKind: 'auto', anthropicApiKey: '' },
-      /* cliResolved */ false,
-    )
+    const fixture = makeFixture({ transportKind: 'auto', apiKeyPresent: false, cliResolved: false })
 
     const view = makeView(fixture)
     expect(view.getActiveTransportKind()).toBe('degraded')
 
-    // Settings change to api-key with a key present.
-    fixture.plugin.settings = makeSettings({
-      transportKind: 'auto',
-      anthropicApiKey: 'sk-newly-set',
-    })
+    // A new API key was persisted to the OS keychain; `_apiKeyCache` was
+    // refreshed and `apiKeyPresent` now reads `true`.
+    fixture.apiKeyPresentRef.value = true
     view.bumpSettingsVersion()
 
     expect(view.getActiveTransportKind()).toBe('api-key')
   })
 
   it('preserves the kind across bumps while a chat turn is in flight (REQ-ASM-003)', () => {
-    const fixture = makeFixture(
-      { transportKind: 'auto', anthropicApiKey: '' },
-      /* cliResolved */ false,
-    )
+    const fixture = makeFixture({ transportKind: 'auto', apiKeyPresent: false, cliResolved: false })
 
     const pinia = createPinia()
     setActivePinia(pinia)
@@ -585,10 +525,7 @@ describe('SpecoratorView.getActiveTransportKind() mirrors selectTransport().kind
     expect(store.status).toBe('loading')
 
     // Settings change that WOULD switch the kind under normal conditions.
-    fixture.plugin.settings = makeSettings({
-      transportKind: 'auto',
-      anthropicApiKey: 'sk-mid-turn',
-    })
+    fixture.apiKeyPresentRef.value = true
     view.bumpSettingsVersion()
 
     // Kind unchanged — selector not re-run mid-turn (REQ-ASM-003).

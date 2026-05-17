@@ -10,10 +10,10 @@
  *
  * Purity invariants (SPEC-ASM-001 §3.1):
  *   - Synchronous (returns `TransportSelection`, never `Promise`).
- *   - No I/O. `deps.cliResolved` is consumed as a plain boolean — the selector
- *     must NOT call `.isAvailable()` (or any other method) on the candidate
- *     ports at selection time.
- *   - Whitespace-only `anthropicApiKey` is treated as empty (trim semantics).
+ *   - No I/O. `deps.cliResolved` and `deps.apiKeyPresent` are consumed as
+ *     plain booleans — the selector must NOT call `.isAvailable()` (or any
+ *     other method) on the candidate ports at selection time, and must NOT
+ *     read the API key from `SecretStorePort` (which is async).
  *
  * ADR-008: this file lives in the plugin layer but imports only domain types.
  * It must not import from `obsidian`, `child_process`, or any infrastructure
@@ -40,47 +40,43 @@ export interface TransportSelection {
  * `subscriptionAdapter.isAvailable()`, evaluated once at plugin-wiring time
  * (see SPEC-ASM-001 §3.1 closing note). The selector never calls
  * `.isAvailable()` itself.
+ *
+ * `apiKeyPresent` is the synchronous projection of the
+ * `SecretStorePort.getSecret(SECRET_ID_ANTHROPIC)` value cached at
+ * `loadSettings()` time. Evaluated by the plugin layer per call so a key
+ * saved mid-session is honoured without re-reading the keychain on the
+ * selector hot path.
  */
 export interface TransportSelectorDeps {
   readonly sdkAdapter: ClaudeCliPort
   readonly subscriptionAdapter: ClaudeCliPort
   readonly degradedPort: ClaudeCliPort
   readonly cliResolved: boolean
-}
-
-/**
- * The settings shape consumed by `selectTransport`. Until T-ASM-014 extends
- * `PluginSettings` with `transportKind`, callers pass a structural intersection
- * — this avoids coupling the selector's compile-time contract to the
- * not-yet-landed settings field.
- */
-type TransportSelectorSettings = PluginSettings & {
-  readonly transportKind: TransportKind
+  readonly apiKeyPresent: boolean
 }
 
 export type TransportSelectorFn = (
-  settings: TransportSelectorSettings,
+  settings: PluginSettings,
   deps: TransportSelectorDeps,
 ) => TransportSelection
 
 /**
  * SPEC-ASM-001 §3.1 truth table (8 rows, first-match-wins).
  *
- * | Row | transportKind   | apiKey.trim() !== '' | cliResolved | Result                              |
- * |-----|-----------------|----------------------|-------------|-------------------------------------|
- * | R1  | 'degraded'      | *                    | *           | { degradedPort,        'degraded'  }|
- * | R2  | 'api-key'       | true                 | *           | { sdkAdapter,          'api-key'   }|
- * | R3  | 'api-key'       | false                | *           | { degradedPort,        'degraded'  }|
- * | R4  | 'subscription'  | *                    | true        | { subscriptionAdapter, 'subscription'}|
- * | R5  | 'subscription'  | *                    | false       | { degradedPort,        'degraded'  }|
- * | R6  | 'auto'          | true                 | *           | { sdkAdapter,          'api-key'   }|
- * | R7  | 'auto'          | false                | true        | { subscriptionAdapter, 'subscription'}|
- * | R8  | 'auto'          | false                | false       | { degradedPort,        'degraded'  }|
+ * | Row | transportKind   | apiKeyPresent | cliResolved | Result                              |
+ * |-----|-----------------|---------------|-------------|-------------------------------------|
+ * | R1  | 'degraded'      | *             | *           | { degradedPort,        'degraded'  }|
+ * | R2  | 'api-key'       | true          | *           | { sdkAdapter,          'api-key'   }|
+ * | R3  | 'api-key'       | false         | *           | { degradedPort,        'degraded'  }|
+ * | R4  | 'subscription'  | *             | true        | { subscriptionAdapter, 'subscription'}|
+ * | R5  | 'subscription'  | *             | false       | { degradedPort,        'degraded'  }|
+ * | R6  | 'auto'          | true          | *           | { sdkAdapter,          'api-key'   }|
+ * | R7  | 'auto'          | false         | true        | { subscriptionAdapter, 'subscription'}|
+ * | R8  | 'auto'          | false         | false       | { degradedPort,        'degraded'  }|
  */
 export const selectTransport: TransportSelectorFn = (settings, deps) => {
   const { transportKind } = settings
-  const apiKeyPresent = settings.anthropicApiKey.trim() !== ''
-  const { sdkAdapter, subscriptionAdapter, degradedPort, cliResolved } = deps
+  const { sdkAdapter, subscriptionAdapter, degradedPort, cliResolved, apiKeyPresent } = deps
 
   // R1 — explicit 'degraded' overrides everything.
   if (transportKind === 'degraded') {

@@ -11,7 +11,9 @@ import { defineComponent } from 'vue'
 import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue'
 import { MockClaudeCliPort } from '@/infrastructure/mock/MockClaudeCliPort'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
+import { MockSecretStore } from '@/infrastructure/mock/MockSecretStore'
 import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort'
+import { SECRET_ID_ANTHROPIC } from '@/domain/ports'
 import {
 	CLAUDE_CLI_PORT,
 	IS_MOBILE_KEY,
@@ -19,6 +21,7 @@ import {
 	WORKSPACE_PORT,
 	SETTINGS_PORT,
 	LOGGER_PORT,
+	SECRET_STORE_PORT,
 } from '@/infrastructure/bridge/ports'
 import { useChatStore } from '@/ui/stores/chatStore'
 import { ChatSidebarPO } from './ChatSidebar.po'
@@ -36,6 +39,7 @@ function makeGlobal(
 	bridge: MockBridge,
 	isMobile: boolean,
 	pinia: ReturnType<typeof createPinia>,
+	secretStore: MockSecretStore = new MockSecretStore(),
 ) {
 	return {
 		plugins: [pinia],
@@ -47,23 +51,28 @@ function makeGlobal(
 			[WORKSPACE_PORT as symbol]: bridge,
 			[SETTINGS_PORT as symbol]: bridge,
 			[LOGGER_PORT as symbol]: bridge,
+			[SECRET_STORE_PORT as symbol]: secretStore,
 		},
 	}
 }
 
 function makeBridgeWithApiKey(
-	apiKey: string,
+	_apiKey: string,
 	files: Record<string, string> = {},
 	overrides: Partial<PluginSettings> = {},
 ): MockBridge {
 	const bridge = new MockBridge(files)
 	const settings: PluginSettings = {
 		...DEFAULT_SETTINGS,
-		anthropicApiKey: apiKey,
 		...overrides,
 	}
 	vi.spyOn(bridge, 'getSettings').mockResolvedValue(settings)
 	return bridge
+}
+
+function makeSecretStoreWithApiKey(apiKey: string): MockSecretStore {
+	const initial = apiKey ? { [SECRET_ID_ANTHROPIC]: apiKey } : undefined
+	return new MockSecretStore({ initial })
 }
 
 async function mountSidebar(options: {
@@ -90,9 +99,10 @@ async function mountSidebar(options: {
 		options.files ?? {},
 		options.settings ?? {},
 	)
+	const secretStore = makeSecretStoreWithApiKey(options.apiKey ?? '')
 
 	const wrapper = mount(ChatSidebar, {
-		global: makeGlobal(port, bridge, options.isMobile ?? false, pinia),
+		global: makeGlobal(port, bridge, options.isMobile ?? false, pinia, secretStore),
 	})
 
 	await flushPromises()
@@ -147,6 +157,7 @@ describe('ChatSidebar', () => {
 			const port = new MockClaudeCliPort()
 			port.available = false
 			const bridge = makeBridgeWithApiKey('', {})
+			const secretStore = makeSecretStoreWithApiKey('')
 			const openPluginSettings = vi.fn()
 			const wrapper = mount(ChatSidebar, {
 				global: {
@@ -159,6 +170,7 @@ describe('ChatSidebar', () => {
 						[WORKSPACE_PORT as symbol]: bridge,
 						[SETTINGS_PORT as symbol]: bridge,
 						[LOGGER_PORT as symbol]: bridge,
+						[SECRET_STORE_PORT as symbol]: secretStore,
 						[OPEN_PLUGIN_SETTINGS_KEY as symbol]: openPluginSettings,
 					},
 				},

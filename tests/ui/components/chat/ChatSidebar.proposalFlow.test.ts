@@ -31,7 +31,9 @@ import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue'
 import { MockClaudeSubprocessAdapter } from '@/infrastructure/mock/MockClaudeSubprocessAdapter'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { MockConfirmModalPort } from '@/infrastructure/mock/MockConfirmModalPort'
+import { MockSecretStore } from '@/infrastructure/mock/MockSecretStore'
 import { asSessionId } from '@/domain/chat/SessionId'
+import { SECRET_ID_ANTHROPIC } from '@/domain/ports'
 import {
 	CLAUDE_CLI_PORT,
 	IS_MOBILE_KEY,
@@ -41,6 +43,7 @@ import {
 	LOGGER_PORT,
 	CONFIRM_MODAL_PORT,
 	TRANSPORT_KIND_KEY,
+	SECRET_STORE_PORT,
 } from '@/infrastructure/bridge/ports'
 import { useChatStore } from '@/ui/stores/chatStore'
 import { ChatSidebarPO } from './ChatSidebar.po'
@@ -62,12 +65,15 @@ function makeBridge(
 	const bridge = new MockBridge(files)
 	const settings: PluginSettings = {
 		...DEFAULT_SETTINGS,
-		anthropicApiKey: 'sk-ant-test',
 		transportKind: 'subscription',
 		...overrides,
 	}
 	vi.spyOn(bridge, 'getSettings').mockResolvedValue(settings)
 	return bridge
+}
+
+function makeSecretStore(): MockSecretStore {
+	return new MockSecretStore({ initial: { [SECRET_ID_ANTHROPIC]: 'sk-ant-test' } })
 }
 
 interface MountArgs {
@@ -96,6 +102,7 @@ async function mountSidebar(args: MountArgs = {}) {
 	port.cannedSessionId = asSessionId('11111111-2222-3333-4444-555555555555')
 
 	const bridge = makeBridge(args.files ?? {}, args.settings ?? {})
+	const secretStore = makeSecretStore()
 	const confirmModal = new MockConfirmModalPort()
 	confirmModal.nextResult = args.confirmResult ?? true
 	const transportKindRef = ref<TransportKind>(args.transportKind ?? 'subscription')
@@ -113,6 +120,7 @@ async function mountSidebar(args: MountArgs = {}) {
 				[LOGGER_PORT as symbol]: bridge,
 				[CONFIRM_MODAL_PORT as symbol]: confirmModal,
 				[TRANSPORT_KIND_KEY as symbol]: transportKindRef,
+				[SECRET_STORE_PORT as symbol]: secretStore,
 			},
 		},
 	})
@@ -301,7 +309,6 @@ describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
 		// guard only ran at proposal-creation time.
 		vi.spyOn(bridge, 'getSettings').mockResolvedValue({
 			...DEFAULT_SETTINGS,
-			anthropicApiKey: 'sk-ant-test',
 			transportKind: 'subscription',
 			specsFolder: 'notes',
 		})
@@ -384,7 +391,6 @@ describe('ChatSidebar — proposal flow integration (T-ASM-072)', () => {
 		// Stale containment + writer fails on every audit append.
 		vi.spyOn(bridge, 'getSettings').mockResolvedValue({
 			...DEFAULT_SETTINGS,
-			anthropicApiKey: 'sk-ant-test',
 			transportKind: 'subscription',
 			specsFolder: 'notes',
 		})

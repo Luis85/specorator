@@ -108,7 +108,6 @@ describe('promoteLegacyFlatSettings', () => {
       'mcpServerEnabled',
       'userPersona',
       'onboardingComplete',
-      'anthropicApiKey',
       'claudeCliPath',
       'transportKind',
     ])
