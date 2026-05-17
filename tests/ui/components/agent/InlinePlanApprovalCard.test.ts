@@ -222,6 +222,23 @@ describe('InlinePlanApprovalCard', () => {
 			expect(po.rowTabindex('cancel')).toBe('-1');
 		});
 
+		it('publishes aria-activedescendant on the focus owner, not the radiogroup (Codex P2 round-5)', async () => {
+			// Codex P2 round-5 on PR #402: `aria-activedescendant` must live
+			// on the DOM-focused element so assistive tech publishes the
+			// active option correctly. The `<section>` owns focus and
+			// keydown; the `<ul role="radiogroup">` is purely a semantic
+			// grouping. ArrowUp/Down updates the pointer on the section,
+			// not the ul.
+			const po = new InlinePlanApprovalCardPO(mountCard());
+			expect(po.rootAriaActiveDescendant()).toBe('agent-plan-approval-row-implement');
+			expect(po.radiogroupAriaActiveDescendant()).toBeUndefined();
+
+			await po.root.trigger('keydown', { key: 'ArrowDown' });
+			await nextTick();
+			expect(po.rootAriaActiveDescendant()).toBe('agent-plan-approval-row-revise');
+			expect(po.radiogroupAriaActiveDescendant()).toBeUndefined();
+		});
+
 		it('restores focus to the previously-focused element on decide', async () => {
 			// Mount a separate "previous" element that owns focus before the
 			// card mounts. Decide → focus must return to it.

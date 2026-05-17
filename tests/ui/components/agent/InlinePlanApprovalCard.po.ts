@@ -46,4 +46,12 @@ export class InlinePlanApprovalCardPO {
 	rowTabindex(name: 'implement' | 'revise' | 'cancel'): string | undefined {
 		return this.row(name).attributes('tabindex');
 	}
+
+	rootAriaActiveDescendant(): string | undefined {
+		return this.root.attributes('aria-activedescendant');
+	}
+
+	radiogroupAriaActiveDescendant(): string | undefined {
+		return this.radiogroup.attributes('aria-activedescendant');
+	}
 }
