@@ -308,3 +308,215 @@ describe('ObsidianChatThreadsRepository — serialised flush queue (Codex P1)', 
     ])
   })
 })
+
+/**
+ * Codex P1, PR #408 — `load()` must return the in-memory pending snapshot
+ * when a debounced write is still in flight. Otherwise reopening a view
+ * inside the debounce window rehydrates pre-save threads and the next
+ * `save()` from the store would persist that stale view, silently dropping
+ * just-created threads.
+ */
+describe('ObsidianChatThreadsRepository.load — pending-snapshot precedence (Codex P1)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('returns the in-flight snapshot while a debounced write is pending', async () => {
+    const { repo } = makeHarness({
+      specorator: {
+        chatThreads: {
+          stale: {
+            threadId: 'stale', sessionId: 'sess-stale', feature: 'foo',
+            logPath: 'specs/foo/sessions/sess-stale.md', transport: 'subscription',
+            createdAt: '2026-05-17T08:00:00.000Z',
+            lastUsedAt: '2026-05-17T08:00:00.000Z',
+          },
+        },
+      },
+    })
+    await repo.save(
+      new Map([
+        ['just-sent', makeRecord({ threadId: 'just-sent' })],
+      ]),
+    )
+    // Debounce timer has NOT fired yet — disk still has the stale blob.
+    await vi.advanceTimersByTimeAsync(500)
+    const loaded = await repo.load()
+    expect(Array.from(loaded.keys())).toEqual(['just-sent'])
+    expect(loaded.get('stale')).toBeUndefined()
+  })
+
+  it('reverts to disk after the pending snapshot has been flushed', async () => {
+    const { state, repo } = makeHarness({ specorator: {} })
+    await repo.save(new Map([['t1', makeRecord({ threadId: 't1' })]]))
+    await vi.advanceTimersByTimeAsync(1_000)
+    // Wait for any queued microtasks chained onto the flush queue.
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(state.saveCount).toBe(1)
+    const loaded = await repo.load()
+    expect(Array.from(loaded.keys())).toEqual(['t1'])
+  })
+
+  it('returns a defensive copy so mutating the result does not corrupt the pending snapshot', async () => {
+    const { repo } = makeHarness({ specorator: {} })
+    await repo.save(new Map([['t1', makeRecord({ threadId: 't1' })]]))
+    await vi.advanceTimersByTimeAsync(500)
+    const loaded = await repo.load()
+    expect(loaded.size).toBe(1)
+    // Caller-side delete must not leak into the pending snapshot.
+    ;(loaded as Map<string, ChatThreadRecord>).delete('t1')
+    const reloaded = await repo.load()
+    expect(reloaded.size).toBe(1)
+    expect(reloaded.has('t1')).toBe(true)
+  })
+})
+
+/**
+ * Codex P1, PR #408 — after each successful disk write the adapter must
+ * notify the host plugin so its `_storedData` cache mirrors the new
+ * `chatThreads` blob. Without this, a later `updateSettings(...)` call
+ * that persists from the cache would silently re-emit the stale pre-chat
+ * snapshot, destroying recent threads.
+ */
+describe('ObsidianChatThreadsRepository — onChatThreadsPersisted hook (Codex P1)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('reproduces the data-loss path when the host cache is NOT synced', async () => {
+    // Simulates the broken wiring: host cache is never updated, so a later
+    // settings-style write re-emits the stale snapshot and clobbers
+    // chat-threads on disk. The assertion below is what fails on `develop`
+    // before this PR and what the synced cache (next test) prevents.
+    const state: HarnessState = { blob: { specorator: { chatThreads: {} } }, saveCount: 0 }
+    const hostCache: { stored: Record<string, unknown> } = { stored: { specorator: { chatThreads: {} } } }
+    const host: ObsidianPluginDataHost = {
+      loadData: vi.fn(async () => state.blob),
+      saveData: vi.fn(async (data: Record<string, unknown>) => {
+        state.blob = data
+        state.saveCount += 1
+      }),
+      setActiveTimeout: (cb, ms) => globalThis.setTimeout(cb, ms) as unknown as number,
+      clearActiveTimeout: (id) => { globalThis.clearTimeout(id) },
+    }
+    // Note: no onChatThreadsPersisted hook configured.
+    const repo = new ObsidianChatThreadsRepository(host, silentLogger())
+    await repo.save(new Map([['t1', makeRecord({ threadId: 't1' })]]))
+    await vi.advanceTimersByTimeAsync(1_000)
+    // Disk now has the chat thread.
+    const specorator = state.blob?.specorator as Record<string, unknown>
+    expect(specorator.chatThreads).toHaveProperty('t1')
+    // The host's in-memory cache still has the empty chatThreads — a later
+    // settings save would write THAT back and destroy the thread.
+    expect((hostCache.stored.specorator as Record<string, unknown>).chatThreads).toEqual({})
+  })
+
+  it('mirrors the encoded chatThreads into the host cache after a successful flush', async () => {
+    const state: HarnessState = { blob: { specorator: { locale: 'en' } }, saveCount: 0 }
+    const hostCache: { stored: Record<string, unknown> } = {
+      stored: { specorator: { locale: 'en' } },
+    }
+    const host: ObsidianPluginDataHost = {
+      loadData: vi.fn(async () => state.blob),
+      saveData: vi.fn(async (data: Record<string, unknown>) => {
+        state.blob = data
+        state.saveCount += 1
+      }),
+      setActiveTimeout: (cb, ms) => globalThis.setTimeout(cb, ms) as unknown as number,
+      clearActiveTimeout: (id) => { globalThis.clearTimeout(id) },
+    }
+    const repo = new ObsidianChatThreadsRepository(host, silentLogger(), {
+      onChatThreadsPersisted: (chatThreads) => {
+        const currentSpec = (hostCache.stored.specorator ?? {}) as Record<string, unknown>
+        hostCache.stored = {
+          ...hostCache.stored,
+          specorator: { ...currentSpec, chatThreads },
+        }
+      },
+    })
+    await repo.save(new Map([['t1', makeRecord({ threadId: 't1' })]]))
+    await vi.advanceTimersByTimeAsync(1_000)
+    await Promise.resolve()
+    await Promise.resolve()
+    const mirrored = (hostCache.stored.specorator as Record<string, unknown>).chatThreads as Record<string, unknown>
+    expect(mirrored).toHaveProperty('t1')
+    // Sibling keys preserved.
+    expect((hostCache.stored.specorator as Record<string, unknown>).locale).toBe('en')
+  })
+
+  it('does NOT invoke the hook when saveData rejects (cache must stay clean)', async () => {
+    const state: HarnessState = { blob: { specorator: {} }, saveCount: 0 }
+    const hookSeen: Array<Record<string, unknown>> = []
+    const host: ObsidianPluginDataHost = {
+      loadData: vi.fn(async () => state.blob),
+      saveData: vi.fn(async () => {
+        throw new Error('disk full')
+      }),
+      setActiveTimeout: (cb, ms) => globalThis.setTimeout(cb, ms) as unknown as number,
+      clearActiveTimeout: (id) => { globalThis.clearTimeout(id) },
+    }
+    const repo = new ObsidianChatThreadsRepository(host, silentLogger(), {
+      onChatThreadsPersisted: (chatThreads) => { hookSeen.push(chatThreads) },
+    })
+    // Use flushPending() to obtain a handle on the queue tail so we can
+    // await its rejection deterministically without an unhandled-rejection
+    // event escaping the runner. The .catch swallow on the returned
+    // promise mirrors how `Plugin.onunload()` fires-and-forgets the flush.
+    await repo.save(new Map([['t1', makeRecord({ threadId: 't1' })]]))
+    await repo.flushPending().catch(() => undefined)
+    expect(hookSeen).toEqual([])
+    // Disk write was attempted (and rejected) — saveData fires exactly once.
+    expect((host.saveData as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1)
+  })
+
+  it('end-to-end: pending-snapshot precedence + cache sync close the data-loss race', async () => {
+    // Reproduces the full sequence from the Codex finding:
+    //   1. user sends a chat message → repo.save() debounces
+    //   2. user reopens the view inside the debounce → repo.load() must
+    //      return the in-flight snapshot, NOT the stale disk copy
+    //   3. debounce fires → disk + host cache both updated
+    //   4. later updateSettings persists from host cache → must include
+    //      the latest chatThreads
+    const state: HarnessState = { blob: { specorator: {} }, saveCount: 0 }
+    let storedDataCache: Record<string, unknown> = {}
+    const host: ObsidianPluginDataHost = {
+      loadData: vi.fn(async () => state.blob),
+      saveData: vi.fn(async (data: Record<string, unknown>) => {
+        state.blob = data
+        state.saveCount += 1
+      }),
+      setActiveTimeout: (cb, ms) => globalThis.setTimeout(cb, ms) as unknown as number,
+      clearActiveTimeout: (id) => { globalThis.clearTimeout(id) },
+    }
+    const repo = new ObsidianChatThreadsRepository(host, silentLogger(), {
+      onChatThreadsPersisted: (chatThreads) => {
+        const currentSpec = (storedDataCache.specorator ?? {}) as Record<string, unknown>
+        storedDataCache = {
+          ...storedDataCache,
+          specorator: { ...currentSpec, chatThreads },
+        }
+      },
+    })
+
+    // 1. save the new thread (debounce starts)
+    await repo.save(new Map([['t1', makeRecord({ threadId: 't1' })]]))
+    // 2. view reopens inside debounce — load must return in-flight snapshot
+    const midWindow = await repo.load()
+    expect(midWindow.has('t1')).toBe(true)
+    // 3. debounce fires → host cache mirrored
+    await vi.advanceTimersByTimeAsync(1_000)
+    await Promise.resolve()
+    await Promise.resolve()
+    const mirroredThreads = (storedDataCache.specorator as Record<string, unknown>).chatThreads as Record<string, unknown>
+    expect(mirroredThreads).toHaveProperty('t1')
+    // 4. simulate updateSettings persisting from cache — chatThreads survives
+    expect(mirroredThreads.t1).toBeDefined()
+  })
+})

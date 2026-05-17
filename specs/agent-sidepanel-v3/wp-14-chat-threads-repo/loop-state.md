@@ -45,6 +45,33 @@ Coverage on relocated codec: 98.33% statements / 96.15% branches / 100% function
 
 `src/plugin/main.ts` shrank by ~85 raw LOC (662 → 577). Effective code is 359 (was 387 in the audit) — the max-lines lint warning at 350 remains a `warn`, not error, and the audit's "may now drop below 350" was conditional. WP-16 (Wave 2) will split `main.ts` further and can drive it below the limit.
 
+### Iteration 4 — Codex P1 round-1 (PR #408 review feedback)
+
+Codex flagged two real data-loss races introduced by the refactor:
+
+- **P1.1 (`src/plugin/main.ts:424`)** — `_storedData` was never updated when `ObsidianChatThreadsRepository` flushed to disk. A subsequent `updateSettings` / `updateModuleSettings` would call `saveData(this._storedData)` and silently re-emit the pre-chat `specorator.chatThreads` snapshot, destroying recent threads.
+- **P1.2 (`src/infrastructure/obsidian/ObsidianChatThreadsRepository.ts:74`)** — `load()` always read from disk. Reopening a chat view inside the 1 s debounce window rehydrated stale threads, and the next save from the store would persist that stale map on top of the in-flight new thread.
+
+Fixes:
+
+- Added `OnChatThreadsPersisted` constructor option to the adapter. `_flushChatThreads` invokes it AFTER `saveData()` resolves so a write failure cannot poison the host cache. `main.ts` passes a closure that mirrors the encoded blob into `this._storedData.specorator.chatThreads`.
+- `load()` now returns a defensive `new Map(this._pendingSnapshot)` when a debounced write is in flight; falls through to disk decode otherwise. Documented precedence in the JSDoc.
+- New tests in `tests/infrastructure/obsidian/ObsidianChatThreadsRepository.test.ts`:
+  - `load — pending-snapshot precedence (Codex P1)` × 3 cases.
+  - `onChatThreadsPersisted hook (Codex P1)` × 4 cases (including a regression reproducer, the success path, the rejection guard, and the end-to-end save-reopen-flush sequence).
+
+Pre-PR gate:
+
+```
+npm audit --audit-level=high --omit=dev  # 0 vulnerabilities
+npm run typecheck                          # clean
+npm run lint                               # 0 errors, 24 pre-existing warnings
+npm run test                               # 1889 / 1889 pass (was 1882; +7 new)
+npm run build                              # OK
+npm run build:web                          # OK
+npm run docs:api                           # 0 errors, 1 pre-existing typedoc link warning
+```
+
 ## Carry-out items
 
 _None._

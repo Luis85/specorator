@@ -425,6 +425,21 @@ export default class SpecoratorPlugin extends Plugin {
         clearActiveTimeout: (id) => { activeWindow.clearTimeout(id) },
       },
       chatThreadsLogger,
+      {
+        // Codex P1 (PR #408): mirror every successful chat-threads disk
+        // write into `this._storedData` so the next `updateSettings` /
+        // `updateModuleSettings` call — which persists from this cache —
+        // cannot resurrect the pre-chat snapshot and silently destroy
+        // recent threads. Runs *after* `saveData()` resolves, never on
+        // failure, matching the adapter's flush ordering.
+        onChatThreadsPersisted: (chatThreads) => {
+          const currentSpecorator = (this._storedData.specorator ?? {}) as Record<string, unknown>
+          this._storedData = {
+            ...this._storedData,
+            specorator: { ...currentSpecorator, chatThreads },
+          }
+        },
+      },
     )
   }
 
