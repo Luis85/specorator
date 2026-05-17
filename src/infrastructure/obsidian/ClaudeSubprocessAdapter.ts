@@ -178,6 +178,18 @@ function createPushChannel<T>(): PushChannel<T> {
 interface StreamSink {
 	/** Push a `text` delta. */
 	pushText: (text: string) => void;
+	/** Push a `thinking` delta. */
+	pushThinking: (text: string) => void;
+	/** Push a `tool-use-start` delta. */
+	pushToolUseStart: (blockId: string, toolName: string, inputJson: string) => void;
+	/** Push a `tool-use-input-delta` delta. */
+	pushToolUseInputDelta: (blockId: string, inputJson: string) => void;
+	/** Push a `tool-use-stop` delta. */
+	pushToolUseStop: (blockId: string) => void;
+	/** Push a `compact-boundary` delta. Optional reason. */
+	pushCompactBoundary: (reason?: string) => void;
+	/** Push a `usage` delta. */
+	pushUsage: (inputTokens: number, outputTokens: number) => void;
 	/** Push a `session-id` delta. Single-fire: subsequent calls are ignored. */
 	pushSessionId: (sessionId: SessionId) => void;
 	/** Push the terminal `done` delta and close the stream. Single-fire. */
@@ -210,6 +222,29 @@ interface TurnProc {
 	onSessionId: ((sessionId: SessionId) => void) | null;
 	/** Monotonic clock at spawn time — used for completion-telemetry durationMs (T-ASM-081). */
 	startTimeMs: number;
+	/**
+	 * Per-stream turn identifier used to mint stable `blockId`s of the form
+	 * `${turnId}-${index}` from SDK-style `content_block_*` events
+	 * (PR-ASV-2-delta-extension). One per spawn — concurrent turns can never
+	 * produce colliding blockIds.
+	 */
+	turnId: string;
+	/**
+	 * Map from `content_block_*` event `.index` → stable `blockId` for the
+	 * active tool-use blocks in this turn. Populated on
+	 * `content_block_start` (tool_use), consulted on `input_json_delta` and
+	 * `content_block_stop`, and pruned on stop so a re-used index does not
+	 * leak the previous block's id.
+	 */
+	toolBlockIds: Map<number, string>;
+	/**
+	 * Last-emitted usage frame for this stream. Codex P2 on PR #386: partial
+	 * `message_delta.usage` frames often contain only the field(s) that
+	 * changed (typically `output_tokens` only); missing fields are
+	 * implicitly "unchanged", NOT zero. Merge against this snapshot
+	 * instead of zero-filling. Parity with SDK adapter (`DispatchState.lastUsage`).
+	 */
+	lastUsage: { input: number; output: number } | null;
 }
 
 /**
@@ -791,6 +826,34 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 				textEmitted = true;
 				channel.push({ type: 'text', text });
 			},
+			pushThinking(text: string) {
+				if (done) return;
+				channel.push({ type: 'thinking', text });
+			},
+			pushToolUseStart(blockId: string, toolName: string, inputJson: string) {
+				if (done) return;
+				channel.push({ type: 'tool-use-start', blockId, toolName, inputJson });
+			},
+			pushToolUseInputDelta(blockId: string, inputJson: string) {
+				if (done) return;
+				channel.push({ type: 'tool-use-input-delta', blockId, inputJson });
+			},
+			pushToolUseStop(blockId: string) {
+				if (done) return;
+				channel.push({ type: 'tool-use-stop', blockId });
+			},
+			pushCompactBoundary(reason?: string) {
+				if (done) return;
+				if (reason === undefined) {
+					channel.push({ type: 'compact-boundary' });
+				} else {
+					channel.push({ type: 'compact-boundary', reason });
+				}
+			},
+			pushUsage(inputTokens: number, outputTokens: number) {
+				if (done) return;
+				channel.push({ type: 'usage', inputTokens, outputTokens });
+			},
 			pushSessionId(sessionId: SessionId) {
 				if (done || sessionIdEmitted) return;
 				sessionIdEmitted = true;
@@ -880,6 +943,9 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 			sessionId: null,
 			onSessionId,
 			startTimeMs: Date.now(),
+			turnId: ClaudeSubprocessAdapter._randomTurnId(),
+			toolBlockIds: new Map<number, string>(),
+			lastUsage: null,
 		};
 
 		this._activeChildren.add(childLike);
@@ -943,9 +1009,22 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 	 * NDJSON dispatch (SPEC §4.3 `_parseNdjson`). Unparseable lines are dropped
 	 * silently (debug log without payload). Recognised events:
 	 *
-	 *   - `system/init`     → push session-id delta
-	 *   - `assistant/message` → push text delta
-	 *   - `result`          → push `done` / `error` delta
+	 *   - `system/init`                         → push session-id delta
+	 *   - `assistant/message`                   → push text delta
+	 *   - `result`                              → push `done` / `error` delta
+	 *
+	 * PR-ASV-2-delta-extension extends the dispatch with the SDK-style
+	 * `stream_event` envelope so the subprocess transport reaches feature
+	 * parity with the in-process SDK adapter:
+	 *
+	 *   - `system` (subtype `'compact_boundary'`)            → compact-boundary
+	 *   - `stream_event` `content_block_start` (tool_use)    → tool-use-start
+	 *   - `stream_event` `content_block_delta` `text_delta`  → text
+	 *   - `stream_event` `content_block_delta` `thinking_delta` → thinking
+	 *   - `stream_event` `content_block_delta` `input_json_delta` → tool-use-input-delta
+	 *   - `stream_event` `content_block_stop` (tool_use)     → tool-use-stop
+	 *   - `stream_event` `message_start` / `message_delta`
+	 *     with `.usage`                                      → usage
 	 */
 	private _handleNdjsonLine(proc: TurnProc, line: string): void {
 		const event = this._parseNdjsonLine(line);
@@ -959,8 +1038,224 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort {
 			this._handleAssistantMessage(proc, event);
 		} else if (eventType === 'result') {
 			this._handleResult(proc, event);
+		} else if (eventType === 'system') {
+			this._handleSystemEvent(proc, event);
+		} else if (eventType === 'stream_event') {
+			this._handleStreamEvent(proc, event);
 		}
 		// Unknown event types are ignored (forward-compat with new CLI events).
+	}
+
+	/**
+	 * Dispatch the SDK-style `system` envelope. The `'init'` subtype is also
+	 * handled here (in addition to the legacy `system/init` event type) so the
+	 * subprocess transport can consume either wire format. The `'compact_boundary'`
+	 * subtype emits a `compact-boundary` delta with the optional `reason` /
+	 * `trigger` field.
+	 */
+	private _handleSystemEvent(proc: TurnProc, event: Record<string, unknown>): void {
+		const subtype = typeof event.subtype === 'string' ? event.subtype : '';
+		if (subtype === 'init') {
+			this._handleSystemInit(proc, event);
+			return;
+		}
+		if (subtype === 'compact_boundary') {
+			const reasonRaw = event.reason ?? event.trigger;
+			const reason =
+				typeof reasonRaw === 'string' && reasonRaw.length > 0 ? reasonRaw : undefined;
+			proc.sink.pushCompactBoundary(reason);
+		}
+	}
+
+	/**
+	 * Dispatch the SDK-style `stream_event` envelope. The Anthropic SDK nests
+	 * the raw Anthropic event under `event.event`; the subprocess transport
+	 * may also produce a flatter form where the event fields sit directly on
+	 * the line. We accept both — when `event.event` is an object, dispatch
+	 * uses it; otherwise we treat the outer envelope itself as the event.
+	 */
+	private _handleStreamEvent(proc: TurnProc, envelope: Record<string, unknown>): void {
+		const inner =
+			typeof envelope.event === 'object' && envelope.event !== null
+				? (envelope.event as Record<string, unknown>)
+				: envelope;
+		const innerType = typeof inner.type === 'string' ? inner.type : '';
+		if (innerType === 'content_block_start') {
+			this._handleContentBlockStart(proc, inner);
+		} else if (innerType === 'content_block_delta') {
+			this._handleContentBlockDelta(proc, inner);
+		} else if (innerType === 'content_block_stop') {
+			this._handleContentBlockStop(proc, inner);
+		} else if (innerType === 'message_start' || innerType === 'message_delta') {
+			this._handleStreamUsage(proc, inner);
+		}
+	}
+
+	/**
+	 * Open a tool_use content block (text / thinking blocks need no
+	 * dedicated start delta — their first delta carries everything the
+	 * consumer needs). Builds a stable `blockId` from the per-turn `turnId`
+	 * and the SDK-supplied `index` and tracks it in `proc.toolBlockIds` so
+	 * subsequent `input_json_delta` / `content_block_stop` events can correlate.
+	 */
+	private _handleContentBlockStart(proc: TurnProc, event: Record<string, unknown>): void {
+		const block = event.content_block;
+		if (typeof block !== 'object' || block === null) return;
+		const blockRecord = block as Record<string, unknown>;
+		if (blockRecord.type !== 'tool_use') return;
+		const index = ClaudeSubprocessAdapter._extractIndex(event);
+		if (index === null) return;
+		const blockId = `${proc.turnId}-${index}`;
+		proc.toolBlockIds.set(index, blockId);
+		const toolName = typeof blockRecord.name === 'string' ? blockRecord.name : '';
+		// Codex P1 on PR #386: `content_block_start` `input` is a placeholder
+		// (commonly `{}`); the real payload arrives via subsequent
+		// `input_json_delta.partial_json` chunks. Seeding with the
+		// placeholder produced invalid JSON (`{}{"command":...}`) by
+		// `tool-use-stop`. Always seed empty. Parity with SDK adapter
+		// (`ClaudeCliAdapter._dispatchContentBlockStart`).
+		proc.sink.pushToolUseStart(blockId, toolName, '');
+	}
+
+	/**
+	 * Dispatch the three inner `content_block_delta` variants we care about:
+	 * `text_delta`, `thinking_delta`, `input_json_delta`. Anything else is a
+	 * no-op (e.g. citations) — additive contract. Extracted into per-variant
+	 * helpers to keep cyclomatic complexity below the lint cap.
+	 */
+	private _handleContentBlockDelta(proc: TurnProc, event: Record<string, unknown>): void {
+		const delta = event.delta;
+		if (typeof delta !== 'object' || delta === null) return;
+		const deltaRecord = delta as Record<string, unknown>;
+		const deltaType = typeof deltaRecord.type === 'string' ? deltaRecord.type : '';
+		if (deltaType === 'text_delta') {
+			this._dispatchTextDelta(proc, deltaRecord);
+		} else if (deltaType === 'thinking_delta') {
+			this._dispatchThinkingDelta(proc, deltaRecord);
+		} else if (deltaType === 'input_json_delta') {
+			this._dispatchInputJsonDelta(proc, event, deltaRecord);
+		}
+	}
+
+	private _dispatchTextDelta(proc: TurnProc, deltaRecord: Record<string, unknown>): void {
+		const text = typeof deltaRecord.text === 'string' ? deltaRecord.text : '';
+		if (text.length > 0) proc.sink.pushText(text);
+	}
+
+	private _dispatchThinkingDelta(proc: TurnProc, deltaRecord: Record<string, unknown>): void {
+		const text = typeof deltaRecord.thinking === 'string' ? deltaRecord.thinking : '';
+		if (text.length > 0) proc.sink.pushThinking(text);
+	}
+
+	private _dispatchInputJsonDelta(
+		proc: TurnProc,
+		event: Record<string, unknown>,
+		deltaRecord: Record<string, unknown>,
+	): void {
+		const index = ClaudeSubprocessAdapter._extractIndex(event);
+		if (index === null) return;
+		const blockId = proc.toolBlockIds.get(index);
+		if (blockId === undefined) return;
+		const partial =
+			typeof deltaRecord.partial_json === 'string' ? deltaRecord.partial_json : '';
+		proc.sink.pushToolUseInputDelta(blockId, partial);
+	}
+
+	/** Close a tool_use content block. Non-tool indices are no-ops. */
+	private _handleContentBlockStop(proc: TurnProc, event: Record<string, unknown>): void {
+		const index = ClaudeSubprocessAdapter._extractIndex(event);
+		if (index === null) return;
+		const blockId = proc.toolBlockIds.get(index);
+		if (blockId === undefined) return;
+		proc.toolBlockIds.delete(index);
+		proc.sink.pushToolUseStop(blockId);
+	}
+
+	/**
+	 * Pull `input_tokens` / `output_tokens` out of a `message_start` /
+	 * `message_delta` frame. `message_start` nests the usage under
+	 * `event.message.usage`; `message_delta` puts it directly on `event.usage`.
+	 */
+	private _handleStreamUsage(proc: TurnProc, event: Record<string, unknown>): void {
+		const usage = ClaudeSubprocessAdapter._extractUsageObject(event);
+		if (usage === null) return;
+		const partial = ClaudeSubprocessAdapter._readPartialUsage(usage);
+		if (partial === null) return;
+		// Codex P2 on PR #386: `message_delta.usage` frames typically include
+		// only the field(s) that changed (often `output_tokens` only).
+		// Missing fields mean "unchanged from the prior frame", NOT zero —
+		// coercing to zero overwrote a previously-captured `input_tokens: N`
+		// with `0`. Merge against `proc.lastUsage` instead. Parity with SDK
+		// adapter (`ClaudeCliAdapter._dispatchUsage`).
+		const prior = proc.lastUsage ?? { input: 0, output: 0 };
+		const merged = {
+			input: partial.input ?? prior.input,
+			output: partial.output ?? prior.output,
+		};
+		// Suppress redundant emits — a `message_delta` that brings no new
+		// info shouldn't generate a delta.
+		if (
+			proc.lastUsage !== null &&
+			merged.input === proc.lastUsage.input &&
+			merged.output === proc.lastUsage.output
+		) {
+			return;
+		}
+		proc.lastUsage = merged;
+		proc.sink.pushUsage(merged.input, merged.output);
+	}
+
+	private static _extractUsageObject(
+		event: Record<string, unknown>,
+	): Record<string, unknown> | null {
+		const direct = event.usage;
+		if (typeof direct === 'object' && direct !== null) {
+			return direct as Record<string, unknown>;
+		}
+		const messageField = event.message;
+		if (typeof messageField !== 'object' || messageField === null) return null;
+		const nested = (messageField as Record<string, unknown>).usage;
+		if (typeof nested !== 'object' || nested === null) return null;
+		return nested as Record<string, unknown>;
+	}
+
+	/**
+	 * Read possibly-partial usage fields. Each field is `null` when missing
+	 * (so the caller merges against prior state) rather than coerced to 0.
+	 * Returns `null` for the whole frame when neither field is present.
+	 */
+	private static _readPartialUsage(
+		usage: Record<string, unknown>,
+	): { input: number | null; output: number | null } | null {
+		const input = typeof usage.input_tokens === 'number' ? usage.input_tokens : null;
+		const output = typeof usage.output_tokens === 'number' ? usage.output_tokens : null;
+		if (input === null && output === null) return null;
+		return { input, output };
+	}
+
+	/** Pull a finite numeric `index` field off an SDK content_block event. */
+	private static _extractIndex(event: Record<string, unknown>): number | null {
+		const raw = event.index;
+		return typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
+	}
+
+
+	/**
+	 * Mint a per-turn id used to namespace `blockId`s within one `queryStream`
+	 * call. Cryptographic strength is unnecessary — collision across concurrent
+	 * turns is the only concern. Falls back to a timestamp + Math.random tuple
+	 * when `crypto.randomUUID` is unavailable (e.g. jsdom edge cases). Reads
+	 * `crypto` off `window` when present to satisfy `prefer-active-doc`.
+	 */
+	private static _randomTurnId(): string {
+		const c =
+			typeof window !== 'undefined'
+				? (window as { crypto?: { randomUUID?: () => string } }).crypto
+				: undefined;
+		if (c !== undefined && typeof c.randomUUID === 'function') {
+			return c.randomUUID();
+		}
+		return `t-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
 	}
 
 	/**
