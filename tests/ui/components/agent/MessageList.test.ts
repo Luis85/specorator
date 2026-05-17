@@ -193,17 +193,18 @@ describe('MessageList', () => {
 		expect(po.markdownBlocks()[0].findAll('script')).toHaveLength(0);
 	});
 
-	it('exposes role="log" but no aria-live on the scroll container (WP-7 a11y #1)', () => {
-		// WP-7: the scroll container no longer carries `aria-live` — every
-		// streamed token previously caused a re-announcement of the growing
-		// transcript. Polite announcements now flow through the dedicated
-		// `A11yAnnouncer` once per completed turn.
+	it('exposes role="log" with explicit aria-live="off" on the scroll container (WP-7 a11y #1)', () => {
+		// WP-7: `role="log"` carries an implicit `aria-live="polite"` per the
+		// ARIA spec, which would re-announce the growing transcript on every
+		// streamed token. Explicit `aria-live="off"` overrides that so only the
+		// dedicated `A11yAnnouncer` boundary message reaches SRs once per
+		// completed turn.
 		const store = useMessagesStore();
 		const tid = 'thread-aria';
 		store.appendMessage(msg(tid, 'user'));
 		const { po } = mountList(tid);
 		expect(po.root.attributes('role')).toBe('log');
-		expect(po.root.attributes('aria-live')).toBeUndefined();
+		expect(po.root.attributes('aria-live')).toBe('off');
 	});
 
 	it('streaming bubble is aria-busy="true" + aria-live="off" while in flight (WP-7 a11y #1)', () => {

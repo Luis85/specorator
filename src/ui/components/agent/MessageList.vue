@@ -290,6 +290,7 @@ watch(
 		class="sp-agent-messages"
 		data-testid="agent-message-list"
 		role="log"
+		aria-live="off"
 		:aria-label="t('agent.messageListAriaLabel')"
 		@scroll.passive="handleScroll"
 	>
