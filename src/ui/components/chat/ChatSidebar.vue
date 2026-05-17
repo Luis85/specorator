@@ -132,6 +132,24 @@ function focusTextarea(): void {
 	ta?.focus();
 }
 
+/**
+ * UX #11 (WP-8) Codex P2: focus the textarea AND dispatch a synthetic
+ * `input` event so `ChatInput`'s `handleInput` runs — which is what opens
+ * the slash palette / @-mention picker based on the leading character.
+ * External `setUserText` alone updates the model but doesn't fire the
+ * textarea's `@input` handler, so the picker would stay closed after a
+ * starter-tile click.
+ */
+function focusInputForTilePrefill(): void {
+	const ta = inputRef.value?.textareaEl as HTMLTextAreaElement | null | undefined;
+	if (ta === null || ta === undefined) return;
+	ta.focus();
+	ta.setSelectionRange(ta.value.length, ta.value.length);
+	ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+defineExpose({ focusInputForTilePrefill });
+
 onMounted(async () => {
 	if (claudeCliPort !== undefined) {
 		available.value = await claudeCliPort.isAvailable();

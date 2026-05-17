@@ -19,7 +19,7 @@
  *     empty-state starter tile; the root pre-fills `messagesStore.userText`
  *     with a matching prompt fragment.
  */
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore';
 import { useMessagesStore } from '@/ui/stores/messagesStore';
@@ -36,6 +36,7 @@ import { BUILT_IN_SLASH_COMMANDS } from '@/application/chat/builtInSlashCommands
 
 const threadsStore = useChatThreadsStore();
 const messagesStore = useMessagesStore();
+const chatSidebarRef = ref<InstanceType<typeof ChatSidebar> | null>(null);
 const chatReset = useChatReset();
 const notificationStore = useNotificationStore();
 const { t } = useI18n();
@@ -133,20 +134,29 @@ function closeHelp(): void {
  * UX #11 (WP-8). Empty-state tile pre-fills the chat textarea with a
  * matching prompt fragment so the user can edit and send. We do NOT
  * auto-send — Cmd/Ctrl+Enter remains the user's commit gesture.
+ *
+ * Codex P2: after the model update, focus the textarea and dispatch a
+ * synthetic `input` event so `ChatInput`'s `handleInput` runs — that's
+ * what opens the slash palette / @-mention picker based on the leading
+ * character. External `setUserText` alone leaves the picker closed.
  */
-function handleEmptyTileAction(key: 'slash' | 'mention' | 'send' | 'escape'): void {
+async function handleEmptyTileAction(
+	key: 'slash' | 'mention' | 'send' | 'escape',
+): Promise<void> {
 	switch (key) {
 		case 'slash':
 			messagesStore.setUserText('/');
-			return;
+			break;
 		case 'mention':
 			messagesStore.setUserText('@');
-			return;
+			break;
 		case 'send':
 		case 'escape':
 			// Informational tiles — no textarea pre-fill needed.
 			return;
 	}
+	await nextTick();
+	chatSidebarRef.value?.focusInputForTilePrefill();
 }
 
 onMounted(() => {
@@ -210,7 +220,7 @@ onUnmounted(() => {
 			</div>
 			<div class="sp-agent__body">
 				<MessageList :thread-id="activeThreadId" @tile-action="handleEmptyTileAction" />
-				<ChatSidebar @select-command="handleSelectCommand" />
+				<ChatSidebar ref="chatSidebarRef" @select-command="handleSelectCommand" />
 			</div>
 		</ErrorBoundary>
 		<AppToast />
