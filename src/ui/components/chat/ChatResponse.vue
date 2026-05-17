@@ -1,6 +1,27 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+/**
+ * Two consumers, two render modes:
+ *
+ *   - `legacyMode === true` (default, `SpecoratorView` standalone embed)
+ *       renders the full state machine — idle placeholder, loading copy,
+ *       success text body, trimmed-success notice, error / timeout /
+ *       structured-fail banners, and the `proposalCard` slot.
+ *
+ *   - `legacyMode === false` (agent sidepanel)
+ *       suppresses the redundant rendering surfaces because `MessageList`
+ *       is the source of truth for assistant text in that mount:
+ *         * UX-#1: success/trimmed-success text body NOT rendered (MessageList
+ *           shows the appended assistant `ChatMessage`).
+ *         * UX-#2: `loading` "Thinking…" copy NOT rendered (MessageList's
+ *           streaming bubble already shows in-flight state with a cursor).
+ *         * `idle` is hidden too — the sidepanel header carries the empty
+ *           state instead.
+ *       The `proposalCard` slot, the trim notice, and the
+ *       error / timeout / structured-fail banners still render because
+ *       MessageList does not host those affordances.
+ */
 defineProps<{
   state:
     | 'idle'
@@ -11,24 +32,25 @@ defineProps<{
     | 'error'
     | 'structured-fail'
   text?: string
+  legacyMode?: boolean
 }>()
 
 const { t } = useI18n()
 </script>
 
 <template>
-  <!-- Idle placeholder -->
+  <!-- Idle placeholder — legacy only -->
   <p
-    v-if="state === 'idle'"
+    v-if="state === 'idle' && (legacyMode ?? true)"
     class="sp-chat__response-idle"
     data-testid="chat-response-idle"
   >
     {{ t('chat.responsePlaceholder') }}
   </p>
 
-  <!-- Loading state -->
+  <!-- Loading state — legacy only (UX-#2: MessageList streaming bubble owns the agent panel). -->
   <div
-    v-else-if="state === 'loading'"
+    v-else-if="state === 'loading' && (legacyMode ?? true)"
     role="status"
     aria-live="polite"
     class="sp-chat__response-loading"
@@ -47,13 +69,23 @@ const { t } = useI18n()
     >
       {{ t('chat.responseTrimmed') }}
     </p>
-    <div class="sp-chat__response-text" data-testid="chat-response-text">{{ text }}</div>
+    <!-- UX-#1: success text body lives in MessageList in the agent panel. -->
+    <div
+      v-if="legacyMode ?? true"
+      class="sp-chat__response-text"
+      data-testid="chat-response-text"
+    >{{ text }}</div>
     <slot name="proposalCard" />
   </template>
 
   <!-- Success state -->
   <template v-else-if="state === 'success'">
-    <div class="sp-chat__response-text" data-testid="chat-response-text">{{ text }}</div>
+    <!-- UX-#1: same suppression in the plain success branch. -->
+    <div
+      v-if="legacyMode ?? true"
+      class="sp-chat__response-text"
+      data-testid="chat-response-text"
+    >{{ text }}</div>
     <slot name="proposalCard" />
   </template>
 
