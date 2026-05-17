@@ -362,7 +362,7 @@ describe('ChatSidebar — session-persistence wiring (T-ASM-057)', () => {
 		expect(store.cliStartingUp).toBe(false)
 	})
 
-	it('mirrors the turn to the vault via SessionLogWriter.appendUserAssistant (REQ-ASM-034)', async () => {
+	it('mirrors the turn to the vault via SessionLogMirror.mirrorTurn (REQ-ASM-034)', async () => {
 		const scriptedId = asSessionId('sess-vault-12345678')
 		const { po, bridge, store } = await mountSidebar({
 			scriptedSessionIds: [scriptedId],
@@ -370,21 +370,35 @@ describe('ChatSidebar — session-persistence wiring (T-ASM-057)', () => {
 		})
 
 		const writeSpy = vi.spyOn(bridge, 'writeFile')
+		const appendSpy = vi.spyOn(bridge, 'appendFile')
 		await send(store, po, 'USER_TURN_BODY')
 
-		// SessionLogWriter writes are fire-and-forget; flush the
+		// SessionLogMirror writes are fire-and-forget; flush the
 		// microtask/event queue so the .then chain runs.
 		await flushPromises()
 		await flushPromises()
 
+		// WP-5: the hot path now stitches the new turn block via `appendFile`
+		// and the `updated:` frontmatter rewrite via `writeFile`. Inspecting
+		// the final on-disk content gives a port-agnostic assertion of the
+		// mirror's effect.
+		const sessionAppends = appendSpy.mock.calls.filter(
+			([path]) => typeof path === 'string' && path.includes('/sessions/'),
+		)
+		expect(sessionAppends.length).toBeGreaterThan(0)
+		const [appendedPath, appendedBody] = sessionAppends[0]
+		expect(appendedBody).toContain('USER_TURN_BODY')
+		expect(appendedBody).toContain('ASSISTANT_TURN_BODY')
+		const finalContent = await bridge.readFile(appendedPath)
+		expect(finalContent).toContain('USER_TURN_BODY')
+		expect(finalContent).toContain('ASSISTANT_TURN_BODY')
+		expect(finalContent).toContain(scriptedId)
+		// The frontmatter rewrite (WP-5) also lands as a `writeFile`; we just
+		// assert that *some* writeFile reached the sessions folder.
 		const sessionWrites = writeSpy.mock.calls.filter(
 			([path]) => typeof path === 'string' && path.includes('/sessions/'),
 		)
 		expect(sessionWrites.length).toBeGreaterThan(0)
-		const [, content] = sessionWrites[0]
-		expect(content).toContain('USER_TURN_BODY')
-		expect(content).toContain('ASSISTANT_TURN_BODY')
-		expect(content).toContain(scriptedId)
 	})
 
 	it('vault-write failure is non-fatal: chat send still completes and logger.warn fires (REQ-ASM-040)', async () => {

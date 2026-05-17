@@ -31,7 +31,7 @@ import type { LoggerPort } from '@/domain/ports/LoggerPort';
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord';
 import { asSessionId } from '@/domain/chat/SessionId';
 import type { FileWriteProposal } from '@/application/chat/FileWriteProposal';
-import type { SessionLogWriter } from '@/application/chat/SessionLogWriter';
+import type { SessionLogMirror } from '@/application/chat/SessionLogMirror';
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
 import { ChatTurnOrchestrator } from '@/application/chat/ChatTurnOrchestrator';
 import type {
@@ -238,11 +238,12 @@ function makeProposalsFake(): ProposalsPort & { state: ProposalsState } {
 	};
 }
 
-function makeWriter(): SessionLogWriter {
+function makeMirror(): SessionLogMirror {
 	return {
-		appendUserAssistant: vi.fn().mockResolvedValue(undefined),
-		appendProposalDecision: vi.fn().mockResolvedValue(undefined),
-	} as unknown as SessionLogWriter;
+		mirrorTurn: vi.fn().mockResolvedValue(undefined),
+		mirrorProposalDecision: vi.fn().mockResolvedValue(undefined),
+		ensureSessionsFolder: vi.fn().mockResolvedValue(undefined),
+	} as unknown as SessionLogMirror;
 }
 
 function freeTextInput(overrides: Partial<TurnInput> = {}): TurnInput {
@@ -263,7 +264,7 @@ function freeTextInput(overrides: Partial<TurnInput> = {}): TurnInput {
 function makeOrchestrator(options: {
 	port?: MockClaudeCliPort | undefined;
 	bridge?: MockBridge;
-	writer?: SessionLogWriter;
+	mirror?: SessionLogMirror;
 	threads?: ThreadsPort & { state: ThreadsState };
 	messages?: MessagesPort & { state: MessagesState };
 	streaming?: StreamingPort & { state: StreamingState };
@@ -272,7 +273,7 @@ function makeOrchestrator(options: {
 } = {}) {
 	const bridge = options.bridge ?? new MockBridge();
 	vi.spyOn(bridge, 'getSettings').mockResolvedValue({ ...DEFAULT_SETTINGS });
-	const writer = options.writer ?? makeWriter();
+	const mirror = options.mirror ?? makeMirror();
 	const messages = options.messages ?? makeMessagesFake();
 	const threads = options.threads ?? makeThreadsFake();
 	const streaming = options.streaming ?? makeStreamingFake();
@@ -287,12 +288,12 @@ function makeOrchestrator(options: {
 		threads,
 		streaming,
 		proposals,
-		getSessionLogWriter: async () => writer,
+		getSessionLogMirror: async () => mirror,
 		nowIso: () => '2025-01-01T00:00:00.000Z',
 		randomId: () => `id-${seq++}`,
 		abortControllerFactory: () => new AbortController(),
 	});
-	return { orchestrator, bridge, writer, messages, threads, streaming, proposals };
+	return { orchestrator, bridge, mirror, messages, threads, streaming, proposals };
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────
@@ -517,17 +518,17 @@ describe('ChatTurnOrchestrator.sendTurn', () => {
 		expect(messages.state.errorType).toBe('query_failed');
 	});
 
-	it('forwards the assistant turn to SessionLogWriter as a best-effort mirror', async () => {
+	it('forwards the assistant turn to SessionLogMirror as a best-effort mirror', async () => {
 		const port = new MockClaudeCliPort();
 		port.available = true;
 		port.cannedResponse = 'response body';
-		const writer = makeWriter();
-		const { orchestrator } = makeOrchestrator({ port, writer });
+		const mirror = makeMirror();
+		const { orchestrator } = makeOrchestrator({ port, mirror });
 		await orchestrator.sendTurn(freeTextInput({ userMessage: 'hi' }));
 		// Wait one microtask tick so the fire-and-forget chain runs.
 		await Promise.resolve();
 		await Promise.resolve();
-		expect(writer.appendUserAssistant).toHaveBeenCalledTimes(1);
+		expect(mirror.mirrorTurn).toHaveBeenCalledTimes(1);
 	});
 
 	describe('structured intent (UX-#5: empty assistant suppression)', () => {

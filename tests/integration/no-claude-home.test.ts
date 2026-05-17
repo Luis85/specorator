@@ -64,6 +64,7 @@ import { queryStructured } from '@/application/chat/queryStructured'
 import { commitFileWriteProposal } from '@/application/chat/commitFileWriteProposal'
 import { MockConfirmModalPort } from '@/infrastructure/mock/MockConfirmModalPort'
 import { SessionLogWriter } from '@/application/chat/SessionLogWriter'
+import { SessionLogMirror } from '@/application/chat/SessionLogMirror'
 import { asSessionId } from '@/domain/chat/SessionId'
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord'
 import type { FileWriteProposal } from '@/application/chat/FileWriteProposal'
@@ -118,12 +119,13 @@ describe('TEST-ASM-051 — no production fs reads under ~/.claude/ (T-ASM-079)',
     if (!structured.ok) return
 
     const proposal = makeProposal(structured.value)
-    const sessionLog = new SessionLogWriter(
+    const writer = new SessionLogWriter(
       ports.vault,
       ports.logger,
       'specs',
       () => '2026-05-15T10:00:00.000Z',
     )
+    const sessionLog = new SessionLogMirror(writer)
     const commitResult = await commitFileWriteProposal(proposal, makeThread(), {
       vault: ports.vault,
       logger: ports.logger,

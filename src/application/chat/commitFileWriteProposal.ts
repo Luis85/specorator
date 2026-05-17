@@ -58,7 +58,7 @@ import type {
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord'
 
 import type { FileWriteProposal } from './FileWriteProposal'
-import type { SessionLogWriter } from './SessionLogWriter'
+import type { SessionLogMirror } from './SessionLogMirror'
 import { CommitProposalError } from './errors'
 
 /**
@@ -70,7 +70,7 @@ import { CommitProposalError } from './errors'
 export interface CommitFileWriteDeps {
   readonly vault: VaultPort
   readonly logger: LoggerPort
-  readonly sessionLog: SessionLogWriter
+  readonly sessionLog: SessionLogMirror
   readonly confirmModal: ConfirmModalPort | undefined
   readonly i18n: TranslationPort
   readonly nowIso: () => string
@@ -140,7 +140,7 @@ export async function commitFileWriteProposal(
     // vault probe already failed; an audit-row failure must not override the
     // original error code surfaced to the user.
     await tryAsync(() =>
-      deps.sessionLog.appendProposalDecision({
+      deps.sessionLog.mirrorProposalDecision({
         thread,
         proposal: {
           envelope: { path: envelope.path, rationale },
@@ -166,7 +166,7 @@ export async function commitFileWriteProposal(
     // when the target path already exists (Codex P2, PR #347).
     if (deps.confirmModal === undefined) {
       await tryAsync(() =>
-        deps.sessionLog.appendProposalDecision({
+        deps.sessionLog.mirrorProposalDecision({
           thread,
           proposal: {
             envelope: { path: envelope.path, rationale },
@@ -194,7 +194,7 @@ export async function commitFileWriteProposal(
       // §3.6 step 1). Best-effort here — a failed audit row should not mask
       // the user's cancellation outcome.
       await deps.sessionLog
-        .appendProposalDecision({
+        .mirrorProposalDecision({
           thread,
           proposal: {
             envelope: { path: envelope.path, rationale },
@@ -227,7 +227,7 @@ export async function commitFileWriteProposal(
     // write already failed; an audit-row failure must not compound the
     // original failure or override its error code.
     await tryAsync(() =>
-      deps.sessionLog.appendProposalDecision({
+      deps.sessionLog.mirrorProposalDecision({
         thread,
         proposal: {
           envelope: { path: envelope.path, rationale },
@@ -246,7 +246,7 @@ export async function commitFileWriteProposal(
   //    failure because a vault-mutating action without its audit row violates
   //    the traceability article of the constitution.
   const auditResult = await tryAsync(() =>
-    deps.sessionLog.appendProposalDecision({
+    deps.sessionLog.mirrorProposalDecision({
       thread,
       proposal: {
         envelope: { path: envelope.path, rationale },
@@ -299,7 +299,7 @@ async function ensureParentFolder(
   const folderResult = await tryAsync(() => deps.vault.createFolder(folderToEnsure))
   if (folderResult.ok) return ok(undefined)
   await tryAsync(() =>
-    deps.sessionLog.appendProposalDecision({
+    deps.sessionLog.mirrorProposalDecision({
       thread,
       proposal: {
         envelope: { path: envelope.path, rationale },
@@ -336,7 +336,7 @@ export async function rejectFileWriteProposal(
   // errors to `logger.error`; we await for ordering but do not surface failure
   // — the user's reject decision is recorded best-effort.
   await deps.sessionLog
-    .appendProposalDecision({
+    .mirrorProposalDecision({
       thread,
       proposal: {
         envelope: { path: proposal.envelope.path, rationale },

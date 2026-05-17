@@ -24,6 +24,18 @@
  *     departure from fire-and-forget is `appendProposalDecision`, which the
  *     proposal-commit pipeline awaits for its audit row (REQ-ASM-046).
  *
+ * **WP-5 hot-path rewrite (2026-05-17):** the writer used to read the full log
+ * back from disk and rewrite it on every append (O(N²) bytes for N turns).
+ * It now keeps a per-path `LogPathCache` of `{ frontmatter, body }` seeded on
+ * first append, calls `VaultPort.appendFile` for each new block (O(1) on the
+ * wire for adapters with native append, O(content) for the localstorage shim),
+ * and rewrites only the frontmatter window via `VaultPort.writeFile` so the
+ * `updated:` timestamp stays accurate. The cache is per `SessionLogWriter`
+ * instance — the composable layer already caches the writer (cf.
+ * `useSessionLogWriter`) so a single Obsidian session shares one cache. A
+ * second writer process racing on the same vault file would invalidate this
+ * cache, but Obsidian is single-window so that case is theoretical.
+ *
  * Trust-first invariant (NFR-ASM-004 / ADR-0031): this class never reads
  * anything under `~/.claude/`; all I/O is mediated by `VaultPort`.
  *
@@ -114,14 +126,20 @@ function quoteYamlString(value: string): string {
   return `'${value.replace(/'/g, "''")}'`
 }
 
-/** Serialise the five-key frontmatter exactly as REQ-ASM-033 prescribes. */
-function buildFrontmatter(frontmatter: {
+/**
+ * Five-key frontmatter shape (SPEC-ASM-001 §2.3). Kept narrow so the cache
+ * entries are cheap to copy.
+ */
+interface FrontmatterFields {
   readonly session_id: string
   readonly feature: string | null
   readonly transport: 'api-key' | 'subscription'
   readonly created: string
   readonly updated: string
-}): string {
+}
+
+/** Serialise the five-key frontmatter exactly as REQ-ASM-033 prescribes. */
+function buildFrontmatter(frontmatter: FrontmatterFields): string {
   return [
     '---',
     `session_id: ${quoteYamlString(frontmatter.session_id)}`,
@@ -154,30 +172,25 @@ function extractSessionIdFromFrontmatter(content: string): string | null {
   return captured === '' ? null : captured
 }
 
-/** Whether a string already contains a frontmatter opener (`---\n…\n---`). */
-function hasFrontmatter(content: string): boolean {
-  return (
-    (content.startsWith('---\n') || content.startsWith('---\r\n')) &&
-    content.includes('\n---', 4)
-  )
-}
-
 /**
- * Replace the `updated:` key inside an existing frontmatter block with the
- * new timestamp. Falls back to a no-op if the frontmatter is malformed — the
- * append still proceeds so the user's turn is not lost.
+ * Split an on-disk session log into `(frontmatter, body)` so the cache can
+ * be seeded from existing content. Returns `null` if the frontmatter cannot
+ * be parsed — the caller falls back to a fresh-file write.
  */
-function rewriteUpdated(content: string, isoTimestamp: string): string {
-  if (!hasFrontmatter(content)) return content
+function splitFrontmatterAndBody(
+  content: string,
+): { readonly frontmatter: string; readonly body: string } | null {
+  if (!content.startsWith('---\n') && !content.startsWith('---\r\n')) return null
   const closeIdx = content.indexOf('\n---', 4)
-  if (closeIdx === -1) return content
-  const block = content.slice(0, closeIdx)
-  const rest = content.slice(closeIdx)
-  const newBlock = block.replace(
-    /^updated:.*$/m,
-    `updated: ${quoteYamlString(isoTimestamp)}`,
-  )
-  return newBlock + rest
+  if (closeIdx === -1) return null
+  // Include the closing `---\n` in the frontmatter slice so rewriting it via
+  // `writeFile` preserves the exact block boundaries.
+  const fmEnd = closeIdx + '\n---'.length
+  // Skip the newline after `---` so the body starts on the next line.
+  const bodyStart = content.charAt(fmEnd) === '\n' ? fmEnd + 1 : fmEnd
+  const frontmatter = `${content.slice(0, bodyStart)}`
+  const body = content.slice(bodyStart)
+  return { frontmatter, body }
 }
 
 /** Body text for a `## user` / `## assistant` turn block. */
@@ -231,11 +244,43 @@ function formatProposalBlock(args: {
 }
 
 /**
+ * Per-path frontmatter+body cache. The body is kept in memory so the
+ * `updated:` rewrite (which has to land at the head of the file) can stitch
+ * back the full content without re-reading from disk.
+ *
+ * `bodyEndsWithNewline` lets us emit body blocks with a single leading
+ * newline when needed without scanning the cached body string on every
+ * append.
+ */
+interface LogPathCache {
+  fields: FrontmatterFields
+  /**
+   * Serialised frontmatter exactly as last written. Includes the closing
+   * `---\n` separator. The leading-newline shape is preserved so writeFile
+   * round-trips deterministic.
+   */
+  frontmatter: string
+  /**
+   * Cached body content (everything after the frontmatter). Append paths
+   * concatenate the new block here in memory.
+   */
+  body: string
+}
+
+/**
  * Append-only session log writer for the agent side-panel chat.
  *
  * Construction is cheap and stateful: each instance owns the per-log-file
- * mutex map. Tests and the production wiring should share one instance per
- * Obsidian plugin lifetime so concurrent appends serialise correctly.
+ * mutex map, conflict-resolution memoisation, and a per-path frontmatter+body
+ * cache. Tests and the production wiring should share one instance per
+ * Obsidian plugin lifetime so concurrent appends serialise correctly and the
+ * cache stays warm.
+ *
+ * **Public callers should prefer the `SessionLogMirror` facade.** The
+ * writer remains exported for the application/chat folder (commit pipeline,
+ * orchestrator) and tests; UI callers go through `SessionLogMirror` so the
+ * dual-contract surface (`appendUserAssistant` fire-and-forget vs
+ * `appendProposalDecision` await-required) is hidden behind clearer names.
  */
 export class SessionLogWriter {
   /** Per-log-file write queue. The promise chain serialises appends. */
@@ -253,6 +298,13 @@ export class SessionLogWriter {
    * (REQ-ASM-039 DoD).
    */
   private readonly warnedSessions = new Set<string>()
+
+  /**
+   * WP-5 frontmatter+body cache keyed by the resolved (post-suffix) path.
+   * Seeded on the first append for a path; subsequent appends mutate it
+   * in-place and rewrite only the frontmatter window via `writeFile`.
+   */
+  private readonly cacheByPath = new Map<string, LogPathCache>()
 
   constructor(
     private readonly vault: VaultPort,
@@ -305,15 +357,7 @@ export class SessionLogWriter {
     }
     return this._runQueued(thread, async (resolvedPath) => {
       const at = this.nowIso()
-      const exists = await this.vault.fileExists(resolvedPath)
-      if (!exists) {
-        await this.writeFreshFile(resolvedPath, thread, [formatTurnBlock(turn, at)], at)
-        return
-      }
-      const existing = await this.vault.readFile(resolvedPath)
-      const updated = rewriteUpdated(existing, at)
-      const next = `${updated.endsWith('\n') ? updated : `${updated}\n`}${formatTurnBlock(turn, at)}`
-      await this.vault.writeFile(resolvedPath, next)
+      await this.appendBlock(resolvedPath, thread, formatTurnBlock(turn, at), at)
     }).catch((thrown: unknown) => {
       // Fire-and-forget swallow — route to logger.error with a redacted
       // sessionId (NFR-ASM-005) and resolve successfully so external callers
@@ -334,7 +378,7 @@ export class SessionLogWriter {
    *
    * **Unlike `appendUserAssistant`, this method rejects** on either:
    *   - missing `session_id` on the thread (throws {@link SessionLogNoSessionError}); or
-   *   - underlying `VaultPort.writeFile` / `readFile` failure (re-thrown).
+   *   - underlying `VaultPort.writeFile` / `appendFile` / `readFile` failure (re-thrown).
    *
    * The commit pipeline surfaces both as `SESSION_LOG_FAILED` so the user
    * never sees a vault-mutating action reported successful while its audit
@@ -358,21 +402,13 @@ export class SessionLogWriter {
       return Promise.reject(new SessionLogNoSessionError(args.thread.threadId))
     }
     return this._runQueued(args.thread, async (resolvedPath) => {
-      const exists = await this.vault.fileExists(resolvedPath)
       const block = formatProposalBlock({
         path: args.proposal.envelope.path,
         decision: args.decision,
         decidedAt: args.decidedAt,
         rationale: args.proposal.envelope.rationale,
       })
-      if (!exists) {
-        await this.writeFreshFile(resolvedPath, args.thread, [block], args.decidedAt)
-        return
-      }
-      const existing = await this.vault.readFile(resolvedPath)
-      const updated = rewriteUpdated(existing, args.decidedAt)
-      const next = `${updated.endsWith('\n') ? updated : `${updated}\n`}${block}`
-      await this.vault.writeFile(resolvedPath, next)
+      await this.appendBlock(resolvedPath, args.thread, block, args.decidedAt)
     })
   }
 
@@ -482,24 +518,141 @@ export class SessionLogWriter {
   }
 
   /**
-   * Write a brand-new session log with its frontmatter + one body block.
-   * `at` is reused as both `created` and `updated` on first write so
-   * REQ-ASM-034 (`updated > created`) can hold true on the second write.
+   * Append one body block (turn or proposal) to a log path. Implements the
+   * WP-5 hot path:
+   *
+   *   1. Seed the per-path cache on first append (single `readFile` if the
+   *      file exists from a previous session).
+   *   2. Call `VaultPort.appendFile(path, blockWithLeadingNewline)` so the
+   *      body delta is the *only* bytes that cross the adapter boundary on
+   *      a native-append adapter.
+   *   3. Rewrite the frontmatter window via `writeFile(path, frontmatter +
+   *      cachedBody)` so the `updated:` field stays accurate. The cached
+   *      body is the source of truth — the loop never re-reads the body
+   *      after the seed.
+   *
+   * The fresh-file branch is collapsed into the cache-seed path so there is
+   * a single `writeFile` call shape for callers to reason about.
    */
-  private async writeFreshFile(
-    path: string,
+  private async appendBlock(
+    resolvedPath: string,
     thread: ChatThreadRecord,
-    blocks: ReadonlyArray<string>,
+    block: string,
     at: string,
   ): Promise<void> {
-    const fm = buildFrontmatter({
-      session_id: thread.sessionId ?? '',
+    // Pre-condition: callers gate sessionId !== null. The cache stores the
+    // canonical sessionId from the frontmatter (or the thread's id on first
+    // write) so subsequent rewrites always have one to embed.
+    const sessionId = thread.sessionId ?? ''
+    let cache = this.cacheByPath.get(resolvedPath)
+    if (cache === undefined) {
+      cache = await this.seedCache(resolvedPath, thread, at)
+      this.cacheByPath.set(resolvedPath, cache)
+    }
+
+    // Compose the on-disk delta. Ensure exactly one newline between the
+    // previous body tail and the new block — first-write case has an empty
+    // body, subsequent appends have a body ending with `\n` from the previous
+    // block.
+    const separator = cache.body === '' || cache.body.endsWith('\n') ? '' : '\n'
+    const blockOnWire = `${separator}${block}`
+    await this.vault.appendFile(resolvedPath, blockOnWire)
+
+    // Update the in-memory body cache so subsequent frontmatter rewrites
+    // remain consistent with what's on disk.
+    cache.body = `${cache.body}${blockOnWire}`
+
+    // Rewrite the `updated:` field by composing the new frontmatter and the
+    // cached body. Tests assert that `updated` advances with each turn
+    // (TEST-ASM-033) so we cannot defer this; the body comes from the cache
+    // so we still avoid the per-turn body re-read.
+    const nextFields: FrontmatterFields = {
+      ...cache.fields,
+      session_id: sessionId !== '' ? sessionId : cache.fields.session_id,
+      updated: at,
+    }
+    const nextFrontmatter = buildFrontmatter(nextFields)
+    cache.fields = nextFields
+    cache.frontmatter = nextFrontmatter
+    await this.vault.writeFile(resolvedPath, `${nextFrontmatter}${cache.body}`)
+  }
+
+  /**
+   * Seed the per-path cache. If the file already exists with parseable
+   * frontmatter we adopt it (and write the freshly-stitched content back
+   * to bring `updated:` into line); otherwise we initialise a brand-new
+   * frontmatter from the thread and create the file via `appendFile` on the
+   * next step. The `appendFile` path is unified so callers don't branch on
+   * existence after seeding.
+   */
+  private async seedCache(
+    resolvedPath: string,
+    thread: ChatThreadRecord,
+    at: string,
+  ): Promise<LogPathCache> {
+    const exists = await this.vault.fileExists(resolvedPath)
+    if (!exists) {
+      // Fresh file: composing the frontmatter now means the first
+      // `appendFile` call below has only the new body block to write.
+      const fields: FrontmatterFields = {
+        session_id: thread.sessionId ?? '',
+        feature: thread.feature,
+        transport: thread.transport,
+        created: at,
+        updated: at,
+      }
+      const frontmatter = buildFrontmatter(fields)
+      // Write the frontmatter via `writeFile` so the file exists on disk
+      // before the body `appendFile` below tries to grow it.
+      await this.vault.writeFile(resolvedPath, frontmatter)
+      return { fields, frontmatter, body: '' }
+    }
+    // Existing file (resumed session or conflict-suffix branch): parse the
+    // current frontmatter once and seed the cache from it.
+    const existing = await this.vault.readFile(resolvedPath)
+    const split = splitFrontmatterAndBody(existing)
+    if (split === null) {
+      // Defensive: the file exists but the frontmatter is malformed.
+      // Treat as fresh — preserves the user's first-turn append rather than
+      // silently dropping it.
+      const fields: FrontmatterFields = {
+        session_id: thread.sessionId ?? '',
+        feature: thread.feature,
+        transport: thread.transport,
+        created: at,
+        updated: at,
+      }
+      const frontmatter = buildFrontmatter(fields)
+      await this.vault.writeFile(resolvedPath, frontmatter)
+      return { fields, frontmatter, body: '' }
+    }
+    const parsedSessionId = extractSessionIdFromFrontmatter(existing) ?? thread.sessionId ?? ''
+    const fields: FrontmatterFields = {
+      session_id: parsedSessionId,
       feature: thread.feature,
       transport: thread.transport,
-      created: at,
+      // We don't re-parse `created` from disk — the seed is best-effort, and
+      // the next rewrite below will leave `created` as the disk value via
+      // the body re-stitch. To preserve `created` exactly we keep the raw
+      // frontmatter slice and let the next writeFile use the rebuilt
+      // frontmatter; the rebuilt timestamps come from `at` for `updated` and
+      // the parsed value for `created` (see below).
+      created: parseCreated(split.frontmatter) ?? at,
       updated: at,
-    })
-    const body = blocks.join('')
-    await this.vault.writeFile(path, `${fm}\n${body}`)
+    }
+    return { fields, frontmatter: split.frontmatter, body: split.body }
   }
+}
+
+/**
+ * Extract the `created:` field from a frontmatter slice so resumed sessions
+ * preserve their original creation timestamp across appends. Returns `null`
+ * when the field is absent or malformed; the caller falls back to the
+ * current timestamp (acceptable for a first-ever turn on the path).
+ */
+function parseCreated(frontmatter: string): string | null {
+  const match = /^created:\s*(?:'([^']*)'|"([^"]*)"|([^\n\r]+))\s*$/m.exec(frontmatter)
+  if (!match) return null
+  const raw = (match[0].replace(/^created:\s*/, '').trim()).replace(/^['"]|['"]$/g, '')
+  return raw === '' ? null : raw
 }

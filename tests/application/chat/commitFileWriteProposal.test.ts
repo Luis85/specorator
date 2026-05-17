@@ -38,6 +38,7 @@ import {
   type CommitFileWriteDeps,
 } from '@/application/chat/commitFileWriteProposal'
 import { SessionLogWriter } from '@/application/chat/SessionLogWriter'
+import { SessionLogMirror } from '@/application/chat/SessionLogMirror'
 import { resolveSessionLogPath } from '@/application/chat/sessionLogPath'
 import type { FileWriteProposal } from '@/application/chat/FileWriteProposal'
 import type { CreateFileEnvelope } from '@/application/chat/createFileEnvelopeSchema'
@@ -110,12 +111,13 @@ function makeDeps(
   ports: FakePorts,
   overrides: Partial<CommitFileWriteDeps> = {},
 ): CommitFileWriteDeps {
-  const sessionLog = new SessionLogWriter(
+  const writer = new SessionLogWriter(
     ports.vault,
     ports.logger,
     'specs',
     () => FIXED_NOW,
   )
+  const sessionLog = new SessionLogMirror(writer)
   return {
     vault: ports.vault,
     logger: ports.logger,
@@ -369,13 +371,14 @@ describe('commitFileWriteProposal — error codes (T-ASM-066)', () => {
 
   it('returns WRITE_FAILED with a failed audit row when no ConfirmModalPort is available AND the target path already exists (Codex P2 fix)', async () => {
     await ports.bridge.writeFile('specs/foo/idea.md', 'old')
-    const sessionLog = new SessionLogWriter(
+    const writer = new SessionLogWriter(
       ports.vault,
       ports.logger,
       'specs',
       () => FIXED_NOW,
     )
-    const appendSpy = vi.spyOn(sessionLog, 'appendProposalDecision')
+    const sessionLog = new SessionLogMirror(writer)
+    const appendSpy = vi.spyOn(writer, 'appendProposalDecision')
     const deps = makeDeps(ports, { confirmModal: undefined, sessionLog })
     const writeSpy = vi.spyOn(ports.vault, 'writeFile')
     const proposal = makeProposal({
@@ -436,13 +439,14 @@ describe('commitFileWriteProposal — error codes (T-ASM-066)', () => {
       listFiles: ports.vault.listFiles.bind(ports.vault),
       listFolders: ports.vault.listFolders.bind(ports.vault),
     }
-    const sessionLog = new SessionLogWriter(
+    const writer = new SessionLogWriter(
       ports.vault,
       ports.logger,
       'specs',
       () => FIXED_NOW,
     )
-    const appendSpy = vi.spyOn(sessionLog, 'appendProposalDecision')
+    const sessionLog = new SessionLogMirror(writer)
+    const appendSpy = vi.spyOn(writer, 'appendProposalDecision')
     const deps = makeDeps(ports, { vault: failingVault, sessionLog })
 
     const result = await commitFileWriteProposal(proposal, makeThread(), deps)
@@ -469,13 +473,14 @@ describe('commitFileWriteProposal — error codes (T-ASM-066)', () => {
       content: 'body',
       rationale: 'because-probe',
     })
-    const sessionLog = new SessionLogWriter(
+    const writer = new SessionLogWriter(
       ports.vault,
       ports.logger,
       'specs',
       () => FIXED_NOW,
     )
-    const appendSpy = vi.spyOn(sessionLog, 'appendProposalDecision')
+    const sessionLog = new SessionLogMirror(writer)
+    const appendSpy = vi.spyOn(writer, 'appendProposalDecision')
     const existsSpy = vi
       .spyOn(ports.vault, 'fileExists')
       .mockImplementationOnce(async () => {
@@ -510,13 +515,14 @@ describe('commitFileWriteProposal — error codes (T-ASM-066)', () => {
     // so we can verify the failed audit row is appended without coupling to
     // the underlying vault wire format. The vault.writeFile remains spied to
     // make the envelope write fail.
-    const sessionLog = new SessionLogWriter(
+    const writer = new SessionLogWriter(
       ports.vault,
       ports.logger,
       'specs',
       () => FIXED_NOW,
     )
-    const appendSpy = vi.spyOn(sessionLog, 'appendProposalDecision')
+    const sessionLog = new SessionLogMirror(writer)
+    const appendSpy = vi.spyOn(writer, 'appendProposalDecision')
     const writeSpy = vi
       .spyOn(ports.vault, 'writeFile')
       .mockImplementationOnce(async () => {
@@ -544,17 +550,18 @@ describe('commitFileWriteProposal — error codes (T-ASM-066)', () => {
 
   it('WRITE_FAILED is preserved even when the failed-audit-row append itself fails (P2 best-effort)', async () => {
     const proposal = makeProposal({ path: 'specs/foo/idea.md', content: 'body' })
-    const sessionLog = new SessionLogWriter(
+    const writer = new SessionLogWriter(
       ports.vault,
       ports.logger,
       'specs',
       () => FIXED_NOW,
     )
+    const sessionLog = new SessionLogMirror(writer)
     // Both the envelope write AND the audit-row append fail. The original
     // WRITE_FAILED code must NOT be overridden — the audit row append is
     // best-effort in this terminal branch.
     vi.spyOn(ports.vault, 'writeFile').mockRejectedValue(new Error('boom: disk full'))
-    vi.spyOn(sessionLog, 'appendProposalDecision').mockRejectedValueOnce(
+    vi.spyOn(writer, 'appendProposalDecision').mockRejectedValueOnce(
       new Error('audit row offline'),
     )
     const deps = makeDeps(ports, { sessionLog })
@@ -573,13 +580,14 @@ describe('commitFileWriteProposal — error codes (T-ASM-066)', () => {
       rationale: 'because',
     })
     // Stub SessionLogWriter.appendProposalDecision to reject.
-    const sessionLog = new SessionLogWriter(
+    const writer = new SessionLogWriter(
       ports.vault,
       ports.logger,
       'specs',
       () => FIXED_NOW,
     )
-    vi.spyOn(sessionLog, 'appendProposalDecision').mockRejectedValueOnce(
+    const sessionLog = new SessionLogMirror(writer)
+    vi.spyOn(writer, 'appendProposalDecision').mockRejectedValueOnce(
       new Error('boom: log offline'),
     )
     const deps = makeDeps(ports, { sessionLog })
@@ -664,12 +672,13 @@ describe('rejectFileWriteProposal (T-ASM-067 / REQ-ASM-045)', () => {
     const writeSpy = vi.spyOn(ports.vault, 'writeFile')
     const createFolderSpy = vi.spyOn(ports.vault, 'createFolder')
     const deleteFileSpy = vi.spyOn(ports.vault, 'deleteFile')
-    const sessionLog = new SessionLogWriter(
+    const writer = new SessionLogWriter(
       ports.vault,
       ports.logger,
       'specs',
       () => FIXED_NOW,
     )
+    const sessionLog = new SessionLogMirror(writer)
 
     await rejectFileWriteProposal(proposal, thread, {
       sessionLog,
@@ -697,13 +706,14 @@ describe('rejectFileWriteProposal (T-ASM-067 / REQ-ASM-045)', () => {
   it('does not throw when the audit-row append fails; routes to logger.error', async () => {
     const proposal = makeProposal({ path: 'specs/foo/idea.md' })
     const thread = makeThread()
-    const sessionLog = new SessionLogWriter(
+    const writer = new SessionLogWriter(
       ports.vault,
       ports.logger,
       'specs',
       () => FIXED_NOW,
     )
-    vi.spyOn(sessionLog, 'appendProposalDecision').mockRejectedValueOnce(
+    const sessionLog = new SessionLogMirror(writer)
+    vi.spyOn(writer, 'appendProposalDecision').mockRejectedValueOnce(
       new Error('boom: log offline'),
     )
 

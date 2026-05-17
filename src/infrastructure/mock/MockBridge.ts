@@ -35,6 +35,21 @@ export class MockBridge
 {
 	private readonly files = new Map<string, string>();
 	private readonly folders = new Set<string>();
+	/**
+	 * WP-5: lightweight call recorder for VaultPort write-shaped methods so
+	 * tests can assert I/O accounting (e.g. `appendFile` count vs `writeFile`
+	 * count) without spying on prototype methods. Kept narrow on purpose —
+	 * read paths still go through `getAllFiles()` / `readFile()` mocks.
+	 */
+	readonly calls: {
+		readonly writeFile: Array<{ readonly path: string; readonly content: string }>;
+		readonly appendFile: Array<{ readonly path: string; readonly content: string }>;
+		readonly readFile: Array<{ readonly path: string }>;
+	} = {
+		writeFile: [],
+		appendFile: [],
+		readFile: [],
+	};
 	private settings: PluginSettings = { ...DEFAULT_SETTINGS };
 	private enabledPluginIds = new Set<string>();
 	private readonly noticeLog: {
@@ -64,13 +79,27 @@ export class MockBridge
 	}
 
 	async readFile(path: string): Promise<string> {
+		this.calls.readFile.push({ path });
 		const content = this.files.get(path);
 		if (content === undefined) throw new Error(`[MockBridge] File not found: ${path}`);
 		return content;
 	}
 
 	async writeFile(path: string, content: string): Promise<void> {
+		this.calls.writeFile.push({ path, content });
 		this.files.set(path, content);
+	}
+
+	/**
+	 * WP-5: in-memory tail append. Mirrors through the same `files` map so a
+	 * later `readFile(path)` reflects every prior `appendFile`. Creates the
+	 * key on first append (POSIX semantics) so tests don't have to seed an
+	 * empty file before the first turn.
+	 */
+	async appendFile(path: string, content: string): Promise<void> {
+		this.calls.appendFile.push({ path, content });
+		const existing = this.files.get(path) ?? '';
+		this.files.set(path, `${existing}${content}`);
 	}
 
 	async deleteFile(path: string): Promise<void> {

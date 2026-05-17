@@ -38,6 +38,18 @@ export class LocalStorageBridge
 		localStorage.setItem(FILE_PREFIX + path, content);
 	}
 
+	/**
+	 * WP-5: tail-append via read-concat-write. The GitHub Pages demo doesn't
+	 * run real chat sessions at scale, so the O(N) cost per call is
+	 * acceptable; the append contract just needs the same final-byte stream
+	 * as the native adapter. Creates the key if missing (POSIX semantics).
+	 */
+	async appendFile(path: string, content: string): Promise<void> {
+		const key = FILE_PREFIX + path;
+		const existing = localStorage.getItem(key) ?? '';
+		localStorage.setItem(key, `${existing}${content}`);
+	}
+
 	async deleteFile(path: string): Promise<void> {
 		localStorage.removeItem(FILE_PREFIX + path);
 	}

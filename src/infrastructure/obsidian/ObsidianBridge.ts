@@ -61,6 +61,24 @@ export class ObsidianBridge
 		}
 	}
 
+	/**
+	 * WP-5 (VaultPort.appendFile): tail-append `content` to `path`. Delegates
+	 * to `Vault.adapter.append(path, data)` — Obsidian's `DataAdapter` exposes
+	 * this on both the desktop FileSystem adapter and the mobile capacitor
+	 * adapter, making it the cheap path. If the file does not exist yet the
+	 * adapter's `append` creates it; we still guard explicitly via `create` so
+	 * the first-write code path stays observable to tests.
+	 */
+	async appendFile(path: string, content: string): Promise<void> {
+		const normalized = normalizePath(path);
+		const existing = this.app.vault.getAbstractFileByPath(normalized);
+		if (!(existing instanceof TFile)) {
+			await this.app.vault.create(normalized, content);
+			return;
+		}
+		await this.app.vault.adapter.append(normalized, content);
+	}
+
 	async deleteFile(path: string): Promise<void> {
 		const normalized = normalizePath(path);
 		const file = this.app.vault.getAbstractFileByPath(normalized);

@@ -1311,15 +1311,15 @@ to {
 	font-style: italic;
 }
 
-.specorator-root :where(.sp-chat__input-area[data-v-0d9910ae]) {
+.specorator-root :where(.sp-chat__input-area[data-v-35e591e4]) {
 	display: flex;
 	flex-direction: column;
 	gap: 0.5rem;
 }
-.specorator-root :where(.sp-chat__input-wrapper[data-v-0d9910ae]) {
+.specorator-root :where(.sp-chat__input-wrapper[data-v-35e591e4]) {
 	position: relative;
 }
-.specorator-root :where(.sp-chat__textarea[data-v-0d9910ae]) {
+.specorator-root :where(.sp-chat__textarea[data-v-35e591e4]) {
 	width: 100%;
 	min-height: 4.5rem;
 	max-height: 8rem;
@@ -1334,11 +1334,11 @@ to {
 	font-size: 0.875rem;
 	box-sizing: border-box;
 }
-.specorator-root :where(.sp-chat__textarea[data-v-0d9910ae]:focus) {
+.specorator-root :where(.sp-chat__textarea[data-v-35e591e4]:focus) {
 	outline: none;
 	border-color: var(--interactive-accent);
 }
-.specorator-root :where(.sp-chat__input-actions[data-v-0d9910ae]) {
+.specorator-root :where(.sp-chat__input-actions[data-v-35e591e4]) {
 	display: flex;
 	justify-content: flex-end;
 }
@@ -1569,7 +1569,7 @@ to {
  * parent: in the agent sidepanel the parent gives ChatSidebar `flex: 0 0
  * auto` and `MessageList` takes the remaining grow space.
  */
-.specorator-root :where(.sp-chat-sidebar[data-v-83554aa6]) {
+.specorator-root :where(.sp-chat-sidebar[data-v-8ff55a79]) {
 	padding: 1rem;
 	display: flex;
 	flex-direction: column;
@@ -1577,19 +1577,19 @@ to {
 	box-sizing: border-box;
 	flex-shrink: 0;
 }
-.specorator-root :where(.sp-chat__title[data-v-83554aa6]) {
+.specorator-root :where(.sp-chat__title[data-v-8ff55a79]) {
 	margin: 0;
 	font-size: 1.125rem;
 	font-weight: 700;
 	color: var(--text-normal);
 }
-.specorator-root :where(.sp-chat__header[data-v-83554aa6]) {
+.specorator-root :where(.sp-chat__header[data-v-8ff55a79]) {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
 	flex-wrap: wrap;
 }
-.specorator-root :where(.sp-chat__divider[data-v-83554aa6]) {
+.specorator-root :where(.sp-chat__divider[data-v-8ff55a79]) {
 	margin: 0;
 	border: none;
 	border-top: 1px solid var(--background-modifier-border);
@@ -1600,7 +1600,7 @@ to {
  * confirmation. Render with neutral chrome (secondary background, normal
  * border) so the visual weight matches the consequence.
  */
-.specorator-root :where(.sp-chat__stop[data-v-83554aa6]) {
+.specorator-root :where(.sp-chat__stop[data-v-8ff55a79]) {
 	margin-left: auto;
 	font-size: 0.75rem;
 	font-weight: 500;
@@ -1614,7 +1614,7 @@ to {
 		background-color 0.15s,
 		border-color 0.15s;
 }
-.specorator-root :where(.sp-chat__stop[data-v-83554aa6]:hover) {
+.specorator-root :where(.sp-chat__stop[data-v-8ff55a79]:hover) {
 	background: var(--interactive-hover);
 }
 

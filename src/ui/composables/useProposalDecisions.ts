@@ -36,14 +36,14 @@ import type {
 } from '@/domain/ports';
 import type { useChatThreadsStore } from '@/ui/stores/chatThreadsStore';
 import type { useProposalStore } from '@/ui/stores/proposalStore';
-import type { UseSessionLogWriter } from '@/ui/composables/useSessionLogWriter';
+import type { UseSessionLogMirror } from '@/ui/composables/useSessionLogMirror';
 
 export interface UseProposalDecisionsArgs {
 	readonly settingsPort: SettingsPort;
 	readonly vaultPort: VaultPort;
 	readonly loggerPort: LoggerPort;
 	readonly confirmModalPort: ConfirmModalPort | undefined;
-	readonly sessionLogWriterFactory: UseSessionLogWriter;
+	readonly sessionLogMirrorFactory: UseSessionLogMirror;
 	readonly translator: TranslationPort;
 	readonly threadsStore: ReturnType<typeof useChatThreadsStore>;
 	readonly proposalStore: ReturnType<typeof useProposalStore>;
@@ -68,8 +68,8 @@ export function useProposalDecisions(args: UseProposalDecisionsArgs): UseProposa
 		context: string,
 	): Promise<void> {
 		await (async () => {
-			const writer = await args.sessionLogWriterFactory.getWriter();
-			await writer.appendProposalDecision({
+			const mirror = await args.sessionLogMirrorFactory.getMirror();
+			await mirror.mirrorProposalDecision({
 				thread,
 				proposal: {
 					envelope: { path: proposal.envelope.path, rationale: undefined },
@@ -117,11 +117,11 @@ export function useProposalDecisions(args: UseProposalDecisionsArgs): UseProposa
 				args.proposalStore.setProposalStatus(payload.proposalId, 'failed', 'WRITE_FAILED');
 				return;
 			}
-			const writer = await args.sessionLogWriterFactory.getWriter();
+			const mirror = await args.sessionLogMirrorFactory.getMirror();
 			const result = await commitFileWriteProposal(proposal, thread, {
 				vault: args.vaultPort,
 				logger: args.loggerPort,
-				sessionLog: writer,
+				sessionLog: mirror,
 				confirmModal: args.confirmModalPort,
 				i18n: args.translator,
 				nowIso: () => new Date().toISOString(),
@@ -149,9 +149,9 @@ export function useProposalDecisions(args: UseProposalDecisionsArgs): UseProposa
 		}
 		inFlight.value.add(payload.proposalId);
 		await (async () => {
-			const writer = await args.sessionLogWriterFactory.getWriter();
+			const mirror = await args.sessionLogMirrorFactory.getMirror();
 			await rejectFileWriteProposal(proposal, thread, {
-				sessionLog: writer,
+				sessionLog: mirror,
 				logger: args.loggerPort,
 				nowIso: () => new Date().toISOString(),
 			});

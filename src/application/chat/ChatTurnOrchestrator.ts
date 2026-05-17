@@ -39,7 +39,7 @@ import { EnvelopeParseError, type PathValidationError } from '@/application/chat
 import type { ClaudeCliError } from '@/domain/ports/ClaudeCliPort';
 import type { SettingsPort } from '@/domain/ports/SettingsPort';
 import type { VaultPort } from '@/domain/ports/VaultPort';
-import type { SessionLogWriter } from '@/application/chat/SessionLogWriter';
+import type { SessionLogMirror } from '@/application/chat/SessionLogMirror';
 import { ChatTurnError } from './ChatTurnError';
 import type { TurnInput } from './TurnInput';
 
@@ -113,7 +113,7 @@ export interface ChatTurnOrchestratorDeps {
 	readonly threads: ThreadsPort;
 	readonly streaming: StreamingPort;
 	readonly proposals: ProposalsPort;
-	readonly getSessionLogWriter: () => Promise<SessionLogWriter>;
+	readonly getSessionLogMirror: () => Promise<SessionLogMirror>;
 	readonly nowIso: () => string;
 	readonly randomId: () => string;
 	readonly abortControllerFactory: () => AbortController;
@@ -457,9 +457,12 @@ export class ChatTurnOrchestrator {
 	 * captured yet. All failures are routed to `logger.warn` so the chat-send
 	 * path completes normally.
 	 *
-	 * NOTE for WP-5: today this awaits the writer factory + chains the warn
-	 * handler inline. A `SessionLogMirror` facade (out of scope here) would
-	 * collapse the two `.then`/`.catch` into a single best-effort call.
+	 * WP-5: routes through the `SessionLogMirror` facade. The mirror exposes a
+	 * single fire-and-forget `mirrorTurn` method, so the older two-step `.then`
+	 * (writer factory + appendUserAssistant) collapses into a single chain.
+	 * The mirror's `mirrorTurn` already swallows its own write failures via the
+	 * underlying writer's `logger.error` route (REQ-ASM-040); the `.catch` here
+	 * still guards against the *factory* rejecting (e.g. settings read failed).
 	 */
 	private mirrorTurnToVault(args: {
 		threadId: string;
@@ -469,15 +472,15 @@ export class ChatTurnOrchestrator {
 		const thread = this.deps.threads.chatThreads.get(args.threadId);
 		if (thread === undefined) return;
 		void this.deps
-			.getSessionLogWriter()
-			.then((writer) =>
-				writer.appendUserAssistant(thread, {
+			.getSessionLogMirror()
+			.then((mirror) =>
+				mirror.mirrorTurn(thread, {
 					user: args.userMessage,
 					assistant: args.assistantResponse,
 				}),
 			)
 			.catch((error: unknown) => {
-				this.deps.logger.warn('SessionLogWriter.appendUserAssistant failed', {
+				this.deps.logger.warn('SessionLogMirror.mirrorTurn failed', {
 					threadId: args.threadId,
 					reason: error instanceof Error ? error.message : String(error),
 				});

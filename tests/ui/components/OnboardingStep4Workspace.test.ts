@@ -22,6 +22,7 @@ function makeVaultPort(folders: string[] = [], overrides: Partial<VaultPort> = {
 		createFolder: vi.fn().mockResolvedValue(undefined),
 		readFile: vi.fn(),
 		writeFile: vi.fn(),
+		appendFile: vi.fn(),
 		deleteFile: vi.fn(),
 		listFiles: vi.fn(),
 		fileExists: vi.fn(),

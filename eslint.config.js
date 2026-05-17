@@ -59,6 +59,22 @@ const UI_FORBIDDEN_PATTERNS = [
 		],
 		message: 'UI may only reach into @/infrastructure/bridge/** (the port boundary).',
 	},
+	{
+		// WP-5: the public surface for session-log writes outside the
+		// application/chat folder is `SessionLogMirror`. The writer's two
+		// methods (`appendUserAssistant` fire-and-forget vs
+		// `appendProposalDecision` await-required) are easy to confuse; the
+		// facade collapses them to a single intent-named surface. Direct
+		// writer imports outside application/chat are forbidden.
+		group: [
+			'@/application/chat/SessionLogWriter',
+			'src/application/chat/SessionLogWriter',
+			'../application/chat/SessionLogWriter',
+			'../../application/chat/SessionLogWriter',
+		],
+		message:
+			'Outside src/application/chat/, use SessionLogMirror (the facade). The writer is the I/O engine; the mirror is the public surface (WP-5).',
+	},
 ];
 
 const MAX_LINES_OPTIONS = { max: 350, skipBlankLines: true, skipComments: true };

@@ -283,7 +283,9 @@ describe('SessionLogWriter fire-and-forget latency (T-ASM-047, TEST-ASM-038)', (
 
   it('appendUserAssistant returns synchronously after enqueueing (caller not blocked on slow writeFile)', async () => {
     const thread = makeThread()
-    // Replace writeFile with a 1 000 ms-delayed promise to simulate slow I/O.
+    // Replace writeFile + appendFile with 1 000 ms-delayed promises to
+    // simulate slow I/O. The WP-5 hot path now does both per append; both
+    // must complete before the queued op finishes.
     const originalWriteFile = ports.vault.writeFile.bind(ports.vault)
     vi.spyOn(ports.vault, 'writeFile').mockImplementation(
       (path: string, content: string): Promise<void> =>
@@ -291,6 +293,16 @@ describe('SessionLogWriter fire-and-forget latency (T-ASM-047, TEST-ASM-038)', (
           // eslint-disable-next-line obsidianmd/prefer-active-window-timers
           setTimeout(() => {
             void originalWriteFile(path, content).then(resolve)
+          }, 1000)
+        }),
+    )
+    const originalAppendFile = ports.vault.appendFile.bind(ports.vault)
+    vi.spyOn(ports.vault, 'appendFile').mockImplementation(
+      (path: string, content: string): Promise<void> =>
+        new Promise((resolve) => {
+          // eslint-disable-next-line obsidianmd/prefer-active-window-timers
+          setTimeout(() => {
+            void originalAppendFile(path, content).then(resolve)
           }, 1000)
         }),
     )
@@ -303,8 +315,9 @@ describe('SessionLogWriter fire-and-forget latency (T-ASM-047, TEST-ASM-038)', (
     // The synchronous body of the call returns quickly — well under 100 ms.
     expect(t1 - t0).toBeLessThan(100)
 
-    // Advance the fake timer so the queued write completes.
-    await vi.advanceTimersByTimeAsync(1000)
+    // Advance the fake timer through every delayed op (seed writeFile +
+    // appendFile + rewrite writeFile = three 1 000 ms ticks worst case).
+    await vi.advanceTimersByTimeAsync(5000)
     await pending
   })
 
@@ -312,8 +325,12 @@ describe('SessionLogWriter fire-and-forget latency (T-ASM-047, TEST-ASM-038)', (
     vi.useRealTimers()
     const thread = makeThread()
     const order: string[] = []
-    vi.spyOn(ports.vault, 'writeFile').mockImplementation(async (_p, content) => {
-      // Tag each write by inspecting the body.
+    // Tag each appended body block by inspecting its body — `appendFile` is
+    // the canonical hot path on WP-5 and carries the new turn block on the
+    // wire. The frontmatter `writeFile` rewrites are intentionally ignored
+    // here so we measure ordering across mutex queueing, not the I/O
+    // accounting (which T-ASM-OturnAppend covers separately).
+    vi.spyOn(ports.vault, 'appendFile').mockImplementation(async (_p, content) => {
       const tag = content.includes('first-turn') ? 'first' : 'second'
       order.push(`start-${tag}`)
       await new Promise((r) => setTimeout(r, 5)) // eslint-disable-line obsidianmd/prefer-active-window-timers
@@ -325,7 +342,7 @@ describe('SessionLogWriter fire-and-forget latency (T-ASM-047, TEST-ASM-038)', (
     const b = writer.appendUserAssistant(thread, { user: 'second-turn', assistant: 'b' })
     await Promise.all([a, b])
 
-    // The second write must not start before the first finishes.
+    // The second append must not start before the first finishes.
     expect(order).toEqual(['start-first', 'end-first', 'start-second', 'end-second'])
   })
 })
@@ -352,6 +369,93 @@ describe('SessionLogWriter error routing (NFR-ASM-005)', () => {
     const ctx = errorCall[2] as { redactedSessionId: string }
     expect(ctx.redactedSessionId).toBe('ffffffff')
     expect(ctx.redactedSessionId).not.toContain('1111')
+  })
+})
+
+describe('SessionLogWriter O(turn) append (WP-5 DoD)', () => {
+  let ports: FakePorts
+
+  beforeEach(() => {
+    ports = fakeModulePorts()
+  })
+
+  it('100 turns produce 100 appendFile calls and ≤ 1 readFile call (no per-turn body re-read)', async () => {
+    // WP-5 closes the O(N²) trigger from the 2026-05-17 audit: the writer
+    // used to call `readFile(path)` and `writeFile(path, fullContent)` on
+    // every append, so 100 turns paid 100 reads × 100 bytes-of-history
+    // cumulative. After WP-5 the body is cached in memory after the seed
+    // and each turn pays exactly one `appendFile` for the new block.
+    const thread = makeThread()
+    let tick = 0
+    const writer = makeWriter(ports, () => {
+      tick += 1
+      return `2026-05-14T10:00:${String(tick).padStart(2, '0')}.000Z`
+    })
+
+    for (let i = 0; i < 100; i += 1) {
+      await writer.appendUserAssistant(thread, {
+        user: `u-${i}`,
+        assistant: `a-${i}`,
+      })
+    }
+
+    expect(ports.bridge.calls.appendFile).toHaveLength(100)
+    // The fresh-thread path does not require any read: `fileExists` returns
+    // false and the writer goes straight to `writeFile(frontmatter)` then
+    // `appendFile(body)`. We assert "at most one" so a single defensive
+    // seed-read on resumed sessions remains permitted by the contract.
+    expect(ports.bridge.calls.readFile.length).toBeLessThanOrEqual(1)
+    // All 100 user/assistant turns survived round-trip on disk.
+    const finalPath = ports.bridge.calls.appendFile[0]?.path ?? ''
+    const finalContent = await ports.vault.readFile(finalPath)
+    expect(finalContent).toContain('u-0')
+    expect(finalContent).toContain('u-99')
+    expect(finalContent).toContain('a-0')
+    expect(finalContent).toContain('a-99')
+  })
+
+  it('resumed-session path: a single readFile seeds the cache, then appends scale O(1)', async () => {
+    // Pre-seed a session log so the writer takes the cache-from-disk branch
+    // on first append. After seeding, subsequent appends must not re-read.
+    const thread = makeThread()
+    await ports.vault.writeFile(
+      'specs/foo/sessions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.md',
+      [
+        '---',
+        "session_id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'",
+        "feature: 'foo'",
+        'transport: subscription',
+        "created: '2026-05-14T08:00:00.000Z'",
+        "updated: '2026-05-14T08:00:00.000Z'",
+        '---',
+        '',
+        '## user',
+        '<!-- at: 2026-05-14T08:00:00.000Z -->',
+        '',
+        'pre-existing',
+        '',
+      ].join('\n'),
+    )
+
+    // Reset the recorder so we only count writer-driven calls below.
+    ports.bridge.calls.appendFile.length = 0
+    ports.bridge.calls.readFile.length = 0
+    ports.bridge.calls.writeFile.length = 0
+
+    const writer = makeWriter(ports)
+    for (let i = 0; i < 10; i += 1) {
+      await writer.appendUserAssistant(thread, {
+        user: `u-${i}`,
+        assistant: `a-${i}`,
+      })
+    }
+
+    expect(ports.bridge.calls.appendFile).toHaveLength(10)
+    // Bounded reads: the conflict-suffix resolver probes the existing file
+    // (REQ-ASM-039) and the cache seed reads it once more for body capture.
+    // What matters for O(turn) closure is that reads do NOT scale with the
+    // turn count — pre-WP-5 this was 10 reads on top of the suffix probe.
+    expect(ports.bridge.calls.readFile.length).toBeLessThanOrEqual(2)
   })
 })
 

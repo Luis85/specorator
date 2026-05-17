@@ -15,7 +15,7 @@ import { useSettingsPort } from '@/ui/composables/useSettingsPort';
 import { useSecretStorePort } from '@/ui/composables/useSecretStorePort';
 import { SECRET_ID_ANTHROPIC } from '@/domain/ports';
 import { useLoggerPort } from '@/ui/composables/useLoggerPort';
-import { useSessionLogWriter } from '@/ui/composables/useSessionLogWriter';
+import { useSessionLogMirror } from '@/ui/composables/useSessionLogMirror';
 import { buildStagePromptMap } from '@/application/chat/stagePromptMap';
 import {
 	CONFIRM_MODAL_PORT,
@@ -56,7 +56,7 @@ const workspacePort = useWorkspacePort();
 const settingsPort = useSettingsPort();
 const secretStorePort = useSecretStorePort();
 const loggerPort = useLoggerPort();
-const sessionLogWriterFactory = useSessionLogWriter();
+const sessionLogMirrorFactory = useSessionLogMirror();
 
 /**
  * Optional injections wired by `SpecoratorView` (PR-ASM-4 batch 9). Both are
@@ -273,7 +273,7 @@ function getOrchestrator(): ChatTurnOrchestrator {
 		threads: threadsStore,
 		streaming: streamingStore,
 		proposals: proposalStore,
-		getSessionLogWriter: () => sessionLogWriterFactory.getWriter(),
+		getSessionLogMirror: () => sessionLogMirrorFactory.getMirror(),
 		nowIso: () => new Date().toISOString(),
 		randomId: () => generateProposalId(),
 		abortControllerFactory: () => new AbortController(),
@@ -378,7 +378,7 @@ const proposalDecisions = useProposalDecisions({
 	vaultPort,
 	loggerPort,
 	confirmModalPort,
-	sessionLogWriterFactory,
+	sessionLogMirrorFactory,
 	translator: inlineTranslator,
 	threadsStore,
 	proposalStore,
