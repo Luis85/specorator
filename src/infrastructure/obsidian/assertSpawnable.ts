@@ -21,6 +21,15 @@
  *     `npx claude`) is needed, this gate must be loosened explicitly, which
  *     forces the security review to happen.
  *
+ * What we **do not** reject:
+ *   - Shell metacharacters anywhere in the path. `SubprocessLifecycle.spawn()`
+ *     calls `child_process.spawn()` without `shell: true`, so the path is
+ *     passed to the kernel as opaque bytes — `&`, `$`, `;`, etc. are
+ *     legitimate filename characters on both POSIX and Windows filesystems
+ *     and never get shell-interpreted. Rejecting them was overreach and
+ *     turned legitimate install paths (e.g. `/Users/me/Apps & Tools/claude`)
+ *     into hard launch failures (Codex P2 review on PR #405).
+ *
  * Returns a `Result<void, ClaudeCliError>` (ADR-004). On rejection the error
  * code is `CLI_LAUNCH_FAILED` so the call site can re-use the existing UI
  * copy — `Chat needs the Claude command-line tool.` — without introducing a
@@ -99,20 +108,6 @@ export function assertSpawnable(binaryPath: string): Result<void, ClaudeCliError
 			new ClaudeCliError(
 				'CLI_LAUNCH_FAILED',
 				'SPAWN_GUARD_FAILED: binary path is empty',
-			),
-		);
-	}
-
-	// Defense against shell-metacharacter injection: if the resolved path ever
-	// contains a character that the OS shell would treat as a metachar, refuse
-	// to spawn even though Node's `spawn` does not invoke a shell by default.
-	// This catches a class of upstream bugs where the path was concatenated
-	// from user input rather than a single resolver call.
-	if (/[;&|`$<>\n\r]/.test(binaryPath)) {
-		return err(
-			new ClaudeCliError(
-				'CLI_LAUNCH_FAILED',
-				'SPAWN_GUARD_FAILED: binary path contains shell metacharacter',
 			),
 		);
 	}
