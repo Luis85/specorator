@@ -241,10 +241,16 @@ function tryHandleSendKey(event: KeyboardEvent): boolean {
 }
 
 function handleKeydown(event: KeyboardEvent): void {
-	// IME-composition guard. `isComposing` is true while a Japanese/Chinese/
-	// Korean IME is mid-composition; pressing Enter to commit must NOT
-	// trigger send / commit-mention / dismiss-palette.
-	if (event.isComposing || event.keyCode === 229) return;
+	// IME-composition guard: while an IME (Japanese/Chinese/Korean) is
+	// composing, Enter commits the candidate and must not trigger send.
+	// Spec-compliant browsers (Chromium/Firefox/Obsidian's Electron) report
+	// `event.isComposing` correctly throughout composition.
+	//
+	// Safari has a documented ordering bug where `compositionend` can fire
+	// BEFORE the confirm-Enter keydown, leaving `isComposing` false on that
+	// keydown. We deliberately do not defend that case — see docs/non-goals.md
+	// (CJK/Safari on the standalone-web demo is an explicit non-goal).
+	if (event.isComposing) return;
 	if (handlePickerKey(event)) return;
 	if (handlePaletteKeydown(event)) return;
 	tryHandleSendKey(event);
