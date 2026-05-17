@@ -84,6 +84,8 @@ export default {
     title: 'Ask Claude.',
     contextLabel: 'Context for this message.',
     contextEmpty: 'No file is currently open. Open a file in your vault and it will be included here automatically.',
+    contextOverflow: '+{count} more',
+    contextOverflowAriaLabel: 'Show {count} more context files',
     autoSuffix: '(auto)',
     autoSrOnly: '(included automatically)',
     dismissAriaLabel: 'Remove {label} from context',
@@ -138,6 +140,7 @@ export default {
     stopGenerationAriaLabel: 'Stop generating the response',
     session: {
       resumeAriaLabel: 'Continuing prior conversation',
+      resumeLabel: 'Resumed',
     },
     response: {
       structuredFail: 'Assistant returned an unexpected response. Please try again.',
@@ -164,6 +167,15 @@ export default {
     contextTrimmed: 'Some context was trimmed to keep the message within size limits.',
     assistantEmpty: '(No text — see the proposal card below.)',
     emptyHistory: "Ask Claude anything — your conversation will appear here.",
+    emptyStateTiles: {
+      heading: 'Try one of these to get started',
+      slash: "Type '/' for commands",
+      mention: "Type the at-sign to attach a file",
+      send: 'Cmd/Ctrl+Enter to send',
+      escape: 'Esc to dismiss palettes',
+    },
+    newMessagesPill: '↓ New messages',
+    newMessagesPillAriaLabel: 'Scroll to the newest message',
     thinking: 'Thinking',
     toolDone: 'Tool finished',
     toolStreaming: 'Tool running',
@@ -173,10 +185,17 @@ export default {
     planApprovalHeading: 'Plan for your approval',
     planApprovalPermissions: 'Requested tools: {tools}',
     planApprovalRevisePlaceholder: 'Describe what should change, then press Enter…',
+    planApprovalCancelled: 'Plan was cancelled.',
     planApproval: {
       implement: 'Implement plan',
       revise: 'Send revision',
       cancel: 'Cancel',
+    },
+    help: {
+      heading: 'Available slash commands',
+      closeAriaLabel: 'Close help',
+      close: 'Close',
+      openAriaLabel: 'Slash command help',
     },
   },
 } as const

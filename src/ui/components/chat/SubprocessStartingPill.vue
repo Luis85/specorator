@@ -27,14 +27,25 @@ const { t } = useI18n()
     role="status"
     aria-live="polite"
   >
-    {{ t('chat.subscription.startingPill') }}
+    <span
+      aria-hidden="true"
+      class="sp-chat__starting-glyph"
+      data-testid="chat-subprocess-starting-glyph"
+    >⌛</span>
+    <span class="sp-chat__starting-text">{{ t('chat.subscription.startingPill') }}</span>
   </span>
 </template>
 
 <style scoped>
+/*
+ * UX #20 (WP-8): pill differentiation. The starting pill carries the `⌛`
+ * leading glyph and a neutral muted-border background so it stands apart
+ * from the resume (`↻`, accent) and transport (`▶`, faint-blend) pills.
+ */
 .sp-chat__starting-pill {
   display: inline-flex;
   align-items: center;
+  gap: 0.25rem;
   border-radius: 9999px;
   padding: 0.15rem 0.625rem;
   background: var(--background-modifier-border);
@@ -42,5 +53,15 @@ const { t } = useI18n()
   font-family: var(--font-text);
   font-size: 0.8125rem;
   line-height: 1.2;
+}
+
+.sp-chat__starting-glyph {
+  display: inline-block;
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.sp-chat__starting-text {
+  font-weight: 500;
 }
 </style>

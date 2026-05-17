@@ -10,8 +10,17 @@
  *
  * Lifts the chat into its own Obsidian `ItemView` per IDEA-ASV-001 / specs/
  * agent-sidepanel-v2/idea.md. Slash-command palette landed in PR-ASV-3.
+ *
+ * WP-8 changes:
+ *   - UX #4: `/help` was a drawer above `MessageList` that pushed history
+ *     offscreen on a narrow sidepanel. It now renders as a popover
+ *     anchored to the chat header so the conversation stays visible.
+ *   - UX #11: `MessageList` now emits `tile-action` when the user clicks an
+ *     empty-state starter tile; the root pre-fills `messagesStore.userText`
+ *     with a matching prompt fragment.
  */
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore';
 import { useMessagesStore } from '@/ui/stores/messagesStore';
 import { useChatReset } from '@/ui/composables/useChatReset';
@@ -27,8 +36,10 @@ import { BUILT_IN_SLASH_COMMANDS } from '@/application/chat/builtInSlashCommands
 
 const threadsStore = useChatThreadsStore();
 const messagesStore = useMessagesStore();
+const chatSidebarRef = ref<InstanceType<typeof ChatSidebar> | null>(null);
 const chatReset = useChatReset();
 const notificationStore = useNotificationStore();
+const { t } = useI18n();
 
 const activeThreadId = computed(() => threadsStore.activeThreadId);
 const isRequestInFlight = computed(() => messagesStore.status === 'loading');
@@ -39,10 +50,10 @@ const activeFeature = computed(() => {
 });
 
 /**
- * Whether the inline `/help` panel is open. Toggled by the `'help'` slash
+ * Whether the inline `/help` popover is open. Toggled by the `'help'` slash
  * command (PR-ASV-3, D-ASV-2). Lives on the root rather than `ChatSidebar`
- * because the help panel is a sidepanel-level affordance — it sits above the
- * chat surface, not inside the input area.
+ * because the help popover is a sidepanel-level affordance, anchored to
+ * the header — UX #4 (WP-8).
  */
 const helpOpen = ref(false);
 
@@ -119,60 +130,123 @@ function closeHelp(): void {
 	helpOpen.value = false;
 }
 
+/**
+ * UX #4 (WP-8 Codex P2 round-2): close the /help popover when the user
+ * interacts anywhere outside it. The popover is anchored to the header
+ * but floats over the chat surface; without this handler, clicking the
+ * message list or the textarea leaves it stuck open until the explicit
+ * Close button is hit.
+ */
+const helpPanelEl = ref<HTMLElement | null>(null);
+function onDocumentPointerDownForHelp(event: PointerEvent): void {
+	if (!helpOpen.value) return;
+	const target = event.target instanceof Node ? event.target : null;
+	if (target === null) return;
+	if (helpPanelEl.value?.contains(target) === true) return;
+	// Clicks on the help-open trigger button (which lives in
+	// AgentSidepanelHeader) should not be intercepted as "outside" — that
+	// button toggles helpOpen and its own click handler runs first via the
+	// regular event flow. We approximate by checking data-testid.
+	if (target instanceof Element && target.closest('[data-testid="agent-help-toggle"]') !== null) {
+		return;
+	}
+	closeHelp();
+}
+
+/**
+ * UX #11 (WP-8). Empty-state tile pre-fills the chat textarea with a
+ * matching prompt fragment so the user can edit and send. We do NOT
+ * auto-send — Cmd/Ctrl+Enter remains the user's commit gesture.
+ *
+ * Codex P2: after the model update, focus the textarea and dispatch a
+ * synthetic `input` event so `ChatInput`'s `handleInput` runs — that's
+ * what opens the slash palette / @-mention picker based on the leading
+ * character. External `setUserText` alone leaves the picker closed.
+ */
+async function handleEmptyTileAction(
+	key: 'slash' | 'mention' | 'send' | 'escape',
+): Promise<void> {
+	switch (key) {
+		case 'slash':
+			messagesStore.setUserText('/');
+			break;
+		case 'mention':
+			messagesStore.setUserText('@');
+			break;
+		case 'send':
+		case 'escape':
+			// Informational tiles — no textarea pre-fill needed.
+			return;
+	}
+	await nextTick();
+	chatSidebarRef.value?.focusInputForTilePrefill();
+}
+
 onMounted(() => {
 	window.addEventListener('sp:notice', onNotice);
+	document.addEventListener('pointerdown', onDocumentPointerDownForHelp, true);
 });
 
 onUnmounted(() => {
 	window.removeEventListener('sp:notice', onNotice);
+	document.removeEventListener('pointerdown', onDocumentPointerDownForHelp, true);
 });
 </script>
 
 <template>
 	<div class="sp-agent" data-testid="agent-sidepanel">
 		<ErrorBoundary>
-			<AgentSidepanelHeader
-				:active-feature="activeFeature"
-				:has-active-thread="activeThreadId !== null"
-				:request-in-flight="isRequestInFlight"
-				@new-conversation="handleNewConversation"
-			/>
-			<div
-				v-if="helpOpen"
-				class="sp-agent__help"
-				role="region"
-				aria-label="Slash command help"
-				data-testid="agent-help-panel"
-			>
-				<header class="sp-agent__help-header">
-					<span class="sp-agent__help-title" data-testid="agent-help-title">
-						Available slash commands
-					</span>
-					<button
-						type="button"
-						class="sp-agent__help-close"
-						data-testid="agent-help-close"
-						aria-label="Close help"
-						@click="closeHelp"
-					>
-						Close
-					</button>
-				</header>
-				<ul class="sp-agent__help-list" data-testid="agent-help-list">
-					<li
-						v-for="command in helpCommands"
-						:key="command.name"
-						class="sp-agent__help-item"
-						:data-testid="`agent-help-item-${command.name}`"
-					>
-						<span class="sp-agent__help-name">/{{ command.name }}</span>
-						<span class="sp-agent__help-description">{{ command.description }}</span>
-					</li>
-				</ul>
+			<div class="sp-agent__header-wrap">
+				<AgentSidepanelHeader
+					:active-feature="activeFeature"
+					:has-active-thread="activeThreadId !== null"
+					:request-in-flight="isRequestInFlight"
+					@new-conversation="handleNewConversation"
+				/>
+				<!--
+          UX #4 (WP-8): /help renders as a popover anchored under the
+          header instead of a drawer that pushes the message list
+          offscreen. The popover floats on top of the chat surface so
+          the conversation stays visible; clicking outside closes it.
+        -->
+				<div
+					v-if="helpOpen"
+					ref="helpPanelEl"
+					class="sp-agent__help"
+					role="dialog"
+					:aria-label="t('agent.help.openAriaLabel')"
+					data-testid="agent-help-panel"
+				>
+					<header class="sp-agent__help-header">
+						<span class="sp-agent__help-title" data-testid="agent-help-title">
+							{{ t('agent.help.heading') }}
+						</span>
+						<button
+							type="button"
+							class="sp-agent__help-close"
+							data-testid="agent-help-close"
+							:aria-label="t('agent.help.closeAriaLabel')"
+							@click="closeHelp"
+						>
+							{{ t('agent.help.close') }}
+						</button>
+					</header>
+					<ul class="sp-agent__help-list" data-testid="agent-help-list">
+						<li
+							v-for="command in helpCommands"
+							:key="command.name"
+							class="sp-agent__help-item"
+							:data-testid="`agent-help-item-${command.name}`"
+						>
+							<span class="sp-agent__help-name">/{{ command.name }}</span>
+							<span class="sp-agent__help-description">{{ command.description }}</span>
+						</li>
+					</ul>
+				</div>
 			</div>
 			<div class="sp-agent__body">
-				<MessageList :thread-id="activeThreadId" />
-				<ChatSidebar @select-command="handleSelectCommand" />
+				<MessageList :thread-id="activeThreadId" @tile-action="handleEmptyTileAction" />
+				<ChatSidebar ref="chatSidebarRef" @select-command="handleSelectCommand" />
 			</div>
 		</ErrorBoundary>
 		<AppToast />
@@ -187,6 +261,11 @@ onUnmounted(() => {
 	overflow: hidden;
 }
 
+.sp-agent__header-wrap {
+	position: relative;
+	flex-shrink: 0;
+}
+
 .sp-agent__body {
 	flex: 1;
 	display: flex;
@@ -194,14 +273,29 @@ onUnmounted(() => {
 	min-height: 0;
 }
 
+/*
+ * UX #4 (WP-8): /help is a popover, not a drawer. It floats over the
+ * chat surface anchored to the header so the message list stays in view
+ * even on a narrow sidepanel. `position: absolute` against
+ * `.sp-agent__header-wrap` keeps the popover scoped to the header
+ * column; the dropdown shadow distinguishes it from inline content.
+ */
 .sp-agent__help {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	right: 0;
+	z-index: 6;
 	display: flex;
 	flex-direction: column;
 	gap: 0.5rem;
 	padding: 0.75rem 1rem;
-	background: var(--background-secondary);
-	border-bottom: 1px solid var(--background-modifier-border);
-	flex-shrink: 0;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	box-shadow: var(--shadow-s, 0 4px 12px rgba(0, 0, 0, 0.15));
+	max-height: 60vh;
+	overflow-y: auto;
 }
 
 .sp-agent__help-header {
