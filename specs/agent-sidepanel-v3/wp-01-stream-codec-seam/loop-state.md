@@ -2,6 +2,8 @@
 
 Updated by the implementer subagent each RALPH iteration. The brief is `brief.md` in this folder.
 
+> **Worktree context** — All "Wrote …" / "Modified …" / "shrunk …" entries below describe work performed on `claude/asv3-wp01-stream-codec-seam` inside `.worktrees/asv3-wp01/`, not on this branch (`claude/improve-sidepanel-chat-8pgcT`). PR #395 only ships `specs/**` files; the actual codec-seam diff lives on PR #397.
+
 > **Brief updated** — `brief.md` (commit `90ec4be`, 2026-05-17) now requires `npm audit --audit-level=high --omit=dev` and `npm run docs:api` in the per-iteration verify chain and in the Definition of Done. Run those alongside typecheck/lint/test/build/build:web every iteration.
 
 ## Iterations
