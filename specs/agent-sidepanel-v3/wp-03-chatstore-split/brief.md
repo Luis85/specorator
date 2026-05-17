@@ -53,10 +53,12 @@ Split the 648-LOC `chatStore` into three Pinia stores aligned with its three rea
 
 ## Definition of done
 
+- [ ] `npm audit --audit-level=high --omit=dev` clean.
 - [ ] `npm run typecheck` clean.
 - [ ] `npm run lint` 0 errors.
 - [ ] `npm run test` passes; new tests under `tests/ui/stores/` and `tests/ui/composables/` cover the moved actions plus the gap (transport-change reset, new-conversation reset).
 - [ ] `npm run build` and `npm run build:web` succeed.
+- [ ] `npm run docs:api` succeeds.
 - [ ] `npm run test:coverage` thresholds (80/70/80/80) maintained or improved.
 - [ ] `src/ui/stores/chatStore.ts` deleted (no facade left behind per CLAUDE.md no-back-compat policy).
 - [ ] `handleNewConversation` in `AgentSidepanelRoot.vue` calls `useChatReset().resetForNewConversation(prev)` — one line replaces the previous multi-action sequence — and the streaming-state-residual case is regression-tested.
@@ -69,8 +71,14 @@ loop:
   1. Read brief.md and loop-state.md.
   2. Pick the next failing check (typecheck → lint → test → build → DoD criterion).
   3. Implement the smallest change that moves one check red→green.
-  4. Run: npm run typecheck && npm run lint && npm run test
-     (+ npm run build && npm run build:web after consumer updates).
+  4. Run the full AGENTS.md §3 pre-PR gate:
+       npm audit --audit-level=high --omit=dev \
+         && npm run typecheck \
+         && npm run lint \
+         && npm run test \
+         && npm run build \
+         && npm run build:web \
+         && npm run docs:api
   5. Update loop-state.md.
   6. If all gates green AND all DoD met → commit, push, open PR via mcp__github__create_pull_request.
      Else → goto 1.

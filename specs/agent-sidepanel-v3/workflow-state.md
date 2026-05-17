@@ -3,7 +3,7 @@ id: a7f3b9d2-4c81-4e6a-9f12-3b8e5c7d2a91
 feature: 'Agent Sidepanel v3 — Post-v2 deepening + UX/perf/a11y/sec hardening'
 area: ASV3
 slug: agent-sidepanel-v3
-current_stage: tasks
+current_stage: implementation-log
 status: active
 last_updated: 2026-05-17
 last_agent: pm

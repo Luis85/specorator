@@ -51,10 +51,12 @@ Extract one `StreamDeltaReducer` module that owns SDK/NDJSON → `StreamDelta` t
 
 All true and verifiable:
 
+- [ ] `npm audit --audit-level=high --omit=dev` clean.
 - [ ] `npm run typecheck` clean.
 - [ ] `npm run lint` 0 errors.
 - [ ] `npm run test` passes; reducer test covers ≥ 95 % statements/branches on the new module.
 - [ ] `npm run build` and `npm run build:web` succeed.
+- [ ] `npm run docs:api` succeeds.
 - [ ] `npm run test:coverage` thresholds (80/70/80/80) maintained or improved on `src/application/**` and `src/infrastructure/**` (excluding `src/infrastructure/obsidian/**`).
 - [ ] **Dedup regression test exists and passes** in `ClaudeSubprocessAdapter.streaming.test.ts`: feeding both `text_delta` events and a terminal `assistant/message` carrying the full body for the same message yields exactly one concatenated text payload to the store.
 - [ ] `ClaudeCliAdapter.ts` and `ClaudeSubprocessAdapter.ts` no longer own `messageSeq` / `_inFlightToolBlocks` state — that's now the reducer's.
@@ -70,8 +72,14 @@ loop:
      specs/agent-sidepanel-v3/wp-01-stream-codec-seam/
   2. Pick the next failing check (typecheck → lint → test → build → DoD criterion).
   3. Implement the smallest change that moves one check red→green.
-  4. Run: npm run typecheck && npm run lint && npm run test
-     (+ npm run build && npm run build:web for adapter changes).
+  4. Run the full AGENTS.md §3 pre-PR gate:
+       npm audit --audit-level=high --omit=dev \
+         && npm run typecheck \
+         && npm run lint \
+         && npm run test \
+         && npm run build \
+         && npm run build:web \
+         && npm run docs:api
   5. Update loop-state.md with what just changed and what's still red.
   6. If all gates green AND all DoD criteria met → commit, push, open PR via mcp__github__create_pull_request.
      Else → goto 1.

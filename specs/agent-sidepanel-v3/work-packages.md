@@ -47,10 +47,18 @@ Each implementer subagent runs this loop, scoped to its WP folder, until done or
 ```
 loop:
   1. Read brief.md and loop-state.md from this WP folder.
-  2. Pick the next failing check (typecheck → lint → test → build → DoD criterion).
+  2. Pick the next failing check (audit → typecheck → lint → test → build → docs → DoD criterion).
   3. Implement the smallest change that moves one check red→green.
-  4. Run: npm run typecheck && npm run lint && npm run test
-     (+ npm run build && npm run build:web when touching adapters or standalone surface).
+  4. Run the full AGENTS.md §3 pre-PR gate:
+       npm audit --audit-level=high --omit=dev \
+         && npm run typecheck \
+         && npm run lint \
+         && npm run test \
+         && npm run build \
+         && npm run build:web \
+         && npm run docs:api
+     (`build:web` is required only when the change touches the standalone-web surface or
+      shared composables; everything else runs every iteration.)
   5. Update loop-state.md: what just changed, what remains red, blockers if any.
   6. If all gates green AND all DoD criteria met → commit, push, open PR via gh MCP.
      Else → goto 1.
