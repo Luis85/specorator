@@ -10,7 +10,7 @@ import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import MessageList from '@/ui/components/agent/MessageList.vue';
 import { i18n } from '@/ui/i18n';
-import { useChatStore } from '@/ui/stores/chatStore';
+import { useMessagesStore } from '@/ui/stores/messagesStore';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
 import { MessageListCompactBoundaryPO } from './MessageList.compactBoundary.po';
 
@@ -42,7 +42,7 @@ describe('MessageList — compact-boundary notice', () => {
 	});
 
 	it('does not render a notice when no boundary has been recorded', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		const tid = 'thread-noisy';
 		store.appendMessage(msg(tid, 'user'));
 		const { po } = mountList(tid);
@@ -50,7 +50,7 @@ describe('MessageList — compact-boundary notice', () => {
 	});
 
 	it('renders a notice inside the message list when a boundary exists', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		const tid = 'thread-compact';
 		store.appendMessage(msg(tid, 'user', { createdAt: '2026-05-16T00:00:00Z' }));
 		store.appendCompactBoundaryNotice(tid, { reason: 'auto-compact' });
@@ -63,7 +63,7 @@ describe('MessageList — compact-boundary notice', () => {
 	});
 
 	it('carries role="status" on the notice element', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		const tid = 'thread-role';
 		store.appendCompactBoundaryNotice(tid, {});
 		const { po } = mountList(tid);
@@ -73,7 +73,7 @@ describe('MessageList — compact-boundary notice', () => {
 	});
 
 	it('surfaces the i18n notice copy (chat.compactBoundary.notice)', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		const tid = 'thread-i18n';
 		store.appendCompactBoundaryNotice(tid, {});
 		const { po } = mountList(tid);
@@ -83,14 +83,14 @@ describe('MessageList — compact-boundary notice', () => {
 	});
 
 	it('renders the empty list when threadId is null even if a boundary exists for another thread', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		store.appendCompactBoundaryNotice('other-thread', {});
 		const { po } = mountList(null);
 		expect(po.notices()).toHaveLength(0);
 	});
 
 	it('isolates notices by threadId', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		store.appendCompactBoundaryNotice('thread-a', {});
 		store.appendCompactBoundaryNotice('thread-b', {});
 		const { po } = mountList('thread-b');
@@ -98,7 +98,7 @@ describe('MessageList — compact-boundary notice', () => {
 	});
 
 	it('interleaves the notice with messages by createdAt', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		const tid = 'thread-interleave';
 		store.appendMessage(msg(tid, 'user', { text: 'first', createdAt: '2026-05-16T00:00:00Z' }));
 		store.appendMessage(msg(tid, 'assistant', { text: 'second', createdAt: '2026-05-16T00:00:01Z' }));

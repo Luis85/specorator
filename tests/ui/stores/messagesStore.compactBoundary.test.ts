@@ -1,37 +1,41 @@
 /**
- * Tests for the per-thread compact-boundary notice log on `useChatStore()`
+ * Tests for the per-thread compact-boundary notice log on `useMessagesStore()`
  * (Codex P2 on PR #379 — `agent-sidepanel-v2-tool-rendering`).
  *
- * Validates that `appendCompactBoundaryNotice(threadId, payload)` pushes a
- * `CompactBoundaryNoticeDto` into the per-thread bucket, that the bucket is
- * isolated across threads, that `reset()` clears it, and that
- * `clearThreadMessages(threadId)` drops the boundary log alongside the
+ * Migrated from `chatStore.compactBoundary.test.ts` as part of WP-3
+ * (Arch review #4 split). Validates that `appendCompactBoundaryNotice(threadId,
+ * payload)` pushes a `CompactBoundaryNoticeDto` into the per-thread bucket,
+ * that the bucket is isolated across threads, that `reset()` clears it, and
+ * that `clearThreadMessages(threadId)` drops the boundary log alongside the
  * matching message bucket.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
-import { useChatStore, type CompactBoundaryNoticeDto } from '@/ui/stores/chatStore';
+import {
+	useMessagesStore,
+	type CompactBoundaryNoticeDto,
+} from '@/ui/stores/messagesStore';
 
 function lastNoticeFor(
-	store: ReturnType<typeof useChatStore>,
+	store: ReturnType<typeof useMessagesStore>,
 	threadId: string,
 ): CompactBoundaryNoticeDto | undefined {
 	const bucket = store.compactBoundaries.get(threadId) ?? [];
 	return bucket[bucket.length - 1];
 }
 
-describe('useChatStore() — compact-boundary notices', () => {
+describe('useMessagesStore() — compact-boundary notices', () => {
 	beforeEach(() => {
 		setActivePinia(createPinia());
 	});
 
 	it('initial state has an empty compactBoundaries Map', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		expect(store.compactBoundaries.size).toBe(0);
 	});
 
 	it('appendCompactBoundaryNotice creates a fresh bucket for a new thread', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		store.appendCompactBoundaryNotice('t-A', { reason: 'auto-compact' });
 		expect(store.compactBoundaries.get('t-A')).toHaveLength(1);
 		const notice = lastNoticeFor(store, 't-A');
@@ -43,14 +47,14 @@ describe('useChatStore() — compact-boundary notices', () => {
 	});
 
 	it('appendCompactBoundaryNotice accepts an absent reason', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		store.appendCompactBoundaryNotice('t-A', {});
 		const notice = lastNoticeFor(store, 't-A');
 		expect(notice?.reason).toBeUndefined();
 	});
 
 	it('appendCompactBoundaryNotice appends multiple entries in insertion order', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		store.appendCompactBoundaryNotice('t-A', { reason: 'r1' });
 		store.appendCompactBoundaryNotice('t-A', { reason: 'r2' });
 		const bucket = store.compactBoundaries.get('t-A') ?? [];
@@ -58,7 +62,7 @@ describe('useChatStore() — compact-boundary notices', () => {
 	});
 
 	it('appendCompactBoundaryNotice isolates buckets per threadId', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		store.appendCompactBoundaryNotice('t-A', { reason: 'r-A' });
 		store.appendCompactBoundaryNotice('t-B', { reason: 'r-B' });
 		expect(store.compactBoundaries.get('t-A')).toHaveLength(1);
@@ -68,7 +72,7 @@ describe('useChatStore() — compact-boundary notices', () => {
 	});
 
 	it('generates a unique id per notice', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		store.appendCompactBoundaryNotice('t-A', {});
 		store.appendCompactBoundaryNotice('t-A', {});
 		const bucket = store.compactBoundaries.get('t-A') ?? [];
@@ -77,7 +81,7 @@ describe('useChatStore() — compact-boundary notices', () => {
 	});
 
 	it('clearThreadMessages drops the matching compact-boundary bucket only', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		store.appendCompactBoundaryNotice('t-A', { reason: 'r-A' });
 		store.appendCompactBoundaryNotice('t-B', { reason: 'r-B' });
 		store.clearThreadMessages('t-A');
@@ -86,7 +90,7 @@ describe('useChatStore() — compact-boundary notices', () => {
 	});
 
 	it('reset() clears all compact-boundary notices', () => {
-		const store = useChatStore();
+		const store = useMessagesStore();
 		store.appendCompactBoundaryNotice('t-A', { reason: 'r' });
 		store.appendCompactBoundaryNotice('t-B', { reason: 'r' });
 		store.reset();

@@ -902,7 +902,7 @@ to   { opacity: 1; transform: translateY(0);
 	font-style: italic;
 }
 
-.specorator-root :where(.sp-agent-messages[data-v-79fec309]) {
+.specorator-root :where(.sp-agent-messages[data-v-e1997bae]) {
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow-y: auto;
@@ -911,21 +911,21 @@ to   { opacity: 1; transform: translateY(0);
 	flex-direction: column;
 	gap: 0.75rem;
 }
-.specorator-root :where(.sp-agent-messages--empty[data-v-79fec309]) {
+.specorator-root :where(.sp-agent-messages--empty[data-v-e1997bae]) {
 	flex: 0 0 auto;
 	padding: 1.25rem 1rem 0;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 }
-.specorator-root :where(.sp-agent-messages__empty-body[data-v-79fec309]) {
+.specorator-root :where(.sp-agent-messages__empty-body[data-v-e1997bae]) {
 	margin: 0;
 	font-size: 0.8125rem;
 	color: var(--text-muted);
 	text-align: center;
 	font-style: italic;
 }
-.specorator-root :where(.sp-agent-message[data-v-79fec309]) {
+.specorator-root :where(.sp-agent-message[data-v-e1997bae]) {
 	display: flex;
 	flex-direction: column;
 	gap: 0.25rem;
@@ -934,43 +934,43 @@ to   { opacity: 1; transform: translateY(0);
 	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 }
-.specorator-root :where(.sp-agent-message--user[data-v-79fec309]) {
+.specorator-root :where(.sp-agent-message--user[data-v-e1997bae]) {
 	background: var(--background-secondary-alt, var(--background-secondary));
 }
-.specorator-root :where(.sp-agent-message__role[data-v-79fec309]) {
+.specorator-root :where(.sp-agent-message__role[data-v-e1997bae]) {
 	font-size: 0.6875rem;
 	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 	color: var(--text-muted);
 }
-.specorator-root :where(.sp-agent-message__body[data-v-79fec309]) {
+.specorator-root :where(.sp-agent-message__body[data-v-e1997bae]) {
 	display: flex;
 	flex-direction: column;
 	gap: 0.25rem;
 }
-.specorator-root :where(.sp-agent-message__text[data-v-79fec309]) {
+.specorator-root :where(.sp-agent-message__text[data-v-e1997bae]) {
 	margin: 0;
 	font-family: inherit;
 	font-size: 0.875rem;
 	color: var(--text-normal);
 	word-break: break-word;
 }
-.specorator-root :where(.sp-agent-message__empty[data-v-79fec309]) {
+.specorator-root :where(.sp-agent-message__empty[data-v-e1997bae]) {
 	margin: 0;
 	font-size: 0.8125rem;
 	color: var(--text-muted);
 	font-style: italic;
 }
-.specorator-root :where(.sp-agent-message__trim-note[data-v-79fec309]) {
+.specorator-root :where(.sp-agent-message__trim-note[data-v-e1997bae]) {
 	margin: 0;
 	font-size: 0.75rem;
 	color: var(--text-faint);
 }
-.specorator-root :where(.sp-agent-message--streaming[data-v-79fec309]) {
+.specorator-root :where(.sp-agent-message--streaming[data-v-e1997bae]) {
 	opacity: 0.95;
 }
-.specorator-root :where(.sp-agent-compact-boundary[data-v-79fec309]) {
+.specorator-root :where(.sp-agent-compact-boundary[data-v-e1997bae]) {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
@@ -980,27 +980,27 @@ to   { opacity: 1; transform: translateY(0);
 	font-style: italic;
 	text-align: center;
 }
-.specorator-root :where(.sp-agent-compact-boundary__line[data-v-79fec309]) {
+.specorator-root :where(.sp-agent-compact-boundary__line[data-v-e1997bae]) {
 	flex: 1 1 auto;
 	height: 1px;
 	background: var(--background-modifier-border);
 }
-.specorator-root :where(.sp-agent-compact-boundary__label[data-v-79fec309]) {
+.specorator-root :where(.sp-agent-compact-boundary__label[data-v-e1997bae]) {
 	flex: 0 0 auto;
 }
-.specorator-root :where(.sp-agent-message__cursor[data-v-79fec309]) {
+.specorator-root :where(.sp-agent-message__cursor[data-v-e1997bae]) {
 	display: inline-block;
 	font-size: 0.875rem;
 	color: var(--text-accent);
-	animation: sp-agent-message__blink-79fec309 1s steps(2, start) infinite;
+	animation: sp-agent-message__blink-e1997bae 1s steps(2, start) infinite;
 }
-@keyframes sp-agent-message__blink-79fec309 {
+@keyframes sp-agent-message__blink-e1997bae {
 to {
 		visibility: hidden;
 }
 }
 
-.specorator-root :where(.sp-chat__chip[data-v-b92cd9d4]) {
+.specorator-root :where(.sp-chat__chip[data-v-04c5f320]) {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -1009,16 +1009,16 @@ to {
   font-size: 0.8125rem;
   font-family: var(--font-text);
 }
-.specorator-root :where(.sp-chat__chip--auto[data-v-b92cd9d4]) {
+.specorator-root :where(.sp-chat__chip--auto[data-v-04c5f320]) {
   background: var(--background-modifier-border);
   color: var(--text-normal);
 }
-.specorator-root :where(.sp-chat__chip--manual[data-v-b92cd9d4]) {
+.specorator-root :where(.sp-chat__chip--manual[data-v-04c5f320]) {
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   color: var(--text-normal);
 }
-.specorator-root :where(.sp-chat__chip-indicator[data-v-b92cd9d4]) {
+.specorator-root :where(.sp-chat__chip-indicator[data-v-04c5f320]) {
   width: 6px;
   height: 6px;
   background: var(--interactive-accent);
@@ -1027,18 +1027,18 @@ to {
   font-size: 0.5rem;
   line-height: 1;
 }
-.specorator-root :where(.sp-chat__chip-suffix[data-v-b92cd9d4]) {
+.specorator-root :where(.sp-chat__chip-suffix[data-v-04c5f320]) {
   color: var(--text-muted);
   font-size: 0.75rem;
   font-weight: 400;
 }
-.specorator-root :where(.sp-chat__chip-label[data-v-b92cd9d4]) {
+.specorator-root :where(.sp-chat__chip-label[data-v-04c5f320]) {
   max-width: 14rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.specorator-root :where(.sp-chat__chip-remove[data-v-b92cd9d4]) {
+.specorator-root :where(.sp-chat__chip-remove[data-v-04c5f320]) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1051,13 +1051,13 @@ to {
   line-height: 1;
   border-radius: 2px;
 }
-.specorator-root :where(.sp-chat__chip-remove[data-v-b92cd9d4]:hover),
-.specorator-root :where(.sp-chat__chip-remove[data-v-b92cd9d4]:focus) {
+.specorator-root :where(.sp-chat__chip-remove[data-v-04c5f320]:hover),
+.specorator-root :where(.sp-chat__chip-remove[data-v-04c5f320]:focus) {
   color: var(--text-normal);
   background: var(--background-modifier-hover);
 }
 
-.specorator-root :where(.sp-chat__context-label[data-v-3c76f082]) {
+.specorator-root :where(.sp-chat__context-label[data-v-9c64c8ed]) {
   margin: 0 0 0.375rem;
   font-size: 0.75rem;
   font-weight: 600;
@@ -1065,7 +1065,7 @@ to {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.specorator-root :where(.sp-chat__context-chips[data-v-3c76f082]) {
+.specorator-root :where(.sp-chat__context-chips[data-v-9c64c8ed]) {
   display: flex;
   flex-wrap: wrap;
   gap: 0.375rem;
@@ -1073,7 +1073,7 @@ to {
   margin: 0;
   padding: 0;
 }
-.specorator-root :where(.sp-chat__context-empty[data-v-3c76f082]) {
+.specorator-root :where(.sp-chat__context-empty[data-v-9c64c8ed]) {
   margin: 0;
   font-size: 0.8125rem;
   color: var(--text-muted);
@@ -1367,7 +1367,7 @@ to {
  * parent: in the agent sidepanel the parent gives ChatSidebar `flex: 0 0
  * auto` and `MessageList` takes the remaining grow space.
  */
-.specorator-root :where(.sp-chat-sidebar[data-v-a32f38e8]) {
+.specorator-root :where(.sp-chat-sidebar[data-v-0134798d]) {
 	padding: 1rem;
 	display: flex;
 	flex-direction: column;
@@ -1375,24 +1375,24 @@ to {
 	box-sizing: border-box;
 	flex-shrink: 0;
 }
-.specorator-root :where(.sp-chat__title[data-v-a32f38e8]) {
+.specorator-root :where(.sp-chat__title[data-v-0134798d]) {
 	margin: 0;
 	font-size: 1.125rem;
 	font-weight: 700;
 	color: var(--text-normal);
 }
-.specorator-root :where(.sp-chat__header[data-v-a32f38e8]) {
+.specorator-root :where(.sp-chat__header[data-v-0134798d]) {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
 	flex-wrap: wrap;
 }
-.specorator-root :where(.sp-chat__divider[data-v-a32f38e8]) {
+.specorator-root :where(.sp-chat__divider[data-v-0134798d]) {
 	margin: 0;
 	border: none;
 	border-top: 1px solid var(--background-modifier-border);
 }
-.specorator-root :where(.sp-chat__stop[data-v-a32f38e8]) {
+.specorator-root :where(.sp-chat__stop[data-v-0134798d]) {
 	margin-left: auto;
 	font-size: 0.75rem;
 	font-weight: 500;
@@ -1406,10 +1406,10 @@ to {
 		background-color 0.15s,
 		border-color 0.15s;
 }
-.specorator-root :where(.sp-chat__stop[data-v-a32f38e8]:hover) {
+.specorator-root :where(.sp-chat__stop[data-v-0134798d]:hover) {
 	background: var(--background-modifier-error-hover, var(--interactive-hover));
 }
-.specorator-root :where(.sp-chat__degraded[data-v-a32f38e8]) {
+.specorator-root :where(.sp-chat__degraded[data-v-0134798d]) {
 	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 8px;
@@ -1418,31 +1418,31 @@ to {
 	flex-direction: column;
 	gap: 0.5rem;
 }
-.specorator-root :where(.sp-chat__degraded-heading[data-v-a32f38e8]) {
+.specorator-root :where(.sp-chat__degraded-heading[data-v-0134798d]) {
 	margin: 0;
 	font-size: 1rem;
 	font-weight: 600;
 	color: var(--text-normal);
 }
-.specorator-root :where(.sp-chat__degraded-body[data-v-a32f38e8]) {
+.specorator-root :where(.sp-chat__degraded-body[data-v-0134798d]) {
 	margin: 0;
 	font-size: 0.875rem;
 	color: var(--text-muted);
 }
 
-.specorator-root :where(.sp-agent[data-v-cf41f4b3]) {
+.specorator-root :where(.sp-agent[data-v-5c73c3c4]) {
 	display: flex;
 	flex-direction: column;
 	height: 100%;
 	overflow: hidden;
 }
-.specorator-root :where(.sp-agent__body[data-v-cf41f4b3]) {
+.specorator-root :where(.sp-agent__body[data-v-5c73c3c4]) {
 	flex: 1;
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
 }
-.specorator-root :where(.sp-agent__help[data-v-cf41f4b3]) {
+.specorator-root :where(.sp-agent__help[data-v-5c73c3c4]) {
 	display: flex;
 	flex-direction: column;
 	gap: 0.5rem;
@@ -1451,17 +1451,17 @@ to {
 	border-bottom: 1px solid var(--background-modifier-border);
 	flex-shrink: 0;
 }
-.specorator-root :where(.sp-agent__help-header[data-v-cf41f4b3]) {
+.specorator-root :where(.sp-agent__help-header[data-v-5c73c3c4]) {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
 }
-.specorator-root :where(.sp-agent__help-title[data-v-cf41f4b3]) {
+.specorator-root :where(.sp-agent__help-title[data-v-5c73c3c4]) {
 	font-size: 0.875rem;
 	font-weight: 600;
 	color: var(--text-normal);
 }
-.specorator-root :where(.sp-agent__help-close[data-v-cf41f4b3]) {
+.specorator-root :where(.sp-agent__help-close[data-v-5c73c3c4]) {
 	font-size: 0.75rem;
 	font-weight: 500;
 	padding: 0.2rem 0.5rem;
@@ -1471,10 +1471,10 @@ to {
 	color: var(--text-normal);
 	cursor: pointer;
 }
-.specorator-root :where(.sp-agent__help-close[data-v-cf41f4b3]:hover) {
+.specorator-root :where(.sp-agent__help-close[data-v-5c73c3c4]:hover) {
 	background: var(--interactive-hover);
 }
-.specorator-root :where(.sp-agent__help-list[data-v-cf41f4b3]) {
+.specorator-root :where(.sp-agent__help-list[data-v-5c73c3c4]) {
 	list-style: none;
 	margin: 0;
 	padding: 0;
@@ -1482,17 +1482,17 @@ to {
 	flex-direction: column;
 	gap: 0.25rem;
 }
-.specorator-root :where(.sp-agent__help-item[data-v-cf41f4b3]) {
+.specorator-root :where(.sp-agent__help-item[data-v-5c73c3c4]) {
 	display: flex;
 	gap: 0.5rem;
 	font-size: 0.8125rem;
 	color: var(--text-normal);
 }
-.specorator-root :where(.sp-agent__help-name[data-v-cf41f4b3]) {
+.specorator-root :where(.sp-agent__help-name[data-v-5c73c3c4]) {
 	font-weight: 600;
 	min-width: 7rem;
 }
-.specorator-root :where(.sp-agent__help-description[data-v-cf41f4b3]) {
+.specorator-root :where(.sp-agent__help-description[data-v-5c73c3c4]) {
 	color: var(--text-muted);
 }
 /*$vite$:1*/

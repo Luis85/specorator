@@ -24,7 +24,8 @@ import type { ClaudeCliPort, ConfirmModalPort } from '@/domain/ports';
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
 import type { TransportKind } from '@/domain/chat/TransportKind';
 import type { TransportSelection } from '@/plugin/transport/TransportSelector';
-import { useChatStore } from '@/ui/stores/chatStore';
+import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore';
+import { useMessagesStore } from '@/ui/stores/messagesStore';
 import { mostRecentlyUsedThreadId } from './chatThreadsPersistence';
 import { trySync } from '@/domain/shared/tryAsync';
 import type SpecoratorPlugin from './main';
@@ -137,10 +138,10 @@ export class AgentSidepanelView extends ItemView {
 		// Subscribe to subsequent mutations so any change to `chatThreads`
 		// triggers the plugin's debounced flush.
 		const persisted = this.plugin.getInitialChatThreads();
-		const chatStore = useChatStore(this.pinia);
-		for (const record of persisted) chatStore.upsertThread(record);
-		chatStore.setActiveThreadId(mostRecentlyUsedThreadId(persisted));
-		chatStore.$subscribe((_mutation, state) => {
+		const threadsStore = useChatThreadsStore(this.pinia);
+		for (const record of persisted) threadsStore.upsertThread(record);
+		threadsStore.setActiveThreadId(mostRecentlyUsedThreadId(persisted));
+		threadsStore.$subscribe((_mutation, state) => {
 			this.plugin.scheduleChatThreadsPersistence(state.chatThreads);
 		});
 
@@ -244,9 +245,9 @@ export class AgentSidepanelView extends ItemView {
 	public _installPendingRefreshWatcher(): void {
 		if (this.pinia === null) return;
 		if (this._statusWatchStop !== null) return;
-		const chatStore = useChatStore(this.pinia);
+		const messagesStore = useMessagesStore(this.pinia);
 		this._statusWatchStop = watch(
-			() => chatStore.status,
+			() => messagesStore.status,
 			(next, prev) => {
 				if (prev === 'loading' && next !== 'loading' && this._pendingSettingsRefresh) {
 					this._pendingSettingsRefresh = false;
@@ -291,7 +292,7 @@ export class AgentSidepanelView extends ItemView {
 	private _isChatLoading(): boolean {
 		if (this.pinia === null) return false;
 		const pinia = this.pinia;
-		const result = trySync(() => useChatStore(pinia).status === 'loading');
+		const result = trySync(() => useMessagesStore(pinia).status === 'loading');
 		return result.ok ? result.value : false;
 	}
 }

@@ -12,7 +12,9 @@
  * agent-sidepanel-v2/idea.md. Slash-command palette landed in PR-ASV-3.
  */
 import { computed, ref } from 'vue';
-import { useChatStore } from '@/ui/stores/chatStore';
+import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore';
+import { useMessagesStore } from '@/ui/stores/messagesStore';
+import { useChatReset } from '@/ui/composables/useChatReset';
 import { useNotificationStore } from '@/ui/stores/notificationStore';
 import { onMounted, onUnmounted } from 'vue';
 import AppToast from '@/ui/components/common/AppToast.vue';
@@ -23,15 +25,17 @@ import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue';
 import type { SlashCommand } from '@/domain/chat/SlashCommand';
 import { BUILT_IN_SLASH_COMMANDS } from '@/application/chat/builtInSlashCommands';
 
-const store = useChatStore();
+const threadsStore = useChatThreadsStore();
+const messagesStore = useMessagesStore();
+const chatReset = useChatReset();
 const notificationStore = useNotificationStore();
 
-const activeThreadId = computed(() => store.activeThreadId);
-const isRequestInFlight = computed(() => store.status === 'loading');
+const activeThreadId = computed(() => threadsStore.activeThreadId);
+const isRequestInFlight = computed(() => messagesStore.status === 'loading');
 const activeFeature = computed(() => {
-	const tid = store.activeThreadId;
+	const tid = threadsStore.activeThreadId;
 	if (tid === null) return null;
-	return store.chatThreads.get(tid)?.feature ?? null;
+	return threadsStore.chatThreads.get(tid)?.feature ?? null;
 });
 
 /**
@@ -65,27 +69,15 @@ function handleNewConversation(): void {
 	// is the defence-in-depth check in case a future entry point (URI
 	// action, keyboard shortcut, command palette) invokes the handler
 	// directly.
-	if (store.status === 'loading') return;
-	// Codex P2 (PR #369): Increment 1 ships no thread switcher, so once the
-	// active thread is cleared its message bucket becomes unreachable. Drop
-	// it before rotating `activeThreadId` to prevent unbounded in-memory
-	// growth across long sessions. The `ChatThreadRecord` itself stays in
-	// `chatThreads` so the subscription transport can still `--resume <id>`
-	// from the persisted session_id when a future increment surfaces a
-	// thread switcher UI.
-	const previousThreadId = store.activeThreadId;
-	if (previousThreadId !== null) {
-		store.clearThreadMessages(previousThreadId);
-		// Codex P2 (PR #369, fourth review): evict the previous thread's
-		// `FileWriteProposal` entries too. They're unreachable after the
-		// thread rotates (Increment 1 ships no thread switcher), but
-		// `envelope.content` payloads can be sizeable — repeated
-		// `/create` + reset cycles accumulated unbounded hidden state.
-		store.clearThreadProposals(previousThreadId);
-	}
-	store.setActiveThreadId(null);
-	store.clearResponse();
-	store.setUserText('');
+	if (messagesStore.status === 'loading') return;
+	// WP-3 (Arch #4): the previous multi-action sequence
+	// (clearThreadMessages → clearThreadProposals → setActiveThreadId(null) →
+	// clearResponse → setUserText('')) forgot to call `resetStreaming()`,
+	// leaving mid-stream residual state across thread rotations — UX
+	// review #15. `useChatReset().resetForNewConversation` is the single
+	// source of truth for "new conversation"; it unconditionally drops the
+	// streaming-turn slots as part of the cross-store sequence.
+	chatReset.resetForNewConversation(threadsStore.activeThreadId);
 }
 
 /**
@@ -97,13 +89,13 @@ function handleNewConversation(): void {
 function handleSelectCommand(command: SlashCommand): void {
 	switch (command.action) {
 		case 'clear-input':
-			store.setUserText('');
+			messagesStore.setUserText('');
 			return;
 		case 'new-conversation':
 			// Mirror the header button's guard rail so the keyboard-driven
 			// dispatch can't strand an in-flight response on a cleared thread
 			// (Codex P1, PR #369 second review).
-			if (store.status === 'loading') return;
+			if (messagesStore.status === 'loading') return;
 			handleNewConversation();
 			return;
 		case 'help':
@@ -117,7 +109,7 @@ function handleSelectCommand(command: SlashCommand): void {
 			// chat textarea for the user to review/edit before sending. We
 			// do NOT auto-send — the body is a template, not a final prompt.
 			if (command.body !== undefined) {
-				store.setUserText(command.body);
+				messagesStore.setUserText(command.body);
 			}
 			return;
 	}

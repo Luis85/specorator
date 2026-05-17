@@ -15,7 +15,7 @@ import { setActivePinia, createPinia } from 'pinia';
 import { defineComponent, h } from 'vue';
 
 import AgentSidepanelRoot from '@/ui/agent/AgentSidepanelRoot.vue';
-import { useChatStore } from '@/ui/stores/chatStore';
+import { getChatStoresFacade } from '../../__fakes__/chatStoresFacade';
 import { useNotificationStore } from '@/ui/stores/notificationStore';
 import { i18n } from '@/ui/i18n';
 import { LOGGER_PORT, NOTIFICATION_PORT } from '@/infrastructure/bridge/ports';
@@ -169,7 +169,7 @@ function mountRoot() {
 			},
 		},
 	});
-	const chatStore = useChatStore(pinia);
+	const chatStore = getChatStoresFacade(pinia);
 	const notificationStore = useNotificationStore(pinia);
 	const po = new AgentSidepanelRootSlashCommandsPO(wrapper);
 	return { wrapper, po, chatStore, notificationStore };

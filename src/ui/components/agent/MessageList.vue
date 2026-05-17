@@ -11,7 +11,8 @@
  */
 import { computed, nextTick, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useChatStore, type CompactBoundaryNoticeDto } from '@/ui/stores/chatStore';
+import { useMessagesStore, type CompactBoundaryNoticeDto } from '@/ui/stores/messagesStore';
+import { useStreamingTurnStore } from '@/ui/stores/streamingTurnStore';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
 import MarkdownBlock from '@/ui/components/agent/MarkdownBlock.vue';
 import ThinkingBlock from './ThinkingBlock.vue';
@@ -32,12 +33,13 @@ const props = defineProps<{
 	threadId: string | null;
 }>();
 
-const store = useChatStore();
+const messagesStore = useMessagesStore();
+const streamingStore = useStreamingTurnStore();
 const { t } = useI18n();
 
 const messages = computed(() => {
 	if (props.threadId === null) return [];
-	return store.messages.get(props.threadId) ?? [];
+	return messagesStore.messages.get(props.threadId) ?? [];
 });
 
 /**
@@ -46,7 +48,7 @@ const messages = computed(() => {
  */
 const compactBoundaries = computed<readonly CompactBoundaryNoticeDto[]>(() => {
 	if (props.threadId === null) return [];
-	return store.compactBoundaries.get(props.threadId) ?? [];
+	return messagesStore.compactBoundaries.get(props.threadId) ?? [];
 });
 
 /**
@@ -78,12 +80,12 @@ const hasContent = computed<boolean>(
  * (PR-ASV-2-ui). The bubble does not have a stable `ChatMessage.id` because
  * it is replaced by the real `appendMessage` once the stream resolves.
  */
-const streamingText = computed<string>(() => store.streamingText);
-const streamingThinking = computed<string>(() => store.streamingThinking);
-const streamingToolCalls = computed(() => Array.from(store.streamingToolCalls.entries()));
+const streamingText = computed<string>(() => streamingStore.streamingText);
+const streamingThinking = computed<string>(() => streamingStore.streamingThinking);
+const streamingToolCalls = computed(() => Array.from(streamingStore.streamingToolCalls.entries()));
 const isStreaming = computed<boolean>(
 	() =>
-		store.status === 'loading' &&
+		messagesStore.status === 'loading' &&
 		(streamingText.value.length > 0 ||
 			streamingThinking.value.length > 0 ||
 			streamingToolCalls.value.length > 0),

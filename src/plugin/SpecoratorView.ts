@@ -28,7 +28,8 @@ import type { ClaudeCliPort, ConfirmModalPort } from '@/domain/ports'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 import type { TransportKind } from '@/domain/chat/TransportKind'
 import type { TransportSelection } from '@/plugin/transport/TransportSelector'
-import { useChatStore } from '@/ui/stores/chatStore'
+import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore'
+import { useMessagesStore } from '@/ui/stores/messagesStore'
 import { mostRecentlyUsedThreadId } from './chatThreadsPersistence'
 import { trySync } from '@/domain/shared/tryAsync'
 import type SpecoratorPlugin from './main'
@@ -176,10 +177,10 @@ export class SpecoratorView extends ItemView {
     // conversation. Subscribe to subsequent mutations so any change to
     // `chatThreads` triggers a debounced flush back to plugin data.
     const persisted = this.plugin.getInitialChatThreads()
-    const chatStore = useChatStore(this.pinia)
-    for (const record of persisted) chatStore.upsertThread(record)
-    chatStore.setActiveThreadId(mostRecentlyUsedThreadId(persisted))
-    chatStore.$subscribe((_mutation, state) => {
+    const threadsStore = useChatThreadsStore(this.pinia)
+    for (const record of persisted) threadsStore.upsertThread(record)
+    threadsStore.setActiveThreadId(mostRecentlyUsedThreadId(persisted))
+    threadsStore.$subscribe((_mutation, state) => {
       this.plugin.scheduleChatThreadsPersistence(state.chatThreads)
     })
 
@@ -347,9 +348,9 @@ export class SpecoratorView extends ItemView {
   public _installPendingRefreshWatcher(): void {
     if (this.pinia === null) return
     if (this._statusWatchStop !== null) return
-    const chatStore = useChatStore(this.pinia)
+    const messagesStore = useMessagesStore(this.pinia)
     this._statusWatchStop = watch(
-      () => chatStore.status,
+      () => messagesStore.status,
       (next, prev) => {
         if (prev === 'loading' && next !== 'loading' && this._pendingSettingsRefresh) {
           this._pendingSettingsRefresh = false
@@ -420,7 +421,7 @@ export class SpecoratorView extends ItemView {
   }
 
   /**
-   * Best-effort read of `useChatStore().status` from the Pinia instance owned
+   * Best-effort read of `useMessagesStore().status` from the Pinia instance owned
    * by this view. Returns `false` if pinia hasn't been initialised yet (i.e.
    * onOpen hasn't run) — in that case there cannot be an in-flight turn.
    */
@@ -431,7 +432,7 @@ export class SpecoratorView extends ItemView {
     // raw-try/catch-free per the no-try-catch-outside-infrastructure rule;
     // a thrown error is treated as not-loading so we don't strand the next
     // selector update.
-    const result = trySync(() => useChatStore(pinia).status === 'loading')
+    const result = trySync(() => useMessagesStore(pinia).status === 'loading')
     return result.ok ? result.value : false
   }
 }
