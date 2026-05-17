@@ -45,7 +45,7 @@ export const MARKDOWN_RENDER_PORT: InjectionKey<MarkdownRenderPort> = Symbol('Ma
  * Consumed by `ChatSidebar` to drive `TransportStatusPill` and the
  * degraded-state template branches. The value mirrors
  * `selectTransport(settings).kind` and is updated on `bumpSettingsVersion`
- * — but only when `useChatStore().status !== 'loading'` (REQ-ASM-003).
+ * — but only when `useMessagesStore().status !== 'loading'` (REQ-ASM-003).
  */
 export const TRANSPORT_KIND_KEY: InjectionKey<Ref<TransportKind>> = Symbol('TransportKind')
 export const IS_MOBILE_KEY: InjectionKey<boolean> = Symbol('IsMobile')

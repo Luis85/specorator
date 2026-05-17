@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ContextFileEntry } from '@/ui/stores/chatStore'
+import type { ContextFileEntry } from '@/ui/stores/messagesStore'
 import ContextFileChip from './ContextFileChip.vue'
 
 defineProps<{
