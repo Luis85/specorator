@@ -90,7 +90,31 @@ Added five new tests at the end of the existing suite:
 
 ### Iteration 7 — Run full pre-PR gate.
 
-(In progress — see commands run from `.worktrees/asv3-wp11`.)
+- `npm audit --audit-level=high --omit=dev`: 0 vulnerabilities.
+- `npm run typecheck`: clean.
+- `npm run lint`: 0 errors (21 pre-existing Vue test warnings, untouched by this WP).
+- `npm run test`: 144 files / 1785 tests pass.
+- `npm run build`: ✓ built.
+- `npm run build:web`: ✓ built.
+- `npm run docs:api`: 0 errors (1 unrelated pre-existing typedoc warning).
+- `npm run verify`: EXIT=0.
+
+Final LOC delta on `ClaudeSubprocessAdapter.ts`: **1169 → 491 code lines (58% reduction)**. New modules (file LOC including docblocks): SubprocessLifecycle 168, NdjsonChannel 161, runSubprocessStructured 259.
+
+F7 + F-8 closure summary:
+
+| Gap | Closure |
+|---|---|
+| F7 — SIGKILL timing | `SubprocessLifecycle.test.ts` + `ClaudeSubprocessAdapter.test.ts` use `vi.useFakeTimers()` + `advanceTimersByTime(SIGKILL_GRACE_MS + 1)` to assert the ladder fires |
+| F7 — cwd assertion | `ClaudeSubprocessAdapter.test.ts` reads `spawn.calls[0].options.cwd` and asserts it's undefined |
+| F7 — 64 KiB 8-fragment reassembly | `NdjsonChannel.test.ts` + adapter test feed 8×8 KiB `\n`-less fragments then terminator |
+| F7 — fragment-on-newline | `NdjsonChannel.test.ts` + adapter test split exactly on `\n` |
+| F-8 — bounded stdout buffer | `NdjsonChannel` enforces a 4 MiB cap (configurable); adapter wires overflow to `kill child + emit terminal error delta + emit redacted `subscription.stdout.overflow` warn` |
+| F-8 — telemetry counter | `NdjsonChannel.overflowCount` exposed; dedicated warn keeps the canonical completion-telemetry shape unchanged (preserves T-ASM-081 invariants) |
+
+### Iteration 8 — Cleanup: revert collateral `eslint --fix` damage.
+
+`npm run lint:fix` mid-iteration also stripped two `// eslint-disable-next-line` comments on files outside WP-11 scope (`src/infrastructure/obsidian/ClaudeCliAdapter.ts` and `src/plugin/main.ts`). Reverted via `git checkout` — those files now show no changes vs `origin/develop`. `npm run verify` EXIT=0 after revert.
 
 ## Carry-out items
 
