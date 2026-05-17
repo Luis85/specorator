@@ -17,6 +17,8 @@ import globals from 'globals';
 const localRequire = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 const noClaudeHomeReadsRule = localRequire('./eslint-rules/no-claude-home-reads.cjs');
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+const noUnsafeAnchorHrefRule = localRequire('./eslint-rules/no-unsafe-anchor-href.cjs');
 
 const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
 
@@ -126,11 +128,27 @@ export default defineConfig(
 				rules: {
 					// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 					'no-claude-home-reads': noClaudeHomeReadsRule,
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+					'no-unsafe-anchor-href': noUnsafeAnchorHrefRule,
 				},
 			},
 		},
 		rules: {
 			'local/no-claude-home-reads': 'error',
+		},
+	},
+
+	// WP-9 Track 3 — preventive anchor-href guard. Scoped to the agent /
+	// chat surface where the audit was performed. WARN severity initially:
+	// the only `safeHref` consumer today is `MarkdownBlock.vue` (WP-4); the
+	// rule is preventive against future regressions. Promote to error once
+	// the WP-4 surface lands and the audit clears at error severity. The
+	// `local` plugin (with both rules registered) is bound to its files in
+	// the block above; this block only flips the second rule on.
+	{
+		files: ['src/ui/components/agent/**/*.vue', 'src/ui/components/chat/**/*.vue'],
+		rules: {
+			'local/no-unsafe-anchor-href': 'warn',
 		},
 	},
 
