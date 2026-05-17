@@ -75,7 +75,10 @@ export type ReadHostData = () => Record<string, unknown> | null | undefined
  *     `warn` (SPEC §11.3). When a debounced write is in flight,
  *     `_pendingSnapshot` is returned instead so reopening a view inside the
  *     debounce window rehydrates the latest in-memory state rather than the
- *     stale disk copy (Codex P1, PR #408).
+ *     stale disk copy. The pending snapshot is held until the queued flush
+ *     has *actually committed to disk* (not just until the debounce fires)
+ *     so the gap between debounce-fire and queue-head is closed too
+ *     (Codex P1 round-3, PR #408).
  *   - Writes coalesce via a 1 s trailing-edge debounce (OQ-ASM-T1) so rapid
  *     streaming mutations do not thrash disk.
  *   - Writes preserve every sibling key under `_storedData.specorator`
@@ -138,6 +141,12 @@ export class ObsidianChatThreadsRepository implements ChatThreadsRepositoryPort 
    * Without (1), reopening a chat view inside the 1 s debounce window
    * rehydrates the pre-save threads and the next `save()` from the store
    * would persist that stale view, losing the just-created thread.
+   *
+   * Codex P1 round-3 (PR #408): the pending snapshot is now held for the
+   * entire lifetime of the queued flush (cleared only after `saveData()`
+   * resolves), not just until the debounce timer fires. This closes the
+   * gap where flush(A) was waiting behind an older queued flush and
+   * `load()` would fall through to a still-stale disk copy.
    */
   async load(): Promise<ReadonlyMap<string, ChatThreadRecord>> {
     if (this._pendingSnapshot !== null) {
@@ -155,6 +164,15 @@ export class ObsidianChatThreadsRepository implements ChatThreadsRepositoryPort 
    * Schedule a debounced flush of `records`. Resolves immediately once the
    * snapshot is captured; the actual write happens after the debounce
    * elapses. Use `flushPending()` to force-flush before plugin teardown.
+   *
+   * Codex P1 round-3 (PR #408): `_pendingSnapshot` is held until the
+   * queued flush has resolved successfully — NOT cleared when the
+   * debounce timer fires. Clearing too early opened a window where an
+   * older flush was still in the queue, the new flush hadn't started yet,
+   * and `load()` would fall through to the stale disk copy. The flush
+   * itself clears the snapshot via an identity check (`=== snapshot`) so
+   * a newer `save()` that replaces `_pendingSnapshot` mid-flight is left
+   * alone — its own debounce schedules the next flush.
    */
   async save(records: ReadonlyMap<string, ChatThreadRecord>): Promise<void> {
     const snapshot = new Map(records)
@@ -164,13 +182,20 @@ export class ObsidianChatThreadsRepository implements ChatThreadsRepositoryPort 
     }
     this._flushTimer = this.host.setActiveTimeout(() => {
       this._flushTimer = null
-      this._pendingSnapshot = null
       // Serialise via the tail-chained queue so older snapshots can never
       // resolve after newer ones (Codex P1, PR #350). `.catch(() => undefined)`
       // keeps the chain alive past a transient saveData failure.
       this._flushQueue = this._flushQueue
         .catch(() => undefined)
-        .then(() => this._flushChatThreads(snapshot))
+        .then(async () => {
+          await this._flushChatThreads(snapshot)
+          // Identity equality: only clear if this exact snapshot is still
+          // the pending one. A newer save() that replaced it must not be
+          // erased by an older flush completing (Codex P1 round-3).
+          if (this._pendingSnapshot === snapshot) {
+            this._pendingSnapshot = null
+          }
+        })
       void this._flushQueue
     }, this._debounceMs)
   }
@@ -183,6 +208,13 @@ export class ObsidianChatThreadsRepository implements ChatThreadsRepositoryPort 
    * No-op when no flush is pending. Codex P1 (PR #346): a message sent
    * within the debounce window must persist even if Obsidian exits or the
    * plugin is disabled before the timer fires.
+   *
+   * Codex P1 round-3 (PR #408): the queued flush clears `_pendingSnapshot`
+   * itself via an identity check on success. If `flushPending()` runs
+   * while an older flush is in-flight AND `_pendingSnapshot` has been
+   * replaced by a newer `save()`, the returned promise composes
+   * correctly: it enqueues a flush of the latest snapshot behind the
+   * in-flight one, and only resolves after both have committed.
    */
   flushPending(): Promise<void> {
     if (this._flushTimer !== null) {
@@ -191,10 +223,14 @@ export class ObsidianChatThreadsRepository implements ChatThreadsRepositoryPort 
     }
     if (this._pendingSnapshot === null) return this._flushQueue
     const snapshot = this._pendingSnapshot
-    this._pendingSnapshot = null
     this._flushQueue = this._flushQueue
       .catch(() => undefined)
-      .then(() => this._flushChatThreads(snapshot))
+      .then(async () => {
+        await this._flushChatThreads(snapshot)
+        if (this._pendingSnapshot === snapshot) {
+          this._pendingSnapshot = null
+        }
+      })
     return this._flushQueue
   }
 

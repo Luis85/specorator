@@ -117,6 +117,61 @@ npm run build:web                          # OK
 npm run docs:api                           # 0 errors, 1 pre-existing typedoc link warning
 ```
 
+### Iteration 6 — Codex P1 round-3 (PR #408 review feedback)
+
+Codex flagged a fourth race: `save()` cleared `_pendingSnapshot` as soon
+as the debounce timer fired, even though the queued
+`_flushChatThreads(snapshot)` had not yet won the `_flushQueue` and
+written to disk. Window:
+
+1. `save(A)` → `_pendingSnapshot = A`, debounce scheduled.
+2. Debounce fires → `_pendingSnapshot = null` (bug), flush(A) enqueued.
+3. `_flushQueue` is busy with an older flush, so flush(A) waits.
+4. `load()` runs → `_pendingSnapshot` is null → falls through to disk,
+   which still has the *pre-A* state.
+5. The view rehydrates the stale state. The next mutation persists that
+   stale map → silently clobbers the in-flight new threads.
+
+Fix:
+
+- Removed the eager `_pendingSnapshot = null` assignment from the
+  `setActiveTimeout` callback in `save()`. The clear now lives inside
+  the queued flush's `.then(async () => { ... })` handler and runs
+  AFTER `_flushChatThreads(snapshot)` resolves.
+- Identity equality on clear: `if (this._pendingSnapshot === snapshot)`.
+  A newer `save()` that replaces `_pendingSnapshot` mid-flight is left
+  alone — its own debounce schedules the next flush. Without this
+  guard, an older flush completing would erase the newer snapshot.
+- `flushPending()` follows the same pattern: it no longer clears
+  `_pendingSnapshot` synchronously; the queued flush clears it on
+  success via the identity check. Composes correctly when called
+  during an in-flight flush — both flushes are awaited.
+- On rejection (`saveData` throws), `_pendingSnapshot` is preserved.
+  The next `save()` / `flushPending()` can retry.
+
+New tests in `tests/infrastructure/obsidian/ObsidianChatThreadsRepository.test.ts`
+under `pending snapshot held until queued flush completes (Codex P1 round-3)`:
+
+- `load()` returns the pending snapshot while the queued flush is
+  in flight (the race reproducer — fails on `cf66087`).
+- A newer `save()` during an in-flight older flush is not cleared by
+  the older flush completing (identity-equality guard).
+- `flushPending()` drains both the in-flight flush and the next
+  queued flush.
+- Does NOT clear `_pendingSnapshot` when the queued flush rejects.
+
+Pre-PR gate:
+
+```
+npm audit --audit-level=high --omit=dev  # 0 vulnerabilities
+npm run typecheck                          # clean
+npm run lint                               # 0 errors, 24 pre-existing warnings
+npm run test                               # 1896 / 1896 pass (was 1892; +4 new)
+npm run build                              # OK
+npm run build:web                          # OK
+npm run docs:api                           # 0 errors, 1 pre-existing typedoc link warning
+```
+
 ## Carry-out items
 
 _None._

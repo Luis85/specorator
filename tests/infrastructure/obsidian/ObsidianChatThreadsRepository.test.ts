@@ -650,3 +650,239 @@ describe('ObsidianChatThreadsRepository — readHostData hook (Codex P1 round-2)
     expect(specorator.chatThreads).toHaveProperty('t1')
   })
 })
+
+/**
+ * Codex P1 round-3, PR #408 — close the gap between the debounce firing
+ * and the queued flush actually writing to disk. Previously `save()`
+ * cleared `_pendingSnapshot` as soon as the debounce timer fired, even
+ * though the queued `_flushChatThreads(snapshot)` had not yet won the
+ * `_flushQueue` and committed to disk. During that window:
+ *
+ *   1. `save(A)` schedules a debounce, sets `_pendingSnapshot = A`.
+ *   2. Debounce fires → `_pendingSnapshot = null` (bug), flush(A) enqueued.
+ *   3. An older flush is still in `_flushQueue`, so flush(A) waits.
+ *   4. `load()` is called → `_pendingSnapshot` is null → falls through to
+ *      disk, which is still pre-A. The view rehydrates the stale state.
+ *
+ * The fix: hold `_pendingSnapshot` until the queued flush has actually
+ * resolved. Use identity equality (same Map reference) when clearing so a
+ * newer `save()` mid-flight is not erroneously cleared by an older flush's
+ * completion.
+ */
+describe('ObsidianChatThreadsRepository — pending snapshot held until queued flush completes (Codex P1 round-3)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('load() returns the pending snapshot while the queued flush is still in flight', async () => {
+    // Set up a host whose saveData parks on a resolver the test controls
+    // so we can interrogate `load()` while the queued flush is mid-air.
+    const diskBlob: { current: Record<string, unknown> | null } = {
+      current: {
+        specorator: {
+          chatThreads: {
+            stale: {
+              threadId: 'stale', sessionId: 'sess-stale', feature: 'foo',
+              logPath: 'specs/foo/sessions/sess-stale.md', transport: 'subscription',
+              createdAt: '2026-05-17T08:00:00.000Z',
+              lastUsedAt: '2026-05-17T08:00:00.000Z',
+            },
+          },
+        },
+      },
+    }
+    const saveResolvers: Array<() => void> = []
+    const host: ObsidianPluginDataHost = {
+      loadData: vi.fn(async () => diskBlob.current),
+      saveData: vi.fn(async (data: Record<string, unknown>) => {
+        await new Promise<void>((resolve) => saveResolvers.push(resolve))
+        diskBlob.current = data
+      }),
+      setActiveTimeout: (cb, ms) => globalThis.setTimeout(cb, ms) as unknown as number,
+      clearActiveTimeout: (id) => { globalThis.clearTimeout(id) },
+    }
+    const repo = new ObsidianChatThreadsRepository(host, silentLogger())
+
+    // 1. save(A) — debounce starts.
+    await repo.save(new Map([['just-sent', makeRecord({ threadId: 'just-sent' })]]))
+    // 2. advance past debounce → timer fires, flush(A) enqueued, flush(A)
+    //    awaits the parked saveData.
+    await vi.advanceTimersByTimeAsync(1_000)
+    await Promise.resolve()
+    await Promise.resolve()
+    // saveData has been invoked (i.e. queue entered the flush) but not resolved.
+    expect((host.saveData as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1)
+    // Disk is still pre-A (saveData parked).
+    const onDisk = diskBlob.current!
+    expect(((onDisk.specorator as Record<string, unknown>).chatThreads as Record<string, unknown>))
+      .toHaveProperty('stale')
+
+    // 3. load() while the queued flush is in flight MUST return the
+    //    in-memory snapshot, not the stale disk copy.
+    const loaded = await repo.load()
+    expect(Array.from(loaded.keys())).toEqual(['just-sent'])
+    expect(loaded.has('stale')).toBe(false)
+
+    // 4. Resolve the parked save → flush completes → pending snapshot
+    //    clears via identity check → load() now reads from disk (which has A).
+    saveResolvers[0]?.()
+    await vi.runAllTimersAsync()
+    await Promise.resolve()
+    await Promise.resolve()
+    const reloaded = await repo.load()
+    expect(Array.from(reloaded.keys())).toEqual(['just-sent'])
+  })
+
+  it('a newer save() during an in-flight older flush is not cleared by the older flush completing', async () => {
+    // Identity-equality guard: when flush(A) finishes, it must NOT clear
+    // `_pendingSnapshot` if a newer save(B) has already replaced it.
+    const diskBlob: { current: Record<string, unknown> | null } = {
+      current: { specorator: {} },
+    }
+    const saveResolvers: Array<() => void> = []
+    const host: ObsidianPluginDataHost = {
+      loadData: vi.fn(async () => diskBlob.current),
+      saveData: vi.fn(async (data: Record<string, unknown>) => {
+        await new Promise<void>((resolve) => saveResolvers.push(resolve))
+        diskBlob.current = data
+      }),
+      setActiveTimeout: (cb, ms) => globalThis.setTimeout(cb, ms) as unknown as number,
+      clearActiveTimeout: (id) => { globalThis.clearTimeout(id) },
+    }
+    const repo = new ObsidianChatThreadsRepository(host, silentLogger())
+
+    // save(A) → debounce → flush(A) enqueued and parked.
+    await repo.save(new Map([['a', makeRecord({ threadId: 'a' })]]))
+    await vi.advanceTimersByTimeAsync(1_000)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect((host.saveData as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1)
+
+    // save(B) replaces _pendingSnapshot while flush(A) is parked.
+    await repo.save(new Map([['b', makeRecord({ threadId: 'b' })]]))
+    // load() now must surface B, not A (B is the live in-memory state).
+    const midFlight = await repo.load()
+    expect(Array.from(midFlight.keys())).toEqual(['b'])
+
+    // Resolve flush(A). Its identity check sees `_pendingSnapshot` is no
+    // longer A's Map reference, so it does NOT clear it. B remains pending.
+    saveResolvers[0]?.()
+    await Promise.resolve()
+    await Promise.resolve()
+    const afterAFinishes = await repo.load()
+    expect(Array.from(afterAFinishes.keys())).toEqual(['b'])
+
+    // Advance to fire B's debounce → flush(B) enqueued and parked.
+    await vi.advanceTimersByTimeAsync(1_000)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect((host.saveData as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2)
+    // Resolve flush(B) → identity match → _pendingSnapshot cleared.
+    saveResolvers[1]?.()
+    await vi.runAllTimersAsync()
+    await Promise.resolve()
+    await Promise.resolve()
+    // Disk now has B; load() falls through to disk and still returns B.
+    const finalLoad = await repo.load()
+    expect(Array.from(finalLoad.keys())).toEqual(['b'])
+  })
+
+  it('flushPending() drains both the in-flight flush and the next queued flush', async () => {
+    // Composition with flushPending(): if flushPending() is called while a
+    // queued flush is in flight AND `_pendingSnapshot` is non-null (because
+    // a newer save replaced it mid-flight), the returned promise must
+    // resolve only after BOTH flushes have committed.
+    const diskBlob: { current: Record<string, unknown> | null } = {
+      current: { specorator: {} },
+    }
+    const saveResolvers: Array<() => void> = []
+    const host: ObsidianPluginDataHost = {
+      loadData: vi.fn(async () => diskBlob.current),
+      saveData: vi.fn(async (data: Record<string, unknown>) => {
+        await new Promise<void>((resolve) => saveResolvers.push(resolve))
+        diskBlob.current = data
+      }),
+      setActiveTimeout: (cb, ms) => globalThis.setTimeout(cb, ms) as unknown as number,
+      clearActiveTimeout: (id) => { globalThis.clearTimeout(id) },
+    }
+    const repo = new ObsidianChatThreadsRepository(host, silentLogger())
+
+    await repo.save(new Map([['a', makeRecord({ threadId: 'a' })]]))
+    await vi.advanceTimersByTimeAsync(1_000)
+    await Promise.resolve()
+    await Promise.resolve()
+    // flush(A) is parked. save(B) replaces pending snapshot.
+    await repo.save(new Map([['b', makeRecord({ threadId: 'b' })]]))
+
+    // flushPending() should enqueue flush(B) and return a promise that
+    // resolves only after both flushes complete.
+    const drained = repo.flushPending()
+    let drainedSettled = false
+    void drained.then(() => { drainedSettled = true })
+
+    // Resolve flush(A) — drained should still be pending (flush(B) queued).
+    saveResolvers[0]?.()
+    // Several microtask flushes: flush(A) finishes → identity check
+    // (B !== A → no clear) → queue then-handler resolves → flush(B)
+    // starts → saveData(B) is invoked → parks on its own resolver.
+    for (let i = 0; i < 10; i += 1) await Promise.resolve()
+    expect(drainedSettled).toBe(false)
+    expect((host.saveData as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2)
+
+    // Resolve flush(B) — drained settles.
+    saveResolvers[1]?.()
+    for (let i = 0; i < 10; i += 1) await Promise.resolve()
+    await drained
+    expect(drainedSettled).toBe(true)
+    // Disk now has B (the latest snapshot).
+    const onDisk = diskBlob.current!
+    expect(((onDisk.specorator as Record<string, unknown>).chatThreads as Record<string, unknown>))
+      .toHaveProperty('b')
+  })
+
+  it('does NOT clear _pendingSnapshot when the queued flush rejects', async () => {
+    // Rejection guard: a failed saveData must NOT swallow the pending
+    // snapshot. The next save() / flushPending() must still see it and
+    // can retry the write. We drive both flushes through `flushPending()`
+    // so the test owns a promise handle for each — this mirrors how the
+    // existing onChatThreadsPersisted-rejection test composes deterministic
+    // rejection handling without leaking unhandled-rejection events.
+    const diskBlob: { current: Record<string, unknown> | null } = {
+      current: { specorator: {} },
+    }
+    let failNext = true
+    const host: ObsidianPluginDataHost = {
+      loadData: vi.fn(async () => diskBlob.current),
+      saveData: vi.fn(async (data: Record<string, unknown>) => {
+        if (failNext) {
+          failNext = false
+          throw new Error('disk full')
+        }
+        diskBlob.current = data
+      }),
+      setActiveTimeout: (cb, ms) => globalThis.setTimeout(cb, ms) as unknown as number,
+      clearActiveTimeout: (id) => { globalThis.clearTimeout(id) },
+    }
+    const repo = new ObsidianChatThreadsRepository(host, silentLogger())
+
+    await repo.save(new Map([['t1', makeRecord({ threadId: 't1' })]]))
+    // Force the first flush via flushPending() so we own the rejection
+    // (no debounce-fire path that leaks an unhandled rejection).
+    await repo.flushPending().catch(() => undefined)
+
+    // After the rejection, load() must STILL return the pending snapshot —
+    // the in-memory state is still authoritative until a successful flush.
+    const afterReject = await repo.load()
+    expect(Array.from(afterReject.keys())).toEqual(['t1'])
+
+    // flushPending() retries; this time saveData succeeds → snapshot clears.
+    await repo.flushPending()
+    for (let i = 0; i < 5; i += 1) await Promise.resolve()
+    const onDisk = diskBlob.current!
+    expect(((onDisk.specorator as Record<string, unknown>).chatThreads as Record<string, unknown>))
+      .toHaveProperty('t1')
+  })
+})
