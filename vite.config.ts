@@ -30,23 +30,38 @@ const ALL_EXTERNALS = [
 
 /**
  * Rolldown's CJS output mangles `import.meta.url` to `{}.url` (undefined),
- * crashing dependencies that call `createRequire(import.meta.url)` at module
- * top-level — `@anthropic-ai/claude-agent-sdk` does this in its bundled
- * `sdk.mjs`. A global `import.meta.url` substitution would also rewrite
- * `fileURLToPath(import.meta.url)` and other module-relative-path call sites,
- * silently changing their semantics (Codex P1 on PR #367). Narrow the rewrite
- * to the single broken pattern: `createRequire(import.meta.url)` becomes
- * `createRequire(require("url").pathToFileURL(process.execPath).href)`, which
- * `createRequire` accepts. Other `import.meta.url` references continue to flow
- * through Rolldown unchanged.
+ * crashing dependencies that consume it through `createRequire` /
+ * `fileURLToPath` — `@anthropic-ai/claude-agent-sdk` does both inside its
+ * bundled `sdk.mjs`. A global `import.meta.url` substitution would also
+ * rewrite unrelated module-relative-path call sites, silently changing their
+ * semantics (Codex P1 on PR #367), so narrow the rewrite to the specific
+ * wrappers that need a valid file URL:
  *
- * Matches both `createRequire(import.meta.url)` (un-minified) and
- * `IDENT(import.meta.url)` where `IDENT` is the minified alias of an
- * `import { createRequire as IDENT } from 'node:module'|'module'` binding —
- * which is what the published SDK ships.
+ *   - `createRequire(import.meta.url)` — at module top-level, crashes module
+ *     load (the original PR #367 symptom).
+ *   - `fileURLToPath(import.meta.url)` — inside the lazy CLI-discovery path
+ *     reached from `query(...)`, crashes the first SDK call (Codex P1 on
+ *     PR #401).
+ *
+ * Both are rewritten to `(require("url").pathToFileURL(process.execPath).href)`,
+ * which is accepted by `createRequire` and round-trips cleanly through
+ * `fileURLToPath` to `process.execPath`. Path resolution becomes relative to
+ * the Electron/Node executable directory — `./cli.js` won't exist there,
+ * which means the SDK falls through to its own informative
+ * `"Native CLI binary for ... not found. ... set options.pathToClaudeCodeExecutable."`
+ * error instead of a low-level `TypeError`.
+ *
+ * The transform scans each SDK file for `import { … as IDENT }` bindings to
+ * pick up the minified aliases the published SDK ships (e.g. `$S`, `cy`,
+ * `f6$`), and matches `IDENT(import.meta.url)` for any of them.
  */
 function patchCreateRequireImportMetaUrl(): VitePlugin {
 	const REPLACEMENT = 'require("url").pathToFileURL(process.execPath).href';
+	const escapeRegex = (s: string): string => s.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
+	const WRAPPERS = [
+		{ name: 'createRequire', moduleRe: /^(?:node:)?module$/ },
+		{ name: 'fileURLToPath', moduleRe: /^(?:node:)?url$/ },
+	];
 	return {
 		name: 'specorator-patch-create-require-import-meta-url',
 		enforce: 'pre',
@@ -54,15 +69,19 @@ function patchCreateRequireImportMetaUrl(): VitePlugin {
 			if (!/[\\/]node_modules[\\/]@anthropic-ai[\\/]claude-agent-sdk[\\/]/.test(id)) {
 				return null;
 			}
-			const aliases = new Set<string>(['createRequire']);
-			const importRe = /import\s*\{([^}]*)\}\s*from\s*['"](?:node:)?module['"]/g;
-			for (const match of code.matchAll(importRe)) {
-				for (const spec of match[1].split(',')) {
-					const aliasMatch = /createRequire\s+as\s+([A-Za-z_$][\w$]*)/.exec(spec);
-					if (aliasMatch !== null) aliases.add(aliasMatch[1]);
+			const aliases = new Set<string>();
+			for (const { name, moduleRe } of WRAPPERS) {
+				aliases.add(name);
+				const importRe = new RegExp(`import\\s*\\{([^}]*)\\}\\s*from\\s*['"]([^'"]+)['"]`, 'g');
+				for (const match of code.matchAll(importRe)) {
+					if (!moduleRe.test(match[2])) continue;
+					for (const spec of match[1].split(',')) {
+						const aliasMatch = new RegExp(`${name}\\s+as\\s+([A-Za-z_$][\\w$]*)`).exec(spec);
+						if (aliasMatch !== null) aliases.add(aliasMatch[1]);
+					}
 				}
 			}
-			const aliasPattern = [...aliases].map((a) => a.replace(/[$]/g, '\\$&')).join('|');
+			const aliasPattern = [...aliases].map(escapeRegex).join('|');
 			// `\b` doesn't match between non-word characters; the SDK ships
 			// `$S(import.meta.url)` and Rolldown can emit `=$S(…)`, so use an
 			// explicit lookbehind that excludes identifier-continuation chars.
