@@ -12,6 +12,7 @@
  * ports (ADR-008).
  */
 import type { SlashCommand } from '@/domain/chat/SlashCommand';
+import { slashCommandSlug } from './slashCommandSlug';
 
 const props = defineProps<{
 	/** Matched commands to render. Empty array = "no matches" placeholder. */
@@ -75,7 +76,7 @@ function sourceLabel(command: SlashCommand): string | null {
 		<ul v-else class="sp-slash-dropdown__list" data-testid="slash-command-list">
 			<li
 				v-for="(command, index) in commands"
-				:id="`slash-command-item-${command.name}`"
+				:id="`slash-command-item-${slashCommandSlug(command.name)}`"
 				:key="command.name"
 				class="sp-slash-dropdown__item"
 				:class="{ 'sp-slash-dropdown__item--selected': isSelected(index) }"
