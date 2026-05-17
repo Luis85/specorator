@@ -54,7 +54,7 @@ import type {
   ConfirmModalPort,
   StreamDelta,
 } from '@/domain/ports'
-import { useChatStore } from '@/ui/stores/chatStore'
+import { getChatStoresFacade } from '../__fakes__/chatStoresFacade'
 import type SpecoratorPlugin from '@/plugin/main'
 
 // -----------------------------------------------------------------------------
@@ -63,21 +63,38 @@ import type SpecoratorPlugin from '@/plugin/main'
 
 function makePort(label: string): ClaudeCliPort {
   return {
-    query: vi.fn(async () => ({ ok: true as const, value: `from-${label}` })),
     isAvailable: vi.fn(async () => true),
-    startup: vi.fn(async () => undefined),
-    shutdown: vi.fn(() => undefined),
     queryStream: vi.fn(
       (_prompt: string, _options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> => {
-        return (async function* (): AsyncGenerator<StreamDelta> {})()
+        return (async function* (): AsyncGenerator<StreamDelta> {
+          yield { type: 'text', text: `from-${label}` }
+          yield { type: 'done' }
+        })()
       },
     ),
+  }
+}
+
+interface MockLifecycle {
+  startup: ReturnType<typeof vi.fn> & (() => Promise<void>)
+  shutdown: ReturnType<typeof vi.fn> & (() => void)
+}
+
+function makeLifecycle(): MockLifecycle {
+  // vi.fn() with a typed implementation is structurally a callable Mock; the
+  // intersection cast pins the return type for `TransportLifecyclePort` while
+  // preserving the `.toHaveBeenCalled()` matcher surface.
+  return {
+    startup: vi.fn(async () => undefined) as MockLifecycle['startup'],
+    shutdown: vi.fn(() => undefined) as MockLifecycle['shutdown'],
   }
 }
 
 interface Fixture {
   readonly sdkAdapter: ClaudeCliPort
   readonly subscriptionAdapter: ClaudeCliPort
+  readonly sdkLifecycle: MockLifecycle
+  readonly subscriptionLifecycle: MockLifecycle
   readonly degradedPort: ClaudeCliPort
   readonly selectTransportSpy: ReturnType<typeof vi.fn>
   readonly plugin: { settings: PluginSettings }
@@ -114,6 +131,8 @@ interface FixtureOptions {
 function makeFixture(opts: FixtureOptions = {}): Fixture {
   const sdkAdapter = makePort('sdk')
   const subscriptionAdapter = makePort('subscription')
+  const sdkLifecycle = makeLifecycle()
+  const subscriptionLifecycle = makeLifecycle()
   const degradedPort = degradedClaudeCliPort
   const cliResolvedRef = { value: opts.cliResolved ?? false }
   const apiKeyPresentRef = { value: opts.apiKeyPresent ?? false }
@@ -140,11 +159,15 @@ function makeFixture(opts: FixtureOptions = {}): Fixture {
     subscriptionAdapter,
     selectTransport: selectTransportSpy,
     confirmModalAdapter,
+    sdkLifecycle,
+    subscriptionLifecycle,
   }
 
   return {
     sdkAdapter,
     subscriptionAdapter,
+    sdkLifecycle,
+    subscriptionLifecycle,
     degradedPort,
     selectTransportSpy,
     plugin,
@@ -301,8 +324,8 @@ describe('SpecoratorView.bumpSettingsVersion() re-runs the selector (REQ-ASM-002
     // Before the fix, only the subscription adapter's startup() ran. Both
     // must now be invoked so the SDK adapter re-checks its availability
     // with the freshly-configured key.
-    expect(fixture.sdkAdapter.startup).toHaveBeenCalled()
-    expect(fixture.subscriptionAdapter.startup).toHaveBeenCalled()
+    expect(fixture.sdkLifecycle.startup).toHaveBeenCalled()
+    expect(fixture.subscriptionLifecycle.startup).toHaveBeenCalled()
   })
 })
 
@@ -323,8 +346,8 @@ describe('SpecoratorView.bumpSettingsVersion() mid-turn guard (REQ-ASM-003)', ()
     const initialPort = activePort(view)
     expect(initialPort).toBe(fixture.degradedPort)
 
-    // Mark an in-flight turn so `useChatStore(pinia).status === 'loading'`.
-    const store = useChatStore(pinia)
+    // Mark an in-flight turn so `getChatStoresFacade(pinia).status === 'loading'`.
+    const store = getChatStoresFacade(pinia)
     store.beginRequest()
     expect(store.status).toBe('loading')
 
@@ -349,7 +372,7 @@ describe('SpecoratorView.bumpSettingsVersion() mid-turn guard (REQ-ASM-003)', ()
     // Install the deferred-refresh watcher the way `onOpen()` would.
     view._installPendingRefreshWatcher()
 
-    const store = useChatStore(pinia)
+    const store = getChatStoresFacade(pinia)
     // Mid-turn settings change.
     store.beginRequest()
     fixture.apiKeyPresentRef.value = true
@@ -371,7 +394,7 @@ describe('SpecoratorView.bumpSettingsVersion() mid-turn guard (REQ-ASM-003)', ()
 
     const view = makeView(fixture)
     view.pinia = pinia
-    const store = useChatStore(pinia)
+    const store = getChatStoresFacade(pinia)
 
     // Mid-turn: bump is a no-op for the selector.
     store.beginRequest()
@@ -520,7 +543,7 @@ describe('SpecoratorView.getActiveTransportKind() mirrors selectTransport().kind
     expect(view.getActiveTransportKind()).toBe('degraded')
 
     // Begin an in-flight turn.
-    const store = useChatStore(pinia)
+    const store = getChatStoresFacade(pinia)
     store.beginRequest()
     expect(store.status).toBe('loading')
 

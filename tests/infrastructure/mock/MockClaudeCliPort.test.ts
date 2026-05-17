@@ -1,10 +1,15 @@
 /**
  * T-CCS-004 — Tests for MockClaudeCliPort all method branches.
  * Satisfies REQ-CCS-022, SPEC-CCS-001 §6, TEST-CCS-022.
+ *
+ * Reshaped in WP-12 (Arch review #3): the deleted `query()` method is now
+ * a `collectStream(port.queryStream(...))` call. Every assertion that used
+ * to exercise `query` is migrated below.
  */
 import { describe, it, expect, beforeEach } from 'vitest'
 import { MockClaudeCliPort } from '@/infrastructure/mock/MockClaudeCliPort'
 import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort'
+import { collectStream } from '@/application/chat/collectStream'
 
 describe('REQ-CCS-022: MockClaudeCliPort', () => {
   let mock: MockClaudeCliPort
@@ -30,45 +35,45 @@ describe('REQ-CCS-022: MockClaudeCliPort', () => {
     expect(() => { mock.shutdown() }).not.toThrow()
   })
 
-  it('query() with available=false returns err(NOT_INSTALLED)', async () => {
+  it('queryStream() with available=false yields err(NOT_INSTALLED) when collected', async () => {
     mock.available = false
-    const result = await mock.query('hello')
+    const result = await collectStream(mock.queryStream('hello'))
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.error).toBeInstanceOf(ClaudeCliError)
     expect(result.error.errorCode).toBe('NOT_INSTALLED')
   })
 
-  it('query() with available=true and no queryError appends to queryLog and returns ok(cannedResponse)', async () => {
+  it('queryStream() with available=true and no queryError appends to queryLog and returns ok(cannedResponse)', async () => {
     mock.available = true
-    const result = await mock.query('test prompt')
+    const result = await collectStream(mock.queryStream('test prompt'))
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.value).toBe(mock.cannedResponse)
     expect(mock.queryLog).toContain('test prompt')
   })
 
-  it('query() appends to queryLog even when not available', async () => {
+  it('queryStream() appends to queryLog even when not available', async () => {
     mock.available = false
-    await mock.query('some prompt')
+    await collectStream(mock.queryStream('some prompt'))
     expect(mock.queryLog).toContain('some prompt')
   })
 
-  it('query() with queryError set returns err(queryError)', async () => {
+  it('queryStream() with queryError set yields err(queryError)', async () => {
     mock.available = true
     const customError = new ClaudeCliError('TIMEOUT', 'simulated timeout')
     mock.queryError = customError
-    const result = await mock.query('test')
+    const result = await collectStream(mock.queryStream('test'))
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.error).toBe(customError)
   })
 
-  it('query() respects delayMs and resolves after the delay', async () => {
+  it('queryStream() respects delayMs and resolves after the delay', async () => {
     mock.available = true
     mock.delayMs = 50
     const start = Date.now()
-    await mock.query('prompt')
+    await collectStream(mock.queryStream('prompt'))
     const elapsed = Date.now() - start
     expect(elapsed).toBeGreaterThanOrEqual(40)
   })

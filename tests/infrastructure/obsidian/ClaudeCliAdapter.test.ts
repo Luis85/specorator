@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort'
+import { collectStream } from '@/application/chat/collectStream'
 
 // We mock the SDK module so no real subprocess is spawned in unit tests.
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
@@ -112,11 +113,11 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
     })
   })
 
-  describe('query() when not available', () => {
+  describe('queryStream() when not available (collected via collectStream)', () => {
     it('with empty key returns err(API_KEY_MISSING)', async () => {
       getApiKey = () => ''
       const adapter = new ClaudeCliAdapter(getApiKey, bridge)
-      const result = await adapter.query('test prompt')
+      const result = await collectStream(adapter.queryStream('test prompt'))
       expect(result.ok).toBe(false)
       if (result.ok) return
       expect(result.error).toBeInstanceOf(ClaudeCliError)
@@ -126,7 +127,7 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
     it('with non-empty key but not started returns err(NOT_INSTALLED)', async () => {
       getApiKey = () => 'sk-ant-test'
       const adapter = new ClaudeCliAdapter(getApiKey, bridge)
-      const result = await adapter.query('test prompt')
+      const result = await collectStream(adapter.queryStream('test prompt'))
       expect(result.ok).toBe(false)
       if (result.ok) return
       expect(result.error).toBeInstanceOf(ClaudeCliError)
@@ -134,7 +135,7 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
     })
   })
 
-  describe('query() success path', () => {
+  describe('queryStream() success path (collected via collectStream)', () => {
     it('returns ok(responseText) from SDK result message', async () => {
       getApiKey = () => 'sk-ant-test'
       const adapter = new ClaudeCliAdapter(getApiKey, bridge, () => '/fake/claude')
@@ -145,14 +146,14 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
         makeSuccessGen('Hello from Claude') as unknown as ReturnType<typeof sdkModule.query>,
       )
 
-      const result = await adapter.query('test')
+      const result = await collectStream(adapter.queryStream('test'))
       expect(result.ok).toBe(true)
       if (!result.ok) return
       expect(result.value).toBe('Hello from Claude')
     })
   })
 
-  describe('query() timeout', () => {
+  describe('queryStream() timeout (collected via collectStream)', () => {
     it('returns err(TIMEOUT) when query exceeds timeoutMs', async () => {
       vi.useFakeTimers()
       getApiKey = () => 'sk-ant-test'
@@ -164,7 +165,7 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
         makeHangingGen() as unknown as ReturnType<typeof sdkModule.query>,
       )
 
-      const queryPromise = adapter.query('test', { timeoutMs: 1_000 })
+      const queryPromise = collectStream(adapter.queryStream('test', { timeoutMs: 1_000 }))
       vi.advanceTimersByTime(1_001)
       const result = await queryPromise
 
@@ -174,7 +175,7 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
     })
   })
 
-  describe('query() SDK error mapping', () => {
+  describe('queryStream() SDK error mapping (collected via collectStream)', () => {
     it('maps generic SDK error to QUERY_FAILED', async () => {
       getApiKey = () => 'sk-ant-test'
       const adapter = new ClaudeCliAdapter(getApiKey, bridge, () => '/fake/claude')
@@ -185,7 +186,7 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
         makeErrorGen(new Error('Some SDK failure')) as unknown as ReturnType<typeof sdkModule.query>,
       )
 
-      const result = await adapter.query('test')
+      const result = await collectStream(adapter.queryStream('test'))
       expect(result.ok).toBe(false)
       if (result.ok) return
       expect(result.error.errorCode).toBe('QUERY_FAILED')
@@ -203,7 +204,7 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
         ) as unknown as ReturnType<typeof sdkModule.query>,
       )
 
-      const result = await adapter.query('test')
+      const result = await collectStream(adapter.queryStream('test'))
       expect(result.ok).toBe(false)
       if (result.ok) return
       expect(result.error.errorCode).toBe('API_KEY_MISSING')

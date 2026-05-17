@@ -54,19 +54,10 @@ function makeSettings(overrides: Partial<PluginSettings>): PluginSettings {
  */
 function makeMockPort(label: string): ClaudeCliPort {
   return {
-    query: () => {
-      throw new Error(`mock port "${label}" .query() must not be called by selectTransport`)
-    },
     isAvailable: () => {
       throw new Error(
         `mock port "${label}" .isAvailable() must not be called by selectTransport`,
       )
-    },
-    startup: () => {
-      throw new Error(`mock port "${label}" .startup() must not be called by selectTransport`)
-    },
-    shutdown: () => {
-      throw new Error(`mock port "${label}" .shutdown() must not be called by selectTransport`)
     },
     queryStream: () => {
       throw new Error(

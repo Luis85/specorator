@@ -20,11 +20,12 @@ import {
 	OPEN_PLUGIN_SETTINGS_KEY,
 } from '@/infrastructure/bridge/ports';
 import { ObsidianMarkdownRenderAdapter } from '@/infrastructure/obsidian/ObsidianMarkdownRenderAdapter';
-import type { ClaudeCliPort, ConfirmModalPort } from '@/domain/ports';
+import type { ClaudeCliPort, ConfirmModalPort, TransportLifecyclePort } from '@/domain/ports';
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
 import type { TransportKind } from '@/domain/chat/TransportKind';
 import type { TransportSelection } from '@/plugin/transport/TransportSelector';
-import { useChatStore } from '@/ui/stores/chatStore';
+import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore';
+import { useMessagesStore } from '@/ui/stores/messagesStore';
 import { mostRecentlyUsedThreadId } from './chatThreadsPersistence';
 import { trySync } from '@/domain/shared/tryAsync';
 import type SpecoratorPlugin from './main';
@@ -41,6 +42,16 @@ export interface AgentSidepanelViewOptions {
 	readonly subscriptionAdapter: ClaudeCliPort;
 	readonly selectTransport: SelectAgentTransportFactory;
 	readonly confirmModalAdapter?: ConfirmModalPort;
+	/**
+	 * Optional lifecycle handles for the SDK and subscription transports.
+	 * Split off `ClaudeCliPort` in WP-12 (Arch review #3) — `startup`/`shutdown`
+	 * no longer live on the streaming port. The plugin layer owns the adapter
+	 * instances and passes the same objects under both contracts. Optional so
+	 * legacy test wiring that omitted lifecycle continues to compile; missing
+	 * handles result in a no-op refresh.
+	 */
+	readonly sdkLifecycle?: TransportLifecyclePort;
+	readonly subscriptionLifecycle?: TransportLifecyclePort;
 }
 
 export const VIEW_TYPE_AGENT = 'specorator-agent';
@@ -137,10 +148,10 @@ export class AgentSidepanelView extends ItemView {
 		// Subscribe to subsequent mutations so any change to `chatThreads`
 		// triggers the plugin's debounced flush.
 		const persisted = this.plugin.getInitialChatThreads();
-		const chatStore = useChatStore(this.pinia);
-		for (const record of persisted) chatStore.upsertThread(record);
-		chatStore.setActiveThreadId(mostRecentlyUsedThreadId(persisted));
-		chatStore.$subscribe((_mutation, state) => {
+		const threadsStore = useChatThreadsStore(this.pinia);
+		for (const record of persisted) threadsStore.upsertThread(record);
+		threadsStore.setActiveThreadId(mostRecentlyUsedThreadId(persisted));
+		threadsStore.$subscribe((_mutation, state) => {
 			this.plugin.scheduleChatThreadsPersistence(state.chatThreads);
 		});
 
@@ -244,9 +255,9 @@ export class AgentSidepanelView extends ItemView {
 	public _installPendingRefreshWatcher(): void {
 		if (this.pinia === null) return;
 		if (this._statusWatchStop !== null) return;
-		const chatStore = useChatStore(this.pinia);
+		const messagesStore = useMessagesStore(this.pinia);
 		this._statusWatchStop = watch(
-			() => chatStore.status,
+			() => messagesStore.status,
 			(next, prev) => {
 				if (prev === 'loading' && next !== 'loading' && this._pendingSettingsRefresh) {
 					this._pendingSettingsRefresh = false;
@@ -258,11 +269,15 @@ export class AgentSidepanelView extends ItemView {
 	}
 
 	private _applyTransportRefresh(): void {
-		void this.claudeCliPort.startup().then(() => {
-			this._refreshActivePort();
-		});
-		if (this._options !== null) {
-			void this._options.subscriptionAdapter.startup().then(() => {
+		const sdkLifecycle = this._options?.sdkLifecycle;
+		if (sdkLifecycle !== undefined) {
+			void sdkLifecycle.startup().then(() => {
+				this._refreshActivePort();
+			});
+		}
+		const subscriptionLifecycle = this._options?.subscriptionLifecycle;
+		if (subscriptionLifecycle !== undefined) {
+			void subscriptionLifecycle.startup().then(() => {
 				this._refreshActivePort();
 			});
 		}
@@ -291,7 +306,7 @@ export class AgentSidepanelView extends ItemView {
 	private _isChatLoading(): boolean {
 		if (this.pinia === null) return false;
 		const pinia = this.pinia;
-		const result = trySync(() => useChatStore(pinia).status === 'loading');
+		const result = trySync(() => useMessagesStore(pinia).status === 'loading');
 		return result.ok ? result.value : false;
 	}
 }

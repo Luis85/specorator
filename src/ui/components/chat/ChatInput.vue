@@ -9,6 +9,7 @@
  * Mention picker opens via `useMentionPicker.handleInput()`.
  */
 import { ref, onBeforeUnmount } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useVaultPort } from '@/ui/composables/useVaultPort';
 import { useMentionPicker } from '@/ui/composables/useMentionPicker';
 import type { MentionCandidate } from '@/application/chat/vaultFileSearch';
@@ -41,6 +42,7 @@ const textareaEl = ref<HTMLTextAreaElement | null>(null);
 const vaultPort = useVaultPort();
 const picker = useMentionPicker(vaultPort);
 const palette = useSlashPalette();
+const { t } = useI18n();
 
 defineExpose({ textareaEl, palette });
 
@@ -334,12 +336,12 @@ function onDropdownHover(index: number): void {
 				class="sp-chat__textarea"
 				:value="modelValue"
 				:readonly="disabled"
-				:aria-label="'Message'"
+				:aria-label="t('chat.inputAriaLabel')"
 				aria-multiline="true"
 				:aria-expanded="picker.open.value"
 				aria-autocomplete="list"
 				:aria-controls="picker.open.value ? 'mention-dropdown' : undefined"
-				placeholder="Ask anything about your work…"
+				:placeholder="t('chat.inputPlaceholder')"
 				rows="3"
 				data-testid="chat-input-textarea"
 				@input="handleInput"
@@ -362,12 +364,12 @@ function onDropdownHover(index: number): void {
 				type="button"
 				class="sp-btn sp-btn--primary sp-btn--md"
 				:disabled="disabled"
-				aria-label="Send message"
+				:aria-label="t('chat.sendAriaLabel')"
 				data-testid="chat-send-button"
 				@click="!disabled && !loading && emit('send')"
 			>
 				<span v-if="loading" class="sp-btn__spinner" aria-hidden="true" />
-				<span>{{ loading ? 'Asking…' : 'Ask' }}</span>
+				<span>{{ loading ? t('chat.sendLoading') : t('chat.sendIdle') }}</span>
 			</button>
 		</div>
 	</div>

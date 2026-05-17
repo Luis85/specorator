@@ -48,6 +48,7 @@ import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort'
 import type { LoggerPort } from '@/domain/ports/LoggerPort'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
+import { collectStream } from '@/application/chat/collectStream'
 
 // Module-under-test (created in T-ASM-011). Tests fail with
 // "Cannot find module '@/infrastructure/obsidian/ClaudeSubprocessAdapter'" until then.
@@ -432,7 +433,7 @@ describe('ClaudeSubprocessAdapter — shutdown() (REQ-CCS-017 family)', () => {
 
     // Kick off a streaming query whose response never arrives — registers a
     // streaming child in _streamingProc.
-    void adapter.query('hello', { resumeSessionId: undefined })
+    void collectStream(adapter.queryStream('hello', { resumeSessionId: undefined }))
     await Promise.resolve() // let spawn fire
     const streamingChild = spawn.lastChild()
 
@@ -472,7 +473,7 @@ describe('ClaudeSubprocessAdapter — query() unavailability (REQ-ASM-009)', () 
     })
     await adapter.startup()
 
-    const result = await adapter.query('hello')
+    const result = await collectStream(adapter.queryStream('hello'))
 
     expect(result.ok).toBe(false)
     if (!result.ok) {
@@ -497,7 +498,7 @@ describe('ClaudeSubprocessAdapter — query() happy path (REQ-ASM-029/030/031)',
     })
     await adapter.startup()
 
-    const promise = adapter.query('hello world')
+    const promise = collectStream(adapter.queryStream('hello world'))
     await Promise.resolve() // let the spawn settle
 
     const child = spawn.lastChild()
@@ -515,7 +516,7 @@ describe('ClaudeSubprocessAdapter — query() happy path (REQ-ASM-029/030/031)',
     await adapter.startup()
 
     const onSessionId = vi.fn()
-    const promise = adapter.query('hi', { onSessionId })
+    const promise = collectStream(adapter.queryStream('hi', { onSessionId }))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -540,7 +541,7 @@ describe('ClaudeSubprocessAdapter — query() happy path (REQ-ASM-029/030/031)',
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -563,7 +564,7 @@ describe('ClaudeSubprocessAdapter — query() happy path (REQ-ASM-029/030/031)',
     await adapter.startup()
 
     const onSessionId = vi.fn()
-    const promise = adapter.query('hi', { onSessionId })
+    const promise = collectStream(adapter.queryStream('hi', { onSessionId }))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -588,7 +589,7 @@ describe('ClaudeSubprocessAdapter — query() happy path (REQ-ASM-029/030/031)',
     const onSessionId = vi.fn(() => {
       throw new Error('caller bug')
     })
-    const promise = adapter.query('hi', { onSessionId })
+    const promise = collectStream(adapter.queryStream('hi', { onSessionId }))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -609,7 +610,7 @@ describe('ClaudeSubprocessAdapter — query() happy path (REQ-ASM-029/030/031)',
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -641,7 +642,7 @@ describe('ClaudeSubprocessAdapter — query() happy path (REQ-ASM-029/030/031)',
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -684,7 +685,7 @@ describe('ClaudeSubprocessAdapter — spawn-per-turn + --resume chaining (REQ-AS
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       resumeSessionId?: any,
     ) => {
-      const p = adapter.query(text, resumeSessionId ? { resumeSessionId } : undefined)
+      const p = collectStream(adapter.queryStream(text, resumeSessionId ? { resumeSessionId } : undefined))
       await Promise.resolve()
       const child = spawn.lastChild()
       spawn.emitStdout(
@@ -736,7 +737,7 @@ describe('ClaudeSubprocessAdapter — timeout (SPEC §4.4)', () => {
     })
     await adapter.startup()
 
-    const promise = adapter.query('hangs forever', { timeoutMs: 1_500 })
+    const promise = collectStream(adapter.queryStream('hangs forever', { timeoutMs: 1_500 }))
     await Promise.resolve() // let the spawn settle
 
     const child = spawn.lastChild()
@@ -772,7 +773,7 @@ describe('ClaudeSubprocessAdapter — spawn error (SPEC §4.4)', () => {
     })
     await adapter.startup()
 
-    const result = await adapter.query('hi')
+    const result = await collectStream(adapter.queryStream('hi'))
 
     expect(result.ok).toBe(false)
     if (!result.ok) {
@@ -786,7 +787,7 @@ describe('ClaudeSubprocessAdapter — spawn error (SPEC §4.4)', () => {
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -816,7 +817,7 @@ describe('ClaudeSubprocessAdapter — non-success exits (REQ-ASM-030, TEST-ASM-0
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -836,7 +837,7 @@ describe('ClaudeSubprocessAdapter — non-success exits (REQ-ASM-030, TEST-ASM-0
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -866,7 +867,7 @@ describe('ClaudeSubprocessAdapter — invalid NDJSON (SPEC §4.3)', () => {
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -900,11 +901,11 @@ describe('ClaudeSubprocessAdapter — resumeSessionId forwarding (REQ-ASM-035)',
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi', {
+    const promise = collectStream(adapter.queryStream('hi', {
       // SessionId is a branded string — cast at the test boundary only.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       resumeSessionId: 'abc-123' as any,
-    })
+    }))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -933,7 +934,7 @@ describe('ClaudeSubprocessAdapter — resumeSessionId forwarding (REQ-ASM-035)',
     })
 
     // Turn 1 — no prior session; capture via callback.
-    const p1 = adapter.query('msg-1', { onSessionId })
+    const p1 = collectStream(adapter.queryStream('msg-1', { onSessionId }))
     await Promise.resolve()
     const c1 = spawn.lastChild()
     spawn.emitStdout(c1, ndjson(systemInit('abc-123'), resultEvent('r-1')))
@@ -945,7 +946,7 @@ describe('ClaudeSubprocessAdapter — resumeSessionId forwarding (REQ-ASM-035)',
 
     // Turn 2 — thread the captured id back as resumeSessionId.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const p2 = adapter.query('msg-2', { resumeSessionId: captured as any })
+    const p2 = collectStream(adapter.queryStream('msg-2', { resumeSessionId: captured as any }))
     await Promise.resolve()
     const c2 = spawn.lastChild()
     spawn.emitStdout(c2, ndjson(systemInit('def-456'), resultEvent('r-2')))
@@ -964,7 +965,7 @@ describe('ClaudeSubprocessAdapter — resumeSessionId forwarding (REQ-ASM-035)',
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -989,7 +990,7 @@ describe('ClaudeSubprocessAdapter — systemPromptSuffix forwarding (REQ-ASM-013
     await adapter.startup()
 
     const suffix = 'You are operating on feature "demo" at stage "idea".'
-    const promise = adapter.query('hi', { systemPromptSuffix: suffix })
+    const promise = collectStream(adapter.queryStream('hi', { systemPromptSuffix: suffix }))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -1009,7 +1010,7 @@ describe('ClaudeSubprocessAdapter — systemPromptSuffix forwarding (REQ-ASM-013
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi', { systemPromptSuffix: '' })
+    const promise = collectStream(adapter.queryStream('hi', { systemPromptSuffix: '' }))
     await Promise.resolve()
 
     const child = spawn.lastChild()
@@ -1034,7 +1035,7 @@ describe('ClaudeSubprocessAdapter — argv invariants (REQ-ASM-006/027/028)', ()
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
     const child = spawn.lastChild()
     spawn.emitStdout(child, ndjson(systemInit('s'), resultEvent('ok')))
@@ -1052,7 +1053,7 @@ describe('ClaudeSubprocessAdapter — argv invariants (REQ-ASM-006/027/028)', ()
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
     const child = spawn.lastChild()
     spawn.emitStdout(child, ndjson(systemInit('s'), resultEvent('ok')))
@@ -1074,7 +1075,7 @@ describe('ClaudeSubprocessAdapter — argv invariants (REQ-ASM-006/027/028)', ()
     })
     await adapter.startup()
 
-    const promise = adapter.query('hi')
+    const promise = collectStream(adapter.queryStream('hi'))
     await Promise.resolve()
     const child = spawn.lastChild()
     spawn.emitStdout(child, ndjson(systemInit('s'), resultEvent('ok')))
@@ -1103,11 +1104,11 @@ describe('ClaudeSubprocessAdapter — ToS posture (NFR-ASM-004, ADR-0031)', () =
     })
     await adapter.startup()
 
-    const promise = adapter.query('hello', {
+    const promise = collectStream(adapter.queryStream('hello', {
       systemPromptSuffix: 'context',
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       resumeSessionId: 'sess-x' as any,
-    })
+    }))
     await Promise.resolve()
     const child = spawn.lastChild()
     spawn.emitStdout(child, ndjson(systemInit('sess-x'), resultEvent('ok')))
@@ -1133,7 +1134,7 @@ describe('ClaudeSubprocessAdapter — ToS posture (NFR-ASM-004, ADR-0031)', () =
     })
     await adapter.startup()
 
-    const promise = adapter.query('hello')
+    const promise = collectStream(adapter.queryStream('hello'))
     await Promise.resolve()
     const child = spawn.lastChild()
     spawn.emitStdout(child, ndjson(systemInit('s'), resultEvent('ok')))
@@ -1167,7 +1168,7 @@ describe('ClaudeSubprocessAdapter — log redaction (NFR-ASM-005, NFR-ASM-012)',
     await adapter.startup()
 
     const prompt = 'SECRET-USER-INTENT-DO-NOT-LOG'
-    const promise = adapter.query(prompt)
+    const promise = collectStream(adapter.queryStream(prompt))
     await Promise.resolve()
     const child = spawn.lastChild()
     spawn.emitStdout(child, ndjson(systemInit('s'), resultEvent('ok')))
@@ -1190,5 +1191,157 @@ describe('ClaudeSubprocessAdapter — log redaction (NFR-ASM-005, NFR-ASM-012)',
         expect(ctxJson).not.toContain(home)
       }
     }
+  })
+})
+
+// =============================================================================
+// 17. Testing-review F7 gaps — SIGKILL timing, cwd, NDJSON reassembly variants,
+//     oversized stdout buffer (perf-F-8). These are the deltas that WP-11
+//     introduces to close the testing-review subprocess-coverage finding.
+// =============================================================================
+
+describe('ClaudeSubprocessAdapter — F7 SIGKILL timing (Testing review F7)', () => {
+  it('SIGKILL fires SIGKILL_GRACE_MS after SIGTERM when child does not exit', async () => {
+    vi.useFakeTimers()
+    const { adapter, spawn } = makeAdapter({
+      resolver: makeResolver('/fake/bin/claude'),
+    })
+    await adapter.startup()
+
+    void collectStream(adapter.queryStream('hi', { timeoutMs: 1_500 }))
+    await Promise.resolve()
+    const child = spawn.lastChild()
+    // Override kill so SIGTERM does NOT mark the child killed.
+    child.kill = vi.fn()
+    child.killed = false
+
+    // Trigger shutdown to invoke the kill ladder.
+    adapter.shutdown()
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM')
+    expect(child.kill).toHaveBeenCalledTimes(1)
+
+    // Cross the 200 ms grace window — SIGKILL must follow because the child
+    // never set `killed = true`.
+    vi.advanceTimersByTime(201)
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expect(child.kill).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('ClaudeSubprocessAdapter — F7 cwd (Testing review F7)', () => {
+  it('spawns with no cwd override (defaults to the Node process cwd)', async () => {
+    const { adapter, spawn } = makeAdapter({
+      resolver: makeResolver('/fake/bin/claude'),
+    })
+    await adapter.startup()
+
+    const promise = collectStream(adapter.queryStream('hi'))
+    await Promise.resolve()
+    const child = spawn.lastChild()
+    spawn.emitStdout(child, ndjson(systemInit('s'), resultEvent('ok')))
+    spawn.closeWith(child, 0)
+    await promise
+
+    // The subscription transport does NOT override cwd — spawn options must
+    // either omit `cwd` or carry an `undefined` value. A regression that
+    // flipped this to e.g. the Obsidian binary path would be caught here.
+    const opts = spawn.calls[0].options
+    if (opts && 'cwd' in opts) {
+      expect(opts.cwd).toBeUndefined()
+    }
+  })
+})
+
+describe('ClaudeSubprocessAdapter — F7 NDJSON reassembly (Testing review F7)', () => {
+  it('reassembles a 64 KiB stdout line streamed in 8 KiB fragments', async () => {
+    const { adapter, spawn } = makeAdapter({
+      resolver: makeResolver('/fake/bin/claude'),
+    })
+    await adapter.startup()
+
+    const promise = collectStream(adapter.queryStream('hi'))
+    await Promise.resolve()
+    const child = spawn.lastChild()
+
+    // Build a 64 KiB result line, no embedded newlines.
+    const longResult = 'x'.repeat(64 * 1024)
+    const fullLine = JSON.stringify(resultEvent(longResult)) + '\n'
+
+    // Pre-emit the system/init line so the session-id capture lands first.
+    spawn.emitStdout(child, JSON.stringify(systemInit('sess-big')) + '\n')
+    // Stream the giant result line as eight 8 KiB fragments (none contain '\n').
+    const chunkSize = Math.floor((fullLine.length - 1) / 8)
+    for (let i = 0; i < 8; i += 1) {
+      const start = i * chunkSize
+      const end = i === 7 ? fullLine.length - 1 : start + chunkSize
+      spawn.emitStdout(child, fullLine.slice(start, end))
+    }
+    // Trailing newline triggers the final flush.
+    spawn.emitStdout(child, '\n')
+    spawn.closeWith(child, 0)
+
+    const result = await promise
+    expect(result.ok).toBe(true)
+  })
+
+  it('flushes immediately when a fragment ends exactly on a newline', async () => {
+    const { adapter, spawn } = makeAdapter({
+      resolver: makeResolver('/fake/bin/claude'),
+    })
+    await adapter.startup()
+
+    const promise = collectStream(adapter.queryStream('hi'))
+    await Promise.resolve()
+    const child = spawn.lastChild()
+
+    // Split the buffer so the first chunk ends exactly on '\n'.
+    const initLine = JSON.stringify(systemInit('s-exact')) + '\n'
+    const resultLine = JSON.stringify(resultEvent('ok')) + '\n'
+    spawn.emitStdout(child, initLine) // ends exactly on \n
+    spawn.emitStdout(child, resultLine)
+    spawn.closeWith(child, 0)
+
+    const result = await promise
+    expect(result.ok).toBe(true)
+  })
+})
+
+describe('ClaudeSubprocessAdapter — F-8 stdout-buffer overflow (Perf review F-8)', () => {
+  it('oversized stdout buffer triggers an error delta + SIGTERM', async () => {
+    const { adapter, spawn, logger } = makeAdapter({
+      resolver: makeResolver('/fake/bin/claude'),
+    })
+    await adapter.startup()
+
+    const promise = collectStream(adapter.queryStream('hi'))
+    await Promise.resolve()
+    const child = spawn.lastChild()
+
+    // Stream 5 MiB of \n-less stdout — past the 4 MiB cap.
+    // Use a single emit so we trigger the overflow in one pump.
+    spawn.emitStdout(child, 'x'.repeat(5 * 1024 * 1024))
+
+    // The adapter should have killed the child as part of the overflow handler.
+    expect(child.kill).toHaveBeenCalled()
+
+    // Close the child so the promise can settle deterministically.
+    queueMicrotask(() => {
+      child.emit('close', null, 'SIGTERM')
+    })
+
+    const result = await promise
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error.errorCode).toBe('QUERY_FAILED')
+    }
+
+    // A redacted overflow telemetry warn must have fired.
+    const overflowEntry = logger.entries.find(
+      (e) => e.message === 'subscription.stdout.overflow',
+    )
+    expect(overflowEntry).toBeDefined()
+    // bufferBytes is a number; never the prompt or binary path.
+    const ctx = overflowEntry!.context ?? {}
+    expect(typeof (ctx as { bufferBytes?: unknown }).bufferBytes).toBe('number')
   })
 })

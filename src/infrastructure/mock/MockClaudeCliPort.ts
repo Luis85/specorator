@@ -5,8 +5,7 @@ import type {
 	StreamDelta,
 } from '@/domain/ports/ClaudeCliPort';
 import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort';
-import type { Result } from '@/domain/shared/Result';
-import { ok, err } from '@/domain/shared/Result';
+import type { TransportLifecyclePort } from '@/domain/ports/TransportLifecyclePort';
 import type { SessionId } from '@/domain/chat/SessionId';
 
 function sleep(ms: number): Promise<void> {
@@ -45,43 +44,47 @@ function interruptibleSleep(ms: number, signal: AbortSignal | undefined): Promis
 }
 
 /**
- * Stub implementation of ClaudeCliPort for use in dev mode and unit tests.
- * Satisfies REQ-CCS-022, NFR-CCS-004, SPEC-CCS-001 §6.
+ * Stub implementation of ClaudeCliPort + TransportLifecyclePort for use in
+ * dev mode and unit tests. Satisfies REQ-CCS-022, NFR-CCS-004, SPEC-CCS-001 §6.
  *
  * `available` defaults to false so the standalone browser UI (npm run dev)
  * renders the degraded state without a real subprocess.
  */
-export class MockClaudeCliPort implements ClaudeCliPort {
+export class MockClaudeCliPort implements ClaudeCliPort, TransportLifecyclePort {
 	/**
-	 * Controls the return value of isAvailable() and the no-op branch of query().
+	 * Controls the return value of isAvailable() and the no-op branch of queryStream().
 	 * Default: false — the standalone browser UI and unit tests start unavailable.
 	 */
 	available = false;
 
 	/**
-	 * Text returned from query() when available === true and queryError === null.
+	 * Text returned from queryStream() when available === true and queryError === null.
 	 */
 	cannedResponse = 'Mock response from MockClaudeCliPort.';
 
 	/**
-	 * If non-null, query() returns this error instead of cannedResponse.
+	 * If non-null, queryStream() emits this error instead of cannedResponse.
 	 */
 	queryError: ClaudeCliError | null = null;
 
 	/**
-	 * Artificial delay for query(). Unit: milliseconds. Default: 0.
+	 * Artificial delay for queryStream(). Unit: milliseconds. Default: 0.
 	 */
 	delayMs = 0;
 
 	/**
-	 * Append-only log of every prompt string passed to query().
+	 * Append-only log of every prompt string passed to queryStream().
+	 *
+	 * Retained as `queryLog` (not `streamLog`) so the established assertion
+	 * vocabulary in UI tests survives WP-12 — the underlying method is now
+	 * `queryStream` but the captured prompt history is the same shape.
 	 */
 	readonly queryLog: string[] = [];
 
 	/**
-	 * Append-only log of every options object passed to query(). Parallel to
-	 * {@link queryLog}: `optionsLog[i]` is the options for prompt `queryLog[i]`.
-	 * `undefined` is preserved as-is (caller passed no options).
+	 * Append-only log of every options object passed to queryStream().
+	 * Parallel to {@link queryLog}: `optionsLog[i]` is the options for
+	 * prompt `queryLog[i]`. `undefined` is preserved as-is.
 	 *
 	 * Added for T-ASM-040 so UI tests can assert the `systemPromptSuffix`
 	 * threaded through by `ChatSidebar.handleSend` (REQ-ASM-013, REQ-ASM-018).
@@ -98,26 +101,6 @@ export class MockClaudeCliPort implements ClaudeCliPort {
 
 	async isAvailable(): Promise<boolean> {
 		return this.available;
-	}
-
-	async query(
-		prompt: string,
-		options?: ClaudeCliQueryOptions,
-	): Promise<Result<string, ClaudeCliError>> {
-		this.queryLog.push(prompt);
-		this.optionsLog.push(options);
-
-		if (!this.available) {
-			return err(new ClaudeCliError('NOT_INSTALLED', 'MockClaudeCliPort: not available'));
-		}
-
-		if (this.delayMs > 0) await sleep(this.delayMs);
-
-		if (this.queryError !== null) {
-			return err(this.queryError);
-		}
-
-		return ok(this.cannedResponse);
 	}
 
 	/**
@@ -176,11 +159,9 @@ export class MockClaudeCliPort implements ClaudeCliPort {
 	async *queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
 		this.streamLog.push(prompt);
 		this.streamOptionsLog.push(options);
-		// PR-ASV-2-ui: `ChatSidebar.handleSend` switched from `query()` to
-		// `queryStream()`. Existing tests assert against `queryLog` /
-		// `optionsLog` (the legacy non-streaming log) — mirror to those
-		// arrays so backward-compatible inspection points keep working
-		// without forcing 10+ tests to migrate to `streamLog`.
+		// Mirror to the canonical `queryLog` / `optionsLog` so the established
+		// assertion vocabulary (older tests / `collectStream` callers) keeps
+		// working without migration.
 		this.queryLog.push(prompt);
 		this.optionsLog.push(options);
 

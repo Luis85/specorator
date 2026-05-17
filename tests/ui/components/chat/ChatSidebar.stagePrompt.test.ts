@@ -24,7 +24,7 @@ import {
 	SETTINGS_PORT,
 	LOGGER_PORT,
 } from '@/infrastructure/bridge/ports'
-import { useChatStore } from '@/ui/stores/chatStore'
+import { useMessagesStore } from '@/ui/stores/messagesStore'
 import { ChatSidebarPO } from './ChatSidebar.po'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
@@ -105,11 +105,11 @@ async function mountSidebar(args: {
 	})
 
 	await flushPromises()
-	const store = useChatStore(pinia)
+	const store = useMessagesStore(pinia)
 	return { wrapper, port, bridge, po: new ChatSidebarPO(wrapper), store }
 }
 
-async function send(store: ReturnType<typeof useChatStore>, po: ChatSidebarPO, text: string) {
+async function send(store: ReturnType<typeof useMessagesStore>, po: ChatSidebarPO, text: string) {
 	store.setUserText(text)
 	await flushPromises()
 	await po.clickSend()

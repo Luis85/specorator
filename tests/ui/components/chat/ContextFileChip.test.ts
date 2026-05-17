@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ContextFileChip from '@/ui/components/chat/ContextFileChip.vue'
-import type { ContextFileEntry } from '@/ui/stores/chatStore'
+import type { ContextFileEntry } from '@/ui/stores/messagesStore'
 import { ContextFileChipPO } from './ContextFileChip.po'
 
 function makeAutoFile(): ContextFileEntry {

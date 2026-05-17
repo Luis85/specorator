@@ -34,7 +34,9 @@ export class ClaudeCliError extends Error {
 }
 
 /**
- * Options forwarded to the underlying SDK call. All fields are optional.
+ * Options forwarded to the underlying SDK / subprocess call. All fields are
+ * optional. Shared by `queryStream` (free-text streaming) and `runStructured`
+ * (structured-output, subscription transport only).
  * Satisfies REQ-CCS-021.
  */
 export interface ClaudeCliQueryOptions {
@@ -73,7 +75,7 @@ export interface ClaudeCliQueryOptions {
 	readonly resumeSessionId?: SessionId;
 
 	/**
-	 * Optional callback invoked exactly once per `query()` call the first time a
+	 * Optional callback invoked exactly once per turn the first time a
 	 * non-empty `session_id` is captured from a `system/init` event on the
 	 * stream-json wire (REQ-ASM-031). The subscription transport invokes this
 	 * synchronously from inside the NDJSON event handler so the caller can
@@ -86,11 +88,9 @@ export interface ClaudeCliQueryOptions {
 }
 
 /**
- * Options for the streaming variant `queryStream()` introduced in Increment 2
- * of `specs/agent-sidepanel-v2/` (REQ-ASV-053). Superset of
- * `ClaudeCliQueryOptions` adding an `AbortSignal` so the UI's stop-generation
- * control can cancel an in-flight turn. The legacy `query()` method
- * intentionally lacks this; cancellation is the differentiator.
+ * Options for `queryStream()` — superset of `ClaudeCliQueryOptions` adding
+ * an `AbortSignal` so the UI's stop-generation control can cancel an
+ * in-flight turn.
  */
 export interface ClaudeCliStreamOptions extends ClaudeCliQueryOptions {
 	/**
@@ -100,9 +100,9 @@ export interface ClaudeCliStreamOptions extends ClaudeCliQueryOptions {
 	 * (or the existing `{ type: 'done' }` if the abort raced a successful
 	 * completion). The adapter MUST NOT throw on abort.
 	 *
-	 * Optional so unit tests and the legacy free-text call sites can omit it.
-	 * Production wiring threads a fresh `AbortController.signal` per turn
-	 * from `ChatSidebar`'s Stop button click handler.
+	 * Optional so unit tests can omit it. Production wiring threads a fresh
+	 * `AbortController.signal` per turn from `ChatSidebar`'s Stop button
+	 * click handler.
 	 */
 	readonly signal?: AbortSignal;
 }
@@ -122,9 +122,8 @@ export interface ClaudeCliStreamOptions extends ClaudeCliQueryOptions {
  *   - `error`       — terminal failure. No further deltas arrive after this.
  *
  * `done` and `error` are mutually exclusive: exactly one of the two ends
- * each stream. The SDK adapter currently emits final `text` + `done`;
- * future increments may add `tool-use` / `thinking` variants under the
- * same union — additive only.
+ * each stream. Future increments may add `tool-use` / `thinking` variants
+ * under the same union — additive only.
  */
 export type StreamDelta =
 	| { readonly type: 'text'; readonly text: string }
@@ -187,19 +186,59 @@ export type StreamDelta =
 	| { readonly type: 'error'; readonly error: ClaudeCliError };
 
 /**
- * Narrow port for the Claude CLI subprocess adapter (ADR-008).
- * The interface file must not import from 'obsidian' or '@anthropic-ai/claude-agent-sdk'.
- * Satisfies REQ-CCS-021.
+ * Raw response from a structured-output Claude CLI invocation
+ * (`claude -p '<prompt>' --output-format json --json-schema '<schema>'`).
+ *
+ * `result` is the model's free-text payload; `structured_output` is the
+ * schema-validated JSON object (or `unknown` for the application-layer
+ * parser to validate via Zod). Both fields are populated by the adapter
+ * from a single `JSON.parse` of the subprocess's full stdout
+ * (SPEC-ASM-001 §4.2 `runStructured` row).
+ *
+ * Moved onto the port file in WP-12 — previously lived in the application
+ * layer's `queryStructured.ts` sidecar.
+ */
+export interface StructuredCliRawResult {
+	readonly result: string;
+	readonly structured_output: unknown;
+}
+
+/**
+ * Options forwarded to `runStructured()`. Mirror of the relevant fields from
+ * `ClaudeCliQueryOptions`; kept as a separate interface so the structured
+ * surface can evolve without widening the free-text streaming surface.
+ *
+ * Moved onto the port file in WP-12.
+ */
+export interface StructuredCliCallOptions {
+	readonly systemPromptSuffix?: string;
+	readonly resumeSessionId?: string;
+	readonly timeoutMs?: number;
+	/**
+	 * Optional caller-supplied callback invoked exactly once when the
+	 * structured call's response envelope yields a non-empty `session_id`
+	 * (REQ-ASM-031, REQ-ASM-046). Mirrors the free-text streaming surface's
+	 * `onSessionId` contract.
+	 */
+	readonly onSessionId?: (sessionId: SessionId) => void;
+}
+
+/**
+ * Narrow port for the Claude CLI adapters (ADR-008).
+ *
+ * The interface file must not import from 'obsidian' or
+ * '@anthropic-ai/claude-agent-sdk'.
+ *
+ * Reshaped in WP-12 (Arch review #3) to a single canonical streaming method
+ * plus the optional structured-output method that subscription-capable
+ * adapters expose. Lifecycle (`startup` / `shutdown`) lives on the sibling
+ * `TransportLifecyclePort`; the free-text non-streaming `query()` method
+ * is gone — non-streaming callers funnel `queryStream` through
+ * `collectStream()` in `src/application/chat/collectStream.ts`.
+ *
+ * Satisfies REQ-CCS-021, REQ-ASM-001.
  */
 export interface ClaudeCliPort {
-	/**
-	 * Send a fully-assembled prompt string to Claude and return the full text response.
-	 * Never throws. Returns Result<string, ClaudeCliError>.
-	 * The promise resolves when the response arrives or when an error/timeout occurs.
-	 * Satisfies REQ-CCS-013, REQ-CCS-016, NFR-CCS-003.
-	 */
-	query(prompt: string, options?: ClaudeCliQueryOptions): Promise<Result<string, ClaudeCliError>>;
-
 	/**
 	 * Returns true if the adapter is ready to accept queries.
 	 * Returns false for all degraded conditions: missing API key, startup failure,
@@ -209,21 +248,6 @@ export interface ClaudeCliPort {
 	 * Satisfies REQ-CCS-018, REQ-CCS-019, REQ-CCS-022.
 	 */
 	isAvailable(): Promise<boolean>;
-
-	/**
-	 * Pre-warm the subprocess. Called from onload() before the first user interaction.
-	 * Must not throw; log errors internally and return.
-	 * Satisfies REQ-CCS-003, NFR-CCS-002.
-	 */
-	startup(): Promise<void>;
-
-	/**
-	 * Terminate the subprocess. Called from onunload() which is synchronous.
-	 * Must be synchronous (fire-and-forget is acceptable).
-	 * Must not throw.
-	 * Satisfies REQ-CCS-017, NFR-CCS-007.
-	 */
-	shutdown(): void;
 
 	/**
 	 * Stream a fully-assembled prompt to Claude and yield deltas as they
@@ -239,85 +263,34 @@ export interface ClaudeCliPort {
 	 *   - close the iterable after the terminal delta — no further deltas;
 	 *   - never throw; surface every error path through `error`.
 	 *
-	 * Introduced for IDEA-ASV-001 Increment 2 (streaming responses + stop
-	 * generation). The legacy `query()` method remains for call sites that
-	 * don't need streaming — both methods coexist and may be implemented
-	 * independently.
+	 * Sole canonical streaming method (WP-12). Non-streaming consumers use
+	 * `collectStream()` from `@/application/chat/collectStream` to converge
+	 * the stream to a `Result<string, ClaudeCliError>`.
 	 */
 	queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta>;
-}
 
-/**
- * Build a `queryStream`-shaped async iterable from a non-streaming `query()`
- * function. Emits the resolved text as a single `text` delta + `done`, or a
- * single `error` delta on failure. Useful for ports that don't (yet) have a
- * real streaming pipeline — test fixtures, the standalone-web
- * `LocalStorageBridge`, and the bridge stubs on the real adapters in
- * PR-ASV-2-port.
- *
- * Honours `options.signal` in two phases:
- *   1. Pre-flight: if the signal is already aborted, yield an error delta
- *      without invoking `query` at all.
- *   2. Mid-flight: while `query()` is in flight, listen for an abort and
- *      race the result against the abort event. On abort, yield the error
- *      delta and return immediately — the underlying `query()` call is
- *      orphaned (it cannot be cancelled because the legacy contract has no
- *      signal parameter), but the iterable's contract is honoured.
- *
- * Codex P2 on PR #370: the original implementation only checked pre-flight,
- * which broke cancellation semantics for stub-delegating adapters.
- */
-export async function* streamFromQuery(
-	query: (
+	/**
+	 * Structured-output one-shot for subscription-capable adapters.
+	 *
+	 * Optional: the SDK adapter and the bridge / degraded sentinels do not
+	 * expose it (the `?` makes calling it a `typeof port.runStructured === 'function'`
+	 * narrowing site). The application-layer `queryStructured()` wrapper
+	 * performs that narrowing — call sites never reach for `instanceof`
+	 * (which would force a domain ⇄ infrastructure import).
+	 *
+	 * Folded onto the port in WP-12; previously lived behind the
+	 * `SubscriptionCapable` structural sidecar in
+	 * `application/chat/queryStructured.ts`. The new shape is narrower
+	 * *per responsibility* — there is one streaming port and one lifecycle
+	 * port, not one port with two unrelated halves.
+	 *
+	 * Never throws. Returns `Result<StructuredCliRawResult, ClaudeCliError>`;
+	 * envelope parsing happens in the application layer.
+	 *
+	 * Satisfies REQ-ASM-021, REQ-ASM-049.
+	 */
+	runStructured?(
 		prompt: string,
-		options?: ClaudeCliQueryOptions,
-	) => Promise<Result<string, ClaudeCliError>>,
-	prompt: string,
-	options?: ClaudeCliStreamOptions,
-): AsyncIterable<StreamDelta> {
-	const abortDelta = (): StreamDelta => ({
-		type: 'error',
-		error: new ClaudeCliError('QUERY_FAILED', 'Request was aborted'),
-	});
-
-	if (options?.signal?.aborted === true) {
-		yield abortDelta();
-		return;
-	}
-
-	const queryPromise = query(prompt, options);
-	const signal = options?.signal;
-	if (signal !== undefined) {
-		const ABORTED = Symbol('aborted');
-		const abortPromise = new Promise<typeof ABORTED>((resolve) => {
-			signal.addEventListener(
-				'abort',
-				() => {
-					resolve(ABORTED);
-				},
-				{ once: true },
-			);
-		});
-		const winner = await Promise.race([queryPromise, abortPromise]);
-		if (winner === ABORTED) {
-			yield abortDelta();
-			return;
-		}
-		const result = winner;
-		if (!result.ok) {
-			yield { type: 'error', error: result.error };
-			return;
-		}
-		yield { type: 'text', text: result.value };
-		yield { type: 'done' };
-		return;
-	}
-
-	const result = await queryPromise;
-	if (!result.ok) {
-		yield { type: 'error', error: result.error };
-		return;
-	}
-	yield { type: 'text', text: result.value };
-	yield { type: 'done' };
+		options: StructuredCliCallOptions,
+	): Promise<Result<StructuredCliRawResult, ClaudeCliError>>;
 }

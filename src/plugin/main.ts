@@ -29,12 +29,13 @@ import { ClaudeBinaryResolver, type SpawnFn as ResolverSpawnFn } from '@/infrast
 import { degradedClaudeCliPort } from '@/infrastructure/bridge/degradedClaudeCliPort'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { FeedbackService } from '@/application/shared/FeedbackService'
+import { tryAsync } from '@/domain/shared/tryAsync'
 import { PluginCore } from '@/core/plugin-core'
 import { ALL_MODULES, type ModuleDescriptor } from '@/modules'
 import { i18nMerge, i18nTranslate, setLocale, type SupportedLocale } from '@/ui/i18n'
 import type { SecretStorePort, TranslationPort } from '@/domain/ports'
 import { SECRET_ID_ANTHROPIC } from '@/domain/ports'
-import { useChatStore } from '@/ui/stores/chatStore'
+import { useMessagesStore } from '@/ui/stores/messagesStore'
 
 export default class SpecoratorPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS }
@@ -210,6 +211,11 @@ export default class SpecoratorPlugin extends Plugin {
       const view = new SpecoratorView(leaf, this, this._claudeCliAdapter!, {
         subscriptionAdapter: this._subscriptionAdapter!,
         confirmModalAdapter: this._confirmModalAdapter!,
+        // WP-12: lifecycle is its own port; pass the adapter instances under
+        // their `TransportLifecyclePort` contract so the view can `startup()`
+        // them on settings bumps without depending on `ClaudeCliPort`.
+        sdkLifecycle: this._claudeCliAdapter!,
+        subscriptionLifecycle: this._subscriptionAdapter!,
         selectTransport: (settings) =>
           selectTransport(settings, {
             sdkAdapter: this._claudeCliAdapter!,
@@ -237,6 +243,8 @@ export default class SpecoratorPlugin extends Plugin {
       const view = new AgentSidepanelView(leaf, this, this._claudeCliAdapter!, {
         subscriptionAdapter: this._subscriptionAdapter!,
         confirmModalAdapter: this._confirmModalAdapter!,
+        sdkLifecycle: this._claudeCliAdapter!,
+        subscriptionLifecycle: this._subscriptionAdapter!,
         selectTransport: (settings) =>
           selectTransport(settings, {
             sdkAdapter: this._claudeCliAdapter!,
@@ -312,8 +320,8 @@ export default class SpecoratorPlugin extends Plugin {
             .onClick(() => {
               void this.activateAgentSidepanel().then(() => {
                 if (this._agentSidepanelView?.pinia) {
-                  const store = useChatStore(this._agentSidepanelView.pinia)
-                  store.addContextFile({ path: file.path, label: file.name, isAuto: false })
+                  const messagesStore = useMessagesStore(this._agentSidepanelView.pinia)
+                  messagesStore.addContextFile({ path: file.path, label: file.name, isAuto: false })
                 }
               })
             })
@@ -326,11 +334,11 @@ export default class SpecoratorPlugin extends Plugin {
       this.app.workspace.on('active-leaf-change', () => {
         const activeFile = this.app.workspace.getActiveFile()
         if (this._agentSidepanelView?.pinia) {
-          const store = useChatStore(this._agentSidepanelView.pinia)
+          const messagesStore = useMessagesStore(this._agentSidepanelView.pinia)
           if (activeFile) {
-            store.setActiveFile({ path: activeFile.path, label: activeFile.name, isAuto: true })
+            messagesStore.setActiveFile({ path: activeFile.path, label: activeFile.name, isAuto: true })
           } else {
-            store.setActiveFile(null)
+            messagesStore.setActiveFile(null)
           }
         }
       }),
@@ -451,12 +459,15 @@ export default class SpecoratorPlugin extends Plugin {
    * stored Anthropic key is loaded into the cache. On mobile / older
    * desktop builds `available === false` and the cache stays empty — chat
    * falls back to degraded mode (see settings tab).
+   *
+   * Codex P1 on PR #393: keychain reads can reject (locked keychain, OS
+   * denial, transient platform error). Mirror the `setSecret` wrap and
+   * degrade to an empty cache on rejection so plugin startup never aborts
+   * for a transient OS-keychain failure.
    */
   private async _initializeSecretStore(): Promise<void> {
     this.secretStore = new ObsidianSecretStoreAdapter(this.app)
-    this._apiKeyCache = this.secretStore.available
-      ? ((await this.secretStore.getSecret(SECRET_ID_ANTHROPIC)) ?? '')
-      : ''
+    this._apiKeyCache = await this._readSecretSafe(this.secretStore)
   }
 
   /**
@@ -477,11 +488,25 @@ export default class SpecoratorPlugin extends Plugin {
    */
   async refreshApiKeyCache(): Promise<void> {
     if (this.secretStore === null) return
-    this._apiKeyCache = this.secretStore.available
-      ? ((await this.secretStore.getSecret(SECRET_ID_ANTHROPIC)) ?? '')
-      : ''
+    this._apiKeyCache = await this._readSecretSafe(this.secretStore)
     this._specoratorView?.bumpSettingsVersion()
     this._agentSidepanelView?.bumpSettingsVersion()
+  }
+
+  /**
+   * Read the Anthropic key from the secret store with defensive handling.
+   * Codex P1 on PR #393: keychain reads can fail (locked keychain, OS
+   * denial, transient platform error) and must not crash the plugin —
+   * degrading to "no key" matches the unavailable-store branch.
+   */
+  private async _readSecretSafe(secretStore: SecretStorePort): Promise<string> {
+    if (!secretStore.available) return ''
+    const outcome = await tryAsync(() => secretStore.getSecret(SECRET_ID_ANTHROPIC))
+    if (!outcome.ok) {
+      this.bridge?.warn('main.secretStorage.read.failed', { error: outcome.error })
+      return ''
+    }
+    return outcome.value ?? ''
   }
 
   /**

@@ -8,12 +8,25 @@ import { nextTick } from 'vue';
 import InlinePlanApprovalCard from '@/ui/components/agent/InlinePlanApprovalCard.vue';
 import { i18n } from '@/ui/i18n';
 
-function mountCard(props: { planMarkdown?: string; allowedPrompts?: readonly string[] } = {}) {
+function mountCard(
+	props: {
+		planMarkdown?: string;
+		allowedPrompts?: readonly string[];
+		/**
+		 * UX #12 (WP-8). Tests default to `false` (legacy auto-cancel on
+		 * unmount) so the existing keyboard/click assertions keep their
+		 * semantics. Opt-in tests for the persistence path pass `true` to
+		 * exercise the new "unmount = transient hide" behaviour.
+		 */
+		persistOnUnmount?: boolean;
+	} = {},
+) {
 	return mount(InlinePlanApprovalCard, {
 		global: { plugins: [i18n] },
 		props: {
 			planMarkdown: props.planMarkdown ?? 'Step 1: do thing.\nStep 2: do other thing.',
 			allowedPrompts: props.allowedPrompts,
+			persistOnUnmount: props.persistOnUnmount ?? false,
 		},
 	});
 }
@@ -130,5 +143,37 @@ describe('InlinePlanApprovalCard', () => {
 		const w = mountCard();
 		w.unmount();
 		expect(w.emitted('decide')?.[0]).toEqual([{ type: 'cancel' }]);
+	});
+
+	describe('UX #12 (WP-8) — persistOnUnmount=true treats unmount as transient hide', () => {
+		it('emits pending-changed(true) on mount', () => {
+			const w = mountCard({ persistOnUnmount: true });
+			expect(w.emitted('pending-changed')?.[0]).toEqual([true]);
+		});
+
+		it('does NOT emit decide on unmount when persistOnUnmount=true', () => {
+			const w = mountCard({ persistOnUnmount: true });
+			w.unmount();
+			expect(w.emitted('decide')).toBeUndefined();
+		});
+
+		it('emits pending-changed(false) after a real decision', async () => {
+			const w = mountCard({ persistOnUnmount: true });
+			await w.find('[data-testid="agent-plan-approval-row-implement"]').trigger('click');
+			const events = w.emitted('pending-changed')!;
+			expect(events[events.length - 1]).toEqual([false]);
+		});
+	});
+
+	describe('UX #19 (WP-8) — plan body renders through MarkdownBlock', () => {
+		it('renders the plan markdown via MarkdownBlock instead of a raw <pre>', () => {
+			const w = mountCard({ planMarkdown: 'Step **one** is bold.' });
+			const plan = w.find('[data-testid="agent-plan-approval-plan"]');
+			expect(plan.exists()).toBe(true);
+			// MarkdownBlock emits the formatted HTML; bold markdown should
+			// render as a <strong> element.
+			expect(plan.find('strong').exists()).toBe(true);
+			expect(plan.find('strong').text()).toBe('one');
+		});
 	});
 });

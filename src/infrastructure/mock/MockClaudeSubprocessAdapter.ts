@@ -18,19 +18,18 @@
  * raw `setTimeout` used to honour `delayMs` for synthetic latency.
  */
 import type { CreateFileEnvelope } from '@/application/chat/createFileEnvelopeSchema';
-import type {
-	StructuredCliCallOptions,
-	StructuredCliRawResult,
-} from '@/application/chat/queryStructured';
 import type { SessionId } from '@/domain/chat/SessionId';
 import type {
 	ClaudeCliPort,
 	ClaudeCliQueryOptions,
 	ClaudeCliStreamOptions,
 	StreamDelta,
-	ClaudeCliError,
+	StructuredCliCallOptions,
+	StructuredCliRawResult,
 } from '@/domain/ports/ClaudeCliPort';
-import { streamFromQuery } from '@/domain/ports/ClaudeCliPort';
+import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort';
+// `ClaudeCliQueryOptions` retained for the `_recordOptions` helper signature.
+import type { TransportLifecyclePort } from '@/domain/ports/TransportLifecyclePort';
 import type { Result } from '@/domain/shared/Result';
 import { err, ok } from '@/domain/shared/Result';
 
@@ -62,12 +61,12 @@ interface RecordedQueryOptions {
  * Field-driven mock subscription adapter. Every behaviour is configurable
  * through a public field — no constructor arguments, no I/O.
  */
-export class MockClaudeSubprocessAdapter implements ClaudeCliPort {
+export class MockClaudeSubprocessAdapter implements ClaudeCliPort, TransportLifecyclePort {
 	/**
-	 * Structural discriminator for `selectTransport()` / `isSubscriptionCapable()`
-	 * narrowing (SPEC-ASM-001 §2.9). Declared here so PR-ASM-1 ships a
-	 * complete mock without waiting on the `SubscriptionCapable` interface
-	 * landing in PR-ASM-2.
+	 * Structural discriminator for `selectTransport()`. Retained as a useful
+	 * tag even after WP-12 deleted the `isSubscriptionCapable` guard — the
+	 * application layer narrows via `typeof port.runStructured === 'function'`
+	 * now, but the selector still keys off `kind`.
 	 */
 	public readonly kind = 'subscription' as const;
 
@@ -162,54 +161,94 @@ export class MockClaudeSubprocessAdapter implements ClaudeCliPort {
 	}
 
 	/**
-	 * Records the prompt and options, optionally waits `delayMs`, then resolves
-	 * with `cannedResponse` (or `queryError` if set). Never throws.
+	 * Streaming-canonical method (WP-12). Records the prompt/options, honours
+	 * `delayMs` interruptibly against `options.signal`, fires the optional
+	 * `onSessionId` callback once with `cannedSessionId`, then yields the
+	 * configured response as `text` + `done` (or `error` when `queryError`
+	 * is set, or `error` on abort).
+	 *
+	 * Replaces the previous `streamFromQuery`-delegating implementation — that
+	 * helper was deleted in WP-12 along with the `query()` method it wrapped.
 	 */
-	async query(
+	async *queryStream(
 		prompt: string,
-		options?: ClaudeCliQueryOptions,
-	): Promise<Result<string, ClaudeCliError>> {
+		options?: ClaudeCliStreamOptions,
+	): AsyncIterable<StreamDelta> {
 		this.queryLog.push(prompt);
 		this._recordOptions(options);
 
-		// Mirror the real adapter's REQ-ASM-031 contract: invoke onSessionId once
-		// with `cannedSessionId` so tests exercising the capture path see the
-		// same observable as production.
-		if (options?.onSessionId !== undefined && this.cannedSessionId !== null) {
+		const signal = options?.signal;
+		if (signal?.aborted === true) {
+			yield MockClaudeSubprocessAdapter._abortDelta();
+			return;
+		}
+
+		yield* this._yieldSessionIdIfConfigured(options);
+
+		if (this.delayMs > 0) {
+			const aborted = await this._waitOrAbort(signal);
+			if (aborted) {
+				yield MockClaudeSubprocessAdapter._abortDelta();
+				return;
+			}
+		}
+
+		if (this.queryError !== null) {
+			yield { type: 'error', error: this.queryError };
+			return;
+		}
+
+		if (this.cannedResponse.length > 0) {
+			yield { type: 'text', text: this.cannedResponse };
+		}
+		yield { type: 'done' };
+	}
+
+	private static _abortDelta(): StreamDelta {
+		return {
+			type: 'error',
+			error: new ClaudeCliError('QUERY_FAILED', 'Request was aborted'),
+		};
+	}
+
+	/**
+	 * Mirror the real adapter's REQ-ASM-031 contract: surface the canned
+	 * session id both as a `session-id` delta AND through the optional
+	 * `onSessionId` callback before any text delta. Extracted to keep
+	 * `queryStream` under the project complexity ceiling.
+	 */
+	private async *_yieldSessionIdIfConfigured(
+		options: ClaudeCliStreamOptions | undefined,
+	): AsyncIterable<StreamDelta> {
+		if (this.cannedSessionId === null) return;
+		yield { type: 'session-id', sessionId: this.cannedSessionId };
+		if (options?.onSessionId !== undefined) {
 			try {
 				options.onSessionId(this.cannedSessionId);
 			} catch {
 				// Mock mirrors the real adapter — never let a caller callback throw
-				// out of `query()`.
+				// out of `queryStream()`.
 			}
 		}
-
-		if (this.delayMs > 0) {
-			await new Promise<void>((resolve) => setTimeout(resolve, this.delayMs));
-		}
-
-		if (this.queryError !== null) {
-			return err(this.queryError);
-		}
-
-		return ok(this.cannedResponse);
 	}
 
 	/**
-	 * Streaming variant for IDEA-ASV-001 Increment 2. Delegates to `query()`
-	 * and emits the result as a single `text` delta + `done`, mirroring the
-	 * stub strategy used by the real `ClaudeSubprocessAdapter` in PR-ASV-2-port.
-	 * Honours `options.signal`: a pre-aborted signal short-circuits to an
-	 * error delta.
+	 * Sleep `this.delayMs` milliseconds, returning `true` if the signal
+	 * aborted before the timer fired. Extracted from `queryStream` to keep
+	 * its cyclomatic complexity under the project ceiling.
 	 */
-	queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
-		// Delegating to `streamFromQuery` instead of a hand-rolled body covers
-		// the Codex P2 mid-flight-abort gap (PR #370 review on
-		// `MockClaudeSubprocessAdapter`). The helper races the `query()`
-		// promise against an abort-signal event, so aborting while `delayMs`
-		// is elapsing terminates the stream with an `error` delta rather
-		// than emitting `text` / `done`.
-		return streamFromQuery((p, o) => this.query(p, o), prompt, options);
+	private _waitOrAbort(signal: AbortSignal | undefined): Promise<boolean> {
+		return new Promise<boolean>((resolve) => {
+			const t = setTimeout(() => {
+				signal?.removeEventListener('abort', onAbort);
+				resolve(false);
+			}, this.delayMs);
+			const onAbort = (): void => {
+				clearTimeout(t);
+				resolve(true);
+			};
+			signal?.addEventListener('abort', onAbort, { once: true });
+		});
 	}
 
 	/**

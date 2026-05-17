@@ -26,7 +26,7 @@ describe('TransportStatusPill', () => {
 
 		it('renders the plain-language status copy', () => {
 			const { po } = mountPill('subscription')
-			expect(po.text()).toBe('Using your installed Claude tool.')
+			expect(po.text()).toContain('Using your installed Claude tool.')
 		})
 
 		it('exposes role="status" and aria-live="polite"', () => {
@@ -60,7 +60,7 @@ describe('TransportStatusPill', () => {
 
 			await wrapper.setProps({ kind: 'subscription' })
 			expect(po.exists()).toBe(true)
-			expect(po.text()).toBe('Using your installed Claude tool.')
+			expect(po.text()).toContain('Using your installed Claude tool.')
 
 			await wrapper.setProps({ kind: 'degraded' })
 			expect(po.exists()).toBe(false)

@@ -21,8 +21,14 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { MockClaudeSubprocessAdapter } from '@/infrastructure/mock/MockClaudeSubprocessAdapter'
-import { isSubscriptionCapable } from '@/application/chat/queryStructured'
-import { useChatStore } from '@/ui/stores/chatStore'
+import { getChatStoresFacade } from '../__fakes__/chatStoresFacade'
+
+// WP-12 (Arch review #3): `isSubscriptionCapable` is deleted. The application
+// layer now narrows via `typeof port.runStructured === 'function'`; this
+// integration suite simply pins the same check inline.
+function isSubscriptionCapable(port: object): boolean {
+  return typeof (port as { runStructured?: unknown }).runStructured === 'function'
+}
 
 describe('TEST-ASM-053 — CCS auto-context inheritance under subscription transport (T-ASM-083)', () => {
   let port: MockClaudeSubprocessAdapter
@@ -40,7 +46,7 @@ describe('TEST-ASM-053 — CCS auto-context inheritance under subscription trans
 
   it('(a) setActiveFile(file) populates the context preamble (REQ-ASM-051)', () => {
     expect(isSubscriptionCapable(port)).toBe(true)
-    const store = useChatStore()
+    const store = getChatStoresFacade()
     expect(store.contextFiles).toEqual([])
 
     store.setActiveFile({ path: 'specs/demo/idea.md', label: 'idea.md', isAuto: true })
@@ -55,7 +61,7 @@ describe('TEST-ASM-053 — CCS auto-context inheritance under subscription trans
 
   it('(b) setActiveFile(null) clears the auto slot but preserves manuals (REQ-ASM-052)', () => {
     expect(isSubscriptionCapable(port)).toBe(true)
-    const store = useChatStore()
+    const store = getChatStoresFacade()
     store.addContextFile({ path: 'manual.md', label: 'manual.md', isAuto: false })
     store.setActiveFile({ path: 'auto.md', label: 'auto.md', isAuto: true })
     expect(store.contextFiles).toHaveLength(2)
@@ -69,7 +75,7 @@ describe('TEST-ASM-053 — CCS auto-context inheritance under subscription trans
 
   it('(c) toggling the auto slot replaces only the auto entry — manuals are stable across calls (REQ-ASM-053)', () => {
     expect(isSubscriptionCapable(port)).toBe(true)
-    const store = useChatStore()
+    const store = getChatStoresFacade()
     store.addContextFile({ path: 'manual-a.md', label: 'manual-a.md', isAuto: false })
     store.addContextFile({ path: 'manual-b.md', label: 'manual-b.md', isAuto: false })
 

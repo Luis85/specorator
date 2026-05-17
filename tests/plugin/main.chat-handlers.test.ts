@@ -12,7 +12,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { TFile, TFolder } from 'obsidian'
-import { useChatStore } from '@/ui/stores/chatStore'
+import { getChatStoresFacade } from '../__fakes__/chatStoresFacade'
 
 // ── helpers extracted from main.ts handler logic ─────────────────────────────
 
@@ -21,7 +21,7 @@ import { useChatStore } from '@/ui/stores/chatStore'
  * main.ts. Takes the store directly so we can test without the full plugin.
  */
 function handleAddToContext(
-  store: ReturnType<typeof useChatStore>,
+  store: ReturnType<typeof getChatStoresFacade>,
   file: { path: string; name: string },
 ): void {
   store.addContextFile({ path: file.path, label: file.name, isAuto: false })
@@ -31,7 +31,7 @@ function handleAddToContext(
  * Mirrors the 'active-leaf-change' handler callback in main.ts.
  */
 function handleActiveLeafChange(
-  store: ReturnType<typeof useChatStore>,
+  store: ReturnType<typeof getChatStoresFacade>,
   activeFile: { path: string; name: string } | null,
 ): void {
   if (activeFile) {
@@ -49,7 +49,7 @@ describe('T-CCS-031: file-menu "Add to chat context" handler', () => {
   })
 
   it('adds a file to contextFiles with isAuto=false', () => {
-    const store = useChatStore()
+    const store = getChatStoresFacade()
     handleAddToContext(store, { path: 'specs/my-feature/requirements.md', name: 'requirements.md' })
 
     expect(store.contextFiles).toHaveLength(1)
@@ -61,7 +61,7 @@ describe('T-CCS-031: file-menu "Add to chat context" handler', () => {
   })
 
   it('does not duplicate when the same file is added twice (REQ-CCS-009)', () => {
-    const store = useChatStore()
+    const store = getChatStoresFacade()
     const file = { path: 'notes/foo.md', name: 'foo.md' }
     handleAddToContext(store, file)
     handleAddToContext(store, file)
@@ -70,7 +70,7 @@ describe('T-CCS-031: file-menu "Add to chat context" handler', () => {
   })
 
   it('adds multiple distinct files in order', () => {
-    const store = useChatStore()
+    const store = getChatStoresFacade()
     handleAddToContext(store, { path: 'a.md', name: 'a.md' })
     handleAddToContext(store, { path: 'b.md', name: 'b.md' })
 
@@ -80,7 +80,7 @@ describe('T-CCS-031: file-menu "Add to chat context" handler', () => {
   })
 
   it('does not mark the file as auto-context (isAuto must be false)', () => {
-    const store = useChatStore()
+    const store = getChatStoresFacade()
     handleAddToContext(store, { path: 'notes/bar.md', name: 'bar.md' })
 
     expect(store.contextFiles[0].isAuto).toBe(false)
@@ -94,7 +94,7 @@ describe('T-CCS-031: file-menu "Add to chat context" handler', () => {
      * so a folder path never ends up as an unreadable context entry.
      */
     function registerIfFile(
-      store: ReturnType<typeof useChatStore>,
+      store: ReturnType<typeof getChatStoresFacade>,
       entry: unknown,
     ): boolean {
       if (!(entry instanceof TFile)) return false
@@ -103,7 +103,7 @@ describe('T-CCS-031: file-menu "Add to chat context" handler', () => {
     }
 
     it('adds the entry to context when invoked on a TFile', () => {
-      const store = useChatStore()
+      const store = getChatStoresFacade()
       const file = new TFile()
       file.path = 'notes/a.md'
       file.name = 'a.md'
@@ -115,7 +115,7 @@ describe('T-CCS-031: file-menu "Add to chat context" handler', () => {
     })
 
     it('does NOT add a folder to context (TFolder rejected)', () => {
-      const store = useChatStore()
+      const store = getChatStoresFacade()
       const folder = new TFolder()
       folder.path = 'notes'
       folder.name = 'notes'
@@ -133,7 +133,7 @@ describe('T-CCS-034: active-leaf-change handler', () => {
   })
 
   it('sets the auto context slot when a file is active (REQ-CCS-005)', () => {
-    const store = useChatStore()
+    const store = getChatStoresFacade()
     handleActiveLeafChange(store, { path: 'journal/today.md', name: 'today.md' })
 
     const auto = store.contextFiles.find((f) => f.isAuto)
@@ -143,7 +143,7 @@ describe('T-CCS-034: active-leaf-change handler', () => {
   })
 
   it('places the auto entry at index 0 ahead of manual entries (REQ-CCS-006)', () => {
-    const store = useChatStore()
+    const store = getChatStoresFacade()
     // Add a manual entry first
     store.addContextFile({ path: 'manual.md', label: 'manual.md', isAuto: false })
     handleActiveLeafChange(store, { path: 'auto.md', name: 'auto.md' })
@@ -154,7 +154,7 @@ describe('T-CCS-034: active-leaf-change handler', () => {
   })
 
   it('clears the auto slot when activeFile is null (REQ-CCS-006)', () => {
-    const store = useChatStore()
+    const store = getChatStoresFacade()
     handleActiveLeafChange(store, { path: 'some.md', name: 'some.md' })
     expect(store.contextFiles.some((f) => f.isAuto)).toBe(true)
 
@@ -163,7 +163,7 @@ describe('T-CCS-034: active-leaf-change handler', () => {
   })
 
   it('replaces a previous auto entry when the active file changes', () => {
-    const store = useChatStore()
+    const store = getChatStoresFacade()
     handleActiveLeafChange(store, { path: 'first.md', name: 'first.md' })
     handleActiveLeafChange(store, { path: 'second.md', name: 'second.md' })
 
@@ -173,7 +173,7 @@ describe('T-CCS-034: active-leaf-change handler', () => {
   })
 
   it('does not affect manual context files when active file changes', () => {
-    const store = useChatStore()
+    const store = getChatStoresFacade()
     store.addContextFile({ path: 'manual.md', label: 'manual.md', isAuto: false })
     handleActiveLeafChange(store, { path: 'active.md', name: 'active.md' })
     handleActiveLeafChange(store, { path: 'active2.md', name: 'active2.md' })

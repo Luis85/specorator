@@ -17,7 +17,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { useChatStore } from '@/ui/stores/chatStore'
+import { getChatStoresFacade } from '../__fakes__/chatStoresFacade'
 import { asSessionId } from '@/domain/chat/SessionId'
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord'
 import type { LoggerPort } from '@/domain/ports/LoggerPort'
@@ -297,7 +297,7 @@ describe('pinia hydration (TEST-ASM-035 / REQ-ASM-037)', () => {
       'newest':{ threadId: 'newest',sessionId: 'sn', feature: 'foo', logPath: 'specs/foo/sessions/sn.md', transport: 'subscription', createdAt: '2026-05-14T09:00:00.000Z', lastUsedAt: '2026-05-14T10:00:00.000Z' },
     }
     const records = decodeChatThreadsBlob(blob, logger)
-    const store = useChatStore()
+    const store = getChatStoresFacade()
     for (const record of records) {
       store.upsertThread(record)
     }
@@ -312,7 +312,7 @@ describe('pinia hydration (TEST-ASM-035 / REQ-ASM-037)', () => {
   it('first-load: missing blob leaves chatThreads empty and activeThreadId null', () => {
     const logger = makeLogger()
     const records = decodeChatThreadsBlob(undefined, logger)
-    const store = useChatStore()
+    const store = getChatStoresFacade()
     for (const record of records) store.upsertThread(record)
     store.setActiveThreadId(mostRecentlyUsedThreadId(records))
 
@@ -336,7 +336,7 @@ describe('pinia hydration (TEST-ASM-035 / REQ-ASM-037)', () => {
       },
     }
     const records = decodeChatThreadsBlob(blob, logger)
-    const store = useChatStore()
+    const store = getChatStoresFacade()
     for (const record of records) store.upsertThread(record)
 
     expect(store.chatThreads.size).toBe(1)
