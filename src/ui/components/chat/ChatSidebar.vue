@@ -101,6 +101,14 @@ const lastUserTurn = ref<string>('');
  */
 const inFlightAbort = ref<AbortController | null>(null);
 
+// Synchronous re-entry guard. `messagesStore.status` is only flipped to
+// `'loading'` inside `orchestrator.sendTurn()` after the (potentially slow)
+// `buildTurnInput()` await resolves — without this local ref, a double Enter
+// or quick second click while vault reads are in flight would start
+// overlapping turns. Set true synchronously on entry, cleared in `finally`.
+const sendInFlight = ref(false);
+const isSending = computed(() => messagesStore.status === 'loading' || sendInFlight.value);
+
 function handleStopGeneration(): void {
 	inFlightAbort.value?.abort();
 }
@@ -228,11 +236,21 @@ function getOrchestrator(): ChatTurnOrchestrator {
 // snapshot inputs, surface the AbortController, refocus, and seed the
 // per-proposal path-error map for the proposal card.
 async function handleSend(): Promise<void> {
+	if (sendInFlight.value) return;
 	const text = messagesStore.userText.trim();
 	if (!text) return;
 	if (messagesStore.status === 'loading') return;
 	if (!available.value) return;
 
+	// `.finally()` chain (not try/finally) per the no-restricted-syntax rule.
+	// See develop commit a619dab for the established pattern.
+	sendInFlight.value = true;
+	await runSendInner().finally(() => {
+		sendInFlight.value = false;
+	});
+}
+
+async function runSendInner(): Promise<void> {
 	lastUserTurn.value = messagesStore.userText;
 
 	const input = await buildTurnInput({
@@ -399,7 +417,7 @@ watch(available, async () => {
 
 			<ContextFileList
 				:files="messagesStore.effectiveContextFiles"
-				:disabled="messagesStore.status === 'loading'"
+				:disabled="isSending"
 				@remove="handleRemoveFile"
 			/>
 
@@ -408,8 +426,8 @@ watch(available, async () => {
 			<ChatInput
 				ref="inputRef"
 				:model-value="messagesStore.userText"
-				:disabled="messagesStore.status === 'loading'"
-				:loading="messagesStore.status === 'loading'"
+				:disabled="isSending"
+				:loading="isSending"
 				@update:model-value="handleUserTextUpdate"
 				@send="handleSend"
 				@add-context-file="handleAddContextFile"
