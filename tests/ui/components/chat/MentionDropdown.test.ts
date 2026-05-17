@@ -65,6 +65,15 @@ describe('MentionDropdown', () => {
 		expect(emitted[0][0]).toBe(1)
 	})
 
+	// WP-7 a11y #3 — per-option id required for the textarea's
+	// `aria-activedescendant` to reference the highlighted row.
+	it('each option carries id="mention-item-${index}" for aria-activedescendant (WP-7 a11y #3)', () => {
+		const po = mountDropdown({ results: candidates, selectedIndex: 1 })
+		expect(po.optionAt(0).attributes('id')).toBe('mention-item-0')
+		expect(po.optionAt(1).attributes('id')).toBe('mention-item-1')
+		expect(po.optionAt(2).attributes('id')).toBe('mention-item-2')
+	})
+
 	/**
 	 * PR-ASV-4-folders — folder rows render with a trailing slash and a
 	 * `data-kind="folder"` discriminator so the consumer (`ChatInput`) can

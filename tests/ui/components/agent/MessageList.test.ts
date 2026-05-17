@@ -6,13 +6,15 @@
  * thread isolation (a different `threadId` prop shows only that thread's
  * messages).
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
+import { nextTick } from 'vue';
 import MessageList from '@/ui/components/agent/MessageList.vue';
 import { i18n } from '@/ui/i18n';
 import { useMessagesStore } from '@/ui/stores/messagesStore';
+import { useStreamingTurnStore } from '@/ui/stores/streamingTurnStore';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
 import { MessageListPO } from './MessageList.po';
 
@@ -192,13 +194,84 @@ describe('MessageList', () => {
 		expect(po.markdownBlocks()[0].findAll('script')).toHaveLength(0);
 	});
 
-	it('exposes role="log" with the aria-live="polite" hint on the scroll container', () => {
+	it('exposes role="log" but no aria-live on the scroll container (WP-7 a11y #1)', () => {
+		// WP-7: the scroll container no longer carries `aria-live` — every
+		// streamed token previously caused a re-announcement of the growing
+		// transcript. Polite announcements now flow through the dedicated
+		// `A11yAnnouncer` once per completed turn.
 		const store = useMessagesStore();
 		const tid = 'thread-aria';
 		store.appendMessage(msg(tid, 'user'));
 		const { po } = mountList(tid);
 		expect(po.root.attributes('role')).toBe('log');
-		expect(po.root.attributes('aria-live')).toBe('polite');
+		expect(po.root.attributes('aria-live')).toBeUndefined();
+	});
+
+	it('streaming bubble is aria-busy="true" + aria-live="off" while in flight (WP-7 a11y #1)', () => {
+		const store = useMessagesStore();
+		const tid = 'thread-streaming';
+		store.appendMessage(msg(tid, 'user', { text: 'Hi' }));
+		store.beginRequest();
+		// Drive the streaming bubble by writing a partial text delta via the
+		// streaming store (see `useStreamingTurnStore`).
+		const streamingStore = useStreamingTurnStore();
+		streamingStore.appendStreamingDelta('part');
+		const { wrapper } = mountList(tid);
+		const bubble = wrapper.find('[data-testid="agent-message-streaming"]');
+		expect(bubble.exists()).toBe(true);
+		expect(bubble.attributes('aria-busy')).toBe('true');
+		expect(bubble.attributes('aria-live')).toBe('off');
+	});
+
+	it('announces ONCE per completed assistant turn (WP-7 a11y #1)', async () => {
+		// Mount MessageList with an injected announcer; spy on `announce` and
+		// assert exactly one call fires when a completed assistant message
+		// lands (not N for N streamed tokens — those go through aria-busy on
+		// the streaming bubble).
+		const { useA11yAnnouncer, A11Y_ANNOUNCER_KEY } = await import(
+			'@/ui/composables/useA11yAnnouncer'
+		);
+		const { defineComponent, h } = await import('vue');
+
+		const store = useMessagesStore();
+		const tid = 'thread-announce';
+		store.appendMessage(msg(tid, 'user', { text: 'Q' }));
+
+		// Set up a parent component that owns the announcer (so it survives
+		// across the `appendMessage` reactivity tick), provides it down to
+		// MessageList, and exposes the announce spy for assertions.
+		const spy = vi.fn();
+		const Host = defineComponent({
+			components: { MessageList },
+			provide() {
+				return {
+					[A11Y_ANNOUNCER_KEY as symbol]: (this as { wrapped: unknown }).wrapped,
+				};
+			},
+			setup() {
+				const announcer = useA11yAnnouncer();
+				const wrapped = {
+					...announcer,
+					announce: (text: string) => {
+						spy(text);
+						announcer.announce(text);
+					},
+				};
+				return { wrapped };
+			},
+			render() {
+				return h(MessageList, { threadId: tid });
+			},
+		});
+		mount(Host, { global: { plugins: [i18n] } });
+		// Initial mount with one user message; no assistant transition yet.
+		expect(spy).not.toHaveBeenCalled();
+
+		// Append a completed assistant message — exactly one announcement.
+		store.appendMessage(msg(tid, 'assistant', { text: 'A' }));
+		await nextTick();
+		expect(spy).toHaveBeenCalledTimes(1);
+		expect(spy.mock.calls[0]?.[0]).toContain('replied');
 	});
 
 	describe('UX #8 (WP-8) — scroll-pin guard', () => {

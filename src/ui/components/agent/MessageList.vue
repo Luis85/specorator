@@ -26,6 +26,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMessagesStore, type CompactBoundaryNoticeDto } from '@/ui/stores/messagesStore';
 import { useStreamingTurnStore } from '@/ui/stores/streamingTurnStore';
+import { useInjectedA11yAnnouncer } from '@/ui/composables/useA11yAnnouncer';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
 import MarkdownBlock from '@/ui/components/agent/MarkdownBlock.vue';
 import ThinkingBlock from './ThinkingBlock.vue';
@@ -60,6 +61,7 @@ const emit = defineEmits<{
 const messagesStore = useMessagesStore();
 const streamingStore = useStreamingTurnStore();
 const { t } = useI18n();
+const announcer = useInjectedA11yAnnouncer();
 
 const messages = computed(() => {
 	if (props.threadId === null) return [];
@@ -249,6 +251,36 @@ const emptyTiles: ReadonlyArray<{ key: EmptyTileKey; labelKey: string }> = [
 function handleTileClick(key: EmptyTileKey): void {
 	emit('tile-action', key);
 }
+
+/**
+ * A11y #1 (WP-7): announce ONCE per completed assistant turn. Previously the
+ * scroll container carried `aria-live="polite"`, which made every streamed
+ * token (and every per-block re-render under it) re-announce the growing
+ * transcript. We watch the count of assistant messages for the active
+ * thread and fire a single polite announcement whenever it increments.
+ *
+ * The streaming bubble itself stays `aria-busy="true"` + `aria-live="off"`
+ * (template below) so an SR knows the region is updating but does not voice
+ * each delta.
+ *
+ * Codex P2 (PR #402): a naïve `next > prev` count comparison also fires when
+ * the user switches to a thread that happens to have MORE assistant turns
+ * than the previous one — producing a false "Assistant replied" while just
+ * browsing. Guard by requiring the threadId to be UNCHANGED across the tick,
+ * and by re-seeding `prev` whenever the active thread rotates.
+ */
+const assistantMessageCount = computed<number>(
+	() => messages.value.filter((m) => m.role === 'assistant').length,
+);
+
+watch(
+	[() => props.threadId, assistantMessageCount],
+	([nextThreadId, nextCount], [prevThreadId, prevCount]) => {
+		if (nextThreadId === prevThreadId && nextCount > prevCount) {
+			announcer.announce(t('agent.assistantReplyAnnouncement'));
+		}
+	},
+);
 </script>
 
 <template>
@@ -259,7 +291,6 @@ function handleTileClick(key: EmptyTileKey): void {
 		data-testid="agent-message-list"
 		role="log"
 		:aria-label="t('agent.messageListAriaLabel')"
-		aria-live="polite"
 		@scroll.passive="handleScroll"
 	>
 		<template v-for="entry in transcript">
@@ -309,6 +340,8 @@ function handleTileClick(key: EmptyTileKey): void {
 			v-if="isStreaming"
 			class="sp-agent-message sp-agent-message--assistant sp-agent-message--streaming"
 			data-testid="agent-message-streaming"
+			aria-busy="true"
+			aria-live="off"
 		>
 			<header class="sp-agent-message__role">
 				{{ t('agent.roleAssistant') }}

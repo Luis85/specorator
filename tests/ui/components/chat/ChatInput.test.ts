@@ -431,4 +431,69 @@ describe('ChatInput', () => {
 			});
 		});
 	});
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// WP-7 a11y P1 wave — A11y #3 (combobox wiring) and A11y #5 (Esc aborts).
+	// ─────────────────────────────────────────────────────────────────────────
+	describe('WP-7 a11y #3 — combobox wiring', () => {
+		it('textarea exposes role="combobox" with aria-expanded="false" when no picker is open', () => {
+			const po = mountChatInput({ modelValue: '', disabled: false, loading: false });
+			const ta = po.textarea;
+			expect(ta.attributes('role')).toBe('combobox');
+			expect(ta.attributes('aria-expanded')).toBe('false');
+			expect(ta.attributes('aria-controls')).toBeUndefined();
+			expect(ta.attributes('aria-activedescendant')).toBeUndefined();
+		});
+
+		it('aria-controls + aria-activedescendant track the slash palette while open', async () => {
+			const po = mountChatInput({ modelValue: '', disabled: false, loading: false });
+			await po.typeAndMoveCaret('/clear');
+			await nextTick();
+			const ta = po.textarea;
+			expect(ta.attributes('aria-expanded')).toBe('true');
+			expect(ta.attributes('aria-controls')).toBe('slash-command-dropdown');
+			expect(ta.attributes('aria-activedescendant')).toBe('slash-command-item-clear');
+		});
+
+		it('aria-controls + aria-activedescendant flip to the mention picker when it opens', async () => {
+			vi.useFakeTimers();
+			try {
+				const po = mountChatInput(
+					{ modelValue: '', disabled: false, loading: false },
+					{ 'specs/foo/idea.md': '' },
+				);
+				await po.typeAndMoveCaretToEnd('@');
+				await vi.advanceTimersByTimeAsync(MENTION_DEBOUNCE_MS + 1);
+				await flushPromises();
+				const ta = po.textarea;
+				expect(ta.attributes('aria-expanded')).toBe('true');
+				expect(ta.attributes('aria-controls')).toBe('mention-dropdown');
+				expect(ta.attributes('aria-activedescendant')).toBe('mention-item-0');
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+	});
+
+	describe('WP-7 a11y #5 — Escape aborts while streaming', () => {
+		it('Escape while loading=true emits `abort`', async () => {
+			const po = mountChatInput({ modelValue: '', disabled: false, loading: true });
+			await po.pressKey('Escape');
+			expect(po.emitted('abort')).toBeTruthy();
+		});
+
+		it('Escape while loading=false does NOT emit `abort`', async () => {
+			const po = mountChatInput({ modelValue: '', disabled: false, loading: false });
+			await po.pressKey('Escape');
+			expect(po.emitted('abort')).toBeFalsy();
+		});
+
+		it('Escape while a slash palette is open dismisses the palette and does NOT emit abort', async () => {
+			const po = mountChatInput({ modelValue: '', disabled: false, loading: true });
+			await po.typeAndMoveCaret('/');
+			await nextTick();
+			await po.pressKey('Escape');
+			expect(po.emitted('abort')).toBeFalsy();
+		});
+	});
 });

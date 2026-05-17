@@ -19,7 +19,7 @@
  *     empty-state starter tile; the root pre-fills `messagesStore.userText`
  *     with a matching prompt fragment.
  */
-import { computed, nextTick, ref } from 'vue';
+import { computed, nextTick, provide, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore';
 import { useMessagesStore } from '@/ui/stores/messagesStore';
@@ -30,6 +30,8 @@ import AppToast from '@/ui/components/common/AppToast.vue';
 import ErrorBoundary from '@/ui/components/ErrorBoundary.vue';
 import AgentSidepanelHeader from '@/ui/components/agent/AgentSidepanelHeader.vue';
 import MessageList from '@/ui/components/agent/MessageList.vue';
+import A11yAnnouncer from '@/ui/components/agent/A11yAnnouncer.vue';
+import { A11Y_ANNOUNCER_KEY, useA11yAnnouncer } from '@/ui/composables/useA11yAnnouncer';
 import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue';
 import type { SlashCommand } from '@/domain/chat/SlashCommand';
 import { BUILT_IN_SLASH_COMMANDS } from '@/application/chat/builtInSlashCommands';
@@ -40,6 +42,15 @@ const chatSidebarRef = ref<InstanceType<typeof ChatSidebar> | null>(null);
 const chatReset = useChatReset();
 const notificationStore = useNotificationStore();
 const { t } = useI18n();
+
+/**
+ * WP-7 a11y P1 wave: own the sidepanel-wide A11y announcer. Provided to every
+ * descendant via `A11Y_ANNOUNCER_KEY` so `MessageList` (turn complete) and
+ * `ChatSidebar` (generation start / proposal decided) share ONE polite live
+ * region instead of competing for `aria-live` on the scroll container.
+ */
+const announcer = useA11yAnnouncer();
+provide(A11Y_ANNOUNCER_KEY, announcer);
 
 const activeThreadId = computed(() => threadsStore.activeThreadId);
 const isRequestInFlight = computed(() => messagesStore.status === 'loading');
@@ -250,6 +261,7 @@ onUnmounted(() => {
 			</div>
 		</ErrorBoundary>
 		<AppToast />
+		<A11yAnnouncer :message="announcer.message.value" />
 	</div>
 </template>
 

@@ -8,7 +8,7 @@
  * the caret is preceded by `/` either at position 0 or after whitespace.
  * Mention picker opens via `useMentionPicker.handleInput()`.
  */
-import { ref, onBeforeUnmount } from 'vue';
+import { computed, ref, onBeforeUnmount } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useVaultPort } from '@/ui/composables/useVaultPort';
 import { useMentionPicker } from '@/ui/composables/useMentionPicker';
@@ -36,6 +36,8 @@ const emit = defineEmits<{
 	 */
 	'add-context-file': [candidate: MentionCandidate];
 	'select-command': [command: SlashCommand];
+	/** WP-7 A11y #5: Escape during loading=true → ChatSidebar aborts the turn. */
+	abort: [];
 }>();
 
 const textareaEl = ref<HTMLTextAreaElement | null>(null);
@@ -43,6 +45,32 @@ const vaultPort = useVaultPort();
 const picker = useMentionPicker(vaultPort);
 const palette = useSlashPalette();
 const { t } = useI18n();
+
+// WP-7 A11y #3: shared combobox wiring for the textarea — both the slash
+// palette and the @-mention picker resolve to the same ARIA attribute set.
+const currentPicker = computed<{ controls: string; activeDescendant?: string } | null>(() => {
+	if (palette.isOpen.value) {
+		const cmds = palette.matchedCommands.value;
+		const idx = palette.selectedIndex.value;
+		const name = idx >= 0 && idx < cmds.length ? cmds[idx]?.name : undefined;
+		return {
+			controls: 'slash-command-dropdown',
+			activeDescendant: name !== undefined ? `slash-command-item-${name}` : undefined,
+		};
+	}
+	if (picker.open.value) {
+		const idx = picker.selectedIndex.value;
+		const hasIdx = idx >= 0 && idx < picker.results.value.length;
+		return {
+			controls: 'mention-dropdown',
+			activeDescendant: hasIdx ? `mention-item-${idx}` : undefined,
+		};
+	}
+	return null;
+});
+const textareaAriaExpanded = computed(() => currentPicker.value !== null);
+const textareaAriaControls = computed(() => currentPicker.value?.controls);
+const textareaAriaActiveDescendant = computed(() => currentPicker.value?.activeDescendant);
 
 defineExpose({ textareaEl, palette });
 
@@ -240,6 +268,16 @@ function tryHandleSendKey(event: KeyboardEvent): boolean {
 	return true;
 }
 
+// WP-7 A11y #5: Escape during streaming aborts. The picker/palette branches
+// consume Escape earlier in `handleKeydown`, so this only fires when neither
+// is open and the parent component is loading=true.
+function tryHandleAbortKey(event: KeyboardEvent): boolean {
+	if (event.key !== 'Escape' || !props.loading) return false;
+	event.preventDefault();
+	emit('abort');
+	return true;
+}
+
 function handleKeydown(event: KeyboardEvent): void {
 	// IME-composition guard. `isComposing` is true while a Japanese/Chinese/
 	// Korean IME is mid-composition; pressing Enter to commit must NOT
@@ -247,6 +285,7 @@ function handleKeydown(event: KeyboardEvent): void {
 	if (event.isComposing || event.keyCode === 229) return;
 	if (handlePickerKey(event)) return;
 	if (handlePaletteKeydown(event)) return;
+	if (tryHandleAbortKey(event)) return;
 	tryHandleSendKey(event);
 }
 
@@ -325,16 +364,19 @@ function onDropdownHover(index: number): void {
 				@select="handleSelectFromPalette"
 				@highlight="handleHighlight"
 			/>
+			<!-- WP-7 A11y #3: combobox attrs are shared between palette & picker. -->
 			<textarea
 				ref="textareaEl"
 				class="sp-chat__textarea"
 				:value="modelValue"
 				:readonly="disabled"
+				role="combobox"
 				:aria-label="t('chat.inputAriaLabel')"
 				aria-multiline="true"
-				:aria-expanded="picker.open.value"
+				:aria-expanded="textareaAriaExpanded"
 				aria-autocomplete="list"
-				:aria-controls="picker.open.value ? 'mention-dropdown' : undefined"
+				:aria-controls="textareaAriaControls"
+				:aria-activedescendant="textareaAriaActiveDescendant"
 				:placeholder="t('chat.inputPlaceholder')"
 				rows="3"
 				data-testid="chat-input-textarea"

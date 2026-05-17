@@ -51,7 +51,15 @@ function sourceLabel(command: SlashCommand): string | null {
 </script>
 
 <template>
+	<!--
+		WP-7 A11y #3: the listbox now exposes a deterministic `id` (referenced
+		by `ChatInput`'s textarea via `aria-controls`) and each option exposes
+		`id="slash-command-item-${name}"` so the textarea can bind
+		`aria-activedescendant` to the highlighted entry. SRs announce
+		"<option name>, listbox" as the user arrows.
+	-->
 	<div
+		id="slash-command-dropdown"
 		class="sp-slash-dropdown"
 		role="listbox"
 		aria-label="Slash commands"
@@ -67,6 +75,7 @@ function sourceLabel(command: SlashCommand): string | null {
 		<ul v-else class="sp-slash-dropdown__list" data-testid="slash-command-list">
 			<li
 				v-for="(command, index) in commands"
+				:id="`slash-command-item-${command.name}`"
 				:key="command.name"
 				class="sp-slash-dropdown__item"
 				:class="{ 'sp-slash-dropdown__item--selected': isSelected(index) }"

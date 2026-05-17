@@ -78,11 +78,29 @@ const resolved = ref(false);
 const textareaEl = ref<HTMLTextAreaElement | null>(null);
 const rootEl = ref<HTMLElement | null>(null);
 
+/**
+ * WP-7 A11y #2: capture the previously-focused element on mount so we can
+ * restore focus to it after the user decides. Without this, focus drops to
+ * `<body>` and a keyboard-only user is stranded between the card unmounting
+ * and the next mount cycle landing focus somewhere useful.
+ */
+const previouslyFocusedEl = ref<HTMLElement | null>(null);
+
 function commit(decision: PlanDecision): void {
 	if (resolved.value) return;
 	resolved.value = true;
+	restorePreviousFocus();
 	emit('decide', decision);
 	emit('pending-changed', false);
+}
+
+function restorePreviousFocus(): void {
+	const el = previouslyFocusedEl.value;
+	if (el === null) return;
+	previouslyFocusedEl.value = null;
+	// `focus()` is a no-op for detached / display:none elements; that's
+	// fine — we only attempt restoration.
+	if (typeof el.focus === 'function') el.focus();
 }
 
 function moveSelection(delta: number): void {
@@ -167,8 +185,19 @@ const hasPermissions = computed(
 );
 
 onMounted(() => {
-	// Tell the host the card is awaiting a decision so it can persist the
-	// pending plan and re-surface it on a future remount (UX #12, WP-8).
+	// WP-7 A11y #2: capture current focus owner BEFORE we steal focus so we
+	// can return to it on decide. `document.activeElement` is the textarea
+	// the user was typing in nine times out of ten.
+	const active =
+		typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+			? document.activeElement
+			: null;
+	previouslyFocusedEl.value = active;
+	// Auto-focus the card root so ArrowDown/Up/Enter operate without an
+	// explicit Tab step from the textarea (per a11y review #2).
+	rootEl.value?.focus();
+	// UX #12 (WP-8): tell the host the card is awaiting a decision so it can
+	// persist the pending plan and re-surface it on a future remount.
 	emit('pending-changed', true);
 });
 
@@ -177,12 +206,15 @@ onBeforeUnmount(() => {
 	if (props.persistOnUnmount) {
 		// UX #12 (WP-8): unmount is a transient hide, not a decision. The
 		// parent has already stashed the pending plan via the on-mount
-		// `pending-changed` emit; do nothing else here.
+		// `pending-changed` emit; do nothing else here. Focus restoration
+		// happens once the user actually decides (via commit()).
 		return;
 	}
 	// Legacy fallback (e.g. tests without a persistence host) — preserves
-	// the prior "auto-cancel on unmount" semantics.
+	// the prior "auto-cancel on unmount" semantics. WP-7 A11y #2 still
+	// applies: restore focus to whoever owned it before we mounted.
 	resolved.value = true;
+	restorePreviousFocus();
 	emit('decide', { type: 'cancel' });
 	emit('pending-changed', false);
 });
@@ -220,15 +252,27 @@ onBeforeUnmount(() => {
 		>
 			{{ t('agent.planApprovalPermissions', { tools: (allowedPrompts ?? []).join(', ') }) }}
 		</p>
-		<ul class="sp-plan-approval__rows" role="list">
+		<!--
+			WP-7 A11y #2: radiogroup + radio semantics so the row list matches the
+			WAI-ARIA APG arrow-keys pattern. Tabindex follows the active-descendant
+			model: focused row has `tabindex="0"`, the rest `tabindex="-1"`. The
+			root `<section>` keeps `tabindex="0"` and owns the keydown handler so
+			the user can land on it via the previous-focus capture.
+		-->
+		<ul
+			class="sp-plan-approval__rows"
+			role="radiogroup"
+			:aria-label="t('agent.planApprovalAriaLabel')"
+		>
 			<li
 				v-for="row in rows"
 				:key="row"
 				class="sp-plan-approval__row"
 				:class="{ 'sp-plan-approval__row--focused': focusedRow === row }"
 				:data-testid="`agent-plan-approval-row-${row}`"
-				role="button"
-				tabindex="-1"
+				role="radio"
+				:aria-checked="focusedRow === row"
+				:tabindex="focusedRow === row ? 0 : -1"
 				@click="handleClick(row)"
 			>
 				<span class="sp-plan-approval__cursor" aria-hidden="true">{{ rowCursor(row) }}</span>

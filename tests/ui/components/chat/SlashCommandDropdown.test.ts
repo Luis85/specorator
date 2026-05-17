@@ -101,6 +101,24 @@ describe('SlashCommandDropdown', () => {
 				expect(item.attributes('role')).toBe('option');
 			}
 		});
+
+		// WP-7 a11y #3 — combobox wiring requires deterministic ids on the
+		// listbox and per-option so the textarea can reference them via
+		// `aria-controls` and `aria-activedescendant`.
+		it('listbox carries id="slash-command-dropdown" for aria-controls (WP-7 a11y #3)', () => {
+			const { po } = mountDropdown({ commands: [CLEAR], selectedIndex: 0 });
+			expect(po.root.attributes('id')).toBe('slash-command-dropdown');
+		});
+
+		it('each option carries id="slash-command-item-${name}" for aria-activedescendant (WP-7 a11y #3)', () => {
+			const { po } = mountDropdown({
+				commands: [CLEAR, NEW, HELP],
+				selectedIndex: 0,
+			});
+			expect(po.itemByName('clear').attributes('id')).toBe('slash-command-item-clear');
+			expect(po.itemByName('new').attributes('id')).toBe('slash-command-item-new');
+			expect(po.itemByName('help').attributes('id')).toBe('slash-command-item-help');
+		});
 	});
 
 	describe('vault-loaded source labels and argument hints', () => {

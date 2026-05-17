@@ -352,4 +352,47 @@ describe('ChatSidebar', () => {
 			expect(po.hasTrimNotice()).toBe(true)
 		})
 	})
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// WP-7 a11y P1 wave
+	// ─────────────────────────────────────────────────────────────────────────
+	describe('WP-7 a11y #5 — Stop button + Escape abort', () => {
+		it('Stop button carries aria-keyshortcuts="Escape" while a turn is in flight', async () => {
+			// Long delay so the Stop button is visible while we assert.
+			const { wrapper, store, po } = await mountSidebar({
+				available: true,
+				delayMs: 5_000,
+				cannedResponse: 'done',
+			})
+			store.setUserText('hi')
+			await flushPromises()
+			void po.clickSend()
+			// Let the orchestrator mint the AbortController.
+			await flushPromises()
+			const stopBtn = wrapper.find('[data-testid="chat-stop-generation"]')
+			expect(stopBtn.exists()).toBe(true)
+			expect(stopBtn.attributes('aria-keyshortcuts')).toBe('Escape')
+		})
+
+		it('Escape from the textarea while loading aborts the in-flight turn (mirrors Stop click)', async () => {
+			const { wrapper, store, po } = await mountSidebar({
+				available: true,
+				delayMs: 5_000,
+				cannedResponse: 'done',
+			})
+			store.setUserText('hi')
+			await flushPromises()
+			void po.clickSend()
+			await flushPromises()
+			expect(wrapper.find('[data-testid="chat-stop-generation"]').exists()).toBe(true)
+			// Press Escape — ChatInput emits `abort`, ChatSidebar handles it
+			// identically to a click on the Stop button.
+			await wrapper
+				.find('[data-testid="chat-input-textarea"]')
+				.trigger('keydown', { key: 'Escape' })
+			await flushPromises()
+			// AbortController cleared → Stop button no longer rendered.
+			expect(wrapper.find('[data-testid="chat-stop-generation"]').exists()).toBe(false)
+		})
+	})
 })

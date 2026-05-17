@@ -7,6 +7,7 @@ import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import InlinePlanApprovalCard from '@/ui/components/agent/InlinePlanApprovalCard.vue';
 import { i18n } from '@/ui/i18n';
+import { InlinePlanApprovalCardPO } from './InlinePlanApprovalCard.po';
 
 function mountCard(
 	props: {
@@ -23,6 +24,8 @@ function mountCard(
 ) {
 	return mount(InlinePlanApprovalCard, {
 		global: { plugins: [i18n] },
+		// eslint-disable-next-line obsidianmd/prefer-active-doc -- jsdom test runner has no Obsidian popout windows.
+		attachTo: document.body,
 		props: {
 			planMarkdown: props.planMarkdown ?? 'Step 1: do thing.\nStep 2: do other thing.',
 			allowedPrompts: props.allowedPrompts,
@@ -176,4 +179,78 @@ describe('InlinePlanApprovalCard', () => {
 			expect(plan.find('strong').text()).toBe('one');
 		});
 	});
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// WP-7 a11y P1 wave — A11y #2
+	// ─────────────────────────────────────────────────────────────────────────
+	// jsdom test runner has no Obsidian popout windows, so the
+	// `obsidianmd/prefer-active-doc` and `prefer-create-el` rules don't apply
+	// to the focus assertions and synthetic-button helpers below.
+	/* eslint-disable obsidianmd/prefer-active-doc, obsidianmd/prefer-create-el */
+	describe('WP-7 a11y #2 — focus and radiogroup semantics', () => {
+		it('focuses the card root on mount', async () => {
+			const w = mountCard();
+			await nextTick();
+			const root = w.find('[data-testid="agent-plan-approval"]').element as HTMLElement;
+			expect(document.activeElement).toBe(root);
+		});
+
+		it('rows expose role="radio" inside a role="radiogroup" container', () => {
+			const po = new InlinePlanApprovalCardPO(mountCard());
+			expect(po.radiogroupExists()).toBe(true);
+			expect(po.rowRole('implement')).toBe('radio');
+			expect(po.rowRole('revise')).toBe('radio');
+			expect(po.rowRole('cancel')).toBe('radio');
+		});
+
+		it('marks the focused row with aria-checked="true" and the others false', async () => {
+			const po = new InlinePlanApprovalCardPO(mountCard());
+			expect(po.rowAriaChecked('implement')).toBe('true');
+			expect(po.rowAriaChecked('revise')).toBe('false');
+			expect(po.rowAriaChecked('cancel')).toBe('false');
+
+			await po.root.trigger('keydown', { key: 'ArrowDown' });
+			await nextTick();
+			expect(po.rowAriaChecked('implement')).toBe('false');
+			expect(po.rowAriaChecked('revise')).toBe('true');
+		});
+
+		it('sets tabindex="0" only on the focused row (active-descendant model)', () => {
+			const po = new InlinePlanApprovalCardPO(mountCard());
+			expect(po.rowTabindex('implement')).toBe('0');
+			expect(po.rowTabindex('revise')).toBe('-1');
+			expect(po.rowTabindex('cancel')).toBe('-1');
+		});
+
+		it('restores focus to the previously-focused element on decide', async () => {
+			// Mount a separate "previous" element that owns focus before the
+			// card mounts. Decide → focus must return to it.
+			const previous = document.createElement('button');
+			previous.setAttribute('data-testid', 'prev-focus');
+			document.body.appendChild(previous);
+			previous.focus();
+			expect(document.activeElement).toBe(previous);
+
+			const w = mountCard();
+			await nextTick();
+			// Card auto-focuses on mount; previous lost focus to root.
+			await w.find('[data-testid="agent-plan-approval-row-implement"]').trigger('click');
+			await nextTick();
+			expect(document.activeElement).toBe(previous);
+			document.body.removeChild(previous);
+		});
+
+		it('restores focus on Escape cancel', async () => {
+			const previous = document.createElement('button');
+			document.body.appendChild(previous);
+			previous.focus();
+			const w = mountCard();
+			await nextTick();
+			await w.find('[data-testid="agent-plan-approval"]').trigger('keydown', { key: 'Escape' });
+			await nextTick();
+			expect(document.activeElement).toBe(previous);
+			document.body.removeChild(previous);
+		});
+	});
+	/* eslint-enable obsidianmd/prefer-active-doc, obsidianmd/prefer-create-el */
 });

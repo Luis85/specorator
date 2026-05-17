@@ -57,8 +57,11 @@ describe('MessageList — compact-boundary notice', () => {
 		const { po } = mountList(tid);
 		expect(po.root.exists()).toBe(true);
 		expect(po.notices()).toHaveLength(1);
-		// Notice is inside the same aria-live="polite" log region.
-		expect(po.root.attributes('aria-live')).toBe('polite');
+		// WP-7 a11y #1: the scroll container no longer carries `aria-live`
+		// (the dedicated `A11yAnnouncer` fires one polite announcement per
+		// completed turn instead). The compact-boundary `<div>` itself
+		// retains `role="status"` so the SR still picks up the divider.
+		expect(po.root.attributes('aria-live')).toBeUndefined();
 		expect(po.root.attributes('role')).toBe('log');
 	});
 
