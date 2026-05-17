@@ -38,4 +38,20 @@ export class MessageListPO {
 	compactBoundaryNotices() {
 		return this.wrapper.findAll(this.byTid('compact-boundary-notice'));
 	}
+
+	get emptyTilesContainer() {
+		return this.wrapper.find(this.byTid('agent-message-list-empty-tiles'));
+	}
+
+	emptyTile(key: 'slash' | 'mention' | 'send' | 'escape') {
+		return this.wrapper.find(this.byTid(`agent-message-list-empty-tile-${key}`));
+	}
+
+	emptyTiles() {
+		return this.wrapper.findAll('[data-testid^="agent-message-list-empty-tile-"]');
+	}
+
+	get newMessagesPill() {
+		return this.wrapper.find(this.byTid('agent-message-new-pill'));
+	}
 }

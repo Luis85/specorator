@@ -393,7 +393,7 @@ watch(available, async () => {
 		<!-- Ready state -->
 		<template v-else>
 			<div class="sp-chat__header">
-				<h2 class="sp-chat__title">Ask Claude.</h2>
+				<h2 class="sp-chat__title">{{ $t('chat.title') }}</h2>
 				<SessionResumeIndicator :resumed="streamingStore.sessionResumed" />
 				<SubprocessStartingPill :visible="streamingStore.cliStartingUp" />
 				<TransportStatusPill :kind="transportKind" />
@@ -498,15 +498,20 @@ watch(available, async () => {
 	border-top: 1px solid var(--background-modifier-border);
 }
 
+/*
+ * UX #16 (WP-8): Stop just aborts a stream — it is not a destructive
+ * confirmation. Render with neutral chrome (secondary background, normal
+ * border) so the visual weight matches the consequence.
+ */
 .sp-chat__stop {
 	margin-left: auto;
 	font-size: 0.75rem;
 	font-weight: 500;
 	padding: 0.25rem 0.625rem;
 	border-radius: 4px;
-	border: 1px solid var(--background-modifier-error-border, var(--background-modifier-border));
-	background: var(--background-modifier-error, var(--background-secondary));
-	color: var(--text-on-accent, var(--text-normal));
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	color: var(--text-normal);
 	cursor: pointer;
 	transition:
 		background-color 0.15s,
@@ -514,6 +519,6 @@ watch(available, async () => {
 }
 
 .sp-chat__stop:hover {
-	background: var(--background-modifier-error-hover, var(--interactive-hover));
+	background: var(--interactive-hover);
 }
 </style>

@@ -15,6 +15,10 @@ export class SessionResumeIndicatorPO {
 		return this.wrapper.find(this.byTid('chat-session-resume-glyph'))
 	}
 
+	get labelEl() {
+		return this.wrapper.find(this.byTid('chat-session-resume-label'))
+	}
+
 	exists(): boolean {
 		return this.rootEl.exists()
 	}
@@ -29,6 +33,14 @@ export class SessionResumeIndicatorPO {
 
 	glyphText(): string {
 		return this.glyphEl.text()
+	}
+
+	labelText(): string {
+		return this.labelEl.text()
+	}
+
+	hasLabel(): boolean {
+		return this.labelEl.exists()
 	}
 
 	rootText(): string {
