@@ -29,6 +29,7 @@ import { ClaudeBinaryResolver, type SpawnFn as ResolverSpawnFn } from '@/infrast
 import { degradedClaudeCliPort } from '@/infrastructure/bridge/degradedClaudeCliPort'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { FeedbackService } from '@/application/shared/FeedbackService'
+import { tryAsync } from '@/domain/shared/tryAsync'
 import { PluginCore } from '@/core/plugin-core'
 import { ALL_MODULES, type ModuleDescriptor } from '@/modules'
 import { i18nMerge, i18nTranslate, setLocale, type SupportedLocale } from '@/ui/i18n'
@@ -451,12 +452,15 @@ export default class SpecoratorPlugin extends Plugin {
    * stored Anthropic key is loaded into the cache. On mobile / older
    * desktop builds `available === false` and the cache stays empty — chat
    * falls back to degraded mode (see settings tab).
+   *
+   * Codex P1 on PR #393: keychain reads can reject (locked keychain, OS
+   * denial, transient platform error). Mirror the `setSecret` wrap and
+   * degrade to an empty cache on rejection so plugin startup never aborts
+   * for a transient OS-keychain failure.
    */
   private async _initializeSecretStore(): Promise<void> {
     this.secretStore = new ObsidianSecretStoreAdapter(this.app)
-    this._apiKeyCache = this.secretStore.available
-      ? ((await this.secretStore.getSecret(SECRET_ID_ANTHROPIC)) ?? '')
-      : ''
+    this._apiKeyCache = await this._readSecretSafe(this.secretStore)
   }
 
   /**
@@ -477,11 +481,25 @@ export default class SpecoratorPlugin extends Plugin {
    */
   async refreshApiKeyCache(): Promise<void> {
     if (this.secretStore === null) return
-    this._apiKeyCache = this.secretStore.available
-      ? ((await this.secretStore.getSecret(SECRET_ID_ANTHROPIC)) ?? '')
-      : ''
+    this._apiKeyCache = await this._readSecretSafe(this.secretStore)
     this._specoratorView?.bumpSettingsVersion()
     this._agentSidepanelView?.bumpSettingsVersion()
+  }
+
+  /**
+   * Read the Anthropic key from the secret store with defensive handling.
+   * Codex P1 on PR #393: keychain reads can fail (locked keychain, OS
+   * denial, transient platform error) and must not crash the plugin —
+   * degrading to "no key" matches the unavailable-store branch.
+   */
+  private async _readSecretSafe(secretStore: SecretStorePort): Promise<string> {
+    if (!secretStore.available) return ''
+    const outcome = await tryAsync(() => secretStore.getSecret(SECRET_ID_ANTHROPIC))
+    if (!outcome.ok) {
+      this.bridge?.warn('main.secretStorage.read.failed', { error: outcome.error })
+      return ''
+    }
+    return outcome.value ?? ''
   }
 
   /**
