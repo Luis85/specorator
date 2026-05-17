@@ -28,9 +28,10 @@ import type { ConfirmModalPort, TranslationPort } from '@/domain/ports';
 import type { TransportKind } from '@/domain/chat/TransportKind';
 import type { FileWriteProposal } from '@/application/chat/FileWriteProposal';
 import type { PathValidationError } from '@/application/chat/errors';
-import { buildTurnInput } from '@/application/chat/TurnInputBuilder';
+import { buildTurnInput, isStructuredIntent } from '@/application/chat/TurnInputBuilder';
 import { ChatTurnOrchestrator } from '@/application/chat/ChatTurnOrchestrator';
 import { useProposalDecisions } from '@/ui/composables/useProposalDecisions';
+import { useInjectedA11yAnnouncer } from '@/ui/composables/useA11yAnnouncer';
 import ContextFileList from './ContextFileList.vue';
 import ChatInput from './ChatInput.vue';
 import ChatResponse from './ChatResponse.vue';
@@ -101,8 +102,46 @@ const lastUserTurn = ref<string>('');
  */
 const inFlightAbort = ref<AbortController | null>(null);
 
+/**
+ * WP-7 a11y wave: announcer shared across the agent sidepanel via
+ * `A11Y_ANNOUNCER_KEY` (provided by `AgentSidepanelRoot`). When mounted
+ * standalone (tests / GitHub Pages demo) `useInjectedA11yAnnouncer` falls
+ * back to a fresh local instance so calls are a no-op.
+ */
+const announcer = useInjectedA11yAnnouncer();
+
 function handleStopGeneration(): void {
 	inFlightAbort.value?.abort();
+	announcer.announce(tI18n('agent.generationAbortedAnnouncement'));
+}
+
+/**
+ * WP-7 A11y #5: Esc-aborts. `ChatInput` emits `abort` when the user presses
+ * Escape during streaming; mirrors the Stop button click. Centralising here
+ * keeps the keyboard path and the mouse path on the same code lane.
+ */
+function handleAbortFromInput(): void {
+	if (inFlightAbort.value === null) return;
+	handleStopGeneration();
+}
+
+/**
+ * Set up the abort affordance + start-of-turn announcement, returning the
+ * preflight `AbortController` for the streaming path (or `null` for
+ * structured turns, which have no abort affordance — see Codex P2 round-2
+ * on PR #402). Extracted from `handleSend` to keep its cyclomatic complexity
+ * under the project's per-function lint cap.
+ */
+function setUpTurnAbortAffordance(userText: string): AbortController | null {
+	const structured = isStructuredIntent(userText) === 'structured';
+	if (structured) {
+		announcer.announce(tI18n('agent.structuredGenerationStartedAnnouncement'));
+		return null;
+	}
+	const controller = new AbortController();
+	inFlightAbort.value = controller;
+	announcer.announce(tI18n('agent.generationStartedAnnouncement'));
+	return controller;
 }
 
 const settingsVersion = inject(SETTINGS_VERSION_KEY, ref(0));
@@ -263,6 +302,13 @@ async function handleSend(): Promise<void> {
 	streamingStore.resetStreaming();
 	messagesStore.beginRequest();
 
+	// Set up the streaming abort affordance + announcement. Structured turns
+	// (/create-file, /create) go through queryStructured / runStructured and
+	// never receive an AbortController via `onAbortController`, so they get
+	// no Stop button, no Esc-aborts, and a different announcement (Codex P2
+	// round-2 on PR #402).
+	const preflightController = setUpTurnAbortAffordance(messagesStore.userText);
+
 	lastUserTurn.value = messagesStore.userText;
 
 	const input = await buildTurnInput({
@@ -282,26 +328,49 @@ async function handleSend(): Promise<void> {
 		logger: loggerPort,
 	});
 
+	// Preflight Escape (Codex P2 on PR #402): if the user pressed Escape during
+	// the vault reads above, the preflight controller is aborted. Bail out
+	// before invoking the orchestrator so the turn never starts. Structured
+	// turns have no preflight controller (see above) and so skip this guard.
+	if (preflightController?.signal.aborted === true) {
+		inFlightAbort.value = null;
+		messagesStore.clearResponse();
+		await nextTick();
+		focusTextarea();
+		return;
+	}
+
 	// `onAbortController` fires the moment the orchestrator mints the
 	// streaming controller — before any delta arrives. Plugging it into
-	// `inFlightAbort` makes the "Stop generation" button visible for the
-	// duration of the stream, matching the pre-refactor behaviour.
+	// `inFlightAbort` replaces the preflight controller with the streaming
+	// one, so `handleStopGeneration` keeps aborting whichever is current.
 	const result = await getOrchestrator().sendTurn(input, {
 		onAbortController: (controller) => {
 			inFlightAbort.value = controller;
 		},
 	});
 	inFlightAbort.value = null;
-	if (result.ok && result.value.kind === 'structured-success') {
-		const pathError = getOrchestrator().consumePathError(result.value.proposal.proposalId);
-		if (pathError !== null) {
-			const next = new Map(proposalPathErrors.value);
-			next.set(result.value.proposal.proposalId, pathError);
-			proposalPathErrors.value = next;
-		}
-	}
+	recordStructuredPathErrorIfAny(result);
 	await nextTick();
 	focusTextarea();
+}
+
+/**
+ * Drain any structured-output path-validation error captured by the
+ * orchestrator into the per-proposal error map so `FileWriteProposalCard`
+ * renders the 'path-invalid' state. Extracted from `handleSend` to keep
+ * its cyclomatic complexity under the project's per-function lint cap.
+ */
+function recordStructuredPathErrorIfAny(
+	result: Awaited<ReturnType<ChatTurnOrchestrator['sendTurn']>>,
+): void {
+	if (!result.ok) return;
+	if (result.value.kind !== 'structured-success') return;
+	const pathError = getOrchestrator().consumePathError(result.value.proposal.proposalId);
+	if (pathError === null) return;
+	const next = new Map(proposalPathErrors.value);
+	next.set(result.value.proposal.proposalId, pathError);
+	proposalPathErrors.value = next;
 }
 
 const proposalDecisions = useProposalDecisions({
@@ -315,11 +384,24 @@ const proposalDecisions = useProposalDecisions({
 	proposalStore,
 	proposalPathErrors,
 });
-function handleAcceptProposal(payload: { proposalId: string }): Promise<void> {
-	return proposalDecisions.handleAcceptProposal(payload);
+/**
+ * WP-7 A11y #4: after a proposal Accept/Reject resolves, the card is
+ * unmounted by the proposal-store status mutation; without restoring focus
+ * to the textarea, focus drops to `<body>` and a keyboard user is stranded.
+ * We await the decision (so the card has time to update its `aria-hidden` /
+ * unmount surface) then call `focusTextarea()`.
+ */
+async function handleAcceptProposal(payload: { proposalId: string }): Promise<void> {
+	await proposalDecisions.handleAcceptProposal(payload);
+	await nextTick();
+	focusTextarea();
+	announcer.announce(tI18n('agent.proposalDecidedAnnouncement'));
 }
-function handleRejectProposal(payload: { proposalId: string }): Promise<void> {
-	return proposalDecisions.handleRejectProposal(payload);
+async function handleRejectProposal(payload: { proposalId: string }): Promise<void> {
+	await proposalDecisions.handleRejectProposal(payload);
+	await nextTick();
+	focusTextarea();
+	announcer.announce(tI18n('agent.proposalDecidedAnnouncement'));
 }
 
 async function handleRetryProposal(payload: { proposalId: string }): Promise<void> {
@@ -421,6 +503,7 @@ watch(available, async () => {
 					class="sp-chat__stop"
 					data-testid="chat-stop-generation"
 					:aria-label="$t('chat.stopGenerationAriaLabel')"
+					aria-keyshortcuts="Escape"
 					@click="handleStopGeneration"
 				>
 					{{ $t('chat.stopGeneration') }}
@@ -444,6 +527,7 @@ watch(available, async () => {
 				@send="handleSend"
 				@add-context-file="handleAddContextFile"
 				@select-command="handleSelectCommand"
+				@abort="handleAbortFromInput"
 			/>
 
 			<hr class="sp-chat__divider" />

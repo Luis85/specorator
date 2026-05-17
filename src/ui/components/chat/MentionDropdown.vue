@@ -31,8 +31,16 @@ const emit = defineEmits<{
 		aria-label="File mentions"
 		data-testid="mention-dropdown"
 	>
+		<!--
+			WP-7 A11y #3: per-option `id` exposed so `ChatInput`'s textarea can
+			set `aria-activedescendant="mention-item-${index}"` on the highlighted
+			row. Index-based ids dedupe basename-collisions (`specs/a/idea.md` +
+			`specs/b/idea.md`) that a path-suffixed id would expose to the SR as
+			two identical ids.
+		-->
 		<li
 			v-for="(candidate, index) in results"
+			:id="`mention-item-${index}`"
 			:key="`${candidate.kind}:${candidate.path}`"
 			class="sp-mention-dropdown__item"
 			:class="{ 'sp-mention-dropdown__item--selected': index === selectedIndex }"
