@@ -101,14 +101,6 @@ const lastUserTurn = ref<string>('');
  */
 const inFlightAbort = ref<AbortController | null>(null);
 
-// Synchronous re-entry guard. `messagesStore.status` is only flipped to
-// `'loading'` inside `orchestrator.sendTurn()` after the (potentially slow)
-// `buildTurnInput()` await resolves — without this local ref, a double Enter
-// or quick second click while vault reads are in flight would start
-// overlapping turns. Set true synchronously on entry, cleared in `finally`.
-const sendInFlight = ref(false);
-const isSending = computed(() => messagesStore.status === 'loading' || sendInFlight.value);
-
 function handleStopGeneration(): void {
 	inFlightAbort.value?.abort();
 }
@@ -236,21 +228,23 @@ function getOrchestrator(): ChatTurnOrchestrator {
 // snapshot inputs, surface the AbortController, refocus, and seed the
 // per-proposal path-error map for the proposal card.
 async function handleSend(): Promise<void> {
-	if (sendInFlight.value) return;
 	const text = messagesStore.userText.trim();
 	if (!text) return;
 	if (messagesStore.status === 'loading') return;
 	if (!available.value) return;
 
-	// `.finally()` chain (not try/finally) per the no-restricted-syntax rule.
-	// See develop commit a619dab for the established pattern.
-	sendInFlight.value = true;
-	await runSendInner().finally(() => {
-		sendInFlight.value = false;
-	});
-}
+	// Flip the cross-component request state to `'loading'` SYNCHRONOUSLY before
+	// any await, so every gate that depends on `messagesStore.status === 'loading'`
+	// (the "New conversation" button in AgentSidepanelRoot, the textarea / send
+	// button / context-file list, the orchestrator's own re-entry guard) sees the
+	// in-flight turn during the potentially-slow `buildTurnInput()` vault reads.
+	// Without this, a fast second Enter or a mid-preflight "New conversation"
+	// click could orphan the in-flight response onto a stale activeThreadId
+	// (Codex P1 #3254392924).
+	messagesStore.setStructuredFail(false);
+	streamingStore.resetStreaming();
+	messagesStore.beginRequest();
 
-async function runSendInner(): Promise<void> {
 	lastUserTurn.value = messagesStore.userText;
 
 	const input = await buildTurnInput({
@@ -417,7 +411,7 @@ watch(available, async () => {
 
 			<ContextFileList
 				:files="messagesStore.effectiveContextFiles"
-				:disabled="isSending"
+				:disabled="messagesStore.status === 'loading'"
 				@remove="handleRemoveFile"
 			/>
 
@@ -426,8 +420,8 @@ watch(available, async () => {
 			<ChatInput
 				ref="inputRef"
 				:model-value="messagesStore.userText"
-				:disabled="isSending"
-				:loading="isSending"
+				:disabled="messagesStore.status === 'loading'"
+				:loading="messagesStore.status === 'loading'"
 				@update:model-value="handleUserTextUpdate"
 				@send="handleSend"
 				@add-context-file="handleAddContextFile"
