@@ -18,7 +18,8 @@ Split the 648-LOC `chatStore` into three Pinia stores aligned with its three rea
 
 **New:**
 - `src/ui/stores/chatThreadsStore.ts` — owns `chatThreads`, `activeThreadId`, `markThreadUsed`, `captureSessionId`, `clearThreadMessages`, persistence keys.
-- `src/ui/stores/streamingTurnStore.ts` — owns `streamingText`, `streamingThinking`, `streamingToolCalls`, `lastUsage`, `cliStartingUp`, `sessionResumed`, `compactBoundaries`, plus actions `appendStreamingDelta`, `appendStreamingThinking`, `startStreamingToolCall`, `appendStreamingToolCallInput`, `finishStreamingToolCall`, `setLastUsage`, `appendCompactBoundaryNotice`, `resetStreaming`.
+- `src/ui/stores/streamingTurnStore.ts` — owns `streamingText`, `streamingThinking`, `streamingToolCalls`, `lastUsage`, `cliStartingUp`, `sessionResumed`, plus actions `appendStreamingDelta`, `appendStreamingThinking`, `startStreamingToolCall`, `appendStreamingToolCallInput`, `finishStreamingToolCall`, `setLastUsage`, `resetStreaming`.
+- `compactBoundaries` (per-thread map) and `appendCompactBoundaryNotice` go in `messagesStore` (or `chatThreadsStore` if `messages` lives there), NOT `streamingTurnStore` — they are thread-scoped transcript metadata read per `threadId` in `MessageList.vue` and must survive `resetStreaming()` on transport-change / new-conversation paths. Wiping them with the per-turn slots would regress message-list rendering.
 - `src/ui/stores/proposalStore.ts` — owns `proposals`, `structuredFail`, `clearThreadProposals`, retry actions.
 - `src/ui/stores/messagesStore.ts` — owns `messages` (per-thread map), `appendMessage`, `clearThreadMessages` (or fold into threads — implementer's call; document the choice in the loop-state.md design decision).
 - `src/ui/composables/useChatReset.ts` — one composable exposing `resetForNewConversation(previousThreadId)` that calls all four stores' reset hooks. Single source of truth for "new conversation".

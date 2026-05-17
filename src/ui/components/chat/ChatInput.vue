@@ -242,7 +242,7 @@ function handleKeydown(event: KeyboardEvent): void {
 	// IME-composition guard. `isComposing` is true while a Japanese/Chinese/
 	// Korean IME is mid-composition; pressing Enter to commit must NOT
 	// trigger send / commit-mention / dismiss-palette.
-	if (event.isComposing || event.keyCode === 229) return;
+	if (event.isComposing) return;
 	if (handlePickerKey(event)) return;
 	if (handlePaletteKeydown(event)) return;
 	tryHandleSendKey(event);

@@ -104,7 +104,7 @@ async function handleRowEnter(): Promise<void> {
 
 function handleReviseKeydown(event: KeyboardEvent): void {
 	if (resolved.value) return;
-	if (event.isComposing || event.keyCode === 229) return;
+	if (event.isComposing) return;
 	if (event.key === 'Escape') {
 		event.preventDefault();
 		collapseRevise();
