@@ -17,7 +17,7 @@
 | WP-9 | Security hardening pass | Security | queued | — | `claude/asv3-wp09-security-hardening` |
 | WP-10 | Perf: tool-call shallowRef, chunk-array, scroll rAF, mention/slash caches, buffer cap | Perf | queued | WP-2, WP-3 | `claude/asv3-wp10-perf-hardening` |
 | WP-11 | ClaudeSubprocessAdapter split (Lifecycle / NdjsonChannel / runStructured) | Spine | in-progress | WP-1 ✓ | `claude/asv3-wp11-subprocess-split` |
-| WP-12 | ClaudeCliPort: queryStream-only + lifecycle port | Spine | in-progress | WP-1 ✓ | `claude/asv3-wp12-claudecli-port-cleanup` |
+| WP-12 | ClaudeCliPort: queryStream-only + lifecycle port | Spine | **merged** ([#399](https://github.com/Luis85/specorator/pull/399)) | WP-1 ✓ | `claude/asv3-wp12-claudecli-port-cleanup` |
 | WP-13 | Test catch-up: secret store, markdown adapter, POs, slash loader edges | Tests | queued | — | `claude/asv3-wp13-test-catchup` |
 | WP-14 | ChatThreadsRepository port + domain VO tests | Tests | queued | — | `claude/asv3-wp14-chat-threads-repo` |
 | WP-15 | degradedClaudeCliPort → first-class adapter + TurnInputBuilder | Cleanup | queued | WP-2 | `claude/asv3-wp15-degraded-port-and-turninput` |
