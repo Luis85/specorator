@@ -241,8 +241,11 @@ function tryHandleSendKey(event: KeyboardEvent): boolean {
 function handleKeydown(event: KeyboardEvent): void {
 	// IME-composition guard. `isComposing` is true while a Japanese/Chinese/
 	// Korean IME is mid-composition; pressing Enter to commit must NOT
-	// trigger send / commit-mention / dismiss-palette.
-	if (event.isComposing) return;
+	// trigger send / commit-mention / dismiss-palette. The `keyCode === 229`
+	// fallback covers Safari paths where `isComposing` is false on the Enter
+	// keydown but the event is still IME-handling (Process key).
+	// eslint-disable-next-line @typescript-eslint/no-deprecated -- legacy IME fallback
+	if (event.isComposing || event.keyCode === 229) return;
 	if (handlePickerKey(event)) return;
 	if (handlePaletteKeydown(event)) return;
 	tryHandleSendKey(event);
