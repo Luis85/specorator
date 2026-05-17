@@ -131,6 +131,29 @@ function closeHelp(): void {
 }
 
 /**
+ * UX #4 (WP-8 Codex P2 round-2): close the /help popover when the user
+ * interacts anywhere outside it. The popover is anchored to the header
+ * but floats over the chat surface; without this handler, clicking the
+ * message list or the textarea leaves it stuck open until the explicit
+ * Close button is hit.
+ */
+const helpPanelEl = ref<HTMLElement | null>(null);
+function onDocumentPointerDownForHelp(event: PointerEvent): void {
+	if (!helpOpen.value) return;
+	const target = event.target instanceof Node ? event.target : null;
+	if (target === null) return;
+	if (helpPanelEl.value?.contains(target) === true) return;
+	// Clicks on the help-open trigger button (which lives in
+	// AgentSidepanelHeader) should not be intercepted as "outside" — that
+	// button toggles helpOpen and its own click handler runs first via the
+	// regular event flow. We approximate by checking data-testid.
+	if (target instanceof Element && target.closest('[data-testid="agent-help-toggle"]') !== null) {
+		return;
+	}
+	closeHelp();
+}
+
+/**
  * UX #11 (WP-8). Empty-state tile pre-fills the chat textarea with a
  * matching prompt fragment so the user can edit and send. We do NOT
  * auto-send — Cmd/Ctrl+Enter remains the user's commit gesture.
@@ -161,10 +184,12 @@ async function handleEmptyTileAction(
 
 onMounted(() => {
 	window.addEventListener('sp:notice', onNotice);
+	document.addEventListener('pointerdown', onDocumentPointerDownForHelp, true);
 });
 
 onUnmounted(() => {
 	window.removeEventListener('sp:notice', onNotice);
+	document.removeEventListener('pointerdown', onDocumentPointerDownForHelp, true);
 });
 </script>
 
@@ -186,6 +211,7 @@ onUnmounted(() => {
         -->
 				<div
 					v-if="helpOpen"
+					ref="helpPanelEl"
 					class="sp-agent__help"
 					role="dialog"
 					:aria-label="t('agent.help.openAriaLabel')"
