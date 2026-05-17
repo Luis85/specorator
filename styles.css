@@ -1204,18 +1204,18 @@ to {
 	justify-content: flex-end;
 }
 
-.specorator-root :where(.sp-chat__response-idle[data-v-90757bc5]) {
+.specorator-root :where(.sp-chat__response-idle[data-v-cc9b37de]) {
   color: var(--text-muted);
   font-size: 0.875rem;
   margin: 0;
   font-style: italic;
 }
-.specorator-root :where(.sp-chat__response-loading[data-v-90757bc5]) {
+.specorator-root :where(.sp-chat__response-loading[data-v-cc9b37de]) {
   color: var(--text-muted);
   font-size: 0.875rem;
   margin: 0;
 }
-.specorator-root :where(.sp-chat__response-text[data-v-90757bc5]) {
+.specorator-root :where(.sp-chat__response-text[data-v-cc9b37de]) {
   white-space: pre-wrap;
   word-break: break-word;
   font-family: var(--font-text);
@@ -1223,7 +1223,7 @@ to {
   color: var(--text-normal);
   margin: 0;
 }
-.specorator-root :where(.sp-chat__trim-notice[data-v-90757bc5]) {
+.specorator-root :where(.sp-chat__trim-notice[data-v-cc9b37de]) {
   background: var(--background-modifier-border);
   color: var(--text-warning, var(--text-muted));
   border-radius: 6px;
@@ -1231,7 +1231,7 @@ to {
   font-size: 0.8125rem;
   margin: 0 0 0.5rem;
 }
-.specorator-root :where(.sp-chat__error[data-v-90757bc5]) {
+.specorator-root :where(.sp-chat__error[data-v-cc9b37de]) {
   color: var(--text-error);
   font-size: 0.875rem;
   margin: 0;
@@ -1358,6 +1358,27 @@ to {
   color: var(--sp-proposal-warning, var(--text-warning, var(--text-muted)));
 }
 
+.specorator-root :where(.sp-chat__degraded[data-v-7113639f]) {
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	padding: 1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+.specorator-root :where(.sp-chat__degraded-heading[data-v-7113639f]) {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--text-normal);
+}
+.specorator-root :where(.sp-chat__degraded-body[data-v-7113639f]) {
+	margin: 0;
+	font-size: 0.875rem;
+	color: var(--text-muted);
+}
+
 /*
  * Sized to content rather than `height: 100%` so the component composes
  * naturally inside `AgentSidepanelRoot` where it sits beneath a scrollable
@@ -1367,7 +1388,7 @@ to {
  * parent: in the agent sidepanel the parent gives ChatSidebar `flex: 0 0
  * auto` and `MessageList` takes the remaining grow space.
  */
-.specorator-root :where(.sp-chat-sidebar[data-v-0134798d]) {
+.specorator-root :where(.sp-chat-sidebar[data-v-c2627d56]) {
 	padding: 1rem;
 	display: flex;
 	flex-direction: column;
@@ -1375,24 +1396,24 @@ to {
 	box-sizing: border-box;
 	flex-shrink: 0;
 }
-.specorator-root :where(.sp-chat__title[data-v-0134798d]) {
+.specorator-root :where(.sp-chat__title[data-v-c2627d56]) {
 	margin: 0;
 	font-size: 1.125rem;
 	font-weight: 700;
 	color: var(--text-normal);
 }
-.specorator-root :where(.sp-chat__header[data-v-0134798d]) {
+.specorator-root :where(.sp-chat__header[data-v-c2627d56]) {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
 	flex-wrap: wrap;
 }
-.specorator-root :where(.sp-chat__divider[data-v-0134798d]) {
+.specorator-root :where(.sp-chat__divider[data-v-c2627d56]) {
 	margin: 0;
 	border: none;
 	border-top: 1px solid var(--background-modifier-border);
 }
-.specorator-root :where(.sp-chat__stop[data-v-0134798d]) {
+.specorator-root :where(.sp-chat__stop[data-v-c2627d56]) {
 	margin-left: auto;
 	font-size: 0.75rem;
 	font-weight: 500;
@@ -1406,28 +1427,8 @@ to {
 		background-color 0.15s,
 		border-color 0.15s;
 }
-.specorator-root :where(.sp-chat__stop[data-v-0134798d]:hover) {
+.specorator-root :where(.sp-chat__stop[data-v-c2627d56]:hover) {
 	background: var(--background-modifier-error-hover, var(--interactive-hover));
-}
-.specorator-root :where(.sp-chat__degraded[data-v-0134798d]) {
-	background: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 8px;
-	padding: 1rem;
-	display: flex;
-	flex-direction: column;
-	gap: 0.5rem;
-}
-.specorator-root :where(.sp-chat__degraded-heading[data-v-0134798d]) {
-	margin: 0;
-	font-size: 1rem;
-	font-weight: 600;
-	color: var(--text-normal);
-}
-.specorator-root :where(.sp-chat__degraded-body[data-v-0134798d]) {
-	margin: 0;
-	font-size: 0.875rem;
-	color: var(--text-muted);
 }
 
 .specorator-root :where(.sp-agent[data-v-5c73c3c4]) {

@@ -19,8 +19,13 @@ type ResponseState =
 	| 'structured-fail'
 
 function mountResponse(state: ResponseState, text?: string) {
+	// WP-2: `legacyMode=true` exercises the original (full) state machine —
+	// idle placeholder, loading copy, success-text body. The agent sidepanel
+	// uses `legacyMode=false`; UX-#1 / UX-#2 suppress those branches there
+	// because `MessageList` owns the rendering surface. The integration
+	// behaviour of the new mode is asserted in `ChatSidebar.test.ts`.
 	const wrapper = mount(ChatResponse, {
-		props: { state, text },
+		props: { state, text, legacyMode: true },
 	})
 	return new ChatResponsePO(wrapper)
 }
@@ -186,7 +191,7 @@ describe('ChatResponse', () => {
 	describe('proposalCard named slot (T-ASM-042)', () => {
 		it('renders slot content alongside the success text', () => {
 			const wrapper = mount(ChatResponse, {
-				props: { state: 'success', text: 'Reply body' },
+				props: { state: 'success', text: 'Reply body', legacyMode: true },
 				slots: {
 					proposalCard: '<div data-testid="stub-proposal-card">card</div>',
 				},
@@ -197,13 +202,34 @@ describe('ChatResponse', () => {
 
 		it('renders slot content alongside trimmed-success', () => {
 			const wrapper = mount(ChatResponse, {
-				props: { state: 'trimmed-success', text: 'Reply body' },
+				props: { state: 'trimmed-success', text: 'Reply body', legacyMode: true },
 				slots: {
 					proposalCard: '<div data-testid="stub-proposal-card">card</div>',
 				},
 			})
 			expect(wrapper.find('[data-testid="chat-response-trim-notice"]').exists()).toBe(true)
 			expect(wrapper.find('[data-testid="stub-proposal-card"]').exists()).toBe(true)
+		})
+
+		it('non-legacy mode (agent sidepanel) does not render the success text body — UX-#1', () => {
+			const wrapper = mount(ChatResponse, {
+				props: { state: 'success', text: 'Reply body', legacyMode: false },
+				slots: {
+					proposalCard: '<div data-testid="stub-proposal-card">card</div>',
+				},
+			})
+			// UX-#1: MessageList is the rendering surface in non-legacy mode.
+			expect(wrapper.find('[data-testid="chat-response-text"]').exists()).toBe(false)
+			// Proposal card slot must still be hosted here.
+			expect(wrapper.find('[data-testid="stub-proposal-card"]').exists()).toBe(true)
+		})
+
+		it('non-legacy mode does not render the loading "Thinking…" copy — UX-#2', () => {
+			const wrapper = mount(ChatResponse, {
+				props: { state: 'loading', legacyMode: false },
+			})
+			// UX-#2: MessageList's streaming bubble carries the in-flight signal.
+			expect(wrapper.find('[data-testid="chat-response-loading"]').exists()).toBe(false)
 		})
 	})
 })
