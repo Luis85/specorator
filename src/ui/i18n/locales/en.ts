@@ -183,6 +183,7 @@ export default {
     streamingResponse: 'Assistant is replying…',
     assistantReplyAnnouncement: 'Assistant replied. Press Tab to read the response.',
     generationStartedAnnouncement: 'Generating. Press Escape to stop.',
+    structuredGenerationStartedAnnouncement: 'Generating proposal — please wait.',
     generationAbortedAnnouncement: 'Generation stopped.',
     proposalDecidedAnnouncement: 'Proposal handled. Focus returned to the message field.',
     planApprovalAriaLabel: 'Plan approval',

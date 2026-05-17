@@ -183,6 +183,7 @@ export default {
     streamingResponse: 'Assistent antwortet…',
     assistantReplyAnnouncement: 'Assistent hat geantwortet. Drücke Tab, um die Antwort zu lesen.',
     generationStartedAnnouncement: 'Generiere. Drücke Escape, um zu stoppen.',
+    structuredGenerationStartedAnnouncement: 'Generiere Vorschlag — bitte warten.',
     generationAbortedAnnouncement: 'Generierung gestoppt.',
     proposalDecidedAnnouncement: 'Vorschlag bearbeitet. Fokus zum Nachrichtenfeld zurückgegeben.',
     planApprovalAriaLabel: 'Plan-Freigabe',
