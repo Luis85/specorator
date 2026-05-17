@@ -21,6 +21,7 @@ import type { LoggerPort } from '@/domain/ports/LoggerPort'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 import { ClaudeSubprocessAdapter } from '@/infrastructure/obsidian/ClaudeSubprocessAdapter'
+import { collectStream } from '@/application/chat/collectStream'
 
 interface FakeChild extends EventEmitter {
   stdout: EventEmitter
@@ -193,7 +194,7 @@ describe('T-ASM-081 — ClaudeSubprocessAdapter telemetry shape', () => {
     await adapter.startup()
 
     const sessionId = '99999999-aaaa-bbbb-cccc-dddddddddddd'
-    const pending = adapter.query('hello', {})
+    const pending = collectStream(adapter.queryStream('hello', {}))
     queueMicrotask(() => {
       // system/init carries the session id; result then closes the turn.
       const lines = [

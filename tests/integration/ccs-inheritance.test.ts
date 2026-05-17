@@ -21,8 +21,14 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { MockClaudeSubprocessAdapter } from '@/infrastructure/mock/MockClaudeSubprocessAdapter'
-import { isSubscriptionCapable } from '@/application/chat/queryStructured'
 import { getChatStoresFacade } from '../__fakes__/chatStoresFacade'
+
+// WP-12 (Arch review #3): `isSubscriptionCapable` is deleted. The application
+// layer now narrows via `typeof port.runStructured === 'function'`; this
+// integration suite simply pins the same check inline.
+function isSubscriptionCapable(port: object): boolean {
+  return typeof (port as { runStructured?: unknown }).runStructured === 'function'
+}
 
 describe('TEST-ASM-053 — CCS auto-context inheritance under subscription transport (T-ASM-083)', () => {
   let port: MockClaudeSubprocessAdapter

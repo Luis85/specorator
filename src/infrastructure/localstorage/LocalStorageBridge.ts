@@ -8,13 +8,10 @@ import type {
 	ActiveFileSnapshot,
 	Unsubscriber,
 	ClaudeCliPort,
-	ClaudeCliQueryOptions,
 	ClaudeCliStreamOptions,
 	StreamDelta,
 } from '@/domain/ports';
-import { ClaudeCliError, streamFromQuery } from '@/domain/ports';
-import type { Result } from '@/domain/shared/Result';
-import { err } from '@/domain/shared/Result';
+import { ClaudeCliError } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
 
 const FILE_PREFIX = 'specorator:file:';
@@ -197,24 +194,14 @@ export class LocalStorageBridge
 		return Promise.resolve(false);
 	}
 
-	query(
+	// eslint-disable-next-line @typescript-eslint/require-await
+	async *queryStream(
 		_prompt: string,
-		_options?: ClaudeCliQueryOptions,
-	): Promise<Result<string, ClaudeCliError>> {
-		return Promise.resolve(
-			err(new ClaudeCliError('NOT_INSTALLED', 'LocalStorageBridge: not available')),
-		);
-	}
-
-	startup(): Promise<void> {
-		return Promise.resolve();
-	}
-
-	shutdown(): void {
-		// no-op stub
-	}
-
-	queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
-		return streamFromQuery((p, o) => this.query(p, o), prompt, options);
+		_options?: ClaudeCliStreamOptions,
+	): AsyncIterable<StreamDelta> {
+		yield {
+			type: 'error',
+			error: new ClaudeCliError('NOT_INSTALLED', 'LocalStorageBridge: not available'),
+		};
 	}
 }

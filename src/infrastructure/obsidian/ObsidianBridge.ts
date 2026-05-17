@@ -10,13 +10,10 @@ import type {
 	ActiveFileSnapshot,
 	Unsubscriber,
 	ClaudeCliPort,
-	ClaudeCliQueryOptions,
 	ClaudeCliStreamOptions,
 	StreamDelta,
 } from '@/domain/ports';
-import { ClaudeCliError, streamFromQuery } from '@/domain/ports';
-import type { Result } from '@/domain/shared/Result';
-import { err } from '@/domain/shared/Result';
+import { ClaudeCliError } from '@/domain/ports';
 
 type FileManagerWithTrash = App['fileManager'] & {
 	trashFile?: (file: TFile) => Promise<void>;
@@ -251,24 +248,17 @@ export class ObsidianBridge
 		});
 	}
 
-	query(
+	// eslint-disable-next-line @typescript-eslint/require-await
+	async *queryStream(
 		_prompt: string,
-		_options?: ClaudeCliQueryOptions,
-	): Promise<Result<string, ClaudeCliError>> {
-		return Promise.resolve(
-			err(new ClaudeCliError('NOT_INSTALLED', 'ObsidianBridge: use ClaudeCliAdapter for queries')),
-		);
-	}
-
-	queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
-		return streamFromQuery((p, o) => this.query(p, o), prompt, options);
-	}
-
-	startup(): Promise<void> {
-		return Promise.resolve();
-	}
-
-	shutdown(): void {
-		// no-op stub — ClaudeCliAdapter handles its own lifecycle
+		_options?: ClaudeCliStreamOptions,
+	): AsyncIterable<StreamDelta> {
+		yield {
+			type: 'error',
+			error: new ClaudeCliError(
+				'NOT_INSTALLED',
+				'ObsidianBridge: use ClaudeCliAdapter for queries',
+			),
+		};
 	}
 }

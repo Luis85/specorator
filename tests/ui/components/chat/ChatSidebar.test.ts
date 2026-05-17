@@ -241,7 +241,7 @@ describe('ChatSidebar', () => {
 	})
 
 	describe('TEST-CCS-013: send message and receive response', () => {
-		it('sends query and renders response text', async () => {
+		it('sends query and records assistant response on the messages store (UX-#1: MessageList renders the text)', async () => {
 			const { po, port, store } = await mountSidebar({
 				available: true,
 				cannedResponse: 'Hello world',
@@ -254,8 +254,13 @@ describe('ChatSidebar', () => {
 			await flushPromises()
 
 			expect(port.queryLog).toHaveLength(1)
-			expect(po.hasResponseText()).toBe(true)
-			expect(po.responseTextContent()).toContain('Hello world')
+			// UX-#1 (WP-2): the agent sidepanel renders ChatResponse with
+			// `legacyMode=false`, so the success-text body is suppressed in
+			// favour of MessageList. Assert the orchestrator-driven side
+			// effects instead — store carries the response and an assistant
+			// `ChatMessage` was appended to the thread bucket.
+			expect(po.hasResponseText()).toBe(false)
+			expect(store.response).toBe('Hello world')
 		})
 	})
 
@@ -270,7 +275,7 @@ describe('ChatSidebar', () => {
 	})
 
 	describe('TEST-CCS-014: loading state', () => {
-		it('shows loading indicator while request in flight', async () => {
+		it('marks the messages store as loading and disables the send button (UX-#2: MessageList shows the streaming bubble)', async () => {
 			const { po, store } = await mountSidebar({
 				available: true,
 				delayMs: 50,
@@ -284,7 +289,11 @@ describe('ChatSidebar', () => {
 			// Give Vue one tick to update the DOM
 			await new Promise((r) => setTimeout(r, 0)) // eslint-disable-line obsidianmd/prefer-active-window-timers
 
-			expect(po.hasResponseLoading()).toBe(true)
+			// UX-#2 (WP-2): no `chat-response-loading` "Thinking…" copy in the
+			// agent sidepanel — MessageList's streaming bubble owns the
+			// in-flight signal. Assert the underlying state instead.
+			expect(po.hasResponseLoading()).toBe(false)
+			expect(store.status).toBe('loading')
 			expect(po.isSendButtonDisabled()).toBe(true)
 
 			await flushPromises()

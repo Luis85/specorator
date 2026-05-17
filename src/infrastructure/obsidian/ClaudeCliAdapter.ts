@@ -2,13 +2,11 @@ import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
 import { isAbsolute } from 'path';
 import type {
 	ClaudeCliPort,
-	ClaudeCliQueryOptions,
 	ClaudeCliStreamOptions,
 	StreamDelta,
 } from '@/domain/ports/ClaudeCliPort';
 import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort';
-import type { Result } from '@/domain/shared/Result';
-import { ok, err } from '@/domain/shared/Result';
+import type { TransportLifecyclePort } from '@/domain/ports/TransportLifecyclePort';
 import type { SessionId } from '@/domain/chat/SessionId';
 import type { LoggerPort } from '@/domain/ports';
 import {
@@ -33,10 +31,14 @@ interface SdkMessage {
 
 /**
  * Production implementation of ClaudeCliPort using @anthropic-ai/claude-agent-sdk.
+ * Also implements `TransportLifecyclePort` (`startup` / `shutdown`) per WP-12
+ * (Arch review #3) — lifecycle is its own narrow port now, but the same
+ * adapter class fulfils both contracts.
+ *
  * Satisfies REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017, REQ-CCS-025,
  * NFR-CCS-003, NFR-CCS-005, NFR-CCS-007, SPEC-CCS-001 §5.
  */
-export class ClaudeCliAdapter implements ClaudeCliPort {
+export class ClaudeCliAdapter implements ClaudeCliPort, TransportLifecyclePort {
 	/** True only after startup() succeeds. Never set to true if API key is missing. */
 	private _available = false;
 	/** Indicates whether SDK has been initialized. */
@@ -120,37 +122,6 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 	}
 
 	/**
-	 * Send a prompt to Claude via the SDK. Returns Result<string, ClaudeCliError>.
-	 * Never throws. Now layered on top of `queryStream()` — collects every
-	 * `text` delta into a single string so existing free-text call sites stay
-	 * unchanged. The Codex P1 audit / NFR-CCS-003 timeout + abort behaviour
-	 * is inherited from `queryStream()`.
-	 *
-	 * Satisfies REQ-CCS-013, REQ-CCS-016, NFR-CCS-003, SPEC-CCS-001 §5.3.
-	 */
-	async query(
-		prompt: string,
-		options?: ClaudeCliQueryOptions,
-	): Promise<Result<string, ClaudeCliError>> {
-		if (options?.maxTurns !== undefined && options.maxTurns > 1) {
-			this._logger.warn('ClaudeCliAdapter.query(): maxTurns > 1 is clamped to 1 in v1');
-		}
-		const chunks: string[] = [];
-		for await (const delta of this.queryStream(prompt, options)) {
-			if (delta.type === 'text') {
-				chunks.push(delta.text);
-			} else if (delta.type === 'error') {
-				return err(delta.error);
-			} else if (delta.type === 'done') {
-				return ok(chunks.join(''));
-			}
-		}
-		// Iterator exhausted without `done` — treat as failure (mirrors the
-		// original `_runSdkQuery` "No result message" behaviour).
-		return err(new ClaudeCliError('QUERY_FAILED', 'No result message received from SDK'));
-	}
-
-	/**
 	 * Returns true if the adapter is ready to accept queries.
 	 * Satisfies REQ-CCS-018, REQ-CCS-019, REQ-CCS-022, SPEC-CCS-001 §5.4.
 	 */
@@ -171,7 +142,8 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 	}
 
 	/**
-	 * Streaming variant of `query()` (IDEA-ASV-001 Increment 2, PR-ASV-2-sdk).
+	 * Canonical streaming method (WP-12 — `query()` was deleted; non-streaming
+	 * consumers use `collectStream()` from `@/application/chat/collectStream`).
 	 *
 	 * Emits real per-token text deltas by consuming the Anthropic Agent SDK's
 	 * `stream_event` messages (`includePartialMessages: true`). The SDK emits
@@ -183,9 +155,9 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 	 *
 	 * The caller's `options.signal` is wired into the SDK's `abortController`;
 	 * aborting mid-stream causes the generator to throw, which the catch
-	 * branch maps to a `QUERY_FAILED` error delta. Timeout follows the same
-	 * pattern as `query()`: a separate Promise rejects on the deadline and
-	 * aborts the SDK controller, then the catch maps it to `TIMEOUT`.
+	 * branch maps to a `QUERY_FAILED` error delta. A separate Promise rejects
+	 * on the deadline and aborts the SDK controller, then the catch maps it
+	 * to `TIMEOUT`.
 	 *
 	 * Never throws. Mid-flight errors are delivered as a terminal `error`
 	 * delta; a successful turn emits a final `done`.
@@ -415,18 +387,18 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 
 	private _mapError(e: unknown, timeoutMs: number): ClaudeCliError {
 		if (e instanceof ClaudeCliError && e.errorCode === 'TIMEOUT') {
-			this._logger.warn('ClaudeCliAdapter.query(): timeout', { timeoutMs });
+			this._logger.warn('ClaudeCliAdapter.queryStream(): timeout', { timeoutMs });
 			return e;
 		}
 		if (e instanceof Error) {
 			if (/api.key|authentication|401/i.test(e.message)) {
-				this._logger.warn('ClaudeCliAdapter.query(): API key error');
+				this._logger.warn('ClaudeCliAdapter.queryStream(): API key error');
 				return new ClaudeCliError('API_KEY_MISSING', 'Authentication failed', e);
 			}
-			this._logger.warn('ClaudeCliAdapter.query(): SDK error', { error: e.message });
+			this._logger.warn('ClaudeCliAdapter.queryStream(): SDK error', { error: e.message });
 			return new ClaudeCliError('QUERY_FAILED', 'Query failed', e);
 		}
-		this._logger.warn('ClaudeCliAdapter.query(): unknown error');
+		this._logger.warn('ClaudeCliAdapter.queryStream(): unknown error');
 		return new ClaudeCliError('QUERY_FAILED', 'Unknown error', e);
 	}
 }
