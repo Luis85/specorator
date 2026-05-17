@@ -120,6 +120,71 @@ All DoD boxes checked. Ready to commit and open PR.
   to `origin/claude/asv3-wp08-ux-polish-wave`.
 - Opened PR #403 against `develop` via `mcp__github__create_pull_request`.
 
+## Recovery verification pass (post-handoff)
+
+A handoff brief reported that the prior implementer's commit was lost
+before being pushed and asked the next operator to reproduce the work
+from this loop-state. On taking over, the recovery operator verified
+that the report was incorrect — the original implementer had in fact
+completed the rebase, the commit, the push, AND the PR opening before
+the session ended (as Iteration 7 above already documents). No code
+reproduction was needed.
+
+### 2026-05-17 — Recovery Iteration R1: state verification
+
+- Worktree `.worktrees/asv3-wp08` was already at `c7dc199` on the
+  `claude/asv3-wp08-ux-polish-wave` branch, and `git ls-remote` confirmed
+  the same SHA on `origin/claude/asv3-wp08-ux-polish-wave`. Nothing was
+  lost.
+- `git diff --stat origin/develop..HEAD` = 19 files, +1205 / -219.
+  Spot-checks against the iteration entries above confirmed every UX
+  finding (#4, #8, #11, #12, #14, #16, #17, #18, #19, #20) is reflected
+  in the committed diff:
+  - `en.ts` / `de.ts` carry every key from Iteration 1.
+  - `SessionResumeIndicator.vue` has the "Resumed" label + tinted pill
+    chrome (Iteration 2).
+  - `InlinePlanApprovalCard.vue` imports `MarkdownBlock`, declares the
+    `persistOnUnmount` prop, and emits `pending-changed` (Iteration 4).
+  - `AgentSidepanelRoot.vue`, `MessageList.vue`, `ChatSidebar.vue`,
+    `ChatInput.vue`, `ContextFileChip.vue`, `ContextFileList.vue`,
+    `SubprocessStartingPill.vue`, `TransportStatusPill.vue` and their
+    tests are all present.
+
+### 2026-05-17 — Recovery Iteration R2: full pre-PR gate re-run
+
+Re-ran the full gate from `.worktrees/asv3-wp08` to make sure the
+branch was still healthy at HEAD post-handoff:
+
+- `npm audit --audit-level=high --omit=dev` → 0 vulnerabilities.
+- `npm run typecheck` → clean.
+- `npm run lint` → 0 errors, 26 unrelated `vue/one-component-per-file`
+  + `vue/require-prop-types` warnings on pre-existing test stubs
+  (`ChatSidebar.test.ts`, `useSettings.test.ts`).
+- `npm run test` → 144 files, 1792 tests, all green.
+- `npm run build` → plugin bundle built (`dist-plugin/main.js`).
+- `npm run build:web` → standalone bundle built (`dist-standalone/`).
+- `npm run docs:api` → 0 errors, 1 pre-existing warning on
+  `VaultPort.fileExists` (unrelated to WP-8).
+
+The 1792 / 144 file count matches the post-rebase numbers Iteration 7
+already recorded.
+
+### 2026-05-17 — Recovery Iteration R3: PR state check
+
+- `mcp__github__list_pull_requests` confirmed PR #403 already exists
+  for `head=Luis85:claude/asv3-wp08-ux-polish-wave` against `develop`,
+  state `open`, `mergeable_state: clean`, 1 commit, head SHA `c7dc199`,
+  1205 / 219 line diff over 19 files.
+- `mcp__github__pull_request_read get_check_runs` shows 9 check runs,
+  all `completed` with `success` or skipped-conditional conclusions:
+  CodeQL, Analyze (javascript-typescript), Verify PR source is develop,
+  Install/typecheck/lint/test/build, Validate manifest + versions.json,
+  Lint workflow files (actionlint), Review pull-request dependency
+  changes, GitGuardian Security Checks, Auto-merge dependabot patches.
+- No new commit was added during the recovery pass — the branch is
+  already at the correct SHA and the PR is green. Adding an empty
+  recovery commit would have invalidated the green CI for no benefit.
+
 ## Carry-out items
 
 - No `[carry-out]` items so far. WP-7 has not pushed any commits yet
@@ -129,3 +194,7 @@ All DoD boxes checked. Ready to commit and open PR.
   with a WP-7 commit message but a WP-8 diff. Soft-reset and re-committed
   with the correct WP-8 message before pushing. No upstream
   consequences (the bogus commit never reached origin).
+- Recovery handoff brief reported "commit was lost before being pushed"
+  — incorrect; the commit had been pushed (and the PR opened) before
+  the session ended. Future handoffs should `git ls-remote` and
+  `mcp__github__list_pull_requests` BEFORE assuming work was lost.
