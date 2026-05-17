@@ -116,7 +116,68 @@ F7 + F-8 closure summary:
 
 `npm run lint:fix` mid-iteration also stripped two `// eslint-disable-next-line` comments on files outside WP-11 scope (`src/infrastructure/obsidian/ClaudeCliAdapter.ts` and `src/plugin/main.ts`). Reverted via `git checkout` — those files now show no changes vs `origin/develop`. `npm run verify` EXIT=0 after revert.
 
+### Iteration 9 — Rebase onto post-WP-12 develop (option A: rebase).
+
+WP-12 (PR #399, commit `1e43b83`) landed on `develop` ahead of WP-11. Rebased
+the two WP-11 commits (`a694201`, `6d95b29`) onto `origin/develop`
+(tip `01dcb75`). The first commit hit three conflict regions inside
+`src/infrastructure/obsidian/ClaudeSubprocessAdapter.ts`; the second commit
+(byte-accurate NDJSON cap, touches only `NdjsonChannel.ts` and
+`SubprocessLifecycle.ts`) replayed cleanly. The test file
+`tests/infrastructure/obsidian/ClaudeSubprocessAdapter.test.ts` auto-merged.
+
+Final commit SHAs after the rebase: `41c3e8b` + `c019aae` (was
+`a694201` + `6d95b29`).
+
+**Conflict resolution strategy** — kept WP-11's slim-facade structure for
+the file shape; absorbed WP-12's reshaped contract for the import surface and
+deleted dead methods:
+
+1. **Header docblock + imports (HEAD lines 32–62)** — merged the WP-11 doc
+   narrative (which accurately describes the new file structure: facade over
+   `SubprocessLifecycle` + `NdjsonChannel` + `runSubprocessStructured`) with
+   the WP-12 paragraphs about `runStructured` being optional-on-port and the
+   `TransportLifecyclePort` split. Dropped the `node:child_process` import
+   block (those types now live in `SubprocessLifecycle.ts`). Imports
+   `StructuredCliCallOptions` / `StructuredCliRawResult` from the WP-12
+   canonical location `@/domain/ports/ClaudeCliPort` instead of the
+   pre-WP-12 application-layer re-export.
+2. **Class docblock (HEAD lines 134–149)** — kept the HEAD/WP-12 wording.
+   It explicitly references the `runStructured` narrowing via
+   `typeof port.runStructured === 'function'` and notes
+   `TransportLifecyclePort` is `implements`'d in addition to `ClaudeCliPort`.
+   The WP-11 side was the older pre-WP-12 wording.
+3. **Dead `query()` method (HEAD lines 246–270)** — both sides agreed the
+   method goes away (WP-12 deleted it from the port; WP-11 had split out
+   the helpers it was the last caller of). Kept the WP-12 section header
+   marker `// ── runStructured() — one-shot structured one-shot path ──`.
+
+**Cascading update** — `src/infrastructure/obsidian/runSubprocessStructured.ts`
+also had to flip its `StructuredCliCallOptions` / `StructuredCliRawResult`
+imports from `@/application/chat/queryStructured` to
+`@/domain/ports/ClaudeCliPort` (WP-12's new canonical location). The
+application-layer re-export still exists for back-compat consumers, but
+infrastructure should depend on the port type directly.
+
+**Test migration** — five WP-11 F7 test sites in
+`tests/infrastructure/obsidian/ClaudeSubprocessAdapter.test.ts` called the
+now-deleted `adapter.query(...)`. Migrated each to
+`collectStream(adapter.queryStream(...))` to match WP-12's pattern (already
+used by all 25+ pre-existing call sites in the file). Same `Result<string,
+ClaudeCliError>` shape, no behaviour change.
+
+**Pre-PR gate after rebase:**
+
+- `npm audit --audit-level=high --omit=dev`: 0 vulnerabilities.
+- `npm run typecheck`: clean.
+- `npm run lint`: 0 errors (25 pre-existing Vue test warnings, unchanged).
+- `npm run test`: 147 files / 1823 tests pass.
+- `npm run build`: ✓ built (dist-plugin/main.js).
+- `npm run build:web`: ✓ built (dist-standalone).
+- `npm run docs:api`: 0 errors (1 unrelated pre-existing typedoc warning).
+
 ## Carry-out items
 
 - `RawClaudeEvent` / `RawStreamEventInner` still live in `@/application/chat/StreamDeltaReducer`. If WP-12 reshapes `ClaudeCliPort`, it may revisit whether these shape types belong in `src/domain/chat/` or `src/infrastructure/obsidian/wire.ts`. No action this WP.
-- WP-12 (parallel): if WP-12 lands first, the adapter facade may need its `runStructured` signature retouched. The structured path is now a single delegate to `runSubprocessStructured` so any port reshape narrows to renaming a one-liner.
+- WP-12 (parallel): WP-12 landed first and has been integrated via the iteration-9 rebase. The structured path delegate (single line to `runSubprocessStructured`) and the `runStructured` port-level signature now flow through the WP-12 canonical types in `@/domain/ports/ClaudeCliPort`.
+- `_unusedSchema` tree-shake guard in `ClaudeSubprocessAdapter.ts` is now redundant since `runSubprocessStructured.ts` imports the same schema for real use. Left in place to avoid scope creep on this rebase; a future cleanup could remove the import + the `void _unusedSchema;` line.
