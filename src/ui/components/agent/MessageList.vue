@@ -191,6 +191,22 @@ function jumpToBottom(): void {
 	showNewMessagesPill.value = false;
 }
 
+/**
+ * Codex P2 on PR #403: `isAtBottom` is only updated by `@scroll`, so the
+ * value from one thread leaks into the next when the user switches threads
+ * (this component is not remounted on threadId change). Reset to the
+ * "fresh thread" default whenever threadId changes: at-bottom + pill hidden.
+ * The auto-scroll watcher below then picks the at-bottom branch for the
+ * first content tick of the new thread.
+ */
+watch(
+	() => props.threadId,
+	() => {
+		isAtBottom.value = true;
+		showNewMessagesPill.value = false;
+	},
+);
+
 watch(
 	[
 		() => messages.value.length,
