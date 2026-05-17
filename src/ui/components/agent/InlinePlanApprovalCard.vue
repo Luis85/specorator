@@ -104,11 +104,11 @@ async function handleRowEnter(): Promise<void> {
 
 function handleReviseKeydown(event: KeyboardEvent): void {
 	if (resolved.value) return;
-	// Safari has IME paths where `isComposing` is false on the Enter keydown but
-	// `keyCode === 229` (Process key) still flags the event as IME-handling.
-	// Both checks are required to avoid committing partial CJK text mid-composition.
-	// eslint-disable-next-line @typescript-eslint/no-deprecated -- legacy IME fallback
-	if (event.isComposing || event.keyCode === 229) return;
+	// IME-composition guard. Some Safari paths report `isComposing === false`
+	// on the confirm-Enter keydown while `event.key === 'Process'` still flags
+	// the event as IME-handling. Both checks needed to avoid committing partial
+	// CJK text mid-composition.
+	if (event.isComposing || event.key === 'Process') return;
 	if (event.key === 'Escape') {
 		event.preventDefault();
 		collapseRevise();

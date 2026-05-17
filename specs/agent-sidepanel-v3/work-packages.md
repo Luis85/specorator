@@ -83,7 +83,7 @@ Ran `npm run lint`, `npm run typecheck`, `npm run test:coverage`, `npm run forma
   | `src/ui/components/agent/MarkdownBlock.vue` | 351 | WP-4 (markdown port as only path shrinks it) |
   | `eslint.config.js` | 451 | tooling, out of scope |
 
-- **`@typescript-eslint/no-deprecated` on `KeyboardEvent.keyCode === 229`** in `InlinePlanApprovalCard.vue:107` + `ChatInput.vue:245` — silenced with inline `eslint-disable-next-line` comments explaining the intent. The fallback **must stay**: Safari (in scope for the standalone-web demo via `npm run build:web`) has IME paths where `isComposing === false` on the confirm-Enter keydown while `keyCode === 229` (Process key) still flags the event as IME-handling. Dropping the fallback would commit partial CJK text mid-composition. The pinned regression test (`'Ctrl+Enter does not emit send when legacy keyCode === 229 fires'`) stays in `tests/ui/components/chat/ChatInput.test.ts`. (My initial removal in `dd1ff46` was wrong — corrected in `4617e61` per Codex P2.)
+- **Fixed in this PR — deprecated `KeyboardEvent.keyCode === 229` IME-guard fallback** in `InlinePlanApprovalCard.vue:107` + `ChatInput.vue:245`. Replaced with `event.key === 'Process'`, the modern non-deprecated W3C-UI-Events equivalent — same defensive coverage of the Safari IME path (`isComposing === false` on the confirm-Enter keydown), no `eslint-disable` needed, no deprecation warning. The pinned regression test was updated to fire `{ key: 'Process', ctrlKey: true }` instead of `{ keyCode: 229 }`.
 
 - **Unused `eslint-disable` directives** — left for the in-flight WP that owns each file to clean up alongside its main refactor:
   - `src/infrastructure/obsidian/ClaudeCliAdapter.ts:111` (`@typescript-eslint/no-require-imports`) → **carry-out for WP-1**

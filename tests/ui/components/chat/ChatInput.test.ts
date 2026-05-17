@@ -96,10 +96,10 @@ describe('ChatInput', () => {
 			expect(po.emitted('send')).toBeFalsy();
 		});
 
-		it('Ctrl+Enter does not emit send when legacy keyCode === 229 fires', async () => {
+		it('Ctrl+Enter does not emit send when key === \'Process\' fires (Safari IME path)', async () => {
 			const po = mountChatInput({ modelValue: '中文', disabled: false, loading: false });
 			const ta = po.textarea;
-			await ta.trigger('keydown', { key: 'Enter', ctrlKey: true, keyCode: 229 });
+			await ta.trigger('keydown', { key: 'Process', ctrlKey: true });
 			expect(po.emitted('send')).toBeFalsy();
 		});
 	});
