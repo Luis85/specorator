@@ -9,12 +9,17 @@ import type {
 import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort';
 import type { Result } from '@/domain/shared/Result';
 import { ok, err } from '@/domain/shared/Result';
-import { asSessionId, type SessionId } from '@/domain/chat/SessionId';
+import type { SessionId } from '@/domain/chat/SessionId';
 import type { LoggerPort } from '@/domain/ports';
+import {
+	StreamDeltaReducer,
+	type RawClaudeEvent,
+	type RawStreamEventInner,
+} from '@/application/chat/StreamDeltaReducer';
 
 /**
  * Loosely-typed view of the SDK message union. Only the fields actually
- * dispatched in `_dispatchMessage` are listed — keeps the file decoupled
+ * translated to `RawClaudeEvent`s are listed — keeps the file decoupled
  * from the SDK's full `SDKMessage` shape so a version bump that adds new
  * variants doesn't break our build.
  */
@@ -24,54 +29,6 @@ interface SdkMessage {
 	session_id?: unknown;
 	event?: unknown;
 	result?: unknown;
-}
-
-/**
- * Loosely-typed view of one `stream_event` payload. Mirrors the
- * Anthropic SDK's `RawMessageStreamEvent` family without importing
- * the type so we stay decoupled from the SDK's exact shape.
- */
-interface StreamEvent {
-	type?: string;
-	index?: number;
-	content_block?: {
-		type?: string;
-		name?: string;
-		input?: unknown;
-	};
-	delta?: {
-		type?: string;
-		text?: string;
-		thinking?: string;
-		partial_json?: string;
-	};
-	usage?: { input_tokens?: number; output_tokens?: number };
-	message?: { usage?: { input_tokens?: number; output_tokens?: number } };
-}
-
-/**
- * Per-stream mutable state passed through `_dispatchMessage`. Tracks
- * the session-id one-fire flag, the text-emitted flag (so a turn with
- * zero `text_delta`s can still emit the `result` fallback), and the
- * content-block kind table that lets `content_block_stop` emit the
- * right terminal delta per block kind.
- */
-interface StreamState {
-	turnId: string;
-	sessionIdEmitted: boolean;
-	textEmitted: boolean;
-	/**
-	 * Monotonic message-index within the stream. Bumped on every
-	 * `message_start` event. Codex P1 (PR #378): Anthropic's
-	 * `content_block_*` indices are scoped to a single message and can
-	 * restart at 0 on later `message_start` events in the same streamed
-	 * turn (multi-step tool loops). Without a per-message discriminator,
-	 * distinct tool calls could reuse the same `blockId` and downstream
-	 * accumulators keyed by `blockId` would merge deltas into the wrong
-	 * entry. `blockId` is now `${turnId}-${messageSeq}-${index}`.
-	 */
-	messageSeq: number;
-	blockKinds: Map<number, { kind: 'text' | 'thinking' | 'tool_use'; blockId: string }>;
 }
 
 /**
@@ -337,17 +294,13 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 	 * against the timeout promise so a hanging SDK call surfaces as a
 	 * terminal `TIMEOUT` error rather than blocking the generator.
 	 *
-	 * Dispatch table:
-	 *   - `system` (subtype `'init'`)      → at most one `session-id` delta
-	 *   - `stream_event` `content_block_delta` `text_delta` → `text` delta
-	 *   - `assistant`                      → fallback text delta if no
-	 *                                        `stream_event` text arrived
-	 *   - `result`                         → fallback text from
-	 *                                        `result.result`, then `done`
-	 *
-	 * The fallback paths cover degenerate SDK callers (tests that emit only
-	 * `result`) and degraded production scenarios where
-	 * `includePartialMessages` is silently ignored.
+	 * The wire→delta translation is delegated to `StreamDeltaReducer`
+	 * (ADR-0034). This method only:
+	 *   1. Pulls the next SDK message off the iterator.
+	 *   2. Translates it into a `RawClaudeEvent` (or skips if unknown).
+	 *   3. Hands the event to the reducer and yields every returned delta.
+	 *   4. Fires the optional `onSessionId` callback exactly once when the
+	 *      reducer emits the `session-id` delta.
 	 */
 	private async *_streamSdk(
 		prompt: string,
@@ -363,13 +316,8 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 				includePartialMessages: true,
 			},
 		});
-		const state: StreamState = {
-			turnId: crypto.randomUUID(),
-			sessionIdEmitted: false,
-			textEmitted: false,
-			messageSeq: 0,
-			blockKinds: new Map(),
-		};
+		const reducer = new StreamDeltaReducer({ turnId: crypto.randomUUID() });
+		let sessionIdFired = false;
 		for (;;) {
 			const next = await Promise.race([gen.next(), timeout.promise]);
 			if (next.done === true) {
@@ -381,265 +329,66 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 				// observe the turn end and `inFlightAbort` / `streamingText`
 				// stay stuck. Surface as `QUERY_FAILED` so callers can clear
 				// in-flight state via the existing error branch.
-				yield {
-					type: 'error',
-					error: new ClaudeCliError('QUERY_FAILED', 'SDK stream ended without result'),
-				};
+				for (const d of reducer.emitError(
+					new ClaudeCliError('QUERY_FAILED', 'SDK stream ended without result'),
+				)) {
+					yield d;
+				}
 				return;
 			}
-			const out = this._dispatchMessage(next.value, state, options);
-			for (const delta of out.deltas) yield delta;
-			if (out.terminal) return;
+			const raw = ClaudeCliAdapter._sdkMessageToRawEvent(next.value);
+			if (raw === null) continue;
+			for (const delta of reducer.consume(raw)) {
+				if (delta.type === 'session-id' && !sessionIdFired) {
+					sessionIdFired = true;
+					ClaudeCliAdapter._fireOnSessionId(options, delta.sessionId);
+				}
+				yield delta;
+			}
+			if (reducer.terminated) return;
 		}
 	}
 
 	/**
-	 * Pure message dispatch helper. Returns the deltas to emit for one SDK
-	 * message and whether the stream should terminate after them. Keeping
-	 * this side-effect-free (modulo the `onSessionId` callback, which the
-	 * port contract demands) lets the outer loop stay simple.
-	 *
-	 * Extended in PR-ASV-2-delta-extension to handle the wider event
-	 * surface from `--include-partial-messages`: `thinking_delta`,
-	 * `input_json_delta`, `content_block_start/stop` for tool_use blocks,
-	 * `system/compact_boundary`, and `message_start/delta` token usage.
-	 * The `state.blockKinds` map keys an SDK content-block index to the
-	 * kind we observed at `content_block_start` so the corresponding
-	 * `content_block_stop` can emit the right terminal delta — text
-	 * blocks don't emit a stop delta, tool_use blocks do.
+	 * Translate one `SDKMessage` envelope into the corresponding
+	 * `RawClaudeEvent` for `StreamDeltaReducer.consume`. Returns `null` for
+	 * SDK messages the reducer does not handle (e.g. `assistant`/`user`
+	 * envelopes — the SDK adapter relies on `stream_event` for incremental
+	 * text, never on whole-message envelopes, so dropping them here is
+	 * forward-compatible).
 	 */
-	private _dispatchMessage(
-		message: SdkMessage,
-		state: StreamState,
-		options: ClaudeCliStreamOptions | undefined,
-	): { deltas: StreamDelta[]; terminal: boolean } {
-		if (message.type === 'system' && message.subtype === 'init') {
-			return ClaudeCliAdapter._dispatchSystemInit(message, state, options);
-		}
-		if (message.type === 'system' && message.subtype === 'compact_boundary') {
-			return { deltas: [{ type: 'compact-boundary' }], terminal: false };
+	private static _sdkMessageToRawEvent(message: SdkMessage): RawClaudeEvent | null {
+		if (message.type === 'system') {
+			return ClaudeCliAdapter._systemEnvelopeRaw(message);
 		}
 		if (message.type === 'stream_event') {
-			return ClaudeCliAdapter._dispatchStreamEvent(message, state);
+			const inner =
+				typeof message.event === 'object' && message.event !== null
+					? (message.event as RawStreamEventInner)
+					: null;
+			if (inner === null) return null;
+			return { kind: 'stream-event', event: inner };
 		}
 		if (message.type === 'result') {
-			return ClaudeCliAdapter._dispatchResult(message, state);
-		}
-		return { deltas: [], terminal: false };
-	}
-
-	private static _dispatchSystemInit(
-		message: SdkMessage,
-		state: StreamState,
-		options: ClaudeCliStreamOptions | undefined,
-	): { deltas: StreamDelta[]; terminal: boolean } {
-		const deltas: StreamDelta[] = [];
-		const sid = ClaudeCliAdapter._extractSessionId(message);
-		if (sid !== null && !state.sessionIdEmitted) {
-			state.sessionIdEmitted = true;
-			deltas.push({ type: 'session-id', sessionId: sid });
-			ClaudeCliAdapter._fireOnSessionId(options, sid);
-		}
-		return { deltas, terminal: false };
-	}
-
-	private static _dispatchStreamEvent(
-		message: SdkMessage,
-		state: StreamState,
-	): { deltas: StreamDelta[]; terminal: boolean } {
-		const deltas: StreamDelta[] = [];
-		const event = ClaudeCliAdapter._asStreamEvent(message);
-		if (event === null) return { deltas, terminal: false };
-		// Token usage telemetry — `message_start` and `message_delta`
-		// carry `usage` at the message root. Read both because some
-		// Anthropic-compatible endpoints push usage only on `message_delta`.
-		if (event.type === 'message_start' || event.type === 'message_delta') {
-			// Codex P1 on PR #378: bump `messageSeq` AND reset `blockKinds`
-			// on every `message_start` so subsequent `content_block_start`
-			// events get a fresh blockId namespace. Anthropic's
-			// content-block index resets to 0 per message; without this
-			// reset, a second message in the same stream (multi-step tool
-			// loop) would overwrite the first message's entries.
-			if (event.type === 'message_start') {
-				state.messageSeq++;
-				state.blockKinds = new Map();
-			}
-			const usage = ClaudeCliAdapter._extractUsage(event);
-			if (usage !== null) deltas.push(usage);
-			return { deltas, terminal: false };
-		}
-		if (event.type === 'content_block_start') {
-			ClaudeCliAdapter._handleBlockStart(event, state, deltas);
-			return { deltas, terminal: false };
-		}
-		if (event.type === 'content_block_delta') {
-			ClaudeCliAdapter._handleBlockDelta(event, state, deltas);
-			return { deltas, terminal: false };
-		}
-		if (event.type === 'content_block_stop') {
-			ClaudeCliAdapter._handleBlockStop(event, state, deltas);
-			return { deltas, terminal: false };
-		}
-		return { deltas, terminal: false };
-	}
-
-	private static _asStreamEvent(message: SdkMessage): StreamEvent | null {
-		if (!ClaudeCliAdapter._isStreamEvent(message.event)) return null;
-		return message.event;
-	}
-
-	private static _isStreamEvent(raw: unknown): raw is StreamEvent {
-		return typeof raw === 'object' && raw !== null;
-	}
-
-	private static _handleBlockStart(
-		event: StreamEvent,
-		state: StreamState,
-		deltas: StreamDelta[],
-	): void {
-		const index = typeof event.index === 'number' ? event.index : -1;
-		if (index < 0) return;
-		const block = event.content_block;
-		if (block === undefined) return;
-		// Codex P1 on PR #378: include `messageSeq` so multi-step tool
-		// loops (where content-block indices restart at 0 per message)
-		// produce unique blockIds across the whole stream.
-		const blockId = `${state.turnId}-${state.messageSeq}-${index}`;
-		// Codex P2 on PR #378: any block whose `type` ends with `_tool_use`
-		// or equals `tool_use` is part of the tool-use lifecycle (covers
-		// `tool_use`, `server_tool_use`, future Anthropic-API variants).
-		// The previous strict equality dropped non-`tool_use` variants and
-		// their subsequent `input_json_delta` chunks vanished.
-		if (typeof block.type === 'string' && block.type.endsWith('tool_use')) {
-			state.blockKinds.set(index, { kind: 'tool_use', blockId });
-			// Codex P1 on PR #378: do NOT seed `inputJson` with the
-			// block-start payload. The SDK ships an empty `{}` placeholder
-			// at start and the real JSON arrives via `input_json_delta`.
-			// Seeding `JSON.stringify({})` corrupted callers that
-			// concatenate by `blockId` — final reconstruction was
-			// `"{}" + "<partial>"` which is unparseable.
-			deltas.push({
-				type: 'tool-use-start',
-				blockId,
-				toolName: typeof block.name === 'string' ? block.name : 'unknown',
-				inputJson: '',
-			});
-			return;
-		}
-		if (block.type === 'thinking') {
-			state.blockKinds.set(index, { kind: 'thinking', blockId });
-			return;
-		}
-		// Text blocks need no start delta — `text_delta` handler accumulates.
-		state.blockKinds.set(index, { kind: 'text', blockId });
-	}
-
-	private static _handleBlockDelta(
-		event: StreamEvent,
-		state: StreamState,
-		deltas: StreamDelta[],
-	): void {
-		const index = typeof event.index === 'number' ? event.index : -1;
-		const delta = event.delta;
-		if (index < 0 || delta === undefined) return;
-		const out = ClaudeCliAdapter._mapBlockDelta(delta, index, state);
-		if (out !== null) {
-			if (out.type === 'text') state.textEmitted = true;
-			deltas.push(out);
-		}
-	}
-
-	private static _mapBlockDelta(
-		delta: NonNullable<StreamEvent['delta']>,
-		index: number,
-		state: StreamState,
-	): StreamDelta | null {
-		if (delta.type === 'text_delta' && typeof delta.text === 'string' && delta.text.length > 0) {
-			return { type: 'text', text: delta.text };
-		}
-		if (delta.type === 'thinking_delta' && typeof delta.thinking === 'string') {
-			return { type: 'thinking', text: delta.thinking };
-		}
-		if (delta.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
-			const tracked = state.blockKinds.get(index);
-			if (tracked?.kind !== 'tool_use') return null;
-			return {
-				type: 'tool-use-input-delta',
-				blockId: tracked.blockId,
-				inputJson: delta.partial_json,
-			};
+			const subtype = typeof message.subtype === 'string' ? message.subtype : undefined;
+			const result = typeof message.result === 'string' ? message.result : undefined;
+			return { kind: 'result', subtype, result };
 		}
 		return null;
 	}
 
-	private static _handleBlockStop(
-		event: StreamEvent,
-		state: StreamState,
-		deltas: StreamDelta[],
-	): void {
-		const index = typeof event.index === 'number' ? event.index : -1;
-		if (index < 0) return;
-		const tracked = state.blockKinds.get(index);
-		state.blockKinds.delete(index);
-		if (tracked?.kind === 'tool_use') {
-			deltas.push({ type: 'tool-use-stop', blockId: tracked.blockId });
+	private static _systemEnvelopeRaw(message: SdkMessage): RawClaudeEvent | null {
+		if (message.subtype === 'init') {
+			const sid =
+				typeof message.session_id === 'string' && message.session_id.length > 0
+					? message.session_id
+					: null;
+			return { kind: 'system-init', sessionId: sid };
 		}
-	}
-
-	private static _extractUsage(event: StreamEvent): StreamDelta | null {
-		const usage = event.usage ?? event.message?.usage;
-		if (usage === undefined) return null;
-		const input = typeof usage.input_tokens === 'number' ? usage.input_tokens : 0;
-		const output = typeof usage.output_tokens === 'number' ? usage.output_tokens : 0;
-		// Skip zero-zero updates — they're noise from `message_start` on
-		// endpoints that don't fill in tokens until `message_delta`.
-		if (input === 0 && output === 0) return null;
-		return { type: 'usage', inputTokens: input, outputTokens: output };
-	}
-
-	/**
-	 * Result-message dispatch (extracted from `_dispatchMessage` to keep its
-	 * cyclomatic complexity below the lint cap).
-	 *
-	 * Codex P1 (PR #371): `result` messages discriminate on `subtype`. Only
-	 * `'success'` is a real success; the error variants
-	 * (`error_during_execution`, `error_max_turns`, `error_max_budget_usd`,
-	 * `error_max_structured_output_retries`) must surface as a terminal
-	 * `error` delta — otherwise the stream would resolve as success with
-	 * an empty body and `query()` would return `ok('')` instead of
-	 * `err(QUERY_FAILED)`.
-	 */
-	private static _dispatchResult(
-		message: SdkMessage,
-		state: { textEmitted: boolean },
-	): { deltas: StreamDelta[]; terminal: boolean } {
-		if (typeof message.subtype === 'string' && message.subtype !== 'success') {
-			return {
-				deltas: [
-					{
-						type: 'error',
-						error: new ClaudeCliError(
-							'QUERY_FAILED',
-							`SDK returned result error: ${message.subtype}`,
-						),
-					},
-				],
-				terminal: true,
-			};
+		if (message.subtype === 'compact_boundary') {
+			return { kind: 'system-compact-boundary' };
 		}
-		const deltas: StreamDelta[] = [];
-		if (!state.textEmitted) {
-			const fallback = ClaudeCliAdapter._extractResultText(message);
-			if (fallback !== null) deltas.push({ type: 'text', text: fallback });
-		}
-		deltas.push({ type: 'done' });
-		return { deltas, terminal: true };
-	}
-
-	private static _extractSessionId(message: { session_id?: unknown }): SessionId | null {
-		const raw = message.session_id;
-		if (typeof raw !== 'string' || raw.length === 0) return null;
-		return asSessionId(raw);
+		return null;
 	}
 
 	private static _fireOnSessionId(
@@ -652,13 +401,6 @@ export class ClaudeCliAdapter implements ClaudeCliPort {
 		} catch {
 			/* Mirror subprocess adapter — swallow callback errors. */
 		}
-	}
-
-	private static _extractResultText(message: { result?: unknown }): string | null {
-		if (typeof message.result === 'string' && message.result.length > 0) {
-			return message.result;
-		}
-		return null;
 	}
 
 	// ── Private helpers ───────────────────────────────────────────────────────

@@ -486,6 +486,60 @@ describe('ClaudeSubprocessAdapter.queryStream — extended StreamDelta variants'
 		expect(usages[0].outputTokens).toBe(22);
 	});
 
+	it('Perf F-2: dedup — text_delta then assistant/message with full body yields one text payload', async () => {
+		// Regression test for the subprocess transport's double-push gap
+		// (Perf review F-2, Claudian PR #510 pattern). The transport used
+		// to dispatch BOTH `assistant/message` (whole-message text) AND
+		// `content_block_delta` (`text_delta` per token) for the same
+		// message — the store concatenated both, rendering assistant text
+		// twice. The reducer's per-message dedup invariant drops the
+		// whole-message text once any `text_delta` has been seen.
+		const { adapter, spawn } = await makeAdapter();
+		const collected = collect(adapter.queryStream('hi'));
+		await Promise.resolve();
+		const child = spawn.lastChild();
+
+		spawn.emitStdout(
+			child,
+			ndjson(
+				systemInit('s-dedup'),
+				// Per-token text_deltas inside a streaming `content_block_*` arc.
+				streamEvent({ type: 'message_start' }),
+				streamEvent({
+					type: 'content_block_start',
+					index: 0,
+					content_block: { type: 'text' },
+				}),
+				streamEvent({
+					type: 'content_block_delta',
+					index: 0,
+					delta: { type: 'text_delta', text: 'Hello' },
+				}),
+				streamEvent({
+					type: 'content_block_delta',
+					index: 0,
+					delta: { type: 'text_delta', text: ' world' },
+				}),
+				streamEvent({ type: 'content_block_stop', index: 0 }),
+				// Subprocess transport ALSO emits the whole-message body —
+				// this is the duplication. Reducer must drop it.
+				assistantDelta('Hello world'),
+				resultEvent('Hello world'),
+			),
+		);
+		spawn.closeWith(child, 0);
+
+		const deltas = await collected;
+		const texts = deltas.filter(
+			(d): d is Extract<StreamDelta, { type: 'text' }> => d.type === 'text',
+		);
+		// Exactly the two text_deltas — no duplicate from the whole-message
+		// envelope, no duplicate from the `result.result` fallback.
+		expect(texts.map((d) => d.text)).toEqual(['Hello', ' world']);
+		// Concatenated, this is what the store would render.
+		expect(texts.map((d) => d.text).join('')).toBe('Hello world');
+	});
+
 	it('emits a `usage` delta on a message_delta frame with outer usage', async () => {
 		const { adapter, spawn } = await makeAdapter();
 		const collected = collect(adapter.queryStream('hi'));
