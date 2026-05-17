@@ -98,6 +98,64 @@ Updated by the implementer subagent each RALPH iteration. The brief is `brief.md
 - `npm run build:web` ✅
 - `npm run docs:api` ✅
 
+### Iteration 3 (2026-05-17) — Codex P1 round-2 (PR #406)
+
+**Trigger** — Codex review on PR #406 round-1 patch flagged a new P1
+finding (thread `3254810244`, line 799 of `SessionLogWriter.ts`):
+
+> Running `doFlush` from the debounced timer allows a
+> `readFile → writeFile` cycle to race with `appendBlock` because this
+> path does not use `_runQueued`'s per-file mutex. If a new turn appends
+> after `readFile` but before this `writeFile`, the stale body snapshot
+> is written back and the just-appended block is lost. This can happen
+> in normal usage when a message arrives around the debounce boundary,
+> so the flush should be serialized through the same queue (or otherwise
+> made race-safe).
+
+Reproduction confirmed: with the round-1 design, an `appendFile` for
+turn N+1 landing between the flush's `readFile` and `writeFile` is
+overwritten by the stale body snapshot.
+
+**Architectural fix** — route `doFlush` through the same per-file mutex
+`appendBlock` uses.
+
+- Extracted `_enqueue(queueKey, op)` from `_runQueued`. Both
+  `appendUserAssistant` / `appendProposalDecision` (via `_runQueued`)
+  and `flushFrontmatter` compose onto the same `mutex` chain via this
+  primitive.
+- `PendingFlush` gained a `queueKey: string` field set on first
+  schedule. The flush registers under the pre-suffix `basePath` so it
+  shares the same queue key as the appends.
+- `appendBlock` now derives the basePath from the thread and passes it
+  through `scheduleFrontmatterFlush(resolvedPath, queueKey, fields)`.
+- `flushFrontmatter` wraps its `doFlush` call in
+  `this._enqueue(pending.queueKey, () => this.doFlush(...))` so the
+  `readFile → writeFile` window is fully serialised against concurrent
+  appends. Single-flight (`inFlight`) coalescing kept on top so
+  `flushAll()` remains idempotent.
+- No new queue. No global mutex. Per-path serialisation only —
+  different session paths still flush in parallel.
+
+**Tests**
+
+- New regression test in
+  `tests/application/chat/SessionLogWriter.test.ts`:
+  "debounced frontmatter flush does not race a concurrent appendBlock".
+  Uses a manual barrier on `VaultPort.readFile` to park the flush
+  mid-cycle, then fires a concurrent `appendUserAssistant`. Verified
+  the test FAILS on the round-1 code (`bd2b49d`) — turn 2's `u2`/`a2`
+  is lost — and PASSES on the round-2 fix.
+
+**Gate status (final)** — all green:
+
+- `npm audit --audit-level=high --omit=dev` ✅ 0 vulnerabilities
+- `npm run typecheck` ✅
+- `npm run lint` ✅ 0 errors (25 pre-existing warnings)
+- `npm run test` ✅ 1880 / 1880 passing (+1 vs round-1)
+- `npm run build` ✅
+- `npm run build:web` ✅
+- `npm run docs:api` ✅ (2 pre-existing TypeDoc warnings unrelated)
+
 ## Carry-out items
 
 _None._

@@ -550,6 +550,120 @@ describe('SessionLogWriter O(turn) append (WP-5 DoD)', () => {
     // Frontmatter `updated:` advanced to the turn-2 timestamp.
     expect(after).toContain("updated: '2026-05-14T10:05:00.000Z'")
   })
+
+  it('debounced frontmatter flush does not race a concurrent appendBlock (Codex P1 round-2)', async () => {
+    // Reproduction of the lost-turn race introduced by the P1+P2 round-1
+    // debounced-flush design. Pre-round-2, `flushFrontmatter`'s
+    // `readFile → writeFile` window bypassed the per-file mutex used by
+    // `appendBlock`. A `VaultPort.appendFile` for a new turn landing between
+    // the flush's read and write would be clobbered by the stale body
+    // snapshot the flush wrote back.
+    //
+    // The fix routes `doFlush` through the same per-path `_enqueue` chain
+    // `appendBlock` uses. After the fix, the flush either reads after every
+    // queued append has landed (so its writeFile preserves them all) or
+    // yields the mutex so the pending append lands on top of the fresh
+    // frontmatter. No turn is ever lost.
+    const thread = makeThread()
+    const stamps: ReadonlyArray<string> = [
+      '2026-05-14T10:00:00.000Z',
+      '2026-05-14T10:01:00.000Z',
+      '2026-05-14T10:02:00.000Z',
+      '2026-05-14T10:03:00.000Z',
+    ]
+    let stampIdx = 0
+    const writer = makeWriter(
+      ports,
+      () => {
+        const next = stamps[stampIdx] ?? '2026-05-14T10:00:00.000Z'
+        stampIdx += 1
+        return next
+      },
+      'specs',
+      // Tight debounce so we don't have to drive timers manually — the flush
+      // is still routed through the queue; we rely on `flushAll()` and the
+      // queue's serialisation to make the assertion deterministic.
+      { flushDebounceMs: 0 },
+    )
+
+    // Seed (turn 0) so the cache is warm and conflict-suffix resolution is
+    // memoised — keeps the rest of the I/O accounting tidy.
+    await writer.appendUserAssistant(thread, { user: 'u0', assistant: 'a0' })
+
+    // Wrap readFile so we can force the flush to suspend mid-cycle: the
+    // first post-seed readFile (the flush's body read) parks on a barrier
+    // we resolve only after a concurrent appendBlock has had a chance to
+    // try to interleave.
+    const realReadFile = ports.vault.readFile.bind(ports.vault)
+    let reachedSignal: () => void = () => undefined
+    const reached = new Promise<void>((r) => {
+      reachedSignal = r
+    })
+    let releaseFlush: () => void = () => undefined
+    const gate = new Promise<void>((r) => {
+      releaseFlush = r
+    })
+    let firstReadHandled = false
+    vi.spyOn(ports.vault, 'readFile').mockImplementation(async (p: string) => {
+      // The flush issues exactly one readFile against the resolved log path
+      // — capture it and park until the test releases the gate.
+      if (!firstReadHandled && p.endsWith('.md')) {
+        firstReadHandled = true
+        reachedSignal()
+        await gate
+      }
+      return realReadFile(p)
+    })
+
+    // Kick off turn 1. With `flushDebounceMs: 0`, the appendBlock queues
+    // first, then the debounce fires and the flush enqueues. The flush's
+    // body-read parks at the barrier.
+    const turn1 = writer.appendUserAssistant(thread, {
+      user: 'u1',
+      assistant: 'a1',
+    })
+    // Wait until the flush has actually entered the readFile so the test's
+    // turn-2 appendBlock cannot squeeze in before it.
+    await reached
+
+    // Concurrent appendBlock for turn 2 — pre-fix, this `appendFile` would
+    // land between the flush's read and write and be clobbered. Post-fix,
+    // it waits in the per-path queue until the flush's writeFile returns.
+    const turn2 = writer.appendUserAssistant(thread, {
+      user: 'u2',
+      assistant: 'a2',
+    })
+
+    // Give the event loop a few ticks so the pre-fix interleaving would
+    // have had every chance to execute the racy appendFile.
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // Release the flush; let everything drain.
+    releaseFlush()
+    await Promise.all([turn1, turn2])
+    await writer.flushAll()
+
+    const path = resolveSessionLogPath(thread.feature, thread.sessionId!, 'specs')
+    const finalContent = await realReadFile(path)
+    // Every turn that was queued must survive in the on-disk content.
+    expect(finalContent).toContain('u0')
+    expect(finalContent).toContain('a0')
+    expect(finalContent).toContain('u1')
+    expect(finalContent).toContain('a1')
+    expect(finalContent).toContain('u2')
+    expect(finalContent).toContain('a2')
+
+    // Sanity check: the flush issued its writeFile, and the appendFile for
+    // turn 2 also landed. The bridge call recorder captures both. We don't
+    // assert a specific order — either is correct under the per-path queue;
+    // the only invariant is that the lost-turn race is closed and the final
+    // on-disk content above already proves that.
+    expect(ports.bridge.calls.writeFile.length).toBeGreaterThanOrEqual(2)
+    // turn 0 (seed), turn 1, turn 2 → at least three appendFile calls.
+    expect(ports.bridge.calls.appendFile.length).toBeGreaterThanOrEqual(3)
+  })
 })
 
 describe('SessionLogWriter.appendProposalDecision (REQ-ASM-046)', () => {

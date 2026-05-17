@@ -24,7 +24,7 @@
  *     departure from fire-and-forget is `appendProposalDecision`, which the
  *     proposal-commit pipeline awaits for its audit row (REQ-ASM-046).
  *
- * **WP-5 hot-path rewrite (2026-05-17, Codex P1+P2 round-1):**
+ * **WP-5 hot-path rewrite (2026-05-17, Codex P1+P2 round-1, P1 round-2):**
  *
  * The previous WP-5 implementation kept the entire session body in memory and
  * rewrote `${frontmatter}${cache.body}` via `writeFile` on every append to
@@ -48,6 +48,11 @@
  *   3. **Explicit drain.** `flushAll()` synchronously cancels every pending
  *      debounce and awaits its flush. Production callers should invoke this
  *      on plugin teardown; tests use it to assert the post-flush state.
+ *   4. **Per-file mutex covers the flush.** The debounced
+ *      `readFile → writeFile` window runs through the same per-path mutex
+ *      `appendBlock` uses (Codex P1 round-2). A concurrent `appendFile`
+ *      can no longer land between the flush's read and write — the queue
+ *      forces strict serialisation per path.
  *
  * The per-path cache now stores only frontmatter shape (`fields`,
  * `bodyEndsWithNewline`) — the body itself is *not* mirrored in memory.
@@ -355,11 +360,17 @@ interface LogPathCache {
  *
  * `inFlight` carries the promise of any flush already running so concurrent
  * `appendBlock` calls don't race a partial frontmatter write.
+ *
+ * `queueKey` is the pre-suffix `basePath` under which `_runQueued` enqueues
+ * the appends for this path. The flush enqueues under the same key so the
+ * `readFile → writeFile` window is serialised against concurrent appends
+ * (Codex P1 round-2: lost-turn race fix).
  */
 interface PendingFlush {
   pendingFields: FrontmatterFields | null
   timer: SessionLogTimer | null
   inFlight: Promise<void> | null
+  queueKey: string
 }
 
 /**
@@ -554,6 +565,14 @@ export class SessionLogWriter {
    *
    * Pre-condition: `thread.sessionId !== null`. Both public callers check
    * this before invoking `_runQueued`.
+   *
+   * Queue key is the **pre-suffix `basePath`**. `resolveConflictSuffix` runs
+   * inside the queued op so concurrent first-appends for the same sessionId
+   * serialise on the resolver — only the first one walks the suffix loop;
+   * the second-and-subsequent reads the memoised value. The debounced
+   * frontmatter flush registers the same `basePath` in `pendingByPath` so
+   * it can enqueue under the same key (see {@link _enqueue} and the
+   * Codex P1 round-2 race-fix rationale).
    */
   private _runQueued(
     thread: ChatThreadRecord,
@@ -567,18 +586,37 @@ export class SessionLogWriter {
     }
     const sessionId = thread.sessionId
     const basePath = resolveSessionLogPath(thread.feature, sessionId, this.specsFolder)
-    const queueKey = basePath
+    return this._enqueue(basePath, async () => {
+      const resolvedPath = await this.resolveConflictSuffix(basePath, sessionId)
+      await this.ensureParentFolder(resolvedPath)
+      await op(resolvedPath)
+    })
+  }
+
+  /**
+   * Lower-level per-path queue helper. Both `_runQueued` (used by
+   * `appendUserAssistant` / `appendProposalDecision`) and the debounced
+   * `flushFrontmatter` compose onto the same `mutex` chain via this
+   * primitive, keyed by the pre-suffix `basePath`.
+   *
+   * **Codex P1 round-2 (2026-05-17):** the debounced frontmatter flush used
+   * to bypass this queue, so its `readFile → writeFile` window could race a
+   * concurrent `appendBlock` and clobber a just-appended turn. Routing
+   * `flushFrontmatter`'s `doFlush` through the same queue closes the race:
+   * the flush either reads *after* every prior append has landed and writes
+   * them all back, or yields the mutex so a pending append lands on top of
+   * the freshly-written frontmatter. No turn is ever lost either way.
+   *
+   * Per-path, not global: different session paths run in parallel.
+   */
+  private _enqueue(queueKey: string, op: () => Promise<void>): Promise<void> {
     const previous = this.mutex.get(queueKey) ?? Promise.resolve()
     const next = previous
       .catch(() => {
         // Prior op failed; the original caller has already received that
         // rejection (or swallowed it). Reset the chain so this op still runs.
       })
-      .then(async () => {
-        const resolvedPath = await this.resolveConflictSuffix(basePath, sessionId)
-        await this.ensureParentFolder(resolvedPath)
-        await op(resolvedPath)
-      })
+      .then(op)
     // Store the chain on the mutex; subsequent enqueues link off this `next`.
     // We deliberately do NOT swallow rejections here — the queue must propagate
     // failure to the caller, while still allowing follow-on writes to proceed
@@ -706,14 +744,23 @@ export class SessionLogWriter {
       updated: at,
     }
     cache.fields = nextFields
-    this.scheduleFrontmatterFlush(resolvedPath, nextFields)
+    // The basePath is the queue key under which this append serialises (see
+    // `_runQueued`). Pass it through so the debounced flush enqueues under
+    // the same mutex chain and the `readFile → writeFile` window is
+    // serialised against subsequent appends (Codex P1 round-2 race fix).
+    const sid = thread.sessionId ?? ''
+    const queueKey = resolveSessionLogPath(thread.feature, sid, this.specsFolder)
+    this.scheduleFrontmatterFlush(resolvedPath, queueKey, nextFields)
   }
 
   /**
    * Arm (or re-arm) the debounced frontmatter flush for `resolvedPath`. The
    * pending `FrontmatterFields` snapshot is replaced on every call so the
    * flush always commits the latest staged `updated:` value. When the timer
-   * fires, control passes to {@link flushFrontmatter}.
+   * fires, control passes to {@link flushFrontmatter}, which routes through
+   * the same per-path queue as the appends so its `readFile → writeFile`
+   * window cannot interleave with a concurrent `appendBlock` (Codex P1
+   * round-2 lost-turn fix).
    *
    * Timer functions come from {@link SessionLogWriterOptions} so callers
    * can pick the runtime-appropriate flavour: `activeWindow.setTimeout` for
@@ -722,13 +769,24 @@ export class SessionLogWriter {
    */
   private scheduleFrontmatterFlush(
     resolvedPath: string,
+    queueKey: string,
     fields: FrontmatterFields,
   ): void {
     const existing = this.pendingByPath.get(resolvedPath)
     const pending: PendingFlush =
-      existing ?? { pendingFields: null, timer: null, inFlight: null }
+      existing ?? {
+        pendingFields: null,
+        timer: null,
+        inFlight: null,
+        queueKey,
+      }
     if (existing === undefined) {
       this.pendingByPath.set(resolvedPath, pending)
+    } else {
+      // Defensive: the queueKey for a given resolvedPath is stable across
+      // the writer's lifetime (sessionId-keyed memoisation). Keep the
+      // earliest-seen value to avoid any chance of drift.
+      pending.queueKey = existing.queueKey
     }
     pending.pendingFields = fields
     if (pending.timer !== null) {
@@ -747,6 +805,16 @@ export class SessionLogWriter {
    * Splice the latest staged frontmatter onto the current on-disk body.
    * Single-flight per path: concurrent calls await the in-flight promise so
    * `flushAll()` can be called repeatedly without racing.
+   *
+   * **Codex P1 round-2 (2026-05-17):** the inner `readFile → writeFile`
+   * window is now run through `_enqueue(queueKey, …)` — the same mutex
+   * chain `appendBlock` uses. This closes the lost-turn race the previous
+   * iteration introduced: without the queue, a concurrent `appendFile`
+   * landing between this flush's `readFile` and `writeFile` would be
+   * overwritten by the stale body snapshot. With the queue, the flush's
+   * body read sees every prior append and its frontmatter write either
+   * lands before any subsequent append (which then appends on top of the
+   * fresh frontmatter) or after every queued append has completed.
    *
    * Out-of-band body edits are preserved automatically: this reads the body
    * fresh on every flush rather than from an in-memory cache.
@@ -767,7 +835,12 @@ export class SessionLogWriter {
     if (fields === null) return
     pending.pendingFields = null
 
-    const flushPromise = this.doFlush(resolvedPath, fields)
+    // Serialise the readFile → writeFile cycle on the same per-path mutex
+    // `appendBlock` uses. Without this the flush could overwrite a
+    // concurrently-appended turn (Codex P1 round-2).
+    const flushPromise = this._enqueue(pending.queueKey, () =>
+      this.doFlush(resolvedPath, fields),
+    )
     pending.inFlight = flushPromise
     const result = await tryAsync(() => flushPromise)
     pending.inFlight = null
