@@ -21,6 +21,7 @@ import {
 } from '@/domain/ports/ClaudeCliPort';
 import type { LoggerPort } from '@/domain/ports/LoggerPort';
 import { err, ok, type Result } from '@/domain/shared/Result';
+import { assertSpawnable } from '@/infrastructure/obsidian/assertSpawnable';
 import { buildSubprocessArgs } from '@/infrastructure/obsidian/buildSubprocessArgs';
 import type {
 	ChildProcessLike,
@@ -55,6 +56,15 @@ export async function runSubprocessStructured(
 				'Subscription transport is not available — Claude CLI binary not found',
 			),
 		);
+	}
+
+	const guard = assertSpawnable(binaryPath);
+	if (!guard.ok) {
+		deps.logger.warn('subscription.structured.spawn_guard_rejected', {
+			transport: 'subscription',
+			event: 'structured.spawn_guard_rejected',
+		});
+		return err(guard.error);
 	}
 
 	const timeoutMs = deps.clampTimeout(options.timeoutMs);

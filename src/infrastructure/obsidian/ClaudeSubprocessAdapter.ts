@@ -67,6 +67,7 @@ import type { TransportLifecyclePort } from '@/domain/ports/TransportLifecyclePo
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
 import { type SessionId } from '@/domain/chat/SessionId';
 import { err, ok, type Result } from '@/domain/shared/Result';
+import { assertSpawnable } from '@/infrastructure/obsidian/assertSpawnable';
 import { buildSubprocessArgs } from '@/infrastructure/obsidian/buildSubprocessArgs';
 import {
 	createNdjsonChannel,
@@ -406,6 +407,14 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort, TransportLifecycl
 		onSessionId: ((sessionId: SessionId) => void) | null,
 		reducer: StreamDeltaReducer,
 	): Result<TurnProc, ClaudeCliError> {
+		const guard = assertSpawnable(binaryPath);
+		if (!guard.ok) {
+			this._logger.warn('subscription.spawn.guard_rejected', {
+				transport: 'subscription',
+				event: 'spawn.guard_rejected',
+			});
+			return err(guard.error);
+		}
 		const spawned = this._lifecycle.spawn(binaryPath, argv, 'spawn.failed');
 		if (!spawned.ok) return spawned;
 		const child = spawned.value;
