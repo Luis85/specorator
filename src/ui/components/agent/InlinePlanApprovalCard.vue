@@ -157,7 +157,10 @@ async function handleRowEnter(): Promise<void> {
 
 function handleReviseKeydown(event: KeyboardEvent): void {
 	if (resolved.value) return;
-	if (event.isComposing || event.keyCode === 229) return;
+	// IME-composition guard. See docs/non-goals.md — CJK/Safari on the
+	// standalone-web demo is an explicit non-goal; Obsidian's Electron
+	// baseline honors `event.isComposing` correctly throughout composition.
+	if (event.isComposing) return;
 	if (event.key === 'Escape') {
 		event.preventDefault();
 		collapseRevise();
