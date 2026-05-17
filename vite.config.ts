@@ -28,15 +28,60 @@ const ALL_EXTERNALS = [
 	...builtinModules.map((m) => `node:${m}`),
 ];
 
+/**
+ * Rolldown's CJS output mangles `import.meta.url` to `{}.url` (undefined),
+ * crashing dependencies that call `createRequire(import.meta.url)` at module
+ * top-level — `@anthropic-ai/claude-agent-sdk` does this in its bundled
+ * `sdk.mjs`. A global `import.meta.url` substitution would also rewrite
+ * `fileURLToPath(import.meta.url)` and other module-relative-path call sites,
+ * silently changing their semantics (Codex P1 on PR #367). Narrow the rewrite
+ * to the single broken pattern: `createRequire(import.meta.url)` becomes
+ * `createRequire(require("url").pathToFileURL(process.execPath).href)`, which
+ * `createRequire` accepts. Other `import.meta.url` references continue to flow
+ * through Rolldown unchanged.
+ *
+ * Matches both `createRequire(import.meta.url)` (un-minified) and
+ * `IDENT(import.meta.url)` where `IDENT` is the minified alias of an
+ * `import { createRequire as IDENT } from 'node:module'|'module'` binding —
+ * which is what the published SDK ships.
+ */
+function patchCreateRequireImportMetaUrl(): VitePlugin {
+	const REPLACEMENT = 'require("url").pathToFileURL(process.execPath).href';
+	return {
+		name: 'specorator-patch-create-require-import-meta-url',
+		enforce: 'pre',
+		transform(code, id) {
+			if (!/[\\/]node_modules[\\/]@anthropic-ai[\\/]claude-agent-sdk[\\/]/.test(id)) {
+				return null;
+			}
+			const aliases = new Set<string>(['createRequire']);
+			const importRe = /import\s*\{([^}]*)\}\s*from\s*['"](?:node:)?module['"]/g;
+			for (const match of code.matchAll(importRe)) {
+				for (const spec of match[1].split(',')) {
+					const aliasMatch = /createRequire\s+as\s+([A-Za-z_$][\w$]*)/.exec(spec);
+					if (aliasMatch !== null) aliases.add(aliasMatch[1]);
+				}
+			}
+			const aliasPattern = [...aliases].map((a) => a.replace(/[$]/g, '\\$&')).join('|');
+			// `\b` doesn't match between non-word characters; the SDK ships
+			// `$S(import.meta.url)` and Rolldown can emit `=$S(…)`, so use an
+			// explicit lookbehind that excludes identifier-continuation chars.
+			const callRe = new RegExp(
+				`(?<![A-Za-z0-9_$])(${aliasPattern})\\(\\s*import\\.meta\\.url\\s*\\)`,
+				'g',
+			);
+			const out = code.replace(callRe, (_full, fn: string) => `${fn}(${REPLACEMENT})`);
+			return out === code ? null : { code: out, map: null };
+		},
+	};
+}
+
 function copyPluginArtifacts(): VitePlugin {
 	return {
 		name: 'specorator-copy-plugin-artifacts',
 		closeBundle() {
 			copyFileSync(resolve(__dirname, 'dist-plugin/main.js'), resolve(__dirname, 'main.js'));
-			copyFileSync(
-				resolve(__dirname, 'dist-plugin/styles.css'),
-				resolve(__dirname, 'styles.css'),
-			);
+			copyFileSync(resolve(__dirname, 'dist-plugin/styles.css'), resolve(__dirname, 'styles.css'));
 			// Sourcemap is emitted as a separate file (sourcemap: true). Copy it next to
 			// main.js so local DevTools can resolve it. The released asset bundle in
 			// release.yml deliberately omits main.js.map.
@@ -59,7 +104,7 @@ function scopeSelector(selector: string): string {
 }
 
 function parentAtRule(rule: Rule): AtRule | undefined {
-	return rule.parent?.type === 'atrule' ? (rule.parent) : undefined;
+	return rule.parent?.type === 'atrule' ? rule.parent : undefined;
 }
 
 function scopeBuiltCss(): VitePlugin {
@@ -95,7 +140,7 @@ export default defineConfig(({ mode }) => {
 
 	if (mode === 'plugin') {
 		return {
-			plugins: [vue(), scopeBuiltCss(), copyPluginArtifacts()],
+			plugins: [patchCreateRequireImportMetaUrl(), vue(), scopeBuiltCss(), copyPluginArtifacts()],
 			resolve: { alias },
 			define: {
 				'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
