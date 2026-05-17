@@ -14,9 +14,9 @@ export type { NotificationPort } from './NotificationPort';
 export type { LoggerPort } from './LoggerPort';
 export type { TranslationPort } from './TranslationPort';
 export type { Unsubscriber } from './shared';
-export type { MetadataCachePort, FileMetadataSnapshot } from './metadata-cache-port';
-export type { CanvasPort, JsonCanvasData } from './canvas-port';
-export type { ObsidianMcpServerPort, McpConnectionConfig } from './obsidian-mcp-server-port';
+export type { MetadataCachePort, FileMetadataSnapshot } from './MetadataCachePort';
+export type { CanvasPort, JsonCanvasData } from './CanvasPort';
+export type { ObsidianMcpServerPort, McpConnectionConfig } from './ObsidianMcpServerPort';
 export type { CommunityPluginPort } from './CommunityPluginPort';
 export type {
 	ClaudeCliPort,
