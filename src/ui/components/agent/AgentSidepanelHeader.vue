@@ -72,6 +72,20 @@ function handleNewConversation(): void {
 		>
 			{{ t('agent.noFeatureInFocus') }}
 		</p>
+		<!--
+        SPEC-MPS-001 §A2 IA: `ThreadTabStrip` is mounted inside the header.
+        Using a named slot keeps Header.vue agnostic of the strip's deps
+        (chatTabCap from settings, store wiring); the root supplies the
+        strip via `<template #tabStrip>` so unit tests that mount Header
+        in isolation continue to render without store + settings setup.
+      -->
+		<div
+			v-if="$slots.tabStrip"
+			class="sp-agent-header__tab-strip-slot"
+			data-testid="agent-header-tab-strip"
+		>
+			<slot name="tabStrip" />
+		</div>
 	</header>
 </template>
 
@@ -131,5 +145,9 @@ function handleNewConversation(): void {
 
 .sp-agent-header__feature--muted {
 	font-style: italic;
+}
+
+.sp-agent-header__tab-strip-slot {
+	margin-top: 0.5rem;
 }
 </style>

@@ -25,10 +25,12 @@ import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore';
 import { useMessagesStore } from '@/ui/stores/messagesStore';
 import { useChatReset } from '@/ui/composables/useChatReset';
 import { useNotificationStore } from '@/ui/stores/notificationStore';
+import { useSettingsStore } from '@/ui/stores/settingsStore';
 import { onMounted, onUnmounted } from 'vue';
 import AppToast from '@/ui/components/common/AppToast.vue';
 import ErrorBoundary from '@/ui/components/ErrorBoundary.vue';
 import AgentSidepanelHeader from '@/ui/components/agent/AgentSidepanelHeader.vue';
+import ThreadTabStrip from '@/ui/components/agent/ThreadTabStrip.vue';
 import MessageList from '@/ui/components/agent/MessageList.vue';
 import A11yAnnouncer from '@/ui/components/agent/A11yAnnouncer.vue';
 import { A11Y_ANNOUNCER_KEY, useA11yAnnouncer } from '@/ui/composables/useA11yAnnouncer';
@@ -38,6 +40,7 @@ import { BUILT_IN_SLASH_COMMANDS } from '@/application/chat/builtInSlashCommands
 
 const threadsStore = useChatThreadsStore();
 const messagesStore = useMessagesStore();
+const settingsStore = useSettingsStore();
 const chatSidebarRef = ref<InstanceType<typeof ChatSidebar> | null>(null);
 const chatReset = useChatReset();
 const notificationStore = useNotificationStore();
@@ -59,6 +62,38 @@ const activeFeature = computed(() => {
 	if (tid === null) return null;
 	return threadsStore.chatThreads.get(tid)?.feature ?? null;
 });
+
+/**
+ * `settings.chatTabCap` resolved via the settings store (REQ-MPS-025).
+ * The store seeds with `DEFAULT_SETTINGS` (cap = 10) so the strip can
+ * mount before `loadSettings()` resolves.
+ */
+const chatTabCap = computed(() => settingsStore.settings.chatTabCap);
+
+/**
+ * WS-6 hand-off: full plumbing of `new-thread` → `createThread`,
+ * `delete-thread` → modal, and rename persistence lives in the
+ * composable that owns this view's lifecycle. The MVP wiring here mounts
+ * the strip and lets it talk directly to `chatThreadsStore` for
+ * activation + rename; WS-10 integration wraps `new-thread` /
+ * `open-context-menu` with the full new-thread + delete-thread flows.
+ */
+function handleNewThread(): void {
+	// Intentional no-op placeholder. The strip's button is wired to this
+	// handler so the UI surface lands in WS-6; the actual
+	// `createThread(...)` orchestration (resolving the active selection,
+	// allocating the session-log folder via `VaultPort.createFolder`) is
+	// the responsibility of WS-10's integration layer per the workstream
+	// dependency table.
+}
+
+function handleOpenThreadContextMenu(threadId: string): void {
+	// Delete + fork orchestration lands in WS-10. The strip emits an
+	// `open-context-menu` intent that the integration layer wires to the
+	// `useDeleteThreadConfirmation` composable (REQ-MPS-022) and the fork
+	// helper (REQ-MPS-023).
+	void threadId;
+}
 
 /**
  * Whether the inline `/help` popover is open. Toggled by the `'help'` slash
@@ -213,7 +248,22 @@ onUnmounted(() => {
 					:has-active-thread="activeThreadId !== null"
 					:request-in-flight="isRequestInFlight"
 					@new-conversation="handleNewConversation"
-				/>
+				>
+					<!--
+            SPEC-MPS-001 §A2: ThreadTabStrip lives inside the header so
+            REQ-MPS-018..025 (tab strip + new-thread + rename) are
+            available from the top of the sidepanel. We pass
+            `chatTabCap` through to keep the strip presentational —
+            settings lookup stays in the root.
+          -->
+					<template #tabStrip>
+						<ThreadTabStrip
+							:chat-tab-cap="chatTabCap"
+							@new-thread="handleNewThread"
+							@open-context-menu="handleOpenThreadContextMenu"
+						/>
+					</template>
+				</AgentSidepanelHeader>
 				<!--
           UX #4 (WP-8): /help renders as a popover anchored under the
           header instead of a drawer that pushes the message list
