@@ -10,7 +10,7 @@
  *   - SIGTERM → SIGKILL ladder with a fixed `SIGKILL_GRACE_MS = 200` window
  *     (SPEC-ASM-001 §4.3) and a non-blocking `unref()`ed timer;
  *   - never throw across module boundaries — `spawn()` returns
- *     `Result<ChildProcessLike, ClaudeCliError>` (ADR-004).
+ *     `Result<ChildProcessLike, ChatTransportError>` (ADR-004).
  *
  * Not responsible for:
  *   - argv construction (lives in `buildSubprocessArgs.ts`);
@@ -24,7 +24,7 @@
  */
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
 
-import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort';
+import { ChatTransportError } from '@/domain/ports/ChatTransportPort';
 import type { LoggerPort } from '@/domain/ports/LoggerPort';
 import { err, ok, type Result } from '@/domain/shared/Result';
 
@@ -89,7 +89,7 @@ export class SubprocessLifecycle {
 		binaryPath: string,
 		argv: readonly string[],
 		event: 'spawn.failed' | 'structured.spawn_failed' = 'spawn.failed',
-	): Result<ChildProcessLike, ClaudeCliError> {
+	): Result<ChildProcessLike, ChatTransportError> {
 		let child: ChildProcess;
 		try {
 			child = this._spawn(binaryPath, argv, { stdio: ['pipe', 'pipe', 'pipe'] });
@@ -104,14 +104,14 @@ export class SubprocessLifecycle {
 				code: code ?? null,
 			});
 			return err(
-				new ClaudeCliError('CLI_LAUNCH_FAILED', 'Failed to spawn Claude CLI subprocess', e),
+				new ChatTransportError('CLI_LAUNCH_FAILED', 'Failed to spawn Claude CLI subprocess', e),
 			);
 		}
 
 		const childLike = child as unknown as ChildProcessLike;
 		if (childLike.stdout === null) {
 			return err(
-				new ClaudeCliError('CLI_LAUNCH_FAILED', 'Spawned Claude CLI subprocess has no stdout'),
+				new ChatTransportError('CLI_LAUNCH_FAILED', 'Spawned Claude CLI subprocess has no stdout'),
 			);
 		}
 

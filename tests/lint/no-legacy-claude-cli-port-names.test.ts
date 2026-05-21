@@ -1,18 +1,17 @@
 /**
- * REQ-MPS-001, REQ-MPS-002, TST-MPS-34 — no production file imports
- * `ClaudeCliPort` (or any of the six sibling legacy identifiers).
+ * REQ-MPS-001, REQ-MPS-002, TST-MPS-34 — no production file references
+ * any of the seven legacy `ClaudeCli*` identifiers (rename retired in
+ * WS-1 / ADR-MPS-001).
  *
- * Verifies that the rename from `ClaudeCliPort` → `ChatTransportPort`
- * (SPEC-MPS-001 §2.1, ADR-MPS-001) has been completed across `src/`.
+ * Verifies the rename to `ChatTransportPort` has been completed across
+ * `src/`. The identifier list is constructed from a per-character array
+ * so the codemod itself does not chew the test fixture during a
+ * regression sweep.
  *
  * Scope: any source file under `src/` that imports/references the
  * legacy identifier set is a defect. The one-release deprecated
  * re-export shim at `src/ui/composables/useClaudeCliPort.ts` is
  * allow-listed by file path; everything else must use the new names.
- *
- * Today (pre-rename) every occurrence in the production tree should
- * make this test fail with a clear count, so the codemod cannot land
- * silently.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -22,15 +21,22 @@ import { join, relative, sep } from 'node:path';
 const REPO_ROOT = process.cwd();
 const SRC_ROOT = join(REPO_ROOT, 'src');
 
-/** Seven legacy identifiers that the rename retires (SPEC-MPS-001 §2.1). */
+/**
+ * Seven legacy identifiers that the rename retires (SPEC-MPS-001 §2.1).
+ * The strings are assembled via concatenation so the codemod's literal
+ * token scan does not accidentally rewrite the test's own fixture data.
+ */
+const LEGACY_PREFIX = 'Claude' + 'Cli';
+const LEGACY_KEY = 'CLAUDE' + '_CLI_PORT';
+const LEGACY_HOOK = 'use' + LEGACY_PREFIX + 'Port';
 const LEGACY_IDENTIFIERS = [
-	'ClaudeCliPort',
-	'ClaudeCliError',
-	'ClaudeCliErrorCode',
-	'ClaudeCliQueryOptions',
-	'ClaudeCliStreamOptions',
-	'CLAUDE_CLI_PORT',
-	'useClaudeCliPort',
+	`${LEGACY_PREFIX}Port`,
+	`${LEGACY_PREFIX}Error`,
+	`${LEGACY_PREFIX}ErrorCode`,
+	`${LEGACY_PREFIX}QueryOptions`,
+	`${LEGACY_PREFIX}StreamOptions`,
+	LEGACY_KEY,
+	LEGACY_HOOK,
 ] as const;
 
 /**
@@ -40,7 +46,7 @@ const LEGACY_IDENTIFIERS = [
  * next minor release (ADR-MPS-001).
  */
 const ALLOWED_FILES = new Set<string>([
-	'src/ui/composables/useClaudeCliPort.ts',
+	['src', 'ui', 'composables', LEGACY_HOOK + '.ts'].join('/'),
 ]);
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.vue', '.mts', '.cts']);

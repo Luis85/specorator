@@ -6,7 +6,7 @@
  * algorithm).
  *
  * Reshaped in WP-12 (Arch review #3):
- *   - `runStructured` is now an *optional* method on `ClaudeCliPort` itself.
+ *   - `runStructured` is now an *optional* method on `ChatTransportPort` itself.
  *     Subscription-capable adapters implement it; the SDK adapter and the
  *     `degradedClaudeCliPort` sentinel do not.
  *   - The `SubscriptionCapable` structural sidecar interface and the
@@ -18,21 +18,21 @@
  *
  * Algorithm (§6.6):
  *   1. If `port.runStructured` is not a function → return
- *      `err(ClaudeCliError{ NOT_INSTALLED })` — structured output requires
+ *      `err(ChatTransportError{ NOT_INSTALLED })` — structured output requires
  *      the subscription transport.
  *   2. `raw = await port.runStructured(prompt, options)`.
- *   3. If `!raw.ok` → propagate the adapter's `ClaudeCliError`.
+ *   3. If `!raw.ok` → propagate the adapter's `ChatTransportError`.
  *   4. Return `parseStructuredEnvelope(raw.value)`.
  *
  * Satisfies REQ-ASM-001, REQ-ASM-021, REQ-ASM-049.
  */
 import {
-	ClaudeCliError,
-	type ClaudeCliPort,
-	type ClaudeCliQueryOptions,
+	ChatTransportError,
+	type ChatTransportPort,
+	type ChatTransportQueryOptions,
 	type StructuredCliCallOptions,
 	type StructuredCliRawResult,
-} from '@/domain/ports/ClaudeCliPort'
+} from '@/domain/ports/ChatTransportPort'
 import { err, type Result } from '@/domain/shared/Result'
 
 import type { CreateFileEnvelope } from './createFileEnvelopeSchema'
@@ -64,9 +64,9 @@ export const STRUCTURED_OUTPUT_GUARD_SUFFIX =
  * sub-capability detection is one method-presence check.
  */
 function hasRunStructured(
-	port: ClaudeCliPort,
-): port is ClaudeCliPort & {
-	runStructured: NonNullable<ClaudeCliPort['runStructured']>
+	port: ChatTransportPort,
+): port is ChatTransportPort & {
+	runStructured: NonNullable<ChatTransportPort['runStructured']>
 } {
 	return typeof port.runStructured === 'function'
 }
@@ -75,19 +75,19 @@ function hasRunStructured(
  * Application-layer wrapper around the structured-output path. See module
  * header and SPEC §6.6 for the algorithm. Never throws. The error union
  * surfaces:
- *   - `ClaudeCliError{ NOT_INSTALLED }` when the port does not expose
+ *   - `ChatTransportError{ NOT_INSTALLED }` when the port does not expose
  *     `runStructured`.
- *   - `ClaudeCliError{ … }` propagated from the adapter (TIMEOUT, QUERY_FAILED, etc.).
+ *   - `ChatTransportError{ … }` propagated from the adapter (TIMEOUT, QUERY_FAILED, etc.).
  *   - `EnvelopeParseError` from the four-step `parseStructuredEnvelope` pipeline.
  */
 export async function queryStructured(
-	port: ClaudeCliPort,
+	port: ChatTransportPort,
 	prompt: string,
 	options: StructuredCliCallOptions = {},
-): Promise<Result<CreateFileEnvelope, EnvelopeParseError | ClaudeCliError>> {
+): Promise<Result<CreateFileEnvelope, EnvelopeParseError | ChatTransportError>> {
 	if (!hasRunStructured(port)) {
 		return err(
-			new ClaudeCliError(
+			new ChatTransportError(
 				'NOT_INSTALLED',
 				'Structured output requires the subscription transport.',
 			),
@@ -114,4 +114,4 @@ export async function queryStructured(
 // Re-export the standard option types so call sites that already hold a
 // free-text options bag can pass it straight through without an extra import
 // line. The structured options are a subset.
-export type { ClaudeCliQueryOptions, StructuredCliCallOptions, StructuredCliRawResult }
+export type { ChatTransportQueryOptions, StructuredCliCallOptions, StructuredCliRawResult }

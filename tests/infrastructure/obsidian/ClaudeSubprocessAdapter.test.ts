@@ -44,7 +44,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { EventEmitter } from 'node:events'
 import * as os from 'node:os'
 
-import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort'
+import { ChatTransportError } from '@/domain/ports/ChatTransportPort'
 import type { LoggerPort } from '@/domain/ports/LoggerPort'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
@@ -477,7 +477,7 @@ describe('ClaudeSubprocessAdapter — query() unavailability (REQ-ASM-009)', () 
 
     expect(result.ok).toBe(false)
     if (!result.ok) {
-      expect(result.error).toBeInstanceOf(ClaudeCliError)
+      expect(result.error).toBeInstanceOf(ChatTransportError)
       // Either code is acceptable per the task spec — the production impl
       // chooses one. Both belong to the "binary not usable" family.
       expect(['CLI_LAUNCH_FAILED', 'NOT_INSTALLED']).toContain(result.error.errorCode)
@@ -750,7 +750,7 @@ describe('ClaudeSubprocessAdapter — timeout (SPEC §4.4)', () => {
 
     expect(result.ok).toBe(false)
     if (!result.ok) {
-      expect(result.error).toBeInstanceOf(ClaudeCliError)
+      expect(result.error).toBeInstanceOf(ChatTransportError)
       expect(result.error.errorCode).toBe('TIMEOUT')
     }
     expect(child.kill).toHaveBeenCalled()

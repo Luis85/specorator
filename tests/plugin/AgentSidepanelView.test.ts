@@ -37,18 +37,18 @@ import type {
 import { degradedClaudeCliPort } from '@/infrastructure/bridge/degradedClaudeCliPort';
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings';
 import type {
-	ClaudeCliPort,
-	ClaudeCliStreamOptions,
+	ChatTransportPort,
+	ChatTransportStreamOptions,
 	ConfirmModalPort,
 	StreamDelta,
 } from '@/domain/ports';
 import type SpecoratorPlugin from '@/plugin/main';
 
-function makePort(label: string): ClaudeCliPort {
+function makePort(label: string): ChatTransportPort {
 	return {
 		isAvailable: vi.fn(async () => true),
 		queryStream: vi.fn(
-			(_prompt: string, _options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> => {
+			(_prompt: string, _options?: ChatTransportStreamOptions): AsyncIterable<StreamDelta> => {
 				return (async function* (): AsyncGenerator<StreamDelta> {
 					yield { type: 'text', text: `from-${label}` };
 					yield { type: 'done' };
@@ -63,9 +63,9 @@ function makeSettings(overrides: Partial<PluginSettings>): PluginSettings {
 }
 
 interface Fixture {
-	readonly sdkAdapter: ClaudeCliPort;
-	readonly subscriptionAdapter: ClaudeCliPort;
-	readonly degradedPort: ClaudeCliPort;
+	readonly sdkAdapter: ChatTransportPort;
+	readonly subscriptionAdapter: ChatTransportPort;
+	readonly degradedPort: ChatTransportPort;
 	readonly selectTransportSpy: ReturnType<typeof vi.fn>;
 	readonly plugin: { settings: PluginSettings };
 	readonly options: AgentSidepanelViewOptions;
@@ -126,11 +126,11 @@ function makeFixture(opts: FixtureOptions = {}): Fixture {
 	};
 }
 
-function activePort(view: AgentSidepanelView): ClaudeCliPort {
+function activePort(view: AgentSidepanelView): ChatTransportPort {
 	return toRaw(view.getActiveClaudeCliPort());
 }
 
-function makeView(fixture: Fixture, legacyPort?: ClaudeCliPort): AgentSidepanelView {
+function makeView(fixture: Fixture, legacyPort?: ChatTransportPort): AgentSidepanelView {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const leaf = {} as any;
 	const port = legacyPort ?? fixture.sdkAdapter;

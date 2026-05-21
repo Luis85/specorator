@@ -11,13 +11,13 @@ import { setActivePinia, createPinia } from 'pinia';
 import { defineComponent, ref } from 'vue';
 import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue';
 import type {
-	ClaudeCliPort,
-	ClaudeCliStreamOptions,
+	ChatTransportPort,
+	ChatTransportStreamOptions,
 	StreamDelta,
-} from '@/domain/ports/ClaudeCliPort';
+} from '@/domain/ports/ChatTransportPort';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
 import {
-	CLAUDE_CLI_PORT,
+	CHAT_TRANSPORT_PORT,
 	IS_MOBILE_KEY,
 	VAULT_PORT,
 	WORKSPACE_PORT,
@@ -38,14 +38,14 @@ const RouterLinkStub = defineComponent({
 	template: '<a :href="to"><slot /></a>',
 });
 
-class FixedClaudeCliPort implements ClaudeCliPort {
+class FixedClaudeCliPort implements ChatTransportPort {
 	available = true;
 	async isAvailable(): Promise<boolean> {
 		return this.available;
 	}
 	async *queryStream(
 		_prompt: string,
-		_options?: ClaudeCliStreamOptions,
+		_options?: ChatTransportStreamOptions,
 	): AsyncIterable<StreamDelta> {
 		yield { type: 'text', text: 'assistant reply' };
 		yield { type: 'done' };
@@ -72,7 +72,7 @@ async function mountSidebar(resolvedKind: TransportKind = 'api-key') {
 			plugins: [pinia],
 			stubs: { RouterLink: RouterLinkStub },
 			provide: {
-				[CLAUDE_CLI_PORT as symbol]: port,
+				[CHAT_TRANSPORT_PORT as symbol]: port,
 				[IS_MOBILE_KEY as symbol]: false,
 				[VAULT_PORT as symbol]: bridge,
 				[WORKSPACE_PORT as symbol]: bridge,

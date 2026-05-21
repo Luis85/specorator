@@ -19,7 +19,7 @@
  * It must not import from `obsidian`, `child_process`, or any infrastructure
  * adapter implementation.
  */
-import type { ClaudeCliPort } from '@/domain/ports/ClaudeCliPort'
+import type { ChatTransportPort } from '@/domain/ports/ChatTransportPort'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 import type { TransportKind } from '@/domain/chat/TransportKind'
 
@@ -29,7 +29,7 @@ import type { TransportKind } from '@/domain/chat/TransportKind'
  * is resolved by the selector itself (SPEC-ASM-001 §3.1, rows R6–R8).
  */
 export interface TransportSelection {
-  readonly port: ClaudeCliPort
+  readonly port: ChatTransportPort
   readonly kind: Exclude<TransportKind, 'auto'>
 }
 
@@ -48,9 +48,9 @@ export interface TransportSelection {
  * selector hot path.
  */
 export interface TransportSelectorDeps {
-  readonly sdkAdapter: ClaudeCliPort
-  readonly subscriptionAdapter: ClaudeCliPort
-  readonly degradedPort: ClaudeCliPort
+  readonly sdkAdapter: ChatTransportPort
+  readonly subscriptionAdapter: ChatTransportPort
+  readonly degradedPort: ChatTransportPort
   readonly cliResolved: boolean
   readonly apiKeyPresent: boolean
 }

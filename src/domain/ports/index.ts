@@ -19,15 +19,15 @@ export type { CanvasPort, JsonCanvasData } from './CanvasPort';
 export type { ObsidianMcpServerPort, McpConnectionConfig } from './ObsidianMcpServerPort';
 export type { CommunityPluginPort } from './CommunityPluginPort';
 export type {
-	ClaudeCliPort,
-	ClaudeCliQueryOptions,
-	ClaudeCliStreamOptions,
-	ClaudeCliErrorCode,
+	ChatTransportPort,
+	ChatTransportQueryOptions,
+	ChatTransportStreamOptions,
+	ChatTransportErrorCode,
 	StreamDelta,
 	StructuredCliRawResult,
 	StructuredCliCallOptions,
-} from './ClaudeCliPort';
-export { ClaudeCliError } from './ClaudeCliPort';
+} from './ChatTransportPort';
+export { ChatTransportError } from './ChatTransportPort';
 export type { TransportLifecyclePort } from './TransportLifecyclePort';
 export type { ConfirmModalPort, ConfirmModalRequest } from './ConfirmModalPort';
 export type { SecretStorePort } from './SecretStorePort';

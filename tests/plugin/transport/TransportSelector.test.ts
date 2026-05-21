@@ -25,7 +25,7 @@
 import { describe, it, expect } from 'vitest'
 
 import { degradedClaudeCliPort } from '@/infrastructure/bridge/degradedClaudeCliPort'
-import type { ClaudeCliPort } from '@/domain/ports/ClaudeCliPort'
+import type { ChatTransportPort } from '@/domain/ports/ChatTransportPort'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 import type { TransportKind } from '@/domain/chat/TransportKind'
@@ -49,10 +49,10 @@ function makeSettings(overrides: Partial<PluginSettings>): PluginSettings {
 }
 
 /**
- * Hand-rolled mock ClaudeCliPort. Calling any method during selection would
+ * Hand-rolled mock ChatTransportPort. Calling any method during selection would
  * indicate the selector performed I/O (forbidden by spec §3.1).
  */
-function makeMockPort(label: string): ClaudeCliPort {
+function makeMockPort(label: string): ChatTransportPort {
   return {
     isAvailable: () => {
       throw new Error(

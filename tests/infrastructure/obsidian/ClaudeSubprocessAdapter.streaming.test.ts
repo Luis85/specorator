@@ -17,7 +17,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 
-import { ClaudeCliError, type StreamDelta } from '@/domain/ports/ClaudeCliPort';
+import { ChatTransportError, type StreamDelta } from '@/domain/ports/ChatTransportPort';
 import type { LoggerPort } from '@/domain/ports/LoggerPort';
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
@@ -240,7 +240,7 @@ describe('ClaudeSubprocessAdapter.queryStream — is_error → terminal error', 
 		const last = deltas[deltas.length - 1];
 		expect(last.type).toBe('error');
 		if (last.type === 'error') {
-			expect(last.error).toBeInstanceOf(ClaudeCliError);
+			expect(last.error).toBeInstanceOf(ChatTransportError);
 			expect(last.error.errorCode).toBe('QUERY_FAILED');
 		}
 		expect(deltas.filter((d) => d.type === 'done')).toHaveLength(0);

@@ -2,27 +2,36 @@ import type { SessionId } from '@/domain/chat/SessionId';
 import type { Result } from '@/domain/shared/Result';
 
 /**
- * Discriminator for ClaudeCliError. Each code maps to one UI copy string:
- *   NOT_INSTALLED      → "AI assistant is not available right now."
- *   API_KEY_MISSING    → "Chat is not set up yet."
- *   TIMEOUT            → "That took too long. Please try again."
- *   QUERY_FAILED       → "Something went wrong. Please try again."
- *   CLI_LAUNCH_FAILED  → "Chat needs the Claude command-line tool." (SPEC-ASM-001 §2.7)
+ * Discriminator for {@link ChatTransportError}. Each code maps to one UI
+ * copy string:
+ *   NOT_INSTALLED         → "AI assistant is not available right now."
+ *   API_KEY_MISSING       → "Chat is not set up yet."
+ *   TIMEOUT               → "That took too long. Please try again."
+ *   QUERY_FAILED          → "Something went wrong. Please try again."
+ *   CLI_LAUNCH_FAILED     → "Chat needs the Claude command-line tool." (SPEC-ASM-001 §2.7)
+ *   ATTACHMENT_TOO_LARGE  → "Attachment exceeds the 5 MB limit." (REQ-MPS-044)
+ *   PROVIDER_UNAVAILABLE  → "This provider is not available yet." (cursor preview disabled)
  *
- * Satisfies REQ-CCS-021, REQ-ASM-009.
+ * Renamed from `ChatTransportErrorCode` in WS-1 (ADR-MPS-001). The two
+ * `*` codes are additive members introduced for the multi-provider
+ * workstreams; no existing variant changed shape.
+ *
+ * Satisfies REQ-CCS-021, REQ-ASM-009, REQ-MPS-001, REQ-MPS-002, REQ-MPS-044.
  */
-export type ClaudeCliErrorCode =
+export type ChatTransportErrorCode =
 	| 'NOT_INSTALLED' // Binary could not be resolved or the SDK failed to start
 	| 'API_KEY_MISSING' // ANTHROPIC_API_KEY was empty at query time
 	| 'TIMEOUT' // No response received within timeoutMs
 	| 'QUERY_FAILED' // SDK call returned an error or threw an unexpected exception
-	| 'CLI_LAUNCH_FAILED'; // Subprocess spawn failed (R-ASM-002 AppArmor / userns) — SPEC-ASM-001 §2.7
+	| 'CLI_LAUNCH_FAILED' // Subprocess spawn failed (R-ASM-002 AppArmor / userns) — SPEC-ASM-001 §2.7
+	| 'ATTACHMENT_TOO_LARGE' // Per-turn attachment payload exceeded the 5 MB cap (REQ-MPS-044)
+	| 'PROVIDER_UNAVAILABLE'; // Provider/mode disabled (e.g. cursorApiPreview === false)
 
-export class ClaudeCliError extends Error {
-	public readonly name = 'ClaudeCliError';
+export class ChatTransportError extends Error {
+	public readonly name = 'ChatTransportError';
 
 	constructor(
-		public readonly errorCode: ClaudeCliErrorCode,
+		public readonly errorCode: ChatTransportErrorCode,
 		message: string,
 		/** Original SDK or system error. Used for logging only; never surfaced in UI. */
 		public readonly cause?: unknown,
@@ -37,12 +46,15 @@ export class ClaudeCliError extends Error {
  * Options forwarded to the underlying SDK / subprocess call. All fields are
  * optional. Shared by `queryStream` (free-text streaming) and `runStructured`
  * (structured-output, subscription transport only).
- * Satisfies REQ-CCS-021.
+ *
+ * Renamed from `ChatTransportQueryOptions` in WS-1 (ADR-MPS-001).
+ *
+ * Satisfies REQ-CCS-021, REQ-MPS-001.
  */
-export interface ClaudeCliQueryOptions {
+export interface ChatTransportQueryOptions {
 	/**
 	 * Maximum wall-clock time the adapter waits for a response before returning
-	 * ClaudeCliError{TIMEOUT}. Unit: milliseconds.
+	 * ChatTransportError{TIMEOUT}. Unit: milliseconds.
 	 * Default: 30 000. Valid range: [1 000, 300 000].
 	 * Values outside the range are silently clamped by the adapter.
 	 * Satisfies NFR-CCS-003.
@@ -88,15 +100,17 @@ export interface ClaudeCliQueryOptions {
 }
 
 /**
- * Options for `queryStream()` — superset of `ClaudeCliQueryOptions` adding
- * an `AbortSignal` so the UI's stop-generation control can cancel an
- * in-flight turn.
+ * Options for `queryStream()` — superset of `ChatTransportQueryOptions`
+ * adding an `AbortSignal` so the UI's stop-generation control can cancel
+ * an in-flight turn.
+ *
+ * Renamed from `ChatTransportStreamOptions` in WS-1 (ADR-MPS-001).
  */
-export interface ClaudeCliStreamOptions extends ClaudeCliQueryOptions {
+export interface ChatTransportStreamOptions extends ChatTransportQueryOptions {
 	/**
 	 * Caller-supplied abort signal. When `signal.aborted` becomes true, the
 	 * adapter MUST terminate the underlying subprocess / SDK call and emit a
-	 * single `{ type: 'error', error: ClaudeCliError{QUERY_FAILED} }` delta
+	 * single `{ type: 'error', error: ChatTransportError{QUERY_FAILED} }` delta
 	 * (or the existing `{ type: 'done' }` if the abort raced a successful
 	 * completion). The adapter MUST NOT throw on abort.
 	 *
@@ -108,8 +122,8 @@ export interface ClaudeCliStreamOptions extends ClaudeCliQueryOptions {
 }
 
 /**
- * Discriminated-union delta emitted by `ClaudeCliPort.queryStream()`. Each
- * delta represents one observable event from the underlying transport:
+ * Discriminated-union delta emitted by `ChatTransportPort.queryStream()`.
+ * Each delta represents one observable event from the underlying transport:
  *
  *   - `text`        — incremental assistant-message text; concatenate to
  *                     render the streaming bubble. Multiple `text` deltas
@@ -122,8 +136,9 @@ export interface ClaudeCliStreamOptions extends ClaudeCliQueryOptions {
  *   - `error`       — terminal failure. No further deltas arrive after this.
  *
  * `done` and `error` are mutually exclusive: exactly one of the two ends
- * each stream. Future increments may add `tool-use` / `thinking` variants
- * under the same union — additive only.
+ * each stream. Additive variants (the tool-result, the agent
+ * progress-list, and citation entries) land in WS-8; this WS-1 rename
+ * is shape-preserving for the existing variants.
  */
 export type StreamDelta =
 	| { readonly type: 'text'; readonly text: string }
@@ -183,7 +198,7 @@ export type StreamDelta =
 			readonly outputTokens: number;
 	  }
 	| { readonly type: 'done' }
-	| { readonly type: 'error'; readonly error: ClaudeCliError };
+	| { readonly type: 'error'; readonly error: ChatTransportError };
 
 /**
  * Raw response from a structured-output Claude CLI invocation
@@ -205,7 +220,7 @@ export interface StructuredCliRawResult {
 
 /**
  * Options forwarded to `runStructured()`. Mirror of the relevant fields from
- * `ClaudeCliQueryOptions`; kept as a separate interface so the structured
+ * `ChatTransportQueryOptions`; kept as a separate interface so the structured
  * surface can evolve without widening the free-text streaming surface.
  *
  * Moved onto the port file in WP-12.
@@ -224,21 +239,25 @@ export interface StructuredCliCallOptions {
 }
 
 /**
- * Narrow port for the Claude CLI adapters (ADR-008).
+ * Narrow port for chat transport adapters (ADR-008, ADR-MPS-001).
  *
- * The interface file must not import from 'obsidian' or
- * '@anthropic-ai/claude-agent-sdk'.
+ * Renamed from `ChatTransportPort` in WS-1. The interface is provider-agnostic
+ * — implementing adapters cover Claude API, Claude CLI, Cursor API, Cursor
+ * CLI, and the degraded sentinel.
  *
- * Reshaped in WP-12 (Arch review #3) to a single canonical streaming method
- * plus the optional structured-output method that subscription-capable
- * adapters expose. Lifecycle (`startup` / `shutdown`) lives on the sibling
+ * The interface file must not import from `'obsidian'`,
+ * `'@anthropic-ai/claude-agent-sdk'`, `'node:child_process'`, or
+ * `'node:https'`. Enforced by `tests/domain/ports/ChatTransportPort.imports.test.ts`
+ * (NFR-MPS-012).
+ *
+ * Lifecycle (`startup` / `shutdown`) lives on the sibling
  * `TransportLifecyclePort`; the free-text non-streaming `query()` method
  * is gone — non-streaming callers funnel `queryStream` through
  * `collectStream()` in `src/application/chat/collectStream.ts`.
  *
- * Satisfies REQ-CCS-021, REQ-ASM-001.
+ * Satisfies REQ-CCS-021, REQ-ASM-001, REQ-MPS-001, REQ-MPS-002.
  */
-export interface ClaudeCliPort {
+export interface ChatTransportPort {
 	/**
 	 * Returns true if the adapter is ready to accept queries.
 	 * Returns false for all degraded conditions: missing API key, startup failure,
@@ -250,24 +269,24 @@ export interface ClaudeCliPort {
 	isAvailable(): Promise<boolean>;
 
 	/**
-	 * Stream a fully-assembled prompt to Claude and yield deltas as they
-	 * arrive. Never throws — every terminal condition is delivered as a
+	 * Stream a fully-assembled prompt to the transport and yield deltas as
+	 * they arrive. Never throws — every terminal condition is delivered as a
 	 * `done` or `error` delta. The caller cancels via `options.signal`;
 	 * cancellation results in an `error` delta (`QUERY_FAILED`) unless the
 	 * cancellation races a `done`, in which case `done` wins.
 	 *
 	 * Implementors MUST:
 	 *   - emit at most one `session-id` delta per stream (mirrors the
-	 *     one-fire semantics of `ClaudeCliQueryOptions.onSessionId`);
+	 *     one-fire semantics of `ChatTransportQueryOptions.onSessionId`);
 	 *   - emit exactly one of `done` or `error` as the final delta;
 	 *   - close the iterable after the terminal delta — no further deltas;
 	 *   - never throw; surface every error path through `error`.
 	 *
 	 * Sole canonical streaming method (WP-12). Non-streaming consumers use
 	 * `collectStream()` from `@/application/chat/collectStream` to converge
-	 * the stream to a `Result<string, ClaudeCliError>`.
+	 * the stream to a `Result<string, ChatTransportError>`.
 	 */
-	queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta>;
+	queryStream(prompt: string, options?: ChatTransportStreamOptions): AsyncIterable<StreamDelta>;
 
 	/**
 	 * Structured-output one-shot for subscription-capable adapters.
@@ -284,7 +303,7 @@ export interface ClaudeCliPort {
 	 * *per responsibility* — there is one streaming port and one lifecycle
 	 * port, not one port with two unrelated halves.
 	 *
-	 * Never throws. Returns `Result<StructuredCliRawResult, ClaudeCliError>`;
+	 * Never throws. Returns `Result<StructuredCliRawResult, ChatTransportError>`;
 	 * envelope parsing happens in the application layer.
 	 *
 	 * Satisfies REQ-ASM-021, REQ-ASM-049.
@@ -292,5 +311,5 @@ export interface ClaudeCliPort {
 	runStructured?(
 		prompt: string,
 		options: StructuredCliCallOptions,
-	): Promise<Result<StructuredCliRawResult, ClaudeCliError>>;
+	): Promise<Result<StructuredCliRawResult, ChatTransportError>>;
 }

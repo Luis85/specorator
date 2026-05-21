@@ -18,7 +18,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 import { MockClaudeSubprocessAdapter } from '@/infrastructure/mock/MockClaudeSubprocessAdapter'
-import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort'
+import { ChatTransportError } from '@/domain/ports/ChatTransportPort'
 import { asSessionId } from '@/domain/chat/SessionId'
 import { collectStream } from '@/application/chat/collectStream'
 
@@ -96,7 +96,7 @@ describe('REQ-ASM-001 / REQ-ASM-031: MockClaudeSubprocessAdapter', () => {
   it('queryStream() returns err(queryError) when set, regardless of cannedResponse', async () => {
     mock.available = true
     mock.cannedResponse = 'should-not-be-returned'
-    const simulated = new ClaudeCliError('QUERY_FAILED', 'simulated subprocess failure')
+    const simulated = new ChatTransportError('QUERY_FAILED', 'simulated subprocess failure')
     mock.queryError = simulated
 
     const result = await collectStream(mock.queryStream('prompt'))
@@ -104,7 +104,7 @@ describe('REQ-ASM-001 / REQ-ASM-031: MockClaudeSubprocessAdapter', () => {
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.error).toBe(simulated)
-    expect(result.error).toBeInstanceOf(ClaudeCliError)
+    expect(result.error).toBeInstanceOf(ChatTransportError)
     expect(result.error.errorCode).toBe('QUERY_FAILED')
   })
 

@@ -7,11 +7,11 @@ import type {
 	CommunityPluginPort,
 	ActiveFileSnapshot,
 	Unsubscriber,
-	ClaudeCliPort,
-	ClaudeCliStreamOptions,
+	ChatTransportPort,
+	ChatTransportStreamOptions,
 	StreamDelta,
 } from '@/domain/ports';
-import { ClaudeCliError } from '@/domain/ports';
+import { ChatTransportError } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
 
 function folderPrefix(parent: string): string {
@@ -30,7 +30,7 @@ export class MockBridge
 		WorkspacePort,
 		NotificationPort,
 		LoggerPort,
-		ClaudeCliPort,
+		ChatTransportPort,
 		CommunityPluginPort
 {
 	private readonly files = new Map<string, string>();
@@ -237,7 +237,7 @@ export class MockBridge
 		console.error(`[MockBridge] ${message}`, error, context);
 	}
 
-	// ── ClaudeCliPort ─────────────────────────────────────────────────────────
+	// ── ChatTransportPort ─────────────────────────────────────────────────────────
 
 	isAvailable(): Promise<boolean> {
 		return Promise.resolve(false);
@@ -245,11 +245,11 @@ export class MockBridge
 
 	async *queryStream(
 		_prompt: string,
-		_options?: ClaudeCliStreamOptions,
+		_options?: ChatTransportStreamOptions,
 	): AsyncIterable<StreamDelta> {
 		yield {
 			type: 'error',
-			error: new ClaudeCliError('NOT_INSTALLED', 'MockBridge: not available'),
+			error: new ChatTransportError('NOT_INSTALLED', 'MockBridge: not available'),
 		};
 	}
 

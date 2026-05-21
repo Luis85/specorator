@@ -1,19 +1,19 @@
 import type {
-	ClaudeCliPort,
-	ClaudeCliStreamOptions,
+	ChatTransportPort,
+	ChatTransportStreamOptions,
 	StreamDelta,
 } from '@/domain/ports';
-import { ClaudeCliError } from '@/domain/ports';
+import { ChatTransportError } from '@/domain/ports';
 
 /**
- * Singleton `ClaudeCliPort` returned by `selectTransport` whenever the
+ * Singleton `ChatTransportPort` returned by `selectTransport` whenever the
  * transport row resolves to `'degraded'` (SPEC-ASM-001 §3.1 rows R1, R3, R5,
  * R8). The single sink for the degraded path — UI components branch on the
  * selector's `kind === 'degraded'`, but if any consumer accidentally invokes
  * the port, this stub fails fast with `CLI_LAUNCH_FAILED` rather than
  * crashing or making a network call.
  *
- * WP-12: surface narrowed to the new `ClaudeCliPort` shape (`isAvailable` +
+ * WP-12: surface narrowed to the new `ChatTransportPort` shape (`isAvailable` +
  * `queryStream`; no `query`, no lifecycle methods). The degraded port
  * intentionally does not expose `runStructured` — its absence is what
  * `queryStructured()` keys off when the transport is degraded.
@@ -24,11 +24,11 @@ import { ClaudeCliError } from '@/domain/ports';
  * mutation in test harnesses surfaces immediately.
  */
 
-function makeError(): ClaudeCliError {
-	return new ClaudeCliError('CLI_LAUNCH_FAILED', 'Chat needs the Claude command-line tool.');
+function makeError(): ChatTransportError {
+	return new ChatTransportError('CLI_LAUNCH_FAILED', 'Chat needs the Claude command-line tool.');
 }
 
-export const degradedClaudeCliPort: ClaudeCliPort = Object.freeze({
+export const degradedClaudeCliPort: ChatTransportPort = Object.freeze({
 	isAvailable(): Promise<boolean> {
 		return Promise.resolve(false);
 	},
@@ -36,7 +36,7 @@ export const degradedClaudeCliPort: ClaudeCliPort = Object.freeze({
 	// eslint-disable-next-line @typescript-eslint/require-await
 	async *queryStream(
 		_prompt: string,
-		_options?: ClaudeCliStreamOptions,
+		_options?: ChatTransportStreamOptions,
 	): AsyncIterable<StreamDelta> {
 		yield { type: 'error', error: makeError() };
 	},

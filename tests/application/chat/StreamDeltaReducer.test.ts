@@ -10,7 +10,7 @@ import {
 	StreamDeltaReducer,
 	type RawClaudeEvent,
 } from '@/application/chat/StreamDeltaReducer';
-import { ClaudeCliError, type StreamDelta } from '@/domain/ports/ClaudeCliPort';
+import { ChatTransportError, type StreamDelta } from '@/domain/ports/ChatTransportPort';
 
 // -----------------------------------------------------------------------------
 // Convenience helpers — flatten the typing for readability in tests.
@@ -537,7 +537,7 @@ describe('StreamDeltaReducer — result termination', () => {
 		expect(out).toHaveLength(1);
 		expect(out[0].type).toBe('error');
 		if (out[0].type === 'error') {
-			expect(out[0].error).toBeInstanceOf(ClaudeCliError);
+			expect(out[0].error).toBeInstanceOf(ChatTransportError);
 			expect(out[0].error.errorCode).toBe('QUERY_FAILED');
 			expect(out[0].error.message).toContain('error_max_turns');
 		}
@@ -567,7 +567,7 @@ describe('StreamDeltaReducer — result termination', () => {
 describe('StreamDeltaReducer — emitError', () => {
 	it('emits a terminal error delta and marks the reducer terminated', () => {
 		const r = reducer();
-		const err = new ClaudeCliError('TIMEOUT', 'too slow');
+		const err = new ChatTransportError('TIMEOUT', 'too slow');
 		const out = [...r.emitError(err)];
 		expect(out).toEqual([{ type: 'error', error: err }]);
 		expect(r.terminated).toBe(true);
@@ -575,15 +575,15 @@ describe('StreamDeltaReducer — emitError', () => {
 
 	it('is idempotent once terminated', () => {
 		const r = reducer();
-		void r.emitError(new ClaudeCliError('TIMEOUT', 'a'));
-		const out = [...r.emitError(new ClaudeCliError('QUERY_FAILED', 'b'))];
+		void r.emitError(new ChatTransportError('TIMEOUT', 'a'));
+		const out = [...r.emitError(new ChatTransportError('QUERY_FAILED', 'b'))];
 		expect(out).toEqual([]);
 	});
 
 	it('returns empty when called after a successful result', () => {
 		const r = reducer();
 		void r.consume({ kind: 'result', subtype: 'success', result: 'ok' });
-		const out = [...r.emitError(new ClaudeCliError('TIMEOUT', 'late'))];
+		const out = [...r.emitError(new ChatTransportError('TIMEOUT', 'late'))];
 		expect(out).toEqual([]);
 	});
 });

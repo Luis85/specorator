@@ -23,17 +23,17 @@ import { setActivePinia, createPinia } from 'pinia'
 import { defineComponent, nextTick, ref } from 'vue'
 import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue'
 import type {
-	ClaudeCliPort,
-	ClaudeCliQueryOptions,
-	ClaudeCliStreamOptions,
+	ChatTransportPort,
+	ChatTransportQueryOptions,
+	ChatTransportStreamOptions,
 	StreamDelta,
-} from '@/domain/ports/ClaudeCliPort'
-import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort'
+} from '@/domain/ports/ChatTransportPort'
+import { ChatTransportError } from '@/domain/ports/ChatTransportPort'
 import { asSessionId } from '@/domain/chat/SessionId'
 import type { SessionId } from '@/domain/chat/SessionId'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import {
-	CLAUDE_CLI_PORT,
+	CHAT_TRANSPORT_PORT,
 	IS_MOBILE_KEY,
 	VAULT_PORT,
 	WORKSPACE_PORT,
@@ -59,13 +59,13 @@ const RouterLinkStub = defineComponent({
  *     so tests can simulate the `system/init` capture.
  *   - Returns a canned response or canned error.
  */
-class ScriptedClaudeCliPort implements ClaudeCliPort {
+class ScriptedClaudeCliPort implements ChatTransportPort {
 	available = true
 	cannedResponse = 'assistant says hi'
-	queryError: ClaudeCliError | null = null
+	queryError: ChatTransportError | null = null
 	scriptedSessionIds: (SessionId | null)[] = []
 	readonly queryLog: string[] = []
-	readonly optionsLog: (ClaudeCliQueryOptions | undefined)[] = []
+	readonly optionsLog: (ChatTransportQueryOptions | undefined)[] = []
 
 	async isAvailable(): Promise<boolean> {
 		return this.available
@@ -73,7 +73,7 @@ class ScriptedClaudeCliPort implements ClaudeCliPort {
 
 	async *queryStream(
 		prompt: string,
-		options?: ClaudeCliStreamOptions,
+		options?: ChatTransportStreamOptions,
 	): AsyncIterable<StreamDelta> {
 		this.queryLog.push(prompt)
 		this.optionsLog.push(options)
@@ -112,7 +112,7 @@ async function mountSidebar(args: {
 	settings?: Partial<PluginSettings>
 	files?: Record<string, string>
 	activeFile?: { path: string; basename: string; extension: string } | null
-	queryError?: ClaudeCliError | null
+	queryError?: ChatTransportError | null
 	/**
 	 * Resolved transport kind injected via `TRANSPORT_KIND_KEY` (mirrors
 	 * production: SpecoratorView's selector resolves the setting + CLI
@@ -145,7 +145,7 @@ async function mountSidebar(args: {
 			plugins: [pinia],
 			stubs: { RouterLink: RouterLinkStub },
 			provide: {
-				[CLAUDE_CLI_PORT as symbol]: port,
+				[CHAT_TRANSPORT_PORT as symbol]: port,
 				[IS_MOBILE_KEY as symbol]: false,
 				[VAULT_PORT as symbol]: bridge,
 				[WORKSPACE_PORT as symbol]: bridge,
@@ -484,7 +484,7 @@ describe('ChatSidebar — session-persistence wiring (T-ASM-057)', () => {
 
 	it('query failure still leaves cliStartingUp cleared and store in error state (R-ASM-003 / REQ-CCS-016)', async () => {
 		const { po, store } = await mountSidebar({
-			queryError: new ClaudeCliError('QUERY_FAILED', 'boom'),
+			queryError: new ChatTransportError('QUERY_FAILED', 'boom'),
 		})
 
 		await send(store, po, 'hello')

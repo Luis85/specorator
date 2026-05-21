@@ -1,6 +1,6 @@
 /**
  * T-ASM-040 — Tests: ChatSidebar threads the stage-aware system-prompt suffix
- * into ClaudeCliPort.query via `options.systemPromptSuffix`.
+ * into ChatTransportPort.query via `options.systemPromptSuffix`.
  *
  * Satisfies REQ-ASM-013, REQ-ASM-014, REQ-ASM-018, REQ-ASM-019, REQ-ASM-054.
  * Maps to: TEST-ASM-020, TEST-ASM-021, TEST-ASM-024, TEST-ASM-048.
@@ -17,7 +17,7 @@ import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue'
 import { MockClaudeCliPort } from '@/infrastructure/mock/MockClaudeCliPort'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import {
-	CLAUDE_CLI_PORT,
+	CHAT_TRANSPORT_PORT,
 	IS_MOBILE_KEY,
 	VAULT_PORT,
 	WORKSPACE_PORT,
@@ -94,7 +94,7 @@ async function mountSidebar(args: {
 			plugins: [pinia],
 			stubs: { RouterLink: RouterLinkStub },
 			provide: {
-				[CLAUDE_CLI_PORT as symbol]: port,
+				[CHAT_TRANSPORT_PORT as symbol]: port,
 				[IS_MOBILE_KEY as symbol]: false,
 				[VAULT_PORT as symbol]: bridge,
 				[WORKSPACE_PORT as symbol]: bridge,

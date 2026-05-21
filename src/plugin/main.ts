@@ -213,7 +213,7 @@ export default class SpecoratorPlugin extends Plugin {
         confirmModalAdapter: this._confirmModalAdapter!,
         // WP-12: lifecycle is its own port; pass the adapter instances under
         // their `TransportLifecyclePort` contract so the view can `startup()`
-        // them on settings bumps without depending on `ClaudeCliPort`.
+        // them on settings bumps without depending on `ChatTransportPort`.
         sdkLifecycle: this._claudeCliAdapter!,
         subscriptionLifecycle: this._subscriptionAdapter!,
         selectTransport: (settings) =>

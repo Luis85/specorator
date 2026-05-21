@@ -7,9 +7,9 @@
  * (ADR-008) requires the port interface to express only domain
  * concepts; any cross-layer import is a defect.
  *
- * This test fails until T-MPS-004 renames the file from
- * `ClaudeCliPort.ts` to `ChatTransportPort.ts` and confirms the import
- * list stays domain-internal.
+ * After T-MPS-004 renames the port file (see ADR-MPS-001), this test
+ * holds the line by asserting the renamed file's import list stays
+ * domain-internal.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -58,7 +58,7 @@ function collectImportSources(source: string): string[] {
 	for (const re of [importRe, exportRe, dynamicRe]) {
 		let m: RegExpExecArray | null;
 		while ((m = re.exec(source)) !== null) {
-			sources.push(m[1] ?? '');
+			sources.push(m[1]);
 		}
 	}
 	return sources;

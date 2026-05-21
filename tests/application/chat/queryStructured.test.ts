@@ -36,11 +36,11 @@ import {
 } from '@/application/chat/queryStructured'
 import { EnvelopeParseError } from '@/application/chat/errors'
 import {
-  ClaudeCliError,
-  type ClaudeCliPort,
-  type ClaudeCliStreamOptions,
+  ChatTransportError,
+  type ChatTransportPort,
+  type ChatTransportStreamOptions,
   type StreamDelta,
-} from '@/domain/ports/ClaudeCliPort'
+} from '@/domain/ports/ChatTransportPort'
 import { ok, type Result } from '@/domain/shared/Result'
 import { degradedClaudeCliPort } from '@/infrastructure/bridge/degradedClaudeCliPort'
 import { MockClaudeSubprocessAdapter } from '@/infrastructure/mock/MockClaudeSubprocessAdapter'
@@ -53,14 +53,14 @@ import { MockClaudeSubprocessAdapter } from '@/infrastructure/mock/MockClaudeSub
 // the Anthropic SDK into a pure-application test.
 // -----------------------------------------------------------------------------
 
-function makeSdkLikePort(): ClaudeCliPort {
+function makeSdkLikePort(): ChatTransportPort {
   return {
     async isAvailable() {
       return true
     },
     async *queryStream(
       _prompt: string,
-      _options?: ClaudeCliStreamOptions,
+      _options?: ChatTransportStreamOptions,
     ): AsyncIterable<StreamDelta> {
       yield { type: 'done' }
     },
@@ -73,25 +73,25 @@ function makeSdkLikePort(): ClaudeCliPort {
 // =============================================================================
 
 describe('queryStructured (SPEC §6.6)', () => {
-  it('non-subscription-capable port (no runStructured) → err(ClaudeCliError{ NOT_INSTALLED })', async () => {
+  it('non-subscription-capable port (no runStructured) → err(ChatTransportError{ NOT_INSTALLED })', async () => {
     const port = makeSdkLikePort()
 
     const result = await queryStructured(port, 'hello', {})
 
     expect(result.ok).toBe(false)
     if (!result.ok) {
-      expect(result.error).toBeInstanceOf(ClaudeCliError)
-      expect((result.error as ClaudeCliError).errorCode).toBe('NOT_INSTALLED')
+      expect(result.error).toBeInstanceOf(ChatTransportError)
+      expect((result.error as ChatTransportError).errorCode).toBe('NOT_INSTALLED')
     }
   })
 
-  it('degradedClaudeCliPort sentinel → err(ClaudeCliError{ NOT_INSTALLED })', async () => {
+  it('degradedClaudeCliPort sentinel → err(ChatTransportError{ NOT_INSTALLED })', async () => {
     const result = await queryStructured(degradedClaudeCliPort, 'hello', {})
 
     expect(result.ok).toBe(false)
     if (!result.ok) {
-      expect(result.error).toBeInstanceOf(ClaudeCliError)
-      expect((result.error as ClaudeCliError).errorCode).toBe('NOT_INSTALLED')
+      expect(result.error).toBeInstanceOf(ChatTransportError)
+      expect((result.error as ChatTransportError).errorCode).toBe('NOT_INSTALLED')
     }
   })
 
@@ -115,31 +115,31 @@ describe('queryStructured (SPEC §6.6)', () => {
   it('propagates adapter error from runStructured (e.g. CLI_LAUNCH_FAILED)', async () => {
     const mock = new MockClaudeSubprocessAdapter()
     mock.available = true
-    mock.queryError = new ClaudeCliError('CLI_LAUNCH_FAILED', 'binary missing')
+    mock.queryError = new ChatTransportError('CLI_LAUNCH_FAILED', 'binary missing')
 
     const result = await queryStructured(mock, 'hello', {})
 
     expect(result.ok).toBe(false)
     if (!result.ok) {
-      expect(result.error).toBeInstanceOf(ClaudeCliError)
-      expect((result.error as ClaudeCliError).errorCode).toBe('CLI_LAUNCH_FAILED')
+      expect(result.error).toBeInstanceOf(ChatTransportError)
+      expect((result.error as ChatTransportError).errorCode).toBe('CLI_LAUNCH_FAILED')
     }
   })
 
   it('invalid structured_output → err(EnvelopeParseError{ PRIMARY_ZOD_FAILED })', async () => {
     // Bypass the typed default and stuff a shape the Zod schema will reject.
-    const port: ClaudeCliPort & {
+    const port: ChatTransportPort & {
       runStructured: (
         p: string,
         o: StructuredCliCallOptions,
-      ) => Promise<Result<StructuredCliRawResult, ClaudeCliError>>
+      ) => Promise<Result<StructuredCliRawResult, ChatTransportError>>
     } = {
       async isAvailable() {
         return true
       },
       async *queryStream(
         _prompt: string,
-        _options?: ClaudeCliStreamOptions,
+        _options?: ChatTransportStreamOptions,
       ): AsyncIterable<StreamDelta> {
         yield { type: 'done' }
       },

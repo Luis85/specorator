@@ -9,11 +9,11 @@ import type {
 	CommunityPluginPort,
 	ActiveFileSnapshot,
 	Unsubscriber,
-	ClaudeCliPort,
-	ClaudeCliStreamOptions,
+	ChatTransportPort,
+	ChatTransportStreamOptions,
 	StreamDelta,
 } from '@/domain/ports';
-import { ClaudeCliError } from '@/domain/ports';
+import { ChatTransportError } from '@/domain/ports';
 
 type FileManagerWithTrash = App['fileManager'] & {
 	trashFile?: (file: TFile) => Promise<void>;
@@ -27,7 +27,7 @@ export class ObsidianBridge
 		NotificationPort,
 		LoggerPort,
 		CommunityPluginPort,
-		ClaudeCliPort
+		ChatTransportPort
 {
 	private static readonly _LEVEL_RANK: Record<string, number> = {
 		debug: 0,
@@ -230,13 +230,13 @@ export class ObsidianBridge
 		return appExt.plugins?.enabledPlugins ?? null;
 	}
 
-	// ── ClaudeCliPort ─────────────────────────────────────────────────────────
+	// ── ChatTransportPort ─────────────────────────────────────────────────────────
 
 	/**
 	 * Legacy isAvailable() kept for protocol compliance.
 	 * In production, ClaudeCliAdapter.isAvailable() is used instead (it is
-	 * provided via CLAUDE_CLI_PORT, not ObsidianBridge). This method is only
-	 * reached if someone accidentally injects ObsidianBridge as CLAUDE_CLI_PORT.
+	 * provided via CHAT_TRANSPORT_PORT, not ObsidianBridge). This method is only
+	 * reached if someone accidentally injects ObsidianBridge as CHAT_TRANSPORT_PORT.
 	 */
 	isAvailable(): Promise<boolean> {
 		type ExecFn = (cmd: string, opts: { timeout: number }, cb: (err: Error | null) => void) => void;
@@ -251,11 +251,11 @@ export class ObsidianBridge
 	// eslint-disable-next-line @typescript-eslint/require-await
 	async *queryStream(
 		_prompt: string,
-		_options?: ClaudeCliStreamOptions,
+		_options?: ChatTransportStreamOptions,
 	): AsyncIterable<StreamDelta> {
 		yield {
 			type: 'error',
-			error: new ClaudeCliError(
+			error: new ChatTransportError(
 				'NOT_INSTALLED',
 				'ObsidianBridge: use ClaudeCliAdapter for queries',
 			),

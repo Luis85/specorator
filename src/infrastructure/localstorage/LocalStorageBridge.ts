@@ -7,11 +7,11 @@ import type {
 	CommunityPluginPort,
 	ActiveFileSnapshot,
 	Unsubscriber,
-	ClaudeCliPort,
-	ClaudeCliStreamOptions,
+	ChatTransportPort,
+	ChatTransportStreamOptions,
 	StreamDelta,
 } from '@/domain/ports';
-import { ClaudeCliError } from '@/domain/ports';
+import { ChatTransportError } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
 
 const FILE_PREFIX = 'specorator:file:';
@@ -26,7 +26,7 @@ export class LocalStorageBridge
 		NotificationPort,
 		LoggerPort,
 		CommunityPluginPort,
-		ClaudeCliPort
+		ChatTransportPort
 {
 	async readFile(path: string): Promise<string> {
 		const value = localStorage.getItem(FILE_PREFIX + path);
@@ -188,7 +188,7 @@ export class LocalStorageBridge
 		}
 	}
 
-	// ── ClaudeCliPort ─────────────────────────────────────────────────────────
+	// ── ChatTransportPort ─────────────────────────────────────────────────────────
 
 	isAvailable(): Promise<boolean> {
 		return Promise.resolve(false);
@@ -197,11 +197,11 @@ export class LocalStorageBridge
 	// eslint-disable-next-line @typescript-eslint/require-await
 	async *queryStream(
 		_prompt: string,
-		_options?: ClaudeCliStreamOptions,
+		_options?: ChatTransportStreamOptions,
 	): AsyncIterable<StreamDelta> {
 		yield {
 			type: 'error',
-			error: new ClaudeCliError('NOT_INSTALLED', 'LocalStorageBridge: not available'),
+			error: new ChatTransportError('NOT_INSTALLED', 'LocalStorageBridge: not available'),
 		};
 	}
 }

@@ -24,7 +24,7 @@ export interface ContextFile {
 }
 
 export interface BuildPromptResult {
-  /** Fully assembled prompt string to pass directly to ClaudeCliPort.query(). */
+  /** Fully assembled prompt string to pass directly to ChatTransportPort.query(). */
   readonly prompt: string
   /**
    * True if any content was removed or shortened to stay within the token cap.

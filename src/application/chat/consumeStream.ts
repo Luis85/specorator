@@ -1,6 +1,6 @@
 /**
  * Pure stream-delta consumer extracted from `ChatTurnOrchestrator` (Arch #1,
- * WP-2). Drains an `AsyncIterable<StreamDelta>` from `ClaudeCliPort.queryStream`
+ * WP-2). Drains an `AsyncIterable<StreamDelta>` from `ChatTransportPort.queryStream`
  * to a terminal `done`/`error` delta, dispatching non-terminal deltas to the
  * structural store ports.
  *
@@ -10,15 +10,15 @@
  */
 import { tryAsync } from '@/domain/shared/tryAsync';
 import type {
-	ClaudeCliErrorCode,
+	ChatTransportErrorCode,
 	StreamDelta,
-} from '@/domain/ports/ClaudeCliPort';
+} from '@/domain/ports/ChatTransportPort';
 import type { MessagesPort, StreamingPort, ThreadsPort } from './ChatTurnOrchestrator';
 
 /** Internal drain outcome — mirrors the pre-refactor `ChatSidebar` shape. */
 type DrainOutcome =
 	| { kind: 'done'; text: string }
-	| { kind: 'error'; errorCode: ClaudeCliErrorCode };
+	| { kind: 'error'; errorCode: ChatTransportErrorCode };
 
 /**
  * Public outcome from `consumeStream`. Never throws — a thrown iterable is
@@ -26,7 +26,7 @@ type DrainOutcome =
  */
 export type StreamConsumptionOutcome =
 	| { readonly kind: 'success'; readonly text: string }
-	| { readonly kind: 'error'; readonly errorCode: ClaudeCliErrorCode };
+	| { readonly kind: 'error'; readonly errorCode: ChatTransportErrorCode };
 
 export interface ConsumeStreamArgs {
 	readonly stream: AsyncIterable<StreamDelta>;

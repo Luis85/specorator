@@ -56,7 +56,7 @@ export interface ContextFileEntry {
 export type ChatStatus = 'idle' | 'loading' | 'error';
 
 /**
- * Subset of ClaudeCliErrorCode values that the store tracks for UI rendering.
+ * Subset of ChatTransportErrorCode values that the store tracks for UI rendering.
  * Only timeout and query_failed appear as error states in the panel;
  * NOT_INSTALLED and API_KEY_MISSING are handled at the availability-check
  * level.

@@ -23,9 +23,9 @@
  */
 import { err, ok, type Result } from '@/domain/shared/Result';
 import type {
-	ClaudeCliErrorCode,
-	ClaudeCliPort,
-} from '@/domain/ports/ClaudeCliPort';
+	ChatTransportErrorCode,
+	ChatTransportPort,
+} from '@/domain/ports/ChatTransportPort';
 import { consumeStream } from './consumeStream';
 import type { SessionId } from '@/domain/chat/SessionId';
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord';
@@ -36,7 +36,7 @@ import { validateProposalPath } from '@/application/chat/validateProposalPath';
 import type { FileWriteProposal } from '@/application/chat/FileWriteProposal';
 import type { CreateFileEnvelope } from '@/application/chat/createFileEnvelopeSchema';
 import { EnvelopeParseError, type PathValidationError } from '@/application/chat/errors';
-import type { ClaudeCliError } from '@/domain/ports/ClaudeCliPort';
+import type { ChatTransportError } from '@/domain/ports/ChatTransportPort';
 import type { SettingsPort } from '@/domain/ports/SettingsPort';
 import type { VaultPort } from '@/domain/ports/VaultPort';
 import type { SessionLogWriter } from '@/application/chat/SessionLogWriter';
@@ -105,7 +105,7 @@ export interface ProposalsPort {
  * defaults to `new AbortController()`.
  */
 export interface ChatTurnOrchestratorDeps {
-	readonly claudeCliPort: ClaudeCliPort | undefined;
+	readonly claudeCliPort: ChatTransportPort | undefined;
 	readonly settings: SettingsPort;
 	readonly vault: VaultPort;
 	readonly logger: LoggerPort;
@@ -138,7 +138,7 @@ export type TurnOutcome =
 			readonly proposal: FileWriteProposal;
 	  }
 	| { readonly kind: 'structured-parse-fail'; readonly threadId: string }
-	| { readonly kind: 'transport-error'; readonly threadId: string; readonly code: ClaudeCliErrorCode };
+	| { readonly kind: 'transport-error'; readonly threadId: string; readonly code: ChatTransportErrorCode };
 
 export class ChatTurnOrchestrator {
 	constructor(private readonly deps: ChatTurnOrchestratorDeps) {}
@@ -248,7 +248,7 @@ export class ChatTurnOrchestrator {
 	// ── Free-text streaming branch ────────────────────────────────────────
 
 	private async dispatchFreeText(
-		port: ClaudeCliPort,
+		port: ChatTransportPort,
 		input: TurnInput,
 		threadId: string,
 		ctx: {
@@ -294,7 +294,7 @@ export class ChatTurnOrchestrator {
 	// ── Structured branch ─────────────────────────────────────────────────
 
 	private async dispatchStructured(
-		port: ClaudeCliPort,
+		port: ChatTransportPort,
 		input: TurnInput,
 		threadId: string,
 		ctx: {
@@ -335,7 +335,7 @@ export class ChatTurnOrchestrator {
 	}
 
 	private handleStructuredFailure(
-		error: EnvelopeParseError | ClaudeCliError,
+		error: EnvelopeParseError | ChatTransportError,
 		threadId: string,
 	): TurnOutcome {
 		if (error instanceof EnvelopeParseError) {

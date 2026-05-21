@@ -1,10 +1,10 @@
 import type {
-	ClaudeCliPort,
-	ClaudeCliQueryOptions,
-	ClaudeCliStreamOptions,
+	ChatTransportPort,
+	ChatTransportQueryOptions,
+	ChatTransportStreamOptions,
 	StreamDelta,
-} from '@/domain/ports/ClaudeCliPort';
-import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort';
+} from '@/domain/ports/ChatTransportPort';
+import { ChatTransportError } from '@/domain/ports/ChatTransportPort';
 import type { TransportLifecyclePort } from '@/domain/ports/TransportLifecyclePort';
 import type { SessionId } from '@/domain/chat/SessionId';
 
@@ -44,13 +44,13 @@ function interruptibleSleep(ms: number, signal: AbortSignal | undefined): Promis
 }
 
 /**
- * Stub implementation of ClaudeCliPort + TransportLifecyclePort for use in
+ * Stub implementation of ChatTransportPort + TransportLifecyclePort for use in
  * dev mode and unit tests. Satisfies REQ-CCS-022, NFR-CCS-004, SPEC-CCS-001 §6.
  *
  * `available` defaults to false so the standalone browser UI (npm run dev)
  * renders the degraded state without a real subprocess.
  */
-export class MockClaudeCliPort implements ClaudeCliPort, TransportLifecyclePort {
+export class MockClaudeCliPort implements ChatTransportPort, TransportLifecyclePort {
 	/**
 	 * Controls the return value of isAvailable() and the no-op branch of queryStream().
 	 * Default: false — the standalone browser UI and unit tests start unavailable.
@@ -65,7 +65,7 @@ export class MockClaudeCliPort implements ClaudeCliPort, TransportLifecyclePort 
 	/**
 	 * If non-null, queryStream() emits this error instead of cannedResponse.
 	 */
-	queryError: ClaudeCliError | null = null;
+	queryError: ChatTransportError | null = null;
 
 	/**
 	 * Artificial delay for queryStream(). Unit: milliseconds. Default: 0.
@@ -89,7 +89,7 @@ export class MockClaudeCliPort implements ClaudeCliPort, TransportLifecyclePort 
 	 * Added for T-ASM-040 so UI tests can assert the `systemPromptSuffix`
 	 * threaded through by `ChatSidebar.handleSend` (REQ-ASM-013, REQ-ASM-018).
 	 */
-	readonly optionsLog: (ClaudeCliQueryOptions | undefined)[] = [];
+	readonly optionsLog: (ChatTransportQueryOptions | undefined)[] = [];
 
 	async startup(): Promise<void> {
 		// No-op. Never throws.
@@ -109,7 +109,7 @@ export class MockClaudeCliPort implements ClaudeCliPort, TransportLifecyclePort 
 	 * (including the optional `signal`) were threaded through.
 	 */
 	readonly streamLog: string[] = [];
-	readonly streamOptionsLog: (ClaudeCliStreamOptions | undefined)[] = [];
+	readonly streamOptionsLog: (ChatTransportStreamOptions | undefined)[] = [];
 
 	/**
 	 * Optional canned chunks for the streaming response. When non-empty, each
@@ -133,20 +133,20 @@ export class MockClaudeCliPort implements ClaudeCliPort, TransportLifecyclePort 
 	streamChunkDelayMs = 0;
 
 	/** Read `options.signal.aborted` defensively (nullable boolean per strict lint). */
-	private static _isAborted(options: ClaudeCliStreamOptions | undefined): boolean {
+	private static _isAborted(options: ChatTransportStreamOptions | undefined): boolean {
 		return options?.signal?.aborted === true;
 	}
 
 	private static _abortDelta(): StreamDelta {
 		return {
 			type: 'error',
-			error: new ClaudeCliError('QUERY_FAILED', 'MockClaudeCliPort: aborted'),
+			error: new ChatTransportError('QUERY_FAILED', 'MockClaudeCliPort: aborted'),
 		};
 	}
 
 	/** Fire-and-forget the optional onSessionId callback; swallow throws. */
 	private static _fireOnSessionId(
-		options: ClaudeCliStreamOptions | undefined,
+		options: ChatTransportStreamOptions | undefined,
 		sessionId: SessionId,
 	): void {
 		try {
@@ -156,7 +156,7 @@ export class MockClaudeCliPort implements ClaudeCliPort, TransportLifecyclePort 
 		}
 	}
 
-	async *queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
+	async *queryStream(prompt: string, options?: ChatTransportStreamOptions): AsyncIterable<StreamDelta> {
 		this.streamLog.push(prompt);
 		this.streamOptionsLog.push(options);
 		// Mirror to the canonical `queryLog` / `optionsLog` so the established
@@ -168,7 +168,7 @@ export class MockClaudeCliPort implements ClaudeCliPort, TransportLifecyclePort 
 		if (!this.available) {
 			yield {
 				type: 'error',
-				error: new ClaudeCliError('NOT_INSTALLED', 'MockClaudeCliPort: not available'),
+				error: new ChatTransportError('NOT_INSTALLED', 'MockClaudeCliPort: not available'),
 			};
 			return;
 		}
@@ -202,7 +202,7 @@ export class MockClaudeCliPort implements ClaudeCliPort, TransportLifecyclePort 
 	 * has already exited so the top-of-loop guard wouldn't run.
 	 */
 	private async *_streamChunks(
-		options: ClaudeCliStreamOptions | undefined,
+		options: ChatTransportStreamOptions | undefined,
 	): AsyncIterable<StreamDelta> {
 		const chunks =
 			this.cannedStreamChunks.length > 0 ? this.cannedStreamChunks : [this.cannedResponse];

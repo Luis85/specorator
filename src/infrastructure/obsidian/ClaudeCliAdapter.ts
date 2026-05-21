@@ -1,11 +1,11 @@
 import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
 import { isAbsolute } from 'path';
 import type {
-	ClaudeCliPort,
-	ClaudeCliStreamOptions,
+	ChatTransportPort,
+	ChatTransportStreamOptions,
 	StreamDelta,
-} from '@/domain/ports/ClaudeCliPort';
-import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort';
+} from '@/domain/ports/ChatTransportPort';
+import { ChatTransportError } from '@/domain/ports/ChatTransportPort';
 import type { TransportLifecyclePort } from '@/domain/ports/TransportLifecyclePort';
 import type { SessionId } from '@/domain/chat/SessionId';
 import type { LoggerPort } from '@/domain/ports';
@@ -30,7 +30,7 @@ interface SdkMessage {
 }
 
 /**
- * Production implementation of ClaudeCliPort using @anthropic-ai/claude-agent-sdk.
+ * Production implementation of ChatTransportPort using @anthropic-ai/claude-agent-sdk.
  * Also implements `TransportLifecyclePort` (`startup` / `shutdown`) per WP-12
  * (Arch review #3) — lifecycle is its own narrow port now, but the same
  * adapter class fulfils both contracts.
@@ -38,7 +38,7 @@ interface SdkMessage {
  * Satisfies REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017, REQ-CCS-025,
  * NFR-CCS-003, NFR-CCS-005, NFR-CCS-007, SPEC-CCS-001 §5.
  */
-export class ClaudeCliAdapter implements ClaudeCliPort, TransportLifecyclePort {
+export class ClaudeCliAdapter implements ChatTransportPort, TransportLifecyclePort {
 	/** True only after startup() succeeds. Never set to true if API key is missing. */
 	private _available = false;
 	/** Indicates whether SDK has been initialized. */
@@ -164,7 +164,7 @@ export class ClaudeCliAdapter implements ClaudeCliPort, TransportLifecyclePort {
 	 */
 	queryStream(
 		prompt: string,
-		options?: ClaudeCliStreamOptions,
+		options?: ChatTransportStreamOptions,
 	): AsyncIterable<StreamDelta> {
 		const pre = this._preflightStream(options);
 		if (pre !== null) return ClaudeCliAdapter._singleDelta(pre);
@@ -185,27 +185,27 @@ export class ClaudeCliAdapter implements ClaudeCliPort, TransportLifecyclePort {
 	 * Synchronous pre-flight checks. Returns the terminal error delta to
 	 * emit before any SDK call, or `null` if the dispatch is allowed.
 	 */
-	private _preflightStream(options: ClaudeCliStreamOptions | undefined): StreamDelta | null {
+	private _preflightStream(options: ChatTransportStreamOptions | undefined): StreamDelta | null {
 		if (!this._available) {
 			return {
 				type: 'error',
-				error: new ClaudeCliError(this._unavailableCode(), 'ClaudeCliAdapter is not available'),
+				error: new ChatTransportError(this._unavailableCode(), 'ClaudeCliAdapter is not available'),
 			};
 		}
 		const currentKey = this._getApiKey().trim();
 		if (currentKey === '') {
-			return { type: 'error', error: new ClaudeCliError('API_KEY_MISSING', 'API key is missing') };
+			return { type: 'error', error: new ChatTransportError('API_KEY_MISSING', 'API key is missing') };
 		}
 		process.env.ANTHROPIC_API_KEY = currentKey;
 		if (options?.signal?.aborted === true) {
-			return { type: 'error', error: new ClaudeCliError('QUERY_FAILED', 'Aborted before send') };
+			return { type: 'error', error: new ChatTransportError('QUERY_FAILED', 'Aborted before send') };
 		}
 		return null;
 	}
 
 	private async *_runStream(
 		prompt: string,
-		options?: ClaudeCliStreamOptions,
+		options?: ChatTransportStreamOptions,
 	): AsyncIterable<StreamDelta> {
 		const timeoutMs = this._clampTimeout(options?.timeoutMs);
 		const controller = new AbortController();
@@ -221,7 +221,7 @@ export class ClaudeCliAdapter implements ClaudeCliPort, TransportLifecyclePort {
 		// against a signal the caller has already cancelled.
 		if (options?.signal?.aborted === true) {
 			options.signal.removeEventListener('abort', onAbort);
-			yield { type: 'error', error: new ClaudeCliError('QUERY_FAILED', 'Aborted before send') };
+			yield { type: 'error', error: new ChatTransportError('QUERY_FAILED', 'Aborted before send') };
 			return;
 		}
 		const timeout = ClaudeCliAdapter._makeTimeout(timeoutMs, controller);
@@ -245,7 +245,7 @@ export class ClaudeCliAdapter implements ClaudeCliPort, TransportLifecyclePort {
 			// eslint-disable-next-line obsidianmd/prefer-active-window-timers
 			timeoutId = setTimeout(() => {
 				controller.abort();
-				reject(new ClaudeCliError('TIMEOUT', `Query exceeded ${timeoutMs} ms`));
+				reject(new ChatTransportError('TIMEOUT', `Query exceeded ${timeoutMs} ms`));
 			}, timeoutMs);
 		});
 		// Swallow unhandled-rejection on the dangling timeout promise.
@@ -277,7 +277,7 @@ export class ClaudeCliAdapter implements ClaudeCliPort, TransportLifecyclePort {
 	private async *_streamSdk(
 		prompt: string,
 		controller: AbortController,
-		options: ClaudeCliStreamOptions | undefined,
+		options: ChatTransportStreamOptions | undefined,
 		timeout: { promise: Promise<never>; clear: () => void },
 	): AsyncIterable<StreamDelta> {
 		const gen = sdkQuery({
@@ -302,7 +302,7 @@ export class ClaudeCliAdapter implements ClaudeCliPort, TransportLifecyclePort {
 				// stay stuck. Surface as `QUERY_FAILED` so callers can clear
 				// in-flight state via the existing error branch.
 				for (const d of reducer.emitError(
-					new ClaudeCliError('QUERY_FAILED', 'SDK stream ended without result'),
+					new ChatTransportError('QUERY_FAILED', 'SDK stream ended without result'),
 				)) {
 					yield d;
 				}
@@ -364,7 +364,7 @@ export class ClaudeCliAdapter implements ClaudeCliPort, TransportLifecyclePort {
 	}
 
 	private static _fireOnSessionId(
-		options: ClaudeCliStreamOptions | undefined,
+		options: ChatTransportStreamOptions | undefined,
 		sid: SessionId,
 	): void {
 		if (options?.onSessionId === undefined) return;
@@ -385,20 +385,20 @@ export class ClaudeCliAdapter implements ClaudeCliPort, TransportLifecyclePort {
 		return Math.min(Math.max(raw ?? 30_000, 1_000), 300_000);
 	}
 
-	private _mapError(e: unknown, timeoutMs: number): ClaudeCliError {
-		if (e instanceof ClaudeCliError && e.errorCode === 'TIMEOUT') {
+	private _mapError(e: unknown, timeoutMs: number): ChatTransportError {
+		if (e instanceof ChatTransportError && e.errorCode === 'TIMEOUT') {
 			this._logger.warn('ClaudeCliAdapter.queryStream(): timeout', { timeoutMs });
 			return e;
 		}
 		if (e instanceof Error) {
 			if (/api.key|authentication|401/i.test(e.message)) {
 				this._logger.warn('ClaudeCliAdapter.queryStream(): API key error');
-				return new ClaudeCliError('API_KEY_MISSING', 'Authentication failed', e);
+				return new ChatTransportError('API_KEY_MISSING', 'Authentication failed', e);
 			}
 			this._logger.warn('ClaudeCliAdapter.queryStream(): SDK error', { error: e.message });
-			return new ClaudeCliError('QUERY_FAILED', 'Query failed', e);
+			return new ChatTransportError('QUERY_FAILED', 'Query failed', e);
 		}
 		this._logger.warn('ClaudeCliAdapter.queryStream(): unknown error');
-		return new ClaudeCliError('QUERY_FAILED', 'Unknown error', e);
+		return new ChatTransportError('QUERY_FAILED', 'Unknown error', e);
 	}
 }
