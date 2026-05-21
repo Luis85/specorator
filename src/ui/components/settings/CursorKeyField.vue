@@ -22,6 +22,7 @@
 import { ref, useId } from 'vue'
 import type { SecretStorePort } from '@/domain/ports'
 import { SECRET_ID_CURSOR } from '@/domain/ports'
+import { tryAsync } from '@/domain/shared/tryAsync'
 
 const props = defineProps<{
   port: SecretStorePort
@@ -48,11 +49,11 @@ const UNAVAILABLE_NOTICE =
 async function handleBlur(event: FocusEvent): Promise<void> {
   const raw = (event.target as HTMLInputElement).value.trim()
   inputValue.value = raw
-  try {
-    await props.port.setSecret(SECRET_ID_CURSOR, raw)
+  const outcome = await tryAsync(() => props.port.setSecret(SECRET_ID_CURSOR, raw))
+  if (outcome.ok) {
     emit('saved', raw)
-  } catch (error: unknown) {
-    emit('saveFailed', error)
+  } else {
+    emit('saveFailed', outcome.error)
   }
 }
 </script>

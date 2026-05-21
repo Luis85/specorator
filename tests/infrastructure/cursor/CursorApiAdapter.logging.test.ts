@@ -54,13 +54,14 @@ describe('CursorApiAdapter logging discipline (T-MPS-043)', () => {
     await store.setSecret(SECRET_ID_CURSOR, SECRET_VALUE)
     const { calls, logger } = recordingLogger()
 
-    const fakeFetch = (async () =>
+    // eslint-disable-next-line obsidianmd/prefer-active-doc -- `typeof globalThis.fetch` is the canonical fetch-signature shape; the rule false-positives on type positions.
+    const fakeFetch: typeof globalThis.fetch = async (): Promise<Response> =>
       new Response(
         bodyFor(
           'event: message_delta\ndata: {"text":"ok"}\n\n' + 'event: done\ndata: \n\n',
         ),
         { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
-      )) as unknown as typeof globalThis.fetch
+      )
 
     const adapter = new CursorApiAdapter({
       secretStore: store,
@@ -86,9 +87,9 @@ describe('CursorApiAdapter logging discipline (T-MPS-043)', () => {
     const adapter = new CursorApiAdapter({
       secretStore: store,
       logger,
-      fetch: (async () => {
+      fetch: async () => {
         throw new Error('must not fetch')
-      }) as unknown as typeof globalThis.fetch,
+      },
       baseUrl: 'https://api.cursor.sh/v1',
       getSettings: () => ({ ...DEFAULT_SETTINGS, cursorApiPreview: true }),
     })

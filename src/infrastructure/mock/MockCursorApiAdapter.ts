@@ -79,23 +79,37 @@ export class MockCursorApiAdapter implements ChatTransportPort {
 	): AsyncIterable<StreamDelta> {
 		this.queryLog.push(prompt)
 		this.optionsLog.push(options)
-
 		if (this._nextDeltas !== null) {
 			const scripted = this._nextDeltas
 			this._nextDeltas = null
 			for (const d of scripted) yield d
 			return
 		}
-
-		if (!this.available) {
-			yield {
-				type: 'error',
-				error: new ChatTransportError('NOT_INSTALLED', 'MockCursorApiAdapter: not available'),
-			}
+		const early = this._preflightDelta()
+		if (early !== null) {
+			yield early
 			yield { type: 'done' }
 			return
 		}
+		yield* this._streamCanned(options)
+	}
 
+	private _preflightDelta(): StreamDelta | null {
+		if (!this.available) {
+			return {
+				type: 'error',
+				error: new ChatTransportError('NOT_INSTALLED', 'MockCursorApiAdapter: not available'),
+			}
+		}
+		if (this.queryError !== null) {
+			return { type: 'error', error: this.queryError }
+		}
+		return null
+	}
+
+	private async *_streamCanned(
+		options: ChatTransportStreamOptions | undefined,
+	): AsyncGenerator<StreamDelta> {
 		await MockCursorApiAdapter._sleep(this.delayMs, options?.signal)
 		if (options?.signal?.aborted === true) {
 			yield {
@@ -105,24 +119,9 @@ export class MockCursorApiAdapter implements ChatTransportPort {
 			yield { type: 'done' }
 			return
 		}
-
-		if (this.queryError !== null) {
-			yield { type: 'error', error: this.queryError }
-			yield { type: 'done' }
-			return
-		}
-
 		const chunks =
 			this.cannedStreamChunks.length > 0 ? this.cannedStreamChunks : [this.cannedResponse]
 		for (const chunk of chunks) {
-			if (options?.signal?.aborted === true) {
-				yield {
-					type: 'error',
-					error: new ChatTransportError('QUERY_FAILED', 'MockCursorApiAdapter: aborted'),
-				}
-				yield { type: 'done' }
-				return
-			}
 			yield { type: 'text', text: chunk }
 			await MockCursorApiAdapter._sleep(this.streamChunkDelayMs, options?.signal)
 		}

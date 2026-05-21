@@ -26,12 +26,13 @@ function bodyFor(text: string): ReadableStream<Uint8Array> {
   })
 }
 
+// eslint-disable-next-line obsidianmd/prefer-active-doc -- `typeof globalThis.fetch` is the canonical fetch-signature shape; the rule false-positives on type positions.
 function fetchReturning(body: ReadableStream<Uint8Array>): typeof globalThis.fetch {
-  return (async () =>
+  return async (): Promise<Response> =>
     new Response(body, {
       status: 200,
       headers: { 'Content-Type': 'text/event-stream' },
-    })) as unknown as typeof globalThis.fetch
+    })
 }
 
 async function adapterWithBody(body: ReadableStream<Uint8Array>) {

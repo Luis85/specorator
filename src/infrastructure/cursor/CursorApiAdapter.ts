@@ -78,6 +78,7 @@ export type CursorQueryOptions = ChatTransportStreamOptions & {
 export interface CursorApiAdapterDeps {
 	readonly secretStore: SecretStorePort
 	readonly logger: LoggerPort
+	// eslint-disable-next-line obsidianmd/prefer-active-doc -- `typeof globalThis.fetch` is the canonical fetch-signature shape; the rule false-positives on type positions.
 	readonly fetch: typeof globalThis.fetch
 	readonly baseUrl: string
 	readonly getSettings: () => PluginSettings
@@ -113,6 +114,7 @@ interface MappedDelta {
 export class CursorApiAdapter implements ChatTransportPort {
 	private readonly _secretStore: SecretStorePort
 	private readonly _logger: LoggerPort
+	// eslint-disable-next-line obsidianmd/prefer-active-doc -- `typeof globalThis.fetch` is the canonical fetch-signature shape; the rule false-positives on type positions.
 	private readonly _fetch: typeof globalThis.fetch
 	private readonly _baseUrl: string
 	private readonly _getSettings: () => PluginSettings
@@ -135,16 +137,8 @@ export class CursorApiAdapter implements ChatTransportPort {
 	async isAvailable(): Promise<boolean> {
 		if (!this._secretStore.available) return false
 		if (!this._getSettings().cursorApiPreview) return false
-		let key: string | null = null
-		try {
-			key = await this._secretStore.getSecret(SECRET_ID_CURSOR)
-		} catch {
-			// SecretStore failures collapse to `false` per port contract — the
-			// production adapter swallows them and the localstorage bridge
-			// returns null. Either way the provider is unavailable.
-			return false
-		}
-		return key !== null && key.trim() !== ''
+		const key = await this._readKey()
+		return key !== null && key !== ''
 	}
 
 	/**
@@ -156,23 +150,22 @@ export class CursorApiAdapter implements ChatTransportPort {
 		prompt: string,
 		options?: ChatTransportStreamOptions,
 	): AsyncIterable<StreamDelta> {
-		return this._run(prompt, options as CursorQueryOptions | undefined)
+		// The Cursor adapter recognises the WS-9 attachments/model/planMode
+		// fields when callers supply them; the base `ChatTransportStreamOptions`
+		// doesn't yet declare them, so a structural cast widens the type.
+		return this._run(prompt, options)
 	}
 
 	private async *_run(
 		prompt: string,
 		options: CursorQueryOptions | undefined,
 	): AsyncGenerator<StreamDelta> {
-		// (1) Attachment cap enforcement — must run before any I/O so an
-		// over-cap turn never reaches the network (REQ-MPS-044).
-		const capError = CursorApiAdapter._checkAttachmentCap(options?.attachments)
-		if (capError !== null) {
-			yield { type: 'error', error: capError }
+		const preflight = this._preflight(options)
+		if (preflight !== null) {
+			yield preflight
 			yield { type: 'done' }
 			return
 		}
-
-		// (2) Late key read (REQ-MPS-013, ADR-MPS-003 §Decision step 4).
 		const key = await this._readKey()
 		if (key === null) {
 			yield {
@@ -182,28 +175,53 @@ export class CursorApiAdapter implements ChatTransportPort {
 			yield { type: 'done' }
 			return
 		}
-
-		// (3) Pre-flight abort check — abort listeners do not replay events
-		// added after the abort, so this guard catches the eager-abort case
-		// before the listener is attached on the fetch path.
-		if (options?.signal?.aborted === true) {
-			yield {
-				type: 'error',
-				error: new ChatTransportError('QUERY_FAILED', 'Aborted before send'),
-			}
+		const dispatch = await this._dispatch(prompt, key, options)
+		if (dispatch.kind === 'error') {
+			yield { type: 'error', error: dispatch.error }
 			yield { type: 'done' }
 			return
 		}
+		yield* this._parseSse(dispatch.body)
+	}
 
-		// (4) Build request and POST. The `Authorization` header is
-		// constructed inline at the fetch call so the bearer string is not
-		// held on any inspectable local variable (NFR-MPS-002).
+	/**
+	 * Sync-only pre-flight checks: attachment cap + eager abort. Returns the
+	 * single error delta to emit, or `null` if dispatch may proceed. Lets the
+	 * generator stay flat (complexity ≤ 10).
+	 */
+	private _preflight(
+		options: CursorQueryOptions | undefined,
+	): StreamDelta | null {
+		const capError = CursorApiAdapter._checkAttachmentCap(options?.attachments)
+		if (capError !== null) return { type: 'error', error: capError }
+		if (options?.signal?.aborted === true) {
+			return {
+				type: 'error',
+				error: new ChatTransportError('QUERY_FAILED', 'Aborted before send'),
+			}
+		}
+		return null
+	}
+
+	/**
+	 * POST the prompt to the Cursor SSE endpoint and return either the body
+	 * stream (success) or the error to surface. The `Authorization` header is
+	 * constructed inline at the `fetch()` call so the bearer string is not
+	 * held on any inspectable local variable (NFR-MPS-002).
+	 */
+	private async _dispatch(
+		prompt: string,
+		key: string,
+		options: CursorQueryOptions | undefined,
+	): Promise<
+		| { kind: 'body'; body: ReadableStream<Uint8Array> }
+		| { kind: 'error'; error: ChatTransportError }
+	> {
 		const url = `${this._baseUrl}${SSE_CHAT_PATH}`
 		const body = CursorApiAdapter._buildBody(prompt, options)
 		this._logger.debug('CursorApiAdapter.queryStream(): dispatch', {
 			path: SSE_CHAT_PATH,
 		})
-
 		let response: Response
 		try {
 			response = await this._fetch(url, {
@@ -217,43 +235,27 @@ export class CursorApiAdapter implements ChatTransportPort {
 				signal: options?.signal,
 			})
 		} catch (e: unknown) {
-			yield {
-				type: 'error',
-				error: CursorApiAdapter._mapFetchError(e),
-			}
-			yield { type: 'done' }
-			return
+			return { kind: 'error', error: CursorApiAdapter._mapFetchError(e) }
 		}
-
 		this._logger.debug('CursorApiAdapter.queryStream(): response', {
 			status: response.status,
 		})
-
 		if (!response.ok) {
-			yield {
-				type: 'error',
+			return {
+				kind: 'error',
 				error: new ChatTransportError(
 					response.status === 401 ? 'API_KEY_MISSING' : 'QUERY_FAILED',
 					`Cursor API responded with HTTP ${response.status}`,
 				),
 			}
-			yield { type: 'done' }
-			return
 		}
-
 		if (response.body === null) {
-			yield {
-				type: 'error',
+			return {
+				kind: 'error',
 				error: new ChatTransportError('QUERY_FAILED', 'Cursor API returned an empty body'),
 			}
-			yield { type: 'done' }
-			return
 		}
-
-		// (5) Parse the SSE stream. The parser yields terminal deltas itself;
-		// a stream that closes without a terminal is converted to QUERY_FAILED
-		// per SPEC-MPS-001 §10 ("Cursor SSE stream closes without `done`" row).
-		yield* this._parseSse(response.body)
+		return { kind: 'body', body: response.body }
 	}
 
 	/** Builds the JSON request body per SPEC-MPS-001 §5 step 2. */
@@ -334,7 +336,6 @@ export class CursorApiAdapter implements ChatTransportPort {
 		const decoder = new TextDecoder('utf-8')
 		const reader = body.getReader()
 		let buffer = ''
-		let terminated = false
 		try {
 			for (;;) {
 				const { value, done } = await reader.read()
@@ -342,42 +343,45 @@ export class CursorApiAdapter implements ChatTransportPort {
 				buffer += decoder.decode(value, { stream: true })
 				const frames = CursorApiAdapter._extractFrames(buffer)
 				buffer = frames.remainder
-				for (const frame of frames.frames) {
-					const mapped = CursorApiAdapter._mapFrame(frame)
-					if (mapped === null) continue
-					yield mapped.delta
-					if (mapped.terminal) {
-						terminated = true
-						return
-					}
-				}
+				const drained = yield* CursorApiAdapter._drainFrames(frames.frames)
+				if (drained) return
 			}
-			// Flush any trailing partial frame as final decoder bytes.
 			buffer += decoder.decode()
 			const tail = CursorApiAdapter._extractFrames(buffer + '\n\n')
-			for (const frame of tail.frames) {
-				const mapped = CursorApiAdapter._mapFrame(frame)
-				if (mapped === null) continue
-				yield mapped.delta
-				if (mapped.terminal) {
-					terminated = true
-					return
-				}
-			}
+			const drained = yield* CursorApiAdapter._drainFrames(tail.frames)
+			if (drained) return
 		} finally {
-			try {
-				reader.releaseLock()
-			} catch {
-				/* tolerate already-released lock from terminal early-return */
-			}
+			CursorApiAdapter._safeReleaseLock(reader)
 		}
-		if (!terminated) {
-			// SPEC-MPS-001 §10: stream closed without `done`.
-			yield {
-				type: 'error',
-				error: new ChatTransportError('QUERY_FAILED', 'stream closed unexpectedly'),
-			}
-			yield { type: 'done' }
+		// SPEC-MPS-001 §10: stream closed without `done`.
+		yield {
+			type: 'error',
+			error: new ChatTransportError('QUERY_FAILED', 'stream closed unexpectedly'),
+		}
+		yield { type: 'done' }
+	}
+
+	/**
+	 * Yield mapped deltas for each frame; return `true` as soon as a terminal
+	 * frame is encountered so the caller can stop pulling from the reader.
+	 */
+	private static *_drainFrames(
+		frames: ReadonlyArray<SseFrame>,
+	): Generator<StreamDelta, boolean> {
+		for (const frame of frames) {
+			const mapped = CursorApiAdapter._mapFrame(frame)
+			if (mapped === null) continue
+			yield mapped.delta
+			if (mapped.terminal) return true
+		}
+		return false
+	}
+
+	private static _safeReleaseLock(reader: ReadableStreamDefaultReader<Uint8Array>): void {
+		try {
+			reader.releaseLock()
+		} catch {
+			/* tolerate already-released lock from terminal early-return */
 		}
 	}
 
@@ -425,44 +429,12 @@ export class CursorApiAdapter implements ChatTransportPort {
 	 */
 	private static _mapFrame(frame: SseFrame): MappedDelta | null {
 		const event = frame.event
-		// `done` may arrive as a bare event with an empty data string.
 		if (event === 'done') {
 			return { delta: { type: 'done' }, terminal: true }
 		}
 		const payload = CursorApiAdapter._safeParseJson(frame.data)
-		if (event === 'error') {
-			const msg = CursorApiAdapter._extractString(payload, 'message') ?? 'Cursor reported an error'
-			return {
-				delta: { type: 'error', error: new ChatTransportError('QUERY_FAILED', msg) },
-				terminal: true,
-			}
-		}
-		if (event === 'message_delta') {
-			const text = CursorApiAdapter._extractString(payload, 'text') ?? ''
-			if (text === '') return null
-			return { delta: { type: 'text', text }, terminal: false }
-		}
-		if (event === 'usage') {
-			const inputTokens = CursorApiAdapter._extractNumber(payload, 'input_tokens') ?? 0
-			const outputTokens = CursorApiAdapter._extractNumber(payload, 'output_tokens') ?? 0
-			return { delta: { type: 'usage', inputTokens, outputTokens }, terminal: false }
-		}
-		if (event === 'tool_use') {
-			const blockId =
-				CursorApiAdapter._extractString(payload, 'block_id') ??
-				CursorApiAdapter._extractString(payload, 'id') ??
-				'cursor-tool-block'
-			const toolName = CursorApiAdapter._extractString(payload, 'name') ?? ''
-			const inputJson = CursorApiAdapter._extractString(payload, 'input_json') ?? ''
-			return {
-				delta: { type: 'tool-use-start', blockId, toolName, inputJson },
-				terminal: false,
-			}
-		}
-		// Unknown event — skip rather than synthesise a delta. The spec's
-		// event mapping is non-exhaustive; future Cursor additions are
-		// forward-compatible at the adapter boundary.
-		return null
+		const handler = SSE_EVENT_HANDLERS[event]
+		return handler !== undefined ? handler(payload) : null
 	}
 
 	private static _safeParseJson(data: string): unknown {
@@ -473,16 +445,50 @@ export class CursorApiAdapter implements ChatTransportPort {
 			return null
 		}
 	}
+}
 
-	private static _extractString(payload: unknown, key: string): string | null {
-		if (payload === null || typeof payload !== 'object') return null
-		const value = (payload as Record<string, unknown>)[key]
-		return typeof value === 'string' ? value : null
-	}
+/**
+ * Per-event handlers for `_mapFrame`. Pulling the dispatch out of a giant
+ * `if`-ladder keeps `_mapFrame`'s cyclomatic complexity within the
+ * project-wide cap (≤10).
+ */
+const SSE_EVENT_HANDLERS: Readonly<Partial<Record<string, (payload: unknown) => MappedDelta | null>>> = {
+	error: (payload) => {
+		const msg = extractStr(payload, 'message') ?? 'Cursor reported an error'
+		return {
+			delta: { type: 'error', error: new ChatTransportError('QUERY_FAILED', msg) },
+			terminal: true,
+		}
+	},
+	message_delta: (payload) => {
+		const text = extractStr(payload, 'text') ?? ''
+		if (text === '') return null
+		return { delta: { type: 'text', text }, terminal: false }
+	},
+	usage: (payload) => {
+		const inputTokens = extractNum(payload, 'input_tokens') ?? 0
+		const outputTokens = extractNum(payload, 'output_tokens') ?? 0
+		return { delta: { type: 'usage', inputTokens, outputTokens }, terminal: false }
+	},
+	tool_use: (payload) => {
+		const blockId = extractStr(payload, 'block_id') ?? extractStr(payload, 'id') ?? 'cursor-tool-block'
+		const toolName = extractStr(payload, 'name') ?? ''
+		const inputJson = extractStr(payload, 'input_json') ?? ''
+		return {
+			delta: { type: 'tool-use-start', blockId, toolName, inputJson },
+			terminal: false,
+		}
+	},
+}
 
-	private static _extractNumber(payload: unknown, key: string): number | null {
-		if (payload === null || typeof payload !== 'object') return null
-		const value = (payload as Record<string, unknown>)[key]
-		return typeof value === 'number' && Number.isFinite(value) ? value : null
-	}
+function extractStr(payload: unknown, key: string): string | null {
+	if (payload === null || typeof payload !== 'object') return null
+	const value = (payload as Record<string, unknown>)[key]
+	return typeof value === 'string' ? value : null
+}
+
+function extractNum(payload: unknown, key: string): number | null {
+	if (payload === null || typeof payload !== 'object') return null
+	const value = (payload as Record<string, unknown>)[key]
+	return typeof value === 'number' && Number.isFinite(value) ? value : null
 }

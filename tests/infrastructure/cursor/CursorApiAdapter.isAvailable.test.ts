@@ -14,11 +14,13 @@ function silentLogger() {
   return { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
 }
 
+// eslint-disable-next-line obsidianmd/prefer-active-doc -- `typeof globalThis.fetch` is the canonical fetch-signature shape; the rule false-positives on type positions.
 function neverFetch(): typeof globalThis.fetch {
-  // isAvailable must never hit the network.
-  return (async () => {
+  // isAvailable must never hit the network. The cast is unnecessary at the
+  // type level — the declared return value drives the inference.
+  return async (): Promise<never> => {
     throw new Error('isAvailable() must not call fetch')
-  }) as unknown as typeof globalThis.fetch
+  }
 }
 
 function buildAdapter(opts: {

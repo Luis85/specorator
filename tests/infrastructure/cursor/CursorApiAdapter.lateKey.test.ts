@@ -42,15 +42,19 @@ describe('CursorApiAdapter late key read (T-MPS-041)', () => {
     const store = new MockSecretStore({ available: true })
     let fetchCalls = 0
     let observedAuth: string | undefined
-    const fakeFetch = (async (_url: unknown, init?: RequestInit) => {
+    // eslint-disable-next-line obsidianmd/prefer-active-doc -- `typeof globalThis.fetch` is the canonical fetch-signature shape; the rule false-positives on type positions.
+    const fakeFetch: typeof globalThis.fetch = async (
+      _url,
+      init,
+    ): Promise<Response> => {
       fetchCalls += 1
       const headers = init?.headers as Record<string, string>
-      observedAuth = headers['Authorization']
+      observedAuth = headers.Authorization
       return new Response(makeSseStream(), {
         status: 200,
         headers: { 'Content-Type': 'text/event-stream' },
       })
-    }) as unknown as typeof globalThis.fetch
+    }
 
     const adapter = new CursorApiAdapter({
       secretStore: store,

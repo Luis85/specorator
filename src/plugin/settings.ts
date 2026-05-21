@@ -8,6 +8,7 @@ import { SECRET_ID_ANTHROPIC } from '@/domain/ports'
 import type { ModuleDescriptor, SettingsFieldDescriptor } from '@/modules/module'
 import { VIEW_TYPE, SpecoratorView } from './SpecoratorView'
 import { VIEW_TYPE_AGENT, AgentSidepanelView } from './AgentSidepanelView'
+import { renderCursorSettingsSection } from './settings/CursorSettingsSection'
 import type SpecoratorPlugin from './main'
 
 export class SpecoratorSettingTab extends PluginSettingTab {
@@ -40,6 +41,21 @@ export class SpecoratorSettingTab extends PluginSettingTab {
     this.renderMcpServerStatus()
     this.renderAnthropicKeyField()
     this.renderClaudeCliPathField(containerEl)
+    renderCursorSettingsSection({
+      containerEl,
+      secretStore: this.plugin.secretStore,
+      settings: this.plugin.settings,
+      cursorKeyCache: this.plugin.getCursorKeyCache(),
+      updateSettings: async (patch) => {
+        await this.plugin.updateSettings(patch)
+      },
+      refreshCursorKeyCache: async () => {
+        await this.plugin.refreshCursorKeyCache()
+      },
+      bumpAllViews: () => {
+        this._bumpAllViews()
+      },
+    })
   }
 
   private renderAboutYouSection(): void {

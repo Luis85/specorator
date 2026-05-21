@@ -29,10 +29,10 @@ function buildAdapter(): {
   const store = new MockSecretStore({ available: true })
   void store.setSecret(SECRET_ID_CURSOR, 'k')
   let calls = 0
-  const fakeFetch = (async () => {
+  const fakeFetch = async (): Promise<Response> => {
     calls += 1
     throw new Error('fetch should not be called when cap is exceeded')
-  }) as unknown as typeof globalThis.fetch
+  }
   const adapter = new CursorApiAdapter({
     secretStore: store,
     logger: silentLogger(),
