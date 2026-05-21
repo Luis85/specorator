@@ -10,6 +10,7 @@ import {
 	NOTIFICATION_PORT,
 	LOGGER_PORT,
 	CHAT_TRANSPORT_PORT,
+	PROVIDER_REGISTRY_KEY,
 	COMMUNITY_PLUGIN_PORT,
 	CONFIRM_MODAL_PORT,
 	MARKDOWN_RENDER_PORT,
@@ -177,6 +178,10 @@ export class AgentSidepanelView extends ItemView {
 			},
 		});
 		this.vueApp.provide(CHAT_TRANSPORT_PORT, reactivePort);
+		// WS-3 (REQ-MPS-006) — read-only ProviderRegistry shared with the
+		// tabbed `SpecoratorView`. UI imports `useProviderRegistry` rather
+		// than reaching for the plugin instance directly.
+		this.vueApp.provide(PROVIDER_REGISTRY_KEY, this.plugin.getProviderRegistry());
 		this.vueApp.provide(COMMUNITY_PLUGIN_PORT, bridge);
 		if (this.plugin.secretStore !== null) {
 			this.vueApp.provide(SECRET_STORE_PORT, this.plugin.secretStore);

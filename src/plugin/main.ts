@@ -12,9 +12,11 @@ import { promoteLegacyFlatSettings } from './loadSettings-migrate'
 import { migrateProviderSelection } from '@/application/migration/migrateProviderSelection'
 import { ensureLeafLoaded } from './leafLoader'
 import { selectTransport } from './transport/TransportSelector'
+import { buildProviderRegistry } from './transport/buildProviderRegistry'
 import type { TransportSelection } from './SpecoratorView'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
 import type { ChatTransportPort } from '@/domain/ports/ChatTransportPort'
+import type { ProviderRegistry } from '@/domain/chat/ProviderRegistry'
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord'
 import {
   decodeChatThreadsBlob,
@@ -750,4 +752,21 @@ export default class SpecoratorPlugin extends Plugin {
    */
   // WS-4/WS-5 will replace this stub.
   private readonly _cursorCliStub: ChatTransportPort = degradedClaudeCliPort
+
+  /**
+   * WS-3 (T-MPS-033) — lazy `ProviderRegistry` accessor. The registry is
+   * pure metadata (REQ-MPS-006 / NFR-MPS-003) and safe to construct on
+   * first access. `SpecoratorView` / `AgentSidepanelView` provide it under
+   * `PROVIDER_REGISTRY_KEY` so the UI's `useProviderRegistry` composable can
+   * inject it.
+   */
+  private _providerRegistry: ProviderRegistry | null = null
+  getProviderRegistry(): ProviderRegistry {
+    let registry = this._providerRegistry
+    if (registry === null) {
+      registry = buildProviderRegistry()
+      this._providerRegistry = registry
+    }
+    return registry
+  }
 }

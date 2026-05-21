@@ -12,6 +12,7 @@ import {
   NOTIFICATION_PORT,
   LOGGER_PORT,
   CHAT_TRANSPORT_PORT,
+  PROVIDER_REGISTRY_KEY,
   COMMUNITY_PLUGIN_PORT,
   CONFIRM_MODAL_PORT,
   SECRET_STORE_PORT,
@@ -237,6 +238,10 @@ export class SpecoratorView extends ItemView {
       },
     })
     this.vueApp.provide(CHAT_TRANSPORT_PORT, reactivePort)
+    // WS-3 (REQ-MPS-006) — provide the read-only ProviderRegistry built once
+    // at plugin startup. The composable `useProviderRegistry` is the UI's
+    // single entry point for provider metadata.
+    this.vueApp.provide(PROVIDER_REGISTRY_KEY, this.plugin.getProviderRegistry())
     this.vueApp.provide(COMMUNITY_PLUGIN_PORT, bridge)
     if (this.plugin.secretStore !== null) {
       this.vueApp.provide(SECRET_STORE_PORT, this.plugin.secretStore)
