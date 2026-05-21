@@ -3,10 +3,10 @@ id: c2d3e4f5-a6b7-4c89-d012-e3f4a5b6c7d8
 feature: "Multi-provider agent sidepanel (Claudian parity + Cursor)"
 area: MPS
 slug: multi-provider-agent-sidepanel
-current_stage: tasks
+current_stage: implementation
 status: active
 last_updated: 2026-05-21
-last_agent: planner
+last_agent: dev
 createdAt: 2026-05-21T00:00:00+02:00
 updatedAt: 2026-05-21T00:00:00+02:00
 artifacts:
@@ -16,7 +16,7 @@ artifacts:
   design: complete
   spec: complete
   tasks: complete
-  implementation-log: pending
+  implementation-log: in-progress
   test-plan: pending
   test-report: pending
   review: pending
@@ -37,7 +37,7 @@ predecessors:
 | 4 — Design | complete | `design.md` | Parts A (UX), B (UI), C (Architecture); 3 inline ADR drafts |
 | 5 — Specification | complete | `spec.md` | Implementation-ready interfaces, data shapes, edge cases, 9 workstreams |
 | 6 — Tasks | complete | `tasks.md`, `dispatch-plan.md` | 156 tasks across 10 workstreams (WS-1..WS-9 + WS-10 integration); TDD-ordered; per-workstream subagent prompts in dispatch-plan.md |
-| 7 — Implementation | pending | — | |
+| 7 — Implementation | in-progress | `implementation-log.md` | WS-1 (rename `ClaudeCliPort` → `ChatTransportPort`) complete on branch `feature/mps-ws-1-rename-port`. WS-2..WS-10 pending. |
 | 8 — Testing | pending | — | |
 | 9 — Review | pending | — | |
 | 10 — Release | pending | — | |
@@ -53,6 +53,7 @@ None at spec stage. Three ADRs (rename `ClaudeCliPort`, provider×mode discrimin
 |---|---|---|---|
 | 2026-05-21 | architect | planner | spec.md complete. 9 workstreams identified for parallel decomposition (rename, Cursor API adapter, multi-thread UI, per-message actions, status panel, modeline modes, model selector, attachments, settings). REQ-MPS-001..047 and NFR-MPS-001..014 covered. Three open clarifications routed to planner — see below. |
 | 2026-05-21 | planner | dev | tasks.md complete: 156 tasks (T-MPS-001..T-MPS-156) across 10 workstreams. WS-1→WS-2→WS-3 sequential; WS-4..WS-9 parallel fan-out from WS-3 tip; WS-10 final integration. First ready task: **T-MPS-001** (file ADR-MPS-001 for the `ClaudeCliPort` → `ChatTransportPort` rename). Per-workstream subagent dispatch prompts captured in `dispatch-plan.md`. CQ-MPS-01 routed into T-MPS-037 (research spike at start of WS-4). CQ-MPS-02 and CQ-MPS-03 remain open for pm / architect to close before WS-10 — not blockers. |
+| 2026-05-21 | dev (WS-1) | dev (WS-2) | WS-1 complete on branch `feature/mps-ws-1-rename-port` (commits `cbc1cb7`, `c2b2d12`, `e3b80bf`). ADR-MPS-001 filed and indexed; ChatTransportPort.ts plus the seven renamed identifiers shipped; codemod `scripts/codemod/rename-claude-cli-port.mjs` and ESLint guard `eslint-rules/no-legacy-claude-cli-port-names.cjs` wired in; one-release deprecated shim at `src/ui/composables/useClaudeCliPort.ts`. `npm run verify` green (1872 tests, 93.34% statement coverage, plugin bundle 2.76 MB / 4 MB budget). Next ready task: **T-MPS-009** (file ADR-MPS-002 for the `ProviderSelection` discriminator). |
 
 ## Open clarifications
 

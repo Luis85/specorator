@@ -49,9 +49,9 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Estimate:** S
 - **Files:** `decisions/ADR-MPS-001-rename-claude-cli-port.md` (new)
 - **Definition of done:**
-  - [ ] ADR file exists with Status: Accepted, Context, Decision, Consequences.
-  - [ ] Referenced from `decisions/README.md` index.
-  - [ ] `npm run verify` green.
+  - [x] ADR file exists with Status: Accepted, Context, Decision, Consequences.
+  - [x] Referenced from `decisions/README.md` index.
+  - [x] `npm run verify` green.
 
 ### T-MPS-002 🧪 — Lint test: no production file imports `ClaudeCliPort`
 
@@ -62,8 +62,8 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Estimate:** S
 - **Files:** `tests/lint/no-legacy-claude-cli-port-names.test.ts` (new)
 - **Definition of done:**
-  - [ ] Test exists, references REQ-MPS-001 in name.
-  - [ ] Test fails on current `develop` HEAD with explicit count of legacy occurrences.
+  - [x] Test exists, references REQ-MPS-001 in name.
+  - [x] Test fails on current `develop` HEAD with explicit count of legacy occurrences.
 
 ### T-MPS-003 🧪 — Lint test: `ChatTransportPort.ts` forbids `obsidian` / SDK / `node:child_process` imports
 
@@ -74,8 +74,8 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Estimate:** S
 - **Files:** `tests/domain/ports/ChatTransportPort.imports.test.ts` (new)
 - **Definition of done:**
-  - [ ] Test file present; will fail until T-MPS-004 renames the file.
-  - [ ] Test references NFR-MPS-012 in name.
+  - [x] Test file present; will fail until T-MPS-004 renames the file.
+  - [x] Test references NFR-MPS-012 in name.
 
 ### T-MPS-004 🔨 🪓 — Rename port file + types
 
@@ -87,9 +87,10 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Files:** `src/domain/ports/ChatTransportPort.ts` (renamed), `src/domain/ports/index.ts` (re-export)
 - **Slice plan:** (a) rename file + types only; (b) update the InjectionKey + composable + adapters in a single follow-up commit.
 - **Definition of done:**
-  - [ ] T-MPS-003 passes.
-  - [ ] No legacy identifier in the new file.
-  - [ ] `npm run typecheck` red elsewhere (callers need updating) — captured in T-MPS-006.
+  - [x] T-MPS-003 passes.
+  - [x] No legacy identifier in the new file.
+  - [x] `npm run typecheck` red elsewhere (callers need updating) — captured in T-MPS-006.
+- **Deviation (dev, 2026-05-21):** delivered together with T-MPS-005/006/007 in commit `e3b80bf` rather than as a stand-alone slice. The single-commit atomic rename keeps the tree typecheck-green throughout WS-1; running the codemod inside the same commit eliminates a transient red state on `feature/mps-ws-1-rename-port`. All DoD items satisfied.
 
 ### T-MPS-005 🔨 — Codemod script `rename-claude-cli-port.mjs`
 
@@ -100,8 +101,8 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Estimate:** M
 - **Files:** `scripts/codemod/rename-claude-cli-port.mjs` (new)
 - **Definition of done:**
-  - [ ] `node scripts/codemod/rename-claude-cli-port.mjs --dry-run` lists every file it would touch.
-  - [ ] Running it on a fixture directory produces deterministic output (unit test under `tests/scripts/`).
+  - [x] `node scripts/codemod/rename-claude-cli-port.mjs --dry-run` lists every file it would touch.
+  - [x] Running it on a fixture directory produces deterministic output (unit test under `tests/scripts/`).
 
 ### T-MPS-006 🔨 🪓 — Apply codemod across `src/`, update InjectionKey + composable
 
@@ -113,9 +114,9 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Slice plan:** (a) codemod sweep; (b) InjectionKey rename; (c) composable rename + shim.
 - **Files:** `src/infrastructure/bridge/ports.ts`, `src/ui/composables/useChatTransportPort.ts` (new), legacy shim at `src/ui/composables/useClaudeCliPort.ts`
 - **Definition of done:**
-  - [ ] T-MPS-002 passes (zero legacy imports).
-  - [ ] `npm run verify` green.
-  - [ ] Implementation log entry added.
+  - [x] T-MPS-002 passes (zero legacy imports).
+  - [x] `npm run verify` green.
+  - [x] Implementation log entry added.
 
 ### T-MPS-007 🧪 — ESLint rule `no-legacy-claude-cli-port-names`
 
@@ -124,11 +125,12 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Owner:** qa
 - **Depends on:** T-MPS-006
 - **Estimate:** S
-- **Files:** `eslint-rules/no-legacy-claude-cli-port-names.mjs` (new), `tests/eslint/no-legacy-claude-cli-port-names.test.ts` (new)
+- **Files:** `eslint-rules/no-legacy-claude-cli-port-names.cjs` (new), `eslint-rules/__tests__/no-legacy-claude-cli-port-names.test.cjs` (new)
 - **Definition of done:**
-  - [ ] Rule fails on a fixture that re-introduces `ClaudeCliPort`.
-  - [ ] Rule wired into `eslint.config.mjs`.
-  - [ ] `npm run lint` green.
+  - [x] Rule fails on a fixture that re-introduces `ClaudeCliPort`.
+  - [x] Rule wired into `eslint.config.js`.
+  - [x] `npm run lint` green.
+- **Deviation (dev, 2026-05-21):** the rule and its RuleTester suite ship as `.cjs` (not `.mjs`) to match the existing convention established by `eslint-rules/no-claude-home-reads.cjs` and ESLint's CommonJS rule format. The config file is `eslint.config.js`, not `eslint.config.mjs` — matched accordingly.
 
 ### T-MPS-008 📚 — WS-1 closeout note in implementation-log
 
@@ -138,8 +140,8 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Depends on:** T-MPS-007
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] Entry present in `implementation-log.md`.
-  - [ ] WS-2 hand-off note appended to `workflow-state.md`.
+  - [x] Entry present in `implementation-log.md`.
+  - [x] WS-2 hand-off note appended to `workflow-state.md`.
 
 ---
 
