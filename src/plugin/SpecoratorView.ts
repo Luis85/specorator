@@ -27,7 +27,19 @@ import { FEATURE_SERVICE_KEY } from '@/ui/composables/useFeatureService'
 import type { ChatTransportPort, ConfirmModalPort, TransportLifecyclePort } from '@/domain/ports'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 import type { TransportKind } from '@/domain/chat/TransportKind'
-import type { TransportSelection } from '@/plugin/transport/TransportSelector'
+import type { ChatTransportPort as _ChatTransportPort } from '@/domain/ports/ChatTransportPort'
+
+/**
+ * Legacy `{ port, kind }` snapshot consumed by the view's reactive state.
+ * `kind` is derived in `main.ts` from the new
+ * `TransportResolution.resolved` (see `resolutionToLegacyKind`). Keeping the
+ * type local to the view layer avoids leaking the deprecated `TransportKind`
+ * vocabulary back into `TransportSelector.ts` (REQ-MPS-007 / NFR-MPS-003).
+ */
+export interface TransportSelection {
+  readonly port: _ChatTransportPort
+  readonly kind: TransportKind
+}
 import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore'
 import { useMessagesStore } from '@/ui/stores/messagesStore'
 import { mostRecentlyUsedThreadId } from './chatThreadsPersistence'

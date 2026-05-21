@@ -23,7 +23,7 @@ import { ObsidianMarkdownRenderAdapter } from '@/infrastructure/obsidian/Obsidia
 import type { ChatTransportPort, ConfirmModalPort, TransportLifecyclePort } from '@/domain/ports';
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
 import type { TransportKind } from '@/domain/chat/TransportKind';
-import type { TransportSelection } from '@/plugin/transport/TransportSelector';
+import type { TransportSelection } from './SpecoratorView';
 import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore';
 import { useMessagesStore } from '@/ui/stores/messagesStore';
 import { mostRecentlyUsedThreadId } from './chatThreadsPersistence';

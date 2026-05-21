@@ -12,7 +12,9 @@ import { promoteLegacyFlatSettings } from './loadSettings-migrate'
 import { migrateProviderSelection } from '@/application/migration/migrateProviderSelection'
 import { ensureLeafLoaded } from './leafLoader'
 import { selectTransport } from './transport/TransportSelector'
+import type { TransportSelection } from './SpecoratorView'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
+import type { ChatTransportPort } from '@/domain/ports/ChatTransportPort'
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord'
 import {
   decodeChatThreadsBlob,
@@ -217,20 +219,7 @@ export default class SpecoratorPlugin extends Plugin {
         // them on settings bumps without depending on `ChatTransportPort`.
         sdkLifecycle: this._claudeCliAdapter!,
         subscriptionLifecycle: this._subscriptionAdapter!,
-        selectTransport: (settings) =>
-          selectTransport(settings, {
-            sdkAdapter: this._claudeCliAdapter!,
-            subscriptionAdapter: this._subscriptionAdapter!,
-            degradedPort: degradedClaudeCliPort,
-            // Synchronous projection — see SPEC-ASM-001 §3.1 closing note and
-            // ClaudeSubprocessAdapter.isAvailableSync(). Evaluated at every
-            // selector call so post-startup() availability is honoured.
-            cliResolved: this._subscriptionAdapter!.isAvailableSync(),
-            // Synchronous projection of `SecretStorePort.getSecret(...)`
-            // captured in `_apiKeyCache`. Re-read on every selector call so
-            // a key saved mid-session is honoured.
-            apiKeyPresent: this._apiKeyCache.trim() !== '',
-          }),
+        selectTransport: (settings) => this._routeTransport(settings),
       })
       this._specoratorView = view
       return view
@@ -246,14 +235,7 @@ export default class SpecoratorPlugin extends Plugin {
         confirmModalAdapter: this._confirmModalAdapter!,
         sdkLifecycle: this._claudeCliAdapter!,
         subscriptionLifecycle: this._subscriptionAdapter!,
-        selectTransport: (settings) =>
-          selectTransport(settings, {
-            sdkAdapter: this._claudeCliAdapter!,
-            subscriptionAdapter: this._subscriptionAdapter!,
-            degradedPort: degradedClaudeCliPort,
-            cliResolved: this._subscriptionAdapter!.isAvailableSync(),
-            apiKeyPresent: this._apiKeyCache.trim() !== '',
-          }),
+        selectTransport: (settings) => this._routeTransport(settings),
       })
       this._agentSidepanelView = view
       return view
@@ -701,4 +683,71 @@ export default class SpecoratorPlugin extends Plugin {
     await leaf.setViewState({ type: VIEW_TYPE_AGENT, active: true })
     void workspace.revealLeaf(leaf)
   }
+
+  /**
+   * WS-3 (T-MPS-033) — bridge the new {@link selectTransport} (SPEC-MPS-001
+   * §4) shape back to the legacy `{port, kind}` snapshot consumed by
+   * `SpecoratorView` / `AgentSidepanelView`. The 15-row truth table runs on
+   * the new `ProviderSelection` discriminator; the view layer still drives
+   * `TransportKind` because its parity surface (REQ-CCS-*) predates Cursor.
+   *
+   * `claude/api` → `'api-key'`, `claude/cli` → `'subscription'`,
+   * `cursor/*` → `'degraded'` for now (WS-4/WS-5 will replace once the Cursor
+   * adapters land), `'degraded'` → `'degraded'`.
+   */
+  private _routeTransport(settings: PluginSettings): TransportSelection {
+    const result = selectTransport(settings.providerSelection, {
+      providers: {
+        claude: { api: this._claudeCliAdapter!, cli: this._subscriptionAdapter! },
+        cursor: { api: this._cursorApiStub, cli: this._cursorCliStub },
+      },
+      degradedPort: degradedClaudeCliPort,
+      availability: {
+        // Synchronous projection of `SecretStorePort.getSecret(...)` captured
+        // in `_apiKeyCache`. Re-read on every selector call so a key saved
+        // mid-session is honoured.
+        claudeApiKeyPresent: this._apiKeyCache.trim() !== '',
+        // Synchronous projection — see SPEC-ASM-001 §3.1 closing note and
+        // `ClaudeSubprocessAdapter.isAvailableSync()`.
+        claudeCliResolved: this._subscriptionAdapter!.isAvailableSync(),
+        // WS-4/WS-5 will replace these stubs. Until the Cursor adapters land
+        // the availability flags stay false so the selector folds every
+        // cursor row to `degraded`.
+        cursorApiKeyPresent: false,
+        cursorCliResolved: false,
+        cursorApiPreviewEnabled: settings.cursorApiPreview,
+        secretStoreAvailable: this.secretStore?.available ?? false,
+      },
+      autoPreferProvider: settings.autoPreferProvider,
+    })
+    if (result.resolved === 'degraded') {
+      return { port: result.port, kind: 'degraded' }
+    }
+    if (result.resolved.provider === 'claude' && result.resolved.mode === 'api') {
+      return { port: result.port, kind: 'api-key' }
+    }
+    if (result.resolved.provider === 'claude' && result.resolved.mode === 'cli') {
+      return { port: result.port, kind: 'subscription' }
+    }
+    // Cursor branches are unreachable until WS-4/WS-5 replaces the stubs and
+    // sets `cursorApiKeyPresent` / `cursorCliResolved` from real probes. Fall
+    // back to `degraded` defensively so the view never sees `undefined`.
+    return { port: degradedClaudeCliPort, kind: 'degraded' }
+  }
+
+  /**
+   * WS-3 (T-MPS-033) — Cursor API adapter placeholder. WS-4 will replace this
+   * stub with the real `CursorApiAdapter`. Returning a degraded port keeps
+   * the selector truth table well-typed and lets ccs-parity remain green
+   * because all cursor availability flags are projected as false.
+   */
+  // WS-4/WS-5 will replace this stub.
+  private readonly _cursorApiStub: ChatTransportPort = degradedClaudeCliPort
+
+  /**
+   * WS-3 (T-MPS-033) — Cursor CLI adapter placeholder. WS-5 will replace this
+   * stub with the real `CursorCliAdapter`.
+   */
+  // WS-4/WS-5 will replace this stub.
+  private readonly _cursorCliStub: ChatTransportPort = degradedClaudeCliPort
 }
