@@ -15,6 +15,7 @@ import type {
 } from '@/domain/ports'
 import type { MarkdownRenderPort } from '@/domain/ports/MarkdownRenderPort'
 import type { TransportKind } from '@/domain/chat/TransportKind'
+import type { ProviderRegistry } from '@/domain/chat/ProviderRegistry'
 
 export const SETTINGS_PORT: InjectionKey<SettingsPort> = Symbol('SettingsPort')
 export const VAULT_PORT: InjectionKey<VaultPort> = Symbol('VaultPort')
@@ -25,6 +26,13 @@ export const METADATA_CACHE_PORT: InjectionKey<MetadataCachePort> = Symbol('Meta
 export const CANVAS_PORT: InjectionKey<CanvasPort> = Symbol('CanvasPort')
 export const COMMUNITY_PLUGIN_PORT: InjectionKey<CommunityPluginPort> = Symbol('CommunityPluginPort')
 export const CHAT_TRANSPORT_PORT: InjectionKey<ChatTransportPort> = Symbol('ChatTransportPort')
+/**
+ * Read-only metadata table of the v1 (provider, mode) cells (REQ-MPS-006).
+ * Built once at plugin startup by `buildProviderRegistry` (WS-3) and
+ * provided to the UI via `useProviderRegistry`. Carries `ProviderCapabilities`
+ * + labels only — no `ChatTransportPort` or secret material (NFR-MPS-003).
+ */
+export const PROVIDER_REGISTRY_KEY: InjectionKey<ProviderRegistry> = Symbol('ProviderRegistry')
 /**
  * Lifecycle (`startup` / `shutdown`) for the active streaming transport.
  * Split off `ChatTransportPort` in WP-12 (Arch review #3) — see
