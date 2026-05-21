@@ -220,19 +220,23 @@ describe('coreSettingsModule.validateSettings', () => {
     expect(out.mcpServerEnabled).toBe(false)
   })
 
-  // T-ASM-015 — migration of new fields (REQ-ASM-002, REQ-ASM-004; SPEC-ASM-001 §11.2)
-  describe('claudeCliPath and transportKind (T-ASM-015)', () => {
-    it('defaults claudeCliPath and transportKind when old settings lack the new fields', () => {
+  // T-ASM-015 — migration of new fields (REQ-ASM-002, REQ-ASM-004;
+  // SPEC-ASM-001 §11.2). SPEC-MPS-001 §2.7 replaces `transportKind` with
+  // `providerSelection`; legacy `transportKind` values arriving here are
+  // ignored at validation time (migration runs ahead of this code path) and
+  // the default `providerSelection` is emitted.
+  describe('claudeCliPath and providerSelection (T-ASM-015 / REQ-MPS-003)', () => {
+    it('defaults claudeCliPath and providerSelection when old settings lack the new fields', () => {
       const out = validate({ locale: 'en', specsFolder: 'specs' })
       expect(out.claudeCliPath).toBe(DEFAULT_SETTINGS.claudeCliPath)
       expect(out.claudeCliPath).toBe('')
-      expect(out.transportKind).toBe(DEFAULT_SETTINGS.transportKind)
-      expect(out.transportKind).toBe('auto')
+      expect(out.providerSelection).toEqual(DEFAULT_SETTINGS.providerSelection)
+      expect(out.providerSelection).toEqual({ forced: 'auto' })
     })
 
-    it("coerces garbage transportKind (e.g. 'invalid') to default 'auto'", () => {
-      const out = validate({ transportKind: 'invalid' })
-      expect(out.transportKind).toBe('auto')
+    it("coerces a garbage providerSelection (e.g. 'invalid') to default", () => {
+      const out = validate({ providerSelection: 'invalid' as unknown })
+      expect(out.providerSelection).toEqual({ forced: 'auto' })
     })
 
     it.each([null, undefined, 42, true, {}, []] as const)(
@@ -243,11 +247,18 @@ describe('coreSettingsModule.validateSettings', () => {
       },
     )
 
-    it.each(['auto', 'api-key', 'subscription', 'degraded'] as const)(
-      "preserves valid transportKind '%s' (idempotent)",
-      (kind) => {
-        const out = validate({ transportKind: kind })
-        expect(out.transportKind).toBe(kind)
+    it.each([
+      [{ forced: 'auto' }],
+      [{ forced: 'degraded' }],
+      [{ provider: 'claude', mode: 'api' }],
+      [{ provider: 'claude', mode: 'cli' }],
+      [{ provider: 'cursor', mode: 'api' }],
+      [{ provider: 'cursor', mode: 'cli' }],
+    ] as ReadonlyArray<[Record<string, unknown>]>)(
+      'preserves a valid providerSelection %o (idempotent)',
+      (selection) => {
+        const out = validate({ providerSelection: selection })
+        expect(out.providerSelection).toEqual(selection)
       },
     )
 
@@ -265,14 +276,22 @@ describe('coreSettingsModule.validateSettings', () => {
 
 describe('coreSettingsModule.settingsSchema', () => {
   it('exposes a field descriptor for every module-driven PluginSettings key', () => {
-    // `claudeCliPath` is rendered by the custom ClaudeCliPathField.vue component
-    // (SPEC-ASM-001 §7.5, T-ASM-016) and `transportKind` is not a user-facing
-    // settings field (its value is driven by transport-selection logic).
-    // The Anthropic key is no longer on PluginSettings — it lives in
-    // `SecretStorePort` and is rendered outside the module loop.
+    // `claudeCliPath` is rendered by the custom ClaudeCliPathField.vue
+    // component (SPEC-ASM-001 §7.5, T-ASM-016). SPEC-MPS-001 §2.7 adds
+    // `providerSelection` plus five companion fields; those are not
+    // user-facing dropdowns (their values come from the provider chooser
+    // and Cursor settings panel), so they are not driven through the
+    // generic module schema loop either. The Anthropic key is no longer on
+    // PluginSettings — it lives in `SecretStorePort` and is rendered
+    // outside the module loop.
     const manuallyRenderedKeys: ReadonlyArray<keyof PluginSettings> = [
       'claudeCliPath',
-      'transportKind',
+      'providerSelection',
+      'cursorCliPath',
+      'cursorApiPreview',
+      'autoPreferProvider',
+      'providerModel',
+      'chatTabCap',
     ]
     const expected = Object.keys(DEFAULT_SETTINGS).length - manuallyRenderedKeys.length
     expect(coreSettingsModule.settingsSchema?.fields).toHaveLength(expected)

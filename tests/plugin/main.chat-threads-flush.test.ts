@@ -176,6 +176,7 @@ describe('scheduleChatThreadsPersistence — debounced flush (T-ASM-054)', () =>
       t1: {
         threadId: 't1', sessionId: 'sess-1', feature: 'foo',
         logPath: 'specs/foo/sessions/sess-1.md', transport: { provider: 'claude', mode: 'cli' },
+        title: '', forkParent: null,
         createdAt: '2026-05-14T10:00:00.000Z', lastUsedAt: '2026-05-14T10:00:00.000Z',
       },
     })

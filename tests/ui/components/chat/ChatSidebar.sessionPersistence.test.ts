@@ -190,7 +190,7 @@ describe('ChatSidebar — session-persistence wiring (T-ASM-057)', () => {
 		const threadId = store.activeThreadId!
 		const record = store.chatThreads.get(threadId)
 		expect(record).toBeDefined()
-		expect(record?.transport).toBe('subscription')
+		expect(record?.transport).toEqual({ provider: 'claude', mode: 'cli' })
 
 		// First call: no resumeSessionId; onSessionId callback present.
 		expect(port.optionsLog).toHaveLength(1)
@@ -205,7 +205,7 @@ describe('ChatSidebar — session-persistence wiring (T-ASM-057)', () => {
 		const { po, store } = await mountSidebar({})
 		await send(store, po, 'hello')
 		const threadId = store.activeThreadId!
-		expect(store.chatThreads.get(threadId)?.transport).toBe('api-key')
+		expect(store.chatThreads.get(threadId)?.transport).toEqual({ provider: 'claude', mode: 'api' })
 	})
 
 	it('records the RESOLVED active transport, not the raw setting — auto→subscription (Codex P2, PR #350)', async () => {
@@ -219,7 +219,7 @@ describe('ChatSidebar — session-persistence wiring (T-ASM-057)', () => {
 		})
 		await send(store, po, 'hello')
 		const threadId = store.activeThreadId!
-		expect(store.chatThreads.get(threadId)?.transport).toBe('subscription')
+		expect(store.chatThreads.get(threadId)?.transport).toEqual({ provider: 'claude', mode: 'cli' })
 	})
 
 	it('records api-key when the resolved kind is api-key under auto mode (mirror of the above)', async () => {
@@ -229,7 +229,7 @@ describe('ChatSidebar — session-persistence wiring (T-ASM-057)', () => {
 		})
 		await send(store, po, 'hello')
 		const threadId = store.activeThreadId!
-		expect(store.chatThreads.get(threadId)?.transport).toBe('api-key')
+		expect(store.chatThreads.get(threadId)?.transport).toEqual({ provider: 'claude', mode: 'api' })
 	})
 
 	it('rotates the active thread when the resolved transport changes (Codex P2, PR #350)', async () => {
@@ -240,7 +240,7 @@ describe('ChatSidebar — session-persistence wiring (T-ASM-057)', () => {
 		})
 		await send(store, po, 'hello')
 		const firstThreadId = store.activeThreadId!
-		expect(store.chatThreads.get(firstThreadId)?.transport).toBe('subscription')
+		expect(store.chatThreads.get(firstThreadId)?.transport).toEqual({ provider: 'claude', mode: 'cli' })
 
 		// User switches transport between turns (selector resolves to api-key now).
 		transportKindRef.value = 'api-key'
@@ -251,10 +251,10 @@ describe('ChatSidebar — session-persistence wiring (T-ASM-057)', () => {
 		// context and audit metadata.
 		const secondThreadId = store.activeThreadId!
 		expect(secondThreadId).not.toBe(firstThreadId)
-		expect(store.chatThreads.get(secondThreadId)?.transport).toBe('api-key')
+		expect(store.chatThreads.get(secondThreadId)?.transport).toEqual({ provider: 'claude', mode: 'api' })
 		// The original subscription thread is preserved in the map (history is
 		// not deleted — only the active-thread pointer rotates).
-		expect(store.chatThreads.get(firstThreadId)?.transport).toBe('subscription')
+		expect(store.chatThreads.get(firstThreadId)?.transport).toEqual({ provider: 'claude', mode: 'cli' })
 	})
 
 	it('does NOT rotate when the resolved transport stays the same across sends', async () => {

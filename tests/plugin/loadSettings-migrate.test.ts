@@ -109,7 +109,15 @@ describe('promoteLegacyFlatSettings', () => {
       'userPersona',
       'onboardingComplete',
       'claudeCliPath',
+      // `transportKind` retained for legacy flat-blob promotion; migration
+      // (`migrateProviderSelection`) translates it before any consumer reads it.
       'transportKind',
+      'providerSelection',
+      'cursorCliPath',
+      'cursorApiPreview',
+      'autoPreferProvider',
+      'providerModel',
+      'chatTabCap',
     ])
   })
 
