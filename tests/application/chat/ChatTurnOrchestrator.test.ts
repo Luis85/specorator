@@ -385,7 +385,9 @@ describe('ChatTurnOrchestrator.sendTurn', () => {
 			sessionId: asSessionId('session-X'),
 			feature: null,
 			logPath: '',
-			transport: 'api-key',
+			transport: { provider: 'claude', mode: 'api' },
+			title: '',
+			forkParent: null,
 			createdAt: '2025-01-01T00:00:00.000Z',
 			lastUsedAt: '2025-01-01T00:00:00.000Z',
 		};

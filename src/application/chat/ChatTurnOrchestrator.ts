@@ -231,7 +231,15 @@ export class ChatTurnOrchestrator {
 			sessionId: null,
 			feature: input.slug,
 			logPath: '',
-			transport: input.transport,
+			// REQ-MPS-005: translate the legacy `ResolvedTransport` string into the
+			// discriminated `{ provider, mode }` shape. Both legacy values map to
+			// Claude; WS-3 will pass the discriminator end-to-end.
+			transport:
+				input.transport === 'api-key'
+					? { provider: 'claude', mode: 'api' }
+					: { provider: 'claude', mode: 'cli' },
+			title: '',
+			forkParent: null,
 			createdAt: nowIso,
 			lastUsedAt: nowIso,
 		};

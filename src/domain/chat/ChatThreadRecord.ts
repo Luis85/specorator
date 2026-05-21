@@ -1,11 +1,24 @@
 import type { SessionId } from './SessionId'
+import type { ProviderId, ProviderMode } from './ProviderSelection'
 
 /**
- * Persistent record describing a single chat thread (SPEC-ASM-001 §2.2).
- * Stored under `_storedData.specorator.chatThreads` (SPEC §9.3) and keyed by
- * `threadId`.
+ * Persistent record describing a single chat thread.
  *
- * Satisfies REQ-ASM-031, REQ-ASM-035, REQ-ASM-037.
+ * Originally specified by SPEC-ASM-001 §2.2; extended by SPEC-MPS-001 §2.6
+ * (REQ-MPS-005, REQ-MPS-020, REQ-MPS-021, REQ-MPS-023):
+ *
+ * - `transport` becomes a discriminated `{ provider, mode }` object so
+ *   threads carry the provider axis explicitly (no more
+ *   `'api-key' | 'subscription'` string conflation).
+ * - `title` carries a user-facing thread name; `''` until the first
+ *   message is sent or the user renames the thread.
+ * - `forkParent` is the source thread id when the thread was forked from
+ *   another conversation; `null` for fresh threads.
+ *
+ * Stored under `_storedData.specorator.chatThreads` (SPEC-ASM-001 §9.3) and
+ * keyed by `threadId`. Persistence translates legacy string `transport`
+ * values to the new object shape via `migrateProviderSelection`
+ * (`src/application/migration/migrateProviderSelection.ts`).
  *
  * Domain layer (ADR-008): no `obsidian` / `child_process` imports.
  */
@@ -26,8 +39,28 @@ export interface ChatThreadRecord {
   /** Vault-relative path to this thread's session log. */
   readonly logPath: string
 
-  /** Transport used by the thread. `'degraded'` threads are not persisted. */
-  readonly transport: 'api-key' | 'subscription'
+  /**
+   * Transport used by the thread. Replaces the legacy
+   * `'api-key' | 'subscription'` string union (REQ-MPS-005). `'degraded'`
+   * threads are not persisted, so neither `provider` nor `mode` carries a
+   * "degraded" marker — the persistence boundary filters those records out.
+   */
+  readonly transport: {
+    readonly provider: ProviderId
+    readonly mode: ProviderMode
+  }
+
+  /**
+   * User-facing thread title. Defaults to `''` until the first user message
+   * is sent or the user renames the thread (REQ-MPS-020).
+   */
+  readonly title: string
+
+  /**
+   * `threadId` of the source thread when this thread was forked, or `null`
+   * for fresh threads (REQ-MPS-021).
+   */
+  readonly forkParent: string | null
 
   /** ISO 8601 UTC timestamp of thread creation. */
   readonly createdAt: string

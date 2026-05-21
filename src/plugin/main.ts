@@ -9,6 +9,7 @@ import { SpecoratorView, VIEW_TYPE } from './SpecoratorView'
 import { AgentSidepanelView, VIEW_TYPE_AGENT } from './AgentSidepanelView'
 import { SpecoratorSettingTab } from './settings'
 import { promoteLegacyFlatSettings } from './loadSettings-migrate'
+import { migrateProviderSelection } from '@/application/migration/migrateProviderSelection'
 import { ensureLeafLoaded } from './leafLoader'
 import { selectTransport } from './transport/TransportSelector'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
@@ -275,7 +276,7 @@ export default class SpecoratorPlugin extends Plugin {
     })
 
     this.addCommand({
-      // eslint-disable-next-line obsidianmd/commands/no-plugin-id-in-command-id
+       
       id: 'open-agent-sidepanel',
       name: 'Open agent sidepanel',
       callback: () => void this.activateAgentSidepanel(),
@@ -431,6 +432,12 @@ export default class SpecoratorPlugin extends Plugin {
 
     this._storedData = promoteLegacyFlatSettings(raw)
 
+    // SPEC-MPS-001 §3 / REQ-MPS-004 / REQ-MPS-005 — translate the v0.x
+    // `transportKind` + string `transport` encoding into the v1
+    // `providerSelection` + `{ provider, mode }` discriminator BEFORE any
+    // adapter wiring reads `this.settings` or hydrates `chatThreads`.
+    await this._runProviderSelectionMigration()
+
     this.settings = {
       ...DEFAULT_SETTINGS,
       ...((this._storedData.specorator ?? {}) as Partial<PluginSettings>),
@@ -468,6 +475,41 @@ export default class SpecoratorPlugin extends Plugin {
   private async _initializeSecretStore(): Promise<void> {
     this.secretStore = new ObsidianSecretStoreAdapter(this.app)
     this._apiKeyCache = await this._readSecretSafe(this.secretStore)
+  }
+
+  /**
+   * SPEC-MPS-001 §3 / REQ-MPS-004 / REQ-MPS-005 — translate any v0.x
+   * `transportKind` + string-transport encoding inside `_storedData.specorator`
+   * to the v1 `providerSelection` + discriminated `{ provider, mode }` shape.
+   * Pure migration; idempotent (NFR-MPS-006). On `migrated === true` the
+   * translated blob is persisted via `saveData()` so the legacy keys never
+   * re-enter the boot path. The migration function does not throw, but
+   * `tryAsync` adds defence-in-depth against future regressions: a thrown
+   * error is logged and migration is skipped, but startup continues.
+   */
+  private async _runProviderSelectionMigration(): Promise<void> {
+    const outcome = await tryAsync(async () => {
+      const specoratorBefore = (this._storedData.specorator ?? {}) as Record<string, unknown>
+      const migration = migrateProviderSelection({
+        settings: specoratorBefore,
+        chatThreads: specoratorBefore.chatThreads as Record<string, unknown> | undefined,
+      })
+      for (const err of migration.errors) {
+        console.warn('[migrateProviderSelection]', err)
+      }
+      if (!migration.migrated) return
+      const nextSpecorator: Record<string, unknown> = {
+        ...(migration.data.settings ?? {}),
+      }
+      if (migration.data.chatThreads !== undefined) {
+        nextSpecorator.chatThreads = migration.data.chatThreads
+      }
+      this._storedData = { ...this._storedData, specorator: nextSpecorator }
+      await this.saveData(this._storedData)
+    })
+    if (!outcome.ok) {
+      console.error('[migrateProviderSelection] threw unexpectedly', outcome.error)
+    }
   }
 
   /**

@@ -120,7 +120,9 @@ describe('ChatSidebar — thread auto-rotation evicts orphaned messages (Codex P
 				sessionId: null,
 				feature: null,
 				logPath: '',
-				transport: 'api-key', // mismatches resolved 'subscription'
+				transport: { provider: 'claude', mode: 'api' }, // mismatches resolved 'subscription'
+				title: '',
+				forkParent: null,
 				createdAt: '2026-05-15T00:00:00Z',
 				lastUsedAt: '2026-05-15T00:00:00Z',
 			},
@@ -151,7 +153,9 @@ describe('ChatSidebar — thread auto-rotation evicts orphaned messages (Codex P
 				sessionId: null,
 				feature: 'old-feature', // current active file resolves to null feature
 				logPath: '',
-				transport: 'api-key',
+				transport: { provider: 'claude', mode: 'api' },
+				title: '',
+				forkParent: null,
 				createdAt: '2026-05-15T00:00:00Z',
 				lastUsedAt: '2026-05-15T00:00:00Z',
 			},
@@ -180,7 +184,9 @@ describe('ChatSidebar — thread auto-rotation evicts orphaned messages (Codex P
 				sessionId: null,
 				feature: null,
 				logPath: '',
-				transport: 'api-key',
+				transport: { provider: 'claude', mode: 'api' },
+				title: '',
+				forkParent: null,
 				createdAt: '2026-05-15T00:00:00Z',
 				lastUsedAt: '2026-05-15T00:00:00Z',
 			},

@@ -1,9 +1,12 @@
 import { defineModule } from '@/modules/module'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
+import type { ProviderId, ProviderSelection } from '@/domain/chat/ProviderSelection'
 
 const VALID_LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const
 const VALID_GATE_STRICTNESS = ['strict', 'lenient'] as const
-const VALID_TRANSPORT_KINDS = ['auto', 'api-key', 'subscription', 'degraded'] as const
+const VALID_PROVIDER_IDS: ReadonlyArray<ProviderId> = ['claude', 'cursor'] as const
+const VALID_PROVIDER_MODES = ['api', 'cli'] as const
+const VALID_FORCED_SENTINELS = ['auto', 'degraded'] as const
 
 function coerceString(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback
@@ -17,12 +20,59 @@ function coerceBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback
 }
 
+function coerceNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
 function coercePassthroughString(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback
 }
 
 function coerceTrimmedString(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value.trim() : fallback
+}
+
+/**
+ * Validate a `providerSelection` candidate against the discriminated-union
+ * shape declared in SPEC-MPS-001 §2.2. Falls back to the documented default
+ * `{ forced: 'auto' }` when the value is missing, malformed, or carries an
+ * unrecognised sentinel/provider/mode.
+ */
+function validateProviderSelection(value: unknown): ProviderSelection {
+  if (value !== null && typeof value === 'object') {
+    const obj = value as Record<string, unknown>
+    if (typeof obj.forced === 'string' && (VALID_FORCED_SENTINELS as ReadonlyArray<string>).includes(obj.forced)) {
+      return { forced: obj.forced as 'auto' | 'degraded' }
+    }
+    if (
+      typeof obj.provider === 'string' &&
+      (VALID_PROVIDER_IDS as ReadonlyArray<string>).includes(obj.provider) &&
+      typeof obj.mode === 'string' &&
+      (VALID_PROVIDER_MODES as ReadonlyArray<string>).includes(obj.mode)
+    ) {
+      return {
+        provider: obj.provider as ProviderId,
+        mode: obj.mode as 'api' | 'cli',
+      }
+    }
+  }
+  return DEFAULT_SETTINGS.providerSelection
+}
+
+/**
+ * Validate the `providerModel` record. Each provider falls back to its
+ * documented default when missing or non-string.
+ */
+function validateProviderModel(
+  value: unknown,
+): Readonly<Record<ProviderId, string>> {
+  const fallback = DEFAULT_SETTINGS.providerModel
+  if (value === null || typeof value !== 'object') return fallback
+  const obj = value as Record<string, unknown>
+  return {
+    claude: typeof obj.claude === 'string' ? obj.claude : fallback.claude,
+    cursor: typeof obj.cursor === 'string' ? obj.cursor : fallback.cursor,
+  }
 }
 
 function toMutableBlob(blob: unknown): { out: Record<string, unknown>; hadData: boolean } {
@@ -80,7 +130,23 @@ export const coreSettingsModule = defineModule<PluginSettings>({
       userPersona: coercePassthroughString(r.userPersona, DEFAULT_SETTINGS.userPersona),
       onboardingComplete: coerceBoolean(r.onboardingComplete, DEFAULT_SETTINGS.onboardingComplete),
       claudeCliPath: coerceTrimmedString(r.claudeCliPath, DEFAULT_SETTINGS.claudeCliPath),
-      transportKind: coerceEnum(r.transportKind, VALID_TRANSPORT_KINDS, DEFAULT_SETTINGS.transportKind),
+      // SPEC-MPS-001 §2.7 — the new provider-selection carrier plus the
+      // five companion fields. `transportKind` is intentionally NOT
+      // re-emitted here: migration (`migrateProviderSelection`) translates
+      // any persisted legacy value into `providerSelection` and deletes the
+      // legacy key, so re-introducing it during validation would resurrect
+      // a half-migrated state. WS-3 removes the deprecated optional from
+      // the type entirely.
+      providerSelection: validateProviderSelection(r.providerSelection),
+      cursorCliPath: coerceTrimmedString(r.cursorCliPath, DEFAULT_SETTINGS.cursorCliPath),
+      cursorApiPreview: coerceBoolean(r.cursorApiPreview, DEFAULT_SETTINGS.cursorApiPreview),
+      autoPreferProvider: coerceEnum(
+        r.autoPreferProvider,
+        VALID_PROVIDER_IDS,
+        DEFAULT_SETTINGS.autoPreferProvider,
+      ),
+      providerModel: validateProviderModel(r.providerModel),
+      chatTabCap: coerceNumber(r.chatTabCap, DEFAULT_SETTINGS.chatTabCap),
     }
   },
 

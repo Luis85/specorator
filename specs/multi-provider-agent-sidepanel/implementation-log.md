@@ -123,3 +123,166 @@ line.
 - **Stage status at hand-off:** Stage 7 (implementation) `in-progress`;
   WS-1 complete; WS-2..WS-10 pending; no blockers.
 - **Next agent:** dev (WS-2). First ready task: T-MPS-009.
+
+---
+
+## WS-2 — `ProviderSelection`, `ProviderRegistry`, migration
+
+### T-MPS-009 — ADR-MPS-002 filed
+
+- **Commit:** `c5a96cb`
+- **Files:** `decisions/ADR-MPS-002-provider-selection-discriminator.md`
+  (new, 220 lines).
+- **Spec:** SPEC-MPS-001 §§2.2–2.7, §3; REQ-MPS-003/004/005/006/007/008,
+  NFR-MPS-006.
+- **Outcome:** done.
+- **Deviation:** none.
+
+### T-MPS-010 + T-MPS-011 — `ProviderSelection` discriminator
+
+- **Commit:** `16964dd`
+- **Files:** `src/domain/chat/ProviderSelection.ts` (new, 56 lines);
+  `tests/domain/chat/ProviderSelection.test.ts` (new, 93 lines, 13
+  green).
+- **Spec:** SPEC-MPS-001 §2.2 / REQ-MPS-003.
+- **Outcome:** done.
+- **Deviation:** none.
+
+### T-MPS-012 + T-MPS-013 — `ProviderCapabilities` shape
+
+- **Commit:** `0b5a8e2`
+- **Files:** `src/domain/chat/ProviderCapabilities.ts` (new, 41 lines);
+  `tests/domain/chat/ProviderCapabilities.test.ts` (new, 76 lines, 3
+  green).
+- **Spec:** SPEC-MPS-001 §2.4 / REQ-MPS-006.
+- **Outcome:** done.
+- **Deviation:** none.
+
+### T-MPS-014 + T-MPS-015 — `ProviderRegistry` interface
+
+- **Commit:** `f304d34`
+- **Files:** `src/domain/chat/ProviderRegistry.ts` (new, 53 lines);
+  `tests/domain/chat/ProviderRegistry.test.ts` (new, 100 lines, 7
+  green).
+- **Spec:** SPEC-MPS-001 §2.3 / REQ-MPS-006, NFR-MPS-003.
+- **Outcome:** done. Interface only — no concrete registry built;
+  WS-3's `buildProviderRegistry` wires the runtime.
+- **Deviation:** none.
+
+### T-MPS-016 + T-MPS-017 — `ChatThreadRecord` extension
+
+- **Commit:** `3dece04`
+- **Files:**
+  - `src/domain/chat/ChatThreadRecord.ts` (transport → discriminated
+    object, +title, +forkParent).
+  - `src/plugin/chatThreadsPersistence.ts` (decode accepts both legacy
+    string and new object shape; encode emits object shape).
+  - `src/application/chat/ChatTurnOrchestrator.ts`,
+    `src/application/chat/SessionLogWriter.ts`,
+    `src/application/chat/TurnInputBuilder.ts` — translate at boundary
+    so `ResolvedTransport` (legacy union) and `SessionLogFrontmatter`
+    (YAML schema) keep their existing shapes.
+  - `tests/domain/chat/ChatThreadRecord.test.ts` (new, 64 lines, 5
+    green) plus 11 test files swept to the new fixture shape.
+- **Spec:** SPEC-MPS-001 §2.6 / REQ-MPS-005, REQ-MPS-020, REQ-MPS-021,
+  REQ-MPS-023.
+- **Outcome:** done.
+- **Deviation:** `SessionLogFrontmatter` keeps its `'api-key' |
+  'subscription'` string union (separate type, mirrors the YAML
+  schema). Translation happens at the writer boundary. WS-3 or a
+  follow-up may align it.
+
+### T-MPS-018..022 — `migrateProviderSelection` pure migration
+
+- **Commit:** `16e1b9e` (+ `f4f55aa` refactor for lint compliance)
+- **Files:**
+  - `src/application/migration/migrateProviderSelection.ts` (new, 264
+    lines after refactor — helper-extracted to keep complexity ≤ 10).
+  - `src/application/migration/index.ts` (barrel).
+  - Four red-then-green test files under
+    `tests/application/migration/` — settings (5 cases), threads (4),
+    idempotency (5), errors (5). 25 tests total, all green.
+- **Spec:** SPEC-MPS-001 §3 / REQ-MPS-004, REQ-MPS-005, NFR-MPS-006.
+- **Outcome:** done. Pure, idempotent, never-throws contract verified
+  by tests.
+- **Deviation:** ADR-MPS-002 wording said "delete the legacy key" —
+  lint rule `no-restricted-syntax` forbids the `delete` operator, so
+  the implementation rebuilds the settings object without the legacy
+  key (semantically equivalent). Recorded for traceability.
+
+### T-MPS-023 + T-MPS-024 — `PluginSettings` delta + defaults
+
+- **Commit:** `c265b0a`
+- **Files:**
+  - `src/domain/settings/PluginSettings.ts` (added 6 new fields with
+    defaults; `transportKind` retained as deprecated optional pending
+    WS-3 removal).
+  - `src/core/core-settings.ts` (validator emits the new fields, drops
+    `transportKind`; new helpers `validateProviderSelection`,
+    `validateProviderModel`, `coerceNumber`).
+  - `src/plugin/loadSettings-migrate.ts` (PLUGIN_SETTINGS_KEYS extended).
+  - `tests/domain/settings/PluginSettings.test.ts` (new, 70 lines, 9
+    green) + cross-WS test updates (core-settings,
+    loadSettings-migrate, main.chat-threads-flush,
+    ChatSidebar.sessionPersistence).
+- **Spec:** SPEC-MPS-001 §2.7 / REQ-MPS-003, REQ-MPS-008, REQ-MPS-014,
+  REQ-MPS-025, REQ-MPS-040.
+- **Outcome:** done.
+- **Deviation:** spec §2.7 says "remove `transportKind`". Dispatch
+  forbids WS-2 from touching `TransportSelector` / `ChatSidebar` /
+  `TurnInputBuilder`, all of which still consume `settings.transportKind`
+  on read. Compromise: kept `transportKind` as a **deprecated
+  optional** field on the type (not in `DEFAULT_SETTINGS`, not emitted
+  by the validator), with a JSDoc note pointing at WS-3 / T-MPS-029 for
+  final removal. Migration deletes the key from `_storedData` before
+  validation runs, so legacy state never leaks back in. Logged so WS-3
+  can complete the removal alongside the selector reshape.
+
+### T-MPS-025 + T-MPS-026 — Migration wiring + integration tests
+
+- **Commit:** `d75b1d0`
+- **Files:**
+  - `src/plugin/main.ts` (`_runProviderSelectionMigration()` invoked
+    from `loadSettings()` after `promoteLegacyFlatSettings`; wrapped in
+    `tryAsync` so a future throw can not crash startup).
+  - `tests/plugin/migration-on-load.test.ts` (new, 188 lines, 7 green).
+  - `tests/fixtures/data-json-legacy/{auto,api-key,subscription}.json`
+    (new fixtures matching the release-criteria scenarios).
+- **Spec:** SPEC-MPS-001 §3 / REQ-MPS-004, REQ-MPS-005, NFR-MPS-006.
+- **Outcome:** done. Integration test asserts: legacy `transportKind`
+  translated and removed, per-record `chatThreads.transport`
+  translated, `title`/`forkParent` defaulted, `saveData` called exactly
+  once on first load, idempotent on second load.
+- **Deviation:** none.
+
+### T-MPS-027 — WS-2 closeout (this entry)
+
+- **Commit:** *this commit* (workflow-state + tasks.md tick-off + log
+  entry).
+- **Spec:** —
+- **Outcome:** done. WS-2 complete; WS-3 next ready task is **T-MPS-028**
+  (selector truth table parameterised test, all 15 rows red).
+- **Deviation:** Branch was cut from `feature/mps-ws-1-rename-port`
+  (WS-1 tip), not `develop`, to keep throughput high while PR #417
+  awaits auto-merge. Will rebase onto `develop` after WS-1 squashes.
+- **Green evidence:** `npm run verify` green (typecheck, lint, full
+  test suite 1934+ unit tests, plugin bundle 2.77 MB / 4 MB budget,
+  standalone chunk 0.26 MB / 2 MB budget, all workflow files
+  SHA-pinned, manifest valid). Targeted re-run of WS-2 surfaces +
+  affected legacy tests: 304/304 green; broader UI + integration:
+  932/932 green.
+
+## WS-2 branch summary
+
+- **Branch:** `feature/mps-ws-2-provider-selection` (cut from
+  `feature/mps-ws-1-rename-port`).
+- **Commits (10):** `c5a96cb` (ADR) → `16964dd` (ProviderSelection) →
+  `0b5a8e2` (Capabilities) → `f304d34` (Registry) → `3dece04`
+  (ChatThreadRecord) → `16e1b9e` (migration pure fn) → `c265b0a`
+  (PluginSettings) → `d75b1d0` (main.ts wiring + integration tests) →
+  `f4f55aa` (lint-clean refactor) → *this commit* (closeout).
+- **Stage status at hand-off:** Stage 7 `in-progress`; WS-1 + WS-2
+  complete; WS-3..WS-10 pending; no blockers.
+- **Next agent:** dev (WS-3). First ready task: T-MPS-028
+  (`TransportSelector` truth table — 15 red rows, design §C4 / spec §11
+  rows R1..R15).
