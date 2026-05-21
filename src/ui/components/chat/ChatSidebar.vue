@@ -7,6 +7,9 @@ import { useMessagesStore } from '@/ui/stores/messagesStore';
 import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore';
 import { useStreamingTurnStore } from '@/ui/stores/streamingTurnStore';
 import { useProposalStore } from '@/ui/stores/proposalStore';
+import { useChatInputModeStore } from '@/ui/stores/chatInputModeStore';
+import { useAttachmentsStore } from '@/ui/stores/attachmentsStore';
+import { useChatProviderStore } from '@/ui/stores/chatProviderStore';
 import { useChatTransportPort } from '@/ui/composables/useChatTransportPort';
 import { usePlatform } from '@/ui/composables/usePlatform';
 import { useVaultPort } from '@/ui/composables/useVaultPort';
@@ -49,6 +52,9 @@ const messagesStore = useMessagesStore();
 const threadsStore = useChatThreadsStore();
 const streamingStore = useStreamingTurnStore();
 const proposalStore = useProposalStore();
+const modeStore = useChatInputModeStore();
+const attachmentsStore = useAttachmentsStore();
+const providerStore = useChatProviderStore();
 const claudeCliPort = useChatTransportPort();
 const { isMobile } = usePlatform();
 const vaultPort = useVaultPort();
@@ -407,6 +413,15 @@ async function handleSend(): Promise<void> {
 		workspace: workspacePort,
 		settings: settingsPort,
 		logger: loggerPort,
+		// WS-10 wire-up: snapshot the chat-input mode / provider / attachments
+		// stores so the orchestrator receives plan-mode, instructionSuffix,
+		// model, and attachments without re-reading Pinia.
+		mode: {
+			planMode: modeStore.planMode,
+			instructionMode: modeStore.instructionMode,
+		},
+		selectedModel: providerStore.selectedModel,
+		attachments: attachmentsStore.pending,
 	});
 
 	// Preflight Escape (Codex P2 on PR #402): if the user pressed Escape during
@@ -432,6 +447,18 @@ async function handleSend(): Promise<void> {
 	});
 	inFlightAbort.value = null;
 	recordStructuredPathErrorIfAny(result);
+	// WS-10 (REQ-MPS-021): after the first successful turn on a thread,
+	// derive the default title from the user message. `applyDefaultTitleFromMessage`
+	// is a no-op when the title is already set (user rename wins).
+	if (result.ok) {
+		const tid = threadsStore.activeThreadId;
+		if (tid !== null) {
+			threadsStore.applyDefaultTitleFromMessage(tid, input.userMessage);
+		}
+		// REQ-MPS-042/043: per-turn attachments are consumed on send; clear
+		// the pending list so a follow-up turn starts empty.
+		attachmentsStore.clear();
+	}
 	await nextTick();
 	focusTextarea();
 }

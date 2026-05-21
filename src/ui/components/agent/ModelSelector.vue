@@ -37,15 +37,25 @@ const models = computed(() => {
 });
 
 const selected = ref<string>(models.value[0]?.id ?? '');
+// REQ-MPS-040 / WS-10: keep the store mirror in sync so the chat send path
+// (TurnInputBuilder) can read the selection without reaching into the
+// component. Seed eagerly so the first turn after mount carries the model.
+store.setSelectedModel(selected.value);
 
 watch(models, (next) => {
 	if (next.length === 0) {
 		selected.value = '';
+		store.setSelectedModel('');
 		return;
 	}
 	if (!next.some((m) => m.id === selected.value)) {
 		selected.value = next[0]?.id ?? '';
 	}
+	store.setSelectedModel(selected.value);
+});
+
+watch(selected, (id) => {
+	store.setSelectedModel(id);
 });
 
 const visible = computed(() => models.value.length > 0);

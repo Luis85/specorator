@@ -19,13 +19,18 @@
  *     empty-state starter tile; the root pre-fills `messagesStore.userText`
  *     with a matching prompt fragment.
  */
-import { computed, nextTick, provide, ref } from 'vue';
+import { computed, inject, nextTick, provide, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore';
 import { useMessagesStore } from '@/ui/stores/messagesStore';
+import { useChatProviderStore } from '@/ui/stores/chatProviderStore';
 import { useChatReset } from '@/ui/composables/useChatReset';
 import { useNotificationStore } from '@/ui/stores/notificationStore';
 import { useSettingsStore } from '@/ui/stores/settingsStore';
+import { useVaultPort } from '@/ui/composables/useVaultPort';
+import { useDeleteThreadConfirmation } from '@/ui/composables/useDeleteThreadConfirmation';
+import { CONFIRM_MODAL_PORT } from '@/infrastructure/bridge/ports';
+import type { ConfirmModalPort, TranslationPort } from '@/domain/ports';
 import { onMounted, onUnmounted } from 'vue';
 import AppToast from '@/ui/components/common/AppToast.vue';
 import ErrorBoundary from '@/ui/components/ErrorBoundary.vue';
@@ -44,11 +49,29 @@ import { BUILT_IN_SLASH_COMMANDS } from '@/application/chat/builtInSlashCommands
 
 const threadsStore = useChatThreadsStore();
 const messagesStore = useMessagesStore();
+const providerStore = useChatProviderStore();
 const settingsStore = useSettingsStore();
 const chatSidebarRef = ref<InstanceType<typeof ChatSidebar> | null>(null);
 const chatReset = useChatReset();
 const notificationStore = useNotificationStore();
+const vaultPort = useVaultPort();
 const { t } = useI18n();
+const inlineTranslator: TranslationPort = { t: (k, p) => t(k, p ?? {}) };
+
+/**
+ * Optional injection wired by `AgentSidepanelView`. The composable layer
+ * does the modal/vault work; when absent (unit tests, browser standalone)
+ * the delete affordance becomes a no-op so the panel still mounts.
+ */
+const confirmModalPort = inject<ConfirmModalPort | undefined>(CONFIRM_MODAL_PORT, undefined);
+const deleteConfirmation =
+	confirmModalPort !== undefined
+		? useDeleteThreadConfirmation({
+				confirmModal: confirmModalPort,
+				vault: vaultPort,
+				t: inlineTranslator,
+			})
+		: null;
 
 /**
  * WP-7 a11y P1 wave: own the sidepanel-wide A11y announcer. Provided to every
@@ -83,20 +106,36 @@ const chatTabCap = computed(() => settingsStore.settings.chatTabCap);
  * `open-context-menu` with the full new-thread + delete-thread flows.
  */
 function handleNewThread(): void {
-	// Intentional no-op placeholder. The strip's button is wired to this
-	// handler so the UI surface lands in WS-6; the actual
-	// `createThread(...)` orchestration (resolving the active selection,
-	// allocating the session-log folder via `VaultPort.createFolder`) is
-	// the responsibility of WS-10's integration layer per the workstream
-	// dependency table.
+	// WS-10 wire-up (REQ-MPS-019): mint a fresh thread record with the
+	// resolved provider/mode discriminator. `logPath` is left empty so the
+	// orchestrator allocates the session-log lazily on the first turn
+	// (matches the rotated-thread mint flow in ChatTurnOrchestrator).
+	// Tab-cap rejections (REQ-MPS-025) surface as a non-blocking warning.
+	const resolution = providerStore.resolved;
+	const transport =
+		resolution === 'degraded'
+			? { provider: 'claude' as const, mode: 'api' as const }
+			: { provider: resolution.provider, mode: resolution.mode };
+	const result = threadsStore.createThread({
+		feature: null,
+		transport,
+		logPath: '',
+		tabCap: settingsStore.settings.chatTabCap,
+	});
+	if (!result.ok) {
+		notificationStore.addNotice(t('thread.tabCap.warning'), 4000);
+	}
 }
 
-function handleOpenThreadContextMenu(threadId: string): void {
-	// Delete + fork orchestration lands in WS-10. The strip emits an
-	// `open-context-menu` intent that the integration layer wires to the
-	// `useDeleteThreadConfirmation` composable (REQ-MPS-022) and the fork
-	// helper (REQ-MPS-023).
-	void threadId;
+async function handleOpenThreadContextMenu(threadId: string): Promise<void> {
+	// WS-10 wire-up (REQ-MPS-022): MVP context menu is "delete this thread"
+	// gated by the existing `ConfirmModalPort`. The fork helper (REQ-MPS-023)
+	// remains a follow-up; the strip's context-menu intent currently maps to
+	// the confirm-delete flow because that's the single destructive action
+	// on the menu. When the modal port is unavailable (unit tests, browser
+	// standalone) this is a no-op so the panel still mounts.
+	if (deleteConfirmation === null) return;
+	await deleteConfirmation.confirmDelete(threadId);
 }
 
 /**
