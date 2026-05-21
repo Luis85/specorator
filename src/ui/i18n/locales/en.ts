@@ -196,6 +196,13 @@ export default {
       revise: 'Send revision',
       cancel: 'Cancel',
     },
+    approvalCard: {
+      ariaLabel: 'Tool approval request',
+      heading: 'Allow {tool} on {scope}?',
+      deny: 'Deny',
+      allowOnce: 'Allow once',
+      alwaysAllow: 'Always allow',
+    },
     help: {
       heading: 'Available slash commands',
       closeAriaLabel: 'Close help',

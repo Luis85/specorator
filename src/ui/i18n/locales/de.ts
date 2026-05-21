@@ -196,6 +196,13 @@ export default {
       revise: 'Überarbeitung senden',
       cancel: 'Abbrechen',
     },
+    approvalCard: {
+      ariaLabel: 'Werkzeug-Freigabeanfrage',
+      heading: '{tool} für {scope} erlauben?',
+      deny: 'Ablehnen',
+      allowOnce: 'Einmal erlauben',
+      alwaysAllow: 'Immer erlauben',
+    },
     help: {
       heading: 'Verfügbare Slash-Befehle',
       closeAriaLabel: 'Hilfe schließen',
