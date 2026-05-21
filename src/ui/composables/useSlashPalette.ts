@@ -5,6 +5,7 @@ import type { SlashCommand } from '@/domain/chat/SlashCommand';
 import { BUILT_IN_SLASH_COMMANDS } from '@/application/chat/builtInSlashCommands';
 import { loadVaultSlashCommands, toSlashCommand } from '@/application/chat/slashCommandLoader';
 import type { VaultPort, LoggerPort } from '@/domain/ports';
+import type { ProviderEntry } from '@/domain/chat/ProviderRegistry';
 import { VAULT_PORT, LOGGER_PORT } from '@/infrastructure/bridge/ports';
 
 /**
@@ -77,6 +78,12 @@ interface UseSlashPaletteOptions {
 	readonly vault?: VaultPort;
 	/** Inject a `LoggerPort` for tests. */
 	readonly logger?: LoggerPort;
+	/**
+	 * WS-8 (REQ-MPS-034): when supplied, the palette enriches its command list
+	 * with the provider's `slashCommands()` contribution. Callers that need
+	 * provider-aware entries pass the active provider's `ProviderEntry`.
+	 */
+	readonly providerEntry?: ProviderEntry;
 }
 
 function matchesQuery(command: SlashCommand, query: string): boolean {
@@ -106,8 +113,18 @@ export function useSlashPalette(options?: UseSlashPaletteOptions): UseSlashPalet
 	// the palette is rapidly reopened.
 	let latestRefreshSeq = 0;
 
+	// WS-8 (REQ-MPS-034): provider-contributed entries are spliced into the
+	// combined list. Resolved lazily so a registry whose contribution changes
+	// over time stays observable.
+	const providerCommands = computed<readonly SlashCommand[]>(() => {
+		const entry = options?.providerEntry;
+		if (entry === undefined) return [];
+		return entry.slashCommands();
+	});
+
 	const commands = computed<readonly SlashCommand[]>(() => [
 		...builtIns,
+		...providerCommands.value,
 		...vaultCommandsRef.value,
 	]);
 

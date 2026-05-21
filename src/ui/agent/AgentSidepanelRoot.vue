@@ -33,6 +33,9 @@ import AgentSidepanelHeader from '@/ui/components/agent/AgentSidepanelHeader.vue
 import ThreadTabStrip from '@/ui/components/agent/ThreadTabStrip.vue';
 import MessageList from '@/ui/components/agent/MessageList.vue';
 import StatusPanel from '@/ui/components/agent/StatusPanel.vue';
+import AttachmentStrip from '@/ui/components/agent/AttachmentStrip.vue';
+import ProviderBadge from '@/ui/components/agent/ProviderBadge.vue';
+import ModelSelector from '@/ui/components/agent/ModelSelector.vue';
 import A11yAnnouncer from '@/ui/components/agent/A11yAnnouncer.vue';
 import { A11Y_ANNOUNCER_KEY, useA11yAnnouncer } from '@/ui/composables/useA11yAnnouncer';
 import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue';
@@ -287,6 +290,10 @@ onUnmounted(() => {
 						/>
 					</template>
 				</AgentSidepanelHeader>
+				<div class="sp-agent__provider-row" data-testid="agent-provider-row">
+					<ProviderBadge />
+					<ModelSelector />
+				</div>
 				<!--
           UX #4 (WP-8): /help renders as a popover anchored under the
           header instead of a drawer that pushes the message list
@@ -337,6 +344,7 @@ onUnmounted(() => {
 					@edit="handleMessageEdit"
 				/>
 				<StatusPanel />
+				<AttachmentStrip />
 				<ChatSidebar ref="chatSidebarRef" @select-command="handleSelectCommand" />
 			</div>
 		</ErrorBoundary>
@@ -356,6 +364,15 @@ onUnmounted(() => {
 .sp-agent__header-wrap {
 	position: relative;
 	flex-shrink: 0;
+}
+
+.sp-agent__provider-row {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 0.5rem;
+	padding: 0.25rem 0.75rem;
+	border-bottom: 1px solid var(--background-modifier-border);
 }
 
 .sp-agent__body {
