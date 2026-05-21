@@ -42,3 +42,13 @@ export interface SecretStorePort {
  * desktop builds where secret storage was available.
  */
 export const SECRET_ID_ANTHROPIC = 'specorator-anthropic-apikey'
+
+/**
+ * Canonical identifier for the Cursor API key (REQ-MPS-010, ADR-MPS-003).
+ *
+ * Mirrors {@link SECRET_ID_ANTHROPIC} — lowercase, hyphen-separated to
+ * satisfy Obsidian's `App.secretStorage` id grammar. Adding a new provider
+ * is a one-line addition here plus the matching adapter under
+ * `src/infrastructure/<provider>/`.
+ */
+export const SECRET_ID_CURSOR = 'specorator-cursor-apikey'

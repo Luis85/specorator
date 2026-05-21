@@ -31,4 +31,4 @@ export { ChatTransportError } from './ChatTransportPort';
 export type { TransportLifecyclePort } from './TransportLifecyclePort';
 export type { ConfirmModalPort, ConfirmModalRequest } from './ConfirmModalPort';
 export type { SecretStorePort } from './SecretStorePort';
-export { SECRET_ID_ANTHROPIC } from './SecretStorePort';
+export { SECRET_ID_ANTHROPIC, SECRET_ID_CURSOR } from './SecretStorePort';

@@ -15,7 +15,6 @@ import { selectTransport } from './transport/TransportSelector'
 import { buildProviderRegistry } from './transport/buildProviderRegistry'
 import type { TransportSelection } from './SpecoratorView'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
-import type { ChatTransportPort } from '@/domain/ports/ChatTransportPort'
 import type { ProviderRegistry } from '@/domain/chat/ProviderRegistry'
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord'
 import {
@@ -41,7 +40,8 @@ import { PluginCore } from '@/core/plugin-core'
 import { ALL_MODULES, type ModuleDescriptor } from '@/modules'
 import { i18nMerge, i18nTranslate, setLocale, type SupportedLocale } from '@/ui/i18n'
 import type { SecretStorePort, TranslationPort } from '@/domain/ports'
-import { SECRET_ID_ANTHROPIC } from '@/domain/ports'
+import { SECRET_ID_ANTHROPIC, SECRET_ID_CURSOR } from '@/domain/ports'
+import { CursorApiAdapter } from '@/infrastructure/cursor/CursorApiAdapter'
 import { useMessagesStore } from '@/ui/stores/messagesStore'
 
 export default class SpecoratorPlugin extends Plugin {
@@ -67,10 +67,25 @@ export default class SpecoratorPlugin extends Plugin {
    */
   private _apiKeyCache = ''
 
+  /**
+   * Synchronous Cursor-API-key cache hydrated from `secretStore` at
+   * `loadSettings()` time (WS-4 / REQ-MPS-013). Mirrors `_apiKeyCache` so
+   * the selector availability projection (`cursorApiKeyPresent`) stays
+   * synchronous on the chat hot path. Refreshed via `refreshCursorKeyCache()`
+   * after the settings tab persists a new value.
+   */
+  private _cursorKeyCache = ''
+
   /** Full stored data blob: specorator sub-key + per-module sub-keys + _moduleVersions. */
   private _storedData: Record<string, unknown> = {}
   /** ClaudeCliAdapter instance — created in onload(), destroyed in onunload(). */
   private _claudeCliAdapter: ClaudeCliAdapter | null = null
+  /**
+   * Cursor public-API adapter — created in onload() after the secret store
+   * is hydrated. Reads the key per call from `secretStore`; `cursorApiPreview`
+   * gates availability (REQ-MPS-014).
+   */
+  private _cursorApiAdapter: CursorApiAdapter | null = null
   /**
    * Subscription-transport adapter — created in onload(), shut down in
    * onunload() via `this.register(() => adapter.shutdown())`.
@@ -229,6 +244,22 @@ export default class SpecoratorPlugin extends Plugin {
       spawn: spawnFn,
     })
     this.register(() => { this._cursorCliAdapter?.shutdown() })
+
+    // WS-4 (T-MPS-053) — Cursor API adapter. Reads SECRET_ID_CURSOR through
+    // `secretStore` on every queryStream() call (REQ-MPS-013); availability
+    // is gated by `cursorApiPreview` (REQ-MPS-014). The base URL is the
+    // RES-MPS-001 placeholder and will be swapped once CQ-MPS-01 closes
+    // upstream.
+    if (this.secretStore !== null) {
+      this._cursorApiAdapter = new CursorApiAdapter({
+        secretStore: this.secretStore,
+        logger: this.bridge,
+        // eslint-disable-next-line obsidianmd/prefer-active-doc -- network `fetch` is a global, not a DOM API; the rule false-positives here.
+        fetch: globalThis.fetch.bind(globalThis),
+        baseUrl: 'https://api.cursor.sh/v1',
+        getSettings: () => this.settings,
+      })
+    }
 
     // T-ASM-075 / SPEC-ASM-001 §9.1 — production-grade confirmation modal.
     // Stateless wrapper; no startup() / shutdown() required. Constructed here
@@ -482,7 +513,8 @@ export default class SpecoratorPlugin extends Plugin {
    */
   private async _initializeSecretStore(): Promise<void> {
     this.secretStore = new ObsidianSecretStoreAdapter(this.app)
-    this._apiKeyCache = await this._readSecretSafe(this.secretStore)
+    this._apiKeyCache = await this._readSecretSafe(this.secretStore, SECRET_ID_ANTHROPIC)
+    this._cursorKeyCache = await this._readSecretSafe(this.secretStore, SECRET_ID_CURSOR)
   }
 
   /**
@@ -538,7 +570,27 @@ export default class SpecoratorPlugin extends Plugin {
    */
   async refreshApiKeyCache(): Promise<void> {
     if (this.secretStore === null) return
-    this._apiKeyCache = await this._readSecretSafe(this.secretStore)
+    this._apiKeyCache = await this._readSecretSafe(this.secretStore, SECRET_ID_ANTHROPIC)
+    this._specoratorView?.bumpSettingsVersion()
+    this._agentSidepanelView?.bumpSettingsVersion()
+  }
+
+  /**
+   * Read-only accessor for the cached Cursor API key. Mirrors
+   * {@link getApiKeyCache} so the settings tab can pre-populate the password
+   * field at render time. Returns `''` on unavailable secret stores.
+   */
+  getCursorKeyCache(): string {
+    return this._cursorKeyCache
+  }
+
+  /**
+   * Re-read the Cursor API key from {@link secretStore} after the settings
+   * tab persists a new value. Mirrors {@link refreshApiKeyCache}.
+   */
+  async refreshCursorKeyCache(): Promise<void> {
+    if (this.secretStore === null) return
+    this._cursorKeyCache = await this._readSecretSafe(this.secretStore, SECRET_ID_CURSOR)
     this._specoratorView?.bumpSettingsVersion()
     this._agentSidepanelView?.bumpSettingsVersion()
   }
@@ -549,11 +601,14 @@ export default class SpecoratorPlugin extends Plugin {
    * denial, transient platform error) and must not crash the plugin —
    * degrading to "no key" matches the unavailable-store branch.
    */
-  private async _readSecretSafe(secretStore: SecretStorePort): Promise<string> {
+  private async _readSecretSafe(
+    secretStore: SecretStorePort,
+    id: string,
+  ): Promise<string> {
     if (!secretStore.available) return ''
-    const outcome = await tryAsync(() => secretStore.getSecret(SECRET_ID_ANTHROPIC))
+    const outcome = await tryAsync(() => secretStore.getSecret(id))
     if (!outcome.ok) {
-      this.bridge?.warn('main.secretStorage.read.failed', { error: outcome.error })
+      this.bridge?.warn('main.secretStorage.read.failed', { error: outcome.error, id })
       return ''
     }
     return outcome.value ?? ''
@@ -722,10 +777,11 @@ export default class SpecoratorPlugin extends Plugin {
    * adapters land), `'degraded'` → `'degraded'`.
    */
   private _routeTransport(settings: PluginSettings): TransportSelection {
+    const cursorApiPort = this._cursorApiAdapter ?? degradedClaudeCliPort
     const result = selectTransport(settings.providerSelection, {
       providers: {
         claude: { api: this._claudeCliAdapter!, cli: this._subscriptionAdapter! },
-        cursor: { api: this._cursorApiStub, cli: this._cursorCliAdapter! },
+        cursor: { api: cursorApiPort, cli: this._cursorCliAdapter! },
       },
       degradedPort: degradedClaudeCliPort,
       availability: {
@@ -736,10 +792,11 @@ export default class SpecoratorPlugin extends Plugin {
         // Synchronous projection — see SPEC-ASM-001 §3.1 closing note and
         // `ClaudeSubprocessAdapter.isAvailableSync()`.
         claudeCliResolved: this._subscriptionAdapter!.isAvailableSync(),
-        // WS-4 will replace `cursorApiKeyPresent` with a real probe. WS-5
-        // wires `cursorCliResolved` to the synchronous projection of
+        // WS-4 (T-MPS-053): Cursor API key presence projected from
+        // `_cursorKeyCache` (mirror of SECRET_ID_CURSOR), late-read on every
+        // selector call. WS-5: `cursorCliResolved` from real
         // `CursorCliAdapter.isAvailableSync()`.
-        cursorApiKeyPresent: false,
+        cursorApiKeyPresent: this._cursorKeyCache.trim() !== '',
         cursorCliResolved: this._cursorCliAdapter?.isAvailableSync() ?? false,
         cursorApiPreviewEnabled: settings.cursorApiPreview,
         secretStoreAvailable: this.secretStore?.available ?? false,
@@ -771,20 +828,15 @@ export default class SpecoratorPlugin extends Plugin {
     if (provider === 'cursor' && mode === 'cli') {
       return { port: result.port, kind: 'subscription' }
     }
-    // Cursor API branch is unreachable until WS-4 replaces `_cursorApiStub`
-    // and sets `cursorApiKeyPresent` from a real probe. Fall back to
-    // `degraded` defensively so the view never sees `undefined`.
+    if (provider === 'cursor' && mode === 'api') {
+      // Cursor API behaves like an API-key transport from the view's POV
+      // until the view learns the (provider, mode) discriminator (deferred
+      // to WS-10).
+      return { port: result.port, kind: 'api-key' }
+    }
+    // Defensive fallback so the view never sees `undefined`.
     return { port: degradedClaudeCliPort, kind: 'degraded' }
   }
-
-  /**
-   * WS-3 (T-MPS-033) — Cursor API adapter placeholder. WS-4 will replace this
-   * stub with the real `CursorApiAdapter`. Returning a degraded port keeps
-   * the selector truth table well-typed and lets ccs-parity remain green
-   * because all cursor availability flags are projected as false.
-   */
-  // WS-4/WS-5 will replace this stub.
-  private readonly _cursorApiStub: ChatTransportPort = degradedClaudeCliPort
 
   /**
    * WS-3 (T-MPS-033) — lazy `ProviderRegistry` accessor. The registry is
