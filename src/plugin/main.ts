@@ -15,7 +15,6 @@ import { selectTransport } from './transport/TransportSelector'
 import { buildProviderRegistry } from './transport/buildProviderRegistry'
 import type { TransportSelection } from './SpecoratorView'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
-import type { ChatTransportPort } from '@/domain/ports/ChatTransportPort'
 import type { ProviderRegistry } from '@/domain/chat/ProviderRegistry'
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord'
 import {

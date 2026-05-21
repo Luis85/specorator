@@ -568,3 +568,121 @@ line.
   (`CursorBinaryResolver.*`, `buildCursorSubprocessArgs`,
   `CursorCliAdapter.ndjson`, `CursorCliAdapter.abort`, `cursor-resolver-no-credentials`).
   Full `npm run verify` green at PR-prep time.
+
+## WS-4 — Cursor API adapter + secret storage + settings
+
+### T-MPS-036 — File ADR-MPS-003 (done)
+
+- **Commit:** `a40a0c3`
+- **Files:** `decisions/ADR-MPS-003-cursor-provider-secret-storage.md` (new)
+- **Spec:** SPEC-MPS-001 §5 / §2.7; DES-MPS-001 §C12.
+- **Outcome:** done.
+- **Green evidence:** ADR shipped as `accepted` per the WS-1 / WS-2 precedent.
+
+### T-MPS-037 — Cursor API research spike (done — deferred)
+
+- **Commit:** `e2fefb5`
+- **Files:** `specs/multi-provider-agent-sidepanel/research-cursor-api.md` (new)
+- **Spec:** CQ-MPS-01.
+- **Outcome:** closed-as-deferred. Cursor publishes no versioned
+  third-party SSE chat endpoint as of 2026-05-21; adapter encoded
+  against the design §C8 event mapping with the placeholder base URL
+  `https://api.cursor.sh/v1`. `cursorApiPreview` stays `false` by
+  default. WS-4 unblocked.
+
+### T-MPS-038 + T-MPS-039 — `SECRET_ID_CURSOR` constant (done)
+
+- **Commit:** `c9607d7`
+- **Files:**
+  - `src/domain/ports/SecretStorePort.ts` (modified — new const)
+  - `src/domain/ports/index.ts` (re-export)
+  - `tests/domain/ports/SecretStorePort.cursor.test.ts` (new — 5 tests)
+- **Spec:** REQ-MPS-010, ADR-MPS-003 §Decision step 1.
+- **Outcome:** done. 5/5 tests green.
+
+### T-MPS-040..045 — `CursorApiAdapter` (done)
+
+- **Commit:** `5bbfb2a`
+- **Files:**
+  - `src/infrastructure/cursor/CursorApiAdapter.ts` (new)
+  - `tests/infrastructure/cursor/CursorApiAdapter.isAvailable.test.ts`
+  - `tests/infrastructure/cursor/CursorApiAdapter.lateKey.test.ts`
+  - `tests/infrastructure/cursor/CursorApiAdapter.sse.test.ts`
+  - `tests/infrastructure/cursor/CursorApiAdapter.logging.test.ts`
+  - `tests/infrastructure/cursor/CursorApiAdapter.attachmentCap.test.ts`
+- **Spec:** REQ-MPS-010..014, REQ-MPS-017, REQ-MPS-044, NFR-MPS-001,
+  NFR-MPS-002, NFR-MPS-013; SPEC-MPS-001 §5; DES-MPS-001 §C8.
+- **Outcome:** done. 18/18 cursor tests green. Adapter never logs key,
+  body, or `Authorization`; attachment cap enforced before network
+  dispatch; late key read implemented; SSE parser handles
+  `message_delta` / `tool_use` / `usage` / `done` / `error` plus the
+  §10 "stream closed without done" recovery.
+- **Deviation:** none.
+
+### T-MPS-046 — `MockCursorApiAdapter` test fake (done)
+
+- **Commit:** `74d9af1`
+- **Files:**
+  - `src/infrastructure/mock/MockCursorApiAdapter.ts` (new)
+  - `tests/__fakes__/MockCursorApiAdapter.ts` (re-export)
+  - `tests/infrastructure/mock/MockCursorApiAdapter.test.ts` (new — 6 tests)
+- **Spec:** NFR-MPS-014.
+- **Outcome:** done. Fluent `setAvailability` / `setNextDelta` /
+  `setError` plus the public-field surface mirror `MockClaudeCliPort`.
+
+### T-MPS-047..049 — `CursorKeyField.vue` (done)
+
+- **Commit:** `98f3f30`
+- **Files:**
+  - `src/ui/components/settings/CursorKeyField.vue` (new)
+  - `tests/ui/components/settings/CursorKeyField.po.ts` (new)
+  - `tests/ui/components/settings/CursorKeyField.test.ts` (new — 7 tests)
+- **Spec:** REQ-MPS-011, REQ-MPS-012, NFR-MPS-001.
+- **Outcome:** done. Two-variant component (available / unavailable)
+  takes `SecretStorePort` as a prop; on blur writes the trimmed value to
+  `SECRET_ID_CURSOR` and emits `saved`. `saveFailed` event covers the
+  throwing-keychain path. PageObject data-testid-only per ADR-009.
+
+### T-MPS-050..053 — Plugin wiring + leakage test + closeout (done)
+
+- **Commit:** `edc3114`
+- **Files:**
+  - `src/plugin/settings/CursorSettingsSection.ts` (new)
+  - `src/plugin/settings.ts` (modified — mounts the section)
+  - `src/plugin/main.ts` (modified — `_cursorKeyCache`, real
+    `CursorApiAdapter`, drops WS-3 cursor-API stub, projects
+    `cursorApiKeyPresent` from the cache)
+  - `tests/plugin/settings/cursor-key-leakage.test.ts` (new — 3 tests)
+  - `src/infrastructure/cursor/CursorApiAdapter.ts` (refactor — extract
+    `_preflight` / `_dispatch` / `_drainFrames` and the
+    `SSE_EVENT_HANDLERS` table to keep complexity under the project
+    cap)
+  - `src/infrastructure/mock/MockCursorApiAdapter.ts` (refactor —
+    extract `_preflightDelta` / `_streamCanned`)
+- **Spec:** REQ-MPS-007, REQ-MPS-008, REQ-MPS-013, REQ-MPS-014,
+  NFR-MPS-001, TST-MPS-09.
+- **Outcome:** done. End-to-end leakage test confirms the canary
+  Cursor key value never appears in the simulated `data.json` blob
+  after the save handler runs. `_routeTransport` now plugs the real
+  `CursorApiAdapter` into the selector when `secretStore` is available;
+  the WS-3 `_cursorApiStub` field is gone.
+
+### WS-4 closeout
+
+- **Branch:** `feature/mps-ws-4-cursor-api` (cut from WS-3 tip
+  `b579a9f`).
+- **Commits:** `a40a0c3` → `e2fefb5` → `c9607d7` → `5bbfb2a` →
+  `74d9af1` → `98f3f30` → `edc3114`.
+- **Verify gate:** all green —
+  `npm audit --audit-level=high --omit=dev` (0 vulnerabilities),
+  `npm run typecheck` (clean), `npm run lint` (0 errors, 31
+  pre-existing warnings), `npm run test` (1992 / 1992 unit tests),
+  `npm run build` (plugin bundle 2.93 MB / 4 MB budget),
+  `npm run build:web` (standalone 0.27 MB / 2 MB budget),
+  `npm run docs:api` (clean).
+- **Conflict zone for WS-5 merge:** `src/plugin/main.ts` will need to
+  swap `_cursorCliStub` for the real `CursorCliAdapter` and project
+  `cursorCliResolved`. The seam in `_routeTransport` is already
+  prepared.
+- **Next agent:** WS-10 integration waits on the remaining fan-out
+  branches (WS-6..WS-9).
