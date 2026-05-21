@@ -44,20 +44,18 @@ describe('AttachmentStrip.vue — paste image (REQ-MPS-042)', () => {
 		const { wrapper } = mountStrip();
 		const file = new File([new Uint8Array(4)], 'pasted.png', { type: 'image/png' });
 		// jsdom lacks DataTransfer — fabricate a minimal ClipboardData stub.
-		const fakeClipboard = {
-			files: [file] as unknown as FileList,
-		};
-		// Trigger the paste handler directly via Vue's event surface.
-		await wrapper.trigger('paste', {} as never);
-		// Manually invoke the handler with the stub since wrapper.trigger does
-		// not let us inject `clipboardData` cleanly.
+		const filesLike = [file] as unknown as FileList;
+		const fakeClipboard = { files: filesLike };
 		const evt = new Event('paste') as ClipboardEvent;
 		Object.defineProperty(evt, 'clipboardData', { value: fakeClipboard });
-		(wrapper.find('[data-testid="attachment-strip"]')
-			.element as HTMLElement).dispatchEvent(evt);
-		await wrapper.vm.$nextTick();
-		await new Promise((r) => setTimeout(r, 0));
-		await wrapper.vm.$nextTick();
+		wrapper.find('[data-testid="attachment-strip"]').element.dispatchEvent(evt);
+		// The handler is async (await file.arrayBuffer()) — flush the
+		// microtask queue and a couple of Vue ticks to settle the reactive
+		// state before asserting.
+		for (let i = 0; i < 5; i++) {
+			await Promise.resolve();
+			await wrapper.vm.$nextTick();
+		}
 		expect(store.pending.length).toBeGreaterThanOrEqual(1);
 		expect(store.pending.map((a) => a.label)).toContain('pasted.png');
 	});

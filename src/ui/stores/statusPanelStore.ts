@@ -24,7 +24,7 @@ const BASH_HISTORY_CAP = 50;
 /**
  * Pinia store backing the agent sidepanel's StatusPanel.
  *
- * - `todos` mirrors the latest `todo-update` delta (REQ-MPS-030, TST-MPS-19).
+ * - `todos` mirrors the latest task-tracker delta (REQ-MPS-030, TST-MPS-19).
  * - `bashHistory` is a capped-at-50 FIFO buffer fed by `tool-result` deltas
  *   from Bash tools (REQ-MPS-031, TST-MPS-20).
  * - `collapsedByThread` records the per-thread collapse state so switching
@@ -43,7 +43,7 @@ export const useStatusPanelStore = defineStore('statusPanel', () => {
 	/** Per-thread collapsed/expanded flag. REQ-MPS-033. */
 	const collapsedByThread = ref<Map<string, boolean>>(new Map());
 
-	/** Replace the todo list verbatim. */
+	/** Replace the entire task list verbatim. */
 	function setTodos(next: ReadonlyArray<TodoEntry>): void {
 		todos.value = next.slice();
 	}

@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { mount } from '@vue/test-utils';
-import { defineComponent, h } from 'vue';
+import { defineComponent } from 'vue';
 import { useChatProviderStore } from '@/ui/stores/chatProviderStore';
 import { useMessagesStore } from '@/ui/stores/messagesStore';
 import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore';

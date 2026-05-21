@@ -225,9 +225,9 @@ export type StreamDelta =
 			readonly exitCode: number | null;
 	  }
 	/**
-	 * Snapshot of the agent's TodoWrite state. Replaces the entire todo list
-	 * verbatim on each emission (the model emits the full updated list rather
-	 * than diffs). REQ-MPS-030.
+	 * Snapshot of the agent's task-tracker. The variant replaces the entire
+	 * task list verbatim on each emission (the model emits the full updated
+	 * list rather than diffs). REQ-MPS-030.
 	 */
 	| { readonly type: 'todo-update'; readonly todos: ReadonlyArray<TodoEntry> }
 	/**
@@ -263,8 +263,8 @@ export type StreamDelta =
 	| { readonly type: 'error'; readonly error: ChatTransportError };
 
 /**
- * Single TodoWrite row. The agent emits the complete updated todo list on
- * each `todo-update` delta; the UI snapshot replaces verbatim.
+ * Single task-tracker row. The agent emits the complete updated task list
+ * on each delta; the UI snapshot replaces verbatim.
  *
  * REQ-MPS-030.
  */

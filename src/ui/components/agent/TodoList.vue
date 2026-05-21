@@ -1,11 +1,10 @@
 <script setup lang="ts">
 /**
- * `TodoList.vue` — agent sidepanel status-panel children.
+ * `TodoList.vue` — agent sidepanel status-panel child component.
  *
- * Renders the latest `TodoWrite` snapshot from `statusPanelStore.todos`
- * (REQ-MPS-030). Each row exposes `data-testid="todo-row-{id}"` so PageObject
- * tests can assert per-item behaviour without reaching for CSS selectors
- * (ADR-009).
+ * Renders the latest task-tracker snapshot from `statusPanelStore.todos`
+ * (REQ-MPS-030). Each row exposes its row-id testid so PageObject tests can
+ * assert per-item behaviour without reaching for CSS selectors (ADR-009).
  */
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';

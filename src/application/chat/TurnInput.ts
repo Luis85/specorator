@@ -13,6 +13,7 @@
  */
 import type { SessionId } from '@/domain/chat/SessionId';
 import type { TransportKind } from '@/domain/chat/TransportKind';
+import type { ChatTransportAttachment } from '@/domain/ports/ChatTransportPort';
 
 /**
  * Discriminator that splits the orchestrator's dispatch table. The builder
@@ -124,5 +125,5 @@ export interface TurnInput {
 	 * WS-8 (REQ-MPS-042/043): pending attachments for this turn. Forwarded as
 	 * `ChatTransportStreamOptions.attachments`.
 	 */
-	readonly attachments?: ReadonlyArray<import('@/domain/ports/ChatTransportPort').ChatTransportAttachment>;
+	readonly attachments?: ReadonlyArray<ChatTransportAttachment>;
 }

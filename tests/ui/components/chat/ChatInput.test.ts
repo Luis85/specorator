@@ -8,6 +8,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { nextTick } from 'vue';
+import { setActivePinia, createPinia } from 'pinia';
 import ChatInput from '@/ui/components/chat/ChatInput.vue';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
 import { VAULT_PORT, LOGGER_PORT } from '@/infrastructure/bridge/ports';
@@ -15,15 +16,20 @@ import { MENTION_DEBOUNCE_MS } from '@/ui/composables/useMentionPicker';
 import { ChatInputPO } from './ChatInput.po';
 import type { SlashCommand } from '@/domain/chat/SlashCommand';
 import { fakeModulePorts } from '@/../tests/__fakes__/fake-ports';
+import { i18n } from '@/ui/i18n';
 
 function mountChatInput(
 	props: { modelValue: string; disabled: boolean; loading: boolean },
 	files: Record<string, string> = {},
 ) {
+	// WS-8: ChatInput now uses Pinia + i18n via the modeline store. Existing
+	// tests that don't care about modes still need both globals attached.
+	setActivePinia(createPinia());
 	const bridge = new MockBridge(files);
 	const wrapper = mount(ChatInput, {
 		props,
 		global: {
+			plugins: [i18n],
 			provide: {
 				[VAULT_PORT as symbol]: bridge,
 			},

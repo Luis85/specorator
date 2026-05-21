@@ -60,14 +60,18 @@ describe('useChatProviderStore()', () => {
 	it('REQ-MPS-007: rejects an unknown provider', () => {
 		const store = useChatProviderStore();
 		store.setRegistry(makeRegistry([makeEntry('claude', ['api', 'cli'])]));
-		expect(() => store.setActiveSelection({ provider: 'cursor', mode: 'api' })).toThrow();
+		expect(() => {
+			store.setActiveSelection({ provider: 'cursor', mode: 'api' });
+		}).toThrow();
 	});
 
 	it('REQ-MPS-007: rejects a known provider with a mode it does not support', () => {
 		const store = useChatProviderStore();
 		// Claude exposes only api, not cli, in this fixture
 		store.setRegistry(makeRegistry([makeEntry('claude', ['api'])]));
-		expect(() => store.setActiveSelection({ provider: 'claude', mode: 'cli' })).toThrow();
+		expect(() => {
+			store.setActiveSelection({ provider: 'claude', mode: 'cli' });
+		}).toThrow();
 	});
 
 	it('REQ-MPS-007: accepts a forced selection even without a registry', () => {

@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n';
 import { useChatProviderStore } from '@/ui/stores/chatProviderStore';
 import { useProviderRegistry } from '@/ui/composables/useProviderRegistry';
 import type { ProviderMode } from '@/domain/chat/ProviderSelection';
+import { trySync } from '@/domain/shared/tryAsync';
 
 const { t } = useI18n();
 const registry = useProviderRegistry();
@@ -49,14 +50,15 @@ function isDisabled(row: MenuRow): boolean {
 
 function pick(row: MenuRow): void {
 	if (isDisabled(row)) return;
-	try {
+	// Validation guard — disabled rows are filtered above, but `trySync` still
+	// neutralises any registry mismatch so a malformed `row.providerId` cannot
+	// crash the click handler.
+	trySync(() => {
 		store.setActiveSelection({
 			provider: row.providerId as 'claude' | 'cursor',
 			mode: row.mode,
 		});
-	} catch {
-		/* validation guard — disabled rows are filtered above */
-	}
+	}, 'ProviderMenu.pick');
 }
 </script>
 
