@@ -441,84 +441,98 @@ line.
   - All fan-out branches must be cut from this branch's tip and rebase
     onto `develop` after the WS-3 PR squash-merges.
 
-## WS-7 — Per-message actions (Copy / Regenerate / Edit-and-resend)
 
-### T-MPS-084..088 + T-MPS-092 — `MessageActions.vue` + `streamingTurnStore.isStreaming`
+## WS-8 — Status panel + modeline modes + selector + attachments
 
-- **Commit:** `4065879`
+### T-MPS-096..103 — Sub-batch 1: Status panel
+
+- **Commits:** `1930c1a feat(mps): status panel + modeline modes`.
 - **Files:**
-  - `src/ui/components/agent/MessageActions.vue` (new, 132 lines)
-  - `src/ui/stores/streamingTurnStore.ts` — added `isStreaming` computed
-    derived from `messagesStore.status === 'loading'`
-  - `src/ui/i18n/locales/{en,de}.ts` — `agent.messageActions.*` labels +
-    aria-labels (NFR-MPS-008)
-  - Tests: `tests/ui/components/agent/MessageActions.{a11y,copy,regen,streaming}.test.ts`
-    + `MessageActions.po.ts` (15 cases)
-- **Spec:** REQ-MPS-026 (copy), REQ-MPS-027 (regenerate latest only),
-  REQ-MPS-028 (edit), REQ-MPS-029 (disabled while streaming),
-  NFR-MPS-008 (per-action aria-labels). Spec §8.3.
-- **Outcome:** done. Component is intent-only — emits
-  `copy/regenerate/edit { messageId }` and the host owns the side
-  effects. Regenerate hidden for non-latest assistant; Edit hidden for
-  assistant role; both disabled while
-  `streamingTurnStore.isStreaming` is true.
+  - `src/domain/ports/ChatTransportPort.ts` (StreamDelta extended:
+    `tool-result`, `todo-update`, `citation`; `TodoEntry` +
+    `ChatTransportAttachment` interfaces added; new
+    `ChatTransportQueryOptions.planMode` / `model` / `attachments`).
+  - `src/ui/stores/statusPanelStore.ts` (new — `todos`, `bashHistory`
+    FIFO-cap 50, `collapsedByThread`).
+  - `src/ui/components/agent/{StatusPanel,TodoList,BashHistoryList}.vue`
+    (new — collapsible panel + PageObject testids).
+  - `src/ui/agent/AgentSidepanelRoot.vue` (mounts `StatusPanel`).
+  - i18n keys for `status.*`.
+  - Tests: `tests/ui/stores/statusPanelStore.*.test.ts` +
+    `tests/ui/components/agent/{TodoList,BashHistoryList,StatusPanel}.{po.ts,test.ts}`.
+- **Spec:** REQ-MPS-017, 030..033; TST-MPS-19..21.
 
-### T-MPS-089, T-MPS-090 — `messagesStore.removeLatestAssistant()` + `truncateAfter()`
+### T-MPS-104..113 — Sub-batch 2: Modeline modes
 
-- **Commit:** `17aaae7`
+- **Commits:** `1930c1a` (continued).
 - **Files:**
-  - `src/ui/stores/messagesStore.ts` — two new mutations + 5 new tests
-  - `tests/ui/stores/messagesStore.editRegen.test.ts` (new, 9 cases)
-- **Spec:** REQ-MPS-027 (regenerate truncation primitive),
-  REQ-MPS-028 (edit-and-resend truncation primitive).
-- **Outcome:** done. Both mutations idempotent on missing buckets,
-  out-of-range indices, and wrong-role tails. Thread-isolated.
+  - `src/ui/stores/chatInputModeStore.ts` (new — planMode /
+    bangBashMode / instructionMode).
+  - `src/ui/components/agent/ModeIndicators.vue` (new).
+  - `src/ui/components/chat/ChatInput.vue` (Shift+Tab plan toggle +
+    `!`/`#` prefix detection + aria-live announce + chip strip).
+  - `src/application/chat/ChatTurnOrchestrator.ts` (forwards
+    `planMode`/`instructionSuffix`/`model`/`attachments` through new
+    `buildStreamOptions` helper).
+  - `src/application/chat/TurnInput.ts` (4 new optional fields).
+  - `src/infrastructure/obsidian/buildSubprocessArgs.ts` (planMode →
+    `--permission-mode plan`).
+  - Tests: `tests/ui/stores/chatInputModeStore.test.ts`,
+    `tests/ui/components/chat/ChatInput.{planMode,modeline}.test.ts`,
+    `tests/application/chat/ChatTurnOrchestrator.{planMode,instructionMode}.test.ts`,
+    plus new `--permission-mode plan` cases in
+    `tests/infrastructure/obsidian/buildSubprocessArgs.test.ts`.
+- **Spec:** REQ-MPS-036..039; NFR-MPS-010; TST-MPS-22..25.
 
-### T-MPS-091..094 — Wire `MessageActions` through `MessageList` + `ChatSidebar`
+### T-MPS-114..116 — Sub-batch 3: Slash-command provider entries
 
-- **Commit:** `9ec2e27` (+ lint fixes in `0cde417`)
+- **Commit:** `[df4a21f follow-on commit feat(mps): slash enrichment...]`.
 - **Files:**
-  - `src/ui/components/agent/MessageList.vue` — render
-    `<MessageActions>` per turn; compute `latestAssistantId`; re-emit
-    `copy/regenerate/edit` (edit carries `{ messageId, index, text }`
-    so the host can truncate the trailing turns).
-  - `src/ui/components/chat/ChatSidebar.vue` — expose three handlers
-    via `defineExpose`: `copyMessageToClipboard`, `regenerateMessage`,
-    `editMessage`. Regenerate drops the latest assistant via
-    `removeLatestAssistant`, restores the prior user prompt to the
-    textarea, and re-dispatches through the existing `handleSend()`
-    pipeline (orchestrator's `resume_session_id` semantics keep the
-    SDK session continuous). Edit calls `truncateAfter(index - 1)`,
-    populates the textarea, and focuses input — user adjusts and
-    presses Enter.
-  - `src/ui/agent/AgentSidepanelRoot.vue` — wire MessageList's
-    `copy/regenerate/edit` to the `ChatSidebar` ref.
-  - Tests: `MessageList.regenerate.test.ts`, `MessageList.edit.test.ts`.
-- **Spec:** REQ-MPS-026, REQ-MPS-027, REQ-MPS-028. Spec §8.3.
-- **Outcome:** done. Architecture mirrors the existing tile-action
-  emit chain (`MessageList → AgentSidepanelRoot → ChatSidebar.expose`).
-  No new state lives in the root; the sidebar owns the side effects
-  because it already holds the orchestrator and the textarea ref.
+  - `src/ui/composables/useSlashPalette.ts` (new optional
+    `providerEntry` option; provider commands spliced into the matched
+    list).
+  - Test: `tests/ui/components/chat/SlashCommandDropdown.providerEntries.test.ts`.
+- **Spec:** REQ-MPS-034.
 
-### T-MPS-095 — WS-7 closeout (this entry)
+### T-MPS-117..124 — Sub-batch 4: Model selector + provider menu
 
+- **Commit:** sub-batch-3-5 commit.
 - **Files:**
-  - `specs/multi-provider-agent-sidepanel/implementation-log.md` (this
-    file)
-  - `specs/multi-provider-agent-sidepanel/workflow-state.md` (hand-off
-    entry)
+  - `src/ui/stores/chatProviderStore.ts` (new — registry-validated
+    `setActiveSelection` + `resolved` flag).
+  - `src/ui/components/agent/{ModelSelector,ProviderBadge,ProviderMenu}.vue`
+    (new — header chrome; disabled rows carry `aria-disabled` + reason).
+  - `src/ui/agent/AgentSidepanelRoot.vue` (provider-row band).
+  - Tests including the NFR-MPS-004 perf test
+    `tests/ui/components/agent/ProviderSwitch.perf.test.ts`.
+- **Spec:** REQ-MPS-006, 007, 040, 041; NFR-MPS-004, 009; TST-MPS-26.
 
-## WS-7 branch summary
+### T-MPS-125..130 — Sub-batch 5: Attachments
 
-- **Branch:** `feature/mps-ws-7-message-actions` (cut from
-  `feature/mps-ws-6-multi-thread` tip `89ea04f`).
-- **Commits (4):** `4065879` (MessageActions + isStreaming) → `17aaae7`
-  (store mutations) → `9ec2e27` (MessageList/ChatSidebar wiring) →
-  `0cde417` (lint fixes) → *this commit* (closeout).
-- **Stage status at hand-off:** Stage 7 `in-progress`; WS-7 complete;
-  WS-4 / WS-5 / WS-8 / WS-9 may continue in parallel; WS-10
-  integration still waits on full fan-out.
-- **Verification:** `npm run test` green (2017 tests across 178
-  files), `npm run typecheck` clean, `npm run lint` 0 errors / 31
-  pre-existing warnings, targeted vitest suites for the WS-7 surface
-  all green.
+- **Commit:** sub-batch-3-5 commit.
+- **Files:**
+  - `src/ui/stores/attachmentsStore.ts` (`add` returns
+    `Result<void, ChatTransportError>`; > 5 MB → `ATTACHMENT_TOO_LARGE`).
+  - `src/ui/components/agent/AttachmentStrip.vue` (paste + drag-drop;
+    `application/x-obsidian-path` MIME marker for vault drops).
+  - `src/ui/agent/AgentSidepanelRoot.vue` (strip mounted above input).
+  - Tests: `tests/ui/stores/attachmentsStore.sizeCap.test.ts`,
+    `tests/ui/components/agent/AttachmentStrip.{paste,drag}.test.ts`.
+- **Spec:** REQ-MPS-042..044; TST-MPS-27..29.
+
+### Verification
+
+- All sub-batch unit tests green.
+- Provider-switch perf test asserts < 200 ms NFR-MPS-004 budget on a
+  100-message thread (jsdom env; the headless browser is expected to be
+  faster).
+- `npm run typecheck` clean. `npm run lint` clean (0 errors, 32
+  warnings, none new from WS-8).
+
+### Open items
+
+- TurnInputBuilder wiring of `chatInputModeStore` + `attachmentsStore` +
+  `chatProviderStore.selectedModel` into `TurnInput` happens in WS-10
+  integration (the orchestrator already accepts the new options; only
+  the builder snapshot needs to wire the stores). Tracked in
+  dispatch-plan.md as a WS-10 hand-off item.

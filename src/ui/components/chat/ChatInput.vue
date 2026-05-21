@@ -18,6 +18,11 @@ import MentionDropdown from './MentionDropdown.vue';
 import type { SlashCommand } from '@/domain/chat/SlashCommand';
 import { useSlashPalette } from '@/ui/composables/useSlashPalette';
 import SlashCommandDropdown from './SlashCommandDropdown.vue';
+import { useChatInputModeStore } from '@/ui/stores/chatInputModeStore';
+import { storeToRefs } from 'pinia';
+import { inject } from 'vue';
+import { A11Y_ANNOUNCER_KEY } from '@/ui/composables/useA11yAnnouncer';
+import ModeIndicators from '@/ui/components/agent/ModeIndicators.vue';
 
 const props = defineProps<{
 	modelValue: string;
@@ -45,6 +50,15 @@ const vaultPort = useVaultPort();
 const picker = useMentionPicker(vaultPort);
 const palette = useSlashPalette();
 const { t } = useI18n();
+const modeStore = useChatInputModeStore();
+const { planMode, bangBashMode, instructionMode } = storeToRefs(modeStore);
+
+// WS-8 sub-batch 2 (REQ-MPS-036, NFR-MPS-010): aria-live announcer is optional —
+// the agent sidepanel provides it; legacy ChatSidebar callers do not.
+interface OptionalAnnouncer {
+	announce: (msg: string) => void;
+}
+const announcer = inject<OptionalAnnouncer | undefined>(A11Y_ANNOUNCER_KEY, undefined);
 
 // WP-7 A11y #3: shared combobox wiring for the textarea — both the slash
 // palette and the @-mention picker resolve to the same ARIA attribute set.
@@ -282,6 +296,18 @@ function tryHandleAbortKey(event: KeyboardEvent): boolean {
 	return true;
 }
 
+// WS-8 (REQ-MPS-036, NFR-MPS-010, TST-MPS-22): Shift+Tab toggles plan mode and
+// announces the change via the optional A11y live region. preventDefault keeps
+// focus on the textarea (matches Claudian's UX).
+function tryHandlePlanModeKey(event: KeyboardEvent): boolean {
+	if (event.key !== 'Tab' || !event.shiftKey) return false;
+	if (event.ctrlKey || event.metaKey || event.altKey) return false;
+	event.preventDefault();
+	modeStore.togglePlanMode();
+	announcer?.announce(modeStore.planMode ? t('mode.planOn') : t('mode.planOff'));
+	return true;
+}
+
 function handleKeydown(event: KeyboardEvent): void {
 	// IME-composition guard: while an IME (Japanese/Chinese/Korean) is
 	// composing, Enter commits the candidate and must not trigger send.
@@ -293,6 +319,7 @@ function handleKeydown(event: KeyboardEvent): void {
 	// keydown. We deliberately do not defend that case — see docs/non-goals.md
 	// (CJK/Safari on the standalone-web demo is an explicit non-goal).
 	if (event.isComposing) return;
+	if (tryHandlePlanModeKey(event)) return;
 	if (handlePickerKey(event)) return;
 	if (handlePaletteKeydown(event)) return;
 	if (tryHandleAbortKey(event)) return;
@@ -304,6 +331,9 @@ function handleInput(event: Event): void {
 	emit('update:modelValue', ta.value);
 	picker.handleInput(ta.value, ta.selectionStart);
 	syncPaletteFromTextarea();
+	// WS-8 (REQ-MPS-038, REQ-MPS-039): `!`-prefix → bangBash, `#`-prefix → instruction.
+	// Detection delegates to the store so the rule lives in one place.
+	modeStore.setFromDraft(ta.value);
 }
 
 function handleClick(): void {
@@ -366,6 +396,7 @@ function onDropdownHover(index: number): void {
 
 <template>
 	<div class="sp-chat__input-area">
+		<ModeIndicators v-if="planMode || bangBashMode || instructionMode" />
 		<div class="sp-chat__input-wrapper">
 			<SlashCommandDropdown
 				v-if="palette.isOpen.value"

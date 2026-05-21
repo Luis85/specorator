@@ -25,6 +25,7 @@ import { err, ok, type Result } from '@/domain/shared/Result';
 import type {
 	ChatTransportErrorCode,
 	ChatTransportPort,
+	ChatTransportStreamOptions,
 } from '@/domain/ports/ChatTransportPort';
 import { consumeStream } from './consumeStream';
 import type { SessionId } from '@/domain/chat/SessionId';
@@ -42,6 +43,46 @@ import type { VaultPort } from '@/domain/ports/VaultPort';
 import type { SessionLogWriter } from '@/application/chat/SessionLogWriter';
 import { ChatTurnError } from './ChatTurnError';
 import type { TurnInput } from './TurnInput';
+
+/**
+ * Compose the per-turn system suffix. WS-8 (REQ-MPS-039) — a `#`-prefixed
+ * draft contributes `instructionSuffix`, which is appended to the stage-aware
+ * `systemPromptSuffix` so the two compose rather than overwrite.
+ */
+function composeSystemSuffix(input: TurnInput): string {
+	const extra = input.instructionSuffix ?? '';
+	if (extra === '') return input.systemPromptSuffix;
+	if (input.systemPromptSuffix === '') return extra;
+	return `${input.systemPromptSuffix}\n\n${extra}`;
+}
+
+/**
+ * Build the `ChatTransportStreamOptions` for a free-text turn. Extracted from
+ * `dispatchFreeText` to keep the dispatcher's cyclomatic complexity under
+ * the project lint cap (ADR-008 narrow-ports — adapters consume options;
+ * dispatchers stay slim).
+ */
+function buildStreamOptions(
+	input: TurnInput,
+	ctx: {
+		readonly resumeSessionId: SessionId | undefined;
+		readonly onSessionId: (id: SessionId) => void;
+	},
+	signal: AbortSignal,
+): ChatTransportStreamOptions {
+	return {
+		timeoutMs: 30_000,
+		systemPromptSuffix: composeSystemSuffix(input),
+		resumeSessionId: ctx.resumeSessionId,
+		onSessionId: ctx.onSessionId,
+		signal,
+		...(input.planMode === true ? { planMode: true } : {}),
+		...(input.model !== undefined ? { model: input.model } : {}),
+		...(input.attachments !== undefined && input.attachments.length > 0
+			? { attachments: input.attachments }
+			: {}),
+	};
+}
 
 /**
  * Structural view of the messages store the orchestrator mutates. Kept as a
@@ -269,14 +310,9 @@ export class ChatTurnOrchestrator {
 		this.deps.streaming.setCliStartingUp(true);
 		const abortController = this.deps.abortControllerFactory();
 		ctx.onAbortController?.(abortController);
+		const streamOptions = buildStreamOptions(input, ctx, abortController.signal);
 		const streamResult = await consumeStream({
-			stream: port.queryStream(input.prompt, {
-				timeoutMs: 30_000,
-				systemPromptSuffix: input.systemPromptSuffix,
-				resumeSessionId: ctx.resumeSessionId,
-				onSessionId: ctx.onSessionId,
-				signal: abortController.signal,
-			}),
+			stream: port.queryStream(input.prompt, streamOptions),
 			threadId,
 			messages: this.deps.messages,
 			threads: this.deps.threads,

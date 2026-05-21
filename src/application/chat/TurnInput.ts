@@ -13,6 +13,7 @@
  */
 import type { SessionId } from '@/domain/chat/SessionId';
 import type { TransportKind } from '@/domain/chat/TransportKind';
+import type { ChatTransportAttachment } from '@/domain/ports/ChatTransportPort';
 
 /**
  * Discriminator that splits the orchestrator's dispatch table. The builder
@@ -99,4 +100,30 @@ export interface TurnInput {
 	 * snapshot for downstream telemetry and observability.
 	 */
 	readonly transportKindRaw: TransportKind;
+
+	/**
+	 * WS-8 (REQ-MPS-036/037): plan-mode hint forwarded to
+	 * `ChatTransportStreamOptions.planMode`. The CLI adapter translates this
+	 * to `--permission-mode plan` (REQ-MPS-037).
+	 */
+	readonly planMode?: boolean;
+
+	/**
+	 * WS-8 (REQ-MPS-039): body of a `#`-prefixed draft. The orchestrator
+	 * appends this to `systemPromptSuffix` so the model treats it as a system
+	 * instruction for this turn only.
+	 */
+	readonly instructionSuffix?: string;
+
+	/**
+	 * WS-8 (REQ-MPS-040): per-provider selected model id. Forwarded as
+	 * `ChatTransportStreamOptions.model`.
+	 */
+	readonly model?: string;
+
+	/**
+	 * WS-8 (REQ-MPS-042/043): pending attachments for this turn. Forwarded as
+	 * `ChatTransportStreamOptions.attachments`.
+	 */
+	readonly attachments?: ReadonlyArray<ChatTransportAttachment>;
 }

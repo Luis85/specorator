@@ -162,6 +162,13 @@ function mountRoot() {
 				ChatSidebar: ChatSidebarStub,
 				MessageList: MessageListStub,
 				AppToast: AppToastStub,
+				// WS-8 — these sidepanel chrome components need their own ports/
+				// registries; the slash-command test does not exercise them so
+				// they are stubbed to keep the harness focused.
+				StatusPanel: { template: '<div data-testid="status-panel-stub" />' },
+				AttachmentStrip: { template: '<div data-testid="attachment-strip-stub" />' },
+				ProviderBadge: { template: '<div data-testid="provider-badge-stub" />' },
+				ModelSelector: { template: '<div data-testid="model-selector-stub" />' },
 			},
 			provide: {
 				[LOGGER_PORT as symbol]: makeLoggerStub(),
