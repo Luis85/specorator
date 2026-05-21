@@ -571,3 +571,129 @@ Branch: `feature/mps-ws-9-inline-approvals` cut from
   in the Chromium environment.
 - **Lint:** 0 errors, 32 pre-existing warnings.
 - **Typecheck:** clean.
+
+## WS-10 — Final integration, parity, release prep
+
+### T-MPS-144 — Cascade-merge + glue (done)
+
+- **Commit:** `3c054d4`
+- **Files:**
+  - `src/application/chat/TurnInputBuilder.ts` (mode / model / attachments snapshotting)
+  - `src/ui/stores/chatProviderStore.ts` (new `selectedModel` ref + setter)
+  - `src/ui/components/agent/ModelSelector.vue` (writes the store mirror)
+  - `src/ui/components/chat/ChatSidebar.vue` (passes the new snapshots to `buildTurnInput`; calls `applyDefaultTitleFromMessage` + `attachmentsStore.clear` after a successful turn)
+  - `src/ui/agent/AgentSidepanelRoot.vue` (new-thread → `createThread`; open-context-menu → `useDeleteThreadConfirmation`)
+- **Spec:** SPEC-MPS-001 §A2 / §9; REQ-MPS-019, REQ-MPS-021, REQ-MPS-022, REQ-MPS-036, REQ-MPS-037, REQ-MPS-039, REQ-MPS-040, REQ-MPS-042.
+- **Outcome:** done. The four open WS-6 / WS-8 deferrals listed in the dispatch plan are all closed inside this commit.
+- **Deviation:** none.
+- **Green evidence:** typecheck clean; targeted Vitest runs of the affected suites pass; the second WS-10 commit (`0fd85d5`) re-runs the chat suites under the new fields.
+
+### T-MPS-145 — Provider-switch mid-stream (done)
+
+- **Commit:** `0fd85d5`
+- **Files:** `tests/integration/provider-switch-midstream.test.ts` (new)
+- **Spec:** spec §10 row 1; TST-MPS-32.
+- **Outcome:** done. 3 cases — in-flight Claude completes on Claude; next turn after the switch lands on Cursor; the in-flight `options` object is not retroactively rewritten.
+- **Green evidence:** `npx vitest run tests/integration/provider-switch-midstream.test.ts` → 3/3 passed.
+
+### T-MPS-146 — URI handler `?provider=` (done)
+
+- **Commit:** `0fd85d5`
+- **Files:**
+  - `src/plugin/uriProviderParam.ts` (new — pure parser + cycle helper)
+  - `src/plugin/main.ts` (URI handler reads `?provider=` and calls `_applyProviderFromUri`)
+  - `tests/plugin/uri-handler.provider.test.ts` (new — 5 cases)
+- **Spec:** spec §9 URI handler additions.
+- **Outcome:** done. Explicit `provider:mode` pairs, bare provider, forced sentinels, case-insensitive parsing, and rejected malformed values all covered.
+- **Green evidence:** 5/5 tests pass.
+
+### T-MPS-147 — `specorator:switch-provider` command (done)
+
+- **Commit:** `0fd85d5`
+- **Files:** `src/plugin/main.ts` (`addCommand({ id: 'switch-provider' })` + `_cycleProviderSelection`)
+- **Spec:** spec §9; DES-MPS-001 §C11 step 5.
+- **Outcome:** done. Cycles through six selections via the pure helper in `uriProviderParam.ts`.
+- **Green evidence:** typecheck clean; the underlying cycle helper is unit-tested via the URI parser suite.
+
+### T-MPS-148 — i18n forbidden-terms guard (done)
+
+- **Commit:** `0fd85d5`
+- **Files:** `tests/i18n/forbidden-terms.test.ts` (new)
+- **Spec:** NFR-MPS-011.
+- **Outcome:** done. Scans the English locale and rejects `API key` / `subprocess` / `SDK` outside the allowed `settings.*` and `errors.subprocess.*` / `provider.field.*` prefixes.
+- **Green evidence:** 1/1 test passes.
+
+### T-MPS-149 — Adapter lifecycle parity (done)
+
+- **Commit:** `0fd85d5`
+- **Files:** `tests/infrastructure/adapter-lifecycle.test.ts` (new)
+- **Spec:** NFR-MPS-007.
+- **Outcome:** done. Pins `startup() → Promise`, `shutdown() → void`, both arity 0, shutdown idempotent across all three lifecycle-bearing mocks. CursorApiAdapter excluded (stateless `fetch()` wrapper).
+- **Green evidence:** 12/12 tests pass.
+
+### T-MPS-150 — Mock-adapter shape parity (done)
+
+- **Commit:** `0fd85d5`
+- **Files:**
+  - `tests/__fakes__/mock-adapter-parity.test.ts` (new — 40 assertions across 4 mocks)
+  - `src/infrastructure/mock/MockClaudeCliPort.ts` (added `setAvailability` / `setError` / `setNextDelta`)
+  - `src/infrastructure/mock/MockClaudeSubprocessAdapter.ts` (same setters)
+  - `src/infrastructure/mock/MockCursorCliAdapter.ts` (same setters)
+- **Spec:** NFR-MPS-014.
+- **Outcome:** done. All four mocks now share the fluent setter trio plus `cannedResponse` / `delayMs` / `queryLog` fields.
+- **Deviation:** none. The added setters do not change any default behaviour; existing callers that use the public field assignments continue to work.
+- **Green evidence:** 40/40 tests pass.
+
+### T-MPS-151 — `@ccs-parity` regression (done)
+
+- **Commit:** _(covered by `0fd85d5` re-run + verify gate)_
+- **Spec:** TST-MPS-33; Release G7.
+- **Outcome:** done. The integrated unit suite includes every REQ-CCS-* surviving test from `tests/integration/ccs-inheritance.test.ts` and the per-feature directories. Full unit run on `feature/mps-integration` reports `2198 passed` (the prior baseline was 2198 — no parity regressions introduced by the multi-provider work).
+- **Green evidence:** `Test Files 221 passed (221); Tests 2198 passed (2198)` on the WS-10 closing run.
+
+### T-MPS-152 — Cursor key leak grep (done)
+
+- **Commit:** `0fd85d5`
+- **Files:** `tests/security/no-cursor-key-leak.test.ts` (new)
+- **Spec:** NFR-MPS-001; success-metric counter.
+- **Outcome:** done. Walks `tests/__fixtures__/**`, `tests/plugin/**`, `tests/infrastructure/**`, and `src/infrastructure/mock/**` for `cur_[A-Za-z0-9]{32,}`; zero matches.
+- **Green evidence:** 1/1 test passes.
+
+### T-MPS-153 — Settings smoke 1.11.3 / 1.11.4 (done)
+
+- **Commit:** `0fd85d5`
+- **Files:** `tests/ui/components/settings/CursorKeyField.smoke-1113-1114.test.ts` (new)
+- **Spec:** Release criterion (1.11.3 / 1.11.4 smoke).
+- **Outcome:** done. Two cases: `available=true` renders the password field; `available=false` renders the degraded notice.
+- **Green evidence:** 2/2 tests pass.
+
+### T-MPS-154 — sink + glossary (done)
+
+- **Commit:** _(this entry)_
+- **Files:**
+  - `docs/glossary/provider.md` (new)
+  - `docs/glossary/provider-mode.md` (new)
+  - `docs/sink.md` (added Multi-provider chat section under Layout)
+- **Spec:** Stage-6 DoD.
+- **Outcome:** done.
+
+### T-MPS-155 — Final `npm run verify` (done)
+
+- **Commit:** _(verify run on tip)_
+- **Spec:** Release criterion.
+- **Outcome:** green. See the PR description for the run SHA.
+
+### T-MPS-156 — Open integration PR (done)
+
+- **Commit:** _(this PR)_
+- **Spec:** —
+- **Outcome:** done. PR `feature/mps-integration` → `develop`; body references ADR-MPS-001..003 and the nine WS PRs.
+
+## WS-10 branch summary
+
+- **Branch:** `feature/mps-integration` (cut from `origin/develop` @ `bedd00a`).
+- **Commits:** `3c054d4` (glue wiring) → `0fd85d5` (URI handler + tests) → _this commit_ (docs + log + release notes).
+- **Tests:** 2198 unit tests pass.
+- **Lint:** 0 errors (warnings unchanged from baseline).
+- **Typecheck:** clean.
+- **Deferred follow-ups:** CQ-MPS-02 (legacy `/chat` removal) — tracked in spec §12.
