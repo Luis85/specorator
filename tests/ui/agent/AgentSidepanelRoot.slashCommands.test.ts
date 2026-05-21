@@ -18,8 +18,8 @@ import AgentSidepanelRoot from '@/ui/agent/AgentSidepanelRoot.vue';
 import { getChatStoresFacade } from '../../__fakes__/chatStoresFacade';
 import { useNotificationStore } from '@/ui/stores/notificationStore';
 import { i18n } from '@/ui/i18n';
-import { LOGGER_PORT, NOTIFICATION_PORT } from '@/infrastructure/bridge/ports';
-import type { LoggerPort, NotificationPort } from '@/domain/ports';
+import { LOGGER_PORT, NOTIFICATION_PORT, VAULT_PORT } from '@/infrastructure/bridge/ports';
+import type { LoggerPort, NotificationPort, VaultPort } from '@/domain/ports';
 import type { SlashCommand } from '@/domain/chat/SlashCommand';
 import { AgentSidepanelRootSlashCommandsPO } from './AgentSidepanelRoot.slashCommands.po';
 
@@ -152,6 +152,18 @@ function makeNotificationStub(): NotificationPort {
 	};
 }
 
+function makeVaultStub(): VaultPort {
+	return {
+		readFile: async () => '',
+		writeFile: async () => undefined,
+		deleteFile: async () => undefined,
+		listFiles: async () => [],
+		listFolders: async () => [],
+		fileExists: async () => false,
+		createFolder: async () => undefined,
+	};
+}
+
 function mountRoot() {
 	const pinia = createPinia();
 	setActivePinia(pinia);
@@ -173,6 +185,7 @@ function mountRoot() {
 			provide: {
 				[LOGGER_PORT as symbol]: makeLoggerStub(),
 				[NOTIFICATION_PORT as symbol]: makeNotificationStub(),
+				[VAULT_PORT as symbol]: makeVaultStub(),
 			},
 		},
 	});

@@ -13,6 +13,16 @@ entry_point: false
 
 <!-- TODO: replace with consumer-facing content for this section -->
 
+### Multi-provider chat (MPS)
+
+- `src/domain/chat/ProviderSelection.ts` — closed `(provider, mode)` union.
+- `src/ui/stores/chatProviderStore.ts` — runtime selection + selected model.
+- `src/plugin/uriProviderParam.ts` — `?provider=` URI helper and palette cycle.
+- `src/infrastructure/cursor/CursorApiAdapter.ts` — Cursor REST adapter.
+- `src/infrastructure/obsidian/CursorCliAdapter.ts` — Cursor CLI adapter.
+- `docs/glossary/provider.md` / `docs/glossary/provider-mode.md` — vocabulary.
+- `specs/multi-provider-agent-sidepanel/` — spec, requirements, tasks, ADRs.
+
 ## README entry points
 
 <!-- TODO: replace with consumer-facing content for this section -->

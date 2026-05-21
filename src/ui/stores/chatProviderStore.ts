@@ -31,6 +31,18 @@ export const useChatProviderStore = defineStore('chatProvider', () => {
 	const activeSelection = ref<ProviderSelection>({ forced: 'auto' });
 	const resolved = ref<ResolvedSelection>('degraded');
 	const registry = ref<ProviderRegistry | null>(null);
+	/**
+	 * WS-10 (REQ-MPS-040): per-provider selected model id. Written by
+	 * `ModelSelector.vue` when the user picks a model; read by the chat send
+	 * path via `buildTurnInput` and forwarded as
+	 * `ChatTransportStreamOptions.model`. Empty string when no provider is
+	 * resolved or the active provider has no model list.
+	 */
+	const selectedModel = ref<string>('');
+
+	function setSelectedModel(id: string): void {
+		selectedModel.value = id;
+	}
 
 	function setRegistry(r: ProviderRegistry | null): void {
 		registry.value = r;
@@ -60,8 +72,10 @@ export const useChatProviderStore = defineStore('chatProvider', () => {
 		activeSelection,
 		resolved,
 		registry,
+		selectedModel,
 		setRegistry,
 		setActiveSelection,
 		setResolved,
+		setSelectedModel,
 	};
 });

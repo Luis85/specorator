@@ -26,6 +26,32 @@ export class MockCursorCliAdapter implements ChatTransportPort, TransportLifecyc
 
   readonly queryLog: string[] = []
 
+  /**
+   * Optional scripted deltas. When set via `setNextDelta`, the adapter emits
+   * these verbatim on the next `queryStream` call instead of the canned
+   * response path; consumed once per call (NFR-MPS-014 parity with
+   * `MockCursorApiAdapter` and `MockClaudeCliPort`).
+   */
+  private _nextDeltas: ReadonlyArray<StreamDelta> | null = null
+
+  /** Fluent helper — NFR-MPS-014 parity with the other mock adapters. */
+  setAvailability(value: boolean): this {
+    this.available = value
+    return this
+  }
+
+  /** Force the next `queryStream` call to terminate with a single error. */
+  setError(error: ChatTransportError | null): this {
+    this.queryError = error
+    return this
+  }
+
+  /** Script the next `queryStream` call's `StreamDelta` sequence. */
+  setNextDelta(deltas: ReadonlyArray<StreamDelta>): this {
+    this._nextDeltas = deltas
+    return this
+  }
+
   async startup(): Promise<void> {
     // No-op.
   }
@@ -50,6 +76,12 @@ export class MockCursorCliAdapter implements ChatTransportPort, TransportLifecyc
     const signal = options?.signal
     if (signal?.aborted === true) {
       yield MockCursorCliAdapter._abortDelta()
+      return
+    }
+    if (this._nextDeltas !== null) {
+      const scripted = this._nextDeltas
+      this._nextDeltas = null
+      for (const d of scripted) yield d
       return
     }
     yield* this._yieldSessionIdIfConfigured(options)

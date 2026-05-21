@@ -28,6 +28,7 @@ import type { WorkspacePort } from '@/domain/ports/WorkspacePort';
 import type { SettingsPort } from '@/domain/ports/SettingsPort';
 import type { TransportKind } from '@/domain/chat/TransportKind';
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord';
+import type { ChatTransportAttachment } from '@/domain/ports/ChatTransportPort';
 import { tryAsync } from '@/domain/shared/tryAsync';
 import { buildPrompt, type ContextFile } from '@/application/chat/buildPrompt';
 import {
@@ -69,6 +70,15 @@ export interface ThreadsSnapshot {
  * responsible for snapshotting the four chat stores into the two shapes
  * above — that keeps the builder framework-agnostic.
  */
+/**
+ * Snapshot of the chat-input mode flags (WS-8 / WS-10). Plain getters so
+ * tests can pass primitive booleans without mounting a Pinia store.
+ */
+export interface ChatInputModeSnapshot {
+	readonly planMode: boolean;
+	readonly instructionMode: boolean;
+}
+
 export interface BuildTurnInputArgs {
 	readonly messages: MessagesSnapshot;
 	readonly threads: ThreadsSnapshot;
@@ -78,6 +88,23 @@ export interface BuildTurnInputArgs {
 	readonly workspace: WorkspacePort;
 	readonly settings: SettingsPort;
 	readonly logger: LoggerPort;
+	/**
+	 * WS-10 (REQ-MPS-036/037/039): per-turn mode flags. Optional so the
+	 * tabbed `SpecoratorView` (which has no ModeIndicators surface yet) can
+	 * omit it; the builder treats absence as "plan off / no instruction".
+	 */
+	readonly mode?: ChatInputModeSnapshot;
+	/**
+	 * WS-10 (REQ-MPS-040): per-provider selected model id snapshotted from
+	 * `chatProviderStore.selectedModel`. Forwarded as
+	 * `ChatTransportStreamOptions.model`.
+	 */
+	readonly selectedModel?: string;
+	/**
+	 * WS-10 (REQ-MPS-042/043): pending attachments snapshotted from
+	 * `attachmentsStore.pending`.
+	 */
+	readonly attachments?: ReadonlyArray<ChatTransportAttachment>;
 }
 
 /**
@@ -218,6 +245,7 @@ export async function buildTurnInput(args: BuildTurnInputArgs): Promise<TurnInpu
 	const loadedFiles = await loadContextFileBodies(args.messages, args.vault);
 	const { prompt, truncated } = buildPrompt(args.messages.userText, loadedFiles);
 	const intent = isStructuredIntent(args.messages.userText);
+	const ws10Overrides = collectWs10Overrides(args);
 	return {
 		userMessage: args.messages.userText,
 		prompt,
@@ -228,5 +256,39 @@ export async function buildTurnInput(args: BuildTurnInputArgs): Promise<TurnInpu
 		intent,
 		thread,
 		transportKindRaw: args.transportKindRaw,
+		...ws10Overrides,
 	};
+}
+
+/**
+ * Collect the WS-10 optional fields (`planMode` / `instructionSuffix` /
+ * `model` / `attachments`) into one object so the main `buildTurnInput`
+ * function stays under the per-function complexity cap. Each field is only
+ * emitted when its source is meaningful (boolean true, non-empty string,
+ * non-empty array) so the resulting `TurnInput` stays minimally populated.
+ */
+type Ws10Mutable = {
+	-readonly [K in keyof Pick<
+		TurnInput,
+		'planMode' | 'instructionSuffix' | 'model' | 'attachments'
+	>]?: TurnInput[K];
+};
+
+function collectWs10Overrides(args: BuildTurnInputArgs): Partial<TurnInput> {
+	const out: Ws10Mutable = {};
+	if (args.mode?.planMode === true) out.planMode = true;
+	if (
+		args.mode?.instructionMode === true &&
+		args.messages.userText.startsWith('#')
+	) {
+		out.instructionSuffix = args.messages.userText.slice(1).trimStart();
+	}
+	if (args.selectedModel !== undefined && args.selectedModel !== '') {
+		out.model = args.selectedModel;
+	}
+	const attachmentsList = args.attachments ?? [];
+	if (attachmentsList.length > 0) {
+		out.attachments = attachmentsList;
+	}
+	return out;
 }

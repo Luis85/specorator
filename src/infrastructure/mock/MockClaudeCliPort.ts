@@ -91,6 +91,31 @@ export class MockClaudeCliPort implements ChatTransportPort, TransportLifecycleP
 	 */
 	readonly optionsLog: (ChatTransportQueryOptions | undefined)[] = [];
 
+	/**
+	 * Optional scripted deltas. When set via `setNextDelta`, the adapter emits
+	 * these verbatim on the next `queryStream` call instead of the canned
+	 * response path; consumed once per call (NFR-MPS-014 parity).
+	 */
+	private _nextDeltas: ReadonlyArray<StreamDelta> | null = null;
+
+	/** Fluent helper — NFR-MPS-014 parity across all four mocks. */
+	setAvailability(value: boolean): this {
+		this.available = value;
+		return this;
+	}
+
+	/** Force the next `queryStream` call to terminate with a single error. */
+	setError(error: ChatTransportError | null): this {
+		this.queryError = error;
+		return this;
+	}
+
+	/** Script the next `queryStream` call's `StreamDelta` sequence. */
+	setNextDelta(deltas: ReadonlyArray<StreamDelta>): this {
+		this._nextDeltas = deltas;
+		return this;
+	}
+
 	async startup(): Promise<void> {
 		// No-op. Never throws.
 	}
@@ -164,6 +189,13 @@ export class MockClaudeCliPort implements ChatTransportPort, TransportLifecycleP
 		// working without migration.
 		this.queryLog.push(prompt);
 		this.optionsLog.push(options);
+
+		if (this._nextDeltas !== null) {
+			const scripted = this._nextDeltas;
+			this._nextDeltas = null;
+			for (const d of scripted) yield d;
+			return;
+		}
 
 		if (!this.available) {
 			yield {
