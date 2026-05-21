@@ -23,10 +23,13 @@
  */
 import { err, ok, type Result } from '@/domain/shared/Result';
 import type {
+	ChatTransportApprovalRequest,
 	ChatTransportErrorCode,
 	ChatTransportPort,
 	ChatTransportStreamOptions,
 } from '@/domain/ports/ChatTransportPort';
+import type { ApprovalRule } from '@/domain/chat/ApprovalRule';
+import type { ProviderId } from '@/domain/chat/ProviderSelection';
 import { consumeStream } from './consumeStream';
 import type { SessionId } from '@/domain/chat/SessionId';
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord';
@@ -67,6 +70,7 @@ function buildStreamOptions(
 	ctx: {
 		readonly resumeSessionId: SessionId | undefined;
 		readonly onSessionId: (id: SessionId) => void;
+		readonly approveTool?: (request: ChatTransportApprovalRequest) => Promise<boolean>;
 	},
 	signal: AbortSignal,
 ): ChatTransportStreamOptions {
@@ -76,6 +80,7 @@ function buildStreamOptions(
 		resumeSessionId: ctx.resumeSessionId,
 		onSessionId: ctx.onSessionId,
 		signal,
+		...(ctx.approveTool !== undefined ? { approveTool: ctx.approveTool } : {}),
 		...(input.planMode === true ? { planMode: true } : {}),
 		...(input.model !== undefined ? { model: input.model } : {}),
 		...(input.attachments !== undefined && input.attachments.length > 0
@@ -206,6 +211,15 @@ export class ChatTurnOrchestrator {
 		input: TurnInput,
 		options: {
 			readonly onAbortController?: (controller: AbortController) => void;
+			/**
+			 * Per-turn tool-approval resolver (REQ-MPS-045). Forwarded verbatim
+			 * to `port.queryStream(...)`'s `approveTool` option. The UI layer
+			 * typically composes this from {@link resolveApproval} so the
+			 * resolver consults `approvalRulesStore.findMatching` first and
+			 * falls back to a pending-request channel (`PendingApprovalsStore`)
+			 * the `ApprovalCard` answers from.
+			 */
+			readonly approveTool?: (request: ChatTransportApprovalRequest) => Promise<boolean>;
 		} = {},
 	): Promise<Result<TurnOutcome, ChatTurnError>> {
 		// Clear structured-fail flag at every new send (UX-#5 closes the empty-
@@ -244,6 +258,7 @@ export class ChatTurnOrchestrator {
 				isResumedTurn,
 				onSessionId,
 				onAbortController: options.onAbortController,
+				approveTool: options.approveTool,
 			}),
 		);
 	}
@@ -305,6 +320,7 @@ export class ChatTurnOrchestrator {
 			isResumedTurn: boolean;
 			onSessionId: (id: SessionId) => void;
 			onAbortController?: (controller: AbortController) => void;
+			approveTool?: (request: ChatTransportApprovalRequest) => Promise<boolean>;
 		},
 	): Promise<TurnOutcome> {
 		this.deps.streaming.setCliStartingUp(true);
@@ -447,6 +463,57 @@ export class ChatTurnOrchestrator {
 		const entry = this.pathErrors.get(proposalId);
 		this.pathErrors.delete(proposalId);
 		return entry ?? null;
+	}
+
+	// ── Inline approval resolver (WS-9, REQ-MPS-045/046) ──────────────────
+
+	/**
+	 * Compose a per-request approval decision for the `approveTool` resolver
+	 * threaded through `sendTurn(input, { approveTool })`. The host typically
+	 * passes:
+	 *
+	 *   `approveTool: (request) => orchestrator.resolveApproval({ request,
+	 *     providerId, findMatching, publishPending })`
+	 *
+	 * Semantics:
+	 *   1. Consult `findMatching(providerId, tool, scope)` for a previously
+	 *      saved rule. On a hit, resolve `true` synchronously with no UI
+	 *      prompt (REQ-MPS-046, TST-MPS-30).
+	 *   2. Otherwise, publish a pending request via `publishPending` so the
+	 *      UI (`MessageList` → `ApprovalCard`) can render a card. The promise
+	 *      stays pending until the host calls `resolve({ kind })`. `'deny'`
+	 *      ⇒ false; `'allow-once'` ⇒ true; `'always'` ⇒ true (the card itself
+	 *      persists the rule).
+	 *
+	 * Pure composition: the orchestrator does NOT itself touch Pinia or the
+	 * DOM. It is the same dispatch boundary as `sendTurn` — store mutations
+	 * happen through the supplied callbacks.
+	 */
+	async resolveApproval(args: {
+		request: ChatTransportApprovalRequest;
+		providerId: ProviderId;
+		findMatching: (
+			providerId: ProviderId,
+			tool: string,
+			scope: string,
+		) => ApprovalRule | undefined;
+		publishPending: (call: {
+			request: ChatTransportApprovalRequest;
+			providerId: ProviderId;
+			resolve: (decision: { kind: 'deny' | 'allow-once' | 'always' }) => void;
+		}) => void;
+	}): Promise<boolean> {
+		const matched = args.findMatching(args.providerId, args.request.tool, args.request.scope);
+		if (matched !== undefined) return true;
+		return await new Promise<boolean>((resolvePromise) => {
+			args.publishPending({
+				request: args.request,
+				providerId: args.providerId,
+				resolve: (decision) => {
+					resolvePromise(decision.kind !== 'deny');
+				},
+			});
+		});
 	}
 
 	// ── Success mutation + vault mirror ───────────────────────────────────

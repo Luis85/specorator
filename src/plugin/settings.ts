@@ -56,6 +56,54 @@ export class SpecoratorSettingTab extends PluginSettingTab {
         this._bumpAllViews()
       },
     })
+    this.renderApprovalRulesSection(containerEl)
+  }
+
+  /**
+   * Renders the Approvals list (WS-9, REQ-MPS-047). One row per saved
+   * `(providerId, tool, scope)` triple plus a Remove button. The list is
+   * read from `_storedData.specorator.approvalRules` via
+   * `plugin.getApprovalRules()`; removals mutate the same store via
+   * `plugin.removeApprovalRule(id)`.
+   *
+   * Rendered with Obsidian's imperative `Setting` API to keep the settings
+   * tab a single Vue-free surface; the canonical Vue component lives at
+   * `src/ui/components/settings/ApprovalRulesList.vue` and is mounted
+   * inside the agent sidepanel where Pinia is already wired.
+   */
+  private renderApprovalRulesSection(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName('Approval rules').setHeading()
+
+    const wrap = containerEl.createDiv({ cls: 'setting-item' })
+    wrap.setAttribute('data-testid', 'settings-approval-rules')
+
+    const rules = this.plugin.getApprovalRules()
+    if (rules.length === 0) {
+      const empty = wrap.createDiv({ cls: 'setting-item-description' })
+      empty.setAttribute('data-testid', 'settings-approval-rules-empty')
+      empty.setText(
+        'No approval rules saved yet. Use the always-allow button on a tool-permission card in the agent panel to create one.',
+      )
+      return
+    }
+
+    const list = wrap.createDiv({ cls: 'setting-item-control' })
+    list.setAttribute('data-testid', 'settings-approval-rules-list')
+    for (const rule of rules) {
+      const row = list.createDiv({ cls: 'sp-approval-row' })
+      row.setAttribute('data-testid', `settings-approval-rule-row-${rule.id}`)
+      row.createSpan({ text: `${rule.providerId} · ${rule.tool} · ${rule.scope}` })
+      const removeBtn = row.createEl('button', { text: 'Remove' })
+      removeBtn.setAttribute('type', 'button')
+      removeBtn.setAttribute('data-testid', `settings-approval-rule-remove-${rule.id}`)
+      removeBtn.addEventListener('click', () => {
+        void (async () => {
+          await this.plugin.removeApprovalRule(rule.id)
+          // Re-render the settings tab so the row disappears.
+          this.display()
+        })()
+      })
+    }
   }
 
   private renderAboutYouSection(): void {

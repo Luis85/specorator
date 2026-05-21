@@ -26,12 +26,17 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMessagesStore, type CompactBoundaryNoticeDto } from '@/ui/stores/messagesStore';
 import { useStreamingTurnStore } from '@/ui/stores/streamingTurnStore';
+import {
+	usePendingApprovalsStore,
+	type ApprovalDecisionKind,
+} from '@/ui/stores/pendingApprovalsStore';
 import { useInjectedA11yAnnouncer } from '@/ui/composables/useA11yAnnouncer';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
 import MarkdownBlock from '@/ui/components/agent/MarkdownBlock.vue';
 import MessageActions from './MessageActions.vue';
 import ThinkingBlock from './ThinkingBlock.vue';
 import ToolCallBlock from './ToolCallBlock.vue';
+import ApprovalCard from './ApprovalCard.vue';
 
 /**
  * Discriminated union for the interleaved transcript: either a real
@@ -69,6 +74,18 @@ const emit = defineEmits<{
 
 const messagesStore = useMessagesStore();
 const streamingStore = useStreamingTurnStore();
+const pendingApprovals = usePendingApprovalsStore();
+
+/**
+ * Inline tool-approval cards awaiting a user decision (WS-9, REQ-MPS-045).
+ * Rendered as part of the message stream so the user can decide without
+ * leaving the chat context (no blocking modal).
+ */
+const approvalRequests = computed(() => pendingApprovals.pending);
+
+function handleApprovalDecision(id: string, decision: { kind: ApprovalDecisionKind }): void {
+	pendingApprovals.decide(id, decision.kind);
+}
 const { t } = useI18n();
 const announcer = useInjectedA11yAnnouncer();
 
@@ -105,7 +122,10 @@ const transcript = computed<readonly TranscriptEntry[]>(() => {
 });
 
 const hasContent = computed<boolean>(
-	() => messages.value.length > 0 || compactBoundaries.value.length > 0,
+	() =>
+		messages.value.length > 0 ||
+		compactBoundaries.value.length > 0 ||
+		approvalRequests.value.length > 0,
 );
 
 /**
@@ -386,6 +406,13 @@ watch(
 				<span class="sp-agent-compact-boundary__line" aria-hidden="true"></span>
 			</div>
 		</template>
+		<ApprovalCard
+			v-for="approval in approvalRequests"
+			:key="approval.id"
+			:request="approval.request"
+			:provider-id="approval.providerId"
+			@decision="(decision) => handleApprovalDecision(approval.id, decision)"
+		/>
 		<article
 			v-if="isStreaming"
 			class="sp-agent-message sp-agent-message--assistant sp-agent-message--streaming"

@@ -135,6 +135,33 @@ export interface ChatTransportAttachment {
 }
 
 /**
+ * One inline tool-approval request raised by the underlying provider mid-turn.
+ *
+ * Carried through `ChatTransportStreamOptions.approveTool` (REQ-MPS-045). The
+ * UI renders an `ApprovalCard` (SPEC-MPS-001 §8.4) that resolves to
+ * `true` (allow this invocation) or `false` (deny). The decision rule
+ * (`allow-once` vs `always`) is a UI concern handled by `useApprovalRulesStore`;
+ * the adapter only sees a boolean.
+ */
+export interface ChatTransportApprovalRequest {
+	/**
+	 * Tool name. Common values: `'Write'`, `'Edit'`, `'Bash'`. Provider-specific
+	 * tool names (Cursor, etc.) are also accepted — the matcher in
+	 * `approvalRulesStore` does string-equality on this field plus the
+	 * scope-glob / bash-prefix rule.
+	 */
+	readonly tool: string;
+	/** Path glob (non-Bash) or command name (Bash). Matches `ApprovalRule.scope`. */
+	readonly scope: string;
+	/**
+	 * Optional human-readable preview the UI surfaces above the action
+	 * buttons (e.g. a diff hunk, a Bash command line). `null` when the
+	 * adapter cannot construct one.
+	 */
+	readonly previewText: string | null;
+}
+
+/**
  * Options for `queryStream()` — superset of `ChatTransportQueryOptions`
  * adding an `AbortSignal` so the UI's stop-generation control can cancel
  * an in-flight turn.
@@ -154,6 +181,18 @@ export interface ChatTransportStreamOptions extends ChatTransportQueryOptions {
 	 * click handler.
 	 */
 	readonly signal?: AbortSignal;
+
+	/**
+	 * Per-turn tool-approval resolver (REQ-MPS-045). When set, the adapter
+	 * invokes this callback every time the underlying provider asks for
+	 * permission to invoke a tool. Resolving `true` allows the invocation;
+	 * `false` denies it. Absent or unresolved → adapter falls back to its
+	 * provider default (typically deny).
+	 *
+	 * The decision rule (`'allow-once' | 'always'`) is handled by the UI;
+	 * the adapter receives only a boolean.
+	 */
+	readonly approveTool?: (request: ChatTransportApprovalRequest) => Promise<boolean>;
 }
 
 /**

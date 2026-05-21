@@ -63,6 +63,12 @@ export default {
     logLevel: 'Log level',
     save: 'Save settings',
     saved: 'Settings saved.',
+    approvalRules: {
+      heading: 'Approval rules',
+      empty: 'No approval rules saved yet. Use "Always allow" on a tool-permission card to create one.',
+      remove: 'Remove',
+      removeAriaLabel: 'Remove approval rule for {scope}',
+    },
   },
   common: {
     cancel: 'Cancel',
@@ -186,15 +192,12 @@ export default {
     structuredGenerationStartedAnnouncement: 'Generating proposal — please wait.',
     generationAbortedAnnouncement: 'Generation stopped.',
     proposalDecidedAnnouncement: 'Proposal handled. Focus returned to the message field.',
-    planApprovalAriaLabel: 'Plan approval',
-    planApprovalHeading: 'Plan for your approval',
-    planApprovalPermissions: 'Requested tools: {tools}',
-    planApprovalRevisePlaceholder: 'Describe what should change, then press Enter…',
-    planApprovalCancelled: 'Plan was cancelled.',
-    planApproval: {
-      implement: 'Implement plan',
-      revise: 'Send revision',
-      cancel: 'Cancel',
+    approvalCard: {
+      ariaLabel: 'Tool approval request',
+      heading: 'Allow {tool} on {scope}?',
+      deny: 'Deny',
+      allowOnce: 'Allow once',
+      alwaysAllow: 'Always allow',
     },
     help: {
       heading: 'Available slash commands',

@@ -63,6 +63,12 @@ export default {
     logLevel: 'Log-Level',
     save: 'Einstellungen speichern',
     saved: 'Einstellungen gespeichert.',
+    approvalRules: {
+      heading: 'Freigaberegeln',
+      empty: 'Noch keine Freigaberegeln gespeichert. Nutze „Immer erlauben" auf einer Werkzeug-Freigabekarte, um eine zu erstellen.',
+      remove: 'Entfernen',
+      removeAriaLabel: 'Freigaberegel für {scope} entfernen',
+    },
   },
   common: {
     cancel: 'Abbrechen',
@@ -186,15 +192,12 @@ export default {
     structuredGenerationStartedAnnouncement: 'Generiere Vorschlag — bitte warten.',
     generationAbortedAnnouncement: 'Generierung gestoppt.',
     proposalDecidedAnnouncement: 'Vorschlag bearbeitet. Fokus zum Nachrichtenfeld zurückgegeben.',
-    planApprovalAriaLabel: 'Plan-Freigabe',
-    planApprovalHeading: 'Plan zur Freigabe',
-    planApprovalPermissions: 'Angeforderte Werkzeuge: {tools}',
-    planApprovalRevisePlaceholder: 'Beschreibe, was sich ändern soll, und drücke Enter…',
-    planApprovalCancelled: 'Plan wurde abgebrochen.',
-    planApproval: {
-      implement: 'Plan umsetzen',
-      revise: 'Überarbeitung senden',
-      cancel: 'Abbrechen',
+    approvalCard: {
+      ariaLabel: 'Werkzeug-Freigabeanfrage',
+      heading: '{tool} für {scope} erlauben?',
+      deny: 'Ablehnen',
+      allowOnce: 'Einmal erlauben',
+      alwaysAllow: 'Immer erlauben',
     },
     help: {
       heading: 'Verfügbare Slash-Befehle',
