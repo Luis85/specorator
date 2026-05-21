@@ -259,6 +259,41 @@ export const useMessagesStore = defineStore('messages', () => {
 	}
 
 	/**
+	 * Removes the latest assistant message from the named thread's bucket
+	 * (REQ-MPS-027). No-op when the thread has no messages or when the trailing
+	 * message is not an assistant turn. Used by the Regenerate per-message
+	 * action in `ChatSidebar`: drop the stale assistant reply before
+	 * re-dispatching the same prompt. Spec: WS-7 §8.3.
+	 */
+	function removeLatestAssistant(threadId: string): void {
+		const bucket = messages.value.get(threadId);
+		if (bucket === undefined || bucket.length === 0) return;
+		const tail = bucket[bucket.length - 1];
+		if (tail?.role !== 'assistant') return;
+		const next = new Map(messages.value);
+		next.set(threadId, bucket.slice(0, -1));
+		messages.value = next;
+	}
+
+	/**
+	 * Drops every message strictly after `index` in the named thread's bucket
+	 * (REQ-MPS-028). Index is preserved — the message AT `index` stays.
+	 * No-op when the thread has no messages or when `index` already points at
+	 * or past the last entry. Used by the Edit per-message action: when the
+	 * user edits a previous user turn, every later message becomes stale and
+	 * must be cleared before the new turn is dispatched. Spec: WS-7 §8.3.
+	 */
+	function truncateAfter(threadId: string, index: number): void {
+		const bucket = messages.value.get(threadId);
+		if (bucket === undefined || bucket.length === 0) return;
+		if (index < 0) return;
+		if (index >= bucket.length - 1) return;
+		const next = new Map(messages.value);
+		next.set(threadId, bucket.slice(0, index + 1));
+		messages.value = next;
+	}
+
+	/**
 	 * Drops every message AND compact-boundary notice for the given thread.
 	 * Called by the "New conversation" action in the sidepanel header when
 	 * the user closes out a thread context — Increment 2 retains the
@@ -365,6 +400,8 @@ export const useMessagesStore = defineStore('messages', () => {
 		clearResponse,
 		setStructuredFail,
 		appendMessage,
+		removeLatestAssistant,
+		truncateAfter,
 		clearThreadMessages,
 		appendCompactBoundaryNotice,
 		reset,
