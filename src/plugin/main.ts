@@ -21,6 +21,8 @@ import {
   decodeChatThreadsBlob,
   encodeChatThreadsBlob,
 } from './chatThreadsPersistence'
+import { decodeApprovalRulesBlob, encodeApprovalRulesBlob } from './approvalRulesPersistence'
+import type { ApprovalRule } from '@/domain/chat/ApprovalRule'
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
 import { ObsidianConfirmModalAdapter } from '@/infrastructure/obsidian/ObsidianConfirmModalAdapter'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
@@ -123,6 +125,13 @@ export default class SpecoratorPlugin extends Plugin {
    * are filtered out at decode time and logged at `warn` (SPEC §11.3).
    */
   private _initialChatThreads: ReadonlyArray<ChatThreadRecord> = []
+  /**
+   * In-memory copy of `_storedData.specorator.approvalRules`. Hydrated at
+   * `loadSettings()` time and mutated by `addApprovalRule` /
+   * `removeApprovalRule` so the settings tab and the agent panel share the
+   * same source of truth (WS-9 / REQ-MPS-046 / REQ-MPS-047).
+   */
+  private _approvalRules: ApprovalRule[] = []
   /** Debounced persistence timer for `chatThreads`. SPEC §9.3 / OQ-ASM-T1. */
   private _chatThreadsFlushTimer: number | null = null
   /**
@@ -491,12 +500,52 @@ export default class SpecoratorPlugin extends Plugin {
     // `console.warn` because `this.bridge` is not yet constructed.
     const specoratorBlob = (this._storedData.specorator ?? {}) as Record<string, unknown>
     const chatThreadsBlob = specoratorBlob.chatThreads
-    this._initialChatThreads = decodeChatThreadsBlob(chatThreadsBlob, {
+    const loaderLogger = {
       debug: () => undefined,
       info: () => undefined,
-      warn: (msg, ctx) => { console.warn(msg, ctx ?? {}) },
-      error: (msg, ctx) => { console.error(msg, ctx ?? {}) },
-    })
+      warn: (msg: string, ctx?: unknown) => { console.warn(msg, ctx ?? {}) },
+      error: (msg: string, ctx?: unknown) => { console.error(msg, ctx ?? {}) },
+    }
+    this._initialChatThreads = decodeChatThreadsBlob(chatThreadsBlob, loaderLogger)
+    this._approvalRules = decodeApprovalRulesBlob(specoratorBlob.approvalRules, loaderLogger)
+  }
+
+  /**
+   * Snapshot of saved `ApprovalRule[]` (WS-9, REQ-MPS-047). Consumed by the
+   * Settings tab to render the Approvals list and by the agent panel to
+   * seed `useApprovalRulesStore` on mount.
+   */
+  getApprovalRules(): ReadonlyArray<ApprovalRule> {
+    return this._approvalRules
+  }
+
+  /**
+   * Append a rule and persist the new array to
+   * `_storedData.specorator.approvalRules`. Returns the persisted record.
+   * Satisfies REQ-MPS-046.
+   */
+  async addApprovalRule(rule: ApprovalRule): Promise<void> {
+    this._approvalRules = [...this._approvalRules, rule]
+    await this._flushApprovalRules()
+  }
+
+  /**
+   * Remove a rule by id and persist. Unknown ids are a no-op.
+   * Satisfies REQ-MPS-047.
+   */
+  async removeApprovalRule(id: string): Promise<void> {
+    const next = this._approvalRules.filter((r) => r.id !== id)
+    if (next.length === this._approvalRules.length) return
+    this._approvalRules = next
+    await this._flushApprovalRules()
+  }
+
+  private async _flushApprovalRules(): Promise<void> {
+    const encoded = encodeApprovalRulesBlob(this._approvalRules)
+    const currentSpecorator = (this._storedData.specorator ?? {}) as Record<string, unknown>
+    const nextSpecorator = { ...currentSpecorator, approvalRules: encoded }
+    this._storedData = { ...this._storedData, specorator: nextSpecorator }
+    await this.saveData(this._storedData)
   }
 
   /**

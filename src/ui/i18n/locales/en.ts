@@ -63,6 +63,12 @@ export default {
     logLevel: 'Log level',
     save: 'Save settings',
     saved: 'Settings saved.',
+    approvalRules: {
+      heading: 'Approval rules',
+      empty: 'No approval rules saved yet. Use "Always allow" on a tool-permission card to create one.',
+      remove: 'Remove',
+      removeAriaLabel: 'Remove approval rule for {scope}',
+    },
   },
   common: {
     cancel: 'Cancel',

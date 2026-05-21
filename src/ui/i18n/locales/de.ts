@@ -63,6 +63,12 @@ export default {
     logLevel: 'Log-Level',
     save: 'Einstellungen speichern',
     saved: 'Einstellungen gespeichert.',
+    approvalRules: {
+      heading: 'Freigaberegeln',
+      empty: 'Noch keine Freigaberegeln gespeichert. Nutze „Immer erlauben" auf einer Werkzeug-Freigabekarte, um eine zu erstellen.',
+      remove: 'Entfernen',
+      removeAriaLabel: 'Freigaberegel für {scope} entfernen',
+    },
   },
   common: {
     cancel: 'Abbrechen',
