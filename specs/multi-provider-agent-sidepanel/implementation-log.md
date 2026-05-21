@@ -686,3 +686,40 @@ line.
   prepared.
 - **Next agent:** WS-10 integration waits on the remaining fan-out
   branches (WS-6..WS-9).
+
+---
+
+## WS-6 — Multi-thread switcher UI
+
+### T-MPS-067..074 — `chatThreadsStore` multi-thread lifecycle (done)
+
+**T-MPS-074 MERGED — sha=89ea04f666a2f3abe5c51b7b5a12075f43fc7598**
+
+- **Commit:** `89ea04f` on `feature/mps-ws-6-multi-thread`
+- **Files:**
+  - `src/ui/stores/chatThreadsStore.ts` (modified — +createThread,
+    renameThread, applyDefaultTitleFromMessage, deleteThread,
+    forkThread, restoreActiveThread; new `CreateThreadError`,
+    `ForkThreadError` Error subclasses).
+  - `tests/ui/stores/chatThreadsStore.create.test.ts` (new — T-MPS-067).
+  - `tests/ui/stores/chatThreadsStore.tabCap.test.ts` (new — T-MPS-068).
+  - `tests/ui/stores/chatThreadsStore.rename.test.ts` (new — T-MPS-069).
+  - `tests/ui/stores/chatThreadsStore.defaultTitle.test.ts` (new —
+    T-MPS-070).
+  - `tests/ui/stores/chatThreadsStore.delete.test.ts` (new — T-MPS-071).
+  - `tests/ui/stores/chatThreadsStore.fork.test.ts` (new — T-MPS-072).
+  - `tests/ui/stores/chatThreadsStore.activeRestore.test.ts` (new —
+    T-MPS-073).
+- **Spec:** SPEC-MPS-001 §2.6, §7; REQ-MPS-018..025; TST-MPS-10..14.
+- **Outcome:** done. 49 chatThreadsStore tests green (13 baseline + 36
+  new); `npm run typecheck` and `npm run lint` clean.
+- **Hand-off — WS-7:** branch `feature/mps-ws-7-message-actions` off
+  `origin/feature/mps-ws-6-multi-thread @ 89ea04f` to consume the
+  extended `ChatThreadRecord` shape and the new fork/edit semantics.
+  The downstream tasks T-MPS-084..095 (per-message actions, transcript
+  truncation, regenerate/edit) can now start in parallel with the
+  remaining WS-6 UI tasks (T-MPS-075..083).
+- **Deviation:** REQ-MPS-021 acceptance example shows the 40-char slice
+  with a trailing space stripped ("...for the Q3" not "...for the Q3 ").
+  Implementation calls `.slice(0, 40).trimEnd()` to match the spec
+  example verbatim. No requirement-level deviation.
