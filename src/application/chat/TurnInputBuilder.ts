@@ -131,7 +131,16 @@ function decideRotation(
 		return { kind: 'rotate', previousThreadId };
 	}
 	const existing = threads.chatThreads.get(previousThreadId);
-	if (existing?.transport !== transport || existing.feature !== slug) {
+	// REQ-MPS-005: the on-thread `transport` is the discriminated object; compare
+	// against the legacy resolved-transport string via the same Claude mapping
+	// the orchestrator applies when minting a fresh thread.
+	const existingResolved: ResolvedTransport | undefined =
+		existing === undefined
+			? undefined
+			: existing.transport.mode === 'api'
+				? 'api-key'
+				: 'subscription';
+	if (existingResolved !== transport || existing?.feature !== slug) {
 		return { kind: 'rotate', previousThreadId };
 	}
 	return {

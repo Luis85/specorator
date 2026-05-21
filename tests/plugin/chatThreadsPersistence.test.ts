@@ -44,7 +44,9 @@ function makeRecord(overrides: Partial<ChatThreadRecord> = {}): ChatThreadRecord
     sessionId: asSessionId('sess-1'),
     feature: 'foo',
     logPath: 'specs/foo/sessions/sess-1.md',
-    transport: 'subscription',
+    transport: { provider: 'claude', mode: 'cli' },
+    title: '',
+    forkParent: null,
     createdAt: '2026-05-14T10:00:00.000Z',
     lastUsedAt: '2026-05-14T10:00:00.000Z',
     ...overrides,
@@ -84,7 +86,9 @@ describe('decodeChatThreadsBlob (T-ASM-053 / REQ-ASM-037)', () => {
         sessionId: 'sess-a',
         feature: 'alpha',
         logPath: 'specs/alpha/sessions/sess-a.md',
-        transport: 'subscription',
+        transport: { provider: 'claude', mode: 'cli' },
+        title: '',
+        forkParent: null,
         createdAt: '2026-05-14T09:00:00.000Z',
         lastUsedAt: '2026-05-14T09:30:00.000Z',
       },
@@ -93,7 +97,9 @@ describe('decodeChatThreadsBlob (T-ASM-053 / REQ-ASM-037)', () => {
         sessionId: null,
         feature: null,
         logPath: '.specorator/sessions/thread-b.md',
-        transport: 'api-key',
+        transport: { provider: 'claude', mode: 'api' },
+        title: '',
+        forkParent: null,
         createdAt: '2026-05-14T10:00:00.000Z',
         lastUsedAt: '2026-05-14T10:05:00.000Z',
       },
@@ -117,7 +123,7 @@ describe('decodeChatThreadsBlob (T-ASM-053 / REQ-ASM-037)', () => {
         sessionId: 'sess-good',
         feature: 'foo',
         logPath: 'specs/foo/sessions/sess-good.md',
-        transport: 'subscription',
+        transport: { provider: 'claude', mode: 'cli' },
         createdAt: '2026-05-14T10:00:00.000Z',
         lastUsedAt: '2026-05-14T10:00:00.000Z',
       },
@@ -142,7 +148,7 @@ describe('decodeChatThreadsBlob (T-ASM-053 / REQ-ASM-037)', () => {
         threadId: 'missing-logPath',
         sessionId: null,
         feature: null,
-        transport: 'api-key',
+        transport: { provider: 'claude', mode: 'api' },
         createdAt: '2026-05-14T10:00:00.000Z',
         lastUsedAt: '2026-05-14T10:00:00.000Z',
       },
@@ -193,7 +199,7 @@ describe('parseChatThreadRecord (T-ASM-053)', () => {
 describe('encodeChatThreadsBlob (T-ASM-053 / REQ-ASM-037)', () => {
   it('returns the JSON-friendly record-of-records keyed by threadId', () => {
     const r1 = makeRecord({ threadId: 'thread-1' })
-    const r2 = makeRecord({ threadId: 'thread-2', transport: 'api-key', sessionId: null })
+    const r2 = makeRecord({ threadId: 'thread-2', transport: { provider: 'claude', mode: 'api' }, sessionId: null })
     const map = new Map<string, ChatThreadRecord>([
       ['thread-1', r1],
       ['thread-2', r2],
@@ -255,7 +261,7 @@ describe('cross-load round-trip (T-ASM-053 / REQ-ASM-037)', () => {
     const logger = makeLogger()
     const original = new Map<string, ChatThreadRecord>([
       ['t1', makeRecord({ threadId: 't1', lastUsedAt: '2026-05-14T10:00:00.000Z' })],
-      ['t2', makeRecord({ threadId: 't2', lastUsedAt: '2026-05-14T11:00:00.000Z', transport: 'api-key', sessionId: null })],
+      ['t2', makeRecord({ threadId: 't2', lastUsedAt: '2026-05-14T11:00:00.000Z', transport: { provider: 'claude', mode: 'api' }, sessionId: null })],
     ])
 
     const blob = encodeChatThreadsBlob(original)
@@ -272,7 +278,8 @@ describe('cross-load round-trip (T-ASM-053 / REQ-ASM-037)', () => {
     const seed: Record<string, SerialisedChatThreadRecord> = {
       a: {
         threadId: 'a', sessionId: 'sa', feature: 'foo',
-        logPath: 'specs/foo/sessions/sa.md', transport: 'subscription',
+        logPath: 'specs/foo/sessions/sa.md', transport: { provider: 'claude', mode: 'cli' },
+        title: '', forkParent: null,
         createdAt: '2026-05-14T08:00:00.000Z', lastUsedAt: '2026-05-14T09:00:00.000Z',
       },
     }
@@ -293,8 +300,8 @@ describe('pinia hydration (TEST-ASM-035 / REQ-ASM-037)', () => {
   it('hydrates the chatStore by calling upsertThread once per record, order preserved', () => {
     const logger = makeLogger()
     const blob = {
-      'old':   { threadId: 'old',   sessionId: 'so', feature: 'foo', logPath: 'specs/foo/sessions/so.md', transport: 'subscription', createdAt: '2026-05-14T08:00:00.000Z', lastUsedAt: '2026-05-14T08:00:00.000Z' },
-      'newest':{ threadId: 'newest',sessionId: 'sn', feature: 'foo', logPath: 'specs/foo/sessions/sn.md', transport: 'subscription', createdAt: '2026-05-14T09:00:00.000Z', lastUsedAt: '2026-05-14T10:00:00.000Z' },
+      'old':   { threadId: 'old',   sessionId: 'so', feature: 'foo', logPath: 'specs/foo/sessions/so.md', transport: { provider: 'claude', mode: 'cli' }, createdAt: '2026-05-14T08:00:00.000Z', lastUsedAt: '2026-05-14T08:00:00.000Z' },
+      'newest':{ threadId: 'newest',sessionId: 'sn', feature: 'foo', logPath: 'specs/foo/sessions/sn.md', transport: { provider: 'claude', mode: 'cli' }, createdAt: '2026-05-14T09:00:00.000Z', lastUsedAt: '2026-05-14T10:00:00.000Z' },
     }
     const records = decodeChatThreadsBlob(blob, logger)
     const store = getChatStoresFacade()
@@ -326,7 +333,7 @@ describe('pinia hydration (TEST-ASM-035 / REQ-ASM-037)', () => {
     const blob: Record<string, unknown> = {
       good: {
         threadId: 'good', sessionId: 'sg', feature: 'foo',
-        logPath: 'specs/foo/sessions/sg.md', transport: 'subscription',
+        logPath: 'specs/foo/sessions/sg.md', transport: { provider: 'claude', mode: 'cli' },
         createdAt: '2026-05-14T10:00:00.000Z', lastUsedAt: '2026-05-14T10:00:00.000Z',
       },
       degraded: {
@@ -362,7 +369,8 @@ describe('settings + chatThreads coexistence (T-ASM-053 / SPEC §9.3)', () => {
     const map = new Map<string, ChatThreadRecord>([
       ['t1', {
         threadId: 't1', sessionId: asSessionId('s1'), feature: 'foo',
-        logPath: 'specs/foo/sessions/s1.md', transport: 'subscription',
+        logPath: 'specs/foo/sessions/s1.md', transport: { provider: 'claude', mode: 'cli' },
+        title: '', forkParent: null,
         createdAt: '2026-05-14T10:00:00.000Z', lastUsedAt: '2026-05-14T10:00:00.000Z',
       }],
     ])
@@ -381,7 +389,8 @@ describe('settings + chatThreads coexistence (T-ASM-053 / SPEC §9.3)', () => {
     expect((nextStored.specorator as Record<string, unknown>).chatThreads).toEqual({
       t1: {
         threadId: 't1', sessionId: 's1', feature: 'foo',
-        logPath: 'specs/foo/sessions/s1.md', transport: 'subscription',
+        logPath: 'specs/foo/sessions/s1.md', transport: { provider: 'claude', mode: 'cli' },
+        title: '', forkParent: null,
         createdAt: '2026-05-14T10:00:00.000Z', lastUsedAt: '2026-05-14T10:00:00.000Z',
       },
     })

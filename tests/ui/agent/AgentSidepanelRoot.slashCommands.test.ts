@@ -197,7 +197,9 @@ describe('AgentSidepanelRoot — slash command dispatch (PR-ASV-3)', () => {
 				sessionId: null,
 				feature: null,
 				logPath: '',
-				transport: 'api-key',
+				transport: { provider: 'claude', mode: 'api' },
+				title: '',
+				forkParent: null,
 				createdAt: '2026-05-16T00:00:00.000Z',
 				lastUsedAt: '2026-05-16T00:00:00.000Z',
 			});
@@ -215,7 +217,9 @@ describe('AgentSidepanelRoot — slash command dispatch (PR-ASV-3)', () => {
 				sessionId: null,
 				feature: null,
 				logPath: '',
-				transport: 'api-key',
+				transport: { provider: 'claude', mode: 'api' },
+				title: '',
+				forkParent: null,
 				createdAt: '2026-05-16T00:00:00.000Z',
 				lastUsedAt: '2026-05-16T00:00:00.000Z',
 			});

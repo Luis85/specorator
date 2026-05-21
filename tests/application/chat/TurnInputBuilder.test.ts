@@ -168,7 +168,9 @@ describe('buildTurnInput', () => {
 			sessionId: asSessionId('session-A'),
 			feature: null,
 			logPath: '',
-			transport: 'api-key',
+			transport: { provider: 'claude', mode: 'api' },
+			title: '',
+			forkParent: null,
 			createdAt: '2025-01-01T00:00:00.000Z',
 			lastUsedAt: '2025-01-01T00:00:00.000Z',
 		};
@@ -198,7 +200,9 @@ describe('buildTurnInput', () => {
 			sessionId: null,
 			feature: null,
 			logPath: '',
-			transport: 'api-key',
+			transport: { provider: 'claude', mode: 'api' },
+			title: '',
+			forkParent: null,
 			createdAt: '2025-01-01T00:00:00.000Z',
 			lastUsedAt: '2025-01-01T00:00:00.000Z',
 		};
@@ -230,7 +234,9 @@ describe('buildTurnInput', () => {
 			sessionId: null,
 			feature: 'bar', // different slug from the current `foo`
 			logPath: '',
-			transport: 'api-key',
+			transport: { provider: 'claude', mode: 'api' },
+			title: '',
+			forkParent: null,
 			createdAt: '2025-01-01T00:00:00.000Z',
 			lastUsedAt: '2025-01-01T00:00:00.000Z',
 		};

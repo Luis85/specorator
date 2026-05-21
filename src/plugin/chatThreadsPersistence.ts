@@ -1,5 +1,6 @@
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord'
 import { asSessionId } from '@/domain/chat/SessionId'
+import type { ProviderId, ProviderMode } from '@/domain/chat/ProviderSelection'
 import type { LoggerPort } from '@/domain/ports/LoggerPort'
 
 /**
@@ -10,15 +11,28 @@ import type { LoggerPort } from '@/domain/ports/LoggerPort'
  * in-memory `Map<string, ChatThreadRecord>` to a plain `Record<string,
  * SerialisedChatThreadRecord>` keyed by `threadId`.
  *
+ * Per SPEC-MPS-001 §2.6 the `transport` field is the discriminated object
+ * `{ provider, mode }`. Legacy `'api-key' | 'subscription'` strings on disk
+ * are translated on load by `migrateProviderSelection`; this module accepts
+ * either shape defensively so a one-off legacy record that escaped the
+ * migrator still hydrates correctly.
+ *
  * Domain-shape guarantees:
  *   - Records with missing or wrong-typed `sessionId`, `feature`, `transport`,
  *     `logPath`, `threadId`, `createdAt`, or `lastUsedAt` are dropped at load
  *     time and logged at `warn` (SPEC §11.3).
- *   - `transport === 'degraded'` records are not persisted (degraded threads
- *     have no resumable session and are user-session-scoped).
+ *   - Records whose serialised transport is the forced sentinel `'degraded'`
+ *     are filtered out (degraded threads have no resumable session and are
+ *     user-session-scoped).
  *
  * No `obsidian` imports — pure functions consumed by `main.ts`.
  */
+
+/** Persisted transport shape — the discriminated object only (post-migration). */
+export interface PersistedTransport {
+  readonly provider: ProviderId
+  readonly mode: ProviderMode
+}
 
 /** JSON-friendly serialisation of a `ChatThreadRecord`. */
 export interface SerialisedChatThreadRecord {
@@ -26,15 +40,38 @@ export interface SerialisedChatThreadRecord {
   readonly sessionId: string | null
   readonly feature: string | null
   readonly logPath: string
-  readonly transport: 'api-key' | 'subscription'
+  readonly transport: PersistedTransport
+  readonly title: string
+  readonly forkParent: string | null
   readonly createdAt: string
   readonly lastUsedAt: string
 }
 
-const PERSISTED_TRANSPORTS: ReadonlySet<string> = new Set(['api-key', 'subscription'])
+const PROVIDER_IDS: ReadonlySet<string> = new Set(['claude', 'cursor'])
+const PROVIDER_MODES: ReadonlySet<string> = new Set(['api', 'cli'])
 
-function isPersistedTransport(value: unknown): value is 'api-key' | 'subscription' {
-  return typeof value === 'string' && PERSISTED_TRANSPORTS.has(value)
+/**
+ * Coerce a raw `transport` value to the new `{ provider, mode }` shape.
+ * Accepts the discriminated object directly, and translates the legacy
+ * string union `'api-key' | 'subscription'` to its Claude-prefixed
+ * equivalent (REQ-MPS-005). Returns `null` for any other shape so the
+ * caller can drop the record.
+ */
+function coerceTransport(value: unknown): PersistedTransport | null {
+  if (value === 'api-key') return { provider: 'claude', mode: 'api' }
+  if (value === 'subscription') return { provider: 'claude', mode: 'cli' }
+  if (value !== null && typeof value === 'object') {
+    const obj = value as Record<string, unknown>
+    if (
+      typeof obj.provider === 'string' &&
+      PROVIDER_IDS.has(obj.provider) &&
+      typeof obj.mode === 'string' &&
+      PROVIDER_MODES.has(obj.mode)
+    ) {
+      return { provider: obj.provider as ProviderId, mode: obj.mode as ProviderMode }
+    }
+  }
+  return null
 }
 
 type RecordDefect = { field: string; value?: unknown } | null
@@ -45,7 +82,7 @@ function findIdentityDefect(r: Record<string, unknown>): RecordDefect {
     return { field: 'threadId' }
   }
   if (typeof r.logPath !== 'string') return { field: 'logPath' }
-  if (!isPersistedTransport(r.transport)) {
+  if (coerceTransport(r.transport) === null) {
     return { field: 'transport', value: r.transport }
   }
   return null
@@ -101,7 +138,16 @@ export function parseChatThreadRecord(
   const sessionIdRaw = r.sessionId as string | null
   const feature = r.feature as string | null
   const logPath = r.logPath as string
-  const transport = r.transport as 'api-key' | 'subscription'
+  // `coerceTransport` is non-null here because `findIdentityDefect` already
+  // rejected any unrecognised shape.
+  const transport = coerceTransport(r.transport) as PersistedTransport
+  const title = typeof r.title === 'string' ? r.title : ''
+  const forkParent =
+    typeof r.forkParent === 'string'
+      ? r.forkParent
+      : r.forkParent === null
+        ? null
+        : null
   const createdAt = r.createdAt as string
   const lastUsedAt = r.lastUsedAt as string
   return {
@@ -110,6 +156,8 @@ export function parseChatThreadRecord(
     feature,
     logPath,
     transport,
+    title,
+    forkParent,
     createdAt,
     lastUsedAt,
   }
@@ -144,21 +192,29 @@ export function decodeChatThreadsBlob(
 
 /**
  * Encode a `Map<threadId, ChatThreadRecord>` into the JSON-friendly blob shape.
- * Filters out records whose transport is not `'api-key'` or `'subscription'`
- * (e.g. degraded threads are not persisted — SPEC §2.2 / ADR-0031).
+ * Filters out records whose `transport.provider` or `transport.mode` is not in
+ * the recognised set (defence in depth — the domain type already constrains
+ * this; degraded threads are not persisted — SPEC-ASM-001 §2.2 / ADR-0031).
  */
 export function encodeChatThreadsBlob(
   records: ReadonlyMap<string, ChatThreadRecord>,
 ): Record<string, SerialisedChatThreadRecord> {
   const out: Record<string, SerialisedChatThreadRecord> = {}
   for (const [threadId, record] of records) {
-    if (!isPersistedTransport(record.transport)) continue
+    if (
+      !PROVIDER_IDS.has(record.transport.provider) ||
+      !PROVIDER_MODES.has(record.transport.mode)
+    ) {
+      continue
+    }
     out[threadId] = {
       threadId: record.threadId,
       sessionId: record.sessionId,
       feature: record.feature,
       logPath: record.logPath,
-      transport: record.transport,
+      transport: { provider: record.transport.provider, mode: record.transport.mode },
+      title: record.title,
+      forkParent: record.forkParent,
       createdAt: record.createdAt,
       lastUsedAt: record.lastUsedAt,
     }

@@ -492,10 +492,15 @@ export class SessionLogWriter {
     blocks: ReadonlyArray<string>,
     at: string,
   ): Promise<void> {
+    // SessionLog YAML still uses the legacy `'api-key' | 'subscription'`
+    // string union (SPEC-ASM-001 §2.3, REQ-ASM-033). REQ-MPS-005 moves the
+    // in-memory `ChatThreadRecord.transport` to a discriminated object; we
+    // translate back at the persistence boundary to keep the YAML schema
+    // stable for downstream tools.
     const fm = buildFrontmatter({
       session_id: thread.sessionId ?? '',
       feature: thread.feature,
-      transport: thread.transport,
+      transport: thread.transport.mode === 'api' ? 'api-key' : 'subscription',
       created: at,
       updated: at,
     })

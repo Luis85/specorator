@@ -113,7 +113,9 @@ function makeRecord(overrides: Partial<ChatThreadRecord> = {}): ChatThreadRecord
     sessionId: asSessionId('sess-1'),
     feature: 'foo',
     logPath: 'specs/foo/sessions/sess-1.md',
-    transport: 'subscription',
+    transport: { provider: 'claude', mode: 'cli' },
+    title: '',
+    forkParent: null,
     createdAt: '2026-05-14T10:00:00.000Z',
     lastUsedAt: '2026-05-14T10:00:00.000Z',
     ...overrides,
@@ -173,7 +175,7 @@ describe('scheduleChatThreadsPersistence — debounced flush (T-ASM-054)', () =>
     expect(specorator.chatThreads).toEqual({
       t1: {
         threadId: 't1', sessionId: 'sess-1', feature: 'foo',
-        logPath: 'specs/foo/sessions/sess-1.md', transport: 'subscription',
+        logPath: 'specs/foo/sessions/sess-1.md', transport: { provider: 'claude', mode: 'cli' },
         createdAt: '2026-05-14T10:00:00.000Z', lastUsedAt: '2026-05-14T10:00:00.000Z',
       },
     })
@@ -187,7 +189,7 @@ describe('scheduleChatThreadsPersistence — debounced flush (T-ASM-054)', () =>
     plugin.scheduleChatThreadsPersistence(new Map([['t1', makeRecord({ threadId: 't1' })]]))
     plugin.scheduleChatThreadsPersistence(new Map([
       ['t1', makeRecord({ threadId: 't1' })],
-      ['t2', makeRecord({ threadId: 't2', sessionId: asSessionId('s2'), transport: 'api-key' })],
+      ['t2', makeRecord({ threadId: 't2', sessionId: asSessionId('s2'), transport: { provider: 'claude', mode: 'api' } })],
     ]))
 
     await vi.advanceTimersByTimeAsync(1_000)
@@ -224,7 +226,7 @@ describe('scheduleChatThreadsPersistence — debounced flush (T-ASM-054)', () =>
 
   it('filters degraded-transport records at flush time (NOT persisted)', async () => {
     const { plugin, state } = makePlugin({ specorator: {} })
-    const persisted = makeRecord({ threadId: 'keep', transport: 'subscription' })
+    const persisted = makeRecord({ threadId: 'keep', transport: { provider: 'claude', mode: 'cli' } })
     // Simulate an in-memory degraded thread that the store currently holds.
     const degraded = {
       ...makeRecord({ threadId: 'drop' }),
@@ -251,7 +253,7 @@ describe('scheduleChatThreadsPersistence — debounced flush (T-ASM-054)', () =>
     // the timer fires. Prior to the fix, onunload() cleared the timer but
     // never flushed the pending snapshot — the just-sent thread was lost.
     const { plugin, state } = makePlugin({ specorator: {} })
-    const recent = makeRecord({ threadId: 'just-sent', transport: 'subscription' })
+    const recent = makeRecord({ threadId: 'just-sent', transport: { provider: 'claude', mode: 'cli' } })
 
     plugin.scheduleChatThreadsPersistence(
       new Map<string, ChatThreadRecord>([['just-sent', recent]]),
@@ -297,7 +299,7 @@ describe('scheduleChatThreadsPersistence — debounced flush (T-ASM-054)', () =>
     // User mutates the in-memory map; persistence is scheduled.
     const map = new Map<string, ChatThreadRecord>([
       ['t1', makeRecord({ threadId: 't1' })],
-      ['t2', makeRecord({ threadId: 't2', sessionId: asSessionId('s2'), transport: 'api-key' })],
+      ['t2', makeRecord({ threadId: 't2', sessionId: asSessionId('s2'), transport: { provider: 'claude', mode: 'api' } })],
     ])
     plugin.scheduleChatThreadsPersistence(map)
 
@@ -349,7 +351,7 @@ describe('scheduleChatThreadsPersistence — debounced flush (T-ASM-054)', () =>
     view.scheduleChatThreadsPersistence(
       new Map([
         ['t1', makeRecord({ threadId: 't1' })],
-        ['t2', makeRecord({ threadId: 't2', sessionId: asSessionId('s2'), transport: 'api-key' })],
+        ['t2', makeRecord({ threadId: 't2', sessionId: asSessionId('s2'), transport: { provider: 'claude', mode: 'api' } })],
       ]),
     )
     await vi.advanceTimersByTimeAsync(1_000)
@@ -394,7 +396,7 @@ describe('getInitialChatThreads — read path (T-ASM-053)', () => {
         chatThreads: {
           't1': {
             threadId: 't1', sessionId: 's1', feature: 'foo',
-            logPath: 'specs/foo/sessions/s1.md', transport: 'subscription',
+            logPath: 'specs/foo/sessions/s1.md', transport: { provider: 'claude', mode: 'cli' },
             createdAt: '2026-05-14T08:00:00.000Z', lastUsedAt: '2026-05-14T09:00:00.000Z',
           },
         },
@@ -433,7 +435,7 @@ describe('updateSettings preserves sibling keys under specorator (Codex P1, PR #
             sessionId: 's1',
             feature: 'foo',
             logPath: 'specs/foo/sessions/s1.md',
-            transport: 'subscription',
+            transport: { provider: 'claude', mode: 'cli' },
             createdAt: '2026-05-14T10:00:00.000Z',
             lastUsedAt: '2026-05-14T10:00:00.000Z',
           },
