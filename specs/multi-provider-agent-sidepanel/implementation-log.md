@@ -441,98 +441,133 @@ line.
   - All fan-out branches must be cut from this branch's tip and rebase
     onto `develop` after the WS-3 PR squash-merges.
 
+---
 
-## WS-8 — Status panel + modeline modes + selector + attachments
+## WS-9 — Inline approvals (T-MPS-132..T-MPS-143)
 
-### T-MPS-096..103 — Sub-batch 1: Status panel
+Branch: `feature/mps-ws-9-inline-approvals` cut from
+`feature/mps-ws-3-selector-wiring` @ `b579a9f`.
 
-- **Commits:** `1930c1a feat(mps): status panel + modeline modes`.
+### T-MPS-132/133/134 — `approvalRulesStore` + `ApprovalRule` type
+
+- **Commit:** `f44f69d`
 - **Files:**
-  - `src/domain/ports/ChatTransportPort.ts` (StreamDelta extended:
-    `tool-result`, `todo-update`, `citation`; `TodoEntry` +
-    `ChatTransportAttachment` interfaces added; new
-    `ChatTransportQueryOptions.planMode` / `model` / `attachments`).
-  - `src/ui/stores/statusPanelStore.ts` (new — `todos`, `bashHistory`
-    FIFO-cap 50, `collapsedByThread`).
-  - `src/ui/components/agent/{StatusPanel,TodoList,BashHistoryList}.vue`
-    (new — collapsible panel + PageObject testids).
-  - `src/ui/agent/AgentSidepanelRoot.vue` (mounts `StatusPanel`).
-  - i18n keys for `status.*`.
-  - Tests: `tests/ui/stores/statusPanelStore.*.test.ts` +
-    `tests/ui/components/agent/{TodoList,BashHistoryList,StatusPanel}.{po.ts,test.ts}`.
-- **Spec:** REQ-MPS-017, 030..033; TST-MPS-19..21.
+  - `src/domain/chat/ApprovalRule.ts` (new, 35 LOC)
+  - `src/ui/stores/approvalRulesStore.ts` (new, 142 LOC)
+  - `tests/ui/stores/approvalRulesStore.match.test.ts` (new, 130 LOC)
+  - `tests/ui/stores/approvalRulesStore.persist.test.ts` (new, 78 LOC)
+- **Spec:** SPEC-MPS-001 §7.5 / REQ-MPS-046 / REQ-MPS-047.
+- **Outcome:** done. 22 tests green.
+- **Notes:** Glob compiler supports `*` (single-segment), `**`
+  (cross-segment) and the conventional `**/` globstar idiom so
+  `src/**/*.ts` matches both `src/foo.ts` and `src/a/b/c.ts`. Bash
+  matching is a whitespace-bounded prefix so `git` matches
+  `git status`/`git push` but not `github-cli status`.
 
-### T-MPS-104..113 — Sub-batch 2: Modeline modes
+### T-MPS-135/136/137 — `ApprovalCard.vue` + `ChatTransportApprovalRequest`
 
-- **Commits:** `1930c1a` (continued).
+- **Commit:** `d9a0adf`
 - **Files:**
-  - `src/ui/stores/chatInputModeStore.ts` (new — planMode /
-    bangBashMode / instructionMode).
-  - `src/ui/components/agent/ModeIndicators.vue` (new).
-  - `src/ui/components/chat/ChatInput.vue` (Shift+Tab plan toggle +
-    `!`/`#` prefix detection + aria-live announce + chip strip).
-  - `src/application/chat/ChatTurnOrchestrator.ts` (forwards
-    `planMode`/`instructionSuffix`/`model`/`attachments` through new
-    `buildStreamOptions` helper).
-  - `src/application/chat/TurnInput.ts` (4 new optional fields).
-  - `src/infrastructure/obsidian/buildSubprocessArgs.ts` (planMode →
-    `--permission-mode plan`).
-  - Tests: `tests/ui/stores/chatInputModeStore.test.ts`,
-    `tests/ui/components/chat/ChatInput.{planMode,modeline}.test.ts`,
-    `tests/application/chat/ChatTurnOrchestrator.{planMode,instructionMode}.test.ts`,
-    plus new `--permission-mode plan` cases in
-    `tests/infrastructure/obsidian/buildSubprocessArgs.test.ts`.
-- **Spec:** REQ-MPS-036..039; NFR-MPS-010; TST-MPS-22..25.
+  - `src/ui/components/agent/ApprovalCard.vue` (new, 170 LOC)
+  - `src/domain/ports/ChatTransportPort.ts` (added the
+    `ChatTransportApprovalRequest` interface + `approveTool` option on
+    `ChatTransportStreamOptions`)
+  - `src/ui/i18n/locales/{en,de}.ts` (5 new keys each under
+    `agent.approvalCard`)
+  - `tests/ui/components/agent/ApprovalCard.{po,test}.ts` (new)
+- **Spec:** SPEC-MPS-001 §8.4 / REQ-MPS-045 / REQ-MPS-046 / TST-MPS-30.
+- **Outcome:** done. 13 tests green.
+- **Notes:** Default focus lands on Deny per spec §8.4 (safer side);
+  Escape on the card commits a deny decision so keyboard-only users
+  can dismiss without clicking. The "Always allow" button adds a rule
+  via `approvalRulesStore.addRule(...)` before emitting; this is
+  end-to-end verified by `findMatching` resolving the same `(provider,
+  Bash, git)` triple immediately after.
 
-### T-MPS-114..116 — Sub-batch 3: Slash-command provider entries
+### T-MPS-138/139 — Orchestrator approval callback + MessageList wiring
 
-- **Commit:** `[df4a21f follow-on commit feat(mps): slash enrichment...]`.
+- **Commit:** `d99ddbf`
 - **Files:**
-  - `src/ui/composables/useSlashPalette.ts` (new optional
-    `providerEntry` option; provider commands spliced into the matched
-    list).
-  - Test: `tests/ui/components/chat/SlashCommandDropdown.providerEntries.test.ts`.
-- **Spec:** REQ-MPS-034.
+  - `src/application/chat/ChatTurnOrchestrator.ts` (`approveTool`
+    threading + new `resolveApproval` composition helper)
+  - `src/ui/stores/pendingApprovalsStore.ts` (new, 78 LOC)
+  - `src/ui/components/agent/MessageList.vue` (`ApprovalCard` render
+    block before the streaming bubble; `hasContent` covers the
+    "approvals-only" case so the empty-state doesn't shadow them)
+  - `tests/application/chat/ChatTurnOrchestrator.approvalCallback.test.ts`
+    (new, 5 tests)
+- **Spec:** SPEC-MPS-001 §8.4 / design §A1 Flow 8 / REQ-MPS-045/046.
+- **Outcome:** done.
+- **Notes:** The orchestrator stays pure: `resolveApproval` accepts
+  injected `findMatching` + `publishPending` callbacks so unit tests
+  can drive both the auto-resolve branch and the user-decision branch
+  without mounting Vue. The view layer composes the resolver as
+  `(request) => orchestrator.resolveApproval({ request, providerId,
+  findMatching: approvalRulesStore.findMatching,
+  publishPending: pendingApprovalsStore.publishPending })`.
 
-### T-MPS-117..124 — Sub-batch 4: Model selector + provider menu
+### T-MPS-140/141 — Settings approvals list + persistence
 
-- **Commit:** sub-batch-3-5 commit.
+- **Commit:** `456338d`
 - **Files:**
-  - `src/ui/stores/chatProviderStore.ts` (new — registry-validated
-    `setActiveSelection` + `resolved` flag).
-  - `src/ui/components/agent/{ModelSelector,ProviderBadge,ProviderMenu}.vue`
-    (new — header chrome; disabled rows carry `aria-disabled` + reason).
-  - `src/ui/agent/AgentSidepanelRoot.vue` (provider-row band).
-  - Tests including the NFR-MPS-004 perf test
-    `tests/ui/components/agent/ProviderSwitch.perf.test.ts`.
-- **Spec:** REQ-MPS-006, 007, 040, 041; NFR-MPS-004, 009; TST-MPS-26.
+  - `src/ui/components/settings/ApprovalRulesList.vue` (new, 138 LOC,
+    bilingual i18n)
+  - `src/plugin/approvalRulesPersistence.ts` (new, 81 LOC; encode +
+    decode + per-record defect logging mirroring
+    `chatThreadsPersistence`)
+  - `src/plugin/main.ts` (`_approvalRules` hydration in
+    `loadSettings`; new `getApprovalRules`, `addApprovalRule`,
+    `removeApprovalRule`, `_flushApprovalRules` methods; mirrored to
+    `_storedData.specorator.approvalRules`)
+  - `src/plugin/settings.ts` (Approvals section rendered with
+    Obsidian's `Setting` API + per-row Remove button)
+  - `src/ui/i18n/locales/{en,de}.ts` (`settings.approvalRules.*`)
+  - `tests/plugin/settings/approval-rules-list.test.ts` (new, 7 tests)
+- **Spec:** SPEC-MPS-001 §7.5 / design §A1 Flow 8 / REQ-MPS-047 /
+  TST-MPS-31.
+- **Outcome:** done.
+- **Notes:** The Settings tab renders the list with Obsidian
+  primitives rather than mounting Vue inside the tab — a Vue island
+  would need Pinia + i18n wiring inside the
+  `PluginSettingTab.display()` path, which is out of WS-9 scope. The
+  canonical Vue component (`ApprovalRulesList.vue`) is reusable in any
+  surface that already has Pinia bootstrapped (agent panel, future
+  settings refresh).
 
-### T-MPS-125..130 — Sub-batch 5: Attachments
+### T-MPS-142 — Remove legacy `InlinePlanApprovalCard`
 
-- **Commit:** sub-batch-3-5 commit.
+- **Commit:** `3db8e9c`
+- **Files removed:**
+  - `src/domain/chat/PlanApproval.ts`
+  - `src/domain/ports/ApprovalPort.ts`
+  - `src/infrastructure/mock/MockApprovalPort.ts`
+  - `src/ui/components/agent/InlinePlanApprovalCard.vue`
+  - `tests/ui/components/agent/InlinePlanApprovalCard.{po,test}.ts`
+  - Stale `agent.planApproval*` i18n keys (en + de).
+- **Outcome:** done. No production callers; verified with a repo-wide
+  grep before deletion.
+
+### T-MPS-143 — WS-9 closeout (this entry)
+
+- **Commit:** _(this)_
 - **Files:**
-  - `src/ui/stores/attachmentsStore.ts` (`add` returns
-    `Result<void, ChatTransportError>`; > 5 MB → `ATTACHMENT_TOO_LARGE`).
-  - `src/ui/components/agent/AttachmentStrip.vue` (paste + drag-drop;
-    `application/x-obsidian-path` MIME marker for vault drops).
-  - `src/ui/agent/AgentSidepanelRoot.vue` (strip mounted above input).
-  - Tests: `tests/ui/stores/attachmentsStore.sizeCap.test.ts`,
-    `tests/ui/components/agent/AttachmentStrip.{paste,drag}.test.ts`.
-- **Spec:** REQ-MPS-042..044; TST-MPS-27..29.
+  - `specs/multi-provider-agent-sidepanel/implementation-log.md`
+    (this entry)
+  - `specs/multi-provider-agent-sidepanel/workflow-state.md` (hand-off
+    note)
 
-### Verification
+## WS-9 branch summary
 
-- All sub-batch unit tests green.
-- Provider-switch perf test asserts < 200 ms NFR-MPS-004 budget on a
-  100-message thread (jsdom env; the headless browser is expected to be
-  faster).
-- `npm run typecheck` clean. `npm run lint` clean (0 errors, 32
-  warnings, none new from WS-8).
-
-### Open items
-
-- TurnInputBuilder wiring of `chatInputModeStore` + `attachmentsStore` +
-  `chatProviderStore.selectedModel` into `TurnInput` happens in WS-10
-  integration (the orchestrator already accepts the new options; only
-  the builder snapshot needs to wire the stores). Tracked in
-  dispatch-plan.md as a WS-10 hand-off item.
+- **Branch:** `feature/mps-ws-9-inline-approvals` (cut from
+  `feature/mps-ws-3-selector-wiring` @ `b579a9f`).
+- **Commits (6):** `f44f69d` (store + types) → `d9a0adf` (ApprovalCard
+  + port shape) → `d99ddbf` (orchestrator + MessageList) → `456338d`
+  (settings list + persistence) → `3db8e9c` (legacy delete) →
+  `d37bb58` (lint/typecheck fixups) → _this commit_.
+- **Tests:** WS-9 surface 47 tests; full unit suite 1974 tests green
+  on the pre-closeout run (`d37bb58`). The six Storybook/Chromium
+  failures (`stories/**`) are pre-existing on this worktree and
+  unrelated to WS-9 — they fail to fetch the addon-vitest setup file
+  in the Chromium environment.
+- **Lint:** 0 errors, 32 pre-existing warnings.
+- **Typecheck:** clean.
