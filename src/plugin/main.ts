@@ -45,6 +45,8 @@ import type { SecretStorePort, TranslationPort } from '@/domain/ports'
 import { SECRET_ID_ANTHROPIC, SECRET_ID_CURSOR } from '@/domain/ports'
 import { CursorApiAdapter } from '@/infrastructure/cursor/CursorApiAdapter'
 import { useMessagesStore } from '@/ui/stores/messagesStore'
+import { useChatProviderStore } from '@/ui/stores/chatProviderStore'
+import { parseProviderUriValue, nextProviderSelection } from './uriProviderParam'
 
 export default class SpecoratorPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS }
@@ -341,6 +343,18 @@ export default class SpecoratorPlugin extends Plugin {
       callback: () => void this.updateSettings({ mcpServerEnabled: false }),
     })
 
+    // T-MPS-147 / spec §9 — quick cycle through provider selections from the
+    // command palette. Defers the actual selector reshuffle to the agent
+    // panel's Pinia store; the order matches the badge dropdown
+    // (auto → claude:api → claude:cli → cursor:api → cursor:cli → degraded).
+    this.addCommand({
+      id: 'switch-provider',
+      name: 'Switch provider',
+      callback: () => {
+        void this.activateAgentSidepanel().then(() => { this._cycleProviderSelection() })
+      },
+    })
+
     this.addCommand({
       id: 're-run-setup',
       name: 'Re-run setup',
@@ -402,6 +416,11 @@ export default class SpecoratorPlugin extends Plugin {
       // continue to work without changes (IDEA-ASV-001).
       const action = params.action
       if (action === 'open-chat' || action === 'focus-chat' || action === 'open-agent') {
+        // WS-10 (T-MPS-146): honour an optional `?provider=` query param. Set
+        // the chat-provider store's active selection BEFORE activating the
+        // panel so the badge/model selector mount with the requested choice.
+        // Invalid values are ignored (no notice — spec §9 wants quiet fall-through).
+        this._applyProviderFromUri(params.provider)
         void this.activateAgentSidepanel()
         return
       }
@@ -895,6 +914,46 @@ export default class SpecoratorPlugin extends Plugin {
    * inject it.
    */
   private _providerRegistry: ProviderRegistry | null = null
+  /**
+   * WS-10 (T-MPS-146): URI handler helper. Translates a `?provider=` query
+   * param into a `chatProviderStore.activeSelection` mutation. The accepted
+   * values are the four explicit (provider, mode) pairs plus the two forced
+   * sentinels; anything else is silently ignored so the panel still opens.
+   * Exported for the unit test mirror in `tests/plugin/main.uri-handler.test.ts`.
+   */
+  /**
+   * T-MPS-147 — cycle the agent panel's `chatProviderStore.activeSelection`
+   * to the next item in the closed list of six choices. Pure (no notice on
+   * success — the badge update is the visible feedback).
+   */
+  _cycleProviderSelection(): void {
+    const pinia = this._agentSidepanelView?.pinia
+    if (pinia === undefined || pinia === null) return
+    const store = useChatProviderStore(pinia)
+    const next = nextProviderSelection(store.activeSelection)
+    try {
+      store.setActiveSelection(next)
+    } catch {
+      /* unknown provider / unsupported mode — silently skip */
+    }
+  }
+
+  _applyProviderFromUri(raw: string | undefined): void {
+    const pinia = this._agentSidepanelView?.pinia
+    if (pinia === undefined || pinia === null) return
+    if (raw === undefined || raw === '') return
+    const selection = parseProviderUriValue(raw)
+    if (selection === null) return
+    const store = useChatProviderStore(pinia)
+    // setActiveSelection throws on unknown provider / unsupported mode when
+    // the registry is wired. Treat as "invalid value" per spec §9 and fall
+    // through silently rather than surfacing a Notice — the panel still opens.
+    try {
+      store.setActiveSelection(selection)
+    } catch {
+      /* silent fall-through */
+    }
+  }
   getProviderRegistry(): ProviderRegistry {
     let registry = this._providerRegistry
     if (registry === null) {
