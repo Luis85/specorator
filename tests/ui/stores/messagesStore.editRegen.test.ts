@@ -64,7 +64,9 @@ describe('messagesStore.removeLatestAssistant', () => {
 
 	it('is a no-op for an empty bucket', () => {
 		const store = useMessagesStore();
-		expect(() => store.removeLatestAssistant('t-empty')).not.toThrow();
+		expect(() => {
+			store.removeLatestAssistant('t-empty');
+		}).not.toThrow();
 		expect(store.messages.has('t-empty')).toBe(false);
 	});
 });

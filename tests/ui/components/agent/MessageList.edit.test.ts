@@ -62,7 +62,7 @@ describe('MessageList — edit emit chain', () => {
 		// One per user message; the assistant message has no Edit affordance.
 		expect(editButtons).toHaveLength(2);
 
-		await editButtons[0]!.trigger('click');
+		await editButtons[0].trigger('click');
 
 		const events = wrapper.emitted('edit');
 		expect(events).toBeDefined();

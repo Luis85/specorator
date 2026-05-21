@@ -268,16 +268,13 @@ function handleTileClick(key: EmptyTileKey): void {
  * affordance (REQ-MPS-027).
  */
 const latestAssistantId = computed<string | null>(() => {
-	for (let i = messages.value.length - 1; i >= 0; i -= 1) {
-		const m = messages.value[i];
-		if (m?.role === 'assistant') return m.id;
+	const list = messages.value;
+	for (let i = list.length - 1; i >= 0; i -= 1) {
+		const m = list[i];
+		if (m.role === 'assistant') return m.id;
 	}
 	return null;
 });
-
-function indexOfMessage(messageId: string): number {
-	return messages.value.findIndex((m) => m.id === messageId);
-}
 
 function handleCopy(payload: { messageId: string }): void {
 	emit('copy', payload);
@@ -288,10 +285,11 @@ function handleRegenerate(payload: { messageId: string }): void {
 }
 
 function handleEdit(payload: { messageId: string }): void {
-	const index = indexOfMessage(payload.messageId);
+	const list = messages.value;
+	const index = list.findIndex((m) => m.id === payload.messageId);
 	if (index === -1) return;
-	const target = messages.value[index];
-	if (target === undefined || target.role !== 'user') return;
+	const target = list[index];
+	if (target.role !== 'user') return;
 	emit('edit', { messageId: payload.messageId, index, text: target.text });
 }
 

@@ -269,7 +269,7 @@ export const useMessagesStore = defineStore('messages', () => {
 		const bucket = messages.value.get(threadId);
 		if (bucket === undefined || bucket.length === 0) return;
 		const tail = bucket[bucket.length - 1];
-		if (tail?.role !== 'assistant') return;
+		if (tail.role !== 'assistant') return;
 		const next = new Map(messages.value);
 		next.set(threadId, bucket.slice(0, -1));
 		messages.value = next;

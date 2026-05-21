@@ -217,26 +217,29 @@ async function copyMessageToClipboard(payload: { messageId: string }): Promise<v
 	await tryAsync(() => clip.writeText!(target.text));
 }
 
+/**
+ * Returns the text of the user turn immediately preceding the latest
+ * assistant turn, or `null` when the trailing message is not the requested
+ * assistant id or when no prior user turn exists. Extracted from
+ * `regenerateMessage` to keep its per-function complexity under the lint cap.
+ */
+function findRegenerationPrompt(threadId: string, messageId: string): string | null {
+	const bucket = messagesStore.messages.get(threadId) ?? [];
+	if (bucket.length === 0) return null;
+	const tail = bucket[bucket.length - 1];
+	if (tail.role !== 'assistant' || tail.id !== messageId) return null;
+	for (let i = bucket.length - 2; i >= 0; i -= 1) {
+		const m = bucket[i];
+		if (m.role === 'user') return m.text;
+	}
+	return null;
+}
+
 async function regenerateMessage(payload: { messageId: string }): Promise<void> {
 	if (streamingStore.isStreaming) return;
 	const tid = threadsStore.activeThreadId;
 	if (tid === null) return;
-	const bucket = messagesStore.messages.get(tid) ?? [];
-	if (bucket.length === 0) return;
-	const tail = bucket[bucket.length - 1];
-	// Only regenerate when the target IS the latest assistant turn.
-	if (tail?.role !== 'assistant' || tail.id !== payload.messageId) return;
-	// Find the immediately preceding user turn so we can re-dispatch the
-	// same prompt. If none exists (shouldn't happen for a normal transcript),
-	// bail out — there is no prompt to resend.
-	let priorUserText: string | null = null;
-	for (let i = bucket.length - 2; i >= 0; i -= 1) {
-		const m = bucket[i];
-		if (m?.role === 'user') {
-			priorUserText = m.text;
-			break;
-		}
-	}
+	const priorUserText = findRegenerationPrompt(tid, payload.messageId);
 	if (priorUserText === null) return;
 	messagesStore.removeLatestAssistant(tid);
 	messagesStore.setUserText(priorUserText);
