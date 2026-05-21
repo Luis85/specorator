@@ -228,6 +228,28 @@ async function handleEmptyTileAction(
 	chatSidebarRef.value?.focusInputForTilePrefill();
 }
 
+/**
+ * WS-7 — per-message action forwarders. `MessageList` emits `copy` /
+ * `regenerate` / `edit` from its `MessageActions` row; the sidebar owns the
+ * side effects (clipboard, orchestrator dispatch, textarea population) so
+ * this root just routes the events.
+ */
+function handleMessageCopy(payload: { messageId: string }): void {
+	void chatSidebarRef.value?.copyMessageToClipboard(payload);
+}
+
+function handleMessageRegenerate(payload: { messageId: string }): void {
+	void chatSidebarRef.value?.regenerateMessage(payload);
+}
+
+function handleMessageEdit(payload: {
+	messageId: string;
+	index: number;
+	text: string;
+}): void {
+	void chatSidebarRef.value?.editMessage(payload);
+}
+
 onMounted(() => {
 	window.addEventListener('sp:notice', onNotice);
 	document.addEventListener('pointerdown', onDocumentPointerDownForHelp, true);
@@ -306,7 +328,13 @@ onUnmounted(() => {
 				</div>
 			</div>
 			<div class="sp-agent__body">
-				<MessageList :thread-id="activeThreadId" @tile-action="handleEmptyTileAction" />
+				<MessageList
+					:thread-id="activeThreadId"
+					@tile-action="handleEmptyTileAction"
+					@copy="handleMessageCopy"
+					@regenerate="handleMessageRegenerate"
+					@edit="handleMessageEdit"
+				/>
 				<ChatSidebar ref="chatSidebarRef" @select-command="handleSelectCommand" />
 			</div>
 		</ErrorBoundary>

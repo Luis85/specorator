@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+
+import { useMessagesStore } from './messagesStore';
 
 /**
  * Pinia store for the **per-turn** streaming-assistant lifecycle (Arch review
@@ -62,6 +64,17 @@ export const useStreamingTurnStore = defineStore('streamingTurn', () => {
 	 * REQ-ASM-035.
 	 */
 	const sessionResumed = ref<boolean>(false);
+
+	/**
+	 * Derived "a turn is currently streaming" flag (REQ-MPS-029). Reads
+	 * `messagesStore.status` — that store owns the canonical request
+	 * lifecycle (`idle` / `loading` / `error`). Exposed here so per-message
+	 * UI surfaces (MessageActions Edit/Regenerate disable, future status
+	 * panel) can subscribe to a single boolean without re-deriving it from
+	 * `messagesStore`. Spec: WS-7 §8.3, T-MPS-092.
+	 */
+	const messagesStore = useMessagesStore();
+	const isStreaming = computed<boolean>(() => messagesStore.status === 'loading');
 
 	/** Appends a streaming-text delta. NFR-ASM-002. */
 	function appendStreamingDelta(delta: string): void {
@@ -169,6 +182,7 @@ export const useStreamingTurnStore = defineStore('streamingTurn', () => {
 		lastUsage,
 		cliStartingUp,
 		sessionResumed,
+		isStreaming,
 		appendStreamingDelta,
 		appendStreamingThinking,
 		startStreamingToolCall,

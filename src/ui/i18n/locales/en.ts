@@ -202,6 +202,16 @@ export default {
       close: 'Close',
       openAriaLabel: 'Slash command help',
     },
+    messageActions: {
+      copy: 'Copy',
+      copyAriaLabel: 'Copy message',
+      copySuccess: 'Message copied to clipboard',
+      copyFailure: 'Could not copy message',
+      regenerate: 'Regenerate',
+      regenerateAriaLabel: 'Regenerate latest assistant reply',
+      edit: 'Edit',
+      editAriaLabel: 'Edit and resend message',
+    },
   },
   // SPEC-MPS-001 §A3 — multi-thread switcher (WS-6) + per-message actions (WS-7).
   thread: {

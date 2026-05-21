@@ -202,6 +202,16 @@ export default {
       close: 'Schließen',
       openAriaLabel: 'Slash-Befehl-Hilfe',
     },
+    messageActions: {
+      copy: 'Kopieren',
+      copyAriaLabel: 'Nachricht kopieren',
+      copySuccess: 'Nachricht in die Zwischenablage kopiert',
+      copyFailure: 'Nachricht konnte nicht kopiert werden',
+      regenerate: 'Neu generieren',
+      regenerateAriaLabel: 'Letzte Assistenten-Antwort neu generieren',
+      edit: 'Bearbeiten',
+      editAriaLabel: 'Nachricht bearbeiten und erneut senden',
+    },
   },
   // SPEC-MPS-001 §A3 — Multi-Thread-Umschalter (WS-6) + Nachrichten-Aktionen (WS-7).
   thread: {
