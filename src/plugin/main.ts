@@ -9,6 +9,7 @@ import { SpecoratorView, VIEW_TYPE } from './SpecoratorView'
 import { AgentSidepanelView, VIEW_TYPE_AGENT } from './AgentSidepanelView'
 import { SpecoratorSettingTab } from './settings'
 import { promoteLegacyFlatSettings } from './loadSettings-migrate'
+import { migrateProviderSelection } from '@/application/migration/migrateProviderSelection'
 import { ensureLeafLoaded } from './leafLoader'
 import { selectTransport } from './transport/TransportSelector'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
@@ -430,6 +431,39 @@ export default class SpecoratorPlugin extends Plugin {
     const raw: Record<string, unknown> = { ...(stored ?? {}) }
 
     this._storedData = promoteLegacyFlatSettings(raw)
+
+    // SPEC-MPS-001 §3 / REQ-MPS-004 / REQ-MPS-005 — translate the v0.x
+    // `transportKind` + string `transport` encoding into the v1
+    // `providerSelection` + `{ provider, mode }` discriminator BEFORE any
+    // adapter wiring reads `this.settings` or hydrates `chatThreads`. The
+    // migration is pure and idempotent (NFR-MPS-006); on `migrated === true`
+    // we persist via `saveData()` so the legacy keys never re-enter the
+    // boot path. Defence-in-depth: the function does not throw, but we
+    // wrap in try/catch to keep startup resilient if some future change
+    // breaks the invariant.
+    try {
+      const specoratorBefore = (this._storedData.specorator ?? {}) as Record<string, unknown>
+      const migration = migrateProviderSelection({
+        settings: specoratorBefore,
+        chatThreads:
+          (specoratorBefore.chatThreads as Record<string, Record<string, unknown>> | undefined) ?? undefined,
+      })
+      if (migration.errors.length > 0) {
+        for (const err of migration.errors) console.warn('[migrateProviderSelection]', err)
+      }
+      if (migration.migrated) {
+        const nextSpecorator: Record<string, unknown> = {
+          ...(migration.data.settings ?? {}),
+        }
+        if (migration.data.chatThreads !== undefined) {
+          nextSpecorator.chatThreads = migration.data.chatThreads
+        }
+        this._storedData = { ...this._storedData, specorator: nextSpecorator }
+        await this.saveData(this._storedData)
+      }
+    } catch (err) {
+      console.error('[migrateProviderSelection] threw unexpectedly', err)
+    }
 
     this.settings = {
       ...DEFAULT_SETTINGS,

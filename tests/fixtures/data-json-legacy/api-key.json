@@ -1,0 +1,29 @@
+{
+  "specorator": {
+    "locale": "en",
+    "specsFolder": "specs",
+    "archiveFolder": "archive",
+    "decisionsFolder": "decisions",
+    "constitutionFile": "CONSTITUTION.md",
+    "gateStrictness": "strict",
+    "teamMode": false,
+    "logLevel": "warn",
+    "mcpServerEnabled": false,
+    "userPersona": "",
+    "onboardingComplete": true,
+    "claudeCliPath": "",
+    "transportKind": "api-key",
+    "chatThreads": {
+      "t-api": {
+        "threadId": "t-api",
+        "sessionId": "sess-api-1",
+        "feature": "demo",
+        "logPath": "specs/demo/sessions/sess-api-1.md",
+        "transport": "api-key",
+        "createdAt": "2026-01-01T00:00:00Z",
+        "lastUsedAt": "2026-01-01T00:00:00Z"
+      }
+    }
+  },
+  "_moduleVersions": { "specorator": 3 }
+}

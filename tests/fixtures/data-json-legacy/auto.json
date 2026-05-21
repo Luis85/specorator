@@ -1,0 +1,18 @@
+{
+  "specorator": {
+    "locale": "en",
+    "specsFolder": "specs",
+    "archiveFolder": "archive",
+    "decisionsFolder": "decisions",
+    "constitutionFile": "CONSTITUTION.md",
+    "gateStrictness": "strict",
+    "teamMode": false,
+    "logLevel": "warn",
+    "mcpServerEnabled": false,
+    "userPersona": "",
+    "onboardingComplete": true,
+    "claudeCliPath": "",
+    "transportKind": "auto"
+  },
+  "_moduleVersions": { "specorator": 3 }
+}
