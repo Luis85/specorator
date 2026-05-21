@@ -187,7 +187,85 @@ function focusInputForTilePrefill(): void {
 	ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-defineExpose({ focusInputForTilePrefill });
+/**
+ * WS-7 — per-message action handlers exposed for `AgentSidepanelRoot` (the
+ * host that owns the `MessageList` instance and forwards its `copy` /
+ * `regenerate` / `edit` events). The sidebar owns the side effects because
+ * it already holds the orchestrator and the textarea ref.
+ *
+ *   - **Copy** (REQ-MPS-026): write the message body to the system clipboard.
+ *     Falls back silently when `navigator.clipboard` is unavailable
+ *     (subscription-CLI sessions inside Electron sometimes ship a stripped
+ *     `navigator`); the user simply sees no notice and no error.
+ *   - **Regenerate** (REQ-MPS-027): drop the latest assistant message and
+ *     re-dispatch the same prompt that produced it. The orchestrator's
+ *     `resume_session_id` semantics (WS-6) keep continuity with the live
+ *     SDK session, so a regenerate is "ask again", not "start over".
+ *   - **Edit** (REQ-MPS-028): populate the textarea with the prior user
+ *     turn's text and truncate every message after that turn. The user can
+ *     adjust the prompt and press Enter; `handleSend()` then re-dispatches.
+ */
+async function copyMessageToClipboard(payload: { messageId: string }): Promise<void> {
+	const tid = threadsStore.activeThreadId;
+	if (tid === null) return;
+	const bucket = messagesStore.messages.get(tid) ?? [];
+	const target = bucket.find((m) => m.id === payload.messageId);
+	if (target === undefined) return;
+	const clip = (globalThis as { navigator?: { clipboard?: { writeText?: (s: string) => Promise<void> } } })
+		.navigator?.clipboard;
+	if (clip?.writeText === undefined) return;
+	await tryAsync(() => clip.writeText!(target.text));
+}
+
+async function regenerateMessage(payload: { messageId: string }): Promise<void> {
+	if (streamingStore.isStreaming) return;
+	const tid = threadsStore.activeThreadId;
+	if (tid === null) return;
+	const bucket = messagesStore.messages.get(tid) ?? [];
+	if (bucket.length === 0) return;
+	const tail = bucket[bucket.length - 1];
+	// Only regenerate when the target IS the latest assistant turn.
+	if (tail?.role !== 'assistant' || tail.id !== payload.messageId) return;
+	// Find the immediately preceding user turn so we can re-dispatch the
+	// same prompt. If none exists (shouldn't happen for a normal transcript),
+	// bail out — there is no prompt to resend.
+	let priorUserText: string | null = null;
+	for (let i = bucket.length - 2; i >= 0; i -= 1) {
+		const m = bucket[i];
+		if (m?.role === 'user') {
+			priorUserText = m.text;
+			break;
+		}
+	}
+	if (priorUserText === null) return;
+	messagesStore.removeLatestAssistant(tid);
+	messagesStore.setUserText(priorUserText);
+	await handleSend();
+}
+
+async function editMessage(payload: {
+	messageId: string;
+	index: number;
+	text: string;
+}): Promise<void> {
+	if (streamingStore.isStreaming) return;
+	const tid = threadsStore.activeThreadId;
+	if (tid === null) return;
+	// Truncate everything after the edited turn (drops the edited user turn
+	// itself too; the resend will re-record it). Then populate the textarea
+	// so the user can adjust the prompt before re-dispatching.
+	messagesStore.truncateAfter(tid, payload.index - 1);
+	messagesStore.setUserText(payload.text);
+	await nextTick();
+	focusTextarea();
+}
+
+defineExpose({
+	focusInputForTilePrefill,
+	copyMessageToClipboard,
+	regenerateMessage,
+	editMessage,
+});
 
 onMounted(async () => {
 	if (claudeCliPort !== undefined) {

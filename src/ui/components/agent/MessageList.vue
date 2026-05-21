@@ -29,6 +29,7 @@ import { useStreamingTurnStore } from '@/ui/stores/streamingTurnStore';
 import { useInjectedA11yAnnouncer } from '@/ui/composables/useA11yAnnouncer';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
 import MarkdownBlock from '@/ui/components/agent/MarkdownBlock.vue';
+import MessageActions from './MessageActions.vue';
 import ThinkingBlock from './ThinkingBlock.vue';
 import ToolCallBlock from './ToolCallBlock.vue';
 
@@ -56,6 +57,14 @@ const emit = defineEmits<{
 	 * with the corresponding prompt fragment.
 	 */
 	'tile-action': [key: EmptyTileKey];
+	/**
+	 * WS-7 per-message actions (REQ-MPS-026/027/028). Re-emitted from
+	 * `MessageActions.vue`. The host (`ChatSidebar`) owns the side effect:
+	 * clipboard write, transcript truncation, orchestrator re-dispatch.
+	 */
+	copy: [payload: { messageId: string }];
+	regenerate: [payload: { messageId: string }];
+	edit: [payload: { messageId: string; index: number; text: string }];
 }>();
 
 const messagesStore = useMessagesStore();
@@ -253,6 +262,40 @@ function handleTileClick(key: EmptyTileKey): void {
 }
 
 /**
+ * WS-7 — id of the latest assistant message in the active thread, or `null`
+ * when the thread has no assistant turns yet. Drives the `isLatest` prop on
+ * `MessageActions` so only the trailing assistant turn shows the Regenerate
+ * affordance (REQ-MPS-027).
+ */
+const latestAssistantId = computed<string | null>(() => {
+	for (let i = messages.value.length - 1; i >= 0; i -= 1) {
+		const m = messages.value[i];
+		if (m?.role === 'assistant') return m.id;
+	}
+	return null;
+});
+
+function indexOfMessage(messageId: string): number {
+	return messages.value.findIndex((m) => m.id === messageId);
+}
+
+function handleCopy(payload: { messageId: string }): void {
+	emit('copy', payload);
+}
+
+function handleRegenerate(payload: { messageId: string }): void {
+	emit('regenerate', payload);
+}
+
+function handleEdit(payload: { messageId: string }): void {
+	const index = indexOfMessage(payload.messageId);
+	if (index === -1) return;
+	const target = messages.value[index];
+	if (target === undefined || target.role !== 'user') return;
+	emit('edit', { messageId: payload.messageId, index, text: target.text });
+}
+
+/**
  * A11y #1 (WP-7): announce ONCE per completed assistant turn. Previously the
  * scroll container carried `aria-live="polite"`, which made every streamed
  * token (and every per-block re-render under it) re-announce the growing
@@ -321,6 +364,14 @@ watch(
 					>
 						{{ t('agent.contextTrimmed') }}
 					</p>
+					<MessageActions
+						:message-id="entry.message.id"
+						:role="entry.message.role"
+						:is-latest="entry.message.id === latestAssistantId"
+						@copy="handleCopy"
+						@regenerate="handleRegenerate"
+						@edit="handleEdit"
+					/>
 				</div>
 			</article>
 			<div
