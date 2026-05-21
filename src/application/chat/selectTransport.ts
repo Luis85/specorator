@@ -6,11 +6,10 @@
  * the public import path stable for UI / test code that wants an
  * application-layer import.
  *
- * Satisfies REQ-ASM-002, REQ-ASM-003.
+ * Satisfies REQ-ASM-002, REQ-ASM-003, REQ-MPS-007, REQ-MPS-008.
  */
 export {
   selectTransport,
-  type TransportSelection,
-  type TransportSelectorDeps,
-  type TransportSelectorFn,
+  type ProviderRouterDeps,
+  type TransportResolution,
 } from '@/plugin/transport/TransportSelector'

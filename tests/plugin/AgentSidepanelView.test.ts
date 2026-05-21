@@ -30,10 +30,10 @@ import {
 	VIEW_TYPE_AGENT,
 } from '@/plugin/AgentSidepanelView';
 import { selectTransport } from '@/plugin/transport/TransportSelector';
-import type {
-	TransportSelection,
-	TransportSelectorDeps,
-} from '@/plugin/transport/TransportSelector';
+import type { ProviderRouterDeps } from '@/plugin/transport/TransportSelector';
+import type { TransportSelection } from '@/plugin/SpecoratorView';
+import type { ProviderSelection } from '@/domain/chat/ProviderSelection';
+import type { TransportKind } from '@/domain/chat/TransportKind';
 import { degradedClaudeCliPort } from '@/infrastructure/bridge/degradedClaudeCliPort';
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings';
 import type {
@@ -60,6 +60,18 @@ function makePort(label: string): ChatTransportPort {
 
 function makeSettings(overrides: Partial<PluginSettings>): PluginSettings {
 	return { ...DEFAULT_SETTINGS, ...overrides };
+}
+
+/**
+ * Translate legacy `TransportKind` fixture inputs to the new
+ * `ProviderSelection` shape consumed by `selectTransport`
+ * (SPEC-MPS-001 §4 / T-MPS-029).
+ */
+function transportKindToSelection(kind: TransportKind | undefined): ProviderSelection {
+	if (kind === 'api-key') return { provider: 'claude', mode: 'api' };
+	if (kind === 'subscription') return { provider: 'claude', mode: 'cli' };
+	if (kind === 'degraded') return { forced: 'degraded' };
+	return { forced: 'auto' };
 }
 
 interface Fixture {
@@ -93,14 +105,32 @@ function makeFixture(opts: FixtureOptions = {}): Fixture {
 	const confirmModalAdapter = makeConfirmModalAdapter();
 
 	const selectTransportSpy = vi.fn((settings: PluginSettings): TransportSelection => {
-		const deps: TransportSelectorDeps = {
-			sdkAdapter,
-			subscriptionAdapter,
+		const selection = transportKindToSelection(settings.transportKind);
+		const deps: ProviderRouterDeps = {
+			providers: {
+				claude: { api: sdkAdapter, cli: subscriptionAdapter },
+				cursor: { api: degradedPort, cli: degradedPort },
+			},
 			degradedPort,
-			cliResolved: cliResolvedRef.value,
-			apiKeyPresent: apiKeyPresentRef.value,
+			availability: {
+				claudeApiKeyPresent: apiKeyPresentRef.value,
+				claudeCliResolved: cliResolvedRef.value,
+				cursorApiKeyPresent: false,
+				cursorCliResolved: false,
+				cursorApiPreviewEnabled: false,
+				secretStoreAvailable: false,
+			},
+			autoPreferProvider: 'claude',
 		};
-		return selectTransport(settings, deps);
+		const result = selectTransport(selection, deps);
+		if (result.resolved === 'degraded') return { port: result.port, kind: 'degraded' };
+		if (result.resolved.provider === 'claude' && result.resolved.mode === 'api') {
+			return { port: result.port, kind: 'api-key' };
+		}
+		if (result.resolved.provider === 'claude' && result.resolved.mode === 'cli') {
+			return { port: result.port, kind: 'subscription' };
+		}
+		return { port: degradedPort, kind: 'degraded' };
 	});
 
 	const plugin = {

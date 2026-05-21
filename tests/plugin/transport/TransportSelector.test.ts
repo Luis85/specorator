@@ -1,56 +1,57 @@
 /**
- * T-ASM-004 — Tests for selectTransport() 8-row truth table.
+ * T-MPS-028 — Tests for `selectTransport()` 15-row truth table.
  *
- * Satisfies: REQ-ASM-002, REQ-ASM-003.
- * Maps to: TEST-ASM-001, TEST-ASM-002, TEST-ASM-003.
+ * Satisfies: REQ-MPS-007, REQ-MPS-008, REQ-MPS-012, REQ-MPS-014.
+ * Maps to: TST-MPS-04 (R6), TST-MPS-05 (R7), TST-MPS-06 (R11).
  *
- * SPEC-ASM-001 §3.1 defines the deterministic decision table (first match wins):
+ * SPEC-MPS-001 §4 / design §C4 define the deterministic decision table
+ * (first match wins, synchronous, no I/O):
  *
- *   | Row | transportKind   | apiKeyPresent | cliResolved | Result                                             |
- *   |-----|-----------------|---------------|-------------|----------------------------------------------------|
- *   | R1  | 'degraded'      | *             | *           | { port: degradedPort,        kind: 'degraded'    } |
- *   | R2  | 'api-key'       | true          | *           | { port: sdkAdapter,          kind: 'api-key'     } |
- *   | R3  | 'api-key'       | false         | *           | { port: degradedPort,        kind: 'degraded'    } |
- *   | R4  | 'subscription'  | *             | true        | { port: subscriptionAdapter, kind: 'subscription'} |
- *   | R5  | 'subscription'  | *             | false       | { port: degradedPort,        kind: 'degraded'    } |
- *   | R6  | 'auto'          | true          | *           | { port: sdkAdapter,          kind: 'api-key'     } |
- *   | R7  | 'auto'          | false         | true        | { port: subscriptionAdapter, kind: 'subscription'} |
- *   | R8  | 'auto'          | false         | false       | { port: degradedPort,        kind: 'degraded'    } |
+ *   | #   | selection                              | Conditions                                                                         | Resolution |
+ *   |-----|----------------------------------------|------------------------------------------------------------------------------------|------------|
+ *   | R1  | { forced: 'degraded' }                 | *                                                                                  | degraded   |
+ *   | R2  | { provider: 'claude', mode: 'api' }    | claudeApiKeyPresent                                                                | claude/api |
+ *   | R3  | { provider: 'claude', mode: 'api' }    | !claudeApiKeyPresent                                                               | degraded   |
+ *   | R4  | { provider: 'claude', mode: 'cli' }    | claudeCliResolved                                                                  | claude/cli |
+ *   | R5  | { provider: 'claude', mode: 'cli' }    | !claudeCliResolved                                                                 | degraded   |
+ *   | R6  | { provider: 'cursor', mode: 'api' }    | secretStoreAvailable && cursorApiKeyPresent && cursorApiPreviewEnabled             | cursor/api |
+ *   | R7  | { provider: 'cursor', mode: 'api' }    | otherwise                                                                          | degraded   |
+ *   | R8  | { provider: 'cursor', mode: 'cli' }    | cursorCliResolved                                                                  | cursor/cli |
+ *   | R9  | { provider: 'cursor', mode: 'cli' }    | !cursorCliResolved                                                                 | degraded   |
+ *   | R10 | { forced: 'auto' }                     | claudeApiKeyPresent && autoPreferProvider === 'claude'                             | claude/api |
+ *   | R11 | { forced: 'auto' }                     | cursorApiKeyPresent && cursorApiPreviewEnabled && autoPreferProvider === 'cursor'  | cursor/api |
+ *   | R12 | { forced: 'auto' }                     | claudeApiKeyPresent                                                                | claude/api |
+ *   | R13 | { forced: 'auto' }                     | claudeCliResolved                                                                  | claude/cli |
+ *   | R14 | { forced: 'auto' }                     | cursorCliResolved                                                                  | cursor/cli |
+ *   | R15 | { forced: 'auto' }                     | otherwise                                                                          | degraded   |
  *
- * Per spec §3.1, the selector is synchronous and performs no I/O. Both
- * `cliResolved` AND `apiKeyPresent` are consumed as plain booleans — the
- * selector does not call `.isAvailable()` on `deps.subscriptionAdapter`,
- * and does not reach into `SecretStorePort` (which is async).
+ * Per spec §4 the selector is synchronous and performs no I/O. All
+ * `availability.*` fields are consumed as plain booleans — the selector
+ * must never call `.isAvailable()` on a candidate port nor reach into
+ * `SecretStorePort` (which is async).
  */
 import { describe, it, expect } from 'vitest'
 
 import { degradedClaudeCliPort } from '@/infrastructure/bridge/degradedClaudeCliPort'
 import type { ChatTransportPort } from '@/domain/ports/ChatTransportPort'
-import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
-import type { PluginSettings } from '@/domain/settings/PluginSettings'
-import type { TransportKind } from '@/domain/chat/TransportKind'
+import type {
+  ProviderId,
+  ProviderSelection,
+} from '@/domain/chat/ProviderSelection'
 
 import {
   selectTransport,
-  type TransportSelection,
-  type TransportSelectorDeps,
+  type ProviderRouterDeps,
+  type TransportResolution,
 } from '@/plugin/transport/TransportSelector'
 
 // -----------------------------------------------------------------------------
 // Fixtures
 // -----------------------------------------------------------------------------
 
-function makeSettings(overrides: Partial<PluginSettings>): PluginSettings {
-  return {
-    ...DEFAULT_SETTINGS,
-    transportKind: 'auto',
-    ...overrides,
-  }
-}
-
 /**
- * Hand-rolled mock ChatTransportPort. Calling any method during selection would
- * indicate the selector performed I/O (forbidden by spec §3.1).
+ * Hand-rolled mock `ChatTransportPort`. Any method call during selection would
+ * indicate the selector performed I/O (forbidden by spec §4).
  */
 function makeMockPort(label: string): ChatTransportPort {
   return {
@@ -67,222 +68,292 @@ function makeMockPort(label: string): ChatTransportPort {
   }
 }
 
-function makeDeps(overrides?: Partial<TransportSelectorDeps>): TransportSelectorDeps {
-  const sdkAdapter = makeMockPort('sdkAdapter')
-  const subscriptionAdapter = makeMockPort('subscriptionAdapter')
-  return {
-    sdkAdapter,
-    subscriptionAdapter,
-    degradedPort: degradedClaudeCliPort,
-    cliResolved: false,
-    apiKeyPresent: false,
-    ...overrides,
+interface MakeDepsOverrides {
+  readonly autoPreferProvider?: ProviderId
+  readonly claudeApiKeyPresent?: boolean
+  readonly claudeCliResolved?: boolean
+  readonly cursorApiKeyPresent?: boolean
+  readonly cursorCliResolved?: boolean
+  readonly cursorApiPreviewEnabled?: boolean
+  readonly secretStoreAvailable?: boolean
+}
+
+interface MakeDepsResult {
+  readonly deps: ProviderRouterDeps
+  readonly claudeApi: ChatTransportPort
+  readonly claudeCli: ChatTransportPort
+  readonly cursorApi: ChatTransportPort
+  readonly cursorCli: ChatTransportPort
+  readonly degraded: ChatTransportPort
+}
+
+function makeDeps(overrides: MakeDepsOverrides = {}): MakeDepsResult {
+  const claudeApi = makeMockPort('claude.api')
+  const claudeCli = makeMockPort('claude.cli')
+  const cursorApi = makeMockPort('cursor.api')
+  const cursorCli = makeMockPort('cursor.cli')
+  const degraded = degradedClaudeCliPort
+  const deps: ProviderRouterDeps = {
+    providers: {
+      claude: { api: claudeApi, cli: claudeCli },
+      cursor: { api: cursorApi, cli: cursorCli },
+    },
+    degradedPort: degraded,
+    availability: {
+      claudeApiKeyPresent: overrides.claudeApiKeyPresent ?? false,
+      claudeCliResolved: overrides.claudeCliResolved ?? false,
+      cursorApiKeyPresent: overrides.cursorApiKeyPresent ?? false,
+      cursorCliResolved: overrides.cursorCliResolved ?? false,
+      cursorApiPreviewEnabled: overrides.cursorApiPreviewEnabled ?? false,
+      secretStoreAvailable: overrides.secretStoreAvailable ?? false,
+    },
+    autoPreferProvider: overrides.autoPreferProvider ?? 'claude',
   }
+  return { deps, claudeApi, claudeCli, cursorApi, cursorCli, degraded }
 }
 
 // -----------------------------------------------------------------------------
-// Truth-table rows R1–R8 (spec §3.1)
+// Truth-table rows R1–R15 (design §C4 / spec §4)
 // -----------------------------------------------------------------------------
 
-describe('REQ-ASM-002 / REQ-ASM-003: selectTransport() — SPEC-ASM-001 §3.1 truth table', () => {
-  it("R1 — transportKind='degraded' (api-key empty, cli unresolved) → degraded", () => {
-    const settings = makeSettings({ transportKind: 'degraded' })
-    const deps = makeDeps({ cliResolved: false, apiKeyPresent: false })
+describe('selectTransport() — SPEC-MPS-001 §4 / design §C4 15-row truth table', () => {
+  it("R1 — { forced: 'degraded' } → degraded (overrides all availability)", () => {
+    const { deps, degraded } = makeDeps({
+      claudeApiKeyPresent: true,
+      claudeCliResolved: true,
+      cursorApiKeyPresent: true,
+      cursorCliResolved: true,
+      cursorApiPreviewEnabled: true,
+      secretStoreAvailable: true,
+    })
+    const selection: ProviderSelection = { forced: 'degraded' }
 
-    const selection: TransportSelection = selectTransport(settings, deps)
+    const result: TransportResolution = selectTransport(selection, deps)
 
-    expect(selection.kind).toBe('degraded')
-    expect(selection.port).toBe(deps.degradedPort)
+    expect(result.resolved).toBe('degraded')
+    expect(result.port).toBe(degraded)
   })
 
-  it("R1 — transportKind='degraded' wins regardless of api-key/cliResolved values", () => {
-    const settings = makeSettings({ transportKind: 'degraded' })
-    const deps = makeDeps({ cliResolved: true, apiKeyPresent: true })
+  it("R2 — claude/api + claudeApiKeyPresent → claude/api", () => {
+    const { deps, claudeApi } = makeDeps({ claudeApiKeyPresent: true })
+    const result = selectTransport({ provider: 'claude', mode: 'api' }, deps)
 
-    const selection = selectTransport(settings, deps)
-
-    expect(selection.kind).toBe('degraded')
-    expect(selection.port).toBe(deps.degradedPort)
+    expect(result.resolved).toEqual({ provider: 'claude', mode: 'api' })
+    expect(result.port).toBe(claudeApi)
   })
 
-  it("R2 — transportKind='api-key' + api-key present → api-key (sdkAdapter)", () => {
-    const settings = makeSettings({ transportKind: 'api-key' })
-    const deps = makeDeps({ cliResolved: false, apiKeyPresent: true })
+  it("R3 — claude/api + !claudeApiKeyPresent → degraded", () => {
+    const { deps, degraded } = makeDeps({ claudeApiKeyPresent: false })
+    const result = selectTransport({ provider: 'claude', mode: 'api' }, deps)
 
-    const selection = selectTransport(settings, deps)
-
-    expect(selection).toEqual(
-      expect.objectContaining({ kind: 'api-key', port: deps.sdkAdapter }),
-    )
+    expect(result.resolved).toBe('degraded')
+    expect(result.port).toBe(degraded)
   })
 
-  it("R2 — transportKind='api-key' + api-key present is independent of cliResolved", () => {
-    const settings = makeSettings({ transportKind: 'api-key' })
-    const deps = makeDeps({ cliResolved: true, apiKeyPresent: true })
+  it("R4 — claude/cli + claudeCliResolved → claude/cli", () => {
+    const { deps, claudeCli } = makeDeps({ claudeCliResolved: true })
+    const result = selectTransport({ provider: 'claude', mode: 'cli' }, deps)
 
-    const selection = selectTransport(settings, deps)
-
-    expect(selection.kind).toBe('api-key')
-    expect(selection.port).toBe(deps.sdkAdapter)
+    expect(result.resolved).toEqual({ provider: 'claude', mode: 'cli' })
+    expect(result.port).toBe(claudeCli)
   })
 
-  it("R3 — transportKind='api-key' + empty api-key → degraded", () => {
-    const settings = makeSettings({ transportKind: 'api-key' })
-    const deps = makeDeps({ cliResolved: false, apiKeyPresent: false })
+  it("R5 — claude/cli + !claudeCliResolved → degraded", () => {
+    const { deps, degraded } = makeDeps({ claudeCliResolved: false })
+    const result = selectTransport({ provider: 'claude', mode: 'cli' }, deps)
 
-    const selection = selectTransport(settings, deps)
-
-    expect(selection.kind).toBe('degraded')
-    expect(selection.port).toBe(deps.degradedPort)
+    expect(result.resolved).toBe('degraded')
+    expect(result.port).toBe(degraded)
   })
 
-  it("R3 — transportKind='api-key' + apiKeyPresent=false → degraded even with cliResolved=true", () => {
-    const settings = makeSettings({ transportKind: 'api-key' })
-    const deps = makeDeps({ cliResolved: true, apiKeyPresent: false })
+  it("R6 — cursor/api + secretStore && cursorApiKey && cursorApiPreview → cursor/api (TST-MPS-04)", () => {
+    const { deps, cursorApi } = makeDeps({
+      secretStoreAvailable: true,
+      cursorApiKeyPresent: true,
+      cursorApiPreviewEnabled: true,
+    })
+    const result = selectTransport({ provider: 'cursor', mode: 'api' }, deps)
 
-    const selection = selectTransport(settings, deps)
-
-    expect(selection.kind).toBe('degraded')
-    expect(selection.port).toBe(deps.degradedPort)
+    expect(result.resolved).toEqual({ provider: 'cursor', mode: 'api' })
+    expect(result.port).toBe(cursorApi)
   })
 
-  it("R4 — transportKind='subscription' + cliResolved=true → subscription (subscriptionAdapter)", () => {
-    const settings = makeSettings({ transportKind: 'subscription' })
-    const deps = makeDeps({ cliResolved: true, apiKeyPresent: false })
+  it("R7 — cursor/api + !secretStoreAvailable → degraded (TST-MPS-05)", () => {
+    const { deps, degraded } = makeDeps({
+      secretStoreAvailable: false,
+      cursorApiKeyPresent: true,
+      cursorApiPreviewEnabled: true,
+    })
+    const result = selectTransport({ provider: 'cursor', mode: 'api' }, deps)
 
-    const selection = selectTransport(settings, deps)
-
-    expect(selection).toEqual(
-      expect.objectContaining({ kind: 'subscription', port: deps.subscriptionAdapter }),
-    )
+    expect(result.resolved).toBe('degraded')
+    expect(result.port).toBe(degraded)
   })
 
-  it("R4 — transportKind='subscription' + cliResolved=true is independent of api-key presence", () => {
-    const settings = makeSettings({ transportKind: 'subscription' })
-    const deps = makeDeps({ cliResolved: true, apiKeyPresent: true })
+  it("R7 — cursor/api + !cursorApiKeyPresent → degraded", () => {
+    const { deps, degraded } = makeDeps({
+      secretStoreAvailable: true,
+      cursorApiKeyPresent: false,
+      cursorApiPreviewEnabled: true,
+    })
+    const result = selectTransport({ provider: 'cursor', mode: 'api' }, deps)
 
-    const selection = selectTransport(settings, deps)
-
-    expect(selection.kind).toBe('subscription')
-    expect(selection.port).toBe(deps.subscriptionAdapter)
+    expect(result.resolved).toBe('degraded')
+    expect(result.port).toBe(degraded)
   })
 
-  it("R5 — transportKind='subscription' + cliResolved=false → degraded", () => {
-    const settings = makeSettings({ transportKind: 'subscription' })
-    const deps = makeDeps({ cliResolved: false, apiKeyPresent: false })
+  it("R7 — cursor/api + !cursorApiPreviewEnabled → degraded", () => {
+    const { deps, degraded } = makeDeps({
+      secretStoreAvailable: true,
+      cursorApiKeyPresent: true,
+      cursorApiPreviewEnabled: false,
+    })
+    const result = selectTransport({ provider: 'cursor', mode: 'api' }, deps)
 
-    const selection = selectTransport(settings, deps)
-
-    expect(selection.kind).toBe('degraded')
-    expect(selection.port).toBe(deps.degradedPort)
+    expect(result.resolved).toBe('degraded')
+    expect(result.port).toBe(degraded)
   })
 
-  it("R5 — transportKind='subscription' + cliResolved=false ignores a present api-key", () => {
-    const settings = makeSettings({ transportKind: 'subscription' })
-    const deps = makeDeps({ cliResolved: false, apiKeyPresent: true })
+  it("R8 — cursor/cli + cursorCliResolved → cursor/cli", () => {
+    const { deps, cursorCli } = makeDeps({ cursorCliResolved: true })
+    const result = selectTransport({ provider: 'cursor', mode: 'cli' }, deps)
 
-    const selection = selectTransport(settings, deps)
-
-    expect(selection.kind).toBe('degraded')
-    expect(selection.port).toBe(deps.degradedPort)
+    expect(result.resolved).toEqual({ provider: 'cursor', mode: 'cli' })
+    expect(result.port).toBe(cursorCli)
   })
 
-  it("R6 — transportKind='auto' + api-key present → api-key (sdkAdapter) — TEST-ASM-001", () => {
-    const settings = makeSettings({ transportKind: 'auto' })
-    const deps = makeDeps({ cliResolved: false, apiKeyPresent: true })
+  it("R9 — cursor/cli + !cursorCliResolved → degraded", () => {
+    const { deps, degraded } = makeDeps({ cursorCliResolved: false })
+    const result = selectTransport({ provider: 'cursor', mode: 'cli' }, deps)
 
-    const selection = selectTransport(settings, deps)
-
-    expect(selection).toEqual(
-      expect.objectContaining({ kind: 'api-key', port: deps.sdkAdapter }),
-    )
+    expect(result.resolved).toBe('degraded')
+    expect(result.port).toBe(degraded)
   })
 
-  it("R6 — transportKind='auto' + api-key present beats cliResolved=true (api-key precedes subscription in auto)", () => {
-    const settings = makeSettings({ transportKind: 'auto' })
-    const deps = makeDeps({ cliResolved: true, apiKeyPresent: true })
+  it("R10 — auto + claudeApiKeyPresent + autoPreferProvider='claude' → claude/api", () => {
+    const { deps, claudeApi } = makeDeps({
+      autoPreferProvider: 'claude',
+      claudeApiKeyPresent: true,
+    })
+    const result = selectTransport({ forced: 'auto' }, deps)
 
-    const selection = selectTransport(settings, deps)
-
-    expect(selection.kind).toBe('api-key')
-    expect(selection.port).toBe(deps.sdkAdapter)
+    expect(result.resolved).toEqual({ provider: 'claude', mode: 'api' })
+    expect(result.port).toBe(claudeApi)
   })
 
-  it("R7 — transportKind='auto' + empty api-key + cliResolved=true → subscription — TEST-ASM-002", () => {
-    const settings = makeSettings({ transportKind: 'auto' })
-    const deps = makeDeps({ cliResolved: true, apiKeyPresent: false })
+  it("R11 — auto + cursorApiKeyPresent && cursorApiPreviewEnabled && autoPreferProvider='cursor' → cursor/api (TST-MPS-06)", () => {
+    const { deps, cursorApi } = makeDeps({
+      autoPreferProvider: 'cursor',
+      cursorApiKeyPresent: true,
+      cursorApiPreviewEnabled: true,
+      // Even with claudeApiKeyPresent we should prefer cursor because R10 only
+      // fires for prefer='claude'; R11 wins ahead of R12 when prefer='cursor'.
+      claudeApiKeyPresent: true,
+      secretStoreAvailable: true,
+    })
+    const result = selectTransport({ forced: 'auto' }, deps)
 
-    const selection = selectTransport(settings, deps)
-
-    expect(selection).toEqual(
-      expect.objectContaining({ kind: 'subscription', port: deps.subscriptionAdapter }),
-    )
+    expect(result.resolved).toEqual({ provider: 'cursor', mode: 'api' })
+    expect(result.port).toBe(cursorApi)
   })
 
-  it("R8 — transportKind='auto' + empty api-key + cliResolved=false → degraded — TEST-ASM-003", () => {
-    const settings = makeSettings({ transportKind: 'auto' })
-    const deps = makeDeps({ cliResolved: false, apiKeyPresent: false })
+  it("R12 — auto + claudeApiKeyPresent (with prefer='cursor' but no cursor key) → claude/api", () => {
+    const { deps, claudeApi } = makeDeps({
+      autoPreferProvider: 'cursor',
+      claudeApiKeyPresent: true,
+      // Cursor side empty so R11 cannot fire — R12 takes precedence over CLI rows.
+      cursorApiKeyPresent: false,
+      cursorApiPreviewEnabled: false,
+      claudeCliResolved: true,
+      cursorCliResolved: true,
+    })
+    const result = selectTransport({ forced: 'auto' }, deps)
 
-    const selection = selectTransport(settings, deps)
+    expect(result.resolved).toEqual({ provider: 'claude', mode: 'api' })
+    expect(result.port).toBe(claudeApi)
+  })
 
-    expect(selection.kind).toBe('degraded')
-    expect(selection.port).toBe(deps.degradedPort)
+  it("R13 — auto + !claudeApiKey + claudeCliResolved → claude/cli", () => {
+    const { deps, claudeCli } = makeDeps({
+      claudeApiKeyPresent: false,
+      claudeCliResolved: true,
+      // cursorCliResolved=true must lose to claudeCliResolved because R13 < R14.
+      cursorCliResolved: true,
+    })
+    const result = selectTransport({ forced: 'auto' }, deps)
+
+    expect(result.resolved).toEqual({ provider: 'claude', mode: 'cli' })
+    expect(result.port).toBe(claudeCli)
+  })
+
+  it("R14 — auto + only cursorCliResolved → cursor/cli", () => {
+    const { deps, cursorCli } = makeDeps({
+      claudeApiKeyPresent: false,
+      claudeCliResolved: false,
+      cursorCliResolved: true,
+    })
+    const result = selectTransport({ forced: 'auto' }, deps)
+
+    expect(result.resolved).toEqual({ provider: 'cursor', mode: 'cli' })
+    expect(result.port).toBe(cursorCli)
+  })
+
+  it("R15 — auto + nothing available → degraded", () => {
+    const { deps, degraded } = makeDeps({})
+    const result = selectTransport({ forced: 'auto' }, deps)
+
+    expect(result.resolved).toBe('degraded')
+    expect(result.port).toBe(degraded)
   })
 })
 
 // -----------------------------------------------------------------------------
-// Purity / no-I/O guards (T-ASM-004 DoD: "Selector test never spawns;
-// deps.cliResolved is set explicitly per test")
+// Purity / no-I/O guards
 // -----------------------------------------------------------------------------
 
-describe('selectTransport() purity invariants (SPEC-ASM-001 §3.1)', () => {
-  it('does not invoke any method on sdkAdapter or subscriptionAdapter during selection', () => {
-    // Every path is exercised below; the mock ports throw on any method call,
-    // so if the selector ever reaches for `.isAvailable()` / `.query()` /
-    // `.startup()` / `.shutdown()` the assertion fails.
+describe('selectTransport() purity invariants (SPEC-MPS-001 §4)', () => {
+  it('never invokes any method on candidate ports during selection', () => {
+    // Mock ports throw on any method call; if selector ever calls one, this
+    // assertion fails. Exercise every row group.
     const cases: ReadonlyArray<{
-      transportKind: TransportKind
-      apiKeyPresent: boolean
-      cliResolved: boolean
+      selection: ProviderSelection
+      overrides: MakeDepsOverrides
     }> = [
-      { transportKind: 'degraded', apiKeyPresent: true, cliResolved: true },
-      { transportKind: 'api-key', apiKeyPresent: true, cliResolved: true },
-      { transportKind: 'api-key', apiKeyPresent: false, cliResolved: false },
-      { transportKind: 'subscription', apiKeyPresent: false, cliResolved: true },
-      { transportKind: 'subscription', apiKeyPresent: false, cliResolved: false },
-      { transportKind: 'auto', apiKeyPresent: true, cliResolved: false },
-      { transportKind: 'auto', apiKeyPresent: false, cliResolved: true },
-      { transportKind: 'auto', apiKeyPresent: false, cliResolved: false },
+      { selection: { forced: 'degraded' }, overrides: {} },
+      { selection: { provider: 'claude', mode: 'api' }, overrides: { claudeApiKeyPresent: true } },
+      { selection: { provider: 'claude', mode: 'api' }, overrides: {} },
+      { selection: { provider: 'claude', mode: 'cli' }, overrides: { claudeCliResolved: true } },
+      { selection: { provider: 'claude', mode: 'cli' }, overrides: {} },
+      {
+        selection: { provider: 'cursor', mode: 'api' },
+        overrides: { secretStoreAvailable: true, cursorApiKeyPresent: true, cursorApiPreviewEnabled: true },
+      },
+      { selection: { provider: 'cursor', mode: 'api' }, overrides: {} },
+      { selection: { provider: 'cursor', mode: 'cli' }, overrides: { cursorCliResolved: true } },
+      { selection: { provider: 'cursor', mode: 'cli' }, overrides: {} },
+      { selection: { forced: 'auto' }, overrides: { claudeApiKeyPresent: true, autoPreferProvider: 'claude' } },
+      {
+        selection: { forced: 'auto' },
+        overrides: { autoPreferProvider: 'cursor', cursorApiKeyPresent: true, cursorApiPreviewEnabled: true },
+      },
+      { selection: { forced: 'auto' }, overrides: { claudeApiKeyPresent: true } },
+      { selection: { forced: 'auto' }, overrides: { claudeCliResolved: true } },
+      { selection: { forced: 'auto' }, overrides: { cursorCliResolved: true } },
+      { selection: { forced: 'auto' }, overrides: {} },
     ]
 
     for (const c of cases) {
-      const settings = makeSettings({ transportKind: c.transportKind })
-      const deps = makeDeps({ cliResolved: c.cliResolved, apiKeyPresent: c.apiKeyPresent })
-
-      // The mocks throw on any port-method call; reaching this point at all
-      // means the selector consumed `cliResolved` and `apiKeyPresent` as
-      // plain booleans.
-      expect(() => selectTransport(settings, deps)).not.toThrow()
+      const { deps } = makeDeps(c.overrides)
+      expect(() => selectTransport(c.selection, deps)).not.toThrow()
     }
   })
 
-  it('returns a kind that is never literally "auto" (TransportSelection.kind excludes "auto")', () => {
-    const settings = makeSettings({ transportKind: 'auto' })
-    const deps = makeDeps({ cliResolved: true, apiKeyPresent: false })
+  it('is deterministic across repeated calls with identical inputs', () => {
+    const { deps } = makeDeps({ claudeApiKeyPresent: true })
+    const first = selectTransport({ forced: 'auto' }, deps)
+    const second = selectTransport({ forced: 'auto' }, deps)
 
-    const selection = selectTransport(settings, deps)
-
-    expect(selection.kind).not.toBe('auto')
-  })
-
-  it('is referentially stable across repeated calls with identical inputs (deterministic)', () => {
-    const settings = makeSettings({ transportKind: 'auto' })
-    const deps = makeDeps({ cliResolved: true, apiKeyPresent: true })
-
-    const first = selectTransport(settings, deps)
-    const second = selectTransport(settings, deps)
-
-    expect(first.kind).toBe(second.kind)
+    expect(first.resolved).toEqual(second.resolved)
     expect(first.port).toBe(second.port)
   })
 })

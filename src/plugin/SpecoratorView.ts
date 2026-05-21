@@ -12,6 +12,7 @@ import {
   NOTIFICATION_PORT,
   LOGGER_PORT,
   CHAT_TRANSPORT_PORT,
+  PROVIDER_REGISTRY_KEY,
   COMMUNITY_PLUGIN_PORT,
   CONFIRM_MODAL_PORT,
   SECRET_STORE_PORT,
@@ -27,7 +28,19 @@ import { FEATURE_SERVICE_KEY } from '@/ui/composables/useFeatureService'
 import type { ChatTransportPort, ConfirmModalPort, TransportLifecyclePort } from '@/domain/ports'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 import type { TransportKind } from '@/domain/chat/TransportKind'
-import type { TransportSelection } from '@/plugin/transport/TransportSelector'
+import type { ChatTransportPort as _ChatTransportPort } from '@/domain/ports/ChatTransportPort'
+
+/**
+ * Legacy `{ port, kind }` snapshot consumed by the view's reactive state.
+ * `kind` is derived in `main.ts` from the new
+ * `TransportResolution.resolved` (see `resolutionToLegacyKind`). Keeping the
+ * type local to the view layer avoids leaking the deprecated `TransportKind`
+ * vocabulary back into `TransportSelector.ts` (REQ-MPS-007 / NFR-MPS-003).
+ */
+export interface TransportSelection {
+  readonly port: _ChatTransportPort
+  readonly kind: TransportKind
+}
 import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore'
 import { useMessagesStore } from '@/ui/stores/messagesStore'
 import { mostRecentlyUsedThreadId } from './chatThreadsPersistence'
@@ -225,6 +238,10 @@ export class SpecoratorView extends ItemView {
       },
     })
     this.vueApp.provide(CHAT_TRANSPORT_PORT, reactivePort)
+    // WS-3 (REQ-MPS-006) — provide the read-only ProviderRegistry built once
+    // at plugin startup. The composable `useProviderRegistry` is the UI's
+    // single entry point for provider metadata.
+    this.vueApp.provide(PROVIDER_REGISTRY_KEY, this.plugin.getProviderRegistry())
     this.vueApp.provide(COMMUNITY_PLUGIN_PORT, bridge)
     if (this.plugin.secretStore !== null) {
       this.vueApp.provide(SECRET_STORE_PORT, this.plugin.secretStore)

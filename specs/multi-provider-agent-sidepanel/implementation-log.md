@@ -286,3 +286,157 @@ line.
 - **Next agent:** dev (WS-3). First ready task: T-MPS-028
   (`TransportSelector` truth table — 15 red rows, design §C4 / spec §11
   rows R1..R15).
+
+---
+
+## WS-3 — `TransportSelector` reshape + `buildProviderRegistry` + plugin wiring
+
+### T-MPS-028 — 15-row truth-table test (RED)
+
+- **Commit:** `97daffc`
+- **Files:** `tests/plugin/transport/TransportSelector.test.ts` (rewritten,
+  lines 1..323).
+- **Spec:** SPEC-MPS-001 §4 / design §C4. Maps TST-MPS-04 (R6),
+  TST-MPS-05 (R7), TST-MPS-06 (R11); covers R1..R5, R8..R10, R12..R15 for
+  completeness.
+- **Outcome:** done — all 15 truth-table rows + 2 purity guards intentionally
+  red because the selector still consumed the old `TransportSelectorDeps`
+  shape.
+
+### T-MPS-029 — Reshape `selectTransport` to `ProviderSelection` (GREEN)
+
+- **Commit:** `3d1b2e4`
+- **Files:**
+  - `src/plugin/transport/TransportSelector.ts` (rewritten, lines 1..172)
+  - `src/application/chat/selectTransport.ts` (re-export updated to
+    `ProviderRouterDeps` / `TransportResolution`)
+  - `src/plugin/SpecoratorView.ts` (introduces local `TransportSelection`
+    `{ port, kind }` so the deprecated `TransportKind` vocabulary stays
+    out of `TransportSelector.ts` — NFR-MPS-003)
+  - `src/plugin/AgentSidepanelView.ts` (re-imports `TransportSelection`
+    from `./SpecoratorView`)
+  - `src/plugin/main.ts` (inlines a `_routeTransport(settings)` adapter
+    that calls the new selector and maps the result back to the legacy
+    `{ port, kind }` shape; cursor adapter slots filled with degraded
+    stubs flagged for WS-4/WS-5 replacement)
+  - `tests/plugin/SpecoratorView.test.ts` (fixture translates
+    legacy `transportKind` → `ProviderSelection`; assertions unchanged)
+  - `tests/plugin/AgentSidepanelView.test.ts` (same fixture refactor)
+- **Spec:** SPEC-MPS-001 §4 / design §C4 / REQ-MPS-007, REQ-MPS-008,
+  REQ-MPS-012, REQ-MPS-014.
+- **Outcome:** done — all 15 truth-table rows + 2 purity guards green;
+  full unit suite passes (no behavioural regression).
+- **Deviation:** none. `TransportSelection { port, kind }` is *not* part
+  of the new spec but is retained as a private view-layer adapter type
+  so `ChatSidebar`'s `TRANSPORT_KIND_KEY` consumers stay bit-for-bit
+  identical (ccs-parity). The vocabulary is documented as legacy in the
+  view; future WS removes it once UI surfaces consume the new
+  `ProviderSelection` directly.
+
+### T-MPS-030 — `buildProviderRegistry` metadata-only test (RED)
+
+- **Commit:** `1dccec7`
+- **Files:** `tests/plugin/transport/buildProviderRegistry.test.ts` (new).
+- **Spec:** SPEC-MPS-001 §2.3 / REQ-MPS-006, NFR-MPS-003.
+- **Outcome:** done — fails because the module does not yet exist.
+
+### T-MPS-031 — Implement `buildProviderRegistry.ts` (GREEN)
+
+- **Commit:** `736ad6c`
+- **Files:**
+  - `src/plugin/transport/buildProviderRegistry.ts` (new, 89 lines)
+  - `src/infrastructure/bridge/ports.ts` (adds `PROVIDER_REGISTRY_KEY`
+    `InjectionKey` alongside the other ADR-008 narrow-port keys)
+- **Spec:** SPEC-MPS-001 §2.3 / §2.4 / REQ-MPS-006, NFR-MPS-003.
+- **Outcome:** done — 6 registry tests green. Registry carries
+  `ProviderCapabilities` records only; no `ChatTransportPort` references
+  on `ProviderEntry` (NFR-MPS-003 audited by the test).
+
+### T-MPS-032 — `useProviderRegistry` composable
+
+- **Commit:** `1e258c7`
+- **Files:**
+  - `src/ui/composables/useProviderRegistry.ts` (new, mirrors
+    `useCommunityPluginPort` pattern)
+  - `tests/ui/composables/useProviderRegistry.test.ts` (new, 2 cases:
+    happy-path inject + throw-when-missing).
+- **Spec:** REQ-MPS-006.
+- **Outcome:** done — 2 cases green.
+
+### T-MPS-033 — Wire selector + registry into `plugin/main.ts`
+
+- **Commit:** `bccaf61`
+- **Files:**
+  - `src/plugin/main.ts` (lazy `getProviderRegistry()` accessor backed by
+    `buildProviderRegistry`; `_routeTransport` already wired in T-MPS-029
+    re-imported `buildProviderRegistry`)
+  - `src/plugin/SpecoratorView.ts` (`provide(PROVIDER_REGISTRY_KEY, …)`
+    alongside the existing chat-transport provide)
+  - `src/plugin/AgentSidepanelView.ts` (same provide)
+- **Spec:** SPEC-MPS-001 §9 / REQ-MPS-006, REQ-MPS-007, REQ-MPS-008.
+- **Outcome:** done — both views expose the registry under
+  `PROVIDER_REGISTRY_KEY`; `useProviderRegistry()` resolves in production
+  and test trees alike.
+- **Deviation:** the Cursor adapter slots are temporary stubs returning
+  `degradedClaudeCliPort`. They are flagged with a
+  `// WS-4/WS-5 will replace this stub` comment on each declaration. The
+  selector's `cursorApiKeyPresent` / `cursorCliResolved` projections are
+  hard-wired to `false` so every Cursor row collapses to `degraded` until
+  WS-4 / WS-5 wire the real adapters. ccs-parity (REQ-CCS-001..028)
+  remains green because every Claude path bypasses the stubs.
+
+### T-MPS-029 refactor — cyclomatic-complexity split
+
+- **Commit:** `ab73dc2`
+- **Files:** `src/plugin/transport/TransportSelector.ts`.
+- **Outcome:** done — extracted `isCellAvailable`, `resolveExplicit`,
+  `resolveAuto` helpers so each sits under the project's
+  `max-complexity: 10` ceiling. Behaviour identical; all 25 truth-table
+  tests stay green.
+
+### T-MPS-034 — Regression: `@ccs-parity` suite under the new selector
+
+- **Commit:** *(no code change — regression-gate task)*
+- **Spec:** Release criterion G7, TST-MPS-33.
+- **Outcome:** done — `npm run verify` green: 1953 unit tests passed
+  across 164 files, including the predecessor `claude-cli-chat-sidebar`
+  surface (`tests/plugin/{SpecoratorView,AgentSidepanelView}.test.ts`,
+  `tests/ui/components/chat/*`, `tests/infrastructure/obsidian/Claude*`,
+  `tests/application/chat/*`). Plugin bundle 2.78 MB / 4 MB budget;
+  standalone 0.26 MB / 2 MB budget; typedoc + manifest + scaffold +
+  workflow SHA-pin gates all clean.
+
+### T-MPS-035 — WS-3 closeout + fan-out notice (this entry)
+
+- **Files:**
+  - `specs/multi-provider-agent-sidepanel/implementation-log.md` (this
+    file)
+  - `specs/multi-provider-agent-sidepanel/workflow-state.md` (hand-off
+    entry pointing WS-4..WS-9 leads at the WS-3 tip)
+
+## WS-3 branch summary
+
+- **Branch:** `feature/mps-ws-3-selector-wiring` (cut from
+  `feature/mps-ws-2-provider-selection` @ `df31b3f`).
+- **Commits (7):** `97daffc` (T-MPS-028 RED) → `3d1b2e4` (T-MPS-029
+  selector reshape) → `1dccec7` (T-MPS-030 RED) → `736ad6c` (T-MPS-031
+  registry) → `1e258c7` (T-MPS-032 composable) → `bccaf61` (T-MPS-033
+  plugin wiring) → `ab73dc2` (lint-driven complexity refactor) → *this
+  commit* (closeout).
+- **Stage status at hand-off:** Stage 7 `in-progress`; WS-1 + WS-2 +
+  WS-3 complete; WS-4..WS-9 ready to start in parallel; WS-10
+  integration waits on the fan-out.
+- **Next agents (parallel fan-out):**
+  - **WS-4 — Cursor API adapter + `SECRET_ID_CURSOR` + settings UX.**
+    First ready task: T-MPS-036 (ADR-MPS-003).
+  - **WS-5 — Cursor CLI adapter + binary resolver.** First ready task:
+    T-MPS-058 (placeholder spec stub) — confirm against
+    `dispatch-plan.md`.
+  - **WS-6 — Multi-thread switcher (ThreadTabStrip + chat store
+    extensions).**
+  - **WS-7 — Per-message actions (edit, regenerate, fork).** Requires
+    WS-6 thread-record shape before T-MPS-074.
+  - **WS-8 — Status panel (todos / bash output / plan mode).**
+  - **WS-9 — Provider model selector + settings polish.**
+  - All fan-out branches must be cut from this branch's tip and rebase
+    onto `develop` after the WS-3 PR squash-merges.
