@@ -112,7 +112,7 @@ describe('plugin loadSettings — migrateProviderSelection integration (T-MPS-02
     const { plugin, state } = makePlugin(structuredClone(autoFixture))
     await plugin.loadSettings()
     expect(state.saveCount).toBe(1)
-    const specorator = (state.blob as Record<string, unknown>).specorator as Record<string, unknown>
+    const specorator = (state.blob!).specorator as Record<string, unknown>
     expect(specorator.providerSelection).toEqual({ forced: 'auto' })
     expect('transportKind' in specorator).toBe(false)
   })
@@ -121,7 +121,7 @@ describe('plugin loadSettings — migrateProviderSelection integration (T-MPS-02
     const { plugin, state } = makePlugin(structuredClone(apiKeyFixture))
     await plugin.loadSettings()
     expect(state.saveCount).toBe(1)
-    const specorator = (state.blob as Record<string, unknown>).specorator as Record<string, unknown>
+    const specorator = (state.blob!).specorator as Record<string, unknown>
     expect(specorator.providerSelection).toEqual({ provider: 'claude', mode: 'api' })
     expect('transportKind' in specorator).toBe(false)
   })
@@ -130,7 +130,7 @@ describe('plugin loadSettings — migrateProviderSelection integration (T-MPS-02
     const { plugin, state } = makePlugin(structuredClone(subscriptionFixture))
     await plugin.loadSettings()
     expect(state.saveCount).toBe(1)
-    const specorator = (state.blob as Record<string, unknown>).specorator as Record<string, unknown>
+    const specorator = (state.blob!).specorator as Record<string, unknown>
     expect(specorator.providerSelection).toEqual({ provider: 'claude', mode: 'cli' })
     expect('transportKind' in specorator).toBe(false)
   })
@@ -138,7 +138,7 @@ describe('plugin loadSettings — migrateProviderSelection integration (T-MPS-02
   it('translates chatThreads.transport=api-key to the discriminated object', async () => {
     const { plugin, state } = makePlugin(structuredClone(apiKeyFixture))
     await plugin.loadSettings()
-    const specorator = (state.blob as Record<string, unknown>).specorator as Record<string, unknown>
+    const specorator = (state.blob!).specorator as Record<string, unknown>
     const threads = specorator.chatThreads as Record<string, Record<string, unknown>>
     expect(threads['t-api'].transport).toEqual({ provider: 'claude', mode: 'api' })
     expect(threads['t-api'].title).toBe('')
@@ -148,7 +148,7 @@ describe('plugin loadSettings — migrateProviderSelection integration (T-MPS-02
   it('translates chatThreads.transport=subscription to the discriminated object', async () => {
     const { plugin, state } = makePlugin(structuredClone(subscriptionFixture))
     await plugin.loadSettings()
-    const specorator = (state.blob as Record<string, unknown>).specorator as Record<string, unknown>
+    const specorator = (state.blob!).specorator as Record<string, unknown>
     const threads = specorator.chatThreads as Record<string, Record<string, unknown>>
     expect(threads['t-sub'].transport).toEqual({ provider: 'claude', mode: 'cli' })
   })

@@ -39,7 +39,7 @@ describe('migrateProviderSelection — malformed records (REQ-MPS-005)', () => {
 
     expect(result.errors.length).toBeGreaterThan(0)
     expect(result.errors.some((e) => e.includes('bad'))).toBe(true)
-    const threads = result.data.chatThreads as Record<string, Record<string, unknown>>
+    const threads = result.data.chatThreads!
     // Good record migrated.
     expect(threads.good.transport).toEqual({ provider: 'claude', mode: 'api' })
     // Bad record is left alone (caller decides whether to drop).

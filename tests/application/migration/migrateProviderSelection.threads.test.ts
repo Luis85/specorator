@@ -33,7 +33,7 @@ describe('migrateProviderSelection — chatThreads.transport translation', () =>
 
       expect(result.migrated).toBe(true)
       expect(result.errors).toEqual([])
-      const thread = (result.data.chatThreads as Record<string, Record<string, unknown>>).t1
+      const thread = (result.data.chatThreads!).t1
       expect(thread.transport).toEqual(expected)
       // Defaults applied to the new fields.
       expect(thread.title).toBe('')
@@ -59,7 +59,7 @@ describe('migrateProviderSelection — chatThreads.transport translation', () =>
     }
     const result = migrateProviderSelection(before)
     expect(result.migrated).toBe(false)
-    const thread = (result.data.chatThreads as Record<string, Record<string, unknown>>).t1
+    const thread = (result.data.chatThreads!).t1
     expect(thread.transport).toEqual({ provider: 'cursor', mode: 'api' })
     expect(thread.title).toBe('Existing title')
     expect(thread.forkParent).toBe('t0')
@@ -81,7 +81,7 @@ describe('migrateProviderSelection — chatThreads.transport translation', () =>
     }
     const result = migrateProviderSelection(before)
     expect(result.migrated).toBe(true)
-    const thread = (result.data.chatThreads as Record<string, Record<string, unknown>>).t1
+    const thread = (result.data.chatThreads!).t1
     expect(thread.title).toBe('')
     expect(thread.forkParent).toBeNull()
   })
@@ -112,7 +112,7 @@ describe('migrateProviderSelection — chatThreads.transport translation', () =>
 
     expect(result.migrated).toBe(true)
     expect(result.errors).toEqual([])
-    const threads = result.data.chatThreads as Record<string, Record<string, unknown>>
+    const threads = result.data.chatThreads!
     expect(threads.a.transport).toEqual({ provider: 'claude', mode: 'api' })
     expect(threads.b.transport).toEqual({ provider: 'claude', mode: 'cli' })
   })

@@ -140,7 +140,7 @@ export function parseChatThreadRecord(
   const logPath = r.logPath as string
   // `coerceTransport` is non-null here because `findIdentityDefect` already
   // rejected any unrecognised shape.
-  const transport = coerceTransport(r.transport) as PersistedTransport
+  const transport = coerceTransport(r.transport)!
   const title = typeof r.title === 'string' ? r.title : ''
   const forkParent =
     typeof r.forkParent === 'string'

@@ -32,12 +32,30 @@ import type { ProviderId, ProviderMode, ProviderSelection } from '@/domain/chat/
 
 export interface RawStoredData {
   readonly settings?: Record<string, unknown>
+  /**
+   * Raw chat-thread records. The value type is `unknown` because callers may
+   * hand us a freshly-parsed JSON blob whose record values have not yet been
+   * narrowed to `Record<string, unknown>`. The migration function performs
+   * the per-record shape check.
+   */
+  readonly chatThreads?: Record<string, unknown>
+  readonly [key: string]: unknown
+}
+
+/**
+ * Post-migration shape. `chatThreads` values are narrowed to `Record<string,
+ * unknown>` because the migration either translates each entry or preserves
+ * it verbatim under that shape; callers can index `result.data.chatThreads`
+ * without re-asserting the value type.
+ */
+export interface MigratedStoredData {
+  readonly settings?: Record<string, unknown>
   readonly chatThreads?: Record<string, Record<string, unknown>>
   readonly [key: string]: unknown
 }
 
 export interface MigrationResult {
-  readonly data: RawStoredData
+  readonly data: MigratedStoredData
   readonly migrated: boolean
   readonly errors: ReadonlyArray<string>
 }
@@ -72,27 +90,74 @@ function migrateSettings(
 ): { next: Record<string, unknown> | undefined; changed: boolean } {
   if (settings === undefined) return { next: undefined, changed: false }
 
-  const next: Record<string, unknown> = { ...settings }
-  let changed = false
-
-  if ('transportKind' in next) {
-    const legacy = next.transportKind
-    if (typeof legacy === 'string' && legacy in SETTINGS_TRANSLATION) {
-      // Translate then remove the legacy key.
-      if (!('providerSelection' in next)) {
-        next.providerSelection = SETTINGS_TRANSLATION[legacy]
-      }
-      delete next.transportKind
-      changed = true
-    } else {
-      errors.push(
-        `settings.transportKind: unrecognised legacy value ${JSON.stringify(legacy)}; ` +
-          `migration skipped for this field.`,
-      )
-    }
+  if (!('transportKind' in settings)) {
+    return { next: { ...settings }, changed: false }
   }
 
-  return { next, changed }
+  const legacy = settings.transportKind
+  if (typeof legacy !== 'string' || !(legacy in SETTINGS_TRANSLATION)) {
+    errors.push(
+      `settings.transportKind: unrecognised legacy value ${JSON.stringify(legacy)}; ` +
+        `migration skipped for this field.`,
+    )
+    return { next: { ...settings }, changed: false }
+  }
+
+  // Rebuild without the legacy key (eslint forbids `delete` per
+  // no-restricted-syntax — reassign by exclusion instead).
+  const next: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(settings)) {
+    if (key === 'transportKind') continue
+    next[key] = value
+  }
+  if (!('providerSelection' in next)) {
+    next.providerSelection = SETTINGS_TRANSLATION[legacy]
+  }
+  return { next, changed: true }
+}
+
+/**
+ * Translate one record's `transport` field. Returns the resolved object
+ * shape and a flag indicating whether translation occurred; appends a
+ * descriptive error string when the value is malformed.
+ */
+function translateThreadTransport(
+  threadId: string,
+  value: unknown,
+  errors: string[],
+): { mapped: { provider: ProviderId; mode: ProviderMode } | null; changed: boolean } {
+  if (typeof value === 'string') {
+    if (!(value in THREAD_TRANSPORT_TRANSLATION)) {
+      errors.push(
+        `chatThreads.${threadId}.transport: unrecognised legacy string ` +
+          `${JSON.stringify(value)}; record left untouched.`,
+      )
+      return { mapped: null, changed: false }
+    }
+    return { mapped: THREAD_TRANSPORT_TRANSLATION[value], changed: true }
+  }
+  if (value !== null && typeof value === 'object') {
+    const obj = value as Record<string, unknown>
+    if (
+      typeof obj.provider === 'string' &&
+      PROVIDER_IDS.has(obj.provider) &&
+      typeof obj.mode === 'string' &&
+      PROVIDER_MODES.has(obj.mode)
+    ) {
+      // Already migrated — leave as-is.
+      return { mapped: null, changed: false }
+    }
+    errors.push(
+      `chatThreads.${threadId}.transport: invalid object shape; ` +
+        `record left untouched.`,
+    )
+    return { mapped: null, changed: false }
+  }
+  errors.push(
+    `chatThreads.${threadId}.transport: missing or invalid type ${typeof value}; ` +
+      `record left untouched.`,
+  )
+  return { mapped: null, changed: false }
 }
 
 /**
@@ -110,39 +175,10 @@ function migrateThreadRecord(
   const next: Record<string, unknown> = { ...raw }
   let changed = false
 
-  // Transport translation.
-  const t = raw.transport
-  if (typeof t === 'string') {
-    const mapped = THREAD_TRANSPORT_TRANSLATION[t]
-    if (mapped === undefined) {
-      errors.push(
-        `chatThreads.${threadId}.transport: unrecognised legacy string ` +
-          `${JSON.stringify(t)}; record left untouched.`,
-      )
-    } else {
-      next.transport = mapped
-      changed = true
-    }
-  } else if (t !== null && typeof t === 'object') {
-    const obj = t as Record<string, unknown>
-    if (
-      typeof obj.provider === 'string' &&
-      PROVIDER_IDS.has(obj.provider) &&
-      typeof obj.mode === 'string' &&
-      PROVIDER_MODES.has(obj.mode)
-    ) {
-      // Already migrated — leave as-is.
-    } else {
-      errors.push(
-        `chatThreads.${threadId}.transport: invalid object shape; ` +
-          `record left untouched.`,
-      )
-    }
-  } else {
-    errors.push(
-      `chatThreads.${threadId}.transport: missing or invalid type ${typeof t}; ` +
-        `record left untouched.`,
-    )
+  const transportOutcome = translateThreadTransport(threadId, raw.transport, errors)
+  if (transportOutcome.mapped !== null) {
+    next.transport = transportOutcome.mapped
+    changed = true
   }
 
   // Default `title` when absent.
@@ -161,10 +197,12 @@ function migrateThreadRecord(
 
 /**
  * Migrate the `chatThreads` sub-blob. Iterates every entry; preserves the
- * map structure even when a record records an error.
+ * map structure even when a record records an error. Accepts an `unknown`
+ * value-typed record because callers may hand the function a raw JSON blob
+ * whose value types have not yet been narrowed.
  */
 function migrateChatThreads(
-  threads: Record<string, Record<string, unknown>> | undefined,
+  threads: Record<string, unknown> | undefined,
   errors: string[],
 ):
   | { next: Record<string, Record<string, unknown>>; changed: boolean }
@@ -181,12 +219,12 @@ function migrateChatThreads(
           `record left untouched.`,
       )
       // Defensive: preserve the raw value so the caller can decide.
-      next[threadId] = raw as unknown as Record<string, unknown>
+      next[threadId] = raw as Record<string, unknown>
       continue
     }
     const { next: recordNext, changed: recordChanged } = migrateThreadRecord(
       threadId,
-      raw,
+      raw as Record<string, unknown>,
       errors,
     )
     next[threadId] = recordNext
@@ -209,16 +247,20 @@ export function migrateProviderSelection(input: RawStoredData): MigrationResult 
   const settingsOutcome = migrateSettings(input.settings, errors)
   const threadsOutcome = migrateChatThreads(input.chatThreads, errors)
 
-  const data: Record<string, unknown> = { ...input }
+  const data: MigratedStoredData = { ...input } as MigratedStoredData
+  // `MigratedStoredData` shares its keys with `RawStoredData`; we update the
+  // narrowed sub-blobs in place via a mutable view so the type assertion only
+  // applies at construction time.
+  const mutable = data as Record<string, unknown>
   if (settingsOutcome.next !== undefined) {
-    data.settings = settingsOutcome.next
+    mutable.settings = settingsOutcome.next
   }
   if (threadsOutcome.next !== undefined) {
-    data.chatThreads = threadsOutcome.next
+    mutable.chatThreads = threadsOutcome.next
   }
 
   return {
-    data: data as RawStoredData,
+    data,
     migrated: settingsOutcome.changed || threadsOutcome.changed,
     errors,
   }

@@ -42,7 +42,7 @@ export type ProviderSelection =
  * `forced` field so this check is exhaustive and side-effect-free.
  */
 export function isExplicit(s: ProviderSelection): s is ExplicitSelection {
-  return (s as ExplicitSelection).provider !== undefined
+  return 'provider' in s
 }
 
 /**

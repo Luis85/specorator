@@ -22,7 +22,7 @@ describe('migrateProviderSelection — settings.transportKind translation', () =
       })
       expect(result.migrated).toBe(true)
       expect(result.errors).toEqual([])
-      const nextSettings = result.data.settings as Record<string, unknown>
+      const nextSettings = result.data.settings!
       expect(nextSettings.providerSelection).toEqual(expected)
       expect('transportKind' in nextSettings).toBe(false)
       // Sibling keys preserved.

@@ -276,7 +276,7 @@ export default class SpecoratorPlugin extends Plugin {
     })
 
     this.addCommand({
-      // eslint-disable-next-line obsidianmd/commands/no-plugin-id-in-command-id
+       
       id: 'open-agent-sidepanel',
       name: 'Open agent sidepanel',
       callback: () => void this.activateAgentSidepanel(),
@@ -435,35 +435,8 @@ export default class SpecoratorPlugin extends Plugin {
     // SPEC-MPS-001 §3 / REQ-MPS-004 / REQ-MPS-005 — translate the v0.x
     // `transportKind` + string `transport` encoding into the v1
     // `providerSelection` + `{ provider, mode }` discriminator BEFORE any
-    // adapter wiring reads `this.settings` or hydrates `chatThreads`. The
-    // migration is pure and idempotent (NFR-MPS-006); on `migrated === true`
-    // we persist via `saveData()` so the legacy keys never re-enter the
-    // boot path. Defence-in-depth: the function does not throw, but we
-    // wrap in try/catch to keep startup resilient if some future change
-    // breaks the invariant.
-    try {
-      const specoratorBefore = (this._storedData.specorator ?? {}) as Record<string, unknown>
-      const migration = migrateProviderSelection({
-        settings: specoratorBefore,
-        chatThreads:
-          (specoratorBefore.chatThreads as Record<string, Record<string, unknown>> | undefined) ?? undefined,
-      })
-      if (migration.errors.length > 0) {
-        for (const err of migration.errors) console.warn('[migrateProviderSelection]', err)
-      }
-      if (migration.migrated) {
-        const nextSpecorator: Record<string, unknown> = {
-          ...(migration.data.settings ?? {}),
-        }
-        if (migration.data.chatThreads !== undefined) {
-          nextSpecorator.chatThreads = migration.data.chatThreads
-        }
-        this._storedData = { ...this._storedData, specorator: nextSpecorator }
-        await this.saveData(this._storedData)
-      }
-    } catch (err) {
-      console.error('[migrateProviderSelection] threw unexpectedly', err)
-    }
+    // adapter wiring reads `this.settings` or hydrates `chatThreads`.
+    await this._runProviderSelectionMigration()
 
     this.settings = {
       ...DEFAULT_SETTINGS,
@@ -502,6 +475,41 @@ export default class SpecoratorPlugin extends Plugin {
   private async _initializeSecretStore(): Promise<void> {
     this.secretStore = new ObsidianSecretStoreAdapter(this.app)
     this._apiKeyCache = await this._readSecretSafe(this.secretStore)
+  }
+
+  /**
+   * SPEC-MPS-001 §3 / REQ-MPS-004 / REQ-MPS-005 — translate any v0.x
+   * `transportKind` + string-transport encoding inside `_storedData.specorator`
+   * to the v1 `providerSelection` + discriminated `{ provider, mode }` shape.
+   * Pure migration; idempotent (NFR-MPS-006). On `migrated === true` the
+   * translated blob is persisted via `saveData()` so the legacy keys never
+   * re-enter the boot path. The migration function does not throw, but
+   * `tryAsync` adds defence-in-depth against future regressions: a thrown
+   * error is logged and migration is skipped, but startup continues.
+   */
+  private async _runProviderSelectionMigration(): Promise<void> {
+    const outcome = await tryAsync(async () => {
+      const specoratorBefore = (this._storedData.specorator ?? {}) as Record<string, unknown>
+      const migration = migrateProviderSelection({
+        settings: specoratorBefore,
+        chatThreads: specoratorBefore.chatThreads as Record<string, unknown> | undefined,
+      })
+      for (const err of migration.errors) {
+        console.warn('[migrateProviderSelection]', err)
+      }
+      if (!migration.migrated) return
+      const nextSpecorator: Record<string, unknown> = {
+        ...(migration.data.settings ?? {}),
+      }
+      if (migration.data.chatThreads !== undefined) {
+        nextSpecorator.chatThreads = migration.data.chatThreads
+      }
+      this._storedData = { ...this._storedData, specorator: nextSpecorator }
+      await this.saveData(this._storedData)
+    })
+    if (!outcome.ok) {
+      console.error('[migrateProviderSelection] threw unexpectedly', outcome.error)
+    }
   }
 
   /**
