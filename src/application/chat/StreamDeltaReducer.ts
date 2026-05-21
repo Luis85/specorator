@@ -28,9 +28,9 @@
  */
 
 import {
-	ClaudeCliError,
+	ChatTransportError,
 	type StreamDelta,
-} from '@/domain/ports/ClaudeCliPort';
+} from '@/domain/ports/ChatTransportPort';
 import { asSessionId, type SessionId } from '@/domain/chat/SessionId';
 
 // -----------------------------------------------------------------------------
@@ -258,7 +258,7 @@ export class StreamDeltaReducer {
 	 * transport-level failure (subprocess close, timeout, abort) needs to
 	 * surface through the same channel as wire-level errors. Idempotent.
 	 */
-	emitError(error: ClaudeCliError): readonly StreamDelta[] {
+	emitError(error: ChatTransportError): readonly StreamDelta[] {
 		if (this._terminated) return [];
 		this._terminated = true;
 		return [{ type: 'error', error }];
@@ -433,7 +433,7 @@ export class StreamDeltaReducer {
 			return [
 				{
 					type: 'error',
-					error: new ClaudeCliError(
+					error: new ChatTransportError(
 						'QUERY_FAILED',
 						`SDK returned result error: ${event.subtype}`,
 					),
@@ -446,7 +446,7 @@ export class StreamDeltaReducer {
 			return [
 				{
 					type: 'error',
-					error: new ClaudeCliError(
+					error: new ChatTransportError(
 						'QUERY_FAILED',
 						'Claude CLI returned result event with is_error=true',
 					),

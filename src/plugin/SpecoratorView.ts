@@ -11,7 +11,7 @@ import {
   WORKSPACE_PORT,
   NOTIFICATION_PORT,
   LOGGER_PORT,
-  CLAUDE_CLI_PORT,
+  CHAT_TRANSPORT_PORT,
   COMMUNITY_PLUGIN_PORT,
   CONFIRM_MODAL_PORT,
   SECRET_STORE_PORT,
@@ -24,7 +24,7 @@ import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { FeatureService } from '@/application/feature/FeatureService'
 import { FeedbackService } from '@/application/shared/FeedbackService'
 import { FEATURE_SERVICE_KEY } from '@/ui/composables/useFeatureService'
-import type { ClaudeCliPort, ConfirmModalPort, TransportLifecyclePort } from '@/domain/ports'
+import type { ChatTransportPort, ConfirmModalPort, TransportLifecyclePort } from '@/domain/ports'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 import type { TransportKind } from '@/domain/chat/TransportKind'
 import type { TransportSelection } from '@/plugin/transport/TransportSelector'
@@ -47,7 +47,7 @@ export type SelectTransportFactory = (settings: PluginSettings) => TransportSele
  * subscription wiring rolls out.
  */
 export interface SpecoratorViewOptions {
-  readonly subscriptionAdapter: ClaudeCliPort
+  readonly subscriptionAdapter: ChatTransportPort
   readonly selectTransport: SelectTransportFactory
   /**
    * Production-grade modal adapter (`ObsidianConfirmModalAdapter`) constructed
@@ -62,7 +62,7 @@ export interface SpecoratorViewOptions {
   readonly confirmModalAdapter?: ConfirmModalPort
   /**
    * Lifecycle handles for the SDK and subscription transports. WP-12 split
-   * `startup`/`shutdown` off `ClaudeCliPort` onto the dedicated
+   * `startup`/`shutdown` off `ChatTransportPort` onto the dedicated
    * `TransportLifecyclePort`. The plugin layer owns the adapter instances
    * and passes the same objects under both contracts. Optional so legacy
    * test wiring that omitted lifecycle continues to compile; missing
@@ -96,14 +96,14 @@ export class SpecoratorView extends ItemView {
   private readonly _settingsVersion = ref(0)
 
   /**
-   * Reactive holder for the active `ClaudeCliPort`. Mutated by
+   * Reactive holder for the active `ChatTransportPort`. Mutated by
    * `_refreshActivePort()` whenever settings change (gated by REQ-ASM-003 —
    * skipped while a chat turn is in flight). Provided to Vue under
-   * `CLAUDE_CLI_PORT` so UI consumers stay transport-agnostic.
+   * `CHAT_TRANSPORT_PORT` so UI consumers stay transport-agnostic.
    *
    * Satisfies REQ-ASM-001, REQ-ASM-002, REQ-ASM-003.
    */
-  private readonly _activeClaudeCliPort: Ref<ClaudeCliPort>
+  private readonly _activeClaudeCliPort: Ref<ChatTransportPort>
 
   /**
    * Reactive holder for the resolved `TransportKind`. Mirrors
@@ -137,7 +137,7 @@ export class SpecoratorView extends ItemView {
   constructor(
     leaf: WorkspaceLeaf,
     private readonly plugin: SpecoratorPlugin,
-    private readonly claudeCliPort: ClaudeCliPort,
+    private readonly claudeCliPort: ChatTransportPort,
     options?: SpecoratorViewOptions,
   ) {
     super(leaf)
@@ -215,16 +215,16 @@ export class SpecoratorView extends ItemView {
     // would leave UI consumers on a stale adapter after transport switches.
     // Methods are bound to the current adapter so their internal `this`
     // references still resolve correctly. UI consumers see a normal
-    // `ClaudeCliPort` and need no changes (SPEC §9.5).
+    // `ChatTransportPort` and need no changes (SPEC §9.5).
     const ref = this._activeClaudeCliPort
-    const reactivePort = new Proxy({} as ClaudeCliPort, {
+    const reactivePort = new Proxy({} as ChatTransportPort, {
       get(_target, prop): unknown {
         const current = ref.value as unknown as Record<PropertyKey, unknown>
         const value = current[prop]
         return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(current) : value
       },
     })
-    this.vueApp.provide(CLAUDE_CLI_PORT, reactivePort)
+    this.vueApp.provide(CHAT_TRANSPORT_PORT, reactivePort)
     this.vueApp.provide(COMMUNITY_PLUGIN_PORT, bridge)
     if (this.plugin.secretStore !== null) {
       this.vueApp.provide(SECRET_STORE_PORT, this.plugin.secretStore)
@@ -404,10 +404,10 @@ export class SpecoratorView extends ItemView {
   }
 
   /**
-   * Returns the currently provided `ClaudeCliPort`. Test seam for T-ASM-021;
-   * production code reads the port via Vue's `inject(CLAUDE_CLI_PORT)`.
+   * Returns the currently provided `ChatTransportPort`. Test seam for T-ASM-021;
+   * production code reads the port via Vue's `inject(CHAT_TRANSPORT_PORT)`.
    */
-  public getActiveClaudeCliPort(): ClaudeCliPort {
+  public getActiveClaudeCliPort(): ChatTransportPort {
     return this._activeClaudeCliPort.value
   }
 

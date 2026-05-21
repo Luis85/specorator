@@ -2,13 +2,13 @@
  * Application-layer error classes for the agent side-panel chat.
  *
  * All five error classes in this surface area (the four defined here plus
- * `ClaudeCliError` in `src/domain/ports/ClaudeCliPort.ts`) extend {@link Error}
+ * `ChatTransportError` in `src/domain/ports/ChatTransportPort.ts`) extend {@link Error}
  * and are returned via `Result.error` — they are never thrown across a port
  * boundary (ADR-004, SPEC-ASM-001 §2.8).
  *
  * Each class restores the prototype chain via
  * `Object.setPrototypeOf(this, new.target.prototype)` so that `instanceof`
- * checks work in transpiled code (matches the `ClaudeCliError` pattern).
+ * checks work in transpiled code (matches the `ChatTransportError` pattern).
  *
  * Satisfies REQ-ASM-023, REQ-ASM-025, REQ-ASM-044, REQ-ASM-048.
  */
@@ -139,7 +139,7 @@ export class VaultReadError extends Error {
 /**
  * Discriminator for {@link ClaudeSubscriptionError}. Identifies the
  * subscription-transport failure mode; the adapter composes this into a
- * `ClaudeCliError` before surfacing to the UI (SPEC-ASM-001 §2.8).
+ * `ChatTransportError` before surfacing to the UI (SPEC-ASM-001 §2.8).
  */
 export type ClaudeSubscriptionErrorCode =
   | 'BINARY_NOT_FOUND'
@@ -149,7 +149,7 @@ export type ClaudeSubscriptionErrorCode =
   | 'STDOUT_INVALID_JSON'
 
 /**
- * Subscription-transport specific errors that compose into `ClaudeCliError`.
+ * Subscription-transport specific errors that compose into `ChatTransportError`.
  * Stays in the application layer so that the infrastructure adapter can map
  * its internal failure modes to the existing UI copy table without leaking
  * subprocess internals across the port boundary.

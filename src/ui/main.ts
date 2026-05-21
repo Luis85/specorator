@@ -17,7 +17,7 @@ import {
   WORKSPACE_PORT,
   NOTIFICATION_PORT,
   LOGGER_PORT,
-  CLAUDE_CLI_PORT,
+  CHAT_TRANSPORT_PORT,
   COMMUNITY_PLUGIN_PORT,
   SECRET_STORE_PORT,
   OPEN_PLUGIN_SETTINGS_KEY,
@@ -71,7 +71,7 @@ void bridge.getSettings()
     app.provide(WORKSPACE_PORT, bridge)
     app.provide(NOTIFICATION_PORT, bridge)
     app.provide(LOGGER_PORT, bridge)
-    app.provide(CLAUDE_CLI_PORT, bridge)
+    app.provide(CHAT_TRANSPORT_PORT, bridge)
     app.provide(COMMUNITY_PLUGIN_PORT, bridge)
     app.provide(SECRET_STORE_PORT, secretStore)
     // The Obsidian build provides this via `SpecoratorView.onOpen()` and

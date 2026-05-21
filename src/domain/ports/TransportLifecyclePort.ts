@@ -1,7 +1,7 @@
 /**
  * Narrow port (ADR-008) for the streaming-transport lifecycle. Owns the two
  * stateful side-effects that are *not* part of the per-turn streaming
- * surface in `ClaudeCliPort`:
+ * surface in `ChatTransportPort`:
  *
  *   - `startup()` — pre-warm the underlying transport (SDK adapter resolves
  *     the binary path; subscription adapter resolves the user-configured
@@ -10,7 +10,7 @@
  *     before plugin unload.  Synchronous so it can run inside Obsidian's
  *     `onunload()` register hook.  Never throws.
  *
- * Split off `ClaudeCliPort` in WP-12 (Arch review #3): the per-turn
+ * Split off `ChatTransportPort` in WP-12 (Arch review #3): the per-turn
  * `queryStream` / `runStructured` surface has nothing to do with process
  * lifecycle, and there is exactly one production caller per method
  * (`AgentSidepanelView` / `SpecoratorView` startup; `main.ts` `register()`

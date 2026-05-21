@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest'
 import { MockClaudeCliPort } from '@/infrastructure/mock/MockClaudeCliPort'
-import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort'
+import { ChatTransportError } from '@/domain/ports/ChatTransportPort'
 import { collectStream } from '@/application/chat/collectStream'
 
 describe('REQ-CCS-022: MockClaudeCliPort', () => {
@@ -40,7 +40,7 @@ describe('REQ-CCS-022: MockClaudeCliPort', () => {
     const result = await collectStream(mock.queryStream('hello'))
     expect(result.ok).toBe(false)
     if (result.ok) return
-    expect(result.error).toBeInstanceOf(ClaudeCliError)
+    expect(result.error).toBeInstanceOf(ChatTransportError)
     expect(result.error.errorCode).toBe('NOT_INSTALLED')
   })
 
@@ -61,7 +61,7 @@ describe('REQ-CCS-022: MockClaudeCliPort', () => {
 
   it('queryStream() with queryError set yields err(queryError)', async () => {
     mock.available = true
-    const customError = new ClaudeCliError('TIMEOUT', 'simulated timeout')
+    const customError = new ChatTransportError('TIMEOUT', 'simulated timeout')
     mock.queryError = customError
     const result = await collectStream(mock.queryStream('test'))
     expect(result.ok).toBe(false)

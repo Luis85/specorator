@@ -1,6 +1,6 @@
 /**
  * T-ASM-011 — `ClaudeSubprocessAdapter`: subscription-transport implementation of
- * `ClaudeCliPort` driving the user-installed `claude` binary as a short-lived
+ * `ChatTransportPort` driving the user-installed `claude` binary as a short-lived
  * child process per turn. Multi-turn continuity is achieved by forwarding
  * `--resume <sessionId>` argv (REQ-ASM-035) supplied by the caller, NOT by
  * reusing a long-lived process across turns.
@@ -43,7 +43,7 @@
  * absent from this file; lint enforcement lives in T-ASM-049.
  *
  * `runStructured` is reached through the application-layer `queryStructured()`
- * wrapper. WP-12 (Arch review #3) folded `runStructured` onto `ClaudeCliPort`
+ * wrapper. WP-12 (Arch review #3) folded `runStructured` onto `ChatTransportPort`
  * itself as an *optional* method — the application layer narrows via
  * `typeof port.runStructured === 'function'`, and the SDK adapter simply
  * does not implement it.
@@ -55,13 +55,13 @@ import {
 	type RawStreamEventInner,
 } from '@/application/chat/StreamDeltaReducer';
 import {
-	ClaudeCliError,
-	type ClaudeCliPort,
-	type ClaudeCliStreamOptions,
+	ChatTransportError,
+	type ChatTransportPort,
+	type ChatTransportStreamOptions,
 	type StreamDelta,
 	type StructuredCliCallOptions,
 	type StructuredCliRawResult,
-} from '@/domain/ports/ClaudeCliPort';
+} from '@/domain/ports/ChatTransportPort';
 import type { LoggerPort } from '@/domain/ports/LoggerPort';
 import type { TransportLifecyclePort } from '@/domain/ports/TransportLifecyclePort';
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
@@ -118,7 +118,7 @@ interface TurnProc {
 }
 
 /**
- * Subscription-transport implementation of `ClaudeCliPort`.
+ * Subscription-transport implementation of `ChatTransportPort`.
  *
  * `kind` is intentionally declared so `selectTransport` can identify this
  * adapter structurally without an `instanceof` check that would force a
@@ -127,10 +127,10 @@ interface TurnProc {
  * `runStructured` rather than `kind` — see WP-12 (Arch review #3).
  *
  * Also implements `TransportLifecyclePort` (`startup` / `shutdown`) — split
- * off `ClaudeCliPort` in WP-12 so the per-turn streaming surface stays
+ * off `ChatTransportPort` in WP-12 so the per-turn streaming surface stays
  * narrow per ADR-008 *responsibility* spirit.
  */
-export class ClaudeSubprocessAdapter implements ClaudeCliPort, TransportLifecyclePort {
+export class ClaudeSubprocessAdapter implements ChatTransportPort, TransportLifecyclePort {
 	public readonly kind = 'subscription' as const;
 
 	private _available = false;
@@ -221,7 +221,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort, TransportLifecycl
 	 * `error` deltas as they arrive. Honours `options.signal`. Never throws —
 	 * all failure modes surface as a terminal `error` delta.
 	 */
-	queryStream(prompt: string, options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> {
+	queryStream(prompt: string, options?: ChatTransportStreamOptions): AsyncIterable<StreamDelta> {
 		return this._runStream(prompt, options);
 	}
 
@@ -234,10 +234,10 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort, TransportLifecycl
 	async runStructured(
 		prompt: string,
 		options: StructuredCliCallOptions,
-	): Promise<Result<StructuredCliRawResult, ClaudeCliError>> {
+	): Promise<Result<StructuredCliRawResult, ChatTransportError>> {
 		if (!this._available) {
 			return err(
-				new ClaudeCliError(
+				new ChatTransportError(
 					'CLI_LAUNCH_FAILED',
 					'Subscription transport is not available — Claude CLI binary not found',
 				),
@@ -268,7 +268,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort, TransportLifecycl
 	 */
 	private async *_runStream(
 		prompt: string,
-		options?: ClaudeCliStreamOptions,
+		options?: ChatTransportStreamOptions,
 	): AsyncIterable<StreamDelta> {
 		const pre = this._preflightStream(options);
 		if (pre !== null) {
@@ -316,11 +316,11 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort, TransportLifecycl
 	 * Synchronous pre-flight gate for `queryStream`. Returns a terminal error
 	 * delta when the adapter is unavailable or the signal is already aborted.
 	 */
-	private _preflightStream(options: ClaudeCliStreamOptions | undefined): StreamDelta | null {
+	private _preflightStream(options: ChatTransportStreamOptions | undefined): StreamDelta | null {
 		if (!this._available || this._binaryPath === null) {
 			return {
 				type: 'error',
-				error: new ClaudeCliError(
+				error: new ChatTransportError(
 					'CLI_LAUNCH_FAILED',
 					'Subscription transport is not available — Claude CLI binary not found',
 				),
@@ -329,7 +329,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort, TransportLifecycl
 		if (options?.signal?.aborted === true) {
 			return {
 				type: 'error',
-				error: new ClaudeCliError('QUERY_FAILED', 'Request was aborted before send'),
+				error: new ChatTransportError('QUERY_FAILED', 'Request was aborted before send'),
 			};
 		}
 		return null;
@@ -349,7 +349,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort, TransportLifecycl
 			this._lifecycle.kill(proc.child);
 			this._emitTerminalError(
 				proc,
-				new ClaudeCliError('TIMEOUT', `Subscription query exceeded ${timeoutMs} ms`),
+				new ChatTransportError('TIMEOUT', `Subscription query exceeded ${timeoutMs} ms`),
 			);
 		}, timeoutMs);
 	}
@@ -366,7 +366,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort, TransportLifecycl
 		const onAbort = (): void => {
 			if (proc.reducer.terminated) return;
 			this._lifecycle.kill(proc.child);
-			this._emitTerminalError(proc, new ClaudeCliError('QUERY_FAILED', 'Request was aborted'));
+			this._emitTerminalError(proc, new ChatTransportError('QUERY_FAILED', 'Request was aborted'));
 		};
 		if (signal === undefined) return () => undefined;
 		signal.addEventListener('abort', onAbort, { once: true });
@@ -379,7 +379,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort, TransportLifecycl
 	/** Build the argv vector for a `query()` invocation. */
 	private _buildArgv(
 		prompt: string,
-		options: ClaudeCliStreamOptions | undefined,
+		options: ChatTransportStreamOptions | undefined,
 	): readonly string[] {
 		const resume =
 			typeof options?.resumeSessionId === 'string' && options.resumeSessionId.length > 0
@@ -405,7 +405,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort, TransportLifecycl
 		argv: readonly string[],
 		onSessionId: ((sessionId: SessionId) => void) | null,
 		reducer: StreamDeltaReducer,
-	): Result<TurnProc, ClaudeCliError> {
+	): Result<TurnProc, ChatTransportError> {
 		const spawned = this._lifecycle.spawn(binaryPath, argv, 'spawn.failed');
 		if (!spawned.ok) return spawned;
 		const child = spawned.value;
@@ -429,7 +429,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort, TransportLifecycl
 				this._lifecycle.kill(procRef.current.child);
 				this._emitTerminalError(
 					procRef.current,
-					new ClaudeCliError(
+					new ChatTransportError(
 						'QUERY_FAILED',
 						'Claude CLI stdout exceeded the buffer cap without a newline',
 					),
@@ -476,7 +476,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort, TransportLifecycl
 			this._lifecycle.release(proc.child);
 			this._emitTerminalError(
 				proc,
-				new ClaudeCliError(
+				new ChatTransportError(
 					'CLI_LAUNCH_FAILED',
 					'Claude CLI subprocess emitted error before completion',
 					errArg,
@@ -583,7 +583,7 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort, TransportLifecycl
 	 * invariants stay in one place) and complete the channel. Safe to call
 	 * repeatedly — the reducer is idempotent post-termination.
 	 */
-	private _emitTerminalError(proc: TurnProc, error: ClaudeCliError): void {
+	private _emitTerminalError(proc: TurnProc, error: ChatTransportError): void {
 		for (const delta of proc.reducer.emitError(error)) {
 			proc.channel.push(delta);
 		}
@@ -673,13 +673,13 @@ export class ClaudeSubprocessAdapter implements ClaudeCliPort, TransportLifecycl
 		if (exitCode !== null && exitCode !== 0) {
 			this._emitTerminalError(
 				proc,
-				new ClaudeCliError('QUERY_FAILED', `Claude CLI subprocess exited with code ${exitCode}`),
+				new ChatTransportError('QUERY_FAILED', `Claude CLI subprocess exited with code ${exitCode}`),
 			);
 			return;
 		}
 		this._emitTerminalError(
 			proc,
-			new ClaudeCliError('QUERY_FAILED', 'Subprocess closed before result event'),
+			new ChatTransportError('QUERY_FAILED', 'Subprocess closed before result event'),
 		);
 	}
 

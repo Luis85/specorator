@@ -26,7 +26,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
 import { MockClaudeCliPort } from '@/infrastructure/mock/MockClaudeCliPort';
-import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort';
+import { ChatTransportError } from '@/domain/ports/ChatTransportPort';
 import type { LoggerPort } from '@/domain/ports/LoggerPort';
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord';
 import { asSessionId } from '@/domain/chat/SessionId';
@@ -357,7 +357,7 @@ describe('ChatTurnOrchestrator.sendTurn', () => {
 	it('maps a TIMEOUT error delta to messages.setError("timeout")', async () => {
 		const port = new MockClaudeCliPort();
 		port.available = true;
-		port.queryError = new ClaudeCliError('TIMEOUT', 'timed out');
+		port.queryError = new ChatTransportError('TIMEOUT', 'timed out');
 		const { orchestrator, messages } = makeOrchestrator({ port });
 		const result = await orchestrator.sendTurn(freeTextInput());
 		expect(result.ok).toBe(true);
@@ -371,7 +371,7 @@ describe('ChatTurnOrchestrator.sendTurn', () => {
 	it('maps non-TIMEOUT error deltas to messages.setError("query_failed")', async () => {
 		const port = new MockClaudeCliPort();
 		port.available = true;
-		port.queryError = new ClaudeCliError('QUERY_FAILED', 'boom');
+		port.queryError = new ChatTransportError('QUERY_FAILED', 'boom');
 		const { orchestrator, messages } = makeOrchestrator({ port });
 		await orchestrator.sendTurn(freeTextInput());
 		expect(messages.state.errorType).toBe('query_failed');
@@ -599,7 +599,7 @@ describe('ChatTurnOrchestrator.sendTurn', () => {
 			(port as unknown as { kind: string }).kind = 'subscription';
 			(port as unknown as Record<string, unknown>).runStructured = async () => ({
 				ok: false,
-				error: new ClaudeCliError('TIMEOUT', 'structured timed out'),
+				error: new ChatTransportError('TIMEOUT', 'structured timed out'),
 			});
 			const { orchestrator, messages } = makeOrchestrator({ port });
 			await orchestrator.sendTurn(

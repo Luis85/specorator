@@ -9,7 +9,7 @@ import {
 	WORKSPACE_PORT,
 	NOTIFICATION_PORT,
 	LOGGER_PORT,
-	CLAUDE_CLI_PORT,
+	CHAT_TRANSPORT_PORT,
 	COMMUNITY_PLUGIN_PORT,
 	CONFIRM_MODAL_PORT,
 	MARKDOWN_RENDER_PORT,
@@ -20,7 +20,7 @@ import {
 	OPEN_PLUGIN_SETTINGS_KEY,
 } from '@/infrastructure/bridge/ports';
 import { ObsidianMarkdownRenderAdapter } from '@/infrastructure/obsidian/ObsidianMarkdownRenderAdapter';
-import type { ClaudeCliPort, ConfirmModalPort, TransportLifecyclePort } from '@/domain/ports';
+import type { ChatTransportPort, ConfirmModalPort, TransportLifecyclePort } from '@/domain/ports';
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
 import type { TransportKind } from '@/domain/chat/TransportKind';
 import type { TransportSelection } from '@/plugin/transport/TransportSelector';
@@ -39,12 +39,12 @@ import type SpecoratorPlugin from './main';
 export type SelectAgentTransportFactory = (settings: PluginSettings) => TransportSelection;
 
 export interface AgentSidepanelViewOptions {
-	readonly subscriptionAdapter: ClaudeCliPort;
+	readonly subscriptionAdapter: ChatTransportPort;
 	readonly selectTransport: SelectAgentTransportFactory;
 	readonly confirmModalAdapter?: ConfirmModalPort;
 	/**
 	 * Optional lifecycle handles for the SDK and subscription transports.
-	 * Split off `ClaudeCliPort` in WP-12 (Arch review #3) — `startup`/`shutdown`
+	 * Split off `ChatTransportPort` in WP-12 (Arch review #3) — `startup`/`shutdown`
 	 * no longer live on the streaming port. The plugin layer owns the adapter
 	 * instances and passes the same objects under both contracts. Optional so
 	 * legacy test wiring that omitted lifecycle continues to compile; missing
@@ -86,7 +86,7 @@ export class AgentSidepanelView extends ItemView {
 	 */
 	private readonly _settingsVersion = ref(0);
 
-	private readonly _activeClaudeCliPort: Ref<ClaudeCliPort>;
+	private readonly _activeClaudeCliPort: Ref<ChatTransportPort>;
 	private readonly _activeTransportKind: Ref<TransportKind>;
 	private readonly _options: AgentSidepanelViewOptions | null;
 
@@ -102,7 +102,7 @@ export class AgentSidepanelView extends ItemView {
 	constructor(
 		leaf: WorkspaceLeaf,
 		private readonly plugin: SpecoratorPlugin,
-		private readonly claudeCliPort: ClaudeCliPort,
+		private readonly claudeCliPort: ChatTransportPort,
 		options?: AgentSidepanelViewOptions,
 	) {
 		super(leaf);
@@ -167,7 +167,7 @@ export class AgentSidepanelView extends ItemView {
 		this.vueApp.provide(LOGGER_PORT, bridge);
 		this._refreshActivePort();
 		const portRef = this._activeClaudeCliPort;
-		const reactivePort = new Proxy({} as ClaudeCliPort, {
+		const reactivePort = new Proxy({} as ChatTransportPort, {
 			get(_target, prop): unknown {
 				const current = portRef.value as unknown as Record<PropertyKey, unknown>;
 				const value = current[prop];
@@ -176,7 +176,7 @@ export class AgentSidepanelView extends ItemView {
 					: value;
 			},
 		});
-		this.vueApp.provide(CLAUDE_CLI_PORT, reactivePort);
+		this.vueApp.provide(CHAT_TRANSPORT_PORT, reactivePort);
 		this.vueApp.provide(COMMUNITY_PLUGIN_PORT, bridge);
 		if (this.plugin.secretStore !== null) {
 			this.vueApp.provide(SECRET_STORE_PORT, this.plugin.secretStore);
@@ -284,7 +284,7 @@ export class AgentSidepanelView extends ItemView {
 		this._refreshActivePort();
 	}
 
-	public getActiveClaudeCliPort(): ClaudeCliPort {
+	public getActiveClaudeCliPort(): ChatTransportPort {
 		return this._activeClaudeCliPort.value;
 	}
 

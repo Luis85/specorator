@@ -7,7 +7,7 @@
  * Spawns a fresh short-lived `claude` subprocess with
  * `--output-format json --json-schema '<schema>'`, buffers stdout, and
  * `JSON.parse`s the whole payload once at close. Never throws — returns
- * `Result<StructuredCliRawResult, ClaudeCliError>` (ADR-004).
+ * `Result<StructuredCliRawResult, ChatTransportError>` (ADR-004).
  *
  * Satisfies REQ-ASM-021 (structured framing), REQ-ASM-049 (one-shot
  * process), REQ-ASM-031 (session-id capture), and the §4.4 error map.
@@ -15,10 +15,10 @@
 import { createFileEnvelopeJsonSchema } from '@/application/chat/createFileEnvelopeSchema';
 import { asSessionId, type SessionId } from '@/domain/chat/SessionId';
 import {
-	ClaudeCliError,
+	ChatTransportError,
 	type StructuredCliCallOptions,
 	type StructuredCliRawResult,
-} from '@/domain/ports/ClaudeCliPort';
+} from '@/domain/ports/ChatTransportPort';
 import type { LoggerPort } from '@/domain/ports/LoggerPort';
 import { err, ok, type Result } from '@/domain/shared/Result';
 import { buildSubprocessArgs } from '@/infrastructure/obsidian/buildSubprocessArgs';
@@ -47,10 +47,10 @@ export async function runSubprocessStructured(
 	binaryPath: string | null,
 	prompt: string,
 	options: StructuredCliCallOptions,
-): Promise<Result<StructuredCliRawResult, ClaudeCliError>> {
+): Promise<Result<StructuredCliRawResult, ChatTransportError>> {
 	if (binaryPath === null) {
 		return err(
-			new ClaudeCliError(
+			new ChatTransportError(
 				'CLI_LAUNCH_FAILED',
 				'Subscription transport is not available — Claude CLI binary not found',
 			),
@@ -68,22 +68,22 @@ export async function runSubprocessStructured(
 
 /**
  * Wire up the one-shot stdout/close/error pipeline and resolve with either
- * a parsed `StructuredCliRawResult` or a mapped `ClaudeCliError`.
+ * a parsed `StructuredCliRawResult` or a mapped `ChatTransportError`.
  */
 function _collectStructuredStdout(
 	deps: RunStructuredDeps,
 	child: ChildProcessLike,
 	timeoutMs: number,
 	options: StructuredCliCallOptions,
-): Promise<Result<StructuredCliRawResult, ClaudeCliError>> {
+): Promise<Result<StructuredCliRawResult, ChatTransportError>> {
 	const startTimeMs = Date.now();
 	let capturedSessionId: SessionId | null = null;
 	let lastExitCode: number | null = null;
-	return new Promise<Result<StructuredCliRawResult, ClaudeCliError>>((resolve) => {
+	return new Promise<Result<StructuredCliRawResult, ChatTransportError>>((resolve) => {
 		let stdoutBuffer = '';
 		let settled = false;
 
-		const settle = (r: Result<StructuredCliRawResult, ClaudeCliError>): void => {
+		const settle = (r: Result<StructuredCliRawResult, ChatTransportError>): void => {
 			if (settled) return;
 			settled = true;
 			// eslint-disable-next-line obsidianmd/prefer-active-window-timers -- infra layer, no Obsidian context
@@ -102,7 +102,7 @@ function _collectStructuredStdout(
 		const timeoutHandle = setTimeout(() => {
 			if (settled) return;
 			deps.lifecycle.kill(child);
-			settle(err(new ClaudeCliError('TIMEOUT', `Structured query exceeded ${timeoutMs} ms`)));
+			settle(err(new ChatTransportError('TIMEOUT', `Structured query exceeded ${timeoutMs} ms`)));
 		}, timeoutMs);
 
 		// Stdout is small and bounded — the structured path emits a single
@@ -123,7 +123,7 @@ function _collectStructuredStdout(
 			});
 			settle(
 				err(
-					new ClaudeCliError(
+					new ChatTransportError(
 						'CLI_LAUNCH_FAILED',
 						'Claude CLI subprocess emitted error before completion',
 						errArg,
@@ -184,23 +184,23 @@ function _extractStructuredSessionId(stdoutBuffer: string): SessionId | null {
 
 /**
  * Map the buffered stdout + exit code to either a parsed
- * `StructuredCliRawResult` or the appropriate `ClaudeCliError`. Pure helper.
+ * `StructuredCliRawResult` or the appropriate `ChatTransportError`. Pure helper.
  */
 function _parseStructuredStdout(
 	deps: RunStructuredDeps,
 	stdoutBuffer: string,
 	exitCode: number | null,
-): Result<StructuredCliRawResult, ClaudeCliError> {
+): Result<StructuredCliRawResult, ChatTransportError> {
 	if (exitCode !== null && exitCode !== 0) {
 		return err(
-			new ClaudeCliError('QUERY_FAILED', `Claude CLI subprocess exited with code ${exitCode}`),
+			new ChatTransportError('QUERY_FAILED', `Claude CLI subprocess exited with code ${exitCode}`),
 		);
 	}
 
 	const trimmed = stdoutBuffer.trim();
 	if (trimmed.length === 0) {
 		return err(
-			new ClaudeCliError('QUERY_FAILED', 'Claude CLI produced no stdout for structured query'),
+			new ChatTransportError('QUERY_FAILED', 'Claude CLI produced no stdout for structured query'),
 		);
 	}
 
@@ -215,7 +215,7 @@ function _parseStructuredStdout(
 			event: 'structured.stdout_invalid_json',
 		});
 		return err(
-			new ClaudeCliError(
+			new ChatTransportError(
 				'QUERY_FAILED',
 				'Claude CLI produced unparseable JSON for structured query',
 				e,
@@ -225,7 +225,7 @@ function _parseStructuredStdout(
 
 	if (parsed === null || typeof parsed !== 'object') {
 		return err(
-			new ClaudeCliError('QUERY_FAILED', 'Claude CLI structured stdout was not a JSON object'),
+			new ChatTransportError('QUERY_FAILED', 'Claude CLI structured stdout was not a JSON object'),
 		);
 	}
 

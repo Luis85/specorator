@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useClaudeCliPort } from '@/ui/composables/useClaudeCliPort'
+import { useChatTransportPort } from '@/ui/composables/useChatTransportPort'
 import { useLoggerPort } from '@/ui/composables/useLoggerPort'
 import { tryAsync } from '@/domain/shared/tryAsync'
 
@@ -8,7 +8,7 @@ type ClaudeStatus = 'checking' | 'ready' | 'not-ready' | 'unknown'
 
 const emit = defineEmits<{ next: [payload: { claudeStatus: 'ready' | 'not-ready' | 'unknown' }] }>()
 
-const claudeCliPort = useClaudeCliPort()
+const claudeCliPort = useChatTransportPort()
 const logger = useLoggerPort()
 
 const status = ref<ClaudeStatus>('checking')
@@ -20,10 +20,10 @@ onMounted(async () => {
 	}
 	const result = await tryAsync(
 		() => claudeCliPort.isAvailable(),
-		'ClaudeCliPort.isAvailable() threw unexpectedly',
+		'ChatTransportPort.isAvailable() threw unexpectedly',
 	)
 	if (!result.ok) {
-		logger.error('ClaudeCliPort.isAvailable() threw unexpectedly', result.error)
+		logger.error('ChatTransportPort.isAvailable() threw unexpectedly', result.error)
 		status.value = 'unknown'
 	} else {
 		status.value = result.value ? 'ready' : 'not-ready'

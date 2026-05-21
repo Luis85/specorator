@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
-import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort'
+import { ChatTransportError } from '@/domain/ports/ChatTransportPort'
 import { collectStream } from '@/application/chat/collectStream'
 
 // We mock the SDK module so no real subprocess is spawned in unit tests.
@@ -120,7 +120,7 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
       const result = await collectStream(adapter.queryStream('test prompt'))
       expect(result.ok).toBe(false)
       if (result.ok) return
-      expect(result.error).toBeInstanceOf(ClaudeCliError)
+      expect(result.error).toBeInstanceOf(ChatTransportError)
       expect(result.error.errorCode).toBe('API_KEY_MISSING')
     })
 
@@ -130,7 +130,7 @@ describe('REQ-CCS-002, REQ-CCS-003, REQ-CCS-016, REQ-CCS-017: ClaudeCliAdapter',
       const result = await collectStream(adapter.queryStream('test prompt'))
       expect(result.ok).toBe(false)
       if (result.ok) return
-      expect(result.error).toBeInstanceOf(ClaudeCliError)
+      expect(result.error).toBeInstanceOf(ChatTransportError)
       expect(result.error.errorCode).toBe('NOT_INSTALLED')
     })
   })

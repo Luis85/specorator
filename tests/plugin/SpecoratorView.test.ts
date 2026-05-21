@@ -14,7 +14,7 @@
  *     test seam (SpecoratorView.ts line 220).
  *   - We do NOT call `onOpen()` — that mounts a Vue app and would require an
  *     Obsidian runtime. Production code consumes the port via Vue's
- *     `inject(CLAUDE_CLI_PORT)`; the seam returns the same reactive value.
+ *     `inject(CHAT_TRANSPORT_PORT)`; the seam returns the same reactive value.
  *   - `selectTransport` is injected through the constructor's options bag
  *     (`SpecoratorViewOptions.selectTransport`) as a spy so we can assert the
  *     `deps` argument shape.
@@ -49,8 +49,8 @@ import type {
 import { degradedClaudeCliPort } from '@/infrastructure/bridge/degradedClaudeCliPort'
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
 import type {
-  ClaudeCliPort,
-  ClaudeCliStreamOptions,
+  ChatTransportPort,
+  ChatTransportStreamOptions,
   ConfirmModalPort,
   StreamDelta,
 } from '@/domain/ports'
@@ -61,11 +61,11 @@ import type SpecoratorPlugin from '@/plugin/main'
 // Fixtures
 // -----------------------------------------------------------------------------
 
-function makePort(label: string): ClaudeCliPort {
+function makePort(label: string): ChatTransportPort {
   return {
     isAvailable: vi.fn(async () => true),
     queryStream: vi.fn(
-      (_prompt: string, _options?: ClaudeCliStreamOptions): AsyncIterable<StreamDelta> => {
+      (_prompt: string, _options?: ChatTransportStreamOptions): AsyncIterable<StreamDelta> => {
         return (async function* (): AsyncGenerator<StreamDelta> {
           yield { type: 'text', text: `from-${label}` }
           yield { type: 'done' }
@@ -91,11 +91,11 @@ function makeLifecycle(): MockLifecycle {
 }
 
 interface Fixture {
-  readonly sdkAdapter: ClaudeCliPort
-  readonly subscriptionAdapter: ClaudeCliPort
+  readonly sdkAdapter: ChatTransportPort
+  readonly subscriptionAdapter: ChatTransportPort
   readonly sdkLifecycle: MockLifecycle
   readonly subscriptionLifecycle: MockLifecycle
-  readonly degradedPort: ClaudeCliPort
+  readonly degradedPort: ChatTransportPort
   readonly selectTransportSpy: ReturnType<typeof vi.fn>
   readonly plugin: { settings: PluginSettings }
   readonly options: SpecoratorViewOptions
@@ -183,7 +183,7 @@ function makeFixture(opts: FixtureOptions = {}): Fixture {
  * a Proxy. Identity (`Object.is`) against the raw port fails even though the
  * underlying target is the same. `toRaw` unwraps the Proxy so `toBe` succeeds.
  */
-function activePort(view: SpecoratorView): ClaudeCliPort {
+function activePort(view: SpecoratorView): ChatTransportPort {
   return toRaw(view.getActiveClaudeCliPort())
 }
 
@@ -193,10 +193,10 @@ function activePort(view: SpecoratorView): ClaudeCliPort {
  */
 function makeView(
   fixture: Fixture,
-  // The view's constructor accepts a `ClaudeCliPort` as its third arg —
+  // The view's constructor accepts a `ChatTransportPort` as its third arg —
   // historically the direct SDK adapter, now still required for the legacy
   // back-compat path. Pass the sdk adapter so it matches production wiring.
-  legacyPort?: ClaudeCliPort,
+  legacyPort?: ChatTransportPort,
 ): SpecoratorView {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const leaf = {} as any

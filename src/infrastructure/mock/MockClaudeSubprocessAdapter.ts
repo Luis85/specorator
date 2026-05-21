@@ -1,6 +1,6 @@
 /**
  * T-ASM-013 — Field-driven mock for the subscription-transport
- * `ClaudeCliPort` implementation. Mirrors the structural conventions of
+ * `ChatTransportPort` implementation. Mirrors the structural conventions of
  * `MockClaudeCliPort` (SPEC-CCS-001 §6) and the public surface of
  * `ClaudeSubprocessAdapter` (SPEC-ASM-001 §4/§5).
  *
@@ -20,15 +20,15 @@
 import type { CreateFileEnvelope } from '@/application/chat/createFileEnvelopeSchema';
 import type { SessionId } from '@/domain/chat/SessionId';
 import type {
-	ClaudeCliPort,
-	ClaudeCliQueryOptions,
-	ClaudeCliStreamOptions,
+	ChatTransportPort,
+	ChatTransportQueryOptions,
+	ChatTransportStreamOptions,
 	StreamDelta,
 	StructuredCliCallOptions,
 	StructuredCliRawResult,
-} from '@/domain/ports/ClaudeCliPort';
-import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort';
-// `ClaudeCliQueryOptions` retained for the `_recordOptions` helper signature.
+} from '@/domain/ports/ChatTransportPort';
+import { ChatTransportError } from '@/domain/ports/ChatTransportPort';
+// `ChatTransportQueryOptions` retained for the `_recordOptions` helper signature.
 import type { TransportLifecyclePort } from '@/domain/ports/TransportLifecyclePort';
 import type { Result } from '@/domain/shared/Result';
 import { err, ok } from '@/domain/shared/Result';
@@ -61,7 +61,7 @@ interface RecordedQueryOptions {
  * Field-driven mock subscription adapter. Every behaviour is configurable
  * through a public field — no constructor arguments, no I/O.
  */
-export class MockClaudeSubprocessAdapter implements ClaudeCliPort, TransportLifecyclePort {
+export class MockClaudeSubprocessAdapter implements ChatTransportPort, TransportLifecyclePort {
 	/**
 	 * Structural discriminator for `selectTransport()`. Retained as a useful
 	 * tag even after WP-12 deleted the `isSubscriptionCapable` guard — the
@@ -92,7 +92,7 @@ export class MockClaudeSubprocessAdapter implements ClaudeCliPort, TransportLife
 	/**
 	 * If non-null, `query()` resolves with this error instead of `cannedResponse`.
 	 */
-	queryError: ClaudeCliError | null = null;
+	queryError: ChatTransportError | null = null;
 
 	/**
 	 * Artificial delay (milliseconds) applied before `query()` resolves.
@@ -172,7 +172,7 @@ export class MockClaudeSubprocessAdapter implements ClaudeCliPort, TransportLife
 	 */
 	async *queryStream(
 		prompt: string,
-		options?: ClaudeCliStreamOptions,
+		options?: ChatTransportStreamOptions,
 	): AsyncIterable<StreamDelta> {
 		this.queryLog.push(prompt);
 		this._recordOptions(options);
@@ -207,7 +207,7 @@ export class MockClaudeSubprocessAdapter implements ClaudeCliPort, TransportLife
 	private static _abortDelta(): StreamDelta {
 		return {
 			type: 'error',
-			error: new ClaudeCliError('QUERY_FAILED', 'Request was aborted'),
+			error: new ChatTransportError('QUERY_FAILED', 'Request was aborted'),
 		};
 	}
 
@@ -218,7 +218,7 @@ export class MockClaudeSubprocessAdapter implements ClaudeCliPort, TransportLife
 	 * `queryStream` under the project complexity ceiling.
 	 */
 	private async *_yieldSessionIdIfConfigured(
-		options: ClaudeCliStreamOptions | undefined,
+		options: ChatTransportStreamOptions | undefined,
 	): AsyncIterable<StreamDelta> {
 		if (this.cannedSessionId === null) return;
 		yield { type: 'session-id', sessionId: this.cannedSessionId };
@@ -252,7 +252,7 @@ export class MockClaudeSubprocessAdapter implements ClaudeCliPort, TransportLife
 	}
 
 	/**
-	 * Structural extension of `ClaudeCliPort` per SPEC-ASM-001 §2.9.
+	 * Structural extension of `ChatTransportPort` per SPEC-ASM-001 §2.9.
 	 * Records the (prompt, options) pair, honours `delayMs`, and resolves with
 	 * `cannedStructuredEnvelope` packaged into a `StructuredCliRawResult`
 	 * (or `queryError` if set). Never throws.
@@ -264,7 +264,7 @@ export class MockClaudeSubprocessAdapter implements ClaudeCliPort, TransportLife
 	async runStructured(
 		prompt: string,
 		options: StructuredCliCallOptions,
-	): Promise<Result<StructuredCliRawResult, ClaudeCliError>> {
+	): Promise<Result<StructuredCliRawResult, ChatTransportError>> {
 		this.queryLog.push(prompt);
 		this.structuredLog.push({ prompt, options });
 
@@ -302,7 +302,7 @@ export class MockClaudeSubprocessAdapter implements ClaudeCliPort, TransportLife
 	 * Extracted from `query()` so its cyclomatic complexity stays under the
 	 * project ceiling — every `?? null` counts as a branch.
 	 */
-	private _recordOptions(options?: ClaudeCliQueryOptions): void {
+	private _recordOptions(options?: ChatTransportQueryOptions): void {
 		this.optionsLog.push({
 			resumeSessionId: options?.resumeSessionId ?? null,
 			systemPromptSuffix: options?.systemPromptSuffix ?? null,

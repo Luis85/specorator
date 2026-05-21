@@ -1,6 +1,6 @@
 /**
  * Tests for `collectStream` (WP-12) — the pure helper that drains a
- * `ClaudeCliPort.queryStream` iterable into `Result<string, ClaudeCliError>`.
+ * `ChatTransportPort.queryStream` iterable into `Result<string, ChatTransportError>`.
  *
  * Replaces the deleted `streamFromQuery` shim (which converged the other
  * direction). The four scenarios required by the brief:
@@ -17,7 +17,7 @@
 import { describe, it, expect } from 'vitest'
 
 import { collectStream } from '@/application/chat/collectStream'
-import { ClaudeCliError, type StreamDelta } from '@/domain/ports/ClaudeCliPort'
+import { ChatTransportError, type StreamDelta } from '@/domain/ports/ChatTransportPort'
 import { asSessionId } from '@/domain/chat/SessionId'
 
 /** Yield each delta from `deltas` once, in order. Closes after the last. */
@@ -39,7 +39,7 @@ describe('collectStream', () => {
   })
 
   it('error mid-stream — propagates err(delta.error) and stops reading', async () => {
-    const failure = new ClaudeCliError('QUERY_FAILED', 'boom')
+    const failure = new ChatTransportError('QUERY_FAILED', 'boom')
     let readPastError = false
     async function* upstream(): AsyncIterable<StreamDelta> {
       yield { type: 'text', text: 'partial' }
@@ -77,7 +77,7 @@ describe('collectStream', () => {
     const result = await collectStream(fromArray([]))
     expect(result.ok).toBe(false)
     if (!result.ok) {
-      expect(result.error).toBeInstanceOf(ClaudeCliError)
+      expect(result.error).toBeInstanceOf(ChatTransportError)
       expect(result.error.errorCode).toBe('QUERY_FAILED')
       expect(result.error.message).toBe('Stream closed before terminal delta')
     }
@@ -95,7 +95,7 @@ describe('collectStream', () => {
     const result = await collectStream(aborted())
     expect(result.ok).toBe(false)
     if (!result.ok) {
-      expect(result.error).toBeInstanceOf(ClaudeCliError)
+      expect(result.error).toBeInstanceOf(ChatTransportError)
       expect(result.error.errorCode).toBe('QUERY_FAILED')
     }
   })

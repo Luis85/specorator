@@ -12,10 +12,10 @@ import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue'
 import { MockClaudeCliPort } from '@/infrastructure/mock/MockClaudeCliPort'
 import { MockBridge } from '@/infrastructure/mock/MockBridge'
 import { MockSecretStore } from '@/infrastructure/mock/MockSecretStore'
-import { ClaudeCliError } from '@/domain/ports/ClaudeCliPort'
+import { ChatTransportError } from '@/domain/ports/ChatTransportPort'
 import { SECRET_ID_ANTHROPIC } from '@/domain/ports'
 import {
-	CLAUDE_CLI_PORT,
+	CHAT_TRANSPORT_PORT,
 	IS_MOBILE_KEY,
 	VAULT_PORT,
 	WORKSPACE_PORT,
@@ -45,7 +45,7 @@ function makeGlobal(
 		plugins: [pinia],
 		stubs: { RouterLink: RouterLinkStub },
 		provide: {
-			[CLAUDE_CLI_PORT as symbol]: port,
+			[CHAT_TRANSPORT_PORT as symbol]: port,
 			[IS_MOBILE_KEY as symbol]: isMobile,
 			[VAULT_PORT as symbol]: bridge,
 			[WORKSPACE_PORT as symbol]: bridge,
@@ -80,7 +80,7 @@ async function mountSidebar(options: {
 	isMobile?: boolean
 	apiKey?: string
 	cannedResponse?: string
-	queryError?: ClaudeCliError | null
+	queryError?: ChatTransportError | null
 	delayMs?: number
 	files?: Record<string, string>
 	settings?: Partial<PluginSettings>
@@ -164,7 +164,7 @@ describe('ChatSidebar', () => {
 					plugins: [pinia],
 					stubs: { RouterLink: RouterLinkStub },
 					provide: {
-						[CLAUDE_CLI_PORT as symbol]: port,
+						[CHAT_TRANSPORT_PORT as symbol]: port,
 						[IS_MOBILE_KEY as symbol]: false,
 						[VAULT_PORT as symbol]: bridge,
 						[WORKSPACE_PORT as symbol]: bridge,
@@ -212,7 +212,7 @@ describe('ChatSidebar', () => {
 					plugins: [pinia],
 					stubs: { RouterLink: RouterLinkLocal },
 					provide: {
-						[CLAUDE_CLI_PORT as symbol]: port,
+						[CHAT_TRANSPORT_PORT as symbol]: port,
 						[IS_MOBILE_KEY as symbol]: false,
 						[VAULT_PORT as symbol]: bridge,
 						[WORKSPACE_PORT as symbol]: bridge,
@@ -304,7 +304,7 @@ describe('ChatSidebar', () => {
 		it('shows timeout error copy when query returns TIMEOUT error', async () => {
 			const { po, store } = await mountSidebar({
 				available: true,
-				queryError: new ClaudeCliError('TIMEOUT', 'timed out'),
+				queryError: new ChatTransportError('TIMEOUT', 'timed out'),
 			})
 
 			store.setUserText('hello')
@@ -319,7 +319,7 @@ describe('ChatSidebar', () => {
 		it('retains userText after timeout error', async () => {
 			const { po, store } = await mountSidebar({
 				available: true,
-				queryError: new ClaudeCliError('TIMEOUT', 'timed out'),
+				queryError: new ChatTransportError('TIMEOUT', 'timed out'),
 			})
 
 			store.setUserText('my question')

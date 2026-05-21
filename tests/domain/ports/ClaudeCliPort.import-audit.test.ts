@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * TEST-ASM-005 — Static-import audit for ClaudeCliPort.ts.
+ * TEST-ASM-005 — Static-import audit for ChatTransportPort.ts.
  *
  * Asserts the ADR-008 narrow-port file imports none of the three forbidden
  * runtime modules:
@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest'
  * Satisfies REQ-ASM-001 (TEST-ASM-005).
  */
 
-const PORT_FILE = resolve(__dirname, '../../../src/domain/ports/ClaudeCliPort.ts')
+const PORT_FILE = resolve(__dirname, '../../../src/domain/ports/ChatTransportPort.ts')
 
 const FORBIDDEN_MODULES = [
   'obsidian',
@@ -48,7 +48,7 @@ function collectImportedModules(source: string): string[] {
   return specifiers
 }
 
-describe('ClaudeCliPort.ts import audit (TEST-ASM-005)', () => {
+describe('ChatTransportPort.ts import audit (TEST-ASM-005)', () => {
   const source = readFileSync(PORT_FILE, 'utf8')
   const specifiers = collectImportedModules(source)
 
