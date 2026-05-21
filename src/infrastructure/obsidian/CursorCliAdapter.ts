@@ -31,7 +31,7 @@ import type { LoggerPort } from '@/domain/ports/LoggerPort'
 import type { TransportLifecyclePort } from '@/domain/ports/TransportLifecyclePort'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 import type { SessionId } from '@/domain/chat/SessionId'
-import { err, ok, type Result } from '@/domain/shared/Result'
+import { ok, type Result } from '@/domain/shared/Result'
 import { buildCursorSubprocessArgs } from '@/infrastructure/obsidian/buildCursorSubprocessArgs'
 import {
   createNdjsonChannel,
@@ -334,31 +334,37 @@ export class CursorCliAdapter implements ChatTransportPort, TransportLifecyclePo
    */
   private static _ndjsonToRawEvent(event: Record<string, unknown>): RawClaudeEvent | null {
     const eventType = typeof event.type === 'string' ? event.type : ''
-    if (eventType === 'system/init') {
-      const sid =
-        typeof event.session_id === 'string' && event.session_id.length > 0
-          ? event.session_id
-          : null
-      return { kind: 'system-init', sessionId: sid }
-    }
+    if (eventType === 'system/init') return CursorCliAdapter._systemInitRaw(event)
     if (eventType === 'assistant/message') {
       const text = typeof event.text === 'string' ? event.text : ''
       return { kind: 'assistant-message', text }
     }
-    if (eventType === 'result') {
-      const subtype = typeof event.subtype === 'string' ? event.subtype : undefined
-      const result = typeof event.result === 'string' ? event.result : undefined
-      const isError = event.is_error === true ? true : undefined
-      return { kind: 'result', subtype, result, is_error: isError }
-    }
-    if (eventType === 'stream_event') {
-      const inner =
-        typeof event.event === 'object' && event.event !== null
-          ? (event.event as RawStreamEventInner)
-          : (event as RawStreamEventInner)
-      return { kind: 'stream-event', event: inner }
-    }
+    if (eventType === 'result') return CursorCliAdapter._resultRaw(event)
+    if (eventType === 'stream_event') return CursorCliAdapter._streamEventRaw(event)
     return null
+  }
+
+  private static _systemInitRaw(event: Record<string, unknown>): RawClaudeEvent {
+    const sid =
+      typeof event.session_id === 'string' && event.session_id.length > 0
+        ? event.session_id
+        : null
+    return { kind: 'system-init', sessionId: sid }
+  }
+
+  private static _resultRaw(event: Record<string, unknown>): RawClaudeEvent {
+    const subtype = typeof event.subtype === 'string' ? event.subtype : undefined
+    const result = typeof event.result === 'string' ? event.result : undefined
+    const isError = event.is_error === true ? true : undefined
+    return { kind: 'result', subtype, result, is_error: isError }
+  }
+
+  private static _streamEventRaw(event: Record<string, unknown>): RawClaudeEvent {
+    const inner =
+      typeof event.event === 'object' && event.event !== null
+        ? (event.event as RawStreamEventInner)
+        : (event as RawStreamEventInner)
+    return { kind: 'stream-event', event: inner }
   }
 
   private _emitFromReducer(proc: TurnProc, raw: RawClaudeEvent): void {

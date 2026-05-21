@@ -50,9 +50,16 @@ function makeSettings(): PluginSettings {
 describe('CursorCliAdapter — abort signal (NFR-MPS-007)', () => {
   it('SIGTERMs the in-flight subprocess and yields QUERY_FAILED on abort', async () => {
     const children: FakeChild[] = []
+    const controller = new AbortController()
     const spawn = vi.fn(() => {
       const c = makeChild()
       children.push(c)
+      // Abort once the spawn returns — at this point the adapter has
+      // already registered its abort listener via `_installStreamAbort`,
+      // so SIGTERM fires deterministically without a wall-clock wait.
+      queueMicrotask(() => {
+        controller.abort()
+      })
       return c
     })
     const adapter = new CursorCliAdapter({
@@ -63,28 +70,19 @@ describe('CursorCliAdapter — abort signal (NFR-MPS-007)', () => {
     })
     await adapter.startup()
 
-    const controller = new AbortController()
     const stream = adapter.queryStream('hi', { signal: controller.signal })
 
     const deltas: StreamDelta[] = []
-    const iter = (async () => {
-      for await (const d of stream) deltas.push(d)
-    })()
-
-    // Let spawn happen and then abort.
-    await new Promise((r) => setTimeout(r, 5))
-    controller.abort()
-    // Drain the iterable.
-    await iter
+    for await (const d of stream) deltas.push(d)
 
     expect(children.length).toBe(1)
     expect(children[0].kill).toHaveBeenCalled()
-    const term = (children[0].kill as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    const term = children[0].kill.mock.calls[0][0]
     expect(term).toBe('SIGTERM')
 
     const last = deltas[deltas.length - 1]
-    expect(last?.type).toBe('error')
-    if (last && last.type === 'error') {
+    expect(last.type).toBe('error')
+    if (last.type === 'error') {
       expect(last.error.errorCode).toBe('QUERY_FAILED')
     }
   })

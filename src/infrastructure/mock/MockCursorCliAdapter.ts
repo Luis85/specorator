@@ -49,39 +49,14 @@ export class MockCursorCliAdapter implements ChatTransportPort, TransportLifecyc
     this.queryLog.push(prompt)
     const signal = options?.signal
     if (signal?.aborted === true) {
-      yield {
-        type: 'error',
-        error: new ChatTransportError('QUERY_FAILED', 'Request was aborted'),
-      }
+      yield MockCursorCliAdapter._abortDelta()
       return
     }
-    if (this.cannedSessionId !== null) {
-      yield { type: 'session-id', sessionId: this.cannedSessionId }
-      if (options?.onSessionId !== undefined) {
-        try {
-          options.onSessionId(this.cannedSessionId)
-        } catch {
-          // Mirror real adapter — swallow callback errors.
-        }
-      }
-    }
+    yield* this._yieldSessionIdIfConfigured(options)
     if (this.delayMs > 0) {
-      const aborted = await new Promise<boolean>((resolve) => {
-        const t = setTimeout(() => {
-          signal?.removeEventListener('abort', onAbort)
-          resolve(false)
-        }, this.delayMs)
-        const onAbort = (): void => {
-          clearTimeout(t)
-          resolve(true)
-        }
-        signal?.addEventListener('abort', onAbort, { once: true })
-      })
+      const aborted = await this._waitOrAbort(signal)
       if (aborted) {
-        yield {
-          type: 'error',
-          error: new ChatTransportError('QUERY_FAILED', 'Request was aborted'),
-        }
+        yield MockCursorCliAdapter._abortDelta()
         return
       }
     }
@@ -93,5 +68,40 @@ export class MockCursorCliAdapter implements ChatTransportPort, TransportLifecyc
       yield { type: 'text', text: this.cannedResponse }
     }
     yield { type: 'done' }
+  }
+
+  private static _abortDelta(): StreamDelta {
+    return {
+      type: 'error',
+      error: new ChatTransportError('QUERY_FAILED', 'Request was aborted'),
+    }
+  }
+
+  private async *_yieldSessionIdIfConfigured(
+    options: ChatTransportStreamOptions | undefined,
+  ): AsyncIterable<StreamDelta> {
+    if (this.cannedSessionId === null) return
+    yield { type: 'session-id', sessionId: this.cannedSessionId }
+    if (options?.onSessionId !== undefined) {
+      try {
+        options.onSessionId(this.cannedSessionId)
+      } catch {
+        // Mirror real adapter — swallow callback errors.
+      }
+    }
+  }
+
+  private _waitOrAbort(signal: AbortSignal | undefined): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      const t = setTimeout(() => {
+        signal?.removeEventListener('abort', onAbort)
+        resolve(false)
+      }, this.delayMs)
+      const onAbort = (): void => {
+        clearTimeout(t)
+        resolve(true)
+      }
+      signal?.addEventListener('abort', onAbort, { once: true })
+    })
   }
 }
