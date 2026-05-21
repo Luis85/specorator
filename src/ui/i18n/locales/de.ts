@@ -203,4 +203,37 @@ export default {
       openAriaLabel: 'Slash-Befehl-Hilfe',
     },
   },
+  // SPEC-MPS-001 §A3 — Multi-Thread-Umschalter (WS-6) + Nachrichten-Aktionen (WS-7).
+  thread: {
+    new: 'Neuer Thread',
+    newAriaLabel: 'Neuen Konversations-Thread öffnen',
+    defaultTitle: 'Neuer Thread',
+    action: {
+      rename: 'Umbenennen',
+      delete: 'Löschen',
+      fork: 'Ab hier abzweigen',
+    },
+    delete: {
+      confirmTitle: 'Diesen Thread löschen?',
+      confirmBody: 'Nachrichten und die Log-Datei werden entfernt. Das kann nicht rückgängig gemacht werden.',
+      confirmAccept: 'Thread löschen',
+      confirmCancel: 'Thread behalten',
+    },
+    tabCap: {
+      warning: 'Schließe einen Thread, bevor du einen neuen öffnest.',
+    },
+    tablistAriaLabel: 'Offene Konversations-Threads',
+    tabAriaLabel: 'Zu {title} wechseln',
+    renameInputAriaLabel: 'Thread umbenennen',
+  },
+  message: {
+    action: {
+      copy: 'Kopieren',
+      regenerate: 'Neu generieren',
+      edit: 'Bearbeiten',
+    },
+    copy: {
+      toast: 'In die Zwischenablage kopiert.',
+    },
+  },
 } as const

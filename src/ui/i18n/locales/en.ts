@@ -203,4 +203,37 @@ export default {
       openAriaLabel: 'Slash command help',
     },
   },
+  // SPEC-MPS-001 §A3 — multi-thread switcher (WS-6) + per-message actions (WS-7).
+  thread: {
+    new: 'New thread',
+    newAriaLabel: 'Open a new conversation thread',
+    defaultTitle: 'New thread',
+    action: {
+      rename: 'Rename',
+      delete: 'Delete',
+      fork: 'Fork from here',
+    },
+    delete: {
+      confirmTitle: 'Delete this thread?',
+      confirmBody: "Messages and the log file will be removed. This can't be undone.",
+      confirmAccept: 'Delete thread',
+      confirmCancel: 'Keep thread',
+    },
+    tabCap: {
+      warning: 'Close a thread before opening a new one.',
+    },
+    tablistAriaLabel: 'Open conversation threads',
+    tabAriaLabel: 'Switch to {title}',
+    renameInputAriaLabel: 'Rename thread',
+  },
+  message: {
+    action: {
+      copy: 'Copy',
+      regenerate: 'Regenerate',
+      edit: 'Edit',
+    },
+    copy: {
+      toast: 'Copied to clipboard.',
+    },
+  },
 } as const
