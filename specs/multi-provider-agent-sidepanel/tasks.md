@@ -159,7 +159,7 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Estimate:** S
 - **Files:** `decisions/ADR-MPS-002-provider-selection-discriminator.md` (new)
 - **Definition of done:**
-  - [ ] ADR file present, indexed.
+  - [x] ADR file present, indexed.
 
 ### T-MPS-010 🧪 — `ProviderSelection` exports + `isExplicit` type guard
 
