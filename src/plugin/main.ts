@@ -31,6 +31,8 @@ import { ObsidianSecretStoreAdapter } from '@/infrastructure/obsidian/ObsidianSe
 import { ClaudeCliAdapter } from '@/infrastructure/obsidian/ClaudeCliAdapter'
 import { ClaudeSubprocessAdapter, type SpawnFn } from '@/infrastructure/obsidian/ClaudeSubprocessAdapter'
 import { ClaudeBinaryResolver, type SpawnFn as ResolverSpawnFn } from '@/infrastructure/obsidian/ClaudeBinaryResolver'
+import { CursorBinaryResolver } from '@/infrastructure/obsidian/CursorBinaryResolver'
+import { CursorCliAdapter } from '@/infrastructure/obsidian/CursorCliAdapter'
 import { degradedClaudeCliPort } from '@/infrastructure/bridge/degradedClaudeCliPort'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { FeedbackService } from '@/application/shared/FeedbackService'
@@ -75,6 +77,13 @@ export default class SpecoratorPlugin extends Plugin {
    * Satisfies SPEC-ASM-001 §9.1.
    */
   private _subscriptionAdapter: ClaudeSubprocessAdapter | null = null
+  /**
+   * Cursor CLI subscription adapter — WS-5 (T-MPS-065). Lifecycle mirrors
+   * `_subscriptionAdapter`: created in `onload()`, pre-warmed on
+   * `onLayoutReady`, torn down via `this.register(() => adapter.shutdown())`.
+   * Satisfies REQ-MPS-007 / REQ-MPS-015.
+   */
+  private _cursorCliAdapter: CursorCliAdapter | null = null
   /**
    * Production-grade `ConfirmModalPort` (REQ-ASM-044, ADR-0032). Constructed
    * once in `onload()` and provided to Vue via `SpecoratorView`'s options bag
@@ -206,6 +215,20 @@ export default class SpecoratorPlugin extends Plugin {
       now: () => Date.now(),
     })
     this.register(() => { this._subscriptionAdapter?.shutdown() })
+
+    // T-MPS-065 / SPEC-MPS-001 §6 — Cursor CLI adapter. Constructs a fresh
+    // `CursorBinaryResolver` per resolve so PATH changes between Settings-tab
+    // clicks are honoured (mirror of the Claude resolver discipline).
+    this._cursorCliAdapter = new CursorCliAdapter({
+      getSettings: () => this.settings,
+      logger: this.bridge,
+      resolveCliPath: () => new CursorBinaryResolver({
+        spawn: resolverSpawnFn,
+        platform: resolverPlatform,
+      }).resolve(),
+      spawn: spawnFn,
+    })
+    this.register(() => { this._cursorCliAdapter?.shutdown() })
 
     // T-ASM-075 / SPEC-ASM-001 §9.1 — production-grade confirmation modal.
     // Stateless wrapper; no startup() / shutdown() required. Constructed here
@@ -363,6 +386,7 @@ export default class SpecoratorPlugin extends Plugin {
       void Promise.all([
         this._claudeCliAdapter?.startup(),
         this._subscriptionAdapter?.startup(),
+        this._cursorCliAdapter?.startup(),
       ]).then(() => {
         this._specoratorView?.bumpSettingsVersion()
         this._agentSidepanelView?.bumpSettingsVersion()
@@ -701,7 +725,7 @@ export default class SpecoratorPlugin extends Plugin {
     const result = selectTransport(settings.providerSelection, {
       providers: {
         claude: { api: this._claudeCliAdapter!, cli: this._subscriptionAdapter! },
-        cursor: { api: this._cursorApiStub, cli: this._cursorCliStub },
+        cursor: { api: this._cursorApiStub, cli: this._cursorCliAdapter! },
       },
       degradedPort: degradedClaudeCliPort,
       availability: {
@@ -712,28 +736,44 @@ export default class SpecoratorPlugin extends Plugin {
         // Synchronous projection — see SPEC-ASM-001 §3.1 closing note and
         // `ClaudeSubprocessAdapter.isAvailableSync()`.
         claudeCliResolved: this._subscriptionAdapter!.isAvailableSync(),
-        // WS-4/WS-5 will replace these stubs. Until the Cursor adapters land
-        // the availability flags stay false so the selector folds every
-        // cursor row to `degraded`.
+        // WS-4 will replace `cursorApiKeyPresent` with a real probe. WS-5
+        // wires `cursorCliResolved` to the synchronous projection of
+        // `CursorCliAdapter.isAvailableSync()`.
         cursorApiKeyPresent: false,
-        cursorCliResolved: false,
+        cursorCliResolved: this._cursorCliAdapter?.isAvailableSync() ?? false,
         cursorApiPreviewEnabled: settings.cursorApiPreview,
         secretStoreAvailable: this.secretStore?.available ?? false,
       },
       autoPreferProvider: settings.autoPreferProvider,
     })
+    return this._mapResolvedToTransportSelection(result)
+  }
+
+  /**
+   * Pure projection: collapse `selectTransport`'s `(provider, mode)` result
+   * into the legacy `TransportSelection` shape consumed by the view layer.
+   * WS-5: cursor/cli flows through under the `subscription` kind until the
+   * view learns the `(provider, mode)` discriminator (deferred to WS-10).
+   */
+  private _mapResolvedToTransportSelection(
+    result: ReturnType<typeof selectTransport>,
+  ): TransportSelection {
     if (result.resolved === 'degraded') {
       return { port: result.port, kind: 'degraded' }
     }
-    if (result.resolved.provider === 'claude' && result.resolved.mode === 'api') {
+    const { provider, mode } = result.resolved
+    if (provider === 'claude' && mode === 'api') {
       return { port: result.port, kind: 'api-key' }
     }
-    if (result.resolved.provider === 'claude' && result.resolved.mode === 'cli') {
+    if (provider === 'claude' && mode === 'cli') {
       return { port: result.port, kind: 'subscription' }
     }
-    // Cursor branches are unreachable until WS-4/WS-5 replaces the stubs and
-    // sets `cursorApiKeyPresent` / `cursorCliResolved` from real probes. Fall
-    // back to `degraded` defensively so the view never sees `undefined`.
+    if (provider === 'cursor' && mode === 'cli') {
+      return { port: result.port, kind: 'subscription' }
+    }
+    // Cursor API branch is unreachable until WS-4 replaces `_cursorApiStub`
+    // and sets `cursorApiKeyPresent` from a real probe. Fall back to
+    // `degraded` defensively so the view never sees `undefined`.
     return { port: degradedClaudeCliPort, kind: 'degraded' }
   }
 
@@ -745,13 +785,6 @@ export default class SpecoratorPlugin extends Plugin {
    */
   // WS-4/WS-5 will replace this stub.
   private readonly _cursorApiStub: ChatTransportPort = degradedClaudeCliPort
-
-  /**
-   * WS-3 (T-MPS-033) — Cursor CLI adapter placeholder. WS-5 will replace this
-   * stub with the real `CursorCliAdapter`.
-   */
-  // WS-4/WS-5 will replace this stub.
-  private readonly _cursorCliStub: ChatTransportPort = degradedClaudeCliPort
 
   /**
    * WS-3 (T-MPS-033) — lazy `ProviderRegistry` accessor. The registry is

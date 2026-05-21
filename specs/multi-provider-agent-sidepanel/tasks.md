@@ -594,7 +594,7 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 
 > **Goal:** `cursor-agent` subprocess adapter. Parallel with WS-4.
 
-### T-MPS-054 🧪 — `CursorBinaryResolver`: darwin/linux `command -v cursor-agent`
+### T-MPS-054 ✅ 🧪 — `CursorBinaryResolver`: darwin/linux `command -v cursor-agent`
 
 - **Description:** Mock subprocess; assert resolver returns absolute path on success, `null` on non-zero exit. 5s timeout enforced.
 - **Satisfies:** REQ-MPS-015
@@ -603,7 +603,7 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Estimate:** S
 - **Files:** `tests/infrastructure/obsidian/CursorBinaryResolver.posix.test.ts` (new)
 
-### T-MPS-055 🧪 — `CursorBinaryResolver`: win32 `where.exe`
+### T-MPS-055 ✅ 🧪 — `CursorBinaryResolver`: win32 `where.exe`
 
 - **Satisfies:** REQ-MPS-015
 - **Owner:** qa
@@ -611,7 +611,7 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Estimate:** S
 - **Files:** `tests/infrastructure/obsidian/CursorBinaryResolver.win32.test.ts` (new)
 
-### T-MPS-056 🧪 — `CursorBinaryResolver`: rejects relative path
+### T-MPS-056 ✅ 🧪 — `CursorBinaryResolver`: rejects relative path
 
 - **Description:** When resolved path is relative (mirror of REQ-ASM-005 for Claude), resolver returns null + warning logged.
 - **Satisfies:** REQ-MPS-015 edge case (spec §10 row 6)
@@ -620,7 +620,7 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Estimate:** S
 - **Files:** `tests/infrastructure/obsidian/CursorBinaryResolver.relativePath.test.ts` (new)
 
-### T-MPS-057 🧪 — Lint: `CursorBinaryResolver.ts` does not touch `~/.cursor/`
+### T-MPS-057 ✅ 🧪 — Lint: `CursorBinaryResolver.ts` does not touch `~/.cursor/`
 
 - **Description:** Static grep of source for `.cursor/` / `cursor-home` credential references.
 - **Satisfies:** REQ-MPS-016
@@ -629,7 +629,7 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Estimate:** S
 - **Files:** `tests/lint/cursor-resolver-no-credentials.test.ts` (new)
 
-### T-MPS-058 🔨 — Implement `CursorBinaryResolver.ts`
+### T-MPS-058 ✅ 🔨 — Implement `CursorBinaryResolver.ts`
 
 - **Description:** Sibling of `ClaudeBinaryResolver`; settings override; 5s timeout; no caching; no home-dir reads.
 - **Satisfies:** REQ-MPS-015, REQ-MPS-016
@@ -638,7 +638,7 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Estimate:** M
 - **Files:** `src/infrastructure/obsidian/CursorBinaryResolver.ts` (new)
 
-### T-MPS-059 🧪 — `buildCursorSubprocessArgs` pure-fn shape
+### T-MPS-059 ✅ 🧪 — `buildCursorSubprocessArgs` pure-fn shape
 
 - **Description:** Per spec §6 example; covers presence/absence of model, planMode, resume.
 - **Satisfies:** REQ-MPS-015, REQ-MPS-037
@@ -647,7 +647,7 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Estimate:** S
 - **Files:** `tests/infrastructure/obsidian/buildCursorSubprocessArgs.test.ts` (new)
 
-### T-MPS-060 🔨 — Implement `buildCursorSubprocessArgs.ts`
+### T-MPS-060 ✅ 🔨 — Implement `buildCursorSubprocessArgs.ts`
 
 - **Satisfies:** REQ-MPS-015, REQ-MPS-037
 - **Owner:** dev
@@ -655,7 +655,7 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Estimate:** S
 - **Files:** `src/infrastructure/obsidian/buildCursorSubprocessArgs.ts` (new)
 
-### T-MPS-061 🧪 — `CursorCliAdapter`: NDJSON delta mapping
+### T-MPS-061 ✅ 🧪 — `CursorCliAdapter`: NDJSON delta mapping
 
 - **Description:** Fixture-driven; reuse Claude NDJSON fixtures where they apply; new fixtures for citation + todo-update.
 - **Satisfies:** REQ-MPS-015
@@ -664,7 +664,7 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Estimate:** M
 - **Files:** `tests/infrastructure/obsidian/CursorCliAdapter.ndjson.test.ts` (new)
 
-### T-MPS-062 🧪 — `CursorCliAdapter`: abort signal → SIGTERM then SIGKILL
+### T-MPS-062 ✅ 🧪 — `CursorCliAdapter`: abort signal → SIGTERM then SIGKILL
 
 - **Satisfies:** NFR-MPS-007
 - **Owner:** qa
@@ -672,7 +672,7 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Estimate:** S
 - **Files:** `tests/infrastructure/obsidian/CursorCliAdapter.abort.test.ts` (new)
 
-### T-MPS-063 🔨 — Implement `CursorCliAdapter.ts`
+### T-MPS-063 ✅ 🔨 — Implement `CursorCliAdapter.ts`
 
 - **Description:** Mirrors `ClaudeSubprocessAdapter` shape; uses `SubprocessLifecycle`, `NdjsonChannel`.
 - **Satisfies:** REQ-MPS-015, NFR-MPS-007
@@ -681,7 +681,7 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Estimate:** M
 - **Files:** `src/infrastructure/obsidian/CursorCliAdapter.ts` (new)
 
-### T-MPS-064 🔨 — `MockCursorCliAdapter`
+### T-MPS-064 ✅ 🔨 — `MockCursorCliAdapter`
 
 - **Satisfies:** NFR-MPS-014
 - **Owner:** dev
@@ -689,7 +689,7 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Estimate:** S
 - **Files:** `tests/__fakes__/MockCursorCliAdapter.ts` (new), `src/infrastructure/mock/MockCursorCliAdapter.ts`
 
-### T-MPS-065 🔨 — Wire `CursorCliAdapter` into `buildProviderRegistry` + main.ts
+### T-MPS-065 ✅ 🔨 — Wire `CursorCliAdapter` into `buildProviderRegistry` + main.ts
 
 - **Satisfies:** REQ-MPS-007, REQ-MPS-015
 - **Owner:** dev
@@ -697,7 +697,7 @@ Each task is ≤ ~½ day (S or M). TDD ordering: every implementation task is pr
 - **Estimate:** S
 - **Files:** `src/plugin/transport/buildProviderRegistry.ts`, `src/plugin/main.ts`
 
-### T-MPS-066 📚 — WS-5 closeout
+### T-MPS-066 ✅ 📚 — WS-5 closeout
 
 - **Owner:** dev
 - **Depends on:** T-MPS-065
