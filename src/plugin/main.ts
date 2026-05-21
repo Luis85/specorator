@@ -37,7 +37,7 @@ import { CursorCliAdapter } from '@/infrastructure/obsidian/CursorCliAdapter'
 import { degradedClaudeCliPort } from '@/infrastructure/bridge/degradedClaudeCliPort'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { FeedbackService } from '@/application/shared/FeedbackService'
-import { tryAsync } from '@/domain/shared/tryAsync'
+import { tryAsync, trySync } from '@/domain/shared/tryAsync'
 import { PluginCore } from '@/core/plugin-core'
 import { ALL_MODULES, type ModuleDescriptor } from '@/modules'
 import { i18nMerge, i18nTranslate, setLocale, type SupportedLocale } from '@/ui/i18n'
@@ -931,11 +931,10 @@ export default class SpecoratorPlugin extends Plugin {
     if (pinia === undefined || pinia === null) return
     const store = useChatProviderStore(pinia)
     const next = nextProviderSelection(store.activeSelection)
-    try {
-      store.setActiveSelection(next)
-    } catch {
-      /* unknown provider / unsupported mode — silently skip */
-    }
+    // setActiveSelection throws on unknown provider / unsupported mode when
+    // the registry is wired. Result discarded — the badge update is the
+    // visible feedback; a transient validation throw is a no-op for the cycle.
+    trySync(() => { store.setActiveSelection(next) })
   }
 
   _applyProviderFromUri(raw: string | undefined): void {
@@ -948,11 +947,7 @@ export default class SpecoratorPlugin extends Plugin {
     // setActiveSelection throws on unknown provider / unsupported mode when
     // the registry is wired. Treat as "invalid value" per spec §9 and fall
     // through silently rather than surfacing a Notice — the panel still opens.
-    try {
-      store.setActiveSelection(selection)
-    } catch {
-      /* silent fall-through */
-    }
+    trySync(() => { store.setActiveSelection(selection) })
   }
   getProviderRegistry(): ProviderRegistry {
     let registry = this._providerRegistry

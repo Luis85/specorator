@@ -56,26 +56,27 @@ export function nextProviderSelection(current: ProviderSelection): ProviderSelec
   // -1 (unknown) wraps to the first entry — defensive against a forced
   // value the cycle does not enumerate (none today; future-proof).
   const nextIdx = (i + 1) % CYCLE.length
-  return CYCLE[nextIdx] ?? CYCLE[0] ?? { forced: 'auto' }
+  // `CYCLE` has 6 entries and `nextIdx` is always within bounds; the
+  // index access is safe because the closed list is built above.
+  return CYCLE[nextIdx]
+}
+
+function parseExplicitPair(lower: string): ProviderSelection | null {
+  const parts = lower.split(':')
+  if (parts.length !== 2) return null
+  const [provider, mode] = parts as [string, string]
+  if (provider === '' || mode === '') return null
+  if (!isProvider(provider) || !isMode(mode)) return null
+  return { provider, mode }
 }
 
 export function parseProviderUriValue(raw: string): ProviderSelection | null {
   const lower = raw.toLowerCase().trim()
   if (lower === '') return null
-  if (lower === 'auto' || lower === 'degraded') {
-    return { forced: lower }
-  }
-  if (lower.includes(':')) {
-    const [provider, mode] = lower.split(':')
-    if (provider === undefined || mode === undefined) return null
-    if (!isProvider(provider) || !isMode(mode)) return null
-    return { provider, mode }
-  }
-  if (isProvider(lower)) {
-    // Bare provider — defer to the auto-mode resolution by mapping to
-    // `forced: 'auto'`. Callers that want a specific mode must use the
-    // `provider:mode` form.
-    return { provider: lower, mode: 'api' }
-  }
+  if (lower === 'auto' || lower === 'degraded') return { forced: lower }
+  if (lower.includes(':')) return parseExplicitPair(lower)
+  // Bare provider — map to the api cell. Callers that want CLI must use
+  // the `provider:mode` form.
+  if (isProvider(lower)) return { provider: lower, mode: 'api' }
   return null
 }

@@ -245,15 +245,7 @@ export async function buildTurnInput(args: BuildTurnInputArgs): Promise<TurnInpu
 	const loadedFiles = await loadContextFileBodies(args.messages, args.vault);
 	const { prompt, truncated } = buildPrompt(args.messages.userText, loadedFiles);
 	const intent = isStructuredIntent(args.messages.userText);
-	// WS-10 (REQ-MPS-039): when instructionMode is on, route the body after
-	// the leading `#` into `systemPromptSuffix` so the model treats it as a
-	// one-turn system instruction. Free-text intent only; structured turns
-	// continue to ignore the `#` prefix (the slash command takes precedence).
-	const instructionSuffix =
-		args.mode?.instructionMode === true && args.messages.userText.startsWith('#')
-			? args.messages.userText.slice(1).trimStart()
-			: undefined;
-	const attachmentsList = args.attachments ?? [];
+	const ws10Overrides = collectWs10Overrides(args);
 	return {
 		userMessage: args.messages.userText,
 		prompt,
@@ -264,11 +256,39 @@ export async function buildTurnInput(args: BuildTurnInputArgs): Promise<TurnInpu
 		intent,
 		thread,
 		transportKindRaw: args.transportKindRaw,
-		...(args.mode?.planMode === true ? { planMode: true } : {}),
-		...(instructionSuffix !== undefined ? { instructionSuffix } : {}),
-		...(args.selectedModel !== undefined && args.selectedModel !== ''
-			? { model: args.selectedModel }
-			: {}),
-		...(attachmentsList.length > 0 ? { attachments: attachmentsList } : {}),
+		...ws10Overrides,
 	};
+}
+
+/**
+ * Collect the WS-10 optional fields (`planMode` / `instructionSuffix` /
+ * `model` / `attachments`) into one object so the main `buildTurnInput`
+ * function stays under the per-function complexity cap. Each field is only
+ * emitted when its source is meaningful (boolean true, non-empty string,
+ * non-empty array) so the resulting `TurnInput` stays minimally populated.
+ */
+type Ws10Mutable = {
+	-readonly [K in keyof Pick<
+		TurnInput,
+		'planMode' | 'instructionSuffix' | 'model' | 'attachments'
+	>]?: TurnInput[K];
+};
+
+function collectWs10Overrides(args: BuildTurnInputArgs): Partial<TurnInput> {
+	const out: Ws10Mutable = {};
+	if (args.mode?.planMode === true) out.planMode = true;
+	if (
+		args.mode?.instructionMode === true &&
+		args.messages.userText.startsWith('#')
+	) {
+		out.instructionSuffix = args.messages.userText.slice(1).trimStart();
+	}
+	if (args.selectedModel !== undefined && args.selectedModel !== '') {
+		out.model = args.selectedModel;
+	}
+	const attachmentsList = args.attachments ?? [];
+	if (attachmentsList.length > 0) {
+		out.attachments = attachmentsList;
+	}
+	return out;
 }
