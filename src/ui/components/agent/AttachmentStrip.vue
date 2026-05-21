@@ -120,7 +120,7 @@ function handleRemove(label: string): void {
 				class="sp-attachment-strip__remove"
 				:aria-label="t('attachment.remove', { label: att.label })"
 				:data-testid="`attachment-chip-remove-${att.label}`"
-				@click="handleRemove(att.label)"
+				@click="handleRemove(att.label ?? '')"
 			>
 				×
 			</button>

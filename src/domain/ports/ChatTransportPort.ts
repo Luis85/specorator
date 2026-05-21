@@ -125,12 +125,13 @@ export interface ChatTransportQueryOptions {
  * applies to the resolved bytes, not the pre-resolved chip. REQ-MPS-042..044.
  */
 export interface ChatTransportAttachment {
-	readonly kind: 'image' | 'file' | 'vault';
-	readonly mimeType: string;
-	readonly bytes: ArrayBuffer | null;
-	readonly path: string | null;
-	readonly label: string;
+	readonly kind?: 'image' | 'file' | 'vault';
+	readonly mimeType?: string;
+	readonly bytes?: ArrayBuffer | null;
+	readonly path?: string | null;
+	readonly label?: string;
 	readonly byteLength: number;
+	readonly source?: 'vault' | 'paste' | 'drop' | 'file';
 }
 
 /**
