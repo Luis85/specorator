@@ -723,3 +723,69 @@ line.
   with a trailing space stripped ("...for the Q3" not "...for the Q3 ").
   Implementation calls `.slice(0, 40).trimEnd()` to match the spec
   example verbatim. No requirement-level deviation.
+
+### T-MPS-075..082 — ThreadTab + ThreadTabStrip + delete modal (done)
+
+- **Commit:** `ba6fd9e` on `feature/mps-ws-6-multi-thread`
+- **Files:**
+  - `src/ui/components/agent/ThreadTab.vue` (new — T-MPS-076).
+  - `src/ui/components/agent/ThreadTabStrip.vue` (new — T-MPS-079).
+  - `src/ui/composables/useDeleteThreadConfirmation.ts` (new — T-MPS-080,
+    wraps existing `ConfirmModalPort` per the "or equivalent
+    narrow-port-wrapped modal" clause).
+  - `src/ui/agent/AgentSidepanelRoot.vue` (modified — T-MPS-081, mounts
+    `ThreadTabStrip` via Header `#tabStrip` slot, feeds `chatTabCap`
+    from `useSettingsStore`).
+  - `src/ui/components/agent/AgentSidepanelHeader.vue` (modified —
+    T-MPS-081, adds `#tabStrip` named slot under the feature row).
+  - `src/ui/i18n/locales/en.ts`, `de.ts` (modified — `thread.*` and
+    `message.*` keys per SPEC §A3).
+  - `tests/ui/components/agent/ThreadTab.test.ts` + `.po.ts` (new —
+    T-MPS-075, 16 tests).
+  - `tests/ui/components/agent/ThreadTabStrip.test.ts` + `.po.ts` (new
+    — T-MPS-077/078, 17 tests).
+  - `tests/ui/components/agent/ThreadTabStrip.perf.test.ts` (new —
+    T-MPS-082, 100 ms render budget with 10 threads).
+  - `tests/ui/composables/useDeleteThreadConfirmation.test.ts` (new —
+    T-MPS-080, 6 tests).
+- **Spec:** SPEC-MPS-001 §A1 Flow 3, §A2 IA, §8.1; REQ-MPS-018, -019,
+  -020, -022, -025; NFR-MPS-005, NFR-MPS-009; TST-MPS-10..12, TST-MPS-14.
+- **Outcome:** done. WS-6 UI surface: 100 tests green
+  (49 store + 16 ThreadTab + 17 ThreadTabStrip + 1 perf + 6 delete
+  modal + 11 existing AgentSidepanelHeader). Full suite: 2029 unit
+  tests green. `npm run typecheck`, `npm run lint`, `npm run build`,
+  `npm run build:web` all clean.
+- **Deviation:** T-MPS-080 names a `ConfirmDeleteThreadModal` subclass
+  of `Modal`; the task description explicitly permits "or equivalent
+  narrow-port-wrapped modal". Implementation uses the existing
+  `ConfirmModalPort` (REQ-ASM-044, ADR-0032 — already an Obsidian
+  `Modal` subclass in `ObsidianConfirmModalAdapter`) plus a new
+  `useDeleteThreadConfirmation` composable. Rationale: avoids
+  duplicating the DOM-construction discipline audit already done for
+  `ObsidianConfirmModalAdapter`; one modal class, one audit surface.
+- **Hand-off — WS-7 (per-message actions):** ready to start. Branch
+  `feature/mps-ws-7-message-actions` should be cut from
+  `origin/feature/mps-ws-6-multi-thread @ 89ea04f` (T-MPS-074
+  milestone) so the `ChatThreadRecord` extensions are available
+  without waiting for WS-6 to fully merge.
+- **Open items deferred to WS-10 integration:**
+  - `new-thread` button currently fires a no-op handler in
+    `AgentSidepanelRoot`. The full `createThread` orchestration
+    (resolve `(provider, mode)`, allocate `specs/_chat/<uuid>.md`
+    via `VaultPort.createFolder`, route to `chatThreadsStore.createThread`)
+    lands in WS-10. Cap-hit toast wiring lands there too.
+  - `open-context-menu` intent is exposed by `ThreadTabStrip` but the
+    contextual menu (Rename / Delete / Fork) is wired in WS-10 — the
+    `useDeleteThreadConfirmation` composable + `chatThreadsStore.forkThread`
+    are the building blocks already in place.
+  - Default-title derivation hook (`applyDefaultTitleFromMessage`) is
+    surfaced by the store; the call site in `messagesStore.appendMessage`
+    / `ChatSidebar.handleSend` lands in WS-10.
+
+### T-MPS-083 — WS-6 closeout (done)
+
+- **Commit:** *this commit* — `implementation-log.md` + `workflow-state.md`
+  updates.
+- **Outcome:** done. WS-6 UI surface complete. Branch
+  `feature/mps-ws-6-multi-thread` ready for PR review. Hand-off note
+  for WS-7 captured in §"Hand-off notes" of workflow-state.md.
