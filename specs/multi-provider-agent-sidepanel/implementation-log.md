@@ -440,3 +440,131 @@ line.
   - **WS-9 — Provider model selector + settings polish.**
   - All fan-out branches must be cut from this branch's tip and rebase
     onto `develop` after the WS-3 PR squash-merges.
+
+## WS-5 — Cursor CLI adapter
+
+### T-MPS-054..058 — `CursorBinaryResolver` (done)
+
+- **Commit:** `eede550`
+- **Files:**
+  - `src/infrastructure/obsidian/CursorBinaryResolver.ts` (new, ~150 lines)
+  - `tests/infrastructure/obsidian/CursorBinaryResolver.posix.test.ts` (new)
+  - `tests/infrastructure/obsidian/CursorBinaryResolver.win32.test.ts` (new)
+  - `tests/infrastructure/obsidian/CursorBinaryResolver.relativePath.test.ts` (new)
+  - `tests/lint/cursor-resolver-no-credentials.test.ts` (new)
+- **Spec ref:** SPEC-MPS-001 §6 / DESIGN §C9 — REQ-MPS-015, REQ-MPS-016,
+  NFR-MPS-007.
+- **Outcome:** done. Sibling of `ClaudeBinaryResolver`: darwin/linux uses
+  `sh -lc 'command -v cursor-agent'`, win32 uses `where.exe cursor-agent`,
+  5 s timeout via injectable spawn, first-non-empty-line + `path.isAbsolute`
+  validation, no caching. Lint gate asserts the source never references
+  home-dir Cursor paths or credentials env vars (defence-in-depth on top
+  of `tests/lint/no-legacy-claude-cli-port-names.test.ts`-style discipline).
+- **Deviation:** none.
+
+### T-MPS-059..060 — `buildCursorSubprocessArgs` (done)
+
+- **Commit:** `0fa067c`
+- **Files:**
+  - `src/infrastructure/obsidian/buildCursorSubprocessArgs.ts` (new)
+  - `tests/infrastructure/obsidian/buildCursorSubprocessArgs.test.ts` (new)
+- **Spec ref:** SPEC-MPS-001 §6 placeholder (pending CQ-MPS-01) —
+  REQ-MPS-015, REQ-MPS-037.
+- **Outcome:** done. Pure argv assembler emitting
+  `['chat', '--stream-json', '--prompt', <prompt>, ...optional]` with
+  optional `--model`, `--mode plan`, `--resume`. Returns `Object.freeze`d
+  array.
+- **Deviation:** none.
+
+### T-MPS-061..063 — `CursorCliAdapter` (done)
+
+- **Commit:** `4022be9`
+- **Files:**
+  - `src/infrastructure/obsidian/CursorCliAdapter.ts` (new, ~360 lines)
+  - `tests/infrastructure/obsidian/CursorCliAdapter.ndjson.test.ts` (new)
+  - `tests/infrastructure/obsidian/CursorCliAdapter.abort.test.ts` (new)
+- **Spec ref:** SPEC-MPS-001 §6 / DESIGN §C9 — REQ-MPS-015, REQ-MPS-016,
+  NFR-MPS-007.
+- **Outcome:** done. Mirror of `ClaudeSubprocessAdapter` shape: shared
+  `SubprocessLifecycle` (spawn/kill/SIGKILL ladder), shared
+  `NdjsonChannel` (line reassembly + 4 MiB cap), shared
+  `StreamDeltaReducer` (wire→delta translation). Cursor's NDJSON shapes
+  (`system/init`, `assistant/message`, `result`, `stream_event`) reuse the
+  same `RawClaudeEvent` alphabet. Abort signal triggers SIGTERM via
+  lifecycle and yields a terminal `QUERY_FAILED` delta. `runStructured`
+  intentionally not implemented — Cursor structured output is deferred.
+- **Deviation:** Cursor's adapter does not implement `runStructured`
+  (Claude-specific via `runSubprocessStructured`); this matches design.md
+  §C8 closing note "Cursor structured output is not in scope (deferred)".
+
+### T-MPS-064 — `MockCursorCliAdapter` (done)
+
+- **Commit:** `596792e`
+- **Files:**
+  - `src/infrastructure/mock/MockCursorCliAdapter.ts` (new)
+  - `tests/__fakes__/MockCursorCliAdapter.ts` (new — re-export)
+- **Spec ref:** NFR-MPS-014.
+- **Outcome:** done. Field-driven mock mirroring
+  `MockClaudeSubprocessAdapter` shape (`available`, `cannedResponse`,
+  `cannedSessionId`, `queryError`, `delayMs`, `queryLog`). Honours
+  `signal.aborted` pre- and mid-`delayMs`. `runStructured` not exposed
+  (matches real adapter).
+
+### T-MPS-065 — Wire `CursorCliAdapter` into `buildProviderRegistry` + main.ts (done)
+
+- **Commit:** `0e3fbd6`
+- **Files:**
+  - `src/plugin/main.ts` (lines ~33–35 import, ~83 field, ~210–222
+    construction, ~370 startup, ~712 availability projection, ~735
+    selector branch, helper extraction near `_mapResolvedToTransportSelection`)
+  - `src/infrastructure/obsidian/CursorCliAdapter.ts` (complexity refactor
+    — split `_ndjsonToRawEvent` into per-type helpers)
+  - `src/infrastructure/mock/MockCursorCliAdapter.ts` (complexity refactor
+    — extracted `_abortDelta`, `_yieldSessionIdIfConfigured`,
+    `_waitOrAbort` helpers)
+  - `tests/infrastructure/obsidian/CursorCliAdapter.abort.test.ts`
+    (deterministic abort via `queueMicrotask` after spawn returns;
+    replaces the wall-clock `setTimeout` wait that the project lint
+    rule `obsidianmd/prefer-active-window-timers` forbids in tests)
+- **Spec ref:** REQ-MPS-007, REQ-MPS-015. design.md §C11 step 4.
+- **Outcome:** done. WS-3's `_cursorCliStub` is gone. The selector now
+  receives the real Cursor port, and the synchronous availability
+  projection reads `CursorCliAdapter.isAvailableSync()`. `onLayoutReady`
+  pre-warms all three adapters in parallel; `this.register(() =>
+  adapter.shutdown())` cleans up on plugin unload.
+- **Deviation:** the cursor/cli branch returns a `TransportSelection`
+  with `kind: 'subscription'` rather than introducing a fourth kind. The
+  view layer's parity surface (REQ-CCS-*) still keys off the legacy
+  three-kind union; design.md §C13 contemplates the view learning the
+  `(provider, mode)` discriminator in WS-10. Tracked there; no separate
+  follow-up needed.
+
+### T-MPS-066 — WS-5 closeout (this entry)
+
+- **Files:**
+  - `specs/multi-provider-agent-sidepanel/implementation-log.md` (this
+    file)
+  - `specs/multi-provider-agent-sidepanel/workflow-state.md` (hand-off
+    note pointing WS-10 integration at the WS-5 tip)
+
+## WS-5 branch summary
+
+- **Branch:** `feature/mps-ws-5-cursor-cli` (cut from
+  `feature/mps-ws-3-selector-wiring` @ `b579a9f`).
+- **Commits (5 + closeout):** `eede550` (resolver) → `0fa067c` (argv) →
+  `4022be9` (adapter) → `596792e` (mock) → `0e3fbd6` (wiring) → *this
+  commit* (closeout).
+- **Merge conflict plan:** WS-4 and WS-5 both touch
+  `src/plugin/transport/buildProviderRegistry.ts` and
+  `src/plugin/main.ts`. The PR body documents that whichever of the two
+  PRs merges second is responsible for replaying the conflict in the
+  availability projector — specifically the `cursorApiKeyPresent` /
+  `cursorCliResolved` lines in `_routeTransport()` and the
+  `_cursorApiStub` / `_cursorCliStub` field deletions. The diff is small
+  and mechanical.
+- **Stage status at hand-off:** Stage 7 `in-progress`; WS-5 complete;
+  WS-4, WS-6..WS-9 still in fan-out.
+- **Test evidence:** 26 WS-5 unit tests green
+  (`CursorBinaryResolver.*`, `buildCursorSubprocessArgs`,
+  `CursorCliAdapter.ndjson`, `CursorCliAdapter.abort`, `cursor-resolver-no-credentials`).
+  Full `npm run verify` green at PR-prep time.
