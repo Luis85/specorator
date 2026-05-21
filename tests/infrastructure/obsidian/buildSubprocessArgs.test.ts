@@ -116,6 +116,32 @@ describe('buildSubprocessArgs() — happy path (SPEC-ASM-001 §3.7)', () => {
 })
 
 // -----------------------------------------------------------------------------
+// WS-8 — planMode swaps permission-mode value (REQ-MPS-037, TST-MPS-23)
+// -----------------------------------------------------------------------------
+
+describe('buildSubprocessArgs() — planMode (REQ-MPS-037)', () => {
+  it('TST-MPS-23: planMode=true emits `--permission-mode plan`', () => {
+    const argv = buildSubprocessArgs(makeInput({ planMode: true }))
+    expect(valueAfter(argv, '--permission-mode')).toBe('plan')
+  })
+
+  it('planMode=false emits `--permission-mode dontAsk` (default behaviour)', () => {
+    const argv = buildSubprocessArgs(makeInput({ planMode: false }))
+    expect(valueAfter(argv, '--permission-mode')).toBe('dontAsk')
+  })
+
+  it('planMode omitted emits `--permission-mode dontAsk` (back-compat)', () => {
+    const argv = buildSubprocessArgs(makeInput())
+    expect(valueAfter(argv, '--permission-mode')).toBe('dontAsk')
+  })
+
+  it('planMode preserves the unconditional disallowedTools denylist', () => {
+    const argv = buildSubprocessArgs(makeInput({ planMode: true }))
+    expect(valueAfter(argv, '--disallowedTools')).toBe(DENYLIST)
+  })
+})
+
+// -----------------------------------------------------------------------------
 // INV-1 — argv never contains '--bare' (REQ-ASM-006) — TEST-ASM-006
 // -----------------------------------------------------------------------------
 

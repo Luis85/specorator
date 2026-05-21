@@ -32,6 +32,12 @@ export interface BuildSubprocessArgsInput {
   readonly resumeSessionId: string | null
   /** `null` → free-text stream-json path; non-null → structured one-shot json path. */
   readonly jsonSchema: string | null
+  /**
+   * WS-8 (REQ-MPS-037, TST-MPS-23). When `true` the assembler emits
+   * `--permission-mode plan` in place of `dontAsk`, telling Claude CLI to
+   * propose a plan rather than execute tools. Optional; default `false`.
+   */
+  readonly planMode?: boolean
 }
 
 /**
@@ -72,7 +78,10 @@ export function buildSubprocessArgs(input: BuildSubprocessArgsInput): readonly s
   }
 
   // Step 4 — INV-2: denylist is unconditional.
-  argv.push('--permission-mode', 'dontAsk', '--disallowedTools', DISALLOWED_TOOLS_DENYLIST)
+  // WS-8 (REQ-MPS-037): plan mode swaps the permission-mode value but keeps
+  // the unconditional denylist invariant.
+  const permissionMode = input.planMode === true ? 'plan' : 'dontAsk'
+  argv.push('--permission-mode', permissionMode, '--disallowedTools', DISALLOWED_TOOLS_DENYLIST)
 
   // Step 5 — INV-5: --resume iff sessionId is a non-empty string.
   if (input.resumeSessionId !== null && input.resumeSessionId.length > 0) {

@@ -390,6 +390,7 @@ export class ClaudeSubprocessAdapter implements ChatTransportPort, TransportLife
 			systemPromptSuffix: options?.systemPromptSuffix ?? '',
 			resumeSessionId: resume,
 			jsonSchema: null,
+			planMode: options?.planMode === true,
 		});
 	}
 

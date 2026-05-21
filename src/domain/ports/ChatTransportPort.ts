@@ -97,6 +97,40 @@ export interface ChatTransportQueryOptions {
 	 * Satisfies REQ-ASM-031.
 	 */
 	readonly onSessionId?: (sessionId: SessionId) => void;
+
+	/**
+	 * WS-8 (REQ-MPS-036/037). Plan-mode hint. Subscription transports translate
+	 * this to `--permission-mode plan`; API transports forward it in the request
+	 * body. Adapters that do not support plan mode ignore it.
+	 */
+	readonly planMode?: boolean;
+
+	/**
+	 * WS-8 (REQ-MPS-040). Selected model id. Adapters that expose models map
+	 * this to the underlying provider's model parameter; transports with no
+	 * model surface ignore it.
+	 */
+	readonly model?: string;
+
+	/**
+	 * WS-8 (REQ-MPS-042/043). Per-turn attachments. Adapters that do not
+	 * advertise `supportsAttachments` discard the array silently.
+	 */
+	readonly attachments?: ReadonlyArray<ChatTransportAttachment>;
+}
+
+/**
+ * Per-turn attachment payload. `kind: 'vault'` entries carry only a path and
+ * are resolved by the adapter via `VaultPort.readFile` so the in-memory cap
+ * applies to the resolved bytes, not the pre-resolved chip. REQ-MPS-042..044.
+ */
+export interface ChatTransportAttachment {
+	readonly kind: 'image' | 'file' | 'vault';
+	readonly mimeType: string;
+	readonly bytes: ArrayBuffer | null;
+	readonly path: string | null;
+	readonly label: string;
+	readonly byteLength: number;
 }
 
 /**
@@ -179,6 +213,34 @@ export type StreamDelta =
 	 */
 	| { readonly type: 'tool-use-stop'; readonly blockId: string }
 	/**
+	 * Tool execution result emitted after the underlying tool finished. The
+	 * `output` is the (possibly truncated) textual stdout/stderr surface and
+	 * `exitCode` is the process exit code when available (null for non-process
+	 * tools). REQ-MPS-031 — drives the bash history rows in `StatusPanel`.
+	 */
+	| {
+			readonly type: 'tool-result';
+			readonly blockId: string;
+			readonly output: string;
+			readonly exitCode: number | null;
+	  }
+	/**
+	 * Snapshot of the agent's TodoWrite state. Replaces the entire todo list
+	 * verbatim on each emission (the model emits the full updated list rather
+	 * than diffs). REQ-MPS-030.
+	 */
+	| { readonly type: 'todo-update'; readonly todos: ReadonlyArray<TodoEntry> }
+	/**
+	 * Source citation referencing a vault file by path + line range. REQ-MPS-017
+	 * — the UI renders these as clickable affordances next to the assistant text.
+	 */
+	| {
+			readonly type: 'citation';
+			readonly filePath: string;
+			readonly lineStart: number;
+			readonly lineEnd: number;
+	  }
+	/**
 	 * Conversation-compaction boundary (SDK `SDKCompactBoundaryMessage`).
 	 * Long sessions silently rewrite history when the SDK auto-compacts;
 	 * the UI surfaces this as a synthetic system message in the transcript
@@ -199,6 +261,19 @@ export type StreamDelta =
 	  }
 	| { readonly type: 'done' }
 	| { readonly type: 'error'; readonly error: ChatTransportError };
+
+/**
+ * Single TodoWrite row. The agent emits the complete updated todo list on
+ * each `todo-update` delta; the UI snapshot replaces verbatim.
+ *
+ * REQ-MPS-030.
+ */
+export interface TodoEntry {
+	readonly id: string;
+	readonly title: string;
+	readonly status: 'pending' | 'in-progress' | 'done';
+	readonly description: string | null;
+}
 
 /**
  * Raw response from a structured-output Claude CLI invocation

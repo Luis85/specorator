@@ -32,6 +32,7 @@ import ErrorBoundary from '@/ui/components/ErrorBoundary.vue';
 import AgentSidepanelHeader from '@/ui/components/agent/AgentSidepanelHeader.vue';
 import ThreadTabStrip from '@/ui/components/agent/ThreadTabStrip.vue';
 import MessageList from '@/ui/components/agent/MessageList.vue';
+import StatusPanel from '@/ui/components/agent/StatusPanel.vue';
 import A11yAnnouncer from '@/ui/components/agent/A11yAnnouncer.vue';
 import { A11Y_ANNOUNCER_KEY, useA11yAnnouncer } from '@/ui/composables/useA11yAnnouncer';
 import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue';
@@ -335,6 +336,7 @@ onUnmounted(() => {
 					@regenerate="handleMessageRegenerate"
 					@edit="handleMessageEdit"
 				/>
+				<StatusPanel />
 				<ChatSidebar ref="chatSidebarRef" @select-command="handleSelectCommand" />
 			</div>
 		</ErrorBoundary>

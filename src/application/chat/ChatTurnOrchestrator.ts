@@ -269,13 +269,28 @@ export class ChatTurnOrchestrator {
 		this.deps.streaming.setCliStartingUp(true);
 		const abortController = this.deps.abortControllerFactory();
 		ctx.onAbortController?.(abortController);
+		// WS-8 (REQ-MPS-039): when the user typed a `#`-prefixed draft, the
+		// builder strips the `#` and routes the remainder as `instructionSuffix`.
+		// We append it to the base `systemPromptSuffix` so per-turn instructions
+		// compose with the stage-aware suffix instead of replacing it.
+		const composedSuffix =
+			input.instructionSuffix !== undefined && input.instructionSuffix !== ''
+				? input.systemPromptSuffix === ''
+					? input.instructionSuffix
+					: `${input.systemPromptSuffix}\n\n${input.instructionSuffix}`
+				: input.systemPromptSuffix;
 		const streamResult = await consumeStream({
 			stream: port.queryStream(input.prompt, {
 				timeoutMs: 30_000,
-				systemPromptSuffix: input.systemPromptSuffix,
+				systemPromptSuffix: composedSuffix,
 				resumeSessionId: ctx.resumeSessionId,
 				onSessionId: ctx.onSessionId,
 				signal: abortController.signal,
+				...(input.planMode === true ? { planMode: true } : {}),
+				...(input.model !== undefined ? { model: input.model } : {}),
+				...(input.attachments !== undefined && input.attachments.length > 0
+					? { attachments: input.attachments }
+					: {}),
 			}),
 			threadId,
 			messages: this.deps.messages,
