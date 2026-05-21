@@ -27,7 +27,7 @@ const REQUIRED_METHODS = [
   'isAvailable',
 ] as const
 
-interface Ctor<T> { new (...args: never[]): T }
+type Ctor<T> = new (...args: never[]) => T
 
 function assertSurface(name: string, ctor: Ctor<unknown>): void {
   describe(`NFR-MPS-014 — ${name}`, () => {

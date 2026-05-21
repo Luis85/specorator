@@ -13,7 +13,7 @@
  * English); the test re-runs against it when the key exists.
  */
 import { describe, it, expect } from 'vitest'
-import { en } from '@/ui/i18n/locales/en'
+import en from '@/ui/i18n/locales/en'
 
 const FORBIDDEN = [/\bAPI key\b/i, /\bsubprocess\b/i, /\bSDK\b/i]
 
