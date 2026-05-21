@@ -192,16 +192,6 @@ export default {
     structuredGenerationStartedAnnouncement: 'Generating proposal — please wait.',
     generationAbortedAnnouncement: 'Generation stopped.',
     proposalDecidedAnnouncement: 'Proposal handled. Focus returned to the message field.',
-    planApprovalAriaLabel: 'Plan approval',
-    planApprovalHeading: 'Plan for your approval',
-    planApprovalPermissions: 'Requested tools: {tools}',
-    planApprovalRevisePlaceholder: 'Describe what should change, then press Enter…',
-    planApprovalCancelled: 'Plan was cancelled.',
-    planApproval: {
-      implement: 'Implement plan',
-      revise: 'Send revision',
-      cancel: 'Cancel',
-    },
     approvalCard: {
       ariaLabel: 'Tool approval request',
       heading: 'Allow {tool} on {scope}?',

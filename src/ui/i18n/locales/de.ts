@@ -192,16 +192,6 @@ export default {
     structuredGenerationStartedAnnouncement: 'Generiere Vorschlag — bitte warten.',
     generationAbortedAnnouncement: 'Generierung gestoppt.',
     proposalDecidedAnnouncement: 'Vorschlag bearbeitet. Fokus zum Nachrichtenfeld zurückgegeben.',
-    planApprovalAriaLabel: 'Plan-Freigabe',
-    planApprovalHeading: 'Plan zur Freigabe',
-    planApprovalPermissions: 'Angeforderte Werkzeuge: {tools}',
-    planApprovalRevisePlaceholder: 'Beschreibe, was sich ändern soll, und drücke Enter…',
-    planApprovalCancelled: 'Plan wurde abgebrochen.',
-    planApproval: {
-      implement: 'Plan umsetzen',
-      revise: 'Überarbeitung senden',
-      cancel: 'Abbrechen',
-    },
     approvalCard: {
       ariaLabel: 'Werkzeug-Freigabeanfrage',
       heading: '{tool} für {scope} erlauben?',
