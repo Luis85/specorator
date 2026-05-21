@@ -25,7 +25,9 @@ import type { ChatTransportApprovalRequest } from '@/domain/ports/ChatTransportP
 import type { ProviderId } from '@/domain/chat/ProviderSelection'
 import { useApprovalRulesStore } from '@/ui/stores/approvalRulesStore'
 
-type Decision = { readonly kind: 'deny' | 'allow-once' | 'always' }
+interface Decision {
+	readonly kind: 'deny' | 'allow-once' | 'always'
+}
 
 const props = defineProps<{
 	request: ChatTransportApprovalRequest

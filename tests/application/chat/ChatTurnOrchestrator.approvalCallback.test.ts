@@ -20,10 +20,7 @@ import { MockClaudeCliPort } from '@/infrastructure/mock/MockClaudeCliPort';
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
 import { ChatTurnOrchestrator } from '@/application/chat/ChatTurnOrchestrator';
 import type { TurnInput } from '@/application/chat/TurnInput';
-import type {
-	ChatTransportApprovalRequest,
-	ChatTransportStreamOptions,
-} from '@/domain/ports/ChatTransportPort';
+import type { ChatTransportApprovalRequest } from '@/domain/ports/ChatTransportPort';
 import type { ApprovalRule } from '@/domain/chat/ApprovalRule';
 import type { ProviderId } from '@/domain/chat/ProviderSelection';
 
@@ -136,7 +133,7 @@ describe('ChatTurnOrchestrator — approval-callback wiring (REQ-MPS-045/046)', 
 		const approveTool = vi.fn(async () => true);
 		await orchestrator.sendTurn(freeTextInput(), { approveTool });
 		expect(port.streamOptionsLog.length).toBe(1);
-		const opts = port.streamOptionsLog[0] as ChatTransportStreamOptions | undefined;
+		const opts = port.streamOptionsLog[0];
 		expect(typeof opts?.approveTool).toBe('function');
 	});
 

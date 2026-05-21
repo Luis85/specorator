@@ -82,7 +82,7 @@ export class SpecoratorSettingTab extends PluginSettingTab {
       const empty = wrap.createDiv({ cls: 'setting-item-description' })
       empty.setAttribute('data-testid', 'settings-approval-rules-empty')
       empty.setText(
-        'No approval rules saved yet. Use "Always allow" on a tool-permission card in the agent panel to create one.',
+        'No approval rules saved yet. Use the always-allow button on a tool-permission card in the agent panel to create one.',
       )
       return
     }

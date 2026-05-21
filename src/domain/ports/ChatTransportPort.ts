@@ -144,8 +144,13 @@ export interface ChatTransportAttachment {
  * the adapter only sees a boolean.
  */
 export interface ChatTransportApprovalRequest {
-	/** Tool name (e.g. `'Write'`, `'Edit'`, `'Bash'`, or provider-specific). */
-	readonly tool: 'Write' | 'Edit' | 'Bash' | string;
+	/**
+	 * Tool name. Common values: `'Write'`, `'Edit'`, `'Bash'`. Provider-specific
+	 * tool names (Cursor, etc.) are also accepted — the matcher in
+	 * `approvalRulesStore` does string-equality on this field plus the
+	 * scope-glob / bash-prefix rule.
+	 */
+	readonly tool: string;
 	/** Path glob (non-Bash) or command name (Bash). Matches `ApprovalRule.scope`. */
 	readonly scope: string;
 	/**

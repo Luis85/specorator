@@ -22,6 +22,16 @@ interface SerialisedApprovalRule {
 	readonly createdAt: string
 }
 
+/** Return the first invalid field of a candidate record, or `null` when shape is OK. */
+function findApprovalRuleDefect(r: Record<string, unknown>): string | null {
+	if (typeof r.id !== 'string' || r.id.length === 0) return 'id'
+	if (typeof r.providerId !== 'string' || !PROVIDER_IDS.has(r.providerId)) return 'providerId'
+	if (typeof r.tool !== 'string' || r.tool.length === 0) return 'tool'
+	if (typeof r.scope !== 'string' || r.scope.length === 0) return 'scope'
+	if (typeof r.createdAt !== 'string') return 'createdAt'
+	return null
+}
+
 /** Type-guard parsing of one raw record. Returns `null` (and logs once) on a bad shape. */
 export function parseApprovalRule(raw: unknown, logger: LoggerPort): ApprovalRule | null {
 	if (raw === null || typeof raw !== 'object') {
@@ -29,32 +39,19 @@ export function parseApprovalRule(raw: unknown, logger: LoggerPort): ApprovalRul
 		return null
 	}
 	const r = raw as Record<string, unknown>
-	if (typeof r.id !== 'string' || r.id.length === 0) {
-		logger.warn('[approvalRules] dropped record (invalid id)')
-		return null
-	}
-	if (typeof r.providerId !== 'string' || !PROVIDER_IDS.has(r.providerId)) {
-		logger.warn('[approvalRules] dropped record (invalid providerId)', { id: r.id, value: r.providerId })
-		return null
-	}
-	if (typeof r.tool !== 'string' || r.tool.length === 0) {
-		logger.warn('[approvalRules] dropped record (invalid tool)', { id: r.id })
-		return null
-	}
-	if (typeof r.scope !== 'string' || r.scope.length === 0) {
-		logger.warn('[approvalRules] dropped record (invalid scope)', { id: r.id })
-		return null
-	}
-	if (typeof r.createdAt !== 'string') {
-		logger.warn('[approvalRules] dropped record (invalid createdAt)', { id: r.id })
+	const defect = findApprovalRuleDefect(r)
+	if (defect !== null) {
+		logger.warn(`[approvalRules] dropped record (invalid ${defect})`, {
+			id: typeof r.id === 'string' ? r.id : undefined,
+		})
 		return null
 	}
 	return {
-		id: r.id,
+		id: r.id as string,
 		providerId: r.providerId as ProviderId,
-		tool: r.tool,
-		scope: r.scope,
-		createdAt: r.createdAt,
+		tool: r.tool as string,
+		scope: r.scope as string,
+		createdAt: r.createdAt as string,
 	}
 }
 

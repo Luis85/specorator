@@ -100,6 +100,7 @@ describe('ApprovalCard.vue', () => {
 			const w = mountCard()
 			await nextTick()
 			const denyEl = w.find('[data-testid="approval-action-deny"]').element as HTMLElement
+			// eslint-disable-next-line obsidianmd/prefer-active-doc -- jsdom test runner has no Obsidian popout windows.
 			expect(document.activeElement).toBe(denyEl)
 			w.unmount()
 		})
