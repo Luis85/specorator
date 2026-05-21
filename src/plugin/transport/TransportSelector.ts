@@ -93,71 +93,83 @@ export function selectTransport(
   selection: ProviderSelection,
   deps: ProviderRouterDeps,
 ): TransportResolution {
-  const { providers, degradedPort, availability, autoPreferProvider } = deps
-  const {
-    claudeApiKeyPresent,
-    claudeCliResolved,
-    cursorApiKeyPresent,
-    cursorCliResolved,
-    cursorApiPreviewEnabled,
-    secretStoreAvailable,
-  } = availability
-
-  // R1 — forced 'degraded' wins over every availability flag.
-  if (!isExplicit(selection) && selection.forced === 'degraded') {
-    return { resolved: 'degraded', port: degradedPort }
-  }
-
   if (isExplicit(selection)) {
-    // R2 / R3 — explicit claude/api.
-    if (selection.provider === 'claude' && selection.mode === 'api') {
-      return claudeApiKeyPresent
-        ? { resolved: { provider: 'claude', mode: 'api' }, port: providers.claude.api }
-        : { resolved: 'degraded', port: degradedPort }
-    }
-    // R4 / R5 — explicit claude/cli.
-    if (selection.provider === 'claude' && selection.mode === 'cli') {
-      return claudeCliResolved
-        ? { resolved: { provider: 'claude', mode: 'cli' }, port: providers.claude.cli }
-        : { resolved: 'degraded', port: degradedPort }
-    }
-    // R6 / R7 — explicit cursor/api gated by the preview flag + secret store.
-    if (selection.provider === 'cursor' && selection.mode === 'api') {
-      return secretStoreAvailable && cursorApiKeyPresent && cursorApiPreviewEnabled
-        ? { resolved: { provider: 'cursor', mode: 'api' }, port: providers.cursor.api }
-        : { resolved: 'degraded', port: degradedPort }
-    }
-    // R8 / R9 — explicit cursor/cli.
-    if (selection.provider === 'cursor' && selection.mode === 'cli') {
-      return cursorCliResolved
-        ? { resolved: { provider: 'cursor', mode: 'cli' }, port: providers.cursor.cli }
-        : { resolved: 'degraded', port: degradedPort }
-    }
+    return resolveExplicit(selection, deps)
   }
+  // Forced sentinel — 'degraded' short-circuits; 'auto' walks the precedence
+  // chain.
+  return selection.forced === 'degraded'
+    ? { resolved: 'degraded', port: deps.degradedPort }
+    : resolveAuto(deps)
+}
 
-  // R10..R15 — 'auto' resolution. Order matters: prefer-provider rows fire
-  // first, then the api-beats-cli fallback chain. Cursor API rows respect the
-  // preview flag (REQ-MPS-014).
-  // R10 — prefer claude, claude API key present.
-  if (claudeApiKeyPresent && autoPreferProvider === 'claude') {
+/**
+ * Per-cell availability predicate for the four explicit (provider, mode)
+ * cells. Returns `true` when the cell's adapter should be selected, `false`
+ * when the selection collapses to the degraded floor.
+ */
+function isCellAvailable(
+  cellKey: string,
+  availability: ProviderRouterDeps['availability'],
+): boolean {
+  if (cellKey === 'claude:api') return availability.claudeApiKeyPresent
+  if (cellKey === 'claude:cli') return availability.claudeCliResolved
+  if (cellKey === 'cursor:api') {
+    return (
+      availability.secretStoreAvailable
+      && availability.cursorApiKeyPresent
+      && availability.cursorApiPreviewEnabled
+    )
+  }
+  return availability.cursorCliResolved
+}
+
+/**
+ * R2..R9 — explicit (provider, mode) cell. Each cell has exactly one
+ * availability predicate; falls through to `degraded` otherwise.
+ */
+function resolveExplicit(
+  selection: { readonly provider: ProviderId; readonly mode: 'api' | 'cli' },
+  deps: ProviderRouterDeps,
+): TransportResolution {
+  const cellKey = `${selection.provider}:${selection.mode}`
+  if (!isCellAvailable(cellKey, deps.availability)) {
+    return { resolved: 'degraded', port: deps.degradedPort }
+  }
+  const port = deps.providers[selection.provider][selection.mode]
+  return { resolved: { provider: selection.provider, mode: selection.mode }, port }
+}
+
+/**
+ * R10..R15 — `forced: 'auto'` precedence walk. Order matters and matches
+ * the canonical table:
+ *   1. prefer-claude w/ claude API key
+ *   2. prefer-cursor w/ cursor API key + preview enabled
+ *   3. claude API key (any prefer)
+ *   4. claude CLI
+ *   5. cursor CLI
+ *   6. degraded floor
+ */
+function resolveAuto(deps: ProviderRouterDeps): TransportResolution {
+  const { providers, degradedPort, availability, autoPreferProvider } = deps
+  if (availability.claudeApiKeyPresent && autoPreferProvider === 'claude') {
     return { resolved: { provider: 'claude', mode: 'api' }, port: providers.claude.api }
   }
-  // R11 — prefer cursor, cursor API key + preview enabled.
-  if (cursorApiKeyPresent && cursorApiPreviewEnabled && autoPreferProvider === 'cursor') {
+  if (
+    availability.cursorApiKeyPresent
+    && availability.cursorApiPreviewEnabled
+    && autoPreferProvider === 'cursor'
+  ) {
     return { resolved: { provider: 'cursor', mode: 'api' }, port: providers.cursor.api }
   }
-  // R12 — claude API key present (any prefer).
-  if (claudeApiKeyPresent) {
+  if (availability.claudeApiKeyPresent) {
     return { resolved: { provider: 'claude', mode: 'api' }, port: providers.claude.api }
   }
-  // R13 — claude CLI resolved.
-  if (claudeCliResolved) {
+  if (availability.claudeCliResolved) {
     return { resolved: { provider: 'claude', mode: 'cli' }, port: providers.claude.cli }
   }
-  // R14 — cursor CLI resolved.
-  if (cursorCliResolved) {
+  if (availability.cursorCliResolved) {
     return { resolved: { provider: 'cursor', mode: 'cli' }, port: providers.cursor.cli }
   }
-  // R15 — floor: nothing available.
   return { resolved: 'degraded', port: degradedPort }
 }
