@@ -70,7 +70,7 @@
 		"playwright": "^1.59.1",
 		"postcss": "^8.5.13",
 		"prettier": "^3.8.3",
-		"storybook": "^10.3.6",
+		"storybook": "^10.4.0",
 		"typedoc": "^0.28.19",
 		"typescript": "^6.0.3",
 		"typescript-eslint": "^8.59.2",
