@@ -34,9 +34,12 @@ import { useInjectedA11yAnnouncer } from '@/ui/composables/useA11yAnnouncer';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
 import MarkdownBlock from '@/ui/components/agent/MarkdownBlock.vue';
 import MessageActions from './MessageActions.vue';
+import MessageBubble from './MessageBubble.vue';
 import ThinkingBlock from './ThinkingBlock.vue';
 import ToolCallBlock from './ToolCallBlock.vue';
 import ApprovalCard from './ApprovalCard.vue';
+import StreamingCursor from './StreamingCursor.vue';
+import CompactBoundary from './CompactBoundary.vue';
 
 /**
  * Discriminated union for the interleaved transcript: either a real
@@ -111,8 +114,7 @@ const compactBoundaries = computed<readonly CompactBoundaryNoticeDto[]>(() => {
 const transcript = computed<readonly TranscriptEntry[]>(() => {
 	const entries: TranscriptEntry[] = [];
 	for (const m of messages.value) entries.push({ kind: 'message', message: m });
-	for (const n of compactBoundaries.value)
-		entries.push({ kind: 'compact-boundary', notice: n });
+	for (const n of compactBoundaries.value) entries.push({ kind: 'compact-boundary', notice: n });
 	entries.sort((a, b) => {
 		const aAt = a.kind === 'message' ? a.message.createdAt : a.notice.createdAt;
 		const bAt = b.kind === 'message' ? b.message.createdAt : b.notice.createdAt;
@@ -262,8 +264,7 @@ watch(
 
 onBeforeUnmount(() => {
 	if (scrollRafHandle !== null) {
-		const cancel =
-			typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null;
+		const cancel = typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null;
 		if (cancel !== null) cancel(scrollRafHandle);
 		scrollRafHandle = null;
 	}
@@ -359,52 +360,49 @@ watch(
 			<article
 				v-if="entry.kind === 'message'"
 				:key="entry.message.id"
-				class="sp-agent-message"
+				class="sp-agent-message sp-hover-host"
 				:class="`sp-agent-message--${entry.message.role}`"
 				:data-testid="`agent-message-${entry.message.role}`"
 			>
 				<header class="sp-agent-message__role" data-testid="agent-message-role">
 					{{ entry.message.role === 'user' ? t('agent.roleUser') : t('agent.roleAssistant') }}
 				</header>
-				<div class="sp-agent-message__body" data-testid="agent-message-body">
-					<MarkdownBlock
-						v-if="entry.message.text.length > 0"
-						class="sp-agent-message__text"
-						:text="entry.message.text"
-					/>
-					<p v-else class="sp-agent-message__empty" data-testid="agent-message-empty">
-						{{ t('agent.assistantEmpty') }}
-					</p>
-					<p
-						v-if="entry.message.truncated === true"
-						class="sp-agent-message__trim-note"
-						data-testid="agent-message-trim-note"
-					>
-						{{ t('agent.contextTrimmed') }}
-					</p>
-					<MessageActions
-						:message-id="entry.message.id"
-						:role="entry.message.role"
-						:is-latest="entry.message.id === latestAssistantId"
-						@copy="handleCopy"
-						@regenerate="handleRegenerate"
-						@edit="handleEdit"
-					/>
-				</div>
+				<MessageBubble :role="entry.message.role">
+					<div class="sp-agent-message__body" data-testid="agent-message-body">
+						<MarkdownBlock
+							v-if="entry.message.text.length > 0"
+							class="sp-agent-message__text"
+							:text="entry.message.text"
+						/>
+						<p v-else class="sp-agent-message__empty" data-testid="agent-message-empty">
+							{{ t('agent.assistantEmpty') }}
+						</p>
+						<p
+							v-if="entry.message.truncated === true"
+							class="sp-agent-message__trim-note"
+							data-testid="agent-message-trim-note"
+						>
+							{{ t('agent.contextTrimmed') }}
+						</p>
+					</div>
+					<template #actions>
+						<MessageActions
+							:message-id="entry.message.id"
+							:role="entry.message.role"
+							:is-latest="entry.message.id === latestAssistantId"
+							@copy="handleCopy"
+							@regenerate="handleRegenerate"
+							@edit="handleEdit"
+						/>
+					</template>
+				</MessageBubble>
 			</article>
-			<div
+			<CompactBoundary
 				v-else
 				:key="entry.notice.id"
-				class="sp-agent-compact-boundary"
+				:label="t('chat.compactBoundary.notice')"
 				data-testid="compact-boundary-notice"
-				role="status"
-			>
-				<span class="sp-agent-compact-boundary__line" aria-hidden="true"></span>
-				<span class="sp-agent-compact-boundary__label">
-					{{ t('chat.compactBoundary.notice') }}
-				</span>
-				<span class="sp-agent-compact-boundary__line" aria-hidden="true"></span>
-			</div>
+			/>
 		</template>
 		<ApprovalCard
 			v-for="approval in approvalRequests"
@@ -415,7 +413,7 @@ watch(
 		/>
 		<article
 			v-if="isStreaming"
-			class="sp-agent-message sp-agent-message--assistant sp-agent-message--streaming"
+			class="sp-agent-message sp-agent-message--assistant sp-agent-message--streaming sp-hover-host"
 			data-testid="agent-message-streaming"
 			aria-busy="true"
 			aria-live="off"
@@ -423,27 +421,24 @@ watch(
 			<header class="sp-agent-message__role">
 				{{ t('agent.roleAssistant') }}
 			</header>
-			<div class="sp-agent-message__body">
-				<ThinkingBlock :text="streamingThinking" />
-				<ToolCallBlock
-					v-for="[blockId, call] in streamingToolCalls"
-					:key="blockId"
-					:tool-name="call.toolName"
-					:input-json="call.inputJson"
-					:done="call.done"
-				/>
-				<MarkdownBlock
-					v-if="streamingText.length > 0"
-					class="sp-agent-message__text"
-					:text="streamingText"
-				/>
-				<span
-					class="sp-agent-message__cursor"
-					aria-hidden="true"
-					data-testid="agent-message-streaming-cursor"
-					>▍</span
-				>
-			</div>
+			<MessageBubble role="assistant">
+				<div class="sp-agent-message__body">
+					<ThinkingBlock :text="streamingThinking" />
+					<ToolCallBlock
+						v-for="[blockId, call] in streamingToolCalls"
+						:key="blockId"
+						:tool-name="call.toolName"
+						:input-json="call.inputJson"
+						:done="call.done"
+					/>
+					<MarkdownBlock
+						v-if="streamingText.length > 0"
+						class="sp-agent-message__text"
+						:text="streamingText"
+					/>
+					<StreamingCursor data-testid="agent-message-streaming-cursor" />
+				</div>
+			</MessageBubble>
 		</article>
 		<button
 			v-if="showNewMessagesPill"

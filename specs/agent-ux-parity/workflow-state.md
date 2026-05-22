@@ -4,7 +4,7 @@ area: AUX
 current_stage: implementation
 status: active
 last_updated: 2026-05-22
-last_agent: dev (WS-AUX-3)
+last_agent: dev (WS-AUX-5)
 artifacts:
   idea.md: complete
   research.md: skipped
@@ -39,7 +39,7 @@ adrs:
 | 4. Design | `design.md` (consolidated A+B+C) | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | in-progress (WS-AUX-1..4 complete; WS-AUX-5..9 pending) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (WS-AUX-1..5 complete; WS-AUX-6..9 pending) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -52,6 +52,74 @@ adrs:
 ## Hand-off notes
 
 ```
+2026-05-22 (dev):         WS-AUX-5 landed on
+                          `feature/aux-ws-5-messages-nested-streaming`.
+                          Delivered: StreamingCursor primitive + PO +
+                          test + story (replaces literal U+258D glyph;
+                          tokens-driven blink + reduced-motion
+                          fallback); NestedDetailFrame primitive + PO
+                          + test + story (owns the only 2px
+                          border-inline-start + indent contract;
+                          data-status idle|running|complete|error);
+                          MessageBubble role-aware shell + PO + test +
+                          story (user → right-aligned + asymmetric
+                          border-end-end-radius; assistant →
+                          transparent full-width; system → outline);
+                          CompactBoundary refresh + PO + test (token-
+                          driven divider + chevron icon — was
+                          deferred from WS-AUX-4); ThinkingBlock +
+                          ToolCallBlock refactored to wrap
+                          NestedDetailFrame; MessageActions migrated
+                          to <HoverActions> + <SpIconButton> with
+                          Lucide icons (copy/rotate-ccw/pencil/
+                          git-fork) and 1.5s Copied aria-label swap
+                          (REQ-AUX-016); MessageList wires
+                          MessageBubble in #default + MessageActions
+                          in #actions, replaces literal cursor with
+                          StreamingCursor, replaces inline ASCII
+                          divider with <CompactBoundary>. Added i18n
+                          copyConfirm + fork + forkAriaLabel keys in
+                          en + de.
+                          Touched tests: ThinkingBlock + ToolCallBlock
+                          + MessageActions.* + MessageList.* +
+                          MessageList.compactBoundary + MessageList
+                          .{edit,regenerate} — each gained
+                          ICON_PORT/LOGGER_PORT provide; assertion
+                          contracts unchanged. .storybook/preview.ts
+                          now provides ICON_PORT so the new agent
+                          stories resolve the IconPort (closes the
+                          9 storybook failures observed on this tip).
+                          Deviations: (1) CQ-AUX-06 Fork action
+                          stays escalated — shipped behind a
+                          `showFork` prop defaulting to false with
+                          working `git-fork` icon + microcopy +
+                          `fork` emit; carried forward to PM
+                          sign-off. (2) `MessageActionIcon.vue`
+                          collapsed into MessageActions; SpIconButton
+                          already provides the per-action a11y
+                          contract. (3) `SubagentBlock.vue` does not
+                          exist in the codebase; NestedDetailFrame
+                          ready to wrap it when it lands.
+                          (4) Role-aware avatars + per-message
+                          timestamps (T-AUX-251..253) deferred:
+                          MessageItem.vue is not a separate file;
+                          carries forward to a follow-up extraction
+                          tracked alongside REQ-AUX-014 in WS-AUX-10.
+                          Verify: typecheck GREEN; lint GREEN
+                          (0 errors); unit GREEN 2430/2430;
+                          storybook GREEN 65/65; build GREEN
+                          (main.js gzip 717.87 kB vs WS-4 baseline
+                          716.63 kB → +1.24 kB / +0.17%);
+                          build:web GREEN (95.83 kB gzip).
+                          Hand-off → dev for WS-AUX-6
+                          (T-AUX-255..284 — composer +
+                          InputToolbar + ContextMeter) on a fresh
+                          branch cut from develop after this PR
+                          merges. WS-AUX-8 (T-AUX-300..324)
+                          depends on WS-AUX-5 + WS-AUX-3 and can
+                          start in parallel; WS-AUX-9 (T-AUX-325..
+                          344) already unblocked.
+
 2026-05-22 (dev):         WS-AUX-4 landed on `feature/aux-ws-4-header-tabs-welcome`.
                           Delivered: ThreadTabBadge + PO + tests; WelcomeGreeting +
                           WelcomeSuggestionChip + POs + tests with hour-banded

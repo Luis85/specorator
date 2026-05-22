@@ -15,11 +15,26 @@ import { i18n } from '@/ui/i18n';
 import { useMessagesStore } from '@/ui/stores/messagesStore';
 import { useStreamingTurnStore } from '@/ui/stores/streamingTurnStore';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
+import { ICON_PORT, LOGGER_PORT } from '@/infrastructure/bridge/ports';
+import { MockBridge } from '@/infrastructure/mock/MockBridge';
+import type { IconPort, LoggerPort } from '@/domain/ports';
 import { MessageListPO } from './MessageList.po';
+
+function fakeLogger(): LoggerPort {
+	return { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
+}
+
+function listProvides() {
+	const bridge = new MockBridge() as unknown as IconPort;
+	return {
+		[ICON_PORT as symbol]: bridge,
+		[LOGGER_PORT as symbol]: fakeLogger(),
+	};
+}
 
 function mountList(threadId: string | null) {
 	const wrapper = mount(MessageList, {
-		global: { plugins: [i18n] },
+		global: { plugins: [i18n], provide: listProvides() },
 		props: { threadId },
 	});
 	return { wrapper, po: new MessageListPO(wrapper) };
@@ -46,7 +61,7 @@ function mountWithScrollMetrics(
 	// eslint-disable-next-line obsidianmd/prefer-active-doc -- test-only mount
 	const attachTarget = document.body;
 	const wrapper = mount(MessageList, {
-		global: { plugins: [i18n] },
+		global: { plugins: [i18n], provide: listProvides() },
 		props: { threadId },
 		attachTo: attachTarget,
 	});
@@ -228,9 +243,8 @@ describe('MessageList', () => {
 		// assert exactly one call fires when a completed assistant message
 		// lands (not N for N streamed tokens — those go through aria-busy on
 		// the streaming bubble).
-		const { useA11yAnnouncer, A11Y_ANNOUNCER_KEY } = await import(
-			'@/ui/composables/useA11yAnnouncer'
-		);
+		const { useA11yAnnouncer, A11Y_ANNOUNCER_KEY } =
+			await import('@/ui/composables/useA11yAnnouncer');
 		const { defineComponent, h } = await import('vue');
 
 		const store = useMessagesStore();
@@ -263,7 +277,7 @@ describe('MessageList', () => {
 				return h(MessageList, { threadId: tid });
 			},
 		});
-		mount(Host, { global: { plugins: [i18n] } });
+		mount(Host, { global: { plugins: [i18n], provide: listProvides() } });
 		// Initial mount with one user message; no assistant transition yet.
 		expect(spy).not.toHaveBeenCalled();
 

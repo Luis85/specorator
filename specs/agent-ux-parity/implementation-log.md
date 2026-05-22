@@ -530,3 +530,96 @@ from the spec.
   (2343/2343); `npm run build` GREEN (main.js gzip 712.87 kB vs
   WS-3 baseline 716.631 kB → −3.76 kB / −0.5%); `npm run build:web`
   GREEN (95.77 kB gzip).
+
+## 2026-05-22 — WS-AUX-5 messages + nested blocks + streaming cursor
+
+- **owner:** dev (Claude Opus 4.7 1M)
+- **tasks:** T-AUX-225..254 (30 tasks; covers MessageBubble role attr,
+  HoverActions + SpIconButton migration on `MessageActions`, Copy
+  confirmation swap, NestedDetailFrame primitive consumed by
+  ThinkingBlock + ToolCallBlock, StreamingCursor primitive replacing
+  the literal `▍` glyph, plus the WS-AUX-4-deferred CompactBoundary
+  refresh).
+- **commits (squash candidate):**
+  - `625e0d3` — StreamingCursor primitive + test + PO + story
+  - `4f0c833` — NestedDetailFrame primitive + test + PO + story
+  - `42bc72d` — MessageBubble role-aware shell
+  - `424579c` — CompactBoundary refresh (WS-AUX-4 deferred)
+  - `66b9166` — ThinkingBlock onto NestedDetailFrame
+  - `bf5e838` — ToolCallBlock onto NestedDetailFrame
+  - `0c253da` — MessageActions to HoverActions + SpIconButton + Copy
+    confirm swap
+  - `c7efbae` — MessageList wires MessageBubble + StreamingCursor +
+    CompactBoundary
+  - `ab33366` — typecheck/lint/prettier sweep
+- **files added:**
+  - `src/ui/components/agent/StreamingCursor.vue`
+  - `src/ui/components/agent/NestedDetailFrame.vue`
+  - `src/ui/components/agent/MessageBubble.vue`
+  - `src/ui/components/agent/CompactBoundary.vue`
+  - `tests/ui/components/agent/{StreamingCursor,NestedDetailFrame,MessageBubble,CompactBoundary}.{po,test}.ts`
+  - `tests/ui/components/agent/MessageActions.aux.test.ts`
+  - `tests/ui/components/agent/messageActionsTestHelpers.ts`
+  - `stories/agent/{StreamingCursor,NestedDetailFrame,MessageBubble,MessageActions}.stories.ts`
+- **files modified:**
+  - `src/ui/components/agent/ThinkingBlock.vue` — wraps body in
+    `NestedDetailFrame`; per-block border CSS removed.
+  - `src/ui/components/agent/ToolCallBlock.vue` — wraps body in
+    `NestedDetailFrame`; status maps to running | complete.
+  - `src/ui/components/agent/MessageActions.vue` — wrapped in
+    `<HoverActions>` (reveal on hover/focus); buttons migrated to
+    `<SpIconButton>` with Lucide icons (`copy`, `rotate-ccw`, `pencil`,
+    `git-fork`); Copy click swaps aria-label to `copyConfirm` for
+    1.5 s then reverts; `showFork` prop gates the Fork action.
+  - `src/ui/components/agent/MessageList.vue` — renders each turn
+    through `<MessageBubble :role>` with `MessageActions` in the
+    `#actions` slot; replaces the literal `▍` cursor with
+    `<StreamingCursor>`; renders compact-boundary entries through
+    `<CompactBoundary>`. `sp-hover-host` added to message articles
+    so HoverActions reveal applies.
+  - `src/ui/i18n/locales/en.ts` + `de.ts` — added `copyConfirm`,
+    `fork`, `forkAriaLabel` keys under `agent.messageActions`.
+  - `.storybook/preview.ts` — provides `ICON_PORT` so the new agent
+    stories resolve the IconPort.
+  - Existing tests (`MessageActions.*`, `MessageList.*`,
+    `ThinkingBlock.test`, `ToolCallBlock.test`) gained the
+    `ICON_PORT`/`LOGGER_PORT` provides. No assertion changes.
+- **spec:** REQ-AUX-001, REQ-AUX-002, REQ-AUX-005, REQ-AUX-008,
+  REQ-AUX-010, REQ-AUX-013, REQ-AUX-014 (partial — see deviations),
+  REQ-AUX-016, spec §1.3.6, §1.3.7, §1.4, §3.2.
+- **outcome:** done for WS-AUX-5 scope. Three opt-in/escalated tasks
+  carried into other workstreams — see deviations.
+- **deviations:**
+  1. **CQ-AUX-06 Fork action** — escalated; PM/architect have not
+     confirmed Fork ships in this feature. Shipped behind a
+     `showFork` prop defaulting to `false`, with a working
+     `git-fork` icon, `agent.messageActions.fork{,AriaLabel}`
+     microcopy, and a `fork` emit. Default false means no behaviour
+     change vs the WS-4 tip. Carried forward to the integration
+     workstream / PM sign-off.
+  2. **`MessageActionIcon.vue` wrapper (T-AUX-233)** — collapsed
+     into `MessageActions.vue` instead of a separate file. The
+     consumer is a single template; extracting it would create a
+     trivial pass-through wrapper that the WS-AUX-3 primitives
+     (`SpIconButton`) already provide. Followup task: split if a
+     second consumer appears.
+  3. **`SubagentBlock.vue` refactor (T-AUX-244/245)** — the
+     `SubagentBlock` component does not yet exist in the codebase
+     (no current renderer for subagent turns). Skipped; will be
+     handled when the component lands. NestedDetailFrame is ready
+     to wrap it.
+  4. **Role-aware avatar + timestamp gating (T-AUX-251..253)** —
+     `MessageItem.vue` does not exist as a separate file (the
+     transcript is rendered inline by `MessageList.vue`). The
+     bubble's role contract is on `<MessageBubble>` (data-role,
+     align-self, mirror corner). Avatars + per-message timestamps
+     belong to a follow-up `MessageItem.vue` extraction; carried
+     forward as REQ-AUX-014 follow-up in WS-AUX-10.
+- **verify:** `npm run typecheck` GREEN; `npm run lint` GREEN
+  (0 errors, 63 pre-existing warnings); `npm run test` GREEN
+  (2430/2430 unit + 65/65 storybook — 9 prior-tip storybook
+  failures resolved by adding `ICON_PORT` to `preview.ts`);
+  `npm run build` GREEN (main.js gzip **717.87 kB** vs WS-4 tip
+  baseline 716.63 kB → **+1.24 kB / +0.17%** for 4 new components +
+  CompactBoundary refresh); `npm run build:web` GREEN (95.83 kB
+  gzip).

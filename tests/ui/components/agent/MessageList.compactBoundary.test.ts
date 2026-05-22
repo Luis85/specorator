@@ -12,11 +12,26 @@ import MessageList from '@/ui/components/agent/MessageList.vue';
 import { i18n } from '@/ui/i18n';
 import { useMessagesStore } from '@/ui/stores/messagesStore';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
+import { ICON_PORT, LOGGER_PORT } from '@/infrastructure/bridge/ports';
+import { MockBridge } from '@/infrastructure/mock/MockBridge';
+import type { IconPort, LoggerPort } from '@/domain/ports';
 import { MessageListCompactBoundaryPO } from './MessageList.compactBoundary.po';
+
+function fakeLogger(): LoggerPort {
+	return { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
+}
+
+function listProvides() {
+	const bridge = new MockBridge() as unknown as IconPort;
+	return {
+		[ICON_PORT as symbol]: bridge,
+		[LOGGER_PORT as symbol]: fakeLogger(),
+	};
+}
 
 function mountList(threadId: string | null) {
 	const wrapper = mount(MessageList, {
-		global: { plugins: [i18n] },
+		global: { plugins: [i18n], provide: listProvides() },
 		props: { threadId },
 	});
 	return { wrapper, po: new MessageListCompactBoundaryPO(wrapper) };
@@ -105,7 +120,9 @@ describe('MessageList — compact-boundary notice', () => {
 		const store = useMessagesStore();
 		const tid = 'thread-interleave';
 		store.appendMessage(msg(tid, 'user', { text: 'first', createdAt: '2026-05-16T00:00:00Z' }));
-		store.appendMessage(msg(tid, 'assistant', { text: 'second', createdAt: '2026-05-16T00:00:01Z' }));
+		store.appendMessage(
+			msg(tid, 'assistant', { text: 'second', createdAt: '2026-05-16T00:00:01Z' }),
+		);
 		// Manually-shaped notice via store mutation; createdAt is generated as
 		// "now" so it sorts after the messages above (which are dated 2026-05-16).
 		store.appendCompactBoundaryNotice(tid, {});
