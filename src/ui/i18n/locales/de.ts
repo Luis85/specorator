@@ -218,6 +218,14 @@ export default {
 		},
 		newMessagesPill: '↓ Neue Nachrichten',
 		newMessagesPillAriaLabel: 'Zur neuesten Nachricht scrollen',
+		// spec §1.6 — Transport-Statusmeldungen (REQ-AUX-016).
+		transport: {
+			connecting: 'Verbinde mit {provider}.',
+			degraded: '{provider} antwortet langsam.',
+			offline: '{provider} ist nicht erreichbar.',
+			retry: 'Erneut versuchen',
+			fallbackProvider: 'Anbieter',
+		},
 		thinking: 'Denkt nach',
 		toolDone: 'Werkzeug abgeschlossen',
 		toolStreaming: 'Werkzeug läuft',

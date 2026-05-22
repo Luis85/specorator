@@ -446,14 +446,16 @@ onUnmounted(() => {
 					@regenerate="handleMessageRegenerate"
 					@edit="handleMessageEdit"
 				/>
-				<StatusPanel />
 				<!--
-				WS-AUX-6 (CQ-AUX-18): AttachmentStrip relocated into ChatInput's
-				composer wrapper. The strip used to sit between StatusPanel and
-				ChatSidebar; it now travels with the composer so chips ride with
-				the textarea.
+				WS-AUX-7 (REQ-AUX-011): StatusPanel + composer (incl. AttachmentStrip,
+				which lives inside ChatInput per CQ-AUX-18) share a single bordered
+				ancestor so they read as one region. StatusPanel owns its own scroll
+				with max-height min(40vh, 320px) to keep the composer in view.
 				-->
-				<ChatSidebar ref="chatSidebarRef" @select-command="handleSelectCommand" />
+				<div class="sp-composer-group" data-testid="agent-composer-group">
+					<StatusPanel />
+					<ChatSidebar ref="chatSidebarRef" @select-command="handleSelectCommand" />
+				</div>
 			</div>
 		</ErrorBoundary>
 		<AppToast />
@@ -488,6 +490,29 @@ onUnmounted(() => {
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
+}
+
+/*
+ * WS-AUX-7 (REQ-AUX-011): shared bordered ancestor for StatusPanel +
+ * composer (AttachmentStrip lives inside ChatInput per CQ-AUX-18). The
+ * group draws the chrome once so the three children read as a single
+ * region. `flex: 0 0 auto` keeps the composer pinned to the bottom of
+ * the body column while MessageList consumes the remaining flex space.
+ */
+.sp-composer-group {
+	display: flex;
+	flex-direction: column;
+	flex: 0 0 auto;
+	margin-block: var(--sp-space-2, 0.5rem);
+	margin-inline: var(--sp-space-3, 0.75rem);
+	border: 1px solid var(--sp-border, var(--background-modifier-border));
+	border-radius: var(--sp-radius-md, 8px);
+	background: var(--sp-bg-primary, var(--background-primary));
+	overflow: hidden;
+}
+
+.sp-composer-group > * + * {
+	border-block-start: 1px solid var(--sp-border, var(--background-modifier-border));
 }
 
 /*

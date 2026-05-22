@@ -215,6 +215,14 @@ export default {
 		},
 		newMessagesPill: '↓ New messages',
 		newMessagesPillAriaLabel: 'Scroll to the newest message',
+		// spec §1.6 — transport health microcopy (REQ-AUX-016).
+		transport: {
+			connecting: 'Connecting to {provider}.',
+			degraded: '{provider} is slow to respond.',
+			offline: '{provider} is unreachable.',
+			retry: 'Retry',
+			fallbackProvider: 'Provider',
+		},
 		thinking: 'Thinking',
 		toolDone: 'Tool finished',
 		toolStreaming: 'Tool running',

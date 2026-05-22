@@ -26,6 +26,9 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMessagesStore, type CompactBoundaryNoticeDto } from '@/ui/stores/messagesStore';
 import { useStreamingTurnStore } from '@/ui/stores/streamingTurnStore';
+import { useTransportStatusStore } from '@/ui/stores/transportStatusStore';
+import { useChatProviderStore } from '@/ui/stores/chatProviderStore';
+import { isExplicit } from '@/domain/chat/ProviderSelection';
 import {
 	usePendingApprovalsStore,
 	type ApprovalDecisionKind,
@@ -40,6 +43,7 @@ import ToolCallBlock from './ToolCallBlock.vue';
 import ApprovalCard from './ApprovalCard.vue';
 import StreamingCursor from './StreamingCursor.vue';
 import CompactBoundary from './CompactBoundary.vue';
+import TransportStatusPill from './TransportStatusPill.vue';
 
 /**
  * Discriminated union for the interleaved transcript: either a real
@@ -78,6 +82,52 @@ const emit = defineEmits<{
 const messagesStore = useMessagesStore();
 const streamingStore = useStreamingTurnStore();
 const pendingApprovals = usePendingApprovalsStore();
+const transportStatusStore = useTransportStatusStore();
+const providerStore = useChatProviderStore();
+
+/**
+ * WS-AUX-7 (REQ-AUX-016) — surface `<TransportStatusPill>` at the top of the
+ * transcript whenever transport health is non-idle. The pill resolves its
+ * provider label through the standard copy table (`agent.provider.*`).
+ */
+const transportPillKind = computed<'connecting' | 'degraded' | 'offline' | null>(() => {
+	const k = transportStatusStore.kind;
+	return k === 'idle' ? null : k;
+});
+
+function humaniseToken(token: string): string {
+	return token.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function resolveProviderCopy(key: string, fallback: string): string {
+	const value = t(key);
+	return value === key || value.length === 0 ? fallback : value;
+}
+
+const providerLabelForPill = computed<string>(() => {
+	const r = providerStore.resolved;
+	if (r === 'degraded') return resolveProviderCopy('agent.transport.fallbackProvider', 'Provider');
+	if (isExplicit(r)) {
+		const providerLabel = resolveProviderCopy(
+			`agent.provider.label.${r.provider}`,
+			humaniseToken(r.provider),
+		);
+		const modeLabel = resolveProviderCopy(
+			`agent.provider.mode.${r.mode}`,
+			humaniseToken(r.mode),
+		);
+		return `${providerLabel} · ${modeLabel}`;
+	}
+	return resolveProviderCopy('agent.transport.fallbackProvider', 'Provider');
+});
+
+function handleTransportRetry(): void {
+	// Dormant by design (REQ-AUX-016): the orchestration layer owns retry
+	// semantics. We reset the pill to `idle` so the user gets visual feedback
+	// while the upper layer (when wired) re-arms the transport.
+	transportStatusStore.setKind('idle');
+	transportStatusStore.setDiagnostic('');
+}
 
 /**
  * Inline tool-approval cards awaiting a user decision (WS-9, REQ-MPS-045).
@@ -356,6 +406,20 @@ watch(
 		:aria-label="t('agent.messageListAriaLabel')"
 		@scroll.passive="handleScroll"
 	>
+		<!--
+		WS-AUX-7 (REQ-AUX-016): transport health pill at the top of the scroll
+		region. Pinned via `position: sticky` so it stays visible while the
+		user scrolls history; hidden whenever transportStatusStore is `idle`.
+		-->
+		<TransportStatusPill
+			v-if="transportPillKind !== null"
+			class="sp-agent-messages__transport-pill"
+			:kind="transportPillKind"
+			:provider-label="providerLabelForPill"
+			:diagnostic="transportStatusStore.diagnostic || undefined"
+			data-testid="agent-message-list-transport-pill"
+			@retry="handleTransportRetry"
+		/>
 		<template v-for="entry in transcript">
 			<article
 				v-if="entry.kind === 'message'"
@@ -642,6 +706,19 @@ watch(
  * centre of the scroll container. Visible only when new content arrived
  * while the user was scrolled away from the bottom.
  */
+/*
+ * WS-AUX-7 (REQ-AUX-016): pinned transport-status pill. Sticks to the top of
+ * the scroll container so users see the health state even after scrolling
+ * deep into history.
+ */
+.sp-agent-messages__transport-pill {
+	position: sticky;
+	inset-block-start: 0;
+	align-self: center;
+	margin-block-end: var(--sp-space-2, 0.5rem);
+	z-index: 2;
+}
+
 .sp-agent-messages__new-pill {
 	position: sticky;
 	bottom: 0.5rem;

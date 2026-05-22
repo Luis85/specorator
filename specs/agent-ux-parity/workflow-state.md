@@ -4,7 +4,7 @@ area: AUX
 current_stage: implementation
 status: active
 last_updated: 2026-05-22
-last_agent: dev (WS-AUX-6)
+last_agent: dev (WS-AUX-7)
 artifacts:
   idea.md: complete
   research.md: skipped
@@ -39,7 +39,7 @@ adrs:
 | 4. Design | `design.md` (consolidated A+B+C) | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | in-progress (WS-AUX-1..6 complete; WS-AUX-7..9 pending) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (WS-AUX-1..7 complete; WS-AUX-8..9 pending) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -52,6 +52,56 @@ adrs:
 ## Hand-off notes
 
 ```
+2026-05-22 (dev):         WS-AUX-7 landed on
+                          `feature/aux-ws-7-status-transport`
+                          (squash-merge → develop pending).
+                          Delivered: TransportStatusPill.vue (kind:
+                          connecting | degraded | offline, provider-
+                          interpolated microcopy via copy table, SpIcon
+                          icon, retry emit for non-connecting kinds);
+                          transportStatusStore.ts (dormant Pinia store:
+                          kind 'idle' | 'connecting' | 'degraded' |
+                          'offline', optional diagnostic); composer-
+                          group wrap in AgentSidepanelRoot.vue (single
+                          bordered .sp-composer-group ancestor for
+                          StatusPanel + ChatSidebar; AttachmentStrip
+                          rides inside ChatInput per CQ-AUX-18);
+                          StatusPanel.vue body owns scroll with
+                          max-height min(40vh, 320px) +
+                          overscroll-behavior contain + --sp-* tokens;
+                          MessageList.vue surfaces TransportStatusPill
+                          sticky at top of scroll region when
+                          transportStatusStore.kind !== 'idle' (retry
+                          resets store to idle); agent.transport.*
+                          microcopy in en + de (connecting/degraded/
+                          offline/retry/fallbackProvider).
+                          Commits: 7f400d5 (pill primitive),
+                          30a5110 (status panel grouping), 1cc2851
+                          (MessageList wiring), 37ffac5 (lint fixes).
+                          Verify: typecheck GREEN; lint GREEN
+                          (0 errors / 68 pre-existing warnings); unit
+                          GREEN 2424/2424 (3 new tests added in WS-7);
+                          plugin gzip 722.91 kB vs WS-4 baseline
+                          716.631 kB → +6.28 kB / +0.88% (inside
+                          NFR-AUX-001 5% ceiling); build:web GREEN
+                          (96.40 kB gzip).
+                          Deviations: (1) T-AUX-288 StatusTodoItem
+                          extraction deferred — TodoList + BashHistoryList
+                          already encapsulate item rendering; wrapper
+                          would be a trivial pass-through. (2)
+                          T-AUX-294/295 new-messages pill behaviour
+                          pre-existed in MessageList from WP-8 (UX #8);
+                          existing coverage at MessageList.test.ts
+                          292..338 already asserts visibility
+                          transitions; no re-implementation. (3)
+                          StatusPanel.po.ts (T-AUX-298) already existed
+                          from WS-MPS work.
+                          Hand-off → dev for WS-AUX-8 (T-AUX-300..324,
+                          approval card + help + slash/mention
+                          popovers) on a fresh branch cut from
+                          develop after this PR merges. WS-AUX-9 also
+                          remains available.
+
 2026-05-22 (dev):         WS-AUX-6 landed on
                           `feature/aux-ws-6-composer-toolbar-meter`
                           (squash-merged into develop).

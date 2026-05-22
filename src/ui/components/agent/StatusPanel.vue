@@ -64,51 +64,69 @@ function toggle(): void {
 </template>
 
 <style scoped>
+/*
+ * WS-AUX-7 (REQ-AUX-011): StatusPanel now lives inside a shared
+ * `.sp-composer-group` container with AttachmentStrip + ChatInput so the
+ * three render as a single bordered region. The panel itself drops its own
+ * border (the group draws the chrome) and owns its body scroll so a long
+ * todo / bash-history list never pushes the composer off-screen.
+ */
 .sp-status {
 	display: flex;
 	flex-direction: column;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 6px;
-	background: var(--background-primary);
+	background: transparent;
+	color: var(--sp-text-normal, var(--text-normal));
 }
 
 .sp-status__header {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 0.5rem;
-	padding: 0.375rem 0.625rem;
+	gap: var(--sp-space-2, 0.5rem);
+	padding-block: var(--sp-space-2, 0.375rem);
+	padding-inline: var(--sp-space-3, 0.625rem);
 	background: transparent;
 	border: 0;
-	border-radius: 6px;
+	border-radius: var(--sp-radius-sm, 6px);
 	cursor: pointer;
-	font-size: 0.8125rem;
-	color: var(--text-normal);
-	text-align: left;
+	font-size: var(--sp-font-size-sm, 0.8125rem);
+	color: var(--sp-text-normal, var(--text-normal));
+	text-align: start;
 }
 
 .sp-status__header:hover {
-	background: var(--background-modifier-hover);
+	background: var(--sp-bg-hover, var(--background-modifier-hover));
 }
 
 .sp-status__title {
 	font-weight: 600;
 	text-transform: uppercase;
-	font-size: 0.75rem;
+	font-size: var(--sp-font-size-xs, 0.75rem);
 	letter-spacing: 0.05em;
-	color: var(--text-muted);
+	color: var(--sp-text-muted, var(--text-muted));
 }
 
 .sp-status__chevron {
-	color: var(--text-muted);
-	font-size: 0.75rem;
+	color: var(--sp-text-muted, var(--text-muted));
+	font-size: var(--sp-font-size-xs, 0.75rem);
 }
 
 .sp-status__body {
 	display: flex;
 	flex-direction: column;
-	gap: 0.75rem;
-	padding: 0.5rem 0.625rem 0.625rem;
-	border-top: 1px solid var(--background-modifier-border);
+	gap: var(--sp-space-3, 0.75rem);
+	padding-block-start: var(--sp-space-2, 0.5rem);
+	padding-block-end: var(--sp-space-3, 0.625rem);
+	padding-inline: var(--sp-space-3, 0.625rem);
+	border-block-start: 1px solid var(--sp-border, var(--background-modifier-border));
+	/*
+	 * Own scroll container — the panel can grow large with many todos /
+	 * bash entries, but must not push the composer off-screen. Cap at
+	 * min(40vh, 320px); contain overscroll so wheel events don't bleed
+	 * into the parent message list.
+	 */
+	max-height: min(40vh, 320px);
+	overflow-y: auto;
+	overscroll-behavior: contain;
 }
 </style>

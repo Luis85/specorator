@@ -57,4 +57,27 @@ describe('StatusPanel.vue', () => {
 		await wrapper.vm.$nextTick();
 		expect(po.headerAriaExpanded()).toBe('false');
 	});
+
+	it('T-AUX-286 REQ-AUX-011: body owns its scroll with `min(40vh, 320px)` max-height', async () => {
+		const threads = useChatThreadsStore();
+		threads.setActiveThreadId('thread-A');
+		const { po, wrapper } = mountPanel();
+		await wrapper.vm.$nextTick();
+		// body exists and is expanded
+		expect(po.body.exists()).toBe(true);
+		// Inline source assertion: jsdom's getComputedStyle doesn't honour
+		// scoped styles in the same way the browser does. We read the SFC
+		// source so the assertion is robust to scoping.
+		const fs = await import('node:fs/promises');
+		const path = await import('node:path');
+		const src = await fs.readFile(
+			path.resolve(__dirname, '../../../../src/ui/components/agent/StatusPanel.vue'),
+			'utf8',
+		);
+		// max-height token: min(40vh, 320px)
+		expect(src).toMatch(/max-height:\s*min\(\s*40vh\s*,\s*320px\s*\)/);
+		// own scroll container behaviour: overflow-y + overscroll-behavior contain
+		expect(src).toMatch(/overflow-y:\s*auto/);
+		expect(src).toMatch(/overscroll-behavior:\s*contain/);
+	});
 });

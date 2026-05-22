@@ -659,3 +659,77 @@ from the spec.
   **716.631 kB** → **+4.84 kB / +0.68%** for InputToolbar + ContextMeter +
   McpIndicator + ProviderBadge copy table (inside NFR-AUX-001 5% ceiling);
   `build:web` GREEN (96.29 kB gzip); workflows SHA-pinned; manifest valid.
+
+---
+
+## WS-AUX-7 — Status panel + transport pill
+
+### 2026-05-22 — T-AUX-285..299 — composer-group grouping + `TransportStatusPill`
+
+- **commits (this branch, off `develop`):**
+  - `7f400d5` `feat(aux): T-AUX-289..292,296 TransportStatusPill primitive`
+  - `30a5110` `feat(aux): T-AUX-285..287 status panel grouping + own scroll`
+  - `1cc2851` `feat(aux): T-AUX-293..296 surface TransportStatusPill in MessageList`
+  - `37ffac5` `fix(aux): WS-7 lint + typecheck fixes`
+- **files added:**
+  - `src/ui/components/agent/TransportStatusPill.vue` — new pill primitive
+    (kind: connecting | degraded | offline), provider-interpolated microcopy,
+    Lucide icon via `<SpIcon>`, `retry` emit for non-connecting kinds.
+  - `src/ui/stores/transportStatusStore.ts` — dormant Pinia store
+    (`kind: 'idle' | 'connecting' | 'degraded' | 'offline'`, optional
+    `diagnostic`). Lets the orchestration layer pulse transport health
+    without coupling to the dormant `ChatDegradedState` branch.
+  - `tests/ui/components/agent/TransportStatusPill.{test,po}.ts` — RED →
+    GREEN coverage for per-kind copy + retry emission.
+  - `tests/ui/agent/AgentSidepanelRoot.composerGroup.test.ts` — asserts
+    `StatusPanel.closest('.sp-composer-group') === ChatSidebar.closest(...)`.
+  - `tests/ui/components/agent/MessageList.transportPill.test.ts` —
+    integration: pill hidden when idle, shown when degraded, retry resets
+    store to idle.
+  - `stories/agent/TransportStatusPill.stories.ts` — one story per kind +
+    one with diagnostic.
+- **files modified:**
+  - `src/ui/components/agent/StatusPanel.vue` — drops own border (the
+    composer-group draws the chrome), adopts `--sp-*` tokens + logical
+    properties, body owns scroll: `max-height: min(40vh, 320px)`,
+    `overflow-y: auto`, `overscroll-behavior: contain`.
+  - `src/ui/agent/AgentSidepanelRoot.vue` — wraps `<StatusPanel>` +
+    `<ChatSidebar>` in `<div class="sp-composer-group">` so the two share
+    a single bordered ancestor (AttachmentStrip lives inside ChatInput's
+    composer wrapper per CQ-AUX-18 and inherits the group transitively).
+  - `src/ui/components/agent/MessageList.vue` — imports
+    `transportStatusStore` + `chatProviderStore`; renders
+    `<TransportStatusPill>` sticky at the top of the scroll region whenever
+    `kind !== 'idle'`; resolves provider label through the
+    `agent.provider.*` copy table; `handleTransportRetry` resets the store.
+  - `src/ui/i18n/locales/en.ts` + `de.ts` — adds `agent.transport.{connecting,
+    degraded, offline, retry, fallbackProvider}` microcopy in both locales.
+  - Existing StatusPanel tests gained one RED test asserting the SFC source
+    contains the `min(40vh, 320px)` + `overscroll-behavior: contain` rules
+    (jsdom can't honour scoped CSS, so source assertion is the robust path).
+- **spec:** REQ-AUX-011 (StatusPanel grouping + own scroll),
+  REQ-AUX-016 (transport health pill + retry + provider copy table),
+  REQ-AUX-017 (Storybook coverage), spec §1.3.10, §1.4, §1.6.
+- **outcome:** done for WS-AUX-7 scope.
+- **deviations:**
+  1. **T-AUX-288 (`StatusTodoItem.vue` extraction)** — deferred. `TodoList.vue`
+     and `BashHistoryList.vue` already encapsulate the item rendering; a
+     separate `StatusTodoItem.vue` would be a trivial pass-through wrapper.
+     Carried as follow-up if Storybook coverage of a single todo item
+     (T-AUX-297 variants) is needed independently.
+  2. **T-AUX-294/295 ("↓ New messages" pill)** — pre-existing implementation
+     in `MessageList.vue` (WP-8 / UX #8) already satisfies the contract
+     (`BOTTOM_TOLERANCE_PX = 32`, sticky pill, scroll-to-bottom on click,
+     hide on at-bottom). Coverage at `MessageList.test.ts:292..338` already
+     asserts the visibility transitions. No re-implementation; tasks
+     considered satisfied by the existing surface.
+  3. **`StatusPanel.po.ts` (T-AUX-298)** — PO already existed from WS-MPS
+     work; no change needed.
+- **verify:** `npm run typecheck` GREEN. `npm run lint` GREEN
+  (0 errors, 68 pre-existing warnings). `npm run test` GREEN
+  (**2424 / 2424 tests** across 257 files; 3 new tests added in WS-7).
+  `npm run build` GREEN — plugin `main.js` gzip **722.91 kB** vs WS-4
+  baseline **716.631 kB** → **+6.28 kB / +0.88%** for
+  `TransportStatusPill` + `transportStatusStore` + composer-group CSS
+  (inside NFR-AUX-001 5% ceiling). `npm run build:web` GREEN (96.40 kB
+  gzip).

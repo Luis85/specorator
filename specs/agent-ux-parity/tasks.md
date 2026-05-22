@@ -33,7 +33,7 @@ Slot encoding: `T-AUX-<NNN>` runs across workstreams (`001..099` reserved for po
 | WS-AUX-4 | Header + tabs + welcome + compact boundary | dev | WS-AUX-1, WS-AUX-2 | T-AUX-200..224 | Collapse header band; `ThreadTabBadge`; `WelcomeGreeting`; `CompactBoundary` refresh. |
 | WS-AUX-5 | Messages + nested blocks + streaming cursor | dev | WS-AUX-3 | T-AUX-225..254 | Bubble asymmetry, role attr, `MessageActions` rewire, `NestedDetailFrame`, `StreamingCursor`. |
 | WS-AUX-6 | Composer + InputToolbar + ContextMeter | dev | WS-AUX-3, WS-AUX-5 | T-AUX-255..284 | `contextUsageStore`, `ContextMeter`, `McpIndicator`, `InputToolbar` order, `ChatInput` rewire. |
-| WS-AUX-7 | Status panel + transport pill | dev | WS-AUX-6 | T-AUX-285..299 | Group status panel with composer; surface `TransportStatusPill`. |
+| WS-AUX-7 ✅ | Status panel + transport pill | dev | WS-AUX-6 | T-AUX-285..299 (complete 2026-05-22 — see implementation-log.md) | Group status panel with composer; surface `TransportStatusPill`. |
 | WS-AUX-8 | Approval card + help + slash/mention popovers | dev | WS-AUX-3, WS-AUX-5 | T-AUX-300..324 | `InlineApprovalCard` + sub-components; `HelpPopover` refresh; `MentionPopover`; `SlashCommandPopover` migration. |
 | WS-AUX-9 | Nav-sidebar + history menu + RTL/lint guard | dev | WS-AUX-3 | T-AUX-325..344 | `FloatingNavSidebar`, `ThreadHistoryMenu`, logical-property lint guard, RTL sweep. |
 | WS-AUX-10 | Storybook + parity screenshots + bundle size | qa, sre | WS-AUX-4..9 | T-AUX-345..360 | Storybook coverage gate, axe scan, baseline + delta bundle-size check, WCAG audit. |
