@@ -131,6 +131,20 @@ describe('MessageList', () => {
 		expect(po.assistantMessages()[0].text()).toContain('Hello!');
 	});
 
+	it('delegates per-message rendering to <MessageItem> (REQ-AUX-014)', () => {
+		const store = useMessagesStore();
+		const tid = 'thread-item';
+		store.appendMessage(msg(tid, 'user', { text: 'u' }));
+		store.appendMessage(msg(tid, 'assistant', { text: 'a' }));
+
+		const { wrapper } = mountList(tid);
+		// One role-icon span per rendered MessageItem (extraction sentinel).
+		const roleIcons = wrapper.findAll('[data-testid="agent-message-role-icon"]');
+		expect(roleIcons).toHaveLength(2);
+		const roleLabels = wrapper.findAll('[data-testid="agent-message-role-label"]');
+		expect(roleLabels).toHaveLength(2);
+	});
+
 	it('renders the per-message trim notice when an assistant turn was truncated', () => {
 		const store = useMessagesStore();
 		const tid = 'thread-trim';

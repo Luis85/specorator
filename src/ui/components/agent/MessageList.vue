@@ -37,8 +37,8 @@ import { useApprovalRulesStore } from '@/ui/stores/approvalRulesStore';
 import { useInjectedA11yAnnouncer } from '@/ui/composables/useA11yAnnouncer';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
 import MarkdownBlock from '@/ui/components/agent/MarkdownBlock.vue';
-import MessageActions from './MessageActions.vue';
 import MessageBubble from './MessageBubble.vue';
+import MessageItem from './MessageItem.vue';
 import ThinkingBlock from './ThinkingBlock.vue';
 import ToolCallBlock from './ToolCallBlock.vue';
 import InlineApprovalCard from './InlineApprovalCard.vue';
@@ -86,6 +86,21 @@ const pendingApprovals = usePendingApprovalsStore();
 const approvalRules = useApprovalRulesStore();
 const transportStatusStore = useTransportStatusStore();
 const providerStore = useChatProviderStore();
+
+/**
+ * REQ-AUX-014 — model name displayed in the assistant role badge. Resolved
+ * from the active `chatProviderStore.selectedModel`, which `ModelSelector.vue`
+ * writes on user pick. Empty string => `MessageItem` falls back to the
+ * localised "Claude" label.
+ */
+const assistantModelName = computed<string>(() => providerStore.selectedModel);
+
+/**
+ * REQ-AUX-014 — timestamps toggle. Hardcoded to `false` until the
+ * `showMessageTimestamps` PluginSettings flag is wired through `useSettingsPort`
+ * (deferred — tracked by CQ-AUX-06 follow-up).
+ */
+const showMessageTimestamps = false;
 
 /**
  * WS-AUX-7 (REQ-AUX-016) — surface `<TransportStatusPill>` at the top of the
@@ -434,46 +449,17 @@ watch(
 			@retry="handleTransportRetry"
 		/>
 		<template v-for="entry in transcript">
-			<article
+			<MessageItem
 				v-if="entry.kind === 'message'"
 				:key="entry.message.id"
-				class="sp-agent-message sp-hover-host"
-				:class="`sp-agent-message--${entry.message.role}`"
-				:data-testid="`agent-message-${entry.message.role}`"
-			>
-				<header class="sp-agent-message__role" data-testid="agent-message-role">
-					{{ entry.message.role === 'user' ? t('agent.roleUser') : t('agent.roleAssistant') }}
-				</header>
-				<MessageBubble :role="entry.message.role">
-					<div class="sp-agent-message__body" data-testid="agent-message-body">
-						<MarkdownBlock
-							v-if="entry.message.text.length > 0"
-							class="sp-agent-message__text"
-							:text="entry.message.text"
-						/>
-						<p v-else class="sp-agent-message__empty" data-testid="agent-message-empty">
-							{{ t('agent.assistantEmpty') }}
-						</p>
-						<p
-							v-if="entry.message.truncated === true"
-							class="sp-agent-message__trim-note"
-							data-testid="agent-message-trim-note"
-						>
-							{{ t('agent.contextTrimmed') }}
-						</p>
-					</div>
-					<template #actions>
-						<MessageActions
-							:message-id="entry.message.id"
-							:role="entry.message.role"
-							:is-latest="entry.message.id === latestAssistantId"
-							@copy="handleCopy"
-							@regenerate="handleRegenerate"
-							@edit="handleEdit"
-						/>
-					</template>
-				</MessageBubble>
-			</article>
+				:message="entry.message"
+				:is-latest="entry.message.id === latestAssistantId"
+				:model-name="entry.message.role === 'assistant' ? assistantModelName : ''"
+				:show-timestamp="showMessageTimestamps"
+				@copy="handleCopy"
+				@regenerate="handleRegenerate"
+				@edit="handleEdit"
+			/>
 			<CompactBoundary
 				v-else
 				:key="entry.notice.id"

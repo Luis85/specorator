@@ -52,6 +52,29 @@ adrs:
 ## Hand-off notes
 
 ```
+2026-05-22 (dev R-AUX-014): MessageItem extracted from MessageList. New
+                           `src/ui/components/agent/MessageItem.vue` owns the
+                           per-message render (article + role badge with
+                           bot/user SpIcon, assistant model name resolved
+                           from chatProviderStore.selectedModel, optional
+                           `<time datetime>` relative-time stamp formatted
+                           via Intl.RelativeTimeFormat). MessageList.vue now
+                           delegates per-message rendering; MessageActions
+                           wiring moved into MessageItem. `showTimestamp`
+                           hardcoded `false` with CQ-AUX-06 follow-up
+                           tracking the PluginSettings.showMessageTimestamps
+                           plumb-through. New tests: MessageItem.test.ts (7
+                           cases) + MessageItem.po.ts + delegation sentinel
+                           assertion in MessageList.test.ts. Verify gate
+                           green: typecheck 0 errors, lint 0 errors,
+                           2454/2454 unit tests pass, plugin build green
+                           (gzip 730,800 B vs baseline 716,631 B, +1.97 %,
+                           below the 5 % NFR-AUX-001 ceiling). review.md
+                           R-AUX-04 + carry-over closed; traceability row
+                           updated. Branch
+                           `feature/aux-r-aux-014-message-item-extraction`,
+                           squash-merge into develop pending.
+
 2026-05-22 (dev R-AUX-01): legacy ApprovalCard.vue and orphaned tests/stories
                            deleted as scheduled in WS-8b. InlineApprovalCard
                            is now the sole approval-card surface.
