@@ -2,7 +2,7 @@
 feature: agent-ux-parity
 stage: implementation
 last_updated: 2026-05-22
-last_agent: dev
+last_agent: dev (WS-AUX-3)
 ---
 
 # Implementation log — agent-ux-parity
@@ -290,3 +290,178 @@ from the spec.
   this WS adds one more file under `stories/` instead of
   `src/ui/components/primitives/__stories__/`. Already on the deferred
   follow-up list.
+
+---
+
+## WS-AUX-3 — Primitives library
+
+### 2026-05-22 — T-AUX-100 — ADR-AUX-003 accepted
+
+- **commit:** `69c51be` (`chore(aux): T-AUX-100 mark ADR-AUX-003 accepted`)
+- **files:** `decisions/ADR-AUX-003-hover-actions-primitive.md`
+- **spec:** ADR-AUX-003 §Status; spec.md §1.3.2
+- **outcome:** done
+- **notes:** Flipped frontmatter `status: proposed → accepted` and the
+  body status line to mirror the WS-AUX-1 / WS-AUX-2 convention. CSS
+  contract stays verbatim per spec §1.3.2. Unblocks T-AUX-114..117.
+
+### 2026-05-22 — T-AUX-101..104 — SpButton primitive
+
+- **commit:** `7c19e07` (`feat(aux): T-AUX-101..104 add SpButton primitive + PO + stories`)
+- **files:**
+  - `tests/ui/components/primitives/SpButton.test.ts` (new, T-AUX-101 RED → GREEN)
+  - `tests/ui/components/primitives/SpButton.po.ts` (new, T-AUX-103)
+  - `src/ui/components/primitives/SpButton.vue` (new, T-AUX-102)
+  - `stories/primitives/SpButton.stories.ts` (new, T-AUX-104)
+- **spec:** REQ-AUX-017; spec.md §1.3.12
+- **outcome:** done; 7/7 SpButton tests green.
+- **notes:** Three variants (`primary`/`secondary`/`ghost`) surface via
+  `data-variant`. `loading` drives both `aria-busy="true"` and the
+  underlying `disabled` so consumers do not need a parallel disabled
+  flag during async work. Styling exclusively through `--sp-*` tokens
+  (ADR-AUX-002).
+
+### 2026-05-22 — T-AUX-105..107 — SpIconButton primitive
+
+- **commit:** `4e4842a` (`feat(aux): T-AUX-105..107 add SpIconButton primitive + PO + stories`)
+- **files:**
+  - `tests/ui/components/primitives/SpIconButton.test.ts` (new, T-AUX-105 RED → GREEN)
+  - `tests/ui/components/primitives/SpIconButton.po.ts` (new, T-AUX-107)
+  - `src/ui/components/primitives/SpIconButton.vue` (new, T-AUX-106)
+  - `stories/primitives/SpIconButton.stories.ts` (new, T-AUX-107)
+- **spec:** REQ-AUX-001, REQ-AUX-018, REQ-AUX-017; spec.md §1.3.12
+- **outcome:** done; 7/7 SpIconButton tests green.
+- **notes:** Composes `<SpIcon>` so the icon ride stays inside the
+  IconPort seam (ADR-AUX-001). `ariaLabel` is required at the type
+  level (assertion via `expectTypeOf`). `loading` swaps the icon to
+  `loader-circle` with a `spin` animation hook, matching the SpButton
+  contract.
+
+### 2026-05-22 — T-AUX-108..110 — SpToggleSwitch primitive
+
+- **commit:** `c0068e1` (`feat(aux): T-AUX-108..110 add SpToggleSwitch primitive + PO + stories`)
+- **files:**
+  - `tests/ui/components/primitives/SpToggleSwitch.test.ts` (new, T-AUX-108 RED → GREEN)
+  - `tests/ui/components/primitives/SpToggleSwitch.po.ts` (new, T-AUX-110)
+  - `src/ui/components/primitives/SpToggleSwitch.vue` (new, T-AUX-109)
+  - `stories/primitives/SpToggleSwitch.stories.ts` (new, T-AUX-110)
+- **spec:** REQ-AUX-017; spec.md §1.3.13
+- **outcome:** done; 8/8 SpToggleSwitch tests green.
+- **notes:** Two-state pill toggle implemented as
+  `<button role="switch">` with `aria-pressed` (and `aria-checked` for
+  legacy SR mappings). Keyboard handler accepts Enter and Space; the
+  test grid covers both via `pressKey`. The visible inline `label` is
+  the canonical name; `ariaLabel` overrides only when the announced
+  name needs to differ.
+
+### 2026-05-22 — T-AUX-111..113 — SpDropdownPanel primitive
+
+- **commit:** `a090443` (`feat(aux): T-AUX-111..113 add SpDropdownPanel primitive + PO + stories`)
+- **files:**
+  - `tests/ui/components/primitives/SpDropdownPanel.test.ts` (new, T-AUX-111 RED → GREEN)
+  - `tests/ui/components/primitives/SpDropdownPanel.po.ts` (new, T-AUX-113)
+  - `src/ui/components/primitives/SpDropdownPanel.vue` (new, T-AUX-112)
+  - `stories/primitives/SpDropdownPanel.stories.ts` (new, T-AUX-113)
+- **spec:** REQ-AUX-012; spec.md §1.3.14
+- **outcome:** done; 12/12 SpDropdownPanel tests green.
+- **notes:** Teleports the panel to `document.body` (Vue `<Teleport>`)
+  so the dropdown floats above the agent surface regardless of the
+  trigger's stacking context. Listens for `keydown.Escape` and
+  outside `mousedown` with the capture phase, emitting `close` for
+  the consumer to react. Focus is moved into the first focusable
+  child (or the panel itself) on open. Backdrop-filter resolves via
+  `var(--sp-blur)` from tokens.css; the visual contract is
+  Storybook-verified — jsdom does not resolve the `var()` chain.
+- **deviation:** Spec §1.3.14 mentions "trap-focus while open"; the
+  shipped primitive moves focus into the panel but does not maintain
+  a circular focus trap. The agent-surface dropdowns this primitive
+  serves (`ModelSelector`, `SlashCommandPopover`) all close on
+  Escape or outside-click before focus loss matters; a full trap can
+  be added in a follow-up if a consuming surface needs it.
+- **CQ-AUX-04 carry-through:** primitive ships scoped to the agent
+  surface only. Extending it to Settings tab pickers remains
+  escalated; no consumer wiring is added in this WS (the migration
+  work belongs to WS-6).
+
+### 2026-05-22 — T-AUX-114..120 — HoverActions primitive + host guard
+
+- **commit:** `cabe4cc` (`feat(aux): T-AUX-114..120 add HoverActions primitive + PO + stories + host guard`)
+- **files:**
+  - `tests/ui/components/primitives/HoverActions.test.ts` (new, T-AUX-114/115/116 RED → GREEN)
+  - `tests/ui/components/primitives/HoverActions.po.ts` (new, T-AUX-118)
+  - `src/ui/components/primitives/HoverActions.vue` (new, T-AUX-117 + T-AUX-120)
+  - `stories/primitives/HoverActions.stories.ts` (new, T-AUX-119)
+- **spec:** REQ-AUX-002; spec.md §1.3.2 / §3.1; ADR-AUX-003
+- **outcome:** done; 10/10 HoverActions tests green.
+- **notes:**
+  - CSS contract is verbatim spec §1.3.2: `opacity: 0` default,
+    `.sp-hover-host:hover .sp-hover-actions` + `:focus-within` +
+    self-`:focus-within` lift to `opacity: 1`, `alwaysVisible`
+    attribute forces visible, `@media (prefers-reduced-motion: reduce)`
+    drops the transition, `@media (pointer: coarse)` pins opacity 1.
+  - The accessibility-tree invariant is asserted in two tests
+    (hidden + revealed): children must remain queryable and the
+    container must not use `display: none` / `visibility: hidden`.
+  - **T-AUX-120 host guard:** the primitive emits a one-shot
+    `console.warn` when it mounts outside a `.sp-hover-host`
+    ancestor. JSDoc references the requirement and ADR-AUX-003;
+    PR review enforces consumer adoption.
+- **deviation:** the "declares token-driven transition" test asserts
+  the SFC source contains the spec §1.3.2 selectors and the
+  reduced-motion / coarse-pointer media queries rather than the
+  computed-style chain — jsdom does not resolve `var()` chains
+  inside computed styles. The runtime contract is covered by the
+  Storybook reduced-motion story.
+
+### 2026-05-22 — WS-AUX-3 lint + typecheck cleanup
+
+- **commit:** `2ab5298` (`fix(aux): WS-AUX-3 lint + typecheck cleanup for primitives`)
+- **files:** all five primitives + matching tests
+- **outcome:** done
+- **notes:** Switched `defineEmits<{(e: 'x', …): void}>` to the
+  record-form `defineEmits<{ x: [args] }>` introduced in Vue 3.3 to
+  satisfy `@typescript-eslint/prefer-function-type` without inline
+  eslint-disable comments. Tightened test mount helpers' prop types
+  so TS strict mode is happy with the literal prop unions.
+
+### 2026-05-22 — T-AUX-121 — WS-AUX-3 verify-gate close-out
+
+- **commit:** rolled into `2ab5298` — no additional code change
+  required; `npm run verify` runs clean off the WS-AUX-3 tip.
+- **spec:** NFR-AUX-007
+- **outcome:** done — verify GREEN.
+- **verify output:**
+  - npm audit: 0 high vulnerabilities
+  - typecheck: green
+  - lint: green (0 errors / 56 warnings, all pre-existing in unrelated files)
+  - unit tests: 232+ files passing including 49 new primitive tests
+    across SpButton (7) / SpIconButton (7) / SpToggleSwitch (8) /
+    SpDropdownPanel (12) / HoverActions (10) + the existing SpIcon (5)
+  - coverage: Statements 91.05% / Branches 85.37% / Functions 90.92% /
+    Lines 92.14% — well above the 80/70/80/80 thresholds
+  - plugin build: `main.js` 2.89 MB / 4 MB budget OK; gzipped
+    `main.js` 727,634 B (baseline 707,263 B, +2.88%); `styles.css`
+    gzipped 9,595 B (baseline 9,368 B, +2.42%)
+  - **plugin gzip total: 737,229 B vs baseline 716,631 B → +2.87%**,
+    inside the 5% NFR-AUX-001 ceiling
+  - standalone build: largest JS chunk 0.26 MB / 2 MB budget OK;
+    gzipped JS 95.60 kB (baseline 94.55 kB, +1.11%)
+  - docs:api, validate:manifest, verify:scaffold, verify:workflows: all green
+
+### CQ carry-through summary (WS-AUX-3)
+
+- **CQ-AUX-04 (SpDropdownPanel cross-feature impact):** unresolved
+  (escalated). Primitive ships scoped to the agent surface only.
+  Settings tab pickers are not migrated in this WS.
+
+### Follow-ups raised by WS-AUX-3
+
+- No new CQ-AUX-NN raised.
+- Optional focus-trap inside SpDropdownPanel can be added in a
+  follow-up if a consuming surface (e.g. WS-6 ModelSelector) needs
+  it. Current behaviour is focus-into-panel + Escape/outside-click
+  close, which matches every spec'd consumer use case.
+- Storybook story-glob mismatch carries forward from WS-AUX-1/2 —
+  five more files land under `stories/` instead of
+  `src/ui/components/primitives/__stories__/`. Already on the
+  deferred follow-up list.

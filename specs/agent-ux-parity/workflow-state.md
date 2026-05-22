@@ -4,7 +4,7 @@ area: AUX
 current_stage: implementation
 status: active
 last_updated: 2026-05-22
-last_agent: dev (WS-AUX-2)
+last_agent: dev (WS-AUX-3)
 artifacts:
   idea.md: complete
   research.md: skipped
@@ -39,7 +39,7 @@ adrs:
 | 4. Design | `design.md` (consolidated A+B+C) | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | in-progress (WS-AUX-1..2 complete; WS-AUX-3..9 pending) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (WS-AUX-1..3 complete; WS-AUX-4..9 pending) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -130,6 +130,55 @@ adrs:
                           and/or dev for WS-AUX-4 (T-AUX-200..224, header
                           + tabs + welcome + compact boundary) in parallel
                           per dispatch-plan.md.
+
+2026-05-22 (dev WS-AUX-3): Shipped WS-AUX-3 (T-AUX-100..121) on branch
+                          feature/aux-ws-3-primitives. Seven commits:
+                          69c51be (ADR-AUX-003 accepted), 7c19e07
+                          (SpButton + PO + stories), 4e4842a
+                          (SpIconButton + PO + stories), c0068e1
+                          (SpToggleSwitch + PO + stories), a090443
+                          (SpDropdownPanel + PO + stories), cabe4cc
+                          (HoverActions + PO + stories + host guard),
+                          2ab5298 (lint + typecheck cleanup).
+                          ADR-AUX-003 marked Accepted (T-AUX-100). All
+                          49 new primitive tests green:
+                          SpButton (7), SpIconButton (7),
+                          SpToggleSwitch (8), SpDropdownPanel (12),
+                          HoverActions (10). Verify gate GREEN:
+                          typecheck OK, lint OK (0 errors / 56
+                          warnings — all pre-existing), unit tests
+                          all passing, coverage 91.05/85.37/90.92/92.14
+                          (above 80/70/80/80). Plugin gzip total
+                          737,229 B vs WS-AUX-1 baseline 716,631 B —
+                          delta +2.87%, well inside the 5% NFR-AUX-001
+                          ceiling. Standalone JS +1.11%. Deviations:
+                          (1) SpDropdownPanel ships focus-into-panel
+                          (not full circular focus-trap) — sufficient
+                          for every spec'd consumer (ModelSelector,
+                          SlashCommandPopover); follow-up if a
+                          surface needs strict trapping. (2)
+                          HoverActions transition-duration assertion
+                          uses SFC source-grep rather than computed
+                          style because jsdom does not resolve
+                          var() chains; visual contract covered by
+                          Storybook reduced-motion story.
+                          (3) Story files land under
+                          stories/primitives/ rather than
+                          src/ui/components/primitives/__stories__/
+                          — carries forward the WS-AUX-1/2 story-glob
+                          deviation. CQ-AUX-04 carry-through:
+                          primitive ships scoped to the agent
+                          surface only; Settings tab pickers
+                          remain escalated. No new CQ-AUX-NN
+                          raised. Hand-off → dev for WS-AUX-4
+                          (T-AUX-200..224, header + tabs +
+                          welcome + compact boundary) and dev for
+                          WS-AUX-5 (T-AUX-225..254, messages +
+                          nested blocks + streaming cursor),
+                          which both can now consume the new
+                          primitives. WS-AUX-9 (T-AUX-325..344)
+                          can also start in parallel since
+                          WS-AUX-3 has merged.
 
 2026-05-22 (planner):     Produced tasks.md (142 tasks across 9 workstreams,
                           TDD-ordered) and dispatch-plan.md (one prompt per

@@ -1,7 +1,7 @@
 ---
 id: ADR-AUX-003
 title: Adopt a canonical HoverActions primitive for hover/focus-reveal affordances
-status: proposed
+status: accepted
 date: 2026-05-22
 deciders:
   - architect
@@ -20,7 +20,7 @@ tags: [ui, accessibility, design-system]
 
 ## Status
 
-Proposed.
+Accepted (2026-05-22). CSS contract per spec §1.3.2; primitive ships in WS-AUX-3 (T-AUX-117).
 
 ## Context
 
