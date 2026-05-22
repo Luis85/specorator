@@ -2,7 +2,7 @@
 feature: agent-ux-parity
 stage: implementation
 last_updated: 2026-05-22
-last_agent: dev (WS-AUX-3)
+last_agent: dev (WS-AUX-6)
 ---
 
 # Implementation log — agent-ux-parity
@@ -623,3 +623,39 @@ from the spec.
   baseline 716.63 kB → **+1.24 kB / +0.17%** for 4 new components +
   CompactBoundary refresh); `npm run build:web` GREEN (95.83 kB
   gzip).
+
+---
+
+## WS-AUX-6 — Composer toolbar + context meter
+
+### 2026-05-22 — T-AUX-255..280 — InputToolbar, ContextMeter, McpIndicator, ProviderBadge
+
+- **commits (this branch, off `develop`):**
+  - `a09e2a6` `feat(aux): T-AUX-255..257 add contextUsageStore`
+  - `77e091b` `feat(aux): T-AUX-260..263 add ContextMeter donut`
+  - `377bb2c` `feat(aux): T-AUX-264..266 add McpIndicator + mcpStatusStore`
+  - `7489145` `feat(aux): T-AUX-267..280 add InputToolbar + ProviderBadge copy table`
+  - `3514ba1` `fix(aux): stub InputToolbar + provider components in ChatInput/ChatSidebar tests`
+- **files:**
+  - `src/ui/agent/AgentSidepanelRoot.vue` (provider/model row moved off header)
+  - `src/ui/components/agent/InputToolbar.vue`, `ModelSelector.vue`, `ProviderBadge.vue`
+  - `src/ui/components/chat/ChatInput.vue` (toolbar host, AttachmentStrip nested, CQ-AUX-10 ArrowUp handler)
+  - `styles.css`
+  - `tests/ui/components/agent/InputToolbar.po.ts`, `McpIndicator.po.ts`
+  - 8 chat-suite test files updated to stub InputToolbar/ProviderBadge/ProviderMenu/ModelSelector:
+    `ChatInput.modeline.test.ts`, `ChatInput.planMode.test.ts`, `ChatInput.test.ts`,
+    `ChatSidebar.test.ts`, `ChatSidebar.proposalFlow.test.ts`,
+    `ChatSidebar.sessionPersistence.test.ts`, `ChatSidebar.stagePrompt.test.ts`,
+    `ChatSidebar.threadRotation.test.ts`
+- **spec:** REQ-AUX-004 (toolbar normative order), REQ-AUX-012 (context meter),
+  REQ-AUX-016 (provider badge copy table); CQ-AUX-10, CQ-AUX-18.
+- **outcome:** done
+- **deviations:** none material. Test files in the chat suite stub InputToolbar
+  + provider components rather than wiring full ports — the toolbar has its
+  own dedicated tests under `tests/ui/components/agent/`.
+- **verify:** `npm run verify` GREEN — 254 files / **2413 tests** pass; coverage
+  91.05 / 85.37 / 90.92 / 92.14 (statements/branches/functions/lines, above
+  80/70/80/80 gate); plugin `main.js` gzip **721.47 kB** vs WS-4 baseline
+  **716.631 kB** → **+4.84 kB / +0.68%** for InputToolbar + ContextMeter +
+  McpIndicator + ProviderBadge copy table (inside NFR-AUX-001 5% ceiling);
+  `build:web` GREEN (96.29 kB gzip); workflows SHA-pinned; manifest valid.

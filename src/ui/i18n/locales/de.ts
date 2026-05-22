@@ -164,6 +164,32 @@ export default {
 		},
 	},
 	agent: {
+		// spec §1.6 — Provider-Copytabelle (REQ-AUX-016).
+		provider: {
+			label: {
+				claude: 'Claude',
+				codex: 'Codex',
+				opencode: 'OpenCode',
+				cursor: 'Cursor',
+			},
+			mode: { cli: 'CLI', api: 'API', web: 'Web' },
+			combined: '{provider} · {mode}',
+		},
+		// spec §1.6 — Composer-Mikrotexte (REQ-AUX-004 / REQ-AUX-016).
+		composer: {
+			placeholder: 'Frage Specorator oder tippe / für Befehle.',
+			placeholderBashMode: 'Shell-Befehl ausführen (Bang-Bash-Modus).',
+			placeholderInstructionMode: 'Anweisung für den nächsten Turn hinzufügen.',
+			send: { tooltip: 'Senden', streamingTooltip: 'Generierung stoppen' },
+			attach: { tooltip: 'Datei anhängen' },
+			mention: { tooltip: 'Datei oder Thread erwähnen' },
+			slash: { tooltip: 'Slash-Befehl einfügen' },
+			mode: { normal: 'Normal', instruction: 'Anweisung', bash: 'Bash', plan: 'Plan' },
+			permission: { label: 'Erlauben', planLabel: 'Plan' },
+			thinking: { label: 'Denken' },
+			mcp: { label: 'MCP' },
+			contextMeter: { tooltip: '{used} von {total} Tokens verwendet.' },
+		},
 		title: 'Specorator Agent',
 		openCommand: 'Agent-Seitenleiste öffnen',
 		ribbonTooltip: 'Specorator-Agent öffnen',

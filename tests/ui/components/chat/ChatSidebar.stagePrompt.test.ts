@@ -23,7 +23,17 @@ import {
 	WORKSPACE_PORT,
 	SETTINGS_PORT,
 	LOGGER_PORT,
+	ICON_PORT,
+	PROVIDER_REGISTRY_KEY,
 } from '@/infrastructure/bridge/ports'
+import type { ProviderRegistry } from '@/domain/chat/ProviderRegistry'
+import { i18n } from '@/ui/i18n'
+
+const emptyRegistry: ProviderRegistry = {
+	listProviders: () => [],
+	getProvider: () => undefined,
+	getCapabilities: () => undefined,
+}
 import { useMessagesStore } from '@/ui/stores/messagesStore'
 import { ChatSidebarPO } from './ChatSidebar.po'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
@@ -91,7 +101,7 @@ async function mountSidebar(args: {
 
 	const wrapper = mount(ChatSidebar, {
 		global: {
-			plugins: [pinia],
+			plugins: [pinia, i18n],
 			stubs: { RouterLink: RouterLinkStub },
 			provide: {
 				[CHAT_TRANSPORT_PORT as symbol]: port,
@@ -100,6 +110,8 @@ async function mountSidebar(args: {
 				[WORKSPACE_PORT as symbol]: bridge,
 				[SETTINGS_PORT as symbol]: bridge,
 				[LOGGER_PORT as symbol]: bridge,
+				[ICON_PORT as symbol]: bridge,
+				[PROVIDER_REGISTRY_KEY as symbol]: emptyRegistry,
 			},
 		},
 	})

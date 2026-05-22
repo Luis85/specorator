@@ -43,9 +43,6 @@ import {
 	NARROW_SIDEPANEL_KEY,
 } from '@/ui/composables/useNarrowSidepanel';
 import StatusPanel from '@/ui/components/agent/StatusPanel.vue';
-import AttachmentStrip from '@/ui/components/agent/AttachmentStrip.vue';
-import ProviderBadge from '@/ui/components/agent/ProviderBadge.vue';
-import ModelSelector from '@/ui/components/agent/ModelSelector.vue';
 import A11yAnnouncer from '@/ui/components/agent/A11yAnnouncer.vue';
 import { A11Y_ANNOUNCER_KEY, useA11yAnnouncer } from '@/ui/composables/useA11yAnnouncer';
 import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue';
@@ -387,10 +384,13 @@ onUnmounted(() => {
 						/>
 					</template>
 				</AgentSidepanelHeader>
-				<div class="sp-agent__provider-row" data-testid="agent-provider-row">
-					<ProviderBadge />
-					<ModelSelector />
-				</div>
+				<!--
+				WS-AUX-6 (T-AUX-279): provider + model selectors moved out of the
+				header band into the composer's <InputToolbar>. The legacy
+				`agent-provider-row` wrapper is gone; tests still mounting
+				ProviderBadge/ModelSelector directly continue to work.
+				-->
+
 				<!--
           UX #4 (WP-8): /help renders as a popover anchored under the
           header instead of a drawer that pushes the message list
@@ -447,7 +447,12 @@ onUnmounted(() => {
 					@edit="handleMessageEdit"
 				/>
 				<StatusPanel />
-				<AttachmentStrip />
+				<!--
+				WS-AUX-6 (CQ-AUX-18): AttachmentStrip relocated into ChatInput's
+				composer wrapper. The strip used to sit between StatusPanel and
+				ChatSidebar; it now travels with the composer so chips ride with
+				the textarea.
+				-->
 				<ChatSidebar ref="chatSidebarRef" @select-command="handleSelectCommand" />
 			</div>
 		</ErrorBoundary>

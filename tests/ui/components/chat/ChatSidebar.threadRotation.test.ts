@@ -24,7 +24,17 @@ import {
 	SETTINGS_PORT,
 	LOGGER_PORT,
 	TRANSPORT_KIND_KEY,
+	ICON_PORT,
+	PROVIDER_REGISTRY_KEY,
 } from '@/infrastructure/bridge/ports';
+import type { ProviderRegistry } from '@/domain/chat/ProviderRegistry';
+import { i18n } from '@/ui/i18n';
+
+const emptyRegistry: ProviderRegistry = {
+	listProviders: () => [],
+	getProvider: () => undefined,
+	getCapabilities: () => undefined,
+};
 import type { TransportKind } from '@/domain/chat/TransportKind';
 import { getChatStoresFacade } from '../../../__fakes__/chatStoresFacade';
 import { ChatSidebarPO } from './ChatSidebar.po';
@@ -69,7 +79,7 @@ async function mountSidebar(resolvedKind: TransportKind = 'api-key') {
 	const transportKindRef = ref<TransportKind>(resolvedKind);
 	const wrapper = mount(ChatSidebar, {
 		global: {
-			plugins: [pinia],
+			plugins: [pinia, i18n],
 			stubs: { RouterLink: RouterLinkStub },
 			provide: {
 				[CHAT_TRANSPORT_PORT as symbol]: port,
@@ -79,6 +89,8 @@ async function mountSidebar(resolvedKind: TransportKind = 'api-key') {
 				[SETTINGS_PORT as symbol]: bridge,
 				[LOGGER_PORT as symbol]: bridge,
 				[TRANSPORT_KIND_KEY as symbol]: transportKindRef,
+				[ICON_PORT as symbol]: bridge,
+				[PROVIDER_REGISTRY_KEY as symbol]: emptyRegistry,
 			},
 		},
 	});

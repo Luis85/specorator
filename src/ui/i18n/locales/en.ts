@@ -162,6 +162,32 @@ export default {
 		},
 	},
 	agent: {
+		// spec §1.6 — provider copy table (REQ-AUX-016).
+		provider: {
+			label: {
+				claude: 'Claude',
+				codex: 'Codex',
+				opencode: 'OpenCode',
+				cursor: 'Cursor',
+			},
+			mode: { cli: 'CLI', api: 'API', web: 'Web' },
+			combined: '{provider} · {mode}',
+		},
+		// spec §1.6 — composer microcopy (REQ-AUX-004 / REQ-AUX-016).
+		composer: {
+			placeholder: 'Ask Specorator, or type / for commands.',
+			placeholderBashMode: 'Run a shell command (bang-bash mode).',
+			placeholderInstructionMode: 'Add an instruction for the next turn.',
+			send: { tooltip: 'Send', streamingTooltip: 'Stop generation' },
+			attach: { tooltip: 'Attach a file' },
+			mention: { tooltip: 'Mention a file or thread' },
+			slash: { tooltip: 'Insert a slash command' },
+			mode: { normal: 'Normal', instruction: 'Instruction', bash: 'Bash', plan: 'Plan' },
+			permission: { label: 'Allow', planLabel: 'Plan' },
+			thinking: { label: 'Thinking' },
+			mcp: { label: 'MCP' },
+			contextMeter: { tooltip: '{used} of {total} tokens used.' },
+		},
 		title: 'Specorator agent',
 		openCommand: 'Open agent sidepanel',
 		ribbonTooltip: 'Open Specorator agent',

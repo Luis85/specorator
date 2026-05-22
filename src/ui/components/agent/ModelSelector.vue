@@ -11,17 +11,21 @@
  * The picked model id is exposed via `chatProviderStore.selectedModel` for
  * the orchestrator to thread into `ChatTransportStreamOptions.model`.
  */
-import { computed, ref, watch } from 'vue';
+import { computed, inject, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { storeToRefs } from 'pinia';
 import { useChatProviderStore } from '@/ui/stores/chatProviderStore';
-import { useProviderRegistry } from '@/ui/composables/useProviderRegistry';
+import { PROVIDER_REGISTRY_KEY } from '@/infrastructure/bridge/ports';
+import type { ProviderRegistry } from '@/domain/chat/ProviderRegistry';
 import { isExplicit, type ProviderId } from '@/domain/chat/ProviderSelection';
 
 const { t } = useI18n();
 const store = useChatProviderStore();
 const { resolved } = storeToRefs(store);
-const registry = useProviderRegistry();
+// WS-AUX-6: ModelSelector now mounts inside InputToolbar which itself mounts
+// inside ChatInput. ChatInput is reused in test contexts that do not provide
+// a ProviderRegistry — degrade gracefully to "no models" instead of throwing.
+const registry = inject<ProviderRegistry | null>(PROVIDER_REGISTRY_KEY, null);
 
 const activeProviderId = computed<ProviderId | null>(() => {
 	const r = resolved.value;
@@ -32,7 +36,7 @@ const activeProviderId = computed<ProviderId | null>(() => {
 
 const models = computed(() => {
 	const id = activeProviderId.value;
-	if (id === null) return [];
+	if (id === null || registry === null) return [];
 	return registry.getCapabilities(id)?.models ?? [];
 });
 

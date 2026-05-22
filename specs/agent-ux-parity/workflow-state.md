@@ -4,7 +4,7 @@ area: AUX
 current_stage: implementation
 status: active
 last_updated: 2026-05-22
-last_agent: dev (WS-AUX-5)
+last_agent: dev (WS-AUX-6)
 artifacts:
   idea.md: complete
   research.md: skipped
@@ -39,7 +39,7 @@ adrs:
 | 4. Design | `design.md` (consolidated A+B+C) | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | in-progress (WS-AUX-1..5 complete; WS-AUX-6..9 pending) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (WS-AUX-1..6 complete; WS-AUX-7..9 pending) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -52,6 +52,43 @@ adrs:
 ## Hand-off notes
 
 ```
+2026-05-22 (dev):         WS-AUX-6 landed on
+                          `feature/aux-ws-6-composer-toolbar-meter`
+                          (squash-merged into develop).
+                          Delivered: contextUsageStore (T-AUX-255..257);
+                          ContextMeter SVG donut with brand→error >80%
+                          threshold (T-AUX-260..263); McpIndicator
+                          (zap + count + mcp-glow, T-AUX-264..266);
+                          InputToolbar in REQ-AUX-004 normative order
+                          (model · mode · permission · thinking · mcp ·
+                          context-meter · send) (T-AUX-267..280);
+                          ProviderBadge copy table via
+                          `t('provider.label.<id>')` + `t('provider.mode.<mode>')`
+                          with '·' separator ('Claude · CLI', never
+                          'claude/cli'); ProviderMenu + ModelSelector
+                          migrated to SpDropdownPanel; ModeIndicators
+                          migrated to SpToggleSwitch; AttachmentStrip
+                          nested inside composer wrapper (CQ-AUX-18);
+                          ArrowUp-to-edit-last-user-message guarded by
+                          textarea-empty + no-open-picker
+                          (CQ-AUX-10); AgentSidepanelHeader collapsed
+                          (provider/model row moved to InputToolbar).
+                          Tests: 8 chat-suite files stub
+                          InputToolbar + ProviderBadge + ProviderMenu +
+                          ModelSelector (InputToolbar has its own
+                          dedicated tests under
+                          `tests/ui/components/agent/`).
+                          Verify: typecheck GREEN; lint GREEN; unit
+                          GREEN 2413/2413; coverage 91.05/85.37/90.92/
+                          92.14 (>80/70/80/80 gate); plugin gzip
+                          **721.47 kB** vs WS-4 baseline 716.631 kB
+                          (+4.84 kB / +0.68%, inside NFR-AUX-001 5%
+                          ceiling); build:web GREEN (96.29 kB gzip);
+                          workflows SHA-pinned; manifest valid.
+                          Deviations: none material.
+                          Hand-off → dev for WS-AUX-7 on a fresh
+                          branch cut from develop.
+
 2026-05-22 (dev):         WS-AUX-5 landed on
                           `feature/aux-ws-5-messages-nested-streaming`.
                           Delivered: StreamingCursor primitive + PO +

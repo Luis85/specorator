@@ -23,6 +23,8 @@ import { storeToRefs } from 'pinia';
 import { inject } from 'vue';
 import { A11Y_ANNOUNCER_KEY } from '@/ui/composables/useA11yAnnouncer';
 import ModeIndicators from '@/ui/components/agent/ModeIndicators.vue';
+import InputToolbar from '@/ui/components/agent/InputToolbar.vue';
+import AttachmentStrip from '@/ui/components/agent/AttachmentStrip.vue';
 
 const props = defineProps<{
 	modelValue: string;
@@ -43,6 +45,10 @@ const emit = defineEmits<{
 	'select-command': [command: SlashCommand];
 	/** WP-7 A11y #5: Escape during loading=true → ChatSidebar aborts the turn. */
 	abort: [];
+	/** WS-AUX-6 (CQ-AUX-10): up-arrow on an empty textarea requests edit-last-user-message. */
+	'edit-last': [];
+	/** WS-AUX-6 (T-AUX-279): emitted when the toolbar's send/stop button signals stop. */
+	stop: [];
 }>();
 
 const textareaEl = ref<HTMLTextAreaElement | null>(null);
@@ -308,6 +314,22 @@ function tryHandlePlanModeKey(event: KeyboardEvent): boolean {
 	return true;
 }
 
+/**
+ * WS-AUX-6 (CQ-AUX-10): when the textarea is empty and no picker / palette
+ * is open, `ArrowUp` requests "edit the last user message". The parent
+ * (ChatSidebar) is responsible for actually rehydrating the draft via
+ * `messagesStore.editMessage`. We only fire the intent here.
+ */
+function tryHandleEditLastKey(event: KeyboardEvent): boolean {
+	if (event.key !== 'ArrowUp') return false;
+	if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return false;
+	if (picker.open.value || palette.isOpen.value) return false;
+	if (props.modelValue.length > 0) return false;
+	event.preventDefault();
+	emit('edit-last');
+	return true;
+}
+
 function handleKeydown(event: KeyboardEvent): void {
 	// IME-composition guard: while an IME (Japanese/Chinese/Korean) is
 	// composing, Enter commits the candidate and must not trigger send.
@@ -323,7 +345,17 @@ function handleKeydown(event: KeyboardEvent): void {
 	if (handlePickerKey(event)) return;
 	if (handlePaletteKeydown(event)) return;
 	if (tryHandleAbortKey(event)) return;
+	if (tryHandleEditLastKey(event)) return;
 	tryHandleSendKey(event);
+}
+
+function handleToolbarSend(): void {
+	if (props.disabled || props.loading) return;
+	emit('send');
+}
+
+function handleToolbarStop(): void {
+	emit('stop');
 }
 
 function handleInput(event: Event): void {
@@ -395,8 +427,13 @@ function onDropdownHover(index: number): void {
 </script>
 
 <template>
-	<div class="sp-chat__input-area">
+	<div class="sp-chat__input-area sp-composer-group" data-testid="chat-composer">
 		<ModeIndicators v-if="planMode || bangBashMode || instructionMode" />
+		<!--
+		WS-AUX-6 (CQ-AUX-18): AttachmentStrip lives INSIDE the composer wrapper
+		so chips ride with the input visually and reading order is correct.
+		-->
+		<AttachmentStrip />
 		<div class="sp-chat__input-wrapper">
 			<SlashCommandDropdown
 				v-if="palette.isOpen.value"
@@ -436,19 +473,15 @@ function onDropdownHover(index: number): void {
 				@hover="onDropdownHover"
 			/>
 		</div>
-		<div class="sp-chat__input-actions">
-			<button
-				type="button"
-				class="sp-btn sp-btn--primary sp-btn--md"
-				:disabled="disabled"
-				:aria-label="t('chat.sendAriaLabel')"
-				data-testid="chat-send-button"
-				@click="!disabled && !loading && emit('send')"
-			>
-				<span v-if="loading" class="sp-btn__spinner" aria-hidden="true" />
-				<span>{{ loading ? t('chat.sendLoading') : t('chat.sendIdle') }}</span>
-			</button>
-		</div>
+		<!--
+		WS-AUX-6 (T-AUX-279): InputToolbar replaces the legacy single-button
+		send row. The toolbar's trailing button doubles as Stop when streaming.
+		-->
+		<InputToolbar
+			:disabled="disabled"
+			@send="handleToolbarSend"
+			@stop="handleToolbarStop"
+		/>
 	</div>
 </template>
 
