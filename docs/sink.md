@@ -21,6 +21,7 @@ entry_point: false
 - `src/infrastructure/cursor/CursorApiAdapter.ts` — Cursor REST adapter.
 - `src/infrastructure/obsidian/CursorCliAdapter.ts` — Cursor CLI adapter.
 - `docs/glossary/provider.md` / `docs/glossary/provider-mode.md` — vocabulary.
+- `docs/agent-sidepanel.md` — user-facing guide (providers, multi-thread, modes, approvals).
 - `specs/multi-provider-agent-sidepanel/` — spec, requirements, tasks, ADRs.
 
 ## README entry points
