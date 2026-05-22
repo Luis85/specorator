@@ -733,3 +733,38 @@ from the spec.
   `TransportStatusPill` + `transportStatusStore` + composer-group CSS
   (inside NFR-AUX-001 5% ceiling). `npm run build:web` GREEN (96.40 kB
   gzip).
+
+### 2026-05-22 — WS-AUX-8a (dev): InlineApprovalCard (additive, Claudian-parity)
+
+- **commit:** `5fddf33` `feat(aux): T-AUX-300..305 InlineApprovalCard (Claudian-parity tabbed widget)`
+- **files added (4):**
+  - `src/ui/components/agent/InlineApprovalCard.vue` — new SFC with tab-bar +
+    body (title + selectable item list, `▌` accent cursor, `<SpIcon name="check">`
+    single-select or `square`/`check-square` multi-select) + actions row of
+    three `SpButton`s (Deny / Allow once / Allow always). Default focus on
+    Deny (SPEC-MPS-001 §8.4); Escape on the card root emits `deny`. Emits
+    three named events (`deny` / `allow-once` / `allow-always`) and is
+    idempotent. All styling resolves through `--sp-*` tokens; logical
+    properties used for paddings + tab-bar radii.
+  - `tests/ui/components/agent/InlineApprovalCard.test.ts` — six tests
+    (title from request, three buttons in DOM order, Deny / Allow once /
+    Allow always emissions, Escape → deny). Provides `ICON_PORT` +
+    `LOGGER_PORT` via `MockBridge` + a no-op logger (the SpIcon dep was
+    discovered RED on first run and resolved by mirroring `McpIndicator.test.ts`).
+  - `tests/ui/components/agent/InlineApprovalCard.po.ts` — class-based PO
+    keyed exclusively by `data-testid` per ADR-009.
+  - `stories/agent/InlineApprovalCard.stories.ts` — single default story
+    inside `.specorator-root` so `--sp-*` tokens resolve.
+- **spec:** WS-AUX-8a (Claudian-parity approval surface). Forward-compatible
+  with multi-resource batches via the tabs[] array; today renders a single
+  primary tab from `request.tool + request.scope`. ApprovalCard.vue remains
+  untouched and active; the MessageList swap-in is WS-8b.
+- **outcome:** done.
+- **deviation:** Prompt asked for SpIcon `check` / `square` / `check-square`.
+  Verified `SpIcon`'s `name` prop is a free-form string passed through
+  `IconPort` (Lucide names), so no enum to extend.
+- **verify:** `npm run typecheck` GREEN. `npm run lint` GREEN (0 errors;
+  pre-existing warnings unchanged, none on the new files).
+  `npx vitest run tests/ui/components/agent/InlineApprovalCard.test.ts`
+  GREEN — **6 / 6**. Full `npm run verify` intentionally skipped per
+  micro-RALPH scope.

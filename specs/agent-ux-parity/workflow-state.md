@@ -364,6 +364,24 @@ adrs:
                           can also start in parallel since
                           WS-AUX-3 has merged.
 
+2026-05-22 (dev WS-AUX-8a): Added `InlineApprovalCard.vue` (additive,
+                          Claudian-parity tabbed approval surface) alongside the
+                          legacy `ApprovalCard.vue`. New component bundle:
+                          SFC + test (6 / 6 GREEN) + class-based PO +
+                          single Storybook story under stories/agent/.
+                          Single tab today (single-resource case);
+                          forward-compatible with multi-resource batches.
+                          Default focus on Deny per SPEC-MPS-001 §8.4;
+                          Escape on card root emits `deny`. Emits three
+                          named events (`deny` / `allow-once` /
+                          `allow-always`); idempotent after the first
+                          decision. typecheck + lint GREEN (0 errors,
+                          pre-existing warnings unchanged). MessageList
+                          swap-in deferred to WS-AUX-8b per scope.
+                          Squash SHA TBD on merge into develop. Hand-off
+                          → dev (WS-AUX-8b) to migrate `MessageList.vue`
+                          + downstream consumers.
+
 2026-05-22 (planner):     Produced tasks.md (142 tasks across 9 workstreams,
                           TDD-ordered) and dispatch-plan.md (one prompt per
                           workstream). Critical path is 24 hops; WS-AUX-1 → WS-AUX-2
