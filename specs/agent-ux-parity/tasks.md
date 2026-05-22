@@ -35,7 +35,7 @@ Slot encoding: `T-AUX-<NNN>` runs across workstreams (`001..099` reserved for po
 | WS-AUX-6 | Composer + InputToolbar + ContextMeter | dev | WS-AUX-3, WS-AUX-5 | T-AUX-255..284 | `contextUsageStore`, `ContextMeter`, `McpIndicator`, `InputToolbar` order, `ChatInput` rewire. |
 | WS-AUX-7 ✅ | Status panel + transport pill | dev | WS-AUX-6 | T-AUX-285..299 (complete 2026-05-22 — see implementation-log.md) | Group status panel with composer; surface `TransportStatusPill`. |
 | WS-AUX-8 | Approval card + help + slash/mention popovers | dev | WS-AUX-3, WS-AUX-5 | T-AUX-300..324 | `InlineApprovalCard` + sub-components; `HelpPopover` refresh; `MentionPopover`; `SlashCommandPopover` migration. |
-| WS-AUX-9 | Nav-sidebar + history menu + RTL/lint guard | dev | WS-AUX-3 | T-AUX-325..344 | `FloatingNavSidebar`, `ThreadHistoryMenu`, logical-property lint guard, RTL sweep. |
+| WS-AUX-9 ✅ | Nav-sidebar + history menu + RTL/lint guard | dev | WS-AUX-3 | T-AUX-325..344 (complete 2026-05-22 — see implementation-log.md; T-AUX-336/339 qa REDs + T-AUX-341 Storybook decorators + T-AUX-342 docs refresh deferred to qa under WS-AUX-10) | `FloatingNavSidebar`, `ThreadHistoryMenu`, logical-property lint guard, RTL sweep. |
 | WS-AUX-10 | Storybook + parity screenshots + bundle size | qa, sre | WS-AUX-4..9 | T-AUX-345..360 | Storybook coverage gate, axe scan, baseline + delta bundle-size check, WCAG audit. |
 
 ---

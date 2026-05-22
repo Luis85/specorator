@@ -836,3 +836,93 @@ from the spec.
   `tests/ui/components/ErrorBoundary.test.ts:70` (confirmed pre-existing
   via `git stash` baseline) and 70 pre-existing warnings — none on files
   introduced by WS-8b.
+
+### 2026-05-22 — WS-AUX-9 nav-sidebar + history menu + RTL/lint guard (dev)
+
+- **commits (feature branch `feature/aux-ws-9-nav-history-rtl-guard`,
+  squashed into develop tip):**
+  - `1d4ae58` feat(aux): T-AUX-336/337 lint-style-tokens guard
+  - `b777919` feat(aux): T-AUX-325..330 FloatingNavSidebar + NavSidebarButton
+  - `40ba381` feat(aux): T-AUX-331..335 ThreadHistoryMenu
+  - `ee99b5f` feat(aux): T-AUX-329 mount FloatingNavSidebar in AgentSidepanelRoot
+  - `9fba34e` feat(aux): T-AUX-343 wire ThreadHistoryMenu into ThreadTabStrip
+  - `85d3bbf` refactor(aux): T-AUX-338/340 sweep agent surface to --sp-* + logical CSS
+  - `1fb1c26` build(aux): T-AUX-337 wire lint:style-tokens into verify
+  - `d0740f0` fix(aux): WS-9 lint cleanup
+- **tasks:** T-AUX-325..344 (with the following exceptions, owned by `qa`
+  and tracked under WS-AUX-10): T-AUX-336 (qa RED), T-AUX-339 (qa RED),
+  T-AUX-341 (Storybook RTL/forced-colors decorators), T-AUX-342 (docs
+  refresh). The lint-guard fixture test (`tests/scripts/
+  lint-style-tokens.test.ts`) carries the RED behaviour that T-AUX-336
+  / T-AUX-339 will own in `qa`'s pass.
+- **files added:**
+  - `scripts/lint-style-tokens.mjs` — guard scanning `.vue`/`.css` under
+    `src/ui/agent/**` and `src/ui/components/agent/**` for raw Obsidian
+    CSS vars (`--background-*`, `--text-*`, `--interactive-*`) outside
+    `tokens.css` and physical-side CSS properties (margin/padding-left/
+    right, border-*-radius corners, text-align: left/right).
+  - `tests/scripts/lint-style-tokens.test.ts` — 6 tests (clean baseline,
+    obsidian-var detection, physical-property detection, corner-radius,
+    scope boundary, text-align nuance).
+  - `src/ui/components/agent/FloatingNavSidebar.vue` — right-edge floating
+    column with 32 px circular buttons (scroll-top, scroll-bottom,
+    clear-conversation, toggle-thinking); opacity 0.15 -> 1 on hover;
+    hidden when narrow.
+  - `src/ui/components/agent/NavSidebarButton.vue` — circular
+    SpIconButton-wrapping primitive with `transform: scale(1.05)` on hover.
+  - `src/ui/components/agent/ThreadHistoryMenu.vue` — drop-up
+    SpDropdownPanel listing chat threads (ordered by lastUsedAt desc),
+    HoverActions-revealed rename/delete icons, inline rename input,
+    2 px accent border on the active row.
+  - `tests/ui/components/agent/FloatingNavSidebar.test.ts` (+ `.po.ts`).
+  - `tests/ui/components/agent/NavSidebarButton.test.ts` (+ `.po.ts`).
+  - `tests/ui/components/agent/ThreadHistoryMenu.test.ts` (+ `.po.ts`).
+  - `stories/agent/FloatingNavSidebar.stories.ts`.
+  - `stories/agent/NavSidebarButton.stories.ts`.
+  - `stories/agent/ThreadHistoryMenu.stories.ts`.
+- **files modified:**
+  - `src/ui/agent/AgentSidepanelRoot.vue` — mount `<FloatingNavSidebar>`;
+    add `position: relative` to `.sp-agent__body` so the floating column
+    anchors to the transcript region; route `clear-conversation` to
+    `handleNewConversation` and dispatch `sp:nav-scroll` custom events.
+  - `src/ui/components/agent/ThreadTabStrip.vue` — add a history
+    SpIconButton (`data-testid="thread-history-toggle"`); render
+    `<ThreadHistoryMenu>` drop-up; new `open-history` emit.
+  - `src/ui/styles/tokens.css` — add `--sp-text-accent`,
+    `--sp-text-on-accent`, `--sp-interactive-accent-translucent`,
+    `--sp-interactive-active-hover`, `--sp-error-bg`, `--sp-error-border`.
+  - `src/ui/i18n/locales/en.ts` + `de.ts` — `agent.nav.*` and
+    `agent.history.*` microcopy keys.
+  - `package.json` — add `lint:style-tokens` npm script and chain it into
+    `verify` (after `lint`).
+  - `tests/ui/agent/AgentSidepanelRoot.slashCommands.test.ts` — stub
+    `FloatingNavSidebar` and provide `ICON_PORT` (new history icon button
+    in ThreadTabStrip pulls in `SpIcon` -> `IconPort`).
+  - `tests/ui/components/agent/ThreadTabStrip.test.ts` + `.perf.test.ts`
+    — provide `ICON_PORT` + `LOGGER_PORT`.
+  - 18 `.vue` files under `src/ui/agent/**` + `src/ui/components/agent/**`
+    swept from raw Obsidian vars to `--sp-*` tokens and from physical to
+    logical CSS properties: AgentSidepanelRoot, AgentSidepanelHeader,
+    ApprovalCard, AttachmentStrip, BashHistoryList, MarkdownBlock,
+    MessageList, ModeIndicators, ModelSelector, ProviderMenu, StatusPanel,
+    ThreadTab, ThreadTabBadge, ThreadTabStrip, TodoList,
+    TransportStatusPill, WelcomeGreeting, WelcomeSuggestionChip.
+- **spec:** REQ-AUX-009 (token layer), REQ-AUX-010 (RTL / logical
+  properties), REQ-AUX-016 (header + nav surfaces), NFR-AUX-006
+  (`.sp-hover-host` ancestor doc — covered by lint guard rationale),
+  NFR-AUX-010 (CI guard). CQ-AUX-16 closed via T-AUX-336 / T-AUX-337.
+- **outcome:** done.
+- **deviation:** none on contract. Two minor harness-only deviations:
+  (a) Slash-command test harness adopts `ICON_PORT` + a stub for the new
+  floating column because the WS-9 sidepanel renders a SpIconButton-based
+  history button — see `AgentSidepanelRoot.slashCommands.test.ts`.
+  (b) Sweep helper `scripts/_aux9-sweep.mjs` used to apply the 112 token /
+  logical-property replacements is intentionally deleted before the
+  commit; the guard at `scripts/lint-style-tokens.mjs` is the durable
+  enforcement.
+- **verify:** `npm run typecheck` GREEN. `npm run lint` 0 errors (85
+  pre-existing warnings unchanged). `npm run lint:style-tokens`
+  GREEN — 0 violations (112 remediated). `npx vitest run` GREEN — 289 /
+  289 files, 2548 / 2548 tests. `npm run build` GREEN — gzip 729.61 KB
+  (vs prior 716.63 KB baseline; +12.98 KB / +1.8 %). Lint-guard wired
+  into `npm run verify` after `npm run lint`.

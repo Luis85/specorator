@@ -581,7 +581,7 @@ watch(
 .sp-agent-messages__empty-body {
 	margin: 0;
 	font-size: 0.8125rem;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 	text-align: center;
 	font-style: italic;
 }
@@ -592,7 +592,7 @@ watch(
 	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
-	color: var(--text-faint, var(--text-muted));
+	color: var(--sp-text-faint, var(--sp-text-muted));
 	text-align: center;
 }
 
@@ -609,13 +609,13 @@ watch(
 	width: 100%;
 	min-height: 3rem;
 	padding: 0.5rem 0.625rem;
-	border: 1px dashed var(--background-modifier-border);
+	border: 1px dashed var(--sp-border);
 	border-radius: 6px;
-	background: var(--background-secondary);
-	color: var(--text-normal);
+	background: var(--sp-bg-secondary);
+	color: var(--sp-text-normal);
 	font-size: 0.8125rem;
 	font-family: var(--font-text);
-	text-align: left;
+	text-align: start;
 	cursor: pointer;
 	transition:
 		background-color 0.15s,
@@ -624,8 +624,8 @@ watch(
 
 .sp-agent-messages__empty-tile:hover,
 .sp-agent-messages__empty-tile:focus {
-	background: var(--interactive-hover);
-	border-color: var(--interactive-accent);
+	background: var(--sp-interactive-hover);
+	border-color: var(--sp-interactive-accent);
 	outline: none;
 }
 
@@ -635,12 +635,12 @@ watch(
 	gap: 0.25rem;
 	padding: 0.625rem 0.75rem;
 	border-radius: 6px;
-	background: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border);
+	background: var(--sp-bg-secondary);
+	border: 1px solid var(--sp-border);
 }
 
 .sp-agent-message--user {
-	background: var(--background-secondary-alt, var(--background-secondary));
+	background: var(--sp-bg-secondary-alt, var(--sp-bg-secondary));
 }
 
 .sp-agent-message__role {
@@ -648,7 +648,7 @@ watch(
 	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 }
 
 .sp-agent-message__body {
@@ -661,21 +661,21 @@ watch(
 	margin: 0;
 	font-family: inherit;
 	font-size: 0.875rem;
-	color: var(--text-normal);
+	color: var(--sp-text-normal);
 	word-break: break-word;
 }
 
 .sp-agent-message__empty {
 	margin: 0;
 	font-size: 0.8125rem;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 	font-style: italic;
 }
 
 .sp-agent-message__trim-note {
 	margin: 0;
 	font-size: 0.75rem;
-	color: var(--text-faint);
+	color: var(--sp-text-faint);
 }
 
 .sp-agent-message--streaming {
@@ -687,7 +687,7 @@ watch(
 	align-items: center;
 	gap: 0.5rem;
 	margin: 0.25rem 0;
-	color: var(--text-faint);
+	color: var(--sp-text-faint);
 	font-size: 0.75rem;
 	font-style: italic;
 	text-align: center;
@@ -696,7 +696,7 @@ watch(
 .sp-agent-compact-boundary__line {
 	flex: 1 1 auto;
 	height: 1px;
-	background: var(--background-modifier-border);
+	background: var(--sp-border);
 }
 
 .sp-agent-compact-boundary__label {
@@ -706,7 +706,7 @@ watch(
 .sp-agent-message__cursor {
 	display: inline-block;
 	font-size: 0.875rem;
-	color: var(--text-accent);
+	color: var(--sp-text-accent);
 	animation: sp-agent-message__blink 1s steps(2, start) infinite;
 }
 
@@ -741,9 +741,9 @@ watch(
 	align-self: center;
 	padding: 0.25rem 0.75rem;
 	border-radius: 9999px;
-	border: 1px solid var(--background-modifier-border);
-	background: var(--background-secondary);
-	color: var(--text-normal);
+	border: 1px solid var(--sp-border);
+	background: var(--sp-bg-secondary);
+	color: var(--sp-text-normal);
 	font-size: 0.75rem;
 	font-weight: 500;
 	cursor: pointer;
@@ -752,7 +752,7 @@ watch(
 
 .sp-agent-messages__new-pill:hover,
 .sp-agent-messages__new-pill:focus {
-	background: var(--interactive-hover);
+	background: var(--sp-interactive-hover);
 	outline: none;
 }
 </style>

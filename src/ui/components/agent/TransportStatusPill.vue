@@ -92,17 +92,17 @@ function onRetry(): void {
 	gap: var(--sp-space-2, 0.375rem);
 	padding-block: var(--sp-space-1, 0.25rem);
 	padding-inline: var(--sp-space-3, 0.625rem);
-	border: 1px solid var(--sp-border, var(--background-modifier-border));
+	border: 1px solid var(--sp-border, var(--sp-border));
 	border-radius: var(--sp-radius-pill, 9999px);
-	background: var(--sp-bg-secondary, var(--background-secondary));
-	color: var(--sp-text-muted, var(--text-muted));
+	background: var(--sp-bg-secondary, var(--sp-bg-secondary));
+	color: var(--sp-text-muted, var(--sp-text-muted));
 	font-size: var(--sp-font-size-xs, 0.75rem);
 	line-height: 1.2;
 	max-inline-size: 100%;
 }
 
 .sp-transport-pill--connecting {
-	color: var(--sp-text-muted, var(--text-muted));
+	color: var(--sp-text-muted, var(--sp-text-muted));
 }
 
 .sp-transport-pill--degraded {
@@ -127,7 +127,7 @@ function onRetry(): void {
 }
 
 .sp-transport-pill__diagnostic {
-	color: var(--sp-text-faint, var(--text-faint));
+	color: var(--sp-text-faint, var(--sp-text-faint));
 	font-style: italic;
 }
 
@@ -145,7 +145,7 @@ function onRetry(): void {
 
 .sp-transport-pill__retry:hover,
 .sp-transport-pill__retry:focus-visible {
-	background: var(--sp-bg-hover, var(--interactive-hover));
+	background: var(--sp-bg-hover, var(--sp-interactive-hover));
 	outline: none;
 }
 </style>

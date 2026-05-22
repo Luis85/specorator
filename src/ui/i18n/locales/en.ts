@@ -265,6 +265,24 @@ export default {
 			fork: 'Fork',
 			forkAriaLabel: 'Fork conversation from this turn',
 		},
+		// WS-AUX-9 §1.3.11 — floating nav sidebar.
+		nav: {
+			ariaLabel: 'Conversation navigation',
+			scrollTop: 'Scroll to top',
+			scrollBottom: 'Scroll to bottom',
+			clearConversation: 'Clear conversation',
+			toggleThinking: 'Toggle thinking display',
+		},
+		// WS-AUX-9 §1.4 — thread history menu.
+		history: {
+			open: 'Show thread history',
+			sectionTitle: 'Recent conversations',
+			empty: 'No saved threads yet.',
+			rename: 'Rename',
+			delete: 'Delete',
+			confirmDelete: 'Delete this thread? This cannot be undone.',
+			renameInputAriaLabel: 'Thread title',
+		},
 	},
 	// spec §1.6 — welcome surface (REQ-AUX-007).
 	welcome: {

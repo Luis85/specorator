@@ -98,7 +98,7 @@ function handleNewConversation(): void {
 	padding-block: 0.25rem;
 	padding-inline: 0.75rem;
 	border-bottom: 1px solid var(--sp-border);
-	background: var(--background-secondary);
+	background: var(--sp-bg-secondary);
 	flex-shrink: 0;
 }
 
@@ -113,7 +113,7 @@ function handleNewConversation(): void {
 .sp-agent-header__title {
 	font-size: 0.9375rem;
 	font-weight: 700;
-	color: var(--text-normal);
+	color: var(--sp-text-normal);
 	letter-spacing: 0.01em;
 }
 
@@ -122,9 +122,9 @@ function handleNewConversation(): void {
 	font-weight: 500;
 	padding: 0.25rem 0.625rem;
 	border-radius: 4px;
-	border: 1px solid var(--background-modifier-border);
-	background: var(--background-primary);
-	color: var(--text-normal);
+	border: 1px solid var(--sp-border);
+	background: var(--sp-bg-primary);
+	color: var(--sp-text-normal);
 	cursor: pointer;
 	transition:
 		background-color 0.15s,
@@ -132,7 +132,7 @@ function handleNewConversation(): void {
 }
 
 .sp-agent-header__action:hover:not(:disabled) {
-	background: var(--interactive-hover);
+	background: var(--sp-interactive-hover);
 }
 
 .sp-agent-header__action:disabled {
@@ -143,7 +143,7 @@ function handleNewConversation(): void {
 .sp-agent-header__feature {
 	margin: 0;
 	font-size: 0.75rem;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 }
 
 .sp-agent-header__feature--muted {

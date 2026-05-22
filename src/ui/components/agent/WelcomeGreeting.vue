@@ -113,13 +113,13 @@ function handlePick(payload: { id: string }): void {
 	font-weight: 500;
 	font-size: 1.75rem;
 	line-height: var(--sp-line-height-tight, 1.2);
-	color: var(--text-normal);
+	color: var(--sp-text-normal);
 }
 
 .sp-welcome__subtitle {
 	margin: 0;
 	font-size: 0.875rem;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 }
 
 .sp-welcome__suggestions {

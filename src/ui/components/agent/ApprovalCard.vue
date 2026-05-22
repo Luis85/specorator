@@ -125,9 +125,9 @@ onMounted(() => {
 .sp-approval-card {
 	margin: 0.5rem 0;
 	padding: 0.75rem;
-	border: 1px solid var(--background-modifier-error-border, var(--interactive-accent));
+	border: 1px solid var(--sp-error-border, var(--sp-interactive-accent));
 	border-radius: 6px;
-	background: var(--background-secondary);
+	background: var(--sp-bg-secondary);
 	display: flex;
 	flex-direction: column;
 	gap: 0.5rem;
@@ -139,7 +139,7 @@ onMounted(() => {
 	gap: 0.375rem;
 	font-size: 0.8125rem;
 	font-weight: 600;
-	color: var(--text-normal);
+	color: var(--sp-text-normal);
 }
 
 .sp-approval-card__icon {
@@ -149,19 +149,19 @@ onMounted(() => {
 	width: 1rem;
 	height: 1rem;
 	border-radius: 50%;
-	background: var(--background-modifier-error, var(--interactive-accent));
-	color: var(--text-on-accent, #fff);
+	background: var(--sp-error-bg, var(--sp-interactive-accent));
+	color: var(--sp-text-on-accent, #fff);
 	font-weight: 700;
 }
 
 .sp-approval-card__title {
-	color: var(--text-normal);
+	color: var(--sp-text-normal);
 }
 
 .sp-approval-card__preview {
 	margin: 0;
 	padding: 0.5rem 0.625rem;
-	background: var(--background-primary);
+	background: var(--sp-bg-primary);
 	border-radius: 4px;
 	font-family: var(--font-monospace, ui-monospace, monospace);
 	font-size: 0.8125rem;
@@ -178,20 +178,20 @@ onMounted(() => {
 
 .sp-approval-card__btn {
 	padding: 0.375rem 0.625rem;
-	border: 1px solid var(--background-modifier-border);
+	border: 1px solid var(--sp-border);
 	border-radius: 4px;
 	font-size: 0.8125rem;
 	cursor: pointer;
-	background: var(--background-primary);
-	color: var(--text-normal);
+	background: var(--sp-bg-primary);
+	color: var(--sp-text-normal);
 }
 
 .sp-approval-card__btn:focus {
 	outline: none;
-	box-shadow: 0 0 0 2px var(--interactive-accent);
+	box-shadow: 0 0 0 2px var(--sp-interactive-accent);
 }
 
 .sp-approval-card__btn--deny {
-	border-color: var(--background-modifier-error-border, var(--interactive-accent));
+	border-color: var(--sp-error-border, var(--sp-interactive-accent));
 }
 </style>

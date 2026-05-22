@@ -45,8 +45,8 @@ function handleClick(): void {
 	padding-inline: 0.75rem;
 	border-radius: var(--sp-radius-sm, 4px);
 	border: 1px solid var(--sp-border);
-	background: var(--background-primary);
-	color: var(--text-normal);
+	background: var(--sp-bg-primary);
+	color: var(--sp-text-normal);
 	font-size: 0.8125rem;
 	cursor: pointer;
 	transition:
@@ -55,7 +55,7 @@ function handleClick(): void {
 }
 
 .sp-welcome-chip:hover {
-	background: var(--interactive-hover);
+	background: var(--sp-interactive-hover);
 	border-color: var(--sp-border-strong, var(--sp-border));
 }
 

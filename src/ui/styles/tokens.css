@@ -16,18 +16,24 @@
 /* §4.1 — Colour tokens. Default each token to a `var(--*)` Obsidian lookup so
  * custom themes keep driving the palette. */
 .specorator-root {
-	--sp-text-normal:        var(--text-normal);
-	--sp-text-muted:         var(--text-muted);
-	--sp-text-faint:         var(--text-faint);
-	--sp-bg-primary:         var(--background-primary);
-	--sp-bg-primary-alt:     var(--background-primary-alt);
-	--sp-bg-secondary:       var(--background-secondary);
-	--sp-bg-secondary-alt:   var(--background-secondary-alt);
-	--sp-border:             var(--background-modifier-border);
-	--sp-border-strong:      var(--background-modifier-border-hover);
-	--sp-interactive-accent: var(--interactive-accent);
-	--sp-interactive-hover:  var(--background-modifier-hover);
-	--sp-error:              var(--text-error, #dc3545);
+	--sp-text-normal:                 var(--text-normal);
+	--sp-text-muted:                  var(--text-muted);
+	--sp-text-faint:                  var(--text-faint);
+	--sp-text-accent:                 var(--text-accent);
+	--sp-text-on-accent:              var(--text-on-accent);
+	--sp-bg-primary:                  var(--background-primary);
+	--sp-bg-primary-alt:              var(--background-primary-alt);
+	--sp-bg-secondary:                var(--background-secondary);
+	--sp-bg-secondary-alt:            var(--background-secondary-alt);
+	--sp-border:                      var(--background-modifier-border);
+	--sp-border-strong:               var(--background-modifier-border-hover);
+	--sp-interactive-accent:          var(--interactive-accent);
+	--sp-interactive-accent-translucent: var(--interactive-accent-translucent);
+	--sp-interactive-hover:           var(--background-modifier-hover);
+	--sp-interactive-active-hover:    var(--background-modifier-active-hover);
+	--sp-error:                       var(--text-error, #dc3545);
+	--sp-error-bg:                    var(--background-modifier-error);
+	--sp-error-border:                var(--background-modifier-error-border);
 	--sp-error-rgb:          220, 53, 69;
 	--sp-warning:            var(--color-orange, #d97706);
 	--sp-success:            var(--color-green, #16a34a);

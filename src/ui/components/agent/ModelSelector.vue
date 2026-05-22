@@ -91,7 +91,7 @@ const visible = computed(() => models.value.length > 0);
 	align-items: center;
 	gap: 0.375rem;
 	font-size: 0.75rem;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 }
 
 .sp-model-selector__label {
@@ -102,10 +102,10 @@ const visible = computed(() => models.value.length > 0);
 
 .sp-model-selector__select {
 	padding: 0.125rem 0.375rem;
-	border: 1px solid var(--background-modifier-border);
+	border: 1px solid var(--sp-border);
 	border-radius: 4px;
-	background: var(--background-primary);
-	color: var(--text-normal);
+	background: var(--sp-bg-primary);
+	color: var(--sp-text-normal);
 	font-size: 0.75rem;
 }
 </style>

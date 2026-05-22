@@ -268,6 +268,24 @@ export default {
 			fork: 'Abzweigen',
 			forkAriaLabel: 'Unterhaltung ab dieser Antwort abzweigen',
 		},
+		// WS-AUX-9 §1.3.11 — Schwebende Navigationsleiste.
+		nav: {
+			ariaLabel: 'Konversationsnavigation',
+			scrollTop: 'Nach oben scrollen',
+			scrollBottom: 'Nach unten scrollen',
+			clearConversation: 'Unterhaltung löschen',
+			toggleThinking: 'Denkanzeige umschalten',
+		},
+		// WS-AUX-9 §1.4 — Thread-Verlaufsmenü.
+		history: {
+			open: 'Thread-Verlauf anzeigen',
+			sectionTitle: 'Aktuelle Unterhaltungen',
+			empty: 'Noch keine gespeicherten Threads.',
+			rename: 'Umbenennen',
+			delete: 'Löschen',
+			confirmDelete: 'Diesen Thread löschen? Dies kann nicht rückgängig gemacht werden.',
+			renameInputAriaLabel: 'Thread-Titel',
+		},
 	},
 	// SPEC-MPS-001 §A3 — Multi-Thread-Umschalter (WS-6) + Nachrichten-Aktionen (WS-7).
 	thread: {

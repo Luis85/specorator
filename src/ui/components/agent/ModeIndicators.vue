@@ -53,15 +53,15 @@ const { planMode, bangBashMode, instructionMode } = storeToRefs(store);
 	font-weight: 600;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
-	background: var(--background-secondary);
-	color: var(--text-normal);
-	border: 1px solid var(--background-modifier-border);
+	background: var(--sp-bg-secondary);
+	color: var(--sp-text-normal);
+	border: 1px solid var(--sp-border);
 }
 
 .sp-mode-indicators__chip--plan {
-	background: var(--interactive-accent-translucent, var(--background-modifier-hover));
-	color: var(--text-on-accent, var(--text-normal));
-	border-color: var(--interactive-accent);
+	background: var(--sp-interactive-accent-translucent, var(--sp-interactive-hover));
+	color: var(--sp-text-on-accent, var(--sp-text-normal));
+	border-color: var(--sp-interactive-accent);
 }
 
 .sp-mode-indicators__chip--bash {

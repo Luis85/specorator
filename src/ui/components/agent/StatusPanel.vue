@@ -75,7 +75,7 @@ function toggle(): void {
 	display: flex;
 	flex-direction: column;
 	background: transparent;
-	color: var(--sp-text-normal, var(--text-normal));
+	color: var(--sp-text-normal, var(--sp-text-normal));
 }
 
 .sp-status__header {
@@ -90,12 +90,12 @@ function toggle(): void {
 	border-radius: var(--sp-radius-sm, 6px);
 	cursor: pointer;
 	font-size: var(--sp-font-size-sm, 0.8125rem);
-	color: var(--sp-text-normal, var(--text-normal));
+	color: var(--sp-text-normal, var(--sp-text-normal));
 	text-align: start;
 }
 
 .sp-status__header:hover {
-	background: var(--sp-bg-hover, var(--background-modifier-hover));
+	background: var(--sp-bg-hover, var(--sp-interactive-hover));
 }
 
 .sp-status__title {
@@ -103,11 +103,11 @@ function toggle(): void {
 	text-transform: uppercase;
 	font-size: var(--sp-font-size-xs, 0.75rem);
 	letter-spacing: 0.05em;
-	color: var(--sp-text-muted, var(--text-muted));
+	color: var(--sp-text-muted, var(--sp-text-muted));
 }
 
 .sp-status__chevron {
-	color: var(--sp-text-muted, var(--text-muted));
+	color: var(--sp-text-muted, var(--sp-text-muted));
 	font-size: var(--sp-font-size-xs, 0.75rem);
 }
 
@@ -118,7 +118,7 @@ function toggle(): void {
 	padding-block-start: var(--sp-space-2, 0.5rem);
 	padding-block-end: var(--sp-space-3, 0.625rem);
 	padding-inline: var(--sp-space-3, 0.625rem);
-	border-block-start: 1px solid var(--sp-border, var(--background-modifier-border));
+	border-block-start: 1px solid var(--sp-border, var(--sp-border));
 	/*
 	 * Own scroll container — the panel can grow large with many todos /
 	 * bash entries, but must not push the composer off-screen. Cap at

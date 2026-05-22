@@ -39,6 +39,7 @@ import ThreadTabStrip from '@/ui/components/agent/ThreadTabStrip.vue';
 import MessageList from '@/ui/components/agent/MessageList.vue';
 import HelpPopover from '@/ui/components/agent/HelpPopover.vue';
 import WelcomeGreeting from '@/ui/components/agent/WelcomeGreeting.vue';
+import FloatingNavSidebar from '@/ui/components/agent/FloatingNavSidebar.vue';
 import {
 	useNarrowSidepanel,
 	NARROW_SIDEPANEL_KEY,
@@ -364,6 +365,32 @@ function handleMessageEdit(payload: {
 	void chatSidebarRef.value?.editMessage(payload);
 }
 
+/**
+ * WS-AUX-9 (REQ-AUX-016): nav-sidebar hooks. The presentational
+ * `<FloatingNavSidebar>` emits scroll/clear/toggle intents which we route to
+ * the existing scroll container and store actions. `MessageList` exposes
+ * `scrollTop` / `scrollBottom` through its `scroll-request` infra; the
+ * sidebar dispatches via custom events on `sidepanelRootEl` so the message
+ * list can subscribe without prop drilling.
+ */
+const showThinking = ref(true);
+
+function handleNavScrollTop(): void {
+	sidepanelRootEl.value?.dispatchEvent(
+		new CustomEvent('sp:nav-scroll', { detail: { direction: 'top' } }),
+	);
+}
+
+function handleNavScrollBottom(): void {
+	sidepanelRootEl.value?.dispatchEvent(
+		new CustomEvent('sp:nav-scroll', { detail: { direction: 'bottom' } }),
+	);
+}
+
+function handleNavToggleThinking(): void {
+	showThinking.value = !showThinking.value;
+}
+
 onMounted(() => {
 	window.addEventListener('sp:notice', onNotice);
 	document.addEventListener('pointerdown', onDocumentPointerDownForHelp, true);
@@ -447,6 +474,19 @@ onUnmounted(() => {
 					@edit="handleMessageEdit"
 				/>
 				<!--
+				WS-AUX-9 §1.3.11 (REQ-AUX-016): right-edge floating column with
+				four circular nav actions. Resting opacity 0.15 lifts to 1 on
+				hover. Hidden when the sidepanel is narrow (useNarrowSidepanel
+				broadcasts via injection).
+				-->
+				<FloatingNavSidebar
+					data-testid="agent-floating-nav"
+					@scroll-top="handleNavScrollTop"
+					@scroll-bottom="handleNavScrollBottom"
+					@clear-conversation="handleNewConversation"
+					@toggle-thinking="handleNavToggleThinking"
+				/>
+				<!--
 				WS-AUX-7 (REQ-AUX-011): StatusPanel + composer (incl. AttachmentStrip,
 				which lives inside ChatInput per CQ-AUX-18) share a single bordered
 				ancestor so they read as one region. StatusPanel owns its own scroll
@@ -482,7 +522,7 @@ onUnmounted(() => {
 	justify-content: flex-end;
 	gap: 0.5rem;
 	padding: 0.25rem 0.75rem;
-	border-bottom: 1px solid var(--background-modifier-border);
+	border-bottom: 1px solid var(--sp-border);
 }
 
 .sp-agent__body {
@@ -490,6 +530,11 @@ onUnmounted(() => {
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
+	/*
+	 * WS-AUX-9: anchor for the absolutely-positioned FloatingNavSidebar so
+	 * it overlays the transcript without escaping the body column.
+	 */
+	position: relative;
 }
 
 /*
@@ -505,14 +550,14 @@ onUnmounted(() => {
 	flex: 0 0 auto;
 	margin-block: var(--sp-space-2, 0.5rem);
 	margin-inline: var(--sp-space-3, 0.75rem);
-	border: 1px solid var(--sp-border, var(--background-modifier-border));
+	border: 1px solid var(--sp-border, var(--sp-border));
 	border-radius: var(--sp-radius-md, 8px);
-	background: var(--sp-bg-primary, var(--background-primary));
+	background: var(--sp-bg-primary, var(--sp-bg-primary));
 	overflow: hidden;
 }
 
 .sp-composer-group > * + * {
-	border-block-start: 1px solid var(--sp-border, var(--background-modifier-border));
+	border-block-start: 1px solid var(--sp-border, var(--sp-border));
 }
 
 /*

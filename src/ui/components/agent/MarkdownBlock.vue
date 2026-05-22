@@ -415,7 +415,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .sp-markdown {
 	font-size: 0.875rem;
-	color: var(--text-normal);
+	color: var(--sp-text-normal);
 	word-break: break-word;
 }
 
@@ -432,8 +432,8 @@ onBeforeUnmount(() => {
 	margin: 0 0 0.5rem;
 	padding: 0.5rem 0.625rem;
 	border-radius: 4px;
-	background: var(--background-primary-alt, var(--background-primary));
-	border: 1px solid var(--background-modifier-border);
+	background: var(--sp-bg-primary-alt, var(--sp-bg-primary));
+	border: 1px solid var(--sp-border);
 	overflow-x: auto;
 	font-size: 0.8125rem;
 }
@@ -446,7 +446,7 @@ onBeforeUnmount(() => {
 .sp-markdown :deep(.sp-markdown__code) {
 	padding: 0.05rem 0.25rem;
 	border-radius: 3px;
-	background: var(--background-modifier-border);
+	background: var(--sp-border);
 	font-family: var(--font-monospace, ui-monospace, monospace);
 	font-size: 0.85em;
 }
@@ -454,14 +454,14 @@ onBeforeUnmount(() => {
 .sp-markdown :deep(.sp-markdown__blockquote) {
 	margin: 0 0 0.5rem;
 	padding: 0.25rem 0.625rem;
-	border-left: 3px solid var(--background-modifier-border);
-	color: var(--text-muted);
+	border-left: 3px solid var(--sp-border);
+	color: var(--sp-text-muted);
 	white-space: pre-wrap;
 }
 
 .sp-markdown :deep(.sp-markdown__list) {
 	margin: 0 0 0.5rem;
-	padding-left: 1.25rem;
+	padding-inline-start: 1.25rem;
 }
 
 .sp-markdown :deep(.sp-markdown__li) {
@@ -469,7 +469,7 @@ onBeforeUnmount(() => {
 }
 
 .sp-markdown :deep(.sp-markdown__link) {
-	color: var(--text-accent);
+	color: var(--sp-text-accent);
 	text-decoration: underline;
 }
 </style>

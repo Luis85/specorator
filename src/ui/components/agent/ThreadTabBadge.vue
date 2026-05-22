@@ -37,7 +37,7 @@ defineProps<ThreadTabBadgeProps>()
 	border: 2px solid var(--sp-border);
 	font-size: 0.75rem;
 	font-weight: 600;
-	color: var(--text-normal);
+	color: var(--sp-text-normal);
 	box-sizing: border-box;
 	background: transparent;
 }

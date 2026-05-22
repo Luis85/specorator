@@ -39,7 +39,7 @@ adrs:
 | 4. Design | `design.md` (consolidated A+B+C) | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | in-progress (WS-AUX-1..7 complete; WS-AUX-8..9 pending) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (WS-AUX-1..9 complete; WS-AUX-10 pending) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -52,6 +52,62 @@ adrs:
 ## Hand-off notes
 
 ```
+2026-05-22 (dev WS-AUX-9): Nav-sidebar + history menu + RTL/lint guard landed on
+                          `feature/aux-ws-9-nav-history-rtl-guard`
+                          (squash-merge → develop pending). Delivered:
+                          (1) `FloatingNavSidebar.vue` — right-edge
+                          column with 32 px circular buttons (scroll-top,
+                          scroll-bottom, clear-conversation, toggle-
+                          thinking); opacity 0.15 -> 1 on hover; hidden
+                          via `useNarrowSidepanel` injection; (2)
+                          `NavSidebarButton.vue` — circular SpIconButton
+                          wrapper with `transform: scale(1.05)` on hover;
+                          (3) `ThreadHistoryMenu.vue` — drop-up
+                          SpDropdownPanel listing chat threads ordered
+                          by lastUsedAt desc; HoverActions reveals
+                          rename + delete on hover; 2 px accent border
+                          on active row; inline rename input committing
+                          on Enter / blur; (4) `scripts/lint-style-
+                          tokens.mjs` — guard for raw Obsidian vars +
+                          physical CSS properties under
+                          `src/ui/agent/**` and
+                          `src/ui/components/agent/**`; wired into
+                          `npm run verify` after `npm run lint`; (5)
+                          full sweep of the agent surface — 18 .vue
+                          files swept from raw vars (`--background-*`,
+                          `--text-*`, `--interactive-*`) to `--sp-*`
+                          tokens and from physical to logical CSS
+                          properties (margin-inline-*, padding-inline-*,
+                          border-start-*-radius, text-align: start/end).
+                          tokens.css gains 6 new aliases
+                          (`--sp-text-accent`, `--sp-text-on-accent`,
+                          `--sp-interactive-accent-translucent`,
+                          `--sp-interactive-active-hover`,
+                          `--sp-error-bg`, `--sp-error-border`).
+                          AgentSidepanelRoot now mounts the floating
+                          column; ThreadTabStrip exposes a
+                          `thread-history-toggle` SpIconButton that
+                          opens the drop-up menu. 18 / 18 new component
+                          tests GREEN (FloatingNavSidebar 6,
+                          NavSidebarButton 3, ThreadHistoryMenu 7,
+                          NavSidebarButton 3 — adjusted). 6 / 6 new
+                          lint-guard tests GREEN. Full unit suite 289
+                          / 289 files, 2548 / 2548 tests GREEN. Plugin
+                          bundle gzip 729.61 KB vs 716.63 KB baseline
+                          (+12.98 KB / +1.8 %, well under the 5 %
+                          NFR-AUX-001 budget). Lint-style-tokens guard
+                          clean (0 violations under guarded paths;
+                          112 originally surfaced, all remediated).
+                          T-AUX-336 / T-AUX-339 (qa RED tasks),
+                          T-AUX-341 (Storybook RTL/forced-colors
+                          decorators), T-AUX-342 (CLAUDE.md /
+                          contributor docs refresh) deferred to qa
+                          and to follow-up commits under WS-AUX-10.
+                          Hand-off → qa + sre for WS-AUX-10 (Storybook
+                          coverage gate, axe scan, WCAG 2.2 AA audit,
+                          bundle-size delta verify, parity screenshots,
+                          traceability matrix regen).
+
 2026-05-22 (dev WS-AUX-8b): MessageList swap-over from legacy `ApprovalCard.vue`
                           to `InlineApprovalCard.vue` (T-AUX-306). Legacy
                           ApprovalCard.vue retained as dead code per

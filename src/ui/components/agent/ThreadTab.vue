@@ -181,8 +181,8 @@ watch(
 	gap: 0.25rem;
 	padding: 0.25rem 0.5rem;
 	border-radius: 4px;
-	background: var(--background-secondary);
-	color: var(--text-muted);
+	background: var(--sp-bg-secondary);
+	color: var(--sp-text-muted);
 	cursor: pointer;
 	font-size: 0.8125rem;
 	max-width: 12rem;
@@ -190,16 +190,16 @@ watch(
 }
 
 .sp-thread-tab:hover {
-	background: var(--background-modifier-active-hover);
+	background: var(--sp-interactive-active-hover);
 }
 
 .sp-thread-tab--active {
-	color: var(--text-normal);
-	border-bottom: 2px solid var(--text-accent);
+	color: var(--sp-text-normal);
+	border-bottom: 2px solid var(--sp-text-accent);
 }
 
 .sp-thread-tab:focus-visible {
-	outline: 2px solid var(--text-accent);
+	outline: 2px solid var(--sp-text-accent);
 	outline-offset: 1px;
 }
 
@@ -213,9 +213,9 @@ watch(
 .sp-thread-tab__rename-input {
 	flex: 1;
 	font-size: 0.8125rem;
-	background: var(--background-primary);
-	color: var(--text-normal);
-	border: 1px solid var(--background-modifier-border);
+	background: var(--sp-bg-primary);
+	color: var(--sp-text-normal);
+	border: 1px solid var(--sp-border);
 	border-radius: 3px;
 	padding: 0 0.25rem;
 	min-width: 0;
@@ -224,14 +224,14 @@ watch(
 .sp-thread-tab__menu-btn {
 	border: none;
 	background: transparent;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 	cursor: pointer;
 	padding: 0 0.25rem;
 	border-radius: 3px;
 }
 
 .sp-thread-tab__menu-btn:hover {
-	background: var(--background-modifier-hover);
-	color: var(--text-normal);
+	background: var(--sp-interactive-hover);
+	color: var(--sp-text-normal);
 }
 </style>
