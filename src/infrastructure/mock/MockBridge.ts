@@ -10,6 +10,7 @@ import type {
 	ChatTransportPort,
 	ChatTransportStreamOptions,
 	StreamDelta,
+	IconPort,
 } from '@/domain/ports';
 import { ChatTransportError } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
@@ -31,7 +32,8 @@ export class MockBridge
 		NotificationPort,
 		LoggerPort,
 		ChatTransportPort,
-		CommunityPluginPort
+		CommunityPluginPort,
+		IconPort
 {
 	private readonly files = new Map<string, string>();
 	private readonly folders = new Set<string>();
@@ -51,6 +53,7 @@ export class MockBridge
 	private openedFile: string | null = null;
 	private activeFile: ActiveFileSnapshot | null = null;
 	private readonly activeFileHandlers = new Set<(f: ActiveFileSnapshot | null) => void>();
+	private readonly missingIcons = new Set<string>();
 
 	constructor(initialFiles: Record<string, string> = {}) {
 		for (const [path, content] of Object.entries(initialFiles)) {
@@ -235,6 +238,34 @@ export class MockBridge
 	error(message: string, error?: unknown, context?: Record<string, unknown>): void {
 		this.logEntries.push({ level: 'error', message, error, context });
 		console.error(`[MockBridge] ${message}`, error, context);
+	}
+
+	// ── IconPort ──────────────────────────────────────────────────────────────
+	// REQ-AUX-001, ADR-AUX-001 — deterministic placeholder so tests assert on
+	// the icon name without booting Obsidian. Idempotent: prior children are
+	// cleared before re-rendering. When a name has been registered as missing
+	// via `markIconAsMissing(name)`, the element is left untouched so the
+	// `<SpIcon>` text fallback path can be exercised.
+	setIcon(el: HTMLElement, name: string): void {
+		if (this.missingIcons.has(name)) return;
+		while (el.firstChild) el.removeChild(el.firstChild);
+		const svgNS = 'http://www.w3.org/2000/svg';
+		// MockBridge is exclusively used in unit tests + the standalone Vite
+		// dev server — there is no Obsidian `activeDocument` to defer to.
+		// eslint-disable-next-line obsidianmd/prefer-active-doc
+		const svg = el.ownerDocument.createElementNS(svgNS, 'svg');
+		svg.setAttribute('data-icon', name);
+		svg.setAttribute('aria-hidden', 'true');
+		// eslint-disable-next-line obsidianmd/prefer-active-doc
+		const title = el.ownerDocument.createElementNS(svgNS, 'title');
+		title.textContent = name;
+		svg.appendChild(title);
+		el.appendChild(svg);
+	}
+
+	/** Test helper — flag `name` as unresolvable so `setIcon` is a no-op for it. */
+	markIconAsMissing(name: string): void {
+		this.missingIcons.add(name);
 	}
 
 	// ── ChatTransportPort ─────────────────────────────────────────────────────────

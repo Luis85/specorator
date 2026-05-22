@@ -26,6 +26,7 @@ import {
   COMMUNITY_PLUGIN_PORT,
   SECRET_STORE_PORT,
   OPEN_PLUGIN_SETTINGS_KEY,
+  ICON_PORT,
 } from '@/infrastructure/bridge/ports'
 import { LocalStorageBridge } from '@/infrastructure/localstorage/LocalStorageBridge'
 import { LocalStorageSecretStore } from '@/infrastructure/localstorage/LocalStorageSecretStore'
@@ -78,6 +79,7 @@ void bridge.getSettings()
     app.provide(LOGGER_PORT, bridge)
     app.provide(CHAT_TRANSPORT_PORT, bridge)
     app.provide(COMMUNITY_PLUGIN_PORT, bridge)
+    app.provide(ICON_PORT, bridge)
     app.provide(SECRET_STORE_PORT, secretStore)
     // The Obsidian build provides this via `SpecoratorView.onOpen()` and
     // opens the real plugin settings tab. In the standalone browser UI

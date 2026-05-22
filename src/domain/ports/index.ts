@@ -12,6 +12,7 @@ export type { VaultPort } from './VaultPort';
 export type { WorkspacePort, ActiveFileSnapshot } from './WorkspacePort';
 export type { NotificationPort } from './NotificationPort';
 export type { LoggerPort } from './LoggerPort';
+export type { IconPort } from './IconPort';
 export type { TranslationPort } from './TranslationPort';
 export type { Unsubscriber } from './shared';
 export type { MetadataCachePort, FileMetadataSnapshot } from './MetadataCachePort';

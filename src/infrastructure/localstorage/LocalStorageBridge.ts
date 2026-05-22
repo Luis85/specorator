@@ -10,6 +10,7 @@ import type {
 	ChatTransportPort,
 	ChatTransportStreamOptions,
 	StreamDelta,
+	IconPort,
 } from '@/domain/ports';
 import { ChatTransportError } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
@@ -26,7 +27,8 @@ export class LocalStorageBridge
 		NotificationPort,
 		LoggerPort,
 		CommunityPluginPort,
-		ChatTransportPort
+		ChatTransportPort,
+		IconPort
 {
 	async readFile(path: string): Promise<string> {
 		const value = localStorage.getItem(FILE_PREFIX + path);
@@ -203,5 +205,23 @@ export class LocalStorageBridge
 			type: 'error',
 			error: new ChatTransportError('NOT_INSTALLED', 'LocalStorageBridge: not available'),
 		};
+	}
+
+	// ── IconPort ──────────────────────────────────────────────────────────────
+	// REQ-AUX-001, ADR-AUX-001 — mirrors MockBridge so the GitHub Pages demo
+	// renders the same deterministic placeholder. No Obsidian runtime is
+	// available in standalone mode.
+	setIcon(el: HTMLElement, name: string): void {
+		while (el.firstChild) el.removeChild(el.firstChild);
+		const svgNS = 'http://www.w3.org/2000/svg';
+		// LocalStorageBridge backs the GitHub Pages standalone demo — there
+		// is no Obsidian `activeDocument`; use the element's owner document.
+		const svg = el.ownerDocument.createElementNS(svgNS, 'svg');
+		svg.setAttribute('data-icon', name);
+		svg.setAttribute('aria-hidden', 'true');
+		const title = el.ownerDocument.createElementNS(svgNS, 'title');
+		title.textContent = name;
+		svg.appendChild(title);
+		el.appendChild(svg);
 	}
 }

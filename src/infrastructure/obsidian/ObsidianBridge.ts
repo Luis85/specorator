@@ -1,4 +1,4 @@
-import { Notice, TFile, TFolder, normalizePath, type App } from 'obsidian';
+import { Notice, TFile, TFolder, normalizePath, setIcon as obsidianSetIcon, type App } from 'obsidian';
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
 import type {
 	SettingsPort,
@@ -12,6 +12,7 @@ import type {
 	ChatTransportPort,
 	ChatTransportStreamOptions,
 	StreamDelta,
+	IconPort,
 } from '@/domain/ports';
 import { ChatTransportError } from '@/domain/ports';
 
@@ -27,7 +28,8 @@ export class ObsidianBridge
 		NotificationPort,
 		LoggerPort,
 		CommunityPluginPort,
-		ChatTransportPort
+		ChatTransportPort,
+		IconPort
 {
 	private static readonly _LEVEL_RANK: Record<string, number> = {
 		debug: 0,
@@ -260,5 +262,11 @@ export class ObsidianBridge
 				'ObsidianBridge: use ClaudeCliAdapter for queries',
 			),
 		};
+	}
+
+	// ── IconPort ─────────────────────────────────────────────────────────────
+	// REQ-AUX-001, ADR-AUX-001 — production seam for obsidian.setIcon.
+	setIcon(el: HTMLElement, name: string): void {
+		obsidianSetIcon(el, name);
 	}
 }

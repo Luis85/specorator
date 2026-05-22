@@ -28,7 +28,7 @@ Slot encoding: `T-AUX-<NNN>` runs across workstreams (`001..099` reserved for po
 | WS | Name | Owner | Depends on | Task range | Objective |
 |---|---|---|---|---|---|
 | WS-AUX-1 ✅ | Tokens + animations layer | dev | — | T-AUX-001..014 (complete 2026-05-22 — see implementation-log.md) | Land `tokens.css` + `animations.css` + provider data-attr plumbing (additive, no visual change). |
-| WS-AUX-2 | IconPort + SpIcon | dev | WS-AUX-1 | T-AUX-015..034 | New narrow port; bridge impls; `<SpIcon>` primitive; composable + fakes wired through. |
+| WS-AUX-2 ✅ | IconPort + SpIcon | dev | WS-AUX-1 | T-AUX-015..034 (complete 2026-05-22 — see implementation-log.md) | New narrow port; bridge impls; `<SpIcon>` primitive; composable + fakes wired through. |
 | WS-AUX-3 | Primitives library | dev | WS-AUX-1, WS-AUX-2 | T-AUX-100..139 | `SpButton`, `SpIconButton`, `SpToggleSwitch`, `SpDropdownPanel`, `HoverActions`. |
 | WS-AUX-4 | Header + tabs + welcome + compact boundary | dev | WS-AUX-1, WS-AUX-2 | T-AUX-200..224 | Collapse header band; `ThreadTabBadge`; `WelcomeGreeting`; `CompactBoundary` refresh. |
 | WS-AUX-5 | Messages + nested blocks + streaming cursor | dev | WS-AUX-3 | T-AUX-225..254 | Bubble asymmetry, role attr, `MessageActions` rewire, `NestedDetailFrame`, `StreamingCursor`. |

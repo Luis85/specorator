@@ -4,7 +4,7 @@ area: AUX
 current_stage: implementation
 status: active
 last_updated: 2026-05-22
-last_agent: dev
+last_agent: dev (WS-AUX-2)
 artifacts:
   idea.md: complete
   research.md: skipped
@@ -39,7 +39,7 @@ adrs:
 | 4. Design | `design.md` (consolidated A+B+C) | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | in-progress (WS-AUX-1 complete; WS-AUX-2..9 pending) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (WS-AUX-1..2 complete; WS-AUX-3..9 pending) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -98,6 +98,38 @@ adrs:
                           — branch feature/aux-ws-2-iconport-spicon cut from
                           develop after this merge. WS-AUX-3..10 follow per
                           dispatch-plan.md.
+
+2026-05-22 (dev WS-AUX-2): Shipped WS-AUX-2 (T-AUX-015..034) on branch
+                          feature/aux-ws-2-iconport-spicon. Three commits:
+                          3355d09 (ADR-AUX-001 accepted), 297f9d1 (IconPort
+                          + bridge impls + ICON_PORT InjectionKey +
+                          useIconPort + fake-ports + main.ts/SpecoratorView/
+                          AgentSidepanelView provide), 72a90ce (SpIcon.vue
+                          + SpIcon.po.ts + SpIcon.test.ts + SpIcon.stories.ts).
+                          ADR-AUX-001 marked Accepted (T-AUX-015). All five
+                          SpIcon tests green: setIcon dispatch on mount,
+                          missing-icon textContent fallback (REQ-AUX-018),
+                          name-only fallback path, warn dedup across mounts
+                          (module-level Set<string>), aria-hidden toggle.
+                          Verify gate green: typecheck OK, lint OK
+                          (0 errors / 55 pre-existing warnings), unit tests
+                          all passing, bundle deltas plugin +0.47% gzip /
+                          standalone +1.11% gzip — both well under the 5%
+                          NFR-AUX-001 ceiling. Deviations: (1) Storybook
+                          file at stories/primitives/SpIcon.stories.ts
+                          rather than src/ui/components/primitives/__stories__/
+                          carrying the WS-AUX-1 story-glob deviation
+                          forward; (2) added a test-only
+                          MockBridge.markIconAsMissing(name) helper so the
+                          SpIcon RED tests can deterministically exercise
+                          the missing-icon path without intercepting the
+                          IconPort interface itself (interface stays the
+                          single setIcon method as ADR-AUX-001 mandates).
+                          No new CQ-AUX-NN raised. Hand-off → dev for
+                          WS-AUX-3 (T-AUX-100..121, primitives library)
+                          and/or dev for WS-AUX-4 (T-AUX-200..224, header
+                          + tabs + welcome + compact boundary) in parallel
+                          per dispatch-plan.md.
 
 2026-05-22 (planner):     Produced tasks.md (142 tasks across 9 workstreams,
                           TDD-ordered) and dispatch-plan.md (one prompt per

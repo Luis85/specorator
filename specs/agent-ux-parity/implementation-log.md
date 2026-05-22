@@ -195,3 +195,98 @@ from the spec.
   §5.3 paths so future stories can live under
   `src/ui/**/__stories__/`. Not a blocker; can be a chore commit in any
   later WS or addressed by WS-AUX-10's Storybook coverage audit.
+
+---
+
+## WS-AUX-2 — IconPort + SpIcon
+
+### 2026-05-22 — T-AUX-015 — ADR-AUX-001 accepted
+
+- **commit:** `3355d09` (`chore(aux): T-AUX-015 mark ADR-AUX-001 accepted`)
+- **files:** `decisions/ADR-AUX-001-icon-port-for-set-icon.md`
+- **spec:** ADR-AUX-001; spec.md §1.1
+- **outcome:** done
+- **notes:** Flipped frontmatter `status: proposed → accepted` and the
+  body status line. ADR enumerates `setIcon(el, name): void` verbatim as
+  in spec §1.1. Unblocks T-AUX-016 onward.
+
+### 2026-05-22 — T-AUX-016..027 — IconPort + bridge impls + wiring
+
+- **commit:** `297f9d1` (`feat(aux): T-AUX-016..027 add IconPort + bridge impls + wiring`)
+- **files:**
+  - `tests/domain/ports/IconPort.contract.test.ts` (new, T-AUX-016 RED → GREEN)
+  - `src/domain/ports/IconPort.ts` (new, T-AUX-017)
+  - `src/domain/ports/index.ts` (T-AUX-018 — re-export `IconPort`)
+  - `tests/ui/composables/useIconPort.test.ts` (new, T-AUX-019 RED → GREEN)
+  - `src/infrastructure/bridge/ports.ts` (T-AUX-020 — `ICON_PORT` symbol)
+  - `src/ui/composables/useIconPort.ts` (new, T-AUX-021)
+  - `src/infrastructure/obsidian/ObsidianBridge.ts` (T-AUX-022 — delegates to `obsidian.setIcon`)
+  - `src/infrastructure/mock/MockBridge.ts` (T-AUX-023 — SVG `<title>` placeholder + `markIconAsMissing()` test helper)
+  - `src/infrastructure/localstorage/LocalStorageBridge.ts` (T-AUX-024 — mirrors MockBridge)
+  - `tests/__fakes__/fake-ports.ts` (T-AUX-025 — exposes `iconPort` field)
+  - `src/ui/main.ts` (T-AUX-026 — `app.provide(ICON_PORT, bridge)`)
+  - `src/plugin/SpecoratorView.ts`, `src/plugin/AgentSidepanelView.ts` (T-AUX-027)
+- **spec:** REQ-AUX-001, ADR-AUX-001; spec.md §1.1, §1.5
+- **outcome:** done; both RED tests GREEN (3/3 contract + 2/2 composable)
+- **notes:** Bridge placeholders use `el.ownerDocument.createElementNS`
+  instead of the global `document` (passes the
+  `obsidianmd/prefer-active-doc` rule without an inline exception).
+  `MockBridge.markIconAsMissing(name)` is a test-only helper that flips
+  the bridge into "no-op" mode for a given icon name; required by the
+  SpIcon T-AUX-029/030 RED tests to exercise the textContent fallback
+  path deterministically.
+
+### 2026-05-22 — T-AUX-028..033 — SpIcon primitive + PO + stories
+
+- **commit:** `72a90ce` (`feat(aux): T-AUX-028..033 add SpIcon primitive + PO + stories`)
+- **files:**
+  - `tests/ui/components/primitives/SpIcon.test.ts` (new, T-AUX-028/029/030 RED → GREEN)
+  - `tests/ui/components/primitives/SpIcon.po.ts` (new, T-AUX-032)
+  - `src/ui/components/primitives/SpIcon.vue` (new, T-AUX-031)
+  - `stories/primitives/SpIcon.stories.ts` (new, T-AUX-033)
+- **spec:** REQ-AUX-001, REQ-AUX-018, REQ-AUX-017; spec.md §1.3.1
+- **outcome:** done; 5/5 SpIcon tests green
+- **notes:**
+  - `<SpIcon>` exposes the host `el` ref via `defineExpose({ el })`.
+  - `onMounted` + `watch(() => props.name)` call `iconPort.setIcon`;
+    if no `<svg>` appears after the call, the component writes
+    `el.textContent = ariaLabel ?? name` and emits a
+    `loggerPort.warn('SpIcon: missing icon "{name}"', { name })`
+    deduplicated through a module-level `Set<string>`. The set is
+    cleared by a private export `__resetSpIconWarnedNames()` used only
+    by the unit tests.
+  - `aria-hidden` is the literal string `"true"`/`"false"` so the test
+    can assert verbatim without DOM coercion ambiguity.
+- **deviation:** Story lives at `stories/primitives/SpIcon.stories.ts`
+  rather than `src/ui/components/primitives/__stories__/SpIcon.stories.ts`
+  because `.storybook/main.ts` only globs `../stories/**` (same
+  deviation as the WS-AUX-1 Tokens story). Story-glob relocation
+  remains a deferred follow-up.
+
+### 2026-05-22 — T-AUX-034 — WS-AUX-2 verify-gate close-out
+
+- **commit:** rolled into the SpIcon commit (`72a90ce`) — no
+  additional code change required; `npm run verify` runs clean off
+  the WS-AUX-2 tip.
+- **spec:** NFR-AUX-007
+- **outcome:** done — verify GREEN.
+- **verify output:**
+  - typecheck green
+  - lint green (55 warnings, 0 errors — all pre-existing in unrelated
+    files)
+  - plugin build: `main.js` 2.89 MB / 4 MB budget OK; gzipped
+    `main.js` 710.58 kB (baseline 707.26 kB, +0.47%); `styles.css`
+    gzipped 9.37 kB (~baseline)
+  - standalone build: largest JS chunk 0.26 MB / 2 MB budget OK;
+    gzipped JS 95.60 kB (baseline 94.55 kB, +1.11%)
+  - all build deltas well inside the 5% budget ceiling that
+    T-AUX-351 will enforce
+  - docs:api, validate:manifest, verify:scaffold, verify:workflows all green
+
+### Follow-ups raised by WS-AUX-2
+
+- No new CQ-AUX-NN raised.
+- The Storybook story-glob mismatch carries forward from WS-AUX-1 —
+  this WS adds one more file under `stories/` instead of
+  `src/ui/components/primitives/__stories__/`. Already on the deferred
+  follow-up list.

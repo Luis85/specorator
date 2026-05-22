@@ -12,6 +12,7 @@ import type {
 	ConfirmModalPort,
 	SecretStorePort,
 	TransportLifecyclePort,
+	IconPort,
 } from '@/domain/ports'
 import type { MarkdownRenderPort } from '@/domain/ports/MarkdownRenderPort'
 import type { TransportKind } from '@/domain/chat/TransportKind'
@@ -22,6 +23,15 @@ export const VAULT_PORT: InjectionKey<VaultPort> = Symbol('VaultPort')
 export const WORKSPACE_PORT: InjectionKey<WorkspacePort> = Symbol('WorkspacePort')
 export const NOTIFICATION_PORT: InjectionKey<NotificationPort> = Symbol('NotificationPort')
 export const LOGGER_PORT: InjectionKey<LoggerPort> = Symbol('LoggerPort')
+/**
+ * Narrow seam for `obsidian.setIcon` (ADR-AUX-001, REQ-AUX-001). Vue components
+ * are forbidden from importing `obsidian` directly, so every icon render goes
+ * through this port — production (ObsidianBridge) delegates to
+ * `obsidian.setIcon`, while MockBridge / LocalStorageBridge emit a deterministic
+ * `<svg data-icon="…"><title>…</title></svg>` placeholder. Sole consumer is
+ * `<SpIcon>` (`src/ui/components/primitives/SpIcon.vue`).
+ */
+export const ICON_PORT: InjectionKey<IconPort> = Symbol('IconPort')
 export const METADATA_CACHE_PORT: InjectionKey<MetadataCachePort> = Symbol('MetadataCachePort')
 export const CANVAS_PORT: InjectionKey<CanvasPort> = Symbol('CanvasPort')
 export const COMMUNITY_PLUGIN_PORT: InjectionKey<CommunityPluginPort> = Symbol('CommunityPluginPort')

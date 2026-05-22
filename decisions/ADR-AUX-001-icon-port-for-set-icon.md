@@ -1,7 +1,7 @@
 ---
 id: ADR-AUX-001
 title: Introduce a narrow IconPort for obsidian.setIcon
-status: proposed
+status: accepted
 date: 2026-05-22
 deciders:
   - architect
@@ -20,7 +20,7 @@ tags: [ui, ports, obsidian]
 
 ## Status
 
-Proposed.
+Accepted (2026-05-22).
 
 ## Context
 

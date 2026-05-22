@@ -19,6 +19,7 @@ import {
 	SETTINGS_VERSION_KEY,
 	TRANSPORT_KIND_KEY,
 	OPEN_PLUGIN_SETTINGS_KEY,
+	ICON_PORT,
 } from '@/infrastructure/bridge/ports';
 import { ObsidianMarkdownRenderAdapter } from '@/infrastructure/obsidian/ObsidianMarkdownRenderAdapter';
 import type { ChatTransportPort, ConfirmModalPort, TransportLifecyclePort } from '@/domain/ports';
@@ -166,6 +167,9 @@ export class AgentSidepanelView extends ItemView {
 		this.vueApp.provide(WORKSPACE_PORT, bridge);
 		this.vueApp.provide(NOTIFICATION_PORT, bridge);
 		this.vueApp.provide(LOGGER_PORT, bridge);
+		// REQ-AUX-001 / ADR-AUX-001 — sole seam for obsidian.setIcon. Consumed by
+		// <SpIcon>; production wraps `obsidian.setIcon` on the bridge.
+		this.vueApp.provide(ICON_PORT, bridge);
 		this._refreshActivePort();
 		const portRef = this._activeClaudeCliPort;
 		const reactivePort = new Proxy({} as ChatTransportPort, {
