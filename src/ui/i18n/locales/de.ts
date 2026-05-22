@@ -248,6 +248,12 @@ export default {
 			closeAriaLabel: 'Hilfe schließen',
 			close: 'Schließen',
 			openAriaLabel: 'Slash-Befehl-Hilfe',
+			search: {
+				placeholder: 'Suchen…',
+			},
+			results: {
+				count: '{count} Ergebnisse',
+			},
 		},
 		messageActions: {
 			copy: 'Kopieren',

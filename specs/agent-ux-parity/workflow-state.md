@@ -52,6 +52,38 @@ adrs:
 ## Hand-off notes
 
 ```
+2026-05-22 (dev WS-AUX-8b): MessageList swap-over from legacy `ApprovalCard.vue`
+                          to `InlineApprovalCard.vue` (T-AUX-306). Legacy
+                          ApprovalCard.vue retained as dead code per
+                          WS-8b brief — deletion scheduled for WS-10
+                          cleanup. Rule-persistence side-effect (the
+                          `addRule(...)` write previously embedded in
+                          ApprovalCard) lifted up to
+                          `handleApprovalDecision` in MessageList.vue
+                          since `InlineApprovalCard` is intentionally
+                          pure UI. New `HelpPopover.vue` (T-AUX-313..318):
+                          searchable, keyboard-navigable command palette
+                          replacing the inline `/help` drawer in
+                          `AgentSidepanelRoot.vue`. Filter by
+                          case-insensitive substring; ArrowUp/Down moves
+                          active row with wrap-around; Enter emits
+                          `select(id)`; Esc emits `close`. Backdrop-blur
+                          background via `--sp-bg-secondary-alt` +
+                          `backdrop-filter: blur(20px)`; logical
+                          properties throughout. Sr-only polite live
+                          region announces filtered result count. 7 / 7
+                          new HelpPopover tests GREEN, 18 / 18 MessageList
+                          tests GREEN, 7 / 7 slashCommands tests GREEN
+                          (Esc replaces explicit close click). New i18n
+                          keys `agent.help.search.placeholder` +
+                          `agent.help.results.count` added to en + de.
+                          Squash SHA TBD on develop merge. Full unit
+                          suite 259 / 259 files, 2437 / 2437 tests
+                          GREEN. Plugin bundle gzip 724.72 kB vs 716.63 kB
+                          baseline (+8 kB, HelpPopover SFC). Hand-off →
+                          dev (WS-AUX-8c) for slash / mention popover
+                          refresh per micro-RALPH dispatch plan.
+
 2026-05-22 (dev):         WS-AUX-7 landed on
                           `feature/aux-ws-7-status-transport`
                           (squash-merge → develop pending).

@@ -262,11 +262,11 @@ describe('AgentSidepanelRoot — slash command dispatch (PR-ASV-3)', () => {
 			expect(po.helpItemByName('help').exists()).toBe(true);
 		});
 
-		it('the help close button hides the panel', async () => {
+		it('pressing Escape inside the help popover hides the panel (WS-AUX-8b)', async () => {
 			const { wrapper, po } = mountRoot();
 			await wrapper.find('[data-testid="stub-emit-help"]').trigger('click');
 			expect(po.hasHelpPanel()).toBe(true);
-			await po.clickHelpClose();
+			await po.pressHelpEscape();
 			expect(po.hasHelpPanel()).toBe(false);
 		});
 	});

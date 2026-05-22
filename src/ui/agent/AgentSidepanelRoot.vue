@@ -37,6 +37,7 @@ import ErrorBoundary from '@/ui/components/ErrorBoundary.vue';
 import AgentSidepanelHeader from '@/ui/components/agent/AgentSidepanelHeader.vue';
 import ThreadTabStrip from '@/ui/components/agent/ThreadTabStrip.vue';
 import MessageList from '@/ui/components/agent/MessageList.vue';
+import HelpPopover from '@/ui/components/agent/HelpPopover.vue';
 import WelcomeGreeting from '@/ui/components/agent/WelcomeGreeting.vue';
 import {
 	useNarrowSidepanel,
@@ -196,6 +197,27 @@ async function handleOpenThreadContextMenu(threadId: string): Promise<void> {
 const helpOpen = ref(false);
 
 const helpCommands = computed<readonly SlashCommand[]>(() => BUILT_IN_SLASH_COMMANDS);
+
+/**
+ * WS-AUX-8b: items projected for `<HelpPopover>` — `id` is the slash-command
+ * name so `@select` can resolve back to the original `SlashCommand` and run
+ * through `handleSelectCommand`. The shortcut column shows the `/name`
+ * trigger so users can practise typing the command directly.
+ */
+const helpItems = computed(() =>
+	helpCommands.value.map((cmd) => ({
+		id: cmd.name,
+		label: cmd.description,
+		shortcut: `/${cmd.name}`,
+	})),
+);
+
+function onHelpSelect(id: string): void {
+	const command = helpCommands.value.find((c) => c.name === id);
+	if (command === undefined) return;
+	closeHelp();
+	handleSelectCommand(command);
+}
 
 function onNotice(e: Event): void {
 	const { message, durationMs } = (
@@ -401,35 +423,13 @@ onUnmounted(() => {
 					v-if="helpOpen"
 					ref="helpPanelEl"
 					class="sp-agent__help"
-					role="dialog"
-					:aria-label="t('agent.help.openAriaLabel')"
 					data-testid="agent-help-panel"
 				>
-					<header class="sp-agent__help-header">
-						<span class="sp-agent__help-title" data-testid="agent-help-title">
-							{{ t('agent.help.heading') }}
-						</span>
-						<button
-							type="button"
-							class="sp-agent__help-close"
-							data-testid="agent-help-close"
-							:aria-label="t('agent.help.closeAriaLabel')"
-							@click="closeHelp"
-						>
-							{{ t('agent.help.close') }}
-						</button>
-					</header>
-					<ul class="sp-agent__help-list" data-testid="agent-help-list">
-						<li
-							v-for="command in helpCommands"
-							:key="command.name"
-							class="sp-agent__help-item"
-							:data-testid="`agent-help-item-${command.name}`"
-						>
-							<span class="sp-agent__help-name">/{{ command.name }}</span>
-							<span class="sp-agent__help-description">{{ command.description }}</span>
-						</li>
-					</ul>
+					<HelpPopover
+						:items="helpItems"
+						@select="onHelpSelect"
+						@close="closeHelp"
+					/>
 				</div>
 			</div>
 			<div class="sp-agent__body">
@@ -524,71 +524,10 @@ onUnmounted(() => {
  */
 .sp-agent__help {
 	position: absolute;
-	top: 100%;
-	left: 0;
-	right: 0;
+	inset-block-start: 100%;
+	inset-inline: 0;
 	z-index: 6;
-	display: flex;
-	flex-direction: column;
-	gap: 0.5rem;
-	padding: 0.75rem 1rem;
-	background: var(--background-primary);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 6px;
-	box-shadow: var(--shadow-s, 0 4px 12px rgba(0, 0, 0, 0.15));
-	max-height: 60vh;
-	overflow-y: auto;
 }
 
-.sp-agent__help-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-}
-
-.sp-agent__help-title {
-	font-size: 0.875rem;
-	font-weight: 600;
-	color: var(--text-normal);
-}
-
-.sp-agent__help-close {
-	font-size: 0.75rem;
-	font-weight: 500;
-	padding: 0.2rem 0.5rem;
-	border-radius: 4px;
-	border: 1px solid var(--background-modifier-border);
-	background: var(--background-primary);
-	color: var(--text-normal);
-	cursor: pointer;
-}
-
-.sp-agent__help-close:hover {
-	background: var(--interactive-hover);
-}
-
-.sp-agent__help-list {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 0.25rem;
-}
-
-.sp-agent__help-item {
-	display: flex;
-	gap: 0.5rem;
-	font-size: 0.8125rem;
-	color: var(--text-normal);
-}
-
-.sp-agent__help-name {
-	font-weight: 600;
-	min-width: 7rem;
-}
-
-.sp-agent__help-description {
-	color: var(--text-muted);
-}
+/* WS-AUX-8b: the help drawer body is now owned by <HelpPopover>. */
 </style>

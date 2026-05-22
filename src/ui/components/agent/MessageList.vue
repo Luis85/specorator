@@ -33,6 +33,7 @@ import {
 	usePendingApprovalsStore,
 	type ApprovalDecisionKind,
 } from '@/ui/stores/pendingApprovalsStore';
+import { useApprovalRulesStore } from '@/ui/stores/approvalRulesStore';
 import { useInjectedA11yAnnouncer } from '@/ui/composables/useA11yAnnouncer';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
 import MarkdownBlock from '@/ui/components/agent/MarkdownBlock.vue';
@@ -40,7 +41,7 @@ import MessageActions from './MessageActions.vue';
 import MessageBubble from './MessageBubble.vue';
 import ThinkingBlock from './ThinkingBlock.vue';
 import ToolCallBlock from './ToolCallBlock.vue';
-import ApprovalCard from './ApprovalCard.vue';
+import InlineApprovalCard from './InlineApprovalCard.vue';
 import StreamingCursor from './StreamingCursor.vue';
 import CompactBoundary from './CompactBoundary.vue';
 import TransportStatusPill from './TransportStatusPill.vue';
@@ -82,6 +83,7 @@ const emit = defineEmits<{
 const messagesStore = useMessagesStore();
 const streamingStore = useStreamingTurnStore();
 const pendingApprovals = usePendingApprovalsStore();
+const approvalRules = useApprovalRulesStore();
 const transportStatusStore = useTransportStatusStore();
 const providerStore = useChatProviderStore();
 
@@ -136,8 +138,19 @@ function handleTransportRetry(): void {
  */
 const approvalRequests = computed(() => pendingApprovals.pending);
 
-function handleApprovalDecision(id: string, decision: { kind: ApprovalDecisionKind }): void {
-	pendingApprovals.decide(id, decision.kind);
+function handleApprovalDecision(
+	id: string,
+	approval: { request: { tool: string; scope: string }; providerId: string },
+	kind: ApprovalDecisionKind,
+): void {
+	if (kind === 'always') {
+		approvalRules.addRule({
+			providerId: approval.providerId as never,
+			tool: approval.request.tool,
+			scope: approval.request.scope,
+		});
+	}
+	pendingApprovals.decide(id, kind);
 }
 const { t } = useI18n();
 const announcer = useInjectedA11yAnnouncer();
@@ -468,12 +481,14 @@ watch(
 				data-testid="compact-boundary-notice"
 			/>
 		</template>
-		<ApprovalCard
+		<InlineApprovalCard
 			v-for="approval in approvalRequests"
 			:key="approval.id"
 			:request="approval.request"
 			:provider-id="approval.providerId"
-			@decision="(decision) => handleApprovalDecision(approval.id, decision)"
+			@deny="handleApprovalDecision(approval.id, approval, 'deny')"
+			@allow-once="handleApprovalDecision(approval.id, approval, 'allow-once')"
+			@allow-always="handleApprovalDecision(approval.id, approval, 'always')"
 		/>
 		<article
 			v-if="isStreaming"

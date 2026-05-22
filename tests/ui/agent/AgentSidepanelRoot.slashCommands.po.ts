@@ -15,19 +15,28 @@ export class AgentSidepanelRootSlashCommandsPO {
 		return this.wrapper.find(this.byTid('agent-help-panel'));
 	}
 
-	get helpClose() {
-		return this.wrapper.find(this.byTid('agent-help-close'));
+	get helpSearch() {
+		return this.wrapper.find(this.byTid('help-search'));
 	}
 
 	helpItemByName(name: string) {
-		return this.wrapper.find(this.byTid(`agent-help-item-${name}`));
+		// WS-AUX-8b: HelpPopover items are keyed by `data-testid="help-item"`
+		// without a per-name suffix; match by visible text of the shortcut span
+		// (e.g. `/clear`) so the assertion intent — "row for command X exists" —
+		// is preserved.
+		const rows = this.wrapper.findAll(this.byTid('help-item'));
+		return (
+			rows.find((row) => row.text().includes(`/${name}`)) ?? {
+				exists: () => false,
+			}
+		);
 	}
 
 	hasHelpPanel(): boolean {
 		return this.helpPanel.exists();
 	}
 
-	async clickHelpClose(): Promise<void> {
-		await this.helpClose.trigger('click');
+	async pressHelpEscape(): Promise<void> {
+		await this.helpSearch.trigger('keydown', { key: 'Escape' });
 	}
 }

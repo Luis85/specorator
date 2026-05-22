@@ -245,6 +245,12 @@ export default {
 			closeAriaLabel: 'Close help',
 			close: 'Close',
 			openAriaLabel: 'Slash command help',
+			search: {
+				placeholder: 'Search…',
+			},
+			results: {
+				count: '{count} results',
+			},
 		},
 		messageActions: {
 			copy: 'Copy',

@@ -768,3 +768,71 @@ from the spec.
   `npx vitest run tests/ui/components/agent/InlineApprovalCard.test.ts`
   GREEN — **6 / 6**. Full `npm run verify` intentionally skipped per
   micro-RALPH scope.
+
+## 2026-05-22 — WS-AUX-8b: approval switchover + HelpPopover (dev)
+
+- **task:** WS-AUX-8b (T-AUX-306 + T-AUX-313..318) — flip MessageList from
+  the legacy `ApprovalCard.vue` to the WS-8a `InlineApprovalCard.vue`, and
+  introduce a Claudian-parity searchable `HelpPopover.vue` replacing the
+  static `/help` drawer that previously lived inline inside
+  `AgentSidepanelRoot.vue`.
+- **commits:**
+  - `88a9a8a` feat(aux): T-AUX-306 MessageList renders InlineApprovalCard
+  - `af15498` feat(aux): T-AUX-313..318 HelpPopover with search + arrow-nav +
+    live region
+- **files changed / added:**
+  - `src/ui/components/agent/MessageList.vue` — swap `ApprovalCard` import +
+    template for `InlineApprovalCard`; legacy `ApprovalCard.vue` retained as
+    dead code per spec instruction (WS-10 cleanup). MessageList's
+    `handleApprovalDecision` now writes the persisted rule via
+    `useApprovalRulesStore` on the `'always'` branch — previously that side
+    effect lived inside `ApprovalCard.vue`. The three discriminated emits
+    (`deny` / `allow-once` / `allow-always`) are wired to the same
+    `ApprovalDecisionKind`-shaped resolver.
+  - `src/ui/components/agent/HelpPopover.vue` — NEW. Searchable, keyboard-
+    navigable popover. Search input filters by case-insensitive substring;
+    Arrow Up / Down moves the active row with wrap-around; Enter emits
+    `select(id)`; Escape emits `close()`. Background uses
+    `--sp-bg-secondary-alt` + `backdrop-filter: blur(20px)`. All paddings
+    and inset/inline use logical properties. Sr-only live region announces
+    the result count.
+  - `tests/ui/components/agent/HelpPopover.test.ts` + `.po.ts` — 7 tests:
+    render-per-item, case-insensitive filter, Arrow Down moves active,
+    Enter emits select, Escape emits close, empty filter announces 0,
+    sr-only count updates with filter. PO queries exclusively by
+    `data-testid` per ADR-009.
+  - `stories/agent/HelpPopover.stories.ts` — Default story with 8
+    representative slash commands, mounted inside `.specorator-root` so
+    `--sp-*` tokens resolve.
+  - `src/ui/agent/AgentSidepanelRoot.vue` — replaced the inline `<ul>` of
+    `agent-help-item-*` rows with `<HelpPopover :items="helpItems" />`.
+    `helpItems` projects `BUILT_IN_SLASH_COMMANDS` to `{id,label,shortcut}`;
+    `onHelpSelect(id)` resolves back to the original `SlashCommand` and
+    dispatches through `handleSelectCommand`. Removed now-dead
+    `.sp-agent__help-{header,title,close,list,item,name,description}` CSS
+    blocks; kept the `.sp-agent__help` anchor with logical-property positioning.
+  - `src/ui/i18n/locales/en.ts`, `de.ts` — added `agent.help.search.placeholder`
+    and `agent.help.results.count` with `{count}` interpolation.
+  - `tests/ui/agent/AgentSidepanelRoot.slashCommands.po.ts` — `helpItemByName`
+    now matches against `data-testid="help-item"` rows by visible `/name`
+    text; added `pressHelpEscape()`. Removed `clickHelpClose()` since the
+    new popover surface uses Escape (no explicit close button).
+  - `tests/ui/agent/AgentSidepanelRoot.slashCommands.test.ts` — flipped the
+    "help close" test to the new Escape gesture; the four `helpItemByName`
+    assertions are unchanged in intent.
+- **spec:** REQ-AUX-008 (approval switchover) + REQ-AUX-019 (HelpPopover
+  search + a11y). Legacy `ApprovalCard.vue` left in place per WS-8b brief —
+  cleanup deferred to WS-10.
+- **outcome:** done.
+- **deviation:** none. Rule-persistence side-effect moved one layer up
+  (MessageList) because `InlineApprovalCard` is intentionally pure UI and
+  does not hold a store reference.
+- **verify:** `npm run typecheck` GREEN. `npx vitest run
+  tests/ui/components/agent/MessageList.test.ts` GREEN — 18 / 18. `npx
+  vitest run tests/ui/components/agent/HelpPopover.test.ts` GREEN — 7 / 7.
+  `npx vitest run tests/ui/agent/AgentSidepanelRoot.slashCommands.test.ts`
+  GREEN — 7 / 7. Full `npm run test` GREEN — **259 / 259 files, 2437 / 2437
+  tests**. `npm run lint` has 1 pre-existing error in
+  `tests/ui/components/ErrorBoundary.test.ts:70` (confirmed pre-existing
+  via `git stash` baseline) and 70 pre-existing warnings — none on files
+  introduced by WS-8b.
