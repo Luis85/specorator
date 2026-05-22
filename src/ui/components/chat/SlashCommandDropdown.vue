@@ -10,8 +10,14 @@
  * (https://github.com/YishenTu/claudian) rendered with Vue 3 SFCs instead of
  * imperative DOM (ADR-003). No `obsidian` import — composes with the narrow
  * ports (ADR-008).
+ *
+ * WS-AUX-8c: visual chrome (backdrop-blur, drop-up positioning, tokenised
+ * surface) is delegated to `<SpDropdownPanel>`. The textarea retains focus
+ * via `:auto-focus="false"` so typing-to-filter and arrow-key navigation
+ * keep working while the dropdown is open.
  */
 import type { SlashCommand } from '@/domain/chat/SlashCommand';
+import SpDropdownPanel from '@/ui/components/primitives/SpDropdownPanel.vue';
 
 const props = defineProps<{
 	/** Matched commands to render. Empty array = "no matches" placeholder. */
@@ -29,6 +35,8 @@ const emit = defineEmits<{
 	select: [command: SlashCommand];
 	/** Emitted when the user mouses over an entry; parent updates the highlight. */
 	highlight: [index: number];
+	/** Emitted when SpDropdownPanel requests close (Esc, outside click). */
+	close: [];
 }>();
 
 function handleClick(command: SlashCommand): void {
@@ -48,6 +56,10 @@ function sourceLabel(command: SlashCommand): string | null {
 	if (command.kind === 'vault-skill') return 'skill';
 	return null;
 }
+
+function handlePanelClose(): void {
+	emit('close');
+}
 </script>
 
 <template>
@@ -58,121 +70,120 @@ function sourceLabel(command: SlashCommand): string | null {
 		`aria-activedescendant` to the highlighted entry. SRs announce
 		"<option name>, listbox" as the user arrows.
 	-->
-	<div
-		id="slash-command-dropdown"
-		class="sp-slash-dropdown"
-		role="listbox"
-		aria-label="Slash commands"
-		data-testid="slash-command-dropdown"
+	<SpDropdownPanel
+		:open="true"
+		anchor-mode="dropup"
+		:auto-focus="false"
+		:ariaLabel="'Slash commands'"
+		@close="handlePanelClose"
 	>
-		<p
-			v-if="commands.length === 0"
-			class="sp-slash-dropdown__empty"
-			data-testid="slash-command-empty"
+		<div
+			id="slash-command-dropdown"
+			class="sp-slash-dropdown"
+			role="listbox"
+			aria-label="Slash commands"
+			data-testid="slash-command-dropdown"
 		>
-			No matching commands
-		</p>
-		<ul v-else class="sp-slash-dropdown__list" data-testid="slash-command-list">
-			<li
-				v-for="(command, index) in commands"
-				:id="`slash-command-item-${index}`"
-				:key="command.name"
-				class="sp-slash-dropdown__item"
-				:class="{ 'sp-slash-dropdown__item--selected': isSelected(index) }"
-				role="option"
-				:aria-selected="isSelected(index)"
-				:data-testid="`slash-command-item-${command.name}`"
-				@mousedown.prevent="handleClick(command)"
-				@mouseenter="handleMouseEnter(index)"
+			<p
+				v-if="commands.length === 0"
+				class="sp-slash-dropdown__empty"
+				data-testid="slash-command-empty"
 			>
-				<span class="sp-slash-dropdown__name" data-testid="slash-command-name">
-					/{{ command.name }}
-					<span
-						v-if="sourceLabel(command) !== null"
-						class="sp-slash-dropdown__source"
-						:data-testid="`slash-command-source-${command.name}`"
-					>
-						({{ sourceLabel(command) }})
-					</span>
-				</span>
-				<span class="sp-slash-dropdown__description" data-testid="slash-command-description">
-					{{ command.description
-					}}<template v-if="command.argumentHint">
+				No matching commands
+			</p>
+			<ul v-else class="sp-slash-dropdown__list" data-testid="slash-command-list">
+				<li
+					v-for="(command, index) in commands"
+					:id="`slash-command-item-${index}`"
+					:key="command.name"
+					class="sp-slash-dropdown__item"
+					:class="{ 'sp-slash-dropdown__item--selected': isSelected(index) }"
+					role="option"
+					:aria-selected="isSelected(index)"
+					:data-testid="`slash-command-item-${command.name}`"
+					@mousedown.prevent="handleClick(command)"
+					@mouseenter="handleMouseEnter(index)"
+				>
+					<span class="sp-slash-dropdown__name" data-testid="slash-command-name">
+						/{{ command.name }}
 						<span
-							class="sp-slash-dropdown__hint"
-							:data-testid="`slash-command-hint-${command.name}`"
-							>{{ command.argumentHint }}</span
-						></template
-					>
-				</span>
-			</li>
-		</ul>
-	</div>
+							v-if="sourceLabel(command) !== null"
+							class="sp-slash-dropdown__source"
+							:data-testid="`slash-command-source-${command.name}`"
+						>
+							({{ sourceLabel(command) }})
+						</span>
+					</span>
+					<span class="sp-slash-dropdown__description" data-testid="slash-command-description">
+						{{ command.description
+						}}<template v-if="command.argumentHint">
+							<span
+								class="sp-slash-dropdown__hint"
+								:data-testid="`slash-command-hint-${command.name}`"
+								>{{ command.argumentHint }}</span
+							></template
+						>
+					</span>
+				</li>
+			</ul>
+		</div>
+	</SpDropdownPanel>
 </template>
 
 <style scoped>
-.sp-slash-dropdown {
-	position: absolute;
-	left: 0;
-	right: 0;
-	bottom: 100%;
-	margin-bottom: 0.25rem;
-	background: var(--background-primary);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 6px;
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-	max-height: 14rem;
-	overflow-y: auto;
-	z-index: 20;
-}
-
 .sp-slash-dropdown__list {
 	list-style: none;
 	margin: 0;
-	padding: 0.25rem 0;
+	padding-block: var(--sp-space-1);
+	padding-inline: 0;
 }
 
 .sp-slash-dropdown__item {
 	display: flex;
 	flex-direction: column;
 	gap: 0.125rem;
-	padding: 0.375rem 0.75rem;
+	padding-block: var(--sp-space-2);
+	padding-inline: var(--sp-space-3);
 	cursor: pointer;
 	transition: background-color 0.1s;
+	border-radius: var(--sp-radius-sm);
 }
 
 .sp-slash-dropdown__item--selected {
-	background: var(--interactive-hover);
+	background: var(--sp-interactive-hover);
 }
 
 .sp-slash-dropdown__name {
-	font-size: 0.875rem;
+	font-family: var(--sp-font-monospace, var(--font-monospace, monospace));
+	font-size: var(--sp-font-size-sm);
 	font-weight: 600;
-	color: var(--text-normal);
+	color: var(--sp-text-normal);
 }
 
 .sp-slash-dropdown__source {
-	margin-left: 0.375rem;
-	font-size: 0.75rem;
+	margin-inline-start: var(--sp-space-1);
+	font-size: var(--sp-font-size-xs);
 	font-weight: 400;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 }
 
 .sp-slash-dropdown__hint {
-	color: var(--text-faint, var(--text-muted));
+	color: var(--sp-text-faint, var(--sp-text-muted));
 	font-style: italic;
+	margin-inline-start: var(--sp-space-1);
 }
 
 .sp-slash-dropdown__description {
-	font-size: 0.75rem;
-	color: var(--text-muted);
+	font-size: var(--sp-font-size-xs);
+	color: var(--sp-text-muted);
 }
 
 .sp-slash-dropdown__empty {
 	margin: 0;
-	padding: 0.5rem 0.75rem;
-	font-size: 0.8125rem;
-	color: var(--text-muted);
+	padding-block: var(--sp-space-2);
+	padding-inline: var(--sp-space-3);
+	font-size: var(--sp-font-size-sm);
+	color: var(--sp-text-muted);
 	font-style: italic;
 }
 </style>

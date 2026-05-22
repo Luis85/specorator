@@ -61,6 +61,18 @@ function mountChatInput(
 }
 
 describe('ChatInput', () => {
+	afterEach(() => {
+		// WS-AUX-8c: slash + mention dropdowns route through `<SpDropdownPanel>`
+		// which teleports to `document.body`. Flush any leftover panels and
+		// backdrops between tests so subsequent `document.querySelector` lookups
+		// do not match a stale teleport from a previous case.
+		for (const el of Array.from(
+			document.body.querySelectorAll('[data-testid^="sp-dropdown-panel"]'),
+		)) {
+			el.remove();
+		}
+	});
+
 	it('renders data-testid="chat-input-textarea"', () => {
 		const po = mountChatInput({ modelValue: '', disabled: false, loading: false });
 		expect(po.hasTextarea()).toBe(true);
@@ -203,7 +215,7 @@ describe('ChatInput', () => {
 			await vi.advanceTimersByTimeAsync(MENTION_DEBOUNCE_MS + 1)
 			await flushPromises()
 			expect(po.mentionDropdownExists()).toBe(true)
-			const text = po.wrapper.find('[data-testid="mention-option-0"]').text()
+			const text = po.mentionOptionAt(0).text()
 			expect(text).toContain('requirements.md')
 		})
 
@@ -290,7 +302,7 @@ describe('ChatInput', () => {
 			expect(po.mentionDropdownExists()).toBe(true)
 			// The first row is the `specs` folder (prefix-matches `spec`;
 			// files don't prefix-match the basename here).
-			const firstLabel = po.wrapper.find('[data-testid="mention-option-0"]').text()
+			const firstLabel = po.mentionOptionAt(0).text()
 			expect(firstLabel).toContain('specs/')
 			await po.pressKey('Enter')
 

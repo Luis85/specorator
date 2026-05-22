@@ -441,6 +441,7 @@ function onDropdownHover(index: number): void {
 				:selected-index="palette.selectedIndex.value"
 				@select="handleSelectFromPalette"
 				@highlight="handleHighlight"
+				@close="palette.close"
 			/>
 			<!-- WP-7 A11y #3: combobox attrs are shared between palette & picker. -->
 			<textarea
@@ -471,6 +472,7 @@ function onDropdownHover(index: number): void {
 				:selected-index="picker.selectedIndex.value"
 				@select="onDropdownSelect"
 				@hover="onDropdownHover"
+				@close="picker.close"
 			/>
 		</div>
 		<!--

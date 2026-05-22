@@ -27,10 +27,19 @@ interface SpDropdownPanelProps {
 	open: boolean
 	anchorMode?: AnchorMode
 	ariaLabel: string
+	/**
+	 * When `false`, the panel does NOT move focus into itself on open. The
+	 * slash-command and @-mention dropdowns rely on this: the textarea
+	 * remains focused so the user can keep typing-to-filter and arrow-key
+	 * navigate while the dropdown is visible (PR-ASV-3, PR-ASV-4).
+	 * Defaults to `true` for menu-style consumers (ProviderMenu, etc.).
+	 */
+	autoFocus?: boolean
 }
 
 const props = withDefaults(defineProps<SpDropdownPanelProps>(), {
 	anchorMode: 'dropup',
+	autoFocus: true,
 })
 
 const emit = defineEmits<{
@@ -82,7 +91,7 @@ async function focusFirst(): Promise<void> {
 onMounted(() => {
 	document.addEventListener('keydown', onDocumentKeydown, true)
 	document.addEventListener('mousedown', onDocumentMousedown, true)
-	if (props.open) {
+	if (props.open && props.autoFocus) {
 		void focusFirst()
 	}
 })
@@ -95,7 +104,7 @@ onBeforeUnmount(() => {
 watch(
 	() => props.open,
 	(isOpen) => {
-		if (isOpen) {
+		if (isOpen && props.autoFocus) {
 			void focusFirst()
 		}
 	},
