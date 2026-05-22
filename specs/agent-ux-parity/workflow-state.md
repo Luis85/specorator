@@ -1,10 +1,10 @@
 ---
 feature: agent-ux-parity
 area: AUX
-current_stage: implementation
+current_stage: testing
 status: active
 last_updated: 2026-05-22
-last_agent: dev (WS-AUX-7)
+last_agent: qa (WS-AUX-10)
 artifacts:
   idea.md: complete
   research.md: skipped
@@ -12,12 +12,12 @@ artifacts:
   design.md: complete
   spec.md: complete
   tasks.md: complete
-  implementation-log.md: in-progress
-  test-plan.md: pending
-  test-report.md: pending
+  implementation-log.md: complete
+  test-plan.md: complete
+  test-report.md: complete
   review.md: pending
-  traceability.md: pending
-  release-notes.md: pending
+  traceability.md: complete
+  release-notes.md: complete
   retrospective.md: pending
 predecessors:
   - multi-provider-agent-sidepanel   # MPS shipped feature parity (WS-1..WS-10); this feature ships UX/visual parity
@@ -39,10 +39,10 @@ adrs:
 | 4. Design | `design.md` (consolidated A+B+C) | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | in-progress (WS-AUX-1..9 complete; WS-AUX-10 pending) |
-| 8. Testing | `test-plan.md`, `test-report.md` | pending |
-| 9. Review | `review.md`, `traceability.md` | pending |
-| 10. Release | `release-notes.md` | pending |
+| 7. Implementation | `implementation-log.md` + code | complete (WS-AUX-1..10 all merged) |
+| 8. Testing | `test-plan.md`, `test-report.md` | complete |
+| 9. Review | `review.md`, `traceability.md` | traceability.md complete; review.md pending |
+| 10. Release | `release-notes.md` | drafted (awaiting reviewer sign-off) |
 | 11. Learning | `retrospective.md` | pending |
 
 ## Skips
@@ -52,6 +52,46 @@ adrs:
 ## Hand-off notes
 
 ```
+2026-05-22 (qa WS-AUX-10): Closed implementation + testing stage. Delivered:
+                          (1) three Storybook stories filling the residual
+                          §5 NEW-component coverage gap (ThreadTabBadge,
+                          WelcomeGreeting, WelcomeSuggestionChip);
+                          (2) bundle-final.json — plugin gzip 738,128 B
+                          vs baseline 716,631 B = +3.00 % / +21.50 kB
+                          (well under NFR-AUX-001 5 % ceiling); standalone
+                          gzip 99,783 B vs baseline 98,499 B = +1.30 %
+                          / +1.28 kB; (3) parity-screenshots.md — manual
+                          capture checklist for 6 screens × 3 breakpoints
+                          (320/520/720 px); (4) traceability.md — every
+                          REQ-AUX-NNN/NFR-AUX-NNN mapped to spec section,
+                          tasks, implementing files, tests; ADR + CQ
+                          disposition table; (5) release-notes.md —
+                          user-facing + internal highlights, bundle
+                          impact, known limitations; (6) test-report.md —
+                          verify chain snapshot. Verify gate GREEN:
+                          typecheck 0 errors; lint 0 errors (85
+                          pre-existing warnings unchanged); unit suite
+                          263 / 263 files, 2459 / 2459 tests; coverage
+                          91.05/85.37/90.92/92.14 (above 80/70/80/80);
+                          lint-style-tokens 0 violations; plugin build
+                          GREEN; build:web GREEN. Open CQs after WS-10:
+                          CQ-AUX-01 (Cursor brand), CQ-AUX-04 (dropdown
+                          cross-feature), CQ-AUX-06 (Fork action),
+                          CQ-AUX-09 (approval editable fields), CQ-AUX-13
+                          (plan-mode label as token) — all documented in
+                          traceability.md §4 and release-notes.md Known
+                          Limitations; none block release. Deferred to
+                          reviewer: axe scan on AgentSidepanelRoot
+                          (T-AUX-347 — Chromium gate on Windows host
+                          unavailable), light + forced-colors WCAG audit
+                          (T-AUX-349), parity-screenshot image capture
+                          (T-AUX-355). MessageItem.vue extraction
+                          (REQ-AUX-014) carried into retrospective for
+                          a follow-up feature. Hand-off → reviewer for
+                          `/spec:review` on branch
+                          `feature/aux-ws-10-storybook-parity-bundle`
+                          (squash-merge into develop pending).
+
 2026-05-22 (dev WS-AUX-9): Nav-sidebar + history menu + RTL/lint guard landed on
                           `feature/aux-ws-9-nav-history-rtl-guard`
                           (squash-merge → develop pending). Delivered:
