@@ -66,7 +66,7 @@ function onKey(event: KeyboardEvent): void {
 			(activeIdx.value - 1 + filtered.value.length) % filtered.value.length
 	} else if (event.key === 'Enter') {
 		event.preventDefault()
-		const target = filtered.value[activeIdx.value]
+		const target = filtered.value.at(activeIdx.value)
 		if (target !== undefined) emit('select', target.id)
 	} else if (event.key === 'Escape') {
 		event.preventDefault()
