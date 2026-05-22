@@ -84,6 +84,18 @@ provide(A11Y_ANNOUNCER_KEY, announcer);
 
 const activeThreadId = computed(() => threadsStore.activeThreadId);
 const isRequestInFlight = computed(() => messagesStore.status === 'loading');
+
+/**
+ * WS-AUX-1 — derive the current provider id from the resolved selection so
+ * `[data-provider]` on the agent root flips brand colours via the `--sp-*`
+ * token layer (ADR-AUX-002, REQ-AUX-006). `'degraded'` resolves to `null`
+ * which v-bind elides — the brand then falls through to the default
+ * `--sp-brand-claude` from tokens.css.
+ */
+const dataProviderAttr = computed<string | null>(() => {
+	const r = providerStore.resolved;
+	return r === 'degraded' ? null : r.provider;
+});
 const activeFeature = computed(() => {
 	const tid = threadsStore.activeThreadId;
 	if (tid === null) return null;
@@ -305,7 +317,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-	<div class="sp-agent" data-testid="agent-sidepanel">
+	<div
+		class="sp-agent specorator-root"
+		:data-provider="dataProviderAttr"
+		data-testid="agent-sidepanel"
+	>
 		<ErrorBoundary>
 			<div class="sp-agent__header-wrap">
 				<AgentSidepanelHeader

@@ -6,6 +6,11 @@
  * scoped to standalone mode only and never leak into Obsidian's theme.
  */
 import './standalone.css'
+// WS-AUX-1: design-token layer + named-keyframes layer (ADR-AUX-002,
+// REQ-AUX-009). Imported here so the standalone browser UI bundles them;
+// the Obsidian plugin build inherits the same tokens via the agent root.
+import './styles/tokens.css'
+import './styles/animations.css'
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import AppRoot from './AppRoot.vue'

@@ -2142,17 +2142,17 @@ to {
 	background: var(--interactive-hover);
 }
 
-.specorator-root :where(.sp-agent[data-v-189acf0e]) {
+.specorator-root :where(.sp-agent[data-v-3db5408e]) {
 	display: flex;
 	flex-direction: column;
 	height: 100%;
 	overflow: hidden;
 }
-.specorator-root :where(.sp-agent__header-wrap[data-v-189acf0e]) {
+.specorator-root :where(.sp-agent__header-wrap[data-v-3db5408e]) {
 	position: relative;
 	flex-shrink: 0;
 }
-.specorator-root :where(.sp-agent__provider-row[data-v-189acf0e]) {
+.specorator-root :where(.sp-agent__provider-row[data-v-3db5408e]) {
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
@@ -2160,7 +2160,7 @@ to {
 	padding: 0.25rem 0.75rem;
 	border-bottom: 1px solid var(--background-modifier-border);
 }
-.specorator-root :where(.sp-agent__body[data-v-189acf0e]) {
+.specorator-root :where(.sp-agent__body[data-v-3db5408e]) {
 	flex: 1;
 	display: flex;
 	flex-direction: column;
@@ -2174,7 +2174,7 @@ to {
  * `.sp-agent__header-wrap` keeps the popover scoped to the header
  * column; the dropdown shadow distinguishes it from inline content.
  */
-.specorator-root :where(.sp-agent__help[data-v-189acf0e]) {
+.specorator-root :where(.sp-agent__help[data-v-3db5408e]) {
 	position: absolute;
 	top: 100%;
 	left: 0;
@@ -2191,17 +2191,17 @@ to {
 	max-height: 60vh;
 	overflow-y: auto;
 }
-.specorator-root :where(.sp-agent__help-header[data-v-189acf0e]) {
+.specorator-root :where(.sp-agent__help-header[data-v-3db5408e]) {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
 }
-.specorator-root :where(.sp-agent__help-title[data-v-189acf0e]) {
+.specorator-root :where(.sp-agent__help-title[data-v-3db5408e]) {
 	font-size: 0.875rem;
 	font-weight: 600;
 	color: var(--text-normal);
 }
-.specorator-root :where(.sp-agent__help-close[data-v-189acf0e]) {
+.specorator-root :where(.sp-agent__help-close[data-v-3db5408e]) {
 	font-size: 0.75rem;
 	font-weight: 500;
 	padding: 0.2rem 0.5rem;
@@ -2211,10 +2211,10 @@ to {
 	color: var(--text-normal);
 	cursor: pointer;
 }
-.specorator-root :where(.sp-agent__help-close[data-v-189acf0e]:hover) {
+.specorator-root :where(.sp-agent__help-close[data-v-3db5408e]:hover) {
 	background: var(--interactive-hover);
 }
-.specorator-root :where(.sp-agent__help-list[data-v-189acf0e]) {
+.specorator-root :where(.sp-agent__help-list[data-v-3db5408e]) {
 	list-style: none;
 	margin: 0;
 	padding: 0;
@@ -2222,17 +2222,17 @@ to {
 	flex-direction: column;
 	gap: 0.25rem;
 }
-.specorator-root :where(.sp-agent__help-item[data-v-189acf0e]) {
+.specorator-root :where(.sp-agent__help-item[data-v-3db5408e]) {
 	display: flex;
 	gap: 0.5rem;
 	font-size: 0.8125rem;
 	color: var(--text-normal);
 }
-.specorator-root :where(.sp-agent__help-name[data-v-189acf0e]) {
+.specorator-root :where(.sp-agent__help-name[data-v-3db5408e]) {
 	font-weight: 600;
 	min-width: 7rem;
 }
-.specorator-root :where(.sp-agent__help-description[data-v-189acf0e]) {
+.specorator-root :where(.sp-agent__help-description[data-v-3db5408e]) {
 	color: var(--text-muted);
 }
 /*$vite$:1*/

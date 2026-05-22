@@ -1,7 +1,7 @@
 ---
 id: ADR-AUX-002
 title: Introduce a --sp-* design-token CSS layer mapped onto Obsidian theme vars
-status: proposed
+status: accepted
 date: 2026-05-22
 deciders:
   - architect
@@ -20,7 +20,7 @@ tags: [ui, theming, css, design-system]
 
 ## Status
 
-Proposed.
+Accepted (2026-05-22). Token enumeration in §4.1–§4.7 of `specs/agent-ux-parity/spec.md` is binding; the file-level layout (`tokens.css` + `animations.css`) is the single seam for `--sp-*` and named keyframes.
 
 ## Context
 
