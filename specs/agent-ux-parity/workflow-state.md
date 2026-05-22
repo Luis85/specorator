@@ -1,10 +1,10 @@
 ---
 feature: agent-ux-parity
 area: AUX
-current_stage: testing
+current_stage: review
 status: active
 last_updated: 2026-05-22
-last_agent: qa (WS-AUX-10)
+last_agent: reviewer (Stage 9)
 artifacts:
   idea.md: complete
   research.md: skipped
@@ -15,7 +15,7 @@ artifacts:
   implementation-log.md: complete
   test-plan.md: complete
   test-report.md: complete
-  review.md: pending
+  review.md: complete
   traceability.md: complete
   release-notes.md: complete
   retrospective.md: pending
@@ -41,7 +41,7 @@ adrs:
 | 6. Tasks | `tasks.md` | complete |
 | 7. Implementation | `implementation-log.md` + code | complete (WS-AUX-1..10 all merged) |
 | 8. Testing | `test-plan.md`, `test-report.md` | complete |
-| 9. Review | `review.md`, `traceability.md` | traceability.md complete; review.md pending |
+| 9. Review | `review.md`, `traceability.md` | complete (verdict: ACCEPT with conditions) |
 | 10. Release | `release-notes.md` | drafted (awaiting reviewer sign-off) |
 | 11. Learning | `retrospective.md` | pending |
 
@@ -52,6 +52,58 @@ adrs:
 ## Hand-off notes
 
 ```
+2026-05-22 (dev R-AUX-01): legacy ApprovalCard.vue and orphaned tests/stories
+                           deleted as scheduled in WS-8b. InlineApprovalCard
+                           is now the sole approval-card surface.
+
+2026-05-22 (reviewer Stage 9): Stage 9 review complete. Verdict: ACCEPT with
+                          conditions. Wrote specs/agent-ux-parity/review.md.
+                          traceability.md re-validated at WS-AUX-10 tip and
+                          adopted as-is (no drift; no regeneration needed).
+                          Spot-checked every REQ-AUX-NNN against an
+                          implementing file + test on disk; re-ran the
+                          lint-style-tokens guard (0 violations) and the
+                          obsidian-import / v-html / window.confirm grep
+                          invariants (all 0 live matches). Bundle delta
+                          confirmed: +3.00 % plugin / +1.30 % standalone
+                          (well under 5 %). Coverage 91.05 / 85.37 / 90.92
+                          / 92.14 (above 80/70/80/80). Three ADRs realised
+                          with no drift.
+
+                          Findings: 3 MAJOR, 3 MINOR, 1 NIT. Conditions to
+                          clear before tagging a release: (R-AUX-01) delete
+                          dead-code ApprovalCard.vue + ApprovalCard.{po,test}.ts
+                          (WS-8b log scheduled deletion in WS-10 cleanup but
+                          it didn't happen — only InlineApprovalCard is now
+                          wired into MessageList.vue at line 44 + 484);
+                          (R-AUX-02) capture the parity screenshots per
+                          parity-screenshots.md so the north-star release
+                          criterion is evidenced; (R-AUX-03) run axe scan
+                          + light/forced-colors WCAG pass on
+                          AgentSidepanelRoot (T-AUX-347, T-AUX-349) since
+                          NFR-AUX-008 cannot be formally cleared without a
+                          runtime pass against the assembled surface.
+                          MINOR/NIT items (R-AUX-04..07) are documentation
+                          polish only.
+
+                          Carry-overs accepted (none block release):
+                          CQ-AUX-01 (Cursor brand placeholder), CQ-AUX-04
+                          (SpDropdownPanel cross-feature deferral),
+                          CQ-AUX-06 (Fork action behind showFork prop),
+                          CQ-AUX-09 (approval editableFields=[]), CQ-AUX-13
+                          (plan-mode literal). MessageItem.vue extraction
+                          for REQ-AUX-014 explicitly accepted as a
+                          retrospective follow-up; inline render in
+                          MessageList.vue satisfies the requirement today.
+
+                          Hand-off → release-manager for Stage 10. Resolve
+                          R-AUX-01..03 first (one small follow-up PR for
+                          R-AUX-01; screenshots + axe pass for R-AUX-02/03
+                          can land alongside release-notes finalisation).
+                          If R-AUX-03 cannot run on the Windows host,
+                          escalate to sre for a CI-side or maintainer-side
+                          accessibility audit before tagging.
+
 2026-05-22 (qa WS-AUX-10): Closed implementation + testing stage. Delivered:
                           (1) three Storybook stories filling the residual
                           §5 NEW-component coverage gap (ThreadTabBadge,
