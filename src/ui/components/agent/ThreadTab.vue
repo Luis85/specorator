@@ -19,6 +19,7 @@
  */
 import { computed, nextTick, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import ThreadTabBadge from './ThreadTabBadge.vue';
 
 const props = withDefaults(
 	defineProps<{
@@ -33,8 +34,16 @@ const props = withDefaults(
 		 * tab the strip currently focuses, `-1` for the rest (NFR-MPS-009).
 		 */
 		tabIndex?: number;
+		/**
+		 * Per-tab status badge state (spec §3.4). `active` / `streaming` /
+		 * `attention` / `idle`. Defaults to `idle` so the badge renders neutral
+		 * even when the strip has not wired a per-thread state mapping yet.
+		 */
+		badgeState?: 'active' | 'streaming' | 'attention' | 'idle';
+		/** 1-indexed tab ordinal rendered inside the badge (spec §1.3.8). */
+		ordinal?: number;
 	}>(),
-	{ tabIndex: -1 },
+	{ tabIndex: -1, badgeState: 'idle', ordinal: 1 },
 );
 
 const emit = defineEmits<{
@@ -130,6 +139,7 @@ watch(
 		@click="handleClick"
 		@contextmenu="onRightClick"
 	>
+		<ThreadTabBadge :state="badgeState" :digit="ordinal" />
 		<span
 			v-if="!renaming"
 			:data-testid="`thread-tab-${threadId}-label`"

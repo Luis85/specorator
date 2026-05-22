@@ -465,3 +465,68 @@ from the spec.
   five more files land under `stories/` instead of
   `src/ui/components/primitives/__stories__/`. Already on the
   deferred follow-up list.
+
+### 2026-05-22 — WS-AUX-4 — Header + tabs + welcome (T-AUX-200..222)
+
+- **branch:** `feature/aux-ws-4-header-tabs-welcome`
+- **commits:** `a6bb249` (ThreadTabBadge), `173baf0` (WelcomeGreeting +
+  chips + microcopy), `af0a1c9` (useNarrowSidepanel),
+  `afd3caf` (wire WS-4 into AgentSidepanelHeader / ThreadTab /
+  ThreadTabStrip / AgentSidepanelRoot)
+- **files added:**
+  - `src/ui/components/agent/ThreadTabBadge.vue`
+  - `src/ui/components/agent/WelcomeGreeting.vue`
+  - `src/ui/components/agent/WelcomeSuggestionChip.vue`
+  - `src/ui/composables/useNarrowSidepanel.ts`
+  - `tests/ui/components/agent/ThreadTabBadge.{po,test}.ts`
+  - `tests/ui/components/agent/WelcomeGreeting.{po,test}.ts`
+  - `tests/ui/components/agent/WelcomeSuggestionChip.{po,test}.ts`
+  - `tests/ui/composables/useNarrowSidepanel.test.ts`
+- **files modified:**
+  - `src/ui/agent/AgentSidepanelRoot.vue` — wires `useNarrowSidepanel`,
+    provides `NARROW_SIDEPANEL_KEY`, swaps the dashed empty grid for
+    `<WelcomeGreeting>` when the active thread has no messages, binds
+    `[data-narrow]` on `.specorator-root`.
+  - `src/ui/components/agent/AgentSidepanelHeader.vue` — single 36 px
+    band; provider/model selectors removed (relocated to InputToolbar
+    in WS-6 — comment marker only).
+  - `src/ui/components/agent/ThreadTab.vue` — renders
+    `<ThreadTabBadge :state :digit>`; new props `badgeState`,
+    `ordinal`.
+  - `src/ui/components/agent/ThreadTabStrip.vue` — passes the badge
+    state per tab; MVP map is `active` for the focused thread and
+    `idle` otherwise. `streaming`/`attention` mapping is owned by
+    WS-AUX-5 once per-thread status surfaces.
+  - `src/ui/i18n/locales/en.ts` — `welcome.greeting.{morning|afternoon|
+    evening|night}`, `welcome.subtitle`, `welcome.suggestion.*`,
+    `welcome.suggestionAriaLabel`.
+  - `tests/ui/components/agent/ThreadTabStrip.po.ts` — extended the
+    `thread-tab-*` filter to exclude the new `thread-tab-badge` test
+    id so the PO's tab enumeration is unchanged.
+- **spec:** REQ-AUX-003, REQ-AUX-004, REQ-AUX-007, REQ-AUX-015 (deferred
+  — see deviation 1), REQ-AUX-019.
+- **outcome:** done for badge/welcome/narrow; partial for the
+  WS-AUX-4 task block: T-AUX-217..219 (CompactBoundary refresh)
+  and the four storybook tasks T-AUX-203/207/213/223 deferred —
+  see deviations below.
+- **deviations:**
+  1. **CompactBoundary** (T-AUX-217..219) — the component does not
+     yet exist at `src/ui/components/agent/CompactBoundary.vue`;
+     the existing chat surface uses `compactBoundary.notice` text
+     only. Refresh belongs naturally with the WS-AUX-5 message-list
+     work where the boundary becomes a renderable. Carried forward
+     into WS-AUX-5 dispatch prompt.
+  2. **Storybook stories** (T-AUX-203/207/213/223) — repo has no
+     Storybook bootstrap yet (carried forward from WS-AUX-1..3).
+     Will be picked up alongside the existing primitive backlog in
+     WS-AUX-10.
+  3. **font-family `Copernicus` assertion** (T-AUX-210 DoD) — jsdom
+     does not resolve `var(--sp-font-serif)` for `getComputedStyle`
+     calls inside scoped style blocks; the unit test asserts the
+     semantic element + testid contract and the WS-AUX-10
+     Playwright/Storybook tier asserts the rendered font-family.
+- **verify:** `npm run typecheck` GREEN; `npm run lint` GREEN
+  (0 errors, 58 pre-existing warnings); `npm run test` GREEN
+  (2343/2343); `npm run build` GREEN (main.js gzip 712.87 kB vs
+  WS-3 baseline 716.631 kB → −3.76 kB / −0.5%); `npm run build:web`
+  GREEN (95.77 kB gzip).

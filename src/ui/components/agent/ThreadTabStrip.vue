@@ -113,6 +113,18 @@ function tabIndexFor(threadId: string): number {
 	return threadId === focusedThreadId.value ? 0 : -1;
 }
 
+/**
+ * Map a thread to a `ThreadTabBadge` state (spec §3.4). MVP mapping: the
+ * active thread shows `active`; every other tab shows `idle`. WS-AUX-5
+ * extends this with `streaming` / `attention` once `messagesStore.status`
+ * and approval-pending signals are surfaced per-thread.
+ */
+function badgeStateFor(
+	threadId: string,
+): 'active' | 'streaming' | 'attention' | 'idle' {
+	return threadId === threadsStore.activeThreadId ? 'active' : 'idle';
+}
+
 async function focusThreadTab(threadId: string): Promise<void> {
 	focusedThreadId.value = threadId;
 	await nextTick();
@@ -208,12 +220,14 @@ async function onStripKeydown(event: KeyboardEvent): Promise<void> {
 		@keydown="onStripKeydown"
 	>
 		<ThreadTab
-			v-for="thread in orderedThreads"
+			v-for="(thread, index) in orderedThreads"
 			:key="thread.threadId"
 			:thread-id="thread.threadId"
 			:title="thread.title"
 			:active="thread.threadId === threadsStore.activeThreadId"
 			:tab-index="tabIndexFor(thread.threadId)"
+			:badge-state="badgeStateFor(thread.threadId)"
+			:ordinal="index + 1"
 			@activate="handleActivate"
 			@rename="handleRename"
 			@open-context-menu="handleOpenContextMenu"

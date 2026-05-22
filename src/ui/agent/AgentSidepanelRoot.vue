@@ -37,6 +37,11 @@ import ErrorBoundary from '@/ui/components/ErrorBoundary.vue';
 import AgentSidepanelHeader from '@/ui/components/agent/AgentSidepanelHeader.vue';
 import ThreadTabStrip from '@/ui/components/agent/ThreadTabStrip.vue';
 import MessageList from '@/ui/components/agent/MessageList.vue';
+import WelcomeGreeting from '@/ui/components/agent/WelcomeGreeting.vue';
+import {
+	useNarrowSidepanel,
+	NARROW_SIDEPANEL_KEY,
+} from '@/ui/composables/useNarrowSidepanel';
 import StatusPanel from '@/ui/components/agent/StatusPanel.vue';
 import AttachmentStrip from '@/ui/components/agent/AttachmentStrip.vue';
 import ProviderBadge from '@/ui/components/agent/ProviderBadge.vue';
@@ -81,6 +86,41 @@ const deleteConfirmation =
  */
 const announcer = useA11yAnnouncer();
 provide(A11Y_ANNOUNCER_KEY, announcer);
+
+/**
+ * WS-AUX-4 (REQ-AUX-004): observe the sidepanel root and broadcast a
+ * reactive `narrow` flag (<360 px inline-size) to descendants so layout-
+ * sensitive children can collapse without each owning a `ResizeObserver`.
+ */
+const sidepanelRootEl = ref<HTMLElement | null>(null);
+const { narrow } = useNarrowSidepanel(sidepanelRootEl);
+provide(NARROW_SIDEPANEL_KEY, narrow);
+
+/**
+ * Empty-thread welcome surface (REQ-AUX-007): when the active thread has
+ * no messages, render `<WelcomeGreeting>` in place of the dashed tile grid.
+ * Clicking a suggestion chip routes through the existing tile pre-fill
+ * pipeline so `ChatInput` opens its slash / mention pickers.
+ */
+const showWelcome = computed(() => {
+	const tid = threadsStore.activeThreadId;
+	if (tid === null) return true;
+	const list = messagesStore.messages.get(tid);
+	return list === undefined || list.length === 0;
+});
+
+async function handleWelcomeSuggestion(payload: {
+	id: 'feature' | 'tasks' | 'file' | 'slash' | 'mention' | 'send' | 'escape';
+}): Promise<void> {
+	if (
+		payload.id === 'slash' ||
+		payload.id === 'mention' ||
+		payload.id === 'send' ||
+		payload.id === 'escape'
+	) {
+		await handleEmptyTileAction(payload.id);
+	}
+}
 
 const activeThreadId = computed(() => threadsStore.activeThreadId);
 const isRequestInFlight = computed(() => messagesStore.status === 'loading');
@@ -318,8 +358,10 @@ onUnmounted(() => {
 
 <template>
 	<div
+		ref="sidepanelRootEl"
 		class="sp-agent specorator-root"
 		:data-provider="dataProviderAttr"
+		:data-narrow="narrow ? 'true' : 'false'"
 		data-testid="agent-sidepanel"
 	>
 		<ErrorBoundary>
@@ -391,7 +433,13 @@ onUnmounted(() => {
 				</div>
 			</div>
 			<div class="sp-agent__body">
+				<WelcomeGreeting
+					v-if="showWelcome"
+					data-testid="agent-welcome-greeting"
+					@suggestion-pick="handleWelcomeSuggestion"
+				/>
 				<MessageList
+					v-else
 					:thread-id="activeThreadId"
 					@tile-action="handleEmptyTileAction"
 					@copy="handleMessageCopy"

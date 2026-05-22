@@ -216,6 +216,26 @@ export default {
       editAriaLabel: 'Edit and resend message',
     },
   },
+  // spec §1.6 — welcome surface (REQ-AUX-007).
+  welcome: {
+    greeting: {
+      morning: 'Good morning.',
+      afternoon: 'Good afternoon.',
+      evening: 'Good evening.',
+      night: 'Working late?',
+    },
+    subtitle: 'What would you like to do next?',
+    suggestion: {
+      feature: 'Start a new feature',
+      tasks: 'Pick up where you left off',
+      file: 'Discuss an open file',
+      slash: 'Browse slash commands',
+      mention: "Attach a vault file with the at-sign",
+      send: 'Press Cmd/Ctrl+Enter to send',
+      escape: 'Esc to dismiss a palette',
+    },
+    suggestionAriaLabel: 'Try: {label}',
+  },
   // SPEC-MPS-001 §A3 — multi-thread switcher (WS-6) + per-message actions (WS-7).
   thread: {
     new: 'New thread',

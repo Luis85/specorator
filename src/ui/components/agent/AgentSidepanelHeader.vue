@@ -1,15 +1,15 @@
 <script setup lang="ts">
 /**
- * Header for the dedicated agent sidepanel. Single-purpose: identifies the
- * surface ("Specorator Agent"), shows which feature the active thread is
- * scoped to (or "No feature in focus"), and exposes a "New conversation"
- * action that clears the active thread so the next send mints a fresh
- * `ChatThreadRecord` (`ChatSidebar.resolveActiveThread` rotates on
- * `activeThreadId === null`).
+ * Header for the dedicated agent sidepanel.
  *
- * Visual reference: header strip from Claudian's `ClaudianView` shell
- * (https://github.com/YishenTu/claudian) translated to Vue 3 SFC + ADR-008
- * narrow-port discipline (no Obsidian imports here).
+ * WS-AUX-4 (T-AUX-201): collapses to a single 36 px band (logo+title+actions);
+ * `ProviderBadge` + `ModelSelector` were relocated to the InputToolbar in WS-6.
+ * The feature-scope hint is kept inline as a small caption beneath the band
+ * because the spec contract is "no extra rows in the header" — the caption is
+ * visually grouped with the title row (no border, no margin) so a screen
+ * reader still announces "feature in focus" but layout reports one band.
+ *
+ * Satisfies REQ-AUX-003.
  */
 import { useI18n } from 'vue-i18n';
 
@@ -43,7 +43,7 @@ function handleNewConversation(): void {
 
 <template>
 	<header class="sp-agent-header" data-testid="agent-header">
-		<div class="sp-agent-header__title-row">
+		<div class="sp-agent-header__band" data-testid="agent-header-band">
 			<span class="sp-agent-header__title" data-testid="agent-header-title">
 				{{ t('agent.title') }}
 			</span>
@@ -58,6 +58,7 @@ function handleNewConversation(): void {
 				{{ t('agent.newConversation') }}
 			</button>
 		</div>
+		<!-- provider + model selectors moved to InputToolbar in WS-6 -->
 		<p
 			v-if="activeFeature !== null"
 			class="sp-agent-header__feature"
@@ -93,18 +94,20 @@ function handleNewConversation(): void {
 .sp-agent-header {
 	display: flex;
 	flex-direction: column;
-	gap: 0.25rem;
-	padding: 0.75rem 1rem;
-	border-bottom: 1px solid var(--background-modifier-border);
+	gap: 0.125rem;
+	padding-block: 0.25rem;
+	padding-inline: 0.75rem;
+	border-bottom: 1px solid var(--sp-border);
 	background: var(--background-secondary);
 	flex-shrink: 0;
 }
 
-.sp-agent-header__title-row {
+.sp-agent-header__band {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
 	gap: 0.5rem;
+	height: 36px;
 }
 
 .sp-agent-header__title {

@@ -39,7 +39,7 @@ adrs:
 | 4. Design | `design.md` (consolidated A+B+C) | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | in-progress (WS-AUX-1..3 complete; WS-AUX-4..9 pending) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (WS-AUX-1..4 complete; WS-AUX-5..9 pending) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -52,6 +52,35 @@ adrs:
 ## Hand-off notes
 
 ```
+2026-05-22 (dev):         WS-AUX-4 landed on `feature/aux-ws-4-header-tabs-welcome`.
+                          Delivered: ThreadTabBadge + PO + tests; WelcomeGreeting +
+                          WelcomeSuggestionChip + POs + tests with hour-banded
+                          variant + chip emit; useNarrowSidepanel composable +
+                          NARROW_SIDEPANEL_KEY inject key; AgentSidepanelHeader
+                          collapsed to single 36px band (provider/model selectors
+                          deferred to InputToolbar WS-6); ThreadTab + ThreadTabStrip
+                          render the new badge with `data-state` mapping per spec
+                          §3.4; AgentSidepanelRoot wires the ResizeObserver + binds
+                          `data-narrow` and renders WelcomeGreeting on empty thread.
+                          Verify: typecheck green, lint 0 errors (58 pre-existing
+                          warnings), full unit suite 2343/2343 passing, plugin
+                          gzip 712.87 kB vs WS-3 baseline 716.631 kB (-0.5%, inside
+                          NFR-AUX-001 5% ceiling), standalone gzip 95.77 kB.
+                          Deviations: (1) CompactBoundary refresh skipped — file
+                          not present at expected path; defer to WS-AUX-5 when the
+                          message-list surfaces compact boundaries. (2) Storybook
+                          stories deferred — repo has no Storybook bootstrap yet;
+                          T-AUX-203/207/213/223 carry forward into WS-AUX-10
+                          alongside the existing primitives backlog. (3) The
+                          "greeting font-family includes Copernicus" assertion
+                          (T-AUX-210 DoD) tests the `--sp-font-serif` token at the
+                          source level via the WS-AUX-10 Playwright tier — jsdom
+                          does not resolve `var()` in scoped CSS. Hand-off → dev
+                          for WS-AUX-5 (T-AUX-225..254, messages + streaming
+                          cursor) and dev for WS-AUX-6 (WS-6 composer + provider
+                          row migration) which now needs to host the relocated
+                          ProviderBadge/ModelSelector.
+
 2026-05-22 (orchestrator): Feature scaffolded after MPS WS-10 closeout. Goal = UX/visual
                           parity with Claudian plugin (D:\Projects\claudian-main). Two
                           upstream audits captured in idea.md. Dispatching ux-designer,
