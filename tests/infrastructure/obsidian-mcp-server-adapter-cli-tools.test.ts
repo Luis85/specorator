@@ -97,12 +97,14 @@ describe('ObsidianMcpServerAdapter — CLI-backed tools (ADR-018)', () => {
       expect.arrayContaining([
         'obsidian_cli_search',
         'obsidian_cli_read_note',
-        'obsidian_cli_daily_note',
         'obsidian_cli_get_properties',
         'obsidian_cli_run',
         'obsidian_cli_append_note',
       ]),
     )
+    // `daily` mutates the vault (creates today's note), so there is no read tool
+    // for it and it is not on the read-only allow-list (write-boundary invariant).
+    expect(names).not.toContain('obsidian_cli_daily_note')
   })
 
   it('search forwards query=… and returns the CLI JSON result', async () => {
@@ -120,13 +122,6 @@ describe('ObsidianMcpServerAdapter — CLI-backed tools (ADR-018)', () => {
     expect(cli.calls).toContainEqual({ command: 'read', args: ['path=note.md'], json: true })
   })
 
-  it('daily_note calls daily with no args', async () => {
-    cli.setJson('daily', { path: 'Daily/2026-05-23.md' })
-    const resp = await callTool(port, 'obsidian_cli_daily_note', {})
-    expect(parse(resp)).toEqual({ result: { path: 'Daily/2026-05-23.md' } })
-    expect(cli.calls).toContainEqual({ command: 'daily', args: [], json: true })
-  })
-
   it('surfaces a CLI error as a structured error payload (no crash)', async () => {
     const resp = await callTool(port, 'obsidian_cli_get_properties', { path: 'x.md' })
     // unscripted properties → mock returns ok({}) by default
@@ -140,6 +135,13 @@ describe('ObsidianMcpServerAdapter — CLI-backed tools (ADR-018)', () => {
     expect(payload.error.allowed).toContain('search')
     // eval must never reach the CLI
     expect(cli.calls.find((c) => c.command === 'eval')).toBeUndefined()
+  })
+
+  it('run rejects `daily` (mutating command) so it cannot bypass ProposalStore', async () => {
+    const resp = await callTool(port, 'obsidian_cli_run', { command: 'daily' })
+    const payload = parse(resp) as { error: { code: string } }
+    expect(payload.error.code).toBe('command-not-allowed')
+    expect(cli.calls.find((c) => c.command === 'daily')).toBeUndefined()
   })
 
   it('run forwards an allow-listed command with key=value args', async () => {

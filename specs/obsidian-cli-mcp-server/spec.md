@@ -65,7 +65,6 @@ error/timeout.
 
 - `obsidian_cli_search { query }` → `cli.runJson('search', ['query='+query])`.
 - `obsidian_cli_read_note { path }` → `cli.runJson('read', ['path='+path])`.
-- `obsidian_cli_daily_note {}` → `cli.runJson('daily')`.
 - `obsidian_cli_get_properties { path }` → `cli.runJson('properties', ['path='+path])`.
 - `obsidian_cli_run { command, args? }` → command ∈ `SAFE_CLI_READ_COMMANDS` else
   `ok({ error: { code: 'command-not-allowed', message, allowed }})`; allowed ⇒
@@ -77,10 +76,11 @@ error/timeout.
 Result mapping: any `cli` `err` ⇒ `ok({ error: { code, message } })`; any `ok` ⇒
 `ok({ result: value })` (search/read/daily/properties/run) — never throw.
 
-`SAFE_CLI_READ_COMMANDS = ['search','read','daily','properties','tags','tasks',
+`SAFE_CLI_READ_COMMANDS = ['search','read','properties','tags','tasks',
 'bookmarks','bases','list','info']`. `eval`/`delete`/`move`/`create`/`append`/`write`/
 `plugins`/`themes`/`publish`/`sync` are not in the set and have no dedicated tool
-(REQ-OCM-013).
+(REQ-OCM-013). **`daily` is excluded** because it can create today's note (a vault
+mutation) — it must not bypass `ProposalStore` (CLAR-OCM-003).
 
 ## §6 Adapter wiring (REQ-OCM-015)
 

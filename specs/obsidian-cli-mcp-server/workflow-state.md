@@ -60,3 +60,4 @@ None.
 
 - [ ] CLAR-OCM-001 — Whether to additionally ship a *standalone* stdio MCP process (for external clients that aren't already pointed at the loopback HTTP server). Deferred; the loopback HTTP transport (ADR-013) is the v1 surface and the CLI tool group rides it.
 - [ ] CLAR-OCM-002 — Exact binary name/discovery path of the official CLI per OS once it is GA on the user's machine. The resolver uses `obsidian` on PATH; the settings field accepts an explicit absolute path as the authoritative override.
+- [ ] CLAR-OCM-003 — A genuinely read-only "daily note" CLI subcommand (e.g. a `daily:path`/`daily:read` variant) once confirmed in the official CLI docs. Until then, `daily` is excluded from the read surface (it can create today's note); a daily-note *creation* tool, if added, would go through `ProposalStore`. Raised by Codex review on PR #428.

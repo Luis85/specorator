@@ -8,14 +8,17 @@ import { ok } from './shared'
 
 /**
  * Commands the generic `obsidian_cli_run` tool may invoke (REQ-OCM-011). Strictly
- * read-only. `eval` and every mutating/administrative command are deliberately
- * absent so they are unreachable through the agent surface (REQ-OCM-013,
- * NFR-OCM-002).
+ * read-only — every entry must be free of vault side effects. `eval` and every
+ * mutating/administrative command are deliberately absent so they are unreachable
+ * through the agent surface (REQ-OCM-013, NFR-OCM-002).
+ *
+ * `daily` is intentionally NOT here: the Obsidian CLI's daily command opens (and,
+ * when missing, can create) today's note — a vault mutation that must not bypass
+ * ProposalStore. A confirmed read-only daily variant is deferred (CLAR-OCM-003).
  */
 export const SAFE_CLI_READ_COMMANDS: readonly string[] = [
   'search',
   'read',
-  'daily',
   'properties',
   'tags',
   'tasks',
@@ -60,15 +63,6 @@ export function registerObsidianCliTools(
       inputSchema: { path: z.string().describe('Vault-relative note path') },
     },
     async ({ path }) => wrap(await cli.runJson('read', [`path=${path}`])),
-  )
-
-  mcp.registerTool(
-    'obsidian_cli_daily_note',
-    {
-      description: "Get today's daily note via the official Obsidian CLI",
-      inputSchema: {},
-    },
-    async () => wrap(await cli.runJson('daily')),
   )
 
   mcp.registerTool(

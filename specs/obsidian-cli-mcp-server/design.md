@@ -81,9 +81,12 @@ Read tools (call `cli.runJson` / `cli.run`):
 |---|---|---|
 | `obsidian_cli_search` | `search` | `query=<q>` |
 | `obsidian_cli_read_note` | `read` | `path=<p>` |
-| `obsidian_cli_daily_note` | `daily` | — |
 | `obsidian_cli_get_properties` | `properties` | `path=<p>` |
 | `obsidian_cli_run` | *(allow-listed)* | `command`, `args: Record<string,string>` |
+
+> `daily` is **not** a read tool and **not** on the allow-list: the CLI's daily
+> command can create today's note if missing (a vault mutation), which would bypass
+> `ProposalStore`. A confirmed read-only daily variant is deferred (CLAR-OCM-003).
 
 Write tool (proposal-queued, REQ-OCM-012):
 
@@ -92,10 +95,10 @@ Write tool (proposal-queued, REQ-OCM-012):
 | `obsidian_cli_append_note` | `append` | `store.queue('obsidian_cli_append_note', {path,content}, () => cli.run('append', ['path='+p,'content='+c]))` → returns `{ proposalId, status: 'pending' }` |
 
 `obsidian_cli_run` validates `command` against `SAFE_CLI_READ_COMMANDS`
-(`search, read, daily, properties, tags, tasks, bookmarks, bases, list, info`). Anything
+(`search, read, properties, tags, tasks, bookmarks, bases, list, info`). Anything
 else → `ok({ error: { code: 'command-not-allowed', message, allowed } })`. `eval`,
-`delete`, `move`, `create`, `append`, `write`, `plugins`, `themes`, `publish`, `sync`
-are therefore unreachable here (REQ-OCM-013, NFR-OCM-002).
+`delete`, `move`, `create`, `append`, `write`, `daily`, `plugins`, `themes`, `publish`,
+`sync` are therefore unreachable here (REQ-OCM-013, NFR-OCM-002).
 
 Every tool wraps the port result: on `result.ok === false` it returns
 `ok({ error: { code, message } })` (REQ-OCM-014) so an MCP request never crashes.

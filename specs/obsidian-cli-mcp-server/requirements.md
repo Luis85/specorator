@@ -46,9 +46,11 @@ test (`TEST-OCM-NNN`) at the testing stage.
 
 - **REQ-OCM-010** — While the MCP server is running and an `ObsidianCliPort` is
   available, the system shall register CLI-backed read tools (`obsidian_cli_search`,
-  `obsidian_cli_read_note`, `obsidian_cli_daily_note`, `obsidian_cli_get_properties`).
+  `obsidian_cli_read_note`, `obsidian_cli_get_properties`). Read tools shall invoke only
+  side-effect-free CLI commands — `daily` (which can create today's note) is excluded.
 - **REQ-OCM-011** — The system shall provide a generic `obsidian_cli_run` tool that
-  executes only commands on a read-only allow-list and rejects any other command.
+  executes only commands on a read-only allow-list (free of vault side effects) and
+  rejects any other command, including mutating commands such as `daily`.
 - **REQ-OCM-012** — When a CLI-backed write tool (`obsidian_cli_append_note`) is called,
   the system shall enqueue the write in the `ProposalStore` and return a pending
   proposal receipt; it shall not mutate the vault until the proposal is accepted.
