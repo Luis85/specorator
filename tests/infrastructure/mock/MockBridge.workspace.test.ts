@@ -58,3 +58,27 @@ describe('MockBridge — WorkspacePort active path + selection (QW-B)', () => {
 		expect(bridge.getActiveSelection()).toBe('text');
 	});
 });
+
+describe('MockBridge — WorkspacePort vault metadata (QW-C)', () => {
+	it('getVaultName defaults to "Mock Vault"', () => {
+		const bridge = new MockBridge();
+		expect(bridge.getVaultName()).toBe('Mock Vault');
+	});
+
+	it('getMarkdownFileCount defaults to 0', () => {
+		const bridge = new MockBridge();
+		expect(bridge.getMarkdownFileCount()).toBe(0);
+	});
+
+	it('setVaultName round-trips through getVaultName', () => {
+		const bridge = new MockBridge();
+		bridge.setVaultName('My Notes');
+		expect(bridge.getVaultName()).toBe('My Notes');
+	});
+
+	it('setMarkdownFileCount round-trips through getMarkdownFileCount', () => {
+		const bridge = new MockBridge();
+		bridge.setMarkdownFileCount(42);
+		expect(bridge.getMarkdownFileCount()).toBe(42);
+	});
+});

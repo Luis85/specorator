@@ -57,6 +57,11 @@ export class MockBridge
 	// used by `buildTurnInput` callers that don't care about basename/extension.
 	private _activeFilePath: string | null = null;
 	private _activeSelection: string | null = null;
+	// QW-C — vault metadata greeting fixtures. Defaults match the prior tests'
+	// "Mock Vault" naming with a zero-note count so existing snapshots are
+	// stable; tests that exercise the greeting override via the setters below.
+	private _vaultName = 'Mock Vault';
+	private _markdownFileCount = 0;
 	private readonly activeFileHandlers = new Set<(f: ActiveFileSnapshot | null) => void>();
 	private readonly missingIcons = new Set<string>();
 	private vaultBasePath: string | null;
@@ -195,6 +200,25 @@ export class MockBridge
 
 	setActiveSelection(text: string | null): void {
 		this._activeSelection = text;
+	}
+
+	// QW-C — `WorkspacePort.getVaultName` / `getMarkdownFileCount`. Both back the
+	// vault-metadata greeting row composed at the top of `<vault-context>` on
+	// the first turn of a new thread. Tests drive them via the matching setters.
+	getVaultName(): string {
+		return this._vaultName;
+	}
+
+	getMarkdownFileCount(): number {
+		return this._markdownFileCount;
+	}
+
+	setVaultName(name: string): void {
+		this._vaultName = name;
+	}
+
+	setMarkdownFileCount(count: number): void {
+		this._markdownFileCount = count;
 	}
 
 	showError(message: string, durationMs = 0): void {

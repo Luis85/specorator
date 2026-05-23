@@ -31,4 +31,24 @@ export interface WorkspacePort {
    * `Selection:` row.
    */
   getActiveSelection(): string | null
+  /**
+   * QW-C — human-readable vault name (Obsidian's `vault.getName()`). Used by
+   * the chat panel to emit a `Vault: <name> (<n> notes)` greeting row at the
+   * top of the `<vault-context>` block on the first turn of a new thread,
+   * anchoring the agent's mental model of where it is working. Synchronous:
+   * queries Obsidian's in-memory workspace metadata.
+   *
+   * Non-production adapters (LocalStorage demo, web standalone) return a
+   * static fixture — they have no real vault.
+   */
+  getVaultName(): string
+  /**
+   * QW-C — count of markdown files in the vault (Obsidian's
+   * `vault.getMarkdownFiles().length`). Surfaced alongside `getVaultName()`
+   * in the QW-C greeting row. Synchronous: Obsidian maintains the markdown
+   * index in memory.
+   *
+   * Adapters with no real vault (LocalStorage demo) return `0`.
+   */
+  getMarkdownFileCount(): number
 }

@@ -130,6 +130,18 @@ export class LocalStorageBridge
 		return null;
 	}
 
+	// QW-C — the GitHub Pages standalone demo has no real vault. Return a
+	// stable label and a zero count so the chat panel's vault-context greeting
+	// row, if surfaced, advertises "demo" / "0 notes" without misleading users
+	// into thinking the demo has a populated workspace.
+	getVaultName(): string {
+		return 'demo';
+	}
+
+	getMarkdownFileCount(): number {
+		return 0;
+	}
+
 	showError(message: string, durationMs = 0): void {
 		window.dispatchEvent(
 			new CustomEvent('sp:notice', { detail: { severity: 'error', message, durationMs } }),

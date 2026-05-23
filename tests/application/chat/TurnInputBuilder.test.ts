@@ -94,7 +94,12 @@ describe('buildTurnInput', () => {
 		expect(result.prompt).toBe('hello');
 		expect(result.truncated).toBe(false);
 		expect(result.userMessage).toBe('hello');
-		expect(result.systemPromptSuffix).toBe('');
+		// QW-C: first turn of a new thread emits the vault-context block with
+		// the greeting row, even when no active path/selection is set. The
+		// MockBridge default vault metadata is "Mock Vault" / 0 notes.
+		expect(result.systemPromptSuffix).toBe(
+			'<vault-context>\nVault: Mock Vault (0 notes)\n</vault-context>',
+		);
 		expect(result.slug).toBeNull();
 	});
 
@@ -341,7 +346,7 @@ describe('buildTurnInput', () => {
 		expect(result.systemPromptSuffix).toContain('foo');
 	});
 
-	it('falls back to empty suffix when the workflow state cannot be loaded', async () => {
+	it('falls back to suffix containing only QW-C greeting when the workflow state cannot be loaded', async () => {
 		const bridge = makeBridge();
 		// Active file under specsFolder but workflow-state.md missing
 		bridge.setActiveFile({
@@ -359,7 +364,11 @@ describe('buildTurnInput', () => {
 			settings: bridge,
 			logger: fakeLogger(),
 		});
-		expect(result.systemPromptSuffix).toBe('');
+		// QW-C: stage portion still empty (workflow load failed) but first-turn
+		// vault-context greeting is emitted by the QW-C path.
+		expect(result.systemPromptSuffix).toBe(
+			'<vault-context>\nVault: Mock Vault (0 notes)\n</vault-context>',
+		);
 		expect(result.slug).toBe('foo');
 	});
 
@@ -398,7 +407,7 @@ describe('buildTurnInput', () => {
 		expect(result.systemPromptSuffix).toContain('snippet text');
 	});
 
-	it('QW-B: omits the block entirely when workspace has neither path nor selection', async () => {
+	it('QW-B: omits the path/selection rows when workspace has neither, but QW-C first-turn greeting remains', async () => {
 		const bridge = makeBridge();
 		const result = await buildTurnInput({
 			messages: emptyMessages('hello'),
@@ -410,7 +419,11 @@ describe('buildTurnInput', () => {
 			settings: bridge,
 			logger: fakeLogger(),
 		});
-		expect(result.systemPromptSuffix).toBe('');
+		// QW-B contract: no Active-note or Selection rows since neither is set.
+		expect(result.systemPromptSuffix).not.toContain('Active note:');
+		expect(result.systemPromptSuffix).not.toContain('Selection:');
+		// QW-C contract: greeting row present on first turn regardless.
+		expect(result.systemPromptSuffix).toContain('Vault: Mock Vault (0 notes)');
 	});
 
 	it('QW-B: composes the vault-context block in front of the stage-aware suffix', async () => {
@@ -439,6 +452,63 @@ describe('buildTurnInput', () => {
 		const stageTail = suffix.slice(idxCtxEnd + '</vault-context>'.length);
 		expect(stageTail.startsWith('\n\n')).toBe(true);
 		expect(suffix).toContain('foo');
+	});
+
+	it('QW-C: includes a Vault greeting row on the first turn of a new thread', async () => {
+		const bridge = makeBridge();
+		bridge.setVaultName('My Vault');
+		bridge.setMarkdownFileCount(17);
+		bridge.setActiveFilePath('notes/today.md');
+		const result = await buildTurnInput({
+			messages: emptyMessages('hello'),
+			threads: emptyThreads(),
+			transportKindRaw: 'api-key',
+			stagePromptMap,
+			vault: bridge,
+			workspace: bridge,
+			settings: bridge,
+			logger: fakeLogger(),
+		});
+		expect(result.systemPromptSuffix).toContain('Vault: My Vault (17 notes)');
+		expect(result.systemPromptSuffix).toContain('Active note: notes/today.md');
+		// Greeting comes before the active-note row.
+		const idxGreeting = result.systemPromptSuffix.indexOf('Vault:');
+		const idxActive = result.systemPromptSuffix.indexOf('Active note:');
+		expect(idxGreeting).toBeGreaterThan(-1);
+		expect(idxGreeting).toBeLessThan(idxActive);
+	});
+
+	it('QW-C: omits the Vault greeting row on follow-up turns (thread reuse)', async () => {
+		const bridge = makeBridge();
+		bridge.setVaultName('My Vault');
+		bridge.setMarkdownFileCount(17);
+		bridge.setActiveFilePath('notes/today.md');
+		const existing: ChatThreadRecord = {
+			threadId: 'T1',
+			sessionId: asSessionId('session-A'),
+			feature: null,
+			logPath: '',
+			transport: { provider: 'claude', mode: 'api' },
+			title: 'Existing thread',
+			forkParent: null,
+			createdAt: '2025-01-01T00:00:00.000Z',
+			lastUsedAt: '2025-01-01T00:00:00.000Z',
+		};
+		const result = await buildTurnInput({
+			messages: emptyMessages('hello'),
+			threads: {
+				activeThreadId: 'T1',
+				chatThreads: new Map([['T1', existing]]),
+			},
+			transportKindRaw: 'api-key',
+			stagePromptMap,
+			vault: bridge,
+			workspace: bridge,
+			settings: bridge,
+			logger: fakeLogger(),
+		});
+		expect(result.systemPromptSuffix).not.toContain('Vault:');
+		expect(result.systemPromptSuffix).toContain('Active note: notes/today.md');
 	});
 
 	it('QW-B: does not double-emit when the suffix already contains a <vault-context> block', async () => {

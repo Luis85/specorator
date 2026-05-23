@@ -150,6 +150,17 @@ export class ObsidianBridge
 		}
 	}
 
+	// QW-C — vault-metadata accessors for the first-turn greeting row in the
+	// chat panel's `<vault-context>` block. Both are synchronous reads against
+	// Obsidian's in-memory workspace surface.
+	getVaultName(): string {
+		return this.app.vault.getName();
+	}
+
+	getMarkdownFileCount(): number {
+		return this.app.vault.getMarkdownFiles().length;
+	}
+
 	private _track(notice: Notice): void {
 		this._activeNotices.add(notice);
 		const el: HTMLElement = notice.messageEl;

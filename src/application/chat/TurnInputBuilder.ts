@@ -210,6 +210,7 @@ async function loadContextFileBodies(
 async function computeStagePromptContext(
 	specsFolder: string,
 	args: BuildTurnInputArgs,
+	isFirstTurn: boolean,
 ): Promise<{ slug: string | null; systemPromptSuffix: string }> {
 	const activeFile = args.workspace.getActiveFile();
 	const slug = getActiveFeatureSlug(activeFile?.path ?? null, specsFolder);
@@ -223,10 +224,21 @@ async function computeStagePromptContext(
 	// root as cwd, courtesy of QW-A) can resolve "this note" / "the selection"
 	// without the user spelling it out. Defensive against an upstream caller
 	// that already pre-composed the block — we never double-emit.
-	const vaultBlock = composeVaultContextBlock(
-		args.workspace.getActiveFilePath(),
-		args.workspace.getActiveSelection(),
-	);
+	//
+	// QW-C — on the first turn of a new thread, prepend a `Vault: <name>
+	// (<n> notes)` row so the agent has an anchor for "this vault". Follow-up
+	// turns omit it (the agent already knows where it is).
+	const vaultGreeting = isFirstTurn
+		? {
+				vaultName: args.workspace.getVaultName(),
+				markdownFileCount: args.workspace.getMarkdownFileCount(),
+			}
+		: null;
+	const vaultBlock = composeVaultContextBlock({
+		activeFilePath: args.workspace.getActiveFilePath(),
+		activeSelection: args.workspace.getActiveSelection(),
+		vaultGreeting,
+	});
 	const systemPromptSuffix = combineSuffix(vaultBlock, stageSuffix);
 	return { slug, systemPromptSuffix };
 }
@@ -261,12 +273,20 @@ function combineSuffix(vaultBlock: string, stageSuffix: string): string {
  */
 export async function buildTurnInput(args: BuildTurnInputArgs): Promise<TurnInput> {
 	const settings = await args.settings.getSettings();
+	// QW-C — decide thread rotation up-front so the prompt-context computation
+	// knows whether this is the first turn on a new thread (greeting row) or a
+	// follow-up (suppress greeting). Rotation needs only the active-file slug,
+	// which is cheap pure path math.
+	const activeFilePath = args.workspace.getActiveFile()?.path ?? null;
+	const provisionalSlug = getActiveFeatureSlug(activeFilePath, settings.specsFolder);
+	const transport = resolveTransport(args.transportKindRaw);
+	const thread = decideRotation(args.threads, provisionalSlug, transport);
+	const isFirstTurn = thread.kind === 'rotate';
 	const { slug, systemPromptSuffix } = await computeStagePromptContext(
 		settings.specsFolder,
 		args,
+		isFirstTurn,
 	);
-	const transport = resolveTransport(args.transportKindRaw);
-	const thread = decideRotation(args.threads, slug, transport);
 	const loadedFiles = await loadContextFileBodies(args.messages, args.vault);
 	const { prompt, truncated } = buildPrompt(args.messages.userText, loadedFiles);
 	const intent = isStructuredIntent(args.messages.userText);

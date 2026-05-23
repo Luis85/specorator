@@ -13,7 +13,11 @@ import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge';
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
 
 interface FakeApp {
-	vault: { adapter: unknown };
+	vault: {
+		adapter: unknown;
+		getName?: () => string;
+		getMarkdownFiles?: () => unknown[];
+	};
 	fileManager: Record<string, unknown>;
 	workspace: {
 		getActiveFile?: () => { path: string } | null;
@@ -21,9 +25,12 @@ interface FakeApp {
 	};
 }
 
-function makeBridge(workspace: FakeApp['workspace']): ObsidianBridge {
+function makeBridge(
+	workspace: FakeApp['workspace'],
+	vaultExtras: Partial<FakeApp['vault']> = {},
+): ObsidianBridge {
 	const app: FakeApp = {
-		vault: { adapter: {} },
+		vault: { adapter: {}, ...vaultExtras },
 		fileManager: {},
 		workspace,
 	};
@@ -87,5 +94,27 @@ describe('ObsidianBridge.getActiveSelection (QW-B)', () => {
 			},
 		});
 		expect(bridge.getActiveSelection()).toBeNull();
+	});
+});
+
+describe('ObsidianBridge.getVaultName (QW-C)', () => {
+	it('returns the vault name from app.vault.getName()', () => {
+		const bridge = makeBridge({}, { getName: () => 'My Vault' });
+		expect(bridge.getVaultName()).toBe('My Vault');
+	});
+});
+
+describe('ObsidianBridge.getMarkdownFileCount (QW-C)', () => {
+	it('returns the length of app.vault.getMarkdownFiles()', () => {
+		const bridge = makeBridge(
+			{},
+			{ getMarkdownFiles: () => [{}, {}, {}] },
+		);
+		expect(bridge.getMarkdownFileCount()).toBe(3);
+	});
+
+	it('returns 0 when the vault has no markdown files', () => {
+		const bridge = makeBridge({}, { getMarkdownFiles: () => [] });
+		expect(bridge.getMarkdownFileCount()).toBe(0);
 	});
 });
