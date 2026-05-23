@@ -5,6 +5,7 @@ const TID = {
 	title: 'welcome-greeting-title',
 	subtitle: 'welcome-greeting-subtitle',
 	suggestions: 'welcome-greeting-suggestions',
+	group: 'welcome-greeting-group',
 } as const
 
 export class WelcomeGreetingPageObject {
@@ -24,6 +25,10 @@ export class WelcomeGreetingPageObject {
 
 	get suggestionsEl(): HTMLElement {
 		return this.wrapper.get(this.byTid(TID.suggestions)).element as HTMLElement
+	}
+
+	get groupEl(): HTMLElement {
+		return this.wrapper.get(this.byTid(TID.group)).element as HTMLElement
 	}
 
 	timeBand(): string | null {

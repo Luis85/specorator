@@ -81,6 +81,25 @@ describe('WelcomeGreeting', () => {
 		expect(po.rootEl.getAttribute('data-testid')).toBe('welcome-greeting')
 	})
 
+	it('lays out as a 4-row grid with greeting-group at row 2 and chips at row 4 (G3)', () => {
+		// G3 (RALPH AUX): the greeting now FILLS the empty transcript area.
+		// The DOM contract is: greeting-group precedes the chips strip and
+		// both are direct children of the section root. jsdom does not parse
+		// `grid-template-rows`, so the visual gate (Storybook + Playwright)
+		// still pins the actual row geometry; here we lock in the structural
+		// invariant the parent flex wrapper relies on.
+		const { po } = mountAt(10)
+		const root = po.rootEl
+		const children = Array.from(root.children) as HTMLElement[]
+		const groupIdx = children.indexOf(po.groupEl)
+		const chipsIdx = children.indexOf(po.suggestionsEl)
+		expect(groupIdx).toBeGreaterThanOrEqual(0)
+		expect(chipsIdx).toBeGreaterThan(groupIdx)
+		// The greeting-group wraps BOTH the title and subtitle so they
+		// share the vertically centred row.
+		expect(po.groupEl.contains(po.titleEl)).toBe(true)
+	})
+
 	it('renders the four vault-investigation chips with their localized labels', () => {
 		// QW-D — chips are now wired to the new vault tools (Glob/Grep/Read).
 		// Verify each label text matches the i18n source so the localized

@@ -45,6 +45,7 @@ import InlineApprovalCard from './InlineApprovalCard.vue';
 import StreamingCursor from './StreamingCursor.vue';
 import CompactBoundary from './CompactBoundary.vue';
 import TransportStatusPill from './TransportStatusPill.vue';
+import WelcomeGreeting from './WelcomeGreeting.vue';
 
 /**
  * Discriminated union for the interleaved transcript: either a real
@@ -56,7 +57,11 @@ type TranscriptEntry =
 	| { readonly kind: 'message'; readonly message: ChatMessage }
 	| { readonly kind: 'compact-boundary'; readonly notice: CompactBoundaryNoticeDto };
 
-type EmptyTileKey = 'slash' | 'mention' | 'send' | 'escape';
+type WelcomeSuggestionId =
+	| 'findOrphans'
+	| 'summarizeActive'
+	| 'projectsTag'
+	| 'brokenLinks';
 
 const props = defineProps<{
 	/** Active thread id, or `null` when no thread is selected. */
@@ -65,11 +70,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{
 	/**
-	 * UX #11 (WP-8). Fired when the user clicks a starter tile in the
-	 * empty state; the host (AgentSidepanelRoot) pre-fills the textarea
-	 * with the corresponding prompt fragment.
+	 * G3 (RALPH AUX): the empty transcript region now renders
+	 * `<WelcomeGreeting>` in place of the legacy dashed tile grid.
+	 * Suggestion-chip clicks bubble to the root so the composer can
+	 * be pre-filled (handler lives in `AgentSidepanelRoot`).
 	 */
-	'tile-action': [key: EmptyTileKey];
+	'suggestion-pick': [payload: { id: WelcomeSuggestionId; prompt: string }];
 	/**
 	 * WS-7 per-message actions (REQ-MPS-026/027/028). Re-emitted from
 	 * `MessageActions.vue`. The host (`ChatSidebar`) owns the side effect:
@@ -349,15 +355,16 @@ onBeforeUnmount(() => {
 	pendingScrollToBottom = false;
 });
 
-const emptyTiles: ReadonlyArray<{ key: EmptyTileKey; labelKey: string }> = [
-	{ key: 'slash', labelKey: 'agent.emptyStateTiles.slash' },
-	{ key: 'mention', labelKey: 'agent.emptyStateTiles.mention' },
-	{ key: 'send', labelKey: 'agent.emptyStateTiles.send' },
-	{ key: 'escape', labelKey: 'agent.emptyStateTiles.escape' },
-];
-
-function handleTileClick(key: EmptyTileKey): void {
-	emit('tile-action', key);
+/**
+ * G3 (RALPH AUX): forward `<WelcomeGreeting>` suggestion picks unchanged
+ * so the root can pre-fill the composer textarea with the full prompt
+ * body (handler lives in `AgentSidepanelRoot.handleWelcomeSuggestion`).
+ */
+function handleSuggestionPick(payload: {
+	id: WelcomeSuggestionId;
+	prompt: string;
+}): void {
+	emit('suggestion-pick', payload);
 }
 
 /**
@@ -516,30 +523,23 @@ watch(
 			{{ t('agent.newMessagesPill') }}
 		</button>
 	</div>
-	<div v-else class="sp-agent-messages--empty" data-testid="agent-message-list-empty">
-		<p class="sp-agent-messages__empty-body">{{ t('agent.emptyHistory') }}</p>
-		<p
-			class="sp-agent-messages__empty-tiles-heading"
-			data-testid="agent-message-list-empty-tiles-heading"
-		>
-			{{ t('agent.emptyStateTiles.heading') }}
-		</p>
-		<ul
-			class="sp-agent-messages__empty-tiles"
-			data-testid="agent-message-list-empty-tiles"
-			role="list"
-		>
-			<li v-for="tile in emptyTiles" :key="tile.key" role="listitem">
-				<button
-					type="button"
-					class="sp-agent-messages__empty-tile"
-					:data-testid="`agent-message-list-empty-tile-${tile.key}`"
-					@click="handleTileClick(tile.key)"
-				>
-					{{ t(tile.labelKey) }}
-				</button>
-			</li>
-		</ul>
+	<!--
+	G3 (RALPH AUX): empty transcript renders the centred serif
+	WelcomeGreeting in place of the legacy dashed tile grid. The
+	wrapper takes the full body flex height so the greeting's internal
+	grid can vertically centre. testid `agent-message-list-empty` is
+	preserved on the wrapper so legacy "is the list empty?" probes
+	still resolve.
+	-->
+	<div
+		v-else
+		class="sp-agent-messages--empty"
+		data-testid="agent-message-list-empty"
+	>
+		<WelcomeGreeting
+			data-testid="agent-welcome-greeting"
+			@suggestion-pick="handleSuggestionPick"
+		/>
 	</div>
 </template>
 
@@ -555,64 +555,21 @@ watch(
 	gap: 0.75rem;
 }
 
+/*
+ * G3 (RALPH AUX): empty-state wrapper now stretches to fill the body
+ * flex column so `<WelcomeGreeting>` can centre vertically against the
+ * full transcript region (Claudian "What's new?" parity).
+ */
 .sp-agent-messages--empty {
-	flex: 0 0 auto;
-	padding: 1.25rem 1rem 0;
+	flex: 1 1 auto;
+	min-block-size: 0;
 	display: flex;
-	flex-direction: column;
-	gap: 0.625rem;
 	align-items: stretch;
+	justify-content: stretch;
 }
 
-.sp-agent-messages__empty-body {
-	margin: 0;
-	font-size: 0.8125rem;
-	color: var(--sp-text-muted);
-	text-align: center;
-	font-style: italic;
-}
-
-.sp-agent-messages__empty-tiles-heading {
-	margin: 0;
-	font-size: 0.75rem;
-	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-	color: var(--sp-text-faint, var(--sp-text-muted));
-	text-align: center;
-}
-
-.sp-agent-messages__empty-tiles {
-	margin: 0;
-	padding: 0;
-	list-style: none;
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 0.375rem;
-}
-
-.sp-agent-messages__empty-tile {
-	width: 100%;
-	min-height: 3rem;
-	padding: 0.5rem 0.625rem;
-	border: 1px dashed var(--sp-border);
-	border-radius: 6px;
-	background: var(--sp-bg-secondary);
-	color: var(--sp-text-normal);
-	font-size: 0.8125rem;
-	font-family: var(--font-text);
-	text-align: start;
-	cursor: pointer;
-	transition:
-		background-color 0.15s,
-		border-color 0.15s;
-}
-
-.sp-agent-messages__empty-tile:hover,
-.sp-agent-messages__empty-tile:focus {
-	background: var(--sp-interactive-hover);
-	border-color: var(--sp-interactive-accent);
-	outline: none;
+.sp-agent-messages--empty > * {
+	flex: 1 1 auto;
 }
 
 .sp-agent-message {

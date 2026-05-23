@@ -104,17 +104,29 @@ describe('MessageList', () => {
 		setActivePinia(createPinia());
 	});
 
-	it('renders the empty-state copy when threadId is null', () => {
+	it('renders the WelcomeGreeting inside the empty state when threadId is null (G3)', () => {
 		const { po } = mountList(null);
 		expect(po.empty.exists()).toBe(true);
 		expect(po.root.exists()).toBe(false);
-		expect(po.empty.text()).toContain('your conversation will appear here');
+		expect(po.welcomeGreeting.exists()).toBe(true);
+		expect(po.welcomeGreetingTitle.exists()).toBe(true);
 	});
 
-	it('renders the empty-state copy when the thread has no messages', () => {
+	it('renders the WelcomeGreeting inside the empty state when the thread has no messages (G3)', () => {
 		const { po } = mountList('thread-empty');
 		expect(po.empty.exists()).toBe(true);
 		expect(po.root.exists()).toBe(false);
+		expect(po.welcomeGreeting.exists()).toBe(true);
+	});
+
+	it('hides the WelcomeGreeting once the thread has at least one message (G3)', () => {
+		const store = useMessagesStore();
+		const tid = 'thread-non-empty';
+		store.appendMessage(msg(tid, 'user', { text: 'hi' }));
+		const { po } = mountList(tid);
+		expect(po.empty.exists()).toBe(false);
+		expect(po.welcomeGreeting.exists()).toBe(false);
+		expect(po.root.exists()).toBe(true);
 	});
 
 	it('renders user and assistant turns for the active thread', async () => {
@@ -353,28 +365,24 @@ describe('MessageList', () => {
 		});
 	});
 
-	describe('UX #11 (WP-8) — empty-state starter tiles', () => {
-		it('renders four starter tiles in the empty state', () => {
+	describe('G3 (RALPH AUX) — WelcomeGreeting fills the empty transcript', () => {
+		it('renders the four vault-investigation chips inside MessageList empty state', () => {
 			const { po } = mountList(null);
-			expect(po.emptyTilesContainer.exists()).toBe(true);
-			expect(po.emptyTiles()).toHaveLength(4);
+			expect(po.suggestionChip('findOrphans').exists()).toBe(true);
+			expect(po.suggestionChip('summarizeActive').exists()).toBe(true);
+			expect(po.suggestionChip('projectsTag').exists()).toBe(true);
+			expect(po.suggestionChip('brokenLinks').exists()).toBe(true);
 		});
 
-		it('emits tile-action with the tile key when a starter tile is clicked', async () => {
+		it('bubbles `suggestion-pick` up when a chip is clicked', async () => {
 			const { wrapper, po } = mountList(null);
-			await po.emptyTile('slash').trigger('click');
-			const events = wrapper.emitted('tile-action')!;
+			await po.suggestionChip('findOrphans').trigger('click');
+			const events = wrapper.emitted('suggestion-pick');
 			expect(events).toBeTruthy();
-			expect(events[0]).toEqual(['slash']);
-		});
-
-		it('emits the correct key per tile (mention/send/escape)', async () => {
-			const { wrapper, po } = mountList(null);
-			await po.emptyTile('mention').trigger('click');
-			await po.emptyTile('send').trigger('click');
-			await po.emptyTile('escape').trigger('click');
-			const events = wrapper.emitted('tile-action')!;
-			expect(events.map((e) => e[0])).toEqual(['mention', 'send', 'escape']);
+			expect(events?.[0]?.[0]).toMatchObject({ id: 'findOrphans' });
+			expect(
+				(events?.[0]?.[0] as { prompt: string }).prompt.length,
+			).toBeGreaterThan(0);
 		});
 	});
 });

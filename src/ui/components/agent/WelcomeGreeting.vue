@@ -77,12 +77,17 @@ function handlePick(payload: { id: string }): void {
 		data-testid="welcome-greeting"
 		:data-time-band="band"
 	>
-		<h2 class="sp-welcome__greeting" data-testid="welcome-greeting-title">
-			{{ greeting }}
-		</h2>
-		<p class="sp-welcome__subtitle" data-testid="welcome-greeting-subtitle">
-			{{ t('welcome.subtitle') }}
-		</p>
+		<div
+			class="sp-welcome__greeting-group"
+			data-testid="welcome-greeting-group"
+		>
+			<h2 class="sp-welcome__greeting" data-testid="welcome-greeting-title">
+				{{ greeting }}
+			</h2>
+			<p class="sp-welcome__subtitle" data-testid="welcome-greeting-subtitle">
+				{{ t('welcome.subtitle') }}
+			</p>
+		</div>
 		<div
 			class="sp-welcome__suggestions"
 			data-testid="welcome-greeting-suggestions"
@@ -100,15 +105,33 @@ function handlePick(payload: { id: string }): void {
 </template>
 
 <style scoped>
+/*
+ * G3 (RALPH AUX): the greeting now FILLS the empty transcript area so it
+ * reads like Claudian's "What's new?" canvas. Layout is a 3-row grid:
+ *   row 1: top spacer (1fr)
+ *   row 2: greeting-group (serif title + subtitle), vertically centered
+ *   row 3: spacer that pushes chips ~80% down (1fr)
+ *   row 4: suggestion chip row (auto, bottom-anchored)
+ * The MessageList wrapper stretches us to the full empty-transcript
+ * height; the grid is what actually centres the greeting.
+ */
 .sp-welcome {
+	display: grid;
+	grid-template-rows: 1fr auto 1fr auto;
+	justify-items: center;
+	inline-size: 100%;
+	block-size: 100%;
+	padding-block: 1.5rem;
+	padding-inline: 1.25rem;
+	text-align: center;
+}
+
+.sp-welcome__greeting-group {
+	grid-row: 2;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	justify-content: center;
-	gap: 0.75rem;
-	padding-block: 2.5rem;
-	padding-inline: 1.25rem;
-	text-align: center;
+	gap: 0.5rem;
 }
 
 .sp-welcome__greeting {
@@ -127,10 +150,11 @@ function handlePick(payload: { id: string }): void {
 }
 
 .sp-welcome__suggestions {
+	grid-row: 4;
 	display: flex;
 	flex-wrap: wrap;
 	justify-content: center;
 	gap: 0.5rem;
-	margin-block-start: 0.5rem;
+	padding-block-end: 0.5rem;
 }
 </style>

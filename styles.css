@@ -1576,7 +1576,84 @@ to   { opacity: 1; transform: translateY(0);
 	outline: none;
 }
 
-.specorator-root :where(.sp-agent-messages[data-v-24c71e42]) {
+.specorator-root :where(.sp-welcome-chip[data-v-f6d0aa2c]) {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.375rem;
+	padding-block: 0.4rem;
+	padding-inline: 0.75rem;
+	border-radius: var(--sp-radius-sm, 4px);
+	border: 1px solid var(--sp-border);
+	background: var(--sp-bg-primary);
+	color: var(--sp-text-normal);
+	font-size: 0.8125rem;
+	cursor: pointer;
+	transition:
+		background-color 0.15s,
+		border-color 0.15s;
+}
+.specorator-root :where(.sp-welcome-chip[data-v-f6d0aa2c]:hover) {
+	background: var(--sp-interactive-hover);
+	border-color: var(--sp-border-strong, var(--sp-border));
+}
+.specorator-root :where(.sp-welcome-chip[data-v-f6d0aa2c]:focus-visible) {
+	outline: 2px solid var(--sp-interactive-accent);
+	outline-offset: 1px;
+}
+.specorator-root :where(.sp-welcome-chip__icon[data-v-f6d0aa2c]) {
+	color: var(--sp-text-muted);
+}
+
+/*
+ * G3 (RALPH AUX): the greeting now FILLS the empty transcript area so it
+ * reads like Claudian's "What's new?" canvas. Layout is a 3-row grid:
+ *   row 1: top spacer (1fr)
+ *   row 2: greeting-group (serif title + subtitle), vertically centered
+ *   row 3: spacer that pushes chips ~80% down (1fr)
+ *   row 4: suggestion chip row (auto, bottom-anchored)
+ * The MessageList wrapper stretches us to the full empty-transcript
+ * height; the grid is what actually centres the greeting.
+ */
+.specorator-root :where(.sp-welcome[data-v-20191c6f]) {
+	display: grid;
+	grid-template-rows: 1fr auto 1fr auto;
+	justify-items: center;
+	inline-size: 100%;
+	block-size: 100%;
+	padding-block: 1.5rem;
+	padding-inline: 1.25rem;
+	text-align: center;
+}
+.specorator-root :where(.sp-welcome__greeting-group[data-v-20191c6f]) {
+	grid-row: 2;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.5rem;
+}
+.specorator-root :where(.sp-welcome__greeting[data-v-20191c6f]) {
+	margin: 0;
+	font-family: var(--sp-font-serif);
+	font-weight: 500;
+	font-size: 1.75rem;
+	line-height: var(--sp-line-height-tight, 1.2);
+	color: var(--sp-text-normal);
+}
+.specorator-root :where(.sp-welcome__subtitle[data-v-20191c6f]) {
+	margin: 0;
+	font-size: 0.875rem;
+	color: var(--sp-text-muted);
+}
+.specorator-root :where(.sp-welcome__suggestions[data-v-20191c6f]) {
+	grid-row: 4;
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 0.5rem;
+	padding-block-end: 0.5rem;
+}
+
+.specorator-root :where(.sp-agent-messages[data-v-c1dd8b4e]) {
 	position: relative;
 	flex: 1 1 auto;
 	min-height: 0;
@@ -1586,61 +1663,23 @@ to   { opacity: 1; transform: translateY(0);
 	flex-direction: column;
 	gap: 0.75rem;
 }
-.specorator-root :where(.sp-agent-messages--empty[data-v-24c71e42]) {
-	flex: 0 0 auto;
-	padding: 1.25rem 1rem 0;
+
+/*
+ * G3 (RALPH AUX): empty-state wrapper now stretches to fill the body
+ * flex column so `<WelcomeGreeting>` can centre vertically against the
+ * full transcript region (Claudian "What's new?" parity).
+ */
+.specorator-root :where(.sp-agent-messages--empty[data-v-c1dd8b4e]) {
+	flex: 1 1 auto;
+	min-block-size: 0;
 	display: flex;
-	flex-direction: column;
-	gap: 0.625rem;
 	align-items: stretch;
+	justify-content: stretch;
 }
-.specorator-root :where(.sp-agent-messages__empty-body[data-v-24c71e42]) {
-	margin: 0;
-	font-size: 0.8125rem;
-	color: var(--sp-text-muted);
-	text-align: center;
-	font-style: italic;
+.specorator-root :where(.sp-agent-messages--empty[data-v-c1dd8b4e] > *) {
+	flex: 1 1 auto;
 }
-.specorator-root :where(.sp-agent-messages__empty-tiles-heading[data-v-24c71e42]) {
-	margin: 0;
-	font-size: 0.75rem;
-	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-	color: var(--sp-text-faint, var(--sp-text-muted));
-	text-align: center;
-}
-.specorator-root :where(.sp-agent-messages__empty-tiles[data-v-24c71e42]) {
-	margin: 0;
-	padding: 0;
-	list-style: none;
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 0.375rem;
-}
-.specorator-root :where(.sp-agent-messages__empty-tile[data-v-24c71e42]) {
-	width: 100%;
-	min-height: 3rem;
-	padding: 0.5rem 0.625rem;
-	border: 1px dashed var(--sp-border);
-	border-radius: 6px;
-	background: var(--sp-bg-secondary);
-	color: var(--sp-text-normal);
-	font-size: 0.8125rem;
-	font-family: var(--font-text);
-	text-align: start;
-	cursor: pointer;
-	transition:
-		background-color 0.15s,
-		border-color 0.15s;
-}
-.specorator-root :where(.sp-agent-messages__empty-tile[data-v-24c71e42]:hover),
-.specorator-root :where(.sp-agent-messages__empty-tile[data-v-24c71e42]:focus) {
-	background: var(--sp-interactive-hover);
-	border-color: var(--sp-interactive-accent);
-	outline: none;
-}
-.specorator-root :where(.sp-agent-message[data-v-24c71e42]) {
+.specorator-root :where(.sp-agent-message[data-v-c1dd8b4e]) {
 	display: flex;
 	flex-direction: column;
 	gap: 0.25rem;
@@ -1649,43 +1688,43 @@ to   { opacity: 1; transform: translateY(0);
 	background: var(--sp-bg-secondary);
 	border: 1px solid var(--sp-border);
 }
-.specorator-root :where(.sp-agent-message--user[data-v-24c71e42]) {
+.specorator-root :where(.sp-agent-message--user[data-v-c1dd8b4e]) {
 	background: var(--sp-bg-secondary-alt, var(--sp-bg-secondary));
 }
-.specorator-root :where(.sp-agent-message__role[data-v-24c71e42]) {
+.specorator-root :where(.sp-agent-message__role[data-v-c1dd8b4e]) {
 	font-size: 0.6875rem;
 	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 	color: var(--sp-text-muted);
 }
-.specorator-root :where(.sp-agent-message__body[data-v-24c71e42]) {
+.specorator-root :where(.sp-agent-message__body[data-v-c1dd8b4e]) {
 	display: flex;
 	flex-direction: column;
 	gap: 0.25rem;
 }
-.specorator-root :where(.sp-agent-message__text[data-v-24c71e42]) {
+.specorator-root :where(.sp-agent-message__text[data-v-c1dd8b4e]) {
 	margin: 0;
 	font-family: inherit;
 	font-size: 0.875rem;
 	color: var(--sp-text-normal);
 	word-break: break-word;
 }
-.specorator-root :where(.sp-agent-message__empty[data-v-24c71e42]) {
+.specorator-root :where(.sp-agent-message__empty[data-v-c1dd8b4e]) {
 	margin: 0;
 	font-size: 0.8125rem;
 	color: var(--sp-text-muted);
 	font-style: italic;
 }
-.specorator-root :where(.sp-agent-message__trim-note[data-v-24c71e42]) {
+.specorator-root :where(.sp-agent-message__trim-note[data-v-c1dd8b4e]) {
 	margin: 0;
 	font-size: 0.75rem;
 	color: var(--sp-text-faint);
 }
-.specorator-root :where(.sp-agent-message--streaming[data-v-24c71e42]) {
+.specorator-root :where(.sp-agent-message--streaming[data-v-c1dd8b4e]) {
 	opacity: 0.95;
 }
-.specorator-root :where(.sp-agent-compact-boundary[data-v-24c71e42]) {
+.specorator-root :where(.sp-agent-compact-boundary[data-v-c1dd8b4e]) {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
@@ -1695,21 +1734,21 @@ to   { opacity: 1; transform: translateY(0);
 	font-style: italic;
 	text-align: center;
 }
-.specorator-root :where(.sp-agent-compact-boundary__line[data-v-24c71e42]) {
+.specorator-root :where(.sp-agent-compact-boundary__line[data-v-c1dd8b4e]) {
 	flex: 1 1 auto;
 	height: 1px;
 	background: var(--sp-border);
 }
-.specorator-root :where(.sp-agent-compact-boundary__label[data-v-24c71e42]) {
+.specorator-root :where(.sp-agent-compact-boundary__label[data-v-c1dd8b4e]) {
 	flex: 0 0 auto;
 }
-.specorator-root :where(.sp-agent-message__cursor[data-v-24c71e42]) {
+.specorator-root :where(.sp-agent-message__cursor[data-v-c1dd8b4e]) {
 	display: inline-block;
 	font-size: 0.875rem;
 	color: var(--sp-text-accent);
-	animation: sp-agent-message__blink-24c71e42 1s steps(2, start) infinite;
+	animation: sp-agent-message__blink-c1dd8b4e 1s steps(2, start) infinite;
 }
-@keyframes sp-agent-message__blink-24c71e42 {
+@keyframes sp-agent-message__blink-c1dd8b4e {
 to {
 		visibility: hidden;
 }
@@ -1725,14 +1764,14 @@ to {
  * the scroll container so users see the health state even after scrolling
  * deep into history.
  */
-.specorator-root :where(.sp-agent-messages__transport-pill[data-v-24c71e42]) {
+.specorator-root :where(.sp-agent-messages__transport-pill[data-v-c1dd8b4e]) {
 	position: sticky;
 	inset-block-start: 0;
 	align-self: center;
 	margin-block-end: var(--sp-space-2, 0.5rem);
 	z-index: 2;
 }
-.specorator-root :where(.sp-agent-messages__new-pill[data-v-24c71e42]) {
+.specorator-root :where(.sp-agent-messages__new-pill[data-v-c1dd8b4e]) {
 	position: sticky;
 	bottom: 0.5rem;
 	margin: 0 auto;
@@ -1747,8 +1786,8 @@ to {
 	cursor: pointer;
 	box-shadow: var(--shadow-s, 0 2px 6px rgba(0, 0, 0, 0.15));
 }
-.specorator-root :where(.sp-agent-messages__new-pill[data-v-24c71e42]:hover),
-.specorator-root :where(.sp-agent-messages__new-pill[data-v-24c71e42]:focus) {
+.specorator-root :where(.sp-agent-messages__new-pill[data-v-c1dd8b4e]:hover),
+.specorator-root :where(.sp-agent-messages__new-pill[data-v-c1dd8b4e]:focus) {
 	background: var(--sp-interactive-hover);
 	outline: none;
 }
@@ -1824,65 +1863,6 @@ to {
 	clip: rect(0, 0, 0, 0);
 	white-space: nowrap;
 	border: 0;
-}
-
-.specorator-root :where(.sp-welcome-chip[data-v-f6d0aa2c]) {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.375rem;
-	padding-block: 0.4rem;
-	padding-inline: 0.75rem;
-	border-radius: var(--sp-radius-sm, 4px);
-	border: 1px solid var(--sp-border);
-	background: var(--sp-bg-primary);
-	color: var(--sp-text-normal);
-	font-size: 0.8125rem;
-	cursor: pointer;
-	transition:
-		background-color 0.15s,
-		border-color 0.15s;
-}
-.specorator-root :where(.sp-welcome-chip[data-v-f6d0aa2c]:hover) {
-	background: var(--sp-interactive-hover);
-	border-color: var(--sp-border-strong, var(--sp-border));
-}
-.specorator-root :where(.sp-welcome-chip[data-v-f6d0aa2c]:focus-visible) {
-	outline: 2px solid var(--sp-interactive-accent);
-	outline-offset: 1px;
-}
-.specorator-root :where(.sp-welcome-chip__icon[data-v-f6d0aa2c]) {
-	color: var(--sp-text-muted);
-}
-
-.specorator-root :where(.sp-welcome[data-v-5784ffa9]) {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	gap: 0.75rem;
-	padding-block: 2.5rem;
-	padding-inline: 1.25rem;
-	text-align: center;
-}
-.specorator-root :where(.sp-welcome__greeting[data-v-5784ffa9]) {
-	margin: 0;
-	font-family: var(--sp-font-serif);
-	font-weight: 500;
-	font-size: 1.75rem;
-	line-height: var(--sp-line-height-tight, 1.2);
-	color: var(--sp-text-normal);
-}
-.specorator-root :where(.sp-welcome__subtitle[data-v-5784ffa9]) {
-	margin: 0;
-	font-size: 0.875rem;
-	color: var(--sp-text-muted);
-}
-.specorator-root :where(.sp-welcome__suggestions[data-v-5784ffa9]) {
-	display: flex;
-	flex-wrap: wrap;
-	justify-content: center;
-	gap: 0.5rem;
-	margin-block-start: 0.5rem;
 }
 
 .specorator-root :where(.sp-nav-sidebar-button[data-v-a1dbf6c7]) {
@@ -2885,17 +2865,17 @@ to {
 	background: var(--interactive-hover);
 }
 
-.specorator-root :where(.sp-agent[data-v-cd1c8fd1]) {
+.specorator-root :where(.sp-agent[data-v-9d6b6157]) {
 	display: flex;
 	flex-direction: column;
 	height: 100%;
 	overflow: hidden;
 }
-.specorator-root :where(.sp-agent__header-wrap[data-v-cd1c8fd1]) {
+.specorator-root :where(.sp-agent__header-wrap[data-v-9d6b6157]) {
 	position: relative;
 	flex-shrink: 0;
 }
-.specorator-root :where(.sp-agent__provider-row[data-v-cd1c8fd1]) {
+.specorator-root :where(.sp-agent__provider-row[data-v-9d6b6157]) {
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
@@ -2903,7 +2883,7 @@ to {
 	padding: 0.25rem 0.75rem;
 	border-bottom: 1px solid var(--sp-border);
 }
-.specorator-root :where(.sp-agent__body[data-v-cd1c8fd1]) {
+.specorator-root :where(.sp-agent__body[data-v-9d6b6157]) {
 	flex: 1;
 	display: flex;
 	flex-direction: column;
@@ -2922,7 +2902,7 @@ to {
  * region. `flex: 0 0 auto` keeps the composer pinned to the bottom of
  * the body column while MessageList consumes the remaining flex space.
  */
-.specorator-root :where(.sp-composer-group[data-v-cd1c8fd1]) {
+.specorator-root :where(.sp-composer-group[data-v-9d6b6157]) {
 	display: flex;
 	flex-direction: column;
 	flex: 0 0 auto;
@@ -2933,7 +2913,7 @@ to {
 	background: var(--sp-bg-primary, var(--sp-bg-primary));
 	overflow: hidden;
 }
-.specorator-root :where(.sp-composer-group[data-v-cd1c8fd1] > * + *) {
+.specorator-root :where(.sp-composer-group[data-v-9d6b6157] > * + *) {
 	border-block-start: 1px solid var(--sp-border, var(--sp-border));
 }
 
@@ -2944,7 +2924,7 @@ to {
  * `.sp-agent__header-wrap` keeps the popover scoped to the header
  * column; the dropdown shadow distinguishes it from inline content.
  */
-.specorator-root :where(.sp-agent__help[data-v-cd1c8fd1]) {
+.specorator-root :where(.sp-agent__help[data-v-9d6b6157]) {
 	position: absolute;
 	inset-block-start: 100%;
 	inset-inline: 0;

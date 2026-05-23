@@ -38,7 +38,6 @@ import AgentSidepanelHeader from '@/ui/components/agent/AgentSidepanelHeader.vue
 import ThreadTabStrip from '@/ui/components/agent/ThreadTabStrip.vue';
 import MessageList from '@/ui/components/agent/MessageList.vue';
 import HelpPopover from '@/ui/components/agent/HelpPopover.vue';
-import WelcomeGreeting from '@/ui/components/agent/WelcomeGreeting.vue';
 import FloatingNavSidebar from '@/ui/components/agent/FloatingNavSidebar.vue';
 import {
 	useNarrowSidepanel,
@@ -96,24 +95,14 @@ const { narrow } = useNarrowSidepanel(sidepanelRootEl);
 provide(NARROW_SIDEPANEL_KEY, narrow);
 
 /**
- * Empty-thread welcome surface (REQ-AUX-007): when the active thread has
- * no messages, render `<WelcomeGreeting>` in place of the dashed tile grid.
- * Clicking a suggestion chip routes through the existing tile pre-fill
- * pipeline so `ChatInput` opens its slash / mention pickers.
- */
-const showWelcome = computed(() => {
-	const tid = threadsStore.activeThreadId;
-	if (tid === null) return true;
-	const list = messagesStore.messages.get(tid);
-	return list === undefined || list.length === 0;
-});
-
-/**
- * QW-D — vault-investigation chip click handler. The chip payload now
+ * QW-D / G3 — vault-investigation chip click handler. The chip payload
  * carries the full prompt text (resolved by `<WelcomeGreeting>` from the
  * `welcome.chips.<id>.prompt` i18n entry). We populate the composer
  * textarea with that prompt and focus it so the user can review/edit
  * before sending — no auto-dispatch.
+ *
+ * G3 (RALPH AUX): `<WelcomeGreeting>` now mounts INSIDE `<MessageList>`,
+ * so the chip event is re-emitted up via `MessageList @suggestion-pick`.
  */
 async function handleWelcomeSuggestion(payload: {
 	id: 'findOrphans' | 'summarizeActive' | 'projectsTag' | 'brokenLinks';
@@ -326,35 +315,6 @@ function onDocumentPointerDownForHelp(event: PointerEvent): void {
 }
 
 /**
- * UX #11 (WP-8). Empty-state tile pre-fills the chat textarea with a
- * matching prompt fragment so the user can edit and send. We do NOT
- * auto-send — Cmd/Ctrl+Enter remains the user's commit gesture.
- *
- * Codex P2: after the model update, focus the textarea and dispatch a
- * synthetic `input` event so `ChatInput`'s `handleInput` runs — that's
- * what opens the slash palette / @-mention picker based on the leading
- * character. External `setUserText` alone leaves the picker closed.
- */
-async function handleEmptyTileAction(
-	key: 'slash' | 'mention' | 'send' | 'escape',
-): Promise<void> {
-	switch (key) {
-		case 'slash':
-			messagesStore.setUserText('/');
-			break;
-		case 'mention':
-			messagesStore.setUserText('@');
-			break;
-		case 'send':
-		case 'escape':
-			// Informational tiles — no textarea pre-fill needed.
-			return;
-	}
-	await nextTick();
-	chatSidebarRef.value?.focusInputForTilePrefill();
-}
-
-/**
  * WS-7 — per-message action forwarders. `MessageList` emits `copy` /
  * `regenerate` / `edit` from its `MessageActions` row; the sidebar owns the
  * side effects (clipboard, orchestrator dispatch, textarea population) so
@@ -475,15 +435,15 @@ onUnmounted(() => {
 				</div>
 			</div>
 			<div class="sp-agent__body">
-				<WelcomeGreeting
-					v-if="showWelcome"
-					data-testid="agent-welcome-greeting"
-					@suggestion-pick="handleWelcomeSuggestion"
-				/>
+				<!--
+				G3 (RALPH AUX): MessageList always mounts and owns its own
+				empty state — `<WelcomeGreeting>` lives inside it now and
+				fills the empty transcript region (Claudian parity).
+				Suggestion-chip clicks bubble through MessageList up here.
+				-->
 				<MessageList
-					v-else
 					:thread-id="activeThreadId"
-					@tile-action="handleEmptyTileAction"
+					@suggestion-pick="handleWelcomeSuggestion"
 					@copy="handleMessageCopy"
 					@regenerate="handleMessageRegenerate"
 					@edit="handleMessageEdit"
