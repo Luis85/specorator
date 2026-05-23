@@ -67,7 +67,13 @@ const visible = computed(() => models.value.length > 0);
 
 <template>
 	<div v-if="visible" class="sp-model-selector" data-testid="model-selector">
-		<label class="sp-model-selector__label" :for="'model-selector-select'">
+		<!-- G5: drop the uppercase "MODEL" label for Claudian parity — the
+		     brand-coloured select stands alone like "Opus" in the reference. -->
+		<label
+			id="model-selector-label"
+			class="sp-model-selector__sr-label"
+			:for="'model-selector-select'"
+		>
 			{{ t('provider.model') }}
 		</label>
 		<select
@@ -75,6 +81,7 @@ const visible = computed(() => models.value.length > 0);
 			v-model="selected"
 			class="sp-model-selector__select sp-model-selector__select--brand"
 			data-testid="model-selector-select"
+			aria-labelledby="model-selector-label"
 		>
 			<option
 				v-for="m in models"
@@ -94,19 +101,32 @@ const visible = computed(() => models.value.length > 0);
 	color: var(--sp-text-muted);
 }
 
-.sp-model-selector__label {
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-	font-weight: 600;
+.sp-model-selector__sr-label {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
 }
 
 .sp-model-selector__select {
-	padding: 0.125rem 0.375rem;
-	border: 1px solid var(--sp-border);
-	border-radius: 4px;
-	background: var(--sp-bg-primary);
+	padding-block: 0.125rem;
+	padding-inline: 0.25rem;
+	border: 0;
+	background: transparent;
 	color: var(--sp-text-normal);
-	font-size: 0.75rem;
+	font-size: 0.8125rem;
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.sp-model-selector__select:hover {
+	background: var(--sp-interactive-hover);
+	border-radius: 4px;
 }
 
 /* G4.1 — brand-color emphasis on the active model name so the toolbar

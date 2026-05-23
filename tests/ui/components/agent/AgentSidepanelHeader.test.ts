@@ -8,6 +8,17 @@ import { mount } from '@vue/test-utils';
 import AgentSidepanelHeader from '@/ui/components/agent/AgentSidepanelHeader.vue';
 import { i18n } from '@/ui/i18n';
 import { AgentSidepanelHeaderPO } from './AgentSidepanelHeader.po';
+import { ICON_PORT, LOGGER_PORT } from '@/infrastructure/bridge/ports';
+import type { IconPort } from '@/domain/ports/IconPort';
+import type { LoggerPort } from '@/domain/ports/LoggerPort';
+
+const noopIconPort: IconPort = { setIcon: () => undefined };
+const noopLoggerPort: LoggerPort = {
+	debug: () => undefined,
+	info: () => undefined,
+	warn: () => undefined,
+	error: () => undefined,
+};
 
 function mountHeader(props: {
 	activeFeature: string | null;
@@ -15,7 +26,13 @@ function mountHeader(props: {
 	requestInFlight?: boolean;
 }) {
 	const wrapper = mount(AgentSidepanelHeader, {
-		global: { plugins: [i18n] },
+		global: {
+			plugins: [i18n],
+			provide: {
+				[ICON_PORT as symbol]: noopIconPort,
+				[LOGGER_PORT as symbol]: noopLoggerPort,
+			},
+		},
 		props,
 	});
 	return { wrapper, po: new AgentSidepanelHeaderPO(wrapper) };

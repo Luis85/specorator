@@ -22,6 +22,7 @@
  * call-site backwards compatibility but no longer drive any chrome.
  */
 import { useI18n } from 'vue-i18n';
+import SpIcon from '@/ui/components/primitives/SpIcon.vue';
 
 withDefaults(
 	defineProps<{
@@ -41,6 +42,13 @@ const { t } = useI18n();
 <template>
 	<header class="sp-agent-header" data-testid="agent-header">
 		<div class="sp-agent-header__band" data-testid="agent-header-band">
+			<SpIcon
+				name="sparkles"
+				:size="16"
+				class="sp-agent-header__logo"
+				data-testid="agent-header-logo"
+				aria-hidden="true"
+			/>
 			<span class="sp-agent-header__title" data-testid="agent-header-title">
 				{{ t('agent.title') }}
 			</span>
@@ -93,6 +101,11 @@ const { t } = useI18n();
 	align-items: center;
 	gap: 0.5rem;
 	height: 36px;
+}
+
+.sp-agent-header__logo {
+	color: var(--sp-brand);
+	flex-shrink: 0;
 }
 
 .sp-agent-header__title {
