@@ -99,44 +99,37 @@ describe('ChatInput', () => {
 	});
 
 	describe('keyboard send', () => {
-		it('REQ-CCS-013: Ctrl+Enter emits send when not disabled and not loading', async () => {
+		it('REQ-CCS-013: plain Enter emits send when not disabled and not loading', async () => {
 			const po = mountChatInput({ modelValue: 'hello', disabled: false, loading: false });
-			await po.triggerSendKey(true);
+			await po.triggerSendKey();
 			expect(po.emitted('send')).toBeTruthy();
 		});
 
-		it('Cmd+Enter emits send when not disabled and not loading', async () => {
+		it('Shift+Enter does NOT emit send (reserved for textarea newline)', async () => {
 			const po = mountChatInput({ modelValue: 'hello', disabled: false, loading: false });
-			await po.triggerSendKey(false);
-			expect(po.emitted('send')).toBeTruthy();
-		});
-
-		it('Enter alone does not emit send', async () => {
-			const po = mountChatInput({ modelValue: 'hello', disabled: false, loading: false });
-			await po.triggerEnterOnly();
+			await po.triggerShiftEnter();
 			expect(po.emitted('send')).toBeFalsy();
 		});
 
-		it('Ctrl+Enter does not emit send when disabled=true', async () => {
+		it('Ctrl+Enter does NOT emit send (Ctrl/Cmd+Enter retired in favour of plain Enter)', async () => {
+			const po = mountChatInput({ modelValue: 'hello', disabled: false, loading: false });
+			await po.pressKey('Enter', { ctrl: true });
+			expect(po.emitted('send')).toBeFalsy();
+		});
+
+		it('plain Enter does not emit send when disabled=true', async () => {
 			const po = mountChatInput({ modelValue: 'hello', disabled: true, loading: false });
-			await po.triggerSendKey(true);
+			await po.triggerSendKey();
 			expect(po.emitted('send')).toBeFalsy();
 		});
 
-		it('Ctrl+Enter does not emit send when loading=true', async () => {
+		it('plain Enter does not emit send when loading=true', async () => {
 			const po = mountChatInput({ modelValue: 'hello', disabled: false, loading: true });
-			await po.triggerSendKey(true);
+			await po.triggerSendKey();
 			expect(po.emitted('send')).toBeFalsy();
 		});
 
-		it('Ctrl+Enter commits even when isComposing=true (some Obsidian/IME setups report spurious composition state)', async () => {
-			const po = mountChatInput({ modelValue: 'こんにち', disabled: false, loading: false });
-			const ta = po.textarea;
-			await ta.trigger('keydown', { key: 'Enter', ctrlKey: true, isComposing: true });
-			expect(po.emitted('send')).toBeTruthy();
-		});
-
-		it('plain Enter is still suppressed while an IME is composing', async () => {
+		it('Enter is suppressed while an IME is composing (lets the IME commit its candidate)', async () => {
 			const po = mountChatInput({ modelValue: 'こんにち', disabled: false, loading: false });
 			const ta = po.textarea;
 			await ta.trigger('keydown', { key: 'Enter', isComposing: true });
@@ -278,7 +271,7 @@ describe('ChatInput', () => {
 			expect(added[0][0].path).toBe('specs/foo/requirements.md')
 		})
 
-		it('Ctrl+Enter still emits `send` instead of committing the mention', async () => {
+		it('Shift+Enter while mention picker is open does NOT commit the mention (lets the textarea insert a newline)', async () => {
 			const po = mountChatInput(
 				{ modelValue: '', disabled: false, loading: false },
 				FILES,
@@ -286,10 +279,10 @@ describe('ChatInput', () => {
 			await po.typeAndMoveCaretToEnd('@req')
 			await vi.advanceTimersByTimeAsync(MENTION_DEBOUNCE_MS + 1)
 			await flushPromises()
-			await po.pressKey('Enter', { ctrl: true })
+			await po.pressKey('Enter', { shift: true })
 
-			expect(po.emitted('send')).toBeTruthy()
 			expect(po.emitted('add-context-file')).toBeFalsy()
+			expect(po.emitted('send')).toBeFalsy()
 		})
 
 		/**
@@ -408,11 +401,11 @@ describe('ChatInput', () => {
 				expect(emitted?.[0][0].name).toBe('clear');
 			});
 
-			it('Ctrl+Enter while the palette is open still commits send (palette does not capture the commit gesture)', async () => {
+			it('Shift+Enter while the palette is open does NOT commit a command (newline gesture, not send)', async () => {
 				const po = mountChatInput({ modelValue: '/', disabled: false, loading: false });
 				await po.typeAndMoveCaret('/');
-				await po.pressKey('Enter', { ctrl: true });
-				expect(po.emitted('send')).toBeTruthy();
+				await po.pressKey('Enter', { shift: true });
+				expect(po.emitted('send')).toBeFalsy();
 				expect(po.emitted('select-command')).toBeFalsy();
 			});
 
@@ -434,9 +427,9 @@ describe('ChatInput', () => {
 				expect(emitted?.[0][0].name).toBe('new');
 			});
 
-			it('Ctrl+Enter still fires send when the palette is closed', async () => {
+			it('plain Enter fires send when the palette is closed', async () => {
 				const po = mountChatInput({ modelValue: 'hello', disabled: false, loading: false });
-				await po.pressKey('Enter', { ctrl: true });
+				await po.pressKey('Enter');
 				expect(po.emitted('send')).toBeTruthy();
 			});
 		});

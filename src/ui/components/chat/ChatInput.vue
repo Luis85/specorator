@@ -202,6 +202,29 @@ function handleHighlight(index: number): void {
 	palette.navigate(index - current);
 }
 
+/** Pure modifier predicate — true if any of Shift/Ctrl/Cmd/Alt is held. */
+function hasAnyModifier(event: KeyboardEvent): boolean {
+	return event.shiftKey || event.ctrlKey || event.metaKey || event.altKey;
+}
+
+/**
+ * Commit the currently-highlighted palette entry. Returns `true` iff a
+ * command was actually selected and emitted.
+ */
+function tryCommitPaletteSelection(event: KeyboardEvent): boolean {
+	// Modified Enter (Shift / Ctrl / Cmd / Alt) is NOT a palette-commit
+	// gesture: Shift+Enter inserts a newline, others fall through to the
+	// textarea defaults.
+	if (hasAnyModifier(event)) return false;
+	const command = palette.select();
+	if (command === null) return false;
+	event.preventDefault();
+	scrubSlashTrigger();
+	palette.close();
+	emit('select-command', command);
+	return true;
+}
+
 /**
  * Returns `true` when the keydown was consumed by the palette and the caller
  * should NOT fall through to send/keystroke handling.
@@ -224,18 +247,7 @@ function handlePaletteKeydown(event: KeyboardEvent): boolean {
 		return true;
 	}
 	if (event.key === 'Enter' || event.key === 'Tab') {
-		// Ctrl/Cmd+Enter is always the commit gesture — let it fall through
-		// to `tryHandleSendKey` even when the palette is open, matching the
-		// behaviour of the mention `tryCommitFromKey` guard.
-		if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) return false;
-		const command = palette.select();
-		if (command !== null) {
-			event.preventDefault();
-			scrubSlashTrigger();
-			palette.close();
-			emit('select-command', command);
-			return true;
-		}
+		return tryCommitPaletteSelection(event);
 	}
 	return false;
 }
@@ -247,10 +259,12 @@ onBeforeUnmount(() => {
 });
 
 /**
- * Tab / non-modifier Enter handler for the open picker — consume to commit.
+ * Tab / Enter handler for the open picker — consume to commit. Any modifier
+ * (Shift/Ctrl/Cmd/Alt) skips the picker: Shift+Enter inserts a newline,
+ * and modified Enter is reserved for textarea defaults.
  */
 function tryCommitFromKey(event: KeyboardEvent): boolean {
-	if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) return false;
+	if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false;
 	const selection = picker.currentSelection();
 	if (selection === null) return false;
 	event.preventDefault();
@@ -285,9 +299,15 @@ function handlePickerKey(event: KeyboardEvent): boolean {
 	return false;
 }
 
+/**
+ * Plain Enter (no modifiers) sends the turn. Shift+Enter inserts a newline
+ * (default textarea behaviour — we don't preventDefault). Picker / palette
+ * intercept plain Enter earlier in `handleKeydown` when they're open, so this
+ * path only fires when both are closed.
+ */
 function tryHandleSendKey(event: KeyboardEvent): boolean {
 	if (event.key !== 'Enter') return false;
-	if (!(event.ctrlKey || event.metaKey)) return false;
+	if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false;
 	if (props.disabled || props.loading) return false;
 	event.preventDefault();
 	if (picker.open.value) picker.close();
@@ -337,18 +357,10 @@ function tryHandleEditLastKey(event: KeyboardEvent): boolean {
 function handleKeydown(event: KeyboardEvent): void {
 	// IME-composition guard: while an IME (Japanese/Chinese/Korean) is
 	// composing, Enter commits the candidate and must not trigger send.
-	// Spec-compliant browsers (Chromium/Firefox/Obsidian's Electron) report
-	// `event.isComposing` correctly throughout composition.
-	//
-	// Safari has a documented ordering bug where `compositionend` can fire
-	// BEFORE the confirm-Enter keydown, leaving `isComposing` false on that
-	// keydown. We deliberately do not defend that case — see docs/non-goals.md
-	// (CJK/Safari on the standalone-web demo is an explicit non-goal).
-	// IME composition guard only applies when no command modifier is held:
-	// Ctrl/Cmd+Enter is always a commit gesture and never composes a glyph,
-	// so skipping it under spurious `isComposing=true` (observed on Obsidian
-	// Windows with certain IMEs / input modes) silently breaks send.
-	if (event.isComposing && !(event.ctrlKey || event.metaKey)) return;
+	// Plain Enter is now our send gesture, so the unconditional guard is the
+	// right behaviour — IME users still get to confirm candidates before the
+	// turn fires.
+	if (event.isComposing) return;
 	if (tryHandlePlanModeKey(event)) return;
 	if (handlePickerKey(event)) return;
 	if (handlePaletteKeydown(event)) return;

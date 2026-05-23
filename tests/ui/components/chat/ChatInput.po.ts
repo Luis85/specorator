@@ -46,11 +46,16 @@ export class ChatInputPO {
 		await this.textarea.trigger('input')
 	}
 
-	async pressKey(key: string, modifiers: { ctrl?: boolean; meta?: boolean } = {}): Promise<void> {
+	async pressKey(
+		key: string,
+		modifiers: { ctrl?: boolean; meta?: boolean; shift?: boolean; alt?: boolean } = {},
+	): Promise<void> {
 		await this.textarea.trigger('keydown', {
 			key,
 			ctrlKey: modifiers.ctrl ?? false,
 			metaKey: modifiers.meta ?? false,
+			shiftKey: modifiers.shift ?? false,
+			altKey: modifiers.alt ?? false,
 		})
 	}
 
@@ -90,16 +95,36 @@ export class ChatInputPO {
 		await this.textarea.setValue(value)
 	}
 
-	async triggerSendKey(ctrl = true): Promise<void> {
+	/**
+	 * Send gesture: plain Enter with no modifiers (current shipping contract —
+	 * Ctrl+Enter was retired in favour of the simpler keymap).
+	 * The `_ignored` parameter is retained for source-compat with existing call
+	 * sites; modifiers no longer affect the send path.
+	 */
+	async triggerSendKey(_ignored = false): Promise<void> {
 		await this.textarea.trigger('keydown', {
 			key: 'Enter',
-			ctrlKey: ctrl,
-			metaKey: !ctrl,
+			ctrlKey: false,
+			metaKey: false,
+			shiftKey: false,
+			altKey: false,
 		})
 	}
 
+	/** Shift+Enter: must NOT send — leaves textarea to insert a newline. */
+	async triggerShiftEnter(): Promise<void> {
+		await this.textarea.trigger('keydown', {
+			key: 'Enter',
+			ctrlKey: false,
+			metaKey: false,
+			shiftKey: true,
+			altKey: false,
+		})
+	}
+
+	/** Alias of `triggerSendKey` retained for readability at call sites. */
 	async triggerEnterOnly(): Promise<void> {
-		await this.textarea.trigger('keydown', { key: 'Enter', ctrlKey: false, metaKey: false })
+		await this.triggerSendKey()
 	}
 
 	async clickSendButton(): Promise<void> {
