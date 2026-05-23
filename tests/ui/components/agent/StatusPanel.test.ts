@@ -14,9 +14,9 @@ import { i18n } from '@/ui/i18n';
 import { StatusPanelPO } from './StatusPanel.po';
 
 function mountPanel() {
-	// G5 polish: StatusPanel hides itself when both todos AND bashHistory
+	// G5 polish: StatusPanel hides itself when both task list AND bashHistory
 	// are empty (Claudian parity — don't earn screen real estate for
-	// nothing). Seed one todo so the panel renders for the collapse /
+	// nothing). Seed one task so the panel renders for the collapse /
 	// scroll-cap tests.
 	const status = useStatusPanelStore();
 	status.setTodos([

@@ -34,7 +34,7 @@ const expanded = computed<boolean>(() => !collapsed.value);
 /**
  * G5 polish — Claudian parity: don't render the status panel chrome when
  * there is nothing to show. The panel only earns its screen real estate
- * when the agent has emitted at least one todo OR one bash invocation on
+ * when the agent has emitted at least one task OR one bash invocation on
  * the active thread. Side benefit: the empty-state welcome view no longer
  * has a vestigial "STATUS" stripe glued to the bottom that pushed the
  * composer off-screen.
