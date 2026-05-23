@@ -1,0 +1,94 @@
+
+ RUN  v4.1.5 D:/Projects/specorator-plugin
+
+11:34:47 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:47 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:48 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:49 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:49 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:49 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:49 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:49 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:49 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:50 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:50 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:52 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:53 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:58 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:58 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:58 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:58 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:59 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:59 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:59 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:59 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:34:59 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:00 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:01 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:02 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:03 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:03 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:03 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:03 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:03 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:04 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:04 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:04 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:05 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:05 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:06 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:07 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:07 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:07 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:08 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:08 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:08 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:08 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:08 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+11:35:08 [vite] [33m[2m(client)[22m[39m [2m[console.warn] [22m[@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+stderr | tests/ui/components/chat/ChatSidebar.stagePrompt.test.ts > ChatSidebar — stage-aware system prompt wiring (T-ASM-040 / TEST-ASM-048) > no active file → systemPromptSuffix is empty (REQ-ASM-014)
+[Vue warn]: Plugin has already been applied to target app.
+
+stdout | tests/ui/components/chat/ChatSidebar.stagePrompt.test.ts > ChatSidebar — stage-aware system prompt wiring (T-ASM-040 / TEST-ASM-048) > no active file → systemPromptSuffix is empty (REQ-ASM-014)
+[MockBridge] SessionLogWriter: drop write (no sessionId) { threadId: '00ec990d-7ab9-46d6-8344-ae0f52aedf99' }
+
+stderr | tests/ui/components/chat/ChatSidebar.stagePrompt.test.ts > ChatSidebar — stage-aware system prompt wiring (T-ASM-040 / TEST-ASM-048) > active file not under specsFolder → systemPromptSuffix is empty (REQ-ASM-014)
+[Vue warn]: Plugin has already been applied to target app.
+
+stdout | tests/ui/components/chat/ChatSidebar.stagePrompt.test.ts > ChatSidebar — stage-aware system prompt wiring (T-ASM-040 / TEST-ASM-048) > active file not under specsFolder → systemPromptSuffix is empty (REQ-ASM-014)
+[MockBridge] SessionLogWriter: drop write (no sessionId) { threadId: '197f4755-6e3e-4234-94db-98ff8e439d8c' }
+
+stderr | tests/ui/components/chat/ChatSidebar.stagePrompt.test.ts > ChatSidebar — stage-aware system prompt wiring (T-ASM-040 / TEST-ASM-048) > unknown stage → systemPromptSuffix falls back to empty (REQ-ASM-015)
+[Vue warn]: Plugin has already been applied to target app.
+
+stdout | tests/ui/components/chat/ChatSidebar.stagePrompt.test.ts > ChatSidebar — stage-aware system prompt wiring (T-ASM-040 / TEST-ASM-048) > unknown stage → systemPromptSuffix falls back to empty (REQ-ASM-015)
+[MockBridge] SessionLogWriter: drop write (no sessionId) { threadId: '7c674417-402d-4d63-a388-3f0ea4a2008f' }
+
+stderr | tests/ui/components/chat/ChatSidebar.stagePrompt.test.ts > ChatSidebar — stage-aware system prompt wiring (T-ASM-040 / TEST-ASM-048) > vault read error → falls back to empty suffix; send still completes (REQ-ASM-015, NFR-ASM)
+[Vue warn]: Plugin has already been applied to target app.
+
+stderr | tests/ui/components/chat/ChatSidebar.stagePrompt.test.ts > ChatSidebar — stage-aware system prompt wiring (T-ASM-040 / TEST-ASM-048) > vault read error → falls back to empty suffix; send still completes (REQ-ASM-015, NFR-ASM)
+[MockBridge] loadWorkflowStateSnapshot: failed to read workflow-state {
+  path: 'specs/missing-feature/workflow-state.md',
+  feature: 'missing-feature',
+  error: '[MockBridge] File not found: specs/missing-feature/workflow-state.md'
+}
+
+stdout | tests/ui/components/chat/ChatSidebar.stagePrompt.test.ts > ChatSidebar — stage-aware system prompt wiring (T-ASM-040 / TEST-ASM-048) > vault read error → falls back to empty suffix; send still completes (REQ-ASM-015, NFR-ASM)
+[MockBridge] SessionLogWriter: drop write (no sessionId) { threadId: '8bb06392-0cea-4413-a942-6f81e9340cac' }
+
+stderr | tests/ui/components/chat/ChatSidebar.stagePrompt.test.ts > ChatSidebar — stage-aware system prompt wiring (T-ASM-040 / TEST-ASM-048) > malformed workflow-state → falls back to empty suffix; send still completes (REQ-ASM-015)
+[Vue warn]: Plugin has already been applied to target app.
+
+stderr | tests/ui/components/chat/ChatSidebar.stagePrompt.test.ts > ChatSidebar — stage-aware system prompt wiring (T-ASM-040 / TEST-ASM-048) > malformed workflow-state → falls back to empty suffix; send still completes (REQ-ASM-015)
+[MockBridge] loadWorkflowStateSnapshot: malformed workflow-state frontmatter { path: 'specs/bad-feature/workflow-state.md', feature: 'bad-feature' }
+
+stdout | tests/ui/components/chat/ChatSidebar.stagePrompt.test.ts > ChatSidebar — stage-aware system prompt wiring (T-ASM-040 / TEST-ASM-048) > malformed workflow-state → falls back to empty suffix; send still completes (REQ-ASM-015)
+[MockBridge] SessionLogWriter: drop write (no sessionId) { threadId: '9f46b5f2-3627-4b5f-90f6-41cb2af63fea' }
+
+ ❯ |unit| tests/ui/components/chat/ChatSidebar.stagePrompt.test.ts (9 tests | 5 failed) 1476ms
+     × no active file → systemPromptSuffix is empty (REQ-ASM-014) 434ms
+     × active file not under specsFolder → systemPromptSuffix is empty (REQ-ASM-014) 137ms
+     × unknown stage → systemPromptSuffix falls back to empty (REQ-ASM-015) 223ms
+     × vault read error → falls back to empty suffix; send still completes (REQ-ASM-015, NFR-ASM) 90ms
+     × malformed workflow-state → falls back to empty suffix; send still completes (REQ-ASM-015) 119ms
