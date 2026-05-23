@@ -63,6 +63,16 @@ const sendAriaLabel = computed<string>(() =>
 		: t('agent.composer.send.tooltip'),
 );
 
+/**
+ * G4.4 — Send button is "primed" (brand fill) only when there is something
+ * to send: not streaming and not disabled. While streaming the stop icon
+ * stays in a muted secondary variant; the disabled state falls back to
+ * secondary so the brand splash does not lie about readiness.
+ */
+const sendVariant = computed<'primary' | 'secondary'>(() =>
+	!isStreaming.value && !props.disabled ? 'primary' : 'secondary',
+);
+
 const sendButtonEl = ref<HTMLElement | null>(null);
 
 function onTrailingClick(): void {
@@ -124,12 +134,17 @@ defineExpose({ sendButtonEl });
 		<span class="sp-input-toolbar__slot" data-testid="input-toolbar-context-meter">
 			<ContextMeter />
 		</span>
-		<span class="sp-input-toolbar__slot sp-input-toolbar__send" data-testid="input-toolbar-send" :data-icon-name="sendIcon">
+		<span
+			class="sp-input-toolbar__slot sp-input-toolbar__send"
+			data-testid="input-toolbar-send"
+			:data-icon-name="sendIcon"
+			:data-send-variant="sendVariant"
+		>
 			<SpIconButton
 				ref="sendButtonEl"
 				:icon="sendIcon"
 				:ariaLabel="sendAriaLabel"
-				variant="primary"
+				:variant="sendVariant"
 				:disabled="disabled && !isStreaming"
 				data-testid="chat-send-button"
 				@click="onTrailingClick"

@@ -31,10 +31,10 @@ const emptyRegistry: ProviderRegistry = {
 	getCapabilities: () => undefined,
 };
 
-function mountToolbar(opts?: { narrow?: boolean }) {
+function mountToolbar(opts?: { narrow?: boolean; disabled?: boolean }) {
 	const bridge = new MockBridge() as unknown as IconPort;
 	return mount(InputToolbar, {
-		props: { narrow: opts?.narrow ?? false },
+		props: { narrow: opts?.narrow ?? false, disabled: opts?.disabled ?? false },
 		global: {
 			plugins: [i18n],
 			provide: {
@@ -104,6 +104,26 @@ describe('<InputToolbar>', () => {
 		const wrapper = mountToolbar();
 		const po = new InputToolbarPageObject(wrapper);
 		expect(po.sendAriaLabel()).toBe('Send');
+	});
+
+	it('G4.4: idle + enabled send button is primed (variant="primary")', () => {
+		const wrapper = mountToolbar();
+		const po = new InputToolbarPageObject(wrapper);
+		expect(po.sendVariant()).toBe('primary');
+	});
+
+	it('G4.4: disabled send button falls back to muted (variant="secondary")', () => {
+		const wrapper = mountToolbar({ disabled: true });
+		const po = new InputToolbarPageObject(wrapper);
+		expect(po.sendVariant()).toBe('secondary');
+	});
+
+	it('G4.4: streaming send button uses muted variant for the stop icon', () => {
+		const messages = useMessagesStore();
+		messages.beginRequest();
+		const wrapper = mountToolbar();
+		const po = new InputToolbarPageObject(wrapper);
+		expect(po.sendVariant()).toBe('secondary');
 	});
 
 	it('streaming send button has stop accessible name', () => {

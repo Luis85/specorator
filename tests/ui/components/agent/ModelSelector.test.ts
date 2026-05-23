@@ -80,6 +80,15 @@ describe('ModelSelector.vue', () => {
 		expect(po.root.exists()).toBe(false);
 	});
 
+	it('G4.1: select trigger carries brand-emphasis class for the active model name', async () => {
+		const store = useChatProviderStore();
+		store.setResolved({ provider: 'claude', mode: 'cli' });
+		const entry = makeEntry([{ id: 'claude-opus-4-7', label: 'Opus 4.7' }]);
+		const { po, wrapper } = mountSelector(entry);
+		await wrapper.vm.$nextTick();
+		expect(po.selectClasses()).toContain('sp-model-selector__select--brand');
+	});
+
 	it('REQ-MPS-041: hides itself when no explicit provider is resolved', async () => {
 		const store = useChatProviderStore();
 		store.setResolved('degraded');

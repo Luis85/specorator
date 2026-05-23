@@ -35,6 +35,10 @@ export class SpToggleSwitchPageObject {
 		return this.rootEl.disabled
 	}
 
+	hasOnClass(): boolean {
+		return this.rootEl.classList.contains('is-on')
+	}
+
 	async click(): Promise<void> {
 		await this.wrapper.get(this.byTid(TID.root)).trigger('click')
 	}

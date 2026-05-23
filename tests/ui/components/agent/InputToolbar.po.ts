@@ -65,4 +65,8 @@ export class InputToolbarPageObject {
 	isNarrow(): boolean {
 		return this.root().getAttribute('data-narrow') === 'true';
 	}
+
+	sendVariant(): string {
+		return this.sendEl().getAttribute('data-send-variant') ?? '';
+	}
 }

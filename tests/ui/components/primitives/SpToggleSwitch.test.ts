@@ -70,6 +70,13 @@ describe('SpToggleSwitch', () => {
 		expect(new SpToggleSwitchPageObject(fallback).ariaLabel()).toBe('Plan')
 	})
 
+	it('G4.2: applies the is-on class when modelValue=true (brand-fill active track)', () => {
+		const off = mount(SpToggleSwitch, { props: { modelValue: false, label: 'Plan' } })
+		expect(new SpToggleSwitchPageObject(off).hasOnClass()).toBe(false)
+		const on = mount(SpToggleSwitch, { props: { modelValue: true, label: 'Plan' } })
+		expect(new SpToggleSwitchPageObject(on).hasOnClass()).toBe(true)
+	})
+
 	it('does not emit when disabled', async () => {
 		const wrapper = mount(SpToggleSwitch, {
 			props: { modelValue: false, label: 'Plan', disabled: true },

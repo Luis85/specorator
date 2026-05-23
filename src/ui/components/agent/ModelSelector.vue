@@ -73,7 +73,7 @@ const visible = computed(() => models.value.length > 0);
 		<select
 			id="model-selector-select"
 			v-model="selected"
-			class="sp-model-selector__select"
+			class="sp-model-selector__select sp-model-selector__select--brand"
 			data-testid="model-selector-select"
 		>
 			<option
@@ -107,5 +107,13 @@ const visible = computed(() => models.value.length > 0);
 	background: var(--sp-bg-primary);
 	color: var(--sp-text-normal);
 	font-size: 0.75rem;
+}
+
+/* G4.1 — brand-color emphasis on the active model name so the toolbar
+ * gets the same brand splash as Claudian's "Opus" label. The dropdown
+ * chevron stays in the platform default (neutral). */
+.sp-model-selector__select--brand {
+	color: var(--sp-brand);
+	font-weight: 600;
 }
 </style>

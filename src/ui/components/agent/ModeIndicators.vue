@@ -19,17 +19,17 @@ const { planMode, bangBashMode, instructionMode } = storeToRefs(store);
 	<div class="sp-mode-indicators" data-testid="mode-indicators">
 		<span
 			v-if="planMode"
-			class="sp-mode-indicators__chip sp-mode-indicators__chip--plan"
+			class="sp-mode-indicators__chip sp-mode-indicators__chip--plan sp-mode-indicators__chip--active"
 			data-testid="mode-indicator-plan"
 		>{{ t('mode.plan') }}</span>
 		<span
 			v-if="bangBashMode"
-			class="sp-mode-indicators__chip sp-mode-indicators__chip--bash"
+			class="sp-mode-indicators__chip sp-mode-indicators__chip--bash sp-mode-indicators__chip--active"
 			data-testid="mode-indicator-bang-bash"
 		>{{ t('mode.bangBash') }}</span>
 		<span
 			v-if="instructionMode"
-			class="sp-mode-indicators__chip sp-mode-indicators__chip--instruction"
+			class="sp-mode-indicators__chip sp-mode-indicators__chip--instruction sp-mode-indicators__chip--active"
 			data-testid="mode-indicator-instruction"
 		>{{ t('mode.instruction') }}</span>
 	</div>
@@ -58,10 +58,14 @@ const { planMode, bangBashMode, instructionMode } = storeToRefs(store);
 	border: 1px solid var(--sp-border);
 }
 
-.sp-mode-indicators__chip--plan {
-	background: var(--sp-interactive-accent-translucent, var(--sp-interactive-hover));
-	color: var(--sp-text-on-accent, var(--sp-text-normal));
-	border-color: var(--sp-interactive-accent);
+/* G4.3 — Active chip carries brand colour on border + text while the
+ * background stays muted so the chip reads as an outlined splash rather
+ * than a flat fill. Inactive chips (no `--active` modifier) remain on the
+ * neutral base. */
+.sp-mode-indicators__chip--active {
+	color: var(--sp-brand);
+	border-color: var(--sp-brand);
+	background: var(--sp-brand-translucent);
 }
 
 .sp-mode-indicators__chip--bash {
