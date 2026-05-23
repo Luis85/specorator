@@ -130,6 +130,9 @@ export const coreSettingsModule = defineModule<PluginSettings>({
       userPersona: coercePassthroughString(r.userPersona, DEFAULT_SETTINGS.userPersona),
       onboardingComplete: coerceBoolean(r.onboardingComplete, DEFAULT_SETTINGS.onboardingComplete),
       claudeCliPath: coerceTrimmedString(r.claudeCliPath, DEFAULT_SETTINGS.claudeCliPath),
+      // REQ-OCM-016 — additive string field; missing/non-string coerces to '' so
+      // both fresh and upgrading installs land on the default without a version bump.
+      obsidianCliPath: coerceTrimmedString(r.obsidianCliPath, DEFAULT_SETTINGS.obsidianCliPath),
       // SPEC-MPS-001 §2.7 — the new provider-selection carrier plus the
       // five companion fields. `transportKind` is intentionally NOT
       // re-emitted here: migration (`migrateProviderSelection`) translates

@@ -272,6 +272,31 @@ describe('coreSettingsModule.validateSettings', () => {
       expect(out.claudeCliPath).toBe('/opt/bin/claude')
     })
   })
+
+  describe('obsidianCliPath (REQ-OCM-016)', () => {
+    it('defaults to empty string when missing', () => {
+      const out = validate({ locale: 'en' })
+      expect(out.obsidianCliPath).toBe(DEFAULT_SETTINGS.obsidianCliPath)
+      expect(out.obsidianCliPath).toBe('')
+    })
+
+    it.each([null, undefined, 42, true, {}, []] as const)(
+      'coerces non-string obsidianCliPath (%p) to default empty string',
+      (value) => {
+        const out = validate({ obsidianCliPath: value })
+        expect(out.obsidianCliPath).toBe('')
+      },
+    )
+
+    it('preserves and trims a valid obsidianCliPath', () => {
+      const out = validate({ obsidianCliPath: '  /usr/local/bin/obsidian  ' })
+      expect(out.obsidianCliPath).toBe('/usr/local/bin/obsidian')
+    })
+
+    it('does not bump settingsVersion (additive validated field)', () => {
+      expect(coreSettingsModule.settingsVersion).toBe(3)
+    })
+  })
 })
 
 describe('coreSettingsModule.settingsSchema', () => {
@@ -286,6 +311,7 @@ describe('coreSettingsModule.settingsSchema', () => {
     // outside the module loop.
     const manuallyRenderedKeys: ReadonlyArray<keyof PluginSettings> = [
       'claudeCliPath',
+      'obsidianCliPath',
       'providerSelection',
       'cursorCliPath',
       'cursorApiPreview',

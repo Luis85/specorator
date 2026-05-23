@@ -38,6 +38,12 @@ export interface PluginSettings {
 	 */
 	readonly claudeCliPath: string
 	/**
+	 * Absolute filesystem path to the official `obsidian` CLI binary, or `''` for
+	 * auto-detect/unset. Backs the ADR-018 CLI-backed MCP tool group. Mirrors
+	 * `claudeCliPath`. Per SPEC-OCM-001 §7, REQ-OCM-016.
+	 */
+	readonly obsidianCliPath: string
+	/**
 	 * Legacy chat transport mode (`'auto' | 'api-key' | 'subscription' |
 	 * 'degraded'`). Replaced by `providerSelection` in SPEC-MPS-001 §2.7;
 	 * retained as a deprecated optional field so WS-3's selector reshape can
@@ -98,6 +104,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	userPersona: '',
 	onboardingComplete: false,
 	claudeCliPath: '',
+	obsidianCliPath: '',
 	// `transportKind` intentionally omitted from defaults — the field is
 	// migration input only (see deprecation note above).
 	providerSelection: { forced: 'auto' },

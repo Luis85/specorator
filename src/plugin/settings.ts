@@ -3,6 +3,7 @@ import { PluginSettingTab, Setting } from 'obsidian'
 import * as path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { ClaudeBinaryResolver, type ResolverPlatform } from '@/infrastructure/obsidian/ClaudeBinaryResolver'
+import { ObsidianCliBinaryResolver } from '@/infrastructure/obsidian/ObsidianCliBinaryResolver'
 import { tryAsync, trySync } from '@/domain/shared/tryAsync'
 import { SECRET_ID_ANTHROPIC } from '@/domain/ports'
 import type { ModuleDescriptor, SettingsFieldDescriptor } from '@/modules/module'
@@ -41,6 +42,7 @@ export class SpecoratorSettingTab extends PluginSettingTab {
     this.renderMcpServerStatus()
     this.renderAnthropicKeyField()
     this.renderClaudeCliPathField(containerEl)
+    this.renderObsidianCliPathField(containerEl)
     renderCursorSettingsSection({
       containerEl,
       secretStore: this.plugin.secretStore,
@@ -150,13 +152,110 @@ export class SpecoratorSettingTab extends PluginSettingTab {
    */
   private renderMcpServerStatus(): void {
     const running = this.plugin.core?.isMcpServerRunning() === true
-    new Setting(this.containerEl)
-      .setName('MCP server status')
-      .setDesc(
-        running
-          ? 'Running. Use the "Stop MCP server" command or toggle the setting above to stop it.'
-          : 'Stopped. Toggle "Enable MCP server (advanced)" above, or run the "Start MCP server" command.',
-      )
+    const cliConfigured = this.plugin.settings.obsidianCliPath.trim() !== ''
+    const config = running ? (this.plugin.core?.getMcpConnectionConfig() ?? null) : null
+
+    const parts: string[] = []
+    parts.push(
+      running
+        ? config !== null
+          ? `Running at ${config.url}. Use the "Stop MCP server" command or the toggle above to stop it.`
+          : 'Running. Use the "Stop MCP server" command or the toggle above to stop it.'
+        : 'Stopped. Toggle "Enable MCP server (advanced)" above, or run the "Start MCP server" command.',
+    )
+    parts.push(
+      cliConfigured
+        ? 'Obsidian CLI configured — CLI-backed tools (search, read, properties, daily note) are exposed.'
+        : 'No Obsidian CLI configured — set the path below to expose CLI-backed tools.',
+    )
+
+    const setting = new Setting(this.containerEl).setName('MCP server status').setDesc(parts.join(' '))
+    setting.settingEl.setAttribute('data-testid', 'settings-mcp-server-status')
+  }
+
+  /**
+   * Renders the "Obsidian CLI path" Settings field (REQ-OCM-017, SPEC-OCM-001 §7).
+   *
+   * Mirrors `renderClaudeCliPathField`:
+   *   - Text input (`settings-obsidian-cli-path-input`), trimmed on change, persisted
+   *     via `plugin.updateSettings({ obsidianCliPath })`.
+   *   - Autodetect button → `ObsidianCliBinaryResolver.resolve()`.
+   *   - Test button → runs `<path> --version` via the shared `_testBinaryVersion`
+   *     helper (the single allow-listed sync-spawn site, never on a chat hot path).
+   */
+  private renderObsidianCliPathField(containerEl: HTMLElement): void {
+    let statusEl: HTMLElement | null = null
+    let textInput: HTMLInputElement | null = null
+
+    new Setting(containerEl)
+      .setName('Obsidian CLI path')
+      .setDesc('Absolute path to the official `obsidian` command-line tool installed on this device.')
+      .addText((text) => {
+        text.inputEl.setAttribute('data-testid', 'settings-obsidian-cli-path-input')
+        textInput = text.inputEl
+        text.setPlaceholder('/usr/local/bin/obsidian')
+        text.setValue(this.plugin.settings.obsidianCliPath)
+        text.onChange(async (raw) => {
+          const trimmed = raw.trim()
+          if (trimmed !== this.plugin.settings.obsidianCliPath) {
+            await this.plugin.updateSettings({ obsidianCliPath: trimmed })
+          }
+        })
+      })
+      .addExtraButton((b) => {
+        b.extraSettingsEl.setAttribute('data-testid', 'settings-obsidian-cli-path-autodetect')
+        b.setIcon('search')
+        b.setTooltip('Autodetect obsidian CLI path')
+        b.onClick(() => {
+          void this.handleObsidianCliAutodetect(textInput, statusEl)
+        })
+      })
+      .addExtraButton((b) => {
+        b.extraSettingsEl.setAttribute('data-testid', 'settings-obsidian-cli-path-test')
+        b.setIcon('check')
+        b.setTooltip('Test obsidian CLI path')
+        b.onClick(() => {
+          this.handleObsidianCliTestBinary(statusEl)
+        })
+      })
+
+    const desc = containerEl.createDiv({ cls: 'setting-item-description' })
+    desc.setAttribute('data-testid', 'settings-obsidian-cli-path-description')
+    desc.setText(
+      "Powers the MCP server's Obsidian-CLI-backed tools. Reads are allow-listed; writes are queued for your approval. The `eval` command is never exposed.",
+    )
+
+    statusEl = containerEl.createDiv({ cls: 'setting-item-description' })
+    statusEl.setAttribute('data-testid', 'settings-obsidian-cli-path-status')
+    statusEl.setText('')
+  }
+
+  private async handleObsidianCliAutodetect(
+    input: HTMLInputElement | null,
+    statusEl: HTMLElement | null,
+  ): Promise<void> {
+    this._setStatus(statusEl, 'Searching for the obsidian CLI on your path…')
+    const platform = process.platform as ResolverPlatform
+    const outcome = await tryAsync(() => new ObsidianCliBinaryResolver({ spawn, platform }).resolve())
+    if (!outcome.ok) {
+      this._setStatus(statusEl, 'Autodetect failed.')
+      return
+    }
+    const resolved = outcome.value
+    if (resolved === null) {
+      this._setStatus(statusEl, 'Could not find the obsidian CLI on your path.')
+      return
+    }
+    if (input !== null) {
+      input.value = resolved
+      input.dispatchEvent(new Event('input'))
+    }
+    await this.plugin.updateSettings({ obsidianCliPath: resolved })
+    this._setStatus(statusEl, `Found: ${resolved}`)
+  }
+
+  private handleObsidianCliTestBinary(statusEl: HTMLElement | null): void {
+    this._testBinaryVersion(this.plugin.settings.obsidianCliPath.trim(), statusEl)
   }
 
   private currentValue(mod: ModuleDescriptor, field: SettingsFieldDescriptor): unknown {
@@ -374,7 +473,15 @@ export class SpecoratorSettingTab extends PluginSettingTab {
    * hot path.
    */
   private handleTestBinary(statusEl: HTMLElement | null): void {
-    const stored = this.plugin.settings.claudeCliPath.trim()
+    this._testBinaryVersion(this.plugin.settings.claudeCliPath.trim(), statusEl)
+  }
+
+  /**
+   * Shared "run `<path> --version`" probe. The single `spawnSync` site in the
+   * plugin (NFR-ASM-004): user-driven, never on a chat hot path. Used by both
+   * the Claude and Obsidian CLI path fields.
+   */
+  private _testBinaryVersion(stored: string, statusEl: HTMLElement | null): void {
     if (stored === '' || !path.isAbsolute(stored)) {
       this._setStatus(statusEl, 'Enter an absolute path before testing.')
       return

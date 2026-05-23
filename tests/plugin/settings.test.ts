@@ -88,11 +88,12 @@ describe('REQ-ASM-004 / REQ-ASM-005 / REQ-ASM-008: Claude CLI path field wiring 
     expect(SETTINGS_SRC).toMatch(/private\s+handleTestBinary\(/)
   })
 
-  it('handleTestBinary is the only spawnSync site (NFR-ASM-004 / T-ASM-018 DoD)', () => {
+  it('_testBinaryVersion is the only spawnSync site (NFR-ASM-004 / T-ASM-018 DoD)', () => {
     const callCount = (SETTINGS_SRC.match(/\bspawnSync\(/g) ?? []).length
     expect(callCount).toBe(1)
-    // The call must be inside handleTestBinary.
-    const handleStart = SETTINGS_SRC.indexOf('private handleTestBinary(')
+    // The single call lives in the shared _testBinaryVersion helper that both the
+    // Claude and Obsidian CLI path test buttons delegate to (ADR-018).
+    const handleStart = SETTINGS_SRC.indexOf('private _testBinaryVersion(')
     const nextPrivateAfter = SETTINGS_SRC.indexOf('\n  private ', handleStart + 1)
     const handleBody = SETTINGS_SRC.slice(
       handleStart,
@@ -100,6 +101,9 @@ describe('REQ-ASM-004 / REQ-ASM-005 / REQ-ASM-008: Claude CLI path field wiring 
     )
     expect(handleBody).toContain('spawnSync(')
     expect(handleBody).toContain('timeout: 5_000')
+    // Both test-binary handlers delegate to the shared single-spawn helper.
+    expect(SETTINGS_SRC).toContain('_testBinaryVersion(this.plugin.settings.claudeCliPath.trim()')
+    expect(SETTINGS_SRC).toContain('_testBinaryVersion(this.plugin.settings.obsidianCliPath.trim()')
   })
 
   it('forbids credential-path literals (NFR-ASM-004)', () => {

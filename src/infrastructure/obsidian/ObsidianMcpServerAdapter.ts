@@ -7,6 +7,7 @@ import type {
   VaultPort,
   MetadataCachePort,
   CanvasPort,
+  ObsidianCliPort,
 } from '@/domain/ports'
 import type { IFeatureRepository } from '@/domain/feature/IFeatureRepository'
 import { AdvanceFeatureStageUseCase } from '@/application/feature/AdvanceFeatureStageUseCase'
@@ -19,6 +20,7 @@ import {
   registerLinksTools,
   registerCanvasTools,
   registerBasesTools,
+  registerObsidianCliTools,
 } from './mcp'
 
 export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
@@ -34,6 +36,7 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
     private readonly metadataCache: MetadataCachePort,
     private readonly canvas: CanvasPort,
     private readonly feedback?: FeedbackService,
+    private readonly cli?: ObsidianCliPort,
   ) {
     // REQ-AVS-005: thread FeedbackService through to AdvanceFeatureStageUseCase
     // so overwrite-protection notices fire consistently on the MCP path (when
@@ -103,6 +106,10 @@ export class ObsidianMcpServerAdapter implements ObsidianMcpServerPort {
     registerLinksTools(mcp, this.vault, this.metadataCache, this.proposalStore)
     registerCanvasTools(mcp, this.canvas, this.proposalStore)
     registerBasesTools(mcp, this.vault, this.proposalStore)
+    // ADR-018 — CLI-backed group, registered only when a CLI is configured.
+    if (this.cli?.available === true) {
+      registerObsidianCliTools(mcp, this.cli, this.proposalStore)
+    }
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
     await mcp.connect(transport)
     try {
