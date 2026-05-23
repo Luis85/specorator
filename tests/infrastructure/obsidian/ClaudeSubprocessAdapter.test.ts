@@ -1063,7 +1063,7 @@ describe('ClaudeSubprocessAdapter — argv invariants (REQ-ASM-006/027/028)', ()
     const argv = spawn.calls[0].args
     expect(argv).toContain('--disallowedTools')
     const idx = argv.indexOf('--disallowedTools')
-    expect(argv[idx + 1]).toBe('Read,Edit,Write,Bash,Glob,Grep,WebFetch,WebSearch')
+    expect(argv[idx + 1]).toBe('Edit,Write,Bash,WebFetch,WebSearch')
     expect(argv).toContain('--permission-mode')
     const pidx = argv.indexOf('--permission-mode')
     expect(argv[pidx + 1]).toBe('dontAsk')
@@ -1229,7 +1229,7 @@ describe('ClaudeSubprocessAdapter — F7 SIGKILL timing (Testing review F7)', ()
 })
 
 describe('ClaudeSubprocessAdapter — F7 cwd (Testing review F7)', () => {
-  it('spawns with no cwd override (defaults to the Node process cwd)', async () => {
+  it('spawns with no cwd override when no getVaultBasePath dep is provided', async () => {
     const { adapter, spawn } = makeAdapter({
       resolver: makeResolver('/fake/bin/claude'),
     })
@@ -1242,13 +1242,41 @@ describe('ClaudeSubprocessAdapter — F7 cwd (Testing review F7)', () => {
     spawn.closeWith(child, 0)
     await promise
 
-    // The subscription transport does NOT override cwd — spawn options must
-    // either omit `cwd` or carry an `undefined` value. A regression that
-    // flipped this to e.g. the Obsidian binary path would be caught here.
+    // Default behaviour (no vault root injected): spawn options must omit
+    // `cwd` so the child inherits the renderer cwd — the pre-QW-A contract.
     const opts = spawn.calls[0].options
     if (opts && 'cwd' in opts) {
       expect(opts.cwd).toBeUndefined()
     }
+  })
+
+  // QW-A — when the plugin wires `getVaultBasePath`, the subprocess inherits
+  // the user's vault root so relative paths in agent tool calls resolve
+  // inside the vault rather than under Obsidian's install dir.
+  it('forwards the vault base path as spawn cwd when getVaultBasePath is supplied', async () => {
+    const settings = makeSettings()
+    const spawn = makeFakeSpawn()
+    const logger = makeFakeLogger()
+    const resolver = makeResolver('/fake/bin/claude')
+    const adapter = new ClaudeSubprocessAdapter({
+      getSettings: () => settings,
+      logger,
+      resolveCliPath: resolver.resolveCliPath as () => Promise<string | null>,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      spawn: spawn.spawn as any,
+      now: () => Date.now(),
+      getVaultBasePath: () => '/fake/vault',
+    })
+    await adapter.startup()
+
+    const promise = collectStream(adapter.queryStream('hi'))
+    await Promise.resolve()
+    const child = spawn.lastChild()
+    spawn.emitStdout(child, ndjson(systemInit('s'), resultEvent('ok')))
+    spawn.closeWith(child, 0)
+    await promise
+
+    expect(spawn.calls[0].options).toMatchObject({ cwd: '/fake/vault' })
   })
 })
 

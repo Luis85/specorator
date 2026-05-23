@@ -30,6 +30,12 @@ export class LocalStorageBridge
 		ChatTransportPort,
 		IconPort
 {
+	// QW-A — no real filesystem in the GitHub Pages demo; subprocess transports
+	// are unavailable here, so the cwd resolver returns null.
+	getVaultBasePath(): string | null {
+		return null;
+	}
+
 	async readFile(path: string): Promise<string> {
 		const value = localStorage.getItem(FILE_PREFIX + path);
 		if (value === null) throw new Error(`File not found: ${path}`);

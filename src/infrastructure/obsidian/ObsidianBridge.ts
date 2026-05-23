@@ -1,4 +1,4 @@
-import { Notice, TFile, TFolder, normalizePath, setIcon as obsidianSetIcon, type App } from 'obsidian';
+import { FileSystemAdapter, Notice, TFile, TFolder, normalizePath, setIcon as obsidianSetIcon, type App } from 'obsidian';
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
 import type {
 	SettingsPort,
@@ -230,6 +230,21 @@ export class ObsidianBridge
 		}
 		const appExt = this.app as unknown as AppWithPlugins;
 		return appExt.plugins?.enabledPlugins ?? null;
+	}
+
+	// ── Vault filesystem root ─────────────────────────────────────────────────
+	// QW-A — expose the vault root so the Claude / Cursor CLI subprocesses
+	// inherit it as `cwd`. On desktop, `vault.adapter` is a `FileSystemAdapter`
+	// that knows its base path; on mobile (or any non-FS adapter) we return
+	// `null` and the subprocess falls back to the renderer cwd — Obsidian
+	// mobile doesn't run external CLIs anyway, so the distinction is academic
+	// but the guard keeps the type clean.
+	getVaultBasePath(): string | null {
+		const adapter = this.app.vault.adapter;
+		if (adapter instanceof FileSystemAdapter) {
+			return adapter.getBasePath();
+		}
+		return null;
 	}
 
 	// ── ChatTransportPort ─────────────────────────────────────────────────────────

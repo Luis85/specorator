@@ -54,8 +54,14 @@ export class MockBridge
 	private activeFile: ActiveFileSnapshot | null = null;
 	private readonly activeFileHandlers = new Set<(f: ActiveFileSnapshot | null) => void>();
 	private readonly missingIcons = new Set<string>();
+	private vaultBasePath: string | null;
 
-	constructor(initialFiles: Record<string, string> = {}) {
+	constructor(
+		initialFiles: Record<string, string> = {},
+		options: { vaultBasePath?: string | null } = {},
+	) {
+		this.vaultBasePath =
+			options.vaultBasePath === undefined ? '/mock/vault' : options.vaultBasePath;
 		for (const [path, content] of Object.entries(initialFiles)) {
 			this.files.set(path, content);
 			// Register parent folders automatically
@@ -64,6 +70,18 @@ export class MockBridge
 				this.folders.add(parts.slice(0, i).join('/'));
 			}
 		}
+	}
+
+	// QW-A — mirror of `ObsidianBridge.getVaultBasePath()` so tests and the
+	// standalone Vite dev server have a deterministic vault root to assert on
+	// without booting Obsidian. Defaults to `/mock/vault`; pass `null` to
+	// model the standalone-web case where no FS root exists.
+	getVaultBasePath(): string | null {
+		return this.vaultBasePath;
+	}
+
+	setVaultBasePath(path: string | null): void {
+		this.vaultBasePath = path;
 	}
 
 	async readFile(path: string): Promise<string> {

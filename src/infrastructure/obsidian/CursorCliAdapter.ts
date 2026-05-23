@@ -54,6 +54,12 @@ export interface CursorCliAdapterDeps {
   readonly logger: LoggerPort
   readonly resolveCliPath: () => Promise<string | null>
   readonly spawn: SpawnFn
+  /**
+   * QW-A — vault root forwarded to `child_process.spawn` as `cwd`. Mirrors
+   * `ClaudeSubprocessAdapterDeps.getVaultBasePath`. Optional; falls back to
+   * the renderer cwd when absent or `null`.
+   */
+  readonly getVaultBasePath?: () => string | null
 }
 
 interface TurnProc {
@@ -78,12 +84,14 @@ export class CursorCliAdapter implements ChatTransportPort, TransportLifecyclePo
   private readonly _getSettings: () => PluginSettings
   private readonly _logger: LoggerPort
   private readonly _resolveCliPath: () => Promise<string | null>
+  private readonly _getVaultBasePath: () => string | null
 
   constructor(deps: CursorCliAdapterDeps) {
     this._getSettings = deps.getSettings
     this._logger = deps.logger
     this._resolveCliPath = deps.resolveCliPath
     this._lifecycle = new SubprocessLifecycle({ spawn: deps.spawn, logger: deps.logger })
+    this._getVaultBasePath = deps.getVaultBasePath ?? ((): string | null => null)
   }
 
   async startup(): Promise<void> {
@@ -252,7 +260,12 @@ export class CursorCliAdapter implements ChatTransportPort, TransportLifecyclePo
     onSessionId: ((sessionId: SessionId) => void) | null,
     reducer: StreamDeltaReducer,
   ): Result<TurnProc, ChatTransportError> {
-    const spawned = this._lifecycle.spawn(binaryPath, argv, 'spawn.failed')
+    const spawned = this._lifecycle.spawn(
+      binaryPath,
+      argv,
+      'spawn.failed',
+      this._getVaultBasePath(),
+    )
     if (!spawned.ok) return spawned
     const child = spawned.value
 

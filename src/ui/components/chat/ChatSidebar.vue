@@ -457,29 +457,34 @@ async function handleSend(): Promise<void> {
 	});
 	inFlightAbort.value = null;
 	recordStructuredPathErrorIfAny(result);
-	// WS-10 (REQ-MPS-021): after the first successful turn on a thread,
-	// derive the default title from the user message. `applyDefaultTitleFromMessage`
-	// is a no-op when the title is already set (user rename wins).
+	finaliseTurnTail(result, input.userMessage, inFlightUserText);
+	await nextTick();
+	focusTextarea();
+}
+
+/**
+ * Post-`sendTurn` housekeeping: derive the thread title from the user's
+ * first message on success, clear pending attachments, and restore the
+ * in-flight text on failure so the user can retry without retyping.
+ * Extracted from `handleSend` to keep its cyclomatic complexity under the
+ * project's per-function lint cap.
+ */
+function finaliseTurnTail(
+	result: Awaited<ReturnType<ChatTurnOrchestrator['sendTurn']>>,
+	userMessage: string,
+	inFlightUserText: string,
+): void {
 	if (result.ok) {
 		const tid = threadsStore.activeThreadId;
 		if (tid !== null) {
-			threadsStore.applyDefaultTitleFromMessage(tid, input.userMessage);
+			threadsStore.applyDefaultTitleFromMessage(tid, userMessage);
 		}
-		// REQ-MPS-042/043: per-turn attachments are consumed on send; clear
-		// the pending list so a follow-up turn starts empty.
 		attachmentsStore.clear();
 	}
-	// Failure paths (orchestrator returned !result.ok OR the streaming reducer
-	// set messages.status to 'error'): restore the in-flight text into the
-	// textarea so the user can retry without retyping. Only restore when the
-	// textarea is still empty — preserves anything the user has already
-	// started typing for the next turn while the previous one was streaming.
 	const turnFailed = !result.ok || messagesStore.status === 'error';
 	if (turnFailed && messagesStore.userText.length === 0) {
 		messagesStore.setUserText(inFlightUserText);
 	}
-	await nextTick();
-	focusTextarea();
 }
 
 /**

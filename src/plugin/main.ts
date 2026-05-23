@@ -239,6 +239,10 @@ export default class SpecoratorPlugin extends Plugin {
       }).resolve(),
       spawn: spawnFn,
       now: () => Date.now(),
+      // QW-A — vault root as the subprocess cwd, so relative paths emitted
+      // by agent tool calls (Read/Glob/Grep) resolve inside the user's vault
+      // rather than Obsidian's renderer cwd.
+      getVaultBasePath: () => this.bridge?.getVaultBasePath() ?? null,
     })
     this.register(() => { this._subscriptionAdapter?.shutdown() })
 
@@ -253,6 +257,8 @@ export default class SpecoratorPlugin extends Plugin {
         platform: resolverPlatform,
       }).resolve(),
       spawn: spawnFn,
+      // QW-A — mirror of the Claude adapter wiring.
+      getVaultBasePath: () => this.bridge?.getVaultBasePath() ?? null,
     })
     this.register(() => { this._cursorCliAdapter?.shutdown() })
 

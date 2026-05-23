@@ -89,6 +89,7 @@ export class SubprocessLifecycle {
 		binaryPath: string,
 		argv: readonly string[],
 		event: 'spawn.failed' | 'structured.spawn_failed' = 'spawn.failed',
+		cwd?: string | null,
 	): Result<ChildProcessLike, ChatTransportError> {
 		let child: ChildProcess;
 		try {
@@ -96,7 +97,16 @@ export class SubprocessLifecycle {
 			// process open until stdin EOF when stdin is a pipe, manifesting
 			// as a TIMEOUT verdict on the renderer side. We never write to
 			// stdin in this code path — the prompt is in argv.
-			child = this._spawn(binaryPath, argv, { stdio: ['ignore', 'pipe', 'pipe'] });
+			//
+			// QW-A: when `cwd` is provided, the child inherits the user's
+			// vault root rather than Obsidian's renderer cwd, so relative
+			// paths in agent tool calls resolve inside the vault. `null` is
+			// treated as "no cwd" (LocalStorageBridge / standalone web).
+			const opts: SpawnOptions =
+				typeof cwd === 'string' && cwd.length > 0
+					? { stdio: ['ignore', 'pipe', 'pipe'], cwd }
+					: { stdio: ['ignore', 'pipe', 'pipe'] };
+			child = this._spawn(binaryPath, argv, opts);
 		} catch (e: unknown) {
 			const code = (e as NodeJS.ErrnoException | undefined)?.code;
 			// Preserve the dotted event-key format so dashboards / alerts keyed

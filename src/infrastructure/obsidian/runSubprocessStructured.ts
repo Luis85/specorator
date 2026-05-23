@@ -37,6 +37,11 @@ export interface RunStructuredDeps {
 		readonly startTimeMs: number;
 		readonly exitCode: number | null;
 	}) => void;
+	/**
+	 * QW-A — vault root used as the subprocess `cwd`. Optional; when absent
+	 * or returning `null`, the child inherits the renderer cwd.
+	 */
+	readonly getCwd?: () => string | null;
 }
 
 /**
@@ -60,7 +65,8 @@ export async function runSubprocessStructured(
 	const timeoutMs = deps.clampTimeout(options.timeoutMs);
 	const argv = _buildStructuredArgv(prompt, options);
 
-	const spawned = deps.lifecycle.spawn(binaryPath, argv, 'structured.spawn_failed');
+	const cwd = deps.getCwd?.() ?? null;
+	const spawned = deps.lifecycle.spawn(binaryPath, argv, 'structured.spawn_failed', cwd);
 	if (!spawned.ok) return spawned;
 
 	return _collectStructuredStdout(deps, spawned.value, timeoutMs, options);

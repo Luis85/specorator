@@ -92,6 +92,13 @@ export interface ClaudeSubprocessAdapterDeps {
 	readonly resolveCliPath: () => Promise<string | null>;
 	readonly spawn: SpawnFn;
 	readonly now?: () => number;
+	/**
+	 * QW-A — vault root forwarded to `child_process.spawn` as `cwd`. Read on
+	 * every spawn so the user can switch vaults mid-session without
+	 * reinstantiating the adapter. Return `null` (or omit the dep entirely)
+	 * to fall back to the renderer cwd.
+	 */
+	readonly getVaultBasePath?: () => string | null;
 }
 
 /** SPEC §4.3 `_clampTimeout` floor / ceiling. */
@@ -149,6 +156,7 @@ export class ClaudeSubprocessAdapter implements ChatTransportPort, TransportLife
 	private readonly _getSettings: () => PluginSettings;
 	private readonly _logger: LoggerPort;
 	private readonly _resolveCliPath: () => Promise<string | null>;
+	private readonly _getVaultBasePath: () => string | null;
 	// @ts-expect-error TS6133: reserved for telemetry hooks landing in T-ASM-038.
 	private readonly _now: () => number;
 
@@ -157,6 +165,7 @@ export class ClaudeSubprocessAdapter implements ChatTransportPort, TransportLife
 		this._logger = deps.logger;
 		this._resolveCliPath = deps.resolveCliPath;
 		this._lifecycle = new SubprocessLifecycle({ spawn: deps.spawn, logger: deps.logger });
+		this._getVaultBasePath = deps.getVaultBasePath ?? ((): string | null => null);
 		this._now = deps.now ?? Date.now;
 	}
 
@@ -258,6 +267,7 @@ export class ClaudeSubprocessAdapter implements ChatTransportPort, TransportLife
 				emitCompletionTelemetry: (args) => {
 					this._emitCompletionTelemetry(args);
 				},
+				getCwd: () => this._getVaultBasePath(),
 			},
 			this._binaryPath,
 			prompt,
@@ -430,7 +440,12 @@ export class ClaudeSubprocessAdapter implements ChatTransportPort, TransportLife
 		onSessionId: ((sessionId: SessionId) => void) | null,
 		reducer: StreamDeltaReducer,
 	): Result<TurnProc, ChatTransportError> {
-		const spawned = this._lifecycle.spawn(binaryPath, argv, 'spawn.failed');
+		const spawned = this._lifecycle.spawn(
+			binaryPath,
+			argv,
+			'spawn.failed',
+			this._getVaultBasePath(),
+		);
 		if (!spawned.ok) return spawned;
 		const child = spawned.value;
 
