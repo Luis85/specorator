@@ -224,6 +224,10 @@ function handlePaletteKeydown(event: KeyboardEvent): boolean {
 		return true;
 	}
 	if (event.key === 'Enter' || event.key === 'Tab') {
+		// Ctrl/Cmd+Enter is always the commit gesture — let it fall through
+		// to `tryHandleSendKey` even when the palette is open, matching the
+		// behaviour of the mention `tryCommitFromKey` guard.
+		if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) return false;
 		const command = palette.select();
 		if (command !== null) {
 			event.preventDefault();
@@ -340,7 +344,11 @@ function handleKeydown(event: KeyboardEvent): void {
 	// BEFORE the confirm-Enter keydown, leaving `isComposing` false on that
 	// keydown. We deliberately do not defend that case — see docs/non-goals.md
 	// (CJK/Safari on the standalone-web demo is an explicit non-goal).
-	if (event.isComposing) return;
+	// IME composition guard only applies when no command modifier is held:
+	// Ctrl/Cmd+Enter is always a commit gesture and never composes a glyph,
+	// so skipping it under spurious `isComposing=true` (observed on Obsidian
+	// Windows with certain IMEs / input modes) silently breaks send.
+	if (event.isComposing && !(event.ctrlKey || event.metaKey)) return;
 	if (tryHandlePlanModeKey(event)) return;
 	if (handlePickerKey(event)) return;
 	if (handlePaletteKeydown(event)) return;

@@ -129,10 +129,17 @@ describe('ChatInput', () => {
 			expect(po.emitted('send')).toBeFalsy();
 		});
 
-		it('Ctrl+Enter does not emit send while an IME is composing', async () => {
+		it('Ctrl+Enter commits even when isComposing=true (some Obsidian/IME setups report spurious composition state)', async () => {
 			const po = mountChatInput({ modelValue: 'こんにち', disabled: false, loading: false });
 			const ta = po.textarea;
 			await ta.trigger('keydown', { key: 'Enter', ctrlKey: true, isComposing: true });
+			expect(po.emitted('send')).toBeTruthy();
+		});
+
+		it('plain Enter is still suppressed while an IME is composing', async () => {
+			const po = mountChatInput({ modelValue: 'こんにち', disabled: false, loading: false });
+			const ta = po.textarea;
+			await ta.trigger('keydown', { key: 'Enter', isComposing: true });
 			expect(po.emitted('send')).toBeFalsy();
 		});
 	});
@@ -394,11 +401,19 @@ describe('ChatInput', () => {
 			it('Enter on a highlighted entry emits select-command and does NOT emit send', async () => {
 				const po = mountChatInput({ modelValue: '/', disabled: false, loading: false });
 				await po.typeAndMoveCaret('/');
-				await po.pressKey('Enter', { ctrl: true });
+				await po.pressKey('Enter');
 				expect(po.emitted('send')).toBeFalsy();
 				const emitted = po.emitted('select-command') as Array<[{ name: string }]> | undefined;
 				expect(emitted).toBeTruthy();
 				expect(emitted?.[0][0].name).toBe('clear');
+			});
+
+			it('Ctrl+Enter while the palette is open still commits send (palette does not capture the commit gesture)', async () => {
+				const po = mountChatInput({ modelValue: '/', disabled: false, loading: false });
+				await po.typeAndMoveCaret('/');
+				await po.pressKey('Enter', { ctrl: true });
+				expect(po.emitted('send')).toBeTruthy();
+				expect(po.emitted('select-command')).toBeFalsy();
 			});
 
 			it('Tab selects the highlighted entry', async () => {

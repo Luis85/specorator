@@ -2617,15 +2617,15 @@ to {
 	color: var(--sp-text-normal);
 }
 
-.specorator-root :where(.sp-chat__input-area[data-v-f74e0f8c]) {
+.specorator-root :where(.sp-chat__input-area[data-v-faf2d0b7]) {
 	display: flex;
 	flex-direction: column;
 	gap: 0.5rem;
 }
-.specorator-root :where(.sp-chat__input-wrapper[data-v-f74e0f8c]) {
+.specorator-root :where(.sp-chat__input-wrapper[data-v-faf2d0b7]) {
 	position: relative;
 }
-.specorator-root :where(.sp-chat__textarea[data-v-f74e0f8c]) {
+.specorator-root :where(.sp-chat__textarea[data-v-faf2d0b7]) {
 	width: 100%;
 	min-height: 4.5rem;
 	max-height: 8rem;
@@ -2640,11 +2640,11 @@ to {
 	font-size: 0.875rem;
 	box-sizing: border-box;
 }
-.specorator-root :where(.sp-chat__textarea[data-v-f74e0f8c]:focus) {
+.specorator-root :where(.sp-chat__textarea[data-v-faf2d0b7]:focus) {
 	outline: none;
 	border-color: var(--interactive-accent);
 }
-.specorator-root :where(.sp-chat__input-actions[data-v-f74e0f8c]) {
+.specorator-root :where(.sp-chat__input-actions[data-v-faf2d0b7]) {
 	display: flex;
 	justify-content: flex-end;
 }
