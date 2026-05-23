@@ -533,14 +533,26 @@ export class SessionLogWriter {
   /**
    * Probe for an existing log this writer should reuse for `sessionId`.
    * Runs the legacy `<sessionId>.md` probe first (back-compat for files
-   * minted before Q-E.1). When the caller had no `firstUserMessage` hint
-   * (proposal-decision callers, REQ-ASM-046) the slug path collapses to the
-   * legacy path and we cannot reconstruct the human-readable basename a
-   * previous user-assistant turn wrote to — a plugin restart leaves the
-   * in-memory `resolvedPaths` cache empty, so without this fallback the
-   * proposal audit row would land in a new file and split the conversation.
-   * Scan the sessions folder for any existing log whose frontmatter
-   * `session_id` matches and reuse it. Returns `null` when no reuse applies.
+   * minted before Q-E.1), then falls through to a folder-scan that
+   * inspects each `.md` in the sessions folder and reuses the one whose
+   * frontmatter `session_id` matches.
+   *
+   * The folder-scan covers two distinct restart hazards:
+   *
+   * 1. **Proposal-decision after restart (Codex P2)** — `appendProposalDecision`
+   *    passes `firstUserMessage: null`, so `slugPath` collapses to the
+   *    legacy path and we cannot reconstruct the human-readable basename
+   *    a previous user-assistant turn wrote to.
+   * 2. **Resumed user-assistant turn after restart (Codex P1)** —
+   *    `appendUserAssistant` passes the *current* turn's user text as
+   *    `firstUserMessage`. After restart the in-memory `resolvedPaths`
+   *    cache is empty, so a follow-up turn with a different message
+   *    would derive `<date>_<later-msg>__<id>.md` and create a parallel
+   *    file even though `<date>_<first-msg>__<id>.md` already holds the
+   *    same `session_id`. The folder-scan finds and reuses it.
+   *
+   * Result memoised through `resolvedPaths` so the scan runs at most
+   * once per `sessionId` per writer instance.
    */
   private async tryReuseExistingLog(
     slugPath: string,
@@ -549,11 +561,11 @@ export class SessionLogWriter {
   ): Promise<string | null> {
     const legacyReuse = await this.tryLegacyReuse(slugPath, legacyPath, sessionId)
     if (legacyReuse !== null) return legacyReuse
-    if (legacyPath !== slugPath) return null
     const folder = parentFolder(slugPath)
     if (folder === '') return null
     const files = await this.vault.listFiles(folder)
     for (const file of files) {
+      if (file === slugPath) continue
       if (!file.endsWith('.md')) continue
       const content = await this.vault.readFile(file)
       if (extractSessionIdFromFrontmatter(content) === sessionId) {

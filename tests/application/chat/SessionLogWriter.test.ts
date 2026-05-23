@@ -506,6 +506,44 @@ describe('SessionLogWriter.appendProposalDecision (REQ-ASM-046)', () => {
     expect(ports.logger.error).toHaveBeenCalled()
   })
 
+  it('appendUserAssistant after restart with a different turn appends to the existing slug-named log (regression: Codex P1 #429)', async () => {
+    const thread = makeThread()
+    // Writer #1 seeds the slug-named log keyed off the first user message.
+    const writer1 = makeWriter(ports, () => '2026-05-14T10:00:00.000Z')
+    await writer1.appendUserAssistant(thread, { user: 'hi', assistant: 'hello' })
+    const firstPath = slugPath(
+      thread.feature,
+      thread.sessionId!,
+      'specs',
+      thread.createdAt,
+      'hi',
+    )
+    expect(await ports.vault.fileExists(firstPath)).toBe(true)
+
+    // Writer #2 simulates a plugin restart — fresh in-memory cache. The next
+    // turn carries a different user text, so without the folder-scan
+    // fallback the writer would derive `<date>_<later>__<id>.md` and split
+    // the conversation across two files.
+    const writer2 = makeWriter(ports, () => '2026-05-14T10:10:00.000Z')
+    await writer2.appendUserAssistant(thread, { user: 'later turn', assistant: 'reply 2' })
+
+    // No parallel slug-named file was created from the later turn text.
+    const splitPath = slugPath(
+      thread.feature,
+      thread.sessionId!,
+      'specs',
+      thread.createdAt,
+      'later turn',
+    )
+    expect(splitPath).not.toBe(firstPath)
+    expect(await ports.vault.fileExists(splitPath)).toBe(false)
+
+    // The follow-up turn appended to the existing slug-named log.
+    const written = await ports.vault.readFile(firstPath)
+    expect(written).toContain('later turn')
+    expect(written).toContain('reply 2')
+  })
+
   it('appendProposalDecision after restart appends to the existing slug-named log (regression: Codex P2 #429)', async () => {
     const thread = makeThread()
     // Writer #1 seeds the slug-named log via a normal user-assistant turn.
