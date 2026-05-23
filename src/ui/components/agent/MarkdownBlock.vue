@@ -27,7 +27,7 @@
  *     emitted without an `href` attribute so they cannot smuggle
  *     `javascript:` URIs.
  */
-import { computed, h, inject, onBeforeUnmount, ref, watch, type VNode } from 'vue';
+import { computed, h, inject, onBeforeUnmount, onMounted, ref, watch, type VNode } from 'vue';
 import { MARKDOWN_RENDER_PORT } from '@/infrastructure/bridge/ports';
 import type { MarkdownRenderPort } from '@/domain/ports/MarkdownRenderPort';
 
@@ -358,6 +358,18 @@ let nativeDisposer: (() => void) | null = null;
  * and discards itself on resolve if `latestSeq` has moved past it.
  */
 let latestSeq = 0;
+
+onMounted(() => {
+	// The `watch(..., { immediate: true, flush: 'post' })` below can fire its
+	// immediate run before the template ref is bound (observed in Vue 3.5
+	// inside Obsidian's view lifecycle): `nativeContainer.value` is still
+	// `null`, so `rerenderNative` returns early. For completed messages whose
+	// text never changes again, that early-return is terminal and the body
+	// stays empty. Streaming bubbles only render because subsequent text
+	// deltas re-fire the watcher after the container has bound. Trigger one
+	// explicit render at mount time so finalised messages render too.
+	void rerenderNative();
+});
 
 async function rerenderNative(): Promise<void> {
 	if (renderPort === undefined) return;
