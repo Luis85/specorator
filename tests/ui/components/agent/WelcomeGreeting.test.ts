@@ -11,6 +11,9 @@ import { createI18n } from 'vue-i18n'
 import en from '@/ui/i18n/locales/en'
 import WelcomeGreeting from '@/ui/components/agent/WelcomeGreeting.vue'
 import { WelcomeGreetingPageObject } from './WelcomeGreeting.po'
+import type { LoggerPort } from '@/domain/ports'
+import { ICON_PORT, LOGGER_PORT } from '@/infrastructure/bridge/ports'
+import { MockBridge } from '@/infrastructure/mock/MockBridge'
 
 function makeI18n() {
 	return createI18n({
@@ -21,10 +24,24 @@ function makeI18n() {
 	})
 }
 
+function fakeLogger(): LoggerPort {
+	return { debug() {}, info() {}, warn() {}, error() {} }
+}
+
 function mountAt(hour: number) {
+	// QW-D — the chip set now embeds `<SpIcon>` which requires the
+	// ICON_PORT + LOGGER_PORT injections. Wire a MockBridge so the icon
+	// host renders without throwing in jsdom.
+	const bridge = new MockBridge()
 	const wrapper = mount(WelcomeGreeting, {
 		props: { hourOverride: hour },
-		global: { plugins: [makeI18n()] },
+		global: {
+			plugins: [makeI18n()],
+			provide: {
+				[ICON_PORT as symbol]: bridge,
+				[LOGGER_PORT as symbol]: fakeLogger(),
+			},
+		},
 	})
 	return { wrapper, po: new WelcomeGreetingPageObject(wrapper) }
 }
@@ -64,12 +81,66 @@ describe('WelcomeGreeting', () => {
 		expect(po.rootEl.getAttribute('data-testid')).toBe('welcome-greeting')
 	})
 
-	it('renders the default suggestion chips and emits `suggestion-pick` on click', async () => {
-		const { wrapper, po } = mountAt(10)
+	it('renders the four vault-investigation chips with their localized labels', () => {
+		// QW-D — chips are now wired to the new vault tools (Glob/Grep/Read).
+		// Verify each label text matches the i18n source so the localized
+		// surface tracks the source of truth, not a hardcoded string.
+		const { po } = mountAt(10)
 		expect(po.suggestionChipCount()).toBe(4)
-		await po.clickSuggestion('slash')
+		expect(po.suggestionLabel('findOrphans')).toBe(
+			en.welcome.chips.findOrphans.label,
+		)
+		expect(po.suggestionLabel('summarizeActive')).toBe(
+			en.welcome.chips.summarizeActive.label,
+		)
+		expect(po.suggestionLabel('projectsTag')).toBe(
+			en.welcome.chips.projectsTag.label,
+		)
+		expect(po.suggestionLabel('brokenLinks')).toBe(
+			en.welcome.chips.brokenLinks.label,
+		)
+	})
+
+	it('emits `suggestion-pick` with the full prompt text on chip click', async () => {
+		// QW-D — clicking a chip must carry the full prompt body so the
+		// parent (AgentSidepanelRoot) can pre-fill the composer textarea
+		// verbatim. Without this the user would just see the short label
+		// in the input, defeating the whole point of the refresh.
+		const { wrapper, po } = mountAt(10)
+		await po.clickSuggestion('findOrphans')
 		const events = wrapper.emitted('suggestion-pick')
 		expect(events).toBeTruthy()
-		expect(events?.[0]?.[0]).toEqual({ id: 'slash' })
+		expect(events?.[0]?.[0]).toEqual({
+			id: 'findOrphans',
+			prompt: en.welcome.chips.findOrphans.prompt,
+		})
+	})
+
+	it('emits the matching prompt for each chip id', async () => {
+		// `summarizeActive.prompt` contains the vue-i18n linked-message escape
+		// `{'@'}` so the source string differs from the rendered string by one
+		// character. We normalise here rather than in the component so the
+		// asserted contract is "what the user sees in their composer".
+		const renderedSummarize = en.welcome.chips.summarizeActive.prompt.replace(
+			"{'@'}",
+			'@',
+		)
+		const { wrapper, po } = mountAt(10)
+		await po.clickSuggestion('summarizeActive')
+		await po.clickSuggestion('projectsTag')
+		await po.clickSuggestion('brokenLinks')
+		const events = wrapper.emitted('suggestion-pick')
+		expect(events?.[0]?.[0]).toEqual({
+			id: 'summarizeActive',
+			prompt: renderedSummarize,
+		})
+		expect(events?.[1]?.[0]).toEqual({
+			id: 'projectsTag',
+			prompt: en.welcome.chips.projectsTag.prompt,
+		})
+		expect(events?.[2]?.[0]).toEqual({
+			id: 'brokenLinks',
+			prompt: en.welcome.chips.brokenLinks.prompt,
+		})
 	})
 })

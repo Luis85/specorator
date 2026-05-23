@@ -108,17 +108,20 @@ const showWelcome = computed(() => {
 	return list === undefined || list.length === 0;
 });
 
+/**
+ * QW-D — vault-investigation chip click handler. The chip payload now
+ * carries the full prompt text (resolved by `<WelcomeGreeting>` from the
+ * `welcome.chips.<id>.prompt` i18n entry). We populate the composer
+ * textarea with that prompt and focus it so the user can review/edit
+ * before sending — no auto-dispatch.
+ */
 async function handleWelcomeSuggestion(payload: {
-	id: 'feature' | 'tasks' | 'file' | 'slash' | 'mention' | 'send' | 'escape';
+	id: 'findOrphans' | 'summarizeActive' | 'projectsTag' | 'brokenLinks';
+	prompt: string;
 }): Promise<void> {
-	if (
-		payload.id === 'slash' ||
-		payload.id === 'mention' ||
-		payload.id === 'send' ||
-		payload.id === 'escape'
-	) {
-		await handleEmptyTileAction(payload.id);
-	}
+	messagesStore.setUserText(payload.prompt);
+	await nextTick();
+	chatSidebarRef.value?.focusInputForTilePrefill();
 }
 
 const activeThreadId = computed(() => threadsStore.activeThreadId);

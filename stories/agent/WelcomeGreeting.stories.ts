@@ -7,6 +7,11 @@ import WelcomeGreeting from '@/ui/components/agent/WelcomeGreeting.vue';
  * from the local hour; `hourOverride` makes the four time bands
  * deterministically renderable. Satisfies REQ-AUX-007 and the WS-AUX-10
  * Storybook coverage gate (T-AUX-345).
+ *
+ * QW-D — the default chip set now exposes four vault-investigation
+ * prompts (Find orphan notes, Summarize active note, Find #project notes,
+ * Audit broken wikilinks). The chip row exercises the new icon slot via
+ * `<SpIcon>`.
  */
 const meta: Meta<typeof WelcomeGreeting> = {
 	title: 'Agent/WelcomeGreeting',

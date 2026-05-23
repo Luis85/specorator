@@ -3,7 +3,9 @@
  * `WelcomeGreeting.vue` — empty-thread welcome surface (spec §1.3.5).
  * Centred serif greeting whose variant is computed from the current local
  * hour. Renders a row of `WelcomeSuggestionChip`s; clicking a chip emits
- * `suggestion-pick` so the parent can pre-fill the composer.
+ * `suggestion-pick` with the chip id AND the full prompt text so the
+ * parent can pre-fill the composer textarea (QW-D — vault-investigation
+ * prompts replacing the legacy hint chips).
  *
  * Satisfies: REQ-AUX-007.
  */
@@ -12,17 +14,14 @@ import { useI18n } from 'vue-i18n'
 import WelcomeSuggestionChip from './WelcomeSuggestionChip.vue'
 
 type SuggestionId =
-	| 'feature'
-	| 'tasks'
-	| 'file'
-	| 'slash'
-	| 'mention'
-	| 'send'
-	| 'escape'
+	| 'findOrphans'
+	| 'summarizeActive'
+	| 'projectsTag'
+	| 'brokenLinks'
 
 interface WelcomeSuggestion {
 	id: SuggestionId
-	prefillText?: string
+	icon: string
 }
 
 interface WelcomeGreetingProps {
@@ -35,15 +34,15 @@ interface WelcomeGreetingProps {
 }
 const props = withDefaults(defineProps<WelcomeGreetingProps>(), {
 	suggestions: () => [
-		{ id: 'slash' },
-		{ id: 'mention' },
-		{ id: 'send' },
-		{ id: 'escape' },
+		{ id: 'findOrphans', icon: 'unplug' },
+		{ id: 'summarizeActive', icon: 'file-text' },
+		{ id: 'projectsTag', icon: 'hash' },
+		{ id: 'brokenLinks', icon: 'link-2-off' },
 	],
 })
 
 const emit = defineEmits<{
-	'suggestion-pick': [payload: { id: SuggestionId }]
+	'suggestion-pick': [payload: { id: SuggestionId; prompt: string }]
 }>()
 
 const { t } = useI18n()
@@ -64,7 +63,11 @@ const band = computed<TimeBand>(() =>
 const greeting = computed(() => t(`welcome.greeting.${band.value}`))
 
 function handlePick(payload: { id: string }): void {
-	emit('suggestion-pick', { id: payload.id as SuggestionId })
+	const id = payload.id as SuggestionId
+	emit('suggestion-pick', {
+		id,
+		prompt: t(`welcome.chips.${id}.prompt`),
+	})
 }
 </script>
 
@@ -88,7 +91,8 @@ function handlePick(payload: { id: string }): void {
 				v-for="s in suggestions"
 				:key="s.id"
 				:id="s.id"
-				:label="t(`welcome.suggestion.${s.id}`)"
+				:label="t(`welcome.chips.${s.id}.label`)"
+				:icon="s.icon"
 				@pick="handlePick"
 			/>
 		</div>

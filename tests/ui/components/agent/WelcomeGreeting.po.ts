@@ -35,12 +35,26 @@ export class WelcomeGreetingPageObject {
 	}
 
 	suggestionChipCount(): number {
+		// QW-D — the chip's inner label span also carries a
+		// `welcome-suggestion-<id>-label` testid. Restrict to the chip
+		// elements (buttons) so the label spans don't double-count.
 		return this.suggestionsEl.querySelectorAll(
-			'[data-testid^="welcome-suggestion-"]',
+			'[data-testid^="welcome-suggestion-"]:not([data-testid$="-label"])',
 		).length
 	}
 
 	async clickSuggestion(id: string): Promise<void> {
 		await this.wrapper.get(`[data-testid="welcome-suggestion-${id}"]`).trigger('click')
+	}
+
+	suggestionLabel(id: string): string {
+		// QW-D — chip renders `<SpIcon>` + a separate label span; we read the
+		// label span via its own `welcome-suggestion-<id>-label` testid so the
+		// icon's embedded `<title>` (added by MockBridge to mimic Lucide
+		// markup) does not leak into the asserted string.
+		const labelEl = this.wrapper.get(
+			`[data-testid="welcome-suggestion-${id}-label"]`,
+		).element as HTMLElement
+		return labelEl.textContent.trim()
 	}
 }

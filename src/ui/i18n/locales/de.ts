@@ -352,4 +352,42 @@ export default {
 		cursor: 'Cursor',
 		model: 'Modell',
 	},
+	// QW-D — Begrüßungsfläche mit Vault-Recherche-Chips (REQ-AUX-007).
+	welcome: {
+		greeting: {
+			morning: 'Guten Morgen.',
+			afternoon: 'Guten Tag.',
+			evening: 'Guten Abend.',
+			night: 'Noch wach?',
+		},
+		subtitle: 'Was möchtest du als Nächstes tun?',
+		// QW-D — chip labels are translated; the prompts (sent to the LLM)
+		// are intentionally kept in English so model output stays predictable
+		// across locales. A native-speaker pass can localise the prompts in a
+		// follow-up once the German strings are signed off.
+		chips: {
+			findOrphans: {
+				label: 'Verwaiste Notizen finden',
+				prompt:
+					'List every markdown file in the vault that has no incoming links (orphans). Use Glob to enumerate files and Grep to find which paths are referenced as [[wikilinks]]. Return the orphan list grouped by folder.',
+			},
+			summarizeActive: {
+				label: 'Aktive Notiz zusammenfassen',
+				// `{'@'}` escapes vue-i18n's linked-message `@:key` sigil.
+				prompt:
+					"Read the active note and produce a concise summary (≤5 bullets) plus a list of any TODOs, open questions, or {'@'}mentions found in it.",
+			},
+			projectsTag: {
+				label: '#project-Notizen finden',
+				prompt:
+					'Search the vault for notes tagged #project (frontmatter tag, inline #project, or YAML list). Return a table: title · last-modified path · short snippet.',
+			},
+			brokenLinks: {
+				label: 'Defekte Wikilinks prüfen',
+				prompt:
+					'Use Grep across .md files to find every [[wikilink]] target, then check each target file exists via Glob/Read. Report broken links with source-file:line.',
+			},
+		},
+		suggestionAriaLabel: 'Vorschlag: {label}',
+	},
 } as const;

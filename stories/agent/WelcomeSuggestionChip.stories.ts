@@ -6,13 +6,16 @@ import WelcomeSuggestionChip from '@/ui/components/agent/WelcomeSuggestionChip.v
  * Pure presentational chip in the welcome surface suggestion grid; click
  * bubbles via `pick`. Satisfies REQ-AUX-007 and the WS-AUX-10 Storybook
  * coverage gate (T-AUX-345).
+ *
+ * QW-D — chip now supports a Lucide icon rendered via `<SpIcon>`.
  */
 const meta: Meta<typeof WelcomeSuggestionChip> = {
 	title: 'Agent/WelcomeSuggestionChip',
 	component: WelcomeSuggestionChip,
 	args: {
-		id: 'slash',
-		label: 'Try /help',
+		id: 'findOrphans',
+		label: 'Find orphan notes',
+		icon: 'unplug',
 	},
 	render: (args) => ({
 		components: { WelcomeSuggestionChip },
@@ -31,6 +34,18 @@ type Story = StoryObj<typeof WelcomeSuggestionChip>;
 
 export const Default: Story = {};
 
-export const LongerLabel: Story = {
-	args: { id: 'feature', label: 'Start a new feature' },
+export const SummarizeActive: Story = {
+	args: { id: 'summarizeActive', label: 'Summarize active note', icon: 'file-text' },
+};
+
+export const ProjectsTag: Story = {
+	args: { id: 'projectsTag', label: 'Find #project notes', icon: 'hash' },
+};
+
+export const BrokenLinks: Story = {
+	args: { id: 'brokenLinks', label: 'Audit broken wikilinks', icon: 'link-2-off' },
+};
+
+export const NoIcon: Story = {
+	args: { id: 'findOrphans', label: 'Find orphan notes', icon: undefined },
 };

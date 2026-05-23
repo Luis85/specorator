@@ -293,14 +293,33 @@ export default {
 			night: 'Working late?',
 		},
 		subtitle: 'What would you like to do next?',
-		suggestion: {
-			feature: 'Start a new feature',
-			tasks: 'Pick up where you left off',
-			file: 'Discuss an open file',
-			slash: 'Browse slash commands',
-			mention: 'Attach a vault file with the at-sign',
-			send: 'Press Cmd/Ctrl+Enter to send',
-			escape: 'Esc to dismiss a palette',
+		// QW-D — vault-investigation chips. `label` is shown on the chip;
+		// `prompt` is the full instruction injected into the composer when the
+		// chip is clicked (user reviews before sending — no auto-dispatch).
+		chips: {
+			findOrphans: {
+				label: 'Find orphan notes',
+				prompt:
+					'List every markdown file in the vault that has no incoming links (orphans). Use Glob to enumerate files and Grep to find which paths are referenced as [[wikilinks]]. Return the orphan list grouped by folder.',
+			},
+			summarizeActive: {
+				label: 'Summarize active note',
+				// `{'@'}` is the vue-i18n literal-interpolation escape for the
+				// `@` sigil, which otherwise opens a linked-message reference
+				// (`@:key`) and fails to parse.
+				prompt:
+					"Read the active note and produce a concise summary (≤5 bullets) plus a list of any TODOs, open questions, or {'@'}mentions found in it.",
+			},
+			projectsTag: {
+				label: 'Find #project notes',
+				prompt:
+					'Search the vault for notes tagged #project (frontmatter tag, inline #project, or YAML list). Return a table: title · last-modified path · short snippet.',
+			},
+			brokenLinks: {
+				label: 'Audit broken wikilinks',
+				prompt:
+					'Use Grep across .md files to find every [[wikilink]] target, then check each target file exists via Glob/Read. Report broken links with source-file:line.',
+			},
 		},
 		suggestionAriaLabel: 'Try: {label}',
 	},
