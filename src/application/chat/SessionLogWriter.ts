@@ -567,8 +567,19 @@ export class SessionLogWriter {
     for (const file of files) {
       if (file === slugPath) continue
       if (!file.endsWith('.md')) continue
-      const content = await this.vault.readFile(file)
-      if (extractSessionIdFromFrontmatter(content) === sessionId) {
+      // Per-file read failures (e.g. file deleted between list and read,
+      // permission glitch, transient I/O) must not abort the scan — the
+      // target log may still be writable. Skip the offender and continue;
+      // a stale entry is preferable to a false-negative append failure.
+      const read = await tryAsync(() => this.vault.readFile(file))
+      if (!read.ok) {
+        this.logger.debug('SessionLogWriter: reuse scan skipped unreadable file', {
+          file,
+          reason: String(read.error.message),
+        })
+        continue
+      }
+      if (extractSessionIdFromFrontmatter(read.value) === sessionId) {
         return file
       }
     }

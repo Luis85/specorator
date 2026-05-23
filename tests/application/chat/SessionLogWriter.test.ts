@@ -544,6 +544,46 @@ describe('SessionLogWriter.appendProposalDecision (REQ-ASM-046)', () => {
     expect(written).toContain('reply 2')
   })
 
+  it('folder-scan skips an unreadable file and still finds the matching session log (regression: Codex P2 #429 — unreadable scan)', async () => {
+    const thread = makeThread()
+    // Seed the real slug-named log.
+    const writer1 = makeWriter(ports, () => '2026-05-14T10:00:00.000Z')
+    await writer1.appendUserAssistant(thread, { user: 'hi', assistant: 'hello' })
+    const realPath = slugPath(
+      thread.feature,
+      thread.sessionId!,
+      'specs',
+      thread.createdAt,
+      'hi',
+    )
+
+    // Seed a sibling decoy file that the listFiles probe will encounter
+    // first, but whose readFile rejects transiently (e.g. deleted between
+    // list and read). The scan must skip it and still find `realPath`.
+    const decoyPath = `specs/${thread.feature!}/sessions/aaaa-decoy.md`
+    await ports.vault.writeFile(decoyPath, '---\nsession_id: other\n---\n')
+    const originalReadFile = ports.vault.readFile.bind(ports.vault)
+    vi.spyOn(ports.vault, 'readFile').mockImplementation(async (p: string) => {
+      if (p === decoyPath) throw new Error('transient I/O — file vanished')
+      return originalReadFile(p)
+    })
+
+    // Fresh writer (simulating restart) — empty resolvedPaths cache forces
+    // the folder-scan path.
+    const writer2 = makeWriter(ports, () => '2026-05-14T10:10:00.000Z')
+    await writer2.appendProposalDecision({
+      thread,
+      proposal: { envelope: { path: 'notes/idea.md' } },
+      decision: 'accepted',
+      decidedAt: '2026-05-14T10:10:00.000Z',
+    })
+
+    // The proposal landed in the real slug-named log, not in a parallel file.
+    const written = await originalReadFile(realPath)
+    expect(written).toContain('## proposal')
+    expect(written).toContain('- decision: accepted')
+  })
+
   it('appendProposalDecision after restart appends to the existing slug-named log (regression: Codex P2 #429)', async () => {
     const thread = makeThread()
     // Writer #1 seeds the slug-named log via a normal user-assistant turn.
