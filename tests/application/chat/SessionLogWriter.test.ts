@@ -506,6 +506,48 @@ describe('SessionLogWriter.appendProposalDecision (REQ-ASM-046)', () => {
     expect(ports.logger.error).toHaveBeenCalled()
   })
 
+  it('appendProposalDecision after restart appends to the existing slug-named log (regression: Codex P2 #429)', async () => {
+    const thread = makeThread()
+    // Writer #1 seeds the slug-named log via a normal user-assistant turn.
+    const writer1 = makeWriter(ports, () => '2026-05-14T10:00:00.000Z')
+    await writer1.appendUserAssistant(thread, { user: 'hi', assistant: 'hello' })
+    const existingPath = slugPath(
+      thread.feature,
+      thread.sessionId!,
+      'specs',
+      thread.createdAt,
+      'hi',
+    )
+    expect(await ports.vault.fileExists(existingPath)).toBe(true)
+
+    // Writer #2 simulates a plugin restart — fresh in-memory `resolvedPaths`
+    // cache, no firstUserMessage hint, but the slug-named file is still on
+    // disk. The proposal-decision append must land in the existing file
+    // instead of creating a parallel UUID-named log.
+    const writer2 = makeWriter(ports, () => '2026-05-14T10:10:00.000Z')
+    await writer2.appendProposalDecision({
+      thread,
+      proposal: { envelope: { path: 'notes/idea.md', rationale: 'because-spec' } },
+      decision: 'accepted',
+      decidedAt: '2026-05-14T10:10:00.000Z',
+    })
+
+    // No parallel UUID-named log was created.
+    const legacyPath = resolveSessionLogPath(
+      thread.feature,
+      thread.sessionId!,
+      'specs',
+    )
+    expect(legacyPath).not.toBe(existingPath)
+    expect(await ports.vault.fileExists(legacyPath)).toBe(false)
+
+    // The proposal audit row landed in the existing slug-named log.
+    const written = await ports.vault.readFile(existingPath)
+    expect(written).toContain('## proposal')
+    expect(written).toContain('- path: notes/idea.md')
+    expect(written).toContain('- decision: accepted')
+  })
+
   it('appendUserAssistant still resolves successfully when the underlying writeFile throws (fire-and-forget per REQ-ASM-040)', async () => {
     const thread = makeThread()
     vi.spyOn(ports.vault, 'writeFile').mockRejectedValue(new Error('boom'))

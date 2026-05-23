@@ -464,10 +464,10 @@ export class SessionLogWriter {
   ): Promise<string> {
     const cached = this.resolvedPaths.get(sessionId)
     if (cached !== undefined) return cached
-    const legacyReuse = await this.tryLegacyReuse(slugPath, legacyPath, sessionId)
-    if (legacyReuse !== null) {
-      this.resolvedPaths.set(sessionId, legacyReuse)
-      return legacyReuse
+    const reuse = await this.tryReuseExistingLog(slugPath, legacyPath, sessionId)
+    if (reuse !== null) {
+      this.resolvedPaths.set(sessionId, reuse)
+      return reuse
     }
     const exists = await this.vault.fileExists(slugPath)
     if (!exists) {
@@ -528,6 +528,39 @@ export class SessionLogWriter {
     const legacyContent = await this.vault.readFile(legacyPath)
     const legacySession = extractSessionIdFromFrontmatter(legacyContent)
     return legacySession === sessionId ? legacyPath : null
+  }
+
+  /**
+   * Probe for an existing log this writer should reuse for `sessionId`.
+   * Runs the legacy `<sessionId>.md` probe first (back-compat for files
+   * minted before Q-E.1). When the caller had no `firstUserMessage` hint
+   * (proposal-decision callers, REQ-ASM-046) the slug path collapses to the
+   * legacy path and we cannot reconstruct the human-readable basename a
+   * previous user-assistant turn wrote to — a plugin restart leaves the
+   * in-memory `resolvedPaths` cache empty, so without this fallback the
+   * proposal audit row would land in a new file and split the conversation.
+   * Scan the sessions folder for any existing log whose frontmatter
+   * `session_id` matches and reuse it. Returns `null` when no reuse applies.
+   */
+  private async tryReuseExistingLog(
+    slugPath: string,
+    legacyPath: string,
+    sessionId: string,
+  ): Promise<string | null> {
+    const legacyReuse = await this.tryLegacyReuse(slugPath, legacyPath, sessionId)
+    if (legacyReuse !== null) return legacyReuse
+    if (legacyPath !== slugPath) return null
+    const folder = parentFolder(slugPath)
+    if (folder === '') return null
+    const files = await this.vault.listFiles(folder)
+    for (const file of files) {
+      if (!file.endsWith('.md')) continue
+      const content = await this.vault.readFile(file)
+      if (extractSessionIdFromFrontmatter(content) === sessionId) {
+        return file
+      }
+    }
+    return null
   }
 
   /** Idempotent parent-folder creation; swallows already-exists errors. */
