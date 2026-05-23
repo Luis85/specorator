@@ -92,7 +92,11 @@ export class SubprocessLifecycle {
 	): Result<ChildProcessLike, ChatTransportError> {
 		let child: ChildProcess;
 		try {
-			child = this._spawn(binaryPath, argv, { stdio: ['pipe', 'pipe', 'pipe'] });
+			// stdin must NOT be a pipe: Claude CLI v2.x with -p holds the
+			// process open until stdin EOF when stdin is a pipe, manifesting
+			// as a TIMEOUT verdict on the renderer side. We never write to
+			// stdin in this code path — the prompt is in argv.
+			child = this._spawn(binaryPath, argv, { stdio: ['ignore', 'pipe', 'pipe'] });
 		} catch (e: unknown) {
 			const code = (e as NodeJS.ErrnoException | undefined)?.code;
 			// Preserve the dotted event-key format so dashboards / alerts keyed
