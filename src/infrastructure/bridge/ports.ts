@@ -97,3 +97,14 @@ export const SETTINGS_VERSION_KEY: InjectionKey<Ref<number>> = Symbol('settingsV
  * can call it unconditionally.
  */
 export const OPEN_PLUGIN_SETTINGS_KEY: InjectionKey<() => void> = Symbol('openPluginSettings')
+
+/**
+ * Q-E.3 — plugin self-id accessor. Wired from `manifest.json` by the plugin
+ * entry so the chat panel's `<vault-context>` greeting can render a
+ * `Plugin: <name> v<version>` row on the first turn. Callers without a real
+ * manifest (unit tests, standalone browser UI) omit this provide and the
+ * `TurnInputBuilder` falls back to `{ name: 'Specorator', version: '0.0.0' }`.
+ */
+export const PLUGIN_MANIFEST_KEY: InjectionKey<
+	() => { readonly name: string; readonly version: string }
+> = Symbol('pluginManifest')

@@ -19,6 +19,7 @@ import {
 	SETTINGS_VERSION_KEY,
 	TRANSPORT_KIND_KEY,
 	OPEN_PLUGIN_SETTINGS_KEY,
+	PLUGIN_MANIFEST_KEY,
 	ICON_PORT,
 } from '@/infrastructure/bridge/ports';
 import { ObsidianMarkdownRenderAdapter } from '@/infrastructure/obsidian/ObsidianMarkdownRenderAdapter';
@@ -215,6 +216,13 @@ export class AgentSidepanelView extends ItemView {
 			setting.open();
 			setting.openTabById(this.plugin.manifest.id);
 		});
+		// Q-E.3 — plugin self-id from `manifest.json` so the chat panel's
+		// `<vault-context>` greeting renders an accurate `Plugin: <name>
+		// v<version>` row on the first turn of every new thread.
+		this.vueApp.provide(PLUGIN_MANIFEST_KEY, () => ({
+			name: this.plugin.manifest.name,
+			version: this.plugin.manifest.version,
+		}));
 
 		this.vueApp.config.errorHandler = (err, _instance, info) => {
 			bridge.error(`[Vue] Unhandled error in ${info}`, err);

@@ -20,6 +20,7 @@ import {
   SETTINGS_VERSION_KEY,
   TRANSPORT_KIND_KEY,
   OPEN_PLUGIN_SETTINGS_KEY,
+  PLUGIN_MANIFEST_KEY,
   ICON_PORT,
 } from '@/infrastructure/bridge/ports'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
@@ -282,6 +283,11 @@ export class SpecoratorView extends ItemView {
       setting.open()
       setting.openTabById(this.plugin.manifest.id)
     })
+    // Q-E.3 — plugin self-id source for the chat panel's first-turn greeting.
+    this.vueApp.provide(PLUGIN_MANIFEST_KEY, () => ({
+      name: this.plugin.manifest.name,
+      version: this.plugin.manifest.version,
+    }))
     const featureFeedback = new FeedbackService(bridge, bridge)
     this.vueApp.provide(
       FEATURE_SERVICE_KEY,

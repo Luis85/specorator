@@ -98,7 +98,7 @@ describe('buildTurnInput', () => {
 		// the greeting row, even when no active path/selection is set. The
 		// MockBridge default vault metadata is "Mock Vault" / 0 notes.
 		expect(result.systemPromptSuffix).toBe(
-			'<vault-context>\nVault: Mock Vault (0 notes)\n</vault-context>',
+			'<vault-context>\nPlugin: Specorator v0.0.0\nVault: Mock Vault (0 notes)\n</vault-context>',
 		);
 		expect(result.slug).toBeNull();
 	});
@@ -367,7 +367,7 @@ describe('buildTurnInput', () => {
 		// QW-C: stage portion still empty (workflow load failed) but first-turn
 		// vault-context greeting is emitted by the QW-C path.
 		expect(result.systemPromptSuffix).toBe(
-			'<vault-context>\nVault: Mock Vault (0 notes)\n</vault-context>',
+			'<vault-context>\nPlugin: Specorator v0.0.0\nVault: Mock Vault (0 notes)\n</vault-context>',
 		);
 		expect(result.slug).toBe('foo');
 	});
@@ -476,6 +476,44 @@ describe('buildTurnInput', () => {
 		const idxActive = result.systemPromptSuffix.indexOf('Active note:');
 		expect(idxGreeting).toBeGreaterThan(-1);
 		expect(idxGreeting).toBeLessThan(idxActive);
+	});
+
+	it('Q-E.3: emits Plugin row + Vault row from pluginManifest on first turn', async () => {
+		const bridge = makeBridge();
+		bridge.setVaultName('My Vault');
+		bridge.setMarkdownFileCount(7);
+		const result = await buildTurnInput({
+			messages: emptyMessages('hello'),
+			threads: emptyThreads(),
+			transportKindRaw: 'api-key',
+			stagePromptMap,
+			vault: bridge,
+			workspace: bridge,
+			settings: bridge,
+			logger: fakeLogger(),
+			pluginManifest: () => ({ name: 'Specorator', version: '1.2.3' }),
+		});
+		const suffix = result.systemPromptSuffix;
+		expect(suffix).toContain('Plugin: Specorator v1.2.3');
+		expect(suffix).toContain('Vault: My Vault (7 notes)');
+		// Plugin row comes before Vault row.
+		expect(suffix.indexOf('Plugin:')).toBeLessThan(suffix.indexOf('Vault:'));
+	});
+
+	it('Q-E.3: pluginManifest is honoured per-call (fork-installs render their own name)', async () => {
+		const bridge = makeBridge();
+		const result = await buildTurnInput({
+			messages: emptyMessages('hello'),
+			threads: emptyThreads(),
+			transportKindRaw: 'api-key',
+			stagePromptMap,
+			vault: bridge,
+			workspace: bridge,
+			settings: bridge,
+			logger: fakeLogger(),
+			pluginManifest: () => ({ name: 'CustomFork', version: '9.9.9' }),
+		});
+		expect(result.systemPromptSuffix).toContain('Plugin: CustomFork v9.9.9');
 	});
 
 	it('QW-C: omits the Vault greeting row on follow-up turns (thread reuse)', async () => {

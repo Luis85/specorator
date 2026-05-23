@@ -29,11 +29,20 @@ export interface VaultContextBlockArgs {
 	readonly activeFilePath: string | null;
 	readonly activeSelection: string | null;
 	/**
-	 * Vault metadata emitted as the top row on the first turn of a thread,
+	 * Vault metadata emitted as the top rows on the first turn of a thread,
 	 * `null` on follow-up turns (or whenever the caller has no greeting to
 	 * emit). The caller decides "first turn" — the composer is pure.
+	 *
+	 * Q-E.3 extends the greeting with `pluginName` + `pluginVersion`, emitted
+	 * as a dedicated `Plugin: <name> v<version>` row ABOVE the `Vault:` row so
+	 * the agent self-identifies before describing the workspace.
 	 */
-	readonly vaultGreeting: { vaultName: string; markdownFileCount: number } | null;
+	readonly vaultGreeting: {
+		vaultName: string;
+		markdownFileCount: number;
+		pluginName: string;
+		pluginVersion: string;
+	} | null;
 }
 
 function normaliseArgs(
@@ -68,6 +77,9 @@ export function composeVaultContextBlock(
 	}
 	const lines: string[] = ['<vault-context>'];
 	if (vaultGreeting !== null) {
+		// Q-E.3 — plugin self-id row first, then vault metadata, so the agent
+		// knows which tool is talking before it reads the workspace anchor.
+		lines.push(`Plugin: ${vaultGreeting.pluginName} v${vaultGreeting.pluginVersion}`);
 		const noun = vaultGreeting.markdownFileCount === 1 ? 'note' : 'notes';
 		lines.push(
 			`Vault: ${vaultGreeting.vaultName} (${vaultGreeting.markdownFileCount} ${noun})`,

@@ -90,6 +90,13 @@ export interface BuildTurnInputArgs {
 	readonly settings: SettingsPort;
 	readonly logger: LoggerPort;
 	/**
+	 * Q-E.3 — plugin self-id source. Wired from `manifest.json` so the
+	 * `Plugin: <name> v<version>` greeting row reflects the running build.
+	 * Optional: callers that omit it (unit tests, standalone browser UI)
+	 * get a sane default so behaviour stays deterministic.
+	 */
+	readonly pluginManifest?: () => { readonly name: string; readonly version: string };
+	/**
 	 * WS-10 (REQ-MPS-036/037/039): per-turn mode flags. Optional so the
 	 * tabbed `SpecoratorView` (which has no ModeIndicators surface yet) can
 	 * omit it; the builder treats absence as "plan off / no instruction".
@@ -228,10 +235,14 @@ async function computeStagePromptContext(
 	// QW-C — on the first turn of a new thread, prepend a `Vault: <name>
 	// (<n> notes)` row so the agent has an anchor for "this vault". Follow-up
 	// turns omit it (the agent already knows where it is).
+	const manifest =
+		args.pluginManifest?.() ?? { name: 'Specorator', version: '0.0.0' };
 	const vaultGreeting = isFirstTurn
 		? {
 				vaultName: args.workspace.getVaultName(),
 				markdownFileCount: args.workspace.getMarkdownFileCount(),
+				pluginName: manifest.name,
+				pluginVersion: manifest.version,
 			}
 		: null;
 	const vaultBlock = composeVaultContextBlock({

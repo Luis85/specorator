@@ -84,15 +84,18 @@ describe('composeVaultContextBlock', () => {
 });
 
 describe('composeVaultContextBlock — QW-C vault greeting', () => {
-	it('emits greeting first, then active-note, then selection on first turn', () => {
+	const fakePlugin = { pluginName: 'Specorator', pluginVersion: '0.0.1' };
+
+	it('emits plugin self-id, then vault, then active-note, then selection on first turn', () => {
 		const out = composeVaultContextBlock({
 			activeFilePath: 'specs/foo/idea.md',
 			activeSelection: 'snippet',
-			vaultGreeting: { vaultName: 'My Vault', markdownFileCount: 12 },
+			vaultGreeting: { vaultName: 'My Vault', markdownFileCount: 12, ...fakePlugin },
 		});
 		expect(out).toBe(
 			[
 				'<vault-context>',
+				'Plugin: Specorator v0.0.1',
 				'Vault: My Vault (12 notes)',
 				'Active note: specs/foo/idea.md',
 				'Selection:',
@@ -104,28 +107,30 @@ describe('composeVaultContextBlock — QW-C vault greeting', () => {
 		);
 	});
 
-	it('emits the greeting row alone when no active path or selection', () => {
+	it('emits the greeting rows alone when no active path or selection', () => {
 		const out = composeVaultContextBlock({
 			activeFilePath: null,
 			activeSelection: null,
-			vaultGreeting: { vaultName: 'Notes', markdownFileCount: 3 },
+			vaultGreeting: { vaultName: 'Notes', markdownFileCount: 3, ...fakePlugin },
 		});
 		expect(out).toBe(
 			[
 				'<vault-context>',
+				'Plugin: Specorator v0.0.1',
 				'Vault: Notes (3 notes)',
 				'</vault-context>',
 			].join('\n'),
 		);
 	});
 
-	it('omits the greeting row on follow-up turns (vaultGreeting=null) even with path/selection', () => {
+	it('omits the greeting rows on follow-up turns (vaultGreeting=null) even with path/selection', () => {
 		const out = composeVaultContextBlock({
 			activeFilePath: 'a.md',
 			activeSelection: 'sel',
 			vaultGreeting: null,
 		});
 		expect(out).not.toContain('Vault:');
+		expect(out).not.toContain('Plugin:');
 		expect(out).toContain('Active note: a.md');
 		expect(out).toContain('sel');
 	});
@@ -139,8 +144,40 @@ describe('composeVaultContextBlock — QW-C vault greeting', () => {
 		const out = composeVaultContextBlock({
 			activeFilePath: null,
 			activeSelection: null,
-			vaultGreeting: { vaultName: 'V', markdownFileCount: count },
+			vaultGreeting: { vaultName: 'V', markdownFileCount: count, ...fakePlugin },
 		});
 		expect(out).toContain(`Vault: V (${expected})`);
+	});
+
+	it('Q-E.3 — emits the Plugin row at the very top of the block', () => {
+		const out = composeVaultContextBlock({
+			activeFilePath: null,
+			activeSelection: null,
+			vaultGreeting: {
+				vaultName: 'V',
+				markdownFileCount: 1,
+				pluginName: 'Specorator',
+				pluginVersion: '1.2.3',
+			},
+		});
+		const lines = out.split('\n');
+		expect(lines[0]).toBe('<vault-context>');
+		expect(lines[1]).toBe('Plugin: Specorator v1.2.3');
+		expect(lines[2]).toBe('Vault: V (1 note)');
+	});
+
+	it('Q-E.3 — uses the supplied plugin name (no hard-coded "Specorator")', () => {
+		const out = composeVaultContextBlock({
+			activeFilePath: null,
+			activeSelection: null,
+			vaultGreeting: {
+				vaultName: 'V',
+				markdownFileCount: 0,
+				pluginName: 'MyFork',
+				pluginVersion: '9.9.9',
+			},
+		});
+		expect(out).toContain('Plugin: MyFork v9.9.9');
+		expect(out).not.toContain('Specorator');
 	});
 });

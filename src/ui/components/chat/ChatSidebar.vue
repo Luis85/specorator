@@ -25,6 +25,7 @@ import {
 	SETTINGS_VERSION_KEY,
 	TRANSPORT_KIND_KEY,
 	OPEN_PLUGIN_SETTINGS_KEY,
+	PLUGIN_MANIFEST_KEY,
 } from '@/infrastructure/bridge/ports';
 import type { SlashCommand } from '@/domain/chat/SlashCommand';
 import type { ConfirmModalPort, TranslationPort } from '@/domain/ports';
@@ -75,6 +76,14 @@ const noopOpenPluginSettings = (): void => {
 	/* default for unit tests and the standalone browser UI */
 };
 const openPluginSettings = inject<() => void>(OPEN_PLUGIN_SETTINGS_KEY, noopOpenPluginSettings);
+/**
+ * Q-E.3 — plugin self-id provider. Optional so unit tests and the standalone
+ * browser UI can mount the sidebar without wiring a real manifest; the
+ * builder applies a sane default fallback.
+ */
+const pluginManifest = inject<
+	(() => { readonly name: string; readonly version: string }) | undefined
+>(PLUGIN_MANIFEST_KEY, undefined);
 
 const { t: tI18n } = useI18n();
 const inlineTranslator: TranslationPort = {
@@ -432,6 +441,7 @@ async function handleSend(): Promise<void> {
 		},
 		selectedModel: providerStore.selectedModel,
 		attachments: attachmentsStore.pending,
+		pluginManifest,
 	});
 
 	// Preflight Escape (Codex P2 on PR #402): if the user pressed Escape during
