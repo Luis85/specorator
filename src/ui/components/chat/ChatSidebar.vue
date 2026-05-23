@@ -635,7 +635,6 @@ watch(available, async () => {
 		<!-- Ready state -->
 		<template v-else>
 			<div class="sp-chat__header">
-				<h2 class="sp-chat__title">{{ $t('chat.title') }}</h2>
 				<SessionResumeIndicator :resumed="streamingStore.sessionResumed" />
 				<SubprocessStartingPill :visible="streamingStore.cliStartingUp" />
 				<TransportStatusPill :kind="transportKind" />
@@ -720,13 +719,6 @@ watch(available, async () => {
 	gap: 0.75rem;
 	box-sizing: border-box;
 	flex-shrink: 0;
-}
-
-.sp-chat__title {
-	margin: 0;
-	font-size: 1.125rem;
-	font-weight: 700;
-	color: var(--text-normal);
 }
 
 .sp-chat__header {

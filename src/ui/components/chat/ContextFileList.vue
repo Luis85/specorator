@@ -62,7 +62,6 @@ function handleOverflowBlur(event: FocusEvent): void {
 
 <template>
 	<section :aria-label="t('chat.contextLabel')" data-testid="context-file-list">
-		<p class="sp-chat__context-label">{{ t('chat.contextLabel') }}</p>
 		<ul role="list" class="sp-chat__context-chips" :aria-label="t('chat.contextLabel')">
 			<li v-for="file in visibleFiles" :key="file.path" role="listitem">
 				<ContextFileChip
@@ -120,15 +119,6 @@ function handleOverflowBlur(event: FocusEvent): void {
 </template>
 
 <style scoped>
-.sp-chat__context-label {
-	margin: 0 0 0.375rem;
-	font-size: 0.75rem;
-	font-weight: 600;
-	color: var(--text-muted);
-	text-transform: uppercase;
-	letter-spacing: 0.05em;
-}
-
 .sp-chat__context-chips {
 	display: flex;
 	flex-wrap: wrap;
