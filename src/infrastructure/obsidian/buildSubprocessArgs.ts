@@ -18,11 +18,24 @@
  */
 
 /**
- * Literal denylist string from SPEC §3.7 step 4 (REQ-ASM-028). Order, casing,
- * and the comma-without-space separator are all load-bearing — the CLI parses
- * this verbatim.
+ * Tool denylist passed to Claude CLI via `--disallowedTools`. The original
+ * SPEC §3.7 step 4 (REQ-ASM-028) listed every built-in tool, which made the
+ * agent functionally useless for any vault-investigation task: it could not
+ * read a note, glob the vault, or grep for a symbol. We now deny only the
+ * tools whose use must be mediated through the plugin (proposal flow for
+ * writes, host security for shell + network) and let the agent run read,
+ * search, and pattern-match tools natively.
+ *
+ *  - Edit / Write — route through `FileWriteProposal` so the user accepts
+ *    every mutation; the agent cannot silently rewrite the vault.
+ *  - Bash         — host-level command execution out of scope for this
+ *                   release; would bypass the proposal model entirely.
+ *  - WebFetch / WebSearch — privacy: never silently call out to the network.
+ *
+ * Order, casing, and the comma-without-space separator are load-bearing —
+ * the CLI parses this verbatim.
  */
-const DISALLOWED_TOOLS_DENYLIST = 'Read,Edit,Write,Bash,Glob,Grep,WebFetch,WebSearch'
+const DISALLOWED_TOOLS_DENYLIST = 'Edit,Write,Bash,WebFetch,WebSearch'
 
 export interface BuildSubprocessArgsInput {
   readonly prompt: string
