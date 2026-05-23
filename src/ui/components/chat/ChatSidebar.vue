@@ -394,13 +394,23 @@ async function handleSend(): Promise<void> {
 	// never receive an AbortController via `onAbortController`, so they get
 	// no Stop button, no Esc-aborts, and a different announcement (Codex P2
 	// round-2 on PR #402).
-	const preflightController = setUpTurnAbortAffordance(messagesStore.userText);
+	// Snapshot the in-flight turn text BEFORE we optimistically clear the
+	// textarea. Every downstream consumer (preflight controller, lastUserTurn,
+	// buildTurnInput) reads from this snapshot — the orchestrator's
+	// `applySuccessfulTurn` will set the store back to '' on completion as a
+	// belt-and-braces idempotent guard.
+	const inFlightUserText = messagesStore.userText;
+	const preflightController = setUpTurnAbortAffordance(inFlightUserText);
 
-	lastUserTurn.value = messagesStore.userText;
+	lastUserTurn.value = inFlightUserText;
+
+	// Optimistic clear (claudian-parity UX): user can begin typing the next
+	// turn while the agent is still streaming the current one.
+	messagesStore.setUserText('');
 
 	const input = await buildTurnInput({
 		messages: {
-			userText: messagesStore.userText,
+			userText: inFlightUserText,
 			effectiveContextFiles: messagesStore.effectiveContextFiles,
 		},
 		threads: {
@@ -458,6 +468,15 @@ async function handleSend(): Promise<void> {
 		// REQ-MPS-042/043: per-turn attachments are consumed on send; clear
 		// the pending list so a follow-up turn starts empty.
 		attachmentsStore.clear();
+	}
+	// Failure paths (orchestrator returned !result.ok OR the streaming reducer
+	// set messages.status to 'error'): restore the in-flight text into the
+	// textarea so the user can retry without retyping. Only restore when the
+	// textarea is still empty — preserves anything the user has already
+	// started typing for the next turn while the previous one was streaming.
+	const turnFailed = !result.ok || messagesStore.status === 'error';
+	if (turnFailed && messagesStore.userText.length === 0) {
+		messagesStore.setUserText(inFlightUserText);
 	}
 	await nextTick();
 	focusTextarea();
