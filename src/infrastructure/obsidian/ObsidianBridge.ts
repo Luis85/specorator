@@ -129,6 +129,27 @@ export class ObsidianBridge
 		};
 	}
 
+	// QW-B — surface the active note's vault-relative path and the current
+	// editor selection so the chat panel can prepend a <vault-context> block
+	// to the system-prompt suffix. Both are sync (Obsidian's workspace is
+	// in-memory) and defensive against the active-editor surface being
+	// `undefined` mid-view-transition.
+	getActiveFilePath(): string | null {
+		return this.app.workspace.getActiveFile()?.path ?? null;
+	}
+
+	getActiveSelection(): string | null {
+		try {
+			const selection = this.app.workspace.activeEditor?.editor?.getSelection();
+			if (selection === undefined || selection === '') return null;
+			return selection;
+		} catch {
+			// `activeEditor.editor` is occasionally undefined during view
+			// transitions; treat any throw as "no selection".
+			return null;
+		}
+	}
+
 	private _track(notice: Notice): void {
 		this._activeNotices.add(notice);
 		const el: HTMLElement = notice.messageEl;

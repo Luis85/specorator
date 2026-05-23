@@ -52,6 +52,11 @@ export class MockBridge
 	}> = [];
 	private openedFile: string | null = null;
 	private activeFile: ActiveFileSnapshot | null = null;
+	// QW-B — the active-note path and current editor selection. Kept separate
+	// from `activeFile` because `setActiveFilePath` is the lighter test fixture
+	// used by `buildTurnInput` callers that don't care about basename/extension.
+	private _activeFilePath: string | null = null;
+	private _activeSelection: string | null = null;
 	private readonly activeFileHandlers = new Set<(f: ActiveFileSnapshot | null) => void>();
 	private readonly missingIcons = new Set<string>();
 	private vaultBasePath: string | null;
@@ -171,6 +176,25 @@ export class MockBridge
 		for (const handler of this.activeFileHandlers) {
 			handler(this.activeFile !== null ? { ...this.activeFile } : null);
 		}
+	}
+
+	// QW-B — `WorkspacePort.getActiveFilePath` / `getActiveSelection` and
+	// matching test fixtures. Used by `buildTurnInput` to inject a
+	// `<vault-context>` block into the system-prompt suffix.
+	getActiveFilePath(): string | null {
+		return this._activeFilePath;
+	}
+
+	getActiveSelection(): string | null {
+		return this._activeSelection;
+	}
+
+	setActiveFilePath(path: string | null): void {
+		this._activeFilePath = path;
+	}
+
+	setActiveSelection(text: string | null): void {
+		this._activeSelection = text;
 	}
 
 	showError(message: string, durationMs = 0): void {

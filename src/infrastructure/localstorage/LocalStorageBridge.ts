@@ -117,6 +117,19 @@ export class LocalStorageBridge
 		return () => {};
 	}
 
+	// QW-B — the GitHub Pages standalone demo has no Obsidian editor surface;
+	// there is no "active note" and no editor selection to query. Returning
+	// null lets the suffix composer skip the <vault-context> block entirely
+	// for browser-only users (who, in turn, have no CLI subprocess to feed
+	// the context to — the demo bridge's queryStream is the degraded stub).
+	getActiveFilePath(): string | null {
+		return null;
+	}
+
+	getActiveSelection(): string | null {
+		return null;
+	}
+
 	showError(message: string, durationMs = 0): void {
 		window.dispatchEvent(
 			new CustomEvent('sp:notice', { detail: { severity: 'error', message, durationMs } }),

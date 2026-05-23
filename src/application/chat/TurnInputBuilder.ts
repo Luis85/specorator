@@ -31,6 +31,7 @@ import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord';
 import type { ChatTransportAttachment } from '@/domain/ports/ChatTransportPort';
 import { tryAsync } from '@/domain/shared/tryAsync';
 import { buildPrompt, type ContextFile } from '@/application/chat/buildPrompt';
+import { composeVaultContextBlock } from '@/application/chat/composeVaultContextBlock';
 import {
 	assembleSystemPrompt,
 	getActiveFeatureSlug,
@@ -216,8 +217,32 @@ async function computeStagePromptContext(
 		slug !== null
 			? await loadWorkflowStateSnapshot(slug, args.vault, args.logger, specsFolder)
 			: null;
-	const systemPromptSuffix = assembleSystemPrompt(snapshot, args.stagePromptMap);
+	const stageSuffix = assembleSystemPrompt(snapshot, args.stagePromptMap);
+	// QW-B — prepend a <vault-context> block carrying the active note path and
+	// editor selection so the agent (which runs in a subprocess with the vault
+	// root as cwd, courtesy of QW-A) can resolve "this note" / "the selection"
+	// without the user spelling it out. Defensive against an upstream caller
+	// that already pre-composed the block — we never double-emit.
+	const vaultBlock = composeVaultContextBlock(
+		args.workspace.getActiveFilePath(),
+		args.workspace.getActiveSelection(),
+	);
+	const systemPromptSuffix = combineSuffix(vaultBlock, stageSuffix);
 	return { slug, systemPromptSuffix };
+}
+
+/**
+ * Combine the QW-B vault-context block with the stage-aware suffix. Each is
+ * independently optional; the join uses a blank-line separator only when
+ * both halves are non-empty. Defensive: if `stageSuffix` already contains a
+ * `<vault-context>` opener (e.g. a future caller pre-composed it), the
+ * vault block is skipped so the suffix never double-emits.
+ */
+function combineSuffix(vaultBlock: string, stageSuffix: string): string {
+	if (vaultBlock === '') return stageSuffix;
+	if (stageSuffix.includes('<vault-context>')) return stageSuffix;
+	if (stageSuffix === '') return vaultBlock;
+	return `${vaultBlock}\n\n${stageSuffix}`;
 }
 
 /**
