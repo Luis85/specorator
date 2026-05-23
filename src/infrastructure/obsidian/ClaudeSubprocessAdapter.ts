@@ -96,8 +96,8 @@ export interface ClaudeSubprocessAdapterDeps {
 
 /** SPEC §4.3 `_clampTimeout` floor / ceiling. */
 const MIN_TIMEOUT_MS = 1_000;
-const MAX_TIMEOUT_MS = 300_000;
-const DEFAULT_TIMEOUT_MS = 30_000;
+const MAX_TIMEOUT_MS = 3_600_000;
+const DEFAULT_TIMEOUT_MS = 600_000;
 
 /**
  * Per-turn streaming-process record. One entry per spawn — short-lived; the
@@ -115,6 +115,13 @@ interface TurnProc {
 	sessionId: SessionId | null;
 	onSessionId: ((sessionId: SessionId) => void) | null;
 	startTimeMs: number;
+	/**
+	 * Reset the idle-timeout window. Called on every NDJSON line so a turn
+	 * that produces output — even tool-heavy ones lasting minutes — only
+	 * fires the timeout if the subprocess goes truly silent for the configured
+	 * window. Stays `null` until `_installStreamTimeout` returns.
+	 */
+	resetIdleTimer: (() => void) | null;
 }
 
 /**
@@ -295,14 +302,13 @@ export class ClaudeSubprocessAdapter implements ChatTransportPort, TransportLife
 		const proc = spawned.value;
 
 		const timeoutMs = this._clampTimeout(options?.timeoutMs);
-		const timeoutHandle = this._installStreamTimeout(proc, timeoutMs);
+		const cancelIdleTimer = this._installStreamTimeout(proc, timeoutMs);
 		const detachAbort = this._installStreamAbort(proc, options?.signal);
 
 		try {
 			yield* proc.channel.iterate();
 		} finally {
-			// eslint-disable-next-line obsidianmd/prefer-active-window-timers -- infra layer, no Obsidian context
-			clearTimeout(timeoutHandle);
+			cancelIdleTimer();
 			detachAbort();
 			if (!proc.reducer.terminated) {
 				this._lifecycle.kill(proc.child);
@@ -336,22 +342,39 @@ export class ClaudeSubprocessAdapter implements ChatTransportPort, TransportLife
 	}
 
 	/**
-	 * Install the per-turn timeout. On expiry the child is SIGTERMed and the
-	 * reducer emits a terminal `TIMEOUT` error.
+	 * Install the per-turn IDLE timeout. The timer fires only if the subprocess
+	 * produces no NDJSON output for `timeoutMs` milliseconds — `_handleNdjsonLine`
+	 * calls `proc.resetIdleTimer()` on every line, so a long tool-heavy turn that
+	 * keeps streaming events never trips this. Without idle semantics the 30 s
+	 * default (now 10 min) cut off tool-using turns mid-conversation as a
+	 * "took too long" error even though the CLI was actively making progress.
+	 *
+	 * The returned handle is the most-recent `setTimeout` ID — kept in scope by
+	 * the closure inside `reset`, so `clearTimeout(handle)` in the finally block
+	 * cancels whichever timer is currently armed.
 	 */
-	private _installStreamTimeout(
-		proc: TurnProc,
-		timeoutMs: number,
-	): ReturnType<typeof setTimeout> {
-		// eslint-disable-next-line obsidianmd/prefer-active-window-timers -- infra layer, no Obsidian context
-		return setTimeout(() => {
+	private _installStreamTimeout(proc: TurnProc, timeoutMs: number): () => void {
+		const fire = (): void => {
 			if (proc.reducer.terminated) return;
 			this._lifecycle.kill(proc.child);
 			this._emitTerminalError(
 				proc,
-				new ChatTransportError('TIMEOUT', `Subscription query exceeded ${timeoutMs} ms`),
+				new ChatTransportError('TIMEOUT', `Subscription query idle for ${timeoutMs} ms`),
 			);
-		}, timeoutMs);
+		};
+		// eslint-disable-next-line obsidianmd/prefer-active-window-timers -- infra layer, no Obsidian context
+		let handle: ReturnType<typeof setTimeout> = setTimeout(fire, timeoutMs);
+		proc.resetIdleTimer = (): void => {
+			// eslint-disable-next-line obsidianmd/prefer-active-window-timers -- infra layer, no Obsidian context
+			clearTimeout(handle);
+			// eslint-disable-next-line obsidianmd/prefer-active-window-timers -- infra layer, no Obsidian context
+			handle = setTimeout(fire, timeoutMs);
+		};
+		return () => {
+			// eslint-disable-next-line obsidianmd/prefer-active-window-timers -- infra layer, no Obsidian context
+			clearTimeout(handle);
+			proc.resetIdleTimer = null;
+		};
 	}
 
 	/**
@@ -445,6 +468,7 @@ export class ClaudeSubprocessAdapter implements ChatTransportPort, TransportLife
 			sessionId: null,
 			onSessionId,
 			startTimeMs: Date.now(),
+			resetIdleTimer: null,
 		};
 		procRef.current = proc;
 
@@ -497,6 +521,11 @@ export class ClaudeSubprocessAdapter implements ChatTransportPort, TransportLife
 	 * dropped silently (debug log without payload).
 	 */
 	private _handleNdjsonLine(proc: TurnProc, line: string): void {
+		// Any output keeps the idle watchdog quiet — long tool-heavy turns
+		// stream system / stream_event / tool deltas continuously, and the
+		// idle timeout should only fire when the subprocess goes truly
+		// silent for the full window.
+		proc.resetIdleTimer?.();
 		const event = this._parseNdjsonLine(line);
 		if (event === null) return;
 		const raw = ClaudeSubprocessAdapter._ndjsonToRawEvent(event);
