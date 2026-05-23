@@ -10,6 +10,7 @@ import type {
 	ChatTransportPort,
 	ChatTransportStreamOptions,
 	StreamDelta,
+	IconPort,
 } from '@/domain/ports';
 import { ChatTransportError } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
@@ -31,7 +32,8 @@ export class MockBridge
 		NotificationPort,
 		LoggerPort,
 		ChatTransportPort,
-		CommunityPluginPort
+		CommunityPluginPort,
+		IconPort
 {
 	private readonly files = new Map<string, string>();
 	private readonly folders = new Set<string>();
@@ -50,9 +52,26 @@ export class MockBridge
 	}> = [];
 	private openedFile: string | null = null;
 	private activeFile: ActiveFileSnapshot | null = null;
+	// QW-B — the active-note path and current editor selection. Kept separate
+	// from `activeFile` because `setActiveFilePath` is the lighter test fixture
+	// used by `buildTurnInput` callers that don't care about basename/extension.
+	private _activeFilePath: string | null = null;
+	private _activeSelection: string | null = null;
+	// QW-C — vault metadata greeting fixtures. Defaults match the prior tests'
+	// "Mock Vault" naming with a zero-note count so existing snapshots are
+	// stable; tests that exercise the greeting override via the setters below.
+	private _vaultName = 'Mock Vault';
+	private _markdownFileCount = 0;
 	private readonly activeFileHandlers = new Set<(f: ActiveFileSnapshot | null) => void>();
+	private readonly missingIcons = new Set<string>();
+	private vaultBasePath: string | null;
 
-	constructor(initialFiles: Record<string, string> = {}) {
+	constructor(
+		initialFiles: Record<string, string> = {},
+		options: { vaultBasePath?: string | null } = {},
+	) {
+		this.vaultBasePath =
+			options.vaultBasePath === undefined ? '/mock/vault' : options.vaultBasePath;
 		for (const [path, content] of Object.entries(initialFiles)) {
 			this.files.set(path, content);
 			// Register parent folders automatically
@@ -61,6 +80,18 @@ export class MockBridge
 				this.folders.add(parts.slice(0, i).join('/'));
 			}
 		}
+	}
+
+	// QW-A — mirror of `ObsidianBridge.getVaultBasePath()` so tests and the
+	// standalone Vite dev server have a deterministic vault root to assert on
+	// without booting Obsidian. Defaults to `/mock/vault`; pass `null` to
+	// model the standalone-web case where no FS root exists.
+	getVaultBasePath(): string | null {
+		return this.vaultBasePath;
+	}
+
+	setVaultBasePath(path: string | null): void {
+		this.vaultBasePath = path;
 	}
 
 	async readFile(path: string): Promise<string> {
@@ -152,6 +183,44 @@ export class MockBridge
 		}
 	}
 
+	// QW-B — `WorkspacePort.getActiveFilePath` / `getActiveSelection` and
+	// matching test fixtures. Used by `buildTurnInput` to inject a
+	// `<vault-context>` block into the system-prompt suffix.
+	getActiveFilePath(): string | null {
+		return this._activeFilePath;
+	}
+
+	getActiveSelection(): string | null {
+		return this._activeSelection;
+	}
+
+	setActiveFilePath(path: string | null): void {
+		this._activeFilePath = path;
+	}
+
+	setActiveSelection(text: string | null): void {
+		this._activeSelection = text;
+	}
+
+	// QW-C — `WorkspacePort.getVaultName` / `getMarkdownFileCount`. Both back the
+	// vault-metadata greeting row composed at the top of `<vault-context>` on
+	// the first turn of a new thread. Tests drive them via the matching setters.
+	getVaultName(): string {
+		return this._vaultName;
+	}
+
+	getMarkdownFileCount(): number {
+		return this._markdownFileCount;
+	}
+
+	setVaultName(name: string): void {
+		this._vaultName = name;
+	}
+
+	setMarkdownFileCount(count: number): void {
+		this._markdownFileCount = count;
+	}
+
 	showError(message: string, durationMs = 0): void {
 		this.noticeLog.push({ severity: 'error', message, durationMs });
 		console.error(`[MockBridge Notice:error] ${message}`);
@@ -235,6 +304,34 @@ export class MockBridge
 	error(message: string, error?: unknown, context?: Record<string, unknown>): void {
 		this.logEntries.push({ level: 'error', message, error, context });
 		console.error(`[MockBridge] ${message}`, error, context);
+	}
+
+	// ── IconPort ──────────────────────────────────────────────────────────────
+	// REQ-AUX-001, ADR-AUX-001 — deterministic placeholder so tests assert on
+	// the icon name without booting Obsidian. Idempotent: prior children are
+	// cleared before re-rendering. When a name has been registered as missing
+	// via `markIconAsMissing(name)`, the element is left untouched so the
+	// `<SpIcon>` text fallback path can be exercised.
+	setIcon(el: HTMLElement, name: string): void {
+		if (this.missingIcons.has(name)) return;
+		while (el.firstChild) el.removeChild(el.firstChild);
+		const svgNS = 'http://www.w3.org/2000/svg';
+		// MockBridge is exclusively used in unit tests + the standalone Vite
+		// dev server — there is no Obsidian `activeDocument` to defer to.
+		// eslint-disable-next-line obsidianmd/prefer-active-doc
+		const svg = el.ownerDocument.createElementNS(svgNS, 'svg');
+		svg.setAttribute('data-icon', name);
+		svg.setAttribute('aria-hidden', 'true');
+		// eslint-disable-next-line obsidianmd/prefer-active-doc
+		const title = el.ownerDocument.createElementNS(svgNS, 'title');
+		title.textContent = name;
+		svg.appendChild(title);
+		el.appendChild(svg);
+	}
+
+	/** Test helper — flag `name` as unresolvable so `setIcon` is a no-op for it. */
+	markIconAsMissing(name: string): void {
+		this.missingIcons.add(name);
 	}
 
 	// ── ChatTransportPort ─────────────────────────────────────────────────────────

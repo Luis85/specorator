@@ -15,6 +15,13 @@ import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore';
 import { i18n } from '@/ui/i18n';
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord';
 import { ThreadTabStripPO } from './ThreadTabStrip.po';
+import type { LoggerPort } from '@/domain/ports';
+import { ICON_PORT, LOGGER_PORT } from '@/infrastructure/bridge/ports';
+import { MockBridge } from '@/infrastructure/mock/MockBridge';
+
+function fakeLogger(): LoggerPort {
+	return { debug() {}, info() {}, warn() {}, error() {} };
+}
 
 function makeThread(
 	threadId: string,
@@ -35,8 +42,15 @@ function makeThread(
 }
 
 function mountStrip(props: { onNewThread?: () => void; onTabCapHit?: () => void } = {}) {
+	const bridge = new MockBridge();
 	const wrapper = mount(ThreadTabStrip, {
-		global: { plugins: [i18n] },
+		global: {
+			plugins: [i18n],
+			provide: {
+				[ICON_PORT as symbol]: bridge,
+				[LOGGER_PORT as symbol]: fakeLogger(),
+			},
+		},
 		props,
 	});
 	return { wrapper, po: new ThreadTabStripPO(wrapper) };

@@ -6,8 +6,8 @@
  * `select`), and hover-emits-index so the consumer can sync
  * `useMentionPicker.setSelectedIndex`.
  */
-import { describe, it, expect } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, afterEach } from 'vitest'
+import { mount, type VueWrapper } from '@vue/test-utils'
 import MentionDropdown from '@/ui/components/chat/MentionDropdown.vue'
 import type { MentionCandidate } from '@/application/chat/vaultFileSearch'
 import { MentionDropdownPO } from './MentionDropdown.po'
@@ -18,12 +18,28 @@ const candidates: MentionCandidate[] = [
 	{ path: 'specs/bar/idea.md', name: 'idea.md', kind: 'file' },
 ]
 
+const mounted: VueWrapper[] = []
+
 function mountDropdown(props: {
 	results: MentionCandidate[]
 	selectedIndex: number
 }): MentionDropdownPO {
-	return new MentionDropdownPO(mount(MentionDropdown, { props }))
+	// WS-AUX-8c: MentionDropdown now renders inside an `<SpDropdownPanel>`
+	// which `<Teleport>`s to `document.body`. Attach so the teleported nodes
+	// land in the real DOM tree, then query through `document` in the PO.
+	const wrapper = mount(MentionDropdown, {
+		props,
+		attachTo: document.body,
+	})
+	mounted.push(wrapper)
+	return new MentionDropdownPO(wrapper)
 }
+
+afterEach(() => {
+	while (mounted.length > 0) {
+		mounted.pop()?.unmount()
+	}
+})
 
 describe('MentionDropdown', () => {
 	it('renders nothing when results array is empty', () => {

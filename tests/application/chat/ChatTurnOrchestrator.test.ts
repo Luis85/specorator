@@ -126,6 +126,7 @@ interface ThreadsState {
 	activeThreadId: string | null;
 	upserted: ChatThreadRecord[];
 	captured: Array<{ threadId: string; sessionId: string }>;
+	cleared: string[];
 	marked: string[];
 }
 
@@ -137,6 +138,7 @@ function makeThreadsFake(initial: ReadonlyMap<string, ChatThreadRecord> = new Ma
 		activeThreadId: null,
 		upserted: [],
 		captured: [],
+		cleared: [],
 		marked: [],
 	};
 	return {
@@ -156,6 +158,13 @@ function makeThreadsFake(initial: ReadonlyMap<string, ChatThreadRecord> = new Ma
 			const existing = state.chatThreads.get(threadId);
 			if (existing !== undefined) {
 				state.chatThreads.set(threadId, { ...existing, sessionId });
+			}
+		},
+		clearSessionId(threadId) {
+			state.cleared.push(threadId);
+			const existing = state.chatThreads.get(threadId);
+			if (existing !== undefined) {
+				state.chatThreads.set(threadId, { ...existing, sessionId: null });
 			}
 		},
 		markThreadUsed(threadId) {
@@ -408,6 +417,48 @@ describe('ChatTurnOrchestrator.sendTurn', () => {
 		expect(threads.state.upserted).toHaveLength(0);
 		// Resume flash fired (REQ-ASM-035).
 		expect(streaming.state.sessionResumed).toContain(true);
+	});
+
+	it('Q-F.4: clears the captured sessionId on the reuse thread when a resume turn fails', async () => {
+		const port = new MockClaudeCliPort();
+		port.available = true;
+		port.queryError = new ChatTransportError('QUERY_FAILED', 'dead resume id');
+		const existing: ChatThreadRecord = {
+			threadId: 'T-resume-fail',
+			sessionId: asSessionId('session-dead'),
+			feature: null,
+			logPath: '',
+			transport: { provider: 'claude', mode: 'cli' },
+			title: '',
+			forkParent: null,
+			createdAt: '2025-01-01T00:00:00.000Z',
+			lastUsedAt: '2025-01-01T00:00:00.000Z',
+		};
+		const threads = makeThreadsFake(new Map([[existing.threadId, existing]]));
+		threads.state.activeThreadId = 'T-resume-fail';
+		const { orchestrator } = makeOrchestrator({ port, threads });
+		await orchestrator.sendTurn(
+			freeTextInput({
+				thread: {
+					kind: 'reuse',
+					previousThreadId: 'T-resume-fail',
+					reuseThreadId: 'T-resume-fail',
+					reuseSessionId: asSessionId('session-dead'),
+				},
+			}),
+		);
+		expect(threads.state.cleared).toContain('T-resume-fail');
+		expect(threads.state.chatThreads.get('T-resume-fail')?.sessionId).toBeNull();
+	});
+
+	it('Q-F.4: does NOT clear sessionId when a non-resume (fresh) turn fails', async () => {
+		const port = new MockClaudeCliPort();
+		port.available = true;
+		port.queryError = new ChatTransportError('QUERY_FAILED', 'unrelated failure');
+		const threads = makeThreadsFake();
+		const { orchestrator } = makeOrchestrator({ port, threads });
+		await orchestrator.sendTurn(freeTextInput());
+		expect(threads.state.cleared).toEqual([]);
 	});
 
 	it('rotates a new thread and evicts the previous thread buckets', async () => {

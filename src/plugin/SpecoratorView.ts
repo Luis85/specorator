@@ -20,6 +20,8 @@ import {
   SETTINGS_VERSION_KEY,
   TRANSPORT_KIND_KEY,
   OPEN_PLUGIN_SETTINGS_KEY,
+  PLUGIN_MANIFEST_KEY,
+  ICON_PORT,
 } from '@/infrastructure/bridge/ports'
 import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
 import { FeatureService } from '@/application/feature/FeatureService'
@@ -218,6 +220,9 @@ export class SpecoratorView extends ItemView {
     this.vueApp.provide(WORKSPACE_PORT, bridge)
     this.vueApp.provide(NOTIFICATION_PORT, bridge)
     this.vueApp.provide(LOGGER_PORT, bridge)
+    // REQ-AUX-001 / ADR-AUX-001 — sole seam for obsidian.setIcon. Consumed by
+    // <SpIcon>; production wraps `obsidian.setIcon` on the bridge.
+    this.vueApp.provide(ICON_PORT, bridge)
     // Refresh the active port from the current settings just before mounting
     // so the first frame already reflects any setting changes since ctor.
     this._refreshActivePort()
@@ -278,6 +283,11 @@ export class SpecoratorView extends ItemView {
       setting.open()
       setting.openTabById(this.plugin.manifest.id)
     })
+    // Q-E.3 — plugin self-id source for the chat panel's first-turn greeting.
+    this.vueApp.provide(PLUGIN_MANIFEST_KEY, () => ({
+      name: this.plugin.manifest.name,
+      version: this.plugin.manifest.version,
+    }))
     const featureFeedback = new FeedbackService(bridge, bridge)
     this.vueApp.provide(
       FEATURE_SERVICE_KEY,

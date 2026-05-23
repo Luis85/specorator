@@ -1,4 +1,4 @@
-import { Notice, TFile, TFolder, normalizePath, type App } from 'obsidian';
+import { FileSystemAdapter, Notice, TFile, TFolder, normalizePath, setIcon as obsidianSetIcon, type App } from 'obsidian';
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
 import type {
 	SettingsPort,
@@ -12,6 +12,7 @@ import type {
 	ChatTransportPort,
 	ChatTransportStreamOptions,
 	StreamDelta,
+	IconPort,
 } from '@/domain/ports';
 import { ChatTransportError } from '@/domain/ports';
 
@@ -27,7 +28,8 @@ export class ObsidianBridge
 		NotificationPort,
 		LoggerPort,
 		CommunityPluginPort,
-		ChatTransportPort
+		ChatTransportPort,
+		IconPort
 {
 	private static readonly _LEVEL_RANK: Record<string, number> = {
 		debug: 0,
@@ -125,6 +127,38 @@ export class ObsidianBridge
 		return () => {
 			this.app.workspace.offref(ref);
 		};
+	}
+
+	// QW-B — surface the active note's vault-relative path and the current
+	// editor selection so the chat panel can prepend a <vault-context> block
+	// to the system-prompt suffix. Both are sync (Obsidian's workspace is
+	// in-memory) and defensive against the active-editor surface being
+	// `undefined` mid-view-transition.
+	getActiveFilePath(): string | null {
+		return this.app.workspace.getActiveFile()?.path ?? null;
+	}
+
+	getActiveSelection(): string | null {
+		try {
+			const selection = this.app.workspace.activeEditor?.editor?.getSelection();
+			if (selection === undefined || selection === '') return null;
+			return selection;
+		} catch {
+			// `activeEditor.editor` is occasionally undefined during view
+			// transitions; treat any throw as "no selection".
+			return null;
+		}
+	}
+
+	// QW-C — vault-metadata accessors for the first-turn greeting row in the
+	// chat panel's `<vault-context>` block. Both are synchronous reads against
+	// Obsidian's in-memory workspace surface.
+	getVaultName(): string {
+		return this.app.vault.getName();
+	}
+
+	getMarkdownFileCount(): number {
+		return this.app.vault.getMarkdownFiles().length;
 	}
 
 	private _track(notice: Notice): void {
@@ -230,6 +264,21 @@ export class ObsidianBridge
 		return appExt.plugins?.enabledPlugins ?? null;
 	}
 
+	// ── Vault filesystem root ─────────────────────────────────────────────────
+	// QW-A — expose the vault root so the Claude / Cursor CLI subprocesses
+	// inherit it as `cwd`. On desktop, `vault.adapter` is a `FileSystemAdapter`
+	// that knows its base path; on mobile (or any non-FS adapter) we return
+	// `null` and the subprocess falls back to the renderer cwd — Obsidian
+	// mobile doesn't run external CLIs anyway, so the distinction is academic
+	// but the guard keeps the type clean.
+	getVaultBasePath(): string | null {
+		const adapter = this.app.vault.adapter;
+		if (adapter instanceof FileSystemAdapter) {
+			return adapter.getBasePath();
+		}
+		return null;
+	}
+
 	// ── ChatTransportPort ─────────────────────────────────────────────────────────
 
 	/**
@@ -260,5 +309,11 @@ export class ObsidianBridge
 				'ObsidianBridge: use ClaudeCliAdapter for queries',
 			),
 		};
+	}
+
+	// ── IconPort ─────────────────────────────────────────────────────────────
+	// REQ-AUX-001, ADR-AUX-001 — production seam for obsidian.setIcon.
+	setIcon(el: HTMLElement, name: string): void {
+		obsidianSetIcon(el, name);
 	}
 }

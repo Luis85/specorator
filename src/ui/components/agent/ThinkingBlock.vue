@@ -1,19 +1,20 @@
 <script setup lang="ts">
 /**
  * Collapsible thinking-mode display for extended-thinking model turns
- * (PR-ASV-2-tool-rendering, agent-sidepanel-v2 Increment 2). Driven by
- * `chatStore.streamingThinking`, populated by the SDK adapter's
- * `thinking` `StreamDelta` variant.
+ * (PR-ASV-2-tool-rendering, agent-sidepanel-v2 Increment 2).
  *
- * Renders nothing when text is empty. When non-empty, shows a
- * collapsed `<details>` block with the streamed thinking text inside.
- * Users can expand to see the model's reasoning without it dominating
- * the chat surface.
+ * WS-AUX-5 refactor (REQ-AUX-013): wraps the body in `<NestedDetailFrame>`
+ * so the 2 px inline-start border + indent live in one place. Per-block
+ * border/indent CSS removed.
+ *
+ * Renders nothing when text is empty.
  *
  * Visual reference: Claudian's `ThinkingBlockRenderer.ts`
  * (https://github.com/YishenTu/claudian).
  */
 import { useI18n } from 'vue-i18n';
+import NestedDetailFrame from '@/ui/components/agent/NestedDetailFrame.vue';
+import SpIcon from '@/ui/components/primitives/SpIcon.vue';
 
 defineProps<{
 	/** Accumulated thinking text from the active turn. */
@@ -24,57 +25,55 @@ const { t } = useI18n();
 </script>
 
 <template>
-	<details v-if="text.length > 0" class="sp-thinking-block" data-testid="agent-thinking-block">
-		<summary class="sp-thinking-block__summary" data-testid="agent-thinking-summary">
-			<span class="sp-thinking-block__icon" aria-hidden="true">💭</span>
-			<span class="sp-thinking-block__label">{{ t('agent.thinking') }}</span>
-		</summary>
-		<pre class="sp-thinking-block__text" data-testid="agent-thinking-text">{{ text }}</pre>
-	</details>
+	<div v-if="text.length > 0" class="sp-thinking-block-host" data-testid="agent-thinking-block">
+		<NestedDetailFrame
+			class="sp-thinking-block"
+			icon="brain"
+			:label="t('agent.thinking')"
+			status="running"
+		>
+			<template #summary>
+				<span class="sp-thinking-block__summary" data-testid="agent-thinking-summary">
+					<SpIcon name="brain" :size="14" class="sp-thinking-block__icon" />
+					<span class="sp-thinking-block__label">{{ t('agent.thinking') }}</span>
+				</span>
+			</template>
+			<pre class="sp-thinking-block__text" data-testid="agent-thinking-text">{{ text }}</pre>
+		</NestedDetailFrame>
+	</div>
 </template>
 
 <style scoped>
 .sp-thinking-block {
-	margin: 0 0 0.5rem;
-	padding: 0.375rem 0.5rem;
-	border-radius: 4px;
-	border: 1px solid var(--background-modifier-border);
-	background: var(--background-secondary-alt, var(--background-secondary));
-	font-size: 0.8125rem;
+	font-size: var(--sp-font-size-md);
 }
 
 .sp-thinking-block__summary {
-	cursor: pointer;
-	color: var(--text-muted);
 	display: inline-flex;
 	align-items: center;
-	gap: 0.375rem;
-	list-style: none;
-}
-
-.sp-thinking-block__summary::-webkit-details-marker {
-	display: none;
+	gap: var(--sp-space-3);
 }
 
 .sp-thinking-block__icon {
-	font-size: 0.875rem;
+	color: var(--sp-text-muted);
 }
 
 .sp-thinking-block__label {
-	font-weight: 500;
+	font-weight: var(--sp-font-weight-medium);
+	color: var(--sp-text-normal);
 }
 
 .sp-thinking-block__text {
-	margin: 0.375rem 0 0;
-	padding: 0.375rem 0.5rem;
-	background: var(--background-primary);
-	border-radius: 3px;
-	font-family: var(--font-monospace, ui-monospace, monospace);
-	font-size: 0.75rem;
-	color: var(--text-muted);
+	margin: 0;
+	padding: var(--sp-space-3) var(--sp-space-4);
+	background-color: var(--sp-bg-primary);
+	border-radius: var(--sp-radius-xs);
+	font-family: var(--sp-font-mono);
+	font-size: var(--sp-font-size-sm);
+	color: var(--sp-text-muted);
 	white-space: pre-wrap;
 	word-break: break-word;
-	max-height: 240px;
+	max-block-size: 240px;
 	overflow-y: auto;
 }
 </style>

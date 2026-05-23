@@ -27,7 +27,7 @@
  *     emitted without an `href` attribute so they cannot smuggle
  *     `javascript:` URIs.
  */
-import { computed, h, inject, onBeforeUnmount, ref, watch, type VNode } from 'vue';
+import { computed, h, inject, onBeforeUnmount, onMounted, ref, watch, type VNode } from 'vue';
 import { MARKDOWN_RENDER_PORT } from '@/infrastructure/bridge/ports';
 import type { MarkdownRenderPort } from '@/domain/ports/MarkdownRenderPort';
 
@@ -359,6 +359,18 @@ let nativeDisposer: (() => void) | null = null;
  */
 let latestSeq = 0;
 
+onMounted(() => {
+	// The `watch(..., { immediate: true, flush: 'post' })` below can fire its
+	// immediate run before the template ref is bound (observed in Vue 3.5
+	// inside Obsidian's view lifecycle): `nativeContainer.value` is still
+	// `null`, so `rerenderNative` returns early. For completed messages whose
+	// text never changes again, that early-return is terminal and the body
+	// stays empty. Streaming bubbles only render because subsequent text
+	// deltas re-fire the watcher after the container has bound. Trigger one
+	// explicit render at mount time so finalised messages render too.
+	void rerenderNative();
+});
+
 async function rerenderNative(): Promise<void> {
 	if (renderPort === undefined) return;
 	const el = nativeContainer.value;
@@ -415,7 +427,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .sp-markdown {
 	font-size: 0.875rem;
-	color: var(--text-normal);
+	color: var(--sp-text-normal);
 	word-break: break-word;
 }
 
@@ -432,8 +444,8 @@ onBeforeUnmount(() => {
 	margin: 0 0 0.5rem;
 	padding: 0.5rem 0.625rem;
 	border-radius: 4px;
-	background: var(--background-primary-alt, var(--background-primary));
-	border: 1px solid var(--background-modifier-border);
+	background: var(--sp-bg-primary-alt, var(--sp-bg-primary));
+	border: 1px solid var(--sp-border);
 	overflow-x: auto;
 	font-size: 0.8125rem;
 }
@@ -446,7 +458,7 @@ onBeforeUnmount(() => {
 .sp-markdown :deep(.sp-markdown__code) {
 	padding: 0.05rem 0.25rem;
 	border-radius: 3px;
-	background: var(--background-modifier-border);
+	background: var(--sp-border);
 	font-family: var(--font-monospace, ui-monospace, monospace);
 	font-size: 0.85em;
 }
@@ -454,14 +466,14 @@ onBeforeUnmount(() => {
 .sp-markdown :deep(.sp-markdown__blockquote) {
 	margin: 0 0 0.5rem;
 	padding: 0.25rem 0.625rem;
-	border-left: 3px solid var(--background-modifier-border);
-	color: var(--text-muted);
+	border-left: 3px solid var(--sp-border);
+	color: var(--sp-text-muted);
 	white-space: pre-wrap;
 }
 
 .sp-markdown :deep(.sp-markdown__list) {
 	margin: 0 0 0.5rem;
-	padding-left: 1.25rem;
+	padding-inline-start: 1.25rem;
 }
 
 .sp-markdown :deep(.sp-markdown__li) {
@@ -469,7 +481,7 @@ onBeforeUnmount(() => {
 }
 
 .sp-markdown :deep(.sp-markdown__link) {
-	color: var(--text-accent);
+	color: var(--sp-text-accent);
 	text-decoration: underline;
 }
 </style>

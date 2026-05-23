@@ -39,16 +39,16 @@ export class MessageListPO {
 		return this.wrapper.findAll(this.byTid('compact-boundary-notice'));
 	}
 
-	get emptyTilesContainer() {
-		return this.wrapper.find(this.byTid('agent-message-list-empty-tiles'));
+	get welcomeGreeting() {
+		return this.wrapper.find(this.byTid('agent-welcome-greeting'));
 	}
 
-	emptyTile(key: 'slash' | 'mention' | 'send' | 'escape') {
-		return this.wrapper.find(this.byTid(`agent-message-list-empty-tile-${key}`));
+	get welcomeGreetingTitle() {
+		return this.wrapper.find(this.byTid('welcome-greeting-title'));
 	}
 
-	emptyTiles() {
-		return this.wrapper.findAll('[data-testid^="agent-message-list-empty-tile-"]');
+	suggestionChip(id: 'findOrphans' | 'summarizeActive' | 'projectsTag' | 'brokenLinks') {
+		return this.wrapper.find(this.byTid(`welcome-suggestion-${id}`));
 	}
 
 	get newMessagesPill() {

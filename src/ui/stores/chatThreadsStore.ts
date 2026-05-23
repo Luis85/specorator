@@ -181,6 +181,22 @@ export const useChatThreadsStore = defineStore('chatThreads', () => {
 	}
 
 	/**
+	 * Clears the captured `sessionId` back to `null` on the matching thread.
+	 * No-op if the thread is unknown.
+	 *
+	 * Used by `ChatTurnOrchestrator` when a resume turn fails — the next user
+	 * turn on this thread will then fall back to a fresh session rather than
+	 * retrying a dead resume id forever (Q-F.4). REQ-ASM-035.
+	 */
+	function clearSessionId(threadId: string): void {
+		const existing = chatThreads.value.get(threadId);
+		if (existing === undefined) return;
+		const next = new Map(chatThreads.value);
+		next.set(threadId, { ...existing, sessionId: null });
+		chatThreads.value = next;
+	}
+
+	/**
 	 * Bumps `lastUsedAt` on the matching thread to "now" (ISO 8601 UTC).
 	 * No-op if the thread is unknown. REQ-ASM-037.
 	 */
@@ -351,6 +367,7 @@ export const useChatThreadsStore = defineStore('chatThreads', () => {
 		upsertThread,
 		setActiveThreadId,
 		captureSessionId,
+		clearSessionId,
 		markThreadUsed,
 		createThread,
 		renameThread,

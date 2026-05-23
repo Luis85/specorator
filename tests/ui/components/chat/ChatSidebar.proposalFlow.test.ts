@@ -44,7 +44,17 @@ import {
 	CONFIRM_MODAL_PORT,
 	TRANSPORT_KIND_KEY,
 	SECRET_STORE_PORT,
+	ICON_PORT,
+	PROVIDER_REGISTRY_KEY,
 } from '@/infrastructure/bridge/ports'
+import type { ProviderRegistry } from '@/domain/chat/ProviderRegistry'
+import { i18n } from '@/ui/i18n'
+
+const emptyRegistry: ProviderRegistry = {
+	listProviders: () => [],
+	getProvider: () => undefined,
+	getCapabilities: () => undefined,
+}
 import { getChatStoresFacade } from '../../../__fakes__/chatStoresFacade'
 import { ChatSidebarPO } from './ChatSidebar.po'
 import { FileWriteProposalCardPO } from './FileWriteProposalCard.po'
@@ -109,7 +119,7 @@ async function mountSidebar(args: MountArgs = {}) {
 
 	const wrapper = mount(ChatSidebar, {
 		global: {
-			plugins: [pinia],
+			plugins: [pinia, i18n],
 			stubs: { RouterLink: RouterLinkStub },
 			provide: {
 				[CHAT_TRANSPORT_PORT as symbol]: port,
@@ -121,6 +131,8 @@ async function mountSidebar(args: MountArgs = {}) {
 				[CONFIRM_MODAL_PORT as symbol]: confirmModal,
 				[TRANSPORT_KIND_KEY as symbol]: transportKindRef,
 				[SECRET_STORE_PORT as symbol]: secretStore,
+				[ICON_PORT as symbol]: bridge,
+				[PROVIDER_REGISTRY_KEY as symbol]: emptyRegistry,
 			},
 		},
 	})

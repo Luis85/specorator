@@ -1,0 +1,42 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"feature": "agent-ux-parity",
+	"workstream": "WS-AUX-1",
+	"captured_at": "2026-05-22T00:00:00Z",
+	"captured_by": "dev (T-AUX-014)",
+	"branch": "feature/aux-ws-1-tokens-animations",
+	"build_commands": [
+		"npm run build",
+		"npm run build:web"
+	],
+	"notes": "Baseline captured at the WS-AUX-1 tip after tokens.css + animations.css + [data-provider] root binding land. NFR-AUX-001 enforces (new - baseline) / baseline <= 0.05 at WS-AUX-10 (T-AUX-351). Gzip sizes are deflate level-default via Node zlib.gzipSync against the emitted artefacts; raw bytes are filesystem stat().size of the build outputs.",
+	"plugin": {
+		"path": "dist-plugin/",
+		"main_js": {
+			"bytes": 3032808,
+			"gzip_bytes": 707263
+		},
+		"styles_css": {
+			"bytes": 64722,
+			"gzip_bytes": 9368
+		},
+		"total_gzip_bytes": 716631
+	},
+	"standalone": {
+		"path": "dist-standalone/",
+		"js": {
+			"bytes": 274481,
+			"gzip_bytes": 94548
+		},
+		"css": {
+			"bytes": 21775,
+			"gzip_bytes": 3951
+		},
+		"total_gzip_bytes": 98499
+	},
+	"requirements": ["NFR-AUX-001"],
+	"references": {
+		"spec": "specs/agent-ux-parity/spec.md §6 (NFR-AUX-001)",
+		"tasks": "specs/agent-ux-parity/tasks.md T-AUX-014, T-AUX-351"
+	}
+}

@@ -142,14 +142,14 @@ function handleRemove(label: string): void {
 	gap: 0.25rem;
 	padding: 0.125rem 0.375rem 0.125rem 0.5rem;
 	border-radius: 999px;
-	background: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border);
+	background: var(--sp-bg-secondary);
+	border: 1px solid var(--sp-border);
 	font-size: 0.6875rem;
-	color: var(--text-normal);
+	color: var(--sp-text-normal);
 }
 
 .sp-attachment-strip__chip--vault {
-	background: var(--interactive-accent-translucent, var(--background-modifier-hover));
+	background: var(--sp-interactive-accent-translucent, var(--sp-interactive-hover));
 }
 
 .sp-attachment-strip__label {
@@ -166,14 +166,14 @@ function handleRemove(label: string): void {
 	border: 0;
 	border-radius: 50%;
 	background: transparent;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 	cursor: pointer;
 	font-size: 0.875rem;
 	line-height: 1;
 }
 
 .sp-attachment-strip__remove:hover {
-	background: var(--background-modifier-hover);
-	color: var(--text-normal);
+	background: var(--sp-interactive-hover);
+	color: var(--sp-text-normal);
 }
 </style>

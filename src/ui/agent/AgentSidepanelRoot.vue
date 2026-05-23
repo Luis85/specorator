@@ -37,10 +37,13 @@ import ErrorBoundary from '@/ui/components/ErrorBoundary.vue';
 import AgentSidepanelHeader from '@/ui/components/agent/AgentSidepanelHeader.vue';
 import ThreadTabStrip from '@/ui/components/agent/ThreadTabStrip.vue';
 import MessageList from '@/ui/components/agent/MessageList.vue';
+import HelpPopover from '@/ui/components/agent/HelpPopover.vue';
+import FloatingNavSidebar from '@/ui/components/agent/FloatingNavSidebar.vue';
+import {
+	useNarrowSidepanel,
+	NARROW_SIDEPANEL_KEY,
+} from '@/ui/composables/useNarrowSidepanel';
 import StatusPanel from '@/ui/components/agent/StatusPanel.vue';
-import AttachmentStrip from '@/ui/components/agent/AttachmentStrip.vue';
-import ProviderBadge from '@/ui/components/agent/ProviderBadge.vue';
-import ModelSelector from '@/ui/components/agent/ModelSelector.vue';
 import A11yAnnouncer from '@/ui/components/agent/A11yAnnouncer.vue';
 import { A11Y_ANNOUNCER_KEY, useA11yAnnouncer } from '@/ui/composables/useA11yAnnouncer';
 import ChatSidebar from '@/ui/components/chat/ChatSidebar.vue';
@@ -82,8 +85,48 @@ const deleteConfirmation =
 const announcer = useA11yAnnouncer();
 provide(A11Y_ANNOUNCER_KEY, announcer);
 
+/**
+ * WS-AUX-4 (REQ-AUX-004): observe the sidepanel root and broadcast a
+ * reactive `narrow` flag (<360 px inline-size) to descendants so layout-
+ * sensitive children can collapse without each owning a `ResizeObserver`.
+ */
+const sidepanelRootEl = ref<HTMLElement | null>(null);
+const { narrow } = useNarrowSidepanel(sidepanelRootEl);
+provide(NARROW_SIDEPANEL_KEY, narrow);
+
+/**
+ * QW-D / G3 — vault-investigation chip click handler. The chip payload
+ * carries the full prompt text (resolved by `<WelcomeGreeting>` from the
+ * `welcome.chips.<id>.prompt` i18n entry). We populate the composer
+ * textarea with that prompt and focus it so the user can review/edit
+ * before sending — no auto-dispatch.
+ *
+ * G3 (RALPH AUX): `<WelcomeGreeting>` now mounts INSIDE `<MessageList>`,
+ * so the chip event is re-emitted up via `MessageList @suggestion-pick`.
+ */
+async function handleWelcomeSuggestion(payload: {
+	id: 'findOrphans' | 'summarizeActive' | 'projectsTag' | 'brokenLinks';
+	prompt: string;
+}): Promise<void> {
+	messagesStore.setUserText(payload.prompt);
+	await nextTick();
+	chatSidebarRef.value?.focusInputForTilePrefill();
+}
+
 const activeThreadId = computed(() => threadsStore.activeThreadId);
 const isRequestInFlight = computed(() => messagesStore.status === 'loading');
+
+/**
+ * WS-AUX-1 — derive the current provider id from the resolved selection so
+ * `[data-provider]` on the agent root flips brand colours via the `--sp-*`
+ * token layer (ADR-AUX-002, REQ-AUX-006). `'degraded'` resolves to `null`
+ * which v-bind elides — the brand then falls through to the default
+ * `--sp-brand-claude` from tokens.css.
+ */
+const dataProviderAttr = computed<string | null>(() => {
+	const r = providerStore.resolved;
+	return r === 'degraded' ? null : r.provider;
+});
 const activeFeature = computed(() => {
 	const tid = threadsStore.activeThreadId;
 	if (tid === null) return null;
@@ -96,6 +139,14 @@ const activeFeature = computed(() => {
  * mount before `loadSettings()` resolves.
  */
 const chatTabCap = computed(() => settingsStore.settings.chatTabCap);
+
+/**
+ * G2.2 (RALPH G2): the multi-thread switcher only renders when there is
+ * something to switch between. Reads off the threads store directly so
+ * mutations elsewhere (createThread / deleteThread) reactively flip the
+ * strip's visibility.
+ */
+const showTabStrip = computed(() => threadsStore.chatThreads.size > 1);
 
 /**
  * WS-6 hand-off: full plumbing of `new-thread` → `createThread`,
@@ -147,6 +198,27 @@ async function handleOpenThreadContextMenu(threadId: string): Promise<void> {
 const helpOpen = ref(false);
 
 const helpCommands = computed<readonly SlashCommand[]>(() => BUILT_IN_SLASH_COMMANDS);
+
+/**
+ * WS-AUX-8b: items projected for `<HelpPopover>` — `id` is the slash-command
+ * name so `@select` can resolve back to the original `SlashCommand` and run
+ * through `handleSelectCommand`. The shortcut column shows the `/name`
+ * trigger so users can practise typing the command directly.
+ */
+const helpItems = computed(() =>
+	helpCommands.value.map((cmd) => ({
+		id: cmd.name,
+		label: cmd.description,
+		shortcut: `/${cmd.name}`,
+	})),
+);
+
+function onHelpSelect(id: string): void {
+	const command = helpCommands.value.find((c) => c.name === id);
+	if (command === undefined) return;
+	closeHelp();
+	handleSelectCommand(command);
+}
 
 function onNotice(e: Event): void {
 	const { message, durationMs } = (
@@ -243,35 +315,6 @@ function onDocumentPointerDownForHelp(event: PointerEvent): void {
 }
 
 /**
- * UX #11 (WP-8). Empty-state tile pre-fills the chat textarea with a
- * matching prompt fragment so the user can edit and send. We do NOT
- * auto-send — Cmd/Ctrl+Enter remains the user's commit gesture.
- *
- * Codex P2: after the model update, focus the textarea and dispatch a
- * synthetic `input` event so `ChatInput`'s `handleInput` runs — that's
- * what opens the slash palette / @-mention picker based on the leading
- * character. External `setUserText` alone leaves the picker closed.
- */
-async function handleEmptyTileAction(
-	key: 'slash' | 'mention' | 'send' | 'escape',
-): Promise<void> {
-	switch (key) {
-		case 'slash':
-			messagesStore.setUserText('/');
-			break;
-		case 'mention':
-			messagesStore.setUserText('@');
-			break;
-		case 'send':
-		case 'escape':
-			// Informational tiles — no textarea pre-fill needed.
-			return;
-	}
-	await nextTick();
-	chatSidebarRef.value?.focusInputForTilePrefill();
-}
-
-/**
  * WS-7 — per-message action forwarders. `MessageList` emits `copy` /
  * `regenerate` / `edit` from its `MessageActions` row; the sidebar owns the
  * side effects (clipboard, orchestrator dispatch, textarea population) so
@@ -293,6 +336,32 @@ function handleMessageEdit(payload: {
 	void chatSidebarRef.value?.editMessage(payload);
 }
 
+/**
+ * WS-AUX-9 (REQ-AUX-016): nav-sidebar hooks. The presentational
+ * `<FloatingNavSidebar>` emits scroll/clear/toggle intents which we route to
+ * the existing scroll container and store actions. `MessageList` exposes
+ * `scrollTop` / `scrollBottom` through its `scroll-request` infra; the
+ * sidebar dispatches via custom events on `sidepanelRootEl` so the message
+ * list can subscribe without prop drilling.
+ */
+const showThinking = ref(true);
+
+function handleNavScrollTop(): void {
+	sidepanelRootEl.value?.dispatchEvent(
+		new CustomEvent('sp:nav-scroll', { detail: { direction: 'top' } }),
+	);
+}
+
+function handleNavScrollBottom(): void {
+	sidepanelRootEl.value?.dispatchEvent(
+		new CustomEvent('sp:nav-scroll', { detail: { direction: 'bottom' } }),
+	);
+}
+
+function handleNavToggleThinking(): void {
+	showThinking.value = !showThinking.value;
+}
+
 onMounted(() => {
 	window.addEventListener('sp:notice', onNotice);
 	document.addEventListener('pointerdown', onDocumentPointerDownForHelp, true);
@@ -305,14 +374,19 @@ onUnmounted(() => {
 </script>
 
 <template>
-	<div class="sp-agent" data-testid="agent-sidepanel">
+	<div
+		ref="sidepanelRootEl"
+		class="sp-agent specorator-root"
+		:data-provider="dataProviderAttr"
+		:data-narrow="narrow ? 'true' : 'false'"
+		data-testid="agent-sidepanel"
+	>
 		<ErrorBoundary>
 			<div class="sp-agent__header-wrap">
 				<AgentSidepanelHeader
 					:active-feature="activeFeature"
 					:has-active-thread="activeThreadId !== null"
 					:request-in-flight="isRequestInFlight"
-					@new-conversation="handleNewConversation"
 				>
 					<!--
             SPEC-MPS-001 §A2: ThreadTabStrip lives inside the header so
@@ -320,8 +394,13 @@ onUnmounted(() => {
             available from the top of the sidepanel. We pass
             `chatTabCap` through to keep the strip presentational —
             settings lookup stays in the root.
+
+            G2.2 (RALPH G2): the strip only mounts when there is more
+            than one open thread. Single-thread sessions get no tab
+            strip at all (Claudian parity). The strip pops in
+            automatically as soon as `chatThreads.size` crosses 1.
           -->
-					<template #tabStrip>
+					<template v-if="showTabStrip" #tabStrip>
 						<ThreadTabStrip
 							:chat-tab-cap="chatTabCap"
 							@new-thread="handleNewThread"
@@ -329,10 +408,13 @@ onUnmounted(() => {
 						/>
 					</template>
 				</AgentSidepanelHeader>
-				<div class="sp-agent__provider-row" data-testid="agent-provider-row">
-					<ProviderBadge />
-					<ModelSelector />
-				</div>
+				<!--
+				WS-AUX-6 (T-AUX-279): provider + model selectors moved out of the
+				header band into the composer's <InputToolbar>. The legacy
+				`agent-provider-row` wrapper is gone; tests still mounting
+				ProviderBadge/ModelSelector directly continue to work.
+				-->
+
 				<!--
           UX #4 (WP-8): /help renders as a popover anchored under the
           header instead of a drawer that pushes the message list
@@ -343,48 +425,53 @@ onUnmounted(() => {
 					v-if="helpOpen"
 					ref="helpPanelEl"
 					class="sp-agent__help"
-					role="dialog"
-					:aria-label="t('agent.help.openAriaLabel')"
 					data-testid="agent-help-panel"
 				>
-					<header class="sp-agent__help-header">
-						<span class="sp-agent__help-title" data-testid="agent-help-title">
-							{{ t('agent.help.heading') }}
-						</span>
-						<button
-							type="button"
-							class="sp-agent__help-close"
-							data-testid="agent-help-close"
-							:aria-label="t('agent.help.closeAriaLabel')"
-							@click="closeHelp"
-						>
-							{{ t('agent.help.close') }}
-						</button>
-					</header>
-					<ul class="sp-agent__help-list" data-testid="agent-help-list">
-						<li
-							v-for="command in helpCommands"
-							:key="command.name"
-							class="sp-agent__help-item"
-							:data-testid="`agent-help-item-${command.name}`"
-						>
-							<span class="sp-agent__help-name">/{{ command.name }}</span>
-							<span class="sp-agent__help-description">{{ command.description }}</span>
-						</li>
-					</ul>
+					<HelpPopover
+						:items="helpItems"
+						@select="onHelpSelect"
+						@close="closeHelp"
+					/>
 				</div>
 			</div>
 			<div class="sp-agent__body">
+				<!--
+				G3 (RALPH AUX): MessageList always mounts and owns its own
+				empty state — `<WelcomeGreeting>` lives inside it now and
+				fills the empty transcript region (Claudian parity).
+				Suggestion-chip clicks bubble through MessageList up here.
+				-->
 				<MessageList
 					:thread-id="activeThreadId"
-					@tile-action="handleEmptyTileAction"
+					@suggestion-pick="handleWelcomeSuggestion"
 					@copy="handleMessageCopy"
 					@regenerate="handleMessageRegenerate"
 					@edit="handleMessageEdit"
 				/>
-				<StatusPanel />
-				<AttachmentStrip />
-				<ChatSidebar ref="chatSidebarRef" @select-command="handleSelectCommand" />
+				<!--
+				WS-AUX-9 §1.3.11 (REQ-AUX-016): right-edge floating column with
+				four circular nav actions. Resting opacity 0.15 lifts to 1 on
+				hover. Hidden when the sidepanel is narrow (useNarrowSidepanel
+				broadcasts via injection).
+				-->
+				<FloatingNavSidebar
+					data-testid="agent-floating-nav"
+					@new-conversation="handleNewConversation"
+					@scroll-top="handleNavScrollTop"
+					@scroll-bottom="handleNavScrollBottom"
+					@clear-conversation="handleNewConversation"
+					@toggle-thinking="handleNavToggleThinking"
+				/>
+				<!--
+				WS-AUX-7 (REQ-AUX-011): StatusPanel + composer (incl. AttachmentStrip,
+				which lives inside ChatInput per CQ-AUX-18) share a single bordered
+				ancestor so they read as one region. StatusPanel owns its own scroll
+				with max-height min(40vh, 320px) to keep the composer in view.
+				-->
+				<div class="sp-composer-group" data-testid="agent-composer-group">
+					<StatusPanel />
+					<ChatSidebar ref="chatSidebarRef" @select-command="handleSelectCommand" />
+				</div>
 			</div>
 		</ErrorBoundary>
 		<AppToast />
@@ -411,7 +498,7 @@ onUnmounted(() => {
 	justify-content: flex-end;
 	gap: 0.5rem;
 	padding: 0.25rem 0.75rem;
-	border-bottom: 1px solid var(--background-modifier-border);
+	border-bottom: 1px solid var(--sp-border);
 }
 
 .sp-agent__body {
@@ -419,6 +506,34 @@ onUnmounted(() => {
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
+	/*
+	 * WS-AUX-9: anchor for the absolutely-positioned FloatingNavSidebar so
+	 * it overlays the transcript without escaping the body column.
+	 */
+	position: relative;
+}
+
+/*
+ * WS-AUX-7 (REQ-AUX-011): shared bordered ancestor for StatusPanel +
+ * composer (AttachmentStrip lives inside ChatInput per CQ-AUX-18). The
+ * group draws the chrome once so the three children read as a single
+ * region. `flex: 0 0 auto` keeps the composer pinned to the bottom of
+ * the body column while MessageList consumes the remaining flex space.
+ */
+.sp-composer-group {
+	display: flex;
+	flex-direction: column;
+	flex: 0 0 auto;
+	margin-block: var(--sp-space-2, 0.5rem);
+	margin-inline: var(--sp-space-3, 0.75rem);
+	border: 1px solid var(--sp-border, var(--sp-border));
+	border-radius: var(--sp-radius-md, 8px);
+	background: var(--sp-bg-primary, var(--sp-bg-primary));
+	overflow: hidden;
+}
+
+.sp-composer-group > * + * {
+	border-block-start: 1px solid var(--sp-border, var(--sp-border));
 }
 
 /*
@@ -430,71 +545,10 @@ onUnmounted(() => {
  */
 .sp-agent__help {
 	position: absolute;
-	top: 100%;
-	left: 0;
-	right: 0;
+	inset-block-start: 100%;
+	inset-inline: 0;
 	z-index: 6;
-	display: flex;
-	flex-direction: column;
-	gap: 0.5rem;
-	padding: 0.75rem 1rem;
-	background: var(--background-primary);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 6px;
-	box-shadow: var(--shadow-s, 0 4px 12px rgba(0, 0, 0, 0.15));
-	max-height: 60vh;
-	overflow-y: auto;
 }
 
-.sp-agent__help-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-}
-
-.sp-agent__help-title {
-	font-size: 0.875rem;
-	font-weight: 600;
-	color: var(--text-normal);
-}
-
-.sp-agent__help-close {
-	font-size: 0.75rem;
-	font-weight: 500;
-	padding: 0.2rem 0.5rem;
-	border-radius: 4px;
-	border: 1px solid var(--background-modifier-border);
-	background: var(--background-primary);
-	color: var(--text-normal);
-	cursor: pointer;
-}
-
-.sp-agent__help-close:hover {
-	background: var(--interactive-hover);
-}
-
-.sp-agent__help-list {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 0.25rem;
-}
-
-.sp-agent__help-item {
-	display: flex;
-	gap: 0.5rem;
-	font-size: 0.8125rem;
-	color: var(--text-normal);
-}
-
-.sp-agent__help-name {
-	font-weight: 600;
-	min-width: 7rem;
-}
-
-.sp-agent__help-description {
-	color: var(--text-muted);
-}
+/* WS-AUX-8b: the help drawer body is now owned by <HelpPopover>. */
 </style>

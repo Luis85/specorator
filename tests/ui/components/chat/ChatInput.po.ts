@@ -1,4 +1,5 @@
 import type { VueWrapper } from '@vue/test-utils'
+import { DOMWrapper as DOMWrapperCtor } from '@vue/test-utils'
 
 export class ChatInputPO {
 	constructor(public readonly wrapper: VueWrapper) {}
@@ -7,16 +8,32 @@ export class ChatInputPO {
 		return `[data-testid="${tid}"]`
 	}
 
+	/**
+	 * WS-AUX-8c: slash + mention dropdowns are rendered through
+	 * `<SpDropdownPanel>` which uses `<Teleport to="body">`. Lookups for
+	 * dropdown elements therefore go through `document` instead of the mounted
+	 * wrapper subtree, while the testid contract is preserved.
+	 */
+	private findOneInDocument(selector: string) {
+		return new DOMWrapperCtor<Element>(document.querySelector(selector))
+	}
+
+	private findAllInDocument(selector: string) {
+		return Array.from(document.querySelectorAll(selector)).map(
+			(el) => new DOMWrapperCtor<Element>(el),
+		)
+	}
+
 	mentionDropdownExists(): boolean {
-		return this.wrapper.find(this.byTid('mention-dropdown')).exists()
+		return this.findOneInDocument(this.byTid('mention-dropdown')).exists()
 	}
 
 	mentionOptionAt(index: number) {
-		return this.wrapper.find(this.byTid(`mention-option-${index}`))
+		return this.findOneInDocument(this.byTid(`mention-option-${index}`))
 	}
 
 	mentionOptionPaths(): string[] {
-		return this.wrapper.findAll('[role="option"]').map((el) => {
+		return this.findAllInDocument('[role="option"]').map((el) => {
 			const path = el.find('[data-testid^="mention-option-"] > :last-child')
 			return path.exists() ? path.text() : ''
 		})
@@ -29,11 +46,16 @@ export class ChatInputPO {
 		await this.textarea.trigger('input')
 	}
 
-	async pressKey(key: string, modifiers: { ctrl?: boolean; meta?: boolean } = {}): Promise<void> {
+	async pressKey(
+		key: string,
+		modifiers: { ctrl?: boolean; meta?: boolean; shift?: boolean; alt?: boolean } = {},
+	): Promise<void> {
 		await this.textarea.trigger('keydown', {
 			key,
 			ctrlKey: modifiers.ctrl ?? false,
 			metaKey: modifiers.meta ?? false,
+			shiftKey: modifiers.shift ?? false,
+			altKey: modifiers.alt ?? false,
 		})
 	}
 
@@ -73,16 +95,36 @@ export class ChatInputPO {
 		await this.textarea.setValue(value)
 	}
 
-	async triggerSendKey(ctrl = true): Promise<void> {
+	/**
+	 * Send gesture: plain Enter with no modifiers (current shipping contract —
+	 * Ctrl+Enter was retired in favour of the simpler keymap).
+	 * The `_ignored` parameter is retained for source-compat with existing call
+	 * sites; modifiers no longer affect the send path.
+	 */
+	async triggerSendKey(_ignored = false): Promise<void> {
 		await this.textarea.trigger('keydown', {
 			key: 'Enter',
-			ctrlKey: ctrl,
-			metaKey: !ctrl,
+			ctrlKey: false,
+			metaKey: false,
+			shiftKey: false,
+			altKey: false,
 		})
 	}
 
+	/** Shift+Enter: must NOT send — leaves textarea to insert a newline. */
+	async triggerShiftEnter(): Promise<void> {
+		await this.textarea.trigger('keydown', {
+			key: 'Enter',
+			ctrlKey: false,
+			metaKey: false,
+			shiftKey: true,
+			altKey: false,
+		})
+	}
+
+	/** Alias of `triggerSendKey` retained for readability at call sites. */
 	async triggerEnterOnly(): Promise<void> {
-		await this.textarea.trigger('keydown', { key: 'Enter', ctrlKey: false, metaKey: false })
+		await this.triggerSendKey()
 	}
 
 	async clickSendButton(): Promise<void> {
@@ -90,11 +132,11 @@ export class ChatInputPO {
 	}
 
 	get dropdown() {
-		return this.wrapper.find(this.byTid('slash-command-dropdown'))
+		return this.findOneInDocument(this.byTid('slash-command-dropdown'))
 	}
 
 	get dropdownEmpty() {
-		return this.wrapper.find(this.byTid('slash-command-empty'))
+		return this.findOneInDocument(this.byTid('slash-command-empty'))
 	}
 
 	hasDropdown(): boolean {
@@ -102,11 +144,11 @@ export class ChatInputPO {
 	}
 
 	dropdownItem(name: string) {
-		return this.wrapper.find(this.byTid(`slash-command-item-${name}`))
+		return this.findOneInDocument(this.byTid(`slash-command-item-${name}`))
 	}
 
 	dropdownItems() {
-		return this.wrapper.findAll('[role="option"]')
+		return this.findAllInDocument('[role="option"]')
 	}
 
 	/**

@@ -23,6 +23,24 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 import { fakeModulePorts, type FakePorts } from '../../__fakes__/fake-ports'
 import { resolveSessionLogPath } from '@/application/chat/sessionLogPath'
+
+/**
+ * Q-E.1 — helper to compute the slug-based path the writer now produces for
+ * a fresh thread. Mirrors what the writer feeds into `resolveSessionLogPath`
+ * internally so tests can assert against the expected output path.
+ */
+function slugPath(
+  feature: string | null,
+  sessionId: string,
+  specsFolder: string,
+  createdAt: string,
+  firstUserMessage: string,
+): string {
+  return resolveSessionLogPath(feature, sessionId, specsFolder, {
+    createdAt,
+    firstUserMessage,
+  })
+}
 import {
   SessionLogWriter,
   SessionLogNoSessionError,
@@ -69,23 +87,30 @@ describe('SessionLogWriter.appendUserAssistant — happy path (T-ASM-046)', () =
     ports = fakeModulePorts()
   })
 
-  it('first write seeds frontmatter with the five named keys plus user/assistant body (TEST-ASM-032)', async () => {
+  it('first write seeds frontmatter with the four named keys plus user/assistant body (Q-E.2; TEST-ASM-032)', async () => {
     const thread = makeThread()
     const writer = makeWriter(ports, () => '2026-05-14T10:00:00.000Z')
 
     await writer.appendUserAssistant(thread, { user: 'hi', assistant: 'hello' })
 
-    const path = resolveSessionLogPath(thread.feature, thread.sessionId!, 'specs')
+    // Q-E.1 — file now lives at the slug-based basename.
+    const path = slugPath(
+      thread.feature,
+      thread.sessionId!,
+      'specs',
+      thread.createdAt,
+      'hi',
+    )
     const written = await ports.vault.readFile(path)
 
-    // Frontmatter parses as YAML with the five named keys.
+    // Frontmatter parses as YAML with the four named keys (Q-E.2 dropped `transport`).
     expect(written.startsWith('---\n')).toBe(true)
     const fmEnd = written.indexOf('\n---', 4)
     expect(fmEnd).toBeGreaterThan(0)
     const fm = written.slice(4, fmEnd)
     expect(fm).toMatch(/session_id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'/)
     expect(fm).toMatch(/feature: 'foo'/)
-    expect(fm).toMatch(/transport: subscription/)
+    expect(fm).not.toMatch(/transport:/)
     expect(fm).toMatch(/created: '2026-05-14T10:00:00\.000Z'/)
     expect(fm).toMatch(/updated: '2026-05-14T10:00:00\.000Z'/)
 
@@ -117,7 +142,14 @@ describe('SessionLogWriter.appendUserAssistant — happy path (T-ASM-046)', () =
     await writer.appendUserAssistant(thread, { user: 'turn2-u', assistant: 'turn2-a' })
 
     expect(writeSpy).toHaveBeenCalledTimes(1)
-    const path = resolveSessionLogPath(thread.feature, thread.sessionId!, 'specs')
+    // Q-E.1 — slug path derived from the first turn's user text.
+    const path = slugPath(
+      thread.feature,
+      thread.sessionId!,
+      'specs',
+      thread.createdAt,
+      'turn1-u',
+    )
     const written = await ports.vault.readFile(path)
     // Both turns survived.
     expect(written).toContain('turn1-u')
@@ -146,24 +178,25 @@ describe('SessionLogWriter.appendUserAssistant — happy path (T-ASM-046)', () =
     expect(folderCalls.length).toBeLessThanOrEqual(2)
   })
 
-  it('resolves to the path computed by resolveSessionLogPath', async () => {
+  it('resolves to the slug-based path computed by resolveSessionLogPath (Q-E.1)', async () => {
     const thread = makeThread({ sessionId: 'session-xyz', feature: 'bar' })
     const writer = makeWriter(ports)
 
     await writer.appendUserAssistant(thread, { user: 'u', assistant: 'a' })
 
-    const path = resolveSessionLogPath('bar', 'session-xyz', 'specs')
-    expect(path).toBe('specs/bar/sessions/session-xyz.md')
+    const path = slugPath('bar', 'session-xyz', 'specs', thread.createdAt, 'u')
+    expect(path).toBe('specs/bar/sessions/2026-05-14_u__session-.md')
     expect(await ports.vault.fileExists(path)).toBe(true)
   })
 
   it('honours a custom specsFolder', async () => {
-    const thread = makeThread({ sessionId: 'sid', feature: 'feat' })
+    const thread = makeThread({ sessionId: 'sid-12345', feature: 'feat' })
     const writer = makeWriter(ports, () => '2026-05-14T10:00:00.000Z', 'features')
 
     await writer.appendUserAssistant(thread, { user: 'u', assistant: 'a' })
 
-    expect(await ports.vault.fileExists('features/feat/sessions/sid.md')).toBe(true)
+    const path = slugPath('feat', 'sid-12345', 'features', thread.createdAt, 'u')
+    expect(await ports.vault.fileExists(path)).toBe(true)
   })
 })
 
@@ -174,17 +207,24 @@ describe('SessionLogWriter overwrite suffix (T-ASM-047, TEST-ASM-037)', () => {
     ports = fakeModulePorts()
   })
 
-  it('routes to <id>-2.md when the target carries a conflicting session_id and logs warn once', async () => {
+  /**
+   * Q-E.1: the writer now uses slug-based filenames, so conflict-suffix tests
+   * pre-seed at the slug path. The legacy `<sessionId>.md` path is reserved
+   * for the backwards-compat probe (verified in a separate block below).
+   */
+  const slugFor = (firstUserMessage: string, sessionId = 'mine'): string =>
+    slugPath('foo', sessionId, 'specs', '2026-05-14T10:00:00.000Z', firstUserMessage)
+
+  it('routes to <slug>-2.md when the target carries a conflicting session_id and logs warn once', async () => {
     const thread = makeThread({ sessionId: 'mine', feature: 'foo' })
-    const basePath = 'specs/foo/sessions/mine.md'
-    // Pre-seed a colliding file with a different session_id.
+    const basePath = slugFor('u')
+    // Pre-seed a colliding file at the same slug path with a different session_id.
     await ports.vault.writeFile(
       basePath,
       [
         '---',
         "session_id: 'theirs'",
         "feature: 'foo'",
-        'transport: subscription',
         "created: '2026-05-14T08:00:00.000Z'",
         "updated: '2026-05-14T08:00:00.000Z'",
         '---',
@@ -201,7 +241,7 @@ describe('SessionLogWriter overwrite suffix (T-ASM-047, TEST-ASM-037)', () => {
     expect(orig).not.toContain('## user')
 
     // The suffixed file exists and carries our session_id.
-    const suffixed = await ports.vault.readFile('specs/foo/sessions/mine-2.md')
+    const suffixed = await ports.vault.readFile(basePath.replace(/\.md$/, '-2.md'))
     expect(suffixed).toContain("session_id: 'mine'")
     expect(suffixed).toContain('## user')
 
@@ -211,48 +251,53 @@ describe('SessionLogWriter overwrite suffix (T-ASM-047, TEST-ASM-037)', () => {
     // Subsequent appends reuse the resolved suffix and do NOT log warn again.
     await writer.appendUserAssistant(thread, { user: 'u2', assistant: 'a2' })
     expect(ports.logger.warn).toHaveBeenCalledTimes(1)
-    expect(await ports.vault.readFile('specs/foo/sessions/mine-2.md')).toContain('u2')
+    expect(await ports.vault.readFile(basePath.replace(/\.md$/, '-2.md'))).toContain('u2')
   })
 
   it('walks the suffix loop through -2, -3, -4 when multiple conflicts pre-exist', async () => {
     const thread = makeThread({ sessionId: 'mine', feature: 'foo' })
+    const basePath = slugFor('u')
     const seed = (sid: string): string =>
       [
         '---',
         `session_id: '${sid}'`,
         "feature: 'foo'",
-        'transport: subscription',
         "created: '2026-05-14T08:00:00.000Z'",
         "updated: '2026-05-14T08:00:00.000Z'",
         '---',
         '',
       ].join('\n')
-    await ports.vault.writeFile('specs/foo/sessions/mine.md', seed('a'))
-    await ports.vault.writeFile('specs/foo/sessions/mine-2.md', seed('b'))
-    await ports.vault.writeFile('specs/foo/sessions/mine-3.md', seed('c'))
+    await ports.vault.writeFile(basePath, seed('a'))
+    await ports.vault.writeFile(basePath.replace(/\.md$/, '-2.md'), seed('b'))
+    await ports.vault.writeFile(basePath.replace(/\.md$/, '-3.md'), seed('c'))
 
     const writer = makeWriter(ports)
     await writer.appendUserAssistant(thread, { user: 'u', assistant: 'a' })
 
-    expect(await ports.vault.fileExists('specs/foo/sessions/mine-4.md')).toBe(true)
-    const four = await ports.vault.readFile('specs/foo/sessions/mine-4.md')
+    const fourPath = basePath.replace(/\.md$/, '-4.md')
+    expect(await ports.vault.fileExists(fourPath)).toBe(true)
+    const four = await ports.vault.readFile(fourPath)
     expect(four).toContain("session_id: 'mine'")
     expect(four).toContain('## user')
     // Originals untouched.
-    expect(await ports.vault.readFile('specs/foo/sessions/mine.md')).toContain("session_id: 'a'")
-    expect(await ports.vault.readFile('specs/foo/sessions/mine-2.md')).toContain("session_id: 'b'")
-    expect(await ports.vault.readFile('specs/foo/sessions/mine-3.md')).toContain("session_id: 'c'")
+    expect(await ports.vault.readFile(basePath)).toContain("session_id: 'a'")
+    expect(await ports.vault.readFile(basePath.replace(/\.md$/, '-2.md'))).toContain(
+      "session_id: 'b'",
+    )
+    expect(await ports.vault.readFile(basePath.replace(/\.md$/, '-3.md'))).toContain(
+      "session_id: 'c'",
+    )
   })
 
   it('reuses the existing file when its frontmatter session_id already matches', async () => {
     const thread = makeThread({ sessionId: 'mine', feature: 'foo' })
+    const basePath = slugFor('u')
     await ports.vault.writeFile(
-      'specs/foo/sessions/mine.md',
+      basePath,
       [
         '---',
         "session_id: 'mine'",
         "feature: 'foo'",
-        'transport: subscription',
         "created: '2026-05-14T08:00:00.000Z'",
         "updated: '2026-05-14T08:00:00.000Z'",
         '---',
@@ -264,9 +309,46 @@ describe('SessionLogWriter overwrite suffix (T-ASM-047, TEST-ASM-037)', () => {
     await writer.appendUserAssistant(thread, { user: 'u', assistant: 'a' })
 
     // No suffix file created.
-    expect(await ports.vault.fileExists('specs/foo/sessions/mine-2.md')).toBe(false)
-    const merged = await ports.vault.readFile('specs/foo/sessions/mine.md')
+    expect(await ports.vault.fileExists(basePath.replace(/\.md$/, '-2.md'))).toBe(false)
+    const merged = await ports.vault.readFile(basePath)
     expect(merged).toContain('## user')
+    expect(ports.logger.warn).not.toHaveBeenCalled()
+  })
+
+  it('Q-E.1 backwards-compat: appends to a pre-existing legacy <sessionId>.md file when it carries our session_id', async () => {
+    const thread = makeThread({ sessionId: 'mine', feature: 'foo' })
+    const legacyPath = 'specs/foo/sessions/mine.md'
+    // Pre-seed a legacy-shaped file owned by THIS thread (e.g. created
+    // before Q-E.1 landed).
+    await ports.vault.writeFile(
+      legacyPath,
+      [
+        '---',
+        "session_id: 'mine'",
+        "feature: 'foo'",
+        "created: '2026-05-14T08:00:00.000Z'",
+        "updated: '2026-05-14T08:00:00.000Z'",
+        '---',
+        '',
+      ].join('\n'),
+    )
+
+    const writer = makeWriter(ports)
+    await writer.appendUserAssistant(thread, { user: 'hello world', assistant: 'a' })
+
+    // The legacy file is reused — the slug-path file is NOT created.
+    const merged = await ports.vault.readFile(legacyPath)
+    expect(merged).toContain('## user')
+    expect(merged).toContain('hello world')
+    const slug = slugPath(
+      'foo',
+      'mine',
+      'specs',
+      thread.createdAt,
+      'hello world',
+    )
+    expect(await ports.vault.fileExists(slug)).toBe(false)
+    // No conflict warning — the legacy probe finds our own session_id.
     expect(ports.logger.warn).not.toHaveBeenCalled()
   })
 })
@@ -380,7 +462,8 @@ describe('SessionLogWriter.appendProposalDecision (REQ-ASM-046)', () => {
       decidedAt: '2026-05-14T10:10:00.000Z',
     })
 
-    const path = resolveSessionLogPath(thread.feature, thread.sessionId!, 'specs')
+    // Q-E.1: writer now uses the slug-based filename for new files.
+    const path = slugPath(thread.feature, thread.sessionId!, 'specs', thread.createdAt, 'u')
     const written = await ports.vault.readFile(path)
     expect(written).toContain('## proposal')
     expect(written).toContain('- path: notes/idea.md')
@@ -421,6 +504,126 @@ describe('SessionLogWriter.appendProposalDecision (REQ-ASM-046)', () => {
     ).rejects.toThrow(SessionLogNoSessionError)
     // No vault write attempted — the missing session is gated before queueing.
     expect(ports.logger.error).toHaveBeenCalled()
+  })
+
+  it('appendUserAssistant after restart with a different turn appends to the existing slug-named log (regression: Codex P1 #429)', async () => {
+    const thread = makeThread()
+    // Writer #1 seeds the slug-named log keyed off the first user message.
+    const writer1 = makeWriter(ports, () => '2026-05-14T10:00:00.000Z')
+    await writer1.appendUserAssistant(thread, { user: 'hi', assistant: 'hello' })
+    const firstPath = slugPath(
+      thread.feature,
+      thread.sessionId!,
+      'specs',
+      thread.createdAt,
+      'hi',
+    )
+    expect(await ports.vault.fileExists(firstPath)).toBe(true)
+
+    // Writer #2 simulates a plugin restart — fresh in-memory cache. The next
+    // turn carries a different user text, so without the folder-scan
+    // fallback the writer would derive `<date>_<later>__<id>.md` and split
+    // the conversation across two files.
+    const writer2 = makeWriter(ports, () => '2026-05-14T10:10:00.000Z')
+    await writer2.appendUserAssistant(thread, { user: 'later turn', assistant: 'reply 2' })
+
+    // No parallel slug-named file was created from the later turn text.
+    const splitPath = slugPath(
+      thread.feature,
+      thread.sessionId!,
+      'specs',
+      thread.createdAt,
+      'later turn',
+    )
+    expect(splitPath).not.toBe(firstPath)
+    expect(await ports.vault.fileExists(splitPath)).toBe(false)
+
+    // The follow-up turn appended to the existing slug-named log.
+    const written = await ports.vault.readFile(firstPath)
+    expect(written).toContain('later turn')
+    expect(written).toContain('reply 2')
+  })
+
+  it('folder-scan skips an unreadable file and still finds the matching session log (regression: Codex P2 #429 — unreadable scan)', async () => {
+    const thread = makeThread()
+    // Seed the real slug-named log.
+    const writer1 = makeWriter(ports, () => '2026-05-14T10:00:00.000Z')
+    await writer1.appendUserAssistant(thread, { user: 'hi', assistant: 'hello' })
+    const realPath = slugPath(
+      thread.feature,
+      thread.sessionId!,
+      'specs',
+      thread.createdAt,
+      'hi',
+    )
+
+    // Seed a sibling decoy file that the listFiles probe will encounter
+    // first, but whose readFile rejects transiently (e.g. deleted between
+    // list and read). The scan must skip it and still find `realPath`.
+    const decoyPath = `specs/${thread.feature!}/sessions/aaaa-decoy.md`
+    await ports.vault.writeFile(decoyPath, '---\nsession_id: other\n---\n')
+    const originalReadFile = ports.vault.readFile.bind(ports.vault)
+    vi.spyOn(ports.vault, 'readFile').mockImplementation(async (p: string) => {
+      if (p === decoyPath) throw new Error('transient I/O — file vanished')
+      return originalReadFile(p)
+    })
+
+    // Fresh writer (simulating restart) — empty resolvedPaths cache forces
+    // the folder-scan path.
+    const writer2 = makeWriter(ports, () => '2026-05-14T10:10:00.000Z')
+    await writer2.appendProposalDecision({
+      thread,
+      proposal: { envelope: { path: 'notes/idea.md' } },
+      decision: 'accepted',
+      decidedAt: '2026-05-14T10:10:00.000Z',
+    })
+
+    // The proposal landed in the real slug-named log, not in a parallel file.
+    const written = await originalReadFile(realPath)
+    expect(written).toContain('## proposal')
+    expect(written).toContain('- decision: accepted')
+  })
+
+  it('appendProposalDecision after restart appends to the existing slug-named log (regression: Codex P2 #429)', async () => {
+    const thread = makeThread()
+    // Writer #1 seeds the slug-named log via a normal user-assistant turn.
+    const writer1 = makeWriter(ports, () => '2026-05-14T10:00:00.000Z')
+    await writer1.appendUserAssistant(thread, { user: 'hi', assistant: 'hello' })
+    const existingPath = slugPath(
+      thread.feature,
+      thread.sessionId!,
+      'specs',
+      thread.createdAt,
+      'hi',
+    )
+    expect(await ports.vault.fileExists(existingPath)).toBe(true)
+
+    // Writer #2 simulates a plugin restart — fresh in-memory `resolvedPaths`
+    // cache, no firstUserMessage hint, but the slug-named file is still on
+    // disk. The proposal-decision append must land in the existing file
+    // instead of creating a parallel UUID-named log.
+    const writer2 = makeWriter(ports, () => '2026-05-14T10:10:00.000Z')
+    await writer2.appendProposalDecision({
+      thread,
+      proposal: { envelope: { path: 'notes/idea.md', rationale: 'because-spec' } },
+      decision: 'accepted',
+      decidedAt: '2026-05-14T10:10:00.000Z',
+    })
+
+    // No parallel UUID-named log was created.
+    const legacyPath = resolveSessionLogPath(
+      thread.feature,
+      thread.sessionId!,
+      'specs',
+    )
+    expect(legacyPath).not.toBe(existingPath)
+    expect(await ports.vault.fileExists(legacyPath)).toBe(false)
+
+    // The proposal audit row landed in the existing slug-named log.
+    const written = await ports.vault.readFile(existingPath)
+    expect(written).toContain('## proposal')
+    expect(written).toContain('- path: notes/idea.md')
+    expect(written).toContain('- decision: accepted')
   })
 
   it('appendUserAssistant still resolves successfully when the underlying writeFile throws (fire-and-forget per REQ-ASM-040)', async () => {

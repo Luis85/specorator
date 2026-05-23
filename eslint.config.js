@@ -576,6 +576,15 @@ export default defineConfig(
 			'max-lines': 'off',
 			'obsidianmd/hardcoded-config-path': 'off',
 			'obsidianmd/ui/sentence-case': 'off',
+			// Tests run under jsdom in node, not inside Obsidian. The
+			// popout-window / forbidden-elements / prefer-create-el rules
+			// are about runtime safety inside the plugin sandbox and do not
+			// apply to vitest harnesses that need to drive the DOM directly
+			// (e.g. injecting `<style>` to verify CSS-token cascades).
+			'obsidianmd/prefer-active-doc': 'off',
+			'obsidianmd/prefer-active-window-timers': 'off',
+			'obsidianmd/prefer-create-el': 'off',
+			'obsidianmd/no-forbidden-elements': 'off',
 		},
 	},
 

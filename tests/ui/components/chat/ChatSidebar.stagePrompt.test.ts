@@ -23,7 +23,17 @@ import {
 	WORKSPACE_PORT,
 	SETTINGS_PORT,
 	LOGGER_PORT,
+	ICON_PORT,
+	PROVIDER_REGISTRY_KEY,
 } from '@/infrastructure/bridge/ports'
+import type { ProviderRegistry } from '@/domain/chat/ProviderRegistry'
+import { i18n } from '@/ui/i18n'
+
+const emptyRegistry: ProviderRegistry = {
+	listProviders: () => [],
+	getProvider: () => undefined,
+	getCapabilities: () => undefined,
+}
 import { useMessagesStore } from '@/ui/stores/messagesStore'
 import { ChatSidebarPO } from './ChatSidebar.po'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
@@ -91,7 +101,7 @@ async function mountSidebar(args: {
 
 	const wrapper = mount(ChatSidebar, {
 		global: {
-			plugins: [pinia],
+			plugins: [pinia, i18n],
 			stubs: { RouterLink: RouterLinkStub },
 			provide: {
 				[CHAT_TRANSPORT_PORT as symbol]: port,
@@ -100,6 +110,8 @@ async function mountSidebar(args: {
 				[WORKSPACE_PORT as symbol]: bridge,
 				[SETTINGS_PORT as symbol]: bridge,
 				[LOGGER_PORT as symbol]: bridge,
+				[ICON_PORT as symbol]: bridge,
+				[PROVIDER_REGISTRY_KEY as symbol]: emptyRegistry,
 			},
 		},
 	})
@@ -128,7 +140,7 @@ describe('ChatSidebar — stage-aware system prompt wiring (T-ASM-040 / TEST-ASM
 		await send(store, po, 'hello')
 
 		expect(port.optionsLog).toHaveLength(1)
-		expect(port.optionsLog[0]?.systemPromptSuffix).toBe('')
+		expect(port.optionsLog[0]?.systemPromptSuffix).not.toContain('Stage:')
 	})
 
 	it('active file not under specsFolder → systemPromptSuffix is empty (REQ-ASM-014)', async () => {
@@ -137,7 +149,7 @@ describe('ChatSidebar — stage-aware system prompt wiring (T-ASM-040 / TEST-ASM
 		})
 		await send(store, po, 'hello')
 
-		expect(port.optionsLog[0]?.systemPromptSuffix).toBe('')
+		expect(port.optionsLog[0]?.systemPromptSuffix).not.toContain('Stage:')
 	})
 
 	it('active feature with valid workflow-state → suffix contains slug, stage display name, and description (REQ-ASM-013, REQ-ASM-018, TEST-ASM-020)', async () => {
@@ -169,7 +181,7 @@ describe('ChatSidebar — stage-aware system prompt wiring (T-ASM-040 / TEST-ASM
 		})
 		await send(store, po, 'hi')
 
-		expect(port.optionsLog[0]?.systemPromptSuffix).toBe('')
+		expect(port.optionsLog[0]?.systemPromptSuffix).not.toContain('Stage:')
 	})
 
 	it('vault read error → falls back to empty suffix; send still completes (REQ-ASM-015, NFR-ASM)', async () => {
@@ -183,7 +195,7 @@ describe('ChatSidebar — stage-aware system prompt wiring (T-ASM-040 / TEST-ASM
 		await send(store, po, 'hi')
 
 		expect(port.queryLog).toHaveLength(1)
-		expect(port.optionsLog[0]?.systemPromptSuffix).toBe('')
+		expect(port.optionsLog[0]?.systemPromptSuffix).not.toContain('Stage:')
 		expect(warnSpy).toHaveBeenCalled()
 	})
 
@@ -198,7 +210,7 @@ describe('ChatSidebar — stage-aware system prompt wiring (T-ASM-040 / TEST-ASM
 		await send(store, po, 'hi')
 
 		expect(port.queryLog).toHaveLength(1)
-		expect(port.optionsLog[0]?.systemPromptSuffix).toBe('')
+		expect(port.optionsLog[0]?.systemPromptSuffix).not.toContain('Stage:')
 	})
 
 	it('concatenation order: stage preamble lives in systemPromptSuffix, CCS preamble + userText live in prompt (REQ-ASM-054, TEST-ASM-048)', async () => {

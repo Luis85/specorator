@@ -52,6 +52,7 @@ function fakeThreads() {
 		upsertThread: vi.fn((r) => map.set(r.threadId, r)),
 		setActiveThreadId: vi.fn(),
 		captureSessionId: vi.fn(),
+		clearSessionId: vi.fn(),
 		markThreadUsed: vi.fn(),
 	};
 }

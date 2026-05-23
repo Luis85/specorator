@@ -26,17 +26,26 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMessagesStore, type CompactBoundaryNoticeDto } from '@/ui/stores/messagesStore';
 import { useStreamingTurnStore } from '@/ui/stores/streamingTurnStore';
+import { useTransportStatusStore } from '@/ui/stores/transportStatusStore';
+import { useChatProviderStore } from '@/ui/stores/chatProviderStore';
+import { isExplicit } from '@/domain/chat/ProviderSelection';
 import {
 	usePendingApprovalsStore,
 	type ApprovalDecisionKind,
 } from '@/ui/stores/pendingApprovalsStore';
+import { useApprovalRulesStore } from '@/ui/stores/approvalRulesStore';
 import { useInjectedA11yAnnouncer } from '@/ui/composables/useA11yAnnouncer';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
 import MarkdownBlock from '@/ui/components/agent/MarkdownBlock.vue';
-import MessageActions from './MessageActions.vue';
+import MessageBubble from './MessageBubble.vue';
+import MessageItem from './MessageItem.vue';
 import ThinkingBlock from './ThinkingBlock.vue';
 import ToolCallBlock from './ToolCallBlock.vue';
-import ApprovalCard from './ApprovalCard.vue';
+import InlineApprovalCard from './InlineApprovalCard.vue';
+import StreamingCursor from './StreamingCursor.vue';
+import CompactBoundary from './CompactBoundary.vue';
+import TransportStatusPill from './TransportStatusPill.vue';
+import WelcomeGreeting from './WelcomeGreeting.vue';
 
 /**
  * Discriminated union for the interleaved transcript: either a real
@@ -48,7 +57,11 @@ type TranscriptEntry =
 	| { readonly kind: 'message'; readonly message: ChatMessage }
 	| { readonly kind: 'compact-boundary'; readonly notice: CompactBoundaryNoticeDto };
 
-type EmptyTileKey = 'slash' | 'mention' | 'send' | 'escape';
+type WelcomeSuggestionId =
+	| 'findOrphans'
+	| 'summarizeActive'
+	| 'projectsTag'
+	| 'brokenLinks';
 
 const props = defineProps<{
 	/** Active thread id, or `null` when no thread is selected. */
@@ -57,11 +70,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{
 	/**
-	 * UX #11 (WP-8). Fired when the user clicks a starter tile in the
-	 * empty state; the host (AgentSidepanelRoot) pre-fills the textarea
-	 * with the corresponding prompt fragment.
+	 * G3 (RALPH AUX): the empty transcript region now renders
+	 * `<WelcomeGreeting>` in place of the legacy dashed tile grid.
+	 * Suggestion-chip clicks bubble to the root so the composer can
+	 * be pre-filled (handler lives in `AgentSidepanelRoot`).
 	 */
-	'tile-action': [key: EmptyTileKey];
+	'suggestion-pick': [payload: { id: WelcomeSuggestionId; prompt: string }];
 	/**
 	 * WS-7 per-message actions (REQ-MPS-026/027/028). Re-emitted from
 	 * `MessageActions.vue`. The host (`ChatSidebar`) owns the side effect:
@@ -75,6 +89,68 @@ const emit = defineEmits<{
 const messagesStore = useMessagesStore();
 const streamingStore = useStreamingTurnStore();
 const pendingApprovals = usePendingApprovalsStore();
+const approvalRules = useApprovalRulesStore();
+const transportStatusStore = useTransportStatusStore();
+const providerStore = useChatProviderStore();
+
+/**
+ * REQ-AUX-014 — model name displayed in the assistant role badge. Resolved
+ * from the active `chatProviderStore.selectedModel`, which `ModelSelector.vue`
+ * writes on user pick. Empty string => `MessageItem` falls back to the
+ * localised "Claude" label.
+ */
+const assistantModelName = computed<string>(() => providerStore.selectedModel);
+
+/**
+ * REQ-AUX-014 — timestamps toggle. Hardcoded to `false` until the
+ * `showMessageTimestamps` PluginSettings flag is wired through `useSettingsPort`
+ * (deferred — tracked by CQ-AUX-06 follow-up).
+ */
+const showMessageTimestamps = false;
+
+/**
+ * WS-AUX-7 (REQ-AUX-016) — surface `<TransportStatusPill>` at the top of the
+ * transcript whenever transport health is non-idle. The pill resolves its
+ * provider label through the standard copy table (`agent.provider.*`).
+ */
+const transportPillKind = computed<'connecting' | 'degraded' | 'offline' | null>(() => {
+	const k = transportStatusStore.kind;
+	return k === 'idle' ? null : k;
+});
+
+function humaniseToken(token: string): string {
+	return token.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function resolveProviderCopy(key: string, fallback: string): string {
+	const value = t(key);
+	return value === key || value.length === 0 ? fallback : value;
+}
+
+const providerLabelForPill = computed<string>(() => {
+	const r = providerStore.resolved;
+	if (r === 'degraded') return resolveProviderCopy('agent.transport.fallbackProvider', 'Provider');
+	if (isExplicit(r)) {
+		const providerLabel = resolveProviderCopy(
+			`agent.provider.label.${r.provider}`,
+			humaniseToken(r.provider),
+		);
+		const modeLabel = resolveProviderCopy(
+			`agent.provider.mode.${r.mode}`,
+			humaniseToken(r.mode),
+		);
+		return `${providerLabel} · ${modeLabel}`;
+	}
+	return resolveProviderCopy('agent.transport.fallbackProvider', 'Provider');
+});
+
+function handleTransportRetry(): void {
+	// Dormant by design (REQ-AUX-016): the orchestration layer owns retry
+	// semantics. We reset the pill to `idle` so the user gets visual feedback
+	// while the upper layer (when wired) re-arms the transport.
+	transportStatusStore.setKind('idle');
+	transportStatusStore.setDiagnostic('');
+}
 
 /**
  * Inline tool-approval cards awaiting a user decision (WS-9, REQ-MPS-045).
@@ -83,8 +159,19 @@ const pendingApprovals = usePendingApprovalsStore();
  */
 const approvalRequests = computed(() => pendingApprovals.pending);
 
-function handleApprovalDecision(id: string, decision: { kind: ApprovalDecisionKind }): void {
-	pendingApprovals.decide(id, decision.kind);
+function handleApprovalDecision(
+	id: string,
+	approval: { request: { tool: string; scope: string }; providerId: string },
+	kind: ApprovalDecisionKind,
+): void {
+	if (kind === 'always') {
+		approvalRules.addRule({
+			providerId: approval.providerId as never,
+			tool: approval.request.tool,
+			scope: approval.request.scope,
+		});
+	}
+	pendingApprovals.decide(id, kind);
 }
 const { t } = useI18n();
 const announcer = useInjectedA11yAnnouncer();
@@ -111,8 +198,7 @@ const compactBoundaries = computed<readonly CompactBoundaryNoticeDto[]>(() => {
 const transcript = computed<readonly TranscriptEntry[]>(() => {
 	const entries: TranscriptEntry[] = [];
 	for (const m of messages.value) entries.push({ kind: 'message', message: m });
-	for (const n of compactBoundaries.value)
-		entries.push({ kind: 'compact-boundary', notice: n });
+	for (const n of compactBoundaries.value) entries.push({ kind: 'compact-boundary', notice: n });
 	entries.sort((a, b) => {
 		const aAt = a.kind === 'message' ? a.message.createdAt : a.notice.createdAt;
 		const bAt = b.kind === 'message' ? b.message.createdAt : b.notice.createdAt;
@@ -262,23 +348,23 @@ watch(
 
 onBeforeUnmount(() => {
 	if (scrollRafHandle !== null) {
-		const cancel =
-			typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null;
+		const cancel = typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null;
 		if (cancel !== null) cancel(scrollRafHandle);
 		scrollRafHandle = null;
 	}
 	pendingScrollToBottom = false;
 });
 
-const emptyTiles: ReadonlyArray<{ key: EmptyTileKey; labelKey: string }> = [
-	{ key: 'slash', labelKey: 'agent.emptyStateTiles.slash' },
-	{ key: 'mention', labelKey: 'agent.emptyStateTiles.mention' },
-	{ key: 'send', labelKey: 'agent.emptyStateTiles.send' },
-	{ key: 'escape', labelKey: 'agent.emptyStateTiles.escape' },
-];
-
-function handleTileClick(key: EmptyTileKey): void {
-	emit('tile-action', key);
+/**
+ * G3 (RALPH AUX): forward `<WelcomeGreeting>` suggestion picks unchanged
+ * so the root can pre-fill the composer textarea with the full prompt
+ * body (handler lives in `AgentSidepanelRoot.handleWelcomeSuggestion`).
+ */
+function handleSuggestionPick(payload: {
+	id: WelcomeSuggestionId;
+	prompt: string;
+}): void {
+	emit('suggestion-pick', payload);
 }
 
 /**
@@ -355,67 +441,51 @@ watch(
 		:aria-label="t('agent.messageListAriaLabel')"
 		@scroll.passive="handleScroll"
 	>
+		<!--
+		WS-AUX-7 (REQ-AUX-016): transport health pill at the top of the scroll
+		region. Pinned via `position: sticky` so it stays visible while the
+		user scrolls history; hidden whenever transportStatusStore is `idle`.
+		-->
+		<TransportStatusPill
+			v-if="transportPillKind !== null"
+			class="sp-agent-messages__transport-pill"
+			:kind="transportPillKind"
+			:provider-label="providerLabelForPill"
+			:diagnostic="transportStatusStore.diagnostic || undefined"
+			data-testid="agent-message-list-transport-pill"
+			@retry="handleTransportRetry"
+		/>
 		<template v-for="entry in transcript">
-			<article
+			<MessageItem
 				v-if="entry.kind === 'message'"
 				:key="entry.message.id"
-				class="sp-agent-message"
-				:class="`sp-agent-message--${entry.message.role}`"
-				:data-testid="`agent-message-${entry.message.role}`"
-			>
-				<header class="sp-agent-message__role" data-testid="agent-message-role">
-					{{ entry.message.role === 'user' ? t('agent.roleUser') : t('agent.roleAssistant') }}
-				</header>
-				<div class="sp-agent-message__body" data-testid="agent-message-body">
-					<MarkdownBlock
-						v-if="entry.message.text.length > 0"
-						class="sp-agent-message__text"
-						:text="entry.message.text"
-					/>
-					<p v-else class="sp-agent-message__empty" data-testid="agent-message-empty">
-						{{ t('agent.assistantEmpty') }}
-					</p>
-					<p
-						v-if="entry.message.truncated === true"
-						class="sp-agent-message__trim-note"
-						data-testid="agent-message-trim-note"
-					>
-						{{ t('agent.contextTrimmed') }}
-					</p>
-					<MessageActions
-						:message-id="entry.message.id"
-						:role="entry.message.role"
-						:is-latest="entry.message.id === latestAssistantId"
-						@copy="handleCopy"
-						@regenerate="handleRegenerate"
-						@edit="handleEdit"
-					/>
-				</div>
-			</article>
-			<div
+				:message="entry.message"
+				:is-latest="entry.message.id === latestAssistantId"
+				:model-name="entry.message.role === 'assistant' ? assistantModelName : ''"
+				:show-timestamp="showMessageTimestamps"
+				@copy="handleCopy"
+				@regenerate="handleRegenerate"
+				@edit="handleEdit"
+			/>
+			<CompactBoundary
 				v-else
 				:key="entry.notice.id"
-				class="sp-agent-compact-boundary"
+				:label="t('chat.compactBoundary.notice')"
 				data-testid="compact-boundary-notice"
-				role="status"
-			>
-				<span class="sp-agent-compact-boundary__line" aria-hidden="true"></span>
-				<span class="sp-agent-compact-boundary__label">
-					{{ t('chat.compactBoundary.notice') }}
-				</span>
-				<span class="sp-agent-compact-boundary__line" aria-hidden="true"></span>
-			</div>
+			/>
 		</template>
-		<ApprovalCard
+		<InlineApprovalCard
 			v-for="approval in approvalRequests"
 			:key="approval.id"
 			:request="approval.request"
 			:provider-id="approval.providerId"
-			@decision="(decision) => handleApprovalDecision(approval.id, decision)"
+			@deny="handleApprovalDecision(approval.id, approval, 'deny')"
+			@allow-once="handleApprovalDecision(approval.id, approval, 'allow-once')"
+			@allow-always="handleApprovalDecision(approval.id, approval, 'always')"
 		/>
 		<article
 			v-if="isStreaming"
-			class="sp-agent-message sp-agent-message--assistant sp-agent-message--streaming"
+			class="sp-agent-message sp-agent-message--assistant sp-agent-message--streaming sp-hover-host"
 			data-testid="agent-message-streaming"
 			aria-busy="true"
 			aria-live="off"
@@ -423,27 +493,24 @@ watch(
 			<header class="sp-agent-message__role">
 				{{ t('agent.roleAssistant') }}
 			</header>
-			<div class="sp-agent-message__body">
-				<ThinkingBlock :text="streamingThinking" />
-				<ToolCallBlock
-					v-for="[blockId, call] in streamingToolCalls"
-					:key="blockId"
-					:tool-name="call.toolName"
-					:input-json="call.inputJson"
-					:done="call.done"
-				/>
-				<MarkdownBlock
-					v-if="streamingText.length > 0"
-					class="sp-agent-message__text"
-					:text="streamingText"
-				/>
-				<span
-					class="sp-agent-message__cursor"
-					aria-hidden="true"
-					data-testid="agent-message-streaming-cursor"
-					>▍</span
-				>
-			</div>
+			<MessageBubble role="assistant">
+				<div class="sp-agent-message__body">
+					<ThinkingBlock :text="streamingThinking" />
+					<ToolCallBlock
+						v-for="[blockId, call] in streamingToolCalls"
+						:key="blockId"
+						:tool-name="call.toolName"
+						:input-json="call.inputJson"
+						:done="call.done"
+					/>
+					<MarkdownBlock
+						v-if="streamingText.length > 0"
+						class="sp-agent-message__text"
+						:text="streamingText"
+					/>
+					<StreamingCursor data-testid="agent-message-streaming-cursor" />
+				</div>
+			</MessageBubble>
 		</article>
 		<button
 			v-if="showNewMessagesPill"
@@ -456,30 +523,23 @@ watch(
 			{{ t('agent.newMessagesPill') }}
 		</button>
 	</div>
-	<div v-else class="sp-agent-messages--empty" data-testid="agent-message-list-empty">
-		<p class="sp-agent-messages__empty-body">{{ t('agent.emptyHistory') }}</p>
-		<p
-			class="sp-agent-messages__empty-tiles-heading"
-			data-testid="agent-message-list-empty-tiles-heading"
-		>
-			{{ t('agent.emptyStateTiles.heading') }}
-		</p>
-		<ul
-			class="sp-agent-messages__empty-tiles"
-			data-testid="agent-message-list-empty-tiles"
-			role="list"
-		>
-			<li v-for="tile in emptyTiles" :key="tile.key" role="listitem">
-				<button
-					type="button"
-					class="sp-agent-messages__empty-tile"
-					:data-testid="`agent-message-list-empty-tile-${tile.key}`"
-					@click="handleTileClick(tile.key)"
-				>
-					{{ t(tile.labelKey) }}
-				</button>
-			</li>
-		</ul>
+	<!--
+	G3 (RALPH AUX): empty transcript renders the centred serif
+	WelcomeGreeting in place of the legacy dashed tile grid. The
+	wrapper takes the full body flex height so the greeting's internal
+	grid can vertically centre. testid `agent-message-list-empty` is
+	preserved on the wrapper so legacy "is the list empty?" probes
+	still resolve.
+	-->
+	<div
+		v-else
+		class="sp-agent-messages--empty"
+		data-testid="agent-message-list-empty"
+	>
+		<WelcomeGreeting
+			data-testid="agent-welcome-greeting"
+			@suggestion-pick="handleSuggestionPick"
+		/>
 	</div>
 </template>
 
@@ -495,64 +555,21 @@ watch(
 	gap: 0.75rem;
 }
 
+/*
+ * G3 (RALPH AUX): empty-state wrapper now stretches to fill the body
+ * flex column so `<WelcomeGreeting>` can centre vertically against the
+ * full transcript region (Claudian "What's new?" parity).
+ */
 .sp-agent-messages--empty {
-	flex: 0 0 auto;
-	padding: 1.25rem 1rem 0;
+	flex: 1 1 auto;
+	min-block-size: 0;
 	display: flex;
-	flex-direction: column;
-	gap: 0.625rem;
 	align-items: stretch;
+	justify-content: stretch;
 }
 
-.sp-agent-messages__empty-body {
-	margin: 0;
-	font-size: 0.8125rem;
-	color: var(--text-muted);
-	text-align: center;
-	font-style: italic;
-}
-
-.sp-agent-messages__empty-tiles-heading {
-	margin: 0;
-	font-size: 0.75rem;
-	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-	color: var(--text-faint, var(--text-muted));
-	text-align: center;
-}
-
-.sp-agent-messages__empty-tiles {
-	margin: 0;
-	padding: 0;
-	list-style: none;
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 0.375rem;
-}
-
-.sp-agent-messages__empty-tile {
-	width: 100%;
-	min-height: 3rem;
-	padding: 0.5rem 0.625rem;
-	border: 1px dashed var(--background-modifier-border);
-	border-radius: 6px;
-	background: var(--background-secondary);
-	color: var(--text-normal);
-	font-size: 0.8125rem;
-	font-family: var(--font-text);
-	text-align: left;
-	cursor: pointer;
-	transition:
-		background-color 0.15s,
-		border-color 0.15s;
-}
-
-.sp-agent-messages__empty-tile:hover,
-.sp-agent-messages__empty-tile:focus {
-	background: var(--interactive-hover);
-	border-color: var(--interactive-accent);
-	outline: none;
+.sp-agent-messages--empty > * {
+	flex: 1 1 auto;
 }
 
 .sp-agent-message {
@@ -561,12 +578,12 @@ watch(
 	gap: 0.25rem;
 	padding: 0.625rem 0.75rem;
 	border-radius: 6px;
-	background: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border);
+	background: var(--sp-bg-secondary);
+	border: 1px solid var(--sp-border);
 }
 
 .sp-agent-message--user {
-	background: var(--background-secondary-alt, var(--background-secondary));
+	background: var(--sp-bg-secondary-alt, var(--sp-bg-secondary));
 }
 
 .sp-agent-message__role {
@@ -574,7 +591,7 @@ watch(
 	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 }
 
 .sp-agent-message__body {
@@ -587,21 +604,21 @@ watch(
 	margin: 0;
 	font-family: inherit;
 	font-size: 0.875rem;
-	color: var(--text-normal);
+	color: var(--sp-text-normal);
 	word-break: break-word;
 }
 
 .sp-agent-message__empty {
 	margin: 0;
 	font-size: 0.8125rem;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 	font-style: italic;
 }
 
 .sp-agent-message__trim-note {
 	margin: 0;
 	font-size: 0.75rem;
-	color: var(--text-faint);
+	color: var(--sp-text-faint);
 }
 
 .sp-agent-message--streaming {
@@ -613,7 +630,7 @@ watch(
 	align-items: center;
 	gap: 0.5rem;
 	margin: 0.25rem 0;
-	color: var(--text-faint);
+	color: var(--sp-text-faint);
 	font-size: 0.75rem;
 	font-style: italic;
 	text-align: center;
@@ -622,7 +639,7 @@ watch(
 .sp-agent-compact-boundary__line {
 	flex: 1 1 auto;
 	height: 1px;
-	background: var(--background-modifier-border);
+	background: var(--sp-border);
 }
 
 .sp-agent-compact-boundary__label {
@@ -632,7 +649,7 @@ watch(
 .sp-agent-message__cursor {
 	display: inline-block;
 	font-size: 0.875rem;
-	color: var(--text-accent);
+	color: var(--sp-text-accent);
 	animation: sp-agent-message__blink 1s steps(2, start) infinite;
 }
 
@@ -647,6 +664,19 @@ watch(
  * centre of the scroll container. Visible only when new content arrived
  * while the user was scrolled away from the bottom.
  */
+/*
+ * WS-AUX-7 (REQ-AUX-016): pinned transport-status pill. Sticks to the top of
+ * the scroll container so users see the health state even after scrolling
+ * deep into history.
+ */
+.sp-agent-messages__transport-pill {
+	position: sticky;
+	inset-block-start: 0;
+	align-self: center;
+	margin-block-end: var(--sp-space-2, 0.5rem);
+	z-index: 2;
+}
+
 .sp-agent-messages__new-pill {
 	position: sticky;
 	bottom: 0.5rem;
@@ -654,9 +684,9 @@ watch(
 	align-self: center;
 	padding: 0.25rem 0.75rem;
 	border-radius: 9999px;
-	border: 1px solid var(--background-modifier-border);
-	background: var(--background-secondary);
-	color: var(--text-normal);
+	border: 1px solid var(--sp-border);
+	background: var(--sp-bg-secondary);
+	color: var(--sp-text-normal);
 	font-size: 0.75rem;
 	font-weight: 500;
 	cursor: pointer;
@@ -665,7 +695,7 @@ watch(
 
 .sp-agent-messages__new-pill:hover,
 .sp-agent-messages__new-pill:focus {
-	background: var(--interactive-hover);
+	background: var(--sp-interactive-hover);
 	outline: none;
 }
 </style>

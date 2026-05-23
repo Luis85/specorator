@@ -114,11 +114,19 @@ function quoteYamlString(value: string): string {
   return `'${value.replace(/'/g, "''")}'`
 }
 
-/** Serialise the five-key frontmatter exactly as REQ-ASM-033 prescribes. */
+/**
+ * Serialise the four-key frontmatter (REQ-ASM-033; Q-E.2 dropped `transport:`).
+ *
+ * Q-E.2 rationale: `transport` is a runtime concern of the in-memory
+ * `ChatThreadRecord` (REQ-MPS-005), not a property of the chat history itself.
+ * Downstream tools that grep the log do not branch on transport, and including
+ * it in the YAML couples the persisted history to the discriminated provider
+ * model. Dropping the key keeps the on-disk schema stable across provider
+ * migrations.
+ */
 function buildFrontmatter(frontmatter: {
   readonly session_id: string
   readonly feature: string | null
-  readonly transport: 'api-key' | 'subscription'
   readonly created: string
   readonly updated: string
 }): string {
@@ -126,7 +134,6 @@ function buildFrontmatter(frontmatter: {
     '---',
     `session_id: ${quoteYamlString(frontmatter.session_id)}`,
     `feature: ${frontmatter.feature === null ? 'null' : quoteYamlString(frontmatter.feature)}`,
-    `transport: ${frontmatter.transport}`,
     `created: ${quoteYamlString(frontmatter.created)}`,
     `updated: ${quoteYamlString(frontmatter.updated)}`,
     '---',
@@ -303,7 +310,7 @@ export class SessionLogWriter {
       })
       return Promise.resolve()
     }
-    return this._runQueued(thread, async (resolvedPath) => {
+    return this._runQueued(thread, turn.user, async (resolvedPath) => {
       const at = this.nowIso()
       const exists = await this.vault.fileExists(resolvedPath)
       if (!exists) {
@@ -357,7 +364,7 @@ export class SessionLogWriter {
       )
       return Promise.reject(new SessionLogNoSessionError(args.thread.threadId))
     }
-    return this._runQueued(args.thread, async (resolvedPath) => {
+    return this._runQueued(args.thread, null, async (resolvedPath) => {
       const exists = await this.vault.fileExists(resolvedPath)
       const block = formatProposalBlock({
         path: args.proposal.envelope.path,
@@ -388,6 +395,7 @@ export class SessionLogWriter {
    */
   private _runQueued(
     thread: ChatThreadRecord,
+    firstUserMessage: string | null,
     op: (resolvedPath: string) => Promise<void>,
   ): Promise<void> {
     // Type-narrow: both callers gate on `sessionId !== null` already, but a
@@ -397,8 +405,22 @@ export class SessionLogWriter {
       return Promise.reject(new SessionLogNoSessionError(thread.threadId))
     }
     const sessionId = thread.sessionId
-    const basePath = resolveSessionLogPath(thread.feature, sessionId, this.specsFolder)
-    const queueKey = basePath
+    // Q-E.1 — slug-based path is the new default. Backwards-compat probe in
+    // `resolveConflictSuffix` falls back to the legacy `<sessionId>.md` path
+    // when it already exists with our session_id, so existing user vaults
+    // continue writing to the file they already have.
+    const slugPath =
+      firstUserMessage === null
+        ? resolveSessionLogPath(thread.feature, sessionId, this.specsFolder)
+        : resolveSessionLogPath(thread.feature, sessionId, this.specsFolder, {
+            createdAt: thread.createdAt,
+            firstUserMessage,
+          })
+    const legacyPath = resolveSessionLogPath(thread.feature, sessionId, this.specsFolder)
+    // Queue under the legacy path so concurrent appends on the same thread —
+    // regardless of which call-site supplied `firstUserMessage` — serialise
+    // through the same mutex. The legacy path is stable per (feature, sessionId).
+    const queueKey = legacyPath
     const previous = this.mutex.get(queueKey) ?? Promise.resolve()
     const next = previous
       .catch(() => {
@@ -406,7 +428,11 @@ export class SessionLogWriter {
         // rejection (or swallowed it). Reset the chain so this op still runs.
       })
       .then(async () => {
-        const resolvedPath = await this.resolveConflictSuffix(basePath, sessionId)
+        const resolvedPath = await this.resolveConflictSuffix(
+          slugPath,
+          legacyPath,
+          sessionId,
+        )
         await this.ensureParentFolder(resolvedPath)
         await op(resolvedPath)
       })
@@ -419,35 +445,53 @@ export class SessionLogWriter {
   }
 
   /**
-   * Walk `-2`, `-3`, … suffixes until we find a path that either does not
-   * exist or carries our own `session_id`. Memoised per `sessionId`.
+   * Resolve the final path for a write to `sessionId`.
+   *
+   * Q-E.1: callers prefer the slug-based `slugPath`; the writer probes for
+   * a pre-existing legacy `<sessionId>.md` file first (a thread minted before
+   * Q-E.1 landed) and reuses it when its frontmatter carries our session_id.
+   * Otherwise the slug path is used as the base, with the `-2`, `-3`, …
+   * conflict-suffix loop applied if a different `session_id` already squats
+   * on the slug path.
+   *
+   * Memoised per `sessionId` so subsequent appends in the same writer
+   * instance skip the probes.
    */
-  private async resolveConflictSuffix(basePath: string, sessionId: string): Promise<string> {
+  private async resolveConflictSuffix(
+    slugPath: string,
+    legacyPath: string,
+    sessionId: string,
+  ): Promise<string> {
     const cached = this.resolvedPaths.get(sessionId)
     if (cached !== undefined) return cached
-    const exists = await this.vault.fileExists(basePath)
-    if (!exists) {
-      this.resolvedPaths.set(sessionId, basePath)
-      return basePath
+    const reuse = await this.tryReuseExistingLog(slugPath, legacyPath, sessionId)
+    if (reuse !== null) {
+      this.resolvedPaths.set(sessionId, reuse)
+      return reuse
     }
-    const existing = await this.vault.readFile(basePath)
+    const exists = await this.vault.fileExists(slugPath)
+    if (!exists) {
+      this.resolvedPaths.set(sessionId, slugPath)
+      return slugPath
+    }
+    const existing = await this.vault.readFile(slugPath)
     const existingSession = extractSessionIdFromFrontmatter(existing)
     if (existingSession === sessionId) {
-      this.resolvedPaths.set(sessionId, basePath)
-      return basePath
+      this.resolvedPaths.set(sessionId, slugPath)
+      return slugPath
     }
     // Conflicting `session_id` (or missing frontmatter): walk the suffix loop.
     if (!this.warnedSessions.has(sessionId)) {
       this.warnedSessions.add(sessionId)
       this.logger.warn('SessionLogWriter: session-id conflict; appending suffix', {
-        basePath,
+        basePath: slugPath,
         redactedSessionId: redactSessionId(sessionId),
       })
     }
     let n = 2
     // Bounded to keep tests deterministic; in practice we expect ≤ 1.
     while (n < 1000) {
-      const candidate = withSuffix(basePath, n)
+      const candidate = withSuffix(slugPath, n)
       const candidateExists = await this.vault.fileExists(candidate)
       if (!candidateExists) {
         this.resolvedPaths.set(sessionId, candidate)
@@ -462,9 +506,84 @@ export class SessionLogWriter {
       n += 1
     }
     // Defensive: fall back to a UUID-keyed path so we never silently overwrite.
-    const overflow = `${basePath}-${sessionId}`
+    const overflow = `${slugPath}-${sessionId}`
     this.resolvedPaths.set(sessionId, overflow)
     return overflow
+  }
+
+  /**
+   * Backwards-compat probe (Q-E.1): if a pre-Q-E thread already has a file
+   * at the legacy `<sessionId>.md` basename and its frontmatter session_id
+   * matches, return that path so continuing turns append to the same file
+   * instead of orphaning history. Returns `null` when no reuse is possible.
+   */
+  private async tryLegacyReuse(
+    slugPath: string,
+    legacyPath: string,
+    sessionId: string,
+  ): Promise<string | null> {
+    if (legacyPath === slugPath) return null
+    const legacyExists = await this.vault.fileExists(legacyPath)
+    if (!legacyExists) return null
+    const legacyContent = await this.vault.readFile(legacyPath)
+    const legacySession = extractSessionIdFromFrontmatter(legacyContent)
+    return legacySession === sessionId ? legacyPath : null
+  }
+
+  /**
+   * Probe for an existing log this writer should reuse for `sessionId`.
+   * Runs the legacy `<sessionId>.md` probe first (back-compat for files
+   * minted before Q-E.1), then falls through to a folder-scan that
+   * inspects each `.md` in the sessions folder and reuses the one whose
+   * frontmatter `session_id` matches.
+   *
+   * The folder-scan covers two distinct restart hazards:
+   *
+   * 1. **Proposal-decision after restart (Codex P2)** — `appendProposalDecision`
+   *    passes `firstUserMessage: null`, so `slugPath` collapses to the
+   *    legacy path and we cannot reconstruct the human-readable basename
+   *    a previous user-assistant turn wrote to.
+   * 2. **Resumed user-assistant turn after restart (Codex P1)** —
+   *    `appendUserAssistant` passes the *current* turn's user text as
+   *    `firstUserMessage`. After restart the in-memory `resolvedPaths`
+   *    cache is empty, so a follow-up turn with a different message
+   *    would derive `<date>_<later-msg>__<id>.md` and create a parallel
+   *    file even though `<date>_<first-msg>__<id>.md` already holds the
+   *    same `session_id`. The folder-scan finds and reuses it.
+   *
+   * Result memoised through `resolvedPaths` so the scan runs at most
+   * once per `sessionId` per writer instance.
+   */
+  private async tryReuseExistingLog(
+    slugPath: string,
+    legacyPath: string,
+    sessionId: string,
+  ): Promise<string | null> {
+    const legacyReuse = await this.tryLegacyReuse(slugPath, legacyPath, sessionId)
+    if (legacyReuse !== null) return legacyReuse
+    const folder = parentFolder(slugPath)
+    if (folder === '') return null
+    const files = await this.vault.listFiles(folder)
+    for (const file of files) {
+      if (file === slugPath) continue
+      if (!file.endsWith('.md')) continue
+      // Per-file read failures (e.g. file deleted between list and read,
+      // permission glitch, transient I/O) must not abort the scan — the
+      // target log may still be writable. Skip the offender and continue;
+      // a stale entry is preferable to a false-negative append failure.
+      const read = await tryAsync(() => this.vault.readFile(file))
+      if (!read.ok) {
+        this.logger.debug('SessionLogWriter: reuse scan skipped unreadable file', {
+          file,
+          reason: String(read.error.message),
+        })
+        continue
+      }
+      if (extractSessionIdFromFrontmatter(read.value) === sessionId) {
+        return file
+      }
+    }
+    return null
   }
 
   /** Idempotent parent-folder creation; swallows already-exists errors. */
@@ -492,15 +611,13 @@ export class SessionLogWriter {
     blocks: ReadonlyArray<string>,
     at: string,
   ): Promise<void> {
-    // SessionLog YAML still uses the legacy `'api-key' | 'subscription'`
-    // string union (SPEC-ASM-001 §2.3, REQ-ASM-033). REQ-MPS-005 moves the
-    // in-memory `ChatThreadRecord.transport` to a discriminated object; we
-    // translate back at the persistence boundary to keep the YAML schema
-    // stable for downstream tools.
+    // Q-E.2 — the YAML schema is now four keys (no `transport`). The
+    // in-memory `ChatThreadRecord.transport` discriminator stays where it
+    // belongs (Pinia + chatThreads persistence) and no longer leaks into the
+    // chat history itself.
     const fm = buildFrontmatter({
       session_id: thread.sessionId ?? '',
       feature: thread.feature,
-      transport: thread.transport.mode === 'api' ? 'api-key' : 'subscription',
       created: at,
       updated: at,
     })

@@ -11,17 +11,21 @@
  * The picked model id is exposed via `chatProviderStore.selectedModel` for
  * the orchestrator to thread into `ChatTransportStreamOptions.model`.
  */
-import { computed, ref, watch } from 'vue';
+import { computed, inject, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { storeToRefs } from 'pinia';
 import { useChatProviderStore } from '@/ui/stores/chatProviderStore';
-import { useProviderRegistry } from '@/ui/composables/useProviderRegistry';
+import { PROVIDER_REGISTRY_KEY } from '@/infrastructure/bridge/ports';
+import type { ProviderRegistry } from '@/domain/chat/ProviderRegistry';
 import { isExplicit, type ProviderId } from '@/domain/chat/ProviderSelection';
 
 const { t } = useI18n();
 const store = useChatProviderStore();
 const { resolved } = storeToRefs(store);
-const registry = useProviderRegistry();
+// WS-AUX-6: ModelSelector now mounts inside InputToolbar which itself mounts
+// inside ChatInput. ChatInput is reused in test contexts that do not provide
+// a ProviderRegistry — degrade gracefully to "no models" instead of throwing.
+const registry = inject<ProviderRegistry | null>(PROVIDER_REGISTRY_KEY, null);
 
 const activeProviderId = computed<ProviderId | null>(() => {
 	const r = resolved.value;
@@ -32,7 +36,7 @@ const activeProviderId = computed<ProviderId | null>(() => {
 
 const models = computed(() => {
 	const id = activeProviderId.value;
-	if (id === null) return [];
+	if (id === null || registry === null) return [];
 	return registry.getCapabilities(id)?.models ?? [];
 });
 
@@ -63,14 +67,21 @@ const visible = computed(() => models.value.length > 0);
 
 <template>
 	<div v-if="visible" class="sp-model-selector" data-testid="model-selector">
-		<label class="sp-model-selector__label" :for="'model-selector-select'">
+		<!-- G5: drop the uppercase "MODEL" label for Claudian parity — the
+		     brand-coloured select stands alone like "Opus" in the reference. -->
+		<label
+			id="model-selector-label"
+			class="sp-model-selector__sr-label"
+			:for="'model-selector-select'"
+		>
 			{{ t('provider.model') }}
 		</label>
 		<select
 			id="model-selector-select"
 			v-model="selected"
-			class="sp-model-selector__select"
+			class="sp-model-selector__select sp-model-selector__select--brand"
 			data-testid="model-selector-select"
+			aria-labelledby="model-selector-label"
 		>
 			<option
 				v-for="m in models"
@@ -87,21 +98,42 @@ const visible = computed(() => models.value.length > 0);
 	align-items: center;
 	gap: 0.375rem;
 	font-size: 0.75rem;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 }
 
-.sp-model-selector__label {
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-	font-weight: 600;
+.sp-model-selector__sr-label {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
 }
 
 .sp-model-selector__select {
-	padding: 0.125rem 0.375rem;
-	border: 1px solid var(--background-modifier-border);
+	padding-block: 0.125rem;
+	padding-inline: 0.25rem;
+	border: 0;
+	background: transparent;
+	color: var(--sp-text-normal);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.sp-model-selector__select:hover {
+	background: var(--sp-interactive-hover);
 	border-radius: 4px;
-	background: var(--background-primary);
-	color: var(--text-normal);
-	font-size: 0.75rem;
+}
+
+/* G4.1 — brand-color emphasis on the active model name so the toolbar
+ * gets the same brand splash as Claudian's "Opus" label. The dropdown
+ * chevron stays in the platform default (neutral). */
+.sp-model-selector__select--brand {
+	color: var(--sp-brand);
+	font-weight: 600;
 }
 </style>

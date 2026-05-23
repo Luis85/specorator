@@ -19,6 +19,7 @@
  */
 import { computed, nextTick, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import ThreadTabBadge from './ThreadTabBadge.vue';
 
 const props = withDefaults(
 	defineProps<{
@@ -33,8 +34,16 @@ const props = withDefaults(
 		 * tab the strip currently focuses, `-1` for the rest (NFR-MPS-009).
 		 */
 		tabIndex?: number;
+		/**
+		 * Per-tab status badge state (spec §3.4). `active` / `streaming` /
+		 * `attention` / `idle`. Defaults to `idle` so the badge renders neutral
+		 * even when the strip has not wired a per-thread state mapping yet.
+		 */
+		badgeState?: 'active' | 'streaming' | 'attention' | 'idle';
+		/** 1-indexed tab ordinal rendered inside the badge (spec §1.3.8). */
+		ordinal?: number;
 	}>(),
-	{ tabIndex: -1 },
+	{ tabIndex: -1, badgeState: 'idle', ordinal: 1 },
 );
 
 const emit = defineEmits<{
@@ -130,6 +139,7 @@ watch(
 		@click="handleClick"
 		@contextmenu="onRightClick"
 	>
+		<ThreadTabBadge :state="badgeState" :digit="ordinal" />
 		<span
 			v-if="!renaming"
 			:data-testid="`thread-tab-${threadId}-label`"
@@ -171,8 +181,8 @@ watch(
 	gap: 0.25rem;
 	padding: 0.25rem 0.5rem;
 	border-radius: 4px;
-	background: var(--background-secondary);
-	color: var(--text-muted);
+	background: var(--sp-bg-secondary);
+	color: var(--sp-text-muted);
 	cursor: pointer;
 	font-size: 0.8125rem;
 	max-width: 12rem;
@@ -180,16 +190,16 @@ watch(
 }
 
 .sp-thread-tab:hover {
-	background: var(--background-modifier-active-hover);
+	background: var(--sp-interactive-active-hover);
 }
 
 .sp-thread-tab--active {
-	color: var(--text-normal);
-	border-bottom: 2px solid var(--text-accent);
+	color: var(--sp-text-normal);
+	border-bottom: 2px solid var(--sp-text-accent);
 }
 
 .sp-thread-tab:focus-visible {
-	outline: 2px solid var(--text-accent);
+	outline: 2px solid var(--sp-text-accent);
 	outline-offset: 1px;
 }
 
@@ -203,9 +213,9 @@ watch(
 .sp-thread-tab__rename-input {
 	flex: 1;
 	font-size: 0.8125rem;
-	background: var(--background-primary);
-	color: var(--text-normal);
-	border: 1px solid var(--background-modifier-border);
+	background: var(--sp-bg-primary);
+	color: var(--sp-text-normal);
+	border: 1px solid var(--sp-border);
 	border-radius: 3px;
 	padding: 0 0.25rem;
 	min-width: 0;
@@ -214,14 +224,14 @@ watch(
 .sp-thread-tab__menu-btn {
 	border: none;
 	background: transparent;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 	cursor: pointer;
 	padding: 0 0.25rem;
 	border-radius: 3px;
 }
 
 .sp-thread-tab__menu-btn:hover {
-	background: var(--background-modifier-hover);
-	color: var(--text-normal);
+	background: var(--sp-interactive-hover);
+	color: var(--sp-text-normal);
 }
 </style>

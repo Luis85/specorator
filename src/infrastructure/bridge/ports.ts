@@ -12,6 +12,7 @@ import type {
 	ConfirmModalPort,
 	SecretStorePort,
 	TransportLifecyclePort,
+	IconPort,
 } from '@/domain/ports'
 import type { MarkdownRenderPort } from '@/domain/ports/MarkdownRenderPort'
 import type { TransportKind } from '@/domain/chat/TransportKind'
@@ -22,6 +23,15 @@ export const VAULT_PORT: InjectionKey<VaultPort> = Symbol('VaultPort')
 export const WORKSPACE_PORT: InjectionKey<WorkspacePort> = Symbol('WorkspacePort')
 export const NOTIFICATION_PORT: InjectionKey<NotificationPort> = Symbol('NotificationPort')
 export const LOGGER_PORT: InjectionKey<LoggerPort> = Symbol('LoggerPort')
+/**
+ * Narrow seam for `obsidian.setIcon` (ADR-AUX-001, REQ-AUX-001). Vue components
+ * are forbidden from importing `obsidian` directly, so every icon render goes
+ * through this port — production (ObsidianBridge) delegates to
+ * `obsidian.setIcon`, while MockBridge / LocalStorageBridge emit a deterministic
+ * `<svg data-icon="…"><title>…</title></svg>` placeholder. Sole consumer is
+ * `<SpIcon>` (`src/ui/components/primitives/SpIcon.vue`).
+ */
+export const ICON_PORT: InjectionKey<IconPort> = Symbol('IconPort')
 export const METADATA_CACHE_PORT: InjectionKey<MetadataCachePort> = Symbol('MetadataCachePort')
 export const CANVAS_PORT: InjectionKey<CanvasPort> = Symbol('CanvasPort')
 export const COMMUNITY_PLUGIN_PORT: InjectionKey<CommunityPluginPort> = Symbol('CommunityPluginPort')
@@ -87,3 +97,14 @@ export const SETTINGS_VERSION_KEY: InjectionKey<Ref<number>> = Symbol('settingsV
  * can call it unconditionally.
  */
 export const OPEN_PLUGIN_SETTINGS_KEY: InjectionKey<() => void> = Symbol('openPluginSettings')
+
+/**
+ * Q-E.3 — plugin self-id accessor. Wired from `manifest.json` by the plugin
+ * entry so the chat panel's `<vault-context>` greeting can render a
+ * `Plugin: <name> v<version>` row on the first turn. Callers without a real
+ * manifest (unit tests, standalone browser UI) omit this provide and the
+ * `TurnInputBuilder` falls back to `{ name: 'Specorator', version: '0.0.0' }`.
+ */
+export const PLUGIN_MANIFEST_KEY: InjectionKey<
+	() => { readonly name: string; readonly version: string }
+> = Symbol('pluginManifest')

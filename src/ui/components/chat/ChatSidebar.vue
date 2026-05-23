@@ -25,6 +25,7 @@ import {
 	SETTINGS_VERSION_KEY,
 	TRANSPORT_KIND_KEY,
 	OPEN_PLUGIN_SETTINGS_KEY,
+	PLUGIN_MANIFEST_KEY,
 } from '@/infrastructure/bridge/ports';
 import type { SlashCommand } from '@/domain/chat/SlashCommand';
 import type { ConfirmModalPort, TranslationPort } from '@/domain/ports';
@@ -75,6 +76,14 @@ const noopOpenPluginSettings = (): void => {
 	/* default for unit tests and the standalone browser UI */
 };
 const openPluginSettings = inject<() => void>(OPEN_PLUGIN_SETTINGS_KEY, noopOpenPluginSettings);
+/**
+ * Q-E.3 — plugin self-id provider. Optional so unit tests and the standalone
+ * browser UI can mount the sidebar without wiring a real manifest; the
+ * builder applies a sane default fallback.
+ */
+const pluginManifest = inject<
+	(() => { readonly name: string; readonly version: string }) | undefined
+>(PLUGIN_MANIFEST_KEY, undefined);
 
 const { t: tI18n } = useI18n();
 const inlineTranslator: TranslationPort = {
@@ -394,13 +403,23 @@ async function handleSend(): Promise<void> {
 	// never receive an AbortController via `onAbortController`, so they get
 	// no Stop button, no Esc-aborts, and a different announcement (Codex P2
 	// round-2 on PR #402).
-	const preflightController = setUpTurnAbortAffordance(messagesStore.userText);
+	// Snapshot the in-flight turn text BEFORE we optimistically clear the
+	// textarea. Every downstream consumer (preflight controller, lastUserTurn,
+	// buildTurnInput) reads from this snapshot — the orchestrator's
+	// `applySuccessfulTurn` will set the store back to '' on completion as a
+	// belt-and-braces idempotent guard.
+	const inFlightUserText = messagesStore.userText;
+	const preflightController = setUpTurnAbortAffordance(inFlightUserText);
 
-	lastUserTurn.value = messagesStore.userText;
+	lastUserTurn.value = inFlightUserText;
+
+	// Optimistic clear (claudian-parity UX): user can begin typing the next
+	// turn while the agent is still streaming the current one.
+	messagesStore.setUserText('');
 
 	const input = await buildTurnInput({
 		messages: {
-			userText: messagesStore.userText,
+			userText: inFlightUserText,
 			effectiveContextFiles: messagesStore.effectiveContextFiles,
 		},
 		threads: {
@@ -422,6 +441,7 @@ async function handleSend(): Promise<void> {
 		},
 		selectedModel: providerStore.selectedModel,
 		attachments: attachmentsStore.pending,
+		pluginManifest,
 	});
 
 	// Preflight Escape (Codex P2 on PR #402): if the user pressed Escape during
@@ -447,20 +467,34 @@ async function handleSend(): Promise<void> {
 	});
 	inFlightAbort.value = null;
 	recordStructuredPathErrorIfAny(result);
-	// WS-10 (REQ-MPS-021): after the first successful turn on a thread,
-	// derive the default title from the user message. `applyDefaultTitleFromMessage`
-	// is a no-op when the title is already set (user rename wins).
+	finaliseTurnTail(result, input.userMessage, inFlightUserText);
+	await nextTick();
+	focusTextarea();
+}
+
+/**
+ * Post-`sendTurn` housekeeping: derive the thread title from the user's
+ * first message on success, clear pending attachments, and restore the
+ * in-flight text on failure so the user can retry without retyping.
+ * Extracted from `handleSend` to keep its cyclomatic complexity under the
+ * project's per-function lint cap.
+ */
+function finaliseTurnTail(
+	result: Awaited<ReturnType<ChatTurnOrchestrator['sendTurn']>>,
+	userMessage: string,
+	inFlightUserText: string,
+): void {
 	if (result.ok) {
 		const tid = threadsStore.activeThreadId;
 		if (tid !== null) {
-			threadsStore.applyDefaultTitleFromMessage(tid, input.userMessage);
+			threadsStore.applyDefaultTitleFromMessage(tid, userMessage);
 		}
-		// REQ-MPS-042/043: per-turn attachments are consumed on send; clear
-		// the pending list so a follow-up turn starts empty.
 		attachmentsStore.clear();
 	}
-	await nextTick();
-	focusTextarea();
+	const turnFailed = !result.ok || messagesStore.status === 'error';
+	if (turnFailed && messagesStore.userText.length === 0) {
+		messagesStore.setUserText(inFlightUserText);
+	}
 }
 
 /**
@@ -601,7 +635,6 @@ watch(available, async () => {
 		<!-- Ready state -->
 		<template v-else>
 			<div class="sp-chat__header">
-				<h2 class="sp-chat__title">{{ $t('chat.title') }}</h2>
 				<SessionResumeIndicator :resumed="streamingStore.sessionResumed" />
 				<SubprocessStartingPill :visible="streamingStore.cliStartingUp" />
 				<TransportStatusPill :kind="transportKind" />
@@ -686,13 +719,6 @@ watch(available, async () => {
 	gap: 0.75rem;
 	box-sizing: border-box;
 	flex-shrink: 0;
-}
-
-.sp-chat__title {
-	margin: 0;
-	font-size: 1.125rem;
-	font-weight: 700;
-	color: var(--text-normal);
 }
 
 .sp-chat__header {

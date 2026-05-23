@@ -36,6 +36,7 @@ export class ThreadTabStripPO {
 				tid !== 'thread-tab-strip' &&
 				tid !== 'thread-tab-new' &&
 				tid !== 'thread-tab-active' &&
+				tid !== 'thread-tab-badge' &&
 				!tid.includes('-label') &&
 				!tid.includes('-rename-input') &&
 				!tid.includes('-context-menu')

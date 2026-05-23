@@ -4,8 +4,8 @@
  * (`role="listbox"` / `role="option"` / `aria-selected`), and the `select`
  * + `highlight` emits.
  */
-import { describe, it, expect } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { describe, it, expect, afterEach } from 'vitest';
+import { mount, type VueWrapper } from '@vue/test-utils';
 
 import SlashCommandDropdown from '@/ui/components/chat/SlashCommandDropdown.vue';
 import type { SlashCommand } from '@/domain/chat/SlashCommand';
@@ -32,10 +32,28 @@ const HELP: SlashCommand = Object.freeze({
 	action: 'help',
 });
 
+const mounted: VueWrapper[] = [];
+
 function mountDropdown(props: { commands: readonly SlashCommand[]; selectedIndex: number }) {
-	const wrapper = mount(SlashCommandDropdown, { props });
+	// WS-AUX-8c: SlashCommandDropdown now renders inside an `<SpDropdownPanel>`
+	// which `<Teleport>`s to `document.body`. Attach the wrapper so the
+	// teleported content lives under the real DOM tree, then query through
+	// `document` in the PO. ADR-009 testid-only contract is preserved.
+	const wrapper = mount(SlashCommandDropdown, {
+		props,
+		attachTo: document.body,
+	});
+	mounted.push(wrapper);
 	return { wrapper, po: new SlashCommandDropdownPO(wrapper) };
 }
+
+afterEach(() => {
+	// Teleport renders to body; without explicit unmount the nodes persist
+	// between tests and `document.querySelector` returns stale results.
+	while (mounted.length > 0) {
+		mounted.pop()?.unmount();
+	}
+});
 
 describe('SlashCommandDropdown', () => {
 	describe('zero matches', () => {

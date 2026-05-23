@@ -35,9 +35,14 @@ describe('ContextFileChip', () => {
 			expect(po.text()).toContain('req.md')
 		})
 
-		it('shows "(auto)" suffix in the chip text', () => {
+		it('G1.3: does not show "(auto)" visible suffix (Claudian parity)', () => {
 			const po = mountChip(makeAutoFile())
-			expect(po.text()).toContain('(auto)')
+			expect(po.text()).not.toContain('(auto)')
+		})
+
+		it('keeps "(included automatically)" sr-only text for screen readers', () => {
+			const po = mountChip(makeAutoFile())
+			expect(po.text()).toContain('(included automatically)')
 		})
 
 		it('REQ-CCS-011: has no remove button for auto chip', () => {

@@ -31,6 +31,7 @@ import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord';
 import type { ChatTransportAttachment } from '@/domain/ports/ChatTransportPort';
 import { tryAsync } from '@/domain/shared/tryAsync';
 import { buildPrompt, type ContextFile } from '@/application/chat/buildPrompt';
+import { composeVaultContextBlock } from '@/application/chat/composeVaultContextBlock';
 import {
 	assembleSystemPrompt,
 	getActiveFeatureSlug,
@@ -88,6 +89,13 @@ export interface BuildTurnInputArgs {
 	readonly workspace: WorkspacePort;
 	readonly settings: SettingsPort;
 	readonly logger: LoggerPort;
+	/**
+	 * Q-E.3 — plugin self-id source. Wired from `manifest.json` so the
+	 * `Plugin: <name> v<version>` greeting row reflects the running build.
+	 * Optional: callers that omit it (unit tests, standalone browser UI)
+	 * get a sane default so behaviour stays deterministic.
+	 */
+	readonly pluginManifest?: () => { readonly name: string; readonly version: string };
 	/**
 	 * WS-10 (REQ-MPS-036/037/039): per-turn mode flags. Optional so the
 	 * tabbed `SpecoratorView` (which has no ModeIndicators surface yet) can
@@ -209,6 +217,7 @@ async function loadContextFileBodies(
 async function computeStagePromptContext(
 	specsFolder: string,
 	args: BuildTurnInputArgs,
+	isFirstTurn: boolean,
 ): Promise<{ slug: string | null; systemPromptSuffix: string }> {
 	const activeFile = args.workspace.getActiveFile();
 	const slug = getActiveFeatureSlug(activeFile?.path ?? null, specsFolder);
@@ -216,8 +225,47 @@ async function computeStagePromptContext(
 		slug !== null
 			? await loadWorkflowStateSnapshot(slug, args.vault, args.logger, specsFolder)
 			: null;
-	const systemPromptSuffix = assembleSystemPrompt(snapshot, args.stagePromptMap);
+	const stageSuffix = assembleSystemPrompt(snapshot, args.stagePromptMap);
+	// QW-B — prepend a <vault-context> block carrying the active note path and
+	// editor selection so the agent (which runs in a subprocess with the vault
+	// root as cwd, courtesy of QW-A) can resolve "this note" / "the selection"
+	// without the user spelling it out. Defensive against an upstream caller
+	// that already pre-composed the block — we never double-emit.
+	//
+	// QW-C — on the first turn of a new thread, prepend a `Vault: <name>
+	// (<n> notes)` row so the agent has an anchor for "this vault". Follow-up
+	// turns omit it (the agent already knows where it is).
+	const manifest =
+		args.pluginManifest?.() ?? { name: 'Specorator', version: '0.0.0' };
+	const vaultGreeting = isFirstTurn
+		? {
+				vaultName: args.workspace.getVaultName(),
+				markdownFileCount: args.workspace.getMarkdownFileCount(),
+				pluginName: manifest.name,
+				pluginVersion: manifest.version,
+			}
+		: null;
+	const vaultBlock = composeVaultContextBlock({
+		activeFilePath: args.workspace.getActiveFilePath(),
+		activeSelection: args.workspace.getActiveSelection(),
+		vaultGreeting,
+	});
+	const systemPromptSuffix = combineSuffix(vaultBlock, stageSuffix);
 	return { slug, systemPromptSuffix };
+}
+
+/**
+ * Combine the QW-B vault-context block with the stage-aware suffix. Each is
+ * independently optional; the join uses a blank-line separator only when
+ * both halves are non-empty. Defensive: if `stageSuffix` already contains a
+ * `<vault-context>` opener (e.g. a future caller pre-composed it), the
+ * vault block is skipped so the suffix never double-emits.
+ */
+function combineSuffix(vaultBlock: string, stageSuffix: string): string {
+	if (vaultBlock === '') return stageSuffix;
+	if (stageSuffix.includes('<vault-context>')) return stageSuffix;
+	if (stageSuffix === '') return vaultBlock;
+	return `${vaultBlock}\n\n${stageSuffix}`;
 }
 
 /**
@@ -236,12 +284,20 @@ async function computeStagePromptContext(
  */
 export async function buildTurnInput(args: BuildTurnInputArgs): Promise<TurnInput> {
 	const settings = await args.settings.getSettings();
+	// QW-C — decide thread rotation up-front so the prompt-context computation
+	// knows whether this is the first turn on a new thread (greeting row) or a
+	// follow-up (suppress greeting). Rotation needs only the active-file slug,
+	// which is cheap pure path math.
+	const activeFilePath = args.workspace.getActiveFile()?.path ?? null;
+	const provisionalSlug = getActiveFeatureSlug(activeFilePath, settings.specsFolder);
+	const transport = resolveTransport(args.transportKindRaw);
+	const thread = decideRotation(args.threads, provisionalSlug, transport);
+	const isFirstTurn = thread.kind === 'rotate';
 	const { slug, systemPromptSuffix } = await computeStagePromptContext(
 		settings.specsFolder,
 		args,
+		isFirstTurn,
 	);
-	const transport = resolveTransport(args.transportKindRaw);
-	const thread = decideRotation(args.threads, slug, transport);
 	const loadedFiles = await loadContextFileBodies(args.messages, args.vault);
 	const { prompt, truncated } = buildPrompt(args.messages.userText, loadedFiles);
 	const intent = isStructuredIntent(args.messages.userText);

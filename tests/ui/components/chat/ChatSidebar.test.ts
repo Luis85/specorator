@@ -22,11 +22,21 @@ import {
 	SETTINGS_PORT,
 	LOGGER_PORT,
 	SECRET_STORE_PORT,
+	ICON_PORT,
+	PROVIDER_REGISTRY_KEY,
 } from '@/infrastructure/bridge/ports'
+import type { ProviderRegistry } from '@/domain/chat/ProviderRegistry'
+import { i18n } from '@/ui/i18n'
 import { useMessagesStore } from '@/ui/stores/messagesStore'
 import { ChatSidebarPO } from './ChatSidebar.po'
 import type { PluginSettings } from '@/domain/settings/PluginSettings'
 import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
+
+const emptyRegistry: ProviderRegistry = {
+	listProviders: () => [],
+	getProvider: () => undefined,
+	getCapabilities: () => undefined,
+}
 
 // Stub RouterLink to avoid vue-router missing in tests
 const RouterLinkStub = defineComponent({
@@ -42,7 +52,7 @@ function makeGlobal(
 	secretStore: MockSecretStore = new MockSecretStore(),
 ) {
 	return {
-		plugins: [pinia],
+		plugins: [pinia, i18n],
 		stubs: { RouterLink: RouterLinkStub },
 		provide: {
 			[CHAT_TRANSPORT_PORT as symbol]: port,
@@ -52,6 +62,8 @@ function makeGlobal(
 			[SETTINGS_PORT as symbol]: bridge,
 			[LOGGER_PORT as symbol]: bridge,
 			[SECRET_STORE_PORT as symbol]: secretStore,
+			[ICON_PORT as symbol]: bridge,
+			[PROVIDER_REGISTRY_KEY as symbol]: emptyRegistry,
 		},
 	}
 }
@@ -161,7 +173,7 @@ describe('ChatSidebar', () => {
 			const openPluginSettings = vi.fn()
 			const wrapper = mount(ChatSidebar, {
 				global: {
-					plugins: [pinia],
+					plugins: [pinia, i18n],
 					stubs: { RouterLink: RouterLinkStub },
 					provide: {
 						[CHAT_TRANSPORT_PORT as symbol]: port,
@@ -172,6 +184,8 @@ describe('ChatSidebar', () => {
 						[LOGGER_PORT as symbol]: bridge,
 						[SECRET_STORE_PORT as symbol]: secretStore,
 						[OPEN_PLUGIN_SETTINGS_KEY as symbol]: openPluginSettings,
+						[ICON_PORT as symbol]: bridge,
+						[PROVIDER_REGISTRY_KEY as symbol]: emptyRegistry,
 					},
 				},
 			})
@@ -209,7 +223,7 @@ describe('ChatSidebar', () => {
 			})
 			const wrapper = mount(ChatSidebar, {
 				global: {
-					plugins: [pinia],
+					plugins: [pinia, i18n],
 					stubs: { RouterLink: RouterLinkLocal },
 					provide: {
 						[CHAT_TRANSPORT_PORT as symbol]: port,
@@ -219,6 +233,8 @@ describe('ChatSidebar', () => {
 						[SETTINGS_PORT as symbol]: bridge,
 						[LOGGER_PORT as symbol]: bridge,
 						[TRANSPORT_KIND_KEY as symbol]: ref<'subscription' | 'api-key'>('subscription'),
+						[ICON_PORT as symbol]: bridge,
+						[PROVIDER_REGISTRY_KEY as symbol]: emptyRegistry,
 					},
 				},
 			})
@@ -294,7 +310,11 @@ describe('ChatSidebar', () => {
 			// in-flight signal. Assert the underlying state instead.
 			expect(po.hasResponseLoading()).toBe(false)
 			expect(store.status).toBe('loading')
-			expect(po.isSendButtonDisabled()).toBe(true)
+			// WS-AUX-6: the InputToolbar trailing button swaps to Stop while
+			// streaming (REQ-AUX-004 / SPEC-AUX-001 §1.3.3). The button stays
+			// enabled so the user can abort. The streaming-bubble in MessageList
+			// is the in-flight indicator, NOT a disabled send button.
+			expect(po.sendButton.exists()).toBe(true)
 
 			await flushPromises()
 		})

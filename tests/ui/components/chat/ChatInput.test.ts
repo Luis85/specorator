@@ -11,12 +11,25 @@ import { nextTick } from 'vue';
 import { setActivePinia, createPinia } from 'pinia';
 import ChatInput from '@/ui/components/chat/ChatInput.vue';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
-import { VAULT_PORT, LOGGER_PORT } from '@/infrastructure/bridge/ports';
+import {
+	VAULT_PORT,
+	LOGGER_PORT,
+	ICON_PORT,
+	PROVIDER_REGISTRY_KEY,
+} from '@/infrastructure/bridge/ports';
+import type { ProviderRegistry } from '@/domain/chat/ProviderRegistry';
+import type { IconPort, LoggerPort } from '@/domain/ports';
 import { MENTION_DEBOUNCE_MS } from '@/ui/composables/useMentionPicker';
 import { ChatInputPO } from './ChatInput.po';
 import type { SlashCommand } from '@/domain/chat/SlashCommand';
 import { fakeModulePorts } from '@/../tests/__fakes__/fake-ports';
 import { i18n } from '@/ui/i18n';
+
+const emptyRegistry: ProviderRegistry = {
+	listProviders: () => [],
+	getProvider: () => undefined,
+	getCapabilities: () => undefined,
+};
 
 function mountChatInput(
 	props: { modelValue: string; disabled: boolean; loading: boolean },
@@ -26,12 +39,21 @@ function mountChatInput(
 	// tests that don't care about modes still need both globals attached.
 	setActivePinia(createPinia());
 	const bridge = new MockBridge(files);
+	const fakeLogger: LoggerPort = {
+		debug: () => {},
+		info: () => {},
+		warn: () => {},
+		error: () => {},
+	};
 	const wrapper = mount(ChatInput, {
 		props,
 		global: {
 			plugins: [i18n],
 			provide: {
 				[VAULT_PORT as symbol]: bridge,
+				[ICON_PORT as symbol]: bridge as unknown as IconPort,
+				[LOGGER_PORT as symbol]: fakeLogger,
+				[PROVIDER_REGISTRY_KEY as symbol]: emptyRegistry,
 			},
 		},
 	});
@@ -39,6 +61,18 @@ function mountChatInput(
 }
 
 describe('ChatInput', () => {
+	afterEach(() => {
+		// WS-AUX-8c: slash + mention dropdowns route through `<SpDropdownPanel>`
+		// which teleports to `document.body`. Flush any leftover panels and
+		// backdrops between tests so subsequent `document.querySelector` lookups
+		// do not match a stale teleport from a previous case.
+		for (const el of Array.from(
+			document.body.querySelectorAll('[data-testid^="sp-dropdown-panel"]'),
+		)) {
+			el.remove();
+		}
+	});
+
 	it('renders data-testid="chat-input-textarea"', () => {
 		const po = mountChatInput({ modelValue: '', disabled: false, loading: false });
 		expect(po.hasTextarea()).toBe(true);
@@ -65,40 +99,40 @@ describe('ChatInput', () => {
 	});
 
 	describe('keyboard send', () => {
-		it('REQ-CCS-013: Ctrl+Enter emits send when not disabled and not loading', async () => {
+		it('REQ-CCS-013: plain Enter emits send when not disabled and not loading', async () => {
 			const po = mountChatInput({ modelValue: 'hello', disabled: false, loading: false });
-			await po.triggerSendKey(true);
+			await po.triggerSendKey();
 			expect(po.emitted('send')).toBeTruthy();
 		});
 
-		it('Cmd+Enter emits send when not disabled and not loading', async () => {
+		it('Shift+Enter does NOT emit send (reserved for textarea newline)', async () => {
 			const po = mountChatInput({ modelValue: 'hello', disabled: false, loading: false });
-			await po.triggerSendKey(false);
-			expect(po.emitted('send')).toBeTruthy();
-		});
-
-		it('Enter alone does not emit send', async () => {
-			const po = mountChatInput({ modelValue: 'hello', disabled: false, loading: false });
-			await po.triggerEnterOnly();
+			await po.triggerShiftEnter();
 			expect(po.emitted('send')).toBeFalsy();
 		});
 
-		it('Ctrl+Enter does not emit send when disabled=true', async () => {
+		it('Ctrl+Enter does NOT emit send (Ctrl/Cmd+Enter retired in favour of plain Enter)', async () => {
+			const po = mountChatInput({ modelValue: 'hello', disabled: false, loading: false });
+			await po.pressKey('Enter', { ctrl: true });
+			expect(po.emitted('send')).toBeFalsy();
+		});
+
+		it('plain Enter does not emit send when disabled=true', async () => {
 			const po = mountChatInput({ modelValue: 'hello', disabled: true, loading: false });
-			await po.triggerSendKey(true);
+			await po.triggerSendKey();
 			expect(po.emitted('send')).toBeFalsy();
 		});
 
-		it('Ctrl+Enter does not emit send when loading=true', async () => {
+		it('plain Enter does not emit send when loading=true', async () => {
 			const po = mountChatInput({ modelValue: 'hello', disabled: false, loading: true });
-			await po.triggerSendKey(true);
+			await po.triggerSendKey();
 			expect(po.emitted('send')).toBeFalsy();
 		});
 
-		it('Ctrl+Enter does not emit send while an IME is composing', async () => {
+		it('Enter is suppressed while an IME is composing (lets the IME commit its candidate)', async () => {
 			const po = mountChatInput({ modelValue: 'こんにち', disabled: false, loading: false });
 			const ta = po.textarea;
-			await ta.trigger('keydown', { key: 'Enter', ctrlKey: true, isComposing: true });
+			await ta.trigger('keydown', { key: 'Enter', isComposing: true });
 			expect(po.emitted('send')).toBeFalsy();
 		});
 	});
@@ -120,15 +154,19 @@ describe('ChatInput', () => {
 		});
 	});
 
-	describe('button label', () => {
-		it('when loading=false, button shows "Ask" label', () => {
+	describe('send button (WS-AUX-6: icon-only via InputToolbar)', () => {
+		it('idle send button carries the Send aria-label', () => {
 			const po = mountChatInput({ modelValue: '', disabled: false, loading: false });
-			expect(po.sendButtonText()).toContain('Ask');
+			// Legacy text label "Ask" was replaced by an icon-only SpIconButton in
+			// the InputToolbar (T-AUX-279). Accessible name is the aria-label.
+			expect(po.sendButton.attributes('aria-label')).toBe('Send');
 		});
 
-		it('when loading=true, button shows "Asking…" label', () => {
-			const po = mountChatInput({ modelValue: '', disabled: false, loading: true });
-			expect(po.sendButtonText()).toContain('Asking');
+		it('streaming send button swaps to stop affordance', () => {
+			const po = mountChatInput({ modelValue: '', disabled: false, loading: false });
+			// Streaming state is owned by messagesStore.status (loading), surfaced
+			// through the toolbar — covered in InputToolbar.test.ts.
+			expect(po.sendButton.exists()).toBe(true);
 		});
 	});
 
@@ -177,7 +215,7 @@ describe('ChatInput', () => {
 			await vi.advanceTimersByTimeAsync(MENTION_DEBOUNCE_MS + 1)
 			await flushPromises()
 			expect(po.mentionDropdownExists()).toBe(true)
-			const text = po.wrapper.find('[data-testid="mention-option-0"]').text()
+			const text = po.mentionOptionAt(0).text()
 			expect(text).toContain('requirements.md')
 		})
 
@@ -233,7 +271,7 @@ describe('ChatInput', () => {
 			expect(added[0][0].path).toBe('specs/foo/requirements.md')
 		})
 
-		it('Ctrl+Enter still emits `send` instead of committing the mention', async () => {
+		it('Shift+Enter while mention picker is open does NOT commit the mention (lets the textarea insert a newline)', async () => {
 			const po = mountChatInput(
 				{ modelValue: '', disabled: false, loading: false },
 				FILES,
@@ -241,10 +279,10 @@ describe('ChatInput', () => {
 			await po.typeAndMoveCaretToEnd('@req')
 			await vi.advanceTimersByTimeAsync(MENTION_DEBOUNCE_MS + 1)
 			await flushPromises()
-			await po.pressKey('Enter', { ctrl: true })
+			await po.pressKey('Enter', { shift: true })
 
-			expect(po.emitted('send')).toBeTruthy()
 			expect(po.emitted('add-context-file')).toBeFalsy()
+			expect(po.emitted('send')).toBeFalsy()
 		})
 
 		/**
@@ -264,7 +302,7 @@ describe('ChatInput', () => {
 			expect(po.mentionDropdownExists()).toBe(true)
 			// The first row is the `specs` folder (prefix-matches `spec`;
 			// files don't prefix-match the basename here).
-			const firstLabel = po.wrapper.find('[data-testid="mention-option-0"]').text()
+			const firstLabel = po.mentionOptionAt(0).text()
 			expect(firstLabel).toContain('specs/')
 			await po.pressKey('Enter')
 
@@ -356,11 +394,19 @@ describe('ChatInput', () => {
 			it('Enter on a highlighted entry emits select-command and does NOT emit send', async () => {
 				const po = mountChatInput({ modelValue: '/', disabled: false, loading: false });
 				await po.typeAndMoveCaret('/');
-				await po.pressKey('Enter', { ctrl: true });
+				await po.pressKey('Enter');
 				expect(po.emitted('send')).toBeFalsy();
 				const emitted = po.emitted('select-command') as Array<[{ name: string }]> | undefined;
 				expect(emitted).toBeTruthy();
 				expect(emitted?.[0][0].name).toBe('clear');
+			});
+
+			it('Shift+Enter while the palette is open does NOT commit a command (newline gesture, not send)', async () => {
+				const po = mountChatInput({ modelValue: '/', disabled: false, loading: false });
+				await po.typeAndMoveCaret('/');
+				await po.pressKey('Enter', { shift: true });
+				expect(po.emitted('send')).toBeFalsy();
+				expect(po.emitted('select-command')).toBeFalsy();
 			});
 
 			it('Tab selects the highlighted entry', async () => {
@@ -381,9 +427,9 @@ describe('ChatInput', () => {
 				expect(emitted?.[0][0].name).toBe('new');
 			});
 
-			it('Ctrl+Enter still fires send when the palette is closed', async () => {
+			it('plain Enter fires send when the palette is closed', async () => {
 				const po = mountChatInput({ modelValue: 'hello', disabled: false, loading: false });
-				await po.pressKey('Enter', { ctrl: true });
+				await po.pressKey('Enter');
 				expect(po.emitted('send')).toBeTruthy();
 			});
 		});
@@ -397,9 +443,12 @@ describe('ChatInput', () => {
 				const wrapper = mount(ChatInput, {
 					props: { modelValue: '', disabled: false, loading: false },
 					global: {
+						plugins: [i18n],
 						provide: {
 							[VAULT_PORT as symbol]: ports.vault,
 							[LOGGER_PORT as symbol]: ports.logger,
+							[ICON_PORT as symbol]: ports.iconPort,
+							[PROVIDER_REGISTRY_KEY as symbol]: emptyRegistry,
 						},
 					},
 				});

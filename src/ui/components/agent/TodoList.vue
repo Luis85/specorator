@@ -56,14 +56,14 @@ const { todos } = storeToRefs(store);
 	font-size: 0.75rem;
 	font-weight: 600;
 	text-transform: uppercase;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 	letter-spacing: 0.05em;
 }
 
 .sp-status__empty {
 	margin: 0;
 	font-size: 0.8125rem;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 	font-style: italic;
 }
 
@@ -86,23 +86,23 @@ const { todos } = storeToRefs(store);
 }
 
 .sp-status__todo-row--done {
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 	text-decoration: line-through;
 }
 
 .sp-status__todo-row--in-progress {
-	background: var(--background-modifier-hover);
+	background: var(--sp-interactive-hover);
 }
 
 .sp-status__todo-status {
 	font-size: 0.6875rem;
 	text-transform: uppercase;
-	color: var(--text-faint, var(--text-muted));
+	color: var(--sp-text-faint, var(--sp-text-muted));
 	letter-spacing: 0.04em;
 }
 
 .sp-status__todo-description {
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 	font-size: 0.75rem;
 }
 </style>

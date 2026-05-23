@@ -41,4 +41,20 @@ export class TFolder {
   name = ''
 }
 
+/**
+ * Minimal stand-in for the desktop-only `FileSystemAdapter`. Tests can
+ * construct an instance and override `getBasePath()` per case; production
+ * code only relies on `instanceof FileSystemAdapter` + `getBasePath()`.
+ */
+export class FileSystemAdapter {
+  getBasePath(): string {
+    return ''
+  }
+}
+
+export function setIcon(_el: HTMLElement, _name: string): void {
+  // No-op stub; tests that care assert on bridge behaviour, not Obsidian's
+  // icon DOM.
+}
+
 export type App = unknown

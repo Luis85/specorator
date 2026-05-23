@@ -2,37 +2,55 @@
 /**
  * Per-message action row (REQ-MPS-026 / REQ-MPS-027 / REQ-MPS-028 / REQ-MPS-029,
  * NFR-MPS-008). Rendered inline beneath each rendered `ChatMessage` in
- * `MessageList.vue`. Three controls:
+ * `MessageList.vue`.
  *
- *   - **Copy** — emits `copy` with the `messageId` so the host can read the
- *     message body and call `navigator.clipboard.writeText`. Always enabled,
- *     including mid-stream (REQ-MPS-029).
+ * WS-AUX-5 refresh (REQ-AUX-001 / REQ-AUX-002 / REQ-AUX-016):
+ *
+ *   - Wrapped in `<HoverActions>` so the row is hidden until the parent
+ *     `.sp-hover-host` is hovered or one of its descendants is focused.
+ *   - Each action is an `<SpIconButton>` (icon-only) instead of a text
+ *     button. Icons: copy / rotate-ccw / pencil / git-fork.
+ *   - Copy success swaps the icon's aria-label to `copyConfirm` for 1.5 s.
+ *
+ * CQ-AUX-06 — the Fork action is gated behind a `showFork` prop defaulting
+ * to false until PM + architect confirm it ships in this feature.
+ *
+ * Three controls:
+ *   - **Copy** — emits `copy` with the `messageId`. Always enabled, including
+ *     mid-stream (REQ-MPS-029).
  *   - **Regenerate** — visible only when the message is the *latest* assistant
- *     turn (`role === 'assistant' && isLatest === true`). Disabled while
- *     `streamingTurnStore.isStreaming === true` (REQ-MPS-029).
- *   - **Edit** — visible only for user messages (`role === 'user'`). Disabled
- *     while streaming.
+ *     turn. Disabled while streaming.
+ *   - **Edit** — visible only for user messages. Disabled while streaming.
+ *   - **Fork** (CQ-AUX-06, opt-in) — escalation pending; stubbed icon-only.
  *
- * The component emits intent-only — it does NOT call `navigator.clipboard` or
- * mutate stores. The host (`MessageList` → `ChatSidebar`) owns the side
- * effects so the action surface stays trivially testable.
- *
- * Spec contract: `specs/multi-provider-agent-sidepanel/spec.md` §8.3.
+ * Spec contract: `specs/multi-provider-agent-sidepanel/spec.md` §8.3,
+ * `specs/agent-ux-parity/spec.md` §1.4.
  */
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useStreamingTurnStore } from '@/ui/stores/streamingTurnStore';
+import HoverActions from '@/ui/components/primitives/HoverActions.vue';
+import SpIconButton from '@/ui/components/primitives/SpIconButton.vue';
 
-const props = defineProps<{
-	messageId: string;
-	role: 'user' | 'assistant';
-	isLatest: boolean;
-}>();
+const props = withDefaults(
+	defineProps<{
+		messageId: string;
+		role: 'user' | 'assistant';
+		isLatest: boolean;
+		/**
+		 * CQ-AUX-06 — Fork action is escalated. Default `false`; flip when PM
+		 * confirms the Fork action ships in this feature.
+		 */
+		showFork?: boolean;
+	}>(),
+	{ showFork: false },
+);
 
 const emit = defineEmits<{
 	copy: [payload: { messageId: string }];
 	regenerate: [payload: { messageId: string }];
 	edit: [payload: { messageId: string }];
+	fork: [payload: { messageId: string }];
 }>();
 
 const streaming = useStreamingTurnStore();
@@ -40,13 +58,43 @@ const { t } = useI18n();
 
 const isStreaming = computed<boolean>(() => streaming.isStreaming);
 
-const showRegenerate = computed<boolean>(
-	() => props.role === 'assistant' && props.isLatest,
-);
+const showRegenerate = computed<boolean>(() => props.role === 'assistant' && props.isLatest);
 const showEdit = computed<boolean>(() => props.role === 'user');
+
+/**
+ * REQ-AUX-016 — Copy confirmation. After a successful click, swap the
+ * Copy icon's aria-label to `copyConfirm` for 1.5 s, then revert. The
+ * timeout is cleared on unmount to avoid leaking handles when the host
+ * unmounts mid-confirm.
+ */
+const copyConfirmActive = ref<boolean>(false);
+let confirmHandle: number | null = null;
+
+function clearConfirm(): void {
+	if (confirmHandle !== null) {
+		clearTimeout(confirmHandle);
+		confirmHandle = null;
+	}
+}
+
+onBeforeUnmount(() => {
+	clearConfirm();
+});
+
+const copyAriaLabel = computed<string>(() =>
+	copyConfirmActive.value
+		? t('agent.messageActions.copyConfirm')
+		: t('agent.messageActions.copyAriaLabel'),
+);
 
 function handleCopy(): void {
 	emit('copy', { messageId: props.messageId });
+	clearConfirm();
+	copyConfirmActive.value = true;
+	confirmHandle = window.setTimeout(() => {
+		copyConfirmActive.value = false;
+		confirmHandle = null;
+	}, 1500);
 }
 
 function handleRegenerate(): void {
@@ -58,75 +106,62 @@ function handleEdit(): void {
 	if (isStreaming.value) return;
 	emit('edit', { messageId: props.messageId });
 }
+
+// CQ-AUX-06 — pending PM/architect confirmation; only fires when showFork=true.
+function handleFork(): void {
+	if (isStreaming.value) return;
+	emit('fork', { messageId: props.messageId });
+}
 </script>
 
 <template>
-	<div class="sp-message-actions" data-testid="message-actions">
-		<button
-			type="button"
-			class="sp-message-actions__btn"
+	<HoverActions
+		class="sp-message-actions"
+		data-testid="message-actions"
+		placement="block-end-inline-end"
+	>
+		<SpIconButton
+			:icon="copyConfirmActive ? 'check' : 'copy'"
+			:ariaLabel="copyAriaLabel"
 			data-testid="message-action-copy"
-			:aria-label="t('agent.messageActions.copyAriaLabel')"
+			:size="14"
 			@click="handleCopy"
-		>
-			{{ t('agent.messageActions.copy') }}
-		</button>
-		<button
+		/>
+		<SpIconButton
 			v-if="showRegenerate"
-			type="button"
-			class="sp-message-actions__btn"
+			icon="rotate-ccw"
+			:ariaLabel="t('agent.messageActions.regenerateAriaLabel')"
 			data-testid="message-action-regenerate"
-			:aria-label="t('agent.messageActions.regenerateAriaLabel')"
-			:aria-disabled="isStreaming ? 'true' : 'false'"
+			:size="14"
 			:disabled="isStreaming"
+			:aria-disabled="isStreaming ? 'true' : 'false'"
 			@click="handleRegenerate"
-		>
-			{{ t('agent.messageActions.regenerate') }}
-		</button>
-		<button
+		/>
+		<SpIconButton
 			v-if="showEdit"
-			type="button"
-			class="sp-message-actions__btn"
+			icon="pencil"
+			:ariaLabel="t('agent.messageActions.editAriaLabel')"
 			data-testid="message-action-edit"
-			:aria-label="t('agent.messageActions.editAriaLabel')"
-			:aria-disabled="isStreaming ? 'true' : 'false'"
+			:size="14"
 			:disabled="isStreaming"
+			:aria-disabled="isStreaming ? 'true' : 'false'"
 			@click="handleEdit"
-		>
-			{{ t('agent.messageActions.edit') }}
-		</button>
-	</div>
+		/>
+		<SpIconButton
+			v-if="showFork"
+			icon="git-fork"
+			:ariaLabel="t('agent.messageActions.forkAriaLabel')"
+			data-testid="message-action-fork"
+			:size="14"
+			:disabled="isStreaming"
+			:aria-disabled="isStreaming ? 'true' : 'false'"
+			@click="handleFork"
+		/>
+	</HoverActions>
 </template>
 
 <style scoped>
 .sp-message-actions {
-	display: flex;
-	gap: 0.375rem;
-	margin-top: 0.25rem;
-}
-
-.sp-message-actions__btn {
-	font-size: 0.6875rem;
-	font-weight: 500;
-	padding: 0.125rem 0.5rem;
-	border-radius: 4px;
-	border: 1px solid var(--background-modifier-border);
-	background: var(--background-secondary);
-	color: var(--text-muted);
-	cursor: pointer;
-	transition:
-		background-color 0.15s,
-		border-color 0.15s,
-		color 0.15s;
-}
-
-.sp-message-actions__btn:hover:not(:disabled) {
-	background: var(--interactive-hover);
-	color: var(--text-normal);
-}
-
-.sp-message-actions__btn:disabled {
-	opacity: 0.55;
-	cursor: not-allowed;
+	gap: var(--sp-space-2);
 }
 </style>

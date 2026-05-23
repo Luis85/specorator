@@ -90,9 +90,9 @@ function pick(row: MenuRow): void {
 	list-style: none;
 	margin: 0;
 	padding: 0.25rem 0;
-	border: 1px solid var(--background-modifier-border);
+	border: 1px solid var(--sp-border);
 	border-radius: 6px;
-	background: var(--background-primary);
+	background: var(--sp-bg-primary);
 	min-width: 12rem;
 	box-shadow: var(--shadow-s, 0 4px 12px rgba(0, 0, 0, 0.12));
 }
@@ -107,17 +107,17 @@ function pick(row: MenuRow): void {
 }
 
 .sp-provider-menu__item[aria-disabled='true'] {
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 	cursor: not-allowed;
 }
 
 .sp-provider-menu__item:not([aria-disabled='true']):hover {
-	background: var(--background-modifier-hover);
+	background: var(--sp-interactive-hover);
 }
 
 .sp-provider-menu__mode {
 	font-size: 0.6875rem;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 }

@@ -23,6 +23,8 @@ import { storeToRefs } from 'pinia';
 import { inject } from 'vue';
 import { A11Y_ANNOUNCER_KEY } from '@/ui/composables/useA11yAnnouncer';
 import ModeIndicators from '@/ui/components/agent/ModeIndicators.vue';
+import InputToolbar from '@/ui/components/agent/InputToolbar.vue';
+import AttachmentStrip from '@/ui/components/agent/AttachmentStrip.vue';
 
 const props = defineProps<{
 	modelValue: string;
@@ -43,6 +45,10 @@ const emit = defineEmits<{
 	'select-command': [command: SlashCommand];
 	/** WP-7 A11y #5: Escape during loading=true → ChatSidebar aborts the turn. */
 	abort: [];
+	/** WS-AUX-6 (CQ-AUX-10): up-arrow on an empty textarea requests edit-last-user-message. */
+	'edit-last': [];
+	/** WS-AUX-6 (T-AUX-279): emitted when the toolbar's send/stop button signals stop. */
+	stop: [];
 }>();
 
 const textareaEl = ref<HTMLTextAreaElement | null>(null);
@@ -196,6 +202,29 @@ function handleHighlight(index: number): void {
 	palette.navigate(index - current);
 }
 
+/** Pure modifier predicate — true if any of Shift/Ctrl/Cmd/Alt is held. */
+function hasAnyModifier(event: KeyboardEvent): boolean {
+	return event.shiftKey || event.ctrlKey || event.metaKey || event.altKey;
+}
+
+/**
+ * Commit the currently-highlighted palette entry. Returns `true` iff a
+ * command was actually selected and emitted.
+ */
+function tryCommitPaletteSelection(event: KeyboardEvent): boolean {
+	// Modified Enter (Shift / Ctrl / Cmd / Alt) is NOT a palette-commit
+	// gesture: Shift+Enter inserts a newline, others fall through to the
+	// textarea defaults.
+	if (hasAnyModifier(event)) return false;
+	const command = palette.select();
+	if (command === null) return false;
+	event.preventDefault();
+	scrubSlashTrigger();
+	palette.close();
+	emit('select-command', command);
+	return true;
+}
+
 /**
  * Returns `true` when the keydown was consumed by the palette and the caller
  * should NOT fall through to send/keystroke handling.
@@ -218,14 +247,7 @@ function handlePaletteKeydown(event: KeyboardEvent): boolean {
 		return true;
 	}
 	if (event.key === 'Enter' || event.key === 'Tab') {
-		const command = palette.select();
-		if (command !== null) {
-			event.preventDefault();
-			scrubSlashTrigger();
-			palette.close();
-			emit('select-command', command);
-			return true;
-		}
+		return tryCommitPaletteSelection(event);
 	}
 	return false;
 }
@@ -237,10 +259,12 @@ onBeforeUnmount(() => {
 });
 
 /**
- * Tab / non-modifier Enter handler for the open picker — consume to commit.
+ * Tab / Enter handler for the open picker — consume to commit. Any modifier
+ * (Shift/Ctrl/Cmd/Alt) skips the picker: Shift+Enter inserts a newline,
+ * and modified Enter is reserved for textarea defaults.
  */
 function tryCommitFromKey(event: KeyboardEvent): boolean {
-	if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) return false;
+	if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false;
 	const selection = picker.currentSelection();
 	if (selection === null) return false;
 	event.preventDefault();
@@ -275,9 +299,15 @@ function handlePickerKey(event: KeyboardEvent): boolean {
 	return false;
 }
 
+/**
+ * Plain Enter (no modifiers) sends the turn. Shift+Enter inserts a newline
+ * (default textarea behaviour — we don't preventDefault). Picker / palette
+ * intercept plain Enter earlier in `handleKeydown` when they're open, so this
+ * path only fires when both are closed.
+ */
 function tryHandleSendKey(event: KeyboardEvent): boolean {
 	if (event.key !== 'Enter') return false;
-	if (!(event.ctrlKey || event.metaKey)) return false;
+	if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false;
 	if (props.disabled || props.loading) return false;
 	event.preventDefault();
 	if (picker.open.value) picker.close();
@@ -308,22 +338,44 @@ function tryHandlePlanModeKey(event: KeyboardEvent): boolean {
 	return true;
 }
 
+/**
+ * WS-AUX-6 (CQ-AUX-10): when the textarea is empty and no picker / palette
+ * is open, `ArrowUp` requests "edit the last user message". The parent
+ * (ChatSidebar) is responsible for actually rehydrating the draft via
+ * `messagesStore.editMessage`. We only fire the intent here.
+ */
+function tryHandleEditLastKey(event: KeyboardEvent): boolean {
+	if (event.key !== 'ArrowUp') return false;
+	if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return false;
+	if (picker.open.value || palette.isOpen.value) return false;
+	if (props.modelValue.length > 0) return false;
+	event.preventDefault();
+	emit('edit-last');
+	return true;
+}
+
 function handleKeydown(event: KeyboardEvent): void {
 	// IME-composition guard: while an IME (Japanese/Chinese/Korean) is
 	// composing, Enter commits the candidate and must not trigger send.
-	// Spec-compliant browsers (Chromium/Firefox/Obsidian's Electron) report
-	// `event.isComposing` correctly throughout composition.
-	//
-	// Safari has a documented ordering bug where `compositionend` can fire
-	// BEFORE the confirm-Enter keydown, leaving `isComposing` false on that
-	// keydown. We deliberately do not defend that case — see docs/non-goals.md
-	// (CJK/Safari on the standalone-web demo is an explicit non-goal).
+	// Plain Enter is now our send gesture, so the unconditional guard is the
+	// right behaviour — IME users still get to confirm candidates before the
+	// turn fires.
 	if (event.isComposing) return;
 	if (tryHandlePlanModeKey(event)) return;
 	if (handlePickerKey(event)) return;
 	if (handlePaletteKeydown(event)) return;
 	if (tryHandleAbortKey(event)) return;
+	if (tryHandleEditLastKey(event)) return;
 	tryHandleSendKey(event);
+}
+
+function handleToolbarSend(): void {
+	if (props.disabled || props.loading) return;
+	emit('send');
+}
+
+function handleToolbarStop(): void {
+	emit('stop');
 }
 
 function handleInput(event: Event): void {
@@ -395,8 +447,13 @@ function onDropdownHover(index: number): void {
 </script>
 
 <template>
-	<div class="sp-chat__input-area">
+	<div class="sp-chat__input-area sp-composer-group" data-testid="chat-composer">
 		<ModeIndicators v-if="planMode || bangBashMode || instructionMode" />
+		<!--
+		WS-AUX-6 (CQ-AUX-18): AttachmentStrip lives INSIDE the composer wrapper
+		so chips ride with the input visually and reading order is correct.
+		-->
+		<AttachmentStrip />
 		<div class="sp-chat__input-wrapper">
 			<SlashCommandDropdown
 				v-if="palette.isOpen.value"
@@ -404,6 +461,7 @@ function onDropdownHover(index: number): void {
 				:selected-index="palette.selectedIndex.value"
 				@select="handleSelectFromPalette"
 				@highlight="handleHighlight"
+				@close="palette.close"
 			/>
 			<!-- WP-7 A11y #3: combobox attrs are shared between palette & picker. -->
 			<textarea
@@ -434,21 +492,18 @@ function onDropdownHover(index: number): void {
 				:selected-index="picker.selectedIndex.value"
 				@select="onDropdownSelect"
 				@hover="onDropdownHover"
+				@close="picker.close"
 			/>
 		</div>
-		<div class="sp-chat__input-actions">
-			<button
-				type="button"
-				class="sp-btn sp-btn--primary sp-btn--md"
-				:disabled="disabled"
-				:aria-label="t('chat.sendAriaLabel')"
-				data-testid="chat-send-button"
-				@click="!disabled && !loading && emit('send')"
-			>
-				<span v-if="loading" class="sp-btn__spinner" aria-hidden="true" />
-				<span>{{ loading ? t('chat.sendLoading') : t('chat.sendIdle') }}</span>
-			</button>
-		</div>
+		<!--
+		WS-AUX-6 (T-AUX-279): InputToolbar replaces the legacy single-button
+		send row. The toolbar's trailing button doubles as Stop when streaming.
+		-->
+		<InputToolbar
+			:disabled="disabled"
+			@send="handleToolbarSend"
+			@stop="handleToolbarStop"
+		/>
 	</div>
 </template>
 

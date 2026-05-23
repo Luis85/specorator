@@ -20,7 +20,6 @@ const emit = defineEmits<{
   >
     <span class="sp-chat__chip-indicator" aria-hidden="true">&#9632;</span>
     {{ file.label }}
-    <span class="sp-chat__chip-suffix" aria-hidden="true">(auto)</span>
     <span class="sr-only">(included automatically)</span>
   </span>
 
@@ -86,12 +85,6 @@ const emit = defineEmits<{
   flex-shrink: 0;
   font-size: 0.5rem;
   line-height: 1;
-}
-
-.sp-chat__chip-suffix {
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  font-weight: 400;
 }
 
 .sp-chat__chip-label {

@@ -14,6 +14,21 @@ import MessageList from '@/ui/components/agent/MessageList.vue';
 import { i18n } from '@/ui/i18n';
 import { useMessagesStore } from '@/ui/stores/messagesStore';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
+import { ICON_PORT, LOGGER_PORT } from '@/infrastructure/bridge/ports';
+import { MockBridge } from '@/infrastructure/mock/MockBridge';
+import type { IconPort, LoggerPort } from '@/domain/ports';
+
+function fakeLogger(): LoggerPort {
+	return { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
+}
+
+function listProvides() {
+	const bridge = new MockBridge() as unknown as IconPort;
+	return {
+		[ICON_PORT as symbol]: bridge,
+		[LOGGER_PORT as symbol]: fakeLogger(),
+	};
+}
 
 function msg(
 	threadId: string,
@@ -53,7 +68,7 @@ describe('MessageList — edit emit chain', () => {
 		);
 
 		const wrapper = mount(MessageList, {
-			global: { plugins: [i18n] },
+			global: { plugins: [i18n], provide: listProvides() },
 			props: { threadId: 't-A' },
 		});
 		await nextTick();
@@ -66,9 +81,7 @@ describe('MessageList — edit emit chain', () => {
 
 		const events = wrapper.emitted('edit');
 		expect(events).toBeDefined();
-		expect(events?.[0]).toEqual([
-			{ messageId: 'u1', index: 0, text: 'first ask' },
-		]);
+		expect(events?.[0]).toEqual([{ messageId: 'u1', index: 0, text: 'first ask' }]);
 	});
 
 	it('does not render Edit on assistant messages', async () => {
@@ -76,7 +89,7 @@ describe('MessageList — edit emit chain', () => {
 		store.appendMessage(msg('t-A', 'assistant', { id: 'a1' }));
 
 		const wrapper = mount(MessageList, {
-			global: { plugins: [i18n] },
+			global: { plugins: [i18n], provide: listProvides() },
 			props: { threadId: 't-A' },
 		});
 		await nextTick();

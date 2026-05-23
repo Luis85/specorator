@@ -87,7 +87,7 @@ describe('SubprocessLifecycle — spawn', () => {
 			expect(result.value).toBe(child);
 		}
 		expect(spawnFn).toHaveBeenCalledWith('/fake/bin/claude', ['-p', 'hi'], {
-			stdio: ['pipe', 'pipe', 'pipe'],
+			stdio: ['ignore', 'pipe', 'pipe'],
 		});
 	});
 

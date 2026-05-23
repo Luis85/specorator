@@ -10,6 +10,7 @@ import type {
 	ChatTransportPort,
 	ChatTransportStreamOptions,
 	StreamDelta,
+	IconPort,
 } from '@/domain/ports';
 import { ChatTransportError } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
@@ -26,8 +27,15 @@ export class LocalStorageBridge
 		NotificationPort,
 		LoggerPort,
 		CommunityPluginPort,
-		ChatTransportPort
+		ChatTransportPort,
+		IconPort
 {
+	// QW-A — no real filesystem in the GitHub Pages demo; subprocess transports
+	// are unavailable here, so the cwd resolver returns null.
+	getVaultBasePath(): string | null {
+		return null;
+	}
+
 	async readFile(path: string): Promise<string> {
 		const value = localStorage.getItem(FILE_PREFIX + path);
 		if (value === null) throw new Error(`File not found: ${path}`);
@@ -107,6 +115,31 @@ export class LocalStorageBridge
 		// no active-file concept in browser bridge
 		// eslint-disable-next-line @typescript-eslint/no-empty-function
 		return () => {};
+	}
+
+	// QW-B — the GitHub Pages standalone demo has no Obsidian editor surface;
+	// there is no "active note" and no editor selection to query. Returning
+	// null lets the suffix composer skip the <vault-context> block entirely
+	// for browser-only users (who, in turn, have no CLI subprocess to feed
+	// the context to — the demo bridge's queryStream is the degraded stub).
+	getActiveFilePath(): string | null {
+		return null;
+	}
+
+	getActiveSelection(): string | null {
+		return null;
+	}
+
+	// QW-C — the GitHub Pages standalone demo has no real vault. Return a
+	// stable label and a zero count so the chat panel's vault-context greeting
+	// row, if surfaced, advertises "demo" / "0 notes" without misleading users
+	// into thinking the demo has a populated workspace.
+	getVaultName(): string {
+		return 'demo';
+	}
+
+	getMarkdownFileCount(): number {
+		return 0;
 	}
 
 	showError(message: string, durationMs = 0): void {
@@ -203,5 +236,23 @@ export class LocalStorageBridge
 			type: 'error',
 			error: new ChatTransportError('NOT_INSTALLED', 'LocalStorageBridge: not available'),
 		};
+	}
+
+	// ── IconPort ──────────────────────────────────────────────────────────────
+	// REQ-AUX-001, ADR-AUX-001 — mirrors MockBridge so the GitHub Pages demo
+	// renders the same deterministic placeholder. No Obsidian runtime is
+	// available in standalone mode.
+	setIcon(el: HTMLElement, name: string): void {
+		while (el.firstChild) el.removeChild(el.firstChild);
+		const svgNS = 'http://www.w3.org/2000/svg';
+		// LocalStorageBridge backs the GitHub Pages standalone demo — there
+		// is no Obsidian `activeDocument`; use the element's owner document.
+		const svg = el.ownerDocument.createElementNS(svgNS, 'svg');
+		svg.setAttribute('data-icon', name);
+		svg.setAttribute('aria-hidden', 'true');
+		const title = el.ownerDocument.createElementNS(svgNS, 'title');
+		title.textContent = name;
+		svg.appendChild(title);
+		el.appendChild(svg);
 	}
 }

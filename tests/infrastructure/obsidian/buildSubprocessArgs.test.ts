@@ -53,7 +53,7 @@ import {
  * Literal denylist string from SPEC §3.7 step 4. The assembler must pass this
  * verbatim — order, casing, and comma-without-space all matter.
  */
-const DENYLIST = 'Read,Edit,Write,Bash,Glob,Grep,WebFetch,WebSearch'
+const DENYLIST = 'Edit,Write,Bash,WebFetch,WebSearch'
 
 function makeInput(overrides: Partial<BuildSubprocessArgsInput> = {}): BuildSubprocessArgsInput {
   return {

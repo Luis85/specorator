@@ -8,6 +8,17 @@ import { mount } from '@vue/test-utils';
 import AgentSidepanelHeader from '@/ui/components/agent/AgentSidepanelHeader.vue';
 import { i18n } from '@/ui/i18n';
 import { AgentSidepanelHeaderPO } from './AgentSidepanelHeader.po';
+import { ICON_PORT, LOGGER_PORT } from '@/infrastructure/bridge/ports';
+import type { IconPort } from '@/domain/ports/IconPort';
+import type { LoggerPort } from '@/domain/ports/LoggerPort';
+
+const noopIconPort: IconPort = { setIcon: () => undefined };
+const noopLoggerPort: LoggerPort = {
+	debug: () => undefined,
+	info: () => undefined,
+	warn: () => undefined,
+	error: () => undefined,
+};
 
 function mountHeader(props: {
 	activeFeature: string | null;
@@ -15,7 +26,13 @@ function mountHeader(props: {
 	requestInFlight?: boolean;
 }) {
 	const wrapper = mount(AgentSidepanelHeader, {
-		global: { plugins: [i18n] },
+		global: {
+			plugins: [i18n],
+			provide: {
+				[ICON_PORT as symbol]: noopIconPort,
+				[LOGGER_PORT as symbol]: noopLoggerPort,
+			},
+		},
 		props,
 	});
 	return { wrapper, po: new AgentSidepanelHeaderPO(wrapper) };
@@ -28,11 +45,14 @@ describe('AgentSidepanelHeader', () => {
 		expect(po.titleText()).toBe('Specorator agent');
 	});
 
-	it('shows the no-feature-in-focus copy when no thread is active', () => {
+	// G2.1 (RALPH G2): Claudian-parity header — render NOTHING in the
+	// feature slot when no feature is in focus. The "No feature in focus"
+	// caption is gone; the header band is just logo+title (+ history/new
+	// in the floating nav sidebar).
+	it('renders no feature slot when no thread is active', () => {
 		const { po } = mountHeader({ activeFeature: null, hasActiveThread: false });
 		expect(po.featureChip.exists()).toBe(false);
-		expect(po.featureEmpty.exists()).toBe(true);
-		expect(po.featureEmpty.text()).toBe('No feature in focus');
+		expect(po.featureEmpty.exists()).toBe(false);
 	});
 
 	it('shows the active feature slug when a thread carries one', () => {
@@ -42,68 +62,23 @@ describe('AgentSidepanelHeader', () => {
 		expect(po.featureChip.text()).toContain('my-feature');
 	});
 
-	it('shows the no-feature copy even when a thread is active but its feature is null', () => {
+	it('renders no feature slot when a thread is active but its feature is null', () => {
 		const { po } = mountHeader({ activeFeature: null, hasActiveThread: true });
 		expect(po.featureChip.exists()).toBe(false);
-		expect(po.featureEmpty.exists()).toBe(true);
+		expect(po.featureEmpty.exists()).toBe(false);
 	});
 
-	describe('new-conversation button', () => {
-		it('is disabled when no thread is active', () => {
-			const { po } = mountHeader({ activeFeature: null, hasActiveThread: false });
-			expect(po.newConversationButton.exists()).toBe(true);
-			expect(po.newConversationDisabled()).toBe(true);
-		});
-
-		it('is enabled when a thread is active', () => {
+	// G2.4 (RALPH G2): the "New conversation" affordance moved to the
+	// floating nav sidebar — the header band collapses to logo+title only.
+	describe('header band (G2.4 Claudian collapse)', () => {
+		it('does NOT render a new-conversation button in the header', () => {
 			const { po } = mountHeader({ activeFeature: 'foo', hasActiveThread: true });
-			expect(po.newConversationDisabled()).toBe(false);
+			expect(po.newConversationButton.exists()).toBe(false);
 		});
 
-		it('emits "new-conversation" when clicked while enabled', async () => {
-			const { wrapper, po } = mountHeader({ activeFeature: 'foo', hasActiveThread: true });
-			await po.clickNewConversation();
-			expect(wrapper.emitted('new-conversation')).toEqual([[]]);
-		});
-
-		it('does not emit when clicked while disabled', async () => {
-			const { wrapper, po } = mountHeader({ activeFeature: null, hasActiveThread: false });
-			await po.clickNewConversation();
-			expect(wrapper.emitted('new-conversation')).toBeUndefined();
-		});
-
-		// Codex P1 (PR #369 second review): mid-request reset would strand
-		// the in-flight response on a no-longer-active thread.
-		it('is disabled while a chat turn is in flight even when a thread is active', () => {
-			const { po } = mountHeader({
-				activeFeature: 'foo',
-				hasActiveThread: true,
-				requestInFlight: true,
-			});
-			expect(po.newConversationDisabled()).toBe(true);
-		});
-
-		it('does not emit while requestInFlight is true', async () => {
-			const { wrapper, po } = mountHeader({
-				activeFeature: 'foo',
-				hasActiveThread: true,
-				requestInFlight: true,
-			});
-			await po.clickNewConversation();
-			expect(wrapper.emitted('new-conversation')).toBeUndefined();
-		});
-
-		it('toggles disabled when requestInFlight transitions in either direction', async () => {
-			const { wrapper, po } = mountHeader({
-				activeFeature: 'foo',
-				hasActiveThread: true,
-				requestInFlight: false,
-			});
-			expect(po.newConversationDisabled()).toBe(false);
-			await wrapper.setProps({ requestInFlight: true });
-			expect(po.newConversationDisabled()).toBe(true);
-			await wrapper.setProps({ requestInFlight: false });
-			expect(po.newConversationDisabled()).toBe(false);
+		it('does NOT render a new-conversation button when no thread is active', () => {
+			const { po } = mountHeader({ activeFeature: null, hasActiveThread: false });
+			expect(po.newConversationButton.exists()).toBe(false);
 		});
 	});
 });

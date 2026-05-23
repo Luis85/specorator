@@ -18,7 +18,8 @@ import AgentSidepanelRoot from '@/ui/agent/AgentSidepanelRoot.vue';
 import { getChatStoresFacade } from '../../__fakes__/chatStoresFacade';
 import { useNotificationStore } from '@/ui/stores/notificationStore';
 import { i18n } from '@/ui/i18n';
-import { LOGGER_PORT, NOTIFICATION_PORT, VAULT_PORT } from '@/infrastructure/bridge/ports';
+import { ICON_PORT, LOGGER_PORT, NOTIFICATION_PORT, VAULT_PORT } from '@/infrastructure/bridge/ports';
+import { MockBridge } from '@/infrastructure/mock/MockBridge';
 import type { LoggerPort, NotificationPort, VaultPort } from '@/domain/ports';
 import type { SlashCommand } from '@/domain/chat/SlashCommand';
 import { AgentSidepanelRootSlashCommandsPO } from './AgentSidepanelRoot.slashCommands.po';
@@ -181,11 +182,19 @@ function mountRoot() {
 				AttachmentStrip: { template: '<div data-testid="attachment-strip-stub" />' },
 				ProviderBadge: { template: '<div data-testid="provider-badge-stub" />' },
 				ModelSelector: { template: '<div data-testid="model-selector-stub" />' },
+				// WS-AUX-9 — the floating nav uses SpIconButton -> SpIcon which
+				// requires ICON_PORT. The slash-command test does not exercise
+				// it; stub it so the harness stays port-free.
+				FloatingNavSidebar: { template: '<div data-testid="floating-nav-stub" />' },
 			},
 			provide: {
 				[LOGGER_PORT as symbol]: makeLoggerStub(),
 				[NOTIFICATION_PORT as symbol]: makeNotificationStub(),
 				[VAULT_PORT as symbol]: makeVaultStub(),
+				// WS-AUX-9: ThreadTabStrip now renders a history SpIconButton
+				// which threads through SpIcon -> IconPort. Provide a MockBridge
+				// so the strip mounts without ICON_PORT errors.
+				[ICON_PORT as symbol]: new MockBridge(),
 			},
 		},
 	});
@@ -262,11 +271,11 @@ describe('AgentSidepanelRoot — slash command dispatch (PR-ASV-3)', () => {
 			expect(po.helpItemByName('help').exists()).toBe(true);
 		});
 
-		it('the help close button hides the panel', async () => {
+		it('pressing Escape inside the help popover hides the panel (WS-AUX-8b)', async () => {
 			const { wrapper, po } = mountRoot();
 			await wrapper.find('[data-testid="stub-emit-help"]').trigger('click');
 			expect(po.hasHelpPanel()).toBe(true);
-			await po.clickHelpClose();
+			await po.pressHelpEscape();
 			expect(po.hasHelpPanel()).toBe(false);
 		});
 	});

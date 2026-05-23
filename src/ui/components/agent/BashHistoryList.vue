@@ -90,14 +90,14 @@ function toggle(id: string): void {
 	font-size: 0.75rem;
 	font-weight: 600;
 	text-transform: uppercase;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 	letter-spacing: 0.05em;
 }
 
 .sp-status__empty {
 	margin: 0;
 	font-size: 0.8125rem;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 	font-style: italic;
 }
 
@@ -128,12 +128,12 @@ function toggle(id: string): void {
 	cursor: pointer;
 	font-family: var(--font-monospace);
 	font-size: 0.8125rem;
-	color: var(--text-normal);
-	text-align: left;
+	color: var(--sp-text-normal);
+	text-align: start;
 }
 
 .sp-status__bash-toggle:hover {
-	background: var(--background-modifier-hover);
+	background: var(--sp-interactive-hover);
 }
 
 .sp-status__bash-cmd {
@@ -145,16 +145,16 @@ function toggle(id: string): void {
 
 .sp-status__bash-exit {
 	font-size: 0.6875rem;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 }
 
 .sp-status__bash-exit--fail {
-	color: var(--text-error, #c25);
+	color: var(--sp-error, #c25);
 }
 
 .sp-status__bash-body {
 	padding: 0.375rem 0.5rem;
-	background: var(--background-secondary);
+	background: var(--sp-bg-secondary);
 	border-radius: 4px;
 }
 
@@ -164,13 +164,13 @@ function toggle(id: string): void {
 	font-size: 0.75rem;
 	white-space: pre-wrap;
 	word-break: break-word;
-	color: var(--text-normal);
+	color: var(--sp-text-normal);
 }
 
 .sp-status__bash-truncated {
 	margin: 0.25rem 0 0;
 	font-size: 0.6875rem;
-	color: var(--text-muted);
+	color: var(--sp-text-muted);
 	font-style: italic;
 }
 </style>

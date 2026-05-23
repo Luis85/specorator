@@ -14,6 +14,26 @@ import ThreadTabStrip from '@/ui/components/agent/ThreadTabStrip.vue';
 import { useChatThreadsStore } from '@/ui/stores/chatThreadsStore';
 import { i18n } from '@/ui/i18n';
 import type { ChatThreadRecord } from '@/domain/chat/ChatThreadRecord';
+import type { LoggerPort } from '@/domain/ports';
+import { ICON_PORT, LOGGER_PORT } from '@/infrastructure/bridge/ports';
+import { MockBridge } from '@/infrastructure/mock/MockBridge';
+
+function fakeLogger(): LoggerPort {
+	return { debug() {}, info() {}, warn() {}, error() {} };
+}
+
+function mountOpts() {
+	const bridge = new MockBridge();
+	return {
+		global: {
+			plugins: [i18n],
+			provide: {
+				[ICON_PORT as symbol]: bridge,
+				[LOGGER_PORT as symbol]: fakeLogger(),
+			},
+		},
+	};
+}
 
 function makeThread(
 	threadId: string,
@@ -49,13 +69,11 @@ describe('ThreadTabStrip perf budget (NFR-MPS-005)', () => {
 		// targets steady-state mount cost — what the user sees after the
 		// strip is loaded once — so a single warm-up here normalises the
 		// measurement across worker contention without weakening the budget.
-		const warmup = mount(ThreadTabStrip, { global: { plugins: [i18n] } });
+		const warmup = mount(ThreadTabStrip, mountOpts());
 		warmup.unmount();
 
 		const start = performance.now();
-		const wrapper = mount(ThreadTabStrip, {
-			global: { plugins: [i18n] },
-		});
+		const wrapper = mount(ThreadTabStrip, mountOpts());
 		const elapsed = performance.now() - start;
 		expect(wrapper.findAll('[data-testid^="thread-tab-"]').length).toBeGreaterThan(0);
 		expect(elapsed).toBeLessThan(100);

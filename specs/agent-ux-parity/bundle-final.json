@@ -1,0 +1,62 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"feature": "agent-ux-parity",
+	"workstream": "WS-AUX-10",
+	"captured_at": "2026-05-22T00:00:00Z",
+	"captured_by": "qa (T-AUX-351)",
+	"branch": "feature/aux-ws-10-storybook-parity-bundle",
+	"build_commands": [
+		"npm run build",
+		"npm run build:web"
+	],
+	"notes": "Final WS-AUX-10 bundle measurement at the tip of WS-AUX-1..9. NFR-AUX-001 (gzipped plugin total delta ≤ 5%) enforced here. Gzip sizes are deflate level-default via Node zlib.gzipSync against the emitted artefacts; raw bytes are filesystem stat().size of the build outputs.",
+	"plugin": {
+		"path": "dist-plugin/",
+		"main_js": {
+			"bytes": 3104066,
+			"gzip_bytes": 725281
+		},
+		"styles_css": {
+			"bytes": 87009,
+			"gzip_bytes": 12847
+		},
+		"total_gzip_bytes": 738128
+	},
+	"standalone": {
+		"path": "dist-standalone/",
+		"js": {
+			"bytes": 278346,
+			"gzip_bytes": 95788
+		},
+		"css": {
+			"bytes": 22102,
+			"gzip_bytes": 3995
+		},
+		"total_gzip_bytes": 99783
+	},
+	"baseline": {
+		"path": "specs/agent-ux-parity/bundle-baseline.json",
+		"plugin_total_gzip_bytes": 716631,
+		"standalone_total_gzip_bytes": 98499
+	},
+	"delta": {
+		"plugin": {
+			"delta_bytes": 21497,
+			"delta_ratio": 0.03000,
+			"budget_ratio": 0.05,
+			"pass": true
+		},
+		"standalone": {
+			"delta_bytes": 1284,
+			"delta_ratio": 0.01304,
+			"budget_ratio": 0.05,
+			"pass": true
+		}
+	},
+	"verdict": "PASS — plugin delta +3.00% (21.50 kB) and standalone delta +1.30% (1.28 kB) both inside the 5% NFR-AUX-001 ceiling.",
+	"requirements": ["NFR-AUX-001"],
+	"references": {
+		"spec": "specs/agent-ux-parity/spec.md §6 (NFR-AUX-001)",
+		"tasks": "specs/agent-ux-parity/tasks.md T-AUX-351"
+	}
+}
