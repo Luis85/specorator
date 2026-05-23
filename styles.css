@@ -2068,13 +2068,13 @@ to {
  * border (the group draws the chrome) and owns its body scroll so a long
  * todo / bash-history list never pushes the composer off-screen.
  */
-.specorator-root :where(.sp-status[data-v-27ae3ded]) {
+.specorator-root :where(.sp-status[data-v-51c066a3]) {
 	display: flex;
 	flex-direction: column;
 	background: transparent;
 	color: var(--sp-text-normal, var(--sp-text-normal));
 }
-.specorator-root :where(.sp-status__header[data-v-27ae3ded]) {
+.specorator-root :where(.sp-status__header[data-v-51c066a3]) {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -2089,21 +2089,21 @@ to {
 	color: var(--sp-text-normal, var(--sp-text-normal));
 	text-align: start;
 }
-.specorator-root :where(.sp-status__header[data-v-27ae3ded]:hover) {
+.specorator-root :where(.sp-status__header[data-v-51c066a3]:hover) {
 	background: var(--sp-bg-hover, var(--sp-interactive-hover));
 }
-.specorator-root :where(.sp-status__title[data-v-27ae3ded]) {
+.specorator-root :where(.sp-status__title[data-v-51c066a3]) {
 	font-weight: 600;
 	text-transform: uppercase;
 	font-size: var(--sp-font-size-xs, 0.75rem);
 	letter-spacing: 0.05em;
 	color: var(--sp-text-muted, var(--sp-text-muted));
 }
-.specorator-root :where(.sp-status__chevron[data-v-27ae3ded]) {
+.specorator-root :where(.sp-status__chevron[data-v-51c066a3]) {
 	color: var(--sp-text-muted, var(--sp-text-muted));
 	font-size: var(--sp-font-size-xs, 0.75rem);
 }
-.specorator-root :where(.sp-status__body[data-v-27ae3ded]) {
+.specorator-root :where(.sp-status__body[data-v-51c066a3]) {
 	display: flex;
 	flex-direction: column;
 	gap: var(--sp-space-3, 0.75rem);

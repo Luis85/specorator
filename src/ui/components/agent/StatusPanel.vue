@@ -20,7 +20,7 @@ import BashHistoryList from './BashHistoryList.vue';
 const { t } = useI18n();
 const statusStore = useStatusPanelStore();
 const threadsStore = useChatThreadsStore();
-const { collapsedByThread } = storeToRefs(statusStore);
+const { collapsedByThread, todos, bashHistory } = storeToRefs(statusStore);
 const { activeThreadId } = storeToRefs(threadsStore);
 
 const collapsed = computed<boolean>(() => {
@@ -31,6 +31,18 @@ const collapsed = computed<boolean>(() => {
 
 const expanded = computed<boolean>(() => !collapsed.value);
 
+/**
+ * G5 polish — Claudian parity: don't render the status panel chrome when
+ * there is nothing to show. The panel only earns its screen real estate
+ * when the agent has emitted at least one todo OR one bash invocation on
+ * the active thread. Side benefit: the empty-state welcome view no longer
+ * has a vestigial "STATUS" stripe glued to the bottom that pushed the
+ * composer off-screen.
+ */
+const hasContent = computed<boolean>(() => {
+	return todos.value.length > 0 || bashHistory.value.length > 0;
+});
+
 function toggle(): void {
 	const id = activeThreadId.value;
 	if (id === null) return;
@@ -39,7 +51,12 @@ function toggle(): void {
 </script>
 
 <template>
-	<section class="sp-status" data-testid="status-panel" :aria-label="t('status.heading')">
+	<section
+		v-if="hasContent"
+		class="sp-status"
+		data-testid="status-panel"
+		:aria-label="t('status.heading')"
+	>
 		<button
 			type="button"
 			class="sp-status__header"
