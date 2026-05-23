@@ -268,6 +268,9 @@ export default {
 		// WS-AUX-9 §1.3.11 — floating nav sidebar.
 		nav: {
 			ariaLabel: 'Conversation navigation',
+			// G2.3 (RALPH G2): "New conversation" moved off the header band
+			// onto the floating nav column for Claudian parity.
+			newConversation: 'New conversation',
 			scrollTop: 'Scroll to top',
 			scrollBottom: 'Scroll to bottom',
 			clearConversation: 'Clear conversation',

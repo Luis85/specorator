@@ -271,6 +271,9 @@ export default {
 		// WS-AUX-9 §1.3.11 — Schwebende Navigationsleiste.
 		nav: {
 			ariaLabel: 'Konversationsnavigation',
+			// G2.3 (RALPH G2): "Neue Unterhaltung" wandert vom Header in
+			// die schwebende Nav-Spalte — Claudian-Parität.
+			newConversation: 'Neue Unterhaltung',
 			scrollTop: 'Nach oben scrollen',
 			scrollBottom: 'Nach unten scrollen',
 			clearConversation: 'Unterhaltung löschen',

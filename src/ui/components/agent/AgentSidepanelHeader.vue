@@ -2,43 +2,40 @@
 /**
  * Header for the dedicated agent sidepanel.
  *
- * WS-AUX-4 (T-AUX-201): collapses to a single 36 px band (logo+title+actions);
- * `ProviderBadge` + `ModelSelector` were relocated to the InputToolbar in WS-6.
- * The feature-scope hint is kept inline as a small caption beneath the band
- * because the spec contract is "no extra rows in the header" — the caption is
- * visually grouped with the title row (no border, no margin) so a screen
- * reader still announces "feature in focus" but layout reports one band.
+ * G2 (RALPH G2) — Claudian-parity collapse: the header band is now just
+ * the logo + wordmark. The "New conversation" affordance lives on the
+ * floating nav column (G2.3); the "No feature in focus" caption is gone
+ * (G2.1); the tab strip only mounts when the user has 2+ open threads
+ * (G2.2). When a thread carries a feature slug we still render a small
+ * caption beneath the band — this is the only non-logo row the spec
+ * still allows.
  *
- * Satisfies REQ-AUX-003.
+ * Provider + model selectors continue to live in the InputToolbar (WS-6).
+ *
+ * Satisfies REQ-AUX-003 plus the G2 parity goals from the WS-AUX dispatch
+ * plan.
+ *
+ * Props the parent supplies:
+ *   - `activeFeature`: current active thread's `feature` slug, or `null`.
+ *
+ * `hasActiveThread` / `requestInFlight` are still accepted for
+ * call-site backwards compatibility but no longer drive any chrome.
  */
 import { useI18n } from 'vue-i18n';
 
-const props = withDefaults(
+withDefaults(
 	defineProps<{
 		/** Current active thread's `feature` slug, or `null` when no thread / no feature. */
 		activeFeature: string | null;
-		/** Whether a thread is currently selected. */
-		hasActiveThread: boolean;
-		/**
-		 * Whether a chat turn is currently in flight (`store.status === 'loading'`).
-		 * Disables the new-conversation control so the user can't reset the thread
-		 * mid-request and strand the in-flight response on a no-longer-active thread
-		 * (Codex P1 finding, PR #369 second-pass review).
-		 */
+		/** Retained for compat; the header no longer renders state for this. */
+		hasActiveThread?: boolean;
+		/** Retained for compat; the header no longer renders state for this. */
 		requestInFlight?: boolean;
 	}>(),
-	{ requestInFlight: false },
+	{ hasActiveThread: false, requestInFlight: false },
 );
 
-const emit = defineEmits<{
-	'new-conversation': [];
-}>();
-
 const { t } = useI18n();
-
-function handleNewConversation(): void {
-	emit('new-conversation');
-}
 </script>
 
 <template>
@@ -47,31 +44,20 @@ function handleNewConversation(): void {
 			<span class="sp-agent-header__title" data-testid="agent-header-title">
 				{{ t('agent.title') }}
 			</span>
-			<button
-				type="button"
-				class="sp-agent-header__action"
-				data-testid="agent-header-new-conversation"
-				:disabled="!props.hasActiveThread || props.requestInFlight"
-				:aria-label="t('agent.newConversationAriaLabel')"
-				@click="handleNewConversation"
-			>
-				{{ t('agent.newConversation') }}
-			</button>
 		</div>
 		<!-- provider + model selectors moved to InputToolbar in WS-6 -->
+		<!--
+			G2.1 (RALPH G2): the "No feature in focus" caption is gone for
+			Claudian parity. We only render the feature scope row when a
+			thread is actually scoped to a feature; otherwise the header
+			collapses to its logo+title band.
+		-->
 		<p
 			v-if="activeFeature !== null"
 			class="sp-agent-header__feature"
 			data-testid="agent-header-feature"
 		>
 			{{ t('agent.featureScope', { slug: activeFeature }) }}
-		</p>
-		<p
-			v-else
-			class="sp-agent-header__feature sp-agent-header__feature--muted"
-			data-testid="agent-header-feature-empty"
-		>
-			{{ t('agent.noFeatureInFocus') }}
 		</p>
 		<!--
         SPEC-MPS-001 §A2 IA: `ThreadTabStrip` is mounted inside the header.
@@ -104,7 +90,6 @@ function handleNewConversation(): void {
 
 .sp-agent-header__band {
 	display: flex;
-	justify-content: space-between;
 	align-items: center;
 	gap: 0.5rem;
 	height: 36px;
@@ -117,37 +102,10 @@ function handleNewConversation(): void {
 	letter-spacing: 0.01em;
 }
 
-.sp-agent-header__action {
-	font-size: 0.75rem;
-	font-weight: 500;
-	padding: 0.25rem 0.625rem;
-	border-radius: 4px;
-	border: 1px solid var(--sp-border);
-	background: var(--sp-bg-primary);
-	color: var(--sp-text-normal);
-	cursor: pointer;
-	transition:
-		background-color 0.15s,
-		border-color 0.15s;
-}
-
-.sp-agent-header__action:hover:not(:disabled) {
-	background: var(--sp-interactive-hover);
-}
-
-.sp-agent-header__action:disabled {
-	opacity: 0.5;
-	cursor: not-allowed;
-}
-
 .sp-agent-header__feature {
 	margin: 0;
 	font-size: 0.75rem;
 	color: var(--sp-text-muted);
-}
-
-.sp-agent-header__feature--muted {
-	font-style: italic;
 }
 
 .sp-agent-header__tab-strip-slot {

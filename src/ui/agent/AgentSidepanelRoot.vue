@@ -152,6 +152,14 @@ const activeFeature = computed(() => {
 const chatTabCap = computed(() => settingsStore.settings.chatTabCap);
 
 /**
+ * G2.2 (RALPH G2): the multi-thread switcher only renders when there is
+ * something to switch between. Reads off the threads store directly so
+ * mutations elsewhere (createThread / deleteThread) reactively flip the
+ * strip's visibility.
+ */
+const showTabStrip = computed(() => threadsStore.chatThreads.size > 1);
+
+/**
  * WS-6 hand-off: full plumbing of `new-thread` → `createThread`,
  * `delete-thread` → modal, and rename persistence lives in the
  * composable that owns this view's lifecycle. The MVP wiring here mounts
@@ -419,7 +427,6 @@ onUnmounted(() => {
 					:active-feature="activeFeature"
 					:has-active-thread="activeThreadId !== null"
 					:request-in-flight="isRequestInFlight"
-					@new-conversation="handleNewConversation"
 				>
 					<!--
             SPEC-MPS-001 §A2: ThreadTabStrip lives inside the header so
@@ -427,8 +434,13 @@ onUnmounted(() => {
             available from the top of the sidepanel. We pass
             `chatTabCap` through to keep the strip presentational —
             settings lookup stays in the root.
+
+            G2.2 (RALPH G2): the strip only mounts when there is more
+            than one open thread. Single-thread sessions get no tab
+            strip at all (Claudian parity). The strip pops in
+            automatically as soon as `chatThreads.size` crosses 1.
           -->
-					<template #tabStrip>
+					<template v-if="showTabStrip" #tabStrip>
 						<ThreadTabStrip
 							:chat-tab-cap="chatTabCap"
 							@new-thread="handleNewThread"
@@ -484,6 +496,7 @@ onUnmounted(() => {
 				-->
 				<FloatingNavSidebar
 					data-testid="agent-floating-nav"
+					@new-conversation="handleNewConversation"
 					@scroll-top="handleNavScrollTop"
 					@scroll-bottom="handleNavScrollBottom"
 					@clear-conversation="handleNewConversation"

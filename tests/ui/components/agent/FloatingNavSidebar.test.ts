@@ -1,12 +1,9 @@
 /**
  * Tests for `FloatingNavSidebar.vue` — WS-AUX-9 (T-AUX-325, T-AUX-326).
  *
- * Five tests:
- *   1. Renders four circular nav buttons.
- *   2. Each button emits the corresponding event.
- *   3. `narrow=true` hides the sidebar entirely.
- *   4. Default (no narrow injection) renders normally.
- *   5. Each button has an accessible name (REQ-AUX-018).
+ * G2.3 (RALPH G2): adds a fifth button — "New conversation" — at the
+ * top of the column. The header band no longer owns the new-conversation
+ * affordance; it lives here alongside scroll + clear + toggle-thinking.
  */
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
@@ -38,13 +35,21 @@ function mountSidebar(props: { narrow?: boolean } = {}) {
 }
 
 describe('FloatingNavSidebar.vue', () => {
-	it('renders four circular nav buttons', () => {
+	it('renders five circular nav buttons (incl. G2.3 new-conversation)', () => {
 		const po = new FloatingNavSidebarPO(mountSidebar())
 		expect(po.exists()).toBe(true)
+		expect(po.newConversationButton.exists()).toBe(true)
 		expect(po.scrollTopButton.exists()).toBe(true)
 		expect(po.scrollBottomButton.exists()).toBe(true)
 		expect(po.clearButton.exists()).toBe(true)
 		expect(po.toggleThinkingButton.exists()).toBe(true)
+	})
+
+	it('emits new-conversation when the top button is clicked (G2.3)', async () => {
+		const wrapper = mountSidebar()
+		const po = new FloatingNavSidebarPO(wrapper)
+		await po.clickNewConversation()
+		expect(wrapper.emitted('new-conversation')).toBeDefined()
 	})
 
 	it('emits scroll-top when the top button is clicked', async () => {
@@ -78,6 +83,7 @@ describe('FloatingNavSidebar.vue', () => {
 	it('every button carries an accessible name', () => {
 		const po = new FloatingNavSidebarPO(mountSidebar())
 		for (const find of [
+			po.newConversationButton,
 			po.scrollTopButton,
 			po.scrollBottomButton,
 			po.clearButton,
@@ -86,5 +92,24 @@ describe('FloatingNavSidebar.vue', () => {
 			const aria = find.find('[data-testid="sp-icon-button"]').attributes('aria-label')
 			expect(aria).toBeTruthy()
 		}
+	})
+
+	it('renders new-conversation as the first button in column order (G2.3)', () => {
+		const wrapper = mountSidebar()
+		const ids = ['floating-nav-new-conversation',
+			'floating-nav-scroll-top',
+			'floating-nav-scroll-bottom',
+			'floating-nav-clear',
+			'floating-nav-toggle-thinking']
+		const root = wrapper.find('[data-testid="floating-nav-sidebar"]').element as HTMLElement
+		const order = ids.map((id) =>
+			Array.from(root.querySelectorAll<HTMLElement>(`[data-testid="${id}"]`))[0],
+		)
+		// All five exist
+		for (const el of order) expect(el).toBeDefined()
+		// new-conversation comes first in DOM order
+		expect(
+			(order[0].compareDocumentPosition(order[1]) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+		).toBe(true)
 	})
 })

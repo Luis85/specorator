@@ -3,7 +3,11 @@
  * `FloatingNavSidebar.vue` — right-edge floating column hosting
  * conversation-scoped navigation actions (WS-AUX-9, T-AUX-327, spec §1.3.11).
  *
- * Hosts four circular `<NavSidebarButton>` actions:
+ * G2.3 (RALPH G2): adds "New conversation" as the topmost button so
+ * the header band can collapse to logo+title (Claudian parity).
+ *
+ * Hosts five circular `<NavSidebarButton>` actions, top to bottom:
+ *   - "New conversation" → emits `new-conversation`
  *   - "Scroll to top" → emits `scroll-top`
  *   - "Scroll to bottom" → emits `scroll-bottom`
  *   - "Clear conversation" → emits `clear-conversation`
@@ -34,6 +38,7 @@ interface FloatingNavSidebarProps {
 const props = defineProps<FloatingNavSidebarProps>()
 
 const emit = defineEmits<{
+	'new-conversation': []
 	'scroll-top': []
 	'scroll-bottom': []
 	'clear-conversation': []
@@ -66,6 +71,12 @@ function isHidden(): boolean {
 		data-testid="floating-nav-sidebar"
 		:aria-label="t('agent.nav.ariaLabel')"
 	>
+		<NavSidebarButton
+			icon="square-plus"
+			:ariaLabel="t('agent.nav.newConversation')"
+			data-testid="floating-nav-new-conversation"
+			@click="emit('new-conversation')"
+		/>
 		<NavSidebarButton
 			icon="arrow-up-to-line"
 			:ariaLabel="t('agent.nav.scrollTop')"

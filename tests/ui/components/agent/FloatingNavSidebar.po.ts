@@ -11,6 +11,10 @@ export class FloatingNavSidebarPO {
 		return this.wrapper.find('[data-testid="floating-nav-sidebar"]')
 	}
 
+	get newConversationButton() {
+		return this.wrapper.find('[data-testid="floating-nav-new-conversation"]')
+	}
+
 	get scrollTopButton() {
 		return this.wrapper.find('[data-testid="floating-nav-scroll-top"]')
 	}
@@ -29,6 +33,12 @@ export class FloatingNavSidebarPO {
 
 	exists(): boolean {
 		return this.root.exists()
+	}
+
+	async clickNewConversation(): Promise<void> {
+		await this.newConversationButton
+			.find('[data-testid="sp-icon-button"]')
+			.trigger('click')
 	}
 
 	async clickScrollTop(): Promise<void> {

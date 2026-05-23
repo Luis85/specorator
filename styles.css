@@ -710,7 +710,7 @@ to   { opacity: 1; transform: translateY(0);
   overflow: hidden;
 }
 
-.specorator-root :where(.sp-agent-header[data-v-88e5c9d2]) {
+.specorator-root :where(.sp-agent-header[data-v-121ca562]) {
 	display: flex;
 	flex-direction: column;
 	gap: 0.125rem;
@@ -720,48 +720,24 @@ to   { opacity: 1; transform: translateY(0);
 	background: var(--sp-bg-secondary);
 	flex-shrink: 0;
 }
-.specorator-root :where(.sp-agent-header__band[data-v-88e5c9d2]) {
+.specorator-root :where(.sp-agent-header__band[data-v-121ca562]) {
 	display: flex;
-	justify-content: space-between;
 	align-items: center;
 	gap: 0.5rem;
 	height: 36px;
 }
-.specorator-root :where(.sp-agent-header__title[data-v-88e5c9d2]) {
+.specorator-root :where(.sp-agent-header__title[data-v-121ca562]) {
 	font-size: 0.9375rem;
 	font-weight: 700;
 	color: var(--sp-text-normal);
 	letter-spacing: 0.01em;
 }
-.specorator-root :where(.sp-agent-header__action[data-v-88e5c9d2]) {
-	font-size: 0.75rem;
-	font-weight: 500;
-	padding: 0.25rem 0.625rem;
-	border-radius: 4px;
-	border: 1px solid var(--sp-border);
-	background: var(--sp-bg-primary);
-	color: var(--sp-text-normal);
-	cursor: pointer;
-	transition:
-		background-color 0.15s,
-		border-color 0.15s;
-}
-.specorator-root :where(.sp-agent-header__action[data-v-88e5c9d2]:hover:not(:disabled)) {
-	background: var(--sp-interactive-hover);
-}
-.specorator-root :where(.sp-agent-header__action[data-v-88e5c9d2]:disabled) {
-	opacity: 0.5;
-	cursor: not-allowed;
-}
-.specorator-root :where(.sp-agent-header__feature[data-v-88e5c9d2]) {
+.specorator-root :where(.sp-agent-header__feature[data-v-121ca562]) {
 	margin: 0;
 	font-size: 0.75rem;
 	color: var(--sp-text-muted);
 }
-.specorator-root :where(.sp-agent-header__feature--muted[data-v-88e5c9d2]) {
-	font-style: italic;
-}
-.specorator-root :where(.sp-agent-header__tab-strip-slot[data-v-88e5c9d2]) {
+.specorator-root :where(.sp-agent-header__tab-strip-slot[data-v-121ca562]) {
 	margin-top: 0.5rem;
 }
 
@@ -1943,7 +1919,7 @@ to {
 	border-radius: 50%;
 }
 
-.specorator-root :where(.sp-floating-nav[data-v-d77f30c7]) {
+.specorator-root :where(.sp-floating-nav[data-v-eb748320]) {
 	position: absolute;
 	inset-block-start: var(--sp-space-4, 1rem);
 	inset-inline-end: var(--sp-space-3, 0.75rem);
@@ -1955,12 +1931,12 @@ to {
 	transition: opacity var(--sp-duration-fast) var(--sp-ease);
 	pointer-events: auto;
 }
-.specorator-root :where(.sp-floating-nav[data-v-d77f30c7]:hover),
-.specorator-root :where(.sp-floating-nav[data-v-d77f30c7]:focus-within) {
+.specorator-root :where(.sp-floating-nav[data-v-eb748320]:hover),
+.specorator-root :where(.sp-floating-nav[data-v-eb748320]:focus-within) {
 	opacity: 1;
 }
 @media (prefers-reduced-motion: reduce) {
-.specorator-root :where(.sp-floating-nav[data-v-d77f30c7]) {
+.specorator-root :where(.sp-floating-nav[data-v-eb748320]) {
 		transition: none;
 }
 }
@@ -2174,7 +2150,7 @@ to {
 	border: 0;
 }
 
-.specorator-root :where(.sp-chat__chip[data-v-e24992e6]) {
+.specorator-root :where(.sp-chat__chip[data-v-c0375cc0]) {
   /*
    * UX #14 (WP-8): chips were `max-width: 14rem` on the label which clipped
    * silently at narrow sidepanel widths. Switch to flex-based shrinking so
@@ -2193,16 +2169,16 @@ to {
   max-width: 100%;
   min-width: 0;
 }
-.specorator-root :where(.sp-chat__chip--auto[data-v-e24992e6]) {
+.specorator-root :where(.sp-chat__chip--auto[data-v-c0375cc0]) {
   background: var(--background-modifier-border);
   color: var(--text-normal);
 }
-.specorator-root :where(.sp-chat__chip--manual[data-v-e24992e6]) {
+.specorator-root :where(.sp-chat__chip--manual[data-v-c0375cc0]) {
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   color: var(--text-normal);
 }
-.specorator-root :where(.sp-chat__chip-indicator[data-v-e24992e6]) {
+.specorator-root :where(.sp-chat__chip-indicator[data-v-c0375cc0]) {
   width: 6px;
   height: 6px;
   background: var(--interactive-accent);
@@ -2211,12 +2187,7 @@ to {
   font-size: 0.5rem;
   line-height: 1;
 }
-.specorator-root :where(.sp-chat__chip-suffix[data-v-e24992e6]) {
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  font-weight: 400;
-}
-.specorator-root :where(.sp-chat__chip-label[data-v-e24992e6]) {
+.specorator-root :where(.sp-chat__chip-label[data-v-c0375cc0]) {
   /*
    * UX #14 (WP-8): the fixed `max-width: 14rem` clipped chips silently at
    * narrow widths. Use flex-based shrinking; the parent row controls
@@ -2228,7 +2199,7 @@ to {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.specorator-root :where(.sp-chat__chip-remove[data-v-e24992e6]) {
+.specorator-root :where(.sp-chat__chip-remove[data-v-c0375cc0]) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2241,21 +2212,13 @@ to {
   line-height: 1;
   border-radius: 2px;
 }
-.specorator-root :where(.sp-chat__chip-remove[data-v-e24992e6]:hover),
-.specorator-root :where(.sp-chat__chip-remove[data-v-e24992e6]:focus) {
+.specorator-root :where(.sp-chat__chip-remove[data-v-c0375cc0]:hover),
+.specorator-root :where(.sp-chat__chip-remove[data-v-c0375cc0]:focus) {
   color: var(--text-normal);
   background: var(--background-modifier-hover);
 }
 
-.specorator-root :where(.sp-chat__context-label[data-v-d520f0ed]) {
-	margin: 0 0 0.375rem;
-	font-size: 0.75rem;
-	font-weight: 600;
-	color: var(--text-muted);
-	text-transform: uppercase;
-	letter-spacing: 0.05em;
-}
-.specorator-root :where(.sp-chat__context-chips[data-v-d520f0ed]) {
+.specorator-root :where(.sp-chat__context-chips[data-v-1f22404e]) {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 0.375rem;
@@ -2264,12 +2227,12 @@ to {
 	padding: 0;
 	min-width: 0;
 }
-.specorator-root :where(.sp-chat__context-empty[data-v-d520f0ed]) {
+.specorator-root :where(.sp-chat__context-empty[data-v-1f22404e]) {
 	margin: 0;
 	font-size: 0.8125rem;
 	color: var(--text-muted);
 }
-.specorator-root :where(.sp-chat__context-overflow[data-v-d520f0ed]) {
+.specorator-root :where(.sp-chat__context-overflow[data-v-1f22404e]) {
 	position: relative;
 	display: inline-flex;
 }
@@ -2279,7 +2242,7 @@ to {
  * reads as a single uniform set; the popover floats below it without
  * pushing the input area.
  */
-.specorator-root :where(.sp-chat__chip--overflow[data-v-d520f0ed]) {
+.specorator-root :where(.sp-chat__chip--overflow[data-v-1f22404e]) {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.25rem;
@@ -2292,11 +2255,11 @@ to {
 	color: var(--text-normal);
 	cursor: pointer;
 }
-.specorator-root :where(.sp-chat__chip--overflow[data-v-d520f0ed]:hover),
-.specorator-root :where(.sp-chat__chip--overflow[data-v-d520f0ed]:focus) {
+.specorator-root :where(.sp-chat__chip--overflow[data-v-1f22404e]:hover),
+.specorator-root :where(.sp-chat__chip--overflow[data-v-1f22404e]:focus) {
 	background: var(--interactive-hover);
 }
-.specorator-root :where(.sp-chat__context-overflow-popover[data-v-d520f0ed]) {
+.specorator-root :where(.sp-chat__context-overflow-popover[data-v-1f22404e]) {
 	position: absolute;
 	top: calc(100% + 0.25rem);
 	left: 0;
@@ -2879,7 +2842,7 @@ to {
  * parent: in the agent sidepanel the parent gives ChatSidebar `flex: 0 0
  * auto` and `MessageList` takes the remaining grow space.
  */
-.specorator-root :where(.sp-chat-sidebar[data-v-2651d2cc]) {
+.specorator-root :where(.sp-chat-sidebar[data-v-d62e7fe9]) {
 	padding: 1rem;
 	display: flex;
 	flex-direction: column;
@@ -2887,19 +2850,13 @@ to {
 	box-sizing: border-box;
 	flex-shrink: 0;
 }
-.specorator-root :where(.sp-chat__title[data-v-2651d2cc]) {
-	margin: 0;
-	font-size: 1.125rem;
-	font-weight: 700;
-	color: var(--text-normal);
-}
-.specorator-root :where(.sp-chat__header[data-v-2651d2cc]) {
+.specorator-root :where(.sp-chat__header[data-v-d62e7fe9]) {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
 	flex-wrap: wrap;
 }
-.specorator-root :where(.sp-chat__divider[data-v-2651d2cc]) {
+.specorator-root :where(.sp-chat__divider[data-v-d62e7fe9]) {
 	margin: 0;
 	border: none;
 	border-top: 1px solid var(--background-modifier-border);
@@ -2910,7 +2867,7 @@ to {
  * confirmation. Render with neutral chrome (secondary background, normal
  * border) so the visual weight matches the consequence.
  */
-.specorator-root :where(.sp-chat__stop[data-v-2651d2cc]) {
+.specorator-root :where(.sp-chat__stop[data-v-d62e7fe9]) {
 	margin-left: auto;
 	font-size: 0.75rem;
 	font-weight: 500;
@@ -2924,21 +2881,21 @@ to {
 		background-color 0.15s,
 		border-color 0.15s;
 }
-.specorator-root :where(.sp-chat__stop[data-v-2651d2cc]:hover) {
+.specorator-root :where(.sp-chat__stop[data-v-d62e7fe9]:hover) {
 	background: var(--interactive-hover);
 }
 
-.specorator-root :where(.sp-agent[data-v-0686135c]) {
+.specorator-root :where(.sp-agent[data-v-cd1c8fd1]) {
 	display: flex;
 	flex-direction: column;
 	height: 100%;
 	overflow: hidden;
 }
-.specorator-root :where(.sp-agent__header-wrap[data-v-0686135c]) {
+.specorator-root :where(.sp-agent__header-wrap[data-v-cd1c8fd1]) {
 	position: relative;
 	flex-shrink: 0;
 }
-.specorator-root :where(.sp-agent__provider-row[data-v-0686135c]) {
+.specorator-root :where(.sp-agent__provider-row[data-v-cd1c8fd1]) {
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
@@ -2946,7 +2903,7 @@ to {
 	padding: 0.25rem 0.75rem;
 	border-bottom: 1px solid var(--sp-border);
 }
-.specorator-root :where(.sp-agent__body[data-v-0686135c]) {
+.specorator-root :where(.sp-agent__body[data-v-cd1c8fd1]) {
 	flex: 1;
 	display: flex;
 	flex-direction: column;
@@ -2965,7 +2922,7 @@ to {
  * region. `flex: 0 0 auto` keeps the composer pinned to the bottom of
  * the body column while MessageList consumes the remaining flex space.
  */
-.specorator-root :where(.sp-composer-group[data-v-0686135c]) {
+.specorator-root :where(.sp-composer-group[data-v-cd1c8fd1]) {
 	display: flex;
 	flex-direction: column;
 	flex: 0 0 auto;
@@ -2976,7 +2933,7 @@ to {
 	background: var(--sp-bg-primary, var(--sp-bg-primary));
 	overflow: hidden;
 }
-.specorator-root :where(.sp-composer-group[data-v-0686135c] > * + *) {
+.specorator-root :where(.sp-composer-group[data-v-cd1c8fd1] > * + *) {
 	border-block-start: 1px solid var(--sp-border, var(--sp-border));
 }
 
@@ -2987,7 +2944,7 @@ to {
  * `.sp-agent__header-wrap` keeps the popover scoped to the header
  * column; the dropdown shadow distinguishes it from inline content.
  */
-.specorator-root :where(.sp-agent__help[data-v-0686135c]) {
+.specorator-root :where(.sp-agent__help[data-v-cd1c8fd1]) {
 	position: absolute;
 	inset-block-start: 100%;
 	inset-inline: 0;
