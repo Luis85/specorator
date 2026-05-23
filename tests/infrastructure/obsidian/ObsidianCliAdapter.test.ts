@@ -53,6 +53,11 @@ function makeFakeSpawn() {
       if (!child) throw new Error('fail() before spawn()')
       queueMicrotask(() => child.emit('error', err))
     },
+    terminate(signal: NodeJS.Signals = 'SIGTERM') {
+      const child = pending
+      if (!child) throw new Error('terminate() before spawn()')
+      queueMicrotask(() => child.emit('close', null, signal))
+    },
     lastChild: () => children[children.length - 1],
   }
 }
@@ -108,6 +113,18 @@ describe('ObsidianCliAdapter', () => {
       expect(res.error.exitCode).toBe(2)
       expect(res.error.stderr).toBe('not found')
     }
+  })
+
+  it('treats a signal-terminated run (exitCode null) as a failure, not success', async () => {
+    const fake = makeFakeSpawn()
+    const adapter = new ObsidianCliAdapter({ spawn: fake.spawn, resolvePath: () => '/bin/obsidian' })
+
+    const promise = adapter.run('append', ['path=n.md', 'content=x'])
+    fake.terminate('SIGKILL')
+    const res = await promise
+
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.error.code).toBe('signal-terminated')
   })
 
   it('maps a child error event to spawn-failed', async () => {

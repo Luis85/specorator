@@ -6,6 +6,8 @@ import type { Result } from '@/domain/shared/Result'
  * - `not-configured` — no binary path is configured; no process was spawned.
  * - `spawn-failed`    — the child process could not be started, or emitted `error`.
  * - `nonzero-exit`    — the process exited with a code other than 0.
+ * - `signal-terminated` — the process was killed by a signal (exit code `null`);
+ *   its output may be partial, so it is never treated as success.
  * - `timeout`         — the process did not finish within the timeout and was killed.
  * - `invalid-json`    — `runJson` received stdout that did not parse as JSON.
  */
@@ -13,6 +15,7 @@ export type ObsidianCliErrorCode =
   | 'not-configured'
   | 'spawn-failed'
   | 'nonzero-exit'
+  | 'signal-terminated'
   | 'timeout'
   | 'invalid-json'
 

@@ -42,8 +42,10 @@ untouched.
 - `available === false` ⇒ resolves `err(ObsidianCliError('not-configured'))`, no spawn.
 - spawn throws ⇒ `err('spawn-failed')`; child `error` event ⇒ `err('spawn-failed')`.
 - timeout (default 15 000 ms) ⇒ kill child, `err('timeout')`.
-- close with code ∉ {0, null} ⇒ `err('nonzero-exit', { exitCode, stderr })`.
-- otherwise ⇒ `ok({ stdout, stderr, exitCode })`.
+- close with `exitCode === null` (signal-terminated, partial output) ⇒
+  `err('signal-terminated', { stderr })` — never `ok`.
+- close with code ∉ {0} ⇒ `err('nonzero-exit', { exitCode, stderr })`.
+- close with code 0 ⇒ `ok({ stdout, stderr, exitCode })`.
 - spawn is shell-free (`spawn(bin, [command, ...args])`).
 
 `runJson(command, args=[])` = `run(command, [...args, 'format=json'])`; on `ok`,

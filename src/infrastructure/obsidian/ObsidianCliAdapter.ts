@@ -117,8 +117,23 @@ export class ObsidianCliAdapter implements ObsidianCliPort {
         settle(err(new ObsidianCliError('spawn-failed', describe(e), { stderr })))
       })
 
-      child.on('close', (exitCode: number | null) => {
-        if (exitCode !== 0 && exitCode !== null) {
+      child.on('close', (exitCode: number | null, signal: NodeJS.Signals | null) => {
+        // A null exit code means the child was killed by a signal — its output
+        // may be partial, so this is a failure, never success (e.g. a queued
+        // write must not be treated as completed).
+        if (exitCode === null) {
+          settle(
+            err(
+              new ObsidianCliError(
+                'signal-terminated',
+                `Obsidian CLI \`${command}\` was terminated by signal ${signal ?? 'unknown'}.`,
+                { stderr },
+              ),
+            ),
+          )
+          return
+        }
+        if (exitCode !== 0) {
           settle(
             err(
               new ObsidianCliError(

@@ -23,7 +23,10 @@ test (`TEST-OCM-NNN`) at the testing stage.
 - **REQ-OCM-003** — When no CLI binary path is configured, the system shall return a
   `not-configured` error from the port without spawning a process.
 - **REQ-OCM-004** — When the spawned CLI process exits non-zero, the system shall return
-  a `nonzero-exit` error carrying the exit code and captured stderr.
+  a `nonzero-exit` error carrying the exit code and captured stderr. When the process is
+  terminated by a signal (exit code `null`), the system shall return a
+  `signal-terminated` error and shall never treat the run as successful — so a
+  proposal-queued write whose CLI command is killed is not marked completed.
 - **REQ-OCM-005** — When the spawned CLI process does not complete within the configured
   timeout, the system shall kill the child and return a `timeout` error.
 - **REQ-OCM-006** — When `runJson` receives stdout that is not valid JSON, the system
