@@ -112,6 +112,36 @@ describe('useChatThreadsStore()', () => {
 		});
 	});
 
+	describe('clearSessionId', () => {
+		it('Q-F.4: resets sessionId to null on the matching thread', () => {
+			const store = useChatThreadsStore();
+			store.upsertThread(makeThread('t1', { sessionId: asSessionId('sess-dead') }));
+			store.clearSessionId('t1');
+			expect(store.chatThreads.get('t1')?.sessionId).toBeNull();
+		});
+
+		it('is a no-op when the thread is unknown', () => {
+			const store = useChatThreadsStore();
+			store.clearSessionId('ghost');
+			expect(store.chatThreads.size).toBe(0);
+		});
+
+		it('preserves other thread fields unchanged', () => {
+			const store = useChatThreadsStore();
+			const record = makeThread('t1', {
+				sessionId: asSessionId('sess-dead'),
+				feature: 'foo',
+				title: 'My thread',
+			});
+			store.upsertThread(record);
+			store.clearSessionId('t1');
+			const after = store.chatThreads.get('t1');
+			expect(after?.feature).toBe('foo');
+			expect(after?.title).toBe('My thread');
+			expect(after?.sessionId).toBeNull();
+		});
+	});
+
 	describe('markThreadUsed', () => {
 		it('REQ-ASM-037: updates lastUsedAt on the matching thread', () => {
 			const store = useChatThreadsStore();

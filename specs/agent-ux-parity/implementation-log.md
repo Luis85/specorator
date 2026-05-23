@@ -926,3 +926,50 @@ from the spec.
   289 files, 2548 / 2548 tests. `npm run build` GREEN — gzip 729.61 KB
   (vs prior 716.63 KB baseline; +12.98 KB / +1.8 %). Lint-guard wired
   into `npm run verify` after `npm run lint`.
+
+## Q-F — `--resume <sessionId>` on follow-up turns
+
+- **commits:**
+  - `8228339` feat(asm): clearSessionId on chatThreadsStore (Q-F.4 prep)
+  - `bad4b27` test(asm): assert reuse-with-sessionId on every follow-up turn (Q-F.1)
+  - `575f2aa` feat(asm): clear stale sessionId on failed --resume turns (Q-F.4)
+  - `f76fe08` test(asm): plumb clearSessionId through sibling orchestrator fakes
+- **files:**
+  - `src/ui/stores/chatThreadsStore.ts` — added `clearSessionId(threadId)`
+    action (resets sessionId back to null, preserves other fields).
+  - `src/application/chat/ChatTurnOrchestrator.ts` — extended `ThreadsPort`
+    with `clearSessionId`; both `dispatchFreeText` and
+    `handleStructuredFailure` now call it when a `QUERY_FAILED` terminal
+    arrives on a turn carrying `resumeSessionId`.
+  - `tests/ui/stores/chatThreadsStore.test.ts` — three RED-first cases.
+  - `tests/application/chat/TurnInputBuilder.test.ts` — two explicit
+    assertions that follow-up turns forward the captured sessionId and
+    that an uncaptured thread reuses the id without `reuseSessionId`.
+  - `tests/application/chat/ChatTurnOrchestrator.test.ts` — two new tests
+    for the failed-resume → clearSessionId path (positive + negative).
+  - Sibling orchestrator fake-typings updated in
+    `ChatTurnOrchestrator.approvalCallback.test.ts`,
+    `ChatTurnOrchestrator.instructionMode.test.ts`,
+    `ChatTurnOrchestrator.planMode.test.ts`.
+- **spec:** REQ-ASM-035.
+- **Q-F.1 finding:** `TurnInputBuilder.decideRotation` already returned
+  `kind: 'reuse'` with `reuseSessionId = existing.sessionId ?? undefined`
+  whenever transport + feature matched. No production behaviour change;
+  the new tests lock the contract.
+- **Q-F.2 finding:** `buildPrompt()` does NOT concatenate per-thread
+  history — it only joins user text with the deduped context-file
+  preamble + truncation handling. We do not re-prepend prior turns
+  today, so the CLI's native `--resume <sessionId>` rehydration via its
+  session log is the sole conversation-memory channel. No code change
+  needed.
+- **Q-F.3 finding:** Greeting gate already uses
+  `isFirstTurn = thread.kind === 'rotate'` in
+  `TurnInputBuilder.computeStagePromptContext`. Existing test
+  "QW-C: omits the Vault greeting row on follow-up turns (thread reuse)"
+  in `TurnInputBuilder.test.ts:519` covers the suppression.
+- **Q-F.4 finding:** Wired both free-text and structured branches to
+  call `threads.clearSessionId(threadId)` on `QUERY_FAILED` when
+  `isResumedTurn` is true. Confirmed by two new orchestrator tests
+  (positive resume-failure clears, negative fresh-turn failure does not).
+- **outcome:** done.
+- **deviation:** none.

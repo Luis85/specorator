@@ -198,6 +198,68 @@ describe('buildTurnInput', () => {
 		expect(result.thread.previousThreadId).toBe('T1');
 	});
 
+	it('Q-F.1: reuses the thread but omits reuseSessionId when the thread has no captured sessionId yet', async () => {
+		const bridge = makeBridge();
+		const existing: ChatThreadRecord = {
+			threadId: 'T1',
+			sessionId: null,
+			feature: null,
+			logPath: '',
+			transport: { provider: 'claude', mode: 'api' },
+			title: '',
+			forkParent: null,
+			createdAt: '2025-01-01T00:00:00.000Z',
+			lastUsedAt: '2025-01-01T00:00:00.000Z',
+		};
+		const result = await buildTurnInput({
+			messages: emptyMessages('hello'),
+			threads: {
+				activeThreadId: 'T1',
+				chatThreads: new Map([['T1', existing]]),
+			},
+			transportKindRaw: 'api-key',
+			stagePromptMap,
+			vault: bridge,
+			workspace: bridge,
+			settings: bridge,
+			logger: fakeLogger(),
+		});
+		expect(result.thread.kind).toBe('reuse');
+		expect(result.thread.reuseThreadId).toBe('T1');
+		expect(result.thread.reuseSessionId).toBeUndefined();
+	});
+
+	it('Q-F.1: forwards the captured sessionId verbatim so every follow-up turn resumes the same CLI session', async () => {
+		const bridge = makeBridge();
+		const sessionId = asSessionId('sess-stable-1234');
+		const existing: ChatThreadRecord = {
+			threadId: 'T-stable',
+			sessionId,
+			feature: null,
+			logPath: '',
+			transport: { provider: 'claude', mode: 'cli' },
+			title: '',
+			forkParent: null,
+			createdAt: '2025-01-01T00:00:00.000Z',
+			lastUsedAt: '2025-01-01T00:00:00.000Z',
+		};
+		const result = await buildTurnInput({
+			messages: emptyMessages('follow-up turn'),
+			threads: {
+				activeThreadId: 'T-stable',
+				chatThreads: new Map([['T-stable', existing]]),
+			},
+			transportKindRaw: 'subscription',
+			stagePromptMap,
+			vault: bridge,
+			workspace: bridge,
+			settings: bridge,
+			logger: fakeLogger(),
+		});
+		expect(result.thread.kind).toBe('reuse');
+		expect(result.thread.reuseSessionId).toBe(sessionId);
+	});
+
 	it('rotates when the active thread transport no longer matches the turn transport', async () => {
 		const bridge = makeBridge();
 		const existing: ChatThreadRecord = {

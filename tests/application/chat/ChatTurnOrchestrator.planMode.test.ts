@@ -42,6 +42,7 @@ function fakeThreads(): ThreadsPort {
 		upsertThread: vi.fn(),
 		setActiveThreadId: vi.fn(),
 		captureSessionId: vi.fn(),
+		clearSessionId: vi.fn(),
 		markThreadUsed: vi.fn(),
 	};
 }

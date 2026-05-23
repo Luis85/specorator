@@ -43,6 +43,7 @@ function makeOrchestrator(port: MockClaudeCliPort) {
 		upsertThread: vi.fn(),
 		setActiveThreadId: vi.fn(),
 		captureSessionId: vi.fn(),
+		clearSessionId: vi.fn(),
 		markThreadUsed: vi.fn(),
 	};
 	const streaming: StreamingPort = {

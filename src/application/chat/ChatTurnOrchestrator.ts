@@ -118,6 +118,13 @@ export interface ThreadsPort {
 	upsertThread(record: ChatThreadRecord): void;
 	setActiveThreadId(threadId: string | null): void;
 	captureSessionId(threadId: string, sessionId: SessionId): void;
+	/**
+	 * Reset the captured sessionId on a thread back to `null`. Called by the
+	 * orchestrator when a `--resume <sessionId>` turn fails terminally so the
+	 * next user turn falls back to a fresh CLI session instead of retrying a
+	 * dead resume id forever (Q-F.4). REQ-ASM-035.
+	 */
+	clearSessionId(threadId: string): void;
 	markThreadUsed(threadId: string): void;
 }
 
@@ -347,6 +354,13 @@ export class ChatTurnOrchestrator {
 			});
 			return { kind: 'success', threadId, abortHandle: abortController };
 		}
+		// Q-F.4 — when a resume turn fails terminally the captured sessionId is
+		// almost certainly stale (e.g. the user wiped the CLI's session log
+		// directory). Clear it so the next user turn on this thread falls back
+		// to a fresh CLI session rather than retrying a dead resume id forever.
+		if (ctx.isResumedTurn && streamResult.errorCode === 'QUERY_FAILED') {
+			this.deps.threads.clearSessionId(threadId);
+		}
 		this.deps.messages.setError(streamResult.errorCode === 'TIMEOUT' ? 'timeout' : 'query_failed');
 		return { kind: 'transport-error', threadId, code: streamResult.errorCode };
 	}
@@ -374,7 +388,7 @@ export class ChatTurnOrchestrator {
 		this.deps.streaming.setCliStartingUp(false);
 
 		if (!structuredResult.ok) {
-			return this.handleStructuredFailure(structuredResult.error, threadId);
+			return this.handleStructuredFailure(structuredResult.error, threadId, ctx.isResumedTurn);
 		}
 		const envelope = structuredResult.value;
 		const proposal = await this.addProposalFromEnvelope(envelope, threadId, input.userMessage);
@@ -397,6 +411,7 @@ export class ChatTurnOrchestrator {
 	private handleStructuredFailure(
 		error: EnvelopeParseError | ChatTransportError,
 		threadId: string,
+		isResumedTurn: boolean,
 	): TurnOutcome {
 		if (error instanceof EnvelopeParseError) {
 			this.deps.messages.setStructuredFail(true);
@@ -404,6 +419,11 @@ export class ChatTurnOrchestrator {
 			return { kind: 'structured-parse-fail', threadId };
 		}
 		const code = error.errorCode;
+		// Q-F.4 — mirror the free-text branch: a failed resume turn likely points
+		// at a stale CLI session id, so clear it before surfacing the error.
+		if (isResumedTurn && code === 'QUERY_FAILED') {
+			this.deps.threads.clearSessionId(threadId);
+		}
 		this.deps.messages.setError(code === 'TIMEOUT' ? 'timeout' : 'query_failed');
 		return { kind: 'transport-error', threadId, code };
 	}
