@@ -339,4 +339,21 @@ only at parity.
                           migration tests). First dev-owned ready task after Batch 1:
                           T-PSR-003 (slim PluginSettings, blocked only by T-PSR-002).
                           Next: /spec:implement — dev/qa pick up Batch 1.
+
+2026-05-24 (analyze gate, post-Stage-6): /spec:analyze ran inline (no subagent —
+                          1M-context credit gate declined). Verdict: CONSISTENT.
+                          Full traceability confirmed — every REQ-PSR-001..012,
+                          NFR-PSR-001..009, SPEC-PSR-001..017 and all 23 TEST-PSR map
+                          to tasks (tasks.md coverage table); chain REQ→SPEC→TEST→Task
+                          intact; dependency graph + critical path coherent; guard
+                          correctly sequenced after the last delete. ONE non-blocking
+                          finding: design §C.5 prose still says "ObsidianBridge
+                          implements exactly six ports" — stale/optimistic, superseded
+                          by SPEC-PSR-009 + T-PSR-021 (ObsidianBridge also carries
+                          ChatTransportPort+IconPort; de-coupled in Wave 3b). Downstream
+                          artifacts are correct; only the design prose is out of date.
+                          Recommend the dev annotate §C.5 (or leave as-is since spec is
+                          authoritative). No requirement/spec/task orphans; no
+                          contradictions. idea→tasks scope COMPLETE — P0 ready for
+                          implementation (Stage 7, T-PSR-001 first).
 ```
