@@ -2,10 +2,10 @@
 feature: Plugin shell reboot (P0 — Claudian-shaped rewrite foundation)
 area: PSR
 slug: plugin-shell-reboot
-current_stage: spec
+current_stage: tasks
 status: active
 last_updated: 2026-05-24
-last_agent: architect (Stage 5)
+last_agent: planner (Stage 6)
 epic: claudian-reboot
 phase: P0
 integration_branch: next
@@ -16,7 +16,7 @@ artifacts:
   requirements.md: complete
   design.md: complete
   spec.md: complete
-  tasks.md: pending
+  tasks.md: complete
   implementation-log.md: pending
   test-plan.md: pending
   test-report.md: pending
@@ -41,7 +41,7 @@ adrs:
 | 3. Requirements | `requirements.md` | complete |
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
-| 6. Tasks | `tasks.md` | pending |
+| 6. Tasks | `tasks.md` | complete |
 | 7. Implementation | `implementation-log.md` | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md` | pending |
@@ -296,4 +296,47 @@ only at parity.
                           Next: /spec:tasks (planner) — decompose into T-PSR-* keyed to
                           the 6 delete waves + the surviving contracts; resolve OC-PSR-4..7
                           as verification subtasks.
+
+2026-05-24 (planner, Stage 6): tasks.md written + complete (TASKS-PSR-001). 34 tasks
+                          (T-PSR-001..034) in 4 phases: A) stand up the surviving
+                          surface + RED tests (slim PluginSettings/core-settings/
+                          migration, AgentPanelRoot, AgentSidebarView, slim main.ts +
+                          settings tab, WorkspacePort revert, i18n trim +
+                          toSupportedLocale, standalone entry); B) six delete waves
+                          0→5 (T-PSR-017..023), each ending `npm run typecheck`
+                          green-or-expected (R-PSR-1 mitigation), Wave 3b de-couples
+                          ALL THREE bridges incl. ObsidianBridge (Stage-5 correction);
+                          C) deleted-symbol guard enabled LAST (T-PSR-026 rule +
+                          T-PSR-027 arch test) once every ban glob resolves to a real
+                          removed path (NFR-PSR-009); D) ci.yml `next`, docs rewrite,
+                          ADR-index housekeeping, coverage check, final verify gate.
+                          CRITICAL PATH: T-002→003→004→008→009→017→018→019→020→021→
+                          022→023→026→027→032→034 — the 6 waves are the spine; the
+                          guard is downstream of the last delete by design.
+                          All 23 TEST-PSR mapped: 15 unit (Vitest+fake-ports/PageObject),
+                          3 automated arch/guard (TEST-PSR-016/017/023), 5 manual
+                          Obsidian (TEST-PSR-018..021 + ribbon enum) flagged as the
+                          dev/human manual-verification task T-PSR-033 (NFR-PSR-003,
+                          not CI-automatable).
+                          OC placement (none floating): OC-PSR-4 (ALL_MODULES/
+                          helloModule) → T-PSR-008; OC-PSR-5 (mcp/migration glob
+                          resolution) → T-PSR-019/020 findings feed T-PSR-026 pruning;
+                          OC-PSR-6 (reuse ESLint-API harness) → T-PSR-024 recon before
+                          T-PSR-027; OC-PSR-7 (ErrorBoundary survives Wave 0) →
+                          T-PSR-017 keep-and-verify subtask. OC-PSR-3 (ADR index +
+                          superseded-by) → T-PSR-031. Explicit tasks for
+                          toSupportedLocale (T-PSR-007), 3-bridge de-couple +
+                          ports.ts/fake-ports trim (T-PSR-021), docs rewrite (T-PSR-030),
+                          coverage threshold + R-PSR-5 contingency (T-PSR-032), and the
+                          feature-DoD verify-with-zero-bypasses gate (T-PSR-034).
+                          No blocking open question; two held sequencing notes in
+                          tasks.md ## Open questions (RED tests won't compile until the
+                          slim rewrite removes the chat import — intended; and
+                          green-or-expected = tsc errors trace only to not-yet-deleted
+                          importers, a kept-file error is a scope-escalation signal).
+                          FIRST READY TASK (dev): none blocked — Batch 1 is all-parallel
+                          RED/recon tasks. First qa-owned ready task: T-PSR-001 (RED
+                          migration tests). First dev-owned ready task after Batch 1:
+                          T-PSR-003 (slim PluginSettings, blocked only by T-PSR-002).
+                          Next: /spec:implement — dev/qa pick up Batch 1.
 ```
