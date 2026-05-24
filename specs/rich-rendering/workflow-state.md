@@ -1,7 +1,7 @@
 ---
 feature: rich-rendering
 area: RR
-current_stage: design
+current_stage: specification
 status: active
 last_updated: 2026-05-24
 last_agent: architect (design)
@@ -12,9 +12,9 @@ reference: D:\Projects\claudian-main
 artifacts:
   idea.md: skipped (charter §3.1 + audits + claudian-main stand in — CLAR-RR-001, mirrors P1)
   research.md: skipped (charter §3.1 + audits + claudian-main stand in — CLAR-RR-001, mirrors P1)
-  requirements.md: draft (PRD-RR-001; held until architect ADR for CLAR-RR-002/003)
-  design.md: in-progress (DESIGN-RR-001 Parts A/B/C complete; ADR-RR-001 proposed — held until human checkpoint, charter §6a)
-  ADR-RR-001: proposed (docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md — CHECKPOINT REQUIRED)
+  requirements.md: accepted (PRD-RR-001; human-blessed via ADR-RR-001 2026-05-24)
+  design.md: complete (DESIGN-RR-001 Parts A/B/C; ADR-RR-001 accepted — human-blessed 2026-05-24)
+  ADR-RR-001: accepted (docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md — human-blessed 2026-05-24)
   spec.md: pending
   tasks.md: pending
   implementation-log.md: pending
@@ -28,11 +28,10 @@ artifacts:
 
 # Workflow state — rich-rendering (P2)
 
-> **>>> CHECKPOINT REQUIRED <<<** A human must bless **ADR-RR-001**
-> (`docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md`, status *proposed*) — the additive
-> `StreamChunk`/`ChatMessage` growth + typed `toolUseResult` + render seam + new `IconPort`
-> (CLAR-RR-002/003, charter §6a) — **before `/spec:specify`**. This mirrors the P1 ADR-CC-001 gate.
-> Until then, `design.md` stays `in-progress` and `current_stage` does not advance past `design`.
+> **>>> CHECKPOINT CLEARED <<<** ADR-RR-001 was **human-blessed as-is on 2026-05-24** (charter §6a
+> "bless as-is" — typed `ToolUseResult` + additive `StreamChunk`/`ChatMessage` growth, per-type
+> components behind a dispatcher, Obsidian markdown backing, new `IconPort`). ADR-RR-001 → accepted;
+> requirements PRD-RR-001 → accepted; CLAR-RR-002/003 resolved. `/spec:specify` is unblocked.
 
 ## Stage progress
 
@@ -40,8 +39,8 @@ artifacts:
 |---|---|---|
 | 1. Idea | `idea.md` | skipped (CLAR-RR-001 — audits + charter stand in, mirrors P1) |
 | 2. Research | `research.md` | skipped (CLAR-RR-001 — audits + charter stand in, mirrors P1) |
-| 3. Requirements | `requirements.md` | in-progress (PRD-RR-001, status `draft`) |
-| 4. Design | `design.md` | in-progress (Parts A/B/C complete; ADR-RR-001 proposed — checkpoint pending) |
+| 3. Requirements | `requirements.md` | accepted (PRD-RR-001; human-blessed via ADR-RR-001) |
+| 4. Design | `design.md` | complete (Parts A/B/C; ADR-RR-001 accepted — human-blessed 2026-05-24) |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |

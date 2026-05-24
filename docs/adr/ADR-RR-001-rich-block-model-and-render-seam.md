@@ -1,11 +1,11 @@
 ---
 id: ADR-RR-001
 title: Grow the chat block model and render seam for rich rendering — typed toolUseResult, per-type block components, Obsidian-backed markdown
-status: proposed       # proposed | accepted | deprecated | superseded by ADR-NNNN
+status: accepted       # human-blessed 2026-05-24 (charter §6a). proposed | accepted | deprecated | superseded by ADR-NNNN
 date: 2026-05-24
 deciders:
   - architect
-  - maintainer (human)        # PENDING — charter §6a P2 checkpoint
+  - maintainer (human)        # ACCEPTED 2026-05-24 — charter §6a P2 checkpoint ("bless as-is")
 consulted:
   - pm
   - ux-ui-designer

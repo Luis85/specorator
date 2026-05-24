@@ -6,9 +6,8 @@ feature: rich-rendering
 area: RR
 epic: claudian-reboot
 phase: P2
-status: draft     # draft | proposed | accepted | superseded — HELD at draft until the architect's
-                  # design-time ADR for the render seam (CLAR-RR-003) + the StreamChunk/ChatMessage
-                  # growth (CLAR-RR-002) is human-blessed, mirroring P1's discipline (PRD-CC-001).
+status: accepted  # human-blessed 2026-05-24 via ADR-RR-001 (charter §6a "bless as-is"); CLAR-RR-002/003
+                  # resolved. draft | proposed | accepted | superseded.
 owner: pm
 inputs:
   - specs/rich-rendering/workflow-state.md            # P2 scope, epic constraints, CLAR-RR-001/002/003
