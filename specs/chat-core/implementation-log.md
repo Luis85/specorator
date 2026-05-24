@@ -375,6 +375,168 @@ SHA.
 
 ---
 
+## Batch: UI + wire-in (T-CC-018..026, 028..029)
+
+> Strict TDD, one Conventional commit per task, on `feature/chat-core`. RED tests are
+> nominally `qa`-owned in tasks.md; authored dev-side as the RED leg of each TDD pair (same
+> dev-driven-TDD precedent as the application+markdown batch). Component tests use Vue Test
+> Utils + i18n install + class-based `data-testid` PageObjects (ADR-009), mirroring the P0
+> `AgentPanelRoot.test.ts` pattern. Vue layer imports chat ports/types via `@/domain/ports` +
+> the InjectionKeys from `@/infrastructure/bridge/ports` (CLAR-CC-007 relaxed those bans).
+
+### T-CC-018 🔨 — composables: `useChatRuntimePort()` + `useMarkdownRenderPort()` (dev)
+
+- **Spec:** SPEC-CC-017, REQ-CC-002.
+- **Files:** `src/ui/composables/useChatRuntimePort.ts` + `useMarkdownRenderPort.ts` (new —
+  inject-or-throw, mirroring `useLoggerPort`); `tests/ui/composables/useChatRuntimePort.test.ts`
+  + `useMarkdownRenderPort.test.ts` (new — resolves the provided port; throws a clear
+  "was not provided" error when absent).
+- **GREEN:** `npx vitest run --project unit tests/ui/composables/*.test.ts` → 4/4. `npx vue-tsc
+  --noEmit -p tsconfig.lint.json` exit 0; eslint + prettier green; no `obsidian`/`node:*` import.
+- **Commit:** `97efe46`.
+- **Outcome:** done. Unblocks the store + components.
+
+### T-CC-019 🧪 → T-CC-020 🔨 — `chatStore` (Pinia) state machine + sink actions (dev TDD)
+
+- **Spec:** SPEC-CC-016 + §6 state machine, REQ-CC-003/004/005/005a/007/009/010/012, EC-1/4/5/7/8/9/10/15.
+- **Files:** `tests/ui/stores/chatStore.test.ts` (new RED — 17 cases: empty/welcome, `canSend`
+  guard, EC-1 no-op, dispatch + history capture, currentNotePath pass-through, the five sink legs,
+  EC-9 ignore-after-cancel, EC-10 usage no content mutation, EC-6 inline error, done→idle / done→error,
+  EC-5 finalise-empty, EC-8 cancel→interrupted→idle, EC-7 not-ready sticky-notice/no-dangling-live,
+  EC-15 `$reset`, EC-4 no second turn while streaming); `src/ui/stores/chatStore.ts` (new — Pinia
+  options store: state `messages`/`status`/`liveAssistantId`/`interruptedId`/`usage`/`errorActive`,
+  getters `isEmpty`/`isStreaming` + the `canSend(text)` action, the `ChatTurnSink` legs, and
+  `sendMessage`/`cancelTurn`/`$reset` driving a bound `RunChatTurnUseCase`-shaped runner).
+- **RED watched:** `npx vitest run --project unit tests/ui/stores/chatStore.test.ts` → module
+  `@/ui/stores/chatStore` unresolved.
+- **GREEN:** 17/17. typecheck exit 0; eslint + prettier green.
+- **Commits:** `01ccd9d` (RED), `bab9e44` (impl).
+- **Outcome:** done.
+- **Deviation:** the bound runner + the start-failure notifier live OUTSIDE reactive state in a
+  module-scoped `WeakMap` keyed by the store instance — so only plain `ChatMessage` DTOs cross the
+  store boundary (ADR-003) and Pinia never wraps a use-case instance reactively. SPEC-CC-016 lists
+  state fields only; the dependency-injection seam (`bindTurnRunner`) is the dev-stage mechanism the
+  surface uses to hand the store its use case (per SPEC-CC-018 "hand it to the store"). EC-7's start-
+  fail path surfaces the sticky notice + sets `errorActive` and resolves `status` to idle with no
+  dangling live message; it does not append a synthetic assistant message (the spec mentions an
+  appended start-fail message, but EC-7's binding constraint is "no dangling live message + sticky
+  notice", which this satisfies — the friendly text is delivered via the notice, not an extra turn).
+
+### T-CC-021 🧪 → T-CC-022 🔨 — `ChatComposer.vue` (dev TDD)
+
+- **Spec:** SPEC-CC-021, TEST-CC-009, REQ-CC-007/008/009/010, EC-1/2/3/4.
+- **Files:** `tests/ui/chat/ChatComposer.test.ts` + `ChatComposer.po.ts` (new RED — 12 cases:
+  render, Enter→submit + preventDefault, EC-1 empty no-op, EC-3 Shift+Enter newline, EC-2 IME-Enter
+  no submit, clear-after-submit, send disabled/enabled, click→submit, EC-4 streaming→stop emits
+  cancel not submit, EC-4 Enter blocked while streaming, Esc→cancel while streaming, Esc no-op while
+  idle); `src/ui/chat/ChatComposer.vue` (new — `<script setup>`; bordered wrapper, auto-grow
+  textarea, send/stop control; the keyboard contract; emits `submit(text)`/`cancel()`; focus on
+  mount + after finalise; owns no chat state — `isStreaming` is a prop). Added the P1 chat i18n keys
+  (`agent.chat.welcome.greeting`, `agent.chat.composer.{placeholder,send,stop}`, `agent.chat.busy`,
+  `agent.chat.interrupted`) to `src/ui/i18n/locales/en.ts` + `de.ts`.
+- **RED watched:** module `@/ui/chat/ChatComposer` unresolved.
+- **GREEN:** 12/12 (+ i18n forbidden-terms + i18n index suites green). typecheck exit 0; eslint +
+  prettier green.
+- **Commits:** `1808552` (RED), `aaa0868` (impl + i18n keys).
+- **Outcome:** done.
+- **Deviation:** textarea auto-grow height is bound through Vue's `:style="{ height }"` (a reactive
+  ref measured via `scrollHeight` on `nextTick`) rather than a direct `element.style.height` write —
+  required to satisfy the `obsidianmd/no-static-styles-assignment` lint rule. Behaviour identical
+  (grows from `--sp-textarea-min-h` toward `--sp-textarea-max-h`). The P1 chat i18n keys for the
+  welcome/busy/interrupted surfaces are added here (first catalogue touch) so T-CC-024/026 consume
+  them; all keys pass the NFR-MPS-011 forbidden-terms guard.
+
+### T-CC-023 🧪 → T-CC-024 🔨 — message render components + `WelcomeGreeting.vue` (dev TDD) 🪓
+
+- **Spec:** SPEC-CC-019/020, TEST-CC-005 (render leg)/008/012/011 (render leg), REQ-CC-004/006/010/011,
+  NFR-CC-008, EC-8/12/14/16.
+- **Files (RED, new):** `tests/ui/chat/{MarkdownBlock,MessageTurn,MessageList,WelcomeGreeting}.test.ts`
+  + co-located `*.po.ts` (data-testid only). `MarkdownBlock`: paragraph split, inline `code` →
+  `md-code`, literal `<`/`&`/`<script>` carried as text (no v-html), empty → 0 paragraphs, reactive
+  re-render on accumulate. `MessageTurn`: `message-user`/`message-assistant` distinct, `data-streaming`,
+  EC-8 interrupted badge, `dir="auto"`. `MessageList`: keyed v-for over `chatStore.messages`, reactive
+  accumulate. `WelcomeGreeting`: brand-neutral i18n greeting, no duration footer, de locale.
+- **Files (impl, new):** `src/ui/chat/{MarkdownBlock,MessageTurn,MessageList,WelcomeGreeting}.vue`.
+  `MarkdownBlock` calls `useMarkdownRenderPort().render(content)` and renders `MarkdownNode[]`
+  DECLARATIVELY (`<p data-testid=md-paragraph>` / `<code data-testid=md-code>` / text spans with
+  `white-space:pre-wrap`) — no `v-html`/`innerHTML`. `MessageTurn` role-distinct + `data-streaming` +
+  `--sp-interrupt` badge + `dir=auto`. `MessageList` keys by `message.id`, auto-scrolls (`scrollTop =
+  scrollHeight`) as the live message grows. `WelcomeGreeting` = serif token greeting, no footer.
+- **RED watched:** the four component modules unresolved.
+- **GREEN:** 18/18. typecheck exit 0; eslint + prettier green; manual hex/raw-obsidian-var scan of
+  `src/ui/chat/*.vue` → none (lint:style-tokens guard does not cover `src/ui/chat/**` by default, so
+  the no-hardcoded-color rule is satisfied by construction + manual scan).
+- **Commits:** `ef07550` (RED), `69131df` (impl).
+- **Outcome:** done.
+- **Deviation:** `MessageTurn` takes `streaming`/`interrupted` as booleans (derived by the parent from
+  `liveAssistantId`/`interruptedId`) rather than reading those ids itself — keeps the turn a pure
+  presentational component; `MessageList` (which reads the store) computes them. Structurally
+  equivalent to SPEC-CC-019's "`id === liveAssistantId`" rule.
+
+### T-CC-025 🧪 → T-CC-026 🔨 — `ChatSurface.vue` container + state-machine wiring (dev TDD) 🪓
+
+- **Spec:** SPEC-CC-018, TEST-CC-004/005/006/010/011 + TEST-CC-013 (A leg), REQ-CC-003/005/009/010/012,
+  EC-4/6/7/8.
+- **Files:** `tests/ui/chat/ChatSurface.test.ts` + `ChatSurface.po.ts` (new RED — 7 cases via a
+  step-gated `ControllableRuntime` + a NotificationPort spy: welcome-when-empty + `data-provider`,
+  send→message-list + busy `aria-live=polite`, per-tick accumulate → "Hello world" before done,
+  done→idle + composer re-enabled, cancel→interrupted + idle, scripted error inline + idle + no
+  `<script>` injection, ensureReady=false → sticky notice + no dangling live message);
+  `src/ui/chat/ChatSurface.vue` (new — `<script setup>`; `data-provider="claude"` root; WelcomeGreeting
+  vs MessageList by `isEmpty`; busy indicator `chat-busy` with `aria-live=polite role=status`; on
+  mount builds `RunChatTurnUseCase` from `useChatRuntimePort()` and binds it via
+  `chatStore.bindTurnRunner` with a `useNotificationPort().showError` start-failure notifier (EC-7);
+  `onBeforeUnmount` → `chatStore.$reset()` cancels the in-flight turn (EC-15); wires composer
+  `submit`→`sendMessage`, `cancel`→`cancelTurn`).
+- **RED watched:** module `@/ui/chat/ChatSurface` unresolved.
+- **GREEN:** 7/7. typecheck exit 0; eslint + prettier green; no hex/raw-var leak.
+- **Commits:** `25feb7b` (RED), `b5bdb41` (impl).
+- **Outcome:** done.
+- **Deviation:** EC-15 is honoured via `ChatSurface.onBeforeUnmount → store.$reset() → runtime.cancel()`
+  rather than a separate `onClose`-stage cancel; `AgentSidebarView.onClose` calling `vueApp.unmount()`
+  fires that hook synchronously during teardown, so "cancel then unmount" holds without duplicate
+  wiring (see T-CC-029).
+
+### T-CC-028 🧪 → T-CC-029 🔨 — wire `ChatSurface` into the sidebar + standalone entry (dev TDD) 🪓
+
+- **Spec:** SPEC-CC-022, TEST-CC-015, REQ-CC-002/014/015, NFR-CC-001, EC-15.
+- **Files:** `tests/ui/chat/mount.test.ts` (new RED — imports `@/ui/main`; asserts `chat-surface` +
+  `data-provider=claude` + welcome render present and `agent-panel-empty` absent — proving both chat
+  ports provided since `ChatSurface.useChatRuntimePort()` would throw otherwise); `src/ui/main.ts`
+  (edited — mounts `ChatSurface` in `ErrorBoundary`, provides `CHAT_RUNTIME_PORT` from
+  `bridge.createChatRuntime()` + `MARKDOWN_RENDER_PORT` from `bridge.createMarkdownRenderPort()`
+  alongside the six core ports); `src/plugin/AgentSidebarView.ts` (edited — same mount + provide
+  swap; `onClose` unmount → `ChatSurface.onBeforeUnmount` cancels the in-flight turn before teardown,
+  EC-15); `tests/ui/main.test.ts` (edited — the P0 TEST-PSR-022 standalone test updated to assert
+  `chat-surface` instead of `agent-panel-empty`, per the batch brief's explicit authorisation).
+- **RED watched:** `tests/ui/chat/mount.test.ts` → `chat-surface` null (view still mounted AgentPanelRoot).
+- **GREEN:** mount + standalone tests 2/2; full chat-UI surface 13 files / 71 tests pass; full unit
+  suite 39 files / 291 tests pass (the run reported 18 vitest worker-startup *timeout* errors under
+  whole-suite parallelism — environmental resource exhaustion, exit code 0, every test file passed;
+  the targeted chat suites are independently green). typecheck exit 0; eslint + prettier + style-tokens
+  green.
+- **Commits:** `698bcc7` (RED), `2b5bf06` (impl).
+- **Outcome:** done. The plugin now mounts the chat surface statically (live sidebar + `npm run dev`).
+- **Deviation:** `AgentPanelRoot.vue` + its direct unit test (`tests/ui/agent/AgentPanelRoot.test.ts`)
+  are LEFT IN PLACE — no longer mounted by any production view, but still exercised by their own
+  direct test (so not dead code) and the `agent.empty.placeholder` i18n key stays referenced. Removing
+  the P0 component is out of this UI-batch scope; flagged for a follow-up if the reviewer wants it gone.
+
+### Batch verification (UI + wire-in)
+
+- `npx vue-tsc --noEmit -p tsconfig.lint.json` exit 0 (no intended-RED remaining — every RED test in
+  this batch was greened by its paired impl within the batch).
+- Targeted chat-UI surface: 13 test files / 71 tests pass (composables, store, all five components,
+  mount, the updated standalone entry, the i18n forbidden-terms + index guards). Full unit suite:
+  39 files / 291 tests pass.
+- eslint + prettier + `npm run lint:style-tokens` green on all changed files. No `v-html`/`innerHTML`/
+  `window.confirm`; no `obsidian`/`node:*` under `src/ui/**`; tokens only (no component hex/raw var).
+- Not run (deferred to the final batch per the brief): T-CC-030 (`npm run dev` smoke), T-CC-031
+  (manual real-CLI), T-CC-032 (`npm run verify` / `build` / `build:web` + parity sign-off + draft PR).
+  `manifest.json` untouched. NOT pushed.
+
+---
+
 ## Hand-back / clarification
 
 ### CLAR-CC-007 — `DELETED_SUBSYSTEM_BAN` blocks the regrown chat/markdown paths — **RESOLVED**

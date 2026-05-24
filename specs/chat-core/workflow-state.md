@@ -4,7 +4,7 @@ area: CC
 current_stage: tasks
 status: active
 last_updated: 2026-05-24
-last_agent: dev (implement — application + markdown batch)
+last_agent: dev (implement — UI + wire-in batch)
 epic: claudian-reboot
 phase: P1
 integration_branch: next
@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (Parts A/B/C; ADR-CC-001 ACCEPTED — human-blessed 2026-05-24, charter §6a)
   spec.md: complete (SPEC-CC-001..023; 23 spec items + 17 TEST-CC scenarios)
   tasks.md: complete (TASKS-CC-001 — 32 T-CC tasks, TDD-ordered; next: /spec:implement)
-  implementation-log.md: in-progress (domain-foundation + infra-runtimes/keys/factory + application/markdown done: T-CC-001..017, 027; CLAR-CC-007 RESOLVED, markdown leg of 011/012 + 013/014/015 + use-case 016/017 landed; ui + wiring batches remain: T-CC-018..026, 028..032)
+  implementation-log.md: in-progress (domain-foundation + infra-runtimes/keys/factory + application/markdown + UI + wire-in done: T-CC-001..029, 027; the chat surface now mounts statically in the sidebar + `npm run dev`; remaining: T-CC-030 npm-run-dev smoke, T-CC-031 manual real-CLI [human], T-CC-032 verify+parity+draft-PR)
   test-plan.md: in-progress (T-CC-001 baseline reference + streaming-feel note recorded; manual legs scheduled)
   parity-screenshots.md: in-progress (T-CC-001 baseline column scaffolded; Specorator column at /spec:review)
   test-report.md: pending
@@ -38,7 +38,7 @@ artifacts:
 | 4. Design | `design.md` | complete (Parts A/B/C; ADR-CC-001 ACCEPTED — human-blessed) |
 | 5. Specification | `spec.md` | complete (SPEC-CC-001..023; 17 TEST-CC; 15 auto + 2 manual) |
 | 6. Tasks | `tasks.md` | complete (TASKS-CC-001 — 32 T-CC tasks) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation + infra-runtimes/keys/factory + application/markdown complete: T-CC-001..017, 027 — 18 commits; CLAR-CC-007 RESOLVED; ui (T-CC-018..026), wiring (T-CC-028..029) + smoke/manual/gate (T-CC-030..032) batches remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation + infra-runtimes/keys/factory + application/markdown + UI + wire-in complete: T-CC-001..029, 027; the chat surface mounts statically in the agent sidebar + standalone `npm run dev`; remaining: T-CC-030 smoke, T-CC-031 manual real-CLI [human], T-CC-032 verify+parity+draft-PR) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -472,4 +472,55 @@ as the visual/parity truth. Reuse the discarded AUX/MPS chat design + `--sp-*` t
                           resolved), so the UI composables and store can wire the ports and the RunChatTurnUseCase
                           directly. Then UI components (T-CC-021/022 composer, T-CC-023/024 render), surface
                           (T-CC-025/026), wiring (T-CC-028/029), and smoke/manual/gate (T-CC-030..032).
+
+2026-05-24 (dev, implement — UI + wire-in batch): executed the UI + wire-in batch of TASKS-CC-001
+                          with strict TDD, one Conventional commit per task, on feature/chat-core. Completed
+                          T-CC-018..026, 028, 029 (T-CC-027 tokens already landed in an earlier batch):
+                          - T-CC-018: useChatRuntimePort()/useMarkdownRenderPort() inject-or-throw composables
+                            (mirror useLoggerPort); 4/4 (97efe46).
+                          - T-CC-019 RED -> T-CC-020: Pinia chatStore — single-thread ChatMessage[] DTOs, the
+                            5-status machine, the ChatTurnSink legs + sendMessage/cancelTurn/$reset driving a
+                            bound RunChatTurnUseCase; EC-1/4/5/7/8/9/10/15; runner+notifier held off reactive
+                            state (WeakMap) so only DTOs cross the boundary; 17/17 (01ccd9d, bab9e44).
+                          - T-CC-021 RED -> T-CC-022: ChatComposer.vue (auto-grow textarea via :style, send/stop,
+                            Enter/Shift+Enter/IME/Esc contract); + the P1 chat i18n keys (welcome/composer/busy/
+                            interrupted) in en+de; 12/12 (1808552, aaa0868).
+                          - T-CC-023 RED -> T-CC-024: MarkdownBlock (declarative nodes, no v-html, EC-14 safe),
+                            MessageTurn (role-distinct + data-streaming + --sp-interrupt badge + dir=auto),
+                            MessageList (keyed v-for + auto-scroll), WelcomeGreeting (serif greeting, no footer);
+                            18/18 (ef07550, 69131df).
+                          - T-CC-025 RED -> T-CC-026: ChatSurface.vue (data-provider=claude; welcome vs list;
+                            busy aria-live=polite; builds RunChatTurnUseCase from useChatRuntimePort() + binds the
+                            store with a sticky-notice start-fail notifier; onBeforeUnmount $reset cancels in-flight
+                            — EC-15); 7/7 (25feb7b, b5bdb41).
+                          - T-CC-028 RED -> T-CC-029: wired ChatSurface into AgentSidebarView.onOpen + src/ui/main.ts
+                            (provide CHAT_RUNTIME_PORT from bridge.createChatRuntime() + MARKDOWN_RENDER_PORT from
+                            bridge.createMarkdownRenderPort() alongside the six core ports; ErrorBoundary kept;
+                            onClose unmount cancels the turn via the surface's onBeforeUnmount); updated the P0
+                            standalone test (TEST-PSR-022) to assert chat-surface; greens TEST-CC-015 (698bcc7,
+                            2b5bf06). The agent-panel-empty placeholder is gone from both live views.
+                          Verification at batch end: `npx vue-tsc --noEmit -p tsconfig.lint.json` exit 0 (no
+                          intended-RED remaining); targeted chat-UI surface 13 files / 71 tests pass; full unit
+                          suite 39 files / 291 tests pass (18 vitest worker-startup *timeout* errors under whole-
+                          suite parallelism — environmental, exit code 0, all files passed; targeted chat suites
+                          independently green). eslint + prettier + lint:style-tokens green on all changed files.
+                          No v-html/innerHTML/window.confirm; no obsidian/node:* under src/ui/**; tokens only.
+                          Not run (deferred to the final batch per the brief): T-CC-030 (npm run dev smoke),
+                          T-CC-031 (manual real-CLI — human-owned), T-CC-032 (npm run verify / build / build:web +
+                          parity sign-off + draft PR). manifest.json untouched. NOT pushed.
+                          Documented deviations (implementation-log.md): (1) chatStore runner/notifier held in a
+                          WeakMap off reactive state (DTO-only boundary) + EC-7 surfaces the start-fail via the
+                          notice, not an extra assistant message; (2) ChatComposer auto-grow via :style binding
+                          (obsidianmd no-static-styles rule); (3) MessageTurn takes streaming/interrupted booleans
+                          from the parent (presentational); (4) EC-15 cancel-then-unmount honoured via
+                          onBeforeUnmount->$reset (no duplicate onClose wiring); (5) AgentPanelRoot.vue + its
+                          direct test left in place (no longer mounted; still test-exercised) — removal flagged
+                          for reviewer follow-up.
+
+                          HAND-OFF -> /spec:implement (final batch: smoke/manual/gate). T-CC-030 (qa — npm run dev
+                          standalone smoke, manual-assisted; record in test-plan.md), T-CC-031 (human — manual
+                          real-CLI in Obsidian + no-secret review, never agent-self-claimed), T-CC-032 (dev —
+                          full npm run verify + npm run test:all + parity sign-off at review + draft PR into next).
+                          The plugin mounts the chat surface statically today (sidebar + npm run dev); the smoke
+                          leg confirms the streaming feel against MockBridge.
 ```

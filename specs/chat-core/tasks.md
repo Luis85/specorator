@@ -357,8 +357,8 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-CC-005
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] Both composables exist, inject-or-throw; no `obsidian`/`node:*` import.
-  - [ ] `npm run typecheck` + `npm run lint` green; implementation-log entry added.
+  - [x] Both composables exist, inject-or-throw; no `obsidian`/`node:*` import.
+  - [x] `npm run typecheck` + `npm run lint` green; implementation-log entry added.
 
 ### T-CC-019 🧪 — RED: `chatStore` (Pinia) state machine + sink actions
 
@@ -375,9 +375,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-CC-017
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/stores/chatStore.test.ts` exists, covering the state machine + sink actions +
+  - [x] `tests/ui/stores/chatStore.test.ts` exists, covering the state machine + sink actions +
         EC-1/5/7/8/9/10/15.
-  - [ ] Tests fail (RED) — `chatStore` does not yet exist.
+  - [x] Tests fail (RED) — `chatStore` does not yet exist. (Watched RED, commit `01ccd9d`.)
 
 ### T-CC-020 🔨 — `chatStore` (Pinia single-thread chat state + `ChatTurnSink`)
 
@@ -392,9 +392,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-CC-019, T-CC-018
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] T-CC-019 tests pass; the 5-status machine matches §6 exactly.
-  - [ ] DTOs only across the store boundary; no `obsidian`/`node:*`/`src/infrastructure/agent/**` import.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] T-CC-019 tests pass (17/17); the 5-status machine matches §6 exactly.
+  - [x] DTOs only across the store boundary; no `obsidian`/`node:*`/`src/infrastructure/agent/**` import.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added. (commit `bab9e44`)
 
 ---
 
@@ -410,9 +410,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-CC-020
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/ChatComposer.test.ts` + co-located `ChatComposer.po.ts` exist, naming
+  - [x] `tests/ui/chat/ChatComposer.test.ts` + co-located `ChatComposer.po.ts` exist, naming
         TEST-CC-009, querying by `data-testid` only.
-  - [ ] Tests fail (RED) — `ChatComposer.vue` does not yet exist.
+  - [x] Tests fail (RED) — `ChatComposer.vue` does not yet exist. (Watched RED, commit `1808552`.)
 
 ### T-CC-022 🔨 — `ChatComposer.vue` (auto-grow textarea + send/stop + keyboard handler)
 
@@ -426,9 +426,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-CC-021
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] TEST-CC-009 passes (Enter/Shift+Enter/IME/empty/Esc/send-stop).
-  - [ ] `<script setup>`; no `v-html`/`innerHTML`/`window.confirm`; no `obsidian` import.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] TEST-CC-009 passes (Enter/Shift+Enter/IME/empty/Esc/send-stop). (12/12)
+  - [x] `<script setup>`; no `v-html`/`innerHTML`/`window.confirm`; no `obsidian` import.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added. (commit `aaa0868`)
 
 ### T-CC-023 🧪 — RED: message render — `MessageList` / `MessageTurn` / `MarkdownBlock` + `WelcomeGreeting` (PageObjects) 🪓
 
@@ -446,9 +446,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Slice plan:** may slice as (a) MarkdownBlock + MessageTurn render tests, (b) MessageList +
   accumulate/auto-scroll tests, (c) WelcomeGreeting tests.
 - **Definition of done:**
-  - [ ] `tests/ui/chat/{MessageList,MessageTurn,MarkdownBlock,WelcomeGreeting}.test.ts` + co-located
+  - [x] `tests/ui/chat/{MessageList,MessageTurn,MarkdownBlock,WelcomeGreeting}.test.ts` + co-located
         `*.po.ts` exist, naming the listed TEST-CC ids, data-testid only.
-  - [ ] Tests fail (RED) — the components do not yet exist.
+  - [x] Tests fail (RED) — the components do not yet exist. (Watched RED, commit `ef07550`.)
 
 ### T-CC-024 🔨 — message render components + `WelcomeGreeting.vue` 🪓
 
@@ -465,10 +465,10 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Estimate:** M
 - **Slice plan:** may slice per component (MarkdownBlock+MessageTurn, MessageList, WelcomeGreeting).
 - **Definition of done:**
-  - [ ] TEST-CC-005, 008, 012, and the TEST-CC-011 render leg pass.
-  - [ ] All components `<script setup>`; **no** `v-html`/`innerHTML`; no `obsidian` import; the
+  - [x] TEST-CC-005, 008, 012, and the TEST-CC-011 render leg pass. (18/18)
+  - [x] All components `<script setup>`; **no** `v-html`/`innerHTML`; no `obsidian` import; the
         `agent.chat.welcome.greeting` key exists in the i18n stub with `en` fallback.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added. (commit `69131df`)
 
 ### T-CC-025 🧪 — RED: `ChatSurface.vue` — state wiring, busy indicator, accumulate, finalise, cancel, error (PageObject) 🪓
 
@@ -485,8 +485,8 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Estimate:** M
 - **Slice plan:** may slice as (a) dispatch+accumulate+finalise, (b) busy/cancel/error states.
 - **Definition of done:**
-  - [ ] `tests/ui/chat/ChatSurface.test.ts` + `ChatSurface.po.ts` exist, naming the listed TEST-CC ids.
-  - [ ] Tests fail (RED) — `ChatSurface.vue` does not yet exist.
+  - [x] `tests/ui/chat/ChatSurface.test.ts` + `ChatSurface.po.ts` exist, naming the listed TEST-CC ids.
+  - [x] Tests fail (RED) — `ChatSurface.vue` does not yet exist. (Watched RED, commit `25feb7b`.)
 
 ### T-CC-026 🔨 — `ChatSurface.vue` (container + state machine wiring)
 
@@ -501,9 +501,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-CC-025
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] TEST-CC-004, 005, 006, 010, 011, 013 (A leg) pass.
-  - [ ] `<script setup>`; no `v-html`/`innerHTML`/`window.confirm`; no `obsidian`/`node:*` import.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] TEST-CC-004, 005, 006, 010, 011, 013 (A leg) pass. (7/7)
+  - [x] `<script setup>`; no `v-html`/`innerHTML`/`window.confirm`; no `obsidian`/`node:*` import.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added. (commit `b5bdb41`)
 
 ---
 
@@ -534,8 +534,8 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-CC-026
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/ui/chat/mount.test.ts` (or equivalent) exists, naming TEST-CC-015, data-testid only.
-  - [ ] Test fails (RED) — the view still mounts `AgentPanelRoot`.
+  - [x] `tests/ui/chat/mount.test.ts` (or equivalent) exists, naming TEST-CC-015, data-testid only.
+  - [x] Test fails (RED) — the view still mounts `AgentPanelRoot`. (Watched RED, commit `698bcc7`.)
 
 ### T-CC-029 🔨 — wire `ChatSurface` into `AgentSidebarView` + `src/ui/main.ts` (provide both ports) 🪓
 
@@ -552,11 +552,11 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Slice plan:** may slice as (a) `AgentSidebarView` wiring + onClose cancel, (b) `src/ui/main.ts`
   standalone wiring.
 - **Definition of done:**
-  - [ ] TEST-CC-015 passes; `chat-surface` present, `agent-panel-empty` absent from the live view.
-  - [ ] Both new ports provided with the six core ports; `onClose` cancels then unmounts (no write
-        to an unmounted store).
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` + `npm run build` + `npm run build:web`
-        green; implementation-log entry added.
+  - [x] TEST-CC-015 passes; `chat-surface` present, `agent-panel-empty` absent from the live view.
+  - [x] Both new ports provided with the six core ports; `onClose` cancels then unmounts (no write
+        to an unmounted store — via `ChatSurface.onBeforeUnmount → store.$reset()`, EC-15).
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+        (`npm run build` / `npm run build:web` deferred to the T-CC-032 verify gate per the batch brief.) (commit `2b5bf06`)
 
 ### T-CC-030 🧪 — `npm run dev` standalone smoke (TEST-CC-016 manual leg)
 
