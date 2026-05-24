@@ -45,18 +45,23 @@ import type { SettingsPort } from '@/domain/ports/SettingsPort';
 import type { VaultPort } from '@/domain/ports/VaultPort';
 import type { SessionLogWriter } from '@/application/chat/SessionLogWriter';
 import { ChatTurnError } from './ChatTurnError';
+import { SYSTEM_PROMPT_ADDENDUM_MHP } from '@/application/agent/SystemPromptAddendum';
 import type { TurnInput } from './TurnInput';
 
 /**
- * Compose the per-turn system suffix. WS-8 (REQ-MPS-039) — a `#`-prefixed
- * draft contributes `instructionSuffix`, which is appended to the stage-aware
- * `systemPromptSuffix` so the two compose rather than overwrite.
+ * Compose the per-turn system suffix. WS-8 (REQ-MPS-039) — `#`-prefixed
+ * `instructionSuffix` composes with the stage-aware `systemPromptSuffix`.
+ * REQ-MHP-032 / SPEC-MHP-039 — the host-side-proposals addendum (statically
+ * inlined per REQ-MHP-033) is appended so the agent always sees the
+ * `pending`-handling contract.
  */
 function composeSystemSuffix(input: TurnInput): string {
 	const extra = input.instructionSuffix ?? '';
-	if (extra === '') return input.systemPromptSuffix;
-	if (input.systemPromptSuffix === '') return extra;
-	return `${input.systemPromptSuffix}\n\n${extra}`;
+	let base: string;
+	if (extra === '') base = input.systemPromptSuffix;
+	else if (input.systemPromptSuffix === '') base = extra;
+	else base = `${input.systemPromptSuffix}\n\n${extra}`;
+	return base === '' ? SYSTEM_PROMPT_ADDENDUM_MHP : `${base}\n\n${SYSTEM_PROMPT_ADDENDUM_MHP}`;
 }
 
 /**
@@ -379,7 +384,10 @@ export class ChatTurnOrchestrator {
 	): Promise<TurnOutcome> {
 		const options: StructuredCliCallOptions = {
 			timeoutMs: 30_000,
-			systemPromptSuffix: input.systemPromptSuffix,
+			// REQ-MHP-032 / SPEC-MHP-039: structured turns also include the
+			// host-side-proposals addendum so the agent treats `pending`
+			// responses identically across free-text and structured modes.
+			systemPromptSuffix: composeSystemSuffix(input),
 			resumeSessionId: ctx.resumeSessionId,
 			onSessionId: ctx.onSessionId,
 		};

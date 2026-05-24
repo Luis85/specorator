@@ -25,7 +25,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { fakeModulePorts, type FakePorts } from '../../../__fakes__/fake-ports'
 
-// @ts-expect-error — production module does not exist yet (T-MHP-072 will add it).
 import { registerObsidianCliReadTools } from '@/infrastructure/obsidian/mcp/registerObsidianCliReadTools'
 
 const TIER_A_TOOL_NAMES = [

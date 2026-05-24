@@ -19,9 +19,8 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-// The SUT does not exist yet — the import itself fails until T-MHP-132 lands.
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-expect-error — module does not exist yet (TDD): production code to be written for T-MHP-132.
+// T-MHP-132 landed `src/application/agent/SystemPromptAddendum.ts`; the TDD
+// `@ts-expect-error` scaffold is removed now that the module exists.
 import { SYSTEM_PROMPT_ADDENDUM_MHP } from '@/application/agent/SystemPromptAddendum'
 
 /**

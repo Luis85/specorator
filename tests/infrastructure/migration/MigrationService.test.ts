@@ -27,7 +27,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { fakeModulePorts, type FakePorts } from '../../__fakes__/fake-ports'
 
-// @ts-expect-error — production module does not exist yet (T-MHP-111 will add it).
 import { MigrationService } from '@/infrastructure/obsidian/MigrationService'
 
 const ROOT_FILE = '.mcp.json'

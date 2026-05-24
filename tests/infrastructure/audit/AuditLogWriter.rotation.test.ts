@@ -27,18 +27,16 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
+import type { AuditRow } from '@/domain/mcp/Proposal'
 import { fakeModulePorts, type FakePorts } from '../../__fakes__/fake-ports'
-// NOTE: this import resolves the not-yet-implemented module per SPEC-MHP-035.
-// Until T-MHP-031 lands, vitest will fail to resolve the module and every test
-// in this file will fail — that is the intended TDD red state for T-MHP-030.
-// @ts-expect-error — production module does not exist yet (T-MHP-031 will add it).
+// NOTE: this import resolves the module added by T-MHP-031 per SPEC-MHP-035.
 import { AuditLogWriter } from '@/infrastructure/obsidian/audit/AuditLogWriter'
 
 const SPECORATOR_FOLDER = '.specorator'
 const AUDIT_LOG = `${SPECORATOR_FOLDER}/mcp-audit.log`
 const TWO_MIB = 2 * 1024 * 1024
 
-function makeRow(idx: number, paths: string[] = ['specs/x/idea.md']): unknown {
+function makeRow(idx: number, paths: string[] = ['specs/x/idea.md']): AuditRow {
   return {
     ts: `2026-05-24T00:00:00.${String(idx).padStart(3, '0')}Z`,
     schema: 1 as const,

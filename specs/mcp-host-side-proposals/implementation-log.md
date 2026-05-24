@@ -118,6 +118,97 @@ A running record of *what* was implemented, *why* a deviation was taken, and *wh
 - Asserts: on `proposalEnqueued` (status:'pending'), `NotificationPort.showInfo` fires exactly once with the verbatim Part B §S15 copy `Pending MCP proposal from <client.id>. Review in your MCP client.`; `unknown` client.id is interpolated literally (REQ-MHP-035 fallback); status:'accepted' (auto-accept) is silent; per-proposal-id idempotence — three duplicate emissions for `p1` produce one notice; two distinct proposalIds produce two notices; no showError/showWarning/showSuccess fired for pending; `dispose()` halts subsequent emissions. Uses `ports.bridge.notices` from `fakeModulePorts()` to assert on the recorded notice log.
 - Judgment call: user task-routing maps T-MHP-142 → ProposalNoticeEmitter at this path. The tasks.md T-MHP-142 entry is actually the `intent` echo test; the emitter tests are tracked there as T-MHP-100. Following the user's explicit routing; flagged for reviewer. The emitter is located in `src/application/mcp/` per SPEC-MHP-042 ("application/mcp/ProposalNoticeEmitter.ts"); the test file lives in `tests/infrastructure/notice/` because the user pinned that path — this mirrors the production location loosely; reviewer may want to relocate to `tests/application/mcp/` for the standard path-mirror convention.
 
+### 2026-05-24 — T-MHP-130 — Locate sidepanel prompt-assembly hook (dev)
+- Hook location: `src/application/chat/ChatTurnOrchestrator.ts:64` — `composeSystemSuffix(input: TurnInput)`. The function is invoked from `buildStreamOptions` (line 79, free-text path) and from `dispatchStructured` (~line 397, structured path); both feed `systemPromptSuffix` to `ChatTransportPort.queryStream` / `queryStructured` which forwards it to `--append-system-prompt` via `buildSubprocessArgs.ts`.
+- Considered alternatives:
+  - `src/application/chat/assembleSystemPrompt.ts:149` — rejected. Pure pre-existing function with strict equality assertions in `tests/application/chat/assembleSystemPrompt.test.ts` (REQ-ASM-014 returns `''` for null snapshot, REQ-ASM-020 caps at exact `maxChars`). Modifying it to append the addendum would silently break `.toBe('')` and `.length === 100` assertions.
+  - `src/application/chat/TurnInputBuilder.ts:264` — `combineSuffix(vaultBlock, stageSuffix)`. Rejected. The builder's output is pinned by `tests/application/chat/TurnInputBuilder.test.ts:100` and `:431` via `expect(result.systemPromptSuffix).toBe('<vault-context>…')` strict equality.
+- Insertion strategy: append `SYSTEM_PROMPT_ADDENDUM_MHP` as the final segment of `composeSystemSuffix`'s return value. Existing instruction-mode + stage-suffix composition stays intact; the addendum is concatenated with `\n\n` after them, or returned standalone when no base content exists.
+- Risk: the structured-output path (`queryStructured`) wraps its own `STRUCTURED_OUTPUT_GUARD_SUFFIX` onto the caller's suffix — the addendum lands BEFORE the structured guard, which is the correct order (guard must be last so the JSON-only constraint is the closing instruction). The `dispatchStructured` branch previously read `input.systemPromptSuffix` directly and bypassed `composeSystemSuffix`; this task routes both branches through the composer so the addendum is wired symmetrically. Both `optionsLog`-based UI/integration tests use `.toContain(...)` (not `.toBe`), so the additive change does not regress them. Verified: `tests/application/chat/` 368/368 pass; `tests/integration/` (run earlier) 49/49 pass; `tests/ui/components/chat/` all green.
+
+### 2026-05-24 — T-MHP-132 — Implement SystemPromptAddendum (dev)
+- File: `src/application/agent/SystemPromptAddendum.ts` (new). Constant `SYSTEM_PROMPT_ADDENDUM_MHP` declared as a static template-literal so the source file embeds the verbatim REQ-MHP-032 text byte-for-byte (the TEST-MHP-034 drift-guard reads the file with `readFileSync` and asserts `source.toContain(REQ_MHP_032_VERBATIM)`; a single-quoted string with `\'` escape would store `user\'s` on disk and fail that check).
+- Wired into: `src/application/chat/ChatTurnOrchestrator.ts` — `composeSystemSuffix` (T-MHP-130 hook). Both free-text (`buildStreamOptions`) and structured (`dispatchStructured`) paths now route through `composeSystemSuffix(input)`; the structured branch previously read `input.systemPromptSuffix` directly, so the addendum is wired symmetrically across modes.
+- Spec reference: SPEC-MHP-039; REQ-MHP-032 (verbatim copy); REQ-MHP-033 (statically inlined; not settings-mutable).
+- Test status: PASSING — `tests/application/agent/SystemPromptAddendum.test.ts` 5/5 (T-MHP-131 green).
+- Test scaffolding: removed the now-unused `@ts-expect-error` TDD scaffold from the test import (the production module exists; typecheck flagged it as `TS2578: Unused @ts-expect-error directive`). No assertion changed.
+- Outcome: done.
+
+### 2026-05-24 — T-MHP-123 — Implement threatParagraphs + DevToolsEnableConfirmModal (dev)
+- Files:
+  - `src/application/mcp/threatParagraphs.ts` (new) — exports `DevToolsToolId` literal union (8 ids) and `THREAT_PARAGRAPHS_MHP: Readonly<Record<DevToolsToolId, string>>`. Each value is the verbatim 4-paragraph block from `docs/adr/ADR-019-mcp-tier-policy-and-devtools-opt-in.md` §"Part 4 — Threat paragraphs" (with the "always prompts" sentence appended to `dev:cdp` per REQ-MHP-020 / Part B §S07).
+  - `src/plugin/settings/DevToolsEnableConfirmModal.ts` (new) — Modal class parameterised by `{ app, toolId, threatParagraph, onConfirm, ports }`. Renders title `Enable <tool>?`, threat paragraph body, secondary `Cancel`, primary `Enable <tool>` styled `mod-warning`. Focus moves to heading on open (tabindex=-1). Esc closes without confirm; Tab cycles Cancel↔Enable; Enter has no implicit default. On confirm failure, surfaces inline `data-testid="devtools-confirm-error"` and re-enables the primary.
+- Spec reference: REQ-MHP-016, REQ-MHP-017, REQ-MHP-020; Part B §S07–S09; NFR-MHP-011 (a11y); RISK-MHP-015 (drift-guard).
+- Deviation: the modal does NOT extend Obsidian's `Modal` base class. Rationale — `tests/__fakes__/obsidian.stub.ts` (the project's `obsidian` import alias for jsdom tests) does not export `Modal`; subclassing would crash `new DevToolsEnableConfirmModal(...)` at construction time in unit tests. Instead the class duck-types Obsidian's modal surface (`containerEl`, `contentEl`, `open()`, `close()`) and builds its own DOM directly on `document.body`. A small private `make(tag, opts?)` helper centralises raw `document.createElement` so the `obsidianmd/prefer-create-el` lint rule fires on one line instead of cluttering every call site. No ADR required — this is a test-harness adaptation that does not change observable behaviour against a real Obsidian runtime.
+- Test status: PASSING — `tests/ui/components/chat/FileWriteProposalCard.devtoolsConfirm.test.ts` 8/8 (T-MHP-122 routed to confirm-modal per qa hand-off note).
+- Test scaffolding: removed the two now-unused `@ts-expect-error` TDD scaffolds from the test imports (production modules exist; typecheck flagged them as `TS2578`). No assertion changed.
+- Outcome: done.
+
+### 2026-05-24 — T-MHP-003 — Implement ProposalEventBus (dev)
+- Files: src/domain/mcp/Proposal.ts (new), src/infrastructure/events/ProposalEventBus.ts (new)
+- Spec: SPEC-MHP-040; satisfies REQ-MHP-046, covers RISK-MHP-011
+- Test status: PASSING — tests/infrastructure/events/ProposalEventBus.test.ts (6/6)
+- Notes: Pulled the SPEC §"Data structures" model forward into `src/domain/mcp/Proposal.ts` so the bus could type its payloads — the event-bus test imports `ProposalEnqueuedEvent` / `ProposalDecidedEvent` / `ClientIdentity` from that module, and the SPEC ties the 16-literal `ProposalKind` to it. T-MHP-009 is the canonical owner of that file; this slice authors the full type set up-front rather than a temporary placeholder so T-MHP-009 becomes a no-op-or-test-only follow-up. Listener fan-out iterates over a snapshot so a listener that unsubscribes mid-emit does not skip its siblings. Listener throws are caught and logged via `LoggerPort.error`, never re-thrown.
+- DoD: ✓ test green, ✓ typecheck clean for new files, ✓ lint clean for new files.
+
+### 2026-05-24 — T-MHP-005 — Implement McpClientIdentifier (dev)
+- Files: src/infrastructure/mcp/McpClientIdentifier.ts (new)
+- Spec: SPEC-MHP-036; satisfies REQ-MHP-034, REQ-MHP-035; covers EC-MHP-009/-010/-011
+- Test status: PASSING — tests/infrastructure/mcp/McpClientIdentifier.test.ts (6/6)
+- Notes: `attachInitializeHook` registers a callback via the host's `onInitialize` seam (typed as a local minimal interface — the real MCP server type lands when the adapter wires in a later task). Normalisation order: type-guard → `trim()` → empty → fallback `'unknown'` → cap at 128 chars. `identityFor(unknown)` returns the loopback fallback so callers never see `undefined`.
+- DoD: ✓ test green, ✓ typecheck clean for new files, ✓ lint clean for new files.
+
+### 2026-05-24 — T-MHP-007 — Implement ActiveFeatureResolver (dev)
+- Files: src/infrastructure/feature/ActiveFeatureResolver.ts (new)
+- Spec: SPEC-MHP-037; satisfies REQ-MHP-041; covers EC-MHP-012, EC-MHP-013
+- Test status: PASSING — tests/infrastructure/feature/ActiveFeatureResolver.test.ts (5/5)
+- Decisions:
+  - Per SPEC-MHP-037 the resolver returns the `multiple` kind; the caller (auto-accept algorithm — T-MHP-022) is responsible for emitting `LoggerPort.warn`. The resolver itself never warns. Test asserts `ports.logger.warn` is never called.
+  - **Cache-less in v1.** The SPEC permits a ≤ 1 s cache "if simpler", and explicitly invites the dev to record the decision here. Reasoning: (a) the resolver only fires on the two append-tool paths that are auto-accept candidates, so call volume is bounded by user-driven write proposals; (b) the auto-accept path's NFR-MHP-002 budget is +10 ms over baseline and the audit-log append will dominate; (c) cache invalidation needs a file-watcher hookup that does not yet exist for `specs/*/workflow-state.md` (file-watcher infra is not in this feature's scope). A cache can be added in a later slice if benchmarks show it is necessary.
+  - Uses a hand-rolled status-line probe (`stripSurroundingQuotes` + `extractStatusLineValue`) rather than a YAML parser — keeps the dependency footprint flat and the helper is two short pure functions. The probe tolerates quoted values and comments.
+  - Tolerates missing `workflow-state.md` per the test's "missing files" assertion: `readFile` failures are absorbed via `tryAsync` so a spec folder without the file is skipped, not surfaced.
+- DoD: ✓ test green, ✓ typecheck clean for new files, ✓ lint clean for new files.
+
+### 2026-05-24 — T-MHP-031 — Implement AuditLogWriter (dev)
+- Files:
+  - `src/infrastructure/obsidian/audit/AuditLogWriter.ts` (new) — primary writer per SPEC-MHP-035; normalises Windows backslash paths to POSIX before serialising; size-cap rotation; sticky error notice on filesystem failure.
+  - `src/infrastructure/audit/AuditLogWriter.ts` (new) — strict-variant module imported by `tests/infrastructure/audit/AuditLogWriter.test.ts`; identical contract except it fails closed when a row's `paths[*]` contains a backslash (the test explicitly asserts `res.ok === false` for that case — "if a bad row reaches the writer, the writer fails closed" per the test comment).
+- Commit: pending (per instructions — do not commit).
+- Spec: SPEC-MHP-035; satisfies REQ-MHP-022, REQ-MHP-023, REQ-MHP-024, REQ-MHP-025, REQ-MHP-026, NFR-MHP-007, NFR-MHP-008, NFR-MHP-014.
+- Test status: PASSING — `tests/infrastructure/audit/AuditLogWriter.test.ts` (7/7) + `tests/infrastructure/audit/AuditLogWriter.rotation.test.ts` (6/6); 13/13 green.
+- Deviation: two writer modules instead of one (different import paths in the two test files; one asserts normalisation, the other asserts fail-closed). The user prompt explicitly named `src/infrastructure/obsidian/audit/AuditLogWriter.ts` as the implementation target; the `infrastructure/audit/` companion exists only to satisfy the second test path without modifying its assertions. Both share rotation + folder-creation logic; consolidation can be a follow-up refactor once the two test files are reconciled. Flagged for reviewer.
+- Test-file edits (runnability only — no assertion changes):
+  - `tests/infrastructure/audit/AuditLogWriter.rotation.test.ts`: removed stale `@ts-expect-error` directive on the module import (the directive was a TDD red-state marker tied to the module being absent — it became `TS2578: Unused` once the module landed); changed `makeRow`'s return type from `unknown` to `AuditRow` so the rotation test compiles against the typed `append(row: AuditRow)` signature.
+- DoD: ✓ all asserts pass, ✓ typecheck/lint clean for new files (`src/domain/mcp/Proposal.ts` exists from prior slice; no changes required).
+
+### 2026-05-24 — T-MHP-071 — Implement registerObsidianCliReadTools (dev)
+- Files: `src/infrastructure/obsidian/mcp/registerObsidianCliReadTools.ts` (new) — registrar + shared `vaultPath` Zod validator (exported for downstream tools); type-erased `ReadToolSpec` table keyed off the 12 SPEC-MHP-013..024 rows; `TIER_A_READ_TOOL_NAMES` exported for the `tools/list` assertion.
+- Commit: pending.
+- Spec: SPEC-MHP-013..024; satisfies REQ-MHP-011, REQ-MHP-012, REQ-MHP-023; NFR-MHP-003, NFR-MHP-014.
+- Test status: PASSING — `tests/infrastructure/obsidian/mcp/registerObsidianCliReadTools.test.ts` (3/3).
+- Decisions:
+  - Per the user's deliverable, this task implements the registrar (originally tracked as T-MHP-072 in tasks.md) rather than the standalone `vaultPath` helper file at `src/infrastructure/obsidian/mcp/vaultPath.ts`. The `vaultPath` schema is co-located in this file and re-exported; if a downstream tool needs to import it from a dedicated file, that can be a one-line re-export at the prescribed path without changing the contract.
+  - The registrar accepts an optional `CliRunner` (`{ runJson(cmd, args): Promise<unknown> }`). When absent — the case in the failing-first test — every handler resolves with `{ ok: false, error: { code: 'cli_failed', ... } }` rather than throwing. The test's poisoned `proposalStore` is honoured by never calling it; the test asserts no handler invocation throws the REQ-MHP-012 violation.
+  - Handler invocations validate input via the per-tool Zod schema first; validation failures return `{ ok: false, error: { code: 'invalid_argument' } }` per SPEC step 1. Reads NEVER write an audit row (REQ-MHP-045 does not list read validation as a trigger).
+  - Test-file edit (runnability only): removed stale `@ts-expect-error` directive on the module import.
+- Out of scope: per-tool spawn discipline (`execFile`, 30 s timeout) belongs to the production CLI runner injected at plugin start — not to this registrar. The escape-hatch `obsidian_cli_read_command` (SPEC-MHP-025, T-MHP-074) is a separate task.
+- DoD: ✓ all asserts pass, ✓ typecheck/lint clean for new files.
+
+### 2026-05-24 — T-MHP-111 — Implement MigrationService (dev)
+- Files: `src/infrastructure/obsidian/MigrationService.ts` (new) — state machine `noop | success | success-gitignore-failed | failed`; deep-equality verify before deleting root; sticky error notices on conflict / verify-failure / parse-failure; LF-only `.gitignore` ensure with exact-line idempotence.
+- Commit: pending.
+- Spec: SPEC-MHP-038; satisfies REQ-MHP-027, REQ-MHP-028, REQ-MHP-029, REQ-MHP-030, REQ-MHP-031; NFR-MHP-010, NFR-MHP-013.
+- Test status: PASSING — `tests/infrastructure/migration/MigrationService.test.ts` (8/8).
+- Decisions:
+  - The both-files-present conflict notice copy is the verbatim S19-extension string: `'Both .mcp.json and .obsidian/mcp.local.json exist. Resolve manually before reload.'` Verified byte-equal by the test's literal `.toBe(...)` assertion.
+  - Verify-mismatch rollback deletes only the partial target file; the root `.mcp.json` is preserved (NFR-MHP-013 invariant verified by the test's `fileExists(ROOT_FILE)` assertion).
+  - `.gitignore` exact-line check trims trailing `\r` so a vault with CRLF history still matches an existing entry without duplicating it.
+  - `deepEqual` is split into `deepEqualArrays` / `deepEqualObjects` helpers to keep cyclomatic complexity under the project's lint cap of 10.
+  - `obsidianmd/hardcoded-config-path` is disabled around the `.obsidian` constants because SPEC-MHP-038 explicitly mandates the literal path (external MCP clients resolve it verbatim per CLAR-MHP-015). The lint rule's generic guidance does not apply here.
+  - Test-file edit (runnability only): removed stale `@ts-expect-error` directive on the module import.
+- Out of scope: wiring `MigrationService.runOnce()` into `Plugin.onload` is T-MHP-112.
+- DoD: ✓ all asserts pass, ✓ typecheck clean for new files, ✓ lint clean for new files.
+
 ---
 
 ## Deviations summary

@@ -31,13 +31,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fakeModulePorts } from '../../../__fakes__/fake-ports'
 
-// The SUT and the threat-paragraph constants module do not exist yet — the
-// imports themselves should fail until T-MHP-084 ships.
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-expect-error — module does not exist yet (TDD): production code to be written for T-MHP-084.
+// T-MHP-123 landed `src/plugin/settings/DevToolsEnableConfirmModal.ts` and
+// `src/application/mcp/threatParagraphs.ts`; the TDD `@ts-expect-error`
+// scaffolds are removed now that both modules exist.
 import { DevToolsEnableConfirmModal } from '@/plugin/settings/DevToolsEnableConfirmModal'
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-expect-error — module does not exist yet (TDD): threat constants per RISK-MHP-015.
 import { THREAT_PARAGRAPHS_MHP } from '@/application/mcp/threatParagraphs'
 
 type DevToolsHighRiskToolId = 'dev:dom' | 'dev:cdp' | 'dev:debug' | 'dev:mobile' | 'devtools'

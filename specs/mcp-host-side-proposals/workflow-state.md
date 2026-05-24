@@ -12,7 +12,7 @@ artifacts:
   design.md: complete
   spec.md: complete
   tasks.md: complete
-  implementation-log.md: pending
+  implementation-log.md: in-progress
   test-plan.md: pending
   test-report.md: pending
   review.md: pending
@@ -33,7 +33,7 @@ artifacts:
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | pending |
+| 7. Implementation | `implementation-log.md` + code | in-progress |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -310,6 +310,41 @@ _None._
                            cross-surface invariant (card observes external
                            accept), .gitignore-failure error class shape.
                            No new CLARs surfaced.
+2026-05-24 (dev):          T-MHP-130 / T-MHP-132 / T-MHP-123 implemented.
+                           Hook for SystemPromptAddendum located at
+                           src/application/chat/ChatTurnOrchestrator.ts
+                           composeSystemSuffix (rejected alternatives in
+                           assembleSystemPrompt.ts + TurnInputBuilder.ts —
+                           both have pinned .toBe equality on the suffix).
+                           Structured-output path (dispatchStructured) now
+                           routes through composeSystemSuffix too, so the
+                           addendum lands symmetrically on free-text +
+                           structured turns. Added 3 src files:
+                           src/application/agent/SystemPromptAddendum.ts,
+                           src/application/mcp/threatParagraphs.ts,
+                           src/plugin/settings/DevToolsEnableConfirmModal.ts.
+                           Verification: tests/application/agent/
+                           SystemPromptAddendum.test.ts (5/5) +
+                           tests/ui/components/chat/FileWriteProposalCard.
+                           devtoolsConfirm.test.ts (8/8) PASS;
+                           tests/application/chat/ 368/368 regression
+                           clean; typecheck + lint clean on changed files
+                           (pre-existing 404-line warning on
+                           ChatTurnOrchestrator.ts shifts to 407; two
+                           pre-existing lint errors on the qa-authored
+                           confirm-modal test file are qa's responsibility,
+                           not in dev scope). Deviation: confirm modal
+                           does NOT extend Obsidian's Modal class because
+                           tests/__fakes__/obsidian.stub.ts does not export
+                           Modal — documented in implementation-log.md
+                           T-MHP-123 entry. Test scaffolding: removed three
+                           now-unused @ts-expect-error directives from the
+                           two target test files (typecheck flagged them as
+                           TS2578); no assertion changed. Implementation-
+                           log artifact remains in-progress: many
+                           WP-MHP-A/B/C/D/E/F/G/H/I tasks still owned by
+                           dev; close-out pending until the rest land.
+                           Next agent: dev (continue WP-MHP backlog).
 ```
 
 ## Open clarifications
