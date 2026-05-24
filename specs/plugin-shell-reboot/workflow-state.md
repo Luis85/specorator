@@ -145,4 +145,18 @@ only at parity.
                           No open question blocks acceptance.
                           Next: /spec:design (architect) — file ADR-PSR-001, resolve
                           Q4/Q5, produce the exact delete list + trimmed main.ts.
+
+2026-05-24 (clarify gate, post-Stage-3): /spec:clarify ran inline (no subagent —
+                          1M-context credit gate declined). 4 findings recorded in
+                          requirements.md Clarifications. User-resolved 2 that amend
+                          requirements: CL-1 = KEEP `locale` + a minimal i18n/
+                          TranslationPort STUB that reads it (live consumer; i18n seam
+                          survives for P7) — amends REQ-PSR-006; CL-2 = the
+                          "no deleted-subsystem references" check is an AUTOMATED guard
+                          (ESLint no-restricted-imports + CI test → durable TEST-PSR),
+                          not manual — amends REQ-PSR-005. CL-3 (open affordance:
+                          command vs ribbon) + CL-4 (Vue mount vs bare ItemView)
+                          deferred to architect. Architect must honour CL-1/CL-2 in
+                          design: keep the minimal translation seam; specify the
+                          deleted-symbol ESLint rule + test seam.
 ```

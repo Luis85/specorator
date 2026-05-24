@@ -355,6 +355,31 @@ decision (deferred to the architect).
   R-PSR-1, delete leaf-first) and the trimmed `main.ts` shape are design concerns. PM
   does not resolve them here.
 
+### `/spec:clarify` gate findings (2026-05-24)
+
+- **CL-1 — `locale` consumer (RESOLVED → amends REQ-PSR-006):** Keeping `locale` in
+  the slim settings while gutting i18n would orphan the field (contradicting
+  REQ-PSR-005). **Resolution:** P0 retains a **minimal i18n / `TranslationPort` stub**
+  that reads `locale`, so the setting has a live consumer and the i18n seam survives
+  for P7. Slim settings stay `{ locale, logLevel }`. Architect must keep (decoupled)
+  the minimal translation seam in the Keep set; planner adds a test that the stub
+  honours `locale`.
+- **CL-2 — REQ-PSR-005 verification mechanism (RESOLVED → amends REQ-PSR-005):** The
+  "no live reference to deleted subsystems" check is an **automated guard**, not a
+  one-time manual review: an ESLint `no-restricted-imports` rule (deleted-symbol /
+  deleted-path patterns) plus a CI-run test that fails on any deleted-symbol
+  reference. This becomes a durable `TEST-PSR-*` and is regression-proof against a
+  later phase re-introducing a deleted name. Architect specifies the rule + test seam;
+  it runs inside the existing lint/test gate (no new gate step).
+- **CL-3 — open affordance for the empty view (DEFERRED → architect):** REQ-PSR-002
+  names "the command/affordance that opens the view" without choosing command-palette
+  entry vs ribbon icon vs both. Architect picks the single open path (consistent with
+  REQ-PSR-003's one-affordance rule).
+- **CL-4 — Vue mount vs bare `ItemView` (DEFERRED → architect):** Whether the empty
+  agent sidebar view mounts the Vue app (exercising the kept UI/port-provide/
+  `ErrorBoundary` machinery, relevant to NFR-PSR-002 coverage) or renders bare DOM is
+  an architecture decision. Architect decides in Stage 4.
+
 ---
 
 ## Quality gate
