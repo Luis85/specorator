@@ -6,7 +6,7 @@ feature: threads-sessions
 area: TS
 epic: claudian-reboot
 phase: P3
-status: draft        # held until the architect's P3 ADRs (CLAR-TS-001..004) are recorded + accepted
+status: accepted     # unblocked: ADR-TS-001/002/003 recorded + accepted (CLAR-TS-001..004 resolved, autonomous drive 2026-05-25)
 owner: pm
 integration_branch: next
 reference: D:\Projects\claudian-main   # MIT, read-only parity reference
@@ -715,5 +715,9 @@ What must be true to ship P3 (to merge `feature/threads-sessions` → `next` in 
 - [x] NFRs listed with targets (inherited from epic constraints; restated, not linked).
 - [x] Success metrics defined (including a scope-leakage counter-metric).
 - [x] Release criteria stated.
-- [ ] `/spec:clarify` returned no open questions — **held**: CLAR-TS-001..004 are open by design,
-      owned by the architect's P3 ADRs (autonomous drive). PRD stays `draft` until they resolve.
+- [x] `/spec:clarify` returned no open questions — **resolved**: CLAR-TS-001..004 decided by the
+      architect's P3 ADRs (autonomous drive, 2026-05-25): CLAR-TS-001/003 → ADR-TS-001 (vault-file
+      history + `ProviderHistoryPort`, fork-as-derive, `HomeFsPort` deferred to P9); CLAR-TS-002 +
+      CLAR-TS-003 runtime half → ADR-TS-002 (N-tab `tabsStore`, router stays removed, additive
+      `ChatRuntimePort` resume/rewind/`getCapabilities` growth); CLAR-TS-004 → ADR-TS-003
+      (cold-start side-query title-gen, `AuxModelPort` deferred to P4/P5). PRD advanced to `accepted`.

@@ -68,6 +68,9 @@ The P0 reboot (`ADR-PSR-001`) **keeps the architectural skeleton** and
 | ADR-CC-001 | ChatRuntime port shape (async-generator `query` + per-phase setter growth) | **Proposed** — P1 (pending human sign-off, charter §6a) |
 | ADR-RR-001 | Rich block model + render seam (typed `toolUseResult`, per-type block components, Obsidian-backed markdown, `IconPort`) | **Accepted** — P2 (§3 sync markdown backing superseded by ADR-RR-002; §1/§2/§4 in force) |
 | ADR-RR-002 | Async `MarkdownRenderPort.render` backed by Obsidian's real `MarkdownRenderer`, walked to the unchanged `SafeRenderResult` DTO | **Accepted** — P2 (human-directed; supersedes ADR-RR-001 §3) |
+| ADR-TS-001 | Persist conversation history to vault files behind a narrow `ProviderHistoryPort` (fork = derive-not-copy; `HomeFsPort` deferred to P9) | **Accepted** — P3 (autonomous-drive; resolves CLAR-TS-001/003) |
+| ADR-TS-002 | Generalise the single-thread store to an N-tab `tabsStore`; grow `ChatRuntimePort` additively for resume/rewind/fork; router stays removed | **Accepted** — P3 (autonomous-drive; resolves CLAR-TS-002 + CLAR-TS-003 runtime half) |
+| ADR-TS-003 | Generate titles via a cold-start side-query on `ChatRuntimePort.query` behind a `GenerateTitleUseCase`; `AuxModelPort` deferred to P4/P5 | **Accepted** — P3 (autonomous-drive; resolves CLAR-TS-004) |
 
 > Two files share the number `0030` (`ifeatureservice-interface-for-di` and
 > `structured-json-output-via-json-schema`) — a pre-existing numbering collision,

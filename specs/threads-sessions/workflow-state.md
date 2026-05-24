@@ -1,10 +1,10 @@
 ---
 feature: threads-sessions
 area: TS
-current_stage: requirements
+current_stage: design
 status: active
 last_updated: 2026-05-25
-last_agent: pm (requirements)
+last_agent: architect (design)
 epic: claudian-reboot
 phase: P3
 integration_branch: next
@@ -12,8 +12,8 @@ reference: D:\Projects\claudian-main
 artifacts:
   idea.md: skipped (charter §3.2 + audits + claudian-main stand in, mirrors P1/P2)
   research.md: skipped (charter §3.2 + audits + claudian-main stand in)
-  requirements.md: draft (PRD-TS-001; in-progress — held until CLAR-TS-001..004 ADRs recorded)
-  design.md: pending
+  requirements.md: accepted (PRD-TS-001; CLAR-TS-001..004 resolved by ADR-TS-001/002/003)
+  design.md: complete (DESIGN-TS-001; Parts A/B/C; ADR-TS-001/002/003 accepted)
   spec.md: pending
   tasks.md: pending
   implementation-log.md: pending
@@ -33,8 +33,8 @@ artifacts:
 |---|---|---|
 | 1. Idea | `idea.md` | skipped |
 | 2. Research | `research.md` | skipped |
-| 3. Requirements | `requirements.md` | in-progress (draft — PRD-TS-001) |
-| 4. Design | `design.md` | pending |
+| 3. Requirements | `requirements.md` | accepted (PRD-TS-001) |
+| 4. Design | `design.md` | complete (DESIGN-TS-001) |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
@@ -149,4 +149,62 @@ self-parity-review vs claudian after each big chunk; merge P3 to `next` autonomo
                           COMMAND WORDS are P4 composer triggers — P3 exposes those actions via
                           buttons/menus only (NG1). (4) home-dir / Codex-JSONL / Opencode-ACP history
                           is OUT (NG8) — P3 exercises only the Claude vault path.
+
+2026-05-25 (architect, design): DESIGN-TS-001 written (Parts A/B/C) →
+                          specs/threads-sessions/design.md. CLAR-TS-001..004 RESOLVED; the four P3
+                          ADRs FILED + ACCEPTED (autonomous drive — architect files, PM accepts, human
+                          defers to one final epic-review gate):
+                            - ADR-TS-001 (docs/adr/ADR-TS-001-conversation-history-persistence-and-
+                              provider-history-port.md) — CLAR-TS-001 + CLAR-TS-003: conversation
+                              transcripts persist to VAULT FILES via VaultPort (default
+                              .specorator/sessions/<id>.json, configurable PluginSettings.sessionsFolder)
+                              — never data.json, never device-local, never a secret. New narrow
+                              ProviderHistoryPort (listSessions/hydrate/save/updateMeta/delete/
+                              resolveSessionId/buildForkPlan), Result-returning, own InjectionKey +
+                              composable, bridge-factory-provided (createProviderHistoryPort()). Fork =
+                              DERIVE provider-state (forkSource pointer + truncated transcript), NOT a
+                              file copy. ConversationRecord{meta,messages,providerState}; ConversationMeta
+                              {id,title,titleManual,createdAt,updatedAt,providerId,sessionId}. 3 bridges:
+                              Obsidian=vault files, Mock=in-memory Map, LocalStorage=fixture. HomeFsPort /
+                              Codex-JSONL / Opencode history DEFERRED to P9 (NG8). No migration
+                              (load-or-default), no secret in any record.
+                            - ADR-TS-002 (docs/adr/ADR-TS-002-multi-thread-tabs-store-and-additive-
+                              runtime-growth.md) — CLAR-TS-002 + CLAR-TS-003 runtime half: ONE tabsStore
+                              (Option A) keyed by tab id holding N TabState DTOs + activeTabId; runners
+                              stay OUT of reactive state in a per-TabId WeakMap (the P1 pattern,
+                              generalised); one ChatRuntimePort instance PER TAB → per-tab streaming
+                              isolation by construction. Vue Router STAYS REMOVED (tabs = in-surface
+                              state, not routing). ChatRuntimePort grows ADDITIVELY: resumeSession,
+                              setResumeCheckpoint, getCapabilities():RuntimeCapabilities{supportsFork,
+                              supportsRewind}. ChatMessage gains optional userMessageId/assistantMessageId/
+                              resumeAtMessageId (pre-flagged P3 growth) → rewind-eligibility is a pure
+                              app fn. Conversation-only rewind EXECUTES; code-and-conversation GATED
+                              (no fs/git, notice — NG7). MIN_TABS=1 (vs Claudian floor 3), MAX clamp 1..10,
+                              default 3.
+                            - ADR-TS-003 (docs/adr/ADR-TS-003-title-generation-side-query-seam.md) —
+                              CLAR-TS-004: title-gen = COLD-START SIDE-QUERY over ChatRuntimePort.query
+                              behind a GenerateTitleUseCase (Result<string>); ported pure prompt/parse
+                              fns; immediate fallback → async AI title → manual-rename wins; failure keeps
+                              fallback, NO blocking error; spin status. AuxModelPort DEFERRED to P4/P5
+                              (instruction-refine / inline-edit) — upgrade is additive. NO new port in P3.
+                          All additive over P1 nine-member ChatRuntimePort + P1/P2 ChatMessage
+                          (REQ-TS-028); provider-addressed, zero provider branches (REQ-TS-026); one
+                          Claude impl (REQ-TS-027). README index rows added for all three ADRs. PRD-TS-001
+                          advanced draft → ACCEPTED.
+
+                          HAND-OFF → /spec:specify (architect). Build the implementation-ready spec.md
+                          (SPEC-TS-001..) on these ADRs. Open clarifications for /spec:specify:
+                            (1) Exact PluginSettings.sessionsFolder + maxTabs field shapes + validation
+                                (design blesses default .specorator/sessions, maxTabs default 3 clamp 1..10,
+                                MIN_TABS=1).
+                            (2) Fork-target options in P3 — design recommends NEW-TAB primary; decide
+                                whether current-tab fork ships in P3 or defers.
+                            (3) ConversationRecord JSON serialisation/versioning detail (no migration, but
+                                a version tag for future-proofing is a /spec:specify call).
+                          Reuse the P2 context_compacted block + onContextCompacted sink leg for compact
+                          (no new render machinery). Preserve the Result/error-as-chunk boundary
+                          (ADR-CC-001 §1/§2) and DTO-only store (ADR-003). Tests mirror src/ + data-testid
+                          PageObjects; coverage 80/70/80/80; --sp-* parity; no v-html / no window.confirm
+                          (Obsidian Modal for fork-target + delete-confirm). Parity-screenshot capture for
+                          the 7 sub-surfaces accumulates to the single final human review gate.
 ```
