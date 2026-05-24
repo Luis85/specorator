@@ -13,8 +13,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { useChatStore } from '@/ui/stores/chatStore';
-import type { ChatTurnSink, RunChatTurnInput } from '@/application/chat/RunChatTurnUseCase';
-import { ChatTurnError } from '@/application/chat/RunChatTurnUseCase';
+import type {
+	ChatTurnSink,
+	RunChatTurnInput,
+	ChatTurnError,
+} from '@/application/chat/RunChatTurnUseCase';
 import { ok, type Result } from '@/domain/shared/Result';
 import type { LoggerPort } from '@/domain/ports';
 import type { ContentBlock } from '@/domain/chat/ContentBlock';
@@ -314,7 +317,9 @@ describe('chatStore P2 sink legs (SPEC-RR-020)', () => {
 
 		it('onNotice does not crash and is a no-op when not streaming', () => {
 			const { store } = freshStore();
-			expect(() => store.onNotice('heads up', 'info')).not.toThrow();
+			expect(() => {
+				store.onNotice('heads up', 'info');
+			}).not.toThrow();
 			expect(store.messages).toEqual([]);
 		});
 	});

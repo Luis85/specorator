@@ -5,6 +5,7 @@ import { storeToRefs } from 'pinia';
 import { useChatStore } from '@/ui/stores/chatStore';
 import { useChatRuntimePort } from '@/ui/composables/useChatRuntimePort';
 import { useNotificationPort } from '@/ui/composables/useNotificationPort';
+import { useLoggerPort } from '@/ui/composables/useLoggerPort';
 import { RunChatTurnUseCase } from '@/application/chat/RunChatTurnUseCase';
 import WelcomeGreeting from './WelcomeGreeting.vue';
 import MessageList from './MessageList.vue';
@@ -25,12 +26,17 @@ const { isEmpty, isStreaming } = storeToRefs(chat);
 
 const runtime = useChatRuntimePort();
 const notify = useNotificationPort();
+const logger = useLoggerPort();
 
 onMounted(() => {
 	const useCase = new RunChatTurnUseCase(runtime);
-	chat.bindTurnRunner(useCase, (message) => {
-		notify.showError(message);
-	});
+	chat.bindTurnRunner(
+		useCase,
+		(message) => {
+			notify.showError(message);
+		},
+		logger,
+	);
 });
 
 // EC-15: abort any in-flight turn and clear state before the surface unmounts so
