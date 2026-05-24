@@ -137,9 +137,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-CC-004
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] Both `InjectionKey`s exported, typed against `@/domain/ports`.
-  - [ ] `npm run typecheck` + `npm run lint` green; no re-introduced deleted-symbol.
-  - [ ] Implementation-log entry added.
+  - [x] Both `InjectionKey`s exported, typed against `@/domain/ports`.
+  - [x] `npm run typecheck` + `npm run lint` green; no re-introduced deleted-symbol.
+  - [x] Implementation-log entry added.
 
 ---
 
@@ -183,8 +183,8 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-CC-004
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/infrastructure/localstorage/FixtureChatRuntime.test.ts` exists, naming TEST-CC-016.
-  - [ ] Test fails (RED) — `FixtureChatRuntime` does not yet exist.
+  - [x] `tests/infrastructure/localstorage/FixtureChatRuntime.test.ts` exists, naming TEST-CC-016.
+  - [x] Test fails (RED) — `FixtureChatRuntime` does not yet exist.
 
 ### T-CC-009 🔨 — `FixtureChatRuntime` (GitHub Pages demo runtime)
 
@@ -196,9 +196,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-CC-008
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] TEST-CC-016 (U leg) passes for the fixture runtime.
-  - [ ] Implements `ChatRuntimePort`; replays the fixture believably; no `node:*`/subprocess.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] TEST-CC-016 (U leg) passes for the fixture runtime.
+  - [x] Implements `ChatRuntimePort`; replays the fixture believably; no `node:*`/subprocess.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-CC-010 🔨 — `ClaudeCliChatRuntime` (spawn + NDJSON→`StreamChunk` reduce)
 
@@ -219,13 +219,13 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-CC-004
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] Implements `ChatRuntimePort` (9 members); reads/writes **no** API key/token/secret (no
+  - [x] Implements `ChatRuntimePort` (9 members); reads/writes **no** API key/token/secret (no
         `data.json`/`SecretStorePort` access — verifiable by source review).
-  - [ ] `cancel()` kills the child manually; `query` never throws across the port (synthetic `error`
+  - [x] `cancel()` kills the child manually; `query` never throws across the port (synthetic `error`
         + return on unexpected fault).
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run build` green; no `obsidian`/`node:*` leak
-        outside this infra file's allowed scope.
-  - [ ] Implementation-log entry added; the manual TEST-CC-017 (T-CC-026) is scheduled in `test-plan.md`.
+  - [x] `npm run typecheck` + `npm run lint` green; no `obsidian`/`node:*` leak outside this infra
+        file's allowed scope. (`npm run build` deferred to the T-CC-032 verify gate per the batch brief.)
+  - [x] Implementation-log entry added; the manual TEST-CC-017 (T-CC-031) is scheduled in `test-plan.md`.
 
 ### T-CC-011 🧪 — RED: per-bridge `createChatRuntime()` + markdown port (all three bridges)
 
@@ -239,8 +239,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-CC-007, T-CC-009
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/infrastructure/.../createChatRuntime.test.ts` (mock + fixture) exist, naming TEST-CC-016.
-  - [ ] Tests fail (RED) — the factory methods do not yet exist.
+  - [x] `tests/infrastructure/mock/createChatRuntime.test.ts` (mock + fixture runtimes) exists, naming
+        TEST-CC-016 (runtime-factory leg). Markdown-port leg deferred — CLAR-CC-007.
+  - [x] Tests fail (RED) — the factory methods do not yet exist.
 
 ### T-CC-012 🔨 — `createChatRuntime()` factory + markdown port on all three bridges 🪓
 
@@ -256,9 +257,10 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Slice plan:** may slice as (a) Mock+LocalStorage factory + markdown port (CI-greens TEST-CC-016)
   then (b) ObsidianBridge factory wiring (coverage-excluded, lands with T-CC-010).
 - **Definition of done:**
-  - [ ] TEST-CC-016 (factory U leg) passes; each call returns a distinct instance.
-  - [ ] All three bridges expose the markdown port backed by `safeMarkdownRender`.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] TEST-CC-016 (factory U leg) passes; each call returns a distinct instance. (Slice a+b runtime leg.)
+  - [ ] All three bridges expose the markdown port backed by `safeMarkdownRender`. **BLOCKED — CLAR-CC-007**
+        (`DELETED_SUBSYSTEM_BAN` bans `@/application/chat/**` + `MarkdownRenderPort`; needs architect/pm).
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green (runtime leg); implementation-log entry added.
 
 ---
 
