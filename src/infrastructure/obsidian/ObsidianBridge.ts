@@ -1,5 +1,14 @@
-import { FileSystemAdapter, Notice, TFile, TFolder, normalizePath, setIcon as obsidianSetIcon, type App } from 'obsidian';
-import type { PluginSettings } from '@/domain/settings/PluginSettings';
+import {
+	FileSystemAdapter,
+	Notice,
+	TFile,
+	TFolder,
+	normalizePath,
+	setIcon as obsidianSetIcon,
+	type App,
+} from 'obsidian';
+import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings';
+import { trySync } from '@/domain/shared/tryAsync';
 import type {
 	SettingsPort,
 	VaultPort,
@@ -40,11 +49,10 @@ export class ObsidianBridge
 
 	private readonly _activeNotices = new Set<Notice>();
 
-	constructor(
-		private readonly app: App,
-		private readonly settingsGetter: () => PluginSettings,
-		private readonly onSaveSettings: (settings: PluginSettings) => Promise<void>,
-	) {}
+	/** Stable device-local key for the user/device-scoped settings blob (ADR-PSR-002). */
+	private static readonly _SETTINGS_KEY = 'specorator:settings';
+
+	constructor(private readonly app: App) {}
 
 	async readFile(path: string): Promise<string> {
 		const normalized = normalizePath(path);
@@ -195,15 +203,45 @@ export class ObsidianBridge
 	}
 
 	async getSettings(): Promise<PluginSettings> {
-		return { ...this.settingsGetter() };
+		return this._readDeviceLocalSettings();
 	}
 
 	async saveSettings(settings: PluginSettings): Promise<void> {
-		await this.onSaveSettings(settings);
+		// Device-local store (ADR-PSR-002 / REQ-PSR-013): never data.json
+		// (NFR-PSR-010). The settings blob is git-committed + Obsidian-Sync'd
+		// from data.json on collaborative vaults, so per-device prefs must not
+		// live there.
+		this.app.saveLocalStorage(ObsidianBridge._SETTINGS_KEY, JSON.stringify(settings));
+	}
+
+	/**
+	 * Load-or-default read of the device-local settings blob (CHARTER-REQ-FRESH /
+	 * NG8 — no migration). Returns DEFAULT_SETTINGS when nothing is stored or the
+	 * blob is unparseable. Field-level validation happens at write time
+	 * (coreSettingsModule.validateSettings via plugin.updateSettings); this read
+	 * is the defensive load-or-default boundary.
+	 */
+	private _readDeviceLocalSettings(): PluginSettings {
+		const raw: unknown = this.app.loadLocalStorage(ObsidianBridge._SETTINGS_KEY);
+		if (typeof raw !== 'string') return { ...DEFAULT_SETTINGS };
+		const parsed = trySync(() => JSON.parse(raw) as unknown);
+		if (!parsed.ok || parsed.value === null || typeof parsed.value !== 'object') {
+			return { ...DEFAULT_SETTINGS };
+		}
+		const obj = parsed.value as Partial<Record<keyof PluginSettings, unknown>>;
+		const levels = ['debug', 'info', 'warn', 'error'] as const;
+		const locale =
+			typeof obj.locale === 'string' && obj.locale.trim() ? obj.locale : DEFAULT_SETTINGS.locale;
+		const rawLevel = obj.logLevel;
+		const logLevel =
+			typeof rawLevel === 'string' && (levels as readonly string[]).includes(rawLevel)
+				? (rawLevel as PluginSettings['logLevel'])
+				: DEFAULT_SETTINGS.logLevel;
+		return { locale, logLevel };
 	}
 
 	private _shouldLog(level: 'debug' | 'info' | 'warn' | 'error'): boolean {
-		const configured = this.settingsGetter().logLevel;
+		const configured = this._readDeviceLocalSettings().logLevel;
 		return (
 			(ObsidianBridge._LEVEL_RANK[level] ?? 0) >= (ObsidianBridge._LEVEL_RANK[configured] ?? 0)
 		);
