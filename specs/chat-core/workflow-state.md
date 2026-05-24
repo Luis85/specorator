@@ -1,10 +1,10 @@
 ---
 feature: chat-core
 area: CC
-current_stage: specification
+current_stage: tasks
 status: active
 last_updated: 2026-05-24
-last_agent: architect (specification)
+last_agent: planner (tasks)
 epic: claudian-reboot
 phase: P1
 integration_branch: next
@@ -14,8 +14,8 @@ artifacts:
   research.md: skipped (charter §3 + frontend/backend audits serve as research)
   requirements.md: accepted (PRD-CC-001 — Claudian-grounded; ADR-CC-001 human-blessed 2026-05-24)
   design.md: complete (Parts A/B/C; ADR-CC-001 ACCEPTED — human-blessed 2026-05-24, charter §6a)
-  spec.md: complete (SPEC-CC-001..023; 23 spec items + 17 TEST-CC scenarios; next: /spec:tasks)
-  tasks.md: pending
+  spec.md: complete (SPEC-CC-001..023; 23 spec items + 17 TEST-CC scenarios)
+  tasks.md: complete (TASKS-CC-001 — 32 T-CC tasks, TDD-ordered; next: /spec:implement)
   implementation-log.md: pending
   test-plan.md: pending
   test-report.md: pending
@@ -33,10 +33,10 @@ artifacts:
 |---|---|---|
 | 1. Idea | `idea.md` | skipped (charter + audits stand in) |
 | 2. Research | `research.md` | skipped (frontend/backend audits stand in) |
-| 3. Requirements | `requirements.md` | in-progress (PRD-CC-001 revised to Claudian ground-truth; CLAR-CC-001 ADR drafted, awaiting human bless) |
+| 3. Requirements | `requirements.md` | accepted (PRD-CC-001 — Claudian ground-truth; ADR-CC-001 human-blessed 2026-05-24) |
 | 4. Design | `design.md` | complete (Parts A/B/C; ADR-CC-001 ACCEPTED — human-blessed) |
 | 5. Specification | `spec.md` | complete (SPEC-CC-001..023; 17 TEST-CC; 15 auto + 2 manual) |
-| 6. Tasks | `tasks.md` | pending |
+| 6. Tasks | `tasks.md` | complete (TASKS-CC-001 — 32 T-CC tasks) |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
@@ -311,4 +311,35 @@ as the visual/parity truth. Reuse the discarded AUX/MPS chat design + `--sp-*` t
                           resolved; EC-5 resolved in spec).
 
                           Recommended next command: /spec:tasks (planner).
+
+2026-05-24 (planner, tasks): tasks.md COMPLETE at specs/chat-core/tasks.md
+                          (TASKS-CC-001 — 32 tasks T-CC-001..032). TDD-ordered: every RED test
+                          task (owner qa) precedes the impl task (owner dev) that greens it; each
+                          dev task's first DoD line is "the prior RED test(s) now pass". Ordered by
+                          DDD inward layering: domain types/ports (T-CC-002..005) → infrastructure
+                          ClaudeCliChatRuntime + Mock/Fixture runtimes + per-bridge createChatRuntime
+                          factory + markdown port (T-CC-006..012) → application safeMarkdownRender +
+                          MarkdownRenderPort + RunChatTurnUseCase (T-CC-013..017) → ui composables +
+                          chatStore + ChatComposer/MessageList/MessageTurn/MarkdownBlock/Welcome +
+                          ChatSurface (T-CC-018..026) → --sp-* tokens (T-CC-027) → wire into
+                          AgentSidebarView + ui/main.ts (T-CC-028..029) → smoke/manual/gate
+                          (T-CC-030..032). Each Vue component task pairs a data-testid PageObject
+                          (ADR-009). Picked up the architect's open items: (1) baseline-capture FIRST
+                          (T-CC-001, NFR-CC-011); (2) the 8 new --sp-* tokens (T-CC-027); (3)
+                          MARKDOWN_RENDER_PORT wiring enumerated (T-CC-005 keys, T-CC-015 adapter,
+                          T-CC-012 bridge expose, T-CC-029 provide); (4) ClaudeCliChatRuntime
+                          coverage-excluded → its sole gate is the MANUAL human-run TEST-CC-017
+                          (T-CC-031, never self-claimed). Coverage table proves all 23 SPEC-CC + all
+                          15 REQ-CC + 14 NFR-CC + all 17 TEST-CC map to >=1 task. Parity screenshots
+                          (320/520/720 x light+dark x 5 states) flagged as a review-stage human task
+                          inside the Feature-DoD gate (T-CC-032, draft PR into next). No production
+                          code written; no commit. No open clarifications block implementation
+                          (CLAR-CC-001..005 resolved; EC-5 finalise-empty resolved in spec).
+
+                          HAND-OFF → /spec:implement. First ready task (qa): T-CC-002 (RED —
+                          StreamChunk union + ChatRuntimePort 9-member structural tests; no deps).
+                          First dev task: T-CC-003 (domain chat types, greens TEST-CC-002, depends
+                          on T-CC-002). T-CC-001 (baseline, dev) and T-CC-027 (tokens, dev) have no
+                          deps and may run in parallel anytime before the T-CC-032 gate.
+                          Recommended next command: /spec:implement (qa picks up T-CC-002).
 ```
