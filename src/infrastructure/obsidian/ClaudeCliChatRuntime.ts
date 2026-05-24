@@ -186,8 +186,21 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 		const child = spawn(binary, [...argv], opts);
 		this.child = child;
 
-		child.stdin?.write(prompt);
-		child.stdin?.end();
+		// EPIPE guard (Codex review #433): if the CLI exits before/while consuming
+		// stdin (immediate startup failure, early termination), writing the prompt
+		// emits an 'error' on the stdin stream. Unhandled, that EPIPE crashes the
+		// process. Swallow it — the child 'close'/'error' handlers below end the
+		// stream and the reducer's finalize() still yields a terminal chunk.
+		const stdin = child.stdin;
+		if (stdin !== null) {
+			stdin.on('error', (e: unknown) => {
+				this.logger?.debug('claude-cli.stdin_error', {
+					detail: e instanceof Error ? e.message : String(e),
+				});
+			});
+			stdin.write(prompt);
+			stdin.end();
+		}
 
 		const state = { queue: [] as string[], buffer: '', finished: false };
 		let resolveNext: (() => void) | null = null;
