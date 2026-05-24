@@ -16,8 +16,9 @@ artifacts:
   design.md: complete (Parts A/B/C; ADR-CC-001 ACCEPTED — human-blessed 2026-05-24, charter §6a)
   spec.md: complete (SPEC-CC-001..023; 23 spec items + 17 TEST-CC scenarios)
   tasks.md: complete (TASKS-CC-001 — 32 T-CC tasks, TDD-ordered; next: /spec:implement)
-  implementation-log.md: pending
-  test-plan.md: pending
+  implementation-log.md: in-progress (domain-foundation batch done: T-CC-001..004, 006, 007, 027; infra/app/ui/wiring batches remain)
+  test-plan.md: in-progress (T-CC-001 baseline reference + streaming-feel note recorded; manual legs scheduled)
+  parity-screenshots.md: in-progress (T-CC-001 baseline column scaffolded; Specorator column at /spec:review)
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -37,7 +38,7 @@ artifacts:
 | 4. Design | `design.md` | complete (Parts A/B/C; ADR-CC-001 ACCEPTED — human-blessed) |
 | 5. Specification | `spec.md` | complete (SPEC-CC-001..023; 17 TEST-CC; 15 auto + 2 manual) |
 | 6. Tasks | `tasks.md` | complete (TASKS-CC-001 — 32 T-CC tasks) |
-| 7. Implementation | `implementation-log.md` + code | pending |
+| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation batch complete: T-CC-001, 002, 003, 004, 006, 007, 027 — 7 commits; infra runtimes/factory, application, ui, wiring batches remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -342,4 +343,43 @@ as the visual/parity truth. Reuse the discarded AUX/MPS chat design + `--sp-*` t
                           on T-CC-002). T-CC-001 (baseline, dev) and T-CC-027 (tokens, dev) have no
                           deps and may run in parallel anytime before the T-CC-032 gate.
                           Recommended next command: /spec:implement (qa picks up T-CC-002).
+
+2026-05-24 (dev, implement — domain-foundation batch): executed the domain-foundation
+                          batch of TASKS-CC-001 with strict TDD, one Conventional commit per task,
+                          on feature/chat-core. Completed T-CC-001 (baseline-capture docs:
+                          parity-screenshots.md + test-plan.md, no src change), T-CC-002 (RED
+                          StreamChunk + ChatRuntimePort structural tests, watched RED via typecheck),
+                          T-CC-003 (domain chat types — StreamChunk/UsageInfo/ChatMessage/ChatTurn/
+                          ProviderId, greens TEST-CC-002), T-CC-004 (ChatRuntimePort 9-member +
+                          MarkdownRenderPort + @/domain/ports barrel re-exports, greens TEST-CC-003),
+                          T-CC-006 (RED MockChatRuntime tests, watched RED), T-CC-007 (MockChatRuntime
+                          scripted runtime, greens TEST-CC-001 — 11 cases), T-CC-027 (8 --sp-* chat
+                          tokens, lint:style-tokens clean). Commits 31a4a4e, ff35058, b0e0fea,
+                          8bcb017, 08a99c3, a5fb990, 5dda4f6.
+                          Verification at batch end: `npm run typecheck` exit 0 (no intended-RED
+                          remaining — every batch RED test was greened by its paired impl within the
+                          batch); 51 domain+mock unit tests pass; eslint + prettier + lint:style-tokens
+                          green on all changed files. Not run yet (deferred to T-CC-032): npm run
+                          verify / build / build:web. manifest.json untouched. NOT pushed.
+                          Two documented deviations (both in implementation-log.md): (1) MarkdownNode
+                          declared as `interface` not `type {…}` to satisfy
+                          @typescript-eslint/consistent-type-definitions (structurally identical);
+                          (2) MockChatRuntime imports chat types via the @/domain/ports barrel
+                          (SPEC-CC-009 one-stop import) because the P0 DELETED_SUBSYSTEM_BAN still
+                          forbids deep `@/domain/chat/**` imports outside src/domain/** — a later
+                          infra/ui batch that needs a deep chat import would update that ESLint ban
+                          (flagged, not done here). Also: --sp-textarea-max-h set to `none` per
+                          claudian-main parity (spec left it unspecified).
+
+                          HAND-OFF → /spec:implement (next batch: infrastructure runtimes). Owner: dev
+                          (RED tasks: qa). First task of the NEXT batch: T-CC-008 (qa, RED —
+                          FixtureChatRuntime replays bundled transcript; depends on T-CC-004, done) →
+                          T-CC-009 (dev, FixtureChatRuntime). T-CC-010 (dev, ClaudeCliChatRuntime —
+                          coverage-excluded infra, structural+lint+typecheck gate, manual TEST-CC-017
+                          only) may start in parallel (depends on T-CC-004, done). Then the
+                          markdown/application batch (T-CC-013→015, T-CC-016→017) and the createChatRuntime
+                          factory (T-CC-011→012, after T-CC-010). NOTE for the next batch: T-CC-005
+                          (InjectionKeys CHAT_RUNTIME_PORT/MARKDOWN_RENDER_PORT) was OUT of this batch's
+                          scope and is still pending — it blocks T-CC-018 (composables); pick it up
+                          before the ui-foundation batch.
 ```
