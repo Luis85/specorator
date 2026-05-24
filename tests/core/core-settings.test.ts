@@ -247,14 +247,6 @@ describe('coreSettingsModule.settingsSchema', () => {
     }
   })
 
-  it('includes a mcpServerEnabled toggle field defaulting to false', () => {
-    const field = coreSettingsModule.settingsSchema?.fields.find(
-      (f) => f.key === 'mcpServerEnabled',
-    )
-    expect(field).toBeDefined()
-    expect(field?.type).toBe('toggle')
-    expect(field?.default).toBe(false)
-  })
 })
 
 describe('coreSettingsModule.init', () => {

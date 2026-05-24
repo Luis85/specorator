@@ -58,10 +58,9 @@ export function stripMcpLegacy(
   const keysPresent = MCP_LEGACY_KEYS.filter((k) => k in blob)
   if (keysPresent.length === 0) return { result: raw, stripped: false }
 
-  const nextBlob: Record<string, unknown> = { ...blob }
-  for (const k of keysPresent) {
-    delete nextBlob[k]
-  }
+  const nextBlob: Record<string, unknown> = Object.fromEntries(
+    Object.entries(blob).filter(([k]) => !MCP_LEGACY_KEYS.includes(k as (typeof MCP_LEGACY_KEYS)[number])),
+  )
   return { result: { ...raw, specorator: nextBlob }, stripped: true }
 }
 
