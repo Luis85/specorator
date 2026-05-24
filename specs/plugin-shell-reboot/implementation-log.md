@@ -265,3 +265,14 @@ convergence.
   `CursorSettingsSection`), the chat application + infra adapters/bridges (Wave 2/3),
   `ObsidianBridge`'s chat/icon methods (Wave 3 de-couple), and their tests. No
   surviving-surface file errors. REQ-PSR-004/005; SPEC-PSR-006 (consumers), §9.
+
+### T-PSR-018 — Wave 1: plugin views/wiring (dev)
+
+- Deleted `src/plugin/{SpecoratorView, AgentSidepanelView, approvalRulesPersistence,
+  chatThreadsPersistence, leafLoader, loadSettings-migrate, uriProviderParam}.ts` +
+  `settings/` (CursorSettingsSection) + `transport/**` and their tests. `leafLoader`
+  dropped — the slim reveal calls `leaf.loadIfDeferred()` directly. `src/plugin`
+  is now `{AgentSidebarView, main, settings}`.
+- **typecheck green-or-expected:** errors trace only to Wave 2 application/chat,
+  Wave 3 infra adapters/bridges, and `ObsidianBridge`'s chat region. REQ-PSR-004/005/003;
+  SPEC-PSR-016, §9.
