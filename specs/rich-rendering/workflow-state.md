@@ -4,7 +4,7 @@ area: RR
 current_stage: implementation
 status: active
 last_updated: 2026-05-25
-last_agent: dev (implement — async markdown ADR-RR-002: port→Promise, ObsidianBridge awaits real renderer, MarkdownBlock async-aware + full node-kind render, TEST-RR-028)
+last_agent: dev (review fixes — R-RR-001 real-CLI reducer emits subagent/async/compaction/notice; R-RR-008 blocked tool status via isBlockedToolResult; CLAR-RR-010 resolved)
 epic: claudian-reboot
 phase: P2
 integration_branch: next
@@ -809,6 +809,32 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
                           compaction/notice/tool_output emission gap (R-RR-001). No code/spec/test edited
                           (reviewer writes only review.md + traceability.md). Next agent: dev (or orchestrator
                           to triage the P1/P2 findings into fix tasks).
+2026-05-25 (dev, review fixes R-RR-001 + R-RR-008): RESOLVED the P1 blocker R-RR-001 and P2 R-RR-008
+                          from REVIEW-RR-001. STRICT TDD (RED watched fail → GREEN). R-RR-001:
+                          reduceClaudeStream.ts now emits the subagent/async/compaction/notice members
+                          from the real CLI wire — `parent_tool_use_id` routes tool_use/tool_result to
+                          subagent_tool_use/_result (emitToolUse/emitToolResult), compact_boundary →
+                          context_compacted, task_notification → async_subagent_result, blocked user
+                          message → warning notice (all mirror transformClaudeMessage.ts). R-RR-008:
+                          new pure helper application/chat/toolStatus.ts (isBlockedToolResult, claudian
+                          ToolCallRenderer.ts:810) wired into chatStore onToolResult + onSubagentToolResult
+                          (status = isError ? error : isBlocked ? blocked : completed). VERIFICATION
+                          PERFORMED: npm run typecheck (0 errors); eslint 6 changed files (0/0);
+                          vitest reducer+application/chat+ui/stores 187/187, tests/infrastructure 179/179,
+                          tests/application+tests/ui 298/298 — no regression (CLAR-RR-009 reducer tests,
+                          store, Mock/Fixture suites all green). WIRE-FORMAT (CLAR-RR-010 resolved):
+                          parent_tool_use_id / compact_boundary / task_notification ARE on the real
+                          stream-json wire; the _blocked/_blockReason notice shape is SDK-internal
+                          (dormant on the raw CLI path, handled by R-RR-008); tool_output not mapped
+                          (claudian emits none). No field faked; no silent dead path; no scope deferral
+                          needed. Commits 8752a65 (R-RR-001), b38b8f1 (R-RR-008) — NOT pushed; manifest
+                          untouched; no new dependency. NOT run (orchestrator gate): full verify/build/
+                          build:web/docs:api/coverage/audit. REMAINING (other owners): R-RR-002 (live
+                          thinking, dev), R-RR-003 (tool icons, dev), R-RR-004 (diff hunking, dev),
+                          R-RR-005 (web-tool scope, pm), R-RR-011 (markdown fidelity, pm); regenerate
+                          traceability.md; complete test-report.md; the manual T-RR-043 real-CLI leg
+                          (which alone confirms subagent/async on a live transcript) is still UNSIGNED.
+                          Next agent: dev (remaining P2 findings) or orchestrator (triage + T-RR-043).
 ```
 
 ## Open clarifications
@@ -906,7 +932,7 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
       cases watched fail) → GREEN `d4aefd4`. Within ADR-RR-001/ADR-CC-001 (the P2 `StreamChunk` members
       already exist — no new type/seam). **Separate (orchestrator-owned, NOT this fix):** the
       markdown-rich-rendering defect (the async `MarkdownRenderPort` issue in the Obsidian backing).
-- [ ] CLAR-RR-010 *(new — 2026-05-25 reviewer, R-RR-001, P1)* — The real-CLI reducer
+- [x] CLAR-RR-010 *(RESOLVED 2026-05-25 — dev, R-RR-001 fix)* — The real-CLI reducer
       (`src/infrastructure/obsidian/reduceClaudeStream.ts`) still emits only
       `tool_use`/`thinking`/`tool_result`. It never inspects `parent_tool_use_id`,
       `system/subtype:'compact_boundary'`, `system/subtype:'task_notification'`, blocked/denied user
@@ -924,3 +950,29 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
       carries `parent_tool_use_id` on a real transcript during T-RR-043), OR explicitly descope
       subagent/async real-CLI rendering to a later phase and record it — do not ship a silent dead
       path. Owner: dev (impl) / pm+architect (scope if the CLI shape forces a deferral).
+      **RESOLUTION (extend, not descope):** `reduceClaudeStream.ts` now threads
+      `parentToolUseIdOf(event,message)` and routes `tool_use`/`tool_result` under a non-null parent to
+      `subagent_tool_use`/`subagent_tool_result` (mirrors `emitToolUse`/`emitToolResult` :23/:30); maps
+      `system/compact_boundary` → `context_compacted` (:385) and `system/task_notification` →
+      `async_subagent_result` (`transformTaskNotification` :48); emits a warning `notice` for a
+      blocked/denied user message (`isBlockedMessage` :446). Pure/total/never-throws; `default` branch
+      stays forward-compatible. **Wire-format verification:** `parent_tool_use_id`, `compact_boundary`,
+      and `task_notification` ARE on the real `--output-format stream-json` wire (public SDK message
+      envelope, emitted verbatim and read back by claudian `history/sdkMessageParsing.ts`) — no field
+      faked. The `_blocked`/`_blockReason` notice shape is **SDK-internal** (claudian permission-hook),
+      NOT on the raw CLI wire, so that branch is **dormant on the raw CLI path** and is implemented only
+      for forward-compatibility; the user-visible blocked rendering there is delivered by R-RR-008's
+      `blocked` tool status (the CLI surfaces a hook denial as `tool_result` text). `tool_output` was
+      NOT mapped — `transformClaudeMessage.ts` emits no `tool_output` member (nothing to mirror). No
+      silent dead path remains; no pm/architect scope deferral was required. RED (10 reducer cases
+      watched fail) → GREEN. Commit `8752a65`. Within ADR-RR-001/ADR-CC-001 (the P2 `StreamChunk`
+      members already exist — no new type/seam). The manual real-CLI confirmation of subagent/async on
+      a live transcript remains the unsigned **T-RR-043** leg.
+- [x] R-RR-008 *(RESOLVED 2026-05-25 — dev)* — Blocked tool status was never set: `'blocked'` is a
+      declared `ToolCall.status` the components style but nothing produced, so a hook-denied tool
+      rendered green-completed. Ported claudian `isBlockedToolResult` (`ToolCallRenderer.ts:810`) as a
+      pure application helper `src/application/chat/toolStatus.ts` (phrases "outside the vault"/"access
+      denied"/"user denied"/"approval"; "deny" only when `isError`); applied in `chatStore`
+      `onToolResult` + `onSubagentToolResult` via `resolveToolStatus` =
+      `isError ? 'error' : (isBlocked ? 'blocked' : 'completed')` (claudian StreamController :611-617
+      precedence). RED (4 store + 9 helper cases watched fail) → GREEN. Commit `b38b8f1`. REQ-RR-020.

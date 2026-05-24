@@ -944,3 +944,83 @@ P1 test/PO await).
   not only paragraphs — this is required by SPEC-RR-011 ("`MarkdownBlock.vue`
   renders any node kind declaratively") and TEST-RR-028 (heading+strong+list
   proof), and is the spec contract, not a divergence; recorded here for clarity.
+
+---
+
+## Review fixes — R-RR-001 (P1) + R-RR-008 (P2) — 2026-05-25 (dev)
+
+Resolves REVIEW-RR-001 findings R-RR-001 (P1 blocker) and R-RR-008 (P2). STRICT TDD:
+RED reducer/helper/store tests added and watched failing, then implemented to GREEN.
+No existing test assertion changed; the prior reducer + store + Mock/Fixture suites
+stay green.
+
+**R-RR-001 — real-CLI reducer now emits the P2 subagent/async/compaction/notice members.**
+- `src/infrastructure/obsidian/reduceClaudeStream.ts`:
+  - class doc rewritten with the new reduce rules + the CLAR-RR-010 wire-format caveat.
+  - `_reduceSystem` (109–129) — `compact_boundary` → `{type:'context_compacted'}`;
+    `task_notification` → `transformTaskNotification` (`async_subagent_result`).
+  - `_reduceAssistant` (139–158) — reads `parentToolUseIdOf(event,message)` and threads
+    it to each block; `_reduceAssistantBlock` (165–193) routes `tool_use` through
+    `emitToolUse` (subagent vs top-level) and drops subagent text/thinking (claudian
+    :406/:409). `_reduceTextBlock` (196–204) extracted for the complexity budget.
+  - `_reduceUser` (218–248) — `isBlockedMessage(event)` short-circuits to a warning
+    `notice` (claudian :446–452); otherwise threads the parent id and routes each
+    result through `reduceToolResultBlock` → `emitToolResult` (subagent vs top-level).
+  - new module helpers (≈300–420): `parentToolUseIdOf`, `emitToolUse`, `emitToolResult`,
+    `reduceToolResultBlock`, `normalizeTaskNotificationStatus`/`Result`,
+    `transformTaskNotification`, `isBlockedMessage` — each mirrors the cited claudian
+    `transformClaudeMessage.ts` line. Pure/total/never-throws; no `obsidian` import.
+- Tests: `tests/infrastructure/obsidian/reduceClaudeStream.test.ts` (+1 describe,
+  10 cases) — parent_tool_use_id → subagent_tool_use/_result (+ structured toolUseResult),
+  null-parent stays top-level (no regression), compact_boundary → context_compacted,
+  task_notification (completed + non-completed-normalised-to-error + no-task_id-ignored),
+  blocked message → notice (+ result block skipped after the notice break).
+- **Claudian field mappings confirmed (vs `transformClaudeMessage.ts`):**
+  `parent_tool_use_id` → `subagentId` (emitToolUse :23 / emitToolResult :30);
+  `system/compact_boundary` → `context_compacted` (:385);
+  `system/task_notification` `{task_id→agentId, status, summary→result}` (:48–66, status
+  normalised `completed` else `error`, fallback result phrase);
+  `_blockReason` → `notice.content` with `level:'warning'` (:446–451).
+
+**R-RR-008 — blocked tool status now set.**
+- `src/application/chat/toolStatus.ts` (NEW) — `isBlockedToolResult(content,isError?)`
+  ports claudian `ToolCallRenderer.ts:810` (phrases "outside the vault"/"access denied"/
+  "user denied"/"approval"; "deny" only when `isError`); flattens non-string content
+  (`extractToolResultContent` parity) via `trySync` (application-layer try/catch ban).
+  Pure/total. `tests/application/chat/toolStatus.test.ts` (NEW, 9 cases).
+- `src/ui/stores/chatStore.ts` — `resolveToolStatus(content,isError)` helper (96–104):
+  `isError ? 'error' : (isBlocked ? 'blocked' : 'completed')` (claudian StreamController
+  :611–617 precedence); applied in `onToolResult` (332) and `onSubagentToolResult` (405).
+  `tests/ui/stores/chatStore.rr.test.ts` (+1 describe, 4 cases — top-level blocked,
+  error-precedence, completed, nested-subagent blocked).
+
+**ESCALATION (CLAR-RR-010, RESOLVED-with-note):** the real CLI `--output-format
+stream-json` **does** carry `parent_tool_use_id`, `system/compact_boundary`, and
+`system/task_notification` (public SDK message envelope, emitted verbatim by the CLI and
+read back by claudian `history/sdkMessageParsing.ts`). The blocked-message
+`_blocked`/`_blockReason` underscore fields are **SDK-internal** — claudian injects them
+in its permission-hook path; they are NOT on the raw CLI wire. The reducer's blocked→notice
+branch is implemented faithfully (forward-compatible if a wrapper injects them) but is
+**dormant on the raw CLI path**; the user-visible blocked rendering there is delivered by
+R-RR-008's `blocked` tool status (the CLI surfaces a hook denial as `tool_result` text).
+No field was faked; no silent dead path remains. `tool_output` was NOT mapped:
+`transformClaudeMessage.ts` emits no `tool_output` member, so per the task it is skipped.
+
+**Gate:**
+- `npm run typecheck` (vue-tsc full project incl. tests) → **0 errors**.
+- `npx eslint` on the 6 changed files → **0 errors / 0 warnings** (no `obsidian` import
+  in the reducer/helper; application-layer try/catch via `trySync`; complexity ≤10).
+- `npx vitest run` reducer + application/chat + ui/stores → **187/187**;
+  full `tests/infrastructure` → **179/179**; `tests/application` + `tests/ui` → **298/298**.
+  No regression in the existing reducer (incl. CLAR-RR-009), store, or Mock/Fixture suites.
+
+**Commits:** `8752a65` (R-RR-001 reducer + tests), `b38b8f1` (R-RR-008 toolStatus helper
++ chatStore wiring + tests).
+
+- **Not run (T-RR-044 GATE, ORCHESTRATOR-owned):** full `npm run verify` / `build` /
+  `build:web` / `docs:api` / coverage / `npm audit` / `test:all`.
+- **Not pushed.** `manifest.json` untouched. **No new dependency.** DDD inward imports
+  respected; the reducer stays coverage-excluded infra (real behaviour is the manual
+  **TEST-RR-043** leg, still unsigned).
+- **Outcome:** done. **Deviation:** none from spec; the CLAR-RR-010 wire-format note above
+  records the SDK-vs-CLI blocked-shape boundary (handled by R-RR-008), not a divergence.
