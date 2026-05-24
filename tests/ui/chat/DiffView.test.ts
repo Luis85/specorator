@@ -90,7 +90,61 @@ describe('DiffView (TEST-RR-019)', () => {
 				: { type: 'equal' as const, text: `=${i}`, oldLineNum: i, newLineNum: i },
 		);
 		const { po } = mountDiff({ filePath: 'm.ts', diffLines, stats: { added: 13, removed: 0 } });
-		expect(po.lineCount()).toBe(25);
+		// The 25-line all-context-around-changes body collapses to hunks (R-RR-004).
 		expect(po.moreExists()).toBe(false);
+	});
+});
+
+describe('DiffView — hunking + context elision (R-RR-004)', () => {
+	/** N equal context lines. */
+	function equalLines(count: number, offset = 0) {
+		return Array.from({ length: count }, (_, i) => ({
+			type: 'equal' as const,
+			text: `eq ${offset + i + 1}`,
+			oldLineNum: offset + i + 1,
+			newLineNum: offset + i + 1,
+		}));
+	}
+
+	it('two distant changes render as two hunks separated by a "..." row, not the whole body', () => {
+		const diffLines = [
+			{ type: 'insert' as const, text: 'A', newLineNum: 1 },
+			...equalLines(40, 1),
+			{ type: 'insert' as const, text: 'B', newLineNum: 42 },
+		];
+		const { po } = mountDiff({ filePath: 'far.ts', diffLines, stats: { added: 2, removed: 0 } });
+		// The 40 equal middle lines are elided — only ±3 context around each change shows.
+		expect(po.lineCount()).toBeLessThan(diffLines.length);
+		expect(po.separatorCount()).toBe(1);
+		const texts = po.lineTexts();
+		expect(texts).toContain('A');
+		expect(texts).toContain('B');
+		expect(texts).not.toContain('eq 20');
+	});
+
+	it('adjacent changes render as a single hunk with no separator', () => {
+		const diffLines = [
+			...equalLines(5),
+			{ type: 'delete' as const, text: 'DEL', oldLineNum: 6 },
+			{ type: 'insert' as const, text: 'INS', newLineNum: 6 },
+			...equalLines(5, 6),
+		];
+		const { po } = mountDiff({ filePath: 'near.ts', diffLines, stats: { added: 1, removed: 1 } });
+		expect(po.separatorCount()).toBe(0);
+		const texts = po.lineTexts();
+		expect(texts).toContain('DEL');
+		expect(texts).toContain('INS');
+	});
+
+	it('an all-insert new file keeps the NEW_FILE_DISPLAY_CAP path (no hunk separators)', () => {
+		const diffLines = Array.from({ length: 25 }, (_, i) => ({
+			type: 'insert' as const,
+			text: `line ${i + 1}`,
+			newLineNum: i + 1,
+		}));
+		const { po } = mountDiff({ filePath: 'big.ts', diffLines, stats: { added: 25, removed: 0 } });
+		expect(po.lineCount()).toBe(20);
+		expect(po.moreExists()).toBe(true);
+		expect(po.separatorCount()).toBe(0);
 	});
 });

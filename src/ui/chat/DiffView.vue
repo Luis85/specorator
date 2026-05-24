@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { DiffLine, ToolDiffData } from '@/domain/chat/diff/Diff';
+import { splitDiffHunks } from '@/application/chat/splitDiffHunks';
 
 /**
  * Renders a Write/Edit diff as per-line declarative spans (SPEC-RR-029). Each
@@ -10,10 +11,15 @@ import type { DiffLine, ToolDiffData } from '@/domain/chat/diff/Diff';
  * rides a per-type class over `--sp-diff-insert-bg`/`--sp-diff-delete-bg` (equal
  * is muted): BACKGROUND-HIGHLIGHT ONLY, never `text-decoration`/strikethrough
  * (the explicit `diff.css` rule, REQ-RR-025). The body scrolls within
- * `--sp-diff-max-height`. An ALL-INSERT new file longer than
- * `NEW_FILE_DISPLAY_CAP` (20, reproduced from `DiffRenderer.ts:76` — not newly
- * invented, NFR-RR-013) shows the first 20 lines + a "... N more lines" footer
- * (EC-RR-5). Text via `{{ }}` declarative spans — NO `v-html` (NFR-RR-006).
+ * `--sp-diff-max-height`.
+ *
+ * Hunking (R-RR-004): a mixed diff is split into hunks of ±3 equal-context lines
+ * around each change (`splitDiffHunks`, parity `DiffRenderer.ts:23-102`), with a
+ * `...` separator row between hunks — the distant equal body is elided rather
+ * than rendered flat. An ALL-INSERT new file longer than `NEW_FILE_DISPLAY_CAP`
+ * (20, reproduced from `DiffRenderer.ts:76` — not newly invented, NFR-RR-013)
+ * keeps the cap path: first 20 lines + a "... N more lines" footer (EC-RR-5).
+ * Text via `{{ }}` declarative spans — NO `v-html` (NFR-RR-006).
  */
 const props = defineProps<{ diffData: ToolDiffData }>();
 
@@ -28,12 +34,17 @@ const isCapped = computed(
 	() => allInsert.value && props.diffData.diffLines.length > NEW_FILE_DISPLAY_CAP,
 );
 
-const visibleLines = computed<DiffLine[]>(() =>
-	isCapped.value ? props.diffData.diffLines.slice(0, NEW_FILE_DISPLAY_CAP) : props.diffData.diffLines,
+const cappedLines = computed<DiffLine[]>(() =>
+	props.diffData.diffLines.slice(0, NEW_FILE_DISPLAY_CAP),
 );
 
 const hiddenCount = computed(() =>
 	isCapped.value ? props.diffData.diffLines.length - NEW_FILE_DISPLAY_CAP : 0,
+);
+
+/** Hunks of ±3 equal-context lines around each change (only when not in the cap path). */
+const hunks = computed(() =>
+	isCapped.value ? [] : splitDiffHunks(props.diffData.diffLines, 3),
 );
 
 /** Gutter glyph per line type: `+` insert, `−` delete, space for equal. */
@@ -46,22 +57,54 @@ function gutter(type: DiffLine['type']): string {
 
 <template>
 	<div class="sp-diff" data-testid="diff-view">
-		<div
-			v-for="(line, index) in visibleLines"
-			:key="index"
-			class="sp-diff__line"
-			:class="`sp-diff__line--${line.type}`"
-			:data-line-type="line.type"
-			data-testid="diff-line"
-		>
-			<span class="sp-diff__gutter" data-testid="diff-line-gutter" aria-hidden="true">{{
-				gutter(line.type)
-			}}</span>
-			<span class="sp-diff__text" data-testid="diff-line-text" dir="auto">{{ line.text || ' ' }}</span>
-		</div>
-		<div v-if="hiddenCount > 0" class="sp-diff__more" data-testid="diff-more">
-			... {{ hiddenCount }} more lines
-		</div>
+		<!-- All-insert new file: capped flat list + "... N more lines" footer (EC-RR-5). -->
+		<template v-if="isCapped">
+			<div
+				v-for="(line, index) in cappedLines"
+				:key="index"
+				class="sp-diff__line"
+				:class="`sp-diff__line--${line.type}`"
+				:data-line-type="line.type"
+				data-testid="diff-line"
+			>
+				<span class="sp-diff__gutter" data-testid="diff-line-gutter" aria-hidden="true">{{
+					gutter(line.type)
+				}}</span>
+				<span class="sp-diff__text" data-testid="diff-line-text" dir="auto">{{
+					line.text || ' '
+				}}</span>
+			</div>
+			<div v-if="hiddenCount > 0" class="sp-diff__more" data-testid="diff-more">
+				... {{ hiddenCount }} more lines
+			</div>
+		</template>
+
+		<!-- Mixed diff: hunks with a "..." separator between them (R-RR-004). -->
+		<template v-for="(hunk, hunkIndex) in hunks" v-else :key="hunkIndex">
+			<div
+				v-if="hunkIndex > 0"
+				class="sp-diff__separator"
+				data-testid="diff-separator"
+				aria-hidden="true"
+			>
+				...
+			</div>
+			<div
+				v-for="(line, index) in hunk.lines"
+				:key="`${hunkIndex}-${index}`"
+				class="sp-diff__line"
+				:class="`sp-diff__line--${line.type}`"
+				:data-line-type="line.type"
+				data-testid="diff-line"
+			>
+				<span class="sp-diff__gutter" data-testid="diff-line-gutter" aria-hidden="true">{{
+					gutter(line.type)
+				}}</span>
+				<span class="sp-diff__text" data-testid="diff-line-text" dir="auto">{{
+					line.text || ' '
+				}}</span>
+			</div>
+		</template>
 	</div>
 </template>
 
@@ -109,5 +152,11 @@ function gutter(type: DiffLine['type']): string {
 	color: var(--sp-text-muted);
 	font-style: italic;
 	margin-block-start: var(--sp-space-1);
+}
+
+.sp-diff__separator {
+	color: var(--sp-text-muted);
+	user-select: none;
+	padding-inline-start: var(--sp-diff-gutter);
 }
 </style>

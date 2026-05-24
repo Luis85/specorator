@@ -6,6 +6,7 @@ const TID = {
 	gutter: 'diff-line-gutter',
 	text: 'diff-line-text',
 	more: 'diff-more',
+	separator: 'diff-separator',
 } as const;
 
 /** PageObject for `DiffView.vue` (SPEC-RR-029). Queries by `data-testid` only (ADR-009). */
@@ -43,6 +44,11 @@ export class DiffViewPageObject {
 
 	moreExists(): boolean {
 		return this.wrapper.find(this.byTid(TID.more)).exists();
+	}
+
+	/** Count of `...` separator rows between hunks (R-RR-004). */
+	separatorCount(): number {
+		return this.wrapper.findAll(this.byTid(TID.separator)).length;
 	}
 
 	moreText(): string {
