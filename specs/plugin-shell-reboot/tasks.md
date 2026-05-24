@@ -13,6 +13,7 @@ created: 2026-05-24
 updated: 2026-05-24
 epic: claudian-reboot
 phase: P0
+note: 2026-05-24 no-backwards-compat simplification — migration tasks/tests dropped (CHARTER-REQ-FRESH / NG8); T-PSR-001..004 re-scoped to load-or-default; TEST-PSR count 24 (TEST-PSR-025 deleted)
 ---
 
 # Tasks — Plugin shell reboot (P0)
@@ -29,9 +30,9 @@ its owner + dependencies, and carries a testable Definition of Done.
 > naive "RED test then code" loop breaks: deleting the chat surface makes the
 > tree red until its consumers are also gone. The plan therefore:
 > 1. Stands up the *new* surviving surface (`AgentPanelRoot.vue`,
->    `AgentSidebarView`, slim `main.ts`/settings, slim settings/migration, i18n
->    trim, standalone entry) **first**, with its RED unit tests, so there is a
->    green target to converge on.
+>    `AgentSidebarView`, slim `main.ts`/settings, slim load-or-default settings
+>    (no migration — CHARTER-REQ-FRESH), i18n trim, standalone entry) **first**,
+>    with its RED unit tests, so there is a green target to converge on.
 > 2. Executes the six delete waves 0→5 in design §C.14 order, **each wave ending
 >    `npm run typecheck` green-or-expected** before the next (the `tsc` error
 >    list is the authoritative next-delete set — R-PSR-1 mitigation).
@@ -73,21 +74,28 @@ its owner + dependencies, and carries a testable Definition of Done.
 
 ### Phase A — Stand up the surviving surface + RED tests (green target first)
 
-### T-PSR-001 🧪 — RED: `coreSettingsModule.migrate` strip-on-read + idempotency
+### T-PSR-001 🧪 — RED: `coreSettingsModule` load-or-default + unknown-key hygiene (no migration)
 
-- **Description:** Author the migration edge-table tests (already-v4 slim,
-  pre-versioned v0.x fat blob strips all 16 dropped keys, `null`/`undefined` →
-  `{}`, corrupt non-object → `{}`, partial-only-`logLevel`, invalid-`logLevel`
-  passes through verbatim, idempotency `migrate(v, migrate(v, blob))` deep-equals
-  `migrate(v, blob)`). Vitest unit, no Obsidian runtime.
-- **Satisfies:** TEST-PSR-001, TEST-PSR-002, TEST-PSR-003, TEST-PSR-004; REQ-PSR-006, REQ-PSR-008, REQ-PSR-005; SPEC-PSR-002
+- **Description:** Author the load-or-default edge-table tests (per SPEC-PSR-002's
+  simplified table): `validateSettings(null)`/`validateSettings(undefined)` →
+  `DEFAULT_SETTINGS` (load-or-default, fresh install / post-upgrade); corrupt
+  non-object (`'garbage'` / `42` / `['a']`) → defaults; valid slim blob
+  `{ locale:'de', logLevel:'info' }` → returned verbatim; partial-only-`logLevel`
+  `{ logLevel:'error' }` → `{ locale:'en', logLevel:'error' }`; **unknown-key
+  hygiene** `{ locale:'de', logLevel:'info', specsFolder:'x' }` →
+  `{ locale:'de', logLevel:'info' }` (unknown key never returned). Assert the
+  module has **no `migrate` method** and does **not** set/bump `settingsVersion`.
+  Vitest unit, no Obsidian runtime. **No migration, no strip-on-read, no version
+  awareness** (CHARTER-REQ-FRESH / NG8).
+- **Satisfies:** TEST-PSR-001, TEST-PSR-002, TEST-PSR-003, TEST-PSR-004; REQ-PSR-006, REQ-PSR-008, REQ-PSR-013, REQ-PSR-005; SPEC-PSR-002
 - **Owner:** qa
 - **Depends on:** —
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] One test file `tests/core/core-settings.test.ts` covers all 7 edge rows of SPEC-PSR-002's table, each `it` naming its TEST-PSR id.
+  - [ ] One test file `tests/core/core-settings.test.ts` covers the load-or-default edge rows (null/undefined/corrupt → defaults; valid; partial; unknown-key hygiene), each `it` naming its TEST-PSR id.
+  - [ ] One assertion confirms `coreSettingsModule` exposes **no `migrate`** member and does **not** set `settingsVersion` (TEST-PSR-002).
   - [ ] Tests reference REQ/SPEC ids in describe/it metadata.
-  - [ ] Tests fail (RED) against the current fat `core-settings.ts` (or its absence of v4 strip behaviour).
+  - [ ] Tests fail (RED) against the current fat `core-settings.ts`.
 
 ### T-PSR-002 🧪 — RED: `validateSettings` coercion + `settingsSchema.fields` + `PluginSettings` shape
 
@@ -119,20 +127,24 @@ its owner + dependencies, and carries a testable Definition of Done.
   - [ ] `npm run typecheck` reports no *new* error originating in this file (downstream fat consumers may still error — that is expected pre-delete; do not fix them here).
   - [ ] Implementation-log entry added.
 
-### T-PSR-004 🔨 — Slim `coreSettingsModule` (v4 strip-on-read + 2-field schema)
+### T-PSR-004 🔨 — Slim `coreSettingsModule` (load-or-default `validateSettings` + 2-field schema, no migration)
 
-- **Description:** Rewrite `src/core/core-settings.ts` to `settingsVersion: 4`
-  with the strip-on-read idempotent `migrate`, the two-field `validateSettings`
-  (`coerceString` locale, `coerceEnum`/`VALID_LOG_LEVELS` logLevel), and the
-  two-dropdown `settingsSchema.fields` per SPEC-PSR-002/003/004. Delete all other
-  coercion helpers + `VALID_*` constants + `@/domain/chat` imports.
-- **Satisfies:** REQ-PSR-006, REQ-PSR-008, REQ-PSR-005; SPEC-PSR-002, SPEC-PSR-003, SPEC-PSR-004
+- **Description:** Rewrite `src/core/core-settings.ts` to the load-or-default
+  shape per SPEC-PSR-002: **no `migrate` method**, **no `settingsVersion`
+  set/bump**, just the two-field `validateSettings` (`coerceString` locale,
+  `coerceEnum`/`VALID_LOG_LEVELS` logLevel) that narrows any blob (or
+  absent/garbage) to `{ locale, logLevel }` with `DEFAULT_SETTINGS` filling
+  missing/invalid fields and unknown keys ignored, plus the two-dropdown
+  `settingsSchema.fields` and `settingsDefaults` per SPEC-PSR-003/004. Delete all
+  other coercion helpers + `VALID_*` constants + `@/domain/chat` imports. **No
+  migration, no strip-on-read, no version awareness** (CHARTER-REQ-FRESH / NG8).
+- **Satisfies:** REQ-PSR-006, REQ-PSR-008, REQ-PSR-013, REQ-PSR-005; SPEC-PSR-002, SPEC-PSR-003, SPEC-PSR-004
 - **Owner:** dev
 - **Depends on:** T-PSR-001, T-PSR-002, T-PSR-003
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] T-PSR-001 and T-PSR-002 (migration + validate + schema) pass GREEN.
-  - [ ] `migrate` is pure, ignores `_fromVersion`, returns a key-subset of `{locale,logLevel}`.
+  - [ ] T-PSR-001 and T-PSR-002 (load-or-default + validate + schema) pass GREEN.
+  - [ ] Module declares **no `migrate`** member and does **not** set/bump `settingsVersion`; `validateSettings` is pure and returns exactly `{ locale, logLevel }` (unknown keys never carried through).
   - [ ] No dead coercion helper / `VALID_*` constant / chat import remains in the file.
   - [ ] Implementation-log entry added.
 
@@ -182,24 +194,36 @@ its owner + dependencies, and carries a testable Definition of Done.
   - [ ] `toSupportedLocale` exported and used as the single narrowing helper.
   - [ ] Implementation-log entry added.
 
-### T-PSR-008 🔨 — Trimmed `main.ts` surviving surface + `ALL_MODULES`/`helloModule` verify (OC-PSR-4)
+### T-PSR-008 🔨 — Trimmed `main.ts` surviving surface (load-or-default `loadSettings`, no settings `saveData`) + `ALL_MODULES`/`helloModule` verify (OC-PSR-4) + device-local API recon (NFR-PSR-011)
 
 - **Description:** Rewrite `src/plugin/main.ts` to the SPEC-PSR-016 / design §C.6
   shape: public fields `settings`/`core`/`bridge`; `onload` = load settings →
   construct `ObsidianBridge` → `PluginCore(ALL_MODULES, ports)` →
   `setLocale(toSupportedLocale(settings.locale))` → `core.init` → `registerView`
   → one `addCommand('open-agent-sidebar')` → `addSettingTab`; `onunload`;
-  `loadSettings`/`updateSettings`/`activateAgentSidebar`. **OC-PSR-4 subtask:**
-  read `src/modules/index.ts`/`helloModule`, confirm `ALL_MODULES` exists and is
-  `[coreSettingsModule, helloModule]`, trim it if it still names a deleted module,
-  and confirm `helloModule` declares no deleted-subsystem settings.
-- **Satisfies:** REQ-PSR-001, REQ-PSR-003; SPEC-PSR-016, SPEC-PSR-007; OC-PSR-4
+  `loadSettings`/`updateSettings`/`activateAgentSidebar`. **`loadSettings()` is
+  load-or-default (SPEC-PSR-002/016): read `this.settings` from the device-local
+  store via `bridge.getSettings()`, which returns `DEFAULT_SETTINGS` when nothing
+  is stored. NO migrate-and-clear call, NO legacy `data.json` read/project/clear**
+  (CHARTER-REQ-FRESH / NG8). `onload` **drops** the settings `saveData(...)`
+  write — settings persist via `bridge.saveSettings` only (device-local). **OC-PSR-4
+  subtask:** read `src/modules/index.ts`/`helloModule`, confirm `ALL_MODULES`
+  exists and is `[coreSettingsModule, helloModule]`, trim it if it still names a
+  deleted module, and confirm `helloModule` declares no deleted-subsystem settings;
+  if `helloModule` persists nothing to `data.json`, drop `_storedData`/`saveData`
+  entirely (design §C.16). **NFR-PSR-011 recon subtask:** verify
+  `app.loadLocalStorage`/`app.saveLocalStorage` are available at
+  `minAppVersion 1.12.7`; if absent, escalate per NG6/R-PSR-6 (do **not** silently
+  bump `minAppVersion`).
+- **Satisfies:** REQ-PSR-001, REQ-PSR-003, REQ-PSR-013, NFR-PSR-010, NFR-PSR-011; SPEC-PSR-016, SPEC-PSR-007; OC-PSR-4
 - **Owner:** dev
 - **Depends on:** T-PSR-004, T-PSR-007
 - **Estimate:** M
 - **Definition of done:**
   - [ ] `main.ts` registers exactly one view (`VIEW_TYPE_AGENT`) + one command (`open-agent-sidebar`) + the settings tab; no ribbon; no transport/provider/secret/MCP/cursor wiring; no deleted handlers.
-  - [ ] `ALL_MODULES` confirmed/trimmed to `[coreSettingsModule, helloModule]`; finding recorded in implementation-log (OC-PSR-4 closed).
+  - [ ] `loadSettings()` is load-or-default via `bridge.getSettings()` (no migrate call, no legacy `data.json` read); `onload` carries **no** settings `saveData` write.
+  - [ ] `ALL_MODULES` confirmed/trimmed to `[coreSettingsModule, helloModule]`; `_storedData`/`saveData` dropped if no kept module persists to `data.json`; finding recorded in implementation-log (OC-PSR-4 closed).
+  - [ ] `app.loadLocalStorage`/`saveLocalStorage` availability at `minAppVersion 1.12.7` verified (NFR-PSR-011); absence escalated per NG6 (not a silent manifest bump).
   - [ ] `setLocale` call narrows via `toSupportedLocale`.
   - [ ] `npm run typecheck` reports no new error from `main.ts` itself.
   - [ ] Implementation-log entry added.
@@ -366,8 +390,8 @@ its owner + dependencies, and carries a testable Definition of Done.
 
 - **Description:** Delete `src/plugin/SpecoratorView.ts`, `AgentSidepanelView.ts`,
   `chatThreadsPersistence`, `approvalRulesPersistence`, `uriProviderParam`,
-  `transport/**`, and `leafLoader`/`loadSettings-migrate` unless the slim reveal
-  (T-PSR-009) / slim migrate (T-PSR-004) still use them (verify; keep
+  `transport/**`, and `leafLoader` unless the slim reveal
+  (T-PSR-009) still uses it (verify; keep
   `ensureLeafLoaded` only if `activateAgentSidebar` references it). The new
   `AgentSidebarView`/`AgentPanelRoot` + slim `main.ts`/`settings.ts` already exist
   (Phase A) — this wave removes their dead predecessors.
@@ -419,23 +443,40 @@ its owner + dependencies, and carries a testable Definition of Done.
   - [ ] `npm run typecheck` green-or-expected; error list recorded.
   - [ ] Implementation-log entry added.
 
-### T-PSR-021 🔨 — Wave 3b: de-couple ALL THREE bridges + slim `ports.ts` + `fake-ports.ts`
+### T-PSR-021 🧪 + 🔨 — Wave 3b: de-couple ALL THREE bridges + `ObsidianBridge` device-local `SettingsPort` re-point + `data.json` hygiene test (TEST-PSR-024) + slim `ports.ts` + `fake-ports.ts`
 
-- **Description:** De-couple `ObsidianBridge` **and** `MockBridge` **and**
+- **Description:** **RED test first (TEST-PSR-024, NFR-PSR-010 data-hygiene):**
+  author the data.json-hygiene round-trip test — after `ObsidianBridge.saveSettings`,
+  the `data.json` settings slice carries **no** `locale`/`logLevel`, and
+  `getSettings()` reads the value back from the device-local store (defaults on
+  absent/garbage). Then de-couple `ObsidianBridge` **and** `MockBridge` **and**
   `LocalStorageBridge` to `implements` the six core ports only (Stage-5
   correction: `ObsidianBridge` carries `ChatTransportPort` + `IconPort` too).
   Delete `queryStream`/`isAvailable`/`setIcon`/`markIconAsMissing`/`missingIcons`
-  + the chat/icon imports from each. Slim `src/infrastructure/bridge/ports.ts` to
-  the six core `InjectionKey`s (drop the ~14 deleted keys + the two `@/domain/chat`
-  imports). Trim `tests/__fakes__/fake-ports.ts` to the six core ports + `EventBus`
-  + `TranslationPort` stub (drop `iconPort`, `MockMetadataCacheAdapter`,
-  `MockCanvasAdapter`, chat-port exposure).
-- **Satisfies:** REQ-PSR-005, REQ-PSR-004, NFR-PSR-002; SPEC-PSR-009, §9
-- **Owner:** dev
+  + the chat/icon imports from each. **Re-point `ObsidianBridge.SettingsPort`
+  (`getSettings`/`saveSettings`) onto the device-local store** —
+  `app.loadLocalStorage`/`app.saveLocalStorage` under the stable key
+  `specorator:settings`, device-scoped + not synced — **not** `loadData`/`saveData`
+  (`data.json`): `saveSettings(s)` → `app.saveLocalStorage('specorator:settings',
+  JSON.stringify(s))`; `getSettings()` → parse
+  `app.loadLocalStorage('specorator:settings')` → `validateSettings` (defaults on
+  absent/garbage). SettingsPort **contract unchanged**; only the backing store
+  moves (REQ-PSR-013, ADR-PSR-002). `MockBridge` (in-memory) + `LocalStorageBridge`
+  (web localStorage) backing stores unchanged. Slim
+  `src/infrastructure/bridge/ports.ts` to the six core `InjectionKey`s (drop the
+  ~14 deleted keys + the two `@/domain/chat` imports). Trim
+  `tests/__fakes__/fake-ports.ts` to the six core ports + `EventBus` +
+  `TranslationPort` stub (drop `iconPort`, `MockMetadataCacheAdapter`,
+  `MockCanvasAdapter`, chat-port exposure). **No migration of any prior
+  `data.json` settings — load-or-default only** (CHARTER-REQ-FRESH / NG8).
+- **Satisfies:** TEST-PSR-024; REQ-PSR-005, REQ-PSR-004, REQ-PSR-013, NFR-PSR-002, NFR-PSR-010; SPEC-PSR-008, SPEC-PSR-009, §9; ADR-PSR-002
+- **Owner:** qa (TEST-PSR-024 RED) → dev (impl)   *(single tracked task; test authored RED first, then impl)*
 - **Depends on:** T-PSR-013, T-PSR-020
 - **Estimate:** M
 - **Definition of done:**
   - [ ] All three bridges `implements` exactly the six core ports; no chat/icon member or import remains in any of them.
+  - [ ] `ObsidianBridge.getSettings`/`saveSettings` route through `app.loadLocalStorage`/`saveLocalStorage` (key `specorator:settings`), never `loadData`/`saveData`; `MockBridge`/`LocalStorageBridge` backing stores unchanged.
+  - [ ] TEST-PSR-024 GREEN: after a save, `data.json` settings slice has no `locale`/`logLevel` and the value round-trips through the device-local store.
   - [ ] `ports.ts` exports only the six core `InjectionKey`s; no `@/domain/chat` import.
   - [ ] `fake-ports.ts` exposes the six core ports + `EventBus` + `TranslationPort` stub only; dependent unit tests still compile.
   - [ ] T-PSR-012 (`WorkspacePort`/`MockBridge`) GREEN.
@@ -624,7 +665,8 @@ its owner + dependencies, and carries a testable Definition of Done.
 
 - **Description:** Run `npm run test:coverage` and confirm 80/70/80/80
   (statements/branches/functions/lines) over the `vitest.config.ts` `include` set
-  on the gutted tree. The migration tests (T-PSR-001/002), view/boot tests
+  on the gutted tree. The load-or-default settings tests (T-PSR-001/002), the
+  data.json-hygiene test (T-PSR-021/TEST-PSR-024), view/boot tests
   (T-PSR-010/011), guard test (T-PSR-027), and settings test (T-PSR-014) are the
   principal new coverage sources. **Contingency:** if a *kept* file is legitimately
   untestable in P0, adjust the coverage `include` ONLY with a written PR
@@ -685,7 +727,7 @@ its owner + dependencies, and carries a testable Definition of Done.
 ```mermaid
 graph TD
   %% Phase A — surviving surface + RED tests
-  T001[T-PSR-001 RED migrate] --> T004[T-PSR-004 slim core-settings]
+  T001[T-PSR-001 RED load-or-default] --> T004[T-PSR-004 slim core-settings]
   T002[T-PSR-002 RED validate/schema] --> T003[T-PSR-003 slim PluginSettings]
   T002 --> T004
   T003 --> T004
@@ -710,7 +752,7 @@ graph TD
   T017 --> T018[T-PSR-018 Wave1 plugin views]
   T018 --> T019[T-PSR-019 Wave2 application +OC5]
   T019 --> T020[T-PSR-020 Wave3a infra adapters +OC5]
-  T013 --> T021[T-PSR-021 Wave3b bridges/ports/fakes]
+  T013 --> T021[T-PSR-021 Wave3b bridges/ports/fakes +device-local +TEST024]
   T020 --> T021
   T021 --> T022[T-PSR-022 Wave4 domain root]
   T022 --> T023[T-PSR-023 Wave5a dead rule del]
@@ -785,7 +827,7 @@ resolves to a real removed path before it is enforced (NFR-PSR-009).
 | SPEC-PSR-005 | T-PSR-009, T-PSR-011 |
 | SPEC-PSR-006 | T-PSR-005, T-PSR-007 |
 | SPEC-PSR-007 | T-PSR-008, T-PSR-009, T-PSR-010, T-PSR-033 |
-| SPEC-PSR-008 | T-PSR-014, T-PSR-015 |
+| SPEC-PSR-008 | T-PSR-014, T-PSR-015, T-PSR-021 |
 | SPEC-PSR-009 | T-PSR-012, T-PSR-013, T-PSR-021, T-PSR-022 |
 | SPEC-PSR-010 | T-PSR-006, T-PSR-007 |
 | SPEC-PSR-011 | T-PSR-006, T-PSR-007 |
@@ -807,6 +849,7 @@ resolves to a real removed path before it is enforced (NFR-PSR-009).
 | REQ-PSR-010 | T-PSR-030 |
 | REQ-PSR-011 | T-PSR-016 |
 | REQ-PSR-012 | T-PSR-028, T-PSR-029, T-PSR-034 |
+| REQ-PSR-013 | T-PSR-001, T-PSR-004, T-PSR-008, T-PSR-021 |
 | NFR-PSR-001 | T-PSR-034 |
 | NFR-PSR-002 | T-PSR-011, T-PSR-021, T-PSR-032 |
 | NFR-PSR-003 | T-PSR-006, T-PSR-010, T-PSR-011, T-PSR-033 |
@@ -816,11 +859,16 @@ resolves to a real removed path before it is enforced (NFR-PSR-009).
 | NFR-PSR-007 | T-PSR-034 |
 | NFR-PSR-008 | T-PSR-028, T-PSR-029, T-PSR-034 |
 | NFR-PSR-009 | T-PSR-023, T-PSR-024, T-PSR-026, T-PSR-027 |
+| NFR-PSR-010 | T-PSR-008, T-PSR-021 |
+| NFR-PSR-011 | T-PSR-008 |
 
-**All 23 TEST-PSR mapped:** TEST-PSR-001..007 → T-PSR-001/002; 008 → T-PSR-005;
+**All 24 TEST-PSR mapped:** TEST-PSR-001..004 (load-or-default + no-migration +
+unknown-key hygiene) → T-PSR-001; 005..007 → T-PSR-002; 008 → T-PSR-005;
 009/010 → T-PSR-006; 011 → T-PSR-012; 012/013 → T-PSR-010; 014 → T-PSR-014; 015 →
 T-PSR-011; 016 → T-PSR-027; 017 → T-PSR-025; 018..021 (manual M) → T-PSR-033; 022
-→ T-PSR-016; 023 → T-PSR-028.
+→ T-PSR-016; 023 → T-PSR-028; 024 (data.json hygiene) → T-PSR-021.
+(TEST-PSR-025 / SPEC-PSR-002a relocate-and-clear deleted — no backwards
+compatibility, CHARTER-REQ-FRESH / NG8.)
 
 ---
 
@@ -829,7 +877,7 @@ T-PSR-011; 016 → T-PSR-027; 017 → T-PSR-025; 018..021 (manual M) → T-PSR-0
 > No blocking open question. The four design/spec OCs (OC-PSR-4..7) are folded
 > into concrete tasks (see the header). Two sequencing notes the dev/QA must hold:
 
-- **Sequencing risk (held, not blocking):** the migration/validate RED tests
+- **Sequencing risk (held, not blocking):** the load-or-default/validate RED tests
   (T-PSR-001/002) and the settings-tab test (T-PSR-014) import `coreSettingsModule`/
   the slim tab, which currently still import `@/domain/chat`. They are authored RED
   and only go GREEN after T-PSR-003/004/015 — they will not *compile* until the

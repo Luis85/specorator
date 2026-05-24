@@ -5,7 +5,7 @@ slug: plugin-shell-reboot
 current_stage: tasks
 status: paused
 last_updated: 2026-05-24
-last_agent: architect (Stage 4/5 — settings-storage delta)
+last_agent: planner (no-backwards-compat simplification)
 epic: claudian-reboot
 phase: P0
 integration_branch: next
@@ -31,7 +31,7 @@ adrs:
   - id: ADR-PSR-002
     path: docs/adr/ADR-PSR-002-settings-storage-device-local.md
     status: accepted
-    note: user/device-scoped settings → device-local store (not data.json) + one-time migrate-and-clear (REQ-PSR-013 / CHARTER-REQ-SET); SecretStorePort ADR deferred to P1
+    note: user/device-scoped settings → device-local store (not data.json), load-or-default, NO migration (REQ-PSR-013 / CHARTER-REQ-FRESH); amended 2026-05-24 to drop migrate-and-clear; SecretStorePort ADR deferred to P1
 ---
 
 # Workflow state — plugin-shell-reboot (P0)
@@ -502,4 +502,129 @@ only at parity.
                           Next: /spec:tasks (planner) — fold CL-9 into the existing
                           T-PSR-* cluster (migration + bridge re-point + slim-main.ts);
                           no stage regression beyond the amendment.
+
+2026-05-24 (pm, Stage 3 — no-backwards-compat simplification): NEW epic constraint
+                          CHARTER-REQ-FRESH (specs/claudian-reboot/parity-charter.md):
+                          complete rewrite, NO backwards compatibility. This REMOVES
+                          migration work — it does not add scope. requirements.md edits
+                          (status stays ACCEPTED — scoped simplification):
+                          - NG8 added: no backwards compatibility, complete rewrite; no
+                            migration of legacy data.json/settings/sessions, no compat
+                            shims/deprecated-field handling, no version-bump migrations.
+                          - REQ-PSR-013 TRIMMED: dropped the one-time legacy data.json
+                            read-migrate-and-clear clause. New shape: device-scoped
+                            settings (locale, logLevel) persist to a device-local store,
+                            never data.json; on first run with no stored settings the
+                            plugin uses DEFAULT_SETTINGS (load-or-default), NO migration.
+                            Kept the data.json-hygiene acceptance (after a save, data.json
+                            carries no locale/logLevel) + round-trip. Traces re-pointed
+                            off SPEC-PSR-002a/TEST-PSR-025 onto SPEC-PSR-002 (load-or-
+                            default) + TEST-PSR-024.
+                          - NFR-PSR-010 (hygiene) KEPT. NFR-PSR-011 keeps only the
+                            device-local API check at minAppVersion 1.12.7 + the deferred
+                            secret-storage-API check (P1).
+                          - Success metrics + release criteria: dropped the migrate-and-
+                            clear-ran criterion; kept the data.json-hygiene + round-trip
+                            check; added the load-or-default (no migration) note.
+                          - Clarifications: replaced the migration CLs (CL-5/CL-6/CL-7/
+                            CL-9) with a single CL-FRESH. CL-8 (SecretStorePort → P1) kept.
+                          DOWNSTREAM DELTAS (CL-FRESH):
+                            ARCHITECT: drop SPEC-PSR-002 strip-migration + SPEC-PSR-002a
+                              relocate-and-clear + TEST-PSR-025; simplify SPEC-PSR-002 /
+                              TEST-PSR-001..004 to load-or-default + hygiene. ADR-PSR-002:
+                              drop the migration section, keep the device-local decision.
+                            PLANNER: drop the migration tasks/tests; keep the device-local
+                              re-point (T-PSR-021) + the data.json-hygiene test (TEST-PSR-024).
+                          requirements.md stays status: accepted. Workflow re-enters at
+                          Stage 3 for this simplification; architect + planner re-touch
+                          spec/tasks/ADR-PSR-002 to remove the migration surface before
+                          spec/tasks return to `complete`.
+                          Next: /spec:design (architect) — process CL-FRESH (drop the
+                          migration surface); then planner removes migration tasks/tests.
+
+2026-05-24 (architect, no-backwards-compat simplification): processed CL-FRESH
+                          (CHARTER-REQ-FRESH / NG8). design.md + spec.md stay
+                          `complete`; ADR-PSR-002 amended in place. MIGRATION SURFACE
+                          REMOVED — device-local backing store kept intact.
+                          SPEC-PSR-002 = LOAD-OR-DEFAULT: coreSettingsModule has NO
+                            migrate() and NO settingsVersion bump; on load, read the
+                            device-local blob and validate→coerce, else DEFAULT_SETTINGS.
+                            validateSettings (coerce locale via coerceString, logLevel
+                            via coerceEnum/VALID_LOG_LEVELS) stays; unknown keys ignored.
+                          DELETED: SPEC-PSR-002a (relocate-and-clear migration) and
+                            TEST-PSR-025 (relocate-and-clear test). Edge E14 removed.
+                          SIMPLIFIED TEST-PSR-001..004: 001 = load-or-default
+                            (null/undefined → DEFAULT_SETTINGS), 002 = no migrate method
+                            + no settingsVersion bump, 003 = unknown-key hygiene
+                            ({...,specsFolder} → {locale,logLevel}), 004 = corrupt
+                            non-object → defaults. TEST-PSR-005 (validateSettings coerce)
+                            + TEST-PSR-024 (data.json hygiene after save) KEPT.
+                            Total TEST-PSR = 24 (was 25): 16 unit, 3 arch/guard, 5 manual.
+                          KEPT (survive, no migration step): SPEC-PSR-008/016 device-local
+                            re-point (app.loadLocalStorage/saveLocalStorage, key
+                            `specorator:settings`); main.ts loadSettings() = load-or-default
+                            (no migrate call, no legacy data.json read); onload does NOT
+                            saveData settings. §12/§13 + edge tables updated (E13 kept,
+                            E14 dropped). NFR-PSR-011 device-local API check at 1.12.7 kept.
+                          design.md: §C.3 = load-or-default (no migrate, no settingsVersion);
+                            §C.3a relocate-and-clear REPLACED with "device-local + load-or-
+                            default, no migration (CHARTER-REQ-FRESH)" note; §C.6 loadSettings
+                            = read device-local or default; §C.2/§C.11/§C.13/§C.16 fixed.
+                          ADR-PSR-002: amended in place (frontmatter `amended` note +
+                            Context/Decision/Options/Consequences/Compliance/References) —
+                            migration section dropped, device-local + load-or-default kept,
+                            minAppVersion 1.12.7 API check kept. Amended (not superseded)
+                            because not yet downstream-consumed/implemented.
+                          requirements.md: CL-FRESH marked RESOLVED-in-design.
+                          PLANNER TASK DELTAS (tasks.md, T-PSR-*): DROP the SPEC-PSR-002a
+                            migrate-and-clear task + its RED TEST-PSR-025 test from the
+                            migration cluster (T-PSR-001..004); RE-SCOPE T-PSR-001..004 to
+                            load-or-default + coerce + no-migration + unknown-key hygiene
+                            (4 simplified RED tests for SPEC-PSR-002/003 → TEST-PSR-001..005);
+                            KEEP T-PSR-021 (3-bridge de-couple + ObsidianBridge device-local
+                            re-point to app.loadLocalStorage/saveLocalStorage) and its
+                            TEST-PSR-024 data.json-hygiene RED test; ADJUST the slim-main.ts
+                            task so loadSettings() is load-or-default (NO migrate-and-clear
+                            call, NO legacy data.json read) and onload drops the settings
+                            saveData write; KEEP the NFR-PSR-011 impl recon subtask (verify
+                            app.loadLocalStorage/saveLocalStorage at minAppVersion 1.12.7,
+                            escalate per NG6 if absent). No new delete wave; no new tasks —
+                            net removal. Re-run /spec:analyze trace check after the tasks.md
+                            edit (TEST-PSR-025 must no longer appear in the coverage table).
+                          Next: /spec:tasks (planner) — remove the migration task/test from
+                          the T-PSR-* cluster; spec/design already `complete`.
+
+2026-05-24 (planner, no-backwards-compat simplification): tasks.md re-scoped per
+                          CL-FRESH (CHARTER-REQ-FRESH / NG8). tasks.md stays `complete`.
+                          NET REMOVAL — no new tasks, no new delete wave. Task count
+                          UNCHANGED at 34 (T-PSR-001..034); critical path UNCHANGED.
+                          DROPPED: the SPEC-PSR-002a migrate-and-clear content + the RED
+                          TEST-PSR-025 test from the T-PSR-001..004 cluster (no longer
+                          referenced anywhere in tasks.md).
+                          RE-SCOPED T-PSR-001 → load-or-default + unknown-key hygiene +
+                          no-migration assertions (no `migrate`, no `settingsVersion`
+                          bump); T-PSR-004 → load-or-default `validateSettings` + 2-field
+                          schema, no migrate/strip/version. Removed every
+                          migrate()/settingsVersion/strip/relocate reference.
+                          T-PSR-008 (slim main.ts) ADJUSTED: `loadSettings()` =
+                          load-or-default via `bridge.getSettings()` (no migrate-and-clear
+                          call, no legacy data.json read); `onload` drops the settings
+                          `saveData` write; NFR-PSR-011 device-local API recon subtask
+                          (verify app.loadLocalStorage/saveLocalStorage at minAppVersion
+                          1.12.7; escalate per NG6 if absent) KEPT.
+                          T-PSR-021 (Wave 3b) KEPT + made explicit: 3-bridge de-couple +
+                          ObsidianBridge SettingsPort device-local re-point
+                          (app.loadLocalStorage/saveLocalStorage, key
+                          `specorator:settings`, never data.json) + its TEST-PSR-024
+                          data.json-hygiene RED test (now qa→dev tracked).
+                          COVERAGE TABLE updated: no TEST-PSR-025; 24 TEST-PSR mapped
+                          (001..004→T-PSR-001 load-or-default cluster, 005..007→T-PSR-002,
+                          024→T-PSR-021); added REQ-PSR-013/NFR-PSR-010/NFR-PSR-011 rows;
+                          T-PSR-001..004 map to REQ-PSR-013 (load-or-default) + REQ-PSR-006/008.
+                          /spec:analyze trace re-check recommended (TEST-PSR-025 no longer
+                          appears in the coverage table).
+                          FIRST READY TASK (qa): T-PSR-001 (RED load-or-default tests).
+                          First dev-owned ready task after Batch 1: T-PSR-003 (slim
+                          PluginSettings, blocked only by T-PSR-002).
+                          Next: /spec:implement — dev/qa pick up Batch 1.
 ```

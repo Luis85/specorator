@@ -7,7 +7,7 @@ status: accepted
 owner: pm
 inputs:
   - IDEA-PSR-001
-  - CHARTER-CLAUDIAN-REBOOT  # 2026-05-24 amendment: CHARTER-REQ-SET + CHARTER-REQ-SEC
+  - CHARTER-CLAUDIAN-REBOOT  # 2026-05-24 amendments: CHARTER-REQ-SET + CHARTER-REQ-SEC + CHARTER-REQ-FRESH
 created: 2026-05-24
 updated: 2026-05-24
 epic: claudian-reboot
@@ -65,6 +65,9 @@ read the gutted tree as the canonical starting shape.
 - NG7 — Authoring the exact file-by-file delete list, the trimmed `main.ts` shape,
   or the `IconPort`/`<SpIcon>` keep/prune decision — those are design (architect)
   concerns deferred to Stage 4 (see Q4, Q5 in Clarifications).
+- NG8 — No backwards compatibility — complete rewrite. No migration of legacy
+  `data.json`/settings/sessions, no compat shims or deprecated-field handling, no
+  version-bump migrations (CHARTER-REQ-FRESH).
 
 ## Personas / stakeholders
 
@@ -256,15 +259,15 @@ read the gutted tree as the canonical starting shape.
 ### REQ-PSR-013 — User/device-scoped settings persist to device-local storage, not `data.json`
 
 - **Pattern:** event-driven
-- **Statement:** *When the plugin persists `PluginSettings`, the plugin shall write the user/device-scoped fields (`locale`, `logLevel`) to a device-local store outside `data.json`, and on first load after upgrade shall read any legacy `data.json` settings into the device-local store and clear them from `data.json`.*
+- **Statement:** *When the plugin persists `PluginSettings`, the plugin shall write the user/device-scoped fields (`locale`, `logLevel`) to a device-local store outside `data.json`; and when the plugin loads with no stored settings, the plugin shall use `DEFAULT_SETTINGS` (load-or-default), performing no migration from any prior state.*
 - **Acceptance:**
-  - Given the plugin loaded on a vault whose `data.json` carries a legacy persisted settings blob with `locale` and/or `logLevel`
-  - When `onload` completes (the one-time migrate-and-clear runs) and the user subsequently changes `locale` or `logLevel` and the change is saved
-  - Then after the save (a) the device-local store returns the changed value through `SettingsPort.getSettings` (round-trip), and (b) `data.json` contains no `locale` and no `logLevel` field — neither carried forward from the legacy blob nor written by the save.
+  - Given the plugin loaded on a vault with no device-local stored settings
+  - When `onload` completes (the plugin loads `DEFAULT_SETTINGS`, no migration runs) and the user subsequently changes `locale` or `logLevel` and the change is saved
+  - Then after the save (a) the device-local store returns the changed value through `SettingsPort.getSettings` (round-trip), and (b) `data.json` contains no `locale` and no `logLevel` field.
 - **Priority:** must
-- **Satisfies:** CHARTER-CLAUDIAN-REBOOT §1 (CHARTER-REQ-SET); §6a "Settings storage — RESOLVED" (P0-relevant)
-- **Traces to:** design §C.3a (migrate-and-clear) + §C.3b (three-bridge story) + §C.6/§C.16 (`ObsidianBridge` re-point); SPEC-PSR-002a (migrate-and-clear contract + edges) + SPEC-PSR-008 (tab persistence); ADR-PSR-002; TEST-PSR-024/025
-- **Note:** The `SettingsPort` **contract is unchanged** (`getSettings`/`saveSettings`). Only its `ObsidianBridge` backing store moves from `data.json` (`loadData`/`saveData`) to a device-local store (Obsidian `app.loadLocalStorage`/`saveLocalStorage`, device-scoped and not synced, or an equivalent gitignored device-local file). This requirement re-points the persistence of REQ-PSR-006/007/008 — it does not change which fields exist (still `{ locale, logLevel }`) nor the settings-tab behaviour (REQ-PSR-007 still calls `SettingsPort.saveSettings`). Rationale (CHARTER-REQ-SET): vaults are used collaboratively and git-backed, so `data.json` is committed and shared; personal/device prefs must not leak into shared, version-controlled state. `data.json` holds only genuinely vault-shared settings — P0 has none, so P0's `data.json` settings slice ends up empty after migration. The one-time migrate-and-clear is required so old shared blobs stop being committed. The migration of the *field shape* (strip-on-read to `{ locale, logLevel }`) is REQ-PSR-008/SPEC-PSR-002; this requirement adds the *storage-location* migrate-and-clear on top of it.
+- **Satisfies:** CHARTER-CLAUDIAN-REBOOT §1 (CHARTER-REQ-SET, CHARTER-REQ-FRESH); §6a "Settings storage — RESOLVED" (P0-relevant)
+- **Traces to:** design §C.3b (three-bridge story) + §C.6/§C.16 (`ObsidianBridge` re-point); SPEC-PSR-002 (load-or-default) + SPEC-PSR-008 (tab persistence); ADR-PSR-002; TEST-PSR-024
+- **Note:** The `SettingsPort` **contract is unchanged** (`getSettings`/`saveSettings`). Only its `ObsidianBridge` backing store moves from `data.json` (`loadData`/`saveData`) to a device-local store (Obsidian `app.loadLocalStorage`/`saveLocalStorage`, device-scoped and not synced, or an equivalent gitignored device-local file). This requirement re-points the persistence of REQ-PSR-006/007/008 — it does not change which fields exist (still `{ locale, logLevel }`) nor the settings-tab behaviour (REQ-PSR-007 still calls `SettingsPort.saveSettings`). Rationale (CHARTER-REQ-SET): vaults are used collaboratively and git-backed, so `data.json` is committed and shared; personal/device prefs must not leak into shared, version-controlled state. Per **CHARTER-REQ-FRESH** (complete rewrite, see NG8) there is **no migration**: a fresh install starts clean and an in-place upgrade ignores any prior `data.json`/settings/session state. On first run with no stored settings the plugin loads `DEFAULT_SETTINGS` (load-or-default). The earlier one-time legacy `data.json` read-migrate-and-clear clause is **removed** — it was a backwards-compat affordance now ruled out by CHARTER-REQ-FRESH.
 
 ### REQ-PSR-014 — Secrets never persist to `data.json` (inherited epic constraint, P0-vacuous)
 
@@ -304,7 +307,7 @@ read the gutted tree as the canonical starting shape.
 | NFR-PSR-008 | supply-chain | Workflow changes stay SHA-pinned + lint-clean | Any `ci.yml` edit for REQ-PSR-012 keeps every `uses:` pinned to a 40-char commit SHA and passes `actionlint` + `verify:workflows` |
 | NFR-PSR-009 | legibility | No dead bypass artifacts | No `eslint-disable` comment, stubbed test, or `if: false` step survives that exists only to mask deleted-subsystem references (supports REQ-PSR-005) |
 | NFR-PSR-010 | data-hygiene | No user/device-scoped settings in committed `data.json` | After the plugin saves settings on the gutted P0 tree, the persisted `data.json` settings slice contains **no** `locale` and **no** `logLevel` field (regression guard for REQ-PSR-013 / CHARTER-REQ-SET); the round-trip value is read back from the device-local store |
-| NFR-PSR-011 | compatibility | Device-local storage API supported at the pinned `minAppVersion` | The device-local persistence API used for REQ-PSR-013 (Obsidian `app.loadLocalStorage`/`saveLocalStorage` or equivalent) is verified available at `minAppVersion 1.12.7` (NFR-PSR-007 keeps the manifest pin unchanged). **Flag (P1, not P0):** `app.secretStorage` (REQ-PSR-014 / CHARTER-REQ-SEC) availability at `1.12.7` is **unconfirmed** — verify before the first secret surface lands; if it needs a newer Obsidian, escalate per NG6 / R-PSR-6 rather than silently bumping the manifest |
+| NFR-PSR-011 | compatibility | Device-local storage API supported at the pinned `minAppVersion` | The device-local persistence API used for REQ-PSR-013 (Obsidian `app.loadLocalStorage`/`saveLocalStorage` or equivalent) is verified available at `minAppVersion 1.12.7` (NFR-PSR-007 keeps the manifest pin unchanged). **Deferred flag (P1, not P0):** `app.secretStorage` (REQ-PSR-014 / CHARTER-REQ-SEC) availability at `1.12.7` is **unconfirmed** — verify before the first secret surface lands; if it needs a newer Obsidian, escalate per NG6 / R-PSR-6 rather than silently bumping the manifest |
 
 ## Success metrics
 
@@ -318,7 +321,8 @@ read the gutted tree as the canonical starting shape.
   - CI runs and passes on the `next` branch for the P0 PR (REQ-PSR-012).
   - After a settings save, the committed `data.json` settings slice carries **no**
     `locale`/`logLevel` field (NFR-PSR-010 / REQ-PSR-013); the value round-trips
-    through the device-local store.
+    through the device-local store. On first run with no stored settings the plugin
+    loads `DEFAULT_SETTINGS` (load-or-default, no migration — CHARTER-REQ-FRESH / NG8).
 - **Counter-metric:** number of verify-gate bypasses introduced to make P0 pass
   (`--no-verify`, `--ignore-scripts`, `if: false`, skipped tests, coverage-`include`
   removals that hide untested kept code, or `eslint-disable` lines masking deleted
@@ -346,8 +350,9 @@ What must be true to ship P0 (merge into `next`).
       and actionlint-clean (NFR-PSR-008).
 - [ ] `manifest.json` `id`/`version`/`minAppVersion` unchanged (NFR-PSR-007).
 - [ ] After a settings save, `data.json` carries no `locale`/`logLevel` field
-      (NFR-PSR-010 / REQ-PSR-013); the legacy `data.json`→device-local migrate-and-clear
-      ran once on upgrade; the value round-trips through the device-local store.
+      (NFR-PSR-010 / REQ-PSR-013); the value round-trips through the device-local store.
+      On first run with no stored settings the plugin loads `DEFAULT_SETTINGS`
+      (load-or-default, no migration — CHARTER-REQ-FRESH / NG8).
 - [ ] The device-local persistence API used for REQ-PSR-013 is verified available at
       `minAppVersion 1.12.7` (NFR-PSR-011); the `app.secretStorage` availability flag
       is recorded for P1 (no P0 secret surface).
@@ -360,8 +365,9 @@ What must be true to ship P0 (merge into `next`).
 > Q1–Q3 are **resolved** in this PRD (REQ-PSR-011, REQ-PSR-006, REQ-PSR-012
 > respectively). Q4–Q5 are deferred to design per scope; see the Clarifications
 > block below. The 2026-05-24 settings/secret amendment (REQ-PSR-013, REQ-PSR-014)
-> adds CL-5..CL-9 as downstream deltas for the architect + planner. No open question
-> blocks `status: accepted`.
+> plus the CHARTER-REQ-FRESH no-backwards-compat simplification add CL-FRESH + CL-8
+> as downstream deltas for the architect + planner. No open question blocks
+> `status: accepted`.
 
 See [Clarifications](#clarifications).
 
@@ -434,40 +440,16 @@ decision (deferred to the architect).
 > following items for re-verification (workflow-state moves back to Stage 3 for the
 > amendment; the architect re-touches spec §C.3/§C.6 + SPEC-PSR-002).
 
-- **CL-5 — `SettingsPort` backing store re-points (RESOLVED-IN-DESIGN → design
-  §C.16 + §C.6, SPEC-PSR-008 + SPEC-PSR-002a, ADR-PSR-002):** REQ-PSR-013 moves the
-  `ObsidianBridge` backing store for `SettingsPort.getSettings`/`saveSettings` off
-  `data.json` (`loadData`/`saveData`) onto a device-local store (Obsidian
-  `app.loadLocalStorage`/`saveLocalStorage`, key `specorator:settings`, device-scoped
-  + not synced; gitignored device-local file as the ADR-PSR-002 Option C escalation
-  fallback). **Resolved:** design §C.16 re-points `ObsidianBridge.getSettings`/
-  `saveSettings`; §C.6 drops the `onload` `saveData(this._storedData)` settings write
-  (settings no longer ride `data.json`; `_storedData`/`saveData` has no remaining P0
-  settings consumer — dropped unless a non-settings module needs the round-trip).
-  SPEC-PSR-008 pins the tab persistence via the re-pointed port; SPEC-PSR-002a pins
-  the bridge round-trip. `MockBridge` (in-memory) / `LocalStorageBridge`
-  (web-localStorage) unchanged (design §C.3b).
-
-- **CL-6 — SPEC-PSR-002 migration gains a storage-location clear (RESOLVED-IN-DESIGN
-  → design §C.3a, SPEC-PSR-002a):** The strip-on-read field migration (SPEC-PSR-002)
-  now composes with a **one-time storage-location migrate-and-clear** (project →
-  relocate → clear). **Resolved:** design §C.3a + SPEC-PSR-002a pin the contract and
-  the idempotency + edge table (legacy present / already migrated / both populated
-  [device-local wins] / both empty / second-run no-op / device-local API
-  unavailable). The field-shape strip and the storage-location clear compose:
-  project (reuse `coreSettingsModule.migrate`) → relocate (seed device-local only if
-  empty) → clear (`data.json` slice deleted). Tests: TEST-PSR-024 (data-hygiene,
-  NFR-PSR-010) + TEST-PSR-025 (relocate-and-clear idempotency).
-
-- **CL-7 — new ADR-PSR-002 warranted (RESOLVED → filed at
-  `docs/adr/ADR-PSR-002-settings-storage-device-local.md`, status: accepted):**
-  ADR-PSR-002 records the device-local backing-store choice for `SettingsPort`, the
-  one-time `data.json`→device-local migrate-and-clear contract, the
-  `minAppVersion 1.12.7` API-availability check (NFR-PSR-011), and a forward pointer
-  that the `SecretStorePort`/`app.secretStorage` ADR is deferred to P1 (not folded
-  in here). Matches the ADR-PSR-001 format; added to the design + spec `adrs:`
-  frontmatter. Charter §6a "Settings storage — RESOLVED, P0-relevant, ADR filed in
-  P0" satisfied.
+- **CL-FRESH — no backwards compatibility (CHARTER-REQ-FRESH / NG8) — RESOLVED in
+  design/spec (2026-05-24, architect):** Settings load-or-default; no migration of
+  any prior `data.json`/settings/sessions, no compat shims, no version-bump
+  migrations. **Done:** SPEC-PSR-002 rewritten to load-or-default (no `migrate`, no
+  `settingsVersion` bump); **SPEC-PSR-002a deleted** (no relocate-and-clear);
+  **TEST-PSR-025 deleted**; TEST-PSR-001..004 simplified to load-or-default +
+  coerce + no-migration + unknown-key hygiene; design §C.3/§C.3a/§C.6 updated;
+  ADR-PSR-002 amended in place to drop the migration section (device-local decision
+  kept). **Planner (remaining):** drop the migration tasks/tests, keep the
+  device-local re-point (T-PSR-021) + the `data.json`-hygiene test (TEST-PSR-024).
 
 - **CL-8 — `SecretStorePort` ADR deferred to P1 (→ architect, P1; NOT P0):**
   REQ-PSR-014 is a P0-vacuous inherited constraint. The `SecretStorePort` contract +
@@ -476,16 +458,6 @@ decision (deferred to the architect).
   prior `SECRET_STORE_PORT`/`SecretStorePort`/`SECRET_ID_*` symbols. Flag carried to
   P1: confirm `app.secretStorage` is available at `minAppVersion 1.12.7` before that
   surface lands (NFR-PSR-011); escalate, do not bump the manifest silently (NG6).
-
-- **CL-9 — planner: add the regression guard + migration tasks (→ planner):**
-  REQ-PSR-013 + NFR-PSR-010 need (a) a test asserting that after a settings save the
-  `data.json` settings slice has no `locale`/`logLevel` and the value round-trips
-  through the device-local store, and (b) a test for the one-time legacy
-  `data.json`→device-local migrate-and-clear (idempotent). These extend the existing
-  SPEC-PSR-002 migration tasks (T-PSR-001..004 cluster) and the bridge re-point
-  (T-PSR-021 bridge work) rather than adding a new delete wave. No new task is needed
-  for REQ-PSR-014 in P0 (vacuous); the planner only records it traces to the deferred
-  P1 `SecretStorePort` ADR.
 
 ---
 
@@ -503,5 +475,12 @@ decision (deferred to the architect).
       deferred to the architect with owners — no open question blocks acceptance.
 - [x] Settings/secret amendment (2026-05-24): REQ-PSR-013 (CHARTER-REQ-SET) +
       REQ-PSR-014 (CHARTER-REQ-SEC) added in EARS; NFR-PSR-010/011 added; downstream
-      deltas (CL-5..CL-9) flagged to architect + planner. REQ-PSR-014 is P0-vacuous;
+      deltas flagged to architect + planner. REQ-PSR-014 is P0-vacuous;
       its `SecretStorePort` ADR is deferred to P1. No open question blocks acceptance.
+- [x] No-backwards-compat simplification (2026-05-24, CHARTER-REQ-FRESH): NG8 added;
+      REQ-PSR-013 trimmed to load-or-default (legacy `data.json` migrate-and-clear
+      clause removed); success metrics + release criteria drop the migration-pass
+      criterion (keep `data.json` hygiene + round-trip); CL-5/CL-6/CL-7/CL-9 collapsed
+      into CL-FRESH (architect drops SPEC-PSR-002 strip-migration + SPEC-PSR-002a +
+      TEST-PSR-025; planner drops migration tasks/tests). No open question blocks
+      acceptance.

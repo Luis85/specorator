@@ -15,7 +15,17 @@ informed:
   - qa
 supersedes: []
 superseded-by: []
-tags: [architecture, settings, persistence, migration, claudian-reboot, P0]
+tags: [architecture, settings, persistence, claudian-reboot, P0]
+amended:
+  - date: 2026-05-24
+    by: architect
+    note: >-
+      CHARTER-REQ-FRESH (no backwards compatibility) — removed the one-time
+      legacy data.json→device-local migrate-and-clear from the Decision. Settings
+      are now load-or-default off the device-local store; no migration of any
+      prior state. The device-local backing-store decision is unchanged. Amended
+      in place because this ADR was not yet downstream-consumed (no
+      implementation depends on the removed migration).
 ---
 
 # ADR-PSR-002 — Persist user/device-scoped settings to device-local storage, not `data.json`
@@ -37,6 +47,15 @@ bounding constraint **CHARTER-REQ-SET**) adds a binding constraint surfaced as
 **REQ-PSR-013** (with the data-hygiene guard **NFR-PSR-010** and the
 compatibility check **NFR-PSR-011**): user/device-scoped settings must persist
 to a device-local store **outside** `data.json`.
+
+A later charter amendment (**CHARTER-REQ-FRESH**, no backwards compatibility —
+PRD NG8) further rules out *any* migration of prior `data.json` / settings /
+session state. P0 is a complete rewrite: there is no strip-on-read field
+migration, no `settingsVersion` bump, and no one-time legacy→device-local
+relocate-and-clear. On first run with no stored settings the plugin uses
+`DEFAULT_SETTINGS` (**load-or-default**). This ADR was amended in place
+(2026-05-24) to drop the migrate-and-clear step it originally carried; see the
+frontmatter `amended` note.
 
 Forces at play:
 
@@ -80,23 +99,15 @@ P0 has **none** (so P0's `data.json` settings slice is empty after migration).
 when absent or unparseable); `saveSettings` writes the device-local store and
 writes **nothing** to `data.json`.
 
-We add a **one-time, idempotent migrate-and-clear** on first load after upgrade
-(layered on top of the existing strip-on-read field migration of SPEC-PSR-002):
-
-1. **Project** — read any legacy `data.json` settings slice and project it down
-   to `{ locale, logLevel }` (the existing `coreSettingsModule.migrate`
-   strip-on-read; SPEC-PSR-002).
-2. **Relocate** — if the device-local store is empty/absent, write the projected
-   `{ locale, logLevel }` into it. If the device-local store is already
-   populated, it wins (the user has already chosen on this device) and the
-   legacy `data.json` values are discarded.
-3. **Clear** — remove the settings slice from `data.json` so the old shared blob
-   stops being committed.
-
-The flow is idempotent and safe in every order of arrival: legacy slice present;
-already migrated (device-local populated, legacy absent); `data.json` already
-empty; both empty (fresh install). A second run finds nothing to migrate and is
-a no-op.
+**No migration from legacy `data.json` (CHARTER-REQ-FRESH) — load-or-default.**
+P0 is a complete rewrite with no backwards compatibility (PRD NG8). The plugin
+does **not** read, project, relocate, or clear any prior `data.json` settings
+slice, and `coreSettingsModule` carries **no** `migrate()` and does **not** bump
+`settingsVersion`. On first run with no device-local settings the plugin loads
+`DEFAULT_SETTINGS`; an in-place upgrade simply finds no device-local blob and
+starts from defaults. (An earlier revision of this ADR specified a one-time
+legacy→device-local migrate-and-clear; that step is removed by CHARTER-REQ-FRESH
+— see the amendment note.)
 
 **API-availability check (NFR-PSR-011).** The dev MUST verify, at implementation,
 that `app.loadLocalStorage`/`app.saveLocalStorage` are available at
@@ -119,18 +130,19 @@ lands (NFR-PSR-011); escalate rather than bump the manifest silently.
 
 ## Considered options
 
-### Option A — Device-local store (`app.loadLocalStorage`/`saveLocalStorage`) with one-time migrate-and-clear (chosen)
+### Option A — Device-local store (`app.loadLocalStorage`/`saveLocalStorage`) with load-or-default, no migration (chosen)
 
 - Pros: device-scoped + not synced — the correct scope for personal preferences;
   keeps `data.json` clean on git-backed collaborative vaults (CHARTER-REQ-SET);
   the `SettingsPort` contract and `PluginSettings` shape are unchanged
   (`MockBridge`/`LocalStorageBridge` untouched in contract); native Obsidian API,
-  no new dependency or file format; the migrate-and-clear stops old shared blobs
-  from being committed.
+  no new dependency or file format; **no migration code** to write, test, or
+  maintain (CHARTER-REQ-FRESH) — the load path is simply load-or-default.
 - Cons: device-scoped means a new machine starts from defaults until the user
   re-chooses (acceptable — these are local preferences, and `locale` defaults to
-  `en`, `logLevel` to `warn`); requires the one-time migration to avoid stranding
-  legacy values; depends on the API being present at `minAppVersion 1.12.7`
+  `en`, `logLevel` to `warn`); an in-place upgrade from a pre-reboot install does
+  not carry forward any prior `locale`/`logLevel` (accepted — no backwards
+  compatibility, NG8); depends on the API being present at `minAppVersion 1.12.7`
   (verified per NFR-PSR-011).
 
 ### Option B — Keep settings in `data.json` (`loadData`/`saveData`) — status quo
@@ -159,20 +171,20 @@ lands (NFR-PSR-011); escalate rather than bump the manifest silently.
 - The `SettingsPort` contract, `PluginSettings` shape, the settings tab
   (REQ-PSR-007), and `MockBridge`/`LocalStorageBridge` are all unchanged — the
   move is confined to `ObsidianBridge` + the `main.ts` persistence path.
-- The one-time migrate-and-clear removes legacy `data.json` settings blobs from
-  existing installs on first upgrade, so old shared state stops being committed.
+- No migration code (CHARTER-REQ-FRESH): the load path is a simple
+  load-or-default off the device-local store — nothing to project, relocate, or
+  clear, and no version-driven branch to test or maintain.
 - A device-local store is the correct sync scope; Obsidian Sync / git no longer
   replicate machine-specific preferences.
 
 ### Negative
 
-- A one-time migration adds load-path complexity and must be idempotent and safe
-  across four arrival states (legacy present / already migrated / `data.json`
-  empty / both empty). Covered by tests (NFR-PSR-010 round-trip + a migrate-and-
-  clear idempotency test).
 - Device-scoped storage means preferences do not follow the user to a new device;
   this is intended for `locale`/`logLevel` but is a behaviour change from the
   pre-reboot synced `data.json`.
+- No backwards compatibility: an in-place upgrade from a pre-reboot install does
+  not carry forward any prior `locale`/`logLevel`; first run loads
+  `DEFAULT_SETTINGS` (accepted per NG8 / CHARTER-REQ-FRESH).
 - Adds a dependency on the `app.loadLocalStorage`/`saveLocalStorage` API being
   present at `minAppVersion 1.12.7` (verified per NFR-PSR-011; escalation path =
   Option C).
@@ -180,8 +192,8 @@ lands (NFR-PSR-011); escalate rather than bump the manifest silently.
 ### Neutral
 
 - `data.json` survives as the slot for genuinely vault-shared settings; P0 has
-  none, so its settings slice is empty after migration. Later phases that add a
-  truly vault-shared setting put it back in `data.json`.
+  none, so its settings slice is empty. Later phases that add a truly vault-shared
+  setting put it back in `data.json`.
 - The `_storedData`/`saveData` path in `main.ts` loses its P0 settings consumer.
   `PluginCore.init(storedData)` may still take a stored-data argument for module
   bootstrap, but the **settings** write no longer rides `saveData`; if no kept P0
@@ -195,14 +207,13 @@ lands (NFR-PSR-011); escalate rather than bump the manifest silently.
 - **`ObsidianBridge.getSettings`/`saveSettings`** read/write
   `app.loadLocalStorage('specorator:settings')` / `saveLocalStorage(...)`, never
   `loadData`/`saveData` for the settings slice (SPEC-PSR-008, design §C.6).
-- **One-time migrate-and-clear** runs on first load (SPEC-PSR-002, design §C.3):
-  project → relocate → clear; idempotent across all four arrival states.
+- **Load-or-default, no migration** (CHARTER-REQ-FRESH) — `coreSettingsModule` has
+  no `migrate()` and no `settingsVersion` bump; `getSettings()` returns
+  `DEFAULT_SETTINGS` when the device-local blob is absent/unparseable. No legacy
+  `data.json` read/project/relocate/clear (SPEC-PSR-002, design §C.3/§C.3a).
 - **NFR-PSR-010 regression guard** — a test asserts that after a `saveSettings`,
   the persisted `data.json` settings slice contains no `locale` and no `logLevel`,
   and the value round-trips through the device-local store (TEST-PSR-024).
-- **Migrate-and-clear test** — a test asserts the one-time legacy
-  `data.json`→device-local relocation runs once, clears the legacy slice, and is
-  idempotent on a second run (TEST-PSR-025).
 - **NFR-PSR-011 API-availability** — the dev verifies `app.loadLocalStorage`/
   `saveLocalStorage` are available at `minAppVersion 1.12.7` before relying on
   them; escalate (Option C fallback) rather than bump the manifest (NG6).
@@ -211,16 +222,17 @@ lands (NFR-PSR-011); escalate rather than bump the manifest silently.
 
 ## References
 
-- PRD-PSR-001 (`specs/plugin-shell-reboot/requirements.md`) — REQ-PSR-013,
-  REQ-PSR-014, NFR-PSR-010, NFR-PSR-011, Clarifications CL-5..CL-9.
-- DESIGN-PSR-001 (`specs/plugin-shell-reboot/design.md`) — §C.3 (data model +
-  migrate-and-clear), §C.6 (`main.ts` persistence path), §C.16 (settings storage).
-- SPEC-PSR-001 (`specs/plugin-shell-reboot/spec.md`) — SPEC-PSR-002 (migration
-  relocate-and-clear contract), SPEC-PSR-008 (settings tab persistence),
-  TEST-PSR-024/025.
+- PRD-PSR-001 (`specs/plugin-shell-reboot/requirements.md`) — REQ-PSR-013
+  (load-or-default), REQ-PSR-014, NFR-PSR-010, NFR-PSR-011, NG8, Clarification
+  CL-FRESH.
+- DESIGN-PSR-001 (`specs/plugin-shell-reboot/design.md`) — §C.3 (data model =
+  load-or-default), §C.3a (device-local, no migration), §C.6 (`main.ts`
+  persistence path), §C.16 (settings storage).
+- SPEC-PSR-001 (`specs/plugin-shell-reboot/spec.md`) — SPEC-PSR-002 (load-or-default,
+  no migration), SPEC-PSR-008 (settings tab persistence), TEST-PSR-024.
 - CHARTER-CLAUDIAN-REBOOT (`specs/claudian-reboot/parity-charter.md`) §1
-  (CHARTER-REQ-SET, CHARTER-REQ-SEC), §6a (Settings storage — RESOLVED,
-  P0-relevant, ADR filed in P0).
+  (CHARTER-REQ-SET, CHARTER-REQ-SEC, CHARTER-REQ-FRESH), §6a (Settings storage —
+  RESOLVED, P0-relevant, ADR filed in P0).
 - ADR-PSR-001 (`docs/adr/ADR-PSR-001-reboot-plugin-shell.md`) — the P0 reboot
   this ADR's settings change rides on.
 - ADR-008 (`docs/adr/ADR-008-narrow-ports-supersede-ibridge.md`) — `SettingsPort`
