@@ -65,6 +65,7 @@ The P0 reboot (`ADR-PSR-001`) **keeps the architectural skeleton** and
 | 0034 | Stream-delta reducer | Feature surface — regrows (P1) |
 | ADR-PSR-001 | Reboot the plugin shell (P0) | **Accepted** — this reboot |
 | ADR-PSR-002 | Settings storage: device-local, load-or-default | **Accepted** — P0 |
+| ADR-CC-001 | ChatRuntime port shape (async-generator `query` + per-phase setter growth) | **Proposed** — P1 (pending human sign-off, charter §6a) |
 
 > Two files share the number `0030` (`ifeatureservice-interface-for-di` and
 > `structured-json-output-via-json-schema`) — a pre-existing numbering collision,
