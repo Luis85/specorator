@@ -378,3 +378,23 @@ convergence.
   so the ban is enforced where the base block applies (application, infra-bridge/
   mock/localstorage, root). The gutted tree is clean everywhere; the positive
   control proves the mechanism. Broadening to every layer is a possible refinement.
+
+## Phase D — CI / docs / coverage / final gate
+
+### T-PSR-030 — Docs rewrite (dev, REQ-PSR-010)
+
+- CLAUDE.md: rewrote the Architecture layer table (gutted state), the Key files
+  list (dropped `Feature.ts`/`FeatureStep.ts`/`FeatureRepository.ts`; added
+  `AgentSidebarView`/`AgentPanelRoot.vue`/slim `main.ts`/`settings.ts`), the Vue
+  router note (router removed in P0), the Vault-structure block (marked
+  "removed in P0 / regrows per phase"), and the CI-branch line (added `next`).
+  AGENTS.md carries no "CI runs on develop/demo/main" prose to reconcile (only a
+  direct-push rule). No deleted-subsystem path remains in the architecture
+  sections.
+
+### T-PSR-032 — Coverage threshold on the gutted tree (qa, NFR-PSR-002, R-PSR-5)
+
+- `npm run test:coverage`: 38 files / 308 tests PASS; coverage
+  **94.53 / 85.01 / 87.17 / 94.66** (stmts/branches/funcs/lines) — all clear
+  80/70/80/80. **No `include` change** (R-PSR-5 contingency not triggered).
+  Recorded in test-report.md.
