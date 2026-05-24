@@ -287,3 +287,24 @@ convergence.
   (T-PSR-026) will match a real removed path.
 - **typecheck green-or-expected:** errors trace only to Wave 3 infra adapters/
   bridges/MCP registrars and their tests. REQ-PSR-004/005; §9.
+
+### T-PSR-020 — Wave 3a: infra adapters/registrars/repos/mock-adapters (dev, OC-PSR-5)
+
+- Deleted the Claude/Cursor adapters + binary resolvers, the
+  `Obsidian{Mcp,Cli,MetadataCache,Canvas,SecretStore,ConfirmModal,MarkdownRender}`
+  adapters, `obsidian/mcp/**` registrars, subprocess plumbing
+  (`runSubprocessStructured`/`buildSubprocessArgs`/`buildCursorSubprocessArgs`/
+  `SubprocessLifecycle`/`NdjsonChannel`/`ProposalStore`), `infrastructure/cursor/**`,
+  `bridge/{FeatureRepository,degradedClaudeCliPort}`, `LocalStorageSecretStore`,
+  the mock chat/secret/mcp/canvas/cursor/cli adapters + `fixtures.ts`, and
+  `infrastructure/workflow-state/**` — plus their tests.
+- **OC-PSR-5 (recorded for T-PSR-026):** MCP registrars lived under
+  `src/infrastructure/obsidian/mcp/**`, **not** a top-level `@/infrastructure/mcp/**`.
+  The SPEC-PSR-013 `@/infrastructure/mcp/**` glob matches nothing → drop or repoint
+  it to `@/infrastructure/obsidian/mcp/**` (NFR-PSR-009). `infrastructure/cursor/**`
+  did exist (now deleted).
+- `src/infrastructure` is now `{bridge/ports.ts, localstorage/LocalStorageBridge,
+  mock/MockBridge, obsidian/ObsidianBridge, vault/VaultPath}`.
+- **typecheck green-or-expected:** errors now trace to the three bridges' chat/icon
+  members + the deleted `ports.ts` keys — the Wave 3b de-couple set (T-021).
+  REQ-PSR-004/005; §9.
