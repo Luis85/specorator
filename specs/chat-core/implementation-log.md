@@ -99,3 +99,22 @@ SHA.
   (transform/import error — runtime does not exist). Green target = T-CC-007.
 - **Outcome:** done (RED established). eslint + prettier green.
 - **Deviation:** none.
+
+### T-CC-007 🔨 — `MockChatRuntime` (scripted in-memory runtime) (dev)
+
+- **Spec:** SPEC-CC-011, REQ-CC-014, NFR-CC-014.
+- **Files:** `src/infrastructure/mock/MockChatRuntime.ts` (new) — implements `ChatRuntimePort` (9
+  members); optional `MockChatScriptEntry[]` script (string → `text` chunk; default deterministic
+  `text…` reply); `providerId='claude'`; `prepareTurn` builds the P1 `PreparedChatTurn`;
+  `ensureReady→true`; `isReady→true`; no-op `onReadyStateChange` unsubscriber; synthetic
+  `getSessionId`/`resetSession`; `query` is an `async *` yielding each scripted chunk behind a
+  per-chunk `await Promise.resolve()` boundary then a single `done`; `cancel()` sets a flag the loop
+  reads via `isCancelled()` and stops yielding. No subprocess.
+- **GREEN:** `npx vitest run --project unit tests/infrastructure/mock/MockChatRuntime.test.ts` →
+  11 passed (TEST-CC-001 incl. the cancel + error + usage legs). `npm run typecheck` exit 0.
+- **Outcome:** done. eslint + prettier green.
+- **Deviation:** imports the chat types via the `@/domain/ports` barrel (SPEC-CC-009 one-stop import)
+  rather than deep `@/domain/chat/*` paths — required because the P0 `DELETED_SUBSYSTEM_BAN` ESLint
+  rule (eslint.config.js) still bans deep `@/domain/chat/**` imports outside `src/domain/**`. The
+  barrel is the sanctioned consumer import; no ESLint config change needed for this batch. (A later
+  batch that needs a deep chat import from infra/ui would update that ban — flagged, not done here.)
