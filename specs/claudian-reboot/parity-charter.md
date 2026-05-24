@@ -67,8 +67,14 @@ Claudian user would recognise immediately.
   — Obsidian `app.saveLocalStorage`/`loadLocalStorage` (device-scoped, not synced), or a
   separate gitignored file — never `data.json`. `data.json` holds only genuinely
   vault-shared settings (P0 has none). The `SettingsPort` contract is unchanged; only its
-  ObsidianBridge backing store moves to local storage. A one-time read-migrate-and-clear
-  from any legacy `data.json` settings is required so old shared blobs stop being committed.
+  ObsidianBridge backing store moves to local storage.
+- **[CHARTER-REQ-FRESH] No backwards compatibility — this is a complete rewrite.** No
+  migration of legacy `data.json`, prior-version settings, chat sessions, or any old
+  state; no compat shims, no deprecated-field handling, no version-bump migrations. A
+  fresh install starts clean; an in-place upgrade simply ignores prior state. This
+  **removes all settings-migration work** — settings just **load-or-default** from the
+  device-local store (supersedes the relocate-and-clear migration drafted under
+  CHARTER-REQ-SET; that migration is dropped).
 
 ---
 
@@ -233,10 +239,11 @@ Each phase = its own `/spec` cycle on a branch off `next`, vertical slice, **wit
   `SecretStorePort` contract + the `app.secretStorage` binding + the `minAppVersion`
   check. Filed when secrets first land (≈P1 Claude key / P9 providers).
 - **Settings storage — RESOLVED:** user/device-scoped settings persist to device-local
-  storage, never `data.json` (CHARTER-REQ-SET). ADR to record the `SettingsPort`
-  backing-store decision + the one-time `data.json`→local-storage migration. **This is
-  P0-relevant** (P0 persists `locale`/`logLevel`) → P0 requirements/spec/tasks amended +
-  ADR filed in P0.
+  storage, never `data.json` (CHARTER-REQ-SET). ADR-PSR-002 records the `SettingsPort`
+  backing-store decision. **No migration** (CHARTER-REQ-FRESH) — settings load-or-default;
+  the relocate-and-clear migration is dropped. **P0-relevant** (P0 persists
+  `locale`/`logLevel`) → ADR-PSR-002 filed in P0; spec/tasks settings persistence
+  re-points to device-local with NO migration path.
 - **Approval-rule persistence** target/shape (device-local vs vault; ties to CHARTER-REQ-SET).
 
 > **Confirmed decisions (2026-05-24):** (1) secrets → Obsidian secret storage +
