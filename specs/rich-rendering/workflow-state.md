@@ -21,8 +21,8 @@ artifacts:
   implementation-log.md: in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 + wire-in T-RR-040..042 done; surface-integration fixes — Gap 1 UsageInfo wire-in DONE [046a0fe], Gap 2 SubagentBlock RESOLVED via CLAR-RR-008 [QA assertion 720b390 + 4-file fix 0fcf123]; T-RR-044 verify gate GREEN [npm run verify: 652 unit, coverage 96.09/89.07/91.56/96.51; npm run test:all: 88 files/653] + styles.css regenerated + deployed to D:/TestVault + draft PR #436 into next opened; T-RR-043 [MANUAL real-Obsidian backing + rich CLI turn, human-owned] + parity screenshots [#434 + P2 states] remain before merge; CLAR-RR-009 real-CLI P2 reducer defect FIXED [RED 96fe4e3 + GREEN d4aefd4 — the production reduceClaudeStream was P1-scope and never emitted P2 chunks from the real claude --output-format stream-json CLI; now maps assistant tool_use/thinking + user tool_result], re-run T-RR-044 to absorb it; the separate markdown-render defect [async MarkdownRenderPort] FIXED 2026-05-25 per ADR-RR-002 [SPEC-RR-010/011/022 + TEST-RR-028] — port→Promise<SafeRenderResult> [de9da57], ObsidianBridge.createMarkdownRenderPort now AWAITS the async MarkdownRenderer.render into a detached element THEN walks the populated fragment [de9da57], MarkdownBlock.vue async-aware [reactive nodes, replace-latest streaming cadence, raw-text first-paint seed] + renders the full additive node-kind union declaratively [1b47476]; Mock/LocalStorage keep the now-async safeMarkdownRenderPort singleton; pure safeMarkdownRender stays SYNC + byte-identical; typecheck 0 err, eslint 0 [no v-html sink], vitest full 672/672 across 89 files [+20: TEST-RR-028 + Promise assertions], P1 unregressed; re-run T-RR-044 to absorb this too)
   test-plan.md: in-progress (TESTPLAN-RR-001; baseline reference + TEST-RR-026 dev leg PASS [T-RR-042] + manual TEST-RR-026 / T-RR-043 M leg scheduled)
   test-report.md: pending
-  review.md: pending
-  traceability.md: pending
+  review.md: complete (REVIEW-RR-001 — verdict Approved with conditions; 11 findings R-RR-001..011; P1 blocker R-RR-001 real-CLI reducer omits subagent/async/compaction/notice/tool_output; P2 R-RR-002 live-thinking never driven, R-RR-003 generic icons, R-RR-004 no diff hunking, R-RR-008 blocked-status absent)
+  traceability.md: pending (reviewer flagged — must be regenerated before review is declared complete, Constitution Art. V)
   release-notes.md: pending
   retrospective.md: pending
 ---
@@ -46,7 +46,7 @@ artifacts:
 | 6. Tasks | `tasks.md` | complete (TASKS-RR-001; T-RR-001..044) |
 | 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 + wire-in T-RR-040..042 done; surface-integration fixes — Gap 1 UsageInfo wire-in DONE [046a0fe], Gap 2 SubagentBlock RESOLVED via CLAR-RR-008 [720b390 + 0fcf123]; CLAR-RR-009 real-CLI P2 reducer defect FIXED [96fe4e3 + d4aefd4]; async markdown render seam FIXED 2026-05-25 per ADR-RR-002 [de9da57 + 1b47476 — port→Promise, ObsidianBridge awaits real renderer, MarkdownBlock async-aware + full node-kind render, TEST-RR-028; full suite 672/672]; gate T-RR-043 [MANUAL, human-owned] + T-RR-044 [verify + PR, orchestrator] remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; report pending) |
-| 9. Review | `review.md`, `traceability.md` | pending |
+| 9. Review | `review.md`, `traceability.md` | review complete (REVIEW-RR-001 — Approved with conditions; R-RR-001 P1 + R-RR-002 P2 are the conditions); `traceability.md` still to regenerate |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
 
@@ -754,6 +754,61 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
                           build:web/docs:api/coverage/audit -- orchestrator-owned). REMAINS: MANUAL TEST-RR-043
                           (real-Obsidian RICH render -- human-owned, re-run to confirm headings/bold/lists/tables
                           render, not plain/<!---->); re-fold this fix into T-RR-044. Hand back to orchestrator.
+2026-05-25 (reviewer, parity review): REVIEW-RR-001 written at specs/rich-rendering/review.md.
+                          VERDICT: Approved with conditions. Systematically diffed OUR P2 impl against
+                          claudian-main per sub-surface (tool rendering, diff, thinking, todo, subagent,
+                          collapsible, markdown, stream/store, usage, tokens). The unit/component suite is
+                          green and faithful (re-ran application+store+reducer: 112/112; the 3 "errors"
+                          were vitest worker-startup timeouts, not failures); the no-v-html invariant,
+                          --sp-* token discipline, additive contract, async-markdown seam, and pure
+                          transforms all hold. 11 findings, separated parity-gaps vs correctness-bugs:
+                          HEADLINE P1 BLOCKER R-RR-001 -- the real-CLI reducer (reduceClaudeStream.ts)
+                          STILL emits only tool_use/thinking/tool_result; it never inspects
+                          parent_tool_use_id, system/compact_boundary, system/task_notification, blocked
+                          messages, or tool_output, so SubagentBlock + async pill + ContextCompactedBlock +
+                          blocked-notices + streaming tool_output are DEAD on the real-Obsidian path even
+                          though every store leg + component is built and unit-tested. CLAR-RR-009 fixed
+                          only the non-subagent subset. The Mock/Fixture scripts emit these chunks, so the
+                          whole unit suite + dev/demo are green and HIDE it; only the unsigned T-RR-043
+                          manual leg would catch it. P2 R-RR-002: the live "Thinking Ns..." counter
+                          (REQ-RR-013) is never driven -- MessageBlocks.vue:94 hardcodes :live="false" and
+                          no live/streaming signal reaches it, so thinking always renders finalised+
+                          collapsed. P2 R-RR-003: toolIcon() collapses ~20 claudian lucide icons
+                          (file-text/file-plus/file-pen/folder-search/list/list-checks/globe/download/...)
+                          to 5 generics, and since ObsidianBridge.setIcon gets the resolved name, even
+                          PRODUCTION icons are wrong (Read/Write/Edit all show the same glyph; TodoWrite/web
+                          tools -> wrench). P2 R-RR-004: DiffView renders all lines flat -- no splitIntoHunks
+                          context elision / "..." hunk separators (DiffRenderer.ts:23). P2 R-RR-008
+                          (correctness): blocked-status detection (isBlockedToolResult, ToolCallRenderer.ts:810)
+                          is absent -- 'blocked' is a declared+styled status that NOTHING ever sets, so a
+                          hook-denied tool shows green-completed. P2 R-RR-005: tool name/summary coverage
+                          narrower than claudian (WebSearch/WebFetch/Skill/plan tools -> empty summary;
+                          mostly CLAR-RR-005-documented but web tools called out). P3: R-RR-006 generic body
+                          uncapped + dumps input JSON; R-RR-007 async subagent classifies sync on the real
+                          path (no agentId from CLI, ties to R-RR-001); R-RR-010 usage % always 0 from CLI +
+                          PRD-RR-024 acceptance "~0.6%" is a typo (claudian % is 0-100 int, our UsageInfo
+                          renders it correctly); R-RR-011 markdown walk drops <a> links + flattens nested
+                          lists/tables. Correctly DEFERRED (NOT findings): inline interactive/approval (P7),
+                          provider-lifecycle subagent consolidation + async hydration retries (P9), tabs/
+                          history/real-compaction (P3), composer/attachments/toolbar/MCP/meter (P4/5/6/8) --
+                          all verified absent-by-design. TRACEABILITY: traceability.md is still `pending` --
+                          must be regenerated before review is complete (Constitution Art. V); it should
+                          flag REQ-RR-013 (R-RR-002) + REQ-RR-006/021a (R-RR-001) as chains present-in-code-
+                          but-not-on-the-delivery-path. quality:metrics overall 64.3 / L1 (reflects pending
+                          downstream artifacts, not code quality -- does not override findings).
+                          CONDITIONS ON THE VERDICT: resolve R-RR-001 (P1) + R-RR-002 (P2), or explicitly
+                          descope R-RR-001's subagent/async/compaction to a later phase WITH human sign-off
+                          (do not leave a silent dead path). HAND-OFF -> dev (R-RR-001 may need a pm/architect
+                          scope call if the CLI stream-json shape cannot carry parent_tool_use_id; R-RR-002/
+                          003/004/008 are dev fixes), pm (R-RR-005 web-tool scope confirm; PRD-RR-024 typo;
+                          R-RR-011 markdown-fidelity scope), architect (CLAR-RR-007 spec-table note; confirm
+                          R-RR-001 descope if the CLI forces it). T-RR-043 (manual real-Obsidian + real-CLI
+                          rich turn) is UNSIGNED and is the leg that would have caught R-RR-001/002/003 --
+                          run it before merge. After fixes: regenerate traceability.md, complete
+                          test-report.md, re-review. Opened CLAR-RR-010 for the real-CLI subagent/async/
+                          compaction/notice/tool_output emission gap (R-RR-001). No code/spec/test edited
+                          (reviewer writes only review.md + traceability.md). Next agent: dev (or orchestrator
+                          to triage the P1/P2 findings into fix tasks).
 ```
 
 ## Open clarifications
@@ -851,3 +906,21 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
       cases watched fail) → GREEN `d4aefd4`. Within ADR-RR-001/ADR-CC-001 (the P2 `StreamChunk` members
       already exist — no new type/seam). **Separate (orchestrator-owned, NOT this fix):** the
       markdown-rich-rendering defect (the async `MarkdownRenderPort` issue in the Obsidian backing).
+- [ ] CLAR-RR-010 *(new — 2026-05-25 reviewer, R-RR-001, P1)* — The real-CLI reducer
+      (`src/infrastructure/obsidian/reduceClaudeStream.ts`) still emits only
+      `tool_use`/`thinking`/`tool_result`. It never inspects `parent_tool_use_id`,
+      `system/subtype:'compact_boundary'`, `system/subtype:'task_notification'`, blocked/denied user
+      messages, or streaming `tool_output`. Claudian's `transformClaudeMessage.ts` derives the P2
+      subagent/async/compaction/notice members from exactly those sources (`emitToolUse`/
+      `emitToolResult` route by `parent_tool_use_id` :23/:30; `transformTaskNotification` :48 →
+      `async_subagent_result`; `compact_boundary` :385 → `context_compacted`; `isBlockedMessage` :446
+      → `notice`). CLAR-RR-009 fixed only the non-subagent subset. Consequence: on the **real
+      Obsidian + CLI** path, `SubagentBlock`, the async status pill, `ContextCompactedBlock`,
+      blocked-notices, and streaming `tool_output` never render — even though every store leg +
+      component is built + unit-tested. The Mock/Fixture scripts emit these chunks, so the unit suite +
+      dev/demo are all green and hide it; only the unsigned T-RR-043 manual leg catches it.
+      **DECISION NEEDED (pm/architect):** either extend the reducer to emit the subagent/async/
+      compaction/notice/tool_output members (verify the CLI `--output-format stream-json` shape
+      carries `parent_tool_use_id` on a real transcript during T-RR-043), OR explicitly descope
+      subagent/async real-CLI rendering to a later phase and record it — do not ship a silent dead
+      path. Owner: dev (impl) / pm+architect (scope if the CLI shape forces a deferral).
