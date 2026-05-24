@@ -76,6 +76,7 @@ const label = computed(() =>
 				<span
 					class="sp-thinking__label"
 					:class="{ 'sp-thinking__label--live': live }"
+					:data-live="live ? 'true' : 'false'"
 					data-testid="thinking-label"
 					>{{ label }}</span
 				>

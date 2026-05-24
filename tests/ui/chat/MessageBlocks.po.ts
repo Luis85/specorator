@@ -3,6 +3,7 @@ import type { VueWrapper } from '@vue/test-utils';
 const TID = {
 	root: 'message-blocks',
 	block: 'message-block',
+	thinkingLabel: 'thinking-label',
 } as const;
 
 /**
@@ -32,6 +33,16 @@ export class MessageBlocksPageObject {
 
 	hasTestid(tid: string): boolean {
 		return this.wrapper.find(this.byTid(tid)).exists();
+	}
+
+	/**
+	 * The `data-live` attribute of each rendered `ThinkingBlock` label, in order
+	 * (R-RR-002 — the trailing thinking block of a streaming turn pulses live).
+	 */
+	thinkingLiveFlags(): string[] {
+		return this.wrapper
+			.findAll(this.byTid(TID.thinkingLabel))
+			.map((w) => w.attributes('data-live') ?? '');
 	}
 
 	countTestid(tid: string): number {

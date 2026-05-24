@@ -36,7 +36,7 @@ const hasBlocks = computed(
 
 <template>
 	<div v-if="isUser()" class="sp-message sp-message--user" data-testid="message-user" dir="auto">
-		<MessageBlocks v-if="hasBlocks" :message="message" />
+		<MessageBlocks v-if="hasBlocks" :message="message" :streaming="streaming" />
 		<MarkdownBlock v-else :content="message.content" />
 	</div>
 	<div
@@ -46,7 +46,7 @@ const hasBlocks = computed(
 		:data-streaming="streaming ? 'true' : undefined"
 		dir="auto"
 	>
-		<MessageBlocks v-if="hasBlocks" :message="message" />
+		<MessageBlocks v-if="hasBlocks" :message="message" :streaming="streaming" />
 		<MarkdownBlock v-else :content="message.content" />
 		<span v-if="interrupted" class="sp-message__interrupted" data-testid="message-interrupted">
 			{{ t('agent.chat.interrupted') }}

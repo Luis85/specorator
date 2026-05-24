@@ -21,9 +21,9 @@ import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { MessageBlocksPageObject } from './MessageBlocks.po';
 
-function mountBlocks(message: ChatMessage) {
+function mountBlocks(message: ChatMessage, streaming = false) {
 	const wrapper = mount(MessageBlocks, {
-		props: { message },
+		props: { message, streaming },
 		global: {
 			provide: {
 				[ICON_PORT as symbol]: staticIconPort,
@@ -118,5 +118,50 @@ describe('MessageBlocks (TEST-RR-008)', () => {
 		expect(po.hasTestid('tool-call-header')).toBe(false);
 		expect(po.hasTestid('write-edit-header')).toBe(false);
 		expect(po.blockCount()).toBe(0);
+	});
+});
+
+describe('MessageBlocks — live thinking counter (R-RR-002, REQ-RR-013)', () => {
+	it('drives the trailing thinking block of a STREAMING turn live', () => {
+		const message = msg({
+			contentBlocks: [
+				{ type: 'text', content: 'before' },
+				{ type: 'thinking', content: 'hmm' },
+			],
+		});
+		const { po } = mountBlocks(message, true);
+		// Only one thinking block — it is the last content block of the live turn.
+		expect(po.thinkingLiveFlags()).toEqual(['true']);
+	});
+
+	it('does NOT drive a finalised (non-streaming) turn live', () => {
+		const message = msg({
+			contentBlocks: [{ type: 'thinking', content: 'done thinking' }],
+		});
+		const { po } = mountBlocks(message, false);
+		expect(po.thinkingLiveFlags()).toEqual(['false']);
+	});
+
+	it('only the LAST content block pulses — a thinking block followed by another block is not live', () => {
+		const message = msg({
+			contentBlocks: [
+				{ type: 'thinking', content: 'earlier reasoning' },
+				{ type: 'text', content: 'a later answer' },
+			],
+		});
+		const { po } = mountBlocks(message, true);
+		// The thinking block is not the trailing content block → finalised, not live.
+		expect(po.thinkingLiveFlags()).toEqual(['false']);
+	});
+
+	it('with two thinking blocks on a streaming turn, only the trailing one is live', () => {
+		const message = msg({
+			contentBlocks: [
+				{ type: 'thinking', content: 'first' },
+				{ type: 'thinking', content: 'second (trailing)' },
+			],
+		});
+		const { po } = mountBlocks(message, true);
+		expect(po.thinkingLiveFlags()).toEqual(['false', 'true']);
 	});
 });

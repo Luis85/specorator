@@ -25,8 +25,16 @@ import ContextCompactedBlock from './ContextCompactedBlock.vue';
  * - `context_compacted` → `ContextCompactedBlock`.
  * Declarative only — no `v-html` (NFR-RR-006). Mirrors claudian-main
  * `MessageRenderer.renderContentBlocks`.
+ *
+ * Live thinking (R-RR-002, REQ-RR-013): a thinking block pulses live only when
+ * this turn is the streaming one AND the thinking block is the trailing content
+ * block. Claudian finalises the previous thinking block the moment a new content
+ * type arrives (`StreamController.finalizeCurrentThinkingBlock` on `text`/
+ * `tool_use`), so only the last block of the live message is live.
  */
-const props = defineProps<{ message: ChatMessage }>();
+const props = withDefaults(defineProps<{ message: ChatMessage; streaming?: boolean }>(), {
+	streaming: false,
+});
 
 /** Tools that route to the diff renderer (parity SPEC-RR-022). */
 const DIFF_TOOLS: ReadonlySet<string> = new Set(['Write', 'Edit']);
@@ -76,6 +84,19 @@ const items = computed<RenderItem[]>(() => {
 function isDiffTool(toolCall: ToolCall): boolean {
 	return DIFF_TOOLS.has(toolCall.name);
 }
+
+/** Index of the trailing content block (the only one that can be a live thinking block). */
+const lastBlockIndex = computed(() => (props.message.contentBlocks?.length ?? 0) - 1);
+
+/**
+ * A thinking block is live iff this turn is streaming AND the block is the
+ * trailing content block (R-RR-002). `item.key` is the block's original index in
+ * `message.contentBlocks`, so this stays correct even when earlier blocks were
+ * dropped from `items` (a dangling tool_use/subagent reference).
+ */
+function isLiveThinking(item: RenderItem): boolean {
+	return props.streaming && item.block.type === 'thinking' && item.key === lastBlockIndex.value;
+}
 </script>
 
 <template>
@@ -91,7 +112,7 @@ function isDiffTool(toolCall: ToolCall): boolean {
 			<ThinkingBlock
 				v-else-if="item.block.type === 'thinking'"
 				:block="item.block"
-				:live="false"
+				:live="isLiveThinking(item)"
 			/>
 			<template v-else-if="item.block.type === 'tool_use' && item.toolCall">
 				<WriteEditBlock v-if="isDiffTool(item.toolCall)" :tool-call="item.toolCall" />
