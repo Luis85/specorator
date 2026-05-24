@@ -1,4 +1,13 @@
-import { FileSystemAdapter, Notice, TFile, TFolder, normalizePath, setIcon, type App } from 'obsidian';
+import {
+	Component,
+	FileSystemAdapter,
+	Notice,
+	TFile,
+	TFolder,
+	normalizePath,
+	setIcon,
+	type App,
+} from 'obsidian';
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings';
 import { trySync } from '@/domain/shared/tryAsync';
 import type {
@@ -10,12 +19,15 @@ import type {
 	CommunityPluginPort,
 	ChatRuntimePort,
 	MarkdownRenderPort,
+	SafeRenderResult,
 	IconPort,
 	IconNode,
 } from '@/domain/ports';
+import { MarkdownRenderer } from 'obsidian';
 import { ClaudeCliChatRuntime } from './ClaudeCliChatRuntime';
-import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
+import { safeMarkdownRender } from '@/application/chat/safeMarkdownRender';
 import { walkSvgElementToIconNode } from './walkSvgElementToIconNode';
+import { walkMarkdownFragment } from './walkMarkdownFragment';
 
 type FileManagerWithTrash = App['fileManager'] & {
 	trashFile?: (file: TFile) => Promise<void>;
@@ -44,6 +56,9 @@ export class ObsidianBridge
 	};
 
 	private readonly _activeNotices = new Set<Notice>();
+
+	/** Lifecycle owner for `MarkdownRenderer.render` post-processors (SPEC-RR-010). */
+	private readonly _renderComponent = new Component();
 
 	/** Stable device-local key for the user/device-scoped settings blob (ADR-PSR-002). */
 	private static readonly _SETTINGS_KEY = 'specorator:settings';
@@ -126,12 +141,36 @@ export class ObsidianBridge
 		return new ClaudeCliChatRuntime(this, this.getVaultBasePath());
 	}
 
-	// ── Markdown render port (SPEC-CC-013, SPEC-CC-015) ─────────────────────────
-	// The P1 `safeMarkdownRender`-backed port (structured nodes, no HTML sink).
-	// Identical behaviour across all three bridges in P1; P2 re-backs the same
-	// port shape with Obsidian's `MarkdownRenderer.render`.
+	// ── Markdown render port (SPEC-CC-013/015, SPEC-RR-010) ─────────────────────
+	// P2 re-backs the UNCHANGED `SafeRenderResult` port shape with Obsidian's
+	// `MarkdownRenderer.render`: render into a DETACHED element, walk the produced
+	// fragment into the declarative DTO entirely in the bridge, then discard the
+	// element — no DOM element / HTML string / sink reaches the UI (NFR-RR-006).
+	// Total: any internal failure (or an async render that has not populated the
+	// fragment synchronously) degrades to the pure `safeMarkdownRender` baseline,
+	// which stays perceptually equivalent for the common paragraph/inline-code
+	// case (EC-RR-17). Coverage-excluded infra; behaviour gated by the MANUAL leg
+	// of TEST-RR-026 (T-RR-043).
 	createMarkdownRenderPort(): MarkdownRenderPort {
-		return safeMarkdownRenderPort;
+		const app = this.app;
+		return {
+			render: (markdown: string): SafeRenderResult => {
+				const detached = createDiv();
+				try {
+					// MarkdownRenderer.render is async; we kick it off into the detached
+					// element and walk whatever it produced synchronously. When the walk
+					// yields nothing (async not yet resolved) we degrade to the pure
+					// baseline so the port stays synchronous, total and never throws.
+					void MarkdownRenderer.render(app, markdown, detached, '', this._renderComponent);
+					const walked = walkMarkdownFragment(detached);
+					return walked.nodes.length > 0 ? walked : safeMarkdownRender(markdown);
+				} catch {
+					return safeMarkdownRender(markdown);
+				} finally {
+					detached.detach();
+				}
+			},
+		};
 	}
 
 	// ── Icon port factory (SPEC-RR-012, ADR-RR-001 §4) ──────────────────────────

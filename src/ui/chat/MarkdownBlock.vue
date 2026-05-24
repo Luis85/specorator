@@ -14,20 +14,28 @@ import { useMarkdownRenderPort } from '@/ui/composables/useMarkdownRenderPort';
 const props = defineProps<{ content: string }>();
 
 const renderPort = useMarkdownRenderPort();
-const nodes = computed(() => renderPort.render(props.content).nodes);
+// The pure P1 backing emits only `paragraph` nodes; P2 widened `MarkdownNode`
+// into a union (SPEC-RR-011). Narrow to paragraphs here so this P1 component is
+// behaviour-identical (the richer block kinds render via SPEC-RR-022 in the UI
+// batch). No assertion or output changes for the existing paragraph path.
+const paragraphs = computed(() =>
+	renderPort.render(props.content).nodes.filter((node) => node.kind === 'paragraph'),
+);
 </script>
 
 <template>
 	<div class="sp-markdown-block" data-testid="markdown-block">
 		<p
-			v-for="(node, paragraphIndex) in nodes"
+			v-for="(node, paragraphIndex) in paragraphs"
 			:key="paragraphIndex"
 			class="sp-markdown-block__paragraph"
 			data-testid="md-paragraph"
 		>
 			<template v-for="(span, spanIndex) in node.spans" :key="spanIndex">
 				<code v-if="span.kind === 'code'" data-testid="md-code">{{ span.value }}</code>
-				<span v-else class="sp-markdown-block__text">{{ span.value }}</span>
+				<span v-else-if="span.kind === 'text'" class="sp-markdown-block__text">{{
+					span.value
+				}}</span>
 			</template>
 		</p>
 	</div>

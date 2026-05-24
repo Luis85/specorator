@@ -1,4 +1,18 @@
-import type { MarkdownInline, MarkdownNode, SafeRenderResult } from '@/domain/ports';
+import type { MarkdownInline, MarkdownNode } from '@/domain/ports';
+
+/** A paragraph block node — the only kind the pure P1 backing emits (SPEC-CC-014). */
+type ParagraphNode = Extract<MarkdownNode, { kind: 'paragraph' }>;
+
+/**
+ * The pure backing's result is the paragraph-only subset of `SafeRenderResult`
+ * (SPEC-CC-014): `safeMarkdownRender` emits ONLY `paragraph` nodes, so callers
+ * (and every P1 test) read `node.spans` without narrowing. It is assignable to
+ * `SafeRenderResult` (the wider union the port returns, SPEC-RR-011) — the
+ * widening stays additive and the P1 surface is untouched.
+ */
+export interface SafeParagraphRenderResult {
+	nodes: ParagraphNode[];
+}
 
 /**
  * The pure P1 backing of `MarkdownRenderPort` (SPEC-CC-014, CLAR-CC-005).
@@ -13,7 +27,7 @@ import type { MarkdownInline, MarkdownNode, SafeRenderResult } from '@/domain/po
  *
  * @see SPEC-CC-014, REQ-CC-006, NFR-CC-008, EC-14
  */
-export function safeMarkdownRender(markdown: string): SafeRenderResult {
+export function safeMarkdownRender(markdown: string): SafeParagraphRenderResult {
 	// Empty / whitespace-only input renders nothing (EC-5 finalise-empty, EC-14).
 	if (markdown.trim() === '') {
 		return { nodes: [] };
@@ -21,7 +35,7 @@ export function safeMarkdownRender(markdown: string): SafeRenderResult {
 
 	// Paragraphs are separated by one-or-more blank lines (a line that is empty or whitespace).
 	const blocks = markdown.split(/\n[ \t]*\n+/);
-	const nodes: MarkdownNode[] = [];
+	const nodes: ParagraphNode[] = [];
 
 	for (const block of blocks) {
 		// A block that is only whitespace contributes no paragraph.

@@ -25,7 +25,11 @@ describe('safeMarkdownRenderPort (T-CC-015)', () => {
 
 	it('never throws and never holds HTML in any output field', () => {
 		const result = safeMarkdownRenderPort.render('<script>alert(1)</script> & `x`');
-		const text = result.nodes.flatMap((n) => n.spans.map((s) => s.value)).join(' ');
+		const text = result.nodes
+			.filter((n) => n.kind === 'paragraph')
+			.flatMap((n) => n.spans.filter((s) => s.kind === 'text' || s.kind === 'code'))
+			.map((s) => s.value)
+			.join(' ');
 		expect(text).toContain('<script>');
 		expect(text).not.toContain('&lt;');
 		expect(() => safeMarkdownRenderPort.render('`')).not.toThrow();
