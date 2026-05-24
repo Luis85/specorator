@@ -218,8 +218,17 @@ export const useChatStore = defineStore('chat', {
 			const live = this._liveMessage();
 			if (live === undefined) return;
 			live.content += content;
+			this._extendTextBlock(live, content);
+		},
 
-			const blocks = (live.contentBlocks ??= []);
+		/**
+		 * Push or extend a trailing `{type:'text'}` content block on `message` so the
+		 * ordered block render (SPEC-RR-022/023) stays complete and order-preserving
+		 * (REQ-RR-011). Consecutive text coalesces onto one block. Only the in-block
+		 * tail is touched here; `content` accumulation is the caller's responsibility.
+		 */
+		_extendTextBlock(message: ChatMessage, content: string): void {
+			const blocks = (message.contentBlocks ??= []);
 			const last = blocks.length > 0 ? blocks[blocks.length - 1] : undefined;
 			if (last?.type === 'text') {
 				last.content += content;
@@ -233,10 +242,19 @@ export const useChatStore = defineStore('chat', {
 			this.usage = usage;
 		},
 
-		/** Append a streaming error inline and flag the turn errored (EC-6, REQ-CC-012). */
+		/**
+		 * Append a streaming error inline and flag the turn errored (EC-6, REQ-CC-012).
+		 * When the live message already renders via ordered blocks (P2 fork,
+		 * SPEC-RR-023), mirror the inline error onto the trailing text block so the
+		 * block-rendered view shows it too (REQ-RR-011). A pure-P1 turn that emitted no
+		 * blocks keeps the plain `content`-only path untouched.
+		 */
 		onErrorChunk(content: string): void {
 			const live = this.messages.find((m) => m.id === this.liveAssistantId);
-			if (live) live.content += content;
+			if (live) {
+				live.content += content;
+				if (live.contentBlocks !== undefined) this._extendTextBlock(live, content);
+			}
 			this.errorActive = true;
 		},
 
@@ -411,6 +429,7 @@ export const useChatStore = defineStore('chat', {
 			const live = this._liveMessage();
 			if (live === undefined) return;
 			live.content += content;
+			if (live.contentBlocks !== undefined) this._extendTextBlock(live, content);
 		},
 
 		/** Resolve a `SubagentInfo` on the live message by its spawn id (SPEC-RR-020). */
