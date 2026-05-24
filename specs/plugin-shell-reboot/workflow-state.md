@@ -212,4 +212,18 @@ only at parity.
                           the DELETED_SUBSYSTEM_BAN glob list (verify each path
                           resolves), the guard-test lint-API contract, view/command/
                           settings-tab signatures, and the WorkspacePort shape (OC-PSR-1).
+
+2026-05-24 (clarify gate, post-Stage-4): /spec:clarify ran inline (no subagent —
+                          1M-context credit gate declined). Verdict: design SOUND, no
+                          blocking clarifications. OC-PSR-1..3 are spec-author
+                          verification tasks (not user-intent forks); all accepted with
+                          the architect's recommended defaults: OC-PSR-1 = revert
+                          WorkspacePort to ADR-008 openFile-only, drop chat-era
+                          extensions unless a kept consumer remains; OC-PSR-2 = P0
+                          standalone always MockBridge, defer GitHub-Pages demo
+                          (consistent with the already-approved defer-standalone /
+                          OQ-PSR-1 posture); OC-PSR-3 = verify docs/adr index filename +
+                          add superseded-by pointers (mechanical). Migration contract
+                          confirmed = STRIP-on-read (architect recommendation) so
+                          REQ-PSR-005 holds for the persisted blob. spec author pins all.
 ```
