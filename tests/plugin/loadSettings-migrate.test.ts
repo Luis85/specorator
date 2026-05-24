@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { promoteLegacyFlatSettings, PLUGIN_SETTINGS_KEYS } from '@/plugin/loadSettings-migrate'
+import { promoteLegacyFlatSettings, stripMcpLegacy, PLUGIN_SETTINGS_KEYS } from '@/plugin/loadSettings-migrate'
 
 describe('promoteLegacyFlatSettings', () => {
   it('promotes flat top-level PluginSettings keys into a specorator sub-key', () => {
@@ -105,7 +105,6 @@ describe('promoteLegacyFlatSettings', () => {
       'gateStrictness',
       'teamMode',
       'logLevel',
-      'mcpServerEnabled',
       'userPersona',
       'onboardingComplete',
       'claudeCliPath',
@@ -163,5 +162,68 @@ describe('promoteLegacyFlatSettings', () => {
 
     expect(out.specorator).toEqual({ transportKind: 'auto' })
     expect(out.transportKind).toBe('should-not-overwrite')
+  })
+})
+
+describe('stripMcpLegacy', () => {
+  it('strips mcpServerEnabled from the specorator blob and reports stripped=true', () => {
+    const input = { specorator: { locale: 'en', mcpServerEnabled: false } }
+    const { result, stripped } = stripMcpLegacy(input)
+    expect(stripped).toBe(true)
+    expect((result.specorator as Record<string, unknown>).mcpServerEnabled).toBeUndefined()
+    expect((result.specorator as Record<string, unknown>).locale).toBe('en')
+  })
+
+  it('strips obsidianCliPath from the specorator blob and reports stripped=true', () => {
+    const input = { specorator: { claudeCliPath: '/usr/bin/claude', obsidianCliPath: '/usr/bin/obsidian' } }
+    const { result, stripped } = stripMcpLegacy(input)
+    expect(stripped).toBe(true)
+    expect((result.specorator as Record<string, unknown>).obsidianCliPath).toBeUndefined()
+    expect((result.specorator as Record<string, unknown>).claudeCliPath).toBe('/usr/bin/claude')
+  })
+
+  it('strips both legacy keys when both are present', () => {
+    const input = { specorator: { mcpServerEnabled: true, obsidianCliPath: '/bin/obs', locale: 'de' } }
+    const { result, stripped } = stripMcpLegacy(input)
+    expect(stripped).toBe(true)
+    const blob = result.specorator as Record<string, unknown>
+    expect(blob.mcpServerEnabled).toBeUndefined()
+    expect(blob.obsidianCliPath).toBeUndefined()
+    expect(blob.locale).toBe('de')
+  })
+
+  it('returns stripped=false and the original object when no legacy keys are present', () => {
+    const input = { specorator: { locale: 'en' }, hello: { x: 1 } }
+    const { result, stripped } = stripMcpLegacy(input)
+    expect(stripped).toBe(false)
+    expect(result).toBe(input) // same reference — no copy
+  })
+
+  it('returns stripped=false when specorator key is absent', () => {
+    const input = { hello: { x: 1 } }
+    const { result, stripped } = stripMcpLegacy(input)
+    expect(stripped).toBe(false)
+    expect(result).toBe(input)
+  })
+
+  it('returns stripped=false when specorator is not a plain object', () => {
+    const inputNull = { specorator: null }
+    expect(stripMcpLegacy(inputNull).stripped).toBe(false)
+    const inputArray = { specorator: [] }
+    expect(stripMcpLegacy(inputArray).stripped).toBe(false)
+  })
+
+  it('does not mutate the input', () => {
+    const input = { specorator: { mcpServerEnabled: false, locale: 'en' } }
+    const snapshot = JSON.parse(JSON.stringify(input)) as typeof input
+    stripMcpLegacy(input)
+    expect(input).toEqual(snapshot)
+  })
+
+  it('preserves top-level keys outside specorator untouched', () => {
+    const input = { specorator: { mcpServerEnabled: true }, hello: { x: 1 }, _moduleVersions: { v: 2 } }
+    const { result } = stripMcpLegacy(input)
+    expect(result.hello).toEqual({ x: 1 })
+    expect(result._moduleVersions).toEqual({ v: 2 })
   })
 })

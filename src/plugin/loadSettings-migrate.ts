@@ -17,7 +17,6 @@ export const PLUGIN_SETTINGS_KEYS: ReadonlyArray<keyof PluginSettings> = [
   'gateStrictness',
   'teamMode',
   'logLevel',
-  'mcpServerEnabled',
   'userPersona',
   'onboardingComplete',
   'claudeCliPath',
@@ -31,6 +30,40 @@ export const PLUGIN_SETTINGS_KEYS: ReadonlyArray<keyof PluginSettings> = [
   'providerModel',
   'chatTabCap',
 ]
+
+/**
+ * Legacy MCP keys that were removed when the MCP server was extracted into
+ * the standalone `specorator-obsidian-mcp` plugin. Strip them silently from
+ * the persisted `specorator` blob so they do not accumulate as dead weight.
+ *
+ * - `mcpServerEnabled` — was the opt-in toggle for the embedded MCP server.
+ * - `obsidianCliPath`  — was the path to the `obsidian` CLI binary used by
+ *                        the MCP CLI-backed tool group (ADR-018).
+ */
+const MCP_LEGACY_KEYS = ['mcpServerEnabled', 'obsidianCliPath'] as const
+
+/**
+ * Strip legacy MCP keys from the `specorator` sub-blob. Idempotent and
+ * pure: returns the original object unchanged when none of the keys are
+ * present (avoids an unnecessary `saveData` round-trip on clean installs).
+ */
+export function stripMcpLegacy(
+  raw: Record<string, unknown>,
+): { result: Record<string, unknown>; stripped: boolean } {
+  const specorator = raw.specorator
+  if (specorator === null || typeof specorator !== 'object' || Array.isArray(specorator)) {
+    return { result: raw, stripped: false }
+  }
+  const blob = specorator as Record<string, unknown>
+  const keysPresent = MCP_LEGACY_KEYS.filter((k) => k in blob)
+  if (keysPresent.length === 0) return { result: raw, stripped: false }
+
+  const nextBlob: Record<string, unknown> = { ...blob }
+  for (const k of keysPresent) {
+    delete nextBlob[k]
+  }
+  return { result: { ...raw, specorator: nextBlob }, stripped: true }
+}
 
 /**
  * Pure migration helper: promotes legacy flat `PluginSettings` keys stored at

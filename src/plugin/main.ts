@@ -8,7 +8,7 @@ import * as os from 'node:os'
 import { SpecoratorView, VIEW_TYPE } from './SpecoratorView'
 import { AgentSidepanelView, VIEW_TYPE_AGENT } from './AgentSidepanelView'
 import { SpecoratorSettingTab } from './settings'
-import { promoteLegacyFlatSettings } from './loadSettings-migrate'
+import { promoteLegacyFlatSettings, stripMcpLegacy } from './loadSettings-migrate'
 import { migrateProviderSelection } from '@/application/migration/migrateProviderSelection'
 import { ensureLeafLoaded } from './leafLoader'
 import { selectTransport } from './transport/TransportSelector'
@@ -474,6 +474,15 @@ export default class SpecoratorPlugin extends Plugin {
     const raw: Record<string, unknown> = { ...(stored ?? {}) }
 
     this._storedData = promoteLegacyFlatSettings(raw)
+
+    // Strip legacy MCP keys left over from the embedded MCP server (removed
+    // in PR8 / chore/extract-mcp-into-standalone-plugin). Idempotent — only
+    // writes when at least one legacy key is present.
+    const mcpStrip = stripMcpLegacy(this._storedData)
+    if (mcpStrip.stripped) {
+      this._storedData = mcpStrip.result
+      await this.saveData(this._storedData)
+    }
 
     // SPEC-MPS-001 §3 / REQ-MPS-004 / REQ-MPS-005 — translate the v0.x
     // `transportKind` + string `transport` encoding into the v1
