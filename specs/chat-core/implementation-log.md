@@ -37,3 +37,19 @@ SHA.
 - **Outcome:** done. No file under `src/` changed (DoD line 3). The baseline screenshot grid is
   scaffolded; the Specorator column + the human visual capture happen at `/spec:review` (T-CC-032).
 - **Deviation:** none.
+
+### T-CC-002 🧪 — RED: `StreamChunk` union + `ChatRuntimePort` 9-member shape (qa)
+
+- **Spec:** TEST-CC-002, TEST-CC-003, SPEC-CC-001, SPEC-CC-002, REQ-CC-001a, REQ-CC-002a.
+- **Files:** `tests/domain/chat/StreamChunk.test.ts` (new — compile-time `Equals<>` asserts the
+  five P1 member shapes + the absence of `text-delta`/`final`); `tests/domain/ports/ChatRuntimePort.test.ts`
+  (new — `Equals<keyof ChatRuntimePort, <nine keys>>` exact-key assertion + deferred-member
+  absence). Mirrors the P0 `WorkspacePort.test.ts` `Equals<>` idiom.
+- **RED watched:** `npx vue-tsc --noEmit -p tsconfig.lint.json` →
+  `StreamChunk.test.ts: TS2307 Cannot find module '@/domain/chat/StreamChunk'` + `'@/domain/chat/UsageInfo'`;
+  `ChatRuntimePort.test.ts: TS2307 Cannot find module '@/domain/ports/ChatRuntimePort'` + `TS2322 Type 'true' is not assignable to type 'false'`.
+  The RED signal for these type-level contracts is the **typecheck** failure (the runtime sentinels
+  pass under vitest because `import type` is erased — same as the P0 pattern). Green target =
+  T-CC-003 (types) + T-CC-004 (port).
+- **Outcome:** done (RED established). Lint + prettier green on the two test files.
+- **Deviation:** none.
