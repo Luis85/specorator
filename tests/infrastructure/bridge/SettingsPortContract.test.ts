@@ -24,15 +24,15 @@ function registerSettingsContract(harness: Harness): void {
 
 			expect((await port.getSettings()).locale).toBe(DEFAULT_SETTINGS.locale)
 
-			await port.saveSettings({ ...DEFAULT_SETTINGS, locale: 'de', specsFolder: 'plans' })
+			await port.saveSettings({ ...DEFAULT_SETTINGS, locale: 'de', logLevel: 'debug' })
 			const saved = await port.getSettings()
 
 			expect(saved.locale).toBe('de')
-			expect(saved.specsFolder).toBe('plans')
+			expect(saved.logLevel).toBe('debug')
 
-			const mutableSaved = saved as { specsFolder: string }
-			mutableSaved.specsFolder = 'mutated'
-			expect((await port.getSettings()).specsFolder).toBe('plans')
+			const mutableSaved = saved as { logLevel: string }
+			mutableSaved.logLevel = 'mutated'
+			expect((await port.getSettings()).logLevel).toBe('debug')
 		})
 	})
 }

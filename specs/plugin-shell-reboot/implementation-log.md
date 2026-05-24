@@ -1,0 +1,421 @@
+---
+id: IMPL-PSR-001
+title: Plugin shell reboot (P0) — implementation log
+stage: implementation
+feature: plugin-shell-reboot
+status: in-progress
+owner: dev
+epic: claudian-reboot
+phase: P0
+created: 2026-05-24
+updated: 2026-05-24
+---
+
+# Implementation log — plugin shell reboot (P0)
+
+Chronological, append-only record of T-PSR-* execution. Each entry names the
+task, what changed, and the gate state at the time. RED-test (qa) tasks record
+the failing state they establish; implementation (dev) tasks record the GREEN
+convergence.
+
+> TDD discipline (mission): RED test authored + watched fail, then minimal code
+> to green. Delete waves end `npm run typecheck` green-or-expected.
+
+---
+
+## Phase A — surviving surface + RED tests
+
+### T-PSR-001 / T-PSR-002 — RED: `coreSettingsModule` load-or-default (qa)
+
+- `tests/core/core-settings.test.ts` rewritten to the slim, no-backwards-compat
+  contract (SPEC-PSR-002/003/004): `validateSettings` load-or-default,
+  **no** `migrate`, **no** `settingsVersion`, unknown-key hygiene, two-dropdown
+  schema, `DEFAULT_SETTINGS` == `{locale,logLevel}`.
+- **RED confirmed:** the slim assertions fail against the current fat module
+  (`migrate()`, `settingsVersion: 3`, 16 fields). Green target = T-PSR-003/004.
+- TEST-PSR-001..007. Commit `test(psr): RED load-or-default core-settings`.
+
+### T-PSR-005 — RED: `AgentPanelRoot` placeholder (qa)
+
+- New `tests/ui/agent/AgentPanelRoot.test.ts` + `AgentPanelRoot.po.ts` (queried
+  by `data-testid="agent-panel-empty"`, ADR-009). **RED confirmed** (component
+  does not exist → mount errors). Green target = T-PSR-007. TEST-PSR-008.
+
+### T-PSR-006 — RED: i18n placeholder + `toSupportedLocale` (qa)
+
+- Extended `tests/ui/i18n/index.test.ts`. **RED confirmed:** `toSupportedLocale`
+  is not exported yet (typecheck TS2724 + runtime TypeError) and
+  `agent.empty.placeholder` resolves to the bare key. Green target = T-PSR-007.
+  TEST-PSR-009/010.
+
+### T-PSR-011 — Trace ErrorBoundary E10 → TEST-PSR-015 (qa)
+
+- The existing `tests/ui/components/ErrorBoundary.test.ts` already asserts
+  `LoggerPort.error` + `NotificationPort.showError` + the fallback testid. Added
+  a TEST-PSR-015 / SPEC-PSR-005 (E10) / OC-PSR-7 trace docblock. **GREEN** against
+  the kept `ErrorBoundary.vue` (it must survive Wave 0 unedited — OC-PSR-7).
+
+### T-PSR-012 — RED: `WorkspacePort` openFile-only (qa)
+
+- New `tests/domain/ports/WorkspacePort.test.ts`: compile-time exact-key
+  assertion (`keyof WorkspacePort === 'openFile'`) + `MockBridge` conformance.
+  **RED confirmed via `npm run typecheck`** (TS2322 against the fat 7-member
+  port). Green target = T-PSR-013. TEST-PSR-011.
+
+### T-PSR-028 — RED: `ci.yml` `next` trigger (qa)
+
+- New `tests/workflows/ci-next-trigger.test.ts` (YAML parse). **RED confirmed:**
+  current `[develop, demo, main]` lists exclude `next`. Green target = T-PSR-029.
+  TEST-PSR-023.
+
+### T-PSR-024 — QA recon: programmatic-ESLint harness + fixtures carve-out (qa, OC-PSR-6)
+
+- **Reuse target for the SPEC-PSR-014 guard test (T-PSR-027):**
+  `tests/eslint-boundaries.test.ts` already drives the ESLint Node API
+  (`new ESLint(...).lintFiles(...)`) over `src/**/__fixtures__/**` boundary
+  fixtures. T-PSR-027 extends that pattern in a new
+  `tests/architecture/no-deleted-subsystem-refs.test.ts` (no
+  `tests/architecture/` dir exists yet). The two `tests/lint/*.test.ts` files use
+  `readFileSync` walks, not the ESLint API — not the reuse target.
+- **`__fixtures__` carve-out confirmed:** `eslint.config.js` ignores
+  `**/__fixtures__/**` (≈ line 192, with the comment that fixtures are exercised
+  "via the ESLint API"). The T-PSR-025 positive-control fixture therefore lives
+  under a `__fixtures__/` path, ignored by daily `npm run lint` but lintable
+  on demand by the harness. **OC-PSR-6 closed.**
+
+### T-PSR-031 — ADR index + superseded-by pointers (dev, OC-PSR-3)
+
+- **Created `docs/adr/README.md`** (no index existed — the architect flagged this
+  in workflow-state). Lists every ADR with a "P0 reboot scope" column quoting
+  ADR-PSR-001's kept/superseded split; adds the `ADR-PSR-001`/`ADR-PSR-002` rows.
+- **Frontmatter pointers (bodies untouched):** added `superseded-by: ADR-PSR-001`
+  to `ADR-008` (scoped to its feature-port surface; status stays `accepted` —
+  six core ports remain) and set `ADR-PSR-001` `supersedes: [ADR-008]`.
+- **MPS/AUX scope call (flag to maintainer):** no standalone `ADR-MPS-*` /
+  `ADR-AUX-*` files exist in `docs/adr/`. Rather than stamp `superseded-by` onto
+  accepted numbered/feature ADRs (013–018, 0027–0034) whose non-feature parts may
+  survive, the feature-surface supersession is recorded in the index's reboot-scope
+  column. This is the OC-PSR-3 re-scope the architect anticipated. **OC-PSR-3
+  closed** pending the maintainer's nod at the P0 checkpoint.
+- Noted the pre-existing duplicate `0030` ADR-number collision in the index
+  (out of P0 scope).
+
+### T-PSR-014 — RED: slim settings-tab round-trip (qa)
+
+- Rewrote `tests/plugin/settings.test.ts` to mount `SpecoratorSettingTab` and
+  drive the schema `locale` dropdown's `onChange` through `SettingsPort`
+  (E12 round-trip). Uses a Proxy `obsidian` mock (real `Setting`/`PluginSettingTab`
+  capturing the dropdown; no-op for every other export) + `fakeModulePorts`.
+- **RED confirmed:** `display()` throws at the fat tab's `renderAboutYouSection`
+  (`containerEl.createEl`) — the very surface T-PSR-015 deletes. Once the tab is
+  slimmed to the module loop, `display()` completes and the round-trip asserts
+  green. TEST-PSR-014; SPEC-PSR-008.
+
+> Batch 1 gate snapshot (post-RED): `npm run typecheck` reports exactly two
+> intended RED type errors (WorkspacePort exact-key assertion; missing
+> `toSupportedLocale`); `npm run test` shows the 4 RED unit files failing for the
+> expected reasons; ErrorBoundary + WorkspacePort runtime checks pass. No lint
+> errors introduced.
+
+## Phase A — GREEN: slim the surviving surface
+
+> From here, slimming the surviving surface deletes fields/symbols the
+> not-yet-deleted fat consumers still import, so tree-wide `npm run typecheck`
+> is **expected red** until the Phase B delete waves land (Phase A exit
+> condition, spec §9). Each slim task is verified GREEN via its targeted tests.
+
+### T-PSR-003 — Slim `PluginSettings` (dev)
+
+- `src/domain/settings/PluginSettings.ts` reduced to `{ locale, logLevel }` +
+  `DEFAULT_SETTINGS`; dropped the 16 feature/provider/workflow fields and both
+  `@/domain/chat` type imports. SPEC-PSR-001; REQ-PSR-006.
+
+### T-PSR-004 — Slim `coreSettingsModule` (dev)
+
+- `src/core/core-settings.ts` rewritten to **load-or-default**: no `migrate`, no
+  `settingsVersion`, a two-field `validateSettings` (`coerceString` locale,
+  `coerceEnum`/`VALID_LOG_LEVELS` logLevel), two-dropdown schema. Deleted every
+  other coercion helper, the `VALID_*` provider constants, the provider
+  validators, and the `@/domain/chat` imports.
+- **T-PSR-001/002 GREEN** (13 tests). SPEC-PSR-002/003/004; CHARTER-REQ-FRESH.
+
+### T-PSR-007 — `AgentPanelRoot.vue` + trimmed i18n + `toSupportedLocale` (dev)
+
+- Created `src/ui/agent/AgentPanelRoot.vue` (single `data-testid="agent-panel-empty"`
+  reading `t('agent.empty.placeholder')`, `<script setup>` only).
+- Trimmed `src/ui/i18n/locales/en.ts` + `de.ts` to the single
+  `agent.empty.placeholder` key (kept `export default … as const`).
+- Added exported `toSupportedLocale(locale)` to `src/ui/i18n/index.ts`; `i18n` /
+  `setLocale` / `i18nTranslate` / `i18nMerge` / `SupportedLocale` /
+  `SUPPORTED_LOCALES` / `MessageSchema` kept in shape.
+- **T-PSR-005/006 GREEN** (11 tests). SPEC-PSR-006/010/011/012.
+
+### T-PSR-013 — Revert `WorkspacePort` to `openFile`-only (dev)
+
+- `src/domain/ports/WorkspacePort.ts` reduced to `{ openFile(path): Promise<void> }`;
+  deleted the six chat-era methods + the `ActiveFileSnapshot` interface + the
+  `Unsubscriber` import (used only by `onActiveFileChanged`). Removed the
+  `ActiveFileSnapshot` re-export from `src/domain/ports/index.ts` (kept
+  `Unsubscriber` per SPEC-PSR-009). T-PSR-012's type-level assertion is now
+  satisfiable; confirmed at the Phase B typecheck-clean gate. SPEC-PSR-009; OC-PSR-1.
+
+### T-PSR-029 — Add `next` to `ci.yml` triggers (dev)
+
+- `.github/workflows/ci.yml`: added `next` to `on.push.branches` and
+  `on.pull_request.branches`. Only change; no `uses:` touched
+  (`verify:workflows` clean — 7 files, all SHA-pinned). `actionlint` not
+  installed locally (CI `workflow-lint` job enforces it); the edit is a pure
+  branch-list extension. **T-PSR-028 GREEN** (2 tests). SPEC-PSR-015; REQ-PSR-012.
+- **Flagged (repo-settings, to release/SRE):** branch protection on `next` must
+  require the `verify` check before merge.
+
+### T-PSR-015 — Slim `SpecoratorSettingTab` (dev)
+
+- `src/plugin/settings.ts` rewritten to the module-schema loop only
+  (`display` + `currentValue` + generic `addControl` switch + `saveField`).
+  Deleted every `render*`/`handle*`/`_test*`/`_set*`/`_bumpAllViews` helper and
+  the `node:path`/`node:child_process`/binary-resolver/`SECRET_ID_*`/
+  `SpecoratorView`/`AgentSidepanelView`/`CursorSettingsSection` imports.
+- **T-PSR-014 GREEN** (round-trip through `SettingsPort`). SPEC-PSR-008; REQ-PSR-007.
+
+## Phase A/B — assemble the new surface (Batch 3)
+
+> **OC-PSR-4 closed:** `ALL_MODULES = [coreSettingsModule, helloModule]` already
+> (`src/modules/index.ts`); `helloModule` names no deleted subsystem. It persists
+> (settingsKey `hello`, version 1) so the minimal `_storedData`/`core.init`
+> round-trip is kept; only the settings `saveData` is dropped.
+>
+> **NFR-PSR-011 closed (no escalation):** `App.loadLocalStorage(key): any|null`
+> and `App.saveLocalStorage(key, data): void` are present in the obsidian
+> typings (resolved from the hoisted root `node_modules`; devDep `obsidian
+> ^1.12.3` ≥ `minAppVersion 1.12.7`). `secretStorage` is a P1 concern (deferred).
+
+### T-PSR-021 (settings-store slice, pulled forward for T-PSR-008) — `ObsidianBridge` device-local re-point + TEST-PSR-024
+
+- **Sequencing note (TDD honoured):** the slim `main.ts` (T-PSR-008) routes
+  settings through `bridge.getSettings`/`saveSettings`; with the old bridge that
+  recursed (`saveSettings → onSaveSettings → updateSettings`). So the SettingsPort
+  device-local re-point (T-021's settings slice) was pulled forward. **RED watched**
+  (impl stashed): `activateAgentSidebar is not a function`, `settingsGetter`/
+  `onSaveSettings is not a function` — then GREEN.
+- `ObsidianBridge` constructor → app-only; `getSettings` reads
+  `app.loadLocalStorage('specorator:settings')` (load-or-default, defaults on
+  absent/corrupt); `saveSettings` writes `app.saveLocalStorage` (never
+  `data.json` — the bridge has no `saveData` access); `_shouldLog` reads the
+  device-local logLevel. TEST-PSR-024 GREEN (3 tests).
+- **Remaining T-021 (Wave 3b):** drop `ChatTransportPort`/`IconPort` from all
+  three bridges, the `MockBridge`/`LocalStorageBridge` de-couple, `ports.ts` +
+  `fake-ports.ts` trim. SPEC-PSR-008; REQ-PSR-013, NFR-PSR-010; ADR-PSR-002.
+
+### T-PSR-009 — `AgentSidebarView` + `VIEW_TYPE_AGENT` (dev)
+
+- `src/plugin/AgentSidebarView.ts` (`ItemView`): `VIEW_TYPE_AGENT='specorator-agent'`,
+  `getIcon()='bot'` (native), `onOpen` mounts `AgentPanelRoot` inside
+  `ErrorBoundary`'s default slot via `createApp({ render: () => h(ErrorBoundary,
+  null, { default: () => h(AgentPanelRoot) }) })`, installs Pinia + i18n, provides
+  the six core ports, narrows locale via `toSupportedLocale`; `onClose` unmounts +
+  empties; `bridge === null` no-op. SPEC-PSR-005.
+
+### T-PSR-008 — slim `main.ts` (dev)
+
+- Rewrote `src/plugin/main.ts` to the SPEC-PSR-016 shape: `settings`/`core`/`bridge`
+  public; `onload` = construct `ObsidianBridge(app)` → `loadSettings`
+  (load-or-default via `bridge.getSettings`, **no** legacy data.json read) →
+  `PluginCore(ALL_MODULES, ports)` → `setLocale(toSupportedLocale(...))` →
+  `core.init(_storedData)` → **drop `_storedData.specorator`** (keep
+  locale/logLevel out of data.json) → `registerView(VIEW_TYPE_AGENT)` → one command
+  `open-agent-sidebar` (no ribbon) → `addSettingTab`. `onload` carries **no**
+  settings `saveData`; `updateSettings` → `bridge.saveSettings` (device-local) +
+  `core.notifySettingsChanged`. SPEC-PSR-016; REQ-PSR-001/003/013, NFR-PSR-010/011.
+
+### T-PSR-010 — RED→GREEN: `activateAgentSidebar` E1/E2 (qa)
+
+- `tests/plugin/activateAgentSidebar.test.ts`: E1 (twice → one leaf + reveal),
+  E2 (`getRightLeaf` null → no throw). RED watched (method absent on fat main),
+  then GREEN. TEST-PSR-012/013; SPEC-PSR-007.
+
+### T-PSR-016 — standalone entry (always MockBridge) + smoke (qa→dev)
+
+- RED smoke (fat entry mounts `AppRoot`, no testid) → rewrote `src/ui/main.ts` to
+  the minimal `AgentPanelRoot`-in-`ErrorBoundary` mount with `MockBridge` + the six
+  core ports; dropped router/`AppRoot`/`FeatureService`/secret stores/`DEV_FIXTURES`/
+  `bootstrapModules` + deleted provides; kept the CSS imports + the
+  `no-restricted-imports: off` carve-out. **TEST-PSR-022 GREEN**; `vite build` exits
+  0 (~175 kB). OC-PSR-2 closed. SPEC-PSR-017; REQ-PSR-011, NFR-PSR-005.
+
+> **Phase A exit gate reached:** the surviving surface is stood up and its targeted
+> tests are GREEN. Tree-wide `npm run typecheck` is red, tracing only to
+> not-yet-deleted chat/feature/MCP/onboarding consumers — the Wave 0 entry point
+> for Phase B.
+
+## Phase B — delete waves 0→5 (each ends typecheck green-or-expected)
+
+### T-PSR-017 — Wave 0: UI leaves (dev, OC-PSR-7)
+
+- Deleted `src/ui/{AppRoot.vue, agent/AgentSidepanelRoot.vue, router/**, stores/**,
+  views/**, layouts/**}`, all of `src/ui/components/**` **except `ErrorBoundary.vue`**,
+  and the 21 non-port composables (kept the six ADR-008 port composables). Deleted
+  the mirrored tests under `tests/ui/**` (kept `ErrorBoundary` + `AgentPanelRoot`),
+  `stories/**`, the obsolete fat `tests/domain/settings/PluginSettings.test.ts`
+  (slim shape covered by TEST-PSR-007), and `tests/__fakes__/chatStoresFacade.ts`.
+  ~345 files removed.
+- **OC-PSR-7 closed:** `ErrorBoundary.vue` retained unedited; T-PSR-011 stays GREEN.
+- **typecheck green-or-expected:** remaining errors trace only to Wave 1 plugin
+  views/wiring (`SpecoratorView`/`AgentSidepanelView`/`loadSettings-migrate`/
+  `CursorSettingsSection`), the chat application + infra adapters/bridges (Wave 2/3),
+  `ObsidianBridge`'s chat/icon methods (Wave 3 de-couple), and their tests. No
+  surviving-surface file errors. REQ-PSR-004/005; SPEC-PSR-006 (consumers), §9.
+
+### T-PSR-018 — Wave 1: plugin views/wiring (dev)
+
+- Deleted `src/plugin/{SpecoratorView, AgentSidepanelView, approvalRulesPersistence,
+  chatThreadsPersistence, leafLoader, loadSettings-migrate, uriProviderParam}.ts` +
+  `settings/` (CursorSettingsSection) + `transport/**` and their tests. `leafLoader`
+  dropped — the slim reveal calls `leaf.loadIfDeferred()` directly. `src/plugin`
+  is now `{AgentSidebarView, main, settings}`.
+- **typecheck green-or-expected:** errors trace only to Wave 2 application/chat,
+  Wave 3 infra adapters/bridges, and `ObsidianBridge`'s chat region. REQ-PSR-004/005/003;
+  SPEC-PSR-016, §9.
+
+### T-PSR-019 — Wave 2: application layer (dev, OC-PSR-5)
+
+- Deleted `src/application/{chat,feature,migration}/**` and their tests; kept
+  `src/application/shared/FeedbackService.ts` (+ test) and the `__fixtures__`
+  boundary fixtures.
+- **OC-PSR-5 (part):** `@/application/migration/**` resolved to a real directory
+  (`index.ts` + `migrateProviderSelection.ts`), now deleted — the guard glob
+  (T-PSR-026) will match a real removed path.
+- **typecheck green-or-expected:** errors trace only to Wave 3 infra adapters/
+  bridges/MCP registrars and their tests. REQ-PSR-004/005; §9.
+
+### T-PSR-020 — Wave 3a: infra adapters/registrars/repos/mock-adapters (dev, OC-PSR-5)
+
+- Deleted the Claude/Cursor adapters + binary resolvers, the
+  `Obsidian{Mcp,Cli,MetadataCache,Canvas,SecretStore,ConfirmModal,MarkdownRender}`
+  adapters, `obsidian/mcp/**` registrars, subprocess plumbing
+  (`runSubprocessStructured`/`buildSubprocessArgs`/`buildCursorSubprocessArgs`/
+  `SubprocessLifecycle`/`NdjsonChannel`/`ProposalStore`), `infrastructure/cursor/**`,
+  `bridge/{FeatureRepository,degradedClaudeCliPort}`, `LocalStorageSecretStore`,
+  the mock chat/secret/mcp/canvas/cursor/cli adapters + `fixtures.ts`, and
+  `infrastructure/workflow-state/**` — plus their tests.
+- **OC-PSR-5 (recorded for T-PSR-026):** MCP registrars lived under
+  `src/infrastructure/obsidian/mcp/**`, **not** a top-level `@/infrastructure/mcp/**`.
+  The SPEC-PSR-013 `@/infrastructure/mcp/**` glob matches nothing → drop or repoint
+  it to `@/infrastructure/obsidian/mcp/**` (NFR-PSR-009). `infrastructure/cursor/**`
+  did exist (now deleted).
+- `src/infrastructure` is now `{bridge/ports.ts, localstorage/LocalStorageBridge,
+  mock/MockBridge, obsidian/ObsidianBridge, vault/VaultPath}`.
+- **typecheck green-or-expected:** errors now trace to the three bridges' chat/icon
+  members + the deleted `ports.ts` keys — the Wave 3b de-couple set (T-021).
+  REQ-PSR-004/005; §9.
+
+### T-PSR-021 (remainder) — Wave 3b: de-couple all three bridges + slim ports/fakes (dev)
+
+- `ObsidianBridge` / `MockBridge` / `LocalStorageBridge` now `implements` exactly
+  the six core ports; dropped `ChatTransportPort`/`IconPort` + `queryStream`/
+  `isAvailable`/`setIcon`/`getActiveFile*`/`onActiveFileChanged`/`getVaultName`/
+  `getMarkdownFileCount` + the `ActiveFileSnapshot`/`StreamDelta`/`ChatTransportError`
+  imports. Slimmed `ports.ts` to the six InjectionKeys and `fake-ports.ts` to the
+  six ports + EventBus + TranslationPort.
+- Fixed the kept bridge/contract tests (slim settings, 1-arg `ObsidianBridge`),
+  removed the deleted-method `MockBridge` cases, dropped `ICON_PORT` from
+  `.storybook/preview.ts`.
+- **typecheck GREEN over the whole tree** — Wave 3 complete. The orphaned
+  `domain/chat` + `domain/feature` (now importer-less) remain for Wave 4. The
+  SettingsPort/VaultPort/NotificationPort contracts + TEST-PSR-024 are retained.
+  REQ-PSR-005/013, NFR-PSR-010; SPEC-PSR-008/009; ADR-PSR-002.
+
+### T-PSR-022 — Wave 4: domain root + barrel slim + PluginCore MCP trim (dev)
+
+- Deleted `src/domain/chat/**`, `src/domain/feature/**`, the 10 deleted port
+  interface files (`ChatTransportPort`, `TransportLifecyclePort`, `ConfirmModalPort`,
+  `SecretStorePort`, `MarkdownRenderPort`, `IconPort`, `MetadataCachePort`,
+  `CanvasPort`, `ObsidianMcpServerPort`, `ObsidianCliPort`), `src/domain/shared/Slug.ts`
+  + tests. Slimmed `src/domain/ports/index.ts` to the six core ports + `TranslationPort`
+  + `Unsubscriber`. `EventBus`/`event-bus.ts` untouched.
+- Deleted the orphan `src/ui/types/FeatureDto.ts` (missed in Wave 0 — imported the
+  deleted `FeatureStatus`).
+- **COMPILER-SURFACED SPEC GAP (flag to maintainer):** `PluginCore` (kept, ADR-012)
+  still carried the MCP-server surface (`CorePorts.mcpServer`/`isMcpServerEnabled`,
+  `start`/`stopMcpServer`, `_syncMcpRunning`, `isMcpServerRunning`,
+  `getMcpConnectionConfig`) referencing the deleted `ObsidianMcpServerPort`. Design
+  §C.14 Wave 4 said "EventBus/EventMap need no edit" but did not enumerate
+  PluginCore's MCP wiring. Trimmed it — unambiguous (MCP is a deleted subsystem per
+  ADR-PSR-001; the slim `main.ts` no longer passes `mcpServer`). Surfaced here per
+  the kept-file-scope-signal rule rather than silently absorbed.
+- **Phase B exit gate reached:** `npm run typecheck` GREEN tree-wide; `npm run test`
+  GREEN (38 files, 307 tests). REQ-PSR-004/005; SPEC-PSR-009, §9.
+
+### T-PSR-023 — Wave 5a: delete dead custom ESLint rule (dev)
+
+- Deleted `eslint-rules/no-legacy-claude-cli-port-names.cjs` + its `__tests__`
+  suite + `tests/lint/no-legacy-claude-cli-port-names.test.ts`, the `lint:rules`
+  half that ran it, the `local/no-legacy-claude-cli-port-names` registration +
+  rule, and the `useClaudeCliPort` carve-out override (target file already gone).
+  **Kept** `local/no-claude-home-reads` (cross-cutting security invariant).
+  `npm run lint:rules` passes; typecheck GREEN. REQ-PSR-005, NFR-PSR-009;
+  SPEC-PSR-013, §9.
+
+## Phase C — deleted-symbol guard (enabled last)
+
+### T-PSR-025 / T-PSR-026 / T-PSR-027 — deleted-subsystem guard (qa+dev)
+
+- **T-PSR-026:** added `DELETED_SUBSYSTEM_BAN` (one glob per deleted prefix) +
+  `DELETED_INJECTION_KEYS` (14 deleted keys) to the project-wide
+  `no-restricted-imports` block in `eslint.config.js`. **OC-PSR-5 closed:** the
+  design's `@/infrastructure/mcp/**` glob matched nothing (registrars were under
+  `@/infrastructure/obsidian/mcp/**`) — dropped + repointed. Every retained glob
+  maps to a path deleted in Waves 0–4 (NFR-PSR-009).
+- **T-PSR-025:** positive-control fixture
+  `src/application/__fixtures__/imports-deleted-subsystem.ts` (`@ts-nocheck`,
+  imports `@/domain/chat/ProviderSelection`).
+- **T-PSR-027:** `tests/architecture/no-deleted-subsystem-refs.test.ts` (ESLint
+  Node API, OC-PSR-6 reuse): TEST-PSR-016 asserts zero `DELETED_SUBSYSTEM_BAN`
+  hits over `src/**`; TEST-PSR-017 asserts the fixture trips the ban. **Both
+  GREEN**; typecheck GREEN.
+- **Coverage nuance (flag):** the ban lives in the project-wide block; the
+  domain/ui/plugin/infra-obsidian layer overrides replace `no-restricted-imports`,
+  so the ban is enforced where the base block applies (application, infra-bridge/
+  mock/localstorage, root). The gutted tree is clean everywhere; the positive
+  control proves the mechanism. Broadening to every layer is a possible refinement.
+
+## Phase D — CI / docs / coverage / final gate
+
+### T-PSR-030 — Docs rewrite (dev, REQ-PSR-010)
+
+- CLAUDE.md: rewrote the Architecture layer table (gutted state), the Key files
+  list (dropped `Feature.ts`/`FeatureStep.ts`/`FeatureRepository.ts`; added
+  `AgentSidebarView`/`AgentPanelRoot.vue`/slim `main.ts`/`settings.ts`), the Vue
+  router note (router removed in P0), the Vault-structure block (marked
+  "removed in P0 / regrows per phase"), and the CI-branch line (added `next`).
+  AGENTS.md carries no "CI runs on develop/demo/main" prose to reconcile (only a
+  direct-push rule). No deleted-subsystem path remains in the architecture
+  sections.
+
+### T-PSR-032 — Coverage threshold on the gutted tree (qa, NFR-PSR-002, R-PSR-5)
+
+- `npm run test:coverage`: 38 files / 308 tests PASS; coverage
+  **94.53 / 85.01 / 87.17 / 94.66** (stmts/branches/funcs/lines) — all clear
+  80/70/80/80. **No `include` change** (R-PSR-5 contingency not triggered).
+  Recorded in test-report.md.
+
+### T-PSR-033 / T-PSR-034 — final gate + manual prep
+
+- **Build fix:** the slim `main.ts` dropped CSS imports, so the plugin lib build
+  emitted no `styles.css` (the copy step ENOENT'd). Re-added the shared token +
+  animation layers (`import '@/ui/styles/tokens.css'` + `animations.css`) to
+  `main.ts`; tagged the `AgentSidebarView` host `.specorator-root` so the scoped
+  tokens apply. `styles.css` regenerated.
+- **Storybook (R-PSR-4):** all stories were deleted in Wave 0, so `test:storybook`
+  exited 1 (no test files). Added `stories/agent/AgentPanelRoot.stories.ts` (the
+  surviving surface) so the gate has ≥1 test. `test:storybook` needs Playwright
+  Chromium — **CI-verified** (not runnable in this environment; not self-claimed).
+- **`npm run verify` exits 0:** audit, typecheck, lint, lint:style-tokens,
+  test:coverage (308 tests; 94.5/85/87/94.7), build, build:web, verify:bundle-size
+  (0.41 MB / 4 MB), docs:api, validate:manifest, verify:scaffold, verify:workflows,
+  `git diff --check`. `manifest.json` `id`/`version`/`minAppVersion` UNCHANGED vs
+  `develop` (NFR-PSR-007). **Zero bypasses** — no `--no-verify`/`--ignore-scripts`/
+  `if: false`/skipped tests/eslint-disable masking (counter-metric = 0).
+- **PENDING human (P0 checkpoint):** `test:storybook` + CI green on `next`
+  (T-PSR-034); manual Obsidian checks TEST-PSR-018..021 (T-PSR-033 — see
+  test-report.md). These are never self-claimed.

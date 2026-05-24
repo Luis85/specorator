@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { TFile, TFolder } from 'obsidian'
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
-import type { PluginSettings } from '@/domain/settings/PluginSettings'
 
 // `obsidian` is aliased to `tests/__fakes__/obsidian.stub.ts` via
 // `vitest.config.ts`. The stub provides a real `normalizePath` (matching
@@ -54,14 +53,8 @@ function makeBridge(
       offref: () => {},
     },
   }
-  const settings: PluginSettings = {
-    specsFolder: 'specs',
-    logLevel: 'warn',
-  } as PluginSettings
   const bridge = new ObsidianBridge(
     app as unknown as ConstructorParameters<typeof ObsidianBridge>[0],
-    () => settings,
-    async () => {},
   )
   return { bridge, app, openFile }
 }

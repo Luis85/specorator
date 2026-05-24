@@ -5,14 +5,7 @@ import type {
 	NotificationPort,
 	LoggerPort,
 	CommunityPluginPort,
-	ActiveFileSnapshot,
-	Unsubscriber,
-	ChatTransportPort,
-	ChatTransportStreamOptions,
-	StreamDelta,
-	IconPort,
 } from '@/domain/ports';
-import { ChatTransportError } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
 
 function folderPrefix(parent: string): string {
@@ -21,8 +14,9 @@ function folderPrefix(parent: string): string {
 }
 
 /**
- * In-memory bridge used in standalone dev mode and unit tests.
- * Provides test helper methods for inspecting state.
+ * In-memory bridge used in standalone dev mode and unit tests. P0 reboot:
+ * implements only the six core ports (the chat/icon members were removed with
+ * their subsystems). Provides test helpers for inspecting state.
  */
 export class MockBridge
 	implements
@@ -31,9 +25,7 @@ export class MockBridge
 		WorkspacePort,
 		NotificationPort,
 		LoggerPort,
-		ChatTransportPort,
-		CommunityPluginPort,
-		IconPort
+		CommunityPluginPort
 {
 	private readonly files = new Map<string, string>();
 	private readonly folders = new Set<string>();
@@ -51,19 +43,6 @@ export class MockBridge
 		context?: Record<string, unknown>;
 	}> = [];
 	private openedFile: string | null = null;
-	private activeFile: ActiveFileSnapshot | null = null;
-	// QW-B — the active-note path and current editor selection. Kept separate
-	// from `activeFile` because `setActiveFilePath` is the lighter test fixture
-	// used by `buildTurnInput` callers that don't care about basename/extension.
-	private _activeFilePath: string | null = null;
-	private _activeSelection: string | null = null;
-	// QW-C — vault metadata greeting fixtures. Defaults match the prior tests'
-	// "Mock Vault" naming with a zero-note count so existing snapshots are
-	// stable; tests that exercise the greeting override via the setters below.
-	private _vaultName = 'Mock Vault';
-	private _markdownFileCount = 0;
-	private readonly activeFileHandlers = new Set<(f: ActiveFileSnapshot | null) => void>();
-	private readonly missingIcons = new Set<string>();
 	private vaultBasePath: string | null;
 
 	constructor(
@@ -109,9 +88,7 @@ export class MockBridge
 	}
 
 	async listFiles(folder: string): Promise<string[]> {
-		// Root listing: top-level files have no `/` in their path. Honours
-		// `listFiles('')` symmetry with Obsidian's `vault.getAbstractFileByPath('/')`
-		// (PR-ASV-4, recursive walker for the @-mention picker).
+		// Root listing: top-level files have no `/` in their path.
 		if (folder === '') {
 			return [...this.files.keys()].filter((p) => !p.includes('/'));
 		}
@@ -151,74 +128,6 @@ export class MockBridge
 
 	async openFile(path: string): Promise<void> {
 		this.openedFile = path;
-		if (!this.files.has(path)) return;
-		const filename = path.split('/').pop() ?? path;
-		const dot = filename.lastIndexOf('.');
-		const snapshot: ActiveFileSnapshot = {
-			path,
-			basename: dot !== -1 ? filename.slice(0, dot) : filename,
-			extension: dot !== -1 ? filename.slice(dot + 1) : '',
-		};
-		this.activeFile = snapshot;
-		for (const handler of this.activeFileHandlers) {
-			handler({ ...snapshot });
-		}
-	}
-
-	getActiveFile(): ActiveFileSnapshot | null {
-		return this.activeFile !== null ? { ...this.activeFile } : null;
-	}
-
-	onActiveFileChanged(handler: (f: ActiveFileSnapshot | null) => void): Unsubscriber {
-		this.activeFileHandlers.add(handler);
-		return () => {
-			this.activeFileHandlers.delete(handler);
-		};
-	}
-
-	setActiveFile(file: ActiveFileSnapshot | null): void {
-		this.activeFile = file !== null ? { ...file } : null;
-		for (const handler of this.activeFileHandlers) {
-			handler(this.activeFile !== null ? { ...this.activeFile } : null);
-		}
-	}
-
-	// QW-B — `WorkspacePort.getActiveFilePath` / `getActiveSelection` and
-	// matching test fixtures. Used by `buildTurnInput` to inject a
-	// `<vault-context>` block into the system-prompt suffix.
-	getActiveFilePath(): string | null {
-		return this._activeFilePath;
-	}
-
-	getActiveSelection(): string | null {
-		return this._activeSelection;
-	}
-
-	setActiveFilePath(path: string | null): void {
-		this._activeFilePath = path;
-	}
-
-	setActiveSelection(text: string | null): void {
-		this._activeSelection = text;
-	}
-
-	// QW-C — `WorkspacePort.getVaultName` / `getMarkdownFileCount`. Both back the
-	// vault-metadata greeting row composed at the top of `<vault-context>` on
-	// the first turn of a new thread. Tests drive them via the matching setters.
-	getVaultName(): string {
-		return this._vaultName;
-	}
-
-	getMarkdownFileCount(): number {
-		return this._markdownFileCount;
-	}
-
-	setVaultName(name: string): void {
-		this._vaultName = name;
-	}
-
-	setMarkdownFileCount(count: number): void {
-		this._markdownFileCount = count;
 	}
 
 	showError(message: string, durationMs = 0): void {
@@ -260,9 +169,7 @@ export class MockBridge
 	}
 
 	/**
-	 * Test-facing accessor for the captured notice log. Returns a defensive
-	 * copy so callers cannot mutate internal state. Equivalent to `getNotices()`
-	 * but exposed as a property for test ergonomics (e.g. `expect(bridge.notices).toEqual([])`).
+	 * Test-facing accessor for the captured notice log. Returns a defensive copy.
 	 */
 	get notices(): readonly {
 		severity: 'error' | 'warning' | 'success' | 'info';
@@ -304,50 +211,6 @@ export class MockBridge
 	error(message: string, error?: unknown, context?: Record<string, unknown>): void {
 		this.logEntries.push({ level: 'error', message, error, context });
 		console.error(`[MockBridge] ${message}`, error, context);
-	}
-
-	// ── IconPort ──────────────────────────────────────────────────────────────
-	// REQ-AUX-001, ADR-AUX-001 — deterministic placeholder so tests assert on
-	// the icon name without booting Obsidian. Idempotent: prior children are
-	// cleared before re-rendering. When a name has been registered as missing
-	// via `markIconAsMissing(name)`, the element is left untouched so the
-	// `<SpIcon>` text fallback path can be exercised.
-	setIcon(el: HTMLElement, name: string): void {
-		if (this.missingIcons.has(name)) return;
-		while (el.firstChild) el.removeChild(el.firstChild);
-		const svgNS = 'http://www.w3.org/2000/svg';
-		// MockBridge is exclusively used in unit tests + the standalone Vite
-		// dev server — there is no Obsidian `activeDocument` to defer to.
-		// eslint-disable-next-line obsidianmd/prefer-active-doc
-		const svg = el.ownerDocument.createElementNS(svgNS, 'svg');
-		svg.setAttribute('data-icon', name);
-		svg.setAttribute('aria-hidden', 'true');
-		// eslint-disable-next-line obsidianmd/prefer-active-doc
-		const title = el.ownerDocument.createElementNS(svgNS, 'title');
-		title.textContent = name;
-		svg.appendChild(title);
-		el.appendChild(svg);
-	}
-
-	/** Test helper — flag `name` as unresolvable so `setIcon` is a no-op for it. */
-	markIconAsMissing(name: string): void {
-		this.missingIcons.add(name);
-	}
-
-	// ── ChatTransportPort ─────────────────────────────────────────────────────────
-
-	isAvailable(): Promise<boolean> {
-		return Promise.resolve(false);
-	}
-
-	async *queryStream(
-		_prompt: string,
-		_options?: ChatTransportStreamOptions,
-	): AsyncIterable<StreamDelta> {
-		yield {
-			type: 'error',
-			error: new ChatTransportError('NOT_INSTALLED', 'MockBridge: not available'),
-		};
 	}
 
 	// ── CommunityPluginPort ───────────────────────────────────────────────────

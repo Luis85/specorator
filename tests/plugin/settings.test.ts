@@ -1,115 +1,160 @@
 /**
- * T-CCS-009 — Tests: settings tab API key field saved, masked, trimmed.
- * Satisfies REQ-CCS-001, NFR-CCS-005, NFR-CCS-006, SPEC-CCS-001 §8.3, TEST-CCS-001.
+ * T-PSR-014 (TEST-PSR-014) — RED: the slim settings tab persists a schema-driven
+ * dropdown change through SettingsPort (SPEC-PSR-008, E12).
  *
- * T-ASM-018 — Extension: Claude CLI path field wired into the settings tab.
- * Satisfies REQ-ASM-004 (field rendered), REQ-ASM-005 (autodetect surface),
- * REQ-ASM-008 (ToS disclosure copy verbatim).
+ * Fails against the current fat tab (it imports the deleted `SpecoratorView` /
+ * `AgentSidepanelView` and its `render*` helpers need deleted plugin surface)
+ * and goes GREEN after T-PSR-015 slims `SpecoratorSettingTab` to the
+ * module-schema loop. Traces: REQ-PSR-007; SPEC-PSR-008.
  */
-import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
+import { describe, it, expect, vi } from 'vitest';
 
-describe('REQ-CCS-001, NFR-CCS-005: Anthropic API key storage', () => {
-  it('PluginSettings does not declare anthropicApiKey (key now lives in SecretStorePort)', () => {
-    expect((DEFAULT_SETTINGS as unknown as Record<string, unknown>).anthropicApiKey).toBeUndefined()
-  })
-})
+interface DropdownStub {
+	readonly options: Record<string, string>;
+	value: string;
+	changeHandler?: (value: string) => void | Promise<void>;
+}
 
-describe('NFR-CCS-006: Settings tab API key field security contract', () => {
-  it('whitespace trimming: trim() removes leading/trailing spaces', () => {
-    // This verifies the trimming logic the onChange handler applies.
-    const rawValue = '  sk-ant-test  '
-    const trimmed = rawValue.trim()
-    expect(trimmed).toBe('sk-ant-test')
-  })
+// A Proxy obsidian mock: real `Setting` (captures dropdown onChange) +
+// `PluginSettingTab` (gives a jsdom containerEl), and a no-op class for every
+// other named import so the fat tab's import chain (ItemView, etc.) resolves.
+vi.mock('obsidian', () => {
+	const dropdowns: DropdownStub[] = [];
+	class Dropdown implements DropdownStub {
+		options: Record<string, string> = {};
+		value = '';
+		changeHandler?: (value: string) => void | Promise<void>;
+		addOption(v: string, l: string): this {
+			this.options[v] = l;
+			return this;
+		}
+		setValue(v: string): this {
+			this.value = v;
+			return this;
+		}
+		onChange(cb: (value: string) => void | Promise<void>): this {
+			this.changeHandler = cb;
+			return this;
+		}
+	}
+	class Setting {
+		setName(): this {
+			return this;
+		}
+		setDesc(): this {
+			return this;
+		}
+		setHeading(): this {
+			return this;
+		}
+		addDropdown(cb: (d: Dropdown) => void): this {
+			const d = new Dropdown();
+			cb(d);
+			dropdowns.push(d);
+			return this;
+		}
+		addText(): this {
+			return this;
+		}
+		addToggle(): this {
+			return this;
+		}
+		addButton(): this {
+			return this;
+		}
+		addTextArea(): this {
+			return this;
+		}
+		addExtraButton(): this {
+			return this;
+		}
+	}
+	class PluginSettingTab {
+		app: unknown;
+		containerEl: HTMLElement;
+		constructor(app: unknown) {
+			this.app = app;
+			const el = document.createElement('div');
+			// Obsidian augments HTMLElement with `empty()`; the slim tab calls it
+			// first. (We deliberately do NOT polyfill `createEl` so the fat tab's
+			// `render*` helpers still throw — this test is RED until T-PSR-015.)
+			(el as unknown as { empty: () => void }).empty = function (this: HTMLElement) {
+				while (this.firstChild) this.removeChild(this.firstChild);
+			};
+			this.containerEl = el;
+		}
+	}
+	const specials: Record<string, unknown> = {
+		Setting,
+		PluginSettingTab,
+		__dropdowns: dropdowns,
+		normalizePath: (p: string) => p,
+		setIcon: () => {},
+	};
+	// Every other named export resolves to a no-op that is both callable and
+	// constructable (so `extends X`, `new X()`, and `X()` all work). Cached per
+	// name so an `instanceof` binding stays stable.
+	const cache = new Map<string, unknown>();
+	const reserved = (prop: string | symbol): boolean =>
+		typeof prop !== 'string' || prop === '__esModule' || prop === 'default' || prop === 'then';
+	return new Proxy(specials, {
+		has(_target, prop) {
+			return !reserved(prop);
+		},
+		get(target, prop) {
+			if (reserved(prop)) return undefined;
+			const key = prop as string;
+			if (key in target) return target[key];
+			let v = cache.get(key);
+			if (v === undefined) {
+				v = function NoOp() {};
+				cache.set(key, v);
+			}
+			return v;
+		},
+	});
+});
 
-  it('empty string after trim disables adapter', () => {
-    const rawValue = '   '
-    const trimmed = rawValue.trim()
-    expect(trimmed).toBe('')
-  })
-})
+import * as obsidian from 'obsidian';
+import type { App } from 'obsidian';
+import { SpecoratorSettingTab } from '@/plugin/settings';
+import { coreSettingsModule } from '@/core/core-settings';
+import { fakeModulePorts } from '../__fakes__/fake-ports';
 
-describe('REQ-ASM-004 / REQ-ASM-005 / REQ-ASM-008: Claude CLI path field wiring (T-ASM-018)', () => {
-  // The settings tab uses native Obsidian APIs and is therefore awkward to
-  // mount in vitest without a full Obsidian shim. We instead assert that the
-  // source code of `src/plugin/settings.ts` carries the wiring fingerprints
-  // mandated by SPEC §10.2 and the T-ASM-018 DoD.
-  const SETTINGS_SRC = readFileSync(
-    resolve(__dirname, '../../src/plugin/settings.ts'),
-    'utf8',
-  )
+const capturedDropdowns = (obsidian as unknown as { __dropdowns: DropdownStub[] }).__dropdowns;
 
-  it('DEFAULT_SETTINGS has claudeCliPath as empty string', () => {
-    expect(DEFAULT_SETTINGS.claudeCliPath).toBe('')
-  })
+describe('SpecoratorSettingTab — schema dropdown round-trip (TEST-PSR-014)', () => {
+	it('a locale dropdown change persists through SettingsPort and reads back', async () => {
+		const { bridge } = fakeModulePorts();
+		const saveSpy = vi.spyOn(bridge, 'saveSettings');
 
-  it('settings.ts defines renderClaudeCliPathField()', () => {
-    expect(SETTINGS_SRC).toContain('renderClaudeCliPathField')
-  })
+		const plugin = {
+			app: {},
+			core: { allModules: [coreSettingsModule] },
+			settings: { locale: 'en', logLevel: 'warn' } as Record<string, unknown>,
+			async updateSettings(patch: Record<string, unknown>): Promise<void> {
+				this.settings = (coreSettingsModule.validateSettings?.({
+					...this.settings,
+					...patch,
+				}) ?? this.settings) as unknown as Record<string, unknown>;
+				await bridge.saveSettings(
+					this.settings as unknown as Parameters<typeof bridge.saveSettings>[0],
+				);
+			},
+		};
 
-  it('display() calls renderClaudeCliPathField() after renderAnthropicKeyField()', () => {
-    const idxAnthropic = SETTINGS_SRC.indexOf('this.renderAnthropicKeyField()')
-    const idxCli = SETTINGS_SRC.indexOf('this.renderClaudeCliPathField(')
-    expect(idxAnthropic).toBeGreaterThan(-1)
-    expect(idxCli).toBeGreaterThan(-1)
-    expect(idxCli).toBeGreaterThan(idxAnthropic)
-  })
+		const tab = new SpecoratorSettingTab(
+			plugin.app as App,
+			plugin as unknown as ConstructorParameters<typeof SpecoratorSettingTab>[1],
+		);
+		capturedDropdowns.length = 0;
+		tab.display();
 
-  it('renderClaudeCliPathField wires the five SPEC §7.5 data-testids', () => {
-    expect(SETTINGS_SRC).toContain('settings-claude-cli-path-input')
-    expect(SETTINGS_SRC).toContain('settings-claude-cli-path-autodetect')
-    expect(SETTINGS_SRC).toContain('settings-claude-cli-path-test')
-    expect(SETTINGS_SRC).toContain('settings-claude-cli-path-description')
-    expect(SETTINGS_SRC).toContain('settings-claude-cli-path-status')
-  })
+		const localeDropdown = capturedDropdowns.find((d) => 'en' in d.options);
+		expect(localeDropdown).toBeDefined();
+		await localeDropdown?.changeHandler?.('de');
 
-  it('description text matches REQ-ASM-008 disclosure copy verbatim', () => {
-    expect(SETTINGS_SRC).toContain(
-      'Specorator does not handle your Claude.ai credentials. The `claude` CLI you installed manages its own login.',
-    )
-  })
-
-  it('onChange handler trims and bumps views after writing the setting', () => {
-    // Capture the renderClaudeCliPathField body and assert it contains the
-    // required interactions in the right order.
-    const start = SETTINGS_SRC.indexOf('renderClaudeCliPathField(')
-    const handleAutodetectAt = SETTINGS_SRC.indexOf('handleAutodetect(', start)
-    const renderBody = SETTINGS_SRC.slice(start, handleAutodetectAt)
-    expect(renderBody).toContain('raw.trim()')
-    expect(renderBody).toContain("updateSettings({ claudeCliPath:")
-    expect(renderBody).toContain('_bumpAllViews()')
-  })
-
-  it('defines handleAutodetect() and handleTestBinary() private methods', () => {
-    expect(SETTINGS_SRC).toMatch(/private\s+async\s+handleAutodetect\(/)
-    expect(SETTINGS_SRC).toMatch(/private\s+handleTestBinary\(/)
-  })
-
-  it('_testBinaryVersion is the only spawnSync site (NFR-ASM-004 / T-ASM-018 DoD)', () => {
-    const callCount = (SETTINGS_SRC.match(/\bspawnSync\(/g) ?? []).length
-    expect(callCount).toBe(1)
-    // The single call lives in the shared _testBinaryVersion helper that both the
-    // Claude and Obsidian CLI path test buttons delegate to (ADR-018).
-    const handleStart = SETTINGS_SRC.indexOf('private _testBinaryVersion(')
-    const nextPrivateAfter = SETTINGS_SRC.indexOf('\n  private ', handleStart + 1)
-    const handleBody = SETTINGS_SRC.slice(
-      handleStart,
-      nextPrivateAfter === -1 ? SETTINGS_SRC.length : nextPrivateAfter,
-    )
-    expect(handleBody).toContain('spawnSync(')
-    expect(handleBody).toContain('timeout: 5_000')
-    // Both test-binary handlers delegate to the shared single-spawn helper.
-    expect(SETTINGS_SRC).toContain('_testBinaryVersion(this.plugin.settings.claudeCliPath.trim()')
-    expect(SETTINGS_SRC).toContain('_testBinaryVersion(this.plugin.settings.obsidianCliPath.trim()')
-  })
-
-  it('forbids credential-path literals (NFR-ASM-004)', () => {
-    const dotClaude = ['~', '/', '.claude', '/'].join('')
-    const credentialsJson = ['.credentials', '.json'].join('')
-    expect(SETTINGS_SRC).not.toContain(dotClaude)
-    expect(SETTINGS_SRC).not.toContain(credentialsJson)
-  })
-})
+		expect(saveSpy).toHaveBeenCalled();
+		expect((await bridge.getSettings()).locale).toBe('de');
+	});
+});

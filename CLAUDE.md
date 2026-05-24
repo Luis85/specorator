@@ -47,11 +47,11 @@ domain ← application ← infrastructure ← ui
 
 | Layer | Path | Role |
 |---|---|---|
-| Domain | `src/domain/` | `Feature` aggregate, value objects (`Slug`), `Result<T,E>`, repository interfaces |
-| Application | `src/application/` | Use cases (`CreateFeatureUseCase`, `AdvanceFeatureStageUseCase`, etc.) |
-| Infrastructure | `src/infrastructure/` | `FeatureRepository`, bridge implementations |
-| UI | `src/ui/` | Vue 3 components, Pinia stores, Vue Router, composables |
-| Plugin | `src/plugin/` | Obsidian `Plugin` subclass, `SpecoratorView`, settings tab |
+| Domain | `src/domain/` | Narrow port interfaces, `Result<T,E>`, `PluginSettings`, typed `EventBus`. (The `Feature` aggregate / workflow value objects were removed in the P0 reboot — ADR-PSR-001 — and regrow per phase.) |
+| Application | `src/application/` | `FeedbackService`. (Chat/feature use cases removed in P0; regrow per phase.) |
+| Infrastructure | `src/infrastructure/` | Three bridges (`ObsidianBridge`, `MockBridge`, `LocalStorageBridge`) + per-port `InjectionKey`s |
+| UI | `src/ui/` | Vue 3 `<script setup>` components (`AgentPanelRoot`, `ErrorBoundary`), the six port composables, i18n. (Router / Pinia chat-feature stores / chat UI removed in P0; regrow per phase.) |
+| Plugin | `src/plugin/` | Obsidian `Plugin` subclass (`main.ts`), `AgentSidebarView`, settings tab |
 
 ### Narrow ports (ADR-008)
 
@@ -88,6 +88,10 @@ Domain aggregate mutations (`activate`, `advanceStep`, `archive`, `abandon`) all
 
 ### Vault structure (ADR-005)
 
+> **Removed in the P0 reboot (ADR-PSR-001):** the 12-stage workflow engine and
+> the `Feature` aggregate were deleted; they regrow per phase. The description
+> below is the pre-reboot / future shape, retained for reference.
+
 Features are stored under `specs/{slug}/` (configurable via `specsFolder` setting, default `specs`):
 
 - `workflow-state.md` — YAML frontmatter tracking file, created on feature creation
@@ -101,7 +105,7 @@ The 12 stage slugs (from `src/domain/feature/FeatureStep.ts`): `idea`, `research
 ### Vue conventions (ADR-003)
 
 - All components use `<script setup>` (Composition API). Options API is not used; ESLint enforces this.
-- Vue Router uses `createWebHashHistory` (hash-mode) so routing works inside Obsidian's embedded view and on GitHub Pages.
+- Vue Router was removed in the P0 reboot (no routed views yet); it regrows with `createWebHashHistory` if a later phase needs multi-surface in-app navigation.
 - Pinia stores hold plain DTOs only — domain class instances must not cross the store boundary.
 - UI imports use cases for business logic; UI must not import domain or infrastructure directly except for port types from `@/domain/ports` and the matching InjectionKey symbols from `@/infrastructure/bridge/ports`.
 
@@ -120,17 +124,20 @@ Plugin code must not assign `innerHTML` / `outerHTML` / `insertAdjacentHTML`, an
 
 ### Key files
 
-- `src/domain/ports/` — narrow port interfaces (SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort)
+- `src/domain/ports/` — the six narrow port interfaces (SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, CommunityPluginPort) + TranslationPort
 - `src/application/shared/FeedbackService.ts` — composable-layer side-effect emitter wrapping LoggerPort + NotificationPort
-- `src/ui/components/ErrorBoundary.vue` — wraps `<RouterView />` in `App.vue`; logs + notifies before swallowing component errors
-- `src/domain/settings/PluginSettings.ts` — `PluginSettings` type + `DEFAULT_SETTINGS`
-- `src/infrastructure/bridge/ports.ts` — per-port InjectionKey symbols
-- `src/infrastructure/bridge/FeatureRepository.ts` — serialises/deserialises `workflow-state.md`, creates stage stubs
-- `src/domain/feature/Feature.ts` — `Feature` aggregate
-- `src/domain/feature/FeatureStep.ts` — `FEATURE_STEPS` array and step metadata helpers
-- `src/plugin/main.ts` — Obsidian plugin entry point
-- `src/plugin/settings.ts` — settings tab (reads `PluginSettings` from `@/domain/settings/PluginSettings`)
-- `src/ui/main.ts` — browser (standalone) entry point, mounts Vue with `MockBridge`
+- `src/ui/components/ErrorBoundary.vue` — wraps the mounted root; logs + notifies before swallowing component errors
+- `src/domain/settings/PluginSettings.ts` — `PluginSettings` (`{ locale, logLevel }`) + `DEFAULT_SETTINGS`
+- `src/infrastructure/bridge/ports.ts` — per-port InjectionKey symbols (six core)
+- `src/plugin/main.ts` — Obsidian plugin entry point (boots one empty agent sidebar)
+- `src/plugin/AgentSidebarView.ts` — `ItemView` (`VIEW_TYPE_AGENT`) mounting `AgentPanelRoot` in `ErrorBoundary`
+- `src/ui/agent/AgentPanelRoot.vue` — the empty P0 agent panel
+- `src/plugin/settings.ts` — settings tab (module-schema loop over the two `coreSettingsModule` dropdowns)
+- `src/ui/main.ts` — browser (standalone) entry point, mounts `AgentPanelRoot` with `MockBridge`
+
+> **P0 reboot (ADR-PSR-001):** the feature/workflow/chat/MCP/onboarding surface
+> was removed and regrows per phase on the `next` integration branch. Settings
+> persist to the device-local store (ADR-PSR-002), never `data.json`.
 
 ## Branching model
 
@@ -146,7 +153,7 @@ Plugin code must not assign `innerHTML` / `outerHTML` / `insertAdjacentHTML`, an
 - To cut a release: PR `develop` → `main`, merge, then tag `main` HEAD with the plain semver version `X.Y.Z` (no `v` prefix — Obsidian marketplace requires tag to equal `manifest.json` version exactly). Use `npm version <bump>` to keep `manifest.json`, `package.json`, `versions.json`, and the tag in sync.
 - Never push directly to `main` or tag from any branch other than `main`.
 
-CI runs on push/PR to `develop`, `demo`, and `main`. GitHub Pages deploys only on push to `demo`.
+CI runs on push/PR to `develop`, `demo`, `main`, and `next` (the P0 reboot integration branch). GitHub Pages deploys only on push to `demo`.
 
 ## Spec-first gate (Phase 4)
 

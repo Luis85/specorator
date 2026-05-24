@@ -4,7 +4,6 @@ import { createPinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { i18n, setLocale } from '../src/ui/i18n';
 import {
-	ICON_PORT,
 	LOGGER_PORT,
 	NOTIFICATION_PORT,
 	SETTINGS_PORT,
@@ -35,7 +34,6 @@ setup((app) => {
 	app.provide(WORKSPACE_PORT, storyBridge);
 	app.provide(NOTIFICATION_PORT, storyBridge);
 	app.provide(LOGGER_PORT, storyBridge);
-	app.provide(ICON_PORT, storyBridge);
 });
 
 const preview: Preview = {
