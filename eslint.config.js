@@ -66,10 +66,17 @@ const MAX_LINES_OPTIONS = { max: 350, skipBlankLines: true, skipComments: true }
 // Shared DOM-injection property bans (used in the global block and in scoped
 // overrides that carve out the window.* dialog entries for non-plugin contexts).
 const DOM_INJECTION_BANS = [
-	{ object: 'document', property: 'innerHTML', message: 'innerHTML is unsafe; use textContent or createEl().' },
+	{
+		object: 'document',
+		property: 'innerHTML',
+		message: 'innerHTML is unsafe; use textContent or createEl().',
+	},
 	{ property: 'innerHTML', message: 'innerHTML is unsafe; use textContent or createEl().' },
 	{ property: 'outerHTML', message: 'outerHTML is unsafe; use createEl()/replaceChildren().' },
-	{ property: 'insertAdjacentHTML', message: 'insertAdjacentHTML is unsafe; use createEl()/append().' },
+	{
+		property: 'insertAdjacentHTML',
+		message: 'insertAdjacentHTML is unsafe; use createEl()/append().',
+	},
 ];
 
 // ADR-008: the aggregate IBridge / BridgeKey / useBridge surface was deleted
@@ -97,6 +104,75 @@ const PORTS_BAN_PATTERN = {
 	],
 	message:
 		'IBridge / BridgeKey / useBridge were superseded by the narrow ports in src/domain/ports (ADR-008). Import a specific port (SettingsPort, VaultPort, WorkspacePort, NotificationPort) and the matching composable instead.',
+};
+
+// Deleted-subsystem guard (ADR-PSR-001, SPEC-PSR-013, NFR-PSR-009). Bans
+// re-importing any path removed in the P0 reboot. Each glob corresponds to a
+// real path deleted during the leaf-first waves (a glob matching nothing would
+// itself be a defect). OC-PSR-5: the MCP registrars lived under
+// `@/infrastructure/obsidian/mcp/**`, so the design's top-level
+// `@/infrastructure/mcp/**` glob is dropped in favour of the real path.
+const DELETED_SUBSYSTEM_BAN = {
+	group: [
+		'@/domain/chat',
+		'@/domain/chat/**',
+		'@/domain/feature',
+		'@/domain/feature/**',
+		'@/application/chat/**',
+		'@/application/feature/**',
+		'@/application/migration/**',
+		'@/infrastructure/bridge/FeatureRepository',
+		'@/infrastructure/bridge/degradedClaudeCliPort',
+		'@/infrastructure/obsidian/Claude*',
+		'@/infrastructure/obsidian/Cursor*',
+		'@/infrastructure/obsidian/ObsidianMcp*',
+		'@/infrastructure/obsidian/ObsidianCli*',
+		'@/infrastructure/obsidian/ObsidianMetadataCache*',
+		'@/infrastructure/obsidian/ObsidianCanvas*',
+		'@/infrastructure/obsidian/ObsidianSecretStore*',
+		'@/infrastructure/obsidian/ObsidianConfirmModal*',
+		'@/infrastructure/obsidian/ObsidianMarkdownRender*',
+		'@/infrastructure/obsidian/mcp/**',
+		'@/infrastructure/cursor/**',
+		'**/SpecoratorView',
+		'**/AgentSidepanelView',
+		'@/domain/ports/ChatTransportPort',
+		'@/domain/ports/TransportLifecyclePort',
+		'@/domain/ports/ConfirmModalPort',
+		'@/domain/ports/SecretStorePort',
+		'@/domain/ports/MarkdownRenderPort',
+		'@/domain/ports/IconPort',
+		'@/domain/ports/MetadataCachePort',
+		'@/domain/ports/CanvasPort',
+		'@/domain/ports/ObsidianMcpServerPort',
+		'@/domain/ports/ObsidianCliPort',
+	],
+	message:
+		'This module names a subsystem deleted in the P0 reboot (ADR-PSR-001). The chat/feature/transport/MCP/onboarding surface regrows per phase — do not re-import the old path.',
+};
+
+// Companion `paths` entry: the InjectionKeys deleted from
+// `@/infrastructure/bridge/ports` (only the six core keys remain).
+const DELETED_INJECTION_KEYS = {
+	name: '@/infrastructure/bridge/ports',
+	importNames: [
+		'ICON_PORT',
+		'METADATA_CACHE_PORT',
+		'CANVAS_PORT',
+		'CHAT_TRANSPORT_PORT',
+		'PROVIDER_REGISTRY_KEY',
+		'TRANSPORT_LIFECYCLE_PORT',
+		'CONFIRM_MODAL_PORT',
+		'SECRET_STORE_PORT',
+		'MARKDOWN_RENDER_PORT',
+		'TRANSPORT_KIND_KEY',
+		'IS_MOBILE_KEY',
+		'SETTINGS_VERSION_KEY',
+		'OPEN_PLUGIN_SETTINGS_KEY',
+		'PLUGIN_MANIFEST_KEY',
+	],
+	message:
+		'This InjectionKey was deleted in the P0 reboot (ADR-PSR-001). Only the six core ports remain (SETTINGS_PORT, VAULT_PORT, WORKSPACE_PORT, NOTIFICATION_PORT, LOGGER_PORT, COMMUNITY_PLUGIN_PORT).',
 };
 
 export default defineConfig(
@@ -319,8 +395,9 @@ export default defineConfig(
 							message:
 								'Import from obsidian only in the plugin adapter layer (src/plugin/** and src/infrastructure/obsidian/**).',
 						},
+						DELETED_INJECTION_KEYS,
 					],
-					patterns: [PORTS_BAN_PATTERN],
+					patterns: [PORTS_BAN_PATTERN, DELETED_SUBSYSTEM_BAN],
 				},
 			],
 
@@ -329,10 +406,7 @@ export default defineConfig(
 
 			// W12 — comments tagged with the warning markers below must be
 			// converted to GitHub issues instead. See `terms` for the list.
-			'no-warning-comments': [
-				'error',
-				{ terms: ['todo', 'fixme', 'xxx'], location: 'anywhere' },
-			],
+			'no-warning-comments': ['error', { terms: ['todo', 'fixme', 'xxx'], location: 'anywhere' }],
 
 			// Out-of-scope obsidianmd recommended rules — opinionated style
 			// items not part of the W5 acceptance list. Keep the security/
@@ -469,10 +543,7 @@ export default defineConfig(
 	// adapter layer are the only places where raw try/catch is sanctioned.
 	// (delete-operator ban still applies.)
 	{
-		files: [
-			'src/infrastructure/**/*.ts',
-			'src/domain/shared/tryAsync.ts',
-		],
+		files: ['src/infrastructure/**/*.ts', 'src/domain/shared/tryAsync.ts'],
 		rules: {
 			'no-restricted-syntax': [
 				'error',
@@ -608,7 +679,7 @@ export default defineConfig(
 				'error',
 				{
 					selector:
-						"CallExpression[callee.property.name=/^(find|findAll|get|getAll)$/] > Literal[value=/^[\\.#]/]",
+						'CallExpression[callee.property.name=/^(find|findAll|get|getAll)$/] > Literal[value=/^[\\.#]/]',
 					message:
 						'Tests must query via data-testid only. CSS class and id selectors are forbidden — add a data-testid attribute and route through a PageObject getter instead.',
 				},

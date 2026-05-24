@@ -355,3 +355,26 @@ convergence.
   **Kept** `local/no-claude-home-reads` (cross-cutting security invariant).
   `npm run lint:rules` passes; typecheck GREEN. REQ-PSR-005, NFR-PSR-009;
   SPEC-PSR-013, §9.
+
+## Phase C — deleted-symbol guard (enabled last)
+
+### T-PSR-025 / T-PSR-026 / T-PSR-027 — deleted-subsystem guard (qa+dev)
+
+- **T-PSR-026:** added `DELETED_SUBSYSTEM_BAN` (one glob per deleted prefix) +
+  `DELETED_INJECTION_KEYS` (14 deleted keys) to the project-wide
+  `no-restricted-imports` block in `eslint.config.js`. **OC-PSR-5 closed:** the
+  design's `@/infrastructure/mcp/**` glob matched nothing (registrars were under
+  `@/infrastructure/obsidian/mcp/**`) — dropped + repointed. Every retained glob
+  maps to a path deleted in Waves 0–4 (NFR-PSR-009).
+- **T-PSR-025:** positive-control fixture
+  `src/application/__fixtures__/imports-deleted-subsystem.ts` (`@ts-nocheck`,
+  imports `@/domain/chat/ProviderSelection`).
+- **T-PSR-027:** `tests/architecture/no-deleted-subsystem-refs.test.ts` (ESLint
+  Node API, OC-PSR-6 reuse): TEST-PSR-016 asserts zero `DELETED_SUBSYSTEM_BAN`
+  hits over `src/**`; TEST-PSR-017 asserts the fixture trips the ban. **Both
+  GREEN**; typecheck GREEN.
+- **Coverage nuance (flag):** the ban lives in the project-wide block; the
+  domain/ui/plugin/infra-obsidian layer overrides replace `no-restricted-imports`,
+  so the ban is enforced where the base block applies (application, infra-bridge/
+  mock/localstorage, root). The gutted tree is clean everywhere; the positive
+  control proves the mechanism. Broadening to every layer is a possible refinement.
