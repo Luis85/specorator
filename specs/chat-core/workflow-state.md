@@ -1,10 +1,10 @@
 ---
 feature: chat-core
 area: CC
-current_stage: design
+current_stage: specification
 status: active
 last_updated: 2026-05-24
-last_agent: architect (design)
+last_agent: architect (specification)
 epic: claudian-reboot
 phase: P1
 integration_branch: next
@@ -14,7 +14,7 @@ artifacts:
   research.md: skipped (charter §3 + frontend/backend audits serve as research)
   requirements.md: accepted (PRD-CC-001 — Claudian-grounded; ADR-CC-001 human-blessed 2026-05-24)
   design.md: complete (Parts A/B/C; ADR-CC-001 ACCEPTED — human-blessed 2026-05-24, charter §6a)
-  spec.md: pending (unblocked — ADR-CC-001 accepted; next: /spec:specify)
+  spec.md: complete (SPEC-CC-001..023; 23 spec items + 17 TEST-CC scenarios; next: /spec:tasks)
   tasks.md: pending
   implementation-log.md: pending
   test-plan.md: pending
@@ -34,8 +34,8 @@ artifacts:
 | 1. Idea | `idea.md` | skipped (charter + audits stand in) |
 | 2. Research | `research.md` | skipped (frontend/backend audits stand in) |
 | 3. Requirements | `requirements.md` | in-progress (PRD-CC-001 revised to Claudian ground-truth; CLAR-CC-001 ADR drafted, awaiting human bless) |
-| 4. Design | `design.md` | complete (Parts A/B/C; ADR-CC-001 proposed — CHECKPOINT) |
-| 5. Specification | `spec.md` | pending |
+| 4. Design | `design.md` | complete (Parts A/B/C; ADR-CC-001 ACCEPTED — human-blessed) |
+| 5. Specification | `spec.md` | complete (SPEC-CC-001..023; 17 TEST-CC; 15 auto + 2 manual) |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
@@ -59,8 +59,9 @@ as the visual/parity truth. Reuse the discarded AUX/MPS chat design + `--sp-*` t
 
 ## Open clarifications — charter §6 decisions to bless BEFORE design/impl
 
-- [~] CLAR-CC-001 — **`ChatRuntime` port shape. RESOLVED-IN-DESIGN (architect, 2026-05-24) —
-  ADR-CC-001 DRAFTED (status: proposed). PENDING HUMAN BLESS (charter §6a checkpoint).**
+- [x] CLAR-CC-001 — **`ChatRuntime` port shape. RESOLVED (architect 2026-05-24; ADR-CC-001
+  ACCEPTED — human-blessed at the charter §6a checkpoint). Pinned implementation-ready in
+  spec.md SPEC-CC-001 (exact 9-member interface) + SPEC-CC-002 (StreamChunk union).**
   `docs/adr/ADR-CC-001-chatruntime-port-shape.md` blesses the overall shape: async-generator
   `query(turn, history?, opts?): AsyncGenerator<StreamChunk>` (no `Result`; streaming error is
   the `{type:'error';content}` union member, not a per-chunk `Result`) + the callback-setter
@@ -251,4 +252,63 @@ as the visual/parity truth. Reuse the discarded AUX/MPS chat design + `--sp-*` t
                           (NFR-CC-011, capture claudian-main P1 baseline before impl), the 8 new
                           --sp-* token additions, and note the open question for the spec: edge
                           case #5 (done with zero text chunks — recommend finalise-empty).
+
+2026-05-24 (architect, specification): spec.md COMPLETE at specs/chat-core/spec.md
+                          (SPEC-CC-001..023 — 23 implementation-ready spec items). Grounded in
+                          design.md + ACCEPTED ADR-CC-001 + claudian-main paths (cited inline).
+                          - DOMAIN (SPEC-CC-001..009): ChatRuntimePort (exact 9-member interface
+                            = the streaming+lifecycle subset of ChatRuntime.ts:20, per-method
+                            pre/post/errors; setters/rewind/steer/subagent EXPLICITLY excluded —
+                            grow per phase); StreamChunk union mirroring chat.ts:137 (P1 emits
+                            assistant_message_start?/text/error/done/usage; full union declared
+                            additive, no text-delta/no final); UsageInfo (chat.ts:165 P1 fields);
+                            ChatMessage (chat.ts:39 subset, per-field validation; streaming/
+                            interrupted live on the store, NOT the DTO); ChatTurnRequest/
+                            PreparedChatTurn/ChatRuntimeQueryOptions/EnsureReadyOptions
+                            (runtime/types.ts:45/56/64/73 subset); ProviderId='claude';
+                            MarkdownRenderPort (one-method safe seam → MarkdownNode DTO, no HTML
+                            sink, CLAR-CC-005); CHAT_RUNTIME_PORT + MARKDOWN_RENDER_PORT
+                            InjectionKeys (ports.ts); @/domain/ports barrel re-exports.
+                          - INFRA (SPEC-CC-010..013): ClaudeCliChatRuntime (spawn contract +
+                            NDJSON→StreamChunk reduce referencing the deleted ClaudeSubprocess
+                            Adapter/StreamDeltaReducer; cancel()→manual child.kill Electron gotcha;
+                            ensureReady→CLI resolvable+login; session id from CLI; NO stored
+                            secret); MockChatRuntime (scripted text…done, per-chunk yield tick);
+                            FixtureChatRuntime (replay); createChatRuntime() factory on all 3
+                            bridges (ADR-CC-001 §6).
+                          - APPLICATION (SPEC-CC-014..015): safeMarkdownRender (pure ¶/inline-code/
+                            breaks, total, no HTML); RunChatTurnUseCase (prepareTurn→ensureReady→
+                            query→ChatTurnSink dispatch; Result<void,ChatTurnError> at boundary;
+                            streaming error = error chunk forwarded, NOT per-chunk Result —
+                            NFR-CC-003; usage session guard; generator-throw→synthetic error+done).
+                          - UI (SPEC-CC-016..022): Pinia chatStore (single-thread DTOs, 5-status
+                            machine, sink actions); useChatRuntimePort()/useMarkdownRenderPort();
+                            ChatSurface + MessageList/MessageTurn/MarkdownBlock (declarative nodes,
+                            no v-html) + WelcomeGreeting (serif token + i18n key, no duration
+                            footer) + ChatComposer (Enter/Shift+Enter/Esc/IME, send/stop);
+                            AgentSidebarView + ui/main.ts mount/provide (replaces AgentPanelRoot
+                            placeholder; provides the 2 new ports + 6 core); data-testid PageObjects
+                            named per component (ADR-009).
+                          - STYLES (SPEC-CC-023): the 8 new --sp-* tokens (color literals confined
+                            to the token layer; no component hex).
+                          - 16 edge cases (EC-1..16; EC-5 'done with zero text' RESOLVED →
+                            finalise-empty); 17 TEST-CC scenarios with U/A/M split (15 automatable
+                            U/A; 2 with a manual leg: TEST-CC-016 npm run dev smoke, TEST-CC-017
+                            real-CLI no-secret review). Full REQ↔spec↔test coverage table; quality
+                            gate green. NO production code, NO tasks written.
+
+                          HAND-OFF → planner (/spec:tasks). Decompose SPEC-CC-001..023 into
+                          T-CC-NNN. Open items for the task list:
+                          (1) baseline-capture task FIRST (NFR-CC-011, capture claudian-main P1
+                              baseline before any impl);
+                          (2) the 8 new --sp-* token additions (SPEC-CC-023);
+                          (3) MARKDOWN_RENDER_PORT wiring (SPEC-CC-008/022) — the per-bridge factory
+                              implies it; enumerate as its own task;
+                          (4) ClaudeCliChatRuntime is coverage-excluded infra → its only gate is the
+                              MANUAL TEST-CC-017 (real CLI + data.json no-secret review) — schedule
+                              it as a reviewer/SRE manual check, not a CI unit.
+                          No remaining open clarifications block tasks (CLAR-CC-001..005 all
+                          resolved; EC-5 resolved in spec).
+
+                          Recommended next command: /spec:tasks (planner).
 ```
