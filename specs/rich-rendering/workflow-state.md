@@ -3,8 +3,8 @@ feature: rich-rendering
 area: RR
 current_stage: implementation
 status: active
-last_updated: 2026-05-24
-last_agent: dev (implement — application batch)
+last_updated: 2026-05-25
+last_agent: dev (implement — ui batch 1)
 epic: claudian-reboot
 phase: P2
 integration_branch: next
@@ -17,7 +17,7 @@ artifacts:
   ADR-RR-001: accepted (docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md — human-blessed 2026-05-24)
   spec.md: complete (SPEC-RR-001..034; extends SPEC-CC-* P1 contract; 27 TEST-RR scenarios)
   tasks.md: complete (TASKS-RR-001; 44 tasks T-RR-001..044; full SPEC/REQ/NFR/TEST coverage table)
-  implementation-log.md: in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 done; ui/wire-in/gate batches remain)
+  implementation-log.md: in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 done; ui batch 2 T-RR-031..038 + wire-in/gate remain)
   test-plan.md: in-progress (TESTPLAN-RR-001; baseline reference + manual TEST-RR-026 / T-RR-043 legs scheduled)
   test-report.md: pending
   review.md: pending
@@ -43,7 +43,7 @@ artifacts:
 | 4. Design | `design.md` | complete (Parts A/B/C; ADR-RR-001 accepted — human-blessed 2026-05-24) |
 | 5. Specification | `spec.md` | complete (SPEC-RR-001..034; 27 TEST-RR) |
 | 6. Tasks | `tasks.md` | complete (TASKS-RR-001; T-RR-001..044) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 done; ui/wire-in/gate remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 done; ui batch 2 T-RR-031..038 + wire-in/gate remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -392,6 +392,49 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
                           inert _sink() P2 stubs landed here with the real block/tool/subagent state
                           mutations + subagent registry). Then T-RR-024 (useIconPort) + the components
                           T-RR-025..038.
+2026-05-25 (dev, implement -- ui batch 1): Executed UI BATCH 1 (T-RR-022..030, SPEC-RR-020/021/024/025/
+                          026/027/028) on feature/rich-rendering with strict TDD, one Conventional commit
+                          per task. COMPLETED (in order): T-RR-022 RED chatStore P2 sink-leg tests (23
+                          cases, TEST-RR-005/006/007/009 store legs, watched fail "store.onToolUse is not
+                          a function", bc1ae57) -> T-RR-023 chatStore P2 legs -- onToolUse(+tool_use
+                          block, merge-on-repeat, Task/Agent seeds SubagentInfo)/onToolResult(+computeDiff
+                          Write/Edit)/onToolOutput/onThinking/onText(ordered block, REQ-RR-011)/subagent
+                          legs(spawn-id correlation, consolidateSubagent)/onContextCompacted/onNotice;
+                          EC-RR-1/2/9 -> LoggerPort.warn+ignore (no buffer); no-op when not streaming;
+                          $reset clears P2 state; ChatSurface binds useLoggerPort() (109a655); T-RR-024
+                          useIconPort() inject-or-throw (270aac8); T-RR-025 RED SpCollapsible+SpIcon (11
+                          cases, TEST-RR-010/011/024 A leg, 435fea9) -> T-RR-026 useCollapsible+
+                          SpCollapsible.vue (WCAG 2.2 AA collapsible, logical-property rail tokens,
+                          reduced-motion/forced-colors) + SpIcon.vue (recursive h() VNode tree, wrench
+                          fallback, aria-hidden, no v-html) (77af3ad); T-RR-027 RED ToolCallBlock+TodoList
+                          (8 cases, TEST-RR-013/015/017 A leg, 0fe655e) -> T-RR-028 ToolCallBlock.vue
+                          (token status + aria-label, escaped pre-wrapped body -- <script> verbatim,
+                          REQ-RR-020a) + TodoList.vue (renderTodos rows, EC-RR-6) + pure toolIcon() added
+                          to toolPresentation (5ddd4a9); T-RR-029 RED ThinkingBlock (4 cases, fake timers,
+                          TEST-RR-016, 8a65287) -> T-RR-030 ThinkingBlock.vue (live "Thinking Ns" 1s
+                          interval, finalise freezes "Thought for Ns" + auto-collapse, interval cleared
+                          on finalise+unmount EC-RR-7, MarkdownBlock body) (f2985fe).
+                          BATCH-END STATE: npm run typecheck -> 0 errors; npm run lint -> 0 errors (3
+                          pre-existing warnings only); full unit suite 612/612 across 79 files (was
+                          566/566x73 -- +46 from 6 new test files). DEVIATIONS (both spec-faithful):
+                          (1) chatStore gained an OPTIONAL third bindTurnRunner arg logger:LoggerPort
+                          (defaults to a no-op) for the section-8 degrade warns without importing obsidian
+                          -- the wire-in the application batch anticipated; ChatSurface passes
+                          useLoggerPort(). (2) toolIcon() added to toolPresentation.ts mapping tool names
+                          to the P2 static icon-name set (file/terminal/search/bot/wrench) since claudian's
+                          richer lucide names exceed iconNodeMap; additive, no prior assertion changed.
+                          Subagent correlation: a Task/Agent onToolUse establishes the SubagentInfo on the
+                          spawning ToolCall (id = spawn tool id) so subagentId/agentId correlate to it --
+                          no separate registry action (SubagentInfo rides the reactive ToolCall.subagent
+                          DTO, ADR-003); $reset clears it via the cleared messages. NOT pushed;
+                          manifest.json untouched; no new dependency; full verify/build/build:web/coverage/
+                          audit deferred to the T-RR-044 gate. NEXT BATCH (UI batch 2, SPEC-RR-029..032):
+                          FIRST TASK = T-RR-031 (qa RED -- WriteEditBlock.vue + DiffView.vue PageObjects:
+                          per-line declarative diff spans with gutter + --sp-diff-* token backgrounds,
+                          NEW_FILE_DISPLAY_CAP=20 truncation footer EC-RR-5, non-zero +N/-N stat chip,
+                          no-diffData generic body EC-RR-3), greened by T-RR-032. Then T-RR-033/034
+                          (SubagentBlock), T-RR-035/036 (MessageBlocks dispatcher + MessageTurn fork +
+                          ContextCompactedBlock/UsageInfo), T-RR-037/038 (wire-in + remaining).
 ```
 
 ## Open clarifications

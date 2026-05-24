@@ -497,9 +497,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-021, T-RR-015, T-RR-019
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/stores/chatStore.rr.test.ts` exists, naming the listed TEST-RR ids, covering the
+  - [x] `tests/ui/stores/chatStore.rr.test.ts` exists, naming the listed TEST-RR ids, covering the
         P2 legs + EC-RR-1/2/9/10 + order preservation + the no-op-when-not-streaming invariant.
-  - [ ] Tests fail (RED) — the P2 store legs do not yet exist.
+  - [x] Tests fail (RED) — the P2 store legs do not yet exist.
 
 ### T-RR-023 🔨 — `chatStore` P2 sink-leg actions + subagent registry
 
@@ -514,9 +514,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-022
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] TEST-RR-005/006/007/009 (store legs) pass (the prior RED tests now pass), incl. EC-RR-1/2/9/10.
-  - [ ] DTOs only across the store boundary; no `obsidian`/`node:*` import; `$reset` clears P2 state.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] TEST-RR-005/006/007/009 (store legs) pass (the prior RED tests now pass), incl. EC-RR-1/2/9/10.
+  - [x] DTOs only across the store boundary; no `obsidian`/`node:*` import; `$reset` clears P2 state.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-RR-024 🔨 — `useIconPort()` composable
 
@@ -527,8 +527,8 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-007
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The composable exists, inject-or-throw; no `obsidian`/`node:*` import.
-  - [ ] `npm run typecheck` + `npm run lint` green; implementation-log entry added.
+  - [x] The composable exists, inject-or-throw; no `obsidian`/`node:*` import.
+  - [x] `npm run typecheck` + `npm run lint` green; implementation-log entry added.
 
 ### T-RR-025 🧪 — RED: `SpCollapsible.vue` + `useCollapsible` + `SpIcon.vue` (PageObjects) 🪓
 
@@ -546,9 +546,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-023, T-RR-024
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/SpCollapsible.test.ts` + `SpCollapsible.po.ts`, `tests/ui/chat/SpIcon.test.ts`
+  - [x] `tests/ui/chat/SpCollapsible.test.ts` + `SpCollapsible.po.ts`, `tests/ui/chat/SpIcon.test.ts`
         + `SpIcon.po.ts` exist, naming TEST-RR-010/011/024, data-testid only.
-  - [ ] Tests fail (RED) — `SpCollapsible`/`useCollapsible`/`SpIcon` do not yet exist.
+  - [x] Tests fail (RED) — `SpCollapsible`/`useCollapsible`/`SpIcon` do not yet exist.
 
 ### T-RR-026 🔨 — `SpCollapsible.vue` + `useCollapsible` + `SpIcon.vue` (the shared primitives) 🪓
 
@@ -564,10 +564,10 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-025
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] TEST-RR-010/011/024 (A leg) pass (the prior RED tests now pass).
-  - [ ] **No `v-html`/`innerHTML`/`outerHTML`/`insertAdjacentHTML`** in either component (NFR-RR-006,
+  - [x] TEST-RR-010/011/024 (A leg) pass (the prior RED tests now pass).
+  - [x] **No `v-html`/`innerHTML`/`outerHTML`/`insertAdjacentHTML`** in either component (NFR-RR-006,
         lint-verified); `<script setup>`; no `obsidian` import; rail uses logical properties + tokens only.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-RR-027 🧪 — RED: `ToolCallBlock.vue` + `TodoList.vue` (PageObjects) 🪓
 
@@ -585,9 +585,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-026, T-RR-013, T-RR-017
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/ToolCallBlock.test.ts` + `ToolCallBlock.po.ts`, `tests/ui/chat/TodoList.test.ts`
+  - [x] `tests/ui/chat/ToolCallBlock.test.ts` + `ToolCallBlock.po.ts`, `tests/ui/chat/TodoList.test.ts`
         + `TodoList.po.ts` exist, naming TEST-RR-013/015/017, data-testid only.
-  - [ ] Tests fail (RED) — `ToolCallBlock`/`TodoList` do not yet exist.
+  - [x] Tests fail (RED) — `ToolCallBlock`/`TodoList` do not yet exist.
 
 ### T-RR-028 🔨 — `ToolCallBlock.vue` + `TodoList.vue`
 
@@ -602,10 +602,10 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-027
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] TEST-RR-013/015/017 (A leg) pass (the prior RED tests now pass), incl. EC-RR-XSS/EC-RR-6.
-  - [ ] **No `v-html`/`innerHTML`** (NFR-RR-006, lint-verified); `<script setup>`; no `obsidian`
+  - [x] TEST-RR-013/015/017 (A leg) pass (the prior RED tests now pass), incl. EC-RR-XSS/EC-RR-6.
+  - [x] **No `v-html`/`innerHTML`** (NFR-RR-006, lint-verified); `<script setup>`; no `obsidian`
         import; status/colour via `--sp-*` tokens, never raw colour.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-RR-029 🧪 — RED: `ThinkingBlock.vue` (timer + freeze + auto-collapse) (PageObject)
 
@@ -620,9 +620,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-026
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/ThinkingBlock.test.ts` + `ThinkingBlock.po.ts` exist, naming TEST-RR-016,
+  - [x] `tests/ui/chat/ThinkingBlock.test.ts` + `ThinkingBlock.po.ts` exist, naming TEST-RR-016,
         using fake timers; data-testid only.
-  - [ ] Tests fail (RED) — `ThinkingBlock` does not yet exist.
+  - [x] Tests fail (RED) — `ThinkingBlock` does not yet exist.
 
 ### T-RR-030 🔨 — `ThinkingBlock.vue`
 
@@ -636,9 +636,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-029
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] TEST-RR-016 passes (the prior RED tests now pass), incl. interval cleanup (EC-RR-7).
-  - [ ] **No `v-html`/`innerHTML`** (NFR-RR-006, lint-verified); `<script setup>`; no `obsidian` import.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] TEST-RR-016 passes (the prior RED tests now pass), incl. interval cleanup (EC-RR-7).
+  - [x] **No `v-html`/`innerHTML`** (NFR-RR-006, lint-verified); `<script setup>`; no `obsidian` import.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-RR-031 🧪 — RED: `WriteEditBlock.vue` + `DiffView.vue` (PageObjects)
 

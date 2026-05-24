@@ -8,7 +8,7 @@ owner: dev
 epic: claudian-reboot
 phase: P2
 created: 2026-05-24
-updated: 2026-05-24
+updated: 2026-05-25
 ---
 
 # Implementation log — rich rendering (P2)
@@ -411,3 +411,81 @@ record the GREEN convergence + commit SHA.
   `tests/ui/stores/chatStore.rr.test.ts`), greened by **T-RR-023** (which replaces the inert `_sink()`
   P2 stubs landed here with the real block/tool/subagent state mutations). Then T-RR-024 (`useIconPort`)
   and the components T-RR-025..038.
+
+---
+
+## UI batch 1 (T-RR-022..030) — store legs, composable, primitives, blocks
+
+### T-RR-022 (RED) — `chatStore` P2 sink-leg tests (TEST-RR-005/006/007/009 store legs)
+
+- **File:** `tests/ui/stores/chatStore.rr.test.ts` (new, 23 cases).
+- **RED watched:** `npx vitest run tests/ui/stores/chatStore.rr.test.ts` → **23 failed** (`store.onToolUse is not a function` etc. — the P2 legs do not exist as actions).
+- **Spec:** SPEC-RR-020; REQ-RR-002/003/004/006/011/021a; EC-RR-1/2/9/10. **SHA:** `bc1ae57`. **Outcome:** done (RED established).
+- **Design note (subagent correlation):** SPEC-RR-020 leaves the subagent-registry shape "dev-stage". The tests assert a `Task`/`Agent` `onToolUse` *establishes* the `SubagentInfo` on the spawning `ToolCall` (id = spawn tool id), so `subagentId`/`agentId` correlate to the spawn id — no separate registry/`registerSubagent` action is introduced (the `SubagentInfo` rides the reactive `ToolCall.subagent` DTO, ADR-003).
+
+### T-RR-023 (GREEN) — `chatStore` P2 sink-leg actions
+
+- **Files:** `src/ui/stores/chatStore.ts` (P2 legs + `applyToolDiff`/`spawnDescription`/`spawnPrompt`/`_liveMessage`/`_findSubagent` helpers + `LoggerPort` dep), `src/ui/chat/ChatSurface.vue` (binds `useLoggerPort()` into `bindTurnRunner`), `tests/ui/stores/chatStore.rr.test.ts` (lint-fix only: `import type`, braced void arrow — runnable, no assertion change).
+- **Behaviour:** legs mutate the live message's `contentBlocks`/`toolCalls` (DTO-only). `onToolUse` pushes `ToolCall{running}` + `{type:'tool_use'}` block (merge on repeat, no dup block; Task/Agent seeds `SubagentInfo`). `onToolResult` matches by id → status + `computeDiff` for Write/Edit. `onToolOutput` appends. `onThinking`/`onText` push/extend ordered blocks (REQ-RR-011). Subagent legs route via spawn-id; `onAsyncSubagentResult` calls `consolidateSubagent`. `onContextCompacted`/`onNotice` render-only. EC-RR-1/2/9 → `LoggerPort.warn` + ignore (no buffer). Every leg no-ops when `liveAssistantId === null` or `status !== 'streaming'`; `$reset` clears all (subagents ride the cleared messages).
+- **GREEN:** `chatStore.rr` 23/23 + P1 `chatStore` 18/18 + `ChatSurface` 7/7 = 48/48. Typecheck 0, lint 0.
+- **Spec:** SPEC-RR-020; REQ-RR-002/003/004/006/011/021a; EC-RR-1/2/9/10; §8. **SHA:** `109a655`. **Outcome:** done.
+- **Deviation (LoggerPort wiring, with rationale):** the store needs a `LoggerPort` for the §8 degrade `warn`s but must not import `obsidian`. Added it as an **optional third arg** to `bindTurnRunner` (defaulting to a no-op logger) — keeps the P1 two-arg call valid, mirrors the existing non-reactive `deps` WeakMap pattern (runner + notifier). `ChatSurface` now passes `useLoggerPort()`. This is the wire-in the application batch (T-RR-021 deviation 1) anticipated.
+
+### T-RR-024 (dev) — `useIconPort()` composable
+
+- **File:** `src/ui/composables/useIconPort.ts` (new).
+- **Behaviour:** inject-or-throw mirror of `useChatRuntimePort`/`useMarkdownRenderPort` (ADR-008): injects `ICON_PORT`, throws a clear "was not provided" error when absent. No `obsidian`/`node:*`.
+- **Gate:** typecheck 0, lint 0. **Spec:** SPEC-RR-021; REQ-RR-019; NFR-RR-001. **SHA:** `270aac8`. **Outcome:** done.
+
+### T-RR-025 (RED) — `SpCollapsible` + `SpIcon` tests/PageObjects (TEST-RR-010/011/024 A leg)
+
+- **Files:** `tests/ui/chat/SpCollapsible.{po,test}.ts`, `tests/ui/chat/SpIcon.{po,test}.ts` (new).
+- **RED watched:** both files fail to import (the components do not exist) → **2 files failed, no tests collected**.
+- **Spec:** SPEC-RR-024/025; REQ-RR-015..019; NFR-RR-006/007/008. **SHA:** `435fea9`. **Outcome:** done (RED).
+
+### T-RR-026 (GREEN) — `SpCollapsible.vue` + `useCollapsible` + `SpIcon.vue`
+
+- **Files:** `src/ui/composables/useCollapsible.ts`, `src/ui/chat/SpCollapsible.vue`, `src/ui/chat/SpIcon.vue` (new).
+- **Behaviour:** `useCollapsible` holds ephemeral `isExpanded` + `toggle`/`collapse`/`expand` (never on the DTO; function-property typing keeps destructured callers `unbound-method`-clean). `SpCollapsible` — collapsed by default, focusable `role="button"`/`tabindex="0"` header, click/Enter/Space toggle (keyboard `preventDefault`), `aria-expanded`, dynamic `aria-label` (`"<label> - click to expand/collapse"`), the 2px rail via logical-property `--sp-tool-rail*`/`--sp-thinking-rail-indent` tokens, reduced-motion + forced-colors guards, `header`/`default` slots, `defineExpose({ isExpanded, collapse })` for the thinking finalise. `SpIcon` — recursive `h(node.tag, node.attrs, children)` VNode tree from `useIconPort()`, `wrench` fallback, decorative `aria-hidden`; **no `v-html`**.
+- **GREEN:** TEST-RR-010/011/024 (A leg) 11/11. Typecheck 0, lint 0.
+- **Spec:** SPEC-RR-024/025; REQ-RR-015..019; NFR-RR-004/006/007/008. **SHA:** `77af3ad`. **Outcome:** done.
+
+### T-RR-027 (RED) — `ToolCallBlock` + `TodoList` tests/PageObjects (TEST-RR-013/015/017 A leg)
+
+- **Files:** `tests/ui/chat/ToolCallBlock.{po,test}.ts`, `tests/ui/chat/TodoList.{po,test}.ts` (new).
+- **RED watched:** both files fail to import (components missing) → **2 files failed, no tests collected**.
+- **Spec:** SPEC-RR-026/028; REQ-RR-019/020/020a/022; NFR-RR-006/007; EC-RR-XSS/EC-RR-6. **SHA:** `0fe655e`. **Outcome:** done (RED).
+
+### T-RR-028 (GREEN) — `ToolCallBlock.vue` + `TodoList.vue`
+
+- **Files:** `src/ui/chat/ToolCallBlock.vue`, `src/ui/chat/TodoList.vue` (new); `src/application/chat/toolPresentation.ts` (edited — added pure `toolIcon`).
+- **Behaviour:** `ToolCallBlock` wraps `SpCollapsible` — header `SpIcon`(`toolIcon`) + monospace `toolName` + `toolSummary` (hidden when empty) + end-pinned status (`--sp-status-*` token class + terminal icon `check`/`x`/`shield-off`, running has none) with `aria-label` (never colour-only); generic body renders the JSON-stringified input + `result` as escaped pre-wrapped declarative `<pre>{{ }}` text — a `<script>` shows verbatim (REQ-RR-020a); TodoWrite renders `TodoList` in the body. `TodoList` — one row per `renderTodos` item, status icon + `--sp-todo-*` class + `data-status`, empty → no rows (EC-RR-6). **No `v-html`.**
+- **GREEN:** TEST-RR-013/015/017 (A leg) 8/8; `toolPresentation` 19/19 unchanged (the additive `toolIcon` did not alter prior assertions).
+- **Spec:** SPEC-RR-026/028; REQ-RR-019/020/020a/022; NFR-RR-004/006/007. **SHA:** `5ddd4a9`. **Outcome:** done.
+- **Deviation (toolIcon placement, with rationale):** SPEC-RR-026 says the header icon comes from a "`getToolIcon`-equivalent map". claudian's `core/tools/toolIcons.ts` uses richer lucide names (`file-text`/`file-plus`/…) than the P2 static icon-name set (`file`/`terminal`/`search`/`bot`/`wrench`, `iconNodeMap.ts`). Added a pure, total `toolIcon(name)` to `toolPresentation.ts` (the application transform that already owns the tool heuristics) mapping to the available P2 names; the `SpIcon` `wrench` fallback covers anything unmapped. Additive export, no prior assertion changed.
+
+### T-RR-029 (RED) — `ThinkingBlock` test/PageObject (TEST-RR-016)
+
+- **Files:** `tests/ui/chat/ThinkingBlock.{po,test}.ts` (new, fake timers).
+- **RED watched:** the file fails to import (component missing) → **1 file failed, no tests collected**.
+- **Spec:** SPEC-RR-027; REQ-RR-013/014; NFR-RR-006; EC-RR-7. **SHA:** `8a65287`. **Outcome:** done (RED).
+
+### T-RR-030 (GREEN) — `ThinkingBlock.vue`
+
+- **File:** `src/ui/chat/ThinkingBlock.vue` (new).
+- **Behaviour:** wraps `SpCollapsible` (`thinking` rail variant). Live: a 1s interval renders brand-italic `"Thinking Ns…"` (pulse via `--sp-thinking-pulse-duration`, `0s` under reduced-motion). On finalise (`live` → false): stop the interval, freeze the label to `"Thought for Ns"`, auto-collapse via the exposed `SpCollapsible.collapse()`. A stored non-live block renders frozen to `block.durationSeconds`. Interval cleared on finalise AND `onBeforeUnmount` (EC-RR-7). Reasoning text via `MarkdownBlock` (no `v-html`).
+- **GREEN:** TEST-RR-016 4/4 (count-up, freeze + auto-collapse, unmount cleanup, stored block).
+- **Spec:** SPEC-RR-027; REQ-RR-013/014; NFR-RR-004/006/007. **SHA:** `f2985fe`. **Outcome:** done.
+- **Note (label glyph):** the spec text uses the single `…` ellipsis glyph (`"Thinking Ns…"`); claudian's imperative renderer used three dots `...`. Followed the spec (the contract) — the RED test asserts the `…` glyph.
+
+---
+
+## Batch close-out — UI batch 1 (T-RR-022..030)
+
+- **Typecheck:** `npm run typecheck` (`vue-tsc --noEmit -p tsconfig.lint.json`) → **0 errors**.
+- **Lint:** `npm run lint` → **0 errors** (3 pre-existing warnings unrelated to this batch: `ErrorBoundary.test.ts` `vue/one-component-per-file` ×2, a `max-lines` warning). Every touched file is clean.
+- **Tests (full unit suite):** **612/612 across 79 files** (was 566/566 ×73 — +46 from 6 new test files: `chatStore.rr` 23, `SpCollapsible` 6, `SpIcon` 5, `ToolCallBlock` 5, `TodoList` 3, `ThinkingBlock` 4). No regression.
+- **Not run (deferred to the T-RR-044 gate):** full `npm run verify` / `build` / `build:web` / coverage / `npm audit`.
+- **Not pushed.** `manifest.json` untouched. No new dependency added.
+- **Commits:** `bc1ae57` (T-RR-022 RED), `109a655` (T-RR-023), `270aac8` (T-RR-024), `435fea9` (T-RR-025 RED), `77af3ad` (T-RR-026), `0fe655e` (T-RR-027 RED), `5ddd4a9` (T-RR-028), `8a65287` (T-RR-029 RED), `f2985fe` (T-RR-030).
+- **Next batch (UI batch 2, SPEC-RR-029..032):** **FIRST TASK = T-RR-031** (qa RED — `WriteEditBlock.vue` + `DiffView.vue` PageObjects: per-line declarative diff spans with gutter + token backgrounds, `NEW_FILE_DISPLAY_CAP=20` truncation footer (EC-RR-5), stat chip non-zero `+N`/`-N`, no-`diffData` generic body (EC-RR-3); `tests/ui/chat/WriteEditBlock.{po,test}.ts` + `DiffView.{po,test}.ts`), greened by **T-RR-032**. Then T-RR-033/034 (`SubagentBlock`), T-RR-035/036 (`MessageBlocks` dispatcher + `MessageTurn` fork + `ContextCompactedBlock`/`UsageInfo`), and the wire-in/gate tasks T-RR-037/038.
