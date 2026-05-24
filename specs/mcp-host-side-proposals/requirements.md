@@ -16,7 +16,7 @@ updated: 2026-05-24
 
 ## Summary
 
-Specorator's in-process MCP server queues every vault write into an `ObsidianMcpServerAdapter.proposalStore` (per `docs/adr/ADR-013-obsidian-mcp-server.md`, `docs/adr/ADR-018-mcp-tools-backed-by-obsidian-cli.md`), but no caller invokes `acceptProposal` / `rejectProposal` / `getProposals`. The store is orphaned: every MCP client — Specorator's sidepanel agent, Claude Desktop, terminal `claude`, Cursor — sees a `pending` response, narrates success, and the vault never changes. This feature makes the proposal queue host-agnostic and terminal-driveable by exposing it as MCP tools, wires the existing 6 write tools to actually commit on accept, adds 12 Tier-A safe-read tools plus one regex-validated read-only escape hatch, ships an append-only JSONL audit log, migrates `.mcp.json` out of the vault root, gates a DevTools surface behind a tiered opt-in matrix, and authors ADR-019 to codify the tier policy and permanent deny-list. Scope is bounded per `specs/mcp-host-side-proposals/idea.md` §"Out of scope" — bearer-token auth, webviewer, Tier-B writes, and batch-card UX are explicit follow-ups.
+Specorator's in-process MCP server queues every vault write into an `ObsidianMcpServerAdapter.proposalStore` (per `docs/adr/ADR-013-obsidian-mcp-server.md`, `docs/adr/ADR-018-mcp-tools-backed-by-obsidian-cli.md`), but no caller invokes `acceptProposal` / `rejectProposal` / `getProposals`. The store is orphaned: every MCP client — Specorator's sidepanel agent, Claude Desktop, terminal `claude`, Cursor — sees a `pending` response, narrates success, and the vault never changes. This feature makes the proposal queue host-agnostic and terminal-driveable by exposing it as MCP tools, wires the existing 8 write tools to actually commit on accept, adds 12 Tier-A safe-read tools plus one regex-validated read-only escape hatch, ships an append-only JSONL audit log, migrates `.mcp.json` out of the vault root, gates a DevTools surface behind a tiered opt-in matrix, and authors ADR-019 to codify the tier policy and permanent deny-list. Scope is bounded per `specs/mcp-host-side-proposals/idea.md` §"Out of scope" — bearer-token auth, webviewer, Tier-B writes, and batch-card UX are explicit follow-ups.
 
 ## Goals
 
@@ -120,11 +120,11 @@ Specorator's in-process MCP server queues every vault write into an `ObsidianMcp
 ### REQ-MHP-006 — Single-accept guarantee against dual-accept race
 
 - **Pattern:** unwanted-behaviour
-- **Statement:** *If `workflow_proposal_accept` is invoked twice concurrently against the same proposal id, then the Specorator MCP server shall execute the queued mutation exactly once and shall return the same execution result to both callers, with the second call's result tagged `decision.outcome: "already-decided"` in the audit log.*
+- **Statement:** *If `workflow_proposal_accept` is invoked twice concurrently against the same proposal id, then the Specorator MCP server shall execute the queued mutation exactly once, return the execution result to the winning caller, and return the `already_decided` error to the losing caller without writing an additional audit row.*
 - **Acceptance:**
   - Given a `pending` proposal exists,
-  - When two MCP clients call `workflow_proposal_accept` for that proposal within the same scheduler tick,
-  - Then the vault mutation runs exactly once, both calls return identical `{ ok: true }` payloads, and the audit log contains two rows for the proposal — the first with `decision.outcome: "accepted"` and the second with `decision.outcome: "already-decided"`.
+  - When two concurrent `workflow_proposal_accept` calls on the same proposal id occur,
+  - Then the vault mutation runs exactly once, the audit log contains EXACTLY ONE row (with `decision.outcome: 'accepted'`); the second concurrent call returns the `already_decided` error WITHOUT writing a new audit row.
 - **Priority:** must
 - **Satisfies:** RISK-MHP-001 in `specs/mcp-host-side-proposals/research.md`; IDEA-MHP-001 §"Constraints" (host-agnostic).
 
@@ -139,10 +139,10 @@ Specorator's in-process MCP server queues every vault write into an `ObsidianMcp
 - **Priority:** must
 - **Satisfies:** RISK-MHP-001; RESEARCH-MHP-001 §Q5.
 
-### REQ-MHP-008 — Existing 6 write tools commit on accept
+### REQ-MHP-008 — Existing 8 write tools commit on accept
 
 - **Pattern:** ubiquitous
-- **Statement:** *The Specorator MCP server shall route the existing write tools `canvas_create_node`, `canvas_link`, `canvas_update_node`, `vault_write_note`, `vault_append_to_note`, and `obsidian_cli_append_note` through the proposal pipeline, and on accept the queued mutation shall execute against the vault.*
+- **Statement:** *The Specorator MCP server shall route the existing write tools `vault_write_note`, `vault_append_to_note`, `obsidian_cli_append_note`, `canvas_create`, `canvas_add_text_node`, `canvas_add_file_node`, `canvas_add_edge`, and `canvas_update_node` through the proposal pipeline, and on accept the queued mutation shall execute against the vault.*
 - **Acceptance:**
   - Given an MCP client calls `vault_write_note` with payload `{ path: "x.md", content: "hi" }`,
   - When the resulting proposal is accepted via `workflow_proposal_accept`,
@@ -305,7 +305,7 @@ Specorator's in-process MCP server queues every vault write into an `ObsidianMcp
 ### REQ-MHP-022 — Audit log at `.specorator/mcp-audit.log` per JSONL schema v1
 
 - **Pattern:** event-driven
-- **Statement:** *When the Specorator MCP server processes any proposal decision (auto-accept, user-accept, client-accept, reject, or error), it shall append one JSON object as a single line to `.specorator/mcp-audit.log` with the fields `ts`, `schema`, `client`, `tool`, `proposal`, `decision`, and `result` defined in `specs/mcp-host-side-proposals/research.md` §Q4.*
+- **Statement:** *When the Specorator MCP server processes any proposal decision combining `decision.by ∈ {auto, user, client, shutdown}` with `decision.outcome ∈ {accepted, rejected, discarded, error}` (per REQ-MHP-040), it shall append one JSON object as a single line to `.specorator/mcp-audit.log` with the fields `ts`, `schema`, `client`, `tool`, `proposal`, `decision`, and `result` defined in `specs/mcp-host-side-proposals/research.md` §Q4.*
 - **Acceptance:**
   - Given the audit log is empty,
   - When a `vault_append_to_note` proposal is auto-accepted,
@@ -372,7 +372,7 @@ Specorator's in-process MCP server queues every vault write into an `ObsidianMcp
 ### REQ-MHP-028 — Migration verify-before-delete
 
 - **Pattern:** unwanted-behaviour
-- **Statement:** *If the write to `.obsidian/mcp.local.json` fails or the post-write verification does not byte-match the source `.mcp.json`, then the Specorator plugin shall leave `.mcp.json` in place at the vault root, surface a sticky error notice, and abort the migration without retrying within the same plugin session.*
+- **Statement:** *If the write to `.obsidian/mcp.local.json` fails or the post-write verification does not deeply equal the source `.mcp.json`, then the Specorator plugin shall leave `.mcp.json` in place at the vault root, surface a sticky error notice, and abort the migration without retrying within the same plugin session.*
 - **Acceptance:**
   - Given the `.obsidian/` folder is read-only,
   - When the plugin starts with a root `.mcp.json` present,
@@ -433,7 +433,7 @@ Specorator's in-process MCP server queues every vault write into an `ObsidianMcp
 - **Pattern:** ubiquitous
 - **Statement:** *The Specorator plugin shall store the system-prompt addendum in a versioned file owned by the plugin's source tree, and shall not source the addendum from a user-editable settings field, user template, or runtime-mutable configuration.*
 - **Acceptance:**
-  - Given the addendum file is committed under `src/` (exact path determined at /spec:design),
+  - Given the addendum file is committed at `src/application/agent/SystemPromptAddendum.ts`,
   - When the user changes any setting in the Specorator settings tab,
   - Then the assembled system prompt still contains the addendum verbatim and the file on disk is unchanged.
 - **Priority:** must
@@ -455,7 +455,7 @@ Specorator's in-process MCP server queues every vault write into an `ObsidianMcp
 - **Pattern:** ubiquitous
 - **Statement:** *The Specorator MCP server shall accept proposal-submitting requests from clients whose identifier cannot be determined and shall record them with `client.id: "unknown"` rather than reject the request.*
 - **Acceptance:**
-  - Given an MCP client sends no `x-mcp-client-name` and no `User-Agent`,
+  - Given an MCP client completes the MCP `initialize` handshake without a `clientInfo.name` field,
   - When the client invokes `vault_write_note`,
   - Then a proposal is enqueued with `client.id: "unknown"` and the call returns a `pending` status; the request is not refused.
 - **Priority:** must
@@ -499,16 +499,16 @@ Specorator's in-process MCP server queues every vault write into an `ObsidianMcp
 - **Priority:** must
 - **Satisfies:** CLAR-MHP-005 (PM confirms ephemeral v1 with shutdown logging); CLAR-MHP-016 (500 ms budget, non-graceful exits OOS); RESEARCH-MHP-001 §"Recommendation".
 
-### REQ-MHP-039 — Audit-log row on every accept and reject
+### REQ-MHP-039 — Audit-log row on every terminal outcome
 
 - **Pattern:** event-driven
-- **Statement:** *When `workflow_proposal_accept` or `workflow_proposal_reject` resolves a proposal, the Specorator MCP server shall append exactly one audit-log row for that decision before returning the MCP response.*
+- **Statement:** *When a proposal transitions to any terminal outcome (`accepted`, `rejected`, `discarded`, `error`), the Specorator MCP server shall append exactly one audit-log row before returning the corresponding MCP response (where one exists).*
 - **Acceptance:**
   - Given a `pending` proposal exists,
   - When `workflow_proposal_reject` is called,
   - Then `.specorator/mcp-audit.log` contains one new row with `decision.outcome: "rejected"` and `decision.by: "client"` (or `"user"` when triggered from the sidepanel card), and the MCP response is returned only after the row is appended.
 - **Priority:** must
-- **Satisfies:** IDEA-MHP-001 §"Desired outcome"; issue 430 acceptance criterion 7.
+- **Satisfies:** IDEA-MHP-001 §"Desired outcome"; issue 430 acceptance criterion 7; cross-references REQ-MHP-038 (discarded on shutdown), REQ-MHP-044 (error post-accept), REQ-MHP-045 (exhaustive error triggers).
 
 ### REQ-MHP-040 — Decision provenance recorded
 
@@ -536,7 +536,7 @@ Specorator's in-process MCP server queues every vault write into an `ObsidianMcp
 | NFR-MHP-007 | observability | Audit-log schema stability | `schema: 1` consumed without error by the reader; any future field addition either keeps `schema: 1` (additive) or bumps to `schema: 2` with deprecation notice in release notes |
 | NFR-MHP-008 | observability | Audit-log file budget | Worst-case disk use ≤ 12 MiB (1 active + 5 rotated × 2 MiB) per vault |
 | NFR-MHP-009 | compatibility | Backwards-compat with ADR-013 and ADR-018 | `npm run typecheck`, `npm run lint`, and existing test suite pass without modification to any unrelated module; asserted by CI on PR |
-| NFR-MHP-010 | compatibility | `.mcp.json` field preservation across migration | 100% of nested fields byte-equal in `.obsidian/mcp.local.json` vs source `.mcp.json`; asserted by unit test (see REQ-MHP-030) |
+| NFR-MHP-010 | compatibility | `.mcp.json` field preservation across migration | 100% of nested fields deeply equal in `.obsidian/mcp.local.json` vs source `.mcp.json`; asserted by unit test (see REQ-MHP-030) |
 | NFR-MHP-011 | accessibility | DevTools settings warning copy | Each high-risk toggle's warning text reachable via screen reader, conforms to WCAG 2.2 AA contrast for the warning-bordered container; asserted in design-stage Storybook test |
 | NFR-MHP-012 | reliability | Single-accept guarantee under concurrency | 0 dual-execution events across 1000 dual-accept fuzz runs; asserted by REQ-MHP-006 stress test |
 | NFR-MHP-013 | reliability | Migration safety | 0 cases of root `.mcp.json` deletion without verified new-file write across 100 fault-injection runs (fs read-only, partial write, disk-full); asserted by REQ-MHP-028 test |
@@ -683,7 +683,7 @@ What we explicitly will not do this cycle (mirrors `## Non-goals` for the read-o
 - [x] Goals and non-goals explicit. (7 goals, 8 non-goals.)
 - [x] Personas / stakeholders named. (3 user personas + sidepanel agent + downstream PM.)
 - [x] Jobs to be done captured. (6 JTBD entries.)
-- [x] Every functional requirement uses EARS and has an ID. (REQ-MHP-001..040, each tagged with one of the five EARS patterns.)
+- [x] Every functional requirement uses EARS and has an ID. (REQ-MHP-001..046, each tagged with one of the five EARS patterns.)
 - [x] Acceptance criteria testable. (Each REQ carries a Given/When/Then with concrete observable outcomes.)
 - [x] NFRs listed with targets. (14 NFRs across performance, security, observability, accessibility, compatibility, reliability, privacy.)
 - [x] Success metrics defined (including a counter-metric). (North star + 2 supporting + 3 counter-metrics.)

@@ -240,6 +240,26 @@ _None._
                            Part B; planner to add a UI-content task. No
                            new CLARs surfaced; all 18 prior CLARs remain
                            resolved. Stage 5 gate PASS.
+2026-05-24 (pm-analyze-fix):  Applied 9 PRD edits from /spec:analyze
+                              critical+important: F-001 (REQ-MHP-008 → 8
+                              tools), F-003/F-005 (REQ-MHP-006), F-004
+                              (REQ-MHP-028 + NFR-MHP-010 deep-equal), F-006
+                              (REQ-MHP-035 clientInfo.name), F-011 (gate REQ
+                              range), F-012 (REQ-MHP-022 dimensions), F-013
+                              (REQ-MHP-039 terminal-outcome), F-015 (REQ-MHP-
+                              033 addendum path). Architect inherits 6 spec/
+                              design findings (F-002/-007/-008/-009/-010/-017).
+2026-05-24 (architect-analyze-fix): Applied 6 spec/design edits from /spec:
+                                    analyze critical+important: F-002
+                                    (ProposalKind expanded 3→5 canvas kinds),
+                                    F-007 (cli_failed in error table), F-008
+                                    (mutate_threw in error table), F-009
+                                    (EC-MHP-041 + design notice copy), F-010
+                                    (ActiveFeatureResolver in components
+                                    table), F-017 (ProposalEventBus label).
+                                    /spec:tasks now safe to run; advisory
+                                    findings F-014/-016 ride to /spec:implement
+                                    and /spec:release respectively.
 2026-05-24 (ux-designer):  design.md Part A complete. 7 flows mapped
                            (F1 external-write headline, F2 auto-accept,
                            F3 in-process+card, F4 list+reject, F5 DevTools

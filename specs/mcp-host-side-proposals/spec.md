@@ -456,6 +456,7 @@ class MigrationService {
 
 - **Behaviour:**
   1. If `.mcp.json` is absent at vault root → return `'noop'`. No notice (REQ-MHP-029).
+  1a. If `.mcp.json` is present AND `.obsidian/mcp.local.json` already exists → return `'failed'`. Show sticky error notice with copy `Both .mcp.json and .obsidian/mcp.local.json exist. Resolve manually before reload.` Do NOT delete or overwrite either file. (EC-MHP-041.)
   2. Read `.mcp.json` as UTF-8 string `srcText`. Parse via `JSON.parse(srcText)` → `srcValue`. On parse error: return `'failed'`; notify error; log error.
   3. Re-serialise: `outText = JSON.stringify(srcValue, null, 2)` (CLAR-MHP-015).
   4. Write `outText` to `.obsidian/mcp.local.json` (creating `.obsidian/` if absent via `VaultPort.createFolder`).
@@ -536,9 +537,12 @@ interface ProposalEventBus {
 // src/domain/mcp/Proposal.ts ----------------------------------------
 
 export type ProposalKind =
-  | 'vault_append' | 'vault_write'
-  | 'canvas_create_node' | 'canvas_link' | 'canvas_update_node'
-  | 'obsidian_cli_append'
+  // Vault / CLI writes (3)
+  | 'vault_write_note' | 'vault_append_to_note' | 'obsidian_cli_append_note'
+  // Canvas writes (5) — one kind per registered tool name (REQ-MHP-008)
+  | 'canvas_create' | 'canvas_add_text_node' | 'canvas_add_file_node'
+  | 'canvas_add_edge' | 'canvas_update_node'
+  // DevTools (8)
   | 'dev_screenshot' | 'dev_errors' | 'dev_console'
   | 'dev_dom' | 'dev_cdp' | 'dev_debug' | 'dev_mobile' | 'devtools'
 
@@ -663,7 +667,7 @@ devtools: {
 | Type | Field | Rule | Violation response |
 |---|---|---|---|
 | `PendingProposal` | `proposalId` | UUID v4 | constructed by store; non-UUID input on `*Get/Accept/Reject` → `not_found` (regex check before lookup is implementation choice) |
-| `PendingProposal` | `kind` | one of the 14 literals | constructed internally; never user-supplied — invalid construction is a programmer error |
+| `PendingProposal` | `kind` | one of the 16 literals (3 vault/CLI + 5 canvas + 8 DevTools) | constructed internally; never user-supplied — invalid construction is a programmer error |
 | `PendingProposal` | `tool` | non-empty string | constructed internally |
 | `PendingProposal` | `intent` | string, length ≤ 4096 | trim and truncate; never reject — fail-open since the field is advisory (REQ-MHP-037) |
 | `PendingProposal` | `paths[*]` | vault-relative POSIX, no `..`, no absolute prefix | normalised by write-tool registrar before `queue` is called; violation → `invalid_argument` (REQ-MHP-023, NFR-MHP-014) |
@@ -845,6 +849,7 @@ Rotation is atomic with respect to other writers because of the internal async l
 | EC-MHP-038 | Path passed to a write tool on Windows: `specs\foo\bar.md` | Normalised to `specs/foo/bar.md` before reaching the store. Audit row records `specs/foo/bar.md`. | REQ-MHP-023; NFR-MHP-014 |
 | EC-MHP-039 | Proposal record `intent` field omitted by caller | Stored as `''`. Audit row `proposal.intent` is `''`. Card / receipt UI shows no intent line. | REQ-MHP-037 |
 | EC-MHP-040 | `requireExplicitAcceptForAllWrites === true` AND auto-accept rule would otherwise have fired | Rule does NOT fire. Proposal queued as `pending`. | REQ-MHP-010 |
+| EC-MHP-041 | Both `.mcp.json` AND `.obsidian/mcp.local.json` exist at plugin start | Migration aborts. Root `.mcp.json` is NOT deleted; existing `.obsidian/mcp.local.json` is NOT overwritten. Sticky error notice with copy `Both .mcp.json and .obsidian/mcp.local.json exist. Resolve manually before reload.` (design.md Part B §S19-extension). `MigrationService.runOnce` returns `'failed'`. No `.gitignore` change. User is expected to resolve manually by removing one of the two files before reloading the plugin. | REQ-MHP-028; NFR-MHP-013 |
 
 ---
 
@@ -890,7 +895,7 @@ Rotation is atomic with respect to other writers because of the internal async l
 | TEST-MHP-034 | Mutating a settings field does not change the addendum content in the assembled prompt; constant file on disk unchanged. | unit | REQ-MHP-033 |
 | TEST-MHP-035 | MCP `initialize` with `clientInfo.name: 'cursor'` → subsequent proposal records carry `client.id: 'cursor'`, `client.transport: 'loopback'`. | integration | REQ-MHP-034 |
 | TEST-MHP-036 | MCP `initialize` without `clientInfo.name` → proposal `client.id: 'unknown'`; call succeeds. | unit | REQ-MHP-035; EC-MHP-009 |
-| TEST-MHP-037 | Proposal `kind` is one of 14 literals; audit-log reader can ignore `kind: 'future_unknown'` without throwing. | unit | REQ-MHP-036 |
+| TEST-MHP-037 | Proposal `kind` is one of 16 literals (3 vault/CLI + 5 canvas + 8 DevTools); audit-log reader can ignore `kind: 'future_unknown'` without throwing. | unit | REQ-MHP-036 |
 | TEST-MHP-038 | `intent` echoed when supplied; defaults to empty string when omitted. | unit | REQ-MHP-037 |
 | TEST-MHP-039 | Graceful shutdown with 3 pending proposals (flush within 500 ms): 3 `discarded` rows in audit log; store empty on reload. | integration | REQ-MHP-038 |
 | TEST-MHP-040 | Shutdown flush exceeds 500 ms: partial flush; remaining rows silently dropped; no error path triggered. | unit (timed) | REQ-MHP-038; CLAR-MHP-016 |
@@ -910,6 +915,7 @@ Rotation is atomic with respect to other writers because of the internal async l
 | TEST-MHP-054 | StatusBarBadge dispose during a simulated event in flight does not throw; DOM element released. | unit | RISK-MHP-012 |
 | TEST-MHP-055 | Threat-paragraph TS constants byte-equal ADR-019 Part 4 frozen text (normalised whitespace assertion). | unit | RISK-MHP-015 |
 | TEST-MHP-056 | Sidepanel-card decision path: `acceptBy(id, 'user', SIDEPANEL_IDENTITY)` → audit row carries `decision.by: 'user'`. | unit | REQ-MHP-040 |
+| TEST-MHP-057 | `.mcp.json` AND `.obsidian/mcp.local.json` both present at plugin start: `MigrationService.runOnce()` returns `'failed'`; both files remain unchanged; `NotificationPort.showError` called with the EC-MHP-041 verbatim copy; `.gitignore` not touched. | unit | REQ-MHP-028; EC-MHP-041; NFR-MHP-013 |
 
 ---
 
@@ -981,7 +987,7 @@ No alerting infrastructure. The audit-log error notification (REQ-MHP-025) is th
 ### Backwards compatibility — on-disk artifacts
 
 - **`.specorator/mcp-audit.log`.** New file. Vault-relative. No pre-existing file at this path. Schema `1` (NFR-MHP-007); future additive fields keep `schema: 1`; breaking changes bump to `schema: 2` with a release-notes deprecation entry.
-- **`.obsidian/mcp.local.json`.** New file written by `MigrationService`. Receives deep-equal copy of source `.mcp.json` (REQ-MHP-027, REQ-MHP-030). Pre-existing files at this path are NOT overwritten — if `.obsidian/mcp.local.json` exists AND `.mcp.json` exists, the migration aborts (it is not safe to overwrite without confirmation; implementer must treat this as a `'failed'` outcome with a distinct notice). EC-MHP-019-extension: this scenario is reported via the failure notice copy and aborts the migration; the user is expected to resolve manually.
+- **`.obsidian/mcp.local.json`.** New file written by `MigrationService`. Receives deep-equal copy of source `.mcp.json` (REQ-MHP-027, REQ-MHP-030). Pre-existing files at this path are NOT overwritten — if `.obsidian/mcp.local.json` exists AND `.mcp.json` exists, the migration aborts (it is not safe to overwrite without confirmation; implementer must treat this as a `'failed'` outcome with a distinct notice). See EC-MHP-041: this scenario is reported via the dedicated failure notice copy (`Both .mcp.json and .obsidian/mcp.local.json exist. Resolve manually before reload.`) and aborts the migration; the user is expected to resolve manually.
 - **`.gitignore`.** Receives one new line (REQ-MHP-031). Idempotent on exact-line match. No other lines touched.
 - **`.mcp.json` at vault root.** Deleted by `MigrationService` after verified migration. Once deleted, it is not recreated.
 
