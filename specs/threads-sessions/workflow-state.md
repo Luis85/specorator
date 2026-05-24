@@ -1,10 +1,10 @@
 ---
 feature: threads-sessions
 area: TS
-current_stage: design
+current_stage: specification
 status: active
 last_updated: 2026-05-25
-last_agent: architect (design)
+last_agent: architect (specification)
 epic: claudian-reboot
 phase: P3
 integration_branch: next
@@ -14,7 +14,7 @@ artifacts:
   research.md: skipped (charter §3.2 + audits + claudian-main stand in)
   requirements.md: accepted (PRD-TS-001; CLAR-TS-001..004 resolved by ADR-TS-001/002/003)
   design.md: complete (DESIGN-TS-001; Parts A/B/C; ADR-TS-001/002/003 accepted)
-  spec.md: pending
+  spec.md: complete (SPEC-TS-001..034; 26 automatable TEST-TS + 2 manual legs)
   tasks.md: pending
   implementation-log.md: pending
   test-plan.md: pending
@@ -35,7 +35,7 @@ artifacts:
 | 2. Research | `research.md` | skipped |
 | 3. Requirements | `requirements.md` | accepted (PRD-TS-001) |
 | 4. Design | `design.md` | complete (DESIGN-TS-001) |
-| 5. Specification | `spec.md` | pending |
+| 5. Specification | `spec.md` | complete (SPEC-TS-001..034) |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
@@ -207,4 +207,76 @@ self-parity-review vs claudian after each big chunk; merge P3 to `next` autonomo
                           PageObjects; coverage 80/70/80/80; --sp-* parity; no v-html / no window.confirm
                           (Obsidian Modal for fork-target + delete-confirm). Parity-screenshot capture for
                           the 7 sub-surfaces accumulates to the single final human review gate.
+
+2026-05-25 (architect, specification): SPEC-TS-001..034 written →
+                          specs/threads-sessions/spec.md. 34 spec items in five layer groups:
+                          DOMAIN (001-005), INFRA (006-010), APPLICATION (011-018), UI (019-027),
+                          STYLES (028-029), CROSS-CUTTING (030-034). Implementation-ready, claudian
+                          paths cited inline, mirrors the P2 SPEC-RR style. 26 automatable TEST-TS
+                          (14 U + 6 A + the U/A halves of the mixed ones) + 2 manual legs
+                          (TEST-TS-M1 Obsidian vault-file store round-trip; TEST-TS-M2 Obsidian
+                          modals + real-CLI resume/rewind). Full REQ-TS↔SPEC-TS↔TEST-TS coverage
+                          table (every REQ-TS 001-028 + NFR-TS 001-015 mapped); quality gate green.
+
+                          THE THREE DESIGN OPEN ITEMS RESOLVED:
+                            (1) PluginSettings.sessionsFolder (string, default '.specorator/sessions',
+                                resolved via resolveSessionsFolder — trim/strip-slash/empty→default,
+                                never '') + maxTabs (number, default 3, clampMaxTabs → MIN_TABS=1 ..
+                                MAX_TABS_CEILING=10; 0→1, 99→10, NaN→3, 2.7→2). SPEC-TS-005.
+                            (2) Current-tab fork SHIPS in P3 — ForkTarget = 'new-tab' | 'current-tab';
+                                new-tab primary/default, current-tab the simplest second target (same
+                                ForkPlan, only the destination differs). SPEC-TS-023/031.
+                            (3) ConversationRecord.version = 1 — a forward-proofing CONSTANT tag, NOT a
+                                migration mechanism; reader load-or-defaults any/missing version, writer
+                                always stamps 1. SPEC-TS-002/010. NFR-TS-014 (no migration) holds.
+
+                          KEY SHAPES (all additive over P1/P2, claudian-grounded):
+                            - ProviderHistoryPort (SPEC-TS-001): listSessions/hydrate/save/updateMeta/
+                              delete/resolveSessionId/buildForkPlan — all Result-returning; own
+                              PROVIDER_HISTORY_PORT InjectionKey + useProviderHistoryPort composable, no
+                              aggregate. ConversationRecord{version,meta,messages,providerState};
+                              ConversationMeta{id,title,titleManual,createdAt,updatedAt,providerId,
+                              sessionId}; ProviderSessionState=opaque Record (no secret); ForkPlan
+                              {messages,providerState(derived forkSource),sourceTitle}. HistoryError
+                              {kind:'not-found'|'corrupt'|'io'}.
+                            - ChatRuntimePort +3 additive members (SPEC-TS-003): resumeSession(sessionId)
+                              :void, setResumeCheckpoint(assistantMessageId):void, getCapabilities():
+                              RuntimeCapabilities{supportsFork,supportsRewind}. Nine P1 members
+                              byte-identical.
+                            - ChatMessage +3 optional fields (SPEC-TS-004): userMessageId?,
+                              assistantMessageId? (presence = rewind eligibility), resumeAtMessageId?.
+                            - tabsStore (SPEC-TS-019): TabState[] DTOs + activeTabId; per-tab runner in a
+                              Map<TabId,TabDeps>/WeakMap OUTSIDE reactive state; one ChatRuntimePort per
+                              tab → per-tab streaming isolation; the P1/P2 sink legs operate on the OWNING
+                              tab; min 1, clamp maxTabs.
+
+                          HAND-OFF → /spec:tasks (planner). TDD ORDERING HINTS (§12 of spec.md):
+                            1. Domain types/ports first (SPEC-TS-001..005) — everything imports these;
+                               the additivity contract tests (TEST-TS-003/004/026) gate the rest.
+                            2. Settings fields + resolve/clamp helpers (SPEC-TS-005) and the pure
+                               transforms (conversationRecordCodec SPEC-TS-010 load-or-default-never-throw,
+                               titleGeneration SPEC-TS-016 pure half, rewindEligibility SPEC-TS-018) —
+                               fully unit-testable, no mount, de-risk the use cases.
+                            3. The additive ChatRuntimePort members + the history port impls EARLY:
+                               Mock + LocalStorage stores (SPEC-TS-006/007/008/009) so npm run dev + demo
+                               + units exercise full history/resume/fork with no vault; wire the
+                               fake-ports factory's new `providerHistory` member here. THE OBSIDIAN
+                               VAULT-FILE STORE (SPEC-TS-006) + CLI session seam ARE COVERAGE-EXCLUDED →
+                               MANUAL LEG (TEST-TS-M1/M2).
+                            4. Use cases (SPEC-TS-011..017) — Result-returning, against the Mock store;
+                               preserve the Result/streaming-error boundary; compact reuses the existing
+                               P2 context_compacted chunk + onContextCompacted sink leg (no new render
+                               machinery).
+                            5. tabsStore (SPEC-TS-019), THEN components (TabBar 020, ResumeSessionDropdown
+                               022, gated hover affordances 025, per-tab ChatSurface 026) with data-testid
+                               PageObjects. The two Obsidian Modal subclasses (ForkTargetModal,
+                               DeleteConfirmModal) + the rewind menu live with the view (NOT src/ui/**);
+                               visual proof = manual leg, pure logic (chooseForkTarget, mode dispatch) =
+                               unit.
+                            6. Styles (§4.10 token block, SPEC-TS-028) + wiring (SPEC-TS-027: provide
+                               PROVIDER_HISTORY_PORT in both mount points; TabBar over ChatSurface;
+                               one runtime per tab).
+                          No open clarification blocks tasks. Coverage 80/70/80/80; --sp-* parity; no
+                          v-html / no window.confirm (Obsidian Modal for fork-target + delete-confirm);
+                          provider-addressed (grep gate TEST-TS-026), one Claude impl.
 ```
