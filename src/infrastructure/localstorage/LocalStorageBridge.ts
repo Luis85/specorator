@@ -7,10 +7,12 @@ import type {
 	CommunityPluginPort,
 	ChatRuntimePort,
 	MarkdownRenderPort,
+	IconPort,
 } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
 import { FixtureChatRuntime } from './FixtureChatRuntime';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
+import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
 
 const FILE_PREFIX = 'specorator:file:';
 const SETTINGS_KEY = 'specorator:settings';
@@ -114,6 +116,13 @@ export class LocalStorageBridge
 	// Identical behaviour across all three bridges in P1.
 	createMarkdownRenderPort(): MarkdownRenderPort {
 		return safeMarkdownRenderPort;
+	}
+
+	// ── Icon port factory (SPEC-RR-012, ADR-RR-001 §4) ──────────────────────────
+	// The same static-map `IconPort` as `MockBridge` (shared singleton), so the
+	// GitHub Pages demo renders icons declaratively without Obsidian.
+	createIconPort(): IconPort {
+		return staticIconPort;
 	}
 
 	showError(message: string, durationMs = 0): void {

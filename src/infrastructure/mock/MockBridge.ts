@@ -7,10 +7,12 @@ import type {
 	CommunityPluginPort,
 	ChatRuntimePort,
 	MarkdownRenderPort,
+	IconPort,
 } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
 import { MockChatRuntime } from './MockChatRuntime';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
+import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
 
 function folderPrefix(parent: string): string {
 	if (parent === '') return '';
@@ -148,6 +150,14 @@ export class MockBridge
 	// (Obsidian's renderer backing is P2).
 	createMarkdownRenderPort(): MarkdownRenderPort {
 		return safeMarkdownRenderPort;
+	}
+
+	// ── Icon port factory (SPEC-RR-012, ADR-RR-001 §4) ──────────────────────────
+	// The static-map `IconPort` (declarative `IconNode`s, no DOM sink). Shared
+	// with `LocalStorageBridge` so `npm run dev` and the demo render icons
+	// without Obsidian; the Obsidian `setIcon` walk is the parity truth (P2).
+	createIconPort(): IconPort {
+		return staticIconPort;
 	}
 
 	showError(message: string, durationMs = 0): void {
