@@ -149,3 +149,48 @@ describe('ClaudeStreamReducer (SPEC-CC-010 NDJSON reduce)', () => {
 		expect(chunks[chunks.length - 1]).toEqual({ type: 'done' });
 	});
 });
+
+/**
+ * Terminal guarantee (Codex review #433, EC-13): the CLI line stream can end
+ * without ever emitting a `result` event (early exit, stderr-only). `query()`
+ * must still yield a terminal `done` so the consumer leaves the `streaming`
+ * state; `finalize()` is the pure seam that decides the tail.
+ *
+ * Traces: SPEC-CC-010, NFR-CC-003 (EC-13), REQ-CC-005.
+ */
+describe('ClaudeStreamReducer.finalize() — terminal guarantee', () => {
+	it('synthesizes error+done when the stream ended without any result event', () => {
+		const reducer = new ClaudeStreamReducer();
+		// Assistant text streamed, but the CLI exited before a `result` event.
+		reducer.consumeLine(
+			JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'partial' }] } }),
+		);
+		const tail = reducer.finalize();
+		expect(tail.some((c) => c.type === 'error')).toBe(true);
+		expect(tail[tail.length - 1]).toEqual({ type: 'done' });
+	});
+
+	it('synthesizes a terminal for a completely empty stream (no lines at all)', () => {
+		const reducer = new ClaudeStreamReducer();
+		const tail = reducer.finalize();
+		expect(tail[tail.length - 1]).toEqual({ type: 'done' });
+	});
+
+	it('returns no extra chunks once a result event already emitted done', () => {
+		const reducer = new ClaudeStreamReducer();
+		reducer.consumeLine(JSON.stringify({ type: 'result', subtype: 'success' }));
+		expect(reducer.finalize()).toEqual([]);
+	});
+
+	it('returns no extra chunks once synthesizeError already emitted a terminal', () => {
+		const reducer = new ClaudeStreamReducer();
+		reducer.synthesizeError('spawn ENOENT');
+		expect(reducer.finalize()).toEqual([]);
+	});
+
+	it('is idempotent — a second finalize after the first yields nothing', () => {
+		const reducer = new ClaudeStreamReducer();
+		reducer.finalize();
+		expect(reducer.finalize()).toEqual([]);
+	});
+});

@@ -84,13 +84,13 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 		const argv = this._buildArgs(queryOptions);
 		const lines = this._spawnAndStreamLines(binary, argv, turn.prompt);
 		try {
-			for await (const line of lines) {
-				if (this._isCancelled()) break;
-				for (const chunk of reducer.consumeLine(line)) {
-					if (this._isCancelled()) break;
-					if (chunk.type === 'usage') this.sessionId = reducer.sessionId;
-					yield chunk;
-				}
+			yield* this._consumeLines(reducer, lines);
+			// Terminal guarantee (Codex review #433, EC-13): if the stream ended
+			// without a `result` event (early exit / stderr-only), emit a synthetic
+			// error+done so the consumer leaves `streaming`. No-op on a clean
+			// completion (the reducer already emitted `done`) or on cancel.
+			if (!this._isCancelled()) {
+				yield* this._yieldEach(reducer.finalize());
 			}
 		} catch (e: unknown) {
 			// Unexpected fault (broken pipe, spawn race) — synthesize, never rethrow.
@@ -99,6 +99,25 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 			yield* this._yieldEach(reducer.synthesizeError(detail));
 		} finally {
 			this._killChild();
+		}
+	}
+
+	/**
+	 * Reduce the spawned CLI's stdout lines to `StreamChunk`s, honouring the live
+	 * cancel flag at both the line and chunk boundary. Extracted from {@link query}
+	 * so the orchestration there stays within the complexity budget.
+	 */
+	private async *_consumeLines(
+		reducer: ClaudeStreamReducer,
+		lines: AsyncIterable<string>,
+	): AsyncGenerator<StreamChunk> {
+		for await (const line of lines) {
+			if (this._isCancelled()) return;
+			for (const chunk of reducer.consumeLine(line)) {
+				if (this._isCancelled()) return;
+				if (chunk.type === 'usage') this.sessionId = reducer.sessionId;
+				yield chunk;
+			}
 		}
 	}
 

@@ -24,6 +24,7 @@ import type { UsageInfo } from '@/domain/chat/UsageInfo';
 export class ClaudeStreamReducer {
 	private _sessionId: string | null = null;
 	private _assistantStarted = false;
+	private _terminated = false;
 
 	/** The session id learned from the CLI stream (`system/init` or `result`). */
 	get sessionId(): string | null {
@@ -69,7 +70,22 @@ export class ClaudeStreamReducer {
 	 * across the port (ADR-CC-001 §1, EC-13).
 	 */
 	synthesizeError(detail: string): StreamChunk[] {
+		this._terminated = true;
 		return [{ type: 'error', content: `Claude CLI failed: ${detail}` }, { type: 'done' }];
+	}
+
+	/**
+	 * Terminal guarantee (Codex review #433, EC-13). The CLI line stream can end
+	 * without ever emitting a `result` event — early process exit, an stderr-only
+	 * failure, or a killed child. In that case no `done` was produced and the
+	 * consumer (`RunChatTurnUseCase` → store) would hang in `streaming`, blocking
+	 * the next turn. `query()` calls this once after the line loop completes
+	 * normally: it returns a synthetic `error` + `done` pair when no terminal has
+	 * been emitted yet, and `[]` otherwise (idempotent).
+	 */
+	finalize(): StreamChunk[] {
+		if (this._terminated) return [];
+		return this.synthesizeError('the Claude CLI stream ended without completing the turn.');
 	}
 
 	private _reduceSystem(event: Record<string, unknown>): StreamChunk[] {
@@ -124,6 +140,7 @@ export class ClaudeStreamReducer {
 		}
 
 		chunks.push({ type: 'done' });
+		this._terminated = true;
 		return chunks;
 	}
 
