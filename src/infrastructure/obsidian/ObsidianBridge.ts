@@ -1,12 +1,4 @@
-import {
-	FileSystemAdapter,
-	Notice,
-	TFile,
-	TFolder,
-	normalizePath,
-	setIcon as obsidianSetIcon,
-	type App,
-} from 'obsidian';
+import { FileSystemAdapter, Notice, TFile, TFolder, normalizePath, type App } from 'obsidian';
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings';
 import { trySync } from '@/domain/shared/tryAsync';
 import type {
@@ -16,19 +8,18 @@ import type {
 	NotificationPort,
 	LoggerPort,
 	CommunityPluginPort,
-	ActiveFileSnapshot,
-	Unsubscriber,
-	ChatTransportPort,
-	ChatTransportStreamOptions,
-	StreamDelta,
-	IconPort,
 } from '@/domain/ports';
-import { ChatTransportError } from '@/domain/ports';
 
 type FileManagerWithTrash = App['fileManager'] & {
 	trashFile?: (file: TFile) => Promise<void>;
 };
 
+/**
+ * Production bridge wrapping Obsidian's `App` + `Vault`. P0 reboot
+ * (SPEC-PSR-009): implements only the six core ports. The chat/icon members
+ * were removed with their subsystems; settings persist to the device-local
+ * store (ADR-PSR-002), never `data.json`.
+ */
 export class ObsidianBridge
 	implements
 		SettingsPort,
@@ -36,9 +27,7 @@ export class ObsidianBridge
 		WorkspacePort,
 		NotificationPort,
 		LoggerPort,
-		CommunityPluginPort,
-		ChatTransportPort,
-		IconPort
+		CommunityPluginPort
 {
 	private static readonly _LEVEL_RANK: Record<string, number> = {
 		debug: 0,
@@ -118,55 +107,6 @@ export class ObsidianBridge
 		if (file instanceof TFile) {
 			await this.app.workspace.getLeaf().openFile(file);
 		}
-	}
-
-	getActiveFile(): ActiveFileSnapshot | null {
-		const file = this.app.workspace.getActiveFile();
-		if (!file) return null;
-		return { path: file.path, basename: file.basename, extension: file.extension };
-	}
-
-	onActiveFileChanged(handler: (file: ActiveFileSnapshot | null) => void): Unsubscriber {
-		const ref = this.app.workspace.on('file-open', (file) => {
-			handler(
-				file ? { path: file.path, basename: file.basename, extension: file.extension } : null,
-			);
-		});
-		return () => {
-			this.app.workspace.offref(ref);
-		};
-	}
-
-	// QW-B — surface the active note's vault-relative path and the current
-	// editor selection so the chat panel can prepend a <vault-context> block
-	// to the system-prompt suffix. Both are sync (Obsidian's workspace is
-	// in-memory) and defensive against the active-editor surface being
-	// `undefined` mid-view-transition.
-	getActiveFilePath(): string | null {
-		return this.app.workspace.getActiveFile()?.path ?? null;
-	}
-
-	getActiveSelection(): string | null {
-		try {
-			const selection = this.app.workspace.activeEditor?.editor?.getSelection();
-			if (selection === undefined || selection === '') return null;
-			return selection;
-		} catch {
-			// `activeEditor.editor` is occasionally undefined during view
-			// transitions; treat any throw as "no selection".
-			return null;
-		}
-	}
-
-	// QW-C — vault-metadata accessors for the first-turn greeting row in the
-	// chat panel's `<vault-context>` block. Both are synchronous reads against
-	// Obsidian's in-memory workspace surface.
-	getVaultName(): string {
-		return this.app.vault.getName();
-	}
-
-	getMarkdownFileCount(): number {
-		return this.app.vault.getMarkdownFiles().length;
 	}
 
 	private _track(notice: Notice): void {
@@ -303,55 +243,14 @@ export class ObsidianBridge
 	}
 
 	// ── Vault filesystem root ─────────────────────────────────────────────────
-	// QW-A — expose the vault root so the Claude / Cursor CLI subprocesses
-	// inherit it as `cwd`. On desktop, `vault.adapter` is a `FileSystemAdapter`
-	// that knows its base path; on mobile (or any non-FS adapter) we return
-	// `null` and the subprocess falls back to the renderer cwd — Obsidian
-	// mobile doesn't run external CLIs anyway, so the distinction is academic
-	// but the guard keeps the type clean.
+	// QW-A — expose the vault root so a later phase's CLI subprocesses can inherit
+	// it as `cwd`. On desktop `vault.adapter` is a `FileSystemAdapter`; on mobile
+	// (or any non-FS adapter) we return `null`.
 	getVaultBasePath(): string | null {
 		const adapter = this.app.vault.adapter;
 		if (adapter instanceof FileSystemAdapter) {
 			return adapter.getBasePath();
 		}
 		return null;
-	}
-
-	// ── ChatTransportPort ─────────────────────────────────────────────────────────
-
-	/**
-	 * Legacy isAvailable() kept for protocol compliance.
-	 * In production, ClaudeCliAdapter.isAvailable() is used instead (it is
-	 * provided via CHAT_TRANSPORT_PORT, not ObsidianBridge). This method is only
-	 * reached if someone accidentally injects ObsidianBridge as CHAT_TRANSPORT_PORT.
-	 */
-	isAvailable(): Promise<boolean> {
-		type ExecFn = (cmd: string, opts: { timeout: number }, cb: (err: Error | null) => void) => void;
-		const { exec } = require('node:child_process') as { exec: ExecFn };
-		return new Promise<boolean>((resolve) => {
-			exec('claude --version', { timeout: 5000 }, (err) => {
-				resolve(err === null);
-			});
-		});
-	}
-
-	// eslint-disable-next-line @typescript-eslint/require-await
-	async *queryStream(
-		_prompt: string,
-		_options?: ChatTransportStreamOptions,
-	): AsyncIterable<StreamDelta> {
-		yield {
-			type: 'error',
-			error: new ChatTransportError(
-				'NOT_INSTALLED',
-				'ObsidianBridge: use ClaudeCliAdapter for queries',
-			),
-		};
-	}
-
-	// ── IconPort ─────────────────────────────────────────────────────────────
-	// REQ-AUX-001, ADR-AUX-001 — production seam for obsidian.setIcon.
-	setIcon(el: HTMLElement, name: string): void {
-		obsidianSetIcon(el, name);
 	}
 }

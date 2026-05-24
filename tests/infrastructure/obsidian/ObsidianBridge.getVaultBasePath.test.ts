@@ -7,9 +7,8 @@
  * adapter) the bridge returns `null`.
  */
 import { describe, it, expect } from 'vitest'
-import { FileSystemAdapter } from 'obsidian'
+import { FileSystemAdapter, type App } from 'obsidian'
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
-import type { PluginSettings } from '@/domain/settings/PluginSettings'
 
 interface FakeApp {
   vault: { adapter: unknown }
@@ -23,12 +22,7 @@ function makeBridge(adapter: unknown): ObsidianBridge {
     fileManager: {},
     workspace: {},
   }
-  const settings: PluginSettings = {
-    specsFolder: 'specs',
-    logLevel: 'warn',
-  } as PluginSettings
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return new ObsidianBridge(app as any, () => settings, async () => undefined)
+  return new ObsidianBridge(app as unknown as App)
 }
 
 describe('ObsidianBridge.getVaultBasePath (QW-A)', () => {

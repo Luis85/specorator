@@ -308,3 +308,19 @@ convergence.
 - **typecheck green-or-expected:** errors now trace to the three bridges' chat/icon
   members + the deleted `ports.ts` keys — the Wave 3b de-couple set (T-021).
   REQ-PSR-004/005; §9.
+
+### T-PSR-021 (remainder) — Wave 3b: de-couple all three bridges + slim ports/fakes (dev)
+
+- `ObsidianBridge` / `MockBridge` / `LocalStorageBridge` now `implements` exactly
+  the six core ports; dropped `ChatTransportPort`/`IconPort` + `queryStream`/
+  `isAvailable`/`setIcon`/`getActiveFile*`/`onActiveFileChanged`/`getVaultName`/
+  `getMarkdownFileCount` + the `ActiveFileSnapshot`/`StreamDelta`/`ChatTransportError`
+  imports. Slimmed `ports.ts` to the six InjectionKeys and `fake-ports.ts` to the
+  six ports + EventBus + TranslationPort.
+- Fixed the kept bridge/contract tests (slim settings, 1-arg `ObsidianBridge`),
+  removed the deleted-method `MockBridge` cases, dropped `ICON_PORT` from
+  `.storybook/preview.ts`.
+- **typecheck GREEN over the whole tree** — Wave 3 complete. The orphaned
+  `domain/chat` + `domain/feature` (now importer-less) remain for Wave 4. The
+  SettingsPort/VaultPort/NotificationPort contracts + TEST-PSR-024 are retained.
+  REQ-PSR-005/013, NFR-PSR-010; SPEC-PSR-008/009; ADR-PSR-002.
