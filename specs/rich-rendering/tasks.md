@@ -326,9 +326,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-005
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/application/chat/toolPresentation.test.ts` exists, naming TEST-RR-014, covering the
+  - [x] `tests/application/chat/toolPresentation.test.ts` exists, naming TEST-RR-014, covering the
         Read/Bash/Glob/Grep/LS/TodoWrite + empty-todos + missing-input cases.
-  - [ ] Tests fail (RED) — `toolPresentation` does not yet exist.
+  - [x] Tests fail (RED) — `toolPresentation` does not yet exist.
 
 ### T-RR-013 🔨 — `toolPresentation.ts` (pure tool name/summary/label)
 
@@ -340,9 +340,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-012
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] TEST-RR-014 passes (the prior RED tests now pass).
-  - [ ] Total/pure: any malformed input degrades, never throws; no side effects; no `obsidian`/Vue import.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] TEST-RR-014 passes (the prior RED tests now pass).
+  - [x] Total/pure: any malformed input degrades, never throws; no side effects; no `obsidian`/Vue import.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-RR-014 🧪 — RED: `computeDiff` pure transform
 
@@ -357,9 +357,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-004, T-RR-005
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/application/chat/computeDiff.test.ts` exists, naming TEST-RR-018, covering
+  - [x] `tests/application/chat/computeDiff.test.ts` exists, naming TEST-RR-018, covering
         structuredPatch / Edit fallback / Write fallback / malformed (EC-RR-4) / absent (EC-RR-3).
-  - [ ] Tests fail (RED) — `computeDiff` does not yet exist.
+  - [x] Tests fail (RED) — `computeDiff` does not yet exist.
 
 ### T-RR-015 🔨 — `computeDiff.ts` (structuredPatch → `DiffLine[]` + `DiffStats`)
 
@@ -372,9 +372,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-014
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] TEST-RR-018 passes (the prior RED tests now pass), incl. EC-RR-3/4.
-  - [ ] Total/pure; no new dependency added to `package.json`; no `obsidian`/Vue import.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] TEST-RR-018 passes (the prior RED tests now pass), incl. EC-RR-3/4.
+  - [x] Total/pure; no new dependency added to `package.json`; no `obsidian`/Vue import.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-RR-016 🧪 — RED: `renderTodos` + `parseTodos` pure transform
 
@@ -387,9 +387,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-005
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/application/chat/renderTodos.test.ts` exists, naming TEST-RR-017, covering
+  - [x] `tests/application/chat/renderTodos.test.ts` exists, naming TEST-RR-017, covering
         pending/in-progress/completed mapping + empty/all-invalid (EC-RR-6).
-  - [ ] Tests fail (RED) — `renderTodos`/`parseTodos` do not yet exist.
+  - [x] Tests fail (RED) — `renderTodos`/`parseTodos` do not yet exist.
 
 ### T-RR-017 🔨 — `renderTodos.ts` (todos → status/icon/text rows)
 
@@ -401,9 +401,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-016
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] TEST-RR-017 (U leg) passes (the prior RED tests now pass).
-  - [ ] Total/pure; no side effects; no `obsidian`/Vue import.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] TEST-RR-017 (U leg) passes (the prior RED tests now pass).
+  - [x] Total/pure; no side effects; no `obsidian`/Vue import.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-RR-018 🧪 — RED: `resolveSubagentLifecycle` + `consolidateSubagent` pure transform
 
@@ -418,9 +418,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-005
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/application/chat/resolveSubagentLifecycle.test.ts` exists, naming TEST-RR-021,
+  - [x] `tests/application/chat/resolveSubagentLifecycle.test.ts` exists, naming TEST-RR-021,
         covering async-vs-sync classification + consolidation + orphaned (EC-RR-11).
-  - [ ] Tests fail (RED) — the helper does not yet exist.
+  - [x] Tests fail (RED) — the helper does not yet exist.
 
 ### T-RR-019 🔨 — `resolveSubagentLifecycle.ts` (sync/async + consolidation, Claude path)
 
@@ -432,9 +432,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-018
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] TEST-RR-021 passes (the prior RED tests now pass), incl. orphaned classification.
-  - [ ] Total/pure; non-Claude shape degrades to `{mode:'sync'}`; no `obsidian`/Vue import.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] TEST-RR-021 passes (the prior RED tests now pass), incl. orphaned classification.
+  - [x] Total/pure; non-Claude shape degrades to `{mode:'sync'}`; no `obsidian`/Vue import.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-RR-020 🧪 — RED: `RunChatTurnUseCase.dispatchChunk` P2 handlers + `ChatTurnSink` P2 legs
 
@@ -453,9 +453,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-006, T-RR-010
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/application/chat/RunChatTurnUseCase.rr.test.ts` exists, naming TEST-RR-005/006/007/
+  - [x] `tests/application/chat/RunChatTurnUseCase.rr.test.ts` exists, naming TEST-RR-005/006/007/
         009/012/027, covering each P2 chunk leg + default-branch + error-boundary.
-  - [ ] Tests fail (RED) — the P2 dispatch cases + sink legs do not yet exist.
+  - [x] Tests fail (RED) — the P2 dispatch cases + sink legs do not yet exist.
 
 ### T-RR-021 🔨 — `dispatchChunk` P2 handlers + `ChatTurnSink` P2 legs
 
@@ -471,10 +471,10 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-020
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] TEST-RR-005/006/007/009/012/027 pass (the prior RED tests now pass).
-  - [ ] The `default` branch is preserved (REQ-RR-007); streaming error stays the `error` chunk (no
+  - [x] TEST-RR-005/006/007/009/012/027 pass (the prior RED tests now pass).
+  - [x] The `default` branch is preserved (REQ-RR-007); streaming error stays the `error` chunk (no
         per-chunk `Result`/throw); pure transforms degrade rather than crossing the boundary.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ---
 

@@ -288,3 +288,126 @@ record the GREEN convergence + commit SHA.
   pure transform: `toolName`/`toolSummary`/`toolLabel`, TEST-RR-014), greened by T-RR-013, then
   T-RR-014..021 (`computeDiff`, `renderTodos`, `resolveSubagentLifecycle`, `dispatchChunk` P2 handlers +
   the new `ChatTurnSink` legs). All application transforms are pure/total and fully unit-testable.
+
+---
+
+## T-RR-012 / T-RR-013 — `toolPresentation` pure transform (2026-05-24, dev, implement — application batch)
+
+- **RED (T-RR-012):** `tests/application/chat/toolPresentation.test.ts` (new, 19 cases, TEST-RR-014).
+  Watched fail for the right reason (module resolution: `toolPresentation` did not exist). SHA `c3eed8d`.
+- **GREEN (T-RR-013):** `src/application/chat/toolPresentation.ts` (new). `toolName`/`toolSummary`/
+  `toolLabel` + exported `fileNameOnly`, reproducing claudian `getToolName`/`getToolSummary`/
+  `getToolLabel`/`fileNameOnly` (`ToolCallRenderer.ts:60/79/119/181`) for the P2 common path. Reads
+  `input.todos` via the domain `isValidTodoItem` guard for the TodoWrite count. `toolLabel` factored
+  into `fileToolLabel`/`patternToolLabel`/`todoWriteLabel` helpers to satisfy `complexity ≤ 10`.
+- **Spec:** SPEC-RR-014; REQ-RR-019a/023; NFR-RR-003/005. TEST-RR-014 19/19.
+- **SHA:** `2b99242`. **Outcome:** done.
+- **Deviation (with rationale):** the RED test (qa-authored) asserts `toolSummary('Read', {file_path: 123})
+  === ''` — a **non-string** `file_path` degrades to `''`. Claudian's `getInputText`/`stringifyToolValue`
+  would coerce `123` → `'123'`. SPEC-RR-014 is explicit ("Missing/**non-string** inputs degrade to
+  `''`/`name`"), so the spec contract — not claudian's permissive coercion — is the source of truth
+  (Constitution Art. I). Implemented `inputText` to treat any non-string (and empty string) as the
+  degrade case. This is a strengthening of totality, not a behaviour the rendered header relied on.
+
+## T-RR-014 / T-RR-015 — `computeDiff` pure transform (2026-05-24, dev, implement — application batch)
+
+- **RED (T-RR-014):** `tests/application/chat/computeDiff.test.ts` (new, 11 cases, TEST-RR-018).
+  Watched fail (module did not exist). SHA `fb2dde5`.
+- **GREEN (T-RR-015):** `src/application/chat/computeDiff.ts` (new). `computeDiff(toolUseResult,
+  toolCall)` → `{lines, stats}`, reproducing claudian `structuredPatchToDiffLines` +
+  `countLineChanges` + `extractDiffData` + `diffFromToolInput` (`utils/diff.ts:9/33/130/147`) for the
+  structuredPatch + Edit/Write-input paths. **No new runtime dependency** (NFR-RR-013); the
+  apply-patch/file-update parsers stay deferred (CLAR-RR-005).
+- **Spec:** SPEC-RR-015; REQ-RR-026; NFR-RR-003/005/013; EC-RR-3/4. TEST-RR-018 11/11.
+- **SHA:** `9ab80ea`. **Outcome:** done.
+- **Deviation (with rationale):** SPEC-RR-015 names "malformed bounds → empty" without prescribing
+  per-hunk vs whole-result granularity. Implemented as: a hunk with non-finite/negative `oldStart`/
+  `newStart` or a non-array `lines` is **dropped** (contributes nothing); non-string line entries
+  within an otherwise-valid hunk are **skipped**. This keeps `computeDiff` total (EC-RR-4, never
+  throws) while preserving the valid lines the RED test asserts. A structuredPatch that is present
+  but yields zero usable lines does **not** fall back to the tool input (it is treated as "diff
+  produced empty"), matching claudian's `extractDiffData` short-circuit; an absent/empty
+  structuredPatch does fall back (EC-RR-3).
+
+## T-RR-016 / T-RR-017 — `renderTodos`/`parseTodos` pure transform (2026-05-24, dev, implement — application batch)
+
+- **RED (T-RR-016):** `tests/application/chat/renderTodos.test.ts` (new, 10 cases, TEST-RR-017).
+  Watched fail (module did not exist). SHA `bbe0f97`.
+- **GREEN (T-RR-017):** `src/application/chat/renderTodos.ts` (new). `renderTodos` → `TodoRow[]`
+  (`iconName` check/dot + status + gerund/content text) + `parseTodos` (guard-filtered `input.todos`),
+  reproducing claudian `getTodoStatusIcon`/`getTodoDisplayText` (`todoUtils.ts:5/9`) + `parseTodoInput`
+  (`todo.ts:30`). Returns the icon NAME only (the IconPort resolves the node — NFR-RR-006).
+- **Spec:** SPEC-RR-016; REQ-RR-022; NFR-RR-003/005; EC-RR-6. TEST-RR-017 (U leg) 10/10.
+- **SHA:** `75d1f47`. **Outcome:** done. **Deviation:** none. (`no-warning-comments` disable added at
+  the top of both src + test — the domain noun "todo" trips the term scanner, as in domain `TodoItem.ts`.)
+
+## T-RR-018 / T-RR-019 — `resolveSubagentLifecycle` pure transform (2026-05-24, dev, implement — application batch)
+
+- **RED (T-RR-018):** `tests/application/chat/resolveSubagentLifecycle.test.ts` (new, 13 cases,
+  TEST-RR-021). Watched fail (module did not exist). SHA `f1f23dd`.
+- **GREEN (T-RR-019):** `src/application/chat/resolveSubagentLifecycle.ts` (new).
+  `resolveSubagentLifecycle(subagent)` → `{mode:'sync'}` | `{mode:'async', asyncStatus}` +
+  `consolidateSubagent(spawn, asyncResult?)`, reproducing the Claude-path branch of claudian
+  `renderTaskSubagent`/`resolveTaskSubagent`/`inferAsyncStatusFromTaskTool`. Provider-lifecycle
+  (Codex/Opencode) consolidation stays deferred to P9 (CLAR-RR-004, NG7); a non-Claude shape degrades
+  to `{mode:'sync'}`. `consolidate` is non-mutating (returns a fresh object); no result by turn end →
+  `orphaned` (EC-RR-11).
+- **Spec:** SPEC-RR-017; REQ-RR-021b; NFR-RR-003/005; EC-RR-10/11. TEST-RR-021 13/13.
+- **SHA:** `86838f7`. **Outcome:** done. **Deviation:** none.
+
+## T-RR-020 / T-RR-021 — `dispatchChunk` P2 handlers + `ChatTurnSink` P2 legs (2026-05-24, dev, implement — application batch)
+
+- **RED (T-RR-020):** `tests/application/chat/RunChatTurnUseCase.rr.test.ts` (new, 16 cases,
+  TEST-RR-005/006/007/009/012/027). Watched fail for the right reason (13/16 failed — the P2 sink
+  legs + dispatch cases did not exist; 3 passed because `text`/`usage`/`error` already route via the
+  P1 legs). SHA `d344476`.
+- **GREEN (T-RR-021):** `src/application/chat/RunChatTurnUseCase.ts` (edited). Grew `ChatTurnSink`
+  additively with the nine P2 legs (`onToolUse`/`onToolResult`/`onToolOutput`/`onThinking`/
+  `onSubagentToolUse`/`onSubagentToolResult`/`onAsyncSubagentResult`/`onContextCompacted`/`onNotice`),
+  the five P1 legs unchanged. `dispatchChunk` routes P2 members from its `default` branch through
+  extracted `dispatchToolChunk` + `dispatchSubagentOrMiscChunk` helpers + a `logP2` helper — each
+  method's `complexity ≤ 10` (the P1 switch is unchanged at 5 cases). The forward-compatible default
+  branch and the streaming-error boundary (ADR-CC-001 §1: `error` chunk forwarded inline, runtime
+  throw → synthetic error+done, never rethrown) are preserved.
+- **Spec:** SPEC-RR-018/019; REQ-RR-001..007; NFR-RR-003; EC-RR-14. TEST-RR-005/006/007/009/012/027
+  16/16; P1 `RunChatTurnUseCase.test.ts` 10/10 unchanged.
+- **SHA:** `ca021de`. **Outcome:** done.
+- **Deviation 1 (LoggerPort, with rationale):** SPEC-RR-018 §8 says the use case "logs a `debug` per
+  dispatched P2 chunk type+id". The P1 `RunChatTurnUseCase` constructor took only `runtime`. Adding a
+  **mandatory** logger would break the P1 `new RunChatTurnUseCase(runtime)` call in `ChatSurface.vue`
+  (a UI-batch wire-in). Added the logger as an **optional** ctor arg (`logger?: LoggerPort`, no-op when
+  absent) — additive, keeps the P1 instantiation valid, satisfies §8 when a logger is provided. The
+  UI batch may pass `useLoggerPort()` when wiring; not required for this batch.
+- **Deviation 2 (cross-batch type bridge, with rationale):** growing the `ChatTurnSink` interface
+  forced two existing consumers to satisfy the wider type **now** (typecheck-0 is this batch's gate):
+  `src/ui/stores/chatStore.ts` `_sink()` and the P1 `RunChatTurnUseCase.test.ts` `makeSink()` fixture.
+  Both gained **inert P2-leg stubs** (no-ops). The concrete store behaviour (block/tool/subagent state,
+  SPEC-RR-020) is owned by **T-RR-023** (UI batch) and driven by the **T-RR-022** RED tests — the
+  stubs are explicitly marked "pending T-RR-023". No P1 test assertion changed (the stubs only make
+  the P1 fixture runnable under the grown interface, per the dev/qa boundary rule). The store touch is
+  the minimal type-bridge, not UI-batch implementation.
+
+---
+
+## Batch close-out — application (T-RR-012..021)
+
+- **Typecheck:** `npm run typecheck` (`vue-tsc --noEmit -p tsconfig.lint.json`) → **0 errors**.
+- **Lint:** `npx eslint` on every touched file → **0 errors / 0 warnings** (the `complexity ≤ 10`
+  application-layer rule held: `dispatchChunk` + the two extracted P2 dispatch helpers + `toolLabel`
+  all within budget).
+- **Tests (touched surface):** `tests/application/chat` + `tests/ui/stores` → **113/113**. Full unit
+  suite re-run → **566/566 across 73 files** (no regression). New: TEST-RR-014 19, TEST-RR-018 11,
+  TEST-RR-017 10, TEST-RR-021 13, TEST-RR-005/006/007/009/012/027 16; P1 `RunChatTurnUseCase` 10/10.
+- **Not run (deferred to the T-RR-044 gate):** full `npm run verify` / `build` / `build:web` /
+  coverage / `npm audit`.
+- **Not pushed.** `manifest.json` untouched. No new dependency added (NFR-RR-013 verified for
+  `computeDiff`).
+- **Commits:** `c3eed8d` (T-RR-012 RED), `2b99242` (T-RR-013), `fb2dde5` (T-RR-014 RED), `9ab80ea`
+  (T-RR-015), `bbe0f97` (T-RR-016 RED), `75d1f47` (T-RR-017), `f1f23dd` (T-RR-018 RED), `86838f7`
+  (T-RR-019), `d344476` (T-RR-020 RED), `ca021de` (T-RR-021).
+- **Next batch (UI, SPEC-RR-020..032):** **FIRST TASK = T-RR-022** (qa RED — `chatStore` P2 sink-leg
+  actions / state machine: `onToolUse`/`onToolResult`+`computeDiff`/`onToolOutput`/`onThinking`/
+  subagent legs + EC-RR-1/2/9/10 + order preservation + no-op-when-not-streaming,
+  `tests/ui/stores/chatStore.rr.test.ts`), greened by **T-RR-023** (which replaces the inert `_sink()`
+  P2 stubs landed here with the real block/tool/subagent state mutations). Then T-RR-024 (`useIconPort`)
+  and the components T-RR-025..038.

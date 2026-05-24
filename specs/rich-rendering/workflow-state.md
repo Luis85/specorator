@@ -4,7 +4,7 @@ area: RR
 current_stage: implementation
 status: active
 last_updated: 2026-05-24
-last_agent: dev (implement — infra batch)
+last_agent: dev (implement — application batch)
 epic: claudian-reboot
 phase: P2
 integration_branch: next
@@ -17,7 +17,7 @@ artifacts:
   ADR-RR-001: accepted (docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md — human-blessed 2026-05-24)
   spec.md: complete (SPEC-RR-001..034; extends SPEC-CC-* P1 contract; 27 TEST-RR scenarios)
   tasks.md: complete (TASKS-RR-001; 44 tasks T-RR-001..044; full SPEC/REQ/NFR/TEST coverage table)
-  implementation-log.md: in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 done; application/ui/wire-in/gate batches remain)
+  implementation-log.md: in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 done; ui/wire-in/gate batches remain)
   test-plan.md: in-progress (TESTPLAN-RR-001; baseline reference + manual TEST-RR-026 / T-RR-043 legs scheduled)
   test-report.md: pending
   review.md: pending
@@ -43,7 +43,7 @@ artifacts:
 | 4. Design | `design.md` | complete (Parts A/B/C; ADR-RR-001 accepted — human-blessed 2026-05-24) |
 | 5. Specification | `spec.md` | complete (SPEC-RR-001..034; 27 TEST-RR) |
 | 6. Tasks | `tasks.md` | complete (TASKS-RR-001; T-RR-001..044) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 done; application/ui/wire-in/gate remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 done; ui/wire-in/gate remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -348,6 +348,50 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
                           (computeDiff, renderTodos, resolveSubagentLifecycle, dispatchChunk P2 handlers +
                           the new ChatTurnSink legs). All four transforms are pure/total + fully
                           unit-testable, no mount.
+2026-05-24 (dev, implement — application batch): Executed the APPLICATION batch (SPEC-RR-014..019) on
+                          feature/rich-rendering with strict TDD, one Conventional commit per task.
+                          COMPLETED (in order): T-RR-012 RED toolPresentation (19 cases, TEST-RR-014,
+                          c3eed8d) → T-RR-013 toolPresentation.ts toolName/toolSummary/toolLabel +
+                          fileNameOnly, claudian getToolName/Summary/Label parity, TodoWrite count via
+                          domain isValidTodoItem guard, toolLabel factored to stay complexity≤10
+                          (2b99242); T-RR-014 RED computeDiff (11 cases, TEST-RR-018, fb2dde5) →
+                          T-RR-015 computeDiff.ts structuredPatch + Edit/Write-input paths, no new dep,
+                          malformed/absent degrade to empty (EC-RR-3/4) (9ab80ea); T-RR-016 RED
+                          renderTodos/parseTodos (10 cases, TEST-RR-017, bbe0f97) → T-RR-017
+                          renderTodos.ts icon-NAME rows + guard-filtered parseTodos (75d1f47); T-RR-018
+                          RED resolveSubagentLifecycle (13 cases, TEST-RR-021, f1f23dd) → T-RR-019
+                          resolveSubagentLifecycle.ts + consolidateSubagent, Claude path only
+                          (Codex/Opencode deferred P9), non-mutating, orphaned on no-result (EC-RR-11)
+                          (86838f7); T-RR-020 RED dispatchChunk P2 handlers + ChatTurnSink P2 legs
+                          (16 cases, TEST-RR-005/006/007/009/012/027, 13/16 watched-fail, d344476) →
+                          T-RR-021 grew ChatTurnSink with the 9 P2 legs + routed each P2 chunk via
+                          extracted dispatchToolChunk/dispatchSubagentOrMiscChunk/logP2 helpers
+                          (default branch + streaming-error boundary preserved, ADR-CC-001 §1)
+                          (ca021de).
+                          BATCH-END STATE: npm run typecheck (vue-tsc -p tsconfig.lint.json) → 0 errors;
+                          npx eslint on every touched file → 0 errors/0 warnings (complexity≤10 held);
+                          tests/application/chat + tests/ui/stores 113/113; full unit suite re-run
+                          566/566 across 73 files (no regression). DEVIATIONS: (1) toolPresentation —
+                          non-string file_path degrades to '' per SPEC-RR-014's explicit wording
+                          (stricter than claudian's number coercion; spec is the contract, Constitution
+                          Art. I); (2) RunChatTurnUseCase — added an OPTIONAL logger?:LoggerPort ctor
+                          arg for §8's per-chunk debug (mandatory would break the P1
+                          new RunChatTurnUseCase(runtime) in ChatSurface.vue); (3) cross-batch type
+                          bridge — growing ChatTurnSink forced inert P2-leg no-op stubs in chatStore.ts
+                          _sink() + the P1 RunChatTurnUseCase.test.ts makeSink() fixture so the wider
+                          interface type-checks NOW (typecheck-0 is this batch's gate); the concrete
+                          store behaviour (SPEC-RR-020) is owned by T-RR-023 (UI batch) and driven by
+                          the T-RR-022 RED tests — stubs marked "pending T-RR-023"; no P1 test assertion
+                          changed. NOT pushed; manifest.json untouched; no new dependency (NFR-RR-013);
+                          full verify/build/build:web/coverage/audit deferred to the T-RR-044 gate.
+                          NEXT BATCH (UI, SPEC-RR-020..032): FIRST TASK = T-RR-022 (qa RED — chatStore
+                          P2 sink-leg actions / state machine: onToolUse + tool_use block, onToolResult
+                          + computeDiff for Write/Edit, onToolOutput, onThinking, subagent legs,
+                          EC-RR-1/2/9/10 + order preservation + no-op-when-not-streaming + $reset,
+                          tests/ui/stores/chatStore.rr.test.ts), greened by T-RR-023 (which replaces the
+                          inert _sink() P2 stubs landed here with the real block/tool/subagent state
+                          mutations + subagent registry). Then T-RR-024 (useIconPort) + the components
+                          T-RR-025..038.
 ```
 
 ## Open clarifications
