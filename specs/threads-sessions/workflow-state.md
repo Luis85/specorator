@@ -1,10 +1,10 @@
 ---
 feature: threads-sessions
 area: TS
-current_stage: specification
+current_stage: tasks
 status: active
 last_updated: 2026-05-25
-last_agent: architect (specification)
+last_agent: planner (tasks)
 epic: claudian-reboot
 phase: P3
 integration_branch: next
@@ -15,7 +15,7 @@ artifacts:
   requirements.md: accepted (PRD-TS-001; CLAR-TS-001..004 resolved by ADR-TS-001/002/003)
   design.md: complete (DESIGN-TS-001; Parts A/B/C; ADR-TS-001/002/003 accepted)
   spec.md: complete (SPEC-TS-001..034; 26 automatable TEST-TS + 2 manual legs)
-  tasks.md: pending
+  tasks.md: complete (TASKS-TS-001; T-TS-001..042; 42 tasks)
   implementation-log.md: pending
   test-plan.md: pending
   test-report.md: pending
@@ -36,7 +36,7 @@ artifacts:
 | 3. Requirements | `requirements.md` | accepted (PRD-TS-001) |
 | 4. Design | `design.md` | complete (DESIGN-TS-001) |
 | 5. Specification | `spec.md` | complete (SPEC-TS-001..034) |
-| 6. Tasks | `tasks.md` | pending |
+| 6. Tasks | `tasks.md` | complete (TASKS-TS-001) |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
@@ -279,4 +279,34 @@ self-parity-review vs claudian after each big chunk; merge P3 to `next` autonomo
                           No open clarification blocks tasks. Coverage 80/70/80/80; --sp-* parity; no
                           v-html / no window.confirm (Obsidian Modal for fork-target + delete-confirm);
                           provider-addressed (grep gate TEST-TS-026), one Claude impl.
+
+2026-05-25 (planner, tasks): TASKS-TS-001 written → specs/threads-sessions/tasks.md. 42 tasks
+                          (T-TS-001..042) decomposing SPEC-TS-001..034, TDD-ordered (RED qa task
+                          before each green dev task; every dev task's first DoD line = "the prior
+                          RED test(s) now pass"), DDD inward layering: baseline → DOMAIN (002-006) →
+                          INFRA (007-013) → APPLICATION (014-025) → UI (026-035) → STYLES (036) →
+                          WIRE-IN (037-039) → GATE (040-042). Each Vue component task pairs a
+                          data-testid PageObject + a no-v-html/no-window.confirm DoD line;
+                          ForkTargetModal/DeleteConfirmModal are Obsidian Modal subclasses (T-TS-035).
+                          Coverage table maps all 34 SPEC-TS + 28 REQ-TS + 15 NFR-TS + 26 automatable
+                          TEST-TS + the 2 manual legs (TEST-TS-M1/M2) to ≥1 task; M1/M2 ride the single
+                          final human review gate (T-TS-040/041, human-owned, never agent-self-claimed).
+
+                          DELETED-SYMBOL GUARD: NO relaxation task needed in P3 (verified against
+                          eslint.config.js) — unlike P2's IconPort/SpIcon/ICON_PORT, none of the P3
+                          symbols (ProviderHistoryPort, PROVIDER_HISTORY_PORT, ConversationRecord,
+                          tabsStore, TabBar, ResumeSessionDropdown, ForkTargetModal, DeleteConfirmModal)
+                          were P0-deleted; DELETED_SUBSYSTEM_BAN + DELETED_INJECTION_KEYS don't list
+                          them and @/domain/chat regrew in P1. T-TS-001 + T-TS-042 carry a one-line
+                          lint-confirmation DoD.
+
+                          HAND-OFF → /spec:implement (dev) + /spec:test (qa). FIRST READY TASK:
+                          T-TS-002 (qa) — RED: domain port/types/settings + additive ChatRuntimePort/
+                          ChatMessage growth (structural; TEST-TS-001..005). It is the RED pair gating
+                          the domain impl tasks (T-TS-003..006). NO-DEP TASKS (Batch 0 — start in
+                          parallel immediately): T-TS-001 (dev, baseline 📐), T-TS-002 (qa, domain RED),
+                          T-TS-014 (qa, titleGeneration RED), T-TS-036 (dev, tokens 🔨). Critical path
+                          (16 tasks): 002→003→004→009→010→018→019→026→027→030→031→034→035→037→038→042.
+                          Coverage 80/70/80/80; --sp-* parity; provider-addressed grep gate; one Claude
+                          impl; manifest untouched; verify + test:all green at T-TS-042 (draft PR → next).
 ```
