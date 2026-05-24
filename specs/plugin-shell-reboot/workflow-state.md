@@ -79,6 +79,14 @@ only at parity.
 | P7 | i18n — remaining locales |
 | later | Workflow + lifecycle features regrow on the new base |
 
+> **This P0–P7 table is COARSE and incomplete.** The authoritative feature/surface/
+> visual inventory and the expanded phase map (P0–P12) live in the epic parity charter:
+> `specs/claudian-reboot/parity-charter.md` (CHARTER-CLAUDIAN-REBOOT). The charter is a
+> mandatory input to every phase's `/spec:design` + `/spec:review`. Goal = **1:1 Claudian
+> experience (features + look/feel) within our constraints** — see the charter for what
+> "1:1 within constraints" does and does not mean, and the per-surface screenshot parity
+> acceptance method.
+
 ## Hand-off notes
 
 ```
