@@ -1,14 +1,14 @@
 ---
 feature: mcp-host-side-proposals
 area: MHP
-current_stage: requirements
+current_stage: design
 status: active
 last_updated: 2026-05-24
-last_agent: analyst
+last_agent: pm
 artifacts:
   idea.md: complete
   research.md: complete
-  requirements.md: pending
+  requirements.md: complete
   design.md: pending
   spec.md: pending
   tasks.md: pending
@@ -29,7 +29,7 @@ artifacts:
 |---|---|---|
 | 1. Idea | `idea.md` | complete |
 | 2. Research | `research.md` | complete |
-| 3. Requirements | `requirements.md` | pending |
+| 3. Requirements | `requirements.md` | complete |
 | 4. Design | `design.md` | pending |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
@@ -76,14 +76,27 @@ _None._
                            requirements (esp. RISK-MHP-001 dual-accept race,
                            RISK-MHP-008 system-prompt-addendum drift). Tool
                            naming verdict: `workflow_proposal_*` namespace.
+2026-05-24 (pm):           requirements.md complete; 40 REQs + 14 NFRs + 6
+                           JTBDs. Gate FAIL on 2 open CLARs. CLAR-MHP-005
+                           closed by REQ-MHP-038 (ephemeral v1 + shutdown
+                           audit rows). New CLAR-MHP-006 surfaced: client
+                           identification mechanism (`x-mcp-client-name`
+                           header vs MCP-native `clientInfo.name` from
+                           initialize). REQ-MHP-014 deny-list explicitly
+                           EXCLUDES the 8 DevTools commands (CLAR-MHP-004
+                           user override over SYNTHESIS deny-list).
+                           Recommend `/spec:clarify` to resolve CLAR-MHP-002
+                           (user signoff on REQ-MHP-009) and CLAR-MHP-006
+                           before `/spec:design`.
 ```
 
 ## Open clarifications
 
 - [x] CLAR-MHP-001 — Bearer-token policy. *(resolved 2026-05-24: no token for this feature; loopback + proposal-gating + read allow-list. Revisit if multi-user.)*
-- [ ] CLAR-MHP-002 — Tier-policy thresholds. Research answered (`research.md` Q1) with defaults; user signoff still required at /spec:design.
+- [ ] CLAR-MHP-002 — Tier-policy thresholds. Research answered (`research.md` Q1) with defaults; user signoff still required (only auto-accept default that ships here is REQ-MHP-009 active-feature-append rule — other Tier-B thresholds deferred to follow-up).
 - [x] CLAR-MHP-003 — Webviewer scope. *(resolved 2026-05-24: carve out into separate spec; this feature emits `kind` discriminator only for forward compatibility — `research.md` Q2.)*
 - [x] CLAR-MHP-004 — DevTools opt-in surface. *(resolved 2026-05-24: per-tool threat model drafted in `research.md` Q3 and will be embedded verbatim in ADR-019.)*
-- [ ] CLAR-MHP-005 — Proposal-queue persistence across plugin restarts. Recommendation in `research.md`: ephemeral for v1, log discarded proposals on shutdown, defer persistence to follow-up. PM to confirm during /spec:requirements.
+- [x] CLAR-MHP-005 — Proposal-queue persistence across plugin restarts. *(resolved 2026-05-24 by REQ-MHP-038: ephemeral v1, log discarded proposals on shutdown, persistence deferred to follow-up.)*
+- [ ] CLAR-MHP-006 — Client identification mechanism. REQ-MHP-034 specifies `x-mcp-client-name` header but MCP-native path is parsing `clientInfo.name` from the `initialize` request. Resolve at /spec:design; testable intent (capture identity, fall back to `unknown`) is wire-mechanism-agnostic.
 
 
