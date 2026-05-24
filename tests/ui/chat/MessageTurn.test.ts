@@ -23,11 +23,7 @@ function msg(partial: Partial<ChatMessage>): ChatMessage {
 	return { id: 'm1', role: 'assistant', content: '', timestamp: 0, ...partial };
 }
 
-function mountTurn(props: {
-	message: ChatMessage;
-	streaming?: boolean;
-	interrupted?: boolean;
-}) {
+function mountTurn(props: { message: ChatMessage; streaming?: boolean; interrupted?: boolean }) {
 	const wrapper = mount(MessageTurn, {
 		props: {
 			message: props.message,
