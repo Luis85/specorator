@@ -116,3 +116,25 @@ convergence.
 > `toSupportedLocale`); `npm run test` shows the 4 RED unit files failing for the
 > expected reasons; ErrorBoundary + WorkspacePort runtime checks pass. No lint
 > errors introduced.
+
+## Phase A — GREEN: slim the surviving surface
+
+> From here, slimming the surviving surface deletes fields/symbols the
+> not-yet-deleted fat consumers still import, so tree-wide `npm run typecheck`
+> is **expected red** until the Phase B delete waves land (Phase A exit
+> condition, spec §9). Each slim task is verified GREEN via its targeted tests.
+
+### T-PSR-003 — Slim `PluginSettings` (dev)
+
+- `src/domain/settings/PluginSettings.ts` reduced to `{ locale, logLevel }` +
+  `DEFAULT_SETTINGS`; dropped the 16 feature/provider/workflow fields and both
+  `@/domain/chat` type imports. SPEC-PSR-001; REQ-PSR-006.
+
+### T-PSR-004 — Slim `coreSettingsModule` (dev)
+
+- `src/core/core-settings.ts` rewritten to **load-or-default**: no `migrate`, no
+  `settingsVersion`, a two-field `validateSettings` (`coerceString` locale,
+  `coerceEnum`/`VALID_LOG_LEVELS` logLevel), two-dropdown schema. Deleted every
+  other coercion helper, the `VALID_*` provider constants, the provider
+  validators, and the `@/domain/chat` imports.
+- **T-PSR-001/002 GREEN** (13 tests). SPEC-PSR-002/003/004; CHARTER-REQ-FRESH.
