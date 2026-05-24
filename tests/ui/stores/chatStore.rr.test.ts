@@ -256,6 +256,19 @@ describe('chatStore P2 sink legs (SPEC-RR-020)', () => {
 			expect(spawn?.subagent?.toolCalls).toEqual([]);
 		});
 
+		it('a Task/Agent spawn pushes a top-level subagent block, not a tool_use block (CLAR-RR-008)', async () => {
+			const { store } = freshStore();
+			await startStreaming(store);
+
+			store.onToolUse('task1', 'Task', { description: 'worker', prompt: 'do it' });
+
+			// Parity claudian StreamController.recordSubagentInMessage (:1008): a spawn
+			// records a `{type:'subagent', subagentId}` block so MessageBlocks routes it
+			// to SubagentBlock — NOT a `{type:'tool_use'}` block (SPEC-RR-004/022).
+			expect(liveBlocks(store)).toEqual([{ type: 'subagent', subagentId: 'task1' }]);
+			expect(liveBlocks(store).filter((b) => b.type === 'tool_use')).toHaveLength(0);
+		});
+
 		it('onSubagentToolUse pushes a nested running ToolCall under the spawning subagent', async () => {
 			const { store } = freshStore();
 			await startStreaming(store);
@@ -267,8 +280,11 @@ describe('chatStore P2 sink legs (SPEC-RR-020)', () => {
 			expect(spawn?.subagent?.toolCalls).toEqual([
 				{ id: 'n1', name: 'Read', input: { file_path: 'x.ts' }, status: 'running' },
 			]);
-			// No top-level block for a nested tool (only the spawning Task tool_use).
-			expect(liveBlocks(store).filter((b) => b.type === 'tool_use')).toHaveLength(1);
+			// The nested tool adds NO top-level block: only the spawning Task produces a
+			// top-level block, and that is the `subagent` block (CLAR-RR-008). The nested
+			// tool lands under the spawn's `subagent.toolCalls`.
+			expect(liveBlocks(store)).toEqual([{ type: 'subagent', subagentId: 'task1' }]);
+			expect(liveBlocks(store).filter((b) => b.type === 'tool_use')).toHaveLength(0);
 		});
 
 		it('onSubagentToolResult sets the nested tool result + status', async () => {
