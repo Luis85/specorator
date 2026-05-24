@@ -1,11 +1,13 @@
 /**
  * Standalone browser entry (`npm run dev` / `npm run build:web`). P1 chat-core
  * (SPEC-CC-022): always MockBridge, mounting `ChatSurface` inside `ErrorBoundary`
- * with the six core ports plus the two chat ports (`CHAT_RUNTIME_PORT` from
- * `bridge.createChatRuntime()` and `MARKDOWN_RENDER_PORT` from the bridge's
- * markdown port) so `npm run dev` shows a working chat against the mock runtime
- * (REQ-CC-014). The PROD / LocalStorageBridge branch, router, AppRoot, and secret
- * stores stay dropped (P0 reboot). CSS imports are kept.
+ * with the six core ports plus the chat ports (`CHAT_RUNTIME_PORT` from
+ * `bridge.createChatRuntime()`, `MARKDOWN_RENDER_PORT` from the bridge's markdown
+ * port, and `ICON_PORT` from `bridge.createIconPort()` — P2 rich-rendering,
+ * SPEC-RR-021) so `npm run dev` shows a working chat (and its block renderers'
+ * icons) against the mock runtime (REQ-CC-014, REQ-RR-019). The PROD /
+ * LocalStorageBridge branch, router, AppRoot, and secret stores stay dropped (P0
+ * reboot). CSS imports are kept.
  */
 import './standalone.css';
 import './styles/tokens.css';
@@ -24,6 +26,7 @@ import {
 	COMMUNITY_PLUGIN_PORT,
 	CHAT_RUNTIME_PORT,
 	MARKDOWN_RENDER_PORT,
+	ICON_PORT,
 } from '@/infrastructure/bridge/ports';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
 
@@ -45,6 +48,7 @@ app.provide(LOGGER_PORT, bridge);
 app.provide(COMMUNITY_PLUGIN_PORT, bridge);
 app.provide(CHAT_RUNTIME_PORT, bridge.createChatRuntime());
 app.provide(MARKDOWN_RENDER_PORT, bridge.createMarkdownRenderPort());
+app.provide(ICON_PORT, bridge.createIconPort());
 
 void bridge.getSettings().then((s) => {
 	setLocale(toSupportedLocale(s.locale));
