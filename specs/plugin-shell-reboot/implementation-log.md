@@ -138,3 +138,14 @@ convergence.
   other coercion helper, the `VALID_*` provider constants, the provider
   validators, and the `@/domain/chat` imports.
 - **T-PSR-001/002 GREEN** (13 tests). SPEC-PSR-002/003/004; CHARTER-REQ-FRESH.
+
+### T-PSR-007 — `AgentPanelRoot.vue` + trimmed i18n + `toSupportedLocale` (dev)
+
+- Created `src/ui/agent/AgentPanelRoot.vue` (single `data-testid="agent-panel-empty"`
+  reading `t('agent.empty.placeholder')`, `<script setup>` only).
+- Trimmed `src/ui/i18n/locales/en.ts` + `de.ts` to the single
+  `agent.empty.placeholder` key (kept `export default … as const`).
+- Added exported `toSupportedLocale(locale)` to `src/ui/i18n/index.ts`; `i18n` /
+  `setLocale` / `i18nTranslate` / `i18nMerge` / `SupportedLocale` /
+  `SUPPORTED_LOCALES` / `MessageSchema` kept in shape.
+- **T-PSR-005/006 GREEN** (11 tests). SPEC-PSR-006/010/011/012.
