@@ -12,9 +12,9 @@ reference: D:\Projects\claudian-main
 artifacts:
   idea.md: skipped (orchestrator bootstrapped P1 from charter + audits)
   research.md: skipped (charter §3 + frontend/backend audits serve as research)
-  requirements.md: in-progress (PRD-CC-001 revised to Claudian ground-truth; held at draft pending CLAR-CC-001 ADR — flips to accepted once ADR-CC-001 is human-blessed)
-  design.md: complete (Parts A/B/C; ADR-CC-001 DRAFTED as proposed — pending human sign-off, charter §6a)
-  spec.md: pending (BLOCKED on the ADR-CC-001 checkpoint)
+  requirements.md: accepted (PRD-CC-001 — Claudian-grounded; ADR-CC-001 human-blessed 2026-05-24)
+  design.md: complete (Parts A/B/C; ADR-CC-001 ACCEPTED — human-blessed 2026-05-24, charter §6a)
+  spec.md: pending (unblocked — ADR-CC-001 accepted; next: /spec:specify)
   tasks.md: pending
   implementation-log.md: pending
   test-plan.md: pending

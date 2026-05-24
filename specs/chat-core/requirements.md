@@ -6,7 +6,7 @@ feature: chat-core
 area: CC
 epic: claudian-reboot
 phase: P1
-status: draft        # draft | proposed | accepted | superseded
+status: accepted     # draft | proposed | accepted | superseded (ADR-CC-001 human-blessed 2026-05-24)
 owner: pm
 inputs:
   - specs/claudian-reboot/parity-charter.md      # §1 constraints, §3.1/§3.3/§3.6, §4 (P1 row), §5 parity acceptance, §6 ADR flags

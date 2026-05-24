@@ -1,11 +1,12 @@
 ---
 id: ADR-CC-001
 title: Bless the ChatRuntime port shape — async-generator query + per-phase callback-setter growth
-status: proposed       # proposed | accepted | deprecated | superseded by ADR-NNNN
+status: accepted       # proposed | accepted | deprecated | superseded by ADR-NNNN
 date: 2026-05-24
+accepted: 2026-05-24    # human-blessed (maintainer) at the charter §6a P1 ADR checkpoint
 deciders:
   - architect
-  - maintainer (human)        # PENDING — charter §6a checkpoint
+  - maintainer (human)        # blessed 2026-05-24 (charter §6a checkpoint)
 consulted:
   - pm
   - analyst
