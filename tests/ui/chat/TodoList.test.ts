@@ -1,3 +1,4 @@
+/* eslint-disable no-warning-comments -- the domain noun "todo" (TodoList, TodoItem, renderTodos) trips the 'todo' term scanner; not a deferral marker. */
 /**
  * T-RR-027 (RED) — `TodoList.vue` (TEST-RR-017 A leg, EC-RR-6).
  *

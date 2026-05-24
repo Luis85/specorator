@@ -120,6 +120,34 @@ function todoWriteLabel(input: Record<string, unknown>): string {
 }
 
 /**
+ * Logical icon NAME for a tool's header (parity `getToolIcon`,
+ * `core/tools/toolIcons.ts:75`), mapped to the P2 static icon-name set
+ * (`file`/`terminal`/`search`/`bot`/`wrench` — `iconNodeMap.ts`). Read/Write/Edit
+ * → `file`, Bash → `terminal`, Glob/Grep → `search`, Task/Agent → `bot`,
+ * everything else → `wrench` (the `SpIcon` fallback also covers unknowns). The
+ * IconPort resolves the name to a declarative `IconNode` — this never touches the
+ * DOM (NFR-RR-006). Pure, total.
+ */
+export function toolIcon(name: string): string {
+	switch (name) {
+		case TOOL_READ:
+		case TOOL_WRITE:
+		case TOOL_EDIT:
+			return 'file';
+		case TOOL_BASH:
+			return 'terminal';
+		case TOOL_GLOB:
+		case TOOL_GREP:
+			return 'search';
+		case 'Task':
+		case 'Agent':
+			return 'bot';
+		default:
+			return 'wrench';
+	}
+}
+
+/**
  * Single descriptive phrase for the collapsible region's ARIA accessible name
  * (parity `getToolLabel`, `:119`). Default → `name`.
  */
