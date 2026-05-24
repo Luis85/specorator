@@ -177,3 +177,114 @@ record the GREEN convergence + commit SHA.
 - **Next batch (infra, SPEC-RR-010..013):** T-RR-008 (qa RED — `createIconPort` on the 3 bridges +
   Mock/Fixture rich-chunk scripts) → T-RR-009/010/011. Obsidian backing half is coverage-excluded →
   manual leg of TEST-RR-026 (T-RR-043).
+
+---
+
+## Batch: infra (T-RR-008..011, SPEC-RR-010..013)
+
+### T-RR-008 🧪 — RED: `createIconPort` on the 3 bridges + Mock/Fixture rich-chunk scripts
+
+- **Spec:** TEST-RR-024 (U leg), TEST-RR-026 (U leg), SPEC-RR-012, SPEC-RR-013, REQ-RR-019, NFR-RR-002.
+- **Files (new):** `tests/infrastructure/mock/createIconPort.test.ts` (25 tests — `createIconPort()`
+  on Mock/LocalStorage returns the declarative `IconNode` for the P2 icon set, unknown → `null`,
+  shared map, no DOM/HTML sink); `tests/infrastructure/mock/MockChatRuntime.rr.test.ts` (rich default
+  script — thinking/Read/Write+structuredPatch+3/−1/TodoWrite/subagent/async/usage, ordered, per-chunk
+  yield, still injectable); `tests/infrastructure/localstorage/FixtureChatRuntime.rr.test.ts` (rich
+  transcript — tool call + Write/Edit diff + TodoWrite, usage-before-done).
+- **RED watched:** `createIconPort` → TS2339 (does not exist on `MockBridge`/`LocalStorageBridge`) =
+  compile-failure RED (mirrors T-RR-002); the rich-chunk runtime tests fail at runtime (default
+  scripts still `text…done` only). 34 failed / 4 passed (the 4 are the injectable-override + yield-
+  boundary assertions that already hold for the P1 scripts).
+- **Commit:** `b3d49e9` (RED). Lint fixup `80e825e` — three `as IconNode` casts → `!` assertions to
+  satisfy `@typescript-eslint/non-nullable-type-assertion-style` (full type-aware config); no
+  assertion change.
+- **Outcome:** done (RED established). **Deviation:** none. Depends on T-RR-007 (done).
+
+### T-RR-009 🔨 — `IconPort` impls on the three bridges
+
+- **Spec:** SPEC-RR-012, REQ-RR-019, NFR-RR-002, NFR-RR-006.
+- **Files (new):** `src/infrastructure/icons/iconNodeMap.ts` (static `Map<string,IconNode>` of the P2
+  icon set — `check`/`x`/`shield-off`/`dot`/`wrench`/`file`/`terminal`/`search`/`bot`, lucide-style
+  24×24 stroke SVG DTOs; `lookupIconNode` deep-copies, unknown → `null`);
+  `src/infrastructure/icons/staticIconPort.ts` (shared stateless `IconPort` singleton);
+  `src/infrastructure/obsidian/walkSvgElementToIconNode.ts` (pure DOM→`IconNode` walk, coverage-
+  excluded). **Edited:** `MockBridge.ts` / `LocalStorageBridge.ts` (`createIconPort()` → shared
+  `staticIconPort`); `ObsidianBridge.ts` (`createIconPort()` → `setIcon` into a detached `createDiv()`,
+  `querySelector('svg')` → `walkSvgElementToIconNode`, `detach()` in `finally`; unknown name → no svg
+  → `null`; no sink reaches UI).
+- **Gate:** TEST-RR-024 U leg 25/25; existing bridge tests (Mock/LocalStorage/createChatRuntime) 36/36
+  no regression. `vue-tsc` → 0; per-file `eslint` → 0.
+- **Commit:** `514782f`.
+- **Outcome:** done. Depends on T-RR-008 (done). **Deviation:** none. The Obsidian `setIcon` walk is
+  coverage-excluded infra (`src/infrastructure/obsidian/**`) — its behavioural gate is the manual leg
+  of TEST-RR-026 (T-RR-043).
+
+### T-RR-010 🔨 — Mock/Fixture runtimes emit scripted rich chunks
+
+- **Spec:** SPEC-RR-013, REQ-RR-001, NFR-RR-002, NFR-RR-014.
+- **Files (edited):** `src/infrastructure/mock/MockChatRuntime.ts` (`DEFAULT_SCRIPT` → the rich turn:
+  assistant_message_start → text → thinking → Read use/result → Write use/result (structuredPatch
+  +3/−1) → TodoWrite use/result → subagent use/result → async_subagent_result(completed) → text →
+  usage; `done` appended by the generator; still injectable per test);
+  `src/infrastructure/localstorage/FixtureChatRuntime.ts` (`FIXTURE_TRANSCRIPT` → text → thinking →
+  Edit use/result (structuredPatch) → TodoWrite use/result → usage).
+- **Gate:** TEST-RR-026 U leg green (Mock 9/9 + Fixture 5/5); P1 runtime tests (`MockChatRuntime.test`,
+  `FixtureChatRuntime.test`) still pass (default still contains text + single `done`). Full
+  app/chat + infra suite 183/183. `vue-tsc` → 0; per-file `eslint` → 0.
+- **Commit:** `1032af0`.
+- **Outcome:** done. Depends on T-RR-008 + T-RR-006 (both done). **Deviation:** none. No subprocess /
+  no `node:*` in either runtime; per-chunk yield boundary preserved (NFR-RR-014).
+
+### T-RR-011 🔨 — `MarkdownRenderPort` Obsidian backing + node-model widening
+
+- **Spec:** SPEC-RR-010, SPEC-RR-011, REQ-RR-020a, NFR-RR-006.
+- **Files (edited):** `src/domain/ports/MarkdownRenderPort.ts` (widen `MarkdownInline` +`strong`/`em`,
+  `MarkdownNode` +`heading`/`code_block`/`list`, **additively** — `SafeRenderResult.nodes` field
+  contract UNCHANGED, ADR-RR-001 §3); `src/application/chat/safeMarkdownRender.ts` (return type
+  narrowed to the paragraph-only subset `SafeParagraphRenderResult` so P1 callers/tests read `.spans`
+  unchanged; assignable to the wider `SafeRenderResult`); `src/infrastructure/obsidian/ObsidianBridge.ts`
+  (`createMarkdownRenderPort()` → `MarkdownRenderer.render` into a detached `createDiv()`, walk via
+  `walkMarkdownFragment`, `detach()` in `finally`, degrade to `safeMarkdownRender` on empty/throw);
+  `src/ui/chat/MarkdownBlock.vue` (`kind === 'paragraph'` filter + `v-else-if span.kind === 'text'` —
+  behaviour-preserving); `tests/__fakes__/obsidian.stub.ts` (+`Component`, +`MarkdownRenderer.render`
+  no-op stub). **Files (new):** `src/infrastructure/obsidian/walkMarkdownFragment.ts` (pure fragment→
+  DTO walk, coverage-excluded).
+- **Gate:** every P1 markdown test passes assertions unchanged (`safeMarkdownRender` 19/19,
+  `safeMarkdownRenderPort` 3/3, `createChatRuntime` markdown leg, `MarkdownBlock` 6/6); touched-surface
+  suite 261/261. `vue-tsc` → 0; `npm run lint` → 0 errors (3 pre-existing warnings only). Manual
+  markdown leg of TEST-RR-026 already scheduled in `test-plan.md` (T-RR-043).
+- **Commit:** `56de482`.
+- **Outcome:** done. Depends on T-RR-002 (done). **Deviation (with rationale):** the union widening is
+  blessed by ADR-RR-001 §3 / SPEC-RR-011 (the documented spec §12 watch item). It forced
+  **behaviour-preserving** `kind`-narrows in three P1 consumers/tests that read `node.spans` /
+  `span.value` directly: (a) `MarkdownBlock.vue` filters to `paragraph` nodes + `text`/`code` spans
+  (richer kinds render via SPEC-RR-022 in the UI batch); (b) `safeMarkdownRender.test.ts`,
+  `safeMarkdownRenderPort.test.ts`, `createChatRuntime.test.ts` add a `kind`-filter in their span-
+  flatten helpers. NO test assertion changed — the narrows are compile-only (the pure backing still
+  emits only `paragraph`/`text`/`code`, so runtime output is byte-identical). The
+  `SafeRenderResult.nodes` field name/type contract is unchanged → **no return to ADR-RR-001 required**
+  (matches the spec §12 conclusion). Also noted: `MarkdownRenderer.render` is async while the port is
+  synchronous — the backing kicks it off and walks synchronously, degrading to the pure baseline when
+  the fragment is not yet populated; this is the spec's "degrade to raw markdown, never throw" path
+  realised within the sync contract (gated by the manual TEST-RR-026 leg on real Obsidian).
+
+---
+
+## Batch close-out — infra (T-RR-008..011)
+
+- **Typecheck:** `npx vue-tsc --noEmit -p tsconfig.lint.json` → **0 errors**.
+- **Lint:** `npm run lint` → **0 errors** (3 pre-existing warnings only: `eslint.config.js` max-lines +
+  2 `ErrorBoundary.test.ts` one-component-per-file — unchanged from the domain-foundation batch).
+- **Tests (touched surface):** 261/261 across `tests/application/chat`, `tests/infrastructure`,
+  `tests/ui/chat`, `tests/domain/chat`, `tests/ui/stores`. TEST-RR-024 U leg 25/25; TEST-RR-026 U leg
+  green (Mock + Fixture); every P1 markdown/runtime test green with assertions intact.
+- **Not run (deferred to the T-RR-044 gate):** full `npm run verify` / `build` / `build:web` / coverage.
+- **Manual legs (human-owned, T-RR-043):** the Obsidian `MarkdownRenderer`/`setIcon` production backing
+  (TEST-RR-026 M leg) stays scheduled in `test-plan.md` — never agent-self-claimed.
+- **Not pushed.** `manifest.json` untouched.
+- **Commits:** `b3d49e9` (T-RR-008 RED), `514782f` (T-RR-009), `1032af0` (T-RR-010), `56de482`
+  (T-RR-011), `80e825e` (T-RR-008 lint fixup).
+- **Next batch (application, SPEC-RR-014..019):** **FIRST TASK = T-RR-012** (qa RED — `toolPresentation`
+  pure transform: `toolName`/`toolSummary`/`toolLabel`, TEST-RR-014), greened by T-RR-013, then
+  T-RR-014..021 (`computeDiff`, `renderTodos`, `resolveSubagentLifecycle`, `dispatchChunk` P2 handlers +
+  the new `ChatTurnSink` legs). All application transforms are pure/total and fully unit-testable.

@@ -4,7 +4,7 @@ area: RR
 current_stage: implementation
 status: active
 last_updated: 2026-05-24
-last_agent: dev (implement — domain-foundation batch)
+last_agent: dev (implement — infra batch)
 epic: claudian-reboot
 phase: P2
 integration_branch: next
@@ -17,7 +17,7 @@ artifacts:
   ADR-RR-001: accepted (docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md — human-blessed 2026-05-24)
   spec.md: complete (SPEC-RR-001..034; extends SPEC-CC-* P1 contract; 27 TEST-RR scenarios)
   tasks.md: complete (TASKS-RR-001; 44 tasks T-RR-001..044; full SPEC/REQ/NFR/TEST coverage table)
-  implementation-log.md: in-progress (domain-foundation batch done: T-RR-001..007, 039; infra/app/ui/wire-in/gate batches remain)
+  implementation-log.md: in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 done; application/ui/wire-in/gate batches remain)
   test-plan.md: in-progress (TESTPLAN-RR-001; baseline reference + manual TEST-RR-026 / T-RR-043 legs scheduled)
   test-report.md: pending
   review.md: pending
@@ -43,7 +43,7 @@ artifacts:
 | 4. Design | `design.md` | complete (Parts A/B/C; ADR-RR-001 accepted — human-blessed 2026-05-24) |
 | 5. Specification | `spec.md` | complete (SPEC-RR-001..034; 27 TEST-RR) |
 | 6. Tasks | `tasks.md` | complete (TASKS-RR-001; T-RR-001..044) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation batch T-RR-001..007, 039 done; infra/app/ui/wire-in/gate remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 done; application/ui/wire-in/gate remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -306,6 +306,48 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
                           rich chunks) + T-RR-011 (MarkdownRenderPort Obsidian backing + node-model widening).
                           The Obsidian backing half is coverage-excluded → manual leg of TEST-RR-026 (T-RR-043,
                           human-owned, recorded in test-plan.md). T-RR-008 depends on T-RR-007 (done).
+2026-05-24 (dev, implement — infra batch): Executed the INFRA batch (SPEC-RR-010..013) on
+                          feature/rich-rendering with strict TDD, one Conventional commit per task.
+                          COMPLETED (in order): T-RR-008 RED — createIconPort on Mock/LocalStorage +
+                          Mock/Fixture rich-chunk scripts (3 new test files, 25+9+5 assertions),
+                          watched fail for the right reason (createIconPort TS2339 compile-failure +
+                          runtime script-still-text…done) (b3d49e9; lint fixup 80e825e); T-RR-009
+                          IconPort impls — shared static name→IconNode Map (iconNodeMap.ts +
+                          staticIconPort.ts) on Mock+LocalStorage, ObsidianBridge setIcon→detached
+                          element→walkSvgElementToIconNode→discard (no UI sink, NFR-RR-006); TEST-RR-024
+                          U leg 25/25 (514782f); T-RR-010 Mock DEFAULT_SCRIPT + Fixture FIXTURE_TRANSCRIPT
+                          emit the rich turn (thinking/Read/Write+structuredPatch+3-1/TodoWrite/subagent/
+                          async/usage), per-chunk yield + single done preserved, still injectable;
+                          TEST-RR-026 U leg green (1032af0); T-RR-011 MarkdownNode/MarkdownInline widened
+                          additively (heading/code_block/list + strong/em), SafeRenderResult.nodes field
+                          contract UNCHANGED; ObsidianBridge.createMarkdownRenderPort()→MarkdownRenderer.
+                          render into detached element→walkMarkdownFragment→DTO, degrade to
+                          safeMarkdownRender (sync/total/never-throws), Mock/LocalStorage keep the pure
+                          backing (56de482).
+                          BATCH-END STATE: vue-tsc -p tsconfig.lint.json → 0 errors; npm run lint → 0
+                          errors (3 pre-existing warnings only — eslint.config.js max-lines + 2
+                          ErrorBoundary one-component-per-file); touched-surface tests 261/261
+                          (tests/application/chat + tests/infrastructure + tests/ui/chat +
+                          tests/domain/chat + tests/ui/stores). DEVIATIONS (both within ADR-RR-001, no
+                          ADR return): (1) the union widening forced behaviour-preserving kind-narrows in
+                          three P1 consumers/tests that read node.spans/span.value directly
+                          (MarkdownBlock.vue paragraph+text/code filter; safeMarkdownRender/
+                          safeMarkdownRenderPort/createChatRuntime test span-flatten helpers) — NO test
+                          assertion changed, compile-only, the pure backing output is byte-identical
+                          (this is the documented spec §12 watch item; SafeRenderResult.nodes contract
+                          intact). (2) MarkdownRenderer.render is async vs the synchronous port — the
+                          backing kicks it off + walks synchronously, degrading to the pure baseline when
+                          the fragment is not yet populated (the spec's degrade-never-throw path within
+                          the sync contract; the real-Obsidian behaviour is gated by the manual
+                          TEST-RR-026 leg). NOT pushed; manifest.json untouched; full verify/build/
+                          build:web/coverage deferred to the T-RR-044 gate. MANUAL legs (T-RR-043,
+                          human-owned) for the Obsidian MarkdownRenderer/setIcon backing stay scheduled
+                          in test-plan.md — never self-claimed. NEXT BATCH (application, SPEC-RR-014..019):
+                          FIRST TASK = T-RR-012 (qa RED — toolPresentation pure transform: toolName/
+                          toolSummary/toolLabel, TEST-RR-014), greened by T-RR-013, then T-RR-014..021
+                          (computeDiff, renderTodos, resolveSubagentLifecycle, dispatchChunk P2 handlers +
+                          the new ChatTurnSink legs). All four transforms are pure/total + fully
+                          unit-testable, no mount.
 ```
 
 ## Open clarifications

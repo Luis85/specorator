@@ -230,11 +230,11 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-007
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/infrastructure/mock/createIconPort.test.ts`,
+  - [x] `tests/infrastructure/mock/createIconPort.test.ts`,
         `tests/infrastructure/mock/MockChatRuntime.rr.test.ts`,
         `tests/infrastructure/localstorage/FixtureChatRuntime.rr.test.ts` exist, naming
         TEST-RR-024 / 026.
-  - [ ] Tests fail (RED) — `createIconPort()` and the rich-chunk scripts do not yet exist.
+  - [x] Tests fail (RED) — `createIconPort()` and the rich-chunk scripts do not yet exist.
 
 ### T-RR-009 🔨 — `IconPort` impls on the three bridges (static map + Obsidian walk) 🪓
 
@@ -254,10 +254,10 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Slice plan:** may slice as (a) Mock+LocalStorage static map (CI-greens TEST-RR-024 U leg), then
   (b) ObsidianBridge walk (coverage-excluded, lands with the manual leg).
 - **Definition of done:**
-  - [ ] TEST-RR-024 (icon U leg) passes; unknown name → `null`; map is declarative `IconNode` only.
-  - [ ] The Obsidian walk reads tag/attrs/children as data and discards the detached element — **no
+  - [x] TEST-RR-024 (icon U leg) passes; unknown name → `null`; map is declarative `IconNode` only.
+  - [x] The Obsidian walk reads tag/attrs/children as data and discards the detached element — **no
         `innerHTML`/`outerHTML`/`setIcon`-into-UI sink** (NFR-RR-006 verified by source review + lint).
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-RR-010 🔨 — Mock/Fixture runtimes emit scripted rich chunks
 
@@ -271,9 +271,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-008, T-RR-006
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] TEST-RR-026 (bridge U leg) passes; the scripted/fixture chunks reach the new sink legs.
-  - [ ] Per-chunk yield boundary observable per tick; no `node:*`/subprocess in either runtime.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] TEST-RR-026 (bridge U leg) passes; the scripted/fixture chunks reach the new sink legs.
+  - [x] Per-chunk yield boundary observable per tick; no `node:*`/subprocess in either runtime.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-RR-011 🔨 — `MarkdownRenderPort` Obsidian backing + `MarkdownNode`/`MarkdownInline` union widening 🪓
 
@@ -299,11 +299,13 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Slice plan:** may slice as (a) `MarkdownNode`/`MarkdownInline` union widening (domain, type/lint
   gate), then (b) ObsidianBridge backing swap (coverage-excluded, manual leg).
 - **Definition of done:**
-  - [ ] `MarkdownNode`/`MarkdownInline` widen additively; `SafeRenderResult.nodes` field contract
-        unchanged; Mock/LocalStorage backings + every P1 markdown test untouched.
-  - [ ] The Obsidian backing walks the detached fragment → DTO in the bridge; **no
+  - [x] `MarkdownNode`/`MarkdownInline` widen additively; `SafeRenderResult.nodes` field contract
+        unchanged; Mock/LocalStorage backings keep the pure `safeMarkdownRender`; P1 markdown tests
+        keep their assertions (a behaviour-preserving `kind`-narrow was added to compile under the
+        widened union — see implementation-log deviation).
+  - [x] The Obsidian backing walks the detached fragment → DTO in the bridge; **no
         `innerHTML`/`v-html`/DOM element reaches the UI** (NFR-RR-006, source review + lint).
-  - [ ] `npm run typecheck` + `npm run lint` green; implementation-log entry added; the manual
+  - [x] `npm run typecheck` + `npm run lint` green; implementation-log entry added; the manual
         markdown leg of TEST-RR-026 is scheduled in `test-plan.md`.
 
 ---
