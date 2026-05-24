@@ -352,6 +352,195 @@ describe('ClaudeStreamReducer — P2 rich chunks from the real stream (SPEC-RR-0
 });
 
 /**
+ * R-RR-001 (P1 blocker) — the real-CLI reducer must also emit the P2 subagent /
+ * async / compaction / notice members, mirroring claudian
+ * `transformClaudeMessage.ts`. These are derived from the real
+ * `--output-format stream-json` wire fields:
+ *   - `parent_tool_use_id` (non-null) on an `assistant`/`user` message routes its
+ *     `tool_use`/`tool_result` to `subagent_tool_use`/`subagent_tool_result`
+ *     (`emitToolUse`/`emitToolResult` :23/:30); null/absent → top-level (current);
+ *   - `system/subtype:'compact_boundary'` → `{type:'context_compacted'}` (:385);
+ *   - `system/subtype:'task_notification'` (`task_id`/`status`/`summary`) →
+ *     `{type:'async_subagent_result', agentId, status, result}` (:48/:387);
+ *   - a blocked/denied `user` message (`isBlockedMessage`, :446) →
+ *     `{type:'notice', content, level:'warning'}`.
+ *
+ * Traces: SPEC-RR-001, SPEC-RR-010, REQ-RR-006, REQ-RR-021a, CLAR-RR-010.
+ */
+describe('ClaudeStreamReducer — R-RR-001 subagent/async/compaction/notice parity', () => {
+	it('routes a tool_use under a non-null parent_tool_use_id to subagent_tool_use', () => {
+		const reducer = new ClaudeStreamReducer();
+		const chunks = reducer.consumeLine(
+			JSON.stringify({
+				type: 'assistant',
+				parent_tool_use_id: 'task-parent-1',
+				message: {
+					content: [
+						{ type: 'tool_use', id: 'nested-1', name: 'Read', input: { file_path: '/x.ts' } },
+					],
+				},
+			}),
+		);
+		expect(chunks).toContainEqual({
+			type: 'subagent_tool_use',
+			subagentId: 'task-parent-1',
+			id: 'nested-1',
+			name: 'Read',
+			input: { file_path: '/x.ts' },
+		});
+		// It must NOT also emit the top-level tool_use member.
+		expect(chunks.some((c) => c.type === 'tool_use')).toBe(false);
+	});
+
+	it('routes a tool_result under a non-null parent_tool_use_id to subagent_tool_result', () => {
+		const reducer = new ClaudeStreamReducer();
+		const chunks = reducer.consumeLine(
+			JSON.stringify({
+				type: 'user',
+				parent_tool_use_id: 'task-parent-1',
+				message: {
+					content: [{ type: 'tool_result', tool_use_id: 'nested-1', content: 'nested out' }],
+				},
+			}),
+		);
+		expect(chunks).toContainEqual({
+			type: 'subagent_tool_result',
+			subagentId: 'task-parent-1',
+			id: 'nested-1',
+			content: 'nested out',
+			isError: false,
+		});
+		expect(chunks.some((c) => c.type === 'tool_result')).toBe(false);
+	});
+
+	it('carries the structured toolUseResult onto a subagent_tool_result', () => {
+		const reducer = new ClaudeStreamReducer();
+		const structured = {
+			filePath: '/n.ts',
+			structuredPatch: [{ oldStart: 1, oldLines: 0, newStart: 1, newLines: 1, lines: ['+a'] }],
+		};
+		const chunks = reducer.consumeLine(
+			JSON.stringify({
+				type: 'user',
+				parent_tool_use_id: 'task-parent-2',
+				message: {
+					content: [{ type: 'tool_result', tool_use_id: 'nested-2', content: 'ok' }],
+				},
+				toolUseResult: structured,
+			}),
+		);
+		const result = chunks.find(
+			(c): c is Extract<StreamChunk, { type: 'subagent_tool_result' }> =>
+				c.type === 'subagent_tool_result',
+		);
+		expect(result?.toolUseResult).toEqual(structured);
+	});
+
+	it('keeps a null parent_tool_use_id on the top-level tool_use path (no regression)', () => {
+		const reducer = new ClaudeStreamReducer();
+		const chunks = reducer.consumeLine(
+			JSON.stringify({
+				type: 'assistant',
+				parent_tool_use_id: null,
+				message: {
+					content: [{ type: 'tool_use', id: 't1', name: 'Read', input: { file_path: '/a.ts' } }],
+				},
+			}),
+		);
+		expect(chunks).toContainEqual({
+			type: 'tool_use',
+			id: 't1',
+			name: 'Read',
+			input: { file_path: '/a.ts' },
+		});
+		expect(chunks.some((c) => c.type === 'subagent_tool_use')).toBe(false);
+	});
+
+	it('maps system/compact_boundary to a context_compacted chunk', () => {
+		const reducer = new ClaudeStreamReducer();
+		const chunks = reducer.consumeLine(
+			JSON.stringify({ type: 'system', subtype: 'compact_boundary' }),
+		);
+		expect(chunks).toEqual([{ type: 'context_compacted' }]);
+	});
+
+	it('maps system/task_notification (completed) to an async_subagent_result chunk', () => {
+		const reducer = new ClaudeStreamReducer();
+		const chunks = reducer.consumeLine(
+			JSON.stringify({
+				type: 'system',
+				subtype: 'task_notification',
+				task_id: 'agent-7',
+				status: 'completed',
+				summary: 'Did the thing.',
+			}),
+		);
+		expect(chunks).toEqual([
+			{ type: 'async_subagent_result', agentId: 'agent-7', status: 'completed', result: 'Did the thing.' },
+		]);
+	});
+
+	it('normalises a non-completed task_notification status to error with a fallback result', () => {
+		const reducer = new ClaudeStreamReducer();
+		const chunks = reducer.consumeLine(
+			JSON.stringify({
+				type: 'system',
+				subtype: 'task_notification',
+				task_id: 'agent-8',
+				status: 'failed',
+			}),
+		);
+		const async = chunks.find(
+			(c): c is Extract<StreamChunk, { type: 'async_subagent_result' }> =>
+				c.type === 'async_subagent_result',
+		);
+		expect(async?.status).toBe('error');
+		expect(async?.agentId).toBe('agent-8');
+		expect(typeof async?.result).toBe('string');
+		expect((async?.result ?? '').length).toBeGreaterThan(0);
+	});
+
+	it('ignores a task_notification with no task_id (no chunk, never throws)', () => {
+		const reducer = new ClaudeStreamReducer();
+		const chunks = reducer.consumeLine(
+			JSON.stringify({ type: 'system', subtype: 'task_notification', status: 'completed' }),
+		);
+		expect(chunks).toEqual([]);
+	});
+
+	it('emits a warning notice for a blocked/denied user message (isBlockedMessage parity)', () => {
+		const reducer = new ClaudeStreamReducer();
+		const chunks = reducer.consumeLine(
+			JSON.stringify({
+				type: 'user',
+				_blocked: true,
+				_blockReason: 'Tool use blocked: outside the vault.',
+				message: { content: [] },
+			}),
+		);
+		expect(chunks).toEqual([
+			{ type: 'notice', content: 'Tool use blocked: outside the vault.', level: 'warning' },
+		]);
+	});
+
+	it('does not emit a tool_result when a blocked user message also carries a result block', () => {
+		const reducer = new ClaudeStreamReducer();
+		const chunks = reducer.consumeLine(
+			JSON.stringify({
+				type: 'user',
+				_blocked: true,
+				_blockReason: 'user denied',
+				message: {
+					content: [{ type: 'tool_result', tool_use_id: 'x', content: 'should be skipped' }],
+				},
+			}),
+		);
+		// claudian breaks out after the notice (:452) — the result block is not emitted.
+		expect(chunks).toEqual([{ type: 'notice', content: 'user denied', level: 'warning' }]);
+	});
+});
+
+/**
  * Terminal guarantee (Codex review #433, EC-13): the CLI line stream can end
  * without ever emitting a `result` event (early exit, stderr-only). `query()`
  * must still yield a terminal `done` so the consumer leaves the `streaming`

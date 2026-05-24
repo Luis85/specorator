@@ -13,6 +13,9 @@ import type { ToolUseResult } from '@/domain/chat/diff/ToolUseResult';
  *
  * Reduce rules:
  *   - `system` / `subtype:'init'` → capture `session_id` (no chunk);
+ *   - `system` / `subtype:'compact_boundary'` → `context_compacted` (R-RR-001);
+ *   - `system` / `subtype:'task_notification'` (`task_id`/`status`/`summary`) →
+ *     `async_subagent_result` (R-RR-001);
  *   - `assistant` message content blocks → optional `assistant_message_start`
  *     (at most once, before the first text), then, in arrival order: a `text`
  *     chunk per text block (accumulate — there is no `text-delta` member,
@@ -21,15 +24,32 @@ import type { ToolUseResult } from '@/domain/chat/diff/ToolUseResult';
  *   - `user` message content blocks → a `tool_result` chunk per tool_result
  *     block, with the structured `toolUseResult` (Write/Edit `structuredPatch`)
  *     attached when the event carries one (SPEC-RR-001/010);
+ *   - a blocked/denied `user` message → a warning `notice` (R-RR-001);
+ *   - a non-null `parent_tool_use_id` on an `assistant`/`user` message routes its
+ *     `tool_use`/`tool_result` to `subagent_tool_use`/`subagent_tool_result`
+ *     (R-RR-001); null/absent → the top-level members (current behaviour);
  *   - `result` (final) → optional `usage` (with captured sessionId), then a
  *     single `done`; an error result (`is_error` / error subtype) → an `error`
  *     chunk then `done`;
  *   - a non-JSON / unparseable line → a friendly `error` chunk (never throws);
  *   - a blank line → no chunk.
  *
- * P2 wire-format parity is mirrored from claudian `transformClaudeMessage.ts`
- * (assistant `tool_use`/`thinking`, user `tool_result`) and its
- * `extractToolResultContent` helper. The reduce stays pure, total, never-throws.
+ * P2 wire-format parity is mirrored from claudian `transformClaudeMessage.ts`:
+ * assistant `tool_use`/`thinking`, user `tool_result`, `extractToolResultContent`,
+ * `emitToolUse`/`emitToolResult` (subagent routing via `parent_tool_use_id`,
+ * :23/:30), `transformTaskNotification` (:48), `system/compact_boundary` (:385),
+ * and `isBlockedMessage` (:446). The reduce stays pure, total, never-throws.
+ *
+ * Wire-format caveat (CLAR-RR-010): `parent_tool_use_id`, `compact_boundary`, and
+ * `task_notification` ARE carried by the real `--output-format stream-json` wire
+ * (they are part of the public SDK message envelope the CLI emits verbatim, and
+ * are read back from the persisted JSONL by claudian `sdkMessageParsing.ts`). The
+ * blocked-message `_blocked`/`_blockReason` underscore fields are SDK-internal —
+ * claudian injects them in its permission-hook path; they are NOT on the raw CLI
+ * stream-json wire. This reducer mirrors that shape faithfully (forward-compatible
+ * if a wrapper injects it), but the user-visible blocked rendering on the real CLI
+ * path is delivered by the `blocked` tool status (R-RR-008, `isBlockedToolResult`
+ * in the store), since the CLI surfaces a hook denial as `tool_result` text.
  */
 export class ClaudeStreamReducer {
 	private _sessionId: string | null = null;
@@ -100,10 +120,24 @@ export class ClaudeStreamReducer {
 		return this.synthesizeError('the Claude CLI stream ended without completing the turn.');
 	}
 
+	/**
+	 * Reduce a `system` event: `init` captures the session id (no chunk);
+	 * `compact_boundary` → `context_compacted` (claudian :385); `task_notification`
+	 * → `async_subagent_result` (claudian `transformTaskNotification` :48). Any
+	 * other subtype yields no chunk (forward-compatible).
+	 */
 	private _reduceSystem(event: Record<string, unknown>): StreamChunk[] {
 		if (event.subtype === 'init') {
 			const sid = event.session_id;
 			if (typeof sid === 'string' && sid.length > 0) this._sessionId = sid;
+			return [];
+		}
+		if (event.subtype === 'compact_boundary') {
+			return [{ type: 'context_compacted' }];
+		}
+		if (event.subtype === 'task_notification') {
+			const notification = transformTaskNotification(event);
+			return notification !== null ? [notification] : [];
 		}
 		return [];
 	}
@@ -114,10 +148,17 @@ export class ClaudeStreamReducer {
 		const content = (message as Record<string, unknown>).content;
 		if (!Array.isArray(content)) return [];
 
+		// Subagent routing (claudian :396): a non-null parent id sends this turn's
+		// tool_use blocks to `subagent_tool_use`. The id may ride the event top-level
+		// or the inner message envelope.
+		const parentToolUseId = parentToolUseIdOf(event, message as Record<string, unknown>);
+
 		const chunks: StreamChunk[] = [];
 		for (const block of content) {
 			if (block === null || typeof block !== 'object') continue;
-			chunks.push(...this._reduceAssistantBlock(block as Record<string, unknown>));
+			chunks.push(
+				...this._reduceAssistantBlock(block as Record<string, unknown>, parentToolUseId),
+			);
 		}
 		return chunks;
 	}
@@ -125,33 +166,46 @@ export class ClaudeStreamReducer {
 	/**
 	 * Map one assistant content block to zero-or-more chunks, preserving order:
 	 * `text` → optional one-time `assistant_message_start` then `text`; `tool_use`
-	 * → `tool_use` (input coerced to an object); `thinking`/`redacted_thinking` →
-	 * `thinking` (SPEC-RR-001). Any other block kind → none.
+	 * → `tool_use` OR (when `parentToolUseId` is non-null) `subagent_tool_use`
+	 * (input coerced to an object); `thinking`/`redacted_thinking` → `thinking`
+	 * (SPEC-RR-001). Any other block kind → none. A subagent's own `text`/`thinking`
+	 * is dropped (claudian :406/:409 emit those only at the top level) — only its
+	 * tool activity surfaces (rendered nested under the spawning subagent).
 	 */
-	private _reduceAssistantBlock(b: Record<string, unknown>): StreamChunk[] {
-		if (b.type === 'text' && typeof b.text === 'string') {
-			const chunks: StreamChunk[] = [];
-			if (!this._assistantStarted) {
-				this._assistantStarted = true;
-				chunks.push({ type: 'assistant_message_start' });
-			}
-			chunks.push({ type: 'text', content: b.text });
-			return chunks;
-		}
+	private _reduceAssistantBlock(
+		b: Record<string, unknown>,
+		parentToolUseId: string | null,
+	): StreamChunk[] {
 		if (b.type === 'tool_use') {
 			return [
-				{
-					type: 'tool_use',
+				emitToolUse(parentToolUseId, {
 					id: typeof b.id === 'string' ? b.id : '',
 					name: typeof b.name === 'string' ? b.name : '',
 					input: toInputObject(b.input),
-				},
+				}),
 			];
+		}
+		// Subagent text/thinking is dropped (claudian :406/:409 emit them only at the
+		// top level) — only its tool activity surfaces, nested under the spawn.
+		if (parentToolUseId !== null) return [];
+		if (b.type === 'text' && typeof b.text === 'string') {
+			return this._reduceTextBlock(b.text);
 		}
 		if (b.type === 'thinking' || b.type === 'redacted_thinking') {
 			return [{ type: 'thinking', content: typeof b.thinking === 'string' ? b.thinking : '' }];
 		}
 		return [];
+	}
+
+	/** Emit a top-level text block, prefixed by the one-time `assistant_message_start`. */
+	private _reduceTextBlock(text: string): StreamChunk[] {
+		const chunks: StreamChunk[] = [];
+		if (!this._assistantStarted) {
+			this._assistantStarted = true;
+			chunks.push({ type: 'assistant_message_start' });
+		}
+		chunks.push({ type: 'text', content: text });
+		return chunks;
 	}
 
 	/**
@@ -161,28 +215,31 @@ export class ClaudeStreamReducer {
 	 * blocks — both are flattened to the displayable text (mirrors claudian
 	 * `extractToolResultContent`). The structured `toolUseResult` (e.g. a Write/Edit
 	 * `structuredPatch`) rides the event top-level and is attached when present.
+	 *
+	 * Two parity branches (R-RR-001): a blocked/denied message (claudian
+	 * `isBlockedMessage` :446) short-circuits to a single warning `notice`; a
+	 * non-null `parent_tool_use_id` routes each result to `subagent_tool_result`
+	 * (claudian `emitToolResult` :30).
 	 */
 	private _reduceUser(event: Record<string, unknown>): StreamChunk[] {
+		// Blocked/denied (hook-deny) message → notice, then stop (claudian :446-452).
+		if (isBlockedMessage(event)) {
+			return [{ type: 'notice', content: event._blockReason, level: 'warning' }];
+		}
+
 		const message = event.message;
 		if (message === null || typeof message !== 'object') return [];
 		const content = (message as Record<string, unknown>).content;
 		if (!Array.isArray(content)) return [];
 
+		const parentToolUseId = parentToolUseIdOf(event, message as Record<string, unknown>);
 		const structured = toToolUseResult(event.toolUseResult);
 
 		const chunks: StreamChunk[] = [];
 		for (const block of content) {
 			if (block === null || typeof block !== 'object') continue;
-			const b = block as Record<string, unknown>;
-			if (b.type !== 'tool_result') continue;
-			const chunk: Extract<StreamChunk, { type: 'tool_result' }> = {
-				type: 'tool_result',
-				id: typeof b.tool_use_id === 'string' ? b.tool_use_id : '',
-				content: extractToolResultContent(b.content),
-				isError: b.is_error === true,
-			};
-			if (structured !== undefined) chunk.toolUseResult = structured;
-			chunks.push(chunk);
+			const chunk = reduceToolResultBlock(block as Record<string, unknown>, parentToolUseId, structured);
+			if (chunk !== null) chunks.push(chunk);
 		}
 		return chunks;
 	}
@@ -237,6 +294,120 @@ export class ClaudeStreamReducer {
 			percentage: 0,
 		};
 	}
+}
+
+/** Fields shared by `tool_use`/`subagent_tool_use` emission (claudian `ToolUseFields`). */
+interface ToolUseFields {
+	id: string;
+	name: string;
+	input: Record<string, unknown>;
+}
+/** Fields shared by `tool_result`/`subagent_tool_result` emission. */
+interface ToolResultFields {
+	id: string;
+	content: string;
+	isError?: boolean;
+	toolUseResult?: ToolUseResult;
+}
+type AsyncSubagentResultStatus = Extract<StreamChunk, { type: 'async_subagent_result' }>['status'];
+
+/**
+ * Read a non-null `parent_tool_use_id` from the event or its inner message
+ * envelope (claudian reads `message.parent_tool_use_id` :396/:443). Returns the id
+ * string when present + non-empty, else `null` (top-level routing).
+ */
+function parentToolUseIdOf(
+	event: Record<string, unknown>,
+	message: Record<string, unknown>,
+): string | null {
+	const fromEvent = event.parent_tool_use_id;
+	if (typeof fromEvent === 'string' && fromEvent.length > 0) return fromEvent;
+	const fromMessage = message.parent_tool_use_id;
+	if (typeof fromMessage === 'string' && fromMessage.length > 0) return fromMessage;
+	return null;
+}
+
+/**
+ * Emit a top-level `tool_use` or, under a non-null parent, a `subagent_tool_use`
+ * (claudian `emitToolUse` :23).
+ */
+function emitToolUse(parentToolUseId: string | null, fields: ToolUseFields): StreamChunk {
+	if (parentToolUseId === null) return { type: 'tool_use', ...fields };
+	return { type: 'subagent_tool_use', subagentId: parentToolUseId, ...fields };
+}
+
+/**
+ * Emit a top-level `tool_result` or, under a non-null parent, a
+ * `subagent_tool_result` (claudian `emitToolResult` :30).
+ */
+function emitToolResult(parentToolUseId: string | null, fields: ToolResultFields): StreamChunk {
+	if (parentToolUseId === null) return { type: 'tool_result', ...fields };
+	return { type: 'subagent_tool_result', subagentId: parentToolUseId, ...fields };
+}
+
+/**
+ * Map one `user` content block to a (subagent-)`tool_result` chunk, or `null`
+ * when the block is not a `tool_result`. The structured `toolUseResult` (when the
+ * event carried one) is attached. Routes via `emitToolResult` so a non-null parent
+ * yields `subagent_tool_result`.
+ */
+function reduceToolResultBlock(
+	b: Record<string, unknown>,
+	parentToolUseId: string | null,
+	structured: ToolUseResult | undefined,
+): StreamChunk | null {
+	if (b.type !== 'tool_result') return null;
+	return emitToolResult(parentToolUseId, {
+		id: typeof b.tool_use_id === 'string' ? b.tool_use_id : '',
+		content: extractToolResultContent(b.content),
+		isError: b.is_error === true,
+		...(structured !== undefined ? { toolUseResult: structured } : {}),
+	});
+}
+
+/** Normalise a `task_notification.status` to the two-state union (claudian :37). */
+function normalizeTaskNotificationStatus(status: unknown): AsyncSubagentResultStatus {
+	return status === 'completed' ? 'completed' : 'error';
+}
+
+/** Choose the result text, falling back to a status-appropriate phrase (claudian :41). */
+function normalizeTaskNotificationResult(status: AsyncSubagentResultStatus, summary: unknown): string {
+	if (typeof summary === 'string' && summary.trim().length > 0) return summary.trim();
+	return status === 'completed' ? 'Background task completed.' : 'Background task failed.';
+}
+
+/**
+ * Map a `system/task_notification` event to an `async_subagent_result` chunk
+ * (claudian `transformTaskNotification` :48). Requires a non-empty `task_id`;
+ * returns `null` when absent so the caller emits no chunk.
+ */
+function transformTaskNotification(event: Record<string, unknown>): StreamChunk | null {
+	const taskId = event.task_id;
+	if (typeof taskId !== 'string' || taskId.length === 0) return null;
+	const status = normalizeTaskNotificationStatus(event.status);
+	return {
+		type: 'async_subagent_result',
+		agentId: taskId,
+		status,
+		result: normalizeTaskNotificationResult(status, event.summary),
+	};
+}
+
+/** A blocked/denied user message (claudian `isBlockedMessage`, sdk/messages.ts:10). */
+type BlockedUserMessage = Record<string, unknown> & { _blocked: true; _blockReason: string };
+
+/**
+ * Recognise a blocked/denied user message (claudian `isBlockedMessage` :10): a
+ * `user` event carrying the SDK-injected `_blocked === true` + a string
+ * `_blockReason`. See the CLAR-RR-010 caveat in the class doc — these underscore
+ * fields are SDK-internal, so on the raw CLI wire this branch is dormant and the
+ * blocked signal arrives instead through `tool_result` text (R-RR-008).
+ */
+function isBlockedMessage(event: Record<string, unknown>): event is BlockedUserMessage {
+	return (
+		event._blocked === true &&
+		typeof event._blockReason === 'string'
+	);
 }
 
 /**
