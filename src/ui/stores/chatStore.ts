@@ -186,7 +186,15 @@ export const useChatStore = defineStore('chat', {
 			deps.get(this)?.notifyStartFailure(error.message);
 		},
 
-		/** The `ChatTurnSink` the use case drives — bound to this store's actions. */
+		/**
+		 * The `ChatTurnSink` the use case drives — bound to this store's actions.
+		 *
+		 * The P1 legs are wired below. The P2 legs (SPEC-RR-019) were added to the `ChatTurnSink`
+		 * interface in T-RR-021 (application batch); their concrete store behaviour — block/tool/
+		 * subagent state mutation (SPEC-RR-020) — is owned by T-RR-023 in the UI batch. Until then
+		 * they are inert no-ops so the grown interface type-checks; the T-RR-022 RED tests drive the
+		 * real behaviour against them.
+		 */
 		_sink(): ChatTurnSink {
 			return {
 				onAssistantStart: () => {
@@ -204,6 +212,16 @@ export const useChatStore = defineStore('chat', {
 				onDone: () => {
 					this.onDone();
 				},
+				// ---- P2 legs: pending T-RR-023 (UI batch, SPEC-RR-020) ----
+				onToolUse: () => undefined,
+				onToolResult: () => undefined,
+				onToolOutput: () => undefined,
+				onThinking: () => undefined,
+				onSubagentToolUse: () => undefined,
+				onSubagentToolResult: () => undefined,
+				onAsyncSubagentResult: () => undefined,
+				onContextCompacted: () => undefined,
+				onNotice: () => undefined,
 			};
 		},
 	},
