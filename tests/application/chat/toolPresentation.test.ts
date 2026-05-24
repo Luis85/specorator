@@ -46,6 +46,14 @@ describe('toolPresentation — toolName (TEST-RR-014)', () => {
 		expect(toolName('TodoWrite', input)).toBe('Tasks 2/2');
 	});
 
+	it('EnterPlanMode -> "Entering plan mode" (R-RR-005, ToolCallRenderer.ts:70)', () => {
+		expect(toolName('EnterPlanMode', {})).toBe('Entering plan mode');
+	});
+
+	it('ExitPlanMode -> "Plan complete" (R-RR-005, ToolCallRenderer.ts:72)', () => {
+		expect(toolName('ExitPlanMode', {})).toBe('Plan complete');
+	});
+
 	it('default tool -> name verbatim', () => {
 		expect(toolName('Read', { file_path: '/x/y.ts' })).toBe('Read');
 		expect(toolName('SomethingNew', {})).toBe('SomethingNew');
@@ -79,6 +87,38 @@ describe('toolPresentation — toolSummary (TEST-RR-014)', () => {
 
 	it('TodoWrite -> "" (header carries the count)', () => {
 		expect(toolSummary('TodoWrite', { todos: [] })).toBe('');
+	});
+
+	it('WebFetch -> url truncated to <= 60 (R-RR-005, ToolCallRenderer.ts:96)', () => {
+		expect(toolSummary('WebFetch', { url: 'https://example.com/page' })).toBe(
+			'https://example.com/page',
+		);
+		const long = 'https://example.com/' + 'p'.repeat(80);
+		const out = toolSummary('WebFetch', { url: long });
+		expect(out.length).toBe(63);
+		expect(out.endsWith('...')).toBe(true);
+	});
+
+	it('WebSearch (search action) -> the query (R-RR-005, ToolCallRenderer.ts:94)', () => {
+		expect(toolSummary('WebSearch', { query: 'vue 3 reactivity' })).toBe('vue 3 reactivity');
+		// Falls back to queries[0] when no explicit query.
+		expect(toolSummary('WebSearch', { queries: ['first term', 'second'] })).toBe('first term');
+	});
+
+	it('WebSearch (open_page action) -> "Open <url>"', () => {
+		expect(toolSummary('WebSearch', { url: 'https://docs.example.com' })).toBe(
+			'Open https://docs.example.com',
+		);
+	});
+
+	it('WebSearch (find_in_page action) -> "Find ... in <url>"', () => {
+		expect(toolSummary('WebSearch', { url: 'https://x.com', pattern: 'token' })).toBe(
+			'Find "token" in https://x.com',
+		);
+	});
+
+	it('WebSearch with no usable input degrades to "" (never throws)', () => {
+		expect(toolSummary('WebSearch', {})).toBe('');
 	});
 
 	it('default tool -> ""', () => {

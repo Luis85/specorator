@@ -21,6 +21,10 @@ const TOOL_GLOB = 'Glob';
 const TOOL_GREP = 'Grep';
 const TOOL_LS = 'LS';
 const TOOL_TODO_WRITE = 'TodoWrite';
+const TOOL_WEB_SEARCH = 'WebSearch';
+const TOOL_WEB_FETCH = 'WebFetch';
+const TOOL_ENTER_PLAN_MODE = 'EnterPlanMode';
+const TOOL_EXIT_PLAN_MODE = 'ExitPlanMode';
 
 /**
  * Read a string field, degrading any non-string (or empty string) to `fallback`
@@ -56,6 +60,56 @@ function truncate(text: string, maxLength: number): string {
 	return text.substring(0, maxLength) + '...';
 }
 
+/** A trimmed non-empty string field, or `''` (parity web-search `normalize…` reads). */
+function trimmedField(input: Record<string, unknown>, key: string): string {
+	const value = input[key];
+	return typeof value === 'string' && value.trim() !== '' ? value.trim() : '';
+}
+
+interface WebSearchData {
+	actionType: string;
+	query: string;
+	url: string;
+	pattern: string;
+}
+
+/**
+ * Derive the WebSearch action shape (parity `normalizeWebSearchDisplayData`,
+ * `ToolCallRenderer.ts:276`). Total: missing fields → `''`; the action type is
+ * inferred from which fields are present when not given explicitly.
+ */
+function normalizeWebSearch(input: Record<string, unknown>): WebSearchData {
+	const firstQuery = Array.isArray(input.queries)
+		? (input.queries.find((q): q is string => typeof q === 'string' && q.trim() !== '')?.trim() ?? '')
+		: '';
+	const query = trimmedField(input, 'query') || firstQuery;
+	const url = trimmedField(input, 'url');
+	const pattern = trimmedField(input, 'pattern');
+	const explicit = trimmedField(input, 'actionType');
+	const actionType =
+		explicit ||
+		(url && pattern ? 'find_in_page' : url ? 'open_page' : query ? 'search' : '');
+	return { actionType, query, url, pattern };
+}
+
+/** One-line WebSearch summary (parity `getWebSearchSummary`, `ToolCallRenderer.ts:298`). */
+function webSearchSummary(input: Record<string, unknown>, maxLength: number): string {
+	const data = normalizeWebSearch(input);
+	switch (data.actionType) {
+		case 'open_page':
+			return truncate(`Open ${data.url || 'page'}`, maxLength);
+		case 'find_in_page': {
+			const target = data.pattern ? `Find "${data.pattern}"` : 'Find in page';
+			const suffix = data.url ? ` in ${data.url}` : '';
+			return truncate(target + suffix, maxLength);
+		}
+		case 'search':
+			return truncate(data.query, maxLength);
+		default:
+			return truncate(data.query || data.url || data.pattern, maxLength);
+	}
+}
+
 /** Completed / total counts over the guard-filtered `input.todos` (EC-RR-6 tolerant). */
 function todoCounts(input: Record<string, unknown>): { completed: number; total: number } {
 	const raw = input.todos;
@@ -67,22 +121,34 @@ function todoCounts(input: Record<string, unknown>): { completed: number; total:
 
 /**
  * Monospace header name (parity `getToolName`, `:60`). `TodoWrite` becomes
- * `"Tasks N/M"` (or `"Tasks"` when there are no valid todos, REQ-RR-023); every
- * other tool returns its `name` verbatim.
+ * `"Tasks N/M"` (or `"Tasks"` when there are no valid todos, REQ-RR-023);
+ * `EnterPlanMode`/`ExitPlanMode` become their phrase labels (R-RR-005, `:70`);
+ * every other tool returns its `name` verbatim.
  */
 export function toolName(name: string, input: Record<string, unknown>): string {
 	if (name === TOOL_TODO_WRITE) {
 		const { completed, total } = todoCounts(input);
 		return total > 0 ? `Tasks ${completed}/${total}` : 'Tasks';
 	}
+	if (name === TOOL_ENTER_PLAN_MODE) return 'Entering plan mode';
+	if (name === TOOL_EXIT_PLAN_MODE) return 'Plan complete';
 	return name;
 }
 
 /**
  * Header summary (parity `getToolSummary`, `:79`). File tools show the filename,
  * `Bash` the (≤60 char) command, `Glob`/`Grep` the pattern, `LS` the directory
- * name, `TodoWrite` and everything else `''`.
+ * name, `WebFetch` the (≤60 char) url, `WebSearch` the action one-liner
+ * (R-RR-005), `TodoWrite` and everything else `''`. The niche apply_patch /
+ * write_stdin / skill / agent-lifecycle summaries stay deferred (CLAR-RR-005).
  */
+/** Summary for the web tools (parity `:94-97`), split out to keep `toolSummary` simple. */
+function webToolSummary(name: string, input: Record<string, unknown>): string {
+	if (name === TOOL_WEB_SEARCH) return webSearchSummary(input, 60);
+	if (name === TOOL_WEB_FETCH) return truncate(inputText(input, 'url'), 60);
+	return '';
+}
+
 export function toolSummary(name: string, input: Record<string, unknown>): string {
 	switch (name) {
 		case TOOL_READ:
@@ -96,10 +162,8 @@ export function toolSummary(name: string, input: Record<string, unknown>): strin
 			return inputText(input, 'pattern');
 		case TOOL_LS:
 			return fileNameOnly(inputText(input, 'path', '.'));
-		case TOOL_TODO_WRITE:
-			return '';
 		default:
-			return '';
+			return webToolSummary(name, input);
 	}
 }
 
