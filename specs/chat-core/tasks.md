@@ -258,9 +258,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
   then (b) ObsidianBridge factory wiring (coverage-excluded, lands with T-CC-010).
 - **Definition of done:**
   - [x] TEST-CC-016 (factory U leg) passes; each call returns a distinct instance. (Slice a+b runtime leg.)
-  - [ ] All three bridges expose the markdown port backed by `safeMarkdownRender`. **BLOCKED — CLAR-CC-007**
-        (`DELETED_SUBSYSTEM_BAN` bans `@/application/chat/**` + `MarkdownRenderPort`; needs architect/pm).
-  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green (runtime leg); implementation-log entry added.
+  - [x] All three bridges expose the markdown port backed by `safeMarkdownRender`. **DONE — CLAR-CC-007 RESOLVED**
+        (delivered with T-CC-015, commit `7185de0`).
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green (runtime + markdown legs); implementation-log entry added.
 
 ---
 
@@ -275,9 +275,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-CC-004
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/application/chat/safeMarkdownRender.test.ts` exists, naming TEST-CC-014, covering the
+  - [x] `tests/application/chat/safeMarkdownRender.test.ts` exists, naming TEST-CC-014, covering the
         empty/whitespace/unbalanced-backtick/literal-`<`-`&` cases.
-  - [ ] Tests fail (RED) — `safeMarkdownRender` does not yet exist.
+  - [x] Tests fail (RED) — `safeMarkdownRender` does not yet exist. (Watched RED, commit `0f02a93`.)
 
 ### T-CC-014 🔨 — `safeMarkdownRender` transform (pure backing of `MarkdownRenderPort`)
 
@@ -289,9 +289,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-CC-013
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] TEST-CC-014 passes (incl. EC-14 edge cases).
-  - [ ] Output is `SafeRenderResult`; no field ever holds HTML; never throws on any string input.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] TEST-CC-014 passes (incl. EC-14 edge cases). (13/13, commit `b617142`.)
+  - [x] Output is `SafeRenderResult`; no field ever holds HTML; never throws on any string input.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-CC-015 🔨 — `MarkdownRenderPort` adapter wrapping `safeMarkdownRender`
 
@@ -303,8 +303,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-CC-014
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] An object implementing `MarkdownRenderPort` exists; `render(md)` === `safeMarkdownRender(md)`.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] An object implementing `MarkdownRenderPort` exists; `render(md)` === `safeMarkdownRender(md)`.
+        (`safeMarkdownRenderPort` singleton; bridges expose `createMarkdownRenderPort()`; commit `7185de0`.)
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ---
 
@@ -322,9 +323,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-CC-007
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/application/chat/RunChatTurnUseCase.test.ts` exists, naming TEST-CC-007 / TEST-CC-013
+  - [x] `tests/application/chat/RunChatTurnUseCase.test.ts` exists, naming TEST-CC-007 / TEST-CC-013
         and the not-ready / usage-guard / error-continue / cancel / generator-throw scenarios.
-  - [ ] Tests fail (RED) — the use case does not yet exist.
+  - [x] Tests fail (RED) — the use case does not yet exist. (Watched RED, commit `b3bab93`.)
 
 ### T-CC-017 🔨 — `RunChatTurnUseCase` (turn orchestrator) + `ChatTurnError`
 
@@ -339,10 +340,10 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-CC-016
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] TEST-CC-007 + TEST-CC-013 (U leg) + all orchestration scenarios pass.
-  - [ ] `Result<void, ChatTurnError>` at the discrete boundary; streaming error never crosses as a
+  - [x] TEST-CC-007 + TEST-CC-013 (U leg) + all orchestration scenarios pass. (10/10, commit `96ff568`.)
+  - [x] `Result<void, ChatTurnError>` at the discrete boundary; streaming error never crosses as a
         thrown error / per-chunk `Result`; file-top comment documents the boundary.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ---
 

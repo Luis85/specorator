@@ -4,7 +4,7 @@ area: CC
 current_stage: tasks
 status: active
 last_updated: 2026-05-24
-last_agent: planner (tasks)
+last_agent: dev (implement — application + markdown batch)
 epic: claudian-reboot
 phase: P1
 integration_branch: next
@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (Parts A/B/C; ADR-CC-001 ACCEPTED — human-blessed 2026-05-24, charter §6a)
   spec.md: complete (SPEC-CC-001..023; 23 spec items + 17 TEST-CC scenarios)
   tasks.md: complete (TASKS-CC-001 — 32 T-CC tasks, TDD-ordered; next: /spec:implement)
-  implementation-log.md: in-progress (domain-foundation + infra-runtimes/keys/factory done: T-CC-001..012, 027 except the markdown leg of 011/012; T-CC-013..015 markdown blocked CLAR-CC-007; app/ui/wiring batches remain)
+  implementation-log.md: in-progress (domain-foundation + infra-runtimes/keys/factory + application/markdown done: T-CC-001..017, 027; CLAR-CC-007 RESOLVED, markdown leg of 011/012 + 013/014/015 + use-case 016/017 landed; ui + wiring batches remain: T-CC-018..026, 028..032)
   test-plan.md: in-progress (T-CC-001 baseline reference + streaming-feel note recorded; manual legs scheduled)
   parity-screenshots.md: in-progress (T-CC-001 baseline column scaffolded; Specorator column at /spec:review)
   test-report.md: pending
@@ -38,7 +38,7 @@ artifacts:
 | 4. Design | `design.md` | complete (Parts A/B/C; ADR-CC-001 ACCEPTED — human-blessed) |
 | 5. Specification | `spec.md` | complete (SPEC-CC-001..023; 17 TEST-CC; 15 auto + 2 manual) |
 | 6. Tasks | `tasks.md` | complete (TASKS-CC-001 — 32 T-CC tasks) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation + infra-runtimes/keys/factory complete: T-CC-001..010, 011, 012 runtime leg, 027 — 13 commits; T-CC-013/014/015 + the markdown leg of 011/012 BLOCKED on CLAR-CC-007; application, ui, wiring batches remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation + infra-runtimes/keys/factory + application/markdown complete: T-CC-001..017, 027 — 18 commits; CLAR-CC-007 RESOLVED; ui (T-CC-018..026), wiring (T-CC-028..029) + smoke/manual/gate (T-CC-030..032) batches remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -90,22 +90,17 @@ as the visual/parity truth. Reuse the discarded AUX/MPS chat design + `--sp-*` t
   neutral, no Claudian name/logo; final wording is a brand-reviewer call at review. (3) **Drop
   the "Baked for mm:ss" duration footer entirely from P1** (P2-adjacent; REQ-CC-011 needs only
   the empty/welcome state). No P1 component emits it.
-- [ ] CLAR-CC-007 *(implementation-time, OPEN — blocks the markdown render leg)* — **The active
-  `DELETED_SUBSYSTEM_BAN` (eslint.config.js, ADR-PSR-001) still bans the exact paths SPEC-CC-008/009/014
-  regrow.** During the infra-runtimes batch (dev, 2026-05-24) the runtime-factory leg of T-CC-011/012
-  shipped green, but the `safeMarkdownRender`-backed `MarkdownRenderPort` leg (T-CC-013 RED / T-CC-014
-  `safeMarkdownRender` / T-CC-015 adapter + the bridge markdown wiring) is **blocked**: `DELETED_SUBSYSTEM_BAN.group`
-  lists `@/application/chat/**` and `@/domain/ports/MarkdownRenderPort`, and `DELETED_INJECTION_KEYS.importNames`
-  lists `MARKDOWN_RENDER_PORT` — so the mock/localstorage bridges (base-config layer) cannot import
-  `@/application/chat/safeMarkdownRender` (eslint probe confirmed), and the UI batch cannot import the
-  `MARKDOWN_RENDER_PORT` key. The batch brief forbids editing `eslint.config.js`, so per Constitution
-  Art. I.3 / IX.3 this is handed back to **architect/pm** rather than worked around by relocating the
-  renderer off its spec'd path. **Proposed fix:** drop `@/application/chat/**`,
-  `@/domain/ports/MarkdownRenderPort`, and the `MARKDOWN_RENDER_PORT` importName from those ban lists
-  (they regrow per phase under ADR-PSR-001); keep `@/domain/chat/**` banned outside `src/domain/**` (chat
-  types are consumed via the `@/domain/ports` barrel). Until resolved, T-CC-013→015, the markdown leg of
-  T-CC-011/012, and the downstream `useMarkdownRenderPort` (T-CC-018) + `MARKDOWN_RENDER_PORT` provide
-  (T-CC-029) cannot proceed. Detail recorded in `implementation-log.md` → "Hand-back / clarification".
+- [x] CLAR-CC-007 *(implementation-time)* — **RESOLVED (2026-05-24).** The `DELETED_SUBSYSTEM_BAN`
+  (eslint.config.js, ADR-PSR-001) was relaxed per the "regrow per phase" clause: `DELETED_SUBSYSTEM_BAN.group`
+  no longer lists `@/application/chat` / `@/application/chat/**` / `@/domain/ports/MarkdownRenderPort`, and
+  `DELETED_INJECTION_KEYS.importNames` no longer lists `MARKDOWN_RENDER_PORT`. The exact paths SPEC-CC-008/009/014
+  regrow are now importable directly (`@/domain/chat/**` stays banned outside `src/domain/**` — chat types are
+  consumed via the `@/domain/ports` barrel). The application+markdown batch (dev, 2026-05-24) closed the blocked
+  legs: T-CC-013 RED → T-CC-014 `safeMarkdownRender`, T-CC-015 `safeMarkdownRenderPort` adapter + the
+  `createMarkdownRenderPort()` markdown leg of T-CC-012 on all three bridges, and T-CC-016 RED → T-CC-017
+  `RunChatTurnUseCase`. Commits `0f02a93`, `b617142`, `7185de0`, `b3bab93`, `96ff568`. The downstream UI
+  consumers (`useMarkdownRenderPort` T-CC-018, the `MARKDOWN_RENDER_PORT` provide wiring T-CC-029) are
+  unblocked for the next (UI) batch.
 - [x] CLAR-CC-005 *(design-time)* — **Minimal-markdown render seam.
   RESOLVED-IN-DESIGN (architect, Part B §B.4, 2026-05-24).** Ship a **minimal safe inline
   renderer behind a thin one-method `MarkdownRenderPort` seam in P1** (paragraphs / inline code /
@@ -441,5 +436,40 @@ as the visual/parity truth. Reuse the discarded AUX/MPS chat design + `--sp-*` t
                           itself + its test are fine to author (the ban fires on *importers* of
                           @/application/chat/**, and a co-located test under tests/application/chat/ is
                           base-config too, so verify the test-file import is permitted or fold CLAR-CC-007's
-                          fix to cover it). T-CC-013→015 (markdown) resume once CLAR-CC-007 is resolved.
+                          fix to cover it). T-CC-013-015 (markdown) resume once CLAR-CC-007 is resolved.
+
+2026-05-24 (dev, implement — application + markdown batch): CLAR-CC-007 RESOLVED upstream (ban lists
+                          relaxed). Executed the application + markdown batch of TASKS-CC-001 with strict TDD,
+                          one Conventional commit per task, on feature/chat-core. Completed:
+                          - T-CC-013 RED (safeMarkdownRender TEST-CC-014 suite, watched RED; 0f02a93) ->
+                            T-CC-014 (safeMarkdownRender pure transform: paragraphs/inline-code/line breaks ->
+                            SafeRenderResult; no HTML in any field; never throws; 13/13; b617142).
+                          - T-CC-015 (safeMarkdownRenderPort MarkdownRenderPort adapter delegating to
+                            safeMarkdownRender + createMarkdownRenderPort() on all three bridges; closes the
+                            previously-blocked markdown leg of T-CC-011/012; extended createChatRuntime suite
+                            with the TEST-CC-016 markdown leg; 7185de0).
+                          - T-CC-016 RED (RunChatTurnUseCase orchestration suite vs a scriptable ScriptedRuntime +
+                            stub ChatTurnSink; dispatch/usage-guard/error-continue/not-ready/cancel/generator-throw/
+                            queryOptions/finalise-empty; watched RED; b3bab93) -> T-CC-017 (RunChatTurnUseCase +
+                            ChatTurnError: prepareTurn->ensureReady->onAssistantStart->drainStream dispatch;
+                            Result<void,ChatTurnError> at the discrete boundary; streaming error = forwarded error
+                            chunk, not per-chunk Result; EC-5/6/7/11/13; tryAsync drain so an unexpected throw
+                            becomes a synthetic error+done + err('runtime-throw'), never rethrown; 10/10; 96ff568).
+                          Verification: npx vue-tsc --noEmit -p tsconfig.lint.json exit 0 (no intended-RED
+                          remaining); 82 chat application+infra unit tests pass; eslint + prettier green on all
+                          changed files. Not run (deferred to T-CC-032): npm run verify / build / build:web.
+                          manifest.json untouched. NOT pushed. One documented deviation (implementation-log.md
+                          T-CC-017): the dispatch loop factored into private drainStream/dispatchChunk/
+                          isForeignSession helpers + tryAsync (vs an inline try/catch) to satisfy the
+                          complexity<=10 + application-layer no-restricted-syntax lint rules; behaviour identical
+                          to the spec's inline for-await switch, no assertion changed.
+
+                          HAND-OFF -> /spec:implement (next batch: UI foundation). First task of the NEXT batch:
+                          T-CC-018 (dev — composables useChatRuntimePort()/useMarkdownRenderPort(), inject-or-throw,
+                          depends on T-CC-005 done) in parallel with T-CC-019 (qa, RED — chatStore state machine +
+                          sink actions, depends on T-CC-017 done) -> T-CC-020 (dev — chatStore). The
+                          MARKDOWN_RENDER_PORT key + @/application/chat/** are now importable (CLAR-CC-007
+                          resolved), so the UI composables and store can wire the ports and the RunChatTurnUseCase
+                          directly. Then UI components (T-CC-021/022 composer, T-CC-023/024 render), surface
+                          (T-CC-025/026), wiring (T-CC-028/029), and smoke/manual/gate (T-CC-030..032).
 ```

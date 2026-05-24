@@ -267,9 +267,117 @@ SHA.
 
 ---
 
+## Batch: application + markdown (T-CC-013..017) — CLAR-CC-007 RESOLVED
+
+> CLAR-CC-007 was resolved upstream: `eslint.config.js` `DELETED_SUBSYSTEM_BAN.group` no longer
+> lists `@/application/chat` / `@/application/chat/**` / `@/domain/ports/MarkdownRenderPort`, and
+> `DELETED_INJECTION_KEYS.importNames` no longer lists `MARKDOWN_RENDER_PORT`. The chat/markdown
+> paths the spec regrows are now importable directly. `@/domain/chat/**` stays banned outside
+> `src/domain/**` (chat types consumed via the `@/domain/ports` barrel). This batch closes the
+> markdown leg that was blocked plus the application use-case.
+
+### T-CC-013 🧪 — RED: `safeMarkdownRender` (qa-style RED, dev-driven TDD)
+
+- **Spec:** TEST-CC-014, SPEC-CC-014, REQ-CC-006, NFR-CC-008, EC-14.
+- **Files:** `tests/application/chat/safeMarkdownRender.test.ts` (new) — empty/whitespace →
+  `{ nodes: [] }`; paragraph split on blank lines (incl. intervening whitespace); inline `` `code` ``
+  spans (mid / start of paragraph); single-`\n` line break preserved as text; unbalanced backtick →
+  literal text (no throw); literal `<`/`&`/`<script>` carried verbatim, no `&lt;`/`&amp;` escaping;
+  `**bold**`/`# heading` literal; idempotent shape; never-throws on adversarial input.
+- **RED watched:** `npx vitest run --project unit tests/application/chat/safeMarkdownRender.test.ts`
+  → 1 failed, "no tests" (module `@/application/chat/safeMarkdownRender` unresolved). Green target = T-CC-014.
+- **Commit:** `0f02a93`.
+- **Outcome:** done (RED established). eslint + prettier green.
+
+### T-CC-014 🔨 — `safeMarkdownRender` transform
+
+- **Spec:** SPEC-CC-014, REQ-CC-006, NFR-CC-008.
+- **Files:** `src/application/chat/safeMarkdownRender.ts` (new) — total/synchronous/idempotent
+  `string → SafeRenderResult`. Splits paragraphs on `/\n[ \t]*\n+/`; per-paragraph inline scan emits
+  balanced `` `code` `` runs as `{kind:'code'}` and everything else (incl. the single `\n`) as
+  `{kind:'text'}`; unbalanced backtick falls through to literal text. No output field holds HTML;
+  never throws.
+- **GREEN:** `npx vitest run --project unit tests/application/chat/safeMarkdownRender.test.ts` → 13/13.
+  `npx vue-tsc --noEmit -p tsconfig.lint.json` exit 0; eslint + prettier green.
+- **Commit:** `b617142`.
+- **Outcome:** done. T-CC-013 RED greened.
+
+### T-CC-015 🔨 — `MarkdownRenderPort` adapter + bridge markdown wiring (closes the T-CC-012 markdown leg)
+
+- **Spec:** SPEC-CC-015, SPEC-CC-007, SPEC-CC-013 (markdown leg), REQ-CC-006, REQ-CC-014, NFR-CC-008,
+  ADR-CC-001 §6.
+- **Files:** `src/application/chat/safeMarkdownRenderPort.ts` (new — stateless `MarkdownRenderPort`
+  singleton `safeMarkdownRenderPort` whose `render` delegates to `safeMarkdownRender`);
+  `tests/application/chat/safeMarkdownRenderPort.test.ts` (new — `render(md)` deep-equals
+  `safeMarkdownRender(md)`, no-HTML/no-throw). `src/infrastructure/mock/MockBridge.ts`,
+  `src/infrastructure/localstorage/LocalStorageBridge.ts`,
+  `src/infrastructure/obsidian/ObsidianBridge.ts` (each gains `createMarkdownRenderPort(): MarkdownRenderPort`
+  returning the shared singleton — identical P1 behaviour across bridges; P2 re-backs with Obsidian's
+  renderer). `tests/infrastructure/mock/createChatRuntime.test.ts` (extended with the TEST-CC-016
+  markdown leg: each bridge exposes the port; Mock/Local behaviour identical; no HTML for adversarial input).
+- **GREEN:** `npx vitest run --project unit tests/infrastructure/mock/createChatRuntime.test.ts
+  tests/application/chat/` → 23/23. `npx vue-tsc --noEmit -p tsconfig.lint.json` exit 0; eslint exit 0
+  on all changed files (infrastructure → application is the inward DDD direction, permitted); prettier clean.
+- **Commit:** `7185de0`.
+- **Outcome:** done. Completes the previously-blocked markdown leg of T-CC-011/012 (TEST-CC-016).
+- **Note:** `createMarkdownRenderPort()` (vs a `createChatRuntime`-style per-call factory) returns the
+  shared stateless singleton — SPEC-CC-013 explicitly permits "a `createMarkdownRenderPort()` method or
+  a shared singleton; dev-stage choice". The DTO-only port is pure and per-conversation isolation is
+  unnecessary.
+
+### T-CC-016 🧪 — RED: `RunChatTurnUseCase` orchestration (qa-style RED, dev-driven TDD)
+
+- **Spec:** TEST-CC-007, TEST-CC-013 (U leg), SPEC-CC-015, REQ-CC-003..005a, 010, 012, NFR-CC-003,
+  ADR-CC-001 §1.
+- **Files:** `tests/application/chat/RunChatTurnUseCase.test.ts` (new) — a fully-scriptable in-test
+  `ScriptedRuntime` (controls chunk sequence, session id, mid-generator throw, cancel) + stub
+  `ChatTurnSink` recording call order. Scenarios: dispatch (prepareTurn once, one query with the
+  history reference, `text→onText`, `done→onDone`, `ok`), usage forwarded on matching/null sessionId,
+  foreign sessionId ignored (EC-11), `error→onErrorChunk` then continue to done (EC-6),
+  `ensureReady→false ⇒ err('not-ready')` with no `onAssistantStart`/no query (EC-7), cancel stops the
+  loop + delegates to `runtime.cancel()` + `ok` (no `done`), generator-throw ⇒ synthetic
+  `onErrorChunk`+`onDone` + `err('runtime-throw')` never rethrown (EC-13), queryOptions pass-through,
+  finalise-empty (EC-5).
+- **RED watched:** `npx vitest run --project unit tests/application/chat/RunChatTurnUseCase.test.ts`
+  → 1 failed, "no tests" (module `@/application/chat/RunChatTurnUseCase` unresolved). Green target = T-CC-017.
+- **Commit:** `b3bab93`.
+- **Outcome:** done (RED established). prettier green.
+
+### T-CC-017 🔨 — `RunChatTurnUseCase` (turn orchestrator) + `ChatTurnError`
+
+- **Spec:** SPEC-CC-015, REQ-CC-003, 004, 005, 005a, 010, 012, NFR-CC-003, ADR-CC-001 §1.
+- **Files:** `src/application/chat/RunChatTurnUseCase.ts` (new) — `ChatTurnError` (`kind:
+  'not-ready'|'runtime-throw'`), `RunChatTurnInput`, `ChatTurnSink`, and the `RunChatTurnUseCase`
+  class. `run(...)`: `prepareTurn → ensureReady` (false ⇒ `err('not-ready')`, no live message/no
+  query, EC-7) `→ onAssistantStart → drainStream` (private `for await` + `dispatchChunk`
+  switch); `usage` behind the `isForeignSession` guard (EC-11); `error` forwarded then continue
+  (EC-6); `done → onDone` + `ok`; cancel ends the loop ⇒ `ok`. The stream drain is wrapped in
+  `tryAsync` so an unexpected throw becomes a Result ⇒ synthetic `onErrorChunk`+`onDone` +
+  `err('runtime-throw')`, never rethrown (EC-13). `Result<void, ChatTurnError>` at the discrete
+  boundary; the streaming-error-vs-`Result` convention is documented in the file-top doc comment.
+- **GREEN:** `npx vitest run --project unit tests/application/chat/RunChatTurnUseCase.test.ts` → 10/10.
+  Full chat application+infra surface (`tests/application/chat` + `tests/infrastructure/mock|localstorage`)
+  → 82/82. `npx vue-tsc --noEmit -p tsconfig.lint.json` exit 0; eslint + prettier green.
+- **Commit:** `96ff568`.
+- **Outcome:** done. T-CC-016 RED greened (TEST-CC-007 + TEST-CC-013 U leg).
+- **Deviation:** the dispatch loop was factored into private `drainStream`/`dispatchChunk`/
+  `isForeignSession` helpers to satisfy the `complexity ≤ 10` lint rule; the raw `try/catch` was
+  replaced with `tryAsync` (application-layer `no-restricted-syntax` rule). Behaviour identical to
+  the spec's inline `for await` switch; no assertion changed.
+
+### Batch verification (application + markdown)
+
+- `npx vue-tsc --noEmit -p tsconfig.lint.json` exit 0 (no intended-RED remaining — every RED test in
+  this batch was greened by its paired impl within the batch).
+- 82 chat application + infra unit tests pass. eslint + prettier green on all changed files.
+- Not run (deferred to T-CC-032 verify gate per the batch brief): `npm run verify` / `build` /
+  `build:web`. `manifest.json` untouched. NOT pushed.
+
+---
+
 ## Hand-back / clarification
 
-### CLAR-CC-007 — `DELETED_SUBSYSTEM_BAN` blocks the regrown chat/markdown paths
+### CLAR-CC-007 — `DELETED_SUBSYSTEM_BAN` blocks the regrown chat/markdown paths — **RESOLVED**
 
 - **Owner to action:** architect / pm (eslint.config.js is a guardrail change).
 - **Blocked tasks:** T-CC-013, T-CC-014, T-CC-015, and the `MarkdownRenderPort` leg of T-CC-011 /
@@ -285,5 +393,8 @@ SHA.
   (they regrow per ADR-PSR-001's "regrow per phase" clause). Note `@/domain/chat/**` stays banned outside
   `src/domain/**` — the chat domain types are consumed via the `@/domain/ports` barrel (already shipped),
   so that ban does not need touching. Once reconciled, T-CC-013→015 + the T-CC-012 markdown leg proceed.
-- **Status:** the runtime-factory half of the batch is complete + green; the markdown half awaits the
-  guardrail decision.
+- **Status:** **RESOLVED (2026-05-24).** The ban lists were relaxed upstream (the three regrown paths
+  + the `MARKDOWN_RENDER_PORT` importName dropped per ADR-PSR-001's "regrow per phase"). The markdown
+  leg of T-CC-012 + T-CC-013→015 landed in the application+markdown batch (commits `0f02a93`,
+  `b617142`, `7185de0`, `b3bab93`, `96ff568`). The downstream UI consumers (`useMarkdownRenderPort`
+  T-CC-018, the `MARKDOWN_RENDER_PORT` provide wiring T-CC-029) are unblocked for the UI batch.
