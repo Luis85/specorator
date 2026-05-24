@@ -1,7 +1,7 @@
 /**
  * Tests for `<InputToolbar>` (REQ-AUX-004, spec §1.3.3).
  *
- *   T-AUX-267: source order matches model · mode · permission · thinking · mcp ·
+ *   T-AUX-267: source order matches model · mode · permission · thinking ·
  *              context-meter · send (children carry the matching data-testid).
  *   T-AUX-268: send/stop swap on streaming — when messagesStore.status is
  *              'loading', the trailing button renders `icon="square"` and emits
@@ -61,7 +61,6 @@ describe('<InputToolbar>', () => {
 			'input-toolbar-mode',
 			'input-toolbar-permission',
 			'input-toolbar-thinking',
-			'input-toolbar-mcp',
 			'input-toolbar-context-meter',
 			'input-toolbar-send',
 		]);

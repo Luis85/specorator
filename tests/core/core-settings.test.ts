@@ -14,51 +14,8 @@ describe('coreSettingsModule descriptor metadata', () => {
     expect(coreSettingsModule.settingsDefaults).toEqual(DEFAULT_SETTINGS)
   })
 
-  it('defaults mcpServerEnabled to false (privacy-by-default)', () => {
-    expect(DEFAULT_SETTINGS.mcpServerEnabled).toBe(false)
-    expect(coreSettingsModule.settingsDefaults?.mcpServerEnabled).toBe(false)
-  })
 })
 
-describe('coreSettingsModule.migrate (v1 → v2 mcpServerEnabled)', () => {
-  const migrate = (fromVersion: number, blob: unknown): unknown => {
-    const fn = coreSettingsModule.migrate
-    if (!fn) throw new Error('migrate is undefined')
-    return fn(fromVersion, blob)
-  }
-
-  it('injects mcpServerEnabled=false when migrating from v0 with no value', () => {
-    const out = migrate(0, {}) as Record<string, unknown>
-    expect(out.mcpServerEnabled).toBe(false)
-  })
-
-  it('injects mcpServerEnabled=false when migrating from v1 with no value', () => {
-    const out = migrate(1, { teamMode: true }) as Record<string, unknown>
-    expect(out.mcpServerEnabled).toBe(false)
-    expect(out.teamMode).toBe(true)
-  })
-
-  it('preserves an existing mcpServerEnabled=true during migration (never flips user choice)', () => {
-    const out = migrate(0, { mcpServerEnabled: true }) as Record<string, unknown>
-    expect(out.mcpServerEnabled).toBe(true)
-  })
-
-  it('preserves an existing mcpServerEnabled=false during migration', () => {
-    const out = migrate(0, { mcpServerEnabled: false }) as Record<string, unknown>
-    expect(out.mcpServerEnabled).toBe(false)
-  })
-
-  it('does not inject when already at the target version (fromVersion >= 2)', () => {
-    const out = migrate(2, {}) as Record<string, unknown>
-    expect('mcpServerEnabled' in out).toBe(false)
-  })
-
-  it('returns a fresh object when blob is null or non-object', () => {
-    expect(migrate(0, null)).toEqual({ mcpServerEnabled: false })
-    expect(migrate(0, 'string-junk')).toEqual({ mcpServerEnabled: false })
-    expect(migrate(0, [])).toEqual({ mcpServerEnabled: false })
-  })
-})
 
 describe('coreSettingsModule.migrate (v2 → v3 onboardingComplete)', () => {
   const migrate = (fromVersion: number, blob: unknown): unknown => {
@@ -195,31 +152,6 @@ describe('coreSettingsModule.validateSettings', () => {
     expect(out.teamMode).toBe(false)
   })
 
-  it('defaults mcpServerEnabled to false when missing', () => {
-    const out = validate({})
-    expect(out.mcpServerEnabled).toBe(false)
-  })
-
-  it('coerces non-boolean mcpServerEnabled to false', () => {
-    const out = validate({ mcpServerEnabled: 'yes' })
-    expect(out.mcpServerEnabled).toBe(false)
-  })
-
-  it('coerces null mcpServerEnabled to false', () => {
-    const out = validate({ mcpServerEnabled: null })
-    expect(out.mcpServerEnabled).toBe(false)
-  })
-
-  it('preserves mcpServerEnabled=true when boolean', () => {
-    const out = validate({ mcpServerEnabled: true })
-    expect(out.mcpServerEnabled).toBe(true)
-  })
-
-  it('preserves mcpServerEnabled=false when boolean', () => {
-    const out = validate({ mcpServerEnabled: false })
-    expect(out.mcpServerEnabled).toBe(false)
-  })
-
   // T-ASM-015 — migration of new fields (REQ-ASM-002, REQ-ASM-004;
   // SPEC-ASM-001 §11.2). SPEC-MPS-001 §2.7 replaces `transportKind` with
   // `providerSelection`; legacy `transportKind` values arriving here are
@@ -273,30 +205,6 @@ describe('coreSettingsModule.validateSettings', () => {
     })
   })
 
-  describe('obsidianCliPath (REQ-OCM-016)', () => {
-    it('defaults to empty string when missing', () => {
-      const out = validate({ locale: 'en' })
-      expect(out.obsidianCliPath).toBe(DEFAULT_SETTINGS.obsidianCliPath)
-      expect(out.obsidianCliPath).toBe('')
-    })
-
-    it.each([null, undefined, 42, true, {}, []] as const)(
-      'coerces non-string obsidianCliPath (%p) to default empty string',
-      (value) => {
-        const out = validate({ obsidianCliPath: value })
-        expect(out.obsidianCliPath).toBe('')
-      },
-    )
-
-    it('preserves and trims a valid obsidianCliPath', () => {
-      const out = validate({ obsidianCliPath: '  /usr/local/bin/obsidian  ' })
-      expect(out.obsidianCliPath).toBe('/usr/local/bin/obsidian')
-    })
-
-    it('does not bump settingsVersion (additive validated field)', () => {
-      expect(coreSettingsModule.settingsVersion).toBe(3)
-    })
-  })
 })
 
 describe('coreSettingsModule.settingsSchema', () => {
@@ -311,7 +219,6 @@ describe('coreSettingsModule.settingsSchema', () => {
     // outside the module loop.
     const manuallyRenderedKeys: ReadonlyArray<keyof PluginSettings> = [
       'claudeCliPath',
-      'obsidianCliPath',
       'providerSelection',
       'cursorCliPath',
       'cursorApiPreview',
@@ -340,14 +247,6 @@ describe('coreSettingsModule.settingsSchema', () => {
     }
   })
 
-  it('includes a mcpServerEnabled toggle field defaulting to false', () => {
-    const field = coreSettingsModule.settingsSchema?.fields.find(
-      (f) => f.key === 'mcpServerEnabled',
-    )
-    expect(field).toBeDefined()
-    expect(field?.type).toBe('toggle')
-    expect(field?.default).toBe(false)
-  })
 })
 
 describe('coreSettingsModule.init', () => {

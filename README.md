@@ -85,17 +85,9 @@ After installing via BRAT and enabling the plugin:
 
 > **v1 alpha:** The plugin shell is installed and loads. Full workflow cockpit features are in active development. Functionality may be limited until v1 is complete.
 
-## MCP server (advanced, opt-in)
+## MCP server
 
-Specorator can expose a local Model Context Protocol (MCP) endpoint so AI clients on the same machine can read and propose changes against your vault.
-
-- **Off by default.** No server is started on a fresh install. Existing installs upgrading to this version retain `mcpServerEnabled = false` unless they had previously enabled it.
-- **Loopback only.** The server binds to `127.0.0.1` on a randomly assigned port and rejects requests with a non-loopback `Host` header. There is no authentication — trust is derived from your local machine.
-- **How to enable.** Open **Settings → Specorator** and toggle **Enable MCP server (advanced)**, or run the command **Start MCP server** from the command palette.
-- **How to disable.** Toggle the setting off, run the command **Stop MCP server**, or set `"mcpServerEnabled": false` in the plugin's `data.json` under the `specorator` key.
-- **Status.** The settings tab shows whether the server is currently Running or Stopped (re-open the tab to refresh).
-
-If you don't use MCP clients, leave this off — Specorator's vault-side functionality works without it.
+The in-process MCP server has been extracted into a standalone Obsidian plugin: [`specorator-obsidian-mcp`](https://github.com/Luis85/specorator-obsidian-mcp). Install that plugin separately if you want to expose your vault to local MCP clients. Specorator no longer ships an embedded MCP server.
 
 ## Development
 

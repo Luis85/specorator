@@ -47,8 +47,8 @@ export interface ObsidianCliInvocation {
 
 /**
  * Narrow port (ADR-008) wrapping invocation of the official Obsidian CLI
- * (`obsidian <command> key=value … format=json`). MCP-tool code depends on this
- * port; only the infrastructure adapter touches `node:child_process` (NFR-OCM-005).
+ * (`obsidian <command> key=value … format=json`). Only the infrastructure
+ * adapter touches `node:child_process` (NFR-OCM-005).
  *
  * Implemented by `ObsidianCliAdapter` (production) and `MockObsidianCliPort` (tests
  * + standalone dev). See ADR-018 / SPEC-OCM-001.

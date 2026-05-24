@@ -8,7 +8,6 @@
     "gateStrictness": "strict",
     "teamMode": false,
     "logLevel": "warn",
-    "mcpServerEnabled": false,
     "userPersona": "",
     "onboardingComplete": true,
     "claudeCliPath": "/usr/local/bin/claude",

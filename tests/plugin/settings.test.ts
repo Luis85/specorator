@@ -101,9 +101,8 @@ describe('REQ-ASM-004 / REQ-ASM-005 / REQ-ASM-008: Claude CLI path field wiring 
     )
     expect(handleBody).toContain('spawnSync(')
     expect(handleBody).toContain('timeout: 5_000')
-    // Both test-binary handlers delegate to the shared single-spawn helper.
+    // The Claude CLI test button delegates to the shared single-spawn helper.
     expect(SETTINGS_SRC).toContain('_testBinaryVersion(this.plugin.settings.claudeCliPath.trim()')
-    expect(SETTINGS_SRC).toContain('_testBinaryVersion(this.plugin.settings.obsidianCliPath.trim()')
   })
 
   it('forbids credential-path literals (NFR-ASM-004)', () => {

@@ -3,7 +3,6 @@ import { createPinia, setActivePinia } from 'pinia';
 
 import InputToolbar from '@/ui/components/agent/InputToolbar.vue';
 import { useContextUsageStore } from '@/ui/stores/contextUsageStore';
-import { useMcpStatusStore } from '@/ui/stores/mcpStatusStore';
 import { useMessagesStore } from '@/ui/stores/messagesStore';
 
 /**
@@ -24,9 +23,6 @@ function seedIdle(): void {
 	const ctx = useContextUsageStore();
 	ctx.setCap('claude', 'sonnet', 200_000);
 	ctx.recordTokens(45_000);
-	const mcp = useMcpStatusStore();
-	mcp.setActive(true);
-	mcp.setCount(2);
 }
 
 function seedStreaming(): void {

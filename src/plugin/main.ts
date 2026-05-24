@@ -8,7 +8,7 @@ import * as os from 'node:os'
 import { SpecoratorView, VIEW_TYPE } from './SpecoratorView'
 import { AgentSidepanelView, VIEW_TYPE_AGENT } from './AgentSidepanelView'
 import { SpecoratorSettingTab } from './settings'
-import { promoteLegacyFlatSettings } from './loadSettings-migrate'
+import { promoteLegacyFlatSettings, stripMcpLegacy } from './loadSettings-migrate'
 import { migrateProviderSelection } from '@/application/migration/migrateProviderSelection'
 import { ensureLeafLoaded } from './leafLoader'
 import { selectTransport } from './transport/TransportSelector'
@@ -25,10 +25,6 @@ import { decodeApprovalRulesBlob, encodeApprovalRulesBlob } from './approvalRule
 import type { ApprovalRule } from '@/domain/chat/ApprovalRule'
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
 import { ObsidianConfirmModalAdapter } from '@/infrastructure/obsidian/ObsidianConfirmModalAdapter'
-import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
-import { ObsidianCliAdapter } from '@/infrastructure/obsidian/ObsidianCliAdapter'
-import { ObsidianMetadataCacheAdapter } from '@/infrastructure/obsidian/ObsidianMetadataCacheAdapter'
-import { ObsidianCanvasAdapter } from '@/infrastructure/obsidian/ObsidianCanvasAdapter'
 import { ObsidianSecretStoreAdapter } from '@/infrastructure/obsidian/ObsidianSecretStoreAdapter'
 import { ClaudeCliAdapter } from '@/infrastructure/obsidian/ClaudeCliAdapter'
 import { ClaudeSubprocessAdapter, type SpawnFn } from '@/infrastructure/obsidian/ClaudeSubprocessAdapter'
@@ -36,8 +32,6 @@ import { ClaudeBinaryResolver, type SpawnFn as ResolverSpawnFn } from '@/infrast
 import { CursorBinaryResolver } from '@/infrastructure/obsidian/CursorBinaryResolver'
 import { CursorCliAdapter } from '@/infrastructure/obsidian/CursorCliAdapter'
 import { degradedClaudeCliPort } from '@/infrastructure/bridge/degradedClaudeCliPort'
-import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
-import { FeedbackService } from '@/application/shared/FeedbackService'
 import { tryAsync, trySync } from '@/domain/shared/tryAsync'
 import { PluginCore } from '@/core/plugin-core'
 import { ALL_MODULES, type ModuleDescriptor } from '@/modules'
@@ -173,22 +167,6 @@ export default class SpecoratorPlugin extends Plugin {
       logger: this.bridge,
       t: translationPort,
       i18nMerge,
-      // REQ-AVS-005: inject FeedbackService into the MCP adapter so
-      // overwrite-protection notices fire consistently on both the UI and MCP
-      // code paths. Without this, MCP-driven `workflow_create_artifact` and
-      // `workflow_propose_advance` accepts silently preserve existing files.
-      mcpServer: new ObsidianMcpServerAdapter(
-        this.bridge,
-        new FeatureRepository(this.bridge, this.bridge),
-        () => this.settings.specsFolder,
-        new ObsidianMetadataCacheAdapter(this.app),
-        new ObsidianCanvasAdapter(this.bridge),
-        new FeedbackService(this.bridge, this.bridge),
-        // ADR-018 — CLI-backed tool group. The adapter reads `obsidianCliPath`
-        // fresh on each call; the group is registered only when a path is set.
-        new ObsidianCliAdapter({ spawn, resolvePath: () => this.settings.obsidianCliPath }),
-      ),
-      isMcpServerEnabled: () => this.settings.mcpServerEnabled,
     })
 
     setLocale(this.settings.locale as SupportedLocale)
@@ -339,18 +317,6 @@ export default class SpecoratorPlugin extends Plugin {
       id: 'open-agent-sidepanel',
       name: 'Open agent sidepanel',
       callback: () => void this.activateAgentSidepanel(),
-    })
-
-    this.addCommand({
-      id: 'start-mcp-server',
-      name: 'Start MCP server',
-      callback: () => void this.updateSettings({ mcpServerEnabled: true }),
-    })
-
-    this.addCommand({
-      id: 'stop-mcp-server',
-      name: 'Stop MCP server',
-      callback: () => void this.updateSettings({ mcpServerEnabled: false }),
     })
 
     // T-MPS-147 / spec §9 — quick cycle through provider selections from the
@@ -508,6 +474,15 @@ export default class SpecoratorPlugin extends Plugin {
     const raw: Record<string, unknown> = { ...(stored ?? {}) }
 
     this._storedData = promoteLegacyFlatSettings(raw)
+
+    // Strip legacy MCP keys left over from the embedded MCP server (removed
+    // in PR8 / chore/extract-mcp-into-standalone-plugin). Idempotent — only
+    // writes when at least one legacy key is present.
+    const mcpStrip = stripMcpLegacy(this._storedData)
+    if (mcpStrip.stripped) {
+      this._storedData = mcpStrip.result
+      await this.saveData(this._storedData)
+    }
 
     // SPEC-MPS-001 §3 / REQ-MPS-004 / REQ-MPS-005 — translate the v0.x
     // `transportKind` + string `transport` encoding into the v1

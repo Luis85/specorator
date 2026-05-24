@@ -23,13 +23,6 @@ export interface PluginSettings {
 	readonly gateStrictness: 'strict' | 'lenient'
 	readonly teamMode: boolean
 	readonly logLevel: 'debug' | 'info' | 'warn' | 'error'
-	/**
-	 * Opt-in flag for the local MCP server (HTTP/SSE on 127.0.0.1).
-	 * Default is `false` for privacy — the server is started only when the
-	 * user explicitly enables it via Settings or runs the "Start MCP server"
-	 * command. See README "MCP server (advanced, opt-in)".
-	 */
-	readonly mcpServerEnabled: boolean
 	readonly userPersona: string
 	readonly onboardingComplete: boolean
 	/**
@@ -37,12 +30,6 @@ export interface PluginSettings {
 	 * (auto-detect at runtime). Per SPEC-ASM-001 §2.12, REQ-ASM-004.
 	 */
 	readonly claudeCliPath: string
-	/**
-	 * Absolute filesystem path to the official `obsidian` CLI binary, or `''` for
-	 * auto-detect/unset. Backs the ADR-018 CLI-backed MCP tool group. Mirrors
-	 * `claudeCliPath`. Per SPEC-OCM-001 §7, REQ-OCM-016.
-	 */
-	readonly obsidianCliPath: string
 	/**
 	 * Legacy chat transport mode (`'auto' | 'api-key' | 'subscription' |
 	 * 'degraded'`). Replaced by `providerSelection` in SPEC-MPS-001 §2.7;
@@ -100,11 +87,9 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	gateStrictness: 'strict',
 	teamMode: false,
 	logLevel: 'warn',
-	mcpServerEnabled: false,
 	userPersona: '',
 	onboardingComplete: false,
 	claudeCliPath: '',
-	obsidianCliPath: '',
 	// `transportKind` intentionally omitted from defaults — the field is
 	// migration input only (see deprecation note above).
 	providerSelection: { forced: 'auto' },

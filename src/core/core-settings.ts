@@ -90,10 +90,8 @@ export const coreSettingsModule = defineModule<PluginSettings>({
   /**
    * Migrate stored settings forward to the current schema version.
    *
-   * v1 → v2: introduces `mcpServerEnabled`. Default it to `false` (opt-out)
-   * for upgrading installs so existing users do not silently start receiving
-   * a local MCP server. Only inject when absent — never flip an existing
-   * user choice.
+   * v1 → v2: introduced `mcpServerEnabled` (removed in PR8 — field is now
+   * stripped by `stripMcpLegacy` in `loadSettings-migrate.ts`).
    *
    * v2 → v3: introduces `onboardingComplete`. Default it to `true` for
    * upgrading installs so existing users are not forced through the wizard on
@@ -106,9 +104,6 @@ export const coreSettingsModule = defineModule<PluginSettings>({
    */
   migrate(fromVersion: number, blob: unknown): unknown {
     const { out, hadData } = toMutableBlob(blob)
-    if (fromVersion < 2 && !('mcpServerEnabled' in out)) {
-      out.mcpServerEnabled = false
-    }
     if ((fromVersion >= 1 || (fromVersion === 0 && hadData)) && fromVersion < 3 && !('onboardingComplete' in out)) {
       out.onboardingComplete = true
     }
@@ -126,13 +121,9 @@ export const coreSettingsModule = defineModule<PluginSettings>({
       gateStrictness: coerceEnum(r.gateStrictness, VALID_GATE_STRICTNESS, DEFAULT_SETTINGS.gateStrictness),
       teamMode: coerceBoolean(r.teamMode, DEFAULT_SETTINGS.teamMode),
       logLevel: coerceEnum(r.logLevel, VALID_LOG_LEVELS, DEFAULT_SETTINGS.logLevel),
-      mcpServerEnabled: coerceBoolean(r.mcpServerEnabled, DEFAULT_SETTINGS.mcpServerEnabled),
       userPersona: coercePassthroughString(r.userPersona, DEFAULT_SETTINGS.userPersona),
       onboardingComplete: coerceBoolean(r.onboardingComplete, DEFAULT_SETTINGS.onboardingComplete),
       claudeCliPath: coerceTrimmedString(r.claudeCliPath, DEFAULT_SETTINGS.claudeCliPath),
-      // REQ-OCM-016 — additive string field; missing/non-string coerces to '' so
-      // both fresh and upgrading installs land on the default without a version bump.
-      obsidianCliPath: coerceTrimmedString(r.obsidianCliPath, DEFAULT_SETTINGS.obsidianCliPath),
       // SPEC-MPS-001 §2.7 — the new provider-selection carrier plus the
       // five companion fields. `transportKind` is intentionally NOT
       // re-emitted here: migration (`migrateProviderSelection`) translates
@@ -224,14 +215,6 @@ export const coreSettingsModule = defineModule<PluginSettings>({
           { value: 'error', label: 'Error' },
         ],
         default: DEFAULT_SETTINGS.logLevel,
-      },
-      {
-        type: 'toggle',
-        key: 'mcpServerEnabled',
-        label: 'Enable MCP server (advanced)',
-        description:
-          'Allow local MCP clients to access your Specorator data via 127.0.0.1. Off by default for privacy.',
-        default: DEFAULT_SETTINGS.mcpServerEnabled,
       },
       {
         type: 'text',
