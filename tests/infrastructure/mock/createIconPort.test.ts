@@ -58,7 +58,7 @@ describe('createIconPort() factory (TEST-RR-024 U leg) — MockBridge', () => {
 		const port = new MockBridge().createIconPort();
 		const node = port.setIcon(name);
 		expect(node).not.toBeNull();
-		assertIconNodeShape(node as IconNode);
+		assertIconNodeShape(node!);
 	});
 
 	it('returns null for an unknown icon name', () => {
@@ -73,7 +73,7 @@ describe('createIconPort() factory (TEST-RR-024 U leg) — MockBridge', () => {
 
 	it('the IconNode carries no DOM element or HTML string (declarative only, NFR-RR-006)', () => {
 		const port = new MockBridge().createIconPort();
-		const node = port.setIcon('check') as IconNode;
+		const node = port.setIcon('check')!;
 		// Serialising round-trips: a real DOM node would throw / lose data.
 		expect(() => JSON.stringify(node)).not.toThrow();
 		const serialised = JSON.stringify(node);
@@ -91,7 +91,7 @@ describe('createIconPort() factory (TEST-RR-024 U leg) — LocalStorageBridge', 
 		const port = new LocalStorageBridge().createIconPort();
 		const node = port.setIcon(name);
 		expect(node).not.toBeNull();
-		assertIconNodeShape(node as IconNode);
+		assertIconNodeShape(node!);
 	});
 
 	it('returns null for an unknown icon name', () => {
