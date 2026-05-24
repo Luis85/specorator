@@ -324,3 +324,24 @@ convergence.
   `domain/chat` + `domain/feature` (now importer-less) remain for Wave 4. The
   SettingsPort/VaultPort/NotificationPort contracts + TEST-PSR-024 are retained.
   REQ-PSR-005/013, NFR-PSR-010; SPEC-PSR-008/009; ADR-PSR-002.
+
+### T-PSR-022 — Wave 4: domain root + barrel slim + PluginCore MCP trim (dev)
+
+- Deleted `src/domain/chat/**`, `src/domain/feature/**`, the 10 deleted port
+  interface files (`ChatTransportPort`, `TransportLifecyclePort`, `ConfirmModalPort`,
+  `SecretStorePort`, `MarkdownRenderPort`, `IconPort`, `MetadataCachePort`,
+  `CanvasPort`, `ObsidianMcpServerPort`, `ObsidianCliPort`), `src/domain/shared/Slug.ts`
+  + tests. Slimmed `src/domain/ports/index.ts` to the six core ports + `TranslationPort`
+  + `Unsubscriber`. `EventBus`/`event-bus.ts` untouched.
+- Deleted the orphan `src/ui/types/FeatureDto.ts` (missed in Wave 0 — imported the
+  deleted `FeatureStatus`).
+- **COMPILER-SURFACED SPEC GAP (flag to maintainer):** `PluginCore` (kept, ADR-012)
+  still carried the MCP-server surface (`CorePorts.mcpServer`/`isMcpServerEnabled`,
+  `start`/`stopMcpServer`, `_syncMcpRunning`, `isMcpServerRunning`,
+  `getMcpConnectionConfig`) referencing the deleted `ObsidianMcpServerPort`. Design
+  §C.14 Wave 4 said "EventBus/EventMap need no edit" but did not enumerate
+  PluginCore's MCP wiring. Trimmed it — unambiguous (MCP is a deleted subsystem per
+  ADR-PSR-001; the slim `main.ts` no longer passes `mcpServer`). Surfaced here per
+  the kept-file-scope-signal rule rather than silently absorbed.
+- **Phase B exit gate reached:** `npm run typecheck` GREEN tree-wide; `npm run test`
+  GREEN (38 files, 307 tests). REQ-PSR-004/005; SPEC-PSR-009, §9.

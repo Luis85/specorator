@@ -1,41 +1,17 @@
 /**
  * Narrow ports replacing the IBridge aggregate (ADR-008).
  *
- * Consumers depend on one port at a time. Do NOT introduce a new
- * interface that composes two or more of these ports — interface
- * segregation is the whole point of this directory. If a consumer
- * appears to need a "VaultAndNotificationPort", it needs two
- * dependencies, not a new aggregate type.
+ * P0 reboot (SPEC-PSR-009): only the six core ports remain, plus the
+ * `TranslationPort` seam (P7) and the `Unsubscriber` primitive. The
+ * chat/MCP/canvas/icon/secret ports were deleted with their subsystems and
+ * regrow per consumer in a later phase. Do NOT compose two or more of these
+ * into a new aggregate — interface segregation is the point of this directory.
  */
 export type { SettingsPort } from './SettingsPort';
 export type { VaultPort } from './VaultPort';
 export type { WorkspacePort } from './WorkspacePort';
 export type { NotificationPort } from './NotificationPort';
 export type { LoggerPort } from './LoggerPort';
-export type { IconPort } from './IconPort';
+export type { CommunityPluginPort } from './CommunityPluginPort';
 export type { TranslationPort } from './TranslationPort';
 export type { Unsubscriber } from './shared';
-export type { MetadataCachePort, FileMetadataSnapshot } from './MetadataCachePort';
-export type { CanvasPort, JsonCanvasData } from './CanvasPort';
-export type { ObsidianMcpServerPort, McpConnectionConfig } from './ObsidianMcpServerPort';
-export type {
-	ObsidianCliPort,
-	ObsidianCliInvocation,
-	ObsidianCliErrorCode,
-} from './ObsidianCliPort';
-export { ObsidianCliError } from './ObsidianCliPort';
-export type { CommunityPluginPort } from './CommunityPluginPort';
-export type {
-	ChatTransportPort,
-	ChatTransportQueryOptions,
-	ChatTransportStreamOptions,
-	ChatTransportErrorCode,
-	StreamDelta,
-	StructuredCliRawResult,
-	StructuredCliCallOptions,
-} from './ChatTransportPort';
-export { ChatTransportError } from './ChatTransportPort';
-export type { TransportLifecyclePort } from './TransportLifecyclePort';
-export type { ConfirmModalPort, ConfirmModalRequest } from './ConfirmModalPort';
-export type { SecretStorePort } from './SecretStorePort';
-export { SECRET_ID_ANTHROPIC, SECRET_ID_CURSOR } from './SecretStorePort';
