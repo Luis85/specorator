@@ -32,4 +32,14 @@ export class MessageTurnPageObject {
 	text(): string {
 		return this.root().text();
 	}
+
+	/** P2 fork (SPEC-RR-023): the `MessageBlocks` dispatcher is mounted. */
+	hasBlocks(): boolean {
+		return this.wrapper.find('[data-testid="message-blocks"]').exists();
+	}
+
+	/** P2 fork (SPEC-RR-023): the P1 `MarkdownBlock`/`content` path is mounted. */
+	hasMarkdownBlock(): boolean {
+		return this.wrapper.find('[data-testid="markdown-block"]').exists();
+	}
 }
