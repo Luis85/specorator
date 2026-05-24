@@ -149,3 +149,22 @@ convergence.
   `setLocale` / `i18nTranslate` / `i18nMerge` / `SupportedLocale` /
   `SUPPORTED_LOCALES` / `MessageSchema` kept in shape.
 - **T-PSR-005/006 GREEN** (11 tests). SPEC-PSR-006/010/011/012.
+
+### T-PSR-013 — Revert `WorkspacePort` to `openFile`-only (dev)
+
+- `src/domain/ports/WorkspacePort.ts` reduced to `{ openFile(path): Promise<void> }`;
+  deleted the six chat-era methods + the `ActiveFileSnapshot` interface + the
+  `Unsubscriber` import (used only by `onActiveFileChanged`). Removed the
+  `ActiveFileSnapshot` re-export from `src/domain/ports/index.ts` (kept
+  `Unsubscriber` per SPEC-PSR-009). T-PSR-012's type-level assertion is now
+  satisfiable; confirmed at the Phase B typecheck-clean gate. SPEC-PSR-009; OC-PSR-1.
+
+### T-PSR-029 — Add `next` to `ci.yml` triggers (dev)
+
+- `.github/workflows/ci.yml`: added `next` to `on.push.branches` and
+  `on.pull_request.branches`. Only change; no `uses:` touched
+  (`verify:workflows` clean — 7 files, all SHA-pinned). `actionlint` not
+  installed locally (CI `workflow-lint` job enforces it); the edit is a pure
+  branch-list extension. **T-PSR-028 GREEN** (2 tests). SPEC-PSR-015; REQ-PSR-012.
+- **Flagged (repo-settings, to release/SRE):** branch protection on `next` must
+  require the `verify` check before merge.
