@@ -2,10 +2,10 @@
 feature: Plugin shell reboot (P0 — Claudian-shaped rewrite foundation)
 area: PSR
 slug: plugin-shell-reboot
-current_stage: design
+current_stage: spec
 status: active
 last_updated: 2026-05-24
-last_agent: architect (Stage 4)
+last_agent: architect (Stage 5)
 epic: claudian-reboot
 phase: P0
 integration_branch: next
@@ -15,7 +15,7 @@ artifacts:
   research.md: skipped
   requirements.md: complete
   design.md: complete
-  spec.md: pending
+  spec.md: complete
   tasks.md: pending
   implementation-log.md: pending
   test-plan.md: pending
@@ -40,7 +40,7 @@ adrs:
 | 2. Research | `research.md` | skipped (Claudian source is the sole reference) |
 | 3. Requirements | `requirements.md` | complete |
 | 4. Design | `design.md` | complete |
-| 5. Specification | `spec.md` | pending |
+| 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
@@ -226,4 +226,74 @@ only at parity.
                           add superseded-by pointers (mechanical). Migration contract
                           confirmed = STRIP-on-read (architect recommendation) so
                           REQ-PSR-005 holds for the persisted blob. spec author pins all.
+
+2026-05-24 (architect, Stage 5): spec.md written + complete (SPEC-PSR-001). 17
+                          spec items (SPEC-PSR-001..017) + 23 test scenarios
+                          (TEST-PSR-001..023: 15 unit, 3 automated guard/arch,
+                          5 manual Obsidian for NFR-PSR-003). Key contracts pinned:
+                          MIGRATION (SPEC-PSR-002) = strip-on-read, idempotent,
+                            version-agnostic (fromVersion ignored). settingsVersion
+                            3→4. migrate projects any blob → {locale,logLevel} only;
+                            validateSettings coerces locale (coerceString) + logLevel
+                            (coerceEnum/VALID_LOG_LEVELS). Edge table covers
+                            already-v4 / pre-versioned-v0.x-fat / null / corrupt /
+                            partial / invalid-value / idempotency. All other coercion
+                            helpers + VALID_* + @/domain/chat imports deleted.
+                          WORKSPACEPORT (SPEC-PSR-009, OC-PSR-1) = reverted to ADR-008
+                            openFile-only. Verified the only KEPT consumer is
+                            useWorkspacePort.ts (passthrough); empty AgentPanelRoot
+                            calls nothing. Dropped getActiveFile*/onActiveFileChanged/
+                            getActiveFilePath/getActiveSelection/getVaultName/
+                            getMarkdownFileCount + ActiveFileSnapshot. CORRECTION to
+                            design §C.5: ObsidianBridge ALSO carries ChatTransportPort
+                            + IconPort (confirmed in source) — it must be de-coupled
+                            in Wave 3 too, not just Mock/LocalStorage. Unsubscriber
+                            kept in barrel (MAY drop if zero kept importers — not
+                            required, not an NFR-PSR-009 violation).
+                          GUARD TEST (SPEC-PSR-013/014, TEST-PSR-016) = ESLint Node
+                            API (new ESLint(), lintFiles(['src/**/*.ts','src/**/*.vue']),
+                            errorOnUnmatchedPattern:true) asserting zero
+                            no-restricted-imports msgs carrying the DELETED_SUBSYSTEM_BAN
+                            fragment. DELETED_SUBSYSTEM_BAN expanded to one glob per
+                            prefix (brace-form collapsed for auditability) + a paths
+                            entry banning the 14 deleted InjectionKey importNames from
+                            @/infrastructure/bridge/ports. Dead custom rule
+                            no-legacy-claude-cli-port-names + .cjs + __tests__ +
+                            lint:rules half + useClaudeCliPort override DELETED
+                            (NFR-PSR-009); no-claude-home-reads KEPT.
+                          AGENT SURFACE: VIEW_TYPE_AGENT='specorator-agent';
+                            AgentSidebarView(ItemView) mounts AgentPanelRoot inside
+                            ErrorBoundary via createApp+h, provides 6 core ports,
+                            getIcon()='bot' (native Lucide, not IconPort); onClose
+                            unmounts. AgentPanelRoot data-testid="agent-panel-empty",
+                            reads agent.empty.placeholder. One command
+                            'open-agent-sidebar' + activateAgentSidebar reveal-or-create
+                            with loadIfDeferred (deferred-leaf invariant). Slim
+                            SpecoratorSettingTab keeps only the module-schema loop.
+                          i18n (CL-1): index.ts kept in shape; catalogues trimmed to
+                            the single agent.empty.placeholder key (en+de); locale
+                            narrowed via toSupportedLocale (fr→en) at all 3 setLocale
+                            sites (main.ts, view.onOpen, ui/main.ts) — fixes the
+                            string→SupportedLocale gap that no-unsafe-argument would
+                            reject.
+                          STANDALONE (OC-PSR-2): src/ui/main.ts always MockBridge;
+                            LocalStorageBridge kept as compiling 6-port class, NOT
+                            referenced; GitHub-Pages demo deferred.
+                          ci.yml (SPEC-PSR-015): add `next` to push+pull_request branch
+                            lists only; SHA-pin/actionlint-safe (no `uses:` touched).
+                          FLAGGED TO PLANNER (## Open clarifications, none blocking):
+                            OC-PSR-4 (verify ALL_MODULES/helloModule shape — trim to
+                            [coreSettingsModule, helloModule]); OC-PSR-5 (confirm
+                            @/infrastructure/mcp/** + @/application/migration/** globs
+                            resolve to real deleted paths during Wave 2/3 — drop any
+                            dead glob per NFR-PSR-009; MCP registrars may be under
+                            ObsidianMcp* instead); OC-PSR-6 (reuse existing ESLint-API
+                            harness in tests/lint/** if present, else create new file);
+                            OC-PSR-7 (confirm ErrorBoundary.vue survives Wave 0 in
+                            place — empty view mounts inside it). OC-PSR-3 (ADR index
+                            row + superseded-by pointers) folded into §9 as a
+                            mechanical planner task note.
+                          Next: /spec:tasks (planner) — decompose into T-PSR-* keyed to
+                          the 6 delete waves + the surviving contracts; resolve OC-PSR-4..7
+                          as verification subtasks.
 ```
