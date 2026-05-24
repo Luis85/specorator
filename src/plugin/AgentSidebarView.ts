@@ -51,7 +51,7 @@ export class AgentSidebarView extends ItemView {
 		if (bridge !== null) {
 			setLocale(toSupportedLocale(this.plugin.settings.locale));
 
-			const host = this.contentEl.createDiv({ cls: 'specorator-agent-root' });
+			const host = this.contentEl.createDiv({ cls: 'specorator-root specorator-agent-root' });
 			const app = createApp({
 				name: 'AgentRoot',
 				render: () => h(ErrorBoundary, null, { default: () => h(AgentPanelRoot) }),

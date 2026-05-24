@@ -398,3 +398,24 @@ convergence.
   **94.53 / 85.01 / 87.17 / 94.66** (stmts/branches/funcs/lines) — all clear
   80/70/80/80. **No `include` change** (R-PSR-5 contingency not triggered).
   Recorded in test-report.md.
+
+### T-PSR-033 / T-PSR-034 — final gate + manual prep
+
+- **Build fix:** the slim `main.ts` dropped CSS imports, so the plugin lib build
+  emitted no `styles.css` (the copy step ENOENT'd). Re-added the shared token +
+  animation layers (`import '@/ui/styles/tokens.css'` + `animations.css`) to
+  `main.ts`; tagged the `AgentSidebarView` host `.specorator-root` so the scoped
+  tokens apply. `styles.css` regenerated.
+- **Storybook (R-PSR-4):** all stories were deleted in Wave 0, so `test:storybook`
+  exited 1 (no test files). Added `stories/agent/AgentPanelRoot.stories.ts` (the
+  surviving surface) so the gate has ≥1 test. `test:storybook` needs Playwright
+  Chromium — **CI-verified** (not runnable in this environment; not self-claimed).
+- **`npm run verify` exits 0:** audit, typecheck, lint, lint:style-tokens,
+  test:coverage (308 tests; 94.5/85/87/94.7), build, build:web, verify:bundle-size
+  (0.41 MB / 4 MB), docs:api, validate:manifest, verify:scaffold, verify:workflows,
+  `git diff --check`. `manifest.json` `id`/`version`/`minAppVersion` UNCHANGED vs
+  `develop` (NFR-PSR-007). **Zero bypasses** — no `--no-verify`/`--ignore-scripts`/
+  `if: false`/skipped tests/eslint-disable masking (counter-metric = 0).
+- **PENDING human (P0 checkpoint):** `test:storybook` + CI green on `next`
+  (T-PSR-034); manual Obsidian checks TEST-PSR-018..021 (T-PSR-033 — see
+  test-report.md). These are never self-claimed.

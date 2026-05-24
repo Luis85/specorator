@@ -1,3 +1,5 @@
+import '@/ui/styles/tokens.css';
+import '@/ui/styles/animations.css';
 import { Plugin } from 'obsidian';
 import { AgentSidebarView, VIEW_TYPE_AGENT } from './AgentSidebarView';
 import { SpecoratorSettingTab } from './settings';
