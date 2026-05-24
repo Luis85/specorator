@@ -116,9 +116,15 @@ const PORTS_BAN_PATTERN = {
 // The guard evolves per phase (ADR-PSR-001 "regrows per phase"). P1 (chat-core,
 // ADR-CC-001) regrows the chat domain (`@/domain/chat`), the chat application
 // layer (`@/application/chat`), and `MarkdownRenderPort` (new minimal contract),
-// so those entries are removed here. Still-deleted subsystems — the `Feature`
-// aggregate, the old transport/MCP/secret/icon/canvas ports + adapters — stay
-// banned until their own phase regrows them.
+// so those entries are removed here. P2 (rich-rendering, ADR-RR-001 §4, T-RR-003)
+// regrows the icon seam (`IconPort` + `ICON_PORT` key + the `SpIcon` consumer),
+// so `@/domain/ports/IconPort` is dropped from this group and `ICON_PORT` from
+// DELETED_INJECTION_KEYS below — these three regrown paths are now permitted
+// while EVERY other P0-deleted symbol stays forbidden. (`SpIcon` lives at the
+// new UI path `@/ui/chat/SpIcon`, which no ban glob matches — it is permitted by
+// construction.) Still-deleted subsystems — the `Feature` aggregate, the old
+// transport/MCP/secret/metadata/canvas ports + adapters — stay banned until
+// their own phase regrows them.
 const DELETED_SUBSYSTEM_BAN = {
 	group: [
 		'@/domain/feature',
@@ -144,7 +150,7 @@ const DELETED_SUBSYSTEM_BAN = {
 		'@/domain/ports/TransportLifecyclePort',
 		'@/domain/ports/ConfirmModalPort',
 		'@/domain/ports/SecretStorePort',
-		'@/domain/ports/IconPort',
+		// `@/domain/ports/IconPort` regrows in P2 (ADR-RR-001 §4, T-RR-003) — removed.
 		'@/domain/ports/MetadataCachePort',
 		'@/domain/ports/CanvasPort',
 		'@/domain/ports/ObsidianMcpServerPort',
@@ -159,7 +165,7 @@ const DELETED_SUBSYSTEM_BAN = {
 const DELETED_INJECTION_KEYS = {
 	name: '@/infrastructure/bridge/ports',
 	importNames: [
-		'ICON_PORT',
+		// `ICON_PORT` regrows in P2 (ADR-RR-001 §4, T-RR-003) — removed from the ban.
 		'METADATA_CACHE_PORT',
 		'CANVAS_PORT',
 		'CHAT_TRANSPORT_PORT',

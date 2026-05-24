@@ -36,7 +36,26 @@ record the GREEN convergence + commit SHA.
   `specs/rich-rendering/test-plan.md` (new — baseline reference + the NFR-RR-014 incremental-render
   qualitative baseline note recorded in the canonical sink; manual TEST-RR-026 / T-RR-043 legs
   scheduled). Both linked to #434.
-- **Commit:** _(this commit)_.
+- **Commit:** `d42bdde`.
 - **Outcome:** done. No file under `src/` changed (DoD line 3). The Specorator column + the human
   visual capture happen at `/spec:review`.
+- **Deviation:** none.
+
+### T-RR-003 🔨 — Relax the deleted-symbol guard for `IconPort` / `SpIcon` / `ICON_PORT`
+
+- **Spec:** SPEC-RR-009, SPEC-RR-025, NFR-RR-001. Mirrors P1's CLAR-CC-007 relaxation.
+- **Files:** `eslint.config.js` — dropped `'@/domain/ports/IconPort'` from `DELETED_SUBSYSTEM_BAN.group`
+  (lines ~147) and `'ICON_PORT'` from `DELETED_INJECTION_KEYS.importNames` (lines ~161); documented
+  the relaxation inline in the guard's evolves-per-phase comment. `SpIcon` lives at the new UI path
+  `@/ui/chat/SpIcon`, which no ban glob matches — already permitted by construction. Every OTHER
+  P0-deleted symbol (`IBridge`/`BridgeKey`/`useBridge` via `PORTS_BAN_PATTERN`; `@/domain/feature/**`,
+  the transport/MCP/secret/metadata/canvas ports + adapters via `DELETED_SUBSYSTEM_BAN`;
+  `METADATA_CACHE_PORT`/`CANVAS_PORT`/… via `DELETED_INJECTION_KEYS`) stays forbidden.
+- **Commit:** _(this commit)_.
+- **Gate:** `npm run lint` → 0 errors (3 pre-existing warnings, unrelated). Positive control:
+  `npx vitest run tests/architecture/no-deleted-subsystem-refs.test.ts` → 2 passed — TEST-PSR-016
+  (no `src/**` violation) **and** TEST-PSR-017 (the fixture importing the still-deleted
+  `@/domain/feature/Feature` still trips the ban, proving the guard still fires on a still-deleted
+  symbol).
+- **Outcome:** done. Lands before T-RR-007 so the `IconPort`/`ICON_PORT` imports resolve.
 - **Deviation:** none.
