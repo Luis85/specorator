@@ -26,6 +26,7 @@ import type { ApprovalRule } from '@/domain/chat/ApprovalRule'
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
 import { ObsidianConfirmModalAdapter } from '@/infrastructure/obsidian/ObsidianConfirmModalAdapter'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
+import { ObsidianCliAdapter } from '@/infrastructure/obsidian/ObsidianCliAdapter'
 import { ObsidianMetadataCacheAdapter } from '@/infrastructure/obsidian/ObsidianMetadataCacheAdapter'
 import { ObsidianCanvasAdapter } from '@/infrastructure/obsidian/ObsidianCanvasAdapter'
 import { ObsidianSecretStoreAdapter } from '@/infrastructure/obsidian/ObsidianSecretStoreAdapter'
@@ -183,6 +184,9 @@ export default class SpecoratorPlugin extends Plugin {
         new ObsidianMetadataCacheAdapter(this.app),
         new ObsidianCanvasAdapter(this.bridge),
         new FeedbackService(this.bridge, this.bridge),
+        // ADR-018 — CLI-backed tool group. The adapter reads `obsidianCliPath`
+        // fresh on each call; the group is registered only when a path is set.
+        new ObsidianCliAdapter({ spawn, resolvePath: () => this.settings.obsidianCliPath }),
       ),
       isMcpServerEnabled: () => this.settings.mcpServerEnabled,
     })

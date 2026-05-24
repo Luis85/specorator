@@ -18,6 +18,12 @@ export type { Unsubscriber } from './shared';
 export type { MetadataCachePort, FileMetadataSnapshot } from './MetadataCachePort';
 export type { CanvasPort, JsonCanvasData } from './CanvasPort';
 export type { ObsidianMcpServerPort, McpConnectionConfig } from './ObsidianMcpServerPort';
+export type {
+	ObsidianCliPort,
+	ObsidianCliInvocation,
+	ObsidianCliErrorCode,
+} from './ObsidianCliPort';
+export { ObsidianCliError } from './ObsidianCliPort';
 export type { CommunityPluginPort } from './CommunityPluginPort';
 export type {
 	ChatTransportPort,

@@ -1,5 +1,5 @@
 import './core-events'
-import type { SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, TranslationPort, ObsidianMcpServerPort } from '@/domain/ports'
+import type { SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, TranslationPort, ObsidianMcpServerPort, McpConnectionConfig } from '@/domain/ports'
 import { createEventBus, type EventBus, type EventBusOptions, type EventEnvelope } from '@/domain/shared/event-bus'
 import { tryAsync, trySync } from '@/domain/shared/tryAsync'
 import type { ModuleDescriptor, ModulePorts } from '@/modules'
@@ -287,6 +287,16 @@ export class PluginCore {
   /** True iff the MCP server is currently running under PluginCore's control. */
   isMcpServerRunning(): boolean {
     return this._mcpRunning
+  }
+
+  /**
+   * Loopback connection config for the running MCP server, or `null` when the
+   * server is not running. Used by the settings tab to show the connection URL
+   * (REQ-OCM-018). Safe because a running server is always started.
+   */
+  getMcpConnectionConfig(): McpConnectionConfig | null {
+    if (!this._mcpRunning || this.ports.mcpServer === undefined) return null
+    return this.ports.mcpServer.getConnectionConfig()
   }
 
   /**
