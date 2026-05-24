@@ -200,17 +200,52 @@ Each phase = its own `/spec` cycle on a branch off `next`, vertical slice, **wit
 
 ---
 
-## 6. Out of scope / deferred (decide explicitly, don't drop silently)
+## 6. Decisions to confirm (from the deep audits)
 
-> Fill as decisions are made. Candidates to confirm with the user:
-- Codex/Opencode feature completeness (Claudian itself flags these "may be incomplete").
-- Claude **plugins** subsystem (`providers/claude/plugins`) — niche; confirm in/out.
-- Any Claudian surface the team decides is not wanted in Specorator.
-- Provider auth flows beyond CLI/env (Openrouter/Kimi compatibility) — confirm.
+> The two deep audits (`claudian-audit-frontend.md`, `claudian-audit-backend.md`)
+> surfaced these. Resolve each at the owning phase's `/spec:design` (or earlier if it
+> needs an ADR). None blocks P0.
+
+### 6a. Needs an ADR (architecturally load-bearing)
+- **`ChatRuntimePort` shape** — Claudian's `ChatRuntime` is a streaming async-generator
+  with injected callback setters; that contract bends ADR-008's "narrow method" style.
+  ADR to bless the shape before P1.
+- **`HomeFsPort` (beyond-vault filesystem)** — Claude/Codex read `~/.claude`, `~/.codex`
+  transcripts; the six core ports are vault-scoped. New port for home-dir access needs
+  an ADR (security surface: reads outside the vault).
+- **Secret handling** — Claudian stores raw API keys in settings JSON. Decide:
+  plain settings vs a `SecretStorePort`/keychain. Security-significant → ADR.
+- **Approval-rule persistence** target/shape (`SecretStorePort`-adjacent).
+
+### 6b. Scope confirmations (in / out)
+- Codex + Opencode **feature completeness** vs Claude-complete + capability-gating
+  (Claudian itself flags these "may be incomplete").
+- Claude **plugins** subsystem (`providers/claude/plugins`) — niche; in/out.
+- MCP for **non-Claude** providers (Claude is in-app; Codex CLI-managed).
+- Provider auth beyond CLI/env (**Openrouter / Kimi** compatibility).
+- Bundling `@modelcontextprotocol/sdk`; i18n key type-generation.
+- Any Claudian surface the team decides Specorator does not want.
+
+### 6c. Recommended new narrow ports (full tables in the audit files)
+Frontend: `FilePickerPort`, `EditorSelectionPort`, `ClipboardPort`, `AuxModelPort`.
+Backend: `ChatRuntimePort`, `ProviderRegistryPort`, `ProviderHistoryPort`,
+`HomeFsPort`*, `McpConfigStorePort`, `McpClientPort`, `TranslationPort` (formalise),
+`SecretStorePort`*, `ApprovalRuleStorePort`. (* = needs ADR, see §6a.)
+Each is mapped to a phase + the bridge that implements it in the audit files.
+
+> **Note on the existing scaffold:** the audits read the *pre-P0* tree, which still
+> contains the AUX/MPS agent UI + chat code. P0 deletes that. So P1–P6 rebuild those
+> surfaces clean — the deleted code + its AUX design are *reference* (charter §7), not a
+> base to extend. "Mostly extension" in the frontend audit describes the pre-gut tree.
 
 ---
 
 ## 7. References
+- **Deep per-surface audits (design input for P1–P12):**
+  `specs/claudian-reboot/claudian-audit-frontend.md` (chat/render/composer/context/
+  toolbar — §3.1–3.5) and `claudian-audit-backend.md` (provider runtime/MCP/settings/
+  i18n/a11y/security — §3.6–3.9). Each maps Claudian source + CSS → Vue component +
+  DDD layer + narrow port + `--sp-*` tokens, per surface, with parity-critical detail.
 - **Visual + behavioural reference:** `D:\Projects\claudian-main` (MIT). Read-only.
   Per-surface, cite the exact source path in each phase's requirements/design.
 - **Prior parity work (reuse, don't re-derive):** the discarded `agent-ux-parity` (AUX)
