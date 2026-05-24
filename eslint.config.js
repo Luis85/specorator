@@ -112,13 +112,17 @@ const PORTS_BAN_PATTERN = {
 // itself be a defect). OC-PSR-5: the MCP registrars lived under
 // `@/infrastructure/obsidian/mcp/**`, so the design's top-level
 // `@/infrastructure/mcp/**` glob is dropped in favour of the real path.
+//
+// The guard evolves per phase (ADR-PSR-001 "regrows per phase"). P1 (chat-core,
+// ADR-CC-001) regrows the chat domain (`@/domain/chat`), the chat application
+// layer (`@/application/chat`), and `MarkdownRenderPort` (new minimal contract),
+// so those entries are removed here. Still-deleted subsystems — the `Feature`
+// aggregate, the old transport/MCP/secret/icon/canvas ports + adapters — stay
+// banned until their own phase regrows them.
 const DELETED_SUBSYSTEM_BAN = {
 	group: [
-		'@/domain/chat',
-		'@/domain/chat/**',
 		'@/domain/feature',
 		'@/domain/feature/**',
-		'@/application/chat/**',
 		'@/application/feature/**',
 		'@/application/migration/**',
 		'@/infrastructure/bridge/FeatureRepository',
@@ -140,7 +144,6 @@ const DELETED_SUBSYSTEM_BAN = {
 		'@/domain/ports/TransportLifecyclePort',
 		'@/domain/ports/ConfirmModalPort',
 		'@/domain/ports/SecretStorePort',
-		'@/domain/ports/MarkdownRenderPort',
 		'@/domain/ports/IconPort',
 		'@/domain/ports/MetadataCachePort',
 		'@/domain/ports/CanvasPort',
@@ -164,7 +167,6 @@ const DELETED_INJECTION_KEYS = {
 		'TRANSPORT_LIFECYCLE_PORT',
 		'CONFIRM_MODAL_PORT',
 		'SECRET_STORE_PORT',
-		'MARKDOWN_RENDER_PORT',
 		'TRANSPORT_KIND_KEY',
 		'IS_MOBILE_KEY',
 		'SETTINGS_VERSION_KEY',
