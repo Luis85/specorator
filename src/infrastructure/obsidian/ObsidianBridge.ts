@@ -141,27 +141,25 @@ export class ObsidianBridge
 		return new ClaudeCliChatRuntime(this, this.getVaultBasePath());
 	}
 
-	// ── Markdown render port (SPEC-CC-013/015, SPEC-RR-010) ─────────────────────
-	// P2 re-backs the UNCHANGED `SafeRenderResult` port shape with Obsidian's
-	// `MarkdownRenderer.render`: render into a DETACHED element, walk the produced
-	// fragment into the declarative DTO entirely in the bridge, then discard the
-	// element — no DOM element / HTML string / sink reaches the UI (NFR-RR-006).
-	// Total: any internal failure (or an async render that has not populated the
-	// fragment synchronously) degrades to the pure `safeMarkdownRender` baseline,
-	// which stays perceptually equivalent for the common paragraph/inline-code
-	// case (EC-RR-17). Coverage-excluded infra; behaviour gated by the MANUAL leg
-	// of TEST-RR-026 (T-RR-043).
+	// ── Markdown render port (SPEC-CC-013/015, SPEC-RR-010, ADR-RR-002) ─────────
+	// P2 re-backs the UNCHANGED `SafeRenderResult` DTO shape with Obsidian's
+	// `MarkdownRenderer.render`: `await` the real (asynchronous) renderer into a
+	// DETACHED element, THEN walk the now-populated fragment into the declarative
+	// DTO entirely in the bridge, then discard the element — no DOM element / HTML
+	// string / sink reaches the UI (NFR-RR-006). The port is async (ADR-RR-002 —
+	// supersedes ADR-RR-001 §3) precisely because the renderer is async; the prior
+	// sync read raced the renderer and always saw an empty fragment, so production
+	// markdown rendered plain. Total: any internal failure (or an empty fragment)
+	// degrades to the pure `safeMarkdownRender` baseline and NEVER rejects.
+	// Coverage-excluded infra; behaviour gated by the MANUAL leg of TEST-RR-043.
 	createMarkdownRenderPort(): MarkdownRenderPort {
 		const app = this.app;
+		const component = this._renderComponent;
 		return {
-			render: (markdown: string): SafeRenderResult => {
+			render: async (markdown: string): Promise<SafeRenderResult> => {
 				const detached = createDiv();
 				try {
-					// MarkdownRenderer.render is async; we kick it off into the detached
-					// element and walk whatever it produced synchronously. When the walk
-					// yields nothing (async not yet resolved) we degrade to the pure
-					// baseline so the port stays synchronous, total and never throws.
-					void MarkdownRenderer.render(app, markdown, detached, '', this._renderComponent);
+					await MarkdownRenderer.render(app, markdown, detached, '', component);
 					const walked = walkMarkdownFragment(detached);
 					return walked.nodes.length > 0 ? walked : safeMarkdownRender(markdown);
 				} catch {

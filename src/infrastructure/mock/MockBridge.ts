@@ -144,10 +144,12 @@ export class MockBridge
 		return new MockChatRuntime();
 	}
 
-	// ── Markdown render port (SPEC-CC-013, SPEC-CC-015) ─────────────────────────
-	// The P1 `safeMarkdownRender`-backed port (structured nodes, no HTML sink).
-	// Stateless singleton; identical behaviour across all three bridges in P1
-	// (Obsidian's renderer backing is P2).
+	// ── Markdown render port (SPEC-CC-013, SPEC-CC-015, ADR-RR-002) ─────────────
+	// The pure `safeMarkdownRender`-backed port (structured nodes, no HTML sink).
+	// Per ADR-RR-002 the port is async: this stateless singleton resolves
+	// `Promise.resolve(safeMarkdownRender(markdown))` (the pure transform stays
+	// synchronous). Obsidian's awaited `MarkdownRenderer` backing is the production
+	// path; Mock/LocalStorage share this resolved-pure-baseline backing.
 	createMarkdownRenderPort(): MarkdownRenderPort {
 		return safeMarkdownRenderPort;
 	}

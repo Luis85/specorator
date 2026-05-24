@@ -111,9 +111,11 @@ export class LocalStorageBridge
 		return new FixtureChatRuntime();
 	}
 
-	// ── Markdown render port (SPEC-CC-013, SPEC-CC-015) ─────────────────────────
-	// The P1 `safeMarkdownRender`-backed port (structured nodes, no HTML sink).
-	// Identical behaviour across all three bridges in P1.
+	// ── Markdown render port (SPEC-CC-013, SPEC-CC-015, ADR-RR-002) ─────────────
+	// The pure `safeMarkdownRender`-backed port (structured nodes, no HTML sink).
+	// Per ADR-RR-002 the port is async: this stateless singleton resolves
+	// `Promise.resolve(safeMarkdownRender(markdown))` for the GitHub Pages demo
+	// (the pure transform stays synchronous).
 	createMarkdownRenderPort(): MarkdownRenderPort {
 		return safeMarkdownRenderPort;
 	}

@@ -6,7 +6,8 @@
  * sink, so the Vue layer renders declaratively (no `v-html`/`innerHTML`, NFR-CC-008/
  * NFR-RR-006). P1 backing = `safeMarkdownRender` (SPEC-CC-014); P2 re-backs `render` on
  * the Obsidian bridge with Obsidian's `MarkdownRenderer.render` walked into this DTO —
- * the `SafeRenderResult.nodes` field contract is UNCHANGED (ADR-RR-001 §3).
+ * the `SafeRenderResult.nodes` field contract is UNCHANGED (ADR-RR-001 §3, as superseded by
+ * ADR-RR-002 for the asynchrony of the seam only).
  *
  * P2 widens the unions ADDITIVELY: the P1 `paragraph` node + `text`/`code` inlines
  * survive byte-identical; P2 adds the declarative block kinds richer markdown (thinking
@@ -41,11 +42,18 @@ export interface SafeRenderResult {
 }
 
 /**
- * One-method safe markdown -> structured-nodes seam. `render` is pure, synchronous, total
- * (never throws), and idempotent — safe to call on every accumulated `text` chunk during
- * streaming (REQ-CC-004). The result is a DTO consumed declaratively by `MarkdownBlock.vue`,
- * never injected as HTML.
+ * One-method safe markdown -> structured-nodes seam. `render` is total (never rejects) and
+ * idempotent — safe to call on every accumulated `text` chunk during streaming (REQ-CC-004).
+ * The result is a DTO consumed declaratively by `MarkdownBlock.vue`, never injected as HTML.
+ *
+ * `render` is **async** (`Promise<SafeRenderResult>`, ADR-RR-002 — supersedes ADR-RR-001 §3):
+ * the production `ObsidianBridge` backing must `await` Obsidian's asynchronous
+ * `MarkdownRenderer.render` before walking the populated fragment into the DTO. The
+ * Mock/LocalStorage backings resolve `Promise.resolve(safeMarkdownRender(markdown))`; the pure
+ * `safeMarkdownRender` transform itself stays synchronous (it is the Mock/Fixture backing AND
+ * the production degrade path). The `SafeRenderResult` / `MarkdownNode` / `MarkdownInline` field
+ * contract is unchanged — only the `Promise` wrapper is added.
  */
 export interface MarkdownRenderPort {
-	render(markdown: string): SafeRenderResult;
+	render(markdown: string): Promise<SafeRenderResult>;
 }
