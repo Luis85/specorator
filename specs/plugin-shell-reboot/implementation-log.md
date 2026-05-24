@@ -276,3 +276,14 @@ convergence.
 - **typecheck green-or-expected:** errors trace only to Wave 2 application/chat,
   Wave 3 infra adapters/bridges, and `ObsidianBridge`'s chat region. REQ-PSR-004/005/003;
   SPEC-PSR-016, §9.
+
+### T-PSR-019 — Wave 2: application layer (dev, OC-PSR-5)
+
+- Deleted `src/application/{chat,feature,migration}/**` and their tests; kept
+  `src/application/shared/FeedbackService.ts` (+ test) and the `__fixtures__`
+  boundary fixtures.
+- **OC-PSR-5 (part):** `@/application/migration/**` resolved to a real directory
+  (`index.ts` + `migrateProviderSelection.ts`), now deleted — the guard glob
+  (T-PSR-026) will match a real removed path.
+- **typecheck green-or-expected:** errors trace only to Wave 3 infra adapters/
+  bridges/MCP registrars and their tests. REQ-PSR-004/005; §9.
