@@ -4,7 +4,7 @@ area: MHP
 current_stage: tasks
 status: active
 last_updated: 2026-05-24
-last_agent: planner
+last_agent: dev
 artifacts:
   idea.md: complete
   research.md: complete
@@ -310,6 +310,67 @@ _None._
                            cross-surface invariant (card observes external
                            accept), .gitignore-failure error class shape.
                            No new CLARs surfaced.
+2026-05-24 (dev):          T-MHP-010 / T-MHP-011 / T-MHP-013 implemented
+                           (Batch 3 ProposalStore extension chain). Added
+                           tests/infrastructure/obsidian/ProposalStore.
+                           extended.test.ts (21 tests covering acceptBy/
+                           rejectBy/discardPending/tryQueue + per-id mutex
+                           single-mutate invariant + 100-iter fuzz +
+                           event-bus emission + post-accept failure
+                           classification + queue cap 1000). Extended
+                           src/infrastructure/obsidian/ProposalStore.ts:
+                           new optional `{eventBus, auditLog,
+                           clientIdentifier, logger}` deps; new methods
+                           acceptBy / rejectBy / tryQueue / pendingCount /
+                           listPending / discardPending; new ProposalError
+                           class with 4 codes (queue_full / not_found /
+                           already_decided / write_failed); per-id mutex
+                           via Map<id, Promise<void>> serialises every
+                           accept/reject. Legacy `queue / accept / reject /
+                           getAll / get` preserved verbatim (jsdoc
+                           @deprecated) so ObsidianMcpServerAdapter and the
+                           8 write-tool registrars keep working with zero
+                           changes until T-MHP-041 rewires them. Extracted
+                           helpers into new src/infrastructure/obsidian/
+                           proposalStoreInternals.ts (buildEntry,
+                           cloneDomainProposal, buildAuditRow,
+                           buildNotFoundAuditRow, QUEUE_CAPACITY,
+                           UNKNOWN_CLIENT, coerceKind) to keep
+                           ProposalStore.ts under the 350-line lint cap.
+                           T-MHP-013 audit wiring landed in the same slice:
+                           acceptBy / rejectBy / discardPending and the
+                           not_found error path all call auditLog.append
+                           BEFORE the Result returns; row ordering invariant
+                           asserted by the test. Verification: 39/39 green
+                           on ProposalStore + legacy proposal-store tests;
+                           1136/1136 green on tests/infrastructure +
+                           tests/application slice; typecheck clean on
+                           changed surface (the 8 pre-existing errors on
+                           tests/core/PluginSettings.devtools.test.ts are
+                           Batch-1 TDD for T-MHP-008 and remain out of
+                           scope); eslint --max-warnings 0 clean on the
+                           three changed files. Two deviations from
+                           SPEC-MHP-034 letter, documented in impl-log
+                           T-MHP-011 entry: (a) two-surface store (legacy
+                           queue + new tryQueue) instead of single
+                           `queue(QueueInput): QueueResult` shape — chosen
+                           per user brief's backwards-compat directive;
+                           (b) acceptBy/rejectBy take a single
+                           ProposalDecision argument (which already carries
+                           `by`) instead of the spec's (by, decidingClient)
+                           tuple — caller constructs the decision
+                           server-side from the connection's stashed
+                           ClientIdentity. Both flagged for architect at
+                           T-MHP-041. Implementation-log artifact remains
+                           in-progress: many WP-MHP-A/B/D/F/G/I tasks still
+                           owned by dev (workflow_proposal_* registrars,
+                           8 write-tool wiring, MigrationService wiring,
+                           StatusBar/Notice emitter, FileWriteProposalCard
+                           S24, etc.). Next agent: dev (continue WP-MHP
+                           backlog) — recommended next slice T-MHP-015 /
+                           T-MHP-016 (workflow_proposal_* MCP tools)
+                           which is the call-site that exercises the new
+                           acceptBy / rejectBy surface end-to-end.
 2026-05-24 (dev):          T-MHP-130 / T-MHP-132 / T-MHP-123 implemented.
                            Hook for SystemPromptAddendum located at
                            src/application/chat/ChatTurnOrchestrator.ts
