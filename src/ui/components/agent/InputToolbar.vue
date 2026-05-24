@@ -3,7 +3,7 @@
  * `InputToolbar.vue` — composes the chat composer's secondary controls in the
  * REQ-AUX-004 normative source order:
  *
- *   model · mode · permission · thinking · mcp · context-meter · send
+ *   model · mode · permission · thinking · context-meter · send
  *
  * The send button doubles as stop while `messagesStore.status === 'loading'`
  * (the streaming state) — clicks emit `stop` instead of `send`. The button
@@ -23,7 +23,6 @@ import { useChatInputModeStore } from '@/ui/stores/chatInputModeStore';
 import SpIconButton from '@/ui/components/primitives/SpIconButton.vue';
 import SpToggleSwitch from '@/ui/components/primitives/SpToggleSwitch.vue';
 import ModelSelector from './ModelSelector.vue';
-import McpIndicator from './McpIndicator.vue';
 import ContextMeter from './ContextMeter.vue';
 
 interface InputToolbarProps {
@@ -127,9 +126,6 @@ defineExpose({ sendButtonEl });
 				v-model="thinking"
 				:label="t('agent.composer.thinking.label')"
 			/>
-		</span>
-		<span class="sp-input-toolbar__slot" data-testid="input-toolbar-mcp">
-			<McpIndicator />
 		</span>
 		<span class="sp-input-toolbar__slot" data-testid="input-toolbar-context-meter">
 			<ContextMeter />

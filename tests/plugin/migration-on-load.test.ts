@@ -162,6 +162,9 @@ describe('plugin loadSettings — migrateProviderSelection integration (T-MPS-02
   })
 
   it('a fully-migrated blob does not trigger a saveData on first load', async () => {
+    // Note: mcpServerEnabled and obsidianCliPath are intentionally absent —
+    // they were removed in PR8. A blob containing either key would trigger an
+    // extra saveData call from stripMcpLegacy; a clean post-PR8 blob must not.
     const migrated = {
       specorator: {
         locale: 'en',
@@ -172,7 +175,6 @@ describe('plugin loadSettings — migrateProviderSelection integration (T-MPS-02
         gateStrictness: 'strict',
         teamMode: false,
         logLevel: 'warn',
-        mcpServerEnabled: false,
         userPersona: '',
         onboardingComplete: true,
         claudeCliPath: '',

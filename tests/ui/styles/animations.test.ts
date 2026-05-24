@@ -1,12 +1,14 @@
 /**
  * Keyframes-presence test for the WS-AUX-1 animations layer (REQ-AUX-008,
  * REQ-AUX-019). Asserts that `src/ui/styles/animations.css` declares the
- * five named keyframes mandated by spec.md §1.3.6, §3.4, and §4.6:
+ * four named keyframes mandated by spec.md §1.3.6, §3.4, and §4.6:
  *   - thinking-pulse
  *   - streaming-cursor-blink
  *   - spin
- *   - mcp-glow
  *   - external-context-glow
+ *
+ * Note: `mcp-glow` was removed in PR8 when the McpIndicator component was
+ * extracted to the standalone specorator-obsidian-mcp plugin.
  *
  * Plus an explicit `prefers-reduced-motion` override for `spin` (CQ-AUX-14).
  *
@@ -24,7 +26,6 @@ const REQUIRED_KEYFRAMES = [
 	'thinking-pulse',
 	'streaming-cursor-blink',
 	'spin',
-	'mcp-glow',
 	'external-context-glow',
 ];
 

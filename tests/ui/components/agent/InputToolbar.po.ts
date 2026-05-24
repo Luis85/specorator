@@ -6,7 +6,6 @@ const TID = {
 	mode: 'input-toolbar-mode',
 	permission: 'input-toolbar-permission',
 	thinking: 'input-toolbar-thinking',
-	mcp: 'input-toolbar-mcp',
 	contextMeter: 'input-toolbar-context-meter',
 	send: 'input-toolbar-send',
 } as const;

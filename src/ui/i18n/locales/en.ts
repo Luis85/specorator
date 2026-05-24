@@ -185,7 +185,6 @@ export default {
 			mode: { normal: 'Normal', instruction: 'Instruction', bash: 'Bash', plan: 'Plan' },
 			permission: { label: 'Allow', planLabel: 'Plan' },
 			thinking: { label: 'Thinking' },
-			mcp: { label: 'MCP' },
 			contextMeter: { tooltip: '{used} of {total} tokens used.' },
 		},
 		title: 'Specorator agent',
