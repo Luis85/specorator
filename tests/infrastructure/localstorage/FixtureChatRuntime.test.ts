@@ -98,6 +98,8 @@ describe('FixtureChatRuntime (TEST-CC-016 U leg)', () => {
 		const runtime = new FixtureChatRuntime();
 		const unsub = runtime.onReadyStateChange(() => {});
 		expect(typeof unsub).toBe('function');
-		expect(() => unsub()).not.toThrow();
+		expect(() => {
+			unsub();
+		}).not.toThrow();
 	});
 });

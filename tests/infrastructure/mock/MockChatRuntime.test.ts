@@ -113,6 +113,8 @@ describe('MockChatRuntime (TEST-CC-001)', () => {
 		const runtime = new MockChatRuntime();
 		const unsub = runtime.onReadyStateChange(() => {});
 		expect(typeof unsub).toBe('function');
-		expect(() => unsub()).not.toThrow();
+		expect(() => {
+			unsub();
+		}).not.toThrow();
 	});
 });
