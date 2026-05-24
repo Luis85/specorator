@@ -598,3 +598,100 @@ Executed UI BATCH 2 (T-RR-031..038, SPEC-RR-029/030/031/032/022/023) on `feature
 - **Not pushed.** `manifest.json` untouched. No new dependency added. Vue never imports `obsidian`; `src/plugin/**` keeps the no-`window.confirm`/no-`innerHTML` rules.
 - **Commits:** `5bc322d` (T-RR-040 RED), `f1ee7d4` (T-RR-041), `8cd4212` (T-RR-042).
 - **Remaining:** **T-RR-043** — MANUAL, **human-owned**, the Obsidian `MarkdownRenderer`/`setIcon` backing + real-CLI rich turn (the M leg of TEST-RR-026); **never agent-self-claimed**; scheduled in `test-plan.md`. **T-RR-044** — the full verify gate + `test:all` + parity #434 + the draft PR into `next`; **ORCHESTRATOR-owned**, not run by this dev agent.
+
+---
+
+## Batch — surface-integration fixes (the two T-RR-040..042 wire-in gaps)
+
+Strict TDD, one Conventional commit per fix. Closes the two surface gaps the WIRE-IN batch
+deviation (above) documented as out-of-scope: the orphaned `UsageInfo.vue` and the subagent
+script that never drives a `SubagentBlock`.
+
+### Gap 1 (REQ-RR-024) — mount `UsageInfo` in the live surface — DONE
+
+- **Spec:** SPEC-RR-031 / SPEC-RR-024; REQ-RR-024/024a; DESIGN-RR-001 Part A.1.1 ("usage — turn-level,
+  not a content block"). The component existed + was unit-tested (T-RR-036) but was mounted in NO live
+  view.
+- **Files:** `src/ui/chat/ChatSurface.vue` (import `UsageInfo`; mount `<UsageInfo class="sp-chat-surface__usage" />`
+  as a turn-level footer row below the message region, above the composer; docblock); `tests/ui/chat/ChatSurface.po.ts`
+  (`showsUsage()` / `usageText()` queries by `data-testid="usage-info"`); `tests/ui/chat/ChatSurface.test.ts`
+  (new RED case "REQ-RR-024: a usage chunk renders the turn-level UsageInfo in the surface footer").
+- **RED watched:** the new ChatSurface case failed for the right reason — `usage-info` absent (UsageInfo
+  not mounted): `expected false to be true` at `po.showsUsage()`. The 7 prior cases stayed green.
+  (One test-data correction in my own RED test: the emitted `usage` chunk's `sessionId` had to match the
+  runtime's `getSessionId()` (`'mock-session'`) so the use case's EC-11 foreign-session guard
+  (`RunChatTurnUseCase.ts:170`) does not drop it — a test-authoring fix, no assertion change.)
+- **GREEN:** `ChatSurface.test.ts` 8/8. `UsageInfo` reads `chatStore.usage` itself (no props, no new
+  getter) and renders nothing while `usage === null` (REQ-RR-024a / EC-RR-12), so the footer is clean
+  when absent. Touched-surface re-run: `tests/ui/chat` + `tests/ui/main.rr.test.ts` + `tests/ui/main.test.ts`
+  → **102/102 across 22 files**, no regression.
+- **Commit:** `046a0fe`. **Outcome:** done. **Deviation:** none.
+
+### Gap 2 (parity evidence) — default script drives a visible `SubagentBlock` — BLOCKED on QA reconciliation
+
+- **Spec:** SPEC-RR-004 (`ContentBlock` `subagent` member), SPEC-RR-005/006 (`ToolCall`/`SubagentInfo`),
+  SPEC-RR-020 (store legs), SPEC-RR-022 (`MessageBlocks.resolveSubagent`), SPEC-RR-013 (Mock/Fixture
+  rich scripts). **Claudian ground-truth:** `StreamController.ts:1008` (`recordSubagentInMessage` pushes
+  `{type:'subagent', subagentId: toolId}` — NOT a `tool_use` block — for a Task/Agent spawn).
+- **Root cause (confirmed empirically):** for `MessageBlocks` to mount a `SubagentBlock` there must be a
+  `{type:'subagent', subagentId}` content block whose id resolves a `toolCall.subagent.id` (see
+  `MessageBlocks.vue:40-42` `resolveSubagent` + `MessageBlocks.test.ts:84-104`). The store's `onToolUse`
+  currently pushes a `{type:'tool_use'}` block for a `Task`/`Agent` spawn (`chatStore.ts:300`), which
+  `MessageBlocks` routes to `ToolCallBlock`, never `SubagentBlock`. **No script-only change can make the
+  store emit a `subagent` block** — the store has no leg that pushes one. The Mock/Fixture default scripts
+  also emit the subagent chunks with no spawning `Task`/`Agent` `tool_use`, so the subagent is never even
+  seeded.
+- **Verified fix (prepared, then reverted to keep the tree green — see below):**
+  1. `src/ui/stores/chatStore.ts` `onToolUse` — for a `Task`/`Agent` spawn push `{type:'subagent', subagentId: id}`
+     instead of `{type:'tool_use', toolId: id}` (parity claudian `recordSubagentInMessage`; SPEC-RR-004/022).
+     The `SubagentInfo` seeding is unchanged.
+  2. `src/infrastructure/mock/MockChatRuntime.ts` — emit a `tool_use(Task, id:'mock-agent-1')` before the
+     `subagent_tool_*` / `async_subagent_result(agentId:'mock-agent-1')` chunks so the spawn seeds the
+     subagent and the later chunks correlate by the spawn id.
+  3. `src/infrastructure/localstorage/FixtureChatRuntime.ts` — add a `Task(id:'fixture-agent-1')` spawn +
+     nested `subagent_tool_use`/`subagent_tool_result` + `async_subagent_result` so the demo shows a
+     `SubagentBlock` too.
+  4. `tests/ui/main.rr.test.ts` — assert `subagent-block` mounts from the default script (and, opportunistically,
+     `usage-info`), with the stale "out-of-scope" NOTE replaced.
+  With the fix applied the verification was: `MockChatRuntime.rr.test.ts` + `main.rr.test.ts` **9/9** (the
+  standalone smoke mounts the `SubagentBlock` end-to-end); the store rr suite **22/23**.
+- **Blocker — the single failing prior P2 test:** `tests/ui/stores/chatStore.rr.test.ts:271`
+  (`onSubagentToolUse pushes a nested running ToolCall under the spawning subagent`) asserts
+  `liveBlocks(store).filter((b) => b.type === 'tool_use')).toHaveLength(1)` — i.e. it pins the **old
+  defect behaviour** (Task spawn → `tool_use` block). The spec-correct change makes the spawn push a
+  `subagent` block, so that filter sees 0 `tool_use` blocks → the assertion fails. The test's stated
+  INTENT ("only the spawning Task produces one top-level block; the nested tool adds none") is preserved
+  — the spawn still produces exactly one top-level block, now `{type:'subagent'}`. Only the literal
+  predicate (`b.type === 'tool_use'`) contradicts spec + claudian parity. **Changing a QA-owned test
+  assertion is QA's job, not dev's** (agent boundary). Per Constitution Art. I.3 / Art. IV.2 this is a
+  QA-test defect (a test asserting incorrect behaviour) that must be reconciled at the earliest stage by
+  its owner.
+- **Action taken:** Gap-2 source + test changes were **reverted** so the tree stays green for the
+  T-RR-044 verify gate (no regression committed). Gap 2 is handed back for a one-line QA assertion update
+  at `chatStore.rr.test.ts:271` (assert one `{type:'subagent'}` top-level block instead of one `tool_use`
+  block — or assert "exactly one top-level block" type-agnostically), after which the four-file fix above
+  lands in one `feat(rr): …` commit. Optionally the architect confirms the spec table (SPEC-RR-020
+  `onToolUse`) explicitly notes the Task/Agent → `subagent`-block routing.
+- **Commit:** none (reverted). **Outcome:** blocked (QA reconciliation required). **Deviation:** the
+  spec-correct fix requires a QA-owned assertion change at `chatStore.rr.test.ts:271`.
+
+---
+
+## Batch close-out — surface-integration fixes
+
+- **Typecheck:** `npm run typecheck` (`vue-tsc --noEmit -p tsconfig.lint.json`) → **0 errors** (after Gap 1;
+  the Gap-2 working changes also type-checked clean before revert).
+- **Lint:** `npx eslint src/ui/chat/ChatSurface.vue tests/ui/chat/ChatSurface.test.ts tests/ui/chat/ChatSurface.po.ts`
+  → **0 errors / 0 warnings**.
+- **Tests:** Gap 1 GREEN — `tests/ui/chat` + `tests/ui/main.rr.test.ts` + `tests/ui/main.test.ts` **102/102
+  across 22 files**; `tests/ui/stores/chatStore.rr.test.ts` **23/23** after the Gap-2 revert. P1 +
+  prior-P2 suites unchanged (the Gap-1 footer mount is purely additive). The blocking Gap-2 assertion
+  (`chatStore.rr.test.ts:271`) is documented above, not committed.
+- **Not run (the T-RR-044 GATE, ORCHESTRATOR-owned):** full `npm run verify` / `build` / `build:web` /
+  `docs:api` / coverage / `npm audit` / `npm run test:all` / parity #434 / the draft PR into `next`.
+- **Not pushed.** `manifest.json` untouched. No new dependency. Vue never imports `obsidian`; no `v-html`;
+  `<script setup>`; `--sp-*` tokens.
+- **Commit:** `046a0fe` (Gap 1 — `feat(rr): mount UsageInfo in ChatSurface footer`).
+- **Net:** Gap 1 completes the live `UsageInfo` wiring; Gap 2 is blocked on the QA assertion
+  reconciliation above. The live wiring is otherwise ready for the T-RR-044 verify gate + the human
+  T-RR-043 manual leg (subject to Gap 2 landing).

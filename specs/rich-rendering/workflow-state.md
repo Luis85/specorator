@@ -3,8 +3,8 @@ feature: rich-rendering
 area: RR
 current_stage: implementation
 status: active
-last_updated: 2026-05-24
-last_agent: dev (implement — wire-in batch)
+last_updated: 2026-05-25
+last_agent: dev (implement — surface-integration fixes)
 epic: claudian-reboot
 phase: P2
 integration_branch: next
@@ -17,7 +17,7 @@ artifacts:
   ADR-RR-001: accepted (docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md — human-blessed 2026-05-24)
   spec.md: complete (SPEC-RR-001..034; extends SPEC-CC-* P1 contract; 27 TEST-RR scenarios)
   tasks.md: complete (TASKS-RR-001; 44 tasks T-RR-001..044; full SPEC/REQ/NFR/TEST coverage table)
-  implementation-log.md: in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 + wire-in T-RR-040..042 done; gate T-RR-043 [MANUAL, human-owned] + T-RR-044 [verify + PR, orchestrator] remain)
+  implementation-log.md: in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 + wire-in T-RR-040..042 done; surface-integration fixes — Gap 1 UsageInfo wire-in DONE [046a0fe], Gap 2 SubagentBlock script BLOCKED on the chatStore.rr.test.ts:271 QA assertion [CLAR-RR-008]; gate T-RR-043 [MANUAL, human-owned] + T-RR-044 [verify + PR, orchestrator] remain)
   test-plan.md: in-progress (TESTPLAN-RR-001; baseline reference + TEST-RR-026 dev leg PASS [T-RR-042] + manual TEST-RR-026 / T-RR-043 M leg scheduled)
   test-report.md: pending
   review.md: pending
@@ -43,7 +43,7 @@ artifacts:
 | 4. Design | `design.md` | complete (Parts A/B/C; ADR-RR-001 accepted — human-blessed 2026-05-24) |
 | 5. Specification | `spec.md` | complete (SPEC-RR-001..034; 27 TEST-RR) |
 | 6. Tasks | `tasks.md` | complete (TASKS-RR-001; T-RR-001..044) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 + wire-in T-RR-040..042 done; gate T-RR-043 [MANUAL, human-owned] + T-RR-044 [verify + PR, orchestrator] remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 + wire-in T-RR-040..042 done; surface-integration fixes — Gap 1 UsageInfo wire-in DONE [046a0fe], Gap 2 SubagentBlock script BLOCKED on chatStore.rr.test.ts:271 [CLAR-RR-008]; gate T-RR-043 [MANUAL, human-owned] + T-RR-044 [verify + PR, orchestrator] remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -533,6 +533,48 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
                           real-CLI rich turn, the M leg of TEST-RR-026; HUMAN-OWNED, never
                           agent-self-claimed; scheduled in test-plan.md) and T-RR-044 (the verify gate +
                           draft PR, ORCHESTRATOR-owned).
+2026-05-25 (dev, implement -- surface-integration fixes): Closed the two surface gaps the WIRE-IN batch
+                          deviation flagged out-of-scope. Strict TDD, one Conventional commit per fix.
+                          GAP 1 (REQ-RR-024, SPEC-RR-031) -- DONE: UsageInfo.vue was orphaned (unit-tested
+                          T-RR-036 but mounted in NO live view). RED extended tests/ui/chat/ChatSurface.test.ts
+                          (+ PageObject showsUsage/usageText) to assert a usage chunk renders usage-info via
+                          the mounted surface -- watched fail (usage-info absent), mounted
+                          <UsageInfo class="sp-chat-surface__usage"/> as a turn-level footer row below
+                          MessageList / above the composer in ChatSurface.vue (DESIGN-RR-001 A.1.1 "usage --
+                          turn-level, not a content block"), watched GREEN. UsageInfo reads chatStore.usage
+                          itself (no props/getter) + renders nothing when null (REQ-RR-024a/EC-RR-12). One
+                          test-data fix in my own RED: the emitted usage chunk sessionId='mock-session' to
+                          clear the use case EC-11 foreign-session guard (no assertion change). ChatSurface
+                          8/8; tests/ui/chat + main.rr + main.test 102/102 across 22 files, no regression.
+                          SHA 046a0fe.
+                          GAP 2 (NFR-RR-002 parity, SPEC-RR-004/005/006/020/022, claudian StreamController
+                          :1008) -- BLOCKED on a QA assertion. Verified the spec-correct fix end-to-end:
+                          for a Task/Agent spawn the store's onToolUse must push {type:'subagent',subagentId:id}
+                          (NOT {type:'tool_use'}) so MessageBlocks routes to SubagentBlock (parity
+                          recordSubagentInMessage); + the Mock/Fixture default scripts must emit a
+                          tool_use(Task) seeding the subagent before the subagent_tool_*/async_subagent_result
+                          chunks (correlate by spawn id). With the 4-file fix applied, MockChatRuntime.rr +
+                          main.rr 9/9 (the standalone smoke mounts SubagentBlock + usage-info end-to-end) and
+                          the store rr suite 22/23. The ONE failing prior-P2 test is tests/ui/stores/
+                          chatStore.rr.test.ts:271, which pins the OLD defect behaviour
+                          (filter b.type==='tool_use' toHaveLength 1) -- the spec-correct change makes the
+                          spawn push a subagent block, so that filter sees 0. The test's INTENT ("only the
+                          spawning Task produces one top-level block") is preserved; only the literal
+                          b.type==='tool_use' predicate contradicts spec+parity. Changing a QA-owned assertion
+                          is QA's job (agent boundary) -- so the Gap-2 source+test changes were REVERTED to keep
+                          the tree green for the T-RR-044 gate, and Gap 2 is handed back via CLAR-RR-008 with
+                          the full ready-to-apply fix recorded in implementation-log.md.
+                          BATCH-END STATE: npm run typecheck -> 0 errors; npx eslint on the Gap-1 touched files
+                          -> 0/0; chatStore.rr 23/23 (post-revert); P1 + prior-P2 suites unchanged (Gap-1 mount
+                          is purely additive). NOT pushed; manifest.json untouched; no new dependency; full
+                          verify/build/build:web/docs:api/coverage/audit + test:all + parity #434 + the draft PR
+                          into next are the T-RR-044 GATE (ORCHESTRATOR-owned). Gap 1 completes the live
+                          UsageInfo wiring; once CLAR-RR-008 is reconciled and Gap 2 lands, the T-RR-044 verify
+                          gate + the human T-RR-043 manual leg can run.
+                          HAND-OFF -> qa (+ architect): reconcile chatStore.rr.test.ts:271 to assert one
+                          {type:'subagent'} top-level block (or "exactly one top-level block" type-agnostically),
+                          then dev lands the 4-file Gap-2 fix in one feat(rr) commit; architect optionally notes
+                          the Task/Agent -> subagent-block routing in the SPEC-RR-020 onToolUse table.
 ```
 
 ## Open clarifications
@@ -586,3 +628,18 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
       (SPEC-RR-019/020) marks `onErrorChunk`/`onNotice` as P1 legs "unchanged"; this reconciliation is
       the minimal additive change the fork requires. **Confirm at review whether the spec table should
       note the block-mirroring leg explicitly. Owner: architect/reviewer.**
+- [ ] CLAR-RR-008 *(new — implementation/QA reconciliation, 2026-05-25 dev, surface-integration fixes,
+      BLOCKS Gap 2)* — A `Task`/`Agent` spawn must render as a `{type:'subagent'}` content block (so
+      `MessageBlocks` routes it to `SubagentBlock`), per SPEC-RR-004/022 and claudian
+      `StreamController.recordSubagentInMessage` (`:1008` pushes `{type:'subagent', subagentId: toolId}`,
+      NOT a `tool_use` block). The store's `onToolUse` currently pushes a `{type:'tool_use'}` block for a
+      Task/Agent spawn, and `tests/ui/stores/chatStore.rr.test.ts:271` pins that defect
+      (`filter(b => b.type === 'tool_use')).toHaveLength(1)`). The spec-correct fix (push a `subagent`
+      block for Task/Agent) makes that assertion fail (0 `tool_use` blocks). The test's INTENT ("only the
+      spawning Task produces one top-level block; the nested tool adds none") is preserved — only the
+      literal `b.type === 'tool_use'` predicate is wrong. **QA must reconcile line 271 to assert one
+      `{type:'subagent'}` top-level block (or "exactly one top-level block" type-agnostically); then dev
+      lands the verified 4-file fix (chatStore.ts onToolUse + MockChatRuntime + FixtureChatRuntime +
+      main.rr.test.ts, recorded in implementation-log.md) in one `feat(rr)` commit. Owner: qa
+      (assertion) + dev (impl); architect optionally notes the routing in the SPEC-RR-020 `onToolUse`
+      table.**
