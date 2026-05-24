@@ -83,6 +83,23 @@ convergence.
   under a `__fixtures__/` path, ignored by daily `npm run lint` but lintable
   on demand by the harness. **OC-PSR-6 closed.**
 
+### T-PSR-031 — ADR index + superseded-by pointers (dev, OC-PSR-3)
+
+- **Created `docs/adr/README.md`** (no index existed — the architect flagged this
+  in workflow-state). Lists every ADR with a "P0 reboot scope" column quoting
+  ADR-PSR-001's kept/superseded split; adds the `ADR-PSR-001`/`ADR-PSR-002` rows.
+- **Frontmatter pointers (bodies untouched):** added `superseded-by: ADR-PSR-001`
+  to `ADR-008` (scoped to its feature-port surface; status stays `accepted` —
+  six core ports remain) and set `ADR-PSR-001` `supersedes: [ADR-008]`.
+- **MPS/AUX scope call (flag to maintainer):** no standalone `ADR-MPS-*` /
+  `ADR-AUX-*` files exist in `docs/adr/`. Rather than stamp `superseded-by` onto
+  accepted numbered/feature ADRs (013–018, 0027–0034) whose non-feature parts may
+  survive, the feature-surface supersession is recorded in the index's reboot-scope
+  column. This is the OC-PSR-3 re-scope the architect anticipated. **OC-PSR-3
+  closed** pending the maintainer's nod at the P0 checkpoint.
+- Noted the pre-existing duplicate `0030` ADR-number collision in the index
+  (out of P0 scope).
+
 > Batch 1 gate snapshot (post-RED): `npm run typecheck` reports exactly two
 > intended RED type errors (WorkspacePort exact-key assertion; missing
 > `toSupportedLocale`); `npm run test` shows the 4 RED unit files failing for the

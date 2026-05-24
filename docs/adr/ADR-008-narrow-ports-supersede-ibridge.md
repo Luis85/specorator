@@ -4,6 +4,7 @@ title: Narrow ports replace the IBridge aggregate
 status: accepted
 date: 2026-05-03
 supersedes: ADR-002
+superseded-by: ADR-PSR-001  # feature-port scope only (IconPort + chat/MCP/canvas ports). The six core narrow ports (SettingsPort, VaultPort, WorkspacePort, NotificationPort, LoggerPort, CommunityPluginPort) and the narrow-port principle remain in force — status stays accepted.
 ---
 
 # ADR-008 — Narrow ports replace the `IBridge` aggregate

@@ -13,7 +13,7 @@ informed:
   - planner
   - dev
   - qa
-supersedes: []
+supersedes: [ADR-008]  # feature-port scope only; six core ports kept. Also supersedes the MPS/AUX agent-surface features (no standalone ADR files — see docs/adr/README.md).
 superseded-by: []
 tags: [architecture, reboot, claudian-reboot, P0]
 ---
