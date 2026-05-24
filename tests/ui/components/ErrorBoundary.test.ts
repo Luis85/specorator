@@ -1,3 +1,10 @@
+/**
+ * T-PSR-011 (TEST-PSR-015) — SPEC-PSR-005 (E10): ErrorBoundary catches a
+ * thrown child, routing to LoggerPort.error + NotificationPort.showError and
+ * rendering the fallback testid. The empty agent panel mounts INSIDE this
+ * boundary (SPEC-PSR-005), so it must survive Wave 0 unedited (OC-PSR-7).
+ * Already GREEN against the kept component — reused as TEST-PSR-015 coverage.
+ */
 import { describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
