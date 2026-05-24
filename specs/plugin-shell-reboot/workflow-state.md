@@ -2,10 +2,10 @@
 feature: Plugin shell reboot (P0 — Claudian-shaped rewrite foundation)
 area: PSR
 slug: plugin-shell-reboot
-current_stage: requirements
+current_stage: design
 status: active
 last_updated: 2026-05-24
-last_agent: pm (Stage 3)
+last_agent: architect (Stage 4)
 epic: claudian-reboot
 phase: P0
 integration_branch: next
@@ -14,7 +14,7 @@ artifacts:
   idea.md: complete
   research.md: skipped
   requirements.md: complete
-  design.md: pending
+  design.md: complete
   spec.md: pending
   tasks.md: pending
   implementation-log.md: pending
@@ -24,7 +24,10 @@ artifacts:
   release-notes.md: pending
   retrospective.md: pending
 adrs:
-  - ADR-PSR-001 (to file in design) — reboot supersedes ADR-008 feature-port scope + MPS/AUX agent surface
+  - id: ADR-PSR-001
+    path: docs/adr/ADR-PSR-001-reboot-plugin-shell.md
+    status: accepted
+    note: reboot supersedes the feature-facing scope of ADR-008 + the MPS/AUX agent surface
 ---
 
 # Workflow state — plugin-shell-reboot (P0)
@@ -36,7 +39,7 @@ adrs:
 | 1. Idea | `idea.md` | complete |
 | 2. Research | `research.md` | skipped (Claudian source is the sole reference) |
 | 3. Requirements | `requirements.md` | complete |
-| 4. Design | `design.md` | pending |
+| 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` | pending |
@@ -159,4 +162,54 @@ only at parity.
                           deferred to architect. Architect must honour CL-1/CL-2 in
                           design: keep the minimal translation seam; specify the
                           deleted-symbol ESLint rule + test seam.
+
+2026-05-24 (architect, Stage 4): design.md written + complete (DESIGN-PSR-001).
+                          ADR-PSR-001 FILED at docs/adr/ADR-PSR-001-reboot-plugin-shell.md
+                          (status: accepted, matches ADR-008-<slug>.md convention) —
+                          records the reboot, supersedes the feature-facing scope of
+                          ADR-008 (IconPort + chat/MCP/canvas ports; six core ports
+                          stay) + the MPS/AUX agent-surface features; keeps ADR-001/
+                          003/004/009/010/011/012.
+                          Decisions resolved:
+                          Q4 (IconPort/<SpIcon>) = PRUNE both — empty view renders no
+                            in-Vue icon; the tab icon is ItemView.getIcon():string
+                            (native), not IconPort. Regrows in P1+ per consumer.
+                          CL-3 (open affordance) = command-palette ONLY (one command
+                            `open-agent-sidebar`), NO ribbon — satisfies REQ-PSR-003's
+                            one-affordance rule with the smallest orphan-free surface.
+                          CL-4 (Vue mount vs bare ItemView) = MOUNT VUE (AgentPanelRoot
+                            inside ErrorBoundary, provide 6 core ports + i18n) — keeps
+                            NFR-PSR-002 coverage of kept UI machinery, is the literal
+                            seam P1 grows into, matches Claudian shape.
+                          Slim settings = { locale, logLevel } only; coreSettingsModule
+                            settingsVersion bumps to 4 with a strip-migrate; minimal
+                            vue-i18n seam kept as locale's live consumer (CL-1).
+                          Delete strategy (Q5): leaf-first, compiler-guided — 6 waves
+                            (UI leaves → plugin views → application → infra adapters →
+                            domain root → config/docs/guards), each ending typecheck-
+                            green; `tsc` error list is the non-fabricated next-delete
+                            set (R-PSR-1 mitigation). No hand-counted line totals.
+                          CL-2 guard: new no-restricted-imports DELETED_SUBSYSTEM_BAN
+                            in eslint.config.js + a Vitest test that lints src/** via
+                            the ESLint Node API and asserts zero deleted-subsystem refs
+                            (durable TEST-PSR-*, inside existing gate). Dead custom
+                            rules (no-legacy-claude-cli-port-names + its override) get
+                            deleted (NFR-PSR-009).
+                          ci.yml (Q3): add `next` to push + pull_request branch lists —
+                            only change; SHA-pin/actionlint-safe (no `uses:` touched).
+                          build:web (Q1): trivial empty src/ui/main.ts mounting
+                            AgentPanelRoot with MockBridge + 6 core ports; router/
+                            FeatureService/secret-store/AppRoot deleted.
+                          Flagged forward to spec/clarify (## Open clarifications):
+                            OC-PSR-1 (ActiveFileSnapshot/Unsubscriber + WorkspacePort
+                            chat-era extensions survival), OC-PSR-2 (LocalStorageBridge
+                            standalone wiring — recommend always-MockBridge in P0),
+                            OC-PSR-3 (verify docs/adr index filename + add ADR-PSR-001
+                            row; add superseded-by pointers to ADR-008 + MPS/AUX ADRs —
+                            bodies stay immutable, pointer fields only). None blocks
+                            spec.
+                          Next: /spec:specify (architect) — fix migration contract,
+                          the DELETED_SUBSYSTEM_BAN glob list (verify each path
+                          resolves), the guard-test lint-API contract, view/command/
+                          settings-tab signatures, and the WorkspacePort shape (OC-PSR-1).
 ```
