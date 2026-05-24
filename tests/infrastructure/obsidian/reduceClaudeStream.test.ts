@@ -151,6 +151,207 @@ describe('ClaudeStreamReducer (SPEC-CC-010 NDJSON reduce)', () => {
 });
 
 /**
+ * P2 rich-rendering defect fix (SPEC-RR-001 / SPEC-RR-010): the reducer must also
+ * map the P2 content-block kinds from the REAL `claude --output-format stream-json`
+ * wire format. Against the real CLI:
+ *   - `tool_use` / `thinking` (+ `redacted_thinking`) arrive as `assistant` message
+ *     content blocks (alongside `text`), preserving arrival order;
+ *   - `tool_result` arrives as a `user` event content block (`tool_use_id`,
+ *     `content` as string OR `[{type:'text',text}]` array, optional `is_error`),
+ *     with the structured `toolUseResult` (Write/Edit `structuredPatch`) when present.
+ *
+ * The mappings mirror claudian `transformClaudeMessage.ts` (assistant `tool_use`/
+ * `thinking`, user `tool_result`) + its `extractToolResultContent` helper.
+ *
+ * Traces: SPEC-RR-001, SPEC-RR-010, REQ-RR-001, REQ-RR-003/026.
+ */
+describe('ClaudeStreamReducer — P2 rich chunks from the real stream (SPEC-RR-001/010)', () => {
+	it('maps an assistant tool_use block to a tool_use chunk', () => {
+		const reducer = new ClaudeStreamReducer();
+		const chunks = reducer.consumeLine(
+			JSON.stringify({
+				type: 'assistant',
+				message: {
+					content: [
+						{ type: 'tool_use', id: 'toolu_1', name: 'Read', input: { file_path: '/a.ts' } },
+					],
+				},
+			}),
+		);
+		expect(chunks).toContainEqual({
+			type: 'tool_use',
+			id: 'toolu_1',
+			name: 'Read',
+			input: { file_path: '/a.ts' },
+		});
+	});
+
+	it('defaults a tool_use with absent/non-object input to an empty object', () => {
+		const reducer = new ClaudeStreamReducer();
+		const chunks = reducer.consumeLine(
+			JSON.stringify({
+				type: 'assistant',
+				message: { content: [{ type: 'tool_use', id: 'toolu_2', name: 'Bash' }] },
+			}),
+		);
+		const toolUse = chunks.find(
+			(c): c is Extract<StreamChunk, { type: 'tool_use' }> => c.type === 'tool_use',
+		);
+		expect(toolUse).toBeDefined();
+		expect(toolUse?.input).toEqual({});
+	});
+
+	it('maps an assistant thinking block to a thinking chunk', () => {
+		const reducer = new ClaudeStreamReducer();
+		const chunks = reducer.consumeLine(
+			JSON.stringify({
+				type: 'assistant',
+				message: { content: [{ type: 'thinking', thinking: 'Let me reason about this.' }] },
+			}),
+		);
+		expect(chunks).toContainEqual({ type: 'thinking', content: 'Let me reason about this.' });
+	});
+
+	it('maps a redacted_thinking block to a thinking chunk (empty content tolerated)', () => {
+		const reducer = new ClaudeStreamReducer();
+		const chunks = reducer.consumeLine(
+			JSON.stringify({
+				type: 'assistant',
+				message: { content: [{ type: 'redacted_thinking', data: 'opaque' }] },
+			}),
+		);
+		expect(chunks).toContainEqual({ type: 'thinking', content: '' });
+	});
+
+	it('preserves arrival order of text and tool_use within one assistant message', () => {
+		const reducer = new ClaudeStreamReducer();
+		const chunks = reducer.consumeLine(
+			JSON.stringify({
+				type: 'assistant',
+				message: {
+					content: [
+						{ type: 'text', text: 'Reading the file' },
+						{ type: 'tool_use', id: 'toolu_3', name: 'Read', input: { file_path: '/b.ts' } },
+					],
+				},
+			}),
+		);
+		const ordered = chunks
+			.filter((c) => c.type === 'text' || c.type === 'tool_use')
+			.map((c) => c.type);
+		expect(ordered).toEqual(['text', 'tool_use']);
+	});
+
+	it('maps a user tool_result block with string content to a tool_result chunk', () => {
+		const reducer = new ClaudeStreamReducer();
+		const chunks = reducer.consumeLine(
+			JSON.stringify({
+				type: 'user',
+				message: {
+					content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: 'file contents' }],
+				},
+			}),
+		);
+		expect(chunks).toContainEqual({
+			type: 'tool_result',
+			id: 'toolu_1',
+			content: 'file contents',
+			isError: false,
+		});
+	});
+
+	it('stringifies a tool_result whose content is an array of text blocks', () => {
+		const reducer = new ClaudeStreamReducer();
+		const chunks = reducer.consumeLine(
+			JSON.stringify({
+				type: 'user',
+				message: {
+					content: [
+						{
+							type: 'tool_result',
+							tool_use_id: 'toolu_4',
+							content: [
+								{ type: 'text', text: 'line one' },
+								{ type: 'text', text: 'line two' },
+							],
+						},
+					],
+				},
+			}),
+		);
+		const result = chunks.find(
+			(c): c is Extract<StreamChunk, { type: 'tool_result' }> => c.type === 'tool_result',
+		);
+		expect(result).toBeDefined();
+		expect(result?.id).toBe('toolu_4');
+		expect(result?.content).toBe('line one\nline two');
+	});
+
+	it('flags an errored tool_result via isError', () => {
+		const reducer = new ClaudeStreamReducer();
+		const chunks = reducer.consumeLine(
+			JSON.stringify({
+				type: 'user',
+				message: {
+					content: [
+						{ type: 'tool_result', tool_use_id: 'toolu_5', content: 'boom', is_error: true },
+					],
+				},
+			}),
+		);
+		const result = chunks.find(
+			(c): c is Extract<StreamChunk, { type: 'tool_result' }> => c.type === 'tool_result',
+		);
+		expect(result?.isError).toBe(true);
+	});
+
+	it('maps a structured toolUseResult (Write/Edit structuredPatch) onto the tool_result chunk', () => {
+		const reducer = new ClaudeStreamReducer();
+		const structured = {
+			filePath: '/c.ts',
+			structuredPatch: [
+				{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 2, lines: [' a', '+b'] },
+			],
+		};
+		const chunks = reducer.consumeLine(
+			JSON.stringify({
+				type: 'user',
+				message: {
+					content: [{ type: 'tool_result', tool_use_id: 'toolu_6', content: 'ok' }],
+				},
+				toolUseResult: structured,
+			}),
+		);
+		const result = chunks.find(
+			(c): c is Extract<StreamChunk, { type: 'tool_result' }> => c.type === 'tool_result',
+		);
+		expect(result?.toolUseResult).toEqual(structured);
+	});
+
+	it('omits toolUseResult when the user event carries no structured result', () => {
+		const reducer = new ClaudeStreamReducer();
+		const chunks = reducer.consumeLine(
+			JSON.stringify({
+				type: 'user',
+				message: {
+					content: [{ type: 'tool_result', tool_use_id: 'toolu_7', content: 'ok' }],
+				},
+			}),
+		);
+		const result = chunks.find(
+			(c): c is Extract<StreamChunk, { type: 'tool_result' }> => c.type === 'tool_result',
+		);
+		expect(result).toBeDefined();
+		expect(result && 'toolUseResult' in result).toBe(false);
+	});
+
+	it('ignores a genuinely unknown event type (forward-compatible default)', () => {
+		const reducer = new ClaudeStreamReducer();
+		expect(reducer.consumeLine(JSON.stringify({ type: 'stream_event', event: {} }))).toEqual([]);
+	});
+});
+
+/**
  * Terminal guarantee (Codex review #433, EC-13): the CLI line stream can end
  * without ever emitting a `result` event (early exit, stderr-only). `query()`
  * must still yield a terminal `done` so the consumer leaves the `streaming`
