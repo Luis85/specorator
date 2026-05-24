@@ -120,31 +120,43 @@ function todoWriteLabel(input: Record<string, unknown>): string {
 }
 
 /**
- * Logical icon NAME for a tool's header (parity `getToolIcon`,
- * `core/tools/toolIcons.ts:75`), mapped to the P2 static icon-name set
- * (`file`/`terminal`/`search`/`bot`/`wrench` — `iconNodeMap.ts`). Read/Write/Edit
- * → `file`, Bash → `terminal`, Glob/Grep → `search`, Task/Agent → `bot`,
- * everything else → `wrench` (the `SpIcon` fallback also covers unknowns). The
- * IconPort resolves the name to a declarative `IconNode` — this never touches the
- * DOM (NFR-RR-006). Pure, total.
+ * The MCP-tool marker icon name (R-RR-003). Claudian signals MCP tools with the
+ * `MCP_ICON_MARKER` sentinel and draws a custom plug SVG (`appendMcpIcon`); we
+ * have no custom SVG seam, so we return the real lucide `plug` icon — the closest
+ * faithful glyph Obsidian's `setIcon` resolves. `iconNodeMap` carries a matching
+ * placeholder so Mock/demo stay recognisable.
  */
+const MCP_ICON = 'plug';
+
+/**
+ * Real lucide icon NAME per tool (parity `getToolIcon`, `core/tools/toolIcons.ts:36-70`).
+ * The `IconPort` resolves the name to a declarative `IconNode`; the Obsidian
+ * backing passes it straight to `setIcon`, so production gets the correct,
+ * distinct glyph for each tool — never touching the DOM in the UI (NFR-RR-006).
+ * Pure, total: any `mcp__*` tool returns the MCP marker icon, every other
+ * unknown tool falls back to `wrench` (the `SpIcon` fallback also covers it).
+ */
+const TOOL_ICONS: Readonly<Record<string, string>> = {
+	[TOOL_READ]: 'file-text',
+	[TOOL_WRITE]: 'file-plus',
+	[TOOL_EDIT]: 'file-pen',
+	NotebookEdit: 'file-pen',
+	[TOOL_BASH]: 'terminal',
+	[TOOL_GLOB]: 'folder-search',
+	[TOOL_GREP]: 'search',
+	[TOOL_LS]: 'list',
+	[TOOL_TODO_WRITE]: 'list-checks',
+	Task: 'bot',
+	Agent: 'bot',
+	WebSearch: 'globe',
+	WebFetch: 'download',
+	Skill: 'zap',
+	AskUserQuestion: 'help-circle',
+};
+
 export function toolIcon(name: string): string {
-	switch (name) {
-		case TOOL_READ:
-		case TOOL_WRITE:
-		case TOOL_EDIT:
-			return 'file';
-		case TOOL_BASH:
-			return 'terminal';
-		case TOOL_GLOB:
-		case TOOL_GREP:
-			return 'search';
-		case 'Task':
-		case 'Agent':
-			return 'bot';
-		default:
-			return 'wrench';
-	}
+	if (name.startsWith('mcp__')) return MCP_ICON;
+	return TOOL_ICONS[name] ?? 'wrench';
 }
 
 /**

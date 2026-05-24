@@ -12,9 +12,13 @@ import type { IconNode } from '@/domain/ports';
  * 24×24 stroke style Obsidian uses; `attrs` are plain strings only.
  *
  * The icon-name set is the union of: the four status icons (`check`/`x`/
- * `shield-off`/`dot`), the generic fallback (`wrench`), and the P2 tool icons
- * (`file`/`terminal`/`search`/`bot`). Unknown names resolve to `null` (the
- * caller substitutes a generic fallback — REQ-RR-019).
+ * `shield-off`/`dot`), the generic fallback (`wrench`), and the real lucide tool
+ * icons claudian's `getToolIcon` returns (`file-text`/`file-plus`/`file-pen`/
+ * `terminal`/`folder-search`/`search`/`list`/`list-checks`/`globe`/`download`/
+ * `bot`/`zap`/`help-circle`/`plug` — R-RR-003). Unknown names resolve to `null`
+ * (the caller substitutes a generic fallback — REQ-RR-019). These Mock/demo
+ * shapes are recognisable placeholders only; the Obsidian backing is the parity
+ * truth (SPEC-RR-012).
  */
 
 /** Shared `<svg>` root attributes for a 24×24 lucide-style stroke icon. */
@@ -47,6 +51,18 @@ function line(x1: string, y1: string, x2: string, y2: string): IconNode {
 
 function circle(cx: string, cy: string, r: string): IconNode {
 	return { tag: 'circle', attrs: { cx, cy, r }, children: [] };
+}
+
+function rect(x: string, y: string, width: string, height: string, rx = '2'): IconNode {
+	return { tag: 'rect', attrs: { x, y, width, height, rx }, children: [] };
+}
+
+/** Generic file outline shared by the file-* tool icons (placeholder shape). */
+function fileBody(): IconNode[] {
+	return [
+		path('M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z'),
+		polyline('14 2 14 8 20 8'),
+	];
 }
 
 /**
@@ -96,6 +112,30 @@ const ICON_NODE_MAP: ReadonlyMap<string, IconNode> = new Map<string, IconNode>([
 			circle('16', '14', '1'),
 		]),
 	],
+	// ── real lucide tool icons (claudian getToolIcon, R-RR-003) ──────────────────
+	['file-text', svg([...fileBody(), line('9', '13', '15', '13'), line('9', '17', '13', '17')])],
+	['file-plus', svg([...fileBody(), line('12', '11', '12', '17'), line('9', '14', '15', '14')])],
+	['file-pen', svg([...fileBody(), path('M10.4 18.6 14 15l1.5 1.5-3.6 3.6H10.4v-1.5z')])],
+	[
+		'folder-search',
+		svg([path('M4 6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v3'), circle('15', '15', '3'), line('17.1', '17.1', '20', '20')]),
+	],
+	[
+		'list',
+		svg([line('8', '6', '21', '6'), line('8', '12', '21', '12'), line('8', '18', '21', '18'), line('3', '6', '3', '6'), line('3', '12', '3', '12'), line('3', '18', '3', '18')]),
+	],
+	[
+		'list-checks',
+		svg([path('M3 6 4 7 6 5'), line('10', '6', '21', '6'), path('M3 12 4 13 6 11'), line('10', '12', '21', '12'), line('10', '18', '21', '18'), line('3', '18', '4', '18')]),
+	],
+	[
+		'globe',
+		svg([circle('12', '12', '10'), line('2', '12', '22', '12'), path('M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z')]),
+	],
+	['download', svg([path('M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'), polyline('7 10 12 15 17 10'), line('12', '15', '12', '3')])],
+	['zap', svg([polyline('13 2 3 14 12 14 11 22 21 10 12 10 13 2')])],
+	['help-circle', svg([circle('12', '12', '10'), path('M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3'), line('12', '17', '12', '17')])],
+	['plug', svg([rect('9', '2', '6', '8'), path('M7 10h10v3a5 5 0 0 1-10 0v-3z'), line('9', '2', '9', '5'), line('15', '2', '15', '5'), line('12', '18', '12', '22')])],
 ]);
 
 /**

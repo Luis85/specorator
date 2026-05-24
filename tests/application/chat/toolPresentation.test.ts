@@ -9,7 +9,7 @@
  * Traces: TEST-RR-014, SPEC-RR-014, REQ-RR-019a/023, NFR-RR-003/005.
  */
 import { describe, it, expect } from 'vitest';
-import { toolName, toolSummary, toolLabel } from '@/application/chat/toolPresentation';
+import { toolName, toolSummary, toolLabel, toolIcon } from '@/application/chat/toolPresentation';
 
 describe('toolPresentation — toolName (TEST-RR-014)', () => {
 	it('TodoWrite -> "Tasks N/M" with completed/total counts', () => {
@@ -131,5 +131,50 @@ describe('toolPresentation — toolLabel (TEST-RR-014)', () => {
 
 	it('default tool -> name', () => {
 		expect(toolLabel('SomethingNew', {})).toBe('SomethingNew');
+	});
+});
+
+describe('toolPresentation — toolIcon (R-RR-003, parity getToolIcon)', () => {
+	// Real lucide names from claudian core/tools/toolIcons.ts:36-70. The IconPort
+	// resolves the returned name (ObsidianBridge passes it straight to setIcon),
+	// so these must be the real icon names, not 5 generics.
+	it('maps file tools to their distinct lucide icons', () => {
+		expect(toolIcon('Read')).toBe('file-text');
+		expect(toolIcon('Write')).toBe('file-plus');
+		expect(toolIcon('Edit')).toBe('file-pen');
+		expect(toolIcon('NotebookEdit')).toBe('file-pen');
+	});
+
+	it('maps search/list tools to their distinct lucide icons', () => {
+		expect(toolIcon('Glob')).toBe('folder-search');
+		expect(toolIcon('Grep')).toBe('search');
+		expect(toolIcon('LS')).toBe('list');
+		expect(toolIcon('TodoWrite')).toBe('list-checks');
+	});
+
+	it('maps web tools to globe/download', () => {
+		expect(toolIcon('WebSearch')).toBe('globe');
+		expect(toolIcon('WebFetch')).toBe('download');
+	});
+
+	it('maps agent/skill/ask tools', () => {
+		expect(toolIcon('Task')).toBe('bot');
+		expect(toolIcon('Agent')).toBe('bot');
+		expect(toolIcon('Skill')).toBe('zap');
+		expect(toolIcon('AskUserQuestion')).toBe('help-circle');
+	});
+
+	it('maps Bash to terminal', () => {
+		expect(toolIcon('Bash')).toBe('terminal');
+	});
+
+	it('maps an mcp__ prefixed tool to the MCP marker icon', () => {
+		expect(toolIcon('mcp__server__do_thing')).toBe('plug');
+		expect(toolIcon('mcp__x')).toBe('plug');
+	});
+
+	it('falls back to wrench for an unknown tool', () => {
+		expect(toolIcon('SomethingNew')).toBe('wrench');
+		expect(toolIcon('')).toBe('wrench');
 	});
 });
