@@ -3,8 +3,8 @@ feature: rich-rendering
 area: RR
 current_stage: implementation
 status: active
-last_updated: 2026-05-25
-last_agent: dev (implement — surface-integration fixes)
+last_updated: 2026-05-24
+last_agent: dev (implement — CLAR-RR-008 resolution)
 epic: claudian-reboot
 phase: P2
 integration_branch: next
@@ -17,7 +17,7 @@ artifacts:
   ADR-RR-001: accepted (docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md — human-blessed 2026-05-24)
   spec.md: complete (SPEC-RR-001..034; extends SPEC-CC-* P1 contract; 27 TEST-RR scenarios)
   tasks.md: complete (TASKS-RR-001; 44 tasks T-RR-001..044; full SPEC/REQ/NFR/TEST coverage table)
-  implementation-log.md: in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 + wire-in T-RR-040..042 done; surface-integration fixes — Gap 1 UsageInfo wire-in DONE [046a0fe], Gap 2 SubagentBlock script BLOCKED on the chatStore.rr.test.ts:271 QA assertion [CLAR-RR-008]; gate T-RR-043 [MANUAL, human-owned] + T-RR-044 [verify + PR, orchestrator] remain)
+  implementation-log.md: in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 + wire-in T-RR-040..042 done; surface-integration fixes — Gap 1 UsageInfo wire-in DONE [046a0fe], Gap 2 SubagentBlock RESOLVED via CLAR-RR-008 [QA assertion 720b390 + 4-file fix 0fcf123]; gate T-RR-043 [MANUAL, human-owned] + T-RR-044 [verify + PR, orchestrator] remain)
   test-plan.md: in-progress (TESTPLAN-RR-001; baseline reference + TEST-RR-026 dev leg PASS [T-RR-042] + manual TEST-RR-026 / T-RR-043 M leg scheduled)
   test-report.md: pending
   review.md: pending
@@ -43,7 +43,7 @@ artifacts:
 | 4. Design | `design.md` | complete (Parts A/B/C; ADR-RR-001 accepted — human-blessed 2026-05-24) |
 | 5. Specification | `spec.md` | complete (SPEC-RR-001..034; 27 TEST-RR) |
 | 6. Tasks | `tasks.md` | complete (TASKS-RR-001; T-RR-001..044) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 + wire-in T-RR-040..042 done; surface-integration fixes — Gap 1 UsageInfo wire-in DONE [046a0fe], Gap 2 SubagentBlock script BLOCKED on chatStore.rr.test.ts:271 [CLAR-RR-008]; gate T-RR-043 [MANUAL, human-owned] + T-RR-044 [verify + PR, orchestrator] remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 + wire-in T-RR-040..042 done; surface-integration fixes — Gap 1 UsageInfo wire-in DONE [046a0fe], Gap 2 SubagentBlock RESOLVED via CLAR-RR-008 [720b390 + 0fcf123]; gate T-RR-043 [MANUAL, human-owned] + T-RR-044 [verify + PR, orchestrator] remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -575,6 +575,38 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
                           {type:'subagent'} top-level block (or "exactly one top-level block" type-agnostically),
                           then dev lands the 4-file Gap-2 fix in one feat(rr) commit; architect optionally notes
                           the Task/Agent -> subagent-block routing in the SPEC-RR-020 onToolUse table.
+2026-05-24 (dev, CLAR-RR-008 resolution): RESOLVED CLAR-RR-008 per the orchestrator decision (SPEC +
+                          claudian-parity-correct behaviour WINS over the defect-pinning test). TDD: (1)
+                          reconciled the QA assertion in tests/ui/stores/chatStore.rr.test.ts -- a Task/Agent
+                          spawn pushes exactly one top-level {type:'subagent', subagentId} block (0 tool_use
+                          blocks for the Task); a nested onSubagentToolUse adds NO top-level block (it lands
+                          under the spawn's subagent.toolCalls); the SubagentInfo is still seeded + findable on
+                          the spawning ToolCall. Watched RED 2/24 fail against the defect store (tool_use vs
+                          subagent diff). SHA 720b390. (2) Re-applied the verified 4-file fix: chatStore.ts
+                          onToolUse pushes a {type:'subagent'} block (+ keeps the SubagentInfo seeding) for
+                          Task/Agent spawns; MockChatRuntime.ts DEFAULT_SCRIPT emits a tool_use(Task,
+                          id:'mock-agent-1') spawn before the subagent_tool_*/async_subagent_result chunks;
+                          FixtureChatRuntime.ts gains the Task(id:'fixture-agent-1') spawn + nested tool +
+                          async result; main.rr.test.ts asserts subagent-block + usage-info mount from the
+                          default script (stale out-of-scope NOTE replaced). Watched GREEN. SHA 0fcf123. (3)
+                          Confirmed MessageBlocks.resolveSubagent resolves the seeded SubagentInfo for the new
+                          subagent block (MessageBlocks.test.ts "routes a subagent block to SubagentBlock" +
+                          the main.rr standalone smoke both mount SubagentBlock end-to-end). GATE: typecheck 0;
+                          eslint 0/0 on the 5 touched files; touched suites (chatStore.rr + main.rr +
+                          MessageBlocks + MockChatRuntime.rr + FixtureChatRuntime.rr) 44/44; P1 runtime tests
+                          20/20; full tests/ui + tests/infrastructure + tests/application regression 435/435
+                          across 56 files, no P1/P2 regression. Within ADR-RR-001 (the subagent ContentBlock
+                          member already exists -- no new type/seam); NO v-html; <script setup>; --sp-*; Vue
+                          never imports obsidian. NOT pushed; manifest untouched; no new dependency. Full
+                          verify/build/build:web/docs:api/coverage/audit/test:all + parity #434 + the draft PR
+                          into next are the T-RR-044 GATE (ORCHESTRATOR-owned) -- NOT run here.
+                          HAND-OFF -> orchestrator (T-RR-044 verify gate + draft PR into next) and the human
+                          (T-RR-043 MANUAL Obsidian MarkdownRenderer/setIcon backing + real-CLI rich turn). Both
+                          P2 surface gaps (UsageInfo wiring + SubagentBlock routing) are now closed; the dev
+                          implementation work for P2 is complete pending those two owner-specific legs.
+                          Verification performed: typecheck + the 5 touched vitest suites + the 435-test
+                          ui/infra/application regression (all green). Remaining owner: orchestrator (T-RR-044),
+                          human (T-RR-043). Next agent: orchestrator.
 ```
 
 ## Open clarifications
@@ -628,18 +660,20 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
       (SPEC-RR-019/020) marks `onErrorChunk`/`onNotice` as P1 legs "unchanged"; this reconciliation is
       the minimal additive change the fork requires. **Confirm at review whether the spec table should
       note the block-mirroring leg explicitly. Owner: architect/reviewer.**
-- [ ] CLAR-RR-008 *(new — implementation/QA reconciliation, 2026-05-25 dev, surface-integration fixes,
-      BLOCKS Gap 2)* — A `Task`/`Agent` spawn must render as a `{type:'subagent'}` content block (so
-      `MessageBlocks` routes it to `SubagentBlock`), per SPEC-RR-004/022 and claudian
+- [x] CLAR-RR-008 *(RESOLVED 2026-05-24 — orchestrator decision + dev implementation)* — A `Task`/`Agent`
+      spawn must render as a top-level `{type:'subagent', subagentId}` content block (so `MessageBlocks`
+      routes it to `SubagentBlock`), per SPEC-RR-004/022 and claudian
       `StreamController.recordSubagentInMessage` (`:1008` pushes `{type:'subagent', subagentId: toolId}`,
-      NOT a `tool_use` block). The store's `onToolUse` currently pushes a `{type:'tool_use'}` block for a
-      Task/Agent spawn, and `tests/ui/stores/chatStore.rr.test.ts:271` pins that defect
-      (`filter(b => b.type === 'tool_use')).toHaveLength(1)`). The spec-correct fix (push a `subagent`
-      block for Task/Agent) makes that assertion fail (0 `tool_use` blocks). The test's INTENT ("only the
-      spawning Task produces one top-level block; the nested tool adds none") is preserved — only the
-      literal `b.type === 'tool_use'` predicate is wrong. **QA must reconcile line 271 to assert one
-      `{type:'subagent'}` top-level block (or "exactly one top-level block" type-agnostically); then dev
-      lands the verified 4-file fix (chatStore.ts onToolUse + MockChatRuntime + FixtureChatRuntime +
-      main.rr.test.ts, recorded in implementation-log.md) in one `feat(rr)` commit. Owner: qa
-      (assertion) + dev (impl); architect optionally notes the routing in the SPEC-RR-020 `onToolUse`
-      table.**
+      NOT a `tool_use` block). **DECISION (orchestrator, authoritative):** the SPEC + claudian-parity
+      behaviour WINS over the test that pinned the old defect; dev was authorised to update the QA
+      assertion. **RESOLUTION:** the QA assertion in `tests/ui/stores/chatStore.rr.test.ts` was
+      reconciled (a `Task`/`Agent` spawn pushes exactly one top-level `{type:'subagent'}` block, 0
+      `tool_use` blocks; a nested `onSubagentToolUse` adds NO top-level block) — RED watched, SHA
+      `720b390`. The 4-file fix (`chatStore.ts` `onToolUse` pushes the `subagent` block + keeps the
+      `SubagentInfo` seeding; `MockChatRuntime.ts` + `FixtureChatRuntime.ts` default scripts emit a
+      `Task` spawn before the subagent chunks; `main.rr.test.ts` asserts `subagent-block` + `usage-info`
+      mount) greened it — SHA `0fcf123`. `MessageBlocks.resolveSubagent` resolves the seeded
+      `SubagentInfo` for the new block (`MessageBlocks.test.ts` + the `main.rr` standalone smoke both
+      mount `SubagentBlock`). Stays within ADR-RR-001 (the `subagent` `ContentBlock` member already
+      exists — no new type/seam). Architect MAY note the Task/Agent → `subagent`-block routing in the
+      SPEC-RR-020 `onToolUse` table (optional, non-blocking).
