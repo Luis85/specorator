@@ -1,10 +1,10 @@
 ---
 feature: rich-rendering
 area: RR
-current_stage: requirements
+current_stage: design
 status: active
 last_updated: 2026-05-24
-last_agent: pm (requirements)
+last_agent: architect (design)
 epic: claudian-reboot
 phase: P2
 integration_branch: next
@@ -13,7 +13,8 @@ artifacts:
   idea.md: skipped (charter §3.1 + audits + claudian-main stand in — CLAR-RR-001, mirrors P1)
   research.md: skipped (charter §3.1 + audits + claudian-main stand in — CLAR-RR-001, mirrors P1)
   requirements.md: draft (PRD-RR-001; held until architect ADR for CLAR-RR-002/003)
-  design.md: pending
+  design.md: in-progress (DESIGN-RR-001 Parts A/B/C complete; ADR-RR-001 proposed — held until human checkpoint, charter §6a)
+  ADR-RR-001: proposed (docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md — CHECKPOINT REQUIRED)
   spec.md: pending
   tasks.md: pending
   implementation-log.md: pending
@@ -27,6 +28,12 @@ artifacts:
 
 # Workflow state — rich-rendering (P2)
 
+> **>>> CHECKPOINT REQUIRED <<<** A human must bless **ADR-RR-001**
+> (`docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md`, status *proposed*) — the additive
+> `StreamChunk`/`ChatMessage` growth + typed `toolUseResult` + render seam + new `IconPort`
+> (CLAR-RR-002/003, charter §6a) — **before `/spec:specify`**. This mirrors the P1 ADR-CC-001 gate.
+> Until then, `design.md` stays `in-progress` and `current_stage` does not advance past `design`.
+
 ## Stage progress
 
 | Stage | Artifact | Status |
@@ -34,7 +41,7 @@ artifacts:
 | 1. Idea | `idea.md` | skipped (CLAR-RR-001 — audits + charter stand in, mirrors P1) |
 | 2. Research | `research.md` | skipped (CLAR-RR-001 — audits + charter stand in, mirrors P1) |
 | 3. Requirements | `requirements.md` | in-progress (PRD-RR-001, status `draft`) |
-| 4. Design | `design.md` | pending |
+| 4. Design | `design.md` | in-progress (Parts A/B/C complete; ADR-RR-001 proposed — checkpoint pending) |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
@@ -149,6 +156,47 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
                           indents, mono sizes) from --sp-* not hardcoded hex; capture P2 parity
                           screenshots (matrix coordinated with #434). current_stage stays at
                           requirements; status DRAFT until CLAR-RR-002 blessed. No design/code; not committed.
+2026-05-24 (architect, design): DESIGN-RR-001 written at specs/rich-rendering/design.md (Parts
+                          A/B/C). ADR-RR-001 FILED at docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md
+                          (status PROPOSED) + indexed in docs/adr/README.md. ADR mirrors ADR-CC-001's
+                          "grow per phase" + additive-union discipline and rules on the four load-bearing
+                          P2 seams: (1) CLAR-RR-002 — type `tool_result`/`subagent_tool_result`
+                          `toolUseResult?: unknown` → typed domain `ToolUseResult` (+ `StructuredPatchHunk`/
+                          `DiffLine`/`DiffStats`, mirroring claudian diff.ts:27); grow `ChatMessage` with
+                          `contentBlocks?`/`toolCalls?` (chat.ts:39/46/47) + new domain types `ContentBlock`/
+                          `ToolCall`/`SubagentInfo`/`TodoItem`; images/rewind-ids/currentNote/inline-approval
+                          fields stay excluded (later phases). (2) CLAR-RR-003 part 1 — per-type block
+                          components (`ToolCallBlock`/`ThinkingBlock`/`TodoList`/`WriteEditBlock`+`DiffView`/
+                          `SubagentBlock`/`UsageInfo`) behind a thin `MessageBlocks.vue` dispatcher (chose
+                          this over a mega-renderer for NFR-RR-005 isolation); pure transforms
+                          (`toolPresentation`/`computeDiff`/`renderTodos`/`resolveSubagentLifecycle`) in the
+                          application layer mirroring the P1 `safeMarkdownRender` seam. (3) CLAR-RR-003 part 2
+                          + CLAR-CC-005 — upgrade `MarkdownRenderPort` production backing to Obsidian
+                          `MarkdownRenderer` in ObsidianBridge, walked to the EXISTING `SafeRenderResult`
+                          DTO (shape UNCHANGED → not an ADR shape change; Mock/LocalStorage keep pure
+                          `safeMarkdownRender`). (4) New narrow `IconPort` (declarative icon-node DTO, own
+                          ICON_PORT key + useIconPort()) regrowing the P0-deleted icon seam; all other P2
+                          ports deferred. Rejected: keep-`unknown`+guard (C), mega-renderer (B),
+                          extend-pure-markdown-only (D). NFR-RR-006 (no v-html) satisfied for diffs (per-line
+                          declarative spans), tool blocks (escaped pre-wrapped text), markdown/icons (bridge
+                          walks fragment→DTO; no sink reaches UI). CLAR-RR-004 (Claude subagent path only,
+                          Codex/Opencode P9), CLAR-RR-005 (generic expanded renderer + Write/Edit diff in P2),
+                          CLAR-RR-006 (thinking colour from `--sp-accent`, not `#D97757`) all confirmed in
+                          design. 17 edge cases (EC-RR-1..17) + 23 QA-seam scenarios + observability + Part C
+                          coverage table. current_stage advanced to design (NOT past it). No spec.md/tasks/
+                          code; not committed.
+                          HAND-OFF → planner (Tasks) — BLOCKED until the human blesses ADR-RR-001:
+                          (a) ADR-RR-001 must be accepted (charter §6a) before /spec:specify, mirroring the
+                          P1 ADR-CC-001 gate; (b) once blessed, /spec:specify writes spec.md from DESIGN-RR-001
+                          (SPEC-RR-* extending SPEC-CC-002 StreamChunk, SPEC-CC-004 ChatMessage, SPEC-CC-008
+                          ports, SPEC-CC-014 markdown seam, SPEC-CC-015 dispatch, SPEC-CC-016 store) — full
+                          per-interface contracts for the new sink legs, the typed `ToolUseResult`, the pure
+                          transforms, `IconPort`, and the edge cases EC-RR-1..17; (c) open clarifications to
+                          watch at spec: EC-RR-2 out-of-order tool_result handling (buffer vs ignore — spec
+                          must decide), EC-RR-17 Obsidian-vs-pure markdown perceptual equivalence
+                          (compatibility note + parity check), and the exact P2 node-model extension for the
+                          Obsidian markdown backing (if it forces a `SafeRenderResult` shape change, that
+                          returns to ADR-RR-001 as an amendment/superseding ADR).
 ```
 
 ## Open clarifications
