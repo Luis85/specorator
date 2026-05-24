@@ -4,7 +4,7 @@ area: TS
 current_stage: requirements
 status: active
 last_updated: 2026-05-25
-last_agent: orchestrator (P3 bootstrap)
+last_agent: pm (requirements)
 epic: claudian-reboot
 phase: P3
 integration_branch: next
@@ -12,7 +12,7 @@ reference: D:\Projects\claudian-main
 artifacts:
   idea.md: skipped (charter §3.2 + audits + claudian-main stand in, mirrors P1/P2)
   research.md: skipped (charter §3.2 + audits + claudian-main stand in)
-  requirements.md: pending
+  requirements.md: draft (PRD-TS-001; in-progress — held until CLAR-TS-001..004 ADRs recorded)
   design.md: pending
   spec.md: pending
   tasks.md: pending
@@ -33,7 +33,7 @@ artifacts:
 |---|---|---|
 | 1. Idea | `idea.md` | skipped |
 | 2. Research | `research.md` | skipped |
-| 3. Requirements | `requirements.md` | pending |
+| 3. Requirements | `requirements.md` | in-progress (draft — PRD-TS-001) |
 | 4. Design | `design.md` | pending |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
@@ -103,4 +103,50 @@ self-parity-review vs claudian after each big chunk; merge P3 to `next` autonomo
                           the P3 ADRs (history persistence location; multi-thread store model;
                           rewind/fork semantics + new ports; title-gen seam). EARS reqs each mapped
                           to a claudian path + test.
+
+2026-05-25 (pm, requirements): PRD-TS-001 written (status: draft) →
+                          specs/threads-sessions/requirements.md. 28 EARS functional reqs
+                          (REQ-TS-001..028) grouped by sub-surface: tabs (001-007),
+                          history+persistence (008-012), resume (013-015), fork (016-018),
+                          rewind (019-022), compact (023), title-gen (024-025), per-provider
+                          seams (026-028). Each maps 1:1 to a claudian §3.2 source path + a
+                          Given/When/Then. 15 NFRs (NFR-TS-001..015) restating epic constraints
+                          (DDD/ports/3-bridges, no obsidian-in-Vue, no v-html/innerHTML/
+                          window.confirm, Obsidian Modal for fork-target, <script setup>,
+                          Result<T,E>, tests-mirror-src + data-testid PageObjects, coverage
+                          80/70/80/80, --sp-* perceptual parity, WCAG 2.2 AA tab/dropdown nav,
+                          manifest untouched, NOT-data.json persistence + secrets→secret-store +
+                          device-prefs→device-local, NO migration/load-or-default).
+
+                          HAND-OFF → /spec:design (architect). PRD is HELD at status:draft until
+                          the FOUR P3 ADRs are recorded (autonomous drive — architect files, PM
+                          accepts; no human gate this phase). The four open clarifications the
+                          architect MUST decide (framed as options + constraints in the PRD §Open
+                          questions, NOT decided by PM):
+                            - CLAR-TS-001 — conversation-history persistence location (vault files
+                              vs device-local vs dedicated/home store). PM RECOMMENDS vault files
+                              via VaultPort for the P3 Claude path (durable portable git-trackable
+                              user content; all 3 bridges exist); defer HomeFsPort to P9. Architect
+                              to bless exact path + record HomeFsPort deferral.
+                            - CLAR-TS-002 — multi-thread store model (generalise SPEC-CC-016
+                              single-thread chatStore to N tabs; DTO-only boundary; turn-runner
+                              stays out of reactive state; per-tab streaming isolation). Architect's
+                              model call; flag P0-removed Vue Router (regrow only if needed).
+                            - CLAR-TS-003 — rewind/fork semantics on the runtime seam + new history
+                              port (additive ChatRuntimePort growth: resume via sessionId, rewind
+                              checkpoint conversation-mode, fork = derive provider-state not copy;
+                              backend audit's ProviderHistoryPort). Code-rollback rewind stays gated
+                              (REQ-TS-022/NG7). This is the ADR-CC-001-deferred rewind/session growth.
+                            - CLAR-TS-004 — title-generation seam (side-query on ChatRuntimePort.query
+                              cold-start vs a dedicated AuxModelPort). PM LEANS side-query for P3;
+                              architect decides (same seam later carries P4 instruction-refine /
+                              P5 inline-edit).
+
+                          SCOPE RISKS flagged to design: (1) the "code and conversation" rewind menu
+                          option must EXIST but must NOT touch fs/git in P3 (REQ-TS-022) — easy to
+                          over-build. (2) per-tab provider-switching is OUT (NG6) — tabs are
+                          Claude-only in P3. (3) the /resume //fork //compact //clear //new built-in
+                          COMMAND WORDS are P4 composer triggers — P3 exposes those actions via
+                          buttons/menus only (NG1). (4) home-dir / Codex-JSONL / Opencode-ACP history
+                          is OUT (NG8) — P3 exercises only the Claude vault path.
 ```
