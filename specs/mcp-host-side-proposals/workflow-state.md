@@ -1,15 +1,15 @@
 ---
 feature: mcp-host-side-proposals
 area: MHP
-current_stage: design
+current_stage: specification
 status: active
 last_updated: 2026-05-24
-last_agent: pm
+last_agent: architect
 artifacts:
   idea.md: complete
   research.md: complete
   requirements.md: complete
-  design.md: pending
+  design.md: complete
   spec.md: pending
   tasks.md: pending
   implementation-log.md: pending
@@ -30,7 +30,7 @@ artifacts:
 | 1. Idea | `idea.md` | complete |
 | 2. Research | `research.md` | complete |
 | 3. Requirements | `requirements.md` | complete |
-| 4. Design | `design.md` | pending |
+| 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
