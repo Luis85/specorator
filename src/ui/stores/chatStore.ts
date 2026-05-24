@@ -114,7 +114,14 @@ export const useChatStore = defineStore('chat', {
 			const input: RunChatTurnInput = { request: { text, currentNotePath }, history };
 
 			const result = await bound.runner.run(input, this._sink());
-			if (!result.ok) this._handleStartFailure(result.error);
+			// Only a PRE-STREAM start failure needs the sticky notice + reset: the sink was
+			// never driven, so the store is still mid-`streaming`. A `'runtime-throw'` already
+			// emitted an inline error + `done` through the sink (onDone resolved status to
+			// 'error'), so re-handling it here would flip status back to idle and raise a
+			// duplicate notice (Codex review #433). Skip it.
+			if (!result.ok && result.error.kind !== 'runtime-throw') {
+				this._handleStartFailure(result.error);
+			}
 		},
 
 		/** Abort the in-flight turn; mark the partial assistant message interrupted (EC-8). */

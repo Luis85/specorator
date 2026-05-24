@@ -33,6 +33,8 @@ class FakeRunner {
 	sink: ChatTurnSink | null = null;
 	lastInput: RunChatTurnInput | null = null;
 	result: Result<void, ChatTurnError> = ok(undefined);
+	/** Optionally drive the sink during `run` (mirrors the real use case finalising). */
+	duringRun: ((sink: ChatTurnSink) => void) | null = null;
 	runCalls = 0;
 	cancel = vi.fn();
 
@@ -40,6 +42,7 @@ class FakeRunner {
 		this.runCalls += 1;
 		this.lastInput = input;
 		this.sink = sink;
+		this.duringRun?.(sink);
 		return Promise.resolve(this.result);
 	}
 }
@@ -210,6 +213,27 @@ describe('chatStore (SPEC-CC-016)', () => {
 		// Composer must be re-enabled: status resolves to idle (or error→idle), never stuck streaming.
 		expect(store.isStreaming).toBe(false);
 		expect(store.errorActive).toBe(true);
+	});
+
+	it('a runtime-throw that already streamed error+done is NOT re-handled as a start failure (Codex #433)', async () => {
+		const { store, runner, notice } = freshStore();
+		// Mirror RunChatTurnUseCase: an unexpected generator fault drives the sink to a
+		// terminal (inline error + done) BEFORE returning err('runtime-throw').
+		runner.duringRun = (sink) => {
+			sink.onAssistantStart();
+			sink.onErrorChunk('The chat turn ended unexpectedly. Please try again.');
+			sink.onDone();
+		};
+		runner.result = err(new ChatTurnError('runtime-throw', 'boom'));
+		await store.sendMessage('Hi');
+		// onDone already resolved status to 'error'; sendMessage must NOT flip it back to
+		// idle nor raise a duplicate start-failure notice.
+		expect(store.status).toBe('error');
+		expect(store.errorActive).toBe(true);
+		expect(notice).not.toHaveBeenCalled();
+		expect(store.liveAssistantId).toBeNull();
+		// Exactly one assistant message carrying the inline error — no duplicate surfacing.
+		expect(store.messages.filter((m) => m.role === 'assistant')).toHaveLength(1);
 	});
 
 	it('EC-15: $reset cancels any in-flight turn and clears state', async () => {
