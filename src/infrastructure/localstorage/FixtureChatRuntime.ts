@@ -25,14 +25,56 @@ const FIXTURE_USAGE: UsageInfo = {
 };
 
 /**
- * Bundled transcript replayed by `FixtureChatRuntime`. A short canned
- * `text…usage…done` reply (SPEC-CC-012). The terminating `done` is appended by
- * the generator, so this constant ends with the `usage` chunk.
+ * Bundled transcript replayed by `FixtureChatRuntime`. A believable RICH reply
+ * (SPEC-RR-013, extending SPEC-CC-012): a text intro, a thinking block, an Edit
+ * tool call carrying a `structuredPatch` diff, a TodoWrite tool call with a
+ * task list, and the canned usage chunk — so the GitHub Pages demo exercises
+ * every P2 renderer with no backend. The terminating `done` is appended by the
+ * generator, so this constant ends with the `usage` chunk.
  */
 const FIXTURE_TRANSCRIPT: readonly StreamChunk[] = [
-	{ type: 'text', content: 'This is a canned demo reply ' },
-	{ type: 'text', content: 'streamed from a bundled fixture — ' },
+	{ type: 'text', content: 'This is a canned demo reply streamed from a bundled fixture — ' },
 	{ type: 'text', content: 'no backend is contacted on GitHub Pages.' },
+	{ type: 'thinking', content: 'Sketching a small edit to demonstrate the diff view.' },
+	{
+		type: 'tool_use',
+		id: 'fixture-edit-1',
+		name: 'Edit',
+		input: {
+			file_path: 'README.md',
+			old_string: '# Demo',
+			new_string: '# Demo\n\nNow with rich rendering.',
+		},
+	},
+	{
+		type: 'tool_result',
+		id: 'fixture-edit-1',
+		content: 'File edited.',
+		toolUseResult: {
+			filePath: 'README.md',
+			structuredPatch: [
+				{
+					oldStart: 1,
+					oldLines: 1,
+					newStart: 1,
+					newLines: 3,
+					lines: ['-# Demo', '+# Demo', '+', '+Now with rich rendering.'],
+				},
+			],
+		},
+	},
+	{
+		type: 'tool_use',
+		id: 'fixture-todo-1',
+		name: 'TodoWrite',
+		input: {
+			todos: [
+				{ content: 'Edit the README', status: 'completed', activeForm: 'Editing the README' },
+				{ content: 'Preview the demo', status: 'in_progress', activeForm: 'Previewing the demo' },
+			],
+		},
+	},
+	{ type: 'tool_result', id: 'fixture-todo-1', content: 'Todos updated.' },
 	{ type: 'usage', usage: FIXTURE_USAGE, sessionId: 'fixture-session' },
 ];
 
