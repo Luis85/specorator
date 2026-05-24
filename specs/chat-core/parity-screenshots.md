@@ -6,7 +6,7 @@ feature: chat-core
 area: CC
 epic: claudian-reboot
 phase: P1
-status: in-progress      # baseline column scaffolded T-CC-001; Specorator column captured at /spec:review
+status: deferred         # functional sign-off 2026-05-24; parity-matrix capture deferred to a follow-up (human: "merge now, screenshots as follow-up")
 owner: dev
 baseline-reference: D:\Projects\claudian-main
 created: 2026-05-24
@@ -14,6 +14,12 @@ updated: 2026-05-24
 ---
 
 # Parity-screenshot matrix — Chat core (P1)
+
+> **Acceptance (2026-05-24):** the human ran the plugin in Obsidian (`D:/TestVault`) and gave a
+> functional sign-off — "everything works as expected" (TEST-CC-031: real `claude` streaming +
+> no-secret). The formal parity-screenshot matrix below is **deferred to a follow-up** by explicit
+> human decision ("merge now, screenshots as follow-up"); it is NOT a merge blocker for P1. The
+> follow-up is tracked as a GitHub issue (see workflow-state hand-off) to be captured during P2.
 
 > **T-CC-001 (baseline-capture):** the baseline column references `claudian-main`
 > (`D:\Projects\claudian-main`, MIT, read-only). The **Specorator column** is captured and

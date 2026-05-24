@@ -524,6 +524,18 @@ as the visual/parity truth. Reuse the discarded AUX/MPS chat design + `--sp-*` t
                           The plugin mounts the chat surface statically today (sidebar + npm run dev); the smoke
                           leg confirms the streaming feel against MockBridge.
 
+2026-05-24 (dev, P1 ACCEPTED + MERGED): human ran the plugin in Obsidian (D:/TestVault) and gave a
+                          functional sign-off — "everything works as expected" (TEST-CC-031: real claude
+                          streaming + no-secret). Codex reviewed PR #433 across 3 commits and raised 3 findings,
+                          ALL fixed + replied + CI-green: (1) terminal-done when the CLI stream ends w/o a result
+                          (ClaudeStreamReducer.finalize(), 286bf58); (2) P1 EPIPE on child.stdin writes
+                          (error handler, fcbf691); (3) P2-badged runtime-throw double-handled as a start failure
+                          (chatStore gates _handleStartFailure on kind!=='runtime-throw', 94214d0). verify +
+                          test:all GREEN (438 tests). Parity-screenshot matrix (charter §5) DEFERRED to a
+                          follow-up by explicit human decision ("merge now, screenshots as follow-up") — tracked
+                          as issue #434, to be captured during P2; parity-screenshots.md status → deferred.
+                          ACTION: flip #433 ready → squash-merge to next → start P2 (charter §4 next row).
+
 2026-05-24 (dev, implement — T-CC-032 verify gate): closed the final batch on feature/chat-core.
                           - Fixed the one verify blocker: tests/ui/styles/tokens.test.ts §4.2 provider-selector
                             check hard-coded double quotes; prettier normalises CSS attribute-selector quotes to
