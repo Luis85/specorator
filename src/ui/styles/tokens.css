@@ -37,6 +37,7 @@
 	--sp-error-rgb: 220, 53, 69;
 	--sp-warning: var(--color-orange, #d97706);
 	--sp-success: var(--color-green, #16a34a);
+	--sp-success-rgb: 22, 163, 74; /* RGB triple for the diff insert wash (§4.9, SPEC-RR-033) */
 	--sp-compact: #5bc0de;
 	--sp-focus-ring: var(--interactive-accent);
 }
@@ -179,4 +180,50 @@ body.theme-light .specorator-root {
 	--sp-input-min-h: 140px; /* composer wrapper min height */
 	--sp-textarea-min-h: 60px; /* auto-grow textarea start height */
 	--sp-textarea-max-h: none; /* textarea grows uncapped (wrapper bounds it) */
+}
+
+/* §4.9 — Rich rendering (P2, SPEC-RR-033). Every Claudian value the P2 renderers reproduce
+ * resolves here; no rich-render component carries a hex/raw Obsidian var (NFR-RR-007). Diff
+ * add/del derive from --sp-success/--sp-error; thinking from --sp-accent (NOT #D97757). All
+ * indents use LOGICAL properties at the component layer. */
+.specorator-root {
+	/* tree-branch rail */
+	--sp-tool-rail: var(--sp-border);
+	--sp-tool-rail-width: 2px;
+	--sp-tool-rail-margin: 7px;
+	--sp-tool-rail-indent: 16px;
+	--sp-thinking-rail-indent: 24px;
+	/* thinking */
+	--sp-thinking-color: var(--sp-accent);
+	--sp-thinking-pulse-duration: 1.5s;
+	/* tool status */
+	--sp-status-running: var(--sp-accent);
+	--sp-status-completed: var(--sp-success);
+	--sp-status-error: var(--sp-error);
+	--sp-status-blocked: var(--sp-warning);
+	/* async subagent state ladder */
+	--sp-state-pending: var(--sp-text-muted);
+	--sp-state-running: var(--sp-accent);
+	--sp-state-completed: var(--sp-success);
+	--sp-state-error: var(--sp-error);
+	--sp-state-orphaned: var(--sp-warning);
+	/* todo */
+	--sp-todo-pending: var(--sp-text-muted);
+	--sp-todo-active: var(--sp-accent);
+	--sp-todo-done: var(--sp-success);
+	--sp-todo-dot-scale: 2;
+	/* diff */
+	--sp-diff-insert-bg: rgba(var(--sp-success-rgb, 22, 163, 74), 0.12);
+	--sp-diff-delete-bg: rgba(var(--sp-error-rgb), 0.12);
+	--sp-diff-add-fg: var(--sp-success);
+	--sp-diff-del-fg: var(--sp-error);
+	--sp-diff-gutter: 16px;
+	--sp-diff-max-height: 300px;
+	/* subagent */
+	--sp-subagent-result-max-height: 220px;
+}
+@media (prefers-reduced-motion: reduce) {
+	.specorator-root {
+		--sp-thinking-pulse-duration: 0s;
+	}
 }
