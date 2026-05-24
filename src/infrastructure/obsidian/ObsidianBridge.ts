@@ -8,7 +8,9 @@ import type {
 	NotificationPort,
 	LoggerPort,
 	CommunityPluginPort,
+	ChatRuntimePort,
 } from '@/domain/ports';
+import { ClaudeCliChatRuntime } from './ClaudeCliChatRuntime';
 
 type FileManagerWithTrash = App['fileManager'] & {
 	trashFile?: (file: TFile) => Promise<void>;
@@ -107,6 +109,16 @@ export class ObsidianBridge
 		if (file instanceof TFile) {
 			await this.app.workspace.getLeaf().openFile(file);
 		}
+	}
+
+	// ── Chat runtime factory (SPEC-CC-013, ADR-CC-001 §6) ───────────────────────
+	// Returns a fresh per-conversation `ClaudeCliChatRuntime` (desktop-only
+	// subprocess; coverage-excluded — manual TEST-CC-017). Passes `this` as the
+	// LoggerPort for diagnostics (no message content logged) and the vault root as
+	// the child cwd so relative paths in CLI tool calls resolve inside the vault.
+	// Reads/writes no secret (NFR-CC-006). Each call is a new instance.
+	createChatRuntime(): ChatRuntimePort {
+		return new ClaudeCliChatRuntime(this, this.getVaultBasePath());
 	}
 
 	private _track(notice: Notice): void {

@@ -5,8 +5,10 @@ import type {
 	NotificationPort,
 	LoggerPort,
 	CommunityPluginPort,
+	ChatRuntimePort,
 } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
+import { MockChatRuntime } from './MockChatRuntime';
 
 function folderPrefix(parent: string): string {
 	if (parent === '') return '';
@@ -128,6 +130,14 @@ export class MockBridge
 
 	async openFile(path: string): Promise<void> {
 		this.openedFile = path;
+	}
+
+	// ── Chat runtime factory (SPEC-CC-013, ADR-CC-001 §6) ───────────────────────
+	// Returns a fresh per-conversation `MockChatRuntime` (scripted, no subprocess)
+	// so `npm run dev` and unit tests get a working chat. Each call is a new
+	// instance for per-conversation state isolation.
+	createChatRuntime(): ChatRuntimePort {
+		return new MockChatRuntime();
 	}
 
 	showError(message: string, durationMs = 0): void {

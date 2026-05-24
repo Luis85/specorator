@@ -5,8 +5,10 @@ import type {
 	NotificationPort,
 	LoggerPort,
 	CommunityPluginPort,
+	ChatRuntimePort,
 } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
+import { FixtureChatRuntime } from './FixtureChatRuntime';
 
 const FILE_PREFIX = 'specorator:file:';
 const SETTINGS_KEY = 'specorator:settings';
@@ -95,6 +97,14 @@ export class LocalStorageBridge
 
 	async openFile(path: string): Promise<void> {
 		window.dispatchEvent(new CustomEvent('sp:open-file', { detail: { path } }));
+	}
+
+	// ── Chat runtime factory (SPEC-CC-013, ADR-CC-001 §6) ───────────────────────
+	// Returns a fresh per-conversation `FixtureChatRuntime` (replays a bundled
+	// transcript, no subprocess) for the GitHub Pages demo. Each call is a new
+	// instance for per-conversation state isolation.
+	createChatRuntime(): ChatRuntimePort {
+		return new FixtureChatRuntime();
 	}
 
 	showError(message: string, durationMs = 0): void {
