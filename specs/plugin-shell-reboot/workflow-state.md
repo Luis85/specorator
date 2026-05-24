@@ -2,10 +2,10 @@
 feature: Plugin shell reboot (P0 — Claudian-shaped rewrite foundation)
 area: PSR
 slug: plugin-shell-reboot
-current_stage: tasks
-status: paused
+current_stage: implementation
+status: implementation-complete-pending-review
 last_updated: 2026-05-24
-last_agent: planner (no-backwards-compat simplification)
+last_agent: dev (P0 implemented — all 34 T-PSR done, verify green; manual + CI pending human)
 epic: claudian-reboot
 phase: P0
 integration_branch: next
@@ -17,9 +17,9 @@ artifacts:
   design.md: complete
   spec.md: complete
   tasks.md: complete
-  implementation-log.md: pending
-  test-plan.md: pending
-  test-report.md: pending
+  implementation-log.md: complete
+  test-plan.md: complete
+  test-report.md: in-progress  # manual Obsidian checks (TEST-PSR-018..021) pending human run
   review.md: pending
   release-notes.md: pending
   retrospective.md: pending
@@ -627,4 +627,26 @@ only at parity.
                           First dev-owned ready task after Batch 1: T-PSR-003 (slim
                           PluginSettings, blocked only by T-PSR-002).
                           Next: /spec:implement — dev/qa pick up Batch 1.
+
+2026-05-24 (dev, Stage 7 — P0 IMPLEMENTED): all 34 T-PSR done across Phases A–D
+                          (surviving surface → 6 delete waves → guard → ci/docs/
+                          coverage/gate), one Conventional commit per task on
+                          feature/plugin-shell-reboot. `npm run verify` exits 0
+                          (typecheck/lint/lint:style-tokens/test:coverage[308 tests,
+                          94.5/85/87/94.7]/build/build:web/verify:bundle-size/docs:api/
+                          validate:manifest/verify:scaffold/verify:workflows/diff-check);
+                          zero bypasses (counter-metric=0); manifest id/version/
+                          minAppVersion unchanged (NFR-PSR-007); deleted-subsystem guard
+                          GREEN (TEST-PSR-016/017). Plugin boots one empty agent sidebar.
+                          THREE flags for the maintainer (impl-log details):
+                          (1) PluginCore MCP surface trimmed — compiler-surfaced spec gap
+                          (design §C.14 didn't enumerate it; MCP is a deleted subsystem).
+                          (2) OC-PSR-3: no standalone ADR-MPS/AUX files — feature-surface
+                          supersession recorded in docs/adr/README.md, not per-file
+                          frontmatter. (3) Settings device-local re-point (T-021 slice)
+                          pulled forward into T-008 to keep main.ts non-recursive.
+                          PENDING HUMAN (never self-claimed): test:storybook + CI green on
+                          `next` (needs Chromium/CI); manual Obsidian checks
+                          TEST-PSR-018..021 (test-report.md). Next: open draft PR
+                          feature/plugin-shell-reboot → next; CHECKPOINT before P1.
 ```
