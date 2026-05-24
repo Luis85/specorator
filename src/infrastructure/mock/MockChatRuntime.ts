@@ -78,7 +78,15 @@ const DEFAULT_SCRIPT: MockChatScriptEntry[] = [
 		},
 	},
 	{ type: 'tool_result', id: 'mock-todo-1', content: 'Todos updated.' },
-	// A subagent with a nested tool call, then an async completion.
+	// A subagent: the Task spawn seeds the SubagentInfo + a top-level `subagent`
+	// block (CLAR-RR-008), then a nested tool call correlated by the spawn id, then
+	// an async completion. Without the spawn the store never seeds the subagent.
+	{
+		type: 'tool_use',
+		id: 'mock-agent-1',
+		name: 'Task',
+		input: { description: 'search the codebase', prompt: 'find every export const' },
+	},
 	{
 		type: 'subagent_tool_use',
 		subagentId: 'mock-agent-1',

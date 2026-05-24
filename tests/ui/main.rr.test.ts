@@ -18,14 +18,11 @@ import { describe, it, expect, beforeEach } from 'vitest';
  * textarea, send with Enter, then flush the per-chunk microtask yield boundaries
  * until the scripted rich turn (+ its `done`) is fully accumulated and rendered.
  *
- * NOTE: the subagent + usage VISUAL renderers are not asserted here. The default
- * script's subagent arrives as bare `subagent_tool_use`/`async_subagent_result`
- * chunks with no preceding `Task`/`Agent` `tool_use`, so the store never seeds a
- * top-level `subagent` content block for the `MessageBlocks` dispatcher (it has
- * no `subagent`-pushing leg), and `UsageInfo.vue` is not yet mounted into the
- * surface — both are stored/handled (covered by the store + component unit
- * suites) but their surface wire-in is out of the P2 WIRE-IN batch scope. See the
- * implementation-log deviation for T-RR-042.
+ * The default script now emits a `Task` spawn before the subagent chunks
+ * (CLAR-RR-008), so the store seeds the `SubagentInfo` and pushes a top-level
+ * `{type:'subagent'}` block — the `MessageBlocks` dispatcher mounts a
+ * `SubagentBlock`. `UsageInfo.vue` is mounted in the `ChatSurface` footer (Gap 1,
+ * REQ-RR-024), so the usage chunk renders `usage-info`. Both are asserted below.
  */
 async function sendAndDrainRichTurn(): Promise<void> {
 	const textarea = document.querySelector<HTMLTextAreaElement>('[data-testid="composer-textarea"]');
@@ -82,6 +79,8 @@ describe('standalone rich-render smoke (TEST-RR-026 dev leg)', () => {
 		expect(has('thinking-block')).toBe(true); // SPEC-RR-027
 		expect(has('tool-call-header')).toBe(true); // SPEC-RR-026
 		expect(has('write-edit-header')).toBe(true); // SPEC-RR-029 (header)
+		expect(has('subagent-block')).toBe(true); // SPEC-RR-030 (Task spawn → subagent block, CLAR-RR-008)
+		expect(has('usage-info')).toBe(true); // SPEC-RR-031 (turn-level usage footer, REQ-RR-024)
 
 		// Expand the collapsibles to reveal the body-level renderers.
 		await expandAllCollapsibles();

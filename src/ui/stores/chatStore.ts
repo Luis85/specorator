@@ -267,10 +267,14 @@ export const useChatStore = defineStore('chat', {
 		// ── P2 sink legs (SPEC-RR-020): block/tool/subagent state ──────────────────
 
 		/**
-		 * Create a `ToolCall{running}` + a `{type:'tool_use'}` block, or merge `input`
+		 * Create a `ToolCall{running}` + a top-level content block, or merge `input`
 		 * on a repeat for the same id (no duplicate block, parity `StreamController:262`).
-		 * A `Task`/`Agent` tool also seeds its `SubagentInfo` so nested-tool legs can
-		 * correlate by the spawn id (SPEC-RR-017/020). REQ-RR-002.
+		 * A `Task`/`Agent` spawn ALSO seeds its `SubagentInfo` (so nested-tool legs
+		 * correlate by the spawn id, SPEC-RR-017/020) and records a
+		 * `{type:'subagent', subagentId}` block — NOT a `{type:'tool_use'}` block — so
+		 * `MessageBlocks` routes it to `SubagentBlock` (parity claudian
+		 * `StreamController.recordSubagentInMessage` :1008; SPEC-RR-004/022, CLAR-RR-008).
+		 * Every other tool records a `{type:'tool_use'}` block. REQ-RR-002.
 		 */
 		onToolUse(id: string, name: string, input: Record<string, unknown>): void {
 			const live = this._liveMessage();
@@ -295,6 +299,9 @@ export const useChatStore = defineStore('chat', {
 				const prompt = spawnPrompt(input);
 				if (prompt !== undefined) subagent.prompt = prompt;
 				toolCall.subagent = subagent;
+				tools.push(toolCall);
+				blocks.push({ type: 'subagent', subagentId: id });
+				return;
 			}
 			tools.push(toolCall);
 			blocks.push({ type: 'tool_use', toolId: id });
