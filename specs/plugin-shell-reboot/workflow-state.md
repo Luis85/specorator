@@ -2,10 +2,10 @@
 feature: Plugin shell reboot (P0 — Claudian-shaped rewrite foundation)
 area: PSR
 slug: plugin-shell-reboot
-current_stage: idea
+current_stage: requirements
 status: active
 last_updated: 2026-05-24
-last_agent: analyst (Stage 1)
+last_agent: pm (Stage 3)
 epic: claudian-reboot
 phase: P0
 integration_branch: next
@@ -13,7 +13,7 @@ reference: D:\Projects\claudian-main
 artifacts:
   idea.md: complete
   research.md: skipped
-  requirements.md: pending
+  requirements.md: complete
   design.md: pending
   spec.md: pending
   tasks.md: pending
@@ -35,13 +35,7 @@ adrs:
 |---|---|---|
 | 1. Idea | `idea.md` | complete |
 | 2. Research | `research.md` | skipped (Claudian source is the sole reference) |
-
-## Skips
-
-- Stage 2 (Research) — skipped per Standard-depth decision. Claudian
-  (`D:\Projects\claudian-main`) is the sole structural reference; no external
-  research required. `research.md` will not be produced; pm reads `idea.md` as input.
-| 3. Requirements | `requirements.md` | pending |
+| 3. Requirements | `requirements.md` | complete |
 | 4. Design | `design.md` | pending |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
@@ -50,6 +44,12 @@ adrs:
 | 9. Review | `review.md` | pending |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
+
+## Skips
+
+- Stage 2 (Research) — skipped per Standard-depth decision. Claudian
+  (`D:\Projects\claudian-main`) is the sole structural reference; no external
+  research required. `research.md` will not be produced; pm reads `idea.md` as input.
 
 ## Epic context — claudian-reboot
 
@@ -117,4 +117,32 @@ only at parity.
                           Carried forward Q1–Q5 with owners (pm/architect).
                           Next: /spec:requirements (pm) — resolve Q1–Q3 then write
                           EARS reqs; design files ADR-PSR-001 + the exact delete list.
+
+2026-05-24 (pm, Stage 3): requirements.md written + accepted (PRD-PSR-001). 12
+                          functional requirements (REQ-PSR-001..012, all `must`,
+                          EARS w/ Given/When/Then) + 9 NFRs (NFR-PSR-001..009,
+                          inherited from the actual verify/vitest/ci/manifest gate
+                          definitions — no new thresholds; NFR-PSR-006 restates the
+                          existing bundle-size budget). Success metrics include a
+                          counter-metric: verify-gate bypasses MUST = 0.
+                          Carried-forward questions resolved:
+                          Q1 (build:web) = KEEP a trivial empty standalone entry on
+                            the gate (REQ-PSR-011); do NOT drop build:web — preserves
+                            the gate definition + browser-dev affordance, reversible.
+                          Q2 (slim PluginSettings) = drop to `locale` + `logLevel`
+                            ONLY (REQ-PSR-006/008); workflow folder/gate fields removed
+                            because their consumer (workflow engine) is deleted.
+                          Q3 (next-branch CI, R-PSR-3) = CI MUST cover `next` on push
+                            + pull_request (REQ-PSR-012); mechanism = add `next` to the
+                            CI trigger lists (workflow change → actionlint + SHA-pin
+                            gate). Local-only verify rejected as sole guard. Exact
+                            ci.yml edit deferred to design/impl.
+                          Deferred to architect (design): Q4 (keep IconPort/<SpIcon>?)
+                          and Q5 (exact file-by-file delete list + trimmed main.ts
+                          shape) — recorded in the ## Clarifications block, NOT
+                          resolved here. REQ-PSR-009 (ADR-PSR-001 body) + REQ-PSR-012
+                          (ci.yml YAML) name design/impl as the trace owner.
+                          No open question blocks acceptance.
+                          Next: /spec:design (architect) — file ADR-PSR-001, resolve
+                          Q4/Q5, produce the exact delete list + trimmed main.ts.
 ```
