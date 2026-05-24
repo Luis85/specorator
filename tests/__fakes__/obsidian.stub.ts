@@ -57,4 +57,26 @@ export function setIcon(_el: HTMLElement, _name: string): void {
   // icon DOM.
 }
 
+/**
+ * Minimal lifecycle-owner stub for `MarkdownRenderer.render` post-processors.
+ * The real `Component` manages child lifecycles; the bridge only needs an
+ * instance to pass through, so the stub is empty.
+ */
+export class Component {
+  load(): void {}
+  unload(): void {}
+}
+
+/**
+ * Minimal stub for the static `MarkdownRenderer.render` used by the P2 Obsidian
+ * markdown backing (SPEC-RR-010). Coverage-excluded infra; tests assert the
+ * pure fragment-walk, not Obsidian's real rendering, so this is a no-op that
+ * leaves the element empty (the backing then degrades to `safeMarkdownRender`).
+ */
+export const MarkdownRenderer = {
+  render(_app: unknown, _markdown: string, _el: HTMLElement, _path: string, _c: Component): Promise<void> {
+    return Promise.resolve()
+  },
+}
+
 export type App = unknown

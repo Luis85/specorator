@@ -26,6 +26,9 @@ export type {
 	MarkdownInline,
 	SafeRenderResult,
 } from './MarkdownRenderPort';
+// P2 rich-rendering icon seam (SPEC-RR-009, ADR-RR-001 §4) — the P0-deleted
+// icon port regrows here. Declarative DTO only; never a DOM mutator.
+export type { IconPort, IconNode } from './IconPort';
 // Re-export the chat domain types through the ports barrel for one-stop import.
 export type { StreamChunk } from '@/domain/chat/StreamChunk';
 export type { ChatMessage } from '@/domain/chat/ChatMessage';

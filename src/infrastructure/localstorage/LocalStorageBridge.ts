@@ -7,10 +7,12 @@ import type {
 	CommunityPluginPort,
 	ChatRuntimePort,
 	MarkdownRenderPort,
+	IconPort,
 } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
 import { FixtureChatRuntime } from './FixtureChatRuntime';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
+import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
 
 const FILE_PREFIX = 'specorator:file:';
 const SETTINGS_KEY = 'specorator:settings';
@@ -109,11 +111,20 @@ export class LocalStorageBridge
 		return new FixtureChatRuntime();
 	}
 
-	// ── Markdown render port (SPEC-CC-013, SPEC-CC-015) ─────────────────────────
-	// The P1 `safeMarkdownRender`-backed port (structured nodes, no HTML sink).
-	// Identical behaviour across all three bridges in P1.
+	// ── Markdown render port (SPEC-CC-013, SPEC-CC-015, ADR-RR-002) ─────────────
+	// The pure `safeMarkdownRender`-backed port (structured nodes, no HTML sink).
+	// Per ADR-RR-002 the port is async: this stateless singleton resolves
+	// `Promise.resolve(safeMarkdownRender(markdown))` for the GitHub Pages demo
+	// (the pure transform stays synchronous).
 	createMarkdownRenderPort(): MarkdownRenderPort {
 		return safeMarkdownRenderPort;
+	}
+
+	// ── Icon port factory (SPEC-RR-012, ADR-RR-001 §4) ──────────────────────────
+	// The same static-map `IconPort` as `MockBridge` (shared singleton), so the
+	// GitHub Pages demo renders icons declaratively without Obsidian.
+	createIconPort(): IconPort {
+		return staticIconPort;
 	}
 
 	showError(message: string, durationMs = 0): void {

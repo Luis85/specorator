@@ -8,14 +8,17 @@ import type {
 	CommunityPluginPort,
 	ChatRuntimePort,
 	MarkdownRenderPort,
+	IconPort,
 } from '@/domain/ports';
 
 /**
  * Per-port InjectionKeys (ADR-008). P0 reboot (SPEC-PSR-009): the six core
  * ports. P1 chat-core (SPEC-CC-008) regrows two more — `CHAT_RUNTIME_PORT` and
  * `MARKDOWN_RENDER_PORT` — alongside them. There is no aggregate key: each port
- * is injected on its own (ADR-CC-001 §5). The remaining MCP/canvas/icon/secret
- * InjectionKeys stay deleted and regrow per consumer in a later phase.
+ * is injected on its own (ADR-CC-001 §5). P2 rich-rendering (SPEC-RR-009)
+ * regrows the icon seam — `ICON_PORT` joins the list below (still no aggregate).
+ * The remaining MCP/canvas/secret InjectionKeys stay deleted and regrow per
+ * consumer in a later phase.
  */
 export const SETTINGS_PORT: InjectionKey<SettingsPort> = Symbol('SettingsPort');
 export const VAULT_PORT: InjectionKey<VaultPort> = Symbol('VaultPort');
@@ -28,3 +31,6 @@ export const COMMUNITY_PLUGIN_PORT: InjectionKey<CommunityPluginPort> =
 // P1 chat-core ports (SPEC-CC-008, REQ-CC-002, REQ-CC-015).
 export const CHAT_RUNTIME_PORT: InjectionKey<ChatRuntimePort> = Symbol('ChatRuntimePort');
 export const MARKDOWN_RENDER_PORT: InjectionKey<MarkdownRenderPort> = Symbol('MarkdownRenderPort');
+
+// P2 rich-rendering icon seam (SPEC-RR-009, ADR-RR-001 §4, T-RR-007).
+export const ICON_PORT: InjectionKey<IconPort> = Symbol('IconPort');

@@ -63,6 +63,18 @@ function makeSink(): ChatTurnSink & {
 		onDone() {
 			calls.push('done');
 		},
+		// P2 legs (SPEC-RR-019) — present so this P1 fixture satisfies the grown `ChatTurnSink`
+		// interface; the P1 scenarios never exercise them (the P2 dispatch is covered by
+		// RunChatTurnUseCase.rr.test.ts). No assertion here changes.
+		onToolUse() {},
+		onToolResult() {},
+		onToolOutput() {},
+		onThinking() {},
+		onSubagentToolUse() {},
+		onSubagentToolResult() {},
+		onAsyncSubagentResult() {},
+		onContextCompacted() {},
+		onNotice() {},
 	};
 }
 

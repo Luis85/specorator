@@ -1,4 +1,13 @@
-import { FileSystemAdapter, Notice, TFile, TFolder, normalizePath, type App } from 'obsidian';
+import {
+	Component,
+	FileSystemAdapter,
+	Notice,
+	TFile,
+	TFolder,
+	normalizePath,
+	setIcon,
+	type App,
+} from 'obsidian';
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings';
 import { trySync } from '@/domain/shared/tryAsync';
 import type {
@@ -10,9 +19,15 @@ import type {
 	CommunityPluginPort,
 	ChatRuntimePort,
 	MarkdownRenderPort,
+	SafeRenderResult,
+	IconPort,
+	IconNode,
 } from '@/domain/ports';
+import { MarkdownRenderer } from 'obsidian';
 import { ClaudeCliChatRuntime } from './ClaudeCliChatRuntime';
-import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
+import { safeMarkdownRender } from '@/application/chat/safeMarkdownRender';
+import { walkSvgElementToIconNode } from './walkSvgElementToIconNode';
+import { walkMarkdownFragment } from './walkMarkdownFragment';
 
 type FileManagerWithTrash = App['fileManager'] & {
 	trashFile?: (file: TFile) => Promise<void>;
@@ -41,6 +56,9 @@ export class ObsidianBridge
 	};
 
 	private readonly _activeNotices = new Set<Notice>();
+
+	/** Lifecycle owner for `MarkdownRenderer.render` post-processors (SPEC-RR-010). */
+	private readonly _renderComponent = new Component();
 
 	/** Stable device-local key for the user/device-scoped settings blob (ADR-PSR-002). */
 	private static readonly _SETTINGS_KEY = 'specorator:settings';
@@ -123,12 +141,56 @@ export class ObsidianBridge
 		return new ClaudeCliChatRuntime(this, this.getVaultBasePath());
 	}
 
-	// ── Markdown render port (SPEC-CC-013, SPEC-CC-015) ─────────────────────────
-	// The P1 `safeMarkdownRender`-backed port (structured nodes, no HTML sink).
-	// Identical behaviour across all three bridges in P1; P2 re-backs the same
-	// port shape with Obsidian's `MarkdownRenderer.render`.
+	// ── Markdown render port (SPEC-CC-013/015, SPEC-RR-010, ADR-RR-002) ─────────
+	// P2 re-backs the UNCHANGED `SafeRenderResult` DTO shape with Obsidian's
+	// `MarkdownRenderer.render`: `await` the real (asynchronous) renderer into a
+	// DETACHED element, THEN walk the now-populated fragment into the declarative
+	// DTO entirely in the bridge, then discard the element — no DOM element / HTML
+	// string / sink reaches the UI (NFR-RR-006). The port is async (ADR-RR-002 —
+	// supersedes ADR-RR-001 §3) precisely because the renderer is async; the prior
+	// sync read raced the renderer and always saw an empty fragment, so production
+	// markdown rendered plain. Total: any internal failure (or an empty fragment)
+	// degrades to the pure `safeMarkdownRender` baseline and NEVER rejects.
+	// Coverage-excluded infra; behaviour gated by the MANUAL leg of TEST-RR-043.
 	createMarkdownRenderPort(): MarkdownRenderPort {
-		return safeMarkdownRenderPort;
+		const app = this.app;
+		const component = this._renderComponent;
+		return {
+			render: async (markdown: string): Promise<SafeRenderResult> => {
+				const detached = createDiv();
+				try {
+					await MarkdownRenderer.render(app, markdown, detached, '', component);
+					const walked = walkMarkdownFragment(detached);
+					return walked.nodes.length > 0 ? walked : safeMarkdownRender(markdown);
+				} catch {
+					return safeMarkdownRender(markdown);
+				} finally {
+					detached.detach();
+				}
+			},
+		};
+	}
+
+	// ── Icon port factory (SPEC-RR-012, ADR-RR-001 §4) ──────────────────────────
+	// Calls Obsidian `setIcon` into a DETACHED element, walks the produced `<svg>`
+	// subtree into a declarative `IconNode` (tag/attrs/children read as data), then
+	// discards the element — NO DOM element / HTML string / sink reaches the UI
+	// (NFR-RR-006). An unknown name produces no `<svg>` → `null` (the caller falls
+	// back to a generic icon, REQ-RR-019). Coverage-excluded infra; behaviour gated
+	// by the MANUAL leg of TEST-RR-026 (T-RR-043).
+	createIconPort(): IconPort {
+		return {
+			setIcon: (name: string): IconNode | null => {
+				const detached = createDiv();
+				try {
+					setIcon(detached, name);
+					const svg = detached.querySelector('svg');
+					return svg !== null ? walkSvgElementToIconNode(svg) : null;
+				} finally {
+					detached.detach();
+				}
+			},
+		};
 	}
 
 	private _track(notice: Notice): void {

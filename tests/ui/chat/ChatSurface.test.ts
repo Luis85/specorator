@@ -170,6 +170,30 @@ describe('ChatSurface (SPEC-CC-018)', () => {
 		expect(wrapper.html()).not.toContain('<script>');
 	});
 
+	it('REQ-RR-024: a usage chunk renders the turn-level UsageInfo in the surface footer', async () => {
+		const runtime = new ControllableRuntime();
+		const { po } = mountSurface(runtime);
+		// No usage element before any usage chunk arrives (REQ-RR-024a / EC-RR-12).
+		expect(po.showsUsage()).toBe(false);
+		await po.typeAndSend('Hi');
+		runtime.emit({ type: 'text', content: 'Reply' });
+		runtime.emit({
+			type: 'usage',
+			usage: {
+				model: 'mock',
+				inputTokens: 12,
+				contextWindow: 200000,
+				contextTokens: 1234,
+				percentage: 1,
+			},
+			sessionId: 'mock-session',
+		});
+		runtime.emit({ type: 'done' });
+		await flushPromises();
+		expect(po.showsUsage()).toBe(true);
+		expect(po.usageText()).toContain('1234');
+	});
+
 	it('TEST-CC-013 A leg: ensureReady=false surfaces a sticky notice with no dangling live message', async () => {
 		const runtime = new ControllableRuntime();
 		runtime.ready = false;

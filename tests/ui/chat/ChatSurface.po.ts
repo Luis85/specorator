@@ -24,6 +24,14 @@ export class ChatSurfacePageObject {
 		return this.wrapper.find('[data-testid="chat-busy"]').exists();
 	}
 
+	showsUsage(): boolean {
+		return this.wrapper.find('[data-testid="usage-info"]').exists();
+	}
+
+	usageText(): string {
+		return this.wrapper.get('[data-testid="usage-info"]').text();
+	}
+
 	busyAriaLive(): string | undefined {
 		return this.wrapper.get('[data-testid="chat-busy"]').attributes('aria-live');
 	}

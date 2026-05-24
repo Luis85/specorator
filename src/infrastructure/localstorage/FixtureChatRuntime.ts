@@ -25,14 +25,85 @@ const FIXTURE_USAGE: UsageInfo = {
 };
 
 /**
- * Bundled transcript replayed by `FixtureChatRuntime`. A short canned
- * `text…usage…done` reply (SPEC-CC-012). The terminating `done` is appended by
- * the generator, so this constant ends with the `usage` chunk.
+ * Bundled transcript replayed by `FixtureChatRuntime`. A believable RICH reply
+ * (SPEC-RR-013, extending SPEC-CC-012): a text intro, a thinking block, an Edit
+ * tool call carrying a `structuredPatch` diff, a TodoWrite tool call with a
+ * task list, a Task subagent (spawn → nested tool use/result → async result),
+ * and the canned usage chunk — so the GitHub Pages demo exercises every P2
+ * renderer (incl. `SubagentBlock`, CLAR-RR-008) with no backend. The terminating
+ * `done` is appended by the generator, so this constant ends with the `usage` chunk.
  */
 const FIXTURE_TRANSCRIPT: readonly StreamChunk[] = [
-	{ type: 'text', content: 'This is a canned demo reply ' },
-	{ type: 'text', content: 'streamed from a bundled fixture — ' },
+	{ type: 'text', content: 'This is a canned demo reply streamed from a bundled fixture — ' },
 	{ type: 'text', content: 'no backend is contacted on GitHub Pages.' },
+	{ type: 'thinking', content: 'Sketching a small edit to demonstrate the diff view.' },
+	{
+		type: 'tool_use',
+		id: 'fixture-edit-1',
+		name: 'Edit',
+		input: {
+			file_path: 'README.md',
+			old_string: '# Demo',
+			new_string: '# Demo\n\nNow with rich rendering.',
+		},
+	},
+	{
+		type: 'tool_result',
+		id: 'fixture-edit-1',
+		content: 'File edited.',
+		toolUseResult: {
+			filePath: 'README.md',
+			structuredPatch: [
+				{
+					oldStart: 1,
+					oldLines: 1,
+					newStart: 1,
+					newLines: 3,
+					lines: ['-# Demo', '+# Demo', '+', '+Now with rich rendering.'],
+				},
+			],
+		},
+	},
+	{
+		type: 'tool_use',
+		id: 'fixture-todo-1',
+		name: 'TodoWrite',
+		input: {
+			todos: [
+				{ content: 'Edit the README', status: 'completed', activeForm: 'Editing the README' },
+				{ content: 'Preview the demo', status: 'in_progress', activeForm: 'Previewing the demo' },
+			],
+		},
+	},
+	{ type: 'tool_result', id: 'fixture-todo-1', content: 'Todos updated.' },
+	// A Task subagent: the spawn seeds the SubagentInfo + a top-level `subagent`
+	// block (CLAR-RR-008), a nested tool call/result correlated by the spawn id,
+	// then the async completion so the demo renders a SubagentBlock.
+	{
+		type: 'tool_use',
+		id: 'fixture-agent-1',
+		name: 'Task',
+		input: { description: 'review the README', prompt: 'confirm the rich-rendering note reads well' },
+	},
+	{
+		type: 'subagent_tool_use',
+		subagentId: 'fixture-agent-1',
+		id: 'fixture-sub-read-1',
+		name: 'Read',
+		input: { file_path: 'README.md' },
+	},
+	{
+		type: 'subagent_tool_result',
+		subagentId: 'fixture-agent-1',
+		id: 'fixture-sub-read-1',
+		content: '# Demo\n\nNow with rich rendering.',
+	},
+	{
+		type: 'async_subagent_result',
+		agentId: 'fixture-agent-1',
+		status: 'completed',
+		result: 'The rich-rendering note reads well.',
+	},
 	{ type: 'usage', usage: FIXTURE_USAGE, sessionId: 'fixture-session' },
 ];
 

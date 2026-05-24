@@ -56,11 +56,11 @@ describe('createChatRuntime() factory (TEST-CC-016 runtime leg)', () => {
 	});
 });
 
-describe('createMarkdownRenderPort() (TEST-CC-016 markdown leg — CLAR-CC-007 resolved)', () => {
-	it('MockBridge exposes a safeMarkdownRender-backed MarkdownRenderPort', () => {
+describe('createMarkdownRenderPort() (TEST-CC-016 markdown leg — CLAR-CC-007 resolved; ADR-RR-002 async)', () => {
+	it('MockBridge exposes a safeMarkdownRender-backed MarkdownRenderPort that resolves the DTO', async () => {
 		const port = new MockBridge().createMarkdownRenderPort();
 		expect(typeof port.render).toBe('function');
-		expect(port.render('hi `x`')).toEqual({
+		expect(await port.render('hi `x`')).toEqual({
 			nodes: [
 				{
 					kind: 'paragraph',
@@ -73,17 +73,24 @@ describe('createMarkdownRenderPort() (TEST-CC-016 markdown leg — CLAR-CC-007 r
 		});
 	});
 
-	it('LocalStorageBridge exposes the markdown port with identical P1 behaviour', () => {
-		const mockPort = new MockBridge().createMarkdownRenderPort();
-		const localPort = new LocalStorageBridge().createMarkdownRenderPort();
-		expect(localPort.render('one\n\ntwo')).toEqual(mockPort.render('one\n\ntwo'));
+	it('MockBridge markdown port render() returns a Promise (ADR-RR-002 async seam)', () => {
+		const port = new MockBridge().createMarkdownRenderPort();
+		expect(port.render('x')).toBeInstanceOf(Promise);
 	});
 
-	it('markdown port output holds no HTML for adversarial input (NFR-CC-008)', () => {
+	it('LocalStorageBridge exposes the markdown port with identical P1 behaviour', async () => {
+		const mockPort = new MockBridge().createMarkdownRenderPort();
+		const localPort = new LocalStorageBridge().createMarkdownRenderPort();
+		expect(await localPort.render('one\n\ntwo')).toEqual(await mockPort.render('one\n\ntwo'));
+	});
+
+	it('markdown port output holds no HTML for adversarial input (NFR-CC-008)', async () => {
 		const port = new MockBridge().createMarkdownRenderPort();
-		const text = port
-			.render('<script>x</script> & y')
-			.nodes.flatMap((n) => n.spans.map((s) => s.value))
+		const result = await port.render('<script>x</script> & y');
+		const text = result.nodes
+			.filter((n) => n.kind === 'paragraph')
+			.flatMap((n) => n.spans.filter((s) => s.kind === 'text' || s.kind === 'code'))
+			.map((s) => s.value)
 			.join(' ');
 		expect(text).toContain('<script>');
 		expect(text).not.toContain('&lt;');

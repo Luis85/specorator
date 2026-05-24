@@ -7,10 +7,12 @@ import type {
 	CommunityPluginPort,
 	ChatRuntimePort,
 	MarkdownRenderPort,
+	IconPort,
 } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
 import { MockChatRuntime } from './MockChatRuntime';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
+import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
 
 function folderPrefix(parent: string): string {
 	if (parent === '') return '';
@@ -142,12 +144,22 @@ export class MockBridge
 		return new MockChatRuntime();
 	}
 
-	// ── Markdown render port (SPEC-CC-013, SPEC-CC-015) ─────────────────────────
-	// The P1 `safeMarkdownRender`-backed port (structured nodes, no HTML sink).
-	// Stateless singleton; identical behaviour across all three bridges in P1
-	// (Obsidian's renderer backing is P2).
+	// ── Markdown render port (SPEC-CC-013, SPEC-CC-015, ADR-RR-002) ─────────────
+	// The pure `safeMarkdownRender`-backed port (structured nodes, no HTML sink).
+	// Per ADR-RR-002 the port is async: this stateless singleton resolves
+	// `Promise.resolve(safeMarkdownRender(markdown))` (the pure transform stays
+	// synchronous). Obsidian's awaited `MarkdownRenderer` backing is the production
+	// path; Mock/LocalStorage share this resolved-pure-baseline backing.
 	createMarkdownRenderPort(): MarkdownRenderPort {
 		return safeMarkdownRenderPort;
+	}
+
+	// ── Icon port factory (SPEC-RR-012, ADR-RR-001 §4) ──────────────────────────
+	// The static-map `IconPort` (declarative `IconNode`s, no DOM sink). Shared
+	// with `LocalStorageBridge` so `npm run dev` and the demo render icons
+	// without Obsidian; the Obsidian `setIcon` walk is the parity truth (P2).
+	createIconPort(): IconPort {
+		return staticIconPort;
 	}
 
 	showError(message: string, durationMs = 0): void {

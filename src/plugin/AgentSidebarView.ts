@@ -13,6 +13,7 @@ import {
 	COMMUNITY_PLUGIN_PORT,
 	CHAT_RUNTIME_PORT,
 	MARKDOWN_RENDER_PORT,
+	ICON_PORT,
 } from '@/infrastructure/bridge/ports';
 import type SpecoratorPlugin from './main';
 
@@ -23,11 +24,13 @@ export const VIEW_TYPE_AGENT = 'specorator-agent';
  * The agent chat sidebar (P1 chat-core — SPEC-CC-022). Mounts `ChatSurface`
  * inside `ErrorBoundary` (so component errors route through LoggerPort +
  * NotificationPort), installs Pinia + i18n, and provides the six core ports plus
- * the two chat ports — `CHAT_RUNTIME_PORT` from `bridge.createChatRuntime()` (one
- * fresh runtime per mounted view) and `MARKDOWN_RENDER_PORT` from the bridge's
- * markdown port. `onClose` unmounts the app, whose `ChatSurface.onBeforeUnmount`
- * cancels the in-flight turn + resets the store before teardown (EC-15). The tab
- * icon is a native Lucide name (`bot`), not routed through a (deleted) IconPort.
+ * the chat ports — `CHAT_RUNTIME_PORT` from `bridge.createChatRuntime()` (one
+ * fresh runtime per mounted view), `MARKDOWN_RENDER_PORT` from the bridge's
+ * markdown port, and `ICON_PORT` from `bridge.createIconPort()` (P2 rich-rendering
+ * — SPEC-RR-021, so the block renderers' `SpIcon`s resolve through the port).
+ * `onClose` unmounts the app, whose `ChatSurface.onBeforeUnmount` cancels the
+ * in-flight turn + resets the store before teardown (EC-15). The tab icon is a
+ * native Lucide name (`bot`), set via Obsidian's own `getIcon`.
  */
 export class AgentSidebarView extends ItemView {
 	private vueApp: VueApp | null = null;
@@ -71,6 +74,7 @@ export class AgentSidebarView extends ItemView {
 			app.provide(COMMUNITY_PLUGIN_PORT, bridge);
 			app.provide(CHAT_RUNTIME_PORT, bridge.createChatRuntime());
 			app.provide(MARKDOWN_RENDER_PORT, bridge.createMarkdownRenderPort());
+			app.provide(ICON_PORT, bridge.createIconPort());
 			app.mount(host);
 			this.vueApp = app;
 		}
