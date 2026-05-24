@@ -116,12 +116,7 @@ const MOTION_TOKENS = [
 
 const SURFACE_TOKENS = ['--sp-surface-overlay'];
 
-const PROVIDER_SELECTORS = [
-	'.specorator-root[data-provider="claude"]',
-	'.specorator-root[data-provider="codex"]',
-	'.specorator-root[data-provider="opencode"]',
-	'.specorator-root[data-provider="cursor"]',
-];
+const PROVIDER_IDS = ['claude', 'codex', 'opencode', 'cursor'] as const;
 
 function loadTokens(): string {
 	return readFileSync(TOKENS_PATH, 'utf8');
@@ -148,8 +143,12 @@ describe('src/ui/styles/tokens.css — token contract (REQ-AUX-006, REQ-AUX-009)
 	it('declares every §4.2 brand token + provider override selector', () => {
 		const css = loadTokens();
 		assertTokensDeclared(css, BRAND_TOKENS);
-		for (const selector of PROVIDER_SELECTORS) {
-			expect(css, `expected provider selector "${selector}"`).toContain(selector);
+		// Quote-agnostic: prettier owns the CSS attribute-selector quote style
+		// (single vs double); the §4.2 contract is the override selector's presence.
+		for (const id of PROVIDER_IDS) {
+			expect(css, `expected provider selector for "${id}"`).toMatch(
+				new RegExp(`\\.specorator-root\\[data-provider=['"]${id}['"]\\]`),
+			);
 		}
 		// body.theme-light override block is required by spec §4.2.
 		expect(css).toMatch(/body\.theme-light\s+\.specorator-root/);

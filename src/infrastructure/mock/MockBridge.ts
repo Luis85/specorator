@@ -5,8 +5,12 @@ import type {
 	NotificationPort,
 	LoggerPort,
 	CommunityPluginPort,
+	ChatRuntimePort,
+	MarkdownRenderPort,
 } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
+import { MockChatRuntime } from './MockChatRuntime';
+import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 
 function folderPrefix(parent: string): string {
 	if (parent === '') return '';
@@ -128,6 +132,22 @@ export class MockBridge
 
 	async openFile(path: string): Promise<void> {
 		this.openedFile = path;
+	}
+
+	// ── Chat runtime factory (SPEC-CC-013, ADR-CC-001 §6) ───────────────────────
+	// Returns a fresh per-conversation `MockChatRuntime` (scripted, no subprocess)
+	// so `npm run dev` and unit tests get a working chat. Each call is a new
+	// instance for per-conversation state isolation.
+	createChatRuntime(): ChatRuntimePort {
+		return new MockChatRuntime();
+	}
+
+	// ── Markdown render port (SPEC-CC-013, SPEC-CC-015) ─────────────────────────
+	// The P1 `safeMarkdownRender`-backed port (structured nodes, no HTML sink).
+	// Stateless singleton; identical behaviour across all three bridges in P1
+	// (Obsidian's renderer backing is P2).
+	createMarkdownRenderPort(): MarkdownRenderPort {
+		return safeMarkdownRenderPort;
 	}
 
 	showError(message: string, durationMs = 0): void {

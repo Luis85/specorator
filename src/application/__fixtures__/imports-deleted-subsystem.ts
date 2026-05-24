@@ -4,4 +4,4 @@
 // unresolvable by design (`@ts-nocheck` keeps `tsc` quiet); `__fixtures__` is
 // ignored by daily `npm run lint`, and the architecture test lints this file
 // on demand with `ignore: false`.
-import '@/domain/chat/ProviderSelection'
+import '@/domain/feature/Feature'

@@ -8,7 +8,11 @@ import type {
 	NotificationPort,
 	LoggerPort,
 	CommunityPluginPort,
+	ChatRuntimePort,
+	MarkdownRenderPort,
 } from '@/domain/ports';
+import { ClaudeCliChatRuntime } from './ClaudeCliChatRuntime';
+import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 
 type FileManagerWithTrash = App['fileManager'] & {
 	trashFile?: (file: TFile) => Promise<void>;
@@ -107,6 +111,24 @@ export class ObsidianBridge
 		if (file instanceof TFile) {
 			await this.app.workspace.getLeaf().openFile(file);
 		}
+	}
+
+	// ── Chat runtime factory (SPEC-CC-013, ADR-CC-001 §6) ───────────────────────
+	// Returns a fresh per-conversation `ClaudeCliChatRuntime` (desktop-only
+	// subprocess; coverage-excluded — manual TEST-CC-017). Passes `this` as the
+	// LoggerPort for diagnostics (no message content logged) and the vault root as
+	// the child cwd so relative paths in CLI tool calls resolve inside the vault.
+	// Reads/writes no secret (NFR-CC-006). Each call is a new instance.
+	createChatRuntime(): ChatRuntimePort {
+		return new ClaudeCliChatRuntime(this, this.getVaultBasePath());
+	}
+
+	// ── Markdown render port (SPEC-CC-013, SPEC-CC-015) ─────────────────────────
+	// The P1 `safeMarkdownRender`-backed port (structured nodes, no HTML sink).
+	// Identical behaviour across all three bridges in P1; P2 re-backs the same
+	// port shape with Obsidian's `MarkdownRenderer.render`.
+	createMarkdownRenderPort(): MarkdownRenderPort {
+		return safeMarkdownRenderPort;
 	}
 
 	private _track(notice: Notice): void {

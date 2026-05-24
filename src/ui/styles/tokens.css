@@ -16,82 +16,94 @@
 /* §4.1 — Colour tokens. Default each token to a `var(--*)` Obsidian lookup so
  * custom themes keep driving the palette. */
 .specorator-root {
-	--sp-text-normal:                 var(--text-normal);
-	--sp-text-muted:                  var(--text-muted);
-	--sp-text-faint:                  var(--text-faint);
-	--sp-text-accent:                 var(--text-accent);
-	--sp-text-on-accent:              var(--text-on-accent);
-	--sp-bg-primary:                  var(--background-primary);
-	--sp-bg-primary-alt:              var(--background-primary-alt);
-	--sp-bg-secondary:                var(--background-secondary);
-	--sp-bg-secondary-alt:            var(--background-secondary-alt);
-	--sp-border:                      var(--background-modifier-border);
-	--sp-border-strong:               var(--background-modifier-border-hover);
-	--sp-interactive-accent:          var(--interactive-accent);
+	--sp-text-normal: var(--text-normal);
+	--sp-text-muted: var(--text-muted);
+	--sp-text-faint: var(--text-faint);
+	--sp-text-accent: var(--text-accent);
+	--sp-text-on-accent: var(--text-on-accent);
+	--sp-bg-primary: var(--background-primary);
+	--sp-bg-primary-alt: var(--background-primary-alt);
+	--sp-bg-secondary: var(--background-secondary);
+	--sp-bg-secondary-alt: var(--background-secondary-alt);
+	--sp-border: var(--background-modifier-border);
+	--sp-border-strong: var(--background-modifier-border-hover);
+	--sp-interactive-accent: var(--interactive-accent);
 	--sp-interactive-accent-translucent: var(--interactive-accent-translucent);
-	--sp-interactive-hover:           var(--background-modifier-hover);
-	--sp-interactive-active-hover:    var(--background-modifier-active-hover);
-	--sp-error:                       var(--text-error, #dc3545);
-	--sp-error-bg:                    var(--background-modifier-error);
-	--sp-error-border:                var(--background-modifier-error-border);
-	--sp-error-rgb:          220, 53, 69;
-	--sp-warning:            var(--color-orange, #d97706);
-	--sp-success:            var(--color-green, #16a34a);
-	--sp-compact:            #5bc0de;
-	--sp-focus-ring:         var(--interactive-accent);
+	--sp-interactive-hover: var(--background-modifier-hover);
+	--sp-interactive-active-hover: var(--background-modifier-active-hover);
+	--sp-error: var(--text-error, #dc3545);
+	--sp-error-bg: var(--background-modifier-error);
+	--sp-error-border: var(--background-modifier-error-border);
+	--sp-error-rgb: 220, 53, 69;
+	--sp-warning: var(--color-orange, #d97706);
+	--sp-success: var(--color-green, #16a34a);
+	--sp-compact: #5bc0de;
+	--sp-focus-ring: var(--interactive-accent);
 }
 
 /* §4.2 — Brand tokens + provider overrides. Brand literals are inlined here
  * only; consumers read `--sp-brand` / `--sp-brand-rgb` / `--sp-brand-translucent`. */
 .specorator-root {
-	--sp-brand:              var(--sp-brand-claude);
-	--sp-brand-rgb:          var(--sp-brand-claude-rgb);
-	--sp-brand-claude:       #D97757;
-	--sp-brand-claude-rgb:   217, 119, 87;
-	--sp-brand-codex:        #d0d0d0;
-	--sp-brand-codex-rgb:    208, 208, 208;
-	--sp-brand-opencode:     #B8B8B8;
+	--sp-brand: var(--sp-brand-claude);
+	--sp-brand-rgb: var(--sp-brand-claude-rgb);
+	--sp-brand-claude: #d97757;
+	--sp-brand-claude-rgb: 217, 119, 87;
+	--sp-brand-codex: #d0d0d0;
+	--sp-brand-codex-rgb: 208, 208, 208;
+	--sp-brand-opencode: #b8b8b8;
 	--sp-brand-opencode-rgb: 184, 184, 184;
 	/* CQ-AUX-01 — placeholder Cursor brand colour; PM + ux-designer must
 	 * confirm the final value before WS-AUX-1 ships. Neutral grey keeps the
 	 * surface readable until then. */
-	--sp-brand-cursor:       #6b7280;
-	--sp-brand-cursor-rgb:   107, 114, 128;
-	--sp-brand-translucent:  rgba(var(--sp-brand-rgb), 0.15);
-	--sp-accent:             var(--sp-brand);
+	--sp-brand-cursor: #6b7280;
+	--sp-brand-cursor-rgb: 107, 114, 128;
+	--sp-brand-translucent: rgba(var(--sp-brand-rgb), 0.15);
+	--sp-accent: var(--sp-brand);
 }
 body.theme-light .specorator-root {
-	--sp-brand-codex:        #000000;
-	--sp-brand-codex-rgb:    0, 0, 0;
-	--sp-brand-opencode:     #707070;
+	--sp-brand-codex: #000000;
+	--sp-brand-codex-rgb: 0, 0, 0;
+	--sp-brand-opencode: #707070;
 	--sp-brand-opencode-rgb: 112, 112, 112;
 }
-.specorator-root[data-provider="claude"]   { --sp-brand: var(--sp-brand-claude);   --sp-brand-rgb: var(--sp-brand-claude-rgb); }
-.specorator-root[data-provider="codex"]    { --sp-brand: var(--sp-brand-codex);    --sp-brand-rgb: var(--sp-brand-codex-rgb); }
-.specorator-root[data-provider="opencode"] { --sp-brand: var(--sp-brand-opencode); --sp-brand-rgb: var(--sp-brand-opencode-rgb); }
-.specorator-root[data-provider="cursor"]   { --sp-brand: var(--sp-brand-cursor);   --sp-brand-rgb: var(--sp-brand-cursor-rgb); }
+.specorator-root[data-provider='claude'] {
+	--sp-brand: var(--sp-brand-claude);
+	--sp-brand-rgb: var(--sp-brand-claude-rgb);
+}
+.specorator-root[data-provider='codex'] {
+	--sp-brand: var(--sp-brand-codex);
+	--sp-brand-rgb: var(--sp-brand-codex-rgb);
+}
+.specorator-root[data-provider='opencode'] {
+	--sp-brand: var(--sp-brand-opencode);
+	--sp-brand-rgb: var(--sp-brand-opencode-rgb);
+}
+.specorator-root[data-provider='cursor'] {
+	--sp-brand: var(--sp-brand-cursor);
+	--sp-brand-rgb: var(--sp-brand-cursor-rgb);
+}
 
 /* §4.3 — Typography tokens. `--sp-font-serif` is the Copernicus stack used
  * by the welcome greeting (REQ-AUX-007). */
 .specorator-root {
-	--sp-font-text:          var(--font-text);
-	--sp-font-mono:          var(--font-monospace);
-	--sp-font-serif:         Copernicus, 'Tiempos Headline', Tiempos, Georgia, 'Times New Roman', serif;
+	--sp-font-text: var(--font-text);
+	--sp-font-mono: var(--font-monospace);
+	--sp-font-serif: Copernicus, 'Tiempos Headline', Tiempos, Georgia, 'Times New Roman', serif;
 
-	--sp-font-size-xs:       11px;
-	--sp-font-size-sm:       12px;
-	--sp-font-size-md:       13px;
-	--sp-font-size-base:     14px;
-	--sp-font-size-lg:       15px;
-	--sp-font-size-xl:       16px;
-	--sp-font-size-display:  28px;
+	--sp-font-size-xs: 11px;
+	--sp-font-size-sm: 12px;
+	--sp-font-size-md: 13px;
+	--sp-font-size-base: 14px;
+	--sp-font-size-lg: 15px;
+	--sp-font-size-xl: 16px;
+	--sp-font-size-display: 28px;
 
-	--sp-font-weight-light:     300;
-	--sp-font-weight-medium:    500;
-	--sp-font-weight-semibold:  600;
+	--sp-font-weight-light: 300;
+	--sp-font-weight-medium: 500;
+	--sp-font-weight-semibold: 600;
 
-	--sp-line-height-tight:   1.4;
-	--sp-line-height-normal:  1.5;
+	--sp-line-height-tight: 1.4;
+	--sp-line-height-normal: 1.5;
 }
 
 /* §4.4 — Spacing rhythm. */
@@ -107,50 +119,64 @@ body.theme-light .specorator-root {
 
 /* §4.5 — Radii. */
 .specorator-root {
-	--sp-radius-xs:                    3px;
-	--sp-radius-sm:                    4px;
-	--sp-radius-md:                    6px;
-	--sp-radius-lg:                    8px;
-	--sp-radius-pill:                  9px;
-	--sp-radius-pill-lg:               12px;
-	--sp-radius-pill-xl:               16px;
-	--sp-radius-full:                  999px;
-	--sp-radius-bubble-tail-user:      4px;
+	--sp-radius-xs: 3px;
+	--sp-radius-sm: 4px;
+	--sp-radius-md: 6px;
+	--sp-radius-lg: 8px;
+	--sp-radius-pill: 9px;
+	--sp-radius-pill-lg: 12px;
+	--sp-radius-pill-xl: 16px;
+	--sp-radius-full: 999px;
+	--sp-radius-bubble-tail-user: 4px;
 	--sp-radius-bubble-tail-assistant: 4px;
 }
 
 /* §4.6 — Shadows + z-index + motion. */
 .specorator-root {
-	--sp-shadow-subtle:      var(--shadow-s, 0 2px 4px rgba(0,0,0,0.1));
-	--sp-shadow-dropup:      0 -4px 16px rgba(0,0,0,0.2);
-	--sp-shadow-dropdown:    0 4px 16px rgba(0,0,0,0.25);
-	--sp-shadow-focus-ring:  0 0 0 2px var(--sp-focus-ring);
+	--sp-shadow-subtle: var(--shadow-s, 0 2px 4px rgba(0, 0, 0, 0.1));
+	--sp-shadow-dropup: 0 -4px 16px rgba(0, 0, 0, 0.2);
+	--sp-shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.25);
+	--sp-shadow-focus-ring: 0 0 0 2px var(--sp-focus-ring);
 
-	--sp-blur:               blur(20px);
+	--sp-blur: blur(20px);
 
-	--sp-z-base:             1;
-	--sp-z-floating:         2;
-	--sp-z-tooltip:          100;
-	--sp-z-nav:              100;
-	--sp-z-dropdown:         1000;
-	--sp-z-dropdown-fixed:   10001;
+	--sp-z-base: 1;
+	--sp-z-floating: 2;
+	--sp-z-tooltip: 100;
+	--sp-z-nav: 100;
+	--sp-z-dropdown: 1000;
+	--sp-z-dropdown-fixed: 10001;
 
-	--sp-duration-fast:      0.15s;
-	--sp-duration-medium:    0.2s;
-	--sp-duration-slow:      0.3s;
-	--sp-ease:               ease;
-	--sp-ease-in-out:        ease-in-out;
-	--sp-ease-linear:        linear;
+	--sp-duration-fast: 0.15s;
+	--sp-duration-medium: 0.2s;
+	--sp-duration-slow: 0.3s;
+	--sp-ease: ease;
+	--sp-ease-in-out: ease-in-out;
+	--sp-ease-linear: linear;
 }
 @media (prefers-reduced-motion: reduce) {
 	.specorator-root {
-		--sp-duration-fast:   0s;
+		--sp-duration-fast: 0s;
 		--sp-duration-medium: 0s;
-		--sp-duration-slow:   0s;
+		--sp-duration-slow: 0s;
 	}
 }
 
 /* §4.7 — Surfaces. */
 .specorator-root {
-	--sp-surface-overlay: var(--sp-bg-secondary);  /* used by SpDropdownPanel with backdrop blur */
+	--sp-surface-overlay: var(--sp-bg-secondary); /* used by SpDropdownPanel with backdrop blur */
+}
+
+/* §4.8 — Chat surface (P1, SPEC-CC-023). The 8 new chat tokens; color literals are
+ * confined to this layer (NFR-CC-012) — no chat component carries a hex / raw Obsidian
+ * var. Parity values from claudian-main messages.css + input.css. */
+.specorator-root {
+	--sp-msg-gap: var(--sp-space-5); /* 12px gap between message turns */
+	--sp-scrollbar-width: 6px; /* message-list scroll-region scrollbar */
+	--sp-msg-user-bg: rgba(0, 0, 0, 0.3); /* user-bubble fill (perceptual parity) */
+	--sp-msg-user-max-width: 95%; /* user bubble max width */
+	--sp-interrupt: #d45d5d; /* Interrupted badge color (parity) */
+	--sp-input-min-h: 140px; /* composer wrapper min height */
+	--sp-textarea-min-h: 60px; /* auto-grow textarea start height */
+	--sp-textarea-max-h: none; /* textarea grows uncapped (wrapper bounds it) */
 }
