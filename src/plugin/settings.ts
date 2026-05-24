@@ -1,538 +1,108 @@
-import type { App } from 'obsidian'
-import { PluginSettingTab, Setting } from 'obsidian'
-import * as path from 'node:path'
-import { spawn, spawnSync } from 'node:child_process'
-import { ClaudeBinaryResolver, type ResolverPlatform } from '@/infrastructure/obsidian/ClaudeBinaryResolver'
-import { ObsidianCliBinaryResolver } from '@/infrastructure/obsidian/ObsidianCliBinaryResolver'
-import { tryAsync, trySync } from '@/domain/shared/tryAsync'
-import { SECRET_ID_ANTHROPIC } from '@/domain/ports'
-import type { ModuleDescriptor, SettingsFieldDescriptor } from '@/modules/module'
-import { VIEW_TYPE, SpecoratorView } from './SpecoratorView'
-import { VIEW_TYPE_AGENT, AgentSidepanelView } from './AgentSidepanelView'
-import { renderCursorSettingsSection } from './settings/CursorSettingsSection'
-import type SpecoratorPlugin from './main'
+import { type App, PluginSettingTab, Setting } from 'obsidian';
+import type { ModuleDescriptor, SettingsFieldDescriptor } from '@/modules/module';
+import type SpecoratorPlugin from './main';
 
+/**
+ * Slim settings tab (P0 reboot — SPEC-PSR-008). Renders only the
+ * module-schema-driven controls (the two `coreSettingsModule` dropdowns in P0)
+ * and persists changes through `SettingsPort` via `plugin.updateSettings`. The
+ * fat tab's chat/secret/CLI/MCP/approval sections were deleted with their
+ * subsystems.
+ */
 export class SpecoratorSettingTab extends PluginSettingTab {
-  private readonly plugin: SpecoratorPlugin
+	constructor(
+		app: App,
+		private readonly plugin: SpecoratorPlugin,
+	) {
+		super(app, plugin);
+	}
 
-  constructor(app: App, plugin: SpecoratorPlugin) {
-    super(app, plugin)
-    this.plugin = plugin
-  }
+	display(): void {
+		const { containerEl } = this;
+		containerEl.empty();
 
-  display(): void {
-    const { containerEl } = this
-    containerEl.empty()
+		for (const mod of this.plugin.core?.allModules ?? []) {
+			const fields = mod.settingsSchema?.fields;
+			if (fields === undefined || fields.length === 0) continue;
 
-    for (const mod of this.plugin.core?.allModules ?? []) {
-      const fields = mod.settingsSchema?.fields
-      if (fields === undefined || fields.length === 0) continue
+			new Setting(containerEl).setName(mod.id).setHeading();
 
-      new Setting(containerEl).setName(mod.id).setHeading()
+			for (const field of fields) {
+				const currentValue = this.currentValue(mod, field);
+				const setting = new Setting(containerEl).setName(field.label);
+				if (field.description !== undefined) setting.setDesc(field.description);
+				this.addControl(setting, mod, field, currentValue);
+			}
+		}
+	}
 
-      for (const field of fields) {
-        const currentValue = this.currentValue(mod, field)
-        const setting = new Setting(containerEl).setName(field.label)
-        if (field.description !== undefined) setting.setDesc(field.description)
-        this.addControl(setting, mod, field, currentValue)
-      }
-    }
+	private currentValue(mod: ModuleDescriptor, field: SettingsFieldDescriptor): unknown {
+		if (mod.settingsKey === 'specorator') {
+			return (
+				(this.plugin.settings as unknown as Record<string, unknown>)[field.key] ?? field.default
+			);
+		}
+		if (mod.settingsKey !== undefined) {
+			const slice = (this.plugin.core?.getModuleSettings(mod.settingsKey) ?? {}) as Record<
+				string,
+				unknown
+			>;
+			return slice[field.key] ?? field.default;
+		}
+		return field.default;
+	}
 
-    this.renderAboutYouSection()
-    this.renderMcpServerStatus()
-    this.renderAnthropicKeyField()
-    this.renderClaudeCliPathField(containerEl)
-    this.renderObsidianCliPathField(containerEl)
-    renderCursorSettingsSection({
-      containerEl,
-      secretStore: this.plugin.secretStore,
-      settings: this.plugin.settings,
-      cursorKeyCache: this.plugin.getCursorKeyCache(),
-      updateSettings: async (patch) => {
-        await this.plugin.updateSettings(patch)
-      },
-      refreshCursorKeyCache: async () => {
-        await this.plugin.refreshCursorKeyCache()
-      },
-      bumpAllViews: () => {
-        this._bumpAllViews()
-      },
-    })
-    this.renderApprovalRulesSection(containerEl)
-  }
+	private addControl(
+		setting: Setting,
+		mod: ModuleDescriptor,
+		field: SettingsFieldDescriptor,
+		currentValue: unknown,
+	): void {
+		switch (field.type) {
+			case 'toggle':
+				setting.addToggle((t) =>
+					t.setValue(currentValue as boolean).onChange(async (value) => {
+						await this.saveField(mod, field.key, value);
+					}),
+				);
+				break;
 
-  /**
-   * Renders the Approvals list (WS-9, REQ-MPS-047). One row per saved
-   * `(providerId, tool, scope)` triple plus a Remove button. The list is
-   * read from `_storedData.specorator.approvalRules` via
-   * `plugin.getApprovalRules()`; removals mutate the same store via
-   * `plugin.removeApprovalRule(id)`.
-   *
-   * Rendered with Obsidian's imperative `Setting` API to keep the settings
-   * tab a single Vue-free surface; the canonical Vue component lives at
-   * `src/ui/components/settings/ApprovalRulesList.vue` and is mounted
-   * inside the agent sidepanel where Pinia is already wired.
-   */
-  private renderApprovalRulesSection(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName('Approval rules').setHeading()
+			case 'text':
+				setting.addText((t) =>
+					t.setValue(String(currentValue ?? field.default)).onChange(async (value) => {
+						await this.saveField(mod, field.key, value.trim() || String(field.default));
+					}),
+				);
+				break;
 
-    const wrap = containerEl.createDiv({ cls: 'setting-item' })
-    wrap.setAttribute('data-testid', 'settings-approval-rules')
+			case 'number':
+				setting.addText((t) =>
+					t.setValue(String(currentValue ?? field.default)).onChange(async (value) => {
+						const n = Number(value);
+						await this.saveField(mod, field.key, Number.isNaN(n) ? field.default : n);
+					}),
+				);
+				break;
 
-    const rules = this.plugin.getApprovalRules()
-    if (rules.length === 0) {
-      const empty = wrap.createDiv({ cls: 'setting-item-description' })
-      empty.setAttribute('data-testid', 'settings-approval-rules-empty')
-      empty.setText(
-        'No approval rules saved yet. Use the always-allow button on a tool-permission card in the agent panel to create one.',
-      )
-      return
-    }
+			case 'dropdown': {
+				setting.addDropdown((dd) => {
+					for (const opt of field.options ?? []) {
+						dd.addOption(opt.value, opt.label);
+					}
+					dd.setValue(String(currentValue ?? field.default)).onChange(async (value) => {
+						await this.saveField(mod, field.key, value);
+					});
+				});
+				break;
+			}
+		}
+	}
 
-    const list = wrap.createDiv({ cls: 'setting-item-control' })
-    list.setAttribute('data-testid', 'settings-approval-rules-list')
-    for (const rule of rules) {
-      const row = list.createDiv({ cls: 'sp-approval-row' })
-      row.setAttribute('data-testid', `settings-approval-rule-row-${rule.id}`)
-      row.createSpan({ text: `${rule.providerId} · ${rule.tool} · ${rule.scope}` })
-      const removeBtn = row.createEl('button', { text: 'Remove' })
-      removeBtn.setAttribute('type', 'button')
-      removeBtn.setAttribute('data-testid', `settings-approval-rule-remove-${rule.id}`)
-      removeBtn.addEventListener('click', () => {
-        void (async () => {
-          await this.plugin.removeApprovalRule(rule.id)
-          // Re-render the settings tab so the row disappears.
-          this.display()
-        })()
-      })
-    }
-  }
-
-  private renderAboutYouSection(): void {
-    const { containerEl } = this
-
-    new Setting(containerEl).setName('About you').setHeading()
-
-    new Setting(containerEl)
-      .setName('Your introduction')
-      .setDesc("A few sentences about your role and what you're working on. Used to personalise AI suggestions.")
-      .addTextArea((ta) =>
-        ta
-          .setValue(this.plugin.settings.userPersona)
-          .setPlaceholder("For example: I'm a product manager at a scale-up...")
-          .onChange(async (value) => {
-            await this.plugin.updateSettings({ userPersona: value })
-          }),
-      )
-
-    if (!this.plugin.settings.userPersona) {
-      containerEl.createEl('p', {
-        text: 'Add a short introduction so Specorator can tailor its suggestions to you.',
-        cls: 'setting-item-description',
-      })
-    }
-
-    new Setting(containerEl)
-      .setName('Set up Specorator again')
-      .setDesc('Start the setup wizard again to update your workspace or introduction.')
-      .addButton((btn) =>
-        btn.setButtonText('Re-run setup').onClick(async () => {
-          await this.plugin.updateSettings({ onboardingComplete: false })
-          await this.plugin.activateView()
-          this.plugin._dispatchNavigate('/onboarding')
-        }),
-      )
-  }
-
-  /**
-   * Static status indicator for the local MCP server. Reflects the state at
-   * the moment the settings tab is rendered — re-open settings to refresh.
-   * Lives below the module-driven settings so the user sees it after the
-   * "Enable MCP server (advanced)" toggle.
-   */
-  private renderMcpServerStatus(): void {
-    const running = this.plugin.core?.isMcpServerRunning() === true
-    const cliConfigured = this.plugin.settings.obsidianCliPath.trim() !== ''
-    const config = running ? (this.plugin.core?.getMcpConnectionConfig() ?? null) : null
-
-    const parts: string[] = []
-    parts.push(
-      running
-        ? config !== null
-          ? `Running at ${config.url}. Use the "Stop MCP server" command or the toggle above to stop it.`
-          : 'Running. Use the "Stop MCP server" command or the toggle above to stop it.'
-        : 'Stopped. Toggle "Enable MCP server (advanced)" above, or run the "Start MCP server" command.',
-    )
-    parts.push(
-      cliConfigured
-        ? 'Obsidian CLI configured — CLI-backed tools (search, read, properties, daily note) are exposed.'
-        : 'No Obsidian CLI configured — set the path below to expose CLI-backed tools.',
-    )
-
-    const setting = new Setting(this.containerEl).setName('MCP server status').setDesc(parts.join(' '))
-    setting.settingEl.setAttribute('data-testid', 'settings-mcp-server-status')
-  }
-
-  /**
-   * Renders the "Obsidian CLI path" Settings field (REQ-OCM-017, SPEC-OCM-001 §7).
-   *
-   * Mirrors `renderClaudeCliPathField`:
-   *   - Text input (`settings-obsidian-cli-path-input`), trimmed on change, persisted
-   *     via `plugin.updateSettings({ obsidianCliPath })`.
-   *   - Autodetect button → `ObsidianCliBinaryResolver.resolve()`.
-   *   - Test button → runs `<path> --version` via the shared `_testBinaryVersion`
-   *     helper (the single allow-listed sync-spawn site, never on a chat hot path).
-   */
-  private renderObsidianCliPathField(containerEl: HTMLElement): void {
-    let statusEl: HTMLElement | null = null
-    let textInput: HTMLInputElement | null = null
-
-    new Setting(containerEl)
-      .setName('Obsidian CLI path')
-      .setDesc('Absolute path to the official `obsidian` command-line tool installed on this device.')
-      .addText((text) => {
-        text.inputEl.setAttribute('data-testid', 'settings-obsidian-cli-path-input')
-        textInput = text.inputEl
-        text.setPlaceholder('/usr/local/bin/obsidian')
-        text.setValue(this.plugin.settings.obsidianCliPath)
-        text.onChange(async (raw) => {
-          const trimmed = raw.trim()
-          if (trimmed !== this.plugin.settings.obsidianCliPath) {
-            await this.plugin.updateSettings({ obsidianCliPath: trimmed })
-          }
-        })
-      })
-      .addExtraButton((b) => {
-        b.extraSettingsEl.setAttribute('data-testid', 'settings-obsidian-cli-path-autodetect')
-        b.setIcon('search')
-        b.setTooltip('Autodetect obsidian CLI path')
-        b.onClick(() => {
-          void this.handleObsidianCliAutodetect(textInput, statusEl)
-        })
-      })
-      .addExtraButton((b) => {
-        b.extraSettingsEl.setAttribute('data-testid', 'settings-obsidian-cli-path-test')
-        b.setIcon('check')
-        b.setTooltip('Test obsidian CLI path')
-        b.onClick(() => {
-          this.handleObsidianCliTestBinary(statusEl)
-        })
-      })
-
-    const desc = containerEl.createDiv({ cls: 'setting-item-description' })
-    desc.setAttribute('data-testid', 'settings-obsidian-cli-path-description')
-    desc.setText(
-      "Powers the MCP server's Obsidian-CLI-backed tools. Reads are allow-listed; writes are queued for your approval. The `eval` command is never exposed.",
-    )
-
-    statusEl = containerEl.createDiv({ cls: 'setting-item-description' })
-    statusEl.setAttribute('data-testid', 'settings-obsidian-cli-path-status')
-    statusEl.setText('')
-  }
-
-  private async handleObsidianCliAutodetect(
-    input: HTMLInputElement | null,
-    statusEl: HTMLElement | null,
-  ): Promise<void> {
-    this._setStatus(statusEl, 'Searching for the obsidian CLI on your path…')
-    const platform = process.platform as ResolverPlatform
-    const outcome = await tryAsync(() => new ObsidianCliBinaryResolver({ spawn, platform }).resolve())
-    if (!outcome.ok) {
-      this._setStatus(statusEl, 'Autodetect failed.')
-      return
-    }
-    const resolved = outcome.value
-    if (resolved === null) {
-      this._setStatus(statusEl, 'Could not find the obsidian CLI on your path.')
-      return
-    }
-    if (input !== null) {
-      input.value = resolved
-      input.dispatchEvent(new Event('input'))
-    }
-    await this.plugin.updateSettings({ obsidianCliPath: resolved })
-    this._setStatus(statusEl, `Found: ${resolved}`)
-  }
-
-  private handleObsidianCliTestBinary(statusEl: HTMLElement | null): void {
-    this._testBinaryVersion(this.plugin.settings.obsidianCliPath.trim(), statusEl)
-  }
-
-  private currentValue(mod: ModuleDescriptor, field: SettingsFieldDescriptor): unknown {
-    if (mod.settingsKey === 'specorator') {
-      return (this.plugin.settings as unknown as Record<string, unknown>)[field.key] ?? field.default
-    }
-    if (mod.settingsKey !== undefined) {
-      const slice = (this.plugin.core?.getModuleSettings(mod.settingsKey) ?? {}) as Record<string, unknown>
-      return slice[field.key] ?? field.default
-    }
-    return field.default
-  }
-
-  private addControl(
-    setting: Setting,
-    mod: ModuleDescriptor,
-    field: SettingsFieldDescriptor,
-    currentValue: unknown,
-  ): void {
-    switch (field.type) {
-      case 'toggle':
-        setting.addToggle((t) =>
-          t.setValue(currentValue as boolean).onChange(async (value) => {
-            await this.saveField(mod, field.key, value)
-          }),
-        )
-        break
-
-      case 'text':
-        setting.addText((t) =>
-          t
-            .setValue(String(currentValue ?? field.default))
-            .onChange(async (value) => {
-              await this.saveField(mod, field.key, value.trim() || String(field.default))
-            }),
-        )
-        break
-
-      case 'number':
-        setting.addText((t) =>
-          t
-            .setValue(String(currentValue ?? field.default))
-            .onChange(async (value) => {
-              const n = Number(value)
-              await this.saveField(mod, field.key, Number.isNaN(n) ? field.default : n)
-            }),
-        )
-        break
-
-      case 'dropdown': {
-        setting.addDropdown((dd) => {
-          for (const opt of field.options ?? []) {
-            dd.addOption(opt.value, opt.label)
-          }
-          dd.setValue(String(currentValue ?? field.default)).onChange(async (value) => {
-            await this.saveField(mod, field.key, value)
-          })
-        })
-        break
-      }
-    }
-  }
-
-  /**
-   * Renders the Anthropic API key password field outside the module-driven settings loop.
-   * Satisfies REQ-CCS-001, NFR-CCS-006, SPEC-CCS-001 §8.3.
-   *
-   * The key is stored in Obsidian's `App.secretStorage` (desktop ≥1.11.4) via
-   * `SecretStorePort`, NOT in the synced `PluginSettings` blob — the latter is
-   * mirrored by Obsidian Sync and would leak the key across devices.
-   * `inputEl.type = 'password'` masks the value (NFR-CCS-006).
-   * `autocomplete = 'off'` prevents browser/OS autofill.
-   * onChange handler trims whitespace before saving.
-   */
-  private renderAnthropicKeyField(): void {
-    const secretStore = this.plugin.secretStore
-    const writable = secretStore?.available ?? false
-    const desc = writable
-      ? "Required to use the AI assistant. Stored in this device's OS keychain (not synced)."
-      : "Required to use the AI assistant. This Obsidian build does not expose the OS keychain, so the field is read-only here."
-
-    new Setting(this.containerEl)
-      .setName('Anthropic key')
-      .setDesc(desc)
-      .addText((text) => {
-        text.inputEl.type = 'password'
-        text.inputEl.autocomplete = 'off'
-        text.inputEl.setAttribute('data-testid', 'settings-anthropic-key')
-        if (!writable) {
-          text.inputEl.disabled = true
-        }
-        text
-          // eslint-disable-next-line obsidianmd/ui/sentence-case
-          .setPlaceholder('sk-ant-…')
-          .setValue(this.plugin.getApiKeyCache())
-          .onChange(async (value) => {
-            const store = secretStore
-            if (store === null) return
-            if (!store.available) return
-            // Codex P2: persisting via the OS keychain can fail (locked
-            // keychain, OS denial). Surface as a no-op rather than throwing
-            // out of the onChange handler — the input keeps the user's
-            // typed value but `_apiKeyCache` is unchanged on error.
-            const outcome = await tryAsync(() =>
-              store.setSecret(SECRET_ID_ANTHROPIC, value.trim()),
-            )
-            if (!outcome.ok) return
-            await this.plugin.refreshApiKeyCache()
-          })
-      })
-  }
-
-  /**
-   * Renders the "Claude CLI path" Settings field per SPEC-ASM-001 §10.2.
-   *
-   * Satisfies REQ-ASM-004 (field present), REQ-ASM-005 (autodetect surface),
-   * REQ-ASM-008 (verbatim ToS disclosure copy below the input).
-   *
-   *   - Text input: data-testid `settings-claude-cli-path-input`, trimmed on
-   *     change, persisted via `plugin.updateSettings({ claudeCliPath })`,
-   *     bumps every open SpecoratorView leaf so the transport selector re-runs.
-   *   - Autodetect button: delegates to `ClaudeBinaryResolver.resolve()`
-   *     (REQ-ASM-004, REQ-ASM-005). Writes success / failure copy to the
-   *     inline status node.
-   *   - Test button: spawns `<path> --version` via `spawnSync` with a 5-second
-   *     timeout. This is the ONLY allowed `spawnSync` site in the plugin
-   *     (spec §10.2 explicitly allow-lists it for this user-driven handler;
-   *     it is never reached on chat hot paths) (T-ASM-018 DoD).
-   *   - Description: literal REQ-ASM-008 disclosure copy. The user's home
-   *     Claude directory and its credentials file are never referenced from
-   *     this file (NFR-ASM-004).
-   */
-  private renderClaudeCliPathField(containerEl: HTMLElement): void {
-    let statusEl: HTMLElement | null = null
-    let textInput: HTMLInputElement | null = null
-
-    new Setting(containerEl)
-      .setName('Claude CLI path')
-      .setDesc('Absolute path to the `claude` command-line tool installed on this device.')
-      .addText((text) => {
-        text.inputEl.setAttribute('data-testid', 'settings-claude-cli-path-input')
-        textInput = text.inputEl
-        text.setPlaceholder('/usr/local/bin/claude')
-        text.setValue(this.plugin.settings.claudeCliPath)
-        text.onChange(async (raw) => {
-          const trimmed = raw.trim()
-          if (trimmed !== this.plugin.settings.claudeCliPath) {
-            await this.plugin.updateSettings({ claudeCliPath: trimmed })
-            this._bumpAllViews()
-          }
-        })
-      })
-      .addExtraButton((b) => {
-        b.extraSettingsEl.setAttribute('data-testid', 'settings-claude-cli-path-autodetect')
-        b.setIcon('search')
-        b.setTooltip('Autodetect claude CLI path')
-        b.onClick(() => {
-          void this.handleAutodetect(textInput, statusEl)
-        })
-      })
-      .addExtraButton((b) => {
-        b.extraSettingsEl.setAttribute('data-testid', 'settings-claude-cli-path-test')
-        b.setIcon('check')
-        b.setTooltip('Test claude CLI path')
-        b.onClick(() => {
-          this.handleTestBinary(statusEl)
-        })
-      })
-
-    const desc = containerEl.createDiv({ cls: 'setting-item-description' })
-    desc.setAttribute('data-testid', 'settings-claude-cli-path-description')
-    desc.setText(
-      'Specorator does not handle your Claude.ai credentials. The `claude` CLI you installed manages its own login.',
-    )
-
-    statusEl = containerEl.createDiv({ cls: 'setting-item-description' })
-    statusEl.setAttribute('data-testid', 'settings-claude-cli-path-status')
-    statusEl.setText('')
-  }
-
-  /**
-   * Autodetect handler — runs `ClaudeBinaryResolver.resolve()`, writes the
-   * result back into the input on success, and reports outcome via the
-   * inline status node (REQ-ASM-004, REQ-ASM-005).
-   */
-  private async handleAutodetect(
-    input: HTMLInputElement | null,
-    statusEl: HTMLElement | null,
-  ): Promise<void> {
-    this._setStatus(statusEl, 'Searching for the claude CLI on your path…')
-    const platform = process.platform as ResolverPlatform
-    const outcome = await tryAsync(() => new ClaudeBinaryResolver({ spawn, platform }).resolve())
-    if (!outcome.ok) {
-      this._setStatus(statusEl, 'Autodetect failed.')
-      return
-    }
-    const resolved = outcome.value
-    if (resolved === null) {
-      this._setStatus(statusEl, 'Could not find the claude CLI on your path.')
-      return
-    }
-    if (input !== null) {
-      input.value = resolved
-      input.dispatchEvent(new Event('input'))
-    }
-    await this.plugin.updateSettings({ claudeCliPath: resolved })
-    this._bumpAllViews()
-    this._setStatus(statusEl, `Found: ${resolved}`)
-  }
-
-  /**
-   * Test-binary handler — spawns `<path> --version` synchronously with a 5 s
-   * timeout. SPEC §10.2 explicitly allow-lists this single `spawnSync` site
-   * for the user-driven settings-tab handler. It is never called on any chat
-   * hot path.
-   */
-  private handleTestBinary(statusEl: HTMLElement | null): void {
-    this._testBinaryVersion(this.plugin.settings.claudeCliPath.trim(), statusEl)
-  }
-
-  /**
-   * Shared "run `<path> --version`" probe. The single `spawnSync` site in the
-   * plugin (NFR-ASM-004): user-driven, never on a chat hot path. Used by both
-   * the Claude and Obsidian CLI path fields.
-   */
-  private _testBinaryVersion(stored: string, statusEl: HTMLElement | null): void {
-    if (stored === '' || !path.isAbsolute(stored)) {
-      this._setStatus(statusEl, 'Enter an absolute path before testing.')
-      return
-    }
-    const outcome = trySync(() =>
-      spawnSync(stored, ['--version'], { timeout: 5_000, encoding: 'utf8' }),
-    )
-    this._setStatus(statusEl, this._describeTestOutcome(outcome))
-  }
-
-  private _describeTestOutcome(
-    outcome: ReturnType<typeof trySync<ReturnType<typeof spawnSync>>>,
-  ): string {
-    if (!outcome.ok) return 'Test failed.'
-    const result = outcome.value
-    if (result.error !== undefined || result.status !== 0) {
-      return 'Test failed — the binary did not respond.'
-    }
-    const version = String(result.stdout).trim()
-    return version.length > 0 ? version : 'Test passed.'
-  }
-
-  private _setStatus(statusEl: HTMLElement | null, text: string): void {
-    if (statusEl !== null) statusEl.setText(text)
-  }
-
-  /**
-   * Calls bumpSettingsVersion() on every open Specorator view leaf so the
-   * chat re-checks adapter availability after the API key (or CLI path)
-   * changes. Covers both the legacy `SpecoratorView` (kept for the tabbed
-   * shell) and the new dedicated `AgentSidepanelView` (IDEA-ASV-001).
-   * Satisfies T-CCS-037, D-CCS-003.
-   */
-  private _bumpAllViews(): void {
-    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
-      if (leaf.view instanceof SpecoratorView) {
-        leaf.view.bumpSettingsVersion()
-      }
-    }
-    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_AGENT)) {
-      if (leaf.view instanceof AgentSidepanelView) {
-        leaf.view.bumpSettingsVersion()
-      }
-    }
-  }
-
-  private async saveField(mod: ModuleDescriptor, key: string, value: unknown): Promise<void> {
-    if (mod.settingsKey === 'specorator') {
-      await this.plugin.updateSettings({ [key]: value })
-    } else if (mod.settingsKey !== undefined) {
-      await this.plugin.updateModuleSettings(mod.settingsKey, { [key]: value })
-    }
-  }
+	private async saveField(mod: ModuleDescriptor, key: string, value: unknown): Promise<void> {
+		if (mod.settingsKey === 'specorator') {
+			await this.plugin.updateSettings({ [key]: value });
+		} else if (mod.settingsKey !== undefined) {
+			await this.plugin.updateModuleSettings(mod.settingsKey, { [key]: value });
+		}
+	}
 }

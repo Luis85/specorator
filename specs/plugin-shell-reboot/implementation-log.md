@@ -168,3 +168,12 @@ convergence.
   branch-list extension. **T-PSR-028 GREEN** (2 tests). SPEC-PSR-015; REQ-PSR-012.
 - **Flagged (repo-settings, to release/SRE):** branch protection on `next` must
   require the `verify` check before merge.
+
+### T-PSR-015 — Slim `SpecoratorSettingTab` (dev)
+
+- `src/plugin/settings.ts` rewritten to the module-schema loop only
+  (`display` + `currentValue` + generic `addControl` switch + `saveField`).
+  Deleted every `render*`/`handle*`/`_test*`/`_set*`/`_bumpAllViews` helper and
+  the `node:path`/`node:child_process`/binary-resolver/`SECRET_ID_*`/
+  `SpecoratorView`/`AgentSidepanelView`/`CursorSettingsSection` imports.
+- **T-PSR-014 GREEN** (round-trip through `SettingsPort`). SPEC-PSR-008; REQ-PSR-007.
