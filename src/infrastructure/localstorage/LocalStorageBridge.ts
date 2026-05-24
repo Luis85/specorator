@@ -6,9 +6,11 @@ import type {
 	LoggerPort,
 	CommunityPluginPort,
 	ChatRuntimePort,
+	MarkdownRenderPort,
 } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
 import { FixtureChatRuntime } from './FixtureChatRuntime';
+import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 
 const FILE_PREFIX = 'specorator:file:';
 const SETTINGS_KEY = 'specorator:settings';
@@ -105,6 +107,13 @@ export class LocalStorageBridge
 	// instance for per-conversation state isolation.
 	createChatRuntime(): ChatRuntimePort {
 		return new FixtureChatRuntime();
+	}
+
+	// ── Markdown render port (SPEC-CC-013, SPEC-CC-015) ─────────────────────────
+	// The P1 `safeMarkdownRender`-backed port (structured nodes, no HTML sink).
+	// Identical behaviour across all three bridges in P1.
+	createMarkdownRenderPort(): MarkdownRenderPort {
+		return safeMarkdownRenderPort;
 	}
 
 	showError(message: string, durationMs = 0): void {

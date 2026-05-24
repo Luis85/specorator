@@ -11,14 +11,14 @@
  * its runtime is coverage-excluded infra (manual TEST-CC-017), so it is not
  * instantiated here.
  *
- * > **Markdown render port (deferred):** SPEC-CC-013 also wires a
- * > `safeMarkdownRender`-backed `MarkdownRenderPort` from each bridge. That leg
- * > is blocked by the active `DELETED_SUBSYSTEM_BAN` (eslint.config.js bans
- * > `@/application/chat/**` + `@/domain/ports/MarkdownRenderPort`) and is handed
- * > back to architect/pm via workflow-state.md (CLAR-CC-007). This file asserts
- * > only the runtime factory leg of TEST-CC-016.
+ * > **Markdown render port (CLAR-CC-007 RESOLVED):** SPEC-CC-013 also wires a
+ * > `safeMarkdownRender`-backed `MarkdownRenderPort` from each bridge. The
+ * > `DELETED_SUBSYSTEM_BAN` was relaxed (CLAR-CC-007 resolved) to permit
+ * > `@/application/chat/**` + `@/domain/ports/MarkdownRenderPort`, so this file
+ * > now asserts both the runtime-factory leg AND the markdown-port leg of
+ * > TEST-CC-016.
  *
- * Traces: TEST-CC-016, SPEC-CC-013, REQ-CC-014, ADR-CC-001 §6.
+ * Traces: TEST-CC-016, SPEC-CC-013, SPEC-CC-015, REQ-CC-014, ADR-CC-001 §6.
  */
 import { describe, it, expect } from 'vitest';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
@@ -53,5 +53,39 @@ describe('createChatRuntime() factory (TEST-CC-016 runtime leg)', () => {
 		const a = bridge.createChatRuntime();
 		const b = bridge.createChatRuntime();
 		expect(a).not.toBe(b);
+	});
+});
+
+describe('createMarkdownRenderPort() (TEST-CC-016 markdown leg — CLAR-CC-007 resolved)', () => {
+	it('MockBridge exposes a safeMarkdownRender-backed MarkdownRenderPort', () => {
+		const port = new MockBridge().createMarkdownRenderPort();
+		expect(typeof port.render).toBe('function');
+		expect(port.render('hi `x`')).toEqual({
+			nodes: [
+				{
+					kind: 'paragraph',
+					spans: [
+						{ kind: 'text', value: 'hi ' },
+						{ kind: 'code', value: 'x' },
+					],
+				},
+			],
+		});
+	});
+
+	it('LocalStorageBridge exposes the markdown port with identical P1 behaviour', () => {
+		const mockPort = new MockBridge().createMarkdownRenderPort();
+		const localPort = new LocalStorageBridge().createMarkdownRenderPort();
+		expect(localPort.render('one\n\ntwo')).toEqual(mockPort.render('one\n\ntwo'));
+	});
+
+	it('markdown port output holds no HTML for adversarial input (NFR-CC-008)', () => {
+		const port = new MockBridge().createMarkdownRenderPort();
+		const text = port
+			.render('<script>x</script> & y')
+			.nodes.flatMap((n) => n.spans.map((s) => s.value))
+			.join(' ');
+		expect(text).toContain('<script>');
+		expect(text).not.toContain('&lt;');
 	});
 });
