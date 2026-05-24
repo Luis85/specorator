@@ -86,3 +86,16 @@ SHA.
   satisfy the repo's `@typescript-eslint/consistent-type-definitions` rule. Structurally identical
   (same shape, same barrel re-export, same declarative consumption) — a lint-conformance form, not a
   contract change. `MarkdownInline` (a union) stays a `type`.
+
+### T-CC-006 🧪 — RED: `MockChatRuntime` scripted streaming + cancel (qa)
+
+- **Spec:** TEST-CC-001, SPEC-CC-011, REQ-CC-001, REQ-CC-001a, REQ-CC-014.
+- **Files:** `tests/infrastructure/mock/MockChatRuntime.test.ts` (new) — scripted `["Hel","lo"]`+`done`
+  in order, concat `"Hello"`, generator exhausts after `done`, per-chunk yield boundary via stepwise
+  `gen.next()`, `cancel()` stops further yields, scripted `error`/`usage` chunks, default `text…done`
+  script, synthetic `getSessionId`/`resetSession`, `onReadyStateChange` unsubscriber.
+- **RED watched:** `npm run typecheck` → `TS2307 Cannot find module '@/infrastructure/mock/MockChatRuntime'`;
+  `npx vitest run --project unit tests/infrastructure/mock/MockChatRuntime.test.ts` → 1 file failed
+  (transform/import error — runtime does not exist). Green target = T-CC-007.
+- **Outcome:** done (RED established). eslint + prettier green.
+- **Deviation:** none.
