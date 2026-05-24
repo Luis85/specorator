@@ -1,5 +1,6 @@
 import type { StreamChunk } from '@/domain/chat/StreamChunk';
 import type { UsageInfo } from '@/domain/chat/UsageInfo';
+import type { ToolUseResult } from '@/domain/chat/diff/ToolUseResult';
 
 /**
  * Pure, deterministic NDJSON → `StreamChunk` reducer for `ClaudeCliChatRuntime`
@@ -12,14 +13,23 @@ import type { UsageInfo } from '@/domain/chat/UsageInfo';
  *
  * Reduce rules:
  *   - `system` / `subtype:'init'` → capture `session_id` (no chunk);
- *   - `assistant` message text blocks → optional `assistant_message_start`
- *     (at most once), then a `text` chunk per text block (accumulate — there is
- *     no `text-delta` member, SPEC-CC-002);
+ *   - `assistant` message content blocks → optional `assistant_message_start`
+ *     (at most once, before the first text), then, in arrival order: a `text`
+ *     chunk per text block (accumulate — there is no `text-delta` member,
+ *     SPEC-CC-002), a `tool_use` chunk per tool_use block (SPEC-RR-001), and a
+ *     `thinking` chunk per `thinking`/`redacted_thinking` block (SPEC-RR-001);
+ *   - `user` message content blocks → a `tool_result` chunk per tool_result
+ *     block, with the structured `toolUseResult` (Write/Edit `structuredPatch`)
+ *     attached when the event carries one (SPEC-RR-001/010);
  *   - `result` (final) → optional `usage` (with captured sessionId), then a
  *     single `done`; an error result (`is_error` / error subtype) → an `error`
  *     chunk then `done`;
  *   - a non-JSON / unparseable line → a friendly `error` chunk (never throws);
  *   - a blank line → no chunk.
+ *
+ * P2 wire-format parity is mirrored from claudian `transformClaudeMessage.ts`
+ * (assistant `tool_use`/`thinking`, user `tool_result`) and its
+ * `extractToolResultContent` helper. The reduce stays pure, total, never-throws.
  */
 export class ClaudeStreamReducer {
 	private _sessionId: string | null = null;
@@ -56,10 +66,12 @@ export class ClaudeStreamReducer {
 				return this._reduceSystem(event);
 			case 'assistant':
 				return this._reduceAssistant(event);
+			case 'user':
+				return this._reduceUser(event);
 			case 'result':
 				return this._reduceResult(event);
 			default:
-				// Unknown / future event (e.g. `user`, `stream_event`) — ignored in P1.
+				// Unknown / future event (e.g. `stream_event`) — ignored, forward-compatible.
 				return [];
 		}
 	}
@@ -105,14 +117,72 @@ export class ClaudeStreamReducer {
 		const chunks: StreamChunk[] = [];
 		for (const block of content) {
 			if (block === null || typeof block !== 'object') continue;
-			const b = block as Record<string, unknown>;
-			if (b.type === 'text' && typeof b.text === 'string') {
-				if (!this._assistantStarted) {
-					this._assistantStarted = true;
-					chunks.push({ type: 'assistant_message_start' });
-				}
-				chunks.push({ type: 'text', content: b.text });
+			chunks.push(...this._reduceAssistantBlock(block as Record<string, unknown>));
+		}
+		return chunks;
+	}
+
+	/**
+	 * Map one assistant content block to zero-or-more chunks, preserving order:
+	 * `text` → optional one-time `assistant_message_start` then `text`; `tool_use`
+	 * → `tool_use` (input coerced to an object); `thinking`/`redacted_thinking` →
+	 * `thinking` (SPEC-RR-001). Any other block kind → none.
+	 */
+	private _reduceAssistantBlock(b: Record<string, unknown>): StreamChunk[] {
+		if (b.type === 'text' && typeof b.text === 'string') {
+			const chunks: StreamChunk[] = [];
+			if (!this._assistantStarted) {
+				this._assistantStarted = true;
+				chunks.push({ type: 'assistant_message_start' });
 			}
+			chunks.push({ type: 'text', content: b.text });
+			return chunks;
+		}
+		if (b.type === 'tool_use') {
+			return [
+				{
+					type: 'tool_use',
+					id: typeof b.id === 'string' ? b.id : '',
+					name: typeof b.name === 'string' ? b.name : '',
+					input: toInputObject(b.input),
+				},
+			];
+		}
+		if (b.type === 'thinking' || b.type === 'redacted_thinking') {
+			return [{ type: 'thinking', content: typeof b.thinking === 'string' ? b.thinking : '' }];
+		}
+		return [];
+	}
+
+	/**
+	 * Reduce a `user` event (SPEC-RR-001/010): tool results arrive as `user`
+	 * message content blocks (`{type:'tool_result', tool_use_id, content,
+	 * is_error?}`). `content` may be a string OR an array of `{type:'text',text}`
+	 * blocks — both are flattened to the displayable text (mirrors claudian
+	 * `extractToolResultContent`). The structured `toolUseResult` (e.g. a Write/Edit
+	 * `structuredPatch`) rides the event top-level and is attached when present.
+	 */
+	private _reduceUser(event: Record<string, unknown>): StreamChunk[] {
+		const message = event.message;
+		if (message === null || typeof message !== 'object') return [];
+		const content = (message as Record<string, unknown>).content;
+		if (!Array.isArray(content)) return [];
+
+		const structured = toToolUseResult(event.toolUseResult);
+
+		const chunks: StreamChunk[] = [];
+		for (const block of content) {
+			if (block === null || typeof block !== 'object') continue;
+			const b = block as Record<string, unknown>;
+			if (b.type !== 'tool_result') continue;
+			const chunk: Extract<StreamChunk, { type: 'tool_result' }> = {
+				type: 'tool_result',
+				id: typeof b.tool_use_id === 'string' ? b.tool_use_id : '',
+				content: extractToolResultContent(b.content),
+				isError: b.is_error === true,
+			};
+			if (structured !== undefined) chunk.toolUseResult = structured;
+			chunks.push(chunk);
 		}
 		return chunks;
 	}
@@ -166,5 +236,62 @@ export class ClaudeStreamReducer {
 			contextTokens,
 			percentage: 0,
 		};
+	}
+}
+
+/**
+ * Coerce a `tool_use.input` to an object (mirrors claudian `getToolInput`):
+ * absent, non-object, or array → `{}`; otherwise the object verbatim.
+ */
+function toInputObject(input: unknown): Record<string, unknown> {
+	if (input === null || typeof input !== 'object' || Array.isArray(input)) return {};
+	return input as Record<string, unknown>;
+}
+
+/**
+ * Coerce the event-level `toolUseResult` to the domain `ToolUseResult` when it is
+ * a usable object (Write/Edit carry a `structuredPatch`); otherwise `undefined`
+ * so the chunk omits the key. The `[key:string]: unknown` bag on `ToolUseResult`
+ * keeps this permissive for non-diff tools (SPEC-RR-002).
+ */
+function toToolUseResult(raw: unknown): ToolUseResult | undefined {
+	if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+	return raw as ToolUseResult;
+}
+
+/**
+ * Flatten a `tool_result.content` to displayable text (mirrors claudian
+ * `extractToolResultContent`): a string passes through; an array keeps the
+ * `{type:'text',text}` blocks joined by newlines, falling back to a JSON dump of
+ * the array; any other value is JSON-stringified; `null`/`undefined` → `''`.
+ * Pure, total, never throws.
+ */
+function extractToolResultContent(content: unknown): string {
+	if (typeof content === 'string') return content;
+	if (content === null || content === undefined) return '';
+	if (Array.isArray(content)) {
+		const textParts = content
+			.filter(isTextBlock)
+			.map((block) => block.text);
+		if (textParts.length > 0) return textParts.join('\n');
+		if (content.length > 0) return safeStringify(content);
+		return '';
+	}
+	return safeStringify(content);
+}
+
+function isTextBlock(block: unknown): block is { type: 'text'; text: string } {
+	if (block === null || typeof block !== 'object') return false;
+	const record = block as Record<string, unknown>;
+	return record.type === 'text' && typeof record.text === 'string';
+}
+
+/** JSON.stringify that never throws (circular refs degrade to `''`). */
+function safeStringify(value: unknown): string {
+	try {
+		const json = JSON.stringify(value, null, 2);
+		return typeof json === 'string' ? json : '';
+	} catch {
+		return '';
 	}
 }
