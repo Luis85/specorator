@@ -11,6 +11,7 @@ import type { SubagentInfo } from '@/domain/chat/Subagent';
 import type { ToolUseResult } from '@/domain/chat/diff/ToolUseResult';
 import { computeDiff } from '@/application/chat/computeDiff';
 import { consolidateSubagent } from '@/application/chat/resolveSubagentLifecycle';
+import { isBlockedToolResult } from '@/application/chat/toolStatus';
 
 /**
  * The single-thread chat store (SPEC-CC-016). Holds plain `ChatMessage` DTOs only —
@@ -75,6 +76,17 @@ function spawnPrompt(input: Record<string, unknown>): string | undefined {
  * diff (EC-RR-3 leaves it unset otherwise). Shared by the top-level and nested
  * (subagent) result legs (SPEC-RR-020). Mutates the passed `ToolCall` in place.
  */
+/**
+ * Resolve a tool's terminal status (R-RR-008): `error` when the runtime flagged
+ * it, else `blocked` when the result text is a permission denial
+ * (`isBlockedToolResult`), else `completed`. `isError` keeps precedence (claudian
+ * StreamController :611-617). Shared by the top-level and nested (subagent) legs.
+ */
+function resolveToolStatus(content: string, isError: boolean): ToolCall['status'] {
+	if (isError) return 'error';
+	return isBlockedToolResult(content, isError) ? 'blocked' : 'completed';
+}
+
 function applyToolDiff(toolCall: ToolCall, result: ToolUseResult | undefined): void {
 	if (!DIFF_TOOLS.has(toolCall.name)) return;
 	const { lines, stats } = computeDiff(result, toolCall);
@@ -309,8 +321,10 @@ export const useChatStore = defineStore('chat', {
 
 		/**
 		 * Match the `ToolCall` by id, set its result + status, and (for Write/Edit)
-		 * compute `diffData`. Unknown id / out-of-order before its `tool_use` → `warn`
-		 * + ignore, no buffer (EC-RR-1/2). REQ-RR-003/026.
+		 * compute `diffData`. A permission-denied result text resolves to `blocked`
+		 * rather than `completed` (R-RR-008, `isBlockedToolResult`); `isError` keeps
+		 * precedence (claudian StreamController :611-617). Unknown id / out-of-order
+		 * before its `tool_use` → `warn` + ignore, no buffer (EC-RR-1/2). REQ-RR-003/026.
 		 */
 		onToolResult(id: string, content: string, isError: boolean, result?: ToolUseResult): void {
 			const live = this._liveMessage();
@@ -322,7 +336,7 @@ export const useChatStore = defineStore('chat', {
 			}
 
 			toolCall.result = content;
-			toolCall.status = isError ? 'error' : 'completed';
+			toolCall.status = resolveToolStatus(content, isError);
 			applyToolDiff(toolCall, result);
 		},
 
@@ -394,7 +408,7 @@ export const useChatStore = defineStore('chat', {
 				return;
 			}
 			toolCall.result = content;
-			toolCall.status = isError ? 'error' : 'completed';
+			toolCall.status = resolveToolStatus(content, isError);
 			applyToolDiff(toolCall, result);
 		},
 

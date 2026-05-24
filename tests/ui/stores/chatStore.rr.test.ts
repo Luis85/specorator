@@ -323,6 +323,51 @@ describe('chatStore P2 sink legs (SPEC-RR-020)', () => {
 		});
 	});
 
+	describe('blocked-status detection (R-RR-008, REQ-RR-020)', () => {
+		it('onToolResult sets blocked when the result text is a denial (not isError)', async () => {
+			const { store } = freshStore();
+			await startStreaming(store);
+			store.onToolUse('t1', 'Read', { file_path: 'secret.ts' });
+
+			store.onToolResult('t1', 'Path is outside the vault.', false);
+
+			expect(liveTools(store)[0].status).toBe('blocked');
+		});
+
+		it('onToolResult keeps error precedence over blocked when isError', async () => {
+			const { store } = freshStore();
+			await startStreaming(store);
+			store.onToolUse('t1', 'Read', {});
+
+			// isError wins: a true error is `error`, even if the text mentions a denial phrase.
+			store.onToolResult('t1', 'access denied', true);
+
+			expect(liveTools(store)[0].status).toBe('error');
+		});
+
+		it('onToolResult stays completed for an ordinary success', async () => {
+			const { store } = freshStore();
+			await startStreaming(store);
+			store.onToolUse('t1', 'Read', {});
+
+			store.onToolResult('t1', 'file contents', false);
+
+			expect(liveTools(store)[0].status).toBe('completed');
+		});
+
+		it('onSubagentToolResult sets blocked when the nested result is a denial', async () => {
+			const { store } = freshStore();
+			await startStreaming(store);
+			store.onToolUse('task1', 'Task', {});
+			store.onSubagentToolUse('task1', 'n1', 'Write', {});
+
+			store.onSubagentToolResult('task1', 'n1', 'user denied this write', false);
+
+			const spawn = liveTools(store).find((t) => t.id === 'task1');
+			expect(spawn?.subagent?.toolCalls[0].status).toBe('blocked');
+		});
+	});
+
 	describe('onContextCompacted + onNotice (render-only)', () => {
 		it('onContextCompacted pushes a render-only block', async () => {
 			const { store } = freshStore();
