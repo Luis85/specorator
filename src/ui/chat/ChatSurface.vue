@@ -9,6 +9,7 @@ import { useLoggerPort } from '@/ui/composables/useLoggerPort';
 import { RunChatTurnUseCase } from '@/application/chat/RunChatTurnUseCase';
 import WelcomeGreeting from './WelcomeGreeting.vue';
 import MessageList from './MessageList.vue';
+import UsageInfo from './UsageInfo.vue';
 import ChatComposer from './ChatComposer.vue';
 
 /**
@@ -18,6 +19,9 @@ import ChatComposer from './ChatComposer.vue';
  * store (start failures surface a sticky `NotificationPort.showError` — EC-7).
  * Shows `WelcomeGreeting` when the thread is empty, else `MessageList`; a busy
  * indicator (`aria-live="polite"`) announces an in-flight turn (REQ-CC-009, a11y).
+ * A turn-level `UsageInfo` footer (SPEC-RR-031, REQ-RR-024) sits below the message
+ * region; it reads `chatStore.usage` itself and renders NOTHING until a `usage`
+ * chunk sets it (REQ-RR-024a / EC-RR-12), so the surface stays clean when absent.
  * The root carries `data-provider="claude"` so the brand accent resolves.
  */
 const { t } = useI18n();
@@ -69,6 +73,7 @@ function onCancel(): void {
 				{{ t('agent.chat.busy') }}
 			</div>
 		</div>
+		<UsageInfo class="sp-chat-surface__usage" />
 		<ChatComposer :is-streaming="isStreaming" @submit="onSubmit" @cancel="onCancel" />
 	</div>
 </template>
