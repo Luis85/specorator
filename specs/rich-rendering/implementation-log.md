@@ -775,3 +775,82 @@ The text below is the original (blocked) record from the surface-integration bat
   `v-html`; `<script setup>`; `--sp-*` tokens; within ADR-RR-001 (the `subagent` `ContentBlock`
   member already exists — no new type/seam).
 - **Commits:** `720b390` (QA assertion RED), `0fcf123` (4-file store/script fix GREEN).
+
+---
+
+## DEFECT FIX — production reducer never emitted P2 chunks from the real CLI (2026-05-25, dev)
+
+> **P2 defect found in real-Obsidian testing** (CLAR-RR-009). The production
+> NDJSON→`StreamChunk` reducer (`src/infrastructure/obsidian/reduceClaudeStream.ts`)
+> was authored at **P1 scope** and never extended for P2: it mapped only
+> `text`/`usage`/`done`/`error`. Against the REAL `claude --output-format
+> stream-json` CLI, assistant `tool_use`/`thinking` blocks and `user`
+> `tool_result` events never became `StreamChunk`s, so NO tool-call/thinking
+> blocks rendered on the real path (only text). The Mock/Fixture scripts
+> (`MockChatRuntime`/`FixtureChatRuntime`, T-RR-010) emit those chunks directly,
+> so every unit test + the `npm run dev` smoke (T-RR-042) and demo passed — the
+> reducer is the ONLY P1 seam they bypass. This closes the gap: the same rich
+> chunks the scripted runtimes synthesise are now also reduced from the live
+> wire format. (The reducer lives under `src/infrastructure/obsidian/**` but is
+> pure/total/never-throws and IS coverage-tested — it is the testable seam; the
+> spawn/child lifecycle is the manual TEST-CC-017/T-RR-043 leg.)
+
+- **Spec:** SPEC-RR-001 (the P2 `StreamChunk` members), SPEC-RR-010 (the infra
+  reduce of the real stream); REQ-RR-001, REQ-RR-003/026. **Parity truth:**
+  claudian `transformClaudeMessage.ts` (`assistant` `tool_use`/`thinking`, `user`
+  `tool_result`) + `core/tools/toolResultContent.ts` (`extractToolResultContent`).
+- **RED (`96fe4e3`):** `tests/infrastructure/obsidian/reduceClaudeStream.test.ts`
+  — added a `describe('… P2 rich chunks from the real stream')` with 10 cases:
+  assistant `tool_use` → `tool_use` chunk; `tool_use` with absent/non-object input
+  → `input: {}`; assistant `thinking` → `thinking`; `redacted_thinking` →
+  `thinking` (empty content tolerated); text+tool_use in one assistant message →
+  both emitted IN ORDER; `user` `tool_result` (string content) → `tool_result`;
+  `tool_result` with `[{type:'text',text}]` array content → newline-joined; `is_error`
+  → `isError: true`; event-level `toolUseResult` (Write/Edit `structuredPatch`) →
+  mapped onto the chunk; no structured result → `toolUseResult` key OMITTED; a
+  genuinely-unknown `stream_event` → `[]`. **Watched fail for the right reason:**
+  10 failed / 15 passed — the reducer emitted nothing for tool_use/thinking/user;
+  the existing 14 P1 reduce tests + the forward-compatible default stayed GREEN.
+- **GREEN (`d4aefd4`):** `src/infrastructure/obsidian/reduceClaudeStream.ts` — added
+  the `case 'user'` to the switch (replacing the `default` ignore for `'user'`),
+  extended `_reduceAssistant` (via a new `_reduceAssistantBlock` helper, kept
+  `complexity ≤ 10`) to map `tool_use` (input coerced to an object via
+  `toInputObject`, mirroring claudian `getToolInput`) and `thinking`/
+  `redacted_thinking` blocks alongside the existing `text` + at-most-once
+  `assistant_message_start`, preserving arrival order; added `_reduceUser` mapping
+  each `tool_result` block → `{type:'tool_result', id: tool_use_id, content:
+  <extracted>, isError: is_error === true, toolUseResult?}`; added pure module
+  helpers `toInputObject`, `toToolUseResult` (event-level structured result →
+  domain `ToolUseResult` when a usable object, else omit), `extractToolResultContent`
+  (string passthrough / `[{type:'text',text}]` newline-join / JSON-dump fallback,
+  mirroring claudian) + `isTextBlock`/`safeStringify`. The `default` branch stays
+  forward-compatible; the reduce stays pure/total/never-throws (NFR-RR-003).
+- **Confirmation vs claudian `transformClaudeMessage`:** assistant — `tool_use` →
+  `{type:'tool_use', id, name, input}` with `getToolInput`-style `{}` default
+  (`:413-419`, `:16-21`); `thinking`/`redacted_thinking` → `{type:'thinking',
+  content}` (`:405-408`). user — `tool_result` block → `{type:'tool_result',
+  id: tool_use_id, content: extractToolResultContent(block.content), isError:
+  is_error}` (`:465-477`) with the message-level structured result attached when
+  present (`:468-473`). The content extraction mirrors `extractToolResultContent`
+  (`core/tools/toolResultContent.ts`) — string passthrough, text-block array
+  newline-join, JSON fallback. The only behavioural divergence from claudian's
+  SDK path is intentional: the SDK puts the structured result at
+  `message.tool_use_result`, while the CLI wire format puts it at the event
+  top-level `toolUseResult` (the field this reducer reads) — both map to the same
+  domain `ToolUseResult`.
+- **Gate:** `npx vitest run tests/infrastructure/obsidian/reduceClaudeStream.test.ts`
+  → **25/25** (14 P1 + 1 default + 10 new P2); `npm run typecheck` → **0 errors**;
+  `npx eslint` on the reducer + its test → **0 errors / 0 warnings**; full
+  `tests/infrastructure` regression → **168/168 across 16 files**, no P1/P2
+  regression.
+- **Not run (the T-RR-044 GATE, ORCHESTRATOR-owned):** full `npm run verify` /
+  `build` / `build:web` / `docs:api` / coverage / `npm audit` / `test:all`.
+- **Not pushed.** `manifest.json` untouched. No new dependency (the
+  `extractToolResultContent` logic is reproduced inline as pure helpers, not
+  imported from claudian — NFR-RR-013). No `obsidian`/`node:*` import in the
+  reducer (it is pure data); within ADR-RR-001 / ADR-CC-001 (the P2 `StreamChunk`
+  members already exist — no new type/seam).
+- **Commits:** `96fe4e3` (RED test), `d4aefd4` (reducer fix GREEN).
+- **Outcome:** done. **Deviation:** none. **Out of scope (orchestrator-owned,
+  separate):** the markdown-rich-rendering defect (the async `MarkdownRenderPort`
+  issue in the Obsidian backing) is a distinct fix and is NOT addressed here.

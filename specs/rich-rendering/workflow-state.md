@@ -3,8 +3,8 @@ feature: rich-rendering
 area: RR
 current_stage: implementation
 status: active
-last_updated: 2026-05-24
-last_agent: orchestrator (T-RR-044 gate + draft PR #436)
+last_updated: 2026-05-25
+last_agent: dev (CLAR-RR-009 real-CLI P2 reducer defect fix)
 epic: claudian-reboot
 phase: P2
 integration_branch: next
@@ -17,7 +17,7 @@ artifacts:
   ADR-RR-001: accepted (docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md — human-blessed 2026-05-24)
   spec.md: complete (SPEC-RR-001..034; extends SPEC-CC-* P1 contract; 27 TEST-RR scenarios)
   tasks.md: complete (TASKS-RR-001; 44 tasks T-RR-001..044; full SPEC/REQ/NFR/TEST coverage table)
-  implementation-log.md: in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 + wire-in T-RR-040..042 done; surface-integration fixes — Gap 1 UsageInfo wire-in DONE [046a0fe], Gap 2 SubagentBlock RESOLVED via CLAR-RR-008 [QA assertion 720b390 + 4-file fix 0fcf123]; T-RR-044 verify gate GREEN [npm run verify: 652 unit, coverage 96.09/89.07/91.56/96.51; npm run test:all: 88 files/653] + styles.css regenerated + deployed to D:/TestVault + draft PR #436 into next opened; T-RR-043 [MANUAL real-Obsidian backing + rich CLI turn, human-owned] + parity screenshots [#434 + P2 states] remain before merge)
+  implementation-log.md: in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 + wire-in T-RR-040..042 done; surface-integration fixes — Gap 1 UsageInfo wire-in DONE [046a0fe], Gap 2 SubagentBlock RESOLVED via CLAR-RR-008 [QA assertion 720b390 + 4-file fix 0fcf123]; T-RR-044 verify gate GREEN [npm run verify: 652 unit, coverage 96.09/89.07/91.56/96.51; npm run test:all: 88 files/653] + styles.css regenerated + deployed to D:/TestVault + draft PR #436 into next opened; T-RR-043 [MANUAL real-Obsidian backing + rich CLI turn, human-owned] + parity screenshots [#434 + P2 states] remain before merge; CLAR-RR-009 real-CLI P2 reducer defect FIXED [RED 96fe4e3 + GREEN d4aefd4 — the production reduceClaudeStream was P1-scope and never emitted P2 chunks from the real claude --output-format stream-json CLI; now maps assistant tool_use/thinking + user tool_result], re-run T-RR-044 to absorb it; the separate markdown-render defect [async MarkdownRenderPort] stays orchestrator-owned)
   test-plan.md: in-progress (TESTPLAN-RR-001; baseline reference + TEST-RR-026 dev leg PASS [T-RR-042] + manual TEST-RR-026 / T-RR-043 M leg scheduled)
   test-report.md: pending
   review.md: pending
@@ -607,6 +607,46 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
                           Verification performed: typecheck + the 5 touched vitest suites + the 435-test
                           ui/infra/application regression (all green). Remaining owner: orchestrator (T-RR-044),
                           human (T-RR-043). Next agent: orchestrator.
+2026-05-25 (dev, DEFECT FIX -- real-CLI P2 reducer gap, CLAR-RR-009): Fixed a P2 defect found in
+                          real-Obsidian testing. The production NDJSON->StreamChunk reducer
+                          (src/infrastructure/obsidian/reduceClaudeStream.ts) was authored at P1 scope and
+                          never extended for P2 -- it mapped only text/usage/done/error. Against the REAL
+                          claude --output-format stream-json CLI, assistant tool_use/thinking blocks and user
+                          tool_result events never became StreamChunks, so NO tool-call/thinking blocks
+                          rendered on the real path (only text). The Mock/Fixture scripts emit those chunks
+                          directly, so every unit test + the npm run dev smoke (T-RR-042) + the demo passed --
+                          the reducer is the ONLY P1 seam they bypass. STRICT TDD: RED (96fe4e3) added 10
+                          canned-event cases to reduceClaudeStream.test.ts (assistant tool_use ->tool_use
+                          chunk incl. {} input default; thinking/redacted_thinking ->thinking; text+tool_use
+                          order preserved; user tool_result ->tool_result with string AND [{type:text}] array
+                          content + is_error + structuredPatch toolUseResult + omit-when-absent; unknown
+                          stream_event ->[]) -- watched fail 10/15 for the right reason (reducer emitted
+                          nothing for the P2 kinds; the 14 P1 reduce tests + the forward-compatible default
+                          stayed GREEN). GREEN (d4aefd4): added case 'user' to the switch + _reduceUser
+                          (tool_result blocks -> {type:'tool_result', id, content, isError, toolUseResult?});
+                          extended _reduceAssistant via a _reduceAssistantBlock helper (complexity<=10) to map
+                          tool_use (input coerced to object) + thinking/redacted_thinking alongside text +
+                          the at-most-once assistant_message_start, order preserved; pure module helpers
+                          toInputObject/toToolUseResult/extractToolResultContent/isTextBlock/safeStringify
+                          mirroring claudian transformClaudeMessage + core/tools/toolResultContent (string
+                          passthrough / text-block array newline-join / JSON fallback). Default branch stays
+                          forward-compatible; reduce stays pure/total/never-throws (NFR-RR-003). GATE: reducer
+                          test 25/25 (14 P1 + 1 default + 10 new P2); npm run typecheck 0; eslint on the
+                          reducer + its test 0/0; full tests/infrastructure regression 168/168 across 16
+                          files, no regression. No new dependency (claudian logic reproduced inline as pure
+                          helpers, NFR-RR-013); no obsidian/node:* import (the reducer is pure data); within
+                          ADR-RR-001/ADR-CC-001 (the P2 StreamChunk members already exist -- no new
+                          type/seam). NOT pushed; manifest.json untouched. Full verify/build/build:web/
+                          test:all are the T-RR-044 GATE (orchestrator-owned), NOT run here. Commits: 96fe4e3
+                          (RED), d4aefd4 (fix GREEN). OUT OF SCOPE (orchestrator handles separately): the
+                          markdown-rich-rendering defect (the async MarkdownRenderPort issue in the Obsidian
+                          backing) is a distinct fix, NOT addressed here.
+                          HAND-OFF -> orchestrator: re-run the T-RR-044 verify gate to absorb the reducer fix
+                          (the touched-surface gate is green; the full verify/build/test:all + the markdown-
+                          render defect remain orchestrator-owned). Verification performed here: typecheck +
+                          the reducer vitest suite (25/25) + the 168-test infrastructure regression (all
+                          green). Remaining owner: orchestrator (T-RR-044 + the separate markdown-render
+                          defect), human (T-RR-043 manual real-Obsidian leg). Next agent: orchestrator.
 ```
 
 ## Open clarifications
@@ -677,3 +717,17 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
       mount `SubagentBlock`). Stays within ADR-RR-001 (the `subagent` `ContentBlock` member already
       exists — no new type/seam). Architect MAY note the Task/Agent → `subagent`-block routing in the
       SPEC-RR-020 `onToolUse` table (optional, non-blocking).
+- [x] CLAR-RR-009 *(RESOLVED 2026-05-25 — dev, real-Obsidian defect fix)* — The production NDJSON→
+      `StreamChunk` reducer (`src/infrastructure/obsidian/reduceClaudeStream.ts`) was authored at **P1
+      scope** and never extended for P2: it mapped only `text`/`usage`/`done`/`error`. Against the REAL
+      `claude --output-format stream-json` CLI, assistant `tool_use`/`thinking` blocks and `user`
+      `tool_result` events never became `StreamChunk`s, so NO tool-call/thinking blocks rendered on the
+      real path (only text). The Mock/Fixture scripts (T-RR-010) emit those chunks directly, so every
+      unit test + the `npm run dev` smoke (T-RR-042) + the demo passed — the reducer is the only P1 seam
+      they bypass. **RESOLUTION:** extended `_reduceAssistant` (tool_use/thinking) + added `_reduceUser`
+      (tool_result, string OR `[{type:'text',text}]` array content, `is_error`, structured
+      `toolUseResult`) mirroring claudian `transformClaudeMessage`/`extractToolResultContent`; the reduce
+      stays pure/total/never-throws, the `default` branch stays forward-compatible. RED `96fe4e3` (10
+      cases watched fail) → GREEN `d4aefd4`. Within ADR-RR-001/ADR-CC-001 (the P2 `StreamChunk` members
+      already exist — no new type/seam). **Separate (orchestrator-owned, NOT this fix):** the
+      markdown-rich-rendering defect (the async `MarkdownRenderPort` issue in the Obsidian backing).
