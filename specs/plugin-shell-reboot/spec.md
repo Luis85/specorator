@@ -14,6 +14,7 @@ epic: claudian-reboot
 phase: P0
 adrs:
   - ADR-PSR-001
+  - ADR-PSR-002  # 2026-05-24 settings-storage delta: device-local backing store + migrate-and-clear (REQ-PSR-013)
 ---
 
 # Specification — Plugin shell reboot (P0)
@@ -176,6 +177,89 @@ export const coreSettingsModule = defineModule<PluginSettings>({
 | Idempotency | `migrate(0, fatBlob)` re-fed to `migrate(4, …)` | unchanged projection | unchanged |
 
 - **Traces:** REQ-PSR-006, REQ-PSR-008; CL-1 (migration contract); design §C.3.
+
+#### SPEC-PSR-002a — Storage-location migrate-and-clear (REQ-PSR-013, CL-5/CL-6, ADR-PSR-002)
+
+> 2026-05-24 settings-storage delta (CHARTER-REQ-SET). `migrate` (SPEC-PSR-002)
+> handles the **field shape** (a pure projection). This item adds the one-time
+> **storage-location** migrate-and-clear that runs in `main.ts loadSettings()` on
+> first load and uses the re-pointed `ObsidianBridge` (SPEC-PSR-008). It is a
+> stateful, side-effecting load-path step, not part of the pure `migrate` reducer.
+> Decision recorded in ADR-PSR-002.
+
+The `SettingsPort` **contract is unchanged** (`getSettings`/`saveSettings`). The
+production `ObsidianBridge` backing store moves off `data.json`
+(`Plugin.loadData`/`saveData`) onto Obsidian's device-local store
+(`app.loadLocalStorage`/`saveLocalStorage`, device-scoped + not synced) under a
+stable key `specorator:settings` (SPEC-PSR-008). `MockBridge` (in-memory) and
+`LocalStorageBridge` (web `localStorage`) are unchanged.
+
+**Migrate-and-clear contract (`main.ts loadSettings()`, one-time, idempotent):**
+
+```ts
+// pseudo-contract — composes the SPEC-PSR-002 strip with a relocate + clear.
+// Reads the legacy data.json slice via plugin.loadData(); writes/reads the
+// device-local store via the bridge; clears the legacy slice via plugin.saveData().
+async loadSettings(): Promise<void> {
+  // 1. PROJECT — read any legacy data.json slice and strip to { locale, logLevel }
+  const stored = (await this.loadData()) as Record<string, unknown> | null
+  const legacySlice = stored?.specorator                       // may be undefined
+  const projected = coreSettingsModule.validateSettings(
+    coreSettingsModule.migrate(0, legacySlice),                // SPEC-PSR-002 strip
+  )
+
+  // 2. RELOCATE — device-local wins if already populated; else seed from legacy
+  const deviceLocal = await this.bridge.getSettings()          // device-local read
+  const deviceLocalEmpty = /* bridge reports absent/unparsed slice */ false
+  if (deviceLocalEmpty && legacySlice !== undefined) {
+    await this.bridge.saveSettings(projected)                  // seed device-local
+    this.settings = projected
+  } else {
+    this.settings = deviceLocal                                // device-local wins
+  }
+
+  // 3. CLEAR — drop the legacy slice from data.json so it stops being committed
+  if (stored && 'specorator' in stored) {
+    delete stored.specorator
+    await this.saveData(stored)                                // data.json now has no settings slice
+  }
+}
+```
+
+- **Signature:** `loadSettings(): Promise<void>` — runs once per `onload`.
+- **Behaviour:** project the legacy `data.json` settings slice down to
+  `{ locale, logLevel }` (reusing SPEC-PSR-002's `migrate` + `validateSettings`),
+  relocate it into the device-local store **only when the device-local store is
+  empty/absent** (device-local wins otherwise), and clear the legacy slice from
+  `data.json`. After it runs, `data.json` carries **no** `locale`/`logLevel`
+  (NFR-PSR-010) and `this.settings` is read from the device-local store.
+- **`saveSettings` thereafter (SPEC-PSR-008):** writes the **device-local store
+  only**, never `data.json`.
+- **Pre-conditions:** `this.bridge` constructed; the device-local API
+  (`app.loadLocalStorage`/`saveLocalStorage`) available at `minAppVersion 1.12.7`
+  (NFR-PSR-011 — verified at impl; escalate per NG6 if absent).
+- **Post-conditions:** `data.json` has no `specorator.locale`/`specorator.logLevel`
+  key; `getSettings()` round-trips through the device-local store; a second
+  `loadSettings()` finds nothing to migrate (no-op — idempotent).
+- **Side effects:** at most one device-local write (the seed) and at most one
+  `data.json` write (the clear), both skipped when there is nothing to do.
+- **Errors:** none thrown. Absent legacy slice → no relocate, no clear. Unparsed
+  device-local → `getSettings` returns `DEFAULT_SETTINGS` (validation supplies
+  defaults).
+
+**Edge cases (enumerated, each a `TEST-PSR`):**
+
+| Edge | data.json slice | device-local | After `loadSettings()` |
+|---|---|---|---|
+| Legacy present, device-local empty | `{ locale:'de', logLevel:'info', specsFolder:'x' }` | absent | device-local = `{ locale:'de', logLevel:'info' }`; `data.json` slice **deleted**; `this.settings = { locale:'de', logLevel:'info' }` |
+| Already migrated | absent | `{ locale:'de', logLevel:'info' }` | no-op; device-local unchanged; `this.settings` = device-local |
+| Both populated (device-local wins) | `{ locale:'en', logLevel:'warn' }` | `{ locale:'de', logLevel:'debug' }` | device-local **unchanged** (`de`/`debug` wins); `data.json` slice **cleared**; `this.settings = { locale:'de', logLevel:'debug' }` |
+| Both empty (fresh install) | absent | absent | no-op; `this.settings = DEFAULT_SETTINGS`; nothing written |
+| Idempotency (second run) | (cleared by first run) | populated | no-op; no write |
+| Device-local API unavailable at runtime | (any) | n/a | escalate per NFR-PSR-011 / NG6 — fall back to a gitignored device-local file (ADR-PSR-002 Option C); do **not** silently keep settings in `data.json` |
+
+- **Traces:** REQ-PSR-013, NFR-PSR-010, NFR-PSR-011; CL-5, CL-6; ADR-PSR-002;
+  design §C.3a, §C.6, §C.16.
 
 ### SPEC-PSR-003 — `validateSettings` coercion
 
@@ -472,6 +556,19 @@ export class SpecoratorSettingTab extends PluginSettingTab {
   (two dropdowns). Changing a control calls `saveField` →
   `plugin.updateSettings({ [key]: value })` → `SettingsPort.saveSettings`
   (REQ-PSR-007).
+- **Backing store (REQ-PSR-013, ADR-PSR-002):** `SettingsPort.saveSettings`/
+  `getSettings` route through the production `ObsidianBridge`, whose backing store
+  is the **device-local store** (`app.loadLocalStorage`/`saveLocalStorage`, key
+  `specorator:settings`), **not** `data.json`. The tab's persistence path is
+  otherwise unchanged — it calls the same `SettingsPort` contract. After a tab
+  change is saved, the persisted `data.json` settings slice carries **no**
+  `locale`/`logLevel` (NFR-PSR-010) and `getSettings()` reads the value back from
+  the device-local store. The bridge round-trip is: `saveSettings(s)` →
+  `app.saveLocalStorage('specorator:settings', JSON.stringify(s))`; `getSettings()`
+  → parse `app.loadLocalStorage('specorator:settings')` → `validateSettings`
+  (defaults on absent/garbage). The exact (de)serialisation shape is verified at
+  impl (NFR-PSR-011); the *contract* is: a saved value round-trips, and no
+  `locale`/`logLevel` reaches `data.json`.
 - `addControl` keeps the existing `toggle | text | number | dropdown` switch
   (generic over the schema) — even though P0 only exercises `dropdown`, the
   switch stays so future module fields render without edits (avoids dead
@@ -482,7 +579,7 @@ export class SpecoratorSettingTab extends PluginSettingTab {
 - **Side effects:** writes through `SettingsPort.saveSettings` via
   `plugin.updateSettings`.
 - **Errors:** none surfaced; `updateSettings` validates via the module.
-- **Traces:** REQ-PSR-007, REQ-PSR-006.
+- **Traces:** REQ-PSR-007, REQ-PSR-006, REQ-PSR-013, NFR-PSR-010; ADR-PSR-002.
 
 ---
 
@@ -822,7 +919,12 @@ surface (referenced by other kept files):
 - `onunload()`: `this.app.workspace.detachLeavesOfType(VIEW_TYPE_AGENT)`;
   `this.bridge?.hideAllNotices()`; `void this.core?.destroy()`.
 - `loadSettings()` / `updateSettings(partial)` / `activateAgentSidebar()`
-  (SPEC-PSR-007).
+  (SPEC-PSR-007). **`loadSettings()` runs the one-time `data.json`→device-local
+  migrate-and-clear (SPEC-PSR-002a)** and reads `this.settings` from the device-local
+  store via the bridge; it does **not** persist settings to `data.json`.
+  `updateSettings(partial)` validates via `coreSettingsModule` then calls
+  `bridge.saveSettings` (device-local write, never `data.json`) — REQ-PSR-013,
+  NFR-PSR-010, ADR-PSR-002.
 
 **Deleted from `main.ts`** (design §C.6 list): `node:child_process`/`node:os`
 imports; all transport/provider/secret-store/MCP/cursor adapter construction +
@@ -843,6 +945,17 @@ chat-threads + approval-rules persistence; the provider-selection migration; the
 > `settingsKey`, the `saveField` non-core branch (SPEC-PSR-008) is unreachable but
 > harmless — keep it (generic schema contract). Verify `helloModule`'s shape
 > during implementation.
+>
+> **Settings-storage delta (2026-05-24, ADR-PSR-002):** the `saveData(this._storedData)`
+> **settings** write in `onload` is **dropped** — settings now persist to the
+> device-local store via `bridge.saveSettings` (SPEC-PSR-002a/008). The only
+> remaining `data.json` settings I/O is the one-time migrate-and-clear's legacy
+> read + clear (SPEC-PSR-002a). If `PluginCore.init(storedData)` still needs a
+> stored-data round-trip for **non-settings** module bootstrap, keep the minimal
+> `init(storedData)` call but not the settings `saveData`; if `helloModule`
+> persists nothing to `data.json`, `_storedData`/`saveData` has **no remaining P0
+> consumer** and the dev drops it entirely (design §C.16). Verify during
+> implementation (OC-PSR-4 covers the module shape).
 
 - **Traces:** REQ-PSR-001, REQ-PSR-003.
 
@@ -918,8 +1031,10 @@ are kept (CSS only).
 | E10 | `AgentPanelRoot` render throws | `ErrorBoundary` catches → `LoggerPort.error` + `NotificationPort.showError`, renders fallback. No uncaught error. (NFR-PSR-002/003) |
 | E11 | `bridge === null` at `onOpen` (defensive) | View renders nothing; no throw. |
 | E12 | Settings change persists then re-reads | `updateSettings({ logLevel: 'debug' })` → `SettingsPort.saveSettings` → later `getSettings()` returns `logLevel: 'debug'`. (REQ-PSR-007) |
+| E13 | Settings change → `data.json` stays clean | After E12's save (device-local backing store), the persisted `data.json` settings slice has **no** `locale`/`logLevel`; the value round-trips from the device-local store. (REQ-PSR-013, NFR-PSR-010; SPEC-PSR-002a/008) |
+| E14 | One-time legacy `data.json`→device-local migrate-and-clear | On first `loadSettings()`, a legacy `data.json` slice is projected → seeded into the device-local store (if empty) → the legacy slice is cleared from `data.json`; device-local-wins when both populated; idempotent + both-empty no-op. (REQ-PSR-013; SPEC-PSR-002a) |
 
-- **Traces:** NFR-PSR-003 (E1–E11), REQ-PSR-007 (E12).
+- **Traces:** NFR-PSR-003 (E1–E11), REQ-PSR-007 (E12), REQ-PSR-013 + NFR-PSR-010 (E13–E14).
 
 ---
 
@@ -979,11 +1094,23 @@ No tighter budget than the PRD NFRs. Inherited verbatim:
 
 ## §12 Compatibility / migration plan
 
-- **Settings:** backward-compatible read via strip-on-read (SPEC-PSR-002). A user
-  upgrading from any prior install loses the dropped fields on first
-  load+save (intended — their consumers are gone). `settingsVersion` 3 → 4 is the
-  marker; the migration is forward-only (no down-migration — P0 is a clean break,
-  ADR-PSR-001).
+- **Settings (field shape):** backward-compatible read via strip-on-read
+  (SPEC-PSR-002). A user upgrading from any prior install loses the dropped fields
+  on first load+save (intended — their consumers are gone). `settingsVersion` 3 → 4
+  is the marker; the migration is forward-only (no down-migration — P0 is a clean
+  break, ADR-PSR-001).
+- **Settings (storage location, 2026-05-24 delta, ADR-PSR-002):** the production
+  `ObsidianBridge` backing store moves off `data.json` onto a device-local store
+  (`app.loadLocalStorage`/`saveLocalStorage`, key `specorator:settings`,
+  device-scoped + not synced). A one-time `loadSettings()` migrate-and-clear
+  (SPEC-PSR-002a) projects any legacy `data.json` slice into the device-local store
+  and clears it from `data.json`, so old shared blobs stop being committed
+  (REQ-PSR-013, NFR-PSR-010). Idempotent; device-local wins when both are populated.
+  The `SettingsPort` contract and `PluginSettings` shape are unchanged;
+  `MockBridge`/`LocalStorageBridge` are unaffected. **API availability** at
+  `minAppVersion 1.12.7` is verified at impl (NFR-PSR-011); escalate per NG6 if
+  absent (ADR-PSR-002 Option C fallback). **Secrets** (REQ-PSR-014) are P0-vacuous
+  and decided under a deferred P1 ADR — no P0 surface.
 - **No `manifest.json` change** (NFR-PSR-007, NG6): `id`/`version`/`minAppVersion`
   untouched. No design or spec element edits the manifest.
 - **`next` integration branch:** SPEC-PSR-015 makes `next` CI-covered; the P0 PR
@@ -1026,6 +1153,8 @@ No tighter budget than the PRD NFRs. Inherited verbatim:
 | TEST-PSR-021 | M | `onunload` (disable plugin) detaches the leaf; re-enable boots clean | NFR-PSR-003 | SPEC-PSR-016 (E8) |
 | TEST-PSR-022 | U | `npm run build:web` entry mounts `AgentPanelRoot` with `MockBridge` (smoke: app mounts, testid present in jsdom) | REQ-PSR-011, NFR-PSR-005 | SPEC-PSR-017 |
 | TEST-PSR-023 | A | `ci.yml` `on.push.branches` and `on.pull_request.branches` both contain `next` (YAML parse assertion) | REQ-PSR-012, NFR-PSR-008 | SPEC-PSR-015 |
+| TEST-PSR-024 | U | After `updateSettings({ logLevel:'debug' })` (device-local bridge), the `data.json` settings slice has **no** `locale` and **no** `logLevel`, and `getSettings()` round-trips `logLevel:'debug'` from the device-local store (data-hygiene guard) | REQ-PSR-013, NFR-PSR-010 | SPEC-PSR-002a, SPEC-PSR-008 |
+| TEST-PSR-025 | U | One-time `loadSettings()` migrate-and-clear: legacy `data.json` slice `{locale:'de',logLevel:'info',specsFolder:'x'}` → device-local seeded `{locale:'de',logLevel:'info'}` + `data.json` slice cleared; device-local-wins when both populated; idempotent no-op on a second run; both-empty no-op | REQ-PSR-013, NFR-PSR-010 | SPEC-PSR-002a |
 
 **Coverage of REQ/NFR by TEST-PSR:**
 
@@ -1037,12 +1166,14 @@ No tighter budget than the PRD NFRs. Inherited verbatim:
 | REQ-PSR-004 | (whole gate — verified by `npm run verify`; §9 invariant) |
 | REQ-PSR-005 | 002, 007, 011, 016, 017 |
 | REQ-PSR-006 | 001–005, 007, 009, 010 |
-| REQ-PSR-007 | 014 |
+| REQ-PSR-007 | 014, 024 |
 | REQ-PSR-008 | 001–006 |
 | REQ-PSR-009 | (ADR-PSR-001 already filed — doc check, OC-PSR-3) |
 | REQ-PSR-010 | (docs review — reviewer, not an automated test) |
 | REQ-PSR-011 | 022 |
 | REQ-PSR-012 | 023 |
+| REQ-PSR-013 | 024, 025 |
+| REQ-PSR-014 | (P0-vacuous — no secret surface; traces to deferred P1 `SecretStorePort` ADR) |
 | NFR-PSR-001 | (verify gate, §9) |
 | NFR-PSR-002 | 008, 015, + migration/view unit tests above |
 | NFR-PSR-003 | 004, 010, 013, 015, 018, 019, 021 |
@@ -1052,11 +1183,13 @@ No tighter budget than the PRD NFRs. Inherited verbatim:
 | NFR-PSR-007 | (`validate:manifest`, §9 / §12) |
 | NFR-PSR-008 | 023 |
 | NFR-PSR-009 | 016, 017 |
+| NFR-PSR-010 | 024, 025 |
+| NFR-PSR-011 | (impl-time API-availability verification at `minAppVersion 1.12.7`; manual/recon step — not a discrete automated test; ADR-PSR-002 Compliance) |
 
-Total durable `TEST-PSR`: **23** (15 unit, 3 automated architecture/guard,
-5 manual Obsidian). REQ-PSR-004/009/010 and the build/manifest/bundle NFRs are
-covered by the verify gate / doc review rather than a discrete `TEST-PSR`, per the
-§9 acceptance invariant.
+Total durable `TEST-PSR`: **25** (17 unit, 3 automated architecture/guard,
+5 manual Obsidian). REQ-PSR-004/009/010/014 and the build/manifest/bundle NFRs +
+NFR-PSR-011 (impl-time API check) are covered by the verify gate / doc review /
+impl recon rather than a discrete `TEST-PSR`, per the §9 acceptance invariant.
 
 ---
 
@@ -1110,3 +1243,9 @@ covered by the verify gate / doc review rather than a discrete `TEST-PSR`, per t
 - [x] `ci.yml` edit SHA-pin/actionlint-safe (§6).
 - [x] Per-wave acceptance invariant restated, not re-enumerated (§9).
 - [x] Residual under-specification surfaced in Open clarifications, not guessed.
+- [x] Settings-storage delta (2026-05-24, CHARTER-REQ-SET): SPEC-PSR-002a (device-local
+      backing-store re-point + one-time migrate-and-clear contract + edge table, CL-5/CL-6)
+      and SPEC-PSR-008 (tab persists via the re-pointed `SettingsPort`) amended;
+      TEST-PSR-024 (NFR-PSR-010 data-hygiene) + TEST-PSR-025 (relocate-and-clear)
+      added; edges E13/E14 enumerated; ADR-PSR-002 referenced. REQ-PSR-014 P0-vacuous
+      (no secret surface; deferred P1 ADR).

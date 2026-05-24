@@ -54,6 +54,21 @@ Claudian user would recognise immediately.
 - `manifest.json` identity (`id`, `version`, `minAppVersion 1.12.7`) unchanged — this
   is **not** Claudian's manifest.
 - Desktop-only (matches Claudian; subprocess/CLI providers).
+- **[CHARTER-REQ-SEC] Secrets stay out of `data.json`.** API keys / tokens / any secret
+  MUST use Obsidian **native secret storage** (`app.secretStorage` — stored in
+  vault-keyed *local storage*, outside `data.json`; UI via `SecretComponent`), behind a
+  `SecretStorePort`. We deliberately do NOT copy Claudian, which writes raw API keys
+  into its settings JSON. Applies when secrets first appear (Claude API key / providers).
+  *(Verify the `app.secretStorage` API is available at `minAppVersion 1.12.7`; if it
+  needs a newer Obsidian, escalate — do not silently bump the manifest.)*
+- **[CHARTER-REQ-SET] User/device-scoped settings stay out of `data.json`.** Vaults are
+  used collaboratively and backed by git, so `data.json` is committed + shared. Personal
+  prefs (locale, logLevel, device CLI paths, …) MUST persist to a **device-local** store
+  — Obsidian `app.saveLocalStorage`/`loadLocalStorage` (device-scoped, not synced), or a
+  separate gitignored file — never `data.json`. `data.json` holds only genuinely
+  vault-shared settings (P0 has none). The `SettingsPort` contract is unchanged; only its
+  ObsidianBridge backing store moves to local storage. A one-time read-migrate-and-clear
+  from any legacy `data.json` settings is required so old shared blobs stop being committed.
 
 ---
 
@@ -213,9 +228,21 @@ Each phase = its own `/spec` cycle on a branch off `next`, vertical slice, **wit
 - **`HomeFsPort` (beyond-vault filesystem)** — Claude/Codex read `~/.claude`, `~/.codex`
   transcripts; the six core ports are vault-scoped. New port for home-dir access needs
   an ADR (security surface: reads outside the vault).
-- **Secret handling** — Claudian stores raw API keys in settings JSON. Decide:
-  plain settings vs a `SecretStorePort`/keychain. Security-significant → ADR.
-- **Approval-rule persistence** target/shape (`SecretStorePort`-adjacent).
+- **Secret handling — RESOLVED:** Obsidian **native secret storage** behind a
+  `SecretStorePort` (CHARTER-REQ-SEC). NOT plain settings JSON. ADR to record the
+  `SecretStorePort` contract + the `app.secretStorage` binding + the `minAppVersion`
+  check. Filed when secrets first land (≈P1 Claude key / P9 providers).
+- **Settings storage — RESOLVED:** user/device-scoped settings persist to device-local
+  storage, never `data.json` (CHARTER-REQ-SET). ADR to record the `SettingsPort`
+  backing-store decision + the one-time `data.json`→local-storage migration. **This is
+  P0-relevant** (P0 persists `locale`/`logLevel`) → P0 requirements/spec/tasks amended +
+  ADR filed in P0.
+- **Approval-rule persistence** target/shape (device-local vs vault; ties to CHARTER-REQ-SET).
+
+> **Confirmed decisions (2026-05-24):** (1) secrets → Obsidian secret storage +
+> `SecretStorePort` (not Claudian's plain-JSON); (2) provider scope → ship **Claude
+> complete first; Codex + Opencode behind capability gates**, feature-incomplete is
+> acceptable (matches Claudian's own posture) — P9 stays one phase, expands later.
 
 ### 6b. Scope confirmations (in / out)
 - Codex + Opencode **feature completeness** vs Claude-complete + capability-gating

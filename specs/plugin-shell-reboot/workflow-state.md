@@ -5,7 +5,7 @@ slug: plugin-shell-reboot
 current_stage: tasks
 status: paused
 last_updated: 2026-05-24
-last_agent: planner (Stage 6)
+last_agent: architect (Stage 4/5 — settings-storage delta)
 epic: claudian-reboot
 phase: P0
 integration_branch: next
@@ -28,6 +28,10 @@ adrs:
     path: docs/adr/ADR-PSR-001-reboot-plugin-shell.md
     status: accepted
     note: reboot supersedes the feature-facing scope of ADR-008 + the MPS/AUX agent surface
+  - id: ADR-PSR-002
+    path: docs/adr/ADR-PSR-002-settings-storage-device-local.md
+    status: accepted
+    note: user/device-scoped settings → device-local store (not data.json) + one-time migrate-and-clear (REQ-PSR-013 / CHARTER-REQ-SET); SecretStorePort ADR deferred to P1
 ---
 
 # Workflow state — plugin-shell-reboot (P0)
@@ -364,4 +368,138 @@ only at parity.
                           authoritative). No requirement/spec/task orphans; no
                           contradictions. idea→tasks scope COMPLETE — P0 ready for
                           implementation (Stage 7, T-PSR-001 first).
+
+2026-05-24 (pm, Stage 3 — settings/secret amendment): TWO new user requirements
+                          arrived from the updated parity charter
+                          (specs/claudian-reboot/parity-charter.md §1 bounding
+                          constraints) and were appended to requirements.md
+                          (status stays ACCEPTED — scoped amendment, not a rewrite):
+                          REQ-PSR-013 (must, event-driven, CHARTER-REQ-SET): P0's
+                            user/device-scoped settings (`locale`, `logLevel`) persist
+                            to a DEVICE-LOCAL store outside `data.json` (Obsidian
+                            app.loadLocalStorage/saveLocalStorage, device-scoped + not
+                            synced, or a gitignored device-local file), NOT `data.json`
+                            (which is git-committed + shared on collaborative vaults).
+                            Includes a one-time legacy `data.json`→device-local
+                            migrate-and-clear so old shared blobs stop being committed.
+                            `SettingsPort` CONTRACT UNCHANGED — only its ObsidianBridge
+                            backing store moves; re-points REQ-PSR-006/007/008
+                            persistence (fields still {locale,logLevel}). Acceptance is
+                            testable: after save, `data.json` has no locale/logLevel +
+                            value round-trips through the device-local store.
+                          REQ-PSR-014 (must, unwanted-behaviour, CHARTER-REQ-SEC):
+                            secrets MUST use Obsidian native secret storage
+                            (`app.secretStorage`, vault-keyed local storage outside
+                            `data.json`) behind a `SecretStorePort`, never `data.json`
+                            (rejecting Claudian's raw-key-in-JSON approach). SCOPED AS A
+                            P0-VACUOUS inherited epic constraint: P0 introduces NO secret
+                            (no API keys until providers in P1+), stores none, writes
+                            none to `data.json`, and in fact deletes the prior
+                            SECRET_STORE_PORT/SECRET_ID_* surface (SPEC-PSR-013). The
+                            `SecretStorePort` is introduced when the first secret lands
+                            (P1+). No P0 secret surface invented.
+                          NFRs added: NFR-PSR-010 (data-hygiene regression guard — after
+                            a save, `data.json` settings slice has NO locale/logLevel;
+                            value reads back from device-local store) and NFR-PSR-011
+                            (compatibility — verify the device-local API is supported at
+                            `minAppVersion 1.12.7`; FLAG: `app.secretStorage` availability
+                            at 1.12.7 is UNCONFIRMED — verify before P1 secret surface,
+                            escalate vs silent manifest bump per NG6/R-PSR-6). Success
+                            metrics + release criteria updated to match.
+                          DOWNSTREAM DELTAS flagged (CL-5..CL-9, requirements.md
+                          Clarifications — PM did NOT design them):
+                            CL-5 → architect: ObsidianBridge `SettingsPort` backing store
+                              re-points to app.loadLocalStorage/saveLocalStorage (design
+                              §C.6 line ~238 saveData(this._storedData) must move off
+                              `data.json`); SPEC-PSR-008 settings persistence touched.
+                            CL-6 → architect: SPEC-PSR-002 migration ALSO clears the legacy
+                              `data.json` settings slice after relocating to device-local
+                              (one-time, idempotent — project then relocate then clear).
+                            CL-7 → architect: file NEW ADR-PSR-002 (settings storage
+                              location + `data.json`→device-local migration + the
+                              minAppVersion API-availability check). P0-relevant, filed in
+                              P0 per charter §6a.
+                            CL-8 → architect (P1, NOT P0): `SecretStorePort` ADR DEFERRED
+                              to P1 (first secret = Claude key); confirm app.secretStorage
+                              at minAppVersion before that surface lands.
+                            CL-9 → planner: add (a) the NFR-PSR-010 regression-guard test
+                              (no locale/logLevel in `data.json` after save + round-trip)
+                              and (b) the one-time migrate-and-clear test (idempotent);
+                              extend the SPEC-PSR-002 migration cluster (T-PSR-001..004)
+                              and the bridge re-point (T-PSR-021) — no new delete wave; no
+                              P0 task for REQ-PSR-014 (vacuous), only a trace to the
+                              deferred P1 SecretStorePort ADR.
+                          requirements.md stays status: accepted. Workflow re-enters at
+                          Stage 3 for the amendment; architect must re-touch design
+                          §C.3/§C.6 + SPEC-PSR-002 and file ADR-PSR-002 before the spec
+                          returns to `complete`.
+                          Next: /spec:design (architect) — process CL-5..CL-8, re-point
+                          the SettingsPort backing store, extend the migration contract,
+                          file ADR-PSR-002; then planner picks up CL-9.
+
+2026-05-24 (architect, Stage 4/5 — settings-storage delta): processed CL-5/CL-6/CL-7
+                          (settings/secret amendment). design.md + spec.md stay
+                          `complete`; this is a scoped delta, not a rewrite.
+                          SETTINGSPORT RE-POINT (CL-5, design §C.16 + §C.6,
+                            SPEC-PSR-008): ObsidianBridge getSettings/saveSettings move
+                            off data.json (loadData/saveData) onto Obsidian's
+                            device-local store (app.loadLocalStorage/saveLocalStorage,
+                            stable key `specorator:settings`, device-scoped + NOT
+                            synced). SettingsPort CONTRACT UNCHANGED + PluginSettings
+                            shape unchanged ({locale,logLevel}). main.ts §C.6: the
+                            onload `saveData(this._storedData)` SETTINGS write is
+                            DROPPED — settings persist via bridge.saveSettings only;
+                            _storedData/saveData has no remaining P0 settings consumer
+                            (dropped unless a non-settings module needs the round-trip —
+                            verify helloModule, OC-PSR-4). Three-bridge story (§C.3b):
+                            MockBridge in-memory (unchanged), LocalStorageBridge
+                            web-localStorage (unchanged), only ObsidianBridge moves.
+                          MIGRATE-AND-CLEAR (CL-6, design §C.3a, SPEC-PSR-002a): one-time
+                            project → relocate → clear on first loadSettings(). Project =
+                            reuse coreSettingsModule.migrate strip (SPEC-PSR-002) →
+                            {locale,logLevel}; Relocate = seed device-local ONLY if empty
+                            (device-local WINS when both populated); Clear = delete the
+                            data.json settings slice so old shared blobs stop being
+                            committed. Idempotent; edge table pinned (legacy present /
+                            already migrated / both populated [device-local wins] / both
+                            empty / second-run no-op / device-local API unavailable →
+                            escalate per NFR-PSR-011/NG6, ADR-PSR-002 Option C fallback).
+                          ADR-PSR-002 FILED (CL-7) at
+                            docs/adr/ADR-PSR-002-settings-storage-device-local.md
+                            (status: accepted; matches ADR-PSR-001 format). Records the
+                            device-local backing-store choice (rationale = collaborative
+                            git-backed/synced vaults must not carry per-device prefs), the
+                            migrate-and-clear contract, and the minAppVersion 1.12.7 API
+                            check (NFR-PSR-011). Forward pointer ONLY for secrets:
+                            SecretStorePort/app.secretStorage ADR DEFERRED to P1 — not
+                            folded in. Added to design.md + spec.md `adrs:` frontmatter.
+                          NEW TESTS: TEST-PSR-024 (NFR-PSR-010 data-hygiene — after save,
+                            data.json has no locale/logLevel + value round-trips
+                            device-local) and TEST-PSR-025 (relocate-and-clear, idempotent).
+                            TEST-PSR set now 25 (was 23): 17 unit, 3 arch/guard, 5 manual.
+                            Edges E13/E14 added to SPEC-PSR-018. NFR-PSR-011 is an
+                            impl-time API-availability recon step, not a discrete
+                            automated test.
+                          CL-8 (SecretStorePort ADR → P1) + CL-9 (planner tasks) left
+                            as-is — not architect's to close here.
+                          PLANNER MUST ADJUST (CL-9): extend the SPEC-PSR-002 migration
+                            cluster (T-PSR-001..004) with SPEC-PSR-002a's migrate-and-clear
+                            (RED test for TEST-PSR-025); extend the bridge re-point
+                            (T-PSR-021) so ObsidianBridge.getSettings/saveSettings target
+                            app.loadLocalStorage/saveLocalStorage (key
+                            `specorator:settings`), NOT loadData/saveData, and add the
+                            TEST-PSR-024 data-hygiene RED test; adjust the slim-main.ts
+                            task to DROP the onload settings saveData write + run the
+                            migrate-and-clear in loadSettings(); add an impl recon subtask
+                            to verify app.loadLocalStorage/saveLocalStorage at
+                            minAppVersion 1.12.7 (NFR-PSR-011, escalate per NG6 if absent).
+                            NO new delete wave; NO P0 task for REQ-PSR-014 (vacuous) —
+                            only a trace to the deferred P1 SecretStorePort ADR. (NOTE:
+                            no docs/adr index file [README.md/index.md] exists in this
+                            worktree — OC-PSR-3's "add the ADR-PSR-001 row" task should
+                            CREATE the index or be re-scoped; ADR-PSR-002 likewise has no
+                            index row to add yet.)
+                          Next: /spec:tasks (planner) — fold CL-9 into the existing
+                          T-PSR-* cluster (migration + bridge re-point + slim-main.ts);
+                          no stage regression beyond the amendment.
 ```

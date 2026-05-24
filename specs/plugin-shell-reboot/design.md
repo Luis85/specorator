@@ -14,6 +14,7 @@ epic: claudian-reboot
 phase: P0
 adrs:
   - ADR-PSR-001
+  - ADR-PSR-002  # 2026-05-24 settings-storage delta: device-local backing store + migrate-and-clear (CHARTER-REQ-SET / REQ-PSR-013)
 ---
 
 # Design — Plugin shell reboot (P0)
@@ -155,6 +156,71 @@ coercion helpers and their `VALID_*` constants are deleted.
 > for the *persisted* blob too, not just the type. `spec.md` must state the
 > idempotent migration contract + the edge case "blob already at v4".
 
+#### C.3a Storage-location migrate-and-clear (REQ-PSR-013, CL-5/CL-6, ADR-PSR-002)
+
+> 2026-05-24 settings-storage delta (CHARTER-REQ-SET). The strip-on-read **field**
+> migration above (the *shape* projection) now composes with a one-time
+> storage-**location** migrate-and-clear. The two are orthogonal: the strip
+> projects the *fields* down to `{ locale, logLevel }`; this delta moves *where the
+> blob lives* off `data.json` onto a device-local store and clears the legacy
+> slice. Decision recorded in **ADR-PSR-002**.
+
+REQ-PSR-013 / NFR-PSR-010 require that `locale`/`logLevel` (user/device-scoped
+preferences) persist **outside** `data.json`, because `data.json` is git-committed
+and synced on collaborative vaults. The backing store for `SettingsPort` moves
+(see C.6) — the **contract is unchanged**; only `ObsidianBridge` changes where it
+reads/writes. On first load after upgrade, a one-time **project → relocate →
+clear** runs:
+
+1. **Project** — read any legacy `data.json` settings slice (key `specorator`) and
+   project it to `{ locale, logLevel }` via the same `coreSettingsModule.migrate`
+   strip-on-read (C.3 above). Reuses the existing reducer — no separate projector.
+2. **Relocate** — write the projected `{ locale, logLevel }` into the device-local
+   store (`app.saveLocalStorage('specorator:settings', …)`) **only if the
+   device-local store is empty/absent**. If it is already populated, the
+   device-local value **wins** (the user already chose on this device) and the
+   legacy `data.json` values are discarded.
+3. **Clear** — delete the settings slice from `data.json` so the old shared blob
+   stops being committed.
+
+**Idempotency + edge contract** (architect-pinned; `spec.md` SPEC-PSR-002 fixes the
+exact behaviour and edge table):
+
+| Arrival state | Behaviour |
+|---|---|
+| Legacy `data.json` slice present, device-local empty | project → relocate (write device-local) → clear `data.json` |
+| Already migrated (device-local populated, `data.json` empty) | no-op (device-local wins; nothing to clear) |
+| Both populated (device-local wins) | keep device-local value; clear the stale `data.json` slice; do **not** overwrite device-local |
+| Both empty (fresh install) | no-op; `getSettings` returns `DEFAULT_SETTINGS` |
+
+A second run finds nothing to migrate and is a no-op (idempotent). The whole flow
+is safe in any order of arrival and does not depend on `settingsVersion`.
+
+**API-availability check (NFR-PSR-011):** the dev verifies
+`app.loadLocalStorage`/`saveLocalStorage` are available at `minAppVersion 1.12.7`
+before relying on them; escalate (gitignored device-local file fallback — ADR-PSR-002
+Option C) rather than bump the manifest silently (NG6).
+
+#### C.3b Three-bridge story (unchanged contracts)
+
+- **`MockBridge`** (unit tests, `npm run dev`) — keeps settings **in-memory**.
+  Unchanged behaviour; no `data.json`, no device-local store. The migrate-and-clear
+  is an `ObsidianBridge`/`main.ts` concern only (MockBridge has no legacy blob).
+- **`LocalStorageBridge`** (GitHub-Pages demo / web) — already
+  browser-`localStorage`-backed; unchanged. It never touched `data.json`.
+- **`ObsidianBridge`** (production) — **moves off `data.json`** onto the device-local
+  store (C.6). This is the **only** bridge this delta changes, and only its backing
+  store, not its `SettingsPort` contract.
+
+> **SecretStorePort (REQ-PSR-014 / CHARTER-REQ-SEC) — P1 seam, no P0 element.** The
+> secret-storage decision (`SecretStorePort` over `app.secretStorage`, vault-keyed,
+> outside `data.json`) is the **P1** seam decided under a deferred ADR when the
+> first secret (the Claude key) lands. P0 designs **no** secret surface, stores no
+> secret, and deletes the prior `SECRET_STORE_PORT`/`SecretStorePort`/`SECRET_ID_*`
+> symbols (C.5, SPEC-PSR-013). **Do not design it here.** ADR-PSR-002 carries only a
+> forward pointer; the `app.secretStorage` availability at `1.12.7` is the open P1
+> flag (NFR-PSR-011).
+
 ### C.4 The minimal i18n / `TranslationPort` stub (CL-1)
 
 `locale` must keep a live consumer or it orphans (REQ-PSR-005). The translation
@@ -234,8 +300,10 @@ export default class SpecoratorPlugin extends Plugin {
     })
     setLocale(this.settings.locale as SupportedLocale)
     await this.core.init(this._storedData)
-    this.settings = { ...DEFAULT_SETTINGS, ...(this._storedData.specorator ?? {}) }
-    await this.saveData(this._storedData)
+    // Settings are NOT persisted to data.json (REQ-PSR-013 / ADR-PSR-002).
+    // loadSettings() has already run the one-time data.json→device-local
+    // migrate-and-clear and read this.settings from the device-local store via
+    // the bridge. No saveData(this._storedData) for the settings slice here.
 
     this.registerView(VIEW_TYPE_AGENT, (leaf) => new AgentSidebarView(leaf, this))
     this.addCommand({ id: 'open-agent-sidebar', name: 'Open agent sidebar',
@@ -249,8 +317,11 @@ export default class SpecoratorPlugin extends Plugin {
     void this.core?.destroy()
   }
 
-  // loadSettings(): read blob, promoteLegacyFlatSettings (if kept), set this.settings.
-  // updateSettings(partial): merge → notifySettingsChanged('specorator') → validated → saveData.
+  // loadSettings(): run the one-time data.json→device-local migrate-and-clear
+  //   (project → relocate → clear, C.3a), then read this.settings from the
+  //   device-local store via bridge.getSettings(). NOT from saveData/data.json.
+  // updateSettings(partial): merge → validate via coreSettingsModule →
+  //   bridge.saveSettings() (writes the DEVICE-LOCAL store, never data.json).
   // activateAgentSidebar(): reveal-or-create the VIEW_TYPE_AGENT leaf in the right sidebar
   //   (loadIfDeferred before reveal — ADR-008 deferred-leaf invariant).
 }
@@ -421,6 +492,8 @@ sequenceDiagram
 | D-PSR-9 | Deleted-symbol ESLint `no-restricted-imports` + Vitest lint-API test (CL-2) | — | REQ-PSR-005, NFR-PSR-009 |
 | D-PSR-10 | Add `next` to `ci.yml` push + pull_request triggers (Q3) | — | REQ-PSR-012, NFR-PSR-008 |
 | D-PSR-11 | Docs: CLAUDE.md + AGENTS.md architecture sections rewritten to gutted state | — | REQ-PSR-010 |
+| D-PSR-12 | `SettingsPort` backing store moves off `data.json` to a device-local store (`app.loadLocalStorage`/`saveLocalStorage`, key `specorator:settings`); contract unchanged; one-time `data.json`→device-local migrate-and-clear (project → relocate → clear, idempotent) (C.3a/C.16) | **ADR-PSR-002** | REQ-PSR-013, NFR-PSR-010, NFR-PSR-011 |
+| D-PSR-13 | `SecretStorePort`/`app.secretStorage` is the **P1** seam — no P0 element; ADR deferred to P1 (C.3b forward pointer) | (deferred → P1 ADR) | REQ-PSR-014 (P0-vacuous) |
 
 ### C.12 Rejected alternatives
 
@@ -445,7 +518,7 @@ sequenceDiagram
 | REQ-PSR-004 | Whole design — leaf-first delete keeps `tsc`/verify green (C.14) |
 | REQ-PSR-005 | C.3, C.4, C.5, C.8 |
 | REQ-PSR-006 | C.3 |
-| REQ-PSR-007 | C.2 (`SpecoratorSettingTab` → `SettingsPort`) |
+| REQ-PSR-007 | C.2 (`SpecoratorSettingTab` → `SettingsPort`), C.16 (re-pointed backing store) |
 | REQ-PSR-008 | C.3 |
 | REQ-PSR-009 | ADR-PSR-001 (C.11) |
 | REQ-PSR-010 | C.11 D-PSR-11, C.15 |
@@ -457,6 +530,10 @@ sequenceDiagram
 | NFR-PSR-007 | Out of scope to touch `manifest.json` (NG6) — no design element edits it |
 | NFR-PSR-008 | C.9 |
 | NFR-PSR-009 | C.8 (no dead bypass artifacts; delete dead custom rules) |
+| REQ-PSR-013 | C.3a (migrate-and-clear), C.3b (three-bridge story), C.6 + C.16 (`ObsidianBridge` re-point), ADR-PSR-002 |
+| REQ-PSR-014 | C.3b forward pointer (P1 seam, no P0 element) |
+| NFR-PSR-010 | C.3a / C.16 (no `locale`/`logLevel` in `data.json` after save; round-trips device-local) |
+| NFR-PSR-011 | C.3a / C.16 (device-local API verified at `minAppVersion 1.12.7`; `app.secretStorage` flag carried to P1) |
 
 ### C.14 Delete inventory + leaf-first, compiler-guided order (Q5)
 
@@ -545,6 +622,54 @@ untestable in P0 (justify in PR — R-PSR-5); edit `ci.yml` (C.9); update docs
   (`docs/adr/README.md` if present — Stage 5/planner verifies the index file name,
   which this stage could not list).
 
+### C.16 Settings backing store re-point — `ObsidianBridge` (REQ-PSR-013, CL-5, ADR-PSR-002)
+
+> 2026-05-24 settings-storage delta. `SettingsPort`'s **contract is unchanged**
+> (`getSettings(): Promise<PluginSettings>`, `saveSettings(s): Promise<void>`).
+> Only `ObsidianBridge`'s backing store moves off `data.json`. Decision: ADR-PSR-002.
+
+`ObsidianBridge` is the only bridge that changes (C.3b). Its `SettingsPort`
+implementation re-points from `Plugin.loadData`/`saveData` (which serialise the
+vault-committed `data.json`) to Obsidian's **device-local** store under a single
+stable key `specorator:settings`:
+
+```ts
+// src/infrastructure/obsidian/ObsidianBridge.ts — SettingsPort surface (re-pointed)
+const SETTINGS_LS_KEY = 'specorator:settings'
+
+async getSettings(): Promise<PluginSettings> {
+  // app.loadLocalStorage is device-scoped + NOT synced + NOT in data.json.
+  const raw = this.app.loadLocalStorage(SETTINGS_LS_KEY) // string | null (or parsed — verify shape at impl)
+  const parsed = safeParse(raw) // null/garbage → {} ; validation supplies defaults
+  return validateSettings(parsed) // → { locale, logLevel }
+}
+
+async saveSettings(settings: PluginSettings): Promise<void> {
+  // Writes the device-local store ONLY. NEVER data.json.
+  this.app.saveLocalStorage(SETTINGS_LS_KEY, JSON.stringify(settings))
+  // (No plugin.saveData call for the settings slice — NFR-PSR-010.)
+}
+```
+
+> The exact (de)serialisation contract for `loadLocalStorage`/`saveLocalStorage`
+> (whether it round-trips strings or arbitrary JSON) is verified at impl
+> (NFR-PSR-011); `spec.md` SPEC-PSR-008 pins the bridge round-trip contract. The
+> previous `getSettings`/`saveSettings` callbacks the bridge took from `main.ts`
+> (`() => this.settings`, `(s) => this.updateSettings(s)`) are reconsidered: with
+> the device-local store the bridge can own the read/write directly, or keep the
+> callback indirection — Stage 5 pins which (the *contract* is unchanged either way).
+
+**`_storedData` / `saveData` P0 consumer:** with settings off `data.json`, the
+**settings slice** no longer rides `saveData`. `PluginCore.init(storedData)` may
+still accept a stored-data argument for non-settings module bootstrap, but if no
+kept P0 module persists through `data.json` (P0 has only `coreSettingsModule` —
+now device-local — and `helloModule`), the `saveData(this._storedData)` call in
+`onload` has **no remaining P0 consumer and is dropped** (C.6). Stage 5 / the dev
+confirms `helloModule` declares no `data.json`-persisted state; if `PluginCore`
+still requires a stored-data round-trip, keep the minimal `init(storedData)` call
+but not the settings write. The one-time migrate-and-clear (C.3a) is the *only*
+remaining `data.json` *read* (legacy slice) and *write* (the clear) for settings.
+
 ---
 
 ## Open clarifications
@@ -589,3 +714,8 @@ untestable in P0 (justify in PR — R-PSR-5); edit `ci.yml` (C.9); update docs
 - [x] `ci.yml` `next` trigger edit specified, SHA-pin/actionlint-safe (C.9).
 - [x] Every design element mapped to a REQ/NFR (C.13).
 - [x] Open clarifications captured, not guessed.
+- [x] Settings-storage delta (2026-05-24, CHARTER-REQ-SET): `SettingsPort` backing
+      store re-pointed to a device-local store (C.16, CL-5); migrate-and-clear added
+      (C.3a, CL-6); ADR-PSR-002 filed (CL-7). `SecretStorePort` (REQ-PSR-014) kept as
+      the P1 seam with no P0 element (C.3b, CL-8 → P1). Coverage table extended for
+      REQ-PSR-013/014 + NFR-PSR-010/011.
