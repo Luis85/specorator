@@ -1,10 +1,10 @@
 ---
 feature: rich-rendering
 area: RR
-current_stage: specification
+current_stage: tasks
 status: active
 last_updated: 2026-05-24
-last_agent: architect (specification)
+last_agent: planner (tasks)
 epic: claudian-reboot
 phase: P2
 integration_branch: next
@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-RR-001 Parts A/B/C; ADR-RR-001 accepted — human-blessed 2026-05-24)
   ADR-RR-001: accepted (docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md — human-blessed 2026-05-24)
   spec.md: complete (SPEC-RR-001..034; extends SPEC-CC-* P1 contract; 27 TEST-RR scenarios)
-  tasks.md: pending
+  tasks.md: complete (TASKS-RR-001; 44 tasks T-RR-001..044; full SPEC/REQ/NFR/TEST coverage table)
   implementation-log.md: pending
   test-plan.md: pending
   test-report.md: pending
@@ -42,7 +42,7 @@ artifacts:
 | 3. Requirements | `requirements.md` | accepted (PRD-RR-001; human-blessed via ADR-RR-001) |
 | 4. Design | `design.md` | complete (Parts A/B/C; ADR-RR-001 accepted — human-blessed 2026-05-24) |
 | 5. Specification | `spec.md` | complete (SPEC-RR-001..034; 27 TEST-RR) |
-| 6. Tasks | `tasks.md` | pending |
+| 6. Tasks | `tasks.md` | complete (TASKS-RR-001; T-RR-001..044) |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
@@ -243,6 +243,40 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
                           ITEMS for planner (spec §12): EC-RR-2 closed; the MarkdownNode union-widening +
                           EC-RR-17 Obsidian-vs-pure perceptual equivalence are implementation/parity-review
                           watch items, not blockers.
+2026-05-24 (planner, tasks): TASKS-RR-001 written at specs/rich-rendering/tasks.md (status complete).
+                          44 tasks T-RR-001..044 decompose SPEC-RR-001..034, mirroring the P1 TASKS-CC-001
+                          discipline: TDD-ordered (every RED test [owner qa] precedes the impl [owner dev]
+                          that greens it; each dev task's FIRST DoD line is "the prior RED test(s) now
+                          pass"), one stable id per task, ≤½ day each (S/M, no L), explicit deps, testable
+                          DoD. Ordered by DDD inward layering in 7 batches: (1) DOMAIN T-RR-002..007 — the
+                          structural RED (T-RR-002), the StreamChunk toolUseResult typing edit + ChatMessage
+                          growth, the new diff/block/tool/subagent/todo types, IconPort+ICON_PORT key+barrel;
+                          (2) INFRA T-RR-008..011 — IconPort on the 3 bridges + Mock/Fixture scripted rich
+                          chunks + the Obsidian MarkdownRenderer/setIcon backing (coverage-excluded → manual
+                          leg); (3) APPLICATION T-RR-012..021 — the four pure transforms (toolPresentation/
+                          computeDiff/renderTodos/resolveSubagentLifecycle) each RED→green, then dispatchChunk
+                          handlers + the new ChatTurnSink legs; (4) UI T-RR-022..038 — chatStore P2 legs,
+                          useIconPort, then the components (SpCollapsible+useCollapsible, SpIcon, ToolCallBlock,
+                          TodoList, ThinkingBlock, WriteEditBlock+DiffView, SubagentBlock, UsageInfo,
+                          ContextCompactedBlock, MessageBlocks dispatcher + MessageTurn fork), each with a
+                          co-located data-testid PageObject; (5) STYLES T-RR-039 (--sp-* §4.9 tokens, no deps);
+                          (6) WIRE-IN T-RR-040..042 (provide ICON_PORT + npm run dev rich smoke); (7) GATE
+                          T-RR-043 (MANUAL Obsidian backing + real-CLI rich turn — human-owned, never
+                          agent-self-claimed, mirrors P1 TEST-CC-017) + T-RR-044 (full verify + parity #434 +
+                          draft PR into next). The deleted-symbol guard relaxation for IconPort/SpIcon/ICON_PORT
+                          is its own task (T-RR-003, mirrors P1 CLAR-CC-007), sequenced before T-RR-007 so the
+                          icon imports resolve. NFR-RR-006 (no v-html/innerHTML — the hardest P2 NFR) is an
+                          explicit DoD line on every render-component task + the bridge DTO-walks + the final
+                          gate. Full coverage table proves all 34 SPEC-RR + 27 REQ-RR + 14 NFR-RR + 27 TEST-RR
+                          map to ≥1 task. current_stage advanced to tasks (NOT past it — no implementation). No
+                          code; not committed.
+                          HAND-OFF → dev/qa (Implementation): FIRST READY TASK is T-RR-002 (qa — RED domain
+                          types/StreamChunk/ChatMessage structural tests), which the dev T-RR-004..006 green.
+                          NO-DEP TASKS runnable in parallel from the start: T-RR-001 (baseline, dev),
+                          T-RR-003 (guard relax, dev), T-RR-039 (--sp-* tokens, dev), and T-RR-002 (domain RED,
+                          qa). GUARD-RELAX = T-RR-003 (must land before T-RR-007). The single human-owned leg is
+                          T-RR-043 (Obsidian markdown/icon backing + real CLI) — schedule + record it in
+                          test-plan.md, never self-claim. Parity screenshots ride #434 at /spec:review (T-RR-044).
 ```
 
 ## Open clarifications
