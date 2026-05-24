@@ -29,7 +29,7 @@ function mountSidebar(props: { narrow?: boolean } = {}) {
 			},
 		},
 		props,
-		// eslint-disable-next-line obsidianmd/prefer-active-doc -- jsdom has no Obsidian popout windows.
+		 
 		attachTo: document.body,
 	})
 }

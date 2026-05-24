@@ -42,7 +42,7 @@ describe('CursorApiAdapter late key read (T-MPS-041)', () => {
     const store = new MockSecretStore({ available: true })
     let fetchCalls = 0
     let observedAuth: string | undefined
-    // eslint-disable-next-line obsidianmd/prefer-active-doc -- `typeof globalThis.fetch` is the canonical fetch-signature shape; the rule false-positives on type positions.
+     
     const fakeFetch: typeof globalThis.fetch = async (
       _url,
       init,

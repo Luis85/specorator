@@ -341,6 +341,11 @@ describe('coreSettingsModule.settingsSchema', () => {
       // `writeProjectMcpConfig` is rendered next to the MCP server status row
       // in settings.ts; not driven through the generic module schema loop.
       'writeProjectMcpConfig',
+      // MHP feature — `requireExplicitAcceptForAllWrites` toggle + `devtools`
+      // section both rendered by `DevToolsSettingsSection.ts` in settings.ts,
+      // not via the generic module schema loop.
+      'requireExplicitAcceptForAllWrites',
+      'devtools',
     ]
     const expected = Object.keys(DEFAULT_SETTINGS).length - manuallyRenderedKeys.length
     expect(coreSettingsModule.settingsSchema?.fields).toHaveLength(expected)

@@ -94,8 +94,8 @@ function handlePick(payload: { id: string }): void {
 		>
 			<WelcomeSuggestionChip
 				v-for="s in suggestions"
-				:key="s.id"
 				:id="s.id"
+				:key="s.id"
 				:label="t(`welcome.chips.${s.id}.label`)"
 				:icon="s.icon"
 				@pick="handlePick"

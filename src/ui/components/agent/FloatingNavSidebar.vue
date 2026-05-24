@@ -73,31 +73,31 @@ function isHidden(): boolean {
 	>
 		<NavSidebarButton
 			icon="square-plus"
-			:ariaLabel="t('agent.nav.newConversation')"
+			:aria-label="t('agent.nav.newConversation')"
 			data-testid="floating-nav-new-conversation"
 			@click="emit('new-conversation')"
 		/>
 		<NavSidebarButton
 			icon="arrow-up-to-line"
-			:ariaLabel="t('agent.nav.scrollTop')"
+			:aria-label="t('agent.nav.scrollTop')"
 			data-testid="floating-nav-scroll-top"
 			@click="emit('scroll-top')"
 		/>
 		<NavSidebarButton
 			icon="arrow-down-to-line"
-			:ariaLabel="t('agent.nav.scrollBottom')"
+			:aria-label="t('agent.nav.scrollBottom')"
 			data-testid="floating-nav-scroll-bottom"
 			@click="emit('scroll-bottom')"
 		/>
 		<NavSidebarButton
 			icon="trash-2"
-			:ariaLabel="t('agent.nav.clearConversation')"
+			:aria-label="t('agent.nav.clearConversation')"
 			data-testid="floating-nav-clear"
 			@click="emit('clear-conversation')"
 		/>
 		<NavSidebarButton
 			icon="brain"
-			:ariaLabel="t('agent.nav.toggleThinking')"
+			:aria-label="t('agent.nav.toggleThinking')"
 			data-testid="floating-nav-toggle-thinking"
 			@click="emit('toggle-thinking')"
 		/>

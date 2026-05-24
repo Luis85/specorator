@@ -139,7 +139,7 @@ describe('ProposalEventBus (SPEC-MHP-040 / REQ-MHP-046)', () => {
     const payload = makeEnqueued('p-4')
 
     // emit MUST NOT throw despite the first listener throwing
-    expect(() => bus.emit({ type: 'proposalEnqueued', payload })).not.toThrow()
+    expect(() => { bus.emit({ type: 'proposalEnqueued', payload }); }).not.toThrow()
 
     expect(throwing).toHaveBeenCalledTimes(1)
     // Fan-out continues to the second listener after the first threw

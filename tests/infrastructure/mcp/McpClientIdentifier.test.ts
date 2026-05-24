@@ -15,14 +15,12 @@ import { McpClientIdentifier } from '@/infrastructure/mcp/McpClientIdentifier'
  * `initialize`-handshake hook. We capture the registered callback so the
  * tests can invoke it with crafted clientInfo payloads.
  */
-interface FakeInitializeHandler {
-  (params: {
+type FakeInitializeHandler = (params: {
     connectionId: string
     clientInfo?: unknown
     transport?: 'loopback' | 'in-process'
     address?: string
-  }): void
-}
+  }) => void
 
 function makeFakeServer() {
   let handler: FakeInitializeHandler | null = null
@@ -41,7 +39,7 @@ describe('McpClientIdentifier (SPEC-MHP-036 / REQ-MHP-034 / REQ-MHP-035)', () =>
   it('TEST-MHP-035: captures clientInfo.name from initialize handshake', () => {
     const server = makeFakeServer()
     const ident = new McpClientIdentifier()
-    ident.attachInitializeHook(server as never)
+    ident.attachInitializeHook(server)
 
     server.fireInitialize({
       connectionId: 'conn-1',
@@ -61,7 +59,7 @@ describe('McpClientIdentifier (SPEC-MHP-036 / REQ-MHP-034 / REQ-MHP-035)', () =>
   it('TEST-MHP-036 / EC-MHP-009: missing clientInfo.name falls back to "unknown"', () => {
     const server = makeFakeServer()
     const ident = new McpClientIdentifier()
-    ident.attachInitializeHook(server as never)
+    ident.attachInitializeHook(server)
 
     server.fireInitialize({
       connectionId: 'conn-2',
@@ -76,7 +74,7 @@ describe('McpClientIdentifier (SPEC-MHP-036 / REQ-MHP-034 / REQ-MHP-035)', () =>
   it('EC-MHP-010: empty / whitespace-only clientInfo.name normalises to "unknown"', () => {
     const server = makeFakeServer()
     const ident = new McpClientIdentifier()
-    ident.attachInitializeHook(server as never)
+    ident.attachInitializeHook(server)
 
     server.fireInitialize({
       connectionId: 'c-empty',
@@ -98,7 +96,7 @@ describe('McpClientIdentifier (SPEC-MHP-036 / REQ-MHP-034 / REQ-MHP-035)', () =>
   it('EC-MHP-010: non-string clientInfo.name normalises to "unknown"', () => {
     const server = makeFakeServer()
     const ident = new McpClientIdentifier()
-    ident.attachInitializeHook(server as never)
+    ident.attachInitializeHook(server)
 
     server.fireInitialize({
       connectionId: 'c-num',
@@ -120,7 +118,7 @@ describe('McpClientIdentifier (SPEC-MHP-036 / REQ-MHP-034 / REQ-MHP-035)', () =>
   it('EC-MHP-011: clientInfo.name is trimmed AND truncated to 128 chars', () => {
     const server = makeFakeServer()
     const ident = new McpClientIdentifier()
-    ident.attachInitializeHook(server as never)
+    ident.attachInitializeHook(server)
 
     const longName = 'x'.repeat(500)
     server.fireInitialize({
@@ -138,7 +136,7 @@ describe('McpClientIdentifier (SPEC-MHP-036 / REQ-MHP-034 / REQ-MHP-035)', () =>
   it('identityFor on unknown connectionId returns fallback unknown loopback identity', () => {
     const ident = new McpClientIdentifier()
     const server = makeFakeServer()
-    ident.attachInitializeHook(server as never)
+    ident.attachInitializeHook(server)
 
     expect(ident.identityFor('never-seen')).toEqual({
       id: 'unknown',

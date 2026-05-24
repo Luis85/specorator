@@ -372,7 +372,7 @@ describe('SessionLogWriter fire-and-forget latency (T-ASM-047, TEST-ASM-038)', (
     vi.spyOn(ports.vault, 'writeFile').mockImplementation(
       (path: string, content: string): Promise<void> =>
         new Promise((resolve) => {
-          // eslint-disable-next-line obsidianmd/prefer-active-window-timers
+           
           setTimeout(() => {
             void originalWriteFile(path, content).then(resolve)
           }, 1000)
@@ -400,7 +400,7 @@ describe('SessionLogWriter fire-and-forget latency (T-ASM-047, TEST-ASM-038)', (
       // Tag each write by inspecting the body.
       const tag = content.includes('first-turn') ? 'first' : 'second'
       order.push(`start-${tag}`)
-      await new Promise((r) => setTimeout(r, 5)) // eslint-disable-line obsidianmd/prefer-active-window-timers
+      await new Promise((r) => setTimeout(r, 5))  
       order.push(`end-${tag}`)
     })
 

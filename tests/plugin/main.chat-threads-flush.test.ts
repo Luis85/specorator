@@ -127,7 +127,7 @@ function makeRecord(overrides: Partial<ChatThreadRecord> = {}): ChatThreadRecord
 // through the test environment's `setTimeout` / `clearTimeout`. Using a typed
 // helper keeps the obsidianmd `prefer-active-doc` rule satisfied for the
 // surrounding source while still allowing the shim itself to exist.
-/* eslint-disable obsidianmd/prefer-active-doc */
+ 
 interface ActiveWindowShim {
   setTimeout: (cb: () => void, ms: number) => number
   clearTimeout: (id: number) => void
@@ -146,7 +146,7 @@ function restoreActiveWindow(prior: ActiveWindowShim | undefined): void {
   if (prior === undefined) delete target.activeWindow
   else target.activeWindow = prior
 }
-/* eslint-enable obsidianmd/prefer-active-doc */
+ 
 
 describe('scheduleChatThreadsPersistence — debounced flush (T-ASM-054)', () => {
   let activeWindowRestore: ActiveWindowShim | undefined

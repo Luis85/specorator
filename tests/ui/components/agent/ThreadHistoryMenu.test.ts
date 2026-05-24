@@ -36,7 +36,7 @@ function mountMenu(open = true) {
 				[LOGGER_PORT as symbol]: fakeLogger(),
 			},
 		},
-		// eslint-disable-next-line obsidianmd/prefer-active-doc -- jsdom has no Obsidian popout windows.
+		 
 		attachTo: document.body,
 	})
 }

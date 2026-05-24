@@ -32,18 +32,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createEventBus } from '@/domain/shared/event-bus'
 import { fakeModulePorts } from '../__fakes__/fake-ports'
 
-// The SUT does not exist yet — the import itself fails until T-MHP-091 lands.
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-expect-error — module does not exist yet (TDD): production code to be written for T-MHP-091.
 import { SpecoratorStatusBar } from '@/plugin/SpecoratorStatusBar'
 
-type ProposalEnqueuedPayload = {
+interface ProposalEnqueuedPayload {
 	proposalId: string
 	tool: string
 	status: 'pending' | 'accepted'
 	client: { id: string }
 }
-type ProposalDecidedPayload = {
+interface ProposalDecidedPayload {
 	proposalId: string
 }
 
@@ -86,7 +83,7 @@ describe('T-MHP-141 — SpecoratorStatusBar (SPEC-MHP-041, REQ-MHP-046)', () => 
 	let host: HTMLElement
 
 	beforeEach(() => {
-		document.body.innerHTML = ''
+		while (document.body.firstChild) document.body.removeChild(document.body.firstChild)
 		host = document.createElement('div')
 		host.setAttribute('data-testid', 'status-bar-host')
 		document.body.appendChild(host)
@@ -201,12 +198,12 @@ describe('T-MHP-141 — SpecoratorStatusBar (SPEC-MHP-041, REQ-MHP-046)', () => 
 		const beforeCount = bus.listenerCount()
 		expect(beforeCount).toBeGreaterThan(0)
 
-		expect(() => badge.dispose()).not.toThrow()
+		expect(() => { badge.dispose(); }).not.toThrow()
 		// Listeners released.
 		expect(bus.listenerCount()).toBeLessThan(beforeCount)
 
 		// A late event must not throw and must not resurrect the DOM element.
-		expect(() => enqueue(bus, 'p2', 'pending')).not.toThrow()
+		expect(() => { enqueue(bus, 'p2', 'pending'); }).not.toThrow()
 		expect(host.querySelector('[data-testid="mcp-status-bar"]')).toBeNull()
 	})
 
@@ -217,7 +214,7 @@ describe('T-MHP-141 — SpecoratorStatusBar (SPEC-MHP-041, REQ-MHP-046)', () => 
 		const badge = new SpecoratorStatusBar({ plugin, bus, ports })
 		badge.mount()
 		// Subscribe a side-listener that disposes the badge mid-fan-out.
-		bus.on('proposalEnqueued' as never, vi.fn(() => badge.dispose()) as never)
-		expect(() => enqueue(bus, 'p1', 'pending')).not.toThrow()
+		bus.on('proposalEnqueued' as never, vi.fn(() => { badge.dispose(); }))
+		expect(() => { enqueue(bus, 'p1', 'pending'); }).not.toThrow()
 	})
 })

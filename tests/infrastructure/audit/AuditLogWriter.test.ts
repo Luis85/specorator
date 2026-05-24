@@ -93,8 +93,8 @@ describe('Proposal domain types (T-MHP-009 / REQ-MHP-036, REQ-MHP-022, REQ-MHP-0
 
   it('TEST-MHP-037 (rejection arm): a non-listed string is not assignable to ProposalKind at compile time', () => {
     // @ts-expect-error — 'future_unknown' is not in the 16-literal union
-    const _bad: ProposalKind = 'future_unknown'
-    expect(true).toBe(true)
+    const bad: ProposalKind = 'future_unknown'
+    expect(typeof bad).toBe('string')
   })
 
   it('AuditRow exposes exactly the 7 top-level fields with schema literal = 1', () => {

@@ -99,7 +99,7 @@ function close(): void {
 		<SpDropdownPanel
 			:open="open"
 			anchor-mode="dropdown"
-			:ariaLabel="t('provider.menuAriaLabel')"
+			:aria-label="t('provider.menuAriaLabel')"
 			@close="close"
 		>
 			<ProviderMenu />

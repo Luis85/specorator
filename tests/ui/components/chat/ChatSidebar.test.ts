@@ -303,7 +303,7 @@ describe('ChatSidebar', () => {
 			// Trigger click without waiting for flushPromises
 			void po.clickSend()
 			// Give Vue one tick to update the DOM
-			await new Promise((r) => setTimeout(r, 0)) // eslint-disable-line obsidianmd/prefer-active-window-timers
+			await new Promise((r) => setTimeout(r, 0))  
 
 			// UX-#2 (WP-2): no `chat-response-loading` "Thinking…" copy in the
 			// agent sidepanel — MessageList's streaming bubble owns the

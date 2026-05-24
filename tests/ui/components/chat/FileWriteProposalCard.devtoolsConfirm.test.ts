@@ -76,7 +76,7 @@ function openModal(
 
 describe('T-MHP-122 — DevToolsEnableConfirmModal (Part B §S07..S09)', () => {
 	beforeEach(() => {
-		document.body.innerHTML = ''
+		while (document.body.firstChild) document.body.removeChild(document.body.firstChild)
 	})
 
 	// ── S07 — opening behaviour ───────────────────────────────────────────────
@@ -148,7 +148,7 @@ describe('T-MHP-122 — DevToolsEnableConfirmModal (Part B §S07..S09)', () => {
 	// ── REQ-MHP-020 — dev:cdp second-paragraph variant ───────────────────────
 	it('dev:cdp body includes the "always prompts" sentence (REQ-MHP-020)', () => {
 		const modal = openModal('dev:cdp')
-		const text = modal.contentEl.textContent ?? ''
+		const text = modal.contentEl.textContent
 		// The verbatim sentence per REQ-MHP-020 / Part B §S07 second paragraph.
 		expect(text.toLowerCase()).toContain('always prompts')
 	})

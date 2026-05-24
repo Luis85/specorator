@@ -18,7 +18,7 @@ import { useApprovalRulesStore } from '@/ui/stores/approvalRulesStore'
 function mountList() {
 	return mount(ApprovalRulesList, {
 		global: { plugins: [i18n] },
-		// eslint-disable-next-line obsidianmd/prefer-active-doc -- jsdom has no Obsidian popout windows.
+		 
 		attachTo: document.body,
 	})
 }

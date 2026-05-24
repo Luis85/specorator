@@ -58,7 +58,7 @@ function mountWithScrollMetrics(
 ) {
 	const lockScrollTop = options.lockScrollTop ?? true;
 	// Tests run in jsdom; `document.body` is the only mount target.
-	// eslint-disable-next-line obsidianmd/prefer-active-doc -- test-only mount
+	 
 	const attachTarget = document.body;
 	const wrapper = mount(MessageList, {
 		global: { plugins: [i18n], provide: listProvides() },
@@ -342,7 +342,7 @@ describe('MessageList', () => {
 				scrollTop: 0, // scrolled way up
 			});
 			// Flush any rAF the watch may have queued on first mount.
-			// eslint-disable-next-line obsidianmd/prefer-active-window-timers -- jsdom-only test helper
+			 
 			await new Promise<void>((resolve) => setTimeout(resolve, 32));
 			// Re-assert the geometry survived the rAF (the setter is a
 			// no-op so this should remain "scrolled up").

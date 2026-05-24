@@ -41,7 +41,7 @@ function onClick(ev: MouseEvent): void {
 	>
 		<SpIconButton
 			:icon="icon"
-			:ariaLabel="ariaLabel"
+			:aria-label="ariaLabel"
 			:disabled="disabled"
 			:size="16"
 			@click="onClick"

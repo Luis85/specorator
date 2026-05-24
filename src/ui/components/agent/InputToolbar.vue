@@ -143,7 +143,7 @@ defineExpose({ sendButtonEl });
 			<SpIconButton
 				ref="sendButtonEl"
 				:icon="sendIcon"
-				:ariaLabel="sendAriaLabel"
+				:aria-label="sendAriaLabel"
 				:variant="sendVariant"
 				:disabled="disabled && !isStreaming"
 				data-testid="chat-send-button"

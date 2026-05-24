@@ -33,7 +33,7 @@ const ITEMS: readonly HelpPopoverItem[] = Object.freeze([
 function mountPopover(items: readonly HelpPopoverItem[] = ITEMS) {
 	return mount(HelpPopover, {
 		global: { plugins: [i18n] },
-		// eslint-disable-next-line obsidianmd/prefer-active-doc -- jsdom has no Obsidian popout windows.
+		 
 		attachTo: document.body,
 		props: { items },
 	})

@@ -50,7 +50,7 @@ function mountCard(
 			proposal: makeProposal(proposalOverrides),
 			pathValidationError,
 		},
-		// eslint-disable-next-line obsidianmd/prefer-active-doc -- jsdom test runner has no Obsidian popout windows.
+		 
 		attachTo: document.body,
 	})
 	const po = new FileWriteProposalCardPO(wrapper)
@@ -289,7 +289,7 @@ describe('FileWriteProposalCard', () => {
 	describe('T-ASM-069 — programmatic focus on mount', () => {
 		it('heading receives focus on mount', () => {
 			const { po } = mountCard({ status: 'pending' })
-			// eslint-disable-next-line obsidianmd/prefer-active-doc -- jsdom test runner has no Obsidian popout windows.
+			 
 			expect(document.activeElement).toBe(po.headingEl.element)
 		})
 	})

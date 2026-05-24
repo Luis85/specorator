@@ -100,7 +100,7 @@ function handleDelete(threadId: string): void {
 	<SpDropdownPanel
 		:open="open"
 		anchor-mode="dropup"
-		:ariaLabel="t('agent.history.open')"
+		:aria-label="t('agent.history.open')"
 		:auto-focus="true"
 		@close="emit('close')"
 	>

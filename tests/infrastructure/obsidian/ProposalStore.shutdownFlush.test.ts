@@ -18,8 +18,9 @@ import { ProposalStore, type AuditLogSink } from '@/infrastructure/obsidian/Prop
 import { ProposalEventBus } from '@/infrastructure/events/ProposalEventBus'
 import type { AuditRow } from '@/domain/mcp/Proposal'
 import type { ProposalDecision } from '@/domain/mcp/Proposal'
+import type { LoggerPort } from '@/domain/ports/LoggerPort'
 
-function makeLogger(): { debug: ReturnType<typeof vi.fn>; info: ReturnType<typeof vi.fn>; warn: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> } {
+function makeLogger(): LoggerPort {
   return { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }
 }
 

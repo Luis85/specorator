@@ -122,7 +122,7 @@ function handleFork(): void {
 	>
 		<SpIconButton
 			:icon="copyConfirmActive ? 'check' : 'copy'"
-			:ariaLabel="copyAriaLabel"
+			:aria-label="copyAriaLabel"
 			data-testid="message-action-copy"
 			:size="14"
 			@click="handleCopy"
@@ -130,7 +130,7 @@ function handleFork(): void {
 		<SpIconButton
 			v-if="showRegenerate"
 			icon="rotate-ccw"
-			:ariaLabel="t('agent.messageActions.regenerateAriaLabel')"
+			:aria-label="t('agent.messageActions.regenerateAriaLabel')"
 			data-testid="message-action-regenerate"
 			:size="14"
 			:disabled="isStreaming"
@@ -140,7 +140,7 @@ function handleFork(): void {
 		<SpIconButton
 			v-if="showEdit"
 			icon="pencil"
-			:ariaLabel="t('agent.messageActions.editAriaLabel')"
+			:aria-label="t('agent.messageActions.editAriaLabel')"
 			data-testid="message-action-edit"
 			:size="14"
 			:disabled="isStreaming"
@@ -150,7 +150,7 @@ function handleFork(): void {
 		<SpIconButton
 			v-if="showFork"
 			icon="git-fork"
-			:ariaLabel="t('agent.messageActions.forkAriaLabel')"
+			:aria-label="t('agent.messageActions.forkAriaLabel')"
 			data-testid="message-action-fork"
 			:size="14"
 			:disabled="isStreaming"

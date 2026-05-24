@@ -51,7 +51,7 @@ onMounted(() => {
 	const host = el.value
 	if (!host) return
 	if (host.closest('.sp-hover-host') === null) {
-		// eslint-disable-next-line no-console
+		 
 		console.warn(
 			'HoverActions: expected a `.sp-hover-host` ancestor on the row driving the reveal. ' +
 				'Without it the hover/focus reveal will never fire — see ADR-AUX-003 / spec §1.3.2.',

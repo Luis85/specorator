@@ -29,12 +29,9 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createEventBus } from '@/domain/shared/event-bus'
 import { fakeModulePorts } from '../../__fakes__/fake-ports'
 
-// The SUT does not exist yet — the import itself fails until T-MHP-101 lands.
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-expect-error — module does not exist yet (TDD): production code to be written for T-MHP-101.
 import { ProposalNoticeEmitter } from '@/application/mcp/ProposalNoticeEmitter'
 
-type ProposalEnqueuedPayload = {
+interface ProposalEnqueuedPayload {
 	proposalId: string
 	tool: string
 	status: 'pending' | 'accepted'
