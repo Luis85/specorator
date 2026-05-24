@@ -655,9 +655,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-026, T-RR-015, T-RR-013
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/WriteEditBlock.test.ts` + `WriteEditBlock.po.ts`,
+  - [x] `tests/ui/chat/WriteEditBlock.test.ts` + `WriteEditBlock.po.ts`,
         `tests/ui/chat/DiffView.test.ts` + `DiffView.po.ts` exist, naming TEST-RR-019, data-testid only.
-  - [ ] Tests fail (RED) — `WriteEditBlock`/`DiffView` do not yet exist.
+  - [x] Tests fail (RED) — `WriteEditBlock`/`DiffView` do not yet exist.
 
 ### T-RR-032 🔨 — `WriteEditBlock.vue` + `DiffView.vue`
 
@@ -672,10 +672,10 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-031
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] TEST-RR-019 passes (the prior RED tests now pass), incl. EC-RR-3/5.
-  - [ ] **No `v-html`/`innerHTML`** (NFR-RR-006, lint-verified); background-highlight only (no
+  - [x] TEST-RR-019 passes (the prior RED tests now pass), incl. EC-RR-3/5.
+  - [x] **No `v-html`/`innerHTML`** (NFR-RR-006, lint-verified); background-highlight only (no
         `text-decoration`); `<script setup>`; no `obsidian` import; colour via `--sp-diff-*` tokens.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-RR-033 🧪 — RED: `SubagentBlock.vue` (PageObject)
 
@@ -692,9 +692,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-028, T-RR-019
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/SubagentBlock.test.ts` + `SubagentBlock.po.ts` exist, naming TEST-RR-020,
+  - [x] `tests/ui/chat/SubagentBlock.test.ts` + `SubagentBlock.po.ts` exist, naming TEST-RR-020,
         covering the async pill ladder + EC-RR-10/11; data-testid only.
-  - [ ] Tests fail (RED) — `SubagentBlock` does not yet exist.
+  - [x] Tests fail (RED) — `SubagentBlock` does not yet exist.
 
 ### T-RR-034 🔨 — `SubagentBlock.vue`
 
@@ -708,10 +708,10 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-033
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] TEST-RR-020 passes (the prior RED tests now pass), incl. EC-RR-10/11.
-  - [ ] **No `v-html`/`innerHTML`** (NFR-RR-006, lint-verified); `<script setup>`; no `obsidian`
+  - [x] TEST-RR-020 passes (the prior RED tests now pass), incl. EC-RR-10/11.
+  - [x] **No `v-html`/`innerHTML`** (NFR-RR-006, lint-verified); `<script setup>`; no `obsidian`
         import; pill colour via `--sp-state-*` tokens, never raw colour.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-RR-035 🧪 — RED: `UsageInfo.vue` + `ContextCompactedBlock.vue` (PageObjects)
 
@@ -727,10 +727,10 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-023
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/UsageInfo.test.ts` + `UsageInfo.po.ts`,
+  - [x] `tests/ui/chat/UsageInfo.test.ts` + `UsageInfo.po.ts`,
         `tests/ui/chat/ContextCompactedBlock.test.ts` + `ContextCompactedBlock.po.ts` exist, naming
         TEST-RR-004/022/025, data-testid only.
-  - [ ] Tests fail (RED) — `UsageInfo`/`ContextCompactedBlock` do not yet exist.
+  - [x] Tests fail (RED) — `UsageInfo`/`ContextCompactedBlock` do not yet exist.
 
 ### T-RR-036 🔨 — `UsageInfo.vue` + `ContextCompactedBlock.vue`
 
@@ -744,9 +744,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-035
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] TEST-RR-004/022/025 pass (the prior RED tests now pass), incl. EC-RR-12.
-  - [ ] **No `v-html`/`innerHTML`** (NFR-RR-006, lint-verified); `<script setup>`; no `obsidian` import.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] TEST-RR-004/022/025 pass (the prior RED tests now pass), incl. EC-RR-12.
+  - [x] **No `v-html`/`innerHTML`** (NFR-RR-006, lint-verified); `<script setup>`; no `obsidian` import.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-RR-037 🧪 — RED: `MessageBlocks.vue` dispatcher + `MessageTurn.vue` fork (PageObjects)
 
@@ -764,10 +764,10 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-028, T-RR-030, T-RR-032, T-RR-034, T-RR-036
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/MessageBlocks.test.ts` + `MessageBlocks.po.ts` and extended
+  - [x] `tests/ui/chat/MessageBlocks.test.ts` + `MessageBlocks.po.ts` and extended
         `tests/ui/chat/MessageTurn.rr.test.ts` + `MessageTurn.po.ts` exist, naming TEST-RR-008/023,
         data-testid only; block order asserted by `data-testid` sequence.
-  - [ ] Tests fail (RED) — `MessageBlocks` + the `MessageTurn` fork do not yet exist.
+  - [x] Tests fail (RED) — `MessageBlocks` + the `MessageTurn` fork do not yet exist.
 
 ### T-RR-038 🔨 — `MessageBlocks.vue` dispatcher + `MessageTurn.vue` blocks-vs-content fork
 
@@ -781,10 +781,10 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-037
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] TEST-RR-008/023 pass (the prior RED tests now pass), incl. EC-RR-1/13 + collapsed-by-default.
-  - [ ] **No `v-html`/`innerHTML`** (NFR-RR-006, lint-verified); `<script setup>`; the P1
+  - [x] TEST-RR-008/023 pass (the prior RED tests now pass), incl. EC-RR-1/13 + collapsed-by-default.
+  - [x] **No `v-html`/`innerHTML`** (NFR-RR-006, lint-verified); `<script setup>`; the P1
         `MarkdownBlock`/`content` path never regresses; no `obsidian` import.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ---
 

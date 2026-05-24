@@ -489,3 +489,74 @@ record the GREEN convergence + commit SHA.
 - **Not pushed.** `manifest.json` untouched. No new dependency added.
 - **Commits:** `bc1ae57` (T-RR-022 RED), `109a655` (T-RR-023), `270aac8` (T-RR-024), `435fea9` (T-RR-025 RED), `77af3ad` (T-RR-026), `0fe655e` (T-RR-027 RED), `5ddd4a9` (T-RR-028), `8a65287` (T-RR-029 RED), `f2985fe` (T-RR-030).
 - **Next batch (UI batch 2, SPEC-RR-029..032):** **FIRST TASK = T-RR-031** (qa RED — `WriteEditBlock.vue` + `DiffView.vue` PageObjects: per-line declarative diff spans with gutter + token backgrounds, `NEW_FILE_DISPLAY_CAP=20` truncation footer (EC-RR-5), stat chip non-zero `+N`/`-N`, no-`diffData` generic body (EC-RR-3); `tests/ui/chat/WriteEditBlock.{po,test}.ts` + `DiffView.{po,test}.ts`), greened by **T-RR-032**. Then T-RR-033/034 (`SubagentBlock`), T-RR-035/036 (`MessageBlocks` dispatcher + `MessageTurn` fork + `ContextCompactedBlock`/`UsageInfo`), and the wire-in/gate tasks T-RR-037/038.
+
+---
+
+## 2026-05-25 (dev, implement — ui batch 2)
+
+Executed UI BATCH 2 (T-RR-031..038, SPEC-RR-029/030/031/032/022/023) on `feature/rich-rendering` with strict TDD, one Conventional commit per task. The RED test for each contract was watched to fail (component import error) before the implementation greened it.
+
+### T-RR-031 (RED) — `WriteEditBlock` + `DiffView` test/PageObjects (TEST-RR-019)
+
+- **Files:** `tests/ui/chat/DiffView.{po,test}.ts`, `tests/ui/chat/WriteEditBlock.{po,test}.ts` (new).
+- **RED watched:** both files fail to import the missing components → **2 files failed, no tests collected**. After the impl greened them, two test-authoring literals were corrected in the RED commit (amend, local-only): the delete-gutter glyph asserted is the SPEC-RR-029 U+2212 minus `−` (not ASCII `-`), and the empty-line single-space assertion reads raw `textContent` (vue-test-utils `.text()` trims) via a new `lineRawTexts()` PageObject method.
+- **Spec:** SPEC-RR-029; REQ-RR-025/027; NFR-RR-006/007; EC-RR-3/5. **SHA:** `c1dfe7b`. **Outcome:** done (RED).
+
+### T-RR-032 (GREEN) — `DiffView.vue` + `WriteEditBlock.vue`
+
+- **Files:** `src/ui/chat/DiffView.vue`, `src/ui/chat/WriteEditBlock.vue` (new).
+- **Behaviour:** `DiffView` renders each `DiffLine` as a per-line declarative row — a centred `--sp-diff-gutter` (16px) monospace prefix span (`+`/`−`/space, `aria-hidden`) + a text span (`text || ' '`, parity `DiffRenderer.ts:131`); per-type background via `--sp-diff-insert-bg`/`--sp-diff-delete-bg` classes (equal muted), **background-highlight only, no `text-decoration`/strikethrough** (REQ-RR-025); body scrolls within `--sp-diff-max-height`; an **all-insert** new file longer than `NEW_FILE_DISPLAY_CAP` (= 20, reproduced from `DiffRenderer.ts:76`) shows the first 20 + a `"... N more lines"` footer (EC-RR-5). `WriteEditBlock` wraps `SpCollapsible` — file `SpIcon`, name, `toolSummary`, end-pinned `--sp-status-*` status with `aria-label`, and a stat chip rendering only the non-zero `+N`(`--sp-diff-add-fg`)/`-N`(`--sp-diff-del-fg`) counts (REQ-RR-027); body embeds `DiffView` with `toolCall.diffData`, degrading to a generic `<pre>` result body when `diffData` is absent (EC-RR-3). **No `v-html`.**
+- **GREEN:** TEST-RR-019 13/13 (DiffView 6 + WriteEditBlock 7).
+- **Spec:** SPEC-RR-029; REQ-RR-025/027; NFR-RR-004/006/007. **SHA:** `306b605`. **Outcome:** done.
+
+### T-RR-033 (RED) — `SubagentBlock` test/PageObject (TEST-RR-020)
+
+- **Files:** `tests/ui/chat/SubagentBlock.{po,test}.ts` (new).
+- **RED watched:** the file fails to import the missing component → **1 file failed, no tests collected**. The `expandAll()` PageObject helper re-queries collapsed headers across passes (nested-section headers only mount once their parent expands) — folded into the RED commit (amend, local-only).
+- **Spec:** SPEC-RR-030; REQ-RR-021/021a; NFR-RR-006/007/008; EC-RR-10/11. **SHA:** `1937e1d`. **Outcome:** done (RED).
+
+### T-RR-034 (GREEN) — `SubagentBlock.vue`
+
+- **File:** `src/ui/chat/SubagentBlock.vue` (new).
+- **Behaviour:** wraps `SpCollapsible` (accent `bot` `SpIcon`); collapsible prompt/result sections (result scrolls within `--sp-subagent-result-max-height`) + the nested `toolCalls` rendered via `ToolCallBlock` at `--sp-font-size-xs`. The async pill (`subagent-status`) is coloured by the resolved `asyncStatus` via `--sp-state-*` and **names** the state (`data-state` + text, never colour-only — NFR-RR-008); sync-vs-async classified by `resolveSubagentLifecycle` — sync subagents show nested tools inline with **no pill**. EC-RR-10 (error + no result → error pill, empty result) and EC-RR-11 (orphaned) ride the resolved status. Markdown via `MarkdownBlock`; **no `v-html`**.
+- **GREEN:** TEST-RR-020 6/6 (completed pill, nested tools, prompt/result, EC-RR-10 error, EC-RR-11 orphaned, sync no-pill).
+- **Spec:** SPEC-RR-030; REQ-RR-021/021a; NFR-RR-004/006/007/008. **SHA:** `b6add34`. **Outcome:** done.
+
+### T-RR-035 (RED) — `UsageInfo` + `ContextCompactedBlock` test/PageObjects (TEST-RR-004/022/025)
+
+- **Files:** `tests/ui/chat/UsageInfo.{po,test}.ts`, `tests/ui/chat/ContextCompactedBlock.{po,test}.ts` (new).
+- **RED watched:** both files fail to import the missing components → **2 files failed, no tests collected**.
+- **Spec:** SPEC-RR-031/032; REQ-RR-005/007/024/024a; NFR-RR-006; EC-RR-12. **SHA:** `a879220`. **Outcome:** done (RED).
+
+### T-RR-036 (GREEN) — `UsageInfo.vue` + `ContextCompactedBlock.vue`
+
+- **Files:** `src/ui/chat/UsageInfo.vue`, `src/ui/chat/ContextCompactedBlock.vue` (new).
+- **Behaviour:** `UsageInfo` is turn-level (NOT a content block) — reads `useChatStore().usage` and renders the context tokens used, `~percentage` (omitted when `contextWindow` is missing/zero), and an optional `model` as `--sp-*`-tokened declarative text; renders **nothing** when `usage === null` (EC-RR-12). It is the simple inline token display, not the P6 arc meter (NG5). `ContextCompactedBlock` is a static render-only notice (NG1). **No `v-html`.**
+- **GREEN:** TEST-RR-004/022/025 6/6 (UsageInfo 5 + ContextCompacted 1).
+- **Spec:** SPEC-RR-031/032; REQ-RR-005/007/024/024a; NFR-RR-004/006. **SHA:** `d413954`. **Outcome:** done.
+
+### T-RR-037 (RED) — `MessageBlocks` dispatcher + `MessageTurn` fork test/PageObjects (TEST-RR-008/023)
+
+- **Files:** `tests/ui/chat/MessageBlocks.{po,test}.ts` (new), `tests/ui/chat/MessageTurn.rr.test.ts` (new), `tests/ui/chat/MessageTurn.po.ts` (extended additively — `hasBlocks()`/`hasMarkdownBlock()`, the P1 methods untouched).
+- **RED watched:** `MessageBlocks` import fails (missing component) and the `MessageTurn` blocks-path assertion fails (fork not implemented) → **2 files failed, 1 of the MessageTurn-fork tests failed**; the existing P1 `MessageTurn.test.ts` stayed **green** alongside.
+- **Spec:** SPEC-RR-022/023; REQ-RR-011/012/018; NFR-RR-006; EC-RR-1/13. **SHA:** `bddff93`. **Outcome:** done (RED).
+
+### T-RR-038 (GREEN) — `MessageBlocks.vue` dispatcher + `MessageTurn.vue` fork
+
+- **Files:** `src/ui/chat/MessageBlocks.vue` (new), `src/ui/chat/MessageTurn.vue` (forked), `src/ui/stores/chatStore.ts` (reconciliation — see deviation).
+- **Behaviour:** `MessageBlocks` iterates `message.contentBlocks` IN ORDER (keyed by index) and dispatches one child per kind — `text`→`MarkdownBlock`, `thinking`→`ThinkingBlock`, `tool_use`→`WriteEditBlock` for Write/Edit else `ToolCallBlock` (TodoWrite renders `TodoList` in its body), `subagent`→`SubagentBlock`, `context_compacted`→`ContextCompactedBlock`. A dangling `tool_use`/`subagent` reference is dropped from the render list so it emits **nothing** (EC-RR-1). Each child carries `data-block-kind` so order is assertable. `MessageTurn` forks: `contentBlocks` present → `MessageBlocks`, else the P1 `MarkdownBlock`/`content` path (EC-RR-13); the assistant marker, `data-streaming`, the Interrupted badge, and `dir="auto"` are unchanged. **No `v-html`.**
+- **GREEN:** TEST-RR-008/023 13/13 (MessageBlocks 6 + MessageTurn-fork 5 + the P1 MessageTurn 7 still green); full chat-UI dir 97 → all green after the store reconciliation.
+- **Spec:** SPEC-RR-022/023; REQ-RR-011/012/018; NFR-RR-004/006. **SHA:** `2f8256a`. **Outcome:** done.
+- **Deviation (CLAR-RR-007 — inline-error/notice reconciliation with the fork, with rationale):** the `MessageTurn` fork revealed an interaction the spec table did not reconcile. `onText` (T-RR-023) pushes a `{type:'text'}` block, so once any text streams, `message.contentBlocks` exists and the fork routes to `MessageBlocks`. But the P1 `onErrorChunk`/`onNotice` legs append their inline text to `message.content` **only**, so under the fork the inline error/notice text became invisible (caught by the existing P1 `ChatSurface` `TEST-CC-013 A leg` — `'partial [failed]'`). Fix: extracted a private `_extendTextBlock(message, content)` helper from `onText`, and `onErrorChunk`/`onNotice` now **also** extend the trailing text block **when the live message already renders via blocks** (`contentBlocks !== undefined`); a pure-P1 turn that emitted no blocks keeps the plain `content`-only path untouched. This preserves the streaming-error boundary (ADR-CC-001 §1 — still the `{type:'error'}` chunk, no per-chunk `Result`/throw) and REQ-RR-011 order; the P1 store test `onErrorChunk` (`content === 'partial boom'`) stays green. Stays within ADR-RR-001 — sink degrade/render policy, no type/seam change. The change touches `chatStore.ts` (T-RR-023 territory) only as far as needed for the T-RR-038 fork not to regress P1 (the task's explicit DoD). Logged as CLAR-RR-007 for the reviewer.
+
+---
+
+## Batch close-out — UI batch 2 (T-RR-031..038)
+
+- **Typecheck:** `npm run typecheck` (`vue-tsc --noEmit -p tsconfig.lint.json`) → **0 errors**.
+- **Lint:** `npx eslint` on every touched file → **0 errors / 0 warnings**.
+- **Tests (full unit suite):** **647/647 across 85 files** (was 612/612 ×79 — +35 from 6 new test files: `DiffView` 6, `WriteEditBlock` 7, `SubagentBlock` 6, `UsageInfo` 5, `ContextCompactedBlock` 1, `MessageBlocks` 6, `MessageTurn.rr` 5 — minus the count absorbed by the existing `ChatSurface`/`MessageTurn` suites). No regression; **the P1 `MessageTurn.test.ts` (7) and `ChatSurface.test.ts` stay green** (the fork is additive + the inline-error reconciliation keeps the P1 content path intact).
+- **Not run (deferred to the T-RR-044 gate):** full `npm run verify` / `build` / `build:web` / `docs:api` / coverage / `npm audit`.
+- **Not pushed.** `manifest.json` untouched. No new dependency added.
+- **Commits:** `c1dfe7b` (T-RR-031 RED), `306b605` (T-RR-032), `1937e1d` (T-RR-033 RED), `b6add34` (T-RR-034), `a879220` (T-RR-035 RED), `d413954` (T-RR-036), `bddff93` (T-RR-037 RED), `2f8256a` (T-RR-038).
+- **Next batch (WIRE-IN, SPEC-RR-021 provide + demo):** **FIRST TASK = T-RR-040** (qa RED — assert `ICON_PORT` is provided from `bridge.createIconPort()` alongside the existing ports in both `AgentSidebarView` and `src/ui/main.ts`, and that a mounted `MessageBlocks`/`ToolCallBlock` resolves icons through it; `tests/ui/chat/mount.rr.test.ts` or the extended P1 mount test), greened by **T-RR-041** (provide `ICON_PORT` in `AgentSidebarView` + `src/ui/main.ts` + demo wiring). Then T-RR-042 (`npm run dev` rich-render smoke — TEST-RR-026 dev leg, qa). Then the GATE: T-RR-043 (MANUAL Obsidian `MarkdownRenderer`/`setIcon` backing + real-CLI rich turn — human-owned, never agent-self-claimed) and T-RR-044 (full verify + parity #434 + draft PR into `next`).

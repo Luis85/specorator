@@ -4,7 +4,7 @@ area: RR
 current_stage: implementation
 status: active
 last_updated: 2026-05-25
-last_agent: dev (implement — ui batch 1)
+last_agent: dev (implement — ui batch 2)
 epic: claudian-reboot
 phase: P2
 integration_branch: next
@@ -17,7 +17,7 @@ artifacts:
   ADR-RR-001: accepted (docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md — human-blessed 2026-05-24)
   spec.md: complete (SPEC-RR-001..034; extends SPEC-CC-* P1 contract; 27 TEST-RR scenarios)
   tasks.md: complete (TASKS-RR-001; 44 tasks T-RR-001..044; full SPEC/REQ/NFR/TEST coverage table)
-  implementation-log.md: in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 done; ui batch 2 T-RR-031..038 + wire-in/gate remain)
+  implementation-log.md: in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 done; wire-in T-RR-040..042 + gate T-RR-043/044 remain)
   test-plan.md: in-progress (TESTPLAN-RR-001; baseline reference + manual TEST-RR-026 / T-RR-043 legs scheduled)
   test-report.md: pending
   review.md: pending
@@ -43,7 +43,7 @@ artifacts:
 | 4. Design | `design.md` | complete (Parts A/B/C; ADR-RR-001 accepted — human-blessed 2026-05-24) |
 | 5. Specification | `spec.md` | complete (SPEC-RR-001..034; 27 TEST-RR) |
 | 6. Tasks | `tasks.md` | complete (TASKS-RR-001; T-RR-001..044) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 done; ui batch 2 T-RR-031..038 + wire-in/gate remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 done; wire-in T-RR-040..042 + gate T-RR-043/044 remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -435,6 +435,59 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
                           no-diffData generic body EC-RR-3), greened by T-RR-032. Then T-RR-033/034
                           (SubagentBlock), T-RR-035/036 (MessageBlocks dispatcher + MessageTurn fork +
                           ContextCompactedBlock/UsageInfo), T-RR-037/038 (wire-in + remaining).
+2026-05-25 (dev, implement -- ui batch 2): Executed UI BATCH 2 (T-RR-031..038, SPEC-RR-029/030/031/
+                          032/022/023) on feature/rich-rendering with strict TDD, one Conventional
+                          commit per task (RED watched to fail on the missing-component import before
+                          each impl greened it). COMPLETED (in order): T-RR-031 RED WriteEditBlock +
+                          DiffView (13 cases, TEST-RR-019; two test-authoring literals corrected in the
+                          local RED commit -- the U+2212 minus gutter glyph and a raw-textContent
+                          single-space assertion, c1dfe7b) -> T-RR-032 DiffView.vue (per-line
+                          declarative gutter+text spans, --sp-diff-* token backgrounds, no
+                          strikethrough, NEW_FILE_DISPLAY_CAP=20 footer EC-RR-5) + WriteEditBlock.vue
+                          (SpCollapsible header + non-zero +N/-N stat chip REQ-RR-027 + DiffView body,
+                          generic body when no diffData EC-RR-3) (306b605); T-RR-033 RED SubagentBlock
+                          (6 cases, TEST-RR-020; expandAll PageObject re-queries nested headers across
+                          passes, 1937e1d) -> T-RR-034 SubagentBlock.vue (accent bot icon, collapsible
+                          prompt/result/tools, nested ToolCallBlock at --sp-font-size-xs, async pill
+                          named+coloured via --sp-state-* from resolveSubagentLifecycle, sync->inline
+                          no pill, EC-RR-10/11) (b6add34); T-RR-035 RED UsageInfo + ContextCompactedBlock
+                          (6 cases, TEST-RR-004/022/025, a879220) -> T-RR-036 UsageInfo.vue (turn-level,
+                          reads chatStore.usage, tokens + ~percentage + optional model, renders nothing
+                          when null EC-RR-12, not the P6 meter) + ContextCompactedBlock.vue (static
+                          render-only notice NG1) (d413954); T-RR-037 RED MessageBlocks dispatcher +
+                          MessageTurn fork (13 cases incl. the P1 MessageTurn.test.ts staying green,
+                          TEST-RR-008/023, bddff93) -> T-RR-038 MessageBlocks.vue (ordered dispatch per
+                          block kind, Write/Edit->WriteEditBlock, dangling tool_use/subagent ref renders
+                          nothing EC-RR-1, data-block-kind order assertable) + MessageTurn.vue fork
+                          (contentBlocks->MessageBlocks else P1 MarkdownBlock/content path EC-RR-13,
+                          streaming attr + Interrupted badge + dir=auto unchanged) (2f8256a).
+                          BATCH-END STATE: npm run typecheck -> 0 errors; npx eslint every touched file
+                          -> 0 errors/0 warnings; full unit suite 647/647 across 85 files (was 612/612
+                          x79 -- +35 from 6 new test files). The P1 MessageTurn.test.ts (7) +
+                          ChatSurface.test.ts stay green. DEVIATION (CLAR-RR-007, spec-faithful, within
+                          ADR-RR-001): the MessageTurn fork exposed that onText pushes a text block (so
+                          contentBlocks exists once any text streams and the fork routes to
+                          MessageBlocks), but the P1 onErrorChunk/onNotice legs append inline text to
+                          message.content ONLY -- so the inline error/notice text became invisible under
+                          the fork (caught by the existing P1 ChatSurface TEST-CC-013 A leg
+                          "partial [failed]"). Fix: extracted _extendTextBlock from onText; onErrorChunk/
+                          onNotice now ALSO extend the trailing text block WHEN the live message already
+                          renders via blocks (contentBlocks !== undefined) -- a pure-P1 turn keeps the
+                          plain content-only path. Preserves the ADR-CC-001 §1 streaming-error boundary
+                          (still the {type:'error'} chunk) + REQ-RR-011 order; the P1 store test
+                          onErrorChunk ('partial boom') stays green. Touches chatStore.ts (T-RR-023
+                          territory) only as needed for the T-RR-038 fork not to regress P1 (the task's
+                          explicit DoD). NOT pushed; manifest.json untouched; no new dependency; full
+                          verify/build/build:web/docs:api/coverage/audit deferred to the T-RR-044 gate.
+                          NEXT BATCH (WIRE-IN, SPEC-RR-021 provide + demo): FIRST TASK = T-RR-040 (qa
+                          RED -- assert ICON_PORT provided from bridge.createIconPort() alongside the
+                          existing ports in AgentSidebarView + src/ui/main.ts, and a mounted
+                          MessageBlocks/ToolCallBlock resolves icons through it; tests/ui/chat/
+                          mount.rr.test.ts or the extended P1 mount test), greened by T-RR-041 (provide
+                          ICON_PORT + demo wiring). Then T-RR-042 (npm run dev rich smoke, TEST-RR-026
+                          dev leg, qa). Then the GATE: T-RR-043 (MANUAL Obsidian MarkdownRenderer/setIcon
+                          backing + real-CLI rich turn -- human-owned, never agent-self-claimed) +
+                          T-RR-044 (full verify + parity #434 + draft PR into next).
 ```
 
 ## Open clarifications
@@ -476,3 +529,15 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
 - [ ] CLAR-RR-006 *(new — design-time, non-blocking)* — Thinking brand colour: drive from `--sp-accent`
       (optional `[data-provider]` aliasing), not Claudian's hardcoded `#D97757`/compact cyan `#5bc0de`
       (charter §1, NFR-RR-007). Owner: ux-ui-designer/brand-reviewer.
+- [ ] CLAR-RR-007 *(new — implementation deviation, 2026-05-25 dev, ui batch 2, non-blocking)* — The
+      `MessageTurn` blocks-vs-content fork (SPEC-RR-023) exposed that the P1 `onErrorChunk`/`onNotice`
+      legs append their inline text to `message.content` ONLY, so once `onText` has created a
+      `contentBlocks` text block the fork routes to `MessageBlocks` and the inline error/notice text
+      becomes invisible (caught by the P1 `ChatSurface` `TEST-CC-013 A leg`). T-RR-038 resolves it by
+      having `onErrorChunk`/`onNotice` also extend the trailing text block **when the live message
+      already renders via blocks** (`contentBlocks !== undefined`), leaving the pure-P1 content-only
+      path untouched. Stays within ADR-RR-001 (sink render/degrade policy; no type/seam change) and
+      preserves the ADR-CC-001 §1 streaming-error boundary + REQ-RR-011 order. The spec table
+      (SPEC-RR-019/020) marks `onErrorChunk`/`onNotice` as P1 legs "unchanged"; this reconciliation is
+      the minimal additive change the fork requires. **Confirm at review whether the spec table should
+      note the block-mirroring leg explicitly. Owner: architect/reviewer.**
