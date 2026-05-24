@@ -1,7 +1,7 @@
 ---
 feature: mcp-host-side-proposals
 area: MHP
-current_stage: specification
+current_stage: tasks
 status: active
 last_updated: 2026-05-24
 last_agent: architect
@@ -10,7 +10,7 @@ artifacts:
   research.md: complete
   requirements.md: complete
   design.md: complete
-  spec.md: pending
+  spec.md: complete
   tasks.md: pending
   implementation-log.md: pending
   test-plan.md: pending
@@ -31,7 +31,7 @@ artifacts:
 | 2. Research | `research.md` | complete |
 | 3. Requirements | `requirements.md` | complete |
 | 4. Design | `design.md` | complete |
-| 5. Specification | `spec.md` | pending |
+| 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
@@ -194,6 +194,52 @@ _None._
                            gates ticked; UX/UI gates remain
                            ux-designer/ui-designer's responsibility per
                            sequencing.
+2026-05-24 (architect):    spec.md complete. 42 SPEC-MHP-NNN interface
+                           sections (4 workflow tools, 8 modified write
+                           tools, 12 Tier-A reads, 1 escape hatch, 8
+                           DevTools, plus 9 internal components:
+                           ProposalStore, AuditLogWriter,
+                           McpClientIdentifier, ActiveFeatureResolver,
+                           MigrationService, SystemPromptAddendumProvider,
+                           ProposalEventBus, StatusBarBadge,
+                           ProposalNoticeEmitter). 40 edge cases (EC-MHP-
+                           001..040). 56 test scenarios (TEST-MHP-001..056)
+                           covering every REQ-MHP-001..046 and every
+                           NFR-MHP-001..014, plus 5 architecture-risk
+                           scenarios (RISK-MHP-011..015). 5 new settings
+                           keys added: requireExplicitAcceptForAllWrites,
+                           devtools.masterEnabled, devtools.autoAcceptLow
+                           Risk, devtools.tools.<id>.enabled × 5 (counted
+                           as a single nested key family per design).
+                           Audit-log JSONL schema v1 byte-precise. State
+                           machine for PendingProposal.status diagrammed
+                           (pending → accepted | rejected | error;
+                           terminal). Server-wide error vocabulary: 7
+                           codes. Hand-offs to planner (Tasks): (a) the
+                           FIRST task must capture baselines for NFR-MHP-
+                           001/-002/-003 before any new code lands (per
+                           Part C hand-off); (b) sidepanel-prompt-assembly
+                           hook integration point for
+                           SystemPromptAddendumProvider remains TBD-by-dev
+                           (the constant location is fixed at
+                           src/application/agent/SystemPromptAddendum.ts
+                           per SPEC-MHP-039 but the existing prompt-
+                           assembly call site needs to be located during
+                           implementation; if not findable, the planner
+                           should add a discovery task before the
+                           addendum-wiring task); (c) the DevTools tool
+                           response delivery (out-of-band result vs.
+                           always-via-accept) noted as implementer choice
+                           in SPEC-MHP-026..033 — planner should add a
+                           task to pick one and document it in the
+                           implementation log; (d) `.obsidian/
+                           mcp.local.json` exists AND `.mcp.json` exists
+                           is documented as a 'failed' migration with a
+                           distinct notice (EC-MHP-019-extension) — needs
+                           one extra notice copy string not in design.md
+                           Part B; planner to add a UI-content task. No
+                           new CLARs surfaced; all 18 prior CLARs remain
+                           resolved. Stage 5 gate PASS.
 2026-05-24 (ux-designer):  design.md Part A complete. 7 flows mapped
                            (F1 external-write headline, F2 auto-accept,
                            F3 in-process+card, F4 list+reject, F5 DevTools

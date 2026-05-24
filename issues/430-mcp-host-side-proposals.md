@@ -4,7 +4,7 @@ title: "Host-side MCP proposal queue + Tier-A read expansion + tier-policy UX"
 feature_slug: mcp-host-side-proposals
 type: feature
 roadmap_status: planned
-stage: specification
+stage: tasks
 github_url: https://github.com/Luis85/specorator/issues/430
 labels: []
 milestone: null
@@ -70,3 +70,4 @@ Out of scope (deferred to follow-up specs):
 | 2026-05-24 | requirements | `research.md` complete (gate PASS); CLARs -003/-004 closed, -005 surfaced; handed off to pm for `/spec:requirements` |
 | 2026-05-24 | design | `requirements.md` complete (gate FAIL — 2 open CLARs); 40 REQs + 14 NFRs; CLAR -005 closed by REQ-MHP-038, -006 new; user should run `/spec:clarify` before `/spec:design` |
 | 2026-05-24 | specification | `design.md` complete (gate PASS, all 7 boxes ticked); Parts A/B/C drafted by ux-designer/ui-designer/architect; ADR-019 authored (Proposed); requirements.md amended (7 rewords + 6 new REQs MHP-041..046); 60-row coverage table closed; 5 new architecture-level risks RISK-MHP-011..015 |
+| 2026-05-24 | tasks | `spec.md` complete (gate PASS); SPEC-MHP-NNN sections + 56 test scenarios + 40 edge cases + 5 new settings keys; 60/60 REQ trace coverage; user may run `/spec:analyze` (optional) before `/spec:tasks` |
