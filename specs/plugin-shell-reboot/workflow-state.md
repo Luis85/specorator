@@ -5,14 +5,14 @@ slug: plugin-shell-reboot
 current_stage: idea
 status: active
 last_updated: 2026-05-24
-last_agent: brainstorming (pre-stage 1)
+last_agent: analyst (Stage 1)
 epic: claudian-reboot
 phase: P0
 integration_branch: next
 reference: D:\Projects\claudian-main
 artifacts:
-  idea.md: draft
-  research.md: pending
+  idea.md: complete
+  research.md: skipped
   requirements.md: pending
   design.md: pending
   spec.md: pending
@@ -33,8 +33,14 @@ adrs:
 
 | Stage | Artifact | Status |
 |---|---|---|
-| 1. Idea | `idea.md` | draft |
-| 2. Research | `research.md` | pending (likely skipped — Claudian source is the reference) |
+| 1. Idea | `idea.md` | complete |
+| 2. Research | `research.md` | skipped (Claudian source is the sole reference) |
+
+## Skips
+
+- Stage 2 (Research) — skipped per Standard-depth decision. Claudian
+  (`D:\Projects\claudian-main`) is the sole structural reference; no external
+  research required. `research.md` will not be produced; pm reads `idea.md` as input.
 | 3. Requirements | `requirements.md` | pending |
 | 4. Design | `design.md` | pending |
 | 5. Specification | `spec.md` | pending |
@@ -80,4 +86,35 @@ only at parity.
                           .worktrees/plugin-shell-reboot on feature/plugin-shell-reboot.
                           Next: /spec:idea (analyst) to firm up idea.md, then
                           requirements → design (file ADR-PSR-001) → spec → tasks.
+
+2026-05-24 (analyst, Stage 1): idea.md refined + accepted (IDEA-PSR-001).
+                          Research SKIPPED (Claudian is the sole reference; no
+                          research.md). Validated Keep/Delete inventory against the
+                          real src/ tree and corrected the seed: the bridges
+                          (MockBridge, LocalStorageBridge) implement ChatTransportPort
+                          + IconPort and import PluginSettings — they are NOT
+                          core-only, so they need de-coupling. Resolved OQs:
+                          OQ-PSR-1 = DEFER standalone build:web (ui/main.ts + router
+                          wire FeatureService/FeatureRepository/CHAT_TRANSPORT_PORT/
+                          SECRET_STORE_PORT, all deleted) — recommend a trivial empty
+                          standalone entry to keep the gate green; flagged to PM.
+                          OQ-PSR-2 = YES, prune required: port barrel (index.ts),
+                          ports.ts InjectionKeys (drop ~10 + the @/domain/chat
+                          imports), PluginSettings (drop chat/provider/MCP fields),
+                          core-settings module, both bridges, fake-ports, and a near-
+                          total rewrite of plugin/main.ts. EventBus EventMap is
+                          already clean (empty declaration-merge target — no prune).
+                          OQ-PSR-3 = KEEP a minimal settings tab over a slimmed
+                          PluginSettings (can't delete it — SettingsPort/module/
+                          migration depend on it); flagged whether to keep workflow
+                          folder fields or drop to locale+logLevel.
+                          NEW risks flagged forward: R-PSR-3 (CI triggers only
+                          [develop,demo,main] — `next` gets NO CI; high/high),
+                          R-PSR-4 (storybook + bundle-size gates not in local pre-PR
+                          list), R-PSR-5 (coverage 80/70/80/80 may drop below
+                          threshold on the gutted tree), R-PSR-6 (don't touch
+                          manifest id/version/minAppVersion — intentional policy).
+                          Carried forward Q1–Q5 with owners (pm/architect).
+                          Next: /spec:requirements (pm) — resolve Q1–Q3 then write
+                          EARS reqs; design files ADR-PSR-001 + the exact delete list.
 ```
