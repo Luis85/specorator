@@ -53,3 +53,18 @@ SHA.
   T-CC-003 (types) + T-CC-004 (port).
 - **Outcome:** done (RED established). Lint + prettier green on the two test files.
 - **Deviation:** none.
+
+### T-CC-003 🔨 — Domain chat types (dev)
+
+- **Spec:** SPEC-CC-002..006, REQ-CC-001a, REQ-CC-005a, REQ-CC-006.
+- **Files (new, `src/domain/chat/`):** `StreamChunk.ts` (full union mirroring `chat.ts:137`, P1
+  subset documented; `toolUseResult?: unknown` per spec), `UsageInfo.ts` (`chat.ts:165` fields),
+  `ChatMessage.ts` (P1 subset + per-field rules), `ChatTurn.ts` (`ChatTurnRequest`,
+  `PreparedChatTurn`, `ChatRuntimeQueryOptions`, `ChatRuntimeEnsureReadyOptions`), `ProviderId.ts`
+  (`'claude'`). Pure interfaces/unions — no `obsidian`, no `node:*`, no class.
+- **GREEN:** `npx vitest run --project unit tests/domain/chat/StreamChunk.test.ts` → 2 passed; the
+  TEST-CC-002 TS2307 errors for `@/domain/chat/StreamChunk` + `@/domain/chat/UsageInfo` are gone
+  from `npm run typecheck`. (The `ChatRuntimePort.test.ts` typecheck errors remain — intended-RED,
+  T-CC-004's target.)
+- **Outcome:** done. eslint + prettier green on `src/domain/chat/**`; no `obsidian`/`node:*` import.
+- **Deviation:** none.
