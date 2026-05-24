@@ -1,12 +1,12 @@
 ---
 feature: mcp-host-side-proposals
 area: MHP
-current_stage: idea
+current_stage: research
 status: active
 last_updated: 2026-05-24
-last_agent: orchestrator
+last_agent: analyst
 artifacts:
-  idea.md: pending
+  idea.md: complete
   research.md: pending
   requirements.md: pending
   design.md: pending
@@ -27,7 +27,7 @@ artifacts:
 
 | Stage | Artifact | Status |
 |---|---|---|
-| 1. Idea | `idea.md` | pending |
+| 1. Idea | `idea.md` | complete |
 | 2. Research | `research.md` | pending |
 | 3. Requirements | `requirements.md` | pending |
 | 4. Design | `design.md` | pending |
@@ -56,6 +56,15 @@ _None._
                            live under discovery/obsidian-cli-mcp-expansion/
                            (SYNTHESIS.md is the entry point) — analyst should
                            cite them as upstream evidence during /spec:research.
+2026-05-24 (analyst):      idea.md complete; gate PASS. Open CLARs MHP-002/
+                           003/004 carried forward to research with current
+                           resolution status noted. Researcher should converge
+                           on tier-policy thresholds (CLAR-MHP-002) and
+                           confirm webviewer carve-out (CLAR-MHP-003) before
+                           handoff to PM. Q4–Q7 added in idea.md surface
+                           audit-log format, tool naming, system-prompt
+                           addendum, DevTools settings ergonomics as new
+                           research-stage gaps.
 ```
 
 ## Open clarifications

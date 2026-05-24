@@ -4,7 +4,7 @@ title: "Host-side MCP proposal queue + Tier-A read expansion + tier-policy UX"
 feature_slug: mcp-host-side-proposals
 type: feature
 roadmap_status: planned
-stage: idea
+stage: research
 github_url: https://github.com/Luis85/specorator/issues/430
 labels: []
 milestone: null
@@ -66,3 +66,4 @@ Out of scope (deferred to follow-up specs):
 | Date | Stage | Event |
 |---|---|---|
 | 2026-05-24 | idea | Issue created by `/spec:start` |
+| 2026-05-24 | research | `idea.md` complete (gate PASS); handed off to analyst for `/spec:research` |
