@@ -1,10 +1,10 @@
 ---
 feature: chat-core
 area: CC
-current_stage: tasks
+current_stage: implementation
 status: active
 last_updated: 2026-05-24
-last_agent: dev (implement — UI + wire-in batch)
+last_agent: dev (implement — T-CC-032 verify gate)
 epic: claudian-reboot
 phase: P1
 integration_branch: next
@@ -16,8 +16,8 @@ artifacts:
   design.md: complete (Parts A/B/C; ADR-CC-001 ACCEPTED — human-blessed 2026-05-24, charter §6a)
   spec.md: complete (SPEC-CC-001..023; 23 spec items + 17 TEST-CC scenarios)
   tasks.md: complete (TASKS-CC-001 — 32 T-CC tasks, TDD-ordered; next: /spec:implement)
-  implementation-log.md: in-progress (domain-foundation + infra-runtimes/keys/factory + application/markdown + UI + wire-in done: T-CC-001..029, 027; the chat surface now mounts statically in the sidebar + `npm run dev`; remaining: T-CC-030 npm-run-dev smoke, T-CC-031 manual real-CLI [human], T-CC-032 verify+parity+draft-PR)
-  test-plan.md: in-progress (T-CC-001 baseline reference + streaming-feel note recorded; manual legs scheduled)
+  implementation-log.md: in-progress (T-CC-001..030, 032 done; the chat surface mounts statically in the sidebar + `npm run dev`; verify + test:all GREEN; remaining: T-CC-031 manual real-CLI [human-owned] + parity screenshots [human])
+  test-plan.md: in-progress (T-CC-001 baseline reference + streaming-feel note recorded; T-CC-030 standalone-mount smoke green [tests/ui/main.test.ts]; manual TEST-CC-017/031 scheduled for the human at the PR)
   parity-screenshots.md: in-progress (T-CC-001 baseline column scaffolded; Specorator column at /spec:review)
   test-report.md: pending
   review.md: pending
@@ -523,4 +523,41 @@ as the visual/parity truth. Reuse the discarded AUX/MPS chat design + `--sp-*` t
                           full npm run verify + npm run test:all + parity sign-off at review + draft PR into next).
                           The plugin mounts the chat surface statically today (sidebar + npm run dev); the smoke
                           leg confirms the streaming feel against MockBridge.
+
+2026-05-24 (dev, implement — T-CC-032 verify gate): closed the final batch on feature/chat-core.
+                          - Fixed the one verify blocker: tests/ui/styles/tokens.test.ts §4.2 provider-selector
+                            check hard-coded double quotes; prettier normalises CSS attribute-selector quotes to
+                            single, so the P1 `prettier --write` on tokens.css (T-CC-027) flipped the four
+                            .specorator-root[data-provider=...] selectors to single quotes and broke the test
+                            (verify has no format:check, so the drift slipped through P0). Made the check
+                            quote-agnostic (presence is the contract; the quote is a prettier formatting detail).
+                            Commit dd22f72.
+                          - `npm run verify` GREEN: 432/432 unit tests, 0 lint errors (3 pre-existing warnings:
+                            eslint.config max-lines, 2x ErrorBoundary one-component-per-file), manifest 0.0.1 /
+                            minAppVersion 1.12.7 UNTOUCHED, 7 workflows SHA-pinned, docs:api + scaffold +
+                            git-diff-check clean.
+                          - `npm run test:all` GREEN (432 unit + 1 storybook). First run reported 1 failed
+                            storybook FILE (AgentPanelRoot.stories.ts: "outside of Vite serving allow list",
+                            resolving @storybook/addon-vitest to the MAIN-tree node_modules) — NOT a code defect:
+                            the worktree's node_modules was incomplete (777 packages missing). `npm install`
+                            materialised them locally; re-run clean (1/1). CI (fresh checkout, node_modules at the
+                            repo root = Vite root) is unaffected.
+                          - styles.css regenerated + committed (b6b3b8e): the committed copy predated P1's chat CSS
+                            + 8 --sp-* chat tokens (build was deferred to this gate). Vite emits it as a tracked
+                            artifact; deterministic (identical hash across two builds). Required current for the
+                            test-vault deploy + release-preflight.
+                          - T-CC-030 (standalone smoke): the deterministic leg (tests/ui/main.test.ts asserts the
+                            chat surface mounts) is green; the live browser `npm run dev` feel pairs with the human
+                            manual pass.
+                          Verification: build + build:web + bundle-size + docs:api all green inside verify.
+                          NOT pushed yet. manifest.json untouched.
+
+                          >>> CHECKPOINT REQUIRED (human) <<< Two human-owned legs remain before P2:
+                          (1) TEST-CC-031 — run the real `claude` CLI in Obsidian from the test-vault build
+                              (D:/TestVault) + confirm NO secret is written to data.json (NFR-CC-006 / NG10).
+                          (2) Parity screenshots — 320/520/720 widths x light+dark x the 5 states, vs claudian-main,
+                              recorded in parity-screenshots.md (charter §5 acceptance).
+                          Agent must NOT self-claim either. Next agent action: deploy the P1 build to D:/TestVault,
+                          then open the P1 draft PR (feature/chat-core -> next) with the parity evidence template +
+                          the manual checklist for the human.
 ```
