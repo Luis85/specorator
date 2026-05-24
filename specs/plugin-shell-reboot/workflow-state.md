@@ -3,7 +3,7 @@ feature: Plugin shell reboot (P0 — Claudian-shaped rewrite foundation)
 area: PSR
 slug: plugin-shell-reboot
 current_stage: tasks
-status: active
+status: paused
 last_updated: 2026-05-24
 last_agent: planner (Stage 6)
 epic: claudian-reboot
