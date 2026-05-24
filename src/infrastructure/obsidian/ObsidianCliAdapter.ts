@@ -11,6 +11,7 @@
  * binary and so PATH/settings changes between calls are honoured (the closure is
  * read fresh on every invocation).
  */
+import * as path from 'node:path'
 import type { EventEmitter } from 'node:events'
 import type {
   ObsidianCliPort,
@@ -56,7 +57,8 @@ export class ObsidianCliAdapter implements ObsidianCliPort {
   }
 
   get available(): boolean {
-    return this._resolvePath().trim() !== ''
+    const bin = this._resolvePath().trim()
+    return bin !== '' && path.isAbsolute(bin)
   }
 
   async run(
@@ -67,6 +69,18 @@ export class ObsidianCliAdapter implements ObsidianCliPort {
     if (bin === '') {
       return err(
         new ObsidianCliError('not-configured', 'No Obsidian CLI path is configured.'),
+      )
+    }
+    // Reject relative or bare command names — they would resolve through PATH and
+    // could execute an unintended binary if PATH is shadowed (REQ-OCM-008, security
+    // hardening from review feedback). The settings UI documents the absolute-path
+    // contract; enforce it here as the last line of defence before spawn.
+    if (!path.isAbsolute(bin)) {
+      return err(
+        new ObsidianCliError(
+          'not-configured',
+          `Obsidian CLI path must be absolute (got \`${bin}\`).`,
+        ),
       )
     }
 

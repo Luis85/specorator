@@ -68,8 +68,11 @@ afterEach(() => {
 })
 
 describe('ObsidianCliAdapter', () => {
-  it('available reflects whether a path is configured', () => {
+  it('available reflects whether an absolute path is configured', () => {
     expect(new ObsidianCliAdapter({ spawn: makeFakeSpawn().spawn, resolvePath: () => '' }).available).toBe(false)
+    expect(
+      new ObsidianCliAdapter({ spawn: makeFakeSpawn().spawn, resolvePath: () => 'obsidian' }).available,
+    ).toBe(false)
     expect(
       new ObsidianCliAdapter({ spawn: makeFakeSpawn().spawn, resolvePath: () => '/bin/obsidian' }).available,
     ).toBe(true)
@@ -83,6 +86,20 @@ describe('ObsidianCliAdapter', () => {
 
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.error.code).toBe('not-configured')
+    expect(fake.calls).toHaveLength(0)
+  })
+
+  it('rejects a non-absolute path as not-configured without spawning (security: no PATH lookup)', async () => {
+    const fake = makeFakeSpawn()
+    const adapter = new ObsidianCliAdapter({ spawn: fake.spawn, resolvePath: () => 'obsidian' })
+
+    const res = await adapter.run('search', ['query=foo'])
+
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.error.code).toBe('not-configured')
+      expect(res.error.message).toContain('absolute')
+    }
     expect(fake.calls).toHaveLength(0)
   })
 
