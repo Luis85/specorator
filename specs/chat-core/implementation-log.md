@@ -68,3 +68,21 @@ SHA.
   T-CC-004's target.)
 - **Outcome:** done. eslint + prettier green on `src/domain/chat/**`; no `obsidian`/`node:*` import.
 - **Deviation:** none.
+
+### T-CC-004 🔨 — `ChatRuntimePort` + `MarkdownRenderPort` + barrel re-exports (dev)
+
+- **Spec:** SPEC-CC-001, SPEC-CC-007, SPEC-CC-009, REQ-CC-001, REQ-CC-002a, REQ-CC-006.
+- **Files:** `src/domain/ports/ChatRuntimePort.ts` (new — exact 9-member interface, verbatim from
+  SPEC-CC-001 + ADR-CC-001 Decision block, with the error-as-chunk convention documented);
+  `src/domain/ports/MarkdownRenderPort.ts` (new — `MarkdownInline`/`MarkdownNode`/`SafeRenderResult`
+  + one-method `render`); `src/domain/ports/index.ts` (edited — added the chat-port + chat-domain
+  re-exports, kept + extended the "do NOT compose into an aggregate" header per ADR-CC-001 §5).
+- **GREEN:** the prior RED test TEST-CC-003 (`tests/domain/ports/ChatRuntimePort.test.ts`) now
+  passes — `npm run typecheck` exit 0 (the `Equals<keyof ChatRuntimePort, <nine keys>>` assertion
+  resolves `true`; the TS2307/TS2322 errors are gone). `npx vitest run --project unit
+  tests/domain/ports/ChatRuntimePort.test.ts tests/domain/chat/StreamChunk.test.ts` → 3 passed.
+- **Outcome:** done. eslint + prettier green.
+- **Deviation:** `MarkdownNode` is declared as an `interface` (not the spec's `type {…}` literal) to
+  satisfy the repo's `@typescript-eslint/consistent-type-definitions` rule. Structurally identical
+  (same shape, same barrel re-export, same declarative consumption) — a lint-conformance form, not a
+  contract change. `MarkdownInline` (a union) stays a `type`.
