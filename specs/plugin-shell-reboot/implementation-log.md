@@ -247,3 +247,21 @@ convergence.
 > tests are GREEN. Tree-wide `npm run typecheck` is red, tracing only to
 > not-yet-deleted chat/feature/MCP/onboarding consumers — the Wave 0 entry point
 > for Phase B.
+
+## Phase B — delete waves 0→5 (each ends typecheck green-or-expected)
+
+### T-PSR-017 — Wave 0: UI leaves (dev, OC-PSR-7)
+
+- Deleted `src/ui/{AppRoot.vue, agent/AgentSidepanelRoot.vue, router/**, stores/**,
+  views/**, layouts/**}`, all of `src/ui/components/**` **except `ErrorBoundary.vue`**,
+  and the 21 non-port composables (kept the six ADR-008 port composables). Deleted
+  the mirrored tests under `tests/ui/**` (kept `ErrorBoundary` + `AgentPanelRoot`),
+  `stories/**`, the obsolete fat `tests/domain/settings/PluginSettings.test.ts`
+  (slim shape covered by TEST-PSR-007), and `tests/__fakes__/chatStoresFacade.ts`.
+  ~345 files removed.
+- **OC-PSR-7 closed:** `ErrorBoundary.vue` retained unedited; T-PSR-011 stays GREEN.
+- **typecheck green-or-expected:** remaining errors trace only to Wave 1 plugin
+  views/wiring (`SpecoratorView`/`AgentSidepanelView`/`loadSettings-migrate`/
+  `CursorSettingsSection`), the chat application + infra adapters/bridges (Wave 2/3),
+  `ObsidianBridge`'s chat/icon methods (Wave 3 de-couple), and their tests. No
+  surviving-surface file errors. REQ-PSR-004/005; SPEC-PSR-006 (consumers), §9.
