@@ -89,11 +89,11 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** —
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `specs/rich-rendering/parity-screenshots.md` exists with the per-renderer × 320/520/720 ×
+  - [x] `specs/rich-rendering/parity-screenshots.md` exists with the per-renderer × 320/520/720 ×
         light/dark baseline matrix scaffolded, baseline column captured from `D:\Projects\claudian-main`.
-  - [ ] The incremental-render qualitative baseline note (NFR-RR-014) recorded in `test-plan.md`
+  - [x] The incremental-render qualitative baseline note (NFR-RR-014) recorded in `test-plan.md`
         (canonical sink); linked to #434.
-  - [ ] No file under `src/` changed.
+  - [x] No file under `src/` changed.
 
 ---
 
@@ -116,11 +116,11 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** —
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/domain/chat/StreamChunk.rr.test.ts`, `tests/domain/chat/ContentBlock.test.ts`,
+  - [x] `tests/domain/chat/StreamChunk.rr.test.ts`, `tests/domain/chat/ContentBlock.test.ts`,
         `tests/domain/chat/ToolCall.test.ts`, `tests/domain/chat/Subagent.test.ts`,
         `tests/domain/chat/TodoItem.test.ts`, `tests/domain/chat/diff/Diff.test.ts`,
         `tests/domain/chat/ChatMessage.rr.test.ts` exist, naming TEST-RR-001 / 002 / 003.
-  - [ ] Tests fail (RED) because the new domain types / typed `toolUseResult` / grown `ChatMessage`
+  - [x] Tests fail (RED) because the new domain types / typed `toolUseResult` / grown `ChatMessage`
         do not yet exist (compile/run failure is the RED signal).
 
 ### T-RR-003 🔨 — Relax the deleted-symbol guard for `IconPort` / `SpIcon` / `ICON_PORT`
@@ -137,10 +137,10 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** —
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The deleted-symbol guard permits `IconPort` / `SpIcon` / `ICON_PORT` on the new paths; every
+  - [x] The deleted-symbol guard permits `IconPort` / `SpIcon` / `ICON_PORT` on the new paths; every
         other P0-deleted symbol (`IBridge`/`BridgeKey`/`useBridge`/`usePorts`) stays forbidden.
-  - [ ] `npm run lint` green; the relaxation is documented inline in the lint config.
-  - [ ] Implementation-log entry added.
+  - [x] `npm run lint` green; the relaxation is documented inline in the lint config.
+  - [x] Implementation-log entry added.
 
 ### T-RR-004 🔨 — Domain diff types: `ToolUseResult` / `StructuredPatchHunk` / `DiffLine` / `DiffStats` / `ToolDiffData`
 
@@ -154,9 +154,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-002
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The TEST-RR-003 structural test passes (shapes match `diff.ts:5/12/18/27` + `tools.ts:4`).
-  - [ ] `npm run typecheck` + `npm run lint` green; no `obsidian`/`node:*` import in `src/domain/chat/diff/**`.
-  - [ ] Implementation-log entry added.
+  - [x] The TEST-RR-003 structural test passes (shapes match `diff.ts:5/12/18/27` + `tools.ts:4`).
+  - [x] `npm run typecheck` + `npm run lint` green; no `obsidian`/`node:*` import in `src/domain/chat/diff/**`.
+  - [x] Implementation-log entry added.
 
 ### T-RR-005 🔨 — Domain block/tool/subagent/todo types: `ContentBlock` / `ToolCall` / `Subagent` / `TodoItem`
 
@@ -171,10 +171,10 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-002, T-RR-004
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The TEST-RR-002/003 structural tests pass for these unions (P2 subset confirmed; excluded
+  - [x] The TEST-RR-002/003 structural tests pass for these unions (P2 subset confirmed; excluded
         members absent).
-  - [ ] `npm run typecheck` + `npm run lint` green; no `obsidian`/`node:*` import in `src/domain/chat/**`.
-  - [ ] Implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` green; no `obsidian`/`node:*` import in `src/domain/chat/**`.
+  - [x] Implementation-log entry added.
 
 ### T-RR-006 🔨 — `StreamChunk` `toolUseResult` typing edit + additive `ChatMessage` growth
 
@@ -189,9 +189,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-004, T-RR-005
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] TEST-RR-001 + TEST-RR-002 pass (typed `toolUseResult`; `ChatMessage` grows additively; no
+  - [x] TEST-RR-001 + TEST-RR-002 pass (typed `toolUseResult`; `ChatMessage` grows additively; no
         P1 member renamed/removed).
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-RR-007 🔨 — `IconPort` + `IconNode` + `ICON_PORT` key + `@/domain/ports` barrel re-export
 
@@ -205,10 +205,10 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-002, T-RR-003
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `IconPort`/`IconNode` declared (DTO-returning, no DOM sink); `ICON_PORT` key exported;
+  - [x] `IconPort`/`IconNode` declared (DTO-returning, no DOM sink); `ICON_PORT` key exported;
         `@/domain/ports` re-exports both; the "no aggregate" header comment retained.
-  - [ ] `npm run typecheck` + `npm run lint` green; deleted-symbol guard green (relaxed in T-RR-003).
-  - [ ] Implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` green; deleted-symbol guard green (relaxed in T-RR-003).
+  - [x] Implementation-log entry added.
 
 ---
 
@@ -803,10 +803,10 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** —
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The §4.9 tokens exist in `tokens.css`; the reduced-motion guard zeroes `--sp-thinking-pulse-duration`.
-  - [ ] The `lint-style-tokens` guard passes with zero leaks; no P2 component file contains a
+  - [x] The §4.9 tokens exist in `tokens.css`; the reduced-motion guard zeroes `--sp-thinking-pulse-duration`.
+  - [x] The `lint-style-tokens` guard passes with zero leaks; no P2 component file contains a
         hex/raw-var colour; `npm run lint` green.
-  - [ ] Implementation-log entry added.
+  - [x] Implementation-log entry added.
 
 ---
 

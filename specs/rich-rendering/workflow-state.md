@@ -1,10 +1,10 @@
 ---
 feature: rich-rendering
 area: RR
-current_stage: tasks
+current_stage: implementation
 status: active
 last_updated: 2026-05-24
-last_agent: planner (tasks)
+last_agent: dev (implement — domain-foundation batch)
 epic: claudian-reboot
 phase: P2
 integration_branch: next
@@ -17,8 +17,8 @@ artifacts:
   ADR-RR-001: accepted (docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md — human-blessed 2026-05-24)
   spec.md: complete (SPEC-RR-001..034; extends SPEC-CC-* P1 contract; 27 TEST-RR scenarios)
   tasks.md: complete (TASKS-RR-001; 44 tasks T-RR-001..044; full SPEC/REQ/NFR/TEST coverage table)
-  implementation-log.md: pending
-  test-plan.md: pending
+  implementation-log.md: in-progress (domain-foundation batch done: T-RR-001..007, 039; infra/app/ui/wire-in/gate batches remain)
+  test-plan.md: in-progress (TESTPLAN-RR-001; baseline reference + manual TEST-RR-026 / T-RR-043 legs scheduled)
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -43,8 +43,8 @@ artifacts:
 | 4. Design | `design.md` | complete (Parts A/B/C; ADR-RR-001 accepted — human-blessed 2026-05-24) |
 | 5. Specification | `spec.md` | complete (SPEC-RR-001..034; 27 TEST-RR) |
 | 6. Tasks | `tasks.md` | complete (TASKS-RR-001; T-RR-001..044) |
-| 7. Implementation | `implementation-log.md` + code | pending |
-| 8. Testing | `test-plan.md`, `test-report.md` | pending |
+| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation batch T-RR-001..007, 039 done; infra/app/ui/wire-in/gate remain) |
+| 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
@@ -277,6 +277,35 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
                           qa). GUARD-RELAX = T-RR-003 (must land before T-RR-007). The single human-owned leg is
                           T-RR-043 (Obsidian markdown/icon backing + real CLI) — schedule + record it in
                           test-plan.md, never self-claim. Parity screenshots ride #434 at /spec:review (T-RR-044).
+2026-05-24 (dev, implement — domain-foundation batch): Executed the DOMAIN-FOUNDATION batch on
+                          feature/rich-rendering with strict TDD, one Conventional commit per task.
+                          COMPLETED (in order): T-RR-001 baseline docs (d42bdde); T-RR-003 deleted-symbol
+                          guard relax for IconPort/ICON_PORT — SpIcon permitted by construction; positive
+                          control still fires (80cdd71); T-RR-002 RED structural tests, 7 files TEST-RR-001/
+                          002/003, watched fail on typecheck TS2307+TS2322 + a runtime missing-value-import
+                          (7557246); T-RR-004 diff domain types ToolUseResult/StructuredPatchHunk/DiffLine/
+                          DiffStats/ToolDiffData → TEST-RR-003 green (e781f4e); T-RR-005 ContentBlock/ToolCall/
+                          Subagent/TodoItem (+isValidTodoItem) P2 subsets → TEST-RR-002 green (baf866e);
+                          T-RR-006 StreamChunk toolUseResult?:unknown→ToolUseResult edit + additive
+                          ChatMessage.contentBlocks?/toolCalls? → TEST-RR-001+002 green (39c4abc);
+                          T-RR-007 IconPort+IconNode DTO+ICON_PORT key+barrel re-export (92464ed);
+                          T-RR-039 §4.9 --sp-* tokens + --sp-success-rgb, lint:style-tokens clean (5b10e30).
+                          BATCH-END STATE: `npx vue-tsc --noEmit -p tsconfig.lint.json` → 0 errors; `npm run
+                          lint` → 0 errors (3 pre-existing warnings: eslint.config.js max-lines + 2
+                          ErrorBoundary one-component-per-file); lint:style-tokens clean; touched-file tests
+                          → 11 files / 49 tests pass (chat domain 48 incl. all 7 RED-now-GREEN; chatStore
+                          18/18; tokens 7/7; deleted-subsystem guard 2/2). DEVIATION: T-RR-006 also touched
+                          one P1 consumer — chatStore.$reset switched from the object form of $patch to the
+                          mutator form, because the object overload's _DeepPartial no longer resolves once
+                          ChatMessage carries the recursive contentBlocks/toolCalls fields. Behaviour-
+                          preserving; the minimal edit required for T-RR-006 to typecheck; no test assertion
+                          changed. NOT pushed; manifest.json untouched; full verify/build/build:web deferred
+                          to the T-RR-044 gate. NEXT BATCH (infra, SPEC-RR-010..013): FIRST TASK = T-RR-008
+                          (qa — RED: createIconPort on the 3 bridges + Mock/Fixture rich-chunk scripts,
+                          TEST-RR-024/026 U legs), greened by T-RR-009 (IconPort impls) + T-RR-010 (scripted
+                          rich chunks) + T-RR-011 (MarkdownRenderPort Obsidian backing + node-model widening).
+                          The Obsidian backing half is coverage-excluded → manual leg of TEST-RR-026 (T-RR-043,
+                          human-owned, recorded in test-plan.md). T-RR-008 depends on T-RR-007 (done).
 ```
 
 ## Open clarifications
