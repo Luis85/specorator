@@ -1,18 +1,18 @@
 ---
 feature: rich-rendering
 area: RR
-current_stage: idea
+current_stage: requirements
 status: active
 last_updated: 2026-05-24
-last_agent: orchestrator (P2 bootstrap)
+last_agent: pm (requirements)
 epic: claudian-reboot
 phase: P2
 integration_branch: next
 reference: D:\Projects\claudian-main
 artifacts:
-  idea.md: pending
-  research.md: pending
-  requirements.md: pending
+  idea.md: skipped (charter §3.1 + audits + claudian-main stand in — CLAR-RR-001, mirrors P1)
+  research.md: skipped (charter §3.1 + audits + claudian-main stand in — CLAR-RR-001, mirrors P1)
+  requirements.md: draft (PRD-RR-001; held until architect ADR for CLAR-RR-002/003)
   design.md: pending
   spec.md: pending
   tasks.md: pending
@@ -31,9 +31,9 @@ artifacts:
 
 | Stage | Artifact | Status |
 |---|---|---|
-| 1. Idea | `idea.md` | pending |
-| 2. Research | `research.md` | pending |
-| 3. Requirements | `requirements.md` | pending |
+| 1. Idea | `idea.md` | skipped (CLAR-RR-001 — audits + charter stand in, mirrors P1) |
+| 2. Research | `research.md` | skipped (CLAR-RR-001 — audits + charter stand in, mirrors P1) |
+| 3. Requirements | `requirements.md` | in-progress (PRD-RR-001, status `draft`) |
 | 4. Design | `design.md` | pending |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
@@ -110,13 +110,76 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
                           audit-named ports/components. EARS requirements, each mapped to a claudian
                           path + a test, mirroring the P1 PRD discipline. Checkpoint with the human on
                           any charter §6 ADR decision before design proper.
+2026-05-24 (pm, requirements): PRD-RR-001 written at specs/rich-rendering/requirements.md (status
+                          DRAFT, held — mirrors P1's PRD-CC-001 discipline). Idea/research SKIPPED
+                          (CLAR-RR-001: charter §3.1 + frontend/backend audits + claudian-main stand
+                          in, as in P1). 30 EARS requirements REQ-RR-001..027 grouped by sub-surface,
+                          each mapped 1:1 to a claudian path/symbol + a testable Given/When/Then:
+                          A stream→chunk emit/dispatch (RR-001..007 → chat.ts:137 + StreamController +
+                          RunChatTurnUseCase.dispatchChunk default branch); B message-model growth
+                          (RR-010..012 → ChatMessage chat.ts:39 contentBlocks/toolCalls, ContentBlock
+                          chat.ts:31, MessageRenderer); C collapsible primitive (RR-015..018 →
+                          collapsible.ts + the 2px rail); D tool-call render (RR-019/019a/020/020a →
+                          ToolCallRenderer + toolIcons/toolNames/toolInput/toolResultContent); E
+                          thinking (RR-013/014 → ThinkingBlockRenderer); F todo (RR-022/023 →
+                          todoUtils + todo.ts); G write/edit + word-diff (RR-025..027 →
+                          WriteEditRenderer + DiffRenderer + diff.ts); H subagent + lifecycle
+                          (RR-021/021a/021b → SubagentRenderer + subagentLifecycleResolution +
+                          SubagentInfo, Claude path only — Codex/Opencode deferred P9); I usage render
+                          (RR-024/024a → usageInfo + UsageInfo chat.ts:165, surfacing what P1 stored).
+                          14 NFRs NFR-RR-001..014: DDD + 3 bridges, **NFR-RR-006 no `v-html`/innerHTML
+                          = the hardest, called out explicitly** (declarative safe nodes for tool/
+                          thinking/todo/diff/markdown), Result<T,E>, <script setup>, tests mirror src/
+                          + data-testid POs, coverage 80/70/80/80, --sp-* token parity (perceptual,
+                          not pixel; reuse AUX work as reference not copy), WCAG 2.2 AA (collapsibles
+                          keyboard + ARIA), manifest untouched, no secret/no migration. Success metrics
+                          + release criteria set; counter-metric = scope leakage vs the NG list (incl.
+                          the P7 Inline* widgets and P6 meter widget). Non-goals enumerate NG1..NG10
+                          deferring tabs/composer/inline-interactive/attachments/toolbar/MCP/providers.
+                          OPEN CLARS sharpened/added: CLAR-RR-002 is ADR-worthy + BLOCKS `accepted`
+                          (the union+ChatMessage growth, incl. the toolUseResult:unknown→SDKToolUseResult
+                          shape divergence flagged vs claudian — do not silently change); CLAR-RR-003
+                          is the render-seam + MarkdownRenderPort-backing design call (CLAR-CC-005's
+                          "defer to P2" lands here); CLAR-RR-001/004/005/006 non-blocking/design-time.
+                          HAND-OFF → /spec:design (architect Part A UX / Part B UI / Part C ADRs):
+                          (1) file the CLAR-RR-002 ADR (StreamChunk + ChatMessage additive growth +
+                          typed toolUseResult) BEFORE design proper — checkpoint with the human, charter
+                          §6; (2) resolve CLAR-RR-003 render seam + port backing in design; (3) Part B
+                          token map for every renderer (statuses, async ladder, diff washes, the rail
+                          indents, mono sizes) from --sp-* not hardcoded hex; capture P2 parity
+                          screenshots (matrix coordinated with #434). current_stage stays at
+                          requirements; status DRAFT until CLAR-RR-002 blessed. No design/code; not committed.
 ```
 
 ## Open clarifications
 
 - [ ] CLAR-RR-001 — Idea/research depth: thin `idea.md` vs charter §3.1 + audits standing in (mirror P1)?
-- [ ] CLAR-RR-002 — `StreamChunk` additive members final shape (thinking/tool_use/tool_result/
-      tool_output/context_compacted/subagent) vs `claudian-main` `chat.ts:137` — bless the union growth.
-- [ ] CLAR-RR-003 — Render seam: one `MessageBlockRenderer` component tree vs per-type components;
-      does the minimal `MarkdownRenderPort` (P1) need the Obsidian `MarkdownRenderer` backing now (P2,
-      per CLAR-CC-005's "defer to P2")?
+      **(pm recommendation: mirror P1 — audits + charter stand in; idea/research skipped above.
+      Non-blocking. Owner: analyst/pm.)**
+- [ ] CLAR-RR-002 — `StreamChunk` + `ChatMessage` additive growth — **ADR-worthy, blocks `accepted`.**
+      Members already declared in `src/domain/chat/StreamChunk.ts`; confirmed vs `claudian-main`
+      `chat.ts:137`: names + field shapes **match**, with ONE divergence to flag — our
+      `tool_result`/`subagent_tool_result` carry `toolUseResult?: unknown`, Claudian uses typed
+      `SDKToolUseResult` (`diff.ts:27`, `{ structuredPatch?, filePath?, … }`). The Write/Edit diff
+      (REQ-RR-026) reads `structuredPatch`, so P2 likely tightens `unknown` → typed. The growth also
+      adds `ChatMessage.contentBlocks`/`toolCalls` (P1 excluded, REQ-CC-006) + new domain types
+      `ContentBlock`/`ToolCallInfo`/`DiffLine`/`DiffStats`/`SubagentInfo`/`TodoItem`. **Do not silently
+      change the union — architect ADR (mirroring ADR-CC-001) before design proper. Owner: architect.**
+- [ ] CLAR-RR-003 — Render seam + `MarkdownRenderPort` backing (design-time). (1) one
+      `MessageBlockRenderer` tree switching on `ContentBlock.type` (mirrors `MessageRenderer`) vs
+      per-type components behind a thin dispatcher. (2) P1 `MarkdownRenderPort` ships paragraph-only
+      `safeMarkdownRender`; CLAR-CC-005 deferred the Obsidian `MarkdownRenderer` backing **to P2** —
+      decide: upgrade the backing to Obsidian's renderer **while keeping the structured-node DTO
+      shape** (so UI stays declarative, NFR-RR-006 no `v-html`), or extend the safe node model.
+      **(pm recommendation: per-type components behind a thin dispatcher; upgrade backing without
+      changing the return shape. ADR only if the port shape changes. Owner: architect — resolve at design.)**
+- [ ] CLAR-RR-004 *(new — design-time, non-blocking)* — Provider-lifecycle subagent split: P2 scopes
+      the Claude Task/Agent subagent path only; Codex/Opencode `spawn_agent`/`wait` consolidation
+      **deferred to P9** (NG7, REQ-RR-021b). Confirm the seam at design. Owner: pm/architect.
+- [ ] CLAR-RR-005 *(new — design-time, non-blocking)* — Which of `ToolCallRenderer`'s ~14 specialised
+      expanded renderers are P2 vs deferred. pm recommendation: generic expanded renderer + Write/Edit
+      diff in P2; niche ones (web-search links, tool-search, agent-lifecycle JSON) deferable. Owner:
+      ux-ui-designer/architect.
+- [ ] CLAR-RR-006 *(new — design-time, non-blocking)* — Thinking brand colour: drive from `--sp-accent`
+      (optional `[data-provider]` aliasing), not Claudian's hardcoded `#D97757`/compact cyan `#5bc0de`
+      (charter §1, NFR-RR-007). Owner: ux-ui-designer/brand-reviewer.
