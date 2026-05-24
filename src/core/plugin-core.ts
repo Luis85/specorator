@@ -23,6 +23,19 @@ export interface CorePorts {
    * for the auto-start path — pass `() => true` to opt in.
    */
   readonly isMcpServerEnabled?: () => boolean
+  /**
+   * Optional lifecycle hook fired once after `mcpServer.start()` succeeds and
+   * `_mcpRunning` flips to `true`. Used by the host plugin to surface the
+   * loopback URL to external clients (e.g. writing `.mcp.json` at the vault
+   * root). Errors are caught and logged — they never strand the running flag.
+   */
+  readonly onMcpServerStarted?: (config: McpConnectionConfig) => Promise<void> | void
+  /**
+   * Optional lifecycle hook fired once after `mcpServer.stop()` returns and
+   * `_mcpRunning` flips to `false`. Mirror of `onMcpServerStarted`. Errors
+   * are caught and logged — they never strand the stopped flag.
+   */
+  readonly onMcpServerStopped?: () => Promise<void> | void
 }
 
 // ── Validation helpers ────────────────────────────────────────────────────────
@@ -419,6 +432,14 @@ export class PluginCore {
       return
     }
     this._mcpRunning = true
+    const onStarted = this.ports.onMcpServerStarted
+    if (onStarted !== undefined) {
+      const config = this.ports.mcpServer.getConnectionConfig()
+      const hook = await tryAsync(() => Promise.resolve(onStarted(config)))
+      if (!hook.ok) {
+        this.ports.logger.error('onMcpServerStarted hook failed', hook.error)
+      }
+    }
   }
 
   /**
@@ -436,6 +457,13 @@ export class PluginCore {
     // Mark stopped even on adapter error: the running invariant is owned by
     // PluginCore, and a failed stop should not strand future start calls.
     this._mcpRunning = false
+    const onStopped = this.ports.onMcpServerStopped
+    if (onStopped !== undefined) {
+      const hook = await tryAsync(() => Promise.resolve(onStopped()))
+      if (!hook.ok) {
+        this.ports.logger.error('onMcpServerStopped hook failed', hook.error)
+      }
+    }
   }
 
   private async initModule(

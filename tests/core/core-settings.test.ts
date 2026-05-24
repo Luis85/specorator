@@ -297,6 +297,26 @@ describe('coreSettingsModule.validateSettings', () => {
       expect(coreSettingsModule.settingsVersion).toBe(3)
     })
   })
+
+  describe('writeProjectMcpConfig (terminal-CLI MCP parity)', () => {
+    it('defaults to true when missing', () => {
+      const out = validate({ locale: 'en' })
+      expect(out.writeProjectMcpConfig).toBe(true)
+    })
+
+    it.each([null, undefined, 'yes', 42, {}, []] as const)(
+      'coerces non-boolean writeProjectMcpConfig (%p) to the default true',
+      (value) => {
+        const out = validate({ writeProjectMcpConfig: value })
+        expect(out.writeProjectMcpConfig).toBe(true)
+      },
+    )
+
+    it('preserves a literal false', () => {
+      const out = validate({ writeProjectMcpConfig: false })
+      expect(out.writeProjectMcpConfig).toBe(false)
+    })
+  })
 })
 
 describe('coreSettingsModule.settingsSchema', () => {
@@ -318,6 +338,9 @@ describe('coreSettingsModule.settingsSchema', () => {
       'autoPreferProvider',
       'providerModel',
       'chatTabCap',
+      // `writeProjectMcpConfig` is rendered next to the MCP server status row
+      // in settings.ts; not driven through the generic module schema loop.
+      'writeProjectMcpConfig',
     ]
     const expected = Object.keys(DEFAULT_SETTINGS).length - manuallyRenderedKeys.length
     expect(coreSettingsModule.settingsSchema?.fields).toHaveLength(expected)

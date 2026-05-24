@@ -133,6 +133,9 @@ export const coreSettingsModule = defineModule<PluginSettings>({
       // REQ-OCM-016 — additive string field; missing/non-string coerces to '' so
       // both fresh and upgrading installs land on the default without a version bump.
       obsidianCliPath: coerceTrimmedString(r.obsidianCliPath, DEFAULT_SETTINGS.obsidianCliPath),
+      // Additive boolean; missing/non-boolean coerces to true (default-on) so
+      // existing installs auto-opt-in to the terminal-CLI parity behaviour.
+      writeProjectMcpConfig: coerceBoolean(r.writeProjectMcpConfig, DEFAULT_SETTINGS.writeProjectMcpConfig),
       // SPEC-MPS-001 §2.7 — the new provider-selection carrier plus the
       // five companion fields. `transportKind` is intentionally NOT
       // re-emitted here: migration (`migrateProviderSelection`) translates

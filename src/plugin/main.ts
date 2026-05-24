@@ -49,6 +49,13 @@ import { useMessagesStore } from '@/ui/stores/messagesStore'
 import { useChatProviderStore } from '@/ui/stores/chatProviderStore'
 import { parseProviderUriValue, nextProviderSelection } from './uriProviderParam'
 
+/**
+ * Vault-relative path of the auto-managed Claude CLI project config. Picked up
+ * by `claude` from cwd; mirrored from the loopback MCP server URL so terminal
+ * sessions inside the vault see the same MCP server as the embedded sidepanel.
+ */
+const PROJECT_MCP_CONFIG_PATH = '.mcp.json'
+
 export default class SpecoratorPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS }
   core: PluginCore | null = null
@@ -165,6 +172,24 @@ export default class SpecoratorPlugin extends Plugin {
       (s) => this.updateSettings(s),
     )
     const translationPort: TranslationPort = { t: i18nTranslate }
+    // Hold a reference to the MCP server adapter so its loopback URL can be
+    // threaded into the Claude subprocess argv (see `getMcpConfigJson` below).
+    // Otherwise the agent never learns about the in-process MCP server.
+    // `bridge` is captured locally so the lifecycle hooks below close over a
+    // narrowed non-null reference (TS does not narrow `this.bridge` across
+    // closures even though it was assigned a few lines above).
+    const bridge = this.bridge
+    const mcpServerAdapter = new ObsidianMcpServerAdapter(
+      bridge,
+      new FeatureRepository(bridge, bridge),
+      () => this.settings.specsFolder,
+      new ObsidianMetadataCacheAdapter(this.app),
+      new ObsidianCanvasAdapter(bridge),
+      new FeedbackService(bridge, bridge),
+      // ADR-018 — CLI-backed tool group. The adapter reads `obsidianCliPath`
+      // fresh on each call; the group is registered only when a path is set.
+      new ObsidianCliAdapter({ spawn, resolvePath: () => this.settings.obsidianCliPath }),
+    )
     this.core = new PluginCore(ALL_MODULES as ReadonlyArray<ModuleDescriptor>, {
       settings: this.bridge,
       vault: this.bridge,
@@ -175,20 +200,34 @@ export default class SpecoratorPlugin extends Plugin {
       i18nMerge,
       // REQ-AVS-005: inject FeedbackService into the MCP adapter so
       // overwrite-protection notices fire consistently on both the UI and MCP
-      // code paths. Without this, MCP-driven `workflow_create_artifact` and
-      // `workflow_propose_advance` accepts silently preserve existing files.
-      mcpServer: new ObsidianMcpServerAdapter(
-        this.bridge,
-        new FeatureRepository(this.bridge, this.bridge),
-        () => this.settings.specsFolder,
-        new ObsidianMetadataCacheAdapter(this.app),
-        new ObsidianCanvasAdapter(this.bridge),
-        new FeedbackService(this.bridge, this.bridge),
-        // ADR-018 — CLI-backed tool group. The adapter reads `obsidianCliPath`
-        // fresh on each call; the group is registered only when a path is set.
-        new ObsidianCliAdapter({ spawn, resolvePath: () => this.settings.obsidianCliPath }),
-      ),
+      // code paths.
+      mcpServer: mcpServerAdapter,
       isMcpServerEnabled: () => this.settings.mcpServerEnabled,
+      // Mirror the loopback MCP server URL to a `.mcp.json` at the vault root
+      // so a `claude` CLI session launched from a terminal inside the vault
+      // sees the same MCP server as the embedded sidepanel. Opt-out via
+      // `writeProjectMcpConfig`. Stop hook removes the file so a stale URL
+      // does not survive plugin/Obsidian restart.
+      // Dotfiles like `.mcp.json` are not tracked by Obsidian's vault index,
+      // so the regular `VaultPort.writeFile` path (which goes through
+      // `vault.create` for unknown paths) throws "File already exists" on
+      // restart. Use the low-level vault adapter — it overwrites by default
+      // and treats dotfiles as regular FS entries.
+      onMcpServerStarted: async (config) => {
+        if (!this.settings.writeProjectMcpConfig) return
+        const payload = JSON.stringify(
+          { mcpServers: { specorator: { type: 'http', url: config.url } } },
+          null,
+          2,
+        )
+        await this.app.vault.adapter.write(PROJECT_MCP_CONFIG_PATH, payload)
+      },
+      onMcpServerStopped: async () => {
+        if (!this.settings.writeProjectMcpConfig) return
+        if (await this.app.vault.adapter.exists(PROJECT_MCP_CONFIG_PATH)) {
+          await this.app.vault.adapter.remove(PROJECT_MCP_CONFIG_PATH)
+        }
+      },
     })
 
     setLocale(this.settings.locale as SupportedLocale)
@@ -247,6 +286,16 @@ export default class SpecoratorPlugin extends Plugin {
       // by agent tool calls (Read/Glob/Grep) resolve inside the user's vault
       // rather than Obsidian's renderer cwd.
       getVaultBasePath: () => this.bridge?.getVaultBasePath() ?? null,
+      // INV-7 — surface the in-process MCP server URL to the Claude CLI so
+      // the agent can call vault tools. Returns null when the server is off
+      // or hasn't bound a port yet; `getConnectionConfig` throws in that
+      // state, so the trySync collapse degrades to "no MCP".
+      getMcpConfigJson: () => {
+        if (!this.settings.mcpServerEnabled) return null
+        const probe = trySync(() => mcpServerAdapter.getConnectionConfig().url)
+        if (!probe.ok) return null
+        return JSON.stringify({ mcpServers: { specorator: { type: 'http', url: probe.value } } })
+      },
     })
     this.register(() => { this._subscriptionAdapter?.shutdown() })
 

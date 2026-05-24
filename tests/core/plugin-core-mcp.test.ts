@@ -196,3 +196,81 @@ describe('PluginCore MCP server sync serialization', () => {
     expect(core.isMcpServerRunning()).toBe(true)
   })
 })
+
+describe('PluginCore MCP server lifecycle hooks', () => {
+  it('calls onMcpServerStarted with the connection config after start succeeds', async () => {
+    const mcpServer = new MockObsidianMcpServerAdapter()
+    const onMcpServerStarted = vi.fn()
+    const core = new PluginCore([], makePorts({
+      mcpServer,
+      isMcpServerEnabled: () => true,
+      onMcpServerStarted,
+    }))
+    await core.init({})
+    expect(onMcpServerStarted).toHaveBeenCalledTimes(1)
+    expect(onMcpServerStarted).toHaveBeenCalledWith(mcpServer.getConnectionConfig())
+  })
+
+  it('calls onMcpServerStopped after stop completes', async () => {
+    const mcpServer = new MockObsidianMcpServerAdapter()
+    const onMcpServerStopped = vi.fn()
+    const core = new PluginCore([], makePorts({
+      mcpServer,
+      isMcpServerEnabled: () => true,
+      onMcpServerStopped,
+    }))
+    await core.init({})
+    await core.destroy()
+    expect(onMcpServerStopped).toHaveBeenCalledTimes(1)
+  })
+
+  it('does NOT call onMcpServerStarted when start fails', async () => {
+    const mcpServer: ObsidianMcpServerPort = {
+      start: async () => { throw new Error('bind failed') },
+      stop: async () => {},
+      getConnectionConfig: () => ({ transport: 'http', url: 'http://127.0.0.1:3001/mcp' }),
+    }
+    const onMcpServerStarted = vi.fn()
+    const core = new PluginCore([], makePorts({
+      mcpServer,
+      isMcpServerEnabled: () => true,
+      onMcpServerStarted,
+    }))
+    await core.init({})
+    expect(onMcpServerStarted).not.toHaveBeenCalled()
+    expect(core.isMcpServerRunning()).toBe(false)
+  })
+
+  it('logs and swallows errors thrown by onMcpServerStarted', async () => {
+    const ports = makePorts({ isMcpServerEnabled: () => true })
+    const mcpServer = new MockObsidianMcpServerAdapter()
+    const core = new PluginCore([], {
+      ...ports,
+      mcpServer,
+      onMcpServerStarted: () => { throw new Error('hook boom') },
+    })
+    await expect(core.init({})).resolves.toBeUndefined()
+    expect(core.isMcpServerRunning()).toBe(true)
+    expect(ports.logger.error).toHaveBeenCalledWith(
+      'onMcpServerStarted hook failed',
+      expect.any(Error),
+    )
+  })
+
+  it('logs and swallows errors thrown by onMcpServerStopped', async () => {
+    const ports = makePorts({ isMcpServerEnabled: () => true })
+    const mcpServer = new MockObsidianMcpServerAdapter()
+    const core = new PluginCore([], {
+      ...ports,
+      mcpServer,
+      onMcpServerStopped: () => { throw new Error('hook boom') },
+    })
+    await core.init({})
+    await expect(core.destroy()).resolves.toBeUndefined()
+    expect(core.isMcpServerRunning()).toBe(false)
+    expect(ports.logger.error).toHaveBeenCalledWith(
+      'onMcpServerStopped hook failed',
+      expect.any(Error),
+    )
+  })
+})

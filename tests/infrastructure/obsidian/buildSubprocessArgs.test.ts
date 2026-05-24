@@ -403,3 +403,56 @@ describe('INV-6: --append-system-prompt only when systemPromptSuffix.length > 0 
     expect(valueAfter(argv, '--append-system-prompt')).toBe('STAGE=spec')
   })
 })
+
+// -----------------------------------------------------------------------------
+// INV-7 — --mcp-config wiring (loopback MCP server URL into Claude CLI)
+// -----------------------------------------------------------------------------
+
+describe('buildSubprocessArgs() — INV-7 (--mcp-config)', () => {
+  const MCP_JSON = '{"mcpServers":{"specorator":{"type":"http","url":"http://127.0.0.1:51234/mcp"}}}'
+
+  it('omits --mcp-config when mcpConfigJson is undefined (default)', () => {
+    const argv = buildSubprocessArgs(makeInput())
+    expect(argv).not.toContain('--mcp-config')
+  })
+
+  it('omits --mcp-config when mcpConfigJson is null', () => {
+    const argv = buildSubprocessArgs(makeInput({ mcpConfigJson: null }))
+    expect(argv).not.toContain('--mcp-config')
+  })
+
+  it('omits --mcp-config when mcpConfigJson is the empty string', () => {
+    const argv = buildSubprocessArgs(makeInput({ mcpConfigJson: '' }))
+    expect(argv).not.toContain('--mcp-config')
+  })
+
+  it('emits --mcp-config <json> verbatim when mcpConfigJson is a non-empty string', () => {
+    const argv = buildSubprocessArgs(makeInput({ mcpConfigJson: MCP_JSON }))
+    expect(valueAfter(argv, '--mcp-config')).toBe(MCP_JSON)
+    expect(countOf(argv, '--mcp-config')).toBe(1)
+  })
+
+  it('emits --mcp-config alongside the structured framing without altering other flags', () => {
+    const argv = buildSubprocessArgs(
+      makeInput({
+        jsonSchema: '{"type":"object"}',
+        resumeSessionId: 'sess_a',
+        systemPromptSuffix: 'STAGE=x',
+        mcpConfigJson: MCP_JSON,
+      }),
+    )
+
+    expect(valueAfter(argv, '--mcp-config')).toBe(MCP_JSON)
+    expect(valueAfter(argv, '--output-format')).toBe('json')
+    expect(valueAfter(argv, '--json-schema')).toBe('{"type":"object"}')
+    expect(valueAfter(argv, '--resume')).toBe('sess_a')
+    expect(valueAfter(argv, '--append-system-prompt')).toBe('STAGE=x')
+    expect(valueAfter(argv, '--permission-mode')).toBe('dontAsk')
+    expect(valueAfter(argv, '--disallowedTools')).toBe(DENYLIST)
+  })
+
+  it('--mcp-config does not violate INV-1 (no --bare token)', () => {
+    const argv = buildSubprocessArgs(makeInput({ mcpConfigJson: MCP_JSON }))
+    expect(argv).not.toContain('--bare')
+  })
+})

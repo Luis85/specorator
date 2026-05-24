@@ -99,6 +99,13 @@ export interface ClaudeSubprocessAdapterDeps {
 	 * to fall back to the renderer cwd.
 	 */
 	readonly getVaultBasePath?: () => string | null;
+	/**
+	 * INV-7 — fresh `--mcp-config` JSON payload per spawn. Returning `null`
+	 * or `''` omits the flag. The closure is invoked on every turn so toggling
+	 * `mcpServerEnabled` or restarting the loopback MCP server takes effect
+	 * on the next turn without reinstantiating the adapter.
+	 */
+	readonly getMcpConfigJson?: () => string | null;
 }
 
 /** SPEC §4.3 `_clampTimeout` floor / ceiling. */
@@ -157,6 +164,7 @@ export class ClaudeSubprocessAdapter implements ChatTransportPort, TransportLife
 	private readonly _logger: LoggerPort;
 	private readonly _resolveCliPath: () => Promise<string | null>;
 	private readonly _getVaultBasePath: () => string | null;
+	private readonly _getMcpConfigJson: () => string | null;
 	// @ts-expect-error TS6133: reserved for telemetry hooks landing in T-ASM-038.
 	private readonly _now: () => number;
 
@@ -166,6 +174,7 @@ export class ClaudeSubprocessAdapter implements ChatTransportPort, TransportLife
 		this._resolveCliPath = deps.resolveCliPath;
 		this._lifecycle = new SubprocessLifecycle({ spawn: deps.spawn, logger: deps.logger });
 		this._getVaultBasePath = deps.getVaultBasePath ?? ((): string | null => null);
+		this._getMcpConfigJson = deps.getMcpConfigJson ?? ((): string | null => null);
 		this._now = deps.now ?? Date.now;
 	}
 
@@ -268,6 +277,7 @@ export class ClaudeSubprocessAdapter implements ChatTransportPort, TransportLife
 					this._emitCompletionTelemetry(args);
 				},
 				getCwd: () => this._getVaultBasePath(),
+				getMcpConfigJson: () => this._getMcpConfigJson(),
 			},
 			this._binaryPath,
 			prompt,
@@ -424,6 +434,7 @@ export class ClaudeSubprocessAdapter implements ChatTransportPort, TransportLife
 			resumeSessionId: resume,
 			jsonSchema: null,
 			planMode: options?.planMode === true,
+			mcpConfigJson: this._getMcpConfigJson(),
 		});
 	}
 

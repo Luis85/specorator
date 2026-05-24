@@ -171,6 +171,19 @@ export class SpecoratorSettingTab extends PluginSettingTab {
 
     const setting = new Setting(this.containerEl).setName('MCP server status').setDesc(parts.join(' '))
     setting.settingEl.setAttribute('data-testid', 'settings-mcp-server-status')
+
+    const projectConfig = new Setting(this.containerEl)
+      .setName('Write `.mcp.json` at vault root')
+      .setDesc(
+        'When the MCP server is running, mirror its URL to `.mcp.json` at the vault root so a `claude` CLI session launched from a terminal inside the vault picks up the same MCP server. The file is removed on stop.',
+      )
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.writeProjectMcpConfig)
+        toggle.onChange(async (value) => {
+          await this.plugin.updateSettings({ writeProjectMcpConfig: value })
+        })
+      })
+    projectConfig.settingEl.setAttribute('data-testid', 'settings-write-project-mcp-config')
   }
 
   /**

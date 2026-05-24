@@ -42,6 +42,13 @@ export interface RunStructuredDeps {
 	 * or returning `null`, the child inherits the renderer cwd.
 	 */
 	readonly getCwd?: () => string | null;
+	/**
+	 * INV-7 — fresh `--mcp-config` JSON payload per call. Returning `null` or
+	 * `''` omits the flag (MCP server disabled or not started). The structured
+	 * one-shot path needs MCP wiring whenever the free-text path does, so the
+	 * agent sees identical tool surfaces across both framings.
+	 */
+	readonly getMcpConfigJson?: () => string | null;
 }
 
 /**
@@ -63,7 +70,8 @@ export async function runSubprocessStructured(
 	}
 
 	const timeoutMs = deps.clampTimeout(options.timeoutMs);
-	const argv = _buildStructuredArgv(prompt, options);
+	const mcpConfigJson = deps.getMcpConfigJson?.() ?? null;
+	const argv = _buildStructuredArgv(prompt, options, mcpConfigJson);
 
 	const cwd = deps.getCwd?.() ?? null;
 	const spawned = deps.lifecycle.spawn(binaryPath, argv, 'structured.spawn_failed', cwd);
@@ -251,6 +259,7 @@ function _parseStructuredStdout(
 function _buildStructuredArgv(
 	prompt: string,
 	options: StructuredCliCallOptions,
+	mcpConfigJson: string | null,
 ): readonly string[] {
 	const resume =
 		typeof options.resumeSessionId === 'string' && options.resumeSessionId.length > 0
@@ -261,5 +270,6 @@ function _buildStructuredArgv(
 		systemPromptSuffix: options.systemPromptSuffix ?? '',
 		resumeSessionId: resume,
 		jsonSchema: createFileEnvelopeJsonSchema,
+		mcpConfigJson,
 	});
 }

@@ -44,6 +44,19 @@ export interface PluginSettings {
 	 */
 	readonly obsidianCliPath: string
 	/**
+	 * When `true` (default), the plugin writes a `.mcp.json` at the vault root
+	 * whenever the loopback MCP server starts and deletes it on stop. This
+	 * lets a `claude` CLI session launched from a terminal inside the vault
+	 * pick up the same MCP server as the embedded sidepanel — `claude` reads
+	 * `.mcp.json` from cwd as one of its standard config sources.
+	 *
+	 * Set to `false` if you manage `.mcp.json` yourself or do not want the
+	 * plugin mutating vault-root files. The plugin only manages the file
+	 * while the MCP server is running; the file is removed cleanly on stop
+	 * or plugin unload.
+	 */
+	readonly writeProjectMcpConfig: boolean
+	/**
 	 * Legacy chat transport mode (`'auto' | 'api-key' | 'subscription' |
 	 * 'degraded'`). Replaced by `providerSelection` in SPEC-MPS-001 §2.7;
 	 * retained as a deprecated optional field so WS-3's selector reshape can
@@ -105,6 +118,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	onboardingComplete: false,
 	claudeCliPath: '',
 	obsidianCliPath: '',
+	writeProjectMcpConfig: true,
 	// `transportKind` intentionally omitted from defaults — the field is
 	// migration input only (see deprecation note above).
 	providerSelection: { forced: 'auto' },

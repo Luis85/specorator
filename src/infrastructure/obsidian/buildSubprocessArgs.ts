@@ -51,6 +51,13 @@ export interface BuildSubprocessArgsInput {
    * propose a plan rather than execute tools. Optional; default `false`.
    */
   readonly planMode?: boolean
+  /**
+   * INV-7 — Serialized `--mcp-config` payload (e.g. `{"mcpServers":{...}}`).
+   * Empty string or `null` → flag omitted. Used to wire the in-process MCP
+   * server (ADR-013/ADR-018) into the Claude CLI subprocess so the agent can
+   * see vault tools. Caller decides which servers to advertise.
+   */
+  readonly mcpConfigJson?: string | null
 }
 
 /**
@@ -101,7 +108,14 @@ export function buildSubprocessArgs(input: BuildSubprocessArgsInput): readonly s
     argv.push('--resume', input.resumeSessionId)
   }
 
-  // Step 6 — freeze so callers cannot mutate the canonical argv (INV-1
+  // Step 6 — INV-7: --mcp-config iff payload is a non-empty string. Threading
+  // the loopback MCP server URL into the subprocess here is the only path that
+  // makes ADR-018 CLI-backed tools discoverable to the embedded agent.
+  if (typeof input.mcpConfigJson === 'string' && input.mcpConfigJson.length > 0) {
+    argv.push('--mcp-config', input.mcpConfigJson)
+  }
+
+  // Step 7 — freeze so callers cannot mutate the canonical argv (INV-1
   // structurally cannot be violated post-return).
   return Object.freeze(argv)
 }
