@@ -8,7 +8,7 @@ owner: dev
 epic: claudian-reboot
 phase: P2
 created: 2026-05-24
-updated: 2026-05-24
+updated: 2026-05-25
 ---
 
 # Implementation log — rich rendering (P2)
@@ -854,3 +854,93 @@ The text below is the original (blocked) record from the surface-integration bat
 - **Outcome:** done. **Deviation:** none. **Out of scope (orchestrator-owned,
   separate):** the markdown-rich-rendering defect (the async `MarkdownRenderPort`
   issue in the Obsidian backing) is a distinct fix and is NOT addressed here.
+
+---
+
+## Batch: async markdown render seam (ADR-RR-002, SPEC-RR-010/011/022 + TEST-RR-028) — 2026-05-25 (dev, implement — async markdown ADR-RR-002)
+
+**What:** fixed the real-Obsidian plain-markdown defect at its root — the sync
+`MarkdownRenderPort.render` raced Obsidian's **async** `MarkdownRenderer.render`,
+always read an empty fragment, and always degraded to the pure paragraph-only
+baseline (no headings/tables/bold/lists; `<!---->` gaps). Per **ADR-RR-002**
+(human-directed 2026-05-25, supersedes ADR-RR-001 §3) the port is now **async**
+(`Promise<SafeRenderResult>`); the `SafeRenderResult`/`MarkdownNode`/`MarkdownInline`
+**DTO field contract is unchanged** — only the `Promise` wrapper is added.
+
+**Streaming cadence chosen (ADR-RR-002 §5):** **replace-latest on a monotonic
+token, microtask-grained — no wall-clock debounce.** Each `content` change
+(and mount) bumps `latestToken` before awaiting the port; a resolution commits
+to reactive state only if its token is still the latest, so a fast text stream
+that supersedes an in-flight render **drops the stale result** instead of
+queueing unbounded awaits. A synchronous **raw-text seed** (one
+`paragraph`/`text` node, or `[]` for whitespace) is painted before the first
+resolve and on every `content` change, so streaming never blank-flashes
+(REQ-CC-004, NFR-RR-014). The pure baseline (Mock/Fixture) resolves on a
+microtask; the production Obsidian rich render settles a tick later and replaces
+the seed. This is the chunk-boundary/at-`done` replace-latest the ADR records
+(either branch satisfies it); a timer debounce was deemed unnecessary because
+the supersede-token already bounds concurrency to one committed render per
+latest `content`.
+
+**TDD (RED → GREEN):**
+- **RED:** updated `tests/application/chat/safeMarkdownRenderPort.test.ts` (await
+  the resolved DTO; assert `render(...)` is a `Promise`; assert the pure
+  `safeMarkdownRender` is **not** a Promise), `tests/infrastructure/mock/createChatRuntime.test.ts`
+  (await the bridge port; assert Promise), and the P1
+  `tests/ui/chat/MarkdownBlock.test.ts` + `.po.ts` (await the resolve). Added
+  **TEST-RR-028** — `tests/ui/chat/MarkdownBlock.rr.test.ts`: a Mock-backed
+  (`Promise.resolve(richResult)`) `MarkdownBlock` mount that, after
+  `flushPromises()`+`nextTick()`, renders **heading + strong + em + list +
+  code_block** from the resolved DTO; asserts the raw-text first paint, the
+  replace-latest drop of a stale resolution, and **no `v-html`** (the `<script>`
+  payload shows as text, never as an element). Watched fail for the right reason
+  (8 failed: bridge `toBeInstanceOf(Promise)` + the component `.nodes` access on
+  a Promise + the rich-node PO queries).
+- **GREEN:**
+  - `src/domain/ports/MarkdownRenderPort.ts` (50–51) — `render(markdown): Promise<SafeRenderResult>`.
+  - `src/application/chat/safeMarkdownRenderPort.ts` (15–17) — `render` returns
+    `Promise.resolve(safeMarkdownRender(markdown))`; the pure transform stays sync.
+  - `src/infrastructure/obsidian/ObsidianBridge.ts` (154–177) —
+    `createMarkdownRenderPort().render` is `async`: `await
+    MarkdownRenderer.render(app, markdown, detached, '', component)` THEN
+    `walkMarkdownFragment(detached)`; degrade to `safeMarkdownRender` on empty
+    fragment or failure; never rejects; `detached.detach()` in `finally`.
+  - `src/infrastructure/mock/MockBridge.ts` (147–155) +
+    `src/infrastructure/localstorage/LocalStorageBridge.ts` (114–120) — keep the
+    shared `safeMarkdownRenderPort` singleton (now async-conformant; comments updated).
+  - `src/ui/chat/MarkdownBlock.vue` (full rewrite) — `<script setup>`: reactive
+    `nodes` ref seeded with the raw text; `onMounted` + `watch(content)` →
+    `renderContent` (await + replace-latest token); declarative recursive VNode
+    render (`h`) of every node kind (paragraph/heading/code_block/list with
+    nested nodes) and inline kind (text/code/strong/em). No `v-html`. New
+    `data-testid`s: `md-heading`, `md-strong`, `md-em`, `md-list-item`,
+    `md-code-block` (existing `markdown-block`/`md-paragraph`/`md-code` kept). PO
+    extended.
+- **Pure path stays sync, P1 byte-identical:** `safeMarkdownRender` is untouched;
+  `safeMarkdownRender.test.ts` (its sync contract) stays GREEN unchanged; the
+  bridge markdown leg resolves the same DTO.
+
+**Gate:**
+- `npx vue-tsc --noEmit -p tsconfig.lint.json` → **0 errors** (full project, incl. `tests/**`).
+- `npx eslint` on all 11 changed files → **0 errors / 0 warnings** (no `v-html`/
+  `innerHTML`/`outerHTML`/`insertAdjacentHTML` sink; no `obsidian` import in the
+  Vue component; `--sp-*` tokens only).
+- `npx vitest run tests/ui/chat` → **105/105** (21 files; MarkdownBlock P1 + rr;
+  MessageTurn/MessageBlocks/MessageList/ChatSurface/Thinking/Subagent unregressed).
+- `npx vitest run` (full) → **672/672 across 89 files** (was 652; +20 from
+  TEST-RR-028 cases + the bridge/adapter Promise assertions). No P1 regression.
+
+**Commits:** `de9da57` (port + adapter + 3 bridges + their tests),
+`1b47476` (MarkdownBlock.vue async-aware + full node-kind render + TEST-RR-028 +
+P1 test/PO await).
+
+- **Not run (T-RR-044 GATE, ORCHESTRATOR-owned):** full `npm run verify` / `build` /
+  `build:web` / `docs:api` / coverage / `npm audit` / `test:all`.
+- **Not pushed.** `manifest.json` untouched. **No new dependency.** Vue never
+  imports `obsidian`; DDD inward imports respected; the Obsidian async walk stays
+  coverage-excluded infra (its real behaviour is the manual **TEST-RR-043** leg).
+- **Outcome:** done. **Deviation:** the rewritten `MarkdownBlock.vue` now renders
+  the **full additive node-kind union** (heading/code_block/list + strong/em),
+  not only paragraphs — this is required by SPEC-RR-011 ("`MarkdownBlock.vue`
+  renders any node kind declaratively") and TEST-RR-028 (heading+strong+list
+  proof), and is the spec contract, not a divergence; recorded here for clarity.

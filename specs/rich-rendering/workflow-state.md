@@ -4,7 +4,7 @@ area: RR
 current_stage: implementation
 status: active
 last_updated: 2026-05-25
-last_agent: dev (CLAR-RR-009 real-CLI P2 reducer defect fix)
+last_agent: dev (implement — async markdown ADR-RR-002: port→Promise, ObsidianBridge awaits real renderer, MarkdownBlock async-aware + full node-kind render, TEST-RR-028)
 epic: claudian-reboot
 phase: P2
 integration_branch: next
@@ -14,10 +14,11 @@ artifacts:
   research.md: skipped (charter §3.1 + audits + claudian-main stand in — CLAR-RR-001, mirrors P1)
   requirements.md: accepted (PRD-RR-001; human-blessed via ADR-RR-001 2026-05-24)
   design.md: complete (DESIGN-RR-001 Parts A/B/C; ADR-RR-001 accepted — human-blessed 2026-05-24)
-  ADR-RR-001: accepted (docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md — human-blessed 2026-05-24)
-  spec.md: complete (SPEC-RR-001..034; extends SPEC-CC-* P1 contract; 27 TEST-RR scenarios)
+  ADR-RR-001: accepted (docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md — human-blessed 2026-05-24; §3 superseded by ADR-RR-002)
+  ADR-RR-002: accepted (docs/adr/ADR-RR-002-async-markdown-render-seam.md — human-directed 2026-05-25; async MarkdownRenderPort.render, supersedes ADR-RR-001 §3)
+  spec.md: complete (SPEC-RR-001..034; extends SPEC-CC-* P1 contract; 28 TEST-RR scenarios incl. the ADR-RR-002 async-render delta TEST-RR-028; SPEC-RR-010/011/022 amended for the async seam)
   tasks.md: complete (TASKS-RR-001; 44 tasks T-RR-001..044; full SPEC/REQ/NFR/TEST coverage table)
-  implementation-log.md: in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 + wire-in T-RR-040..042 done; surface-integration fixes — Gap 1 UsageInfo wire-in DONE [046a0fe], Gap 2 SubagentBlock RESOLVED via CLAR-RR-008 [QA assertion 720b390 + 4-file fix 0fcf123]; T-RR-044 verify gate GREEN [npm run verify: 652 unit, coverage 96.09/89.07/91.56/96.51; npm run test:all: 88 files/653] + styles.css regenerated + deployed to D:/TestVault + draft PR #436 into next opened; T-RR-043 [MANUAL real-Obsidian backing + rich CLI turn, human-owned] + parity screenshots [#434 + P2 states] remain before merge; CLAR-RR-009 real-CLI P2 reducer defect FIXED [RED 96fe4e3 + GREEN d4aefd4 — the production reduceClaudeStream was P1-scope and never emitted P2 chunks from the real claude --output-format stream-json CLI; now maps assistant tool_use/thinking + user tool_result], re-run T-RR-044 to absorb it; the separate markdown-render defect [async MarkdownRenderPort] stays orchestrator-owned)
+  implementation-log.md: in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 + wire-in T-RR-040..042 done; surface-integration fixes — Gap 1 UsageInfo wire-in DONE [046a0fe], Gap 2 SubagentBlock RESOLVED via CLAR-RR-008 [QA assertion 720b390 + 4-file fix 0fcf123]; T-RR-044 verify gate GREEN [npm run verify: 652 unit, coverage 96.09/89.07/91.56/96.51; npm run test:all: 88 files/653] + styles.css regenerated + deployed to D:/TestVault + draft PR #436 into next opened; T-RR-043 [MANUAL real-Obsidian backing + rich CLI turn, human-owned] + parity screenshots [#434 + P2 states] remain before merge; CLAR-RR-009 real-CLI P2 reducer defect FIXED [RED 96fe4e3 + GREEN d4aefd4 — the production reduceClaudeStream was P1-scope and never emitted P2 chunks from the real claude --output-format stream-json CLI; now maps assistant tool_use/thinking + user tool_result], re-run T-RR-044 to absorb it; the separate markdown-render defect [async MarkdownRenderPort] FIXED 2026-05-25 per ADR-RR-002 [SPEC-RR-010/011/022 + TEST-RR-028] — port→Promise<SafeRenderResult> [de9da57], ObsidianBridge.createMarkdownRenderPort now AWAITS the async MarkdownRenderer.render into a detached element THEN walks the populated fragment [de9da57], MarkdownBlock.vue async-aware [reactive nodes, replace-latest streaming cadence, raw-text first-paint seed] + renders the full additive node-kind union declaratively [1b47476]; Mock/LocalStorage keep the now-async safeMarkdownRenderPort singleton; pure safeMarkdownRender stays SYNC + byte-identical; typecheck 0 err, eslint 0 [no v-html sink], vitest full 672/672 across 89 files [+20: TEST-RR-028 + Promise assertions], P1 unregressed; re-run T-RR-044 to absorb this too)
   test-plan.md: in-progress (TESTPLAN-RR-001; baseline reference + TEST-RR-026 dev leg PASS [T-RR-042] + manual TEST-RR-026 / T-RR-043 M leg scheduled)
   test-report.md: pending
   review.md: pending
@@ -43,7 +44,7 @@ artifacts:
 | 4. Design | `design.md` | complete (Parts A/B/C; ADR-RR-001 accepted — human-blessed 2026-05-24) |
 | 5. Specification | `spec.md` | complete (SPEC-RR-001..034; 27 TEST-RR) |
 | 6. Tasks | `tasks.md` | complete (TASKS-RR-001; T-RR-001..044) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 + wire-in T-RR-040..042 done; surface-integration fixes — Gap 1 UsageInfo wire-in DONE [046a0fe], Gap 2 SubagentBlock RESOLVED via CLAR-RR-008 [720b390 + 0fcf123]; gate T-RR-043 [MANUAL, human-owned] + T-RR-044 [verify + PR, orchestrator] remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 + wire-in T-RR-040..042 done; surface-integration fixes — Gap 1 UsageInfo wire-in DONE [046a0fe], Gap 2 SubagentBlock RESOLVED via CLAR-RR-008 [720b390 + 0fcf123]; CLAR-RR-009 real-CLI P2 reducer defect FIXED [96fe4e3 + d4aefd4]; async markdown render seam FIXED 2026-05-25 per ADR-RR-002 [de9da57 + 1b47476 — port→Promise, ObsidianBridge awaits real renderer, MarkdownBlock async-aware + full node-kind render, TEST-RR-028; full suite 672/672]; gate T-RR-043 [MANUAL, human-owned] + T-RR-044 [verify + PR, orchestrator] remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -647,6 +648,112 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
                           the reducer vitest suite (25/25) + the 168-test infrastructure regression (all
                           green). Remaining owner: orchestrator (T-RR-044 + the separate markdown-render
                           defect), human (T-RR-043 manual real-Obsidian leg). Next agent: orchestrator.
+2026-05-25 (architect, ADR amendment + spec delta -- async markdown render seam): Filed ADR-RR-002
+                          (docs/adr/ADR-RR-002-async-markdown-render-seam.md, status ACCEPTED -- human-directed
+                          under charter §6a delegation "review how claudian solved it, apply it; else my
+                          recommendation"; claudian's solution IS the recommendation). ADR-RR-002 SUPERSEDES
+                          ADR-RR-001 §3 (the "Obsidian markdown backing with an unchanged SYNCHRONOUS return
+                          shape" decision); ADR-RR-001 §1 (typed toolUseResult + block model), §2 (per-type
+                          components + dispatcher), §4 (IconPort) all REMAIN IN FORCE. ROOT CAUSE (real-Obsidian
+                          testing): MarkdownRenderPort.render was SYNCHRONOUS but Obsidian's
+                          MarkdownRenderer.render is ASYNC -- the ObsidianBridge backing kicked it off and read
+                          the still-empty element immediately, so the fragment walk always saw empty and always
+                          degraded to the pure paragraph-only baseline (plain render: no headings/tables/bold/
+                          lists; <!----> gaps where bold should be). Grounded in claudian
+                          D:/Projects/claudian-main/src/features/chat/rendering/MessageRenderer.ts renderContent
+                          (lines 625-648): it is `async` and does `await MarkdownRenderer.render(app, md, el, '',
+                          component)`, with escapeMathDelimitersForStreaming/deferMath (lines 30-38/633-635) for
+                          incremental streaming. OUR ADAPTATION vs claudian: claudian renders imperatively into a
+                          live DOM element; we keep the DTO contract -- await the real renderer into a DETACHED
+                          element then walk the fragment into the EXISTING SafeRenderResult/MarkdownNode[] DTO so
+                          Vue stays declarative (NFR-RR-006, no v-html). DECISION: MarkdownRenderPort.render(
+                          markdown: string): Promise<SafeRenderResult> (async; was SafeRenderResult). The DTO
+                          shape is UNCHANGED -- ONLY the return gains a Promise. ObsidianBridge awaits the real
+                          renderer then walks (degrade-on-failure to a single paragraph raw-text node, never
+                          rejects). Mock/LocalStorage return Promise.resolve(safeMarkdownRender(...)) -- synchronous-
+                          fast, byte-identical DTO; the pure safeMarkdownRender itself stays SYNC and is the
+                          Mock/Fixture + production-degrade path. MarkdownBlock.vue becomes async-aware: resolves
+                          nodes into reactive state, re-renders on mount + on content change, shows last-rendered
+                          nodes (or raw text first-render) while in flight, debounce/replace-latest acceptable.
+                          STREAMING CADENCE (recorded for the dev, ADR §5): the pure baseline may render mid-stream
+                          on every chunk (sync-cheap); the Obsidian rich render runs on CHUNK BOUNDARIES or at
+                          `done` (debounced replace-latest), not per keystroke-delta -- preserves NFR-RR-014
+                          (incremental, no batch-on-complete) while bounding the async renderer cost; dev records
+                          the concrete interval/trigger in the impl log (either chunk-boundary debounce OR at-done
+                          satisfies the ADR). REJECTED: (B) richer pure SYNC renderer -- re-implements a markdown
+                          parser CLAR-CC-005 deferred to Obsidian, misses Obsidian syntax (callouts/embeds/math/
+                          tables); (C) imperative v-html / DOM-host render -- violates NFR-RR-006. ADR row added
+                          to docs/adr/README.md; ADR-RR-001 status flipped to Accepted in the README with the
+                          "§3 superseded by ADR-RR-002" note + its frontmatter superseded-by pointer annotated
+                          (§3-scoped; ADR-RR-001 stays accepted as §1/§2/§4 are in force -- body immutable, only
+                          the pointer field touched). SPEC DELTAS (additive, ADR-RR-002-marked): SPEC-RR-010
+                          (async Obsidian backing + await-then-walk + Promise.resolve Mock/LS), SPEC-RR-011
+                          (MarkdownRenderPort.render -> Promise<SafeRenderResult>, DTO field contract unchanged),
+                          SPEC-RR-022 (MarkdownBlock.vue async-aware reactive render + streaming cadence);
+                          TEST-RR-028 NEW (Mock-backed A+U: async port resolves, MarkdownBlock renders rich nodes
+                          heading/strong/list from a resolved SafeRenderResult, no v-html, pure safeMarkdownRender
+                          return is non-promise) + TEST-RR-043 re-scoped (real-Obsidian RICH markdown render +
+                          real-CLI rich turn, MANUAL human-owned, coverage-excluded infra -- the async fix's
+                          end-to-end proof). §9 split now 28 scenarios (26 automatable + 2 manual legs);
+                          coverage table REQ-RR-020a/NFR-RR-006/NFR-RR-014 rows gain TEST-RR-028; §12 async watch
+                          item RESOLVED; quality-gate ADR-shape line updated. RESOLVED CLAR-RR-003 part 2 (the
+                          spec §12 async watch item) -- the pm recommendation's "ADR only if the port shape
+                          changes" condition was met (return shape changed). current_stage stays implementation
+                          (this is a design/spec amendment, not a stage advance). NO code / NO tasks written; NOT
+                          committed.
+                          HAND-OFF -> dev (async-markdown implementation): apply the ADR-RR-002 + spec-delta
+                          changes as a focused TDD batch. SUGGESTED ORDER: (1) flip MarkdownRenderPort.render to
+                          Promise<SafeRenderResult> in src/domain/ports/MarkdownRenderPort.ts (the DTO is
+                          unchanged); (2) update the three bridges -- ObsidianBridge.createMarkdownRenderPort()
+                          await MarkdownRenderer.render into a detached element THEN walk (replace the current
+                          fire-and-read-empty path; degrade-on-failure to a raw-text paragraph node, never
+                          reject), Mock/LocalStorage return Promise.resolve(safeMarkdownRender(...)); (3) make
+                          MarkdownBlock.vue async-aware (reactive nodes, watch content, last-rendered-while-
+                          in-flight, raw-text first-render, debounce/replace-latest); (4) await at every caller +
+                          the Mock/Fixture test span-flatten helpers (compile-surfaced, mechanical). RED-FIRST:
+                          TEST-RR-028 (Mock-backed, QA-owned) before the impl greens it; the pure safeMarkdownRender
+                          stays sync (a unit assertion that its return is a plain SafeRenderResult, not a Promise).
+                          DEV RECORDS the chosen streaming cadence (chunk-boundary debounce OR at-done) in the impl
+                          log. The real-Obsidian RICH render is the MANUAL TEST-RR-043 leg (human-owned, never
+                          self-claimed) -- re-run it after the fix to confirm headings/bold/lists/tables render
+                          (not plain / <!---->). NFR-RR-006 (no v-html) is a DoD line on the MarkdownBlock change
+                          AND the ObsidianBridge walk. This is the orchestrator-flagged separate markdown-render
+                          defect (distinct from CLAR-RR-009's reducer fix). Re-fold into the T-RR-044 verify gate.
+2026-05-25 (dev, implement -- async markdown ADR-RR-002): Implemented the async markdown render seam per
+                          ADR-RR-002 (supersedes ADR-RR-001 §3) + SPEC-RR-010/011/022 + TEST-RR-028. STRICT
+                          TDD. (1) PORT: src/domain/ports/MarkdownRenderPort.ts render -> Promise<SafeRenderResult>
+                          (DTO field contract UNCHANGED -- only the Promise wrapper). (2) OBSIDIAN BACKING:
+                          ObsidianBridge.createMarkdownRenderPort now ASYNC -- awaits MarkdownRenderer.render
+                          into a DETACHED element THEN walks the populated fragment (walkMarkdownFragment,
+                          reused unchanged); degrade to safeMarkdownRender on empty fragment/failure; never
+                          rejects; detach() in finally. This fixes the real-Obsidian plain-render defect at its
+                          root (the prior sync read raced the async renderer). (3) MOCK/LOCALSTORAGE: keep the
+                          shared safeMarkdownRenderPort singleton, now async-conformant (Promise.resolve(
+                          safeMarkdownRender(md))); the PURE safeMarkdownRender STAYS SYNC + byte-identical.
+                          (4) ADAPTER: safeMarkdownRenderPort.render returns Promise.resolve(...). (5)
+                          MARKDOWNBLOCK.vue: async-aware -- reactive nodes ref, onMounted + watch(content) ->
+                          renderContent (await + REPLACE-LATEST via a monotonic token: a resolution commits only
+                          if still latest, dropping superseded in-flight renders); synchronous raw-text SEED
+                          before first resolve + on each content change (no blank flash); declarative recursive
+                          VNode render (h) of the FULL additive node-kind union -- heading/paragraph/code_block/
+                          list[nested] + text/code/strong/em. NO v-html (NFR-RR-006). New data-testids
+                          md-heading/md-strong/md-em/md-list-item/md-code-block (existing ones kept); PO extended.
+                          STREAMING CADENCE CHOSEN: replace-latest on a monotonic token, microtask-grained, NO
+                          wall-clock debounce -- the supersede-token bounds concurrency to one committed render
+                          per latest content, so a fast text stream cannot queue unbounded awaits (the chunk-
+                          boundary/at-done replace-latest the ADR §5 allows; timer debounce deemed unnecessary).
+                          CALLERS: the ONLY .render() caller of the markdown port is MarkdownBlock.vue (now
+                          awaited); ui/main.ts + AgentSidebarView.ts only call the createMarkdownRenderPort()
+                          factory (unaffected). TDD RED-watched-fail (8 failed for the right reason) then GREEN.
+                          GATE: vue-tsc -p tsconfig.lint.json 0 err; eslint 0 (11 files, no v-html/innerHTML sink,
+                          Vue free of obsidian, --sp-* tokens); vitest tests/ui/chat 105/105; vitest full 672/672
+                          across 89 files (was 652; +20 = TEST-RR-028 + Promise assertions); P1 UNREGRESSED, pure
+                          safeMarkdownRender output byte-identical. Commits de9da57 (port+adapter+3 bridges+tests),
+                          1b47476 (MarkdownBlock async + full node-kind render + TEST-RR-028 + P1 test/PO await).
+                          NOT pushed; manifest untouched; no new dependency. NOT run: T-RR-044 GATE (verify/build/
+                          build:web/docs:api/coverage/audit -- orchestrator-owned). REMAINS: MANUAL TEST-RR-043
+                          (real-Obsidian RICH render -- human-owned, re-run to confirm headings/bold/lists/tables
+                          render, not plain/<!---->); re-fold this fix into T-RR-044. Hand back to orchestrator.
 ```
 
 ## Open clarifications
@@ -657,6 +764,13 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
 > blockers. NO return to ADR-RR-001 was required (the StreamChunk `toolUseResult` edit + node-union
 > widening stay within ADR-RR-001 §1/§3). CLAR-RR-004/005/006 confirmed in spec (Claude subagent path
 > only; generic expanded renderer + Write/Edit diff in P2; thinking colour from `--sp-accent`).
+>
+> **UPDATE (2026-05-25, architect — ADR-RR-002):** the EC-RR-17 / async watch item DID later fire. The
+> spec-time judgement ("no return to ADR-RR-001 required") held for the *DTO node-model widening*, but
+> real-Obsidian testing then exposed the **async-vs-sync** mismatch: `MarkdownRenderer.render` is async,
+> so the sync port always degraded to the pure baseline. That **is** a return-shape change
+> (`SafeRenderResult` → `Promise<SafeRenderResult>`), filed as **ADR-RR-002** (supersedes ADR-RR-001 §3,
+> human-directed). The DTO *field* contract is still unchanged.
 
 - [ ] CLAR-RR-001 — Idea/research depth: thin `idea.md` vs charter §3.1 + audits standing in (mirror P1)?
       **(pm recommendation: mirror P1 — audits + charter stand in; idea/research skipped above.
@@ -670,14 +784,20 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
       adds `ChatMessage.contentBlocks`/`toolCalls` (P1 excluded, REQ-CC-006) + new domain types
       `ContentBlock`/`ToolCallInfo`/`DiffLine`/`DiffStats`/`SubagentInfo`/`TodoItem`. **Do not silently
       change the union — architect ADR (mirroring ADR-CC-001) before design proper. Owner: architect.**
-- [ ] CLAR-RR-003 — Render seam + `MarkdownRenderPort` backing (design-time). (1) one
-      `MessageBlockRenderer` tree switching on `ContentBlock.type` (mirrors `MessageRenderer`) vs
-      per-type components behind a thin dispatcher. (2) P1 `MarkdownRenderPort` ships paragraph-only
-      `safeMarkdownRender`; CLAR-CC-005 deferred the Obsidian `MarkdownRenderer` backing **to P2** —
-      decide: upgrade the backing to Obsidian's renderer **while keeping the structured-node DTO
-      shape** (so UI stays declarative, NFR-RR-006 no `v-html`), or extend the safe node model.
-      **(pm recommendation: per-type components behind a thin dispatcher; upgrade backing without
-      changing the return shape. ADR only if the port shape changes. Owner: architect — resolve at design.)**
+- [x] CLAR-RR-003 — Render seam + `MarkdownRenderPort` backing. (1) **RESOLVED at design (ADR-RR-001
+      §2):** per-type components behind a thin `MessageBlocks.vue` dispatcher. (2) **RESOLVED — part 2
+      / the spec §12 async watch item, by ADR-RR-002 (2026-05-25, human-directed):** the Obsidian
+      `MarkdownRenderer` backing is adopted, but real-Obsidian testing proved the port could **not**
+      stay synchronous — `MarkdownRenderer.render` is async, so the sync backing read the empty element
+      immediately and always degraded to the pure paragraph-only baseline (plain render / `<!---->`
+      gaps). The pm recommendation ("upgrade backing without changing the return shape; ADR only if the
+      port shape changes") triggered its own ADR condition: the **return shape changed**
+      (`SafeRenderResult` → `Promise<SafeRenderResult>`). ADR-RR-002 supersedes ADR-RR-001 §3, keeps the
+      `SafeRenderResult` **DTO** unchanged, has `ObsidianBridge` `await` the real renderer before walking
+      the fragment, makes Mock/LocalStorage `Promise.resolve(safeMarkdownRender(...))`, and makes
+      `MarkdownBlock.vue` async-aware (reactive nodes + on-mount/on-change re-render + streaming cadence).
+      Spec deltas: SPEC-RR-010/011/022 + TEST-RR-028 (Mock-backed) + TEST-RR-043 (real-Obsidian rich,
+      manual). Owner was: architect — resolved.
 - [ ] CLAR-RR-004 *(new — design-time, non-blocking)* — Provider-lifecycle subagent split: P2 scopes
       the Claude Task/Agent subagent path only; Codex/Opencode `spawn_agent`/`wait` consolidation
       **deferred to P9** (NG7, REQ-RR-021b). Confirm the seam at design. Owner: pm/architect.

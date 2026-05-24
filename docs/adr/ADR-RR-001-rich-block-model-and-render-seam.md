@@ -16,7 +16,7 @@ informed:
   - reviewer
   - brand-reviewer
 supersedes: []
-superseded-by: []
+superseded-by: []         # §3 (sync markdown backing) superseded by ADR-RR-002; §1/§2/§4 remain in force — ADR stays accepted
 tags: [architecture, chat, rich-rendering, claudian-reboot, P2]
 ---
 

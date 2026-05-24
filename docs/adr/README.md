@@ -66,7 +66,8 @@ The P0 reboot (`ADR-PSR-001`) **keeps the architectural skeleton** and
 | ADR-PSR-001 | Reboot the plugin shell (P0) | **Accepted** — this reboot |
 | ADR-PSR-002 | Settings storage: device-local, load-or-default | **Accepted** — P0 |
 | ADR-CC-001 | ChatRuntime port shape (async-generator `query` + per-phase setter growth) | **Proposed** — P1 (pending human sign-off, charter §6a) |
-| ADR-RR-001 | Rich block model + render seam (typed `toolUseResult`, per-type block components, Obsidian-backed markdown, `IconPort`) | **Proposed** — P2 (pending human sign-off, charter §6a) |
+| ADR-RR-001 | Rich block model + render seam (typed `toolUseResult`, per-type block components, Obsidian-backed markdown, `IconPort`) | **Accepted** — P2 (§3 sync markdown backing superseded by ADR-RR-002; §1/§2/§4 in force) |
+| ADR-RR-002 | Async `MarkdownRenderPort.render` backed by Obsidian's real `MarkdownRenderer`, walked to the unchanged `SafeRenderResult` DTO | **Accepted** — P2 (human-directed; supersedes ADR-RR-001 §3) |
 
 > Two files share the number `0030` (`ifeatureservice-interface-for-di` and
 > `structured-json-output-via-json-schema`) — a pre-existing numbering collision,

@@ -11,12 +11,13 @@ owner: architect
 inputs:
   - specs/rich-rendering/requirements.md                # PRD-RR-001 (accepted 2026-05-24)
   - specs/rich-rendering/design.md                      # DESIGN-RR-001 Parts A/B/C (complete)
-  - docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md  # accepted (human-blessed 2026-05-24)
+  - docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md  # accepted (human-blessed 2026-05-24); §3 superseded by ADR-RR-002
+  - docs/adr/ADR-RR-002-async-markdown-render-seam.md   # accepted (human-directed 2026-05-25) — async MarkdownRenderPort, supersedes ADR-RR-001 §3
   - specs/chat-core/spec.md                             # SPEC-CC-001..023 (P1 contract this extends)
   - docs/adr/ADR-CC-001-chatruntime-port-shape.md / ADR-008 / ADR-004 / ADR-003 / ADR-001 / ADR-009
 reference: D:\Projects\claudian-main                    # MIT, read-only parity reference
 created: 2026-05-24
-updated: 2026-05-24
+updated: 2026-05-25                                     # ADR-RR-002 async-markdown-render delta (SPEC-RR-010/011/022 + TEST-RR-028/043)
 ---
 
 # Specification — Rich rendering (P2)
@@ -42,6 +43,15 @@ This spec defines **34 spec items** across five layer groups (SPEC-RR-001..034).
 (`planner`) decomposes them into `T-RR-NNN`; the QA stage turns the TEST-RR-NNN scenarios (§9) into
 automated tests. SPEC-RR items **extend** their P1 counterparts and cite the extension point.
 
+> **>>> ADR-RR-002 AMENDMENT (2026-05-25, additive) <<<** A P2 markdown defect found in real-Obsidian
+> testing (plain render / `<!---->` gaps) is fixed by **ADR-RR-002**, which **supersedes ADR-RR-001 §3**:
+> `MarkdownRenderPort.render` becomes **async** (`Promise<SafeRenderResult>`) and the `ObsidianBridge`
+> `await`s Obsidian's real `MarkdownRenderer` before walking the fragment to the **unchanged**
+> `SafeRenderResult` DTO. Deltas (minimal, additive): SPEC-RR-010/011 (async signature), SPEC-RR-022
+> (`MarkdownBlock.vue` async-render + streaming cadence), TEST-RR-028 (Mock-backed async-render) +
+> re-scoped TEST-RR-043 (real-Obsidian rich render, manual). The DTO shape, the no-`v-html` invariant,
+> and the three-bridge story are all preserved.
+
 ---
 
 ## 0. Spec-item index
@@ -59,8 +69,8 @@ automated tests. SPEC-RR items **extend** their P1 counterparts and cite the ext
 | SPEC-RR-008 | `ChatMessage` — additive `contentBlocks?` / `toolCalls?` | domain | SPEC-CC-004 | REQ-RR-010; ADR-RR-001 §1 |
 | SPEC-RR-009 | `IconPort` + `IconNode` + `ICON_PORT` key + barrel re-export | domain/infra | SPEC-CC-008/009 | REQ-RR-019/020/022; ADR-RR-001 §4 |
 | **INFRA** | | | | |
-| SPEC-RR-010 | `MarkdownRenderPort` Obsidian backing (DTO shape unchanged) | infra | SPEC-CC-007 | REQ-RR-020a; CLAR-CC-005; ADR-RR-001 §3 |
-| SPEC-RR-011 | `MarkdownNode`/`MarkdownInline` declarative node-model extension | domain | SPEC-CC-007 | REQ-RR-020a, NFR-RR-006; ADR-RR-001 §3 |
+| SPEC-RR-010 | `MarkdownRenderPort` **async** Obsidian backing (DTO shape unchanged) | infra | SPEC-CC-007 | REQ-RR-020a; CLAR-CC-005; **ADR-RR-002** (supersedes ADR-RR-001 §3) |
+| SPEC-RR-011 | `MarkdownNode`/`MarkdownInline` node-model extension + **async port return** | domain | SPEC-CC-007 | REQ-RR-020a, NFR-RR-006; ADR-RR-001 §3 + **ADR-RR-002** |
 | SPEC-RR-012 | `IconPort` impls on the three bridges | infra | SPEC-CC-013 | REQ-RR-019, NFR-RR-002 |
 | SPEC-RR-013 | Mock/Fixture runtimes emit scripted rich chunks | infra | SPEC-CC-011/012 | REQ-RR-001, NFR-RR-002 |
 | **APPLICATION** | | | | |
@@ -418,36 +428,48 @@ is one port for one consumer per ADR-008/ADR-CC-001 §5.
 
 ## SPEC-RR-010 — `MarkdownRenderPort` Obsidian backing (`src/infrastructure/obsidian/ObsidianBridge.ts`)
 
-**REQ:** REQ-RR-020a · **Decision:** CLAR-CC-005 + ADR-RR-001 §3 · **Claudian ground-truth:**
-Obsidian `MarkdownRenderer.render`. **Extends SPEC-CC-007/013 — the production backing only; the
-`SafeRenderResult` return shape is UNCHANGED.**
+**REQ:** REQ-RR-020a · **Decision:** CLAR-CC-005 + **ADR-RR-002** (supersedes ADR-RR-001 §3) ·
+**Claudian ground-truth:** `MessageRenderer.renderContent` (`async` + `await
+MarkdownRenderer.render`, lines 625–648). **Extends SPEC-CC-007/013 — the production backing only;
+the `SafeRenderResult` DTO shape is UNCHANGED, only the port's return becomes a `Promise`.**
 
-- `ObsidianBridge.createMarkdownRenderPort()` upgrades from the pure `safeMarkdownRender` (P1) to a
-  backing that calls Obsidian's `MarkdownRenderer.render(app, markdown, detachedEl, sourcePath,
-  component)` into a **detached** element, then **walks** that fragment into the existing
-  `SafeRenderResult` (`{ nodes: MarkdownNode[] }`) DTO — extended per SPEC-RR-011.
+> **>>> ADR-RR-002 AMENDMENT (2026-05-25) <<<** Real-Obsidian testing found markdown renders **plain**
+> (no headings/tables/bold/lists; `<!---->` gaps) because `MarkdownRenderer.render` is **async** while
+> the P1 port was **synchronous** — the backing read the still-empty element immediately and always
+> degraded to the pure baseline. **Fix (human-directed, ADR-RR-002):** the port return becomes
+> `Promise<SafeRenderResult>` and the bridge **`await`s** the real renderer **before** walking the
+> fragment. The DTO shape (SPEC-RR-011 node model) is unchanged. Mock/LocalStorage stay
+> synchronous-fast via `Promise.resolve(...)`.
+
+- `ObsidianBridge.createMarkdownRenderPort().render(markdown)` is **`async`**: it `await`s Obsidian's
+  `MarkdownRenderer.render(app, markdown, detachedEl, sourcePath, component)` into a **detached**
+  element, **then** (once populated) **walks** that fragment into the existing `SafeRenderResult`
+  (`{ nodes: MarkdownNode[] }`) DTO — extended per SPEC-RR-011 — and resolves with it.
 - **The walk happens entirely in the bridge.** The bridge reads `textContent` and tag/structure from
   the detached fragment to build the DTO; it **never** passes a DOM element, an HTML string, or a
   DOM-injection sink to the UI (NFR-RR-006). The detached element is discarded after the walk.
-- **`MockBridge` and `LocalStorageBridge` keep the pure `safeMarkdownRender`** (SPEC-CC-014) — their
-  `createMarkdownRenderPort()` is unchanged. The two backings must stay **perceptually equivalent**
-  for the common paragraph / inline-code case (EC-RR-17 compatibility note).
+- **`MockBridge` and `LocalStorageBridge` keep the pure `safeMarkdownRender`** (SPEC-CC-014) and
+  return **`Promise.resolve(safeMarkdownRender(markdown))`** — synchronous-fast, the same byte-identical
+  DTO as before, resolved on a microtask. The pure `safeMarkdownRender` itself stays **sync, pure,
+  total**, is the Mock/Fixture backing **and** the production degrade path. The two backings must stay
+  **perceptually equivalent** for the common paragraph / inline-code case (EC-RR-17 compatibility note).
 
-**Contract:** `render(markdown)` stays **pure-shaped from the UI's view** (same DTO type, declarative,
-no HTML). The Obsidian backing MAY be non-pure internally (it builds + discards a detached element)
-but is total — on any internal failure it falls back to a single `paragraph` node carrying the raw
-markdown as `{kind:'text'}` (degrade, never throw). Because the **port shape is unchanged**, the UI,
-the two non-Obsidian bridges, and every existing test are untouched (NFR-RR-006 holds, the
-`MarkdownBlock.vue` declarative render still applies). This is a **backing swap, not an ADR shape
-change** (ADR-RR-001 §3); *if* SPEC-RR-011's node-model extension is found to require a
-`SafeRenderResult` shape change during implementation, that returns to ADR-RR-001 as an
-amendment/superseding ADR (see §12 open items).
+**Contract:** `render(markdown): Promise<SafeRenderResult>` is **declarative-shaped from the UI's
+view** (same DTO node type, no HTML). The Obsidian backing is non-pure internally (it builds +
+`await`s + discards a detached element) but **total** — on any internal failure (or a renderer
+rejection) it resolves with a single `paragraph` node carrying the raw markdown as `{kind:'text'}`
+(degrade, never reject/throw). The degrade is now reached **only on genuine failure**, not on the
+always-empty-fragment race the sync port hit. Because the **DTO shape is unchanged**, the two
+non-Obsidian bridges and the declarative `MarkdownBlock.vue` node tree are intact (NFR-RR-006 holds);
+the only mechanical ripple is that **callers `await`** (SPEC-RR-011, SPEC-RR-022/023 — `MarkdownBlock`
+becomes async-aware). This is the **ADR-RR-002 superseding decision** for ADR-RR-001 §3 — the §12
+escape hatch ("if the walk needs a return-shape change, return as a superseding ADR") fired.
 
-## SPEC-RR-011 — `MarkdownNode` / `MarkdownInline` extension (`src/domain/ports/MarkdownRenderPort.ts`)
+## SPEC-RR-011 — `MarkdownNode` / `MarkdownInline` extension + async port return (`src/domain/ports/MarkdownRenderPort.ts`)
 
-**REQ:** REQ-RR-020a, NFR-RR-006 · **ADR:** ADR-RR-001 §3. **Extends SPEC-CC-007 additively** — the
-P1 `paragraph` node + `text`/`code` inline survive; P2 adds the declarative block kinds richer
-markdown (thinking / subagent content) needs.
+**REQ:** REQ-RR-020a, NFR-RR-006 · **ADR:** ADR-RR-001 §3 **as superseded by ADR-RR-002** (async
+return). **Extends SPEC-CC-007 additively** — the P1 `paragraph` node + `text`/`code` inline survive;
+P2 adds the declarative block kinds richer markdown (thinking / subagent content) needs.
 
 ```ts
 export type MarkdownInline =
@@ -465,7 +487,19 @@ export type MarkdownNode =
 export interface SafeRenderResult {
   nodes: MarkdownNode[];
 }
+
+export interface MarkdownRenderPort {
+  render(markdown: string): Promise<SafeRenderResult>;   // ADR-RR-002 — async (was SafeRenderResult)
+}
 ```
+
+> **>>> ADR-RR-002 AMENDMENT (2026-05-25) <<<** The **only** signature change is the port's return:
+> `SafeRenderResult` → `Promise<SafeRenderResult>`. The `SafeRenderResult` / `MarkdownNode` /
+> `MarkdownInline` **field contract is unchanged** (the additive node-kind widening below still
+> stands). The async return is required because the Obsidian backing (SPEC-RR-010) `await`s the real
+> async `MarkdownRenderer.render`. Mock/Fixture/pure backings + their test helpers resolve via
+> `Promise.resolve(...)`; the pure `safeMarkdownRender` itself stays **synchronous** (returns a plain
+> `SafeRenderResult`, wrapped by the bridge). Every caller `await`s (SPEC-RR-022/023 `MarkdownBlock`).
 
 **Validation/Contract:** every node kind is **declarative data** — `code_block.value` is raw text
 rendered as `<pre><code>{{ value }}</code></pre>` (escaped by Vue interpolation, NFR-RR-006); list
@@ -807,6 +841,24 @@ alongside the existing nine ports (extends SPEC-CC-022).
   inside the `ToolCallBlock` expanded body.
 - **PageObject:** `MessageBlocks.po.ts` — asserts child block order by `data-testid` sequence
   (TEST-RR-008).
+
+> **>>> ADR-RR-002 AMENDMENT (2026-05-25) — `MarkdownBlock.vue` becomes async-aware <<<** The
+> `text`-block child is the **existing P1 `MarkdownBlock.vue`**, which calls `MarkdownRenderPort.render`.
+> Per ADR-RR-002 that port is now **async** (`Promise<SafeRenderResult>`), so `MarkdownBlock.vue`:
+> 1. holds the resolved `SafeRenderResult.nodes` in **reactive state** and renders them declaratively
+>    (the existing node-kind `v-for`/`v-if` tree — unchanged, **no `v-html`**, NFR-RR-006);
+> 2. re-renders **on mount** and **on `content`/`markdown` prop change** (i.e. as a streaming text
+>    block accumulates);
+> 3. while a render is in flight shows the **last-rendered nodes** (or, first render, the **raw text**
+>    as a single `paragraph`/`text` node) so there is never a blank flash — claudian's incremental feel;
+> 4. MAY **debounce / replace-latest** (drop a superseded in-flight result when newer `content` has
+>    arrived) to keep streaming cheap.
+> **Streaming cadence (recorded for the implementer, ADR-RR-002 §5):** the **pure baseline** (Mock/Fixture)
+> is sync-cheap and MAY render mid-stream on every chunk; the **Obsidian rich render** runs on **chunk
+> boundaries or at `done`** (debounced replace-latest), not per keystroke-delta — preserving NFR-RR-014
+> (incremental, no batch-on-complete) while bounding the async renderer's cost. The implementer records
+> the concrete debounce interval / boundary trigger in the implementation log; either chunk-boundary
+> debounce **or** at-`done` satisfies the ADR.
 
 ## SPEC-RR-023 — `MessageTurn.vue`: blocks-vs-content fork (`src/ui/chat/MessageTurn.vue`)
 
@@ -1195,15 +1247,28 @@ legs are recorded for the reviewer.
 | TEST-RR-025 | `context_compacted` block renders a static notice; `notice` chunk render-only (no thread machinery) | A | REQ-RR-007 (NG1) | `StreamController:189/205` |
 | TEST-RR-026 | All three bridges drive every renderer: Mock script + LocalStorage fixture, no subprocess; Obsidian markdown/icon backing produces the DTO | U + M | NFR-RR-002 · EC-RR-17 | backend audit bridge rows |
 | TEST-RR-027 | `RunChatTurnUseCase.dispatchChunk` routes each P2 member to the matching sink leg; streaming error stays `error` chunk; pure transforms never throw | U | REQ-RR-001..007, NFR-RR-003 | `StreamController:116`, ADR-CC-001 §1 |
+| TEST-RR-028 | **(ADR-RR-002 delta)** Async `MarkdownRenderPort` resolves a `SafeRenderResult` and `MarkdownBlock.vue` renders **rich nodes** (heading + strong + list) from the resolved DTO — Mock-backed (`Promise.resolve(safeMarkdownRender(...))`), awaited, declarative VNode tree, **no `v-html`**; first-render raw-text fallback then resolved nodes; pure `safeMarkdownRender` return is a plain (non-promise) `SafeRenderResult` | A + U | REQ-RR-020a, NFR-RR-006/014 · ADR-RR-002 | `MessageRenderer.renderContent` (`async`, lines 625–648) |
 
-**Split:** 27 scenarios total.
+> **>>> ADR-RR-002 AMENDMENT (2026-05-25) — test deltas <<<**
+> - **TEST-RR-028 (new, automatable A+U):** the Mock-backed async-render proof above. The Mock
+>   `MarkdownRenderPort` is fully synchronous-fast under the hood (`Promise.resolve`), so this resolves
+>   on a microtask and exercises the async-aware `MarkdownBlock.vue` reactive-render path declaratively.
+> - **TEST-RR-043 (manual, human-owned) re-scoped:** the **real Obsidian rich render** — driving a real
+>   `claude` CLI rich turn in Obsidian and confirming markdown renders **rich** (heading / bold / list /
+>   table), **not** plain with `<!---->` gaps — stays the manual M leg (the `ObsidianBridge`
+>   `MarkdownRenderer` backing is coverage-excluded infra). TEST-RR-043 is now the end-to-end proof that
+>   the ADR-RR-002 async fix works against the real renderer. (Previously this rode the TEST-RR-026 M
+>   leg; ADR-RR-002 makes the rich-markdown render its own explicit manual assertion.)
+
+**Split:** 28 scenarios total (was 27 — +1 for the ADR-RR-002 async-render delta TEST-RR-028).
 - **Unit (U):** TEST-RR-001, 002, 003, 005, 006, 007, 009, 012, 014, 018, 021, 027 (12 pure U) + the
   U-portion of 024 and 026.
 - **Component (A):** TEST-RR-004, 008, 010, 011, 013, 015, 016, 017, 019, 020, 022, 023, 025 (13 A) +
-  the A-portion of 024.
-- **Manual (M):** the M-leg of TEST-RR-026 (Obsidian `MarkdownRenderer`/`setIcon` backing →
-  coverage-excluded infra; real-CLI rich turn in Obsidian). So **25 automatable** scenarios (U/A) and
-  **1 with a manual leg** (TEST-RR-026: the Obsidian markdown/icon backing).
+  the A-portion of 024 + the A-portion of **028** (ADR-RR-002 async-render, Mock-backed).
+- **Manual (M):** the M-leg of TEST-RR-026 (Obsidian `setIcon` backing → coverage-excluded infra) and
+  the M-leg of **TEST-RR-043** (the real Obsidian `MarkdownRenderer` **rich** markdown render +
+  real-CLI rich turn in Obsidian — ADR-RR-002 end-to-end proof). So **26 automatable** scenarios (U/A,
+  incl. TEST-RR-028) and **2 with a manual leg** (TEST-RR-026 icon backing; TEST-RR-043 rich markdown).
 
 ---
 
@@ -1254,7 +1319,7 @@ legs are recorded for the reviewer.
 | REQ-RR-019 | SPEC-RR-009, 012, 014, 025, 026 | TEST-RR-013, 024 |
 | REQ-RR-019a | SPEC-RR-014 | TEST-RR-014 |
 | REQ-RR-020 | SPEC-RR-026, 033 | TEST-RR-013 |
-| REQ-RR-020a | SPEC-RR-010, 011, 026, 034 | TEST-RR-015 |
+| REQ-RR-020a | SPEC-RR-010, 011, 026, 034 | TEST-RR-015, 028 |
 | REQ-RR-021 | SPEC-RR-006, 030 | TEST-RR-020 |
 | REQ-RR-021a | SPEC-RR-006, 020, 030 | TEST-RR-020 |
 | REQ-RR-021b | SPEC-RR-017 | TEST-RR-021 |
@@ -1270,14 +1335,14 @@ legs are recorded for the reviewer.
 | NFR-RR-003 | SPEC-RR-014, 015, 016, 017, 018 | TEST-RR-018, 027 |
 | NFR-RR-004 | SPEC-RR-022..032 (`<script setup>`) | (lint-enforced) |
 | NFR-RR-005 | SPEC-RR-014..017 (pure transforms), §10 + PageObjects | (coverage gate) + TEST-RR-014/018/021 |
-| NFR-RR-006 | SPEC-RR-010, 011, 025, 026, 029, 034 | TEST-RR-015, 024 |
+| NFR-RR-006 | SPEC-RR-010, 011, 025, 026, 029, 034 | TEST-RR-015, 024, 028 |
 | NFR-RR-007 | SPEC-RR-024, 026, 028..030, 033 | TEST-RR-010, 013, 019 |
 | NFR-RR-008 | SPEC-RR-024, 025, 026, 030 | TEST-RR-010, 011 |
 | NFR-RR-009 | §10 | (review) |
 | NFR-RR-010 | SPEC-RR-008, §10 | (review) |
 | NFR-RR-011/012 | design §B.4 parity plan (#434) | (parity review) |
 | NFR-RR-013 | SPEC-RR-015 (no new dep) | TEST-RR-018 |
-| NFR-RR-014 | SPEC-RR-013, 020, 027, 029, §10 | TEST-RR-008, 016 |
+| NFR-RR-014 | SPEC-RR-013, 020, 022, 027, 029, §10 | TEST-RR-008, 016, 028 |
 
 > Every REQ-RR (all 27: 001–007, 010–012, 013/014, 015–018/019/019a/020/020a, 021/021a/021b,
 > 022/023, 024/024a, 025/026/027) maps to ≥1 spec item and ≥1 test. Every NFR-RR (001–014) maps to a
@@ -1289,12 +1354,21 @@ legs are recorded for the reviewer.
 
 - **EC-RR-2 (out-of-order `tool_result`) — RESOLVED in SPEC-RR-020:** ignore + `warn`, no buffer.
   No remaining open question blocks tasks. *(The design's spec-time watch item is closed.)*
-- **Markdown node-model extension (SPEC-RR-011) — watch during implementation:** the additive node
-  kinds (`heading`/`code_block`/`list` + `strong`/`em` inlines) widen `MarkdownNode` from a
-  single-shape interface to a union. This keeps the `SafeRenderResult.nodes` field contract intact
-  (not an ADR-shape change, ADR-RR-001 §3). **If** the Obsidian fragment walk is found to need a
-  return-shape change beyond this widening, it **returns to ADR-RR-001 as an amendment/superseding
-  ADR** before implementation proceeds.
+- **Markdown node-model extension (SPEC-RR-011) — settled:** the additive node kinds
+  (`heading`/`code_block`/`list` + `strong`/`em` inlines) widen `MarkdownNode` from a single-shape
+  interface to a union; the `SafeRenderResult.nodes` field contract is intact.
+- **Async markdown render seam (SPEC-RR-010/011) — RESOLVED by ADR-RR-002 (2026-05-25):** the §12
+  escape hatch ("if the Obsidian fragment walk needs a return-shape change, return to ADR-RR-001 as a
+  superseding ADR") **fired**. Real-Obsidian testing found markdown renders plain because
+  `MarkdownRenderer.render` is async while the P1 port was synchronous (the backing read the empty
+  element immediately and always degraded to the pure baseline). **ADR-RR-002** (human-directed,
+  supersedes ADR-RR-001 §3) makes `MarkdownRenderPort.render` return `Promise<SafeRenderResult>` and
+  has the `ObsidianBridge` `await` the real renderer before walking the fragment; the DTO node model
+  is unchanged; Mock/LocalStorage `Promise.resolve(safeMarkdownRender(...))`; `MarkdownBlock.vue`
+  becomes async-aware (reactive nodes + on-mount/on-change re-render + streaming cadence — SPEC-RR-022
+  amendment). Spec deltas: SPEC-RR-010/011 (async signature), SPEC-RR-022 (`MarkdownBlock` async-render
+  + cadence), TEST-RR-028 (Mock-backed async-render) + TEST-RR-043 (real-Obsidian rich render, manual).
+  **No further open question blocks the dev.**
 - **EC-RR-17 (Obsidian-vs-pure markdown equivalence) — compatibility note + parity check:** the two
   backings must read perceptually equivalent for the common paragraph/inline-code case (the demo/dev
   pure backing vs production Obsidian backing). Validated by the parity review (NFR-RR-011, #434) +
@@ -1322,5 +1396,7 @@ legs are recorded for the reviewer.
 - [x] Every spec item traces to ≥1 REQ (§11); every REQ-RR + NFR-RR has a downstream spec + test.
 - [x] Streaming-error boundary preserved (ADR-CC-001 §1); pure transforms total (NFR-RR-003).
 - [x] No-`v-html` invariant specified across all five sink surfaces (SPEC-RR-034, NFR-RR-006).
-- [x] No new ADR-shape change required — the `StreamChunk` `toolUseResult` edit + `MarkdownNode`
-      union widening stay within ADR-RR-001 §1/§3 (watch item flagged for implementation, §12).
+- [x] The `StreamChunk` `toolUseResult` edit + `MarkdownNode` union widening stay within ADR-RR-001
+      §1/§3. **ADR-RR-002 (2026-05-25) supersedes ADR-RR-001 §3:** the markdown render seam is now
+      async (`Promise<SafeRenderResult>`) — the §12 watch item fired and is settled (SPEC-RR-010/011/022
+      deltas + TEST-RR-028/043). The DTO field contract remains unchanged.
