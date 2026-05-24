@@ -86,6 +86,22 @@ NOT findings.
 
 ---
 
+## Resolution log
+
+*(dev, 2026-05-25 — appended; finding text above is immutable, resolutions recorded here.)*
+
+| ID | Status | Resolution (commit) |
+|---|---|---|
+| **R-RR-001** | **ADDRESSED** | Real-CLI reducer now emits subagent/async/compaction/notice; blocked-message branch dormant on the raw CLI wire (CLAR-RR-010). Commits `8752a65`. See impl-log batch 1. |
+| **R-RR-002** | **ADDRESSED** | `streaming` threaded `MessageList→MessageTurn→MessageBlocks`; `live = streaming && trailing content block && type==='thinking'`. Claudian finalisation semantics confirmed (`StreamController:133/141/208`). Commit `5e822a8`. |
+| **R-RR-003** | **ADDRESSED** | `toolIcon()` returns the real claudian `getToolIcon` lucide names; `mcp__*`→`plug` (scope call — no custom-SVG seam); `iconNodeMap` placeholders added. Commit `c635fff`. |
+| **R-RR-004** | **ADDRESSED** | `splitDiffHunks` (pure port of `splitIntoHunks`) + `DiffView` renders hunks with `...` separators, all-insert cap path kept. Commit `f6032cb`. |
+| **R-RR-005** | **ADDRESSED** | WebSearch (action one-liner) / WebFetch (url) summaries + EnterPlanMode/ExitPlanMode names. Niche expanded-body renderers stay DEFERRED (CLAR-RR-005, explicit scope call). Commit `21005f1`. |
+| **R-RR-008** | **ADDRESSED** | `isBlockedToolResult` ported + applied in `onToolResult`/`onSubagentToolResult`. Commit `b38b8f1`. See impl-log batch 1. |
+| R-RR-006/007/009/010/011 | open (P3 / note-only) | Deferred per their finding rows (polish / scope-confirm / spec-faithful). |
+
+---
+
 ## What is solid (verified, not findings)
 
 - **Additive contract held (ADR-RR-001 §1).** `StreamChunk` makes only the `toolUseResult?: unknown → ToolUseResult` edit on `tool_result`/`subagent_tool_result`; `ChatMessage` grows `contentBlocks?`/`toolCalls?` additively; no P1 member renamed/removed. Matches spec SPEC-RR-001/008 and claudian `chat.ts`.

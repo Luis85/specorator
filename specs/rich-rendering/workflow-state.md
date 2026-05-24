@@ -4,7 +4,7 @@ area: RR
 current_stage: implementation
 status: active
 last_updated: 2026-05-25
-last_agent: dev (review fixes — R-RR-001 real-CLI reducer emits subagent/async/compaction/notice; R-RR-008 blocked tool status via isBlockedToolResult; CLAR-RR-010 resolved)
+last_agent: dev (review fixes batch 2 — R-RR-002 live thinking counter, R-RR-003 real per-tool lucide icons, R-RR-004 diff hunking, R-RR-005 web/plan-mode tool name+summary; all P2 parity findings now ADDRESSED)
 epic: claudian-reboot
 phase: P2
 integration_branch: next
@@ -835,6 +835,34 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
                           traceability.md; complete test-report.md; the manual T-RR-043 real-CLI leg
                           (which alone confirms subagent/async on a live transcript) is still UNSIGNED.
                           Next agent: dev (remaining P2 findings) or orchestrator (triage + T-RR-043).
+2026-05-25 (dev, review fixes batch 2 -- R-RR-002/003/004/005): Closed the four remaining P2 parity
+                          findings with strict TDD, one Conventional commit each, every change grounded
+                          in claudian-main. R-RR-002 (5e822a8) -- threaded `streaming`
+                          MessageList->MessageTurn->MessageBlocks; live = streaming && trailing content
+                          block && type==='thinking' drives ThinkingBlock :live (claudian finalises the
+                          previous thinking block when a new content type arrives -- StreamController
+                          :133/141/208 confirmed); ThinkingBlock label exposes data-live; RED 4 cases.
+                          R-RR-003 (c635fff) -- toolIcon() returns claudian getToolIcon's real lucide
+                          names (toolIcons.ts:36-70), mcp__*->plug (scope call: no custom-SVG seam, plug
+                          is the closest real lucide glyph setIcon resolves); iconNodeMap placeholders
+                          added; RED 5 cases. R-RR-004 (f6032cb) -- NEW pure splitDiffHunks (port of
+                          splitIntoHunks DiffRenderer.ts:23-73), DiffView renders hunks with `...`
+                          separators + keeps the all-insert cap path; RED 6 transform + 3 component
+                          cases. R-RR-005 (21005f1) -- WebSearch (action one-liner)/WebFetch (url)
+                          summaries + EnterPlanMode/ExitPlanMode names (ToolCallRenderer.ts:70-97);
+                          niche expanded-body renderers (WebSearch links, apply_patch, AskUserQuestion)
+                          stay DEFERRED per CLAR-RR-005 (explicit scope call); RED 6 cases. Typecheck 0
+                          err + eslint 0 (complexity <=10) + touched vitest green after each;
+                          REGRESSION full re-run -- ui/chat + ui/stores + application/chat + domain/chat
+                          306/306, infrastructure + plugin 182/182 (P1 + all prior P2 unregressed). All
+                          P2 parity findings (R-RR-002/003/004/005 + R-RR-001/008 from batch 1) now
+                          ADDRESSED -- see review.md Resolution log + impl-log batch 2. NOT pushed;
+                          manifest untouched; no new dependency. NOT run (orchestrator gate): full
+                          verify/build/build:web/docs:api/coverage/audit/test:all. REMAINING: R-RR-006/
+                          007/009/010 (P3 polish, dev/optional), R-RR-011 (markdown fidelity, pm scope);
+                          regenerate traceability.md; complete test-report.md; the manual T-RR-043
+                          real-CLI leg is still UNSIGNED. Next agent: orchestrator (T-RR-044 verify gate
+                          + T-RR-043 schedule) or pm (R-RR-011 scope).
 ```
 
 ## Open clarifications

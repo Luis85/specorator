@@ -1024,3 +1024,103 @@ No field was faked; no silent dead path remains. `tool_output` was NOT mapped:
   **TEST-RR-043** leg, still unsigned).
 - **Outcome:** done. **Deviation:** none from spec; the CLAR-RR-010 wire-format note above
   records the SDK-vs-CLI blocked-shape boundary (handled by R-RR-008), not a divergence.
+
+---
+
+## 2026-05-25 — Review fixes batch 2 (R-RR-002/003/004/005, P2 parity)
+
+Closed the four remaining P2 parity findings on `feature/rich-rendering` with strict TDD,
+one Conventional commit per finding, each grounded in claudian-main (read-only parity
+truth). Typecheck + touched vitest + eslint after each.
+
+### R-RR-002 — live "Thinking Ns…" counter (commit `5e822a8`)
+- **Claudian ref confirmed:** `StreamController.finalizeCurrentThinkingBlock` is called on
+  `text` (`:133`), `tool_use` (`:141`), and other content chunks (`:208`), and at turn end
+  (`InputController.ts:473/1023/1070`). So claudian finalises the PREVIOUS thinking block
+  the moment a new content type arrives — only the trailing thinking block on the live
+  message pulses. Matches `ThinkingBlockRenderer.createThinkingBlock` (1s interval) vs
+  `finalizeThinkingBlock` (freeze + collapse).
+- **Files:** `src/ui/chat/MessageList.vue` already passes per-turn `streaming` to
+  `MessageTurn`; `src/ui/chat/MessageTurn.vue:39/49` now forwards `:streaming` to
+  `MessageBlocks`; `src/ui/chat/MessageBlocks.vue` adds the `streaming` prop (withDefaults)
+  + `lastBlockIndex`/`isLiveThinking(item)` and drives `ThinkingBlock :live` from it;
+  `src/ui/chat/ThinkingBlock.vue:79` exposes `:data-live` on the label for the PageObject.
+- **RED test:** `tests/ui/chat/MessageBlocks.test.ts` +4 cases (streaming trailing thinking
+  → live; finalised turn → not-live; thinking-then-text → not-live; two thinking blocks →
+  only trailing live) + `MessageBlocks.po.ts` `thinkingLiveFlags()`. Watched 4 fail RED
+  (`data-live` absent / `streaming` ignored), then green.
+
+### R-RR-003 — real per-tool lucide icons (commit `c635fff`)
+- **Claudian ref confirmed:** `core/tools/toolIcons.ts:36-70` `TOOL_ICONS` map + `getToolIcon`
+  (`:75`, `mcp__*` → `MCP_ICON_MARKER`). `ObsidianBridge.createIconPort` (`:181-193`) passes
+  the resolved name straight to Obsidian `setIcon`, so production icons were wrong with the
+  old 5-way switch.
+- **Files:** `src/application/chat/toolPresentation.ts` `toolIcon()` replaced with the full
+  map (Read→`file-text`, Write→`file-plus`, Edit/NotebookEdit→`file-pen`,
+  Glob→`folder-search`, Grep→`search`, LS→`list`, TodoWrite→`list-checks`,
+  WebSearch→`globe`, WebFetch→`download`, Task/Agent→`bot`, Skill→`zap`,
+  AskUserQuestion→`help-circle`, Bash→`terminal`, `mcp__*`→`plug`, default→`wrench`).
+  `src/infrastructure/icons/iconNodeMap.ts` extended with placeholder shapes for the new
+  names (Mock/demo recognisable; Obsidian backing is the parity truth per SPEC-RR-012).
+- **RED test:** `tests/application/chat/toolPresentation.test.ts` +7 `toolIcon` cases (the
+  real name mappings + the `mcp__` prefix + the wrench fallback). Watched 5 fail RED, green.
+- **Scope call:** claudian's `MCP_ICON_MARKER` is a sentinel for a custom plug SVG
+  (`appendMcpIcon`); we have no custom-SVG seam, so `mcp__*` returns the real lucide `plug`
+  icon (the closest faithful glyph Obsidian's `setIcon` resolves) + a `plug` placeholder in
+  `iconNodeMap`. No fake icon name reaches `setIcon`.
+
+### R-RR-004 — diff hunking + context elision (commit `f6032cb`)
+- **Claudian ref confirmed:** `DiffRenderer.ts:23-73` `splitIntoHunks(diffLines, 3)` (±3
+  equal-context lines per change, adjacent/overlapping windows merge) + `renderDiffContent`
+  (`:78-134`) `...` separator between hunks; the all-insert `NEW_FILE_DISPLAY_CAP=20` path
+  (`:76/87-100`).
+- **Files:** NEW `src/application/chat/splitDiffHunks.ts` — pure/total port of
+  `splitIntoHunks`, returns `DiffHunk[]` (`{lines}`), no new dependency (NFR-RR-013).
+  `src/ui/chat/DiffView.vue` renders hunks with a `...` `data-testid="diff-separator"` row
+  between them (declarative, `--sp-*` tokens, no `v-html`), keeping the all-insert cap path
+  unchanged.
+- **RED test:** NEW `tests/application/chat/splitDiffHunks.test.ts` (6 cases — empty,
+  all-equal, single change ±3 context, distant→multi-hunk, adjacent→one hunk, touching
+  windows→merge) + `tests/ui/chat/DiffView.test.ts` +3 cases (distant→2 hunks+1 separator+
+  elided body; adjacent→1 hunk no separator; all-insert→cap path no separators) +
+  `DiffView.po.ts` `separatorCount()`. Watched fail RED (module missing + flat-render), green.
+
+### R-RR-005 — web + plan-mode tool name/summary coverage (commit `21005f1`)
+- **Claudian ref confirmed:** `ToolCallRenderer.ts:70-97` `getToolName`
+  (EnterPlanMode→"Entering plan mode", ExitPlanMode→"Plan complete") + `getToolSummary`
+  (WebSearch via `getWebSearchSummary`/`normalizeWebSearchDisplayData` `:276-314`,
+  WebFetch→url ≤60).
+- **Files:** `src/application/chat/toolPresentation.ts` — `toolName` adds the two plan-mode
+  phrases; `toolSummary` adds WebSearch (action one-liner: open_page/find_in_page/search via
+  a ported total `normalizeWebSearch`) + WebFetch (url ≤60); `webToolSummary` extracted to
+  hold complexity ≤10.
+- **RED test:** `tests/application/chat/toolPresentation.test.ts` +6 cases (the two plan-mode
+  names + WebFetch url + 3 WebSearch action shapes + degrade-to-empty). Watched 6 fail RED,
+  green.
+- **Scope call (explicit):** the niche EXPANDED-BODY specialised renderers (WebSearch links
+  list, apply_patch sections, AskUserQuestion review) remain DEFERRED to P7/later per
+  CLAR-RR-005 / SPEC-RR-014 "common path" scope — this finding delivers names + one-line
+  summaries only, as the task directed. Skill / ToolSearch / apply_patch / write_stdin /
+  agent-lifecycle summaries are NOT added (still deferred).
+
+### Constraints honoured (all four)
+- No `v-html`/`innerHTML`; `<script setup>`; `--sp-*` tokens (one new component-scoped
+  `.sp-diff__separator` rule over existing tokens, no new hex); Vue never imports `obsidian`;
+  pure application transforms (`splitDiffHunks`, `toolPresentation`) are total/never-throw.
+- **Typecheck:** `npm run typecheck` (vue-tsc full project) → 0 errors after each finding.
+- **Lint:** `npx eslint` on every touched file → 0 errors/0 warnings (complexity ≤10 held;
+  no `obsidian` in app layer).
+- **Tests:** touched vitest green per finding; **full regression** re-run after the batch —
+  `tests/ui/chat` + `tests/ui/stores` + `tests/application/chat` + `tests/domain/chat` →
+  **306/306**; `tests/infrastructure` + `tests/plugin` → **182/182**. P1 + all prior P2
+  tests unregressed.
+
+### Gate / scope
+- **Not run (T-RR-044 GATE, ORCHESTRATOR-owned):** full `npm run verify` / `build` /
+  `build:web` / `docs:api` / coverage / `npm audit` / `test:all`.
+- **Not pushed.** `manifest.json` untouched. **No new dependency.**
+- **Commits:** `5e822a8` (R-RR-002), `c635fff` (R-RR-003), `f6032cb` (R-RR-004),
+  `21005f1` (R-RR-005).
+- **Outcome:** done. **Deviation:** none from spec — R-RR-003 returns the real lucide names
+  the spec already scoped (SPEC-RR-012/009 "tool icons via `getToolIcon`/`toolIcons.ts`");
+  the MCP-marker → `plug` and the deferred niche summaries are the two recorded scope calls.
