@@ -4,7 +4,7 @@ area: RR
 current_stage: specification
 status: active
 last_updated: 2026-05-24
-last_agent: architect (design)
+last_agent: architect (specification)
 epic: claudian-reboot
 phase: P2
 integration_branch: next
@@ -15,7 +15,7 @@ artifacts:
   requirements.md: accepted (PRD-RR-001; human-blessed via ADR-RR-001 2026-05-24)
   design.md: complete (DESIGN-RR-001 Parts A/B/C; ADR-RR-001 accepted — human-blessed 2026-05-24)
   ADR-RR-001: accepted (docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md — human-blessed 2026-05-24)
-  spec.md: pending
+  spec.md: complete (SPEC-RR-001..034; extends SPEC-CC-* P1 contract; 27 TEST-RR scenarios)
   tasks.md: pending
   implementation-log.md: pending
   test-plan.md: pending
@@ -41,7 +41,7 @@ artifacts:
 | 2. Research | `research.md` | skipped (CLAR-RR-001 — audits + charter stand in, mirrors P1) |
 | 3. Requirements | `requirements.md` | accepted (PRD-RR-001; human-blessed via ADR-RR-001) |
 | 4. Design | `design.md` | complete (Parts A/B/C; ADR-RR-001 accepted — human-blessed 2026-05-24) |
-| 5. Specification | `spec.md` | pending |
+| 5. Specification | `spec.md` | complete (SPEC-RR-001..034; 27 TEST-RR) |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
@@ -196,9 +196,63 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
                           (compatibility note + parity check), and the exact P2 node-model extension for the
                           Obsidian markdown backing (if it forces a `SafeRenderResult` shape change, that
                           returns to ADR-RR-001 as an amendment/superseding ADR).
+2026-05-24 (architect, specification): SPEC-RR-001..034 written at specs/rich-rendering/spec.md
+                          (status complete), extending the P1 SPEC-CC-* contract (SPEC-CC-002 StreamChunk,
+                          SPEC-CC-004 ChatMessage, SPEC-CC-007 MarkdownRenderPort, SPEC-CC-008/009 ports,
+                          SPEC-CC-013 bridges, SPEC-CC-015 dispatch/sink, SPEC-CC-016 store, SPEC-CC-017
+                          composables, SPEC-CC-019 message render, SPEC-CC-023 tokens) additively — no P1
+                          member renamed/removed. 34 spec items grouped by layer: DOMAIN (SPEC-RR-001..009 —
+                          the StreamChunk `toolUseResult?:unknown`→`ToolUseResult` edit [the ONLY edit to a
+                          declared P1 member], ToolUseResult/StructuredPatchHunk, DiffLine/DiffStats/
+                          ToolDiffData, ContentBlock ordered union, ToolCall, SubagentInfo/SubagentMode/
+                          AsyncSubagentStatus, TodoItem, additive ChatMessage.contentBlocks?/toolCalls?, new
+                          IconPort + IconNode DTO + ICON_PORT key + barrel re-export); INFRA (SPEC-RR-010..013
+                          — Obsidian MarkdownRenderer backing walked to the UNCHANGED SafeRenderResult DTO,
+                          MarkdownNode/Inline declarative extension, IconPort on all 3 bridges, Mock/Fixture
+                          scripted rich chunks); APPLICATION (SPEC-RR-014..019 — pure/total transforms
+                          toolPresentation/computeDiff/renderTodos/resolveSubagentLifecycle [Claude path
+                          only], dispatchChunk P2 handlers + the new ChatTurnSink legs, streaming-error
+                          boundary PRESERVED); UI (SPEC-RR-020..032 — chatStore block/tool/subagent legs,
+                          useIconPort, MessageBlocks dispatcher, MessageTurn fork, SpCollapsible+useCollapsible,
+                          SpIcon, ToolCallBlock, ThinkingBlock, TodoList, WriteEditBlock+DiffView,
+                          SubagentBlock, UsageInfo, ContextCompactedBlock — each with its data-testid
+                          PageObject, declarative nodes only, WCAG 2.2 AA collapsible); STYLES (SPEC-RR-033
+                          tokens §4.9 + SPEC-RR-034 the no-v-html cross-cutting invariant). 17 edge cases
+                          (EC-RR-1..17) + EC-RR-XSS + EC-RR-ICON, all testable. 27 TEST-RR scenarios with the
+                          U/A/M split (12 pure U + 13 A + the Obsidian markdown/icon backing as the single M
+                          leg of TEST-RR-026, coverage-excluded infra) — 25 automatable. Full
+                          REQ-RR↔SPEC-RR↔TEST-RR coverage table proving all 27 REQ + all 14 NFR map to ≥1
+                          spec + test. RESOLVED the spec-time watch item EC-RR-2 (out-of-order tool_result):
+                          the store IGNORES + warns, no buffer/late-bind (claudian StreamController find+skip
+                          parity) — stays within ADR-RR-001 (sink degrade policy, no type/seam change).
+                          NO return to ADR-RR-001 was needed: the StreamChunk toolUseResult edit (ADR-RR-001
+                          §1) + the MarkdownNode union widening (ADR-RR-001 §3, keeps the SafeRenderResult
+                          field contract) both stay within the blessed ADR; flagged as an implementation
+                          watch item in spec §12 in case the Obsidian fragment walk forces a return-shape
+                          change. current_stage stays at specification (NOT advanced). No tasks/code; not committed.
+                          HAND-OFF → planner (Tasks): decompose SPEC-RR-001..034 into T-RR-NNN. TDD ORDERING:
+                          (1) domain types FIRST (SPEC-RR-001..009) — the StreamChunk member-shape edit + the
+                          ICON_PORT key land early since all downstream imports them; (2) pure transforms next
+                          (SPEC-RR-014..017 — fully unit-testable, no mount); (3) dispatch + sink + store
+                          (SPEC-RR-018..020); (4) components last (SPEC-RR-022..032) with co-located
+                          data-testid PageObjects; (5) the Obsidian MarkdownRenderer/setIcon backing
+                          (SPEC-RR-010/012 production half) is coverage-excluded → MANUAL leg (TEST-RR-026 M),
+                          not unit-covered; add a --sp-* token task (SPEC-RR-033) + a Mock/Fixture
+                          rich-chunk-script task (SPEC-RR-013) EARLY so npm run dev / demo drive every
+                          renderer from the start; pair with the NFR-RR-011 baseline-capture (#434). OPEN
+                          ITEMS for planner (spec §12): EC-RR-2 closed; the MarkdownNode union-widening +
+                          EC-RR-17 Obsidian-vs-pure perceptual equivalence are implementation/parity-review
+                          watch items, not blockers.
 ```
 
 ## Open clarifications
+
+> **Spec-time resolutions (2026-05-24, architect):** EC-RR-2 (out-of-order `tool_result`) RESOLVED in
+> SPEC-RR-020 — ignore + `warn`, no buffer. The MarkdownNode union-widening (SPEC-RR-011) + EC-RR-17
+> (Obsidian-vs-pure markdown perceptual equivalence) are implementation/parity-review watch items, not
+> blockers. NO return to ADR-RR-001 was required (the StreamChunk `toolUseResult` edit + node-union
+> widening stay within ADR-RR-001 §1/§3). CLAR-RR-004/005/006 confirmed in spec (Claude subagent path
+> only; generic expanded renderer + Write/Edit diff in P2; thinking colour from `--sp-accent`).
 
 - [ ] CLAR-RR-001 — Idea/research depth: thin `idea.md` vs charter §3.1 + audits standing in (mirror P1)?
       **(pm recommendation: mirror P1 — audits + charter stand in; idea/research skipped above.
