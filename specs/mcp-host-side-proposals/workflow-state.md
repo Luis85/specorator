@@ -4,14 +4,14 @@ area: MHP
 current_stage: tasks
 status: active
 last_updated: 2026-05-24
-last_agent: architect
+last_agent: planner
 artifacts:
   idea.md: complete
   research.md: complete
   requirements.md: complete
   design.md: complete
   spec.md: complete
-  tasks.md: pending
+  tasks.md: complete
   implementation-log.md: pending
   test-plan.md: pending
   test-report.md: pending
@@ -32,7 +32,7 @@ artifacts:
 | 3. Requirements | `requirements.md` | complete |
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
-| 6. Tasks | `tasks.md` | pending |
+| 6. Tasks | `tasks.md` | complete |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
@@ -260,6 +260,38 @@ _None._
                                     /spec:tasks now safe to run; advisory
                                     findings F-014/-016 ride to /spec:implement
                                     and /spec:release respectively.
+2026-05-24 (planner):     tasks.md complete. 56 tasks across 10 work
+                          packages (WP-MHP-0..J). T-MHP-001 is the
+                          baseline-capture task and gates every other
+                          per Part C hand-off; numbers must land in
+                          test-plan.md §Baselines before any new code
+                          path ships. 46/46 REQs and 14/14 NFRs covered
+                          (matrix at bottom of tasks.md). TDD invariant
+                          holds: 21 implementation tasks each list
+                          their blocking test task in `dependencies`.
+                          NFR-MHP-012 stability loop (1000-pair dual-
+                          accept fuzz) encoded 1:1 as T-MHP-014 with
+                          N=1000 verbatim in title + DoD. Three tasks
+                          flagged 🪓 may-slice: T-MHP-011 (ProposalStore
+                          extension — 3 slices), T-MHP-021 (8 write-tool
+                          wirings — 2 slices), T-MHP-072 (12 Tier-A
+                          reads — 3 slices). Two architect-flagged
+                          unknowns surfaced as explicit discovery /
+                          decision tasks: T-MHP-130 (locate sidepanel
+                          prompt-assembly hook, escalate via
+                          /spec:clarify if not found) and T-MHP-082
+                          (document DevTools result-delivery choice in
+                          implementation-log.md). ADR-019 acceptance
+                          gate is T-MHP-087, blocked on T-MHP-088
+                          drift-guard test (RISK-MHP-015). First ready
+                          task: T-MHP-001 (owner: qa). After it lands:
+                          Batch 1 test-authoring tasks (12 tasks, all
+                          qa-owned) and Batch 2 foundational impl tasks
+                          (9 tasks, all dev-owned) can run in parallel.
+                          Hand-off → qa: pick up T-MHP-001 first; the
+                          three baseline numbers must be recorded in
+                          test-plan.md before any WP-MHP-A..I task PR
+                          opens.
 2026-05-24 (ux-designer):  design.md Part A complete. 7 flows mapped
                            (F1 external-write headline, F2 auto-accept,
                            F3 in-process+card, F4 list+reject, F5 DevTools
