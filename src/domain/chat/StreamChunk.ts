@@ -1,4 +1,5 @@
 import type { UsageInfo } from './UsageInfo';
+import type { ToolUseResult } from './diff/ToolUseResult';
 
 /**
  * Normalized stream chunk — mirrors claudian-main `chat.ts:137` member NAMES and
@@ -32,7 +33,7 @@ export type StreamChunk =
 			id: string;
 			content: string;
 			isError?: boolean;
-			toolUseResult?: unknown;
+			toolUseResult?: ToolUseResult; // P2 — EDITED (SPEC-RR-001): was `unknown`
 	  } // P2
 	| { type: 'tool_output'; id: string; content: string } // P2
 	| { type: 'notice'; content: string; level?: 'info' | 'warning' }
@@ -56,5 +57,5 @@ export type StreamChunk =
 			id: string;
 			content: string;
 			isError?: boolean;
-			toolUseResult?: unknown;
+			toolUseResult?: ToolUseResult; // P2 — EDITED (SPEC-RR-001): was `unknown`
 	  };

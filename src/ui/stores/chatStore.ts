@@ -169,7 +169,13 @@ export const useChatStore = defineStore('chat', {
 		/** Cancel any in-flight turn and clear all state (EC-15, on view close). */
 		$reset(): void {
 			deps.get(this)?.runner.cancel();
-			this.$patch(initialState());
+			// Mutator form of `$patch`: the object form's `_DeepPartial` overload no
+			// longer resolves once `ChatMessage` grows the recursive `contentBlocks`/
+			// `toolCalls` fields (SPEC-RR-008). Assigning each top-level key from a
+			// fresh `initialState()` keeps the identical reset behaviour.
+			this.$patch((state) => {
+				Object.assign(state, initialState());
+			});
 		},
 
 		/** EC-7: surface a sticky start-failure notice; leave no dangling live message. */
