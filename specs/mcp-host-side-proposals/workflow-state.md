@@ -105,6 +105,113 @@ _None._
                            (post-accept failure path), -013 (error-row
                            triggers), -017 (NotificationPort + status-bar).
                            Stage 3 gate now PASS.
+2026-05-24 (ui-designer):  design.md Part B complete. 26 UI states enumerated
+                           across 6 surfaces (settings DevTools section,
+                           confirm modal, status bar, notices, existing
+                           FileWriteProposalCard, new AutoAcceptReceipt).
+                           Three NEW components introduced and justified:
+                           (a) DevToolsEnableConfirmModal (Obsidian Modal
+                           subclass; parameterised by tool + verbatim threat
+                           paragraph; mod-warning destructive primary, no
+                           Enter-default, triangle-alert glyph); (b)
+                           AutoAcceptReceipt.vue (compact muted row inside
+                           the agent's message bubble for F2 silent auto-
+                           accept and S26 DevTools-low-risk auto-accept);
+                           (c) DevToolsToggleRow helper on
+                           SpecoratorSettingTab (skeleton for the 5 high-
+                           risk per-tool rows). FileWriteProposalCard.vue
+                           gets ONE additive change (S24): a
+                           proposal-card-decided-elsewhere note rendered
+                           inside existing accepted/rejected terminal states
+                           when the deciding client.id !== self — satisfies
+                           the F3 cross-surface invariant without adding a
+                           5th render state. Status-bar item is plain text
+                           "MCP: N pending" (no pill, no animation, hidden
+                           at N=0, absolute integer up to queue cap 1000 —
+                           no "99+" truncation). 1 NEW token proposed:
+                           --sp-status-bar-glyph-size; zero new colour
+                           tokens (theme-robustness). NFR-MHP-011 contrast
+                           assertions made for 7 token combos; disabled
+                           per-tool toggle row keeps label at
+                           var(--text-normal) full strength (not muted
+                           ghost) to stay ≥4.5:1 — non-interactivity is
+                           carried by the toggle's own disabled state +
+                           aria-disabled + helper text "Enable DevTools
+                           first." Microcopy: ~40 verbatim strings written
+                           (settings, modal, notices, status bar, two new
+                           i18n keys for the card update, three new i18n
+                           keys for AutoAcceptReceipt). Confirm-modal threat
+                           text NOT duplicated in design.md — sourced from
+                           research.md §Q3 at impl time (ADR-019 will
+                           codify). Hand-offs to architect (Part C): (a)
+                           proposalDecided event contract that the modified
+                           FileWriteProposalCard subscribes to for S24;
+                           (b) confirm where the per-tool risk summaries +
+                           threat paragraphs live as a TS constant so the
+                           settings row and confirm modal share one source.
+                           No new CLARs surfaced; no Part A flow revisions
+                           requested.
+2026-05-24 (architect):    design.md Part C complete and cross-cutting
+                           requirements-coverage table closed (60 rows:
+                           REQ-MHP-001..046 + NFR-MHP-001..014). ADR-019
+                           authored at docs/adr/ADR-019-mcp-tier-policy-and-
+                           devtools-opt-in.md (status: proposed). Tier policy,
+                           verbatim deny-list, DevTools opt-in matrix, and
+                           per-tool threat paragraphs codified (verbatim from
+                           research.md §Q3). requirements.md edited per
+                           orchestrator hand-off: rewords on REQ-MHP-013/-027/
+                           -030/-031/-034/-038 + NFR-MHP-003; six new REQs
+                           added (REQ-MHP-041 active-feature slug resolution
+                           per CLAR-MHP-007; REQ-MHP-042 write-tool response
+                           shape + queue cap per CLAR-MHP-009; REQ-MHP-043
+                           devtoolsAutoAcceptLowRisk per CLAR-MHP-010;
+                           REQ-MHP-044 post-accept failure path per
+                           CLAR-MHP-011; REQ-MHP-045 exhaustive error-row
+                           triggers per CLAR-MHP-013; REQ-MHP-046
+                           NotificationPort + status-bar surfacing per
+                           CLAR-MHP-017). Five new architecture-level risks
+                           surfaced (RISK-MHP-011..015) beyond the 10 from
+                           research.md: EventBus listener leak (card unmount
+                           hygiene); StatusBar dispose race; per-id-mutex
+                           re-entrance; audit-row drop on graceful shutdown
+                           500 ms budget; threat-paragraph three-way drift
+                           (ADR-019 Part 4 / research.md §Q3 / runtime TS
+                           constant). Hand-offs to planner (Tasks): (a) define
+                           baselines for NFR-MHP-001/-002/-003 as the FIRST
+                           task before any new code path lands; (b) the
+                           sidepanel-prompt-assembly hook for
+                           SystemPromptAddendumProvider needs an exact source
+                           file path — current sidepanel prompt-assembly code
+                           was not located during Part C drafting (the
+                           SystemPromptAddendum constant location is fixed at
+                           src/application/agent/SystemPromptAddendum.ts but
+                           the integration point in the existing sidepanel is
+                           TBD-by-dev); (c) the EventBus has no existing
+                           project-wide implementation — a feature-local
+                           ProposalEventBus is fine but if a global bus lands
+                           in a sibling spec before /spec:implement, prefer
+                           that. No new CLARs surfaced. Part C + cross-cutting
+                           gates ticked; UX/UI gates remain
+                           ux-designer/ui-designer's responsibility per
+                           sequencing.
+2026-05-24 (ux-designer):  design.md Part A complete. 7 flows mapped
+                           (F1 external-write headline, F2 auto-accept,
+                           F3 in-process+card, F4 list+reject, F5 DevTools
+                           opt-in incl. confirm-modal, F6 .mcp.json migration,
+                           F7 Notice+status-bar surfacing). IA table covers
+                           4 surfaces; deep-link convention = none.
+                           Empty/loading/error states prescribed per
+                           surface. A11y covers keyboard order, focus
+                           return, ARIA-live polite for status-bar,
+                           role=alertdialog for confirm modal, reduced-
+                           motion compliant. Hand-offs flagged inline:
+                           ui-designer owns visual treatment of badge,
+                           confirm modal, in-card receipt, disabled per-
+                           tool rows (NFR-MHP-011 contrast); architect
+                           owns proposal-store event emission contract,
+                           cross-surface invariant (card observes external
+                           accept), .gitignore-failure error class shape.
+                           No new CLARs surfaced.
 ```
 
 ## Open clarifications

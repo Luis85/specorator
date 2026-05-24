@@ -197,17 +197,21 @@ Specorator's in-process MCP server queues every vault write into an `ObsidianMcp
 ### REQ-MHP-013 — Read-only escape hatch with regex-validated args
 
 - **Pattern:** ubiquitous
-- **Statement:** *The Specorator MCP server shall register an MCP tool `obsidian_cli_read_command` that accepts a CLI command name and an argument list, validates each argument against the regex `^[^;|&$`\\n\\r\\\\]+$`, rejects any argument that fails validation with MCP error code `invalid_argument`, and dispatches only to CLI commands present in the configured read-only allow-list.*
+- **Statement:** *The Specorator MCP server shall register an MCP tool `obsidian_cli_read_command` that accepts a CLI command name and an argument list, validates each argument against the regex `^[^;|&$`\\n\\r\\\\]+$` AND additionally rejects any argument containing the path segment `..` or starting with an absolute path prefix (`/`, drive-letter `C:\\` (any letter), or UNC `\\\\?\\`), rejects any argument that fails validation with MCP error code `invalid_argument`, and dispatches only to CLI commands present in a hard-coded server-side allow-list equal to the 12 Tier-A CLI command names listed in REQ-MHP-011 (not user-editable).*
 - **Acceptance:**
   - Given the allow-list contains `outline` but not `delete`,
   - When an MCP client calls `obsidian_cli_read_command` with `{ command: "outline", args: ["x.md"] }`,
   - Then the call succeeds and returns the outline output;
   - And when an MCP client calls `obsidian_cli_read_command` with `{ command: "outline", args: ["x.md; rm -rf /"] }`,
   - Then the call returns MCP error `invalid_argument`;
+  - And when an MCP client calls `obsidian_cli_read_command` with `{ command: "outline", args: ["../etc/passwd"] }`,
+  - Then the call returns MCP error `invalid_argument`;
+  - And when an MCP client calls `obsidian_cli_read_command` with `{ command: "outline", args: ["/etc/passwd"] }`,
+  - Then the call returns MCP error `invalid_argument`;
   - And when an MCP client calls `obsidian_cli_read_command` with `{ command: "delete", args: ["x.md"] }`,
   - Then the call returns MCP error `not_allowed`.
 - **Priority:** must
-- **Satisfies:** `discovery/obsidian-cli-mcp-expansion/SYNTHESIS.md` §"Phase 1" (escape hatch); RESEARCH-MHP-001 §"Technical considerations" (Tier-A reads).
+- **Satisfies:** `discovery/obsidian-cli-mcp-expansion/SYNTHESIS.md` §"Phase 1" (escape hatch); RESEARCH-MHP-001 §"Technical considerations" (Tier-A reads); CLAR-MHP-012 (path-traversal + hard-coded allow-list).
 
 ### REQ-MHP-014 — Permanent deny-list at server registration
 
@@ -357,13 +361,13 @@ Specorator's in-process MCP server queues every vault write into an `ObsidianMcp
 ### REQ-MHP-027 — Migrate `.mcp.json` to `.obsidian/mcp.local.json`
 
 - **Pattern:** event-driven
-- **Statement:** *When the Specorator plugin starts and detects a `.mcp.json` file at the vault root, it shall read the file, write its contents to `.obsidian/mcp.local.json`, verify the new file's contents byte-match the source, delete the root `.mcp.json` only after verification succeeds, and show a one-time user notice describing the migration.*
+- **Statement:** *When the Specorator plugin starts and detects a `.mcp.json` file at the vault root, it shall parse the file as JSON, re-serialise the parsed value with `JSON.stringify(value, null, 2)` and write the result to `.obsidian/mcp.local.json`, verify that re-parsing the written file yields a value deeply-equal to the parsed source, delete the root `.mcp.json` only after verification succeeds, and show a one-time user notice describing the migration.*
 - **Acceptance:**
-  - Given `.mcp.json` exists at vault root with payload `P`,
+  - Given `.mcp.json` exists at vault root parsing to value `V`,
   - When the plugin starts,
-  - Then `.obsidian/mcp.local.json` exists with payload byte-equal to `P`, `.mcp.json` is absent from the vault root, and the user has seen a one-time notice.
+  - Then `.obsidian/mcp.local.json` exists, parses to a value deeply-equal to `V`, `.mcp.json` is absent from the vault root, and the user has seen a one-time notice.
 - **Priority:** must
-- **Satisfies:** IDEA-MHP-001 §"Constraints" (`.mcp.json` cannot remain at vault root); RESEARCH-MHP-001 §"Technical considerations"; issue 430 acceptance criterion 6.
+- **Satisfies:** IDEA-MHP-001 §"Constraints" (`.mcp.json` cannot remain at vault root); RESEARCH-MHP-001 §"Technical considerations"; issue 430 acceptance criterion 6; CLAR-MHP-015 (semantic equality, not byte equality).
 
 ### REQ-MHP-028 — Migration verify-before-delete
 
@@ -390,24 +394,28 @@ Specorator's in-process MCP server queues every vault write into an `ObsidianMcp
 ### REQ-MHP-030 — Migration preserves all configured fields
 
 - **Pattern:** ubiquitous
-- **Statement:** *The Specorator plugin shall write `.obsidian/mcp.local.json` such that every top-level and nested field present in the source `.mcp.json` is preserved with byte-equal value.*
+- **Statement:** *The Specorator plugin shall write `.obsidian/mcp.local.json` such that every top-level and nested field present in the source `.mcp.json` is preserved with deeply-equal parsed value (semantic equality, not byte equality — re-serialisation may normalise whitespace).*
 - **Acceptance:**
   - Given `.mcp.json` contains `{ "servers": { "a": { "command": "x", "args": ["y"], "env": { "K": "v" } } } }`,
   - When migration completes,
-  - Then `.obsidian/mcp.local.json` parses to the identical object.
+  - Then `.obsidian/mcp.local.json` parses to a deeply-equal object.
 - **Priority:** must
-- **Satisfies:** IDEA-MHP-001 §"Constraints" ("without losing user-configured fields"); RISK-MHP-004.
+- **Satisfies:** IDEA-MHP-001 §"Constraints" ("without losing user-configured fields"); RISK-MHP-004; CLAR-MHP-015 (semantic equality).
 
 ### REQ-MHP-031 — `.gitignore` shipped for `.obsidian/mcp.local.json`
 
 - **Pattern:** event-driven
-- **Statement:** *When the Specorator plugin creates or migrates `.obsidian/mcp.local.json`, it shall ensure the vault's `.gitignore` (creating it if absent) contains a line matching `.obsidian/mcp.local.json`.*
+- **Statement:** *When the Specorator plugin runs the `.mcp.json` → `.obsidian/mcp.local.json` migration (REQ-MHP-027), it shall ensure the vault's `.gitignore` (creating it if absent) contains an exact line `.obsidian/mcp.local.json` (no glob detection — exact-line match for idempotence), appended with LF line ending on every platform, and shall perform this check exactly once per migration event — not on every plugin start.*
 - **Acceptance:**
   - Given the vault has no `.gitignore`,
   - When migration runs,
-  - Then `.gitignore` exists at the vault root and contains the line `.obsidian/mcp.local.json`.
+  - Then `.gitignore` exists at the vault root and contains the exact line `.obsidian/mcp.local.json` terminated by LF;
+  - And given the vault has a `.gitignore` already containing that exact line,
+  - When migration runs,
+  - Then the file is unchanged (idempotent);
+  - And on subsequent plugin starts where no migration is required, the `.gitignore` is not re-inspected.
 - **Priority:** must
-- **Satisfies:** IDEA-MHP-001 §"Constraints" ("ship a `.gitignore` entry").
+- **Satisfies:** IDEA-MHP-001 §"Constraints" ("ship a `.gitignore` entry"); CLAR-MHP-014 (exact-line match, LF, once-per-migration).
 
 ### REQ-MHP-032 — Sidepanel-agent system-prompt addendum present
 
@@ -434,13 +442,13 @@ Specorator's in-process MCP server queues every vault write into an `ObsidianMcp
 ### REQ-MHP-034 — Proposal records carry submitting client identifier
 
 - **Pattern:** event-driven
-- **Statement:** *When the Specorator MCP server enqueues a proposal, it shall populate `client.id` from the request header `x-mcp-client-name` if present, otherwise from `User-Agent` if present, otherwise the literal string `unknown`, and shall populate `client.transport` as `in-process` for sidepanel-originated proposals and `loopback` for HTTP-originated proposals.*
+- **Statement:** *When the Specorator MCP server enqueues a proposal, it shall populate `client.id` from the `clientInfo.name` field captured during the MCP `initialize` handshake for the calling connection (stashed server-side per connection), falling back to the literal string `unknown` when the field is absent, empty, or malformed, and shall populate `client.transport` as `in-process` for sidepanel-originated proposals and `loopback` for HTTP-originated proposals.*
 - **Acceptance:**
-  - Given an MCP client sends header `x-mcp-client-name: cursor`,
-  - When that client triggers a proposal,
+  - Given an MCP client completes the `initialize` handshake with `clientInfo: { name: "cursor", version: "0.42.0" }`,
+  - When that client triggers a proposal on the same connection,
   - Then the proposal record's `client.id` is `cursor` and `client.transport` is `loopback`.
 - **Priority:** must
-- **Satisfies:** RISK-MHP-002; RESEARCH-MHP-001 §Q4 ("`client` — Identifies who invoked the proposal"); RESEARCH-MHP-001 §"Technical considerations" (client identity).
+- **Satisfies:** RISK-MHP-002; RESEARCH-MHP-001 §Q4 ("`client` — Identifies who invoked the proposal"); RESEARCH-MHP-001 §"Technical considerations" (client identity); CLAR-MHP-006 (MCP-native `clientInfo.name` over Specorator-private header).
 
 ### REQ-MHP-035 — Unknown clients are not refused
 
@@ -477,16 +485,19 @@ Specorator's in-process MCP server queues every vault write into an `ObsidianMcp
 - **Priority:** must
 - **Satisfies:** RESEARCH-MHP-001 §Q1, §Q4; NG8 (schema carries field; enforcement is Tier-B).
 
-### REQ-MHP-038 — Proposal queue is ephemeral; discards logged on shutdown
+### REQ-MHP-038 — Proposal queue is ephemeral; discards logged on graceful shutdown (best-effort)
 
 - **Pattern:** event-driven
-- **Statement:** *When the Specorator plugin shuts down (Obsidian close, plugin disable, plugin reload), it shall write one audit-log row per remaining `pending` proposal with `decision.outcome: "discarded"` and `decision.by: "shutdown"`, and shall not persist the proposal store across the restart.*
+- **Statement:** *When the Specorator plugin shuts down gracefully (Obsidian close via UI, plugin disable, plugin reload), it shall attempt — on a best-effort, non-blocking basis with a 500 ms upper-bound time budget — to write one audit-log row per remaining `pending` proposal with `decision.outcome: "discarded"` and `decision.by: "shutdown"`, and shall not persist the proposal store across the restart. Proposals not flushed within the 500 ms window are silently dropped. Non-graceful exits (forced quit, OS kill, process crash) are explicitly out of scope: in those cases the audit log may be inconsistent with the ephemeral store contents.*
 - **Acceptance:**
   - Given three `pending` proposals exist in the store,
-  - When the plugin is disabled in Obsidian settings,
-  - Then the audit log contains three new rows with `decision.outcome: "discarded"` and `decision.by: "shutdown"`, and on re-enable the proposal store is empty.
+  - When the plugin is disabled in Obsidian settings (graceful path) and the flush completes within 500 ms,
+  - Then the audit log contains three new rows with `decision.outcome: "discarded"` and `decision.by: "shutdown"`, and on re-enable the proposal store is empty;
+  - And given the host process is force-killed (non-graceful path),
+  - When the plugin reloads,
+  - Then the audit log may not contain corresponding `discarded` rows and the proposal store is empty (silent loss is accepted).
 - **Priority:** must
-- **Satisfies:** CLAR-MHP-005 in `specs/mcp-host-side-proposals/workflow-state.md` (PM confirms ephemeral v1 with shutdown logging); RESEARCH-MHP-001 §"Recommendation" item CLAR-MHP-005.
+- **Satisfies:** CLAR-MHP-005 (PM confirms ephemeral v1 with shutdown logging); CLAR-MHP-016 (500 ms budget, non-graceful exits OOS); RESEARCH-MHP-001 §"Recommendation".
 
 ### REQ-MHP-039 — Audit-log row on every accept and reject
 
@@ -518,7 +529,7 @@ Specorator's in-process MCP server queues every vault write into an `ObsidianMcp
 |---|---|---|---|
 | NFR-MHP-001 | performance | `workflow_proposal_list` response latency from request receipt to MCP response | p95 ≤ 50 ms with 100 `pending` proposals in store (measured via unit-level benchmark; no I/O beyond in-memory list) |
 | NFR-MHP-002 | performance | Audit-log append latency added to the write-tool path | ≤ baseline + 10 ms p95 per accepted proposal (baseline = pre-change write path) |
-| NFR-MHP-003 | performance | Tier-A read tools added round-trip latency vs direct CLI invocation | ≤ baseline + 20 ms p95 per call (baseline = direct CLI process spawn) |
+| NFR-MHP-003 | performance | Tier-A read tools added round-trip latency vs baseline (CLAR-MHP-018) | ≤ baseline + 20 ms p95 per call, measured at the MCP server boundary. **Baseline** = time to spawn the underlying `obsidian-cli` subprocess from within the plugin process, excluding MCP framing. The 20 ms budget covers JSON serialisation of the result. |
 | NFR-MHP-004 | security | Permanent deny-list enforcement | 100% of deny-list entries unreachable via `tools/list` AND via `obsidian_cli_read_command`; asserted by unit test (see REQ-MHP-014, REQ-MHP-015) |
 | NFR-MHP-005 | security | Escape-hatch argument validation | 100% of arguments containing `;`, `|`, `&`, `$`, backtick, newline, carriage return, or backslash are rejected with MCP error `invalid_argument`; asserted by unit test |
 | NFR-MHP-006 | security | Audit-log payload privacy | DevTools tool result bytes never appear in `.specorator/mcp-audit.log`; asserted by REQ-MHP-021 unit test |
@@ -530,6 +541,94 @@ Specorator's in-process MCP server queues every vault write into an `ObsidianMcp
 | NFR-MHP-012 | reliability | Single-accept guarantee under concurrency | 0 dual-execution events across 1000 dual-accept fuzz runs; asserted by REQ-MHP-006 stress test |
 | NFR-MHP-013 | reliability | Migration safety | 0 cases of root `.mcp.json` deletion without verified new-file write across 100 fault-injection runs (fs read-only, partial write, disk-full); asserted by REQ-MHP-028 test |
 | NFR-MHP-014 | privacy | Audit-log path scoping | All recorded paths are vault-relative POSIX strings; 0 absolute paths, 0 backslash separators, 0 home-directory leaks; asserted by REQ-MHP-023 test |
+
+### REQ-MHP-041 — Active-feature slug resolution rule
+
+- **Pattern:** ubiquitous
+- **Statement:** *The Specorator MCP server shall resolve the active feature slug by scanning every `specs/*/workflow-state.md` file and selecting the single feature whose YAML frontmatter `status` field equals `active`. If zero matches are found, no proposal is auto-accepted (every write queues as `pending`). If two or more matches are found, no proposal is auto-accepted and the LoggerPort shall emit a `warn` entry naming every matching slug.*
+- **Acceptance:**
+  - Given exactly one `specs/<slug>/workflow-state.md` has frontmatter `status: active`,
+  - When the auto-accept rule (REQ-MHP-009) evaluates `<active_slug>`,
+  - Then the slug resolves to that single feature;
+  - And given zero feature folders have `status: active`,
+  - When a `vault_append_to_note` proposal is enqueued for `specs/anything/research.md`,
+  - Then the proposal status is `pending`;
+  - And given two feature folders have `status: active`,
+  - When a write is enqueued,
+  - Then the proposal status is `pending`, no vault mutation runs, and the LoggerPort receives one `warn` entry listing both slugs.
+- **Priority:** must
+- **Satisfies:** CLAR-MHP-007 (single-match invariant + fallback); REQ-MHP-009 (depends-on).
+
+### REQ-MHP-042 — Write-tool synchronous response shape and queue capacity
+
+- **Pattern:** ubiquitous
+- **Statement:** *The Specorator MCP server shall return a synchronous response of shape `{ proposalId: string, status: 'pending' | 'accepted', tool: string }` from every write tool invocation. The `status` is `accepted` when the auto-accept rule fires (REQ-MHP-009) and `pending` otherwise. The proposal store has a hard capacity of 1000 pending proposals; when the store contains 1000 `pending` entries, any further write tool invocation shall return MCP error code `queue_full` and shall not enqueue.*
+- **Acceptance:**
+  - Given the proposal store is empty,
+  - When a non-auto-accepted write tool is invoked,
+  - Then the response is `{ proposalId: "<uuid>", status: "pending", tool: "<toolName>" }`;
+  - And given an auto-accept rule matches,
+  - When the same tool is invoked,
+  - Then the response is `{ proposalId: "<uuid>", status: "accepted", tool: "<toolName>" }`;
+  - And given the proposal store contains 1000 `pending` entries,
+  - When a write tool is invoked,
+  - Then the response is an MCP error result with code `queue_full` and the store still contains exactly 1000 entries.
+- **Priority:** must
+- **Satisfies:** CLAR-MHP-009 (write-tool response shape + queue cap).
+
+### REQ-MHP-043 — DevTools low-risk auto-accept setting
+
+- **Pattern:** state-driven
+- **Statement:** *While the user setting `devtools.masterEnabled` is `true` AND the user setting `devtoolsAutoAcceptLowRisk` is `true`, the Specorator MCP server shall auto-accept any newly queued proposal whose tool is one of `dev:screenshot`, `dev:errors`, or `dev:console`, and shall not affect the proposal-gating of the five high-risk DevTools tools (`dev:dom`, `dev:cdp`, `dev:debug`, `dev:mobile`, `devtools`). The default value of `devtoolsAutoAcceptLowRisk` is `false`.*
+- **Acceptance:**
+  - Given `devtools.masterEnabled` and `devtoolsAutoAcceptLowRisk` are both `true`,
+  - When an MCP client calls `dev:screenshot`,
+  - Then the proposal is auto-accepted, the screenshot executes, and the audit row carries `decision.by: "auto"` and `decision.rule: "devtools-low-risk-auto-accept"`;
+  - And given the same settings,
+  - When an MCP client calls `dev:dom`,
+  - Then the proposal status is `pending` and the DOM read does not execute until `workflow_proposal_accept` runs;
+  - And given `devtoolsAutoAcceptLowRisk` is `false` (default),
+  - When an MCP client calls `dev:screenshot`,
+  - Then the proposal status is `pending`.
+- **Priority:** must
+- **Satisfies:** CLAR-MHP-010 (`devtoolsAutoAcceptLowRisk` setting); REQ-MHP-020 (high-risk always-prompt invariant unaffected).
+
+### REQ-MHP-044 — Post-accept vault-write failure transitions proposal to error
+
+- **Pattern:** unwanted-behaviour
+- **Statement:** *If the queued mutation for a proposal throws or returns a failure after the proposal has transitioned to `accepted`, then the Specorator MCP server shall transition the proposal status to `error` (terminal), append exactly one audit row with `decision.outcome: "error"`, `decision.by` carrying the same value as the accept decision (`auto` | `user` | `client`), and `result.error` populated with the underlying error message, and shall return an MCP error result with code `write_failed` carrying the `proposalId`. The proposal record shall remain in the in-memory store for inspection until the next plugin shutdown.*
+- **Acceptance:**
+  - Given a `pending` proposal targeting a read-only file is accepted via `workflow_proposal_accept`,
+  - When the vault write fails,
+  - Then the proposal status is `error`, the audit log contains one row with `decision.outcome: "error"` and a populated `result.error`, the MCP response is an error with code `write_failed` and the `proposalId`, and the proposal is still retrievable via `workflow_proposal_get` until plugin shutdown.
+- **Priority:** must
+- **Satisfies:** CLAR-MHP-011 (post-accept failure path); RISK-MHP-001 (write-failure visibility).
+
+### REQ-MHP-045 — Exhaustive triggers for `decision.outcome: error`
+
+- **Pattern:** ubiquitous
+- **Statement:** *The Specorator MCP server shall emit an audit row with `decision.outcome: "error"` exclusively in response to one of the following four conditions, and shall emit a `LoggerPort.warn` entry alongside each row: (a) vault-write failure post-accept (REQ-MHP-044); (b) the queued mutation callback throws inside `ProposalStore.accept`; (c) inbound payload schema-validation failure on a write tool; (d) `proposalId` not found on `workflow_proposal_accept` or `workflow_proposal_reject`.*
+- **Acceptance:**
+  - Given any one of the four trigger conditions occurs,
+  - When the audit row is appended,
+  - Then `decision.outcome` is `error`, `result.error` is non-empty, and LoggerPort received one corresponding `warn` entry;
+  - And given no other condition produces an `error` row.
+- **Priority:** must
+- **Satisfies:** CLAR-MHP-013 (exhaustive error-row trigger list).
+
+### REQ-MHP-046 — Pending-proposal surfacing via NotificationPort and status-bar item
+
+- **Pattern:** event-driven
+- **Statement:** *When a proposal transitions to `pending` status (either as a result of a new write tool invocation from an external loopback client OR from an in-process call while the sidepanel is not the focused leaf), the Specorator plugin shall (a) emit a `NotificationPort.showInfo` notice naming the submitting `client.id` and (b) update an Obsidian status-bar item (registered via `Plugin.addStatusBarItem`) to display the current count of `pending` proposals. The status-bar item shall be hidden (removed from the DOM) when the count reaches zero.*
+- **Acceptance:**
+  - Given the proposal store contains 0 `pending` proposals,
+  - When an external loopback client triggers a non-auto-accepted write,
+  - Then NotificationPort receives exactly one `showInfo` call whose message includes the submitting `client.id` and the status-bar item displays the count `1`;
+  - And given the count subsequently drops to `0` after the user accepts the proposal,
+  - When the status-bar item is inspected,
+  - Then the status-bar item element is absent from the DOM (not present with text "0 pending").
+- **Priority:** must
+- **Satisfies:** CLAR-MHP-017 (dual surface — NotificationPort + status-bar); `DESIGN-MHP-001` Part A §F7.
 
 ## Success metrics
 
