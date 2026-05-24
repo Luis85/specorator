@@ -560,3 +560,41 @@ Executed UI BATCH 2 (T-RR-031..038, SPEC-RR-029/030/031/032/022/023) on `feature
 - **Not pushed.** `manifest.json` untouched. No new dependency added.
 - **Commits:** `c1dfe7b` (T-RR-031 RED), `306b605` (T-RR-032), `1937e1d` (T-RR-033 RED), `b6add34` (T-RR-034), `a879220` (T-RR-035 RED), `d413954` (T-RR-036), `bddff93` (T-RR-037 RED), `2f8256a` (T-RR-038).
 - **Next batch (WIRE-IN, SPEC-RR-021 provide + demo):** **FIRST TASK = T-RR-040** (qa RED — assert `ICON_PORT` is provided from `bridge.createIconPort()` alongside the existing ports in both `AgentSidebarView` and `src/ui/main.ts`, and that a mounted `MessageBlocks`/`ToolCallBlock` resolves icons through it; `tests/ui/chat/mount.rr.test.ts` or the extended P1 mount test), greened by **T-RR-041** (provide `ICON_PORT` in `AgentSidebarView` + `src/ui/main.ts` + demo wiring). Then T-RR-042 (`npm run dev` rich-render smoke — TEST-RR-026 dev leg, qa). Then the GATE: T-RR-043 (MANUAL Obsidian `MarkdownRenderer`/`setIcon` backing + real-CLI rich turn — human-owned, never agent-self-claimed) and T-RR-044 (full verify + parity #434 + draft PR into `next`).
+
+---
+
+## WIRE-IN batch (T-RR-040..042) — `dev`, implement (wire-in batch)
+
+### T-RR-040 (RED) — `ICON_PORT` provided in the sidebar + standalone mount (TEST-RR-024 wire leg)
+
+- **Files:** `tests/ui/chat/mount.rr.test.ts` (new).
+- **Behaviour asserted:** extends the P1 mount/standalone test. Two legs mount the **real** entry point against a `MockBridge`, drive the default scripted rich turn through the live composer (set the textarea value, dispatch `input`, dispatch an Enter `keydown`, then drain the per-chunk microtask yield boundaries), and assert the finalised assistant turn rendered `message-blocks` + `tool-call-header` and that the `sp-icon` resolved a real `<svg>` through the injected `ICON_PORT`. Leg 1 = `src/ui/main` (standalone); leg 2 = `AgentSidebarView.onOpen()` with a jsdom-backed `obsidian` mock (`ItemView.contentEl` is a real element with `createDiv`/`empty`). Queried by `data-testid` only (ADR-009).
+- **RED watched:** both legs fail with `IconPort was not provided. Call app.provide(ICON_PORT, iconPort)…` thrown by `SpIcon`'s `useIconPort()` when the dispatcher mounts a `ToolCallBlock` → swallowed by `ErrorBoundary` → no `message-blocks`/`sp-icon` → `expected null not to be null`. **2 tests failed** for the right reason.
+- **Spec:** SPEC-RR-021; REQ-RR-019; NFR-RR-001. **SHA:** `5bc322d`. **Outcome:** done (RED).
+
+### T-RR-041 (GREEN) — provide `ICON_PORT` in `AgentSidebarView` + `src/ui/main.ts`
+
+- **Files:** `src/plugin/AgentSidebarView.ts` (L7-16 import + L72-74 provide + docblock), `src/ui/main.ts` (L18-27 import + L46-48 provide + docblock).
+- **Behaviour:** added `app.provide(ICON_PORT, bridge.createIconPort())` **additively** alongside the existing ports in both entry points, mirroring exactly how P1 provides `CHAT_RUNTIME_PORT`/`MARKDOWN_RENDER_PORT` (T-CC-029). Every existing provide + assertion stayed intact. The class/module docblocks were updated to name the `ICON_PORT` provide (and to drop the stale "(deleted) IconPort" note now that the P2 seam is regrown).
+- **GREEN:** T-RR-040 now passes (3 rr tests green incl. the T-RR-042 smoke). The P1 mount/standalone tests (`tests/ui/chat/mount.test.ts`, `tests/ui/main.test.ts`, `tests/plugin/*`) stay green (5/5 re-run).
+- **Spec:** SPEC-RR-021; REQ-RR-019; NFR-RR-002. **SHA:** `f1ee7d4`. **Outcome:** done.
+
+### T-RR-042 — standalone rich-render smoke (TEST-RR-026 dev leg)
+
+- **Files:** `tests/ui/main.rr.test.ts` (new), `specs/rich-rendering/test-plan.md` (dev-leg row recorded, dated 2026-05-24).
+- **Behaviour asserted (deterministic leg):** `src/ui/main` (MockBridge) streams the default scripted rich turn (SPEC-RR-013, T-RR-010); after expanding the collapsibles, `message-blocks` + `thinking-block` + `tool-call-header` + `write-edit-header` + `diff-line` + `todo-list` mount, the `sp-icon` resolves a declarative `<svg>` through the provided `ICON_PORT`, and no `<script>` element is injected (NFR-RR-006). This is the deterministic leg; the live-browser visual feel pairs with the human run.
+- **Result:** **PASS** (recorded in `test-plan.md`, 2026-05-24).
+- **Deviation (in-scope, recorded in `test-plan.md` + the test docblock):** the dev leg does NOT assert the SUBAGENT or USAGE visual renderers. The default `MockChatRuntime` script emits the subagent as bare `subagent_tool_use`/`subagent_tool_result`/`async_subagent_result` chunks with no preceding `Task`/`Agent` `tool_use`, so the store (T-RR-023) never seeds a top-level `{type:'subagent'}` content block (the subagent rides a spawning `ToolCall.subagent`, and the store has no subagent-block-pushing leg), so `MessageBlocks` never mounts a `SubagentBlock` from this script; `UsageInfo.vue` (T-RR-036) reads `chatStore.usage` but is not yet mounted into the surface tree. Both paths are stored/handled and covered by the store + component unit suites (T-RR-022/023, T-RR-033/034, T-RR-035/036); their **surface** wire-in is out of the P2 WIRE-IN batch scope (T-RR-040..042 cover only the `ICON_PORT` provide + the dev smoke). No prior-batch store/script/component was modified, so there is no regression risk. Rationale: per Constitution Art. I/II, forcing those renderers into the smoke would require either a script change (T-RR-010 territory) or a surface wire-in (a new task) — both out of this batch's scope; logged here rather than silently expanded.
+- **Spec:** TEST-RR-026 (dev leg); NFR-RR-002, NFR-RR-014. **SHA:** `8cd4212`. **Outcome:** done.
+
+---
+
+## Batch close-out — WIRE-IN batch (T-RR-040..042)
+
+- **Typecheck:** `npm run typecheck` (`vue-tsc --noEmit -p tsconfig.lint.json`) → **0 errors**.
+- **Lint:** `npx eslint` on every touched file (`AgentSidebarView.ts`, `main.ts`, `mount.rr.test.ts`, `main.rr.test.ts`) → **0 errors / 0 warnings**.
+- **Tests:** the 3 new rr tests pass; **the P1 mount/standalone tests stay green** (`tests/ui/chat/mount.test.ts`, `tests/ui/main.test.ts`, `tests/plugin/*` — 5/5 re-run); **full unit suite re-run 554/554 across 73 files** (dot reporter), no regression. The `ICON_PORT` provide is purely additive — every existing provide + assertion intact.
+- **Not run (the T-RR-044 GATE, ORCHESTRATOR-owned):** full `npm run verify` / `build` / `build:web` / `docs:api` / coverage / `npm audit` / `npm run test:all` / parity #434 / the draft PR into `next`.
+- **Not pushed.** `manifest.json` untouched. No new dependency added. Vue never imports `obsidian`; `src/plugin/**` keeps the no-`window.confirm`/no-`innerHTML` rules.
+- **Commits:** `5bc322d` (T-RR-040 RED), `f1ee7d4` (T-RR-041), `8cd4212` (T-RR-042).
+- **Remaining:** **T-RR-043** — MANUAL, **human-owned**, the Obsidian `MarkdownRenderer`/`setIcon` backing + real-CLI rich turn (the M leg of TEST-RR-026); **never agent-self-claimed**; scheduled in `test-plan.md`. **T-RR-044** — the full verify gate + `test:all` + parity #434 + the draft PR into `next`; **ORCHESTRATOR-owned**, not run by this dev agent.

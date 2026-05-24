@@ -825,9 +825,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-038, T-RR-009
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/ui/chat/mount.rr.test.ts` (or the extended P1 mount test) exists, asserting
+  - [x] `tests/ui/chat/mount.rr.test.ts` (or the extended P1 mount test) exists, asserting
         `ICON_PORT` provision; data-testid only.
-  - [ ] Test fails (RED) — `ICON_PORT` is not yet provided.
+  - [x] Test fails (RED) — `ICON_PORT` is not yet provided.
 
 ### T-RR-041 🔨 — Provide `ICON_PORT` in `AgentSidebarView` + `src/ui/main.ts`; demo wiring 🪓
 
@@ -841,9 +841,9 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Estimate:** S
 - **Slice plan:** may slice as (a) `AgentSidebarView` provision, (b) `src/ui/main.ts` standalone.
 - **Definition of done:**
-  - [ ] T-RR-040 passes; `ICON_PORT` provided with the existing ports in both entry points.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; no `obsidian` leak under `src/ui/**`.
-  - [ ] Implementation-log entry added.
+  - [x] T-RR-040 passes; `ICON_PORT` provided with the existing ports in both entry points.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; no `obsidian` leak under `src/ui/**`.
+  - [x] Implementation-log entry added.
 
 ### T-RR-042 🧪 — `npm run dev` standalone rich-render smoke (TEST-RR-026 dev leg)
 
@@ -857,8 +857,10 @@ names an owner, lists explicit dependencies, and has a testable Definition of Do
 - **Depends on:** T-RR-041, T-RR-010
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `npm run dev` boots; the scripted rich turn streams every renderer incrementally and finalises.
-  - [ ] Result recorded in `test-plan.md` (TEST-RR-026 dev leg pass/fail + date).
+  - [x] `npm run dev` boots; the scripted rich turn streams every renderer incrementally and finalises.
+        (Deterministic leg automated as `tests/ui/main.rr.test.ts`; live-browser visual feel pairs
+        with the human run.)
+  - [x] Result recorded in `test-plan.md` (TEST-RR-026 dev leg pass/fail + date).
 
 ---
 

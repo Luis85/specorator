@@ -3,8 +3,8 @@ feature: rich-rendering
 area: RR
 current_stage: implementation
 status: active
-last_updated: 2026-05-25
-last_agent: dev (implement — ui batch 2)
+last_updated: 2026-05-24
+last_agent: dev (implement — wire-in batch)
 epic: claudian-reboot
 phase: P2
 integration_branch: next
@@ -17,8 +17,8 @@ artifacts:
   ADR-RR-001: accepted (docs/adr/ADR-RR-001-rich-block-model-and-render-seam.md — human-blessed 2026-05-24)
   spec.md: complete (SPEC-RR-001..034; extends SPEC-CC-* P1 contract; 27 TEST-RR scenarios)
   tasks.md: complete (TASKS-RR-001; 44 tasks T-RR-001..044; full SPEC/REQ/NFR/TEST coverage table)
-  implementation-log.md: in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 done; wire-in T-RR-040..042 + gate T-RR-043/044 remain)
-  test-plan.md: in-progress (TESTPLAN-RR-001; baseline reference + manual TEST-RR-026 / T-RR-043 legs scheduled)
+  implementation-log.md: in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 + wire-in T-RR-040..042 done; gate T-RR-043 [MANUAL, human-owned] + T-RR-044 [verify + PR, orchestrator] remain)
+  test-plan.md: in-progress (TESTPLAN-RR-001; baseline reference + TEST-RR-026 dev leg PASS [T-RR-042] + manual TEST-RR-026 / T-RR-043 M leg scheduled)
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -43,7 +43,7 @@ artifacts:
 | 4. Design | `design.md` | complete (Parts A/B/C; ADR-RR-001 accepted — human-blessed 2026-05-24) |
 | 5. Specification | `spec.md` | complete (SPEC-RR-001..034; 27 TEST-RR) |
 | 6. Tasks | `tasks.md` | complete (TASKS-RR-001; T-RR-001..044) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 done; wire-in T-RR-040..042 + gate T-RR-043/044 remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (domain-foundation T-RR-001..007, 039 + infra T-RR-008..011 + application T-RR-012..021 + ui batch 1 T-RR-022..030 + ui batch 2 T-RR-031..038 + wire-in T-RR-040..042 done; gate T-RR-043 [MANUAL, human-owned] + T-RR-044 [verify + PR, orchestrator] remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -488,6 +488,51 @@ evidence; checkpoint with the human at charter §6 ADR decisions + the P2 PR + s
                           dev leg, qa). Then the GATE: T-RR-043 (MANUAL Obsidian MarkdownRenderer/setIcon
                           backing + real-CLI rich turn -- human-owned, never agent-self-claimed) +
                           T-RR-044 (full verify + parity #434 + draft PR into next).
+2026-05-24 (dev, implement -- wire-in batch): Executed the WIRE-IN batch (T-RR-040..042,
+                          SPEC-RR-021 provide + demo) on feature/rich-rendering with strict TDD, one
+                          Conventional commit per task. COMPLETED (in order): T-RR-040 RED
+                          tests/ui/chat/mount.rr.test.ts -- asserts BOTH entry points provide
+                          ICON_PORT from bridge.createIconPort() by mounting the real surface against
+                          MockBridge, streaming the default scripted rich turn, and proving a
+                          ToolCallBlock resolves its SpIcon through the injected port (SVG under
+                          sp-icon). Watched fail RED for the right reason: "IconPort was not provided"
+                          thrown by SpIcon.useIconPort() -> ErrorBoundary swallows -> no
+                          message-blocks/sp-icon (5bc322d). T-RR-041 -- app.provide(ICON_PORT,
+                          bridge.createIconPort()) added ADDITIVELY alongside the existing ports in
+                          BOTH src/plugin/AgentSidebarView.ts and src/ui/main.ts, mirroring the P1
+                          CHAT_RUNTIME_PORT/MARKDOWN_RENDER_PORT wiring (T-CC-029); docblocks updated;
+                          T-RR-040 -> GREEN (f1ee7d4). T-RR-042 -- tests/ui/main.rr.test.ts standalone
+                          rich-render smoke (TEST-RR-026 dev leg): drives the default rich turn through
+                          src/ui/main + MockBridge, expands the collapsibles, asserts thinking-block +
+                          tool-call-header + write-edit-header + diff-line + todo-list mount and the
+                          icon resolves as declarative SVG (no v-html, no injected <script>); result
+                          recorded in test-plan.md (8cd4212).
+                          BATCH-END STATE: npm run typecheck -> 0 errors; npx eslint every touched file
+                          -> 0 errors/0 warnings; the new rr tests 3/3; the P1 mount/standalone tests
+                          stay green (tests/ui/chat/mount.test.ts, tests/ui/main.test.ts,
+                          tests/plugin/* -- 5/5 re-run); full unit suite re-run 554/554 across 73 files
+                          (dot reporter), no regression -- every existing provide + assertion intact,
+                          the ICON_PORT provide is purely additive. DEVIATION (in-scope, recorded in
+                          test-plan.md + the T-RR-042 test docblock): the TEST-RR-026 dev leg does NOT
+                          assert the SUBAGENT and USAGE visual renderers. The default MockChatRuntime
+                          script emits the subagent as bare subagent_tool_use/subagent_tool_result/
+                          async_subagent_result chunks with NO preceding Task/Agent tool_use, so the
+                          store (T-RR-023) never seeds a top-level {type:'subagent'} content block (it
+                          has no subagent-block-pushing leg -- the subagent rides a spawning
+                          ToolCall.subagent), and the MessageBlocks dispatcher therefore never mounts a
+                          SubagentBlock from this script; UsageInfo.vue (T-RR-036) reads
+                          chatStore.usage but is not yet mounted into the surface tree. Both paths are
+                          stored/handled and covered by the store + component unit suites (T-RR-022/023,
+                          T-RR-033/034, T-RR-035/036) -- their SURFACE wire-in is out of the P2 WIRE-IN
+                          batch scope (T-RR-040..042 cover only the ICON_PORT provide + the dev smoke).
+                          No prior-batch store/script/component was modified (no regression risk). NOT
+                          pushed; manifest.json untouched; no new dependency; full verify/build/
+                          build:web/docs:api/coverage/audit + test:all + parity #434 + the draft PR into
+                          next are the T-RR-044 GATE, run by the ORCHESTRATOR (not this dev agent).
+                          REMAINING: T-RR-043 (MANUAL -- Obsidian MarkdownRenderer/setIcon backing +
+                          real-CLI rich turn, the M leg of TEST-RR-026; HUMAN-OWNED, never
+                          agent-self-claimed; scheduled in test-plan.md) and T-RR-044 (the verify gate +
+                          draft PR, ORCHESTRATOR-owned).
 ```
 
 ## Open clarifications
