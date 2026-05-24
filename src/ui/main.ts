@@ -1,119 +1,47 @@
 /**
- * Standalone entry point — runs in a regular browser via `npm run dev`.
- * Uses LocalStorageBridge in production and MockBridge in development.
- *
- * CSS custom properties are injected here (not in App.vue) so they are
- * scoped to standalone mode only and never leak into Obsidian's theme.
+ * Standalone browser entry (`npm run dev` / `npm run build:web`). P0 reboot
+ * (SPEC-PSR-017 / OC-PSR-2): always MockBridge, mounting the empty
+ * AgentPanelRoot inside ErrorBoundary with the six core ports. The PROD /
+ * LocalStorageBridge branch, router, AppRoot, FeatureService, and secret stores
+ * are dropped; the GitHub-Pages demo path is deferred. CSS imports are kept.
  */
-import './standalone.css'
-// WS-AUX-1: design-token layer + named-keyframes layer (ADR-AUX-002,
-// REQ-AUX-009). Imported here so the standalone browser UI bundles them;
-// the Obsidian plugin build inherits the same tokens via the agent root.
-import './styles/tokens.css'
-import './styles/animations.css'
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
-import AppRoot from './AppRoot.vue'
-import { router } from './router'
-import { i18n, i18nMerge, i18nTranslate, setLocale, type SupportedLocale } from './i18n'
+import './standalone.css';
+import './styles/tokens.css';
+import './styles/animations.css';
+import { createApp, h } from 'vue';
+import { createPinia } from 'pinia';
+import AgentPanelRoot from './agent/AgentPanelRoot.vue';
+import ErrorBoundary from './components/ErrorBoundary.vue';
+import { i18n, setLocale, toSupportedLocale } from './i18n';
 import {
-  SETTINGS_PORT,
-  VAULT_PORT,
-  WORKSPACE_PORT,
-  NOTIFICATION_PORT,
-  LOGGER_PORT,
-  CHAT_TRANSPORT_PORT,
-  COMMUNITY_PLUGIN_PORT,
-  SECRET_STORE_PORT,
-  OPEN_PLUGIN_SETTINGS_KEY,
-  ICON_PORT,
-} from '@/infrastructure/bridge/ports'
-import { LocalStorageBridge } from '@/infrastructure/localstorage/LocalStorageBridge'
-import { LocalStorageSecretStore } from '@/infrastructure/localstorage/LocalStorageSecretStore'
-import { MockBridge } from '@/infrastructure/mock/MockBridge'
-import { MockSecretStore } from '@/infrastructure/mock/MockSecretStore'
-import { FeatureRepository } from '@/infrastructure/bridge/FeatureRepository'
-import { FeatureService } from '@/application/feature/FeatureService'
-import { FeedbackService } from '@/application/shared/FeedbackService'
-import { FEATURE_SERVICE_KEY } from './composables/useFeatureService'
-import { DEV_FIXTURES } from '@/infrastructure/mock/fixtures'
-import { createEventBus } from '@/domain/shared/event-bus'
-import { bootstrapModules } from '@/core/bootstrap'
-import { ALL_MODULES, type ModuleDescriptor, type ModulePorts } from '@/modules'
-import type { TranslationPort } from '@/domain/ports'
+	SETTINGS_PORT,
+	VAULT_PORT,
+	WORKSPACE_PORT,
+	NOTIFICATION_PORT,
+	LOGGER_PORT,
+	COMMUNITY_PLUGIN_PORT,
+} from '@/infrastructure/bridge/ports';
+import { MockBridge } from '@/infrastructure/mock/MockBridge';
 
-const bridge = import.meta.env.PROD ? new LocalStorageBridge() : new MockBridge(DEV_FIXTURES)
-const secretStore = import.meta.env.PROD ? new LocalStorageSecretStore() : new MockSecretStore()
-const mountPoint = document.querySelector('#app')
+const bridge = new MockBridge();
+const mountPoint = document.querySelector('#app');
+mountPoint?.classList.add('specorator-root');
 
-mountPoint?.classList.add('specorator-root')
+const app = createApp({
+	name: 'StandaloneRoot',
+	render: () => h(ErrorBoundary, null, { default: () => h(AgentPanelRoot) }),
+});
+app.use(createPinia());
+app.use(i18n);
+app.provide(SETTINGS_PORT, bridge);
+app.provide(VAULT_PORT, bridge);
+app.provide(WORKSPACE_PORT, bridge);
+app.provide(NOTIFICATION_PORT, bridge);
+app.provide(LOGGER_PORT, bridge);
+app.provide(COMMUNITY_PLUGIN_PORT, bridge);
 
-const app = createApp(AppRoot)
-app.use(createPinia())
-app.use(router)
-app.use(i18n)
+void bridge.getSettings().then((s) => {
+	setLocale(toSupportedLocale(s.locale));
+});
 
-const translationPort: TranslationPort = { t: i18nTranslate }
-
-const appBus = createEventBus()
-const ports: ModulePorts = {
-  settings: bridge,
-  vault: bridge,
-  workspace: bridge,
-  notifications: bridge,
-  logger: bridge,
-  bus: appBus,
-  t: translationPort,
-}
-
-void bridge.getSettings()
-  .then((settings) => {
-    if (settings.locale) setLocale(settings.locale as SupportedLocale)
-    return bootstrapModules(ALL_MODULES as ReadonlyArray<ModuleDescriptor>, ports, settings as unknown as Readonly<Record<string, unknown>>, i18nMerge)
-  })
-  .then(() => {
-    app.provide(SETTINGS_PORT, bridge)
-    app.provide(VAULT_PORT, bridge)
-    app.provide(WORKSPACE_PORT, bridge)
-    app.provide(NOTIFICATION_PORT, bridge)
-    app.provide(LOGGER_PORT, bridge)
-    app.provide(CHAT_TRANSPORT_PORT, bridge)
-    app.provide(COMMUNITY_PLUGIN_PORT, bridge)
-    app.provide(ICON_PORT, bridge)
-    app.provide(SECRET_STORE_PORT, secretStore)
-    // The Obsidian build provides this via `SpecoratorView.onOpen()` and
-    // opens the real plugin settings tab. In the standalone browser UI
-    // there is no Obsidian `App`, so route to the in-app Vue `/settings`
-    // page — that's the same destination the previous `<RouterLink>` had,
-    // so this preserves the prior behaviour rather than degrading to a
-    // no-op (Codex P2, PR #365).
-    app.provide(OPEN_PLUGIN_SETTINGS_KEY, () => {
-      void router.push('/settings')
-    })
-    const featureFeedback = new FeedbackService(bridge, bridge)
-    app.provide(
-      FEATURE_SERVICE_KEY,
-      new FeatureService(new FeatureRepository(bridge, bridge), featureFeedback),
-    )
-
-    // Set errorHandler BEFORE mount() so initial render/setup errors flow through
-    // bridge.error()/showError() instead of escaping to console.
-    app.config.errorHandler = (err, _instance, info) => {
-      bridge.error(`[Vue] Unhandled error in ${info}`, err)
-      bridge.showError('An unexpected error occurred. Check the console for details.')
-    }
-
-    // Standalone: page lifetime = app lifetime, no teardown needed.
-    window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
-      bridge.error('[Unhandled rejection]', event.reason)
-      bridge.showError('An unexpected error occurred. Check the console for details.')
-    })
-
-    router.onError((err) => {
-      bridge.error('[Router] Navigation error', err)
-      bridge.showError('Navigation failed. Please try again.')
-    })
-
-    app.mount(mountPoint ?? '#app')
-  })
-  .catch(console.error)
+app.mount(mountPoint ?? '#app');

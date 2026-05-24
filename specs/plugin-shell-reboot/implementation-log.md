@@ -233,3 +233,17 @@ convergence.
 - `tests/plugin/activateAgentSidebar.test.ts`: E1 (twice → one leaf + reveal),
   E2 (`getRightLeaf` null → no throw). RED watched (method absent on fat main),
   then GREEN. TEST-PSR-012/013; SPEC-PSR-007.
+
+### T-PSR-016 — standalone entry (always MockBridge) + smoke (qa→dev)
+
+- RED smoke (fat entry mounts `AppRoot`, no testid) → rewrote `src/ui/main.ts` to
+  the minimal `AgentPanelRoot`-in-`ErrorBoundary` mount with `MockBridge` + the six
+  core ports; dropped router/`AppRoot`/`FeatureService`/secret stores/`DEV_FIXTURES`/
+  `bootstrapModules` + deleted provides; kept the CSS imports + the
+  `no-restricted-imports: off` carve-out. **TEST-PSR-022 GREEN**; `vite build` exits
+  0 (~175 kB). OC-PSR-2 closed. SPEC-PSR-017; REQ-PSR-011, NFR-PSR-005.
+
+> **Phase A exit gate reached:** the surviving surface is stood up and its targeted
+> tests are GREEN. Tree-wide `npm run typecheck` is red, tracing only to
+> not-yet-deleted chat/feature/MCP/onboarding consumers — the Wave 0 entry point
+> for Phase B.
