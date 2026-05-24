@@ -345,3 +345,13 @@ convergence.
   the kept-file-scope-signal rule rather than silently absorbed.
 - **Phase B exit gate reached:** `npm run typecheck` GREEN tree-wide; `npm run test`
   GREEN (38 files, 307 tests). REQ-PSR-004/005; SPEC-PSR-009, §9.
+
+### T-PSR-023 — Wave 5a: delete dead custom ESLint rule (dev)
+
+- Deleted `eslint-rules/no-legacy-claude-cli-port-names.cjs` + its `__tests__`
+  suite + `tests/lint/no-legacy-claude-cli-port-names.test.ts`, the `lint:rules`
+  half that ran it, the `local/no-legacy-claude-cli-port-names` registration +
+  rule, and the `useClaudeCliPort` carve-out override (target file already gone).
+  **Kept** `local/no-claude-home-reads` (cross-cutting security invariant).
+  `npm run lint:rules` passes; typecheck GREEN. REQ-PSR-005, NFR-PSR-009;
+  SPEC-PSR-013, §9.

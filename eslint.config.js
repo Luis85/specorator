@@ -17,10 +17,6 @@ import globals from 'globals';
 const localRequire = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 const noClaudeHomeReadsRule = localRequire('./eslint-rules/no-claude-home-reads.cjs');
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-const noLegacyClaudeCliPortNamesRule = localRequire(
-	'./eslint-rules/no-legacy-claude-cli-port-names.cjs',
-);
 
 const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
 
@@ -130,22 +126,11 @@ export default defineConfig(
 				rules: {
 					// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 					'no-claude-home-reads': noClaudeHomeReadsRule,
-					// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-					'no-legacy-claude-cli-port-names': noLegacyClaudeCliPortNamesRule,
 				},
 			},
 		},
 		rules: {
 			'local/no-claude-home-reads': 'error',
-			'local/no-legacy-claude-cli-port-names': 'error',
-		},
-	},
-	// Carve out the deprecated re-export shim — the file's whole point is
-	// to keep the legacy name available for one release (ADR-MPS-001).
-	{
-		files: ['src/ui/composables/useClaudeCliPort.ts'],
-		rules: {
-			'local/no-legacy-claude-cli-port-names': 'off',
 		},
 	},
 
