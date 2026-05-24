@@ -5,6 +5,53 @@ import type {
 } from '@/domain/chat/ProviderSelection'
 
 /**
+ * Full DevTools tool id alphabet governed by ADR-019. Mirrors the literal
+ * union exported by `@/application/mcp/threatParagraphs`, redeclared here so
+ * the settings domain owns its own canonical surface (the application module
+ * carries the same shape independently per ADR-008 inward-only direction).
+ */
+export type DevToolsToolId =
+	| 'dev:screenshot'
+	| 'dev:errors'
+	| 'dev:console'
+	| 'dev:dom'
+	| 'dev:cdp'
+	| 'dev:debug'
+	| 'dev:mobile'
+	| 'devtools'
+
+/**
+ * The five high-risk DevTools tool ids governed by per-tool opt-in toggles
+ * (REQ-MHP-017, ADR-019 Part 3). The three low-risk ids — `dev:screenshot`,
+ * `dev:errors`, `dev:console` — are gated by the master toggle plus
+ * `devtools.autoAcceptLowRisk` only; they have no per-tool toggle.
+ */
+export type DevToolsHighRiskToolId = Extract<
+	DevToolsToolId,
+	'dev:dom' | 'dev:cdp' | 'dev:debug' | 'dev:mobile' | 'devtools'
+>
+
+/**
+ * DevTools opt-in matrix per ADR-019 + SPEC §"Settings additions".
+ *
+ * - `masterEnabled` (REQ-MHP-016): master toggle. When `false`, none of the
+ *   eight DevTools tools register.
+ * - `autoAcceptLowRisk` (REQ-MHP-043): when `true` AND `masterEnabled`,
+ *   auto-accepts the three low-risk tools (`dev:screenshot`, `dev:errors`,
+ *   `dev:console`). Has NO effect on the high-risk five — `dev:cdp` and the
+ *   other high-risk tools always prompt (REQ-MHP-020).
+ * - `tools[id].enabled` (REQ-MHP-017): per-tool opt-in for the high-risk five.
+ *   Registration requires master enabled AND per-tool enabled.
+ */
+export interface DevToolsSettings {
+	readonly masterEnabled: boolean
+	readonly autoAcceptLowRisk: boolean
+	readonly tools: Readonly<
+		Record<DevToolsHighRiskToolId, { readonly enabled: boolean }>
+	>
+}
+
+/**
  * Domain-level plugin configuration. Persisted via SettingsPort and
  * read by use cases that need to resolve vault paths or behaviour flags.
  *
@@ -102,6 +149,19 @@ export interface PluginSettings {
 	 * thread switcher prunes the least-recently-used. Per REQ-MPS-040.
 	 */
 	readonly chatTabCap: number
+	/**
+	 * When `true`, every MCP write tool returns `pending` regardless of the
+	 * active-feature-append auto-accept rule (REQ-MHP-010). Default `false`:
+	 * appends inside `specs/<active>/*.md` may auto-accept per REQ-MHP-009.
+	 */
+	readonly requireExplicitAcceptForAllWrites: boolean
+	/**
+	 * DevTools opt-in matrix per ADR-019 (REQ-MHP-016, REQ-MHP-017,
+	 * REQ-MHP-043). All three nested fields default to `false`; the registrar
+	 * registers zero DevTools tools until the user explicitly opts in via the
+	 * settings tab.
+	 */
+	readonly devtools: DevToolsSettings
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -127,4 +187,16 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	autoPreferProvider: 'claude',
 	providerModel: { claude: 'claude-sonnet-4', cursor: 'cursor-default' },
 	chatTabCap: 10,
+	requireExplicitAcceptForAllWrites: false,
+	devtools: {
+		masterEnabled: false,
+		autoAcceptLowRisk: false,
+		tools: {
+			'dev:dom': { enabled: false },
+			'dev:cdp': { enabled: false },
+			'dev:debug': { enabled: false },
+			'dev:mobile': { enabled: false },
+			devtools: { enabled: false },
+		},
+	},
 }

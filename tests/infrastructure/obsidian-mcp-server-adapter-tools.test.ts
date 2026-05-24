@@ -111,7 +111,10 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
   })
 
   describe('tools/list', () => {
-    it('registers all 35 tools', async () => {
+    it('registers all 39 tools', async () => {
+      // T-MHP-041 added the 4 host-side `workflow_proposal_*` tools
+      // (SPEC-MHP-001..004) to the registrar set so any MCP client can
+      // drive the proposal queue. Tool-count assertion lifted 35 → 39.
       const resp = (await mcpPost(port, {
         jsonrpc: '2.0',
         id: 99,
@@ -154,6 +157,10 @@ describe('ObsidianMcpServerAdapter — vault + frontmatter tools', () => {
         'workflow_get_stage_artifacts',
         'workflow_get_state',
         'workflow_list_features',
+        'workflow_proposal_accept',
+        'workflow_proposal_get',
+        'workflow_proposal_list',
+        'workflow_proposal_reject',
         'workflow_propose_advance',
       ])
     })

@@ -26,6 +26,7 @@ import type { ApprovalRule } from '@/domain/chat/ApprovalRule'
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge'
 import { ObsidianConfirmModalAdapter } from '@/infrastructure/obsidian/ObsidianConfirmModalAdapter'
 import { ObsidianMcpServerAdapter } from '@/infrastructure/obsidian/ObsidianMcpServerAdapter'
+import { MigrationService } from '@/infrastructure/obsidian/MigrationService'
 import { ObsidianCliAdapter } from '@/infrastructure/obsidian/ObsidianCliAdapter'
 import { ObsidianMetadataCacheAdapter } from '@/infrastructure/obsidian/ObsidianMetadataCacheAdapter'
 import { ObsidianCanvasAdapter } from '@/infrastructure/obsidian/ObsidianCanvasAdapter'
@@ -179,6 +180,19 @@ export default class SpecoratorPlugin extends Plugin {
     // narrowed non-null reference (TS does not narrow `this.bridge` across
     // closures even though it was assigned a few lines above).
     const bridge = this.bridge
+
+    // T-MHP-112 / SPEC-MHP-038 — migrate any vault-root `.mcp.json` into
+    // `.obsidian/mcp.local.json` BEFORE the MCP server registers any tools.
+    // The MigrationService internally surfaces success/conflict/failure
+    // notices via the injected NotificationPort; a thrown migration is
+    // swallowed (best-effort) so plugin startup is never blocked by an
+    // unexpected filesystem error.
+    const migration = new MigrationService({ vault: bridge, logger: bridge, notify: bridge })
+    const migrationOutcome = await tryAsync(() => migration.runOnce())
+    if (!migrationOutcome.ok) {
+      bridge.warn('mhp.migration.threw', { error: migrationOutcome.error })
+    }
+
     const mcpServerAdapter = new ObsidianMcpServerAdapter(
       bridge,
       new FeatureRepository(bridge, bridge),

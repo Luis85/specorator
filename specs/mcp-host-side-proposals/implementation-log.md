@@ -243,6 +243,154 @@ A running record of *what* was implemented, *why* a deviation was taken, and *wh
 - Out of scope: wiring `MigrationService.runOnce()` into `Plugin.onload` is T-MHP-112.
 - DoD: ✓ all asserts pass, ✓ typecheck clean for new files, ✓ lint clean for new files.
 
+### 2026-05-24 — T-MHP-015 — workflow_proposal_* contract tests (qa)
+- File: `tests/infrastructure/obsidian/mcp/registerWorkflowProposalTools.test.ts` (new — 14 tests).
+- Status: FAILING (before T-MHP-016) — import unresolved (`registerWorkflowProposalTools` module not yet created); after T-MHP-016 lands all 14 turn green.
+- Satisfies: REQ-MHP-001..007, REQ-MHP-034..036, REQ-MHP-045(d); SPEC-MHP-001..004; TEST-MHP-001..005, TEST-MHP-007, TEST-MHP-008.
+- Asserts: exactly 4 tools registered (`workflow_proposal_list/get/accept/reject`); list returns pending-only ordered by `enqueuedAt`; get on unknown id → `proposal_not_found`; get/list write no audit row; accept on pending invokes mutate, returns `{ok:true, decision}`, writes one `accepted` audit row; accept on already-decided returns `already_decided` with `priorDecision`; accept on unknown writes one error audit row (REQ-MHP-045(d)); reject on pending does NOT invoke mutate, writes one `rejected` audit row; reject already-decided + reject not-found symmetric; client.id captured from `McpClientIdentifier` flows into `decision.client.id` on accept.
+
+### 2026-05-24 — T-MHP-016 — Implement registerWorkflowProposalTools (dev)
+- File: `src/infrastructure/obsidian/mcp/registerWorkflowProposalTools.ts` (new).
+- Spec: SPEC-MHP-001..004; satisfies REQ-MHP-001..007, REQ-MHP-034..036, REQ-MHP-045(d).
+- Test status: PASSING — `tests/infrastructure/obsidian/mcp/registerWorkflowProposalTools.test.ts` (14/14).
+- Implementation notes:
+  - Tool descriptions use the verbatim copy from SPEC-MHP-001..004 ("This tool is for the user — do not call it on the user's behalf").
+  - Accept/reject delegate to `ProposalStore.acceptBy` / `rejectBy` (extended surface from T-MHP-011). The store writes the audit row before the result returns, so the registrar only translates the `Result<AuditRow, ProposalError>` into the MCP envelope.
+  - `not_found` from store is normalised to MCP `{error:'not_found'}`; the store has already appended the not-found error row (REQ-MHP-045(d)), so the registrar adds no second row.
+  - `already_decided` carries `priorDecision` through verbatim.
+  - `write_failed` carries `proposalId` + `message`.
+  - `get` uses a new `ProposalStore.getDomain(id)` method that returns the deep-cloned domain `PendingProposal` regardless of status (SPEC-MHP-002). The legacy `get` returned the truncated infra shape (`toolName` instead of `tool`); a new method was the lowest-risk change.
+  - DEFAULT_CONNECTION_ID literal `'mcp'` is used for `clientIdentifier.identityFor(...)` because the registrar runs once per MCP request and the SDK does not yet expose per-call connection ids. The identifier resolves any unknown id to a stable identity, so behaviour is unchanged for tests; production rewires when the SDK lands the per-call hook.
+- Deviation from SPEC-MHP-003 letter: the registrar builds the `ProposalDecision` server-side (`by:'client'`, `outcome:'accepted'|'rejected'`, `at: now`) and passes it as the single argument to `acceptBy/rejectBy`, matching the existing extended-surface signature documented in T-MHP-011's deviation note. SPEC-MHP-034 letter has `(by, decidingClient)` — that signature lands when T-MHP-014's stress test or a follow-up clean-up rewires the store API.
+- DoD: ✓ tests pass, ✓ typecheck clean, ✓ lint clean.
+
+### 2026-05-24 — T-MHP-040 — Adapter rewire tests (qa)
+- File: `tests/infrastructure/obsidian/ObsidianMcpServerAdapter.test.ts` (new — 7 tests).
+- Status: FAILING (before T-MHP-041) — 5/7 red against the unrewired adapter; 7/7 green after T-MHP-041.
+- Satisfies: REQ-MHP-001..007 (workflow tools registered), REQ-MHP-008 (legacy off-port callers route to new surface), REQ-MHP-011 (Tier-A reads), REQ-MHP-034..036 (clientIdentifier present).
+- Asserts (live HTTP roundtrip + private-field probes):
+  - 4 `workflow_proposal_*` tools listed in `tools/list` on every `/mcp` request.
+  - 12 Tier-A `obsidian_cli_*` reads listed when a CLI port is configured; absent when CLI is omitted.
+  - `acceptProposal(id)` routes via `acceptBy`; mutate runs; entry leaves pending list (terminal state).
+  - `rejectProposal(id)` routes via `rejectBy`; mutate does NOT run; entry leaves pending list.
+  - `getProposals()` delegates to `listPending` (pending-only filter, decided entries excluded).
+  - ProposalStore has the four-dep extended shape (`listPending`, `acceptBy`, `rejectBy`, `discardPending` all defined as functions).
+- Test design: probes adapter private field `proposalStore` via the literal `(adapter as any).proposalStore` to seed pending entries through the legacy `queue` helper (the 8 write-tool registrars still use it until T-MHP-021). Acceptable here because the rewire test specifically verifies internal wiring; an alternative public accessor existing only for testing was rejected as broader surface area than a single test-only field probe.
+
+### 2026-05-24 — T-MHP-080..088 — DevTools opt-in surface (dev/qa)
+- Tests:
+  - `tests/infrastructure/obsidian/mcp/DevToolsToolRegistrar.test.ts` (new, 12/12 green) — T-MHP-080 matrix per REQ-MHP-016/-017/-018/-020/-043 + TEST-MHP-017..021, TEST-MHP-046.
+  - `tests/plugin/settings/DevToolsEnableConfirmModal.interaction.test.ts` (new, 17/17 green) — T-MHP-083 modal interaction per Part B §S07–S09 + REQ-MHP-020.
+  - `tests/application/mcp/threatParagraphs.driftGuard.test.ts` (new, 10/10 green) — T-MHP-088 drift-guard per RISK-MHP-015 / TEST-MHP-055; asserts every `THREAT_PARAGRAPHS_MHP[id]` block byte-equals ADR-019 §4 after normalising Markdown-bold / inline-code / typographic-quote decoration. The dev:cdp entry is permitted a single appended paragraph — the verbatim "always prompts" sentence mandated by REQ-MHP-020 / Part B §S07 — and that suffix is asserted explicitly.
+- Files:
+  - `src/infrastructure/obsidian/mcp/DevToolsToolRegistrar.ts` (NEW, T-MHP-081) — implements SPEC-MHP-026..033 + SPEC-MHP-041. Conditional registration per ADR-019 matrix; per-tool Zod schemas; mutate closure built via injected `mutateFor(toolId, input)` factory; auto-accept low-risk routes via `ProposalStore.tryQueue` → `acceptBy` with `{by:'auto', rule:'devtools-low-risk-auto-accept'}`; `refresh()` reconciles registered tool set on settings change; `dispose()` unregisters all.
+  - `src/domain/settings/PluginSettings.ts` (extended, T-MHP-085) — adds `DevToolsToolId`, `DevToolsHighRiskToolId`, `DevToolsSettings`; extends `PluginSettings` with `requireExplicitAcceptForAllWrites: boolean` (REQ-MHP-010, default false) and `devtools: DevToolsSettings` (REQ-MHP-016/-017/-043, all nested booleans default false); `DEFAULT_SETTINGS` carries the five new defaults.
+  - `src/core/core-settings.ts` (extended, T-MHP-085) — adds `validateDevtools(value)` for nested coercion (missing/malformed → defaults; per-tool entries default to `{enabled:false}`); wires both new keys into `validateSettings`.
+  - `src/plugin/settings/DevToolsSettingsSection.ts` (NEW, T-MHP-085) — renders "MCP write proposals" section (`requireExplicitAcceptForAllWrites` toggle, S01/S02 microcopy) and "DevTools (agent-driven)" section (master toggle, autoAcceptLowRisk toggle, 5 high-risk per-tool toggles with `Enable DevTools first.` helper text when disabled; verbatim Part B §"Content" microcopy throughout; per-tool flip on opens `DevToolsEnableConfirmModal`; cancel reverts the toggle, confirm persists and calls `onSettingsChange`).
+  - `src/plugin/settings.ts` (extended, T-MHP-085) — wires `renderDevToolsSettingsSection` into `SpecoratorSettingTab.display()` (15 net lines).
+  - `src/infrastructure/obsidian/proposalStoreInternals.ts` (extended) — `coerceKind` now translates colon-form tool ids (`dev:screenshot`) to underscore-form `ProposalKind` (`dev_screenshot`) before lookup so DevTools proposals carry the correct discriminator without forcing the registrar to pre-map.
+- T-MHP-082 decision: **always-via-accept**. Per SPEC-MHP-026..033 §"Common per-tool behaviour" step 4 (implementer-choice clause / /spec:analyze F-014), every DevTools tool returns `{ proposalId, status, tool, intent? }`; clients call `workflow_proposal_accept` to obtain the actual side-effect payload via the accept-response. Rationale: the architecturally simpler path that satisfies REQ-MHP-019 + REQ-MHP-046 — no second `content` block to add, no client-side branching ("is the payload inline or do I need to accept?"). REQ-MHP-021 (DevTools result payloads never enter the audit row) holds because the store's `acceptBy` audit-row construction never reads the mutate-callback return value.
+- T-MHP-084 status: Batch 2C's `DevToolsEnableConfirmModal` already implements the Part B §S07–S09 contract end-to-end (focus on heading, Esc cancels, Tab cycles Cancel↔Enable, no Enter default, mod-warning primary, inline S09 error with `data-testid="devtools-confirm-error"`, dev:cdp body includes the second-paragraph "always prompts" sentence). T-MHP-083's canonical test file verifies these behaviours plus the happy-path close and S09 re-enable. No modal-class changes required.
+- Test status: ALL PASSING — 68/68 across the six target test files (10 drift-guard + 17 modal + 12 registrar matrix + 12 PluginSettings devtools + 9 PluginSettings WS-2 + 8 DevTools confirm-modal-from-T-MHP-122). 39/39 ProposalStore regression tests still green (the `coerceKind` translation is additive — legacy underscore-form names still resolve through `KNOWN_KINDS` lookup).
+- Spec reference: SPEC-MHP-026..033 (DevTools tool registrations), SPEC-MHP-041 (`DevToolsToolRegistrar`); REQ-MHP-010/-016/-017/-018/-020/-021/-043; ADR-019 Parts 1/3/4; RISK-MHP-015.
+- Verification: `npx tsc --noEmit` exits 0 on the full project; `npx eslint --max-warnings 0` clean on all 8 changed source/test files. `settings.ts` retains its pre-existing `max-lines` warn (was 419 lines pre-change, now 430 — 11 net lines added; threshold is 350 but rule is `warn` for plugin code, not `error`, and was already over baseline).
+- Out of scope: `T-MHP-102` plugin-start wiring that mounts the `DevToolsToolRegistrar` against the live MCP server and calls `refresh()` from the settings-section `onSettingsChange` hook. The section's `onSettingsChange` is currently a documented no-op; the registrar itself is fully testable in isolation per the T-MHP-080 suite.
+- Outcome: done.
+
+### 2026-05-24 — T-MHP-041 — Rewire ObsidianMcpServerAdapter (dev)
+- File: `src/infrastructure/obsidian/ObsidianMcpServerAdapter.ts` (modified — full rewrite of constructor and `_handleMcpRequest`).
+- Also: `src/infrastructure/obsidian/mcp/index.ts` (re-exports added for `registerWorkflowProposalTools` + `registerObsidianCliReadTools`); `src/infrastructure/obsidian/ProposalStore.ts` (added `getDomain(id)` for SPEC-MHP-002 read).
+- Spec: SPEC-MHP-034..036; satisfies REQ-MHP-008, REQ-MHP-011, REQ-MHP-034..036, REQ-MHP-046.
+- Test status: PASSING — `tests/infrastructure/obsidian/ObsidianMcpServerAdapter.test.ts` (7/7); `tests/infrastructure/obsidian/mcp/registerWorkflowProposalTools.test.ts` (14/14); `tests/infrastructure/obsidian/ProposalStore.extended.test.ts` + `tests/infrastructure/proposal-store.test.ts` (39/39 — no regression on legacy surface).
+- Implementation notes:
+  - Constructor now instantiates `ProposalEventBus`, `AuditLogWriter`, `McpClientIdentifier` and wires all four into `ProposalStore`. Optional `deps?: { logger, notify }` keeps the existing 7-positional-argument signature backwards-compat for the 12+ existing test files that construct the adapter without ports.
+  - `FALLBACK_LOGGER` is **silent** (not `console.*`-backed) per Obsidian's "Avoid unnecessary logging to console" plugin guideline (the lint rule fires on console calls inside src/). Production threads a real `LoggerPort` through plugin start.
+  - `FALLBACK_NOTIFY` is a no-op for the same reason; `AuditLogWriter` still surfaces errors through `LoggerPort.error` when present.
+  - `acceptProposal` / `rejectProposal` now build a `ProposalDecision` server-side with `by:'user'` (the off-port callers are the sidebar / settings UI, not a remote MCP client) and route through `acceptBy` / `rejectBy`. Throws on failure to preserve the pre-rewire void-return contract.
+  - `getProposals()` now returns the domain shape mapped to the legacy `PendingProposal` interface (`tool` → `toolName`) so the 4 existing test files that assert `proposals[i].toolName === ...` keep passing.
+  - `discardPendingOnShutdown()` is exposed as a new public method; plugin-side wiring belongs to T-MHP-012 and is not in scope here.
+  - The 12 Tier-A reads (`registerObsidianCliReadTools`) are registered when the CLI port is configured. The registrar's `tool(name, schema, handler)` shape is bridged to the SDK's `registerTool(name, descriptor, handler)` via a local wrapper that lifts the zod-shape `.shape` into the SDK's `inputSchema` slot and wraps the handler result in the MCP `content` envelope.
+  - `McpClientIdentifier.attachInitializeHook(mcp)` is attached when the SDK exposes `onInitialize` — currently it does not, so the call is a structurally-typed no-op. The integration point is in place for when the SDK lands the hook.
+  - `registerWorkflowProposalTools(mcp, proposalStore, clientIdentifier)` is registered on every `/mcp` request — independent of the CLI port — so any MCP client can list/get/accept/reject proposals (REQ-MHP-001..007).
+- Deviation from SPEC-MHP-036: the `attachInitializeHook` call is a runtime-typeof-guarded no-op until the MCP SDK exposes `onInitialize`. Per-connection client identity therefore falls back to `'unknown'` in v1; the audit-row `client` field is still populated (REQ-MHP-040 provenance is intact via the `decision.by` literal `'client'` vs `'user'`). The full integration lands when the SDK ships the hook.
+- DoD: ✓ 21 tests pass on the new surface, ✓ 39 ProposalStore-related tests pass (no regression), ✓ typecheck clean (`tsc --noEmit` exits 0 on the changed surface), ✓ lint clean on changed files. Pre-existing TDD-red on `tests/infrastructure/obsidian/mcp/DevToolsToolRegistrar.test.ts` (T-MHP-080 / T-MHP-081 not in this batch's scope) remains red as expected.
+
+### 2026-05-24 — T-MHP-090 / T-MHP-091 — SpecoratorStatusBar (dev)
+- File: `src/plugin/SpecoratorStatusBar.ts` (new, ~95 lines).
+- Spec: SPEC-MHP-041; satisfies REQ-MHP-046; covers RISK-MHP-012 (dispose order).
+- Test status: PASSING — `tests/plugin/StatusBarBadge.test.ts` (10/10).
+- Implementation notes:
+  - Plain DOM (no Vue) per the plugin-chrome rule. Subscribes to `proposalEnqueued` (increments on `status === 'pending'`) and `proposalDecided` (decrements). Auto-accepted entries (`status === 'accepted'`) intentionally do NOT increment per Part A §F2.
+  - The status-bar element is created via `Plugin.addStatusBarItem()` on the first transition from 0→1 and is REMOVED from the DOM (not `display: none`) on every transition back to 0 per EC-MHP-035.
+  - `aria-live="polite"` set on the element; `data-testid="mcp-status-bar"` for query parity with Part B §S10.
+  - `dispose()` unsubscribes BEFORE releasing the DOM element (RISK-MHP-012 / TEST-MHP-054). A late event after dispose neither throws nor resurrects the element.
+  - Uses the generic project `EventBus` (`@/domain/shared/event-bus`) rather than `ProposalEventBus` directly because the QA-authored test imports `createEventBus` and emits via the channel name; production wire-up at T-MHP-102 will bridge `ProposalEventBus.emit` to the generic bus.
+- DoD: ✓ subscribes, ✓ hidden at 0, ✓ updates on event, ✓ dispose-order invariant.
+
+### 2026-05-24 — T-MHP-100 / T-MHP-101 — ProposalNoticeEmitter (dev)
+- File: `src/application/mcp/ProposalNoticeEmitter.ts` (new, ~80 lines).
+- Spec: SPEC-MHP-042; satisfies REQ-MHP-046; covers EC-MHP-034.
+- Test status: PASSING — `tests/infrastructure/notice/ProposalNoticeEmitter.test.ts` (8/8).
+- Implementation notes:
+  - Subscribes to `proposalEnqueued` via the injected generic `EventBus`. On payload `status === 'pending'`, calls `NotificationPort.showInfo` with the verbatim Part B §S15 copy: `Pending MCP proposal from <client.id>. Review in your MCP client.`.
+  - Per-proposalId idempotence via internal `Set<proposalId>` — duplicate emissions for the same id (defensive guard against fan-out bugs) produce one notice. Distinct ids produce distinct notices.
+  - `status === 'accepted'` is silent (auto-accept path, Part A §F2).
+  - Falls back to client.id `'unknown'` when the captured ClientIdentity is missing the name (REQ-MHP-035 mirror).
+  - `dispose()` halts subsequent emissions.
+- DoD: ✓ test green, ✓ idempotent, ✓ silent on auto-accept.
+
+### 2026-05-24 — T-MHP-120 / T-MHP-121 — FileWriteProposalCard S24 decided-elsewhere (dev)
+- Files: `src/ui/components/chat/FileWriteProposalCard.vue` (additive prop + render branch + style); `src/ui/i18n/locales/en.ts` + `src/ui/i18n/locales/de.ts` (new `chat.proposal.decidedElsewhereBody` key).
+- Spec: Part B §S24 + Part A §F3 cross-surface invariant; satisfies REQ-MHP-046; covers EC-MHP-033 + RISK-MHP-011.
+- Test status: PASSING — `tests/ui/components/chat/FileWriteProposalCard.decidedElsewhere.test.ts` (10/10) + `tests/ui/components/chat/FileWriteProposalCard.test.ts` (33/33 — no regression).
+- Implementation notes:
+  - Additive change per Part B §S24 — NOT a fifth render state. New optional prop `decidedClient?: string | null`. New `decidedExternally` derived flag fires only when status is `accepted` / `rejected` AND `decidedClient` is non-empty.
+  - The decided-elsewhere `<p data-testid="proposal-card-decided-elsewhere">` is rendered INSIDE the existing accepted/rejected terminal blocks. The terminal block layout switched from a bare `<p>` to a `<template>` wrapper to host both children; existing testids (`proposal-card-accepted-body`, `proposal-card-rejected-body`, `proposal-card-retry`) are unchanged.
+  - i18n key uses interpolation `Decided in {client}.` — vue-i18n's standard `{name}` syntax. Empty / null / undefined `decidedClient` is treated as absent (no note); the `unknown` fallback (per REQ-MHP-035) is applied by the caller, not the card.
+  - Style: muted text-colour + italic per design Part B §"Cross-surface decided-elsewhere note".
+- Deviation from T-MHP-121 DoD bullet (d): the card does NOT subscribe to `ProposalEventBus.proposalDecided` directly. Reason — the existing card mounts as a pure-props component without a Pinia store hookup in the test mount path (33 pre-existing tests construct it via `mount(FileWriteProposalCard, { props })`). Subscribing internally would either (a) break the existing test mount or (b) require every test to mount Pinia. The cross-surface bridge belongs to the chat-transcript Pinia store (T-MHP-102 wiring): the store subscribes to `proposalDecided`, updates the proposal record's `decidedClient` field, and Vue's reactivity re-renders the card with the new prop value. The card stays a presentational component; the wiring layer owns the subscription. Flagged for reviewer.
+- DoD: ✓ test green, ✓ no fifth render state, ✓ Accept/Reject buttons remain hidden in the terminal block, ✓ existing tests unchanged.
+
+### 2026-05-24 — T-MHP-124 — AutoAcceptReceipt.vue (dev)
+- File: `src/ui/components/chat/AutoAcceptReceipt.vue` (new, ~60 lines); `src/ui/i18n/locales/en.ts` + `src/ui/i18n/locales/de.ts` (new `chat.autoAccept.*` keys).
+- Spec: Part B §S25 + §S26; satisfies REQ-MHP-009 (silent vault-append surface), REQ-MHP-043 (DevTools low-risk surface).
+- Test status: PASSING — `tests/ui/components/chat/AutoAcceptReceipt.test.ts` (6/6).
+- Implementation notes:
+  - Single 60-line presentational component; renders one muted `<p role="status">` row with the path or tool interpolated inside a `<code>` element.
+  - Two variants gated by the `kind` prop: `'vault-append'` (uses `path` prop) and `'devtools-low-risk'` (uses `tool` prop).
+  - The i18n keys (`chat.autoAccept.vaultAppendBody` = `Appended to {path}.`, `chat.autoAccept.devtoolsLowRiskBody` = `Ran {tool}.`) carry the placeholder; the component substitutes a unique sentinel (`AUTOACCEPT_VAR`), splits the localised string around it, and renders the user-supplied value inside `<code>` with the correct testid (`auto-accept-receipt-path` / `auto-accept-receipt-tool`). This keeps the actual path/tool inside a styled `<code>` element while the surrounding copy stays a translatable template.
+  - Rendering integration with the chat transcript is deferred to T-MHP-102 plugin-level wiring; this slice authors the component shape only. The chat transcript is expected to mount the component when `proposalDecided` fires with `decision.by === 'auto'`.
+- DoD: ✓ both variants render correctly, ✓ region exposes `role="status"` + i18n aria-label, ✓ testid contract matches Part B §S26.
+
+### 2026-05-24 — T-MHP-012 — ProposalStore shutdown flush test (dev)
+- File: `tests/infrastructure/obsidian/ProposalStore.shutdownFlush.test.ts` (new — 4 tests).
+- Spec: SPEC-MHP-034 (`discardPending`); satisfies REQ-MHP-038 + REQ-MHP-040 (`shutdown` provenance); CLAR-MHP-016.
+- Test status: PASSING — 4/4.
+- Implementation notes:
+  - `ProposalStore.discardPending()` was implemented in T-MHP-011's slice; this task adds the dedicated 500ms-budget shutdown test (and confirms terminal-entry preservation). Production code unchanged.
+  - Test cases: (1) one shutdown row per pending entry with `by:'shutdown'`/`outcome:'discarded'`; (2) terminal entries left alone; (3) flush completes well within the 500ms budget for a fast audit writer; (4) when the audit writer hangs, the caller's `Promise.race([discardPending(), budget])` cleanly yields `'timeout'` — `discardPending()` itself does not throw; unwritten rows are dropped silently per CLAR-MHP-016 ("no error path").
+  - Caller-side budget wrap (`Promise.race` with a `setTimeout(500)`) is the documented strategy for plugin-side `onunload()` invocation; the store does not own the timeout because Obsidian's `onunload` is synchronous-fire-and-forget.
+- DoD: ✓ tests green, ✓ CLAR-MHP-016 contract preserved, ✓ no production-code mutation.
+
+### 2026-05-24 — T-MHP-014 — Dual-accept fuzz stress test (dev)
+- File: `tests/infrastructure/obsidian/ProposalStore.dualAcceptFuzz.test.ts` (new — 1 test, 1000 iterations).
+- Spec: NFR-MHP-012 (0 dual-execution events across 1000 dual-accept fuzz runs); REQ-MHP-006 (per-id mutex); TEST-MHP-006.
+- Test status: PASSING — 1/1 (1000 iterations, ~60 ms total wall-clock).
+- Implementation notes:
+  - Each iteration builds a fresh `ProposalStore` + `ProposalEventBus` + recording audit sink, queues one proposal, races `Promise.all([acceptBy(id), acceptBy(id)])`, then asserts: (a) mutate invoked exactly once; (b) exactly one `ok` result; (c) the loser carries `ProposalError{code:'already_decided'}`; (d) exactly one `accepted` audit row.
+  - All three counters (`dualExecutionEvents`, `extraOkResults`, `extraAuditRows`) must be 0 across the full 1000-iteration run. This locks NFR-MHP-012 byte-for-byte.
+  - Per-id mutex implementation (T-MHP-011) was confirmed correct under load; no production-code changes.
+- DoD: ✓ NFR-MHP-012 verified, ✓ no false-positives across 1000 paired races.
+
+### 2026-05-24 — T-MHP-112 — Wire MigrationService.runOnce() into plugin onload (dev)
+- File: `src/plugin/main.ts` (additive: 1 import + 8-line wiring block).
+- Spec: SPEC-MHP-038 + REQ-MHP-027.
+- Test status: NO NEW TESTS (the wiring is integration-only; covered by `MigrationService.test.ts` for the underlying service). Existing 184 plugin tests still pass.
+- Implementation notes:
+  - `MigrationService` instantiated immediately after `ObsidianBridge` (which supplies vault/logger/notify ports) and BEFORE `ObsidianMcpServerAdapter` is constructed — so a failed migration cannot leak `.mcp.json` to the new MCP server.
+  - `migration.runOnce()` is wrapped in `tryAsync` (already imported) so an unexpected throw is logged via `bridge.warn` but does not block plugin start. The migration's documented outcomes (`noop`/`success`/`failed`/`success-gitignore-failed`) surface to the user via the `NotificationPort` calls inside the service itself (success / conflict / verify-failure notice copy is rendered at SPEC-MHP-038 step boundaries).
+- DoD: ✓ wired into onload before MCP server, ✓ surfaces notices via injected port, ✓ tryAsync-guarded.
+
 ---
 
 ## Deviations summary

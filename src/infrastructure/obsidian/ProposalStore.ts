@@ -218,6 +218,17 @@ export class ProposalStore {
   }
 
   /**
+   * Deep-cloned domain snapshot of a single entry by id, regardless of
+   * `status` (SPEC-MHP-002). Returns `undefined` when no entry matches —
+   * callers map to MCP error `proposal_not_found`.
+   */
+  getDomain(proposalId: string): DomainPendingProposal | undefined {
+    const entry = this.entries.get(proposalId)
+    if (entry === undefined) return undefined
+    return cloneDomainProposal(entry)
+  }
+
+  /**
    * Accept a proposal under a per-id mutex. On success the queued mutation has
    * been committed before the response returns, and one audit row has been
    * appended via the injected `AuditLogWriter`. Returns:

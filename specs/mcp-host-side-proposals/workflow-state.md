@@ -406,6 +406,150 @@ _None._
                            WP-MHP-A/B/C/D/E/F/G/H/I tasks still owned by
                            dev; close-out pending until the rest land.
                            Next agent: dev (continue WP-MHP backlog).
+2026-05-24 (dev):          Polish slice: T-MHP-072 verified (12 Tier-A read
+                           registrars already complete from T-MHP-071 —
+                           registrar covers all 12 SPEC-MHP-013..024 tools
+                           with per-tool Zod schemas + cli.runJson mapping;
+                           no per-tool deliverable split needed); T-MHP-074
+                           implemented obsidian_cli_read_command escape hatch
+                           at src/infrastructure/obsidian/mcp/
+                           registerEscapeHatchTool.ts plus
+                           denyList.ts holding the REQ-MHP-014 PERMANENT_
+                           DENY_LIST (24 entries); T-MHP-073 escape-hatch
+                           test PASSING (19 tests covering shell-meta
+                           regex, .. traversal, absolute prefixes,
+                           allow-list, deny-list, deny-overrides-allow,
+                           runner-not-spawned-on-rejection); T-MHP-075
+                           deny-list tools/list test PASSING (6 tests
+                           covering REQ-MHP-014 constant, no Tier-A name
+                           collision, escape-hatch deny-list-handler,
+                           combined-surface 13-tool inventory, ADR-019 §3
+                           DevTools carve-out); T-MHP-032 audit-error-
+                           triggers PASSING (9 tests over the 4 REQ-MHP-045
+                           triggers — post-accept write failure, mutate
+                           throw, schema-validation failure, not-found —
+                           plus 3 non-error closure checks). Verification:
+                           37 tests across 4 task files green; typecheck
+                           clean for my surface; eslint clean (auto-fix
+                           applied two `!` assertions + removed two
+                           redundant type casts). Implementation-log
+                           updated with detailed entries per task.
+                           Implementation-log artifact remains in-progress:
+                           Stage 7 close-out blocked until WP-MHP-A/B/D/E/
+                           F/G/H/I remaining tasks land. Next agent: dev
+                           (continue WP-MHP backlog — DevToolsToolRegistrar
+                           T-MHP-081 is currently the failing-first import
+                           gap blocking the mcp test sweep).
+2026-05-24 (dev):          Batch T-MHP-015 / -016 / -040 / -041 landed —
+                           THE critical unlock: ANY MCP client can now
+                           list / get / accept / reject host-side
+                           proposals. New files: tests/infrastructure/
+                           obsidian/mcp/registerWorkflowProposalTools.test
+                           .ts (14 tests, all green); src/infrastructure/
+                           obsidian/mcp/registerWorkflowProposalTools.ts
+                           (4-tool registrar per SPEC-MHP-001..004);
+                           tests/infrastructure/obsidian/ObsidianMcpServer
+                           Adapter.test.ts (7 tests, all green — verifies
+                           rewire via live HTTP tools/list + private-field
+                           probes). Modified: src/infrastructure/obsidian/
+                           ObsidianMcpServerAdapter.ts (constructor now
+                           wires ProposalEventBus + AuditLogWriter +
+                           McpClientIdentifier + 4-dep ProposalStore;
+                           accept/reject route through acceptBy/rejectBy
+                           with by:'user' decision; getProposals uses
+                           listPending; _handleMcpRequest registers
+                           workflow_proposal_* + Tier-A reads + attaches
+                           clientIdentifier hook when SDK exposes
+                           onInitialize); src/infrastructure/obsidian/
+                           ProposalStore.ts (+getDomain(id) for SPEC-MHP-
+                           002 read); src/infrastructure/obsidian/mcp/
+                           index.ts (re-exports new registrars). Two
+                           deviations logged: (a) accept/rejectBy still
+                           take a single ProposalDecision argument rather
+                           than (by, decidingClient) per SPEC-MHP-034 —
+                           inherited from T-MHP-011; (b) attachInitialize
+                           Hook is typeof-guarded no-op until MCP SDK
+                           exposes onInitialize, so per-connection client
+                           identity falls back to 'unknown' in v1. Audit-
+                           row provenance is intact via decision.by
+                           literal. Verification: 21/21 new tests green;
+                           39/39 ProposalStore + legacy tests green (no
+                           regression); typecheck exit 0 across changed
+                           surface; eslint clean on 6 touched files.
+                           Pre-existing TDD-red on tests/infrastructure/
+                           obsidian/mcp/DevToolsToolRegistrar.test.ts
+                           (T-MHP-080 / T-MHP-081) remains red — out of
+                           scope. Implementation-log artifact remains
+                           in-progress: WP-MHP-B (write-tool wiring),
+                           WP-MHP-D (DevTools), WP-MHP-F (migration plug-
+                           in wiring), WP-MHP-G (status-bar / notice),
+                           WP-MHP-I (FileWriteProposalCard S24) still
+                           owned by dev. Next agent: dev (continue WP-MHP
+                           backlog — T-MHP-021 8-write-tool wiring +
+                           T-MHP-022 auto-accept algorithm are the next
+                           critical-path slices that unblock end-to-end
+                           pending-proposal demos).
+2026-05-24 (dev):          WP-MHP-D DevTools opt-in surface landed
+                           (T-MHP-080..088). New files: src/infrastructure/
+                           obsidian/mcp/DevToolsToolRegistrar.ts (T-MHP-081
+                           matrix-driven 8-tool registrar per SPEC-MHP-026..
+                           033 + SPEC-MHP-041; auto-accept low-risk via
+                           tryQueue→acceptBy; refresh() reconciles tool set
+                           on settings change); src/plugin/settings/DevTools
+                           SettingsSection.ts (T-MHP-085 MCP-write-proposals
+                           + DevTools sections with verbatim Part B microcopy,
+                           per-tool flip opens DevToolsEnableConfirmModal,
+                           cancel reverts toggle); tests/infrastructure/
+                           obsidian/mcp/DevToolsToolRegistrar.test.ts
+                           (T-MHP-080 matrix, 12/12 green); tests/plugin/
+                           settings/DevToolsEnableConfirmModal.interaction
+                           .test.ts (T-MHP-083 modal interaction, 17/17 green);
+                           tests/application/mcp/threatParagraphs.driftGuard
+                           .test.ts (T-MHP-088 RISK-MHP-015 drift-guard, 10/10
+                           green — asserts each threat block byte-equals
+                           ADR-019 §4 after normalising Markdown decoration;
+                           dev:cdp permitted its Part-B §S07 trailing
+                           "always prompts" sentence). Extended: src/domain/
+                           settings/PluginSettings.ts (5 new keys per spec
+                           §"Settings additions"); src/core/core-settings.ts
+                           (validateDevtools nested coercion); src/plugin/
+                           settings.ts (wires renderDevToolsSettingsSection
+                           into display()); src/infrastructure/obsidian/
+                           proposalStoreInternals.ts (coerceKind translates
+                           dev:foo→dev_foo so DevTools proposals carry the
+                           correct ProposalKind without forcing the
+                           registrar to pre-map). T-MHP-082 decision:
+                           always-via-accept (DevTools tools return
+                           {proposalId, status, tool}; clients call
+                           workflow_proposal_accept to obtain the side-effect
+                           payload — architecturally simpler path satisfying
+                           REQ-MHP-019 + REQ-MHP-046; payload never enters
+                           audit row per REQ-MHP-021). T-MHP-084 verified:
+                           Batch-2C DevToolsEnableConfirmModal already
+                           implements §S07–S09 end-to-end; no class changes
+                           needed. Verification: 68/68 tests green across
+                           the six target files (10 drift-guard + 17 modal-
+                           interaction + 12 registrar matrix + 12 Plugin
+                           Settings devtools + 9 PluginSettings WS-2 + 8
+                           DevTools confirm-modal-from-T-MHP-122); 39/39
+                           ProposalStore regression green (coerceKind
+                           extension is additive); typecheck exit 0 across
+                           full project; eslint --max-warnings 0 clean on
+                           all 8 changed source/test files. settings.ts
+                           pre-existing max-lines warn shifts from 419→430
+                           (warn not error). Out of scope: T-MHP-102 plug-
+                           in-start wiring that mounts the registrar against
+                           the live MCP server (renderDevToolsSettingsSection's
+                           onSettingsChange is currently a documented no-op).
+                           Implementation-log artifact remains in-progress:
+                           WP-MHP-B (write-tool wiring T-MHP-020..022),
+                           WP-MHP-F (migration plug-in wiring T-MHP-112),
+                           WP-MHP-G (status-bar / notice T-MHP-090..102),
+                           WP-MHP-I (FileWriteProposalCard S24 T-MHP-120..
+                           126) still owned by dev. Next agent: dev
+                           (continue WP-MHP backlog). T-MHP-087 architect
+                           gate (flip ADR-019 status: proposed → accepted)
+                           now unblocked by T-MHP-088.
 ```
 
 ## Open clarifications

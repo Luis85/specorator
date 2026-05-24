@@ -45,11 +45,21 @@ const KNOWN_KINDS: ReadonlySet<ProposalKind> = new Set<ProposalKind>([
  * `ProposalKind` literal. Unknown names fall through to a stable default so
  * audit-row construction never throws; the strict-typed kind discriminator
  * is enforced by the write-tool registrars themselves (T-MHP-021).
+ *
+ * DevTools tool ids use colon-form (e.g. `dev:screenshot`) at registration
+ * time but the `ProposalKind` literals use underscore-form (`dev_screenshot`).
+ * This helper translates colons → underscores before lookup so DevTools
+ * proposals carry the correct kind without forcing every caller to pre-map.
  */
 export function coerceKind(toolName: string): ProposalKind {
-  return KNOWN_KINDS.has(toolName as ProposalKind)
-    ? (toolName as ProposalKind)
-    : 'vault_write_note'
+  const underscored = toolName.replace(/:/g, '_')
+  if (KNOWN_KINDS.has(underscored as ProposalKind)) {
+    return underscored as ProposalKind
+  }
+  if (KNOWN_KINDS.has(toolName as ProposalKind)) {
+    return toolName as ProposalKind
+  }
+  return 'vault_write_note'
 }
 
 export interface StoreEntry {

@@ -29,6 +29,14 @@ const { t } = useI18n()
 const props = defineProps<{
   proposal: FileWriteProposal
   pathValidationError: PathValidationError | null
+  /**
+   * REQ-MHP-046 / Part B §S24 — when the proposal was decided by an external
+   * MCP client (not the local user) while the card was open, this is the
+   * deciding client's `client.id`. The card renders an additive "Decided in
+   * `<client.id>`." note inside the existing accepted/rejected terminal
+   * block — NOT a fifth render state.
+   */
+  decidedClient?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -74,6 +82,17 @@ const showsRetry = computed(
     renderState.value === 'pending' ||
     renderState.value === 'rejected' ||
     renderState.value === 'failed',
+)
+
+const decidedExternally = computed(() => {
+  if (props.decidedClient === undefined || props.decidedClient === null) return false
+  if (props.decidedClient === '') return false
+  return renderState.value === 'accepted' || renderState.value === 'rejected'
+})
+const decidedElsewhereText = computed(() =>
+  t('chat.proposal.decidedElsewhereBody', {
+    client: props.decidedClient ?? 'unknown',
+  }),
 )
 
 const acceptAriaLabel = computed(() => t('chat.proposal.acceptAriaLabel', { path: path.value }))
@@ -173,13 +192,21 @@ onMounted(() => {
       </button>
     </div>
 
-    <p
-      v-if="renderState === 'accepted'"
-      class="sp-proposal-card__accepted-body"
-      data-testid="proposal-card-accepted-body"
-    >
-      {{ t('chat.proposal.acceptedBody', { path }) }}
-    </p>
+    <template v-if="renderState === 'accepted'">
+      <p
+        class="sp-proposal-card__accepted-body"
+        data-testid="proposal-card-accepted-body"
+      >
+        {{ t('chat.proposal.acceptedBody', { path }) }}
+      </p>
+      <p
+        v-if="decidedExternally"
+        class="sp-proposal-card__decided-elsewhere"
+        data-testid="proposal-card-decided-elsewhere"
+      >
+        {{ decidedElsewhereText }}
+      </p>
+    </template>
 
     <template v-if="renderState === 'rejected'">
       <p
@@ -187,6 +214,13 @@ onMounted(() => {
         data-testid="proposal-card-rejected-body"
       >
         {{ t('chat.proposal.rejectedBody') }}
+      </p>
+      <p
+        v-if="decidedExternally"
+        class="sp-proposal-card__decided-elsewhere"
+        data-testid="proposal-card-decided-elsewhere"
+      >
+        {{ decidedElsewhereText }}
       </p>
       <button
         v-if="showsRetry"
@@ -318,5 +352,11 @@ onMounted(() => {
 
 .sp-proposal-card__path-invalid {
   color: var(--sp-proposal-warning, var(--text-warning, var(--text-muted)));
+}
+
+.sp-proposal-card__decided-elsewhere {
+  margin: 0;
+  color: var(--text-muted);
+  font-style: italic;
 }
 </style>

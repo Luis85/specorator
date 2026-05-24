@@ -1,6 +1,19 @@
 import { defineModule } from '@/modules/module'
-import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
+import {
+  DEFAULT_SETTINGS,
+  type DevToolsHighRiskToolId,
+  type DevToolsSettings,
+  type PluginSettings,
+} from '@/domain/settings/PluginSettings'
 import type { ProviderId, ProviderSelection } from '@/domain/chat/ProviderSelection'
+
+const HIGH_RISK_DEVTOOLS_IDS: ReadonlyArray<DevToolsHighRiskToolId> = [
+  'dev:dom',
+  'dev:cdp',
+  'dev:debug',
+  'dev:mobile',
+  'devtools',
+] as const
 
 const VALID_LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const
 const VALID_GATE_STRICTNESS = ['strict', 'lenient'] as const
@@ -57,6 +70,41 @@ function validateProviderSelection(value: unknown): ProviderSelection {
     }
   }
   return DEFAULT_SETTINGS.providerSelection
+}
+
+/**
+ * Validate the `devtools` substructure (REQ-MHP-016/-017/-043). Missing or
+ * malformed nested keys default to `DEFAULT_SETTINGS.devtools` so older
+ * settings files without the substructure load cleanly. Each per-tool entry
+ * is coerced independently — a partially-populated `tools` object falls back
+ * to `{ enabled: false }` for any missing id.
+ */
+function validateDevtools(value: unknown): DevToolsSettings {
+  const fallback = DEFAULT_SETTINGS.devtools
+  if (value === null || typeof value !== 'object') return fallback
+  const obj = value as Record<string, unknown>
+  const rawTools =
+    obj.tools !== null && typeof obj.tools === 'object'
+      ? (obj.tools as Record<string, unknown>)
+      : {}
+  const tools = Object.fromEntries(
+    HIGH_RISK_DEVTOOLS_IDS.map((id) => {
+      const entry = rawTools[id]
+      const enabled =
+        entry !== null && typeof entry === 'object'
+          ? coerceBoolean((entry as Record<string, unknown>).enabled, false)
+          : false
+      return [id, { enabled }] as const
+    }),
+  ) as Record<DevToolsHighRiskToolId, { readonly enabled: boolean }>
+  return {
+    masterEnabled: coerceBoolean(obj.masterEnabled, fallback.masterEnabled),
+    autoAcceptLowRisk: coerceBoolean(
+      obj.autoAcceptLowRisk,
+      fallback.autoAcceptLowRisk,
+    ),
+    tools,
+  }
 }
 
 /**
@@ -153,6 +201,16 @@ export const coreSettingsModule = defineModule<PluginSettings>({
       ),
       providerModel: validateProviderModel(r.providerModel),
       chatTabCap: coerceNumber(r.chatTabCap, DEFAULT_SETTINGS.chatTabCap),
+      // REQ-MHP-010 — additive boolean; missing/non-boolean coerces to false
+      // (queue auto-accept stays opt-in to opt-out).
+      requireExplicitAcceptForAllWrites: coerceBoolean(
+        r.requireExplicitAcceptForAllWrites,
+        DEFAULT_SETTINGS.requireExplicitAcceptForAllWrites,
+      ),
+      // REQ-MHP-016/-017/-043 — additive nested object; missing substructure
+      // or any nested field falls back to `DEFAULT_SETTINGS.devtools` so
+      // older settings files load cleanly.
+      devtools: validateDevtools(r.devtools),
     }
   },
 

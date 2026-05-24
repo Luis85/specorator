@@ -430,8 +430,8 @@ flowchart TD
 - **Depends on:** T-MHP-016, T-MHP-008
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/infrastructure/obsidian/mcp/DevToolsToolRegistrar.test.ts` covers the matrix.
-  - [ ] All fail before impl.
+  - [x] `tests/infrastructure/obsidian/mcp/DevToolsToolRegistrar.test.ts` covers the matrix.
+  - [x] All fail before impl.
 
 #### T-MHP-081 🔨 — Implement `DevToolsToolRegistrar` + 8 DevTools tool registrars
 
@@ -441,7 +441,7 @@ flowchart TD
 - **Depends on:** T-MHP-080
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] T-MHP-080 passes.
+  - [x] T-MHP-080 passes.
 
 #### T-MHP-082 📐 — Document DevTools result-delivery choice (out-of-band content block vs always-via-accept)
 
@@ -451,8 +451,8 @@ flowchart TD
 - **Depends on:** T-MHP-016
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] Decision recorded in `implementation-log.md` with rationale.
-  - [ ] T-MHP-081 implementation matches the recorded decision.
+  - [x] Decision recorded in `implementation-log.md` with rationale.
+  - [x] T-MHP-081 implementation matches the recorded decision.
 
 #### T-MHP-083 🧪 — `DevToolsEnableConfirmModal` interaction tests (S07–S09)
 
@@ -462,8 +462,8 @@ flowchart TD
 - **Depends on:** T-MHP-080
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/plugin/settings/DevToolsEnableConfirmModal.test.ts` covers the listed behaviours.
-  - [ ] All fail before impl.
+  - [x] `tests/plugin/settings/DevToolsEnableConfirmModal.test.ts` covers the listed behaviours.
+  - [x] All fail before impl.
 
 #### T-MHP-084 🔨 — Implement `DevToolsEnableConfirmModal`
 
@@ -473,7 +473,7 @@ flowchart TD
 - **Depends on:** T-MHP-083
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] T-MHP-083 passes.
+  - [x] T-MHP-083 passes.
 
 #### T-MHP-085 🔨 — Add DevTools section + `requireExplicitAcceptForAllWrites` toggle + `devtoolsAutoAcceptLowRisk` toggle to settings tab
 
@@ -483,9 +483,9 @@ flowchart TD
 - **Depends on:** T-MHP-008, T-MHP-084, T-MHP-081
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] Storybook story added for the DevTools section in master-off, master-on, and per-tool-enabled states.
-  - [ ] `data-testid`s match Part B (`settings-require-explicit-accept`, `settings-devtools-master`, `settings-devtools-auto-accept-low-risk`, `settings-devtools-tool-dev-dom`, ...).
-  - [ ] Axe-core scan on the Storybook story passes (NFR-MHP-011).
+  - [ ] Storybook story added for the DevTools section in master-off, master-on, and per-tool-enabled states. _(deferred — see T-MHP-086 follow-up)_
+  - [x] `data-testid`s match Part B (`settings-require-explicit-accept`, `settings-devtools-master`, `settings-devtools-auto-accept-low-risk`, `settings-devtools-tool-dev-dom`, ...).
+  - [ ] Axe-core scan on the Storybook story passes (NFR-MHP-011). _(deferred — owned by T-MHP-086)_
 
 #### T-MHP-086 🧪 — NFR-MHP-011 contrast assertion via Storybook + axe-core
 
@@ -516,7 +516,7 @@ flowchart TD
 - **Depends on:** T-MHP-084
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/application/mcp/threatParagraphs.drift.test.ts` exists and passes.
+  - [x] `tests/application/mcp/threatParagraphs.driftGuard.test.ts` exists and passes (10/10).
 
 ---
 

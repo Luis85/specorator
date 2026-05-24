@@ -143,6 +143,12 @@ export default {
 			overwriteBody: "'{path}' already exists. Replace it with the new content?",
 			overwriteConfirm: 'Replace',
 			overwriteCancel: 'Keep existing',
+			decidedElsewhereBody: 'Decided in {client}.',
+		},
+		autoAccept: {
+			vaultAppendBody: 'Appended to {path}.',
+			devtoolsLowRiskBody: 'Ran {tool}.',
+			regionAriaLabel: 'Automatic accept receipt.',
 		},
 		subscription: {
 			statusPill: 'Using your installed Claude tool.',

@@ -10,6 +10,7 @@ import type { ModuleDescriptor, SettingsFieldDescriptor } from '@/modules/module
 import { VIEW_TYPE, SpecoratorView } from './SpecoratorView'
 import { VIEW_TYPE_AGENT, AgentSidepanelView } from './AgentSidepanelView'
 import { renderCursorSettingsSection } from './settings/CursorSettingsSection'
+import { renderDevToolsSettingsSection } from './settings/DevToolsSettingsSection'
 import type SpecoratorPlugin from './main'
 
 export class SpecoratorSettingTab extends PluginSettingTab {
@@ -59,6 +60,20 @@ export class SpecoratorSettingTab extends PluginSettingTab {
       },
     })
     this.renderApprovalRulesSection(containerEl)
+    renderDevToolsSettingsSection({
+      app: this.app,
+      containerEl,
+      settings: this.plugin.settings,
+      updateSettings: async (patch) => {
+        await this.plugin.updateSettings(patch)
+      },
+      onSettingsChange: () => {
+        // DevToolsToolRegistrar.refresh() wire-up lands when the registrar
+        // is mounted by `Plugin.onload` (T-MHP-102 wiring slice). Until
+        // then this is a no-op — the registrar polls `settings()` on its
+        // own `refresh()` invocations.
+      },
+    })
   }
 
   /**
