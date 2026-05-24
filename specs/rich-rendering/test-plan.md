@@ -48,3 +48,9 @@ reviewer/SRE and never self-claimed by an agent.
 > The automatable U-leg of TEST-RR-026 (Mock script + LocalStorage fixture drive every sink leg, no
 > subprocess) is authored by `qa` and runs in CI (T-RR-008/010). Only the Obsidian-backing + real-CLI
 > legs above are manual.
+
+## Dev / standalone legs (CI-automatable)
+
+| Test | Owner | Trigger task | Recorded |
+|---|---|---|---|
+| TEST-RR-026 (dev leg) — `src/ui/main.ts` (MockBridge) streams the default scripted rich turn (SPEC-RR-013) and the renderers reachable through `MessageBlocks` mount: thinking, tool-call, Write/Edit word-diff (header + diff lines), task list; icons resolve through the provided `ICON_PORT` as declarative SVG (no `v-html`/no `<script>` sink). | qa | T-RR-042 | **PASS — 2026-05-24** (`tests/ui/main.rr.test.ts`, headless deterministic leg). Subagent + usage VISUAL renderers not exercised by the default script's bare `subagent_*`/`async_subagent_result` chunks + current store/dispatcher wiring (`UsageInfo.vue` not yet surface-mounted); both are stored/handled and covered by the store + component unit suites — surface wire-in is out of the P2 WIRE-IN batch scope. The live-browser visual feel pairs with the human run. |
