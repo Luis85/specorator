@@ -118,3 +118,19 @@ SHA.
   rule (eslint.config.js) still bans deep `@/domain/chat/**` imports outside `src/domain/**`. The
   barrel is the sanctioned consumer import; no ESLint config change needed for this batch. (A later
   batch that needs a deep chat import from infra/ui would update that ban — flagged, not done here.)
+
+### T-CC-027 🔨 — `--sp-*` token additions (token layer only) (dev)
+
+- **Spec:** SPEC-CC-023, NFR-CC-012, REQ-CC-006, REQ-CC-007, REQ-CC-011.
+- **Files:** `src/ui/styles/tokens.css` (edited) — new `§4.8 — Chat surface (P1)` block with the 8
+  tokens: `--sp-msg-gap` (`var(--sp-space-5)`), `--sp-scrollbar-width` (6px), `--sp-msg-user-bg`
+  (`rgba(0,0,0,0.3)`), `--sp-msg-user-max-width` (95%), `--sp-interrupt` (`#d45d5d`),
+  `--sp-input-min-h` (140px), `--sp-textarea-min-h` (60px), `--sp-textarea-max-h` (`none`). Color
+  literals confined to the token layer (NFR-CC-012).
+- **GREEN:** `npm run lint:style-tokens` → "clean (0 violations across guarded paths)"; `npm run lint`
+  unaffected (CSS not ESLint-linted). No chat component file exists yet to carry a hex/raw var, so
+  zero leaks by construction.
+- **Outcome:** done.
+- **Deviation:** `--sp-textarea-max-h` set to `none` (spec left the value unspecified) — matches the
+  claudian-main parity source (`input.css:84` `max-height: var(--claudian-textarea-max-height, none)`);
+  the textarea grows uncapped within the `--sp-input-min-h` wrapper.
