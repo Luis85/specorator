@@ -37,7 +37,8 @@ export class ChatSurfacePageObject {
 	}
 
 	sendDisabled(): boolean {
-		return (this.wrapper.get('[data-testid="composer-send"]').element as HTMLButtonElement).disabled;
+		return (this.wrapper.get('[data-testid="composer-send"]').element as HTMLButtonElement)
+			.disabled;
 	}
 
 	async typeAndSend(text: string): Promise<void> {
