@@ -100,6 +100,17 @@ convergence.
 - Noted the pre-existing duplicate `0030` ADR-number collision in the index
   (out of P0 scope).
 
+### T-PSR-014 — RED: slim settings-tab round-trip (qa)
+
+- Rewrote `tests/plugin/settings.test.ts` to mount `SpecoratorSettingTab` and
+  drive the schema `locale` dropdown's `onChange` through `SettingsPort`
+  (E12 round-trip). Uses a Proxy `obsidian` mock (real `Setting`/`PluginSettingTab`
+  capturing the dropdown; no-op for every other export) + `fakeModulePorts`.
+- **RED confirmed:** `display()` throws at the fat tab's `renderAboutYouSection`
+  (`containerEl.createEl`) — the very surface T-PSR-015 deletes. Once the tab is
+  slimmed to the module loop, `display()` completes and the round-trip asserts
+  green. TEST-PSR-014; SPEC-PSR-008.
+
 > Batch 1 gate snapshot (post-RED): `npm run typecheck` reports exactly two
 > intended RED type errors (WorkspacePort exact-key assertion; missing
 > `toSupportedLocale`); `npm run test` shows the 4 RED unit files failing for the
