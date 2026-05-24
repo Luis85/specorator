@@ -177,3 +177,59 @@ convergence.
   the `node:path`/`node:child_process`/binary-resolver/`SECRET_ID_*`/
   `SpecoratorView`/`AgentSidepanelView`/`CursorSettingsSection` imports.
 - **T-PSR-014 GREEN** (round-trip through `SettingsPort`). SPEC-PSR-008; REQ-PSR-007.
+
+## Phase A/B — assemble the new surface (Batch 3)
+
+> **OC-PSR-4 closed:** `ALL_MODULES = [coreSettingsModule, helloModule]` already
+> (`src/modules/index.ts`); `helloModule` names no deleted subsystem. It persists
+> (settingsKey `hello`, version 1) so the minimal `_storedData`/`core.init`
+> round-trip is kept; only the settings `saveData` is dropped.
+>
+> **NFR-PSR-011 closed (no escalation):** `App.loadLocalStorage(key): any|null`
+> and `App.saveLocalStorage(key, data): void` are present in the obsidian
+> typings (resolved from the hoisted root `node_modules`; devDep `obsidian
+> ^1.12.3` ≥ `minAppVersion 1.12.7`). `secretStorage` is a P1 concern (deferred).
+
+### T-PSR-021 (settings-store slice, pulled forward for T-PSR-008) — `ObsidianBridge` device-local re-point + TEST-PSR-024
+
+- **Sequencing note (TDD honoured):** the slim `main.ts` (T-PSR-008) routes
+  settings through `bridge.getSettings`/`saveSettings`; with the old bridge that
+  recursed (`saveSettings → onSaveSettings → updateSettings`). So the SettingsPort
+  device-local re-point (T-021's settings slice) was pulled forward. **RED watched**
+  (impl stashed): `activateAgentSidebar is not a function`, `settingsGetter`/
+  `onSaveSettings is not a function` — then GREEN.
+- `ObsidianBridge` constructor → app-only; `getSettings` reads
+  `app.loadLocalStorage('specorator:settings')` (load-or-default, defaults on
+  absent/corrupt); `saveSettings` writes `app.saveLocalStorage` (never
+  `data.json` — the bridge has no `saveData` access); `_shouldLog` reads the
+  device-local logLevel. TEST-PSR-024 GREEN (3 tests).
+- **Remaining T-021 (Wave 3b):** drop `ChatTransportPort`/`IconPort` from all
+  three bridges, the `MockBridge`/`LocalStorageBridge` de-couple, `ports.ts` +
+  `fake-ports.ts` trim. SPEC-PSR-008; REQ-PSR-013, NFR-PSR-010; ADR-PSR-002.
+
+### T-PSR-009 — `AgentSidebarView` + `VIEW_TYPE_AGENT` (dev)
+
+- `src/plugin/AgentSidebarView.ts` (`ItemView`): `VIEW_TYPE_AGENT='specorator-agent'`,
+  `getIcon()='bot'` (native), `onOpen` mounts `AgentPanelRoot` inside
+  `ErrorBoundary`'s default slot via `createApp({ render: () => h(ErrorBoundary,
+  null, { default: () => h(AgentPanelRoot) }) })`, installs Pinia + i18n, provides
+  the six core ports, narrows locale via `toSupportedLocale`; `onClose` unmounts +
+  empties; `bridge === null` no-op. SPEC-PSR-005.
+
+### T-PSR-008 — slim `main.ts` (dev)
+
+- Rewrote `src/plugin/main.ts` to the SPEC-PSR-016 shape: `settings`/`core`/`bridge`
+  public; `onload` = construct `ObsidianBridge(app)` → `loadSettings`
+  (load-or-default via `bridge.getSettings`, **no** legacy data.json read) →
+  `PluginCore(ALL_MODULES, ports)` → `setLocale(toSupportedLocale(...))` →
+  `core.init(_storedData)` → **drop `_storedData.specorator`** (keep
+  locale/logLevel out of data.json) → `registerView(VIEW_TYPE_AGENT)` → one command
+  `open-agent-sidebar` (no ribbon) → `addSettingTab`. `onload` carries **no**
+  settings `saveData`; `updateSettings` → `bridge.saveSettings` (device-local) +
+  `core.notifySettingsChanged`. SPEC-PSR-016; REQ-PSR-001/003/013, NFR-PSR-010/011.
+
+### T-PSR-010 — RED→GREEN: `activateAgentSidebar` E1/E2 (qa)
+
+- `tests/plugin/activateAgentSidebar.test.ts`: E1 (twice → one leaf + reveal),
+  E2 (`getRightLeaf` null → no throw). RED watched (method absent on fat main),
+  then GREEN. TEST-PSR-012/013; SPEC-PSR-007.
