@@ -497,5 +497,42 @@ warnings only), `vitest run tests/application` **372/372 green** (incl. the P6
 - **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); `npm run lint`
   0 errors (12 pre-existing warnings); `vitest run useApprovalRuleStorePort.test.ts` 2/2.
   No `obsidian` import under `src/ui/**`.
-- **Commit (RED / green):** `<RED>` / `<GREEN>`.
+- **Commit (RED / green):** `46d03f0f` / `6a9a0399`.
 - **Deviation:** none.
+
+### T-AS-023 — `PermissionToggle.vue` live three-mode + PLAN label (🔨 dev)
+
+- **Spec/req:** SPEC-AS-012/022; REQ-AS-001/002/003/006/050/051; NFR-AS-006/007/013/015.
+- **Files:** `src/ui/chat/toolbar/PermissionToggle.vue` (the live three-mode control
+  added additively alongside the P6 honest-defer seam); `src/ui/i18n/locales/en.ts` +
+  `de.ts` (the SPEC-AS-022 keys: `toolbar.permission.mode.{normal,plan,yolo}`,
+  `inline.approval.{allowOnce,allowAlways,denyOnce,denyAlways}`, the `approvals.*`
+  block); `tests/ui/chat/toolbar/PermissionToggle.live.test.ts` (new RED → green) +
+  `tests/ui/chat/toolbar/PermissionToggle.po.ts` (the live-mode PO methods added).
+- **How additivity holds:** the component keeps the P6 `vm: PermissionWidgetVm` prop and
+  gains an OPTIONAL `mode?: PermissionMode` prop + a `set:[mode]` emit. `live` ≡
+  `mode !== undefined`. When `mode` is supplied (ChatSurface T-AS-029) it renders a
+  keyboard `role="listbox"` of the three fixed modes (Arrow cycle, Enter/Space activate,
+  Escape blur), `aria-selected` per the live mode, NO `aria-disabled`, and `plan` → the
+  "PLAN" label; selecting emits `set(mode)`. When `mode` is absent (the P6 toolbar today)
+  the original disabled honest-defer seam + the `permission.deferred` notice render
+  byte-identically. The P6 `permission.deferred` string is RETAINED (not removed — see
+  deviation).
+- **Outcome:** done — the prior RED (6 failing live legs) now green; the P6
+  `PermissionToggle.test.ts` (3 legs) + the `buildToolbarViewModel`/ToolbarStrip toolbar
+  regression stay green (additive).
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); `npm run lint`
+  0 errors (12 pre-existing warnings); `vitest run` toggle live 6/6 + P6 3/3 +
+  `tests/ui/chat/toolbar/` + `buildToolbarViewModel` + `tests/ui/i18n` 85/85. No
+  `obsidian`/`v-html` in `src/ui/**`. `styles.css` untouched.
+- **Commit (RED / green):** `d915348f` / `<GREEN-023>`.
+- **Deviation:** **(1)** the spec (SPEC-AS-012) pins the toggle's props as `mode:
+  PermissionMode` only; the implementation keeps the P6 `vm` prop AND adds `mode?`
+  optionally so the P6 `ToolbarStrip` wiring stays byte-identical until ChatSurface wires
+  the live mode (T-AS-029) — this realises the brief's "keep it additive (when no live
+  mode, the P6 disabled behaviour)" directive. **(2)** SPEC-AS-012/022 say the P6
+  `toolbar.permission.deferred` string is removed; it is **retained** because the
+  no-live-mode P6 seam still renders it (removing it would break the live P6 toolbar
+  before T-AS-029 wires the mode). The deferred notice is dead only once the surface
+  always supplies a live `mode`; a follow-up at the gate can drop it. Rationale: additive
+  growth + no P6 regression (NFR-AS-001) is load-bearing per the brief.

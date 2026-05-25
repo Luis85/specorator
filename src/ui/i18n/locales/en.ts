@@ -26,6 +26,12 @@ export default {
 					implement: 'Implement',
 					revise: 'Revise',
 					cancel: 'Cancel',
+					approval: {
+						allowOnce: 'Allow once',
+						allowAlways: 'Always allow',
+						denyOnce: 'Deny once',
+						denyAlways: 'Always deny',
+					},
 					revisePlaceholder: 'Enter feedback to continue planning…',
 				},
 				bash: {
@@ -124,6 +130,22 @@ export default {
 					compactHint: 'Context is filling up — run /compact to free space.',
 				},
 			},
+				approvals: {
+					title: 'Approvals',
+					mode: 'Mode: {mode}',
+					rulesHeading: 'Rules',
+					empty: 'No approval rules yet.',
+					decision: {
+						allow: 'allow',
+						deny: 'deny',
+					},
+					lifetime: {
+						session: 'session',
+						persisted: 'persisted',
+					},
+					remove: 'Remove rule: {tool} {pattern}',
+					storeError: 'Could not read your approval rules — asking for this action.',
+				},
 		},
 	},
 } as const;

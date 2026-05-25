@@ -26,6 +26,12 @@ export default {
 					implement: 'Umsetzen',
 					revise: 'Überarbeiten',
 					cancel: 'Abbrechen',
+					approval: {
+						allowOnce: 'Einmal erlauben',
+						allowAlways: 'Immer erlauben',
+						denyOnce: 'Einmal ablehnen',
+						denyAlways: 'Immer ablehnen',
+					},
 					revisePlaceholder: 'Feedback zur weiteren Planung eingeben…',
 				},
 				bash: {
@@ -94,6 +100,11 @@ export default {
 				},
 				permission: {
 					label: 'Berechtigungen',
+					mode: {
+						normal: 'Normal',
+						plan: 'Plan',
+						yolo: 'Automatisch erlauben',
+					},
 					plan: 'PLAN',
 					deferred: 'Berechtigungsregeln folgen in einer späteren Version.',
 				},
@@ -124,6 +135,22 @@ export default {
 					compactHint: 'Der Kontext füllt sich — führe /compact aus, um Platz zu schaffen.',
 				},
 			},
+				approvals: {
+					title: 'Freigaben',
+					mode: 'Modus: {mode}',
+					rulesHeading: 'Regeln',
+					empty: 'Noch keine Freigaberegeln.',
+					decision: {
+						allow: 'erlauben',
+						deny: 'ablehnen',
+					},
+					lifetime: {
+						session: 'Sitzung',
+						persisted: 'dauerhaft',
+					},
+					remove: 'Regel entfernen: {tool} {pattern}',
+					storeError: 'Deine Freigaberegeln konnten nicht gelesen werden — frage für diese Aktion nach.',
+				},
 		},
 	},
 } as const;
