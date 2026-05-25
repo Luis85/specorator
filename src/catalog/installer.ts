@@ -1,4 +1,4 @@
-import type { AssetMeta, FileSystem, Platform } from "./types";
+import type { AssetMeta, FileSystem, Platform, InstalledRecord } from "./types";
 import { resolveOrder } from "./deps";
 import { targetPath, supportedPlatforms } from "./platforms";
 import { renderAsset } from "./render";
@@ -127,14 +127,14 @@ async function installHookAsset(
   opts: EnableOptions,
 ): Promise<void> {
   // Hooks are opt-in — never merge without explicit consent.
-  if (!opts.enableHooks) return;
+  if (opts.enableHooks !== true) return;
 
   const bodyHash = await sha256(a.body);
 
   // Synced-vault warning before any merge.
   const sync = await detectSyncedVault(fs);
-  if (sync) {
-    const warnFn = opts.warn ?? ((m: string) => console.warn(m));
+  if (sync !== null) {
+    const warnFn = opts.warn ?? ((m: string) => { console.warn(m); });
     warnFn(
       `specorator: enabling hook "${a.id}" in a vault under ${sync}; ` +
         `the auto-running command will propagate to everything that syncs this vault.`,
@@ -220,6 +220,48 @@ export async function enableAsset(
   }
 
   return { destructive: destructiveAll };
+}
+
+// Timestamped backup so a second update does not clobber the first .bak.
+// Returns the created backup path (or null if there was nothing to back up).
+// A numeric suffix guarantees a unique path even within the same millisecond.
+async function writeRotatedBackup(fs: FileSystem, path: string): Promise<string | null> {
+  if (!(await fs.exists(path))) return null;
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  let bak = `${path}.${ts}.bak`;
+  for (let n = 1; await fs.exists(bak); n++) bak = `${path}.${ts}-${n}.bak`;
+  await fs.write(bak, (await fs.read(path)) ?? "");
+  return bak;
+}
+
+export async function updateAsset(
+  fs: FileSystem,
+  asset: AssetMeta,
+  catalog: AssetMeta[],
+  platforms: Platform[],
+  opts: EnableOptions = {},
+): Promise<void> {
+  const state = await loadState(fs);
+  const rec = (state as Record<string, InstalledRecord | undefined>)[asset.id];
+  if (rec === undefined) return; // not installed (or hook never opted-in) → nothing to update
+  const baks: string[] = [];
+  for (const path of rec.paths) {
+    // Hooks share the hooks.json — skip rotated backup for the shared file
+    // (mergeHook/unmergeHook handle that internally); only back up asset-owned files.
+    if (path === HOOKS_PATH) continue;
+    const b = await writeRotatedBackup(fs, path);
+    if (b !== null) baks.push(b);
+  }
+  await disableAsset(fs, asset.id);               // removes old files + record
+  await enableAsset(fs, asset, catalog, platforms, opts); // forward opts (enableHooks etc.)
+  await appendAudit(fs, { action: "update", id: asset.id, hash: await sha256(asset.body) });
+  // Surface the rotated backups so the caller can offer cleanup.
+  if (baks.length > 0) {
+    const warnFn = opts.warn ?? ((m: string) => { console.warn(m); });
+    warnFn(
+      `specorator: updated "${asset.id}"; previous version(s) backed up at ${baks.join(", ")}`,
+    );
+  }
 }
 
 export async function disableAsset(fs: FileSystem, id: string): Promise<void> {

@@ -18,14 +18,15 @@ async function readJsonStrict(
   path: string,
 ): Promise<Record<string, unknown[]>> {
   const raw = await fs.read(path);
-  if (raw == null || raw === "") return {};
+  if (raw === null || raw === "") return {};
   try {
     return JSON.parse(raw) as Record<string, unknown[]>;
   } catch (e) {
     throw new Error(
       `refusing to rewrite ${path}: existing file is not valid JSON ` +
-        `(${(e as Error).message}); ` +
+        `(${String((e as Error).message)}); ` +
         `fix or remove it manually so we don't clobber your other hooks`,
+      { cause: e },
     );
   }
 }
@@ -43,7 +44,7 @@ export async function mergeHook(
   const json = await readJsonStrict(fs, path);
   if (!Array.isArray(json[frag.event])) json[frag.event] = [];
   json[frag.event] = (json[frag.event] as Array<Record<string, unknown>>).filter(
-    (e) => e["_specorator"] !== frag.id,
+    (e) => e._specorator !== frag.id,
   );
   (json[frag.event] as Array<Record<string, unknown>>).push({
     ...frag.entry,
@@ -67,7 +68,7 @@ export async function unmergeHook(
   await writeBackup(fs, path);
   for (const event of Object.keys(json)) {
     json[event] = (json[event] as Array<Record<string, unknown>>).filter(
-      (e) => e["_specorator"] !== id,
+      (e) => e._specorator !== id,
     );
   }
   await fs.write(path, JSON.stringify(json, null, 2));

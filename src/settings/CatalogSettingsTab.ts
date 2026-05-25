@@ -8,7 +8,7 @@ import {
 } from "obsidian";
 import type { CatalogIndex, AssetMeta, FileSystem, InstalledState } from "../catalog/types";
 import type { Platform } from "../catalog/types";
-import { enableAsset, disableAsset } from "../catalog/installer";
+import { enableAsset, disableAsset, updateAsset } from "../catalog/installer";
 import type { ConflictChoice } from "../catalog/installer";
 import { loadState } from "../catalog/sidecar";
 import { scanForInjection } from "../catalog/scanner";
@@ -16,6 +16,7 @@ import { targetPath, supportedPlatforms } from "../catalog/platforms";
 import { buildConsentSummary, ConsentModal } from "./ConsentModal";
 import { ConflictModal } from "./ConflictModal";
 import { partitionTools } from "../catalog/policy";
+import { detectUpdates } from "../catalog/update";
 
 /** B7: default platform selection so multi-platform emit is reachable immediately. */
 export const DEFAULT_PLATFORMS: Platform[] = ["claude"];
@@ -122,6 +123,40 @@ export class CatalogSettingsTab extends PluginSettingTab {
     const state = await loadState(this.fs);
     const currentPlatforms = this.platforms();
 
+    // Phase 3: show "Update available (N)" header + bulk-update button.
+    const outdatedIds = detectUpdates(state, this.catalog.assets);
+    this.renderUpdateHeader(containerEl, outdatedIds, currentPlatforms);
+    this.renderBundleRows(containerEl, state, currentPlatforms, outdatedIds, searchFilter);
+  }
+
+  private renderUpdateHeader(
+    containerEl: HTMLElement,
+    outdatedIds: string[],
+    currentPlatforms: Platform[],
+  ): void {
+    if (outdatedIds.length === 0) return;
+    new Setting(containerEl)
+      .setName(`Update available (${outdatedIds.length.toString()})`)
+      .setDesc("Newer versions of installed assets are bundled.")
+      .addButton((b) =>
+        b.setButtonText("Update all").setCta().onClick(() => {
+          void this.handleBulkUpdate(outdatedIds, currentPlatforms);
+        }),
+      )
+      .addButton((b) =>
+        b.setButtonText("Clean up backups").onClick(() => {
+          this.handleCleanupBackups();
+        }),
+      );
+  }
+
+  private renderBundleRows(
+    containerEl: HTMLElement,
+    state: InstalledState,
+    currentPlatforms: Platform[],
+    outdatedIds: string[],
+    searchFilter: string,
+  ): void {
     const bundles = new Map<string, AssetMeta[]>();
     for (const a of this.catalog.assets) {
       if (!bundles.has(a.bundle)) bundles.set(a.bundle, []);
@@ -130,13 +165,13 @@ export class CatalogSettingsTab extends PluginSettingTab {
 
     for (const [bundle, assets] of bundles) {
       const filtered = assets.filter(
-        (a) => searchFilter === "" ||
+        (a) =>
+          searchFilter === "" ||
           a.name.toLowerCase().includes(searchFilter) ||
           a.description.toLowerCase().includes(searchFilter),
       );
       if (filtered.length === 0) continue;
 
-      // Bundle heading + "Enable all" button (Medium)
       const header = new Setting(containerEl).setName(bundle).setHeading();
       header.addButton((b) => {
         b.setButtonText("Enable all").onClick(() => {
@@ -145,28 +180,45 @@ export class CatalogSettingsTab extends PluginSettingTab {
       });
 
       for (const asset of filtered) {
-        const installed = Object.hasOwn(state, asset.id);
-        const { destructive: destructiveReqs } = partitionTools(asset.requires);
-        const badgeState: BadgeState = {
-          installed,
-          requiresOk: destructiveReqs.length < asset.requires.length || asset.requires.length === 0,
-          installedHash: installed ? state[asset.id].hash : undefined,
-        };
-        const badgeText = computeBadge(badgeState);
-
-        new Setting(containerEl)
-          .setName(asset.name)
-          .setDesc(asset.description)
-          .addToggle((t) =>
-            t.setValue(installed).onChange((value) => {
-              void this.handleToggle(asset, value);
-            })
-          )
-          .then((s) => {
-            s.nameEl.createSpan({ text: ` [${badgeText}]`, cls: "catalog-badge" });
-          });
+        this.renderAssetRow(containerEl, asset, state, currentPlatforms, outdatedIds);
       }
     }
+  }
+
+  private renderAssetRow(
+    containerEl: HTMLElement,
+    asset: AssetMeta,
+    state: InstalledState,
+    currentPlatforms: Platform[],
+    outdatedIds: string[],
+  ): void {
+    const installed = Object.hasOwn(state, asset.id);
+    const { destructive: destructiveReqs } = partitionTools(asset.requires);
+    const badgeState: BadgeState = {
+      installed,
+      requiresOk: destructiveReqs.length < asset.requires.length || asset.requires.length === 0,
+      installedHash: installed ? state[asset.id].hash : undefined,
+    };
+    const badgeText = computeBadge(badgeState);
+
+    const row = new Setting(containerEl)
+      .setName(asset.name)
+      .setDesc(asset.description)
+      .addToggle((t) =>
+        t.setValue(installed).onChange((value) => {
+          void this.handleToggle(asset, value);
+        }),
+      );
+    if (outdatedIds.includes(asset.id)) {
+      row.addExtraButton((b) =>
+        b.setIcon("refresh-cw").setTooltip("Update this asset").onClick(() => {
+          void this.handleBulkUpdate([asset.id], currentPlatforms);
+        }),
+      );
+    }
+    row.then((s) => {
+      s.nameEl.createSpan({ text: ` [${badgeText}]`, cls: "catalog-badge" });
+    });
   }
 
   private handleEnableAll(
@@ -251,4 +303,71 @@ export class CatalogSettingsTab extends PluginSettingTab {
       this.display();
     }
   }
+
+  // Phase 3: bulk update — run updateAsset for each outdated id, threading opts
+  // (enableHooks preference + Notice-backed warn sink so hooks stay enabled).
+  private async handleBulkUpdate(ids: string[], platforms: Platform[]): Promise<void> {
+    const enableHooks = this.pw.settings.enableHooks === true;
+    const warn = (m: string) => { new Notice(m); };
+    let updated = 0;
+    for (const id of ids) {
+      const asset = this.catalog.assets.find((a) => a.id === id);
+      if (asset === undefined) continue;
+      try {
+        await updateAsset(this.fs, asset, this.catalog.assets, platforms, {
+          enableHooks,
+          warn,
+          onConflict: (p) => this.onConflict(p),
+          onUserModified: (p) => this.onConflict(p),
+        });
+        updated++;
+      } catch (e) {
+        new Notice(`Failed to update ${id}: ${(e as Error).message}`);
+      }
+    }
+    if (updated > 0) new Notice(`Updated ${updated.toString()} asset(s)`);
+    this.display();
+  }
+
+  // Phase 3: clean up .bak files — surface guidance (no glob API available).
+  private handleCleanupBackups(): void {
+    new Notice("Backup files are named *.bak in your vault. Remove them via your file manager.");
+  }
+}
+
+/** Register the specorator:update-catalog-assets command (BRAT pattern).
+ *  Called from the plugin's onload() after the settings tab is constructed. */
+export function registerUpdateCommand(
+  plugin: Plugin & { addCommand: (cmd: { id: string; name: string; callback: () => void }) => void },
+  fs: FileSystem,
+  catalog: CatalogIndex,
+  getPlatforms: () => Platform[],
+): void {
+  plugin.addCommand({
+    id: "update-catalog-assets",
+    name: "Update catalog assets",
+    callback: () => {
+      void (async () => {
+        try {
+          const state = await loadState(fs);
+          const outdated = detectUpdates(state, catalog.assets);
+          if (outdated.length === 0) {
+            new Notice("All catalog assets are up to date.");
+            return;
+          }
+          const platforms = getPlatforms();
+          for (const id of outdated) {
+            const asset = catalog.assets.find((a) => a.id === id);
+            if (!asset) continue;
+            await updateAsset(fs, asset, catalog.assets, platforms, {
+              warn: (m: string) => { new Notice(m); },
+            });
+          }
+          new Notice(`Updated ${outdated.length.toString()} catalog asset(s).`);
+        } catch (e) {
+          new Notice(`Catalog update failed: ${(e as Error).message}`);
+        }
+      })();
+    },
+  });
 }
