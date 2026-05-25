@@ -726,6 +726,110 @@ describe('tabsStore (SPEC-TS-019)', () => {
 		const runner = runners[runners.length - 1];
 		expect(runner.lastInput?.queryOptions?.appendSystemPrompt).toBeUndefined();
 	});
+
+	// ── R-CA-001/R-CA-004: per-tab context folds into the submitted turn ─────────
+	// FIX-1 (was R-CA-001 + R-CA-004). The present context sets travel with the
+	// turn: attached files / images / the captured selection (mapped by union
+	// member) populate the additive `ChatTurnRequest` fields. SPEC-CA-001/022;
+	// REQ-CA-004/010/019.
+
+	it('REQ-CA-004: attached files travel with the submitted turn', async () => {
+		const { store, runners } = freshStore();
+		store.switchTab(store.activeTabId!);
+		await store.sendMessage('Look at these', undefined, {
+			attachedFiles: [{ path: 'notes/a.md', displayName: 'a' }],
+		});
+		const runner = runners[runners.length - 1];
+		expect(runner.lastInput?.request.attachedFiles).toEqual([
+			{ path: 'notes/a.md', displayName: 'a' },
+		]);
+	});
+
+	it('REQ-CA-010: attached images travel with the submitted turn', async () => {
+		const image = { path: 'img/x.png', mimeType: 'image/png' as const, byteSize: 4, dataBase64: 'AAA' };
+		const { store, runners } = freshStore();
+		store.switchTab(store.activeTabId!);
+		await store.sendMessage('See this', undefined, { images: [image] });
+		const runner = runners[runners.length - 1];
+		expect(runner.lastInput?.request.images).toEqual([image]);
+	});
+
+	it('REQ-CA-019: a captured editor selection maps into the editorSelection field', async () => {
+		const { store, runners } = freshStore();
+		store.switchTab(store.activeTabId!);
+		await store.sendMessage('About this', undefined, {
+			selection: {
+				kind: 'editor',
+				notePath: 'notes/a.md',
+				selectedText: 'hi',
+				startLine: 10,
+				lineCount: 3,
+			},
+		});
+		const runner = runners[runners.length - 1];
+		expect(runner.lastInput?.request.editorSelection).toEqual({
+			kind: 'editor',
+			notePath: 'notes/a.md',
+			selectedText: 'hi',
+			startLine: 10,
+			lineCount: 3,
+		});
+		expect(runner.lastInput?.request.canvasSelection).toBeUndefined();
+		expect(runner.lastInput?.request.browserSelection).toBeUndefined();
+	});
+
+	it('REQ-CA-019: a captured canvas selection maps into the canvasSelection field', async () => {
+		const { store, runners } = freshStore();
+		store.switchTab(store.activeTabId!);
+		await store.sendMessage('About these nodes', undefined, {
+			selection: { kind: 'canvas', canvasPath: 'board.canvas', nodeIds: ['n1', 'n2'] },
+		});
+		const runner = runners[runners.length - 1];
+		expect(runner.lastInput?.request.canvasSelection).toEqual({
+			kind: 'canvas',
+			canvasPath: 'board.canvas',
+			nodeIds: ['n1', 'n2'],
+		});
+		expect(runner.lastInput?.request.editorSelection).toBeUndefined();
+	});
+
+	it('G2/SPEC-CA-028: with no context the request stays byte-identical to P1 (text-only)', async () => {
+		const { store, runners } = freshStore();
+		store.switchTab(store.activeTabId!);
+		await store.sendMessage('Plain turn');
+		const runner = runners[runners.length - 1];
+		expect(runner.lastInput?.request).toEqual({ text: 'Plain turn' });
+	});
+
+	it('G2/SPEC-CA-028: an empty context object still yields a text-only request', async () => {
+		const { store, runners } = freshStore();
+		store.switchTab(store.activeTabId!);
+		await store.sendMessage('Plain turn', undefined, {});
+		const runner = runners[runners.length - 1];
+		expect(runner.lastInput?.request).toEqual({ text: 'Plain turn' });
+	});
+
+	it('REQ-CA-004/010/019: the context sets clear on a successful submit (onConsumed fires)', async () => {
+		const { store } = freshStore();
+		store.switchTab(store.activeTabId!);
+		const onConsumed = vi.fn();
+		await store.sendMessage('Look', undefined, {
+			attachedFiles: [{ path: 'notes/a.md', displayName: 'a' }],
+			onConsumed,
+		});
+		expect(onConsumed).toHaveBeenCalledTimes(1);
+	});
+
+	it('REQ-CA-004: onConsumed does NOT fire when the send is guarded out (empty text)', async () => {
+		const { store } = freshStore();
+		store.switchTab(store.activeTabId!);
+		const onConsumed = vi.fn();
+		await store.sendMessage('   ', undefined, {
+			attachedFiles: [{ path: 'notes/a.md', displayName: 'a' }],
+			onConsumed,
+		});
+		expect(onConsumed).not.toHaveBeenCalled();
+	});
 });
 
 /** Read the persisted meta for a conversation id (R-TS-004 createdAt/updatedAt). */
