@@ -109,7 +109,10 @@ export type {
 	TabControls,
 } from '@/domain/chat/toolbar';
 
-// P7 approvals-security (SPEC-AS-001/002, ADR-AS-002 §1). The permission-mode
-// union the toggle/fold/runtime share, surfaced through the ports barrel for
+// P7 approvals-security (SPEC-AS-001/002/005/006, ADR-AS-001/002). The
+// permission-mode union, the store-only `ApprovalRuleStorePort` (one consumer, no
+// aggregate), and the rule DTOs it carries, surfaced through the ports barrel for
 // one-stop import.
 export type { PermissionMode } from '@/domain/chat/PermissionMode';
+export type { ApprovalRuleStorePort } from './ApprovalRuleStorePort';
+export type { ApprovalRule, ApprovalRuleInput } from '@/domain/chat/approvals/ApprovalRule';
