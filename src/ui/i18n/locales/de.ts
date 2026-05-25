@@ -30,6 +30,7 @@ export default {
 				},
 				bash: {
 					exitLabel: 'Exit',
+					placeholder: 'Shell-Befehl ausführen…',
 				},
 				instruction: {
 					placeholder: 'Systemanweisung hinzufügen…',
