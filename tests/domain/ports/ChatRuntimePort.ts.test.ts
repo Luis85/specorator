@@ -8,16 +8,21 @@
  * `{supportsFork,supportsRewind}` + the P4 additive `{supportsPlanMode,
  * supportsInlineResponse}` (byte-identical). `ToolbarCapabilities` is the five
  * P6 `readonly` flags. The 15 prior members + 4 prior caps stay byte-identical
- * (additivity, SPEC-CP-034 / SPEC-TC-027, NFR-TC-001).
+ * (additivity, SPEC-CP-034 / SPEC-TC-027, NFR-TC-001 / NFR-AS-001).
  *
- * The compile-time exact-key equality (now SIXTEEN members + FOUR runtime caps +
- * the five-flag ToolbarCapabilities) fails `vue-tsc -p tsconfig.lint.json` until
- * T-TC-008 appends `getToolbarCapabilities()` + the `ToolbarCapabilities` shape.
+ * P7 (T-AS-010, TEST-AS-001 capabilities-shape leg + TEST-AS-021 additivity leg,
+ * SPEC-AS-006b) WIDENS `ToolbarCapabilities.permissionMode` from the P6
+ * `'default' | 'plan'` to the live `PermissionMode` (`'normal' | 'plan' | 'yolo'`),
+ * the P6 `'default'` value mapping to `'normal'`. The four OTHER `ToolbarCapabilities`
+ * flags + the five `RuntimeCapabilities` flags + the P0–P6 `ChatRuntimePort` members
+ * stay byte-identical. This leg fails `vue-tsc -p tsconfig.lint.json` until T-AS-011
+ * widens the union.
  *
- * Traces: TEST-TS-003, TEST-CP-002, TEST-TC-003/019/021/027, SPEC-TS-003,
- * SPEC-CP-002, SPEC-CP-034, SPEC-TC-005/027, REQ-TS-013/019/021/028,
- * REQ-CP-020/023/025/026/028, REQ-TC-003/015/019/021; ADR-TS-002 §3, ADR-CP-004 §1,
- * ADR-TC-003 §2; NFR-TC-001.
+ * Traces: TEST-TS-003, TEST-CP-002, TEST-TC-003/019/021/027, TEST-AS-001/021,
+ * SPEC-TS-003, SPEC-CP-002, SPEC-CP-034, SPEC-TC-005/027, SPEC-AS-006/021,
+ * REQ-TS-013/019/021/028, REQ-CP-020/023/025/026/028, REQ-TC-003/015/019/021,
+ * REQ-AS-003; ADR-TS-002 §3, ADR-CP-004 §1, ADR-TC-003 §2, ADR-AS-002 §2;
+ * NFR-TC-001, NFR-AS-001.
  */
 import { describe, it, expect } from 'vitest';
 import type {
@@ -28,6 +33,7 @@ import type {
 // `ToolbarCapabilities` is also surfaced through the ports barrel (SPEC-TC-005).
 import type { ToolbarCapabilities as ToolbarCapsFromBarrel } from '@/domain/ports';
 import type { ChatRuntimeQueryOptions } from '@/domain/chat/ChatTurn';
+import type { PermissionMode } from '@/domain/chat/PermissionMode';
 import type {
 	AskUserQuestionRequest,
 	AskUserQuestionAnswer,
@@ -118,7 +124,12 @@ const _toolbarReasoning: Equals<
 > = true;
 const _toolbarTier: Equals<ToolbarCapabilities['hasServiceTier'], boolean> = true;
 const _toolbarMode: Equals<ToolbarCapabilities['hasModeToggle'], boolean> = true;
-const _toolbarPermission: Equals<ToolbarCapabilities['permissionMode'], 'default' | 'plan'> = true;
+// P7 (TEST-AS-001 capabilities-shape leg, SPEC-AS-006b): WIDENED to PermissionMode.
+const _toolbarPermission: Equals<ToolbarCapabilities['permissionMode'], PermissionMode> = true;
+const _toolbarPermissionWidened: Equals<
+	ToolbarCapabilities['permissionMode'],
+	'normal' | 'plan' | 'yolo'
+> = true;
 const _toolbarBarrelSame: Equals<ToolbarCapabilities, ToolbarCapsFromBarrel> = true;
 void _toolbarCapsKeys;
 void _toolbarMcp;
@@ -126,6 +137,7 @@ void _toolbarReasoning;
 void _toolbarTier;
 void _toolbarMode;
 void _toolbarPermission;
+void _toolbarPermissionWidened;
 void _toolbarBarrelSame;
 
 // RuntimeCapabilities is { supportsFork, supportsRewind } + the P4 additive
@@ -190,16 +202,17 @@ describe('ChatRuntimePort additive growth (TEST-TS-003 + TEST-CP-002 + TEST-TC-0
 		expect([...p3, ...p4, ...p6]).not.toContain('steer');
 	});
 
-	it('reports the five-flag ToolbarCapabilities synchronously (TEST-TC-003/019/021)', () => {
+	it('reports the five-flag ToolbarCapabilities synchronously (TEST-TC-003/019/021, TEST-AS-001)', () => {
+		// P7: the P6 `'default'` display value maps to the live `'normal'` (SPEC-AS-006b).
 		const caps: ToolbarCapabilities = {
 			supportsMcpTools: false,
 			reasoningControl: 'effort',
 			hasServiceTier: false,
 			hasModeToggle: true,
-			permissionMode: 'default',
+			permissionMode: 'normal',
 		};
 		expect(caps.reasoningControl).toBe('effort');
-		expect(caps.permissionMode).toBe('default');
+		expect(caps.permissionMode).toBe('normal');
 		expect(Object.keys(caps)).toEqual([
 			'supportsMcpTools',
 			'reasoningControl',
@@ -207,5 +220,19 @@ describe('ChatRuntimePort additive growth (TEST-TS-003 + TEST-CP-002 + TEST-TC-0
 			'hasModeToggle',
 			'permissionMode',
 		]);
+	});
+
+	it('represents all three live permission modes (TEST-AS-001 widen leg)', () => {
+		const modes: PermissionMode[] = ['normal', 'plan', 'yolo'];
+		for (const mode of modes) {
+			const caps: ToolbarCapabilities = {
+				supportsMcpTools: false,
+				reasoningControl: 'none',
+				hasServiceTier: false,
+				hasModeToggle: true,
+				permissionMode: mode,
+			};
+			expect(caps.permissionMode).toBe(mode);
+		}
 	});
 });
