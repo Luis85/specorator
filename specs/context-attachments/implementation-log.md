@@ -446,3 +446,42 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   does NOT coalesce consecutive same-type ops (claudian's `InlineEditModal.ts:171`
   does coalesce — an intentional divergence so the word-granular acceptance holds
   at the token level).
+
+### T-CA-019 — RED `parseInlineEditResponse` + `inlineEditPrompt` (🧪 qa)
+
+- **Spec/test:** TEST-CA-022, TEST-CA-021 (prompt leg); SPEC-CA-012/013;
+  REQ-CA-021/022; NFR-CA-004.
+- **Files:** `tests/application/chat/inlineEdit/parseInlineEditResponse.test.ts`
+  (new — replacement (trimmed inner, first-match, wins over insertion) / insertion
+  / clarification (trimmed) / failure (empty + whitespace); the REQ-CA-022
+  acceptances; never-throws), `tests/application/chat/inlineEdit/inlineEditPrompt.test.ts`
+  (new — `INLINE_EDIT_SYSTEM_PROMPT` non-empty + documents the
+  `<replacement>`/`<insertion>`/clarification contract; `buildInlineEditPrompt`
+  frames instruction + selection + optional notePath; pure/deterministic).
+- **Outcome:** done — RED confirmed (both modules unresolved at import time).
+- **Commit:** `4bef1f1`.
+
+### T-CA-020 — `parseInlineEditResponse.ts` + `inlineEditPrompt.ts` (🔨 dev)
+
+- **Spec/req:** SPEC-CA-012/013; REQ-CA-021/022; NFR-CA-004.
+- **Files:** `src/application/chat/inlineEdit/parseInlineEditResponse.ts` (new —
+  the `InlineEditParse` union + the parse, ported from claudian
+  `core/prompt/inlineEdit.ts:9`: first `<replacement>` (regex `exec`, `[\s\S]*?`,
+  trimmed inner) → replacement; else `<insertion>` → insertion; else non-empty
+  trimmed → clarification; else failure),
+  `src/application/chat/inlineEdit/inlineEditPrompt.ts` (new —
+  `INLINE_EDIT_SYSTEM_PROMPT` ported from claudian (selection-mode leg) +
+  `buildInlineEditPrompt(selectedText, instruction, notePath?)` framing the
+  instruction + `<editor_selection>` tag).
+- **Outcome:** done — the T-CA-019 RED tests now green (parse 9/9, prompt 5/5).
+  Pure/total, never throws; no side effects; no `obsidian`/Vue import.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` on the four files
+  exit 0; `vitest run` on the two test files 14/14 green.
+- **Commit:** _this commit._
+- **Deviation:** two intentional divergences from a strict verbatim port: (1) the
+  parse **trims** the `<replacement>`/`<insertion>` inner per SPEC-CA-012 ("trimmed
+  inner") — claudian's `replacementMatch[1]` is raw. (2) `INLINE_EDIT_SYSTEM_PROMPT`
+  drops claudian's leading `Today is ${getTodayDate()}` interpolation and the
+  cursor-mode sections — the date interpolation would break the pure/total +
+  stable-constant contract (SPEC-CA-013), and P5 captures editor selections, not
+  cursor positions, so `buildInlineEditPrompt` frames only `<editor_selection>`.
