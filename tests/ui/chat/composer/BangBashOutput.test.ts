@@ -12,11 +12,12 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import BangBashOutput from '@/ui/chat/composer/BangBashOutput.vue';
+import { i18n } from '@/ui/i18n';
 import type { BangBashOutput as BangBashOutputDto } from '@/application/chat/composer/SubmitBangBashUseCase';
 import { BangBashOutputPageObject } from './BangBashOutput.po';
 
 function mountOutput(output: BangBashOutputDto) {
-	const wrapper = mount(BangBashOutput, { props: { output } });
+	const wrapper = mount(BangBashOutput, { props: { output }, global: { plugins: [i18n] } });
 	return { wrapper, po: new BangBashOutputPageObject(wrapper) };
 }
 
