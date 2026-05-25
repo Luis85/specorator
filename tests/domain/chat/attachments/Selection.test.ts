@@ -62,31 +62,26 @@ const _unionKinds: Equals<CapturedSelection['kind'], 'editor' | 'canvas' | 'brow
 void _unionKinds;
 
 describe('CapturedSelection union (TEST-CA-013 type-shape)', () => {
-	it('narrows on kind', () => {
-		const sel: CapturedSelection = {
-			kind: 'editor',
-			notePath: 'a.md',
-			selectedText: 'hello',
-			startLine: 10,
-			lineCount: 1,
-		};
+	// A union-typed array so the `kind` discriminant is genuinely narrowed (not a literal).
+	const cases: CapturedSelection[] = [
+		{ kind: 'editor', notePath: 'a.md', selectedText: 'hello', startLine: 10, lineCount: 1 },
+		{ kind: 'canvas', canvasPath: 'board.canvas', nodeIds: ['n1', 'n2'] },
+		{ kind: 'browser', source: 'webview:example.com', selectedText: 'quote' },
+	];
+
+	it('narrows on kind for the editor member', () => {
+		const sel = cases[0];
 		if (sel.kind === 'editor') {
 			expect(sel.startLine).toBe(10);
 			expect(sel.lineCount).toBeGreaterThanOrEqual(1);
+		} else {
+			throw new Error('expected an editor selection');
 		}
 	});
 
-	it('constructs a canvas and a browser member', () => {
-		const canvas: CapturedSelection = {
-			kind: 'canvas',
-			canvasPath: 'board.canvas',
-			nodeIds: ['n1', 'n2'],
-		};
-		const browser: CapturedSelection = {
-			kind: 'browser',
-			source: 'webview:example.com',
-			selectedText: 'quote',
-		};
+	it('narrows on kind for the canvas + browser members', () => {
+		const canvas = cases[1];
+		const browser = cases[2];
 		expect(canvas.kind).toBe('canvas');
 		expect(browser.kind).toBe('browser');
 		if (canvas.kind === 'canvas') expect(canvas.nodeIds).toHaveLength(2);
