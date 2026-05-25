@@ -1,7 +1,7 @@
 /**
  * Approvals domain barrel (P7, SPEC-AS-004/005). One-stop import for the pure
  * matcher (`getActionPattern`/`getActionDescription`/`matchesRulePattern`) and the
- * rule DTO (added in T-AS-007).
+ * rule DTO (`ApprovalRule`/`ApprovalRuleInput`/`ruleDedupeKey`).
  */
 export {
 	TOOL_BASH,
@@ -15,3 +15,5 @@ export {
 	getActionDescription,
 	matchesRulePattern,
 } from './ApprovalMatcher';
+export type { ApprovalRule, ApprovalRuleInput } from './ApprovalRule';
+export { ruleDedupeKey } from './ApprovalRule';
