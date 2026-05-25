@@ -62,6 +62,24 @@ export default {
 				newTab: 'New tab',
 				currentTab: 'Current tab',
 			},
+			context: {
+				files: {
+					label: 'Attached files',
+					open: 'Open {name}',
+					remove: 'Remove {name}',
+				},
+				images: {
+					label: 'Attached images',
+					preview: 'Preview {name}',
+					remove: 'Remove {name}',
+				},
+				selection: {
+					label: 'Captured selection',
+					clear: 'Clear selection',
+					editor: '{notePath} · line {startLine} (+{lineCount})',
+					canvas: '{canvasPath} ({count} nodes)',
+				},
+			},
 		},
 	},
 } as const;

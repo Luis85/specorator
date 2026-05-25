@@ -62,6 +62,24 @@ export default {
 				newTab: 'Neuer Tab',
 				currentTab: 'Aktueller Tab',
 			},
+			context: {
+				files: {
+					label: 'Angehängte Dateien',
+					open: '{name} öffnen',
+					remove: '{name} entfernen',
+				},
+				images: {
+					label: 'Angehängte Bilder',
+					preview: '{name} ansehen',
+					remove: '{name} entfernen',
+				},
+				selection: {
+					label: 'Erfasste Auswahl',
+					clear: 'Auswahl löschen',
+					editor: '{notePath} · Zeile {startLine} (+{lineCount})',
+					canvas: '{canvasPath} ({count} Knoten)',
+				},
+			},
 		},
 	},
 } as const;

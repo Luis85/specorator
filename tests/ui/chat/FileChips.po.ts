@@ -58,8 +58,8 @@ export class FileChipsPageObject {
 		await this.wrapper.findAll(this.byTid(TID.remove))[index].trigger('keydown', { key });
 	}
 
-	/** The raw innerHTML of the chips root — for the no-`v-html` / verbatim-text assertion. */
+	/** The serialized chips-root markup — for the no-`v-html` / verbatim-text assertion. */
 	rootHtml(): string {
-		return this.wrapper.get(this.byTid(TID.root)).element.innerHTML;
+		return this.wrapper.get(this.byTid(TID.root)).html();
 	}
 }

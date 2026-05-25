@@ -85,12 +85,13 @@ describe('FileChips (SPEC-CA-019)', () => {
 		const malicious: AttachedFileRef[] = [
 			{ path: 'x/<script>alert(1)</script>.md', displayName: '<script>alert(1)</script>' },
 		];
-		const { po } = mountChips(malicious);
+		const { wrapper, po } = mountChips(malicious);
 		// The displayName is shown as text…
 		expect(po.linkText(0)).toContain('<script>alert(1)</script>');
-		// …and no live <script> element entered the DOM (escaped, not parsed).
-		expect(po.rootHtml()).not.toContain('<script>alert(1)</script>');
+		// …rendered escaped in the text node (no `v-html`/`innerHTML`)…
 		expect(po.rootHtml()).toContain('&lt;script&gt;');
+		// …and no live <script> ELEMENT was parsed into the DOM.
+		expect(wrapper.find('script').exists()).toBe(false);
 	});
 
 	it('renders nothing-but-an-empty-root when there are no files', () => {

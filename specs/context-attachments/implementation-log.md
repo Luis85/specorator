@@ -661,3 +661,39 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   without fixing the parameter shape, so the ref is the host's binding seam. An
   explicit `clear()` is treated as a deselection regardless of focus (it cannot
   be a focus hand-off).
+
+## T-CA-031 — RED FileChips.vue + PageObject (🧪 qa)
+
+- **Spec/test:** TEST-CA-001 (A leg), TEST-CA-003 (A leg), TEST-CA-005,
+  TEST-CA-031 (file leg); SPEC-CA-019; REQ-CA-001/003/005; NFR-CA-002/003/005/008.
+- **Files:** `tests/ui/chat/FileChips.test.ts`, `tests/ui/chat/FileChips.po.ts`
+  (new — one chip per file showing displayName; wikilink `[[path]]` on the
+  declarative `title` attr; Enter/Space → open; labelled remove → remove;
+  EC-CA-14 `<script>` renders verbatim/escaped; data-testid only).
+- **Outcome:** done — RED confirmed (`FileChips.vue` unresolved at import).
+- **Commit:** `892d8a0`.
+
+## T-CA-032 — FileChips.vue (🔨 dev)
+
+- **Spec/req:** SPEC-CA-019; REQ-CA-001/003/005; NFR-CA-002/003/008.
+- **Files:** `src/ui/chat/FileChips.vue` (new — `<script setup>`; props
+  `files`; emits `remove`/`open`; each chip is a `<button>` showing `displayName`
+  with the wikilink `[[path]]` on a declarative `:title`, Enter/Space → `open`;
+  a labelled `×` remove button, Enter/Space → `remove`; chips in a labelled
+  `<ul>`), `src/ui/i18n/locales/en.ts` + `de.ts` (new
+  `agent.chat.context.{files,images,selection}` string group — NFR-CA-013),
+  `tests/ui/chat/FileChips.test.ts` + `FileChips.po.ts` (EC-CA-14 assertion
+  tightened — see deviation).
+- **Outcome:** done — the T-CA-031 RED tests now green (10/10). No `v-html`/
+  `innerHTML`; no `obsidian` import; no `window.confirm`/`alert`/`prompt`.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` on the changed
+  files exit 0; `vitest run` 10/10 green.
+- **Commit:** _this commit._
+- **Deviation:** the EC-CA-14 RED assertion was tightened in the same batch:
+  jsdom serializes `<`/`>` literally inside ATTRIBUTE values (`title`/`aria-label`),
+  so a blanket `innerHTML.not.toContain('<script>…')` is a false positive. The
+  real contract (a `<script>` never parses into a live ELEMENT; the displayName
+  TEXT renders escaped) is asserted via `wrapper.find('script').exists() === false`
+  + `&lt;script&gt;` in the serialized markup. The `--sp-chip-*` /
+  `--sp-context-bar-gap` tokens the styles reference are minted in Layer 6
+  (T-CA-042) — CSS vars resolve at runtime, so this is forward-compatible.
