@@ -10,6 +10,7 @@ import type {
 	ChatRuntimeEnsureReadyOptions,
 	Unsubscriber,
 	RuntimeCapabilities,
+	ToolbarCapabilities,
 } from '@/domain/ports';
 import type {
 	AskUserQuestionRequest,
@@ -208,6 +209,19 @@ export class FixtureChatRuntime implements ChatRuntimePort {
 			supportsRewind: true,
 			supportsPlanMode: false,
 			supportsInlineResponse: false,
+		};
+	}
+
+	// P6 (SPEC-TC-005/009, ADR-TC-003 §3): the demo reports the inert flags so it
+	// renders the backed widgets (model/mode) + the honest-defer seams, never a live
+	// service-tier/MCP. Fleshed out (with the inert catalog) in T-TC-011.
+	getToolbarCapabilities(): ToolbarCapabilities {
+		return {
+			supportsMcpTools: false,
+			reasoningControl: 'none',
+			hasServiceTier: false,
+			hasModeToggle: true,
+			permissionMode: 'default',
 		};
 	}
 

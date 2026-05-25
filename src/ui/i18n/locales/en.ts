@@ -83,6 +83,47 @@ export default {
 					browserCapture: 'Capture browser selection',
 				},
 			},
+			toolbar: {
+				model: {
+					label: 'Model',
+					open: 'Choose model',
+					empty: 'No models available',
+				},
+				mode: {
+					label: 'Mode',
+				},
+				permission: {
+					label: 'Permissions',
+					plan: 'PLAN',
+					deferred: 'Permission rules arrive in a later release.',
+				},
+				thinking: {
+					label: 'Thinking',
+					open: 'Choose thinking effort',
+					effortLabel: 'Effort',
+					budgetLabel: 'Budget',
+					effort: {
+						high: 'High',
+						medium: 'Medium',
+						low: 'Low',
+					},
+				},
+				serviceTier: {
+					label: 'Priority',
+				},
+				mcp: {
+					label: 'MCP servers',
+					empty: 'MCP servers arrive in a later release.',
+				},
+				external: {
+					label: 'External context',
+					deferred: 'External folder context arrives in a later release.',
+				},
+				usage: {
+					label: 'Context usage {percent}%',
+					compactHint: 'Context is filling up — run /compact to free space.',
+				},
+			},
 		},
 	},
 } as const;

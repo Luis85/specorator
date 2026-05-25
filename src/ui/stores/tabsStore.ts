@@ -12,6 +12,8 @@ import { CONVERSATION_RECORD_VERSION } from '@/domain/chat/ConversationRecord';
 import type { ProviderSessionState } from '@/domain/chat/ConversationRecord';
 import type { ChatTurnSink, RunChatTurnInput } from '@/application/chat/RunChatTurnUseCase';
 import type { ChatTurnRequest } from '@/domain/chat/ChatTurn';
+import type { TabControls } from '@/domain/chat/toolbar/TabControls';
+import { foldControlOptions } from '@/application/chat/toolbar/foldControlOptions';
 import type {
 	AttachedFileRef,
 	AttachedImage,
@@ -73,6 +75,14 @@ export interface TabState {
 	 * (R-TS-004). No secret (NFR-TS-013).
 	 */
 	providerState: ProviderSessionState;
+	/**
+	 * P6 (SPEC-TC-006/023, ADR-TC-001 §1): the per-tab toolbar control selections
+	 * (model/mode/reasoning/serviceTier). A draft-input bag the surface folds into
+	 * the next turn on submit; an absent member means "no explicit choice — the
+	 * runtime applies its default" so an untouched toolbar turn is byte-identical to
+	 * P5 (NFR-TC-001). Plain DTO — crosses the Pinia store boundary (NFR-TC-005).
+	 */
+	controls: TabControls;
 }
 
 /**
@@ -254,6 +264,8 @@ function freshTab(): TabState {
 		needsAttention: false,
 		createdAt: Date.now(),
 		providerState: {},
+		// P6 (SPEC-TC-023): a fresh tab starts with no explicit control choice.
+		controls: {},
 	};
 }
 
@@ -411,6 +423,10 @@ export const useTabsStore = defineStore('tabs', {
 			tab.liveAssistantId = null;
 			tab.interruptedId = null;
 			tab.errorActive = false;
+			// P6 (SPEC-TC-023, REQ-TC-042): a resumed/forked conversation starts with no
+			// explicit control choice — the runtime applies its defaults (parity with the
+			// P5 context-set reset).
+			tab.controls = {};
 			if (payload.sessionId !== null) {
 				this._deps(tabId)?.runtime.resumeSession(payload.sessionId);
 			}
@@ -552,6 +568,18 @@ export const useTabsStore = defineStore('tabs', {
 			}
 		},
 
+		/**
+		 * P6 (SPEC-TC-023, REQ-TC-012/014/018/020): set one per-tab toolbar control on
+		 * the ACTIVE tab. A DRAFT-INPUT mutation — it does NOT send; the backed widgets
+		 * fold into the query options on the next submit (ADR-TC-001). The seam widgets
+		 * (permission/MCP/external) never call this (no `controls` member for them).
+		 */
+		setControl<K extends keyof TabControls>(field: K, value: TabControls[K]): void {
+			const active = this.activeTab;
+			if (active === undefined) return;
+			active.controls = { ...active.controls, [field]: value };
+		},
+
 		/** Send-guard: not streaming AND non-empty trimmed text (REQ-CC-007). */
 		canSend(text: string): boolean {
 			const active = this.activeTab;
@@ -559,14 +587,24 @@ export const useTabsStore = defineStore('tabs', {
 		},
 
 		/**
-		 * R-CP-001: resolve the per-turn `ChatRuntimeQueryOptions` from the binding's
-		 * `customSystemPrompt` seam. Returns `undefined` when there is no custom prompt
-		 * (the turn omits the system prompt — identical to P3 behaviour).
+		 * R-CP-001 + P6 (SPEC-TC-023): resolve the per-turn `ChatRuntimeQueryOptions`.
+		 * Two ADDITIVE + GUARDED folds, coexisting: (1) the P4 `customSystemPrompt` seam
+		 * → `appendSystemPrompt`; (2) the P6 toolbar controls → `model`/`mode`/
+		 * `reasoning`/`serviceTier` via `foldControlOptions(active.controls)`. Each only
+		 * writes a field when an explicit value is present, so an untouched-toolbar turn
+		 * with no custom prompt yields `undefined` — byte-identical to P5 (NFR-TC-001,
+		 * EC-TC-1/6). The seam widgets fold nothing.
 		 */
 		async _turnQueryOptions(): Promise<RunChatTurnInput['queryOptions']> {
 			const appendSystemPrompt = await this._sidecar().binding?.getAppendSystemPrompt?.();
-			if (appendSystemPrompt === undefined || appendSystemPrompt.length === 0) return undefined;
-			return { appendSystemPrompt };
+			const controlOptions = foldControlOptions(this.activeTab?.controls ?? {});
+			const hasPrompt = appendSystemPrompt !== undefined && appendSystemPrompt.length > 0;
+			const hasControls = Object.keys(controlOptions).length > 0;
+			if (!hasPrompt && !hasControls) return undefined;
+			return {
+				...controlOptions,
+				...(hasPrompt ? { appendSystemPrompt } : {}),
+			};
 		},
 
 		/**

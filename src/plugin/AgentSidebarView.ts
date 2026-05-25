@@ -21,6 +21,7 @@ import {
 	AUX_MODEL_PORT,
 	SELECTION_SOURCE_PORT,
 	SELECTION_HIGHLIGHT_PORT,
+	TOOLBAR_CATALOG_PORT,
 } from '@/infrastructure/bridge/ports';
 import {
 	CHAT_RUNTIME_FACTORY,
@@ -153,6 +154,11 @@ export class AgentSidebarView extends ItemView {
 			// vault file/image `FuzzySuggestModal`; the Vue surface routes the picked
 			// path through the file-chip / image-gate paths (it never imports `obsidian`).
 			app.provide(PICK_ATTACHMENT, () => pickAttachment(this.app));
+			// P6 (SPEC-TC-025): the toolbar option-list source. The `ObsidianBridge`
+			// exposes the real Claude static catalog; the per-tab Claude `ChatRuntimePort`
+			// already reports `getToolbarCapabilities()` (read via `tabs.activeRuntime()`),
+			// so the strip renders the backed widgets + the honest capability-gated seams.
+			app.provide(TOOLBAR_CATALOG_PORT, bridge.toolbarCatalog);
 			app.mount(host);
 			this.vueApp = app;
 		}

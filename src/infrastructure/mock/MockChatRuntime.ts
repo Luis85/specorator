@@ -9,6 +9,7 @@ import type {
 	ChatRuntimeEnsureReadyOptions,
 	Unsubscriber,
 	RuntimeCapabilities,
+	ToolbarCapabilities,
 } from '@/domain/ports';
 import type {
 	AskUserQuestionRequest,
@@ -155,6 +156,15 @@ export class MockChatRuntime implements ChatRuntimePort {
 	// P4 (SPEC-CP-009): scriptable capability flags + captured inline-block callbacks.
 	private supportsPlanMode = true;
 	private supportsInlineResponse = true;
+	// P6 (SPEC-TC-008): scriptable toolbar capabilities — default Claude-shaped, a test
+	// flips `setToolbarCapabilities` to drive the seam-hidden-vs-visible matrix.
+	private toolbarCapabilities: ToolbarCapabilities = {
+		supportsMcpTools: false,
+		reasoningControl: 'effort',
+		hasServiceTier: false,
+		hasModeToggle: true,
+		permissionMode: 'default',
+	};
 	private askUserQuestionCallback:
 		| ((req: AskUserQuestionRequest) => Promise<AskUserQuestionAnswer | null>)
 		| null = null;
@@ -266,6 +276,14 @@ export class MockChatRuntime implements ChatRuntimePort {
 		};
 	}
 
+	// P6 (SPEC-TC-005/008, ADR-TC-003 §2): scriptable — defaults Claude-shaped so the
+	// strip exercises by default; a test flips `setToolbarCapabilities(caps)` to drive
+	// the seam-hidden-vs-visible matrix (supportsMcpTools / hasServiceTier /
+	// reasoningControl / permissionMode). Synchronous + total; never throws.
+	getToolbarCapabilities(): ToolbarCapabilities {
+		return this.toolbarCapabilities;
+	}
+
 	// ── P4 additive members (SPEC-CP-002/009/011, ADR-CP-004) ───────────────────
 	// Scriptable callback channels: the setters CAPTURE the registered callback so
 	// a test can invoke it (driving an ask-user/exit-plan/approval request in both
@@ -295,6 +313,11 @@ export class MockChatRuntime implements ChatRuntimePort {
 	/** Test scriptable: flip the inline-response capability flag (capable/non-capable driver). */
 	setSupportsInlineResponse(value: boolean): void {
 		this.supportsInlineResponse = value;
+	}
+
+	/** Test scriptable: set the toolbar capability flags (drives the seam-visible matrix). */
+	setToolbarCapabilities(caps: ToolbarCapabilities): void {
+		this.toolbarCapabilities = caps;
 	}
 
 	/** Test driver: invoke the registered ask-user-question callback (the runtime's pull). */

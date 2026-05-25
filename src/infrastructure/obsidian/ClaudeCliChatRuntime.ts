@@ -14,6 +14,7 @@ import type {
 	Unsubscriber,
 	LoggerPort,
 	RuntimeCapabilities,
+	ToolbarCapabilities,
 } from '@/domain/ports';
 import type {
 	AskUserQuestionRequest,
@@ -234,6 +235,31 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 			supportsRewind: false,
 			supportsPlanMode: false,
 			supportsInlineResponse: false,
+		};
+	}
+
+	// P6 (SPEC-TC-005/007, ADR-TC-003 §2): the REAL Claude toolbar flags (T-TC-012,
+	// coverage-excluded — behavioural gate is the MANUAL leg TEST-TC-M1).
+	// - `supportsMcpTools`: the `claude --print` one-shot transport ships no live MCP
+	//   tool backing in P6 (MCP arrives in P8, NG2), so the honest CLI capability is
+	//   `false` — the MCP selector stays capability-hidden, the same honest-gating
+	//   posture as `getCapabilities().supportsInlineResponse: false` (ADR-TS-004).
+	// - `reasoningControl: 'effort'`: Claude uses the adaptive-effort vocabulary (high/
+	//   medium/low), not a token budget.
+	// - `hasServiceTier: false`: no Codex fast-mode on Claude — the toggle collapses.
+	// - `hasModeToggle: true`: the catalog ships a mode descriptor (SPEC-TC-007).
+	// - `permissionMode`: mirrors the active P4 plan state (display only — P6 does not
+	//   own plan mode, NG6). The one-shot `--print` transport reports `supportsPlanMode:
+	//   false` (no interactive plan round-trip), so the displayed permission mode stays
+	//   `'default'` until an interactive transport flips it.
+	// Synchronous + total; never throws. No `providerId` branch.
+	getToolbarCapabilities(): ToolbarCapabilities {
+		return {
+			supportsMcpTools: false,
+			reasoningControl: 'effort',
+			hasServiceTier: false,
+			hasModeToggle: true,
+			permissionMode: 'default',
 		};
 	}
 

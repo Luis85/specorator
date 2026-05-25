@@ -21,7 +21,9 @@ export type { Unsubscriber } from './shared';
 // P1 chat-core ports (SPEC-CC-001, SPEC-CC-007, SPEC-CC-009).
 // P3 (SPEC-TS-003) appends `RuntimeCapabilities` alongside the additive
 // ChatRuntimePort members.
-export type { ChatRuntimePort, RuntimeCapabilities } from './ChatRuntimePort';
+// P6 (SPEC-TC-005) appends `ToolbarCapabilities` alongside the additive
+// `getToolbarCapabilities()` member on `ChatRuntimePort`.
+export type { ChatRuntimePort, RuntimeCapabilities, ToolbarCapabilities } from './ChatRuntimePort';
 export type {
 	MarkdownRenderPort,
 	MarkdownNode,
@@ -90,3 +92,19 @@ export type { ComposerMode, ComposerModeKind, TriggerHit } from '@/domain/chat/c
 export type { AuxModelPort, AuxModelRunOptions } from './AuxModelPort';
 export type { SelectionSourcePort } from './SelectionSourcePort';
 export type { SelectionHighlightPort } from './SelectionHighlightPort';
+
+// P6 toolbar-controls (SPEC-TC-002, ADR-TC-002 §2). The reasoning union the
+// thinking selector folds, surfaced through the ports barrel for one-stop import.
+export type { ReasoningChoice, ReasoningEffort } from '@/domain/chat/Reasoning';
+// P6 toolbar-catalog port (SPEC-TC-004, ADR-TC-004 §1). One consumer (the toolbar
+// view-model), one port — no aggregate. The descriptor DTOs it returns are
+// re-exported from `@/domain/chat/toolbar` for one-stop import.
+export type { ToolbarCatalogPort } from './ToolbarCatalogPort';
+export type {
+	ModelOption,
+	ModeDescriptor,
+	ReasoningDescriptor,
+	ServiceTierDescriptor,
+	ToolbarCatalog,
+	TabControls,
+} from '@/domain/chat/toolbar';

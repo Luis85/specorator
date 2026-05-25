@@ -34,6 +34,24 @@ export interface RuntimeCapabilities {
 }
 
 /**
+ * Toolbar-widget capability flags (P6, SPEC-TC-005, ADR-TC-003 §2). Read through the
+ * port, NEVER branched on by `providerId` (REQ-TC-003). Distinct from the P3/P4
+ * `RuntimeCapabilities` (fork/rewind/plan/inline) — these gate the toolbar widgets.
+ */
+export interface ToolbarCapabilities {
+	/** Gates the MCP selector (REQ-TC-021). */
+	readonly supportsMcpTools: boolean;
+	/** Gates + selects the thinking variant (REQ-TC-017). */
+	readonly reasoningControl: 'effort' | 'token-budget' | 'none';
+	/** Gates the service-tier toggle (REQ-TC-019); false for Claude. */
+	readonly hasServiceTier: boolean;
+	/** Gates the mode selector alongside the catalog descriptor (REQ-TC-013). */
+	readonly hasModeToggle: boolean;
+	/** The permission display state (PLAN special-case, REQ-TC-015). */
+	readonly permissionMode: 'default' | 'plan';
+}
+
+/**
  * The streaming + lifecycle subset of Claudian's ChatRuntime (`ChatRuntime.ts:20`),
  * blessed by ADR-CC-001. The nine P1 members (SPEC-CC-001) keep every name +
  * signature byte-identical (REQ-TS-028); P3 (SPEC-TS-003, ADR-TS-002 §3) APPENDS
@@ -85,4 +103,11 @@ export interface ChatRuntimePort {
 		cb: (req: ExitPlanModeRequest) => Promise<ExitPlanModeDecision | null>,
 	): void;
 	setApprovalCallback(cb: (req: ApprovalRequest) => Promise<ApprovalDecision | null>): void;
+	// ---- P6 additive (SPEC-TC-005, ADR-TC-003 §2) ----
+	/**
+	 * The toolbar-widget capability flags — gates widget visibility/enablement
+	 * (REQ-TC-003/019/021). Synchronous + total; never throws. NEVER branched on by
+	 * `providerId` by the consumer.
+	 */
+	getToolbarCapabilities(): ToolbarCapabilities;
 }

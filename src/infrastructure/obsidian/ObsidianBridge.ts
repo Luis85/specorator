@@ -35,6 +35,7 @@ import type {
 	AuxModelRunOptions,
 	SelectionSourcePort,
 	SelectionHighlightPort,
+	ToolbarCatalogPort,
 } from '@/domain/ports';
 import type { Result } from '@/domain/shared/Result';
 import { ok, err } from '@/domain/shared/Result';
@@ -45,6 +46,7 @@ import { ObsidianMentionDataProvider } from './ObsidianMentionDataProvider';
 import { ObsidianProviderCommandCatalog } from './ObsidianProviderCommandCatalog';
 import { ObsidianShellExec } from './ObsidianShellExec';
 import { ObsidianSelectionSource, ObsidianSelectionHighlight } from './ObsidianSelectionPorts';
+import { ObsidianToolbarCatalog } from './ObsidianToolbarCatalog';
 import { VaultFileHistoryStore } from './history/VaultFileHistoryStore';
 import { safeMarkdownRender } from '@/application/chat/safeMarkdownRender';
 import { walkSvgElementToIconNode } from './walkSvgElementToIconNode';
@@ -364,6 +366,18 @@ export class ObsidianBridge
 	get selectionHighlight(): SelectionHighlightPort {
 		this.selectionHighlightPort ??= new ObsidianSelectionHighlight(this.app);
 		return this.selectionHighlightPort;
+	}
+
+	// ── Toolbar catalog port (SPEC-TC-007, ADR-TC-004 §1) ───────────────────────
+	// The real static-for-now Claude catalog (model list + mode + effort descriptors,
+	// no service-tier). Stateless — the bridge IS the port. Lazily created;
+	// coverage-excluded infra (manual leg TEST-TC-M1). No `obsidian` symbol leaks past
+	// `ObsidianToolbarCatalog.ts` (it imports only domain types).
+	private toolbarCatalogPort: ToolbarCatalogPort | null = null;
+
+	get toolbarCatalog(): ToolbarCatalogPort {
+		this.toolbarCatalogPort ??= new ObsidianToolbarCatalog();
+		return this.toolbarCatalogPort;
 	}
 
 	private _track(notice: Notice): void {

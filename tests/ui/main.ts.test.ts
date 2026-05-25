@@ -203,3 +203,63 @@ describe('standalone attachments smoke (TEST-CA-007/004 dev leg)', () => {
 		expect($('[data-testid="selection-indicator"]')).toBeNull();
 	}, 15000);
 });
+
+/**
+ * T-TC-032 — standalone toolbar smoke (TEST-TC-001/004/042 dev leg, deterministic).
+ *
+ * The `npm run dev` entry (`src/ui/main.ts`) provides `TOOLBAR_CATALOG_PORT`
+ * (T-TC-031, the scriptable Mock Claude-shaped catalog) and the Mock runtime reports
+ * `getToolbarCapabilities()` (Claude-shaped: `supportsMcpTools:false`,
+ * `reasoningControl:'effort'`, `hasServiceTier:false`, `hasModeToggle:true`,
+ * `permissionMode:'default'`). This deterministic leg proves the strip mounts against
+ * `MockBridge` in Claudian order with the backed widgets (model · mode · thinking) +
+ * the honest seams (permission visible-disabled, MCP capability-hidden, service-tier
+ * capability-hidden, external visible-disabled), the usage meter is hidden on a fresh
+ * tab (`usage===null`, EC-TC-7), and a tab switch re-derives every widget without a
+ * `providerId` branch (EC-TC-8). The backed-pick / fold-on-submit / live-arc-rerender
+ * flows are automated by `ChatSurface.toolbar.test.ts`; the live-dev-server feel pairs
+ * with the human run (recorded in `test-plan.md`, T-TC-032 manual leg). Queried by
+ * `data-testid` only (ADR-009). SPEC-TC-025; REQ-TC-042; NFR-TC-002.
+ */
+describe('standalone toolbar smoke (TEST-TC-001/004/042 dev leg)', () => {
+	beforeEach(() => {
+		vi.resetModules();
+		document.body.replaceChildren();
+		const el = document.createElement('div');
+		el.id = 'app';
+		document.body.appendChild(el);
+	});
+
+	it('mounts the strip with the backed widgets + honest seams against MockBridge, re-deriving on tab switch', async () => {
+		await import('@/ui/main');
+		await settle();
+
+		// The strip mounts (the TOOLBAR_CATALOG_PORT provide reached the surface + the
+		// Mock runtime reported its capabilities via tabs.activeRuntime()).
+		expect($('[data-testid="toolbar-strip"]')).not.toBeNull();
+
+		// Backed widgets render off the default Mock Claude-shaped catalog + caps:
+		// model (always), mode (hasModeToggle + descriptor), thinking (effort, 3 opts).
+		expect($('[data-testid="toolbar-model"]')).not.toBeNull();
+		expect($('[data-testid="toolbar-mode"]')).not.toBeNull();
+		expect($('[data-testid="toolbar-thinking"]')).not.toBeNull();
+
+		// Honest seams: permission visible-disabled; external visible-disabled; MCP +
+		// service-tier capability-hidden on the inert Claude flags (slots collapse).
+		expect($('[data-testid="toolbar-permission"]')).not.toBeNull();
+		expect($('[data-testid="toolbar-external"]')).not.toBeNull();
+		expect($('[data-testid="toolbar-mcp"]')).toBeNull();
+		expect($('[data-testid="toolbar-service-tier"]')).toBeNull();
+
+		// Fresh tab → no usage stream yet → the meter is HIDDEN (EC-TC-7, no zero-gauge).
+		expect($('[data-testid="toolbar-usage"]')).toBeNull();
+
+		// Open a second tab → the strip re-derives from the new active tab's controls +
+		// caps (per-tab isolation, EC-TC-8) — the backed widgets still render, no throw.
+		($('[data-testid="tab-new"]') as HTMLButtonElement).click();
+		await settle();
+		expect($('[data-testid="toolbar-strip"]')).not.toBeNull();
+		expect($('[data-testid="toolbar-model"]')).not.toBeNull();
+		expect($('[data-testid="toolbar-mode"]')).not.toBeNull();
+	}, 15000);
+});

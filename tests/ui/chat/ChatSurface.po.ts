@@ -86,4 +86,26 @@ export class ChatSurfacePageObject {
 	async clickCompact(): Promise<void> {
 		await this.wrapper.get('[data-testid="chat-compact"]').trigger('click');
 	}
+
+	// ── P6 toolbar-controls (SPEC-TC-022) ────────────────────────────────────────
+
+	hasToolbar(): boolean {
+		return this.wrapper.find('[data-testid="composer-toolbar"]').exists();
+	}
+
+	hasToolbarStrip(): boolean {
+		return this.wrapper.find('[data-testid="toolbar-strip"]').exists();
+	}
+
+	hasToolbarModel(): boolean {
+		return this.wrapper.find('[data-testid="toolbar-model"]').exists();
+	}
+
+	hasToolbarMode(): boolean {
+		return this.wrapper.find('[data-testid="toolbar-mode"]').exists();
+	}
+
+	async clickToolbarMode(): Promise<void> {
+		await this.wrapper.get('[data-testid="toolbar-mode"]').trigger('click');
+	}
 }

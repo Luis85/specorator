@@ -179,6 +179,28 @@ const CONTEXT_ATTACHMENTS_TOKENS = [
 	'--sp-inline-edit-modal-w',
 ];
 
+/**
+ * §4.13 — Toolbar & controls (P6, SPEC-TC-026 / NFR-TC-008). The `--sp-*` tokens
+ * the P6 toolbar surfaces genuinely need (strip row, widget height, the dimmed
+ * seam affordance, the toggle track/thumb/active fill, the usage arc gauge, the
+ * service-tier active glow). The strip's dropdowns reuse the P4 `SpDropdownPanel`
+ * / `--sp-surface-overlay` pattern — no new dropdown token is minted for P6.
+ */
+const TOOLBAR_CONTROLS_TOKENS = [
+	'--sp-toolbar-gap',
+	'--sp-toolbar-widget-h',
+	'--sp-toolbar-disabled-opacity',
+	'--sp-toggle-track',
+	'--sp-toggle-thumb',
+	'--sp-toggle-active',
+	'--sp-usage-arc-track',
+	'--sp-usage-arc-fill',
+	'--sp-usage-arc-warn',
+	'--sp-usage-arc-size',
+	'--sp-usage-arc-stroke',
+	'--sp-service-tier-glow',
+];
+
 const PROVIDER_IDS = ['claude', 'codex', 'opencode', 'cursor'] as const;
 
 function loadTokens(): string {
@@ -290,10 +312,34 @@ describe('src/ui/styles/tokens.css — token contract (REQ-AUX-006, REQ-AUX-009)
 		// Isolate the §4.12 declaration block and assert each P5 token resolves to
 		// a token-layer var() lookup (or a bare dimension) — never a raw hex, a raw
 		// Obsidian var, or a physical CSS property.
-		const block = css.slice(css.indexOf('§4.12'));
+		const block = css.slice(css.indexOf('§4.12'), css.indexOf('§4.13'));
 		for (const token of CONTEXT_ATTACHMENTS_TOKENS) {
 			const match = new RegExp(`${token.replace(/-/g, '\\-')}\\s*:\\s*([^;]+);`).exec(block);
 			expect(match, `expected ${token} declared in the §4.12 block`).not.toBeNull();
+			const value = match?.[1] ?? '';
+			// No raw hex colour literal.
+			expect(value, `${token} must not carry a raw hex literal`).not.toMatch(/#[0-9a-fA-F]{3,8}/);
+			// No raw Obsidian theme var (only --sp-* lookups are allowed).
+			expect(value, `${token} must not read a raw Obsidian var`).not.toMatch(
+				/var\(--(?!sp-)[a-z]/,
+			);
+		}
+	});
+
+	it('declares every §4.13 toolbar/controls token (SPEC-TC-026, NFR-TC-008)', () => {
+		const css = loadTokens();
+		assertTokensDeclared(css, TOOLBAR_CONTROLS_TOKENS);
+	});
+
+	it('declares the §4.13 tokens with no raw-hex / Obsidian-var / physical-property leak (TEST-TC-026)', () => {
+		const css = loadTokens();
+		// Isolate the §4.13 declaration block and assert each P6 token resolves to a
+		// token-layer var() lookup (or a bare dimension/shadow) — never a raw hex, a
+		// raw Obsidian var, or a physical CSS property.
+		const block = css.slice(css.indexOf('§4.13'));
+		for (const token of TOOLBAR_CONTROLS_TOKENS) {
+			const match = new RegExp(`${token.replace(/-/g, '\\-')}\\s*:\\s*([^;]+);`).exec(block);
+			expect(match, `expected ${token} declared in the §4.13 block`).not.toBeNull();
 			const value = match?.[1] ?? '';
 			// No raw hex colour literal.
 			expect(value, `${token} must not carry a raw hex literal`).not.toMatch(/#[0-9a-fA-F]{3,8}/);

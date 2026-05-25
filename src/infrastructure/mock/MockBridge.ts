@@ -19,6 +19,7 @@ import {
 } from './MockComposerPorts';
 import { MockAuxModel } from './MockAuxModel';
 import { MockSelectionSource, MockSelectionHighlight } from './MockSelectionPorts';
+import { MockToolbarCatalog } from './MockToolbarCatalog';
 import type { MentionDataProviderPort, ShellExecResult } from '@/domain/ports';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
@@ -70,6 +71,8 @@ export class MockBridge
 	private readonly selectionSourcePort = new MockSelectionSource();
 	/** Recording no-op selection highlight (SPEC-CA-008 selection leg). */
 	private readonly selectionHighlightPort = new MockSelectionHighlight();
+	/** Scriptable toolbar catalog (SPEC-TC-008). Stateless — the bridge exposes the port. */
+	private readonly toolbarCatalogPort = new MockToolbarCatalog();
 
 	constructor(
 		initialFiles: Record<string, string> = {},
@@ -247,6 +250,16 @@ export class MockBridge
 	/** Recording no-op `SelectionHighlightPort` (`show`/`clear` recorded for assertion). */
 	get selectionHighlight(): MockSelectionHighlight {
 		return this.selectionHighlightPort;
+	}
+
+	// ── Toolbar catalog port (SPEC-TC-008, ADR-TC-004 §1) ───────────────────────
+	// The scriptable option-list + descriptor source the toolbar view-model reads.
+	// Scriptable (setToolbarCatalog); stateless — the bridge IS the port (no factory;
+	// the catalog is a per-mount constant in P6).
+
+	/** Scriptable `ToolbarCatalogPort` (`setToolbarCatalog` drives the catalog; never throws). */
+	get toolbarCatalog(): MockToolbarCatalog {
+		return this.toolbarCatalogPort;
 	}
 
 	showError(message: string, durationMs = 0): void {

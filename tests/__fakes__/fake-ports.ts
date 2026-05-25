@@ -7,6 +7,7 @@ import type {
 	MockSelectionSource,
 	MockSelectionHighlight,
 } from '@/infrastructure/mock/MockSelectionPorts';
+import type { MockToolbarCatalog } from '@/infrastructure/mock/MockToolbarCatalog';
 import type {
 	SettingsPort,
 	VaultPort,
@@ -70,6 +71,13 @@ export interface FakePorts {
 	 * `show`/`clear` calls are recorded on `.calls` for assertion (TEST-CA-014/015).
 	 */
 	readonly selectionHighlight: MockSelectionHighlight;
+	/**
+	 * The scriptable Mock `ToolbarCatalogPort` (SPEC-TC-008, T-TC-010). The toolbar
+	 * view-model + widget tests inject every catalog shape via `setToolbarCatalog`
+	 * (custom/grouped models, effort/budget reasoning, empty-list degrade) without a
+	 * real provider.
+	 */
+	readonly toolbarCatalog: MockToolbarCatalog;
 }
 
 export function fakeModulePorts(): FakePorts {
@@ -97,5 +105,6 @@ export function fakeModulePorts(): FakePorts {
 		auxModel: bridge.auxModel,
 		selectionSource: bridge.selectionSource,
 		selectionHighlight: bridge.selectionHighlight,
+		toolbarCatalog: bridge.toolbarCatalog,
 	};
 }
