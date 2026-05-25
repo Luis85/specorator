@@ -16,8 +16,8 @@ artifacts:
   design.md: complete (DESIGN-TC-001; Parts A/B/C; ADR-TC-001..004 accepted; CLAR-TC-001..003 ratified)
   spec.md: complete (SPEC-TC-001..030; 6 layer groups; EC-TC-1..14; TEST-TC-001..043 + M1/M2/M3; full REQ↔SPEC↔TEST coverage)
   tasks.md: complete (TASKS-TC-001; 35 tasks T-TC-001..035; DDD batches DOMAIN→INFRA→APP→UI→STYLES→WIRE-IN→GATE; RED-before-green; 2 manual legs T-TC-033/034; NO guard-relax)
-  implementation-log.md: in-progress (DOMAIN T-TC-001..008 + INFRA T-TC-009..012 + APPLICATION T-TC-013..016 + UI T-TC-017..028 done; STYLES T-TC-029 + WIRE-IN T-TC-030..032 + GATE T-TC-033..035 remain)
-  test-plan.md: in-progress (guard-verification note + TEST-TC-M1/M2/M3 manual legs + DOMAIN-batch automated status; test-report at Stage 8)
+  implementation-log.md: in-progress (DOMAIN T-TC-001..008 + INFRA T-TC-009..012 + APPLICATION T-TC-013..016 + UI T-TC-017..028 + STYLES T-TC-029 + WIRE-IN T-TC-030..032 done; GATE T-TC-033/034 human-manual + T-TC-035 parent final-DoD remain)
+  test-plan.md: in-progress (guard-verification note + TEST-TC-M1/M2/M3 manual legs + DOMAIN/INFRA/WIRE-IN-batch automated status + the deferred T-TC-032 live-dev-server leg; test-report at Stage 8)
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (ADR-TC-001..004 accepted) |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete (TASKS-TC-001) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-TC-001..008 + INFRA T-TC-009..012 + APPLICATION T-TC-013..016 + UI T-TC-017..028 done; STYLES/WIRE-IN/GATE remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-TC-001..008 + INFRA T-TC-009..012 + APPLICATION T-TC-013..016 + UI T-TC-017..028 + STYLES T-TC-029 + WIRE-IN T-TC-030..032 done; GATE T-TC-033/034 human-manual + T-TC-035 parent final-DoD remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (`test-plan.md` scaffolded; report at Stage 8) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -327,4 +327,34 @@ meter, and the `toolbar/*` CSS modules).
                  mints), then WIRE-IN T-TC-030..032 (provide TOOLBAR_CATALOG_PORT in AgentSidebarView +
                  ui/main.ts; mount + dev smoke), then GATE T-TC-033..035 (the human-run manual legs
                  TEST-TC-M1/M2/M3 + the feature DoD verify chain).
+2026-05-25 (dev): Stage-7 STYLES + WIRE-IN batches (T-TC-029..032) COMPLETE on
+                 feature/toolbar-controls. Commits: eb8fc96a (T-TC-029 — the toolbar/* --sp-*
+                 token slice: §4.13 in tokens.css mints the twelve spec-named tokens
+                 --sp-toolbar-gap/-widget-h/-disabled-opacity, --sp-toggle-track/-thumb/-active,
+                 --sp-usage-arc-track/-fill/-warn/-size/-stroke, --sp-service-tier-glow, each a
+                 token-layer var lookup or bare dimension/shadow; tokens.test §4.13 presence +
+                 no-leak guard, TEST-TC-026), 778ceaad (T-TC-030 RED — toolbarMount.ts.test.ts:
+                 TOOLBAR_CATALOG_PORT must be provided in BOTH entry points + the strip mounts;
+                 RED confirmed), d0ffa0a7 (T-TC-031 — AgentSidebarView.onOpen +
+                 src/ui/main.ts each app.provide(TOOLBAR_CATALOG_PORT, bridge.toolbarCatalog);
+                 greens T-TC-030; additive — absent port → no strip, the optional inject; no
+                 obsidian symbol enters src/ui/**; no router), fc114830 (T-TC-032 — standalone
+                 toolbar smoke dev leg in tests/ui/main.ts.test.ts: strip in Claudian order +
+                 backed widgets + honest seams + fresh-tab usage-hidden + tab-switch re-derive
+                 against MockBridge; the live-dev-server interactive feel deferred-manual in
+                 test-plan.md). Verification: `npx vue-tsc -p tsconfig.lint.json --noEmit` 0
+                 errors (whole project); full `npm run lint` 0 errors (12 pre-existing warnings,
+                 none in touched files); `vitest run` (threads, no-file-parallelism) —
+                 toolbarMount.ts 3/3 + the standalone-mount regression main.ts/main/main.rr 7/7
+                 (the additive provide; mounts still render) + ChatSurface.toolbar/
+                 ChatComposer.toolbar/activateAgentSidebar 8/8 + tokens 15/15 all green. DID NOT
+                 run build/build:web/docs:api/verify or the dev server; DID NOT push; styles.css
+                 untouched. Stayed on feature/toolbar-controls; did NOT touch the GATE tasks
+                 T-TC-033..035. VERIFICATION PERFORMED: vue-tsc 0, full lint 0, the wire-in +
+                 standalone-mount + surface/composer + tokens suites green. REMAINING OWNER:
+                 human (T-TC-033 real Claude caps/catalog + CLI folded turn TEST-TC-M1/M3; T-TC-034
+                 parity screenshots TEST-TC-M2; the deferred T-TC-032 live-dev-server leg) +
+                 parent/orchestrator (T-TC-035 final feature DoD + verify chain + draft PR into
+                 next + the styles.css regenerate at the gate). NEXT AGENT: the parent orchestrator
+                 (T-TC-035 gate) / the human (the manual legs at the single final epic-review gate).
 ```

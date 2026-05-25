@@ -591,7 +591,7 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   (TEST-TC-001/004/042 dev leg)` describe block appended, mirroring the P3/P4/P5
   dev-leg blocks); `specs/toolbar-controls/test-plan.md` (the WIRE-IN batch section —
   the automated dev legs + the deferred live-dev-server manual leg).
-- **Commit:** `<pending>`.
+- **Commit:** `fc114830`.
 - **Outcome:** done. **Automated** the deterministic dev leg against `MockBridge` via
   `src/ui/main.ts`: the strip mounts in Claudian order with the backed widgets
   (model · mode · thinking — the default Mock Claude-shaped catalog + caps:

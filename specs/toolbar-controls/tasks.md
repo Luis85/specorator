@@ -863,10 +863,10 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-028, T-TC-018, T-TC-010, T-TC-011
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/ui/chat/toolbarMount.ts.test.ts` (or the extended surface mount test) exists, asserting
+  - [x] `tests/ui/chat/toolbarMount.ts.test.ts` (or the extended surface mount test) exists, asserting
         `TOOLBAR_CATALOG_PORT` is provided in both entry points + the toolbar region mounts (data-testid
         only); the no-port path stays pure P5.
-  - [ ] Test fails (RED) — `TOOLBAR_CATALOG_PORT` is not yet provided.
+  - [x] Test fails (RED) — `TOOLBAR_CATALOG_PORT` is not yet provided.
 
 ### T-TC-031 🔨 — Provide `TOOLBAR_CATALOG_PORT`; mount the strip 🪓
 
@@ -883,9 +883,9 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Slice plan:** may slice as (a) `AgentSidebarView` provision, (b) `src/ui/main.ts` standalone provision
   + the strip mount.
 - **Definition of done:**
-  - [ ] The prior RED test (TEST-TC-001/003 mount legs) now passes; `TOOLBAR_CATALOG_PORT` is provided in
+  - [x] The prior RED test (TEST-TC-001/003 mount legs) now passes; `TOOLBAR_CATALOG_PORT` is provided in
         both entry points; the strip mounts; the no-port path stays byte-identical to P5.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; no `obsidian`/`node:*` leak under
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; no `obsidian`/`node:*` leak under
         `src/ui/**`; no router reintroduced; implementation-log entry added.
 
 ### T-TC-032 🧪 — `npm run dev` standalone toolbar smoke (TEST-TC-001/004/042 dev leg)
@@ -902,12 +902,12 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-031, T-TC-010, T-TC-011
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `npm run dev` boots; the strip / backed widgets / fold-on-submit / arc-rerender / tab-switch flows
+  - [x] `npm run dev` boots; the strip / backed widgets / fold-on-submit / arc-rerender / tab-switch flows
         are exercised against `MockBridge`/`LocalStorageBridge` (deterministic mount + fold legs automated
         as a `tests/ui/main.ts.test.ts` extension). _Deterministic legs automated + PASS; the
         interactive/live-dev-server flows are a DEFERRED human-run leg (the agent does not start the
         long-running dev server) — recorded in `test-plan.md`._
-  - [ ] Result recorded in `test-plan.md` (TEST-TC-001/004/042 dev leg pass/fail + date).
+  - [x] Result recorded in `test-plan.md` (TEST-TC-001/004/042 dev leg pass/fail + date).
 
 ---
 
