@@ -1,10 +1,10 @@
 ---
 feature: composer-power
 area: CP
-current_stage: spec
+current_stage: tasks
 status: active
 last_updated: 2026-05-25
-last_agent: architect (specification)
+last_agent: planner (tasks)
 epic: claudian-reboot
 phase: P4
 integration_branch: next
@@ -15,7 +15,7 @@ artifacts:
   requirements.md: accepted (PRD-CP-001; released after ADR-CP-001..004 accepted)
   design.md: complete (DESIGN-CP-001; A/B/C; ADR-CP-001..004 accepted)
   spec.md: complete (SPEC-CP-001..038; TEST-CP-001..028 + M1/M2)
-  tasks.md: pending
+  tasks.md: complete (TASKS-CP-001; T-CP-001..053)
   implementation-log.md: pending
   test-plan.md: pending
   test-report.md: pending
@@ -36,7 +36,7 @@ artifacts:
 | 3. Requirements | `requirements.md` | accepted (PRD-CP-001) |
 | 4. Design | `design.md` | complete (DESIGN-CP-001) |
 | 5. Specification | `spec.md` | complete (SPEC-CP-001..038) |
-| 6. Tasks | `tasks.md` | pending |
+| 6. Tasks | `tasks.md` | complete (TASKS-CP-001; T-CP-001..053) |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
@@ -261,4 +261,43 @@ self-parity-review vs claudian after each big chunk; merge P4 to `next` autonomo
                              AgentSidebarView + ui/main.ts (SPEC-CP-028); the Obsidian InstructionConfirmModal
                              is a plugin-layer Modal (TEST-CP-M2 manual), the standalone gets a stand-in.
                           No open clarifications block tasks — all four design items resolved in-spec.
+
+2026-05-25 (planner, tasks): TASKS-CP-001 written to tasks.md (status: complete). 53 tasks
+                          T-CP-001..053 across the seven DDD layers + the gate, TDD-ordered (every
+                          RED test task `qa`-owned precedes the `dev` impl whose first DoD line is "the
+                          prior RED test(s) now pass"). Layers: 0 baseline (T-CP-001); DOMAIN (002-007
+                          — inline DTOs, StreamChunk+ComposerMode, ChatRuntimePort growth, the 3 ports
+                          +keys+barrel, customSystemPrompt+appendInstruction); INFRA (008-014 — Mock
+                          fixtures+scripted-echo ShellExec+scriptable callbacks, LocalStorage err,
+                          Obsidian mention/catalog [M1] + Obsidian ShellExec [coverage-excluded, S1-S5
+                          DoD, M2] + grown runtimes/reducer [CLI honesty, M2]); APPLICATION (015-026 —
+                          pure triggerParse, builtIn+RunCommand, ResolveMention, instructionRefine+
+                          Refine side-query, SubmitBangBash, RespondToInlineBlock capability-gate);
+                          UI (027-046 — useComposerMode, 3 port composables, ComposerDropdown+MentionRow,
+                          PlanModeIndicator, the 3 inline blocks, BangBashOutput, instruction-confirm
+                          seam+InstructionConfirmModal, ChatComposer extension — each Vue component
+                          pairs a data-testid PageObject + no-v-html/no-window.confirm DoD); STYLES
+                          (047 — §4.11 --sp-* tokens + tokens.test); WIRE-IN (048-050 — provide 3 ports
+                          +seam as per-mount factories/stateless, mount, npm run dev smoke); GATE
+                          (051 M1, 052 M2, 053 feature DoD + grep gates + draft PR into next).
+
+                          GUARD-RELAX: NONE needed (verified vs eslint.config.js DELETED_SUBSYSTEM_BAN
+                          / DELETED_INJECTION_KEYS — no P4 mention/command/bang-bash/inline-block symbol
+                          was P0-deleted; the 3 new keys + the new domain/app/ui composer paths match no
+                          ban glob; @/domain/chat regrew in P1). Unlike P2 (IconPort relax); like P3.
+
+                          Coverage table maps all 38 SPEC-CP + all 36 REQ-CP + 13 NFR-CP + all 28
+                          automatable TEST-CP + the 2 manual legs (M1/M2) → ≥1 task. No stability-loop
+                          NFR in scope. Parity-screenshots = single final epic-review human gate (T-CP-053).
+
+                          HAND-OFF → /spec:implement (dev) + the qa RED legs.
+                          FIRST READY TASK: T-CP-002 (qa, RED — inline DTOs + StreamChunk request
+                          members + ComposerMode value types; names TEST-CP-001/004/006) → greened by
+                          T-CP-003 (dev, inline DTOs) → T-CP-004 (dev, StreamChunk+ComposerMode).
+                          NO-DEP PARALLEL TASKS (Batch 0, run anytime): T-CP-001 (dev, baseline +
+                          guard verify), T-CP-002 (qa, domain RED — inline/StreamChunk/ComposerMode),
+                          T-CP-005 (qa, domain RED — runtime growth/3 ports/appendInstruction),
+                          T-CP-047 (dev, §4.11 tokens). The qa RED pair to start immediately is
+                          T-CP-002 + T-CP-005 (both no-dep). Critical path (14 tasks): T-CP-005 → 007 →
+                          009 → 025 → 026 → 027 → 028 → 035 → 036 → 045 → 046 → 048 → 049 → 053.
 ```
