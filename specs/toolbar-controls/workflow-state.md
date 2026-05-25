@@ -1,10 +1,10 @@
 ---
 feature: toolbar-controls
 area: TC
-current_stage: spec
+current_stage: tasks
 status: active
 last_updated: 2026-05-25
-last_agent: architect
+last_agent: planner
 epic: claudian-reboot
 phase: P6
 integration_branch: next
@@ -15,7 +15,7 @@ artifacts:
   requirements.md: accepted (PRD-TC-001; 27 EARS reqs; per-widget backed-vs-seam classified; CLAR-TC-001..003 resolved-by-recommendation)
   design.md: complete (DESIGN-TC-001; Parts A/B/C; ADR-TC-001..004 accepted; CLAR-TC-001..003 ratified)
   spec.md: complete (SPEC-TC-001..030; 6 layer groups; EC-TC-1..14; TEST-TC-001..043 + M1/M2/M3; full REQ↔SPEC↔TEST coverage)
-  tasks.md: pending
+  tasks.md: complete (TASKS-TC-001; 35 tasks T-TC-001..035; DDD batches DOMAIN→INFRA→APP→UI→STYLES→WIRE-IN→GATE; RED-before-green; 2 manual legs T-TC-033/034; NO guard-relax)
   implementation-log.md: pending
   test-plan.md: pending
   test-report.md: pending
@@ -36,7 +36,7 @@ artifacts:
 | 3. Requirements | `requirements.md` | accepted |
 | 4. Design | `design.md` | complete (ADR-TC-001..004 accepted) |
 | 5. Specification | `spec.md` | complete |
-| 6. Tasks | `tasks.md` | pending |
+| 6. Tasks | `tasks.md` | complete (TASKS-TC-001) |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
@@ -189,4 +189,28 @@ meter, and the `toolbar/*` CSS modules).
                  fold early); (2) ToolbarCatalog DTOs + ToolbarCatalogPort + TOOLBAR_CATALOG_PORT key +
                  getToolbarCapabilities + the 3 bridges + fake-ports `toolbarCatalog`; (3) buildToolbarViewModel
                  + the 9 widgets + ChatComposer region + ChatSurface wiring + composable + tokens + i18n.
+2026-05-25 (planner): Stage-6 COMPLETE. TASKS-TC-001 written — 35 tasks T-TC-001..035, mirroring the P5
+                 TASKS-CA-001 shape (baseline+guard-verify first; DDD batches DOMAIN->INFRA->APPLICATION->
+                 UI->STYLES->WIRE-IN->GATE; strict RED qa-task before impl dev-task; every dev task's first
+                 DoD line = "prior RED passes"; coverage-excluded Obsidian real catalog/caps -> human manual
+                 legs). Batches: DOMAIN T-TC-002..008 (Reasoning.ts + 3 additive ChatRuntimeQueryOptions
+                 fields + ToolbarCatalog DTOs + TabControls + ToolbarCatalogPort/TOOLBAR_CATALOG_PORT +
+                 getToolbarCapabilities); INFRA T-TC-009..012 (Mock scriptable / LS inert / Obsidian real
+                 catalog+caps + fake-ports.toolbarCatalog); APPLICATION T-TC-013..016 (foldControlOptions +
+                 buildToolbarViewModel, pure/total, no providerId branch); UI T-TC-017..028 (useToolbarCatalogPort
+                 + ToolbarStrip + 8 leaf widgets + UsageMeter, each + co-located .po.ts; tabsStore controls/
+                 setControl/fold + ChatComposer region + ChatSurface wiring); STYLES T-TC-029 (toolbar/* --sp-*
+                 slice + tokens contract); WIRE-IN T-TC-030..032 (provide TOOLBAR_CATALOG_PORT + mount + dev
+                 smoke); GATE T-TC-033 (MANUAL real caps/catalog + CLI folded turn, TEST-TC-M1/M3), T-TC-034
+                 (MANUAL parity screenshots, TEST-TC-M2), T-TC-035 (feature DoD + grep gate + additivity +
+                 draft PR into next). NOTE: the getToolbarCapabilities interface-member addition lands its
+                 3-runtime stub in the SAME task (T-TC-008 — the P5 T-CA-006 readBinary lesson) to keep the
+                 build green; the additive ChatRuntimeQueryOptions optional fields carry NO implements-break.
+                 NO guard-relax task needed (verified eslint.config.js DELETED_SUBSYSTEM_BAN/
+                 DELETED_INJECTION_KEYS — TOOLBAR_CATALOG_PORT / ToolbarCatalogPort / getToolbarCapabilities /
+                 the toolbar paths are NOT banned). Full REQ<->SPEC<->TEST->task coverage table; critical path
+                 14 tasks. NEXT: /spec:implement (dev/qa) — first ready task = T-TC-001 (baseline-capture +
+                 guard verification, owner dev, no deps), in parallel with T-TC-002 (domain RED, owner qa) and
+                 T-TC-029 (tokens, owner dev). The dev/qa pair then walks the DDD batches in the
+                 dependency-graph order.
 ```
