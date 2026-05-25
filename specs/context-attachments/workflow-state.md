@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-CA-001; Parts A/B/C; ADR-CA-001..004 accepted)
   spec.md: complete (SPEC-CA-001..030; 6 layer groups; TEST-CA-001..032 + M1/M2/M3; full coverage)
   tasks.md: complete (TASKS-CA-001; 48 tasks T-CA-001..048; 8 batches; full SPEC/REQ/NFR/TEST coverage)
-  implementation-log.md: in-progress (T-CA-001..045 logged; batches 0-7 done — Layer 6 STYLES + Layer 7 WIRE-IN complete; batch 8 GATE remains: human-owned manual legs T-CA-046/047 + T-CA-048 close-out)
+  implementation-log.md: in-progress (T-CA-001..045 logged + T-CA-048 deterministic gate GREEN; batches 0-7 done; only human-owned manual legs T-CA-046/047 + the draft-PR push remain)
   test-plan.md: in-progress (manual legs M1/M2/M3/017/024/025/029 scheduled; T-CA-045 dev-leg smoke automated + PASS, live-dev-server leg deferred-manual; guard-verify noted)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | in-progress (batches 0-7: T-CA-001..045; Layer 6 STYLES + Layer 7 WIRE-IN done; batch 8 GATE — human-owned manual legs + close-out — remains) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (batches 0-7: T-CA-001..045 + T-CA-048 deterministic gate GREEN — full typecheck/lint/test(1279)/build/build:web/docs:api/audit pass; only human-owned manual legs T-CA-046/047 + the draft-PR push remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
