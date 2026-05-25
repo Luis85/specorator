@@ -12,6 +12,7 @@ import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import ChatComposer from '@/ui/chat/ChatComposer.vue';
 import { i18n } from '@/ui/i18n';
+import type { AttachedFileRef, AttachedImage, CapturedSelection } from '@/domain/chat/attachments';
 import { ChatComposerPageObject } from './ChatComposer.po';
 
 function mountComposer(props: { isStreaming?: boolean } = {}) {
@@ -108,5 +109,100 @@ describe('ChatComposer (TEST-CC-009)', () => {
 		const { wrapper, po } = mountComposer({ isStreaming: false });
 		await po.pressEsc();
 		expect(wrapper.emitted('cancel')).toBeUndefined();
+	});
+});
+
+// ── P5 context-attachments extension (TEST-CA-004/006, SPEC-CA-022) ──────────────
+
+const files: AttachedFileRef[] = [{ path: 'notes/a.md', displayName: 'a' }];
+const images: AttachedImage[] = [
+	{ path: 'img/x.png', mimeType: 'image/png', byteSize: 4, dataBase64: 'AAA' },
+];
+const selection: CapturedSelection = {
+	kind: 'editor',
+	notePath: 'notes/a.md',
+	selectedText: 'hi',
+	startLine: 1,
+	lineCount: 1,
+};
+
+function mountWithContext(
+	props: {
+		attachedFiles?: readonly AttachedFileRef[];
+		images?: readonly AttachedImage[];
+		capturedSelection?: CapturedSelection | null;
+		supportsBrowserSelection?: boolean;
+	} = {},
+) {
+	const wrapper = mount(ChatComposer, {
+		props: {
+			isStreaming: false,
+			attachedFiles: props.attachedFiles,
+			images: props.images,
+			capturedSelection: props.capturedSelection,
+			supportsBrowserSelection: props.supportsBrowserSelection ?? false,
+			resolveThumbSrc: (path: string) => `app://resource/${path}`,
+		},
+		global: { plugins: [i18n] },
+	});
+	return { wrapper, po: new ChatComposerPageObject(wrapper) };
+}
+
+describe('ChatComposer P5 context-bar slot (TEST-CA-004/006, SPEC-CA-022)', () => {
+	it('G2: with no context the context bar is hidden (byte-identical to P4)', () => {
+		const { po } = mountWithContext();
+		expect(po.hasContextBar()).toBe(false);
+		expect(po.textareaExists()).toBe(true);
+	});
+
+	it('renders FileChips when attachedFiles is non-empty', () => {
+		const { po } = mountWithContext({ attachedFiles: files });
+		expect(po.hasContextBar()).toBe(true);
+		expect(po.hasFileChips()).toBe(true);
+	});
+
+	it('renders ImageContextBar when images is non-empty', () => {
+		const { po } = mountWithContext({ images });
+		expect(po.hasContextBar()).toBe(true);
+		expect(po.hasImageContextBar()).toBe(true);
+	});
+
+	it('renders SelectionIndicator when a selection is captured', () => {
+		const { po } = mountWithContext({ capturedSelection: selection });
+		expect(po.hasContextBar()).toBe(true);
+		expect(po.hasSelectionIndicator()).toBe(true);
+	});
+
+	it('re-emits the file remove to the parent (REQ-CA-003)', async () => {
+		const { wrapper, po } = mountWithContext({ attachedFiles: files });
+		await po.clickFirstFileRemove();
+		expect(wrapper.emitted('removeFile')).toEqual([['notes/a.md']]);
+	});
+
+	it('re-emits the file open to the parent (REQ-CA-005)', async () => {
+		const { wrapper, po } = mountWithContext({ attachedFiles: files });
+		await po.clickFirstFileLink();
+		expect(wrapper.emitted('openFile')).toEqual([['notes/a.md']]);
+	});
+
+	it('re-emits the image remove + preview to the parent (REQ-CA-008/009)', async () => {
+		const { wrapper, po } = mountWithContext({ images });
+		await po.clickFirstImagePreview();
+		expect(wrapper.emitted('previewImage')).toEqual([[images[0]]]);
+		await po.clickFirstImageRemove();
+		expect(wrapper.emitted('removeImage')).toEqual([['img/x.png']]);
+	});
+
+	it('re-emits the selection clear to the parent (REQ-CA-015)', async () => {
+		const { wrapper, po } = mountWithContext({ capturedSelection: selection });
+		await po.clickSelectionClear();
+		expect(wrapper.emitted('clearSelection')).toHaveLength(1);
+	});
+
+	it('the P1 send path is unchanged with context present (still emits submit on Enter)', async () => {
+		const { wrapper, po } = mountWithContext({ attachedFiles: files });
+		await po.setValue('Hello');
+		await po.pressEnter();
+		expect(wrapper.emitted('submit')).toEqual([['Hello']]);
 	});
 });
