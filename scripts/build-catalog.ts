@@ -8,11 +8,14 @@ import type { CatalogIndex } from "../src/catalog/types";
 // commands/agents and Phase 3 appends hooks — each adds ONE row here; do NOT
 // create a second build script (`.mjs`). Every asset is routed through
 // `parseAsset`, so the frontmatter validator gates EVERY asset type.
+// SINGLE SOURCE OF TRUTH for the catalog scan (R1). Phase 3 appends hooks —
+// adds ONE row here; do NOT create a second build script (`.mjs`). Every asset
+// is routed through `parseAsset`, so the frontmatter validator gates EVERY asset type.
 export const SOURCES: { subdir: string; file: string }[] = [
-  { subdir: "skills", file: "SKILL.md" },
-  // Phase 2 adds: { subdir: "commands", file: "command.md" },
-  //               { subdir: "agents",   file: "agent.md" },
-  // Phase 3 adds: { subdir: "hooks",    file: "hook.md" },
+  { subdir: "skills",   file: "SKILL.md" },
+  { subdir: "commands", file: "command.md" },   // Decision 3
+  { subdir: "agents",   file: "agent.md" },      // Decision 3
+  // Phase 3 adds: { subdir: "hooks", file: "hook.md" },
 ];
 
 async function dirExists(p: string): Promise<boolean> {
