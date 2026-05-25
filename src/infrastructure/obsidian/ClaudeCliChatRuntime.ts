@@ -14,6 +14,7 @@ import type {
 	Unsubscriber,
 	LoggerPort,
 	RuntimeCapabilities,
+	ToolbarCapabilities,
 } from '@/domain/ports';
 import type {
 	AskUserQuestionRequest,
@@ -234,6 +235,22 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 			supportsRewind: false,
 			supportsPlanMode: false,
 			supportsInlineResponse: false,
+		};
+	}
+
+	// P6 (SPEC-TC-005/007, ADR-TC-003 §2): a minimal Claude-shaped stub keeps the
+	// build green. The real flags — `supportsMcpTools` from the live CLI capability +
+	// `permissionMode` mirroring the active P4 plan state — are fleshed out in
+	// T-TC-012 (coverage-excluded, behaviour gated by the manual leg TEST-TC-M1).
+	// `reasoningControl:'effort'`, `hasServiceTier:false` (no Codex fast-mode),
+	// `hasModeToggle:true`. Synchronous + total; never throws.
+	getToolbarCapabilities(): ToolbarCapabilities {
+		return {
+			supportsMcpTools: false,
+			reasoningControl: 'effort',
+			hasServiceTier: false,
+			hasModeToggle: true,
+			permissionMode: 'default',
 		};
 	}
 

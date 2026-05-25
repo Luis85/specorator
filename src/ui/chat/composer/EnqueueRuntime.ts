@@ -1,6 +1,7 @@
 import type {
 	ChatRuntimePort,
 	RuntimeCapabilities,
+	ToolbarCapabilities,
 	ChatMessage,
 	StreamChunk,
 	ProviderId,
@@ -88,6 +89,12 @@ export class EnqueueRuntime implements ChatRuntimePort {
 
 	getCapabilities(): RuntimeCapabilities {
 		return this.inner.getCapabilities();
+	}
+
+	// P6 (SPEC-TC-005): the decorator forwards the toolbar capability flags verbatim
+	// to the inner runtime, like every other non-enqueued member.
+	getToolbarCapabilities(): ToolbarCapabilities {
+		return this.inner.getToolbarCapabilities();
 	}
 
 	setAskUserQuestionCallback(

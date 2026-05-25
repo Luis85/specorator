@@ -9,6 +9,7 @@ import type {
 	ChatRuntimeEnsureReadyOptions,
 	Unsubscriber,
 	RuntimeCapabilities,
+	ToolbarCapabilities,
 } from '@/domain/ports';
 import type {
 	AskUserQuestionRequest,
@@ -263,6 +264,19 @@ export class MockChatRuntime implements ChatRuntimePort {
 			// / `setSupportsPlanMode(false)` to drive the non-capable branch.
 			supportsPlanMode: this.supportsPlanMode,
 			supportsInlineResponse: this.supportsInlineResponse,
+		};
+	}
+
+	// P6 (SPEC-TC-005, ADR-TC-003 §2): a fixed Claude-shaped default stub keeps the
+	// build green ahead of the scriptable body (T-TC-010 adds
+	// `setToolbarCapabilities`). Synchronous + total; never throws.
+	getToolbarCapabilities(): ToolbarCapabilities {
+		return {
+			supportsMcpTools: false,
+			reasoningControl: 'effort',
+			hasServiceTier: false,
+			hasModeToggle: true,
+			permissionMode: 'default',
 		};
 	}
 

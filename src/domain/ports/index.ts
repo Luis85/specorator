@@ -21,7 +21,9 @@ export type { Unsubscriber } from './shared';
 // P1 chat-core ports (SPEC-CC-001, SPEC-CC-007, SPEC-CC-009).
 // P3 (SPEC-TS-003) appends `RuntimeCapabilities` alongside the additive
 // ChatRuntimePort members.
-export type { ChatRuntimePort, RuntimeCapabilities } from './ChatRuntimePort';
+// P6 (SPEC-TC-005) appends `ToolbarCapabilities` alongside the additive
+// `getToolbarCapabilities()` member on `ChatRuntimePort`.
+export type { ChatRuntimePort, RuntimeCapabilities, ToolbarCapabilities } from './ChatRuntimePort';
 export type {
 	MarkdownRenderPort,
 	MarkdownNode,

@@ -125,5 +125,65 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   exit 0 on the four changed files (the new key/port imports resolve clean — guard
   green, no relaxation); `vitest run tests/domain/ports/ToolbarCatalogPort.test.ts`
   2/2 green.
-- **Commit:** _this commit._
+- **Commit:** `6310b17`.
 - **Deviation:** none.
+
+### T-TC-007 — RED `ToolbarCapabilities` shape + `getToolbarCapabilities()` additivity (🧪 qa)
+
+- **Spec/test:** TEST-TC-003/019/021 (shape legs) + TEST-TC-027 (`ChatRuntimePort`
+  additivity leg); SPEC-TC-005/027; REQ-TC-003/015/019/021; NFR-TC-001.
+- **Files:** `tests/domain/ports/ChatRuntimePort.ts.test.ts` (extended — the
+  `_exactFifteen` keyof equality widened to the sixteen-member contract incl.
+  `getToolbarCapabilities`; the `getToolbarCapabilities(): ToolbarCapabilities`
+  signature leg; the five-flag `ToolbarCapabilities` shape leg + the barrel-equality
+  leg; the runtime sentinel updated to sixteen members + the five-flag assertion).
+- **Outcome:** done — RED confirmed (`vue-tsc -p tsconfig.lint.json` failed on the
+  missing `ToolbarCapabilities` + the missing `getToolbarCapabilities` member).
+- **Commit:** `17a3e95`.
+
+### T-TC-008 — `ToolbarCapabilities` + `getToolbarCapabilities()` + the 3-runtime stub (🔨 dev)
+
+- **Spec/req:** SPEC-TC-005/027; REQ-TC-003/015/019/021; NFR-TC-001/002.
+- **Files:** `src/domain/ports/ChatRuntimePort.ts` (the `ToolbarCapabilities`
+  interface — the five `readonly` flags — + `getToolbarCapabilities():
+  ToolbarCapabilities` appended after `setApprovalCallback`; the P0–P5 members + the
+  four `RuntimeCapabilities` flags byte-identical); `src/domain/ports/index.ts`
+  (`ToolbarCapabilities` re-export appended alongside `RuntimeCapabilities`);
+  `src/infrastructure/mock/MockChatRuntime.ts` (fixed Claude-shaped default stub —
+  scriptable body in T-TC-010); `src/infrastructure/localstorage/FixtureChatRuntime.ts`
+  (inert flags — `reasoningControl:'none'`, all seams off); `src/infrastructure/
+  obsidian/ClaudeCliChatRuntime.ts` (minimal Claude-shaped stub — real
+  `supportsMcpTools`/`permissionMode` fleshed in T-TC-012's manual leg);
+  `src/ui/chat/composer/EnqueueRuntime.ts` (the decorator forwards
+  `getToolbarCapabilities` verbatim to `inner`); `tests/application/chat/
+  RunChatTurnUseCase.test.ts` + `RunChatTurnUseCase.rr.test.ts` (the two
+  `ScriptedRuntime` doubles gain a Claude-shaped stub — runnability only, no
+  assertion change).
+- **Outcome:** done — the TEST-TC-003/019/021 shape legs + the TEST-TC-027
+  `ChatRuntimePort` additivity leg now green; all six classes that `implements
+  ChatRuntimePort` carry `getToolbarCapabilities()` so the build stays green
+  (the P5 `readBinary` lesson, T-CA-006). Synchronous + total; no `providerId`
+  branch.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project — the
+  three bridge runtimes + the `EnqueueRuntime` decorator + the two test doubles all
+  satisfy the widened interface); `npm run lint` 0 errors (12 pre-existing
+  warnings); `vitest run` 48/48 green over `ChatRuntimePort.ts.test.ts` +
+  `RunChatTurnUseCase{,.rr}.test.ts` + `MockChatRuntime.test.ts` +
+  `FixtureChatRuntime.test.ts`.
+- **Commit:** _this commit._
+- **Deviations:**
+  1. **Beyond the three bridge runtimes named in the task body, `EnqueueRuntime`
+     (a production `ChatRuntimePort` decorator, `src/ui/chat/composer/`) and the two
+     `ScriptedRuntime` test doubles also `implements ChatRuntimePort`** — appending
+     the interface member breaks their compilation too (the same P5 `readBinary`
+     fan-out, T-CA-006). `EnqueueRuntime` forwards the new member verbatim to `inner`
+     (it is a transparent decorator); the two test doubles get a Claude-shaped stub
+     (runnability only — no assertion changed). This keeps `npm run build` /
+     `typecheck` green per the T-TC-008 DoD ("all three runtimes carry a
+     `getToolbarCapabilities()` impl/stub so the build stays green").
+  2. The spec text references "the five `RuntimeCapabilities` flags"; the actual
+     `RuntimeCapabilities` interface carries **four** flags (`supportsFork`,
+     `supportsRewind`, `supportsPlanMode`, `supportsInlineResponse`). The test +
+     impl assert the real four-flag byte-identical contract (the five-flag count is
+     the new `ToolbarCapabilities`). The load-bearing invariant — `RuntimeCapabilities`
+     unchanged from P4 — holds.

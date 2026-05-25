@@ -24,6 +24,7 @@ import type { ChatTurnSink } from '@/application/chat/RunChatTurnUseCase';
 import type {
 	ChatRuntimePort,
 	RuntimeCapabilities,
+	ToolbarCapabilities,
 	StreamChunk,
 	ChatMessage,
 	ChatTurnRequest,
@@ -165,6 +166,17 @@ class ScriptedRuntime implements ChatRuntimePort {
 			supportsRewind: true,
 			supportsPlanMode: true,
 			supportsInlineResponse: true,
+		};
+	}
+
+	// P6 additive member (SPEC-TC-005) — Claude-shaped stub to satisfy the grown port.
+	getToolbarCapabilities(): ToolbarCapabilities {
+		return {
+			supportsMcpTools: false,
+			reasoningControl: 'effort',
+			hasServiceTier: false,
+			hasModeToggle: true,
+			permissionMode: 'default',
 		};
 	}
 
