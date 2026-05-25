@@ -1,6 +1,7 @@
 import { vi } from 'vitest';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
 import type { MockHistoryStore } from '@/infrastructure/mock/MockHistoryStore';
+import { MockChatRuntime } from '@/infrastructure/mock/MockChatRuntime';
 import type {
 	SettingsPort,
 	VaultPort,
@@ -9,6 +10,9 @@ import type {
 	LoggerPort,
 	CommunityPluginPort,
 	TranslationPort,
+	MentionDataProviderPort,
+	ProviderCommandCatalogPort,
+	ShellExecPort,
 } from '@/domain/ports';
 import { createEventBus } from '@/domain/shared/event-bus';
 import type { EventBus } from '@/domain/shared/event-bus';
@@ -33,6 +37,17 @@ export interface FakePorts {
 	readonly bus: EventBus;
 	readonly t: TranslationPort;
 	readonly bridge: MockBridge;
+	// P4 composer-power ports (SPEC-CP-009, T-CP-008). Fixture mention/catalog
+	// providers + the scripted-echo ShellExec, all over the same MockBridge.
+	readonly mentionData: MentionDataProviderPort;
+	readonly commandCatalog: ProviderCommandCatalogPort;
+	readonly shellExec: ShellExecPort;
+	/**
+	 * A scriptable `MockChatRuntime` whose inline-block capability flags toggle the
+	 * capable / non-capable transport branches (TEST-CP-020 vs TEST-CP-024). Defaults
+	 * capable; call `mockRuntime.setSupportsInlineResponse(false)` for the gated branch.
+	 */
+	readonly mockRuntime: MockChatRuntime;
 }
 
 export function fakeModulePorts(): FakePorts {
@@ -53,5 +68,9 @@ export function fakeModulePorts(): FakePorts {
 		bus: createEventBus(),
 		t: { t: vi.fn((key: string) => key) },
 		bridge,
+		mentionData: bridge.createMentionDataProvider(),
+		commandCatalog: bridge.createProviderCommandCatalog(),
+		shellExec: bridge.shellExec,
+		mockRuntime: new MockChatRuntime(),
 	};
 }

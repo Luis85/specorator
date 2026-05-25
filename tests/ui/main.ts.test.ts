@@ -12,7 +12,7 @@
  *
  * SPEC-TS-027; NFR-TS-002.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 import { nextTick } from 'vue';
 
@@ -78,4 +78,85 @@ describe('standalone multi-tab smoke (TEST-TS-026 dev leg)', () => {
 		expect($('[data-testid="message-list"]')).not.toBeNull();
 		expect($('[data-testid="chat-welcome"]')).toBeNull();
 	});
+});
+
+/**
+ * T-CP-050 — standalone composer-power smoke (TEST-CP-026 dev leg, deterministic).
+ *
+ * The `npm run dev` entry (`src/ui/main.ts`) provides the three composer ports +
+ * the instruction-confirm stand-in (T-CP-049) and mounts the live `useComposerMode`
+ * arbiter into `ChatComposer`. This deterministic leg drives the trigger modes
+ * against `MockBridge`: typing `/` opens the slash dropdown over the Mock catalog,
+ * `@` opens the mention dropdown over the Mock referent fixtures, Shift+Tab toggles
+ * the PLAN indicator (the capable mock), and `!echo hi`+Enter runs the scripted-echo
+ * `ShellExecPort` and surfaces the output block. The live-feel pairs with the human's
+ * final review (T-CP-051/052). Queried by `data-testid` only (ADR-009). SPEC-CP-028;
+ * NFR-CP-002.
+ */
+async function typeComposer(text: string): Promise<HTMLTextAreaElement> {
+	const ta = $('[data-testid="composer-textarea"]') as HTMLTextAreaElement;
+	ta.value = text;
+	ta.setSelectionRange(text.length, text.length);
+	ta.dispatchEvent(new Event('input', { bubbles: true }));
+	await settle();
+	return ta;
+}
+
+/** Real-time wait past the mention debounce window (~120ms), then flush. */
+async function waitDebounce(): Promise<void> {
+	await new Promise((resolve) => setTimeout(resolve, 200));
+	await settle();
+}
+
+describe('standalone composer-power smoke (TEST-CP-026 dev leg)', () => {
+	beforeEach(() => {
+		// Reset the module registry so `@/ui/main` re-executes its mount onto the
+		// fresh `#app` (the prior describe already imported + cached it).
+		vi.resetModules();
+		document.body.replaceChildren();
+		const el = document.createElement('div');
+		el.id = 'app';
+		document.body.appendChild(el);
+	});
+
+	it('drives slash / mention / plan-toggle / bang-bash against MockBridge', async () => {
+		await import('@/ui/main');
+		await settle();
+		expect($('[data-testid="composer-textarea"]')).not.toBeNull();
+
+		// `/` opens the slash command dropdown (PROVIDER_COMMAND_CATALOG_PORT wired).
+		await typeComposer('/');
+		expect($('[data-testid="composer-dropdown"]')).not.toBeNull();
+
+		// `@` opens the mention dropdown (MENTION_DATA_PROVIDER_PORT wired) after the
+		// debounce window resolves the Mock referent fixtures.
+		await typeComposer('@');
+		await waitDebounce();
+		expect($('[data-testid="composer-dropdown"]')).not.toBeNull();
+
+		// Shift+Tab toggles the PLAN indicator (the capable Mock runtime reports
+		// supportsPlanMode:true) — the orthogonal plan flag, distinct from the mode.
+		await typeComposer('');
+		const ta = $('[data-testid="composer-textarea"]') as HTMLTextAreaElement;
+		ta.dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }),
+		);
+		await settle();
+		expect($('[data-testid="plan-indicator"]')).not.toBeNull();
+		// Toggle off again so it does not bleed into the bang-bash leg.
+		ta.dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }),
+		);
+		await settle();
+
+		// `!echo hi` + Enter runs the scripted-echo ShellExecPort → the output block
+		// renders the command + stdout (the Mock echoes the command verbatim).
+		await typeComposer('!echo hi');
+		ta.dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+		);
+		await settle();
+		expect($('[data-testid="bang-bash-output"]')).not.toBeNull();
+		expect($('[data-testid="bang-bash-output-stdout"]')?.textContent).toContain('echo hi');
+	}, 15000);
 });

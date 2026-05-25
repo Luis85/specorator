@@ -4,6 +4,12 @@ const TID = {
 	composer: 'chat-composer',
 	textarea: 'composer-textarea',
 	send: 'composer-send',
+	dropdown: 'composer-dropdown',
+	planIndicator: 'plan-indicator',
+	bangBashOutput: 'bang-bash-output',
+	inlineAsk: 'inline-ask',
+	inlineExitPlan: 'inline-exit-plan',
+	inlinePlanApproval: 'inline-plan-approval',
 } as const;
 
 /** PageObject for `ChatComposer.vue` (SPEC-CC-021). Queries by `data-testid` only (ADR-009). */
@@ -62,5 +68,58 @@ export class ChatComposerPageObject {
 
 	async clickSend(): Promise<void> {
 		await this.send.trigger('click');
+	}
+
+	// ── P4 composer-power extension (SPEC-CP-019) ───────────────────────────────
+
+	textareaExists(): boolean {
+		return this.wrapper.find(this.byTid(TID.textarea)).exists();
+	}
+
+	placeholder(): string {
+		return this.textarea.attributes('placeholder') ?? '';
+	}
+
+	textareaRole(): string {
+		return this.textarea.attributes('role') ?? '';
+	}
+
+	ariaExpanded(): string {
+		return this.textarea.attributes('aria-expanded') ?? '';
+	}
+
+	/** The mode-border class set on the composer wrapper (instruction/bang-bash/plan). */
+	composerClasses(): string {
+		return this.wrapper.get(this.byTid(TID.composer)).attributes('class') ?? '';
+	}
+
+	hasDropdown(): boolean {
+		return this.wrapper.find(this.byTid(TID.dropdown)).exists();
+	}
+
+	hasPlanIndicator(): boolean {
+		return this.wrapper.find(this.byTid(TID.planIndicator)).exists();
+	}
+
+	hasBangBashOutput(): boolean {
+		return this.wrapper.find(this.byTid(TID.bangBashOutput)).exists();
+	}
+
+	hasInlineAsk(): boolean {
+		return this.wrapper.find(this.byTid(TID.inlineAsk)).exists();
+	}
+
+	hasInlineExitPlan(): boolean {
+		return this.wrapper.find(this.byTid(TID.inlineExitPlan)).exists();
+	}
+
+	hasInlinePlanApproval(): boolean {
+		return this.wrapper.find(this.byTid(TID.inlinePlanApproval)).exists();
+	}
+
+	/** Type into the textarea and fire `input` so the arbiter re-classifies. */
+	async typeValue(value: string): Promise<void> {
+		await this.textarea.setValue(value);
+		await this.textarea.trigger('input');
 	}
 }

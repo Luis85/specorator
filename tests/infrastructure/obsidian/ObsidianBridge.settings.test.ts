@@ -34,6 +34,7 @@ describe('ObsidianBridge settings — device-local store (TEST-PSR-024)', () => 
 			logLevel: 'debug' as const,
 			sessionsFolder: '.specorator/sessions',
 			maxTabs: 3,
+			customSystemPrompt: '',
 		};
 		await bridge.saveSettings(saved);
 

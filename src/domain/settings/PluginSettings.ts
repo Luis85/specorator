@@ -16,6 +16,12 @@ export interface PluginSettings {
 	readonly sessionsFolder: string
 	/** Max concurrent tabs (ADR-TS-002 §1). Default 3; resolved-and-clamped to MIN_TABS..MAX_TABS_CEILING. */
 	readonly maxTabs: number
+	// ---- P4 composer-power (SPEC-CP-005) ----
+	/**
+	 * The custom system prompt that instruction mode APPENDS to (REQ-CP-018).
+	 * Device-local, never a secret. Default ''. No migration — load-or-default.
+	 */
+	readonly customSystemPrompt: string
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -23,6 +29,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	logLevel: 'warn',
 	sessionsFolder: '.specorator/sessions',
 	maxTabs: 3,
+	customSystemPrompt: '',
 }
 
 /** Tab-count bounds (ADR-TS-002 §1). MIN diverges from Claudian's floor of 3 deliberately. */
@@ -53,4 +60,15 @@ export function clampMaxTabs(raw: number): number {
 	if (!Number.isFinite(raw)) return DEFAULT_SETTINGS.maxTabs
 	const truncated = Math.trunc(raw)
 	return Math.min(Math.max(truncated, MIN_TABS), MAX_TABS_CEILING)
+}
+
+/**
+ * Append an instruction to the existing custom system prompt (SPEC-CP-005,
+ * REQ-CP-018): an empty `existing` yields the raw `instruction`; a non-empty
+ * `existing` yields `existing + '\n\n' + instruction`. **Append, never
+ * overwrite.** Pure/total. The accept path passes the result to
+ * `SettingsPort.saveSettings({ customSystemPrompt })`.
+ */
+export function appendInstruction(existing: string, instruction: string): string {
+	return existing === '' ? instruction : `${existing}\n\n${instruction}`
 }

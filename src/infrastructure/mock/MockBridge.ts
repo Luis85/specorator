@@ -12,6 +12,12 @@ import type {
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
 import { MockChatRuntime } from './MockChatRuntime';
 import { MockHistoryStore } from './MockHistoryStore';
+import {
+	MockMentionDataProvider,
+	MockProviderCommandCatalog,
+	MockShellExec,
+} from './MockComposerPorts';
+import type { MentionDataProviderPort, ShellExecResult } from '@/domain/ports';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
 
@@ -53,6 +59,8 @@ export class MockBridge
 	private vaultBasePath: string | null;
 	/** Stable in-memory history store for the mount (SPEC-TS-007). Lazily created. */
 	private historyStore: MockHistoryStore | null = null;
+	/** Scripted-echo ShellExec for the mount (SPEC-CP-009). Stateless — the bridge is the port. */
+	private readonly shellExecPort = new MockShellExec();
 
 	constructor(
 		initialFiles: Record<string, string> = {},
@@ -172,6 +180,30 @@ export class MockBridge
 	createProviderHistoryPort(): MockHistoryStore {
 		this.historyStore ??= new MockHistoryStore();
 		return this.historyStore;
+	}
+
+	// ── Composer-power ports (SPEC-CP-009, ADR-CP-002 §4) ───────────────────────
+	// Mention/catalog are per-mount FACTORIES (parity with the Obsidian impls);
+	// ShellExec is stateless — the bridge IS the port (no factory).
+
+	/** Fixture mention provider (files + one subagent; MCP []). */
+	createMentionDataProvider(): MentionDataProviderPort {
+		return new MockMentionDataProvider();
+	}
+
+	/** Fixture command/skill catalog with a `seedCatalogDelay` test hook. */
+	createProviderCommandCatalog(): MockProviderCommandCatalog {
+		return new MockProviderCommandCatalog();
+	}
+
+	/** Scripted-echo `ShellExecPort` (never spawns a process, S1). */
+	get shellExec(): MockShellExec {
+		return this.shellExecPort;
+	}
+
+	/** Test helper: script the ShellExec result for an exact command string. */
+	seedShellExec(command: string, result: ShellExecResult): void {
+		this.shellExecPort.seed(command, result);
 	}
 
 	showError(message: string, durationMs = 0): void {

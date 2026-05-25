@@ -11,6 +11,30 @@ export default {
 				placeholder: 'Send a message…',
 				send: 'Send message',
 				stop: 'Stop generating',
+				dropdown: {
+					hints: 'Enter to select · Arrow keys to navigate · Esc to cancel',
+				},
+				mention: {
+					empty: 'No matches',
+				},
+				inline: {
+					askTitle: 'Question',
+					customPlaceholder: 'Type a custom answer…',
+					readOnlyNotice:
+						"This provider can't answer inline; respond in your message instead.",
+					exitPlanTitle: 'Plan complete',
+					implement: 'Implement',
+					revise: 'Revise',
+					cancel: 'Cancel',
+					revisePlaceholder: 'Enter feedback to continue planning…',
+				},
+				bash: {
+					exitLabel: 'exit',
+					placeholder: 'Run a shell command…',
+				},
+				instruction: {
+					placeholder: 'Add a system instruction…',
+				},
 			},
 			busy: 'Generating a response…',
 			interrupted: 'Interrupted',

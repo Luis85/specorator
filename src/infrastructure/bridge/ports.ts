@@ -10,6 +10,9 @@ import type {
 	MarkdownRenderPort,
 	IconPort,
 	ProviderHistoryPort,
+	MentionDataProviderPort,
+	ProviderCommandCatalogPort,
+	ShellExecPort,
 } from '@/domain/ports';
 
 /**
@@ -40,3 +43,12 @@ export const ICON_PORT: InjectionKey<IconPort> = Symbol('IconPort');
 // aggregate — injected on its own per ADR-008/ADR-CC-001 §5.
 export const PROVIDER_HISTORY_PORT: InjectionKey<ProviderHistoryPort> =
 	Symbol('ProviderHistoryPort');
+
+// P4 composer-power ports (SPEC-CP-005, ADR-CP-002 §4). Own keys, no aggregate —
+// mention/catalog are per-mount factories, ShellExec is stateless (the bridge IS
+// the port).
+export const MENTION_DATA_PROVIDER_PORT: InjectionKey<MentionDataProviderPort> =
+	Symbol('MentionDataProviderPort');
+export const PROVIDER_COMMAND_CATALOG_PORT: InjectionKey<ProviderCommandCatalogPort> =
+	Symbol('ProviderCommandCatalogPort');
+export const SHELL_EXEC_PORT: InjectionKey<ShellExecPort> = Symbol('ShellExecPort');

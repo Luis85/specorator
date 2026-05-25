@@ -15,6 +15,14 @@ import type {
 	LoggerPort,
 	RuntimeCapabilities,
 } from '@/domain/ports';
+import type {
+	AskUserQuestionRequest,
+	AskUserQuestionAnswer,
+	ExitPlanModeRequest,
+	ExitPlanModeDecision,
+	ApprovalRequest,
+	ApprovalDecision,
+} from '@/domain/chat/inline';
 import { ClaudeStreamReducer } from './reduceClaudeStream';
 
 /**
@@ -44,6 +52,18 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 	private cancelled = false;
 	private child: ChildProcess | null = null;
 	private readonly readyListeners = new Set<(ready: boolean) => void>();
+	// P4 (SPEC-CP-011): the registered inline-block callbacks. Stored so the stream
+	// reducer's emitted request chunk can route a response back (T-CP-014); the CLI
+	// transport gates the answerable affordance off (`supportsInlineResponse:false`).
+	private askUserQuestionCallback:
+		| ((req: AskUserQuestionRequest) => Promise<AskUserQuestionAnswer | null>)
+		| null = null;
+	private exitPlanModeCallback:
+		| ((req: ExitPlanModeRequest) => Promise<ExitPlanModeDecision | null>)
+		| null = null;
+	private approvalCallback:
+		| ((req: ApprovalRequest) => Promise<ApprovalDecision | null>)
+		| null = null;
 
 	constructor(
 		private readonly logger?: LoggerPort,
@@ -117,8 +137,41 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 			for (const chunk of reducer.consumeLine(line)) {
 				if (this._isCancelled()) return;
 				if (chunk.type === 'usage') this.sessionId = reducer.sessionId;
+				// P4 (SPEC-CP-011/017): where the wire surfaced an inline-block request,
+				// the reducer emits the matching request member; route it back through
+				// the registered callback (the response transport). The one-shot
+				// `--print` CLI gates `supportsInlineResponse: false`, so today this is
+				// a forward-compatible no-effect call (the UI renders read-only); a
+				// future interactive transport flips the flag and the same path resolves.
+				this._routeInlineRequest(chunk);
 				yield chunk;
 			}
+		}
+	}
+
+	/**
+	 * Route a reducer-emitted inline-block request chunk to the registered callback
+	 * (ADR-CP-004 §1). Fire-and-forget — the CLI does not await the answer (the
+	 * one-shot turn has already produced its output); the routing exists so a later
+	 * interactive transport reuses the identical wiring. No-op when no callback was
+	 * registered.
+	 */
+	private _routeInlineRequest(chunk: StreamChunk): void {
+		if (chunk.type === 'ask_user_question') {
+			void this.askUserQuestionCallback?.({ requestId: chunk.requestId, questions: chunk.questions });
+		} else if (chunk.type === 'exit_plan_mode') {
+			void this.exitPlanModeCallback?.({
+				requestId: chunk.requestId,
+				plan: chunk.plan,
+				allowedPrompts: chunk.allowedPrompts,
+			});
+		} else if (chunk.type === 'approval_request') {
+			void this.approvalCallback?.({
+				requestId: chunk.requestId,
+				tool: chunk.tool,
+				context: chunk.context,
+				options: chunk.options,
+			});
 		}
 	}
 
@@ -171,7 +224,41 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 		// Fork derives lineage via `--resume <forkSource.sessionId>` (supported).
 		// Rewind-to-turn is gated OFF — it is an Agent-SDK-transport capability the
 		// `--print` subprocess cannot honour faithfully (ADR-TS-004, R-TS-002).
-		return { supportsFork: true, supportsRewind: false };
+		// P4 CLI honesty (SPEC-CP-011, ADR-CP-004 §3): the one-shot `claude --print`
+		// transport cannot round-trip a mid-turn interactive answer, so it reports
+		// `supportsInlineResponse: false` (and plan-mode off — both depend on the
+		// interactive round-trip). When a later interactive transport (Agent-SDK /
+		// ACP) ships it flips these flags and the same UI lights up — no UI change.
+		return {
+			supportsFork: true,
+			supportsRewind: false,
+			supportsPlanMode: false,
+			supportsInlineResponse: false,
+		};
+	}
+
+	// ── P4 additive members (SPEC-CP-002/011, ADR-CP-004 §1) ────────────────────
+	// The setters STORE the registered callbacks; the CLI stream reducer emits the
+	// matching request chunk where the wire surfaces one (T-CP-014), and the
+	// response flows back via the stored callback (SPEC-CP-017). Because
+	// `supportsInlineResponse` is false, the answerable affordance is gated off and
+	// the inline block renders read-only — the callback is registered but the UI
+	// never resolves it (honest gating).
+
+	setAskUserQuestionCallback(
+		cb: (req: AskUserQuestionRequest) => Promise<AskUserQuestionAnswer | null>,
+	): void {
+		this.askUserQuestionCallback = cb;
+	}
+
+	setExitPlanModeCallback(
+		cb: (req: ExitPlanModeRequest) => Promise<ExitPlanModeDecision | null>,
+	): void {
+		this.exitPlanModeCallback = cb;
+	}
+
+	setApprovalCallback(cb: (req: ApprovalRequest) => Promise<ApprovalDecision | null>): void {
+		this.approvalCallback = cb;
 	}
 
 	// ── internals ─────────────────────────────────────────────────────────────
@@ -196,8 +283,27 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 		if (!coldStart && this.sessionId !== null && this.sessionId.length > 0) {
 			argv.push('--resume', this.sessionId);
 		}
-		if (queryOptions?.model !== undefined && queryOptions.model.length > 0) {
-			argv.push('--model', queryOptions.model);
+		argv.push(...this._optionArgs(queryOptions));
+		return argv;
+	}
+
+	/**
+	 * The per-turn `--model` / `--append-system-prompt` flags derived from the query
+	 * options (extracted from {@link _buildArgs} for the complexity budget). P4
+	 * (R-CP-001): `--append-system-prompt <text>` feeds the instruction-appended
+	 * `customSystemPrompt` to the agent (the real `claude` CLI flag, the parity
+	 * counterpart of Claudian's SDK `systemPrompt`). An empty/absent value emits no
+	 * flag, so a no-custom-prompt turn runs identically to P3.
+	 */
+	private _optionArgs(queryOptions?: ChatRuntimeQueryOptions): string[] {
+		const argv: string[] = [];
+		const model = queryOptions?.model;
+		if (model !== undefined && model.length > 0) {
+			argv.push('--model', model);
+		}
+		const appendSystemPrompt = queryOptions?.appendSystemPrompt;
+		if (appendSystemPrompt !== undefined && appendSystemPrompt.length > 0) {
+			argv.push('--append-system-prompt', appendSystemPrompt);
 		}
 		return argv;
 	}

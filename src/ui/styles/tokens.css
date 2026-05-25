@@ -259,3 +259,41 @@ body.theme-light .specorator-root {
 		--sp-history-spin-duration: 0s;
 	}
 }
+
+/* §4.11 — Composer power (P4, SPEC-CP-029). slash-commands / plan-mode /
+ * ask-user-question / input. Colour literals stay confined to the token layer
+ * (NFR-CP-011) — no P4 component carries a hex/raw Obsidian var; all values
+ * resolve from Obsidian theme vars (teal/blue/pink from accent + semantic vars)
+ * so light/dark/forced-colors honour the user's theme (perceptual parity). Mode
+ * borders carry a non-colour cue (the PLAN label / mono textarea / placeholder)
+ * for forced-colors users (NFR-CP-008, SPEC-CP-037). */
+.specorator-root {
+	/* dropdown palette (slash/skills/mention) */
+	--sp-dropdown-shadow: var(--sp-shadow-dropup);
+	--sp-dropdown-max-h: 320px;
+	--sp-option-selected-bg: var(--sp-accent);
+	/* plan-mode indicator + border (teal) */
+	--sp-plan-accent: var(--color-cyan);
+	--sp-plan-border: var(--sp-plan-accent);
+	--sp-plan-label-bg: var(--sp-plan-accent);
+	/* instruction-mode border (blue) */
+	--sp-instruction-border: var(--color-blue);
+	/* bang-bash mode border (pink) + output bg */
+	--sp-bash-border: var(--color-pink);
+	--sp-bash-output-bg: var(--sp-bg-secondary);
+	/* ask-user / exit-plan / approval inline blocks */
+	--sp-inline-block-bg: var(--sp-bg-primary);
+	--sp-ask-cursor: var(--sp-accent); /* the › focus cursor */
+	--sp-ask-item-focused-bg: var(--sp-bg-secondary);
+	/* mention category icons */
+	--sp-mention-file: var(--sp-text-muted);
+	--sp-mention-agent: var(--color-purple);
+	--sp-mention-mcp: var(--color-green);
+	--sp-mention-dir: var(--color-orange);
+}
+@media (prefers-reduced-motion: reduce) {
+	/* palette open is instant under reduced-motion (NFR-CP-008) */
+	.specorator-root {
+		--sp-dropdown-anim-duration: 0s;
+	}
+}

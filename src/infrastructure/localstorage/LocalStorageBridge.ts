@@ -13,6 +13,16 @@ import type {
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
 import { FixtureChatRuntime } from './FixtureChatRuntime';
 import { FixtureHistoryStore } from './FixtureHistoryStore';
+import {
+	LocalStorageMentionDataProvider,
+	LocalStorageProviderCommandCatalog,
+	LocalStorageShellExec,
+} from './LocalStorageComposerPorts';
+import type {
+	MentionDataProviderPort,
+	ProviderCommandCatalogPort,
+	ShellExecPort,
+} from '@/domain/ports';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
 
@@ -135,6 +145,23 @@ export class LocalStorageBridge
 	// correct posture for a stateless public demo (NFR-TS-002).
 	createProviderHistoryPort(): ProviderHistoryPort {
 		return new FixtureHistoryStore();
+	}
+
+	// ── Composer-power ports (SPEC-CP-010, ADR-CP-002 §4) ───────────────────────
+	// Fixture mention/catalog lists so the palettes work in the browser demo;
+	// ShellExec honestly gated OFF (run -> err). No subprocess in a browser.
+	private readonly shellExecPort = new LocalStorageShellExec();
+
+	createMentionDataProvider(): MentionDataProviderPort {
+		return new LocalStorageMentionDataProvider();
+	}
+
+	createProviderCommandCatalog(): ProviderCommandCatalogPort {
+		return new LocalStorageProviderCommandCatalog();
+	}
+
+	get shellExec(): ShellExecPort {
+		return this.shellExecPort;
 	}
 
 	showError(message: string, durationMs = 0): void {

@@ -35,6 +35,18 @@ describe('fakeModulePorts', () => {
 		if (empty.ok) expect(empty.value).toEqual([])
 	})
 
+	// T-CP-008 (TEST-CP-003/005/028 fake-ports leg): the factory exposes the three
+	// P4 composer ports (mentionData / commandCatalog / shellExec) backed by the
+	// MockBridge fixtures + scripted echo.
+	it('exposes mentionData / commandCatalog / shellExec composer ports', async () => {
+		const ports = fakeModulePorts()
+		expect((await ports.mentionData.query('')).length).toBeGreaterThan(0)
+		expect((await ports.commandCatalog.getEntries('command')).length).toBeGreaterThan(0)
+		const run = await ports.shellExec.run({ command: 'echo fake' })
+		expect(run.ok).toBe(true)
+		if (run.ok) expect(run.value.exitCode).toBe(0)
+	})
+
 	it('providerHistory mutations are visible across the factory ports', async () => {
 		const ports = fakeModulePorts()
 		ports.providerHistory.seedConversations([

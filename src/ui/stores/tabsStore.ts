@@ -95,6 +95,14 @@ export interface TabDepsBinding {
 	generateTitle(firstUserMessage: string): Promise<Result<string>>;
 	getMaxTabs(): number;
 	logger?: LoggerPort;
+	/**
+	 * P4 (R-CP-001, SPEC-CP-011, REQ-CP-018): read the persisted
+	 * `customSystemPrompt` (via `SettingsPort`, where it already lives) so a sent
+	 * turn carries it as `queryOptions.appendSystemPrompt`. Optional — when absent
+	 * the turn omits the system prompt (degrades to P3 behaviour). The
+	 * `SettingsPort` read stays in the surface/application layer, not the store.
+	 */
+	getAppendSystemPrompt?(): Promise<string | undefined>;
 }
 
 /** Per-tab runner + runtime + notifier + logger held OUTSIDE reactive state (ADR-003). */
@@ -372,11 +380,31 @@ export const useTabsStore = defineStore('tabs', {
 			tab.liveAssistantId = null;
 		},
 
+		/**
+		 * R-CP-002: the ACTIVE tab's runtime — the same per-tab instance `sendMessage`
+		 * streams on (held OUTSIDE reactive state). The composer binds its inline-block
+		 * channel + capability reads to this so a streaming-runtime-pulled
+		 * ask_user_question / exit_plan_mode / approval_request reaches the rendered
+		 * queue (no orphan runtime). `undefined` before the first tab is seeded.
+		 */
+		activeRuntime(): ChatRuntimePort | undefined {
+			const id = this.activeTabId;
+			return id === null ? undefined : this._deps(id)?.runtime;
+		},
+
 		/** The active tab's runtime fork/rewind capability flags (read through the port). */
 		activeCapabilities(): RuntimeCapabilities {
 			const id = this.activeTabId;
 			const runtime = id === null ? undefined : this._deps(id)?.runtime;
-			return runtime?.getCapabilities() ?? { supportsFork: false, supportsRewind: false };
+			return (
+				runtime?.getCapabilities() ?? {
+					supportsFork: false,
+					supportsRewind: false,
+					// P4 additive (SPEC-CP-002): no runtime → nothing capable.
+					supportsPlanMode: false,
+					supportsInlineResponse: false,
+				}
+			);
 		},
 
 		/** True iff the active runtime supports fork (gates the per-message control). */
@@ -478,6 +506,17 @@ export const useTabsStore = defineStore('tabs', {
 			return active !== undefined && active.status !== 'streaming' && text.trim().length > 0;
 		},
 
+		/**
+		 * R-CP-001: resolve the per-turn `ChatRuntimeQueryOptions` from the binding's
+		 * `customSystemPrompt` seam. Returns `undefined` when there is no custom prompt
+		 * (the turn omits the system prompt — identical to P3 behaviour).
+		 */
+		async _turnQueryOptions(): Promise<RunChatTurnInput['queryOptions']> {
+			const appendSystemPrompt = await this._sidecar().binding?.getAppendSystemPrompt?.();
+			if (appendSystemPrompt === undefined || appendSystemPrompt.length === 0) return undefined;
+			return { appendSystemPrompt };
+		},
+
 		/** Send on the ACTIVE tab; the sink legs route to it (REQ-TS-001/006). */
 		async sendMessage(text: string, currentNotePath?: string): Promise<void> {
 			const active = this.activeTab;
@@ -492,8 +531,14 @@ export const useTabsStore = defineStore('tabs', {
 			active.interruptedId = null;
 			active.status = 'streaming';
 
+			// R-CP-001: thread the persisted instruction `customSystemPrompt` (read via
+			// the binding's SettingsPort seam) into the turn's query options so the
+			// runtime feeds it to the agent (CLI `--append-system-prompt`). Omitted when
+			// empty/absent so a no-custom-prompt turn runs identically to P3.
+			const queryOptions = await this._turnQueryOptions();
+
 			const history = active.messages.map((m) => ({ ...m }));
-			const input: RunChatTurnInput = { request: { text, currentNotePath }, history };
+			const input: RunChatTurnInput = { request: { text, currentNotePath }, history, queryOptions };
 
 			const result = await deps.runner.run(input, this._sink(tabId));
 			if (!result.ok && result.error.kind !== 'runtime-throw') {

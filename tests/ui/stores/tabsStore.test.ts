@@ -32,7 +32,12 @@ import type { RuntimeCapabilities } from '@/domain/ports';
  */
 class NoRewindRuntime extends MockChatRuntime {
 	override getCapabilities(): RuntimeCapabilities {
-		return { supportsFork: true, supportsRewind: false };
+		return {
+			supportsFork: true,
+			supportsRewind: false,
+			supportsPlanMode: true,
+			supportsInlineResponse: true,
+		};
 	}
 }
 
@@ -83,6 +88,7 @@ function freshStore(opts?: {
 	maxTabs?: number;
 	titleResult?: Result<string>;
 	createRuntime?: () => MockChatRuntime;
+	getAppendSystemPrompt?: () => Promise<string | undefined>;
 }): Harness {
 	setActivePinia(createPinia());
 	const store = useTabsStore();
@@ -115,6 +121,7 @@ function freshStore(opts?: {
 		history,
 		generateTitle: () => Promise.resolve(harness.titleResult),
 		getMaxTabs: () => harness.maxTabs,
+		getAppendSystemPrompt: opts?.getAppendSystemPrompt,
 	});
 	return harness;
 }
@@ -685,6 +692,39 @@ describe('tabsStore (SPEC-TS-019)', () => {
 		runner.sink?.onAssistantStart();
 		runner.sink?.onDone();
 		expect(store.isStreaming).toBe(false);
+	});
+
+	// ── R-CP-001: customSystemPrompt threads into the turn's query options ──────
+
+	it('R-CP-001: sendMessage threads the persisted customSystemPrompt into queryOptions.appendSystemPrompt', async () => {
+		const { store, runners } = freshStore({
+			getAppendSystemPrompt: () => Promise.resolve('Always answer in French.'),
+		});
+		const target = store.activeTabId!;
+		store.switchTab(target);
+		await store.sendMessage('Bonjour');
+		const runner = runners[runners.length - 1];
+		expect(runner.lastInput?.queryOptions?.appendSystemPrompt).toBe('Always answer in French.');
+	});
+
+	it('R-CP-001: sendMessage omits appendSystemPrompt when there is no custom prompt', async () => {
+		const { store, runners } = freshStore({
+			getAppendSystemPrompt: () => Promise.resolve(''),
+		});
+		const target = store.activeTabId!;
+		store.switchTab(target);
+		await store.sendMessage('Hi');
+		const runner = runners[runners.length - 1];
+		expect(runner.lastInput?.queryOptions?.appendSystemPrompt).toBeUndefined();
+	});
+
+	it('R-CP-001: sendMessage omits appendSystemPrompt when no seam is bound (degrades cleanly)', async () => {
+		const { store, runners } = freshStore();
+		const target = store.activeTabId!;
+		store.switchTab(target);
+		await store.sendMessage('Hi');
+		const runner = runners[runners.length - 1];
+		expect(runner.lastInput?.queryOptions?.appendSystemPrompt).toBeUndefined();
 	});
 });
 

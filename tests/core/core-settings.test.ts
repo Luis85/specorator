@@ -95,8 +95,10 @@ describe('coreSettingsModule — validate / schema / defaults (T-PSR-002)', () =
 		expect(fields.map((f) => f.type)).toEqual(['dropdown', 'dropdown', 'text', 'number']);
 	});
 
-	it('TEST-PSR-007 / SPEC-TS-005: DEFAULT_SETTINGS keys are [locale, logLevel, maxTabs, sessionsFolder]', () => {
+	it('TEST-PSR-007 / SPEC-TS-005 / SPEC-CP-005: DEFAULT_SETTINGS keys are [customSystemPrompt, locale, logLevel, maxTabs, sessionsFolder]', () => {
+		// P4 (SPEC-CP-005) adds the device-local customSystemPrompt additively.
 		expect(Object.keys(DEFAULT_SETTINGS).sort()).toEqual([
+			'customSystemPrompt',
 			'locale',
 			'logLevel',
 			'maxTabs',

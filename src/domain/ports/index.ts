@@ -54,3 +54,32 @@ export type {
 	ChatRuntimeEnsureReadyOptions,
 } from '@/domain/chat/ChatTurn';
 export type { ProviderId } from '@/domain/chat/ProviderId';
+
+// P4 composer-power ports (SPEC-CP-003/005, ADR-CP-002). Three new narrow ports +
+// their value types; one consumer each, no aggregate. The inline-block DTOs the
+// runtime callbacks + StreamChunk request members carry (SPEC-CP-004) are
+// re-exported here for one-stop import.
+export type {
+	MentionDataProviderPort,
+	MentionReferent,
+	MentionReferentKind,
+} from './MentionDataProviderPort';
+export type {
+	ProviderCommandCatalogPort,
+	CatalogEntry,
+	CatalogEntryKind,
+} from './ProviderCommandCatalogPort';
+export type { ShellExecPort, ShellExecRequest, ShellExecResult } from './ShellExecPort';
+export type {
+	AskUserQuestionOption,
+	AskUserQuestionItem,
+	AskUserQuestionRequest,
+	AskUserQuestionAnswer,
+	ExitPlanModeRequest,
+	ExitPlanModeDecision,
+	ApprovalDecision,
+	ApprovalOption,
+	ApprovalRequest,
+} from '@/domain/chat/inline';
+// P4 composer-mode value types (SPEC-CP-006) re-exported for one-stop import.
+export type { ComposerMode, ComposerModeKind, TriggerHit } from '@/domain/chat/composer/ComposerMode';

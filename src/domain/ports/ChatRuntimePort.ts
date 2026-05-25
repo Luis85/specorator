@@ -8,14 +8,29 @@ import type {
 	ChatRuntimeQueryOptions,
 	ChatRuntimeEnsureReadyOptions,
 } from '@/domain/chat/ChatTurn';
+import type {
+	AskUserQuestionRequest,
+	AskUserQuestionAnswer,
+	ExitPlanModeRequest,
+	ExitPlanModeDecision,
+	ApprovalRequest,
+	ApprovalDecision,
+} from '@/domain/chat/inline';
 
 /**
  * Provider capability flags (SPEC-TS-003) — gate the fork/rewind UI affordances.
- * Read through the port, NEVER branched on by `providerId` (REQ-TS-026).
+ * Read through the port, NEVER branched on by `providerId` (REQ-TS-026). P4
+ * (SPEC-CP-002, ADR-CP-004 §3) APPENDS `supportsPlanMode` / `supportsInlineResponse`
+ * — the three P3 flags stay byte-identical (SPEC-CP-034).
  */
 export interface RuntimeCapabilities {
 	readonly supportsFork: boolean;
 	readonly supportsRewind: boolean;
+	// ---- P4 additive (SPEC-CP-002, ADR-CP-004 §3) ----
+	/** Gates the Shift+Tab plan-mode toggle (REQ-CP-020). */
+	readonly supportsPlanMode: boolean;
+	/** Gates the answerable inline blocks (REQ-CP-028); false → read-only + notice. */
+	readonly supportsInlineResponse: boolean;
 }
 
 /**
@@ -55,4 +70,19 @@ export interface ChatRuntimePort {
 	setResumeCheckpoint(assistantMessageId: string): void;
 	/** The provider's fork/rewind capability flags — gates the UI affordances (REQ-TS-016/019). */
 	getCapabilities(): RuntimeCapabilities;
+	// ---- P4 additive (SPEC-CP-002, ADR-CP-004 §1) ----
+	// The UI→runtime control channel for inline blocks: the runtime pulls (invokes
+	// the registered callback) when it owns the timing; the UI registers HOW to
+	// answer. The returned promise resolves the user's decision, or `null` for
+	// cancel (Escape). `void`-returning, non-streaming — they do NOT change the
+	// streaming-error convention (ADR-CC-001 §1, unchanged). No `respond(...)`
+	// method (ADR-CP-004 §1, Opt B rejected). The setters are always registered
+	// (the channel exists); `supportsInlineResponse` gates the answerable affordance.
+	setAskUserQuestionCallback(
+		cb: (req: AskUserQuestionRequest) => Promise<AskUserQuestionAnswer | null>,
+	): void;
+	setExitPlanModeCallback(
+		cb: (req: ExitPlanModeRequest) => Promise<ExitPlanModeDecision | null>,
+	): void;
+	setApprovalCallback(cb: (req: ApprovalRequest) => Promise<ApprovalDecision | null>): void;
 }

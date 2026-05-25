@@ -28,9 +28,15 @@ import type {
 	IconPort,
 	IconNode,
 	ProviderHistoryPort,
+	MentionDataProviderPort,
+	ProviderCommandCatalogPort,
+	ShellExecPort,
 } from '@/domain/ports';
 import { MarkdownRenderer } from 'obsidian';
 import { ClaudeCliChatRuntime } from './ClaudeCliChatRuntime';
+import { ObsidianMentionDataProvider } from './ObsidianMentionDataProvider';
+import { ObsidianProviderCommandCatalog } from './ObsidianProviderCommandCatalog';
+import { ObsidianShellExec } from './ObsidianShellExec';
 import { VaultFileHistoryStore } from './history/VaultFileHistoryStore';
 import { safeMarkdownRender } from '@/application/chat/safeMarkdownRender';
 import { walkSvgElementToIconNode } from './walkSvgElementToIconNode';
@@ -214,6 +220,32 @@ export class ObsidianBridge
 		);
 	}
 
+	// ── Composer-power ports (SPEC-CP-007, ADR-CP-002 §4) ───────────────────────
+	// Mention/catalog are per-mount factories (the Claude impl binds to the active
+	// provider context). All vault I/O flows through this bridge's VaultPort — the
+	// UI never imports obsidian (REQ-CP-010). Coverage-excluded infra; behaviour
+	// gated by the manual leg TEST-CP-M1.
+
+	createMentionDataProvider(): MentionDataProviderPort {
+		return new ObsidianMentionDataProvider(this);
+	}
+
+	createProviderCommandCatalog(): ProviderCommandCatalogPort {
+		return new ObsidianProviderCommandCatalog(this);
+	}
+
+	// ── Bang-bash ShellExec (SPEC-CP-008, ADR-CP-002 §3) ────────────────────────
+	// Stateless — the bridge IS the port (no factory). The sole real shell path
+	// (S1); cwd = the vault adapter base path; passes `this` as the LoggerPort so
+	// only the command + exit code are logged (S3, never stdout/stderr content).
+	// Lazily created; coverage-excluded infra (manual leg TEST-CP-M2).
+	private shellExecPort: ShellExecPort | null = null;
+
+	get shellExec(): ShellExecPort {
+		this.shellExecPort ??= new ObsidianShellExec(() => this.getVaultBasePath(), this);
+		return this.shellExecPort;
+	}
+
 	private _track(notice: Notice): void {
 		this._activeNotices.add(notice);
 		const el: HTMLElement = notice.messageEl;
@@ -296,7 +328,12 @@ export class ObsidianBridge
 			typeof obj.sessionsFolder === 'string' ? obj.sessionsFolder : '',
 		);
 		const maxTabs = clampMaxTabs(typeof obj.maxTabs === 'number' ? obj.maxTabs : Number.NaN);
-		return { locale, logLevel, sessionsFolder, maxTabs };
+		// P4 (SPEC-CP-005): load-or-default the device-local custom system prompt.
+		const customSystemPrompt =
+			typeof obj.customSystemPrompt === 'string'
+				? obj.customSystemPrompt
+				: DEFAULT_SETTINGS.customSystemPrompt;
+		return { locale, logLevel, sessionsFolder, maxTabs, customSystemPrompt };
 	}
 
 	private _shouldLog(level: 'debug' | 'info' | 'warn' | 'error'): boolean {

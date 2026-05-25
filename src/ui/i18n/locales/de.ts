@@ -11,6 +11,30 @@ export default {
 				placeholder: 'Nachricht senden…',
 				send: 'Nachricht senden',
 				stop: 'Generierung stoppen',
+				dropdown: {
+					hints: 'Enter zum Auswählen · Pfeiltasten zum Navigieren · Esc zum Abbrechen',
+				},
+				mention: {
+					empty: 'Keine Treffer',
+				},
+				inline: {
+					askTitle: 'Frage',
+					customPlaceholder: 'Eigene Antwort eingeben…',
+					readOnlyNotice:
+						'Dieser Anbieter kann nicht inline antworten; antworte stattdessen in deiner Nachricht.',
+					exitPlanTitle: 'Plan abgeschlossen',
+					implement: 'Umsetzen',
+					revise: 'Überarbeiten',
+					cancel: 'Abbrechen',
+					revisePlaceholder: 'Feedback zur weiteren Planung eingeben…',
+				},
+				bash: {
+					exitLabel: 'Exit',
+					placeholder: 'Shell-Befehl ausführen…',
+				},
+				instruction: {
+					placeholder: 'Systemanweisung hinzufügen…',
+				},
 			},
 			busy: 'Antwort wird generiert…',
 			interrupted: 'Unterbrochen',
