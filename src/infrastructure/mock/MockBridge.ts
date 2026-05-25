@@ -17,6 +17,7 @@ import {
 	MockProviderCommandCatalog,
 	MockShellExec,
 } from './MockComposerPorts';
+import { MockAuxModel } from './MockAuxModel';
 import type { MentionDataProviderPort, ShellExecResult } from '@/domain/ports';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
@@ -61,6 +62,8 @@ export class MockBridge
 	private historyStore: MockHistoryStore | null = null;
 	/** Scripted-echo ShellExec for the mount (SPEC-CP-009). Stateless — the bridge is the port. */
 	private readonly shellExecPort = new MockShellExec();
+	/** Scriptable one-shot aux model (SPEC-CA-008). Stateless — the bridge exposes the port. */
+	private readonly auxModelPort = new MockAuxModel();
 
 	constructor(
 		initialFiles: Record<string, string> = {},
@@ -210,6 +213,16 @@ export class MockBridge
 	/** Test helper: script the ShellExec result for an exact command string. */
 	seedShellExec(command: string, result: ShellExecResult): void {
 		this.shellExecPort.seed(command, result);
+	}
+
+	// ── Aux model port (SPEC-CA-008, ADR-CA-002 §1) ─────────────────────────────
+	// The one-shot cold-start aux seam the re-pointed title/refine use cases drive.
+	// Scriptable (setAuxResponse/setAuxError/setAuxEmpty); stateless — the bridge IS
+	// the port (no factory; per-conversation isolation is not needed for a one-shot).
+
+	/** Scriptable one-shot `AuxModelPort` (no subprocess; never throws). */
+	get auxModel(): MockAuxModel {
+		return this.auxModelPort;
 	}
 
 	showError(message: string, durationMs = 0): void {

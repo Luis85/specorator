@@ -2,6 +2,7 @@ import { vi } from 'vitest';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
 import type { MockHistoryStore } from '@/infrastructure/mock/MockHistoryStore';
 import { MockChatRuntime } from '@/infrastructure/mock/MockChatRuntime';
+import type { MockAuxModel } from '@/infrastructure/mock/MockAuxModel';
 import type {
 	SettingsPort,
 	VaultPort,
@@ -48,6 +49,12 @@ export interface FakePorts {
 	 * capable; call `mockRuntime.setSupportsInlineResponse(false)` for the gated branch.
 	 */
 	readonly mockRuntime: MockChatRuntime;
+	/**
+	 * The scriptable Mock `AuxModelPort` (SPEC-CA-008, T-CA-008). The re-pointed
+	 * title/refine tests (SPEC-CA-018) + the inline-edit tests (SPEC-CA-017) inject
+	 * this aux stub instead of a runtime — `setAuxResponse`/`setAuxError`/`setAuxEmpty`.
+	 */
+	readonly auxModel: MockAuxModel;
 }
 
 export function fakeModulePorts(): FakePorts {
@@ -72,5 +79,6 @@ export function fakeModulePorts(): FakePorts {
 		commandCatalog: bridge.createProviderCommandCatalog(),
 		shellExec: bridge.shellExec,
 		mockRuntime: new MockChatRuntime(),
+		auxModel: bridge.auxModel,
 	};
 }

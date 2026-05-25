@@ -17,11 +17,13 @@ import {
 	LocalStorageMentionDataProvider,
 	LocalStorageProviderCommandCatalog,
 	LocalStorageShellExec,
+	LocalStorageAuxModel,
 } from './LocalStorageComposerPorts';
 import type {
 	MentionDataProviderPort,
 	ProviderCommandCatalogPort,
 	ShellExecPort,
+	AuxModelPort,
 } from '@/domain/ports';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
@@ -157,6 +159,7 @@ export class LocalStorageBridge
 	// Fixture mention/catalog lists so the palettes work in the browser demo;
 	// ShellExec honestly gated OFF (run -> err). No subprocess in a browser.
 	private readonly shellExecPort = new LocalStorageShellExec();
+	private readonly auxModelPort = new LocalStorageAuxModel();
 
 	createMentionDataProvider(): MentionDataProviderPort {
 		return new LocalStorageMentionDataProvider();
@@ -168,6 +171,12 @@ export class LocalStorageBridge
 
 	get shellExec(): ShellExecPort {
 		return this.shellExecPort;
+	}
+
+	// ── Aux model port (SPEC-CA-009 aux leg) ────────────────────────────────────
+	// Browser-safe canned/echo stand-in so the demo's side-queries never crash.
+	get auxModel(): AuxModelPort {
+		return this.auxModelPort;
 	}
 
 	showError(message: string, durationMs = 0): void {

@@ -121,3 +121,43 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   interface widening (T-CA-006) and the real impls (T-CA-013/014). The stubs
   throw, so T-CA-012's RED test (Mock `readBinary` reads bytes) is genuinely RED
   until T-CA-013 — TDD ordering preserved.
+
+## Layer 2 batch — AuxModelPort impl + the re-point early (T-CA-007..011)
+
+### T-CA-007 — RED three-bridge `AuxModelPort` impls + scriptable `fake-ports.auxModel` (🧪 qa)
+
+- **Spec/test:** TEST-CA-021 (Mock-aux leg), TEST-CA-018 (aux backing);
+  SPEC-CA-008/009/004; REQ-CA-021; NFR-CA-001/010.
+- **Files:** `tests/infrastructure/mock/MockAuxModel.test.ts`,
+  `tests/infrastructure/localstorage/LocalStorageAuxModel.test.ts` (new),
+  `tests/__fakes__/fake-ports.test.ts` (extended — the scriptable `auxModel`
+  member assertions).
+- **Outcome:** done — RED confirmed (`vitest run` 5 failed: `MockAuxModel`/
+  `LocalStorageAuxModel` not constructable, `ports.auxModel` undefined).
+- **Commit:** `7128019`.
+
+### T-CA-008 — `MockBridge` + `LocalStorageBridge` `AuxModelPort` impls + `fake-ports.auxModel` (🔨 dev)
+
+- **Spec/req:** SPEC-CA-008/009/004; REQ-CA-021; NFR-CA-001/010.
+- **Files:** `src/infrastructure/mock/MockAuxModel.ts` (new — scriptable
+  `setAuxResponse`/`setAuxError`/`setAuxEmpty`, aborted `signal` → err, records
+  `prompt`/`systemPrompt`, empty/whitespace → err; mirrors `MockShellExec`),
+  `src/infrastructure/localstorage/LocalStorageComposerPorts.ts`
+  (`LocalStorageAuxModel` appended — browser-safe canned/echo, never throws),
+  `src/infrastructure/mock/MockBridge.ts` (`get auxModel()` over a private
+  `MockAuxModel`), `src/infrastructure/localstorage/LocalStorageBridge.ts`
+  (`get auxModel()` over a private `LocalStorageAuxModel`),
+  `tests/__fakes__/fake-ports.ts` (`auxModel: bridge.auxModel` + the `FakePorts`
+  member).
+- **Outcome:** done — the T-CA-007 RED tests now green (20/20). No `node:*`,
+  no spawn, no `obsidian` in Mock/LocalStorage; `Result`-mapped error/empty/abort.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` clean on the
+  six changed files; `vitest run tests/infrastructure/mock/MockAuxModel.test.ts
+  tests/infrastructure/localstorage/LocalStorageAuxModel.test.ts
+  tests/__fakes__/fake-ports.test.ts` 20/20 green.
+- **Commit:** _this commit._
+- **Deviation:** an empty/whitespace `setAuxResponse(text)` maps to `err` (not
+  `ok('')`) — parity with the real impls' empty-accumulated → err rule
+  (SPEC-CA-004), so the re-pointed title/refine tests' "empty → err" cases stay
+  driven by `setAuxResponse('')` as well as `setAuxEmpty()`. Within the SPEC-CA-008
+  contract; noted for clarity.
