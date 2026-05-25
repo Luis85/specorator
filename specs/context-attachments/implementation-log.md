@@ -540,7 +540,42 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   `obsidian`/Vue import.
 - **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` on the two files
   exit 0; `vitest run` 7/7 green.
-- **Commit:** _this commit._
+- **Commit:** `71f2d2f`.
 - **Deviation:** `resolveImageMime` returns `null` (not `undefined` as the batch-4
   brief summarised) — the use case branches on `=== null`. The behaviour (`.exe` /
   non-image rejected before read) is exactly the DoD.
+
+### T-CA-025 — RED `CaptureSelectionUseCase` (🧪 qa)
+
+- **Spec/test:** TEST-CA-013/014/015/016 (U legs), TEST-CA-018b (U leg);
+  SPEC-CA-016; REQ-CA-013..018; NFR-CA-010; EC-CA-5-clear; EC-CA-11.
+- **Files:** `tests/application/chat/attachments/CaptureSelectionUseCase.test.ts`
+  (new — editor → `show` + capture; null+no-focus → `clear` + null (EC-CA-5-clear);
+  null+focus → retain prior, no extra clear (EC-CA-11); canvas + browser capture
+  with empty `highlight.calls`; `current()` starts null; never-throws — over the
+  `MockSelectionSource` + recording `MockSelectionHighlight`).
+- **Outcome:** done — RED confirmed (`CaptureSelectionUseCase` unresolved at import).
+- **Commit:** `c078a32`.
+
+### T-CA-026 — `CaptureSelectionUseCase` (🔨 dev)
+
+- **Spec/req:** SPEC-CA-016; REQ-CA-013..018; NFR-CA-010.
+- **Files:** `src/application/chat/attachments/CaptureSelectionUseCase.ts` (new —
+  constructor `(source, highlight)`; `onChange(sel, focusWithinChat)`: editor →
+  `highlight.show`; null+no-focus → `clear` + drop; null+focus → retain (no clear);
+  canvas/browser → capture, no highlight; `current()` seeds from
+  `source.getCurrentSelection()` until the first observed tick, then the tracked
+  value is authoritative; all `Result.ok`).
+- **Outcome:** done — the T-CA-025 RED tests now green (7/7). `Result`-returning,
+  never throws; no provider branch; no `obsidian`/Vue import.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` exit 0;
+  `vitest run` 7/7 green.
+- **Commit:** _this commit._
+- **Deviation:** the retain/clear semantics match the DoD exactly (focus hand-off
+  retains; a genuine deselection clears). One implementation choice beyond the
+  literal contract: `current()` reads `source.getCurrentSelection()` as a SEED only
+  **before** the first `onChange` tick (an `observed` flag), so a freshly-mounted
+  consumer sees the live selection without waiting for a poll while an explicit
+  deselection never resurrects a stale source read. This also gives the injected
+  `source` port a real use (it would otherwise be an unused-private TS6138 error) —
+  the constructor signature is unchanged from the spec.
