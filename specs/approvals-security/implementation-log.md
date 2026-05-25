@@ -525,7 +525,7 @@ warnings only), `vitest run tests/application` **372/372 green** (incl. the P6
   0 errors (12 pre-existing warnings); `vitest run` toggle live 6/6 + P6 3/3 +
   `tests/ui/chat/toolbar/` + `buildToolbarViewModel` + `tests/ui/i18n` 85/85. No
   `obsidian`/`v-html` in `src/ui/**`. `styles.css` untouched.
-- **Commit (RED / green):** `d915348f` / `<GREEN-023>`.
+- **Commit (RED / green):** `d915348f` / `517557e1`.
 - **Deviation:** **(1)** the spec (SPEC-AS-012) pins the toggle's props as `mode:
   PermissionMode` only; the implementation keeps the P6 `vm` prop AND adds `mode?`
   optionally so the P6 `ToolbarStrip` wiring stays byte-identical until ChatSurface wires
@@ -536,3 +536,31 @@ warnings only), `vitest run tests/application` **372/372 green** (incl. the P6
   before T-AS-029 wires the mode). The deferred notice is dead only once the surface
   always supplies a live `mode`; a follow-up at the gate can drop it. Rationale: additive
   growth + no P6 regression (NFR-AS-001) is load-bearing per the brief.
+
+### T-AS-025 — `ApprovalsPanel.vue` + `ApprovalRuleRow.vue` (🔨 dev)
+
+- **Spec/req:** SPEC-AS-013/014/022; REQ-AS-040/041/042/043/050/051; NFR-AS-006/007/013/015.
+- **Files:** `src/ui/chat/approvals/ApprovalsPanel.vue` (new), `src/ui/chat/approvals/
+  ApprovalRuleRow.vue` (new); `tests/ui/chat/approvals/ApprovalsPanel.test.ts` +
+  `ApprovalsPanel.po.ts` + `ApprovalRuleRow.test.ts` + `ApprovalRuleRow.po.ts` (new RED
+  → green).
+- **Behaviour:** `ApprovalsPanel` props `mode: PermissionMode` + `rules: readonly
+  ApprovalRule[]`, emits `remove:[id]` — shows the active mode (`approvals.mode` "Mode:
+  {mode}") under a localised title + the rule-list heading + one `ApprovalRuleRow` per
+  rule (re-emitting `remove`) + the empty notice; LIVE (reads reactive props).
+  `ApprovalRuleRow` props `rule: ApprovalRule`, emits `remove:[id]` — shows tool ·
+  `actionPattern ?? '*'` · the localised decision · lifetime as TEXT; a persisted rule
+  carries the focusable remove button (accessible name) emitting `remove(rule.id)`; a
+  session rule has no remove control. The decision badge tints via the
+  `--sp-approvals-decision-allow|deny` tokens (minted in T-AS-030) with a text label
+  (forced-colors survives).
+- **Outcome:** done — the prior RED (both components missing) now green (9/9 across the
+  two files).
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); `npm run lint`
+  0 errors (12 pre-existing warnings); `vitest run tests/ui/chat/approvals/` 9/9. No
+  `obsidian`/`v-html` in `src/ui/**`. `styles.css` untouched.
+- **Commit (RED / green):** `3225fe1f` / `<GREEN-025>`.
+- **Deviation:** the `--sp-approvals-decision-allow|deny` + `--sp-approvals-row-gap`
+  tokens the components reference are minted in T-AS-030 (the STYLES task); referencing a
+  not-yet-defined CSS var resolves to the inherited value at runtime and fails no
+  lint/typecheck gate now (the `lint-style-tokens` guard TEST-AS-062 lands with T-AS-030).
