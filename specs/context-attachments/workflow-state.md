@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-CA-001; Parts A/B/C; ADR-CA-001..004 accepted)
   spec.md: complete (SPEC-CA-001..030; 6 layer groups; TEST-CA-001..032 + M1/M2/M3; full coverage)
   tasks.md: complete (TASKS-CA-001; 48 tasks T-CA-001..048; 8 batches; full SPEC/REQ/NFR/TEST coverage)
-  implementation-log.md: in-progress (T-CA-001..011 logged; batches 0-2 done; batches 3-8 remain)
+  implementation-log.md: in-progress (T-CA-001..028 logged; batches 0-4 done; batches 5-8 remain)
   test-plan.md: in-progress (manual legs M1/M3/029 scheduled; guard-verify noted)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | in-progress (batches 0-2: T-CA-001..011) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (batches 0-4: T-CA-001..028) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -324,4 +324,45 @@ parity-screenshot legs accumulate for the SINGLE FINAL human review gate.
                           (T-CA-017..028) + InlineEditModal (T-CA-039) may build on the unified
                           AuxModelPort seam. The readBinary throwing stubs (T-CA-006) are
                           UNTOUCHED — they are replaced in T-CA-013/014. NO open clarifications.
+
+2026-05-25 (dev, implement): Layer-4 APPLICATION batch (T-CA-017..028) complete on
+                          `feature/context-attachments` — strict TDD, one commit per task.
+                          T-CA-017 RED computeWordDiff (test(ca), 12814ce) → T-CA-018
+                          computeWordDiff word-level DP/LCS → ToolDiffData (feat(ca), 2008094)
+                          → T-CA-019 RED parseInlineEditResponse + inlineEditPrompt (test(ca),
+                          4bef1f1) → T-CA-020 ported parse + prompt (feat(ca), e92076d) →
+                          T-CA-021 RED AddFileContextUseCase (test(ca), e9cbf1e) → T-CA-022
+                          pure file-set ops (feat(ca), b292341) → T-CA-023 RED AddImageUseCase
+                          (test(ca), 58f51b5) → T-CA-024 gate-order MIME→readBinary→8MiB→encode
+                          (feat(ca), 71f2d2f) → T-CA-025 RED CaptureSelectionUseCase (test(ca),
+                          c078a32) → T-CA-026 capture+highlight+focus-retain (feat(ca), 88d9ca1)
+                          → T-CA-027 RED InlineEditUseCase (test(ca), a82acf1) → T-CA-028
+                          InlineEditUseCase over AuxModelPort, no provider branch (feat(ca),
+                          eebbcf0). VERIFICATION: vue-tsc -p tsconfig.lint.json 0 errors; eslint
+                          clean on every changed src+test file; the 7 batch-4 test files 56/56
+                          green; the dependent P3/P4 re-point + image-encode suites 25/25 still
+                          green (no regression). Targeted runs only per maintainer (no full
+                          build/build:web/docs:api/verify — the gate is the maintainer's). New
+                          files: src/application/chat/inlineEdit/{computeWordDiff,
+                          parseInlineEditResponse,inlineEditPrompt,InlineEditUseCase}.ts +
+                          src/application/chat/attachments/{AddFileContextUseCase,AddImageUseCase,
+                          CaptureSelectionUseCase}.ts (+ the 7 co-located tests). NOTE: the
+                          pre-existing unstaged styles.css edit (5 lines) was left UNTOUCHED — not
+                          part of this batch. DEVIATIONS (all logged in implementation-log.md):
+                          computeWordDiff emits one DiffLine per token (no coalescing, per SPEC
+                          "each token is an entry" — diverges from claudian's coalescing);
+                          INLINE_EDIT_SYSTEM_PROMPT drops claudian's getTodayDate() interpolation +
+                          cursor-mode to stay pure/stable + selection-only; parse trims the
+                          <replacement>/<insertion> inner per SPEC-CA-012; CaptureSelectionUseCase
+                          current() seeds from source.getCurrentSelection() only before the first
+                          observed tick (gives the injected source port a real use); InlineEdit
+                          abort is handled at the aux-port boundary (aux err on aborted signal →
+                          Result.err), no separate abort branch.
+
+                          HAND-OFF → next ready task T-CA-029 (qa, RED — the port composables
+                          useAuxModelPort/useSelectionSourcePort/useSelectionHighlightPort +
+                          useCapturedSelection), green pair T-CA-030 (dev). The Layer-5 UI batch
+                          (T-CA-029..041) builds on the now-landed application use cases. Manual
+                          legs (T-CA-046/047) + the standalone-mount smoke tests stay for the
+                          single final epic-review gate. NO open clarifications.
 ```

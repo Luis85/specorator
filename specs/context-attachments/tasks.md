@@ -510,9 +510,9 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-002
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/application/chat/inlineEdit/computeWordDiff.test.ts` exists, naming TEST-CA-023/023b,
+  - [x] `tests/application/chat/inlineEdit/computeWordDiff.test.ts` exists, naming TEST-CA-023/023b,
         covering the bank→riverbank acceptance, the identical-text no-op, the empty inputs, and never-throws.
-  - [ ] Tests fail (RED) — `computeWordDiff.ts` does not yet exist (it consumes the existing P2
+  - [x] Tests fail (RED) — `computeWordDiff.ts` does not yet exist (it consumes the existing P2
         `ToolDiffData`/`DiffLine` from `@/domain/chat/diff/Diff`, unchanged).
 
 ### T-CA-018 🔨 — `computeWordDiff.ts` (pure word-level DP/LCS → `ToolDiffData`)
@@ -528,9 +528,9 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-017
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-CA-023 U leg + TEST-CA-023b) now pass, incl. EC-CA-10.
-  - [ ] Pure/total; never throws; no new `package.json` runtime dep; no `obsidian`/Vue import.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] The prior RED tests (TEST-CA-023 U leg + TEST-CA-023b) now pass, incl. EC-CA-10.
+  - [x] Pure/total; never throws; no new `package.json` runtime dep; no `obsidian`/Vue import.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-CA-019 🧪 — RED: `parseInlineEditResponse` + `inlineEditPrompt` (pure/total)
 
@@ -548,10 +548,10 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-002
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/application/chat/inlineEdit/parseInlineEditResponse.test.ts` +
+  - [x] `tests/application/chat/inlineEdit/parseInlineEditResponse.test.ts` +
         `tests/application/chat/inlineEdit/inlineEditPrompt.test.ts` exist, naming TEST-CA-022 + the
         TEST-CA-021 prompt leg, covering replacement / insertion / clarification / failure + the prompt shape.
-  - [ ] Tests fail (RED) — `parseInlineEditResponse.ts` + `inlineEditPrompt.ts` do not yet exist.
+  - [x] Tests fail (RED) — `parseInlineEditResponse.ts` + `inlineEditPrompt.ts` do not yet exist.
 
 ### T-CA-020 🔨 — `parseInlineEditResponse.ts` + `inlineEditPrompt.ts` (ported pure)
 
@@ -566,9 +566,9 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-019
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-CA-022 + the TEST-CA-021 prompt leg) now pass.
-  - [ ] Pure/total; never throws; no side effects; no `obsidian`/Vue import.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] The prior RED tests (TEST-CA-022 + the TEST-CA-021 prompt leg) now pass.
+  - [x] Pure/total; never throws; no side effects; no `obsidian`/Vue import.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-CA-021 🧪 — RED: `AddFileContextUseCase`
 
@@ -583,10 +583,10 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-003
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/application/chat/attachments/AddFileContextUseCase.test.ts` exists, naming the listed
+  - [x] `tests/application/chat/attachments/AddFileContextUseCase.test.ts` exists, naming the listed
         TEST-CA legs, covering add / idempotent re-add (EC-CA-3) / remove (EC-CA-4) / displayName basename /
         empty-path → `err`.
-  - [ ] Tests fail (RED) — `AddFileContextUseCase` does not yet exist.
+  - [x] Tests fail (RED) — `AddFileContextUseCase` does not yet exist.
 
 ### T-CA-022 🔨 — `AddFileContextUseCase` (pure file-set ops)
 
@@ -599,9 +599,9 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-021
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The prior RED test (TEST-CA-001 add leg + TEST-CA-003 displayName leg) now passes, incl. EC-CA-3/4.
-  - [ ] `Result`-returning; pure; no port; no `obsidian`/Vue import.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] The prior RED test (TEST-CA-001 add leg + TEST-CA-003 displayName leg) now passes, incl. EC-CA-3/4.
+  - [x] `Result`-returning; pure; no port; no `obsidian`/Vue import.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-CA-023 🧪 — RED: `AddImageUseCase` (gate order MIME → readBinary → 8 MiB → encode)
 
@@ -618,10 +618,10 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-013, T-CA-016
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/application/chat/attachments/AddImageUseCase.test.ts` exists, naming TEST-CA-007/012 + the
+  - [x] `tests/application/chat/attachments/AddImageUseCase.test.ts` exists, naming TEST-CA-007/012 + the
         TEST-CA-030 no-secret leg, covering the gate order, EC-CA-1 (oversize before encode), EC-CA-2
         (non-image), the missing-file → `err`, and the payload-has-no-secret assertion.
-  - [ ] Tests fail (RED) — `AddImageUseCase` does not yet exist.
+  - [x] Tests fail (RED) — `AddImageUseCase` does not yet exist.
 
 ### T-CA-024 🔨 — `AddImageUseCase` (allow-list + 8 MiB gate + `readBinary` + base64)
 
@@ -636,11 +636,11 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-023
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-CA-007 U leg + TEST-CA-012 + the TEST-CA-030 no-secret leg) now pass,
+  - [x] The prior RED tests (TEST-CA-007 U leg + TEST-CA-012 + the TEST-CA-030 no-secret leg) now pass,
         incl. EC-CA-1/2 and the gate ordering (oversize measured before encode).
-  - [ ] `Result`-returning; gate order enforced; no secret/`data.json` write; no provider branch; no
+  - [x] `Result`-returning; gate order enforced; no secret/`data.json` write; no provider branch; no
         `obsidian`/Vue import.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-CA-025 🧪 — RED: `CaptureSelectionUseCase` (capture + highlight + focus-hand-off retain)
 
@@ -658,10 +658,10 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-013
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/application/chat/attachments/CaptureSelectionUseCase.test.ts` exists, naming the listed
+  - [x] `tests/application/chat/attachments/CaptureSelectionUseCase.test.ts` exists, naming the listed
         TEST-CA U legs, covering editor → show / null+no-focus → clear / null+focus → retain / canvas no
         highlight / browser only when gated.
-  - [ ] Tests fail (RED) — `CaptureSelectionUseCase` does not yet exist.
+  - [x] Tests fail (RED) — `CaptureSelectionUseCase` does not yet exist.
 
 ### T-CA-026 🔨 — `CaptureSelectionUseCase`
 
@@ -677,10 +677,10 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-025
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-CA-013/014/015/016 U legs + TEST-CA-018b U leg) now pass, incl.
+  - [x] The prior RED tests (TEST-CA-013/014/015/016 U legs + TEST-CA-018b U leg) now pass, incl.
         EC-CA-5-clear/EC-CA-11.
-  - [ ] `Result`-returning; never throws; no provider branch; no `obsidian`/Vue import.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `Result`-returning; never throws; no provider branch; no `obsidian`/Vue import.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-CA-027 🧪 — RED: `InlineEditUseCase` (aux → parse → outcome; clarification loop; abort)
 
@@ -700,10 +700,10 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-008, T-CA-018, T-CA-020
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/application/chat/inlineEdit/InlineEditUseCase.test.ts` exists, naming TEST-CA-021/026/027,
+  - [x] `tests/application/chat/inlineEdit/InlineEditUseCase.test.ts` exists, naming TEST-CA-021/026/027,
         covering execute (replacement+diff / insertion / clarification / failure) / continue / abort →
         err (EC-CA-8) / empty-or-error aux → err (EC-CA-9) / no provider branch.
-  - [ ] Tests fail (RED) — `InlineEditUseCase` does not yet exist.
+  - [x] Tests fail (RED) — `InlineEditUseCase` does not yet exist.
 
 ### T-CA-028 🔨 — `InlineEditUseCase` (over `AuxModelPort`, no provider branch)
 
@@ -719,11 +719,11 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-027
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-CA-021 use-case leg + TEST-CA-026 + TEST-CA-027) now pass, incl.
+  - [x] The prior RED tests (TEST-CA-021 use-case leg + TEST-CA-026 + TEST-CA-027) now pass, incl.
         EC-CA-8/9.
-  - [ ] `Result`-returning; never throws; no `providerId` branch; the `replacement` outcome carries the
+  - [x] `Result`-returning; never throws; no `providerId` branch; the `replacement` outcome carries the
         word-diff; no `obsidian`/Vue import.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ---
 
