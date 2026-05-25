@@ -27,6 +27,10 @@ import type {
 	SubmitBangBashUseCase,
 	BangBashOutput,
 } from '@/application/chat/composer/SubmitBangBashUseCase';
+import type { RefineInstructionUseCase } from '@/application/chat/composer/RefineInstructionUseCase';
+import type { SettingsPort } from '@/domain/ports';
+import { appendInstruction } from '@/domain/settings/PluginSettings';
+import type { InstructionConfirmFn } from '@/ui/chat/modalSeam';
 
 /**
  * A pending inline-block request the composer renders in place of the textarea
@@ -60,6 +64,17 @@ export interface UseComposerModeOptions {
 	readonly getCaret: () => number;
 	/** Mention-filter debounce window (REQ-CP-014). */
 	readonly debounceMs?: number;
+	// ── Instruction ladder (SPEC-CP-027) — optional collaborators. ──────────────
+	/**
+	 * Best-effort instruction refine (SPEC-CP-015). When provided, the ladder
+	 * attempts a refine before the confirm; a refine failure falls through with the
+	 * RAW instruction (EC-CP-9). When absent, the raw instruction is confirmed.
+	 */
+	readonly refineInstruction?: RefineInstructionUseCase;
+	/** Persists the appended `customSystemPrompt` on accept (REQ-CP-018). */
+	readonly settings?: SettingsPort;
+	/** Opens the instruction-confirm modal via the seam (SPEC-CP-027). */
+	readonly confirmInstruction?: InstructionConfirmFn;
 }
 
 /** The composable's public surface (SPEC-CP-018). */
@@ -72,6 +87,13 @@ export interface ComposerModeApi {
 	confirmEntry(index: number): Promise<void>;
 	enqueueInlineBlock(entry: InlineBlockEntry, hooks?: { warn?: (msg: string) => void }): boolean;
 	resolveInlineBlock(): void;
+	/**
+	 * Run the instruction ladder for a submitted raw instruction (SPEC-CP-027): an
+	 * empty/whitespace instruction exits without persisting (REQ-CP-019); otherwise
+	 * optionally refine (refine-fail → raw, EC-CP-9), confirm, and on accept append
+	 * to `customSystemPrompt` (prior preserved, REQ-CP-018). Returns to `default`.
+	 */
+	submitInstruction(rawInstruction: string): Promise<void>;
 }
 
 const DEFAULT_DEBOUNCE_MS = 120;
@@ -301,6 +323,41 @@ export function useComposerMode(options: UseComposerModeOptions): ComposerModeAp
 		setMode('default');
 	}
 
+	/**
+	 * The instruction ladder (SPEC-CP-027, REQ-CP-015..019). Empty/whitespace →
+	 * exit, persist nothing (REQ-CP-019). Otherwise: optionally refine (best-effort,
+	 * refine-fail → the RAW instruction, EC-CP-9) → confirm via the seam → on accept
+	 * append the (possibly edited) instruction to `customSystemPrompt` (prior
+	 * preserved, REQ-CP-018) → on reject/dismiss persist nothing (REQ-CP-017).
+	 * Always returns to `default`.
+	 */
+	async function submitInstruction(rawInstruction: string): Promise<void> {
+		const trimmed = rawInstruction.trim();
+		if (trimmed === '' || options.confirmInstruction === undefined || options.settings === undefined) {
+			setMode('default');
+			return;
+		}
+
+		const existing = (await options.settings.getSettings()).customSystemPrompt;
+
+		// Best-effort refine: on err / a clarification, fall through to the raw text.
+		let candidate = trimmed;
+		if (options.refineInstruction !== undefined) {
+			const refined = await options.refineInstruction.execute(trimmed, existing);
+			if (refined.ok && refined.value.kind === 'refined') candidate = refined.value.instruction;
+		}
+
+		const decision = await options.confirmInstruction(candidate);
+		setMode('default');
+		if (decision === null || decision.kind === 'reject') return; // persist nothing.
+
+		const current = await options.settings.getSettings();
+		await options.settings.saveSettings({
+			...current,
+			customSystemPrompt: appendInstruction(current.customSystemPrompt, decision.instruction),
+		});
+	}
+
 	return {
 		mode,
 		paletteEntries,
@@ -310,5 +367,6 @@ export function useComposerMode(options: UseComposerModeOptions): ComposerModeAp
 		confirmEntry,
 		enqueueInlineBlock,
 		resolveInlineBlock,
+		submitInstruction,
 	};
 }

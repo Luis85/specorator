@@ -24,9 +24,24 @@ export type ChooseForkTargetFn = () => Promise<ForkTarget | null>;
  */
 export type ChatRuntimeFactory = () => ChatRuntimePort;
 
+/**
+ * Confirm an instruction before it is appended to the custom system prompt;
+ * resolves the decision or `null` on dismiss (SPEC-CP-027, REQ-CP-017). The real
+ * launcher opens the Obsidian `InstructionConfirmModal` (`src/plugin/modals/`);
+ * the standalone entry provides a browser-safe stand-in (no `window.*`).
+ */
+export type InstructionConfirmResult =
+	| { kind: 'accept'; instruction: string } // accept (possibly edited) → append
+	| { kind: 'reject' }; // reject → persist nothing
+
+export type InstructionConfirmFn = (
+	instruction: string,
+) => Promise<InstructionConfirmResult | null>;
+
 export const CONFIRM_DELETE: InjectionKey<ConfirmDeleteFn> = Symbol('ConfirmDelete');
 export const CHOOSE_FORK_TARGET: InjectionKey<ChooseForkTargetFn> = Symbol('ChooseForkTarget');
 export const CHAT_RUNTIME_FACTORY: InjectionKey<ChatRuntimeFactory> = Symbol('ChatRuntimeFactory');
+export const INSTRUCTION_CONFIRM: InjectionKey<InstructionConfirmFn> = Symbol('InstructionConfirm');
 
 /** Inject the confirm-delete launcher; falls back to an auto-decline when absent. */
 export function useConfirmDelete(): ConfirmDeleteFn {
@@ -47,4 +62,13 @@ export function useChatRuntimeFactory(): ChatRuntimeFactory {
 		);
 	}
 	return factory;
+}
+
+/**
+ * Inject the instruction-confirm launcher; falls back to an AUTO-REJECT when
+ * absent (SPEC-CP-027) — a missing launcher must never silently persist an
+ * instruction (REQ-CP-017). Mirrors `useConfirmDelete`'s auto-decline fallback.
+ */
+export function useInstructionConfirm(): InstructionConfirmFn {
+	return inject(INSTRUCTION_CONFIRM, () => Promise.resolve<InstructionConfirmResult>({ kind: 'reject' }));
 }
