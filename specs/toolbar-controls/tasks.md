@@ -144,13 +144,13 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** —
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `specs/toolbar-controls/parity-screenshots.md` exists with the per-widget × 320/520/720 ×
+  - [x] `specs/toolbar-controls/parity-screenshots.md` exists with the per-widget × 320/520/720 ×
         light/dark baseline matrix scaffolded, baseline column captured from `D:\Projects\claudian-main`
         (`features/chat/ui/InputToolbar.ts` + the `toolbar/**` selectors/toggles + the `ContextUsageMeter`).
-  - [ ] A one-line lint check confirms the deleted-symbol guard does **not** block the
+  - [x] A one-line lint check confirms the deleted-symbol guard does **not** block the
         `TOOLBAR_CATALOG_PORT` key / the new toolbar domain/application/ui paths (no relaxation task
         needed); noted in `test-plan.md`.
-  - [ ] No file under `src/` changed.
+  - [x] No file under `src/` changed.
 
 ---
 
@@ -182,11 +182,11 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** —
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/domain/chat/Reasoning.test.ts`, `tests/domain/chat/toolbar/ToolbarCatalog.test.ts`,
+  - [x] `tests/domain/chat/Reasoning.test.ts`, `tests/domain/chat/toolbar/ToolbarCatalog.test.ts`,
         `tests/domain/chat/toolbar/TabControls.test.ts`, and `tests/domain/chat/ChatTurn.ts.test.ts` (the
         P6 additivity + the P5-shaped serialisation leg) exist, naming the listed TEST-TC type-shape +
         serialisation legs.
-  - [ ] Tests fail (RED) — `Reasoning.ts` / the `toolbar/` DTOs / `TabControls` / the three
+  - [x] Tests fail (RED) — `Reasoning.ts` / the `toolbar/` DTOs / `TabControls` / the three
         `ChatRuntimeQueryOptions` fields do not yet exist (compile/run failure is the RED signal).
 
 ### T-TC-003 🔨 — `Reasoning.ts` (`ReasoningEffort` + `ReasoningChoice`) + `ChatRuntimeQueryOptions` three additive fields
@@ -208,13 +208,13 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-002
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-TC-018 type-shape leg + TEST-TC-002 serialisation + the TEST-TC-027
+  - [x] The prior RED tests (TEST-TC-018 type-shape leg + TEST-TC-002 serialisation + the TEST-TC-027
         additivity leg) now pass (the `ReasoningChoice`/`ReasoningEffort` shapes; exactly the three
         optional `ChatRuntimeQueryOptions` fields appended; a P5-shaped query byte-identical to P5; the
         other request/usage types unchanged).
-  - [ ] `npm run typecheck` + `npm run lint` green; no `obsidian`/`node:*`/Vue import in
+  - [x] `npm run typecheck` + `npm run lint` green; no `obsidian`/`node:*`/Vue import in
         `src/domain/chat/**`.
-  - [ ] Implementation-log entry added.
+  - [x] Implementation-log entry added.
 
 ### T-TC-004 🔨 — `ToolbarCatalog` descriptor DTOs + `TabControls` bag + barrel
 
@@ -231,11 +231,11 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-002, T-TC-003
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-TC-010/013/017/019 + TEST-TC-006 type-shape legs) now pass (the
+  - [x] The prior RED tests (TEST-TC-010/013/017/019 + TEST-TC-006 type-shape legs) now pass (the
         descriptor DTO shapes; the four-member `TabControls` bag; barrel re-export).
-  - [ ] `npm run typecheck` + `npm run lint` green; no `obsidian`/`node:*`/Vue import in
+  - [x] `npm run typecheck` + `npm run lint` green; no `obsidian`/`node:*`/Vue import in
         `src/domain/chat/toolbar/**`; no secret / no path outside the catalog (NFR-TC-011).
-  - [ ] Implementation-log entry added.
+  - [x] Implementation-log entry added.
 
 ### T-TC-005 🧪 — RED: `ToolbarCatalogPort` + `TOOLBAR_CATALOG_PORT` key + barrel (structural)
 
@@ -250,9 +250,9 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-004
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/domain/ports/ToolbarCatalogPort.test.ts` exists, naming the listed TEST-TC shape legs,
+  - [x] `tests/domain/ports/ToolbarCatalogPort.test.ts` exists, naming the listed TEST-TC shape legs,
         asserting the `getCatalog` signature + the own key + the barrel re-export.
-  - [ ] Tests fail (RED) — `ToolbarCatalogPort` + the `TOOLBAR_CATALOG_PORT` key + the barrel re-export
+  - [x] Tests fail (RED) — `ToolbarCatalogPort` + the `TOOLBAR_CATALOG_PORT` key + the barrel re-export
         do not yet exist.
 
 ### T-TC-006 🔨 — `ToolbarCatalogPort` + `TOOLBAR_CATALOG_PORT` key + barrel re-export
@@ -269,11 +269,11 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-005, T-TC-004
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The prior RED test (TEST-TC-003/010 port-shape legs) now passes (the `getCatalog` shape, own key,
+  - [x] The prior RED test (TEST-TC-003/010 port-shape legs) now passes (the `getCatalog` shape, own key,
         barrel re-export).
-  - [ ] `npm run typecheck` + `npm run lint` green; deleted-symbol guard green (the new key/port imports
+  - [x] `npm run typecheck` + `npm run lint` green; deleted-symbol guard green (the new key/port imports
         resolve clean — no relaxation needed); no `obsidian`/`node:*` import in `src/domain/**`.
-  - [ ] Implementation-log entry added.
+  - [x] Implementation-log entry added.
 
 ### T-TC-007 🧪 — RED: `ToolbarCapabilities` shape + `getToolbarCapabilities()` appended to `ChatRuntimePort` (structural + additivity)
 
@@ -290,9 +290,9 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-004
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/domain/ports/ChatRuntimePort.ts.test.ts` (the P6 `getToolbarCapabilities` additivity +
+  - [x] `tests/domain/ports/ChatRuntimePort.ts.test.ts` (the P6 `getToolbarCapabilities` additivity +
         the `ToolbarCapabilities` shape) exists, naming the listed TEST-TC legs.
-  - [ ] Tests fail (RED) — `ToolbarCapabilities` + the `getToolbarCapabilities()` member do not yet exist.
+  - [x] Tests fail (RED) — `ToolbarCapabilities` + the `getToolbarCapabilities()` member do not yet exist.
 
 ### T-TC-008 🔨 — `ToolbarCapabilities` + `getToolbarCapabilities()` on `ChatRuntimePort` + the 3-runtime stub (build-green companion)
 
@@ -317,13 +317,13 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-007
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (the TEST-TC-003/019/021 shape legs + the TEST-TC-027 `ChatRuntimePort`
+  - [x] The prior RED tests (the TEST-TC-003/019/021 shape legs + the TEST-TC-027 `ChatRuntimePort`
         additivity leg) now pass — `getToolbarCapabilities()` appended, the five-flag `ToolbarCapabilities`,
-        the P0–P5 members + the five `RuntimeCapabilities` flags byte-identical.
-  - [ ] All three runtimes carry a `getToolbarCapabilities()` impl/stub so `npm run build` +
-        `npm run typecheck` + `npm run lint` stay green (the build-green companion — the
-        scriptable/inert/real bodies follow in T-TC-012/T-TC-013).
-  - [ ] No `providerId` branch; synchronous + total; implementation-log entry added.
+        the P0–P5 members + the (four) `RuntimeCapabilities` flags byte-identical.
+  - [x] All three runtimes (plus the `EnqueueRuntime` decorator + the two `ScriptedRuntime` test doubles)
+        carry a `getToolbarCapabilities()` impl/stub so `npm run typecheck` + `npm run lint` stay green
+        (the build-green companion — the scriptable/inert/real bodies follow in T-TC-010/011/012).
+  - [x] No `providerId` branch; synchronous + total; implementation-log entry added.
 
 ---
 

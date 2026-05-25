@@ -1,10 +1,10 @@
 ---
 feature: toolbar-controls
 area: TC
-current_stage: tasks
+current_stage: implementation
 status: active
 last_updated: 2026-05-25
-last_agent: planner
+last_agent: dev
 epic: claudian-reboot
 phase: P6
 integration_branch: next
@@ -16,8 +16,8 @@ artifacts:
   design.md: complete (DESIGN-TC-001; Parts A/B/C; ADR-TC-001..004 accepted; CLAR-TC-001..003 ratified)
   spec.md: complete (SPEC-TC-001..030; 6 layer groups; EC-TC-1..14; TEST-TC-001..043 + M1/M2/M3; full REQ↔SPEC↔TEST coverage)
   tasks.md: complete (TASKS-TC-001; 35 tasks T-TC-001..035; DDD batches DOMAIN→INFRA→APP→UI→STYLES→WIRE-IN→GATE; RED-before-green; 2 manual legs T-TC-033/034; NO guard-relax)
-  implementation-log.md: pending
-  test-plan.md: pending
+  implementation-log.md: in-progress (DOMAIN batch T-TC-001..008 done; INFRA/APP/UI/STYLES/WIRE-IN/GATE batches remain)
+  test-plan.md: in-progress (guard-verification note + TEST-TC-M1/M2/M3 manual legs + DOMAIN-batch automated status; test-report at Stage 8)
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -37,8 +37,8 @@ artifacts:
 | 4. Design | `design.md` | complete (ADR-TC-001..004 accepted) |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete (TASKS-TC-001) |
-| 7. Implementation | `implementation-log.md` + code | pending |
-| 8. Testing | `test-plan.md`, `test-report.md` | pending |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN batch T-TC-001..008 done) |
+| 8. Testing | `test-plan.md`, `test-report.md` | in-progress (`test-plan.md` scaffolded; report at Stage 8) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
@@ -213,4 +213,27 @@ meter, and the `toolbar/*` CSS modules).
                  guard verification, owner dev, no deps), in parallel with T-TC-002 (domain RED, owner qa) and
                  T-TC-029 (tokens, owner dev). The dev/qa pair then walks the DDD batches in the
                  dependency-graph order.
+2026-05-25 (dev): Stage-7 DOMAIN batch (T-TC-001..008) COMPLETE on feature/toolbar-controls.
+                 Commits: ca037ac (T-TC-001 baseline+guard, doc), f12f14c (T-TC-002 RED),
+                 293809c (T-TC-003 Reasoning.ts + the 3 additive ChatRuntimeQueryOptions fields),
+                 2dc706e (T-TC-004 ToolbarCatalog DTOs + TabControls + barrel), a747ce9 (T-TC-005
+                 RED port), 6310b17 (T-TC-006 ToolbarCatalogPort + TOOLBAR_CATALOG_PORT key +
+                 barrel), 17a3e95 (T-TC-007 RED caps), 3c9974a (T-TC-008 ToolbarCapabilities +
+                 getToolbarCapabilities + the build-green companion on all SIX classes that
+                 implements ChatRuntimePort — the 3 bridge runtimes + the EnqueueRuntime decorator
+                 + the 2 ScriptedRuntime test doubles, the P5 readBinary lesson). Verification:
+                 `npx vue-tsc -p tsconfig.lint.json --noEmit` 0 errors (whole project);
+                 `npm run lint` 0 errors (12 pre-existing warnings); `vitest run` 16/16 across the
+                 6 DOMAIN-batch test files (Reasoning + toolbar DTOs + TabControls + ChatTurn
+                 additivity + ToolbarCatalogPort + ChatRuntimePort caps), plus 48/48 on the
+                 runtime+use-case regression set. Additivity proven: a P5-shaped ChatRuntimeQueryOptions
+                 + a `{text}`-only ChatTurnRequest serialise byte-identically to P5 (TEST-TC-002/027).
+                 Deviations logged in implementation-log.md (the implements-ChatRuntimePort fan-out
+                 beyond the 3 bridges; the RuntimeCapabilities four-vs-"five" wording). DID NOT run
+                 build/build:web/docs:api/verify or the dev server; DID NOT push. Stayed on
+                 feature/toolbar-controls; touched no application transform / UI / infra catalog impl
+                 beyond the T-TC-008 capability stub. NEXT: the INFRA batch (T-TC-009..012, owner
+                 qa→dev) — the scriptable MockBridge ToolbarCatalogPort + scriptable
+                 getToolbarCapabilities + the inert LocalStorage impls + fake-ports.toolbarCatalog,
+                 then the real Obsidian Claude catalog/caps (coverage-excluded, manual leg).
 ```
