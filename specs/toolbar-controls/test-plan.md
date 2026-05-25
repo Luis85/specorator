@@ -78,3 +78,20 @@ TEST-TC-001..043 (incl. the M1/M2/M3 manual legs).
 | TEST-TC-006/010/013/017/019 — `ToolbarCatalog` descriptor DTOs + `TabControls` shapes | covered (RED→green) | `tests/domain/chat/toolbar/{ToolbarCatalog,TabControls}.test.ts` |
 | TEST-TC-003/010 (port-shape) — `ToolbarCatalogPort` `getCatalog` + key + barrel | covered (RED→green) | `tests/domain/ports/ToolbarCatalogPort.test.ts` |
 | TEST-TC-003/019/021/027 (shape + additivity) — `ToolbarCapabilities` + `getToolbarCapabilities()` appended | covered (RED→green) | `tests/domain/ports/ChatRuntimePort.ts.test.ts` |
+
+## INFRA batch (T-TC-009..012) — automated unit legs + the manual Obsidian gate
+
+| Leg | Status | Where |
+|---|---|---|
+| TEST-TC-003/010/011/013/017/019/021/030 (Mock backing) — scriptable `MockToolbarCatalog` (`setToolbarCatalog`, default Claude-shaped, empty-models degrade, total) + `MockBridge.toolbarCatalog` | covered (RED→green) | `tests/infrastructure/mock/MockToolbarCatalog.test.ts` |
+| TEST-TC-003/019/021 (Mock backing) — scriptable `MockChatRuntime.getToolbarCapabilities` (`setToolbarCapabilities`, default Claude-shaped, total) | covered (RED→green) | `tests/infrastructure/mock/MockToolbarCapabilities.test.ts` |
+| TEST-TC-019/021 (LS inert leg) — `LocalStorageToolbarCatalog` (inert Claude catalog, no service-tier) + `LocalStorageBridge.toolbarCatalog` + `FixtureChatRuntime` inert caps | covered (RED→green) | `tests/infrastructure/localstorage/LocalStorageToolbar.test.ts` |
+| TEST-TC-003 (fake-ports leg) — `fakeModulePorts().toolbarCatalog` member (the MockBridge catalog port, scriptable) | covered (RED→green) | `tests/__fakes__/fake-ports.test.ts` |
+| **TEST-TC-M1** — the **real** Claude `ObsidianToolbarCatalog.getCatalog('claude')` (static-for-now catalog) + `ClaudeCliChatRuntime.getToolbarCapabilities` (real flags: `supportsMcpTools:false` honest CLI gating, `reasoningControl:'effort'`, `hasServiceTier:false`, `hasModeToggle:true`, `permissionMode:'default'`) wire end-to-end in Obsidian | **MANUAL — scheduled, not self-claimed** (T-TC-012; coverage-excluded `src/infrastructure/obsidian/**`) | manual Obsidian leg at the final epic-review gate |
+
+> T-TC-012 implements the coverage-excluded Obsidian leg (`ObsidianToolbarCatalog`
+> + the real `getToolbarCapabilities()` flags + `ObsidianBridge.toolbarCatalog`).
+> The file imports **only** domain types — no `obsidian`/`node:*` symbol leaks past
+> `ObsidianToolbarCatalog.ts`. Its behaviour is **not** agent-self-claimed green;
+> TEST-TC-M1 is the human-run gate. `npm run typecheck` + `npm run lint` confirm the
+> static surface compiles clean.
