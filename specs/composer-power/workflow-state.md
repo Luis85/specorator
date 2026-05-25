@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-CP-001; A/B/C; ADR-CP-001..004 accepted)
   spec.md: complete (SPEC-CP-001..038; TEST-CP-001..028 + M1/M2)
   tasks.md: complete (TASKS-CP-001; T-CP-001..053)
-  implementation-log.md: in-progress (DOMAIN+INFRA T-CP-001..014 + T-CP-047 + APPLICATION T-CP-015..026 + UI batch 1 T-CP-027..034 done; UI batch 2 + WIRE/GATE remain)
+  implementation-log.md: in-progress (DOMAIN+INFRA T-CP-001..014 + T-CP-047 + APPLICATION T-CP-015..026 + UI batch 1 T-CP-027..034 + UI batch 2 T-CP-035..046 done; WIRE-IN T-CP-048..050 + GATE T-CP-051..053 remain)
   test-plan.md: in-progress (guard verification + M1/M2 manual legs scheduled; TEST-CP status by batch)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-CP-001) |
 | 5. Specification | `spec.md` | complete (SPEC-CP-001..038) |
 | 6. Tasks | `tasks.md` | complete (TASKS-CP-001; T-CP-001..053) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN+INFRA + tokens + APPLICATION + UI batch 1 done; UI batch 2 + WIRE/GATE remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN+INFRA + tokens + APPLICATION + UI batch 1 + UI batch 2 done; WIRE-IN T-CP-048..050 + GATE T-CP-051..053 remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -435,4 +435,84 @@ self-parity-review vs claudian after each big chunk; merge P4 to `next` autonomo
                           EC-CP-6; depends on T-CP-026/028, done), then dev T-CP-036. First task of UI
                           batch 2 = T-CP-035. No blockers; useComposerMode (enqueue/resolve queue) +
                           RespondToInlineBlockUseCase + the three port composables are the ready inputs.
+
+2026-05-25 (dev, implement — ui batch 2): UI batch 2 T-CP-035..046 complete (strict TDD,
+                          one Conventional commit per task — RED test(cp) then feat(cp)). Delivered:
+                          InlineAskUserQuestion (T-CP-035/036, 11c58be/dec480a — render in place of the
+                          composer, multi-question tabs, Arrow/Enter/Escape, allowCustomInput field,
+                          complete-answer → respondAskUserQuestion, capability-gated read-only + showInfo
+                          when supportsInlineResponse:false, EC-CP-6); InlineExitPlanMode (T-CP-037/038,
+                          5988438/74f63c0 — Plan-complete card + scrollable monospace preview +
+                          implement/revise(feedback)/cancel, Escape dismisses null, capability-gated);
+                          InlinePlanApproval (T-CP-039/040, 4b43412/9ea63a8 — deny/allow/allow-always,
+                          allow-always routes the current decision and persists NO rule (NG3 — no
+                          SettingsPort/history collaborator), Escape→null, capability-gated);
+                          BangBashOutput (T-CP-041/042, f93ad2a/477fe4d — monospace stdout/stderr <pre> +
+                          non-zero exit badge + truncation notice, {{ }} text so a <script> renders
+                          verbatim, EC-CP-13/no-v-html); the instruction-confirm seam + InstructionConfirmModal
+                          + the instruction ladder (T-CP-043/044, 625bf75/9f52de9 — modalSeam
+                          InstructionConfirmFn/INSTRUCTION_CONFIRM + useInstructionConfirm auto-reject
+                          fallback; the Obsidian Modal under src/plugin/modals/ building DOM via
+                          createEl/setText with an editable field, never window.confirm/prompt/alert;
+                          useComposerMode.submitInstruction: empty→persist-nothing, optional refine
+                          (refine-fail→raw, EC-CP-9), confirm, accept appends to customSystemPrompt prior
+                          preserved REQ-CP-018 / reject→nothing REQ-CP-017); and the ChatComposer extension
+                          (T-CP-045/046, 42d803a/99764c0 — additive optional `composer` arbiter prop: the
+                          keydown handler delegates to composer.handleKeydown first and only falls through
+                          to the byte-identical P1 send when it returns false && mode.kind==='default'
+                          (REQ-CP-035); onInput re-classifies; combobox ARIA + mode-border classes
+                          (instruction/bang-bash/plan) + bang-bash monospace + run-command placeholder;
+                          inline-block mode v-if-hides the textarea+toolbar and renders the active block
+                          wired to RespondToInlineBlockUseCase + the capability flag + notify, restored
+                          after the last resolves REQ-CP-027; mounts ComposerDropdown/PlanModeIndicator/
+                          BangBashOutput; the # instruction Enter routes submitInstruction; with no arbiter
+                          the component is pure P1). HOW THE THREE CONTRACTS WORK: (1) inline-block
+                          capability-gating — each inline component reads a `supportsInlineResponse` prop
+                          (the parent passes runtime.getCapabilities().supportsInlineResponse, never a
+                          provider=== branch, SPEC-CP-032): when false it renders a read-only block + fires
+                          NotificationPort.showInfo onMounted and never wires actionable options, so
+                          RespondToInlineBlockUseCase's callback is never reached (no lost response,
+                          EC-CP-6); when true the chosen decision calls respond*(decision) and emits
+                          resolve so the arbiter dequeues. (2) instruction Obsidian-Modal-via-seam — the
+                          .vue/composable path stays obsidian-free: useComposerMode.submitInstruction calls
+                          the injected InstructionConfirmFn (modalSeam INSTRUCTION_CONFIRM, auto-reject when
+                          absent); the plugin provides the real InstructionConfirmModal launcher (Obsidian
+                          Modal subclass, src/plugin/modals/, createEl/setText, resolves a Promise), the
+                          standalone provides a browser-safe stand-in — mirrors P3 ForkTargetModal/
+                          DeleteConfirmModal. The provide is T-CP-049's job (wire-in batch). (3) ChatComposer
+                          P1-send preservation — submitTurn/autoGrow/the original onKeydown are kept
+                          byte-for-byte; the new onComposerKeydown wraps them: with no `composer` prop it
+                          calls onKeydown directly (pure P1); with an arbiter it consumes palette/inline/plan
+                          keys first and only reaches the P1 send when handleKeydown→false && kind==='default'
+                          (Enter sends only in default mode; Shift+Enter newline; Esc closes the dropdown not
+                          the turn). Verification performed: vue-tsc 0 errors (whole project); eslint 0
+                          errors over all touched production files (no v-html/innerHTML, no
+                          window.confirm/alert/prompt, no obsidian import under src/ui/** — NFR-CP-003);
+                          targeted vitest 245/43 (the full chat + composables surface green incl. P1
+                          ChatComposer + ChatSurface); full unit suite 1087 passed / 152 files, 0 failed
+                          (+39 from batch 2; P1/P2/P3 + DOMAIN/INFRA/APPLICATION + UI batch 1 stay green
+                          under the additive growth, NFR-CP-009; no test assertion changed). KEY DECISIONS:
+                          (a) the inline components + the ChatComposer extension take their collaborators as
+                          props (the arbiter, respond, supportsInlineResponse, notify) so they unit-test
+                          cleanly and ChatComposer stays pure P1 when the props are absent — the actual
+                          per-tab runtime/ports provide is the wire-in batch (T-CP-049); (b) Escape
+                          dismisses an inline block with null (cancel), distinct from the explicit Cancel
+                          action which routes {kind:'cancel'} on exit-plan; (c) capability-gating reads the
+                          flag never a provider=== branch (SPEC-CP-032). DEVIATIONS (logged in
+                          implementation-log.md): the inline components receive `supportsInlineResponse` as
+                          a prop (the parent reads getCapabilities()) rather than each holding a runtime —
+                          keeps the components runtime-free and DTO-driven, the gate is still the capability
+                          flag (SPEC-CP-032 honoured); the bang-bash output renders from an optional
+                          `bangBashOutput` prop on ChatComposer (the arbiter's onBangBashOutput sets the
+                          parent state) — the output-block plumbing completes in the wire-in. Two new i18n
+                          subtrees added (composer.inline / composer.bash / composer.instruction, en+de).
+                          implementation-log.md kept in-progress (WIRE-IN + GATE remain). Not run
+                          (orchestrator gate): npm run verify / build / build:web; not pushed; manifest.json
+                          untouched. Remaining owner: qa (T-CP-048 RED) + dev (T-CP-049). Next agent: qa for
+                          T-CP-048 RED (provide the three ports + the instruction-confirm seam in
+                          AgentSidebarView + src/ui/main.ts + mount the composer modes; the standalone path
+                          leg of TEST-CP-026 + the TEST-CP-027 grep-gate hook), then dev T-CP-049, then qa
+                          T-CP-050 (npm run dev composer smoke). First task of the wire-in batch = T-CP-048.
+                          No blockers; all UI components + useComposerMode.submitInstruction + the seam +
+                          the Mock fixtures/scripted ShellExec are the ready inputs for the provide+mount.
 ```

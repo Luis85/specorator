@@ -478,3 +478,183 @@ try/catch ban honoured (`tryAsync` reused). Application imports domain only.
   (qa RED — `InlineAskUserQuestion.vue` render + respond + capability-gated
   read-only when `supportsInlineResponse:false`; depends on T-CP-026/028, both
   done), greened by T-CP-036.
+
+## UI batch 2 (T-CP-035..046)
+
+### T-CP-035 — RED `InlineAskUserQuestion.vue` (🧪 qa)
+
+- **Spec/test:** TEST-CP-019 + TEST-CP-024 (ask-user A leg); SPEC-CP-022/032.
+- **Files:** `tests/ui/chat/composer/{InlineAskUserQuestion.test.ts,InlineAskUserQuestion.po.ts}` (new).
+- **Outcome:** done — RED confirmed (component did not resolve).
+- **Commit:** `11c58be`.
+
+### T-CP-036 — `InlineAskUserQuestion.vue` (🔨 dev)
+
+- **Spec/req:** SPEC-CP-022/032; REQ-CP-022/023/027/028; NFR-CP-003/007/008.
+- **Files:** `src/ui/chat/composer/InlineAskUserQuestion.vue` (new),
+  `src/ui/i18n/locales/{en,de}.ts` (composer.inline/bash/instruction keys).
+- **Outcome:** done. Renders the (possibly multi-question) block in place of the
+  composer — Arrow option nav, Left/Right + Tab/Shift+Tab tab switch, Enter
+  select/advance, Escape cancel; `allowCustomInput` free-text field; a complete
+  answer (every question id covered) → `respondAskUserQuestion` → emits `resolve`.
+  Capability gate (SPEC-CP-032, EC-CP-6): `supportsInlineResponse:false` →
+  read-only + `NotificationPort.showInfo`, no actionable options rendered (the
+  callback is never reached). `<script setup>`; `{{ }}` text — no `v-html`; no
+  `obsidian` import.
+- **Commit:** `dec480a`.
+- **Deviation:** the component reads `supportsInlineResponse` as a prop (the parent
+  passes `getCapabilities().supportsInlineResponse`) rather than holding a runtime —
+  keeps it runtime-free + DTO-driven; the gate is still the capability flag, never a
+  provider branch (SPEC-CP-032). Answer-membership uses `Object.hasOwnProperty` (not
+  an indexed `!== undefined`) so it is type-safe without `noUncheckedIndexedAccess`.
+
+### T-CP-037 — RED `InlineExitPlanMode.vue` (🧪 qa)
+
+- **Spec/test:** TEST-CP-024 (exit-plan A leg); SPEC-CP-023/032.
+- **Files:** `tests/ui/chat/composer/{InlineExitPlanMode.test.ts,InlineExitPlanMode.po.ts}` (new).
+- **Outcome:** done — RED confirmed.
+- **Commit:** `5988438`.
+
+### T-CP-038 — `InlineExitPlanMode.vue` (🔨 dev)
+
+- **Spec/req:** SPEC-CP-023/032; REQ-CP-024/025/027/028; NFR-CP-003/007/008.
+- **Files:** `src/ui/chat/composer/InlineExitPlanMode.vue` (new).
+- **Outcome:** done. "Plan complete" card + scrollable monospace plan preview +
+  implement/revise/cancel; the decision → `respondExitPlanMode` (revise carries the
+  feedback text); the explicit Cancel routes `{kind:'cancel'}`, Escape dismisses with
+  `null`; Arrow moves the focused action, Enter activates. Capability-gated read-only
+  + `showInfo` identically (EC-CP-6). `<script setup>`; no `v-html`; no `obsidian`.
+- **Commit:** `74f63c0`.
+- **Deviation:** Escape resolves `null` while the explicit Cancel action resolves
+  `{kind:'cancel'}` — SPEC-CP-023 specifies "Escape → cancel (null)"; both routes are
+  honoured distinctly.
+
+### T-CP-039 — RED `InlinePlanApproval.vue` (🧪 qa)
+
+- **Spec/test:** TEST-CP-021 (A leg) + TEST-CP-024 (approval A leg); SPEC-CP-024/032.
+- **Files:** `tests/ui/chat/composer/{InlinePlanApproval.test.ts,InlinePlanApproval.po.ts}` (new).
+- **Outcome:** done — RED confirmed.
+- **Commit:** `4b43412`.
+
+### T-CP-040 — `InlinePlanApproval.vue` (🔨 dev)
+
+- **Spec/req:** SPEC-CP-024/032; REQ-CP-026/027/028; NFR-CP-003/007/008.
+- **Files:** `src/ui/chat/composer/InlinePlanApproval.vue` (new),
+  `tests/ui/chat/composer/InlinePlanApproval.test.ts` (props cast → compile).
+- **Outcome:** done. Renders `tool` + `context` (render-only) + Deny/Allow once/
+  Always allow; the decision → `respondApproval`; **`allow-always` routes the current
+  decision and persists NO rule (NG3)** — the component takes no SettingsPort/history
+  collaborator; Escape dismisses with `null`; Arrow + Enter keyboard. Capability-gated
+  read-only + `showInfo` (EC-CP-6). `<script setup>`; no `v-html`; no `obsidian`.
+- **Commit:** `9ea63a8`.
+- **Deviation:** none material (the NG3 "no rule persisted" is structural — the
+  component has no settings/history dependency to write through).
+
+### T-CP-041 — RED `BangBashOutput.vue` (🧪 qa)
+
+- **Spec/test:** TEST-CP-013 (A leg); SPEC-CP-025.
+- **Files:** `tests/ui/chat/composer/{BangBashOutput.test.ts,BangBashOutput.po.ts}` (new).
+- **Outcome:** done — RED confirmed.
+- **Commit:** `f93ad2a`.
+
+### T-CP-042 — `BangBashOutput.vue` (🔨 dev)
+
+- **Spec/req:** SPEC-CP-025; REQ-CP-031; NFR-CP-003.
+- **Files:** `src/ui/chat/composer/BangBashOutput.vue` (new),
+  `tests/ui/chat/composer/BangBashOutput.test.ts` (i18n plugin in mount).
+- **Outcome:** done. The `BangBashOutput` DTO renders as a read-only tool-like block —
+  command, monospace stdout/stderr `<pre>`, a non-zero exit-code badge, the
+  truncation/timeout notice. `{{ }}` text only (Vue escapes), so a `<script>` in the
+  output renders verbatim and is never executed (EC-CP-13, no `v-html`). Colour via
+  `--sp-bash-*` tokens; no `obsidian`.
+- **Commit:** `477fe4d`.
+- **Deviation:** none.
+
+### T-CP-043 — RED instruction-confirm seam + the instruction ladder (🧪 qa)
+
+- **Spec/test:** TEST-CP-011 (confirm leg) + TEST-CP-025; SPEC-CP-027.
+- **Files:** `tests/ui/chat/modalSeam.ts.test.ts`,
+  `tests/ui/chat/composer/instructionLadder.test.ts` (new).
+- **Outcome:** done — RED confirmed (seam handle + `submitInstruction` did not exist).
+- **Commit:** `625bf75`.
+
+### T-CP-044 — instruction-confirm seam + `InstructionConfirmModal` + ladder (🔨 dev)
+
+- **Spec/req:** SPEC-CP-027; REQ-CP-015/016/017/018/019; NFR-CP-003/010.
+- **Files:** `src/ui/chat/modalSeam.ts` (additive handle),
+  `src/plugin/modals/InstructionConfirmModal.ts` (new),
+  `src/ui/chat/composer/useComposerMode.ts` (additive options + `submitInstruction`).
+- **Outcome:** done. The seam gains `InstructionConfirmFn`/`InstructionConfirmResult`/
+  `INSTRUCTION_CONFIRM`/`useInstructionConfirm()` (auto-reject when absent —
+  REQ-CP-017). `InstructionConfirmModal` is an Obsidian `Modal` subclass under
+  `src/plugin/modals/` (like `ForkTargetModal`) — `createEl`/`setText`, an editable
+  textarea, Accept/Reject, resolves a `Promise`, **never** `window.confirm`/`prompt`/
+  `alert`. `useComposerMode.submitInstruction` runs the ladder: empty → exit persist
+  nothing (REQ-CP-019); else optional refine (refine-fail/clarification → the RAW
+  instruction, EC-CP-9) → `confirmInstruction` → accept appends to `customSystemPrompt`
+  (prior preserved via `appendInstruction`, REQ-CP-018) / reject persists nothing
+  (REQ-CP-017). The `.vue`/composable path is `obsidian`-free.
+- **Commit:** `9f52de9`.
+- **Deviation:** the ladder lives in `useComposerMode` (additive optional options
+  `refineInstruction?`/`settings`/`confirmInstruction`) rather than inline in
+  `ChatComposer` — keeps the composer thin and the ladder unit-testable; ChatComposer
+  forwards the instruction-mode Enter to `submitInstruction`. The modal's visual render
+  + Promise resolution is the manual leg **TEST-CP-M2** (coverage-excluded plugin code).
+
+### T-CP-045 — RED `ChatComposer.vue` extension (🧪 qa)
+
+- **Spec/test:** TEST-CP-023; SPEC-CP-019/031.
+- **Files:** `tests/ui/chat/ChatComposer.ts.test.ts` (new),
+  `tests/ui/chat/ChatComposer.po.ts` (extended P4 testids).
+- **Outcome:** done — RED confirmed (7 fail / 2 pass; the 2 pure-P1 default-Enter cases
+  already held).
+- **Commit:** `42d803a`.
+
+### T-CP-046 — `ChatComposer.vue` extension (🔨 dev)
+
+- **Spec/req:** SPEC-CP-019/031; REQ-CP-020/021/027/029/034/035/036; NFR-CP-008/009.
+- **Files:** `src/ui/chat/ChatComposer.vue` (extended),
+  `src/ui/i18n/locales/{en,de}.ts` (bash.placeholder),
+  `tests/ui/chat/ChatComposer.ts.test.ts`.
+- **Outcome:** done. The P1 `submitTurn`/`autoGrow`/`onKeydown` are kept byte-for-byte;
+  an additive P4 layer keys off an optional `composer` arbiter prop: `onComposerKeydown`
+  delegates to `composer.handleKeydown` first and only reaches the P1 send when it
+  returns `false` && `mode.kind==='default'` (REQ-CP-035); `onInput` re-classifies the
+  mode; the textarea gains combobox ARIA (`role`/`aria-expanded`) + mode-border classes
+  (instruction/bang-bash/plan) + bang-bash monospace + run-command placeholder;
+  `inline-block` mode `v-if`-hides the textarea+toolbar and renders the active inline
+  component (Ask/ExitPlan/PlanApproval) wired to `respond` + the capability flag +
+  `notify`, restored after the last resolves (REQ-CP-027); mounts ComposerDropdown/
+  PlanModeIndicator/BangBashOutput; the `#` instruction Enter routes `submitInstruction`.
+  With no `composer` prop the component is pure P1. `<script setup>`; no `v-html`; no
+  `obsidian` import.
+- **Commit:** `99764c0`.
+- **Deviation:** the arbiter + inline collaborators arrive as props (built/provided by
+  the parent — the per-tab runtime/ports provide is the wire-in batch T-CP-049); the
+  bang-bash output renders from an optional `bangBashOutput` prop (the arbiter's
+  `onBangBashOutput` sets the parent state). Both keep the composer additive and the P1
+  send path unchanged in default mode; the output-block plumbing completes in T-CP-049.
+
+## Batch verification (UI batch 2)
+
+- `npm run typecheck` (`vue-tsc --noEmit -p tsconfig.lint.json`) — **0 errors**
+  (whole project).
+- `npx eslint` over every touched production file (the four inline/output `.vue`,
+  `useComposerMode.ts`, `ChatComposer.vue`, `modalSeam.ts`, `InstructionConfirmModal.ts`,
+  both locales) — **0 errors** (no `v-html`/`innerHTML`, no `window.confirm`/`alert`/
+  `prompt`, no `obsidian` import under `src/ui/**` — NFR-CP-003; the Obsidian modal
+  lives under `src/plugin/modals/`).
+- Targeted `npx vitest run tests/ui/chat tests/ui/composables` — **245 passed / 43
+  files** (the full chat + composables surface, incl. the P1 `ChatComposer.test.ts` +
+  `ChatSurface.test.ts`/`.ts.test.ts`, green).
+- Full suite `npx vitest run --project unit` — **1087 passed / 152 files, 0 failed**
+  (up from 1048; +39 from batch 2). P1/P2/P3 + DOMAIN/INFRA/APPLICATION + UI batch 1
+  stay green under the additive UI growth (NFR-CP-009); no test assertion was modified.
+- **Not run** (orchestrator gate): full `npm run verify` / `build` / `build:web`. Not
+  pushed. `manifest.json` untouched.
+- **Next batch (WIRE-IN):** provide the three ports + the instruction-confirm seam in
+  `AgentSidebarView` + `src/ui/main.ts` + mount the composer modes. First ready task:
+  **T-CP-048** (qa RED — assert the four provides in both entry points + the composer
+  modes mount; the standalone leg of TEST-CP-026 + the TEST-CP-027 grep-gate hook),
+  greened by **T-CP-049**, then **T-CP-050** (`npm run dev` composer smoke). The manual
+  legs **TEST-CP-M1/M2** + the **GATE** (T-CP-053 full verify) follow.
