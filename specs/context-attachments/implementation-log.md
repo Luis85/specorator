@@ -508,5 +508,39 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   pure, never throws; no `obsidian`/Vue import.
 - **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` on the two files
   exit 0; `vitest run` 9/9 green.
-- **Commit:** _this commit._
+- **Commit:** `b292341`.
 - **Deviation:** none.
+
+### T-CA-023 — RED `AddImageUseCase` (🧪 qa)
+
+- **Spec/test:** TEST-CA-007 (U leg), TEST-CA-012, TEST-CA-030 (no-secret leg);
+  SPEC-CA-015; REQ-CA-007/012; NFR-CA-009/004; EC-CA-1/2.
+- **Files:** `tests/application/chat/attachments/AddImageUseCase.test.ts` (new —
+  happy path (PNG → encoded `AttachedImage` matching `encodeImageBase64`);
+  no-secret payload (exactly the four fields, base64 alphabet only); EC-CA-2
+  `.exe` → err (bytes seeded under the path to prove the MIME gate rejects before
+  read); missing file → err; EC-CA-1 oversize `> MAX_IMAGE_BYTES` → err; the 8 MiB
+  boundary accepted; never-throws on missing file).
+- **Outcome:** done — RED confirmed (`AddImageUseCase` unresolved at import).
+- **Commit:** `58f51b5`.
+
+### T-CA-024 — `AddImageUseCase` (allow-list + 8 MiB gate + readBinary + base64) (🔨 dev)
+
+- **Spec/req:** SPEC-CA-015; REQ-CA-007/012; NFR-CA-009/004.
+- **Files:** `src/application/chat/attachments/AddImageUseCase.ts` (new —
+  constructor `(vault: VaultPort)`; `execute(path)` gate order: `resolveImageMime`
+  → `null` ⇒ err before read; `vault.readBinary` in `tryAsync` ⇒ missing → err;
+  `byteSize = bytes.byteLength > MAX_IMAGE_BYTES` ⇒ err measured before encode;
+  else `encodeImageBase64` → `ok({ path, mimeType, byteSize, dataBase64 })`).
+- **Outcome:** done — the T-CA-023 RED tests now green (7/7). `Result`-returning,
+  never throws; gate order enforced (oversize measured before encode); no secret /
+  `data.json` write; no provider branch. Imports the T-CA-016 encode helper from
+  `@/infrastructure/image/imageEncode` (the application→infra import sanctioned by
+  SPEC-CA-010 — only domain→infra and UI→infra are ESLint-banned). No
+  `obsidian`/Vue import.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` on the two files
+  exit 0; `vitest run` 7/7 green.
+- **Commit:** _this commit._
+- **Deviation:** `resolveImageMime` returns `null` (not `undefined` as the batch-4
+  brief summarised) — the use case branches on `=== null`. The behaviour (`.exe` /
+  non-image rejected before read) is exactly the DoD.
