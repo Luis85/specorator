@@ -6,7 +6,7 @@ feature: threads-sessions
 area: TS
 epic: claudian-reboot
 phase: P3
-status: in-progress       # domain + infra + application + UI + wire-in done; styles T-TS-036 + dev-smoke + gate remain
+status: in-progress       # domain + infra + application + UI + wire-in + styles + dev-smoke done; gate T-TS-040/041 (human) + T-TS-042 (orchestrator) remain
 owner: dev
 integration_branch: next
 branch: feature/threads-sessions
@@ -21,9 +21,10 @@ updated: 2026-05-25
 # Implementation log — Threads & Sessions (P3)
 
 Append-only, one entry per executed task. Domain (T-TS-002..006) + infra
-(T-TS-007..013) + application (T-TS-014..025) batches complete; the UI
-(T-TS-026..035), styles (T-TS-036), wire-in (T-TS-037..039), and gate
-(T-TS-040..042) batches remain.
+(T-TS-007..013) + application (T-TS-014..025) + UI (T-TS-026..035) + wire-in
+(T-TS-037..038) + styles (T-TS-036) + dev-smoke (T-TS-039) batches complete; the
+gate batch remains: T-TS-040/041 (human-owned manual legs TEST-TS-M1/M2) +
+T-TS-042 (orchestrator — full verify + parity self-review + draft PR into `next`).
 
 > **TDD-ordering note (load-bearing):** the three additive `ChatRuntimePort`
 > members (`resumeSession`/`setResumeCheckpoint`/`getCapabilities`) +
@@ -487,3 +488,126 @@ regression). Provider-addressed grep gate clean (zero `provider === 'claude'` in
 Then **T-TS-039** (qa `npm run dev` multi-tab smoke), and the **GATE** (T-TS-040/041 human-owned
 manual legs TEST-TS-M1/M2; T-TS-042 full verify + draft PR into `next`). Manual legs unchanged, for
 the single final epic-review human gate.
+
+---
+
+## Styles + smoke batch — T-TS-036 + T-TS-039 (2026-05-25, dev — implement)
+
+T-TS-036 (styles) + T-TS-039 (standalone dev-leg smoke) EXECUTED on
+`feature/threads-sessions` (one Conventional commit per task).
+
+**Completed + SHAs:**
+
+| Task | SHA | What |
+|---|---|---|
+| T-TS-036 🔨 | `6485a17` | §4.10 `--sp-*` token block in `tokens.css` + tokens contract test |
+| T-TS-039 🧪 | `519a2cc` | standalone multi-tab dev-leg smoke `tests/ui/main.ts.test.ts` |
+
+### T-TS-036 — §4.10 tokens (SPEC-TS-028)
+
+Added the `§4.10 — Threads & sessions (P3)` block to `src/ui/styles/tokens.css`
+(after the P2 `§4.9`), per SPEC-TS-028. Tokens declared:
+
+- **Tab badges (REQ-TS-006/007):** `--sp-tab-size: 28px`, `--sp-tab-border-idle:
+  var(--sp-border)`, `--sp-tab-border-active: var(--sp-accent)`,
+  `--sp-tab-border-streaming: var(--sp-accent)`, `--sp-tab-border-attention:
+  var(--sp-error)` — the active/attention/idle borders derive from existing
+  `--sp-*` tokens (no new colour literal).
+- **History rows:** `--sp-history-row-h: 44px`, `--sp-history-delete:
+  var(--sp-error)`.
+- **Drop-UP blurred menu:** `--sp-history-blur: 8px`.
+- **Fork-target modal:** `--sp-fork-modal-max-inline: 340px`.
+- **Streaming-border brand override:** `.specorator-root[data-provider='claude']`
+  redeclares `--sp-tab-border-streaming: var(--sp-accent)` so the active
+  provider's accent drives the streaming badge (inherits the P1 brand seam).
+- **Reduced-motion guard:** a `@media (prefers-reduced-motion: reduce)` block
+  zeroes `--sp-history-spin-duration: 0s`. The history/title **spin reuses the
+  existing P2 `spin` keyframe** (`animations.css`) — **no new keyframe added**.
+  In normal motion the components supply their own `var(--…, 0.8s)` /
+  `var(--…, 0.15s)` fallback (the token is declared only inside the guard, per
+  the spec §4.10 listing).
+
+Every `--sp-*` token the P3 components reference now exists: `TabBar.vue`
+(`--sp-tab-size`, `--sp-tab-border-idle/active/streaming/attention`,
+`--sp-history-spin-duration` for the transition), `ResumeSessionDropdown.vue`
+(`--sp-history-blur`, `--sp-history-row-h`, `--sp-history-delete`,
+`--sp-history-spin-duration` for the spinner), `MessageTurn.vue`
+(`--sp-history-spin-duration`), and the `--sp-fork-modal-max-inline` width for the
+`ForkTargetModal` surface. Colour literals stay confined to the token layer
+(NFR-TS-012) — no P3 component carries a hex / raw Obsidian var.
+
+Extended `tests/ui/styles/tokens.test.ts` (the existing token-presence contract):
+a `THREADS_SESSIONS_TOKENS` list asserting the nine §4.10 declarations, a
+quote-agnostic assertion that the `[data-provider='claude']` block redeclares
+`--sp-tab-border-streaming`, and a reduced-motion assertion that
+`--sp-history-spin-duration: 0s` is declared.
+
+### T-TS-039 — standalone multi-tab smoke (dev leg)
+
+Added `tests/ui/main.ts.test.ts` — the deterministic leg of TEST-TS-026. It
+imports `@/ui/main` (the `npm run dev` / `build:web` entry, which mounts the P3
+multi-tab `ChatSurface` against `MockBridge` with one scripted runtime per tab via
+the injected `CHAT_RUNTIME_FACTORY`, the `PROVIDER_HISTORY_PORT` seam, and the
+browser-safe modal stand-ins) and asserts, by `data-testid` only:
+
+1. the multi-tab surface mounts — `chat-surface`, `tab-bar` with one
+   `tab-badge`, the P1/P2 `chat-welcome` + `history-open` affordances, no
+   `message-list` yet;
+2. sending a message in tab 1 swaps the active tab to the P1/P2 chat surface
+   (`message-list` present, `chat-welcome` gone);
+3. opening a second tab works (`tab-new` → two `tab-badge`s; the new empty active
+   tab shows `chat-welcome`, no `message-list`);
+4. switching back to tab 1 swaps the active conversation back (`message-list`
+   returns, `chat-welcome` gone) — per-tab isolation without cross-write (EC-TS-3).
+
+Microtask + reactive flushing via `flushPromises` + `nextTick`. This is the
+deterministic automated leg the T-TS-039 DoD names (`tests/ui/main.ts.test.ts`);
+the **live-browser feel** and the **real-CLI resume/rewind** pair with the
+human's final review (T-TS-040/041). `test-plan.md` is a pending qa-stage
+artifact — the TEST-TS-026 dev-leg pass/fail + date recording rides qa authoring
+`test-plan.md`; this entry records the deterministic leg's green state.
+
+### Verification (this batch)
+
+- `npx vue-tsc -p tsconfig.lint.json --noEmit` → **0 errors**.
+- `npx eslint tests/ui/main.ts.test.ts` + `tests/ui/styles/tokens.test.ts` → **0 errors**.
+- `npx prettier --check` on `tokens.css` + both test files → clean.
+- `npm run lint:style-tokens` → **clean (0 violations across guarded paths)**.
+- `npx vitest run` → **120 files / 885 passed** (was 119 / 882 after the UI/wire-in
+  batch; +3 from the 2 new §4.10 token assertions + the 1 new standalone smoke;
+  P0/P1/P2/P3 + domain/infra/application GREEN — no regression). `tests/ui` subset
+  (chat + stores + styles + main) = 40 files / 246 green.
+- Manifest untouched. No push. NOT run (orchestrator gate T-TS-042): full
+  `npm run verify` / `build` / `build:web` / `docs:api` / `test:storybook`.
+
+### Deviations (load-bearing)
+
+1. **`--sp-history-spin-duration` is declared only inside the reduced-motion
+   guard**, matching the spec §4.10 listing exactly. The normal-motion value comes
+   from each consumer's own `var(--sp-history-spin-duration, 0.8s|0.15s)` fallback
+   (already in `TabBar.vue` / `ResumeSessionDropdown.vue` / `MessageTurn.vue`).
+   The tokens contract test asserts the reduced-motion `0s` declaration
+   separately rather than via the shared presence list, to avoid demanding a
+   normal-mode declaration the spec does not mandate.
+2. **`--sp-fork-modal-max-inline` is declared but not yet consumed by a CSS rule.**
+   The `ForkTargetModal` (`src/plugin/modals/ForkTargetModal.ts`) builds DOM via
+   `createEl`/`setText` and its visual styling (the `.sp-fork-target-modal` rules
+   that would read this token) is not yet wired into `styles.css`. T-TS-036 is the
+   token-layer-only task per its DoD; declaring the token satisfies SPEC-TS-028 and
+   keeps the colour/measure literal confined to the token layer for the eventual
+   modal-styles wiring + the manual leg TEST-TS-M2.
+
+### Hand-off
+
+**Remaining:**
+
+- **T-TS-040 / T-TS-041 — human-owned manual legs** (TEST-TS-M1 Obsidian
+  vault-file store round-trip + reload; TEST-TS-M2 Obsidian `Modal` flows +
+  real-CLI resume/rewind). Never agent-self-claimed; they ride the single final
+  epic-review human gate.
+- **T-TS-042 — orchestrator gate:** full `npm run verify` + parity self-review
+  (seven sub-surfaces, charter §5) + draft PR into `next`.
+- **qa:** author `test-plan.md` and record the TEST-TS-026 dev-leg pass + date
+  (the deterministic leg is green; the recording is a qa-stage artifact).
+
+NEXT AGENT: human (T-TS-040/041 manual legs) ∥ orchestrator (T-TS-042 verify gate).

@@ -4,7 +4,7 @@ area: TS
 current_stage: implementation
 status: active
 last_updated: 2026-05-25
-last_agent: dev (implement — ui batch)
+last_agent: dev (implement — styles+smoke batch)
 epic: claudian-reboot
 phase: P3
 integration_branch: next
@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-TS-001; Parts A/B/C; ADR-TS-001/002/003 accepted)
   spec.md: complete (SPEC-TS-001..034; 26 automatable TEST-TS + 2 manual legs)
   tasks.md: complete (TASKS-TS-001; T-TS-001..042; 42 tasks)
-  implementation-log.md: in-progress (IMPL-TS-001; domain T-TS-002..006 + infra T-TS-007..013 + application T-TS-014..025 + UI T-TS-026..035 + wire-in T-TS-037/038 done; styles T-TS-036 + dev-smoke T-TS-039 + gate T-TS-040..042 remain)
+  implementation-log.md: in-progress (IMPL-TS-001; domain T-TS-002..006 + infra T-TS-007..013 + application T-TS-014..025 + UI T-TS-026..035 + wire-in T-TS-037/038 + styles T-TS-036 + dev-smoke T-TS-039 done; gate T-TS-040/041 [human manual legs] + T-TS-042 [orchestrator verify] remain)
   test-plan.md: pending
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-TS-001) |
 | 5. Specification | `spec.md` | complete (SPEC-TS-001..034) |
 | 6. Tasks | `tasks.md` | complete (TASKS-TS-001) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (domain + infra + application + UI + wire-in done; styles + dev-smoke + gate remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (domain + infra + application + UI + wire-in + styles + dev-smoke done; gate T-TS-040/041 [human] + T-TS-042 [orchestrator] remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -480,4 +480,50 @@ self-parity-review vs claudian after each big chunk; merge P3 to `next` autonomo
                           T-TS-042 (dev — full verify + parity self-review + draft PR into next).
                           REMAINING OWNER: dev (styles T-TS-036 + gate T-TS-042) + qa (test-plan.md +
                           T-TS-039) + human (T-TS-040/041 manual legs). NEXT AGENT: dev (/spec:implement).
+
+2026-05-25 (dev, implement — styles+smoke batch): T-TS-036 + T-TS-039 EXECUTED on
+                          feature/threads-sessions (one Conventional commit per task) →
+                          implementation-log.md (IMPL-TS-001, "Styles + smoke batch" section).
+                          COMPLETED + SHAs:
+                            T-TS-036 6485a17 (styles 🔨 — §4.10 --sp-* token block in tokens.css +
+                              tokens contract test)
+                            T-TS-039 519a2cc (dev-leg smoke 🧪 — tests/ui/main.ts.test.ts standalone
+                              multi-tab)
+
+                          T-TS-036: added the §4.10 — Threads & sessions (P3) block to
+                          src/ui/styles/tokens.css per SPEC-TS-028 — tab badges (--sp-tab-size,
+                          --sp-tab-border-idle/active/streaming/attention), history rows
+                          (--sp-history-row-h, --sp-history-delete), drop-UP blur (--sp-history-blur),
+                          fork-modal width (--sp-fork-modal-max-inline), the [data-provider='claude']
+                          streaming-border brand override, and the prefers-reduced-motion guard zeroing
+                          --sp-history-spin-duration (REUSES the existing P2 `spin` keyframe — NO new
+                          keyframe). Colour literals confined to the token layer (NFR-TS-012). Every
+                          --sp-* token the P3 components reference (TabBar / ResumeSessionDropdown /
+                          MessageTurn / ForkTargetModal) now exists. Extended tokens.test.ts with the
+                          §4.10 presence + reduced-motion assertions (quote-agnostic provider selector).
+
+                          T-TS-039: added tests/ui/main.ts.test.ts (the deterministic leg of
+                          TEST-TS-026). It mounts @/ui/main against MockBridge and asserts the multi-tab
+                          surface mounts (TabBar + one badge + welcome + history opener), a second tab
+                          opens (two badges), switching tabs swaps the active conversation (send in tab 1
+                          → message-list; new tab → welcome; switch back → message-list returns; EC-TS-3),
+                          and the active tab renders the P1/P2 chat surface. data-testid-only;
+                          flushPromises + nextTick. The live-browser feel + real-CLI resume/rewind pair
+                          with the human's final review (T-TS-040/041). test-plan.md (the TEST-TS-026
+                          dev-leg pass/date recording) remains a pending qa-stage artifact.
+
+                          VERIFICATION PERFORMED THIS BATCH: vue-tsc -p tsconfig.lint.json = 0 errors;
+                          eslint (touched test files) = 0 errors; prettier --check (tokens.css + both
+                          test files) clean; npm run lint:style-tokens = clean (0 violations); vitest run
+                          = 120 files / 885 passed (was 119 / 882; +3 new assertions/test; P0/P1/P2/P3 +
+                          domain/infra/application GREEN — no regression). Manifest untouched. No push.
+                          NOT run (orchestrator gate T-TS-042): full verify/build/build:web/docs:api/
+                          test:storybook.
+
+                          REMAINING: T-TS-040/041 (HUMAN-owned manual legs TEST-TS-M1/M2 — vault-file
+                          round-trip + Obsidian Modal flows + real-CLI resume/rewind; never
+                          agent-self-claimed) + T-TS-042 (ORCHESTRATOR — full npm run verify + parity
+                          self-review over the seven sub-surfaces + draft PR into next) + qa
+                          (test-plan.md authoring + TEST-TS-026 dev-leg recording).
+                          NEXT AGENT: human (T-TS-040/041) ∥ orchestrator (T-TS-042).
 ```

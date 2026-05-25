@@ -863,11 +863,11 @@ and the merged P2 rich-render surface (`rich-rendering`, TASKS-RR-001).
 - **Depends on:** —
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The §4.10 tokens exist in `tokens.css`; the reduced-motion guard zeroes `--sp-history-spin-duration`;
-        the streaming border inherits the provider brand via `[data-provider]`.
-  - [ ] The `lint-style-tokens` guard passes with zero leaks; no P3 component file contains a hex/raw-var
+  - [x] The §4.10 tokens exist in `tokens.css`; the reduced-motion guard zeroes `--sp-history-spin-duration`;
+        the streaming border inherits the provider brand via `[data-provider]`. (`6485a17`)
+  - [x] The `lint-style-tokens` guard passes with zero leaks; no P3 component file contains a hex/raw-var
         colour; `npm run lint` green.
-  - [ ] Implementation-log entry added.
+  - [x] Implementation-log entry added.
 
 ---
 
@@ -928,10 +928,12 @@ and the merged P2 rich-render surface (`rich-rendering`, TASKS-RR-001).
 - **Depends on:** T-TS-038, T-TS-010, T-TS-013
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `npm run dev` boots; multi-tab open/switch/close + persist/resume/fork/rewind exercised against
-        `MockBridge`. (Deterministic leg automated as `tests/ui/main.ts.test.ts`; live-browser feel pairs
-        with the human run.)
-  - [ ] Result recorded in `test-plan.md` (TEST-TS-026 dev leg pass/fail + date).
+  - [x] `npm run dev` boots; multi-tab open/switch/close + persist/resume/fork/rewind exercised against
+        `MockBridge`. (Deterministic leg automated as `tests/ui/main.ts.test.ts` — `519a2cc`, green:
+        mount + open second tab + switch swaps the active conversation + active tab renders the P1/P2
+        surface. The live-browser feel pairs with the human run.)
+  - [ ] Result recorded in `test-plan.md` (TEST-TS-026 dev leg pass/fail + date). _(qa-owned: deterministic
+        leg green; `test-plan.md` not yet authored.)_
 
 ---
 
