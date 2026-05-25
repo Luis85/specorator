@@ -77,5 +77,23 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   still-RED `toolbar/{ToolbarCatalog,TabControls}.test.ts`; `eslint` clean on the
   three changed files; `vitest run` 8/8 green on the T-TC-003 legs. No
   `obsidian`/`node:*`/Vue import in `src/domain/chat/**`.
+- **Commit:** `293809c`.
+- **Deviation:** none.
+
+### T-TC-004 — `ToolbarCatalog` descriptor DTOs + `TabControls` bag + barrel (🔨 dev)
+
+- **Spec/req:** SPEC-TC-003/006; REQ-TC-010/011/013/017/019/042; NFR-TC-005/011.
+- **Files:** `src/domain/chat/toolbar/ToolbarCatalog.ts` (new — `ModelOption`,
+  `ModeDescriptor`, `ReasoningDescriptor`, `ServiceTierDescriptor`, `ToolbarCatalog`,
+  all `readonly`; `ReasoningDescriptor.options.length >= 2` to render, distinct
+  active/inactive values, every label a display string — all documented),
+  `src/domain/chat/toolbar/TabControls.ts` (new — the four optional members
+  importing `ReasoningChoice` from `../Reasoning`),
+  `src/domain/chat/toolbar/index.ts` (new — barrel re-exporting all of them).
+- **Outcome:** done — the TEST-TC-010/013/017/019 + TEST-TC-006 type-shape legs now
+  green (`tests/domain/chat/toolbar/` 4/4); plain `readonly` data, no
+  `obsidian`/`node:*`/Vue/class; no secret / no path outside the catalog.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); `eslint`
+  exit 0 on the three new files; `vitest run tests/domain/chat/toolbar/` 4/4 green.
 - **Commit:** _this commit._
 - **Deviation:** none.
