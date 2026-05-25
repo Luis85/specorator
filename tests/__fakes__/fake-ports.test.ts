@@ -68,6 +68,38 @@ describe('fakeModulePorts', () => {
 		expect((await ports.auxModel.run('x')).ok).toBe(false)
 	})
 
+	// T-CA-012 (TEST-CA-013/014/015 fake-ports leg): the factory exposes the two
+	// P5 selection ports — a scriptable `selectionSource` (inert by default) and a
+	// recording `selectionHighlight` — so multi-port tests (CaptureSelectionUseCase)
+	// inject them from the shared seam.
+	it('exposes a scriptable selectionSource member (inert by default)', () => {
+		const ports = fakeModulePorts()
+		expect(ports.selectionSource.getCurrentSelection()).toBeNull()
+		expect(ports.selectionSource.supportsBrowserSelection).toBe(false)
+		ports.selectionSource.setSelection({
+			kind: 'editor',
+			notePath: 'notes/a.md',
+			selectedText: 'hi',
+			startLine: 0,
+			lineCount: 1,
+		})
+		const current = ports.selectionSource.getCurrentSelection()
+		expect(current?.kind).toBe('editor')
+	})
+
+	it('exposes a recording selectionHighlight member', () => {
+		const ports = fakeModulePorts()
+		ports.selectionHighlight.show({
+			kind: 'editor',
+			notePath: 'notes/a.md',
+			selectedText: 'hi',
+			startLine: 0,
+			lineCount: 1,
+		})
+		ports.selectionHighlight.clear()
+		expect(ports.selectionHighlight.calls.map((c) => c.kind)).toEqual(['show', 'clear'])
+	})
+
 	it('providerHistory mutations are visible across the factory ports', async () => {
 		const ports = fakeModulePorts()
 		ports.providerHistory.seedConversations([
