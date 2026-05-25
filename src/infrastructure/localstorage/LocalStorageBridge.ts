@@ -21,6 +21,7 @@ import {
 	LocalStorageSelectionSource,
 	LocalStorageSelectionHighlight,
 } from './LocalStorageComposerPorts';
+import { LocalStorageToolbarCatalog } from './LocalStorageToolbarCatalog';
 import type {
 	MentionDataProviderPort,
 	ProviderCommandCatalogPort,
@@ -28,6 +29,7 @@ import type {
 	AuxModelPort,
 	SelectionSourcePort,
 	SelectionHighlightPort,
+	ToolbarCatalogPort,
 } from '@/domain/ports';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
@@ -217,6 +219,16 @@ export class LocalStorageBridge
 
 	get selectionHighlight(): SelectionHighlightPort {
 		return this.selectionHighlightPort;
+	}
+
+	// ── Toolbar catalog port (SPEC-TC-009, ADR-TC-003 §3) ───────────────────────
+	// A fixed inert Claude-shaped catalog (model list + mode + effort descriptors,
+	// no service-tier) so the GitHub Pages demo renders the full strip with the
+	// backed widgets + the honest seams. Never throws.
+	private readonly toolbarCatalogPort = new LocalStorageToolbarCatalog();
+
+	get toolbarCatalog(): ToolbarCatalogPort {
+		return this.toolbarCatalogPort;
 	}
 
 	showError(message: string, durationMs = 0): void {
