@@ -155,9 +155,42 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   six changed files; `vitest run tests/infrastructure/mock/MockAuxModel.test.ts
   tests/infrastructure/localstorage/LocalStorageAuxModel.test.ts
   tests/__fakes__/fake-ports.test.ts` 20/20 green.
-- **Commit:** _this commit._
+- **Commit:** `66fc361`.
 - **Deviation:** an empty/whitespace `setAuxResponse(text)` maps to `err` (not
   `ok('')`) — parity with the real impls' empty-accumulated → err rule
   (SPEC-CA-004), so the re-pointed title/refine tests' "empty → err" cases stay
   driven by `setAuxResponse('')` as well as `setAuxEmpty()`. Within the SPEC-CA-008
   contract; noted for clarity.
+
+### T-CA-009 — `ObsidianBridge` `AuxModelPort` (real cold-start, coverage-excluded) (🔨 dev)
+
+- **Spec/req:** SPEC-CA-007 (aux leg), SPEC-CA-004; REQ-CA-021; NFR-CA-001
+  (manual leg), NFR-CA-010.
+- **Files:** `src/infrastructure/obsidian/ObsidianBridge.ts` —
+  `createAuxModel(): AuxModelPort` builds a FRESH cold-start `ChatRuntimePort`
+  via `this.createChatRuntime()`, drives
+  `query(prepareTurn({ text: sys ? `${sys}\n\n${prompt}` : prompt }), [],
+  { forceColdStart: true })`, accumulates `text` chunks (tool/thinking/usage
+  ignored, `done` terminates), maps a streaming `error` chunk / an
+  empty-accumulated result / an aborted `signal` → `Result.err`, the non-empty
+  text → `ok(text)`; cold-start only (never resumes). The `signal` aborts the
+  subprocess via the runtime's `cancel()` (listener registered for the in-flight
+  query, removed after). Wrapped in `tryAsync` — never throws across the boundary.
+  Added `AuxModelPort`/`AuxModelRunOptions` + `Result`/`ok`/`err` + `tryAsync`
+  (merged into the existing `trySync` import) + `StreamChunk` imports; the drain
+  loop + outcome map are split into private `drainAuxStream`/`mapAuxOutcome`
+  statics (complexity/strict-boolean lint).
+- **Outcome:** done (coverage-excluded; behaviour gated by the MANUAL leg
+  TEST-CA-M1 + the real-CLI image turn TEST-CA-029, already scheduled in
+  `test-plan.md` against T-CA-009). No `obsidian` symbol leaks past this file.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint
+  src/infrastructure/obsidian/ObsidianBridge.ts` clean; `vitest run
+  tests/infrastructure` 252/252 green (no regression).
+- **Commit:** _this commit._
+- **Deviation:** the abort is tracked via a small mutable holder object
+  (`{ aborted: boolean }`) flipped by the `abort` listener, rather than re-reading
+  `signal.aborted` after the await — TS flow-narrows `signal.aborted` to
+  `false | undefined` after the early-return guard, making a post-loop
+  `=== true` check unsatisfiable (TS2367). The holder is the standard escape; the
+  behaviour (abort → err) is unchanged. Also split the drain/map into two private
+  statics to clear the complexity-10 lint ceiling.
