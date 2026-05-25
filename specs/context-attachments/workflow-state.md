@@ -1,10 +1,10 @@
 ---
 feature: context-attachments
 area: CA
-current_stage: design
+current_stage: spec
 status: active
 last_updated: 2026-05-25
-last_agent: architect (design)
+last_agent: architect (specification)
 epic: claudian-reboot
 phase: P5
 integration_branch: next
@@ -14,7 +14,7 @@ artifacts:
   research.md: skipped
   requirements.md: accepted (PRD-CA-001; CLAR-CA-001..004 resolved by ADR-CA-001..004)
   design.md: complete (DESIGN-CA-001; Parts A/B/C; ADR-CA-001..004 accepted)
-  spec.md: pending
+  spec.md: complete (SPEC-CA-001..030; 6 layer groups; TEST-CA-001..032 + M1/M2/M3; full coverage)
   tasks.md: pending
   implementation-log.md: pending
   test-plan.md: pending
@@ -35,7 +35,7 @@ artifacts:
 | 2. Research | `research.md` | skipped |
 | 3. Requirements | `requirements.md` | accepted |
 | 4. Design | `design.md` | complete |
-| 5. Specification | `spec.md` | pending |
+| 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
@@ -195,5 +195,65 @@ parity-screenshot legs accumulate for the SINGLE FINAL human review gate.
                           display format — spec-level, not architecture), the inline-edit state machine,
                           edge cases (C.5), observability, per-interface REQ links. Sequence the AuxModelPort
                           re-point (ADR-CA-002 §3) as an early task so inline-edit builds on the unified seam.
+                          NO open clarifications blocking.
+
+2026-05-25 (architect, specification): SPEC-CA-001..030 complete (specs/context-attachments/spec.md),
+                          status complete. 30 spec items in 6 layer groups: DOMAIN SPEC-CA-001..006
+                          (the 5 additive optional ChatTurnRequest fields; AttachedFileRef/AttachedImage
+                          DTOs; CapturedSelection editor/canvas/browser union; AuxModelPort + key +
+                          barrel; SelectionSourcePort + SelectionHighlightPort + supportsBrowserSelection
+                          + keys + barrel; additive VaultPort.readBinary); INFRA SPEC-CA-007..010
+                          (3-bridge AuxModelPort/selection/readBinary impls + the bounded base64
+                          image-encode, 8 MiB + MIME allow-list); APPLICATION SPEC-CA-011..018 (pure
+                          computeWordDiff/parseInlineEditResponse/inlineEditPrompt; AddFileContext/
+                          AddImage/CaptureSelection/InlineEdit use cases; the behaviour-preserving
+                          re-point of GenerateTitle + RefineInstruction onto AuxModelPort, drains
+                          deleted); UI SPEC-CA-019..026 (FileChips/ImageContextBar+ImageThumb/
+                          SelectionIndicator + the ChatComposer context-bar slot; OpenInlineEditFn +
+                          OpenImagePreviewFn modal-seam handles; InlineEditModal reusing the UNCHANGED
+                          DiffView for the word-diff + ImagePreviewModal; useAuxModelPort/
+                          useSelectionSourcePort/useSelectionHighlightPort composables; AgentSidebarView +
+                          ui/main.ts wiring); STYLES SPEC-CA-027 (8 minted --sp-* tokens, word-diff rides
+                          the P2 diff tokens); CROSS-CUTTING SPEC-CA-028..030 (additivity / no-provider-
+                          branch + capability-gate / Result-no-secret-DOM-observability). EC-CA-1..16 +
+                          TEST-CA-001..032 + M1/M2/M3 (U≈18 / A≈9 / M≈8). Full REQ-CA↔SPEC-CA↔TEST-CA
+                          coverage table (all 28 REQ + 13 NFR). Two design open items RESOLVED in the
+                          spec: EditorSelectionContext.startLine = 0-based (CM6 verbatim); chip
+                          displayName = basename-without-extension, wikilink-form via a declarative
+                          element + WorkspacePort.openFile (no raw HTML, no app.workspace). Everything
+                          additive + claudian-grounded. No new ADR needed.
+
+                          HAND-OFF → /spec:tasks (planner). TDD-ordering hints:
+                          1) DOMAIN FIRST — the 5 ChatTurnRequest fields (SPEC-CA-001), the DTOs
+                             (SPEC-CA-002/003), the three ports + keys + barrels (SPEC-CA-004/005), and
+                             VaultPort.readBinary (SPEC-CA-006). Pure type-shape contracts; unblock
+                             everything downstream.
+                          2) AuxModelPort + THE RE-POINT EARLY (SPEC-CA-004/008/018, ADR-CA-002 §3):
+                             grow fake-ports with the `auxModel` member, then re-point GenerateTitleUseCase
+                             (P3) + RefineInstructionUseCase (P4) onto it and migrate their tests to inject
+                             the Mock aux — keep P3/P4 GREEN before inline-edit lands. Behaviour-preserving
+                             seam swap; the pure transforms (titleGeneration/instructionRefine) stay
+                             byte-identical.
+                          3) PURE TRANSFORMS BEFORE THE MODAL — computeWordDiff + parseInlineEditResponse
+                             + inlineEditPrompt (SPEC-CA-011/012/013) are total/never-throw; test in
+                             isolation (incl. the identical-text no-op EC-CA-10) before InlineEditUseCase
+                             (SPEC-CA-017) and well before the InlineEditModal (SPEC-CA-024).
+                          4) USE CASES over the Mock ports (SPEC-CA-014/015/016/017) — AddImage's gate
+                             order (MIME → readBinary → 8 MiB → encode) and the Result-err legs
+                             (EC-CA-1/2/8/9) are unit-coverage; the word-diff→DiffView reuse is asserted by
+                             mounting the UNCHANGED DiffView with a word-diff ToolDiffData.
+                          5) UI components + composables (SPEC-CA-019..025) each with a co-located
+                             data-testid PageObject; the ChatComposer context-bar slot is ADDITIVE (no
+                             context → byte-identical to P4).
+                          6) COVERAGE-EXCLUDED → MANUAL LEGS — the ObsidianBridge AuxModelPort (real
+                             cold-start subprocess), the CM6 editor + Obsidian canvas selection, the real
+                             VaultPort.readBinary, the InlineEditModal/ImagePreviewModal, and the real-CLI
+                             image turn are src/infrastructure/obsidian/** + src/plugin/** (excluded from
+                             coverage); they accumulate as TEST-CA-M1/M2/M3 + the parity screenshots for
+                             the SINGLE FINAL human review gate.
+                          7) BROWSER-SELECTION CAPABILITY-GATED — ship the DTO + the request slot +
+                             SelectionSourcePort.supportsBrowserSelection now (ObsidianBridge may ship it
+                             false — an honest defer, REQ-CA-018); the SelectionIndicator renders the
+                             browser affordance ONLY where the flag is true. Never silently dropped.
                           NO open clarifications blocking.
 ```
