@@ -1,10 +1,10 @@
 ---
 feature: threads-sessions
 area: TS
-current_stage: tasks
+current_stage: implementation
 status: active
 last_updated: 2026-05-25
-last_agent: planner (tasks)
+last_agent: dev (implement — domain+infra batch)
 epic: claudian-reboot
 phase: P3
 integration_branch: next
@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-TS-001; Parts A/B/C; ADR-TS-001/002/003 accepted)
   spec.md: complete (SPEC-TS-001..034; 26 automatable TEST-TS + 2 manual legs)
   tasks.md: complete (TASKS-TS-001; T-TS-001..042; 42 tasks)
-  implementation-log.md: pending
+  implementation-log.md: in-progress (IMPL-TS-001; domain T-TS-002..006 + infra T-TS-007..013 done; application/UI/styles/wire-in/gate remain)
   test-plan.md: pending
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-TS-001) |
 | 5. Specification | `spec.md` | complete (SPEC-TS-001..034) |
 | 6. Tasks | `tasks.md` | complete (TASKS-TS-001) |
-| 7. Implementation | `implementation-log.md` + code | pending |
+| 7. Implementation | `implementation-log.md` + code | in-progress (domain + infra batches done) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -309,4 +309,61 @@ self-parity-review vs claudian after each big chunk; merge P3 to `next` autonomo
                           (16 tasks): 002→003→004→009→010→018→019→026→027→030→031→034→035→037→038→042.
                           Coverage 80/70/80/80; --sp-* parity; provider-addressed grep gate; one Claude
                           impl; manifest untouched; verify + test:all green at T-TS-042 (draft PR → next).
+
+2026-05-25 (dev, implement — domain+infra batch): T-TS-001..013 EXECUTED on
+                          feature/threads-sessions (STRICT TDD, one Conventional commit per task) →
+                          specs/threads-sessions/implementation-log.md (IMPL-TS-001).
+                          COMPLETED + SHAs:
+                            T-TS-001 1990dcc (baseline parity scaffold + guard verification, doc-only)
+                            T-TS-002 ccb9e5c (qa RED: domain port/types/settings + additive growth)
+                            T-TS-003 753b2a9 (ConversationRecord types + CONVERSATION_RECORD_VERSION)
+                            T-TS-004 99baab2 (ProviderHistoryPort + HistoryError + PROVIDER_HISTORY_PORT + barrel)
+                            T-TS-005 a263d14 (additive ChatRuntimePort/ChatMessage growth + forceColdStart)
+                            T-TS-006 b77048b (PluginSettings.sessionsFolder + maxTabs + resolve/clamp)
+                            T-TS-007 e84ec06 (qa RED: conversationRecordCodec + buildForkPlan)
+                            T-TS-008 325176b (conversationRecordCodec.ts + pure buildForkPlan.ts)
+                            T-TS-009 50ede98 (qa RED: Mock/LocalStorage history stores + fake-ports member)
+                            T-TS-010 138303c (MockHistoryStore + FixtureHistoryStore + fake-ports providerHistory)
+                            T-TS-011 899bb58 (VaultFileHistoryStore — coverage-excluded; manual leg TEST-TS-M1)
+                            T-TS-012 42fc119 (qa RED behavioural contract; passes-on-author — see below)
+                            T-TS-013 (this commit) — no further prod code; the lint fix to the codec test rides here.
+                          STATE: vue-tsc -p tsconfig.lint.json = 0 errors; npx eslint . = 0 errors
+                          (3 pre-existing P0 warnings); npx vitest run = 101 files / 779 passed
+                          (was 743 pre-batch; P0/P1/P2 GREEN — no regression). NOT run (orchestrator
+                          gate): full verify/build/build:web/test:storybook. Manifest untouched. No push.
+
+                          THE THREE ADDITIVE ChatRuntimePort MEMBERS (SPEC-TS-009, ALL three runtimes):
+                            - MockChatRuntime / FixtureChatRuntime: resumeSession/setResumeCheckpoint =
+                              recorded no-ops (getResumedSessionId/getResumeCheckpoint accessors);
+                              getCapabilities() → {supportsFork:true,supportsRewind:true}; forceColdStart
+                              recorded per query (getLastForceColdStart) + a scripted text→done cold-start
+                              side-query for title-gen.
+                            - ClaudeCliChatRuntime (coverage-excluded): resumeSession(sessionId) sets the
+                              next --resume session id (empty → cold-start, EC-TS-5); setResumeCheckpoint
+                              stores a pending resume-at consumed once per turn (debug-logged, no message
+                              content — NFR-TS-013); getCapabilities() → {fork,rewind}; forceColdStart in
+                              _buildArgs skips --resume for that one query.
+
+                          DEVIATION (load-bearing, recorded in IMPL-TS-001): the additive ChatRuntimePort
+                          growth forces EVERY implementor to satisfy the grown interface for the codebase
+                          to compile, so the runtime-member impls necessarily landed in T-TS-005 (the
+                          green of the domain growth), not T-TS-013. T-TS-012's RED test therefore passes
+                          on author (a behavioural-confirmation contract). Two P1/P2 exact-count test
+                          ASSERTIONS (ChatRuntimePort.test.ts exact-nine; ChatMessage.rr.test.ts
+                          rewind-id-absent) + the P0 PSR settings-shape assertions were updated to the
+                          superseding additive contract (qa-owned test-assertion changes executed within
+                          this batch's qa-RED scope; the new *.ts.test.ts files carry the exact contracts).
+                          test-plan.md does NOT yet exist (a qa-stage artifact) — the two manual legs
+                          (TEST-TS-M1 vault-file round-trip + reload; TEST-TS-M2 real-CLI resume/rewind)
+                          are recorded in IMPL-TS-001 pending qa authoring test-plan.md; both ride the
+                          single final epic-review human gate, never agent-self-claimed.
+
+                          HAND-OFF → NEXT BATCH = APPLICATION (T-TS-014..025). FIRST READY TASK:
+                          T-TS-014 (qa RED) — titleGeneration.ts pure transforms (no deps, Batch-0
+                          parallel-ready): parseTitleGenerationResponse (50-char/strip-quotes/sentence-
+                          case/''→null), fallbackTitle (truncate/empty→'New conversation'),
+                          TITLE_GENERATION_SYSTEM_PROMPT + buildTitleGenerationPrompt ported VERBATIM
+                          from claudian core/prompt/titleGeneration.ts (SPEC-TS-016, TEST-TS-019). Then
+                          T-TS-016/018/020/022/024 RED gate the use cases (List/Resume/Fork/Rewind/
+                          Compact/GenerateTitle/Rename/Delete + chooseForkTarget + rewindEligibility).
 ```

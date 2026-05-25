@@ -53,7 +53,7 @@ describe('conversationRecordCodec.serialise (TEST-TS-010)', () => {
 
 	it('strips any non-contract (secret-bearing) field on serialise', () => {
 		const dirty = { ...makeRecord(), apiKey: 'sk-leak', token: 'secret' };
-		const raw = serialise(dirty as ConversationRecord);
+		const raw = serialise(dirty);
 		const parsed = JSON.parse(raw) as Record<string, unknown>;
 		expect(parsed.apiKey).toBeUndefined();
 		expect(parsed.token).toBeUndefined();
