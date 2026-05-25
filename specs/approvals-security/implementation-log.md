@@ -355,3 +355,37 @@ proven: a P6-shaped `ChatRuntimeQueryOptions`/`TabControls` (no `permissionMode`
 serialises byte-identically to P6 (TEST-AS-002). No `obsidian`/`node:*`/Vue import under
 `src/domain/**`; the matcher is pure + total. The INFRA batch (T-AS-012..015) onward is
 out of this batch's scope.
+
+## APPLICATION batch (T-AS-016..019)
+
+### T-AS-016 — RED `foldControlOptions` guarded `permissionMode` clause (🧪 qa)
+
+- **Spec/test:** TEST-AS-002 (fold leg); SPEC-AS-011/021; REQ-AS-002/052; NFR-AS-001;
+  EC-AS-2/13.
+- **Files:** `tests/application/chat/toolbar/foldControlOptions.test.ts` (extended,
+  lines 96-172 — a new `describe` for the P7 clause: the `{}`→`{}` + explicit
+  `'normal'`→`{}` non-`normal`-only guard (EC-AS-2/13), the `'plan'`/`'yolo'` fold, the
+  combined-with-P6-fields case, the P6-byte-identity-when-normal case, and never-throws).
+- **Outcome:** done (RED). The three "fold a non-normal mode" cases failed (the clause
+  did not yet exist); the `normal`/absent/total cases already passed (folding nothing was
+  the prior behaviour). 3 failed / 15 passed confirmed RED before the impl.
+- **Commit:** `49f622f1`.
+- **Deviation:** none.
+
+### T-AS-017 — `foldControlOptions.ts` guarded `permissionMode` clause (🔨 dev)
+
+- **Spec/req:** SPEC-AS-011 §3; SPEC-AS-021; REQ-AS-002/052; NFR-AS-001.
+- **Files:** `src/application/chat/toolbar/foldControlOptions.ts` (lines 10-46 — widened
+  the return type by the one optional `permissionMode` key and added the single guarded
+  clause `if (controls.permissionMode !== undefined && controls.permissionMode !==
+  'normal') folded.permissionMode = controls.permissionMode;` after the P6
+  `serviceTier` clause; doc updated).
+- **Outcome:** done. The prior RED tests now pass — the full file is green
+  (`vitest run foldControlOptions.test.ts` 18/18, incl. the 9 P6 regression cases). The
+  P6 `model`/`mode`/`reasoning`/`serviceTier` clauses + behaviour stay byte-identical;
+  `normal`/absent folds nothing → byte-identical P6 (EC-AS-2/13). Pure + total; no
+  `obsidian`/`node:*`/Vue import; no `providerId` branch. `vue-tsc -p tsconfig.lint.json`
+  **0 errors** (whole project), whole-project `npm run lint` **0 errors** (12 pre-existing
+  warnings only).
+- **Commit:** `99f73648`.
+- **Deviation:** none.
