@@ -99,7 +99,7 @@ describe('InlinePlanApproval NG3 — allow-always persists no rule (TEST-CP-021)
 		// injected collaborators are the use case + the capability flag + notify.
 		// The use case (RespondToInlineBlockUseCase) has no settings dependency:
 		// constructing it requires only the runtime (no saveSettings call exists).
-		const propKeys = Object.keys(wrapper.props() as Record<string, unknown>);
+		const propKeys = Object.keys(wrapper.props() as unknown as Record<string, unknown>);
 		expect(propKeys).not.toContain('settings');
 		expect(propKeys).not.toContain('history');
 		expect(wrapper.emitted('resolve')).toBeTruthy();
