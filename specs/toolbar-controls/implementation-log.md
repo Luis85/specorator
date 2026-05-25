@@ -555,3 +555,31 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   `expected null not to be null` for `toolbar-strip` (Obsidian view). Queried by
   `data-testid` only.
 - **Deviations:** none.
+
+## T-TC-031 — Provide `TOOLBAR_CATALOG_PORT`; mount the strip (WIRE-IN)
+
+- **Spec/req:** SPEC-TC-025; REQ-TC-003/010/021; NFR-TC-002/003.
+- **Files:** `src/plugin/AgentSidebarView.ts` (import `TOOLBAR_CATALOG_PORT`;
+  `app.provide(TOOLBAR_CATALOG_PORT, bridge.toolbarCatalog)` after the P5 picker
+  provide — the `ObsidianBridge` real Claude static catalog; the per-tab Claude
+  runtime already reports `getToolbarCapabilities()` via `tabs.activeRuntime()`,
+  T-TC-012); `src/ui/main.ts` (import `TOOLBAR_CATALOG_PORT`;
+  `app.provide(TOOLBAR_CATALOG_PORT, bridge.toolbarCatalog)` — the `MockBridge`
+  scriptable Claude-shaped catalog so the demo renders the strip with the backed
+  widgets + the honest seams).
+- **Commit:** `<pending>`.
+- **Outcome:** done. The prior RED test (T-TC-030, TEST-TC-001/003 mount legs) now
+  passes — `TOOLBAR_CATALOG_PORT` is provided in both entry points, the
+  `toolbar-strip` + `toolbar-model` widgets mount, and the standalone path reads the
+  bridge's `toolbarCatalog` getter. The provide is additive: the P1–P5 surfaces stay
+  byte-identical (the `ChatSurface` optional inject still resolves `undefined` → pure
+  P5 wherever no port is provided, EC-TC-14). No `obsidian`/`node:*` symbol enters
+  `src/ui/**` (the standalone provides the Mock catalog; the Obsidian symbol stays in
+  `src/plugin/**`); no router reintroduced.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); full
+  `npm run lint` 0 errors (12 pre-existing warnings, none in touched files);
+  `vitest run` (threads, no-file-parallelism) — `toolbarMount.ts` 3/3 green +
+  `main.ts`/`main`/`main.rr` 7/7 green (the additive provide; the mounts still
+  render) + `ChatSurface.toolbar`/`ChatComposer.toolbar`/`activateAgentSidebar`
+  8/8 green.
+- **Deviations:** none.

@@ -34,6 +34,7 @@ import {
 	AUX_MODEL_PORT,
 	SELECTION_SOURCE_PORT,
 	SELECTION_HIGHLIGHT_PORT,
+	TOOLBAR_CATALOG_PORT,
 } from '@/infrastructure/bridge/ports';
 import {
 	CHAT_RUNTIME_FACTORY,
@@ -99,6 +100,12 @@ app.provide(OPEN_IMAGE_PREVIEW, () => Promise.resolve());
 // has no vault picker, so the stand-in resolves `null` (dismiss) — no `window.*`,
 // deterministic for the GitHub Pages demo. Drop/paste exercises the live gate.
 app.provide(PICK_ATTACHMENT, () => Promise.resolve(null));
+// P6 (SPEC-TC-025): the toolbar option-list source. The `MockBridge` exposes a
+// scriptable Claude-shaped catalog (default-backed model + mode) and the Mock
+// runtime reports `getToolbarCapabilities()` (read via `tabs.activeRuntime()`), so
+// the GitHub Pages demo renders the full strip with the backed widgets + the
+// honest capability-gated seams (no live service-tier/MCP on the inert flags).
+app.provide(TOOLBAR_CATALOG_PORT, bridge.toolbarCatalog);
 
 void bridge.getSettings().then((s) => {
 	setLocale(toSupportedLocale(s.locale));
