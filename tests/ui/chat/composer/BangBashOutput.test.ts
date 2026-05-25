@@ -67,7 +67,6 @@ describe('BangBashOutput XSS-safety (EC-CP-13)', () => {
 		// The text content shows the literal markup…
 		expect(po.stdoutText()).toContain('<script>alert(1)</script>');
 		// …and the DOM holds no live <script> element (escaped, not parsed).
-		expect(po.stdoutHtml()).not.toContain('<script>');
-		expect(po.stdoutHtml()).toContain('&lt;script&gt;');
+		expect(po.stdoutScriptElementCount()).toBe(0);
 	});
 });

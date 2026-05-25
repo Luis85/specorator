@@ -33,9 +33,13 @@ export class BangBashOutputPageObject {
 		return this.wrapper.get(this.byTid(TID.stdout)).text();
 	}
 
-	/** The raw stdout HTML — used to assert verbatim-text rendering (EC-CP-13). */
-	stdoutHtml(): string {
-		return this.wrapper.get(this.byTid(TID.stdout)).element.innerHTML;
+	/**
+	 * Count of live `<script>` elements under stdout — used to assert verbatim-text
+	 * rendering (EC-CP-13): escaped output parses to zero script elements. Avoids
+	 * reading `innerHTML` (lint-forbidden); a tag selector is permitted in tests.
+	 */
+	stdoutScriptElementCount(): number {
+		return this.wrapper.get(this.byTid(TID.stdout)).findAll('script').length;
 	}
 
 	hasStderr(): boolean {
