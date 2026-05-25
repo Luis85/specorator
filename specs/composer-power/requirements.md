@@ -4,7 +4,7 @@ title: Composer Power (P4) — slash/skills, @mention, instruction, plan mode + 
 stage: requirements
 feature: composer-power
 area: CP
-status: draft        # draft | proposed | accepted | superseded — HELD until the architect's P4 ADRs are recorded (CLAR-CP-001..004)
+status: accepted     # draft | proposed | accepted | superseded — released after the P4 ADRs (ADR-CP-001..004) were recorded + accepted (CLAR-CP-001..004 resolved)
 owner: pm
 epic: claudian-reboot
 phase: P4
@@ -747,4 +747,4 @@ wires only Claude.
 - [x] NFRs listed with targets (epic constraints restated; new bang-bash + transport-honesty thresholds flagged).
 - [x] Success metrics defined (including a counter-metric — scope leakage vs the non-goals).
 - [x] Release criteria stated.
-- [ ] `/spec:clarify` returned no open questions — **HELD:** CLAR-CP-001..004 are intentional ADR hand-offs to the architect (autonomous-drive; no human gate). `status` stays `draft` until the four P4 ADRs are recorded and accepted.
+- [x] `/spec:clarify` returned no open questions — **RESOLVED:** CLAR-CP-001..004 were the intentional ADR hand-offs to the architect; recorded + accepted as ADR-CP-001 (composer-mode state machine), ADR-CP-002 (mention/command-catalog/shell-exec ports), ADR-CP-003 (instruction-refine side-query), ADR-CP-004 (inline-block response transport + CLI capability-gating). `status` flipped `draft → accepted`.

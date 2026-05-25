@@ -1,10 +1,10 @@
 ---
 feature: composer-power
 area: CP
-current_stage: requirements
+current_stage: design
 status: active
 last_updated: 2026-05-25
-last_agent: pm (requirements)
+last_agent: architect (design)
 epic: claudian-reboot
 phase: P4
 integration_branch: next
@@ -12,8 +12,8 @@ reference: D:\Projects\claudian-main
 artifacts:
   idea.md: skipped (charter §3.3 + audits + claudian-main stand in, mirrors P1-P3)
   research.md: skipped
-  requirements.md: draft (PRD-CP-001; held until P4 ADRs CLAR-CP-001..004 recorded)
-  design.md: pending
+  requirements.md: accepted (PRD-CP-001; released after ADR-CP-001..004 accepted)
+  design.md: complete (DESIGN-CP-001; A/B/C; ADR-CP-001..004 accepted)
   spec.md: pending
   tasks.md: pending
   implementation-log.md: pending
@@ -33,8 +33,8 @@ artifacts:
 |---|---|---|
 | 1. Idea | `idea.md` | skipped |
 | 2. Research | `research.md` | skipped |
-| 3. Requirements | `requirements.md` | draft (PRD-CP-001) |
-| 4. Design | `design.md` | pending |
+| 3. Requirements | `requirements.md` | accepted (PRD-CP-001) |
+| 4. Design | `design.md` | complete (DESIGN-CP-001) |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
@@ -148,4 +148,56 @@ self-parity-review vs claudian after each big chunk; merge P4 to `next` autonomo
                                          vs must be capability-gated (charter §6 transport-honesty)
                                          → REQ-CP-023/025/026/028.
                           On ADR acceptance flip requirements.md status draft → accepted, then design.
+
+2026-05-25 (architect, design): DESIGN-CP-001 written to design.md (Parts A/B/C, status: complete).
+                          The four framed CLARs RESOLVED as four accepted ADRs (autonomous drive,
+                          no per-phase human gate; legs accumulate for the single final epic-review):
+                          - ADR-CP-001 composer-mode state machine — a `useComposerMode` composable
+                            owning a discriminated `ComposerMode` union (default/slash/skills/mention/
+                            instruction/bang-bash/inline-block + an orthogonal `planActive` boolean) +
+                            PURE trigger-parse fns in application (detectTrigger/shouldEnterInstruction/
+                            shouldEnterBangBash/replaceTriggerToken). `ChatComposer.vue` extended
+                            additively; P1 send contract gated behind `kind==='default'`. DTO-only,
+                            no Pinia store for the mode. (CLAR-CP-001 → REQ-CP-034/036.)
+                          - ADR-CP-002 three new narrow ports — MentionDataProviderPort (a composite:
+                            VaultPort vault source + a provider-addressed subagent/MCP/dir catalog
+                            source; MCP no-ops [] until P8, Claude-only subagent), ProviderCommandCatalogPort
+                            (provider entries only; built-ins are a PURE app list; request-id guarded
+                            in the consumer), and the SECURITY-BOUNDED ShellExecPort (the SOLE shell
+                            path; S1 user-explicit-only/never model-reachable, S2 no rewrite, S3 no
+                            secret capture/log/render, S4 bounded 30s/1MB→exitCode 124, S5 output-as-
+                            block; 3-bridge: Obsidian real child_process.exec coverage-excluded, Mock
+                            scripted/echo no-spawn, LocalStorage err 'unavailable in browser demo').
+                            (CLAR-CP-002 → REQ-CP-004/009/010/012/030/031/032; NFR-CP-006.)
+                          - ADR-CP-003 instruction-refine — REUSE the ADR-TS-003 cold-start side-query
+                            over ChatRuntimePort.query (2nd consumer after title-gen), behind a new
+                            RefineInstructionUseCase; ported pure buildRefineSystemPrompt/parseRefineResponse;
+                            AuxModelPort deferral RE-CONFIRMED to P5 (inline-edit is the re-eval point;
+                            two small re-point sites). No new port in P4. (CLAR-CP-003 → REQ-CP-016, NG7.)
+                          - ADR-CP-004 inline-block response transport — +3 ADDITIVE ChatRuntimePort
+                            callback-setters (setAskUserQuestionCallback/setExitPlanModeCallback/
+                            setApprovalCallback — the ADR-CC-001 §3 pre-blessed channel) + +2 additive
+                            RuntimeCapabilities flags (supportsPlanMode/supportsInlineResponse) +3
+                            additive StreamChunk REQUEST members (ask_user_question/exit_plan_mode/
+                            approval_request — audit confirmed the P2 union does NOT yet carry these).
+                            CLI transport honesty (ADR-TS-004 pattern): a flow `claude --print` can't
+                            round-trip is capability-GATED via getCapabilities() (never provider===),
+                            rendered read-only + a notice, NO lost response. Approval RULES/persistence/
+                            ApprovalManager stay P7 (NG3 — P4 transports a one-shot decision, stores
+                            nothing). (CLAR-CP-004 → REQ-CP-022/023/024/025/026/028; NFR-CP-007.)
+
+                          Everything ADDITIVE + claudian-grounded: zero P1-P3 member renamed/removed;
+                          ChatComposer.vue/tabsStore/ChatRuntimePort grown additively only. README.md
+                          rows added; requirements.md flipped draft → accepted.
+
+                          HAND-OFF → /spec:specify (architect writes spec.md). Open clarifications for
+                          the spec author: (1) the EXACT AskUserQuestion answer DTO shape (single vs
+                          multi-question, custom-input) — mirror Claudian core/types/tools AskUserQuestionItem;
+                          (2) the ProviderCommandCatalog file layout + the Claude commands/storage source
+                          paths to port (.claude/commands, skills) — confirm against providers/claude/
+                          {commands,storage}/*; (3) the instruction-append target field in the custom
+                          system prompt + whether it lives in PluginSettings (device-local) or a vault
+                          file (REQ-CP-018 says SettingsPort — confirm the field name); (4) the exact
+                          ShellExecPort cwd resolution (vault adapter base path) for the Obsidian impl.
+                          None blocks spec; each is a small contract detail to pin in spec.md.
 ```
