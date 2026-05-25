@@ -89,3 +89,36 @@ describe('TEST-CA-012 AddImageUseCase.execute — gate order', () => {
 		await expect(new AddImageUseCase(ports.vault).execute('nope.png')).resolves.toBeDefined();
 	});
 });
+
+// ── FIX-2.3 (was R-CA-002): drop/paste — gate in-hand bytes (no vault read) ──────
+// SPEC-CA-015, REQ-CA-007/012. A dropped/pasted image's bytes are already in hand
+// (a `File`), so `executeBytes(name, bytes)` runs the SAME MIME→size→encode gate
+// without a `readBinary` round-trip. Claudian ground-truth: `ImageContext.addImageFromFile`.
+
+describe('AddImageUseCase.executeBytes — in-hand bytes (drop/paste)', () => {
+	it('REQ-CA-007: resolves MIME from the name and encodes in-hand bytes to an AttachedImage', () => {
+		const ports = fakeModulePorts();
+		const result = new AddImageUseCase(ports.vault).executeBytes('pasted.png', PNG_BYTES);
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.value).toEqual({
+			path: 'pasted.png',
+			mimeType: 'image/png',
+			byteSize: PNG_BYTES.length,
+			dataBase64: encodeImageBase64(PNG_BYTES, 'image/png'),
+		});
+	});
+
+	it('EC-CA-2: a non-image name (.exe) → err (no AttachedImage)', () => {
+		const ports = fakeModulePorts();
+		const result = new AddImageUseCase(ports.vault).executeBytes('payload.exe', PNG_BYTES);
+		expect(result.ok).toBe(false);
+	});
+
+	it('EC-CA-1: oversize in-hand bytes (> 8 MiB) → err', () => {
+		const ports = fakeModulePorts();
+		const oversize = new Uint8Array(MAX_IMAGE_BYTES + 1);
+		const result = new AddImageUseCase(ports.vault).executeBytes('huge.png', oversize);
+		expect(result.ok).toBe(false);
+	});
+});

@@ -206,3 +206,41 @@ describe('ChatComposer P5 context-bar slot (TEST-CA-004/006, SPEC-CA-022)', () =
 		expect(wrapper.emitted('submit')).toEqual([['Hello']]);
 	});
 });
+
+// ── FIX-2.3 (was R-CA-002): drop / paste files into the composer ─────────────────
+// SPEC-CA-022, REQ-CA-007/012. The composer accepts files dropped onto or pasted
+// into it and emits `attachFiles` with the File[] for the parent to gate (image →
+// 8 MiB/MIME gate, non-image → file chip). Claudian ground-truth:
+// `ImageContext.setupDragAndDrop` / `setupPasteHandler`.
+
+function imageFile(name: string): File {
+	return new File([new Uint8Array([1, 2, 3])], name, { type: 'image/png' });
+}
+
+describe('ChatComposer drop/paste (FIX-2.3, SPEC-CA-022)', () => {
+	it('REQ-CA-007: dropping a file emits attachFiles with the dropped File[]', async () => {
+		const { wrapper, po } = mountComposer();
+		const file = imageFile('diagram.png');
+		await po.dropFiles([file]);
+		const emitted = wrapper.emitted('attachFiles') as unknown[][] | undefined;
+		expect(emitted).toBeDefined();
+		expect((emitted?.[0]?.[0] as File[])[0].name).toBe('diagram.png');
+	});
+
+	it('REQ-CA-007: pasting an image emits attachFiles with the pasted File[] (prevents default)', async () => {
+		const { wrapper, po } = mountComposer();
+		const file = imageFile('clip.png');
+		const event = await po.pasteFiles([file]);
+		const emitted = wrapper.emitted('attachFiles') as unknown[][] | undefined;
+		expect(emitted).toBeDefined();
+		expect((emitted?.[0]?.[0] as File[])[0].name).toBe('clip.png');
+		expect(event.defaultPrevented).toBe(true);
+	});
+
+	it('a paste with NO files (plain text) does not emit attachFiles or prevent default', async () => {
+		const { wrapper, po } = mountComposer();
+		const event = await po.pasteText('just words');
+		expect(wrapper.emitted('attachFiles')).toBeUndefined();
+		expect(event.defaultPrevented).toBe(false);
+	});
+});
