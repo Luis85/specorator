@@ -26,7 +26,7 @@ export class TabBarPageObject {
 
 	/** The visible 1-based numbers, in order (the non-colour cue, NFR-TS-010). */
 	badgeNumbers(): string[] {
-		return this.badges().map((b) => b.text().trim());
+		return this.wrapper.findAll('[data-testid="tab-number"]').map((b) => b.text().trim());
 	}
 
 	badgeRole(index: number): string | undefined {
