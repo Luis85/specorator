@@ -1,6 +1,10 @@
 import type { StreamChunk } from '@/domain/chat/StreamChunk';
 import type { UsageInfo } from '@/domain/chat/UsageInfo';
 import type { ToolUseResult } from '@/domain/chat/diff/ToolUseResult';
+import type {
+	AskUserQuestionItem,
+	AskUserQuestionOption,
+} from '@/domain/chat/inline';
 
 /**
  * Pure, deterministic NDJSON → `StreamChunk` reducer for `ClaudeCliChatRuntime`
@@ -195,13 +199,7 @@ export class ClaudeStreamReducer {
 		parentToolUseId: string | null,
 	): StreamChunk[] {
 		if (b.type === 'tool_use') {
-			return [
-				emitToolUse(parentToolUseId, {
-					id: typeof b.id === 'string' ? b.id : '',
-					name: typeof b.name === 'string' ? b.name : '',
-					input: toInputObject(b.input),
-				}),
-			];
+			return [reduceToolUseBlock(b, parentToolUseId)];
 		}
 		// Subagent text/thinking is dropped (claudian :406/:409 emit them only at the
 		// top level) — only its tool activity surfaces, nested under the spawn.
@@ -384,6 +382,28 @@ function emitToolUse(parentToolUseId: string | null, fields: ToolUseFields): Str
 }
 
 /**
+ * Reduce one assistant `tool_use` block (SPEC-CP-001/011). A TOP-LEVEL
+ * `ExitPlanMode` / `AskUserQuestion` tool_use surfaces an inline-block REQUEST on
+ * the wire → the matching `StreamChunk` request member (the composer renders the
+ * block; the response transports back via the registered callback, SPEC-CP-017);
+ * the tool_use `id` becomes the `requestId` correlation key. Subagent-nested ones
+ * (and every other tool name) stay the generic `tool_use`/`subagent_tool_use`.
+ */
+function reduceToolUseBlock(
+	b: Record<string, unknown>,
+	parentToolUseId: string | null,
+): StreamChunk {
+	const id = typeof b.id === 'string' ? b.id : '';
+	const name = typeof b.name === 'string' ? b.name : '';
+	const input = toInputObject(b.input);
+	if (parentToolUseId === null) {
+		const requestChunk = toInlineRequestChunk(name, id, input);
+		if (requestChunk !== null) return requestChunk;
+	}
+	return emitToolUse(parentToolUseId, { id, name, input });
+}
+
+/**
  * Emit a top-level `tool_result` or, under a non-null parent, a
  * `subagent_tool_result` (claudian `emitToolResult` :30).
  */
@@ -512,4 +532,60 @@ function safeStringify(value: unknown): string {
 	} catch {
 		return '';
 	}
+}
+
+/**
+ * Map a top-level `ExitPlanMode` / `AskUserQuestion` tool_use to its `StreamChunk`
+ * request member (SPEC-CP-001/011). The tool_use `id` becomes the `requestId`
+ * correlation key the response resolves against (SPEC-CP-017). Returns `null` for
+ * any other tool name (the caller emits the generic `tool_use`). Pure, total.
+ * Coverage-excluded infra (the real CLI inline-response leg is manual TEST-CP-M2).
+ */
+function toInlineRequestChunk(
+	name: string,
+	id: string,
+	input: Record<string, unknown>,
+): StreamChunk | null {
+	if (name === 'ExitPlanMode') {
+		const plan = typeof input.plan === 'string' ? input.plan : '';
+		return { type: 'exit_plan_mode', requestId: id, plan };
+	}
+	if (name === 'AskUserQuestion') {
+		const questions = toAskUserQuestionItems(input.questions);
+		if (questions.length === 0) return null; // malformed → fall through to tool_use
+		return { type: 'ask_user_question', requestId: id, questions };
+	}
+	return null;
+}
+
+/** Coerce the wire `questions` array to SPEC-CP-004 `AskUserQuestionItem[]`. */
+function toAskUserQuestionItems(raw: unknown): AskUserQuestionItem[] {
+	if (!Array.isArray(raw)) return [];
+	const items: AskUserQuestionItem[] = [];
+	raw.forEach((q, qi) => {
+		if (q === null || typeof q !== 'object') return;
+		const record = q as Record<string, unknown>;
+		const question = typeof record.question === 'string' ? record.question : '';
+		if (question === '') return;
+		const qid = typeof record.id === 'string' && record.id.length > 0 ? record.id : `q${qi}`;
+		items.push({ id: qid, question, options: toAskUserQuestionOptions(record.options) });
+	});
+	return items;
+}
+
+/** Coerce the wire `options` array to SPEC-CP-004 `AskUserQuestionOption[]`. */
+function toAskUserQuestionOptions(raw: unknown): AskUserQuestionOption[] {
+	if (!Array.isArray(raw)) return [];
+	const options: AskUserQuestionOption[] = [];
+	raw.forEach((o, oi) => {
+		if (o === null || typeof o !== 'object') return;
+		const record = o as Record<string, unknown>;
+		const label = typeof record.label === 'string' ? record.label : '';
+		if (label === '') return;
+		const oid =
+			typeof record.value === 'string' && record.value.length > 0 ? record.value : `o${oi}`;
+		const description = typeof record.description === 'string' ? record.description : undefined;
+		options.push(description !== undefined ? { id: oid, label, description } : { id: oid, label });
+	});
+	return options;
 }
