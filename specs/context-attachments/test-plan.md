@@ -53,6 +53,18 @@ new domain/aux/infra surface confirms the imports resolve without a
 > externals, already in `vite.config.ts` `ALL_EXTERNALS`) — no symbol leaks past
 > it; coverage-excluded.
 
+> **T-CA-039 note (the two Modals exist, awaiting TEST-CA-M2):**
+> `src/plugin/modals/InlineEditModal.ts` (the Prompt → Querying → Preview /
+> Clarify / Failed → Applied / Rejected state machine, reusing the UNCHANGED
+> `DiffView` mounted as a tiny Vue app over `InlineEditOutcome.diff`; dismiss
+> aborts the `AbortController` → `InlineEditUseCase` `Result.err`, EC-CA-8) and
+> `src/plugin/modals/ImagePreviewModal.ts` (declarative `createEl('img', { attr:
+> { src } })`, no `innerHTML`; Escape + close control) are implemented and
+> coverage-excluded. Their behavioural gate is the human-run **TEST-CA-M2**
+> (render + dismiss + parity screenshots) + **TEST-CA-024/025** (accept replaces
+> the note range / reject leaves it unchanged — the launcher write, T-CA-044).
+> **Not agent-self-claimed.**
+
 ## Automated unit/component proof
 
 The Mock scriptable aux/selection impls, the LocalStorage inert impls, the pure

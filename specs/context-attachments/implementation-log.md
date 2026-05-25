@@ -786,3 +786,38 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   `vitest run` 6/6 green.
 - **Commit:** _this commit._
 - **Deviation:** none.
+
+## T-CA-039 — InlineEditModal.ts + ImagePreviewModal.ts (🔨 dev, coverage-excluded)
+
+- **Spec/req:** SPEC-CA-024; REQ-CA-008/020/023/024/025/026/027; NFR-CA-003/008.
+- **Files:** `src/plugin/modals/InlineEditModal.ts` (new — Obsidian `Modal`
+  subclass; `openAndWait(): Promise<InlineEditDecision | null>`; the
+  Prompt → Querying → Preview / Clarify / Failed → Applied / Rejected state
+  machine; Prompt textarea pre-bound to the selection (empty submits nothing);
+  Querying drives `InlineEditUseCase.execute(..., signal)`, dismiss aborts the
+  `AbortController` → `Result.err` (EC-CA-8); Preview mounts the UNCHANGED
+  `DiffView` as a tiny Vue app over `InlineEditOutcome.diff` for `replacement`
+  (a `<pre>` for `insertion`), accept → `{kind:'accept',editedText}` / reject →
+  `{kind:'reject'}`; Clarify renders the question + a reply → `continue`; Failed
+  → `NotificationPort.showError` + resolve `null`),
+  `src/plugin/modals/ImagePreviewModal.ts` (new — Obsidian `Modal`;
+  `openAndWait(): Promise<void>`; declarative `createEl('img', { attr:{src} })`,
+  no `innerHTML`; Escape + a close control),
+  `specs/context-attachments/test-plan.md` (the T-CA-039 manual-leg note).
+- **Outcome:** done — both Obsidian `Modal` subclasses in `src/plugin/modals/`
+  (coverage-excluded); no `window.confirm`/`alert`/`prompt`; `ImagePreviewModal`
+  uses declarative `createEl('img', …)` — no `innerHTML`/`outerHTML`/
+  `insertAdjacentHTML`; `InlineEditModal` reuses the UNCHANGED `DiffView`; focus
+  trap/restore + Escape dismiss are Obsidian `Modal` defaults; labelled buttons.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` on the two
+  files exit 0. NO RED test (manual leg) — behavioural gate is **TEST-CA-M2**
+  (+ TEST-CA-024/025), scheduled in `test-plan.md`, NOT agent-self-claimed.
+- **Commit:** _this commit._
+- **Deviation:** the modal takes a constructed `InlineEditUseCase` + a
+  `NotificationPort` + the resolved selection params + i18n-sourced labels — the
+  launcher (T-CA-044, Layer 7) builds the use case over the provided aux and
+  applies the accepted edit to the note (the note-range write is the manual
+  leg). The `insertion` outcome has no word-diff, so its Preview shows the
+  inserted text in a `<pre>` (accept still resolves `{kind:'accept',editedText}`)
+  — the DiffView reuse is exercised for the `replacement` outcome, matching the
+  spec ("for a `replacement` outcome, render the word-diff via DiffView").
