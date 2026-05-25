@@ -619,3 +619,45 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   (matches the EC-CA-8 expectation). The clarification loop is modelled by
   `continue` re-framing the `priorExchange` turns + the `reply` into a single
   re-run instruction (the modal owns the conversation transcript — DESIGN-CA-001).
+
+## T-CA-029 — RED port composables + useCapturedSelection (🧪 qa)
+
+- **Spec/test:** TEST-CA-013 (composable leg), TEST-CA-016 (composable leg);
+  SPEC-CA-025; REQ-CA-013/016/021; NFR-CA-002.
+- **Files:** `tests/ui/composables/useAuxModelPort.test.ts`,
+  `tests/ui/composables/useSelectionSourcePort.test.ts`,
+  `tests/ui/composables/useSelectionHighlightPort.test.ts` (new — each
+  inject-or-throw, mirroring `useShellExecPort`), and
+  `tests/ui/composables/useCapturedSelection.test.ts` (new — editor capture →
+  highlight show; null+focus-outside → clear; null+focus-inside → retain
+  (EC-CA-11); `clear()` drops + clears).
+- **Outcome:** done — RED confirmed (the four composables under
+  `src/ui/composables/` unresolved at import; run with `--no-file-parallelism`
+  to dodge the machine-load worker timeout).
+- **Commit:** `0294fc1`.
+
+## T-CA-030 — Port composables + useCapturedSelection (🔨 dev)
+
+- **Spec/req:** SPEC-CA-025; REQ-CA-013/016/021; NFR-CA-002/004.
+- **Files:** `src/ui/composables/useAuxModelPort.ts`,
+  `src/ui/composables/useSelectionSourcePort.ts`,
+  `src/ui/composables/useSelectionHighlightPort.ts` (new — inject the
+  `AUX_MODEL_PORT` / `SELECTION_SOURCE_PORT` / `SELECTION_HIGHLIGHT_PORT` keys,
+  throw a helpful "was not provided" error otherwise — mirrors `useVaultPort`),
+  `src/ui/composables/useCapturedSelection.ts` (new — subscribes
+  `source.onSelectionChange`, computes focus-within-chat from `document.activeElement`
+  relative to a `chatRoot` ref, feeds `CaptureSelectionUseCase.onChange`, exposes
+  a `shallowRef` `current` + `clear()`, tears the subscription down via
+  `onScopeDispose`).
+- **Outcome:** done — the T-CA-029 RED tests now green (10/10). No `obsidian`
+  import under `src/ui/**`; DTO-only.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` on the four
+  files exit 0; `vitest run` 10/10 green.
+- **Commit:** _this commit._
+- **Deviation:** `useCapturedSelection` takes the chat-surface element as a
+  `Ref<HTMLElement | null>` (`chatRoot`) so the focus-within-chat signal is
+  computed from `document.activeElement.contains` — the spec says "compute the
+  focus-within-chat signal from the active element relative to the chat surface"
+  without fixing the parameter shape, so the ref is the host's binding seam. An
+  explicit `clear()` is treated as a deselection regardless of focus (it cannot
+  be a focus hand-off).
