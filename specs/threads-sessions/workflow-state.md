@@ -19,8 +19,8 @@ artifacts:
   implementation-log.md: in-progress (IMPL-TS-001; domain T-TS-002..006 + infra T-TS-007..013 + application T-TS-014..025 + UI T-TS-026..035 + wire-in T-TS-037/038 + styles T-TS-036 + dev-smoke T-TS-039 done; gate T-TS-040/041 [human manual legs] + T-TS-042 [orchestrator verify] remain)
   test-plan.md: pending
   test-report.md: pending
-  review.md: pending
-  traceability.md: pending
+  review.md: complete (REVIEW-TS-001; verdict BLOCKED — 3 P1 real-path blockers R-TS-001/002/003)
+  traceability.md: complete-with-broken-links (TRACE-TS-001; REQ-TS-018/019/021 chains broken at code→test)
   release-notes.md: pending
   retrospective.md: pending
 ---
@@ -39,7 +39,7 @@ artifacts:
 | 6. Tasks | `tasks.md` | complete (TASKS-TS-001) |
 | 7. Implementation | `implementation-log.md` + code | in-progress (domain + infra + application + UI + wire-in + styles + dev-smoke done; gate T-TS-040/041 [human] + T-TS-042 [orchestrator] remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
-| 9. Review | `review.md`, `traceability.md` | pending |
+| 9. Review | `review.md`, `traceability.md` | complete — **verdict BLOCKED** (REVIEW-TS-001) |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
 
@@ -526,4 +526,71 @@ self-parity-review vs claudian after each big chunk; merge P3 to `next` autonomo
                           self-review over the seven sub-surfaces + draft PR into next) + qa
                           (test-plan.md authoring + TEST-TS-026 dev-leg recording).
                           NEXT AGENT: human (T-TS-040/041) ∥ orchestrator (T-TS-042).
+
+2026-05-25 (reviewer, parity review): REVIEW-TS-001 + TRACE-TS-001 written →
+                          specs/threads-sessions/{review.md,traceability.md}. VERDICT = **BLOCKED**
+                          (autonomous self-review gate, pre-merge to next). Reviewed feature/threads-
+                          sessions @ 5d1b52f vs claudian-main, P3 surface scoped out of the 856-file
+                          reboot diff (base merge-base=8b7cb77). Ran the threads app + tabsStore suites
+                          (68 passed) and quality:metrics (overall 64.3, maturity L1 — pending artifacts,
+                          not a signal).
+
+                          HEADLINE — THREE P1 BLOCKERS, all the R-RR-001 failure mode (real-CLI/real-
+                          Obsidian path dead/incomplete but UNIT-GREEN via Mock/Fixture):
+                            - R-TS-001 (REQ-TS-019/020): rewind eligibility keys on
+                              ChatMessage.assistantMessageId, which is NEVER set on the live turn path
+                              (assistantMessage()/sink legs/ClaudeStreamReducer/MockChatRuntime all omit
+                              it; only LocalStorage fixtures + hand-seeded tests carry it). The rewind
+                              control therefore never renders for any real conversation. Claudian derives
+                              it from the SDK turn UUID (ClaudeChatRuntime.ts:500-515).
+                            - R-TS-002 (REQ-TS-021): conversation-only rewind does NOT rewind the provider
+                              session on the subprocess CLI — setResumeCheckpoint stores resumeCheckpoint
+                              (ClaudeCliChatRuntime.ts:169) but query() logs+clears it (:80-85) and
+                              _buildArgs emits only --resume <sessionId> (:193-206). UI truncates so it
+                              LOOKS rewound; the model continues from the latest state. Claudian passes
+                              resumeSessionAt to the Agent SDK (ClaudeQueryOptionsBuilder.ts:164-166).
+                              LIKELY a transport-mismatch → architect ADR (SDK vs subprocess) needed.
+                            - R-TS-003 (REQ-TS-018): fork lineage (forkSource providerState) is derived by
+                              buildForkPlan.ts:42 then DROPPED — tabsStore.forkActive omits providerState
+                              from the payload (:382), _persistTab hard-codes providerState:{} (:693). Forked
+                              tabs persist with no lineage → next turn cold-starts instead of resuming the
+                              source session at the fork point.
+
+                          P2 correctness: R-TS-004 (_persistTab resets createdAt + wipes providerState on
+                          every save → wrong history ordering/dates + lineage loss), R-TS-005 (resume
+                          clobbers the active tab incl. an in-flight stream with no cancel/guard), R-TS-006
+                          (compact boundary may be dropped — no live assistant message to attach
+                          onContextCompacted to). Brand: R-TS-007 — 🗑/✎/⌃ emoji+glyphs in
+                          ResumeSessionDropdown.vue instead of SpIcon (Lucide) — emoji is brand-blocking-
+                          class; folded into BLOCKED. Parity polish (P3): R-TS-008 badge priority
+                          (streaming-vs-attention swapped vs Claudian), R-TS-009 per-badge data-provider
+                          (defer P9), R-TS-010 resolveSessionId omits providerSessionId lookup.
+
+                          SOLID (do not regress): per-tab streaming isolation (one runtime/tab + tabId-
+                          scoped sink closures), the pure codec (resume DOES reconstruct rich contentBlocks
+                          — the flagged most-likely-gap is actually fine), zero provider branches
+                          (REQ-TS-026 clean), additivity intact (REQ-TS-028), title-gen uses a FRESH runtime
+                          (no forceColdStart pollution), Obsidian-Modal seams keep Vue obsidian-free.
+
+                          CORRECT DEFERRALS confirmed (not gaps): P4 command-words, P7 approvals, P5
+                          attachments, P8 MCP, P9 other-provider history, NG7 code-rewind fs effect (gated
+                          by construction). Tabs-across-reload is out of P3 scope (Claudian doesn't persist
+                          open tabs either).
+
+                          HAND-OFF → orchestrator: dispatch fixes to OWNING agents, then re-test + re-review.
+                            - dev: R-TS-001 (runtime+reducer+sink surface assistantMessageId), R-TS-003/004
+                              (carry+persist fork lineage; preserve createdAt; persist providerState),
+                              R-TS-005 (resume guard/cancel), R-TS-006 (compact live message), R-TS-007
+                              (emoji→SpIcon).
+                            - architect: R-TS-002 — decide SDK-vs-subprocess transport for the rewind-at
+                              seam (ADR), or amend REQ-TS-021 to the achievable semantics. Do not ship the
+                              silent no-op.
+                            - qa: after fixes, add REAL-SHAPED contract tests for the three seams (drive the
+                              actual ClaudeStreamReducer / assert resume-at args / assert persisted lineage —
+                              NOT fixture-seeded DTOs), author test-plan.md + test-report.md, run the manual
+                              legs TEST-TS-M1/M2 (which would have caught R-TS-001/002/003).
+                            - reviewer: regenerate traceability.md (clear the 3 broken chains) + re-verdict
+                              once the blockers close.
+                          P3 must NOT merge to next until R-TS-001..007 are resolved (or R-TS-002 descoped
+                          by ADR) and the verify gate (T-TS-042) is green.
 ```
