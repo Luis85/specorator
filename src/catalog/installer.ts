@@ -10,6 +10,8 @@ import { appendAudit } from "./auditlog";
 import { partitionTools, allowedToolsLine } from "./policy";
 import { geminiManifest, GEMINI_MANIFEST_PATH } from "./gemini";
 import { scanForInjection, HARD_BLOCK_KINDS } from "./scanner";
+import { mergeHook, unmergeHook, HOOKS_PATH, type HookFragment } from "./hooks";
+import { detectSyncedVault } from "../settings/HookConsentModal";
 
 export class ConflictError extends Error {
   constructor(public path: string) {
@@ -34,6 +36,10 @@ export interface EnableOptions {
   onConflict?: (path: string) => Promise<ConflictChoice>;
   /** resolve a Specorator-tracked-but-user-edited file. */
   onUserModified?: (path: string) => Promise<ConflictChoice>;
+  /** Phase 3: opt-in flag to merge hook assets into hooks.json. OFF by default. */
+  enableHooks?: boolean;
+  /** Phase 3: sink for non-fatal warnings (synced-vault notice, backup paths). */
+  warn?: (msg: string) => void;
 }
 
 /** What enableAsset reports back so the consent UI can surface destructive grants (B4). */
@@ -43,6 +49,12 @@ export interface EnableResult {
 }
 
 function parentDir(p: string): string { return p.slice(0, p.lastIndexOf("/")) || "."; }
+
+function parseHookFragment(body: string): HookFragment {
+  const m = /```json\n([\s\S]*?)\n```/.exec(body);
+  if (!m) throw new Error("hook asset missing ```json fragment");
+  return JSON.parse(m[1]) as HookFragment;
+}
 
 function trackedHashFor(
   state: Record<string, { paths: string[]; hash: string }>, path: string,
@@ -109,6 +121,37 @@ async function writePlatformFile(
   await maybeEmitGeminiManifest(platform, a.version, fs, written, paths);
 }
 
+async function installHookAsset(
+  fs: FileSystem,
+  a: AssetMeta,
+  opts: EnableOptions,
+): Promise<void> {
+  // Hooks are opt-in — never merge without explicit consent.
+  if (!opts.enableHooks) return;
+
+  const bodyHash = await sha256(a.body);
+
+  // Synced-vault warning before any merge.
+  const sync = await detectSyncedVault(fs);
+  if (sync) {
+    const warnFn = opts.warn ?? ((m: string) => console.warn(m));
+    warnFn(
+      `specorator: enabling hook "${a.id}" in a vault under ${sync}; ` +
+        `the auto-running command will propagate to everything that syncs this vault.`,
+    );
+  }
+
+  const frag = parseHookFragment(a.body);
+  await mergeHook(fs, HOOKS_PATH, frag);
+  await saveRecord(fs, a.id, {
+    version: a.version,
+    platforms: ["claude"],
+    paths: [HOOKS_PATH],
+    hash: bodyHash,
+  });
+  await appendAudit(fs, { action: "enable", id: a.id, hash: bodyHash });
+}
+
 async function installAsset(
   fs: FileSystem,
   a: AssetMeta,
@@ -117,6 +160,12 @@ async function installAsset(
   opts: EnableOptions,
   destructiveAll: string[],
 ): Promise<void> {
+  // Phase 3: hook assets follow a separate path (hooks.json merge, not file write).
+  if (a.type === "hook") {
+    await installHookAsset(fs, a, opts);
+    return;
+  }
+
   const bodyHash = await sha256(a.body);
 
   // R2 / Decision 4: scan gate BEFORE any write, HARD-BLOCKS.
@@ -177,8 +226,13 @@ export async function disableAsset(fs: FileSystem, id: string): Promise<void> {
   const state = await loadState(fs);
   if (!Object.hasOwn(state, id)) return;
   const rec = state[id];
-  for (const path of rec.paths) {
-    if (await fs.exists(path)) await fs.remove(path);
+  // Phase 3: hook records have exactly [HOOKS_PATH] — unmerge instead of remove.
+  if (rec.paths.length === 1 && rec.paths[0] === HOOKS_PATH) {
+    await unmergeHook(fs, HOOKS_PATH, id);
+  } else {
+    for (const path of rec.paths) {
+      if (await fs.exists(path)) await fs.remove(path);
+    }
   }
   await removeRecord(fs, id);
   await appendAudit(fs, { action: "disable", id, hash: rec.hash });
