@@ -13,6 +13,9 @@ import type {
 	MentionDataProviderPort,
 	ProviderCommandCatalogPort,
 	ShellExecPort,
+	AuxModelPort,
+	SelectionSourcePort,
+	SelectionHighlightPort,
 } from '@/domain/ports';
 
 /**
@@ -52,3 +55,12 @@ export const MENTION_DATA_PROVIDER_PORT: InjectionKey<MentionDataProviderPort> =
 export const PROVIDER_COMMAND_CATALOG_PORT: InjectionKey<ProviderCommandCatalogPort> =
 	Symbol('ProviderCommandCatalogPort');
 export const SHELL_EXEC_PORT: InjectionKey<ShellExecPort> = Symbol('ShellExecPort');
+
+// P5 context-attachments ports (SPEC-CA-004/005, ADR-CA-002 §1 / ADR-CA-003 §1).
+// Own keys, no aggregate — AuxModelPort is the one-shot cold-start aux query;
+// the two selection ports split capture (source) from paint (highlight).
+export const AUX_MODEL_PORT: InjectionKey<AuxModelPort> = Symbol('AuxModelPort');
+export const SELECTION_SOURCE_PORT: InjectionKey<SelectionSourcePort> =
+	Symbol('SelectionSourcePort');
+export const SELECTION_HIGHLIGHT_PORT: InjectionKey<SelectionHighlightPort> =
+	Symbol('SelectionHighlightPort');

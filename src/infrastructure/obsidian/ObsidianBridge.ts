@@ -85,6 +85,12 @@ export class ObsidianBridge
 		return this.app.vault.read(file);
 	}
 
+	// P5 SPEC-CA-006 — real vault byte read lands in T-CA-014 (coverage-excluded,
+	// manual leg TEST-CA-M3). Throwing stub keeps typecheck green meanwhile.
+	async readBinary(path: string): Promise<Uint8Array> {
+		throw new Error(`[ObsidianBridge] readBinary not yet implemented (T-CA-014): ${path}`);
+	}
+
 	async writeFile(path: string, content: string): Promise<void> {
 		const normalized = normalizePath(path);
 		const existing = this.app.vault.getAbstractFileByPath(normalized);

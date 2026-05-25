@@ -56,6 +56,12 @@ export class LocalStorageBridge
 		return value;
 	}
 
+	// P5 SPEC-CA-006 — localStorage-backed bytes land in T-CA-013.
+	// Throwing stub keeps typecheck green without pre-empting the RED test.
+	async readBinary(path: string): Promise<Uint8Array> {
+		throw new Error(`[LocalStorageBridge] readBinary not yet implemented (T-CA-013): ${path}`);
+	}
+
 	async writeFile(path: string, content: string): Promise<void> {
 		localStorage.setItem(FILE_PREFIX + path, content);
 	}

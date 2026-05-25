@@ -80,5 +80,44 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
 - **Verify:** `vue-tsc -p tsconfig.lint.json` 0 CA errors; `eslint` clean;
   `vitest run tests/domain/chat/attachments/ tests/domain/chat/ChatTurn.ts.test.ts`
   7/7 green.
-- **Commit:** _this commit._
+- **Commit:** `0138abe`.
 - **Deviation:** none.
+
+### T-CA-005 — RED ports + `VaultPort.readBinary` shapes (🧪 qa)
+
+- **Spec/test:** TEST-CA-010/021/028 (shape legs); SPEC-CA-004/005/006/028.
+- **Files:** `tests/domain/ports/AuxModelPort.test.ts`,
+  `tests/domain/ports/SelectionSourcePort.test.ts`,
+  `tests/domain/ports/SelectionHighlightPort.test.ts`,
+  `tests/domain/ports/VaultPort.ts.test.ts` (new).
+- **Outcome:** done — RED confirmed (`vue-tsc -p tsconfig.lint.json` failed on
+  the three missing ports / three keys / `readBinary` member).
+- **Commit:** `1b…` (see `git log`).
+
+### T-CA-006 — Three ports + 3 keys + barrels + `VaultPort.readBinary` (🔨 dev)
+
+- **Spec/req:** SPEC-CA-004/005/006/028; REQ-CA-010/013/014/015/018/021;
+  NFR-CA-001.
+- **Files:** `src/domain/ports/AuxModelPort.ts`,
+  `src/domain/ports/SelectionSourcePort.ts`,
+  `src/domain/ports/SelectionHighlightPort.ts` (new);
+  `src/domain/ports/VaultPort.ts` (`readBinary` appended — the seven P0–P4
+  members byte-identical); `src/domain/ports/index.ts` (barrel re-exports);
+  `src/infrastructure/bridge/ports.ts` (`AUX_MODEL_PORT` /
+  `SELECTION_SOURCE_PORT` / `SELECTION_HIGHLIGHT_PORT` keys appended);
+  `MockBridge.ts` / `LocalStorageBridge.ts` / `ObsidianBridge.ts` (throwing
+  `readBinary` stubs — compile-satisfying only; real impls in T-CA-013/014).
+- **Outcome:** done — all four T-CA-005 RED port tests now green.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (full project — the three
+  bridge stubs satisfy the widened `VaultPort`); `eslint` clean;
+  `vitest run tests/domain/ports/{AuxModelPort,SelectionSourcePort,SelectionHighlightPort,VaultPort.ts}.test.ts`
+  7/7 green.
+- **Guard:** the three new keys + the new port paths match no
+  `DELETED_SUBSYSTEM_BAN` / `DELETED_INJECTION_KEYS` glob — lint green,
+  no relaxation.
+- **Commit:** _this commit._
+- **Deviation:** added throwing `readBinary` stubs to the three bridges inside
+  T-CA-006 (not named in the task body) to keep the build green between the
+  interface widening (T-CA-006) and the real impls (T-CA-013/014). The stubs
+  throw, so T-CA-012's RED test (Mock `readBinary` reads bytes) is genuinely RED
+  until T-CA-013 — TDD ordering preserved.

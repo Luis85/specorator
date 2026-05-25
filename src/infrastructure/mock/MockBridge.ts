@@ -96,6 +96,12 @@ export class MockBridge
 		return content;
 	}
 
+	// P5 SPEC-CA-006 — real scriptable impl lands in T-CA-013 (greens TEST-CA-010).
+	// Throwing stub keeps typecheck green without pre-empting the RED test.
+	async readBinary(path: string): Promise<Uint8Array> {
+		throw new Error(`[MockBridge] readBinary not yet implemented (T-CA-013): ${path}`);
+	}
+
 	async writeFile(path: string, content: string): Promise<void> {
 		this.files.set(path, content);
 	}
