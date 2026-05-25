@@ -94,3 +94,15 @@ export type { SelectionHighlightPort } from './SelectionHighlightPort';
 // P6 toolbar-controls (SPEC-TC-002, ADR-TC-002 §2). The reasoning union the
 // thinking selector folds, surfaced through the ports barrel for one-stop import.
 export type { ReasoningChoice, ReasoningEffort } from '@/domain/chat/Reasoning';
+// P6 toolbar-catalog port (SPEC-TC-004, ADR-TC-004 §1). One consumer (the toolbar
+// view-model), one port — no aggregate. The descriptor DTOs it returns are
+// re-exported from `@/domain/chat/toolbar` for one-stop import.
+export type { ToolbarCatalogPort } from './ToolbarCatalogPort';
+export type {
+	ModelOption,
+	ModeDescriptor,
+	ReasoningDescriptor,
+	ServiceTierDescriptor,
+	ToolbarCatalog,
+	TabControls,
+} from '@/domain/chat/toolbar';

@@ -95,5 +95,35 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   `obsidian`/`node:*`/Vue/class; no secret / no path outside the catalog.
 - **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); `eslint`
   exit 0 on the three new files; `vitest run tests/domain/chat/toolbar/` 4/4 green.
+- **Commit:** `2dc706e`.
+- **Deviation:** none.
+
+### T-TC-005 — RED `ToolbarCatalogPort` + `TOOLBAR_CATALOG_PORT` key + barrel (🧪 qa)
+
+- **Spec/test:** TEST-TC-003/010 (port-shape legs); SPEC-TC-004; REQ-TC-003/010;
+  NFR-TC-002.
+- **Files:** `tests/domain/ports/ToolbarCatalogPort.test.ts` (new — asserts the
+  `getCatalog(providerId): ToolbarCatalog` signature, the own
+  `InjectionKey<ToolbarCatalogPort>` key, the barrel re-export equality).
+- **Outcome:** done — RED confirmed (`vue-tsc -p tsconfig.lint.json` failed on the
+  missing port, the missing `TOOLBAR_CATALOG_PORT` key, and the barrel re-export).
+- **Commit:** `a747ce9`.
+
+### T-TC-006 — `ToolbarCatalogPort` + `TOOLBAR_CATALOG_PORT` key + barrel re-export (🔨 dev)
+
+- **Spec/req:** SPEC-TC-004; REQ-TC-003/010; NFR-TC-002/010.
+- **Files:** `src/domain/ports/ToolbarCatalogPort.ts` (new —
+  `getCatalog(providerId: ProviderId): ToolbarCatalog`, documented synchronous +
+  total, never throws, unknown-provider/load-miss → safe default, never branched on
+  by the consumer); `src/domain/ports/index.ts` (barrel re-exports the port + the
+  `ToolbarCatalog`/`TabControls`/descriptor DTOs for one-stop import);
+  `src/infrastructure/bridge/ports.ts` (`TOOLBAR_CATALOG_PORT` `InjectionKey`
+  appended — own key, no aggregate).
+- **Outcome:** done — the TEST-TC-003/010 port-shape legs now green (2/2). One
+  consumer, one port (ADR-008). No `obsidian`/`node:*`/Vue; no class.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); `eslint`
+  exit 0 on the four changed files (the new key/port imports resolve clean — guard
+  green, no relaxation); `vitest run tests/domain/ports/ToolbarCatalogPort.test.ts`
+  2/2 green.
 - **Commit:** _this commit._
 - **Deviation:** none.

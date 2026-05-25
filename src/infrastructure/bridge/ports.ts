@@ -16,6 +16,7 @@ import type {
 	AuxModelPort,
 	SelectionSourcePort,
 	SelectionHighlightPort,
+	ToolbarCatalogPort,
 } from '@/domain/ports';
 
 /**
@@ -64,3 +65,9 @@ export const SELECTION_SOURCE_PORT: InjectionKey<SelectionSourcePort> =
 	Symbol('SelectionSourcePort');
 export const SELECTION_HIGHLIGHT_PORT: InjectionKey<SelectionHighlightPort> =
 	Symbol('SelectionHighlightPort');
+
+// P6 toolbar-controls (SPEC-TC-004, ADR-TC-004 §1). Own key, no aggregate — one
+// consumer (the toolbar view-model) reads the per-provider option lists +
+// descriptors through it.
+export const TOOLBAR_CATALOG_PORT: InjectionKey<ToolbarCatalogPort> =
+	Symbol('ToolbarCatalogPort');
