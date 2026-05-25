@@ -19,7 +19,9 @@ export type { TranslationPort } from './TranslationPort';
 export type { Unsubscriber } from './shared';
 
 // P1 chat-core ports (SPEC-CC-001, SPEC-CC-007, SPEC-CC-009).
-export type { ChatRuntimePort } from './ChatRuntimePort';
+// P3 (SPEC-TS-003) appends `RuntimeCapabilities` alongside the additive
+// ChatRuntimePort members.
+export type { ChatRuntimePort, RuntimeCapabilities } from './ChatRuntimePort';
 export type {
 	MarkdownRenderPort,
 	MarkdownNode,

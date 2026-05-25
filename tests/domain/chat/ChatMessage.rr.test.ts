@@ -1,15 +1,14 @@
 /**
- * T-RR-002 (TEST-RR-002) — RED: `ChatMessage` grows additively with
+ * T-RR-002 (TEST-RR-002) — `ChatMessage` grows additively with
  * `contentBlocks?`/`toolCalls?` (claudian-main `chat.ts:46/47`), the six P1
- * fields stay byte-identical, and the still-excluded members (`images`, rewind
- * ids, `currentNote`, `isInterrupt`, `isRebuiltContext`, `durationFlavorWord`)
- * remain absent.
+ * fields stay byte-identical. The rewind ids were P2-excluded but are now P3
+ * additive (SPEC-TS-004, T-TS-005) — their presence is asserted in
+ * `ChatMessage.ts.test.ts` (TEST-TS-004); this P2 file no longer asserts their
+ * absence. The remaining members (`images`, `currentNote`, `isInterrupt`,
+ * `isRebuiltContext`, `durationFlavorWord`) stay excluded.
  *
- * The compile-time `Equals<>` asserts on `contentBlocks`/`toolCalls` fail
- * `npx vue-tsc --noEmit -p tsconfig.lint.json` until T-RR-006 grows
- * `ChatMessage`. (The six P1 fields stay green.)
- *
- * Traces: TEST-RR-002, SPEC-RR-008, REQ-RR-010; ADR-RR-001 §1.
+ * Traces: TEST-RR-002, SPEC-RR-008, REQ-RR-010, SPEC-TS-004; ADR-RR-001 §1,
+ * ADR-TS-002 §4.
  */
 import { describe, it, expect } from 'vitest';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
@@ -42,18 +41,14 @@ void _contentBlocks;
 void _toolCalls;
 
 // ---- still-excluded members (later-phase) ----
+// (The rewind ids userMessageId/assistantMessageId/resumeAtMessageId moved to
+// P3 additive growth — SPEC-TS-004, asserted present in ChatMessage.ts.test.ts.)
 const _noImages: Equals<HasKey<ChatMessage, 'images'>, false> = true;
-const _noUserMessageId: Equals<HasKey<ChatMessage, 'userMessageId'>, false> = true;
-const _noAssistantMessageId: Equals<HasKey<ChatMessage, 'assistantMessageId'>, false> = true;
-const _noResumeAtMessageId: Equals<HasKey<ChatMessage, 'resumeAtMessageId'>, false> = true;
 const _noCurrentNote: Equals<HasKey<ChatMessage, 'currentNote'>, false> = true;
 const _noIsInterrupt: Equals<HasKey<ChatMessage, 'isInterrupt'>, false> = true;
 const _noIsRebuiltContext: Equals<HasKey<ChatMessage, 'isRebuiltContext'>, false> = true;
 const _noDurationFlavorWord: Equals<HasKey<ChatMessage, 'durationFlavorWord'>, false> = true;
 void _noImages;
-void _noUserMessageId;
-void _noAssistantMessageId;
-void _noResumeAtMessageId;
 void _noCurrentNote;
 void _noIsInterrupt;
 void _noIsRebuiltContext;

@@ -28,8 +28,14 @@ export interface PreparedChatTurn {
 
 /** Query options — mirrors `runtime/types.ts:64`. */
 export interface ChatRuntimeQueryOptions {
-	/** P1 optional; allowedTools/mcpMentions/enabledMcpServers/forceColdStart/externalContextPaths are P2+. */
+	/** P1 optional; allowedTools/mcpMentions/enabledMcpServers/externalContextPaths are P2+. */
 	model?: string;
+	/**
+	 * P3 additive (SPEC-TS-003/009, ADR-TS-003 §1): when set, the runtime ignores
+	 * any bound session for this single query (a cold-start / one-shot query, used
+	 * by the title-gen side-query so it does not steer the tab's main stream).
+	 */
+	forceColdStart?: boolean;
 }
 
 /** Ensure-ready options — mirrors `runtime/types.ts:73`. */

@@ -13,6 +13,7 @@ import type {
 	ChatRuntimeEnsureReadyOptions,
 	Unsubscriber,
 	LoggerPort,
+	RuntimeCapabilities,
 } from '@/domain/ports';
 import { ClaudeStreamReducer } from './reduceClaudeStream';
 
@@ -43,6 +44,8 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 	private cancelled = false;
 	private child: ChildProcess | null = null;
 	private readonly readyListeners = new Set<(ready: boolean) => void>();
+	/** P3 (SPEC-TS-009): the conversation-only rewind checkpoint pending for the next turn. */
+	private resumeCheckpoint: string | null = null;
 
 	constructor(
 		private readonly logger?: LoggerPort,
@@ -74,6 +77,12 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 		queryOptions?: ChatRuntimeQueryOptions,
 	): AsyncGenerator<StreamChunk> {
 		this.cancelled = false;
+		if (this.resumeCheckpoint !== null) {
+			// A conversation rewind set a checkpoint; the next turn continues from it.
+			// No message content is logged (NFR-TS-013). Consumed once per turn.
+			this.logger?.debug('claude-cli.resume_checkpoint_applied');
+			this.resumeCheckpoint = null;
+		}
 		const reducer = new ClaudeStreamReducer();
 		const binary = this._resolveBinary();
 		if (binary === null) {
@@ -132,6 +141,7 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 
 	resetSession(): void {
 		this.sessionId = null;
+		this.resumeCheckpoint = null;
 	}
 
 	onReadyStateChange(listener: (ready: boolean) => void): Unsubscriber {
@@ -143,6 +153,28 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 
 	isReady(): boolean {
 		return this.ready;
+	}
+
+	// ── P3 additive members (SPEC-TS-003/009, ADR-TS-002 §3) ────────────────────
+	// Maps to the CLI session/resume seam (mirrors claudian-main's
+	// SessionManager.setSessionId + ClaudeRewindService conversation mode). Bound
+	// state setters — no stream, no Result.
+
+	resumeSession(sessionId: string): void {
+		// Bind the next `--resume` to this session id (an empty id cold-starts the
+		// next turn — EC-TS-5).
+		this.sessionId = sessionId.length > 0 ? sessionId : null;
+	}
+
+	setResumeCheckpoint(assistantMessageId: string): void {
+		// Conversation-only rewind point for the next turn; no filesystem/git effect
+		// (NG7). Last call wins.
+		this.resumeCheckpoint = assistantMessageId;
+	}
+
+	getCapabilities(): RuntimeCapabilities {
+		// Claude supports both fork (derive) and conversation rewind (REQ-TS-027).
+		return { supportsFork: true, supportsRewind: true };
 	}
 
 	// ── internals ─────────────────────────────────────────────────────────────
@@ -160,7 +192,11 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 
 	private _buildArgs(queryOptions?: ChatRuntimeQueryOptions): string[] {
 		const argv = ['--print', '--output-format', 'stream-json', '--verbose'];
-		if (this.sessionId !== null && this.sessionId.length > 0) {
+		// P3 (SPEC-TS-009): a forceColdStart query ignores any bound session for
+		// this single query — no `--resume` (so the title side-query does not steer
+		// the tab's main stream).
+		const coldStart = queryOptions?.forceColdStart === true;
+		if (!coldStart && this.sessionId !== null && this.sessionId.length > 0) {
 			argv.push('--resume', this.sessionId);
 		}
 		if (queryOptions?.model !== undefined && queryOptions.model.length > 0) {
