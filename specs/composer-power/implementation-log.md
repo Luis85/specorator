@@ -658,3 +658,113 @@ try/catch ban honoured (`tryAsync` reused). Application imports domain only.
   modes mount; the standalone leg of TEST-CP-026 + the TEST-CP-027 grep-gate hook),
   greened by **T-CP-049**, then **T-CP-050** (`npm run dev` composer smoke). The manual
   legs **TEST-CP-M1/M2** + the **GATE** (T-CP-053 full verify) follow.
+
+---
+
+## WIRE-IN batch (T-CP-048..050) — provide composer ports + seam + mount
+
+### T-CP-048 — RED: provide the three ports + instruction-confirm seam + mount (🧪 qa)
+
+- **Spec:** TEST-CP-026 (mount leg), TEST-CP-027; SPEC-CP-028, SPEC-CP-038;
+  REQ-CP-004/009/017/030; NFR-CP-002.
+- **Files:** `tests/ui/chat/composer/mount.ts.test.ts` (new, lines 1-212).
+- **What:** the failing component/integration test asserting (a) the standalone
+  (`src/ui/main`) surface mounts the live composer and typing `/` then `@` opens the
+  `composer-dropdown` (the catalog + mention ports reached the live arbiter); (b) the
+  Obsidian `AgentSidebarView.onOpen` mounts the same surface with the composer ports
+  provided; (c) an emitted ask-user request on the active runtime renders the
+  `inline-ask` block in place of the composer (the depth-counted queue). RED because
+  `ChatSurface` mounted `ChatComposer` without the arbiter and neither entry point
+  provided the three ports / `INSTRUCTION_CONFIRM` → no dropdown, no inline block.
+- **Commit:** `39208ef`.
+- **RED proof:** 2 failed / 1 passed (the dropdown + inline-ask assertions fail; the
+  bare surface-mount passes) — clean assertion failures, not crashes.
+
+### T-CP-049 — Provide the three ports + the instruction-confirm seam; mount the composer modes (🔨 dev)
+
+- **Spec:** SPEC-CP-028, SPEC-CP-038; REQ-CP-004/009/017/030; NFR-CP-002.
+- **Files:** `src/plugin/AgentSidebarView.ts` (provide block + InstructionConfirmModal
+  import/launcher), `src/ui/main.ts` (provide block + browser stand-in),
+  `src/ui/chat/ChatSurface.vue` (the `buildComposer` wiring + the `EnqueueRuntime`
+  bridge + `dispatchBuiltIn`), `src/ui/chat/ChatComposer.vue` (`defineExpose`
+  `getValue`/`getCaret`/`applyInsert`; simplified palette-confirm), and
+  `src/ui/chat/composer/EnqueueRuntime.ts` (new — the inline-callback enqueue decorator).
+- **What:** greens TEST-CP-026 (mount leg) + TEST-CP-027. Both entry points now
+  `app.provide(MENTION_DATA_PROVIDER_PORT, bridge.createMentionDataProvider())` +
+  `app.provide(PROVIDER_COMMAND_CATALOG_PORT, bridge.createProviderCommandCatalog())`
+  (per-mount factories) + `app.provide(SHELL_EXEC_PORT, bridge.shellExec)` (stateless)
+  + `app.provide(INSTRUCTION_CONFIRM, …)` — the Obsidian view opens the REAL
+  `InstructionConfirmModal`, `ui/main.ts` provides a browser-safe stand-in (accept
+  verbatim, no `window.*`). `ChatSurface` builds the live `useComposerMode` arbiter +
+  `RespondToInlineBlockUseCase` ONLY when all three ports are present (degrades to
+  pure P1 otherwise), bridges `getValue`/`getCaret`/`onInsert` to the mounted
+  `ChatComposer` textarea, feeds `onBangBashOutput` → `bangBashOutput` → the
+  `BangBashOutput` block, and maps built-in actions (`new`→`openTab`,
+  `compact`→`compactActive`) to the existing tab flow. No router reintroduced; no
+  `obsidian`/`node:*` under `src/ui/**`.
+- **Commit:** `0afaefe`.
+- **KEY DECISION (inline-block bridge):** the runtime→render→answer knot is resolved
+  by `EnqueueRuntime`, a `ChatRuntimePort` decorator that wraps ONLY the three inline
+  callback setters to `enqueue` the request for render BEFORE delegating to the
+  registered capture callback; every other member delegates verbatim. So
+  `RespondToInlineBlockUseCase` (built over the decorator) still captures the runtime's
+  awaiting `resolve` — ONE registration per callback, no last-wins conflict between
+  rendering (arbiter queue) and answering (use-case resolve). Chosen over a Proxy
+  (lint-hostile: `unbound-method`/`no-unsafe-return`) — an explicit delegating class is
+  lint-clean and DTO-only.
+- **Deviation:** the composer binds to ONE runtime built via the per-tab
+  `CHAT_RUNTIME_FACTORY` (for the plan/inline capability gate + the inline callback
+  channel), not the live streaming tab runtime. Under the single-runtime mock (test
+  spies `createChatRuntime` to one instance) the composer's runtime IS the tab runtime,
+  so an emitted request renders. The per-tab-streaming-runtime ↔ composer-runtime
+  binding (one composer per active tab) is a P5+ refinement; P4 wires one composer
+  runtime, matching the single `ChatComposer` instance below the tab region.
+- **Deviation:** `/clear`/`/add-dir`/`/resume`/`/fork` built-in actions log a `debug`
+  with no surface side effect (catalog rows only) — the full dispatch is beyond the
+  P4 wire-in (the spec routes them to "the existing flow"; only `new`/`compact` have a
+  P4 store action). No `// TODO`; recorded here.
+- **Deviation:** `ChatComposer` now `defineExpose`s `getValue`/`getCaret`/`applyInsert`
+  so the externally-built arbiter writes back the post-confirm value+caret (the
+  textarea stays the single source of truth, NFR-CP-005); the old manual
+  `value.value = textarea.value?.value` re-read in `onPaletteConfirm` is removed.
+
+### T-CP-050 — standalone composer-power smoke (TEST-CP-026 dev leg) (🧪 qa)
+
+- **Spec:** TEST-CP-026 (dev leg); NFR-CP-002.
+- **Files:** `tests/ui/main.ts.test.ts` (extended — new `standalone composer-power
+  smoke` describe), `specs/composer-power/test-plan.md` (TEST-CP-026 dev-leg PASS row).
+- **What:** the deterministic standalone smoke against `MockBridge`: typing `/` opens
+  the slash command dropdown, `@` opens the mention dropdown (after the debounce
+  window), Shift+Tab toggles the PLAN indicator (the capable mock,
+  `supportsPlanMode:true`), and `!echo hi`+Enter runs the scripted-echo `ShellExecPort`
+  surfacing the `bang-bash-output` block (the Mock echoes the command). `data-testid` +
+  `flushPromises`/`nextTick`; `vi.resetModules()` so `@/ui/main` re-mounts onto the
+  fresh `#app`. The instruction-mode `#` → refine → confirm stand-in → append leg + the
+  live-feel pair with the human's final review (T-CP-051/052).
+- **Commit:** `62a6636`.
+
+## Batch verification (WIRE-IN batch)
+
+- `npm run typecheck` (`vue-tsc --noEmit -p tsconfig.lint.json`) — **0 errors**
+  (whole project).
+- `npx eslint` over every touched file (`AgentSidebarView.ts`, `main.ts`,
+  `ChatSurface.vue`, `ChatComposer.vue`, `EnqueueRuntime.ts`, both new/extended test
+  files) — **0 errors** (no `v-html`/`innerHTML`, no `window.confirm`/`alert`/`prompt`,
+  no `obsidian`/`node:*` under `src/ui/**` — NFR-CP-003; the real `InstructionConfirmModal`
+  is an Obsidian `Modal` subclass under `src/plugin/modals/`).
+- Targeted `npx vitest run`:
+  - `tests/ui/chat/composer/mount.ts.test.ts` — **3 passed** (T-CP-048 greened).
+  - mount + main entry points (`mount{,.ts,.rr}.test.ts`, `main{,.ts,.rr}.test.ts`,
+    `composer/mount.ts.test.ts`) — **11 passed / 7 files** (P1/P2/P3 entry points stay
+    green; the provides are additive).
+  - `ChatSurface{,.ts}.test.ts` + `ChatComposer{,.ts}.test.ts` — **38 passed** (the
+    surface degrades to pure P1 when the composer ports are absent; the `defineExpose`
+    change preserved the P1 keyboard contract).
+  - `tests/ui/chat/composer` + `tests/ui/composables` — **90 passed / 16 files**.
+- **Not run** (orchestrator gate T-CP-053): full `npm run verify` / `build` /
+  `build:web` / `test:all` / coverage. Not pushed. `manifest.json` untouched.
+- **Remaining:** T-CP-051 (MANUAL — Obsidian mention + `.claude` catalog vault read,
+  TEST-CP-M1) + T-CP-052 (MANUAL — Obsidian `ShellExec` + real-CLI inline honesty +
+  `InstructionConfirmModal`, TEST-CP-M2) are **human-owned** (never agent-self-claimed);
+  T-CP-053 (feature DoD — full verify + grep gates + additivity + parity self-review +
+  draft PR into `next`) is the **orchestrator's** gate.

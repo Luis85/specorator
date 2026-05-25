@@ -4,7 +4,7 @@ area: CP
 current_stage: tasks
 status: active
 last_updated: 2026-05-25
-last_agent: dev (implement — ui batch 1)
+last_agent: dev (implement — wire-in batch)
 epic: claudian-reboot
 phase: P4
 integration_branch: next
@@ -16,8 +16,8 @@ artifacts:
   design.md: complete (DESIGN-CP-001; A/B/C; ADR-CP-001..004 accepted)
   spec.md: complete (SPEC-CP-001..038; TEST-CP-001..028 + M1/M2)
   tasks.md: complete (TASKS-CP-001; T-CP-001..053)
-  implementation-log.md: in-progress (DOMAIN+INFRA T-CP-001..014 + T-CP-047 + APPLICATION T-CP-015..026 + UI batch 1 T-CP-027..034 + UI batch 2 T-CP-035..046 done; WIRE-IN T-CP-048..050 + GATE T-CP-051..053 remain)
-  test-plan.md: in-progress (guard verification + M1/M2 manual legs scheduled; TEST-CP status by batch)
+  implementation-log.md: in-progress (DOMAIN+INFRA T-CP-001..014 + T-CP-047 + APPLICATION T-CP-015..026 + UI batch 1 T-CP-027..034 + UI batch 2 T-CP-035..046 + WIRE-IN T-CP-048..050 done; remaining = T-CP-051/052 manual legs [human, final review] + T-CP-053 verify gate [orchestrator])
+  test-plan.md: in-progress (guard verification + M1/M2 manual legs scheduled; TEST-CP-026 dev leg PASS 2026-05-25; TEST-CP status by batch)
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-CP-001) |
 | 5. Specification | `spec.md` | complete (SPEC-CP-001..038) |
 | 6. Tasks | `tasks.md` | complete (TASKS-CP-001; T-CP-001..053) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN+INFRA + tokens + APPLICATION + UI batch 1 + UI batch 2 done; WIRE-IN T-CP-048..050 + GATE T-CP-051..053 remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN+INFRA + tokens + APPLICATION + UI batch 1 + UI batch 2 + WIRE-IN T-CP-048..050 done; remaining = T-CP-051/052 manual legs [human] + T-CP-053 verify gate [orchestrator]) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -515,4 +515,52 @@ self-parity-review vs claudian after each big chunk; merge P4 to `next` autonomo
                           T-CP-050 (npm run dev composer smoke). First task of the wire-in batch = T-CP-048.
                           No blockers; all UI components + useComposerMode.submitInstruction + the seam +
                           the Mock fixtures/scripted ShellExec are the ready inputs for the provide+mount.
+
+2026-05-25 (dev, implement — wire-in batch): WIRE-IN batch T-CP-048..050 complete
+                          (strict TDD, one Conventional commit per task — RED test(cp) then feat(cp)).
+                          Delivered: the both-entry-point provides + the composer-mode mount (T-CP-048
+                          RED 39208ef → T-CP-049 0afaefe) — AgentSidebarView.onOpen + src/ui/main.ts now
+                          app.provide MENTION_DATA_PROVIDER_PORT (bridge.createMentionDataProvider(),
+                          per-mount factory) + PROVIDER_COMMAND_CATALOG_PORT
+                          (bridge.createProviderCommandCatalog(), factory) + SHELL_EXEC_PORT
+                          (bridge.shellExec, stateless) + INSTRUCTION_CONFIRM (the Obsidian view → the
+                          REAL InstructionConfirmModal launcher under src/plugin/modals/; ui/main.ts → a
+                          browser-safe accept-verbatim stand-in, no window.*); ChatSurface builds the
+                          live useComposerMode arbiter + RespondToInlineBlockUseCase when the three ports
+                          are present (degrades to pure P1 when absent so P1/P2/P3 mount+surface tests
+                          stay green), bridges getValue/getCaret/onInsert to the mounted ChatComposer
+                          (now defineExpose getValue/getCaret/applyInsert), feeds onBangBashOutput →
+                          bangBashOutput → the BangBashOutput block, and maps built-ins (new→openTab,
+                          compact→compactActive). The runtime→render→answer knot is resolved by a new
+                          src/ui/chat/composer/EnqueueRuntime.ts decorator wrapping ONLY the 3 inline
+                          callback setters to enqueue-for-render before delegating to the use case's
+                          capture (one registration per callback, no last-wins conflict). And the
+                          standalone composer smoke (T-CP-050 62a6636) — tests/ui/main.ts.test.ts drives
+                          /→slash dropdown, @→mention dropdown, Shift+Tab→PLAN indicator (capable mock),
+                          !echo hi+Enter→scripted-echo output block against MockBridge (deterministic;
+                          live-feel + the instruction # leg pair with the human final review). DEV-SMOKE
+                          ASSERTIONS: composer-dropdown present on /, composer-dropdown present on @ after
+                          the debounce, plan-indicator present after Shift+Tab, bang-bash-output +
+                          bang-bash-output-stdout containing the echoed command on !echo hi+Enter.
+                          Verification performed: vue-tsc 0 errors (whole project); eslint 0 errors over
+                          all touched files (no v-html/innerHTML/window.confirm/obsidian under src/ui/**,
+                          NFR-CP-003); targeted vitest — composer/mount.ts.test.ts 3 passed; the 7
+                          mount+main entry-point files 11 passed (P1/P2/P3 green); ChatSurface+ChatComposer
+                          38 passed (pure-P1 degrade + the defineExpose keyboard contract preserved);
+                          composer+composables 90 passed. No test assertion changed. DEVIATIONS (logged in
+                          implementation-log.md): (a) the composer binds ONE runtime via CHAT_RUNTIME_FACTORY
+                          for the caps/inline channel (under the single-runtime mock it IS the tab runtime);
+                          the per-tab-streaming ↔ composer-runtime binding is a P5+ refinement; (b)
+                          /clear//add-dir//resume//fork built-ins log a debug with no surface side effect
+                          (only new/compact have a P4 store action; the spec routes the rest to "the existing
+                          flow"); (c) ChatComposer defineExpose getValue/getCaret/applyInsert so the arbiter
+                          writes back post-confirm value+caret (textarea = single source of truth). Not run
+                          (orchestrator gate T-CP-053): full npm run verify / build / build:web / test:all /
+                          coverage; not pushed; manifest.json untouched. REMAINING: T-CP-051 (MANUAL —
+                          Obsidian mention + .claude catalog vault read, TEST-CP-M1) + T-CP-052 (MANUAL —
+                          Obsidian ShellExec + real-CLI inline honesty + InstructionConfirmModal, TEST-CP-M2)
+                          are HUMAN-OWNED (never agent-self-claimed; recorded for the single final epic-review
+                          gate); T-CP-053 (feature DoD — full verify + grep gates + additivity + parity
+                          self-review + draft PR into next) is the ORCHESTRATOR's gate. Next agent:
+                          orchestrator (T-CP-053) after the human manual legs.
 ```
