@@ -251,7 +251,7 @@ describe('tabsStore (SPEC-TS-019)', () => {
 
 	it('loadIntoTab(current) sets messages/title/conversationId/sessionId + binds resume', () => {
 		const { store, runtimes } = freshStore();
-		const target = store.activeTabId as string;
+		const target = store.activeTabId!;
 		const messages: ChatMessage[] = [{ id: 'm1', role: 'user', content: 'hi', timestamp: 1 }];
 		store.loadIntoTab(target, {
 			conversationId: 'conv-1',
@@ -284,7 +284,7 @@ describe('tabsStore (SPEC-TS-019)', () => {
 
 	it('TEST-TS-016: truncateTo removes messages after the user message (rewind)', () => {
 		const { store } = freshStore();
-		const target = store.activeTabId as string;
+		const target = store.activeTabId!;
 		const messages: ChatMessage[] = [
 			{ id: 'u1', role: 'user', content: 'first', timestamp: 1 },
 			{ id: 'a1', role: 'assistant', content: 'reply', timestamp: 2, assistantMessageId: 'turn-1' },
@@ -301,7 +301,7 @@ describe('tabsStore (SPEC-TS-019)', () => {
 
 	it('SPEC-TS-030: a completed first turn persists a ConversationRecord to history', async () => {
 		const { store, runners, history } = freshStore();
-		const target = store.activeTabId as string;
+		const target = store.activeTabId!;
 		store.switchTab(target);
 		await store.sendMessage('Hello there');
 		const runner = runners[runners.length - 1];
@@ -316,7 +316,7 @@ describe('tabsStore (SPEC-TS-019)', () => {
 
 	it('TEST-TS-025: title ladder — fallback set immediately on first-turn done, then AI title replaces it', async () => {
 		const { store, runners } = freshStore({ titleResult: ok('Strong verb summary') });
-		const target = store.activeTabId as string;
+		const target = store.activeTabId!;
 		store.switchTab(target);
 		await store.sendMessage('Help me write a parser');
 		const runner = runners[runners.length - 1];
@@ -336,7 +336,7 @@ describe('tabsStore (SPEC-TS-019)', () => {
 		const { store, runners } = freshStore({
 			titleResult: { ok: false, error: new Error('no title') },
 		});
-		const target = store.activeTabId as string;
+		const target = store.activeTabId!;
 		store.switchTab(target);
 		await store.sendMessage('A question');
 		const runner = runners[runners.length - 1];
@@ -364,12 +364,13 @@ describe('tabsStore (SPEC-TS-019)', () => {
 		}
 	});
 
-	it('TEST-TS-022: $reset cancels every tab and leaves exactly one fresh empty tab', () => {
+	it('TEST-TS-022: $reset cancels every open tab and leaves exactly one fresh empty tab', () => {
 		const { store, runners } = freshStore();
 		store.openTab();
 		store.openTab();
+		const beforeReset = [...runners]; // the runners bound before $reset (a fresh one is spawned after)
 		store.$reset();
-		for (const runner of runners) {
+		for (const runner of beforeReset) {
 			expect(runner.cancel).toHaveBeenCalled();
 		}
 		expect(store.tabs).toHaveLength(1);
