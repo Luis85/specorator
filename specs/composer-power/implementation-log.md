@@ -343,3 +343,138 @@ try/catch ban honoured (`tryAsync` reused). Application imports domain only.
   `useComposerMode` composable: mode arbiter + depth-counted inline-block queue +
   request-id guard + debounce, greened by T-CP-028; depends on T-CP-016/018/020/
   024/026, all now done).
+
+## UI batch 1 (T-CP-027..034)
+
+### T-CP-027 — RED `useComposerMode` composable (🧪 qa)
+
+- **Spec/test:** TEST-CP-022 + TEST-CP-012 (req-guard U leg) + TEST-CP-015
+  (debounce); SPEC-CP-018/031.
+- **Files:** `tests/ui/chat/composer/useComposerMode.test.ts` (new).
+- **Outcome:** done — RED confirmed (failed to resolve the missing module).
+- **Commit:** `fce6bcc`.
+
+### T-CP-028 — `useComposerMode` composable (🔨 dev)
+
+- **Spec/req:** SPEC-CP-018/031; REQ-CP-004/014/027/032/034/035/036; NFR-CP-001/005.
+- **Files:** `src/ui/chat/composer/useComposerMode.ts` (1-300, new).
+- **Outcome:** done. The mode arbiter over the pure trigger-parse: a
+  `ref<ComposerMode>` is the SOLE arbiter of the active surface (REQ-CP-034);
+  `handleInput` re-classifies via `detectTrigger`/`shouldEnter*`; `handleKeydown`
+  returns `true` when it consumed the event (palette confirm/nav, bang-bash Enter,
+  Escape, inline-block) so the P1 send fires only when `kind==='default'` && it
+  returned `false` (REQ-CP-035); `Shift+Tab` toggles `planActive` iff
+  `getCapabilities().supportsPlanMode` and consumes the event (EC-CP-7,
+  capability-gated — never a provider branch). `paletteEntries` = built-ins ++ the
+  monotonic-request-id-guarded `getEntries` (stale discarded, EC-CP-3) or the
+  debounced `ResolveMentionUseCase.query` with an `AbortSignal` (REQ-CP-014).
+  `confirmEntry` dispatches a built-in action or inserts via `replaceTriggerToken`
+  (mention `mentionText` verbatim, REQ-CP-013). The depth-counted
+  `enqueueInlineBlock`/`resolveInlineBlock` queue restores the composer only when
+  the LAST resolves (EC-CP-12); an empty-questions chunk is ignored + `warn`.
+  `SubmitBangBashUseCase.execute` runs ONLY on an explicit Enter (S1/REQ-CP-032/
+  EC-CP-5). DTO-only reactive state — use-case/runtime/catalog live outside the
+  refs (NFR-CP-005); no `obsidian`/`node:*` import.
+- **Commit:** `8926ba0`.
+- **Deviation:** none. `useComposerMode` takes its collaborators as an options
+  object (not `inject`) so the composable unit-tests cleanly; the consumer
+  (`ChatComposer`, batch 2) wires the injected ports/use cases. Instruction/
+  bang-bash detection uses `value.trimStart().startsWith('#'/'!')` + the pure
+  `shouldEnter*` gate on the pre-trigger text (the mode persists as the body is
+  typed) — within SPEC-CP-018's "one active mode" contract.
+
+### T-CP-029 — RED port composables (🧪 qa)
+
+- **Spec/test:** TEST-CP-026 (composables U leg); SPEC-CP-026.
+- **Files:** `tests/ui/composables/{useMentionDataProviderPort,useProviderCommandCatalogPort,useShellExecPort}.test.ts` (new).
+- **Outcome:** done — RED confirmed (the three composables did not resolve).
+- **Commit:** `0de7ac8`.
+
+### T-CP-030 — port composables (🔨 dev)
+
+- **Spec/req:** SPEC-CP-026; REQ-CP-004/009/030; NFR-CP-002.
+- **Files:** `src/ui/composables/{useMentionDataProviderPort,useProviderCommandCatalogPort,useShellExecPort}.ts` (new).
+- **Outcome:** done. Each injects its own key (no aggregate, ADR-008) and throws a
+  clear "was not provided" error when absent — parity with `useChatRuntimePort` /
+  `useProviderHistoryPort`. No `obsidian` import.
+- **Commit:** `6ec9f9f`.
+- **Deviation:** none.
+
+### T-CP-031 — RED `ComposerDropdown.vue` + `MentionRow.vue` (🧪 qa)
+
+- **Spec/test:** TEST-CP-014/017; SPEC-CP-020/037.
+- **Files:** `tests/ui/chat/composer/{ComposerDropdown.test.ts,ComposerDropdown.po.ts,MentionRow.test.ts,MentionRow.po.ts}` (new).
+- **Outcome:** done — RED confirmed (neither component resolved).
+- **Commit:** `307b0be`.
+
+### T-CP-032 — `ComposerDropdown.vue` + `MentionRow.vue` (🔨 dev)
+
+- **Spec/req:** SPEC-CP-020/037; REQ-CP-001/002/005/006/007/008/009/011/013;
+  NFR-CP-003/008.
+- **Files:** `src/ui/chat/composer/ComposerDropdown.vue` (new),
+  `src/ui/chat/composer/MentionRow.vue` (new), `src/ui/i18n/locales/en.ts`
+  (composer.dropdown.hints + composer.mention.empty), `src/ui/i18n/locales/de.ts`
+  (same keys).
+- **Outcome:** done. The shared drop-UP palette: `role="listbox"`, rows
+  `role="option"` + `aria-selected`; the listbox advertises the highlighted
+  option's id via `aria-activedescendant` (the textarea binds it + keeps focus —
+  navigation moves the highlight, not DOM focus, SPEC-CP-037). Arrow Up/Down move
+  (wrap), Enter or Tab confirm (REQ-CP-005; IME-Enter is not a confirm), Escape
+  emits `close` text-unchanged (REQ-CP-008); option `mousedown` confirms without
+  stealing textarea focus; built-ins-first slash/skills rows show prefix+name
+  (`$` vs `/` distinct, EC-CP-11); mention mode renders `MentionRow`; `@` no match
+  → empty-state line, palette open (EC-CP-3b); hints text is an `aria-describedby`
+  target. `MentionRow`: file/folder single-line ellipsised path vs subagent/MCP/
+  dir two-line name+description with a category-distinct `<SpIcon>` (REQ-CP-011,
+  colour via `--sp-mention-*`). Names/descriptions are `{{ }}` text — NO `v-html`
+  (NFR-CP-003, EC-CP-13, lint-verified); `<script setup>`; no `obsidian` import; no
+  `window.confirm`/`alert`/`prompt`. The exposed `handleKeydown` returns `true`
+  when consumed (the composer forwards the textarea keydown).
+- **Commit:** `3ef0000`.
+- **Deviation:** none. The dropdown owns the highlight internally and exposes
+  `handleKeydown` via `defineExpose` (the composer forwards the textarea event) —
+  consistent with "focus stays in the textarea" (SPEC-CP-037).
+
+### T-CP-033 — RED `PlanModeIndicator.vue` + plan-mode toggle (🧪 qa)
+
+- **Spec/test:** TEST-CP-018; SPEC-CP-021/032.
+- **Files:** `tests/ui/chat/composer/{PlanModeIndicator.test.ts,PlanModeIndicator.po.ts}` (new).
+- **Outcome:** done — RED confirmed (component did not resolve).
+- **Commit:** `91c20e1`.
+
+### T-CP-034 — `PlanModeIndicator.vue` + plan-mode toggle (🔨 dev)
+
+- **Spec/req:** SPEC-CP-021/032; REQ-CP-020/021; NFR-CP-007/008.
+- **Files:** `src/ui/chat/composer/PlanModeIndicator.vue` (new).
+- **Outcome:** done. Renders the teal "PLAN" label when `active` — the non-colour
+  cue is the label text (NFR-CP-008), colour via the `--sp-plan-*` tokens
+  (SPEC-CP-029); renders nothing when not active (honest gating). The `Shift+Tab`
+  toggle lives in `useComposerMode.handleKeydown` (T-CP-028), gated on
+  `getCapabilities().supportsPlanMode` (SPEC-CP-032 — never a provider branch) and
+  consuming the keydown so focus stays in the composer; inert when `false`
+  (EC-CP-7). `<script setup>`; label as `{{ }}` text — NO `v-html`; no `obsidian`
+  import.
+- **Commit:** `bac9446`.
+- **Deviation:** the "PLAN" weight uses `--sp-font-weight-semibold` (the token set
+  has light/medium/semibold; no `--sp-font-weight-bold` exists) — perceptual
+  parity, no token leak (NFR-CP-011).
+
+## Batch verification (UI batch 1)
+
+- `npm run typecheck` (`vue-tsc --noEmit -p tsconfig.lint.json`) — **0 errors**
+  (whole project).
+- `npx eslint src/ui/chat/composer src/ui/composables/{useMentionDataProviderPort,useProviderCommandCatalogPort,useShellExecPort}.ts`
+  — **0 errors** (no `v-html`/`innerHTML`, no `window.confirm`/`alert`/`prompt`, no
+  `obsidian` import — NFR-CP-003).
+- Targeted `npx vitest run tests/ui/chat/composer tests/ui/composables` plus the
+  P1 `ChatComposer.test.ts`/`ChatSurface.test.ts` — **79 passed / 12 files**.
+- Full suite `npx vitest run --project unit` — **1048 passed / 145 files, 0
+  failed**. P1/P2/P3 + the DOMAIN/INFRA/APPLICATION P4 surface stay green under the
+  additive UI growth (NFR-CP-009); no test assertion was modified.
+- **Not run** (orchestrator gate): full `npm run verify` / `build` / `build:web`.
+  Not pushed. `manifest.json` untouched.
+- **Next batch (UI batch 2):** inline blocks + bang-bash output + instruction-
+  confirm seam + the `ChatComposer` extension. First ready task: **T-CP-035**
+  (qa RED — `InlineAskUserQuestion.vue` render + respond + capability-gated
+  read-only when `supportsInlineResponse:false`; depends on T-CP-026/028, both
+  done), greened by T-CP-036.

@@ -4,7 +4,7 @@ area: CP
 current_stage: tasks
 status: active
 last_updated: 2026-05-25
-last_agent: planner (tasks)
+last_agent: dev (implement — ui batch 1)
 epic: claudian-reboot
 phase: P4
 integration_branch: next
@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-CP-001; A/B/C; ADR-CP-001..004 accepted)
   spec.md: complete (SPEC-CP-001..038; TEST-CP-001..028 + M1/M2)
   tasks.md: complete (TASKS-CP-001; T-CP-001..053)
-  implementation-log.md: in-progress (DOMAIN+INFRA T-CP-001..014 + T-CP-047 + APPLICATION T-CP-015..026 done; UI/WIRE/GATE remain)
+  implementation-log.md: in-progress (DOMAIN+INFRA T-CP-001..014 + T-CP-047 + APPLICATION T-CP-015..026 + UI batch 1 T-CP-027..034 done; UI batch 2 + WIRE/GATE remain)
   test-plan.md: in-progress (guard verification + M1/M2 manual legs scheduled; TEST-CP status by batch)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-CP-001) |
 | 5. Specification | `spec.md` | complete (SPEC-CP-001..038) |
 | 6. Tasks | `tasks.md` | complete (TASKS-CP-001; T-CP-001..053) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN+INFRA + tokens + APPLICATION done; UI/WIRE/GATE remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN+INFRA + tokens + APPLICATION + UI batch 1 done; UI batch 2 + WIRE/GATE remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -394,4 +394,45 @@ self-parity-review vs claudian after each big chunk; merge P4 to `next` autonomo
                           T-CP-027 RED (useComposerMode composable — mode arbiter / depth-counted queue /
                           req-id guard / debounce), then dev T-CP-028. No blockers; the five composer use
                           cases + pure trigger-parse are the ready inputs for the UI batch.
+
+2026-05-25 (dev, implement — ui batch 1): UI batch 1 T-CP-027..034 complete (strict TDD,
+                          one Conventional commit per task — RED test(cp) then feat(cp)). Delivered:
+                          useComposerMode composable (T-CP-027/028, fce6bcc/8926ba0 — the mode arbiter
+                          over the pure trigger-parse: one active mode, P1-send gated behind
+                          kind==='default' && handleKeydown→false, Shift+Tab plan toggle capability-gated,
+                          Escape text-intact, built-ins-first + request-id-guarded getEntries, debounced
+                          mention query w/ AbortSignal, depth-counted inline-block queue, bang-bash
+                          explicit-Enter only, DTO-only reactive state); the three port composables
+                          useMentionDataProviderPort/useProviderCommandCatalogPort/useShellExecPort
+                          (T-CP-029/030, 0de7ac8/6ec9f9f — inject-or-throw, no aggregate); ComposerDropdown
+                          + MentionRow (T-CP-031/032, 307b0be/3ef0000 — role=listbox/option +
+                          aria-activedescendant, Arrow/Enter/Tab/Esc keyboard, built-ins-first, $ vs /
+                          distinct, file single-line vs subagent/MCP/dir two-line w/ category SpIcon,
+                          empty-state, no-v-html verbatim text; +en/de dropdown.hints/mention.empty keys);
+                          PlanModeIndicator (T-CP-033/034, 91c20e1/bac9446 — teal PLAN label, non-colour
+                          cue, capability-gated toggle via useComposerMode, inert when supportsPlanMode
+                          false). Verification performed: vue-tsc 0 errors (whole project); eslint 0 errors
+                          over the composer + new composables (no v-html/innerHTML/window.confirm/obsidian
+                          — NFR-CP-003); targeted vitest 79/12 (composer + composables + P1
+                          ChatComposer/ChatSurface green); full unit suite 1048 passed / 145 files, 0
+                          failed (P1/P2/P3 + DOMAIN/INFRA/APPLICATION P4 green, NFR-CP-009; no test
+                          assertion changed). KEY DECISIONS: (a) the composer-mode arbiter takes its
+                          collaborators as an options object (not inject) so it unit-tests cleanly — the
+                          consumer (ChatComposer, batch 2) wires the injected ports/use cases; (b) the
+                          dropdown owns the highlight internally + exposes handleKeydown via defineExpose
+                          (the composer forwards the textarea keydown) so DOM focus stays in the textarea
+                          per SPEC-CP-037; (c) capability-gating reads getCapabilities().supportsPlanMode,
+                          never a provider=== branch (SPEC-CP-032). DEVIATIONS (logged in
+                          implementation-log.md): PLAN weight uses --sp-font-weight-semibold (no
+                          --sp-font-weight-bold token exists — no leak, NFR-CP-011); instruction/bang-bash
+                          detection uses trimStart().startsWith('#'/'!') + the pure shouldEnter* gate on
+                          the pre-trigger text (mode persists as the body is typed — within SPEC-CP-018's
+                          one-active-mode contract). implementation-log.md kept in-progress (UI batch 2 +
+                          WIRE/GATE remain). Not run (orchestrator gate): npm run verify / build /
+                          build:web; not pushed; manifest.json untouched. Remaining owner: qa (T-CP-035
+                          RED) + dev (T-CP-036..). Next agent: qa for T-CP-035 RED (InlineAskUserQuestion
+                          — render + respond + capability-gated read-only when supportsInlineResponse:false,
+                          EC-CP-6; depends on T-CP-026/028, done), then dev T-CP-036. First task of UI
+                          batch 2 = T-CP-035. No blockers; useComposerMode (enqueue/resolve queue) +
+                          RespondToInlineBlockUseCase + the three port composables are the ready inputs.
 ```
