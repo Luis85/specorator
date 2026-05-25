@@ -251,7 +251,8 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 	// - `permissionMode`: mirrors the active P4 plan state (display only — P6 does not
 	//   own plan mode, NG6). The one-shot `--print` transport reports `supportsPlanMode:
 	//   false` (no interactive plan round-trip), so the displayed permission mode stays
-	//   `'default'` until an interactive transport flips it.
+	//   `'normal'` (the P7 widen maps the P6 `'default'` to the live `'normal'`,
+	//   SPEC-AS-006b) until the real SDK mapping in T-AS-012 returns the live mode.
 	// Synchronous + total; never throws. No `providerId` branch.
 	getToolbarCapabilities(): ToolbarCapabilities {
 		return {
@@ -259,7 +260,7 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 			reasoningControl: 'effort',
 			hasServiceTier: false,
 			hasModeToggle: true,
-			permissionMode: 'default',
+			permissionMode: 'normal',
 		};
 	}
 

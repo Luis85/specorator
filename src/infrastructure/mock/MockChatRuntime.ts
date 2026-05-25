@@ -163,7 +163,9 @@ export class MockChatRuntime implements ChatRuntimePort {
 		reasoningControl: 'effort',
 		hasServiceTier: false,
 		hasModeToggle: true,
-		permissionMode: 'default',
+		// P7 (SPEC-AS-006b): the P6 `'default'` maps to the live `'normal'`; a test
+		// flips `setToolbarCapabilities` to drive a `'plan'`/`'yolo'` mode.
+		permissionMode: 'normal',
 	};
 	private askUserQuestionCallback:
 		| ((req: AskUserQuestionRequest) => Promise<AskUserQuestionAnswer | null>)

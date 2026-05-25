@@ -211,7 +211,8 @@ describe('standalone attachments smoke (TEST-CA-007/004 dev leg)', () => {
  * (T-TC-031, the scriptable Mock Claude-shaped catalog) and the Mock runtime reports
  * `getToolbarCapabilities()` (Claude-shaped: `supportsMcpTools:false`,
  * `reasoningControl:'effort'`, `hasServiceTier:false`, `hasModeToggle:true`,
- * `permissionMode:'default'`). This deterministic leg proves the strip mounts against
+ * `permissionMode:'normal'` — P7 widens the P6 `'default'`, SPEC-AS-006b). This
+ * deterministic leg proves the strip mounts against
  * `MockBridge` in Claudian order with the backed widgets (model · mode · thinking) +
  * the honest seams (permission visible-disabled, MCP capability-hidden, service-tier
  * capability-hidden, external visible-disabled), the usage meter is hidden on a fresh

@@ -30,7 +30,8 @@ const CLAUDE_CAPS: ToolbarCapabilities = {
 	reasoningControl: 'effort',
 	hasServiceTier: false,
 	hasModeToggle: true,
-	permissionMode: 'default',
+	// P7 (SPEC-AS-006b): the P6 `'default'` widens to the live `'normal'` (not plan).
+	permissionMode: 'normal',
 };
 
 const FULL_CATALOG: ToolbarCatalog = {

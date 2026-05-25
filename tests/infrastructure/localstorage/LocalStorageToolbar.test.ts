@@ -8,8 +8,9 @@
  *     never throwing across the boundary;
  *   - `FixtureChatRuntime.getToolbarCapabilities()` → the inert flags
  *     (`supportsMcpTools:false`, `hasServiceTier:false`, `reasoningControl:'none'`,
- *     `hasModeToggle:true`, `permissionMode:'default'`) so the demo shows the backed
- *     widgets + the honest-defer seams, never a live MCP/service-tier.
+ *     `hasModeToggle:true`, `permissionMode:'normal'` — P7 widens the P6 `'default'`,
+ *     SPEC-AS-006b) so the demo shows the backed widgets + the honest-defer seams,
+ *     never a live MCP/service-tier.
  * Both are exposed/wired through `LocalStorageBridge` (`get toolbarCatalog` +
  * `createChatRuntime().getToolbarCapabilities`).
  *
@@ -68,7 +69,8 @@ describe('FixtureChatRuntime.getToolbarCapabilities (TEST-TC-019/021 LS inert le
 			reasoningControl: 'none',
 			hasServiceTier: false,
 			hasModeToggle: true,
-			permissionMode: 'default',
+			// P7 (SPEC-AS-006b): the P6 `'default'` widens to the live `'normal'` (inert demo).
+			permissionMode: 'normal',
 		});
 	});
 
