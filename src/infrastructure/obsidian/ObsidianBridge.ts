@@ -27,9 +27,11 @@ import type {
 	SafeRenderResult,
 	IconPort,
 	IconNode,
+	ProviderHistoryPort,
 } from '@/domain/ports';
 import { MarkdownRenderer } from 'obsidian';
 import { ClaudeCliChatRuntime } from './ClaudeCliChatRuntime';
+import { VaultFileHistoryStore } from './history/VaultFileHistoryStore';
 import { safeMarkdownRender } from '@/application/chat/safeMarkdownRender';
 import { walkSvgElementToIconNode } from './walkSvgElementToIconNode';
 import { walkMarkdownFragment } from './walkMarkdownFragment';
@@ -196,6 +198,20 @@ export class ObsidianBridge
 				}
 			},
 		};
+	}
+
+	// ── Provider history factory (SPEC-TS-006, ADR-TS-001 §1/§3) ────────────────
+	// Returns a vault-file `VaultFileHistoryStore` (one JSON file per conversation
+	// under the resolved sessions folder). Passes `this` as the VaultPort + the
+	// LoggerPort (corrupt-skip warn, no message content) and a folder resolver that
+	// reads the device-local `sessionsFolder` setting. Coverage-excluded infra —
+	// behaviour gated by the MANUAL leg TEST-TS-M1.
+	createProviderHistoryPort(): ProviderHistoryPort {
+		return new VaultFileHistoryStore(
+			this,
+			async () => (await this.getSettings()).sessionsFolder,
+			this,
+		);
 	}
 
 	private _track(notice: Notice): void {
