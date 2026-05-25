@@ -1,10 +1,10 @@
 ---
 feature: toolbar-controls
 area: TC
-current_stage: requirements
+current_stage: design
 status: active
 last_updated: 2026-05-25
-last_agent: orchestrator (bootstrap)
+last_agent: architect
 epic: claudian-reboot
 phase: P6
 integration_branch: next
@@ -13,7 +13,7 @@ artifacts:
   idea.md: skipped (parity-charter §3.5/§4 P6 + audits + claudian-main stand in, mirrors P1-P5)
   research.md: skipped
   requirements.md: accepted (PRD-TC-001; 27 EARS reqs; per-widget backed-vs-seam classified; CLAR-TC-001..003 resolved-by-recommendation)
-  design.md: pending
+  design.md: complete (DESIGN-TC-001; Parts A/B/C; ADR-TC-001..004 accepted; CLAR-TC-001..003 ratified)
   spec.md: pending
   tasks.md: pending
   implementation-log.md: pending
@@ -34,7 +34,7 @@ artifacts:
 | 1. Idea | `idea.md` | skipped |
 | 2. Research | `research.md` | skipped |
 | 3. Requirements | `requirements.md` | accepted |
-| 4. Design | `design.md` | pending |
+| 4. Design | `design.md` | complete (ADR-TC-001..004 accepted) |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
@@ -123,4 +123,39 @@ meter, and the `toolbar/*` CSS modules).
                  /spec:design (architect) — bless the additive ChatRuntimeQueryOptions fields, the
                  toolbar mount/slot on ChatComposer (P5 context-bar slot pattern), the capability-gate
                  seam wiring, and the provider-UI-config source for the option lists.
+2026-05-25 (architect): Stage-4 COMPLETE. DESIGN-TC-001 written (Parts A UX / B UI / C Architecture).
+                 CLAR-TC-001..003 RATIFIED by ADR-TC-001..004 (all accepted, autonomous-drive):
+                 · ADR-TC-001 (CLAR-TC-003) — toolbar mounts as an additive ChatComposer region
+                   (mirrors the P5 context bar); control state PER-TAB via an additive TabControls bag
+                   on TabState; fold on submit in buildTurnRequest. Composer byte-identical without it.
+                 · ADR-TC-002 (CLAR-TC-001) — additive ChatRuntimeQueryOptions: `mode?: string`,
+                   `reasoning?: ReasoningChoice` (discriminated `{kind:'effort';value} | {kind:'budget';tokens}`,
+                   new src/domain/chat/Reasoning.ts), `serviceTier?: string` (declared-now/emitted-P9).
+                   `model?` already exists; P0–P5 members byte-identical (NFR-TC-001). Pure guarded
+                   foldControlOptions writes ONLY non-default values (resolves the default-vs-explicit
+                   under-spec). `enabledMcpServers?`/`externalContextPaths?` stay EXCLUDED (NG2/NG3).
+                 · ADR-TC-003 (REQ-TC-003 + honest-defer counter-metric) — visibility reads capability
+                   flags (additive `getToolbarCapabilities` on the EXISTING ChatRuntimePort seam — no
+                   new port for flags) + catalog descriptors, NEVER a providerId branch. Seam matrix:
+                   service-tier + MCP capability-HIDDEN (Claude / !supportsMcpTools); permission +
+                   external + MCP-empty VISIBLE-DISABLED "coming later" (no rule/picker/server/turn-field).
+                   Mirrors P5 supportsBrowserSelection (ADR-CA-003 §2).
+                 · ADR-TC-004 (CLAR-TC-002) — option lists from a NEW narrow ToolbarCatalogPort
+                   (getCatalog(providerId), Claude static-for-now, 3 bridges + scriptable Mock,
+                   TOOLBAR_CATALOG_PORT key + useToolbarCatalogPort). External-context = VISIBLE-DISABLED
+                   seam (full 8-widget parity); externalContextPaths excluded; no electron in Vue;
+                   FilePickerPort deferred (charter §6c).
+                 Component inventory (Part B): ToolbarStrip + 8 widgets (Model/Mode/Permission/Thinking/
+                 ServiceTier/Mcp/External/UsageMeter), each <script setup> + co-located data-testid .po.ts;
+                 additive ChatComposer toolbar region; toolbar/* --sp-* token slice (charter §3.10);
+                 i18n agent.chat.toolbar.* en+de. Usage meter = declarative SVG 240° arc over TabState.usage
+                 (P2), warning >80% + /compact tooltip, hidden when null. NO new runtime dep.
+                 Under-specified flag (resolved in design, pin in spec): PRD did not state default-vs-explicit
+                 fold — design folds only non-default (ADR-TC-002 §4). Spec-level detail to pin: the effort
+                 vocabulary ('high'|'medium'|'low'), token-budget defaults, the >80% warning constant.
+                 NEXT: /spec:specify (architect) — implementation-ready contracts for the additive
+                 ChatRuntimeQueryOptions fields + ReasoningChoice + ToolbarCatalog DTOs + ToolbarCatalogPort
+                 + getToolbarCapabilities + the per-widget component contracts + TabControls/setControl +
+                 foldControlOptions. Sequence the query-option grow + fold first, the catalog port + bridges
+                 next, the 9 widgets + view-model last.
 ```
