@@ -78,6 +78,7 @@ export default {
 					clear: 'Clear selection',
 					editor: '{notePath} · line {startLine} (+{lineCount})',
 					canvas: '{canvasPath} ({count} nodes)',
+					browserCapture: 'Capture browser selection',
 				},
 			},
 		},

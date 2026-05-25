@@ -78,6 +78,7 @@ export default {
 					clear: 'Auswahl löschen',
 					editor: '{notePath} · Zeile {startLine} (+{lineCount})',
 					canvas: '{canvasPath} ({count} Knoten)',
+					browserCapture: 'Browser-Auswahl erfassen',
 				},
 			},
 		},

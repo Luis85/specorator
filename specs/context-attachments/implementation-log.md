@@ -727,3 +727,37 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
 - **Deviation:** none. Tokens `--sp-image-thumb-size` / `--sp-chip-*` /
   `--sp-context-bar-gap` are minted in Layer 6 (T-CA-042); CSS vars resolve at
   runtime so this is forward-compatible.
+
+## T-CA-035 — RED SelectionIndicator.vue + PO (🧪 qa)
+
+- **Spec/test:** TEST-CA-015 (A leg), TEST-CA-018b (A leg); SPEC-CA-021;
+  REQ-CA-015/018; NFR-CA-005/008.
+- **Files:** `tests/ui/chat/SelectionIndicator.test.ts` +
+  `SelectionIndicator.po.ts` (new — editor/canvas/browser text labels; labelled
+  clear → `clear`; null → no render; the gated browser-capture affordance present
+  only when `supportsBrowserSelection` true; data-testid only).
+- **Outcome:** done — RED confirmed (`SelectionIndicator.vue` unresolved at import).
+- **Commit:** `22d7d6a`.
+
+## T-CA-036 — SelectionIndicator.vue (🔨 dev)
+
+- **Spec/req:** SPEC-CA-021; REQ-CA-015/018; NFR-CA-002/003/008.
+- **Files:** `src/ui/chat/SelectionIndicator.vue` (new — `<script setup>`; props
+  `selection`/`supportsBrowserSelection`; emits `clear`; a `v-if` text label per
+  `kind` (editor note+line span / canvas+node count / browser `title ?? source`);
+  a labelled clear button; the browser-capture affordance behind
+  `v-if="supportsBrowserSelection"` — no affordance + no error otherwise),
+  `src/ui/i18n/locales/en.ts` + `de.ts` (the `selection.browserCapture` label).
+- **Outcome:** done — the T-CA-035 RED tests now green (7/7). Text label (not
+  colour alone); the browser affordance gated (EC-CA-7, SPEC-CA-029); no
+  `obsidian` import; no `v-html`; no `window.confirm`/`alert`/`prompt`.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` exit 0;
+  `vitest run` 7/7 green.
+- **Commit:** _this commit._
+- **Deviation:** the gated browser-capture affordance is a labelled icon button
+  (data-testid `selection-indicator-browser-capture`) rendered only under
+  `v-if="supportsBrowserSelection"`; it has no click handler in P5 (the real
+  embedded-view capture is the Obsidian leg, T-CA-014, and `ObsidianBridge`
+  currently ships `supportsBrowserSelection: false` — an honest defer per
+  REQ-CA-018). The affordance simply never appears in the shipped P5 desktop
+  build, which is the spec's "honest defer" intent.
