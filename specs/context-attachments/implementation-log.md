@@ -579,3 +579,43 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   deselection never resurrects a stale source read. This also gives the injected
   `source` port a real use (it would otherwise be an unused-private TS6138 error) —
   the constructor signature is unchanged from the spec.
+
+### T-CA-027 — RED `InlineEditUseCase` (🧪 qa)
+
+- **Spec/test:** TEST-CA-021 (use-case leg), TEST-CA-026, TEST-CA-027;
+  SPEC-CA-017; REQ-CA-021/022/026/027/028; NFR-CA-004/010; EC-CA-8/9.
+- **Files:** `tests/application/chat/inlineEdit/InlineEditUseCase.test.ts` (new —
+  aux wiring (prompt + system prompt asserted); replacement → ok + the
+  `computeWordDiff` preview; insertion → ok; clarification → ok (TEST-CA-026);
+  aux error / empty / aborted-signal → err (EC-CA-8/9); empty/whitespace
+  instruction → err with NO aux query (`lastPrompt` stays null); `continue`
+  re-frames the prior exchange + reply and re-runs; never-throws — over the
+  scriptable `MockAuxModel`).
+- **Outcome:** done — RED confirmed (`InlineEditUseCase` unresolved at import).
+- **Commit:** `a82acf1`.
+
+### T-CA-028 — `InlineEditUseCase` (over `AuxModelPort`, no provider branch) (🔨 dev)
+
+- **Spec/req:** SPEC-CA-017; REQ-CA-021/022/026/027/028; NFR-CA-004/010.
+- **Files:** `src/application/chat/inlineEdit/InlineEditUseCase.ts` (new — the
+  `InlineEditOutcome` union (`replacement` carries `diff: computeWordDiff(...)`);
+  constructor `(aux: AuxModelPort)`; `execute` guards an empty instruction → err,
+  else `aux.run(buildInlineEditPrompt(...), { systemPrompt:
+  INLINE_EDIT_SYSTEM_PROMPT, signal })` → a shared `run` mapping via
+  `parseInlineEditResponse` (replacement → ok+diff, insertion → ok, clarification
+  → ok, failure / aux-err → err); `continue` re-frames the prior exchange + reply
+  into one instruction and re-runs through the same path).
+- **Outcome:** done — the T-CA-027 RED tests now green (12/12). `Result`-returning,
+  never throws (`aux.run` maps error/empty/abort; parse + `computeWordDiff` are
+  pure/total); the `replacement` outcome carries the word-diff; NO `providerId`
+  branch (SPEC-CA-029); no `obsidian`/Vue import.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` on the two files
+  exit 0; `vitest run` 12/12 green.
+- **Commit:** _this commit._
+- **Deviation:** abort is handled at the port boundary — the spec passes `signal`
+  into `aux.run`, and the scriptable `MockAuxModel` (and the real Obsidian aux)
+  resolve `err` on an already-aborted/cancelled signal; the use case maps any
+  aux `err` to `Result.err`, so there is no separate abort branch in the use case
+  (matches the EC-CA-8 expectation). The clarification loop is modelled by
+  `continue` re-framing the `priorExchange` turns + the `reply` into a single
+  re-run instruction (the modal owns the conversation transcript — DESIGN-CA-001).
