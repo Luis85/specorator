@@ -16,11 +16,11 @@ artifacts:
   design.md: complete (DESIGN-CA-001; Parts A/B/C; ADR-CA-001..004 accepted)
   spec.md: complete (SPEC-CA-001..030; 6 layer groups; TEST-CA-001..032 + M1/M2/M3; full coverage)
   tasks.md: complete (TASKS-CA-001; 48 tasks T-CA-001..048; 8 batches; full SPEC/REQ/NFR/TEST coverage)
-  implementation-log.md: in-progress (T-CA-001..045 logged + T-CA-048 deterministic gate GREEN; batches 0-7 done; only human-owned manual legs T-CA-046/047 + the draft-PR push remain)
-  test-plan.md: in-progress (manual legs M1/M2/M3/017/024/025/029 scheduled; T-CA-045 dev-leg smoke automated + PASS, live-dev-server leg deferred-manual; guard-verify noted)
+  implementation-log.md: in-progress (T-CA-001..045 logged + T-CA-048 deterministic gate GREEN; Stage-9 review fixes R-CA-001/002/003 GREEN [FIX-1/2/3]; only human-owned manual legs T-CA-046/047 + TEST-CA-M4 + the draft-PR push remain)
+  test-plan.md: in-progress (manual legs M1/M2/M3/M4/017/024/025/029 scheduled; T-CA-045 dev-leg smoke automated + PASS, live-dev-server leg deferred-manual; guard-verify noted)
   test-report.md: pending
-  review.md: pending
-  traceability.md: pending
+  review.md: complete (REVIEW-CA-001; verdict CHANGES-REQUESTED — 2 P1, 4 P2, 4 P3, 3 P4; see findings R-CA-001..010)
+  traceability.md: complete (TRACE-CA-001; REQ↔SPEC↔TEST↔code matrix; REQ-CA-001/004/006/007/010/019 not-satisfied; manual legs pending-manual)
   release-notes.md: pending
   retrospective.md: pending
 ---
@@ -39,7 +39,7 @@ artifacts:
 | 6. Tasks | `tasks.md` | complete |
 | 7. Implementation | `implementation-log.md` + code | in-progress (batches 0-7: T-CA-001..045 + T-CA-048 deterministic gate GREEN — full typecheck/lint/test(1279)/build/build:web/docs:api/audit pass; only human-owned manual legs T-CA-046/047 + the draft-PR push remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
-| 9. Review | `review.md`, `traceability.md` | pending |
+| 9. Review | `review.md`, `traceability.md` | complete — verdict CHANGES-REQUESTED (2 P1, 4 P2, 4 P3, 3 P4) |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
 
@@ -439,3 +439,46 @@ parity-screenshot legs accumulate for the SINGLE FINAL human review gate.
                           agent-self-claimed; T-CA-045 live-dev-server leg deferred-manual; T-CA-048 lint/
                           coverage/verify gate + final close-out. No open clarifications.
 ```
+
+2026-05-25 (reviewer, review): Stage 9 review COMPLETE on feature/context-attachments
+                          (diff 88f9810..HEAD). VERDICT: CHANGES-REQUESTED. review.md (REVIEW-CA-001)
+                          + traceability.md (TRACE-CA-001) written. Counts: 2 P1, 4 P2, 4 P3, 3 P4.
+                          Re-ran the load-bearing automated suites — all green (re-point 40/40; UI/wiring
+                          37/37). The inline-edit, selection-capture, and AuxModelPort-re-point sub-surfaces
+                          are correctly implemented and verified. BLOCKING GAP: two of the four PRD North-Star
+                          jobs (pin files, attach+preview image) have NO end-to-end path —
+                          * R-CA-001 (P1): attached files/images/selection are NEVER folded into the submitted
+                            ChatTurnRequest and the sets never clear (ChatSurface.vue:308 → tabsStore.ts:541
+                            send text only). Violates REQ-CA-004/010/019 (must).
+                          * R-CA-002 (P1): no attach affordance; AddImageUseCase + AddFileContextUseCase.add
+                            are never called in src/ (dead at the wiring layer). Violates REQ-CA-001/002/007/012.
+                          * R-CA-003 (P2): REQ-CA-006 reset-on-new/loaded-conversation not wired.
+                          * R-CA-004 (P2): TEST-CA-004 asserts only "submit still emits text", not travel+clear —
+                            masking R-CA-001 (qa test-quality defect).
+                          HAND-OFF → dev (R-CA-001/002/003 fixes) + qa (R-CA-004 assertion) on
+                          feature/context-attachments. The send-path fold + an attach affordance + the
+                          conversation-reset are the blockers; after they land and the manual legs
+                          (TEST-CA-M1/M2/M3 + TEST-CA-017/024/025/029 + parity screenshots, HUMAN-owned, recorded
+                          pending-manual) are run, the verdict can move to approve-with-conditions. The re-point
+                          refactor (SPEC-CA-018) and additivity (SPEC-CA-028) need no change. NEXT AGENT: dev.
+
+2026-05-25 (dev, Stage-9 fixes): R-CA-001/002/003 CLOSED on feature/context-attachments
+                          via TDD (RED test(ca): → green feat(ca): per logical unit). FIX-1
+                          (R-CA-001+R-CA-004 dev half): tabsStore.sendMessage grows an additive
+                          SendMessageContext; the five ChatTurnRequest fields now travel (written
+                          only when non-empty → P1-byte-identical empty), and onConsumed clears the
+                          ChatSurface sets on a successful submit. FIX-2 (R-CA-002): THREE attach
+                          affordances now call AddFileContextUseCase.add / AddImageUseCase — (2.1)
+                          @-file-mention chip via useComposerMode.onFileMention (P4 insertion
+                          unchanged); (2.2) paperclip → PICK_ATTACHMENT modal seam → real Obsidian
+                          FuzzySuggestModal in src/plugin/attachmentPicker.ts (coverage-excluded,
+                          TEST-CA-M4); (2.3) drop/paste → AddImageUseCase.executeBytes (8 MiB/MIME
+                          gate) + NotificationPort.showWarning on reject. FIX-3 (R-CA-003):
+                          ChatSurface watches the active conversation identity and resets the context
+                          sets on new/loaded conversation (REQ-CA-006). VERIFY: vue-tsc 0 errors;
+                          targeted vitest 127/127 GREEN incl. the P4 mention/composer regression;
+                          display layer 36/36. R-CA-004 (the travel+clear ASSERTION) is qa-owned — I
+                          added the store-level travel/clear assertions that prove FIX-1; qa still owns
+                          tightening TEST-CA-004 itself per the review. NEXT AGENT: qa (R-CA-004
+                          assertion + run the manual legs TEST-CA-M1/M2/M3/M4 + 017/024/025/029 +
+                          parity screenshots), then reviewer re-verify → approve-with-conditions.
