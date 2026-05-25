@@ -1,10 +1,10 @@
 ---
 feature: composer-power
 area: CP
-current_stage: design
+current_stage: spec
 status: active
 last_updated: 2026-05-25
-last_agent: architect (design)
+last_agent: architect (specification)
 epic: claudian-reboot
 phase: P4
 integration_branch: next
@@ -14,7 +14,7 @@ artifacts:
   research.md: skipped
   requirements.md: accepted (PRD-CP-001; released after ADR-CP-001..004 accepted)
   design.md: complete (DESIGN-CP-001; A/B/C; ADR-CP-001..004 accepted)
-  spec.md: pending
+  spec.md: complete (SPEC-CP-001..038; TEST-CP-001..028 + M1/M2)
   tasks.md: pending
   implementation-log.md: pending
   test-plan.md: pending
@@ -35,7 +35,7 @@ artifacts:
 | 2. Research | `research.md` | skipped |
 | 3. Requirements | `requirements.md` | accepted (PRD-CP-001) |
 | 4. Design | `design.md` | complete (DESIGN-CP-001) |
-| 5. Specification | `spec.md` | pending |
+| 5. Specification | `spec.md` | complete (SPEC-CP-001..038) |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
@@ -200,4 +200,65 @@ self-parity-review vs claudian after each big chunk; merge P4 to `next` autonomo
                           file (REQ-CP-018 says SettingsPort — confirm the field name); (4) the exact
                           ShellExecPort cwd resolution (vault adapter base path) for the Obsidian impl.
                           None blocks spec; each is a small contract detail to pin in spec.md.
+
+2026-05-25 (architect, specification): SPEC-CP-001..038 written to spec.md (status: complete).
+                          38 spec items across five layer groups: DOMAIN (001-006 — the 3 additive
+                          StreamChunk request members, the +3 ChatRuntimePort callback-setters + 2
+                          RuntimeCapabilities flags, MentionDataProviderPort/ProviderCommandCatalogPort/
+                          ShellExecPort + keys + barrel, the inline-block DTOs, ComposerMode value
+                          types, PluginSettings.customSystemPrompt); INFRA (007-011 — 3-bridge mention/
+                          catalog factories, the coverage-excluded Obsidian ShellExec, Mock scripted-
+                          echo + scriptable callbacks, LocalStorage err-not-available, the grown
+                          runtimes emitting the 3 request chunks w/ CLI honesty); APPLICATION (012-017
+                          — pure trigger-parse, builtInCommands + RunCommand, ResolveMention,
+                          instructionRefine + RefineInstruction side-query, SubmitBangBash,
+                          RespondToInlineBlock); UI (018-028 — useComposerMode, extended ChatComposer,
+                          dropdown/mention/plan/inline/bash components w/ PageObjects, port composables,
+                          the instruction-confirm seam + Obsidian Modal, wiring); STYLES (029-030);
+                          CROSS-CUTTING (031-038). TEST-CP-001..028 + 2 manual legs; full REQ-CP /
+                          NFR-CP ↔ SPEC-CP ↔ TEST-CP coverage table (§11) — every REQ-CP-001..036 +
+                          NFR-CP-001..013 covered; every SPEC-CP traces back. The 4 design open items
+                          RESOLVED: (1) AskUserQuestionAnswer DTO (multi-question array keyed by
+                          question id + optional customInput) — SPEC-CP-004; (2) Claude catalog paths
+                          (.claude/commands/**/*.md, .claude/skills/**/SKILL.md via VaultPort) —
+                          SPEC-CP-007/013; (3) instruction-append target = device-local
+                          PluginSettings.customSystemPrompt, APPEND w/ \n\n (appendInstruction helper)
+                          — SPEC-CP-005/027; (4) Obsidian ShellExec cwd = vault adapter base path
+                          (FileSystemAdapter.getBasePath), 30s/1MB, enhanced PATH — SPEC-CP-008.
+                          Everything ADDITIVE + claudian-grounded: zero P1-P3 member renamed/removed
+                          (TEST-CP-001/002 assert byte-identical 12 runtime members + 3 caps + the
+                          StreamChunk union).
+
+                          HAND-OFF → /spec:tasks (planner). TDD ORDERING HINTS:
+                          1. DOMAIN FIRST — the value types/DTOs/ports/keys/barrel + the StreamChunk +
+                             ChatRuntimePort additive growth (SPEC-CP-001..006); they are the contract
+                             every other layer compiles against and TEST-CP-001..006 are pure shape
+                             tests with no mount.
+                          2. PURE PARSE/REFINE BEFORE COMPONENTS — triggerParse (SPEC-CP-012),
+                             builtInCommands (SPEC-CP-013), instructionRefine pure fns (SPEC-CP-015),
+                             appendInstruction (SPEC-CP-005) are total functions unit-tested in
+                             isolation (TEST-CP-005/007/008/010); land them before the use cases and
+                             well before any Vue mount.
+                          3. USE CASES (SPEC-CP-013..017) next — each returns Result; the refine + the
+                             inline-block-respond use cases carry the streaming-error→Result boundary
+                             and the capability gate; back them with the Mock runtime (capable +
+                             non-capable) from the fake-ports factory.
+                          4. SHELLEXEC OBSIDIAN COVERAGE-EXCLUDED → MANUAL LEG — the real
+                             child_process.exec impl (SPEC-CP-008) lives under
+                             src/infrastructure/obsidian/** (coverage-excluded); its automated proof is
+                             the Mock scripted-echo (no spawn, TEST-CP-028) + the LocalStorage err
+                             (TEST-CP-016); the real exec + cwd/timeout is TEST-CP-M2 (manual). Do NOT
+                             schedule unit-coverage tasks against the Obsidian impl.
+                          5. INLINE-BLOCK CAPABILITY-GATING — the gate lives in
+                             RespondToInlineBlockUseCase (SPEC-CP-017) reading getCapabilities()
+                             .supportsInlineResponse, with the read-only render + notice in the three
+                             inline components (SPEC-CP-022..024). Schedule a capable-mock task AND a
+                             non-capable-mock task (TEST-CP-020 vs TEST-CP-024); the real-CLI honest
+                             read-only state is TEST-CP-M2 (manual). The grep-gate invariant
+                             (TEST-CP-027: zero `provider === 'claude'`) is a cheap guard to land early.
+                          6. WIRING LAST — provide the 3 new ports (mention/catalog as per-mount
+                             FACTORIES, ShellExec stateless/direct) + the instruction-confirm seam in
+                             AgentSidebarView + ui/main.ts (SPEC-CP-028); the Obsidian InstructionConfirmModal
+                             is a plugin-layer Modal (TEST-CP-M2 manual), the standalone gets a stand-in.
+                          No open clarifications block tasks — all four design items resolved in-spec.
 ```
