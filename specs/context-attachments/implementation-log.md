@@ -485,3 +485,28 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   cursor-mode sections — the date interpolation would break the pure/total +
   stable-constant contract (SPEC-CA-013), and P5 captures editor selections, not
   cursor positions, so `buildInlineEditPrompt` frames only `<editor_selection>`.
+
+### T-CA-021 — RED `AddFileContextUseCase` (🧪 qa)
+
+- **Spec/test:** TEST-CA-001 (add leg), TEST-CA-003 (displayName leg);
+  SPEC-CA-014; REQ-CA-001/002/003; NFR-CA-004; EC-CA-3/4.
+- **Files:** `tests/application/chat/attachments/AddFileContextUseCase.test.ts`
+  (new — add to empty/existing set; displayName basename-without-extension
+  (`report.final.md` → `report.final`; `README` → `README`); EC-CA-3 idempotent
+  re-add; EC-CA-4 remove; remove-absent no-op; empty/whitespace path → `err`).
+- **Outcome:** done — RED confirmed (`AddFileContextUseCase` unresolved at import).
+- **Commit:** `e9cbf1e`.
+
+### T-CA-022 — `AddFileContextUseCase` (pure file-set ops) (🔨 dev)
+
+- **Spec/req:** SPEC-CA-014; REQ-CA-001/002/003; NFR-CA-004.
+- **Files:** `src/application/chat/attachments/AddFileContextUseCase.ts` (new —
+  `add`/`remove` over `readonly AttachedFileRef[]`, path-unique idempotent add,
+  `basenameWithoutExtension` helper (strips the final extension only, keeps
+  dotfiles whole, handles `/` + `\` separators), empty path → `err`; **no port**).
+- **Outcome:** done — the T-CA-021 RED tests now green (9/9). `Result`-returning,
+  pure, never throws; no `obsidian`/Vue import.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` on the two files
+  exit 0; `vitest run` 9/9 green.
+- **Commit:** _this commit._
+- **Deviation:** none.
