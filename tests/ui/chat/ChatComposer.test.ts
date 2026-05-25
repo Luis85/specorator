@@ -222,7 +222,7 @@ describe('ChatComposer drop/paste (FIX-2.3, SPEC-CA-022)', () => {
 		const { wrapper, po } = mountComposer();
 		const file = imageFile('diagram.png');
 		await po.dropFiles([file]);
-		const emitted = wrapper.emitted('attachFiles') as unknown[][] | undefined;
+		const emitted = wrapper.emitted('attachFiles');
 		expect(emitted).toBeDefined();
 		expect((emitted?.[0]?.[0] as File[])[0].name).toBe('diagram.png');
 	});
@@ -231,7 +231,7 @@ describe('ChatComposer drop/paste (FIX-2.3, SPEC-CA-022)', () => {
 		const { wrapper, po } = mountComposer();
 		const file = imageFile('clip.png');
 		const event = await po.pasteFiles([file]);
-		const emitted = wrapper.emitted('attachFiles') as unknown[][] | undefined;
+		const emitted = wrapper.emitted('attachFiles');
 		expect(emitted).toBeDefined();
 		expect((emitted?.[0]?.[0] as File[])[0].name).toBe('clip.png');
 		expect(event.defaultPrevented).toBe(true);
