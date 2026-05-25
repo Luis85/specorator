@@ -28,9 +28,13 @@ import type {
 	IconPort,
 	IconNode,
 	ProviderHistoryPort,
+	MentionDataProviderPort,
+	ProviderCommandCatalogPort,
 } from '@/domain/ports';
 import { MarkdownRenderer } from 'obsidian';
 import { ClaudeCliChatRuntime } from './ClaudeCliChatRuntime';
+import { ObsidianMentionDataProvider } from './ObsidianMentionDataProvider';
+import { ObsidianProviderCommandCatalog } from './ObsidianProviderCommandCatalog';
 import { VaultFileHistoryStore } from './history/VaultFileHistoryStore';
 import { safeMarkdownRender } from '@/application/chat/safeMarkdownRender';
 import { walkSvgElementToIconNode } from './walkSvgElementToIconNode';
@@ -212,6 +216,20 @@ export class ObsidianBridge
 			async () => (await this.getSettings()).sessionsFolder,
 			this,
 		);
+	}
+
+	// ── Composer-power ports (SPEC-CP-007, ADR-CP-002 §4) ───────────────────────
+	// Mention/catalog are per-mount factories (the Claude impl binds to the active
+	// provider context). All vault I/O flows through this bridge's VaultPort — the
+	// UI never imports obsidian (REQ-CP-010). Coverage-excluded infra; behaviour
+	// gated by the manual leg TEST-CP-M1.
+
+	createMentionDataProvider(): MentionDataProviderPort {
+		return new ObsidianMentionDataProvider(this);
+	}
+
+	createProviderCommandCatalog(): ProviderCommandCatalogPort {
+		return new ObsidianProviderCommandCatalog(this);
 	}
 
 	private _track(notice: Notice): void {
