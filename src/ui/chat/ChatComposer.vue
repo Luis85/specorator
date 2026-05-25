@@ -77,6 +77,8 @@ const emit = defineEmits<{
 	clearSelection: [];
 	/** P5 (SPEC-CA-022): files dropped onto or pasted into the composer; the parent gates them. */
 	attachFiles: [files: File[]];
+	/** P5 (SPEC-CA-022): the paperclip control — the parent opens the picker via the seam. */
+	attach: [];
 }>();
 
 const { t } = useI18n();
@@ -384,6 +386,15 @@ function onBlockResolved(): void {
 			<div class="sp-chat-composer__toolbar">
 				<button
 					type="button"
+					class="sp-chat-composer__attach"
+					data-testid="composer-attach"
+					:aria-label="t('agent.chat.context.attach')"
+					@click="emit('attach')"
+				>
+					<span aria-hidden="true">📎</span>
+				</button>
+				<button
+					type="button"
 					class="sp-chat-composer__send"
 					data-testid="composer-send"
 					:disabled="!isStreaming && !canSubmit"
@@ -447,8 +458,22 @@ function onBlockResolved(): void {
 
 .sp-chat-composer__toolbar {
 	display: flex;
-	justify-content: flex-end;
+	align-items: center;
+	justify-content: space-between;
 	padding-block-start: var(--sp-space-2);
+}
+
+.sp-chat-composer__attach {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	inline-size: 28px;
+	block-size: 28px;
+	border: none;
+	border-radius: var(--sp-radius-full);
+	background: transparent;
+	color: var(--sp-text-muted);
+	cursor: pointer;
 }
 
 .sp-chat-composer__send {

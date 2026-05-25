@@ -38,7 +38,7 @@ import {
 	SELECTION_SOURCE_PORT,
 	SELECTION_HIGHLIGHT_PORT,
 } from '@/infrastructure/bridge/ports';
-import { useOpenImagePreview } from '@/ui/chat/modalSeam';
+import { useOpenImagePreview, usePickAttachment } from '@/ui/chat/modalSeam';
 import { useCapturedSelection } from '@/ui/composables/useCapturedSelection';
 import { AddFileContextUseCase } from '@/application/chat/attachments/AddFileContextUseCase';
 import { AddImageUseCase } from '@/application/chat/attachments/AddImageUseCase';
@@ -260,6 +260,7 @@ const selectionHighlight: SelectionHighlightPort | undefined = inject(
 	undefined,
 );
 const openImagePreview = useOpenImagePreview();
+const pickAttachment = usePickAttachment();
 
 const chatRoot = ref<HTMLElement | null>(null);
 const attachedFiles = ref<readonly AttachedFileRef[]>([]);
@@ -302,6 +303,31 @@ function attachFile(path: string): void {
 function addAttachedImage(image: AttachedImage): void {
 	if (images.value.some((img) => img.path === image.path)) return;
 	images.value = [...images.value, image];
+}
+
+/**
+ * Attach a vault image BY PATH through `AddImageUseCase.execute` — reads the vault
+ * bytes through the 8 MiB/MIME gate (R-CA-002, REQ-CA-007/012). On reject a
+ * non-blocking warning surfaces and the set is unchanged (REQ-CA-012, EC-CA-1/2).
+ * Used by the paperclip image pick.
+ */
+async function attachImageByPath(path: string): Promise<void> {
+	if (addImage === undefined) return;
+	const result = await addImage.execute(path);
+	if (result.ok) addAttachedImage(result.value);
+	else notify.showWarning(t('agent.chat.context.images.rejected', { name: path }));
+}
+
+/**
+ * Open the vault file/image picker via the modal seam (R-CA-002, REQ-CA-001/007).
+ * The picker is obsidian-specific (it lives in `src/plugin/**`); the Vue layer only
+ * routes the result — an image through the gate, a file as a chip. `null` = dismiss.
+ */
+async function onAttach(): Promise<void> {
+	const picked = await pickAttachment();
+	if (picked === null) return;
+	if (picked.kind === 'image') await attachImageByPath(picked.path);
+	else attachFile(picked.path);
 }
 
 /**
@@ -466,6 +492,7 @@ function onRewindCode(userMessageId: string): void {
 			@preview-image="onPreviewImage"
 			@clear-selection="onClearSelection"
 			@attach-files="onAttachFiles"
+			@attach="onAttach"
 		/>
 	</div>
 </template>

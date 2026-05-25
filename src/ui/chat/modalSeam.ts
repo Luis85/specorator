@@ -109,3 +109,29 @@ export function useOpenInlineEdit(): OpenInlineEditFn {
 export function useOpenImagePreview(): OpenImagePreviewFn {
 	return inject(OPEN_IMAGE_PREVIEW, () => Promise.resolve());
 }
+
+// ── FIX-2.2: the paperclip attach-picker seam (SPEC-CA-022/026, R-CA-002) ────────
+// The vault file/image picker is Obsidian-specific (a `SuggestModal`/file picker),
+// so the real launcher lives in `src/plugin/**` (coverage-excluded, manual leg);
+// the Vue layer only injects this handle and never imports `obsidian`. The
+// standalone entry provides a browser-safe stand-in.
+
+/** A picked vault attachment: its vault-relative path + whether to treat it as an image. */
+export interface PickedAttachment {
+	readonly kind: 'file' | 'image';
+	readonly path: string;
+}
+
+/** Open the vault file/image picker; resolves the picked attachment or `null` on dismiss. */
+export type PickAttachmentFn = () => Promise<PickedAttachment | null>;
+
+export const PICK_ATTACHMENT: InjectionKey<PickAttachmentFn> = Symbol('PickAttachment');
+
+/**
+ * Inject the attach-picker launcher; falls back to a no-op resolving `null` when
+ * absent (SPEC-CA-022/026) — an unwired picker attaches nothing. Mirrors the
+ * `useChooseForkTarget` dismiss fallback.
+ */
+export function usePickAttachment(): PickAttachmentFn {
+	return inject(PICK_ATTACHMENT, () => Promise.resolve(null));
+}

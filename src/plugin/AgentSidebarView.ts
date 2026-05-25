@@ -29,6 +29,7 @@ import {
 	INSTRUCTION_CONFIRM,
 	OPEN_INLINE_EDIT,
 	OPEN_IMAGE_PREVIEW,
+	PICK_ATTACHMENT,
 } from '@/ui/chat/modalSeam';
 import type { AttachedImage } from '@/domain/chat/attachments';
 import type { AuxModelPort } from '@/domain/ports';
@@ -37,6 +38,7 @@ import { ForkTargetModal } from './modals/ForkTargetModal';
 import { DeleteConfirmModal } from './modals/DeleteConfirmModal';
 import { InstructionConfirmModal } from './modals/InstructionConfirmModal';
 import { openInlineEdit, openImagePreview } from './inlineEditLauncher';
+import { pickAttachment } from './attachmentPicker';
 import type SpecoratorPlugin from './main';
 
 /** The single view type the plugin registers (SPEC-PSR-005). */
@@ -147,6 +149,10 @@ export class AgentSidebarView extends ItemView {
 			app.provide(OPEN_IMAGE_PREVIEW, (image: AttachedImage) =>
 				openImagePreview(this.app, image),
 			);
+			// FIX-2.2 (SPEC-CA-022/026): the paperclip attach-picker opens the Obsidian
+			// vault file/image `FuzzySuggestModal`; the Vue surface routes the picked
+			// path through the file-chip / image-gate paths (it never imports `obsidian`).
+			app.provide(PICK_ATTACHMENT, () => pickAttachment(this.app));
 			app.mount(host);
 			this.vueApp = app;
 		}

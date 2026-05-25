@@ -43,6 +43,20 @@ new domain/aux/infra surface confirms the imports resolve without a
 | TEST-CA-M3 | Real `VaultPort.readBinary` reads vault image bytes | T-CA-014 |
 | TEST-CA-017 | Real CM6 editor + Obsidian canvas selection capture (250 ms poll fires `onSelectionChange`; transient read errors degrade to `null`) | T-CA-014 |
 | TEST-CA-029 | Real-CLI image turn (base64 transport reaches the Claude CLI) | T-CA-047 |
+| TEST-CA-M4 | The paperclip attach-picker opens the real Obsidian `FuzzySuggestModal` (`src/plugin/attachmentPicker.ts`); choosing an image file adds a thumbnail (gated), choosing a non-image file adds a chip, dismiss attaches nothing | FIX-2.2 (R-CA-002 follow-up) |
+
+> **FIX-2.2 note (paperclip attach-picker — three attach affordances, R-CA-002):**
+> The composer now ships THREE attach affordances, each calling
+> `AddFileContextUseCase.add` / `AddImageUseCase`: (1) an `@`-file mention adds a
+> chip (`useComposerMode.onFileMention` → `attachFile`); (2) the paperclip control
+> emits `attach` → `ChatSurface` opens the picker through the `PICK_ATTACHMENT`
+> modal seam (the real Obsidian `FuzzySuggestModal` lives in
+> `src/plugin/attachmentPicker.ts`, coverage-excluded → **TEST-CA-M4**; the
+> standalone provides a browser-safe `null` stand-in); (3) drop/paste of files onto
+> the composer routes images through `AddImageUseCase.executeBytes` (the 8 MiB/MIME
+> gate) and surfaces `NotificationPort.showWarning` on a reject. The picker is the
+> only one of the three behind a manual leg; the mention + drop/paste legs are
+> component/unit-tested.
 
 > **T-CA-014 note (`supportsBrowserSelection`):** the `ObsidianSelectionSource`
 > ships `supportsBrowserSelection: false` for P5 — an honest defer of the fragile

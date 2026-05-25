@@ -42,6 +42,7 @@ import {
 	INSTRUCTION_CONFIRM,
 	OPEN_INLINE_EDIT,
 	OPEN_IMAGE_PREVIEW,
+	PICK_ATTACHMENT,
 } from '@/ui/chat/modalSeam';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
 
@@ -93,6 +94,11 @@ app.provide(SELECTION_SOURCE_PORT, bridge.selectionSource);
 app.provide(SELECTION_HIGHLIGHT_PORT, bridge.selectionHighlight);
 app.provide(OPEN_INLINE_EDIT, () => Promise.resolve(null));
 app.provide(OPEN_IMAGE_PREVIEW, () => Promise.resolve());
+// FIX-2.2 (SPEC-CA-022/026): the paperclip attach-picker stand-in. The real
+// Obsidian file/image `SuggestModal` lives in `src/plugin/**`; the browser demo
+// has no vault picker, so the stand-in resolves `null` (dismiss) — no `window.*`,
+// deterministic for the GitHub Pages demo. Drop/paste exercises the live gate.
+app.provide(PICK_ATTACHMENT, () => Promise.resolve(null));
 
 void bridge.getSettings().then((s) => {
 	setLocale(toSupportedLocale(s.locale));
