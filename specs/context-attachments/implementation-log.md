@@ -366,3 +366,42 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   3. `startLine` is the 0-based CM6 line (`editor.getCursor('from').line`) carried
      verbatim per SPEC-CA-003 (open item #1 resolved), NOT claudian's display
      `+1`.
+
+### T-CA-015 — RED bounded base64 image-encode + gate constants (🧪 qa)
+
+- **Spec/test:** TEST-CA-010 (encode leg), TEST-CA-012 (gate-constant leg);
+  SPEC-CA-010; REQ-CA-010/012; NFR-CA-009/011.
+- **Files:** `tests/infrastructure/image/imageEncode.test.ts` (new — the 8 MiB
+  constant, the exact four-member allow-list, the pure `encodeImageBase64` (no
+  data-URI prefix, deterministic, atob round-trip, empty → ''), and
+  `resolveImageMime` mapping `.png`/`.jpg`/`.jpeg`/`.webp`/`.gif` (case-insensitive)
+  → allow-list member and `.exe`/`.md`/`.svg`/`.bmp`/`.ico`/extensionless → null).
+- **Outcome:** done — RED confirmed (`vitest run` import of
+  `@/infrastructure/image/imageEncode` fails to resolve; the test file errors at
+  import time).
+- **Commit:** `c9496c0`.
+
+### T-CA-016 — Bounded base64 image-encode + `MAX_IMAGE_BYTES` / `IMAGE_MIME_ALLOW_LIST` (🔨 dev)
+
+- **Spec/req:** SPEC-CA-010; REQ-CA-010/012; NFR-CA-009/011.
+- **Files:** `src/infrastructure/image/imageEncode.ts` (new — `MAX_IMAGE_BYTES =
+  8 * 1024 * 1024`; `IMAGE_MIME_ALLOW_LIST` the exact four members; the pure
+  `encodeImageBase64(bytes, mime)` — `btoa` over a chunked byte→char fold in
+  browser/Obsidian, `Buffer` fallback in Node, no data-URI prefix, empty → '';
+  `resolveImageMime(path)` extension→allow-list resolver, case-insensitive, `.exe`
+  + any non-image → null per EC-CA-2).
+- **Outcome:** done — the T-CA-015 RED tests now green (11/11). Pure/total, never
+  throws on valid input; no `obsidian` import; no data-URI prefix; no new
+  `package.json` runtime dependency. The 8 MiB gate ORDER is enforced later by
+  `AddImageUseCase` (T-CA-020) — this file is only the constants + transforms.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint
+  src/infrastructure/image/imageEncode.ts tests/infrastructure/image/imageEncode.test.ts`
+  exit 0; `vitest run tests/infrastructure/image/imageEncode.test.ts` 11/11 green.
+- **Commit:** _this commit._
+- **Deviation:** file path is `src/infrastructure/image/imageEncode.ts` (the
+  spec's `src/infrastructure/.../imageEncode.ts`) — a new `image/` subdir kept OUT
+  of the coverage-excluded `src/infrastructure/obsidian/**` so the pure transform
+  carries the 80/70/80/80 coverage weight. The encode signature takes the
+  `mimeType` for the caller's contract clarity (the resolved + gated MIME), though
+  it is not embedded in the output (no data-URI prefix) — the parameter is
+  underscore-prefixed to mark it intentionally unused in the byte fold.

@@ -468,10 +468,10 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-003
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/infrastructure/imageEncode.test.ts` (or the in-app-helper path mirror) exists, naming the
+  - [x] `tests/infrastructure/imageEncode.test.ts` (or the in-app-helper path mirror) exists, naming the
         encode/gate legs of TEST-CA-010/012, covering the 8 MiB constant, the allow-list, the pure encode,
         and the `.exe` → no-member resolve.
-  - [ ] Tests fail (RED) — the encode helper + the gate constants do not yet exist.
+  - [x] Tests fail (RED) — the encode helper + the gate constants do not yet exist.
 
 ### T-CA-016 🔨 — Bounded base64 image-encode + `MAX_IMAGE_BYTES` / `IMAGE_MIME_ALLOW_LIST`
 
@@ -486,8 +486,8 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-015
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The prior RED tests (the encode/gate legs of TEST-CA-010/012) now pass.
-  - [ ] Pure encode; no `obsidian` import; no data-URI prefix; `npm run typecheck` + `npm run lint` +
+  - [x] The prior RED tests (the encode/gate legs of TEST-CA-010/012) now pass.
+  - [x] Pure encode; no `obsidian` import; no data-URI prefix; `npm run typecheck` + `npm run lint` +
         `npm run test` green; implementation-log entry added.
 
 ---
