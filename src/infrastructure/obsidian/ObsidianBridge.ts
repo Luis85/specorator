@@ -296,7 +296,12 @@ export class ObsidianBridge
 			typeof obj.sessionsFolder === 'string' ? obj.sessionsFolder : '',
 		);
 		const maxTabs = clampMaxTabs(typeof obj.maxTabs === 'number' ? obj.maxTabs : Number.NaN);
-		return { locale, logLevel, sessionsFolder, maxTabs };
+		// P4 (SPEC-CP-005): load-or-default the device-local custom system prompt.
+		const customSystemPrompt =
+			typeof obj.customSystemPrompt === 'string'
+				? obj.customSystemPrompt
+				: DEFAULT_SETTINGS.customSystemPrompt;
+		return { locale, logLevel, sessionsFolder, maxTabs, customSystemPrompt };
 	}
 
 	private _shouldLog(level: 'debug' | 'info' | 'warn' | 'error'): boolean {

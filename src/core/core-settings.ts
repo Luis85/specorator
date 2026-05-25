@@ -44,6 +44,13 @@ export const coreSettingsModule = defineModule<PluginSettings>({
         typeof r.sessionsFolder === 'string' ? r.sessionsFolder : '',
       ),
       maxTabs: clampMaxTabs(typeof r.maxTabs === 'number' ? r.maxTabs : Number.NaN),
+      // P4 (SPEC-CP-005): the custom system prompt is device-local, written by
+      // instruction mode (SPEC-CP-027), not a settings-tab field (settings UX is
+      // P10). Load-or-default the persisted blob; never a secret, no migration.
+      customSystemPrompt:
+        typeof r.customSystemPrompt === 'string'
+          ? r.customSystemPrompt
+          : DEFAULT_SETTINGS.customSystemPrompt,
     }
   },
 
