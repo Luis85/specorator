@@ -16,8 +16,8 @@ artifacts:
   design.md: complete (DESIGN-CP-001; A/B/C; ADR-CP-001..004 accepted)
   spec.md: complete (SPEC-CP-001..038; TEST-CP-001..028 + M1/M2)
   tasks.md: complete (TASKS-CP-001; T-CP-001..053)
-  implementation-log.md: pending
-  test-plan.md: pending
+  implementation-log.md: in-progress (DOMAIN+INFRA batch T-CP-001..014 + T-CP-047 done; APPLICATION/UI/WIRE/GATE remain)
+  test-plan.md: in-progress (guard verification + M1/M2 manual legs scheduled; TEST-CP status by batch)
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-CP-001) |
 | 5. Specification | `spec.md` | complete (SPEC-CP-001..038) |
 | 6. Tasks | `tasks.md` | complete (TASKS-CP-001; T-CP-001..053) |
-| 7. Implementation | `implementation-log.md` + code | pending |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN+INFRA + tokens done) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -300,4 +300,79 @@ self-parity-review vs claudian after each big chunk; merge P4 to `next` autonomo
                           T-CP-047 (dev, §4.11 tokens). The qa RED pair to start immediately is
                           T-CP-002 + T-CP-005 (both no-dep). Critical path (14 tasks): T-CP-005 → 007 →
                           009 → 025 → 026 → 027 → 028 → 035 → 036 → 045 → 046 → 048 → 049 → 053.
+
+2026-05-25 (dev, implement — domain+infra batch): DOMAIN (T-CP-002..007) + INFRA (T-CP-008..014)
+                          + STYLES (T-CP-047) + baseline (T-CP-001) DONE, STRICT TDD, one
+                          Conventional commit per task. Verification at batch end: vue-tsc
+                          -p tsconfig.lint.json = 0 errors; eslint over the 27 changed src files = 0
+                          errors (only the pre-existing tabsStore max-lines warning); targeted vitest
+                          (domain/application-chat/infrastructure/__fakes__/ui-stores/ui-styles/core)
+                          = 619 passed / 68 files; full background suite = 818 passed / 118 files (10
+                          worker-pool startup-timeout flakes, exit 0, unrelated). P1/P2/P3 runtimes +
+                          tests GREEN under the additive growth (NFR-CP-009).
+
+                          SHAs (last commit of each task; RED test commits precede their green):
+                          - T-CP-001 docs(cp) baseline + test-plan guard verify ........ cfb5ee2
+                          - T-CP-002 RED inline/StreamChunk/ComposerMode (qa) ........... (test(cp) T-CP-002)
+                          - T-CP-003 inline-block DTOs ................................. (feat(cp) T-CP-003)
+                          - T-CP-004 StreamChunk request members + ComposerMode ........ (feat(cp) T-CP-004)
+                          - T-CP-005 RED ChatRuntimePort/3 ports/appendInstruction (qa)  (test(cp) T-CP-005)
+                          - T-CP-006 ChatRuntimePort +3 setters +2 caps ............... 13dfc2c
+                          - T-CP-007 Mention/Catalog/ShellExec ports+keys+barrel+helper  c077eaa
+                          - T-CP-008 RED Mock fixtures/scripted-echo/callbacks (qa) .... (test(cp) T-CP-008)
+                          - T-CP-009 MockBridge fixtures + scripted ShellExec + fakes .. (feat(cp) T-CP-009)
+                          - T-CP-010 RED LocalStorage fixtures + err ShellExec (qa) .... (test(cp) T-CP-010)
+                          - T-CP-011 LocalStorage fixtures + err ShellExec ............. (feat(cp) T-CP-011)
+                          - T-CP-012 ObsidianBridge mention + catalog (cov-excluded, M1) (feat(cp) T-CP-012)
+                          - T-CP-013 ObsidianShellExec child_process.exec S1-S5 (M2) ... (feat(cp) T-CP-013)
+                          - T-CP-014 ClaudeCliChatRuntime + reducer 3 chunks (M2) ...... ea3a9ad
+                          - T-CP-047 §4.11 --sp-* tokens + tokens contract ............. (feat(cp) T-CP-047)
+
+                          KEY DECISIONS: (a) ShellExec security — ObsidianShellExec is the SOLE real
+                          shell path (S1, node:child_process only here + ClaudeCliChatRuntime,
+                          grep-confirmed), verbatim passthrough (S2), no plugin secret in the child env
+                          + LoggerPort logs only command+exitCode never stdout/stderr (S3), bounded
+                          30s/1MB -> ok(exitCode 124, truncated, notice) (S4), render-only DTO (S5),
+                          cwd = vault adapter base path (non-FS -> err), NEVER a ChatRuntimePort member;
+                          Mock = scripted echo (no spawn), LocalStorage = err 'not available in the
+                          browser demo'. (b) The 3 runtime callback-setters land on all 3 runtimes:
+                          Mock captures + scriptable caps (capable default), Fixture no-op + false/false
+                          caps, ClaudeCli stores + routes via the reducer-emitted request chunks. (c)
+                          CLI honesty (ADR-CP-004 §3): ClaudeCliChatRuntime reports
+                          supportsInlineResponse:false AND supportsPlanMode:false — the one-shot
+                          claude --print cannot round-trip a mid-turn interactive answer; the same UI
+                          lights up unchanged when a capable transport ships.
+
+                          DEVIATIONS (all logged in implementation-log.md): customSystemPrompt added to
+                          validateSettings load-or-default only, NOT a settings-tab UI field (settings
+                          UX = P10; written by instruction mode SPEC-CP-027); --sp-dropdown-shadow
+                          resolves from --sp-shadow-dropup (not raw var(--shadow-s)) to keep the
+                          shadow literal at the Specorator token layer (NFR-CP-011); ClaudeCli gates
+                          supportsPlanMode:false too (both flags depend on the interactive round-trip).
+                          Mechanical additivity updates to tabsStore fallback caps + test runtime stubs
+                          + the core-settings key-set sentinel (authorised "keep P1/P2/P3 green").
+
+                          NOT RUN (orchestrator gate): full npm run verify / build / build:web. NOT
+                          pushed. manifest.json untouched.
+
+                          HAND-OFF → APPLICATION batch (T-CP-015..026). FIRST READY TASK: T-CP-015 (qa,
+                          RED — pure trigger-parse detectTrigger/shouldEnterInstruction/
+                          shouldEnterBangBash/replaceTriggerToken; TEST-CP-007) → greened by T-CP-016
+                          (dev, triggerParse.ts ported from claudian utils/slashCommand.ts). The Mock
+                          capable/non-capable runtime toggle (fake-ports.mockRuntime) + the scripted
+                          ShellExec + the fixture mention/catalog providers are ready to back the use-
+                          case RED legs (RunCommand/ResolveMention/RefineInstruction/SubmitBangBash/
+                          RespondToInlineBlock, T-CP-017..026).
+```
+
+## Hand-off notes
+
+```
+2026-05-25 (dev, implement — domain+infra batch): DOMAIN+INFRA+tokens batch complete.
+                          Verification performed: vue-tsc 0 errors; eslint 0 errors on changed src;
+                          vitest 619/68 targeted + 818/118 full (10 infra flakes). implementation-log.md
+                          set in-progress (APPLICATION/UI/WIRE/GATE remain). test-plan.md in-progress
+                          (M1/M2 manual legs scheduled). Remaining owner: dev (APPLICATION T-CP-015..026)
+                          + qa (RED legs). Next agent: qa for T-CP-015 RED, then dev T-CP-016.
+                          No blockers; all four design open items remain resolved in-spec.
 ```
