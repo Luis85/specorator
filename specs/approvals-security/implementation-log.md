@@ -479,3 +479,23 @@ warnings only), `vitest run tests/application` **372/372 green** (incl. the P6
 `src/application/**`; the use case is `Result`-returning + never throws. The UI batch
 (T-AS-018-onward UI tasks: the toggle/panel/inline + the `ChatSurface` wiring of this
 `ApprovalManager` into the live approval callback) is out of this batch's scope.
+
+---
+
+## UI batch (T-AS-020..029)
+
+### T-AS-021 — `useApprovalRuleStorePort.ts` composable (🔨 dev)
+
+- **Spec/req:** SPEC-AS-018; REQ-AS-040/042/053; NFR-AS-005/006.
+- **Files:** `src/ui/composables/useApprovalRuleStorePort.ts` (new — `inject(APPROVAL_RULE_STORE_PORT)`,
+  throw-when-unprovided, return the injected `ApprovalRuleStorePort`); `tests/ui/composables/
+  useApprovalRuleStorePort.test.ts` (new RED → green: inject-when-provided over
+  `MockBridge.approvalRuleStore` + throw-when-unprovided).
+- **Outcome:** done — the prior RED (module-not-found) now green; the composable mirrors
+  `useToolbarCatalogPort` exactly (one-port-one-composable, ADR-008). `ChatSurface` will
+  inject the key OPTIONALLY so a no-port mount degrades to always-prompt.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); `npm run lint`
+  0 errors (12 pre-existing warnings); `vitest run useApprovalRuleStorePort.test.ts` 2/2.
+  No `obsidian` import under `src/ui/**`.
+- **Commit (RED / green):** `<RED>` / `<GREEN>`.
+- **Deviation:** none.
