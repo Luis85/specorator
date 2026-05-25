@@ -31,6 +31,10 @@ import {
 	type OpenInlineEditFn,
 	type OpenImagePreviewFn,
 	type InlineEditDecision,
+	PICK_ATTACHMENT,
+	usePickAttachment,
+	type PickAttachmentFn,
+	type PickedAttachment,
 } from '@/ui/chat/modalSeam';
 import type { AttachedImage } from '@/domain/chat/attachments';
 
@@ -126,5 +130,39 @@ describe('useOpenImagePreview (TEST-CA-020 fallback leg, SPEC-CA-023)', () => {
 	it('falls back to a no-op resolve when no launcher was provided', async () => {
 		const fn = probeImagePreview();
 		await expect(fn(sampleImage)).resolves.toBeUndefined();
+	});
+});
+
+// ── FIX-2.2 (was R-CA-002): the paperclip attach-picker seam (SPEC-CA-022/026) ───
+// The vault file/image picker is Obsidian-specific → a modal-seam launcher
+// (`PickAttachmentFn`) resolving the picked path + kind, or null on dismiss. The
+// real picker lives in `src/plugin/**` (coverage-excluded, manual leg); the
+// fallback is a no-op resolving null (no attach when unwired).
+
+/** Mount a probe that calls `usePickAttachment()` under an optional provide. */
+function probePickAttachment(provided?: PickAttachmentFn): PickAttachmentFn {
+	let captured!: PickAttachmentFn;
+	const Probe = defineComponent({
+		setup() {
+			captured = usePickAttachment();
+			return () => h('div');
+		},
+	});
+	mount(Probe, {
+		global: provided ? { provide: { [PICK_ATTACHMENT as symbol]: provided } } : {},
+	});
+	return captured;
+}
+
+describe('usePickAttachment (FIX-2.2 fallback leg, SPEC-CA-022/026)', () => {
+	it('returns the provided launcher when PICK_ATTACHMENT is provided', async () => {
+		const picked: PickedAttachment = { kind: 'image', path: 'img/x.png' };
+		const fn = probePickAttachment(() => Promise.resolve(picked));
+		await expect(fn()).resolves.toEqual(picked);
+	});
+
+	it('falls back to a no-op resolving null when no launcher was provided (no attach)', async () => {
+		const fn = probePickAttachment();
+		await expect(fn()).resolves.toBeNull();
 	});
 });

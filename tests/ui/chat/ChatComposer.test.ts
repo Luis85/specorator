@@ -244,3 +244,21 @@ describe('ChatComposer drop/paste (FIX-2.3, SPEC-CA-022)', () => {
 		expect(event.defaultPrevented).toBe(false);
 	});
 });
+
+// ── FIX-2.2 (was R-CA-002): the paperclip attach button ──────────────────────────
+// SPEC-CA-022, REQ-CA-001/007. An explicit attach control on the composer toolbar
+// emits `attach` so the parent opens the vault file/image picker via the seam.
+
+describe('ChatComposer attach button (FIX-2.2, SPEC-CA-022)', () => {
+	it('REQ-CA-001/007: the composer renders a labelled attach control', () => {
+		const { po } = mountComposer();
+		expect(po.hasAttach()).toBe(true);
+		expect(po.attachLabel().length).toBeGreaterThan(0);
+	});
+
+	it('REQ-CA-001/007: clicking the attach control emits attach', async () => {
+		const { wrapper, po } = mountComposer();
+		await po.clickAttach();
+		expect(wrapper.emitted('attach')).toHaveLength(1);
+	});
+});

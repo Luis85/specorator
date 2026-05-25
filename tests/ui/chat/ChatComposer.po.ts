@@ -20,6 +20,7 @@ const TID = {
 	imageThumbPreview: 'image-thumb-preview',
 	selectionIndicator: 'selection-indicator',
 	selectionClear: 'selection-indicator-clear',
+	attach: 'composer-attach',
 } as const;
 
 /** PageObject for `ChatComposer.vue` (SPEC-CC-021). Queries by `data-testid` only (ADR-009). */
@@ -194,6 +195,20 @@ export class ChatComposerPageObject {
 		this.textarea.element.dispatchEvent(event);
 		await this.wrapper.vm.$nextTick();
 		return event;
+	}
+
+	// ── FIX-2.2 attach button (SPEC-CA-022) ─────────────────────────────────────
+
+	hasAttach(): boolean {
+		return this.wrapper.find(this.byTid(TID.attach)).exists();
+	}
+
+	attachLabel(): string {
+		return this.wrapper.get(this.byTid(TID.attach)).attributes('aria-label') ?? '';
+	}
+
+	async clickAttach(): Promise<void> {
+		await this.wrapper.get(this.byTid(TID.attach)).trigger('click');
 	}
 
 	/** Fire a `paste` carrying plain text only (no files). */
