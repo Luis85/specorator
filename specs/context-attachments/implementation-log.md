@@ -895,3 +895,37 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   (48px), `--sp-image-modal-max` (80vh) and `--sp-inline-edit-modal-w` (540px)
   are bare dimensions (no colour literal), matching the §4.8/§4.10/§4.11
   precedent for sizing tokens.
+
+## T-CA-043 — RED: provide the three ports + the two launchers + context-bar mount (🧪 qa)
+
+- **Spec/test:** TEST-CA-020 (mount leg) + TEST-CA-M1 (wiring leg); SPEC-CA-026;
+  REQ-CA-008/020/021; NFR-CA-002.
+- **Files:** `tests/ui/chat/attachmentsMount.ts.test.ts` (new — two legs: the
+  standalone `src/ui/main.ts` leg spies the `MockBridge.prototype` `auxModel`/
+  `selectionSource`/`selectionHighlight` getters to prove the standalone entry
+  reads + provides the three new ports and the surface mounts; the
+  `AgentSidebarView.onOpen` leg — over the jsdom obsidian mock mirrored from
+  `composer/mount.ts.test.ts` — scripts a Mock editor selection via
+  `bridge.selectionSource.setSelection(...)` and asserts the `composer-context-bar`
+  + `selection-indicator` render, proving the two selection ports reached the
+  surface AND the context bar mounts).
+- **Outcome:** done — RED confirmed (both legs fail: the standalone aux getter is
+  never read because `src/ui/main.ts` does not yet provide `AUX_MODEL_PORT`, and
+  the sidebar leg's scripted selection never reaches a `selection-indicator`
+  because `ChatSurface` does not yet inject the selection ports / call
+  `useCapturedSelection` / pass `capturedSelection` to the composer). Both mounts
+  succeed (the surfaces render), so the failures are the wiring assertions only,
+  not a harness break. Run with `--pool=threads --no-file-parallelism
+  --testTimeout=30000` per the fork-worker startup gotcha.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` on the test exit
+  0; `vitest run` 0/2 (RED as designed).
+- **Commit:** _this commit._
+- **Deviation:** the cross-entry "provided" proof differs per entry point: the
+  Obsidian-view leg controls its own `MockBridge`, so it asserts the
+  selection-port provide BEHAVIOURALLY (a scripted selection renders the
+  indicator); the standalone leg cannot reach the internally-constructed bridge,
+  so it asserts the provide via prototype-getter spies (the mount reads
+  `auxModel`/`selectionSource`/`selectionHighlight`). The two launchers
+  (`OPEN_INLINE_EDIT`/`OPEN_IMAGE_PREVIEW`) opening real Obsidian Modals are the
+  manual leg (TEST-CA-M1/M2); this RED proves they are wired by proving the
+  context surface they feed mounts — the modal-open itself is human-verified.
