@@ -221,6 +221,128 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
 
 ---
 
+## INFRA batch (T-AS-012..015)
+
+### T-AS-012 — Obsidian device-local `ApprovalRuleStorePort` + Claude SDK mapping + plan-exit `setMode` (🔨 dev, coverage-excluded) 🪓
+
+- **Spec/req:** SPEC-AS-007; REQ-AS-002/004/005/030/034/053; NFR-AS-003 (manual leg).
+- **Files:** `src/infrastructure/obsidian/ObsidianApprovalRuleStore.ts` (new — the real
+  device-local store under `'specorator:approval-rules'` via
+  `app.saveLocalStorage`/`loadLocalStorage` (ADR-PSR-002 pattern); `loadRules`
+  load-or-default + field-level coercion drops malformed entries; `addRule`
+  dedupe-by-`ruleDedupeKey` + mint `id`(`crypto.randomUUID()`)/`createdAt`;
+  `removeRule` idempotent; `clear`; all `Result`-typed via `tryAsync`, total — never
+  throws; NEVER `data.json`/vault, NFR-AS-003); `src/infrastructure/obsidian/
+  ObsidianBridge.ts` (the `get approvalRuleStore` lazy getter + import);
+  `src/infrastructure/obsidian/ClaudeCliChatRuntime.ts` (the SDK-string mapping
+  `_toSdkPermissionMode` — `yolo`→`bypassPermissions`/`plan`→`plan`/`normal`/absent→no
+  flag, emitted as `--permission-mode` in `_optionArgs`; `liveMode` recorded per query +
+  surfaced through `getToolbarCapabilities().permissionMode` replacing the T-AS-011
+  `'normal'` stub; the plan-exit `_syncPlanExitMode` seam — parity
+  `ClaudeApprovalHandler.ts:63–71` `setMode destination:'session'`; no `providerId`
+  branch).
+- **Outcome:** done. Coverage-excluded (`src/infrastructure/obsidian/**`, §10) — the
+  behavioural gate is the **manual** legs **TEST-AS-M1** (the real device-local store
+  round-trips in Obsidian; `data.json`/vault untouched) + **TEST-AS-M3** (the real
+  Claude SDK mapping + plan-exit `setMode`), scheduled in `test-plan.md`; **not
+  self-claimed**. No `obsidian` symbol leaks past the file — `ObsidianApprovalRuleStore`
+  imports only the `App` type.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); whole-project
+  `npm run lint` 0 errors (12 pre-existing warnings). No automated unit run (the
+  Obsidian leg is coverage-excluded → manual TEST-AS-M1/M3).
+- **Commit:** `eb0b543a`.
+- **Deviation:** none. The `_coerce` complexity was split into `_isValidEntry` to stay
+  under the cap-10 (mirrors the established structural pattern), not a behaviour change.
+
+### T-AS-013 — RED scriptable Mock `ApprovalRuleStorePort` + runtime mode + `fake-ports.approvalRuleStore` (🧪 qa)
+
+- **Spec/test:** TEST-AS-002/003/006/020/021/030/032/033/053/054; SPEC-AS-008;
+  REQ-AS-020/021/032/053/054; NFR-AS-010.
+- **Files:** `tests/infrastructure/mock/MockApprovalRuleStore.test.ts` (new — the
+  scriptable store: `seedRules`, `loadRules` default `ok([])`, `addRule` mint + dedupe +
+  opposite-decision append, idempotent `removeRule`, `clear`, `setFailMode` forcing
+  `Result.err`, never-throws + the `MockBridge.approvalRuleStore` accessor),
+  `tests/infrastructure/mock/MockApprovalRuntimeMode.test.ts` (new — `getLastPermissionMode`
+  records the folded query mode + the scriptable three-mode `getToolbarCapabilities`),
+  `tests/__fakes__/fake-ports.test.ts` (extended — the `approvalRuleStore` member +
+  `setFailMode` legs).
+- **Outcome:** done — RED confirmed (5 failing legs across the three files: missing
+  `MockApprovalRuleStore` module, missing `MockBridge.approvalRuleStore`, missing
+  `getLastPermissionMode`, missing `fake-ports.approvalRuleStore` member).
+- **Commit:** `cf7a9b67`.
+
+### T-AS-014 — scriptable `MockBridge` `ApprovalRuleStorePort` + runtime mode + `fake-ports.approvalRuleStore` (🔨 dev)
+
+- **Spec/req:** SPEC-AS-008; REQ-AS-020/021/032/053/054; NFR-AS-010.
+- **Files:** `src/infrastructure/mock/MockApprovalRuleStore.ts` (new — the scriptable
+  in-memory store: `seedRules`/`setFailMode('none'|'load'|'save')`/`loadRules`/`addRule`
+  (dedupe-by-`ruleDedupeKey`, opposite-decision append)/`removeRule` idempotent/`clear`,
+  all `Result`-typed, total — never throws; only the persisted lifetime),
+  `src/infrastructure/mock/MockBridge.ts` (the `get approvalRuleStore` accessor + field +
+  import), `src/infrastructure/mock/MockChatRuntime.ts` (the `lastPermissionMode` recording
+  in `query` + the `getLastPermissionMode` accessor + the `PermissionMode` type import),
+  `tests/__fakes__/fake-ports.ts` (the `approvalRuleStore` member on `FakePorts` +
+  factory wiring, typed as `MockApprovalRuleStore` so `seedRules`/`setFailMode` surface).
+  Runnability fix to the T-AS-013 RED fixture in
+  `tests/infrastructure/mock/MockApprovalRuntimeMode.test.ts` (the `request` literal
+  dropped the nonexistent `conversationId`; the drain loop no longer binds an unused
+  chunk — **no assertion change**, qa-authored assertions unchanged).
+- **Outcome:** done — the T-AS-013 RED tests now green (32/32 across the three files); the
+  `fake-ports.approvalRuleStore` member works for multi-port tests; `setFailMode` drives
+  the fail-safe path deterministically.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; whole-project `npm run lint` 0
+  errors; `vitest run` (the three files) 32/32. No `node:*`/`obsidian` import in Mock.
+- **Commit:** `07a58253`.
+- **Deviation:** the documented runnability-only fix to the T-AS-013 fixture (type shape
+  + unused-binding), no assertion content changed.
+
+### T-AS-015 — LocalStorage browser-`localStorage` `ApprovalRuleStorePort` + inert runtime mode (🔨 dev)
+
+- **Spec/req:** SPEC-AS-009; REQ-AS-053; NFR-AS-010.
+- **Files:** `tests/infrastructure/localstorage/LocalStorageApprovalRuleStore.test.ts`
+  (new — the RED leg authored first: port-shape, default `ok([])`, cross-instance
+  round-trip (reload parity), dedupe, idempotent remove, clear, corrupt-blob
+  load-or-default, + the `LocalStorageBridge.approvalRuleStore` accessor),
+  `src/infrastructure/localstorage/LocalStorageApprovalRuleStore.ts` (new — browser
+  `localStorage` under the same key `'specorator:approval-rules'`; load-or-default +
+  field-level coercion; `addRule` dedupe + mint; idempotent `removeRule`; `clear`; all
+  `Result`-typed, never throws — a write fault is an `err`),
+  `src/infrastructure/localstorage/LocalStorageBridge.ts` (the `get approvalRuleStore`
+  accessor + field + import). The inert runtime mode needs no change — `FixtureChatRuntime`
+  already reports `permissionMode:'normal'` (T-AS-011) and fires no live `setMode` (no
+  live SDK), which IS the inert behaviour (the toggle/panel reflect the per-tab draft via
+  the fold).
+- **Outcome:** done — the RED leg confirmed (module unresolved) then greened (8/8); the
+  demo persists a rule across a reload (cross-instance read) with no Obsidian.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; whole-project `npm run lint` 0
+  errors; `vitest run` 8/8 (store) + the full `tests/infrastructure` + `tests/__fakes__`
+  surface 346/346 green. No `node:*`.
+- **Commit:** `9d7874b5`.
+- **Deviation:** the LS RED leg was authored within this dev task (no separate qa RED task
+  was scheduled for the LS half in the INFRA batch — T-AS-013 covered the Mock half); RED
+  was confirmed before the impl greened it.
+
+---
+
+## INFRA batch (T-AS-012..015) — close-out
+
+All four INFRA-batch tasks executed in strict TDD order (Mock RED qa → Mock green dev →
+LS RED→green dev; the Obsidian leg is coverage-excluded → manual TEST-AS-M1/M3), one
+commit per task. The three bridges back `ApprovalRuleStorePort`: **Obsidian** device-local
+(`app.saveLocalStorage`/`loadLocalStorage('specorator:approval-rules')`, coverage-excluded
+→ manual TEST-AS-M1, never `data.json`/vault); **Mock** scriptable in-memory (seedable +
+`setFailMode`, exposed on `MockBridge.approvalRuleStore` + `fake-ports.approvalRuleStore`);
+**LocalStorage** browser-`localStorage` (same key, GitHub Pages demo). The Claude runtime
+SDK-mode mapping (`yolo`↔`bypassPermissions`/`plan`↔`plan`/`normal`↔`default`) + the
+plan-exit `setMode` live in `ClaudeCliChatRuntime` (coverage-excluded → manual TEST-AS-M3);
+the LS runtime mode is inert. Final gate over the batch surface: `vue-tsc -p
+tsconfig.lint.json` **0 errors** (whole project), whole-project `npm run lint` **0 errors**
+(12 pre-existing warnings only), `vitest run tests/infrastructure tests/__fakes__`
+**346/346 green**. No `node:*`/`obsidian` import under `src/infrastructure/mock/**` or
+`localstorage/**`; the store ports never throw across the boundary (`Result`-mapped). The
+APPLICATION batch (T-AS-016..019: the `foldControlOptions` clause + the `ApprovalManager`
+use case) onward is out of this batch's scope.
+
 ## DOMAIN batch (T-AS-001..011) — close-out
 
 All eleven DOMAIN-batch tasks executed in strict TDD order (RED qa → green dev), one

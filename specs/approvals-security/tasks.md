@@ -453,12 +453,12 @@ pattern (ADR-PSR-002).
 - **Slice plan:** may slice as (a) the device-local `ApprovalRuleStorePort`, (b) the Claude-runtime SDK
   mapping + plan-exit `setMode`.
 - **Definition of done:**
-  - [ ] `ObsidianBridge` provides the real device-local `ApprovalRuleStorePort` (load-or-default,
+  - [x] `ObsidianBridge` provides the real device-local `ApprovalRuleStorePort` (load-or-default,
         read-modify-write, key `'specorator:approval-rules'`, never `data.json`/vault) + the Claude runtime
         maps the live mode to the SDK + emits the plan-exit `setMode`; both total; no `obsidian` symbol leaks
         past the file.
-  - [ ] `npm run typecheck` + `npm run lint` green; the manual legs TEST-AS-M1/M3 scheduled in `test-plan.md`.
-  - [ ] Implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` green; the manual legs TEST-AS-M1/M3 scheduled in `test-plan.md`.
+  - [x] Implementation-log entry added.
 
 ### T-AS-013 🧪 — RED: scriptable `MockBridge` `ApprovalRuleStorePort` (seedable + `setFailMode`) + scriptable runtime mode + `fake-ports.approvalRuleStore`
 
@@ -480,11 +480,11 @@ pattern (ADR-PSR-002).
 - **Depends on:** T-AS-009, T-AS-011
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/infrastructure/mock/MockApprovalRuleStore.test.ts`,
+  - [x] `tests/infrastructure/mock/MockApprovalRuleStore.test.ts`,
         `tests/infrastructure/mock/MockApprovalRuntimeMode.test.ts`, and the extended
         `tests/__fakes__/fake-ports.test.ts` (the `approvalRuleStore` member + `setFailMode`) exist, naming
         the listed TEST-AS ids.
-  - [ ] Tests fail (RED) — the scriptable Mock store (`seedRules`/`setFailMode`) + the scriptable runtime
+  - [x] Tests fail (RED) — the scriptable Mock store (`seedRules`/`setFailMode`) + the scriptable runtime
         mode + the factory member do not yet exist (beyond the T-AS-011 default mapping).
 
 ### T-AS-014 🔨 — `MockBridge` scriptable `ApprovalRuleStorePort` + scriptable runtime mode + `fake-ports.approvalRuleStore`
@@ -501,10 +501,10 @@ pattern (ADR-PSR-002).
 - **Depends on:** T-AS-013
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (the Mock store seed/dedupe/fail-inject + the scriptable runtime mode legs of
+  - [x] The prior RED tests (the Mock store seed/dedupe/fail-inject + the scriptable runtime mode legs of
         TEST-AS-020/021/030/032/033/053/054) now pass; the `fake-ports` `approvalRuleStore` member works for
         multi-port tests; `setFailMode` drives the fail-safe path deterministically.
-  - [ ] No `node:*`/`obsidian` import in Mock; total — never throws; `npm run typecheck` + `npm run lint` +
+  - [x] No `node:*`/`obsidian` import in Mock; total — never throws; `npm run typecheck` + `npm run lint` +
         `npm run test` green; implementation-log entry added.
 
 ### T-AS-015 🔨 — `LocalStorageBridge` browser-`localStorage` `ApprovalRuleStorePort` + inert runtime mode
@@ -521,10 +521,10 @@ pattern (ADR-PSR-002).
 - **Depends on:** T-AS-013
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The prior RED tests (the LocalStorage round-trip leg of TEST-AS-053) now pass; the demo persists a
+  - [x] The prior RED tests (the LocalStorage round-trip leg of TEST-AS-053) now pass; the demo persists a
         rule across a reload with no Obsidian; the runtime mode is inert (recorded, no live `setMode`); never
         throws.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ---
 

@@ -4,7 +4,7 @@ area: AS
 current_stage: implementation
 status: active
 last_updated: 2026-05-26
-last_agent: dev (implementation — DOMAIN batch T-AS-001..011)
+last_agent: dev (implementation — INFRA batch T-AS-012..015)
 epic: claudian-reboot
 phase: P7
 integration_branch: next
@@ -16,8 +16,8 @@ artifacts:
   design.md: complete (DESIGN-AS-001; ADR-AS-001/002/003 accepted; CLAR-AS-001..005 ratified)
   spec.md: complete (SPEC-AS-001; 28 items, 6 layer groups; 33 REQ-AS + 16 NFR-AS chained to TEST-AS; 6 design open items resolved)
   tasks.md: complete (TASKS-AS-001; 40 tasks T-AS-001..040; DDD batches DOMAIN→INFRA→APP→UI→STYLES→WIRE-IN→GATE; RED-before-green; 3 manual legs T-AS-036/037/038; NO guard-relax)
-  implementation-log.md: in-progress (DOMAIN batch T-AS-001..011 executed + logged; INFRA/APP/UI/STYLES/WIRE-IN/GATE batches T-AS-012..040 remain)
-  test-plan.md: in-progress (guard-verify note + manual legs TEST-AS-M1/M2/M3 + DOMAIN-batch automated status scaffolded by T-AS-001; INFRA/APP/UI legs follow)
+  implementation-log.md: in-progress (DOMAIN batch T-AS-001..011 + INFRA batch T-AS-012..015 executed + logged; APP/UI/STYLES/WIRE-IN/GATE batches T-AS-016..040 remain, incl. manual legs TEST-AS-M1/M2/M3)
+  test-plan.md: in-progress (guard-verify note + manual legs TEST-AS-M1/M2/M3 + DOMAIN/INFRA automated status; APP/UI legs follow)
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -37,8 +37,8 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-AS-001; ADR-AS-001/002/003 accepted) |
 | 5. Specification | `spec.md` | complete (SPEC-AS-001; 28 items SPEC-AS-001..028) |
 | 6. Tasks | `tasks.md` | complete (TASKS-AS-001; 40 tasks T-AS-001..040; DDD batches; RED-before-green; 3 manual legs; NO guard-relax) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN batch T-AS-001..011 done; T-AS-012..040 remain) |
-| 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; test-report pending) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-AS-001..011 + INFRA T-AS-012..015 done; APP/UI/STYLES/WIRE-IN/GATE T-AS-016..040 remain) |
+| 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; manual legs TEST-AS-M1/M3 scheduled at T-AS-012; test-report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
@@ -327,4 +327,49 @@ updates, the inline approval/plan-mode controllers, `status-panel`/`permission-t
                  browser-localStorage + inert mode). The frozen domain types (PermissionMode, the two
                  optionals, the matcher, the rule DTO, ApprovalRuleStorePort + key) are ready for the
                  bridges to implement.
+
+2026-05-26 (dev): INFRA batch T-AS-012..015 COMPLETE on feature/approvals-security (off next).
+                 Strict TDD, one commit per task; verification performed per task = vue-tsc -p
+                 tsconfig.lint.json 0 errors (whole project) + whole-project npm run lint 0 errors
+                 (12 pre-existing warnings) + vitest run on the changed surface:
+                 - T-AS-012 eb0b543a (dev, coverage-excluded) — ObsidianApprovalRuleStore (device-local
+                   app.saveLocalStorage/loadLocalStorage('specorator:approval-rules'), load-or-default +
+                   coercion, dedupe + mint, idempotent remove, clear; never data.json/vault, NFR-AS-003) +
+                   get approvalRuleStore on ObsidianBridge; ClaudeCliChatRuntime SDK-mode mapping
+                   (yolo->bypassPermissions / plan->plan / normal|absent->no --permission-mode flag) +
+                   liveMode through getToolbarCapabilities().permissionMode + plan-exit _syncPlanExitMode
+                   (parity ClaudeApprovalHandler setMode destination:session); no providerId branch.
+                   Behavioural gate = MANUAL TEST-AS-M1 (device-local round-trip + data.json/vault
+                   untouched) + TEST-AS-M3 (real SDK map + plan-exit setMode), scheduled in test-plan.md —
+                   NOT self-claimed.
+                 - T-AS-013 cf7a9b67 RED / T-AS-014 07a58253 green — MockApprovalRuleStore (scriptable
+                   in-memory: seedRules / setFailMode('none'|'load'|'save') forcing Result.err /
+                   loadRules-default-ok([]) / addRule mint+dedupe+opposite-decision-append / idempotent
+                   remove / clear; total never-throws) + get approvalRuleStore on MockBridge;
+                   MockChatRuntime getLastPermissionMode + scriptable three-mode getToolbarCapabilities;
+                   the fake-ports.approvalRuleStore member (typed MockApprovalRuleStore so seedRules +
+                   setFailMode surface). vitest 32/32. Runnability-only fix to the T-AS-013 RED fixture
+                   (ChatTurnRequest has no conversationId; drop the unused chunk binding) folded into the
+                   green commit — no assertion change.
+                 - T-AS-015 9d7874b5 (RED leg authored within the dev task then greened — no separate qa
+                   RED task scheduled for the LS half) — LocalStorageApprovalRuleStore (browser
+                   localStorage under the same key; load-or-default incl. corrupt-blob; dedupe + mint;
+                   idempotent remove; clear; never throws) + get approvalRuleStore on LocalStorageBridge.
+                   The inert runtime mode needs no change (FixtureChatRuntime reports 'normal' from
+                   T-AS-011, fires no live setMode). vitest 8/8 store + full tests/infrastructure +
+                   tests/__fakes__ 346/346.
+                 THREE-BRIDGE STORY: Obsidian device-local (coverage-excluded -> manual M1) / Mock
+                 scriptable in-memory (seedable + setFailMode, on fake-ports.approvalRuleStore) /
+                 LocalStorage browser-localStorage. Claude SDK-mode mapping + plan-exit setMode in
+                 ClaudeCliChatRuntime (coverage-excluded -> manual M3); LS runtime mode inert.
+                 DEVIATION: T-AS-012/015 store _coerce split into _isValidEntry for the complexity cap
+                 (structural, no behaviour change); the LS RED leg authored in the dev task (no qa RED
+                 task scheduled for the LS half in the batch) — RED confirmed before green. NOT touched:
+                 other batches (no application ApprovalManager, no UI). styles.css left untouched.
+                 HAND-OFF -> APPLICATION batch /spec:implement (qa/dev): T-AS-016 RED (foldControlOptions
+                 guarded permissionMode clause, EC-AS-2/13) -> T-AS-017 green; T-AS-018 RED (ApprovalManager
+                 decide/applyDecision/listRules — mode-gate-first -> match deny-wins -> prompt -> persist;
+                 fail-safe-to-prompt over the scriptable Mock store via fake-ports.approvalRuleStore +
+                 setFailMode) -> T-AS-019 green. The three bridges + the fake-ports.approvalRuleStore seam
+                 (seed + setFailMode) are ready for the ApprovalManager use-case tests.
 ```
