@@ -108,3 +108,8 @@ export type {
 	ToolbarCatalog,
 	TabControls,
 } from '@/domain/chat/toolbar';
+
+// P7 approvals-security (SPEC-AS-001/002, ADR-AS-002 §1). The permission-mode
+// union the toggle/fold/runtime share, surfaced through the ports barrel for
+// one-stop import.
+export type { PermissionMode } from '@/domain/chat/PermissionMode';

@@ -10,6 +10,7 @@ import type {
 	BrowserSelectionContext,
 } from './attachments/Selection';
 import type { ReasoningChoice } from './Reasoning';
+import type { PermissionMode } from './PermissionMode';
 
 /** Turn request — mirrors `runtime/types.ts:45`. P1 uses `text` (+ optional `currentNotePath`). */
 export interface ChatTurnRequest {
@@ -74,6 +75,11 @@ export interface ChatRuntimeQueryOptions {
 	reasoning?: ReasoningChoice;
 	/** Service-tier toggle (REQ-TC-020): declared-now, emitted by a capable runtime in P9. */
 	serviceTier?: string;
+	// ---- P7 additive (SPEC-AS-002, ADR-AS-002 §1) — optional; an unset query is
+	// byte-identical to P6 (NFR-AS-001). The fold writes it ONLY for a non-`normal`
+	// mode (SPEC-AS-011), so a `normal`/absent tab folds nothing. ----
+	/** Permission mode (REQ-AS-002): absent ⇒ the runtime's default (`'normal'`). */
+	permissionMode?: PermissionMode;
 }
 
 /** Ensure-ready options — mirrors `runtime/types.ts:73`. */
