@@ -761,3 +761,28 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   currently ships `supportsBrowserSelection: false` — an honest defer per
   REQ-CA-018). The affordance simply never appears in the shipped P5 desktop
   build, which is the spec's "honest defer" intent.
+
+## T-CA-037 — RED modalSeam OpenInlineEdit/OpenImagePreview handles (🧪 qa)
+
+- **Spec/test:** TEST-CA-020 (fallback leg); SPEC-CA-023; REQ-CA-008/020;
+  NFR-CA-003.
+- **Files:** `tests/ui/chat/modalSeam.ts.test.ts` (extended — the two new
+  handles + keys; `useOpenInlineEdit()` auto-rejects `null` when unprovided;
+  `useOpenImagePreview()` no-op resolve; the two P3/P4 tests stay green).
+- **Outcome:** done — RED confirmed (4 new tests fail, the 2 P3/P4 tests pass).
+- **Commit:** `ae84cf6`.
+
+## T-CA-038 — modalSeam.ts handles + keys + composables (🔨 dev)
+
+- **Spec/req:** SPEC-CA-023; REQ-CA-008/020; NFR-CA-003.
+- **Files:** `src/ui/chat/modalSeam.ts` (additive — `InlineEditDecision`,
+  `OpenInlineEditFn`, `OpenImagePreviewFn`, the `OPEN_INLINE_EDIT` /
+  `OPEN_IMAGE_PREVIEW` keys, `useOpenInlineEdit()` (auto-reject `null` fallback)
+  + `useOpenImagePreview()` (no-op resolve fallback); the four P3/P4 handles
+  byte-identical).
+- **Outcome:** done — the T-CA-037 RED tests now green (6/6). No `obsidian`
+  import; no `window.*`; the fallbacks never silently apply.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` exit 0;
+  `vitest run` 6/6 green.
+- **Commit:** _this commit._
+- **Deviation:** none.

@@ -1,6 +1,7 @@
 import { inject, type InjectionKey } from 'vue';
 import type { ForkTarget } from '@/application/threads/chooseForkTarget';
 import type { ChatRuntimePort } from '@/domain/ports';
+import type { AttachedImage } from '@/domain/chat/attachments';
 
 /**
  * The plugin-owned modal-launch seam (SPEC-TS-023/024, NFR-TS-007). The Obsidian
@@ -71,4 +72,40 @@ export function useChatRuntimeFactory(): ChatRuntimeFactory {
  */
 export function useInstructionConfirm(): InstructionConfirmFn {
 	return inject(INSTRUCTION_CONFIRM, () => Promise.resolve<InstructionConfirmResult>({ kind: 'reject' }));
+}
+
+// ── P5 context-attachments seam additions (SPEC-CA-023, ADR-CA-004 §1) ───────────
+// Additive — the four P3/P4 handles above stay byte-identical. The real launchers
+// open the Obsidian `InlineEditModal` / `ImagePreviewModal` (`src/plugin/modals/`);
+// the standalone entry provides browser-safe stand-ins (no `window.*`).
+
+/** The inline-edit decision the modal resolves (REQ-CA-024/025); null on dismiss → reject (note unchanged). */
+export type InlineEditDecision =
+	| { kind: 'accept'; editedText: string } // apply the (insertion-or-replacement) edited text (REQ-CA-024)
+	| { kind: 'reject' }; // note unchanged, highlight restored (REQ-CA-025)
+
+/** Open the inline-edit modal, pre-bound to the selection; resolves the decision or null on dismiss. */
+export type OpenInlineEditFn = (
+	selectedText: string,
+	notePath?: string,
+) => Promise<InlineEditDecision | null>;
+
+/** Open the full-size image preview; resolves when dismissed (REQ-CA-008). */
+export type OpenImagePreviewFn = (image: AttachedImage) => Promise<void>;
+
+export const OPEN_INLINE_EDIT: InjectionKey<OpenInlineEditFn> = Symbol('OpenInlineEdit');
+export const OPEN_IMAGE_PREVIEW: InjectionKey<OpenImagePreviewFn> = Symbol('OpenImagePreview');
+
+/**
+ * Inject the inline-edit launcher; falls back to an AUTO-REJECT (`null`) when
+ * absent (SPEC-CA-023) — a missing launcher must NEVER silently apply an edit
+ * (REQ-CA-008/020, NFR-CA-003). Mirrors `useInstructionConfirm`'s auto-reject.
+ */
+export function useOpenInlineEdit(): OpenInlineEditFn {
+	return inject(OPEN_INLINE_EDIT, () => Promise.resolve(null));
+}
+
+/** Inject the image-preview launcher; falls back to a no-op resolve when absent (SPEC-CA-023). */
+export function useOpenImagePreview(): OpenImagePreviewFn {
+	return inject(OPEN_IMAGE_PREVIEW, () => Promise.resolve());
 }
