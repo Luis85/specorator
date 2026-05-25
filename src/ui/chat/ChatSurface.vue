@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, computed, inject, ref, shallowRef } from 'vue';
+import { onMounted, onBeforeUnmount, computed, inject, ref, shallowRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { storeToRefs } from 'pinia';
 import { useTabsStore } from '@/ui/stores/tabsStore';
@@ -19,14 +19,30 @@ import type {
 	MentionDataProviderPort,
 	ProviderCommandCatalogPort,
 	ShellExecPort,
+	WorkspacePort,
+	VaultPort,
+	SelectionSourcePort,
+	SelectionHighlightPort,
 } from '@/domain/ports';
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
+import type { AttachedFileRef, AttachedImage } from '@/domain/chat/attachments';
+import { err } from '@/domain/shared/Result';
 import {
 	SETTINGS_PORT,
 	MENTION_DATA_PROVIDER_PORT,
 	PROVIDER_COMMAND_CATALOG_PORT,
 	SHELL_EXEC_PORT,
+	AUX_MODEL_PORT,
+	WORKSPACE_PORT,
+	VAULT_PORT,
+	SELECTION_SOURCE_PORT,
+	SELECTION_HIGHLIGHT_PORT,
 } from '@/infrastructure/bridge/ports';
+import { useOpenImagePreview, usePickAttachment } from '@/ui/chat/modalSeam';
+import { useCapturedSelection } from '@/ui/composables/useCapturedSelection';
+import { AddFileContextUseCase } from '@/application/chat/attachments/AddFileContextUseCase';
+import { AddImageUseCase } from '@/application/chat/attachments/AddImageUseCase';
+import { resolveImageMime } from '@/infrastructure/image/imageEncode';
 import { clampMaxTabs } from '@/domain/settings/PluginSettings';
 import { RunCommandUseCase } from '@/application/chat/composer/RunCommandUseCase';
 import { ResolveMentionUseCase } from '@/application/chat/composer/ResolveMentionUseCase';
@@ -70,6 +86,12 @@ const chooseForkTarget = useChooseForkTarget();
 // SettingsPort is OPTIONAL here (the maxTabs preference): the surface degrades to
 // the default ceiling when the host does not provide it (parity with the demo).
 const settingsPort = inject(SETTINGS_PORT, undefined);
+// AuxModelPort is OPTIONAL here (SPEC-CA-018, ADR-CA-002 §3): the unified one-shot
+// cold-start aux seam driving title-gen (always) + instruction-refine (gated). The
+// production `provide(AUX_MODEL_PORT, …)` lands in the wire-in batch (T-CA-033); a
+// transient unwired window in the real plugin is expected — title-gen degrades to a
+// best-effort err so the tab still streams (REQ-TS-025 keeps the caller's fallback).
+const aux = inject(AUX_MODEL_PORT, undefined);
 
 let maxTabs = 3;
 
@@ -87,7 +109,9 @@ tabs.bindTabDeps({
 	},
 	history,
 	generateTitle: (firstUserMessage) =>
-		new GenerateTitleUseCase(createRuntime()).execute(firstUserMessage),
+		aux !== undefined
+			? new GenerateTitleUseCase(aux).execute(firstUserMessage)
+			: Promise.resolve(err(new Error('aux model unavailable'))),
 	getMaxTabs: () => maxTabs,
 	logger,
 	// R-CP-001: read the persisted instruction `customSystemPrompt` from the
@@ -180,9 +204,15 @@ function buildComposer(): {
 		},
 		getValue: (): string => composerRef.value?.getValue() ?? '',
 		getCaret: (): number => composerRef.value?.getCaret() ?? 0,
-		refineInstruction: new RefineInstructionUseCase(runtime),
+		// Refine is gated behind the composer ports AND the optional AuxModelPort
+		// (SPEC-CA-018): build it only when `aux` is provided; the arbiter treats an
+		// absent `refineInstruction` as "no refine affordance" (it is `?` there).
+		refineInstruction: aux !== undefined ? new RefineInstructionUseCase(aux) : undefined,
 		settings: settingsPort,
 		confirmInstruction,
+		// P5 (SPEC-CA-022, REQ-CA-001): resolving a FILE mention ALSO adds a context
+		// chip via the attached-file set (additive — the token is still inserted).
+		onFileMention: attachFile,
 	});
 	// The inline-block response boundary (SPEC-CP-017). Built over an enqueue-decorator
 	// runtime so a runtime-pulled inline request both (a) RENDERS via the arbiter's
@@ -211,6 +241,133 @@ function dispatchBuiltIn(action: BuiltInAction): void {
 	logger.debug('composer: built-in action not wired in P4', { action });
 }
 
+// ── P5 context & attachments (SPEC-CA-022/025/026) ──────────────────────────────
+// The four P5 ports are OPTIONAL here (parity with the P1–P4 demos + mount tests):
+// the surface owns the per-mount attached-file + image sets and, when the selection
+// ports are provided (the wire-in batch, T-CA-044), the captured-selection composable
+// — feeding `ChatComposer`'s context-bar slot. When any is absent the composer stays
+// pure P1–P4 (the context bar is hidden when all three sets are empty). The Vue
+// surface never imports `obsidian`; image preview launches through the injected seam.
+const workspace: WorkspacePort | undefined = inject(WORKSPACE_PORT, undefined);
+// VaultPort is OPTIONAL here (parity with the P1 demo): the image gate
+// (`AddImageUseCase`) is built only when a vault is provided, so a mount without
+// it degrades to "no path-based image attach" rather than throwing.
+const vault: VaultPort | undefined = inject(VAULT_PORT, undefined);
+const addImage = vault !== undefined ? new AddImageUseCase(vault) : undefined;
+const selectionSource: SelectionSourcePort | undefined = inject(SELECTION_SOURCE_PORT, undefined);
+const selectionHighlight: SelectionHighlightPort | undefined = inject(
+	SELECTION_HIGHLIGHT_PORT,
+	undefined,
+);
+const openImagePreview = useOpenImagePreview();
+const pickAttachment = usePickAttachment();
+
+const chatRoot = ref<HTMLElement | null>(null);
+const attachedFiles = ref<readonly AttachedFileRef[]>([]);
+const images = ref<readonly AttachedImage[]>([]);
+const addFileContext = new AddFileContextUseCase();
+
+// The captured selection is reactive only when BOTH selection ports are provided
+// (the production sidebar + the standalone demo). The composable subscribes the
+// source, computes focus-within-chat (the EC-CA-11 retain), and paints the highlight.
+const selectionApi =
+	selectionSource !== undefined && selectionHighlight !== undefined
+		? useCapturedSelection(selectionSource, selectionHighlight, chatRoot)
+		: undefined;
+const capturedSelection = computed(() => selectionApi?.current.value ?? null);
+const supportsBrowserSelection = selectionSource?.supportsBrowserSelection ?? false;
+
+/**
+ * Resolve a thumbnail `:src` for an attached image (SPEC-CA-020). The turn payload
+ * is the bounded base64 (`dataBase64`); the thumb binds a `data:` URI derived from
+ * the captured snapshot, so a moved/deleted source file keeps the thumb stable
+ * (EC-CA-15). DECLARATIVE — `ImageThumb` binds `:src`, never `v-html`/`innerHTML`.
+ */
+function resolveThumbSrc(path: string): string {
+	const image = images.value.find((img) => img.path === path);
+	return image === undefined ? '' : `data:${image.mimeType};base64,${image.dataBase64}`;
+}
+
+/**
+ * Attach a vault file to the context set as a removable chip (R-CA-002, REQ-CA-001).
+ * Idempotent (the use case dedupes by path, REQ-CA-002). Drives the @-mention chip
+ * (and the paperclip / non-image drop in the later legs). A malformed path is a
+ * quiet no-op (the use case returns `err`).
+ */
+function attachFile(path: string): void {
+	const next = addFileContext.add(attachedFiles.value, path);
+	if (next.ok) attachedFiles.value = next.value;
+}
+
+/** Add an `AttachedImage` to the set, idempotent by path (REQ-CA-002 parity, EC-CA-15). */
+function addAttachedImage(image: AttachedImage): void {
+	if (images.value.some((img) => img.path === image.path)) return;
+	images.value = [...images.value, image];
+}
+
+/**
+ * Attach a vault image BY PATH through `AddImageUseCase.execute` — reads the vault
+ * bytes through the 8 MiB/MIME gate (R-CA-002, REQ-CA-007/012). On reject a
+ * non-blocking warning surfaces and the set is unchanged (REQ-CA-012, EC-CA-1/2).
+ * Used by the paperclip image pick.
+ */
+async function attachImageByPath(path: string): Promise<void> {
+	if (addImage === undefined) return;
+	const result = await addImage.execute(path);
+	if (result.ok) addAttachedImage(result.value);
+	else notify.showWarning(t('agent.chat.context.images.rejected', { name: path }));
+}
+
+/**
+ * Open the vault file/image picker via the modal seam (R-CA-002, REQ-CA-001/007).
+ * The picker is obsidian-specific (it lives in `src/plugin/**`); the Vue layer only
+ * routes the result — an image through the gate, a file as a chip. `null` = dismiss.
+ */
+async function onAttach(): Promise<void> {
+	const picked = await pickAttachment();
+	if (picked === null) return;
+	if (picked.kind === 'image') await attachImageByPath(picked.path);
+	else attachFile(picked.path);
+}
+
+/**
+ * Gate + attach dropped/pasted files (R-CA-002, REQ-CA-007/012). Each image runs
+ * the in-hand-bytes gate (`AddImageUseCase.executeBytes` — 8 MiB/MIME); a reject
+ * surfaces a non-blocking warning and is skipped (REQ-CA-012, EC-CA-1/2). Non-image
+ * files are ignored on drop/paste (parity with claudian's image-only drop handler).
+ */
+async function onAttachFiles(files: File[]): Promise<void> {
+	if (addImage === undefined) return;
+	for (const file of files) {
+		if (resolveImageMime(file.name) === null) continue; // non-image → skip (parity).
+		const bytes = new Uint8Array(await file.arrayBuffer());
+		const result = addImage.executeBytes(file.name, bytes);
+		if (result.ok) addAttachedImage(result.value);
+		else notify.showWarning(t('agent.chat.context.images.rejected', { name: file.name }));
+	}
+}
+
+function onRemoveFile(path: string): void {
+	const next = addFileContext.remove(attachedFiles.value, path);
+	if (next.ok) attachedFiles.value = next.value;
+}
+
+function onOpenFile(path: string): void {
+	void workspace?.openFile(path);
+}
+
+function onRemoveImage(path: string): void {
+	images.value = images.value.filter((img) => img.path !== path);
+}
+
+function onPreviewImage(image: AttachedImage): void {
+	void openImagePreview(image);
+}
+
+function onClearSelection(): void {
+	selectionApi?.clear();
+}
+
 const activeMessages = computed<ChatMessage[]>(() => tabs.activeTab?.messages ?? []);
 const liveAssistantId = computed<string | null>(() => tabs.activeTab?.liveAssistantId ?? null);
 const interruptedId = computed<string | null>(() => tabs.activeTab?.interruptedId ?? null);
@@ -220,9 +377,53 @@ function canRewind(message: ChatMessage): boolean {
 	return tabs.canRewindMessage(message.id);
 }
 
+/**
+ * Submit the turn, folding the present P5 context (attached files / images / the
+ * captured selection) into the request (R-CA-001, REQ-CA-004/010/019). When no
+ * context is present the request stays byte-identical to P1–P4 (G2). `onConsumed`
+ * fires on a successful submit → clear the per-tab sets + the captured selection
+ * for the next turn (SPEC-CA-022).
+ */
 function onSubmit(text: string): void {
-	void tabs.sendMessage(text);
+	const hasContext =
+		attachedFiles.value.length > 0 ||
+		images.value.length > 0 ||
+		capturedSelection.value !== null;
+	if (!hasContext) {
+		void tabs.sendMessage(text);
+		return;
+	}
+	void tabs.sendMessage(text, undefined, {
+		attachedFiles: attachedFiles.value,
+		images: images.value,
+		selection: capturedSelection.value,
+		onConsumed: clearContextSets,
+	});
 }
+
+/** Reset the per-tab context sets + the captured selection (R-CA-001/R-CA-003, REQ-CA-006). */
+function clearContextSets(): void {
+	attachedFiles.value = [];
+	images.value = [];
+	selectionApi?.clear();
+}
+
+/**
+ * R-CA-003 (REQ-CA-006, EC-CA-6): reset the context sets on a NEW or LOADED
+ * conversation. The active conversation identity changes when a new tab opens
+ * (`/new` + the TabBar `+`, both `tabs.openTab` → a new `activeTabId`), when a fork
+ * loads into a new tab (`loadIntoNewTab`), and when a conversation is resumed into
+ * the current tab (`loadIntoTab` → a new `conversationId`). Watching both keys
+ * covers all three; a plain re-render does not change either, so it never clears
+ * mid-draft. The initial mount runs without `immediate`, so the first empty tab does
+ * not trigger a (redundant) clear.
+ */
+watch(
+	() => `${tabs.activeTabId ?? ''}::${tabs.activeTab?.conversationId ?? ''}`,
+	() => {
+		clearContextSets();
+	},
+);
 
 function onCancel(): void {
 	tabs.cancelTurn();
@@ -248,7 +449,7 @@ function onRewindCode(userMessageId: string): void {
 </script>
 
 <template>
-	<div class="sp-chat-surface" data-testid="chat-surface" data-provider="claude">
+	<div ref="chatRoot" class="sp-chat-surface" data-testid="chat-surface" data-provider="claude">
 		<TabBar />
 		<div class="sp-chat-surface__region">
 			<WelcomeGreeting v-if="isEmpty" />
@@ -295,8 +496,20 @@ function onRewindCode(userMessageId: string): void {
 			:supports-inline-response="supportsInlineResponse"
 			:notify="notify"
 			:bang-bash-output="bangBashOutput"
+			:attached-files="attachedFiles"
+			:images="images"
+			:captured-selection="capturedSelection"
+			:supports-browser-selection="supportsBrowserSelection"
+			:resolve-thumb-src="resolveThumbSrc"
 			@submit="onSubmit"
 			@cancel="onCancel"
+			@remove-file="onRemoveFile"
+			@open-file="onOpenFile"
+			@remove-image="onRemoveImage"
+			@preview-image="onPreviewImage"
+			@clear-selection="onClearSelection"
+			@attach-files="onAttachFiles"
+			@attach="onAttach"
 		/>
 	</div>
 </template>

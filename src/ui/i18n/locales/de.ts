@@ -62,6 +62,27 @@ export default {
 				newTab: 'Neuer Tab',
 				currentTab: 'Aktueller Tab',
 			},
+			context: {
+				files: {
+					label: 'Angehängte Dateien',
+					open: '{name} öffnen',
+					remove: '{name} entfernen',
+				},
+				images: {
+					label: 'Angehängte Bilder',
+					preview: '{name} ansehen',
+					remove: '{name} entfernen',
+					rejected: '{name} konnte nicht angehängt werden — kein unterstütztes Bild oder zu groß.',
+				},
+				attach: 'Datei oder Bild anhängen',
+				selection: {
+					label: 'Erfasste Auswahl',
+					clear: 'Auswahl löschen',
+					editor: '{notePath} · Zeile {startLine} (+{lineCount})',
+					canvas: '{canvasPath} ({count} Knoten)',
+					browserCapture: 'Browser-Auswahl erfassen',
+				},
+			},
 		},
 	},
 } as const;

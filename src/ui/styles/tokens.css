@@ -297,3 +297,28 @@ body.theme-light .specorator-root {
 		--sp-dropdown-anim-duration: 0s;
 	}
 }
+
+/* §4.12 — Context & attachments (P5, SPEC-CA-027). file-context / file-link
+ * chips, the image thumbnail + preview modal, the selection highlight, and the
+ * inline-edit modal. Each token is a token-layer var lookup — no hex, no raw
+ * Obsidian var outside this layer, no physical CSS property (NFR-CA-007,
+ * lint-style-tokens guard). The word-diff preview rides the §4.9 P2 diff tokens
+ * unchanged (`--sp-diff-insert-bg`/`--sp-diff-delete-bg`/`--sp-diff-gutter`/
+ * `--sp-diff-max-height`) — no new diff token. Values justified against the
+ * claudian `style/{file-context,file-link,image-*,inline-edit}.css` rules. */
+.specorator-root {
+	/* file + image chips (file-context.css chip surface) */
+	--sp-chip-bg: var(--sp-bg-secondary);
+	--sp-chip-border: var(--sp-border);
+	--sp-chip-radius: var(--sp-radius-sm);
+	/* context bar chip-row spacing */
+	--sp-context-bar-gap: var(--sp-space-2);
+	/* image thumbnail box (image-*.css thumbnail) */
+	--sp-image-thumb-size: 48px;
+	/* full-size image preview modal cap (image-modal css) */
+	--sp-image-modal-max: 80vh;
+	/* selection highlight tint (SelectionHighlight; interactive-accent wash) */
+	--sp-selection-highlight-bg: var(--sp-interactive-accent-translucent);
+	/* inline-edit modal width (inline-edit.css) */
+	--sp-inline-edit-modal-w: 540px;
+}

@@ -77,6 +77,12 @@ export class ChatSurfacePageObject {
 		return this.wrapper.find('[data-testid="chat-compact"]').exists();
 	}
 
+	// ── P5 context-attachments (SPEC-CA-022) ─────────────────────────────────────
+
+	hasContextBar(): boolean {
+		return this.wrapper.find('[data-testid="composer-context-bar"]').exists();
+	}
+
 	async clickCompact(): Promise<void> {
 		await this.wrapper.get('[data-testid="chat-compact"]').trigger('click');
 	}

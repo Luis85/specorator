@@ -75,6 +75,14 @@ export interface UseComposerModeOptions {
 	readonly settings?: SettingsPort;
 	/** Opens the instruction-confirm modal via the seam (SPEC-CP-027). */
 	readonly confirmInstruction?: InstructionConfirmFn;
+	/**
+	 * P5 (SPEC-CA-022, REQ-CA-001): fired with a FILE mention's vault path when a
+	 * `file`-kind referent is confirmed, so the parent ADDS a context chip. ADDITIVE
+	 * — the P4 `mentionText` insertion (REQ-CP-013) is unchanged; this fires
+	 * ALONGSIDE it. Absent → no chip behaviour (pure P4). Non-file referents
+	 * (folder/subagent/mcp/external-dir) never fire it.
+	 */
+	readonly onFileMention?: (path: string) => void;
 }
 
 /** The composable's public surface (SPEC-CP-018). */
@@ -277,12 +285,16 @@ export function useComposerMode(options: UseComposerModeOptions): ComposerModeAp
 		const caret = options.getCaret();
 		const value = options.getValue();
 		if ('mentionText' in entry) {
-			// REQ-CP-013: the insertion is the referent's `mentionText` verbatim (the
-			// removable chip is P5/NG1 — no augmentation here).
+			// REQ-CP-013: the insertion is the referent's `mentionText` verbatim.
 			const next = replaceTriggerToken(value, tokenStart, caret, entry.mentionText);
 			closePalette();
 			setMode('default');
 			options.onInsert(next.value, next.caret);
+			// P5 (SPEC-CA-022, REQ-CA-001): a FILE referent ALSO adds a context chip via
+			// its vault path (`detail`); the insertion above is unchanged (additive).
+			if (entry.kind === 'file' && entry.detail !== undefined && entry.detail !== '') {
+				options.onFileMention?.(entry.detail);
+			}
 			return;
 		}
 		const outcome = await options.runCommand.execute(entry);

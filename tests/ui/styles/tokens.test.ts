@@ -162,6 +162,23 @@ const COMPOSER_POWER_TOKENS = [
 	'--sp-mention-dir',
 ];
 
+/**
+ * §4.12 — Context & attachments (P5, SPEC-CA-027 / NFR-CA-007). The eight `--sp-*`
+ * tokens the P5 surfaces genuinely need (file/image chips, the context bar, the
+ * image thumbnail + preview modal, the selection highlight, the inline-edit modal).
+ * The word-diff preview rides the §4.9 P2 diff tokens unchanged — no new diff token.
+ */
+const CONTEXT_ATTACHMENTS_TOKENS = [
+	'--sp-chip-bg',
+	'--sp-chip-border',
+	'--sp-chip-radius',
+	'--sp-context-bar-gap',
+	'--sp-image-thumb-size',
+	'--sp-image-modal-max',
+	'--sp-selection-highlight-bg',
+	'--sp-inline-edit-modal-w',
+];
+
 const PROVIDER_IDS = ['claude', 'codex', 'opencode', 'cursor'] as const;
 
 function loadTokens(): string {
@@ -258,5 +275,32 @@ describe('src/ui/styles/tokens.css — token contract (REQ-AUX-006, REQ-AUX-009)
 		const css = loadTokens();
 		// The palette open animation collapses to instant under reduced-motion.
 		expect(css).toMatch(/--sp-dropdown-anim-duration\s*:\s*0s/);
+	});
+
+	it('declares every §4.12 context/attachments token (SPEC-CA-027, NFR-CA-007)', () => {
+		const css = loadTokens();
+		assertTokensDeclared(css, CONTEXT_ATTACHMENTS_TOKENS);
+		// The word-diff preview rides the §4.9 P2 diff tokens — no new diff token
+		// is minted for P5 (SPEC-CA-027).
+		expect(css).not.toMatch(/--sp-diff-(?:word|inline)[a-z-]*\s*:/);
+	});
+
+	it('declares the §4.12 tokens with no raw-hex / Obsidian-var / physical-property leak (TEST-CA-032)', () => {
+		const css = loadTokens();
+		// Isolate the §4.12 declaration block and assert each P5 token resolves to
+		// a token-layer var() lookup (or a bare dimension) — never a raw hex, a raw
+		// Obsidian var, or a physical CSS property.
+		const block = css.slice(css.indexOf('§4.12'));
+		for (const token of CONTEXT_ATTACHMENTS_TOKENS) {
+			const match = new RegExp(`${token.replace(/-/g, '\\-')}\\s*:\\s*([^;]+);`).exec(block);
+			expect(match, `expected ${token} declared in the §4.12 block`).not.toBeNull();
+			const value = match?.[1] ?? '';
+			// No raw hex colour literal.
+			expect(value, `${token} must not carry a raw hex literal`).not.toMatch(/#[0-9a-fA-F]{3,8}/);
+			// No raw Obsidian theme var (only --sp-* lookups are allowed).
+			expect(value, `${token} must not read a raw Obsidian var`).not.toMatch(
+				/var\(--(?!sp-)[a-z]/,
+			);
+		}
 	});
 });

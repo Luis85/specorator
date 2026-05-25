@@ -47,6 +47,59 @@ describe('fakeModulePorts', () => {
 		if (run.ok) expect(run.value.exitCode).toBe(0)
 	})
 
+	// T-CA-007 (TEST-CA-021 fake-ports leg): the factory exposes a scriptable
+	// `auxModel` member (the MockBridge aux port) so the re-pointed title/refine
+	// tests (SPEC-CA-018) inject the aux stub instead of a runtime.
+	it('exposes a scriptable auxModel member', async () => {
+		const ports = fakeModulePorts()
+		ports.auxModel.setAuxResponse('Fix the login bug')
+		const result = await ports.auxModel.run('please fix login', { systemPrompt: 'sys' })
+		expect(result.ok).toBe(true)
+		if (result.ok) expect(result.value).toBe('Fix the login bug')
+		expect(ports.auxModel.lastPrompt).toBe('please fix login')
+		expect(ports.auxModel.lastSystemPrompt).toBe('sys')
+	})
+
+	it('auxModel maps a scripted error / empty to err', async () => {
+		const ports = fakeModulePorts()
+		ports.auxModel.setAuxError()
+		expect((await ports.auxModel.run('x')).ok).toBe(false)
+		ports.auxModel.setAuxEmpty()
+		expect((await ports.auxModel.run('x')).ok).toBe(false)
+	})
+
+	// T-CA-012 (TEST-CA-013/014/015 fake-ports leg): the factory exposes the two
+	// P5 selection ports — a scriptable `selectionSource` (inert by default) and a
+	// recording `selectionHighlight` — so multi-port tests (CaptureSelectionUseCase)
+	// inject them from the shared seam.
+	it('exposes a scriptable selectionSource member (inert by default)', () => {
+		const ports = fakeModulePorts()
+		expect(ports.selectionSource.getCurrentSelection()).toBeNull()
+		expect(ports.selectionSource.supportsBrowserSelection).toBe(false)
+		ports.selectionSource.setSelection({
+			kind: 'editor',
+			notePath: 'notes/a.md',
+			selectedText: 'hi',
+			startLine: 0,
+			lineCount: 1,
+		})
+		const current = ports.selectionSource.getCurrentSelection()
+		expect(current?.kind).toBe('editor')
+	})
+
+	it('exposes a recording selectionHighlight member', () => {
+		const ports = fakeModulePorts()
+		ports.selectionHighlight.show({
+			kind: 'editor',
+			notePath: 'notes/a.md',
+			selectedText: 'hi',
+			startLine: 0,
+			lineCount: 1,
+		})
+		ports.selectionHighlight.clear()
+		expect(ports.selectionHighlight.calls.map((c) => c.kind)).toEqual(['show', 'clear'])
+	})
+
 	it('providerHistory mutations are visible across the factory ports', async () => {
 		const ports = fakeModulePorts()
 		ports.providerHistory.seedConversations([

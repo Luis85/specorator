@@ -5,12 +5,16 @@ import type { ComposerModeApi } from '@/ui/chat/composer/useComposerMode';
 import type { RespondToInlineBlockUseCase } from '@/application/chat/composer/RespondToInlineBlockUseCase';
 import type { BangBashOutput as BangBashOutputDto } from '@/application/chat/composer/SubmitBangBashUseCase';
 import type { NotificationPort } from '@/domain/ports';
+import type { AttachedFileRef, AttachedImage, CapturedSelection } from '@/domain/chat/attachments';
 import ComposerDropdown from '@/ui/chat/composer/ComposerDropdown.vue';
 import PlanModeIndicator from '@/ui/chat/composer/PlanModeIndicator.vue';
 import BangBashOutput from '@/ui/chat/composer/BangBashOutput.vue';
 import InlineAskUserQuestion from '@/ui/chat/composer/InlineAskUserQuestion.vue';
 import InlineExitPlanMode from '@/ui/chat/composer/InlineExitPlanMode.vue';
 import InlinePlanApproval from '@/ui/chat/composer/InlinePlanApproval.vue';
+import FileChips from '@/ui/chat/FileChips.vue';
+import ImageContextBar from '@/ui/chat/ImageContextBar.vue';
+import SelectionIndicator from '@/ui/chat/SelectionIndicator.vue';
 
 /**
  * The send-composer (SPEC-CC-021, extended P4 — SPEC-CP-019). A bordered rounded
@@ -31,6 +35,13 @@ import InlinePlanApproval from '@/ui/chat/composer/InlinePlanApproval.vue';
  * inline block sibling, restored after the last resolves (REQ-CP-027); bang-bash
  * mode switches to monospace + a run-command placeholder. With no `composer` prop
  * the component is pure P1 (the send path byte-identical). No `obsidian` import.
+ *
+ * **P5 extension (SPEC-CA-022, ADDITIVE):** an optional context-bar region ABOVE
+ * the textarea hosts `FileChips` + `ImageContextBar` + `SelectionIndicator` when
+ * their props are non-empty; the composer re-emits the children's
+ * `removeFile`/`openFile`/`removeImage`/`previewImage`/`clearSelection` to the
+ * parent (which owns the store sets, ADR-CA-001 §2). With ALL three empty the bar
+ * is hidden → the composer renders exactly as P4 (G2).
  */
 const props = defineProps<{
 	isStreaming: boolean;
@@ -44,8 +55,31 @@ const props = defineProps<{
 	notify?: NotificationPort;
 	/** A completed bang-bash run rendered as an output block (SPEC-CP-025). */
 	bangBashOutput?: BangBashOutputDto | null;
+	/** P5 (SPEC-CA-022): the attached-file context set (the parent owns it). */
+	attachedFiles?: readonly AttachedFileRef[];
+	/** P5 (SPEC-CA-022): the image-context set. */
+	images?: readonly AttachedImage[];
+	/** P5 (SPEC-CA-022): the captured editor/canvas/browser selection. */
+	capturedSelection?: CapturedSelection | null;
+	/** P5 (SPEC-CA-021): the honest browser-capability flag for the gated affordance. */
+	supportsBrowserSelection?: boolean;
+	/** P5 (SPEC-CA-020): resolve a vault path → a display resource src (no `obsidian` here). */
+	resolveThumbSrc?: (path: string) => string;
 }>();
-const emit = defineEmits<{ submit: [text: string]; cancel: [] }>();
+const emit = defineEmits<{
+	submit: [text: string];
+	cancel: [];
+	/** P5 re-emits (SPEC-CA-022) — the parent owns the store sets. */
+	removeFile: [path: string];
+	openFile: [path: string];
+	removeImage: [path: string];
+	previewImage: [image: AttachedImage];
+	clearSelection: [];
+	/** P5 (SPEC-CA-022): files dropped onto or pasted into the composer; the parent gates them. */
+	attachFiles: [files: File[]];
+	/** P5 (SPEC-CA-022): the paperclip control — the parent opens the picker via the seam. */
+	attach: [];
+}>();
 
 const { t } = useI18n();
 
@@ -57,6 +91,39 @@ const textarea = ref<HTMLTextAreaElement | null>(null);
 const textareaHeight = ref<string>('auto');
 
 const canSubmit = computed(() => !props.isStreaming && value.value.trim().length > 0);
+
+// ── P5 context-bar gate (SPEC-CA-022) ────────────────────────────────────────────
+const hasFiles = computed(() => (props.attachedFiles?.length ?? 0) > 0);
+const hasImages = computed(() => (props.images?.length ?? 0) > 0);
+const hasSelection = computed(() => (props.capturedSelection ?? null) !== null);
+/** The bar is hidden when all three context sets are empty → byte-identical to P4 (G2). */
+const hasContext = computed(() => hasFiles.value || hasImages.value || hasSelection.value);
+
+// ── P5 drop / paste (SPEC-CA-022, REQ-CA-007) ────────────────────────────────────
+// Files dropped onto / pasted into the composer are emitted to the parent, which
+// gates each (image → the 8 MiB/MIME gate, non-image → a file chip). The composer
+// only marshals the DOM events; it never imports `obsidian` and never reads bytes.
+
+/** A drop carrying files → emit them; prevent the browser's default file-open. */
+function onDrop(event: DragEvent): void {
+	const files = event.dataTransfer?.files;
+	if (files === undefined || files.length === 0) return;
+	event.preventDefault();
+	emit('attachFiles', Array.from(files));
+}
+
+/** Allow a drop over the composer (without this the browser blocks the `drop`). */
+function onDragOver(event: DragEvent): void {
+	event.preventDefault();
+}
+
+/** A paste carrying files (e.g. a clipboard image) → emit them; prevent the default insert. */
+function onPaste(event: ClipboardEvent): void {
+	const files = event.clipboardData?.files;
+	if (files === undefined || files.length === 0) return;
+	event.preventDefault();
+	emit('attachFiles', Array.from(files));
+}
 
 function autoGrow(): void {
 	const el = textarea.value;
@@ -229,7 +296,13 @@ function onBlockResolved(): void {
 </script>
 
 <template>
-	<div class="sp-chat-composer" :class="composerClasses" data-testid="chat-composer">
+	<div
+		class="sp-chat-composer"
+		:class="composerClasses"
+		data-testid="chat-composer"
+		@drop="onDrop"
+		@dragover="onDragOver"
+	>
 		<template v-if="inlineActive && activeBlock !== null">
 			<InlineAskUserQuestion
 				v-if="activeBlock.kind === 'ask_user_question' && respond !== undefined && notify !== undefined"
@@ -260,6 +333,28 @@ function onBlockResolved(): void {
 		<template v-else>
 			<PlanModeIndicator :active="mode.planActive" />
 
+			<div v-if="hasContext" class="sp-chat-composer__context" data-testid="composer-context-bar">
+				<FileChips
+					v-if="hasFiles && attachedFiles"
+					:files="attachedFiles"
+					@remove="emit('removeFile', $event)"
+					@open="emit('openFile', $event)"
+				/>
+				<ImageContextBar
+					v-if="hasImages && images && resolveThumbSrc"
+					:images="images"
+					:resolve-thumb-src="resolveThumbSrc"
+					@remove="emit('removeImage', $event)"
+					@preview="emit('previewImage', $event)"
+				/>
+				<SelectionIndicator
+					v-if="hasSelection"
+					:selection="capturedSelection ?? null"
+					:supports-browser-selection="supportsBrowserSelection ?? false"
+					@clear="emit('clearSelection')"
+				/>
+			</div>
+
 			<ComposerDropdown
 				v-if="composer !== undefined && isPalette"
 				:entries="composer.paletteEntries.value"
@@ -280,6 +375,7 @@ function onBlockResolved(): void {
 				:aria-expanded="composer !== undefined && isPalette ? 'true' : 'false'"
 				@input="onInput"
 				@keydown="onComposerKeydown"
+				@paste="onPaste"
 			/>
 
 			<BangBashOutput
@@ -288,6 +384,15 @@ function onBlockResolved(): void {
 			/>
 
 			<div class="sp-chat-composer__toolbar">
+				<button
+					type="button"
+					class="sp-chat-composer__attach"
+					data-testid="composer-attach"
+					:aria-label="t('agent.chat.context.attach')"
+					@click="emit('attach')"
+				>
+					<span aria-hidden="true">📎</span>
+				</button>
 				<button
 					type="button"
 					class="sp-chat-composer__send"
@@ -312,6 +417,13 @@ function onBlockResolved(): void {
 	border-radius: var(--sp-radius-md);
 	background: var(--sp-bg-primary);
 	padding: var(--sp-space-3);
+}
+
+.sp-chat-composer__context {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-context-bar-gap);
+	padding-block-end: var(--sp-space-2);
 }
 
 .sp-chat-composer--plan {
@@ -346,8 +458,22 @@ function onBlockResolved(): void {
 
 .sp-chat-composer__toolbar {
 	display: flex;
-	justify-content: flex-end;
+	align-items: center;
+	justify-content: space-between;
 	padding-block-start: var(--sp-space-2);
+}
+
+.sp-chat-composer__attach {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	inline-size: 28px;
+	block-size: 28px;
+	border: none;
+	border-radius: var(--sp-radius-full);
+	background: transparent;
+	color: var(--sp-text-muted);
+	cursor: pointer;
 }
 
 .sp-chat-composer__send {

@@ -160,3 +160,46 @@ describe('standalone composer-power smoke (TEST-CP-026 dev leg)', () => {
 		expect($('[data-testid="bang-bash-output-stdout"]')?.textContent).toContain('echo hi');
 	}, 15000);
 });
+
+/**
+ * T-CA-045 — standalone attachments smoke (TEST-CA-007/004 dev leg, deterministic).
+ *
+ * The `npm run dev` entry (`src/ui/main.ts`) provides the P5 aux + selection ports
+ * + the browser-safe modal launcher stand-ins (T-CA-044) and mounts the
+ * `ChatComposer` context bar into `ChatSurface`. This deterministic leg proves the
+ * P5 wiring runs against `MockBridge` without an inject-or-throw and stays
+ * behaviour-identical to P4 when no context is present: the surface + composer
+ * mount, and the `composer-context-bar` is HIDDEN with empty file/image/selection
+ * sets (the P4-byte-identical gate, SPEC-CA-022 G2). The scripted-selection /
+ * file-chip / image-thumb / inline-edit-stand-in flows depend on the attach
+ * affordance + store-set wiring (T-CA-033/034) + the live dev server, which pair
+ * with the human run (recorded in `test-plan.md`). Queried by `data-testid` only
+ * (ADR-009). SPEC-CA-026; NFR-CA-002.
+ */
+describe('standalone attachments smoke (TEST-CA-007/004 dev leg)', () => {
+	beforeEach(() => {
+		vi.resetModules();
+		document.body.replaceChildren();
+		const el = document.createElement('div');
+		el.id = 'app';
+		document.body.appendChild(el);
+	});
+
+	it('mounts the context surface (composer present, context bar hidden when empty) against MockBridge', async () => {
+		await import('@/ui/main');
+		await settle();
+
+		// The P5-wired surface + composer mount (the new optional selection/aux injects
+		// + the context-bar slot run without an inject-or-throw).
+		expect($('[data-testid="chat-surface"]')).not.toBeNull();
+		expect($('[data-testid="composer-textarea"]')).not.toBeNull();
+
+		// No file / image / selection context yet → the context bar is HIDDEN, exactly
+		// the P4 byte-identical composer (SPEC-CA-022 G2). The chip / thumb / indicator
+		// affordances therefore do not render either.
+		expect($('[data-testid="composer-context-bar"]')).toBeNull();
+		expect($('[data-testid="file-chips"]')).toBeNull();
+		expect($('[data-testid="image-context-bar"]')).toBeNull();
+		expect($('[data-testid="selection-indicator"]')).toBeNull();
+	}, 15000);
+});

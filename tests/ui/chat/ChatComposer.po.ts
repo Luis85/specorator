@@ -10,6 +10,17 @@ const TID = {
 	inlineAsk: 'inline-ask',
 	inlineExitPlan: 'inline-exit-plan',
 	inlinePlanApproval: 'inline-plan-approval',
+	// P5 context-attachments extension (SPEC-CA-022).
+	contextBar: 'composer-context-bar',
+	fileChips: 'file-chips',
+	fileChipRemove: 'file-chip-remove',
+	fileChipLink: 'file-chip-link',
+	imageContextBar: 'image-context-bar',
+	imageThumbRemove: 'image-thumb-remove',
+	imageThumbPreview: 'image-thumb-preview',
+	selectionIndicator: 'selection-indicator',
+	selectionClear: 'selection-indicator-clear',
+	attach: 'composer-attach',
 } as const;
 
 /** PageObject for `ChatComposer.vue` (SPEC-CC-021). Queries by `data-testid` only (ADR-009). */
@@ -121,5 +132,93 @@ export class ChatComposerPageObject {
 	async typeValue(value: string): Promise<void> {
 		await this.textarea.setValue(value);
 		await this.textarea.trigger('input');
+	}
+
+	// ── P5 context-attachments extension (SPEC-CA-022) ──────────────────────────
+
+	hasContextBar(): boolean {
+		return this.wrapper.find(this.byTid(TID.contextBar)).exists();
+	}
+
+	hasFileChips(): boolean {
+		return this.wrapper.find(this.byTid(TID.fileChips)).exists();
+	}
+
+	hasImageContextBar(): boolean {
+		return this.wrapper.find(this.byTid(TID.imageContextBar)).exists();
+	}
+
+	hasSelectionIndicator(): boolean {
+		return this.wrapper.find(this.byTid(TID.selectionIndicator)).exists();
+	}
+
+	async clickFirstFileRemove(): Promise<void> {
+		await this.wrapper.findAll(this.byTid(TID.fileChipRemove))[0].trigger('click');
+	}
+
+	async clickFirstFileLink(): Promise<void> {
+		await this.wrapper.findAll(this.byTid(TID.fileChipLink))[0].trigger('click');
+	}
+
+	async clickFirstImageRemove(): Promise<void> {
+		await this.wrapper.findAll(this.byTid(TID.imageThumbRemove))[0].trigger('click');
+	}
+
+	async clickFirstImagePreview(): Promise<void> {
+		await this.wrapper.findAll(this.byTid(TID.imageThumbPreview))[0].trigger('click');
+	}
+
+	async clickSelectionClear(): Promise<void> {
+		await this.wrapper.get(this.byTid(TID.selectionClear)).trigger('click');
+	}
+
+	// ── FIX-2.3 drop / paste (SPEC-CA-022) ──────────────────────────────────────
+
+	/** Fire a `drop` on the composer root carrying `files` via a stubbed DataTransfer. */
+	async dropFiles(files: File[]): Promise<DragEvent> {
+		const event = new Event('drop', { cancelable: true, bubbles: true }) as DragEvent;
+		Object.defineProperty(event, 'dataTransfer', { value: { files } });
+		this.wrapper.get(this.byTid(TID.composer)).element.dispatchEvent(event);
+		await this.wrapper.vm.$nextTick();
+		return event;
+	}
+
+	/** Fire a `paste` on the textarea carrying image `files` via stubbed clipboard items. */
+	async pasteFiles(files: File[]): Promise<ClipboardEvent> {
+		const items = files.map((file) => ({
+			kind: 'file',
+			type: file.type,
+			getAsFile: () => file,
+		}));
+		const event = new Event('paste', { cancelable: true, bubbles: true }) as ClipboardEvent;
+		Object.defineProperty(event, 'clipboardData', { value: { files, items } });
+		this.textarea.element.dispatchEvent(event);
+		await this.wrapper.vm.$nextTick();
+		return event;
+	}
+
+	// ── FIX-2.2 attach button (SPEC-CA-022) ─────────────────────────────────────
+
+	hasAttach(): boolean {
+		return this.wrapper.find(this.byTid(TID.attach)).exists();
+	}
+
+	attachLabel(): string {
+		return this.wrapper.get(this.byTid(TID.attach)).attributes('aria-label') ?? '';
+	}
+
+	async clickAttach(): Promise<void> {
+		await this.wrapper.get(this.byTid(TID.attach)).trigger('click');
+	}
+
+	/** Fire a `paste` carrying plain text only (no files). */
+	async pasteText(_text: string): Promise<ClipboardEvent> {
+		const event = new Event('paste', { cancelable: true, bubbles: true }) as ClipboardEvent;
+		Object.defineProperty(event, 'clipboardData', {
+			value: { files: [], items: [{ kind: 'string', type: 'text/plain' }] },
+		});
+		this.textarea.element.dispatchEvent(event);
+		await this.wrapper.vm.$nextTick();
+		return event;
 	}
 }

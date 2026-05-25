@@ -2,6 +2,11 @@ import { vi } from 'vitest';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
 import type { MockHistoryStore } from '@/infrastructure/mock/MockHistoryStore';
 import { MockChatRuntime } from '@/infrastructure/mock/MockChatRuntime';
+import type { MockAuxModel } from '@/infrastructure/mock/MockAuxModel';
+import type {
+	MockSelectionSource,
+	MockSelectionHighlight,
+} from '@/infrastructure/mock/MockSelectionPorts';
 import type {
 	SettingsPort,
 	VaultPort,
@@ -48,6 +53,23 @@ export interface FakePorts {
 	 * capable; call `mockRuntime.setSupportsInlineResponse(false)` for the gated branch.
 	 */
 	readonly mockRuntime: MockChatRuntime;
+	/**
+	 * The scriptable Mock `AuxModelPort` (SPEC-CA-008, T-CA-008). The re-pointed
+	 * title/refine tests (SPEC-CA-018) + the inline-edit tests (SPEC-CA-017) inject
+	 * this aux stub instead of a runtime — `setAuxResponse`/`setAuxError`/`setAuxEmpty`.
+	 */
+	readonly auxModel: MockAuxModel;
+	/**
+	 * The inert-but-scriptable Mock `SelectionSourcePort` (SPEC-CA-008, T-CA-013).
+	 * `setSelection(captured)` drives the editor/canvas capture path for the
+	 * `CaptureSelectionUseCase` tests (SPEC-CA-016).
+	 */
+	readonly selectionSource: MockSelectionSource;
+	/**
+	 * The recording no-op Mock `SelectionHighlightPort` (SPEC-CA-008, T-CA-013).
+	 * `show`/`clear` calls are recorded on `.calls` for assertion (TEST-CA-014/015).
+	 */
+	readonly selectionHighlight: MockSelectionHighlight;
 }
 
 export function fakeModulePorts(): FakePorts {
@@ -72,5 +94,8 @@ export function fakeModulePorts(): FakePorts {
 		commandCatalog: bridge.createProviderCommandCatalog(),
 		shellExec: bridge.shellExec,
 		mockRuntime: new MockChatRuntime(),
+		auxModel: bridge.auxModel,
+		selectionSource: bridge.selectionSource,
+		selectionHighlight: bridge.selectionHighlight,
 	};
 }

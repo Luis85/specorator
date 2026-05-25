@@ -14,7 +14,7 @@ import {
 	clampMaxTabs,
 	type PluginSettings,
 } from '@/domain/settings/PluginSettings';
-import { trySync } from '@/domain/shared/tryAsync';
+import { trySync, tryAsync } from '@/domain/shared/tryAsync';
 import type {
 	SettingsPort,
 	VaultPort,
@@ -31,12 +31,20 @@ import type {
 	MentionDataProviderPort,
 	ProviderCommandCatalogPort,
 	ShellExecPort,
+	AuxModelPort,
+	AuxModelRunOptions,
+	SelectionSourcePort,
+	SelectionHighlightPort,
 } from '@/domain/ports';
+import type { Result } from '@/domain/shared/Result';
+import { ok, err } from '@/domain/shared/Result';
+import type { StreamChunk } from '@/domain/chat/StreamChunk';
 import { MarkdownRenderer } from 'obsidian';
 import { ClaudeCliChatRuntime } from './ClaudeCliChatRuntime';
 import { ObsidianMentionDataProvider } from './ObsidianMentionDataProvider';
 import { ObsidianProviderCommandCatalog } from './ObsidianProviderCommandCatalog';
 import { ObsidianShellExec } from './ObsidianShellExec';
+import { ObsidianSelectionSource, ObsidianSelectionHighlight } from './ObsidianSelectionPorts';
 import { VaultFileHistoryStore } from './history/VaultFileHistoryStore';
 import { safeMarkdownRender } from '@/application/chat/safeMarkdownRender';
 import { walkSvgElementToIconNode } from './walkSvgElementToIconNode';
@@ -83,6 +91,18 @@ export class ObsidianBridge
 		const file = this.app.vault.getAbstractFileByPath(normalized);
 		if (!(file instanceof TFile)) throw new Error(`File not found: ${normalized}`);
 		return this.app.vault.read(file);
+	}
+
+	// P5 SPEC-CA-006/007 — real vault byte read (coverage-excluded, manual leg
+	// TEST-CA-M3). Reads the file's raw bytes via `vault.readBinary` and wraps the
+	// `ArrayBuffer` in a `Uint8Array`; a missing file rejects (the caller —
+	// `AddImageUseCase` — wraps it in `tryAsync` → `Result.err`).
+	async readBinary(path: string): Promise<Uint8Array> {
+		const normalized = normalizePath(path);
+		const file = this.app.vault.getAbstractFileByPath(normalized);
+		if (!(file instanceof TFile)) throw new Error(`File not found: ${normalized}`);
+		const buffer = await this.app.vault.readBinary(file);
+		return new Uint8Array(buffer);
 	}
 
 	async writeFile(path: string, content: string): Promise<void> {
@@ -152,6 +172,88 @@ export class ObsidianBridge
 	// Reads/writes no secret (NFR-CC-006). Each call is a new instance.
 	createChatRuntime(): ChatRuntimePort {
 		return new ClaudeCliChatRuntime(this, this.getVaultBasePath());
+	}
+
+	// ── Aux model port (SPEC-CA-007 aux leg, ADR-CA-002 §1) ─────────────────────
+	// The one-shot cold-start aux seam the title/refine/inline-edit consumers drive
+	// (SPEC-CA-018/017). Builds a FRESH cold-start `ChatRuntimePort` (the same
+	// factory the tabs use), drives `query(turn, [], { forceColdStart: true })`,
+	// accumulates `text` chunks (tool/thinking/usage ignored), and maps a streaming
+	// `error` chunk / an empty-accumulated result / an aborted `signal` →
+	// `Result.err`; the non-empty text → `ok(text)`. The `signal` aborts the
+	// subprocess via the runtime's `cancel()`. It NEVER resumes a session
+	// (cold-start only, REQ-CA-021) and NEVER throws across the boundary
+	// (`tryAsync`, NFR-CA-010). Coverage-excluded infra — behaviour gated by the
+	// MANUAL leg TEST-CA-M1 (+ the real-CLI image turn TEST-CA-029). Each call is a
+	// new runtime; no `obsidian` symbol leaks past this file.
+	createAuxModel(): AuxModelPort {
+		const createRuntime = (): ChatRuntimePort => this.createChatRuntime();
+		return {
+			run: (prompt: string, options?: AuxModelRunOptions): Promise<Result<string>> =>
+				ObsidianBridge.runColdStartAux(createRuntime(), prompt, options),
+		};
+	}
+
+	/** Drive one cold-start aux query and map error/empty/abort → `Result.err`. */
+	private static async runColdStartAux(
+		runtime: ChatRuntimePort,
+		prompt: string,
+		options?: AuxModelRunOptions,
+	): Promise<Result<string>> {
+		const signal = options?.signal;
+		if (signal?.aborted === true) {
+			return err(new Error('aux model query aborted'));
+		}
+		// A mutable holder (not a flow-narrowed `let`/`signal.aborted`) the abort
+		// listener flips — the `signal` aborts the subprocess via `cancel()`.
+		const state = { aborted: false };
+		const onAbort = (): void => {
+			state.aborted = true;
+			runtime.cancel();
+		};
+		signal?.addEventListener('abort', onAbort);
+
+		const sys = options?.systemPrompt;
+		const framed = sys !== undefined && sys !== '' ? `${sys}\n\n${prompt}` : prompt;
+		const prepared = runtime.prepareTurn({ text: framed });
+		const drained = await tryAsync(() =>
+			ObsidianBridge.drainAuxStream(runtime.query(prepared, [], { forceColdStart: true })),
+		);
+
+		signal?.removeEventListener('abort', onAbort);
+		return ObsidianBridge.mapAuxOutcome(drained, state.aborted);
+	}
+
+	/** Map the drained cold-start outcome → `Result` (error/empty/abort → err). */
+	private static mapAuxOutcome(
+		drained: Result<{ text: string; errored: boolean }>,
+		aborted: boolean,
+	): Result<string> {
+		if (!drained.ok) return err(drained.error);
+		if (aborted) return err(new Error('aux model query aborted'));
+		const { text, errored } = drained.value;
+		if (errored) return err(new Error('aux model query failed'));
+		if (text.trim() === '') return err(new Error('aux model returned no usable text'));
+		return ok(text);
+	}
+
+	/** Accumulate `text` chunks from a cold-start aux stream; `done` terminates. */
+	private static async drainAuxStream(
+		stream: AsyncGenerator<StreamChunk>,
+	): Promise<{ text: string; errored: boolean }> {
+		let text = '';
+		let errored = false;
+		for await (const chunk of stream) {
+			if (chunk.type === 'text') {
+				text += chunk.content;
+			} else if (chunk.type === 'error') {
+				errored = true;
+			} else if (chunk.type === 'done') {
+				break;
+			}
+			// tool/thinking/usage and any other member are ignored for an aux query.
+		}
+		return { text, errored };
 	}
 
 	// ── Markdown render port (SPEC-CC-013/015, SPEC-RR-010, ADR-RR-002) ─────────
@@ -244,6 +346,24 @@ export class ObsidianBridge
 	get shellExec(): ShellExecPort {
 		this.shellExecPort ??= new ObsidianShellExec(() => this.getVaultBasePath(), this);
 		return this.shellExecPort;
+	}
+
+	// ── Selection ports (SPEC-CA-007, ADR-CA-003 §1) ────────────────────────────
+	// CM6 editor + Obsidian canvas selection capture (250 ms poll, transient
+	// errors swallowed → null) and the CM6 highlight decoration. Lazily created;
+	// coverage-excluded infra (manual legs TEST-CA-M1/M3 + TEST-CA-017). No
+	// `obsidian`/CM6 symbol leaks past `ObsidianSelectionPorts.ts`.
+	private selectionSourcePort: SelectionSourcePort | null = null;
+	private selectionHighlightPort: SelectionHighlightPort | null = null;
+
+	get selectionSource(): SelectionSourcePort {
+		this.selectionSourcePort ??= new ObsidianSelectionSource(this.app);
+		return this.selectionSourcePort;
+	}
+
+	get selectionHighlight(): SelectionHighlightPort {
+		this.selectionHighlightPort ??= new ObsidianSelectionHighlight(this.app);
+		return this.selectionHighlightPort;
 	}
 
 	private _track(notice: Notice): void {

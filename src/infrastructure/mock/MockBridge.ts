@@ -17,6 +17,8 @@ import {
 	MockProviderCommandCatalog,
 	MockShellExec,
 } from './MockComposerPorts';
+import { MockAuxModel } from './MockAuxModel';
+import { MockSelectionSource, MockSelectionHighlight } from './MockSelectionPorts';
 import type { MentionDataProviderPort, ShellExecResult } from '@/domain/ports';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
@@ -41,6 +43,7 @@ export class MockBridge
 		CommunityPluginPort
 {
 	private readonly files = new Map<string, string>();
+	private readonly binaries = new Map<string, Uint8Array>();
 	private readonly folders = new Set<string>();
 	private settings: PluginSettings = { ...DEFAULT_SETTINGS };
 	private enabledPluginIds = new Set<string>();
@@ -61,6 +64,12 @@ export class MockBridge
 	private historyStore: MockHistoryStore | null = null;
 	/** Scripted-echo ShellExec for the mount (SPEC-CP-009). Stateless — the bridge is the port. */
 	private readonly shellExecPort = new MockShellExec();
+	/** Scriptable one-shot aux model (SPEC-CA-008). Stateless — the bridge exposes the port. */
+	private readonly auxModelPort = new MockAuxModel();
+	/** Inert-but-scriptable selection source (SPEC-CA-008 selection leg). */
+	private readonly selectionSourcePort = new MockSelectionSource();
+	/** Recording no-op selection highlight (SPEC-CA-008 selection leg). */
+	private readonly selectionHighlightPort = new MockSelectionHighlight();
 
 	constructor(
 		initialFiles: Record<string, string> = {},
@@ -94,6 +103,16 @@ export class MockBridge
 		const content = this.files.get(path);
 		if (content === undefined) throw new Error(`[MockBridge] File not found: ${path}`);
 		return content;
+	}
+
+	// P5 SPEC-CA-006/008 — in-memory byte read. Seed bytes with `seedBinary`; a
+	// missing path REJECTS (the `Result.err` path `AddImageUseCase` wraps in
+	// `tryAsync`, T-CA-023). Returns a defensive copy so callers cannot mutate
+	// the seeded buffer.
+	async readBinary(path: string): Promise<Uint8Array> {
+		const bytes = this.binaries.get(path);
+		if (bytes === undefined) throw new Error(`[MockBridge] File not found: ${path}`);
+		return new Uint8Array(bytes);
 	}
 
 	async writeFile(path: string, content: string): Promise<void> {
@@ -206,6 +225,30 @@ export class MockBridge
 		this.shellExecPort.seed(command, result);
 	}
 
+	// ── Aux model port (SPEC-CA-008, ADR-CA-002 §1) ─────────────────────────────
+	// The one-shot cold-start aux seam the re-pointed title/refine use cases drive.
+	// Scriptable (setAuxResponse/setAuxError/setAuxEmpty); stateless — the bridge IS
+	// the port (no factory; per-conversation isolation is not needed for a one-shot).
+
+	/** Scriptable one-shot `AuxModelPort` (no subprocess; never throws). */
+	get auxModel(): MockAuxModel {
+		return this.auxModelPort;
+	}
+
+	// ── Selection ports (SPEC-CA-008 selection leg, ADR-CA-003 §1) ──────────────
+	// Capture (scriptable, inert by default) + paint (recording no-op). The real
+	// CM6 + canvas poll + decoration is the Obsidian leg (T-CA-014).
+
+	/** Inert-but-scriptable `SelectionSourcePort` (`setSelection` drives capture). */
+	get selectionSource(): MockSelectionSource {
+		return this.selectionSourcePort;
+	}
+
+	/** Recording no-op `SelectionHighlightPort` (`show`/`clear` recorded for assertion). */
+	get selectionHighlight(): MockSelectionHighlight {
+		return this.selectionHighlightPort;
+	}
+
 	showError(message: string, durationMs = 0): void {
 		this.noticeLog.push({ severity: 'error', message, durationMs });
 		console.error(`[MockBridge Notice:error] ${message}`);
@@ -265,6 +308,11 @@ export class MockBridge
 
 	seedSettings(partial: Partial<PluginSettings>): void {
 		this.settings = { ...this.settings, ...partial };
+	}
+
+	/** Test helper: seed raw bytes for `readBinary` (SPEC-CA-008 readBinary leg). */
+	seedBinary(path: string, bytes: Uint8Array): void {
+		this.binaries.set(path, new Uint8Array(bytes));
 	}
 
 	// ── LoggerPort ───────────────────────────────────────────────────────────────

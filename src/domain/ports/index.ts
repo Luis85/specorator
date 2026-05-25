@@ -83,3 +83,10 @@ export type {
 } from '@/domain/chat/inline';
 // P4 composer-mode value types (SPEC-CP-006) re-exported for one-stop import.
 export type { ComposerMode, ComposerModeKind, TriggerHit } from '@/domain/chat/composer/ComposerMode';
+
+// P5 context-attachments ports (SPEC-CA-004/005, ADR-CA-002 §1 / ADR-CA-003 §1).
+// One consumer kind each, no aggregate (ADR-008): AuxModelPort = a one-shot
+// cold-start aux query; the two selection ports split capture from paint.
+export type { AuxModelPort, AuxModelRunOptions } from './AuxModelPort';
+export type { SelectionSourcePort } from './SelectionSourcePort';
+export type { SelectionHighlightPort } from './SelectionHighlightPort';

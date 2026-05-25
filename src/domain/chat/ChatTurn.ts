@@ -3,14 +3,32 @@
  * `runtime/types.ts:45/56/64/73` (SPEC-CC-005, SPEC-CC-006). P1 carries the full
  * shapes for parity but only populates the marked fields.
  */
+import type { AttachedFileRef, AttachedImage } from './attachments/Attachments';
+import type {
+	EditorSelectionContext,
+	CanvasSelectionContext,
+	BrowserSelectionContext,
+} from './attachments/Selection';
 
 /** Turn request — mirrors `runtime/types.ts:45`. P1 uses `text` (+ optional `currentNotePath`). */
 export interface ChatTurnRequest {
 	text: string;
 	/** P1 optional context hint; the rest of Claudian's request fields regrow P2+. */
 	currentNotePath?: string;
-	// images?, editorSelection?, browserSelection?, canvasSelection?,
-	// externalContextPaths?, enabledMcpServers? — EXCLUDED from P1 (regrow P2+).
+	// --- P5 additive optional context fields (SPEC-CA-001, ADR-CA-001 §1). The P1
+	// `text`/`currentNotePath` above stay byte-identical; a `{ text }`-only request
+	// serialises identically to P1. `externalContextPaths?`/`enabledMcpServers?`
+	// stay EXCLUDED (NG3 — regrow a later phase).
+	/** Vault files attached as context chips (REQ-CA-001..006). */
+	attachedFiles?: readonly AttachedFileRef[];
+	/** Images attached to the turn, bounded base64 (REQ-CA-007..012). */
+	images?: readonly AttachedImage[];
+	/** A captured CM6 editor selection (REQ-CA-013/019). */
+	editorSelection?: EditorSelectionContext;
+	/** A captured canvas-node selection (REQ-CA-017/019). */
+	canvasSelection?: CanvasSelectionContext;
+	/** A capability-gated embedded-view selection (REQ-CA-018/019). */
+	browserSelection?: BrowserSelectionContext;
 }
 
 /** Prepared turn — mirrors `runtime/types.ts:56`. */

@@ -1,73 +1,35 @@
 import { ok, err, type Result } from '@/domain/shared/Result';
-import { tryAsync } from '@/domain/shared/tryAsync';
-import type { ChatRuntimePort } from '@/domain/ports';
+import type { AuxModelPort } from '@/domain/ports';
 import {
 	TITLE_GENERATION_SYSTEM_PROMPT,
 	buildTitleGenerationPrompt,
 	parseTitleGenerationResponse,
 } from './titleGeneration';
 
-/** The accumulated outcome of the cold-start side-query stream. */
-interface TitleStreamOutcome {
-	text: string;
-	errored: boolean;
-}
-
 const TITLE_GEN_FAILED_MESSAGE = 'Title generation produced no usable title.';
 
 /**
- * Generate a conversation title via a cold-start side-query (SPEC-TS-016,
- * ADR-TS-003, REQ-TS-024/025). Mirrors claudian-main
- * `QueryBackedTitleGenerationService` (one-shot aux query). Drives
- * `runtime.query(turn, [], { forceColdStart: true })` so the side-query ignores
- * any bound session and does NOT steer the tab's main stream; accumulates `text`
- * chunks (tool/thinking ignored); `done` terminates. `parseTitleGenerationResponse`
- * → `Result.ok(title)`; a `null` parse or an `error` chunk → `Result.err` (the
- * error-as-chunk mapped to a `Result` at this boundary, ADR-CC-001 §2). NEVER
- * surfaces `NotificationPort.showError` (REQ-TS-025) — the caller keeps the
- * fallback. `Result`-returning (ADR-004); no `providerId` branch (REQ-TS-026).
+ * Generate a conversation title via a one-shot cold-start aux query (SPEC-TS-016,
+ * SPEC-CA-018, ADR-TS-003, ADR-CA-002 §3, REQ-TS-024/025). P5 re-points this onto
+ * the unified `AuxModelPort` — the `prepareTurn` + drain loop are gone; the port's
+ * `run` subsumes them (cold-start, never steers the tab's main stream). Behaviour
+ * is unchanged: `parseTitleGenerationResponse(text)` → `Result.ok(title)`; an aux
+ * `err` (error/empty/abort, mapped at the port boundary) or a `null` parse →
+ * `Result.err`. NEVER surfaces `NotificationPort.showError` (REQ-TS-025) — the
+ * caller keeps the fallback. `Result`-returning (ADR-004); no `providerId` branch
+ * (REQ-TS-026). No `obsidian`/Vue import.
  */
 export class GenerateTitleUseCase {
-	constructor(private readonly runtime: ChatRuntimePort) {}
+	constructor(private readonly aux: AuxModelPort) {}
 
 	async execute(firstUserMessage: string): Promise<Result<string>> {
-		// The system prompt frames the one-shot request; the runtime applies it as
-		// the side-query's system prompt. P3's ChatTurnRequest carries only `text`,
-		// so the framed prompt is the turn text (no invented domain field).
-		const prepared = this.runtime.prepareTurn({
-			text: `${TITLE_GENERATION_SYSTEM_PROMPT}\n\n${buildTitleGenerationPrompt(firstUserMessage)}`,
+		const run = await this.aux.run(buildTitleGenerationPrompt(firstUserMessage), {
+			systemPrompt: TITLE_GENERATION_SYSTEM_PROMPT,
 		});
+		if (!run.ok) return err(new Error(TITLE_GEN_FAILED_MESSAGE));
 
-		const drained = await tryAsync(() => this.accumulate(prepared));
-		if (!drained.ok) {
-			// An unexpected generator throw becomes a Result, never crosses the boundary.
-			return err(drained.error);
-		}
-
-		const { text, errored } = drained.value;
-		if (errored) return err(new Error(TITLE_GEN_FAILED_MESSAGE));
-
-		const title = parseTitleGenerationResponse(text);
+		const title = parseTitleGenerationResponse(run.value);
 		if (title === null) return err(new Error(TITLE_GEN_FAILED_MESSAGE));
 		return ok(title);
-	}
-
-	/** Drain the cold-start side-query, accumulating `text`; stop on `done`. */
-	private async accumulate(
-		prepared: ReturnType<ChatRuntimePort['prepareTurn']>,
-	): Promise<TitleStreamOutcome> {
-		let text = '';
-		let errored = false;
-		for await (const chunk of this.runtime.query(prepared, [], { forceColdStart: true })) {
-			if (chunk.type === 'text') {
-				text += chunk.content;
-			} else if (chunk.type === 'error') {
-				errored = true;
-			} else if (chunk.type === 'done') {
-				break;
-			}
-			// tool/thinking/usage and any other member are ignored for title-gen.
-		}
-		return { text, errored };
 	}
 }

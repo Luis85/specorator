@@ -31,12 +31,18 @@ import {
 	MENTION_DATA_PROVIDER_PORT,
 	PROVIDER_COMMAND_CATALOG_PORT,
 	SHELL_EXEC_PORT,
+	AUX_MODEL_PORT,
+	SELECTION_SOURCE_PORT,
+	SELECTION_HIGHLIGHT_PORT,
 } from '@/infrastructure/bridge/ports';
 import {
 	CHAT_RUNTIME_FACTORY,
 	CONFIRM_DELETE,
 	CHOOSE_FORK_TARGET,
 	INSTRUCTION_CONFIRM,
+	OPEN_INLINE_EDIT,
+	OPEN_IMAGE_PREVIEW,
+	PICK_ATTACHMENT,
 } from '@/ui/chat/modalSeam';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
 
@@ -76,6 +82,23 @@ app.provide(SHELL_EXEC_PORT, bridge.shellExec);
 app.provide(INSTRUCTION_CONFIRM, (instruction: string) =>
 	Promise.resolve({ kind: 'accept' as const, instruction }),
 );
+// P5 (SPEC-CA-026): the Mock cold-start aux (scriptable) + the inert-but-scriptable
+// selection ports, so the demo's title-gen no longer degrades and the context bar
+// can render a scripted selection. The two modal launchers are browser-safe
+// stand-ins (no Obsidian, no `window.*`): the inline-edit stand-in AUTO-REJECTS
+// (`null`) — a missing real modal must NEVER silently apply an edit (REQ-CA-008/020,
+// NFR-CA-003); the image-preview stand-in is a no-op resolve. Deterministic for the
+// GitHub Pages demo.
+app.provide(AUX_MODEL_PORT, bridge.auxModel);
+app.provide(SELECTION_SOURCE_PORT, bridge.selectionSource);
+app.provide(SELECTION_HIGHLIGHT_PORT, bridge.selectionHighlight);
+app.provide(OPEN_INLINE_EDIT, () => Promise.resolve(null));
+app.provide(OPEN_IMAGE_PREVIEW, () => Promise.resolve());
+// FIX-2.2 (SPEC-CA-022/026): the paperclip attach-picker stand-in. The real
+// Obsidian file/image `SuggestModal` lives in `src/plugin/**`; the browser demo
+// has no vault picker, so the stand-in resolves `null` (dismiss) — no `window.*`,
+// deterministic for the GitHub Pages demo. Drop/paste exercises the live gate.
+app.provide(PICK_ATTACHMENT, () => Promise.resolve(null));
 
 void bridge.getSettings().then((s) => {
 	setLocale(toSupportedLocale(s.locale));
