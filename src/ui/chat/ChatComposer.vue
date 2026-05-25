@@ -193,11 +193,29 @@ async function submitInstruction(): Promise<void> {
 
 function onPaletteConfirm(index: number): void {
 	void props.composer?.confirmEntry(index);
+	void nextTick(focusTextarea);
+}
+
+// ── Arbiter bridge (SPEC-CP-018) ────────────────────────────────────────────────
+// The externally-built arbiter (provided by `ChatSurface`) reads/writes the
+// composer text through these handles so the textarea stays the single source of
+// truth (the arbiter holds only plain DTOs, NFR-CP-005). `applyInsert` rewrites the
+// value + caret after a palette confirm / token replace (SPEC-CP-012).
+function applyInsert(next: string, caret: number): void {
+	value.value = next;
 	void nextTick(() => {
-		value.value = textarea.value?.value ?? value.value;
+		autoGrow();
+		const el = textarea.value;
+		if (el !== null) el.setSelectionRange(caret, caret);
 		focusTextarea();
 	});
 }
+
+defineExpose({
+	getValue: (): string => value.value,
+	getCaret: caret,
+	applyInsert,
+});
 
 function onPaletteClose(): void {
 	// Escape already cleared the palette via the arbiter's handleKeydown; refocus.

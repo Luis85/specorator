@@ -15,14 +15,19 @@ import {
 	MARKDOWN_RENDER_PORT,
 	ICON_PORT,
 	PROVIDER_HISTORY_PORT,
+	MENTION_DATA_PROVIDER_PORT,
+	PROVIDER_COMMAND_CATALOG_PORT,
+	SHELL_EXEC_PORT,
 } from '@/infrastructure/bridge/ports';
 import {
 	CHAT_RUNTIME_FACTORY,
 	CONFIRM_DELETE,
 	CHOOSE_FORK_TARGET,
+	INSTRUCTION_CONFIRM,
 } from '@/ui/chat/modalSeam';
 import { ForkTargetModal } from './modals/ForkTargetModal';
 import { DeleteConfirmModal } from './modals/DeleteConfirmModal';
+import { InstructionConfirmModal } from './modals/InstructionConfirmModal';
 import type SpecoratorPlugin from './main';
 
 /** The single view type the plugin registers (SPEC-PSR-005). */
@@ -101,6 +106,20 @@ export class AgentSidebarView extends ItemView {
 					newTab: 'New tab',
 					currentTab: 'Current tab',
 				}).choose(),
+			);
+			// P4 (SPEC-CP-028/038): the composer ports. Mention/catalog are per-mount
+			// factories (the Claude impl binds to the active provider context); ShellExec
+			// is stateless (the bridge IS the port). The instruction-confirm seam opens
+			// the REAL Obsidian Modal — the Vue surface never imports `obsidian`.
+			app.provide(MENTION_DATA_PROVIDER_PORT, bridge.createMentionDataProvider());
+			app.provide(PROVIDER_COMMAND_CATALOG_PORT, bridge.createProviderCommandCatalog());
+			app.provide(SHELL_EXEC_PORT, bridge.shellExec);
+			app.provide(INSTRUCTION_CONFIRM, (instruction: string) =>
+				new InstructionConfirmModal(this.app, instruction, {
+					title: 'Add a system instruction',
+					accept: 'Add instruction',
+					reject: 'Cancel',
+				}).confirm(),
 			);
 			app.mount(host);
 			this.vueApp = app;

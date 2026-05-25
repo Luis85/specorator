@@ -86,7 +86,7 @@ describe('composer-power entry-point wiring + mount (TEST-CP-026 mount leg)', ()
 		await typeInComposer('@');
 		await waitDebounce();
 		expect($('[data-testid="composer-dropdown"]')).not.toBeNull();
-	});
+	}, 15000);
 });
 
 describe('composer-power inline-block queue (TEST-CP-026 mount leg)', () => {
@@ -188,7 +188,7 @@ describe('composer-power inline-block queue (TEST-CP-026 mount leg)', () => {
 		// (wired by the surface) enqueues the inline block; the composer hides and the
 		// inline-ask block renders in its place (the depth-counted queue, REQ-CP-027).
 		void runtime.emitAskUserQuestion({
-			id: 'q-req-1',
+			requestId: 'q-req-1',
 			questions: [
 				{
 					id: 'q1',

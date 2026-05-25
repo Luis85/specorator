@@ -28,11 +28,15 @@ import {
 	MARKDOWN_RENDER_PORT,
 	ICON_PORT,
 	PROVIDER_HISTORY_PORT,
+	MENTION_DATA_PROVIDER_PORT,
+	PROVIDER_COMMAND_CATALOG_PORT,
+	SHELL_EXEC_PORT,
 } from '@/infrastructure/bridge/ports';
 import {
 	CHAT_RUNTIME_FACTORY,
 	CONFIRM_DELETE,
 	CHOOSE_FORK_TARGET,
+	INSTRUCTION_CONFIRM,
 } from '@/ui/chat/modalSeam';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
 
@@ -62,6 +66,16 @@ app.provide(PROVIDER_HISTORY_PORT, bridge.createProviderHistoryPort());
 app.provide(CHAT_RUNTIME_FACTORY, () => bridge.createChatRuntime());
 app.provide(CONFIRM_DELETE, () => Promise.resolve(true));
 app.provide(CHOOSE_FORK_TARGET, () => Promise.resolve('new-tab'));
+// P4 (SPEC-CP-028/038): the composer ports + the instruction-confirm seam. Mention/
+// catalog are per-mount factories, ShellExec is the stateless bridge port (scripted
+// echo in the demo). The standalone instruction-confirm stand-in accepts the
+// instruction verbatim — deterministic for the GitHub Pages demo, no `window.*`.
+app.provide(MENTION_DATA_PROVIDER_PORT, bridge.createMentionDataProvider());
+app.provide(PROVIDER_COMMAND_CATALOG_PORT, bridge.createProviderCommandCatalog());
+app.provide(SHELL_EXEC_PORT, bridge.shellExec);
+app.provide(INSTRUCTION_CONFIRM, (instruction: string) =>
+	Promise.resolve({ kind: 'accept' as const, instruction }),
+);
 
 void bridge.getSettings().then((s) => {
 	setLocale(toSupportedLocale(s.locale));
