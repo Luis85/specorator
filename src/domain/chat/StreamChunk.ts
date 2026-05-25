@@ -1,5 +1,6 @@
 import type { UsageInfo } from './UsageInfo';
 import type { ToolUseResult } from './diff/ToolUseResult';
+import type { AskUserQuestionItem, ApprovalOption } from './inline';
 
 /**
  * Normalized stream chunk — mirrors claudian-main `chat.ts:137` member NAMES and
@@ -64,4 +65,17 @@ export type StreamChunk =
 			content: string;
 			isError?: boolean;
 			toolUseResult?: ToolUseResult; // P2 — EDITED (SPEC-RR-001): was `unknown`
-	  };
+	  }
+	// ---- P4 additive request members (SPEC-CP-001, ADR-CP-004 §2) — declared now,
+	// emitted by a capable transport (same declared-now/emitted-later discipline as
+	// the P2/P3 members above). `requestId` is the runtime-owned correlation key the
+	// response callback resolves against (SPEC-CP-017). The P1/P2/P3 members above
+	// stay byte-identical (SPEC-CP-034). ----
+	| { type: 'ask_user_question'; requestId: string; questions: AskUserQuestionItem[] }
+	| {
+			type: 'exit_plan_mode';
+			requestId: string;
+			plan: string;
+			allowedPrompts?: { tool: string; prompt: string }[];
+	  }
+	| { type: 'approval_request'; requestId: string; tool: string; context: string; options: ApprovalOption[] };
