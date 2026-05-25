@@ -6,10 +6,15 @@ import type {
 	ProviderHistoryPort,
 	ChatRuntimePort,
 	ConversationRecord,
+	RuntimeCapabilities,
 } from '@/domain/ports';
 import { CONVERSATION_RECORD_VERSION } from '@/domain/chat/ConversationRecord';
 import type { ChatTurnSink, RunChatTurnInput } from '@/application/chat/RunChatTurnUseCase';
 import type { Result } from '@/domain/shared/Result';
+import { ForkConversationUseCase } from '@/application/threads/ForkConversationUseCase';
+import { RewindConversationUseCase } from '@/application/threads/RewindConversationUseCase';
+import { isRewindEligible } from '@/application/threads/rewindEligibility';
+import type { ForkTarget } from '@/application/threads/chooseForkTarget';
 import type { ToolCall } from '@/domain/chat/ToolCall';
 import type { SubagentInfo } from '@/domain/chat/Subagent';
 import type { ToolUseResult } from '@/domain/chat/diff/ToolUseResult';
@@ -206,6 +211,10 @@ export const useTabsStore = defineStore('tabs', {
 		},
 	},
 
+	// The fork/rewind capability of the active tab's runtime is exposed via an
+	// action (`activeCapabilities`) rather than a getter so it reads through the
+	// OUTSIDE-reactive-state runtime (a getter cannot reach the deps Map cleanly).
+
 	actions: {
 		/** Bind the OUTSIDE-reactive-state deps + seed the first empty tab (SPEC-TS-019). */
 		bindTabDeps(binding: TabDepsBinding): void {
@@ -331,6 +340,102 @@ export const useTabsStore = defineStore('tabs', {
 			if (index === -1) return;
 			tab.messages = tab.messages.slice(0, index + 1);
 			tab.liveAssistantId = null;
+		},
+
+		/** The active tab's runtime fork/rewind capability flags (read through the port). */
+		activeCapabilities(): RuntimeCapabilities {
+			const id = this.activeTabId;
+			const runtime = id === null ? undefined : this._deps(id)?.runtime;
+			return runtime?.getCapabilities() ?? { supportsFork: false, supportsRewind: false };
+		},
+
+		/** True iff the active runtime supports fork (gates the per-message control). */
+		canForkActive(): boolean {
+			return this.activeCapabilities().supportsFork;
+		},
+
+		/** True iff a user message is rewind-eligible AND the runtime supports rewind. */
+		canRewindMessage(userMessageId: string): boolean {
+			const tab = this.activeTab;
+			if (tab === undefined) return false;
+			return (
+				this.activeCapabilities().supportsRewind &&
+				isRewindEligible(tab.messages, userMessageId)
+			);
+		},
+
+		/**
+		 * Fork the active conversation at `userMessageId` into the chosen target
+		 * (SPEC-TS-013/031). Derives a `ForkPlan` (source untouched, EC-TS-7) then
+		 * loads it into the current tab or a new tab. Quiet on a missing source.
+		 */
+		async forkActive(target: ForkTarget, userMessageId: string): Promise<void> {
+			const tab = this.activeTab;
+			const binding = this._sidecar().binding;
+			if (tab === undefined || binding === null || tab.conversationId === null) return;
+			const fork = new ForkConversationUseCase(binding.history);
+			const result = await fork.execute(tab.conversationId, userMessageId);
+			if (!result.ok) {
+				this._logger().warn('[tabsStore] fork failed', { conversationId: tab.conversationId });
+				return;
+			}
+			const payload: TabLoadPayload = {
+				conversationId: null,
+				title: result.value.sourceTitle,
+				messages: result.value.messages,
+				sessionId: null,
+			};
+			if (target === 'new-tab') {
+				this.loadIntoNewTab(payload);
+			} else {
+				this.loadIntoTab(tab.id, payload);
+			}
+		},
+
+		/**
+		 * Rewind the active conversation at `userMessageId` (SPEC-TS-014/024).
+		 * `'conversation'` truncates the tab + sets the runtime checkpoint (REQ-TS-021);
+		 * `'code-and-conversation'` is gated (NG7) — no fs/git, just a notice (EC-TS-9).
+		 */
+		async rewindActive(
+			mode: 'conversation' | 'code-and-conversation',
+			userMessageId: string,
+		): Promise<void> {
+			const tab = this.activeTab;
+			if (tab === undefined) return;
+			const rewind = new RewindConversationUseCase();
+			const result = await rewind.execute({ mode, messages: tab.messages, userMessageId });
+			if (!result.ok) return;
+			if (mode === 'code-and-conversation') {
+				if (result.value.notice !== null) {
+					this._sidecar().binding?.notifyInfo(result.value.notice);
+				}
+				return;
+			}
+			this.truncateTo(tab.id, userMessageId);
+			if (result.value.checkpointMessageId !== null) {
+				this._deps(tab.id)?.runtime.setResumeCheckpoint(result.value.checkpointMessageId);
+			}
+		},
+
+		/**
+		 * Compact the active conversation (SPEC-TS-015). Reuses the existing turn path:
+		 * a compaction turn streams a `{type:'context_compacted'}` chunk through the
+		 * existing `onContextCompacted` sink leg → the P2 block (no new machinery).
+		 */
+		async compactActive(): Promise<void> {
+			const active = this.activeTab;
+			if (active === undefined || active.status === 'streaming') return;
+			const deps = this._deps(active.id);
+			if (deps === undefined) return;
+			const tabId = active.id;
+			active.status = 'streaming';
+			const history = active.messages.map((m) => ({ ...m }));
+			const input: RunChatTurnInput = { request: { text: '/compact' }, history };
+			const result = await deps.runner.run(input, this._sink(tabId));
+			if (!result.ok && result.error.kind !== 'runtime-throw') {
+				this._handleStartFailure(tabId, result.error.message);
+			}
 		},
 
 		/** Send-guard: not streaming AND non-empty trimmed text (REQ-CC-007). */

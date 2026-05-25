@@ -24,7 +24,7 @@ import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPor
 import { MockChatRuntime } from '@/infrastructure/mock/MockChatRuntime';
 import { MockHistoryStore } from '@/infrastructure/mock/MockHistoryStore';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
-import type { NotificationPort, LoggerPort, StreamChunk } from '@/domain/ports';
+import type { NotificationPort, LoggerPort } from '@/domain/ports';
 import { ChatSurfacePageObject } from './ChatSurface.po';
 
 const bridge = new MockBridge();
@@ -42,7 +42,7 @@ function mountSurface() {
 			plugins: [i18n],
 			provide: {
 				[CHAT_RUNTIME_FACTORY as symbol]: () => {
-					const r = new MockChatRuntime([{ type: 'context_compacted' } as StreamChunk]);
+					const r = new MockChatRuntime([{ type: 'context_compacted' }]);
 					created.push(r);
 					return r;
 				},
