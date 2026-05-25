@@ -697,3 +697,33 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   + `&lt;script&gt;` in the serialized markup. The `--sp-chip-*` /
   `--sp-context-bar-gap` tokens the styles reference are minted in Layer 6
   (T-CA-042) — CSS vars resolve at runtime, so this is forward-compatible.
+
+## T-CA-033 — RED ImageContextBar.vue + ImageThumb.vue + POs (🧪 qa)
+
+- **Spec/test:** TEST-CA-007 (A leg), TEST-CA-009, TEST-CA-011; SPEC-CA-020;
+  REQ-CA-007/008/009/011; NFR-CA-002/003/005/008.
+- **Files:** `tests/ui/chat/ImageContextBar.test.ts` + `ImageContextBar.po.ts`,
+  `tests/ui/chat/ImageThumb.test.ts` + `ImageThumb.po.ts` (new — declarative
+  `:src` via `resolveThumbSrc`; alt = basename; preview/remove emits; empty bar;
+  data-testid only).
+- **Outcome:** done — RED confirmed (both components unresolved at import).
+- **Commit:** `d4029ee`.
+
+## T-CA-034 — ImageContextBar.vue + ImageThumb.vue (🔨 dev)
+
+- **Spec/req:** SPEC-CA-020; REQ-CA-007/008/009/011; NFR-CA-002/003/008.
+- **Files:** `src/ui/chat/ImageThumb.vue` (new — a thumb button binding
+  `<img :src="resolveThumbSrc(path)">` declaratively, `alt` = basename, click +
+  Enter/Space → `preview`; a labelled `×` remove button → `remove`),
+  `src/ui/chat/ImageContextBar.vue` (new — labelled `role=group` row of
+  `ImageThumb`s, re-emitting `preview`/`remove`; `resolveThumbSrc` injected so no
+  `obsidian` import).
+- **Outcome:** done — the T-CA-033 RED tests now green (11/11). No `v-html`/
+  `innerHTML`; no `obsidian` import; no `window.confirm`/`alert`/`prompt`; the
+  resource path is display-only (the payload stays base64).
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` exit 0;
+  `vitest run` 11/11 green.
+- **Commit:** _this commit._
+- **Deviation:** none. Tokens `--sp-image-thumb-size` / `--sp-chip-*` /
+  `--sp-context-bar-gap` are minted in Layer 6 (T-CA-042); CSS vars resolve at
+  runtime so this is forward-compatible.
