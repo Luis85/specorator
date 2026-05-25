@@ -11,6 +11,7 @@ import type {
 	RuntimeCapabilities,
 	ToolbarCapabilities,
 } from '@/domain/ports';
+import type { PermissionMode } from '@/domain/chat/PermissionMode';
 import type {
 	AskUserQuestionRequest,
 	AskUserQuestionAnswer,
@@ -153,6 +154,9 @@ export class MockChatRuntime implements ChatRuntimePort {
 	private resumedSessionId: string | null = null;
 	private resumeCheckpoint: string | null = null;
 	private lastForceColdStart = false;
+	// P7 (SPEC-AS-008): the recorded permissionMode of the last query so a test asserts
+	// the folded mode reaches the runtime (TEST-AS-002). Undefined ⇒ a P6-shaped send.
+	private lastPermissionMode: PermissionMode | undefined = undefined;
 	// P4 (SPEC-CP-009): scriptable capability flags + captured inline-block callbacks.
 	private supportsPlanMode = true;
 	private supportsInlineResponse = true;
@@ -210,6 +214,9 @@ export class MockChatRuntime implements ChatRuntimePort {
 		// this single query (so the title side-query does not steer the main
 		// stream). The Mock has no real session to continue, so it records the flag.
 		this.lastForceColdStart = queryOptions?.forceColdStart === true;
+		// P7 (SPEC-AS-008): record the folded permission mode so a test asserts it reaches
+		// the runtime (TEST-AS-002). Absent ⇒ undefined (the P6-shaped send path).
+		this.lastPermissionMode = queryOptions?.permissionMode;
 		let scriptedAssistantId: string | undefined;
 		for (const chunk of this.script) {
 			// Per-chunk yield boundary: each chunk lands on its own resumed tick.
@@ -350,6 +357,11 @@ export class MockChatRuntime implements ChatRuntimePort {
 	/** Test accessor: whether the last `query` ran with `forceColdStart`. */
 	getLastForceColdStart(): boolean {
 		return this.lastForceColdStart;
+	}
+
+	/** Test accessor: the `permissionMode` of the last `query` (undefined ⇒ P6-shaped). */
+	getLastPermissionMode(): PermissionMode | undefined {
+		return this.lastPermissionMode;
 	}
 
 	/** Opaque read of the cancel flag so the streaming loop checks live state. */

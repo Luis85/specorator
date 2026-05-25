@@ -8,6 +8,7 @@ import type {
 	MockSelectionHighlight,
 } from '@/infrastructure/mock/MockSelectionPorts';
 import type { MockToolbarCatalog } from '@/infrastructure/mock/MockToolbarCatalog';
+import type { MockApprovalRuleStore } from '@/infrastructure/mock/MockApprovalRuleStore';
 import type {
 	SettingsPort,
 	VaultPort,
@@ -78,6 +79,13 @@ export interface FakePorts {
 	 * real provider.
 	 */
 	readonly toolbarCatalog: MockToolbarCatalog;
+	/**
+	 * The scriptable Mock `ApprovalRuleStorePort` (SPEC-AS-008, T-AS-014). The
+	 * `ApprovalManager` + `ApprovalsPanel` tests inject it via `seedRules` (pre-seed
+	 * persisted rules) + `setFailMode` (force the fail-safe-to-prompt path,
+	 * TEST-AS-054) without a real provider.
+	 */
+	readonly approvalRuleStore: MockApprovalRuleStore;
 }
 
 export function fakeModulePorts(): FakePorts {
@@ -106,5 +114,6 @@ export function fakeModulePorts(): FakePorts {
 		selectionSource: bridge.selectionSource,
 		selectionHighlight: bridge.selectionHighlight,
 		toolbarCatalog: bridge.toolbarCatalog,
+		approvalRuleStore: bridge.approvalRuleStore,
 	};
 }

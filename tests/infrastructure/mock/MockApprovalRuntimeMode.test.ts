@@ -21,7 +21,7 @@ import type { PreparedChatTurn } from '@/domain/ports';
 
 function turn(text = 'hi'): PreparedChatTurn {
 	return {
-		request: { conversationId: 'c1', text },
+		request: { text },
 		persistedContent: text,
 		prompt: text,
 		isCompact: false,
@@ -31,8 +31,8 @@ function turn(text = 'hi'): PreparedChatTurn {
 
 async function drain(runtime: MockChatRuntime, mode?: 'normal' | 'plan' | 'yolo'): Promise<void> {
 	const gen = runtime.query(turn(), undefined, mode !== undefined ? { permissionMode: mode } : {});
-	for await (const _chunk of gen) {
-		// drain
+	for await (const chunk of gen) {
+		void chunk; // drain to completion so the query records the mode
 	}
 }
 

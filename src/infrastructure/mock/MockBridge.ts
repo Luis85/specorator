@@ -20,6 +20,7 @@ import {
 import { MockAuxModel } from './MockAuxModel';
 import { MockSelectionSource, MockSelectionHighlight } from './MockSelectionPorts';
 import { MockToolbarCatalog } from './MockToolbarCatalog';
+import { MockApprovalRuleStore } from './MockApprovalRuleStore';
 import type { MentionDataProviderPort, ShellExecResult } from '@/domain/ports';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
@@ -73,6 +74,8 @@ export class MockBridge
 	private readonly selectionHighlightPort = new MockSelectionHighlight();
 	/** Scriptable toolbar catalog (SPEC-TC-008). Stateless — the bridge exposes the port. */
 	private readonly toolbarCatalogPort = new MockToolbarCatalog();
+	/** Scriptable approval-rule store (SPEC-AS-008). Stateless — the bridge exposes the port. */
+	private readonly approvalRuleStorePort = new MockApprovalRuleStore();
 
 	constructor(
 		initialFiles: Record<string, string> = {},
@@ -260,6 +263,16 @@ export class MockBridge
 	/** Scriptable `ToolbarCatalogPort` (`setToolbarCatalog` drives the catalog; never throws). */
 	get toolbarCatalog(): MockToolbarCatalog {
 		return this.toolbarCatalogPort;
+	}
+
+	// ── Approval-rule store port (SPEC-AS-008, ADR-AS-001 §4) ───────────────────
+	// The scriptable in-memory rule store the ApprovalManager + panel tests drive.
+	// Scriptable (seedRules / setFailMode); stateless — the bridge IS the port (the
+	// session rules live in ApprovalManager memory, not here).
+
+	/** Scriptable `ApprovalRuleStorePort` (`seedRules`/`setFailMode`; never throws). */
+	get approvalRuleStore(): MockApprovalRuleStore {
+		return this.approvalRuleStorePort;
 	}
 
 	showError(message: string, durationMs = 0): void {
