@@ -65,6 +65,22 @@ new domain/aux/infra surface confirms the imports resolve without a
 > the note range / reject leaves it unchanged — the launcher write, T-CA-044).
 > **Not agent-self-claimed.**
 
+## Standalone attachments smoke (T-CA-045 — TEST-CA-007/004 dev leg)
+
+| Leg | Status | Date | Where |
+|---|---|---|---|
+| Deterministic mount smoke (the P5-wired standalone surface + composer mount against `MockBridge`; the context bar is hidden when empty — P4-byte-identical, SPEC-CA-022 G2) | **PASS (automated)** | 2026-05-25 | `tests/ui/main.ts.test.ts` → `describe('standalone attachments smoke (TEST-CA-007/004 dev leg)')` |
+| Live `npm run dev` feel: a file attaches as a removable chip + travels with the turn + clears on submit; an image attaches as a thumbnail (Mock `resolveThumbSrc`) + the preview stand-in resolves; the `SelectionIndicator` renders a scripted Mock selection + clear works; the inline-edit launcher stand-in AUTO-REJECTS (no silent apply) | **DEFERRED (manual, human-run)** | — | `npm run dev` (long-running dev server — not started by the agent) |
+
+> **T-CA-045 note:** the deterministic leg is automated (the standalone P5 wiring
+> mounts and runs without an inject-or-throw; the context bar is correctly hidden
+> with empty sets). The interactive file-chip / image-thumb / scripted-selection /
+> inline-edit-stand-in flows depend on (a) the attach affordance + per-tab store
+> sets (T-CA-033/034, which thread the context into the turn) and (b) a live
+> `npm run dev` server — both pair with the human's final review (the agent does
+> not start the long-running dev server). The standalone aux is now genuinely
+> provided (T-CA-044), so the demo's title-gen no longer degrades.
+
 ## Automated unit/component proof
 
 The Mock scriptable aux/selection impls, the LocalStorage inert impls, the pure

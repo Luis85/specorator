@@ -991,3 +991,36 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   this task wires the context bar's render + remove/open/preview/clear edges only,
   so `VaultPort`/`AddImageUseCase` are deliberately not injected here (avoiding dead
   code).
+
+## T-CA-045 — standalone attachments smoke (🧪 dev leg, TEST-CA-007/004 dev leg)
+
+- **Spec/test:** TEST-CA-007 (dev leg) + TEST-CA-004 (dev leg); NFR-CA-002;
+  SPEC-CA-026.
+- **Files:** `tests/ui/main.ts.test.ts` (new `describe('standalone attachments
+  smoke …')` block — the deterministic leg); `specs/context-attachments/test-plan.md`
+  (new "Standalone attachments smoke (T-CA-045)" table recording the automated
+  PASS + the deferred live-`npm run dev` manual leg).
+- **Outcome:** done (deterministic leg automated + PASS; live leg deferred-manual).
+  The brief forbids starting the long-running `npm run dev` server, so the
+  committable artifact is the headless deterministic smoke: the P5-wired
+  standalone surface + composer mount against `MockBridge` without an
+  inject-or-throw, and the `composer-context-bar` (plus the chip / thumb /
+  indicator children) is HIDDEN with empty file/image/selection sets — the
+  P4-byte-identical gate (SPEC-CA-022 G2). The interactive file-chip / image-thumb
+  / scripted-selection / inline-edit-stand-in flows depend on the attach affordance
+  + per-tab store sets (T-CA-033/034) and a live dev server, so they are recorded
+  as the human-run leg in `test-plan.md`, not self-claimed.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` on the test exit
+  0; `vitest --pool=threads --no-file-parallelism --testTimeout=30000
+  tests/ui/main.ts.test.ts` 3/3 GREEN (the new smoke + the two existing P3/P4 dev
+  legs).
+- **Commit:** _this commit._
+- **Deviation:** the live `npm run dev` interactive flows in the DoD (file attaches
+  → removable chip → travels with the turn → clears on submit; image thumbnail +
+  preview; scripted selection + clear; inline-edit stand-in auto-reject) are
+  recorded as a DEFERRED manual leg rather than agent-run, for two reasons: (1) the
+  agent is forbidden from starting the long-running dev server, and (2) the
+  file/image ATTACH affordance + the turn-threading are the store-set tasks
+  (T-CA-033/034), not yet wired — so an interactive attach cannot be exercised yet.
+  The deterministic mount + hidden-when-empty gate is the honest committable proof
+  for this batch; the rest pairs with the human review.
