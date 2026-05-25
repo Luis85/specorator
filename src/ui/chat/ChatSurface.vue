@@ -90,6 +90,11 @@ tabs.bindTabDeps({
 		new GenerateTitleUseCase(createRuntime()).execute(firstUserMessage),
 	getMaxTabs: () => maxTabs,
 	logger,
+	// R-CP-001: read the persisted instruction `customSystemPrompt` from the
+	// already-injected SettingsPort so each sent turn carries it to the runtime
+	// (CLI `--append-system-prompt`). The SettingsPort read stays in this surface
+	// layer; the store only threads the resolved string into the query options.
+	getAppendSystemPrompt: async () => (await settingsPort?.getSettings())?.customSystemPrompt,
 });
 
 onMounted(() => {

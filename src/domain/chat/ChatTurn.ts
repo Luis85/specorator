@@ -36,6 +36,16 @@ export interface ChatRuntimeQueryOptions {
 	 * by the title-gen side-query so it does not steer the tab's main stream).
 	 */
 	forceColdStart?: boolean;
+	/**
+	 * P4 additive (SPEC-CP-005/011, REQ-CP-018, R-CP-001): the persisted
+	 * `customSystemPrompt` the instruction `#` flow appends to. When present and
+	 * non-empty the runtime feeds it to the agent's system prompt (the CLI emits
+	 * `--append-system-prompt <text>`; the parity counterpart of Claudian feeding
+	 * `settings.systemPrompt` through `buildSystemPrompt` into the SDK). The store
+	 * reads it from `SettingsPort` and threads it here, so instruction mode actually
+	 * reaches the runtime instead of dead-ending in settings.
+	 */
+	appendSystemPrompt?: string;
 }
 
 /** Ensure-ready options — mirrors `runtime/types.ts:73`. */

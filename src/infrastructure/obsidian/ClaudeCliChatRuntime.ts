@@ -283,8 +283,27 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 		if (!coldStart && this.sessionId !== null && this.sessionId.length > 0) {
 			argv.push('--resume', this.sessionId);
 		}
-		if (queryOptions?.model !== undefined && queryOptions.model.length > 0) {
-			argv.push('--model', queryOptions.model);
+		argv.push(...this._optionArgs(queryOptions));
+		return argv;
+	}
+
+	/**
+	 * The per-turn `--model` / `--append-system-prompt` flags derived from the query
+	 * options (extracted from {@link _buildArgs} for the complexity budget). P4
+	 * (R-CP-001): `--append-system-prompt <text>` feeds the instruction-appended
+	 * `customSystemPrompt` to the agent (the real `claude` CLI flag, the parity
+	 * counterpart of Claudian's SDK `systemPrompt`). An empty/absent value emits no
+	 * flag, so a no-custom-prompt turn runs identically to P3.
+	 */
+	private _optionArgs(queryOptions?: ChatRuntimeQueryOptions): string[] {
+		const argv: string[] = [];
+		const model = queryOptions?.model;
+		if (model !== undefined && model.length > 0) {
+			argv.push('--model', model);
+		}
+		const appendSystemPrompt = queryOptions?.appendSystemPrompt;
+		if (appendSystemPrompt !== undefined && appendSystemPrompt.length > 0) {
+			argv.push('--append-system-prompt', appendSystemPrompt);
 		}
 		return argv;
 	}
