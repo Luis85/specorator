@@ -862,3 +862,36 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   generic `remove`/`open`/`preview`/`clear`) so the parent can route each to the
   right store set; the spec says "re-emits the children's remove/open/preview/
   clear", which these do 1:1.
+
+## T-CA-042 — `--sp-*` token additions + tokens contract update (🔨 dev, STYLES)
+
+- **Spec/test:** SPEC-CA-027; TEST-CA-032; NFR-CA-007.
+- **Files:** `src/ui/styles/tokens.css` (new §4.12 block — the eight P5 tokens
+  `--sp-chip-bg`/`--sp-chip-border`/`--sp-chip-radius`/`--sp-context-bar-gap`/
+  `--sp-image-thumb-size`/`--sp-image-modal-max`/`--sp-selection-highlight-bg`/
+  `--sp-inline-edit-modal-w`, each a token-layer `var(--sp-*)` lookup or a bare
+  dimension; the word-diff rides the §4.9 P2 diff tokens — no new diff token);
+  `tests/ui/styles/tokens.test.ts` (new `CONTEXT_ATTACHMENTS_TOKENS` list + two
+  `it` blocks — the eight-token presence contract and the TEST-CA-032 leak guard
+  asserting no raw-hex / raw-Obsidian-var leak in the §4.12 block + no new diff
+  token).
+- **Outcome:** done — the five tokens the Layer-5 components reference
+  (`--sp-chip-bg`/`-border`/`-radius`, `--sp-context-bar-gap`,
+  `--sp-image-thumb-size`) resolve; the three modal/highlight tokens
+  (`--sp-image-modal-max`/`--sp-selection-highlight-bg`/`--sp-inline-edit-modal-w`)
+  are minted ahead of their consumers (the two Obsidian Modals + the highlight
+  port, coverage-excluded) per the SPEC-CA-027 table. No hex, no raw Obsidian
+  var outside the token layer, no physical property.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` on the test
+  file exit 0 (tokens.css is not ESLint-scanned — warning only); `vitest run
+  tokens.test.ts` 13/13 green; the Layer-5 component tests (FileChips /
+  ImageContextBar / SelectionIndicator) stay green (23/23) with the tokens
+  resolved.
+- **Commit:** _this commit._
+- **Deviation:** `--sp-selection-highlight-bg` maps to
+  `var(--sp-interactive-accent-translucent)` (the existing token-layer var) — a
+  forced-colors-safe accent wash satisfying the SPEC-CA-027 "forced-colors-safe
+  tint" intent without minting a new colour literal; `--sp-image-thumb-size`
+  (48px), `--sp-image-modal-max` (80vh) and `--sp-inline-edit-modal-w` (540px)
+  are bare dimensions (no colour literal), matching the §4.8/§4.10/§4.11
+  precedent for sizing tokens.
