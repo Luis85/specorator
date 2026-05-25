@@ -136,6 +136,32 @@ const THREADS_SESSIONS_TOKENS = [
 	'--sp-fork-modal-max-inline',
 ];
 
+/**
+ * §4.11 — Composer power (P4, SPEC-CP-029 / NFR-CP-011). Every `--sp-*` token the
+ * P4 composer components reference (dropdown palette, plan-mode, instruction/
+ * bang-bash borders, inline blocks, mention category icons).
+ * `--sp-dropdown-anim-duration` is declared only inside the reduced-motion guard,
+ * so it is asserted separately by the reduced-motion test below.
+ */
+const COMPOSER_POWER_TOKENS = [
+	'--sp-dropdown-shadow',
+	'--sp-dropdown-max-h',
+	'--sp-option-selected-bg',
+	'--sp-plan-accent',
+	'--sp-plan-border',
+	'--sp-plan-label-bg',
+	'--sp-instruction-border',
+	'--sp-bash-border',
+	'--sp-bash-output-bg',
+	'--sp-inline-block-bg',
+	'--sp-ask-cursor',
+	'--sp-ask-item-focused-bg',
+	'--sp-mention-file',
+	'--sp-mention-agent',
+	'--sp-mention-mcp',
+	'--sp-mention-dir',
+];
+
 const PROVIDER_IDS = ['claude', 'codex', 'opencode', 'cursor'] as const;
 
 function loadTokens(): string {
@@ -221,5 +247,16 @@ describe('src/ui/styles/tokens.css — token contract (REQ-AUX-006, REQ-AUX-009)
 		// The history/title spin reuses the P2 `spin` keyframe; reduced-motion
 		// collapses its duration to 0s via this token (no new keyframe).
 		expect(css).toMatch(/--sp-history-spin-duration\s*:\s*0s/);
+	});
+
+	it('declares every §4.11 composer-power token (SPEC-CP-029, NFR-CP-011)', () => {
+		const css = loadTokens();
+		assertTokensDeclared(css, COMPOSER_POWER_TOKENS);
+	});
+
+	it('zeroes --sp-dropdown-anim-duration under reduced-motion (NFR-CP-008)', () => {
+		const css = loadTokens();
+		// The palette open animation collapses to instant under reduced-motion.
+		expect(css).toMatch(/--sp-dropdown-anim-duration\s*:\s*0s/);
 	});
 });
