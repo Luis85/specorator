@@ -84,6 +84,51 @@ describe('MockChatRuntime cold-start side-query (TEST-TS-020 backing)', () => {
 	});
 });
 
+describe('MockChatRuntime P4 inline-block channels (TEST-CP-020/024 backing)', () => {
+	it('captures the registered ask-user-question callback and resolves the scripted answer', async () => {
+		const runtime = new MockChatRuntime();
+		const answer = { requestId: 'r1', answers: { q1: 'opt-a' } };
+		runtime.setAskUserQuestionCallback(async () => answer);
+		const resolved = await runtime.emitAskUserQuestion({
+			requestId: 'r1',
+			questions: [{ id: 'q1', question: 'pick', options: [{ id: 'opt-a', label: 'A' }] }],
+		});
+		expect(resolved).toEqual(answer);
+	});
+
+	it('captures the registered exit-plan + approval callbacks', async () => {
+		const runtime = new MockChatRuntime();
+		runtime.setExitPlanModeCallback(async () => ({ kind: 'implement' }));
+		runtime.setApprovalCallback(async () => 'allow');
+		expect(await runtime.emitExitPlanMode({ requestId: 'r2', plan: 'p' })).toEqual({
+			kind: 'implement',
+		});
+		expect(
+			await runtime.emitApprovalRequest({
+				requestId: 'r3',
+				tool: 'Bash',
+				context: 'run',
+				options: [{ decision: 'allow', label: 'Allow once' }],
+			}),
+		).toBe('allow');
+	});
+
+	it('an unregistered channel resolves null (cancel) without throwing', async () => {
+		const runtime = new MockChatRuntime();
+		await expect(runtime.emitExitPlanMode({ requestId: 'r', plan: 'p' })).resolves.toBeNull();
+	});
+
+	it('caps are scriptable: setSupportsInlineResponse(false) drives the non-capable branch', () => {
+		const runtime = new MockChatRuntime();
+		expect(runtime.getCapabilities().supportsInlineResponse).toBe(true);
+		runtime.setSupportsInlineResponse(false);
+		runtime.setSupportsPlanMode(false);
+		const caps = runtime.getCapabilities();
+		expect(caps.supportsInlineResponse).toBe(false);
+		expect(caps.supportsPlanMode).toBe(false);
+	});
+});
+
 describe('FixtureChatRuntime grown members (parity)', () => {
 	it('reports the same capabilities + recorded session ops', () => {
 		const runtime = new FixtureChatRuntime();
