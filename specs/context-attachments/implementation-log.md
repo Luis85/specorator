@@ -1024,3 +1024,112 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   (T-CA-033/034), not yet wired — so an interactive attach cannot be exercised yet.
   The deterministic mount + hidden-when-empty gate is the honest committable proof
   for this batch; the rest pairs with the human review.
+
+---
+
+## Stage-9 review fixes (R-CA-001..004) — dev, 2026-05-25
+
+The Stage-9 review (`review.md`, REVIEW-CA-001) requested four changes before merge.
+All four are now closed via TDD (RED `test(ca):` → green `feat(ca):` per logical
+unit). Verify per green commit: `vue-tsc -p tsconfig.lint.json --noEmit` 0 errors;
+`eslint` on changed files (only pre-existing `max-lines` warnings on the two SFCs +
+the store, no errors); targeted `vitest`. No `npm run build`/`build:web`/`verify`
+run (per the fix brief); `styles.css` untouched.
+
+### FIX-1 (was R-CA-001 + R-CA-004) — context travels with the turn + clears
+
+- **Spec/REQ:** SPEC-CA-001 §1, SPEC-CA-022; REQ-CA-004/010/019.
+- **Files:** `src/ui/stores/tabsStore.ts` (`SendMessageContext` type +
+  `buildTurnRequest`/`foldSelection` helpers + `sendMessage(text, currentNotePath?,
+  context?)` additive 3rd param + `context?.onConsumed?.()` after the run, ~L73-128,
+  L218-240, L505-545); `src/ui/chat/ChatSurface.vue` (`onSubmit` assembles the
+  snapshot + `clearContextSets`, ~L350-385); `tests/ui/stores/tabsStore.test.ts`
+  (RED travel/clear assertions, +8 cases).
+- **Commits:** RED `b40dff6f3194c3a87ccf1edd9e295346975308c8`; green
+  `115760be6e935d49b976625b3440403320cd8bb1`.
+- **Proving test:** `tests/ui/stores/tabsStore.test.ts` — "REQ-CA-004: attached
+  files travel…", "REQ-CA-010: …images travel…", "REQ-CA-019: …editor/canvas
+  selection maps…", "…context sets clear on a successful submit (onConsumed fires)",
+  "…does NOT fire when the send is guarded out", "G2/SPEC-CA-028: …byte-identical to
+  P1".
+- **Outcome:** done. The five additive `ChatTurnRequest` fields are now written on
+  the live path (folds in `tabsStore`, assembled in `ChatSurface`); the sets clear
+  on a successful submit. A no-context turn stays byte-identical to P1–P4 (fields
+  written only when non-empty).
+- **Deviation:** the clear is a parent-owned `onConsumed` callback the store invokes
+  (rather than the store mutating surface-owned refs) — keeps the store DTO-only
+  (ADR-003) and the ChatSurface refs authoritative (ADR-CA-001 §2). No spec change.
+
+### FIX-2 (was R-CA-002) — three attach affordances
+
+- **Spec/REQ:** SPEC-CA-022/026; REQ-CA-001/002/007/012.
+- **2.1 @-mention chip:** `src/ui/chat/composer/useComposerMode.ts` (additive
+  `onFileMention?` option; fires on a `file`-kind referent confirm with its `detail`
+  vault path, ALONGSIDE the unchanged P4 `mentionText` insertion, ~L74-83, L279-298);
+  `src/ui/chat/ChatSurface.vue` (`attachFile` → `AddFileContextUseCase.add`, wired as
+  `onFileMention`); i18n `context.attach`/`context.images.rejected` (en/de).
+  - **Commits:** RED `191946f6d3f37cbd65a8174837e56d996413a067`; green
+    `25c59c2c1eeafbf2e2e9ec9c03c43a8cbda79564`.
+  - **Proving test:** `tests/ui/chat/composer/useComposerMode.test.ts` — "REQ-CA-001:
+    confirming a FILE mention fires onFileMention…keeps the insertion" + the non-file
+    negative. P4 mention/composer-mode regression re-run GREEN (no regression).
+- **2.2 paperclip / picker (coverage-excluded behind a manual leg):**
+  `src/ui/chat/modalSeam.ts` (`PickAttachmentFn`/`PickedAttachment`/`PICK_ATTACHMENT`/
+  `usePickAttachment` — fallback no-op `null`); `src/ui/chat/ChatComposer.vue` (the
+  `composer-attach` button → `attach` emit); `src/ui/chat/ChatSurface.vue` (`onAttach`
+  → `pickAttachment()` → image via `AddImageUseCase.execute` / file via `attachFile`);
+  `src/plugin/attachmentPicker.ts` (**new** — the real Obsidian `FuzzySuggestModal`,
+  coverage-excluded → **TEST-CA-M4** manual leg); `src/plugin/AgentSidebarView.ts`
+  (`provide(PICK_ATTACHMENT, …)`); `src/ui/main.ts` (browser-safe `null` stand-in);
+  `specs/context-attachments/test-plan.md` (TEST-CA-M4 + the three-affordance note).
+  - **Commits:** RED `ca260859e11a47762edc4aeb9ddd6c094685034e`; green
+    `b15a8f5a472b7c066feaed4c83513b2e481d9e34`.
+  - **Proving test:** `tests/ui/chat/modalSeam.ts.test.ts` — "usePickAttachment …
+    provided / fallback null"; `tests/ui/chat/ChatComposer.test.ts` — "the composer
+    renders a labelled attach control" + "clicking the attach control emits attach".
+    The real picker is **TEST-CA-M4** (manual).
+- **2.3 drop/paste:** `src/application/chat/attachments/AddImageUseCase.ts` (additive
+  `executeBytes(name, bytes)` — same MIME→size→encode gate over in-hand bytes, no
+  `readBinary`); `src/ui/chat/ChatComposer.vue` (`@drop`/`@dragover`/`@paste` → emits
+  `attachFiles(File[])`, paste-with-image prevents default); `src/ui/chat/ChatSurface.vue`
+  (`onAttachFiles` gates each image via `executeBytes`, `NotificationPort.showWarning`
+  on reject, non-image skipped — parity with claudian's image-only drop).
+  - **Commits:** RED `9768d51e73aa64883a3cee8162f5ee5b9b037805`; green
+    `5e7456753a25a66824382a54fc712dc81aea4f56`.
+  - **Proving test:** `tests/application/chat/attachments/AddImageUseCase.test.ts` —
+    "executeBytes … resolves MIME … encodes / .exe → err / oversize → err";
+    `tests/ui/chat/ChatComposer.test.ts` — "dropping a file emits attachFiles…",
+    "pasting an image emits attachFiles… (prevents default)", "a paste with NO files …
+    does not emit".
+- **Outcome:** done. `AddFileContextUseCase.add` + `AddImageUseCase` are now called
+  on the live path through three affordances (mention, paperclip, drop/paste);
+  oversize/non-image images surface `NotificationPort.showWarning` (REQ-CA-012). Only
+  the Obsidian picker is behind a manual leg (TEST-CA-M4); mention + drop/paste are
+  component/unit-tested.
+- **Deviation:** a dropped/pasted NON-image file is skipped (parity with claudian's
+  image-only drop handler) rather than chip-attached — a raw `File` has no
+  vault-relative path for `AddFileContextUseCase`. Vault files attach via the
+  mention + the picker (which yield vault paths). No spec change.
+
+### FIX-3 (was R-CA-003) — reset on a new / loaded conversation
+
+- **Spec/REQ:** SPEC-CA-022; REQ-CA-006; EC-CA-6.
+- **Files:** `src/ui/chat/ChatSurface.vue` (`watch` on the active conversation
+  identity `activeTabId::conversationId` → `clearContextSets`, covering `/new` + the
+  TabBar `+`, fork-into-new-tab, and resume-into-current-tab); `tests/ui/chat/
+  ChatSurface.context.test.ts` (**new** RED→green); `tests/ui/chat/ChatSurface.po.ts`
+  (`hasContextBar`).
+- **Commits:** RED `4bfc8de3610886e61d5ccfb7c7bb5666dabce4b2`; green
+  `c655827fa7ad860818f3e63c6d640b08690b9ad6`.
+- **Proving test:** `tests/ui/chat/ChatSurface.context.test.ts` — "opening a new
+  conversation clears the captured selection (bar hidden)".
+- **Outcome:** done. A new/loaded conversation now resets the surface-owned context
+  sets; a plain re-render changes neither watch key, so draft context is never
+  cleared mid-edit. The existing ChatSurface send-path mount tests stay GREEN.
+- **Deviation:** none.
+
+**Final verify (all four fixes):** `vue-tsc -p tsconfig.lint.json --noEmit` 0 errors;
+`vitest` over the 9 new/changed + P4-regression files (tabsStore, ChatComposer,
+useComposerMode, AddImageUseCase, modalSeam, ChatSurface{,.inline,.context},
+ResolveMentionUseCase) — **127/127 GREEN**; attachments + FileChips display layer
+36/36 GREEN. R-CA-001/002/003/004 closed.
