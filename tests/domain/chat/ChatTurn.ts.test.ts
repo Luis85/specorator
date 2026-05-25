@@ -27,6 +27,7 @@ import type {
 	BrowserSelectionContext,
 } from '@/domain/chat/attachments';
 import type { ReasoningChoice } from '@/domain/chat/Reasoning';
+import type { PermissionMode } from '@/domain/chat/PermissionMode';
 
 type Equals<A, B> =
 	(<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
@@ -91,11 +92,29 @@ void _ensureKeys;
 // `ChatRuntimeQueryOptions` gains EXACTLY the three additive optional fields
 // (`mode?`/`reasoning?`/`serviceTier?`) appended after `appendSystemPrompt`; the
 // P0–P5 `model?`/`forceColdStart?`/`appendSystemPrompt?` stay byte-identical.
+// ---- T-AS-002 (TEST-AS-002 type-shape leg, SPEC-AS-002/021) ----
+// `ChatRuntimeQueryOptions` gains EXACTLY one further additive optional field
+// `permissionMode?: PermissionMode` appended AFTER `serviceTier`; the P0–P6
+// `model?`/`forceColdStart?`/`appendSystemPrompt?`/`mode?`/`reasoning?`/`serviceTier?`
+// stay byte-identical.
 const _queryKeys: Equals<
 	keyof ChatRuntimeQueryOptions,
-	'model' | 'forceColdStart' | 'appendSystemPrompt' | 'mode' | 'reasoning' | 'serviceTier'
+	| 'model'
+	| 'forceColdStart'
+	| 'appendSystemPrompt'
+	| 'mode'
+	| 'reasoning'
+	| 'serviceTier'
+	| 'permissionMode'
 > = true;
 void _queryKeys;
+
+// The P7 additive field carries its contracted optional PermissionMode type.
+const _qPermissionMode: Equals<
+	ChatRuntimeQueryOptions['permissionMode'],
+	PermissionMode | undefined
+> = true;
+void _qPermissionMode;
 
 // The P0–P5 members keep their exact types.
 const _qModel: Equals<ChatRuntimeQueryOptions['model'], string | undefined> = true;
@@ -181,5 +200,30 @@ describe('ChatRuntimeQueryOptions P6 additivity / serialisation (TEST-TC-002/027
 		expect(full.mode).toBe('acceptEdits');
 		expect(full.reasoning).toEqual({ kind: 'effort', value: 'high' });
 		expect(full.serviceTier).toBe('priority');
+	});
+});
+
+describe('ChatRuntimeQueryOptions P7 additivity / serialisation (TEST-AS-002)', () => {
+	it('serialises a P6-shaped query (no permissionMode) byte-identically to P6', () => {
+		const p6: ChatRuntimeQueryOptions = {
+			model: 'sonnet',
+			mode: 'acceptEdits',
+			reasoning: { kind: 'effort', value: 'high' },
+			serviceTier: 'priority',
+		};
+		// No `permissionMode` present — the JSON is identical to P6.
+		expect(JSON.parse(JSON.stringify(p6))).toEqual({
+			model: 'sonnet',
+			mode: 'acceptEdits',
+			reasoning: { kind: 'effort', value: 'high' },
+			serviceTier: 'priority',
+		});
+		expect(Object.keys(p6)).toEqual(['model', 'mode', 'reasoning', 'serviceTier']);
+	});
+
+	it('carries permissionMode when present', () => {
+		const mode: PermissionMode = 'yolo';
+		const query: ChatRuntimeQueryOptions = { model: 'opus', permissionMode: mode };
+		expect(query.permissionMode).toBe('yolo');
 	});
 });
