@@ -14,7 +14,15 @@ import {
 	CHAT_RUNTIME_PORT,
 	MARKDOWN_RENDER_PORT,
 	ICON_PORT,
+	PROVIDER_HISTORY_PORT,
 } from '@/infrastructure/bridge/ports';
+import {
+	CHAT_RUNTIME_FACTORY,
+	CONFIRM_DELETE,
+	CHOOSE_FORK_TARGET,
+} from '@/ui/chat/modalSeam';
+import { ForkTargetModal } from './modals/ForkTargetModal';
+import { DeleteConfirmModal } from './modals/DeleteConfirmModal';
 import type SpecoratorPlugin from './main';
 
 /** The single view type the plugin registers (SPEC-PSR-005). */
@@ -75,6 +83,25 @@ export class AgentSidebarView extends ItemView {
 			app.provide(CHAT_RUNTIME_PORT, bridge.createChatRuntime());
 			app.provide(MARKDOWN_RENDER_PORT, bridge.createMarkdownRenderPort());
 			app.provide(ICON_PORT, bridge.createIconPort());
+			// P3 (SPEC-TS-027): the history seam + the per-tab runtime factory (one
+			// runtime per tab, ADR-TS-002 §1) + the Obsidian Modal launch seams. The
+			// Vue surface never imports `obsidian`; it launches the modals through these.
+			app.provide(PROVIDER_HISTORY_PORT, bridge.createProviderHistoryPort());
+			app.provide(CHAT_RUNTIME_FACTORY, () => bridge.createChatRuntime());
+			app.provide(CONFIRM_DELETE, (message: string) =>
+				new DeleteConfirmModal(this.app, {
+					message,
+					confirm: 'Delete',
+					cancel: 'Cancel',
+				}).confirm(),
+			);
+			app.provide(CHOOSE_FORK_TARGET, () =>
+				new ForkTargetModal(this.app, {
+					title: 'Fork conversation',
+					newTab: 'New tab',
+					currentTab: 'Current tab',
+				}).choose(),
+			);
 			app.mount(host);
 			this.vueApp = app;
 		}
