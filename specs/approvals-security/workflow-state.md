@@ -1,10 +1,10 @@
 ---
 feature: approvals-security
 area: AS
-current_stage: tasks
+current_stage: implementation
 status: active
 last_updated: 2026-05-26
-last_agent: planner (tasks)
+last_agent: dev (implementation — DOMAIN batch T-AS-001..011)
 epic: claudian-reboot
 phase: P7
 integration_branch: next
@@ -16,8 +16,8 @@ artifacts:
   design.md: complete (DESIGN-AS-001; ADR-AS-001/002/003 accepted; CLAR-AS-001..005 ratified)
   spec.md: complete (SPEC-AS-001; 28 items, 6 layer groups; 33 REQ-AS + 16 NFR-AS chained to TEST-AS; 6 design open items resolved)
   tasks.md: complete (TASKS-AS-001; 40 tasks T-AS-001..040; DDD batches DOMAIN→INFRA→APP→UI→STYLES→WIRE-IN→GATE; RED-before-green; 3 manual legs T-AS-036/037/038; NO guard-relax)
-  implementation-log.md: pending
-  test-plan.md: pending
+  implementation-log.md: in-progress (DOMAIN batch T-AS-001..011 executed + logged; INFRA/APP/UI/STYLES/WIRE-IN/GATE batches T-AS-012..040 remain)
+  test-plan.md: in-progress (guard-verify note + manual legs TEST-AS-M1/M2/M3 + DOMAIN-batch automated status scaffolded by T-AS-001; INFRA/APP/UI legs follow)
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -37,8 +37,8 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-AS-001; ADR-AS-001/002/003 accepted) |
 | 5. Specification | `spec.md` | complete (SPEC-AS-001; 28 items SPEC-AS-001..028) |
 | 6. Tasks | `tasks.md` | complete (TASKS-AS-001; 40 tasks T-AS-001..040; DDD batches; RED-before-green; 3 manual legs; NO guard-relax) |
-| 7. Implementation | `implementation-log.md` + code | pending |
-| 8. Testing | `test-plan.md`, `test-report.md` | pending |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN batch T-AS-001..011 done; T-AS-012..040 remain) |
+| 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; test-report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
@@ -283,4 +283,48 @@ updates, the inline approval/plan-mode controllers, `status-panel`/`permission-t
                  verification, no production code). FIRST READY TASK = T-AS-002 (qa, RED — no deps). Freeze
                  the additive domain types FIRST so the engine + the toggle build on frozen types; the
                  ToolbarCapabilities widen (T-AS-011) lands its runtime fan-out in one task.
+
+2026-05-26 (dev): DOMAIN batch T-AS-001..011 COMPLETE on feature/approvals-security (off next).
+                 Created implementation-log.md + test-plan.md + parity-screenshots.md (T-AS-001,
+                 doc-only baseline + guard verification). Strict TDD, one commit per task (RED qa →
+                 green dev):
+                 - T-AS-001 ac070a66 (baseline + guard-verify; no src change)
+                 - T-AS-002 e136d4d3 RED / T-AS-003 6db66df1 green — PermissionMode
+                   ('normal'|'plan'|'yolo'); ChatRuntimeQueryOptions.permissionMode? + TabControls.
+                   permissionMode? appended after serviceTier; ApprovalDecision grown by
+                   'deny-always'; barrel re-export. Additive — NO implements break. A P6-shaped
+                   query is byte-identical to P6 (TEST-AS-002).
+                 - T-AS-004 9b632f5a RED / T-AS-005 052a6c50 green — the PURE matcher
+                   (getActionPattern/getActionDescription/matchesRulePattern) ported verbatim from
+                   claudian ApprovalManager.ts; pure + total, never throws; full SPEC-AS-026 truth
+                   table (bash explicit-wildcard-only, file path-segment boundary, other-tool prefix,
+                   null-action guard, backslash->/ normalise, deny-wins).
+                 - T-AS-006 91b168e3 RED / T-AS-007 2ddf0eba green — ApprovalRule DTO (six readonly
+                   members) + ApprovalRuleInput omit + ruleDedupeKey triple; inert, no secret field.
+                 - T-AS-008 856982f8 RED / T-AS-009 4eb395c7 green — ApprovalRuleStorePort
+                   (loadRules/addRule/removeRule/clear, all Promise<Result>) + APPROVAL_RULE_STORE_PORT
+                   key (own, no aggregate) + barrel re-exports. Guard green (no relaxation).
+                 - T-AS-010 214e025c RED / T-AS-011 b8bb8688 green — WIDEN ToolbarCapabilities.
+                   permissionMode 'default'|'plan' -> PermissionMode; the implements fan-out
+                   ('default'->'normal') landed in the SAME commit across the 3 runtimes
+                   (Mock/Fixture/ClaudeCli) + the 2 ScriptedRuntime test doubles + the 4 P6 capability
+                   fixtures; EnqueueRuntime forwards verbatim (untouched). The P6 T-TC-008 lesson
+                   applied — whole-project build stayed green.
+                 GATE over the batch: vue-tsc -p tsconfig.lint.json 0 (whole project), whole-project
+                 npm run lint 0 errors (12 pre-existing warnings), vitest tests/domain/{chat,ports}
+                 116/116. No obsidian/node/Vue in src/domain/**; matcher pure/total; additivity proven.
+                 DEVIATION: two targeted `complexity` lint disables on the verbatim-ported matcher
+                 (intrinsic per-tool/per-family dispatch, justified — project convention per
+                 plugin-core.ts); the additive-union-grow + capability-widen fan-out edits to the P4
+                 inlineBlockDtos test + the P6 capability fixtures/doubles are the forced consequence
+                 of the type changes, not assertion changes (authoritative assertions live in the new
+                 Approval.test.ts + ChatRuntimePort.ts.test.ts). NOT staged: pre-existing uncommitted
+                 styles.css (P6 comment cleanup, unrelated — left untouched).
+                 HAND-OFF -> INFRA batch /spec:implement (dev/qa): T-AS-012 (Obsidian device-local
+                 store + Claude SDK map + plan-exit setMode, coverage-excluded -> manual M1/M3) ||
+                 T-AS-013 RED (Mock scriptable store + setFailMode + fake-ports.approvalRuleStore +
+                 scriptable runtime mode) -> T-AS-014 green || T-AS-015 (LocalStorage
+                 browser-localStorage + inert mode). The frozen domain types (PermissionMode, the two
+                 optionals, the matcher, the rule DTO, ApprovalRuleStorePort + key) are ready for the
+                 bridges to implement.
 ```
