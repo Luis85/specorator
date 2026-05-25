@@ -559,8 +559,41 @@ warnings only), `vitest run tests/application` **372/372 green** (incl. the P6
 - **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); `npm run lint`
   0 errors (12 pre-existing warnings); `vitest run tests/ui/chat/approvals/` 9/9. No
   `obsidian`/`v-html` in `src/ui/**`. `styles.css` untouched.
-- **Commit (RED / green):** `3225fe1f` / `<GREEN-025>`.
+- **Commit (RED / green):** `3225fe1f` / `5aa89193`.
 - **Deviation:** the `--sp-approvals-decision-allow|deny` + `--sp-approvals-row-gap`
   tokens the components reference are minted in T-AS-030 (the STYLES task); referencing a
   not-yet-defined CSS var resolves to the inherited value at runtime and fails no
   lint/typecheck gate now (the `lint-style-tokens` guard TEST-AS-062 lands with T-AS-030).
+
+### T-AS-027 — `InlinePlanApproval.vue` +`deny-always` option (additive) (🔨 dev)
+
+- **Spec/req:** SPEC-AS-015/018/022; REQ-AS-022/025/030; NFR-AS-006/007/015.
+- **Files:** `src/ui/chat/composer/InlinePlanApproval.vue` (added a `:data-decision`
+  attribute to each option button — additive, the existing `data-testid` + layout +
+  focus model unchanged); `tests/ui/chat/composer/InlinePlanApproval.denyAlways.test.ts`
+  (new RED → green).
+- **How additivity holds:** the P4 `InlinePlanApproval` already renders `request.options`
+  generically (N buttons), so the fourth `'deny-always'` option arrives via the
+  `ApprovalRequest.options` array the surface/runtime builds (SPEC-AS-018 fixed order:
+  Allow once · Always allow · Deny once · Always deny). The only component change is the
+  additive `:data-decision="option.decision"` attribute so the surface/tests can target an
+  option by its decision; the existing `inline-plan-approval-option-${decision}` testid,
+  the tool + `request.context` render, the keyboard/Escape-cancel (`null`) leg, and the
+  read-only capability gate are byte-identical to P4 (NG4). The `deny-always` label uses
+  the `agent.chat.inline.approval.denyAlways` i18n key (added in T-AS-023, en+de) where the
+  request options are built.
+- **Outcome:** done — the prior RED (2 failing four-option/route legs) now green; the P4
+  `InlinePlanApproval.test.ts` (5 legs) stays green (byte-identical render + the additive
+  attribute).
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); `npm run lint`
+  0 errors (12 pre-existing warnings); `vitest run` deny-always 3/3 + P4 regression 5/5.
+  No `obsidian`/`v-html` in `src/ui/**`. `styles.css` untouched.
+- **Commit (RED / green):** `47f91f4e` / `<GREEN-027>`.
+- **Deviation:** the spec (SPEC-AS-015) names the component `InlineApproval.vue` with
+  `inline-approval-*` testids + a `decide`/`cancel` emit shape; the actual P4 component is
+  `InlinePlanApproval.vue` (in `src/ui/chat/composer/`) with `inline-plan-approval-*`
+  testids + a `resolve` emit routed through `RespondToInlineBlockUseCase`. The real P4
+  component is the contract surface (the spec was authored against an assumed name); the
+  `deny-always` option was added to it additively. The brief's `inline-approval-deny-always`
+  testid is realised as the additive `[data-decision="deny-always"]` selector (the
+  decision-keyed testid `inline-plan-approval-option-deny-always` also exists).
