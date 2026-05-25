@@ -19,8 +19,8 @@ artifacts:
   implementation-log.md: in-progress (DOMAIN+INFRA T-CP-001..014 + T-CP-047 + APPLICATION T-CP-015..026 + UI batch 1 T-CP-027..034 + UI batch 2 T-CP-035..046 + WIRE-IN T-CP-048..050 done; remaining = T-CP-051/052 manual legs [human, final review] + T-CP-053 verify gate [orchestrator])
   test-plan.md: in-progress (guard verification + M1/M2 manual legs scheduled; TEST-CP-026 dev leg PASS 2026-05-25; TEST-CP status by batch)
   test-report.md: pending
-  review.md: pending
-  traceability.md: pending
+  review.md: complete (REVIEW-CP-001; verdict Approved with conditions — R-CP-001/002 P2 real-path)
+  traceability.md: complete (TRACE-CP-001; 2 chains real-path-dead at code→test, conditioned)
   release-notes.md: pending
   retrospective.md: pending
 ---
@@ -39,7 +39,7 @@ artifacts:
 | 6. Tasks | `tasks.md` | complete (TASKS-CP-001; T-CP-001..053) |
 | 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN+INFRA + tokens + APPLICATION + UI batch 1 + UI batch 2 + WIRE-IN T-CP-048..050 done; remaining = T-CP-051/052 manual legs [human] + T-CP-053 verify gate [orchestrator]) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
-| 9. Review | `review.md`, `traceability.md` | pending |
+| 9. Review | `review.md`, `traceability.md` | complete (Approved with conditions) |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
 
@@ -563,4 +563,58 @@ self-parity-review vs claudian after each big chunk; merge P4 to `next` autonomo
                           gate); T-CP-053 (feature DoD — full verify + grep gates + additivity + parity
                           self-review + draft PR into next) is the ORCHESTRATOR's gate. Next agent:
                           orchestrator (T-CP-053) after the human manual legs.
+```
+
+## Hand-off notes (reviewer)
+
+```
+2026-05-25 (reviewer, parity review): REVIEW-CP-001 + TRACE-CP-001 written. VERDICT =
+                          Approved with conditions. Full unit suite re-run GREEN (1092 tests /
+                          154 files); grep gates pass (zero provider==='claude' in app/ui; node:*
+                          only in src/infrastructure/obsidian; no v-html/innerHTML/window.confirm/
+                          obsidian-in-UI). Pure layers (triggerParse, builtInCommands,
+                          instructionRefine, inline DTOs, the 5 use cases) are faithful claudian
+                          ports; bang-bash S1-S5 genuinely enforced; capability-gating honest; P1
+                          send byte-identical; additivity holds.
+
+                          TWO P2 REAL-PATH FINDINGS (unit-green-but-dead — the P2/P3 failure mode):
+                          - R-CP-001 (P2): instruction # append writes customSystemPrompt and
+                            round-trips, but NOTHING reads it into a turn — prepareTurn sets
+                            prompt:request.text only, _buildArgs never emits --append-system-prompt,
+                            ChatTurnRequest has no system-prompt field. Instruction mode is a no-op
+                            on the real CLI agent. Claudian feeds settings.systemPrompt via
+                            ClaudeQueryOptionsBuilder -> buildSystemPrompt -> SDK. Fix to the wire OR
+                            spec-rescope-to-P5; verify TEST-CP-M2.
+                          - R-CP-002 (P2): inline-block callbacks register on an ORPHAN
+                            composerRuntime (ChatSurface.vue:131 createRuntime() = fresh instance)
+                            separate from the per-tab streaming runtime (tabsStore.ts:263); the
+                            streaming consumer never enqueues the 3 request chunks. Inline blocks
+                            never render from a real turn. Masked by CLI supportsInlineResponse:false
+                            + single-runtime Mock coincidence; NO test drives inline via sendMessage
+                            (all inline tests call enqueue/RespondToInlineBlock directly;
+                            MockChatRuntime.query never invokes the captured callback). ADR-CP-004's
+                            "lights up with no UI change" is currently unachievable. Open an ADR for
+                            the per-tab<->composer runtime binding + consumer enqueue, OR rescope-P5.
+
+                          P3 polish/parity (non-blocking, each needs a spec/release-note line):
+                          R-CP-003 four built-ins (/clear,/add-dir,/resume,/fork) inert in
+                          dispatchBuiltIn; R-CP-004 approval_request has no reducer emission (correct
+                          parity — SDK canUseTool not stream — spec wording misleading);
+                          R-CP-005 mention provider uncapped vs claudian slice(0,50/100);
+                          R-CP-006 six built-ins vs claudian four+`new` alias; R-CP-007 mention
+                          insert format (no trailing space / full path) diverges; R-CP-008 a11y
+                          aria-activedescendant/aria-controls on the listbox not the combobox
+                          textarea; R-CP-009 ObsidianShellExec genuine spawn failure -> exit 1 not err.
+
+                          OUT-OF-SCOPE deferrals all correct (P5/P6/P7/P8/P9/P10); zero counter-metric
+                          scope leakage in the diff.
+
+                          HAND-OFF -> orchestrator: dispatch R-CP-001 + R-CP-002 fixes to the
+                          ARCHITECT first (spec decision: wire vs explicit P5 re-scope; R-CP-002
+                          needs an ADR for the runtime binding) -> then DEV. The human final review
+                          gate (TEST-CP-M1/M2) must specifically exercise: instruction->system-prompt
+                          effect on the real CLI (R-CP-001), inline-block arrival from a real turn
+                          (R-CP-002), mention vault read + cap (R-CP-005), bang-bash spawn-failure
+                          (R-CP-009). T-CP-053 full verify gate (npm run verify + test:all + coverage
+                          80/70/80/80) NOT re-run beyond the unit suite — still orchestrator's gate.
 ```
