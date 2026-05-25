@@ -56,7 +56,9 @@ relaxation task is required (verified by the dev DOMAIN+INFRA batch).
 | TEST-CP-020 | U | qa | backing green — Mock capable runtime (T-CP-008/009) |
 | TEST-CP-024 | U/A | qa | backing green — Mock non-capable runtime (T-CP-008/009) |
 | TEST-CP-028 | U | qa | green — Mock no-spawn ShellExec (T-CP-008/009) |
-| TEST-CP-007..011, 013..015, 017..027 | U/A | qa | scheduled — APPLICATION/UI batches |
+| TEST-CP-026 | A | qa | green — composer-mode composables + both-entry-point provides + mount (T-CP-029/030/048/049); **dev leg PASS 2026-05-25** — standalone smoke (`tests/ui/main.ts.test.ts`): `/`→slash dropdown, `@`→mention dropdown, Shift+Tab→PLAN indicator (capable mock), `!echo hi`+Enter→scripted-echo output block (T-CP-050) |
+| TEST-CP-027 | grep+mount | qa | green — provider-addressed grep-gate hook + the mount leg (T-CP-025/026/048); the full `provider === 'claude'` grep gate runs at T-CP-053 |
+| TEST-CP-007..011, 013..015, 017..025 | U/A | qa | green — APPLICATION/UI batches (T-CP-015..046) |
 
 ## Manual legs (M — coverage-excluded Obsidian production bridge)
 
