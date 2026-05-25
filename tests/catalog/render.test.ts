@@ -55,7 +55,7 @@ describe("renderAsset", () => {
     const descLine = out.split("\n").find((l) => l.startsWith("description ="))!;
     expect(descLine).toBe('description = "has \\"quote\\" and \\\\ slash"');
     // prompt is a basic (escaped) string; decode it back to the original body
-    const m = out.match(/prompt = "((?:[^"\\]|\\.)*)"/s);
+    const m = (/prompt = "((?:[^"\\]|\\.)*)"/s).exec(out);
     expect(m).toBeTruthy();
     expect(decodeTomlBasic(m![1])).toBe(
       'line1\nuse `mcp__specorator-obsidian-mcp__vault_read` and a "quote"',

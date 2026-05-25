@@ -18,7 +18,7 @@ function withFrontmatter(a: AssetMeta, allowedTools?: string): string {
   // host agent actually reads — NOT in a sidecar file. Empty/absent => omit it
   // (default-deny grants nothing).
   const fmObj: Record<string, unknown> = { name: a.name, description: a.description };
-  if (allowedTools) fmObj["allowed-tools"] = allowedTools;
+  if (allowedTools !== undefined && allowedTools !== "") fmObj["allowed-tools"] = allowedTools;
   const fm = yamlStringify(fmObj).trimEnd();
   return `---\n${fm}\n---\n${a.body}`;
 }

@@ -6,7 +6,7 @@ import {
   Setting,
   Notice,
 } from "obsidian";
-import type { CatalogIndex, AssetMeta, FileSystem } from "../catalog/types";
+import type { CatalogIndex, AssetMeta, FileSystem, InstalledState } from "../catalog/types";
 import type { Platform } from "../catalog/types";
 import { enableAsset, disableAsset } from "../catalog/installer";
 import type { ConflictChoice } from "../catalog/installer";
@@ -32,12 +32,14 @@ export interface BadgeState {
 
 export function computeBadge(s: BadgeState): string {
   if (s.installed) {
-    if (s.installedHash && s.catalogHash && s.installedHash !== s.catalogHash)
-      return "Update available";
+    if (
+      s.installedHash !== undefined && s.catalogHash !== undefined &&
+      s.installedHash !== s.catalogHash
+    ) return "Update available";
     return "Enabled";
   }
-  if (s.conflict) return "Conflict";
-  if (s.denied) return "Needs tool (denied)";  // required tool present but deny-moded
+  if (s.conflict === true) return "Conflict";
+  if (s.denied === true) return "Needs tool (denied)";
   if (!s.requiresOk) return "Needs tool";
   return "Available";
 }
@@ -52,30 +54,31 @@ interface PluginWithSettings extends Plugin {
 }
 
 export class CatalogSettingsTab extends PluginSettingTab {
+  private readonly pw: PluginWithSettings;
+
   constructor(
     app: App,
     plugin: Plugin,
     private fs: FileSystem,
     private catalog: CatalogIndex,
-  ) { super(app, plugin); }
+  ) {
+    super(app, plugin);
+    this.pw = plugin as PluginWithSettings;
+  }
 
   display(): void {
     void this.renderDisplay();
   }
 
-  private get pluginWithSettings(): PluginWithSettings {
-    return this.plugin as PluginWithSettings;
-  }
-
   private platforms(): Platform[] {
-    const p = this.pluginWithSettings.settings.platforms;
-    return (p && p.length > 0) ? p : DEFAULT_PLATFORMS;
+    const p = this.pw.settings.platforms;
+    return (p !== undefined && p.length > 0) ? p : DEFAULT_PLATFORMS;
   }
 
   private onConflict(path: string): Promise<ConflictChoice> {
-    return new Promise<ConflictChoice>((resolve) =>
-      new ConflictModal(this.app, path, resolve).open()
-    );
+    return new Promise<ConflictChoice>((resolve) => {
+      new ConflictModal(this.app, path, resolve).open();
+    });
   }
 
   private async renderDisplay(): Promise<void> {
@@ -101,22 +104,23 @@ export class CatalogSettingsTab extends PluginSettingTab {
       psetting.addToggle((t) =>
         t.setTooltip(p).setValue(selected.has(p)).onChange(async (on) => {
           if (on) selected.add(p); else selected.delete(p);
-          this.pluginWithSettings.settings.platforms = [...selected];
-          await this.pluginWithSettings.saveSettings();
+          this.pw.settings.platforms = [...selected];
+          await this.pw.saveSettings();
         }),
       );
     }
 
     // Search filter (Medium)
     let searchFilter = "";
-    new Setting(containerEl).addSearch((s) =>
+    new Setting(containerEl).addSearch((s) => {
       s.setPlaceholder("Search assets...").onChange((v) => {
         searchFilter = v.toLowerCase();
         void this.renderDisplay();
-      })
-    );
+      });
+    });
 
     const state = await loadState(this.fs);
+    const currentPlatforms = this.platforms();
 
     const bundles = new Map<string, AssetMeta[]>();
     for (const a of this.catalog.assets) {
@@ -124,11 +128,9 @@ export class CatalogSettingsTab extends PluginSettingTab {
       bundles.get(a.bundle)!.push(a);
     }
 
-    const currentPlatforms = this.platforms();
-
     for (const [bundle, assets] of bundles) {
       const filtered = assets.filter(
-        (a) => !searchFilter ||
+        (a) => searchFilter === "" ||
           a.name.toLowerCase().includes(searchFilter) ||
           a.description.toLowerCase().includes(searchFilter),
       );
@@ -136,56 +138,20 @@ export class CatalogSettingsTab extends PluginSettingTab {
 
       // Bundle heading + "Enable all" button (Medium)
       const header = new Setting(containerEl).setName(bundle).setHeading();
-      header.addButton((b) =>
-        b.setButtonText("Enable all").onClick(async () => {
-          const notInstalled = filtered.filter((a) => !state[a.id]);
-          const destructiveTools = notInstalled.flatMap(
-            (a) => partitionTools(a.requires).destructive,
-          );
-          const allPaths = notInstalled.flatMap((a) =>
-            currentPlatforms
-              .filter((p) => supportedPlatforms(a).includes(p))
-              .flatMap((p) => {
-                try { return [targetPath(a, p)]; } catch { return []; }
-              })
-          );
-          const summary = buildConsentSummary(
-            notInstalled[0] ?? assets[0],
-            allPaths,
-            notInstalled.some((a) => scanForInjection(a.body).flagged),
-          );
-          // Surface destructive tools in the summary body
-          if (destructiveTools.length > 0) {
-            summary.body = `⚠ Destructive tools: ${destructiveTools.join(", ")}\n\n${summary.body}`;
-          }
-          new ConsentModal(this.app, summary, () => {
-            void (async () => {
-              for (const a of notInstalled) {
-                await enableAsset(this.fs, a, this.catalog.assets, currentPlatforms, {
-                  onConflict: (p) => this.onConflict(p),
-                  onUserModified: (p) => this.onConflict(p),
-                });
-              }
-              new Notice(`Enabled ${notInstalled.length} asset(s) in ${bundle}`);
-              this.display();
-            })();
-          }).open();
-        })
-      );
+      header.addButton((b) => {
+        b.setButtonText("Enable all").onClick(() => {
+          this.handleEnableAll(bundle, filtered, assets, state, currentPlatforms);
+        });
+      });
 
       for (const asset of filtered) {
         const installed = Object.hasOwn(state, asset.id);
-
-        // Compute badge state for this asset
-        const requiresOk = asset.requires.length === 0; // simplified — full check in v1 requires live tools
         const { destructive: destructiveReqs } = partitionTools(asset.requires);
         const badgeState: BadgeState = {
           installed,
-          requiresOk: requiresOk || destructiveReqs.length < asset.requires.length,
-          installedHash: state[asset.id]?.hash,
-          // catalogHash would come from sha256(asset.body) — simplified here
+          requiresOk: destructiveReqs.length < asset.requires.length || asset.requires.length === 0,
+          installedHash: installed ? state[asset.id].hash : undefined,
         };
-
         const badgeText = computeBadge(badgeState);
 
         new Setting(containerEl)
@@ -203,6 +169,48 @@ export class CatalogSettingsTab extends PluginSettingTab {
     }
   }
 
+  private handleEnableAll(
+    bundle: string,
+    filtered: AssetMeta[],
+    assets: AssetMeta[],
+    state: InstalledState,
+    currentPlatforms: Platform[],
+  ): void {
+    const notInstalled = filtered.filter((a) => !Object.hasOwn(state, a.id));
+    const destructiveTools = notInstalled.flatMap(
+      (a) => partitionTools(a.requires).destructive,
+    );
+    const allPaths = notInstalled.flatMap((a) =>
+      currentPlatforms
+        .filter((p) => supportedPlatforms(a).includes(p))
+        .flatMap((p) => {
+          try { return [targetPath(a, p)]; } catch { return []; }
+        })
+    );
+    // assets is always non-empty (populated from bundles map); notInstalled[0] falls back to it.
+    const firstAsset = notInstalled[0] ?? assets[0];
+    const summary = buildConsentSummary(
+      firstAsset,
+      allPaths,
+      notInstalled.some((a) => scanForInjection(a.body).flagged),
+    );
+    if (destructiveTools.length > 0) {
+      summary.body = `Destructive tools: ${destructiveTools.join(", ")}\n\n${summary.body}`;
+    }
+    new ConsentModal(this.app, summary, () => {
+      void (async () => {
+        for (const a of notInstalled) {
+          await enableAsset(this.fs, a, this.catalog.assets, currentPlatforms, {
+            onConflict: (p) => this.onConflict(p),
+            onUserModified: (p) => this.onConflict(p),
+          });
+        }
+        new Notice(`Enabled ${notInstalled.length} asset(s) in ${bundle}`);
+        this.display();
+      })();
+    }).open();
+  }
+
   private async handleToggle(asset: AssetMeta, value: boolean): Promise<void> {
     try {
       if (value) {
@@ -218,11 +226,10 @@ export class CatalogSettingsTab extends PluginSettingTab {
           void enableAsset(this.fs, asset, this.catalog.assets, currentPlatforms, {
             onConflict: (p) => this.onConflict(p),
             onUserModified: (p) => this.onConflict(p),
-          })
-            .then(() => {
-              new Notice(`Installed ${asset.name}`);
-              this.display();
-            });
+          }).then(() => {
+            new Notice(`Installed ${asset.name}`);
+            this.display();
+          });
         }).open();
       } else {
         await disableAsset(this.fs, asset.id);

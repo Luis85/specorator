@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { targetPath } from "../../src/catalog/platforms";
+import type { AssetMeta } from "../../src/catalog/types";
 
-const a = (type: string) => ({ id: "x", type } as import("../../src/catalog/types").AssetMeta);
+const a = (type: string) => ({ id: "x", type } as AssetMeta);
 
 describe("targetPath (all platforms)", () => {
   it("claude skill/command/agent/hook", () => {

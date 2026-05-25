@@ -37,12 +37,15 @@ const TABLE: Table = {
 };
 
 export function targetPath(asset: AssetMeta, platform: Platform): string {
-  const fn = TABLE[platform]?.[asset.type];
+  const fn = TABLE[platform][asset.type];
   if (!fn)
     throw new Error(`no mapping for ${asset.type} on ${platform}`);
   return fn(asset.id);
 }
 
 export function supportedPlatforms(asset: AssetMeta): Platform[] {
-  return (Object.keys(TABLE) as Platform[]).filter((p) => !!TABLE[p][asset.type]);
+  return (Object.keys(TABLE) as Platform[]).filter((p) => {
+    const row = TABLE[p];
+    return row[asset.type] !== undefined;
+  });
 }

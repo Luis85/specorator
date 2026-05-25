@@ -28,7 +28,7 @@ describe("authored bundles", () => {
       expect(existsSync(p)).toBe(true);
       const lines = (await readFile(p, "utf8")).trim().split("\n").filter(Boolean);
       expect(lines.length).toBeGreaterThanOrEqual(3);
-      lines.forEach((l) => expect(() => JSON.parse(l)).not.toThrow());
+      lines.forEach((l) => { expect(() => JSON.parse(l)).not.toThrow(); });
     }
   });
 
