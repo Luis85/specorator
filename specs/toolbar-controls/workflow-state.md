@@ -1,7 +1,7 @@
 ---
 feature: toolbar-controls
 area: TC
-current_stage: design
+current_stage: spec
 status: active
 last_updated: 2026-05-25
 last_agent: architect
@@ -14,7 +14,7 @@ artifacts:
   research.md: skipped
   requirements.md: accepted (PRD-TC-001; 27 EARS reqs; per-widget backed-vs-seam classified; CLAR-TC-001..003 resolved-by-recommendation)
   design.md: complete (DESIGN-TC-001; Parts A/B/C; ADR-TC-001..004 accepted; CLAR-TC-001..003 ratified)
-  spec.md: pending
+  spec.md: complete (SPEC-TC-001..030; 6 layer groups; EC-TC-1..14; TEST-TC-001..043 + M1/M2/M3; full REQ↔SPEC↔TEST coverage)
   tasks.md: pending
   implementation-log.md: pending
   test-plan.md: pending
@@ -35,7 +35,7 @@ artifacts:
 | 2. Research | `research.md` | skipped |
 | 3. Requirements | `requirements.md` | accepted |
 | 4. Design | `design.md` | complete (ADR-TC-001..004 accepted) |
-| 5. Specification | `spec.md` | pending |
+| 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
@@ -158,4 +158,35 @@ meter, and the `toolbar/*` CSS modules).
                  + getToolbarCapabilities + the per-widget component contracts + TabControls/setControl +
                  foldControlOptions. Sequence the query-option grow + fold first, the catalog port + bridges
                  next, the 9 widgets + view-model last.
+2026-05-25 (architect): Stage-5 COMPLETE. SPEC-TC-001..030 written (6 layer groups: domain 001-006,
+                 infra 007-009, application 010-011, ui 012-025, styles 026, cross-cutting 027-030).
+                 Pins the accepted ADR-TC-001..004 into implementation-ready contracts:
+                 · DOMAIN — appended ChatRuntimeQueryOptions fields `mode?`/`reasoning?: ReasoningChoice`/
+                   `serviceTier?` AFTER appendSystemPrompt (model?/forceColdStart?/appendSystemPrompt?
+                   byte-identical); new src/domain/chat/Reasoning.ts (ReasoningEffort 'high'|'medium'|'low'
+                   + discriminated ReasoningChoice effort|budget); ToolbarCatalog DTOs (Model/Mode/Reasoning/
+                   ServiceTier descriptors) + ToolbarCatalogPort.getCatalog(providerId) (total, no throw) +
+                   TOOLBAR_CATALOG_PORT key; getToolbarCapabilities(): ToolbarCapabilities appended to the
+                   EXISTING ChatRuntimePort seam (supportsMcpTools/reasoningControl/hasServiceTier/
+                   hasModeToggle/permissionMode); TabControls bag.
+                 · PURE TRANSFORMS — foldControlOptions(controls) writes ONLY controls-present (non-default)
+                   values → {} for an untouched toolbar; buildToolbarViewModel(catalog, capabilities,
+                   controls, usage) decides per-widget visible/enabled/hidden, NO providerId branch.
+                 · INFRA — 3-bridge ToolbarCatalogPort (Obsidian Claude-static / Mock scriptable / LS inert)
+                   + getToolbarCapabilities on the 3 runtimes; real Claude capability/catalog = manual legs.
+                 · UI — ToolbarStrip + 8 leaf widgets + UsageMeter (declarative 240° SVG arc), additive
+                   ChatComposer toolbar region + ChatSurface VM wiring + tabsStore controls/setControl/fold.
+                 PINNED-OPEN-ITEMS (the 3 design field-level under-specs, resolved in §0): effort vocab
+                 'high'|'medium'|'low' (lower-case stored); token-budget = descriptor-driven, NO hard-coded
+                 default in P6; USAGE_WARNING_THRESHOLD = 80, warning STRICTLY ABOVE (`percentage > 80`).
+                 14 edge cases (EC-TC-1..14); 27 TEST-TC + 3 manual legs (TEST-TC-M1 real Claude capability/
+                 catalog wiring, M2 parity screenshots, M3 real-CLI folded-options turn). Every REQ-TC +
+                 NFR-TC has a SPEC+TEST chain (§9 coverage table). NO new ADR needed (ADR-TC-001..004 cover
+                 the irreversible choices; spec only refines delegated field detail). NO open clarifications
+                 block the planner. NEXT: /spec:tasks (planner) — decompose SPEC-TC-001..030 into T-TC-NNN.
+                 Suggested sequence (carried from design + this spec): (1) the additive ChatRuntimeQueryOptions
+                 grow + Reasoning.ts + foldControlOptions + tabsStore controls/setControl/fold (freeze the
+                 fold early); (2) ToolbarCatalog DTOs + ToolbarCatalogPort + TOOLBAR_CATALOG_PORT key +
+                 getToolbarCapabilities + the 3 bridges + fake-ports `toolbarCatalog`; (3) buildToolbarViewModel
+                 + the 9 widgets + ChatComposer region + ChatSurface wiring + composable + tokens + i18n.
 ```
