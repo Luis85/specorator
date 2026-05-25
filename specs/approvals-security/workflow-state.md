@@ -1,10 +1,10 @@
 ---
 feature: approvals-security
 area: AS
-current_stage: design
+current_stage: specification
 status: active
 last_updated: 2026-05-26
-last_agent: architect (design)
+last_agent: architect (specification)
 epic: claudian-reboot
 phase: P7
 integration_branch: next
@@ -14,7 +14,7 @@ artifacts:
   research.md: skipped
   requirements.md: accepted (PRD-AS-001; CLAR-AS-001..005 resolved-by-recommendation → P7 architect ADRs, notably ADR-AS-001 ApprovalRuleStorePort)
   design.md: complete (DESIGN-AS-001; ADR-AS-001/002/003 accepted; CLAR-AS-001..005 ratified)
-  spec.md: pending
+  spec.md: complete (SPEC-AS-001; 28 items, 6 layer groups; 33 REQ-AS + 16 NFR-AS chained to TEST-AS; 6 design open items resolved)
   tasks.md: pending
   implementation-log.md: pending
   test-plan.md: pending
@@ -35,7 +35,7 @@ artifacts:
 | 2. Research | `research.md` | skipped |
 | 3. Requirements | `requirements.md` | accepted |
 | 4. Design | `design.md` | complete (DESIGN-AS-001; ADR-AS-001/002/003 accepted) |
-| 5. Specification | `spec.md` | pending |
+| 5. Specification | `spec.md` | complete (SPEC-AS-001; 28 items SPEC-AS-001..028) |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
@@ -183,4 +183,51 @@ updates, the inline approval/plan-mode controllers, `status-panel`/`permission-t
                  shapes, the device-local key + the no-data.json regression assertion, the three-bridge
                  backings, observability (no rule content in logs), and the TEST-AS scenarios. Resolve
                  the six pinned spec-level items above.
+
+2026-05-26 (architect): Stage 5 COMPLETE. Wrote SPEC-AS-001 (specs/approvals-security/spec.md): 28
+                 implementation-ready spec items across 6 layer groups (DOMAIN SPEC-AS-001..006 ·
+                 INFRA 007..009 · APPLICATION 010..011 · UI 012..019 · STYLES 020 · CROSS-CUTTING
+                 021..028). Mirrors the SPEC-TC/SPEC-CA format exactly (layer-grouped items, exact TS
+                 interface blocks, manual-leg call-outs, EC table EC-AS-1..20, U/A/M test split
+                 TEST-AS-001..062 + M1/M2/M3, the §9 coverage table, the §10 quality gate).
+                 PINNED SHAPES: PermissionMode = 'normal'|'plan'|'yolo' (SPEC-AS-001); additive
+                 ChatRuntimeQueryOptions.permissionMode? + TabControls.permissionMode? (SPEC-AS-002,
+                 P0-P6 byte-identical + serialisation test TEST-AS-002); ApprovalDecision grown by
+                 'deny-always' (SPEC-AS-003, 4 members, NG4 render unchanged); the PURE matcher
+                 getActionPattern/getActionDescription/matchesRulePattern (SPEC-AS-004, claudian
+                 ApprovalManager.ts verbatim — bash explicit-wildcard-only, file path-segment
+                 boundaries, other-tool prefix, null-action guard, \→/ normalise, deny-wins; full
+                 truth table SPEC-AS-026); ApprovalRule DTO {id,toolName,actionPattern?,decision,
+                 lifetime,createdAt} + ruleDedupeKey (SPEC-AS-005); ApprovalRuleStorePort
+                 loadRules/addRule/removeRule/clear all Promise<Result> + APPROVAL_RULE_STORE_PORT key
+                 + ToolbarCapabilities.permissionMode WIDEN (SPEC-AS-006); ApprovalManager.decide/
+                 applyDecision/listRules (SPEC-AS-010, mode-gate-first → load → match deny-wins →
+                 prompt → persist; fail-safe-to-prompt on store err); foldControlOptions +permissionMode
+                 guarded non-'normal' clause (SPEC-AS-011).
+                 6 DESIGN OPEN ITEMS RESOLVED in §0: (1) session rules per-SURFACE (one ApprovalManager
+                 per ChatSurface); (2) addRule DEDUPE by (toolName,actionPattern??'',decision) triple;
+                 (3) JSON-fallback ({-leading) pattern stored with actionPattern ABSENT (match-all, no
+                 secret); (4) decide AWAITS loadRules (+ addRule for *-always) before resolving the
+                 callback, second pending request re-evaluates on a fresh load; (5) yolo/mode = per-tab
+                 DRAFT state (reload → normal), not a persisted rule; (6) 'deny-always' label +
+                 ordering (Allow once · Always allow · Deny once · Always deny).
+                 MANUAL LEGS (final epic gate): TEST-AS-M1 real device-local store round-trip +
+                 data.json/vault untouched; TEST-AS-M2 parity screenshots (toggle 3 modes / inline
+                 4-option row / panel / auto-decided turn @ 320/520/720 light+dark); TEST-AS-M3 real
+                 Claude SDK-string mapping + plan-exit setMode; TEST-AS-005 plan-mode edit gating.
+                 COVERAGE: all 33 REQ-AS + 16 NFR-AS chain to ≥1 SPEC-AS and ≥1 TEST-AS (§9). No TBD.
+                 No new ADR (ADR-AS-001..003 cover the architecture; spec only refines field-level
+                 detail the ADRs delegated).
+                 HAND-OFF → /spec:tasks (planner): decompose SPEC-AS-001..028 into T-AS-NNN. Sequence
+                 the additive domain grow FIRST (PermissionMode SPEC-AS-001 + the two optionals
+                 SPEC-AS-002 + the grown ApprovalDecision SPEC-AS-003 + the pure matcher SPEC-AS-004 +
+                 the ApprovalRule DTO SPEC-AS-005) so the engine + the toggle build on frozen types;
+                 then ApprovalRuleStorePort + APPROVAL_RULE_STORE_PORT + the three bridges
+                 (SPEC-AS-006..009) incl. the fake-ports approvalRuleStore member + the scriptable
+                 failure-injection (setFailMode) for TEST-AS-054; then foldControlOptions clause
+                 (SPEC-AS-011) + ApprovalManager (SPEC-AS-010); the UI (PermissionToggle live three-mode
+                 SPEC-AS-012, ApprovalsPanel + ApprovalRuleRow SPEC-AS-013/014, InlineApproval
+                 +deny-always SPEC-AS-015, ChatSurface callback wiring SPEC-AS-016, tabsStore SPEC-AS-017,
+                 composable SPEC-AS-018, wiring SPEC-AS-019) + the --sp-* slice SPEC-AS-020 last.
+                 No open clarifications block the planner.
 ```
