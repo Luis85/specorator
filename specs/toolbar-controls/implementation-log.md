@@ -518,7 +518,7 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   lines ~326-356); `tests/ui/styles/tokens.test.ts` (the `TOOLBAR_CONTROLS_TOKENS`
   presence list + the §4.13 no-leak guard; the §4.12 no-leak block now slices to
   `§4.12`..`§4.13` so the two blocks stay isolated).
-- **Commit:** `<pending>`.
+- **Commit:** `eb8fc96a`.
 - **Outcome:** done. Minted the twelve spec-named P6 tokens in a new `§4.13 — Toolbar
   & controls` block on `.specorator-root`: `--sp-toolbar-gap` (`var(--sp-space-2)`),
   `--sp-toolbar-widget-h` (`24px`), `--sp-toolbar-disabled-opacity` (`0.5`),
@@ -536,3 +536,22 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   cases). `vue-tsc` 0; full lint 0 errors (12 pre-existing warnings, none in touched files).
 - **Deviations:** none. The strip dropdowns reuse the P4 `SpDropdownPanel`/
   `--sp-surface-overlay` pattern, so no new dropdown token is minted (SPEC-TC-026 reuse rule).
+
+## T-TC-030 — RED: provide `TOOLBAR_CATALOG_PORT` + strip mounts (wire-in)
+
+- **Spec/req:** SPEC-TC-025; TEST-TC-001/003 (mount legs), TEST-TC-M1 (wiring leg);
+  REQ-TC-003/010/021; NFR-TC-002.
+- **Files:** `tests/ui/chat/toolbarMount.ts.test.ts` (RED).
+- **Commit:** `<pending>`.
+- **Outcome:** done (RED confirmed). The test mirrors the P5
+  `attachmentsMount.ts.test.ts` template: (a) the standalone path imports
+  `@/ui/main`, spies the `MockBridge.toolbarCatalog` getter, and asserts the getter
+  was read during the mount + the `toolbar-strip` / `toolbar-model` widgets render;
+  (b) the Obsidian-view path mounts `AgentSidebarView.onOpen` over a jsdom obsidian
+  mock and asserts the strip mounts. Both FAIL today because neither entry point
+  provides `TOOLBAR_CATALOG_PORT` (the optional inject resolves `undefined` → no
+  `toolbar` prop → no strip; the `toolbarCatalog` getter is never read). RED:
+  `expected "get toolbarCatalog" to be called at least once` (standalone) +
+  `expected null not to be null` for `toolbar-strip` (Obsidian view). Queried by
+  `data-testid` only.
+- **Deviations:** none.

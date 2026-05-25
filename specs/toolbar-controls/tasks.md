@@ -838,11 +838,11 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** —
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The toolbar tokens added (or fewer if already present — prefer reuse); each justified against a
+  - [x] The toolbar tokens added (or fewer if already present — prefer reuse); each justified against a
         Claudian `toolbar/**` / `context-footer.css` rule (noted for the final review); the `tokens.test`
         contract asserts the additions + the `lint-style-tokens` guard (no raw hex / Obsidian var /
         physical property, TEST-TC-026) is green.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ---
 
