@@ -18,16 +18,25 @@ import {
 	MENTION_DATA_PROVIDER_PORT,
 	PROVIDER_COMMAND_CATALOG_PORT,
 	SHELL_EXEC_PORT,
+	AUX_MODEL_PORT,
+	SELECTION_SOURCE_PORT,
+	SELECTION_HIGHLIGHT_PORT,
 } from '@/infrastructure/bridge/ports';
 import {
 	CHAT_RUNTIME_FACTORY,
 	CONFIRM_DELETE,
 	CHOOSE_FORK_TARGET,
 	INSTRUCTION_CONFIRM,
+	OPEN_INLINE_EDIT,
+	OPEN_IMAGE_PREVIEW,
 } from '@/ui/chat/modalSeam';
+import type { AttachedImage } from '@/domain/chat/attachments';
+import type { AuxModelPort } from '@/domain/ports';
+import type { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge';
 import { ForkTargetModal } from './modals/ForkTargetModal';
 import { DeleteConfirmModal } from './modals/DeleteConfirmModal';
 import { InstructionConfirmModal } from './modals/InstructionConfirmModal';
+import { openInlineEdit, openImagePreview } from './inlineEditLauncher';
 import type SpecoratorPlugin from './main';
 
 /** The single view type the plugin registers (SPEC-PSR-005). */
@@ -121,6 +130,23 @@ export class AgentSidebarView extends ItemView {
 					reject: 'Cancel',
 				}).confirm(),
 			);
+			// P5 (SPEC-CA-026): the cold-start aux + the selection capture/paint ports +
+			// the two Obsidian Modal launchers. The aux is genuinely provided here (the
+			// re-pointed title/refine use cases + InlineEditUseCase consume it — no more
+			// degrade-to-err window, T-CA-011/044). The inline-edit launcher builds the
+			// use case over the aux, opens `InlineEditModal`, and applies the accepted
+			// edit to the active editor; the image-preview launcher opens
+			// `ImagePreviewModal`. These are the ONLY place `obsidian`/the P5 modals are
+			// imported into the wiring — the Vue surface launches them through the seam.
+			app.provide(AUX_MODEL_PORT, this.resolveAuxModel(bridge));
+			app.provide(SELECTION_SOURCE_PORT, bridge.selectionSource);
+			app.provide(SELECTION_HIGHLIGHT_PORT, bridge.selectionHighlight);
+			app.provide(OPEN_INLINE_EDIT, (selectedText: string, notePath?: string) =>
+				openInlineEdit(this.app, this.resolveAuxModel(bridge), bridge, { selectedText, notePath }),
+			);
+			app.provide(OPEN_IMAGE_PREVIEW, (image: AttachedImage) =>
+				openImagePreview(this.app, image),
+			);
 			app.mount(host);
 			this.vueApp = app;
 		}
@@ -132,5 +158,20 @@ export class AgentSidebarView extends ItemView {
 		this.vueApp = null;
 		this.contentEl.empty();
 		return Promise.resolve();
+	}
+
+	/**
+	 * Resolve the cold-start `AuxModelPort` from the runtime bridge (SPEC-CA-026).
+	 * The production `ObsidianBridge` exposes a `createAuxModel()` factory (a fresh
+	 * cold-start runtime per call); the `MockBridge` used by `npm run dev` + the
+	 * mount tests exposes the equivalent `auxModel` getter. This seam tolerates both
+	 * bridge shapes so the surface gets a genuine aux either way (NFR-CA-002).
+	 */
+	private resolveAuxModel(bridge: ObsidianBridge): AuxModelPort {
+		const candidate = bridge as Partial<{
+			createAuxModel: () => AuxModelPort;
+			auxModel: AuxModelPort;
+		}>;
+		return candidate.createAuxModel?.() ?? candidate.auxModel!;
 	}
 }

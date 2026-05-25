@@ -5,6 +5,7 @@ import { AgentSidebarView, VIEW_TYPE_AGENT } from './AgentSidebarView';
 import { SpecoratorSettingTab } from './settings';
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings';
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge';
+import { openInlineEdit } from './inlineEditLauncher';
 import { PluginCore } from '@/core/plugin-core';
 import { ALL_MODULES, type ModuleDescriptor } from '@/modules';
 import { coreSettingsModule } from '@/core/core-settings';
@@ -61,6 +62,28 @@ export default class SpecoratorPlugin extends Plugin {
 			name: 'Open agent sidebar',
 			callback: () => {
 				void this.activateAgentSidebar();
+			},
+		});
+
+		// P5 (SPEC-CA-026, REQ-CA-020): the inline-edit affordance is an editor command
+		// gated on a NON-EMPTY selection — it does not appear / run on an empty one. It
+		// opens the same launcher the sidebar provides (the aux-backed `InlineEditModal`)
+		// and applies the accepted edit to the active editor.
+		this.addCommand({
+			id: 'inline-edit-selection',
+			name: 'Inline edit: edit selection',
+			editorCheckCallback: (checking, editor) => {
+				const selectedText = editor.getSelection();
+				if (selectedText.trim() === '') return false;
+				if (checking) return true;
+				const bridge = this.bridge;
+				if (bridge === null) return true;
+				const notePath = this.app.workspace.getActiveFile()?.path;
+				void openInlineEdit(this.app, bridge.createAuxModel(), bridge, {
+					selectedText,
+					notePath,
+				});
+				return true;
 			},
 		});
 

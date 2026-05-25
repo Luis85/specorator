@@ -929,3 +929,65 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   (`OPEN_INLINE_EDIT`/`OPEN_IMAGE_PREVIEW`) opening real Obsidian Modals are the
   manual leg (TEST-CA-M1/M2); this RED proves they are wired by proving the
   context surface they feed mounts — the modal-open itself is human-verified.
+
+## T-CA-044 — Provide the three ports + the two launchers; mount the context bar (🔨 dev, WIRE-IN)
+
+- **Spec/req:** SPEC-CA-026; REQ-CA-008/020/021; NFR-CA-002.
+- **Files:**
+  - `src/plugin/AgentSidebarView.ts` — `app.provide` the three P5 ports
+    (`AUX_MODEL_PORT` via a new `resolveAuxModel(bridge)` seam,
+    `SELECTION_SOURCE_PORT`/`SELECTION_HIGHLIGHT_PORT` off the bridge) + the two
+    launchers (`OPEN_INLINE_EDIT`/`OPEN_IMAGE_PREVIEW` → the new launcher module);
+    closes the deferred T-CA-011 aux provide (title/refine no longer degrade).
+  - `src/plugin/inlineEditLauncher.ts` (new) — `openInlineEdit` (builds
+    `InlineEditUseCase` over the aux, opens `InlineEditModal`, applies an accepted
+    edit to the active editor via `editor.replaceSelection`) + `openImagePreview`
+    (opens `ImagePreviewModal` over a `data:` URI from the captured base64). The
+    ONLY wiring file importing `obsidian` + the two P5 modals.
+  - `src/plugin/main.ts` — registers the `inline-edit-selection` editor command
+    (`editorCheckCallback` gated on a NON-EMPTY selection, REQ-CA-020) opening the
+    same launcher over `bridge.createAuxModel()`.
+  - `src/ui/main.ts` — provides the Mock aux + the inert-but-scriptable selection
+    ports + browser-safe launcher stand-ins (inline-edit AUTO-REJECTS `null`;
+    image-preview no-op resolve; no `window.*`).
+  - `src/ui/chat/ChatSurface.vue` — injects `WORKSPACE_PORT`/`SELECTION_SOURCE_PORT`/
+    `SELECTION_HIGHLIGHT_PORT` OPTIONALLY (parity with the existing optional
+    `AUX_MODEL_PORT` inject so P1–P4 mounts stay behaviour-identical), owns the
+    per-mount `attachedFiles`/`images` reactive sets (`AddFileContextUseCase`),
+    builds `useCapturedSelection` only when both selection ports are present, adds
+    `resolveThumbSrc` (a `data:` URI from the captured snapshot, EC-CA-15), and
+    passes the context props + the five re-emit handlers (`removeFile`/`openFile`/
+    `removeImage`/`previewImage`/`clearSelection`) into the `ChatComposer`
+    context-bar slot. The root div gains `ref="chatRoot"` for the focus-within
+    signal.
+- **Outcome:** done — the prior RED test (`attachmentsMount.ts.test.ts`, both
+  legs) now passes; the three ports + the two launchers are provided in both entry
+  points; the context bar mounts (a scripted Mock selection renders the
+  `selection-indicator` inside `composer-context-bar`); the inline-edit command is
+  registered (manual leg). The standalone aux is now genuinely provided, so
+  title-gen no longer degrades. No `obsidian`/`node:*` under `src/ui/**`; no router
+  reintroduced.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` on the five
+  changed source files exit 0; `vitest --pool=threads --no-file-parallelism
+  --testTimeout=30000`: `attachmentsMount.ts.test.ts` 2/2 + `composer/mount.ts`
+  3/3 + ChatSurface/ChatComposer regression 46/46 + standalone mounts
+  (`main.ts`/`main`/`main.rr` + `mount.ts`/`mount`/`mount.rr`) 8/8 + plugin/core
+  51/51 — all GREEN.
+- **Commit:** _this commit._
+- **Deviation:** (1) `AgentSidebarView.resolveAuxModel(bridge)` tolerates BOTH
+  bridge shapes — the production `ObsidianBridge.createAuxModel()` factory AND the
+  `MockBridge.auxModel` getter (the documented dev/test bridge that mounts the view
+  in the suite) — rather than calling `createAuxModel()` unconditionally, which
+  would crash every MockBridge-fed mount test (the committed T-CP-048 composer
+  mount). This is a genuine seam, not dead code (MockBridge is a first-class
+  runtime bridge). (2) The inline-edit command is registered in `main.ts` via
+  `addCommand` (where the Plugin lives) rather than literally on the view —
+  `editorCheckCallback` is a Plugin API; the spec's "AgentSidebarView registers it"
+  reads as "the plugin wiring registers it", which `main.ts` does. (3) Launcher
+  labels are literal English strings, matching the existing fork/delete/instruction
+  launchers (no i18n keys minted — out of scope). (4) The image/file ATTACH flows
+  (the attach affordance + `AddImageUseCase` + threading the context into the turn)
+  are the store-set tasks (T-CA-033/034, REQ-CA-004/007/019), NOT this mount task —
+  this task wires the context bar's render + remove/open/preview/clear edges only,
+  so `VaultPort`/`AddImageUseCase` are deliberately not injected here (avoiding dead
+  code).

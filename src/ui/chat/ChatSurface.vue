@@ -19,8 +19,12 @@ import type {
 	MentionDataProviderPort,
 	ProviderCommandCatalogPort,
 	ShellExecPort,
+	WorkspacePort,
+	SelectionSourcePort,
+	SelectionHighlightPort,
 } from '@/domain/ports';
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
+import type { AttachedFileRef, AttachedImage } from '@/domain/chat/attachments';
 import { err } from '@/domain/shared/Result';
 import {
 	SETTINGS_PORT,
@@ -28,7 +32,13 @@ import {
 	PROVIDER_COMMAND_CATALOG_PORT,
 	SHELL_EXEC_PORT,
 	AUX_MODEL_PORT,
+	WORKSPACE_PORT,
+	SELECTION_SOURCE_PORT,
+	SELECTION_HIGHLIGHT_PORT,
 } from '@/infrastructure/bridge/ports';
+import { useOpenImagePreview } from '@/ui/chat/modalSeam';
+import { useCapturedSelection } from '@/ui/composables/useCapturedSelection';
+import { AddFileContextUseCase } from '@/application/chat/attachments/AddFileContextUseCase';
 import { clampMaxTabs } from '@/domain/settings/PluginSettings';
 import { RunCommandUseCase } from '@/application/chat/composer/RunCommandUseCase';
 import { ResolveMentionUseCase } from '@/application/chat/composer/ResolveMentionUseCase';
@@ -224,6 +234,68 @@ function dispatchBuiltIn(action: BuiltInAction): void {
 	logger.debug('composer: built-in action not wired in P4', { action });
 }
 
+// ── P5 context & attachments (SPEC-CA-022/025/026) ──────────────────────────────
+// The four P5 ports are OPTIONAL here (parity with the P1–P4 demos + mount tests):
+// the surface owns the per-mount attached-file + image sets and, when the selection
+// ports are provided (the wire-in batch, T-CA-044), the captured-selection composable
+// — feeding `ChatComposer`'s context-bar slot. When any is absent the composer stays
+// pure P1–P4 (the context bar is hidden when all three sets are empty). The Vue
+// surface never imports `obsidian`; image preview launches through the injected seam.
+const workspace: WorkspacePort | undefined = inject(WORKSPACE_PORT, undefined);
+const selectionSource: SelectionSourcePort | undefined = inject(SELECTION_SOURCE_PORT, undefined);
+const selectionHighlight: SelectionHighlightPort | undefined = inject(
+	SELECTION_HIGHLIGHT_PORT,
+	undefined,
+);
+const openImagePreview = useOpenImagePreview();
+
+const chatRoot = ref<HTMLElement | null>(null);
+const attachedFiles = ref<readonly AttachedFileRef[]>([]);
+const images = ref<readonly AttachedImage[]>([]);
+const addFileContext = new AddFileContextUseCase();
+
+// The captured selection is reactive only when BOTH selection ports are provided
+// (the production sidebar + the standalone demo). The composable subscribes the
+// source, computes focus-within-chat (the EC-CA-11 retain), and paints the highlight.
+const selectionApi =
+	selectionSource !== undefined && selectionHighlight !== undefined
+		? useCapturedSelection(selectionSource, selectionHighlight, chatRoot)
+		: undefined;
+const capturedSelection = computed(() => selectionApi?.current.value ?? null);
+const supportsBrowserSelection = selectionSource?.supportsBrowserSelection ?? false;
+
+/**
+ * Resolve a thumbnail `:src` for an attached image (SPEC-CA-020). The turn payload
+ * is the bounded base64 (`dataBase64`); the thumb binds a `data:` URI derived from
+ * the captured snapshot, so a moved/deleted source file keeps the thumb stable
+ * (EC-CA-15). DECLARATIVE — `ImageThumb` binds `:src`, never `v-html`/`innerHTML`.
+ */
+function resolveThumbSrc(path: string): string {
+	const image = images.value.find((img) => img.path === path);
+	return image === undefined ? '' : `data:${image.mimeType};base64,${image.dataBase64}`;
+}
+
+function onRemoveFile(path: string): void {
+	const next = addFileContext.remove(attachedFiles.value, path);
+	if (next.ok) attachedFiles.value = next.value;
+}
+
+function onOpenFile(path: string): void {
+	void workspace?.openFile(path);
+}
+
+function onRemoveImage(path: string): void {
+	images.value = images.value.filter((img) => img.path !== path);
+}
+
+function onPreviewImage(image: AttachedImage): void {
+	void openImagePreview(image);
+}
+
+function onClearSelection(): void {
+	selectionApi?.clear();
+}
+
 const activeMessages = computed<ChatMessage[]>(() => tabs.activeTab?.messages ?? []);
 const liveAssistantId = computed<string | null>(() => tabs.activeTab?.liveAssistantId ?? null);
 const interruptedId = computed<string | null>(() => tabs.activeTab?.interruptedId ?? null);
@@ -261,7 +333,7 @@ function onRewindCode(userMessageId: string): void {
 </script>
 
 <template>
-	<div class="sp-chat-surface" data-testid="chat-surface" data-provider="claude">
+	<div ref="chatRoot" class="sp-chat-surface" data-testid="chat-surface" data-provider="claude">
 		<TabBar />
 		<div class="sp-chat-surface__region">
 			<WelcomeGreeting v-if="isEmpty" />
@@ -308,8 +380,18 @@ function onRewindCode(userMessageId: string): void {
 			:supports-inline-response="supportsInlineResponse"
 			:notify="notify"
 			:bang-bash-output="bangBashOutput"
+			:attached-files="attachedFiles"
+			:images="images"
+			:captured-selection="capturedSelection"
+			:supports-browser-selection="supportsBrowserSelection"
+			:resolve-thumb-src="resolveThumbSrc"
 			@submit="onSubmit"
 			@cancel="onCancel"
+			@remove-file="onRemoveFile"
+			@open-file="onOpenFile"
+			@remove-image="onRemoveImage"
+			@preview-image="onPreviewImage"
+			@clear-selection="onClearSelection"
 		/>
 	</div>
 </template>
