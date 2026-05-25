@@ -48,23 +48,20 @@ export function resolveImageMime(path: string): ImageMimeType | null {
 
 /**
  * Encode raw image bytes as base64 — NO data-URI prefix (the runtime/CLI
- * prompt-assembly owns the framing, SPEC-CA-002). Uses `btoa` in the browser /
- * Obsidian and `Buffer` in Node. Pure given the bytes; total — empty bytes encode
- * to `''`, never throws. The `mimeType` is part of the contract (the caller has
- * already resolved + gated it); it is not embedded in the output.
+ * prompt-assembly owns the framing, SPEC-CA-002). Uses the global `btoa`
+ * (available in the browser, Obsidian's Electron renderer, and Node ≥ 16 — the
+ * vitest runtime). Pure given the bytes; total — empty bytes encode to `''`,
+ * never throws. The `mimeType` is part of the contract (the caller has already
+ * resolved + gated it); it is not embedded in the output.
  */
 export function encodeImageBase64(bytes: Uint8Array, _mimeType: ImageMimeType): string {
 	if (bytes.length === 0) return '';
-	if (typeof btoa === 'function') {
-		let binary = '';
-		// Chunk the byte→char fold to avoid a huge intermediate apply on large images.
-		const CHUNK = 0x8000;
-		for (let i = 0; i < bytes.length; i += CHUNK) {
-			const slice = bytes.subarray(i, i + CHUNK);
-			binary += String.fromCharCode(...slice);
-		}
-		return btoa(binary);
+	let binary = '';
+	// Chunk the byte→char fold to avoid a huge intermediate apply on large images.
+	const CHUNK = 0x8000;
+	for (let i = 0; i < bytes.length; i += CHUNK) {
+		const slice = bytes.subarray(i, i + CHUNK);
+		binary += String.fromCharCode(...slice);
 	}
-	// Node fallback (e.g. SSR/tests without a DOM `btoa`).
-	return Buffer.from(bytes).toString('base64');
+	return btoa(binary);
 }

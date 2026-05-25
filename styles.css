@@ -297,6 +297,31 @@
 		--sp-dropdown-anim-duration: 0s;
 	}
 }
+
+/* §4.12 — Context & attachments (P5, SPEC-CA-027). file-context / file-link
+ * chips, the image thumbnail + preview modal, the selection highlight, and the
+ * inline-edit modal. Each token is a token-layer var lookup — no hex, no raw
+ * Obsidian var outside this layer, no physical CSS property (NFR-CA-007,
+ * lint-style-tokens guard). The word-diff preview rides the §4.9 P2 diff tokens
+ * unchanged (`--sp-diff-insert-bg`/`--sp-diff-delete-bg`/`--sp-diff-gutter`/
+ * `--sp-diff-max-height`) — no new diff token. Values justified against the
+ * claudian `style/{file-context,file-link,image-*,inline-edit}.css` rules. */
+.specorator-root {
+	/* file + image chips (file-context.css chip surface) */
+	--sp-chip-bg: var(--sp-bg-secondary);
+	--sp-chip-border: var(--sp-border);
+	--sp-chip-radius: var(--sp-radius-sm);
+	/* context bar chip-row spacing */
+	--sp-context-bar-gap: var(--sp-space-2);
+	/* image thumbnail box (image-*.css thumbnail) */
+	--sp-image-thumb-size: 48px;
+	/* full-size image preview modal cap (image-modal css) */
+	--sp-image-modal-max: 80vh;
+	/* selection highlight tint (SelectionHighlight; interactive-accent wash) */
+	--sp-selection-highlight-bg: var(--sp-interactive-accent-translucent);
+	/* inline-edit modal width (inline-edit.css) */
+	--sp-inline-edit-modal-w: 540px;
+}
 /*
  * Specorator named-keyframes layer (ADR-AUX-002, spec.md §1.3.6 / §3.4 / §4.6).
  *
@@ -1158,7 +1183,131 @@
 	font-size: var(--sp-font-size-sm);
 }
 
-.specorator-root :where(.sp-chat-composer[data-v-268bcf20]) {
+.specorator-root :where(.sp-file-chips[data-v-c5925007]) {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--sp-context-bar-gap);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.specorator-root :where(.sp-file-chips__chip[data-v-c5925007]) {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--sp-space-1);
+	border: 1px solid var(--sp-chip-border);
+	border-radius: var(--sp-chip-radius);
+	background: var(--sp-chip-bg);
+	padding-inline: var(--sp-space-2);
+}
+.specorator-root :where(.sp-file-chips__link[data-v-c5925007]) {
+	border: none;
+	background: transparent;
+	color: var(--sp-text-normal);
+	font-size: var(--sp-font-size-sm);
+	cursor: pointer;
+	padding-block: var(--sp-space-1);
+}
+.specorator-root :where(.sp-file-chips__name[data-v-c5925007]) {
+	unicode-bidi: plaintext;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-inline-size: 18ch;
+}
+.specorator-root :where(.sp-file-chips__remove[data-v-c5925007]) {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	background: transparent;
+	color: var(--sp-text-muted);
+	cursor: pointer;
+	line-height: 1;
+}
+.specorator-root :where(.sp-file-chips__remove[data-v-c5925007]:hover) {
+	color: var(--sp-text-normal);
+}
+
+.specorator-root :where(.sp-image-thumb[data-v-8ca7bcea]) {
+	position: relative;
+	display: inline-flex;
+}
+.specorator-root :where(.sp-image-thumb__preview[data-v-8ca7bcea]) {
+	border: 1px solid var(--sp-chip-border);
+	border-radius: var(--sp-chip-radius);
+	background: var(--sp-chip-bg);
+	padding: 0;
+	cursor: pointer;
+	overflow: hidden;
+	line-height: 0;
+}
+.specorator-root :where(.sp-image-thumb__img[data-v-8ca7bcea]) {
+	inline-size: var(--sp-image-thumb-size);
+	block-size: var(--sp-image-thumb-size);
+	object-fit: cover;
+	display: block;
+}
+.specorator-root :where(.sp-image-thumb__remove[data-v-8ca7bcea]) {
+	position: absolute;
+	inset-block-start: 0;
+	inset-inline-end: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	background: var(--sp-bg-primary);
+	color: var(--sp-text-muted);
+	cursor: pointer;
+	line-height: 1;
+	border-radius: var(--sp-radius-full);
+}
+.specorator-root :where(.sp-image-thumb__remove[data-v-8ca7bcea]:hover) {
+	color: var(--sp-text-normal);
+}
+
+.specorator-root :where(.sp-image-context-bar[data-v-74422b9a]) {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--sp-context-bar-gap);
+}
+
+.specorator-root :where(.sp-selection-indicator[data-v-672ffd7e]) {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--sp-space-1);
+	border: 1px solid var(--sp-chip-border);
+	border-radius: var(--sp-chip-radius);
+	background: var(--sp-chip-bg);
+	padding-inline: var(--sp-space-2);
+	padding-block: var(--sp-space-1);
+}
+.specorator-root :where(.sp-selection-indicator__label[data-v-672ffd7e]) {
+	font-size: var(--sp-font-size-sm);
+	color: var(--sp-text-normal);
+	unicode-bidi: plaintext;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-inline-size: 28ch;
+}
+.specorator-root :where(.sp-selection-indicator__browser[data-v-672ffd7e]),
+.specorator-root :where(.sp-selection-indicator__clear[data-v-672ffd7e]) {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	background: transparent;
+	color: var(--sp-text-muted);
+	cursor: pointer;
+	line-height: 1;
+}
+.specorator-root :where(.sp-selection-indicator__browser[data-v-672ffd7e]:hover),
+.specorator-root :where(.sp-selection-indicator__clear[data-v-672ffd7e]:hover) {
+	color: var(--sp-text-normal);
+}
+
+.specorator-root :where(.sp-chat-composer[data-v-0f7a7d2c]) {
 	display: flex;
 	flex-direction: column;
 	min-block-size: var(--sp-input-min-h);
@@ -1167,16 +1316,22 @@
 	background: var(--sp-bg-primary);
 	padding: var(--sp-space-3);
 }
-.specorator-root :where(.sp-chat-composer--plan[data-v-268bcf20]) {
+.specorator-root :where(.sp-chat-composer__context[data-v-0f7a7d2c]) {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-context-bar-gap);
+	padding-block-end: var(--sp-space-2);
+}
+.specorator-root :where(.sp-chat-composer--plan[data-v-0f7a7d2c]) {
 	border-color: var(--sp-plan-border);
 }
-.specorator-root :where(.sp-chat-composer--instruction[data-v-268bcf20]) {
+.specorator-root :where(.sp-chat-composer--instruction[data-v-0f7a7d2c]) {
 	border-color: var(--sp-instruction-border);
 }
-.specorator-root :where(.sp-chat-composer--bang-bash[data-v-268bcf20]) {
+.specorator-root :where(.sp-chat-composer--bang-bash[data-v-0f7a7d2c]) {
 	border-color: var(--sp-bash-border);
 }
-.specorator-root :where(.sp-chat-composer__textarea[data-v-268bcf20]) {
+.specorator-root :where(.sp-chat-composer__textarea[data-v-0f7a7d2c]) {
 	flex: 1;
 	border: none;
 	background: transparent;
@@ -1189,15 +1344,15 @@
 	max-block-size: var(--sp-textarea-max-h);
 	outline: none;
 }
-.specorator-root :where(.sp-chat-composer--mono .sp-chat-composer__textarea[data-v-268bcf20]) {
+.specorator-root :where(.sp-chat-composer--mono .sp-chat-composer__textarea[data-v-0f7a7d2c]) {
 	font-family: var(--sp-font-mono);
 }
-.specorator-root :where(.sp-chat-composer__toolbar[data-v-268bcf20]) {
+.specorator-root :where(.sp-chat-composer__toolbar[data-v-0f7a7d2c]) {
 	display: flex;
 	justify-content: flex-end;
 	padding-block-start: var(--sp-space-2);
 }
-.specorator-root :where(.sp-chat-composer__send[data-v-268bcf20]) {
+.specorator-root :where(.sp-chat-composer__send[data-v-0f7a7d2c]) {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -1209,7 +1364,7 @@
 	color: var(--sp-text-on-accent);
 	cursor: pointer;
 }
-.specorator-root :where(.sp-chat-composer__send[data-v-268bcf20]:disabled) {
+.specorator-root :where(.sp-chat-composer__send[data-v-0f7a7d2c]:disabled) {
 	opacity: 0.4;
 	cursor: default;
 }
@@ -1372,31 +1527,31 @@
 }
 }
 
-.specorator-root :where(.sp-chat-surface[data-v-6dfa5b5d]) {
+.specorator-root :where(.sp-chat-surface[data-v-9b6c5763]) {
 	display: flex;
 	flex-direction: column;
 	block-size: 100%;
 	gap: var(--sp-space-3);
 	padding: var(--sp-space-5);
 }
-.specorator-root :where(.sp-chat-surface__region[data-v-6dfa5b5d]) {
+.specorator-root :where(.sp-chat-surface__region[data-v-9b6c5763]) {
 	display: flex;
 	flex-direction: column;
 	flex: 1;
 	min-block-size: 0;
 }
-.specorator-root :where(.sp-chat-surface__busy[data-v-6dfa5b5d]) {
+.specorator-root :where(.sp-chat-surface__busy[data-v-9b6c5763]) {
 	padding-block-start: var(--sp-space-3);
 	color: var(--sp-accent);
 	font-size: var(--sp-font-size-sm);
 	font-style: italic;
 }
-.specorator-root :where(.sp-chat-surface__actions[data-v-6dfa5b5d]) {
+.specorator-root :where(.sp-chat-surface__actions[data-v-9b6c5763]) {
 	display: flex;
 	align-items: center;
 	gap: var(--sp-space-2);
 }
-.specorator-root :where(.sp-chat-surface__compact[data-v-6dfa5b5d]) {
+.specorator-root :where(.sp-chat-surface__compact[data-v-9b6c5763]) {
 	border: 1px solid var(--sp-border);
 	border-radius: var(--sp-radius-md);
 	background: transparent;

@@ -47,7 +47,9 @@ export class ImagePreviewModal extends Modal {
 			attr: { type: 'button', 'data-testid': 'image-preview-close' },
 		});
 		close.setText(this.labels.close);
-		close.addEventListener('click', () => this.close());
+		close.addEventListener('click', () => {
+			this.close();
+		});
 	}
 
 	override onClose(): void {

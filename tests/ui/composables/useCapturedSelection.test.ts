@@ -53,7 +53,9 @@ function mountProbe(
 			const captured = useCapturedSelection(source, highlight, chatRoot);
 			handle = {
 				current: () => captured.current.value,
-				clear: () => captured.clear(),
+				clear: () => {
+					captured.clear();
+				},
 			};
 			return () =>
 				h('div', { ref: chatRoot, 'data-testid': 'chat-root' }, [
