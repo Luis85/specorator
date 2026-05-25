@@ -510,3 +510,29 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   production `provide(TOOLBAR_CATALOG_PORT, ...)` wire-in (T-TC-030..032). The
   `lint-style-tokens` guard scans only `src/ui/agent/**` and does not validate token
   existence, so the forward token references do not break the gate.
+
+## T-TC-029 — `toolbar/*` `--sp-*` token slice + tokens-contract update (STYLES)
+
+- **Spec/req:** SPEC-TC-026; TEST-TC-026; NFR-TC-008.
+- **Files:** `src/ui/styles/tokens.css` (new §4.13 block appended after §4.12,
+  lines ~326-356); `tests/ui/styles/tokens.test.ts` (the `TOOLBAR_CONTROLS_TOKENS`
+  presence list + the §4.13 no-leak guard; the §4.12 no-leak block now slices to
+  `§4.12`..`§4.13` so the two blocks stay isolated).
+- **Commit:** `<pending>`.
+- **Outcome:** done. Minted the twelve spec-named P6 tokens in a new `§4.13 — Toolbar
+  & controls` block on `.specorator-root`: `--sp-toolbar-gap` (`var(--sp-space-2)`),
+  `--sp-toolbar-widget-h` (`24px`), `--sp-toolbar-disabled-opacity` (`0.5`),
+  `--sp-toggle-track` (`var(--sp-border)`), `--sp-toggle-thumb` (`var(--sp-bg-secondary)`),
+  `--sp-toggle-active` (`var(--sp-accent)`), `--sp-usage-arc-track` (`var(--sp-border)`),
+  `--sp-usage-arc-fill` (`var(--sp-accent)`), `--sp-usage-arc-warn` (`var(--sp-warning)`),
+  `--sp-usage-arc-size` (`16px`), `--sp-usage-arc-stroke` (`2px`), `--sp-service-tier-glow`
+  (`0 0 0 1px var(--sp-toggle-active)`). Each is a token-layer var lookup or a bare
+  dimension/shadow — no hex, no raw Obsidian var, no physical property. The nine toolbar
+  widgets now resolve every token they reference (verified by grep: `ToolbarStrip` gap,
+  `UsageMeter` arc track/fill/warn/size, `Mode/Mcp/Permission/ServiceTier/External`
+  track/active/disabled-opacity/glow). `--sp-toggle-thumb` + `--sp-usage-arc-stroke` are
+  minted (spec-table tokens) though the meter uses JS-constant `STROKE`/`SIZE` for the SVG
+  geometry — kept for parity + future reuse. `tokens.test` now 15/15 green (two new §4.13
+  cases). `vue-tsc` 0; full lint 0 errors (12 pre-existing warnings, none in touched files).
+- **Deviations:** none. The strip dropdowns reuse the P4 `SpDropdownPanel`/
+  `--sp-surface-overlay` pattern, so no new dropdown token is minted (SPEC-TC-026 reuse rule).
