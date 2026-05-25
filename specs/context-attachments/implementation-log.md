@@ -186,7 +186,7 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
 - **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint
   src/infrastructure/obsidian/ObsidianBridge.ts` clean; `vitest run
   tests/infrastructure` 252/252 green (no regression).
-- **Commit:** _this commit._
+- **Commit:** `7470224`.
 - **Deviation:** the abort is tracked via a small mutable holder object
   (`{ aborted: boolean }`) flipped by the `abort` listener, rather than re-reading
   `signal.aborted` after the await — TS flow-narrows `signal.aborted` to
@@ -194,3 +194,20 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   `=== true` check unsatisfiable (TS2367). The holder is the standard escape; the
   behaviour (abort → err) is unchanged. Also split the drain/map into two private
   statics to clear the complexity-10 lint ceiling.
+
+### T-CA-010 — RED re-point title-gen + instruction-refine onto `AuxModelPort` (🧪 qa)
+
+- **Spec/test:** TEST-CA-018; SPEC-CA-018, ADR-CA-002 §3; REQ-CA-021;
+  NFR-CA-004/010.
+- **Files:** `tests/application/threads/GenerateTitleUseCase.test.ts`,
+  `tests/application/chat/composer/RefineInstructionUseCase.test.ts` (migrated —
+  inject the scriptable `MockAuxModel` instead of a `MockChatRuntime`; same
+  observable assertions: title parsed / refined + clarification outcomes /
+  err on empty / err on aux error / never surfaces `showError`; the prompt +
+  systemPrompt passed to the aux are asserted; the chunk-scripting +
+  "ignores tool/thinking" cases collapsed; a byte-identity block imports +
+  calls `titleGeneration.ts` / `instructionRefine.ts` directly).
+- **Outcome:** done — RED confirmed (`vue-tsc -p tsconfig.lint.json` fails: a
+  `MockAuxModel` is not assignable to the constructors' still-`ChatRuntimePort`
+  parameter — 9 TS2345 errors).
+- **Commit:** _this commit._
