@@ -533,9 +533,9 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-006, T-TC-010
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/ui/composables/useToolbarCatalogPort.test.ts` exists, naming the TEST-TC-003 composable
+  - [x] `tests/ui/composables/useToolbarCatalogPort.test.ts` exists, naming the TEST-TC-003 composable
         leg, covering inject-when-provided + throw-when-unprovided.
-  - [ ] Test fails (RED) — `useToolbarCatalogPort` does not yet exist.
+  - [x] Test fails (RED) — `useToolbarCatalogPort` does not yet exist.
 
 ### T-TC-018 🔨 — `useToolbarCatalogPort.ts`
 
@@ -547,8 +547,8 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-017
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The prior RED test (TEST-TC-003 composable leg) now passes.
-  - [ ] No `obsidian` import under `src/ui/**`; `npm run typecheck` + `npm run lint` + `npm run test`
+  - [x] The prior RED test (TEST-TC-003 composable leg) now passes.
+  - [x] No `obsidian` import under `src/ui/**`; `npm run typecheck` + `npm run lint` + `npm run test`
         green; implementation-log entry added.
 
 ### T-TC-019 🧪 — RED: `ModelSelector.vue` + `ModeSelector.vue` (POs co-located)
@@ -571,10 +571,10 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-016
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/toolbar/ModelSelector.test.ts` + `ModelSelector.po.ts` +
+  - [x] `tests/ui/chat/toolbar/ModelSelector.test.ts` + `ModelSelector.po.ts` +
         `tests/ui/chat/toolbar/ModeSelector.test.ts` + `ModeSelector.po.ts` exist, naming the listed
         TEST-TC legs, querying by `data-testid` only.
-  - [ ] Tests fail (RED) — `ModelSelector.vue` / `ModeSelector.vue` do not yet exist.
+  - [x] Tests fail (RED) — `ModelSelector.vue` / `ModeSelector.vue` do not yet exist.
 
 ### T-TC-020 🔨 — `ModelSelector.vue` + `ModeSelector.vue`
 
@@ -592,10 +592,10 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-019
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-TC-010/011/013/014/040/041 A legs) now pass.
-  - [ ] `<script setup>`; no `v-html`/`innerHTML`; no `obsidian` import; keyboard-operable +
+  - [x] The prior RED tests (TEST-TC-010/011/013/014/040/041 A legs) now pass.
+  - [x] `<script setup>`; no `v-html`/`innerHTML`; no `obsidian` import; keyboard-operable +
         forced-colors/reduced-motion; keyed strings via `TranslationPort`; PageObject + `data-testid` only.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-TC-021 🧪 — RED: `ThinkingSelector.vue` + `ServiceTierToggle.vue` (POs co-located)
 
@@ -616,10 +616,10 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-016
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/toolbar/ThinkingSelector.test.ts` + `ThinkingSelector.po.ts` +
+  - [x] `tests/ui/chat/toolbar/ThinkingSelector.test.ts` + `ThinkingSelector.po.ts` +
         `tests/ui/chat/toolbar/ServiceTierToggle.test.ts` + `ServiceTierToggle.po.ts` exist, naming the
         listed TEST-TC legs, querying by `data-testid` only.
-  - [ ] Tests fail (RED) — `ThinkingSelector.vue` / `ServiceTierToggle.vue` do not yet exist.
+  - [x] Tests fail (RED) — `ThinkingSelector.vue` / `ServiceTierToggle.vue` do not yet exist.
 
 ### T-TC-022 🔨 — `ThinkingSelector.vue` + `ServiceTierToggle.vue`
 
@@ -636,10 +636,10 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-021
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-TC-017/018/019/020/040/041 A legs) now pass.
-  - [ ] `<script setup>`; no `v-html`/`innerHTML`; no `obsidian` import; keyboard-operable +
+  - [x] The prior RED tests (TEST-TC-017/018/019/020/040/041 A legs) now pass.
+  - [x] `<script setup>`; no `v-html`/`innerHTML`; no `obsidian` import; keyboard-operable +
         forced-colors/reduced-motion; keyed strings via `TranslationPort`; PageObject + `data-testid` only.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-TC-023 🧪 — RED: `PermissionToggle.vue` + `McpSelector.vue` + `ExternalContextControl.vue` (the honest-defer seam widgets; POs co-located)
 
@@ -664,12 +664,12 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-016
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/toolbar/PermissionToggle.test.ts` + `.po.ts`,
+  - [x] `tests/ui/chat/toolbar/PermissionToggle.test.ts` + `.po.ts`,
         `tests/ui/chat/toolbar/McpSelector.test.ts` + `.po.ts`,
         `tests/ui/chat/toolbar/ExternalContextControl.test.ts` + `.po.ts` exist, naming the listed
         TEST-TC legs, querying by `data-testid` only, covering the honest-defer (no rule/picker/server/
         turn-field/`data.json` write).
-  - [ ] Tests fail (RED) — the three seam widgets do not yet exist.
+  - [x] Tests fail (RED) — the three seam widgets do not yet exist.
 
 ### T-TC-024 🔨 — `PermissionToggle.vue` + `McpSelector.vue` + `ExternalContextControl.vue`
 
@@ -689,12 +689,12 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-023
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-TC-015/016/021/022/023 A legs) now pass; the three seams persist no
+  - [x] The prior RED tests (TEST-TC-015/016/021/022/023 A legs) now pass; the three seams persist no
         rule / open no picker / connect no server / write no turn field or `data.json` (EC-TC-9).
-  - [ ] `<script setup>`; no `v-html`/`innerHTML`; no `obsidian` import; no `window.confirm`/`alert`/
+  - [x] `<script setup>`; no `v-html`/`innerHTML`; no `obsidian` import; no `window.confirm`/`alert`/
         `prompt`; no `require('electron')`; keyed strings via `TranslationPort`; PageObject + `data-testid`
         only.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-TC-025 🧪 — RED: `UsageMeter.vue` + `ToolbarStrip.vue` (POs co-located)
 
@@ -719,11 +719,11 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-016, T-TC-020, T-TC-022, T-TC-024
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/toolbar/UsageMeter.test.ts` + `UsageMeter.po.ts` +
+  - [x] `tests/ui/chat/toolbar/UsageMeter.test.ts` + `UsageMeter.po.ts` +
         `tests/ui/chat/toolbar/ToolbarStrip.test.ts` + `ToolbarStrip.po.ts` exist, naming the listed
         TEST-TC legs, querying by `data-testid` only, covering the declarative SVG arc (no `v-html`) + the
         Claudian-order strip + the hidden-slot-collapse.
-  - [ ] Tests fail (RED) — `UsageMeter.vue` / `ToolbarStrip.vue` do not yet exist.
+  - [x] Tests fail (RED) — `UsageMeter.vue` / `ToolbarStrip.vue` do not yet exist.
 
 ### T-TC-026 🔨 — `UsageMeter.vue` + `ToolbarStrip.vue`
 
@@ -744,12 +744,12 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-025
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-TC-001/024/025/026/027 A legs) now pass; the arc is a declarative SVG
+  - [x] The prior RED tests (TEST-TC-001/024/025/026/027 A legs) now pass; the arc is a declarative SVG
         binding (no `v-html`); the strip lays Claudian order + collapses hidden slots; the existing P2
         `UsageInfo.vue` is unchanged.
-  - [ ] `<script setup>`; no `v-html`/`innerHTML`; no `obsidian` import; no new `package.json` runtime dep;
+  - [x] `<script setup>`; no `v-html`/`innerHTML`; no `obsidian` import; no new `package.json` runtime dep;
         keyed strings via `TranslationPort`; forced-colors/reduced-motion; PageObject + `data-testid` only.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-TC-027 🧪 — RED: `tabsStore` `controls`/`setControl`/fold + `ChatComposer` toolbar region + `ChatSurface` VM wiring (PageObject extensions)
 
@@ -775,11 +775,11 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-014, T-TC-016, T-TC-026, T-TC-018
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/stores/tabsStore.ts.test.ts` (the P6 `controls`/`setControl`/fold extension),
+  - [x] `tests/ui/stores/tabsStore.ts.test.ts` (the P6 `controls`/`setControl`/fold extension),
         `tests/ui/chat/ChatComposer.test.ts` + `ChatComposer.po.ts` (the toolbar-region extension), and
         `tests/ui/chat/ChatSurface.test.ts` + `ChatSurface.po.ts` (the VM-wiring extension) are extended,
         naming the listed TEST-TC legs, querying by `data-testid` only.
-  - [ ] Tests fail (RED) — `controls`/`setControl`/the fold, the composer toolbar region, and the surface
+  - [x] Tests fail (RED) — `controls`/`setControl`/the fold, the composer toolbar region, and the surface
         VM wiring do not yet exist.
 
 ### T-TC-028 🔨 — `tabsStore` `controls`/`setControl`/fold + `ChatComposer` toolbar region + `ChatSurface` VM wiring (additive) 🪓
@@ -806,13 +806,13 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Slice plan:** may slice as (a) the `tabsStore` `controls`/`setControl`/fold, (b) the `ChatComposer`
   toolbar region, (c) the `ChatSurface` VM wiring.
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-TC-001/002/003/004/006/012/042/043 store/composer/surface legs) now
+  - [x] The prior RED tests (TEST-TC-001/002/003/004/006/012/042/043 store/composer/surface legs) now
         pass; with no `toolbar` prop / no `TOOLBAR_CATALOG_PORT` the composer is byte-identical to P5
         (EC-TC-14); an untouched-toolbar turn writes no new query field (EC-TC-1/6); a tab switch
         re-derives every widget (EC-TC-8/10).
-  - [ ] `<script setup>`; additive only (P3/P4/P5 members byte-identical); no `v-html`/`innerHTML`; no
+  - [x] `<script setup>`; additive only (P3/P4/P5 members byte-identical); no `v-html`/`innerHTML`; no
         `obsidian` import; no `providerId` branch; DTO-only store boundary; PageObject + `data-testid` only.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ---
 

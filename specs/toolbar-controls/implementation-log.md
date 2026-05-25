@@ -374,3 +374,139 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   table ("visible/enabled" / "visible with `enabled:false`"). `buildThinking` returns
   `control: capabilities.reasoningControl` + `options: []` on the hidden branch (the
   interface's `control`/`options` are non-optional — a safe, total default).
+
+## T-TC-017 / T-TC-018 — `useToolbarCatalogPort` composable (🧪 RED → 🔨 green)
+
+- **Spec/req:** SPEC-TC-024; REQ-TC-003/010; NFR-TC-002/003. TEST-TC-003 composable leg.
+- **Files:** `tests/ui/composables/useToolbarCatalogPort.test.ts` (new, 44 lines — RED),
+  `src/ui/composables/useToolbarCatalogPort.ts` (new, 24 lines — green).
+- **Commits:** RED `a7eafbe`, green `a93043a`.
+- **Outcome:** done. RED confirmed first (module absent → transform error). The
+  composable injects `TOOLBAR_CATALOG_PORT` and throws a "ToolbarCatalogPort was not
+  provided" error when unprovided — mirrors `useVaultPort`/`useAuxModelPort` exactly
+  (ADR-008, one-port-per-composable, no aggregate). 2/2 green; `vue-tsc` 0; full
+  `npm run lint` 0 errors.
+- **Deviations:** none.
+
+## T-TC-019 / T-TC-020 — `ModelSelector` + `ModeSelector` + toolbar i18n (RED -> green)
+
+- **Spec/req:** SPEC-TC-013/014/028; REQ-TC-010/011/013/014/040/041; NFR-TC-003/004/009/014.
+  TEST-TC-010/011/013/014/040/041 A legs.
+- **Files:** `tests/ui/chat/toolbar/ModelSelector.{test.ts,po.ts}`,
+  `ModeSelector.{test.ts,po.ts}` (RED); `src/ui/chat/toolbar/ModelSelector.vue`,
+  `ModeSelector.vue`, `src/ui/i18n/locales/{en,de}.ts` (`agent.chat.toolbar.*` keys, green).
+- **Commits:** RED `17cb21b6`, green `695a5503`.
+- **Outcome:** done. RED confirmed (components absent). `ModelSelector` = grouped
+  keyboard listbox: combobox button showing the selected label (falls back to the
+  persisted id on an empty catalog, EC-TC-3); `role="listbox"` with
+  `role="presentation"` group separators where `option.group` differs; `aria-selected`
+  per option; Arrow/Home/End move `aria-activedescendant`; Enter/Space select -> `pick`;
+  Escape closes + restores focus; empty-notice row. `ModeSelector` = descriptor-driven
+  `role="switch"` toggle (returns nothing on a hidden slice; flips to the other value).
+  12/12 green; `vue-tsc` 0; full `npm run lint` 0 errors.
+- **Deviations:** none. The full toolbar i18n key set (en+de, SPEC-TC-028) landed with
+  this first widget commit since the keys are first referenced here.
+
+## T-TC-021 / T-TC-022 — `ThinkingSelector` + `ServiceTierToggle` (RED -> green)
+
+- **Spec/req:** SPEC-TC-016/017/028; REQ-TC-017/018/019/020/040/041; NFR-TC-003/004/009/014.
+  TEST-TC-017/018/019/020/040/041 A legs.
+- **Files:** `tests/ui/chat/toolbar/ThinkingSelector.{test.ts,po.ts}`,
+  `ServiceTierToggle.{test.ts,po.ts}` (RED); `src/ui/chat/toolbar/ThinkingSelector.vue`,
+  `ServiceTierToggle.vue` (green).
+- **Commits:** RED `62a054fe`, green `83e70acd`.
+- **Outcome:** done. RED confirmed. `ThinkingSelector` reuses the model-selector listbox
+  a11y over `ReasoningChoice` options; effort label + localised level / budget label +
+  token amount; selecting emits `set(choice)`; a stable `choiceKey` drives the `v-for`.
+  `ServiceTierToggle` = capability-gated zap `role="switch"`; toggling emits
+  `toggle(!active)` (declared-now/emitted-P9). 11/11 green; `vue-tsc` 0; full lint 0.
+- **Deviations:** none.
+
+## T-TC-023 / T-TC-024 — `PermissionToggle` + `McpSelector` + `ExternalContextControl` seams (RED -> green)
+
+- **Spec/req:** SPEC-TC-015/018/019/028/029/030; REQ-TC-015/016/021/022/023/041;
+  NFR-TC-003/004/011/014. TEST-TC-015/016/021/022/023 A legs.
+- **Files:** `tests/ui/chat/toolbar/PermissionToggle.{test.ts,po.ts}`,
+  `McpSelector.{test.ts,po.ts}`, `ExternalContextControl.{test.ts,po.ts}` (RED);
+  `src/ui/chat/toolbar/PermissionToggle.vue`, `McpSelector.vue`,
+  `ExternalContextControl.vue` (green).
+- **Commits:** RED `e8cbe25a`, green `9f9f6ccf`.
+- **Outcome:** done. RED confirmed. The three honest-defer seams (counter-metric: zero
+  live-looking-but-dead controls). `PermissionToggle` shows the PLAN label vs a disabled
+  `role="switch"`; activating -> `NotificationPort.showInfo`, no rule/`data.json`.
+  `McpSelector` renders nothing on a hidden slice; the visible shell opens a
+  visible-empty "coming later" panel, connects nothing. `ExternalContextControl` is
+  always a disabled folder; activating -> a notice, no picker/path. 8/8 green; `vue-tsc`
+  0; full lint 0.
+- **Deviations:** the seam-widget RED assertions check the SPECIFIC persist/connect/add
+  events are `undefined` (not `emitted() === {}`), because `@vue/test-utils` records the
+  native DOM `click` on the root `<button>` (a test-utils artifact, not a domain emit).
+  The widgets declare NO custom emits, so the honest-defer contract is the real assertion.
+
+## T-TC-025 / T-TC-026 — `UsageMeter` + `ToolbarStrip` (RED -> green)
+
+- **Spec/req:** SPEC-TC-012/020/027/028; REQ-TC-001/003/024/025/026/027;
+  NFR-TC-003/004/008/009/012/014. TEST-TC-001/024/025/026/027 A legs.
+- **Files:** `tests/ui/chat/toolbar/UsageMeter.{test.ts,po.ts}`,
+  `ToolbarStrip.{test.ts,po.ts}` (RED); `src/ui/chat/toolbar/UsageMeter.vue`,
+  `ToolbarStrip.vue` (green).
+- **Commits:** RED `de11dc69`, green `25b9b128`.
+- **Outcome:** done. RED confirmed. `UsageMeter` = a declarative 240-degree SVG arc
+  gauge: the arc path `d` is computed in-repo (a 240-degree sweep from 150 clockwise) and
+  the fill `stroke-dasharray` from `vm.percentage` (no chart lib, no `v-html`); a "{n}%"
+  label + `role="img"` `aria-label` carry the value; `vm.warning` (> 80) switches to the
+  warning style + a `/compact` title; hidden when usage null. `ToolbarStrip` is the ONLY
+  view-model reader; lays the eight widgets in Claudian order, gates each on
+  `vm.<widget>.visibility.kind === 'visible'` (hidden slot collapses), re-emits the four
+  backed changes. 10/10 green; `vue-tsc` 0; full lint 0.
+- **Deviations:** the SVG large-arc flag is the literal `1` (the 240-degree sweep is
+  always the long way round) - inlined to satisfy `no-unnecessary-condition`.
+
+## T-TC-027 / T-TC-028 — `tabsStore` controls/fold + `ChatComposer` region + `ChatSurface` wiring (RED -> green)
+
+- **Spec/req:** SPEC-TC-021/022/023/029; REQ-TC-001/002/003/004/012/014/018/020/042;
+  NFR-TC-001/003/004/005. TEST-TC-001/002/003/004/006/012/042/043 store/composer/surface
+  legs.
+- **Files:** `tests/ui/stores/tabsStore.controls.test.ts`,
+  `tests/ui/chat/ChatComposer.toolbar.test.ts`, `tests/ui/chat/ChatComposer.po.ts`,
+  `tests/ui/chat/ChatSurface.toolbar.test.ts`, `tests/ui/chat/ChatSurface.po.ts` (RED);
+  `src/ui/stores/tabsStore.ts`, `src/ui/chat/ChatComposer.vue`,
+  `src/ui/chat/ChatSurface.vue` (green).
+- **Commits:** RED `49b966bf`, green `e421574f`.
+- **Outcome:** done. RED confirmed. **The fold coexists with the P5 context fold:**
+  `tabsStore._turnQueryOptions()` now runs TWO additive + guarded folds - (1) the P4
+  `customSystemPrompt` -> `appendSystemPrompt` seam (unchanged), and (2) the new P6
+  `foldControlOptions(active.controls)` -> `model`/`mode`/`reasoning`/`serviceTier`. The
+  result spreads the control options then the prompt; when BOTH yield nothing it returns
+  `undefined` - byte-identical to P5 (EC-TC-1/6). The P5 context fold lives separately in
+  `buildTurnRequest` (the `request` shape, unchanged), so both coexist by construction.
+  `TabState` grows `controls: TabControls` (seeded `{}` in `freshTab`, reset in
+  `loadIntoTab`); `setControl` is a draft-input mutation. `controls` is NOT serialised
+  into the persisted `ConversationRecord` (field-by-field construction in `_persistTab`
+  excludes it - SPEC-TC-030). `ChatComposer` gains the optional `toolbar?:
+  ToolbarViewModel` region + four re-emits; byte-identical to P5 when absent.
+  `ChatSurface` injects `TOOLBAR_CATALOG_PORT` OPTIONALLY and derives `toolbarVm`
+  reactively from `getCatalog('claude')` + `tabs.activeRuntime()?.getToolbarCapabilities()`
+  + `activeTab.controls` + `activeTab.usage`; absent port OR absent caps -> `undefined`
+  -> pure P5. 12/12 P6 wiring green; 95/95 P5 regression green; `vue-tsc` 0; full lint 0;
+  no `providerId` branch; no `obsidian`/`v-html` in `src/ui/chat/toolbar/**`.
+- **Deviations:** `ChatSurface.onToggleServiceTier(active)` resolves the descriptor's
+  active/inactive token from `toolbarVm.value.serviceTier.descriptor` (the boolean intent
+  -> the stored value), per SPEC-TC-017. A no-descriptor toggle is a no-op.
+
+### UI-batch (T-TC-017..028) verification summary
+
+- `npx vue-tsc -p tsconfig.lint.json --noEmit`: 0 errors (whole project).
+- `npm run lint` (whole project): 0 errors, 12 pre-existing warnings (none in toolbar
+  files - all `vue/one-component-per-file` in test harnesses).
+- `npx vitest run`: the batch (`useToolbarCatalogPort` + `tests/ui/chat/toolbar/**`) =
+  43/43 green; the three P6 wiring files = 12/12 green.
+- P5 regression (`tabsStore` / `ChatComposer{,.ts}` /
+  `ChatSurface{,.ts,.context,.inline}`): 95/95 green - additivity holds.
+- **Out of scope (other batches):** the `toolbar/*` `--sp-*` token slice (T-TC-029,
+  STYLES) - the widget styles reference the spec-named tokens (`--sp-toolbar-widget-h`,
+  `--sp-toggle-track`/`--sp-toggle-active`, `--sp-usage-arc-*`, `--sp-toolbar-gap`,
+  `--sp-toolbar-disabled-opacity`, `--sp-service-tier-glow`) which T-TC-029 mints; the
+  production `provide(TOOLBAR_CATALOG_PORT, ...)` wire-in (T-TC-030..032). The
+  `lint-style-tokens` guard scans only `src/ui/agent/**` and does not validate token
+  existence, so the forward token references do not break the gate.

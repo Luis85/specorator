@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-TC-001; Parts A/B/C; ADR-TC-001..004 accepted; CLAR-TC-001..003 ratified)
   spec.md: complete (SPEC-TC-001..030; 6 layer groups; EC-TC-1..14; TEST-TC-001..043 + M1/M2/M3; full REQ↔SPEC↔TEST coverage)
   tasks.md: complete (TASKS-TC-001; 35 tasks T-TC-001..035; DDD batches DOMAIN→INFRA→APP→UI→STYLES→WIRE-IN→GATE; RED-before-green; 2 manual legs T-TC-033/034; NO guard-relax)
-  implementation-log.md: in-progress (DOMAIN T-TC-001..008 + INFRA T-TC-009..012 + APPLICATION T-TC-013..016 done; UI/STYLES/WIRE-IN/GATE batches remain)
+  implementation-log.md: in-progress (DOMAIN T-TC-001..008 + INFRA T-TC-009..012 + APPLICATION T-TC-013..016 + UI T-TC-017..028 done; STYLES T-TC-029 + WIRE-IN T-TC-030..032 + GATE T-TC-033..035 remain)
   test-plan.md: in-progress (guard-verification note + TEST-TC-M1/M2/M3 manual legs + DOMAIN-batch automated status; test-report at Stage 8)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (ADR-TC-001..004 accepted) |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete (TASKS-TC-001) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-TC-001..008 + INFRA T-TC-009..012 + APPLICATION T-TC-013..016 done) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-TC-001..008 + INFRA T-TC-009..012 + APPLICATION T-TC-013..016 + UI T-TC-017..028 done; STYLES/WIRE-IN/GATE remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (`test-plan.md` scaffolded; report at Stage 8) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -292,4 +292,39 @@ meter, and the `toolbar/*` CSS modules).
                  from process.cwd(); assertions unchanged). NEXT: the UI batch (T-TC-017..025, owner
                  qa→dev) — useToolbarCatalogPort + ToolbarStrip + the 8 leaf widgets + UsageMeter +
                  ChatComposer/ChatSurface/tabsStore wiring, each with a co-located data-testid PageObject.
+2026-05-25 (dev): Stage-7 UI batch (T-TC-017..028) COMPLETE on feature/toolbar-controls.
+                 RED-before-green, one RED + one green commit per task. Commits: a7eafbe/a93043a
+                 (T-TC-017/018 — useToolbarCatalogPort inject-or-throw, mirrors useVaultPort),
+                 17cb21b6/695a5503 (T-TC-019/020 — ModelSelector grouped keyboard listbox +
+                 ModeSelector role=switch toggle + the full agent.chat.toolbar.* en+de i18n key set),
+                 62a054fe/83e70acd (T-TC-021/022 — ThinkingSelector effort/budget listbox +
+                 ServiceTierToggle zap toggle), e8cbe25a/9f9f6ccf (T-TC-023/024 — the three honest-defer
+                 seams PermissionToggle/McpSelector/ExternalContextControl), de11dc69/25b9b128
+                 (T-TC-025/026 — UsageMeter declarative 240-degree SVG arc + ToolbarStrip container),
+                 49b966bf/e421574f (T-TC-027/028 — tabsStore controls/setControl/fold + ChatComposer
+                 toolbar region + ChatSurface VM wiring). Every .vue has a co-located data-testid
+                 PageObject (ADR-009). Verification: vue-tsc 0 (whole project); npm run lint 0 errors
+                 (12 pre-existing warnings, none in toolbar files); the batch (useToolbarCatalogPort +
+                 tests/ui/chat/toolbar/**) 43/43 green + the three P6 wiring files 12/12 green; the P5
+                 regression (tabsStore / ChatComposer{,.ts} / ChatSurface{,.ts,.context,.inline})
+                 95/95 green — ADDITIVITY HOLDS (no P0–P5 member renamed/removed; composer + the P5
+                 context fold + composer-mode behaviour byte-identical when no toolbar present). The P6
+                 control fold COEXISTS with the P5 context fold: _turnQueryOptions runs the P4
+                 appendSystemPrompt fold AND foldControlOptions(controls) into the SAME query options
+                 (both additive+guarded → undefined when both empty); the P5 context fold lives
+                 independently in buildTurnRequest (the request shape). ChatSurface sources caps/usage/
+                 controls via OPTIONAL inject(TOOLBAR_CATALOG_PORT, undefined) + tabs.activeRuntime()?.
+                 getToolbarCapabilities() — absent port OR absent caps → toolbarVm undefined → pure P5.
+                 No providerId branch (grep clean); no obsidian/v-html in src/ui/chat/toolbar/**.
+                 Deviations: (1) the seam-widget RED assertions check specific persist/connect/add
+                 events are undefined (not emitted()==={}) since test-utils records the native button
+                 click; the widgets declare no custom emits. (2) UsageMeter large-arc flag inlined as 1
+                 (constant 240-degree sweep) to satisfy no-unnecessary-condition. (3) ChatSurface
+                 onToggleServiceTier resolves the descriptor active/inactive token from the VM. NEXT:
+                 STYLES T-TC-029 (the toolbar/* --sp-* token slice — the widget styles already reference
+                 the spec-named tokens --sp-toolbar-widget-h/--sp-toggle-*/--sp-usage-arc-*/
+                 --sp-toolbar-gap/--sp-toolbar-disabled-opacity/--sp-service-tier-glow which T-TC-029
+                 mints), then WIRE-IN T-TC-030..032 (provide TOOLBAR_CATALOG_PORT in AgentSidebarView +
+                 ui/main.ts; mount + dev smoke), then GATE T-TC-033..035 (the human-run manual legs
+                 TEST-TC-M1/M2/M3 + the feature DoD verify chain).
 ```
