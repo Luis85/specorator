@@ -129,11 +129,15 @@ const bangBashOutput = shallowRef<BangBashOutput | null>(null);
 
 const composerEnabled = mentions !== undefined && catalog !== undefined && shell !== undefined;
 
-// The composer binds to one runtime for the plan/inline capability gate + the
-// inline-block callback channel (SPEC-CP-002/017). Built via the same per-tab
-// factory the store uses, so under a single-runtime mock the composer's runtime IS
-// the streaming runtime (the inline request the runtime pulls renders here).
-const composerRuntime: ChatRuntimePort | null = composerEnabled ? createRuntime() : null;
+// R-CP-002: the composer binds its plan/inline capability gate + inline-block
+// callback channel (SPEC-CP-002/017) to the ACTIVE TAB's runtime — the SAME per-tab
+// instance the store streams `sendMessage`/`query` on (`tabs.activeRuntime()`). This
+// is the streaming runtime whose reducer-emitted ask_user_question / exit_plan_mode /
+// approval_request must reach the rendered queue, NOT a fresh orphan. The first tab +
+// its runtime are seeded synchronously by `bindTabDeps` above, so it exists here.
+const composerRuntime: ChatRuntimePort | null = composerEnabled
+	? tabs.activeRuntime() ?? null
+	: null;
 
 const supportsInlineResponse = composerRuntime?.getCapabilities().supportsInlineResponse ?? false;
 

@@ -380,6 +380,18 @@ export const useTabsStore = defineStore('tabs', {
 			tab.liveAssistantId = null;
 		},
 
+		/**
+		 * R-CP-002: the ACTIVE tab's runtime — the same per-tab instance `sendMessage`
+		 * streams on (held OUTSIDE reactive state). The composer binds its inline-block
+		 * channel + capability reads to this so a streaming-runtime-pulled
+		 * ask_user_question / exit_plan_mode / approval_request reaches the rendered
+		 * queue (no orphan runtime). `undefined` before the first tab is seeded.
+		 */
+		activeRuntime(): ChatRuntimePort | undefined {
+			const id = this.activeTabId;
+			return id === null ? undefined : this._deps(id)?.runtime;
+		},
+
 		/** The active tab's runtime fork/rewind capability flags (read through the port). */
 		activeCapabilities(): RuntimeCapabilities {
 			const id = this.activeTabId;
