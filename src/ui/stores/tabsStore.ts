@@ -376,7 +376,15 @@ export const useTabsStore = defineStore('tabs', {
 		activeCapabilities(): RuntimeCapabilities {
 			const id = this.activeTabId;
 			const runtime = id === null ? undefined : this._deps(id)?.runtime;
-			return runtime?.getCapabilities() ?? { supportsFork: false, supportsRewind: false };
+			return (
+				runtime?.getCapabilities() ?? {
+					supportsFork: false,
+					supportsRewind: false,
+					// P4 additive (SPEC-CP-002): no runtime → nothing capable.
+					supportsPlanMode: false,
+					supportsInlineResponse: false,
+				}
+			);
 		},
 
 		/** True iff the active runtime supports fork (gates the per-message control). */

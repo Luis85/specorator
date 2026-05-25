@@ -30,10 +30,14 @@ async function drain(gen: AsyncGenerator<StreamChunk>): Promise<StreamChunk[]> {
 }
 
 describe('MockChatRuntime grown members (TEST-TS-016 runtime U leg)', () => {
-	it('getCapabilities() -> {supportsFork:true,supportsRewind:true}', () => {
+	it('getCapabilities() -> fork/rewind true + P4 plan/inline true (default capable)', () => {
+		// P4 (SPEC-CP-009): the Mock defaults capable so the answerable inline blocks
+		// exercise by default; a test flips them via setSupports* for the gated branch.
 		expect(new MockChatRuntime().getCapabilities()).toEqual({
 			supportsFork: true,
 			supportsRewind: true,
+			supportsPlanMode: true,
+			supportsInlineResponse: true,
 		});
 	});
 
@@ -83,7 +87,13 @@ describe('MockChatRuntime cold-start side-query (TEST-TS-020 backing)', () => {
 describe('FixtureChatRuntime grown members (parity)', () => {
 	it('reports the same capabilities + recorded session ops', () => {
 		const runtime = new FixtureChatRuntime();
-		expect(runtime.getCapabilities()).toEqual({ supportsFork: true, supportsRewind: true });
+		// P4 (SPEC-CP-010): the demo gates BOTH inline flags false (read-only inline).
+		expect(runtime.getCapabilities()).toEqual({
+			supportsFork: true,
+			supportsRewind: true,
+			supportsPlanMode: false,
+			supportsInlineResponse: false,
+		});
 		runtime.resumeSession('sess-demo');
 		runtime.setResumeCheckpoint('demo-a1');
 		expect(runtime.getResumedSessionId()).toBe('sess-demo');

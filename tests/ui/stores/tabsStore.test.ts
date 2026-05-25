@@ -32,7 +32,12 @@ import type { RuntimeCapabilities } from '@/domain/ports';
  */
 class NoRewindRuntime extends MockChatRuntime {
 	override getCapabilities(): RuntimeCapabilities {
-		return { supportsFork: true, supportsRewind: false };
+		return {
+			supportsFork: true,
+			supportsRewind: false,
+			supportsPlanMode: true,
+			supportsInlineResponse: true,
+		};
 	}
 }
 

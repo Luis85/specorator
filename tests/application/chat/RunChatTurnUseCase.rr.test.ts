@@ -107,8 +107,17 @@ class ScriptedRuntime implements ChatRuntimePort {
 	resumeSession(): void {}
 	setResumeCheckpoint(): void {}
 	getCapabilities(): RuntimeCapabilities {
-		return { supportsFork: true, supportsRewind: true };
+		return {
+			supportsFork: true,
+			supportsRewind: true,
+			supportsPlanMode: true,
+			supportsInlineResponse: true,
+		};
 	}
+	// P4 additive members (SPEC-CP-002) — no-op stubs to satisfy the grown port.
+	setAskUserQuestionCallback(): void {}
+	setExitPlanModeCallback(): void {}
+	setApprovalCallback(): void {}
 }
 
 const REQUEST: ChatTurnRequest = { text: 'hi' };

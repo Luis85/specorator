@@ -11,6 +11,14 @@ import type {
 	Unsubscriber,
 	RuntimeCapabilities,
 } from '@/domain/ports';
+import type {
+	AskUserQuestionRequest,
+	AskUserQuestionAnswer,
+	ExitPlanModeRequest,
+	ExitPlanModeDecision,
+	ApprovalRequest,
+	ApprovalDecision,
+} from '@/domain/chat/inline';
 
 /**
  * The canned demo usage DTO — a small, plausible context-window snapshot so the
@@ -192,7 +200,36 @@ export class FixtureChatRuntime implements ChatRuntimePort {
 	}
 
 	getCapabilities(): RuntimeCapabilities {
-		return { supportsFork: true, supportsRewind: true };
+		// P4 (SPEC-CP-010): the browser demo reports BOTH inline flags false so the
+		// gated read-only inline-block state is demonstrable in the demo (the correct
+		// rendering, not a missing feature).
+		return {
+			supportsFork: true,
+			supportsRewind: true,
+			supportsPlanMode: false,
+			supportsInlineResponse: false,
+		};
+	}
+
+	// ── P4 additive members (SPEC-CP-002/010, ADR-CP-004) ───────────────────────
+	// The fixture runtime never round-trips a mid-turn interactive answer (demo),
+	// so the setters store-no-op. The channel exists; the answerable affordance is
+	// gated off by `supportsInlineResponse: false`.
+
+	setAskUserQuestionCallback(
+		_cb: (req: AskUserQuestionRequest) => Promise<AskUserQuestionAnswer | null>,
+	): void {
+		// no-op: the demo gates inline response off (supportsInlineResponse: false)
+	}
+
+	setExitPlanModeCallback(
+		_cb: (req: ExitPlanModeRequest) => Promise<ExitPlanModeDecision | null>,
+	): void {
+		// no-op
+	}
+
+	setApprovalCallback(_cb: (req: ApprovalRequest) => Promise<ApprovalDecision | null>): void {
+		// no-op
 	}
 
 	/** Test accessor: the last session id bound via {@link resumeSession}. */

@@ -10,6 +10,14 @@ import type {
 	Unsubscriber,
 	RuntimeCapabilities,
 } from '@/domain/ports';
+import type {
+	AskUserQuestionRequest,
+	AskUserQuestionAnswer,
+	ExitPlanModeRequest,
+	ExitPlanModeDecision,
+	ApprovalRequest,
+	ApprovalDecision,
+} from '@/domain/chat/inline';
 
 /**
  * A script entry: a bare string (shorthand for a `{type:'text'}` chunk) or any
@@ -144,6 +152,18 @@ export class MockChatRuntime implements ChatRuntimePort {
 	private resumedSessionId: string | null = null;
 	private resumeCheckpoint: string | null = null;
 	private lastForceColdStart = false;
+	// P4 (SPEC-CP-009): scriptable capability flags + captured inline-block callbacks.
+	private supportsPlanMode = true;
+	private supportsInlineResponse = true;
+	private askUserQuestionCallback:
+		| ((req: AskUserQuestionRequest) => Promise<AskUserQuestionAnswer | null>)
+		| null = null;
+	private exitPlanModeCallback:
+		| ((req: ExitPlanModeRequest) => Promise<ExitPlanModeDecision | null>)
+		| null = null;
+	private approvalCallback:
+		| ((req: ApprovalRequest) => Promise<ApprovalDecision | null>)
+		| null = null;
 
 	constructor(script: MockChatScriptEntry[] = DEFAULT_SCRIPT) {
 		// Drop any trailing `done` — the generator owns the terminator.
@@ -235,7 +255,61 @@ export class MockChatRuntime implements ChatRuntimePort {
 	}
 
 	getCapabilities(): RuntimeCapabilities {
-		return { supportsFork: true, supportsRewind: true };
+		return {
+			supportsFork: true,
+			supportsRewind: true,
+			// P4 (SPEC-CP-009): scriptable — defaults capable so the answerable inline
+			// blocks exercise by default; a test flips `setSupportsInlineResponse(false)`
+			// / `setSupportsPlanMode(false)` to drive the non-capable branch.
+			supportsPlanMode: this.supportsPlanMode,
+			supportsInlineResponse: this.supportsInlineResponse,
+		};
+	}
+
+	// ── P4 additive members (SPEC-CP-002/009/011, ADR-CP-004) ───────────────────
+	// Scriptable callback channels: the setters CAPTURE the registered callback so
+	// a test can invoke it (driving an ask-user/exit-plan/approval request in both
+	// the capable + non-capable transport branch) and assert the resolved decision.
+
+	setAskUserQuestionCallback(
+		cb: (req: AskUserQuestionRequest) => Promise<AskUserQuestionAnswer | null>,
+	): void {
+		this.askUserQuestionCallback = cb;
+	}
+
+	setExitPlanModeCallback(
+		cb: (req: ExitPlanModeRequest) => Promise<ExitPlanModeDecision | null>,
+	): void {
+		this.exitPlanModeCallback = cb;
+	}
+
+	setApprovalCallback(cb: (req: ApprovalRequest) => Promise<ApprovalDecision | null>): void {
+		this.approvalCallback = cb;
+	}
+
+	/** Test scriptable: flip the plan-mode capability flag. */
+	setSupportsPlanMode(value: boolean): void {
+		this.supportsPlanMode = value;
+	}
+
+	/** Test scriptable: flip the inline-response capability flag (capable/non-capable driver). */
+	setSupportsInlineResponse(value: boolean): void {
+		this.supportsInlineResponse = value;
+	}
+
+	/** Test driver: invoke the registered ask-user-question callback (the runtime's pull). */
+	emitAskUserQuestion(req: AskUserQuestionRequest): Promise<AskUserQuestionAnswer | null> {
+		return this.askUserQuestionCallback?.(req) ?? Promise.resolve(null);
+	}
+
+	/** Test driver: invoke the registered exit-plan-mode callback. */
+	emitExitPlanMode(req: ExitPlanModeRequest): Promise<ExitPlanModeDecision | null> {
+		return this.exitPlanModeCallback?.(req) ?? Promise.resolve(null);
+	}
+
+	/** Test driver: invoke the registered approval callback. */
+	emitApprovalRequest(req: ApprovalRequest): Promise<ApprovalDecision | null> {
+		return this.approvalCallback?.(req) ?? Promise.resolve(null);
 	}
 
 	/** Test accessor: the last session id bound via {@link resumeSession}. */

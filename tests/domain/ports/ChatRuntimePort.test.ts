@@ -41,12 +41,13 @@ void _resetSession;
 void _onReadyStateChange;
 void _isReady;
 
-// Still-deferred members must NOT be present (P3 added only the three resume/
-// checkpoint/capability members — not these).
-const _noApprovalSetter: Equals<HasKey<ChatRuntimePort, 'setApprovalCallback'>, false> = true;
+// P4 (SPEC-CP-002) appended the inline-block callback setters, so
+// `setApprovalCallback` is now PRESENT; the exact-fifteen contract lives in
+// `ChatRuntimePort.ts.test.ts`. The still-deferred `rewind`/`steer` stay absent.
+const _hasApprovalSetter: Equals<HasKey<ChatRuntimePort, 'setApprovalCallback'>, true> = true;
 const _noRewind: Equals<HasKey<ChatRuntimePort, 'rewind'>, false> = true;
 const _noSteer: Equals<HasKey<ChatRuntimePort, 'steer'>, false> = true;
-void _noApprovalSetter;
+void _hasApprovalSetter;
 void _noRewind;
 void _noSteer;
 

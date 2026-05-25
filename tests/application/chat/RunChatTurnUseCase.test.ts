@@ -160,7 +160,25 @@ class ScriptedRuntime implements ChatRuntimePort {
 	}
 
 	getCapabilities(): RuntimeCapabilities {
-		return { supportsFork: true, supportsRewind: true };
+		return {
+			supportsFork: true,
+			supportsRewind: true,
+			supportsPlanMode: true,
+			supportsInlineResponse: true,
+		};
+	}
+
+	// P4 additive members (SPEC-CP-002) — no-op stubs to satisfy the grown port.
+	setAskUserQuestionCallback(): void {
+		/* no-op for the test */
+	}
+
+	setExitPlanModeCallback(): void {
+		/* no-op for the test */
+	}
+
+	setApprovalCallback(): void {
+		/* no-op for the test */
 	}
 }
 
