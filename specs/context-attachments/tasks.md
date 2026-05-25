@@ -743,10 +743,10 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-013, T-CA-026
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/composables/useAuxModelPort.test.ts`, `tests/ui/composables/useSelectionSourcePort.test.ts`,
+  - [x] `tests/ui/composables/useAuxModelPort.test.ts`, `tests/ui/composables/useSelectionSourcePort.test.ts`,
         `tests/ui/composables/useSelectionHighlightPort.test.ts`, and
         `tests/ui/composables/useCapturedSelection.test.ts` exist, naming the listed TEST-CA legs.
-  - [ ] Tests fail (RED) — the four composables do not yet exist.
+  - [x] Tests fail (RED) — the four composables do not yet exist.
 
 ### T-CA-030 🔨 — Port composables + `useCapturedSelection`
 
@@ -762,8 +762,8 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-029
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-CA-013/016 composable legs) now pass.
-  - [ ] No `obsidian` import under `src/ui/**`; DTO-only; `npm run typecheck` + `npm run lint` +
+  - [x] The prior RED tests (TEST-CA-013/016 composable legs) now pass.
+  - [x] No `obsidian` import under `src/ui/**`; DTO-only; `npm run typecheck` + `npm run lint` +
         `npm run test` green; implementation-log entry added.
 
 ### T-CA-031 🧪 — RED: `FileChips.vue` (PageObject `FileChips.po.ts`)
@@ -781,9 +781,9 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-022, T-CA-030
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/FileChips.test.ts` + `tests/ui/chat/FileChips.po.ts` exist, naming the listed
+  - [x] `tests/ui/chat/FileChips.test.ts` + `tests/ui/chat/FileChips.po.ts` exist, naming the listed
         TEST-CA legs, querying by `data-testid` only.
-  - [ ] Tests fail (RED) — `FileChips.vue` does not yet exist.
+  - [x] Tests fail (RED) — `FileChips.vue` does not yet exist.
 
 ### T-CA-032 🔨 — `FileChips.vue`
 
@@ -799,10 +799,10 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-031
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-CA-001/003 A legs + TEST-CA-005 + TEST-CA-031 file leg) now pass.
-  - [ ] `<script setup>`; **no `v-html`/`innerHTML`** (NFR-CA-003); **no `window.confirm`/`alert`/`prompt`**;
+  - [x] The prior RED tests (TEST-CA-001/003 A legs + TEST-CA-005 + TEST-CA-031 file leg) now pass.
+  - [x] `<script setup>`; **no `v-html`/`innerHTML`** (NFR-CA-003); **no `window.confirm`/`alert`/`prompt`**;
         no `obsidian` import; keyboard-operable + forced-colors/reduced-motion; PageObject + `data-testid` only.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-CA-033 🧪 — RED: `ImageContextBar.vue` + `ImageThumb.vue` (POs co-located)
 
@@ -819,10 +819,10 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-024, T-CA-030
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/ImageContextBar.test.ts` + `tests/ui/chat/ImageContextBar.po.ts` +
+  - [x] `tests/ui/chat/ImageContextBar.test.ts` + `tests/ui/chat/ImageContextBar.po.ts` +
         `tests/ui/chat/ImageThumb.test.ts` + `tests/ui/chat/ImageThumb.po.ts` exist, naming the listed
         TEST-CA legs, querying by `data-testid` only.
-  - [ ] Tests fail (RED) — `ImageContextBar.vue` / `ImageThumb.vue` do not yet exist.
+  - [x] Tests fail (RED) — `ImageContextBar.vue` / `ImageThumb.vue` do not yet exist.
 
 ### T-CA-034 🔨 — `ImageContextBar.vue` + `ImageThumb.vue`
 
@@ -838,10 +838,10 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-033
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-CA-007 A leg + TEST-CA-009 + TEST-CA-011) now pass.
-  - [ ] `<script setup>`; declarative `:src` (no `v-html`/`innerHTML`, NFR-CA-003); no `obsidian` import;
+  - [x] The prior RED tests (TEST-CA-007 A leg + TEST-CA-009 + TEST-CA-011) now pass.
+  - [x] `<script setup>`; declarative `:src` (no `v-html`/`innerHTML`, NFR-CA-003); no `obsidian` import;
         no `window.confirm`/`alert`/`prompt`; PageObject + `data-testid` only; keyboard + forced-colors.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-CA-035 🧪 — RED: `SelectionIndicator.vue` (PO co-located; gated browser affordance)
 
@@ -859,9 +859,9 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-026, T-CA-030
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/SelectionIndicator.test.ts` + `tests/ui/chat/SelectionIndicator.po.ts` exist,
+  - [x] `tests/ui/chat/SelectionIndicator.test.ts` + `tests/ui/chat/SelectionIndicator.po.ts` exist,
         naming the listed TEST-CA legs, querying by `data-testid` only, covering the gated browser affordance.
-  - [ ] Tests fail (RED) — `SelectionIndicator.vue` does not yet exist.
+  - [x] Tests fail (RED) — `SelectionIndicator.vue` does not yet exist.
 
 ### T-CA-036 🔨 — `SelectionIndicator.vue`
 
@@ -875,10 +875,10 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-035
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-CA-015 A leg + TEST-CA-018b A leg) now pass, incl. EC-CA-7.
-  - [ ] `<script setup>`; text label (not colour alone); the browser affordance gated; no `obsidian`
+  - [x] The prior RED tests (TEST-CA-015 A leg + TEST-CA-018b A leg) now pass, incl. EC-CA-7.
+  - [x] `<script setup>`; text label (not colour alone); the browser affordance gated; no `obsidian`
         import; no `v-html`; no `window.confirm`/`alert`/`prompt`; PageObject + `data-testid` only.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-CA-037 🧪 — RED: `modalSeam.ts` additions (`OpenInlineEditFn` / `OpenImagePreviewFn` + keys + fallback composables)
 
@@ -894,9 +894,9 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-003
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/ui/chat/modalSeam.ts.test.ts` (the P5 additions) exists, naming TEST-CA-020, covering the
+  - [x] `tests/ui/chat/modalSeam.ts.test.ts` (the P5 additions) exists, naming TEST-CA-020, covering the
         two handles + keys + the auto-reject/no-op fallbacks + the four P3/P4 handles unchanged.
-  - [ ] Tests fail (RED) — the inline-edit + image-preview seam handles do not yet exist.
+  - [x] Tests fail (RED) — the inline-edit + image-preview seam handles do not yet exist.
 
 ### T-CA-038 🔨 — `modalSeam.ts` `OpenInlineEditFn` + `OpenImagePreviewFn` handles + keys + composables
 
@@ -910,9 +910,9 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-037
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The prior RED test (TEST-CA-020 fallback leg) now passes; the four P3/P4 seam handles
+  - [x] The prior RED test (TEST-CA-020 fallback leg) now passes; the four P3/P4 seam handles
         byte-identical; the fallbacks never silently apply.
-  - [ ] No `obsidian` import; no `window.*`; `npm run typecheck` + `npm run lint` + `npm run test` green;
+  - [x] No `obsidian` import; no `window.*`; `npm run typecheck` + `npm run lint` + `npm run test` green;
         implementation-log entry added.
 
 ### T-CA-039 🔨 — `InlineEditModal.ts` + `ImagePreviewModal.ts` (Obsidian `Modal`, coverage-excluded) 🪓
@@ -945,13 +945,13 @@ TASKS-CP-001) on the `next` integration branch.
 - **Slice plan:** may slice as (a) the `InlineEditModal` state machine + `DiffView` reuse, (b) the
   `ImagePreviewModal`.
 - **Definition of done:**
-  - [ ] Both are Obsidian `Modal` subclasses in `src/plugin/modals/`; **no `window.confirm`/`alert`/
+  - [x] Both are Obsidian `Modal` subclasses in `src/plugin/modals/`; **no `window.confirm`/`alert`/
         `prompt`** (NFR-CA-003); `ImagePreviewModal` uses declarative `createEl('img', …)` — **no
         `innerHTML`/`outerHTML`/`insertAdjacentHTML`**; the `InlineEditModal` reuses the **UNCHANGED**
         `DiffView` for the preview; focus trap/restore + Escape dismiss + labelled buttons.
-  - [ ] `npm run typecheck` + `npm run lint` green; the manual legs TEST-CA-M2 (+ TEST-CA-024/025)
+  - [x] `npm run typecheck` + `npm run lint` green; the manual legs TEST-CA-M2 (+ TEST-CA-024/025)
         scheduled in `test-plan.md`.
-  - [ ] Implementation-log entry added.
+  - [x] Implementation-log entry added.
 
 ### T-CA-040 🧪 — RED: `ChatComposer.vue` context-bar slot extension (PageObject extension)
 
@@ -969,10 +969,10 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-032, T-CA-034, T-CA-036
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The existing `tests/ui/chat/ChatComposer.test.ts` + `ChatComposer.po.ts` are extended, naming
+  - [x] The existing `tests/ui/chat/ChatComposer.test.ts` + `ChatComposer.po.ts` are extended, naming
         TEST-CA-004/006, covering files-travel-and-clear-on-submit, reset-on-new/loaded, and
         context-bar-hidden-when-empty (P4 byte-identical).
-  - [ ] Tests fail (RED) — the context-bar slot + the optional props do not yet exist.
+  - [x] Tests fail (RED) — the context-bar slot + the optional props do not yet exist.
 
 ### T-CA-041 🔨 — `ChatComposer.vue` context-bar slot (additive)
 
@@ -989,11 +989,11 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-040
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-CA-004 + TEST-CA-006) now pass; with no context the composer is
+  - [x] The prior RED tests (TEST-CA-004 + TEST-CA-006) now pass; with no context the composer is
         byte-identical to P4 (the send path unchanged, EC-CA-6/11 reset path covered).
-  - [ ] `<script setup>`; additive only; no `v-html`/`innerHTML`; no `obsidian` import; no
+  - [x] `<script setup>`; additive only; no `v-html`/`innerHTML`; no `obsidian` import; no
         `window.confirm`/`alert`/`prompt`; PageObject + `data-testid` only.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ---
 

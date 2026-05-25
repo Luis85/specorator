@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-CA-001; Parts A/B/C; ADR-CA-001..004 accepted)
   spec.md: complete (SPEC-CA-001..030; 6 layer groups; TEST-CA-001..032 + M1/M2/M3; full coverage)
   tasks.md: complete (TASKS-CA-001; 48 tasks T-CA-001..048; 8 batches; full SPEC/REQ/NFR/TEST coverage)
-  implementation-log.md: in-progress (T-CA-001..028 logged; batches 0-4 done; batches 5-8 remain)
+  implementation-log.md: in-progress (T-CA-001..041 logged; batches 0-5 done; batches 6-8 remain)
   test-plan.md: in-progress (manual legs M1/M3/029 scheduled; guard-verify noted)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | in-progress (batches 0-4: T-CA-001..028) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (batches 0-5: T-CA-001..041) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -365,4 +365,46 @@ parity-screenshot legs accumulate for the SINGLE FINAL human review gate.
                           (T-CA-029..041) builds on the now-landed application use cases. Manual
                           legs (T-CA-046/047) + the standalone-mount smoke tests stay for the
                           single final epic-review gate. NO open clarifications.
+
+2026-05-25 (dev): Batch 5 (Layer 5 — UI, T-CA-029..041) COMPLETE on
+                          feature/context-attachments — 13 tasks, 13 commits (one per task, strict
+                          RED→green TDD). Verification performed: `vue-tsc -p tsconfig.lint.json
+                          --noEmit` 0 errors across the whole project; `eslint` clean on every
+                          changed file; `vitest run` on the 11 batch-5 test files = 74/74 green
+                          (incl. the ChatComposer.ts.test.ts P4-extension regression 9/9 — additivity
+                          holds). Did NOT run build/build:web/docs:api/full verify (maintainer's
+                          gate). Commits: T-CA-029 0294fc1 / T-CA-030 483fbab / T-CA-031 892d8a0 /
+                          T-CA-032 fb09c00 / T-CA-033 d4029ee / T-CA-034 b17569a / T-CA-035 22d7d6a /
+                          T-CA-036 b9ee887 / T-CA-037 ae84cf6 / T-CA-038 9d5aecc / T-CA-039 bc2328f /
+                          T-CA-040 d7d87ba / T-CA-041 662a3e0. New files: src/ui/composables/
+                          {useAuxModelPort,useSelectionSourcePort,useSelectionHighlightPort,
+                          useCapturedSelection}.ts; src/ui/chat/{FileChips,ImageContextBar,ImageThumb,
+                          SelectionIndicator}.vue + co-located *.po.ts; modalSeam.ts P5 additions;
+                          src/plugin/modals/{InlineEditModal,ImagePreviewModal}.ts (coverage-excluded);
+                          ChatComposer.vue context-bar slot (additive). i18n: en+de
+                          agent.chat.context.{files,images,selection} group (NFR-CA-013). DEVIATIONS
+                          (all logged): useCapturedSelection takes a chatRoot Ref<HTMLElement|null>
+                          for the focus-within-chat signal; FileChips EC-CA-14 RED assertion
+                          tightened (jsdom serializes <> literally in attr values — asserted via
+                          find('script').exists()===false instead); SelectionIndicator browser-capture
+                          affordance is a labelled v-if button with no P5 handler (ObsidianBridge
+                          ships supportsBrowserSelection:false — honest defer); InlineEditModal shows
+                          the insertion outcome in a <pre> (DiffView reuse is for replacement, per
+                          spec); ChatComposer takes resolveThumbSrc as a prop (ImageContextBar needs
+                          it) + disambiguated re-emit names (removeFile/openFile/removeImage/
+                          previewImage/clearSelection). The --sp-chip-*/context-bar/image-thumb tokens
+                          the styles reference are minted in Layer 6 (T-CA-042) — CSS vars resolve at
+                          runtime, forward-compatible. Test-run note: the fork-worker pool hit the 60s
+                          startup-timeout ceiling under machine load — ran with
+                          `--pool=threads --no-file-parallelism`; not a regression (these are NEW
+                          test files, green). styles.css left UNTOUCHED. NO open clarifications.
+
+                          HAND-OFF → Layer 6 T-CA-042 (dev — the --sp-* token additions +
+                          tokens.test contract) is now ready (no dep on Layer 5). Then Layer 7
+                          T-CA-043 (qa, RED) / T-CA-044 (dev — provide the three ports + the two
+                          launchers in AgentSidebarView + ui/main.ts; mount the context bar; the
+                          inline-edit launcher applies the accepted edit to the note). The two modals
+                          (T-CA-039) await the human-run manual leg TEST-CA-M2 (+ TEST-CA-024/025) —
+                          scheduled in test-plan.md, NOT agent-self-claimed. NEXT AGENT: dev (T-CA-042)
+                          or orchestrator to dispatch the Layer 6/7 batch.
 ```
