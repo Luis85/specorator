@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-CP-001; A/B/C; ADR-CP-001..004 accepted)
   spec.md: complete (SPEC-CP-001..038; TEST-CP-001..028 + M1/M2)
   tasks.md: complete (TASKS-CP-001; T-CP-001..053)
-  implementation-log.md: in-progress (DOMAIN+INFRA batch T-CP-001..014 + T-CP-047 done; APPLICATION/UI/WIRE/GATE remain)
+  implementation-log.md: in-progress (DOMAIN+INFRA T-CP-001..014 + T-CP-047 + APPLICATION T-CP-015..026 done; UI/WIRE/GATE remain)
   test-plan.md: in-progress (guard verification + M1/M2 manual legs scheduled; TEST-CP status by batch)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-CP-001) |
 | 5. Specification | `spec.md` | complete (SPEC-CP-001..038) |
 | 6. Tasks | `tasks.md` | complete (TASKS-CP-001; T-CP-001..053) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN+INFRA + tokens done) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN+INFRA + tokens + APPLICATION done; UI/WIRE/GATE remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -375,4 +375,23 @@ self-parity-review vs claudian after each big chunk; merge P4 to `next` autonomo
                           (M1/M2 manual legs scheduled). Remaining owner: dev (APPLICATION T-CP-015..026)
                           + qa (RED legs). Next agent: qa for T-CP-015 RED, then dev T-CP-016.
                           No blockers; all four design open items remain resolved in-spec.
+
+2026-05-25 (dev, implement — application batch): APPLICATION batch T-CP-015..026 complete
+                          (strict TDD, one Conventional commit per task — RED test(cp) then feat(cp)).
+                          Delivered: triggerParse.ts (T-CP-016, 6b9eddd/e3cb4e3); builtInCommands.ts +
+                          RunCommandUseCase (T-CP-018, da2b4fa/9d9a114); ResolveMentionUseCase (T-CP-020,
+                          47676c0/932031f); instructionRefine.ts + RefineInstructionUseCase cold-start
+                          side-query (T-CP-022, 4031cac/ae10816); SubmitBangBashUseCase (T-CP-024,
+                          858bd71/a99c0c7); RespondToInlineBlockUseCase capability-gated (T-CP-026,
+                          7804031/a506592). Verification performed: npm run typecheck 0 errors; eslint 0
+                          errors over src/application/chat/composer + tests; vitest 51/8 composer + full
+                          996/139, 0 failed (P1/P2/P3 + DOMAIN/INFRA P4 green, NFR-CP-009; no test
+                          assertion changed). One deviation logged: mention does NOT close on whitespace
+                          (SPEC-CP-012 A.1, diverges from claudian MentionDropdownController — spec is
+                          authoritative). implementation-log.md kept in-progress (UI/WIRE/GATE remain).
+                          Not run (orchestrator gate): npm run verify / build / build:web; no push.
+                          Remaining owner: qa (T-CP-027 RED) + dev (T-CP-028..). Next agent: qa for
+                          T-CP-027 RED (useComposerMode composable — mode arbiter / depth-counted queue /
+                          req-id guard / debounce), then dev T-CP-028. No blockers; the five composer use
+                          cases + pure trigger-parse are the ready inputs for the UI batch.
 ```
