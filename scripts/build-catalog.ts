@@ -14,8 +14,8 @@ import type { CatalogIndex } from "../src/catalog/types";
 export const SOURCES: { subdir: string; file: string }[] = [
   { subdir: "skills",   file: "SKILL.md" },
   { subdir: "commands", file: "command.md" },   // Decision 3
-  { subdir: "agents",   file: "agent.md" },      // Decision 3
-  // Phase 3 adds: { subdir: "hooks", file: "hook.md" },
+  { subdir: "agents",   file: "agent.md" },     // Decision 3
+  { subdir: "hooks",    file: "hook.md" },      // Phase 3
 ];
 
 async function dirExists(p: string): Promise<boolean> {
