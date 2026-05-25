@@ -64,7 +64,8 @@ describe('MockChatRuntime (TEST-CC-001)', () => {
 		const second = await gen.next();
 		expect(second.value).toEqual({ type: 'text', content: 'b' });
 		const third = await gen.next();
-		expect(third.value).toEqual({ type: 'done' });
+		// R-TS-001: the terminator carries an additive per-turn assistantMessageId.
+		expect(third.value).toMatchObject({ type: 'done' });
 	});
 
 	it('cancel() stops further yields', async () => {
@@ -85,7 +86,7 @@ describe('MockChatRuntime (TEST-CC-001)', () => {
 		const runtime = new MockChatRuntime([{ type: 'error', content: 'boom' }]);
 		const chunks = await drain(runtime.query(prepare(runtime, 'hi')));
 		expect(chunks).toContainEqual({ type: 'error', content: 'boom' });
-		expect(chunks[chunks.length - 1]).toEqual({ type: 'done' });
+		expect(chunks[chunks.length - 1]).toMatchObject({ type: 'done' });
 	});
 
 	it('emits a scripted usage chunk on request', async () => {
@@ -99,7 +100,7 @@ describe('MockChatRuntime (TEST-CC-001)', () => {
 		const runtime = new MockChatRuntime();
 		const chunks = await drain(runtime.query(prepare(runtime, 'hi')));
 		expect(chunks.some((c) => c.type === 'text')).toBe(true);
-		expect(chunks[chunks.length - 1]).toEqual({ type: 'done' });
+		expect(chunks[chunks.length - 1]).toMatchObject({ type: 'done' });
 	});
 
 	it('getSessionId / resetSession behave synthetically', () => {

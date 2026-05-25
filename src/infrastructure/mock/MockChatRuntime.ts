@@ -178,15 +178,26 @@ export class MockChatRuntime implements ChatRuntimePort {
 		// this single query (so the title side-query does not steer the main
 		// stream). The Mock has no real session to continue, so it records the flag.
 		this.lastForceColdStart = queryOptions?.forceColdStart === true;
+		let scriptedAssistantId: string | undefined;
 		for (const chunk of this.script) {
 			// Per-chunk yield boundary: each chunk lands on its own resumed tick.
 			await Promise.resolve();
 			if (this.isCancelled()) return;
+			// R-TS-001: when a scripted `done` carries an assistantMessageId, honour it on
+			// the generator-owned terminator so a scripted-turn test can assert eligibility.
+			if (chunk.type === 'done') {
+				scriptedAssistantId = chunk.assistantMessageId;
+				continue;
+			}
 			yield chunk;
 		}
 		await Promise.resolve();
 		if (this.isCancelled()) return;
-		yield { type: 'done' };
+		// R-TS-001: surface a per-turn assistant id on the terminal `done` so the live
+		// (Mock) path stamps `assistantMessageId` and rewind eligibility renders, the
+		// same way the real CLI reducer surfaces the assistant uuid (reduceClaudeStream).
+		const assistantMessageId = scriptedAssistantId ?? `mock-assistant-${crypto.randomUUID()}`;
+		yield { type: 'done', assistantMessageId };
 	}
 
 	cancel(): void {

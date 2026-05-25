@@ -114,7 +114,8 @@ describe('MockChatRuntime default rich script (TEST-RR-026 U leg)', () => {
 		const chunks = await drain(runtime.query(prepare(runtime, 'hi')));
 		expect(idx(chunks, 'thinking')).toBeLessThan(idx(chunks, 'tool_use'));
 		expect(idx(chunks, 'usage')).toBeLessThan(idx(chunks, 'done'));
-		expect(chunks[chunks.length - 1]).toEqual({ type: 'done' });
+		// R-TS-001: the terminator carries an additive per-turn assistantMessageId.
+		expect(chunks[chunks.length - 1]).toMatchObject({ type: 'done' });
 		expect(chunks.filter((c) => c.type === 'done')).toHaveLength(1);
 	});
 

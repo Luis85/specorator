@@ -16,13 +16,19 @@ import type { ToolUseResult } from './diff/ToolUseResult';
  *   SHOULD be a human-readable failure message).
  * - `usage.sessionId` is `string | null | undefined`; `undefined`/`null` means "no
  *   session filter" (treated as "current session", EC-11).
+ * - `done.assistantMessageId` (P3, R-TS-001) is the runtime's per-turn assistant id
+ *   when the wire surfaced one (the CLI `assistant` envelope `uuid` / `message.id`);
+ *   absent when the turn carried none. Its PRESENCE on the stamped assistant
+ *   `ChatMessage` proves the runtime processed the turn (rewind eligibility,
+ *   REQ-TS-019). Mirrors claudian `sdkMessageParsing.ts:215` (`assistantMessageId`
+ *   from the SDK message `uuid`).
  */
 export type StreamChunk =
 	// ---- P1 EMITS this subset ----
 	| { type: 'assistant_message_start'; itemId?: string } // P1 (optional)
 	| { type: 'text'; content: string } // P1 — accumulate
 	| { type: 'error'; content: string } // P1 — inline error
-	| { type: 'done' } // P1 — terminator
+	| { type: 'done'; assistantMessageId?: string } // P1 — terminator (P3: carries the per-turn assistant id, R-TS-001)
 	| { type: 'usage'; usage: UsageInfo; sessionId?: string | null } // P1 (should)
 	// ---- declared now, EMITTED in later phases (additive) ----
 	| { type: 'user_message_start'; content: string; itemId?: string }

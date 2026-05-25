@@ -108,7 +108,12 @@ function newId(): string {
 }
 
 function userMessage(content: string): ChatMessage {
-	return { id: newId(), role: 'user', content, timestamp: Date.now() };
+	// R-TS-001: stamp the user-turn id at send so the eligibility scan keys on a
+	// real conversation (claudian sets `userMessageId` from the SDK message uuid —
+	// sdkMessageParsing.ts:214; on our live path the user message's own id is the
+	// stable turn id). The following assistant message proves the turn ran.
+	const id = newId();
+	return { id, role: 'user', content, userMessageId: id, timestamp: Date.now() };
 }
 
 function assistantMessage(): ChatMessage {
@@ -539,9 +544,21 @@ export const useTabsStore = defineStore('tabs', {
 					}
 					tab.errorActive = true;
 				},
-				onDone: () => {
+				onDone: (assistantMessageId) => {
 					const tab = tabOf();
 					if (tab === undefined) return;
+					// R-TS-001: stamp the per-turn assistant id so rewind eligibility renders
+					// on a real conversation (REQ-TS-019). Use the runtime-surfaced id when the
+					// stream carried one (the CLI assistant uuid / message.id via the reducer);
+					// otherwise generate a stable id at finalise — its PRESENCE is what proves
+					// the turn ran (claudian derives it from the SDK uuid, sdkMessageParsing:215).
+					const live = tab.messages.find((m) => m.id === tab.liveAssistantId);
+					if (live !== undefined) {
+						live.assistantMessageId =
+							assistantMessageId !== undefined && assistantMessageId.length > 0
+								? assistantMessageId
+								: newId();
+					}
 					tab.liveAssistantId = null;
 					tab.status = tab.errorActive ? 'error' : 'idle';
 					if (tab.id !== this.activeTabId) this.markAttention(tab.id);

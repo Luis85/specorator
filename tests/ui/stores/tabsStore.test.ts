@@ -377,6 +377,51 @@ describe('tabsStore (SPEC-TS-019)', () => {
 		expect(store.tabs[0].status).toBe('empty');
 	});
 
+	// ── R-TS-001: live-path rewind ids (REQ-TS-019) ─────────────────────────────
+
+	it('R-TS-001: sendMessage stamps userMessageId on the user message at send', async () => {
+		const { store } = freshStore();
+		const target = store.activeTabId!;
+		store.switchTab(target);
+		await store.sendMessage('Drive a real turn');
+		const userMsg = store.activeTab?.messages.find((m) => m.role === 'user');
+		expect(userMsg?.userMessageId).toBeTruthy();
+		// The user turn id keys eligibility; it is the user message's own id.
+		expect(userMsg?.userMessageId).toBe(userMsg?.id);
+	});
+
+	it('R-TS-001: a completed turn stamps assistantMessageId so rewind is eligible', async () => {
+		const { store, runners } = freshStore();
+		const target = store.activeTabId!;
+		store.switchTab(target);
+		await store.sendMessage('Make me rewindable');
+		const runner = runners[runners.length - 1];
+		runner.sink?.onAssistantStart();
+		runner.sink?.onText('a reply');
+		// The runtime surfaces the per-turn id on done (R-TS-001).
+		runner.sink?.onDone('turn-id-from-runtime');
+		const assistant = store.activeTab?.messages.find((m) => m.role === 'assistant');
+		expect(assistant?.assistantMessageId).toBe('turn-id-from-runtime');
+		const userMsg = store.activeTab?.messages.find((m) => m.role === 'user');
+		// The whole point: rewind eligibility now renders for a real conversation.
+		expect(store.canRewindMessage(userMsg!.id)).toBe(true);
+	});
+
+	it('R-TS-001: onDone with no runtime id still stamps a stable assistantMessageId', async () => {
+		const { store, runners } = freshStore();
+		const target = store.activeTabId!;
+		store.switchTab(target);
+		await store.sendMessage('No runtime id');
+		const runner = runners[runners.length - 1];
+		runner.sink?.onAssistantStart();
+		runner.sink?.onText('reply');
+		runner.sink?.onDone();
+		const assistant = store.activeTab?.messages.find((m) => m.role === 'assistant');
+		expect(assistant?.assistantMessageId).toBeTruthy();
+		const userMsg = store.activeTab?.messages.find((m) => m.role === 'user');
+		expect(store.canRewindMessage(userMsg!.id)).toBe(true);
+	});
+
 	// ── getters ─────────────────────────────────────────────────────────────────
 
 	it('isEmpty / isStreaming read the active tab', async () => {

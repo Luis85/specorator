@@ -55,6 +55,14 @@ export class ClaudeStreamReducer {
 	private _sessionId: string | null = null;
 	private _assistantStarted = false;
 	private _terminated = false;
+	/**
+	 * The per-turn assistant id learned from the `assistant` event envelope
+	 * (`uuid`) or its inner message (`message.id`) — surfaced on the terminal
+	 * `done` so the store can stamp `ChatMessage.assistantMessageId` and rewind
+	 * eligibility renders on the real CLI path (R-TS-001, REQ-TS-019). Mirrors
+	 * claudian `sdkMessageParsing.ts:215`.
+	 */
+	private _assistantMessageId: string | null = null;
 
 	/** The session id learned from the CLI stream (`system/init` or `result`). */
 	get sessionId(): string | null {
@@ -148,10 +156,20 @@ export class ClaudeStreamReducer {
 		const content = (message as Record<string, unknown>).content;
 		if (!Array.isArray(content)) return [];
 
+		// R-TS-001: capture the per-turn assistant id (claudian reads the SDK message
+		// `uuid`; the CLI wire carries it on the event envelope `uuid` or the inner
+		// `message.id`). The envelope uuid wins. Top-level turns only — a subagent
+		// message (non-null parent) is nested activity, not the user-facing turn id.
+		const assistantId = assistantMessageIdOf(event, message as Record<string, unknown>);
+
 		// Subagent routing (claudian :396): a non-null parent id sends this turn's
 		// tool_use blocks to `subagent_tool_use`. The id may ride the event top-level
 		// or the inner message envelope.
 		const parentToolUseId = parentToolUseIdOf(event, message as Record<string, unknown>);
+		// Only a top-level turn (no parent) sets the user-facing assistant id.
+		if (parentToolUseId === null && assistantId !== null) {
+			this._assistantMessageId = assistantId;
+		}
 
 		const chunks: StreamChunk[] = [];
 		for (const block of content) {
@@ -266,9 +284,21 @@ export class ClaudeStreamReducer {
 			}
 		}
 
-		chunks.push({ type: 'done' });
+		chunks.push(this._buildDone());
 		this._terminated = true;
 		return chunks;
+	}
+
+	/**
+	 * Build the terminal `done`, attaching the captured per-turn `assistantMessageId`
+	 * when one was learned (R-TS-001). Absent → a bare `{type:'done'}` (back-compat
+	 * with the P1 terminator shape).
+	 */
+	private _buildDone(): StreamChunk {
+		if (this._assistantMessageId !== null && this._assistantMessageId.length > 0) {
+			return { type: 'done', assistantMessageId: this._assistantMessageId };
+		}
+		return { type: 'done' };
 	}
 
 	/**
@@ -324,6 +354,23 @@ function parentToolUseIdOf(
 	if (typeof fromEvent === 'string' && fromEvent.length > 0) return fromEvent;
 	const fromMessage = message.parent_tool_use_id;
 	if (typeof fromMessage === 'string' && fromMessage.length > 0) return fromMessage;
+	return null;
+}
+
+/**
+ * Read the per-turn assistant id (R-TS-001). The envelope `uuid` is preferred
+ * (claudian derives `assistantMessageId` from the SDK message `uuid`,
+ * sdkMessageParsing.ts:215); the CLI stream-json wire alternatively carries the
+ * Anthropic `message.id`. Returns the first non-empty string, else `null`.
+ */
+function assistantMessageIdOf(
+	event: Record<string, unknown>,
+	message: Record<string, unknown>,
+): string | null {
+	const uuid = event.uuid;
+	if (typeof uuid === 'string' && uuid.length > 0) return uuid;
+	const messageId = message.id;
+	if (typeof messageId === 'string' && messageId.length > 0) return messageId;
 	return null;
 }
 
