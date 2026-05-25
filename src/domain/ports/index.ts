@@ -90,3 +90,7 @@ export type { ComposerMode, ComposerModeKind, TriggerHit } from '@/domain/chat/c
 export type { AuxModelPort, AuxModelRunOptions } from './AuxModelPort';
 export type { SelectionSourcePort } from './SelectionSourcePort';
 export type { SelectionHighlightPort } from './SelectionHighlightPort';
+
+// P6 toolbar-controls (SPEC-TC-002, ADR-TC-002 §2). The reasoning union the
+// thinking selector folds, surfaced through the ports barrel for one-stop import.
+export type { ReasoningChoice, ReasoningEffort } from '@/domain/chat/Reasoning';

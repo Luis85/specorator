@@ -37,5 +37,45 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   `DELETED_SUBSYSTEM_BAN` / `DELETED_INJECTION_KEYS` glob — no relaxation task
   needed (recorded in `test-plan.md`). A whole-project `npm run lint` over the
   pre-existing surface passes clean (no new key/port referenced yet).
-- **Commit:** _this commit._
+- **Commit:** `ca037ac`.
 - **Deviation:** none. No file under `src/` changed.
+
+## DOMAIN batch (T-TC-002..008)
+
+### T-TC-002 — RED Reasoning union + ToolbarCatalog/TabControls DTOs + query fields (🧪 qa)
+
+- **Spec/test:** TEST-TC-002/006/010/013/017/018/019/027; SPEC-TC-001/002/003/
+  006/027.
+- **Files:** `tests/domain/chat/Reasoning.test.ts`,
+  `tests/domain/chat/toolbar/ToolbarCatalog.test.ts`,
+  `tests/domain/chat/toolbar/TabControls.test.ts` (new); `tests/domain/chat/
+  ChatTurn.ts.test.ts` (extended — the P6 additivity legs + the P5-shaped query
+  byte-identical serialisation leg, the `_queryKeys` exact-keys assertion widened
+  to the six members).
+- **Outcome:** done — RED confirmed (`vue-tsc -p tsconfig.lint.json` failed on the
+  missing `@/domain/chat/Reasoning`, `@/domain/chat/toolbar`, and the three
+  `ChatRuntimeQueryOptions` fields).
+- **Commit:** `f12f14c`.
+
+### T-TC-003 — `Reasoning.ts` + `ChatRuntimeQueryOptions` three additive fields (🔨 dev)
+
+- **Spec/req:** SPEC-TC-001/002/027; REQ-TC-004/014/017/018/020; NFR-TC-001.
+- **Files:** `src/domain/chat/Reasoning.ts` (new — `ReasoningEffort =
+  'high'|'medium'|'low'` closed lower-case union + the two-member `readonly`
+  discriminated `ReasoningChoice`, `budget.tokens` documented finite non-negative
+  integer); `src/domain/chat/ChatTurn.ts` (the three optional fields `mode?`/
+  `reasoning?`/`serviceTier?` appended after `appendSystemPrompt`, importing
+  `ReasoningChoice` from `./Reasoning`; the P0–P5 members byte-identical;
+  `PreparedChatTurn`/`ChatRuntimeEnsureReadyOptions`/`ChatTurnRequest` unchanged);
+  `src/domain/ports/index.ts` (barrel re-export of `ReasoningChoice`/
+  `ReasoningEffort` appended).
+- **Outcome:** done — the TEST-TC-018 type-shape leg + TEST-TC-002 serialisation +
+  the TEST-TC-027 `ChatRuntimeQueryOptions` additivity leg now green (8/8 across
+  `Reasoning.test.ts` + `ChatTurn.ts.test.ts`); a P5-shaped query is byte-identical
+  to P5. The `toolbar/*` DTO tests stay RED for T-TC-004 (by design).
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors outside the
+  still-RED `toolbar/{ToolbarCatalog,TabControls}.test.ts`; `eslint` clean on the
+  three changed files; `vitest run` 8/8 green on the T-TC-003 legs. No
+  `obsidian`/`node:*`/Vue import in `src/domain/chat/**`.
+- **Commit:** _this commit._
+- **Deviation:** none.

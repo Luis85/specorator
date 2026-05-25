@@ -9,6 +9,7 @@ import type {
 	CanvasSelectionContext,
 	BrowserSelectionContext,
 } from './attachments/Selection';
+import type { ReasoningChoice } from './Reasoning';
 
 /** Turn request — mirrors `runtime/types.ts:45`. P1 uses `text` (+ optional `currentNotePath`). */
 export interface ChatTurnRequest {
@@ -64,6 +65,15 @@ export interface ChatRuntimeQueryOptions {
 	 * reaches the runtime instead of dead-ending in settings.
 	 */
 	appendSystemPrompt?: string;
+	// ---- P6 additive (SPEC-TC-001, ADR-TC-002 §1) — all optional; an unset query
+	// is byte-identical to P5 (NFR-TC-001). The P0–P5 members above stay
+	// byte-identical; `enabledMcpServers?`/`externalContextPaths?` stay EXCLUDED. ----
+	/** Mode selector (REQ-TC-014): the active/inactive mode descriptor value token. */
+	mode?: string;
+	/** Thinking selector (REQ-TC-018): the discriminated effort|budget choice (SPEC-TC-002). */
+	reasoning?: ReasoningChoice;
+	/** Service-tier toggle (REQ-TC-020): declared-now, emitted by a capable runtime in P9. */
+	serviceTier?: string;
 }
 
 /** Ensure-ready options — mirrors `runtime/types.ts:73`. */
