@@ -18,7 +18,7 @@ import { useTabsStore } from '@/ui/stores/tabsStore';
 import type { ChatTurnSink, RunChatTurnInput, ChatTurnError } from '@/application/chat/RunChatTurnUseCase';
 import type { ChatTurnRunner } from '@/ui/stores/chatStore';
 import { ok, type Result } from '@/domain/shared/Result';
-import type { ChatMessage, ConversationMeta, UsageInfo } from '@/domain/ports';
+import type { ChatMessage, ConversationMeta, ConversationRecord, UsageInfo } from '@/domain/ports';
 import { MockChatRuntime } from '@/infrastructure/mock/MockChatRuntime';
 import { MockHistoryStore } from '@/infrastructure/mock/MockHistoryStore';
 
@@ -422,6 +422,113 @@ describe('tabsStore (SPEC-TS-019)', () => {
 		expect(store.canRewindMessage(userMsg!.id)).toBe(true);
 	});
 
+	// ── R-TS-003: fork lineage threads through to the persisted record ──────────
+
+	it('R-TS-003: forkActive carries the derived providerState into the new tab record', async () => {
+		const { store, runners, history } = freshStore();
+		// Seed a source conversation with a session id so buildForkPlan derives lineage.
+		const source: ConversationRecord = {
+			version: 1,
+			meta: {
+				id: 'src',
+				title: 'Source chat',
+				titleManual: false,
+				createdAt: 10,
+				updatedAt: 20,
+				providerId: 'claude',
+				sessionId: 'sess-src',
+			},
+			messages: [
+				{ id: 'u1', role: 'user', content: 'hi', userMessageId: 'u1', timestamp: 1 },
+				{ id: 'a1', role: 'assistant', content: 'yo', assistantMessageId: 'turn-1', timestamp: 2 },
+			],
+			providerState: {},
+		};
+		history.seedConversations([source]);
+		// Bind the active tab to the source conversation so forkActive can derive.
+		const active = store.activeTabId!;
+		store.loadIntoTab(active, {
+			conversationId: 'src',
+			title: 'Source chat',
+			messages: source.messages.map((m) => ({ ...m })),
+			sessionId: 'sess-src',
+		});
+
+		await store.forkActive('new-tab', 'u1');
+		// The forked tab is now active; persist it (first turn) and inspect the record.
+		const forkedTabId = store.activeTabId!;
+		await store._persistTab(forkedTabId);
+		void runners;
+		const forkedConvId = store.activeTab?.conversationId;
+		expect(forkedConvId).toBeTruthy();
+		const hydrated = await history.hydrate(forkedConvId!);
+		expect(hydrated.ok).toBe(true);
+		if (hydrated.ok) {
+			const state = hydrated.value.providerState as {
+				forkSource?: { sessionId: string; resumeAt: string };
+			};
+			expect(state.forkSource).toEqual({ sessionId: 'sess-src', resumeAt: 'u1' });
+		}
+	});
+
+	it('R-TS-003: loadIntoTab stores the payload providerState on the tab', () => {
+		const { store } = freshStore();
+		const target = store.activeTabId!;
+		store.loadIntoTab(target, {
+			conversationId: 'c',
+			title: 't',
+			messages: [{ id: 'm1', role: 'user', content: 'hi', timestamp: 1 }],
+			sessionId: null,
+			providerState: { forkSource: { sessionId: 'sess-x', resumeAt: 'm1' } },
+		});
+		expect(store.activeTab?.providerState).toEqual({
+			forkSource: { sessionId: 'sess-x', resumeAt: 'm1' },
+		});
+	});
+
+	// ── R-TS-004: persist preserves createdAt + providerState across saves ──────
+
+	it('R-TS-004: re-persisting preserves createdAt and only bumps updatedAt', async () => {
+		const { store, history } = freshStore();
+		const target = store.activeTabId!;
+		store.switchTab(target);
+		await store.sendMessage('first turn');
+		// First persist.
+		await store._persistTab(target);
+		const convId = store.activeTab!.conversationId!;
+		const after1 = await metaOf(history, convId);
+		const createdAt1 = after1.createdAt;
+		// A later save (e.g. a title-ladder re-persist or a follow-up turn).
+		await new Promise((r) => setTimeout(r, 5));
+		await store._persistTab(target);
+		const after2 = await metaOf(history, convId);
+		expect(after2.createdAt).toBe(createdAt1);
+		expect(after2.updatedAt).toBeGreaterThanOrEqual(after2.createdAt);
+	});
+
+	it('R-TS-004: re-persisting retains the tab providerState (does not wipe to {})', async () => {
+		const { store, history } = freshStore();
+		const target = store.activeTabId!;
+		store.loadIntoTab(target, {
+			conversationId: null,
+			title: 'Forked',
+			messages: [{ id: 'm1', role: 'user', content: 'hi', timestamp: 1 }],
+			sessionId: null,
+			providerState: { forkSource: { sessionId: 'sess-y', resumeAt: 'm1' } },
+		});
+		await store._persistTab(target);
+		const convId = store.activeTab?.conversationId;
+		// Save again — lineage must survive.
+		await store._persistTab(target);
+		const hydrated = await history.hydrate(convId!);
+		expect(hydrated.ok).toBe(true);
+		if (hydrated.ok) {
+			expect(hydrated.value.providerState).toEqual({
+				forkSource: { sessionId: 'sess-y', resumeAt: 'm1' },
+			});
+		}
+	});
+
 	// ── getters ─────────────────────────────────────────────────────────────────
 
 	it('isEmpty / isStreaming read the active tab', async () => {
@@ -438,13 +545,16 @@ describe('tabsStore (SPEC-TS-019)', () => {
 	});
 });
 
+/** Read the persisted meta for a conversation id (R-TS-004 createdAt/updatedAt). */
+async function metaOf(history: MockHistoryStore, id: string): Promise<ConversationMeta> {
+	const hydrated = await history.hydrate(id);
+	if (!hydrated.ok) throw new Error(`no record for ${id}`);
+	return hydrated.value.meta;
+}
+
 /** Flush the chained microtasks (persist + title ladder) the store schedules. */
 async function flushAll(): Promise<void> {
 	for (let i = 0; i < 8; i++) {
 		await Promise.resolve();
 	}
 }
-
-/** Keep `ConversationMeta` import used (shape reference for the persist leg). */
-const _metaShape: ConversationMeta | undefined = undefined;
-void _metaShape;

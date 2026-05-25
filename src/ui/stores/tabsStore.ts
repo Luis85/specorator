@@ -9,6 +9,7 @@ import type {
 	RuntimeCapabilities,
 } from '@/domain/ports';
 import { CONVERSATION_RECORD_VERSION } from '@/domain/chat/ConversationRecord';
+import type { ProviderSessionState } from '@/domain/chat/ConversationRecord';
 import type { ChatTurnSink, RunChatTurnInput } from '@/application/chat/RunChatTurnUseCase';
 import type { Result } from '@/domain/shared/Result';
 import { ForkConversationUseCase } from '@/application/threads/ForkConversationUseCase';
@@ -57,6 +58,15 @@ export interface TabState {
 	errorActive: boolean;
 	sessionId: string | null;
 	needsAttention: boolean;
+	/** Set ONCE at creation; preserved across saves so history ordering holds (R-TS-004, REQ-TS-010). */
+	createdAt: number;
+	/**
+	 * The provider-owned lineage/fork bag (opaque DTO). A fork seeds `{ forkSource }`
+	 * here so the forked tab resumes the source session (R-TS-003, REQ-TS-018); a
+	 * fresh tab carries `{}`. Persisted verbatim — never reset to `{}` on re-save
+	 * (R-TS-004). No secret (NFR-TS-013).
+	 */
+	providerState: ProviderSessionState;
 }
 
 /** The payload a resume/fork loads into a tab (SPEC-TS-022/031). */
@@ -65,6 +75,8 @@ export interface TabLoadPayload {
 	title: string;
 	messages: ChatMessage[];
 	sessionId: string | null;
+	/** The derived/persisted provider lineage bag (fork → forkSource); absent → `{}` (R-TS-003). */
+	providerState?: ProviderSessionState;
 }
 
 /**
@@ -180,6 +192,8 @@ function freshTab(): TabState {
 		errorActive: false,
 		sessionId: null,
 		needsAttention: false,
+		createdAt: Date.now(),
+		providerState: {},
 	};
 }
 
@@ -322,6 +336,9 @@ export const useTabsStore = defineStore('tabs', {
 			tab.titleStatus = payload.title.length > 0 ? 'success' : 'none';
 			tab.conversationId = payload.conversationId;
 			tab.sessionId = payload.sessionId;
+			// R-TS-003: carry the derived/persisted provider lineage onto the tab so the
+			// first persist round-trips it (forked tab resumes the source session).
+			tab.providerState = { ...(payload.providerState ?? {}) };
 			tab.status = tab.messages.length === 0 ? 'empty' : 'idle';
 			tab.liveAssistantId = null;
 			tab.interruptedId = null;
@@ -389,6 +406,10 @@ export const useTabsStore = defineStore('tabs', {
 				title: result.value.sourceTitle,
 				messages: result.value.messages,
 				sessionId: null,
+				// R-TS-003: thread the derived `{ forkSource }` lineage through so the forked
+				// tab persists it (instead of cold-starting). Mirrors claudian
+				// buildForkProviderState → persisted conversation (ClaudeConversationHistoryService).
+				providerState: result.value.providerState,
 			};
 			if (target === 'new-tab') {
 				this.loadIntoNewTab(payload);
@@ -692,7 +713,6 @@ export const useTabsStore = defineStore('tabs', {
 			const binding = this._sidecar().binding;
 			const tab = this._tab(tabId);
 			if (binding === null || tab === undefined) return;
-			const now = Date.now();
 			const id = tab.conversationId ?? newId();
 			tab.conversationId = id;
 			const record: ConversationRecord = {
@@ -701,13 +721,19 @@ export const useTabsStore = defineStore('tabs', {
 					id,
 					title: tab.title,
 					titleManual: tab.titleManual,
-					createdAt: now,
-					updatedAt: now,
+					// R-TS-004: createdAt is set ONCE at tab creation and preserved across every
+					// save so the history list orders newest-first correctly (REQ-TS-010); only
+					// updatedAt advances. Mirrors claudian's partial updateConversation (createdAt
+					// is never in the update patch).
+					createdAt: tab.createdAt,
+					updatedAt: Date.now(),
 					providerId: 'claude',
 					sessionId: tab.sessionId,
 				},
 				messages: tab.messages.map((m) => ({ ...m })),
-				providerState: {},
+				// R-TS-003/004: persist the tab's provider lineage verbatim (fork → forkSource),
+				// never wipe it to `{}` on re-save, so the forked tab resumes the source session.
+				providerState: { ...tab.providerState },
 			};
 			const saved = await binding.history.save(record);
 			if (!saved.ok) {
