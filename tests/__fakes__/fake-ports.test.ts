@@ -111,6 +111,36 @@ describe('fakeModulePorts', () => {
 		expect(ports.toolbarCatalog.getCatalog('claude').models).toEqual([{ id: 'z', label: 'Z' }])
 	})
 
+	// T-AS-013 (TEST-AS-053/054 fake-ports leg): the factory exposes a scriptable
+	// `approvalRuleStore` member (the MockBridge approval-rule store) so the
+	// ApprovalManager + ApprovalsPanel tests inject it (with the failure-injection
+	// switch) without a real provider (SPEC-AS-008).
+	it('exposes a scriptable approvalRuleStore member (seedable + round-trips)', async () => {
+		const ports = fakeModulePorts()
+		const empty = await ports.approvalRuleStore.loadRules()
+		expect(empty.ok).toBe(true)
+		if (empty.ok) expect(empty.value).toEqual([])
+		ports.approvalRuleStore.seedRules([
+			{
+				id: 'r1',
+				toolName: 'Bash',
+				actionPattern: 'git *',
+				decision: 'allow',
+				lifetime: 'persisted',
+				createdAt: 1,
+			},
+		])
+		const seeded = await ports.approvalRuleStore.loadRules()
+		expect(seeded.ok).toBe(true)
+		if (seeded.ok) expect(seeded.value).toHaveLength(1)
+	})
+
+	it('approvalRuleStore setFailMode drives the fail-safe path deterministically', async () => {
+		const ports = fakeModulePorts()
+		ports.approvalRuleStore.setFailMode('load')
+		expect((await ports.approvalRuleStore.loadRules()).ok).toBe(false)
+	})
+
 	it('providerHistory mutations are visible across the factory ports', async () => {
 		const ports = fakeModulePorts()
 		ports.providerHistory.seedConversations([
