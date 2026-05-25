@@ -330,6 +330,14 @@ export const useTabsStore = defineStore('tabs', {
 		loadIntoTab(tabId: TabId, payload: TabLoadPayload): void {
 			const tab = this._tab(tabId);
 			if (tab === undefined) return;
+			// R-TS-005: cancel any in-flight turn BEFORE overwriting the transcript so the
+			// old runner's closed-over sink (scoped by this tabId) cannot mutate the resumed
+			// transcript after the swap. Mirrors claudian's guard: resume does not silently
+			// clobber a busy tab (ConversationController.switchTo bails while streaming; the
+			// forced path cancels first). The live id is cleared below regardless.
+			if (tab.status === 'streaming') {
+				this._deps(tabId)?.runner.cancel();
+			}
 			tab.messages = payload.messages.map((m) => ({ ...m }));
 			tab.title = payload.title;
 			tab.titleManual = payload.title.length > 0;
@@ -687,8 +695,21 @@ export const useTabsStore = defineStore('tabs', {
 					);
 				},
 				onContextCompacted: () => {
-					const live = liveOf();
-					if (live === undefined) return;
+					const tab = tabOf();
+					if (tab === undefined) return;
+					// R-TS-006: the compact boundary is a STANDALONE separator that must render
+					// even when the compact turn produced no live assistant message to attach to
+					// (the runner may emit `context_compacted` without `onAssistantStart`). Seed a
+					// fresh live assistant message in that case so the boundary block always lands
+					// (claudian renders the boundary on the turn's assistant msg, StreamController:212;
+					// its history store keeps it standalone, ClaudeHistoryStore:91).
+					let live = this._liveMessage(tab);
+					if (live === undefined) {
+						const message = assistantMessage();
+						tab.messages.push(message);
+						tab.liveAssistantId = message.id;
+						live = message;
+					}
 					(live.contentBlocks ??= []).push({ type: 'context_compacted' });
 				},
 				onNotice: (content) => {

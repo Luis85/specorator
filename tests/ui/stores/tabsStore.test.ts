@@ -422,6 +422,99 @@ describe('tabsStore (SPEC-TS-019)', () => {
 		expect(store.canRewindMessage(userMsg!.id)).toBe(true);
 	});
 
+	// ── R-TS-006: compact boundary renders even with no live assistant message ──
+
+	it('R-TS-006: compactActive renders the context_compacted boundary with no live message', async () => {
+		const { store, runners } = freshStore();
+		const target = store.activeTabId!;
+		store.switchTab(target);
+		// Seed a prior turn so the tab is non-empty (a real compact follows a turn).
+		await store.sendMessage('earlier turn');
+		const firstRunner = runners[runners.length - 1];
+		firstRunner.sink?.onAssistantStart();
+		firstRunner.sink?.onText('ok');
+		firstRunner.sink?.onDone('t1');
+
+		// The compact turn's runner emits `context_compacted` WITHOUT onAssistantStart.
+		const compactRunner = runners[runners.length - 1];
+		compactRunner.duringRun = (sink) => {
+			sink.onContextCompacted();
+			sink.onDone();
+		};
+		await store.compactActive();
+		const blocks = (store.activeTab?.messages ?? []).flatMap((m) => m.contentBlocks ?? []);
+		expect(blocks.some((b) => b.type === 'context_compacted')).toBe(true);
+	});
+
+	it('R-TS-006: compact still resolves the tab to a non-streaming status after the boundary', async () => {
+		const { store, runners } = freshStore();
+		const target = store.activeTabId!;
+		store.switchTab(target);
+		await store.sendMessage('earlier');
+		const firstRunner = runners[runners.length - 1];
+		firstRunner.sink?.onAssistantStart();
+		firstRunner.sink?.onDone('t1');
+
+		const compactRunner = runners[runners.length - 1];
+		compactRunner.duringRun = (sink) => {
+			sink.onContextCompacted();
+			sink.onDone();
+		};
+		await store.compactActive();
+		expect(store.activeTab?.status).not.toBe('streaming');
+	});
+
+	// ── R-TS-005: resume must not clobber an in-flight streaming tab ────────────
+
+	it('R-TS-005: resuming into a streaming tab cancels the in-flight runner first', async () => {
+		const { store, runners } = freshStore();
+		const target = store.activeTabId!;
+		store.switchTab(target);
+		await store.sendMessage('streaming turn');
+		const runner = runners[runners.length - 1];
+		runner.sink?.onAssistantStart();
+		runner.sink?.onText('partial');
+		expect(store.activeTab?.status).toBe('streaming');
+
+		// Resume a different conversation into the same (streaming) tab.
+		store.loadIntoTab(target, {
+			conversationId: 'resumed',
+			title: 'Resumed',
+			messages: [{ id: 'r1', role: 'user', content: 'resumed hi', timestamp: 9 }],
+			sessionId: 'sess-r',
+		});
+		// The in-flight runner is cancelled before the overwrite (no zombie sink).
+		expect(runner.cancel).toHaveBeenCalled();
+		// The tab now holds the resumed transcript, not the streamed partial.
+		expect(store.activeTab?.conversationId).toBe('resumed');
+		expect(store.activeTab?.messages.map((m) => m.id)).toEqual(['r1']);
+		expect(store.activeTab?.status).toBe('idle');
+		expect(store.activeTab?.liveAssistantId).toBeNull();
+	});
+
+	it('R-TS-005: a late sink chunk from the cancelled runner cannot corrupt the resumed transcript', async () => {
+		const { store, runners } = freshStore();
+		const target = store.activeTabId!;
+		store.switchTab(target);
+		await store.sendMessage('streaming turn');
+		const runner = runners[runners.length - 1];
+		runner.sink?.onAssistantStart();
+
+		store.loadIntoTab(target, {
+			conversationId: 'resumed',
+			title: 'Resumed',
+			messages: [{ id: 'r1', role: 'user', content: 'resumed hi', timestamp: 9 }],
+			sessionId: null,
+		});
+		// A stray late chunk on the old runner's sink: the resumed tab is no longer
+		// streaming, so the sink leg no-ops (the live id was cleared on load).
+		runner.sink?.onText('zombie text');
+		runner.sink?.onDone('zombie-turn');
+		const messages = store.activeTab?.messages ?? [];
+		expect(messages.map((m) => m.id)).toEqual(['r1']);
+		expect(messages.some((m) => m.content.includes('zombie'))).toBe(false);
+	});
+
 	// ── R-TS-003: fork lineage threads through to the persisted record ──────────
 
 	it('R-TS-003: forkActive carries the derived providerState into the new tab record', async () => {
