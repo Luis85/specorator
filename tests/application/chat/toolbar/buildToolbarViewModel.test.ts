@@ -14,7 +14,7 @@
  * 019/021/023/027, NFR-TC-010, EC-TC-2/3/4/5/7.
  */
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
 	buildToolbarViewModel,
@@ -261,7 +261,7 @@ describe('buildToolbarViewModel — degrade + totality (EC-TC-3, NFR-TC-010)', (
 describe('buildToolbarViewModel — no providerId branch (SPEC-TC-029, TEST-TC-003)', () => {
 	it('source references no providerId and no "claude" literal', () => {
 		const src = readFileSync(
-			fileURLToPath(new URL('../../../../src/application/chat/toolbar/buildToolbarViewModel.ts', import.meta.url)),
+			resolve(process.cwd(), 'src/application/chat/toolbar/buildToolbarViewModel.ts'),
 			'utf8',
 		);
 		expect(src).not.toMatch(/providerId/);
