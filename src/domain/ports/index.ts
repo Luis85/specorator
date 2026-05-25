@@ -29,6 +29,18 @@ export type {
 // P2 rich-rendering icon seam (SPEC-RR-009, ADR-RR-001 §4) — the P0-deleted
 // icon port regrows here. Declarative DTO only; never a DOM mutator.
 export type { IconPort, IconNode } from './IconPort';
+// P3 threads-sessions history seam (SPEC-TS-001, ADR-TS-001 §2). One port, one
+// consumer (the history/resume/fork use cases) — no aggregate.
+export type { ProviderHistoryPort } from './ProviderHistoryPort';
+export { HistoryError } from './ProviderHistoryPort';
+export type {
+	ConversationRecord,
+	ConversationMeta,
+	ProviderSessionState,
+	ClaudeProviderState,
+	ForkPlan,
+} from '@/domain/chat/ConversationRecord';
+export { CONVERSATION_RECORD_VERSION } from '@/domain/chat/ConversationRecord';
 // Re-export the chat domain types through the ports barrel for one-stop import.
 export type { StreamChunk } from '@/domain/chat/StreamChunk';
 export type { ChatMessage } from '@/domain/chat/ChatMessage';
