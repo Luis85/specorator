@@ -58,3 +58,43 @@ export function setIcon(_el: HTMLElement, _name: string): void {
 }
 
 export type App = unknown
+
+export class Modal {
+  contentEl: HTMLElement = {
+    createEl: (_tag: string, _opts?: unknown) => ({ addEventListener: () => {}, createEl: () => ({}) } as unknown as HTMLElement),
+    empty: () => {},
+  } as unknown as HTMLElement
+  constructor(_app: unknown) {}
+  open(): void {}
+  close(): void {}
+  onOpen(): void {}
+  onClose(): void {}
+}
+
+export class PluginSettingTab {
+  containerEl: HTMLElement = {
+    empty: () => {},
+    createEl: (_tag: string, _opts?: unknown) => ({} as HTMLElement),
+  } as unknown as HTMLElement
+  constructor(_app: unknown, _plugin: unknown) {}
+  display(): void {}
+  hide(): void {}
+}
+
+export class Setting {
+  constructor(_containerEl: unknown) {}
+  setName(_name: string): this { return this; }
+  setDesc(_desc: string): this { return this; }
+  setHeading(): this { return this; }
+  addToggle(_cb: (t: { setValue(v: boolean): { onChange(cb: (v: boolean) => unknown): unknown } }) => void): this {
+    return this;
+  }
+}
+
+export class Plugin {
+  app: unknown = {}
+  addSettingTab(_tab: unknown): void {}
+  addCommand(_cmd: unknown): void {}
+  registerView(_type: string, _factory: unknown): void {}
+  addRibbonIcon(_icon: string, _title: string, _cb: unknown): unknown { return {}; }
+}

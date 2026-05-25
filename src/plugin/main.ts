@@ -42,6 +42,10 @@ import { CursorApiAdapter } from '@/infrastructure/cursor/CursorApiAdapter'
 import { useMessagesStore } from '@/ui/stores/messagesStore'
 import { useChatProviderStore } from '@/ui/stores/chatProviderStore'
 import { parseProviderUriValue, nextProviderSelection } from './uriProviderParam'
+import { CatalogSettingsTab } from '../settings/CatalogSettingsTab'
+import { obsidianFs } from '../catalog/obsidianFs'
+import { loadBundledCatalog } from '../catalog/source'
+import bundledIndex from '../../catalog/index.json'
 
 export default class SpecoratorPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS }
@@ -343,6 +347,10 @@ export default class SpecoratorPlugin extends Plugin {
     })
 
     this.addSettingTab(new SpecoratorSettingTab(this.app, this))
+
+    // Workflow Catalog settings tab — skills catalog (Phase 1: skills + Claude only).
+    const catalogIndex = loadBundledCatalog(JSON.stringify(bundledIndex))
+    this.addSettingTab(new CatalogSettingsTab(this.app, this, obsidianFs(this.app), catalogIndex))
 
     // T-CCS-031: Right-click "Add to chat context" menu item on vault files.
     // Targets the dedicated agent sidepanel (IDEA-ASV-001) — the chat
