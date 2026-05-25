@@ -294,6 +294,72 @@ describe('useComposerMode (TEST-CP-022)', () => {
 		expect(onInsert).toHaveBeenCalledWith('look at @notes.md', expect.any(Number));
 	});
 
+	// ── FIX-2.1 (was R-CA-002): a file mention also adds a context chip ──────────
+	// SPEC-CA-022, REQ-CA-001. ADDITIVE — the P4 mentionText insertion is unchanged
+	// (REQ-CP-013, asserted above); resolving a `file` referent ALSO fires
+	// `onFileMention` with the file's vault path so the parent adds a chip.
+
+	it('REQ-CA-001: confirming a FILE mention fires onFileMention with the file path (chip), keeps the insertion', async () => {
+		const onFileMention = vi.fn();
+		const onInsert = vi.fn();
+		const arbiter = useComposerMode({
+			runCommand: new RunCommandUseCase(),
+			resolveMention: new ResolveMentionUseCase(new MockMentionDataProvider()),
+			submitBangBash: new SubmitBangBashUseCase(new MockShellExec()),
+			catalog: new ScriptableCatalog(),
+			runtime: new MockChatRuntime(),
+			onInsert: (v, c) => onInsert(v, c),
+			onAction: vi.fn(),
+			onBangBashOutput: vi.fn(),
+			getValue: () => 'look at @no',
+			getCaret: () => 11,
+			debounceMs: 120,
+			onFileMention,
+		});
+		vi.useFakeTimers();
+		arbiter.handleInput('look at @no', 11);
+		await vi.advanceTimersByTimeAsync(200);
+		vi.useRealTimers();
+		// `notes.md` is a FILE referent (detail = 'notes.md', the vault path).
+		const idx = arbiter.paletteEntries.value.findIndex(
+			(e) => 'mentionText' in e && e.mentionText === '@notes.md',
+		);
+		expect(idx).toBeGreaterThanOrEqual(0);
+		await arbiter.confirmEntry(idx);
+		// The chip path is the referent's vault path (its `detail`).
+		expect(onFileMention).toHaveBeenCalledWith('notes.md');
+		// The P4 insertion is NOT regressed — the token is still inserted.
+		expect(onInsert).toHaveBeenCalledWith('look at @notes.md', expect.any(Number));
+	});
+
+	it('REQ-CA-001: confirming a NON-file mention (subagent) does NOT fire onFileMention', async () => {
+		const onFileMention = vi.fn();
+		const arbiter = useComposerMode({
+			runCommand: new RunCommandUseCase(),
+			resolveMention: new ResolveMentionUseCase(new MockMentionDataProvider()),
+			submitBangBash: new SubmitBangBashUseCase(new MockShellExec()),
+			catalog: new ScriptableCatalog(),
+			runtime: new MockChatRuntime(),
+			onInsert: vi.fn(),
+			onAction: vi.fn(),
+			onBangBashOutput: vi.fn(),
+			getValue: () => 'ask @rev',
+			getCaret: () => 8,
+			debounceMs: 120,
+			onFileMention,
+		});
+		vi.useFakeTimers();
+		arbiter.handleInput('ask @rev', 8);
+		await vi.advanceTimersByTimeAsync(200);
+		vi.useRealTimers();
+		const idx = arbiter.paletteEntries.value.findIndex(
+			(e) => 'mentionText' in e && e.mentionText === '@reviewer',
+		);
+		expect(idx).toBeGreaterThanOrEqual(0);
+		await arbiter.confirmEntry(idx);
+		expect(onFileMention).not.toHaveBeenCalled();
+	});
+
 	it('EC-CP-12: depth-counted inline-block queue — composer restores only after the last resolves', () => {
 		const { arbiter } = makeArbiter();
 		const q = [{ id: 'q1', question: 'Pick', options: [{ id: 'a', label: 'A' }] }];
