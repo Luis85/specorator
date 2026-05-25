@@ -4,7 +4,7 @@ area: TS
 current_stage: implementation
 status: active
 last_updated: 2026-05-25
-last_agent: dev (implement — application batch)
+last_agent: dev (implement — ui batch)
 epic: claudian-reboot
 phase: P3
 integration_branch: next
@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-TS-001; Parts A/B/C; ADR-TS-001/002/003 accepted)
   spec.md: complete (SPEC-TS-001..034; 26 automatable TEST-TS + 2 manual legs)
   tasks.md: complete (TASKS-TS-001; T-TS-001..042; 42 tasks)
-  implementation-log.md: in-progress (IMPL-TS-001; domain T-TS-002..006 + infra T-TS-007..013 + application T-TS-014..025 done; UI/styles/wire-in/gate remain)
+  implementation-log.md: in-progress (IMPL-TS-001; domain T-TS-002..006 + infra T-TS-007..013 + application T-TS-014..025 + UI T-TS-026..035 + wire-in T-TS-037/038 done; styles T-TS-036 + dev-smoke T-TS-039 + gate T-TS-040..042 remain)
   test-plan.md: pending
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-TS-001) |
 | 5. Specification | `spec.md` | complete (SPEC-TS-001..034) |
 | 6. Tasks | `tasks.md` | complete (TASKS-TS-001) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (domain + infra + application batches done) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (domain + infra + application + UI + wire-in done; styles + dev-smoke + gate remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -415,4 +415,69 @@ self-parity-review vs claudian after each big chunk; merge P3 to `next` autonomo
                           data-testid PageObject (ADR-009). VERIFICATION PERFORMED THIS BATCH: typecheck
                           0, lint 0 errors, 830 unit tests green. REMAINING OWNER: dev (UI batch) +
                           qa (test-plan.md). NEXT AGENT: dev (/spec:implement) + qa (/spec:test).
+
+2026-05-25 (dev, implement — ui batch): T-TS-026..035 + T-TS-037/038 EXECUTED on
+                          feature/threads-sessions (STRICT TDD, one Conventional commit per task) →
+                          implementation-log.md (IMPL-TS-001, "UI + wire-in batch" section).
+                          COMPLETED + SHAs (RED → impl):
+                            T-TS-026 0a88dd5 → T-TS-027 25eb431 (tabsStore: N TabState DTOs + per-tab
+                              runner Map OUTSIDE reactive state + isolation + persist/title ladder)
+                            T-TS-028 cefd665 → T-TS-029 404385f (TabBar.vue state machine + roving
+                              tabindex + P3 i18n keys en+de)
+                            T-TS-030 ae40ef3 → T-TS-031 18dd8e2 (ResumeSessionDropdown.vue + modalSeam
+                              CONFIRM_DELETE/CHOOSE_FORK_TARGET)
+                            T-TS-032 4985d5c → T-TS-033 c7d788f (gated fork/rewind affordances + in-surface
+                              two-mode rewind menu on MessageTurn.vue)
+                            T-TS-034 2cad464 → T-TS-035 ab68966 (ChatSurface per-tab binding + compact +
+                              ForkTargetModal/DeleteConfirmModal Obsidian Modal subclasses)
+                            T-TS-037 465065b → T-TS-038 b514b9c (provide PROVIDER_HISTORY_PORT + per-tab
+                              runtime factory + modal seams in AgentSidebarView + ui/main.ts)
+
+                          MODEL CHOSEN (ADR-TS-002 §1 Option A): tabsStore OWNS the per-tab chat state
+                          (TabState[] DTOs + activeTabId); per-TabId runtime+runner held in a Map keyed
+                          by store instance via WeakMap, OUTSIDE reactive state; one ChatRuntimePort per
+                          tab → streaming isolated by construction (sink legs resolve the live message
+                          through the OWNING tab, scoped by the runner's closed-over TabId). P1 chatStore
+                          UNTOUCHED (still its own single-thread unit); ChatSurface rebinds to
+                          tabsStore.activeTab; MessageList/UsageInfo gained OPTIONAL props (chatStore
+                          fallback) so their P1 unit tests stay green — the lowest-churn path keeping P2
+                          block rendering on the active tab.
+
+                          OBSIDIAN MODALS w/o Vue importing obsidian: src/ui/chat/modalSeam.ts declares
+                          CONFIRM_DELETE / CHOOSE_FORK_TARGET / CHAT_RUNTIME_FACTORY UI InjectionKeys; the
+                          Vue components inject + call these handles. AgentSidebarView provides them by
+                          constructing the real Obsidian Modal subclasses (src/plugin/modals/, createEl/
+                          setText, no innerHTML, resolve a Promise); the standalone demo provides
+                          browser-safe stand-ins (no window.*).
+
+                          VERIFICATION PERFORMED THIS BATCH: vue-tsc -p tsconfig.lint.json = 0 errors;
+                          eslint . = 0 errors (4 warnings: 2 pre-existing P0 ErrorBoundary
+                          one-component-per-file, 1 chatStore + 1 tabsStore max-lines — warn-tier
+                          src/ui/**, non-failing, same precedent as P1 chatStore); vitest run = 119 files
+                          / 882 passed (was 830 after the application batch; +52 UI/store/wire tests;
+                          P0/P1/P2 + domain/infra/application GREEN — no regression). Provider-addressed
+                          grep gate clean. Manifest untouched. No push. NOT run (orchestrator gate): full
+                          verify/build/build:web/test:storybook.
+
+                          DEVIATIONS (recorded in IMPL-TS-001): (1) tabsStore max-lines warning (596,
+                          budget 350) — warn-tier, non-failing, same role as P1 chatStore; sink-builder
+                          extraction deferred to avoid churn on isolation-tested legs. (2) the per-tab
+                          ChatSurface rewire required a P1 ChatSurface.test.ts HARNESS update (provide the
+                          new ports + the runtime factory) — NOT an assertion change; the P1/P2
+                          mount.test/mount.rr.test were restored to green by the T-TS-038 wire-in so the
+                          tree never ships red. (3) useChatRuntimePort/CHAT_RUNTIME_PORT kept provided
+                          (P1 public contract) though no longer consumed by a component.
+
+                          HAND-OFF → STYLES + dev-smoke + GATE. FIRST READY TASK: T-TS-036 (dev, styles 🔨,
+                          no deps) — add the §4.10 --sp-* token block to src/ui/styles/tokens.css per
+                          SPEC-TS-028: --sp-tab-size, --sp-tab-border-idle/active/streaming/attention,
+                          --sp-history-row-h, --sp-history-delete, --sp-history-blur,
+                          --sp-fork-modal-max-inline, the [data-provider='claude'] streaming-border brand
+                          override, and the prefers-reduced-motion guard zeroing --sp-history-spin-duration
+                          (reuse the existing P2 `spin` keyframe — NO new keyframe). The P3 components
+                          already reference these tokens with graceful fallbacks. Then T-TS-039 (qa, npm
+                          run dev multi-tab smoke), T-TS-040/041 (human-owned manual legs TEST-TS-M1/M2),
+                          T-TS-042 (dev — full verify + parity self-review + draft PR into next).
+                          REMAINING OWNER: dev (styles T-TS-036 + gate T-TS-042) + qa (test-plan.md +
+                          T-TS-039) + human (T-TS-040/041 manual legs). NEXT AGENT: dev (/spec:implement).
 ```

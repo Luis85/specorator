@@ -6,7 +6,7 @@ feature: threads-sessions
 area: TS
 epic: claudian-reboot
 phase: P3
-status: in-progress       # domain + infra + application batches done; UI/styles/wire-in/gate remain
+status: in-progress       # domain + infra + application + UI + wire-in done; styles T-TS-036 + dev-smoke + gate remain
 owner: dev
 integration_branch: next
 branch: feature/threads-sessions
@@ -410,3 +410,80 @@ First ready task: **T-TS-014 (qa RED)** — `titleGeneration.ts` pure transforms
 `fallbackTitle`; `TITLE_GENERATION_SYSTEM_PROMPT` + `buildTitleGenerationPrompt` ported verbatim
 from claudian `core/prompt/titleGeneration.ts`). It has no dependencies (Batch-0 parallel-ready),
 so it can start immediately; T-TS-018/020/022/024 RED tasks gate the remaining use cases.
+
+---
+
+## UI + wire-in batch (T-TS-026 .. T-TS-038) — `(dev, implement — ui batch)` 2026-05-25
+
+STRICT TDD, one Conventional commit per task (RED → impl). Executed on
+`feature/threads-sessions`.
+
+| Task | SHA | Summary |
+|---|---|---|
+| T-TS-026 (qa RED) | `0a88dd5` | `tabsStore` test (N tabs, isolation, runner map, min1/clamp) |
+| T-TS-027 (dev) | `25eb431` | `tabsStore` — N `TabState` DTOs + per-tab runner Map + isolation + persist/title ladder |
+| T-TS-028 (qa RED) | `cefd665` | `TabBar.vue` + badge PageObject |
+| T-TS-029 (dev) | `404385f` | `TabBar.vue` (state machine, roving tabindex) + P3 i18n keys en+de |
+| T-TS-030 (qa RED) | `ae40ef3` | `ResumeSessionDropdown.vue` PageObject + the `modalSeam` (CONFIRM_DELETE / CHOOSE_FORK_TARGET) |
+| T-TS-031 (dev) | `18dd8e2` | `ResumeSessionDropdown.vue` (list/resume/rename/delete-via-seam/spin/keyboard) |
+| T-TS-032 (qa RED) | `4985d5c` | gated fork/rewind affordances + rewind menu PageObject (`MessageTurn.ts.test.ts`) |
+| T-TS-033 (dev) | `c7d788f` | gated fork/rewind affordances + in-surface two-mode rewind menu (`MessageTurn.vue`) |
+| T-TS-034 (qa RED) | `2cad464` | `ChatSurface` per-tab + compact PageObject + the `CHAT_RUNTIME_FACTORY` seam |
+| T-TS-035 (dev) | `ab68966` | `ChatSurface` per-tab binding + compact + `ForkTargetModal`/`DeleteConfirmModal` (Obsidian `Modal`) |
+| T-TS-037 (qa) | `465065b` | mount-wiring test (PROVIDER_HISTORY_PORT + per-tab factory) |
+| T-TS-038 (dev) | `b514b9c` | provide PROVIDER_HISTORY_PORT + per-tab runtime factory + modal seams in both entry points |
+
+**tabsStore ↔ chatStore model (ADR-TS-002 §1, Option A):** the `tabsStore` **OWNS** the per-tab
+chat state. Each `TabState` is a plain DTO (`messages`/`usage`/`status`/`title`/… — DTO-only,
+ADR-003/NFR-TS-003); the per-`TabId` `TabDeps` (its own `ChatRuntimePort` instance + bound
+`RunChatTurnUseCase` runner) live in a `Map<TabId, TabDeps>` OUTSIDE reactive state, keyed by the
+store instance via a `WeakMap` (the P1 `chatStore` pattern generalised). One runtime per tab →
+per-tab streaming isolation by construction (the sink legs resolve the live message through the
+**owning** tab's `TabState`, scoped by the runner's closed-over `TabId`). The P1 `chatStore` is
+**untouched** and stays green as its own single-thread unit; `ChatSurface` rebinds to
+`tabsStore.activeTab`. `MessageList`/`UsageInfo` gained **optional** props (driven by the active
+tab) with a `chatStore` fallback so their P1 unit tests stay green with zero assertion changes —
+the lowest-churn path that keeps P2 block rendering working on the active tab.
+
+**Obsidian modals without Vue importing `obsidian` (NFR-TS-007):** a plugin-owned modal-launch
+seam (`src/ui/chat/modalSeam.ts`) declares three UI InjectionKeys — `CONFIRM_DELETE`
+(`(msg) => Promise<boolean>`), `CHOOSE_FORK_TARGET` (`() => Promise<ForkTarget|null>`), and
+`CHAT_RUNTIME_FACTORY` (`() => ChatRuntimePort`, one runtime per tab). The Vue components inject
+and call these handles; they never import `obsidian`. `AgentSidebarView` provides them by
+constructing the real Obsidian `Modal` subclasses (`ForkTargetModal`/`DeleteConfirmModal` in
+`src/plugin/modals/`, DOM via `createEl`/`setText`, no `innerHTML`, resolving a `Promise`); the
+standalone demo (`src/ui/main.ts`) provides browser-safe stand-ins (no `window.*`).
+
+**Verification (this batch):** `npx vue-tsc -p tsconfig.lint.json --noEmit` → **0 errors**;
+`npx eslint .` → **0 errors** (4 warnings: 2 pre-existing P0 `ErrorBoundary` one-component-per-file,
+1 `chatStore` + 1 `tabsStore` `max-lines` — both stores warn-tier `src/ui/**`, non-failing, same as
+the P1 `chatStore` precedent); `npx vitest run` → **119 files, 882 passed** (was 830 after the
+application batch; +52 new UI/store/wire tests; P0/P1/P2 + domain/infra/application GREEN — no
+regression). Provider-addressed grep gate clean (zero `provider === 'claude'` in `src/ui` /
+`src/application`). Manifest untouched. No push. NOT run (orchestrator gate): full `npm run verify`
+/ `build` / `build:web` / `test:storybook`.
+
+**Deviations (load-bearing):**
+1. **`tabsStore` `max-lines` warning (596 lines, budget 350).** The store carries the full per-tab
+   P1+P2 sink-leg set (scoped by `TabId`) plus the fork/rewind/compact/title-ladder/persist actions.
+   `max-lines` is a `warn` (not `error`) for `src/ui/**` and `npm run lint` (`eslint .`) does not
+   fail on warnings — consistent with the P1 `chatStore` (a store of the same role). A follow-up
+   refactor could extract the sink builder into a `tabSink.ts` module; deferred to avoid churn risk
+   on the isolation-tested legs.
+2. **`ChatSurface` rewire required a P1 harness update (NOT an assertion change).** The surface now
+   builds runtimes via the `CHAT_RUNTIME_FACTORY` seam and needs `PROVIDER_HISTORY_PORT` +
+   `ICON_PORT`, so the P1 `ChatSurface.test.ts` mount harness (`mountSurface`) was updated to provide
+   them (the factory returns the one controllable runtime the test drives). All P1 assertions
+   (welcome→list→busy→accumulate→done→cancel→error→usage) are unchanged. The P1/P2 `mount.test.ts` /
+   `mount.rr.test.ts` were restored to green by the T-TS-038 wire-in (the entry points now provide
+   the new ports), so the cross-batch tree never ships red.
+3. **`useChatRuntimePort` / `CHAT_RUNTIME_PORT` are no longer consumed by a component** (the surface
+   uses the per-tab factory) but are kept provided in both entry points + the composable retained —
+   harmless, part of the P1 public contract; the per-tab factory is the SPEC-TS-027 contract.
+
+**Remaining in the UI/wire-in arc (next):** **T-TS-036** (styles — the `§4.10 --sp-*` token block:
+`--sp-tab-*`, `--sp-history-*`, `--sp-fork-modal-max-inline`, the reduced-motion guard zeroing
+`--sp-history-spin-duration`; the components already reference these tokens with graceful fallbacks).
+Then **T-TS-039** (qa `npm run dev` multi-tab smoke), and the **GATE** (T-TS-040/041 human-owned
+manual legs TEST-TS-M1/M2; T-TS-042 full verify + draft PR into `next`). Manual legs unchanged, for
+the single final epic-review human gate.
