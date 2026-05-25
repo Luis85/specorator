@@ -305,8 +305,35 @@ function canRewind(message: ChatMessage): boolean {
 	return tabs.canRewindMessage(message.id);
 }
 
+/**
+ * Submit the turn, folding the present P5 context (attached files / images / the
+ * captured selection) into the request (R-CA-001, REQ-CA-004/010/019). When no
+ * context is present the request stays byte-identical to P1–P4 (G2). `onConsumed`
+ * fires on a successful submit → clear the per-tab sets + the captured selection
+ * for the next turn (SPEC-CA-022).
+ */
 function onSubmit(text: string): void {
-	void tabs.sendMessage(text);
+	const hasContext =
+		attachedFiles.value.length > 0 ||
+		images.value.length > 0 ||
+		capturedSelection.value !== null;
+	if (!hasContext) {
+		void tabs.sendMessage(text);
+		return;
+	}
+	void tabs.sendMessage(text, undefined, {
+		attachedFiles: attachedFiles.value,
+		images: images.value,
+		selection: capturedSelection.value,
+		onConsumed: clearContextSets,
+	});
+}
+
+/** Reset the per-tab context sets + the captured selection (R-CA-001/R-CA-003, REQ-CA-006). */
+function clearContextSets(): void {
+	attachedFiles.value = [];
+	images.value = [];
+	selectionApi?.clear();
 }
 
 function onCancel(): void {

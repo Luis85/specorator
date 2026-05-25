@@ -11,6 +11,12 @@ import type {
 import { CONVERSATION_RECORD_VERSION } from '@/domain/chat/ConversationRecord';
 import type { ProviderSessionState } from '@/domain/chat/ConversationRecord';
 import type { ChatTurnSink, RunChatTurnInput } from '@/application/chat/RunChatTurnUseCase';
+import type { ChatTurnRequest } from '@/domain/chat/ChatTurn';
+import type {
+	AttachedFileRef,
+	AttachedImage,
+	CapturedSelection,
+} from '@/domain/chat/attachments';
 import type { Result } from '@/domain/shared/Result';
 import { ForkConversationUseCase } from '@/application/threads/ForkConversationUseCase';
 import { RewindConversationUseCase } from '@/application/threads/RewindConversationUseCase';
@@ -67,6 +73,23 @@ export interface TabState {
 	 * (R-TS-004). No secret (NFR-TS-013).
 	 */
 	providerState: ProviderSessionState;
+}
+
+/**
+ * P5 (SPEC-CA-001/022, R-CA-001): the per-tab context the surface folds into the
+ * submitted turn. ADDITIVE — every member is optional, so a `sendMessage(text)`
+ * call with no context yields a `{ text }`-only request byte-identical to P1 (G2,
+ * SPEC-CA-028). The parent (ChatSurface) owns the reactive sets (ADR-CA-001 §2)
+ * and passes a snapshot here; `onConsumed` fires on a SUCCESSFUL submit so the
+ * parent clears the sets for the next turn (REQ-CA-004/010/019).
+ */
+export interface SendMessageContext {
+	attachedFiles?: readonly AttachedFileRef[];
+	images?: readonly AttachedImage[];
+	/** The single captured selection, mapped into the matching request field by `kind`. */
+	selection?: CapturedSelection | null;
+	/** Invoked once after a successful submit so the parent clears its sets. */
+	onConsumed?: () => void;
 }
 
 /** The payload a resume/fork loads into a tab (SPEC-TS-022/031). */
@@ -183,6 +206,35 @@ function fallbackTitleFrom(firstUserMessage: string): string {
 	if (trimmed.length === 0) return FALLBACK_TITLE;
 	if (trimmed.length <= FALLBACK_TITLE_MAX) return trimmed;
 	return `${trimmed.slice(0, FALLBACK_TITLE_MAX).trimEnd()}…`;
+}
+
+/**
+ * Fold the present context into the turn request (SPEC-CA-001, R-CA-001). ADDITIVE
+ * + GUARDED: a field is written ONLY when it carries content, so an absent/empty
+ * context yields a `{ text, currentNotePath? }`-only request byte-identical to P1
+ * (G2, SPEC-CA-028). The captured selection maps to the field matching its `kind`
+ * — at most one selection field is ever set (REQ-CA-019).
+ */
+function buildTurnRequest(
+	text: string,
+	currentNotePath: string | undefined,
+	context: SendMessageContext | undefined,
+): ChatTurnRequest {
+	const request: ChatTurnRequest = { text };
+	if (currentNotePath !== undefined) request.currentNotePath = currentNotePath;
+	if (context === undefined) return request;
+	if ((context.attachedFiles?.length ?? 0) > 0) request.attachedFiles = context.attachedFiles;
+	if ((context.images?.length ?? 0) > 0) request.images = context.images;
+	foldSelection(request, context.selection ?? null);
+	return request;
+}
+
+/** Map the single captured selection into the field matching its `kind` (REQ-CA-019). */
+function foldSelection(request: ChatTurnRequest, selection: CapturedSelection | null): void {
+	if (selection === null) return;
+	if (selection.kind === 'editor') request.editorSelection = selection;
+	else if (selection.kind === 'canvas') request.canvasSelection = selection;
+	else request.browserSelection = selection;
 }
 
 function freshTab(): TabState {
@@ -517,8 +569,19 @@ export const useTabsStore = defineStore('tabs', {
 			return { appendSystemPrompt };
 		},
 
-		/** Send on the ACTIVE tab; the sink legs route to it (REQ-TS-001/006). */
-		async sendMessage(text: string, currentNotePath?: string): Promise<void> {
+		/**
+		 * Send on the ACTIVE tab; the sink legs route to it (REQ-TS-001/006). P5
+		 * additive (R-CA-001, SPEC-CA-001/022): the optional `context` folds the
+		 * present attached files / images / captured selection into the request and,
+		 * on a successful submit, invokes `context.onConsumed` so the parent clears
+		 * its sets for the next turn (REQ-CA-004/010/019). With no context the request
+		 * is byte-identical to P1/P4 (G2).
+		 */
+		async sendMessage(
+			text: string,
+			currentNotePath?: string,
+			context?: SendMessageContext,
+		): Promise<void> {
 			const active = this.activeTab;
 			if (active === undefined || !this.canSend(text)) return;
 			const deps = this._deps(active.id);
@@ -538,12 +601,17 @@ export const useTabsStore = defineStore('tabs', {
 			const queryOptions = await this._turnQueryOptions();
 
 			const history = active.messages.map((m) => ({ ...m }));
-			const input: RunChatTurnInput = { request: { text, currentNotePath }, history, queryOptions };
+			const request = buildTurnRequest(text, currentNotePath, context);
+			const input: RunChatTurnInput = { request, history, queryOptions };
 
 			const result = await deps.runner.run(input, this._sink(tabId));
 			if (!result.ok && result.error.kind !== 'runtime-throw') {
 				this._handleStartFailure(tabId, result.error.message);
 			}
+			// R-CA-001: the turn was accepted (the guard above passed) — clear the
+			// parent's context sets for the next turn (REQ-CA-004/010/019). A
+			// start-failure does not retain the context (parity with the cleared input).
+			context?.onConsumed?.();
 			if (isFirstTurn) this._onFirstTurnComplete(tabId, text);
 		},
 
