@@ -281,8 +281,8 @@ export interface ChatRuntimePort {
 | Member | Behaviour | Pre / Post | Side effects | Claudian cite |
 |---|---|---|---|---|
 | `resumeSession(sessionId)` | Bind the runtime's next `query` to continue `sessionId` (does **not** itself stream). On an empty/unknown id the runtime cold-starts on the next turn (EC-TS-5). | Post: `getSessionId()` reflects the resumed id once a turn runs. `void`. | sets internal session pointer | `ClaudeSessionManager` resume seam |
-| `setResumeCheckpoint(assistantMessageId)` | Mark the conversation-only rewind point; the next turn continues from this turn id. **No** filesystem/git effect (NG7). | `void`; idempotent (last call wins). | sets pending resume-at | `ClaudeRewindService.executeClaudeRewind` `mode==='conversation'` |
-| `getCapabilities()` | Return `{ supportsFork, supportsRewind }`. **Pure, total, synchronous** — safe to call on every hover (SPEC-TS-025). | Post: a fresh `RuntimeCapabilities`. | none | `ProviderRegistry.getCapabilities` |
+| `setResumeCheckpoint(assistantMessageId)` | Mark the conversation-only rewind point; the next turn continues from this turn id. **No** filesystem/git effect (NG7). **Only honoured on a runtime whose `getCapabilities().supportsRewind` is `true`** (the Mock/Fixture runtimes; the future SDK-transport Claude runtime). On the production Claude-CLI runtime (`supportsRewind: false`) it is a documented no-op-by-transport and is never reached, because the rewind affordance is capability-gated off (ADR-TS-004, SPEC-TS-009/025). | `void`; idempotent (last call wins). | sets pending resume-at (rewind-capable runtimes only) | `ClaudeRewindService.executeClaudeRewind` `mode==='conversation'` |
+| `getCapabilities()` | Return `{ supportsFork, supportsRewind }`. **Pure, total, synchronous** — safe to call on every hover (SPEC-TS-025). The Claude-CLI runtime returns `{ supportsFork: true, supportsRewind: false }` (ADR-TS-004 — rewind-to-turn is SDK-transport, not raw-`--print`); Mock/Fixture return `{ supportsFork: true, supportsRewind: true }`. | Post: a fresh `RuntimeCapabilities`. | none | `ProviderRegistry.getCapabilities` |
 
 The streaming-error boundary is UNCHANGED (ADR-CC-001 §1): these three members are non-streaming and
 do **not** return `Result` — `resumeSession`/`setResumeCheckpoint` are `void` runtime-state setters,
@@ -435,9 +435,20 @@ public demo). Its runtime reports the same capabilities as the Mock.
 **REQ:** REQ-TS-013/019/021/024/027 · **ADR:** ADR-TS-002 §3, ADR-TS-003 §1. Each bridge's runtime
 gains the three additive members (SPEC-TS-003):
 
-- **`ObsidianBridge` (Claude CLI, coverage-excluded):** `resumeSession`/`setResumeCheckpoint` map to
-  the CLI session/resume seam (`ClaudeSessionManager` / `ClaudeRewindService` conversation mode);
-  `getCapabilities() → { supportsFork: true, supportsRewind: true }`.
+- **`ObsidianBridge` (Claude CLI, coverage-excluded):** `resumeSession(sessionId)` maps to the CLI
+  resume seam (binds the next `--resume <sessionId>`; empty id cold-starts — EC-TS-5).
+  `getCapabilities() → { supportsFork: true, supportsRewind: false }` (**ADR-TS-004** — rewind-to-turn
+  (`resumeSessionAt`) is an **Agent-SDK-transport** capability, not a faithful capability of the
+  one-shot `claude --print` subprocess transport; Claudian rewinds via the SDK
+  `options.resumeSessionAt` over a persistent `MessageChannel`, which `--print` does not provide).
+  Because the rewind affordance is capability-gated (REQ-TS-019, SPEC-TS-025), it does **not** render on
+  the Claude-CLI path, so `setResumeCheckpoint` is **never reached** on this runtime — it is a
+  documented no-op-by-transport and **must not** store-then-discard a checkpoint or emit a misleading
+  "checkpoint applied" log (the prior `resumeCheckpoint` field + its `query()` log/clear are removed —
+  the dev follow-up). True rewind on the Claude path is deferred to a future SDK-transport runtime,
+  which will report `supportsRewind: true` and wire `setResumeCheckpoint` → `resumeSessionAt` exactly as
+  Claudian does — the UI affordance then auto-enables with no UI/branch change (capability-driven,
+  REQ-TS-026).
 - **`MockChatRuntime` / `FixtureChatRuntime`:** recorded no-op session ops; scripted capabilities
   (SPEC-TS-007/008).
 
@@ -549,11 +560,16 @@ execute(input: {
 
 **Behaviour:**
 
-- **`mode === 'conversation'` (REQ-TS-021, EXECUTES):** find the assistant turn that followed
-  `userMessageId` (its `assistantMessageId`); return `{ truncatedThrough: userMessageId, checkpointSet:
-  true }`. The **`tabsStore`** truncates the tab's `messages` to `userMessageId` (later messages
-  removed) and calls `runtime.setResumeCheckpoint(assistantMessageId)` so the next turn continues from
-  there. **No filesystem touch.**
+- **`mode === 'conversation'` (REQ-TS-021, EXECUTES on a rewind-capable runtime):** find the assistant
+  turn that followed `userMessageId` (its `assistantMessageId`); return `{ truncatedThrough:
+  userMessageId, checkpointSet: true }`. The **`tabsStore`** truncates the tab's `messages` to
+  `userMessageId` (later messages removed) and calls `runtime.setResumeCheckpoint(assistantMessageId)`
+  so the next turn continues from there. **No filesystem touch.** The use case itself is transport-blind
+  — it always truncates + calls the seam; the **honesty gate is upstream**: the rewind affordance only
+  renders where `getCapabilities().supportsRewind` is true (SPEC-TS-025), so this path is reached only
+  on a runtime that honours the checkpoint (Mock/Fixture; the future SDK-transport Claude runtime). On
+  the production Claude-CLI runtime `supportsRewind` is `false`, the affordance does not render, and the
+  use case is not invoked (**ADR-TS-004**, R-TS-002).
 - **`mode === 'code-and-conversation'` (REQ-TS-022, GATED — NG7):** the use case performs **no** fs/git
   change and returns `Result.ok({ truncatedThrough: userMessageId, checkpointSet: false })` paired with
   a flag the caller surfaces as a **non-blocking `NotificationPort.showInfo`** ("code rollback is not
@@ -821,6 +837,14 @@ two **capability/eligibility-gated** controls (parity `components/messages.css` 
 Both gates read **through the runtime port** — never a provider-id branch (REQ-TS-026). PageObject:
 extends `MessageTurn.po.ts` — fork shown/absent by `supportsFork`; rewind shown only when eligible +
 `supportsRewind` (TEST-TS-005, TEST-TS-008).
+
+> **ADR-TS-004 (R-TS-002):** the `supportsRewind` gate is **load-bearing for transport honesty**, not
+> cosmetic. The production Claude-CLI runtime returns `supportsRewind: false` (rewind-to-turn is an
+> Agent-SDK-transport capability the one-shot `--print` transport cannot keep — SPEC-TS-009), so the
+> rewind control **does not render** on the Claude-CLI path; it auto-enables (no UI/branch change) on a
+> future SDK-transport runtime that returns `supportsRewind: true`. A test must assert the rewind
+> affordance is **absent** when `getCapabilities().supportsRewind === false` and **present** when it is
+> `true` (Mock), so the affordance never renders a promise the transport cannot keep.
 
 ## SPEC-TS-026 — `ChatSurface.vue` per-tab binding + compact (`src/ui/chat/ChatSurface.vue`)
 

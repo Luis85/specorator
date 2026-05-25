@@ -221,7 +221,7 @@ the ids so eligibility renders and does not touch the `--resume`/rewind-transpor
 | ID | Sev | Status | Commit | Fix summary |
 |---|---|---|---|---|
 | **R-TS-001** | P1 | **resolved** | `e34f18c` | `ClaudeStreamReducer` captures the per-turn assistant id (envelope `uuid` / inner `message.id`) and surfaces it on the terminal `done`; `RunChatTurnUseCase` forwards it to `onDone(assistantMessageId?)`; `tabsStore` stamps `assistantMessageId` on the live assistant message (runtime id, else a stable id at finalise) + `userMessageId` on the user message at send. `MockChatRuntime` emits the id so the live path proves eligibility. Rewind eligibility (REQ-TS-019/020) now reaches production. |
-| **R-TS-002** | P1 | **deferred → architect** | — | NOT in this batch. Transport ADR (SDK vs subprocess `--resume-at`) or amend REQ-TS-021. |
+| **R-TS-002** | P1 | **resolved (ADR)** | ADR-TS-004 | **Investigated + decided (architect, 2026-05-25).** Parity truth: Claudian rewinds via the **Agent SDK** `options.resumeSessionAt` (the assistant turn UUID) over a **persistent `MessageChannel`** (`ClaudeQueryOptionsBuilder.ts:162-166`, `ClaudeChatRuntime.ts:500-512`) — NOT a raw-CLI flag. The `resume-at` capability is **SDK-transport**, not exposed faithfully by our one-shot `claude --print` subprocess transport (SDK doc names a CLI-flag equivalent for options that have one; `resumeSessionAt` has none; Claudian never feeds resume-at to a raw CLI; we can't guarantee our message UUID matches the CLI transcript UUID on the resumed-from-history path). **Option B1 chosen:** Claude-CLI `getCapabilities()` returns `supportsRewind: false` → the capability-gated rewind affordance (REQ-TS-019/SPEC-TS-025) does **not render** on the CLI path; the stored-then-discarded `resumeCheckpoint` + its misleading `query()` log/clear are removed. The truncate + `setResumeCheckpoint` flow stays live on Mock/Fixture and auto-enables on a future SDK-transport runtime (`supportsRewind: true`) with no UI/branch change (REQ-TS-026). True rewind on the Claude path deferred to that SDK-transport phase. **No silent dead path remains.** Dev follow-up below. |
 | **R-TS-003** | P1 | **resolved** | `6f5e874` | `forkActive` threads `result.value.providerState` through `TabLoadPayload` → `TabState.providerState`; `_persistTab` persists `{...tab.providerState}` (was hard-coded `{}`). Forked tab persists `{forkSource}` lineage → resumes the source session (REQ-TS-018). |
 | **R-TS-004** | P2 | **resolved** | `6f5e874` | `TabState.createdAt` set once at creation; `_persistTab` preserves it and only bumps `updatedAt`; `providerState` retained across saves (no wipe to `{}`). History ordering newest-first holds (REQ-TS-008/010). |
 | **R-TS-005** | P2 | **resolved** | `6cef786` | `loadIntoTab` cancels an in-flight runner (`status==='streaming'`) before overwriting, so the old `tabId`-scoped sink cannot corrupt the resumed transcript (claudian-faithful busy-tab guard). |
@@ -239,3 +239,58 @@ gate (NOT run here).
 **Re-verdict prerequisite:** R-TS-002 (architect ADR) must close and the verify gate (T-TS-042) must
 be green before the reviewer regenerates `traceability.md` (clearing the REQ-TS-018/019 chains, now
 populated) and re-verdicts.
+
+---
+
+## R-TS-002 resolution (architect, transport ADR — 2026-05-25)
+
+**Closed by `docs/adr/ADR-TS-004-conversation-rewind-transport.md` (accepted, autonomous drive).**
+
+**Investigation (parity truth, read-only against `D:\Projects\claudian-main`):**
+- Claudian's rewind-to-turn mechanism is the **Agent-SDK `Options.resumeSessionAt`** field (the
+  assistant turn UUID, `SDKAssistantMessage.uuid`): `executeClaudeRewind` `mode==='conversation'`
+  (`ClaudeRewindService.ts:172-176`) sets `pendingResumeAt` + closes the persistent query; the next turn
+  threads it into `options.resumeSessionAt` (`ClaudeQueryOptionsBuilder.ts:162-166`) and runs via
+  `agentQuery({ prompt: messageChannel, options })` (`ClaudeChatRuntime.ts:509`) — the **SDK driving a
+  persistent bidirectional `MessageChannel`** (`--input-format stream-json`), not a one-shot `--print`.
+- The raw `claude --print` CLI our P1 runtime spawns does **not** expose a faithful equivalent: the SDK
+  doc-comments name a `--flag` equivalent for every option that has one (`--agent`, `--settings`,
+  `--debug`), but `resumeSessionAt` has **none** — it is a resume-shaping option on the SDK's persistent
+  resume path. Claudian itself never feeds resume-at to a raw CLI (its cold-start path sets only
+  `options.resume`). Even if a `--resume-session-at`-style flag existed in the binary, our `--print`
+  per-turn transport carries no persistent session and cannot guarantee the message UUID we hold matches
+  the CLI's transcript UUID on a resumed-from-history conversation → it would be a second silent no-op.
+
+**Decision: Option (B1)** — a genuine transport limitation of the P1 subprocess runtime, handled
+honestly:
+- Claude-CLI `getCapabilities()` → `{ supportsFork: true, supportsRewind: false }`; the rewind hover
+  affordance (REQ-TS-019, capability-gated, SPEC-TS-025) **does not render** on the Claude-CLI path.
+- The stored-then-discarded `resumeCheckpoint` field + its misleading `query()` debug-log/clear are
+  removed so no reader believes a checkpoint is applied.
+- The truncate + `setResumeCheckpoint` flow stays fully live + unit-tested on the Mock/Fixture runtimes;
+  a future SDK-transport Claude runtime reports `supportsRewind: true` and wires `setResumeCheckpoint` →
+  `resumeSessionAt`, at which point the affordance auto-enables with **no UI or provider-branch change**
+  (capability-driven, REQ-TS-026).
+
+This mirrors the already-accepted gated-affordance pattern (REQ-TS-022/NG7, R-RR-008): the affordance
+exists where the transport can keep it, and is explicitly gated where it cannot — documented, not
+silent. **No silent dead path remains** (R-TS-002 class closed).
+
+**Artifacts updated:** `requirements.md` (REQ-TS-021 delta — satisfied-by-gating on `supportsRewind`),
+`spec.md` (SPEC-TS-003/009/014/025 capability deltas), `design.md` Part C (C.2/C.4/C.5), this
+`review.md`, `docs/adr/README.md` (ADR-TS-004 row).
+
+**Dev follow-up (to make the behaviour honest — for `/spec:implement`):**
+1. `ClaudeCliChatRuntime.getCapabilities()` → return `{ supportsFork: true, supportsRewind: false }`
+   (was `supportsRewind: true`).
+2. Remove the `resumeCheckpoint` field and its `query()` log-and-clear (`ClaudeCliChatRuntime.ts:47-48,
+   80-85, 144, 169-173`); `setResumeCheckpoint` becomes a documented no-op-by-transport on this runtime
+   (or remove the body — it is unreachable behind the capability gate). **Do NOT** wire a `--resume-at`
+   flag into `_buildArgs` (Option A is rejected — the transport cannot honour it faithfully).
+3. Keep `MockChatRuntime`/`FixtureChatRuntime` at `supportsRewind: true` with `setResumeCheckpoint` as a
+   recorded no-op (the rewind flow stays exercised in dev + units).
+4. QA: add a test asserting the rewind affordance is **absent** when `getCapabilities().supportsRewind`
+   is false and **present** on a `supportsRewind: true` runtime (SPEC-TS-025 compliance); assert the
+   Claude-CLI runtime reports `supportsRewind: false`.
+
+No production code was written by the architect (this is a decision + spec/req/review delta only).

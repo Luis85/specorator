@@ -437,6 +437,20 @@ rich rendering, with no dependency on the composer-power (P4) or approvals (P7) 
 - **Priority:** must
 - **Satisfies:** charter §3.2 (rewind); **blocked on CLAR-TS-003** (rewind checkpoint semantics)
 
+> **Delta — ADR-TS-004 (R-TS-002 resolution, 2026-05-25):** rewind-to-turn (`resumeSessionAt`) is an
+> **Agent-SDK-transport** capability, not a faithful capability of the one-shot `claude --print`
+> subprocess transport our P1 runtime uses (parity truth: Claudian rewinds via the SDK
+> `options.resumeSessionAt` over a persistent `MessageChannel`; the raw CLI has no faithful equivalent
+> we can feed a guaranteed-valid turn UUID to). REQ-TS-021's acceptance above therefore holds **only on
+> a runtime whose `getCapabilities().supportsRewind` is `true`** (the Mock/Fixture runtimes, and the
+> future SDK-transport Claude runtime). On the **production Claude-CLI runtime**, `supportsRewind` is
+> `false`, so — by the capability gate of REQ-TS-019 — the rewind affordance **does not render** and the
+> requirement is **satisfied-by-gating** (no UI promise the transport cannot keep; no silent no-op). The
+> conversation-rewind truncate + `setResumeCheckpoint` flow stays fully live on the Mock/Fixture
+> runtimes and auto-enables on a future SDK-transport runtime with no UI or branch change
+> (capability-driven, REQ-TS-026). True rewind on the Claude path is deferred to that SDK-transport
+> phase. See `docs/adr/ADR-TS-004-conversation-rewind-transport.md`.
+
 #### REQ-TS-022 — Code-and-conversation rewind affordance is gated, not executed
 
 - **Pattern:** unwanted-behaviour

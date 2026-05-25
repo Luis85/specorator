@@ -71,6 +71,7 @@ The P0 reboot (`ADR-PSR-001`) **keeps the architectural skeleton** and
 | ADR-TS-001 | Persist conversation history to vault files behind a narrow `ProviderHistoryPort` (fork = derive-not-copy; `HomeFsPort` deferred to P9) | **Accepted** — P3 (autonomous-drive; resolves CLAR-TS-001/003) |
 | ADR-TS-002 | Generalise the single-thread store to an N-tab `tabsStore`; grow `ChatRuntimePort` additively for resume/rewind/fork; router stays removed | **Accepted** — P3 (autonomous-drive; resolves CLAR-TS-002 + CLAR-TS-003 runtime half) |
 | ADR-TS-003 | Generate titles via a cold-start side-query on `ChatRuntimePort.query` behind a `GenerateTitleUseCase`; `AuxModelPort` deferred to P4/P5 | **Accepted** — P3 (autonomous-drive; resolves CLAR-TS-004) |
+| ADR-TS-004 | Gate conversation-rewind execution off the subprocess CLI transport (`supportsRewind: false`); true rewind-to-turn (`resumeSessionAt`) is an Agent-SDK-transport capability deferred to a later phase | **Accepted** — P3 (autonomous-drive; resolves R-TS-002) |
 
 > Two files share the number `0030` (`ifeatureservice-interface-for-di` and
 > `structured-json-output-via-json-schema`) — a pre-existing numbering collision,

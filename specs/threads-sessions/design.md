@@ -20,6 +20,7 @@ inputs:
   - docs/adr/ADR-TS-001-conversation-history-persistence-and-provider-history-port.md
   - docs/adr/ADR-TS-002-multi-thread-tabs-store-and-additive-runtime-growth.md
   - docs/adr/ADR-TS-003-title-generation-side-query-seam.md
+  - docs/adr/ADR-TS-004-conversation-rewind-transport.md   # R-TS-002 — rewind gated off the CLI transport
 created: 2026-05-25
 updated: 2026-05-25
 ---
@@ -272,7 +273,7 @@ implements ports; the view (plugin layer) wires bridges → ports.
 | Component | Layer | Responsibility | New/Grown | REQ |
 |---|---|---|---|---|
 | `ProviderHistoryPort` + `ConversationRecord`/`ConversationMeta`/`ForkPlan`/`ProviderSessionState` | domain | List/hydrate/save/updateMeta/delete/resolveSessionId/buildForkPlan; provider-neutral metadata + transcript + opaque state | **New** (ADR-TS-001) | 008/009/010/012/013/018/026 |
-| `ChatRuntimePort` + `RuntimeCapabilities` | domain | Add `resumeSession`/`setResumeCheckpoint`/`getCapabilities` additively to the nine P1 members | **Grown** (ADR-TS-002 §3) | 013/019/021/028 |
+| `ChatRuntimePort` + `RuntimeCapabilities` | domain | Add `resumeSession`/`setResumeCheckpoint`/`getCapabilities` additively to the nine P1 members. Claude-CLI runtime reports `supportsRewind: false` — rewind-to-turn is SDK-transport (ADR-TS-004) | **Grown** (ADR-TS-002 §3, ADR-TS-004) | 013/019/021/028 |
 | `ChatMessage` rewind fields | domain | `userMessageId?`/`assistantMessageId?`/`resumeAtMessageId?` — additive, all optional | **Grown** (ADR-TS-002 §4) | 019/021/028 |
 | `ListConversationsUseCase` | application | `ProviderHistoryPort.listSessions` → sorted meta (`Result`) | **New** | 010 |
 | `ResumeConversationUseCase` | application | hydrate + resolveSessionId → tab payload + runtime bind (`Result`) | **New** | 013/014 |
@@ -310,6 +311,13 @@ implements ports; the view (plugin layer) wires bridges → ports.
 4. **Rewind (REQ-TS-021/022):** hover user message (cap-gated + eligible via `rewindEligibility`) →
    two-mode menu. Conversation-only → `RewindConversationUseCase` truncates `messages` +
    `runtime.setResumeCheckpoint(assistantMessageId)`. Code-mode → gated no-op + `NotificationPort` notice.
+   **Transport gate (ADR-TS-004, R-TS-002):** the rewind affordance is gated on
+   `getCapabilities().supportsRewind`. The production Claude-CLI runtime returns `supportsRewind: false`
+   — rewind-to-turn (`resumeSessionAt`) is an **Agent-SDK-transport** capability the one-shot
+   `claude --print` subprocess transport cannot keep faithfully — so the rewind control **does not
+   render** on the Claude-CLI path (no silent no-op). The full truncate + checkpoint flow stays live on
+   the Mock/Fixture runtimes and auto-enables on a future SDK-transport runtime (no UI/branch change,
+   capability-driven). See `docs/adr/ADR-TS-004-conversation-rewind-transport.md`.
 5. **Title (REQ-TS-024/025):** first-turn done → set fallback + `updateMeta` → status `pending` (spin)
    → `GenerateTitleUseCase` (cold-start side-query) → on `ok` && `!titleManual` replace + `updateMeta`;
    on `err` keep fallback (no blocking error); manual rename wins.
@@ -318,7 +326,7 @@ implements ports; the view (plugin layer) wires bridges → ports.
 
 | Bridge | `ProviderHistoryPort` (`createProviderHistoryPort()`) | `ChatRuntimePort` (grown) |
 |---|---|---|
-| `ObsidianBridge` | vault-file store: JSON records under `<sessionsFolder>/` via its own `VaultPort` | real Claude-CLI runtime; `resumeSession`/`setResumeCheckpoint`/`getCapabilities` map to the CLI session/resume seam |
+| `ObsidianBridge` | vault-file store: JSON records under `<sessionsFolder>/` via its own `VaultPort` | real Claude-CLI runtime; `resumeSession` maps to `--resume <sessionId>`; `getCapabilities() → { supportsFork: true, supportsRewind: false }` — **rewind-to-turn is SDK-transport, gated off here (ADR-TS-004)**; `setResumeCheckpoint` is an unreached no-op-by-transport on this runtime |
 | `MockBridge` | in-memory `Map<id, ConversationRecord>` — full list/hydrate/save/fork/delete with no vault | scripted generator; capabilities `{ supportsFork:true, supportsRewind:true }`; resume/checkpoint are recorded no-ops for tests |
 | `LocalStorageBridge` | fixture-seeded in-memory store (canned conversations); non-durable writes (degrade, NFR-TS-002) | replay generator (as P1) |
 

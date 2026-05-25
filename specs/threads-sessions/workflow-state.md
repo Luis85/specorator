@@ -4,7 +4,7 @@ area: TS
 current_stage: implementation
 status: active
 last_updated: 2026-05-25
-last_agent: dev (implement — parity-fix batch, REVIEW-TS-001 R-TS-001/003/004/005/006/007)
+last_agent: architect (R-TS-002 transport ADR — ADR-TS-004 filed + accepted; req/spec/design/review deltas)
 epic: claudian-reboot
 phase: P3
 integration_branch: next
@@ -16,10 +16,10 @@ artifacts:
   design.md: complete (DESIGN-TS-001; Parts A/B/C; ADR-TS-001/002/003 accepted)
   spec.md: complete (SPEC-TS-001..034; 26 automatable TEST-TS + 2 manual legs)
   tasks.md: complete (TASKS-TS-001; T-TS-001..042; 42 tasks)
-  implementation-log.md: in-progress (IMPL-TS-001; domain T-TS-002..006 + infra T-TS-007..013 + application T-TS-014..025 + UI T-TS-026..035 + wire-in T-TS-037/038 + styles T-TS-036 + dev-smoke T-TS-039 done; parity-fix batch R-TS-001/003/004/005/006/007 done [e34f18c/6f5e874/6cef786/b14021f]; remain: R-TS-002 [architect ADR] + gate T-TS-040/041 [human manual legs] + T-TS-042 [orchestrator verify])
+  implementation-log.md: in-progress (IMPL-TS-001; domain T-TS-002..006 + infra T-TS-007..013 + application T-TS-014..025 + UI T-TS-026..035 + wire-in T-TS-037/038 + styles T-TS-036 + dev-smoke T-TS-039 done; parity-fix batch R-TS-001/003/004/005/006/007 done [e34f18c/6f5e874/6cef786/b14021f]; R-TS-002 decided by architect ADR-TS-004 [rewind gated off CLI transport]; remain: R-TS-002 dev follow-up [3-line ClaudeCliChatRuntime edit — supportsRewind:false + drop resumeCheckpoint] + gate T-TS-040/041 [human manual legs] + T-TS-042 [orchestrator verify])
   test-plan.md: pending
   test-report.md: pending
-  review.md: complete (REVIEW-TS-001; verdict BLOCKED — 3 P1 real-path blockers R-TS-001/002/003; resolution log appended — R-TS-001/003/004/005/006/007 RESOLVED by dev, R-TS-002 deferred to architect; re-verdict pending R-TS-002 + verify gate)
+  review.md: complete (REVIEW-TS-001; verdict BLOCKED — 3 P1 real-path blockers R-TS-001/002/003; resolution log appended — R-TS-001/003/004/005/006/007 RESOLVED by dev, R-TS-002 RESOLVED by architect via ADR-TS-004 [rewind gated off CLI transport, supportsRewind:false]; re-verdict pending the R-TS-002 dev follow-up [3 lines in ClaudeCliChatRuntime] + verify gate T-TS-042)
   traceability.md: complete-with-broken-links (TRACE-TS-001; REQ-TS-018/019/021 chains broken at code→test)
   release-notes.md: pending
   retrospective.md: pending
@@ -648,4 +648,51 @@ self-parity-review vs claudian after each big chunk; merge P3 to `next` autonomo
                             - R-TS-008/009/010 remain scheduled P3-polish / P9.
                           REMAINING OWNER: architect (R-TS-002) + qa (test-plan/report + manual legs) +
                           orchestrator (T-TS-042 verify gate). NEXT AGENT: architect (R-TS-002 ADR).
+
+2026-05-25 (architect, R-TS-002 transport ADR): R-TS-002 RESOLVED → ADR-TS-004 filed + accepted
+                          (docs/adr/ADR-TS-004-conversation-rewind-transport.md), README row added.
+                          INVESTIGATION (parity truth vs claudian-main): claudian's rewind-to-turn is the
+                          Agent-SDK Options.resumeSessionAt (assistant turn UUID) over a PERSISTENT
+                          MessageChannel (ClaudeQueryOptionsBuilder.ts:162-166 + ClaudeChatRuntime.ts:500-512
+                          + agentQuery). The raw `claude --print` CLI our P1 runtime spawns has NO faithful
+                          equivalent: resume-at is an SDK-transport capability (SDK docs name a CLI-flag
+                          equiv for every option that has one; resumeSessionAt has none; claudian never feeds
+                          resume-at to a raw CLI; we can't guarantee our msg UUID == the CLI transcript UUID
+                          on the resumed-from-history path). → Option (B) transport limitation, honest
+                          handling = (B1): Claude-CLI getCapabilities() → supportsRewind:false so the
+                          capability-gated rewind affordance (REQ-TS-019/SPEC-TS-025) DOES NOT RENDER on the
+                          CLI path; remove the stored-then-discarded resumeCheckpoint + its misleading
+                          query() log/clear. Truncate+checkpoint flow stays live on Mock/Fixture and
+                          auto-enables on a future SDK-transport runtime (supportsRewind:true) with NO
+                          UI/branch change (REQ-TS-026). Rejected (A) [no faithful CLI flag] + (b2)
+                          [re-send-kept-transcript double-counts context vs --resume; not how claudian
+                          rewinds] + (C) [whole-seam SDK swap is a later transport ADR, out of P3]. NO SILENT
+                          DEAD PATH REMAINS.
+
+                          DELTAS WRITTEN (no production code — architect scope): requirements.md (REQ-TS-021
+                          delta: satisfied-by-gating on supportsRewind), spec.md (SPEC-TS-003 getCapabilities/
+                          setResumeCheckpoint rows + SPEC-TS-009 Claude-CLI runtime + SPEC-TS-014 conv-mode
+                          note + SPEC-TS-025 gate-honesty note), design.md Part C (C.2/C.4#4/C.5), review.md
+                          (R-TS-002 row → resolved + "R-TS-002 resolution" section + dev follow-up),
+                          docs/adr/README.md (ADR-TS-004 row).
+
+                          HAND-OFF → planner (Tasks) / dev (implement) + qa (test) + reviewer (re-verdict):
+                          - dev (R-TS-002 follow-up, the ONLY remaining code to make the behaviour honest —
+                            3 small edits in src/infrastructure/obsidian/ClaudeCliChatRuntime.ts):
+                            (1) getCapabilities() → { supportsFork:true, supportsRewind:false } (was true);
+                            (2) remove the resumeCheckpoint field + its query() log-and-clear (:47-48,80-85,
+                                144,169-173); setResumeCheckpoint becomes an unreached no-op-by-transport (do
+                                NOT wire any --resume-at flag into _buildArgs — Option A is rejected);
+                            (3) keep Mock/Fixture at supportsRewind:true (recorded no-op) so the flow stays
+                                exercised.
+                          - qa: add a test asserting the rewind affordance is ABSENT when
+                            getCapabilities().supportsRewind === false and PRESENT on a supportsRewind:true
+                            runtime (SPEC-TS-025), + assert Claude-CLI runtime reports supportsRewind:false;
+                            then author test-plan.md/test-report.md + run TEST-TS-M1/M2.
+                          - reviewer: with R-TS-002 closed (the last P1 blocker), regenerate traceability.md
+                            (REQ-TS-018/019/021 chains) + re-verdict once the dev follow-up + verify gate
+                            (T-TS-042) are green. NO OPEN CLARIFICATIONS block tasks.
+                          REMAINING OWNER: dev (R-TS-002 3-line follow-up) + qa (capability-gate test +
+                          test-plan/report + manual legs) + orchestrator (T-TS-042 verify gate) + reviewer
+                          (re-verdict). NEXT AGENT: dev (/spec:implement — R-TS-002 follow-up).
 ```
