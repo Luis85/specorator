@@ -8,7 +8,12 @@ import {
 	setIcon,
 	type App,
 } from 'obsidian';
-import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings';
+import {
+	DEFAULT_SETTINGS,
+	resolveSessionsFolder,
+	clampMaxTabs,
+	type PluginSettings,
+} from '@/domain/settings/PluginSettings';
 import { trySync } from '@/domain/shared/tryAsync';
 import type {
 	SettingsPort,
@@ -252,7 +257,17 @@ export class ObsidianBridge
 		if (!parsed.ok || parsed.value === null || typeof parsed.value !== 'object') {
 			return { ...DEFAULT_SETTINGS };
 		}
-		const obj = parsed.value as Partial<Record<keyof PluginSettings, unknown>>;
+		return ObsidianBridge._coerceSettings(parsed.value);
+	}
+
+	/**
+	 * Field-level load-or-default coercion for the device-local blob. The two P3
+	 * additive fields (SPEC-TS-005) flow through the pure resolve/clamp helpers so
+	 * an absent/garbage value never escapes.
+	 */
+	private static _coerceSettings(
+		obj: Partial<Record<keyof PluginSettings, unknown>>,
+	): PluginSettings {
 		const levels = ['debug', 'info', 'warn', 'error'] as const;
 		const locale =
 			typeof obj.locale === 'string' && obj.locale.trim() ? obj.locale : DEFAULT_SETTINGS.locale;
@@ -261,7 +276,11 @@ export class ObsidianBridge
 			typeof rawLevel === 'string' && (levels as readonly string[]).includes(rawLevel)
 				? (rawLevel as PluginSettings['logLevel'])
 				: DEFAULT_SETTINGS.logLevel;
-		return { locale, logLevel };
+		const sessionsFolder = resolveSessionsFolder(
+			typeof obj.sessionsFolder === 'string' ? obj.sessionsFolder : '',
+		);
+		const maxTabs = clampMaxTabs(typeof obj.maxTabs === 'number' ? obj.maxTabs : Number.NaN);
+		return { locale, logLevel, sessionsFolder, maxTabs };
 	}
 
 	private _shouldLog(level: 'debug' | 'info' | 'warn' | 'error'): boolean {

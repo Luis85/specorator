@@ -1,5 +1,10 @@
 import { defineModule } from '@/modules/module'
-import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings'
+import {
+  DEFAULT_SETTINGS,
+  resolveSessionsFolder,
+  clampMaxTabs,
+  type PluginSettings,
+} from '@/domain/settings/PluginSettings'
 
 const VALID_LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const
 
@@ -34,6 +39,11 @@ export const coreSettingsModule = defineModule<PluginSettings>({
     return {
       locale: coerceString(r.locale, DEFAULT_SETTINGS.locale),
       logLevel: coerceEnum(r.logLevel, VALID_LOG_LEVELS, DEFAULT_SETTINGS.logLevel),
+      // P3 (SPEC-TS-005): resolve/clamp through the pure helpers on save.
+      sessionsFolder: resolveSessionsFolder(
+        typeof r.sessionsFolder === 'string' ? r.sessionsFolder : '',
+      ),
+      maxTabs: clampMaxTabs(typeof r.maxTabs === 'number' ? r.maxTabs : Number.NaN),
     }
   },
 
@@ -63,6 +73,23 @@ export const coreSettingsModule = defineModule<PluginSettings>({
           { value: 'error', label: 'Error' },
         ],
         default: DEFAULT_SETTINGS.logLevel,
+      },
+      // P3 threads-sessions (SPEC-TS-005). Both flow through resolveSessionsFolder/
+      // clampMaxTabs in validateSettings on save.
+      {
+        type: 'text',
+        key: 'sessionsFolder',
+        label: 'Sessions folder',
+        description:
+          'Vault folder holding conversation history (one JSON file per conversation).',
+        default: DEFAULT_SETTINGS.sessionsFolder,
+      },
+      {
+        type: 'number',
+        key: 'maxTabs',
+        label: 'Max tabs',
+        description: 'Maximum concurrent chat tabs (1–10).',
+        default: DEFAULT_SETTINGS.maxTabs,
       },
     ],
   },
