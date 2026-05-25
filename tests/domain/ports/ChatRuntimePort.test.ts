@@ -1,50 +1,58 @@
 /**
- * T-CC-002 (TEST-CC-003) — RED: `ChatRuntimePort` declares exactly nine members.
+ * T-CC-002 (TEST-CC-003) — the P1 `ChatRuntimePort` member sentinel, superseded
+ * additively by P3 (SPEC-TS-003, T-TS-005). The nine P1 members stay
+ * byte-identical (REQ-TS-028); P3 appended exactly three members
+ * (`resumeSession`/`setResumeCheckpoint`/`getCapabilities`) — so this file now
+ * asserts the nine P1 members are PRESENT (not that they are the only members).
+ * The exact-twelve contract lives in `ChatRuntimePort.ts.test.ts` (TEST-TS-003).
  *
  * SPEC-CC-001 / ADR-CC-001 bless the streaming + lifecycle subset of Claudian's
- * `ChatRuntime` (`ChatRuntime.ts:20`): `providerId`, `prepareTurn`, `ensureReady`,
- * `query`, `cancel`, `getSessionId`, `resetSession`, `onReadyStateChange`,
- * `isReady` — and NO callback-setter / `rewind` / `steer` / subagent member in P1.
- * The compile-time exact-key equality below fails `npm run typecheck`
- * (`tsconfig.lint.json` covers `tests/**`) until T-CC-004 declares the port.
+ * `ChatRuntime` (`ChatRuntime.ts:20`); the still-deferred members
+ * (callback-setters / `rewind` / `steer` / subagent) remain absent.
  *
- * Traces: TEST-CC-003, SPEC-CC-001, REQ-CC-002a; ADR-CC-001 (Decision §3, Compliance).
+ * Traces: TEST-CC-003, SPEC-CC-001, REQ-CC-002a, SPEC-TS-003, REQ-TS-028;
+ * ADR-CC-001 (Decision §3, Compliance), ADR-TS-002 §3.
  */
 import { describe, it, expect } from 'vitest';
 import type { ChatRuntimePort } from '@/domain/ports/ChatRuntimePort';
 
 type Equals<A, B> =
 	(<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+type HasKey<T, K extends PropertyKey> = K extends keyof T ? true : false;
 
-// Exact-key equality: true ONLY when ChatRuntimePort exposes EXACTLY these nine keys.
-type ExpectedKeys =
-	| 'providerId'
-	| 'prepareTurn'
-	| 'ensureReady'
-	| 'query'
-	| 'cancel'
-	| 'getSessionId'
-	| 'resetSession'
-	| 'onReadyStateChange'
-	| 'isReady';
+// The nine P1 members stay present + byte-identical (REQ-TS-028). P3 grows the
+// port additively, so we assert PRESENCE (not exact count) here.
+const _providerId: Equals<HasKey<ChatRuntimePort, 'providerId'>, true> = true;
+const _prepareTurn: Equals<HasKey<ChatRuntimePort, 'prepareTurn'>, true> = true;
+const _ensureReady: Equals<HasKey<ChatRuntimePort, 'ensureReady'>, true> = true;
+const _query: Equals<HasKey<ChatRuntimePort, 'query'>, true> = true;
+const _cancel: Equals<HasKey<ChatRuntimePort, 'cancel'>, true> = true;
+const _getSessionId: Equals<HasKey<ChatRuntimePort, 'getSessionId'>, true> = true;
+const _resetSession: Equals<HasKey<ChatRuntimePort, 'resetSession'>, true> = true;
+const _onReadyStateChange: Equals<HasKey<ChatRuntimePort, 'onReadyStateChange'>, true> = true;
+const _isReady: Equals<HasKey<ChatRuntimePort, 'isReady'>, true> = true;
+void _providerId;
+void _prepareTurn;
+void _ensureReady;
+void _query;
+void _cancel;
+void _getSessionId;
+void _resetSession;
+void _onReadyStateChange;
+void _isReady;
 
-const _portHasExactlyNineMembers: Equals<keyof ChatRuntimePort, ExpectedKeys> = true;
-void _portHasExactlyNineMembers;
-
-// Deferred members must NOT be present in P1 (their absence keeps the keyof exact).
-const _noApprovalSetter: Equals<
-	Extract<keyof ChatRuntimePort, 'setApprovalCallback'>,
-	never
-> = true;
-const _noRewind: Equals<Extract<keyof ChatRuntimePort, 'rewind'>, never> = true;
-const _noSteer: Equals<Extract<keyof ChatRuntimePort, 'steer'>, never> = true;
+// Still-deferred members must NOT be present (P3 added only the three resume/
+// checkpoint/capability members — not these).
+const _noApprovalSetter: Equals<HasKey<ChatRuntimePort, 'setApprovalCallback'>, false> = true;
+const _noRewind: Equals<HasKey<ChatRuntimePort, 'rewind'>, false> = true;
+const _noSteer: Equals<HasKey<ChatRuntimePort, 'steer'>, false> = true;
 void _noApprovalSetter;
 void _noRewind;
 void _noSteer;
 
 describe('ChatRuntimePort shape (TEST-CC-003)', () => {
-	it('lists exactly the nine blessed members (runtime sentinel)', () => {
-		const expected = [
+	it('lists the nine blessed P1 members (runtime sentinel)', () => {
+		const p1 = [
 			'providerId',
 			'prepareTurn',
 			'ensureReady',
@@ -55,9 +63,9 @@ describe('ChatRuntimePort shape (TEST-CC-003)', () => {
 			'onReadyStateChange',
 			'isReady',
 		];
-		expect(expected).toHaveLength(9);
-		expect(expected).not.toContain('setApprovalCallback');
-		expect(expected).not.toContain('rewind');
-		expect(expected).not.toContain('steer');
+		expect(p1).toHaveLength(9);
+		expect(p1).not.toContain('setApprovalCallback');
+		expect(p1).not.toContain('rewind');
+		expect(p1).not.toContain('steer');
 	});
 });

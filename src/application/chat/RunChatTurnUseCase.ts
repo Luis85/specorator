@@ -64,8 +64,13 @@ export interface ChatTurnSink {
 	onUsage(usage: UsageInfo): void;
 	/** Render a streaming error inline (REQ-CC-012). */
 	onErrorChunk(content: string): void;
-	/** Finalise the live message -> idle (REQ-CC-005). */
-	onDone(): void;
+	/**
+	 * Finalise the live message -> idle (REQ-CC-005). `assistantMessageId` (P3,
+	 * R-TS-001) is the runtime's per-turn id when the stream surfaced one; the
+	 * store stamps it on the live assistant message so rewind eligibility renders
+	 * (REQ-TS-019).
+	 */
+	onDone(assistantMessageId?: string): void;
 	// ---- P2 additive legs (SPEC-RR-019) ----
 	/** Create a running `ToolCall` + push a `tool_use` content block (REQ-RR-002). */
 	onToolUse(id: string, name: string, input: Record<string, unknown>): void;
@@ -174,7 +179,8 @@ export class RunChatTurnUseCase {
 				sink.onErrorChunk(chunk.content);
 				return false;
 			case 'done':
-				sink.onDone();
+				// P3 (R-TS-001): forward the per-turn assistant id when the stream carried one.
+				sink.onDone(chunk.assistantMessageId);
 				return true;
 			default:
 				// P2 rich members route here; `assistant_message_start` / `user_message_start` and any

@@ -24,7 +24,8 @@ type Equals<A, B> =
 // ---- P1 members byte-identical (no rename, no reshape) ----
 const _textShape: Equals<ChunkOf<'text'>, { type: 'text'; content: string }> = true;
 const _errorShape: Equals<ChunkOf<'error'>, { type: 'error'; content: string }> = true;
-const _doneShape: Equals<ChunkOf<'done'>, { type: 'done' }> = true;
+// R-TS-001: `done` grows the additive optional per-turn assistant id (REQ-TS-019).
+const _doneShape: Equals<ChunkOf<'done'>, { type: 'done'; assistantMessageId?: string }> = true;
 const _startShape: Equals<
 	ChunkOf<'assistant_message_start'>,
 	{ type: 'assistant_message_start'; itemId?: string }

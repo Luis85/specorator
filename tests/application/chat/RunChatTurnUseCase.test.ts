@@ -23,6 +23,7 @@ import { RunChatTurnUseCase, ChatTurnError } from '@/application/chat/RunChatTur
 import type { ChatTurnSink } from '@/application/chat/RunChatTurnUseCase';
 import type {
 	ChatRuntimePort,
+	RuntimeCapabilities,
 	StreamChunk,
 	ChatMessage,
 	ChatTurnRequest,
@@ -147,6 +148,19 @@ class ScriptedRuntime implements ChatRuntimePort {
 
 	isReady(): boolean {
 		return this.ready;
+	}
+
+	// P3 additive members (SPEC-TS-003) — no-op stubs to satisfy the grown port.
+	resumeSession(): void {
+		/* no-op for the test */
+	}
+
+	setResumeCheckpoint(): void {
+		/* no-op for the test */
+	}
+
+	getCapabilities(): RuntimeCapabilities {
+		return { supportsFork: true, supportsRewind: true };
 	}
 }
 

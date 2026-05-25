@@ -6,10 +6,12 @@ import type { ToolCall } from './ToolCall';
  * SPEC-RR-008). Mirrors the relevant subset of claudian-main `chat.ts:39/46/47`.
  *
  * P2 (rich-rendering, SPEC-RR-008) grows this **additively** with
- * `contentBlocks?`/`toolCalls?`; the six P1 fields are byte-identical. The still
- * later-phase members — `images` (P5), `userMessageId`/`assistantMessageId`/
- * `resumeAtMessageId` (P3 rewind), `currentNote`, `isInterrupt`/
- * `isRebuiltContext`, `durationFlavorWord` — stay EXCLUDED (ADR-RR-001 §1). "is
+ * `contentBlocks?`/`toolCalls?`; the six P1 fields are byte-identical. P3
+ * (threads-sessions, SPEC-TS-004, ADR-TS-002 §4) grows it additively with the
+ * three optional rewind ids `userMessageId`/`assistantMessageId`/
+ * `resumeAtMessageId`. The still later-phase members — `images` (P5),
+ * `currentNote`, `isInterrupt`/`isRebuiltContext`, `durationFlavorWord` — stay
+ * EXCLUDED (ADR-RR-001 §1). "is
  * streaming" and "interrupted" are NOT fields here — the live-turn id and
  * interrupted-turn id live on `chatStore` (SPEC-CC-016) so DTOs stay minimal.
  * No per-block `isExpanded`/timer state on the DTO — that lives in the Vue layer
@@ -40,4 +42,11 @@ export interface ChatMessage {
 	// ---- P2 additive (chat.ts:46/47, SPEC-RR-008) ----
 	contentBlocks?: ContentBlock[];
 	toolCalls?: ToolCall[];
+	// ---- P3 additive (chat.ts:39, SPEC-TS-004, all optional) ----
+	/** The runtime's id for this user turn (set on assistant turns it triggered). */
+	userMessageId?: string;
+	/** The runtime's id for this assistant turn — its PRESENCE proves the runtime processed the turn (REQ-TS-019). */
+	assistantMessageId?: string;
+	/** The turn id the runtime resumes from for this message (fork/rewind offset). */
+	resumeAtMessageId?: string;
 }

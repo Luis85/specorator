@@ -42,4 +42,41 @@ export class MessageTurnPageObject {
 	hasMarkdownBlock(): boolean {
 		return this.wrapper.find('[data-testid="markdown-block"]').exists();
 	}
+
+	// ── P3 fork/rewind affordances (SPEC-TS-024/025) ─────────────────────────────
+
+	hasForkButton(): boolean {
+		return this.wrapper.find('[data-testid="msg-fork"]').exists();
+	}
+
+	hasRewindButton(): boolean {
+		return this.wrapper.find('[data-testid="msg-rewind"]').exists();
+	}
+
+	async clickFork(): Promise<void> {
+		await this.wrapper.get('[data-testid="msg-fork"]').trigger('click');
+	}
+
+	async clickRewind(): Promise<void> {
+		await this.wrapper.get('[data-testid="msg-rewind"]').trigger('click');
+	}
+
+	rewindMenuOpen(): boolean {
+		return this.wrapper.find('[data-testid="rewind-menu"]').exists();
+	}
+
+	rewindOptionCount(): number {
+		return (
+			this.wrapper.findAll('[data-testid="rewind-conversation"]').length +
+			this.wrapper.findAll('[data-testid="rewind-code"]').length
+		);
+	}
+
+	async clickRewindConversation(): Promise<void> {
+		await this.wrapper.get('[data-testid="rewind-conversation"]').trigger('click');
+	}
+
+	async clickRewindCode(): Promise<void> {
+		await this.wrapper.get('[data-testid="rewind-code"]').trigger('click');
+	}
 }

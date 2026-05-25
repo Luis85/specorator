@@ -270,8 +270,17 @@ export const useChatStore = defineStore('chat', {
 			this.errorActive = true;
 		},
 
-		/** Finalise: live id cleared; status resolves to error (transient) or idle (REQ-CC-005). */
-		onDone(): void {
+		/**
+		 * Finalise: live id cleared; status resolves to error (transient) or idle
+		 * (REQ-CC-005). `assistantMessageId` (P3, R-TS-001) is accepted for sink-contract
+		 * parity; the single-thread P1 store stamps it on the live message when the stream
+		 * surfaced one so a P1 surface that later grows rewind reads a real id.
+		 */
+		onDone(assistantMessageId?: string): void {
+			if (assistantMessageId !== undefined && assistantMessageId.length > 0) {
+				const live = this.messages.find((m) => m.id === this.liveAssistantId);
+				if (live !== undefined) live.assistantMessageId = assistantMessageId;
+			}
 			this.liveAssistantId = null;
 			this.status = this.errorActive ? 'error' : 'idle';
 		},
@@ -497,8 +506,8 @@ export const useChatStore = defineStore('chat', {
 				onErrorChunk: (content) => {
 					this.onErrorChunk(content);
 				},
-				onDone: () => {
-					this.onDone();
+				onDone: (assistantMessageId) => {
+					this.onDone(assistantMessageId);
 				},
 				// ---- P2 legs (SPEC-RR-020) ----
 				onToolUse: (id, name, input) => {

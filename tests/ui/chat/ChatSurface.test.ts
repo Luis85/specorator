@@ -18,15 +18,21 @@ import { setActivePinia, createPinia } from 'pinia';
 import ChatSurface from '@/ui/chat/ChatSurface.vue';
 import { i18n } from '@/ui/i18n';
 import {
-	CHAT_RUNTIME_PORT,
 	MARKDOWN_RENDER_PORT,
 	NOTIFICATION_PORT,
 	LOGGER_PORT,
+	PROVIDER_HISTORY_PORT,
+	ICON_PORT,
 } from '@/infrastructure/bridge/ports';
+import { CHAT_RUNTIME_FACTORY } from '@/ui/chat/modalSeam';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { MockChatRuntime } from '@/infrastructure/mock/MockChatRuntime';
+import { MockHistoryStore } from '@/infrastructure/mock/MockHistoryStore';
+import { MockBridge } from '@/infrastructure/mock/MockBridge';
 import type { ChatRuntimePort, StreamChunk, NotificationPort, LoggerPort } from '@/domain/ports';
 import { ChatSurfacePageObject } from './ChatSurface.po';
+
+const iconBridge = new MockBridge();
 
 /**
  * A step-gated runtime: each `yield` waits until the test calls `step()`, so the
@@ -79,14 +85,19 @@ function notifySpy(): NotificationPort {
 const logger: LoggerPort = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
 function mountSurface(runtime: ChatRuntimePort, notify: NotificationPort = notifySpy()) {
+	// P3 (SPEC-TS-026): the surface builds one runtime PER TAB via CHAT_RUNTIME_FACTORY.
+	// The single-tab P1 behaviour is preserved by handing the factory the one
+	// controllable runtime the test drives. (Harness update only — assertions unchanged.)
 	const wrapper = mount(ChatSurface, {
 		global: {
 			plugins: [i18n],
 			provide: {
-				[CHAT_RUNTIME_PORT as symbol]: runtime,
+				[CHAT_RUNTIME_FACTORY as symbol]: () => runtime,
 				[MARKDOWN_RENDER_PORT as symbol]: safeMarkdownRenderPort,
 				[NOTIFICATION_PORT as symbol]: notify,
 				[LOGGER_PORT as symbol]: logger,
+				[PROVIDER_HISTORY_PORT as symbol]: new MockHistoryStore(),
+				[ICON_PORT as symbol]: iconBridge.createIconPort(),
 			},
 		},
 	});

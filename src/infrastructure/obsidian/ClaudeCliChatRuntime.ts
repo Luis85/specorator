@@ -13,6 +13,7 @@ import type {
 	ChatRuntimeEnsureReadyOptions,
 	Unsubscriber,
 	LoggerPort,
+	RuntimeCapabilities,
 } from '@/domain/ports';
 import { ClaudeStreamReducer } from './reduceClaudeStream';
 
@@ -145,6 +146,34 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 		return this.ready;
 	}
 
+	// ── P3 additive members (SPEC-TS-003/009, ADR-TS-002 §3) ────────────────────
+	// `resumeSession` maps to the CLI `--resume <sessionId>` seam (mirrors
+	// claudian-main's SessionManager.setSessionId). `setResumeCheckpoint` is a
+	// no-op-by-transport here (ADR-TS-004) — see below. Bound setters — no stream,
+	// no Result.
+
+	resumeSession(sessionId: string): void {
+		// Bind the next `--resume` to this session id (an empty id cold-starts the
+		// next turn — EC-TS-5).
+		this.sessionId = sessionId.length > 0 ? sessionId : null;
+	}
+
+	setResumeCheckpoint(_assistantMessageId: string): void {
+		// No-op-by-transport (ADR-TS-004): rewind-to-turn is an Agent-SDK capability
+		// (`Options.resumeSessionAt` over a persistent MessageChannel), NOT exposed
+		// faithfully by the one-shot `claude --print` subprocess. The method stays on
+		// the port (ADR-TS-002 §3) but applies no checkpoint here — `getCapabilities`
+		// reports `supportsRewind: false`, so the capability-gated UI never offers
+		// rewind on this transport and never calls this with intent to rewind.
+	}
+
+	getCapabilities(): RuntimeCapabilities {
+		// Fork derives lineage via `--resume <forkSource.sessionId>` (supported).
+		// Rewind-to-turn is gated OFF — it is an Agent-SDK-transport capability the
+		// `--print` subprocess cannot honour faithfully (ADR-TS-004, R-TS-002).
+		return { supportsFork: true, supportsRewind: false };
+	}
+
 	// ── internals ─────────────────────────────────────────────────────────────
 
 	/** Opaque read of the cancel flag so the streaming loop checks live state. */
@@ -160,7 +189,11 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 
 	private _buildArgs(queryOptions?: ChatRuntimeQueryOptions): string[] {
 		const argv = ['--print', '--output-format', 'stream-json', '--verbose'];
-		if (this.sessionId !== null && this.sessionId.length > 0) {
+		// P3 (SPEC-TS-009): a forceColdStart query ignores any bound session for
+		// this single query — no `--resume` (so the title side-query does not steer
+		// the tab's main stream).
+		const coldStart = queryOptions?.forceColdStart === true;
+		if (!coldStart && this.sessionId !== null && this.sessionId.length > 0) {
 			argv.push('--resume', this.sessionId);
 		}
 		if (queryOptions?.model !== undefined && queryOptions.model.length > 0) {

@@ -148,6 +148,47 @@ describe('ClaudeStreamReducer (SPEC-CC-010 NDJSON reduce)', () => {
 		expect(chunks[0]?.type).toBe('error');
 		expect(chunks[chunks.length - 1]).toEqual({ type: 'done' });
 	});
+
+	// ── R-TS-001: surface the per-turn assistant id on the terminal `done` ───────
+
+	it('R-TS-001: captures the assistant message id and surfaces it on the done chunk', () => {
+		const reducer = new ClaudeStreamReducer();
+		reducer.consumeLine(JSON.stringify({ type: 'system', subtype: 'init', session_id: 's1' }));
+		reducer.consumeLine(
+			JSON.stringify({
+				type: 'assistant',
+				message: { id: 'msg_turn_42', content: [{ type: 'text', text: 'Hi' }] },
+			}),
+		);
+		const chunks = reducer.consumeLine(
+			JSON.stringify({ type: 'result', subtype: 'success', session_id: 's1' }),
+		);
+		const done = chunks[chunks.length - 1];
+		expect(done).toEqual({ type: 'done', assistantMessageId: 'msg_turn_42' });
+	});
+
+	it('R-TS-001: prefers the envelope uuid over the inner message id when both are present', () => {
+		const reducer = new ClaudeStreamReducer();
+		reducer.consumeLine(
+			JSON.stringify({
+				type: 'assistant',
+				uuid: 'uuid-outer',
+				message: { id: 'msg-inner', content: [{ type: 'text', text: 'Hi' }] },
+			}),
+		);
+		const chunks = reducer.consumeLine(JSON.stringify({ type: 'result', subtype: 'success' }));
+		const done = chunks[chunks.length - 1];
+		expect(done).toEqual({ type: 'done', assistantMessageId: 'uuid-outer' });
+	});
+
+	it('R-TS-001: a turn with no assistant id emits a bare done (no assistantMessageId)', () => {
+		const reducer = new ClaudeStreamReducer();
+		reducer.consumeLine(
+			JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Hi' }] } }),
+		);
+		const chunks = reducer.consumeLine(JSON.stringify({ type: 'result', subtype: 'success' }));
+		expect(chunks[chunks.length - 1]).toEqual({ type: 'done' });
+	});
 });
 
 /**

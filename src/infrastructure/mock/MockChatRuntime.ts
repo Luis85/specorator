@@ -8,6 +8,7 @@ import type {
 	ChatRuntimeQueryOptions,
 	ChatRuntimeEnsureReadyOptions,
 	Unsubscriber,
+	RuntimeCapabilities,
 } from '@/domain/ports';
 
 /**
@@ -138,6 +139,11 @@ export class MockChatRuntime implements ChatRuntimePort {
 	private readonly script: StreamChunk[];
 	private sessionId: string | null = 'mock-session';
 	private cancelled = false;
+	// P3 (SPEC-TS-009): recorded-no-op session ops so per-tab wiring tests assert
+	// without a subprocess. The last call is captured for inspection.
+	private resumedSessionId: string | null = null;
+	private resumeCheckpoint: string | null = null;
+	private lastForceColdStart = false;
 
 	constructor(script: MockChatScriptEntry[] = DEFAULT_SCRIPT) {
 		// Drop any trailing `done` — the generator owns the terminator.
@@ -165,18 +171,33 @@ export class MockChatRuntime implements ChatRuntimePort {
 	async *query(
 		_turn: PreparedChatTurn,
 		_conversationHistory?: ChatMessage[],
-		_queryOptions?: ChatRuntimeQueryOptions,
+		queryOptions?: ChatRuntimeQueryOptions,
 	): AsyncGenerator<StreamChunk> {
 		this.cancelled = false;
+		// P3 (SPEC-TS-009): a forceColdStart query ignores any bound session for
+		// this single query (so the title side-query does not steer the main
+		// stream). The Mock has no real session to continue, so it records the flag.
+		this.lastForceColdStart = queryOptions?.forceColdStart === true;
+		let scriptedAssistantId: string | undefined;
 		for (const chunk of this.script) {
 			// Per-chunk yield boundary: each chunk lands on its own resumed tick.
 			await Promise.resolve();
 			if (this.isCancelled()) return;
+			// R-TS-001: when a scripted `done` carries an assistantMessageId, honour it on
+			// the generator-owned terminator so a scripted-turn test can assert eligibility.
+			if (chunk.type === 'done') {
+				scriptedAssistantId = chunk.assistantMessageId;
+				continue;
+			}
 			yield chunk;
 		}
 		await Promise.resolve();
 		if (this.isCancelled()) return;
-		yield { type: 'done' };
+		// R-TS-001: surface a per-turn assistant id on the terminal `done` so the live
+		// (Mock) path stamps `assistantMessageId` and rewind eligibility renders, the
+		// same way the real CLI reducer surfaces the assistant uuid (reduceClaudeStream).
+		const assistantMessageId = scriptedAssistantId ?? `mock-assistant-${crypto.randomUUID()}`;
+		yield { type: 'done', assistantMessageId };
 	}
 
 	cancel(): void {
@@ -198,6 +219,38 @@ export class MockChatRuntime implements ChatRuntimePort {
 
 	isReady(): boolean {
 		return true;
+	}
+
+	// ── P3 additive members (SPEC-TS-003/009) ──────────────────────────────────
+	// Recorded no-ops: capture the last call so per-tab wiring tests assert without
+	// a subprocess. Capabilities are scripted (Claude supports both, REQ-TS-027).
+
+	resumeSession(sessionId: string): void {
+		this.resumedSessionId = sessionId;
+		this.sessionId = sessionId.length > 0 ? sessionId : this.sessionId;
+	}
+
+	setResumeCheckpoint(assistantMessageId: string): void {
+		this.resumeCheckpoint = assistantMessageId;
+	}
+
+	getCapabilities(): RuntimeCapabilities {
+		return { supportsFork: true, supportsRewind: true };
+	}
+
+	/** Test accessor: the last session id bound via {@link resumeSession}. */
+	getResumedSessionId(): string | null {
+		return this.resumedSessionId;
+	}
+
+	/** Test accessor: the last checkpoint set via {@link setResumeCheckpoint}. */
+	getResumeCheckpoint(): string | null {
+		return this.resumeCheckpoint;
+	}
+
+	/** Test accessor: whether the last `query` ran with `forceColdStart`. */
+	getLastForceColdStart(): boolean {
+		return this.lastForceColdStart;
 	}
 
 	/** Opaque read of the cancel flag so the streaming loop checks live state. */

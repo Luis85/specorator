@@ -8,7 +8,12 @@ import {
 	setIcon,
 	type App,
 } from 'obsidian';
-import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings';
+import {
+	DEFAULT_SETTINGS,
+	resolveSessionsFolder,
+	clampMaxTabs,
+	type PluginSettings,
+} from '@/domain/settings/PluginSettings';
 import { trySync } from '@/domain/shared/tryAsync';
 import type {
 	SettingsPort,
@@ -22,9 +27,11 @@ import type {
 	SafeRenderResult,
 	IconPort,
 	IconNode,
+	ProviderHistoryPort,
 } from '@/domain/ports';
 import { MarkdownRenderer } from 'obsidian';
 import { ClaudeCliChatRuntime } from './ClaudeCliChatRuntime';
+import { VaultFileHistoryStore } from './history/VaultFileHistoryStore';
 import { safeMarkdownRender } from '@/application/chat/safeMarkdownRender';
 import { walkSvgElementToIconNode } from './walkSvgElementToIconNode';
 import { walkMarkdownFragment } from './walkMarkdownFragment';
@@ -193,6 +200,20 @@ export class ObsidianBridge
 		};
 	}
 
+	// ── Provider history factory (SPEC-TS-006, ADR-TS-001 §1/§3) ────────────────
+	// Returns a vault-file `VaultFileHistoryStore` (one JSON file per conversation
+	// under the resolved sessions folder). Passes `this` as the VaultPort + the
+	// LoggerPort (corrupt-skip warn, no message content) and a folder resolver that
+	// reads the device-local `sessionsFolder` setting. Coverage-excluded infra —
+	// behaviour gated by the MANUAL leg TEST-TS-M1.
+	createProviderHistoryPort(): ProviderHistoryPort {
+		return new VaultFileHistoryStore(
+			this,
+			async () => (await this.getSettings()).sessionsFolder,
+			this,
+		);
+	}
+
 	private _track(notice: Notice): void {
 		this._activeNotices.add(notice);
 		const el: HTMLElement = notice.messageEl;
@@ -252,7 +273,17 @@ export class ObsidianBridge
 		if (!parsed.ok || parsed.value === null || typeof parsed.value !== 'object') {
 			return { ...DEFAULT_SETTINGS };
 		}
-		const obj = parsed.value as Partial<Record<keyof PluginSettings, unknown>>;
+		return ObsidianBridge._coerceSettings(parsed.value);
+	}
+
+	/**
+	 * Field-level load-or-default coercion for the device-local blob. The two P3
+	 * additive fields (SPEC-TS-005) flow through the pure resolve/clamp helpers so
+	 * an absent/garbage value never escapes.
+	 */
+	private static _coerceSettings(
+		obj: Partial<Record<keyof PluginSettings, unknown>>,
+	): PluginSettings {
 		const levels = ['debug', 'info', 'warn', 'error'] as const;
 		const locale =
 			typeof obj.locale === 'string' && obj.locale.trim() ? obj.locale : DEFAULT_SETTINGS.locale;
@@ -261,7 +292,11 @@ export class ObsidianBridge
 			typeof rawLevel === 'string' && (levels as readonly string[]).includes(rawLevel)
 				? (rawLevel as PluginSettings['logLevel'])
 				: DEFAULT_SETTINGS.logLevel;
-		return { locale, logLevel };
+		const sessionsFolder = resolveSessionsFolder(
+			typeof obj.sessionsFolder === 'string' ? obj.sessionsFolder : '',
+		);
+		const maxTabs = clampMaxTabs(typeof obj.maxTabs === 'number' ? obj.maxTabs : Number.NaN);
+		return { locale, logLevel, sessionsFolder, maxTabs };
 	}
 
 	private _shouldLog(level: 'debug' | 'info' | 'warn' | 'error'): boolean {

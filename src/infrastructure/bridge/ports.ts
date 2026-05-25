@@ -9,6 +9,7 @@ import type {
 	ChatRuntimePort,
 	MarkdownRenderPort,
 	IconPort,
+	ProviderHistoryPort,
 } from '@/domain/ports';
 
 /**
@@ -34,3 +35,8 @@ export const MARKDOWN_RENDER_PORT: InjectionKey<MarkdownRenderPort> = Symbol('Ma
 
 // P2 rich-rendering icon seam (SPEC-RR-009, ADR-RR-001 §4, T-RR-007).
 export const ICON_PORT: InjectionKey<IconPort> = Symbol('IconPort');
+
+// P3 threads-sessions history seam (SPEC-TS-001, ADR-TS-001 §2). Own key, no
+// aggregate — injected on its own per ADR-008/ADR-CC-001 §5.
+export const PROVIDER_HISTORY_PORT: InjectionKey<ProviderHistoryPort> =
+	Symbol('ProviderHistoryPort');

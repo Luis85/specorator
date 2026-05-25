@@ -1,5 +1,6 @@
 import { vi } from 'vitest';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
+import type { MockHistoryStore } from '@/infrastructure/mock/MockHistoryStore';
 import type {
 	SettingsPort,
 	VaultPort,
@@ -15,7 +16,9 @@ import type { EventBus } from '@/domain/shared/event-bus';
 /**
  * Standard test seam (ADR-009): the six core ports backed by a single MockBridge,
  * plus a fresh EventBus, a `vi.fn()` spy LoggerPort, and a TranslationPort stub.
- * P0 reboot — the chat/icon/metadata/canvas fakes were removed with their ports.
+ * P3 (SPEC-TS-007, T-TS-010) adds the `providerHistory` member — the mount's
+ * stable `MockHistoryStore` (over a fresh `Map`) with mutations visible across
+ * the factory's ports.
  *
  * `bridge` is exposed so tests can inspect recorded notices and opened-file paths.
  */
@@ -26,6 +29,7 @@ export interface FakePorts {
 	readonly notifications: NotificationPort;
 	readonly logger: LoggerPort;
 	readonly communityPluginPort: CommunityPluginPort;
+	readonly providerHistory: MockHistoryStore;
 	readonly bus: EventBus;
 	readonly t: TranslationPort;
 	readonly bridge: MockBridge;
@@ -45,6 +49,7 @@ export function fakeModulePorts(): FakePorts {
 			error: vi.fn(),
 		},
 		communityPluginPort: bridge,
+		providerHistory: bridge.createProviderHistoryPort(),
 		bus: createEventBus(),
 		t: { t: vi.fn((key: string) => key) },
 		bridge,

@@ -58,4 +58,26 @@ export class ChatSurfacePageObject {
 	async clickStop(): Promise<void> {
 		await this.wrapper.get('[data-testid="composer-send"]').trigger('click');
 	}
+
+	// ── P3 per-tab + compact (SPEC-TS-026) ──────────────────────────────────────
+
+	hasTabBar(): boolean {
+		return this.wrapper.find('[data-testid="tab-bar"]').exists();
+	}
+
+	tabBadgeCount(): number {
+		return this.wrapper.findAll('[data-testid="tab-badge"]').length;
+	}
+
+	async clickNewTab(): Promise<void> {
+		await this.wrapper.get('[data-testid="tab-new"]').trigger('click');
+	}
+
+	hasCompact(): boolean {
+		return this.wrapper.find('[data-testid="chat-compact"]').exists();
+	}
+
+	async clickCompact(): Promise<void> {
+		await this.wrapper.get('[data-testid="chat-compact"]').trigger('click');
+	}
 }

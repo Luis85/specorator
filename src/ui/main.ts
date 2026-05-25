@@ -27,7 +27,13 @@ import {
 	CHAT_RUNTIME_PORT,
 	MARKDOWN_RENDER_PORT,
 	ICON_PORT,
+	PROVIDER_HISTORY_PORT,
 } from '@/infrastructure/bridge/ports';
+import {
+	CHAT_RUNTIME_FACTORY,
+	CONFIRM_DELETE,
+	CHOOSE_FORK_TARGET,
+} from '@/ui/chat/modalSeam';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
 
 const bridge = new MockBridge();
@@ -49,6 +55,13 @@ app.provide(COMMUNITY_PLUGIN_PORT, bridge);
 app.provide(CHAT_RUNTIME_PORT, bridge.createChatRuntime());
 app.provide(MARKDOWN_RENDER_PORT, bridge.createMarkdownRenderPort());
 app.provide(ICON_PORT, bridge.createIconPort());
+// P3 (SPEC-TS-027): the history seam + the per-tab runtime factory. The standalone
+// demo provides browser-safe modal stand-ins (no Obsidian, no `window.confirm`):
+// fork lands in a new tab, delete proceeds — deterministic for the GitHub Pages demo.
+app.provide(PROVIDER_HISTORY_PORT, bridge.createProviderHistoryPort());
+app.provide(CHAT_RUNTIME_FACTORY, () => bridge.createChatRuntime());
+app.provide(CONFIRM_DELETE, () => Promise.resolve(true));
+app.provide(CHOOSE_FORK_TARGET, () => Promise.resolve('new-tab'));
 
 void bridge.getSettings().then((s) => {
 	setLocale(toSupportedLocale(s.locale));
