@@ -47,6 +47,27 @@ describe('fakeModulePorts', () => {
 		if (run.ok) expect(run.value.exitCode).toBe(0)
 	})
 
+	// T-CA-007 (TEST-CA-021 fake-ports leg): the factory exposes a scriptable
+	// `auxModel` member (the MockBridge aux port) so the re-pointed title/refine
+	// tests (SPEC-CA-018) inject the aux stub instead of a runtime.
+	it('exposes a scriptable auxModel member', async () => {
+		const ports = fakeModulePorts()
+		ports.auxModel.setAuxResponse('Fix the login bug')
+		const result = await ports.auxModel.run('please fix login', { systemPrompt: 'sys' })
+		expect(result.ok).toBe(true)
+		if (result.ok) expect(result.value).toBe('Fix the login bug')
+		expect(ports.auxModel.lastPrompt).toBe('please fix login')
+		expect(ports.auxModel.lastSystemPrompt).toBe('sys')
+	})
+
+	it('auxModel maps a scripted error / empty to err', async () => {
+		const ports = fakeModulePorts()
+		ports.auxModel.setAuxError()
+		expect((await ports.auxModel.run('x')).ok).toBe(false)
+		ports.auxModel.setAuxEmpty()
+		expect((await ports.auxModel.run('x')).ok).toBe(false)
+	})
+
 	it('providerHistory mutations are visible across the factory ports', async () => {
 		const ports = fakeModulePorts()
 		ports.providerHistory.seedConversations([
