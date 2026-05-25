@@ -12,7 +12,7 @@ reference: D:\Projects\claudian-main
 artifacts:
   idea.md: skipped (parity-charter §3.5/§4 P6 + audits + claudian-main stand in, mirrors P1-P5)
   research.md: skipped
-  requirements.md: pending
+  requirements.md: accepted (PRD-TC-001; 27 EARS reqs; per-widget backed-vs-seam classified; CLAR-TC-001..003 resolved-by-recommendation)
   design.md: pending
   spec.md: pending
   tasks.md: pending
@@ -33,7 +33,7 @@ artifacts:
 |---|---|---|
 | 1. Idea | `idea.md` | skipped |
 | 2. Research | `research.md` | skipped |
-| 3. Requirements | `requirements.md` | pending |
+| 3. Requirements | `requirements.md` | accepted |
 | 4. Design | `design.md` | pending |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
@@ -110,4 +110,17 @@ meter, and the `toolbar/*` CSS modules).
                           mode, thinking, service-tier, usage meter) vs capability-gated seams
                           pending P7 (permission) / P8 (MCP) / external-context (NG3). Additive-only
                           ChatRuntimeQueryOptions fields for the per-turn controls.
+2026-05-25 (pm): Stage-3 ACCEPTED. PRD-TC-001 written — 27 EARS reqs (REQ-TC-001..004 cross-cutting,
+                 010..027 per-widget, 040..042 a11y/state), each mapped to a claudian InputToolbar
+                 source path + a TEST-TC-NNN. Per-widget classification: BACKED = model (model? exists),
+                 mode (+mode?), thinking (+reasoning?), usage meter (UsageInfo, read-only); SEAM =
+                 service-tier (capability-gated, +serviceTier? declared-now/emitted-P9), permission
+                 (honest-defer → P7), MCP (honest-defer → P8), external-context (deferred control,
+                 externalContextPaths stays excluded → later phase). All P0-P5 ChatRuntimeQueryOptions
+                 members byte-identical (NFR-TC-001). CLAR-TC-001 (additive field shapes), CLAR-TC-002
+                 (external-context visible-disabled vs omit), CLAR-TC-003 (per-tab vs global state) —
+                 resolved-by-recommendation (autonomous drive); P6 architect ADRs ratify. NEXT:
+                 /spec:design (architect) — bless the additive ChatRuntimeQueryOptions fields, the
+                 toolbar mount/slot on ChatComposer (P5 context-bar slot pattern), the capability-gate
+                 seam wiring, and the provider-UI-config source for the option lists.
 ```
