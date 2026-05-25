@@ -9,7 +9,11 @@ import type {
 	ShellExecResult,
 	AuxModelPort,
 	AuxModelRunOptions,
+	SelectionSourcePort,
+	SelectionHighlightPort,
 } from '@/domain/ports';
+import type { CapturedSelection, EditorSelectionContext } from '@/domain/chat/attachments/Selection';
+import type { Unsubscriber } from '@/domain/ports/shared';
 import type { Result } from '@/domain/shared/Result';
 import { ok, err } from '@/domain/shared/Result';
 
@@ -77,5 +81,41 @@ export class LocalStorageAuxModel implements AuxModelPort {
 		// stand-in so the consuming side-query maps to `ok` (never an error path).
 		const echo = prompt.trim() === '' ? 'Demo response' : `Demo response: ${prompt.trim()}`;
 		return Promise.resolve(ok(echo));
+	}
+}
+
+/**
+ * Inert `SelectionSourcePort` for the (deferred) GitHub Pages demo (SPEC-CA-009
+ * selection leg, ADR-CA-003 §2). The browser demo cannot read an Obsidian editor /
+ * canvas selection, so capture is honestly OFF: `getCurrentSelection() → null`,
+ * `supportsBrowserSelection: false`, and `onSelectionChange` registers but never
+ * fires (no poll). No `obsidian`, no `node:*`.
+ */
+export class LocalStorageSelectionSource implements SelectionSourcePort {
+	readonly supportsBrowserSelection = false;
+
+	getCurrentSelection(): CapturedSelection | null {
+		return null;
+	}
+
+	onSelectionChange(_listener: (sel: CapturedSelection | null) => void): Unsubscriber {
+		// Registers but never fires — the demo has no selection source.
+		return () => {
+			/* no-op */
+		};
+	}
+}
+
+/**
+ * No-op `SelectionHighlightPort` for the GitHub Pages demo (SPEC-CA-009 selection
+ * leg). There is no CM6 editor to paint — `show`/`clear` are inert and never throw.
+ */
+export class LocalStorageSelectionHighlight implements SelectionHighlightPort {
+	show(_target: EditorSelectionContext): void {
+		/* no-op — no editor in the browser demo */
+	}
+
+	clear(): void {
+		/* no-op */
 	}
 }

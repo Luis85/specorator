@@ -254,3 +254,60 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   constructed `RefineInstructionUseCase(runtime)` and would not compile after the
   ctor change. Only the injected double changed (runtime → scripted `MockAuxModel`);
   the assertions are byte-identical. A runnability fix, not an assertion change.
+
+## Layer 3 batch — INFRA selection + readBinary + image-encode (T-CA-012..016)
+
+### T-CA-012 — RED Mock/LS selection ports + `readBinary` + `fake-ports` members (🧪 qa)
+
+- **Spec/test:** TEST-CA-010/013/014/015; SPEC-CA-008/009; REQ-CA-013/017/018;
+  NFR-CA-010.
+- **Files:** `tests/infrastructure/mock/MockSelectionPorts.test.ts`,
+  `tests/infrastructure/mock/MockReadBinary.test.ts`,
+  `tests/infrastructure/localstorage/LocalStorageSelectionPorts.test.ts` (new),
+  `tests/__fakes__/fake-ports.test.ts` (extended — the `selectionSource` /
+  `selectionHighlight` member assertions).
+- **Outcome:** done — RED confirmed (`vitest run` 8 failed: `MockSelectionPorts`
+  module + `seedBinary` + `selectionSource` / `selectionHighlight` members absent;
+  the throwing `readBinary` stub fails the readBinary cases).
+- **Commit:** `e95331e`.
+- **Deviation:** the commit also carries two test-only runnability fixes folded
+  into the RED commit (not assertion changes): the `vi.fn<…>` generic switched to
+  the Vitest-4 single-function-type form, and `expect(() => fn()).not.toThrow()`
+  wrapped in braces for `no-confusing-void-expression`. Assertions unchanged.
+
+### T-CA-013 — Mock/LS selection ports + `readBinary` + `fake-ports` members (🔨 dev)
+
+- **Spec/req:** SPEC-CA-008/009; REQ-CA-013/017/018; NFR-CA-001/010.
+- **Files:**
+  - `src/infrastructure/mock/MockSelectionPorts.ts` (new — `MockSelectionSource`:
+    inert by default, scriptable `setSelection(captured|null)` pushes to listeners
+    + backs `getCurrentSelection`, `supportsBrowserSelection:false`, unsubscriber;
+    `MockSelectionHighlight`: recording no-op `show`/`clear` → `.calls` array);
+  - `src/infrastructure/mock/MockBridge.ts` (a `binaries` Map; real `readBinary`
+    returns a defensive copy, missing path rejects; `seedBinary(path,bytes)` test
+    helper; `get selectionSource()` / `get selectionHighlight()`);
+  - `src/infrastructure/localstorage/LocalStorageComposerPorts.ts`
+    (`LocalStorageSelectionSource`: inert, `onSelectionChange` registers but never
+    fires; `LocalStorageSelectionHighlight`: no-op);
+  - `src/infrastructure/localstorage/LocalStorageBridge.ts` (base64-backed
+    `readBinary` over a `BINARY_PREFIX` key + `seedBinary`; `get selectionSource()`
+    / `get selectionHighlight()`);
+  - `tests/__fakes__/fake-ports.ts` (`selectionSource` / `selectionHighlight`
+    members + `FakePorts` interface entries).
+- **Outcome:** done — the T-CA-012 RED tests now green (31/31). No `node:*`, no
+  `obsidian` in Mock/LocalStorage; `readBinary` rejects on a missing path (the
+  contracted `Result.err` path of `AddImageUseCase`).
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` clean on the
+  changed source + test files; `vitest run tests/infrastructure/mock/MockSelectionPorts.test.ts
+  tests/infrastructure/mock/MockReadBinary.test.ts
+  tests/infrastructure/localstorage/LocalStorageSelectionPorts.test.ts
+  tests/__fakes__/fake-ports.test.ts` 31/31 green.
+- **Commit:** _this commit._
+- **Deviation:** the Mock binary store is a separate in-memory `Map<string,
+  Uint8Array>` (seeded via `seedBinary`), distinct from the existing string
+  `files` Map — bytes never round-trip through the UTF-8 string store. The LS
+  store base64-encodes bytes under a `specorator:binary:` key prefix (parity with
+  the string `specorator:file:` prefix) so the demo's localStorage stays a string
+  store. `readBinary` returns a defensive copy of the seeded buffer. The
+  `supportsBrowserSelection` value shipped by both Mock + LS is `false` (per the
+  SPEC-CA-005 contract for these two bridges).

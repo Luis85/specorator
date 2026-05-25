@@ -399,11 +399,11 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-006
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/infrastructure/mock/MockSelectionPorts.test.ts`,
+  - [x] `tests/infrastructure/mock/MockSelectionPorts.test.ts`,
         `tests/infrastructure/mock/MockReadBinary.test.ts`,
         `tests/infrastructure/localstorage/LocalStorageSelectionPorts.test.ts`, and the extended
         `tests/__fakes__/fake-ports.test.ts` exist, naming the listed TEST-CA ids.
-  - [ ] Tests fail (RED) — the Mock/LocalStorage selection ports + `readBinary` + the factory members do
+  - [x] Tests fail (RED) — the Mock/LocalStorage selection ports + `readBinary` + the factory members do
         not yet exist.
 
 ### T-CA-013 🔨 — `MockBridge` + `LocalStorageBridge` selection ports + `readBinary` + `fake-ports` members
@@ -420,9 +420,9 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-012
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-CA-010 Mock readBinary + the capture/recording-highlight/gated-browser
+  - [x] The prior RED tests (TEST-CA-010 Mock readBinary + the capture/recording-highlight/gated-browser
         backing) now pass; the factory members work for multi-port tests; mutations visible across ports.
-  - [ ] No `node:*`/`obsidian` import in Mock/LocalStorage; `npm run typecheck` + `npm run lint` +
+  - [x] No `node:*`/`obsidian` import in Mock/LocalStorage; `npm run typecheck` + `npm run lint` +
         `npm run test` green; implementation-log entry added.
 
 ### T-CA-014 🔨 — `ObsidianBridge` selection ports + `readBinary` (CM6 + canvas + decoration + real bytes, coverage-excluded) 🪓

@@ -18,19 +18,39 @@ import {
 	LocalStorageProviderCommandCatalog,
 	LocalStorageShellExec,
 	LocalStorageAuxModel,
+	LocalStorageSelectionSource,
+	LocalStorageSelectionHighlight,
 } from './LocalStorageComposerPorts';
 import type {
 	MentionDataProviderPort,
 	ProviderCommandCatalogPort,
 	ShellExecPort,
 	AuxModelPort,
+	SelectionSourcePort,
+	SelectionHighlightPort,
 } from '@/domain/ports';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
 
 const FILE_PREFIX = 'specorator:file:';
+const BINARY_PREFIX = 'specorator:binary:';
 const SETTINGS_KEY = 'specorator:settings';
 const ENABLED_PLUGINS_KEY = 'specorator:enabled-plugins';
+
+/** Encode raw bytes as a base64 string for localStorage (parity LS string store). */
+function bytesToBase64(bytes: Uint8Array): string {
+	let binary = '';
+	for (const byte of bytes) binary += String.fromCharCode(byte);
+	return btoa(binary);
+}
+
+/** Decode a base64 string back into raw bytes. */
+function base64ToBytes(base64: string): Uint8Array {
+	const binary = atob(base64);
+	const bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+	return bytes;
+}
 
 /**
  * Browser-only bridge for the (deferred) GitHub Pages demo. P0 reboot: kept as a
@@ -58,10 +78,18 @@ export class LocalStorageBridge
 		return value;
 	}
 
-	// P5 SPEC-CA-006 — localStorage-backed bytes land in T-CA-013.
-	// Throwing stub keeps typecheck green without pre-empting the RED test.
+	// P5 SPEC-CA-006/009 — localStorage-backed bytes (base64-encoded value; parity
+	// with the LS string `readFile`). Seed bytes with `seedBinary`; a missing path
+	// REJECTS (the `Result.err` path `AddImageUseCase` wraps in `tryAsync`).
 	async readBinary(path: string): Promise<Uint8Array> {
-		throw new Error(`[LocalStorageBridge] readBinary not yet implemented (T-CA-013): ${path}`);
+		const value = localStorage.getItem(BINARY_PREFIX + path);
+		if (value === null) throw new Error(`File not found: ${path}`);
+		return base64ToBytes(value);
+	}
+
+	/** Test/demo helper: seed raw bytes for `readBinary` (base64-encoded in store). */
+	seedBinary(path: string, bytes: Uint8Array): void {
+		localStorage.setItem(BINARY_PREFIX + path, bytesToBase64(bytes));
 	}
 
 	async writeFile(path: string, content: string): Promise<void> {
@@ -160,6 +188,8 @@ export class LocalStorageBridge
 	// ShellExec honestly gated OFF (run -> err). No subprocess in a browser.
 	private readonly shellExecPort = new LocalStorageShellExec();
 	private readonly auxModelPort = new LocalStorageAuxModel();
+	private readonly selectionSourcePort = new LocalStorageSelectionSource();
+	private readonly selectionHighlightPort = new LocalStorageSelectionHighlight();
 
 	createMentionDataProvider(): MentionDataProviderPort {
 		return new LocalStorageMentionDataProvider();
@@ -177,6 +207,16 @@ export class LocalStorageBridge
 	// Browser-safe canned/echo stand-in so the demo's side-queries never crash.
 	get auxModel(): AuxModelPort {
 		return this.auxModelPort;
+	}
+
+	// ── Selection ports (SPEC-CA-009 selection leg, ADR-CA-003 §2) ──────────────
+	// Inert in the browser demo — no Obsidian editor/canvas to read or paint.
+	get selectionSource(): SelectionSourcePort {
+		return this.selectionSourcePort;
+	}
+
+	get selectionHighlight(): SelectionHighlightPort {
+		return this.selectionHighlightPort;
 	}
 
 	showError(message: string, durationMs = 0): void {

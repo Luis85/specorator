@@ -4,6 +4,10 @@ import type { MockHistoryStore } from '@/infrastructure/mock/MockHistoryStore';
 import { MockChatRuntime } from '@/infrastructure/mock/MockChatRuntime';
 import type { MockAuxModel } from '@/infrastructure/mock/MockAuxModel';
 import type {
+	MockSelectionSource,
+	MockSelectionHighlight,
+} from '@/infrastructure/mock/MockSelectionPorts';
+import type {
 	SettingsPort,
 	VaultPort,
 	WorkspacePort,
@@ -55,6 +59,17 @@ export interface FakePorts {
 	 * this aux stub instead of a runtime — `setAuxResponse`/`setAuxError`/`setAuxEmpty`.
 	 */
 	readonly auxModel: MockAuxModel;
+	/**
+	 * The inert-but-scriptable Mock `SelectionSourcePort` (SPEC-CA-008, T-CA-013).
+	 * `setSelection(captured)` drives the editor/canvas capture path for the
+	 * `CaptureSelectionUseCase` tests (SPEC-CA-016).
+	 */
+	readonly selectionSource: MockSelectionSource;
+	/**
+	 * The recording no-op Mock `SelectionHighlightPort` (SPEC-CA-008, T-CA-013).
+	 * `show`/`clear` calls are recorded on `.calls` for assertion (TEST-CA-014/015).
+	 */
+	readonly selectionHighlight: MockSelectionHighlight;
 }
 
 export function fakeModulePorts(): FakePorts {
@@ -80,5 +95,7 @@ export function fakeModulePorts(): FakePorts {
 		shellExec: bridge.shellExec,
 		mockRuntime: new MockChatRuntime(),
 		auxModel: bridge.auxModel,
+		selectionSource: bridge.selectionSource,
+		selectionHighlight: bridge.selectionHighlight,
 	};
 }
