@@ -4,7 +4,7 @@ area: CA
 current_stage: requirements
 status: active
 last_updated: 2026-05-25
-last_agent: orchestrator (P5 bootstrap)
+last_agent: pm (requirements)
 epic: claudian-reboot
 phase: P5
 integration_branch: next
@@ -12,7 +12,7 @@ reference: D:\Projects\claudian-main
 artifacts:
   idea.md: skipped (charter §3.4 + audits + claudian-main stand in, mirrors P1-P4)
   research.md: skipped
-  requirements.md: pending
+  requirements.md: draft (PRD-CA-001; in-progress, held for the P5 ADRs / CLAR-CA-001..004)
   design.md: pending
   spec.md: pending
   tasks.md: pending
@@ -33,7 +33,7 @@ artifacts:
 |---|---|---|
 | 1. Idea | `idea.md` | skipped |
 | 2. Research | `research.md` | skipped |
-| 3. Requirements | `requirements.md` | pending |
+| 3. Requirements | `requirements.md` | in-progress (draft) |
 | 4. Design | `design.md` | pending |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
@@ -107,4 +107,43 @@ parity-screenshot legs accumulate for the SINGLE FINAL human review gate.
                           word-diff). EARS reqs each mapped to a claudian path + test. Inline-edit modal
                           via the modalSeam (Obsidian Modal). Reuse P2 computeDiff/DiffView for the
                           inline-edit preview.
+
+2026-05-25 (pm, requirements): PRD-CA-001 drafted (specs/context-attachments/requirements.md), status
+                          draft (HELD for the P5 ADRs — autonomous drive, no human gate). 28 EARS reqs
+                          REQ-CA-001..028 grouped by sub-surface, each mapped 1:1 to a claudian §3.4 path
+                          + Given/When/Then: A file chips REQ-CA-001..006 (FileContextState/fileLink),
+                          B images REQ-CA-007..012 (ImageContext/imageEmbed), C selection REQ-CA-013..019
+                          (Selection/Canvas/BrowserSelectionController + SelectionHighlight),
+                          D inline-edit REQ-CA-020..028 (InlineEditModal/prompt/QueryBackedInlineEditService).
+                          NFR-CA-001..013 (DDD/ports/3-bridges, Vue-no-obsidian, no v-html/innerHTML +
+                          Obsidian Modal via modalSeam, <script setup>, Result, tests-mirror-src +
+                          data-testid POs, coverage 80/70/80/80, --sp-* parity, WCAG 2.2 AA, image
+                          size/no-secret [NEW threshold], manifest untouched, no migration). Counter-metric
+                          = scope leakage vs NG1-NG8.
+
+                          HAND-OFF → /spec:design (architect). Four ADR-worthy CLARs flagged (PM gave
+                          options + constraints + a recommendation; PM did NOT decide):
+                          - CLAR-CA-001 attachment/context model + image transport. PM rec: additive
+                            ChatTurnRequest fields (already reserved at ChatTurn.ts:12-13); image transport
+                            decided by what the Claude CLI subprocess accepts (base64 vs vault-ref), bounded
+                            by a size limit (the one NEW threshold).
+                          - CLAR-CA-002 selection-capture ports + feasibility. PM rec: ship EDITOR (CM6,
+                            clean) + CANVAS (mock exists in fake-ports) behind the selection port(s);
+                            CAPABILITY-GATE the BROWSER leg (REQ-CA-018 'could' — webview.executeJavaScript/
+                            iframe.contentDocument is Electron-specific/fragile), defer if the bridge can't
+                            read it; do not silently drop.
+                          - CLAR-CA-003 inline-edit modal-seam shape. PM rec: an OpenInlineEditFn modal-seam
+                            handle resolving {decision, editedText?} (mirrors InstructionConfirmFn), preview
+                            via DiffView inside the Obsidian Modal.
+                          - CLAR-CA-004 AuxModelPort extract-now + diff-reuse seam. PM rec: EXTRACT
+                            AuxModelPort NOW (inline-edit is the 3rd cold-start side-query consumer after
+                            GenerateTitleUseCase + RefineInstructionUseCase; ADR-CP-003 named this the
+                            re-eval point; claudian's AuxQueryRunner validates the shape). DIFF SEAM: the P2
+                            computeDiff is LINE-level (DiffLine[] from tool results) — inline edit needs a
+                            WORD-level diff; reuse the DiffView RENDERER only, add a small in-repo word-level
+                            diff fn (no new dep, NFR-CA-011). NOTE the brief's "reuse computeDiff" needs this
+                            line-vs-word correction — confirm in the ADR.
+
+                          PRD held at draft until the P5 ADRs resolve CLAR-CA-001..004; then /spec:clarify
+                          gate closes and status → accepted.
 ```
