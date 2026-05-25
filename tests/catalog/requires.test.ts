@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { checkRequires } from "../../src/catalog/requires";
+import type { AssetMeta } from "../../src/catalog/types";
 
-const asset = { requires: ["links_backlinks", "audit_report"] } as any;
+const partial = (requires: string[]): AssetMeta => ({ requires } as unknown as AssetMeta);
+
+const asset = partial(["links_backlinks", "audit_report"]);
 
 describe("checkRequires", () => {
   it("uses the live tool list when present", () => {
@@ -17,13 +20,13 @@ describe("checkRequires", () => {
   });
   // MCP v0.1.0: a tool present but in `deny` mode is effectively unusable.
   it("treats a present-but-denied tool as effectively unavailable", () => {
-    const a = { requires: ["vault_write"] } as any;
+    const a = partial(["vault_write"]);
     const r = checkRequires(a, ["vault_write"], ["vault_write"], { vault_write: "deny" });
     expect(r.available).toBe(false);
     expect(r.denied).toEqual(["vault_write"]);
   });
   it("surfaces ask-mode tools without marking unavailable", () => {
-    const a = { requires: ["vault_write"] } as any;
+    const a = partial(["vault_write"]);
     const r = checkRequires(a, ["vault_write"], ["vault_write"], { vault_write: "ask" });
     expect(r.available).toBe(true);
     expect(r.ask).toEqual(["vault_write"]);

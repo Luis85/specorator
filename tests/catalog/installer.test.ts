@@ -53,7 +53,7 @@ describe("installer", () => {
     await enableAsset(fs, tricky, [tricky], ["claude"]);
     const written = (await fs.read(PATH))!;
     const { parse: parseYaml } = await import("yaml");
-    const fmText = written.match(/^---\n([\s\S]*?)\n---\n/)![1];
+    const fmText = (/^---\n([\s\S]*?)\n---\n/).exec(written)![1];
     const fm = parseYaml(fmText);
     expect(fm.description).toBe("Audits a vault: orphans, links, and tags. Use when: cleaning up.");
     expect(fm.name).toBe("auditing-vault");

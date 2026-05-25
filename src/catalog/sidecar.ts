@@ -4,7 +4,7 @@ export const SIDECAR_PATH = ".specorator/installed.json";
 
 export async function loadState(fs: FileSystem): Promise<InstalledState> {
   const raw = await fs.read(SIDECAR_PATH);
-  if (!raw) return {};
+  if (raw === null) return {};
   try { return JSON.parse(raw) as InstalledState; }
   catch { return {}; }
 }
@@ -22,6 +22,8 @@ export async function saveRecord(fs: FileSystem, id: string, rec: InstalledRecor
 
 export async function removeRecord(fs: FileSystem, id: string): Promise<void> {
   const state = await loadState(fs);
-  delete state[id];
-  await persist(fs, state);
+  const rest: InstalledState = Object.fromEntries(
+    Object.entries(state).filter(([k]) => k !== id)
+  );
+  await persist(fs, rest);
 }

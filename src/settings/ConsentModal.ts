@@ -1,4 +1,4 @@
-import { App, Modal } from "obsidian";
+import { type App, Modal } from "obsidian";
 import type { AssetMeta } from "../catalog/types";
 
 export interface ConsentSummary {

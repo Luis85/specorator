@@ -34,7 +34,7 @@ export async function enableAsset(
   let state = await loadState(fs); // H1: refreshed at the end of each iteration
 
   for (const id of order) {
-    if (state[id]) continue; // already installed (state is current — see H1 refresh)
+    if (Object.hasOwn(state, id)) continue; // already installed (state is current — see H1 refresh)
     const a = catalog.find((x) => x.id === id)!;
 
     // Decision 4 / B3: scan gate runs BEFORE any write and hard-blocks.
@@ -72,8 +72,8 @@ export async function enableAsset(
 
 export async function disableAsset(fs: FileSystem, id: string): Promise<void> {
   const state = await loadState(fs);
+  if (!Object.hasOwn(state, id)) return;
   const rec = state[id];
-  if (!rec) return;
   for (const path of rec.paths) {
     if (await fs.exists(path)) await fs.remove(path);
   }

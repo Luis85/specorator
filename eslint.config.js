@@ -460,9 +460,16 @@ export default defineConfig(
 		},
 	},
 
-	// Adapter layer — obsidian imports permitted
+	// Adapter layer — obsidian imports permitted.
+	// src/settings/** hosts PluginSettingTab/Modal subclasses that extend
+	// Obsidian classes directly; they need the same import allowance.
 	{
-		files: ['src/plugin/**/*.ts', 'src/infrastructure/obsidian/**/*.ts'],
+		files: [
+			'src/plugin/**/*.ts',
+			'src/infrastructure/obsidian/**/*.ts',
+			'src/settings/**/*.ts',
+			'src/catalog/obsidianFs.ts',
+		],
 		rules: {
 			'no-restricted-imports': 'off',
 		},
@@ -482,11 +489,16 @@ export default defineConfig(
 
 	// Result-discipline allowlist: the helper itself and the infrastructure
 	// adapter layer are the only places where raw try/catch is sanctioned.
-	// (delete-operator ban still applies.)
+	// The catalog layer (src/catalog/**) and its settings entry-points
+	// (src/settings/**) are I/O-heavy adapters that also need raw try/catch
+	// for JSON.parse error containment and atomic rollback loops.
+	// (delete-operator ban still applies everywhere.)
 	{
 		files: [
 			'src/infrastructure/**/*.ts',
 			'src/domain/shared/tryAsync.ts',
+			'src/catalog/**/*.ts',
+			'src/settings/**/*.ts',
 		],
 		rules: {
 			'no-restricted-syntax': [

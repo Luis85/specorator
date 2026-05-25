@@ -14,7 +14,7 @@ export const HARD_BLOCK_KINDS: ScanKind[] = ["hidden-unicode"];
 const OVERRIDE_RE =
   /\b(ignore|disregard|forget)\b[^.\n]{0,40}\b(previous|prior|above)\b[^.\n]{0,20}\b(instruction|prompt|rule)/i;
 // Unicode "tag" block + bidi/zero-width controls used to hide text.
-const HIDDEN_RE = /[\u{E0000}-\u{E007F}​-‏‪-‮⁦-⁩]/u;
+const HIDDEN_RE = /[\u{E0000}-\u{E007F}\u{200B}-\u{200F}\u{202A}-\u{202E}\u{2066}-\u{2069}]/u;
 // External URL inside a markdown link: [text](http(s)://...)
 const MD_LINK_URL_RE = /\]\(\s*https?:\/\/[^)\s]+/i;
 // base64 blob: >=40 contiguous base64 chars (optionally padded).

@@ -8,6 +8,6 @@ export function loadBundledCatalog(indexJson: string): CatalogIndex {
     if (!Array.isArray(idx.assets)) throw new Error("no assets[]");
     return idx;
   } catch (e) {
-    throw new Error(`invalid bundled catalog index: ${(e as Error).message}`);
+    throw new Error(`invalid bundled catalog index: ${(e as Error).message}`, { cause: e });
   }
 }

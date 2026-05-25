@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { resolveOrder } from "../../src/catalog/deps";
+import type { AssetMeta } from "../../src/catalog/types";
 
-const idx = (deps: Record<string, string[]>) =>
-  Object.entries(deps).map(([id, dependsOn]) => ({ id, dependsOn } as any));
+const idx = (deps: Record<string, string[]>): AssetMeta[] =>
+  Object.entries(deps).map(([id, dependsOn]) => ({ id, dependsOn } as unknown as AssetMeta));
 
 describe("resolveOrder", () => {
   it("returns deps before dependents", () => {

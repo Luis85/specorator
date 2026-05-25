@@ -1,4 +1,4 @@
-import { App, normalizePath } from "obsidian";
+import { type App, normalizePath } from "obsidian";
 import type { FileSystem } from "./types";
 
 export function obsidianFs(app: App): FileSystem {
