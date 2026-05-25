@@ -6,7 +6,7 @@ feature: threads-sessions
 area: TS
 epic: claudian-reboot
 phase: P3
-status: in-progress       # domain + infra batches done; application/UI/styles/wire-in/gate remain
+status: in-progress       # domain + infra + application batches done; UI/styles/wire-in/gate remain
 owner: dev
 integration_branch: next
 branch: feature/threads-sessions
@@ -21,7 +21,7 @@ updated: 2026-05-25
 # Implementation log — Threads & Sessions (P3)
 
 Append-only, one entry per executed task. Domain (T-TS-002..006) + infra
-(T-TS-007..013) batches complete; the application (T-TS-014..025), UI
+(T-TS-007..013) + application (T-TS-014..025) batches complete; the UI
 (T-TS-026..035), styles (T-TS-036), wire-in (T-TS-037..039), and gate
 (T-TS-040..042) batches remain.
 
@@ -205,6 +205,189 @@ Append-only, one entry per executed task. Domain (T-TS-002..006) + infra
   the final epic-review human gate.
 - **Deviation:** the implementation landed in T-TS-005 (additive-interface compile mandate); this
   task is the confirmation + the manual-leg backing. No empty production commit was created.
+
+---
+
+## T-TS-014 — RED: titleGeneration pure transforms (done, dev-RED)
+
+- **Files (new):** `tests/application/threads/titleGeneration.test.ts`.
+- **Commit:** `f5aab20`
+- **Spec:** SPEC-TS-016, TEST-TS-019, REQ-TS-024, NFR-TS-005.
+- **Outcome:** done (RED). Module did not exist (transform/import failure).
+- **Deviation:** none.
+
+## T-TS-015 — titleGeneration.ts (pure prompt/parse/fallback) (done)
+
+- **Files (new):** `src/application/threads/titleGeneration.ts`.
+- **Commit:** `028db4a`
+- **Spec:** SPEC-TS-016, REQ-TS-024, NFR-TS-005.
+- **Outcome:** done. `TITLE_GENERATION_SYSTEM_PROMPT` + `buildTitleGenerationPrompt` +
+  `parseTitleGenerationResponse` ported verbatim from claudian
+  `core/prompt/titleGeneration.ts`; `fallbackTitle` (badge-width truncate, empty →
+  'New conversation'). Pure/total; no obsidian/Vue import. TEST-TS-019 green (15).
+- **Deviation:** `parseTitleGenerationResponse` is the claudian verbatim port (strip
+  quotes / strip trailing punctuation / 50-char cap). Claudian does NOT apply an
+  explicit sentence-case transform beyond that; the spec's "sentence-case" note
+  describes the model output the system prompt requests, not a post-parse mutation.
+  Ported verbatim per the T-TS-015 DoD; no invented transform.
+
+## T-TS-016 — RED: rewindEligibility pure scan (done, dev-RED)
+
+- **Files (new):** `tests/application/threads/rewindEligibility.test.ts`.
+- **Commit:** `6213cd2`
+- **Spec:** SPEC-TS-018, TEST-TS-021, REQ-TS-019, NFR-TS-005.
+- **Outcome:** done (RED). Module did not exist.
+- **Deviation:** none.
+
+## T-TS-017 — rewindEligibility.ts (pure scan) (done)
+
+- **Files (new):** `src/application/threads/rewindEligibility.ts`.
+- **Commit:** `f485359`
+- **Spec:** SPEC-TS-018, REQ-TS-019, NFR-TS-005.
+- **Outcome:** done. `isRewindEligible(messages, userMessageId)` — forward scan
+  mirroring claudian `rewind.ts findRewindContext` (hasResponse leg); eligible iff a
+  following assistant (before the next user) bears a non-empty `assistantMessageId`;
+  unknown id / no-following / empty → false (EC-TS-8). Pure/total; no capability check
+  (the UI's runtime concern). TEST-TS-021 green (8).
+- **Deviation:** none.
+
+## T-TS-018 — RED: List/Resume/Rename/Delete + useProviderHistoryPort (done, dev-RED)
+
+- **Files (new):** `tests/application/threads/ListConversationsUseCase.test.ts`,
+  `tests/application/threads/ResumeConversationUseCase.test.ts`,
+  `tests/application/threads/RenameConversationUseCase.test.ts`,
+  `tests/application/threads/DeleteConversationUseCase.test.ts`,
+  `tests/ui/composables/useProviderHistoryPort.test.ts`.
+- **Commit:** `eeced66`
+- **Spec:** SPEC-TS-011/012/017/021, TEST-TS-011/012/013, REQ-TS-010/011/012/013/014.
+- **Outcome:** done (RED). The four use cases + the composable did not exist (5 failed).
+- **Deviation:** none.
+
+## T-TS-019 — List/Resume/Rename/Delete use cases + useProviderHistoryPort() (done)
+
+- **Files (new):** `src/application/threads/ListConversationsUseCase.ts`,
+  `src/application/threads/ResumeConversationUseCase.ts`,
+  `src/application/threads/RenameConversationUseCase.ts`,
+  `src/application/threads/DeleteConversationUseCase.ts`,
+  `src/ui/composables/useProviderHistoryPort.ts`.
+- **Commit:** `9525273`
+- **Spec:** SPEC-TS-011/012/017/021, REQ-TS-010/011/012/013/014, NFR-TS-004/005.
+- **Outcome:** done. List forwards `listSessions` (empty → ok([])); Resume hydrates →
+  err-no-throw on miss/corrupt (EC-TS-5/6) + `resolveSessionId` → ResumeResult; Rename
+  `updateMeta(id,{title,titleManual:true,updatedAt})` meta-only (EC-TS-14); Delete
+  idempotent. Composable inject-or-throw (no aggregate). Each Result-returning; no
+  provider branch; no obsidian/node:* under src/application/threads or
+  src/ui/composables. TEST-TS-011/012/013 (U leg) + the composable A leg green (11).
+- **Deviation:** none.
+
+## T-TS-020 — RED: ForkConversationUseCase + chooseForkTarget (done, dev-RED)
+
+- **Files (new):** `tests/application/threads/ForkConversationUseCase.test.ts`,
+  `tests/application/threads/chooseForkTarget.test.ts`.
+- **Commit:** `141a758`
+- **Spec:** SPEC-TS-013/023, TEST-TS-014, REQ-TS-017/018, NFR-TS-004.
+- **Outcome:** done (RED). Both modules did not exist.
+- **Deviation:** none.
+
+## T-TS-021 — ForkConversationUseCase + pure chooseForkTarget (done)
+
+- **Files (new):** `src/application/threads/ForkConversationUseCase.ts`,
+  `src/application/threads/chooseForkTarget.ts`.
+- **Commit:** `7a16589`
+- **Spec:** SPEC-TS-013/023, REQ-TS-017/018, NFR-TS-004/005.
+- **Outcome:** done. Fork forwards `history.buildForkPlan` (derive-not-copy; M1..M3 of
+  M1..M5 + forkSource{resumeAt:M3}; source untouched, EC-TS-7; first-message fork;
+  id-absent → err). `chooseForkTarget(option)` maps 'new-tab'/'current-tab' through,
+  unrecognised/dismissed → null. Result-returning; no provider branch. TEST-TS-014 (8).
+- **Deviation:** `chooseForkTarget` takes the modal's selected option string (`'new-tab'
+  | 'current-tab' | null`) and validates it to a `ForkTarget`. The Obsidian
+  `ForkTargetModal` (a thin shell, coverage-excluded → TEST-TS-M2) calls this pure
+  mapping. Matches SPEC-TS-023 ("the modal's option-resolution logic factored into a
+  pure chooseForkTarget mapping").
+
+## T-TS-022 — RED: RewindConversationUseCase (conversation/code modes) (done, dev-RED)
+
+- **Files (new):** `tests/application/threads/RewindConversationUseCase.test.ts`.
+- **Commit:** `13b563e`
+- **Spec:** SPEC-TS-014, TEST-TS-016/017, REQ-TS-021/022, NFR-TS-004.
+- **Outcome:** done (RED). Module did not exist.
+- **Deviation:** none.
+
+## T-TS-023 — RewindConversationUseCase (conversation executes / code gated) (done)
+
+- **Files (new):** `src/application/threads/RewindConversationUseCase.ts`.
+- **Commit:** `c7e0c11`
+- **Spec:** SPEC-TS-014, REQ-TS-021/022, NFR-TS-004/005.
+- **Outcome:** done. Pure orchestration → Result<RewindResult>. conversation mode finds
+  the following assistant turn id → {truncatedThrough, checkpointSet:true,
+  checkpointMessageId}; code-and-conversation gated (NG7) → {checkpointSet:false} +
+  notice, NO VaultPort/fs call (takes no port), conversation untouched (EC-TS-9);
+  absent id → err. TEST-TS-016/017 (U leg) green (3).
+- **Deviation:** the spec's `RewindResult{truncatedThrough,checkpointSet}` is carried
+  exactly; the result also surfaces `checkpointMessageId: string|null` (the assistant
+  turn id the caller passes to `runtime.setResumeCheckpoint`) and `notice: string|null`
+  (the gated-mode showInfo text) — the spec text explicitly references both as the data
+  the caller needs (§SPEC-TS-014). Minimal, no port dependency added; the use case
+  cannot touch fs by construction.
+
+## T-TS-024 — RED: GenerateTitleUseCase + CompactConversationUseCase (done, dev-RED)
+
+- **Files (new):** `tests/application/threads/GenerateTitleUseCase.test.ts`,
+  `tests/application/threads/CompactConversationUseCase.test.ts`.
+- **Commit:** `f53797f`
+- **Spec:** SPEC-TS-015/016, TEST-TS-018/020, REQ-TS-023/024/025, NFR-TS-004.
+- **Outcome:** done (RED). Both modules did not exist.
+- **Deviation:** none.
+
+## T-TS-025 — GenerateTitleUseCase + CompactConversationUseCase (done)
+
+- **Files (new):** `src/application/threads/GenerateTitleUseCase.ts`,
+  `src/application/threads/CompactConversationUseCase.ts`.
+- **Commit:** `9a36954`
+- **Spec:** SPEC-TS-015/016, REQ-TS-023/024/025, NFR-TS-004/005.
+- **Outcome:** done. GenerateTitle drives a cold-start side-query
+  (`query(turn,[],{forceColdStart:true})`) via `tryAsync`, accumulates `text` (ignores
+  tool/thinking), `parseTitleGenerationResponse` → Result<string>; error chunk / null
+  parse → err, NEVER `showError` (EC-TS-11). Compact delegates to the existing
+  `RunChatTurnUseCase.run` so a `context_compacted` chunk routes through the existing
+  `onContextCompacted` sink leg + the P2 `ContextCompactedBlock` (no new machinery).
+  Result-returning; preserves the error-as-chunk → Result boundary (ADR-CC-001 §2); no
+  provider branch. TEST-TS-018/020 (U leg) green (6).
+- **Deviation:** GenerateTitle frames the side-query as
+  `${SYSTEM_PROMPT}\n\n${buildTitleGenerationPrompt(msg)}` in the turn `text` because
+  P3's `ChatTurnRequest` carries only `text` (no invented domain field). Compact uses a
+  `/compact` command text that the runtime maps to an `{isCompact:true}` prepared turn;
+  the real CLI runtime detects it (coverage-excluded → TEST-TS-M2), the Mock scripts the
+  `context_compacted` chunk directly.
+
+---
+
+## Batch state (application)
+
+- **Completed:** T-TS-014 .. T-TS-025 (12 tasks; one Conventional commit per RED + per impl).
+- **Typecheck:** `npx vue-tsc --noEmit -p tsconfig.lint.json` → **0 errors**.
+- **Lint:** `npx eslint .` → **0 errors** (same 3 pre-existing P0 warnings as the prior
+  batch — eslint.config.js max-lines, ErrorBoundary.test.ts one-component-per-file ×2;
+  none introduced here). Application-layer `complexity ≤10` + no-raw-try/catch (tryAsync)
+  rules hold — GenerateTitle drains via `tryAsync`.
+- **Unit tests:** `npx vitest run` → **113 files, 830 passed** (was 779 after the
+  infra batch; +51 new application/composable tests; P0/P1/P2/domain/infra GREEN — no
+  regression).
+- **Manual legs (not self-claimed):** TEST-TS-M1/M2 unchanged — for the single final
+  epic-review human gate.
+- **Not run (orchestrator gate):** full `npm run verify` / `npm run build` / `build:web` /
+  `test:storybook`. Manifest untouched. No push.
+
+## Next batch — UI (T-TS-026 .. T-TS-035)
+
+First ready task: **T-TS-026 (qa RED)** — `tabsStore` (SPEC-TS-019): N `TabState` DTOs +
+`activeTabId` + per-`TabId` runner WeakMap + per-tab streaming isolation + min-1/clamp
+(EC-TS-1/2/3/13), DTO-only boundary (no reactive use-case instance, TEST-TS-022/023).
+Then T-TS-027..035 grow `TabBar` + `ResumeSessionDropdown` + the gated fork/rewind hover
+affordances + the rewind menu + per-tab `ChatSurface` + compact + the two Obsidian
+`Modal` subclasses (`ForkTargetModal`, `DeleteConfirmModal`), each with a `data-testid`
+PageObject (ADR-009). Note: the application files landed under `src/application/threads/`
+(spec/tasks canonical path), not `src/application/chat/`.
 
 ---
 

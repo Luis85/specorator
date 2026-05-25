@@ -4,7 +4,7 @@ area: TS
 current_stage: implementation
 status: active
 last_updated: 2026-05-25
-last_agent: dev (implement — domain+infra batch)
+last_agent: dev (implement — application batch)
 epic: claudian-reboot
 phase: P3
 integration_branch: next
@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-TS-001; Parts A/B/C; ADR-TS-001/002/003 accepted)
   spec.md: complete (SPEC-TS-001..034; 26 automatable TEST-TS + 2 manual legs)
   tasks.md: complete (TASKS-TS-001; T-TS-001..042; 42 tasks)
-  implementation-log.md: in-progress (IMPL-TS-001; domain T-TS-002..006 + infra T-TS-007..013 done; application/UI/styles/wire-in/gate remain)
+  implementation-log.md: in-progress (IMPL-TS-001; domain T-TS-002..006 + infra T-TS-007..013 + application T-TS-014..025 done; UI/styles/wire-in/gate remain)
   test-plan.md: pending
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-TS-001) |
 | 5. Specification | `spec.md` | complete (SPEC-TS-001..034) |
 | 6. Tasks | `tasks.md` | complete (TASKS-TS-001) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (domain + infra batches done) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (domain + infra + application batches done) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -366,4 +366,53 @@ self-parity-review vs claudian after each big chunk; merge P3 to `next` autonomo
                           from claudian core/prompt/titleGeneration.ts (SPEC-TS-016, TEST-TS-019). Then
                           T-TS-016/018/020/022/024 RED gate the use cases (List/Resume/Fork/Rewind/
                           Compact/GenerateTitle/Rename/Delete + chooseForkTarget + rewindEligibility).
+
+2026-05-25 (dev, implement — application batch): T-TS-014..025 EXECUTED on
+                          feature/threads-sessions (STRICT TDD, one Conventional commit per RED +
+                          per impl) → specs/threads-sessions/implementation-log.md (IMPL-TS-001).
+                          COMPLETED + SHAs (RED → impl):
+                            T-TS-014 f5aab20 → T-TS-015 028db4a (titleGeneration.ts pure transforms)
+                            T-TS-016 6213cd2 → T-TS-017 f485359 (rewindEligibility.ts pure scan)
+                            T-TS-018 eeced66 → T-TS-019 9525273 (List/Resume/Rename/Delete use cases +
+                              useProviderHistoryPort)
+                            T-TS-020 141a758 → T-TS-021 7a16589 (ForkConversationUseCase + chooseForkTarget)
+                            T-TS-022 13b563e → T-TS-023 c7e0c11 (RewindConversationUseCase conv/code modes)
+                            T-TS-024 f53797f → T-TS-025 9a36954 (GenerateTitleUseCase + CompactConversationUseCase)
+                          STATE: vue-tsc -p tsconfig.lint.json = 0 errors; npx eslint . = 0 errors
+                          (3 pre-existing P0 warnings); npx vitest run = 113 files / 830 passed
+                          (was 779 after the infra batch; +51 new app/composable tests; P0/P1/P2/
+                          domain/infra GREEN — no regression). Application layer imports domain only;
+                          every discrete use case returns Result<…,Error>; pure transforms total/
+                          never-throw; GenerateTitle drains via tryAsync (no raw try/catch);
+                          complexity ≤10 holds. NOT run (orchestrator gate): full verify/build/
+                          build:web/test:storybook. Manifest untouched. No push.
+
+                          PATH NOTE: the application files landed under src/application/threads/ +
+                          tests/application/threads/ (the spec.md SPEC-TS-011..018 + tasks.md DoD
+                          canonical path), NOT src/application/chat/. useProviderHistoryPort.ts is the
+                          one UI composable in this batch (T-TS-019 DoD), under src/ui/composables/.
+
+                          DEVIATIONS (all recorded in IMPL-TS-001): (1) parseTitleGenerationResponse is
+                          the claudian verbatim port (no explicit post-parse sentence-case beyond strip
+                          quotes / trailing punctuation / 50-char cap — the spec's "sentence-case" note
+                          describes the model output the system prompt requests). (2) RewindResult
+                          carries the spec's {truncatedThrough,checkpointSet} exactly plus
+                          checkpointMessageId + notice (the data §SPEC-TS-014 says the caller needs);
+                          the use case takes no port → cannot touch fs by construction (EC-TS-9).
+                          (3) GenerateTitle frames the side-query prompt into the turn text + Compact
+                          uses a /compact command (P3 ChatTurnRequest carries only text; no invented
+                          domain field) — the real-CLI compact/title seams are coverage-excluded →
+                          TEST-TS-M2. Manual legs TEST-TS-M1/M2 unchanged, for the single final
+                          epic-review human gate; test-plan.md still a pending qa-stage artifact.
+
+                          HAND-OFF → NEXT BATCH = UI (T-TS-026..035). FIRST READY TASK:
+                          T-TS-026 (qa RED) — tabsStore (SPEC-TS-019): N TabState DTOs + activeTabId +
+                          per-TabId runner WeakMap + per-tab streaming isolation + min-1/clamp
+                          (EC-TS-1/2/3/13), DTO-only (no reactive use-case instance, TEST-TS-022/023).
+                          Then T-TS-027..035: TabBar + ResumeSessionDropdown + gated fork/rewind hover
+                          affordances + rewind menu + per-tab ChatSurface + compact + the two Obsidian
+                          Modal subclasses (ForkTargetModal, DeleteConfirmModal), each with a
+                          data-testid PageObject (ADR-009). VERIFICATION PERFORMED THIS BATCH: typecheck
+                          0, lint 0 errors, 830 unit tests green. REMAINING OWNER: dev (UI batch) +
+                          qa (test-plan.md). NEXT AGENT: dev (/spec:implement) + qa (/spec:test).
 ```
