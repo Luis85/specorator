@@ -16,8 +16,8 @@ artifacts:
   design.md: complete (DESIGN-CA-001; Parts A/B/C; ADR-CA-001..004 accepted)
   spec.md: complete (SPEC-CA-001..030; 6 layer groups; TEST-CA-001..032 + M1/M2/M3; full coverage)
   tasks.md: complete (TASKS-CA-001; 48 tasks T-CA-001..048; 8 batches; full SPEC/REQ/NFR/TEST coverage)
-  implementation-log.md: in-progress (T-CA-001..041 logged; batches 0-5 done; batches 6-8 remain)
-  test-plan.md: in-progress (manual legs M1/M3/029 scheduled; guard-verify noted)
+  implementation-log.md: in-progress (T-CA-001..045 logged; batches 0-7 done — Layer 6 STYLES + Layer 7 WIRE-IN complete; batch 8 GATE remains: human-owned manual legs T-CA-046/047 + T-CA-048 close-out)
+  test-plan.md: in-progress (manual legs M1/M2/M3/017/024/025/029 scheduled; T-CA-045 dev-leg smoke automated + PASS, live-dev-server leg deferred-manual; guard-verify noted)
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | in-progress (batches 0-5: T-CA-001..041) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (batches 0-7: T-CA-001..045; Layer 6 STYLES + Layer 7 WIRE-IN done; batch 8 GATE — human-owned manual legs + close-out — remains) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -407,4 +407,35 @@ parity-screenshot legs accumulate for the SINGLE FINAL human review gate.
                           (T-CA-039) await the human-run manual leg TEST-CA-M2 (+ TEST-CA-024/025) —
                           scheduled in test-plan.md, NOT agent-self-claimed. NEXT AGENT: dev (T-CA-042)
                           or orchestrator to dispatch the Layer 6/7 batch.
+
+2026-05-25 (dev, implement): Layer 6 STYLES (T-CA-042) + Layer 7 WIRE-IN (T-CA-043 RED / T-CA-044
+                          provide+mount / T-CA-045 dev-leg smoke) COMPLETE on feature/context-attachments.
+                          Commits: T-CA-042 8165c24 (--sp-* §4.12 token block in src/ui/styles/tokens.css
+                          — the 8 P5 tokens; word-diff rides the P2 §4.9 diff tokens, no new diff token;
+                          tokens.test contract + TEST-CA-032 leak guard), T-CA-043 84586fd (RED
+                          tests/ui/chat/attachmentsMount.ts.test.ts — 3 ports + 2 launchers provided in
+                          both entry points + context bar mounts), T-CA-044 589d16f (provide AUX_MODEL_PORT
+                          [closes the deferred T-CA-011 provide] + SELECTION_SOURCE/HIGHLIGHT ports + the
+                          OPEN_INLINE_EDIT / OPEN_IMAGE_PREVIEW launchers in AgentSidebarView [via new
+                          src/plugin/inlineEditLauncher.ts] + src/ui/main.ts [Mock aux + inert selection +
+                          browser-safe stand-ins]; inline-edit editor command in main.ts; ChatSurface mounts
+                          the context bar via useCapturedSelection + the use cases), T-CA-045 e18d39e
+                          (deterministic standalone smoke + test-plan.md leg). VERIFICATION: vue-tsc
+                          -p tsconfig.lint.json 0 errors; eslint on all changed files exit 0; vitest
+                          --pool=threads --no-file-parallelism --testTimeout=30000 — attachmentsMount 2/2,
+                          composer/mount 3/3, ChatSurface/ChatComposer regression 46/46, standalone+sidebar
+                          mounts (main.ts/main/main.rr + mount.ts/mount/mount.rr) 11/11, plugin/core 51/51 —
+                          all GREEN. The aux is now genuinely provided in BOTH entry points, so title-gen no
+                          longer degrades (the standalone-mount tests pass with aux present). P1-P4 surfaces
+                          behaviour-identical (the P5 injects are OPTIONAL; the context bar is hidden when
+                          empty). KEY DEVIATION: AgentSidebarView.resolveAuxModel(bridge) tolerates BOTH the
+                          ObsidianBridge createAuxModel() factory and the MockBridge auxModel getter (a
+                          genuine seam — MockBridge is the documented dev/test bridge that mounts the view in
+                          the suite — not dead code); the inline-edit command lives in main.ts addCommand (a
+                          Plugin API) rather than literally on the view; the file/image ATTACH affordance +
+                          turn-threading are the store-set tasks T-CA-033/034, NOT this mount batch.
+                          REMAINING (batch 8 GATE, NEXT AGENT = human / release): T-CA-046 (M1/M3/017 manual)
+                          + T-CA-047 (M2/024/025/029 manual + parity screenshots) — human-owned, never
+                          agent-self-claimed; T-CA-045 live-dev-server leg deferred-manual; T-CA-048 lint/
+                          coverage/verify gate + final close-out. No open clarifications.
 ```
