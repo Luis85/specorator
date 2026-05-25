@@ -323,15 +323,15 @@
 	--sp-inline-edit-modal-w: 540px;
 }
 
-/* §4.13 — Toolbar & controls (P6, SPEC-TC-026, NFR-TC-008). The strip + the
- * eight leaf widgets + the usage meter. Each token is a token-layer var lookup
- * (or a bare dimension) — no hex, no raw Obsidian var outside this layer, no
- * physical CSS property (lint-style-tokens guard, TEST-TC-026). Values justified
- * against the claudian `toolbar/{model,mode,thinking,mcp,external-context}-selector.css`
- * / `{permission,service-tier}-toggle.css` / `context-footer.css` rules. Reuses
- * the existing set (--sp-border/--sp-bg-*/.specorator-root :where(--sp-accent/--sp-warning/--sp-space-*/
- * --sp-shadow-dropup/--sp-z-dropdown/--sp-surface-overlay) for the dropdowns. */
-.specorator-root) {
+/* §4.13 — Toolbar and controls (P6, SPEC-TC-026, NFR-TC-008). The strip
+ * plus the eight leaf widgets plus the usage meter. Each token is a token-layer
+ * var lookup (or a bare dimension) — no hex, no raw Obsidian var outside this
+ * layer, no physical CSS property (lint-style-tokens guard, TEST-TC-026). Values
+ * justified against the claudian toolbar selector and toggle css plus the
+ * context-footer rules. Reuses the existing set (--sp-border, --sp-bg, --sp-accent,
+ * --sp-warning, --sp-space, --sp-shadow-dropup, --sp-z-dropdown,
+ * --sp-surface-overlay) for the dropdowns. */
+.specorator-root {
 	/* strip row (.claudian-input-toolbar flex gap) */
 	--sp-toolbar-gap: var(--sp-space-2);
 	/* each widget control height (toolbar control height) */
