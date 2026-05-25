@@ -4,7 +4,7 @@ area: CP
 current_stage: tasks
 status: active
 last_updated: 2026-05-25
-last_agent: dev (implement — wire-in batch)
+last_agent: dev (review remediation — R-CP-001/002 P2)
 epic: claudian-reboot
 phase: P4
 integration_branch: next
@@ -16,11 +16,11 @@ artifacts:
   design.md: complete (DESIGN-CP-001; A/B/C; ADR-CP-001..004 accepted)
   spec.md: complete (SPEC-CP-001..038; TEST-CP-001..028 + M1/M2)
   tasks.md: complete (TASKS-CP-001; T-CP-001..053)
-  implementation-log.md: in-progress (DOMAIN+INFRA T-CP-001..014 + T-CP-047 + APPLICATION T-CP-015..026 + UI batch 1 T-CP-027..034 + UI batch 2 T-CP-035..046 + WIRE-IN T-CP-048..050 done; remaining = T-CP-051/052 manual legs [human, final review] + T-CP-053 verify gate [orchestrator])
+  implementation-log.md: in-progress (DOMAIN+INFRA T-CP-001..014 + T-CP-047 + APPLICATION T-CP-015..026 + UI batch 1 T-CP-027..034 + UI batch 2 T-CP-035..046 + WIRE-IN T-CP-048..050 + REVIEW REMEDIATION R-CP-001 ade17d6 / R-CP-002 8171fad done; remaining = T-CP-051/052 manual legs [human, final review] + T-CP-053 verify gate [orchestrator])
   test-plan.md: in-progress (guard verification + M1/M2 manual legs scheduled; TEST-CP-026 dev leg PASS 2026-05-25; TEST-CP status by batch)
   test-report.md: pending
-  review.md: complete (REVIEW-CP-001; verdict Approved with conditions — R-CP-001/002 P2 real-path)
-  traceability.md: complete (TRACE-CP-001; 2 chains real-path-dead at code→test, conditioned)
+  review.md: complete (REVIEW-CP-001; Approved with conditions — both P2 R-CP-001 ade17d6 / R-CP-002 8171fad RESOLVED; R-CP-003..009 P3 scheduled)
+  traceability.md: complete (TRACE-CP-001; the 2 real-path-dead chains now wired — R-CP-001/002 fixed)
   release-notes.md: pending
   retrospective.md: pending
 ---
@@ -37,9 +37,9 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-CP-001) |
 | 5. Specification | `spec.md` | complete (SPEC-CP-001..038) |
 | 6. Tasks | `tasks.md` | complete (TASKS-CP-001; T-CP-001..053) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN+INFRA + tokens + APPLICATION + UI batch 1 + UI batch 2 + WIRE-IN T-CP-048..050 done; remaining = T-CP-051/052 manual legs [human] + T-CP-053 verify gate [orchestrator]) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN+INFRA + tokens + APPLICATION + UI batch 1 + UI batch 2 + WIRE-IN + REVIEW REMEDIATION R-CP-001/002 done; remaining = T-CP-051/052 manual legs [human] + T-CP-053 verify gate [orchestrator]) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
-| 9. Review | `review.md`, `traceability.md` | complete (Approved with conditions) |
+| 9. Review | `review.md`, `traceability.md` | complete (Approved with conditions — both P2 RESOLVED) |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
 
@@ -617,4 +617,47 @@ self-parity-review vs claudian after each big chunk; merge P4 to `next` autonomo
                           (R-CP-002), mention vault read + cap (R-CP-005), bang-bash spawn-failure
                           (R-CP-009). T-CP-053 full verify gate (npm run verify + test:all + coverage
                           80/70/80/80) NOT re-run beyond the unit suite — still orchestrator's gate.
+```
+
+## Hand-off notes (dev — review remediation)
+
+```
+2026-05-25 (dev, review remediation): the two P2 conditions from REVIEW-CP-001 FIXED under
+                          strict TDD, one Conventional commit per finding.
+                          - R-CP-001 (ade17d6): customSystemPrompt now reaches the CLI. Additive
+                            ChatRuntimeQueryOptions.appendSystemPrompt threaded customSystemPrompt
+                            (read via a SettingsPort-backed tabsStore binding seam getAppendSystemPrompt,
+                            wired in ChatSurface where SettingsPort lives) → sendMessage query options →
+                            ClaudeCliChatRuntime._buildArgs/_optionArgs emits --append-system-prompt
+                            <text> (the real claude CLI flag; parity counterpart of Claudian's SDK
+                            systemPrompt). RED at the argv seam (ClaudeCliChatRuntime.buildArgs.test.ts)
+                            + the store threading (tabsStore.test.ts +3). Real round-trip = TEST-CP-M2.
+                          - R-CP-002 (8171fad): inline-block channel bound to the active-tab runtime.
+                            New tabsStore.activeRuntime() exposes the active tab's existing per-tab
+                            runtime (held outside reactive state); ChatSurface points the composer's
+                            EnqueueRuntime/RespondToInlineBlock channel + getCapabilities() read at it
+                            instead of a createRuntime() orphan. NO ADR needed — the composer operates
+                            on the active tab so its inline channel = the active-tab runtime (minimal
+                            accessor over the existing deps Map; no new runtime lifecycle). RED test
+                            (ChatSurface.inline.test.ts) drives ask-user THROUGH the active-tab runtime
+                            with a distinct-instance factory → inline-ask renders + no orphan; verified
+                            RED on the orphan code.
+
+                          Verification performed: vue-tsc 0 errors; eslint 0 errors over touched
+                          src+test (only the pre-existing tabsStore max-lines warning); vitest 748
+                          passed / 92 files over chat-UI + stores + composables + application + infra
+                          (P1/P2/P3/P4 green; no test assertion changed; no P1-P3 member renamed/removed;
+                          capability-gating via getCapabilities() not provider===; no v-html/innerHTML/
+                          window.confirm; no obsidian under src/ui/**). Docs updated: implementation-log.md
+                          (remediation section + per-finding files/SHAs/threading/binding), review.md
+                          (R-CP-001/002 → RESOLVED in the findings table + §8 conditions + verdict note),
+                          this workflow-state.md. NOT run (orchestrator gate T-CP-053): full npm run
+                          verify / build / build:web / test:all / coverage. NOT pushed. manifest.json
+                          untouched. implementation-log.md kept in-progress (human manual legs T-CP-051/052
+                          + orchestrator verify gate T-CP-053 remain).
+
+                          Remaining owner: human (T-CP-051/052 manual legs — must exercise R-CP-001
+                          instruction→system-prompt + R-CP-002 inline-arrival from a real turn) +
+                          orchestrator (T-CP-053 verify gate). Next agent: orchestrator (T-CP-053) after
+                          the human manual legs.
 ```

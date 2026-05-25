@@ -768,3 +768,80 @@ try/catch ban honoured (`tryAsync` reused). Application imports domain only.
   `InstructionConfirmModal`, TEST-CP-M2) are **human-owned** (never agent-self-claimed);
   T-CP-053 (feature DoD — full verify + grep gates + additivity + parity self-review +
   draft PR into `next`) is the **orchestrator's** gate.
+
+## Review remediation (REVIEW-CP-001 R-CP-001 / R-CP-002, P2) — dev
+
+The two P2 real-path conditions from `review.md` (unit-green-but-dead on the real
+runtime) fixed under strict TDD, one Conventional commit per finding. Verify gate /
+build NOT run (orchestrator gate); not pushed; `manifest.json` untouched.
+
+### R-CP-001 — instruction `customSystemPrompt` now reaches the runtime
+
+- **Spec:** SPEC-CP-011, REQ-CP-018; parity ref Claudian `ClaudeQueryOptionsBuilder`
+  → `buildSystemPrompt` → SDK `systemPrompt`.
+- **Files:**
+  - `src/domain/chat/ChatTurn.ts` (`ChatRuntimeQueryOptions` +`appendSystemPrompt?: string`, additive).
+  - `src/infrastructure/obsidian/ClaudeCliChatRuntime.ts` (`_buildArgs` → new pure
+    `_optionArgs`; emits `--append-system-prompt <text>` when present/non-empty —
+    the real `claude` CLI flag; complexity split for the budget).
+  - `src/ui/stores/tabsStore.ts` (`TabDepsBinding.getAppendSystemPrompt?()`; new
+    `_turnQueryOptions()`; `sendMessage` threads it onto `RunChatTurnInput.queryOptions`).
+  - `src/ui/chat/ChatSurface.vue` (`getAppendSystemPrompt` reads
+    `SettingsPort.getSettings().customSystemPrompt` — the SettingsPort read stays in
+    the surface layer where it already lives).
+  - RED tests: `tests/infrastructure/obsidian/ClaudeCliChatRuntime.buildArgs.test.ts`
+    (the `_optionArgs`/argv seam emits `--append-system-prompt`, omits on empty/absent);
+    `tests/ui/stores/tabsStore.test.ts` (+3: `sendMessage` threads the persisted prompt
+    into `queryOptions.appendSystemPrompt`, omits when empty / no seam).
+- **Threading:** `customSystemPrompt` → `getAppendSystemPrompt` binding seam →
+  `tabsStore.sendMessage._turnQueryOptions()` → `RunChatTurnInput.queryOptions` →
+  `runtime.query(prepared, history, queryOptions)` → `_buildArgs`/`_optionArgs` →
+  `--append-system-prompt`. Matches how `queryOptions.model` already flows; preferred
+  query-options threading over a runtime `SettingsPort` ref (keeps the runtime ctor
+  simple, the read in the application/store layer). The real CLI round-trip rides
+  manual TEST-CP-M2 (the runtime is coverage-excluded infra).
+- **Commit:** `ade17d6`.
+- **Outcome:** done. No deviation from spec; resolves the SPEC-CP-005/011 intent that
+  the appended prompt is "read by the runtime", not merely persisted.
+
+### R-CP-002 — inline-block channel bound to the active-tab runtime (no orphan)
+
+- **Spec:** ADR-CP-004 §1, SPEC-CP-017, REQ-CP-023/027.
+- **Files:**
+  - `src/ui/stores/tabsStore.ts` (new `activeRuntime()` action exposing the active
+    tab's existing per-tab runtime held OUTSIDE reactive state).
+  - `src/ui/chat/ChatSurface.vue` (`composerRuntime` now = `tabs.activeRuntime()` —
+    the SAME instance `sendMessage`/`query` streams on — instead of a fresh
+    `createRuntime()` orphan; `supportsInlineResponse` reads from it).
+  - RED test: `tests/ui/chat/ChatSurface.inline.test.ts` — mounts with the three
+    composer ports + a DISTINCT-instance `CHAT_RUNTIME_FACTORY`, drives
+    `emitAskUserQuestion` THROUGH the active-tab runtime (`created[0]`) → `inline-ask`
+    renders; asserts NO second orphan runtime is built (count 1). Verified RED on the
+    orphan code (both assertions fail) before the fix.
+- **Binding:** the composer's `EnqueueRuntime`/`RespondToInlineBlockUseCase` channel +
+  the `getCapabilities()` read bind to `tabs.activeRuntime()`. The first tab + its
+  runtime are seeded synchronously by `bindTabDeps` before `buildComposer`, so the
+  active runtime exists at setup. The streaming runtime's reducer-emitted request
+  chunk now routes through the registered callback to the rendered queue.
+- **ADR decision:** **no ADR needed.** The review allowed an ADR if the per-tab↔composer
+  lifecycle were architecturally non-trivial; it is not — the composer operates on the
+  active tab, so its inline channel = the active tab's runtime. A minimal `activeRuntime()`
+  accessor over the existing per-tab `deps` Map suffices (no new runtime lifecycle, no
+  store-owned registration). Recorded here per the brief.
+- **Commit:** `8171fad`.
+- **Outcome:** done. ADR-CP-004's "the same UI lights up — no UI change" is now true on
+  a capable transport; the CLI still honestly gates `supportsInlineResponse:false`.
+
+### Remediation verification
+
+- `npm run typecheck` (`vue-tsc --noEmit -p tsconfig.lint.json`) — **0 errors**.
+- `npx eslint` over every touched src + test file — **0 errors** (only the pre-existing
+  `tabsStore` `max-lines` warning; no `v-html`/`innerHTML`/`window.confirm`, no
+  `obsidian` under `src/ui/**`, capability-gating via `getCapabilities()` not
+  `provider===`).
+- `npx vitest run` over `tests/ui/chat tests/ui/stores tests/ui/composables
+  tests/application/chat tests/infrastructure` — **748 passed / 92 files** (P1/P2/P3 +
+  P4 green under the additive growth; no test assertion changed, no P1-P3 member
+  renamed/removed). The two new RED tests + the +3 tabsStore tests pass green.
+- **Not run** (orchestrator gate, T-CP-053): full `npm run verify` / `build` /
+  `build:web` / `test:all` / coverage. Not pushed; `manifest.json` untouched.
