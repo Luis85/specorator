@@ -821,3 +821,44 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   inserted text in a `<pre>` (accept still resolves `{kind:'accept',editedText}`)
   — the DiffView reuse is exercised for the `replacement` outcome, matching the
   spec ("for a `replacement` outcome, render the word-diff via DiffView").
+
+## T-CA-040 — RED ChatComposer context-bar slot (🧪 qa)
+
+- **Spec/test:** TEST-CA-004, TEST-CA-006; SPEC-CA-022; REQ-CA-001/004/006/010/019;
+  NFR-CA-005.
+- **Files:** `tests/ui/chat/ChatComposer.test.ts` + `ChatComposer.po.ts`
+  (extended — context-bar hidden when empty (G2, P4 byte-identical); FileChips /
+  ImageContextBar / SelectionIndicator render when their props are non-empty;
+  re-emits `removeFile`/`openFile`/`removeImage`/`previewImage`/`clearSelection`;
+  the P1 send path unchanged with context present; data-testid only).
+- **Outcome:** done — RED confirmed (7 new tests fail, the 14 P1 tests stay
+  green; run with `--pool=threads --no-file-parallelism` to dodge the
+  fork-worker startup timeout under machine load).
+- **Commit:** `d7d87ba`.
+
+## T-CA-041 — ChatComposer context-bar slot (🔨 dev, additive)
+
+- **Spec/req:** SPEC-CA-022; REQ-CA-001/004/006/010/019; NFR-CA-002/003.
+- **Files:** `src/ui/chat/ChatComposer.vue` (additive — optional props
+  `attachedFiles`/`images`/`capturedSelection`/`supportsBrowserSelection`/
+  `resolveThumbSrc`; new re-emits `removeFile`/`openFile`/`removeImage`/
+  `previewImage`/`clearSelection`; a `hasContext` gate; a `v-if="hasContext"`
+  context-bar region ABOVE the textarea hosting `FileChips` (when files) +
+  `ImageContextBar` (when images + `resolveThumbSrc`) + `SelectionIndicator`
+  (when a selection); the bar is hidden when all three empty → exactly P4).
+- **Outcome:** done — the T-CA-040 RED tests now green (21/21); the P4 extension
+  regression (`ChatComposer.ts.test.ts`) stays green (9/9) — additivity holds
+  (no rename/removal of any P4 member; the send path byte-identical when the
+  slot is absent). `<script setup>`; no `v-html`; no `obsidian` import; no
+  `window.confirm`/`alert`/`prompt`.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` exit 0;
+  `vitest run` (ChatComposer.test.ts 21/21, ChatComposer.ts.test.ts 9/9) green.
+- **Commit:** _this commit._
+- **Deviation:** the composer takes `resolveThumbSrc` as a prop (SPEC-CA-020
+  requires it for `ImageContextBar`; the spec's prop list omits it but the image
+  bar cannot render without it — the parent injects it, keeping the composer
+  obsidian-free). The re-emit event names are `removeFile`/`openFile`/
+  `removeImage`/`previewImage`/`clearSelection` (disambiguated from the children's
+  generic `remove`/`open`/`preview`/`clear`) so the parent can route each to the
+  right store set; the spec says "re-emits the children's remove/open/preview/
+  clear", which these do 1:1.

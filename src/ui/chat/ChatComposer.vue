@@ -5,12 +5,16 @@ import type { ComposerModeApi } from '@/ui/chat/composer/useComposerMode';
 import type { RespondToInlineBlockUseCase } from '@/application/chat/composer/RespondToInlineBlockUseCase';
 import type { BangBashOutput as BangBashOutputDto } from '@/application/chat/composer/SubmitBangBashUseCase';
 import type { NotificationPort } from '@/domain/ports';
+import type { AttachedFileRef, AttachedImage, CapturedSelection } from '@/domain/chat/attachments';
 import ComposerDropdown from '@/ui/chat/composer/ComposerDropdown.vue';
 import PlanModeIndicator from '@/ui/chat/composer/PlanModeIndicator.vue';
 import BangBashOutput from '@/ui/chat/composer/BangBashOutput.vue';
 import InlineAskUserQuestion from '@/ui/chat/composer/InlineAskUserQuestion.vue';
 import InlineExitPlanMode from '@/ui/chat/composer/InlineExitPlanMode.vue';
 import InlinePlanApproval from '@/ui/chat/composer/InlinePlanApproval.vue';
+import FileChips from '@/ui/chat/FileChips.vue';
+import ImageContextBar from '@/ui/chat/ImageContextBar.vue';
+import SelectionIndicator from '@/ui/chat/SelectionIndicator.vue';
 
 /**
  * The send-composer (SPEC-CC-021, extended P4 — SPEC-CP-019). A bordered rounded
@@ -31,6 +35,13 @@ import InlinePlanApproval from '@/ui/chat/composer/InlinePlanApproval.vue';
  * inline block sibling, restored after the last resolves (REQ-CP-027); bang-bash
  * mode switches to monospace + a run-command placeholder. With no `composer` prop
  * the component is pure P1 (the send path byte-identical). No `obsidian` import.
+ *
+ * **P5 extension (SPEC-CA-022, ADDITIVE):** an optional context-bar region ABOVE
+ * the textarea hosts `FileChips` + `ImageContextBar` + `SelectionIndicator` when
+ * their props are non-empty; the composer re-emits the children's
+ * `removeFile`/`openFile`/`removeImage`/`previewImage`/`clearSelection` to the
+ * parent (which owns the store sets, ADR-CA-001 §2). With ALL three empty the bar
+ * is hidden → the composer renders exactly as P4 (G2).
  */
 const props = defineProps<{
 	isStreaming: boolean;
@@ -44,8 +55,27 @@ const props = defineProps<{
 	notify?: NotificationPort;
 	/** A completed bang-bash run rendered as an output block (SPEC-CP-025). */
 	bangBashOutput?: BangBashOutputDto | null;
+	/** P5 (SPEC-CA-022): the attached-file context set (the parent owns it). */
+	attachedFiles?: readonly AttachedFileRef[];
+	/** P5 (SPEC-CA-022): the image-context set. */
+	images?: readonly AttachedImage[];
+	/** P5 (SPEC-CA-022): the captured editor/canvas/browser selection. */
+	capturedSelection?: CapturedSelection | null;
+	/** P5 (SPEC-CA-021): the honest browser-capability flag for the gated affordance. */
+	supportsBrowserSelection?: boolean;
+	/** P5 (SPEC-CA-020): resolve a vault path → a display resource src (no `obsidian` here). */
+	resolveThumbSrc?: (path: string) => string;
 }>();
-const emit = defineEmits<{ submit: [text: string]; cancel: [] }>();
+const emit = defineEmits<{
+	submit: [text: string];
+	cancel: [];
+	/** P5 re-emits (SPEC-CA-022) — the parent owns the store sets. */
+	removeFile: [path: string];
+	openFile: [path: string];
+	removeImage: [path: string];
+	previewImage: [image: AttachedImage];
+	clearSelection: [];
+}>();
 
 const { t } = useI18n();
 
@@ -57,6 +87,13 @@ const textarea = ref<HTMLTextAreaElement | null>(null);
 const textareaHeight = ref<string>('auto');
 
 const canSubmit = computed(() => !props.isStreaming && value.value.trim().length > 0);
+
+// ── P5 context-bar gate (SPEC-CA-022) ────────────────────────────────────────────
+const hasFiles = computed(() => (props.attachedFiles?.length ?? 0) > 0);
+const hasImages = computed(() => (props.images?.length ?? 0) > 0);
+const hasSelection = computed(() => (props.capturedSelection ?? null) !== null);
+/** The bar is hidden when all three context sets are empty → byte-identical to P4 (G2). */
+const hasContext = computed(() => hasFiles.value || hasImages.value || hasSelection.value);
 
 function autoGrow(): void {
 	const el = textarea.value;
@@ -260,6 +297,28 @@ function onBlockResolved(): void {
 		<template v-else>
 			<PlanModeIndicator :active="mode.planActive" />
 
+			<div v-if="hasContext" class="sp-chat-composer__context" data-testid="composer-context-bar">
+				<FileChips
+					v-if="hasFiles && attachedFiles"
+					:files="attachedFiles"
+					@remove="emit('removeFile', $event)"
+					@open="emit('openFile', $event)"
+				/>
+				<ImageContextBar
+					v-if="hasImages && images && resolveThumbSrc"
+					:images="images"
+					:resolve-thumb-src="resolveThumbSrc"
+					@remove="emit('removeImage', $event)"
+					@preview="emit('previewImage', $event)"
+				/>
+				<SelectionIndicator
+					v-if="hasSelection"
+					:selection="capturedSelection ?? null"
+					:supports-browser-selection="supportsBrowserSelection ?? false"
+					@clear="emit('clearSelection')"
+				/>
+			</div>
+
 			<ComposerDropdown
 				v-if="composer !== undefined && isPalette"
 				:entries="composer.paletteEntries.value"
@@ -312,6 +371,13 @@ function onBlockResolved(): void {
 	border-radius: var(--sp-radius-md);
 	background: var(--sp-bg-primary);
 	padding: var(--sp-space-3);
+}
+
+.sp-chat-composer__context {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-context-bar-gap);
+	padding-block-end: var(--sp-space-2);
 }
 
 .sp-chat-composer--plan {
