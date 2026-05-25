@@ -3,7 +3,7 @@ id: PRD-CA-001
 title: Context & Attachments (Claudian Reboot P5)
 stage: requirements
 feature: context-attachments
-status: draft        # held until the architect's P5 ADRs resolve CLAR-CA-001..004
+status: accepted     # CLAR-CA-001..004 resolved by ADR-CA-001..004 (accepted 2026-05-25)
 owner: pm
 inputs:
   - CHARTER-CLAUDIAN-REBOOT §3.4 / §4 (P5) / §5 / §6
@@ -681,5 +681,5 @@ rewrite.
 - [x] NFRs listed with targets (NFR-CA-001..013; new threshold flagged).
 - [x] Success metrics defined (including a counter-metric: scope leakage vs NG1–NG8).
 - [x] Release criteria stated.
-- [ ] `/spec:clarify` returned no open questions — **held**: CLAR-CA-001..004 are architect-owned
-      ADR decisions; PRD stays `draft` until the P5 ADRs resolve them (autonomous drive, no human gate).
+- [x] `/spec:clarify` returned no open questions — **closed**: CLAR-CA-001..004 resolved by the P5
+      architect ADRs **ADR-CA-001..004** (accepted 2026-05-25, autonomous drive). PRD → `accepted`.

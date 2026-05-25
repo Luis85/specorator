@@ -1,10 +1,10 @@
 ---
 feature: context-attachments
 area: CA
-current_stage: requirements
+current_stage: design
 status: active
 last_updated: 2026-05-25
-last_agent: pm (requirements)
+last_agent: architect (design)
 epic: claudian-reboot
 phase: P5
 integration_branch: next
@@ -12,8 +12,8 @@ reference: D:\Projects\claudian-main
 artifacts:
   idea.md: skipped (charter §3.4 + audits + claudian-main stand in, mirrors P1-P4)
   research.md: skipped
-  requirements.md: draft (PRD-CA-001; in-progress, held for the P5 ADRs / CLAR-CA-001..004)
-  design.md: pending
+  requirements.md: accepted (PRD-CA-001; CLAR-CA-001..004 resolved by ADR-CA-001..004)
+  design.md: complete (DESIGN-CA-001; Parts A/B/C; ADR-CA-001..004 accepted)
   spec.md: pending
   tasks.md: pending
   implementation-log.md: pending
@@ -33,8 +33,8 @@ artifacts:
 |---|---|---|
 | 1. Idea | `idea.md` | skipped |
 | 2. Research | `research.md` | skipped |
-| 3. Requirements | `requirements.md` | in-progress (draft) |
-| 4. Design | `design.md` | pending |
+| 3. Requirements | `requirements.md` | accepted |
+| 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
@@ -146,4 +146,54 @@ parity-screenshot legs accumulate for the SINGLE FINAL human review gate.
 
                           PRD held at draft until the P5 ADRs resolve CLAR-CA-001..004; then /spec:clarify
                           gate closes and status → accepted.
+
+2026-05-25 (architect, design): DESIGN-CA-001 complete (specs/context-attachments/design.md, Parts
+                          A/B/C). CLAR-CA-001..004 RESOLVED by four accepted ADRs; PRD-CA-001 → accepted;
+                          /spec:clarify gate closed.
+
+                          ADR DECISIONS (all accepted, autonomous-drive):
+                          - ADR-CA-001 (CLAR-CA-001): regrow the reserved ChatTurnRequest fields
+                            additively (attachedFiles?/images?/editorSelection?/canvasSelection?/
+                            browserSelection? — all optional, P1 send path byte-identical when empty).
+                            NO AttachmentPort — one additive VaultPort.readBinary for the only missing
+                            capability (binary read). Image transport = BOUNDED BASE64-INLINE (self-
+                            contained, matches the claude --print CLI turn; vault-path-ref rejected for
+                            transport, kept only for thumbnail display). 8 MiB limit + png/jpeg/webp/gif
+                            allow-list; no secret; no data.json.
+                          - ADR-CA-002 (CLAR-CA-004 port half): EXTRACT AuxModelPort NOW
+                            (run(prompt,{systemPrompt?,model?,signal?})→Result<string>), delegating to the
+                            runtime's cold-start query. Third consumer (inline-edit) + two new aux concerns
+                            (abort signal + continue-conversation) cross the ADR-CP-003 threshold. REFACTOR:
+                            re-point GenerateTitleUseCase (P3) + RefineInstructionUseCase (P4) onto it,
+                            delete their drain loops, keep their tests green (inject the aux stub); grow
+                            fake-ports with an auxModel member. Bounded churn, pre-paid by ADR-TS-003/CP-003.
+                          - ADR-CA-003 (CLAR-CA-002): two ports — SelectionSourcePort (union DTO over
+                            editor/canvas/browser + supportsBrowserSelection flag) + SelectionHighlightPort.
+                            SHIP editor + canvas (canvas mock exists). CAPABILITY-GATE the browser leg
+                            (ADR-TS-004 honesty) — render the affordance only where supportsBrowserSelection;
+                            DTO + request slot ship now so it lights up additively; never silently dropped.
+                          - ADR-CA-004 (CLAR-CA-003 + CLAR-CA-004 diff half): inline edit via an
+                            OpenInlineEditFn modal seam (mirrors InstructionConfirmFn) → Obsidian
+                            InlineEditModal; cold-start aux query via AuxModelPort; parseInlineEditResponse
+                            (ported pure). DIFF SEAM: reuse the DiffView RENDERER ONLY, fed by a NEW pure
+                            computeWordDiff (DP/LCS over split(/(\s+)/) → DiffLine[] → ToolDiffData) — NOT
+                            line-level computeDiff (the brief's line-vs-word correction); no new dep.
+
+                          NEW PORTS/TYPES/COMPONENTS: ports AuxModelPort, SelectionSourcePort,
+                          SelectionHighlightPort (+ AUX_MODEL_PORT/SELECTION_SOURCE_PORT/
+                          SELECTION_HIGHLIGHT_PORT keys, three-bridge impls); VaultPort.readBinary
+                          (additive); ChatTurnRequest grows five optional fields; domain DTOs
+                          AttachedFileRef/AttachedImage + the CapturedSelection union; app fns
+                          parseInlineEditResponse/computeWordDiff/inlineEditPrompt; use cases
+                          AddFileContext/AddImage/CaptureSelection/InlineEdit + the title/refine re-point;
+                          ui FileChips/ImageContext/SelectionIndicator + ChatComposer context bar + the
+                          OpenInlineEditFn seam; plugin InlineEditModal + ImagePreviewModal. DiffView
+                          REUSED UNCHANGED. Everything additive + claudian-grounded.
+
+                          HAND-OFF → /spec:specify (architect). Write spec.md: full DTO/port contracts +
+                          field validation (pin EditorSelectionContext.startLine 0/1-based + the wikilink
+                          display format — spec-level, not architecture), the inline-edit state machine,
+                          edge cases (C.5), observability, per-interface REQ links. Sequence the AuxModelPort
+                          re-point (ADR-CA-002 §3) as an early task so inline-edit builds on the unified seam.
+                          NO open clarifications blocking.
 ```
