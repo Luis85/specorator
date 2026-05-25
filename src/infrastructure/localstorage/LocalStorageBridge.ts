@@ -22,6 +22,7 @@ import {
 	LocalStorageSelectionHighlight,
 } from './LocalStorageComposerPorts';
 import { LocalStorageToolbarCatalog } from './LocalStorageToolbarCatalog';
+import { LocalStorageApprovalRuleStore } from './LocalStorageApprovalRuleStore';
 import type {
 	MentionDataProviderPort,
 	ProviderCommandCatalogPort,
@@ -30,6 +31,7 @@ import type {
 	SelectionSourcePort,
 	SelectionHighlightPort,
 	ToolbarCatalogPort,
+	ApprovalRuleStorePort,
 } from '@/domain/ports';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
@@ -229,6 +231,18 @@ export class LocalStorageBridge
 
 	get toolbarCatalog(): ToolbarCatalogPort {
 		return this.toolbarCatalogPort;
+	}
+
+	// ── Approval-rule store port (SPEC-AS-009, ADR-AS-001 §4) ───────────────────
+	// Browser-localStorage under the same key as the Obsidian device-local store so
+	// the GitHub Pages demo persists rules across a reload with no Obsidian runtime
+	// (REQ-AS-053). The runtime mode is inert — the FixtureChatRuntime records the
+	// mode on the turn but no live `setMode` fires (no live SDK); the toggle/panel
+	// still reflect the per-tab mode draft via the fold. Never throws.
+	private readonly approvalRuleStorePort = new LocalStorageApprovalRuleStore();
+
+	get approvalRuleStore(): ApprovalRuleStorePort {
+		return this.approvalRuleStorePort;
 	}
 
 	showError(message: string, durationMs = 0): void {
