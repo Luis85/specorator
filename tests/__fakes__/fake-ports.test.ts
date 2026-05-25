@@ -23,4 +23,38 @@ describe('fakeModulePorts', () => {
 		ports.notifications.showInfo('hi')
 		expect(ports.bridge.getNotices()).toHaveLength(1)
 	})
+
+	// T-TS-009 (TEST-TS-011 A leg): the factory exposes a `providerHistory` member
+	// (a MockHistoryStore over a fresh Map) with mutations visible across the
+	// factory's ports.
+	it('exposes a providerHistory member backed by an in-memory store', async () => {
+		const ports = fakeModulePorts()
+		expect(ports.providerHistory.providerId).toBe('claude')
+		const empty = await ports.providerHistory.listSessions()
+		expect(empty.ok).toBe(true)
+		if (empty.ok) expect(empty.value).toEqual([])
+	})
+
+	it('providerHistory mutations are visible across the factory ports', async () => {
+		const ports = fakeModulePorts()
+		ports.providerHistory.seedConversations([
+			{
+				version: 1,
+				meta: {
+					id: 'c1',
+					title: 't',
+					titleManual: false,
+					createdAt: 1,
+					updatedAt: 2,
+					providerId: 'claude',
+					sessionId: 'sess-1',
+				},
+				messages: [{ id: 'm1', role: 'user', content: 'hi', timestamp: 1 }],
+				providerState: { providerSessionId: 'sess-1' },
+			},
+		])
+		const list = await ports.providerHistory.listSessions()
+		expect(list.ok).toBe(true)
+		if (list.ok) expect(list.value.map((m) => m.id)).toEqual(['c1'])
+	})
 })
