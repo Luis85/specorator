@@ -11,6 +11,12 @@ export default {
 				placeholder: 'Send a message…',
 				send: 'Send message',
 				stop: 'Stop generating',
+				dropdown: {
+					hints: 'Enter to select · Arrow keys to navigate · Esc to cancel',
+				},
+				mention: {
+					empty: 'No matches',
+				},
 			},
 			busy: 'Generating a response…',
 			interrupted: 'Interrupted',
