@@ -611,3 +611,138 @@ artifact — the TEST-TS-026 dev-leg pass/fail + date recording rides qa authori
   (the deterministic leg is green; the recording is a qa-stage artifact).
 
 NEXT AGENT: human (T-TS-040/041 manual legs) ∥ orchestrator (T-TS-042 verify gate).
+
+---
+
+## Parity-fix batch — REVIEW-TS-001 findings R-TS-001/003/004/005/006/007 (2026-05-25, dev — implement)
+
+STRICT TDD (RED → green per finding), one Conventional commit per finding (or per
+cohesive pair). Executed on `feature/threads-sessions`. R-TS-002 is the architect's
+(transport ADR) — NOT touched here. Manifest untouched. No push. NOT run
+(orchestrator gate T-TS-042): full `npm run verify` / `build` / `build:web` /
+`docs:api` / `test:storybook`.
+
+| Finding | Sev | SHA | Summary |
+|---|---|---|---|
+| R-TS-001 | P1 | `e34f18c` | populate message ids on the live turn path |
+| R-TS-003/004 | P1/P2 | `6f5e874` | persist fork lineage + preserve createdAt/providerState |
+| R-TS-005/006 | P2 | `6cef786` | guard resume clobber + standalone compact boundary |
+| R-TS-007 | brand | `b14021f` | history-list emoji glyphs → Lucide `SpIcon` |
+
+### R-TS-001 — rewind eligibility populated on the real turn path (REQ-TS-019)
+
+- **Files (src):** `src/domain/chat/StreamChunk.ts` (additive `done.assistantMessageId?`),
+  `src/infrastructure/obsidian/reduceClaudeStream.ts` (capture the per-turn assistant
+  id from the `assistant` envelope `uuid` / inner `message.id`, surface it on the
+  terminal `done`; `assistantMessageIdOf` helper; `_buildDone`),
+  `src/infrastructure/mock/MockChatRuntime.ts` (terminal `done` carries a per-turn id),
+  `src/application/chat/RunChatTurnUseCase.ts` (`ChatTurnSink.onDone(assistantMessageId?)`
+  + forward from the `done` chunk), `src/ui/stores/tabsStore.ts` (`userMessage()` stamps
+  `userMessageId` = its own id at send; `onDone` stamps `assistantMessageId` on the live
+  message — runtime-surfaced id or a stable generated id at finalise),
+  `src/ui/stores/chatStore.ts` (P1 `onDone` accepts + stamps the id for sink-contract parity).
+- **Files (tests):** `tests/infrastructure/obsidian/reduceClaudeStream.test.ts` (RED:
+  reducer surfaces the id on `done`; uuid > message.id; bare `done` when none),
+  `tests/ui/stores/tabsStore.test.ts` (RED: a completed Mock-runtime turn carries
+  `assistantMessageId` + `canRewindMessage` → eligible; `userMessageId` at send;
+  onDone-with-no-runtime-id still stamps a stable id). Updated additive-contract
+  assertions: `tests/domain/chat/StreamChunk.test.ts` + `.rr.test.ts` (the `done`
+  exact-shape now `{type:'done';assistantMessageId?}`),
+  `tests/infrastructure/mock/MockChatRuntime.test.ts` + `.rr.test.ts` (the strict
+  `toEqual({type:'done'})` terminator assertions → `toMatchObject({type:'done'})`).
+- **Commit:** `e34f18c`
+- **Spec:** SPEC-TS-018/004, REQ-TS-019; claudian `sdkMessageParsing.ts:214-215` (id from
+  the SDK uuid), `rewind.ts findRewindContext`.
+- **Outcome:** done. RED→green. The whole rewind surface (REQ-TS-019/020/021-UI) now
+  reaches production: a real conversation's assistant turn carries a non-empty
+  `assistantMessageId` and `isRewindEligible` returns true.
+- **Deviation:** the additive `done.assistantMessageId?` growth forced four P1/P2 exact-
+  shape/exact-`done` test ASSERTIONS to the superseding additive contract (same class of
+  qa-RED contract update documented for T-TS-005). Intent unchanged (`done` is still the
+  terminator). On the live path the assistant id is the runtime-surfaced CLI uuid when
+  present, else a stable generated id at finalise — its PRESENCE (not its value) is what
+  REQ-TS-019 keys on. R-TS-002 (the conversation-rewind *execution* on the subprocess
+  transport) is the architect's ADR — NOT addressed here; this fix only POPULATES the ids
+  so eligibility renders.
+
+### R-TS-003 + R-TS-004 — persist fork lineage; preserve createdAt + providerState (REQ-TS-018/008/010)
+
+- **Files (src):** `src/ui/stores/tabsStore.ts` — `TabState` grows `createdAt:number`
+  (set ONCE in `freshTab`) + `providerState:ProviderSessionState`; `TabLoadPayload` grows
+  `providerState?`; `forkActive` threads `result.value.providerState` into the payload;
+  `loadIntoTab` stores `payload.providerState` on the tab; `_persistTab` preserves
+  `tab.createdAt` (only bumps `updatedAt`) and persists `{...tab.providerState}` instead of
+  hard-coding `{}`.
+- **Files (tests):** `tests/ui/stores/tabsStore.test.ts` (RED: forkActive carries the
+  derived `forkSource` into the persisted record; loadIntoTab stores payload providerState;
+  re-persist preserves createdAt + bumps updatedAt; re-persist retains providerState; +
+  `metaOf` helper, `ConversationRecord` import).
+- **Commit:** `6f5e874`
+- **Spec:** SPEC-TS-006/030, REQ-TS-018/008/010; claudian `buildForkProviderState`
+  (`ClaudeConversationHistoryService.ts:329`) + `ConversationController.save` partial-update
+  (createdAt never in the update patch).
+- **Outcome:** done. RED→green. A forked tab persists `{forkSource:{sessionId,resumeAt}}`
+  so `resolveSessionId` resolves the source session (REQ-TS-018); createdAt is stable across
+  saves so the history list orders newest-first (REQ-TS-010); providerState survives re-save.
+- **Deviation:** none. (R-TS-010 — `resolveSessionId` checking `providerSessionId` first — is
+  the deferred P3-polish item; the persisted record now carries lineage so the existing
+  `meta.sessionId ?? forkSource.sessionId` lookup resolves correctly today.)
+
+### R-TS-005 + R-TS-006 — resume guard + standalone compact boundary (REQ-TS-013/023)
+
+- **Files (src):** `src/ui/stores/tabsStore.ts` — `loadIntoTab` cancels an in-flight runner
+  (`status==='streaming'`) BEFORE overwriting so the old `tabId`-scoped sink cannot corrupt
+  the resumed transcript (R-TS-005); `onContextCompacted` seeds a fresh live assistant
+  message when the compact turn produced none, so the `context_compacted` separator always
+  renders (R-TS-006).
+- **Files (tests):** `tests/ui/stores/tabsStore.test.ts` (RED: resume into a streaming tab
+  cancels the runner first + no clobber; a late chunk from the cancelled runner cannot
+  corrupt the resumed transcript; compactActive renders the boundary with no live message;
+  compact resolves to non-streaming after the boundary).
+- **Commit:** `6cef786`
+- **Spec:** SPEC-TS-022/015, REQ-TS-013/023; claudian `ConversationController.switchTo`
+  busy guard, `StreamController.ts:212` boundary push + `ClaudeHistoryStore` standalone
+  separator.
+- **Outcome:** done. RED→green. R-TS-005 = claudian-faithful cancel-then-load guard (resume
+  no longer silently clobbers a busy tab). R-TS-006 = the compact boundary block is always
+  present even without a streamed assistant turn.
+- **Deviation:** R-TS-005 chose the cancel-then-load guard (claudian's force path cancels a
+  busy tab) over open-in-new-tab, since the resume entry (`ResumeSessionDropdown`) targets the
+  active tab by design (SPEC-TS-022); cancelling the in-flight runner is the minimal faithful
+  fix that prevents transcript corruption.
+
+### R-TS-007 — history-list emoji glyphs → Lucide `SpIcon` (brand, NFR-TS-012)
+
+- **Files (src):** `src/ui/chat/ResumeSessionDropdown.vue` (the `⌃`/`✎`/`🗑` glyph spans →
+  `<SpIcon name="chevron-up|pencil|trash-2" />`; import `SpIcon`),
+  `src/infrastructure/icons/iconNodeMap.ts` (+`chevron-up`/`pencil`/`trash-2` static shapes
+  so `npm run dev` / the GitHub-Pages demo resolve them; `ObsidianBridge.setIcon` resolves the
+  real lucide geometry).
+- **Files (tests):** `tests/ui/chat/ResumeSessionDropdown.test.ts` (RED: opener renders an
+  SpIcon; rename+delete render SpIcons; markup carries no `🗑`/`✎`/`⌃` literal — provide
+  `ICON_PORT` via `staticIconPort`), `tests/ui/chat/ResumeSessionDropdown.po.ts`
+  (`spIconCount`/`html` accessors).
+- **Commit:** `b14021f`
+- **Spec:** SPEC-TS-022, NFR-TS-012; claudian `history.css` lucide
+  `chevron-up`/`pencil`/`trash-2`.
+- **Outcome:** done. RED→green. No emoji/raw-glyph literal in the component; icon parity
+  restored; the delete keeps its hover-red via `--sp-history-delete`.
+- **Deviation:** none.
+
+### Verification (this batch)
+
+- `npx vue-tsc --noEmit -p tsconfig.lint.json` → **0 errors** (after each finding).
+- `npx eslint` (touched files, per finding) → **0 errors** (only the pre-existing warn-tier
+  `chatStore` + `tabsStore` `max-lines` warnings — non-failing, P1 precedent).
+- `npx vitest run tests/ui tests/application tests/infrastructure tests/domain` → green
+  (P0/P1/P2/P3 + domain/infra/application no regression; the chat-UI + store + application +
+  history suites the brief names all pass).
+- Manual legs TEST-TS-M1/M2 unchanged (human-owned, single final gate). R-TS-002 is the
+  architect's transport ADR — explicitly NOT addressed in this batch.
+
+### Hand-off
+
+NEXT AGENT: qa (real-shaped contract tests for the three seams now that the ids/lineage are
+populated; author test-plan.md + test-report.md; run TEST-TS-M1/M2) ∥ architect (R-TS-002
+transport ADR) ∥ reviewer (regenerate traceability.md + re-verdict once R-TS-002 resolves and
+the verify gate is green). R-TS-008/009/010 remain scheduled P3-polish/P9.

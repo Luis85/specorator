@@ -4,7 +4,7 @@ area: TS
 current_stage: implementation
 status: active
 last_updated: 2026-05-25
-last_agent: dev (implement — styles+smoke batch)
+last_agent: dev (implement — parity-fix batch, REVIEW-TS-001 R-TS-001/003/004/005/006/007)
 epic: claudian-reboot
 phase: P3
 integration_branch: next
@@ -16,10 +16,10 @@ artifacts:
   design.md: complete (DESIGN-TS-001; Parts A/B/C; ADR-TS-001/002/003 accepted)
   spec.md: complete (SPEC-TS-001..034; 26 automatable TEST-TS + 2 manual legs)
   tasks.md: complete (TASKS-TS-001; T-TS-001..042; 42 tasks)
-  implementation-log.md: in-progress (IMPL-TS-001; domain T-TS-002..006 + infra T-TS-007..013 + application T-TS-014..025 + UI T-TS-026..035 + wire-in T-TS-037/038 + styles T-TS-036 + dev-smoke T-TS-039 done; gate T-TS-040/041 [human manual legs] + T-TS-042 [orchestrator verify] remain)
+  implementation-log.md: in-progress (IMPL-TS-001; domain T-TS-002..006 + infra T-TS-007..013 + application T-TS-014..025 + UI T-TS-026..035 + wire-in T-TS-037/038 + styles T-TS-036 + dev-smoke T-TS-039 done; parity-fix batch R-TS-001/003/004/005/006/007 done [e34f18c/6f5e874/6cef786/b14021f]; remain: R-TS-002 [architect ADR] + gate T-TS-040/041 [human manual legs] + T-TS-042 [orchestrator verify])
   test-plan.md: pending
   test-report.md: pending
-  review.md: complete (REVIEW-TS-001; verdict BLOCKED — 3 P1 real-path blockers R-TS-001/002/003)
+  review.md: complete (REVIEW-TS-001; verdict BLOCKED — 3 P1 real-path blockers R-TS-001/002/003; resolution log appended — R-TS-001/003/004/005/006/007 RESOLVED by dev, R-TS-002 deferred to architect; re-verdict pending R-TS-002 + verify gate)
   traceability.md: complete-with-broken-links (TRACE-TS-001; REQ-TS-018/019/021 chains broken at code→test)
   release-notes.md: pending
   retrospective.md: pending
@@ -593,4 +593,59 @@ self-parity-review vs claudian after each big chunk; merge P3 to `next` autonomo
                               once the blockers close.
                           P3 must NOT merge to next until R-TS-001..007 are resolved (or R-TS-002 descoped
                           by ADR) and the verify gate (T-TS-042) is green.
+
+2026-05-25 (dev, implement — parity-fix batch): R-TS-001/003/004/005/006/007 RESOLVED on
+                          feature/threads-sessions (STRICT TDD, RED→green, one Conventional commit per
+                          finding/pair) → implementation-log.md ("Parity-fix batch" section) +
+                          review.md (Resolution log).
+                          COMMITS:
+                            R-TS-001    e34f18c (populate message ids on the live turn path)
+                            R-TS-003/004 6f5e874 (persist fork lineage + preserve createdAt/providerState)
+                            R-TS-005/006 6cef786 (guard resume clobber + standalone compact boundary)
+                            R-TS-007    b14021f (history-list emoji glyphs → Lucide SpIcon)
+
+                          R-TS-001: ClaudeStreamReducer captures the per-turn assistant id (envelope uuid
+                          / inner message.id) → terminal `done`; RunChatTurnUseCase forwards to
+                          onDone(assistantMessageId?); tabsStore stamps assistantMessageId on the live
+                          assistant message (runtime id else a stable id at finalise) + userMessageId on
+                          the user message at send; MockChatRuntime surfaces the id. Rewind eligibility
+                          (REQ-TS-019/020) now reaches production. Additive done.assistantMessageId?
+                          forced four P1/P2 exact-`done` test assertions to the additive contract
+                          (toMatchObject; same class as the T-TS-005 qa-RED update). R-TS-002 (the
+                          conversation-rewind EXECUTION on the subprocess transport) is NOT touched —
+                          architect's ADR; this fix only populates the ids.
+
+                          R-TS-003/004: TabState grows createdAt (set once) + providerState; forkActive
+                          threads the derived {forkSource} through TabLoadPayload → TabState; _persistTab
+                          persists {...tab.providerState} (was {}) + preserves createdAt (only bumps
+                          updatedAt). Forked tab resumes the source session (REQ-TS-018); history orders
+                          newest-first (REQ-TS-008/010).
+
+                          R-TS-005/006: loadIntoTab cancels an in-flight runner before overwriting a
+                          streaming tab (claudian-faithful busy guard — no transcript corruption);
+                          onContextCompacted seeds a fresh live assistant message when the compact turn
+                          produced none → the boundary always renders (REQ-TS-023).
+
+                          R-TS-007: ResumeSessionDropdown.vue ⌃/✎/🗑 → <SpIcon chevron-up/pencil/trash-2>;
+                          three lucide shapes added to the static icon map. No emoji/glyph literal.
+
+                          VERIFICATION: vue-tsc -p tsconfig.lint.json 0 errors; eslint touched files
+                          0 errors (only pre-existing warn-tier max-lines); chat-UI + store + application
+                          + history + domain suites GREEN (no P0/P1/P2/P3 regression). Manifest untouched.
+                          No push. NOT run (orchestrator gate T-TS-042): full verify/build/build:web/
+                          docs:api/test:storybook.
+
+                          HAND-OFF →
+                            - architect: R-TS-002 transport ADR (SDK vs subprocess --resume-at) or amend
+                              REQ-TS-021 to the achievable semantics. Do not ship the silent no-op. This
+                              is the ONLY remaining P1 blocker for the BLOCKED verdict.
+                            - qa: with the ids/lineage now populated on the real path, add the REAL-SHAPED
+                              contract tests REVIEW-TS-001 §Risks names (drive the actual ClaudeStreamReducer
+                              → assert done.assistantMessageId; assert the persisted forkSource lineage),
+                              author test-plan.md + test-report.md, run TEST-TS-M1/M2.
+                            - reviewer: regenerate traceability.md (REQ-TS-018/019 chains now populated) +
+                              re-verdict once R-TS-002 closes and the verify gate is green.
+                            - R-TS-008/009/010 remain scheduled P3-polish / P9.
+                          REMAINING OWNER: architect (R-TS-002) + qa (test-plan/report + manual legs) +
+                          orchestrator (T-TS-042 verify gate). NEXT AGENT: architect (R-TS-002 ADR).
 ```

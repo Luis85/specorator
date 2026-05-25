@@ -208,3 +208,34 @@ frontmatter gaps — it is **not** a release signal and does not offset the code
 6. After fixes: the QA stage must add **real-shaped** contract tests for the three seams (not fixture-seeded),
    generate `test-plan.md`/`test-report.md`, and the reviewer regenerates `traceability.md`.
 7. R-TS-008/009/010 are P3-polish — schedule, not blockers (R-TS-009/010 may ride P9).
+
+---
+
+## Resolution log (dev, parity-fix batch — 2026-05-25)
+
+Six findings dispatched to `dev` were fixed on `feature/threads-sessions` (STRICT TDD, RED→green,
+one Conventional commit per finding/pair). **R-TS-002 is explicitly NOT in this batch** — it is the
+architect's transport ADR (SDK-vs-subprocess for the rewind-at seam); R-TS-001's fix only POPULATES
+the ids so eligibility renders and does not touch the `--resume`/rewind-transport semantics.
+
+| ID | Sev | Status | Commit | Fix summary |
+|---|---|---|---|---|
+| **R-TS-001** | P1 | **resolved** | `e34f18c` | `ClaudeStreamReducer` captures the per-turn assistant id (envelope `uuid` / inner `message.id`) and surfaces it on the terminal `done`; `RunChatTurnUseCase` forwards it to `onDone(assistantMessageId?)`; `tabsStore` stamps `assistantMessageId` on the live assistant message (runtime id, else a stable id at finalise) + `userMessageId` on the user message at send. `MockChatRuntime` emits the id so the live path proves eligibility. Rewind eligibility (REQ-TS-019/020) now reaches production. |
+| **R-TS-002** | P1 | **deferred → architect** | — | NOT in this batch. Transport ADR (SDK vs subprocess `--resume-at`) or amend REQ-TS-021. |
+| **R-TS-003** | P1 | **resolved** | `6f5e874` | `forkActive` threads `result.value.providerState` through `TabLoadPayload` → `TabState.providerState`; `_persistTab` persists `{...tab.providerState}` (was hard-coded `{}`). Forked tab persists `{forkSource}` lineage → resumes the source session (REQ-TS-018). |
+| **R-TS-004** | P2 | **resolved** | `6f5e874` | `TabState.createdAt` set once at creation; `_persistTab` preserves it and only bumps `updatedAt`; `providerState` retained across saves (no wipe to `{}`). History ordering newest-first holds (REQ-TS-008/010). |
+| **R-TS-005** | P2 | **resolved** | `6cef786` | `loadIntoTab` cancels an in-flight runner (`status==='streaming'`) before overwriting, so the old `tabId`-scoped sink cannot corrupt the resumed transcript (claudian-faithful busy-tab guard). |
+| **R-TS-006** | P2 | **resolved** | `6cef786` | `onContextCompacted` seeds a fresh live assistant message when the compact turn produced none → the `context_compacted` separator always renders (REQ-TS-023). |
+| **R-TS-007** | brand | **resolved** | `b14021f` | `ResumeSessionDropdown.vue` `⌃`/`✎`/`🗑` → `<SpIcon name="chevron-up|pencil|trash-2">`; three lucide shapes added to the static icon map. No emoji/glyph literal; icon parity restored. |
+| R-TS-008 | P3 | scheduled | — | badge priority swap (attention before streaming) — P3-polish. |
+| R-TS-009 | P3 | deferred → P9 | — | per-badge `data-provider` — rides multi-provider. |
+| R-TS-010 | P3 | scheduled | — | `resolveSessionId` `providerSessionId`-first lookup — no behaviour change today (lineage now persisted). |
+
+**Verification (parity-fix batch):** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` touched
+files 0 errors (only pre-existing warn-tier `max-lines`); the chat-UI + store + application +
+history + domain suites green (no P0/P1/P2/P3 regression). Full `npm run verify` is the orchestrator
+gate (NOT run here).
+
+**Re-verdict prerequisite:** R-TS-002 (architect ADR) must close and the verify gate (T-TS-042) must
+be green before the reviewer regenerates `traceability.md` (clearing the REQ-TS-018/019 chains, now
+populated) and re-verdicts.
