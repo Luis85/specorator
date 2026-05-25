@@ -63,14 +63,18 @@ describe('ThreadTabStrip perf budget (NFR-MPS-005)', () => {
 		for (let i = 0; i < 10; i++) {
 			store.upsertThread(makeThread(`t${i}`));
 		}
-		// Warm-up mount: when the suite runs in parallel workers, the first
+		// Warm-up mounts: when the suite runs in parallel workers, the first
 		// component mount in a worker pays the Vue template compilation cost
 		// (~200ms in a contended runner). NFR-MPS-005's "100 ms budget"
 		// targets steady-state mount cost — what the user sees after the
-		// strip is loaded once — so a single warm-up here normalises the
+		// strip is loaded once — so multiple warm-ups here normalise the
 		// measurement across worker contention without weakening the budget.
-		const warmup = mount(ThreadTabStrip, mountOpts());
-		warmup.unmount();
+		// Phase 2 catalog work expanded the unit-suite footprint (~30 new test
+		// files); a single warm-up is no longer enough to flush JIT contention.
+		for (let i = 0; i < 3; i++) {
+			const warmup = mount(ThreadTabStrip, mountOpts());
+			warmup.unmount();
+		}
 
 		const start = performance.now();
 		const wrapper = mount(ThreadTabStrip, mountOpts());

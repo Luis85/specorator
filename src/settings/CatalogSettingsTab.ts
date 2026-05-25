@@ -199,13 +199,17 @@ export class CatalogSettingsTab extends PluginSettingTab {
     }
     new ConsentModal(this.app, summary, () => {
       void (async () => {
-        for (const a of notInstalled) {
-          await enableAsset(this.fs, a, this.catalog.assets, currentPlatforms, {
-            onConflict: (p) => this.onConflict(p),
-            onUserModified: (p) => this.onConflict(p),
-          });
+        try {
+          for (const a of notInstalled) {
+            await enableAsset(this.fs, a, this.catalog.assets, currentPlatforms, {
+              onConflict: (p) => this.onConflict(p),
+              onUserModified: (p) => this.onConflict(p),
+            });
+          }
+          new Notice(`Enabled ${notInstalled.length} asset(s) in ${bundle}`);
+        } catch (e) {
+          new Notice(`Failed: ${(e as Error).message}`);
         }
-        new Notice(`Enabled ${notInstalled.length} asset(s) in ${bundle}`);
         this.display();
       })();
     }).open();
@@ -226,10 +230,16 @@ export class CatalogSettingsTab extends PluginSettingTab {
           void enableAsset(this.fs, asset, this.catalog.assets, currentPlatforms, {
             onConflict: (p) => this.onConflict(p),
             onUserModified: (p) => this.onConflict(p),
-          }).then(() => {
-            new Notice(`Installed ${asset.name}`);
-            this.display();
-          });
+          })
+            .then(() => {
+              new Notice(`Installed ${asset.name}`);
+            })
+            .catch((e: unknown) => {
+              new Notice(`Failed: ${(e as Error).message}`);
+            })
+            .finally(() => {
+              this.display();
+            });
         }).open();
       } else {
         await disableAsset(this.fs, asset.id);

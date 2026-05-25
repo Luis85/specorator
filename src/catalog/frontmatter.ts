@@ -11,7 +11,7 @@ const TRIGGER_RE = /\b(use when|use this when|use to|invoke when|trigger|wheneve
 // Anthropic skill convention: skill names are gerunds. Accept a gerund in ANY
 // segment (R7) — "auditing-vault" OR "vault-auditing" — not only the first.
 const GERUND_RE = /\b[a-z0-9]*ing\b/;
-const FM_RE = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/;
+const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
 
 function parseFrontmatter(raw: string): Record<string, unknown> {
   const parsed: unknown = parseYaml(raw);

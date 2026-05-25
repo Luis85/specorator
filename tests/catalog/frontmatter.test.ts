@@ -53,10 +53,13 @@ describe("parseAsset", () => {
   });
 
   it("accepts a multi-word gerund skill name", () => {
-    const ok = good
-      .replace(/name: auditing-vault/, "name: auditing-vault")
-      .replace("# Body", "# Body");
-    const a = parseAsset("auditing-vault", ok);
+    const a = parseAsset("auditing-vault", good);
+    expect(a.name).toBe("auditing-vault");
+  });
+
+  it("tolerates CRLF line endings in the frontmatter delimiters", () => {
+    const crlf = good.replace(/\n/g, "\r\n");
+    const a = parseAsset("auditing-vault", crlf);
     expect(a.name).toBe("auditing-vault");
   });
 });
