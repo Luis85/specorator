@@ -37,7 +37,15 @@ import {
 	VAULT_PORT,
 	SELECTION_SOURCE_PORT,
 	SELECTION_HIGHLIGHT_PORT,
+	TOOLBAR_CATALOG_PORT,
 } from '@/infrastructure/bridge/ports';
+import type { ToolbarCatalogPort } from '@/domain/ports';
+import type { TabControls } from '@/domain/chat/toolbar/TabControls';
+import type { ReasoningChoice } from '@/domain/chat/Reasoning';
+import {
+	buildToolbarViewModel,
+	type ToolbarViewModel,
+} from '@/application/chat/toolbar/buildToolbarViewModel';
 import { useOpenImagePreview, usePickAttachment } from '@/ui/chat/modalSeam';
 import { useCapturedSelection } from '@/ui/composables/useCapturedSelection';
 import { AddFileContextUseCase } from '@/application/chat/attachments/AddFileContextUseCase';
@@ -368,6 +376,54 @@ function onClearSelection(): void {
 	selectionApi?.clear();
 }
 
+// ── P6 toolbar controls (SPEC-TC-022) ───────────────────────────────────────────
+// The toolbar catalog port is OPTIONAL here (parity with the P1–P5 demos + mount
+// tests): when provided (the wire-in batch, T-TC-031) the surface builds the toolbar
+// view-model from `getCatalog('claude')` + the active runtime's
+// `getToolbarCapabilities()` + the active tab's `controls` + `usage`, and passes it to
+// `ChatComposer`'s additive toolbar region. When absent the composer stays pure P5 (no
+// `toolbar` prop). NEVER branches on a provider id (REQ-TC-003) — it reads the catalog
+// + capabilities. The fold happens in the store on submit (SPEC-TC-023), not here.
+const toolbarCatalog: ToolbarCatalogPort | undefined = inject(TOOLBAR_CATALOG_PORT, undefined);
+
+const toolbarVm = computed<ToolbarViewModel | undefined>(() => {
+	if (toolbarCatalog === undefined) return undefined;
+	const caps = tabs.activeRuntime()?.getToolbarCapabilities();
+	if (caps === undefined) return undefined;
+	return buildToolbarViewModel(
+		toolbarCatalog.getCatalog('claude'),
+		caps,
+		tabs.activeTab?.controls ?? {},
+		tabs.activeTab?.usage ?? null,
+	);
+});
+
+/** Route a backed toolbar change to the per-tab control bag (draft input, ADR-TC-001). */
+function onSetControl<K extends keyof TabControls>(field: K, value: TabControls[K]): void {
+	tabs.setControl(field, value);
+}
+
+function onPickModel(id: string): void {
+	onSetControl('model', id);
+}
+
+function onSetMode(value: string): void {
+	onSetControl('mode', value);
+}
+
+function onSetReasoning(choice: ReasoningChoice): void {
+	onSetControl('reasoning', choice);
+}
+
+function onToggleServiceTier(active: boolean): void {
+	// `active` reflects the desired state; the descriptor's active/inactive token is
+	// resolved by the view-model's `active` flag. The toggle emits the boolean intent;
+	// we store the descriptor's active value when on, clearing it when off.
+	const descriptor = toolbarVm.value?.serviceTier.descriptor;
+	if (descriptor === undefined) return;
+	onSetControl('serviceTier', active ? descriptor.activeValue : descriptor.inactiveValue);
+}
+
 const activeMessages = computed<ChatMessage[]>(() => tabs.activeTab?.messages ?? []);
 const liveAssistantId = computed<string | null>(() => tabs.activeTab?.liveAssistantId ?? null);
 const interruptedId = computed<string | null>(() => tabs.activeTab?.interruptedId ?? null);
@@ -501,6 +557,7 @@ function onRewindCode(userMessageId: string): void {
 			:captured-selection="capturedSelection"
 			:supports-browser-selection="supportsBrowserSelection"
 			:resolve-thumb-src="resolveThumbSrc"
+			:toolbar="toolbarVm"
 			@submit="onSubmit"
 			@cancel="onCancel"
 			@remove-file="onRemoveFile"
@@ -510,6 +567,10 @@ function onRewindCode(userMessageId: string): void {
 			@clear-selection="onClearSelection"
 			@attach-files="onAttachFiles"
 			@attach="onAttach"
+			@pick-model="onPickModel"
+			@set-mode="onSetMode"
+			@set-reasoning="onSetReasoning"
+			@toggle-service-tier="onToggleServiceTier"
 		/>
 	</div>
 </template>

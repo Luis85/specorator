@@ -15,6 +15,9 @@ import InlinePlanApproval from '@/ui/chat/composer/InlinePlanApproval.vue';
 import FileChips from '@/ui/chat/FileChips.vue';
 import ImageContextBar from '@/ui/chat/ImageContextBar.vue';
 import SelectionIndicator from '@/ui/chat/SelectionIndicator.vue';
+import ToolbarStrip from '@/ui/chat/toolbar/ToolbarStrip.vue';
+import type { ToolbarViewModel } from '@/application/chat/toolbar/buildToolbarViewModel';
+import type { ReasoningChoice } from '@/domain/chat/Reasoning';
 
 /**
  * The send-composer (SPEC-CC-021, extended P4 — SPEC-CP-019). A bordered rounded
@@ -65,6 +68,12 @@ const props = defineProps<{
 	supportsBrowserSelection?: boolean;
 	/** P5 (SPEC-CA-020): resolve a vault path → a display resource src (no `obsidian` here). */
 	resolveThumbSrc?: (path: string) => string;
+	/**
+	 * P6 (SPEC-TC-021): the prebuilt toolbar view-model. When present an optional
+	 * toolbar region renders `ToolbarStrip` between the textarea + the footer; when
+	 * absent the composer is byte-identical to P5 (NFR-TC-001, EC-TC-14).
+	 */
+	toolbar?: ToolbarViewModel;
 }>();
 const emit = defineEmits<{
 	submit: [text: string];
@@ -79,6 +88,11 @@ const emit = defineEmits<{
 	attachFiles: [files: File[]];
 	/** P5 (SPEC-CA-022): the paperclip control — the parent opens the picker via the seam. */
 	attach: [];
+	/** P6 (SPEC-TC-021): the four backed toolbar changes re-emitted to the parent. */
+	'pick-model': [id: string];
+	'set-mode': [value: string];
+	'set-reasoning': [choice: ReasoningChoice];
+	'toggle-service-tier': [active: boolean];
 }>();
 
 const { t } = useI18n();
@@ -383,6 +397,17 @@ function onBlockResolved(): void {
 				:output="bangBashOutput"
 			/>
 
+			<div v-if="toolbar !== undefined" class="sp-chat-composer__controls" data-testid="composer-toolbar">
+				<ToolbarStrip
+					:vm="toolbar"
+					:notify="notify"
+					@pick-model="emit('pick-model', $event)"
+					@set-mode="emit('set-mode', $event)"
+					@set-reasoning="emit('set-reasoning', $event)"
+					@toggle-service-tier="emit('toggle-service-tier', $event)"
+				/>
+			</div>
+
 			<div class="sp-chat-composer__toolbar">
 				<button
 					type="button"
@@ -454,6 +479,10 @@ function onBlockResolved(): void {
 
 .sp-chat-composer--mono .sp-chat-composer__textarea {
 	font-family: var(--sp-font-mono);
+}
+
+.sp-chat-composer__controls {
+	padding-block-start: var(--sp-space-2);
 }
 
 .sp-chat-composer__toolbar {
