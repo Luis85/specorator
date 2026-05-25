@@ -4,7 +4,7 @@ area: CP
 current_stage: requirements
 status: active
 last_updated: 2026-05-25
-last_agent: orchestrator (P4 bootstrap)
+last_agent: pm (requirements)
 epic: claudian-reboot
 phase: P4
 integration_branch: next
@@ -12,7 +12,7 @@ reference: D:\Projects\claudian-main
 artifacts:
   idea.md: skipped (charter §3.3 + audits + claudian-main stand in, mirrors P1-P3)
   research.md: skipped
-  requirements.md: pending
+  requirements.md: draft (PRD-CP-001; held until P4 ADRs CLAR-CP-001..004 recorded)
   design.md: pending
   spec.md: pending
   tasks.md: pending
@@ -33,7 +33,7 @@ artifacts:
 |---|---|---|
 | 1. Idea | `idea.md` | skipped |
 | 2. Research | `research.md` | skipped |
-| 3. Requirements | `requirements.md` | pending |
+| 3. Requirements | `requirements.md` | draft (PRD-CP-001) |
 | 4. Design | `design.md` | pending |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
@@ -118,4 +118,34 @@ self-parity-review vs claudian after each big chunk; merge P4 to `next` autonomo
                           EARS reqs each mapped to a claudian path + test. NOTE for scope: the inline
                           ask-user/exit-plan/plan-approval blocks RENDER + RESPOND in P4; the approval
                           RULES/persistence machinery is P7.
+
+2026-05-25 (pm, requirements): PRD-CP-001 written to requirements.md (status: draft). 36 EARS reqs
+                          REQ-CP-001..036 across six sub-surfaces — A slash/skills (001-008),
+                          B @mention (009-014), C instruction (015-019), D plan-mode + inline
+                          ask/exit/approval blocks (020-028), E bang-bash (029-033), F composer-mode
+                          orchestration (034-036). Each maps 1:1 to a claudian §3.3 source path +
+                          a Given/When/Then. NFR-CP-001..013 restate the epic constraints + the NEW
+                          bang-bash security posture (NFR-CP-006) and transport-honesty (NFR-CP-007).
+                          Counter-metric = scope leakage vs NG1-NG7. SCOPE GUARD: D-group renders +
+                          RESPONDS to inline blocks; approval RULES/persistence/ApprovalManager are
+                          P7 (NG3, REQ-CP-026). Built per-provider command/skill/mention SEAMS, wired
+                          ONLY Claude (NG5). MCP client deferred (NG4, REQ-CP-012). No AuxModelPort
+                          committed (NG7).
+
+                          HAND-OFF → /spec:design (architect). PRD held at `draft` until the four P4
+                          ADRs are recorded + accepted (autonomous drive, no human gate). The four
+                          framed clarifications for the architect to resolve as ADRs:
+                          - CLAR-CP-001  composer-mode trigger state machine (extends ChatComposer.vue;
+                                         preserve P1 send contract; DTO-only) → REQ-CP-034/036.
+                          - CLAR-CP-002  new ports — mention/data-provider seam (VaultPort + subagent/
+                                         MCP/dir catalog), command/skill catalog+storage seam, and the
+                                         SECURITY-SENSITIVE bang-bash EXEC seam (sole shell path, no
+                                         secret capture) → REQ-CP-004/009/010/012/030/031/032.
+                          - CLAR-CP-003  instruction-refine side-query — reuse ADR-TS-003 cold-start
+                                         pattern vs introduce the deferred AuxModelPort now → REQ-CP-016.
+                          - CLAR-CP-004  inline-block RESPONSE transport on ChatRuntimePort (additive
+                                         callbacks per backend audit) + what `claude --print` can carry
+                                         vs must be capability-gated (charter §6 transport-honesty)
+                                         → REQ-CP-023/025/026/028.
+                          On ADR acceptance flip requirements.md status draft → accepted, then design.
 ```
