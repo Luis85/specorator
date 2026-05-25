@@ -100,6 +100,17 @@ describe('fakeModulePorts', () => {
 		expect(ports.selectionHighlight.calls.map((c) => c.kind)).toEqual(['show', 'clear'])
 	})
 
+	// T-TC-009 (TEST-TC-003 fake-ports leg): the factory exposes a scriptable
+	// `toolbarCatalog` member (the MockBridge toolbar catalog port) so the view-model
+	// + widget tests inject a catalog without a real provider (SPEC-TC-008).
+	it('exposes a scriptable toolbarCatalog member (default Claude-shaped)', () => {
+		const ports = fakeModulePorts()
+		const def = ports.toolbarCatalog.getCatalog('claude')
+		expect(def.models.length).toBeGreaterThan(0)
+		ports.toolbarCatalog.setToolbarCatalog({ models: [{ id: 'z', label: 'Z' }] })
+		expect(ports.toolbarCatalog.getCatalog('claude').models).toEqual([{ id: 'z', label: 'Z' }])
+	})
+
 	it('providerHistory mutations are visible across the factory ports', async () => {
 		const ports = fakeModulePorts()
 		ports.providerHistory.seedConversations([
