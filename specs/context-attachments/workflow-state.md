@@ -1,10 +1,10 @@
 ---
 feature: context-attachments
 area: CA
-current_stage: spec
+current_stage: tasks
 status: active
 last_updated: 2026-05-25
-last_agent: architect (specification)
+last_agent: planner (tasks)
 epic: claudian-reboot
 phase: P5
 integration_branch: next
@@ -15,7 +15,7 @@ artifacts:
   requirements.md: accepted (PRD-CA-001; CLAR-CA-001..004 resolved by ADR-CA-001..004)
   design.md: complete (DESIGN-CA-001; Parts A/B/C; ADR-CA-001..004 accepted)
   spec.md: complete (SPEC-CA-001..030; 6 layer groups; TEST-CA-001..032 + M1/M2/M3; full coverage)
-  tasks.md: pending
+  tasks.md: complete (TASKS-CA-001; 48 tasks T-CA-001..048; 8 batches; full SPEC/REQ/NFR/TEST coverage)
   implementation-log.md: pending
   test-plan.md: pending
   test-report.md: pending
@@ -36,7 +36,7 @@ artifacts:
 | 3. Requirements | `requirements.md` | accepted |
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
-| 6. Tasks | `tasks.md` | pending |
+| 6. Tasks | `tasks.md` | complete |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
@@ -256,4 +256,50 @@ parity-screenshot legs accumulate for the SINGLE FINAL human review gate.
                              false — an honest defer, REQ-CA-018); the SelectionIndicator renders the
                              browser affordance ONLY where the flag is true. Never silently dropped.
                           NO open clarifications blocking.
+
+2026-05-25 (planner, tasks): TASKS-CA-001 complete (specs/context-attachments/tasks.md), status
+                          complete. 48 tasks T-CA-001..048 decomposing SPEC-CA-001..030, TDD-ordered
+                          (RED qa-owned before green dev-owned; every dev task's first DoD line = "the
+                          prior RED test(s) now pass"), one commit per task, DDD inward layering across
+                          8 batches: (0) baseline+guard-verify T-CA-001; (1) DOMAIN T-CA-002..006 (5
+                          ChatTurnRequest fields, AttachedFileRef/AttachedImage + CapturedSelection union,
+                          3 ports+keys+barrels, VaultPort.readBinary); (2) AUX IMPL + RE-POINT EARLY
+                          T-CA-007..011 (Mock/LS/Obsidian AuxModelPort + fake-ports.auxModel, then
+                          behaviour-preserving re-point of GenerateTitle (P3) + RefineInstruction (P4) —
+                          sequenced BEFORE inline-edit per ADR-CA-002 §3 so P3/P4 stay green); (3) INFRA
+                          T-CA-012..016 (Mock/LS/Obsidian selection ports + readBinary; bounded base64
+                          encode + 8 MiB/MIME gates); (4) APPLICATION T-CA-017..028 (pure computeWordDiff
+                          + parseInlineEditResponse + inlineEditPrompt BEFORE AddFileContext/AddImage/
+                          CaptureSelection/InlineEdit use cases); (5) UI T-CA-029..041 (4 composables;
+                          FileChips/ImageContextBar+ImageThumb/SelectionIndicator each + data-testid PO;
+                          modalSeam OpenInlineEdit/OpenImagePreview handles; InlineEditModal reusing the
+                          UNCHANGED DiffView + ImagePreviewModal as Obsidian Modal subclasses; ChatComposer
+                          context-bar slot); (6) STYLES T-CA-042 (8 --sp-* tokens + tokens.test); (7)
+                          WIRE-IN T-CA-043..045 (provide 3 ports + 2 launchers in AgentSidebarView +
+                          ui/main.ts; mount context bar; npm run dev smoke); (8) GATE T-CA-046/047 (manual
+                          legs M1/M3/017 + M2/024/025/029 + parity screenshots, human-owned) + T-CA-048
+                          (full verify + grep gates + draft PR to next, orchestrator merges).
+
+                          GUARD-RELAX TASK: NONE. Verified against eslint.config.js — no P5 symbol was
+                          P0-deleted; AUX_MODEL_PORT/SELECTION_SOURCE_PORT/SELECTION_HIGHLIGHT_PORT are
+                          not in DELETED_INJECTION_KEYS; @/domain/chat/attachments/**, the 3 new ports,
+                          @/application/chat/{attachments,inlineEdit}/**, and the new UI paths match no
+                          DELETED_SUBSYSTEM_BAN glob (@/domain/chat regrew in P1; VaultPort is a live core
+                          port). T-CA-001 + T-CA-006 + T-CA-048 carry the lint-confirm DoD lines.
+
+                          Coverage: full SPEC-CA-001..030 + 28 REQ-CA + 13 NFR-CA + 32 TEST-CA (incl.
+                          018b/023b/026b) + 3 manual legs (M1/M2/M3) → ≥1 task (§ coverage table).
+                          Stability-loop NFRs: none in scope (no "0 flakes across N runs" requirement).
+
+                          HAND-OFF → /spec:implement (dev) + /spec:test (qa). FIRST READY TASK:
+                          T-CA-002 (qa, RED) — the domain DTOs + CapturedSelection union + the five
+                          additive ChatTurnRequest fields structural/serialisation tests (naming
+                          TEST-CA-001/002/003 + the TEST-CA-013 type-shape leg) — its green pair is
+                          T-CA-003 (dev). NO-DEP PARALLEL TASKS (Batch 0, run anytime): T-CA-001 (dev,
+                          baseline + guard-verify), T-CA-002 (qa, domain RED), T-CA-042 (dev, --sp-*
+                          tokens). The aux re-point chain (T-CA-007→T-CA-011) must land before the
+                          inline-edit chain (T-CA-027/028) + the InlineEditModal (T-CA-039). Manual legs
+                          T-CA-046/047 are human-owned — never agent-self-claimed; they ride the single
+                          final epic-review gate. Critical path (12 tasks): T-CA-002→003→005→006→007→008
+                          →027→028→039→044→047→048.
 ```
