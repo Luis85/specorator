@@ -4,7 +4,7 @@ area: AS
 current_stage: implementation
 status: active
 last_updated: 2026-05-26
-last_agent: dev (implementation — INFRA batch T-AS-012..015)
+last_agent: dev (implementation — APPLICATION batch T-AS-016..019)
 epic: claudian-reboot
 phase: P7
 integration_branch: next
@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-AS-001; ADR-AS-001/002/003 accepted; CLAR-AS-001..005 ratified)
   spec.md: complete (SPEC-AS-001; 28 items, 6 layer groups; 33 REQ-AS + 16 NFR-AS chained to TEST-AS; 6 design open items resolved)
   tasks.md: complete (TASKS-AS-001; 40 tasks T-AS-001..040; DDD batches DOMAIN→INFRA→APP→UI→STYLES→WIRE-IN→GATE; RED-before-green; 3 manual legs T-AS-036/037/038; NO guard-relax)
-  implementation-log.md: in-progress (DOMAIN batch T-AS-001..011 + INFRA batch T-AS-012..015 executed + logged; APP/UI/STYLES/WIRE-IN/GATE batches T-AS-016..040 remain, incl. manual legs TEST-AS-M1/M2/M3)
+  implementation-log.md: in-progress (DOMAIN T-AS-001..011 + INFRA T-AS-012..015 + APPLICATION T-AS-016..019 executed + logged; UI/STYLES/WIRE-IN/GATE batches T-AS-020..040 remain, incl. manual legs TEST-AS-M1/M2/M3)
   test-plan.md: in-progress (guard-verify note + manual legs TEST-AS-M1/M2/M3 + DOMAIN/INFRA automated status; APP/UI legs follow)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-AS-001; ADR-AS-001/002/003 accepted) |
 | 5. Specification | `spec.md` | complete (SPEC-AS-001; 28 items SPEC-AS-001..028) |
 | 6. Tasks | `tasks.md` | complete (TASKS-AS-001; 40 tasks T-AS-001..040; DDD batches; RED-before-green; 3 manual legs; NO guard-relax) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-AS-001..011 + INFRA T-AS-012..015 done; APP/UI/STYLES/WIRE-IN/GATE T-AS-016..040 remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-AS-001..011 + INFRA T-AS-012..015 + APPLICATION T-AS-016..019 done; UI/STYLES/WIRE-IN/GATE T-AS-020..040 remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; manual legs TEST-AS-M1/M3 scheduled at T-AS-012; test-report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -372,4 +372,45 @@ updates, the inline approval/plan-mode controllers, `status-panel`/`permission-t
                  fail-safe-to-prompt over the scriptable Mock store via fake-ports.approvalRuleStore +
                  setFailMode) -> T-AS-019 green. The three bridges + the fake-ports.approvalRuleStore seam
                  (seed + setFailMode) are ready for the ApprovalManager use-case tests.
+
+2026-05-26 (dev): APPLICATION batch T-AS-016..019 COMPLETE on feature/approvals-security (off next).
+                 Strict TDD, one commit per task (RED qa -> green dev). Verification performed per task
+                 and at the batch close-out = vue-tsc -p tsconfig.lint.json 0 errors (whole project) +
+                 whole-project npm run lint 0 errors (12 pre-existing warnings only) + vitest run:
+                 - T-AS-016 49f622f1 RED / T-AS-017 99f73648 green — foldControlOptions gains ONE guarded
+                   clause: folded.permissionMode = controls.permissionMode only when present AND
+                   non-'normal'. {} -> {} and {permissionMode:'normal'} -> {} (EC-AS-2/13, byte-identical
+                   P6); 'plan'/'yolo' folded; the P6 model/mode/reasoning/serviceTier clauses + behaviour
+                   byte-identical; pure+total. The 9 P6 fold regression tests stay green (18/18 in-file).
+                 - T-AS-018 d9797c17 RED / T-AS-019 99f73648-onward green — ApprovalManager
+                   decide/applyDecision/listRules over the scriptable Mock store + a scripted mode.
+                   decide(action, mode): mode-gate-FIRST (yolo->ok('allow') no lookup proven by a
+                   loadRules spy / plan->ok('prompt') defer / normal->continue) -> await loadRules via
+                   tryAsync (err -> debug-log NO rule content + feedback.info(storeError) + ok('prompt'),
+                   never auto-allow) -> match persisted-union-session via the pure matcher (deny-wins ->
+                   ok('deny'), else allow -> ok('allow'), else ok('prompt')). applyDecision: allow/deny ->
+                   in-memory session rule (dedupe by ruleDedupeKey); allow-always/deny-always ->
+                   store.addRule({...,lifetime:'persisted'}) returning the concrete allow/deny (the
+                   {-leading JSON-fallback + null/empty pattern stored WITHOUT actionPattern, EC-AS-16);
+                   null -> ok(null) cancel; a persist err surfaces the notice but the decision stands.
+                   listRules -> persisted-union-session, Result-typed (load err -> err). No providerId
+                   branch; never throws (every store touch via tryAsync; matcher total). vitest
+                   ApprovalManager.test.ts 26/26; full tests/application 372/372 (incl. the P6
+                   foldControlOptions regression).
+                 DEVIATION (logged in implementation-log.md): SPEC-AS-010 shows decide(action, mode) +
+                 constructor(store, feedback); the manager takes a THIRD constructor arg
+                 storeErrorMessage:string so the spec's feedback.notify(approvals.storeError) is realised
+                 as feedback.info(resolvedMessage) — i18n key resolution stays in the UI/composable layer
+                 (NFR-AS-006/SPEC-AS-022); the UI passes t('agent.chat.approvals.storeError') when wiring
+                 the per-surface ApprovalManager (T-AS-028). The brief's decide(action, mode, sessionRules,
+                 store) shorthand was NOT followed — the spec pins store + session-rule map as instance
+                 state (resolved open item #1). No spec change required. NOT touched: domain/infra/UI;
+                 styles.css left untouched.
+                 HAND-OFF -> UI batch /spec:implement (qa/dev): T-AS-020/021 useApprovalRuleStorePort;
+                 T-AS-022/023 PermissionToggle live three-mode; T-AS-024/025 ApprovalsPanel +
+                 ApprovalRuleRow; T-AS-026/027 InlineApproval +deny-always; T-AS-028/029 ChatSurface
+                 approval-callback -> ApprovalManager wiring (construct ONE per surface with the resolved
+                 storeError message) + tabsStore permissionMode control. The application use case
+                 (ApprovalManager.decide/applyDecision/listRules) + the foldControlOptions clause are
+                 ready for the surface to wire into the live P4 setApprovalCallback seam.
 ```

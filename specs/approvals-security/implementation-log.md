@@ -389,3 +389,93 @@ out of this batch's scope.
   warnings only).
 - **Commit:** `99f73648`.
 - **Deviation:** none.
+
+### T-AS-018 — RED `ApprovalManager` decision-flow matrix (🧪 qa)
+
+- **Spec/test:** TEST-AS-003/004/020/021/023/025/030/031/032/033/052/054;
+  SPEC-AS-010/023/027/028; REQ-AS-004/005/020..025/030/031/052/054; NFR-AS-004/009;
+  EC-AS-1/3/5/6/10/11/12/16/20.
+- **Files:** `tests/application/chat/approvals/ApprovalManager.test.ts` (new — the full
+  use-case matrix over the scriptable `MockApprovalRuleStore` + a scripted
+  `PermissionMode`: mode-gate-first (yolo auto-allow no-lookup via a `loadRules` spy /
+  plan defer / normal continue), load-await + match deny-wins (incl. match-all,
+  different-tool no-match, bash `"git *"`↛`"github"` EC-AS-7, path `/a/b`↛`/a/bc.md`
+  EC-AS-8), fail-safe-to-prompt on a forced `setFailMode('load')` (notice, never
+  auto-allow, no rule content in `logger.error`, never throws), `applyDecision` (session
+  allow/deny round-trip through `decide`, persisted `*-always` via `addRule`, dedupe
+  EC-AS-10, `{`-leading JSON-fallback stored WITHOUT `actionPattern` EC-AS-16, null
+  cancel EC-AS-12, persist-err notice + decision-still-stands), `listRules`
+  persisted∪session + load-err→err, the persisted-allow + session-deny deny-wins
+  EC-AS-11, and the no-stale-snapshot per-call re-read EC-AS-20).
+- **Outcome:** done (RED). The import of the missing `@/application/chat/approvals/
+  ApprovalManager` fails to resolve — no tests run (compile/resolve failure is the RED
+  signal) before the impl.
+- **Commit:** `d9797c17`.
+- **Deviation:** none.
+
+### T-AS-019 — `ApprovalManager.ts` decision-flow use case (🔨 dev)
+
+- **Spec/req:** SPEC-AS-010/023/027/028; REQ-AS-004/005/020..025/030/031/052/054;
+  NFR-AS-004/009; ADR-AS-003.
+- **Files:** `src/application/chat/approvals/ApprovalManager.ts` (new — the
+  `ApprovalManager` class + the `ApprovalAction` / `ApprovalGateOutcome` types). One
+  per-surface instance holds the in-memory session rules in a `Map` keyed by
+  `ruleDedupeKey`; the constructor takes `(store, feedback, storeErrorMessage)` (the UI
+  resolves the `agent.chat.approvals.storeError` i18n key when wiring, SPEC-AS-022).
+- **Signatures:**
+  - `decide(action: ApprovalAction, mode: PermissionMode): Promise<Result<ApprovalGateOutcome>>`
+  - `applyDecision(action: ApprovalAction, decision: ApprovalDecision | null): Promise<Result<ApprovalDecision | null>>`
+  - `listRules(): Promise<Result<readonly ApprovalRule[]>>`
+- **How the invariants are realised:**
+  - **Mode-gate-FIRST** — `decide` returns `ok('allow')` for `yolo` BEFORE any store
+    call (a `loadRules` spy proves no lookup, EC-AS-3); `plan` returns `ok('prompt')`
+    (defer to the P4 exit-plan gate, REQ-AS-005); `normal`/absent continues.
+  - **Deny-wins** — the match loop returns `ok('deny')` on the first matching deny and
+    otherwise tracks `hasAllow`, returning `ok('allow')` only when a matching allow with
+    no matching deny exists, else `ok('prompt')` (REQ-AS-021/023).
+  - **Fail-safe-to-prompt** — `store.loadRules()` is wrapped in `tryAsync` (re-throwing
+    an `err` Result inside so a fault is captured uniformly); a non-`ok` load logs via
+    `feedback.debug` (a constant message, NO rule content) + `feedback.info(storeError)`
+    (a non-blocking notice) + returns `ok('prompt')` — never auto-allow (REQ-AS-054).
+  - **Never throws** — every store touch goes through `tryAsync`; the matcher is total;
+    `decide`/`applyDecision` resolve a `Result`, never reject.
+  - **`applyDecision`** — `'allow'`/`'deny'` → an in-memory session rule (dedupe by
+    `ruleDedupeKey`); `'allow-always'`/`'deny-always'` → `store.addRule({...,
+    lifetime:'persisted'})` returning the concrete `allow`/`deny`; `null` → `ok(null)`
+    (cancel). A `{`-leading or `null`/empty action pattern is persisted as `undefined`
+    (match-all, no serialised input lands in a rule, EC-AS-16/NFR-AS-002). A persist
+    `err` surfaces the notice but the concrete decision still stands.
+  - **No `providerId` branch** (SPEC-AS-023) — the manager reads `mode` + the pure
+    matcher only.
+- **Outcome:** done. The prior RED tests now pass — `vitest run ApprovalManager.test.ts`
+  **26/26**; the full `tests/application` surface **372/372** (incl. the P6
+  `foldControlOptions` regression). `vue-tsc -p tsconfig.lint.json` **0 errors** (whole
+  project), whole-project `npm run lint` **0 errors** (12 pre-existing warnings only). No
+  `obsidian`/`node:*`/Vue import under `src/application/**`.
+- **Commit:** `7e0dd4dd`.
+- **Deviation:** the brief's `decide(action, mode, sessionRules, store)` shorthand differs
+  from the spec's `decide(action, mode)` + manager-held `store`/session-rules (SPEC-AS-010
+  pins the store + per-surface session map as instance state, resolved open item #1) — the
+  spec signature is the contract and was implemented. The `feedback.notify(approvals.storeError)`
+  shorthand in SPEC-AS-010 is realised as `feedback.info(storeErrorMessage)` (logger.info +
+  `NotificationPort.showInfo`) with the resolved message injected via the constructor (i18n
+  key resolution stays in the UI/composable layer, NFR-AS-006/SPEC-AS-022).
+
+## APPLICATION batch (T-AS-016..019) — close-out
+
+All four APPLICATION-batch tasks executed in strict TDD order (RED qa → green dev), one
+commit per task. The `foldControlOptions` fold gained a single guarded `permissionMode`
+clause (non-`normal` only, so a no-rule/normal tab stays byte-identical to P6,
+EC-AS-2/13); the `ApprovalManager` decision-flow use case (`decide`/`applyDecision`/
+`listRules`) lands mode-gate-first (yolo auto-allow no-lookup / plan defer / normal
+continue) → load-await (`tryAsync`) → match deny-wins → auto OR `'prompt'`, with
+fail-safe-to-prompt on a store load `err` (notice + `'prompt'`, never auto-allow, never
+throws) and `applyDecision` routing session (`allow`/`deny`) vs persisted (`*-always` →
+`store.addRule`) rules (the `{`-leading JSON-fallback stored without `actionPattern`). No
+`providerId` branch. Final gate over the batch surface: `vue-tsc -p tsconfig.lint.json`
+**0 errors** (whole project), whole-project `npm run lint` **0 errors** (12 pre-existing
+warnings only), `vitest run tests/application` **372/372 green** (incl. the P6
+`foldControlOptions` regression). No `obsidian`/`node:*`/Vue import under
+`src/application/**`; the use case is `Result`-returning + never throws. The UI batch
+(T-AS-018-onward UI tasks: the toggle/panel/inline + the `ChatSurface` wiring of this
+`ApprovalManager` into the live approval callback) is out of this batch's scope.

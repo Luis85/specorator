@@ -543,10 +543,10 @@ pattern (ADR-PSR-002).
 - **Depends on:** T-AS-003
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/application/chat/toolbar/foldControlOptions.test.ts` is extended, naming the TEST-AS-002 fold
+  - [x] `tests/application/chat/toolbar/foldControlOptions.test.ts` is extended, naming the TEST-AS-002 fold
         leg, covering the non-`normal`-only guard, the `{}`→`{}` and `{permissionMode:'normal'}`→`{}` empty
         folds (EC-AS-2/13), the `'plan'`/`'yolo'` fold, and the P6-clause byte-identity + never-throws.
-  - [ ] Tests fail (RED) — the `permissionMode` clause does not yet exist in `foldControlOptions.ts`.
+  - [x] Tests fail (RED) — the `permissionMode` clause does not yet exist in `foldControlOptions.ts`.
 
 ### T-AS-017 🔨 — `foldControlOptions.ts` — add the guarded `permissionMode` clause
 
@@ -562,10 +562,10 @@ pattern (ADR-PSR-002).
 - **Depends on:** T-AS-016
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-AS-002 fold leg, incl. EC-AS-2/13) now pass.
-  - [ ] Pure/total; never throws; no `obsidian`/Vue import; no `providerId` branch; the P6 clauses
+  - [x] The prior RED tests (TEST-AS-002 fold leg, incl. EC-AS-2/13) now pass.
+  - [x] Pure/total; never throws; no `obsidian`/Vue import; no `providerId` branch; the P6 clauses
         byte-identical.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-AS-018 🧪 — RED: `ApprovalManager.decide`/`applyDecision`/`listRules` — the full decision-flow matrix (no `providerId` branch)
 
@@ -592,11 +592,11 @@ pattern (ADR-PSR-002).
 - **Depends on:** T-AS-005, T-AS-007, T-AS-014
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/application/chat/approvals/ApprovalManager.test.ts` exists, naming the listed TEST-AS ids,
+  - [x] `tests/application/chat/approvals/ApprovalManager.test.ts` exists, naming the listed TEST-AS ids,
         covering the mode-gate-first / load-await / match-deny-wins / prompt-fallback / applyDecision
         session-vs-persist / cancel / listRules paths + the fail-safe-to-prompt + the no-`providerId`-branch
         grep+behaviour + the never-throws assertion, driven by the scriptable Mock store + a scripted mode.
-  - [ ] Tests fail (RED) — `ApprovalManager.ts` does not yet exist.
+  - [x] Tests fail (RED) — `ApprovalManager.ts` does not yet exist.
 
 ### T-AS-019 🔨 — `ApprovalManager.ts` (`decide`/`applyDecision`/`listRules`)
 
@@ -620,12 +620,12 @@ pattern (ADR-PSR-002).
 - **Depends on:** T-AS-018
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-AS-003/004/020/021/023/025/030/031/032/033/052/054 + the EC-AS legs) now
+  - [x] The prior RED tests (TEST-AS-003/004/020/021/023/025/030/031/032/033/052/054 + the EC-AS legs) now
         pass across the full matrix (mode-gate-first, deny-wins, fail-safe-to-prompt, session-vs-persist,
         cancel, dedupe, JSON-fallback-as-match-all).
-  - [ ] Result-typed; never throws across the callback boundary; logs no rule content/secret; **no
+  - [x] Result-typed; never throws across the callback boundary; logs no rule content/secret; **no
         `providerId` branch**; no `obsidian`/Vue import.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ---
 

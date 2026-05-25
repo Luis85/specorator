@@ -246,7 +246,7 @@ describe('ApprovalManager', () => {
 			const stored = await store.loadRules();
 			if (isOk(stored)) {
 				expect(stored.value).toHaveLength(1);
-				expect(stored.value[0]?.decision).toBe('deny');
+				expect(stored.value[0].decision).toBe('deny');
 			}
 		});
 
@@ -265,8 +265,9 @@ describe('ApprovalManager', () => {
 			};
 			await manager.applyDecision(jsonAction, 'allow-always');
 
-			const arg = addSpy.mock.calls[0]?.[0];
-			expect(arg?.actionPattern).toBeUndefined();
+			expect(addSpy).toHaveBeenCalledTimes(1);
+			const arg = addSpy.mock.calls[0][0];
+			expect(arg.actionPattern).toBeUndefined();
 			expect(JSON.stringify(arg)).not.toContain('token');
 		});
 
