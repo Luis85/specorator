@@ -349,12 +349,12 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-006, T-TC-008
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/infrastructure/mock/MockToolbarCatalog.test.ts`,
+  - [x] `tests/infrastructure/mock/MockToolbarCatalog.test.ts`,
         `tests/infrastructure/mock/MockToolbarCapabilities.test.ts`,
         `tests/infrastructure/localstorage/LocalStorageToolbar.test.ts`, and the extended
         `tests/__fakes__/fake-ports.test.ts` (the `toolbarCatalog` member) exist, naming the listed
         TEST-TC ids.
-  - [ ] Tests fail (RED) — the scriptable Mock catalog/capabilities + the inert LocalStorage impls + the
+  - [x] Tests fail (RED) — the scriptable Mock catalog/capabilities + the inert LocalStorage impls + the
         factory member do not yet exist (beyond the T-TC-008 default stub).
 
 ### T-TC-010 🔨 — `MockBridge` scriptable `ToolbarCatalogPort` + scriptable `getToolbarCapabilities` + `fake-ports.toolbarCatalog`
@@ -370,10 +370,10 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-009
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (the Mock catalog/capabilities scriptable legs of
+  - [x] The prior RED tests (the Mock catalog/capabilities scriptable legs of
         TEST-TC-003/010/011/013/017/019/021) now pass; the `fake-ports` `toolbarCatalog` member works for
         multi-port tests; the empty-models default drives the degrade path.
-  - [ ] No `node:*`/`obsidian` import in Mock; total — never throws; `npm run typecheck` + `npm run lint`
+  - [x] No `node:*`/`obsidian` import in Mock; total — never throws; `npm run typecheck` + `npm run lint`
         + `npm run test` green; implementation-log entry added.
 
 ### T-TC-011 🔨 — `LocalStorageBridge` inert `ToolbarCatalogPort` + inert `getToolbarCapabilities`
@@ -389,9 +389,9 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-009
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The prior RED tests (the LocalStorage inert catalog/capabilities legs) now pass; the demo renders
+  - [x] The prior RED tests (the LocalStorage inert catalog/capabilities legs) now pass; the demo renders
         the backed widgets (model/mode) + the honest seams (no live service-tier/MCP); never throws.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-TC-012 🔨 — `ObsidianBridge` real Claude `ToolbarCatalogPort` + real `getToolbarCapabilities` (coverage-excluded) 🪓
 
@@ -418,11 +418,11 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Slice plan:** may slice as (a) the real Claude `ToolbarCatalogPort.getCatalog` constant, (b) the real
   `getToolbarCapabilities()` flags.
 - **Definition of done:**
-  - [ ] `ObsidianBridge` provides the real Claude `ToolbarCatalogPort` (static-for-now catalog) + the
+  - [x] `ObsidianBridge` provides the real Claude `ToolbarCatalogPort` (static-for-now catalog) + the
         Claude runtime's real `getToolbarCapabilities()`; both total — never throw; no `obsidian` symbol
         leaks past the file.
-  - [ ] `npm run typecheck` + `npm run lint` green; the manual leg TEST-TC-M1 scheduled in `test-plan.md`.
-  - [ ] Implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` green; the manual leg TEST-TC-M1 scheduled in `test-plan.md`.
+  - [x] Implementation-log entry added.
 
 ---
 

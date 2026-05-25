@@ -187,3 +187,96 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
      impl assert the real four-flag byte-identical contract (the five-flag count is
      the new `ToolbarCapabilities`). The load-bearing invariant — `RuntimeCapabilities`
      unchanged from P4 — holds.
+
+---
+
+## T-TC-009 — RED: scriptable Mock catalog/caps + inert LS + fake-ports `toolbarCatalog` (🧪, qa)
+
+- **Spec/req:** SPEC-TC-008, SPEC-TC-009; TEST-TC-003/010/011/013/017/019/021/030
+  (Mock/LS backing); REQ-TC-003/013/019/021; NFR-TC-001/010.
+- **Files:** `tests/infrastructure/mock/MockToolbarCatalog.test.ts` (new, 1-130 —
+  scriptable catalog + `MockBridge.toolbarCatalog`), `tests/infrastructure/mock/
+  MockToolbarCapabilities.test.ts` (new, 1-67 — scriptable `getToolbarCapabilities`),
+  `tests/infrastructure/localstorage/LocalStorageToolbar.test.ts` (new, 1-78 — inert
+  catalog + bridge accessor + `FixtureChatRuntime` inert caps),
+  `tests/__fakes__/fake-ports.test.ts` (1 case appended, ~106-114 — the
+  `toolbarCatalog` member).
+- **Commit:** `2acc196`.
+- **Spec reference:** SPEC-TC-008 (Mock scriptable), SPEC-TC-009 (LS inert).
+- **Outcome:** done (RED confirmed) — `MockToolbarCatalog` / `LocalStorageToolbar`
+  fail at import (modules absent); `MockToolbarCapabilities` + `fake-ports` fail at
+  runtime (`setToolbarCapabilities` / `toolbarCatalog` absent beyond the T-TC-008
+  stub). `vitest run` over the four files: 4 files failed, 3 failed / 12 passed.
+- **Deviations:** none.
+
+## T-TC-010 — scriptable `MockBridge` `ToolbarCatalogPort` + scriptable caps + `fake-ports.toolbarCatalog` (🔨, dev)
+
+- **Spec/req:** SPEC-TC-008; REQ-TC-003/013/019/021; NFR-TC-001/010.
+- **Files:** `src/infrastructure/mock/MockToolbarCatalog.ts` (new, 1-63 — scriptable
+  `ToolbarCatalogPort`: `setToolbarCatalog` backs `getCatalog`, default `DEFAULT_MOCK_CATALOG`
+  = 2 models + mode + effort reasoning, no service-tier; total, no `providerId` branch),
+  `src/infrastructure/mock/MockBridge.ts` (import + private `toolbarCatalogPort` + the
+  `get toolbarCatalog` accessor mirroring `auxModel`), `src/infrastructure/mock/
+  MockChatRuntime.ts` (private `toolbarCapabilities` default + `getToolbarCapabilities`
+  reads it + `setToolbarCapabilities` setter — replaces the T-TC-008 fixed stub),
+  `tests/__fakes__/fake-ports.ts` (import + `toolbarCatalog` member type + factory wiring).
+- **Commit:** `2d0c248`.
+- **Spec reference:** SPEC-TC-008 (`MockBridge` scriptable catalog + caps).
+- **Outcome:** done — the Mock RED legs of T-TC-009 now green. `vitest run` over the
+  Mock-side files (incl. `MockBridge`/`MockChatRuntime`): 47/47. `vue-tsc -p
+  tsconfig.lint.json` 0 errors on the Mock surface (the 2 remaining errors were the
+  still-RED T-TC-011 LS legs); `npm run lint` 0 errors (12 pre-existing warnings).
+- **Deviations:** none. No `node:*`/`obsidian` in Mock; total — never throws.
+
+## T-TC-011 — `LocalStorageBridge` inert `ToolbarCatalogPort` + inert caps (🔨, dev)
+
+- **Spec/req:** SPEC-TC-009; REQ-TC-019/021; NFR-TC-002/010.
+- **Files:** `src/infrastructure/localstorage/LocalStorageToolbarCatalog.ts` (new, 1-46
+  — fixed inert `DEMO_CATALOG` = small model list + mode + effort, NO service-tier;
+  total, same for every `providerId`), `src/infrastructure/localstorage/
+  LocalStorageBridge.ts` (import + private `toolbarCatalogPort` + the `get toolbarCatalog`
+  accessor). `FixtureChatRuntime.getToolbarCapabilities` already reported the inert flags
+  from T-TC-008 — the T-TC-009 RED leg now confirms it (no change needed).
+- **Commit:** `f5e5acf`.
+- **Spec reference:** SPEC-TC-009 (`LocalStorageBridge` inert catalog + caps).
+- **Outcome:** done — the LS RED legs of T-TC-009 now green. `vitest run` over the
+  LS-side files: 35/35. `vue-tsc -p tsconfig.lint.json` 0 errors (whole project);
+  `npm run lint` 0 errors (12 pre-existing warnings).
+- **Deviations:** none. No `node:*` in LocalStorage; total — never throws.
+
+## T-TC-012 — `ObsidianBridge` real Claude `ToolbarCatalogPort` + real caps (🔨, dev, coverage-excluded)
+
+- **Spec/req:** SPEC-TC-007; REQ-TC-010/015/019/021; NFR-TC-001 (manual leg),
+  NFR-TC-010; TEST-TC-M1 (manual gate).
+- **Files:** `src/infrastructure/obsidian/ObsidianToolbarCatalog.ts` (new, 1-52 — the
+  real static-for-now Claude catalog `CLAUDE_CATALOG` = 3 models + mode + effort, NO
+  service-tier; total, imports only domain types — no `obsidian`/`node:*` symbol leaks),
+  `src/infrastructure/obsidian/ObsidianBridge.ts` (import + lazy `toolbarCatalogPort`
+  + the `get toolbarCatalog` accessor mirroring `selectionSource`),
+  `src/infrastructure/obsidian/ClaudeCliChatRuntime.ts` (`getToolbarCapabilities`
+  fleshed from the T-TC-008 stub into the documented real flags + the comment block
+  explaining each), `specs/toolbar-controls/test-plan.md` (the INFRA-batch table +
+  the scheduled manual leg TEST-TC-M1).
+- **Commit:** `a7f6409`.
+- **Spec reference:** SPEC-TC-007 (`ObsidianBridge` real catalog + real caps,
+  coverage-excluded → manual leg TEST-TC-M1).
+- **Outcome:** done (static surface). The real flags: `supportsMcpTools:false`
+  (honest CLI gating — MCP backing is P8/NG2, mirroring `supportsInlineResponse:false`),
+  `reasoningControl:'effort'`, `hasServiceTier:false`, `hasModeToggle:true`,
+  `permissionMode:'default'` (mirrors the P4 plan state; `--print` reports
+  `supportsPlanMode:false`, display only, NG6). `vue-tsc` 0 errors (whole project);
+  `npm run lint` 0 errors (12 pre-existing warnings); the four T-TC-009 batch files
+  33/33 green. **Coverage-excluded** (`src/infrastructure/obsidian/**`) — behaviour is
+  NOT agent-self-claimed green; the human-run **TEST-TC-M1** is the gate (scheduled in
+  `test-plan.md`).
+- **Deviations:**
+  1. The spec note describes `permissionMode` as "mirroring the active P4 plan state".
+     There is no live plan-state field plumbed into this runtime at P6 (P6 does not own
+     plan mode, NG6) and the `--print` one-shot transport reports `supportsPlanMode:
+     false`, so the honest displayed value is the constant `'default'`. The comment
+     documents that an interactive transport (Agent-SDK/ACP) flips it later with no UI
+     change — the same honest-gating posture as the P4 `getCapabilities()` flags.
+  2. `ObsidianBridge.toolbarCatalog` is provided now (the T-TC-012 DoD: "ObsidianBridge
+     provides the real Claude `ToolbarCatalogPort`"). Wiring the `TOOLBAR_CATALOG_PORT`
+     InjectionKey into `AgentSidebarView` + `ui/main.ts` (SPEC-TC-025) stays in the
+     later WIRE-IN batch, not this one — only the bridge-hosted accessor lands here.

@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-TC-001; Parts A/B/C; ADR-TC-001..004 accepted; CLAR-TC-001..003 ratified)
   spec.md: complete (SPEC-TC-001..030; 6 layer groups; EC-TC-1..14; TEST-TC-001..043 + M1/M2/M3; full REQ↔SPEC↔TEST coverage)
   tasks.md: complete (TASKS-TC-001; 35 tasks T-TC-001..035; DDD batches DOMAIN→INFRA→APP→UI→STYLES→WIRE-IN→GATE; RED-before-green; 2 manual legs T-TC-033/034; NO guard-relax)
-  implementation-log.md: in-progress (DOMAIN batch T-TC-001..008 done; INFRA/APP/UI/STYLES/WIRE-IN/GATE batches remain)
+  implementation-log.md: in-progress (DOMAIN T-TC-001..008 + INFRA T-TC-009..012 done; APP/UI/STYLES/WIRE-IN/GATE batches remain)
   test-plan.md: in-progress (guard-verification note + TEST-TC-M1/M2/M3 manual legs + DOMAIN-batch automated status; test-report at Stage 8)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (ADR-TC-001..004 accepted) |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete (TASKS-TC-001) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN batch T-TC-001..008 done) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-TC-001..008 + INFRA T-TC-009..012 done) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (`test-plan.md` scaffolded; report at Stage 8) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -236,4 +236,33 @@ meter, and the `toolbar/*` CSS modules).
                  qa→dev) — the scriptable MockBridge ToolbarCatalogPort + scriptable
                  getToolbarCapabilities + the inert LocalStorage impls + fake-ports.toolbarCatalog,
                  then the real Obsidian Claude catalog/caps (coverage-excluded, manual leg).
+2026-05-25 (dev): Stage-7 INFRA batch (T-TC-009..012) COMPLETE on feature/toolbar-controls.
+                 Commits: 2acc196 (T-TC-009 RED — scriptable Mock catalog/caps + inert LS +
+                 fake-ports toolbarCatalog tests), 2d0c248 (T-TC-010 — MockToolbarCatalog
+                 scriptable via setToolbarCatalog + MockBridge.toolbarCatalog accessor +
+                 MockChatRuntime.getToolbarCapabilities scriptable via setToolbarCapabilities +
+                 fake-ports.toolbarCatalog member), f5e5acf (T-TC-011 — LocalStorageToolbarCatalog
+                 inert Claude catalog no service-tier + LocalStorageBridge.toolbarCatalog; the
+                 FixtureChatRuntime inert caps from T-TC-008 confirmed by the RED leg), a7f6409
+                 (T-TC-012 — ObsidianToolbarCatalog real static-for-now Claude catalog +
+                 ObsidianBridge.toolbarCatalog + ClaudeCliChatRuntime.getToolbarCapabilities real
+                 flags, coverage-excluded; test-plan.md INFRA-batch table + scheduled manual leg
+                 TEST-TC-M1). EXPOSURE: Mock = scriptable `MockBridge.toolbarCatalog` (get) +
+                 scriptable `MockChatRuntime.setToolbarCapabilities`; LS = inert
+                 `LocalStorageBridge.toolbarCatalog` (get) + inert FixtureChatRuntime caps; Obsidian
+                 = real `ObsidianBridge.toolbarCatalog` (get, lazy) + real
+                 ClaudeCliChatRuntime.getToolbarCapabilities (coverage-excluded behind manual leg
+                 TEST-TC-M1, NOT self-claimed green). fake-ports gains the `toolbarCatalog` member.
+                 Verification: `npx vue-tsc -p tsconfig.lint.json --noEmit` 0 errors (whole project);
+                 `npm run lint` 0 errors (12 pre-existing warnings); `vitest run` 33/33 across the 4
+                 INFRA-batch test files (MockToolbarCatalog + MockToolbarCapabilities +
+                 LocalStorageToolbar + fake-ports). No `node:*`/`obsidian` in Mock or LocalStorage;
+                 no `obsidian`/`node:*` symbol leaks past ObsidianToolbarCatalog.ts; getCatalog +
+                 capabilities total — never throw. DID NOT run build/build:web/docs:api/verify or the
+                 dev server; DID NOT push; styles.css untouched. Stayed on feature/toolbar-controls;
+                 touched no application transform / UI. Deviation: ClaudeCliChatRuntime permissionMode
+                 is the constant 'default' (no live plan-state field plumbed at P6; --print reports
+                 supportsPlanMode:false, NG6 — documented in ClaudeCliChatRuntime + implementation-log).
+                 NEXT: the APPLICATION batch (T-TC-013..016, owner qa→dev) — the pure foldControlOptions
+                 + buildToolbarViewModel (pure/total, no providerId branch), each RED→green.
 ```
