@@ -227,3 +227,35 @@ body.theme-light .specorator-root {
 		--sp-thinking-pulse-duration: 0s;
 	}
 }
+
+/* §4.10 — Threads & sessions (P3, SPEC-TS-028). Tabs/history/resume/fork values resolve here;
+ * no P3 component carries a hex/raw Obsidian var (NFR-TS-012). The streaming border inherits the
+ * provider brand via the root's [data-provider]; the attention/active borders derive from existing
+ * --sp-* tokens. */
+.specorator-root {
+	/* tab badges (REQ-TS-006/007) */
+	--sp-tab-size: 28px;
+	--sp-tab-border-idle: var(--sp-border);
+	--sp-tab-border-active: var(--sp-accent);
+	--sp-tab-border-streaming: var(--sp-accent); /* overridden per-provider by [data-provider] */
+	--sp-tab-border-attention: var(--sp-error);
+	/* history list rows */
+	--sp-history-row-h: 44px;
+	--sp-history-delete: var(--sp-error);
+	/* drop-UP blurred menu */
+	--sp-history-blur: 8px;
+	/* fork-target modal */
+	--sp-fork-modal-max-inline: 340px;
+}
+.specorator-root[data-provider='claude'] {
+	/* streaming-border brand for the active provider (inherits the P1 brand seam) */
+	--sp-tab-border-streaming: var(
+		--sp-accent
+	); /* brand resolves from the existing provider accent */
+}
+@media (prefers-reduced-motion: reduce) {
+	.specorator-root {
+		/* the resume/title spin reuses the P2 spin keyframe; reduced-motion zeroes it (NFR-TS-010) */
+		--sp-history-spin-duration: 0s;
+	}
+}

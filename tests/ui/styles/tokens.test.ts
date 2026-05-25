@@ -1,9 +1,10 @@
 /**
  * Token-presence test for the WS-AUX-1 design-token layer (REQ-AUX-006,
  * REQ-AUX-009). Asserts every `--sp-*` token enumerated in
- * `specs/agent-ux-parity/spec.md` §4.1–§4.7 is declared by
- * `src/ui/styles/tokens.css` on the `.specorator-root` selector and the
- * brand-override blocks.
+ * `specs/agent-ux-parity/spec.md` §4.1–§4.7 — plus the P3 threads/sessions
+ * §4.10 block (`specs/threads-sessions/spec.md` SPEC-TS-028, NFR-TS-012) — is
+ * declared by `src/ui/styles/tokens.css` on the `.specorator-root` selector and
+ * the brand-override blocks.
  *
  * The test reads the CSS file as a string rather than mounting + computing
  * styles because jsdom's `getComputedStyle` resolves custom properties to
@@ -116,6 +117,25 @@ const MOTION_TOKENS = [
 
 const SURFACE_TOKENS = ['--sp-surface-overlay'];
 
+/**
+ * §4.10 — Threads & sessions (P3, SPEC-TS-028 / NFR-TS-012). Every token the P3
+ * components reference (TabBar.vue, ResumeSessionDropdown.vue, ForkTargetModal).
+ * `--sp-history-spin-duration` is declared only inside the reduced-motion guard
+ * (the component normal-mode value comes from its own `var(--…, 0.8s)` fallback),
+ * so it is asserted separately by the reduced-motion test below.
+ */
+const THREADS_SESSIONS_TOKENS = [
+	'--sp-tab-size',
+	'--sp-tab-border-idle',
+	'--sp-tab-border-active',
+	'--sp-tab-border-streaming',
+	'--sp-tab-border-attention',
+	'--sp-history-row-h',
+	'--sp-history-delete',
+	'--sp-history-blur',
+	'--sp-fork-modal-max-inline',
+];
+
 const PROVIDER_IDS = ['claude', 'codex', 'opencode', 'cursor'] as const;
 
 function loadTokens(): string {
@@ -182,5 +202,24 @@ describe('src/ui/styles/tokens.css — token contract (REQ-AUX-006, REQ-AUX-009)
 	it('declares the §4.7 surface token', () => {
 		const css = loadTokens();
 		assertTokensDeclared(css, SURFACE_TOKENS);
+	});
+
+	it('declares every §4.10 threads/sessions token (SPEC-TS-028, NFR-TS-012)', () => {
+		const css = loadTokens();
+		assertTokensDeclared(css, THREADS_SESSIONS_TOKENS);
+		// The streaming-border brand override hangs off the provider seam — the
+		// claude provider must redeclare `--sp-tab-border-streaming` so the
+		// active provider's accent drives the streaming badge (SPEC-TS-028).
+		// Quote-agnostic on the selector (prettier owns CSS attr-selector quotes).
+		expect(css).toMatch(
+			/\.specorator-root\[data-provider=['"]claude['"]\][\s\S]*?--sp-tab-border-streaming\s*:/,
+		);
+	});
+
+	it('zeroes --sp-history-spin-duration under reduced-motion (NFR-TS-010)', () => {
+		const css = loadTokens();
+		// The history/title spin reuses the P2 `spin` keyframe; reduced-motion
+		// collapses its duration to 0s via this token (no new keyframe).
+		expect(css).toMatch(/--sp-history-spin-duration\s*:\s*0s/);
 	});
 });
