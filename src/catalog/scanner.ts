@@ -25,6 +25,16 @@ const HEX_RE = /\b[0-9a-fA-F]{32,}\b/;
 const DESTRUCTIVE_TOOL_RE =
   /\bmcp__specorator-obsidian-mcp__(vault_delete|vault_move|cli_execute|canvas_write|vault_write)\b/;
 
+export interface AllowlistResult extends ScanResult { allowlisted: boolean; }
+
+export function scanWithAllowlist(
+  body: string, bodyHash: string, allowlist: Set<string>
+): AllowlistResult {
+  if (allowlist.has(bodyHash))
+    return { flagged: false, findings: [], normalized: body, allowlisted: true };
+  return { ...scanForInjection(body), allowlisted: false };
+}
+
 export function scanForInjection(body: string): ScanResult {
   const normalized = body.normalize("NFKC");
   const findings: ScanFinding[] = [];
