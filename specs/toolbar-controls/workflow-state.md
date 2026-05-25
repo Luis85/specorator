@@ -19,8 +19,8 @@ artifacts:
   implementation-log.md: in-progress (DOMAIN T-TC-001..008 + INFRA T-TC-009..012 + APPLICATION T-TC-013..016 + UI T-TC-017..028 + STYLES T-TC-029 + WIRE-IN T-TC-030..032 done; GATE T-TC-033/034 human-manual + T-TC-035 parent final-DoD remain)
   test-plan.md: in-progress (guard-verification note + TEST-TC-M1/M2/M3 manual legs + DOMAIN/INFRA/WIRE-IN-batch automated status + the deferred T-TC-032 live-dev-server leg; test-report at Stage 8)
   test-report.md: pending
-  review.md: pending
-  traceability.md: pending
+  review.md: complete (REVIEW-TC-001; verdict approve-with-nits; P1=0 P2=0 P3=3 P4=3; live fold-on-submit + production provide verified)
+  traceability.md: complete (TRACE-TC-001; all 27 REQ-TC + 14 NFR-TC chained; no orphans; M1/M2/M3 + coverage-gate pending-manual)
   release-notes.md: pending
   retrospective.md: pending
 ---
@@ -39,7 +39,7 @@ artifacts:
 | 6. Tasks | `tasks.md` | complete (TASKS-TC-001) |
 | 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-TC-001..008 + INFRA T-TC-009..012 + APPLICATION T-TC-013..016 + UI T-TC-017..028 + STYLES T-TC-029 + WIRE-IN T-TC-030..032 done; GATE T-TC-033/034 human-manual + T-TC-035 parent final-DoD remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (`test-plan.md` scaffolded; report at Stage 8) |
-| 9. Review | `review.md`, `traceability.md` | pending |
+| 9. Review | `review.md`, `traceability.md` | complete (REVIEW-TC-001 + TRACE-TC-001; approve-with-nits) |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
 
@@ -358,3 +358,35 @@ meter, and the `toolbar/*` CSS modules).
                  next + the styles.css regenerate at the gate). NEXT AGENT: the parent orchestrator
                  (T-TC-035 gate) / the human (the manual legs at the single final epic-review gate).
 ```
+
+## Stage-9 review hand-off (reviewer → release-manager)
+
+- **2026-05-25 — reviewer (REVIEW-TC-001 + TRACE-TC-001).** Verdict
+  **approve-with-nits** (P1=0 · P2=0 · P3=3 · P4=3). The P5 built-but-unwired lesson is
+  NOT repeated: the live path is verified end-to-end — selection → `tabs.setControl`
+  (`tabsStore.ts:578-581`) → fold on submit via `foldControlOptions` invoked in
+  `_turnQueryOptions` (`tabsStore.ts:598-607,639`, NOT dead code) → `runner.run`
+  (`:643-645`); reset on conversation change (`freshTab`/`loadIntoTab`); production
+  `TOOLBAR_CATALOG_PORT` provided in BOTH entry points (`AgentSidebarView.ts:158`,
+  `src/ui/main.ts:106`); `controls` excluded from `_persistTab` (no `data.json` write).
+  Additivity holds (RuntimeCapabilities byte-identical; control fold → `queryOptions`,
+  P5 context fold → `request`, coexist). All eight widgets parity-clean vs claudian-main;
+  240° usage arc confirmed. Toolbar test suite green on my read-only run; P5 regression
+  29/29 green.
+- **No merge-blockers.** Open items routed to owners:
+  - **dev:** R-TC-001 (UsageMeter SVG geometry `SIZE=36` vs `--sp-usage-arc-size:16px`
+    token mismatch — polish before the M2 screenshot gate), R-TC-005 (MCP empty-panel
+    focus management nit).
+  - **qa:** R-TC-003 (Stage-8 `test-report.md` absent — produce it / capture the
+    80/70/80/80 coverage-gate result before the epic gate).
+  - **reviewer/retro:** R-TC-002 (`quality:metrics` scanner under-counts spec/test
+    coverage for this feature — chains verified manually).
+  - **ux/ui-designer (pending brand-reviewer):** R-TC-004 (emoji glyphs `🔌`/`⚡`/`📁` —
+    P5 precedent + spec-sanctioned; if brand-reviewer rules blocking, verdict flips to
+    Approved-with-conditions).
+  - **architect (future phase):** R-TC-006 (`permissionMode` constant `'default'` in prod
+    — PLAN branch exercised only in Mock until plan state is plumbed; honest for P6/NG6).
+- **release-manager:** approve P6 → `next`. The four manual legs (TEST-TC-M1/M2/M3 + the
+  T-TC-032 live-dev-server leg) and the coverage-gate accumulate for the single final
+  epic-review human gate per the autonomous-drive directive — honestly scheduled, not
+  skipped. NEXT AGENT: parent orchestrator (T-TC-035 gate + draft PR into `next`).
