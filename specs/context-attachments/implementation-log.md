@@ -405,3 +405,44 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   `mimeType` for the caller's contract clarity (the resolved + gated MIME), though
   it is not embedded in the output (no data-URI prefix) — the parameter is
   underscore-prefixed to mark it intentionally unused in the byte fold.
+
+## APPLICATION batch (T-CA-017..028)
+
+### T-CA-017 — RED pure `computeWordDiff` (🧪 qa)
+
+- **Spec/test:** TEST-CA-023 (U leg), TEST-CA-023b; SPEC-CA-011; REQ-CA-023;
+  NFR-CA-011; EC-CA-10.
+- **Files:** `tests/application/chat/inlineEdit/computeWordDiff.test.ts` (new —
+  the REQ-CA-023 bank→riverbank acceptance asserted by per-type token sets +
+  reconstructing each side from equal+insert / equal+delete; stats `{added:1,
+  removed:1}`; EC-CA-10 identical → all-equal `{added:0,removed:0}`; empty inputs
+  → empty diff; one-sided empty → clean all-insert/all-delete; never-throws).
+- **Outcome:** done — RED confirmed (`vitest run` cannot resolve
+  `@/application/chat/inlineEdit/computeWordDiff`; the file errors at import time).
+- **Commit:** `12814ce`.
+
+### T-CA-018 — `computeWordDiff.ts` (pure word-level DP/LCS → `ToolDiffData`) (🔨 dev)
+
+- **Spec/req:** SPEC-CA-011; REQ-CA-023; NFR-CA-011.
+- **Files:** `src/application/chat/inlineEdit/computeWordDiff.ts` (new —
+  `tokenise` on `split(/(\s+)/)` (empty string → zero tokens, no phantom `''`),
+  `lcsTable` classic DP, `backtrace` into a token-granular `DiffLine[]` (one entry
+  per token, no coalescing — per SPEC "each token is an entry"), `countChanges`
+  counting non-whitespace insert/delete tokens; `filePath` `''`).
+- **Outcome:** done — the T-CA-017 RED tests now green (7/7). Pure/total, never
+  throws; identical inputs → all-equal no-op (EC-CA-10); empty → empty diff. The
+  `ToolDiffData` feeds the UNCHANGED P2 `DiffView` verbatim (the renderer reuse,
+  asserted at the UI layer). No new `package.json` runtime dependency; no
+  `obsidian`/`node:*`/Vue import.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` on the two files
+  exit 0; `vitest run tests/application/chat/inlineEdit/computeWordDiff.test.ts`
+  7/7 green.
+- **Commit:** _this commit._
+- **Deviation:** the DP/back-trace is decomposed into `tokenise`/`lcsTable`/
+  `backtrace`/`countChanges` helpers (vs claudian's single in-file `computeDiff`)
+  to satisfy the project ESLint `complexity ≤ 10` rule — matches the accepted
+  P2 `src/application/chat/computeDiff.ts` decomposition style. Per SPEC-CA-011
+  ("each token is an entry") the back-trace emits **one `DiffLine` per token** and
+  does NOT coalesce consecutive same-type ops (claudian's `InlineEditModal.ts:171`
+  does coalesce — an intentional divergence so the word-granular acceptance holds
+  at the token level).
