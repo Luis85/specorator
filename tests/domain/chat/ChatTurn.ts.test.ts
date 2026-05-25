@@ -26,6 +26,7 @@ import type {
 	CanvasSelectionContext,
 	BrowserSelectionContext,
 } from '@/domain/chat/attachments';
+import type { ReasoningChoice } from '@/domain/chat/Reasoning';
 
 type Equals<A, B> =
 	(<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
@@ -74,22 +75,43 @@ void _editorSel;
 void _canvasSel;
 void _browserSel;
 
-// PreparedChatTurn / ChatRuntimeQueryOptions / ChatRuntimeEnsureReadyOptions stay byte-identical.
+// PreparedChatTurn / ChatRuntimeEnsureReadyOptions stay byte-identical (P5 + P6).
 const _preparedKeys: Equals<
 	keyof PreparedChatTurn,
 	'request' | 'persistedContent' | 'prompt' | 'isCompact' | 'mcpMentions'
-> = true;
-const _queryKeys: Equals<
-	keyof ChatRuntimeQueryOptions,
-	'model' | 'forceColdStart' | 'appendSystemPrompt'
 > = true;
 const _ensureKeys: Equals<
 	keyof ChatRuntimeEnsureReadyOptions,
 	'allowSessionCreation' | 'force'
 > = true;
 void _preparedKeys;
-void _queryKeys;
 void _ensureKeys;
+
+// ---- T-TC-002 (TEST-TC-027 additivity leg, SPEC-TC-001/027) ----
+// `ChatRuntimeQueryOptions` gains EXACTLY the three additive optional fields
+// (`mode?`/`reasoning?`/`serviceTier?`) appended after `appendSystemPrompt`; the
+// P0–P5 `model?`/`forceColdStart?`/`appendSystemPrompt?` stay byte-identical.
+const _queryKeys: Equals<
+	keyof ChatRuntimeQueryOptions,
+	'model' | 'forceColdStart' | 'appendSystemPrompt' | 'mode' | 'reasoning' | 'serviceTier'
+> = true;
+void _queryKeys;
+
+// The P0–P5 members keep their exact types.
+const _qModel: Equals<ChatRuntimeQueryOptions['model'], string | undefined> = true;
+const _qForceCold: Equals<ChatRuntimeQueryOptions['forceColdStart'], boolean | undefined> = true;
+const _qAppend: Equals<ChatRuntimeQueryOptions['appendSystemPrompt'], string | undefined> = true;
+void _qModel;
+void _qForceCold;
+void _qAppend;
+
+// The three P6 additive fields carry their contracted optional types.
+const _qMode: Equals<ChatRuntimeQueryOptions['mode'], string | undefined> = true;
+const _qReasoning: Equals<ChatRuntimeQueryOptions['reasoning'], ReasoningChoice | undefined> = true;
+const _qServiceTier: Equals<ChatRuntimeQueryOptions['serviceTier'], string | undefined> = true;
+void _qMode;
+void _qReasoning;
+void _qServiceTier;
 
 describe('ChatTurnRequest P5 additive context fields (TEST-CA-001)', () => {
 	it('constructs a request with all five context fields', () => {
@@ -123,5 +145,41 @@ describe('ChatTurnRequest additivity / serialisation (TEST-CA-002)', () => {
 	it('serialises a { text, currentNotePath }-only request byte-identically to P1', () => {
 		const p1: ChatTurnRequest = { text: 'hello', currentNotePath: 'note.md' };
 		expect(JSON.parse(JSON.stringify(p1))).toEqual({ text: 'hello', currentNotePath: 'note.md' });
+	});
+});
+
+describe('ChatRuntimeQueryOptions P6 additivity / serialisation (TEST-TC-002/027)', () => {
+	it('serialises a P5-shaped query (no new field) byte-identically to P5', () => {
+		const p5: ChatRuntimeQueryOptions = {
+			model: 'sonnet',
+			forceColdStart: false,
+			appendSystemPrompt: 'be terse',
+		};
+		// No `mode`/`reasoning`/`serviceTier` present — the JSON is identical to P5.
+		expect(JSON.parse(JSON.stringify(p5))).toEqual({
+			model: 'sonnet',
+			forceColdStart: false,
+			appendSystemPrompt: 'be terse',
+		});
+		expect(Object.keys(p5)).toEqual(['model', 'forceColdStart', 'appendSystemPrompt']);
+	});
+
+	it('serialises an empty query byte-identically to P5', () => {
+		const empty: ChatRuntimeQueryOptions = {};
+		expect(JSON.parse(JSON.stringify(empty))).toEqual({});
+		expect(Object.keys(empty)).toEqual([]);
+	});
+
+	it('carries the three additive fields when present', () => {
+		const reasoning: ReasoningChoice = { kind: 'effort', value: 'high' };
+		const full: ChatRuntimeQueryOptions = {
+			model: 'opus',
+			mode: 'acceptEdits',
+			reasoning,
+			serviceTier: 'priority',
+		};
+		expect(full.mode).toBe('acceptEdits');
+		expect(full.reasoning).toEqual({ kind: 'effort', value: 'high' });
+		expect(full.serviceTier).toBe('priority');
 	});
 });
