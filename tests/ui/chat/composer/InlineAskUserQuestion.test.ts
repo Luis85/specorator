@@ -17,6 +17,7 @@ import { mount } from '@vue/test-utils';
 import InlineAskUserQuestion from '@/ui/chat/composer/InlineAskUserQuestion.vue';
 import { RespondToInlineBlockUseCase } from '@/application/chat/composer/RespondToInlineBlockUseCase';
 import { MockChatRuntime } from '@/infrastructure/mock/MockChatRuntime';
+import { i18n } from '@/ui/i18n';
 import type { AskUserQuestionRequest } from '@/domain/chat/inline';
 import type { NotificationPort } from '@/domain/ports';
 
@@ -80,6 +81,7 @@ function mountAsk(
 			supportsInlineResponse: opts.capable ?? true,
 			notify,
 		},
+		global: { plugins: [i18n] },
 	});
 	return { wrapper, runtime, respond, notify, pending };
 }

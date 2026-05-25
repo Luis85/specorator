@@ -17,6 +17,23 @@ export default {
 				mention: {
 					empty: 'Keine Treffer',
 				},
+				inline: {
+					askTitle: 'Frage',
+					customPlaceholder: 'Eigene Antwort eingeben…',
+					readOnlyNotice:
+						'Dieser Anbieter kann nicht inline antworten; antworte stattdessen in deiner Nachricht.',
+					exitPlanTitle: 'Plan abgeschlossen',
+					implement: 'Umsetzen',
+					revise: 'Überarbeiten',
+					cancel: 'Abbrechen',
+					revisePlaceholder: 'Feedback zur weiteren Planung eingeben…',
+				},
+				bash: {
+					exitLabel: 'Exit',
+				},
+				instruction: {
+					placeholder: 'Systemanweisung hinzufügen…',
+				},
 			},
 			busy: 'Antwort wird generiert…',
 			interrupted: 'Unterbrochen',
