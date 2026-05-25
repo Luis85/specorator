@@ -1,10 +1,10 @@
 ---
 feature: approvals-security
 area: AS
-current_stage: requirements
+current_stage: design
 status: active
 last_updated: 2026-05-26
-last_agent: pm (requirements)
+last_agent: architect (design)
 epic: claudian-reboot
 phase: P7
 integration_branch: next
@@ -13,7 +13,7 @@ artifacts:
   idea.md: skipped (parity-charter §3.9/§4 P7 + audits + claudian-main stand in, mirrors P1-P6)
   research.md: skipped
   requirements.md: accepted (PRD-AS-001; CLAR-AS-001..005 resolved-by-recommendation → P7 architect ADRs, notably ADR-AS-001 ApprovalRuleStorePort)
-  design.md: pending
+  design.md: complete (DESIGN-AS-001; ADR-AS-001/002/003 accepted; CLAR-AS-001..005 ratified)
   spec.md: pending
   tasks.md: pending
   implementation-log.md: pending
@@ -34,7 +34,7 @@ artifacts:
 | 1. Idea | `idea.md` | skipped |
 | 2. Research | `research.md` | skipped |
 | 3. Requirements | `requirements.md` | accepted |
-| 4. Design | `design.md` | pending |
+| 4. Design | `design.md` | complete (DESIGN-AS-001; ADR-AS-001/002/003 accepted) |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
@@ -137,4 +137,50 @@ updates, the inline approval/plan-mode controllers, `status-panel`/`permission-t
                  (additive ChatRuntimeQueryOptions/runtime setter + ToolbarCapabilities 3-mode
                  expansion), and the minimal status/approvals UI (status-panel/permission-toggle
                  --sp-* slice). Part A UX + Part B visual parity per charter §5.
+
+2026-05-26 (architect): Stage 4 COMPLETE. Wrote DESIGN-AS-001 (specs/approvals-security/design.md,
+                 Parts A UX / B UI / C Architecture) + filed ADR-AS-001/002/003 (accepted) + indexed
+                 them in docs/adr/README.md. CLAR-AS-001..005 RATIFIED.
+                 ADR-AS-001 (ApprovalRuleStorePort, charter §6a — the load-bearing one): store-only
+                 narrow port loadRules/addRule/removeRule/clear all Promise<Result<…>>; rule DTO =
+                 { id, toolName, actionPattern?, decision allow|deny, lifetime session|persisted,
+                 createdAt }; PURE domain matcher (getActionPattern/getActionDescription/
+                 matchesRulePattern + isPathPrefixMatch/matchesBashPrefix — claudian semantics EXACT:
+                 bash explicit-wildcard-only, file path-segment boundaries, other-tool prefix,
+                 null-action guard); DEVICE-LOCAL backing app.saveLocalStorage('specorator:approval-rules')
+                 — NOT data.json, NOT a vault file (CHARTER-REQ-SET), NO migration (CHARTER-REQ-FRESH);
+                 3 bridges (Obsidian device-local / Mock scriptable+in-memory+failure-injection / LS
+                 browser-localStorage). Fail-safe-to-prompt on store error (NFR-AS-004).
+                 ADR-AS-002 (permission-mode plumbing): additive ChatRuntimeQueryOptions.permissionMode?
+                 ('normal'|'plan'|'yolo') + per-tab TabControls.permissionMode?, folded by the P6
+                 foldControlOptions (guarded — non-'normal' only → byte-identical default, NFR-AS-001);
+                 P6 ToolbarCapabilities.permissionMode WIDENED from 'default'|'plan' to the live
+                 three-mode value ('default'→'normal'); SDK mapping (yolo↔bypassPermissions/plan↔plan/
+                 normal↔default) + plan-exit setMode session sync stay in the Claude runtime — NO
+                 providerId branch (NG6).
+                 ADR-AS-003 (decision flow): application ApprovalManager use case over the narrow ports —
+                 mode gate (yolo→auto-allow, plan→P4 exit-plan gate) FIRST → load (store + in-memory
+                 session) → pure match → deny-wins/allow/auto OR the UNCHANGED P4 inline prompt → *-always
+                 persists a rule, *-once = session rule, cancel = deny+interrupt; additive 'deny-always'
+                 on the P4 ApprovalDecision (render otherwise unchanged, NG4); decisionReason/blockedPath
+                 via the existing P4 ApprovalRequest.context (CLAR-AS-005, defer the panel NG3); no-rules
+                 + normal mode = byte-identical P4 (REQ-AS-052).
+                 COMPONENT INVENTORY: PermissionToggle.vue (P6 seam → live three-mode, changed),
+                 ApprovalsPanel.vue + ApprovalRuleRow.vue (new status/approvals surface),
+                 InlineApproval.vue (+deny-always option, additive). status-panel/permission-toggle
+                 --sp-* slice; en+de i18n; no v-html; co-located data-testid POs.
+                 NOTED under/over-specified (non-blocking, pinned to /spec:specify): (1) yolo lifetime —
+                 design treats mode as per-tab draft (reload → normal), not a persisted rule; (2) session-
+                 rule scope (per-surface recommended); (3) addRule dedupe by (tool,pattern,decision);
+                 (4) JSON-fallback pattern stored as match-all (no actionPattern); (5) concurrency/ordering
+                 + await-store-write-before-decide; (6) the P4 ApprovalDecision grows 'deny-always'
+                 additively (PRD lists deny rules but the P4 union lacked the member).
+                 HAND-OFF → /spec:specify: write SPEC-AS contracts — ApprovalRuleStorePort method
+                 contracts (pre/post/errors/Result), the ApprovalRule field-validation rules, the pure
+                 matcher's exact behaviour table + edge cases (bash-wildcard/path-segment/null-action/
+                 JSON-fallback), the ApprovalManager decide() algorithm contract (mode-gate-first,
+                 deny-wins, fail-safe), the additive ChatRuntimeQueryOptions/TabControls/ApprovalDecision
+                 shapes, the device-local key + the no-data.json regression assertion, the three-bridge
+                 backings, observability (no rule content in logs), and the TEST-AS scenarios. Resolve
+                 the six pinned spec-level items above.
 ```
