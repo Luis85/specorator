@@ -11,6 +11,7 @@ import type {
 } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
 import { MockChatRuntime } from './MockChatRuntime';
+import { MockHistoryStore } from './MockHistoryStore';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
 
@@ -50,6 +51,8 @@ export class MockBridge
 	}> = [];
 	private openedFile: string | null = null;
 	private vaultBasePath: string | null;
+	/** Stable in-memory history store for the mount (SPEC-TS-007). Lazily created. */
+	private historyStore: MockHistoryStore | null = null;
 
 	constructor(
 		initialFiles: Record<string, string> = {},
@@ -160,6 +163,15 @@ export class MockBridge
 	// without Obsidian; the Obsidian `setIcon` walk is the parity truth (P2).
 	createIconPort(): IconPort {
 		return staticIconPort;
+	}
+
+	// ── Provider history factory (SPEC-TS-007, ADR-TS-001 §3) ───────────────────
+	// Returns the mount's stable in-memory `MockHistoryStore` (over a `Map`, no
+	// vault), so `npm run dev` and unit tests exercise the full history flow. The
+	// concrete type exposes `seedConversations`/`getAllConversations` test helpers.
+	createProviderHistoryPort(): MockHistoryStore {
+		this.historyStore ??= new MockHistoryStore();
+		return this.historyStore;
 	}
 
 	showError(message: string, durationMs = 0): void {

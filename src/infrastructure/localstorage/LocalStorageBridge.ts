@@ -8,9 +8,11 @@ import type {
 	ChatRuntimePort,
 	MarkdownRenderPort,
 	IconPort,
+	ProviderHistoryPort,
 } from '@/domain/ports';
 import { type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
 import { FixtureChatRuntime } from './FixtureChatRuntime';
+import { FixtureHistoryStore } from './FixtureHistoryStore';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
 
@@ -125,6 +127,14 @@ export class LocalStorageBridge
 	// GitHub Pages demo renders icons declaratively without Obsidian.
 	createIconPort(): IconPort {
 		return staticIconPort;
+	}
+
+	// ── Provider history factory (SPEC-TS-008, ADR-TS-001 §3) ───────────────────
+	// Returns a fresh fixture-seeded in-memory store so the GitHub Pages demo shows
+	// a populated history list. Writes are non-durable (re-seeds per mount) — the
+	// correct posture for a stateless public demo (NFR-TS-002).
+	createProviderHistoryPort(): ProviderHistoryPort {
+		return new FixtureHistoryStore();
 	}
 
 	showError(message: string, durationMs = 0): void {
