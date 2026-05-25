@@ -1,10 +1,10 @@
 ---
 feature: approvals-security
 area: AS
-current_stage: specification
+current_stage: tasks
 status: active
 last_updated: 2026-05-26
-last_agent: architect (specification)
+last_agent: planner (tasks)
 epic: claudian-reboot
 phase: P7
 integration_branch: next
@@ -15,7 +15,7 @@ artifacts:
   requirements.md: accepted (PRD-AS-001; CLAR-AS-001..005 resolved-by-recommendation → P7 architect ADRs, notably ADR-AS-001 ApprovalRuleStorePort)
   design.md: complete (DESIGN-AS-001; ADR-AS-001/002/003 accepted; CLAR-AS-001..005 ratified)
   spec.md: complete (SPEC-AS-001; 28 items, 6 layer groups; 33 REQ-AS + 16 NFR-AS chained to TEST-AS; 6 design open items resolved)
-  tasks.md: pending
+  tasks.md: complete (TASKS-AS-001; 40 tasks T-AS-001..040; DDD batches DOMAIN→INFRA→APP→UI→STYLES→WIRE-IN→GATE; RED-before-green; 3 manual legs T-AS-036/037/038; NO guard-relax)
   implementation-log.md: pending
   test-plan.md: pending
   test-report.md: pending
@@ -36,7 +36,7 @@ artifacts:
 | 3. Requirements | `requirements.md` | accepted |
 | 4. Design | `design.md` | complete (DESIGN-AS-001; ADR-AS-001/002/003 accepted) |
 | 5. Specification | `spec.md` | complete (SPEC-AS-001; 28 items SPEC-AS-001..028) |
-| 6. Tasks | `tasks.md` | pending |
+| 6. Tasks | `tasks.md` | complete (TASKS-AS-001; 40 tasks T-AS-001..040; DDD batches; RED-before-green; 3 manual legs; NO guard-relax) |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
@@ -230,4 +230,57 @@ updates, the inline approval/plan-mode controllers, `status-panel`/`permission-t
                  +deny-always SPEC-AS-015, ChatSurface callback wiring SPEC-AS-016, tabsStore SPEC-AS-017,
                  composable SPEC-AS-018, wiring SPEC-AS-019) + the --sp-* slice SPEC-AS-020 last.
                  No open clarifications block the planner.
+
+2026-05-26 (planner): Stage 6 COMPLETE. Wrote TASKS-AS-001 (specs/approvals-security/tasks.md): 40
+                 tasks T-AS-001..040 decomposing SPEC-AS-001..028, mirroring the TASKS-TC-001 (P6) +
+                 TASKS-CA-001 (P5) shape EXACTLY — a baseline/guard-verify task first; DDD batches
+                 DOMAIN→INFRA→APPLICATION→UI→STYLES→WIRE-IN→GATE; strict RED test (qa) before impl
+                 (dev); every dev task's first DoD = "the prior RED test(s) now pass" + typecheck/lint/
+                 test green + impl-log entry.
+                 BATCHES: DOMAIN T-AS-002..011 (PermissionMode + the 2 additive optionals + ApprovalDecision
+                 +deny-always RED→green T-AS-002/003; the PURE matcher truth table RED→green T-AS-004/005;
+                 ApprovalRule DTO + ruleDedupeKey RED→green T-AS-006/007; ApprovalRuleStorePort +
+                 APPROVAL_RULE_STORE_PORT key + barrel RED→green T-AS-008/009; the ToolbarCapabilities.
+                 permissionMode WIDEN RED→green+runtime fan-out T-AS-010/011). INFRA T-AS-012..015 (Obsidian
+                 device-local store + Claude SDK map + plan-exit setMode coverage-excluded→manual T-AS-012;
+                 Mock scriptable store + setFailMode + fake-ports.approvalRuleStore + scriptable runtime
+                 mode RED→green T-AS-013/014; LocalStorage browser-localStorage + inert mode T-AS-015).
+                 APPLICATION T-AS-016..019 (foldControlOptions permissionMode clause RED→green T-AS-016/017;
+                 ApprovalManager decide/applyDecision/listRules — mode-gate-first→match deny-wins→prompt→
+                 persist + fail-safe RED→green T-AS-018/019). UI T-AS-020..029 (useApprovalRuleStorePort
+                 T-AS-020/021; PermissionToggle live three-mode T-AS-022/023; ApprovalsPanel+ApprovalRuleRow
+                 T-AS-024/025; InlineApproval +deny-always T-AS-026/027; ChatSurface approval-callback→
+                 ApprovalManager + tabsStore permissionMode control T-AS-028/029; each mounted .vue + a
+                 co-located data-testid PO). STYLES T-AS-030 (status-panel/permission-toggle --sp-* slice +
+                 tokens-contract). WIRE-IN T-AS-031..033 (provide APPROVAL_RULE_STORE_PORT in
+                 AgentSidebarView + ui/main.ts + mount the panel + wire the live callback RED→green
+                 T-AS-031/032; npm run dev standalone smoke T-AS-033). GATE T-AS-034..040 (cross-cutting
+                 invariants RED→green T-AS-034/035; 3 manual human-run legs T-AS-036 device-local round-trip
+                 + no-data.json M1 / T-AS-037 real SDK map+setMode+plan-gating M3+005 / T-AS-038 parity
+                 screenshots M2; token guard + additivity gate T-AS-039; Feature DoD + draft PR into next
+                 T-AS-040).
+                 BUILD-GREEN DISCIPLINE (the P5 T-CA-006 / P6 T-TC-008 lesson): the ToolbarCapabilities.
+                 permissionMode WIDEN (a non-additive type change that breaks every implements
+                 ChatRuntimePort) lands its runtime fan-out (3 runtimes + EnqueueRuntime decorator +
+                 ScriptedRuntime doubles, mapping 'default'→'normal') in the SAME task T-AS-011 to keep the
+                 build green; the additive ChatRuntimeQueryOptions.permissionMode? + TabControls.
+                 permissionMode? optionals carry NO implements-break (T-AS-003 notes this — no companion
+                 stub) — called out in the tasks.md banner + the T-AS-003/011 DoD.
+                 GUARD-RELAX: NONE needed (verified against eslint.config.js — no P7 symbol was P0-deleted;
+                 APPROVAL_RULE_STORE_PORT + @/domain/chat/PermissionMode + @/domain/chat/approvals/** +
+                 @/domain/ports/ApprovalRuleStorePort + @/application/chat/approvals/** + @/ui/chat/approvals/**
+                 match no DELETED_SUBSYSTEM_BAN glob; DELETED_INJECTION_KEYS has no APPROVAL_RULE_STORE_PORT).
+                 Stated explicitly like P5/P6; T-AS-001/009/040 carry the lint-confirmation DoD.
+                 STABILITY-LOOP NFRs: NONE in scope (no "0 flakes across N runs" NFR in PRD-AS/SPEC-AS) —
+                 no 1:1 stability-loop task generated; nothing to escalate.
+                 COVERAGE: all 28 SPEC-AS + 33 REQ-AS + 16 NFR-AS + all TEST-AS-001..062 + M1/M2/M3 map to
+                 ≥1 task (§coverage table). No TBD; no orphan task. Critical path = 14 tasks
+                 (T-AS-002→003→010→011→013→014→018→019→028→029→031→032→037→040).
+                 HAND-OFF → /spec:implement (dev/qa/sre): start with the Batch-0 RED tasks T-AS-002 (qa —
+                 PermissionMode + the two additive optionals + the grown ApprovalDecision + the byte-identity
+                 serialisation leg) ∥ T-AS-004 (qa — the PURE matcher truth table) ∥ T-AS-006 (qa — the
+                 ApprovalRule DTO + ruleDedupeKey), plus T-AS-001 (dev — baseline-capture + guard
+                 verification, no production code). FIRST READY TASK = T-AS-002 (qa, RED — no deps). Freeze
+                 the additive domain types FIRST so the engine + the toggle build on frozen types; the
+                 ToolbarCapabilities widen (T-AS-011) lands its runtime fan-out in one task.
 ```
