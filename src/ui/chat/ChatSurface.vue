@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, computed, inject, ref, shallowRef } from 'vue';
+import { onMounted, onBeforeUnmount, computed, inject, ref, shallowRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { storeToRefs } from 'pinia';
 import { useTabsStore } from '@/ui/stores/tabsStore';
@@ -407,6 +407,23 @@ function clearContextSets(): void {
 	images.value = [];
 	selectionApi?.clear();
 }
+
+/**
+ * R-CA-003 (REQ-CA-006, EC-CA-6): reset the context sets on a NEW or LOADED
+ * conversation. The active conversation identity changes when a new tab opens
+ * (`/new` + the TabBar `+`, both `tabs.openTab` → a new `activeTabId`), when a fork
+ * loads into a new tab (`loadIntoNewTab`), and when a conversation is resumed into
+ * the current tab (`loadIntoTab` → a new `conversationId`). Watching both keys
+ * covers all three; a plain re-render does not change either, so it never clears
+ * mid-draft. The initial mount runs without `immediate`, so the first empty tab does
+ * not trigger a (redundant) clear.
+ */
+watch(
+	() => `${tabs.activeTabId ?? ''}::${tabs.activeTab?.conversationId ?? ''}`,
+	() => {
+		clearContextSets();
+	},
+);
 
 function onCancel(): void {
 	tabs.cancelTurn();
