@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-TC-001; Parts A/B/C; ADR-TC-001..004 accepted; CLAR-TC-001..003 ratified)
   spec.md: complete (SPEC-TC-001..030; 6 layer groups; EC-TC-1..14; TEST-TC-001..043 + M1/M2/M3; full REQ↔SPEC↔TEST coverage)
   tasks.md: complete (TASKS-TC-001; 35 tasks T-TC-001..035; DDD batches DOMAIN→INFRA→APP→UI→STYLES→WIRE-IN→GATE; RED-before-green; 2 manual legs T-TC-033/034; NO guard-relax)
-  implementation-log.md: in-progress (DOMAIN T-TC-001..008 + INFRA T-TC-009..012 done; APP/UI/STYLES/WIRE-IN/GATE batches remain)
+  implementation-log.md: in-progress (DOMAIN T-TC-001..008 + INFRA T-TC-009..012 + APPLICATION T-TC-013..016 done; UI/STYLES/WIRE-IN/GATE batches remain)
   test-plan.md: in-progress (guard-verification note + TEST-TC-M1/M2/M3 manual legs + DOMAIN-batch automated status; test-report at Stage 8)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (ADR-TC-001..004 accepted) |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete (TASKS-TC-001) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-TC-001..008 + INFRA T-TC-009..012 done) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-TC-001..008 + INFRA T-TC-009..012 + APPLICATION T-TC-013..016 done) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (`test-plan.md` scaffolded; report at Stage 8) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -265,4 +265,31 @@ meter, and the `toolbar/*` CSS modules).
                  supportsPlanMode:false, NG6 — documented in ClaudeCliChatRuntime + implementation-log).
                  NEXT: the APPLICATION batch (T-TC-013..016, owner qa→dev) — the pure foldControlOptions
                  + buildToolbarViewModel (pure/total, no providerId branch), each RED→green.
+2026-05-25 (dev): Stage-7 APPLICATION batch (T-TC-013..016) COMPLETE on feature/toolbar-controls.
+                 Commits: e2d498a (T-TC-013 RED — foldControlOptions: empty {}→{} + each present-field
+                 fold + empty-string/descriptor-default-never-folded EC-TC-6 + never-throws),
+                 12c6a90 (T-TC-014 — foldControlOptions.ts: Partial<Pick<ChatRuntimeQueryOptions,
+                 'model'|'mode'|'reasoning'|'serviceTier'>>; writes model/mode/serviceTier only when
+                 present+non-empty, reasoning only when present; {} → {} byte-identical to P5),
+                 fadeeee (T-TC-015 RED — buildToolbarViewModel full per-widget matrix + EC-TC-2/3/4/5/7
+                 + USAGE_WARNING_THRESHOLD===80 strictly-above boundary + source-grep no-providerId leg),
+                 e4940e2 (T-TC-016 — buildToolbarViewModel.ts: WidgetVisibility union + 8 per-widget VM
+                 interfaces + ToolbarViewModel + USAGE_WARNING_THRESHOLD=80; eight per-widget builders;
+                 seam widgets decided from capabilities+catalog descriptors alone — mcp on
+                 supportsMcpTools, permission visible-disabled+plan flag, external unconditional
+                 visible-disabled; NO providerId branch). Verification: `npx vue-tsc -p
+                 tsconfig.lint.json --noEmit` 0 errors (whole project); `npm run lint` 0 errors (12
+                 pre-existing warnings, none in toolbar files); `vitest run` 39/39 across the 2
+                 APPLICATION-batch test files (foldControlOptions 11 + buildToolbarViewModel 28). Both
+                 transforms pure/total — never throw; no `obsidian`/`node:*`/Vue import; no providerId
+                 branch (the source-grep leg enforces zero `providerId` / quoted-`claude`). DID NOT run
+                 build/build:web/docs:api/verify or the dev server; DID NOT push; styles.css untouched.
+                 Stayed on feature/toolbar-controls; touched no domain/infra/UI. Deviations: (1)
+                 foldControlOptions return narrowed to Partial<Pick<...>> (a tighter assignable subtype
+                 of the spec's Partial<ChatRuntimeQueryOptions> — type-enforces additive-only). (2) the
+                 T-TC-015 source-grep path-resolution was fixed in the T-TC-016 commit
+                 (fileURLToPath(import.meta.url) is not a file: URL under the vitest config → resolve
+                 from process.cwd(); assertions unchanged). NEXT: the UI batch (T-TC-017..025, owner
+                 qa→dev) — useToolbarCatalogPort + ToolbarStrip + the 8 leaf widgets + UsageMeter +
+                 ChatComposer/ChatSurface/tabsStore wiring, each with a co-located data-testid PageObject.
 ```

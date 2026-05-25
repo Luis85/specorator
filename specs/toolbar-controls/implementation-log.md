@@ -280,3 +280,97 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
      provides the real Claude `ToolbarCatalogPort`"). Wiring the `TOOLBAR_CATALOG_PORT`
      InjectionKey into `AgentSidebarView` + `ui/main.ts` (SPEC-TC-025) stays in the
      later WIRE-IN batch, not this one — only the bridge-hosted accessor lands here.
+
+## T-TC-013 — RED: `foldControlOptions` pure guarded fold (🧪, qa, `test(tc):`)
+
+- **Spec/req:** SPEC-TC-010; REQ-TC-004; NFR-TC-001/005; TEST-TC-002 (fold leg),
+  TEST-TC-004 (fold leg); EC-TC-1, EC-TC-6.
+- **Files:** `tests/application/chat/toolbar/foldControlOptions.test.ts` (new, 1-95 —
+  11 cases: the empty `{}` → `{}` fold (EC-TC-1), each present-field fold
+  (model/mode/effort-reasoning/budget-reasoning/serviceTier), all-fields-together, the
+  omit-absent assertion, the empty-string-never-folded leg (EC-TC-6), the
+  additive-only `forceColdStart`/`appendSystemPrompt`-absent leg, and never-throws).
+- **Commit:** `e2d498a`.
+- **Spec reference:** SPEC-TC-010 (the pure guarded fold contract + the resolved
+  default/non-default table).
+- **Outcome:** done (RED). `npx vitest run` fails at import — `foldControlOptions.ts`
+  does not yet exist (the RED signal). Greened by T-TC-014.
+- **Deviations:** none.
+
+## T-TC-014 — `foldControlOptions.ts` pure guarded fold (🔨, dev, `feat(tc):`)
+
+- **Spec/req:** SPEC-TC-010; REQ-TC-004; NFR-TC-001/005/007.
+- **Files:** `src/application/chat/toolbar/foldControlOptions.ts` (new, 1-42 —
+  `foldControlOptions(controls: TabControls): Partial<Pick<ChatRuntimeQueryOptions,
+  'model'|'mode'|'reasoning'|'serviceTier'>>`; writes `model`/`mode`/`serviceTier`
+  only when present + non-empty, `reasoning` only when present; an untouched `{}`
+  yields `{}`; imports only the `TabControls` + `ChatRuntimeQueryOptions` domain
+  types — no `obsidian`/`node:*`/Vue, no `providerId` branch).
+- **Commit:** `12c6a90`.
+- **Spec reference:** SPEC-TC-010 (additive + guarded; a descriptor default is never
+  folded so an untouched toolbar stays byte-identical to P5, NFR-TC-001/EC-TC-1/6).
+- **Outcome:** done. The T-TC-013 RED tests now pass (11/11 green). `vue-tsc -p
+  tsconfig.lint.json` 0 errors (whole project); `npm run lint` 0 errors (12
+  pre-existing warnings, none in toolbar files).
+- **Deviations:** none. The signature pins the return to the four toolbar-owned query
+  fields via `Pick<...>` (the spec writes `Partial<ChatRuntimeQueryOptions>`; the
+  `Pick` is a tighter, assignable subtype that makes the additive-only contract
+  type-enforced — it can never write `forceColdStart`/`appendSystemPrompt`). Pure +
+  total — never throws.
+
+## T-TC-015 — RED: `buildToolbarViewModel` per-widget decision (🧪, qa, `test(tc):`)
+
+- **Spec/req:** SPEC-TC-011/018/029; REQ-TC-003/010/013/015/016/017/019/021/023/027;
+  NFR-TC-010; TEST-TC-003/010/013/017/019/021/027/030 (VM legs); EC-TC-2/3/4/5/7.
+- **Files:** `tests/application/chat/toolbar/buildToolbarViewModel.test.ts` (new — 28
+  cases across the full per-widget matrix: `USAGE_WARNING_THRESHOLD === 80`; model
+  always visible/enabled with options + selectedId fallback + emptyNotice degrade
+  (EC-TC-3); mode/thinking/serviceTier capability+descriptor gating (EC-TC-2/4); the
+  thinking single-option hide; permission/external always visible-disabled with the
+  PLAN flag (EC-TC-5); mcp hidden vs visible-empty; usage hidden when null (EC-TC-7) +
+  the strictly-above-80 warning boundary at 80/81; the empty-catalog degrade
+  never-throws; and a source-grep leg asserting zero `providerId` / quoted-`claude`
+  literal (SPEC-TC-029)).
+- **Commit:** `fadeeee`.
+- **Spec reference:** SPEC-TC-011 (the per-widget decision table) + SPEC-TC-018 (the
+  `> 80` warning) + SPEC-TC-029 (no-provider-branch).
+- **Outcome:** done (RED). `npx vitest run` fails at import — `buildToolbarViewModel.ts`
+  does not yet exist (the RED signal). Greened by T-TC-016.
+- **Deviations:** none in assertions. The source-grep leg's path resolution was fixed
+  in the T-TC-016 commit (`fileURLToPath(import.meta.url)` is not a `file:` URL under
+  the project's vitest config → switched to `resolve(process.cwd(), 'src/...')`); the
+  assertions (no `providerId`, no quoted `claude`) are unchanged.
+
+## T-TC-016 — `buildToolbarViewModel.ts` per-widget decision + `USAGE_WARNING_THRESHOLD` (🔨, dev, `feat(tc):`)
+
+- **Spec/req:** SPEC-TC-011/018/029; REQ-TC-003/010/013/015/016/017/019/021/023/027;
+  NFR-TC-010/007.
+- **Files:** `src/application/chat/toolbar/buildToolbarViewModel.ts` (new — the
+  `WidgetVisibility` union, the eight per-widget VM interfaces, `ToolbarViewModel`, the
+  `USAGE_WARNING_THRESHOLD = 80` module constant, and `buildToolbarViewModel(catalog,
+  capabilities, controls, usage)` delegating to eight private per-widget builders;
+  imports only domain types — no `obsidian`/`node:*`/Vue, no per-provider branch),
+  `tests/application/chat/toolbar/buildToolbarViewModel.test.ts` (the path-resolution
+  fix that makes the source-grep leg runnable — assertions unchanged).
+- **Commit:** `e4940e2`.
+- **Spec reference:** SPEC-TC-011 per-widget rules — model always visible/enabled
+  (`selectedId = controls.model ?? catalog.defaultModelId`, `emptyNotice` on an empty
+  list); mode visible iff `hasModeToggle && catalog.mode`; thinking hidden on
+  `reasoningControl==='none'` / no descriptor / `< 2` options; serviceTier hidden on
+  `!hasServiceTier` / no descriptor; permission + external always `visible-disabled`;
+  mcp hidden vs visible-empty on `supportsMcpTools`; usage hidden when null else
+  `warning = percentage > USAGE_WARNING_THRESHOLD`.
+- **Outcome:** done. The T-TC-015 RED tests now pass (28/28 green; 39/39 across the
+  two application transforms). **Seam-widget decision without a provider branch:** the
+  three honest-defer seams are decided from `capabilities` + the `catalog` descriptors
+  alone — `mcp` reads `capabilities.supportsMcpTools` (hidden vs visible-disabled);
+  `permission` reads `capabilities.permissionMode` (always visible-disabled, `plan`
+  flag set when `'plan'`); `external` is unconditionally visible-disabled (full-parity
+  seam, no capability/descriptor needed). No `if (providerId === 'claude')` anywhere —
+  the source-grep leg enforces this. `vue-tsc -p tsconfig.lint.json` 0 errors (whole
+  project); `npm run lint` 0 errors (12 pre-existing warnings, none in toolbar files).
+- **Deviations:** none. The `WidgetVisibility`/VM interfaces match the SPEC-TC-011
+  shapes verbatim; the `enabled: true` value on `visible` widgets follows the spec
+  table ("visible/enabled" / "visible with `enabled:false`"). `buildThinking` returns
+  `control: capabilities.reasoningControl` + `options: []` on the hidden branch (the
+  interface's `control`/`options` are non-optional — a safe, total default).

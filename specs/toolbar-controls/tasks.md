@@ -444,10 +444,10 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-003, T-TC-004
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/application/chat/toolbar/foldControlOptions.test.ts` exists, naming TEST-TC-002/004 fold
+  - [x] `tests/application/chat/toolbar/foldControlOptions.test.ts` exists, naming TEST-TC-002/004 fold
         legs, covering each present-field fold, the descriptor-default-never-folded (EC-TC-6), the
         `{}` → `{}` empty fold (EC-TC-1), and never-throws.
-  - [ ] Tests fail (RED) — `foldControlOptions.ts` does not yet exist (it consumes the
+  - [x] Tests fail (RED) — `foldControlOptions.ts` does not yet exist (it consumes the
         `TabControls`/`ChatRuntimeQueryOptions` from T-TC-003/004).
 
 ### T-TC-014 🔨 — `foldControlOptions.ts` (pure guarded fold)
@@ -463,9 +463,9 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-013
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-TC-002 fold leg + TEST-TC-004 fold leg) now pass, incl. EC-TC-1/6.
-  - [ ] Pure/total; never throws; no `obsidian`/Vue import; no `providerId` branch.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] The prior RED tests (TEST-TC-002 fold leg + TEST-TC-004 fold leg) now pass, incl. EC-TC-1/6.
+  - [x] Pure/total; never throws; no `obsidian`/Vue import; no `providerId` branch.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-TC-015 🧪 — RED: pure `buildToolbarViewModel` (full per-widget matrix, no `providerId` branch)
 
@@ -491,11 +491,11 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-004, T-TC-008
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/application/chat/toolbar/buildToolbarViewModel.test.ts` exists, naming the listed TEST-TC
+  - [x] `tests/application/chat/toolbar/buildToolbarViewModel.test.ts` exists, naming the listed TEST-TC
         VM legs, covering the full per-widget matrix, the no-`providerId`-branch grep+behaviour, the
         `USAGE_WARNING_THRESHOLD = 80` `>` constant, the empty/partial-catalog degrade (EC-TC-3), and
         never-throws.
-  - [ ] Tests fail (RED) — `buildToolbarViewModel.ts` does not yet exist.
+  - [x] Tests fail (RED) — `buildToolbarViewModel.ts` does not yet exist.
 
 ### T-TC-016 🔨 — `buildToolbarViewModel.ts` (pure per-widget decision + `USAGE_WARNING_THRESHOLD`)
 
@@ -511,10 +511,10 @@ branch (P5 #446 / squash 6d6b1a6).
 - **Depends on:** T-TC-015
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-TC-003/010/013/017/019/021/027/030 VM legs + the EC-TC-2/3/4/5/7 legs)
+  - [x] The prior RED tests (TEST-TC-003/010/013/017/019/021/027/030 VM legs + the EC-TC-2/3/4/5/7 legs)
         now pass; `USAGE_WARNING_THRESHOLD = 80`, warning strictly above.
-  - [ ] Pure/total; never throws; **no `providerId` branch**; no `obsidian`/Vue import.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] Pure/total; never throws; **no `providerId` branch**; no `obsidian`/Vue import.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ---
 
