@@ -10,12 +10,13 @@ describe("targetPath", () => {
     expect(targetPath(partial({ id: "auditing-vault", type: "skill" }), "claude"))
       .toBe(".claude/skills/auditing-vault/SKILL.md");
   });
-  it("throws for non-skill in phase 1", () => {
-    expect(() => targetPath(partial({ id: "x", type: "command" }), "claude"))
-      .toThrow(/skill/i);
+  it("throws for unsupported type+platform combination", () => {
+    // hook on cursor — no mapping defined for that combo
+    expect(() => targetPath(partial({ id: "x", type: "hook" }), "cursor"))
+      .toThrow(/no mapping/);
   });
-  it("throws for unsupported platform in phase 1", () => {
-    expect(() => targetPath(partial({ id: "x", type: "skill" }), "cursor"))
-      .toThrow(/claude/i);
+  it("throws for unsupported platform (codex has no command mapping)", () => {
+    expect(() => targetPath(partial({ id: "x", type: "command" }), "codex"))
+      .toThrow(/no mapping/);
   });
 });
