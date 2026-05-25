@@ -21,6 +21,11 @@ const TID = {
 	selectionIndicator: 'selection-indicator',
 	selectionClear: 'selection-indicator-clear',
 	attach: 'composer-attach',
+	// P6 toolbar-controls extension (SPEC-TC-021).
+	toolbar: 'composer-toolbar',
+	toolbarStrip: 'toolbar-strip',
+	toolbarModel: 'toolbar-model',
+	toolbarMode: 'toolbar-mode',
 } as const;
 
 /** PageObject for `ChatComposer.vue` (SPEC-CC-021). Queries by `data-testid` only (ADR-009). */
@@ -209,6 +214,20 @@ export class ChatComposerPageObject {
 
 	async clickAttach(): Promise<void> {
 		await this.wrapper.get(this.byTid(TID.attach)).trigger('click');
+	}
+
+	// ── P6 toolbar-controls extension (SPEC-TC-021) ─────────────────────────────
+
+	hasToolbar(): boolean {
+		return this.wrapper.find(this.byTid(TID.toolbar)).exists();
+	}
+
+	hasToolbarStrip(): boolean {
+		return this.wrapper.find(this.byTid(TID.toolbarStrip)).exists();
+	}
+
+	async clickToolbarMode(): Promise<void> {
+		await this.wrapper.get(this.byTid(TID.toolbarMode)).trigger('click');
 	}
 
 	/** Fire a `paste` carrying plain text only (no files). */
