@@ -313,7 +313,7 @@ parity-screenshot legs accumulate for the SINGLE FINAL human review gate.
                           re-pointed onto AuxModelPort, drain loops deleted, ChatSurface.vue wiring
                           (aux injected optionally; title-gen degrades to err when absent — prod
                           provide deferred to T-CA-033; refine built only when aux present)
-                          (feat(ca), <T-CA-011 SHA>). VERIFY: vue-tsc -p tsconfig.lint.json 0 errors;
+                          (feat(ca), 248b289). VERIFY: vue-tsc -p tsconfig.lint.json 0 errors;
                           eslint clean on the changed files; tests/infrastructure 252/252 +
                           the re-pointed/ladder suites 20/20 green (mount.rr full-suite timeout was
                           a load flake — 2/2 in isolation). Targeted checks only per maintainer

@@ -248,7 +248,7 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   `vitest run tests/ui/chat` 238 tests — `mount.rr.test.ts` re-confirmed 2/2 green
   in isolation (the one full-suite timeout was a load-induced flake at ~6× duration,
   not a regression; the wiring touches no rich-render path).
-- **Commit:** _this commit._
+- **Commit:** `248b289`.
 - **Deviation:** migrated `tests/ui/chat/composer/instructionLadder.test.ts` as part
   of T-CA-011 (not named in the task body, beyond the two T-CA-010 files) — it
   constructed `RefineInstructionUseCase(runtime)` and would not compile after the
