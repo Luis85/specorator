@@ -84,4 +84,14 @@ export class ResumeSessionDropdownPageObject {
 		const opener = this.wrapper.get('[data-testid="history-open"]').element;
 		return document.activeElement === opener;
 	}
+
+	/** R-TS-007: every glyph renders via `SpIcon` (a `data-testid="sp-icon"` span). */
+	spIconCount(): number {
+		return this.wrapper.findAll('[data-testid="sp-icon"]').length;
+	}
+
+	/** R-TS-007: the full rendered markup — used to assert no emoji/raw-glyph literals. */
+	html(): string {
+		return this.wrapper.html();
+	}
 }

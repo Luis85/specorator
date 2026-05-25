@@ -15,7 +15,8 @@ import type { IconNode } from '@/domain/ports';
  * `shield-off`/`dot`), the generic fallback (`wrench`), and the real lucide tool
  * icons claudian's `getToolIcon` returns (`file-text`/`file-plus`/`file-pen`/
  * `terminal`/`folder-search`/`search`/`list`/`list-checks`/`globe`/`download`/
- * `bot`/`zap`/`help-circle`/`plug` — R-RR-003). Unknown names resolve to `null`
+ * `bot`/`zap`/`help-circle`/`plug` — R-RR-003), and the P3 history-list action
+ * icons (`chevron-up`/`pencil`/`trash-2` — R-TS-007). Unknown names resolve to `null`
  * (the caller substitutes a generic fallback — REQ-RR-019). These Mock/demo
  * shapes are recognisable placeholders only; the Obsidian backing is the parity
  * truth (SPEC-RR-012).
@@ -136,6 +137,18 @@ const ICON_NODE_MAP: ReadonlyMap<string, IconNode> = new Map<string, IconNode>([
 	['zap', svg([polyline('13 2 3 14 12 14 11 22 21 10 12 10 13 2')])],
 	['help-circle', svg([circle('12', '12', '10'), path('M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3'), line('12', '17', '12', '17')])],
 	['plug', svg([rect('9', '2', '6', '8'), path('M7 10h10v3a5 5 0 0 1-10 0v-3z'), line('9', '2', '9', '5'), line('15', '2', '15', '5'), line('12', '18', '12', '22')])],
+	// ── history-list action icons (P3 ResumeSessionDropdown, R-TS-007) ───────────
+	['chevron-up', svg([polyline('18 15 12 9 6 15')])],
+	['pencil', svg([path('M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z'), path('m15 5 4 4')])],
+	[
+		'trash-2',
+		svg([
+			polyline('3 6 5 6 21 6'),
+			path('M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'),
+			line('10', '11', '10', '17'),
+			line('14', '11', '14', '17'),
+		]),
+	],
 ]);
 
 /**

@@ -17,7 +17,8 @@ import { useTabsStore } from '@/ui/stores/tabsStore';
 import type { ChatTurnRunner } from '@/ui/stores/chatStore';
 import { i18n } from '@/ui/i18n';
 import { ok } from '@/domain/shared/Result';
-import { PROVIDER_HISTORY_PORT } from '@/infrastructure/bridge/ports';
+import { PROVIDER_HISTORY_PORT, ICON_PORT } from '@/infrastructure/bridge/ports';
+import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
 import { CONFIRM_DELETE } from '@/ui/chat/modalSeam';
 import { MockChatRuntime } from '@/infrastructure/mock/MockChatRuntime';
 import { MockHistoryStore } from '@/infrastructure/mock/MockHistoryStore';
@@ -72,6 +73,7 @@ function mountDropdown(opts?: {
 			provide: {
 				[PROVIDER_HISTORY_PORT as symbol]: history,
 				[CONFIRM_DELETE as symbol]: confirmDelete,
+				[ICON_PORT as symbol]: staticIconPort,
 			},
 		},
 	});
@@ -207,5 +209,28 @@ describe('ResumeSessionDropdown (SPEC-TS-022)', () => {
 		const hydrated = await history.hydrate('a');
 		expect(hydrated.ok && hydrated.value.meta.title).toBe('New name');
 		expect(hydrated.ok && hydrated.value.meta.titleManual).toBe(true);
+	});
+
+	// ── R-TS-007: Lucide SpIcon glyphs, no emoji literals (brand parity) ────────
+
+	it('R-TS-007: the opener renders an SpIcon (chevron), not a raw glyph', () => {
+		const { po } = mountDropdown();
+		// The opener carries one SpIcon (the drop-UP chevron).
+		expect(po.spIconCount()).toBeGreaterThanOrEqual(1);
+	});
+
+	it('R-TS-007: rename + delete render SpIcons; no emoji/glyph literals in the markup', async () => {
+		const history = new MockHistoryStore();
+		history.seedConversations([record('a', 'Has actions', 100)]);
+		const { po } = mountDropdown({ history });
+		await po.open();
+		await flushPromises();
+		// Opener + rename + delete = three SpIcons.
+		expect(po.spIconCount()).toBe(3);
+		// The brand-blocking emoji + raw glyphs are gone.
+		const markup = po.html();
+		expect(markup).not.toContain('🗑');
+		expect(markup).not.toContain('✎');
+		expect(markup).not.toContain('⌃');
 	});
 });

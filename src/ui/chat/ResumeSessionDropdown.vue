@@ -5,6 +5,7 @@ import type { ConversationMeta } from '@/domain/ports';
 import { useProviderHistoryPort } from '@/ui/composables/useProviderHistoryPort';
 import { useTabsStore } from '@/ui/stores/tabsStore';
 import { useConfirmDelete } from '@/ui/chat/modalSeam';
+import SpIcon from '@/ui/chat/SpIcon.vue';
 import { ListConversationsUseCase } from '@/application/threads/ListConversationsUseCase';
 import { ResumeConversationUseCase } from '@/application/threads/ResumeConversationUseCase';
 import { RenameConversationUseCase } from '@/application/threads/RenameConversationUseCase';
@@ -20,8 +21,10 @@ import { DeleteConversationUseCase } from '@/application/threads/DeleteConversat
  * `DeleteConversationUseCase`. A `pending` row spins (reduced-motion honoured);
  * `failed` silently keeps the fallback. Keyboard: Arrow Up/Down move the
  * `aria-activedescendant`, Enter resumes, Escape closes + focus returns to the
- * opener (REQ-TS-015). `<script setup>`; titles/dates as `{{ }}` text; no `v-html`;
- * no `obsidian` import.
+ * opener (REQ-TS-015). Glyphs render via the Lucide `SpIcon` seam
+ * (`chevron-up`/`pencil`/`trash-2`) — no emoji/raw-glyph literals (R-TS-007, brand
+ * parity with claudian's history.css). `<script setup>`; titles/dates as `{{ }}`
+ * text; no `v-html`; no `obsidian` import.
  */
 const { t } = useI18n();
 const history = useProviderHistoryPort();
@@ -163,7 +166,7 @@ function isPending(meta: ConversationMeta): boolean {
 			:aria-expanded="open ? 'true' : 'false'"
 			@click="toggle"
 		>
-			<span aria-hidden="true">⌃</span>
+			<SpIcon name="chevron-up" />
 		</button>
 		<div
 			v-if="open"
@@ -216,7 +219,7 @@ function isPending(meta: ConversationMeta): boolean {
 						:aria-label="t('agent.chat.history.rename')"
 						@click.stop="startRename(meta)"
 					>
-						<span aria-hidden="true">✎</span>
+						<SpIcon name="pencil" />
 					</button>
 					<button
 						type="button"
@@ -225,7 +228,7 @@ function isPending(meta: ConversationMeta): boolean {
 						:aria-label="t('agent.chat.history.delete')"
 						@click.stop="onDelete(meta)"
 					>
-						<span aria-hidden="true">🗑</span>
+						<SpIcon name="trash-2" />
 					</button>
 				</template>
 			</div>
