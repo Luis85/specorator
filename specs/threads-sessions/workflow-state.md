@@ -4,7 +4,7 @@ area: TS
 current_stage: implementation
 status: active
 last_updated: 2026-05-25
-last_agent: architect (R-TS-002 transport ADR — ADR-TS-004 filed + accepted; req/spec/design/review deltas)
+last_agent: dev (R-TS-002 follow-up — ADR-TS-004 Option B1 landed in code [79df245]: ClaudeCliChatRuntime supportsRewind:false + dead resumeCheckpoint removed; capability-gate RED tests added)
 epic: claudian-reboot
 phase: P3
 integration_branch: next
@@ -16,10 +16,10 @@ artifacts:
   design.md: complete (DESIGN-TS-001; Parts A/B/C; ADR-TS-001/002/003 accepted)
   spec.md: complete (SPEC-TS-001..034; 26 automatable TEST-TS + 2 manual legs)
   tasks.md: complete (TASKS-TS-001; T-TS-001..042; 42 tasks)
-  implementation-log.md: in-progress (IMPL-TS-001; domain T-TS-002..006 + infra T-TS-007..013 + application T-TS-014..025 + UI T-TS-026..035 + wire-in T-TS-037/038 + styles T-TS-036 + dev-smoke T-TS-039 done; parity-fix batch R-TS-001/003/004/005/006/007 done [e34f18c/6f5e874/6cef786/b14021f]; R-TS-002 decided by architect ADR-TS-004 [rewind gated off CLI transport]; remain: R-TS-002 dev follow-up [3-line ClaudeCliChatRuntime edit — supportsRewind:false + drop resumeCheckpoint] + gate T-TS-040/041 [human manual legs] + T-TS-042 [orchestrator verify])
+  implementation-log.md: in-progress (IMPL-TS-001; domain T-TS-002..006 + infra T-TS-007..013 + application T-TS-014..025 + UI T-TS-026..035 + wire-in T-TS-037/038 + styles T-TS-036 + dev-smoke T-TS-039 done; parity-fix batch R-TS-001/003/004/005/006/007 done [e34f18c/6f5e874/6cef786/b14021f]; R-TS-002 dev follow-up DONE [79df245 — ADR-TS-004 Option B1: ClaudeCliChatRuntime supportsRewind:false, dead resumeCheckpoint removed, capability-gate RED tests]; ALL P1 review blockers now closed in code; remain: gate T-TS-040/041 [human manual legs] + T-TS-042 [orchestrator verify] + qa test-plan/report)
   test-plan.md: pending
   test-report.md: pending
-  review.md: complete (REVIEW-TS-001; verdict BLOCKED — 3 P1 real-path blockers R-TS-001/002/003; resolution log appended — R-TS-001/003/004/005/006/007 RESOLVED by dev, R-TS-002 RESOLVED by architect via ADR-TS-004 [rewind gated off CLI transport, supportsRewind:false]; re-verdict pending the R-TS-002 dev follow-up [3 lines in ClaudeCliChatRuntime] + verify gate T-TS-042)
+  review.md: complete (REVIEW-TS-001; verdict BLOCKED — 3 P1 real-path blockers R-TS-001/002/003; resolution log appended — R-TS-001/003/004/005/006/007 RESOLVED by dev, R-TS-002 RESOLVED by architect ADR-TS-004 + dev follow-up [79df245 — supportsRewind:false, dead resumeCheckpoint removed]; ALL P1 blockers now closed in code; re-verdict pending only the verify gate T-TS-042 + qa traceability regen)
   traceability.md: complete-with-broken-links (TRACE-TS-001; REQ-TS-018/019/021 chains broken at code→test)
   release-notes.md: pending
   retrospective.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-TS-001) |
 | 5. Specification | `spec.md` | complete (SPEC-TS-001..034) |
 | 6. Tasks | `tasks.md` | complete (TASKS-TS-001) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (domain + infra + application + UI + wire-in + styles + dev-smoke done; gate T-TS-040/041 [human] + T-TS-042 [orchestrator] remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (domain + infra + application + UI + wire-in + styles + dev-smoke + all parity-fix batches done; R-TS-002 follow-up [ADR-TS-004] landed; ALL P1 review blockers closed in code; gate T-TS-040/041 [human] + T-TS-042 [orchestrator] + qa test-plan/report remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | complete — **verdict BLOCKED** (REVIEW-TS-001) |
 | 10. Release | `release-notes.md` | pending |
@@ -695,4 +695,42 @@ self-parity-review vs claudian after each big chunk; merge P3 to `next` autonomo
                           REMAINING OWNER: dev (R-TS-002 3-line follow-up) + qa (capability-gate test +
                           test-plan/report + manual legs) + orchestrator (T-TS-042 verify gate) + reviewer
                           (re-verdict). NEXT AGENT: dev (/spec:implement — R-TS-002 follow-up).
+
+2026-05-25 (dev, implement — R-TS-002 follow-up): ADR-TS-004 (Option B1) landed in code on
+                          feature/threads-sessions (STRICT TDD, RED→green, one Conventional commit
+                          79df245) → implementation-log.md ("R-TS-002 dev follow-up" section) +
+                          review.md (R-TS-002 row → resolved [ADR + dev follow-up]; dev-follow-up
+                          checklist ticked).
+                          CHANGE: src/infrastructure/obsidian/ClaudeCliChatRuntime.ts —
+                          (1) getCapabilities() → { supportsFork:true, supportsRewind:false } (was
+                              both true);
+                          (2) removed the private resumeCheckpoint field, its query() log-and-clear
+                              block, and the resetSession reference to it (the stored-then-discarded
+                              no-op the reviewer flagged);
+                          (3) setResumeCheckpoint(_assistantMessageId) is now a documented
+                              no-op-by-transport (kept on the port per ADR-TS-002 §3) — NO --resume-at
+                              flag wired into _buildArgs (Option A rejected).
+                          UI GATING (verified, already wired + capability-driven, ZERO provider branch):
+                          tabsStore.canRewindMessage → activeCapabilities().supportsRewind →
+                          ChatSurface.canRewind → MessageTurn.showRewind. The affordance renders ONLY
+                          where supportsRewind===true. R-TS-001's id population is intact (eligibility
+                          still computes; it is just gated by capability on the CLI). Mock/Fixture stay
+                          supportsRewind:true so the truncate + setResumeCheckpoint flow stays exercised.
+                          RED TESTS: tests/infrastructure/obsidian/ClaudeCliChatRuntime.capabilities.test.ts
+                          (new — capability value, ADR-TS-004 §Compliance #1/#3) +
+                          tests/ui/stores/tabsStore.test.ts (NoRewindRuntime + createRuntime override +
+                          two gate tests, §Compliance #2). MessageTurn.ts.test.ts component-leg gate was
+                          already present.
+                          VERIFICATION: vue-tsc -p tsconfig.lint.json 0 errors; eslint touched files
+                          0 errors; vitest tests/ui+application+infrastructure+domain = 101 files /
+                          735 passed (P0/P1/P2/P3 GREEN — no regression). NOT run (orchestrator gate
+                          T-TS-042): full verify/build/build:web/docs:api/test:storybook. Manifest
+                          untouched. styles.css (pre-existing unrelated working-tree change) left
+                          untouched + unstaged. No push.
+                          STATE: R-TS-002 is the LAST P1 blocker — now closed in code. No silent dead
+                          path remains.
+                          REMAINING OWNER: reviewer (regenerate traceability.md REQ-TS-018/019/021
+                          chains + re-verdict once T-TS-042 green) ∥ qa (test-plan.md/test-report.md +
+                          human manual legs TEST-TS-M1/M2) ∥ orchestrator (T-TS-042 verify gate).
+                          NEXT AGENT: orchestrator (T-TS-042 verify gate) → reviewer (re-verdict).
 ```

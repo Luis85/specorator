@@ -221,7 +221,7 @@ the ids so eligibility renders and does not touch the `--resume`/rewind-transpor
 | ID | Sev | Status | Commit | Fix summary |
 |---|---|---|---|---|
 | **R-TS-001** | P1 | **resolved** | `e34f18c` | `ClaudeStreamReducer` captures the per-turn assistant id (envelope `uuid` / inner `message.id`) and surfaces it on the terminal `done`; `RunChatTurnUseCase` forwards it to `onDone(assistantMessageId?)`; `tabsStore` stamps `assistantMessageId` on the live assistant message (runtime id, else a stable id at finalise) + `userMessageId` on the user message at send. `MockChatRuntime` emits the id so the live path proves eligibility. Rewind eligibility (REQ-TS-019/020) now reaches production. |
-| **R-TS-002** | P1 | **resolved (ADR)** | ADR-TS-004 | **Investigated + decided (architect, 2026-05-25).** Parity truth: Claudian rewinds via the **Agent SDK** `options.resumeSessionAt` (the assistant turn UUID) over a **persistent `MessageChannel`** (`ClaudeQueryOptionsBuilder.ts:162-166`, `ClaudeChatRuntime.ts:500-512`) — NOT a raw-CLI flag. The `resume-at` capability is **SDK-transport**, not exposed faithfully by our one-shot `claude --print` subprocess transport (SDK doc names a CLI-flag equivalent for options that have one; `resumeSessionAt` has none; Claudian never feeds resume-at to a raw CLI; we can't guarantee our message UUID matches the CLI transcript UUID on the resumed-from-history path). **Option B1 chosen:** Claude-CLI `getCapabilities()` returns `supportsRewind: false` → the capability-gated rewind affordance (REQ-TS-019/SPEC-TS-025) does **not render** on the CLI path; the stored-then-discarded `resumeCheckpoint` + its misleading `query()` log/clear are removed. The truncate + `setResumeCheckpoint` flow stays live on Mock/Fixture and auto-enables on a future SDK-transport runtime (`supportsRewind: true`) with no UI/branch change (REQ-TS-026). True rewind on the Claude path deferred to that SDK-transport phase. **No silent dead path remains.** Dev follow-up below. |
+| **R-TS-002** | P1 | **resolved (ADR + dev follow-up)** | ADR-TS-004 + `79df245` | **Investigated + decided (architect, 2026-05-25); dev follow-up landed `79df245`.** `ClaudeCliChatRuntime.getCapabilities()` → `supportsRewind:false`; `resumeCheckpoint` field + its `query()` log/clear + the `resetSession` ref removed; `setResumeCheckpoint` is a no-op-by-transport (no `--resume-at` flag). RED tests: `ClaudeCliChatRuntime.capabilities.test.ts` (capability value) + `tabsStore.test.ts` gate (rewind absent on `supportsRewind:false`, present on `true`). **No silent dead path remains.** **Investigated + decided (architect, 2026-05-25).** Parity truth: Claudian rewinds via the **Agent SDK** `options.resumeSessionAt` (the assistant turn UUID) over a **persistent `MessageChannel`** (`ClaudeQueryOptionsBuilder.ts:162-166`, `ClaudeChatRuntime.ts:500-512`) — NOT a raw-CLI flag. The `resume-at` capability is **SDK-transport**, not exposed faithfully by our one-shot `claude --print` subprocess transport (SDK doc names a CLI-flag equivalent for options that have one; `resumeSessionAt` has none; Claudian never feeds resume-at to a raw CLI; we can't guarantee our message UUID matches the CLI transcript UUID on the resumed-from-history path). **Option B1 chosen:** Claude-CLI `getCapabilities()` returns `supportsRewind: false` → the capability-gated rewind affordance (REQ-TS-019/SPEC-TS-025) does **not render** on the CLI path; the stored-then-discarded `resumeCheckpoint` + its misleading `query()` log/clear are removed. The truncate + `setResumeCheckpoint` flow stays live on Mock/Fixture and auto-enables on a future SDK-transport runtime (`supportsRewind: true`) with no UI/branch change (REQ-TS-026). True rewind on the Claude path deferred to that SDK-transport phase. **No silent dead path remains.** Dev follow-up below. |
 | **R-TS-003** | P1 | **resolved** | `6f5e874` | `forkActive` threads `result.value.providerState` through `TabLoadPayload` → `TabState.providerState`; `_persistTab` persists `{...tab.providerState}` (was hard-coded `{}`). Forked tab persists `{forkSource}` lineage → resumes the source session (REQ-TS-018). |
 | **R-TS-004** | P2 | **resolved** | `6f5e874` | `TabState.createdAt` set once at creation; `_persistTab` preserves it and only bumps `updatedAt`; `providerState` retained across saves (no wipe to `{}`). History ordering newest-first holds (REQ-TS-008/010). |
 | **R-TS-005** | P2 | **resolved** | `6cef786` | `loadIntoTab` cancels an in-flight runner (`status==='streaming'`) before overwriting, so the old `tabId`-scoped sink cannot corrupt the resumed transcript (claudian-faithful busy-tab guard). |
@@ -236,9 +236,10 @@ files 0 errors (only pre-existing warn-tier `max-lines`); the chat-UI + store + 
 history + domain suites green (no P0/P1/P2/P3 regression). Full `npm run verify` is the orchestrator
 gate (NOT run here).
 
-**Re-verdict prerequisite:** R-TS-002 (architect ADR) must close and the verify gate (T-TS-042) must
-be green before the reviewer regenerates `traceability.md` (clearing the REQ-TS-018/019 chains, now
-populated) and re-verdicts.
+**Re-verdict prerequisite:** R-TS-002 is now CLOSED (architect ADR-TS-004 + dev follow-up `79df245`).
+All P1 blockers (R-TS-001/002/003) are resolved in code. The verify gate (T-TS-042) must be green
+before the reviewer regenerates `traceability.md` (clearing the REQ-TS-018/019/021 chains, now
+populated + gated) and re-verdicts.
 
 ---
 
@@ -280,17 +281,22 @@ silent. **No silent dead path remains** (R-TS-002 class closed).
 `spec.md` (SPEC-TS-003/009/014/025 capability deltas), `design.md` Part C (C.2/C.4/C.5), this
 `review.md`, `docs/adr/README.md` (ADR-TS-004 row).
 
-**Dev follow-up (to make the behaviour honest — for `/spec:implement`):**
-1. `ClaudeCliChatRuntime.getCapabilities()` → return `{ supportsFork: true, supportsRewind: false }`
+**Dev follow-up — DONE (`79df245`, 2026-05-25, dev — STRICT TDD, RED→green):**
+1. ✅ `ClaudeCliChatRuntime.getCapabilities()` returns `{ supportsFork: true, supportsRewind: false }`
    (was `supportsRewind: true`).
-2. Remove the `resumeCheckpoint` field and its `query()` log-and-clear (`ClaudeCliChatRuntime.ts:47-48,
-   80-85, 144, 169-173`); `setResumeCheckpoint` becomes a documented no-op-by-transport on this runtime
-   (or remove the body — it is unreachable behind the capability gate). **Do NOT** wire a `--resume-at`
-   flag into `_buildArgs` (Option A is rejected — the transport cannot honour it faithfully).
-3. Keep `MockChatRuntime`/`FixtureChatRuntime` at `supportsRewind: true` with `setResumeCheckpoint` as a
-   recorded no-op (the rewind flow stays exercised in dev + units).
-4. QA: add a test asserting the rewind affordance is **absent** when `getCapabilities().supportsRewind`
-   is false and **present** on a `supportsRewind: true` runtime (SPEC-TS-025 compliance); assert the
-   Claude-CLI runtime reports `supportsRewind: false`.
+2. ✅ Removed the `resumeCheckpoint` field, its `query()` log-and-clear, and the `resetSession`
+   reference; `setResumeCheckpoint(_assistantMessageId)` is a documented no-op-by-transport (kept on
+   the port per ADR-TS-002 §3). **No** `--resume-at` flag wired into `_buildArgs` (Option A rejected).
+3. ✅ `MockChatRuntime`/`FixtureChatRuntime` stay at `supportsRewind: true` (recorded no-op) — the
+   truncate + `setResumeCheckpoint` flow stays exercised in `npm run dev` + units.
+4. ✅ QA-shaped capability-gate tests added:
+   `tests/infrastructure/obsidian/ClaudeCliChatRuntime.capabilities.test.ts` asserts the Claude-CLI
+   runtime reports `supportsRewind: false` (+ `supportsFork: true`);
+   `tests/ui/stores/tabsStore.test.ts` asserts the rewind affordance is **absent** (`canRewindMessage`
+   false) on a `supportsRewind:false` runtime even with eligibility satisfied, and **present** on a
+   `supportsRewind:true` runtime (SPEC-TS-025 store leg). The component-leg gate
+   (`MessageTurn.ts.test.ts` canRewind true/false) was already present.
 
-No production code was written by the architect (this is a decision + spec/req/review delta only).
+The architect wrote no production code (decision + spec/req/review delta only); the dev follow-up
+above lands the code. **R-TS-002 is closed in code — no silent dead path; rewind renders only where
+`supportsRewind === true`.** Re-verdict pending the orchestrator verify gate (T-TS-042).

@@ -6,7 +6,7 @@ feature: threads-sessions
 area: TS
 epic: claudian-reboot
 phase: P3
-status: in-progress       # domain + infra + application + UI + wire-in + styles + dev-smoke done; gate T-TS-040/041 (human) + T-TS-042 (orchestrator) remain
+status: in-progress       # all P1 review blockers closed in code (R-TS-001..007 + R-TS-002 ADR-TS-004 follow-up); remain: gate T-TS-040/041 (human manual legs) + T-TS-042 (orchestrator verify) + qa test-plan/report
 owner: dev
 integration_branch: next
 branch: feature/threads-sessions
@@ -746,3 +746,66 @@ NEXT AGENT: qa (real-shaped contract tests for the three seams now that the ids/
 populated; author test-plan.md + test-report.md; run TEST-TS-M1/M2) ∥ architect (R-TS-002
 transport ADR) ∥ reviewer (regenerate traceability.md + re-verdict once R-TS-002 resolves and
 the verify gate is green). R-TS-008/009/010 remain scheduled P3-polish/P9.
+
+---
+
+## R-TS-002 dev follow-up — gate conversation-rewind off the Claude-CLI transport (2026-05-25, dev — implement)
+
+Implements **ADR-TS-004** (Option B1), the dev follow-up the architect handed off
+(review.md §"R-TS-002 resolution" + workflow-state Hand-off). STRICT TDD (RED→green); one
+Conventional commit. Closes the last P1 blocker (R-TS-002) in REVIEW-TS-001.
+
+- **Files (src):** `src/infrastructure/obsidian/ClaudeCliChatRuntime.ts`
+  - `getCapabilities()` → `{ supportsFork: true, supportsRewind: false }` (was both `true`).
+  - Removed the `private resumeCheckpoint` field, its `query()` log-and-clear block, and the
+    `resetSession` reference to it (the stored-then-discarded no-op the reviewer flagged).
+  - `setResumeCheckpoint(_assistantMessageId)` is now a documented **no-op-by-transport**
+    (kept on the port per ADR-TS-002 §3; the parameter is unused). No `--resume-at` flag
+    wired into `_buildArgs` (ADR-TS-004 rejects Option A — the `--print` transport cannot
+    honour resume-at faithfully).
+  - The P3-additive-members doc comment updated to state `setResumeCheckpoint` is no-op here.
+- **Files (tests):**
+  - `tests/infrastructure/obsidian/ClaudeCliChatRuntime.capabilities.test.ts` (new) — RED:
+    asserts `getCapabilities().supportsRewind === false` (+ `supportsFork === true`) and that
+    `setResumeCheckpoint` does not throw. ADR-TS-004 §Compliance #1/#3. The capability is pure
+    data (no subprocess), so this is testable even though the runtime is coverage-excluded.
+  - `tests/ui/stores/tabsStore.test.ts` — added a `NoRewindRuntime` (MockChatRuntime subclass
+    reporting `supportsRewind:false`), an opt-in `createRuntime` override on the `freshStore`
+    harness, and two gate tests: `canRewindMessage` is **false** on a `supportsRewind:false`
+    runtime even with eligibility satisfied, and **true** on a `supportsRewind:true` runtime
+    with the same eligibility (ADR-TS-004 §Compliance #2; SPEC-TS-025 store leg).
+- **Commit:** `79df245`
+- **Spec / decision:** ADR-TS-004 (Option B1); SPEC-TS-003/009/025, REQ-TS-019/021/026/027;
+  R-TS-002 (REVIEW-TS-001).
+- **Outcome:** **done.** RED→green. R-TS-002 closed honestly: no silent dead path. The
+  rewind affordance is capability-gated end-to-end (`tabsStore.canRewindMessage` →
+  `activeCapabilities().supportsRewind` → `ChatSurface.canRewind` → `MessageTurn.showRewind`),
+  with **zero provider branch** (REQ-TS-026) — it renders only where `supportsRewind === true`.
+  R-TS-001's id population is intact (eligibility still computes; it is just gated by capability
+  on the CLI). Mock/Fixture stay `supportsRewind:true`, so the truncate + `setResumeCheckpoint`
+  flow stays exercised in `npm run dev` + units; a future SDK-transport runtime auto-enables the
+  affordance with no UI change.
+- **Deviation:** none. (The store-leg gate already existed from the UI batch + R-TS-001; the
+  two store tests are gating-regression guards proving the capability *data* drives the gate —
+  the production RED was the `ClaudeCliChatRuntime` capability value.)
+
+### Verification (this follow-up)
+
+- `npx vue-tsc -p tsconfig.lint.json --noEmit` → **0 errors**.
+- `npx eslint` (touched src + test files) → **0 errors**.
+- `npx vitest run tests/ui tests/application tests/infrastructure tests/domain` → **101 files /
+  735 passed** (P0/P1/P2/P3 GREEN — no regression). Targeted:
+  `ClaudeCliChatRuntime.capabilities.test.ts` (3), `tabsStore.test.ts`, `MessageTurn.ts.test.ts`
+  all green.
+- NOT run (orchestrator gate T-TS-042): full `npm run verify` / build / build:web / docs:api /
+  test:storybook. Manifest untouched. No push. `styles.css` (pre-existing unrelated working-tree
+  change) left untouched and unstaged.
+
+### Hand-off
+
+NEXT AGENT: reviewer — R-TS-002 (the last P1 blocker) is now CLOSED in code; regenerate
+`traceability.md` (REQ-TS-018/019/021 chains now populated + gated) and re-verdict once the
+orchestrator verify gate (T-TS-042) is green. qa: capability-gate test added here (ADR-TS-004
+§Compliance #1/#2/#3); still owes test-plan.md/test-report.md + the human manual legs
+TEST-TS-M1/M2. orchestrator: T-TS-042 verify gate. R-TS-008/009/010 remain scheduled
+P3-polish/P9.
