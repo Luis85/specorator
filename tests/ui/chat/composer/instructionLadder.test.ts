@@ -18,6 +18,7 @@ import { ResolveMentionUseCase } from '@/application/chat/composer/ResolveMentio
 import { SubmitBangBashUseCase } from '@/application/chat/composer/SubmitBangBashUseCase';
 import { RefineInstructionUseCase } from '@/application/chat/composer/RefineInstructionUseCase';
 import { MockChatRuntime } from '@/infrastructure/mock/MockChatRuntime';
+import { MockAuxModel } from '@/infrastructure/mock/MockAuxModel';
 import {
 	MockMentionDataProvider,
 	MockProviderCommandCatalog,
@@ -114,10 +115,12 @@ describe('instruction ladder — reject / empty (REQ-CP-017/019)', () => {
 describe('instruction ladder — refine (EC-CP-9)', () => {
 	it('presents the refined instruction to the confirm modal', async () => {
 		const { port } = fakeSettings(DEFAULT_SETTINGS);
-		const runtime = new MockChatRuntime([
-			{ type: 'text', content: '<instruction>Always use TypeScript.</instruction>' },
-		]);
-		const refine = new RefineInstructionUseCase(runtime);
+		// P5 (SPEC-CA-018): refine runs over the AuxModelPort; the arbiter still takes
+		// a runtime for the other modes. The aux scripts the refined instruction.
+		const runtime = new MockChatRuntime([]);
+		const aux = new MockAuxModel();
+		aux.setAuxResponse('<instruction>Always use TypeScript.</instruction>');
+		const refine = new RefineInstructionUseCase(aux);
 		const confirm = vi.fn<InstructionConfirmFn>(() => Promise.resolve({ kind: 'reject' }));
 		const arbiter = useComposerMode({
 			runCommand: new RunCommandUseCase(),
@@ -140,9 +143,11 @@ describe('instruction ladder — refine (EC-CP-9)', () => {
 
 	it('a refine failure falls through with the RAW instruction (EC-CP-9)', async () => {
 		const { port } = fakeSettings(DEFAULT_SETTINGS);
-		// An empty-text stream → parse → null → Result.err → fall through to raw.
-		const runtime = new MockChatRuntime([{ type: 'error', content: 'cold-start failed' }]);
-		const refine = new RefineInstructionUseCase(runtime);
+		// An aux err (cold-start failed / empty) → Result.err → fall through to raw.
+		const runtime = new MockChatRuntime([]);
+		const aux = new MockAuxModel();
+		aux.setAuxError();
+		const refine = new RefineInstructionUseCase(aux);
 		const confirm = vi.fn<InstructionConfirmFn>(() => Promise.resolve({ kind: 'reject' }));
 		const arbiter = useComposerMode({
 			runCommand: new RunCommandUseCase(),

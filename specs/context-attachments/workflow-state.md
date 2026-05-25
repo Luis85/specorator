@@ -1,10 +1,10 @@
 ---
 feature: context-attachments
 area: CA
-current_stage: tasks
+current_stage: implementation
 status: active
 last_updated: 2026-05-25
-last_agent: planner (tasks)
+last_agent: dev (implement)
 epic: claudian-reboot
 phase: P5
 integration_branch: next
@@ -16,8 +16,8 @@ artifacts:
   design.md: complete (DESIGN-CA-001; Parts A/B/C; ADR-CA-001..004 accepted)
   spec.md: complete (SPEC-CA-001..030; 6 layer groups; TEST-CA-001..032 + M1/M2/M3; full coverage)
   tasks.md: complete (TASKS-CA-001; 48 tasks T-CA-001..048; 8 batches; full SPEC/REQ/NFR/TEST coverage)
-  implementation-log.md: pending
-  test-plan.md: pending
+  implementation-log.md: in-progress (T-CA-001..011 logged; batches 0-2 done; batches 3-8 remain)
+  test-plan.md: in-progress (manual legs M1/M3/029 scheduled; guard-verify noted)
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | pending |
+| 7. Implementation | `implementation-log.md` + code | in-progress (batches 0-2: T-CA-001..011) |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -302,4 +302,26 @@ parity-screenshot legs accumulate for the SINGLE FINAL human review gate.
                           T-CA-046/047 are human-owned — never agent-self-claimed; they ride the single
                           final epic-review gate. Critical path (12 tasks): T-CA-002→003→005→006→007→008
                           →027→028→039→044→047→048.
+
+2026-05-25 (dev, implement): DOMAIN batch (T-CA-002..006) + Layer-2 aux batch
+                          (T-CA-007..011) complete on `feature/context-attachments`.
+                          T-CA-007 RED (test(ca), 7128019) → T-CA-008 Mock/LS AuxModelPort
+                          + fake-ports.auxModel (feat(ca), 66fc361) → T-CA-009 ObsidianBridge
+                          createAuxModel cold-start delegate (feat(ca), 7470224,
+                          coverage-excluded, manual leg TEST-CA-M1/029) → T-CA-010 RED re-point
+                          tests (test(ca), ab697a2) → T-CA-011 GenerateTitle + RefineInstruction
+                          re-pointed onto AuxModelPort, drain loops deleted, ChatSurface.vue wiring
+                          (aux injected optionally; title-gen degrades to err when absent — prod
+                          provide deferred to T-CA-033; refine built only when aux present)
+                          (feat(ca), <T-CA-011 SHA>). VERIFY: vue-tsc -p tsconfig.lint.json 0 errors;
+                          eslint clean on the changed files; tests/infrastructure 252/252 +
+                          the re-pointed/ladder suites 20/20 green (mount.rr full-suite timeout was
+                          a load flake — 2/2 in isolation). Targeted checks only per maintainer
+                          (no full npm run build/build:web/docs:api/verify — the gate is run by the
+                          maintainer). HAND-OFF → next ready task T-CA-012 (qa, RED — Mock/LS
+                          selection ports + readBinary + fake-ports members), green pair T-CA-013
+                          (dev). The aux re-point chain is now landed; the inline-edit chain
+                          (T-CA-017..028) + InlineEditModal (T-CA-039) may build on the unified
+                          AuxModelPort seam. The readBinary throwing stubs (T-CA-006) are
+                          UNTOUCHED — they are replaced in T-CA-013/014. NO open clarifications.
 ```

@@ -21,11 +21,13 @@ import type {
 	ShellExecPort,
 } from '@/domain/ports';
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
+import { err } from '@/domain/shared/Result';
 import {
 	SETTINGS_PORT,
 	MENTION_DATA_PROVIDER_PORT,
 	PROVIDER_COMMAND_CATALOG_PORT,
 	SHELL_EXEC_PORT,
+	AUX_MODEL_PORT,
 } from '@/infrastructure/bridge/ports';
 import { clampMaxTabs } from '@/domain/settings/PluginSettings';
 import { RunCommandUseCase } from '@/application/chat/composer/RunCommandUseCase';
@@ -70,6 +72,12 @@ const chooseForkTarget = useChooseForkTarget();
 // SettingsPort is OPTIONAL here (the maxTabs preference): the surface degrades to
 // the default ceiling when the host does not provide it (parity with the demo).
 const settingsPort = inject(SETTINGS_PORT, undefined);
+// AuxModelPort is OPTIONAL here (SPEC-CA-018, ADR-CA-002 §3): the unified one-shot
+// cold-start aux seam driving title-gen (always) + instruction-refine (gated). The
+// production `provide(AUX_MODEL_PORT, …)` lands in the wire-in batch (T-CA-033); a
+// transient unwired window in the real plugin is expected — title-gen degrades to a
+// best-effort err so the tab still streams (REQ-TS-025 keeps the caller's fallback).
+const aux = inject(AUX_MODEL_PORT, undefined);
 
 let maxTabs = 3;
 
@@ -87,7 +95,9 @@ tabs.bindTabDeps({
 	},
 	history,
 	generateTitle: (firstUserMessage) =>
-		new GenerateTitleUseCase(createRuntime()).execute(firstUserMessage),
+		aux !== undefined
+			? new GenerateTitleUseCase(aux).execute(firstUserMessage)
+			: Promise.resolve(err(new Error('aux model unavailable'))),
 	getMaxTabs: () => maxTabs,
 	logger,
 	// R-CP-001: read the persisted instruction `customSystemPrompt` from the
@@ -180,7 +190,10 @@ function buildComposer(): {
 		},
 		getValue: (): string => composerRef.value?.getValue() ?? '',
 		getCaret: (): number => composerRef.value?.getCaret() ?? 0,
-		refineInstruction: new RefineInstructionUseCase(runtime),
+		// Refine is gated behind the composer ports AND the optional AuxModelPort
+		// (SPEC-CA-018): build it only when `aux` is provided; the arbiter treats an
+		// absent `refineInstruction` as "no refine affordance" (it is `?` there).
+		refineInstruction: aux !== undefined ? new RefineInstructionUseCase(aux) : undefined,
 		settings: settingsPort,
 		confirmInstruction,
 	});

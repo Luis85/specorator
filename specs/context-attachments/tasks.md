@@ -279,10 +279,10 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-006
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/infrastructure/mock/MockAuxModel.test.ts`,
+  - [x] `tests/infrastructure/mock/MockAuxModel.test.ts`,
         `tests/infrastructure/localstorage/LocalStorageAuxModel.test.ts`, and the extended
         `tests/__fakes__/fake-ports.test.ts` (the `auxModel` member) exist, naming the listed TEST-CA ids.
-  - [ ] Tests fail (RED) — the Mock/LocalStorage `AuxModelPort` impls + the factory member do not yet exist.
+  - [x] Tests fail (RED) — the Mock/LocalStorage `AuxModelPort` impls + the factory member do not yet exist.
 
 ### T-CA-008 🔨 — `MockBridge` + `LocalStorageBridge` `AuxModelPort` impls + `fake-ports.auxModel`
 
@@ -297,9 +297,9 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-007
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (the TEST-CA-021 Mock-aux leg) now pass; the `fake-ports` `auxModel` member
+  - [x] The prior RED tests (the TEST-CA-021 Mock-aux leg) now pass; the `fake-ports` `auxModel` member
         works for multi-port tests; the LocalStorage stand-in never throws.
-  - [ ] No `node:*`/subprocess in Mock/LocalStorage; `Result`-mapped error/empty/abort; `npm run typecheck`
+  - [x] No `node:*`/subprocess in Mock/LocalStorage; `Result`-mapped error/empty/abort; `npm run typecheck`
         + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-CA-009 🔨 — `ObsidianBridge` `AuxModelPort` (real cold-start subprocess, coverage-excluded) 🪓
@@ -323,12 +323,12 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-006
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `ObsidianBridge.createAuxModel()` (or the equivalent member) implements `AuxModelPort`;
+  - [x] `ObsidianBridge.createAuxModel()` (or the equivalent member) implements `AuxModelPort`;
         cold-start only (never resumes a session); maps error/empty/abort → `Result.err`; the `signal`
         aborts the subprocess.
-  - [ ] `npm run typecheck` + `npm run lint` green; the manual leg TEST-CA-M1 (+ TEST-CA-029 real-CLI
+  - [x] `npm run typecheck` + `npm run lint` green; the manual leg TEST-CA-M1 (+ TEST-CA-029 real-CLI
         image turn) scheduled in `test-plan.md`.
-  - [ ] Implementation-log entry added.
+  - [x] Implementation-log entry added.
 
 ### T-CA-010 🧪 — RED: re-point `GenerateTitleUseCase` (P3) + `RefineInstructionUseCase` (P4) onto `AuxModelPort`
 
@@ -347,11 +347,11 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-008
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The existing `tests/application/threads/GenerateTitleUseCase.test.ts` +
+  - [x] The existing `tests/application/threads/GenerateTitleUseCase.test.ts` +
         `tests/application/chat/composer/RefineInstructionUseCase.test.ts` are migrated to inject the Mock
         `auxModel`; the assertions are the **same** (title parsed / fallback on err / refine outcome / no
         `showError`); naming TEST-CA-018.
-  - [ ] Tests fail (RED) — the use-case constructors still take `ChatRuntimePort`, not `AuxModelPort`
+  - [x] Tests fail (RED) — the use-case constructors still take `ChatRuntimePort`, not `AuxModelPort`
         (compile/run failure is the RED signal); the pure-transform byte-identity assertion is in place.
 
 ### T-CA-011 🔨 — Re-point `GenerateTitleUseCase` + `RefineInstructionUseCase` onto `AuxModelPort` (behaviour-preserving)
@@ -371,11 +371,11 @@ TASKS-CP-001) on the `next` integration branch.
 - **Depends on:** T-CA-010
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-CA-018) now pass — the two re-pointed use cases over the Mock aux keep
+  - [x] The prior RED tests (TEST-CA-018) now pass — the two re-pointed use cases over the Mock aux keep
         their observable behaviour; the pure transforms are byte-identical; the drain loops are deleted.
-  - [ ] No `providerId` branch; `Result`-returning; the P3/P4 use-case tests stay GREEN; `npm run typecheck`
+  - [x] No `providerId` branch; `Result`-returning; the P3/P4 use-case tests stay GREEN; `npm run typecheck`
         + `npm run lint` + `npm run test` green; no dead `ChatRuntimePort`-side-query code left behind.
-  - [ ] Implementation-log entry added.
+  - [x] Implementation-log entry added.
 
 ---
 

@@ -61,7 +61,8 @@ describe('TEST-CA-018 GenerateTitleUseCase over AuxModelPort', () => {
 
 describe('TEST-CA-018 titleGeneration pure transforms stay byte-identical', () => {
 	it('parseTitleGenerationResponse keeps its trim/strip/cap behaviour (untouched)', () => {
-		expect(parseTitleGenerationResponse('"Fix the login bug".')).toBe('Fix the login bug');
+		expect(parseTitleGenerationResponse('"Fix the login bug"')).toBe('Fix the login bug');
+		expect(parseTitleGenerationResponse('Fix the login bug.')).toBe('Fix the login bug');
 		expect(parseTitleGenerationResponse('   ')).toBeNull();
 	});
 

@@ -210,4 +210,47 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
 - **Outcome:** done — RED confirmed (`vue-tsc -p tsconfig.lint.json` fails: a
   `MockAuxModel` is not assignable to the constructors' still-`ChatRuntimePort`
   parameter — 9 TS2345 errors).
+- **Commit:** `ab697a2`.
+
+### T-CA-011 — Re-point `GenerateTitleUseCase` + `RefineInstructionUseCase` onto `AuxModelPort` (🔨 dev)
+
+- **Spec/req:** SPEC-CA-018, ADR-CA-002 §3; REQ-CA-021; NFR-CA-004/010.
+- **Files:**
+  - `src/application/threads/GenerateTitleUseCase.ts` (ctor
+    `(runtime: ChatRuntimePort)` → `(aux: AuxModelPort)`; the `prepareTurn` +
+    `accumulate` drain loop + the `TitleStreamOutcome` interface + the `tryAsync`
+    import deleted; body is `await this.aux.run(buildTitleGenerationPrompt(msg),
+    { systemPrompt: TITLE_GENERATION_SYSTEM_PROMPT })`; outcome mapping unchanged
+    — parse → ok / err(TITLE_GEN_FAILED_MESSAGE), no `showError`, no `providerId`
+    branch);
+  - `src/application/chat/composer/RefineInstructionUseCase.ts` (same shape —
+    drain loop + `RefineStreamOutcome` deleted; body is `await this.aux.run(
+    rawInstruction, { systemPrompt: buildRefineSystemPrompt(existing) })`; outcome
+    mapping unchanged, still best-effort, no notice, no `providerId` branch);
+  - `src/ui/chat/ChatSurface.vue` (inject `AUX_MODEL_PORT` optionally; `generateTitle`
+    degrades to `Promise.resolve(err('aux model unavailable'))` when `aux` is absent
+    — title-gen runs always but the production provide is deferred to T-CA-033;
+    `refineInstruction` built only when `aux !== undefined`, else `undefined`
+    (the arbiter's `refineInstruction` is optional));
+  - `tests/ui/chat/composer/instructionLadder.test.ts` (the two `new
+    RefineInstructionUseCase(runtime)` constructions migrated to a `MockAuxModel`
+    — `setAuxResponse(<instruction>…)` for the refined-path assertion, `setAuxError()`
+    for the EC-CP-9 fall-through; the `runtime` stays for the arbiter's other modes;
+    assertions unchanged).
+- **Outcome:** done — the T-CA-010 RED tests now green (the two re-pointed use
+  cases keep their observable behaviour); the pure transforms byte-identical (the
+  byte-identity blocks pass); the drain loops + no dead `ChatRuntimePort`
+  side-query code remain. No `providerId` branch; `Result`-returning.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` clean on the six
+  changed files; `vitest run tests/application/threads/GenerateTitleUseCase.test.ts
+  tests/application/chat/composer/RefineInstructionUseCase.test.ts
+  tests/ui/chat/composer/instructionLadder.test.ts` 20/20 green;
+  `vitest run tests/ui/chat` 238 tests — `mount.rr.test.ts` re-confirmed 2/2 green
+  in isolation (the one full-suite timeout was a load-induced flake at ~6× duration,
+  not a regression; the wiring touches no rich-render path).
 - **Commit:** _this commit._
+- **Deviation:** migrated `tests/ui/chat/composer/instructionLadder.test.ts` as part
+  of T-CA-011 (not named in the task body, beyond the two T-CA-010 files) — it
+  constructed `RefineInstructionUseCase(runtime)` and would not compile after the
+  ctor change. Only the injected double changed (runtime → scripted `MockAuxModel`);
+  the assertions are byte-identical. A runnability fix, not an assertion change.
