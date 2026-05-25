@@ -542,7 +542,7 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
 - **Spec/req:** SPEC-TC-025; TEST-TC-001/003 (mount legs), TEST-TC-M1 (wiring leg);
   REQ-TC-003/010/021; NFR-TC-002.
 - **Files:** `tests/ui/chat/toolbarMount.ts.test.ts` (RED).
-- **Commit:** `<pending>`.
+- **Commit:** `778ceaad`.
 - **Outcome:** done (RED confirmed). The test mirrors the P5
   `attachmentsMount.ts.test.ts` template: (a) the standalone path imports
   `@/ui/main`, spies the `MockBridge.toolbarCatalog` getter, and asserts the getter
@@ -567,7 +567,7 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   `app.provide(TOOLBAR_CATALOG_PORT, bridge.toolbarCatalog)` — the `MockBridge`
   scriptable Claude-shaped catalog so the demo renders the strip with the backed
   widgets + the honest seams).
-- **Commit:** `<pending>`.
+- **Commit:** `d0ffa0a7`.
 - **Outcome:** done. The prior RED test (T-TC-030, TEST-TC-001/003 mount legs) now
   passes — `TOOLBAR_CATALOG_PORT` is provided in both entry points, the
   `toolbar-strip` + `toolbar-model` widgets mount, and the standalone path reads the
@@ -583,3 +583,32 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   render) + `ChatSurface.toolbar`/`ChatComposer.toolbar`/`activateAgentSidebar`
   8/8 green.
 - **Deviations:** none.
+
+## T-TC-032 — standalone toolbar smoke (dev leg automated + deferred live-server leg)
+
+- **Spec/req:** SPEC-TC-025; TEST-TC-001/004/042 (dev leg); REQ-TC-042; NFR-TC-002.
+- **Files:** `tests/ui/main.ts.test.ts` (a new `standalone toolbar smoke
+  (TEST-TC-001/004/042 dev leg)` describe block appended, mirroring the P3/P4/P5
+  dev-leg blocks); `specs/toolbar-controls/test-plan.md` (the WIRE-IN batch section —
+  the automated dev legs + the deferred live-dev-server manual leg).
+- **Commit:** `<pending>`.
+- **Outcome:** done. **Automated** the deterministic dev leg against `MockBridge` via
+  `src/ui/main.ts`: the strip mounts in Claudian order with the backed widgets
+  (model · mode · thinking — the default Mock Claude-shaped catalog + caps:
+  `reasoningControl:'effort'`/`hasModeToggle:true`) + the honest seams (permission
+  visible-disabled, external visible-disabled, MCP + service-tier capability-hidden on
+  `supportsMcpTools:false`/`hasServiceTier:false`); the usage meter is hidden on a
+  fresh tab (EC-TC-7); a second-tab open re-derives every widget (EC-TC-8) without a
+  throw. The backed-pick / fold-on-submit flows are covered component-level by
+  `ChatSurface.toolbar.test.ts`. **Deferred (human-run):** the live `npm run dev`
+  server interactive feel (live pick → strip re-render, a live usage stream →
+  240° arc re-render, dropdown a11y) — the agent does not start the long-running dev
+  server (project rule); recorded as the T-TC-032 live-dev-server leg in
+  `test-plan.md`, pairing with TEST-TC-M2 at the review gate.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); full
+  `npm run lint` 0 errors (12 pre-existing warnings); `vitest run` (threads,
+  no-file-parallelism) `tests/ui/main.ts.test.ts` 4/4 green (the new toolbar block +
+  the 3 prior P3/P4/P5 dev-leg blocks).
+- **Deviations:** the dev-server interactive leg is deferred-manual (per the project
+  rule against starting the long-running dev server) — the automatable mount/order/
+  seam/tab-switch legs are automated; recorded in `test-plan.md`.

@@ -95,3 +95,18 @@ TEST-TC-001..043 (incl. the M1/M2/M3 manual legs).
 > `ObsidianToolbarCatalog.ts`. Its behaviour is **not** agent-self-claimed green;
 > TEST-TC-M1 is the human-run gate. `npm run typecheck` + `npm run lint` confirm the
 > static surface compiles clean.
+
+## WIRE-IN batch (T-TC-030..032) — automated mount/smoke legs + the deferred live-dev-server leg
+
+| Leg | Status | Where |
+|---|---|---|
+| TEST-TC-001/003 (mount leg), TEST-TC-M1 (wiring leg) — `TOOLBAR_CATALOG_PORT` provided in BOTH entry points (standalone `src/ui/main.ts` reads `MockBridge.toolbarCatalog`; `AgentSidebarView.onOpen` provides `ObsidianBridge.toolbarCatalog`); the toolbar strip mounts the backed widgets; the no-port path stays pure P5 | covered (RED→green, T-TC-030→031) | `tests/ui/chat/toolbarMount.ts.test.ts` |
+| TEST-TC-001/004/042 (dev leg) — standalone toolbar smoke against `MockBridge`: the strip mounts in Claudian order with the backed widgets (model · mode · thinking) + the honest seams (permission visible-disabled, external visible-disabled, MCP + service-tier capability-hidden), the usage meter hidden on a fresh tab (EC-TC-7), a tab switch re-derives every widget (EC-TC-8) without a `providerId` branch | covered (automated dev leg) | `tests/ui/main.ts.test.ts` (`standalone toolbar smoke` block) |
+| TEST-TC-012 (fold leg) — picking a model / toggling mode / selecting a thinking level sets `controls` (draft input) and folds into the next turn's query options | covered (component-level) | `tests/ui/chat/ChatSurface.toolbar.test.ts` |
+| **T-TC-032 live-dev-server leg** — `npm run dev` boots, the strip renders live against `MockBridge`/`LocalStorageBridge`, and the interactive feel (picking a model / toggling mode / selecting a thinking level re-renders the strip; a live usage stream re-renders the 240° arc; the open/close dropdown a11y) is exercised in a real browser | **DEFERRED — human-run** (the agent does not start the long-running dev server, project rule) | manual `npm run dev` check at the final epic-review gate; pass/fail + date recorded here |
+
+> The deterministic legs above (mount, Claudian-order, seam state, fresh-tab usage
+> hidden, tab-switch re-derive) are automated as a `tests/ui/main.ts.test.ts`
+> extension and pass green under `--pool=threads --no-file-parallelism`. The
+> live-dev-server interactive feel is the only deferred-manual portion of T-TC-032 —
+> it pairs with TEST-TC-M2 (the per-widget parity screenshots) at the review gate.
