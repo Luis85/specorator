@@ -20,6 +20,7 @@ import type {
 	ProviderCommandCatalogPort,
 	ShellExecPort,
 	WorkspacePort,
+	VaultPort,
 	SelectionSourcePort,
 	SelectionHighlightPort,
 } from '@/domain/ports';
@@ -33,12 +34,15 @@ import {
 	SHELL_EXEC_PORT,
 	AUX_MODEL_PORT,
 	WORKSPACE_PORT,
+	VAULT_PORT,
 	SELECTION_SOURCE_PORT,
 	SELECTION_HIGHLIGHT_PORT,
 } from '@/infrastructure/bridge/ports';
 import { useOpenImagePreview } from '@/ui/chat/modalSeam';
 import { useCapturedSelection } from '@/ui/composables/useCapturedSelection';
 import { AddFileContextUseCase } from '@/application/chat/attachments/AddFileContextUseCase';
+import { AddImageUseCase } from '@/application/chat/attachments/AddImageUseCase';
+import { resolveImageMime } from '@/infrastructure/image/imageEncode';
 import { clampMaxTabs } from '@/domain/settings/PluginSettings';
 import { RunCommandUseCase } from '@/application/chat/composer/RunCommandUseCase';
 import { ResolveMentionUseCase } from '@/application/chat/composer/ResolveMentionUseCase';
@@ -245,6 +249,11 @@ function dispatchBuiltIn(action: BuiltInAction): void {
 // pure P1–P4 (the context bar is hidden when all three sets are empty). The Vue
 // surface never imports `obsidian`; image preview launches through the injected seam.
 const workspace: WorkspacePort | undefined = inject(WORKSPACE_PORT, undefined);
+// VaultPort is OPTIONAL here (parity with the P1 demo): the image gate
+// (`AddImageUseCase`) is built only when a vault is provided, so a mount without
+// it degrades to "no path-based image attach" rather than throwing.
+const vault: VaultPort | undefined = inject(VAULT_PORT, undefined);
+const addImage = vault !== undefined ? new AddImageUseCase(vault) : undefined;
 const selectionSource: SelectionSourcePort | undefined = inject(SELECTION_SOURCE_PORT, undefined);
 const selectionHighlight: SelectionHighlightPort | undefined = inject(
 	SELECTION_HIGHLIGHT_PORT,
@@ -287,6 +296,29 @@ function resolveThumbSrc(path: string): string {
 function attachFile(path: string): void {
 	const next = addFileContext.add(attachedFiles.value, path);
 	if (next.ok) attachedFiles.value = next.value;
+}
+
+/** Add an `AttachedImage` to the set, idempotent by path (REQ-CA-002 parity, EC-CA-15). */
+function addAttachedImage(image: AttachedImage): void {
+	if (images.value.some((img) => img.path === image.path)) return;
+	images.value = [...images.value, image];
+}
+
+/**
+ * Gate + attach dropped/pasted files (R-CA-002, REQ-CA-007/012). Each image runs
+ * the in-hand-bytes gate (`AddImageUseCase.executeBytes` — 8 MiB/MIME); a reject
+ * surfaces a non-blocking warning and is skipped (REQ-CA-012, EC-CA-1/2). Non-image
+ * files are ignored on drop/paste (parity with claudian's image-only drop handler).
+ */
+async function onAttachFiles(files: File[]): Promise<void> {
+	if (addImage === undefined) return;
+	for (const file of files) {
+		if (resolveImageMime(file.name) === null) continue; // non-image → skip (parity).
+		const bytes = new Uint8Array(await file.arrayBuffer());
+		const result = addImage.executeBytes(file.name, bytes);
+		if (result.ok) addAttachedImage(result.value);
+		else notify.showWarning(t('agent.chat.context.images.rejected', { name: file.name }));
+	}
 }
 
 function onRemoveFile(path: string): void {
@@ -433,6 +465,7 @@ function onRewindCode(userMessageId: string): void {
 			@remove-image="onRemoveImage"
 			@preview-image="onPreviewImage"
 			@clear-selection="onClearSelection"
+			@attach-files="onAttachFiles"
 		/>
 	</div>
 </template>

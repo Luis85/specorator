@@ -36,16 +36,29 @@ export class AddImageUseCase {
 		// (2) Read bytes, guarded — a missing file is a Result.err, never a throw.
 		const read = await tryAsync(() => this.vault.readBinary(path));
 		if (!read.ok) return read;
-		const bytes = read.value;
 
-		// (3) Size gate — measured BEFORE the encode (no oversize string is built).
+		// (3/4) Size gate + encode (gate measured before encode, EC-CA-1).
+		return this.executeBytes(path, read.value);
+	}
+
+	/**
+	 * Gate + encode image bytes already IN HAND (a dropped/pasted `File`) — the
+	 * drop/paste path (SPEC-CA-022, REQ-CA-007/012). Runs the SAME gate as `execute`
+	 * minus the `readBinary` round-trip: (1) MIME from `name` ∉ allow-list → `err`
+	 * (EC-CA-2); (2) `byteSize > MAX_IMAGE_BYTES` → `err` measured before encode
+	 * (EC-CA-1); (3) else encode → `ok`. Pure/total — never throws (NFR-CA-004).
+	 * Claudian ground-truth: `ImageContext.addImageFromFile`.
+	 */
+	executeBytes(name: string, bytes: Uint8Array): Result<AttachedImage> {
+		const mimeType = resolveImageMime(name);
+		if (mimeType === null) {
+			return err(new Error(`Unsupported image type: ${name}`));
+		}
 		const byteSize = bytes.byteLength;
 		if (byteSize > MAX_IMAGE_BYTES) {
-			return err(new Error(`Image exceeds the ${MAX_IMAGE_BYTES}-byte limit: ${path}`));
+			return err(new Error(`Image exceeds the ${MAX_IMAGE_BYTES}-byte limit: ${name}`));
 		}
-
-		// (4) Encode.
 		const dataBase64 = encodeImageBase64(bytes, mimeType);
-		return ok({ path, mimeType, byteSize, dataBase64 });
+		return ok({ path: name, mimeType, byteSize, dataBase64 });
 	}
 }

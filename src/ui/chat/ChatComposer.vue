@@ -75,6 +75,8 @@ const emit = defineEmits<{
 	removeImage: [path: string];
 	previewImage: [image: AttachedImage];
 	clearSelection: [];
+	/** P5 (SPEC-CA-022): files dropped onto or pasted into the composer; the parent gates them. */
+	attachFiles: [files: File[]];
 }>();
 
 const { t } = useI18n();
@@ -94,6 +96,32 @@ const hasImages = computed(() => (props.images?.length ?? 0) > 0);
 const hasSelection = computed(() => (props.capturedSelection ?? null) !== null);
 /** The bar is hidden when all three context sets are empty → byte-identical to P4 (G2). */
 const hasContext = computed(() => hasFiles.value || hasImages.value || hasSelection.value);
+
+// ── P5 drop / paste (SPEC-CA-022, REQ-CA-007) ────────────────────────────────────
+// Files dropped onto / pasted into the composer are emitted to the parent, which
+// gates each (image → the 8 MiB/MIME gate, non-image → a file chip). The composer
+// only marshals the DOM events; it never imports `obsidian` and never reads bytes.
+
+/** A drop carrying files → emit them; prevent the browser's default file-open. */
+function onDrop(event: DragEvent): void {
+	const files = event.dataTransfer?.files;
+	if (files === undefined || files.length === 0) return;
+	event.preventDefault();
+	emit('attachFiles', Array.from(files));
+}
+
+/** Allow a drop over the composer (without this the browser blocks the `drop`). */
+function onDragOver(event: DragEvent): void {
+	event.preventDefault();
+}
+
+/** A paste carrying files (e.g. a clipboard image) → emit them; prevent the default insert. */
+function onPaste(event: ClipboardEvent): void {
+	const files = event.clipboardData?.files;
+	if (files === undefined || files.length === 0) return;
+	event.preventDefault();
+	emit('attachFiles', Array.from(files));
+}
 
 function autoGrow(): void {
 	const el = textarea.value;
@@ -266,7 +294,13 @@ function onBlockResolved(): void {
 </script>
 
 <template>
-	<div class="sp-chat-composer" :class="composerClasses" data-testid="chat-composer">
+	<div
+		class="sp-chat-composer"
+		:class="composerClasses"
+		data-testid="chat-composer"
+		@drop="onDrop"
+		@dragover="onDragOver"
+	>
 		<template v-if="inlineActive && activeBlock !== null">
 			<InlineAskUserQuestion
 				v-if="activeBlock.kind === 'ask_user_question' && respond !== undefined && notify !== undefined"
@@ -339,6 +373,7 @@ function onBlockResolved(): void {
 				:aria-expanded="composer !== undefined && isPalette ? 'true' : 'false'"
 				@input="onInput"
 				@keydown="onComposerKeydown"
+				@paste="onPaste"
 			/>
 
 			<BangBashOutput
