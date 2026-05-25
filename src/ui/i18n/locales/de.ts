@@ -72,7 +72,9 @@ export default {
 					label: 'Angehängte Bilder',
 					preview: '{name} ansehen',
 					remove: '{name} entfernen',
+					rejected: '{name} konnte nicht angehängt werden — kein unterstütztes Bild oder zu groß.',
 				},
+				attach: 'Datei oder Bild anhängen',
 				selection: {
 					label: 'Erfasste Auswahl',
 					clear: 'Auswahl löschen',

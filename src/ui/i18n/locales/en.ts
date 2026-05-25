@@ -72,7 +72,9 @@ export default {
 					label: 'Attached images',
 					preview: 'Preview {name}',
 					remove: 'Remove {name}',
+					rejected: 'Could not attach {name} — not a supported image, or it exceeds the size limit.',
 				},
+				attach: 'Attach a file or image',
 				selection: {
 					label: 'Captured selection',
 					clear: 'Clear selection',

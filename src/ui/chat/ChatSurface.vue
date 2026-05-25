@@ -206,6 +206,9 @@ function buildComposer(): {
 		refineInstruction: aux !== undefined ? new RefineInstructionUseCase(aux) : undefined,
 		settings: settingsPort,
 		confirmInstruction,
+		// P5 (SPEC-CA-022, REQ-CA-001): resolving a FILE mention ALSO adds a context
+		// chip via the attached-file set (additive — the token is still inserted).
+		onFileMention: attachFile,
 	});
 	// The inline-block response boundary (SPEC-CP-017). Built over an enqueue-decorator
 	// runtime so a runtime-pulled inline request both (a) RENDERS via the arbiter's
@@ -273,6 +276,17 @@ const supportsBrowserSelection = selectionSource?.supportsBrowserSelection ?? fa
 function resolveThumbSrc(path: string): string {
 	const image = images.value.find((img) => img.path === path);
 	return image === undefined ? '' : `data:${image.mimeType};base64,${image.dataBase64}`;
+}
+
+/**
+ * Attach a vault file to the context set as a removable chip (R-CA-002, REQ-CA-001).
+ * Idempotent (the use case dedupes by path, REQ-CA-002). Drives the @-mention chip
+ * (and the paperclip / non-image drop in the later legs). A malformed path is a
+ * quiet no-op (the use case returns `err`).
+ */
+function attachFile(path: string): void {
+	const next = addFileContext.add(attachedFiles.value, path);
+	if (next.ok) attachedFiles.value = next.value;
 }
 
 function onRemoveFile(path: string): void {
