@@ -33,6 +33,8 @@ import type {
 	ShellExecPort,
 	AuxModelPort,
 	AuxModelRunOptions,
+	SelectionSourcePort,
+	SelectionHighlightPort,
 } from '@/domain/ports';
 import type { Result } from '@/domain/shared/Result';
 import { ok, err } from '@/domain/shared/Result';
@@ -42,6 +44,7 @@ import { ClaudeCliChatRuntime } from './ClaudeCliChatRuntime';
 import { ObsidianMentionDataProvider } from './ObsidianMentionDataProvider';
 import { ObsidianProviderCommandCatalog } from './ObsidianProviderCommandCatalog';
 import { ObsidianShellExec } from './ObsidianShellExec';
+import { ObsidianSelectionSource, ObsidianSelectionHighlight } from './ObsidianSelectionPorts';
 import { VaultFileHistoryStore } from './history/VaultFileHistoryStore';
 import { safeMarkdownRender } from '@/application/chat/safeMarkdownRender';
 import { walkSvgElementToIconNode } from './walkSvgElementToIconNode';
@@ -90,10 +93,16 @@ export class ObsidianBridge
 		return this.app.vault.read(file);
 	}
 
-	// P5 SPEC-CA-006 — real vault byte read lands in T-CA-014 (coverage-excluded,
-	// manual leg TEST-CA-M3). Throwing stub keeps typecheck green meanwhile.
+	// P5 SPEC-CA-006/007 — real vault byte read (coverage-excluded, manual leg
+	// TEST-CA-M3). Reads the file's raw bytes via `vault.readBinary` and wraps the
+	// `ArrayBuffer` in a `Uint8Array`; a missing file rejects (the caller —
+	// `AddImageUseCase` — wraps it in `tryAsync` → `Result.err`).
 	async readBinary(path: string): Promise<Uint8Array> {
-		throw new Error(`[ObsidianBridge] readBinary not yet implemented (T-CA-014): ${path}`);
+		const normalized = normalizePath(path);
+		const file = this.app.vault.getAbstractFileByPath(normalized);
+		if (!(file instanceof TFile)) throw new Error(`File not found: ${normalized}`);
+		const buffer = await this.app.vault.readBinary(file);
+		return new Uint8Array(buffer);
 	}
 
 	async writeFile(path: string, content: string): Promise<void> {
@@ -337,6 +346,24 @@ export class ObsidianBridge
 	get shellExec(): ShellExecPort {
 		this.shellExecPort ??= new ObsidianShellExec(() => this.getVaultBasePath(), this);
 		return this.shellExecPort;
+	}
+
+	// ── Selection ports (SPEC-CA-007, ADR-CA-003 §1) ────────────────────────────
+	// CM6 editor + Obsidian canvas selection capture (250 ms poll, transient
+	// errors swallowed → null) and the CM6 highlight decoration. Lazily created;
+	// coverage-excluded infra (manual legs TEST-CA-M1/M3 + TEST-CA-017). No
+	// `obsidian`/CM6 symbol leaks past `ObsidianSelectionPorts.ts`.
+	private selectionSourcePort: SelectionSourcePort | null = null;
+	private selectionHighlightPort: SelectionHighlightPort | null = null;
+
+	get selectionSource(): SelectionSourcePort {
+		this.selectionSourcePort ??= new ObsidianSelectionSource(this.app);
+		return this.selectionSourcePort;
+	}
+
+	get selectionHighlight(): SelectionHighlightPort {
+		this.selectionHighlightPort ??= new ObsidianSelectionHighlight(this.app);
+		return this.selectionHighlightPort;
 	}
 
 	private _track(notice: Notice): void {

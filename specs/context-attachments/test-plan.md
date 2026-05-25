@@ -41,7 +41,17 @@ new domain/aux/infra surface confirms the imports resolve without a
 | TEST-CA-M1 | The three ObsidianBridge ports (aux cold-start, CM6 + canvas selection, highlight decoration) wire end-to-end | T-CA-009, T-CA-014 |
 | TEST-CA-M2 | The two real Obsidian Modals (`InlineEditModal` reusing `DiffView`, `ImagePreviewModal`) render + dismiss + parity screenshots | T-CA-039, T-CA-044, T-CA-047 |
 | TEST-CA-M3 | Real `VaultPort.readBinary` reads vault image bytes | T-CA-014 |
+| TEST-CA-017 | Real CM6 editor + Obsidian canvas selection capture (250 ms poll fires `onSelectionChange`; transient read errors degrade to `null`) | T-CA-014 |
 | TEST-CA-029 | Real-CLI image turn (base64 transport reaches the Claude CLI) | T-CA-047 |
+
+> **T-CA-014 note (`supportsBrowserSelection`):** the `ObsidianSelectionSource`
+> ships `supportsBrowserSelection: false` for P5 — an honest defer of the fragile
+> embedded-view (browser) capture leg (REQ-CA-018, ADR-CA-003 §2), not a silent
+> drop. The editor + canvas capture paths are live; the browser leg is gated off
+> at the bridge until a later phase. `ObsidianSelectionPorts.ts` is the sole file
+> importing `@codemirror/state`/`@codemirror/view` (Obsidian-provided runtime
+> externals, already in `vite.config.ts` `ALL_EXTERNALS`) — no symbol leaks past
+> it; coverage-excluded.
 
 ## Automated unit/component proof
 

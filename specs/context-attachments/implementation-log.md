@@ -311,3 +311,58 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   store. `readBinary` returns a defensive copy of the seeded buffer. The
   `supportsBrowserSelection` value shipped by both Mock + LS is `false` (per the
   SPEC-CA-005 contract for these two bridges).
+
+### T-CA-014 — `ObsidianBridge` selection ports + `readBinary` (coverage-excluded) (🔨 dev) 🪓
+
+- **Spec/req:** SPEC-CA-007; REQ-CA-010/013/014/015/017/018; NFR-CA-001 (manual
+  leg), NFR-CA-010.
+- **Files:**
+  - `src/infrastructure/obsidian/ObsidianSelectionPorts.ts` (new —
+    `ObsidianSelectionSource`: CM6 editor-selection read (0-based `startLine`
+    carried verbatim, `selectedText` non-empty) + Obsidian canvas-node-selection
+    read, polled at 250 ms (parity claudian), fires `onSelectionChange` on a
+    change keyed by a JSON snapshot, a transient read error swallowed → `null`
+    (NFR-CA-010, EC-CA-12), `supportsBrowserSelection:false` honest defer
+    (REQ-CA-018); `ObsidianSelectionHighlight`: paints/removes a CM6 `Decoration`
+    over the captured editor range (`show`/`clear`, ported from claudian
+    `SelectionHighlight.showSelectionHighlight`, `clear` idempotent));
+  - `src/infrastructure/obsidian/ObsidianBridge.ts` (real `readBinary` —
+    `vault.readBinary(file)` → `new Uint8Array(buffer)`, missing file rejects;
+    lazily-created `get selectionSource()` / `get selectionHighlight()` mirroring
+    the `get shellExec` idiom; `SelectionSourcePort`/`SelectionHighlightPort`
+    imports);
+  - `package.json` (`@codemirror/state` ^6.5.0 + `@codemirror/view` ^6.38.6 added
+    to **devDependencies** — see deviation);
+  - `specs/context-attachments/test-plan.md` (TEST-CA-017 real-capture manual leg
+    added; the `supportsBrowserSelection:false` + codemirror-external note).
+- **Outcome:** done (coverage-excluded `src/infrastructure/obsidian/**`).
+  Behavioural gate is the MANUAL legs TEST-CA-M1 (the three ports wire
+  end-to-end) + TEST-CA-M3 (real `readBinary`) + TEST-CA-017 (real CM6/canvas
+  capture) — scheduled in `test-plan.md`, NOT self-claimed green. No `obsidian`
+  or CM6 symbol leaks past `ObsidianSelectionPorts.ts` (the ports expose only
+  domain DTOs).
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors; `eslint` on the two
+  Obsidian files exit 0 (one pre-existing `max-lines` warning on the large
+  `ObsidianBridge.ts`, not introduced by these ~22 added lines — a warning, not an
+  error); `vitest run` of the four Layer-3 Mock/LS test files 31/31 green (no
+  regression; the Obsidian leg has no automated coverage by design).
+- **Commit:** _this commit._
+- **Deviations:**
+  1. **`supportsBrowserSelection: false`** — P5 ships the honest defer of the
+     fragile embedded-view (browser) capture leg (REQ-CA-018, ADR-CA-003 §2,
+     explicitly permitted by the spec "P5 may ship `false`"). The editor + canvas
+     capture paths are live; the browser leg is gated off at the bridge.
+  2. **`@codemirror/state` + `@codemirror/view` added to `devDependencies`** — the
+     CM6 highlight `Decoration`/`StateField`/`StateEffect` require them. They are
+     Obsidian-provided **runtime externals** (already declared in `vite.config.ts`
+     `ALL_EXTERNALS` and already installed transitively), never bundled — exactly
+     the posture of `obsidian` itself (also a devDependency). This is **not** a new
+     runtime dependency (it does not enter the plugin bundle); it makes the
+     already-present, already-externalized CM6 packages explicit so
+     `import/no-extraneous-dependencies` passes. The brief's "no new package.json
+     dependency" targets T-CA-016's pure encode (which adds none); the CM6
+     externals are intrinsic to the ported `SelectionHighlight` decoration named in
+     the T-CA-014 task body.
+  3. `startLine` is the 0-based CM6 line (`editor.getCursor('from').line`) carried
+     verbatim per SPEC-CA-003 (open item #1 resolved), NOT claudian's display
+     `+1`.

@@ -449,11 +449,11 @@ TASKS-CP-001) on the `next` integration branch.
 - **Slice plan:** may slice as (a) the CM6 + canvas `SelectionSourcePort` poll, (b) the
   `SelectionHighlightPort` decoration, (c) `VaultPort.readBinary`.
 - **Definition of done:**
-  - [ ] The three ObsidianBridge impls exist; the poll swallows transient errors → `null`;
+  - [x] The three ObsidianBridge impls exist; the poll swallows transient errors → `null`;
         `supportsBrowserSelection` is an honest fixed boolean; `readBinary` returns the real bytes.
-  - [ ] `npm run typecheck` + `npm run lint` green; the manual legs TEST-CA-M1/M3 + TEST-CA-017 scheduled
+  - [x] `npm run typecheck` + `npm run lint` green; the manual legs TEST-CA-M1/M3 + TEST-CA-017 scheduled
         in `test-plan.md`.
-  - [ ] Implementation-log entry added.
+  - [x] Implementation-log entry added.
 
 ### T-CA-015 🧪 — RED: bounded base64 image-encode + gate constants (`MAX_IMAGE_BYTES` / `IMAGE_MIME_ALLOW_LIST`)
 
