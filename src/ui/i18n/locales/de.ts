@@ -83,6 +83,47 @@ export default {
 					browserCapture: 'Browser-Auswahl erfassen',
 				},
 			},
+			toolbar: {
+				model: {
+					label: 'Modell',
+					open: 'Modell wählen',
+					empty: 'Keine Modelle verfügbar',
+				},
+				mode: {
+					label: 'Modus',
+				},
+				permission: {
+					label: 'Berechtigungen',
+					plan: 'PLAN',
+					deferred: 'Berechtigungsregeln folgen in einer späteren Version.',
+				},
+				thinking: {
+					label: 'Denken',
+					open: 'Denk-Aufwand wählen',
+					effortLabel: 'Aufwand',
+					budgetLabel: 'Budget',
+					effort: {
+						high: 'Hoch',
+						medium: 'Mittel',
+						low: 'Niedrig',
+					},
+				},
+				serviceTier: {
+					label: 'Priorität',
+				},
+				mcp: {
+					label: 'MCP-Server',
+					empty: 'MCP-Server folgen in einer späteren Version.',
+				},
+				external: {
+					label: 'Externer Kontext',
+					deferred: 'Externer Ordner-Kontext folgt in einer späteren Version.',
+				},
+				usage: {
+					label: 'Kontextnutzung {percent}%',
+					compactHint: 'Der Kontext füllt sich — führe /compact aus, um Platz zu schaffen.',
+				},
+			},
 		},
 	},
 } as const;
