@@ -21,6 +21,20 @@ import { ok, type Result } from '@/domain/shared/Result';
 import type { ChatMessage, ConversationMeta, ConversationRecord, UsageInfo } from '@/domain/ports';
 import { MockChatRuntime } from '@/infrastructure/mock/MockChatRuntime';
 import { MockHistoryStore } from '@/infrastructure/mock/MockHistoryStore';
+import type { RuntimeCapabilities } from '@/domain/ports';
+
+/**
+ * A runtime that supports fork but NOT rewind — mirrors the production
+ * `ClaudeCliChatRuntime` capability after ADR-TS-004 (rewind-to-turn is an
+ * Agent-SDK-transport capability, gated OFF on the one-shot `--print` subprocess).
+ * The capability is plain data, so the store's rewind gate is testable without a
+ * subprocess (ClaudeCliChatRuntime itself is coverage-excluded infra).
+ */
+class NoRewindRuntime extends MockChatRuntime {
+	override getCapabilities(): RuntimeCapabilities {
+		return { supportsFork: true, supportsRewind: false };
+	}
+}
 
 const USAGE: UsageInfo = {
 	inputTokens: 10,
@@ -65,7 +79,11 @@ interface Harness {
  * a runtime factory (one MockChatRuntime per tab), a runner factory (one FakeRunner
  * per tab), the start-failure notifier, the history port + a title generator.
  */
-function freshStore(opts?: { maxTabs?: number; titleResult?: Result<string> }): Harness {
+function freshStore(opts?: {
+	maxTabs?: number;
+	titleResult?: Result<string>;
+	createRuntime?: () => MockChatRuntime;
+}): Harness {
 	setActivePinia(createPinia());
 	const store = useTabsStore();
 	const runners: FakeRunner[] = [];
@@ -83,7 +101,7 @@ function freshStore(opts?: { maxTabs?: number; titleResult?: Result<string> }): 
 	};
 	store.bindTabDeps({
 		createRuntime: () => {
-			const runtime = new MockChatRuntime([]);
+			const runtime = opts?.createRuntime?.() ?? new MockChatRuntime([]);
 			runtimes.push(runtime);
 			return runtime;
 		},
@@ -419,6 +437,38 @@ describe('tabsStore (SPEC-TS-019)', () => {
 		const assistant = store.activeTab?.messages.find((m) => m.role === 'assistant');
 		expect(assistant?.assistantMessageId).toBeTruthy();
 		const userMsg = store.activeTab?.messages.find((m) => m.role === 'user');
+		expect(store.canRewindMessage(userMsg!.id)).toBe(true);
+	});
+
+	// ── R-TS-002 / ADR-TS-004: rewind gated by runtime capability, not provider ──
+
+	it('ADR-TS-004: canRewindMessage is FALSE on a supportsRewind:false runtime even when eligibility holds', async () => {
+		const { store, runners } = freshStore({ createRuntime: () => new NoRewindRuntime([]) });
+		const target = store.activeTabId!;
+		store.switchTab(target);
+		await store.sendMessage('Make me eligible');
+		const runner = runners[runners.length - 1];
+		runner.sink?.onAssistantStart();
+		runner.sink?.onText('a reply');
+		runner.sink?.onDone('turn-id-from-runtime');
+		const userMsg = store.activeTab?.messages.find((m) => m.role === 'user');
+		// Eligibility still computes (assistantMessageId is stamped — R-TS-001 kept),
+		// but the capability gate keeps the affordance off on this transport.
+		expect(store.activeCapabilities().supportsRewind).toBe(false);
+		expect(store.canRewindMessage(userMsg!.id)).toBe(false);
+	});
+
+	it('ADR-TS-004: canRewindMessage is TRUE on a supportsRewind:true runtime with the same eligibility', async () => {
+		const { store, runners } = freshStore();
+		const target = store.activeTabId!;
+		store.switchTab(target);
+		await store.sendMessage('Make me eligible');
+		const runner = runners[runners.length - 1];
+		runner.sink?.onAssistantStart();
+		runner.sink?.onText('a reply');
+		runner.sink?.onDone('turn-id-from-runtime');
+		const userMsg = store.activeTab?.messages.find((m) => m.role === 'user');
+		expect(store.activeCapabilities().supportsRewind).toBe(true);
 		expect(store.canRewindMessage(userMsg!.id)).toBe(true);
 	});
 

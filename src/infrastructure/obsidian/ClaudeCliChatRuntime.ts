@@ -44,8 +44,6 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 	private cancelled = false;
 	private child: ChildProcess | null = null;
 	private readonly readyListeners = new Set<(ready: boolean) => void>();
-	/** P3 (SPEC-TS-009): the conversation-only rewind checkpoint pending for the next turn. */
-	private resumeCheckpoint: string | null = null;
 
 	constructor(
 		private readonly logger?: LoggerPort,
@@ -77,12 +75,6 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 		queryOptions?: ChatRuntimeQueryOptions,
 	): AsyncGenerator<StreamChunk> {
 		this.cancelled = false;
-		if (this.resumeCheckpoint !== null) {
-			// A conversation rewind set a checkpoint; the next turn continues from it.
-			// No message content is logged (NFR-TS-013). Consumed once per turn.
-			this.logger?.debug('claude-cli.resume_checkpoint_applied');
-			this.resumeCheckpoint = null;
-		}
 		const reducer = new ClaudeStreamReducer();
 		const binary = this._resolveBinary();
 		if (binary === null) {
@@ -141,7 +133,6 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 
 	resetSession(): void {
 		this.sessionId = null;
-		this.resumeCheckpoint = null;
 	}
 
 	onReadyStateChange(listener: (ready: boolean) => void): Unsubscriber {
@@ -156,9 +147,10 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 	}
 
 	// ── P3 additive members (SPEC-TS-003/009, ADR-TS-002 §3) ────────────────────
-	// Maps to the CLI session/resume seam (mirrors claudian-main's
-	// SessionManager.setSessionId + ClaudeRewindService conversation mode). Bound
-	// state setters — no stream, no Result.
+	// `resumeSession` maps to the CLI `--resume <sessionId>` seam (mirrors
+	// claudian-main's SessionManager.setSessionId). `setResumeCheckpoint` is a
+	// no-op-by-transport here (ADR-TS-004) — see below. Bound setters — no stream,
+	// no Result.
 
 	resumeSession(sessionId: string): void {
 		// Bind the next `--resume` to this session id (an empty id cold-starts the
@@ -166,15 +158,20 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 		this.sessionId = sessionId.length > 0 ? sessionId : null;
 	}
 
-	setResumeCheckpoint(assistantMessageId: string): void {
-		// Conversation-only rewind point for the next turn; no filesystem/git effect
-		// (NG7). Last call wins.
-		this.resumeCheckpoint = assistantMessageId;
+	setResumeCheckpoint(_assistantMessageId: string): void {
+		// No-op-by-transport (ADR-TS-004): rewind-to-turn is an Agent-SDK capability
+		// (`Options.resumeSessionAt` over a persistent MessageChannel), NOT exposed
+		// faithfully by the one-shot `claude --print` subprocess. The method stays on
+		// the port (ADR-TS-002 §3) but applies no checkpoint here — `getCapabilities`
+		// reports `supportsRewind: false`, so the capability-gated UI never offers
+		// rewind on this transport and never calls this with intent to rewind.
 	}
 
 	getCapabilities(): RuntimeCapabilities {
-		// Claude supports both fork (derive) and conversation rewind (REQ-TS-027).
-		return { supportsFork: true, supportsRewind: true };
+		// Fork derives lineage via `--resume <forkSource.sessionId>` (supported).
+		// Rewind-to-turn is gated OFF — it is an Agent-SDK-transport capability the
+		// `--print` subprocess cannot honour faithfully (ADR-TS-004, R-TS-002).
+		return { supportsFork: true, supportsRewind: false };
 	}
 
 	// ── internals ─────────────────────────────────────────────────────────────
