@@ -19,8 +19,8 @@ artifacts:
   implementation-log.md: in-progress (DOMAIN T-MC-001..011 + INFRA T-MC-012..017 + APPLICATION T-MC-018..021 + UI T-MC-022..033 + STYLES T-MC-034 + WIRE-IN T-MC-035..037 complete; GATE T-MC-038..043 — invariant gate + human manual legs + final DoD/PR — pending)
   test-plan.md: in-progress (guard-verification + Obsidian-infra file-naming directive + manual legs TEST-MC-M1/M2 + TEST-MC-021/022/061/064 scaffolded; DOMAIN-batch + WIRE-IN-batch automated legs recorded; TEST-MC-037 interactive live-dev flow deferred to human run)
   test-report.md: pending
-  review.md: pending
-  traceability.md: pending
+  review.md: complete (REVIEW-MC-001; verdict approve-with-nits; 0 P1/P2, 2 P3, 3 P4; security + live-wiring + file-naming-ban + SDK-externalization all confirmed; conditions = the manual legs TEST-MC-M1/M2 + TEST-MC-021/022/061/064 recorded at the final epic gate)
+  traceability.md: complete (TRACE-MC-001; all 45 REQ-MC + 12 NFR-MC chained REQ↔SPEC↔code↔TEST; no orphans; the M legs flagged pending-manual)
   release-notes.md: pending
   retrospective.md: pending
 ---
@@ -39,7 +39,7 @@ artifacts:
 | 6. Tasks | `tasks.md` | complete (TASKS-MC-001; 42 tasks T-MC-001..043, TDD-ordered, full coverage) |
 | 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-MC-001..011 + INFRA T-MC-012..017 + APPLICATION T-MC-018..021 + UI T-MC-022..033 + STYLES T-MC-034 + WIRE-IN T-MC-035..037 complete; GATE T-MC-038..043 pending) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; test-report pending) |
-| 9. Review | `review.md`, `traceability.md` | pending |
+| 9. Review | `review.md`, `traceability.md` | complete (REVIEW-MC-001 + TRACE-MC-001; approve-with-nits; 0 P1/P2) |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
 
@@ -476,4 +476,26 @@ merge. Manual-Obsidian + parity-screenshot legs accumulate for the SINGLE FINAL 
                  T-MC-042 (TEST-MC-M2 parity screenshots), T-MC-043 (grep gate + final DoD/PR into next), and
                  the styles.css regeneration. TEST-MC-037 interactive live-dev flow is a DEFERRED human-run leg
                  (recorded in test-plan.md). NEXT agent: the GATE qa/dev (T-MC-038) + the human (T-MC-041/042).
+
+2026-05-26 (reviewer): Stage 9 COMPLETE. Wrote REVIEW-MC-001 (specs/mcp-client/review.md) +
+                 TRACE-MC-001 (specs/mcp-client/traceability.md). VERDICT = approve-with-nits.
+                 Findings: 0 P1 / 0 P2 (nothing blocks merge) · 2 P3 · 3 P4. SECURITY CONFIRMED:
+                 vault writes only .claude/mcp.json (never data.json, VaultMcpConfigStore.ts:8);
+                 no plaintext secret duplicated (no SecretStorePort added); stdio spawn bounded/
+                 no-shell/no-eval (SdkMcpClient.ts:172-182); malformed→Result.err (parser+codec
+                 total); MCP tool gated by UNCHANGED P7 ApprovalManager, no providerId branch
+                 (TEST-MC-065); SDK externalized — imported only under obsidian/** (build:web
+                 cannot bundle it, by inspection). LIVE-WIRING CONFIRMED: per-surface McpServerManager
+                 built (ChatSurface.vue:265), foldEnabledMcpServers on the real submit path
+                 (ChatSurface.vue:156 → tabsStore._turnQueryOptions:618/628 → queryOptions.enabledMcpServers),
+                 both ports + both modal-seam launchers provided in BOTH AgentSidebarView + main.ts,
+                 optional-inject degrade = byte-identical P6/P7. FILE-NAMING BAN honoured
+                 (VaultMcpConfigStore.ts/SdkMcpClient.ts; no ObsidianMcp*/obsidian/mcp/). RTM: all
+                 45 REQ-MC + 12 NFR-MC chained, no orphans. CONDITIONS (do NOT block merge to next):
+                 the manual legs TEST-MC-M1/M2 + TEST-MC-021/022/061/064 stay pending-manual and must
+                 be recorded at the final epic gate before the real-transport REQs are claimed green
+                 (by design — coverage-excluded infra, NFR-MC-006); the P3 nits (SdkMcpClient POSIX-only
+                 enhanced PATH; activeWindow timer un-unit-testable) are schedule-not-block. NEXT agent
+                 (the open findings are non-blocking): release-manager may proceed to Stage 10 once the
+                 parent's Stage-8 verify/build/test-report.md lands green; carry P3-MC-001/002 to the retro.
 ```
