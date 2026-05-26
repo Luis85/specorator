@@ -626,3 +626,34 @@ this batch's scope.
   No `obsidian`/`node:*` import under `src/ui/**`; no `v-html`; co-located POs present.
 - **Deviation:** none. The `--sp-mcp-row-gap` token referenced by both components is minted
   in T-MC-034 (styles); CSS-var resolution is irrelevant to the component tests.
+
+### T-MC-028 / T-MC-029 — `McpServerModal.vue` (add/edit · name required/unique · paste/parse)
+
+- **Files:**
+  - `tests/ui/chat/mcp/McpServerModal.test.ts` + `.po.ts` (new) — RED.
+  - `src/ui/chat/mcp/McpServerModal.vue` (new) — green.
+- **Spec:** SPEC-MC-016, SPEC-MC-023, SPEC-MC-024, REQ-MC-010/011/012/042/043/070/072,
+  NFR-MC-006/007 (TEST-MC-010/011/012/042/043/070 A legs + EC-MC-2/3/4).
+- **Description:** Presentational add/edit form (`input?` = edit, absent = add;
+  `existingNames` for the dup check; `submit:[draft]`/`cancel`). The four fields (Name
+  required / Config JSON-or-paste / Description / Context-saving). On Save: the config is
+  parsed via the PURE `parseClipboardConfig` — a malformed paste shows `parseError` and
+  submits nothing (EC-MC-2); a parsed name seeds the field when blank (format 1/3/4), a
+  format-2 paste leaves the name for the user (needsName, EC-MC-3); an empty name shows
+  `nameRequired`, a name in `existingNames` (excluding the edited server's own name)
+  shows `nameDuplicate "{name}"` — Save blocked, the existing server never overwritten
+  (EC-MC-4). Edit pre-fills config/description/context-saving + Save emits the replacing
+  draft. The name field auto-focuses on mount; Escape cancels; fields are labelled. No
+  `v-html`/`window.prompt`; no server config value in any error (only the parser's
+  category message); i18n via `vue-i18n` (en+de).
+- **Outcome:** done — the prior RED (TEST-MC-010/011/012 A legs/042/043/070 modal leg +
+  EC-MC-2/3/4) now green: 9/9.
+- **Commits:** RED `T-MC-028`; green `T-MC-029` (SHAs in close-out).
+- **Verify:** `npx vitest run tests/ui/chat/mcp/McpServerModal.test.ts` **9/9 green**;
+  whole-project `vue-tsc` **0 errors**; whole-project `npm run lint` **0 errors** (14
+  pre-existing warnings only). No `obsidian`/`node:*` import under `src/ui/**`; no
+  `v-html`/`window.prompt`; co-located PO present.
+- **Deviation:** added an `existingNames?: readonly string[]` prop (the duplicate check
+  SPEC-MC-016 requires the current name set; the modal-seam fn `OpenMcpServerModalFn`
+  carries only `input?`, so the host passes the live list to the component). The
+  `--sp-mcp-status-error` token is minted in T-MC-034.
