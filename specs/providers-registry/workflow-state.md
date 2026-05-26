@@ -120,7 +120,7 @@ workspace registry, `~/.codex`/`~/.claude` transcript reads, the secret storage,
                             CLAUDE entry REUSES the P1 MockChatRuntime so the standalone demo is
                             byte-identical P8 — the prior MockProviderRuntime('claude') reported the frozen
                             descriptor's supportsMcpTools:true and surfaced the MCP UI in the demo).
-                          T-PV-036 <pending> (feat(pv) the CRITICAL _coerceSettings homeFsConsent
+                          T-PV-036 955dddc9 (feat(pv) the CRITICAL _coerceSettings homeFsConsent
                             round-trip fix in BOTH coercion sites (ObsidianBridge._coerceSettings +
                             core-settings.validateSettings) via the new pure coerceHomeFsConsent helper +
                             the round-trip test; the standalone providers smoke dev leg; a harness update

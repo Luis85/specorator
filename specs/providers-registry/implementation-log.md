@@ -925,4 +925,4 @@ WIRE-IN/GATE batches ride their own subagents.
   invariant (T-PV-037, parent-owned) — either extend `ALLOWED_PREFIXES` or reword the
   copy. Flagged for the parent; NOT fixed here (outside T-PV-033..036 scope, and a test
   change is QA/gate's call).
-- **Commit (green):** <pending>.
+- **Commit (green):** `955dddc9`.
