@@ -162,7 +162,7 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
 - **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); whole-project
   `npm run lint` 0 errors (12 pre-existing warnings); `vitest run` 19/19 (codec) +
   61/61 (mcp + ChatTurn). No `obsidian`/`node:*`/Vue import in `src/domain/chat/mcp/**`.
-- **Commit:** <pending>
+- **Commit:** `1747e432`.
 - **Deviation:** `normalizeDisabledTools` filters by **trimmed**-non-empty on load
   (claudian load only filters `typeof === 'string'` and trims on save); the QA
   contract (TEST-MC-001) + SPEC-MC-003 ("filtered to non-empty strings") asserts a
@@ -170,3 +170,42 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   values stay verbatim (untrimmed) — only the filter predicate trims. The `delete`
   operator was replaced by rest-spread object-rebuild (the project's `no-restricted-syntax`
   bans `delete`); behaviour-identical to the Claudian `delete file._claudian`.
+
+### T-MC-008 — RED pure `parseCommand` + `getActiveServers`/`collectDisallowedMcpTools` (🧪 qa)
+
+- **Spec/test:** TEST-MC-020a/052/053/054 + EC-MC-7/9/10; SPEC-MC-005/006;
+  REQ-MC-020/023/052/053/054/061; NFR-MC-004.
+- **Files:** `tests/domain/chat/mcp/parseCommand.test.ts` (new — providedArgs
+  passthrough, quote-aware split, empty/whitespace command →`{ cmd:'', args:[] }`,
+  single/double quote grouping, never-throws) + `tests/domain/chat/mcp/getActiveServers.test.ts`
+  (new — the enabled/disabled/context-saving(∅)-filter active set, the mentioned
+  inclusion, the fresh map; `collectDisallowedMcpTools` enabled-only pre-register
+  ignoring `contextSaving`, the `mcp__server__tool` trim/dedupe/sort, never-throws).
+- **Outcome:** done — RED confirmed (23 failing; `parseCommand.ts` +
+  `getActiveServers.ts` are not yet exported from `@/domain/chat/mcp`).
+- **Commit:** `13d00eec`.
+
+### T-MC-009 — `parseCommand.ts` + `getActiveServers.ts` + barrel (🔨 dev)
+
+- **Spec/req:** SPEC-MC-005/006; REQ-MC-020/023/052/053/054/061; NFR-MC-002/004.
+- **Files:** `src/domain/chat/mcp/parseCommand.ts` (new — `parseCommand` +
+  `splitCommandString`, the no-shell quote-aware tokeniser ported from claudian
+  `utils/mcp.ts:46/59`; the per-char state machine extracted into a `stepCharacter`
+  helper to stay ≤ cap-10 complexity) + `src/domain/chat/mcp/getActiveServers.ts`
+  (new — `getActiveServers(servers, mentionedNames)` enabled ∧ (¬contextSaving ∨
+  mentioned) + `collectDisallowedMcpTools(servers)` enabled-only trim/dedupe/sort,
+  ported from `McpServerManager.getActiveServers:38` + `getAllDisallowedMcpTools:74-94`);
+  the barrel `index.ts` re-exports appended.
+- **Outcome:** done — the prior RED (TEST-MC-020a/052/053/054 + EC-MC-7/9/10) now
+  green (23/23); the full `tests/domain/chat/mcp` suite 73/73; the functions never
+  throw; `splitCommandString` invokes no shell/eval.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); whole-project
+  `npm run lint` 0 errors (12 pre-existing warnings); `vitest run` 23/23 (the two
+  files) + 73/73 (the mcp suite). No `obsidian`/`node:*`/Vue import in
+  `src/domain/chat/mcp/**`.
+- **Commit:** <pending>
+- **Deviation:** `splitCommandString`'s single-pass quote/whitespace state machine
+  would exceed the cap-10 complexity inline; rather than a complexity-disable (the
+  P7 `ApprovalMatcher` precedent) the per-char branch was extracted into a
+  `stepCharacter(state, char, push)` helper — behaviour-identical to the verbatim
+  Claudian loop, no disable needed.

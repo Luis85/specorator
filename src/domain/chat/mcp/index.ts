@@ -21,3 +21,5 @@ export {
 	isValidMcpServerConfig,
 } from './McpConfigParser';
 export { deserializeMcpConfig, serializeMcpConfig } from './McpConfigCodec';
+export { parseCommand, splitCommandString } from './parseCommand';
+export { getActiveServers, collectDisallowedMcpTools } from './getActiveServers';
