@@ -35,8 +35,16 @@ import {
 	usePickAttachment,
 	type PickAttachmentFn,
 	type PickedAttachment,
+	OPEN_MCP_SERVER_MODAL,
+	OPEN_MCP_TEST_MODAL,
+	useOpenMcpServerModal,
+	useOpenMcpTestModal,
+	type OpenMcpServerModalFn,
+	type OpenMcpTestModalFn,
 } from '@/ui/chat/modalSeam';
 import type { AttachedImage } from '@/domain/chat/attachments';
+import type { McpServerDraft } from '@/application/chat/mcp/McpServerManager';
+import type { ManagedMcpServer } from '@/domain/chat/mcp/McpTypes';
 
 /** Mount a probe component that calls `useInstructionConfirm()` under a provide. */
 function probe(provided?: InstructionConfirmFn): InstructionConfirmFn {
@@ -164,5 +172,86 @@ describe('usePickAttachment (FIX-2.2 fallback leg, SPEC-CA-022/026)', () => {
 	it('falls back to a no-op resolving null when no launcher was provided (no attach)', async () => {
 		const fn = probePickAttachment();
 		await expect(fn()).resolves.toBeNull();
+	});
+});
+
+// ── T-MC-024 (RED): the P8 MCP modal-seam launchers (SPEC-MC-023) ─────────────────
+// Additive — the P3/P4/P5 handles above stay byte-identical. The real Obsidian Modal
+// hosts (McpServerModal / McpTestModal) live in src/plugin/**; the standalone entry
+// provides browser-safe stand-ins. `useOpenMcpServerModal()` falls back to an
+// AUTO-DISMISS (null) when absent (a missing launcher adds nothing, mirroring
+// `useOpenInlineEdit`); `useOpenMcpTestModal()` falls back to a no-op resolve.
+
+/** Mount a probe that calls `useOpenMcpServerModal()` under an optional provide. */
+function probeMcpServerModal(provided?: OpenMcpServerModalFn): OpenMcpServerModalFn {
+	let captured!: OpenMcpServerModalFn;
+	const Probe = defineComponent({
+		setup() {
+			captured = useOpenMcpServerModal();
+			return () => h('div');
+		},
+	});
+	mount(Probe, {
+		global: provided ? { provide: { [OPEN_MCP_SERVER_MODAL as symbol]: provided } } : {},
+	});
+	return captured;
+}
+
+/** Mount a probe that calls `useOpenMcpTestModal()` under an optional provide. */
+function probeMcpTestModal(provided?: OpenMcpTestModalFn): OpenMcpTestModalFn {
+	let captured!: OpenMcpTestModalFn;
+	const Probe = defineComponent({
+		setup() {
+			captured = useOpenMcpTestModal();
+			return () => h('div');
+		},
+	});
+	mount(Probe, {
+		global: provided ? { provide: { [OPEN_MCP_TEST_MODAL as symbol]: provided } } : {},
+	});
+	return captured;
+}
+
+const sampleDraft: McpServerDraft = {
+	name: 'fs',
+	config: { command: 'mcp-fs' },
+	contextSaving: false,
+};
+
+const sampleServer: ManagedMcpServer = {
+	name: 'fs',
+	config: { command: 'mcp-fs' },
+	enabled: true,
+	contextSaving: false,
+};
+
+describe('useOpenMcpServerModal (TEST-MC-042 seam leg, SPEC-MC-023)', () => {
+	it('returns the provided launcher when OPEN_MCP_SERVER_MODAL is provided', async () => {
+		const fn = probeMcpServerModal((input) => Promise.resolve(input ?? sampleDraft));
+		await expect(fn(sampleDraft)).resolves.toEqual(sampleDraft);
+		await expect(fn()).resolves.toEqual(sampleDraft);
+	});
+
+	it('falls back to an AUTO-DISMISS (null) when no launcher was provided (no add)', async () => {
+		const fn = probeMcpServerModal();
+		await expect(fn(sampleDraft)).resolves.toBeNull();
+		await expect(fn()).resolves.toBeNull();
+	});
+});
+
+describe('useOpenMcpTestModal (TEST-MC-044 seam leg, SPEC-MC-023)', () => {
+	it('returns the provided launcher when OPEN_MCP_TEST_MODAL is provided', async () => {
+		let seen: ManagedMcpServer | null = null;
+		const fn = probeMcpTestModal((server) => {
+			seen = server;
+			return Promise.resolve();
+		});
+		await fn(sampleServer);
+		expect(seen).toEqual(sampleServer);
+	});
+
+	it('falls back to a no-op resolve when no launcher was provided', async () => {
+		const fn = probeMcpTestModal();
+		await expect(fn(sampleServer)).resolves.toBeUndefined();
 	});
 });

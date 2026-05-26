@@ -18,6 +18,8 @@ import type {
 	SelectionHighlightPort,
 	ToolbarCatalogPort,
 	ApprovalRuleStorePort,
+	McpConfigStorePort,
+	McpClientPort,
 } from '@/domain/ports';
 
 /**
@@ -78,3 +80,11 @@ export const TOOLBAR_CATALOG_PORT: InjectionKey<ToolbarCatalogPort> =
 // three bridges back it device-local / scriptable in-memory / browser-localStorage.
 export const APPROVAL_RULE_STORE_PORT: InjectionKey<ApprovalRuleStorePort> =
 	Symbol('ApprovalRuleStorePort');
+
+// P8 mcp-client (SPEC-MC-007/008, ADR-MC-001 §2 / ADR-MC-002 §1). Own keys, no
+// aggregate — one consumer each (the `McpServerManager` reads the config store; the
+// tester reads the client). The three bridges back them vault-`.claude/mcp.json` +
+// real SDK transports / scriptable in-memory / browser-localStorage + inert.
+export const MCP_CONFIG_STORE_PORT: InjectionKey<McpConfigStorePort> =
+	Symbol('McpConfigStorePort');
+export const MCP_CLIENT_PORT: InjectionKey<McpClientPort> = Symbol('McpClientPort');

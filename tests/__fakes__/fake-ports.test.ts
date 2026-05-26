@@ -141,6 +141,51 @@ describe('fakeModulePorts', () => {
 		expect((await ports.approvalRuleStore.loadRules()).ok).toBe(false)
 	})
 
+	// T-MC-014 (TEST-MC-001/072/080 fake-ports leg): the factory exposes a scriptable
+	// `mcpConfigStore` member (seedable + fault-injectable) so the McpServerManager +
+	// settings + selector tests inject the store without a real provider (SPEC-MC-010).
+	it('exposes a scriptable mcpConfigStore member (seedable + round-trips)', async () => {
+		const ports = fakeModulePorts()
+		const empty = await ports.mcpConfigStore.load()
+		expect(empty.ok).toBe(true)
+		if (empty.ok) expect(empty.value).toEqual([])
+		ports.mcpConfigStore.seedMcpServers([
+			{
+				name: 'alpha',
+				config: { command: 'node', args: ['s.js'] },
+				enabled: true,
+				contextSaving: true,
+			},
+		])
+		const seeded = await ports.mcpConfigStore.load()
+		expect(seeded.ok).toBe(true)
+		if (seeded.ok) expect(seeded.value).toHaveLength(1)
+	})
+
+	it('mcpConfigStore setMcpStoreFailMode drives the save-fail path deterministically', async () => {
+		const ports = fakeModulePorts()
+		ports.mcpConfigStore.setMcpStoreFailMode('save')
+		const res = await ports.mcpConfigStore.save([])
+		expect(res.ok).toBe(false)
+	})
+
+	// T-MC-014 (TEST-MC-030..034 fake-ports leg): the factory exposes a scriptable
+	// `mcpClient` member (mode + per-server script switches) driving the SPEC-MC-028
+	// matrix without a real transport (SPEC-MC-010).
+	it('exposes a scriptable mcpClient member (mode-driven test matrix)', async () => {
+		const ports = fakeModulePorts()
+		expect(ports.mcpClient.isAvailable()).toBe(true)
+		ports.mcpClient.setClientMode('timeout')
+		const res = await ports.mcpClient.test({
+			name: 'srv',
+			config: { command: 'node', args: ['x.js'] },
+			enabled: true,
+			contextSaving: true,
+		})
+		expect(res.success).toBe(false)
+		expect(res.error).toBe('Connection timeout (10s)')
+	})
+
 	it('providerHistory mutations are visible across the factory ports', async () => {
 		const ports = fakeModulePorts()
 		ports.providerHistory.seedConversations([

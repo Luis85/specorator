@@ -108,4 +108,22 @@ export class ChatSurfacePageObject {
 	async clickToolbarMode(): Promise<void> {
 		await this.wrapper.get('[data-testid="toolbar-mode"]').trigger('click');
 	}
+
+	// ── P8 MCP client (SPEC-MC-020) ──────────────────────────────────────────────
+
+	hasMcpSettings(): boolean {
+		return this.wrapper.find('[data-testid="mcp-settings"]').exists();
+	}
+
+	mcpServerRowCount(): number {
+		return this.wrapper.findAll('[data-testid="mcp-server-row"]').length;
+	}
+
+	hasMcpSelector(): boolean {
+		return this.wrapper.find('[data-testid="toolbar-mcp"]').exists();
+	}
+
+	mcpSelectorBadge(): string {
+		return this.wrapper.get('[data-testid="mcp-selector-badge"]').text();
+	}
 }

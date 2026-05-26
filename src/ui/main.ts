@@ -36,6 +36,8 @@ import {
 	SELECTION_HIGHLIGHT_PORT,
 	TOOLBAR_CATALOG_PORT,
 	APPROVAL_RULE_STORE_PORT,
+	MCP_CONFIG_STORE_PORT,
+	MCP_CLIENT_PORT,
 } from '@/infrastructure/bridge/ports';
 import {
 	CHAT_RUNTIME_FACTORY,
@@ -45,6 +47,8 @@ import {
 	OPEN_INLINE_EDIT,
 	OPEN_IMAGE_PREVIEW,
 	PICK_ATTACHMENT,
+	OPEN_MCP_SERVER_MODAL,
+	OPEN_MCP_TEST_MODAL,
 } from '@/ui/chat/modalSeam';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
 
@@ -114,6 +118,18 @@ app.provide(TOOLBAR_CATALOG_PORT, bridge.toolbarCatalog);
 // match → auto OR the unchanged P4 prompt) with no live SDK. The surface gates the
 // active runtime's approval callback through one per-surface `ApprovalManager`.
 app.provide(APPROVAL_RULE_STORE_PORT, bridge.approvalRuleStore);
+// P8 (SPEC-MC-020): the scriptable Mock MCP config store (seedable, codec-round-tripped)
+// + the scriptable Mock client (the SPEC-MC-028 test matrix, never throws). The surface
+// builds the per-surface `McpServerManager` over the store; with the default Mock runtime
+// reporting `supportsMcpTools:false` the MCP settings + selector stay hidden (the P7
+// byte-identical state) until a server is seeded against an MCP-capable runtime. The two
+// modal-seam launchers are browser-safe stand-ins (no Obsidian, no `window.*`): the
+// add/edit modal AUTO-DISMISSES (`null`) — a missing real modal adds nothing
+// (REQ-MC-042); the test modal is a no-op resolve. Deterministic for the GitHub Pages demo.
+app.provide(MCP_CONFIG_STORE_PORT, bridge.mcpConfigStore);
+app.provide(MCP_CLIENT_PORT, bridge.mcpClient);
+app.provide(OPEN_MCP_SERVER_MODAL, () => Promise.resolve(null));
+app.provide(OPEN_MCP_TEST_MODAL, () => Promise.resolve());
 
 void bridge.getSettings().then((s) => {
 	setLocale(toSupportedLocale(s.locale));

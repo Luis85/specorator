@@ -9,6 +9,8 @@ import type {
 } from '@/infrastructure/mock/MockSelectionPorts';
 import type { MockToolbarCatalog } from '@/infrastructure/mock/MockToolbarCatalog';
 import type { MockApprovalRuleStore } from '@/infrastructure/mock/MockApprovalRuleStore';
+import type { MockMcpConfigStore } from '@/infrastructure/mock/MockMcpConfigStore';
+import type { MockMcpClient } from '@/infrastructure/mock/MockMcpClient';
 import type {
 	SettingsPort,
 	VaultPort,
@@ -86,6 +88,20 @@ export interface FakePorts {
 	 * TEST-AS-054) without a real provider.
 	 */
 	readonly approvalRuleStore: MockApprovalRuleStore;
+	/**
+	 * The scriptable Mock `McpConfigStorePort` (SPEC-MC-010, T-MC-015). The
+	 * `McpServerManager` + settings + selector tests inject it via `seedMcpServers`
+	 * (pre-seed managed servers, round-tripped through the pure codec) + `setMcpStoreFailMode`
+	 * (force the save-fail / load-fail path, TEST-MC-072) without a real provider.
+	 */
+	readonly mcpConfigStore: MockMcpConfigStore;
+	/**
+	 * The scriptable Mock `McpClientPort` (SPEC-MC-010, T-MC-015). The tester + manager
+	 * tests drive the SPEC-MC-028 matrix via `setClientMode` (success/partial/timeout/
+	 * error/unavailable) + `scriptTestResult` (per-server canned result) without a real
+	 * transport.
+	 */
+	readonly mcpClient: MockMcpClient;
 }
 
 export function fakeModulePorts(): FakePorts {
@@ -115,5 +131,7 @@ export function fakeModulePorts(): FakePorts {
 		selectionHighlight: bridge.selectionHighlight,
 		toolbarCatalog: bridge.toolbarCatalog,
 		approvalRuleStore: bridge.approvalRuleStore,
+		mcpConfigStore: bridge.mcpConfigStore,
+		mcpClient: bridge.mcpClient,
 	};
 }

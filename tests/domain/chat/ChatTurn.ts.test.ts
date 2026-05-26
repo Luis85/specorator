@@ -28,6 +28,7 @@ import type {
 } from '@/domain/chat/attachments';
 import type { ReasoningChoice } from '@/domain/chat/Reasoning';
 import type { PermissionMode } from '@/domain/chat/PermissionMode';
+import type { EnabledMcpServers } from '@/domain/chat/mcp';
 
 type Equals<A, B> =
 	(<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
@@ -97,6 +98,10 @@ void _ensureKeys;
 // `permissionMode?: PermissionMode` appended AFTER `serviceTier`; the P0–P6
 // `model?`/`forceColdStart?`/`appendSystemPrompt?`/`mode?`/`reasoning?`/`serviceTier?`
 // stay byte-identical.
+// ---- T-MC-002 (TEST-MC-001 type-shape leg, SPEC-MC-002/022) ----
+// `ChatRuntimeQueryOptions` gains EXACTLY one further additive optional field
+// `enabledMcpServers?: EnabledMcpServers` appended AFTER `permissionMode`; the
+// P0–P7 members stay byte-identical; `externalContextPaths?` stays EXCLUDED.
 const _queryKeys: Equals<
 	keyof ChatRuntimeQueryOptions,
 	| 'model'
@@ -106,8 +111,16 @@ const _queryKeys: Equals<
 	| 'reasoning'
 	| 'serviceTier'
 	| 'permissionMode'
+	| 'enabledMcpServers'
 > = true;
 void _queryKeys;
+
+// `externalContextPaths?` stays EXCLUDED (a later phase, NG3).
+const _noExternalContext: Equals<
+	'externalContextPaths' extends keyof ChatRuntimeQueryOptions ? true : false,
+	false
+> = true;
+void _noExternalContext;
 
 // The P7 additive field carries its contracted optional PermissionMode type.
 const _qPermissionMode: Equals<
@@ -115,6 +128,13 @@ const _qPermissionMode: Equals<
 	PermissionMode | undefined
 > = true;
 void _qPermissionMode;
+
+// The P8 additive field carries its contracted optional EnabledMcpServers type.
+const _qEnabledMcp: Equals<
+	ChatRuntimeQueryOptions['enabledMcpServers'],
+	EnabledMcpServers | undefined
+> = true;
+void _qEnabledMcp;
 
 // The P0–P5 members keep their exact types.
 const _qModel: Equals<ChatRuntimeQueryOptions['model'], string | undefined> = true;
@@ -227,3 +247,50 @@ describe('ChatRuntimeQueryOptions P7 additivity / serialisation (TEST-AS-002)', 
 		expect(query.permissionMode).toBe('yolo');
 	});
 });
+
+describe('ChatRuntimeQueryOptions P8 additivity / serialisation (TEST-MC-082)', () => {
+	it('serialises a P7-shaped query (no enabledMcpServers) byte-identically to P7', () => {
+		const p7: ChatRuntimeQueryOptions = {
+			model: 'sonnet',
+			mode: 'acceptEdits',
+			reasoning: { kind: 'effort', value: 'high' },
+			serviceTier: 'priority',
+			permissionMode: 'plan',
+		};
+		// No `enabledMcpServers` present — the JSON is identical to P7.
+		expect(JSON.parse(JSON.stringify(p7))).toEqual({
+			model: 'sonnet',
+			mode: 'acceptEdits',
+			reasoning: { kind: 'effort', value: 'high' },
+			serviceTier: 'priority',
+			permissionMode: 'plan',
+		});
+		expect(Object.keys(p7)).toEqual([
+			'model',
+			'mode',
+			'reasoning',
+			'serviceTier',
+			'permissionMode',
+		]);
+	});
+
+	it('an empty query folds nothing (byte-identical to a P7 no-servers turn)', () => {
+		const empty: ChatRuntimeQueryOptions = {};
+		expect(JSON.parse(JSON.stringify(empty))).toEqual({});
+		expect(Object.keys(empty)).toEqual([]);
+	});
+
+	it('carries enabledMcpServers when present', () => {
+		const enabled: EnabledMcpServers = {
+			servers: { fs: { command: 'npx', args: ['-y', 'server-filesystem'] } },
+			disallowedTools: ['mcp__fs__write'],
+		};
+		const query: ChatRuntimeQueryOptions = { model: 'opus', enabledMcpServers: enabled };
+		expect(query.enabledMcpServers?.servers).toHaveProperty('fs');
+		expect(query.enabledMcpServers?.disallowedTools).toEqual(['mcp__fs__write']);
+	});
+});
+
+// PreparedChatTurn.mcpMentions stays the empty Set seam (P8 NG3 — no mention extractor).
+const _mcpMentions: Equals<PreparedChatTurn['mcpMentions'], Set<string>> = true;
+void _mcpMentions;

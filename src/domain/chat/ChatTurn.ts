@@ -11,6 +11,7 @@ import type {
 } from './attachments/Selection';
 import type { ReasoningChoice } from './Reasoning';
 import type { PermissionMode } from './PermissionMode';
+import type { EnabledMcpServers } from './mcp/McpTypes';
 
 /** Turn request — mirrors `runtime/types.ts:45`. P1 uses `text` (+ optional `currentNotePath`). */
 export interface ChatTurnRequest {
@@ -80,6 +81,12 @@ export interface ChatRuntimeQueryOptions {
 	// mode (SPEC-AS-011), so a `normal`/absent tab folds nothing. ----
 	/** Permission mode (REQ-AS-002): absent ⇒ the runtime's default (`'normal'`). */
 	permissionMode?: PermissionMode;
+	// ---- P8 additive (SPEC-MC-002, ADR-MC-003 §1) — optional; an unset query is
+	// byte-identical to P7 (NFR-MC-001). `foldEnabledMcpServers` writes it ONLY when
+	// the active set is non-empty, so a no-servers / all-disabled turn folds nothing.
+	// `externalContextPaths?` stays EXCLUDED (a later phase, NG3). ----
+	/** Active MCP servers + disallowed tools (REQ-MC-052): absent/empty ⇒ byte-identical to P7. */
+	enabledMcpServers?: EnabledMcpServers;
 }
 
 /** Ensure-ready options — mirrors `runtime/types.ts:73`. */

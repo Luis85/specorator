@@ -2,6 +2,8 @@ import { inject, type InjectionKey } from 'vue';
 import type { ForkTarget } from '@/application/threads/chooseForkTarget';
 import type { ChatRuntimePort } from '@/domain/ports';
 import type { AttachedImage } from '@/domain/chat/attachments';
+import type { McpServerDraft } from '@/application/chat/mcp/McpServerManager';
+import type { ManagedMcpServer } from '@/domain/chat/mcp/McpTypes';
 
 /**
  * The plugin-owned modal-launch seam (SPEC-TS-023/024, NFR-TS-007). The Obsidian
@@ -134,4 +136,35 @@ export const PICK_ATTACHMENT: InjectionKey<PickAttachmentFn> = Symbol('PickAttac
  */
 export function usePickAttachment(): PickAttachmentFn {
 	return inject(PICK_ATTACHMENT, () => Promise.resolve(null));
+}
+
+// ── P8 MCP modal-seam launchers (SPEC-MC-023, ADR-MC-003) ────────────────────────
+// Additive — the P3/P4/P5 handles above stay byte-identical. The real Obsidian
+// `Modal` hosts (`McpServerModal` / `McpTestModal`) import `obsidian`, so they live
+// with the view (`src/plugin/**`), NOT under `src/ui/**`. The Vue settings surface
+// launches them through these handles; the standalone entry provides browser-safe
+// stand-ins (no `window.*`).
+
+/** Open the add/edit server modal (add when `input` absent, edit when present); resolves the draft or `null` on dismiss (REQ-MC-010/012/042). */
+export type OpenMcpServerModalFn = (input?: McpServerDraft) => Promise<McpServerDraft | null>;
+
+/** Open the test-result modal (owns its own probe + per-tool toggle lifecycle); resolves when dismissed (REQ-MC-044). */
+export type OpenMcpTestModalFn = (server: ManagedMcpServer) => Promise<void>;
+
+export const OPEN_MCP_SERVER_MODAL: InjectionKey<OpenMcpServerModalFn> =
+	Symbol('OpenMcpServerModal');
+export const OPEN_MCP_TEST_MODAL: InjectionKey<OpenMcpTestModalFn> = Symbol('OpenMcpTestModal');
+
+/**
+ * Inject the add/edit-server-modal launcher; falls back to an AUTO-DISMISS (`null`)
+ * when absent (SPEC-MC-023) — a missing launcher adds nothing (REQ-MC-042). Mirrors
+ * `useOpenInlineEdit`'s auto-reject fallback.
+ */
+export function useOpenMcpServerModal(): OpenMcpServerModalFn {
+	return inject(OPEN_MCP_SERVER_MODAL, () => Promise.resolve(null));
+}
+
+/** Inject the test-modal launcher; falls back to a no-op resolve when absent (SPEC-MC-023). */
+export function useOpenMcpTestModal(): OpenMcpTestModalFn {
+	return inject(OPEN_MCP_TEST_MODAL, () => Promise.resolve());
 }

@@ -371,3 +371,23 @@ body.theme-light .specorator-root {
 	/* the active permission-mode pill fill (permission-toggle.css active) */
 	--sp-permission-mode-active: var(--sp-toggle-active);
 }
+
+/* section 4.15 - MCP client (P8, SPEC-MC-021, NFR-MC-009). The mcp-settings plus
+ * mcp-modal plus mcp-selector slice. Each token is a token-layer var lookup - no
+ * hex, no raw Obsidian var outside this layer, no physical CSS property
+ * (lint-style-tokens guard, TEST-MC-045). Reuses the existing set (--sp-border,
+ * --sp-radius, --sp-bg, --sp-surface-overlay, --sp-text, --sp-accent, --sp-space,
+ * --sp-font, and the P6 --sp-toggle-active plus --sp-toolbar-widget-h plus
+ * --sp-z-dropdown plus --sp-shadow-dropup for the selector) - only the four
+ * genuinely new MCP tokens are minted here. The block marker is ASCII so the
+ * standalone lightningcss minifier accepts the comment. */
+.specorator-root {
+	/* settings / row / test-modal list row spacing (mcp-settings.css list rhythm) */
+	--sp-mcp-row-gap: var(--sp-space-2);
+	/* reachable-server / success state colour (mcp-test.css ok state) */
+	--sp-mcp-status-ok: var(--sp-success);
+	/* unreachable-server / error state colour (mcp-test.css error state) */
+	--sp-mcp-status-error: var(--sp-status-error);
+	/* the enabled-server count badge fill (mcp-selector.css badge) */
+	--sp-mcp-selector-badge: var(--sp-accent);
+}

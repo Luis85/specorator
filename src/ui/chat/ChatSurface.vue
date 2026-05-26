@@ -10,6 +10,8 @@ import {
 	useChatRuntimeFactory,
 	useChooseForkTarget,
 	useInstructionConfirm,
+	useOpenMcpServerModal,
+	useOpenMcpTestModal,
 } from '@/ui/chat/modalSeam';
 import { RunChatTurnUseCase } from '@/application/chat/RunChatTurnUseCase';
 import { GenerateTitleUseCase } from '@/application/threads/GenerateTitleUseCase';
@@ -39,8 +41,14 @@ import {
 	SELECTION_HIGHLIGHT_PORT,
 	TOOLBAR_CATALOG_PORT,
 	APPROVAL_RULE_STORE_PORT,
+	MCP_CONFIG_STORE_PORT,
 } from '@/infrastructure/bridge/ports';
-import type { ToolbarCatalogPort, ApprovalRuleStorePort, ApprovalRule } from '@/domain/ports';
+import type {
+	ToolbarCatalogPort,
+	ApprovalRuleStorePort,
+	ApprovalRule,
+	McpConfigStorePort,
+} from '@/domain/ports';
 import type { TabControls } from '@/domain/chat/toolbar/TabControls';
 import type { PermissionMode } from '@/domain/chat/PermissionMode';
 import type { ReasoningChoice } from '@/domain/chat/Reasoning';
@@ -68,6 +76,12 @@ import { RespondToInlineBlockUseCase } from '@/application/chat/composer/Respond
 import { useComposerMode } from '@/ui/chat/composer/useComposerMode';
 import { EnqueueRuntime } from '@/ui/chat/composer/EnqueueRuntime';
 import type { BuiltInAction } from '@/application/chat/composer/builtInCommands';
+import { McpServerManager, type McpServerDraft } from '@/application/chat/mcp/McpServerManager';
+import {
+	buildMcpViewModel,
+	type McpViewModel,
+} from '@/application/chat/mcp/buildMcpViewModel';
+import type { ManagedMcpServer } from '@/domain/chat/mcp/McpTypes';
 import WelcomeGreeting from './WelcomeGreeting.vue';
 import MessageList from './MessageList.vue';
 import UsageInfo from './UsageInfo.vue';
@@ -75,6 +89,7 @@ import ChatComposer from './ChatComposer.vue';
 import TabBar from './TabBar.vue';
 import ResumeSessionDropdown from './ResumeSessionDropdown.vue';
 import ApprovalsPanel from './approvals/ApprovalsPanel.vue';
+import McpSettingsManager from './mcp/McpSettingsManager.vue';
 
 /**
  * The chat container (SPEC-CC-018, extended P3 — SPEC-TS-026). Now driven by the
@@ -133,6 +148,12 @@ tabs.bindTabDeps({
 	// (CLI `--append-system-prompt`). The SettingsPort read stays in this surface
 	// layer; the store only threads the resolved string into the query options.
 	getAppendSystemPrompt: async () => (await settingsPort?.getSettings())?.customSystemPrompt,
+	// P8 (SPEC-MC-020, REQ-MC-052/082): the guarded enabled-MCP-servers fold. The
+	// store threads the manager's `getEnabledMcpServers(∅)` into the turn's
+	// `enabledMcpServers` ONLY when defined (the active set is non-empty), so a
+	// no-server turn omits the field (byte-identical to P7). Absent when the MCP
+	// store port is not provided. The empty mention-set is the P8 default (open item #1).
+	getEnabledMcpServers: () => mcpManager?.getEnabledMcpServers(new Set()),
 });
 
 onMounted(() => {
@@ -141,6 +162,9 @@ onMounted(() => {
 	});
 	// P7 (SPEC-AS-016, REQ-AS-040/043): seed the live approvals view-model from the store.
 	void refreshApprovalRules();
+	// P8 (SPEC-MC-020, REQ-MC-001/002): load the managed MCP server list (the manager
+	// degrades to an empty list + a non-blocking notice on a store `err`).
+	void loadMcpServers();
 });
 
 onBeforeUnmount(() => {
@@ -220,6 +244,104 @@ async function refreshApprovalRules(): Promise<void> {
 	if (approvalManager === null) return;
 	const result = await approvalManager.listRules();
 	if (result.ok) approvalRules.value = result.value;
+}
+
+// ── P8 MCP client (SPEC-MC-020) ──────────────────────────────────────────────────
+// `MCP_CONFIG_STORE_PORT` is OPTIONAL here (parity with the P6 toolbar + P7 approvals):
+// when provided (the wire-in batch) the surface constructs ONE per-surface
+// `McpServerManager` (parity the per-surface `ApprovalManager`), loads it on mount, and
+// drives the settings + the selector from a reactive `McpViewModel` (SPEC-MC-014). On
+// turn submit it folds `getEnabledMcpServers(∅)` into `queryOptions.enabledMcpServers`
+// ONLY when defined (REQ-MC-052/082) — additive alongside the P4/P6/P7 folds; a no-MCP
+// turn stays byte-identical to P7. An MCP tool call (`mcp__<server>__<tool>`) routes
+// through the UNCHANGED P7 `ApprovalManager` via the existing `ApprovalGateRuntime` (no
+// MCP special-case, no `providerId` branch). When absent the settings/selector keep the
+// P6 empty seam and the turn omits the field. A store/manager `err` degrades gracefully
+// (the manager surfaces a non-blocking notice + keeps an empty list — never crashes).
+const mcpStore: McpConfigStorePort | undefined = inject(MCP_CONFIG_STORE_PORT, undefined);
+const openMcpServerModal = useOpenMcpServerModal();
+const openMcpTestModal = useOpenMcpTestModal();
+
+const mcpManager: McpServerManager | null =
+	mcpStore !== undefined
+		? new McpServerManager(mcpStore, new FeedbackService(logger, notify))
+		: null;
+
+/** True iff the MCP surface is wired (the store + the manager are present). */
+const hasMcp = mcpManager !== null;
+
+// The reactive managed-server snapshot the view-model derives from. Refreshed on mount +
+// after every manager mutation so the settings + selector stay live (REQ-MC-050/051).
+const mcpServers = ref<readonly ManagedMcpServer[]>([]);
+
+/** The active runtime's `supportsMcpTools` capability — the settings + selector gate (REQ-MC-041). */
+const supportsMcpTools = computed<boolean>(
+	() => tabs.activeRuntime()?.getToolbarCapabilities().supportsMcpTools ?? false,
+);
+
+/** The MCP view-model (the P6 empty seam at 0 servers, the live list at ≥ 1). */
+const mcpVm = computed<McpViewModel | undefined>(() =>
+	mcpManager === null ? undefined : buildMcpViewModel(mcpServers.value, supportsMcpTools.value),
+);
+
+function refreshMcpServers(): void {
+	if (mcpManager === null) return;
+	mcpServers.value = mcpManager.getServers();
+}
+
+async function loadMcpServers(): Promise<void> {
+	if (mcpManager === null) return;
+	await mcpManager.load();
+	refreshMcpServers();
+}
+
+/** Toggle a server's `enabled` then re-derive the view-model (REQ-MC-014/050/051). */
+async function onMcpSetEnabled(name: string, enabled: boolean): Promise<void> {
+	if (mcpManager === null) return;
+	await mcpManager.setEnabled(name, enabled);
+	refreshMcpServers();
+}
+
+/** Open the add modal via the seam; on a draft, add + re-derive (REQ-MC-010/042). */
+async function onMcpAdd(): Promise<void> {
+	if (mcpManager === null) return;
+	const draft = await openMcpServerModal();
+	if (draft === null) return;
+	await mcpManager.add(draft);
+	refreshMcpServers();
+}
+
+/** Open the edit modal pre-bound to the server via the seam (REQ-MC-012/042). */
+async function onMcpEdit(name: string): Promise<void> {
+	if (mcpManager === null) return;
+	const existing = mcpServers.value.find((server) => server.name === name);
+	if (existing === undefined) return;
+	const draft = await openMcpServerModal({
+		name: existing.name,
+		config: existing.config,
+		description: existing.description,
+		contextSaving: existing.contextSaving,
+	} satisfies McpServerDraft);
+	if (draft === null) return;
+	await mcpManager.edit(name, draft);
+	refreshMcpServers();
+}
+
+/** Remove a server then re-derive the view-model (REQ-MC-013). */
+async function onMcpRemove(name: string): Promise<void> {
+	if (mcpManager === null) return;
+	await mcpManager.remove(name);
+	refreshMcpServers();
+}
+
+/** Open the test modal via the seam (the host owns the probe + per-tool toggle, REQ-MC-044). */
+async function onMcpTest(name: string): Promise<void> {
+	const server = mcpServers.value.find((entry) => entry.name === name);
+	if (server === undefined) return;
+	await openMcpTestModal(server);
+	// The test modal may have toggled a server's `disabledTools` through its own
+	// lifecycle; re-load so the surface's snapshot reflects the saved truth.
+	await loadMcpServers();
 }
 
 const { composer, respond } = buildComposer();
@@ -628,6 +750,16 @@ function onRewindCode(userMessageId: string): void {
 			:rules="approvalRules"
 			@remove="onRemoveApprovalRule"
 		/>
+		<McpSettingsManager
+			v-if="hasMcp && mcpVm !== undefined"
+			:vm="mcpVm"
+			@add="onMcpAdd"
+			@paste="onMcpAdd"
+			@edit="onMcpEdit"
+			@remove="onMcpRemove"
+			@test="onMcpTest"
+			@set-enabled="onMcpSetEnabled"
+		/>
 		<ChatComposer
 			ref="composerRef"
 			:is-streaming="isStreaming"
@@ -643,8 +775,10 @@ function onRewindCode(userMessageId: string): void {
 			:resolve-thumb-src="resolveThumbSrc"
 			:toolbar="toolbarVm"
 			:permission-mode="activePermissionMode"
+			:mcp-vm="mcpVm"
 			@submit="onSubmit"
 			@cancel="onCancel"
+			@set-mcp-enabled="onMcpSetEnabled"
 			@remove-file="onRemoveFile"
 			@open-file="onOpenFile"
 			@remove-image="onRemoveImage"

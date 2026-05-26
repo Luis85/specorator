@@ -23,6 +23,8 @@ import {
 	SELECTION_HIGHLIGHT_PORT,
 	TOOLBAR_CATALOG_PORT,
 	APPROVAL_RULE_STORE_PORT,
+	MCP_CONFIG_STORE_PORT,
+	MCP_CLIENT_PORT,
 } from '@/infrastructure/bridge/ports';
 import {
 	CHAT_RUNTIME_FACTORY,
@@ -32,6 +34,8 @@ import {
 	OPEN_INLINE_EDIT,
 	OPEN_IMAGE_PREVIEW,
 	PICK_ATTACHMENT,
+	OPEN_MCP_SERVER_MODAL,
+	OPEN_MCP_TEST_MODAL,
 } from '@/ui/chat/modalSeam';
 import type { AttachedImage } from '@/domain/chat/attachments';
 import type { AuxModelPort } from '@/domain/ports';
@@ -41,6 +45,7 @@ import { DeleteConfirmModal } from './modals/DeleteConfirmModal';
 import { InstructionConfirmModal } from './modals/InstructionConfirmModal';
 import { openInlineEdit, openImagePreview } from './inlineEditLauncher';
 import { pickAttachment } from './attachmentPicker';
+import { buildMcpModalLaunchers } from './mcpModalLaunchers';
 import type SpecoratorPlugin from './main';
 
 /** The single view type the plugin registers (SPEC-PSR-005). */
@@ -167,6 +172,25 @@ export class AgentSidebarView extends ItemView {
 			// the unchanged P4 prompt); the per-tab Claude runtime maps the live mode to the SDK +
 			// emits the plan-exit `setMode` (T-AS-012). Never `data.json`/a vault file.
 			app.provide(APPROVAL_RULE_STORE_PORT, bridge.approvalRuleStore);
+			// P8 (SPEC-MC-020): the MCP config store (the vault `.claude/mcp.json` round-trip,
+			// the ONLY vault-file seam — ADR-MC-001) + the real SDK transport client. The
+			// surface builds one per-surface `McpServerManager` over the store + gates an MCP
+			// tool call (`mcp__<server>__<tool>`) through the UNCHANGED P7 `ApprovalManager`
+			// (no MCP special-case, no `providerId` branch). The two modal-seam launchers open
+			// the Obsidian `Modal` hosts (`McpServerModalHost`/`McpTestModalHost`) — the ONLY
+			// place `obsidian`/the MCP modals are imported into the wiring; the Vue surface
+			// launches them through the seam.
+			app.provide(MCP_CONFIG_STORE_PORT, bridge.mcpConfigStore);
+			app.provide(MCP_CLIENT_PORT, bridge.mcpClient);
+			const mcpLaunchers = buildMcpModalLaunchers(
+				this.app,
+				bridge.mcpConfigStore,
+				bridge.mcpClient,
+				bridge,
+				bridge,
+			);
+			app.provide(OPEN_MCP_SERVER_MODAL, mcpLaunchers.openMcpServerModal);
+			app.provide(OPEN_MCP_TEST_MODAL, mcpLaunchers.openMcpTestModal);
 			app.mount(host);
 			this.vueApp = app;
 		}

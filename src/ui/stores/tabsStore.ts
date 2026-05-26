@@ -12,6 +12,7 @@ import { CONVERSATION_RECORD_VERSION } from '@/domain/chat/ConversationRecord';
 import type { ProviderSessionState } from '@/domain/chat/ConversationRecord';
 import type { ChatTurnSink, RunChatTurnInput } from '@/application/chat/RunChatTurnUseCase';
 import type { ChatTurnRequest } from '@/domain/chat/ChatTurn';
+import type { EnabledMcpServers } from '@/domain/chat/mcp/McpTypes';
 import type { TabControls } from '@/domain/chat/toolbar/TabControls';
 import { foldControlOptions } from '@/application/chat/toolbar/foldControlOptions';
 import type {
@@ -136,6 +137,15 @@ export interface TabDepsBinding {
 	 * `SettingsPort` read stays in the surface/application layer, not the store.
 	 */
 	getAppendSystemPrompt?(): Promise<string | undefined>;
+	/**
+	 * P8 (SPEC-MC-020, REQ-MC-052/082): the guarded enabled-MCP-servers fold. The
+	 * surface threads its per-surface `McpServerManager.getEnabledMcpServers(∅)` so a
+	 * sent turn carries the active servers + the disallowed-tool list as
+	 * `queryOptions.enabledMcpServers`. Optional — when absent (no MCP store port) the
+	 * turn omits the field (byte-identical to P7). Returns `undefined` when the active
+	 * set is empty, so a no-enabled-server turn also omits it (the pure guarded fold).
+	 */
+	getEnabledMcpServers?(): EnabledMcpServers | undefined;
 }
 
 /** Per-tab runner + runtime + notifier + logger held OUTSIDE reactive state (ADR-003). */
@@ -158,6 +168,11 @@ const FALLBACK_TITLE_MAX = 40;
 
 function newId(): string {
 	return crypto.randomUUID();
+}
+
+/** A type-narrowing guard for an optional non-empty string (the append-prompt fold gate). */
+function isNonEmptyText(value: string | undefined): value is string {
+	return value !== undefined && value.length > 0;
 }
 
 function userMessage(content: string): ChatMessage {
@@ -596,15 +611,24 @@ export const useTabsStore = defineStore('tabs', {
 		 * EC-TC-1/6). The seam widgets fold nothing.
 		 */
 		async _turnQueryOptions(): Promise<RunChatTurnInput['queryOptions']> {
-			const appendSystemPrompt = await this._sidecar().binding?.getAppendSystemPrompt?.();
-			const controlOptions = foldControlOptions(this.activeTab?.controls ?? {});
-			const hasPrompt = appendSystemPrompt !== undefined && appendSystemPrompt.length > 0;
-			const hasControls = Object.keys(controlOptions).length > 0;
-			if (!hasPrompt && !hasControls) return undefined;
-			return {
-				...controlOptions,
-				...(hasPrompt ? { appendSystemPrompt } : {}),
+			const binding = this._sidecar().binding;
+			const appendSystemPrompt = await binding?.getAppendSystemPrompt?.();
+			// P8 (SPEC-MC-013/020): the pure guarded fold returns `undefined` when no enabled
+			// server is active, so a no-server turn omits the field (byte-identical to P7).
+			const enabledMcpServers = binding?.getEnabledMcpServers?.();
+			// Build the options once from the three additive + guarded folds: each writes a
+			// field only when an explicit value is present, so an untouched turn yields an
+			// empty object → `undefined` (byte-identical to P5/P7, NFR-TC-001, EC-TC-1/6).
+			const options: NonNullable<RunChatTurnInput['queryOptions']> = {
+				...foldControlOptions(this.activeTab?.controls ?? {}),
 			};
+			if (isNonEmptyText(appendSystemPrompt)) {
+				options.appendSystemPrompt = appendSystemPrompt;
+			}
+			if (enabledMcpServers !== undefined) {
+				options.enabledMcpServers = enabledMcpServers;
+			}
+			return Object.keys(options).length > 0 ? options : undefined;
 		},
 
 		/**

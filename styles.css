@@ -371,6 +371,26 @@
 	/* the active permission-mode pill fill (permission-toggle.css active) */
 	--sp-permission-mode-active: var(--sp-toggle-active);
 }
+
+/* section 4.15 - MCP client (P8, SPEC-MC-021, NFR-MC-009). The mcp-settings plus
+ * mcp-modal plus mcp-selector slice. Each token is a token-layer var lookup - no
+ * hex, no raw Obsidian var outside this layer, no physical CSS property
+ * (lint-style-tokens guard, TEST-MC-045). Reuses the existing set (--sp-border,
+ * --sp-radius, --sp-bg, --sp-surface-overlay, --sp-text, --sp-accent, --sp-space,
+ * --sp-font, and the P6 --sp-toggle-active plus --sp-toolbar-widget-h plus
+ * --sp-z-dropdown plus --sp-shadow-dropup for the selector) - only the four
+ * genuinely new MCP tokens are minted here. The block marker is ASCII so the
+ * standalone lightningcss minifier accepts the comment. */
+.specorator-root {
+	/* settings / row / test-modal list row spacing (mcp-settings.css list rhythm) */
+	--sp-mcp-row-gap: var(--sp-space-2);
+	/* reachable-server / success state colour (mcp-test.css ok state) */
+	--sp-mcp-status-ok: var(--sp-success);
+	/* unreachable-server / error state colour (mcp-test.css error state) */
+	--sp-mcp-status-error: var(--sp-status-error);
+	/* the enabled-server count badge fill (mcp-selector.css badge) */
+	--sp-mcp-selector-badge: var(--sp-accent);
+}
 /*
  * Specorator named-keyframes layer (ADR-AUX-002, spec.md §1.3.6 / §3.4 / §4.6).
  *
@@ -1543,11 +1563,11 @@
 }
 }
 
-.specorator-root :where(.sp-toolbar-mcp[data-v-47270be9]) {
+.specorator-root :where(.sp-toolbar-mcp[data-v-933cd528]) {
 	position: relative;
 	display: inline-flex;
 }
-.specorator-root :where(.sp-toolbar-mcp__shell[data-v-47270be9]) {
+.specorator-root :where(.sp-toolbar-mcp__shell[data-v-933cd528]) {
 	display: inline-flex;
 	align-items: center;
 	gap: var(--sp-space-1);
@@ -1557,13 +1577,17 @@
 	background: var(--sp-bg-secondary);
 	color: var(--sp-text-muted);
 	padding-inline: var(--sp-space-2);
-	opacity: var(--sp-toolbar-disabled-opacity);
 	cursor: pointer;
 }
-.specorator-root :where(.sp-toolbar-mcp__badge[data-v-47270be9]) {
-	font-size: var(--sp-font-size-sm);
+.specorator-root :where(.sp-toolbar-mcp__shell--empty[data-v-933cd528]) {
+	opacity: var(--sp-toolbar-disabled-opacity);
 }
-.specorator-root :where(.sp-toolbar-mcp__empty[data-v-47270be9]) {
+.specorator-root :where(.sp-toolbar-mcp__badge[data-v-933cd528]) {
+	font-size: var(--sp-font-size-sm);
+	color: var(--sp-mcp-selector-badge);
+}
+.specorator-root :where(.sp-toolbar-mcp__empty[data-v-933cd528]),
+.specorator-root :where(.sp-toolbar-mcp__list[data-v-933cd528]) {
 	position: absolute;
 	inset-block-end: calc(var(--sp-toolbar-widget-h) + var(--sp-space-1));
 	inset-inline-start: 0;
@@ -1576,6 +1600,25 @@
 	padding: var(--sp-space-2);
 	color: var(--sp-text-muted);
 	font-size: var(--sp-font-size-sm);
+}
+.specorator-root :where(.sp-toolbar-mcp__list[data-v-933cd528]) {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-mcp-row-gap);
+	margin: 0;
+	list-style: none;
+}
+.specorator-root :where(.sp-toolbar-mcp__server-label[data-v-933cd528]) {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-space-1);
+}
+.specorator-root :where(.sp-toolbar-mcp__server-name[data-v-933cd528]) {
+	font-weight: var(--sp-font-weight-semibold);
+}
+.specorator-root :where(.sp-toolbar-mcp__server-type[data-v-933cd528]) {
+	font-family: var(--sp-font-mono);
+	margin-inline-start: auto;
 }
 
 .specorator-root :where(.sp-toolbar-external[data-v-a551f20a]) {
@@ -1625,24 +1668,24 @@
 }
 }
 
-.specorator-root :where(.sp-toolbar-strip[data-v-23f3f74a]) {
+.specorator-root :where(.sp-toolbar-strip[data-v-8574c609]) {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--sp-toolbar-gap);
 }
-.specorator-root :where(.sp-toolbar-strip__group[data-v-23f3f74a]) {
+.specorator-root :where(.sp-toolbar-strip__group[data-v-8574c609]) {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--sp-toolbar-gap);
 }
-.specorator-root :where(.sp-toolbar-strip__meter[data-v-23f3f74a]) {
+.specorator-root :where(.sp-toolbar-strip__meter[data-v-8574c609]) {
 	margin-inline-start: auto;
 }
 
-.specorator-root :where(.sp-chat-composer[data-v-8b5c2974]) {
+.specorator-root :where(.sp-chat-composer[data-v-c68f7caf]) {
 	display: flex;
 	flex-direction: column;
 	min-block-size: var(--sp-input-min-h);
@@ -1651,22 +1694,22 @@
 	background: var(--sp-bg-primary);
 	padding: var(--sp-space-3);
 }
-.specorator-root :where(.sp-chat-composer__context[data-v-8b5c2974]) {
+.specorator-root :where(.sp-chat-composer__context[data-v-c68f7caf]) {
 	display: flex;
 	flex-direction: column;
 	gap: var(--sp-context-bar-gap);
 	padding-block-end: var(--sp-space-2);
 }
-.specorator-root :where(.sp-chat-composer--plan[data-v-8b5c2974]) {
+.specorator-root :where(.sp-chat-composer--plan[data-v-c68f7caf]) {
 	border-color: var(--sp-plan-border);
 }
-.specorator-root :where(.sp-chat-composer--instruction[data-v-8b5c2974]) {
+.specorator-root :where(.sp-chat-composer--instruction[data-v-c68f7caf]) {
 	border-color: var(--sp-instruction-border);
 }
-.specorator-root :where(.sp-chat-composer--bang-bash[data-v-8b5c2974]) {
+.specorator-root :where(.sp-chat-composer--bang-bash[data-v-c68f7caf]) {
 	border-color: var(--sp-bash-border);
 }
-.specorator-root :where(.sp-chat-composer__textarea[data-v-8b5c2974]) {
+.specorator-root :where(.sp-chat-composer__textarea[data-v-c68f7caf]) {
 	flex: 1;
 	border: none;
 	background: transparent;
@@ -1679,19 +1722,19 @@
 	max-block-size: var(--sp-textarea-max-h);
 	outline: none;
 }
-.specorator-root :where(.sp-chat-composer--mono .sp-chat-composer__textarea[data-v-8b5c2974]) {
+.specorator-root :where(.sp-chat-composer--mono .sp-chat-composer__textarea[data-v-c68f7caf]) {
 	font-family: var(--sp-font-mono);
 }
-.specorator-root :where(.sp-chat-composer__controls[data-v-8b5c2974]) {
+.specorator-root :where(.sp-chat-composer__controls[data-v-c68f7caf]) {
 	padding-block-start: var(--sp-space-2);
 }
-.specorator-root :where(.sp-chat-composer__toolbar[data-v-8b5c2974]) {
+.specorator-root :where(.sp-chat-composer__toolbar[data-v-c68f7caf]) {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	padding-block-start: var(--sp-space-2);
 }
-.specorator-root :where(.sp-chat-composer__attach[data-v-8b5c2974]) {
+.specorator-root :where(.sp-chat-composer__attach[data-v-c68f7caf]) {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -1703,7 +1746,7 @@
 	color: var(--sp-text-muted);
 	cursor: pointer;
 }
-.specorator-root :where(.sp-chat-composer__send[data-v-8b5c2974]) {
+.specorator-root :where(.sp-chat-composer__send[data-v-c68f7caf]) {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -1715,7 +1758,7 @@
 	color: var(--sp-text-on-accent);
 	cursor: pointer;
 }
-.specorator-root :where(.sp-chat-composer__send[data-v-8b5c2974]:disabled) {
+.specorator-root :where(.sp-chat-composer__send[data-v-c68f7caf]:disabled) {
 	opacity: 0.4;
 	cursor: default;
 }
@@ -1951,31 +1994,105 @@
 	list-style: none;
 }
 
-.specorator-root :where(.sp-chat-surface[data-v-86c54f7c]) {
+.specorator-root :where(.sp-mcp-row[data-v-ed407fcf]) {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-mcp-row-gap);
+	font-size: var(--sp-font-size-sm);
+}
+.specorator-root :where(.sp-mcp-row__toggle[data-v-ed407fcf]) {
+	display: inline-flex;
+	align-items: center;
+}
+.specorator-root :where(.sp-mcp-row__name[data-v-ed407fcf]) {
+	font-weight: var(--sp-font-weight-semibold);
+}
+.specorator-root :where(.sp-mcp-row__type[data-v-ed407fcf]) {
+	border: 1px solid var(--sp-border);
+	border-radius: var(--sp-radius-sm);
+	padding-inline: var(--sp-space-1);
+	color: var(--sp-text-muted);
+	font-family: var(--sp-font-mono);
+}
+.specorator-root :where(.sp-mcp-row__actions[data-v-ed407fcf]) {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--sp-space-1);
+	margin-inline-start: auto;
+}
+.specorator-root :where(.sp-mcp-row__action[data-v-ed407fcf]) {
+	border: 1px solid var(--sp-border);
+	border-radius: var(--sp-radius-sm);
+	background: transparent;
+	color: var(--sp-text-muted);
+	cursor: pointer;
+}
+
+.specorator-root :where(.sp-mcp-settings[data-v-89d8ac0f]) {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-space-2);
+	padding: var(--sp-space-3);
+	border: 1px solid var(--sp-border);
+	border-radius: var(--sp-radius-md);
+	background: var(--sp-bg-secondary);
+}
+.specorator-root :where(.sp-mcp-settings__title[data-v-89d8ac0f]) {
+	margin: 0;
+	font-size: var(--sp-font-size-sm);
+	font-weight: var(--sp-font-weight-semibold);
+}
+.specorator-root :where(.sp-mcp-settings__empty[data-v-89d8ac0f]) {
+	margin: 0;
+	font-size: var(--sp-font-size-sm);
+	color: var(--sp-text-muted);
+}
+.specorator-root :where(.sp-mcp-settings__rows[data-v-89d8ac0f]) {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-mcp-row-gap);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.specorator-root :where(.sp-mcp-settings__actions[data-v-89d8ac0f]) {
+	display: flex;
+	gap: var(--sp-space-2);
+}
+.specorator-root :where(.sp-mcp-settings__action[data-v-89d8ac0f]) {
+	border: 1px solid var(--sp-border);
+	border-radius: var(--sp-radius-sm);
+	background: transparent;
+	color: var(--sp-text-normal);
+	padding-inline: var(--sp-space-2);
+	cursor: pointer;
+}
+
+.specorator-root :where(.sp-chat-surface[data-v-a1d72e56]) {
 	display: flex;
 	flex-direction: column;
 	block-size: 100%;
 	gap: var(--sp-space-3);
 	padding: var(--sp-space-5);
 }
-.specorator-root :where(.sp-chat-surface__region[data-v-86c54f7c]) {
+.specorator-root :where(.sp-chat-surface__region[data-v-a1d72e56]) {
 	display: flex;
 	flex-direction: column;
 	flex: 1;
 	min-block-size: 0;
 }
-.specorator-root :where(.sp-chat-surface__busy[data-v-86c54f7c]) {
+.specorator-root :where(.sp-chat-surface__busy[data-v-a1d72e56]) {
 	padding-block-start: var(--sp-space-3);
 	color: var(--sp-accent);
 	font-size: var(--sp-font-size-sm);
 	font-style: italic;
 }
-.specorator-root :where(.sp-chat-surface__actions[data-v-86c54f7c]) {
+.specorator-root :where(.sp-chat-surface__actions[data-v-a1d72e56]) {
 	display: flex;
 	align-items: center;
 	gap: var(--sp-space-2);
 }
-.specorator-root :where(.sp-chat-surface__compact[data-v-86c54f7c]) {
+.specorator-root :where(.sp-chat-surface__compact[data-v-a1d72e56]) {
 	border: 1px solid var(--sp-border);
 	border-radius: var(--sp-radius-md);
 	background: transparent;
@@ -1983,5 +2100,100 @@
 	padding: var(--sp-space-1) var(--sp-space-3);
 	font-size: var(--sp-font-size-sm);
 	cursor: pointer;
+}
+
+.specorator-root :where(.sp-mcp-modal[data-v-d0a7036d]) {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-space-2);
+	padding: var(--sp-space-3);
+}
+.specorator-root :where(.sp-mcp-modal__title[data-v-d0a7036d]) {
+	margin: 0;
+	font-size: var(--sp-font-size-md);
+	font-weight: var(--sp-font-weight-semibold);
+}
+.specorator-root :where(.sp-mcp-modal__field[data-v-d0a7036d]) {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-space-1);
+}
+.specorator-root :where(.sp-mcp-modal__label[data-v-d0a7036d]) {
+	font-size: var(--sp-font-size-sm);
+	color: var(--sp-text-muted);
+}
+.specorator-root :where(.sp-mcp-modal__checkbox[data-v-d0a7036d]) {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-space-1);
+	font-size: var(--sp-font-size-sm);
+}
+.specorator-root :where(.sp-mcp-modal__error[data-v-d0a7036d]) {
+	margin: 0;
+	font-size: var(--sp-font-size-sm);
+	color: var(--sp-mcp-status-error);
+}
+.specorator-root :where(.sp-mcp-modal__actions[data-v-d0a7036d]) {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--sp-space-2);
+}
+
+.specorator-root :where(.sp-mcp-test[data-v-9484ccd8]) {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-space-2);
+	padding: var(--sp-space-3);
+}
+.specorator-root :where(.sp-mcp-test__live[data-v-9484ccd8]) {
+	position: absolute;
+	inline-size: 1px;
+	block-size: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+.specorator-root :where(.sp-mcp-test__running[data-v-9484ccd8]) {
+	margin: 0;
+	color: var(--sp-text-muted);
+	font-size: var(--sp-font-size-sm);
+}
+.specorator-root :where(.sp-mcp-test__header[data-v-9484ccd8]) {
+	margin: 0;
+	font-weight: var(--sp-font-weight-semibold);
+	color: var(--sp-mcp-status-ok);
+}
+.specorator-root :where(.sp-mcp-test__partial[data-v-9484ccd8]) {
+	margin: 0;
+	color: var(--sp-text-muted);
+	font-size: var(--sp-font-size-sm);
+}
+.specorator-root :where(.sp-mcp-test__tools[data-v-9484ccd8]) {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-mcp-row-gap);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.specorator-root :where(.sp-mcp-test__tool[data-v-9484ccd8]) {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-space-1);
+	font-size: var(--sp-font-size-sm);
+}
+.specorator-root :where(.sp-mcp-test__error[data-v-9484ccd8]) {
+	margin: 0;
+	color: var(--sp-mcp-status-error);
+	font-size: var(--sp-font-size-sm);
+}
+.specorator-root :where(.sp-mcp-test__unavailable[data-v-9484ccd8]) {
+	margin: 0;
+	color: var(--sp-text-muted);
+	font-size: var(--sp-font-size-sm);
+}
+.specorator-root :where(.sp-mcp-test__actions[data-v-9484ccd8]) {
+	display: flex;
+	justify-content: flex-end;
 }
 /*$vite$:1*/
