@@ -391,3 +391,25 @@ body.theme-light .specorator-root {
 	/* the enabled-server count badge fill (mcp-selector.css badge) */
 	--sp-mcp-selector-badge: var(--sp-accent);
 }
+
+/* section 4.16 - Providers registry (P9, SPEC-PV-021, NFR-PV-010). The
+ * provider-chooser plus provider-secret plus opencode-model-picker slice. Each
+ * token is a token-layer var lookup (or a bare dimension) - no hex, no raw
+ * Obsidian var outside this layer, no physical CSS property (lint-style-tokens
+ * guard, TEST-PV-091). The provider-brand tokens alias the section 4.2
+ * --sp-brand-* literals (the brand swatch on a chooser row) so the brand palette
+ * stays defined in one place; the model-picker group gap reuses --sp-space-5
+ * (12px, parity with opencode-model-picker.css gap). The chooser/option/
+ * secret-field otherwise reuse the existing set (--sp-border, --sp-radius,
+ * --sp-bg, --sp-surface-overlay, --sp-text, --sp-accent, --sp-space, --sp-font,
+ * and the P6 --sp-toolbar-widget-h) - only these four are minted for P9. The
+ * block marker is ASCII (section 4.16) so the standalone lightningcss minifier
+ * accepts the comment. */
+.specorator-root {
+	/* per-provider brand swatch on a chooser row (aliases the section 4.2 brand literals) */
+	--sp-provider-brand-claude: var(--sp-brand-claude);
+	--sp-provider-brand-codex: var(--sp-brand-codex);
+	--sp-provider-brand-opencode: var(--sp-brand-opencode);
+	/* opencode-model-picker group separator gap (parity 12px) */
+	--sp-model-picker-group-gap: var(--sp-space-5);
+}

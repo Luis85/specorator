@@ -244,6 +244,11 @@ function onListKeydown(event: KeyboardEvent): void {
 	font-weight: var(--sp-font-weight-semibold);
 }
 
+/* opencode-model-picker variant: a wider group separator gap (SPEC-PV-021). */
+.sp-toolbar-model--opencode-model-picker .sp-toolbar-model__group {
+	margin-block-start: var(--sp-model-picker-group-gap);
+}
+
 .sp-toolbar-model__option {
 	padding: var(--sp-space-1) var(--sp-space-2);
 	border-radius: var(--sp-radius-sm);

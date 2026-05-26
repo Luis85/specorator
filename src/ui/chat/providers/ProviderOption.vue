@@ -47,6 +47,7 @@ function onKeydown(event: KeyboardEvent): void {
 		:class="{ 'sp-provider-option--active': option.isActive }"
 		data-testid="provider-option"
 		role="option"
+		:data-provider="option.id"
 		:aria-current="option.isActive ? 'true' : undefined"
 		:aria-selected="option.isActive ? 'true' : 'false'"
 		:aria-label="accessibleName"
@@ -98,6 +99,18 @@ function onKeydown(event: KeyboardEvent): void {
 	align-items: center;
 	justify-content: center;
 	color: var(--sp-text-muted);
+}
+
+/* Per-provider brand swatch on the row icon (SPEC-PV-021). The brand colour
+   resolves from the section 4.16 provider-brand aliases by the row's data-provider. */
+.sp-provider-option[data-provider='claude'] .sp-provider-option__icon {
+	color: var(--sp-provider-brand-claude);
+}
+.sp-provider-option[data-provider='codex'] .sp-provider-option__icon {
+	color: var(--sp-provider-brand-codex);
+}
+.sp-provider-option[data-provider='opencode'] .sp-provider-option__icon {
+	color: var(--sp-provider-brand-opencode);
 }
 
 .sp-provider-option__name {

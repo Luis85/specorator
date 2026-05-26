@@ -756,3 +756,29 @@ WIRE-IN/GATE batches ride their own subagents.
   + the picker variant), which degrades byte-identical to P6/P8 when the prop is
   absent (NFR-PV-001).
 - **Commit (green):** `42490bca`.
+
+## T-PV-033 — `provider-chooser` / `provider-secret` / `opencode-model-picker` + provider-brand `--sp-*` token slice (🔨)
+
+- **Spec/req:** SPEC-PV-021, NFR-PV-010, REQ-PV-091, TEST-PV-091.
+- **Files:** `src/ui/styles/tokens.css` (new `section 4.16` slice — four minted
+  tokens: `--sp-provider-brand-claude`/`-codex`/`-opencode` aliasing the section 4.2
+  `--sp-brand-*` literals, `--sp-model-picker-group-gap` reusing `--sp-space-5` (12px,
+  parity with `opencode-model-picker.css` gap); ASCII-only comment for the
+  lightningcss pass), `tests/ui/styles/tokens.test.ts` (the `PROVIDERS_REGISTRY_TOKENS`
+  presence list + a `§4.16` no-hex/no-Obsidian-var leak guard naming TEST-PV-091; the
+  `§4.15` leak guard re-bounded by the `section 4.16` marker), `src/ui/chat/toolbar/
+  ModelSelector.vue` (the `opencode-model-picker` variant consumes
+  `--sp-model-picker-group-gap` for the group separator), `src/ui/chat/providers/
+  ProviderOption.vue` (a `data-provider` attribute + a per-provider brand swatch on the
+  row icon consuming `--sp-provider-brand-*`).
+- **Outcome:** done. The slice is applied to the chooser-option + the
+  `opencode-model-picker` shape; each minted token is a token-layer var lookup (no hex
+  / no raw Obsidian var / no physical property); all new comments are ASCII-only
+  (lightningcss-safe by construction).
+- **Verify:** `vitest run tests/ui/styles/tokens.test.ts` 21/21 green; `vue-tsc -p
+  tsconfig.lint.json --noEmit` exit 0; whole-project `npm run lint` 0 errors (16
+  pre-existing warnings only). `build:web` deferred to the parent gate per the batch
+  directive (the ASCII-only comment satisfies the lightningcss constraint by
+  construction).
+- **Deviation:** none.
+- **Commit (green):** <pending>.
