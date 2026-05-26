@@ -1,10 +1,10 @@
 ---
 feature: providers-registry
 area: PV
-current_stage: design
+current_stage: specification
 status: complete
 last_updated: 2026-05-26
-last_agent: architect (/spec:design)
+last_agent: architect (/spec:specify)
 epic: claudian-reboot
 phase: P9
 integration_branch: next
@@ -14,7 +14,7 @@ artifacts:
   research.md: skipped
   requirements.md: accepted (PRD-PV-001 — 64 EARS REQ-PV + 14 NFR-PV + 7 CLAR-PV)
   design.md: complete (DESIGN-PV-001 — Parts A/B/C; ADR-PV-001/002/003 accepted)
-  spec.md: pending
+  spec.md: complete (SPEC-PV-001 — 34 spec items, 6 layer groups; 20 EC-PV; TEST-PV-001..114 + M1..M4; full REQ↔SPEC↔TEST table)
   tasks.md: pending
   implementation-log.md: pending
   test-plan.md: pending
@@ -35,7 +35,7 @@ artifacts:
 | 2. Research | `research.md` | skipped |
 | 3. Requirements | `requirements.md` | accepted |
 | 4. Design | `design.md` | complete |
-| 5. Specification | `spec.md` | pending |
+| 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
@@ -162,4 +162,33 @@ workspace registry, `~/.codex`/`~/.claude` transcript reads, the secret storage,
                           build the BACKED caps only + honest-false the GATED-OFF (NG1); listKeys/service-
                           tier are off the P9 critical path — pin verb/feature scope in spec.md so dev does
                           not over-build.
+2026-05-26 (architect): Stage 5 COMPLETE. specs/providers-registry/spec.md (SPEC-PV-001) written — 34 spec
+                          items across 6 layer groups (DOMAIN SPEC-PV-001..007: ProviderId widen +
+                          ProviderDescriptor/ProviderCapabilities frozen bag + pure resolveProvider helpers +
+                          ProviderRegistryPort/SecretStorePort/HomeFsPort + the widened CHAT_RUNTIME_FACTORY/
+                          OPEN_PROVIDER_CONSENT seam; INFRA 008..012: the descriptor-table registry + the
+                          coverage-excluded Codex JSON-RPC + ACP transports + 3 bridges (Mock scriptable / LS
+                          inert); APPLICATION 013..015: SelectProviderUseCase + ProviderConsentGate +
+                          buildProviderViewModel; UI 016..020: ProviderChooser/ProviderOption/ProviderSecretField
+                          + provider-aware P6 widgets + composables + wiring; STYLES 021; CROSS-CUTTING 022..034:
+                          frozen matrix, the selection/consent/transport state models, additivity, security,
+                          no-switch(providerId), i18n, the widened-factory contract, the minAppVersion check,
+                          coverage-exclusion, history parity). 20 EC-PV; TEST-PV-001..114 + the 4 manual legs
+                          (M1 Codex JSON-RPC, M2 Opencode ACP, M3 app.secretStorage+minAppVersion, M4 parity
+                          screenshots) U/A/M split; FULL REQ-PV↔SPEC-PV↔TEST-PV coverage table — all 56 REQ-PV +
+                          14 NFR-PV chained, no TBD. Five design open items RESOLVED in §0: (1) widened factory
+                          (providerId)→Result + every P0-P8 site + tabs store passes the resolved active provider
+                          (default 'claude'), Claude → ok same runtime as P8 (byte-identical); (2) build BACKED
+                          caps only + honest-false the GATED-OFF (NG1); (3) listKeys + service-tier toggle off
+                          the P9 critical path; (4) secret key namespace provider.<id>.apiKey, home roots
+                          ~/.codex+~/.claude with path-escape→err, consent key provider.homeFsConsent.<id>;
+                          (5) turn streams through the runtime (no separate turn-time transport call). No new
+                          ADR needed (ADR-PV-001..003 cover it). HAND-OFF → /spec:tasks (planner): decompose the
+                          34 SPEC-PV into T-PV-NNN; sequence pure-domain-first (widen ProviderId → frozen
+                          descriptor table + resolve helpers + view-model → the 3 ports + 3 bridges incl. the
+                          in-memory secret/inert home-fs + the scriptable transport → SelectProviderUseCase +
+                          ProviderConsentGate + the provider-aware widgets + the chooser/secret UI); the real
+                          Codex JSON-RPC + ACP transports + real SecretStorePort/HomeFsPort (coverage-excluded)
+                          are the final manual-leg tasks (TEST-PV-M1/M2/M3). The minAppVersion app.secretStorage
+                          check is a dev task (escalate-don't-bump). No open clarifications block the planner.
 ```
