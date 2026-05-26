@@ -4,7 +4,7 @@ area: MC
 current_stage: specification
 status: active
 last_updated: 2026-05-26
-last_agent: architect (design — DESIGN-MC-001 complete; ADR-MC-001..003 accepted)
+last_agent: architect (specification — SPEC-MC-001 complete; 30 spec items, full REQ↔SPEC↔TEST coverage)
 epic: claudian-reboot
 phase: P8
 integration_branch: next
@@ -14,7 +14,7 @@ artifacts:
   research.md: skipped
   requirements.md: accepted (PRD-MC-001; CLAR-MC-001..005 resolved-by-recommendation → P8 architect ADRs, notably McpConfigStorePort vault-file + McpClientPort transport contract)
   design.md: complete (DESIGN-MC-001; Parts A/B/C; ADR-MC-001 McpConfigStorePort vault file + ADR-MC-002 McpClientPort transport seam + ADR-MC-003 enabledMcpServers? + P7 approval composition — all accepted)
-  spec.md: pending
+  spec.md: complete (SPEC-MC-001; 30 spec items SPEC-MC-001..030 across domain/infra/app/ui/styles/cross-cutting; EC-MC-1..20; TEST-MC-001..082 + 020a + M1/M2; REQ-MC ↔ SPEC-MC ↔ TEST-MC coverage table — all 45 REQ-MC + 12 NFR-MC chained; the five design open items resolved in §0)
   tasks.md: pending
   implementation-log.md: pending
   test-plan.md: pending
@@ -35,7 +35,7 @@ artifacts:
 | 2. Research | `research.md` | skipped |
 | 3. Requirements | `requirements.md` | accepted (PRD-MC-001) |
 | 4. Design | `design.md` | complete (DESIGN-MC-001; ADR-MC-001..003 accepted) |
-| 5. Specification | `spec.md` | pending |
+| 5. Specification | `spec.md` | complete (SPEC-MC-001; 30 items, full coverage) |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
@@ -226,4 +226,61 @@ merge. Manual-Obsidian + parity-screenshot legs accumulate for the SINGLE FINAL 
                    (concurrency/ordering, the _claudian codec round-trip fidelity preserving CLI-written
                    keys, the callTool turn-time-vs-tester split, mentionedNames=∅). CLAR-MC-001..005 do not
                    block the spec author.
+
+2026-05-26 (architect): Stage 5 COMPLETE. Wrote SPEC-MC-001 (specs/mcp-client/spec.md) — 30
+                 implementation-ready spec items SPEC-MC-001..030 across six layer groups:
+                 - DOMAIN (001-008): McpTypes (McpServerConfig stdio|sse|http union / ManagedMcpServer /
+                   McpTool / McpTestResult / ParsedMcpConfig / EnabledMcpServers / DEFAULT_MCP_SERVER), the
+                   additive ChatRuntimeQueryOptions.enabledMcpServers? (after permissionMode; P0-P7 byte-
+                   identical, byte-identical-proof = TEST-MC-082), the PURE McpConfigCodec (deserialize/
+                   serialize .claude/mcp.json, load-or-default, non-default _claudian pruning + CLI-key
+                   preservation), the PURE McpConfigParser (parseClipboardConfig→Result<ParsedMcpConfig> 4
+                   formats + needsName, getMcpServerType, isValidMcpServerConfig), the PURE parseCommand
+                   (no-shell split), the PURE getActiveServers + collectDisallowedMcpTools, the
+                   McpConfigStorePort (load/save/exists Result-typed) + McpClientPort (isAvailable/test/
+                   connect/listTools/callTool/disconnect; test→structured McpTestResult never throws) + the
+                   MCP_CONFIG_STORE_PORT/MCP_CLIENT_PORT keys.
+                 - INFRA (009-011): 3-bridge — Obsidian (VaultPort .claude/mcp.json + real SDK stdio/SSE/HTTP,
+                   coverage-excluded → manual leg) / Mock (scriptable in-memory store + scriptable client with
+                   success/partial/timeout/error/unavailable + fault switches) / LS (browser-localStorage store
+                   + inert client isAvailable→false). fake-ports grows mcpConfigStore + mcpClient.
+                 - APP (012-014): McpServerManager use case (load/add/edit/remove/setEnabled/setToolDisabled →
+                   Result over McpConfigStorePort, getEnabledCount, getActiveServers(∅), getEnabledMcpServers),
+                   the PURE foldEnabledMcpServers (writes the field ONLY when the active set is non-empty), the
+                   PURE buildMcpViewModel (empty-seam vs live + enabledCount).
+                 - UI (015-020): McpSettingsManager + McpServerRow, McpServerModal (paste/parse/add/edit, name
+                   required/unique), McpTestModal (the 5-state machine), the expanded McpSelector (list+toggle+
+                   badge, keeps the P6 empty seam at 0), useMcpConfigStorePort + useMcpClientPort, the wiring +
+                   the UNCHANGED P7 ApprovalManager gating for mcp__<server>__<tool>.
+                 - STYLES (021): the mcp-settings/mcp-modal/mcp-selector --sp-* slice (reuse-first).
+                 - CROSS-CUTTING (022-030): additivity, the modal-seam signatures (OpenMcpServerModalFn(input?)
+                   →Promise<McpServerDraft|null> / OpenMcpTestModalFn(server)→Promise<void>), i18n (P6 mcp.empty
+                   kept), security (bounded explicit stdio spawn / no eval / no plaintext-secret dup / Node fetch
+                   no-TLS-weaken / explicit-add-only), the P7-gating invariant (no new gate surface / no
+                   providerId branch), Result/graceful-degrade/observability, the McpTestResult state model, the
+                   paste-format truth table, coverage-exclusion + SDK externalization + never-build:web.
+                 EDGE CASES EC-MC-1..20 (no-server byte-identical, malformed paste→err, the 4 formats, unreachable/
+                   timeout, partial-success, stdio spawn bounded, disabled-tool, MCP-tool→P7 gate, config-absent→
+                   empty, codec CLI-key fidelity, concurrent test+edit, save-fail notice). TESTS TEST-MC-001..082
+                   + 020a, U/A/M split (U≈26 / A≈9 / M≈5). MANUAL LEGS: TEST-MC-021/022 (real SSE/HTTP), 061
+                   (stdio spawn args), 064 (Node fetch/TLS), M1 (real stdio/SSE/HTTP + real vault round-trip +
+                   real Claude MCP turn through the SDK + P7 gate), M2 (parity screenshots 320/520/720 light+dark).
+                 FIVE DESIGN OPEN ITEMS RESOLVED in §0: (1) mentionedNames ALWAYS ∅ in P8 (NG3, no mention
+                   extractor built); (2) McpClientPort.callTool OFF the turn-time critical path (the Claude SDK
+                   calls it from the advertised enabledMcpServers.servers set; connect/callTool/disconnect are the
+                   tester + future-non-SDK seam, not double-built at turn time); (3) the codec preserves CLI-written
+                   top-level + non-`servers` _claudian keys (round-trip fidelity); (4) manager mutations await
+                   store.save before resolving, a test owns its own immutable config snapshot (concurrency); (5)
+                   the modal-seam fn signatures pinned (mirror the P5 OpenInlineEditFn/OpenImagePreviewFn).
+                 COVERAGE: all 45 REQ-MC + 12 NFR-MC chained REQ↔SPEC↔TEST (§9); no TBD.
+                 HAND-OFF → /spec:tasks (planner): decompose SPEC-MC-001..030 into T-MC-NNN. SEQUENCING (per
+                   DESIGN-MC-001 open clarifications): (a) the PURE DOMAIN first — McpTypes + McpConfigParser +
+                   McpConfigCodec + parseCommand + getActiveServers + the additive enabledMcpServers? — so the
+                   manager + UI build on frozen types; (b) the two ports + the 3 bridges (Mock+LS first for the
+                   automated weight, Obsidian real-transport last as a coverage-excluded manual-leg task); (c) the
+                   McpServerManager use case + foldEnabledMcpServers + buildMcpViewModel; (d) the UI (settings/
+                   modals/selector) + the modal-seam launchers + the P7-gating wiring; (e) the --sp-* slice +
+                   en/de i18n. The real SDK transport (coverage-excluded obsidian/**) + the parity screenshots are
+                   the FINAL manual-leg tasks accumulating for the single final epic gate. @modelcontextprotocol/
+                   sdk is the one new runtime dep (rationale per AGENTS.md §8). No open clarifications block tasks.
 ```
