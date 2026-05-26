@@ -16,7 +16,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge';
-import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
+import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings';
 import type { App } from 'obsidian';
 
 function makeApp(): { app: App; store: Map<string, string> } {
@@ -97,5 +97,92 @@ describe('ObsidianBridge settings — device-local store (TEST-PSR-024)', () => 
 		// The OPTIONAL field is absent (the exact-key contract holds, NFR-PV-001).
 		expect('homeFsConsent' in settings).toBe(false);
 		expect(settings).toEqual(DEFAULT_SETTINGS);
+	});
+
+	// T-SS-021 (TEST-SS-092 bridge round-trip leg, SPEC-SS-012): the six additive
+	// OPTIONAL P10 fields round-trip a save→fresh-bridge reload via the six coerce*
+	// calls; each is present on the returned object only when present; absent/garbage
+	// → the field stays absent (no migration, REQ-SS-092, EC-SS-16, NFR-SS-001).
+	it('T-SS-021: the six additive P10 fields survive a save→reload round-trip (REQ-SS-092)', async () => {
+		const { app, store } = makeApp();
+		const bridge = new ObsidianBridge(app);
+		const saved: PluginSettings = {
+			...DEFAULT_SETTINGS,
+			enabledProviders: ['codex'] as const,
+			envSnippets: [
+				{
+					id: 's1',
+					name: 'proxy',
+					description: 'corp proxy',
+					scope: 'shared',
+					envEntries: [{ key: 'HTTP_PROXY', value: { kind: 'inline', text: 'http://p' } }],
+				},
+			],
+			envScopes: {
+				shared: [{ key: 'FOO', value: { kind: 'inline', text: 'bar' } }],
+				'provider:codex': [
+					{
+						key: 'OPENAI_API_KEY',
+						value: { kind: 'secretRef', secretRef: 'env.provider:codex.OPENAI_API_KEY' },
+					},
+				],
+			},
+			keyboardNav: { scrollUpKey: 'w', scrollDownKey: 's', focusInputKey: 'i' },
+			providerDefaultModel: { codex: 'gpt-5' },
+			defaultPermissionMode: 'plan',
+			providerCliPath: { codex: '/usr/local/bin/codex' },
+		};
+		await bridge.saveSettings(saved);
+
+		const reloaded = new ObsidianBridge(app);
+		const after = await reloaded.getSettings();
+		expect(after.envSnippets).toEqual(saved.envSnippets);
+		expect(after.envScopes).toEqual(saved.envScopes);
+		expect(after.keyboardNav).toEqual(saved.keyboardNav);
+		expect(after.providerDefaultModel).toEqual(saved.providerDefaultModel);
+		expect(after.defaultPermissionMode).toBe('plan');
+		expect(after.providerCliPath).toEqual(saved.providerCliPath);
+		// No plaintext secret ever lands in the device-local blob (only a secretRef).
+		expect(store.get('specorator:settings')!).not.toContain('sk-');
+	});
+
+	it('T-SS-021: garbage P10 fields coerce to absent on reload (no migration, EC-SS-16)', async () => {
+		const { app, store } = makeApp();
+		// A blob with garbage P10 values + the P9-shaped exact keys.
+		store.set(
+			'specorator:settings',
+			JSON.stringify({
+				...DEFAULT_SETTINGS,
+				envSnippets: 'not-an-array',
+				envScopes: 42,
+				keyboardNav: { scrollUpKey: 'ww', scrollDownKey: 's', focusInputKey: 'i' },
+				providerDefaultModel: [],
+				defaultPermissionMode: 'bogus',
+				providerCliPath: null,
+			}),
+		);
+		const bridge = new ObsidianBridge(app);
+		const after = await bridge.getSettings();
+		expect('envSnippets' in after).toBe(false);
+		expect('envScopes' in after).toBe(false);
+		expect('keyboardNav' in after).toBe(false);
+		expect('providerDefaultModel' in after).toBe(false);
+		expect('defaultPermissionMode' in after).toBe(false);
+		expect('providerCliPath' in after).toBe(false);
+	});
+
+	it('T-SS-021: a P9-shaped blob (no P10 field) stays byte-identical (NFR-SS-001)', async () => {
+		const { app, store } = makeApp();
+		const p9: PluginSettings = {
+			...DEFAULT_SETTINGS,
+			enabledProviders: ['codex'] as const,
+			activeProvider: 'codex' as const,
+		};
+		store.set('specorator:settings', JSON.stringify(p9));
+		const bridge = new ObsidianBridge(app);
+		const after = await bridge.getSettings();
+		expect(after).toEqual(p9);
+		expect('envSnippets' in after).toBe(false);
+		expect('keyboardNav' in after).toBe(false);
 	});
 });
