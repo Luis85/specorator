@@ -590,3 +590,43 @@ WIRE-IN/GATE batches ride their own subagents.
   `homeFsConsent` (a `coerceHomeFsConsent` helper) at wire-in to make the one-time consent
   durable on the production bridge. Escalated in `workflow-state.md`.
 - **Commit (green):** `3758692f`.
+
+---
+
+## Layer 4 — UI (T-PV-025..032)
+
+> UI batch on `feature/providers-registry`. TDD per task — RED (qa-style) first,
+> then minimal `dev` green. Each mounted `.vue` carries a co-located `data-testid`
+> PageObject (ADR-009). i18n keys land under `agent.chat.providers.*` (en+de kept in
+> parity). Additivity is load-bearing: single-Claude / ports-absent renders
+> byte-identical to P6/P7/P8 (NFR-PV-001).
+
+## T-PV-025 — RED: `useProviderRegistryPort`/`useSecretStorePort`/`useHomeFsPort` (🧪)
+
+- **Spec/req:** TEST-PV-112 (composable leg), SPEC-PV-019, REQ-PV-112, NFR-PV-006.
+- **Files:** `tests/ui/composables/useProviderRegistryPort.test.ts` (new, 1–43),
+  `tests/ui/composables/useSecretStorePort.test.ts` (new, 1–42),
+  `tests/ui/composables/useHomeFsPort.test.ts` (new, 1–40). Each mirrors
+  `useToolbarCatalogPort.test.ts`: a `defineComponent` harness asserts the injected
+  port is returned when provided and a clear "was not provided" error throws when
+  unprovided (over the `ProviderRegistry` / `MockSecretStore` / `MockHomeFs`
+  backings).
+- **Outcome:** done (RED confirmed — `Failed to resolve import` for the three
+  not-yet-existing composables).
+- **Commit (RED):** `ee44b9cb`.
+
+## T-PV-026 — `useProviderRegistryPort.ts`/`useSecretStorePort.ts`/`useHomeFsPort.ts` (🔨)
+
+- **Spec/req:** SPEC-PV-019, REQ-PV-112, NFR-PV-006.
+- **Files:** `src/ui/composables/useProviderRegistryPort.ts` (new, 1–24),
+  `src/ui/composables/useSecretStorePort.ts` (new, 1–23),
+  `src/ui/composables/useHomeFsPort.ts` (new, 1–23). Each `inject`s its own key
+  (`PROVIDER_REGISTRY_PORT` / `SECRET_STORE_PORT` / `HOME_FS_PORT`), returns the
+  port, throws a helpful error when absent — verbatim the `useVaultPort` shape. No
+  aggregate `usePorts`; no `obsidian`/`node:*` under `src/ui/**`.
+- **Outcome:** done. The prior RED TEST-PV-112 composable leg now passes (6/6).
+- **Verify:** `vitest run` on the three files green (6 passed); `vue-tsc -p
+  tsconfig.lint.json --noEmit` exit 0; whole-project `npm run lint` 0 errors (16
+  pre-existing test-file warnings only).
+- **Deviation:** none.
+- **Commit (green):** `732cdd56`.
