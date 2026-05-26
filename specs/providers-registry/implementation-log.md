@@ -89,7 +89,7 @@ WIRE-IN/GATE batches ride their own subagents.
 - **Verify:** `vue-tsc -p tsconfig.lint.json` 0 (whole project) + `npm run lint` 0
   errors (14 pre-existing warnings) + `npx vitest run` full suite 247 files / 1778
   tests pass.
-- **Commit:** _filled after commit_.
+- **Commit:** `9c949b37`.
 - **Deviation:** none beyond the build-green additive fan-out (the two new
   `PluginSettings` fields are required, not optional, per SPEC-PV-001/027, so the
   three full-literal construction sites + two exact-key tests grow in the same task —
@@ -97,3 +97,36 @@ WIRE-IN/GATE batches ride their own subagents.
   pure type `ProviderId` from `@/domain/chat` — a domain-internal acyclic type dep
   (`ProviderId.ts` has no imports), not a layer violation (ADR-001 forbids only
   cross-layer imports).
+
+### T-PV-004 — RED frozen `ProviderDescriptor` capability matrix (🧪 qa)
+
+- **Spec/test:** TEST-PV-020/021/022/023; SPEC-PV-002/022;
+  REQ-PV-001/020/021/022/023/103; NFR-PV-014.
+- **Files:** `tests/domain/chat/providers/ProviderDescriptor.test.ts` (new — the
+  `ProviderCapabilities`/`ProviderDescriptor` exact-key shape legs + the full
+  SPEC-PV-022 per-flag truth table per provider + the `Object.freeze` invariant +
+  the distinct `blankTabOrder` + the `isEnabled` claude-always / non-claude
+  membership + the pure `ownsModel` predicate + the never-throws assertion).
+- **Outcome:** done — RED confirmed: the test suite fails to import (no
+  `@/domain/chat/providers/ProviderDescriptor` module).
+- **Commit:** `ebde7ae4`.
+
+### T-PV-005 — `ProviderDescriptor.ts` frozen matrix + barrel (🔨 dev)
+
+- **Spec/req:** SPEC-PV-002/022; REQ-PV-001/020/021/022/023/103; NFR-PV-014.
+- **Files:** `src/domain/chat/providers/ProviderDescriptor.ts` (new — the
+  `ProviderCapabilities` + `ProviderDescriptor` interfaces; the three
+  `Object.freeze`d descriptors + their frozen `capabilities` per the SPEC-PV-022
+  matrix; `PROVIDER_DESCRIPTORS` frozen; `DEFAULT_CHAT_PROVIDER_ID`; the pure
+  `isEnabled` predicates — claude-always-true / non-claude `enabledProviders`
+  membership; the pure `ownsModel` predicates grounded verbatim in claudian:
+  claude = the fixed model ids `[haiku, sonnet, sonnet[1m], opus, opus[1m]]`, codex
+  = `/^(gpt-|o\d)/i`, opencode = the `opencode:` prefix), `src/domain/chat/providers/
+  index.ts` (new — the barrel). BACKED caps wired, GATED-OFF literal `false` (NG1).
+  No `switch (providerId)`.
+- **Outcome:** done — TEST-PV-020/021/022/023 all pass (11 tests).
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 (whole project) + `npm run lint` 0
+  errors + `npx vitest run tests/domain/chat/providers/ProviderDescriptor.test.ts`
+  11 pass. No `obsidian`/`node:*`/Vue import in `src/domain/chat/providers/**`.
+- **Commit:** _filled after commit_.
+- **Deviation:** none.
