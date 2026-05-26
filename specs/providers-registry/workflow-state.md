@@ -4,7 +4,7 @@ area: PV
 current_stage: implementation
 status: in-progress
 last_updated: 2026-05-26
-last_agent: dev (/spec:implement — DOMAIN batch T-PV-001..010)
+last_agent: dev (/spec:implement — APPLICATION batch T-PV-019..024)
 epic: claudian-reboot
 phase: P9
 integration_branch: next
@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-PV-001 — Parts A/B/C; ADR-PV-001/002/003 accepted)
   spec.md: complete (SPEC-PV-001 — 34 spec items, 6 layer groups; 20 EC-PV; TEST-PV-001..114 + M1..M4; full REQ↔SPEC↔TEST table)
   tasks.md: complete (TASKS-PV-001 — 44 T-PV tasks across 7 batches; TDD RED-before-green; 4 manual legs M1/M2/M3/M4; dep graph + coverage sanity-check)
-  implementation-log.md: in-progress (DOMAIN T-PV-001..010 + INFRA T-PV-011..018 done; APP/UI/STYLES/WIRE-IN/GATE + manual legs M1/M2/M3/M4 remain)
+  implementation-log.md: in-progress (DOMAIN T-PV-001..010 + INFRA T-PV-011..018 + APPLICATION T-PV-019..024 done; UI/STYLES/WIRE-IN/GATE + manual legs M1/M2/M3/M4 remain)
   test-plan.md: in-progress (TESTPLAN-PV-001 scaffolded — guard-verify + file-naming directive + manual legs + DOMAIN-batch status)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-PV-001..010 + INFRA T-PV-011..018 done) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-PV-001..010 + INFRA T-PV-011..018 + APPLICATION T-PV-019..024 done) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; test-report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -351,4 +351,61 @@ workspace registry, `~/.codex`/`~/.claude` transcript reads, the secret storage,
                           and ready to inject. REMAINING OWNER: dev/qa (APP→UI→STYLES→
                           WIRE-IN→GATE); the 4 manual legs + parity screenshots (TEST-PV-M4)
                           are the human review gate.
+
+2026-05-26 dev (APPLICATION batch T-PV-019..024 — done, on feature/providers-registry):
+                          implemented the 3 application contracts strict-TDD (RED→green,
+                          one commit each):
+                          - T-PV-019/020 SelectProviderUseCase (SPEC-PV-013/023/029):
+                            select(id, prior) resets+cancels prior, persists activeProvider
+                            device-local (read-modify-write saveSettings, never data.json),
+                            constructs via the widened (providerId)=>Result factory — a
+                            construct err → feedback.warn(honest secret-free notice) + the
+                            err returns (chat usable, never throws); selectForModel auto-
+                            switches/no-ops. No switch(providerId). 12 tests. Commits
+                            feaa6c0a (RED) / b7446528 (green).
+                          - T-PV-023/024 buildProviderViewModel (SPEC-PV-015/029): pure/total
+                            chooser rows (isActive/isDefault) + showChooser=enabled>1
+                            (single-Claude→false, byte-identical P8) + capability-gated widget
+                            VM read field-for-field from the active bag (Codex/Opencode gated-
+                            off). DTO-only, no provider-id branch. 12 tests. Commits b8a6e5cd
+                            (RED) / 1c760ab3 (green).
+                          - T-PV-021/022 ProviderConsentGate (SPEC-PV-014/024): ensureConsent(id)
+                            reads/records provider.homeFsConsent.<id> device-local, opens the
+                            OPEN_PROVIDER_CONSENT modal seam once (auto-decline when absent,
+                            never window.confirm), decline→ok(false), never throws. 6 tests.
+                            Commits 6b4f72bf (RED) / 3758692f (green).
+                          VERIFICATION: vue-tsc -p tsconfig.lint.json 0 (whole project);
+                          whole-project npm run lint 0 errors (16 pre-existing warnings);
+                          app/providers + domain/settings 6 files/50 tests pass; the FULL
+                          project vitest suite completed exit 0 (no regressions). No
+                          obsidian/node:*/Vue under src/application/**; Result-returning +
+                          never throws; pure transform total; no switch(providerId).
+                          DEVIATION / ESCALATION (architect/planner attention — NOT a blocker
+                          for the application unit tests, but a WIRE-IN follow-up): SPEC-PV-014
+                          mandates the consent persist device-local via SettingsPort keyed
+                          provider.homeFsConsent.<id>, but the DOMAIN batch's accepted RED
+                          tests (TEST-PV-114 + core-settings.test.ts:102 exact-key guard) froze
+                          PluginSettings to EXACTLY the 7 existing keys with no consent field
+                          and no arbitrary-key device-local store. Resolved minimally + non-
+                          breakingly by adding an OPTIONAL homeFsConsent? field (absent from
+                          DEFAULT_SETTINGS, so BOTH qa-owned guards stay green — verified, 21
+                          settings tests unchanged) + the pure homeFsConsentKey(id) helper. OPEN
+                          WIRE-IN FOLLOW-UP (T-PV-031, INFRA — NOT done in this batch):
+                          ObsidianBridge._coerceSettings rebuilds an explicit key list and DROPS
+                          homeFsConsent, so the consent will not round-trip on a production
+                          reload (the gate would re-prompt). Mock/LS spread the full object, so
+                          unit tests + the demo round-trip correctly. The real ObsidianBridge
+                          coercer must load-or-default homeFsConsent (a coerceHomeFsConsent
+                          helper) at wire-in to make the one-time consent durable. The other
+                          honest-notice deviation: SelectProviderUseCase surfaces the construct-
+                          err via FeedbackService.warn (no literal notify() method exists).
+                          NEXT AGENT → UI batch (T-PV-025..032, dev + qa): the 3 composables
+                          (useProviderRegistryPort/useSecretStorePort/useHomeFsPort),
+                          ProviderChooser/ProviderOption, ProviderSecretField, the provider-
+                          aware capability-gated P6 widgets — all reading the
+                          buildProviderViewModel DTO + the SelectProviderUseCase. The 3
+                          application contracts are frozen + injectable. REMAINING OWNER:
+                          dev/qa (UI→STYLES→WIRE-IN→GATE); the WIRE-IN batch must close the
+                          homeFsConsent ObsidianBridge round-trip follow-up above; the 4 manual
+                          legs + parity screenshots (TEST-PV-M4) are the human review gate.
 ```
