@@ -281,4 +281,56 @@ WIRE-IN/GATE batches ride their own subagents.
 - **Deviation:** the doc comment was reworded from the literal "No `switch
   (providerId)`" to "capability-gated, never branched on the provider id" so the
   source-guard test (which greps the file text) does not match the comment itself.
-- **Commit:** see below.
+- **Commit:** `7af60ea7`.
+
+### T-PV-013/014 — Mock scriptable registry/runtime/transport + in-memory secret + inert/seedable home-fs + fake-ports (🧪 qa → 🔨 dev)
+
+- **Spec/test:** TEST-PV-011/050/051/052/053/070/072/073/080/081/083/100;
+  SPEC-PV-011/025/026; REQ-PV-053/070..073/080..083/100; NFR-PV-007; EC-PV-7/11/12.
+- **Files (new):**
+  - `src/infrastructure/mock/MockProviderRuntime.ts` — `MockProviderRuntime`
+    (scriptable per-provider `ChatRuntimePort`, exposes the frozen capability bag) +
+    `MockProviderRuntimeRegistry` (the widened factory body: `setProviderConstructMode`
+    drives the SPEC-PV-025 construct gate ok/keyRequired/cliNotFound/unavailable;
+    `scriptProviderStream` + `setTransportMode` drive the SPEC-PV-026 stream/timeout/
+    error-chunk matrix). A failed construct → `Result.err(<reason>)` (no key substring);
+    an in-flight transport failure → a terminal `{type:'error'}` `StreamChunk` then
+    `done`. No subprocess.
+  - `src/infrastructure/mock/MockSecretStore.ts` — in-memory `SecretStorePort`
+    (`seedSecret`/`getStoredKeys`/`setSecretStoreAvailable`; `isAvailable()` default
+    true; round-trip set/get/delete/listKeys; the unavailable gate → `err`). No real
+    OS secret; the value never leaves the in-memory map.
+  - `src/infrastructure/mock/MockHomeFs.ts` — inert/seedable `HomeFsPort`
+    (`isAvailable()→false` until `seedHomeFile` flips it; readFile/exists/listFolders;
+    the path-escape rule). No `node:fs`.
+  - `src/infrastructure/providers/homeFsPath.ts` — the PURE `isInsideHomeRoot`
+    path-escape check (coverage-included; the single source of truth the Mock + the
+    real `HomeFileSystem` share).
+- **Files (edited):** `src/infrastructure/mock/MockBridge.ts` (added the
+  `providerRegistry` / `providerRuntimeRegistry` / `secretStore` / `homeFs` getters
+  backed by the shared `ProviderRegistry` + the three Mock impls);
+  `tests/__fakes__/fake-ports.ts` (added the four members + a `DEFAULT_SETTINGS`-free
+  factory wiring through the bridge).
+- **Tests (new):** `tests/infrastructure/mock/MockProviderRuntime.test.ts`,
+  `MockSecretStore.test.ts`, `MockHomeFs.test.ts`,
+  `tests/infrastructure/providers/homeFsPath.test.ts`, + the extended
+  `tests/__fakes__/fake-ports.test.ts` (the four provider members).
+- **fake-ports members:** `providerRegistry` (the shared descriptor table),
+  `providerRuntimeRegistry` (the scriptable construct/transport switches), `secretStore`
+  (in-memory + availability switch), `homeFs` (inert/seedable). The P1 no-arg
+  `bridge.createChatRuntime()` (Claude `MockChatRuntime` for the `CHAT_RUNTIME_PORT`
+  provide) is UNCHANGED — the widened per-tab factory routes through
+  `providerRuntimeRegistry.createChatRuntime(providerId)` at the wire-in batch.
+- **Outcome:** done. 52 provider/secret/home-fs/fake-ports tests pass; the existing
+  `createChatRuntime.test.ts` (P1 Claude factory) stays green; vue-tsc 0; whole-project
+  lint 0 errors (16 pre-existing warnings).
+- **Deviation:** the scriptable runtime registry is exposed as a separate
+  `providerRuntimeRegistry` getter (its `createChatRuntime(providerId): Result`) rather
+  than overloading the existing no-arg `bridge.createChatRuntime(): ChatRuntimePort`,
+  which the P1 `CHAT_RUNTIME_PORT` provide + the existing test depend on. The spec
+  method name `createChatRuntime(providerId)` lives on the registry object; the wire-in
+  batch (T-PV-031) routes the per-tab factory through it. No behaviour change to the P1
+  contract (additivity invariant, NFR-PV-001). The early `if (this.cancelled)` reads use
+  a private `isCancelled()` opaque accessor (mirrors `MockChatRuntime`) to satisfy
+  `no-unnecessary-condition`.
+- **Commit:** `36ff…` (below).

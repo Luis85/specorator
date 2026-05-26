@@ -23,6 +23,10 @@ import { MockToolbarCatalog } from './MockToolbarCatalog';
 import { MockApprovalRuleStore } from './MockApprovalRuleStore';
 import { MockMcpConfigStore } from './MockMcpConfigStore';
 import { MockMcpClient } from './MockMcpClient';
+import { MockProviderRuntimeRegistry } from './MockProviderRuntime';
+import { MockSecretStore } from './MockSecretStore';
+import { MockHomeFs } from './MockHomeFs';
+import { ProviderRegistry } from '@/infrastructure/providers/ProviderRegistry';
 import type { MentionDataProviderPort, ShellExecResult } from '@/domain/ports';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
@@ -82,6 +86,14 @@ export class MockBridge
 	private readonly mcpConfigStorePort = new MockMcpConfigStore();
 	/** Scriptable MCP client driving the SPEC-MC-028 matrix. The bridge IS the port. */
 	private readonly mcpClientPort = new MockMcpClient();
+	/** The shared descriptor-table provider registry (SPEC-PV-011). The bridge IS the port. */
+	private readonly providerRegistryPort = new ProviderRegistry();
+	/** The scriptable per-provider runtime/transport registry (SPEC-PV-011). */
+	private readonly providerRuntimeRegistryRef = new MockProviderRuntimeRegistry();
+	/** The in-memory `SecretStorePort` (availability switch; no real OS secret, SPEC-PV-011). */
+	private readonly secretStorePort = new MockSecretStore();
+	/** The inert/seedable `HomeFsPort` (no `node:fs`; path-escape rule, SPEC-PV-011). */
+	private readonly homeFsPort = new MockHomeFs();
 
 	constructor(
 		initialFiles: Record<string, string> = {},
@@ -296,6 +308,39 @@ export class MockBridge
 	/** Scriptable `McpClientPort` (`scriptTestResult`/`setClientMode`; never throws). */
 	get mcpClient(): MockMcpClient {
 		return this.mcpClientPort;
+	}
+
+	// ── Provider registry / runtime / secret / home-fs ports (SPEC-PV-011) ──────
+	// The shared descriptor-table registry (coverage-included pure data) + the
+	// scriptable per-provider runtime registry (the widened `createChatRuntime`
+	// factory body: `setProviderConstructMode` / `scriptProviderStream` /
+	// `setTransportMode`) + the in-memory secret store (availability switch) + the
+	// inert/seedable home-fs. The wire-in batch routes the per-tab factory through
+	// `providerRuntimeRegistry.createChatRuntime(providerId)`. Never throws.
+
+	/** The shared descriptor-table `ProviderRegistryPort` (SPEC-PV-008/011). */
+	get providerRegistry(): ProviderRegistry {
+		return this.providerRegistryPort;
+	}
+
+	/**
+	 * The scriptable per-provider runtime/transport registry (SPEC-PV-011). The
+	 * widened `(providerId) => Result<ChatRuntimePort>` factory body —
+	 * `setProviderConstructMode` drives the SPEC-PV-025 construct gate;
+	 * `scriptProviderStream` + `setTransportMode` drive the SPEC-PV-026 matrix.
+	 */
+	get providerRuntimeRegistry(): MockProviderRuntimeRegistry {
+		return this.providerRuntimeRegistryRef;
+	}
+
+	/** The in-memory `SecretStorePort` (`seedSecret`/`getStoredKeys`/`setSecretStoreAvailable`). */
+	get secretStore(): MockSecretStore {
+		return this.secretStorePort;
+	}
+
+	/** The inert/seedable `HomeFsPort` (`seedHomeFile`; path-escape rule). */
+	get homeFs(): MockHomeFs {
+		return this.homeFsPort;
 	}
 
 	showError(message: string, durationMs = 0): void {
