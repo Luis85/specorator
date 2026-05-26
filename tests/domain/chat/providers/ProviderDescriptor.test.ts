@@ -49,12 +49,26 @@ const _capKeys: Equals<
 > = true;
 void _capKeys;
 
-// ---- The descriptor exposes EXACTLY the SPEC-PV-002 members ----
+// ---- The descriptor exposes the SPEC-PV-002 members + the P10-additive
+// `environmentKeyPatterns?` (SPEC-SS-002). The field is OPTIONAL — the P9
+// matrix assertions stay green (additive only). ----
 const _descKeys: Equals<
 	keyof ProviderDescriptor,
-	'id' | 'displayNameKey' | 'blankTabOrder' | 'capabilities' | 'isEnabled' | 'ownsModel'
+	| 'id'
+	| 'displayNameKey'
+	| 'blankTabOrder'
+	| 'capabilities'
+	| 'isEnabled'
+	| 'ownsModel'
+	| 'environmentKeyPatterns'
 > = true;
 void _descKeys;
+
+const _envPatterns: Equals<
+	ProviderDescriptor['environmentKeyPatterns'],
+	readonly RegExp[] | undefined
+> = true;
+void _envPatterns;
 
 const withEnabled = (...ids: PluginSettings['enabledProviders']): PluginSettings => ({
 	...DEFAULT_SETTINGS,
@@ -172,5 +186,28 @@ describe('ProviderDescriptor — the frozen matrix (TEST-PV-020/021/022/023)', (
 		expect(() => CLAUDE_DESCRIPTOR.isEnabled(odd)).not.toThrow();
 		expect(() => CODEX_DESCRIPTOR.ownsModel('')).not.toThrow();
 		expect(() => OPENCODE_DESCRIPTOR.ownsModel('anything')).not.toThrow();
+	});
+});
+
+describe('ProviderDescriptor.environmentKeyPatterns — the P10-additive field (TEST-SS-051, SPEC-SS-002)', () => {
+	it('CLAUDE carries the pinned [^ANTHROPIC_, ^CLAUDE_] patterns (case-insensitive)', () => {
+		const patterns = CLAUDE_DESCRIPTOR.environmentKeyPatterns ?? [];
+		expect(patterns.map((p) => p.source)).toEqual(['^ANTHROPIC_', '^CLAUDE_']);
+		expect(patterns.every((p) => p.flags.includes('i'))).toBe(true);
+		expect(patterns.some((p) => p.test('ANTHROPIC_API_KEY'))).toBe(true);
+		expect(patterns.some((p) => p.test('CLAUDE_CODE_FOO'))).toBe(true);
+	});
+
+	it('CODEX carries the pinned [^OPENAI_, ^CODEX_] patterns', () => {
+		const patterns = CODEX_DESCRIPTOR.environmentKeyPatterns ?? [];
+		expect(patterns.map((p) => p.source)).toEqual(['^OPENAI_', '^CODEX_']);
+		expect(patterns.some((p) => p.test('OPENAI_API_KEY'))).toBe(true);
+		expect(patterns.some((p) => p.test('CODEX_HOME'))).toBe(true);
+	});
+
+	it('OPENCODE carries the pinned [^OPENCODE_] pattern', () => {
+		const patterns = OPENCODE_DESCRIPTOR.environmentKeyPatterns ?? [];
+		expect(patterns.map((p) => p.source)).toEqual(['^OPENCODE_']);
+		expect(patterns.some((p) => p.test('OPENCODE_API_KEY'))).toBe(true);
 	});
 });
