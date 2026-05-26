@@ -246,5 +246,40 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   `npm run lint` 0 errors (12 pre-existing warnings); `vitest run` 4/4 (the two port
   files) + 196/196 (domain chat + ports). No `obsidian`/`node:*` import in
   `src/domain/**`.
-- **Commit:** <pending>
+- **Commit:** `e31d929f`.
 - **Deviation:** none.
+
+---
+
+## DOMAIN batch (T-MC-001..011) — close-out
+
+All eleven DOMAIN-batch tasks executed in strict TDD order (RED qa → green dev), one
+commit per task (T-MC-001 the doc-only baseline). The single domain interface change
+— the purely additive optional `ChatRuntimeQueryOptions.enabledMcpServers?`
+(SPEC-MC-002) — kept the whole-project build green with **no `implements ChatRuntimePort`
+break** (the runtimes read the optional field; no companion-stub, no fan-out). The two
+new ports (`McpConfigStorePort`/`McpClientPort`) are new interfaces with no prior impl,
+so adding them + their keys + barrel re-exports broke nothing. The pure DOMAIN slice
+landed: `McpTypes` (the config union + `ManagedMcpServer`/`McpTool`/`McpTestResult`/
+`ParsedMcpConfig`/`EnabledMcpServers`/`DEFAULT_MCP_SERVER`), the PURE `McpConfigParser`
+(the four-format truth table + `getMcpServerType` + `isValidMcpServerConfig`), the PURE
+`McpConfigCodec` (load-or-default + default-pruning + CLI-key preservation), the PURE
+`parseCommand`/`splitCommandString` (no-shell tokeniser), the PURE `getActiveServers` +
+`collectDisallowedMcpTools` — all ported verbatim from `D:\Projects\claudian-main` with
+Claudian throws converted to `Result.err` (ADR-004); all pure + total (never throw).
+
+**Additivity proven:** a P7-shaped `ChatRuntimeQueryOptions` (no `enabledMcpServers`)
+serialises byte-identically to P7 (TEST-MC-082); `externalContextPaths?` stays EXCLUDED;
+`PreparedChatTurn.mcpMentions` stays the empty `Set`.
+
+**Final gate over the batch surface:** `vue-tsc -p tsconfig.lint.json` **0 errors**
+(whole project), whole-project `npm run lint` **0 errors** (12 pre-existing warnings
+only), `npx vitest run tests/domain/{chat,ports}` **196/196 green**. No
+`obsidian`/`node:*`/Vue import under `src/domain/chat/mcp/**` or `src/domain/ports/Mcp*`;
+the parser/codec/`parseCommand`/`getActiveServers` are pure + total; the `McpClientPort.test`
+contract is documented to return a structured result and never throw. **Deleted-symbol
+guard green** — the new keys + the new paths resolve clean (no relaxation needed); the
+Obsidian-infra file-naming directive (`VaultMcpConfigStore.ts`/`SdkMcpClient.ts`, never
+`ObsidianMcp…`/`obsidian/mcp/`) is recorded in `test-plan.md` for the INFRA batch.
+`styles.css` untouched (no build run). The INFRA batch (T-MC-012..017: the SDK dep-add +
+the three-bridge store/client) onward is out of this batch's scope.

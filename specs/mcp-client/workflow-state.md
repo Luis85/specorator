@@ -1,10 +1,10 @@
 ---
 feature: mcp-client
 area: MC
-current_stage: tasks
+current_stage: implementation
 status: active
 last_updated: 2026-05-26
-last_agent: planner (tasks — TASKS-MC-001 complete; 42 tasks T-MC-001..043 across 7 batches, TDD-ordered, full SPEC↔REQ↔NFR↔TEST coverage)
+last_agent: dev (implementation — DOMAIN batch T-MC-001..011 complete; the pure types/parser/codec/parseCommand/getActiveServers + the additive enabledMcpServers? + the two ports/keys/barrels; INFRA batch onward pending)
 epic: claudian-reboot
 phase: P8
 integration_branch: next
@@ -16,8 +16,8 @@ artifacts:
   design.md: complete (DESIGN-MC-001; Parts A/B/C; ADR-MC-001 McpConfigStorePort vault file + ADR-MC-002 McpClientPort transport seam + ADR-MC-003 enabledMcpServers? + P7 approval composition — all accepted)
   spec.md: complete (SPEC-MC-001; 30 spec items SPEC-MC-001..030 across domain/infra/app/ui/styles/cross-cutting; EC-MC-1..20; TEST-MC-001..082 + 020a + M1/M2; REQ-MC ↔ SPEC-MC ↔ TEST-MC coverage table — all 45 REQ-MC + 12 NFR-MC chained; the five design open items resolved in §0)
   tasks.md: complete (TASKS-MC-001; 42 tasks T-MC-001..043, TDD-ordered RED(qa)→impl(dev), 7 batches DOMAIN→INFRA→APP→UI→STYLES→WIRE-IN→GATE; dep graph + parallel batches + critical path + full SPEC/REQ/NFR/TEST coverage table; NO guard-relax needed; @modelcontextprotocol/sdk dep-add = T-MC-012; manual legs T-MC-041/042 (M1/M2))
-  implementation-log.md: pending
-  test-plan.md: pending
+  implementation-log.md: in-progress (DOMAIN batch T-MC-001..011 complete; INFRA/APP/UI/STYLES/WIRE-IN/GATE batches T-MC-012..043 pending)
+  test-plan.md: in-progress (guard-verification + Obsidian-infra file-naming directive + manual legs TEST-MC-M1/M2 + TEST-MC-021/022/061/064 scaffolded; DOMAIN-batch automated legs recorded)
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -37,8 +37,8 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-MC-001; ADR-MC-001..003 accepted) |
 | 5. Specification | `spec.md` | complete (SPEC-MC-001; 30 items, full coverage) |
 | 6. Tasks | `tasks.md` | complete (TASKS-MC-001; 42 tasks T-MC-001..043, TDD-ordered, full coverage) |
-| 7. Implementation | `implementation-log.md` + code | pending |
-| 8. Testing | `test-plan.md`, `test-report.md` | pending |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN batch T-MC-001..011 complete; INFRA→GATE pending) |
+| 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; test-report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
@@ -334,4 +334,35 @@ merge. Manual-Obsidian + parity-screenshot legs accumulate for the SINGLE FINAL 
                  T-MC-002→003→004→005→006→007→010→011→014→015→018→019→035→036→041→043 (17 tasks); see the dep
                  graph + parallel batches + coverage table in tasks.md. CLAR-MC-001..005 resolved; no open
                  clarifications block implementation.
+
+2026-05-26 (dev): DOMAIN batch (T-MC-001..011) COMPLETE on feature/mcp-client. Eleven tasks, strict
+                 TDD (RED qa → green dev), one commit each:
+                 - T-MC-001 docs(mc) bcff6d77 — parity-screenshots.md + test-plan.md (guard-verify +
+                   Obsidian-infra file-naming directive VaultMcpConfigStore/SdkMcpClient) + implementation-log.md.
+                 - T-MC-002 RED ea5c1c71 / T-MC-003 green db5226d6 — McpTypes + barrel + the additive
+                   ChatRuntimeQueryOptions.enabledMcpServers? (after permissionMode; P0-P7 byte-identical;
+                   externalContextPaths? EXCLUDED; mcpMentions empty Set). NO implements break (additive-only).
+                 - T-MC-004 RED 12e68ec1 / T-MC-005 green 1ff81b07 — pure McpConfigParser (4 formats +
+                   getMcpServerType + isValidMcpServerConfig, throws→Result.err, total).
+                 - T-MC-006 RED e4790abe / T-MC-007 green 1747e432 — pure McpConfigCodec (load-or-default +
+                   non-default _claudian pruning + CLI-key preservation + 2-space indent, total).
+                 - T-MC-008 RED 13d00eec / T-MC-009 green bf78a92a — pure parseCommand/splitCommandString
+                   (no-shell tokeniser) + getActiveServers/collectDisallowedMcpTools.
+                 - T-MC-010 RED 7f59e830 / T-MC-011 green e31d929f — McpConfigStorePort + McpClientPort +
+                   McpConnection + MCP_CONFIG_STORE_PORT/MCP_CLIENT_PORT keys + barrel re-exports.
+                 VERIFICATION (whole-project): vue-tsc -p tsconfig.lint.json 0 errors; npm run lint 0 errors
+                 (12 pre-existing warnings); vitest tests/domain/{chat,ports} 196/196. Additivity proven
+                 (TEST-MC-082: a P7-shaped query byte-identical to P7). No obsidian/node:*/Vue in
+                 src/domain/chat/mcp/** or src/domain/ports/Mcp*; all pure transforms total (never throw);
+                 McpClientPort.test contract documented never-throw. Deleted-symbol guard green (no relax).
+                 styles.css untouched. THREE small spec-faithful deviations (logged): getMcpServerType
+                 totalised with an isRecord guard (NFR-MC-004 never-throw); JSON.parse via trySync + delete
+                 replaced by rest-spread (domain Result-discipline / codec bans); normalizeDisabledTools
+                 trims on load too (load/save symmetry per SPEC-MC-003 + TEST-MC-001).
+                 REMAINING (owner dev/qa, NOT in this batch): INFRA T-MC-012..017 (the @modelcontextprotocol/
+                 sdk dep-add + the three-bridge store/client — Obsidian real transports coverage-excluded with
+                 the file-naming directive VaultMcpConfigStore.ts/SdkMcpClient.ts, Mock scriptable, LS inert),
+                 APP T-MC-018..021, UI T-MC-022..033, STYLES T-MC-034, WIRE-IN T-MC-035..037, GATE
+                 T-MC-038..043 (incl. the human manual legs T-MC-041/042). NEXT agent: the INFRA-batch dev/qa
+                 (T-MC-012 SDK dep-add is ready, no deps; T-MC-013 carries the file-naming directive).
 ```
