@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-PV-001 — Parts A/B/C; ADR-PV-001/002/003 accepted)
   spec.md: complete (SPEC-PV-001 — 34 spec items, 6 layer groups; 20 EC-PV; TEST-PV-001..114 + M1..M4; full REQ↔SPEC↔TEST table)
   tasks.md: complete (TASKS-PV-001 — 44 T-PV tasks across 7 batches; TDD RED-before-green; 4 manual legs M1/M2/M3/M4; dep graph + coverage sanity-check)
-  implementation-log.md: in-progress (DOMAIN batch T-PV-001..010 done; INFRA/APP/UI/STYLES/WIRE-IN/GATE + manual legs remain)
+  implementation-log.md: in-progress (DOMAIN T-PV-001..010 + INFRA T-PV-011..018 done; APP/UI/STYLES/WIRE-IN/GATE + manual legs M1/M2/M3/M4 remain)
   test-plan.md: in-progress (TESTPLAN-PV-001 scaffolded — guard-verify + file-naming directive + manual legs + DOMAIN-batch status)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN batch T-PV-001..010 done) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-PV-001..010 + INFRA T-PV-011..018 done) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; test-report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -285,4 +285,70 @@ workspace registry, `~/.codex`/`~/.claude` transcript reads, the secret storage,
                           ObsidianSecretStore*, per the test-plan.md file-naming directive).
                           The frozen ProviderId / descriptors / resolve helpers / 3 ports /
                           widened factory are now frozen for the INFRA/APP/UI batches.
+
+2026-05-26 — INFRA batch (T-PV-011..018) COMPLETE (dev).
+                          Commits: 7af60ea7 (T-PV-011/012 shared descriptor-table
+                          ProviderRegistry, coverage-included) · 50a0fdd7 (T-PV-013/014
+                          Mock scriptable runtime/transport + in-memory secret +
+                          inert/seedable home-fs + fake-ports members) · 58f53787
+                          (T-PV-015/016 LS inert non-Claude runtime + secret + home-fs) ·
+                          dcba7b99 (T-PV-018 Codex JSON-RPC + shared ACP stdio transports,
+                          in-tree, no new dep, coverage-excluded) · 988d7997 (T-PV-017
+                          ObsidianBridge runtime registry + real SecretStorage.ts +
+                          HomeFileSystem.ts, coverage-excluded).
+                          VERIFICATION: vue-tsc -p tsconfig.lint.json 0; whole-project
+                          npm run lint 0 errors (16 pre-existing warnings); full vitest
+                          260 files / 1877 tests pass (60 new, up from 1817 at T-PV-010).
+                          FILE NAMES confirmed per the T-PV-001 directive: the secret
+                          infra is SecretStorage.ts (NEVER ObsidianSecretStore*); home-fs
+                          HomeFileSystem.ts; transports CodexRpcTransport.ts/AcpTransport.ts
+                          + shared JsonRpcStdioChannel.ts; runtimes CodexRuntime.ts/
+                          OpencodeRuntime.ts at obsidian/ root — no banned glob.
+                          REGISTRY (data-driven, no switch(providerId)): the shared
+                          ProviderRegistry indexes the frozen PROVIDER_DESCRIPTORS by id via
+                          a ReadonlyMap + delegates resolve to the pure helpers; the
+                          ObsidianProviderRuntimeRegistry holds a Map<ProviderId,
+                          RuntimeBuilder> (claude reuse / codex / opencode) — construction
+                          dispatches through the map, never an id branch.
+                          BRIDGES: ObsidianBridge backs the real app.secretStorage
+                          (SecretStorage.ts, coverage-excluded → TEST-PV-M3, never data.json)
+                          + real node:fs home-fs (HomeFileSystem.ts, coverage-excluded →
+                          TEST-PV-M1/M2) + the Claude/Codex/Opencode runtime registry
+                          (coverage-excluded → TEST-PV-M1/M2). MockBridge = scriptable
+                          runtime/transport (setProviderConstructMode / scriptProviderStream
+                          / setTransportMode) + in-memory secret (setSecretStoreAvailable)
+                          + inert/seedable home-fs (seedHomeFile). LS = Claude-fixture ok /
+                          non-Claude err 'unavailable' + in-memory secret (isAvailable true)
+                          + inert home-fs (isAvailable false). fake-ports members added:
+                          providerRegistry / providerRuntimeRegistry / secretStore / homeFs.
+                          TRANSPORTS (no new dep): the shared JsonRpcStdioChannel is in-tree
+                          line-delimited JSON-RPC 2.0 over node:child_process stdio (bounded
+                          spawn, per-request timeout→err, dying-subprocess→terminal error
+                          chunk, SIGTERM→SIGKILL 3s); CodexRpcTransport adds turn-steer,
+                          AcpTransport adds initialize+prompt (no steer).
+                          DEVIATIONS: (1) the scriptable runtime registry is a separate
+                          `providerRuntimeRegistry` getter (its createChatRuntime(providerId)
+                          → Result) rather than overloading the P1 no-arg
+                          bridge.createChatRuntime() that CHAT_RUNTIME_PORT depends on; the
+                          wire-in batch (T-PV-031) routes the per-tab factory through it.
+                          (2) the key read is async inside each runtime's turn boundary
+                          (the widened factory is sync); the construct gate uses the sync
+                          secretStore.isAvailable() probe. (3) SecretStorage.deleteSecret
+                          clears-to-empty (app.secretStorage exposes no delete). None alter
+                          the additivity invariant (Claude byte-identical to P8).
+                          MANUAL LEGS (human-run, NOT agent-claimed, scheduled in
+                          test-plan.md): TEST-PV-M1 (real Codex JSON-RPC) / TEST-PV-M2 (real
+                          Opencode ACP) / TEST-PV-M3 (real app.secretStorage + minAppVersion
+                          + no-data.json) + the real sub-legs TEST-PV-030..033/035/040..042/
+                          044/101.
+                          NEXT AGENT → APPLICATION batch (T-PV-019..026, dev + qa):
+                          SelectProviderUseCase (resolve+activate+persist+reset+construct via
+                          the widened factory over the Mock providerRuntimeRegistry) +
+                          ProviderConsentGate (one-time beyond-vault consent over Mock
+                          settings + the OPEN_PROVIDER_CONSENT seam) + the PURE
+                          buildProviderViewModel. The INFRA seam (the 3 Mock scriptable
+                          ports + the shared registry + the widened factory body) is frozen
+                          and ready to inject. REMAINING OWNER: dev/qa (APP→UI→STYLES→
+                          WIRE-IN→GATE); the 4 manual legs + parity screenshots (TEST-PV-M4)
+                          are the human review gate.
 ```
