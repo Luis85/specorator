@@ -253,6 +253,24 @@ const PROVIDERS_REGISTRY_TOKENS = [
 	'--sp-model-picker-group-gap',
 ];
 
+/**
+ * §4.17 — Settings shell (P10, SPEC-SS-015, NFR-SS-009). The four `--sp-*` tokens
+ * the P10 settings/* slice (base/plugin/agent/slash/env-snippets/mcp/
+ * opencode-model-picker) genuinely needs (the section-heading rhythm, the list-row
+ * gap, the env-snippet/context-limit item radius + background). The seven modules
+ * reuse the existing set otherwise (`--sp-text-*`, `--sp-bg-*`, `--sp-border`,
+ * `--sp-radius-*`, `--sp-space-*`, `--sp-font-*`, `--sp-interactive-accent`, the P8
+ * `--sp-mcp-row-gap`, the P9 `--sp-model-picker-group-gap`) — only these four are
+ * minted for P10. The block marker is ASCII (`section 4.17`) so the standalone
+ * lightningcss minifier accepts the comment.
+ */
+const SETTINGS_SHELL_TOKENS = [
+	'--sp-settings-section-gap',
+	'--sp-settings-row-gap',
+	'--sp-settings-snippet-radius',
+	'--sp-settings-snippet-bg',
+];
+
 const PROVIDER_IDS = ['claude', 'codex', 'opencode', 'cursor'] as const;
 
 function loadTokens(): string {
@@ -461,13 +479,38 @@ describe('src/ui/styles/tokens.css — token contract (REQ-AUX-006, REQ-AUX-009)
 	it('declares the §4.16 tokens with no raw-hex / Obsidian-var / physical-property leak (TEST-PV-091)', () => {
 		const css = loadTokens();
 		// Isolate the §4.16 declaration block (ASCII `section 4.16` marker so the
-		// standalone lightningcss minifier accepts the comment) and assert each P9
-		// token resolves to a token-layer var() lookup — never a raw hex or a raw
-		// Obsidian var.
-		const block = css.slice(css.indexOf('section 4.16'));
+		// standalone lightningcss minifier accepts the comment), bounded by the §4.17
+		// marker, and assert each P9 token resolves to a token-layer var() lookup —
+		// never a raw hex or a raw Obsidian var.
+		const block = css.slice(css.indexOf('section 4.16'), css.indexOf('section 4.17'));
 		for (const token of PROVIDERS_REGISTRY_TOKENS) {
 			const match = new RegExp(`${token.replace(/-/g, '\\-')}\\s*:\\s*([^;]+);`).exec(block);
 			expect(match, `expected ${token} declared in the §4.16 block`).not.toBeNull();
+			const value = match?.[1] ?? '';
+			// No raw hex colour literal.
+			expect(value, `${token} must not carry a raw hex literal`).not.toMatch(/#[0-9a-fA-F]{3,8}/);
+			// No raw Obsidian theme var (only --sp-* lookups are allowed).
+			expect(value, `${token} must not read a raw Obsidian var`).not.toMatch(
+				/var\(--(?!sp-)[a-z]/,
+			);
+		}
+	});
+
+	it('declares every §4.17 settings-shell token (SPEC-SS-015, NFR-SS-009)', () => {
+		const css = loadTokens();
+		assertTokensDeclared(css, SETTINGS_SHELL_TOKENS);
+	});
+
+	it('declares the §4.17 tokens with no raw-hex / Obsidian-var / physical-property leak (TEST-SS-M4)', () => {
+		const css = loadTokens();
+		// Isolate the §4.17 declaration block (ASCII `section 4.17` marker so the
+		// standalone lightningcss minifier accepts the comment) and assert each P10
+		// settings token resolves to a token-layer var() lookup (or a bare dimension) —
+		// never a raw hex or a raw Obsidian var.
+		const block = css.slice(css.indexOf('section 4.17'));
+		for (const token of SETTINGS_SHELL_TOKENS) {
+			const match = new RegExp(`${token.replace(/-/g, '\\-')}\\s*:\\s*([^;]+);`).exec(block);
+			expect(match, `expected ${token} declared in the §4.17 block`).not.toBeNull();
 			const value = match?.[1] ?? '';
 			// No raw hex colour literal.
 			expect(value, `${token} must not carry a raw hex literal`).not.toMatch(/#[0-9a-fA-F]{3,8}/);
