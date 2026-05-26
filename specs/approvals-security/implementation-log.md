@@ -588,7 +588,7 @@ warnings only), `vitest run tests/application` **372/372 green** (incl. the P6
 - **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); `npm run lint`
   0 errors (12 pre-existing warnings); `vitest run` deny-always 3/3 + P4 regression 5/5.
   No `obsidian`/`v-html` in `src/ui/**`. `styles.css` untouched.
-- **Commit (RED / green):** `47f91f4e` / `<GREEN-027>`.
+- **Commit (RED / green):** `47f91f4e` / `1277a44e`.
 - **Deviation:** the spec (SPEC-AS-015) names the component `InlineApproval.vue` with
   `inline-approval-*` testids + a `decide`/`cancel` emit shape; the actual P4 component is
   `InlinePlanApproval.vue` (in `src/ui/chat/composer/`) with `inline-plan-approval-*`
@@ -597,3 +597,74 @@ warnings only), `vitest run tests/application` **372/372 green** (incl. the P6
   `deny-always` option was added to it additively. The brief's `inline-approval-deny-always`
   testid is realised as the additive `[data-decision="deny-always"]` selector (the
   decision-keyed testid `inline-plan-approval-option-deny-always` also exists).
+### T-AS-029 — `ChatSurface` approval-callback → `ApprovalManager` wiring + `tabsStore` permissionMode control + approvals view-model (🔨 dev)
+
+- **Spec/req:** SPEC-AS-016/017/023/028; REQ-AS-002/004/005/006/020..025/040/043;
+  NFR-AS-006/007/008; EC-AS-17/18.
+- **Files:** `src/ui/chat/composer/ApprovalGateRuntime.ts` (new — the approval-gating
+  `ChatRuntimePort` decorator); `src/ui/chat/ChatSurface.vue` (inject
+  `APPROVAL_RULE_STORE_PORT` optionally + the per-surface `ApprovalManager` + the
+  approvals view-model + the panel render + the permission-mode wiring);
+  `src/ui/chat/ChatComposer.vue` + `src/ui/chat/toolbar/ToolbarStrip.vue` (thread the
+  `permissionMode` prop + the `set-permission` emit additively down to `PermissionToggle`);
+  `tests/ui/stores/tabsStore.permissionMode.test.ts` (new) +
+  `tests/ui/chat/ChatSurface.approvals.test.ts` (new RED → green).
+- **How the approval callback routes through `ApprovalManager` (the key design):** the P4
+  approval flow is `runtime → EnqueueRuntime (enqueue + render) → RespondToInlineBlockUseCase`.
+  P7 inserts `ApprovalGateRuntime` as the **inner-most** decorator (the gate wraps the real
+  runtime; `EnqueueRuntime` wraps the gate). On a runtime-pulled approval the gate derives
+  the `ApprovalAction` (`toolName` from `req.tool`, `actionPattern` from `req.context`) +
+  reads the active tab's `mode` (`controls.permissionMode ?? 'normal'`), then
+  `manager.decide(action, mode)`: `ok('allow')`/`ok('deny')` resolve the callback DIRECTLY —
+  the downstream enqueue/render `cb` is never invoked, so NO inline block renders
+  (auto-decision silent, REQ-AS-020/021/024); `ok('prompt')` (or a defensive `err`) delegate
+  to `cb` (which enqueues the unchanged P4 `InlinePlanApproval` + captures the user's answer),
+  then `manager.applyDecision(action, decision)` persists/sessions the rule and resolves the
+  concrete on-the-wire decision (`*-always` → `allow`/`deny`, cancel → `null`). An
+  `onAfterApply` hook refreshes the live panel after a prompted decision.
+- **Degradation when the port is absent:** `inject(APPROVAL_RULE_STORE_PORT, undefined)` →
+  `approvalManager === null` → the gate is NOT inserted (`gated = runtime`) and the panel is
+  NOT mounted (`hasApprovals === false`). The chain is then the byte-identical P4 path — every
+  approval enqueues + prompts, exactly like P4 (proven by the no-store degrade test). This
+  mirrors the P6 `inject(TOOLBAR_CATALOG_PORT, undefined)` optional-degrade pattern.
+- **`tabsStore`:** NO store change was needed — the P6 generic `setControl<K extends keyof
+  TabControls>` already sets `controls.permissionMode`, `freshTab()` already seeds
+  `controls:{}`, `loadIntoTab` already resets it, and `_turnQueryOptions()` already folds via
+  `foldControlOptions` (the T-AS-017 guarded clause folds non-`normal` only). The new
+  `tabsStore.permissionMode.test.ts` proves these (draft-input/no-send, non-`normal`-only
+  fold, tab-switch re-derive, loadIntoTab reset) green with no store edit.
+- **Toggle/panel wiring:** `PermissionToggle.set` → `ToolbarStrip` `@set-permission` →
+  `ChatComposer` `@set-permission` → `ChatSurface.onSetPermission` →
+  `tabs.setControl('permissionMode', mode)`; `:permission-mode="activePermissionMode"` flows
+  the active mode down to the toggle (live) + is passed to the panel. The panel's `remove`
+  routes to `approvalStore.removeRule(id)` then `refreshApprovalRules()`. NO `providerId`
+  branch (SPEC-AS-023).
+- **Outcome:** done — the prior RED (ChatSurface approvals 3 failing legs) now green (6/6);
+  the new `tabsStore.permissionMode` 5/5 green (no store edit). The P4 inline
+  (`InlinePlanApproval`), the P6 toolbar (`PermissionToggle`/`ToolbarStrip`/`ChatComposer`),
+  the `tabsStore` regression, and the other ChatSurface tests (toolbar/inline/context/ts)
+  stay green (additive).
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); `npm run lint`
+  0 errors (12 pre-existing warnings); `vitest run` (threads pool) — ChatSurface approvals
+  6/6, the ChatSurface regression 14/14, the composer+toolbar+tabsStore+ChatComposer
+  regression 256/256, the structural/composable/approvals 17/17. No `obsidian`/`v-html`/
+  `window.confirm` in `src/ui/**`; a single per-surface `ApprovalManager`. `styles.css`
+  untouched.
+- **Commit (RED / green):** `75a8684f` / `<GREEN-029>`.
+- **Deviation:** **(1)** the spec (SPEC-AS-016) describes the surface registering the approval
+  callback directly via `setApprovalCallback`; the actual P4 architecture routes approvals
+  through the composer arbiter (`EnqueueRuntime` + `RespondToInlineBlockUseCase`). The
+  `ApprovalManager` is therefore wired via a NEW `ApprovalGateRuntime` decorator that sits
+  inner-most in that existing chain (rather than a direct callback) — this is the faithful,
+  additive realisation of "gate the callback through `ApprovalManager` → auto-decide or
+  surface the unchanged P4 prompt" on the real P4 wiring (the spec was authored against an
+  assumed direct-callback shape). **(2)** SPEC-AS-016 says the surface derives the
+  `ApprovalAction` via `getActionPattern(req.tool, …)` over the tool input; the P4
+  `ApprovalRequest` carries only `tool` + `context` (no structured input, byte-identical NG4),
+  so the gate derives `actionPattern` from `req.context` (the command/path/glob string the
+  runtime described) — the matcher `\`→`/`-normalises + compares it. Carrying the structured
+  input onto the request (so `getActionPattern` runs over it) is the runtime's job when it
+  builds the `ApprovalRequest`; that is a follow-up at the wire-in/runtime layer (T-AS-032),
+  out of this UI batch. **(3)** the `tabsStore` half of T-AS-029 required no code change (the
+  P6 generic `setControl` + the T-AS-017 fold already cover `permissionMode`) — the new store
+  test documents/locks this rather than adding redundant code.

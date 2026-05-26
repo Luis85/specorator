@@ -18,6 +18,7 @@ import SelectionIndicator from '@/ui/chat/SelectionIndicator.vue';
 import ToolbarStrip from '@/ui/chat/toolbar/ToolbarStrip.vue';
 import type { ToolbarViewModel } from '@/application/chat/toolbar/buildToolbarViewModel';
 import type { ReasoningChoice } from '@/domain/chat/Reasoning';
+import type { PermissionMode } from '@/domain/chat/PermissionMode';
 
 /**
  * The send-composer (SPEC-CC-021, extended P4 — SPEC-CP-019). A bordered rounded
@@ -74,6 +75,8 @@ const props = defineProps<{
 	 * absent the composer is byte-identical to P5 (NFR-TC-001, EC-TC-14).
 	 */
 	toolbar?: ToolbarViewModel;
+	/** P7 (SPEC-AS-012): the active tab's live permission mode for the toggle. */
+	permissionMode?: PermissionMode;
 }>();
 const emit = defineEmits<{
 	submit: [text: string];
@@ -93,6 +96,8 @@ const emit = defineEmits<{
 	'set-mode': [value: string];
 	'set-reasoning': [choice: ReasoningChoice];
 	'toggle-service-tier': [active: boolean];
+	/** P7 (SPEC-AS-012): the live permission-mode change re-emitted to the surface. */
+	'set-permission': [mode: PermissionMode];
 }>();
 
 const { t } = useI18n();
@@ -401,10 +406,12 @@ function onBlockResolved(): void {
 				<ToolbarStrip
 					:vm="toolbar"
 					:notify="notify"
+					:permission-mode="permissionMode"
 					@pick-model="emit('pick-model', $event)"
 					@set-mode="emit('set-mode', $event)"
 					@set-reasoning="emit('set-reasoning', $event)"
 					@toggle-service-tier="emit('toggle-service-tier', $event)"
+					@set-permission="emit('set-permission', $event)"
 				/>
 			</div>
 

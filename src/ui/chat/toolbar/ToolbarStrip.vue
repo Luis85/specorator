@@ -2,6 +2,7 @@
 import type { ToolbarViewModel } from '@/application/chat/toolbar/buildToolbarViewModel';
 import type { ReasoningChoice } from '@/domain/chat/Reasoning';
 import type { NotificationPort } from '@/domain/ports';
+import type { PermissionMode } from '@/domain/chat/PermissionMode';
 import ModelSelector from './ModelSelector.vue';
 import ModeSelector from './ModeSelector.vue';
 import PermissionToggle from './PermissionToggle.vue';
@@ -24,12 +25,14 @@ import UsageMeter from './UsageMeter.vue';
  * trailing end of the wrapped row (NFR-TC-008). No `obsidian`/`v-html`. Claudian
  * ground-truth: `InputToolbar.ts` (`.claudian-input-toolbar`).
  */
-defineProps<{ vm: ToolbarViewModel; notify?: NotificationPort }>();
+defineProps<{ vm: ToolbarViewModel; notify?: NotificationPort; permissionMode?: PermissionMode }>();
 const emit = defineEmits<{
 	'pick-model': [id: string];
 	'set-mode': [value: string];
 	'set-reasoning': [choice: ReasoningChoice];
 	'toggle-service-tier': [active: boolean];
+	/** P7 (SPEC-AS-012): the live permission-mode change re-emitted to the surface. */
+	'set-permission': [mode: PermissionMode];
 }>();
 </script>
 
@@ -50,6 +53,8 @@ const emit = defineEmits<{
 				v-if="vm.permission.visibility.kind === 'visible'"
 				:vm="vm.permission"
 				:notify="notify"
+				:mode="permissionMode"
+				@set="emit('set-permission', $event)"
 			/>
 			<ThinkingSelector
 				v-if="vm.thinking.visibility.kind === 'visible'"
