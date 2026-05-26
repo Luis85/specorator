@@ -118,7 +118,7 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   `npm run lint` 0 errors (12 pre-existing warnings); `vitest run` 27/27. No
   `obsidian`/`node:*`/Vue import in `src/domain/chat/mcp/**`; no `eval` — JSON parse
   only.
-- **Commit:** <pending>
+- **Commit:** `1ff81b07`.
 - **Deviation:** `getMcpServerType` gains a leading `isRecord` guard (returns
   `'stdio'` on a non-object) so it is **total — never throws** for any runtime input
   (SPEC-MC-004 + NFR-MC-004 pin all three functions total; the QA never-throws leg
@@ -126,3 +126,47 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   Claudian. The JSON parse uses `trySync` (the domain layer bans raw `try/catch` per
   the Result-discipline ESLint rule) and maps any parse fault to the contracted
   `'Invalid JSON'` message — behaviour-identical to the Claudian `SyntaxError` branch.
+
+### T-MC-006 — RED pure `McpConfigCodec` round-trip (🧪 qa)
+
+- **Spec/test:** TEST-MC-001/002/007 + EC-MC-12/19/20; SPEC-MC-003;
+  REQ-MC-001/002/007; NFR-MC-004.
+- **Files:** `tests/domain/chat/mcp/McpConfigCodec.test.ts` (new — the
+  load-or-default (null/empty/unparseable/no-`mcpServers`/non-object-`mcpServers` →
+  `ok([])`), the sidecar default-application + `disabledTools` filter +
+  skip-invalid, the serialise default-pruning (all-default ⇒ no sidecar) +
+  non-default-only fields + 2-space indent + round-trip, the CLI-key preservation
+  (unknown top-level keys + non-`servers` `_claudian` keys) + the empty-`_claudian`
+  deletion + a non-`servers` key kept even when all servers are default, and the
+  never-throws assertion).
+- **Outcome:** done — RED confirmed (19 failing; the codec functions are not yet
+  exported from `@/domain/chat/mcp`).
+- **Commit:** `e4790abe`.
+
+### T-MC-007 — `McpConfigCodec.ts` + barrel (🔨 dev)
+
+- **Spec/req:** SPEC-MC-003; REQ-MC-001/002/007; NFR-MC-004.
+- **Files:** `src/domain/chat/mcp/McpConfigCodec.ts` (new —
+  `deserializeMcpConfig(raw)` (load-or-default `ok([])`; `hydrateServer` applies
+  `DEFAULT_MCP_SERVER` defaults; `normalizeDisabledTools` keeps trimmed-non-empty;
+  skip `!isValidMcpServerConfig`) + `serializeMcpConfig(servers, existingRaw)`
+  (write `mcpServers` + ONLY non-default `_claudian.servers` via `buildSidecarMeta`;
+  `resolveClaudian` preserves non-`servers` `_claudian` keys + unknown top-level
+  keys; emits no/empty `_claudian` when nothing non-default; 2-space indent); ported
+  from claudian `McpStorage.load:14-56` + `save:58-134`, `JSON.parse` via `trySync`,
+  the `delete` operator replaced by object-rebuild rest-spread (codec ban)); the
+  barrel `index.ts` re-exports appended.
+- **Outcome:** done — the prior RED (TEST-MC-001/002/007 + EC-MC-12/19/20) now green
+  (19/19); the full `tests/domain/chat/mcp` + `ChatTurn` suite 61/61; load-or-default,
+  default-pruning, CLI-key preservation, 2-space indent, never-throws all proven.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); whole-project
+  `npm run lint` 0 errors (12 pre-existing warnings); `vitest run` 19/19 (codec) +
+  61/61 (mcp + ChatTurn). No `obsidian`/`node:*`/Vue import in `src/domain/chat/mcp/**`.
+- **Commit:** <pending>
+- **Deviation:** `normalizeDisabledTools` filters by **trimmed**-non-empty on load
+  (claudian load only filters `typeof === 'string'` and trims on save); the QA
+  contract (TEST-MC-001) + SPEC-MC-003 ("filtered to non-empty strings") asserts a
+  whitespace-only `'  '` is dropped on load, so load + save are symmetric. The kept
+  values stay verbatim (untrimmed) — only the filter predicate trims. The `delete`
+  operator was replaced by rest-spread object-rebuild (the project's `no-restricted-syntax`
+  bans `delete`); behaviour-identical to the Claudian `delete file._claudian`.

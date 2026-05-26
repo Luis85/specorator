@@ -20,3 +20,4 @@ export {
 	getMcpServerType,
 	isValidMcpServerConfig,
 } from './McpConfigParser';
+export { deserializeMcpConfig, serializeMcpConfig } from './McpConfigCodec';
