@@ -1,10 +1,10 @@
 ---
 feature: mcp-client
 area: MC
-current_stage: requirements
+current_stage: design
 status: active
 last_updated: 2026-05-26
-last_agent: orchestrator (bootstrap)
+last_agent: pm (requirements — PRD-MC-001 accepted)
 epic: claudian-reboot
 phase: P8
 integration_branch: next
@@ -12,7 +12,7 @@ reference: D:\Projects\claudian-main
 artifacts:
   idea.md: skipped (parity-charter §3.7/§4 P8 + audits + claudian-main stand in, mirrors P1-P7)
   research.md: skipped
-  requirements.md: pending
+  requirements.md: accepted (PRD-MC-001; CLAR-MC-001..005 resolved-by-recommendation → P8 architect ADRs, notably McpConfigStorePort vault-file + McpClientPort transport contract)
   design.md: pending
   spec.md: pending
   tasks.md: pending
@@ -33,7 +33,7 @@ artifacts:
 |---|---|---|
 | 1. Idea | `idea.md` | skipped |
 | 2. Research | `research.md` | skipped |
-| 3. Requirements | `requirements.md` | pending |
+| 3. Requirements | `requirements.md` | accepted (PRD-MC-001) |
 | 4. Design | `design.md` | pending |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
@@ -107,4 +107,59 @@ merge. Manual-Obsidian + parity-screenshot legs accumulate for the SINGLE FINAL 
                           McpConfigStorePort + config source (vault Claude-CLI-readable vs device-local
                           — resolve the CHARTER-REQ-SET tension), and how enabled MCP servers reach the
                           runtime + the P6 selector (additive). Claude-only (non-Claude MCP is P9+, out).
+
+2026-05-26 (pm): Stage 3 ACCEPTED. Wrote PRD-MC-001 (specs/mcp-client/requirements.md):
+                 36 EARS REQ-MC grouped — config/parse 001-007 · server-manager lifecycle 010-016 ·
+                 transports 020-023 · tester 030-034 · settings UI 040-045 · selector+runtime 050-054 ·
+                 security 061-065 · a11y+additivity 070-082 — + 12 NFR-MC + metrics + release criteria.
+                 Each REQ carries Given/When/Then, MoSCoW, a 1:1 claudian path, and a future TEST-MC id.
+                 GROUNDED IN CLAUDIAN:
+                 - Config SOURCE = a VAULT FILE `.claude/mcp.json` (McpStorage.ts:9 MCP_CONFIG_PATH) —
+                   an `mcpServers` map + a `_claudian` per-server metadata sidecar (enabled/contextSaving/
+                   disabledTools/description); the Claude Agent-SDK/CLI reads this path. Four paste formats
+                   parsed (McpConfigParser.parseClipboardConfig); malformed → Result.err, never crash.
+                 - TRANSPORTS = stdio / SSE / HTTP, ALL THREE P8-BACKED for Claude (McpTester.ts branches);
+                   bare-url defaults to http (getMcpServerType). Tester = 10s AbortController timeout,
+                   PARTIAL-SUCCESS (connect ok but listTools fails → success+empty tools), friendly error
+                   map, Node http/https fetch to bypass renderer CORS (createNodeFetch) while keeping SDK
+                   transports. Real transports + the MCP SDK = coverage-excluded infra (manual leg M1).
+                 - SELECTOR + RUNTIME = P6 McpSelector seam (visible-empty "coming later") now LISTS +
+                   TOGGLES enabled servers + count badge; an enabled server's active set reaches the turn
+                   via the ADDITIVE ChatRuntimeQueryOptions.enabledMcpServers? (currently EXCLUDED in
+                   ChatTurn.ts:51 — introduced additively); disabledTools → mcp__<server>__<tool> disallowed.
+                 - SECURITY = stdio spawns bounded+explicit ({...process.env,...config.env,PATH:enhanced},
+                   parsed cmd+args, stderr:'ignore', NO shell-eval); user explicitly adds every server (no
+                   auto-discover); config is inert data, never eval-ed, no plaintext secret duplicated by P8;
+                   an MCP tool call is GATED by the P7 ApprovalManager (setApprovalCallback seam) — not
+                   auto-trusted; a malformed/unreachable server degrades gracefully (never crashes chat).
+                 ADDITIVITY: with NO MCP server configured, P1-P7 BYTE-IDENTICAL (REQ-MC-082, NFR-MC-001) —
+                 the P6 selector keeps its visible-empty seam; the query emits no enabledMcpServers.
+                 CONFIG-SOURCE RECOMMENDATION (CLAR-MC-001 → McpConfigStorePort ADR): VAULT FILE, not
+                 device-local. Diverges from ADR-PSR-002 (device-local SettingsPort) + P7 device-local
+                 ApprovalRuleStorePort BECAUSE the MCP list is project/vault config the Claude CLI must READ
+                 from a known path, not a personal device pref. Tension flagged (vault file = git-shared) —
+                 acceptable for non-secret server config; the auth/secret tension → CLAR-MC-004 (no plaintext
+                 secret managed by P8; SecretStorePort follow-up ≈P10).
+                 CLAR-MC-001..005 resolved-by-recommendation (autonomous; architect ADRs ratify):
+                 001 config source = vault `.claude/mcp.json` · 002 keep the `.claude/mcp.json` path
+                 (Claude-CLI-readable, not Specorator-branded) · 003 bundle @modelcontextprotocol/sdk +
+                 record rationale (AGENTS.md §8) · 004 server auth stays in the user-authored config, no new
+                 plaintext secret store, SecretStorePort deferred · 005 additive enabledMcpServers? =
+                 getActiveServers(mentionedNames) with an empty mention set for P8 (composer @mention MCP
+                 cross-link = NG3, deferred).
+                 NON-GOALS: non-Claude MCP (NG1, charter §6b L258) · author/bundle MCP servers (NG2) ·
+                 composer @mention-MCP cross-link (NG3) · bespoke running-tool UI (NG4) · secret editor (NG5)
+                 · settings-shell/i18n/a11y polish P10-12 (NG6) · legacy migration (NG7, CHARTER-REQ-FRESH).
+                 HAND-OFF → /spec:design (architect): file the McpConfigStorePort ADR (vault `.claude/mcp.json`
+                 + `_claudian` sidecar round-trip + 3-bridge backing — ratify CLAR-MC-001/002) FIRST, plus the
+                 McpClientPort ADR (the narrow transport contract testServer/listTools over stdio/SSE/HTTP —
+                 stdio = subprocess security surface like ShellExecPort; real transports coverage-excluded
+                 infra, Mock scriptable canned, LS inert — ratify CLAR-MC-003/004) and the additive
+                 enabledMcpServers? runtime-seam shape (CLAR-MC-005). Design the pure-domain config parse/
+                 validate (parseClipboardConfig→Result, getMcpServerType, isValidMcpServerConfig), the
+                 McpServerManager application logic (add/edit/remove/enable/disable, getActiveServers +
+                 disallowed-tools), the settings UI (McpServerModal add/edit + McpSettingsManager list +
+                 McpTestModal result, no v-html/window.confirm, --sp-* mcp-modal/mcp-settings/mcp-selector
+                 slice), the P6-selector list+toggle, and the P7 approval-gating wiring for MCP tools. Part A
+                 UX + Part B visual parity per charter §5. CLAR-MC-001..005 do not block the architect.
 ```
