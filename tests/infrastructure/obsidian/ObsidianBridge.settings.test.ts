@@ -35,6 +35,9 @@ describe('ObsidianBridge settings — device-local store (TEST-PSR-024)', () => 
 			sessionsFolder: '.specorator/sessions',
 			maxTabs: 3,
 			customSystemPrompt: '',
+			// P9 (SPEC-PV-001/027): the additive device-local provider selection.
+			activeProvider: 'claude' as const,
+			enabledProviders: [] as const,
 		};
 		await bridge.saveSettings(saved);
 

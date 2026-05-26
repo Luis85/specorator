@@ -12,6 +12,8 @@ import {
 	DEFAULT_SETTINGS,
 	resolveSessionsFolder,
 	clampMaxTabs,
+	coerceActiveProvider,
+	coerceEnabledProviders,
 	type PluginSettings,
 } from '@/domain/settings/PluginSettings';
 import { trySync, tryAsync } from '@/domain/shared/tryAsync';
@@ -507,7 +509,19 @@ export class ObsidianBridge
 			typeof obj.customSystemPrompt === 'string'
 				? obj.customSystemPrompt
 				: DEFAULT_SETTINGS.customSystemPrompt;
-		return { locale, logLevel, sessionsFolder, maxTabs, customSystemPrompt };
+		// P9 (SPEC-PV-001/027): the device-local provider selection. Load-or-default
+		// through the pure coercers — never a secret, no migration (ADR-PV-002).
+		const activeProvider = coerceActiveProvider(obj.activeProvider);
+		const enabledProviders = coerceEnabledProviders(obj.enabledProviders);
+		return {
+			locale,
+			logLevel,
+			sessionsFolder,
+			maxTabs,
+			customSystemPrompt,
+			activeProvider,
+			enabledProviders,
+		};
 	}
 
 	private _shouldLog(level: 'debug' | 'info' | 'warn' | 'error'): boolean {

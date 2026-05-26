@@ -49,6 +49,51 @@ WIRE-IN/GATE batches ride their own subagents.
   (`:142`) STAYS banned. Recorded in `test-plan.md` + escalated in `workflow-state.md`.
 - **Lint:** whole-project `npm run lint` over the pre-existing surface passes clean
   (no new key/port referenced yet).
-- **Commit:** _filled after commit_.
+- **Commit:** `33cf3225`.
 - **Deviation:** the SecretStorePort/SECRET_STORE_PORT guard-relax (see above); no
   file under `src/` changed in this task.
+
+## DOMAIN batch (T-PV-002..010)
+
+### T-PV-002 — RED widened `ProviderId` union + settings provider fields (🧪 qa)
+
+- **Spec/test:** TEST-PV-005 (widened-union), TEST-PV-114 (settings/additivity);
+  SPEC-PV-001/027; REQ-PV-005/103/114; NFR-PV-001.
+- **Files:** `tests/domain/chat/ProviderId.test.ts` (new — the exactly-three-member
+  union + `'claude'` still-assignable type legs), `tests/domain/settings/
+  PluginSettings.ts.test.ts` (new — `activeProvider` default `'claude'` +
+  `enabledProviders` default `[]` + the P0–P8 byte-identical legs).
+- **Outcome:** done — RED confirmed: `vue-tsc -p tsconfig.lint.json` fails on the
+  `'codex'`/`'opencode'` not-assignable-to-`'claude'` + the missing
+  `activeProvider`/`enabledProviders` `PluginSettings` keys; the runtime defaults
+  also fail (`undefined`).
+- **Commit:** `26e6e898`.
+
+### T-PV-003 — `ProviderId.ts` widened + `PluginSettings` provider fields (🔨 dev)
+
+- **Spec/req:** SPEC-PV-001/027; REQ-PV-005/103; NFR-PV-001.
+- **Files:** `src/domain/chat/ProviderId.ts` (widened to
+  `'claude' | 'codex' | 'opencode'`, additive), `src/domain/settings/PluginSettings.ts`
+  (appended `activeProvider: ProviderId` default `'claude'` + `enabledProviders:
+  readonly ProviderId[]` default `[]`; the P0–P8 fields byte-identical; added pure
+  `coerceActiveProvider` + `coerceEnabledProviders` load-or-default helpers). Same-task
+  additive fan-out (the two new required fields force every full-`PluginSettings`
+  literal to load-or-default them): `src/core/core-settings.ts` (validateSettings
+  coerces the two fields), `src/infrastructure/obsidian/ObsidianBridge.ts:_readDeviceLocalSettings`
+  (same), `tests/infrastructure/obsidian/ObsidianBridge.settings.test.ts` (the
+  round-trip fixture gains the two additive fields), `tests/core/core-settings.test.ts`
+  (the exact-key additivity guard grows by the two keys — same pattern P4 used for
+  `customSystemPrompt`).
+- **Outcome:** done — TEST-PV-005 (type) + TEST-PV-114 (settings) now pass; every
+  P0–P8 `'claude'` site type-checks unchanged.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 (whole project) + `npm run lint` 0
+  errors (14 pre-existing warnings) + `npx vitest run` full suite 247 files / 1778
+  tests pass.
+- **Commit:** _filled after commit_.
+- **Deviation:** none beyond the build-green additive fan-out (the two new
+  `PluginSettings` fields are required, not optional, per SPEC-PV-001/027, so the
+  three full-literal construction sites + two exact-key tests grow in the same task —
+  the established P3/P4 additive-grow pattern). `@/domain/settings` now imports the
+  pure type `ProviderId` from `@/domain/chat` — a domain-internal acyclic type dep
+  (`ProviderId.ts` has no imports), not a layer violation (ADR-001 forbids only
+  cross-layer imports).

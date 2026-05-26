@@ -3,6 +3,8 @@ import {
   DEFAULT_SETTINGS,
   resolveSessionsFolder,
   clampMaxTabs,
+  coerceActiveProvider,
+  coerceEnabledProviders,
   type PluginSettings,
 } from '@/domain/settings/PluginSettings'
 
@@ -51,6 +53,10 @@ export const coreSettingsModule = defineModule<PluginSettings>({
         typeof r.customSystemPrompt === 'string'
           ? r.customSystemPrompt
           : DEFAULT_SETTINGS.customSystemPrompt,
+      // P9 (SPEC-PV-001/027): the device-local provider selection. Load-or-default
+      // through the pure coercers — never a secret, no migration (ADR-PV-002).
+      activeProvider: coerceActiveProvider(r.activeProvider),
+      enabledProviders: coerceEnabledProviders(r.enabledProviders),
     }
   },
 
