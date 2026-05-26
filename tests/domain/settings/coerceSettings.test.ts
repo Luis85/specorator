@@ -117,7 +117,7 @@ describe('coerceEnvScopes (SPEC-SS-001)', () => {
 	it('round-trips + never throws', () => {
 		const value = { shared: [{ key: 'FOO', value: { kind: 'inline' as const, text: 'bar' } }] };
 		expect(coerceEnvScopes(value as unknown)).toEqual(value);
-		expect(() => coerceEnvScopes(42 as unknown)).not.toThrow();
+		expect(() => coerceEnvScopes(42)).not.toThrow();
 	});
 });
 
@@ -158,7 +158,7 @@ describe('coerceProviderDefaultModel / coerceProviderCliPath (SPEC-SS-001)', () 
 		expect(coerceProviderDefaultModel({})).toBeUndefined();
 		expect(coerceProviderCliPath([])).toBeUndefined();
 		expect(coerceProviderCliPath({ bogus: 'x' })).toBeUndefined();
-		expect(() => coerceProviderDefaultModel(42 as unknown)).not.toThrow();
+		expect(() => coerceProviderDefaultModel(42)).not.toThrow();
 	});
 });
 
@@ -169,6 +169,6 @@ describe('coercePermissionMode (SPEC-SS-001)', () => {
 		expect(coercePermissionMode('yolo')).toBe('yolo');
 		expect(coercePermissionMode('bogus')).toBeUndefined();
 		expect(coercePermissionMode(undefined)).toBeUndefined();
-		expect(() => coercePermissionMode(42 as unknown)).not.toThrow();
+		expect(() => coercePermissionMode(42)).not.toThrow();
 	});
 });

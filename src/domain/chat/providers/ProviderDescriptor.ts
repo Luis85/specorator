@@ -59,6 +59,13 @@ export interface ProviderDescriptor {
 	isEnabled(settings: PluginSettings): boolean;
 	/** PURE: whether this provider owns the given model id (parity `ownsModel`, REQ-PV-060). Total. */
 	ownsModel(model: string): boolean;
+	/**
+	 * P10-additive (SPEC-SS-002, REQ-SS-051): the env-key patterns the classifier
+	 * iterates to attribute a key to this provider — DESCRIPTOR DATA, never a
+	 * `switch (providerId)` branch (NFR-SS-008). OPTIONAL so the P9 frozen-matrix
+	 * stays byte-identical; a descriptor without patterns owns no env key.
+	 */
+	readonly environmentKeyPatterns?: readonly RegExp[];
 }
 
 /** The default + unknown/disabled fallback provider (SPEC-PV-001/002/003). */
@@ -117,6 +124,7 @@ export const CLAUDE_DESCRIPTOR: ProviderDescriptor = Object.freeze({
 	}),
 	isEnabled: claudeIsEnabled,
 	ownsModel: claudeOwnsModel,
+	environmentKeyPatterns: Object.freeze([/^ANTHROPIC_/i, /^CLAUDE_/i]),
 });
 
 export const CODEX_DESCRIPTOR: ProviderDescriptor = Object.freeze({
@@ -141,6 +149,7 @@ export const CODEX_DESCRIPTOR: ProviderDescriptor = Object.freeze({
 	}),
 	isEnabled: (settings: PluginSettings) => nonClaudeIsEnabled('codex', settings),
 	ownsModel: codexOwnsModel,
+	environmentKeyPatterns: Object.freeze([/^OPENAI_/i, /^CODEX_/i]),
 });
 
 export const OPENCODE_DESCRIPTOR: ProviderDescriptor = Object.freeze({
@@ -165,6 +174,7 @@ export const OPENCODE_DESCRIPTOR: ProviderDescriptor = Object.freeze({
 	}),
 	isEnabled: (settings: PluginSettings) => nonClaudeIsEnabled('opencode', settings),
 	ownsModel: opencodeOwnsModel,
+	environmentKeyPatterns: Object.freeze([/^OPENCODE_/i]),
 });
 
 /** The frozen registered-provider table (SPEC-PV-002). The single source of capability truth. */
