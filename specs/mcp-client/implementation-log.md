@@ -932,3 +932,29 @@ GATE (T-MC-038..043) batches are out of this batch's scope.
   `(server)=>Promise<void>` carries no callback), matching SPEC-MC-023's "the host owns
   its own probe + per-tool toggle lifecycle"; the surface re-loads after the test modal
   closes so its snapshot reflects the saved truth.
+
+## T-MC-037 — `npm run dev` standalone MCP smoke (dev leg) (🧪, dev leg)
+
+- **Spec/req:** TEST-MC-040 (dev leg), TEST-MC-043 (dev leg), TEST-MC-044 (dev leg),
+  TEST-MC-050 (dev leg), TEST-MC-052 (dev leg), TEST-MC-082 (dev leg), NFR-MC-005.
+- **Files:** `tests/ui/main.ts.test.ts` (the standalone MCP smoke leg added under
+  T-MC-035 — `src/ui/main.ts` mounts the MCP-wired surface against `MockBridge` with
+  the two MCP ports + the browser-safe seam stand-ins, no inject-or-throw, the MCP
+  settings + selector hidden on the inert Mock `supportsMcpTools:false` caps — the P7
+  byte-identical state); `specs/mcp-client/test-plan.md` (the WIRE-IN batch table + the
+  TEST-MC-037 deferred-manual leg note added under T-MC-036).
+- **Commit:** (rides T-MC-035 `0b6b82c4` (the automated leg) + T-MC-036 `18f0093e`
+  (the test-plan record); no new code in this leg).
+- **Outcome:** done (deterministic leg automated + PASS; the interactive live-dev-server
+  flow DEFERRED to the human run, recorded in `test-plan.md`).
+- **How T-MC-037 was handled:** the deterministic mount + the no-MCP fold legs are
+  automated in `tests/ui/main.ts.test.ts` (the standalone MCP smoke describe) and run
+  green under the heavy-mount pool (`--pool=threads --no-file-parallelism
+  --testTimeout=30000`) alongside `main.test.ts` / `main.rr.test.ts` — 8/8. The
+  interactive live-dev-server flows (seed a server against an MCP-capable runtime, drive
+  the add/edit modal incl. paste/name-required/parse-error, the test modal across the
+  five states, the selector toggle + count badge, a toggle persists + re-derives, a turn
+  folds `enabledMcpServers` only when ≥ 1 active server) require the long-running
+  `npm run dev` server — per the brief the agent does NOT start it; recorded as a
+  DEFERRED human-run leg in `test-plan.md` (TEST-MC-037).
+- **Deviation:** none.
