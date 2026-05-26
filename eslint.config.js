@@ -678,7 +678,10 @@ export default defineConfig(
 	{
 		files: ['src/plugin/**/*.ts', 'src/ui/**/*.ts', 'src/ui/**/*.vue'],
 		rules: {
-			'obsidianmd/ui/sentence-case': ['error', { brands: ['Specorator', 'MCP'] }],
+			'obsidianmd/ui/sentence-case': [
+				'error',
+				{ brands: ['Specorator', 'MCP', 'Claude', 'Codex', 'Opencode', 'API'] },
+			],
 		},
 	},
 
