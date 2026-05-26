@@ -657,3 +657,30 @@ this batch's scope.
   SPEC-MC-016 requires the current name set; the modal-seam fn `OpenMcpServerModalFn`
   carries only `input?`, so the host passes the live list to the component). The
   `--sp-mcp-status-error` token is minted in T-MC-034.
+
+### T-MC-030 / T-MC-031 — `McpTestModal.vue` (the 5-state machine)
+
+- **Files:**
+  - `tests/ui/chat/mcp/McpTestModal.test.ts` + `.po.ts` (new) — RED.
+  - `src/ui/chat/mcp/McpTestModal.vue` (new) — green.
+- **Spec:** SPEC-MC-017, SPEC-MC-028, SPEC-MC-024, REQ-MC-016/023/030..034/044/070/072,
+  NFR-MC-006/007/008 (TEST-MC-016/030..034/044 A legs).
+- **Description:** On mount the modal runs the probe via the injected `McpClientPort`
+  (`useMcpClientPort`): `!isAvailable()` short-circuits to unavailable (no connection);
+  otherwise `client.test(server)` resolves and is classified into success / partial
+  (success + empty tool list) / timeout (error contains "timeout") / unavailable (error
+  contains "unavailable") / error. Success renders the server header + per-tool
+  enable/disable checkboxes (checked = enabled = not in `server.disabledTools`); a toggle
+  emits `set-tool-disabled:[tool, !enabled]`. A visually-hidden `aria-live="polite"`
+  region announces the running → result transition. The rendered text is only the tool
+  names + the friendly category message — no env/auth value (REQ-MC-072). `close` on the
+  close control.
+- **Outcome:** done — the prior RED (TEST-MC-016/030..034 A legs/044) now green across the
+  five-state matrix: 10/10.
+- **Commits:** RED `T-MC-030`; green `T-MC-031` (SHAs in close-out).
+- **Verify:** `npx vitest run tests/ui/chat/mcp/McpTestModal.test.ts` **10/10 green**;
+  whole-project `vue-tsc` **0 errors**; whole-project `npm run lint` **0 errors** (14
+  pre-existing warnings only). No `obsidian`/`node:*` import under `src/ui/**`; no
+  `v-html`; the no-secret-render assertion holds; co-located PO present.
+- **Deviation:** none. The `--sp-mcp-status-ok`/`--sp-mcp-status-error`/`--sp-mcp-row-gap`
+  tokens are minted in T-MC-034.
