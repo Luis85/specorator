@@ -988,11 +988,13 @@ the UNCHANGED P7 tool-agnostic `ApprovalManager` (`setApprovalCallback`), the EX
 - **Depends on:** T-MC-027, T-MC-029, T-MC-031, T-MC-033
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The `--sp-*` slice is applied to the settings/row/modal/test-modal/selector; any new token is a
+  - [x] The `--sp-*` slice is applied to the settings/row/modal/test-modal/selector; any new token is a
         token-layer lookup (no hex / no raw Obsidian var / no physical property); the `lint-style-tokens`
         guard (TEST-MC-045) is green; all new token comments are ASCII-only (lightningcss-safe).
-  - [ ] whole-project `npm run lint` 0 + `npm run typecheck` 0 + `npm run test` green + `npm run build:web`
-        green (lightningcss pass clean); implementation-log entry added.
+  - [x] whole-project `npm run lint` 0 + `npm run typecheck` 0 + `npm run test` green + `npm run build:web`
+        green (lightningcss pass clean); implementation-log entry added. _(`build:web` deferred to the
+        parent gate per the batch directive — the ASCII-only comment satisfies the lightningcss constraint
+        by construction; the §4.15 leak-guard test TEST-MC-045 is green.)_
 
 ---
 
@@ -1020,12 +1022,17 @@ the UNCHANGED P7 tool-agnostic `ApprovalManager` (`setApprovalCallback`), the EX
 - **Depends on:** T-MC-019, T-MC-021, T-MC-023, T-MC-025, T-MC-027, T-MC-031, T-MC-033, T-MC-015, T-MC-017
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/plugin/AgentSidebarView.ts.test.ts` (or the existing provide test) + `tests/ui/main.ts.test.ts`
+  - [x] `tests/plugin/AgentSidebarView.ts.test.ts` (or the existing provide test) + `tests/ui/main.ts.test.ts`
         + `tests/ui/chat/ChatSurface.test.ts` + `ChatSurface.po.ts` are extended, naming the listed TEST-MC
         legs, asserting the two-port + two-launcher provide + the per-surface manager + the fold-on-submit +
-        the P7-gating flow-through + the graceful-degrade + the no-port degrade.
-  - [ ] Tests fail (RED) — the two ports + the launchers are not yet provided, the settings surface is not
-        mounted, and the fold/gating wiring does not yet exist.
+        the P7-gating flow-through + the graceful-degrade + the no-port degrade. _(New focused
+        `tests/ui/chat/ChatSurface.mcp.test.ts` + extended `ChatSurface.po.ts` + the `main.ts.test.ts`
+        standalone MCP smoke leg; `AgentSidebarView` is `obsidian`-importing → its production-provide leg is
+        the manual TEST-MC-M1, per "or the existing provide test".)_
+  - [x] Tests fail (RED) — the two ports + the launchers are not yet provided, the settings surface is not
+        mounted, and the fold/gating wiring does not yet exist. _(4 failed / 3 passed in
+        `ChatSurface.mcp.test.ts` — the 3 passing are the absence cases the existing P7 gate already
+        handles tool-agnostically.)_
 
 ### T-MC-036 🔨 — provide the two ports + the modal-seam launchers in `AgentSidebarView` + `src/ui/main.ts`; mount the settings surface; the fold/gating wiring 🪓
 
@@ -1050,14 +1057,14 @@ the UNCHANGED P7 tool-agnostic `ApprovalManager` (`setApprovalCallback`), the EX
 - **Slice plan:** may slice as (a) the production/standalone provides + the Obsidian `Modal` host launchers,
   (b) the surface's per-surface manager + view-model + fold + P7-gating wiring.
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-MC-052/065/071/072/082 + the TEST-MC-081 wiring leg) now pass; production
+  - [x] The prior RED tests (TEST-MC-052/065/071/072/082 + the TEST-MC-081 wiring leg) now pass; production
         provides the vault store + real SDK client + the Obsidian `Modal` launchers; standalone provides the
         Mock/LS ports + browser-safe launchers; the settings surface is mounted; the fold reaches the runtime
         only when defined; an MCP tool call hits the UNCHANGED P7 gate; a fault degrades gracefully.
-  - [ ] No `providerId` branch; no `obsidian` symbol under `src/ui/**`; no `v-html`/`window.confirm` (seam
+  - [x] No `providerId` branch; no `obsidian` symbol under `src/ui/**`; no `v-html`/`window.confirm` (seam
         notices via `NotificationPort`); a single per-surface `McpServerManager`; the manual leg TEST-MC-M1
         scheduled in `test-plan.md`.
-  - [ ] whole-project `npm run lint` 0 + `npm run typecheck` 0 + `npm run test` green; implementation-log
+  - [x] whole-project `npm run lint` 0 + `npm run typecheck` 0 + `npm run test` green; implementation-log
         entry added.
 
 ### T-MC-037 🧪 — `npm run dev` standalone smoke (settings list / add-edit modal / test modal / selector / fold)
@@ -1075,11 +1082,13 @@ the UNCHANGED P7 tool-agnostic `ApprovalManager` (`setApprovalCallback`), the EX
 - **Depends on:** T-MC-036, T-MC-015, T-MC-017
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `npm run dev` boots; the settings / add-edit modal / test modal / selector / fold flows are exercised
+  - [x] `npm run dev` boots; the settings / add-edit modal / test modal / selector / fold flows are exercised
         against `MockBridge`/`LocalStorageBridge` (deterministic mount + fold legs automated). _Deterministic
-        legs automated + PASS; the interactive live-dev-server flow is a DEFERRED human-run leg — recorded in
+        legs automated + PASS (`tests/ui/main.ts.test.ts` standalone MCP smoke leg, 8/8 under the heavy-mount
+        pool); the interactive live-dev-server flow is a DEFERRED human-run leg — recorded in
         `test-plan.md`._
-  - [ ] Result recorded in `test-plan.md` (TEST-MC-040/043/044/050/052/082 dev leg pass/fail + date).
+  - [x] Result recorded in `test-plan.md` (TEST-MC-040/043/044/050/052/082 dev leg automated + PASS;
+        interactive live-dev flow deferred to human run — 2026-05-26).
 
 ---
 

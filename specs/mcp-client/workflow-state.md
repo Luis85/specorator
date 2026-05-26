@@ -16,8 +16,8 @@ artifacts:
   design.md: complete (DESIGN-MC-001; Parts A/B/C; ADR-MC-001 McpConfigStorePort vault file + ADR-MC-002 McpClientPort transport seam + ADR-MC-003 enabledMcpServers? + P7 approval composition — all accepted)
   spec.md: complete (SPEC-MC-001; 30 spec items SPEC-MC-001..030 across domain/infra/app/ui/styles/cross-cutting; EC-MC-1..20; TEST-MC-001..082 + 020a + M1/M2; REQ-MC ↔ SPEC-MC ↔ TEST-MC coverage table — all 45 REQ-MC + 12 NFR-MC chained; the five design open items resolved in §0)
   tasks.md: complete (TASKS-MC-001; 42 tasks T-MC-001..043, TDD-ordered RED(qa)→impl(dev), 7 batches DOMAIN→INFRA→APP→UI→STYLES→WIRE-IN→GATE; dep graph + parallel batches + critical path + full SPEC/REQ/NFR/TEST coverage table; NO guard-relax needed; @modelcontextprotocol/sdk dep-add = T-MC-012; manual legs T-MC-041/042 (M1/M2))
-  implementation-log.md: in-progress (DOMAIN T-MC-001..011 + INFRA T-MC-012..017 + APPLICATION T-MC-018..021 + UI T-MC-022..033 complete; STYLES T-MC-034 + WIRE-IN T-MC-035..037 + GATE T-MC-038..043 batches pending)
-  test-plan.md: in-progress (guard-verification + Obsidian-infra file-naming directive + manual legs TEST-MC-M1/M2 + TEST-MC-021/022/061/064 scaffolded; DOMAIN-batch automated legs recorded)
+  implementation-log.md: in-progress (DOMAIN T-MC-001..011 + INFRA T-MC-012..017 + APPLICATION T-MC-018..021 + UI T-MC-022..033 + STYLES T-MC-034 + WIRE-IN T-MC-035..037 complete; GATE T-MC-038..043 — invariant gate + human manual legs + final DoD/PR — pending)
+  test-plan.md: in-progress (guard-verification + Obsidian-infra file-naming directive + manual legs TEST-MC-M1/M2 + TEST-MC-021/022/061/064 scaffolded; DOMAIN-batch + WIRE-IN-batch automated legs recorded; TEST-MC-037 interactive live-dev flow deferred to human run)
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-MC-001; ADR-MC-001..003 accepted) |
 | 5. Specification | `spec.md` | complete (SPEC-MC-001; 30 items, full coverage) |
 | 6. Tasks | `tasks.md` | complete (TASKS-MC-001; 42 tasks T-MC-001..043, TDD-ordered, full coverage) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-MC-001..011 + INFRA T-MC-012..017 + APPLICATION T-MC-018..021 + UI T-MC-022..033 complete; STYLES T-MC-034 → GATE T-MC-043 pending) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-MC-001..011 + INFRA T-MC-012..017 + APPLICATION T-MC-018..021 + UI T-MC-022..033 + STYLES T-MC-034 + WIRE-IN T-MC-035..037 complete; GATE T-MC-038..043 pending) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; test-report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -435,4 +435,45 @@ merge. Manual-Obsidian + parity-screenshot legs accumulate for the SINGLE FINAL 
                  the human manual legs T-MC-041/042 M1/M2). NEXT agent: the STYLES dev (T-MC-034; deps
                  T-MC-027/029/031/033 are committed) then the WIRE-IN qa/dev (T-MC-035 RED is ready; the Vue
                  seam handles + composables + components it provides/mounts are all committed).
+
+2026-05-26 (dev): STYLES (T-MC-034) + WIRE-IN (T-MC-035 RED → T-MC-036 → T-MC-037 dev leg) COMPLETE on
+                 feature/mcp-client. Commits: T-MC-034 d61e9f6a (+ c3353bd7 SHA backfill); T-MC-035 RED
+                 0b6b82c4 (+ c8ddc701); T-MC-036 18f0093e (+ 163342f8); T-MC-037 91c111f6.
+                 - STYLES: minted the §4.15 (ASCII `section 4.15` marker) MCP token slice in
+                   src/ui/styles/tokens.css — --sp-mcp-row-gap=var(--sp-space-2) /
+                   --sp-mcp-status-ok=var(--sp-success) / --sp-mcp-status-error=var(--sp-status-error) /
+                   --sp-mcp-selector-badge=var(--sp-accent), all token-layer var() lookups, ASCII-only
+                   comments (lightningcss-safe). Added the §4.15 presence + leak-guard tests (TEST-MC-045) +
+                   bounded the §4.14 slice with the new marker. The five MCP widgets resolve the four tokens.
+                 - WIRE-IN: AgentSidebarView provides MCP_CONFIG_STORE_PORT=ObsidianBridge.mcpConfigStore +
+                   MCP_CLIENT_PORT=ObsidianBridge.mcpClient + the OPEN_MCP_SERVER_MODAL/OPEN_MCP_TEST_MODAL
+                   launchers (buildMcpModalLaunchers → new Obsidian Modal hosts McpServerModalHost /
+                   McpTestModalHost in src/plugin/**, the ONLY obsidian + MCP-modal imports in the wiring).
+                   src/ui/main.ts provides the Mock ports + browser-safe seam stand-ins (auto-dismiss / no-op).
+                   ChatSurface builds ONE per-surface McpServerManager, loads on mount, mounts
+                   McpSettingsManager, threads the live mcpVm + set-mcp-enabled through ChatComposer →
+                   ToolbarStrip → McpSelector, wires add/paste/edit/remove/test via the seam launchers, and
+                   binds getEnabledMcpServers(∅) into bindTabDeps. tabsStore._turnQueryOptions folds
+                   enabledMcpServers ONLY when defined (additive alongside the P4 append / P6 controls folds;
+                   omitted when empty → byte-identical to P7). An mcp__<server>__<tool> tool call routes
+                   through the UNCHANGED P7 ApprovalManager via the existing ApprovalGateRuntime — no
+                   special-case, no providerId branch. Absent ports → P6 empty seam + the turn omits the field.
+                 VERIFICATION (whole-project): vue-tsc -p tsconfig.lint.json 0 errors; npm run lint 0 errors
+                 (14 pre-existing warnings only); vitest — tokens 19/19, ChatSurface.mcp 7/7,
+                 surface/toolbar/approvals/tabsStore/mcp 150/150, ChatComposer 38/38, and the STANDALONE-MOUNT
+                 tests main.ts/main.test/main.rr 8/8 GREEN after the provide. No obsidian/SDK under src/ui/**;
+                 no v-html/window.confirm; styles.css untouched (no build run — the parent regenerates at the
+                 gate). graphify-out left unstaged (generated; restored).
+                 DEVIATIONS: (1) _turnQueryOptions refactored (incremental object build + an isNonEmptyText
+                 guard) to satisfy the complexity-10 lint rule after adding the MCP fold — behaviour-preserving,
+                 the P4/P6 folds stay byte-identical (regressions confirm). (2) The test-modal per-tool toggle
+                 persists through a launcher-local McpServerManager over the shared vault store (the seam
+                 (server)=>Promise<void> carries no callback) — matches SPEC-MC-023's "the host owns its own
+                 probe + per-tool toggle lifecycle"; the surface re-loads after the test modal closes.
+                 REMAINING (GATE, NOT this batch — the PARENT owns these): T-MC-038→039 (RED→green cross-cutting
+                 invariants), T-MC-040 (additivity byte-identical proof), the human manual legs T-MC-041
+                 (TEST-MC-M1 real transports + vault round-trip + real MCP turn through the SDK + P7 gate) +
+                 T-MC-042 (TEST-MC-M2 parity screenshots), T-MC-043 (grep gate + final DoD/PR into next), and
+                 the styles.css regeneration. TEST-MC-037 interactive live-dev flow is a DEFERRED human-run leg
+                 (recorded in test-plan.md). NEXT agent: the GATE qa/dev (T-MC-038) + the human (T-MC-041/042).
 ```
