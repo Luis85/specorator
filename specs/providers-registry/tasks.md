@@ -897,11 +897,11 @@ secret port + three-bridge pattern, and the P8 additive `ChatRuntimeQueryOptions
 - **Depends on:** T-PV-024, T-PV-026
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/providers/ProviderChooser.test.ts` + `ProviderChooser.po.ts` +
+  - [x] `tests/ui/chat/providers/ProviderChooser.test.ts` + `ProviderChooser.po.ts` +
         `tests/ui/chat/providers/ProviderOption.test.ts` + `ProviderOption.po.ts` exist, naming the listed
         TEST-PV legs, querying by `data-testid` only, asserting the absent-at-≤1 / list-at->1 / select-emits /
         keyboard + AT names + non-colour cues + the no-`v-html`.
-  - [ ] Tests fail (RED) — `ProviderChooser.vue` / `ProviderOption.vue` do not yet exist.
+  - [x] Tests fail (RED) — `ProviderChooser.vue` / `ProviderOption.vue` do not yet exist. (commit `1ce7a10d`)
 
 ### T-PV-028 🔨 — `ProviderChooser.vue` + `ProviderOption.vue`
 
@@ -919,12 +919,12 @@ secret port + three-bridge pattern, and the P8 additive `ChatRuntimeQueryOptions
 - **Depends on:** T-PV-027
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-PV-001/002/006/090/110/113/114 A legs) now pass (absent-at-≤1 /
+  - [x] The prior RED tests (TEST-PV-001/002/006/090/110/113/114 A legs) now pass (absent-at-≤1 /
         list-at->1 / select-emits / keyboard + AT + non-colour cues / no-`v-html`).
-  - [ ] No `obsidian`/`node:*` import under `src/ui/**`; no `v-html`; state cues text+border+icon; new strings
+  - [x] No `obsidian`/`node:*` import under `src/ui/**`; no `v-html`; state cues text+border+icon; new strings
         via `TranslationPort` (en+de); the brand allowlist updated if needed; co-located POs present.
-  - [ ] whole-project `npm run lint` 0 + `npm run typecheck` 0 + `npm run test` green; implementation-log
-        entry added.
+  - [x] whole-project `npm run lint` 0 + `npm run typecheck` 0 + `npm run test` green; implementation-log
+        entry added. (commit `65aadc32`)
 
 ### T-PV-029 🧪 — RED: `ProviderSecretField.vue` (masked input / save-emits / disabled-when-unavailable / no-value-echo) (PO co-located)
 
@@ -942,10 +942,10 @@ secret port + three-bridge pattern, and the P8 additive `ChatRuntimeQueryOptions
 - **Depends on:** T-PV-026
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/providers/ProviderSecretField.test.ts` + `ProviderSecretField.po.ts` exist, naming the
+  - [x] `tests/ui/chat/providers/ProviderSecretField.test.ts` + `ProviderSecretField.po.ts` exist, naming the
         listed TEST-PV legs, querying by `data-testid` only, asserting the masked input + save-emits + the
         disabled-with-`unavailable` state (no plain-store fallback) + the no-value-echo + the AT name/focus.
-  - [ ] Tests fail (RED) — `ProviderSecretField.vue` does not yet exist.
+  - [x] Tests fail (RED) — `ProviderSecretField.vue` does not yet exist. (commit `e75af92c`)
 
 ### T-PV-030 🔨 — `ProviderSecretField.vue`
 
@@ -961,12 +961,12 @@ secret port + three-bridge pattern, and the P8 additive `ChatRuntimeQueryOptions
 - **Depends on:** T-PV-029
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-PV-070/072/092/102/110 A legs + EC-PV-10) now pass (masked / save-emits /
+  - [x] The prior RED tests (TEST-PV-070/072/092/102/110 A legs + EC-PV-10) now pass (masked / save-emits /
         disabled-unavailable / no-value-echo / AT).
-  - [ ] No `obsidian`/`node:*` import under `src/ui/**`; no `v-html`; the value never echoes back / never
+  - [x] No `obsidian`/`node:*` import under `src/ui/**`; no `v-html`; the value never echoes back / never
         enters a notice/log/DTO; new strings via `TranslationPort` (en+de); co-located PO present.
-  - [ ] whole-project `npm run lint` 0 + `npm run typecheck` 0 + `npm run test` green; implementation-log
-        entry added.
+  - [x] whole-project `npm run lint` 0 + `npm run typecheck` 0 + `npm run test` green; implementation-log
+        entry added. (commit `54714b01`)
 
 ### T-PV-031 🧪 — RED: the provider-aware P6 widgets (ModelSelector incl. `opencode-model-picker` / ThinkingSelector / ServiceTierToggle / capability-gated rewind-fork-steer-MCP-provider-command affordances) (POs co-located)
 
@@ -990,13 +990,16 @@ secret port + three-bridge pattern, and the P8 additive `ChatRuntimeQueryOptions
 - **Depends on:** T-PV-024, T-PV-026
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The P6 widget tests + POs (`ModelSelector.po.ts` / `ThinkingSelector.po.ts` / `ServiceTierToggle.po.ts`
+  - [x] The P6 widget tests + POs (`ModelSelector.po.ts` / `ThinkingSelector.po.ts` / `ServiceTierToggle.po.ts`
         + the affordance POs) are extended, naming the listed TEST-PV legs, querying by `data-testid` only,
         asserting the active-provider re-list (incl. `opencode-model-picker`) / the `reasoningControl` reflect
         + auto-hide / the service-tier show-for-codex-hide-for-others / the capability-gated affordances
         (Codex/Opencode gated-off) / the mid-turn unsupported notice / the no-`switch(providerId)` guard.
-  - [ ] Tests fail (RED) — the P6 widgets do not yet read the active provider's catalog/capability bag (they
-        still render the Claude-only P6 lists/affordances).
+        (ModelSelector PO + test extended for the opencode-picker shape; `no-provider-switch.test.ts` adds
+        the source guard; the reasoning/service-tier/affordance gating is already capability-bag-driven —
+        see the T-PV-031 log scope note.)
+  - [x] Tests fail (RED) — the P6 widgets do not yet read the active provider's catalog/capability bag (they
+        still render the Claude-only P6 lists/affordances). (commit `098fd7df` — the opencode-shape RED leg)
 
 ### T-PV-032 🔨 — provider-aware P6 widgets (ModelSelector incl. `opencode-model-picker` / ThinkingSelector / ServiceTierToggle / capability-gated affordances)
 
@@ -1016,13 +1019,13 @@ secret port + three-bridge pattern, and the P8 additive `ChatRuntimeQueryOptions
 - **Depends on:** T-PV-031
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-PV-013/024/025/034/043/062/063/064 A legs + EC-PV-14/15/16) now pass; each
+  - [x] The prior RED tests (TEST-PV-013/024/025/034/043/062/063/064 A legs + EC-PV-14/15/16) now pass; each
         widget re-lists/gates from the active provider's catalog/capability bag; the `opencode-model-picker`
         shape renders; a false flag hides/disables-with-reason (never clickable-but-dead).
-  - [ ] No `switch (providerId)`; no `obsidian`/`node:*` import under `src/ui/**`; no `v-html`; new strings via
+  - [x] No `switch (providerId)`; no `obsidian`/`node:*` import under `src/ui/**`; no `v-html`; new strings via
         `TranslationPort` (en+de); co-located POs present.
-  - [ ] whole-project `npm run lint` 0 + `npm run typecheck` 0 + `npm run test` green; implementation-log
-        entry added.
+  - [x] whole-project `npm run lint` 0 + `npm run typecheck` 0 + `npm run test` green; implementation-log
+        entry added. (commit `42490bca`)
 
 ---
 

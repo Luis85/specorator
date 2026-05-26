@@ -4,7 +4,7 @@ area: PV
 current_stage: implementation
 status: in-progress
 last_updated: 2026-05-26
-last_agent: dev (/spec:implement — APPLICATION batch T-PV-019..024)
+last_agent: dev (/spec:implement — UI batch T-PV-027..032)
 epic: claudian-reboot
 phase: P9
 integration_branch: next
@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-PV-001 — Parts A/B/C; ADR-PV-001/002/003 accepted)
   spec.md: complete (SPEC-PV-001 — 34 spec items, 6 layer groups; 20 EC-PV; TEST-PV-001..114 + M1..M4; full REQ↔SPEC↔TEST table)
   tasks.md: complete (TASKS-PV-001 — 44 T-PV tasks across 7 batches; TDD RED-before-green; 4 manual legs M1/M2/M3/M4; dep graph + coverage sanity-check)
-  implementation-log.md: in-progress (DOMAIN T-PV-001..010 + INFRA T-PV-011..018 + APPLICATION T-PV-019..024 done; UI/STYLES/WIRE-IN/GATE + manual legs M1/M2/M3/M4 remain)
+  implementation-log.md: in-progress (DOMAIN T-PV-001..010 + INFRA T-PV-011..018 + APPLICATION T-PV-019..024 + UI T-PV-025..032 done; STYLES T-PV-033 / WIRE-IN T-PV-034..036 / GATE + manual legs M1/M2/M3/M4 remain)
   test-plan.md: in-progress (TESTPLAN-PV-001 scaffolded — guard-verify + file-naming directive + manual legs + DOMAIN-batch status)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-PV-001..010 + INFRA T-PV-011..018 + APPLICATION T-PV-019..024 done) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-PV-001..010 + INFRA T-PV-011..018 + APPLICATION T-PV-019..024 + UI T-PV-025..032 done; STYLES/WIRE-IN/GATE + manual legs remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; test-report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -408,4 +408,75 @@ workspace registry, `~/.codex`/`~/.claude` transcript reads, the secret storage,
                           dev/qa (UI→STYLES→WIRE-IN→GATE); the WIRE-IN batch must close the
                           homeFsConsent ObsidianBridge round-trip follow-up above; the 4 manual
                           legs + parity screenshots (TEST-PV-M4) are the human review gate.
+
+2026-05-26 dev (UI batch T-PV-027..032 — done, on feature/providers-registry):
+                          completed the UI component layer strict-TDD (RED→green, one
+                          commit per task). Composables T-PV-025/026 were already done by
+                          a prior agent.
+                          - T-PV-027/028 ProviderChooser.vue + ProviderOption.vue
+                            (SPEC-PV-016): presentational props-in/events-out; chooser
+                            renders nothing at showChooser=false (single-Claude byte-
+                            identical P8), else a role=listbox of provider rows in the
+                            given blank-tab order; each row keyboard-operable (Enter/Space),
+                            announces active via aria-current, conveys state by text+icon
+                            (never colour-only). Added the agent.chat.providers.* i18n block
+                            (en+de, locale-parity preserved) + the Claude/Codex/Opencode/API
+                            ui/sentence-case brand allowlist entries. Commits 1ce7a10d (RED)
+                            / 65aadc32 (green) / 38448781 (log).
+                          - T-PV-029/030 ProviderSecretField.vue (SPEC-PV-018/025): masked
+                            type=password input; emits save(value); the typed secret lives
+                            only in a transient ref, cleared on emit, never echoed into the
+                            DOM/notice/log/store/DTO; disabled + honest providers.secret.
+                            unavailable + no save when available=false (no plain-store
+                            fallback, EC-PV-10). Commits e75af92c (RED) / 54714b01 (green) /
+                            760f89dc (log).
+                          - T-PV-031/032 provider-aware ModelSelector (SPEC-PV-017/029):
+                            an additive optional providerId prop selects a per-provider
+                            picker variant from a data-driven PICKER_VARIANT map (the
+                            opencode-model-picker shape) — a pure lookup, NEVER a
+                            switch(providerId)/provider-id branch (NFR-PV-014); absent/claude
+                            renders byte-identical P6 (NFR-PV-001). ToolbarStrip threads the
+                            optional providerId through. The ThinkingSelector/ServiceTierToggle
+                            + rewind/fork/steer/MCP/provider-command affordances ALREADY gate
+                            on the capability bag (getToolbarCapabilities/getCapabilities →
+                            buildToolbar/buildProviderViewModel), so P9 just supplies the
+                            per-provider flags. Added a source-level no-switch(providerId)
+                            guard over the toolbar widgets + provider components. Commits
+                            098fd7df (RED) / 42490bca (green) / 73940a1f (log).
+                          VERIFICATION: vue-tsc -p tsconfig.lint.json --noEmit exit 0 (whole
+                          project); whole-project npm run lint 0 errors (16 pre-existing
+                          warnings); vitest run on tests/ui/chat/providers + tests/ui/chat/
+                          toolbar + tests/ui/i18n/index.test.ts = 15 files / 91 tests pass —
+                          incl. the P6 ModelSelector/ThinkingSelector/ServiceTierToggle/
+                          ToolbarStrip regressions + the en↔de locale-parity regression, all
+                          green. No obsidian/node:*/v-html under src/ui/**; clean working
+                          tree (no styles.css/graphify-out drift).
+                          COMPONENT + PO INVENTORY (all co-located data-testid POs, ADR-009):
+                          ProviderChooser.vue + ProviderChooser.po.ts (provider-chooser),
+                          ProviderOption.vue + ProviderOption.po.ts (provider-option /
+                          provider-option-active / provider-icon), ProviderSecretField.vue +
+                          ProviderSecretField.po.ts (provider-secret-field / -input / -save /
+                          -unavailable), ModelSelector.vue (changed) + ModelSelector.po.ts
+                          (opencode-model-picker getter), ToolbarStrip.vue (changed, threads
+                          providerId), plus the no-provider-switch.test.ts source guard.
+                          DEGRADE-WHEN-ABSENT: the chooser renders nothing at showChooser=false
+                          / ≤1 enabled (byte-identical P8); the secret field is presentational
+                          (the wiring decides availability); ModelSelector with no providerId
+                          prop is byte-identical P6. The components inject NO ports directly —
+                          they take DTOs/props (the parent-owned wire-in injects
+                          PROVIDER_REGISTRY_PORT/SECRET_STORE_PORT and routes
+                          SelectProviderUseCase).
+                          SCOPE BOUNDARY (intentional, per the brief Rules): the ChatSurface/
+                          tabsStore provide-site wiring — the actual provide(...) of the 3
+                          ports, the getCatalog('claude') un-hardcode, the chooser mount +
+                          SelectProviderUseCase routing, and the _coerceSettings homeFsConsent
+                          round-trip fix — is NOT done here. That is the parent-owned WIRE-IN
+                          (T-PV-034..036, SPEC-PV-020). This batch delivers only the additive
+                          component seam (the optional providerId prop on ModelSelector/
+                          ToolbarStrip), which degrades byte-identical to P6/P8 when absent.
+                          NEXT AGENT → STYLES T-PV-033 (the provider-chooser/provider-secret/
+                          opencode-model-picker + provider-brand --sp-* slice, ASCII-only
+                          lightningcss-safe) then WIRE-IN T-PV-034..036. REMAINING OWNER:
+                          dev/qa (STYLES→WIRE-IN→GATE); the 4 manual legs + parity screenshots
+                          (TEST-PV-M4) are the human review gate.
 ```
