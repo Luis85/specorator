@@ -1,10 +1,10 @@
 ---
 feature: mcp-client
 area: MC
-current_stage: specification
+current_stage: tasks
 status: active
 last_updated: 2026-05-26
-last_agent: architect (specification — SPEC-MC-001 complete; 30 spec items, full REQ↔SPEC↔TEST coverage)
+last_agent: planner (tasks — TASKS-MC-001 complete; 42 tasks T-MC-001..043 across 7 batches, TDD-ordered, full SPEC↔REQ↔NFR↔TEST coverage)
 epic: claudian-reboot
 phase: P8
 integration_branch: next
@@ -15,7 +15,7 @@ artifacts:
   requirements.md: accepted (PRD-MC-001; CLAR-MC-001..005 resolved-by-recommendation → P8 architect ADRs, notably McpConfigStorePort vault-file + McpClientPort transport contract)
   design.md: complete (DESIGN-MC-001; Parts A/B/C; ADR-MC-001 McpConfigStorePort vault file + ADR-MC-002 McpClientPort transport seam + ADR-MC-003 enabledMcpServers? + P7 approval composition — all accepted)
   spec.md: complete (SPEC-MC-001; 30 spec items SPEC-MC-001..030 across domain/infra/app/ui/styles/cross-cutting; EC-MC-1..20; TEST-MC-001..082 + 020a + M1/M2; REQ-MC ↔ SPEC-MC ↔ TEST-MC coverage table — all 45 REQ-MC + 12 NFR-MC chained; the five design open items resolved in §0)
-  tasks.md: pending
+  tasks.md: complete (TASKS-MC-001; 42 tasks T-MC-001..043, TDD-ordered RED(qa)→impl(dev), 7 batches DOMAIN→INFRA→APP→UI→STYLES→WIRE-IN→GATE; dep graph + parallel batches + critical path + full SPEC/REQ/NFR/TEST coverage table; NO guard-relax needed; @modelcontextprotocol/sdk dep-add = T-MC-012; manual legs T-MC-041/042 (M1/M2))
   implementation-log.md: pending
   test-plan.md: pending
   test-report.md: pending
@@ -36,7 +36,7 @@ artifacts:
 | 3. Requirements | `requirements.md` | accepted (PRD-MC-001) |
 | 4. Design | `design.md` | complete (DESIGN-MC-001; ADR-MC-001..003 accepted) |
 | 5. Specification | `spec.md` | complete (SPEC-MC-001; 30 items, full coverage) |
-| 6. Tasks | `tasks.md` | pending |
+| 6. Tasks | `tasks.md` | complete (TASKS-MC-001; 42 tasks T-MC-001..043, TDD-ordered, full coverage) |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
@@ -283,4 +283,55 @@ merge. Manual-Obsidian + parity-screenshot legs accumulate for the SINGLE FINAL 
                    en/de i18n. The real SDK transport (coverage-excluded obsidian/**) + the parity screenshots are
                    the FINAL manual-leg tasks accumulating for the single final epic gate. @modelcontextprotocol/
                    sdk is the one new runtime dep (rationale per AGENTS.md §8). No open clarifications block tasks.
+
+2026-05-26 (planner): Stage 6 COMPLETE. Wrote TASKS-MC-001 (specs/mcp-client/tasks.md) — 42 tasks
+                 T-MC-001..043 decomposing SPEC-MC-001..030, mirroring the TASKS-AS-001 (P7) + TASKS-TC-001
+                 (P6) shape: 📐 baseline/guard-verify FIRST (T-MC-001); strict RED(qa,🧪)-before-impl(dev,🔨),
+                 every dev task's first DoD = "prior RED passes" + whole-project lint 0 + typecheck 0 + test
+                 green + impl-log entry; 7 layer batches —
+                 - DOMAIN (T-MC-002..011): McpTypes + additive enabledMcpServers? (RED additivity/serialisation,
+                   types frozen first), the PURE McpConfigParser (own truth-table RED→green) + McpConfigCodec +
+                   parseCommand + getActiveServers, the two ports + MCP_CONFIG_STORE_PORT/MCP_CLIENT_PORT keys +
+                   barrels.
+                 - INFRA (T-MC-012..017): the dependency-add task T-MC-012 (@modelcontextprotocol/sdk →
+                   package.json + confirm vite.config.ts ALL_EXTERNALS like @codemirror/* + bundle into main.js
+                   not build:web + AGENTS.md §8 rationale); 3-bridge — Obsidian vault store + real SDK transports
+                   (coverage-excluded → manual, file-naming directive) / Mock scriptable (seedMcpServers +
+                   setMcpStoreFailMode + scriptTestResult + setClientMode + fake-ports.mcpConfigStore/mcpClient) /
+                   LS browser-localStorage + inert client.
+                 - APP (T-MC-018..021): McpServerManager lifecycle (await-save, dup-reject, Result,
+                   getActiveServers/getEnabledMcpServers(∅)) + the PURE foldEnabledMcpServers + buildMcpViewModel.
+                 - UI (T-MC-022..033): useMcp*Port composables, the modal-seam launchers
+                   (OpenMcpServerModalFn/OpenMcpTestModalFn + fallbacks), McpSettingsManager+McpServerRow,
+                   McpServerModal (paste/parse/add/edit), McpTestModal (5-state machine), the expanded McpSelector
+                   (keeps the P6 empty seam at 0) — each + co-located data-testid PO.
+                 - STYLES (T-MC-034): the mcp-settings/mcp-modal/mcp-selector --sp-* slice + tokens-contract
+                   (ASCII-only comments — the lightningcss lesson; DoD runs build:web).
+                 - WIRE-IN (T-MC-035..037): provide the two ports + the modal-seam launchers in AgentSidebarView +
+                   ui/main.ts, mount the settings surface, the per-surface McpServerManager + the enabled-servers
+                   fold + the UNCHANGED P7 ApprovalManager gating; npm run dev smoke.
+                 - GATE (T-MC-038..043): cross-cutting invariants RED→green (no-secret/no-eval/explicit-add-only/
+                   no-provider-branch) + the additivity byte-identical gate + the --sp-* token guard + the manual
+                   legs T-MC-041 (real stdio/SSE/HTTP + real vault round-trip + real Claude MCP turn = TEST-MC-M1
+                   incl. sub-legs 021/022/061/064, 👤 human-run) + T-MC-042 (parity screenshots = TEST-MC-M2,
+                   👤) + the Feature DoD T-MC-043 (full verify + grep gate + dep-rationale + draft PR into next).
+                 GUARD-RELAX VERDICT: NONE needed (verified vs eslint.config.js). The OLD pre-reboot MCP was
+                 P0-deleted, but the NEW P8 names are clean — MCP_CONFIG_STORE_PORT/MCP_CLIENT_PORT not in
+                 DELETED_INJECTION_KEYS; @/domain/chat/mcp/** + @/application/chat/mcp/** + @/ui/chat/mcp/** +
+                 @/domain/ports/McpConfigStorePort + @/domain/ports/McpClientPort match NO DELETED_SUBSYSTEM_BAN
+                 glob (@/domain/chat + @/application/chat regrew in P1; no @/ui/chat ban; only @/domain/feature +
+                 the old ObsidianMcpServerPort banned). The ONE @/…/mcp collision: the still-active Obsidian-layer
+                 globs @/infrastructure/obsidian/ObsidianMcp* + @/infrastructure/obsidian/mcp/** — NO ban edit
+                 needed; handled by a FILE-NAMING DIRECTIVE (T-MC-001/013: name the new infra VaultMcpConfigStore.ts
+                 / SdkMcpClient.ts, never ObsidianMcp…, never under obsidian/mcp/). Unlike P1's scoped chat-ban
+                 relax, nothing further is needed here.
+                 BUILD-GREEN: the additive enabledMcpServers? is interface-additive (no implements-break, no
+                 companion stub — T-MC-003 notes this); the two new ports are new interfaces (impl + fake-ports
+                 member land in the same bridge task). No stability-loop NFR in scope (no "0 flakes across N runs").
+                 HAND-OFF → /spec:implement (dev + qa): first ready task is T-MC-001 📐 (baseline-capture +
+                 guard-verify + the file-naming directive, dev, no deps) — runs in parallel with T-MC-002 🧪 (the
+                 first domain RED, qa) and T-MC-012 🔨 (the SDK dep-add, dev, no deps). The critical path runs
+                 T-MC-002→003→004→005→006→007→010→011→014→015→018→019→035→036→041→043 (17 tasks); see the dep
+                 graph + parallel batches + coverage table in tasks.md. CLAR-MC-001..005 resolved; no open
+                 clarifications block implementation.
 ```
