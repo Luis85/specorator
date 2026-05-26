@@ -10,7 +10,7 @@
  * Traces: TEST-SS-051, SPEC-SS-002, REQ-SS-051/066, NFR-SS-008, EC-SS-3.
  */
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
 	SHARED_ENVIRONMENT_KEYS,
@@ -112,10 +112,10 @@ describe('isSecretEnvKey (auth-suffix + markSecret, SPEC-SS-002, REQ-SS-066)', (
 describe('no switch(providerId) guard (NFR-SS-008)', () => {
 	it('the classifier module contains no provider-id branch', () => {
 		const src = readFileSync(
-			fileURLToPath(new URL('../../../../src/domain/chat/environment/classifyEnvKey.ts', import.meta.url)),
+			resolve(__dirname, '../../../../src/domain/chat/environment/classifyEnvKey.ts'),
 			'utf8',
 		);
-		expect(src).not.toMatch(/switch\s*\(\s*provider/i);
+		expect(src).not.toMatch(/switch\s*\(\s*\w*[Pp]rovider/);
 		expect(src).not.toMatch(/===\s*['"](claude|codex|opencode)['"]/);
 	});
 });

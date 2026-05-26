@@ -12,3 +12,9 @@ export {
 	type EnvironmentScope,
 	type EnvSnippetStruct,
 } from './EnvSnippet';
+export {
+	SHARED_ENVIRONMENT_KEYS,
+	classifyEnvKey,
+	isSecretEnvKey,
+	type EnvKeyOwnership,
+} from './classifyEnvKey';
