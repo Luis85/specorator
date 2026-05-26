@@ -573,3 +573,26 @@ this batch's scope.
   (12 pre-existing warnings only). No `obsidian`/`node:*` import under `src/ui/**`; no
   aggregate `usePorts`.
 - **Deviation:** none.
+
+### T-MC-024 / T-MC-025 — `modalSeam.ts` MCP launchers (`OpenMcpServerModalFn` / `OpenMcpTestModalFn`)
+
+- **Files:**
+  - `tests/ui/chat/modalSeam.ts.test.ts` (extended: imports + two probe helpers +
+    two describe blocks) — RED.
+  - `src/ui/chat/modalSeam.ts` (4-5 imports; appended ~140-178 the two fn types + the
+    two keys + `useOpenMcpServerModal`/`useOpenMcpTestModal`) — green.
+- **Spec:** SPEC-MC-023, REQ-MC-042/044, NFR-MC-007 (TEST-MC-042/044 seam legs).
+- **Description:** Appended the P8 MCP modal-seam launchers, additive to the P3/P4/P5
+  handles: `OpenMcpServerModalFn = (input?: McpServerDraft) => Promise<McpServerDraft |
+  null>` (add when `input` absent, edit when present; `null` on dismiss) +
+  `OpenMcpTestModalFn = (server) => Promise<void>`; the `OPEN_MCP_SERVER_MODAL` /
+  `OPEN_MCP_TEST_MODAL` keys; `useOpenMcpServerModal()` falling back to AUTO-DISMISS
+  (`null`), `useOpenMcpTestModal()` to a no-op resolve. The P3/P4/P5 handles stay
+  byte-identical.
+- **Outcome:** done — the prior RED (TEST-MC-042/044 seam legs) now green; 12/12 (the 8
+  P3/P4/P5 legs unchanged + 4 new).
+- **Commits:** RED `T-MC-024`; green `T-MC-025` (SHAs in close-out).
+- **Verify:** `npx vitest run tests/ui/chat/modalSeam.ts.test.ts` **12/12 green**;
+  whole-project `vue-tsc` **0 errors**; whole-project `npm run lint` **0 errors**. No
+  `obsidian` import under `src/ui/**`.
+- **Deviation:** none.
