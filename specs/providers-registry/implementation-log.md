@@ -808,4 +808,62 @@ WIRE-IN/GATE batches ride their own subagents.
   the surface-level test above (no Obsidian needed). The three-port + consent-launcher
   provide is verified at green via the standalone mount (no inject-or-throw) + the
   `_coerceSettings` round-trip (T-PV-036).
-- **Commit (RED):** <pending>.
+- **Commit (RED):** `fd5bb15e`.
+
+## T-PV-035 — WIRE-IN: provide the three ports + widened factory + consent launcher; surface routing; chooser mount (🔨)
+
+- **Spec/req:** SPEC-PV-020/031/034, REQ-PV-010/012/062/082/084/114,
+  NFR-PV-001/006/008/014.
+- **Files:**
+  - `src/ui/chat/ChatSurface.vue` — injects `PROVIDER_REGISTRY_PORT` OPTIONALLY;
+    resolves the active provider + the enabled list from the registry + settings on
+    mount (`refreshActiveProviderRuntime`), rebinds the first synchronously-seeded
+    Claude tab to a recorded non-Claude active provider; the `createRuntime` adapter
+    now passes the RESOLVED `activeProviderId` to the widened factory (a bind-time
+    construct-fail degrades to the byte-identical P8 Claude runtime so the surface
+    always mounts; the honest construct-fail notice rides the explicit select path);
+    mounts `ProviderChooser` driven by `buildProviderViewModel` (hidden at ≤ 1 enabled
+    → byte-identical P8); routes a selection through `SelectProviderUseCase.select` +
+    `tabs.rebindActiveRuntime`, gating a `readsHomeDir` provider through
+    `ProviderConsentGate.ensureConsent` first; the toolbar reads
+    `getCatalog(activeProviderId.value)` (un-hardcoded from `'claude'`); the root
+    `data-provider` binds the active provider. No `obsidian`/`v-html`/`window.confirm`.
+  - `src/ui/stores/tabsStore.ts` — new `rebindActiveRuntime(runtime)` action (the
+    provider-switch path: cancel the active runner, rebind the runtime + a fresh runner
+    so the NEXT turn streams on the new provider, no cross-provider leakage, EC-PV-13).
+  - `src/plugin/AgentSidebarView.ts` — `app.provide`s `PROVIDER_REGISTRY_PORT` =
+    `bridge.providerRegistry`, `SECRET_STORE_PORT` = `bridge.secretStore`,
+    `HOME_FS_PORT` = `bridge.homeFs`, the widened `CHAT_RUNTIME_FACTORY` routed through
+    `bridge.providerRuntimeRegistry.createChatRuntime(providerId)`, and the
+    `OPEN_PROVIDER_CONSENT` launcher opening the real `ProviderConsentModal`.
+  - `src/plugin/modals/ProviderConsentModal.ts` (new) — the Obsidian `Modal` consent
+    host (resolves `Promise<boolean>`, `createEl`/`setText`, never `window.confirm`).
+  - `src/ui/main.ts` — provides the Mock `providerRegistry`/`secretStore`/`homeFs` + the
+    widened factory routed through `bridge.providerRuntimeRegistry` + a browser-safe
+    consent stand-in (`() => Promise.resolve(true)`, no `window.*`).
+  - `src/infrastructure/mock/MockProviderRuntime.ts` — the registry's runtime
+    construction refactored to a **data-driven builder table** (NFR-PV-014, mirroring
+    `ObsidianProviderRuntimeRegistry`): the **claude** builder REUSES the P1
+    `MockChatRuntime` (the `supportsMcpTools:false` Claude-shaped demo runtime — so the
+    standalone demo is byte-identical P8, SPEC-PV-031, NFR-PV-001), the non-Claude
+    builders build the scriptable `MockProviderRuntime` (script/transport threaded).
+- **Outcome:** done. T-PV-034 (6/6) now green; the standalone-mount + the existing
+  toolbar/MCP/approvals/context/inline smoke + the tabsStore + the Mock-registry tests
+  stay green (byte-identical single-Claude — the claude-reuse keeps the demo's MCP +
+  service-tier hidden).
+- **Verify:** `vue-tsc -p tsconfig.lint.json --noEmit` exit 0; whole-project
+  `npm run lint` 0 errors (16 pre-existing warnings); `vitest run --pool=threads
+  --no-file-parallelism --testTimeout=30000` over `main.ts.test.ts`/`main.test.ts`/
+  `main.rr.test.ts`/`ChatSurface.providers.test.ts`/`tabsStore.test.ts`/
+  `MockProviderRuntime.test.ts` = 69/69; the six `ChatSurface.*` files = 27/27; the
+  `no-provider-switch` guard = 6/6.
+- **Deviation:** (1) added a minimal `rebindActiveRuntime` store action (genuinely
+  needed for the SPEC-PV-023 provider switch — no public swap existed). (2) refactored
+  `MockProviderRuntimeRegistry.createChatRuntime` to a data-driven builder table so the
+  **claude** path reuses `MockChatRuntime` — required to keep the standalone demo
+  byte-identical P8 (the prior commit's `MockProviderRuntime('claude')` reported the
+  frozen Claude descriptor's `supportsMcpTools:true`, which surfaced the MCP settings +
+  selector in the demo, breaking NFR-PV-001). The Mock-registry tests stay green (they
+  assert only claude `.ok` + a drainable query). The byte-identical claude-reuse mirrors
+  the Obsidian registry reusing `ClaudeCliChatRuntime`.
+- **Commit (green):** <pending>.

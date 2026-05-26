@@ -453,6 +453,23 @@ export const useTabsStore = defineStore('tabs', {
 			this.loadIntoTab(id, payload);
 		},
 
+		/**
+		 * P9 (SPEC-PV-013/023, REQ-PV-012): swap the ACTIVE tab's runtime to a freshly
+		 * constructed one (the provider-switch path). The caller (`SelectProviderUseCase`
+		 * via the surface) has already torn down + cancelled the prior runtime; this
+		 * cancels the active tab's in-flight runner, then rebinds the runtime + a fresh
+		 * runner over it so the NEXT turn streams on the new provider (no cross-provider
+		 * leakage, EC-PV-13). A no-active-tab / unbound store is a quiet no-op (total).
+		 */
+		rebindActiveRuntime(runtime: ChatRuntimePort): void {
+			const id = this.activeTabId;
+			const binding = this._sidecar().binding;
+			if (id === null || binding === null) return;
+			this._deps(id)?.runner.cancel();
+			const runner = binding.createRunner(runtime);
+			this._sidecar().deps.set(id, { runtime, runner });
+		},
+
 		/** Remove messages after `userMessageId` (rewind conversation mode, REQ-TS-021). */
 		truncateTo(tabId: TabId, userMessageId: string): void {
 			const tab = this._tab(tabId);

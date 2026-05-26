@@ -34,7 +34,8 @@ import type {
 } from '@/domain/chat/inline';
 import type { Result } from '@/domain/shared/Result';
 import { ok, err } from '@/domain/shared/Result';
-import { PROVIDER_DESCRIPTORS } from '@/domain/chat/providers';
+import { PROVIDER_DESCRIPTORS, DEFAULT_CHAT_PROVIDER_ID } from '@/domain/chat/providers';
+import { MockChatRuntime } from './MockChatRuntime';
 
 /** The SPEC-PV-025 construct-gate mode a provider's `createChatRuntime` resolves. */
 export type MockProviderConstructMode = 'ok' | 'no-key' | 'no-cli' | 'unavailable';
@@ -232,20 +233,52 @@ export class MockProviderRuntimeRegistry {
 	}
 
 	/**
-	 * Construct the scriptable runtime for `providerId` (the widened factory body).
-	 * A non-`ok` construct mode → `Result.err(<honest reason>)`; otherwise a fresh
-	 * scriptable runtime wired with the queued stream + transport mode → `Result.ok`.
+	 * The data-driven per-provider builder table (the registry-construction choice,
+	 * mirroring `ObsidianProviderRuntimeRegistry`). Construction dispatches through a map
+	 * lookup, never a behavioural `providerId` branch (NFR-PV-014). The **claude** entry
+	 * REUSES the P1 `MockChatRuntime` (the `supportsMcpTools:false` Claude-shaped demo
+	 * runtime the standalone entry used before P9 — byte-identical P8, SPEC-PV-031,
+	 * NFR-PV-001), exactly as the Obsidian table reuses `ClaudeCliChatRuntime`; the
+	 * non-Claude entries build the scriptable `MockProviderRuntime`.
+	 */
+	private readonly builders: ReadonlyMap<ProviderId, () => ChatRuntimePort> = new Map<
+		ProviderId,
+		() => ChatRuntimePort
+	>([
+		[DEFAULT_CHAT_PROVIDER_ID, () => this._buildClaudeReuse()],
+		...PROVIDER_DESCRIPTORS.filter((d) => d.id !== DEFAULT_CHAT_PROVIDER_ID).map(
+			(d): [ProviderId, () => ChatRuntimePort] => [d.id, () => this._buildScriptable(d.id)],
+		),
+	]);
+
+	/**
+	 * Construct the runtime for `providerId` (the widened factory body) via the builder
+	 * table. A non-`ok` construct mode → `Result.err(<honest reason>)`; otherwise the
+	 * built runtime → `Result.ok`. Total — never throws.
 	 */
 	createChatRuntime(providerId: ProviderId): Result<ChatRuntimePort> {
 		const mode = this.constructMode.get(providerId) ?? 'ok';
 		if (mode !== 'ok') {
 			return err(new Error(CONSTRUCT_REASON[mode]));
 		}
+		const builder = this.builders.get(providerId);
+		if (builder === undefined) return err(new Error('unavailable'));
+		return ok(builder());
+	}
+
+	/** Build the Claude reuse runtime (the P1 demo runtime, byte-identical P8). */
+	private _buildClaudeReuse(): ChatRuntimePort {
+		const script = this.scripts.get(DEFAULT_CHAT_PROVIDER_ID);
+		return script === undefined ? new MockChatRuntime() : new MockChatRuntime([...script]);
+	}
+
+	/** Build a scriptable non-Claude runtime wired with its queued stream + transport mode. */
+	private _buildScriptable(providerId: ProviderId): ChatRuntimePort {
 		const runtime = new MockProviderRuntime(providerId);
 		const script = this.scripts.get(providerId);
 		if (script !== undefined) runtime.scriptStream(script);
 		const transport = this.transportMode.get(providerId);
 		if (transport !== undefined) runtime.setTransportMode(transport);
-		return ok(runtime);
+		return runtime;
 	}
 }

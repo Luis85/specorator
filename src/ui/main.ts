@@ -38,6 +38,9 @@ import {
 	APPROVAL_RULE_STORE_PORT,
 	MCP_CONFIG_STORE_PORT,
 	MCP_CLIENT_PORT,
+	PROVIDER_REGISTRY_PORT,
+	SECRET_STORE_PORT,
+	HOME_FS_PORT,
 } from '@/infrastructure/bridge/ports';
 import {
 	CHAT_RUNTIME_FACTORY,
@@ -49,9 +52,10 @@ import {
 	PICK_ATTACHMENT,
 	OPEN_MCP_SERVER_MODAL,
 	OPEN_MCP_TEST_MODAL,
+	OPEN_PROVIDER_CONSENT,
 } from '@/ui/chat/modalSeam';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
-import { ok } from '@/domain/shared/Result';
+import type { ProviderId } from '@/domain/chat/ProviderId';
 
 const bridge = new MockBridge();
 const mountPoint = document.querySelector('#app');
@@ -76,11 +80,25 @@ app.provide(ICON_PORT, bridge.createIconPort());
 // demo provides browser-safe modal stand-ins (no Obsidian, no `window.confirm`):
 // fork lands in a new tab, delete proceeds — deterministic for the GitHub Pages demo.
 app.provide(PROVIDER_HISTORY_PORT, bridge.createProviderHistoryPort());
-// P9 (SPEC-PV-005/031): the widened `(providerId) => Result<runtime>` factory. The
-// standalone demo constructs the Mock Claude runtime for any provider and wraps it
-// `ok` — the resolved-provider routing + the inert non-Claude `err` land at the
-// wire-in batch. Byte-identical at runtime to P8 for the default `'claude'`.
-app.provide(CHAT_RUNTIME_FACTORY, () => ok(bridge.createChatRuntime()));
+// P9 (SPEC-PV-020): the shared descriptor-table registry + the in-memory secret store
+// (availability switch, no real OS secret) + the inert/seedable home-fs. The surface
+// resolves the active provider, mounts the chooser when > 1 enabled, and routes a
+// selection through `SelectProviderUseCase` against the Mock runtime registry.
+app.provide(PROVIDER_REGISTRY_PORT, bridge.providerRegistry);
+app.provide(SECRET_STORE_PORT, bridge.secretStore);
+app.provide(HOME_FS_PORT, bridge.homeFs);
+// P9 (SPEC-PV-005/031): the widened `(providerId) => Result<runtime>` factory routed
+// through the Mock runtime registry. Claude → `ok` with the SAME Mock runtime as P8
+// (byte-identical); a scripted non-Claude construct-fail / the LS demo's inert
+// non-Claude → `Result.err` (the surface degrades honestly, never throws).
+app.provide(CHAT_RUNTIME_FACTORY, (providerId: ProviderId) =>
+	bridge.providerRuntimeRegistry.createChatRuntime(providerId),
+);
+// P9 (SPEC-PV-014/024): the beyond-vault consent launcher stand-in. The browser demo
+// has no Obsidian `Modal`; the stand-in resolves `true` (deterministic for the GitHub
+// Pages demo, no `window.confirm`/`prompt`). The Mock home-fs is inert anyway, so no
+// real beyond-vault read occurs.
+app.provide(OPEN_PROVIDER_CONSENT, (_providerId: ProviderId) => Promise.resolve(true));
 app.provide(CONFIRM_DELETE, () => Promise.resolve(true));
 app.provide(CHOOSE_FORK_TARGET, () => Promise.resolve('new-tab'));
 // P4 (SPEC-CP-028/038): the composer ports + the instruction-confirm seam. Mention/
