@@ -17,6 +17,7 @@ import ImageContextBar from '@/ui/chat/ImageContextBar.vue';
 import SelectionIndicator from '@/ui/chat/SelectionIndicator.vue';
 import ToolbarStrip from '@/ui/chat/toolbar/ToolbarStrip.vue';
 import type { ToolbarViewModel } from '@/application/chat/toolbar/buildToolbarViewModel';
+import type { McpViewModel } from '@/application/chat/mcp/buildMcpViewModel';
 import type { ReasoningChoice } from '@/domain/chat/Reasoning';
 import type { PermissionMode } from '@/domain/chat/PermissionMode';
 
@@ -77,6 +78,12 @@ const props = defineProps<{
 	toolbar?: ToolbarViewModel;
 	/** P7 (SPEC-AS-012): the active tab's live permission mode for the toggle. */
 	permissionMode?: PermissionMode;
+	/**
+	 * P8 (SPEC-MC-018/020): the manager-driven MCP view-model for the toolbar selector.
+	 * When present the strip's selector lists the live servers + their enabled toggles;
+	 * when absent (no MCP store) the strip keeps the P6 visible-empty seam (EC-MC-1).
+	 */
+	mcpVm?: McpViewModel;
 }>();
 const emit = defineEmits<{
 	submit: [text: string];
@@ -98,6 +105,8 @@ const emit = defineEmits<{
 	'toggle-service-tier': [active: boolean];
 	/** P7 (SPEC-AS-012): the live permission-mode change re-emitted to the surface. */
 	'set-permission': [mode: PermissionMode];
+	/** P8 (SPEC-MC-018): the MCP selector's per-server enabled toggle re-emitted to the surface. */
+	'set-mcp-enabled': [name: string, enabled: boolean];
 }>();
 
 const { t } = useI18n();
@@ -407,11 +416,13 @@ function onBlockResolved(): void {
 					:vm="toolbar"
 					:notify="notify"
 					:permission-mode="permissionMode"
+					:mcp-vm="mcpVm"
 					@pick-model="emit('pick-model', $event)"
 					@set-mode="emit('set-mode', $event)"
 					@set-reasoning="emit('set-reasoning', $event)"
 					@toggle-service-tier="emit('toggle-service-tier', $event)"
 					@set-permission="emit('set-permission', $event)"
+					@set-mcp-enabled="(name, enabled) => emit('set-mcp-enabled', name, enabled)"
 				/>
 			</div>
 

@@ -859,3 +859,76 @@ GATE (T-MC-038..043) batches are out of this batch's scope.
   TEST-MC-M1 + the surface tests, per the DoD's "or the existing provide test"). The
   standalone-provide RED is carried by the surface test's no-port degrade + the
   main.ts smoke (which T-MC-036 makes byte-identical-safe by adding the provides).
+
+## T-MC-036 — WIRE-IN: provide the two ports + the modal-seam launchers + mount the settings + the fold/gating wiring (🔨)
+
+- **Spec/req:** SPEC-MC-020, SPEC-MC-026, REQ-MC-052/065/071/072/082, NFR-MC-004,
+  NFR-MC-005, NFR-MC-006, NFR-MC-007.
+- **Files:**
+  - `src/plugin/modals/McpServerModalHost.ts` (new — the Obsidian `Modal` host that
+    mounts `McpServerModal.vue` as a tiny Vue app, bridges `submit`/`cancel` to
+    `Promise<McpServerDraft | null>`, resolves `null` on dismiss; mirrors
+    `InlineEditModal`). Imports `obsidian` — `src/plugin/**` only.
+  - `src/plugin/modals/McpTestModalHost.ts` (new — the Obsidian `Modal` host that
+    mounts `McpTestModal.vue` (provides `MCP_CLIENT_PORT` so its probe runs the SDK
+    client), persists a `set-tool-disabled` toggle through the supplied
+    `McpServerManager.setToolDisabled` (the per-tool lifecycle, REQ-MC-016), resolves
+    on dismiss). Imports `obsidian` — `src/plugin/**` only.
+  - `src/plugin/mcpModalLaunchers.ts` (new — `buildMcpModalLaunchers(app, store,
+    client, logger, notify)` returns the two seam fns: `openMcpServerModal` reads the
+    live `existingNames` from the vault store then opens the add/edit host;
+    `openMcpTestModal` loads a launcher-local `McpServerManager` over the same vault
+    store then opens the test host — so a per-tool toggle persists to the same
+    `.claude/mcp.json` truth). Imports `obsidian` — `src/plugin/**` only.
+  - `src/plugin/AgentSidebarView.ts` (provides `MCP_CONFIG_STORE_PORT` =
+    `bridge.mcpConfigStore` + `MCP_CLIENT_PORT` = `bridge.mcpClient` + the two
+    `OPEN_MCP_SERVER_MODAL`/`OPEN_MCP_TEST_MODAL` launchers from
+    `buildMcpModalLaunchers(this.app, …, bridge, bridge)`).
+  - `src/ui/main.ts` (standalone provides `MCP_CONFIG_STORE_PORT` =
+    `bridge.mcpConfigStore` + `MCP_CLIENT_PORT` = `bridge.mcpClient` (the scriptable
+    Mock store + client) + browser-safe seam stand-ins — the add/edit launcher
+    auto-dismisses `null`, the test launcher is a no-op resolve; no `window.*`).
+  - `src/ui/chat/ChatSurface.vue` (injects `MCP_CONFIG_STORE_PORT` optionally → builds
+    ONE per-surface `McpServerManager` over it + `FeedbackService`; loads on mount;
+    derives a reactive `mcpVm = buildMcpViewModel(servers, supportsMcpTools)`; mounts
+    `McpSettingsManager` (gated `hasMcp && mcpVm`); threads `mcpVm` + `set-mcp-enabled`
+    through `ChatComposer` → `ToolbarStrip` → `McpSelector`; wires add/paste/edit/
+    remove/test via the seam launchers + `set-enabled` to the manager; binds
+    `getEnabledMcpServers: () => mcpManager?.getEnabledMcpServers(new Set())` into
+    `bindTabDeps`). An MCP tool call routes through the UNCHANGED P7 `ApprovalManager`
+    via the existing `ApprovalGateRuntime` — no MCP special-case, no `providerId`
+    branch. Absent store → settings/selector keep the P6 empty seam + the turn omits
+    the field.
+  - `src/ui/chat/ChatComposer.vue` (additive optional `mcpVm?` prop + `set-mcp-enabled`
+    emit, threaded to `ToolbarStrip`).
+  - `src/ui/chat/toolbar/ToolbarStrip.vue` (the `mcpVm?` prop replaces the always-empty-
+    seam adapter when the surface threads a live view-model; falls back to the P6 seam
+    when absent; re-emits the selector's `set-enabled` as `set-mcp-enabled`).
+  - `src/ui/stores/tabsStore.ts` (additive optional `TabDepsBinding.getEnabledMcpServers?`
+    + the guarded fold in `_turnQueryOptions` — writes `enabledMcpServers` only when the
+    pure fold returns a value, so a no-server turn stays byte-identical to P7; extracted
+    an `isNonEmptyText` guard + rebuilt the options object incrementally to keep the
+    method under the complexity-10 lint ceiling).
+- **Commit:** `T-MC-036-SHA`.
+- **Outcome:** done (T-MC-035 now green).
+- **How the wiring composes:** the surface owns the per-surface manager + the view-model;
+  the toolbar selector + the settings read the SAME `mcpVm`; the turn's
+  `enabledMcpServers` is the manager's `getEnabledMcpServers(∅)` folded only when defined
+  (alongside the P4 append / P6 controls folds — omitted when empty). An MCP tool name
+  (`mcp__fs__read`) flows through the UNCHANGED `ApprovalGateRuntime` →
+  `ApprovalManager.decide` exactly like a native tool (the gate is tool-agnostic). The two
+  Obsidian `Modal` hosts are the ONLY `obsidian`-importing MCP files (all under
+  `src/plugin/**`); the Vue surface launches them through the seam.
+- **Gates:** `vue-tsc -p tsconfig.lint.json` **0 errors**; whole-project `npm run lint`
+  **0 errors** (14 pre-existing warnings only); `ChatSurface.mcp.test.ts` **7/7**;
+  surface/toolbar/approvals/tabsStore/mcp/composer regressions **188/188**; the
+  standalone-mount tests (`main.ts`/`main.test`/`main.rr`) **8/8** GREEN after the
+  provide. No `obsidian`/SDK import under `src/ui/**`; no `v-html`/`window.confirm`.
+- **Deviation:** the `_turnQueryOptions` fold was refactored (incremental object build +
+  an `isNonEmptyText` guard) to satisfy the complexity-10 lint rule after adding the MCP
+  fold — behaviour-preserving (the P4 append + P6 controls folds stay byte-identical; the
+  three regression suites confirm). The test-modal per-tool toggle persists through a
+  launcher-local `McpServerManager` over the shared vault store (the seam signature
+  `(server)=>Promise<void>` carries no callback), matching SPEC-MC-023's "the host owns
+  its own probe + per-tool toggle lifecycle"; the surface re-loads after the test modal
+  closes so its snapshot reflects the saved truth.

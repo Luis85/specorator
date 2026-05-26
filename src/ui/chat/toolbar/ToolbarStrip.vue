@@ -31,6 +31,13 @@ const props = defineProps<{
 	vm: ToolbarViewModel;
 	notify?: NotificationPort;
 	permissionMode?: PermissionMode;
+	/**
+	 * P8 (SPEC-MC-020): the manager-driven MCP view-model from the surface. When present
+	 * the expanded `McpSelector` lists the live servers + their enabled toggles; when
+	 * absent the strip falls back to the P6 visible-empty seam (the strip has no
+	 * `McpServerManager` of its own, EC-MC-1).
+	 */
+	mcpVm?: McpViewModel;
 }>();
 const emit = defineEmits<{
 	'pick-model': [id: string];
@@ -39,21 +46,26 @@ const emit = defineEmits<{
 	'toggle-service-tier': [active: boolean];
 	/** P7 (SPEC-AS-012): the live permission-mode change re-emitted to the surface. */
 	'set-permission': [mode: PermissionMode];
+	/** P8 (SPEC-MC-018): the MCP selector's per-server enabled toggle re-emitted to the surface. */
+	'set-mcp-enabled': [name: string, enabled: boolean];
 }>();
 
 /**
- * Adapt the toolbar's P6 `McpWidgetVm` to the P8 `McpViewModel` the expanded
- * `McpSelector` consumes (SPEC-MC-018). The toolbar strip has no `McpServerManager`,
- * so it always yields the P6 visible-empty seam (`empty-seam`); the manager-driven
- * live list is wired by the surface (T-MC-036). `supported` mirrors the P6
- * `supportsMcpTools` gate (the `visible` visibility kind).
+ * The `McpViewModel` the expanded `McpSelector` consumes (SPEC-MC-018). When the
+ * surface threads its manager-driven `mcpVm` (≥ 1 server possible) the selector lists
+ * the live servers; otherwise the strip yields the P6 visible-empty seam
+ * (`empty-seam`) so a no-MCP-store mount stays byte-identical to P6. `supported` for the
+ * fallback mirrors the P6 `supportsMcpTools` gate (the `visible` visibility kind).
  */
-const mcpVm = computed<McpViewModel>(() => ({
-	kind: 'empty-seam',
-	servers: [],
-	enabledCount: 0,
-	supported: props.vm.mcp.visibility.kind === 'visible',
-}));
+const resolvedMcpVm = computed<McpViewModel>(
+	() =>
+		props.mcpVm ?? {
+			kind: 'empty-seam',
+			servers: [],
+			enabledCount: 0,
+			supported: props.vm.mcp.visibility.kind === 'visible',
+		},
+);
 </script>
 
 <template>
@@ -86,7 +98,11 @@ const mcpVm = computed<McpViewModel>(() => ({
 				:vm="vm.serviceTier"
 				@toggle="emit('toggle-service-tier', $event)"
 			/>
-			<McpSelector v-if="vm.mcp.visibility.kind === 'visible'" :vm="mcpVm" />
+			<McpSelector
+				v-if="vm.mcp.visibility.kind === 'visible'"
+				:vm="resolvedMcpVm"
+				@set-enabled="(name, enabled) => emit('set-mcp-enabled', name, enabled)"
+			/>
 			<ExternalContextControl
 				v-if="vm.external.visibility.kind === 'visible'"
 				:vm="vm.external"

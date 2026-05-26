@@ -107,6 +107,36 @@ that surface.
 > impl, so adding them breaks nothing until a bridge declares `implements` (the
 > bridge tasks add the impl + the `fake-ports` member in the same task).
 
+## WIRE-IN batch (T-MC-035..037) — automated legs + the deferred-manual smoke
+
+| Leg | Status | Where |
+|---|---|---|
+| TEST-MC-052 (wiring) — a turn folds `getEnabledMcpServers(∅)` into `queryOptions.enabledMcpServers` only when an enabled server is active | covered (RED→green, T-MC-035→036) | `tests/ui/chat/ChatSurface.mcp.test.ts` |
+| TEST-MC-082 (wiring) — a no-server / no-MCP-port turn omits `enabledMcpServers` (byte-identical to P7) | covered (RED→green, T-MC-035→036) | `tests/ui/chat/ChatSurface.mcp.test.ts`, `tests/ui/main.ts.test.ts` |
+| TEST-MC-065 — an `mcp__<server>__<tool>` approval routes through the UNCHANGED P7 `ApprovalManager` (no MCP special-case, no `providerId` branch) | covered (RED→green, T-MC-035→036) | `tests/ui/chat/ChatSurface.mcp.test.ts` |
+| TEST-MC-071/072 — a store load fault degrades gracefully (a non-blocking notice + the chat continues; no crash) | covered (RED→green, T-MC-035→036) | `tests/ui/chat/ChatSurface.mcp.test.ts` |
+| TEST-MC-081 (wiring) — the per-surface `McpServerManager` feeds the settings + selector a live view-model when the store is provided + MCP supported | covered (RED→green, T-MC-035→036) | `tests/ui/chat/ChatSurface.mcp.test.ts` |
+| TEST-MC-040/043/044/050/052/082 (T-MC-037 dev leg, **deterministic**) — `src/ui/main.ts` mounts the MCP-wired surface against `MockBridge`/`LocalStorageBridge` with the two MCP ports + browser-safe seam stand-ins; the MCP surface stays hidden on the inert Mock `supportsMcpTools:false` caps (the P7 byte-identical state) | **automated + PASS** | `tests/ui/main.ts.test.ts` (the standalone MCP smoke leg) |
+
+> **TEST-MC-037 — `npm run dev` interactive live-dev flow (DEFERRED human-run leg).**
+> The deterministic mount + fold legs are automated in `tests/ui/main.ts.test.ts`.
+> The interactive live-dev-server flow (seed a server against an MCP-capable runtime,
+> open the add/edit modal incl. a format-2 paste → name required + a malformed paste →
+> parse error adds nothing, drive the test modal across the five states via the
+> scriptable Mock client, the expanded selector list + toggle + count badge, a toggle
+> persists + re-derives the badge, and a turn folds `enabledMcpServers` only when ≥ 1
+> active server) requires the long-running `npm run dev` server — the agent does NOT
+> start it. **Deferred to the human run** (record pass/fail + date here).
+
+> **TEST-MC-M1 — production wire-in (manual, T-MC-036).** `AgentSidebarView` provides
+> `MCP_CONFIG_STORE_PORT` = `ObsidianBridge.mcpConfigStore` (the real vault
+> `.claude/mcp.json`) + `MCP_CLIENT_PORT` = `ObsidianBridge.mcpClient` (the real SDK
+> client) + the two Obsidian `Modal`-host launchers (`McpServerModalHost` /
+> `McpTestModalHost`, the ONLY place `obsidian` + the MCP modals are imported into the
+> wiring). Their behavioural gate is the manual TEST-MC-M1 leg in Obsidian (a real
+> vault round-trip + a real Claude turn calling an MCP tool through the SDK + the P7
+> gate) — never self-claimed by an agent.
+
 ## INFRA / APPLICATION / UI / STYLES / WIRE-IN / GATE batches
 
 The scriptable Mock store (`seedMcpServers` + `setMcpStoreFailMode`) + the
