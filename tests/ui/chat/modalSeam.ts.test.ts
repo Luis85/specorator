@@ -14,7 +14,18 @@
  * `useOpenImagePreview()` falling back to a no-op resolve. The four P3/P4 handles
  * stay byte-identical (additivity).
  *
- * Traces: REQ-CP-017, REQ-CA-008/020, NFR-CP-003, NFR-CA-003.
+ * T-PV-010 (RED → green) — the P9 widened `CHAT_RUNTIME_FACTORY` + the
+ * `OPEN_PROVIDER_CONSENT` seam (TEST-PV-010/011/082/113/114, SPEC-PV-005/031):
+ * `ChatRuntimeFactory` widens to `(providerId: ProviderId) => Result<ChatRuntimePort>`
+ * (the construct-fail path is `Result.err`, not a throw); `useChatRuntimeFactory()`
+ * still throws-when-absent (the surface needs it); the appended `OpenProviderConsentFn`
+ * = `(providerId) => Promise<boolean>` + `OPEN_PROVIDER_CONSENT` key;
+ * `useOpenProviderConsent()` falls back to an AUTO-DECLINE (`false`) when absent (a
+ * missing launcher must never silently read beyond the vault — mirrors
+ * `useConfirmDelete`). The P3–P8 handles stay byte-identical (additivity).
+ *
+ * Traces: REQ-CP-017, REQ-CA-008/020, NFR-CP-003, NFR-CA-003,
+ * REQ-PV-010/011/012/082/113/114, NFR-PV-001/008.
  */
 import { describe, it, expect } from 'vitest';
 import { defineComponent, h } from 'vue';
@@ -41,10 +52,19 @@ import {
 	useOpenMcpTestModal,
 	type OpenMcpServerModalFn,
 	type OpenMcpTestModalFn,
+	CHAT_RUNTIME_FACTORY,
+	useChatRuntimeFactory,
+	type ChatRuntimeFactory,
+	OPEN_PROVIDER_CONSENT,
+	useOpenProviderConsent,
+	type OpenProviderConsentFn,
 } from '@/ui/chat/modalSeam';
 import type { AttachedImage } from '@/domain/chat/attachments';
 import type { McpServerDraft } from '@/application/chat/mcp/McpServerManager';
 import type { ManagedMcpServer } from '@/domain/chat/mcp/McpTypes';
+import type { ChatRuntimePort } from '@/domain/ports';
+import type { Result } from '@/domain/shared/Result';
+import type { ProviderId } from '@/domain/chat/ProviderId';
 
 /** Mount a probe component that calls `useInstructionConfirm()` under a provide. */
 function probe(provided?: InstructionConfirmFn): InstructionConfirmFn {
@@ -253,5 +273,99 @@ describe('useOpenMcpTestModal (TEST-MC-044 seam leg, SPEC-MC-023)', () => {
 	it('falls back to a no-op resolve when no launcher was provided', async () => {
 		const fn = probeMcpTestModal();
 		await expect(fn(sampleServer)).resolves.toBeUndefined();
+	});
+});
+
+// ── T-PV-010 (RED → green): the P9 widened factory + consent seam (SPEC-PV-005/031) ──
+// `ChatRuntimeFactory` widens to `(providerId) => Result<ChatRuntimePort>`. The
+// construct-fail path is a `Result.err`, not a throw (REQ-PV-011). `OPEN_PROVIDER_CONSENT`
+// is the beyond-vault consent launcher; `useOpenProviderConsent()` auto-declines
+// (`false`) when absent (REQ-PV-082/113) — a missing launcher never silently reads
+// beyond the vault.
+
+type Equals<A, B> =
+	(<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+
+// ---- The widened factory signature (TEST-PV-114 compile leg, SPEC-PV-005) ----
+const _factorySig: Equals<
+	ChatRuntimeFactory,
+	(providerId: ProviderId) => Result<ChatRuntimePort>
+> = true;
+void _factorySig;
+
+// ---- The consent fn signature (SPEC-PV-005) ----
+const _consentSig: Equals<OpenProviderConsentFn, (providerId: ProviderId) => Promise<boolean>> =
+	true;
+void _consentSig;
+
+/** A throwaway stub runtime — only its identity matters for the factory leg. */
+const stubRuntime = { providerId: 'claude' } as unknown as ChatRuntimePort;
+
+/** Mount a probe calling `useChatRuntimeFactory()` under an optional provide. */
+function probeFactory(provided?: ChatRuntimeFactory): ChatRuntimeFactory {
+	let captured!: ChatRuntimeFactory;
+	const Probe = defineComponent({
+		setup() {
+			captured = useChatRuntimeFactory();
+			return () => h('div');
+		},
+	});
+	mount(Probe, {
+		global: provided ? { provide: { [CHAT_RUNTIME_FACTORY as symbol]: provided } } : {},
+	});
+	return captured;
+}
+
+/** Mount a probe calling `useOpenProviderConsent()` under an optional provide. */
+function probeConsent(provided?: OpenProviderConsentFn): OpenProviderConsentFn {
+	let captured!: OpenProviderConsentFn;
+	const Probe = defineComponent({
+		setup() {
+			captured = useOpenProviderConsent();
+			return () => h('div');
+		},
+	});
+	mount(Probe, {
+		global: provided ? { provide: { [OPEN_PROVIDER_CONSENT as symbol]: provided } } : {},
+	});
+	return captured;
+}
+
+describe('useChatRuntimeFactory widened (TEST-PV-010/011/114, SPEC-PV-005/031)', () => {
+	it('returns the provided widened factory; a registered provider → Result.ok(runtime)', () => {
+		const factory: ChatRuntimeFactory = () => ({ ok: true, value: stubRuntime });
+		const fn = probeFactory(factory);
+		const result = fn('claude');
+		expect(result.ok).toBe(true);
+		expect(result.ok && result.value).toBe(stubRuntime);
+	});
+
+	it('the construct-fail path is a Result.err, never a throw (REQ-PV-011)', () => {
+		const factory: ChatRuntimeFactory = () => ({ ok: false, error: new Error('no key') });
+		const fn = probeFactory(factory);
+		const result = fn('codex');
+		expect(result.ok).toBe(false);
+		expect(!result.ok && result.error.message).toBe('no key');
+	});
+
+	it('still throws-when-absent (the surface needs it, byte-identical to P3-P8)', () => {
+		expect(() => probeFactory()).toThrow(/ChatRuntimeFactory was not provided/);
+	});
+});
+
+describe('useOpenProviderConsent (TEST-PV-082/113, SPEC-PV-005)', () => {
+	it('returns the provided launcher when OPEN_PROVIDER_CONSENT is provided', async () => {
+		let seen: ProviderId | null = null;
+		const fn = probeConsent((providerId) => {
+			seen = providerId;
+			return Promise.resolve(true);
+		});
+		await expect(fn('codex')).resolves.toBe(true);
+		expect(seen).toBe('codex');
+	});
+
+	it('falls back to an AUTO-DECLINE (false) when absent (no silent beyond-vault read)', async () => {
+		const fn = probeConsent();
+		await expect(fn('codex')).resolves.toBe(false);
 	});
 });
