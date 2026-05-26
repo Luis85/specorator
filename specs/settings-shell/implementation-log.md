@@ -211,3 +211,150 @@ STYLES / WIRE-IN / GATE batches ride their own subagents.
   returned the fallback for empty input too; the SPEC-SS-004 "only when nothing
   classified" wording + the RED test (`'' → []`) pin the meaningful-content guard.
   Reused the classifier so the routing is branch-free; no provider-id branch.
+
+---
+
+# APPLICATION batch (T-SS-014..019)
+
+The PURE `buildSettingsViewModel` + the read-only discovery mapping + the
+`EnvSnippetService` (secret-split) + the env→subprocess-env resolution helper.
+All under `src/application/settings/**` — pure / port-driven, no
+`obsidian`/`node:*`/Vue (NFR-SS-003); `Result`-typed, never throws; no
+`switch(providerId)` (NFR-SS-008). Each task RED-first then green.
+
+### T-SS-014 — RED buildSettingsViewModel ordered capability-gated VM (🧪)
+
+- **Spec/test:** TEST-SS-001/002/004/005/007/010/011/015/020/022/080/081/082/083/093;
+  SPEC-SS-006/007; SPEC-SS-016/020/021; NFR-SS-008; EC-SS-1/2/8/9/10.
+- **Files:** `tests/application/settings/buildSettingsViewModel.test.ts` (new, 25
+  cases — section ordering, shared P0 core + permission/keyboardNav, Claude no
+  toggle, non-Claude toggle-first, environment editors + snippet list, determinism,
+  apiKeyField tri-state, modelPicker empty + preselect, mcpManager/mcpDocNote,
+  slash/agent definition gate, approvals + permissionMode, Claude-only baseline,
+  union no-secret + read-only no-onChange, no-switch source guard over the
+  comment-stripped source).
+- **Outcome:** done — RED confirmed (module missing).
+- **Commit:** `ba392060`.
+
+### T-SS-015 — buildSettingsViewModel.ts + SettingsControl union (🔨)
+
+- **Spec/req:** SPEC-SS-006/007; SPEC-SS-016/020/021; REQ-SS-001/002/004/005/010/011/
+  015/020/022/080/081/082/083/093; NFR-SS-008; EC-SS-1/2/8/9/10.
+- **Files:** `src/application/settings/buildSettingsViewModel.ts:1-220` (new — the
+  PURE total `buildSettingsViewModel` + the 14-member `SettingsControl` discriminated
+  union + the `SettingsViewModel`/`SettingsSection` DTOs; the shared/provider/
+  environment section builders; `resolveApiKeyState`/`buildModelPicker` helpers),
+  `src/application/settings/index.ts:1-16` (new barrel).
+- **Outcome:** done — TEST-SS ids pass (25/25). Sections ordered
+  `[shared, …enabled blank-tab-order, environment]`; each provider section gates on
+  the capability bag (apiKeyField iff needsApiKey + tri-state from secretKeysSet/
+  availability; modelPicker preselect providerDefaultModel[id] else defaultModelId,
+  empty flag; mcpManager iff supportsMcpTools else mcpDocNote; slashList iff
+  supportsProviderCommands && definitions.slash; agentList iff agent||skill; approvals
+  unconditional). No member carries a secret value (apiKeyField = `{kind,providerId,
+  state}` only).
+- **Verify:** whole-project vue-tsc 0 + whole-project lint 0 errors (16 pre-existing
+  warnings only) + 25/25; no `obsidian`/`node:*`/Vue import in
+  `src/application/settings/**`; no `switch(providerId)`/`=== 'claude'…` (gates on the
+  registry's enabled list + the descriptor enablement predicate + the capability bag).
+- **Commit:** `3c142be3`.
+- **Deviation:** the per-enabled-provider env-scope editors render in blank-tab order
+  (mirrors the section order) rather than a Claude-first order — the spec does not pin
+  the per-provider editor order; blank-tab order keeps it consistent with the section
+  ordering. Provider-section control order follows the UX layout (A.0): toggle →
+  apiKeyField → modelPicker → slashList → agentList → mcp(manager|docNote) → approvals.
+
+### T-SS-016 — RED read-only agent/skill + slash discovery mapping (🧪)
+
+- **Spec/test:** TEST-SS-030/031/040/041; SPEC-SS-008; EC-SS-9.
+- **Files:** `tests/application/settings/discoverDefinitions.test.ts` (new, 8 cases —
+  command→slash + skill→agent mapping, no write affordance on rows, load-or-default
+  `[]` on a rejected `getEntries` / empty catalog, the `hasProviderDefinitions`
+  predicate: agent always false, slash/skill from the non-empty catalogs, omit when
+  both empty; over an inline stub catalog).
+- **Outcome:** done — RED confirmed (module missing).
+- **Commit:** `b149c730`.
+
+### T-SS-017 — discoverDefinitions.ts + hasProviderDefinitions (🔨)
+
+- **Spec/req:** SPEC-SS-008; REQ-SS-030/031/040/041; EC-SS-9.
+- **Files:** `src/application/settings/discoverDefinitions.ts:1-86` (new —
+  `discoverDefinitions(catalog)` mapping `getEntries('command'|'skill')` to the
+  read-only `slash {name,description}` + `agent {name,description,kind}` shapes via
+  `tryAsync` load-or-default; `makeHasProviderDefinitions(catalog)` building the
+  `(id) => {slash,skill,agent}` predicate, agent:false), barrel grows.
+- **Outcome:** done — TEST-SS-030/031/040/041 pass (8/8). Read-only; agent list
+  sourced from skills, omitted when both catalogs empty; never throws.
+- **Verify:** whole-project vue-tsc 0 + whole-project lint 0 errors + 8/8; no raw
+  try/catch (uses `tryAsync`); no `obsidian`/`node:*`/Vue.
+- **Commit:** `2d423fc8`.
+- **Deviation:** the catalog is provider-agnostic in P4 (no per-provider source), so
+  `hasProviderDefinitions` returns the same presence for every id — matches SPEC-SS-008
+  ("the catalog is provider-agnostic in P4; P10 reads it for the active provider's
+  section read-only"). Initial impl used raw try/catch; reworked to `tryAsync` to clear
+  the Result-discipline `no-restricted-syntax` lint rule.
+
+### T-SS-018 — RED EnvSnippetService (🧪)
+
+- **Spec/test:** TEST-SS-052/053/060/061/062/063/064/066/067/090/094; SPEC-SS-009;
+  SPEC-SS-018/019/022; NFR-SS-002/006/008; EC-SS-5/6/11/12/13/14.
+- **Files:** `tests/application/settings/EnvSnippetService.test.ts` (new, 14 cases over
+  `fake-ports` secretStore+settings — list load-or-default + round-trip, name guard
+  (nothing persisted), secret split (provider auth → secretRef + secret store;
+  non-secret → inline; markSecretKeys), zero-secret-bytes in data.json, invalid
+  context-limit drop-but-save, edit secret-slot reconcile + id preserve, remove-both +
+  idempotence, apply scope-inference, applyScopeText split + review keys, masked
+  readScope, Result.err with no secret substring on unavailable storage, no-switch
+  source guard).
+- **Outcome:** done — RED confirmed (module missing).
+- **Commit:** `d9f483ed`.
+
+### T-SS-019 — EnvSnippetService.ts (secret-split, Result-typed) (🔨)
+
+- **Spec/req:** SPEC-SS-009; SPEC-SS-018/019/022; REQ-SS-050..053/060..064/066/067/090/
+  094; NFR-SS-002/006/008; EC-SS-5/6/11/12/13/14.
+- **Files:** `src/application/settings/EnvSnippetService.ts:1-300` (new —
+  `createEnvSnippetService(deps)` factory composing `SettingsPort` + `SecretStorePort`
+  + the injected `ProviderDescriptor[]`; `EnvSnippetService` interface +
+  `EnvSnippetInput`; `splitEntries`/`writeSecrets`/`deleteSecretsFor`/`saveSnippets`/
+  `buildStruct`/`mergeScopeEntries` helpers; list/create/edit/remove/apply/
+  applyScopeText/readScope), barrel grows.
+- **Outcome:** done — all listed TEST-SS ids pass (14/14). The secret split routes
+  provider-owned auth keys (`isSecretEnvKey`) + caller `markSecretKeys` to
+  `setSecret(envSecretKey(scope,key), value)` + a `{kind:'secretRef'}` entry — the
+  struct/data.json carry ZERO secret bytes; non-secret → `{kind:'inline'}`. Name guard
+  errs `settings.envSnippets.nameRequired` (nothing persisted); edit reconciles secret
+  slots (delete orphaned refs, set new) preserving the id; remove clears both stores
+  idempotently; apply infers an undeclared scope (over `KEY=x` lines); applyScopeText
+  splits via `getEnvironmentScopeUpdates` + returns the out-of-scope review keys;
+  readScope returns secretRefs MASKED (never resolved). Every method returns `Result`
+  (no throw, no secret substring in err).
+- **Verify:** whole-project vue-tsc 0 + whole-project lint 0 errors + 14/14; no raw
+  try/catch (uses `tryAsync`); no `switch(providerId)`; no `obsidian`/`node:*`/Vue.
+- **Commit:** `20e5295f`.
+- **Deviation:** `apply` infers an undeclared scope over reconstructed `KEY=x` lines
+  (the classifier reads only the key, and a bare key list has no `=` for
+  `extractEnvironmentKey`) — behaviour-equivalent to inferring from the entry keys.
+  `mergeScopeEntries` replaces by key (not append) so re-applying is idempotent. The
+  secret-namespace scope for create/edit is `input.scope ?? inferred ?? 'shared'`.
+
+### T-SS-019 (cont.) — resolveEnvScope/mergeScopeEnvs env→subprocess-env helper (🧪+🔨)
+
+- **Spec/req:** TEST-SS-065; SPEC-SS-013; REQ-SS-065; NFR-SS-002; EC-SS-15.
+- **Files:** `tests/application/settings/resolveEnvScope.test.ts` (new, 7 cases),
+  `src/application/settings/resolveEnvScope.ts:1-65` (new — `resolveEnvScope(entries,
+  secretStore)` resolves inline verbatim + a secretRef via `getSecret` at the boundary
+  (absent → omitted; failure → err); `mergeScopeEnvs(base, shared, provider,
+  secretStore)` composes `{...base, ...shared, ...provider}`), barrel grows.
+- **Outcome:** done — TEST-SS-065 passes (7/7). This is the application-layer pure
+  composition the P9 runtimes (SPEC-SS-013, infra batch T-SS-023) call at the
+  subprocess boundary; it is the ONE place a secret value is read, and the resolved
+  value is returned only for the subprocess-env merge — never into a DTO/notice/log.
+- **Verify:** whole-project vue-tsc 0 + whole-project lint 0 errors + 7/7; no
+  `obsidian`/`node:*`/Vue.
+- **Commit:** RED `7717db43`, green `5ae9541f`.
+- **Deviation:** placed in `src/application/settings/` (not `src/infrastructure/
+  obsidian/**`) so the secret-resolving composition is pure + unit-tested; the infra
+  runtime wiring (T-SS-023, outside this batch) imports and calls it at the boundary.
+  This keeps the coverage on the composition while the real subprocess injection stays
+  the coverage-excluded manual leg (TEST-SS-M2).

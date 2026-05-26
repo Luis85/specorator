@@ -4,7 +4,7 @@ area: SS
 current_stage: implementation
 status: active
 last_updated: 2026-05-26
-last_agent: dev (/spec:implement — DOMAIN batch T-SS-001..013)
+last_agent: dev (/spec:implement — APPLICATION batch T-SS-014..019)
 epic: claudian-reboot
 phase: P10
 integration_branch: next
@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-SS-001; Parts A UX / B UI / C Architecture; ADR-SS-001 + ADR-SS-002 accepted + filed; CLAR-SS-001/004 ratified by ADR-SS-001, CLAR-SS-002 by ADR-SS-002)
   spec.md: complete (SPEC-SS-001; 28 spec items SPEC-SS-001..028 across 6 layer groups; EC-SS-1..16; TEST-SS-001..095 + M1..M4; every REQ-SS chained to ≥1 SPEC + ≥1 TEST)
   tasks.md: complete (TASKS-SS-001; 35 tasks T-SS-001..035 across 6 batches + baseline; TDD-ordered RED-before-green; every SPEC-SS-001..028 covered; manual legs TEST-SS-M1..M4; NO guard-relax / NO new InjectionKey / NO new obsidian file)
-  implementation-log.md: in-progress (DOMAIN batch T-SS-001..013 done; APPLICATION/INFRA-PLUGIN/STYLES/WIRE-IN/GATE batches T-SS-014..035 remain)
+  implementation-log.md: in-progress (DOMAIN T-SS-001..013 + APPLICATION T-SS-014..019 done; INFRA-PLUGIN/STYLES/WIRE-IN/GATE batches T-SS-020..035 remain)
   test-plan.md: in-progress (TESTPLAN-SS-001; guard-verify note + Claude-only additivity baseline + DOMAIN automated status + manual legs TEST-SS-M1..M4)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-SS-001 + ADR-SS-001/002 accepted) |
 | 5. Specification | `spec.md` | complete (SPEC-SS-001..028; EC-SS-1..16; TEST-SS-001..095 + M1..M4) |
 | 6. Tasks | `tasks.md` | complete (TASKS-SS-001; 35 tasks T-SS-001..035) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN batch T-SS-001..013 complete + committed; T-SS-014..035 remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-SS-001..013 + APPLICATION T-SS-014..019 complete + committed; INFRA/PLUGIN/STYLES/WIRE-IN/GATE T-SS-020..035 remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -272,4 +272,50 @@ settings, model picker, agent/skill/subagent + slash-command settings, env-snipp
                           APPLICATION batch T-SS-014..019 (buildSettingsViewModel + SettingsControl union +
                           discoverDefinitions + EnvSnippetService) — owner dev/qa; depends on this batch's
                           frozen domain types. Then INFRA/PLUGIN T-SS-020..026, STYLES, WIRE-IN, GATE.
+2026-05-26 (dev): /spec:implement — APPLICATION batch T-SS-014..019 COMPLETE on feature/settings-shell
+                          (off next). RED-first then green per task, one commit each. SHAs:
+                          T-SS-014 RED ba392060 · T-SS-015 3c142be3 · T-SS-016 RED b149c730 ·
+                          T-SS-017 2d423fc8 · T-SS-018 RED d9f483ed · T-SS-019 (EnvSnippetService) 20e5295f ·
+                          T-SS-019 (resolveEnvScope RED) 7717db43 · T-SS-019 (resolveEnvScope green) 5ae9541f.
+                          LANDED under src/application/settings/ (+ barrel index.ts): buildSettingsViewModel.ts
+                          (PURE total ordered capability-gated VM + the 14-member SettingsControl discriminated
+                          union — sections [shared, enabled providers blank-tab-order, environment]; apiKeyField
+                          tri-state from secretKeysSet/availability; modelPicker empty + preselect; mcpManager
+                          else mcpDocNote; slash/agent definition gate; unconditional approvals/permissionMode/
+                          keyboardNav; NO member carries a secret; NO switch(providerId)); discoverDefinitions.ts
+                          (read-only P4 command→slash + skill→agent mapping + makeHasProviderDefinitions
+                          predicate, agent:false, load-or-default via tryAsync); EnvSnippetService.ts
+                          (createEnvSnippetService composing SettingsPort + SecretStorePort + the injected
+                          ProviderDescriptor[]; list/create/edit/remove/apply/applyScopeText/readScope; the
+                          secret-split — provider auth + markSecretKeys → setSecret(envSecretKey) + secretRef,
+                          ZERO secret bytes in data.json; name guard; remove-both idempotent; apply
+                          scope-inference; applyScopeText split + out-of-scope review keys; readScope masked;
+                          every method Result-typed, no throw, no secret substring in err); resolveEnvScope.ts
+                          (the env→subprocess-env helper the P9 runtimes consume — resolveEnvScope reads inline
+                          verbatim + secretRef via getSecret AT THE BOUNDARY (the ONE place a secret is read),
+                          mergeScopeEnvs composes {...base,...shared,...provider}). SECRET-SPLIT REALISED:
+                          plaintext secrets never reach data.json/device-local/a DTO/notice/log — only the
+                          struct's secretRef + the SecretStorePort slot; readScope keeps secretRefs masked; the
+                          value is resolved only at the subprocess boundary (resolveEnvScope). NO-SWITCH
+                          REALISED: gating reads the registry's enabled list + the descriptor enablement
+                          predicate + the frozen capability bag + the descriptor environmentKeyPatterns
+                          (classifier) — a source-guard test (comment-stripped) asserts no
+                          switch(providerId)/=== 'claude'… in buildSettingsViewModel + EnvSnippetService.
+                          VERIFY: whole-project vue-tsc 0 + whole-project npm run lint 0 errors (16 pre-existing
+                          warnings: ChatSurface/chatStore/tabsStore max-lines + modalSeam/ErrorBoundary
+                          one-component-per-file — none mine) + the P10 surface 173/173 (application/settings +
+                          domain/settings + domain/chat/environment + domain/chat/providers); the new
+                          application/settings suites = 54/54 (VM 25 + discovery 8 + EnvSnippetService 14 +
+                          resolveEnvScope 7). NO new port / InjectionKey / obsidian file (composes the existing
+                          SETTINGS_PORT + SECRET_STORE_PORT, ADR-SS-001 §5). DEVIATIONS: (a) per-enabled-provider
+                          env-scope editors render in blank-tab order (spec does not pin the editor order); (b)
+                          discoverDefinitions reworked from raw try/catch to tryAsync for the Result-discipline
+                          lint rule; (c) apply infers an undeclared scope over reconstructed KEY=x lines
+                          (behaviour-equivalent); (d) resolveEnvScope/mergeScopeEnvs placed in
+                          src/application/settings/ (pure + unit-tested) — the infra runtime wiring (T-SS-023,
+                          real obsidian/** coverage-excluded) imports + calls it at the boundary. NEXT: the
+                          INFRA batch T-SS-020..024 (the _coerceSettings six-field round-trip + Mock/LS env-slot
+                          SecretStore + Mock runtime env-capture; wire resolveEnvScope/mergeScopeEnvs into the P9
+                          runtimes via T-SS-023; the no-secret/correct-store/Result-boundary guards) — owner
+                          dev/qa; then PLUGIN T-SS-025..026 (DOM tab + modals), STYLES, WIRE-IN, GATE.
 ```
