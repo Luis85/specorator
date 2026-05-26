@@ -251,6 +251,51 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
 
 ---
 
+## INFRA batch (T-MC-012..017)
+
+### T-MC-012 — Add `@modelcontextprotocol/sdk` + confirm externals + dep rationale (🔨 dev)
+
+- **Spec/req:** SPEC-MC-030; REQ-MC-080; NFR-MC-010; ADR-MC-002 §3.
+- **Files:** `package.json` (the `@modelcontextprotocol/sdk` runtime dependency,
+  `^1.29.0`) + `package-lock.json` (resolved) — **already present** in the worktree
+  (added when the worktree was provisioned; `git status` clean, no diff). No
+  `vite.config.ts` change needed.
+- **Outcome:** done (verification + rationale).
+- **Verification (by inspection):**
+  - `@modelcontextprotocol/sdk@^1.29.0` is in `package.json` `dependencies`; the
+    installed copy under `node_modules/@modelcontextprotocol/sdk` reports
+    `version 1.29.0`, `license MIT`. `npm install` clean (lockfile committed).
+  - `vite.config.ts` `ALL_EXTERNALS` = `OBSIDIAN_EXTERNALS` + `builtinModules` +
+    `builtinModules.map(node:…)`. The SDK's Node entry points
+    (`node:http`/`https`/`child_process`/`process`/`url`/`stream` …) are all node
+    builtins → covered in **both** bare and `node:` forms; **no new external
+    needed**. The SDK package itself (`@modelcontextprotocol/sdk`) is NOT in
+    `OBSIDIAN_EXTERNALS`, so — exactly like `@anthropic-ai/claude-agent-sdk` — it
+    **bundles into the plugin `main.js`** while its node builtins stay external.
+  - The SDK is imported **only** under `src/infrastructure/obsidian/**` (the new
+    `SdkMcpClient.ts`, T-MC-013). Confirmed by inspection: a project-wide grep for
+    `@modelcontextprotocol/sdk` under `src/**` matches **only**
+    `src/infrastructure/obsidian/SdkMcpClient.ts`. The standalone `build:web` mounts
+    `MockBridge` via `src/ui/main.ts` and never imports `obsidian/**`, so the SDK +
+    its `node:*` deps cannot reach the browser graph. (Per the batch directive the
+    full `build`/`build:web` chain is run by the orchestrator at the gate, not here.)
+- **Dependency rationale (AGENTS.md §8):**
+  - **License:** MIT (`node_modules/@modelcontextprotocol/sdk/package.json`).
+  - **Maintenance:** authored + maintained by Anthropic — the official Model Context
+    Protocol TypeScript SDK; the same vendor as the already-bundled
+    `@anthropic-ai/claude-agent-sdk`.
+  - **Why-not-existing:** there is no in-tree MCP client/transport; the SDK is the
+    only sanctioned implementation of the MCP `Client` + the stdio/SSE/HTTP
+    transports the tester (SPEC-MC-009) needs. Hand-rolling the protocol would
+    re-implement the wire format the Claude CLI already speaks.
+  - **Blast radius:** bundled into `main.js` (desktop plugin only); never reaches
+    `build:web`; `node:*` transports stay external; `manifest.json` untouched
+    (NFR-MC-010).
+- **Commit:** _(see batch close-out)_.
+- **Deviation:** the dependency line was already present in the provisioned worktree
+  (no `npm install` mutation was required); T-MC-012 reduces to the externals +
+  bundle-boundary verification and the AGENTS.md §8 rationale record.
+
 ## DOMAIN batch (T-MC-001..011) — close-out
 
 All eleven DOMAIN-batch tasks executed in strict TDD order (RED qa → green dev), one
