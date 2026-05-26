@@ -4,3 +4,9 @@
  * view-model. No `obsidian`/`node:*`/Vue.
  */
 export { SelectProviderUseCase } from './SelectProviderUseCase';
+export { buildProviderViewModel } from './buildProviderViewModel';
+export type {
+	ProviderOptionVM,
+	ProviderWidgetVM,
+	ProviderViewModel,
+} from './buildProviderViewModel';
