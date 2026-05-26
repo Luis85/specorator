@@ -1,22 +1,39 @@
 /**
- * T-TC-023 (RED) — `McpSelector.vue` honest-defer seam (TEST-TC-021/022 A legs).
+ * T-MC-032 (RED) — `McpSelector.vue` EXPANDED (TEST-MC-050/051/082 A legs + EC-MC-1/8).
  *
- * SPEC-TC-018. Renders nothing on a `hidden` slice (`!supportsMcpTools`,
- * REQ-TC-021); else the shell shows the MCP icon + a count-0 badge, opening
- * reveals a VISIBLE-EMPTY `mcp.empty` "coming later" panel — LISTS NO SERVER,
- * toggles/connects nothing (REQ-TC-022, EC-TC-9). Queried by `data-testid` only
- * (ADR-009).
- *
- * Traces: REQ-TC-021/022, SPEC-TC-018/029, NFR-TC-004/006.
+ * SPEC-MC-018 (extends SPEC-TC-018). The P6 visible-empty seam EXPANDED to a live
+ * list + toggle + count badge. Props become `vm: McpViewModel` (replacing the P6
+ * `McpWidgetVm`): hidden when `!vm.supported`; at `empty-seam` the P6 seam is kept
+ * byte-identical (the 🔌 shell + a count-0 badge + the `agent.chat.toolbar.mcp.empty`
+ * "coming later" panel on open, REQ-MC-082); at `live` the dropdown lists every
+ * server with its enabled toggle, the badge shows `enabledCount`, and toggling emits
+ * `set-enabled:[name, enabled]` (REQ-MC-051). Queried by `data-testid` only (ADR-009).
  */
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import McpSelector from '@/ui/chat/toolbar/McpSelector.vue';
 import { i18n } from '@/ui/i18n';
-import type { McpWidgetVm } from '@/application/chat/toolbar/buildToolbarViewModel';
+import type { McpViewModel } from '@/application/chat/mcp/buildMcpViewModel';
 import { McpSelectorPageObject } from './McpSelector.po';
 
-function mountMcp(vm: McpWidgetVm) {
+const EMPTY_VM: McpViewModel = {
+	kind: 'empty-seam',
+	servers: [],
+	enabledCount: 0,
+	supported: true,
+};
+
+const LIVE_VM: McpViewModel = {
+	kind: 'live',
+	servers: [
+		{ name: 'filesystem', type: 'stdio', enabled: true },
+		{ name: 'remote', type: 'sse', enabled: false },
+	],
+	enabledCount: 1,
+	supported: true,
+};
+
+function mountMcp(vm: McpViewModel) {
 	const wrapper = mount(McpSelector, {
 		props: { vm },
 		global: { plugins: [i18n] },
@@ -24,30 +41,42 @@ function mountMcp(vm: McpWidgetVm) {
 	return { wrapper, po: new McpSelectorPageObject(wrapper) };
 }
 
-describe('McpSelector (SPEC-TC-018)', () => {
-	it('renders nothing on a hidden slice (REQ-TC-021)', () => {
-		const { po } = mountMcp({ visibility: { kind: 'hidden' }, empty: true });
+describe('McpSelector (SPEC-MC-018)', () => {
+	it('renders nothing when the capability is unsupported (REQ-MC-041)', () => {
+		const { po } = mountMcp({ ...EMPTY_VM, supported: false });
 		expect(po.shellExists()).toBe(false);
 	});
 
-	it('shows the shell with a count-0 badge when supported', () => {
-		const { po } = mountMcp({ visibility: { kind: 'visible', enabled: false }, empty: true });
+	it('keeps the P6 empty seam byte-identical at empty-seam (TEST-MC-082, EC-MC-1)', async () => {
+		const { wrapper, po } = mountMcp(EMPTY_VM);
 		expect(po.shellExists()).toBe(true);
-		expect(po.buttonText()).toContain('0');
-	});
-
-	it('opening reveals the visible-empty coming-later panel; connects nothing (TEST-TC-022, EC-TC-9)', async () => {
-		const { wrapper, po } = mountMcp({
-			visibility: { kind: 'visible', enabled: false },
-			empty: true,
-		});
+		expect(po.badgeText()).toContain('0');
+		expect(po.serverCount()).toBe(0);
 		expect(po.emptyExists()).toBe(false);
 		await po.clickShell();
 		expect(po.emptyExists()).toBe(true);
 		expect(po.emptyText().length).toBeGreaterThan(0);
-		// Honest seam: no emitted connect/toggle event (the widget declares no custom
-		// emits — only the native click is captured).
-		expect(wrapper.emitted('connect')).toBeUndefined();
-		expect(wrapper.emitted('toggle')).toBeUndefined();
+		// Honest seam at empty: no live server listed, no set-enabled emitted.
+		expect(wrapper.emitted('set-enabled')).toBeUndefined();
+	});
+
+	it('lists every server with its toggle + the count badge at live (TEST-MC-050)', () => {
+		const { po } = mountMcp(LIVE_VM);
+		expect(po.shellExists()).toBe(true);
+		expect(po.badgeText()).toContain('1');
+		expect(po.serverCount()).toBe(2);
+	});
+
+	it('emits set-enabled([name, enabled]) when a server toggle changes (TEST-MC-051, EC-MC-8)', async () => {
+		const { wrapper, po } = mountMcp(LIVE_VM);
+		await po.toggleServerAt(1); // the disabled 'remote' → enabled
+		expect(wrapper.emitted('set-enabled')?.[0]).toEqual(['remote', true]);
+	});
+
+	it('keeps the P6 aria-expanded on the shell (REQ-MC-070)', async () => {
+		const { po } = mountMcp(LIVE_VM);
+		expect(po.ariaExpanded()).toBe('false');
+		await po.clickShell();
+		expect(po.ariaExpanded()).toBe('true');
 	});
 });
