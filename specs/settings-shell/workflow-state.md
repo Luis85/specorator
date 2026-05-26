@@ -4,7 +4,7 @@ area: SS
 current_stage: design
 status: active
 last_updated: 2026-05-26
-last_agent: pm (/spec:requirements)
+last_agent: architect (/spec:design)
 epic: claudian-reboot
 phase: P10
 integration_branch: next
@@ -13,7 +13,7 @@ artifacts:
   idea.md: skipped (parity-charter §3.8/§4 P10 + audits + claudian-main stand in, mirrors P1-P9)
   research.md: skipped
   requirements.md: accepted (PRD-SS-001; REQ-SS-001..095, NFR-SS-001..012; 6 CLAR-SS resolved-by-recommendation, CLAR-SS-001 ADR-needed)
-  design.md: pending
+  design.md: complete (DESIGN-SS-001; Parts A UX / B UI / C Architecture; ADR-SS-001 + ADR-SS-002 accepted + filed; CLAR-SS-001/004 ratified by ADR-SS-001, CLAR-SS-002 by ADR-SS-002)
   spec.md: pending
   tasks.md: pending
   implementation-log.md: pending
@@ -34,7 +34,7 @@ artifacts:
 | 1. Idea | `idea.md` | skipped |
 | 2. Research | `research.md` | skipped |
 | 3. Requirements | `requirements.md` | accepted |
-| 4. Design | `design.md` | pending |
+| 4. Design | `design.md` | complete (DESIGN-SS-001 + ADR-SS-001/002 accepted) |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
@@ -133,4 +133,37 @@ settings, model picker, agent/skill/subagent + slash-command settings, env-snipp
                           key-field set/not-set + capability-gated section visibility) + Part B UI
                           (settings/* → --sp-* parity) + the ADR for CLAR-SS-001 (EnvSnippetStorePort /
                           the secret-vs-non-secret split).
+2026-05-26 (architect): /spec:design COMPLETE → DESIGN-SS-001 (specs/settings-shell/design.md) Parts
+                          A UX / B UI / C Architecture. Two ADRs filed + accepted + indexed:
+                          - ADR-SS-001 (env-snippet store split, CLAR-SS-001 + CLAR-SS-004): the
+                            NON-SECRET snippet STRUCTURE (EnvSnippetStruct: id/name/description/scope/
+                            non-secret EnvEntry[]/contextLimits) persists DEVICE-LOCAL via SettingsPort as
+                            additive OPTIONAL PluginSettings fields (mirroring the P9 homeFsConsent pattern,
+                            round-tripped through _coerceSettings); SECRET-bearing values persist via
+                            SecretStorePort under env.<scope>.<KEY>, the struct holding only a secretRef;
+                            a PURE classifier (regrown providerEnvironment.ts) decides secret-vs-non-secret;
+                            injection reuses the P9 runtime env merge; NO NEW PORT — compose SettingsPort +
+                            SecretStorePort behind a pure EnvSnippetService (ADR-008); NO plaintext secret in
+                            data.json/device-local; no new consent gate (reuse isAvailable()).
+                          - ADR-SS-002 (view-model + DOM, CLAR-SS-002): a PURE buildSettingsViewModel(
+                            settings, registry, getCatalog, secretKeysSet, secretStorageAvailable) →
+                            SettingsViewModel (ordered sections: shared/core first then enabled providers in
+                            blank-tab order, each with only the SUPPORTED controls), capability-gated by the
+                            frozen bag, NEVER switch(providerId) (extends ADR-PV-001 §4); the PluginSettingTab
+                            STAYS Obsidian Setting-API DOM (NOT Vue, NG2), coverage-excluded src/plugin/**
+                            with manual legs; sections surface the existing P6-P9 ports; safe-DOM; native
+                            keyboard nav (WCAG 2.2 AA).
+                          DECISIONS: settings DOM-not-Vue confirmed (CLAR-SS-002); coverage split = tested
+                          view-model/env-service/classifier/coercers (application+domain) vs coverage-excluded
+                          Setting-API DOM (plugin) + subprocess env injection (infra). Six additive OPTIONAL
+                          PluginSettings fields (envSnippets/envScopes/keyboardNav/providerDefaultModel/
+                          defaultPermissionMode/providerCliPath), each with a coerce* round-trip; exact-key
+                          contract byte-identical P9 (NFR-SS-001). Flagged for the planner: read-only
+                          agent/skill/subagent + slash DISCOVERY SOURCE is under-specified in the PRD — pin
+                          the read source in spec.md (escalate to PM if no P9 seam exists; read-only either
+                          way per NG1). REQ-SS-067 contextLimits is 'could' — sequence last, do not gate the
+                          must-tier snippet round-trip. HAND-OFF → /spec:specify (architect): pin the
+                          EnvSnippetStruct/EnvEntry shape + envSecretKey namespace + the additive field names
+                          + their coerce* rules + the SettingsControl union members + the secret-classification
+                          rule; capture the Claude-only baseline on `next` before implementation.
 ```
