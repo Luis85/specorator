@@ -1,10 +1,10 @@
 ---
 feature: providers-registry
 area: PV
-current_stage: specification
+current_stage: tasks
 status: complete
 last_updated: 2026-05-26
-last_agent: architect (/spec:specify)
+last_agent: planner (/spec:tasks)
 epic: claudian-reboot
 phase: P9
 integration_branch: next
@@ -15,7 +15,7 @@ artifacts:
   requirements.md: accepted (PRD-PV-001 — 64 EARS REQ-PV + 14 NFR-PV + 7 CLAR-PV)
   design.md: complete (DESIGN-PV-001 — Parts A/B/C; ADR-PV-001/002/003 accepted)
   spec.md: complete (SPEC-PV-001 — 34 spec items, 6 layer groups; 20 EC-PV; TEST-PV-001..114 + M1..M4; full REQ↔SPEC↔TEST table)
-  tasks.md: pending
+  tasks.md: complete (TASKS-PV-001 — 44 T-PV tasks across 7 batches; TDD RED-before-green; 4 manual legs M1/M2/M3/M4; dep graph + coverage sanity-check)
   implementation-log.md: pending
   test-plan.md: pending
   test-report.md: pending
@@ -36,7 +36,7 @@ artifacts:
 | 3. Requirements | `requirements.md` | accepted |
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
-| 6. Tasks | `tasks.md` | pending |
+| 6. Tasks | `tasks.md` | complete |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
@@ -191,4 +191,46 @@ workspace registry, `~/.codex`/`~/.claude` transcript reads, the secret storage,
                           Codex JSON-RPC + ACP transports + real SecretStorePort/HomeFsPort (coverage-excluded)
                           are the final manual-leg tasks (TEST-PV-M1/M2/M3). The minAppVersion app.secretStorage
                           check is a dev task (escalate-don't-bump). No open clarifications block the planner.
+2026-05-26 (planner): Stage 6 COMPLETE. specs/providers-registry/tasks.md (TASKS-PV-001) written — 44
+                          T-PV tasks decomposing SPEC-PV-001..034, mirroring TASKS-MC-001 (P8) + TASKS-AS-001
+                          (P7) shape: baseline/guard-verify first (T-PV-001), then layer batches with strict
+                          RED(qa)-before-impl(dev), every dev task's first DoD = "prior RED passes" +
+                          whole-project npm run lint 0 + typecheck 0 + test green + impl-log. BATCHES: B0
+                          baseline T-PV-001; B1 DOMAIN T-PV-002..010 (ProviderId+settings widen; frozen
+                          ProviderDescriptor/capability matrix; pure resolveProvider; the 3 ports + keys +
+                          barrels; the WIDENED CHAT_RUNTIME_FACTORY + OPEN_PROVIDER_CONSENT seam); B2 INFRA
+                          T-PV-011..018 (shared descriptor-table ProviderRegistry coverage-included; Mock
+                          scriptable runtime/transport + in-memory secret + inert/seedable home-fs +
+                          fake-ports; LS inert; ObsidianBridge runtime registry + real app.secretStorage +
+                          real node:fs home-fs cov-excluded; Codex JSON-RPC + shared ACP transports
+                          cov-excluded); B3 APPLICATION T-PV-019..024 (SelectProviderUseCase,
+                          ProviderConsentGate, pure buildProviderViewModel); B4 UI T-PV-025..032 (3
+                          composables; ProviderChooser/ProviderOption; ProviderSecretField; provider-aware P6
+                          widgets incl. opencode-model-picker + capability-gated affordances; co-located
+                          data-testid POs); B5 STYLES T-PV-033 (--sp-* slice, ASCII-only lightningcss-safe);
+                          B6 WIRE-IN T-PV-034..036 (provide 3 ports + widened factory + consent launcher;
+                          tabs-store resolved-provider routing; provider-addressed history; chooser mount; dev
+                          smoke); B7 GATE T-PV-037..044 (invariants RED/green, token+additivity guard, the 4
+                          MANUAL legs T-PV-040 M1 Codex / T-PV-041 M2 Opencode / T-PV-042 M3 secret+minAppVersion
+                          / T-PV-043 M4 parity, feature DoD + draft PR into next). GUARD-RELAX VERDICT: NO
+                          relaxation needed — the new PROVIDER_REGISTRY_PORT/SECRET_STORE_PORT/HOME_FS_PORT keys
+                          + @/domain/chat/providers/** + @/application/chat/providers/** + @/ui/chat/providers/**
+                          + @/infrastructure/providers/** + the 3 new port paths are NOT in DELETED_SUBSYSTEM_BAN/
+                          DELETED_INJECTION_KEYS. SECRET-INFRA FILE-NAMING DIRECTIVE (T-PV-001/T-PV-017/T-PV-044):
+                          @/infrastructure/obsidian/ObsidianSecretStore* IS a still-banned glob — name the real
+                          secret infra SecretStorage.ts (NEVER ObsidianSecretStore*), the home-fs
+                          HomeFileSystem.ts, the runtimes/transports CodexRuntime/OpencodeRuntime/AcpTransport/
+                          CodexRpcTransport at the obsidian/ root, never under a banned subfolder — exactly as
+                          P8 did for VaultMcpConfigStore/SdkMcpClient; T-PV-001 enumerates the exact banned set
+                          vs the live eslint.config.js. WIDENED-FACTORY FAN-OUT = the one INTERFACE change (not a
+                          purely-additive optional): T-PV-010 widens ChatRuntimeFactory ()→ChatRuntimePort to
+                          (providerId)→Result<ChatRuntimePort> + updates EVERY call site + provide-site +
+                          modal-seam handle in the SAME task (build-green); resolved-provider routing finalises
+                          at T-PV-035; createProviderHistoryPort(providerId)/getCatalog(providerId) are
+                          UNCHANGED P3/P6 contracts (the seams receive the resolved provider at wire-in, not a
+                          signature change). Capability-matrix discipline: build BACKED only, honest-false
+                          GATED-OFF (NG1). HAND-OFF → /spec:implement (dev + qa): first ready task = T-PV-001
+                          (baseline + guard-verify, owner dev, no deps); then the B1 DOMAIN RED-first chain
+                          starting T-PV-002 (qa). The manual legs T-PV-040/041/042/043 are human-owned, never
+                          agent-self-claimed, accumulating for the single final epic-review gate (autonomous drive).
 ```
