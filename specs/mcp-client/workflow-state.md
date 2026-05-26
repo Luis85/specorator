@@ -4,7 +4,7 @@ area: MC
 current_stage: implementation
 status: active
 last_updated: 2026-05-26
-last_agent: dev (implementation — DOMAIN batch T-MC-001..011 complete; the pure types/parser/codec/parseCommand/getActiveServers + the additive enabledMcpServers? + the two ports/keys/barrels; INFRA batch onward pending)
+last_agent: dev (implementation — DOMAIN T-MC-001..011 + INFRA T-MC-012..017 + APPLICATION T-MC-018..021 complete; the McpServerManager lifecycle use case + the pure foldEnabledMcpServers + buildMcpViewModel; UI batch onward pending)
 epic: claudian-reboot
 phase: P8
 integration_branch: next
@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-MC-001; Parts A/B/C; ADR-MC-001 McpConfigStorePort vault file + ADR-MC-002 McpClientPort transport seam + ADR-MC-003 enabledMcpServers? + P7 approval composition — all accepted)
   spec.md: complete (SPEC-MC-001; 30 spec items SPEC-MC-001..030 across domain/infra/app/ui/styles/cross-cutting; EC-MC-1..20; TEST-MC-001..082 + 020a + M1/M2; REQ-MC ↔ SPEC-MC ↔ TEST-MC coverage table — all 45 REQ-MC + 12 NFR-MC chained; the five design open items resolved in §0)
   tasks.md: complete (TASKS-MC-001; 42 tasks T-MC-001..043, TDD-ordered RED(qa)→impl(dev), 7 batches DOMAIN→INFRA→APP→UI→STYLES→WIRE-IN→GATE; dep graph + parallel batches + critical path + full SPEC/REQ/NFR/TEST coverage table; NO guard-relax needed; @modelcontextprotocol/sdk dep-add = T-MC-012; manual legs T-MC-041/042 (M1/M2))
-  implementation-log.md: in-progress (DOMAIN batch T-MC-001..011 complete; INFRA/APP/UI/STYLES/WIRE-IN/GATE batches T-MC-012..043 pending)
+  implementation-log.md: in-progress (DOMAIN T-MC-001..011 + INFRA T-MC-012..017 + APPLICATION T-MC-018..021 complete; UI/STYLES/WIRE-IN/GATE batches T-MC-022..043 pending)
   test-plan.md: in-progress (guard-verification + Obsidian-infra file-naming directive + manual legs TEST-MC-M1/M2 + TEST-MC-021/022/061/064 scaffolded; DOMAIN-batch automated legs recorded)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-MC-001; ADR-MC-001..003 accepted) |
 | 5. Specification | `spec.md` | complete (SPEC-MC-001; 30 items, full coverage) |
 | 6. Tasks | `tasks.md` | complete (TASKS-MC-001; 42 tasks T-MC-001..043, TDD-ordered, full coverage) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN batch T-MC-001..011 complete; INFRA→GATE pending) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-MC-001..011 + INFRA T-MC-012..017 + APPLICATION T-MC-018..021 complete; UI→GATE pending) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; test-report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -365,4 +365,32 @@ merge. Manual-Obsidian + parity-screenshot legs accumulate for the SINGLE FINAL 
                  APP T-MC-018..021, UI T-MC-022..033, STYLES T-MC-034, WIRE-IN T-MC-035..037, GATE
                  T-MC-038..043 (incl. the human manual legs T-MC-041/042). NEXT agent: the INFRA-batch dev/qa
                  (T-MC-012 SDK dep-add is ready, no deps; T-MC-013 carries the file-naming directive).
+
+2026-05-26 (dev): APPLICATION batch (T-MC-018..021) COMPLETE on feature/mcp-client. Four tasks,
+                 RED-first (qa → dev), one commit each. INFRA T-MC-012..017 confirmed already committed
+                 (a672d5a4 back to fbd1d775). Commit order respected the dep graph (T-MC-019 Depends on
+                 T-MC-021): RED-018 → RED-020 → green-021 → green-019 so every commit is type-valid.
+                 - T-MC-018 RED 9c85ef19 — McpServerManager lifecycle test over the scriptable Mock store
+                   (load / add-dup-reject / await-save / rollback-on-save-err / edit/remove/setEnabled/
+                   setToolDisabled / getEnabledCount / getActiveServers(∅) / getEnabledMcpServers(∅) /
+                   never-throws), 23 specs.
+                 - T-MC-020 RED 5facd46e — foldEnabledMcpServers (empty/all-disabled/all-context-saving(∅)
+                   → undefined; non-empty fold w/ pre-registered disallowedTools) + buildMcpViewModel
+                   (supported gate, empty-seam-vs-live, transport-type mapping, enabledCount), 12 specs.
+                 - T-MC-021 green b783c83b — the two PURE/TOTAL transforms (foldEnabledMcpServers omits the
+                   field when the active set is empty → byte-identical P7; buildMcpViewModel DTO-only, no
+                   providerId branch). 12/12 green.
+                 - T-MC-019 green ffa6b8b5 — McpServerManager + McpServerDraft over McpConfigStorePort +
+                   FeedbackService (await-save via a private commit(); rollback + showError on save err;
+                   load err → showInfo + keep []; ∅-mention active-set/fold delegates). Result-returning,
+                   never throws across the port boundary. 23/23 green.
+                 VERIFICATION (whole-project): vue-tsc -p tsconfig.lint.json 0 errors; npm run lint 0 errors
+                 (12 pre-existing warnings, none in src/application/chat/mcp/**); vitest
+                 tests/application/chat/mcp/ 35/35. No obsidian/node:*/Vue import; no providerId branch;
+                 transforms pure+total; styles.css untouched (no build run). DEVIATIONS: none functional —
+                 only the commit ordering (021 before 019) to satisfy the manager's compile dependency on
+                 foldEnabledMcpServers; RED-before-green preserved within each pair.
+                 REMAINING (NOT in this batch): UI T-MC-022..033, STYLES T-MC-034, WIRE-IN T-MC-035..037,
+                 GATE T-MC-038..043 (incl. human manual legs T-MC-041/042). NEXT agent: the UI-batch qa/dev
+                 (T-MC-022 useMcp*Port composables RED is ready; deps T-MC-011/015 are committed).
 ```

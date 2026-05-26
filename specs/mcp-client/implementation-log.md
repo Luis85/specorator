@@ -433,3 +433,118 @@ Obsidian-infra file-naming directive (`VaultMcpConfigStore.ts`/`SdkMcpClient.ts`
 `ObsidianMcp…`/`obsidian/mcp/`) is recorded in `test-plan.md` for the INFRA batch.
 `styles.css` untouched (no build run). The INFRA batch (T-MC-012..017: the SDK dep-add +
 the three-bridge store/client) onward is out of this batch's scope.
+
+## APPLICATION batch (T-MC-018..021)
+
+### T-MC-018 — RED `McpServerManager` lifecycle over the scriptable Mock store (🧪 qa)
+
+- **Spec/req:** SPEC-MC-012; REQ-MC-010..016/050/051/052..054/071/072; NFR-MC-004;
+  EC-MC-4/8/9/10/18.
+- **Files:**
+  - `tests/application/chat/mcp/McpServerManager.test.ts` (new — 23 specs over the
+    scriptable `MockMcpConfigStore`: load (seeded list / load-or-default / err →
+    `showInfo` + keep `[]`), add (DEFAULT_MCP_SERVER `enabled` + draft `contextSaving`;
+    await-save proven via a fresh-manager reload; empty + duplicate-name reject with the
+    existing server unchanged; save-err → `showError` + rollback to `[]`), edit/remove/
+    setEnabled/setToolDisabled (locate-by-name, missing → `err`, save-err rollback),
+    getEnabledCount, getActiveServers(∅), getEnabledMcpServers(∅ → `undefined` /
+    non-empty fold with `disallowedTools`), and the never-throws-across-the-boundary
+    path).
+- **Outcome:** done (RED) — the test module fails to resolve
+  `@/application/chat/mcp/McpServerManager` (it imports `foldEnabledMcpServers`, whose
+  RED is T-MC-020), the documented RED signal.
+- **Commit:** `9c85ef19`.
+- **Verify:** `npx vitest run tests/application/chat/mcp/McpServerManager.test.ts` → 1
+  file failed, no tests (unresolved import) — RED confirmed.
+- **Deviation:** none.
+
+### T-MC-020 — RED `foldEnabledMcpServers` + `buildMcpViewModel` (🧪 qa)
+
+- **Spec/req:** SPEC-MC-013/014; REQ-MC-015/040/050/051/052/082; NFR-MC-001;
+  EC-MC-1/8/9/13.
+- **Files:**
+  - `tests/application/chat/mcp/foldEnabledMcpServers.test.ts` (new — empty list →
+    `undefined`, all-disabled → `undefined`, all-context-saving(∅) → `undefined`, a
+    non-empty active set → `{ servers, disallowedTools }`, the disallowed pre-registration
+    over all enabled servers even when only one is active, never-throws).
+  - `tests/application/chat/mcp/buildMcpViewModel.test.ts` (new — `supported` gate,
+    `kind` empty-seam-vs-live, the `McpServerVm` stdio/sse/http transport mapping,
+    `enabledCount`, never-throws).
+- **Outcome:** done (RED) — both modules fail to resolve their `@/application/chat/mcp/*`
+  imports (the transforms do not yet exist), the documented RED signal.
+- **Commit:** `5facd46e`.
+- **Verify:** `npx vitest run` the two files → 2 files failed, no tests (unresolved
+  imports) — RED confirmed.
+- **Deviation:** none.
+
+### T-MC-021 — `foldEnabledMcpServers.ts` + `buildMcpViewModel.ts` (pure) (🔨 dev)
+
+- **Spec/req:** SPEC-MC-013/014; REQ-MC-015/040/050/051/052/082; NFR-MC-001/005.
+- **Files:**
+  - `src/application/chat/mcp/foldEnabledMcpServers.ts` (new — the guarded fold:
+    `getActiveServers(servers, mentioned)`; an empty active map → `undefined` (the
+    surface omits `enabledMcpServers` → byte-identical P7); a non-empty map →
+    `{ servers, disallowedTools: collectDisallowedMcpTools(servers) }` (the disallowed
+    list pre-registered over all enabled servers); pure + total — never throws).
+  - `src/application/chat/mcp/buildMcpViewModel.ts` (new — the `McpServerVm` +
+    `McpViewModel` `{ kind, servers, enabledCount, supported }`; `kind = 'empty-seam'`
+    at 0 servers / `'live'` at ≥ 1; each server mapped via `getMcpServerType`;
+    `enabledCount` = the enabled count; DTO-only, no `providerId` branch; pure + total).
+- **Outcome:** done — the prior RED (T-MC-020, TEST-MC-015/040/050/052/082 +
+  EC-MC-1/8/9/13) now green: 12/12 across the two files.
+- **Commit:** `b783c83b`.
+- **Verify:** `npx vitest run` the two files **12/12 green**; whole-project
+  `vue-tsc -p tsconfig.lint.json` **0 errors**; whole-project `npm run lint` **0 errors**
+  (the only remaining type/lint findings at this point were the not-yet-implemented
+  `McpServerManager.test.ts` leftovers from T-MC-018 RED). No `obsidian`/`node:*`/Vue
+  import; no `providerId` branch; pure + total.
+- **Deviation:** none. (Implemented before T-MC-019 to satisfy the manager's dependency
+  on `foldEnabledMcpServers` — T-MC-019 `Depends on: T-MC-021` — so each commit stays
+  type-valid; the RED-before-green discipline is preserved within each pair.)
+
+### T-MC-019 — `McpServerManager.ts` lifecycle use case + `McpServerDraft` (🔨 dev)
+
+- **Spec/req:** SPEC-MC-012; REQ-MC-010..016/050/051/052..054/071/072; NFR-MC-003/004.
+- **Files:**
+  - `src/application/chat/mcp/McpServerManager.ts` (new — the `McpServerDraft` interface +
+    the `McpServerManager` class over `McpConfigStorePort` + `FeedbackService`:
+    `load`/`getServers`/`getEnabledCount`; `add` (reject empty/duplicate; apply
+    `DEFAULT_MCP_SERVER.enabled` + draft `contextSaving`); `edit`/`remove`/`setEnabled`/
+    `setToolDisabled` (locate-by-name, missing → `err`); a private `commit(next, op)`
+    that **awaits** `store.save` before resolving and rolls the in-memory list back +
+    `feedback.reportResult(...)` (`showError`) on a save `err`; `getActiveServers(∅)` →
+    the pure SPEC-MC-006 fold; `getEnabledMcpServers(∅)` → `foldEnabledMcpServers`
+    (`undefined` when empty). A load `err` degrades to `feedback.info` (`showInfo`) + an
+    empty list, returning `ok([])` — never crashes. Result-returning, never throws across
+    the port boundary; logs/notifies no secret/config value).
+- **Outcome:** done — the prior RED (T-MC-018, TEST-MC-010..016/050/051/052..054/072 +
+  the EC-MC legs) now green: 23/23.
+- **Commit:** `ffa6b8b5`.
+- **Verify:** `npx vitest run tests/application/chat/mcp/McpServerManager.test.ts` **23/23
+  green**; whole-project `vue-tsc -p tsconfig.lint.json` **0 errors**; whole-project
+  `npm run lint` **0 errors** (12 pre-existing warnings, none in `src/application/chat/mcp/**`);
+  `npx vitest run tests/application/chat/mcp/` **35/35** across the three files. No
+  `obsidian`/`node:*`/Vue import; never throws across the port boundary.
+- **Deviation:** none.
+
+## APPLICATION batch (T-MC-018..021) — close-out
+
+All four APPLICATION-batch tasks executed RED-first (qa → dev), one commit per task. The
+strict commit order respected the dependency graph (`T-MC-019 Depends on T-MC-021`): the
+two RED tasks first (T-MC-018, T-MC-020), then the pure transforms (T-MC-021), then the
+manager (T-MC-019) — so every commit is type-valid while the RED-before-green discipline
+holds within each pair. The application slice landed: the `McpServerManager` lifecycle
+use case (await-save + dup-reject + rollback-on-save-err + load-degrade + the ∅-mention
+active-set/fold delegates), the PURE guarded `foldEnabledMcpServers` (empty → `undefined`
+so a no-servers / all-disabled / all-context-saving(∅) turn stays byte-identical to P7),
+and the PURE `buildMcpViewModel` (empty-seam-vs-live + `enabledCount`, DTO-only, no
+`providerId` branch). The manager is `Result`-returning and never throws across the port
+boundary; the two transforms are pure + total.
+
+**Final gate over the batch surface:** whole-project `vue-tsc -p tsconfig.lint.json`
+**0 errors**; whole-project `npm run lint` **0 errors** (12 pre-existing warnings only,
+none in `src/application/chat/mcp/**`); `npx vitest run tests/application/chat/mcp/`
+**35/35 green**. No `obsidian`/`node:*`/Vue import under `src/application/chat/mcp/**`;
+no `providerId` branch; `styles.css` untouched (no build run). The UI batch (T-MC-022
+onward: the composables + the settings/modal/selector components + the wiring) is out of
+this batch's scope.

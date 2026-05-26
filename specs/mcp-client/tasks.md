@@ -627,11 +627,11 @@ the UNCHANGED P7 tool-agnostic `ApprovalManager` (`setApprovalCallback`), the EX
 - **Depends on:** T-MC-009, T-MC-015
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/application/chat/mcp/McpServerManager.test.ts` exists, naming the listed TEST-MC ids, driven by
+  - [x] `tests/application/chat/mcp/McpServerManager.test.ts` exists, naming the listed TEST-MC ids, driven by
         the scriptable Mock store, covering the load / add-with-dup-reject / edit / remove / setEnabled /
         setToolDisabled / getEnabledCount / getActiveServers(∅) / getEnabledMcpServers(∅) / await-save /
         rollback-on-save-err / never-throws paths.
-  - [ ] Tests fail (RED) — `McpServerManager.ts` does not yet exist (it imports `foldEnabledMcpServers` —
+  - [x] Tests fail (RED) — `McpServerManager.ts` does not yet exist (it imports `foldEnabledMcpServers` —
         whose RED is T-MC-020).
 
 ### T-MC-019 🔨 — `McpServerManager.ts` (lifecycle use case) + `McpServerDraft`
@@ -651,11 +651,11 @@ the UNCHANGED P7 tool-agnostic `ApprovalManager` (`setApprovalCallback`), the EX
 - **Depends on:** T-MC-018, T-MC-021
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-MC-010..016/050/051/052..054/072 + the EC-MC legs) now pass across the full
+  - [x] The prior RED tests (TEST-MC-010..016/050/051/052..054/072 + the EC-MC legs) now pass across the full
         lifecycle (await-save, dup-reject, rollback-on-save-err, getActiveServers/getEnabledMcpServers(∅)).
-  - [ ] `Result`-typed; never throws across the port boundary; logs/notifies no secret/config value; no
+  - [x] `Result`-typed; never throws across the port boundary; logs/notifies no secret/config value; no
         `obsidian`/`node:*`/Vue import.
-  - [ ] whole-project `npm run lint` 0 + `npm run typecheck` 0 + `npm run test` green; implementation-log
+  - [x] whole-project `npm run lint` 0 + `npm run typecheck` 0 + `npm run test` green; implementation-log
         entry added.
 
 ### T-MC-020 🧪 — RED: `foldEnabledMcpServers` + `buildMcpViewModel` (the guarded fold + the empty-seam-vs-live VM)
@@ -675,11 +675,11 @@ the UNCHANGED P7 tool-agnostic `ApprovalManager` (`setApprovalCallback`), the EX
 - **Depends on:** T-MC-009
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/application/chat/mcp/foldEnabledMcpServers.test.ts` +
+  - [x] `tests/application/chat/mcp/foldEnabledMcpServers.test.ts` +
         `tests/application/chat/mcp/buildMcpViewModel.test.ts` exist, naming the listed TEST-MC ids, covering
         the empty→`undefined` / non-empty fold (incl. the all-context-saving(∅) → `undefined` case) + the
         empty-seam-vs-live VM + the `enabledCount` + the never-throws assertion.
-  - [ ] Tests fail (RED) — `foldEnabledMcpServers.ts` + `buildMcpViewModel.ts` do not yet exist.
+  - [x] Tests fail (RED) — `foldEnabledMcpServers.ts` + `buildMcpViewModel.ts` do not yet exist.
 
 ### T-MC-021 🔨 — `foldEnabledMcpServers.ts` + `buildMcpViewModel.ts` (pure)
 
@@ -694,9 +694,9 @@ the UNCHANGED P7 tool-agnostic `ApprovalManager` (`setApprovalCallback`), the EX
 - **Depends on:** T-MC-020
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-MC-015/040/050/052/082 + EC-MC-1/8/9/13) now pass.
-  - [ ] Pure/total; never throws; DTO-only; no `obsidian`/Vue import; no `providerId` branch.
-  - [ ] whole-project `npm run lint` 0 + `npm run typecheck` 0 + `npm run test` green; implementation-log
+  - [x] The prior RED tests (TEST-MC-015/040/050/052/082 + EC-MC-1/8/9/13) now pass.
+  - [x] Pure/total; never throws; DTO-only; no `obsidian`/Vue import; no `providerId` branch.
+  - [x] whole-project `npm run lint` 0 + `npm run typecheck` 0 + `npm run test` green; implementation-log
         entry added.
 
 ---
