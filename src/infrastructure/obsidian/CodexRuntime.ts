@@ -29,9 +29,11 @@ import type {
 	ToolbarCapabilities,
 	LoggerPort,
 	SecretStorePort,
+	SettingsPort,
 	HomeFsPort,
 } from '@/domain/ports';
 import { providerSecretKey } from '@/domain/ports';
+import { buildScopeEnv } from './buildScopeEnv';
 import type {
 	AskUserQuestionRequest,
 	AskUserQuestionAnswer,
@@ -49,6 +51,13 @@ export interface CodexRuntimeDeps {
 	readonly cwd?: string | null;
 	readonly command?: string;
 	readonly logger?: LoggerPort;
+	/**
+	 * The device-local `SettingsPort` (P10, SPEC-SS-013). When present, the applied
+	 * `envScopes['shared']` + `envScopes['provider:codex']` are resolved + merged into
+	 * the subprocess env at the turn boundary (REQ-SS-065). Optional — absent leaves
+	 * the P9 env untouched (byte-identical P9, NFR-SS-001).
+	 */
+	readonly settings?: SettingsPort;
 }
 
 const DEFAULT_CODEX_COMMAND = 'codex';
@@ -93,13 +102,21 @@ export class CodexRuntime implements ChatRuntimePort {
 			yield { type: 'done' };
 			return;
 		}
+		// P10 (SPEC-SS-013, REQ-SS-065): merge the applied env scopes (inline values +
+		// secretRefs resolved via getSecret) over the provider key — the key + the
+		// env-scope secret values are read ONLY here at the spawn boundary, never logged
+		// or returned to the UI/DTO (NFR-SS-002). Absent settings → the bare key env.
+		const baseEnv = { CODEX_API_KEY: key.value };
+		const env =
+			this.deps.settings !== undefined
+				? await buildScopeEnv(baseEnv, 'codex', this.deps.settings, this.deps.secretStore)
+				: baseEnv;
 		const transport = new CodexRpcTransport(
 			{
 				command: this.deps.command ?? DEFAULT_CODEX_COMMAND,
 				args: ['app-server'],
 				cwd: this.deps.cwd,
-				// The key is merged into the subprocess env at this boundary only.
-				env: { CODEX_API_KEY: key.value },
+				env,
 			},
 			this.deps.logger,
 		);

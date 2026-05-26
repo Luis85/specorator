@@ -13,10 +13,13 @@ import type {
 	ChatRuntimeEnsureReadyOptions,
 	Unsubscriber,
 	LoggerPort,
+	SettingsPort,
+	SecretStorePort,
 	RuntimeCapabilities,
 	ToolbarCapabilities,
 } from '@/domain/ports';
 import type { PermissionMode } from '@/domain/chat/PermissionMode';
+import { buildScopeEnv } from './buildScopeEnv';
 import type {
 	AskUserQuestionRequest,
 	AskUserQuestionAnswer,
@@ -75,6 +78,15 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 	constructor(
 		private readonly logger?: LoggerPort,
 		private readonly cwd?: string | null,
+		// P10 (SPEC-SS-013, REQ-SS-065): when both are present, the applied
+		// `envScopes['shared']` + `envScopes['provider:claude']` are resolved + merged
+		// into the spawned CLI env at the turn boundary. Optional — absent leaves the P1
+		// PATH-augmented env untouched (byte-identical P1, NFR-SS-001). The Claude CLI
+		// itself reads no API key/secret (its login is the auth source, NFR-CC-006); the
+		// env-scope contribution is the user's own opt-in env vars, secretRefs resolved
+		// ONLY at this spawn boundary, never logged (NFR-SS-002).
+		private readonly settings?: SettingsPort,
+		private readonly secretStore?: SecretStorePort,
 	) {}
 
 	prepareTurn(request: ChatTurnRequest): PreparedChatTurn {
@@ -396,10 +408,11 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 		argv: readonly string[],
 		prompt: string,
 	): AsyncGenerator<string> {
+		const env = await this._buildEnv();
 		const opts: SpawnOptions =
 			typeof this.cwd === 'string' && this.cwd.length > 0
-				? { stdio: ['pipe', 'pipe', 'pipe'], cwd: this.cwd, env: this._buildEnv() }
-				: { stdio: ['pipe', 'pipe', 'pipe'], env: this._buildEnv() };
+				? { stdio: ['pipe', 'pipe', 'pipe'], cwd: this.cwd, env }
+				: { stdio: ['pipe', 'pipe', 'pipe'], env };
 		const child = spawn(binary, [...argv], opts);
 		this.child = child;
 
@@ -482,15 +495,26 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 	/**
 	 * Build the child environment with an augmented PATH so a GUI-launched
 	 * Obsidian (which inherits a sparse PATH on macOS/Linux) can still find a
-	 * user-installed `claude`. No secret is injected — auth is the CLI's own login.
+	 * user-installed `claude`. The Claude CLI reads no API key/secret — its login is
+	 * the auth source (NFR-CC-006). P10 (SPEC-SS-013, REQ-SS-065): when a `SettingsPort`
+	 * + `SecretStorePort` are wired, the user's applied `envScopes['shared']` +
+	 * `envScopes['provider:claude']` are resolved (secretRefs via `getSecret`) + merged
+	 * over this PATH-augmented base at the spawn boundary only — never logged
+	 * (NFR-SS-002). Absent deps → the unmodified P1 env (byte-identical P1, NFR-SS-001).
 	 */
-	private _buildEnv(): NodeJS.ProcessEnv {
+	private async _buildEnv(): Promise<NodeJS.ProcessEnv> {
 		const env = { ...process.env };
 		const extra = ['/usr/local/bin', '/opt/homebrew/bin', `${process.env.HOME ?? ''}/.local/bin`];
 		const current = env.PATH ?? '';
 		const merged = [current, ...extra].filter((p) => p.length > 0).join(PATH_DELIMITER);
 		env.PATH = merged;
-		return env;
+		if (this.settings === undefined || this.secretStore === undefined) return env;
+		// Resolve + merge the applied env scopes over the PATH-augmented base.
+		const base: Record<string, string> = {};
+		for (const [k, v] of Object.entries(env)) {
+			if (typeof v === 'string') base[k] = v;
+		}
+		return buildScopeEnv(base, 'claude', this.settings, this.secretStore);
 	}
 
 	/**

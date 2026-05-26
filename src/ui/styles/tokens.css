@@ -413,3 +413,26 @@ body.theme-light .specorator-root {
 	/* opencode-model-picker group separator gap (parity 12px) */
 	--sp-model-picker-group-gap: var(--sp-space-5);
 }
+
+/* section 4.17 - Settings shell (P10, SPEC-SS-015, NFR-SS-009). The settings/*
+ * slice (base plus plugin plus agent plus slash plus env-snippets plus mcp plus
+ * opencode-model-picker). Each token is a token-layer var lookup (or a bare
+ * dimension) - no hex, no raw Obsidian var outside this layer, no physical CSS
+ * property (lint-style-tokens guard, TEST-SS-M4 perceptual parity). The seven
+ * modules otherwise reuse the existing set (--sp-text, --sp-bg, --sp-border,
+ * --sp-radius, --sp-space, --sp-font, --sp-interactive-accent, and the P8
+ * --sp-mcp-row-gap plus the P9 --sp-model-picker-group-gap) - only the four
+ * genuinely new settings tokens are minted here (the section-heading rhythm, the
+ * list-row gap, the snippet/context-limit item radius plus background). The block
+ * marker is ASCII (section 4.17) so the standalone lightningcss minifier accepts
+ * the comment. */
+.specorator-root {
+	/* settings section-heading top rhythm (base.css setting-item-heading) */
+	--sp-settings-section-gap: var(--sp-space-6);
+	/* settings list-row gap (env-snippets / agent / slash list rhythm) */
+	--sp-settings-row-gap: var(--sp-space-2);
+	/* env-snippet / context-limit item corner radius (env-snippets.css item) */
+	--sp-settings-snippet-radius: var(--sp-radius-sm);
+	/* env-snippet / context-limit item background (env-snippets.css item) */
+	--sp-settings-snippet-bg: var(--sp-bg-secondary);
+}

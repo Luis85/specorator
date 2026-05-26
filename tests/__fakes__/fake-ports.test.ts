@@ -240,6 +240,37 @@ describe('fakeModulePorts', () => {
 		expect((await ports.homeFs.readFile('../escape.txt')).ok).toBe(false)
 	})
 
+	// T-SS-020 (TEST-SS-091 fake-ports leg): the factory drives the env subsystem
+	// through `settings` + `secretStore` + `providerRegistry`; each setting lands in
+	// its correct store — secrets (provider key + env.<scope>.<KEY>) → secretStore;
+	// device prefs (incl. the six P10 fields) → settings (SPEC-SS-019).
+	it('routes secrets to secretStore and device prefs to settings (TEST-SS-091)', async () => {
+		const ports = fakeModulePorts()
+		// A secret-bearing env value + a provider key land in the SecretStore.
+		await ports.secretStore.setSecret('env.provider:codex.OPENAI_API_KEY', 'sk-env')
+		await ports.secretStore.setSecret('provider.codex.apiKey', 'sk-key')
+		// A device-pref (the non-secret snippet structure) lands in Settings.
+		await ports.settings.saveSettings({
+			...DEFAULT_SETTINGS,
+			envScopes: { shared: [{ key: 'FOO', value: { kind: 'inline', text: 'bar' } }] },
+			providerDefaultModel: { codex: 'gpt-5' },
+		})
+		const secretKeys = await ports.secretStore.listKeys()
+		expect(secretKeys.ok).toBe(true)
+		if (secretKeys.ok) {
+			expect([...secretKeys.value].sort()).toEqual([
+				'env.provider:codex.OPENAI_API_KEY',
+				'provider.codex.apiKey',
+			])
+		}
+		const settings = await ports.settings.getSettings()
+		// The device-local blob carries the non-secret structure + NO secret bytes.
+		expect(settings.envScopes).toEqual({
+			shared: [{ key: 'FOO', value: { kind: 'inline', text: 'bar' } }],
+		})
+		expect(JSON.stringify(settings)).not.toContain('sk-')
+	})
+
 	it('providerHistory mutations are visible across the factory ports', async () => {
 		const ports = fakeModulePorts()
 		ports.providerHistory.seedConversations([
