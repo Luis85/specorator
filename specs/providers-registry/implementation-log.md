@@ -159,5 +159,50 @@ WIRE-IN/GATE batches ride their own subagents.
 - **Verify:** `vue-tsc -p tsconfig.lint.json` 0 (whole project) + `npm run lint` 0
   errors + `npx vitest run` 13 pass. No `obsidian`/`node:*`/Vue import; no
   `switch (providerId)` (grep-clean).
-- **Commit:** _filled after commit_.
+- **Commit:** `645bff2d`.
 - **Deviation:** none.
+
+### T-PV-008 — RED the three port shapes (🧪 qa)
+
+- **Spec/test:** TEST-PV-112 (port-shape leg); SPEC-PV-004/006/007;
+  REQ-PV-001/070..073/080..083/112; NFR-PV-006.
+- **Files:** `tests/domain/ports/ProviderRegistryPort.test.ts` (new — the 7
+  pure-sync reads + own key + barrel), `tests/domain/ports/SecretStorePort.test.ts`
+  (new — `isAvailable` sync + 4 `Result` async methods + `providerSecretKey` =
+  `provider.<id>.apiKey` + own key + barrel), `tests/domain/ports/HomeFsPort.test.ts`
+  (new — `isAvailable` sync + 3 read-only `Result` methods, no write/delete +
+  `HOME_FS_ROOTS = ['.codex','.claude']` + own key + barrel).
+- **Outcome:** done — RED confirmed: the three suites fail to import (the ports +
+  keys do not yet exist).
+- **Commit:** `1c9e464c`.
+
+### T-PV-009 — the three ports + keys + barrel + the SecretStorePort guard-relax (🔨 dev)
+
+- **Spec/req:** SPEC-PV-004/006/007; REQ-PV-001/070..073/080..083/112; NFR-PV-006.
+- **Files:** `src/domain/ports/ProviderRegistryPort.ts` (new — 7 pure-sync total
+  reads), `src/domain/ports/SecretStorePort.ts` (new — `isAvailable`/`getSecret`/
+  `setSecret`/`deleteSecret`/`listKeys` `Result`-typed + the `providerSecretKey`
+  helper), `src/domain/ports/HomeFsPort.ts` (new — read-first `isAvailable`/
+  `readFile`/`exists`/`listFolders`, no write/delete, + `HOME_FS_ROOTS`),
+  `src/infrastructure/bridge/ports.ts` (added `PROVIDER_REGISTRY_PORT` +
+  `SECRET_STORE_PORT` + `HOME_FS_PORT` keys, no aggregate), `src/domain/ports/index.ts`
+  (barrel re-exports the three port types + `providerSecretKey` + `HOME_FS_ROOTS` +
+  the descriptor/capability DTOs), `eslint.config.js` (the **guard-relax** — see
+  deviation).
+- **Outcome:** done — TEST-PV-112 port-shape legs pass (10 tests).
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 (whole project) + `npm run lint` 0
+  errors (deleted-symbol guard green) + `npx vitest run` 10 pass. No
+  `obsidian`/`node:*` import in `src/domain/**`.
+- **Commit:** _filled after commit_.
+- **DEVIATION (guard-relax — contradicts the planner's no-relax verdict):**
+  `eslint.config.js` had `@/domain/ports/SecretStorePort` in `DELETED_SUBSYSTEM_BAN`
+  (`:152`) and `SECRET_STORE_PORT` in `DELETED_INJECTION_KEYS` (`:175`) — the OLD
+  P0-deleted secret symbols. SPEC-PV-006 / ADR-PV-002 §47 pin exactly that path +
+  key with no alternative name, so P9 regrows them. This task drops ONLY those two
+  stale entries (the documented per-phase regrow pattern — identical to P2's
+  ICON_PORT drop), updating the guard comments to record the P9 regrow. The
+  Obsidian-layer impl glob `@/infrastructure/obsidian/ObsidianSecretStore*` (`:142`)
+  STAYS banned; every other P0-deleted symbol stays banned; `PROVIDER_REGISTRY_KEY`
+  (a different name than the new `PROVIDER_REGISTRY_PORT`) stays banned. Recorded in
+  `test-plan.md` + escalated in `workflow-state.md` (the planner's tasks.md
+  guard-verification claim is a documented defect; resolution is unambiguous).
