@@ -1,10 +1,10 @@
 ---
 feature: providers-registry
 area: PV
-current_stage: tasks
-status: complete
+current_stage: implementation
+status: in-progress
 last_updated: 2026-05-26
-last_agent: planner (/spec:tasks)
+last_agent: dev (/spec:implement — DOMAIN batch T-PV-001..010)
 epic: claudian-reboot
 phase: P9
 integration_branch: next
@@ -16,8 +16,8 @@ artifacts:
   design.md: complete (DESIGN-PV-001 — Parts A/B/C; ADR-PV-001/002/003 accepted)
   spec.md: complete (SPEC-PV-001 — 34 spec items, 6 layer groups; 20 EC-PV; TEST-PV-001..114 + M1..M4; full REQ↔SPEC↔TEST table)
   tasks.md: complete (TASKS-PV-001 — 44 T-PV tasks across 7 batches; TDD RED-before-green; 4 manual legs M1/M2/M3/M4; dep graph + coverage sanity-check)
-  implementation-log.md: pending
-  test-plan.md: pending
+  implementation-log.md: in-progress (DOMAIN batch T-PV-001..010 done; INFRA/APP/UI/STYLES/WIRE-IN/GATE + manual legs remain)
+  test-plan.md: in-progress (TESTPLAN-PV-001 scaffolded — guard-verify + file-naming directive + manual legs + DOMAIN-batch status)
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -37,8 +37,8 @@ artifacts:
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | pending |
-| 8. Testing | `test-plan.md`, `test-report.md` | pending |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN batch T-PV-001..010 done) |
+| 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; test-report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
@@ -233,4 +233,56 @@ workspace registry, `~/.codex`/`~/.claude` transcript reads, the secret storage,
                           (baseline + guard-verify, owner dev, no deps); then the B1 DOMAIN RED-first chain
                           starting T-PV-002 (qa). The manual legs T-PV-040/041/042/043 are human-owned, never
                           agent-self-claimed, accumulating for the single final epic-review gate (autonomous drive).
+2026-05-26 (dev): Stage 7 DOMAIN batch (T-PV-001..010) COMPLETE on
+                          feature/providers-registry. Commits: T-PV-001 33cf3225
+                          (baseline+guard-verify+naming, doc-only), T-PV-002 26e6e898
+                          (RED union+settings), T-PV-003 9c949b37 (widen ProviderId +
+                          PluginSettings.activeProvider/enabledProviders + coercers +
+                          additive fan-out), T-PV-004 ebde7ae4 (RED descriptor matrix),
+                          T-PV-005 c1b441d3 (frozen ProviderDescriptor matrix + barrel),
+                          T-PV-006 5e62433e (RED resolveProvider), T-PV-007 645bff2d
+                          (pure resolveProvider helpers), T-PV-008 1c9e464c (RED 3 port
+                          shapes), T-PV-009 dfc50ad0 (ProviderRegistryPort/SecretStorePort/
+                          HomeFsPort + 3 keys + barrel + guard-relax), T-PV-010 RED
+                          298b76ef + green 52b7dc54 (widen CHAT_RUNTIME_FACTORY to
+                          (providerId)=>Result + OPEN_PROVIDER_CONSENT + same-task call/
+                          provide-site fan-out). VERIFY: whole-project vue-tsc 0 + full
+                          npm run lint 0 errors (16 pre-existing warnings) + full vitest
+                          252 files / 1817 tests pass. The widened-factory fan-out kept
+                          the whole-project build green (sites: AgentSidebarView +
+                          src/ui/main.ts provide (providerId)=>ok(createChatRuntime());
+                          ChatSurface adapts to the UNCHANGED P3 store binding; 7
+                          ChatSurface mount fixtures wrap ok(); tabsStore TabDepsBinding
+                          UNCHANGED). Claude-only ADDITIVITY proven byte-identical to P8:
+                          DEFAULT_SETTINGS additive (activeProvider 'claude' /
+                          enabledProviders []), the P8-shaped settings round-trip leg
+                          passes (TEST-PV-114), the default 'claude' factory returns
+                          ok(<P1 runtime>) (TEST-PV-010), the full 1778->1817 suite
+                          (every P0-P8 test) stays green.
+                          *** ESCALATION (planner guard-verification defect, NON-BLOCKING
+                          — resolved per the documented per-phase regrow precedent):
+                          tasks.md / the planner hand-off asserted "NO guard-relax needed"
+                          and that SECRET_STORE_PORT / @/domain/ports/SecretStorePort are
+                          not banned. They ARE still banned (eslint.config.js:152 + :175 —
+                          the OLD P0-deleted secret symbols). SPEC-PV-006 / ADR-PV-002 §47
+                          pin EXACTLY that path + key with no alternative name, so P9
+                          regrows them — identical to P2's ICON_PORT drop. T-PV-009 dropped
+                          ONLY those two stale entries (the Obsidian-layer
+                          ObsidianSecretStore* glob stays banned). If the maintainer wants
+                          the tasks.md guard-verification line corrected, that is an
+                          architect/planner doc fix — the code resolution is unambiguous
+                          and is recorded in test-plan.md + implementation-log.md T-PV-001/
+                          T-PV-009. ***
+                          HAND-OFF → INFRA batch (T-PV-011..018, dev + qa): the shared
+                          descriptor-table ProviderRegistry impl (coverage-included,
+                          src/infrastructure/providers/ProviderRegistry.ts) + Mock
+                          scriptable runtime/transport + in-memory secret + inert/seedable
+                          home-fs + fake-ports members + LS inert + the coverage-excluded
+                          ObsidianBridge runtime registry + real SecretStorage.ts +
+                          HomeFileSystem.ts + Codex/ACP transports (NAME them
+                          SecretStorage.ts / HomeFileSystem.ts / CodexRuntime.ts /
+                          OpencodeRuntime.ts / AcpTransport.ts at obsidian/ root — NEVER
+                          ObsidianSecretStore*, per the test-plan.md file-naming directive).
+                          The frozen ProviderId / descriptors / resolve helpers / 3 ports /
+                          widened factory are now frozen for the INFRA/APP/UI batches.
 ```

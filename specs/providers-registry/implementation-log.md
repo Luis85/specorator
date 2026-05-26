@@ -243,7 +243,8 @@ WIRE-IN/GATE batches ride their own subagents.
   one `one-component-per-file` from the added test probes, both pre-existing
   categories) + `npx vitest run tests/ui` 68 files / 418 pass + full suite (below).
   No `obsidian`/`node:*` import under `src/ui/**`; no `implements` break dangling.
-- **Commit:** _filled after commit_.
+  Full suite: 252 files / 1817 tests pass.
+- **Commit:** `52b7dc54`.
 - **Deviation:** none beyond the documented same-task interface-change fan-out
   (the one INTERFACE widen in P9, per the task's build-green directive). The store
   binding `TabDepsBinding.createRuntime` stays `() => ChatRuntimePort` (the
