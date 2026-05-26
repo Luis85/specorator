@@ -11,3 +11,8 @@ export {
 	PROVIDER_DESCRIPTORS,
 	DEFAULT_CHAT_PROVIDER_ID,
 } from './ProviderDescriptor';
+export {
+	listEnabledProviders,
+	resolveActiveProvider,
+	resolveProviderForModel,
+} from './resolveProvider';

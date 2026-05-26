@@ -128,5 +128,36 @@ WIRE-IN/GATE batches ride their own subagents.
 - **Verify:** `vue-tsc -p tsconfig.lint.json` 0 (whole project) + `npm run lint` 0
   errors + `npx vitest run tests/domain/chat/providers/ProviderDescriptor.test.ts`
   11 pass. No `obsidian`/`node:*`/Vue import in `src/domain/chat/providers/**`.
+- **Commit:** `c1b441d3`.
+- **Deviation:** none.
+
+### T-PV-006 — RED pure `resolveProvider` helpers (🧪 qa)
+
+- **Spec/test:** TEST-PV-002/003/060/061 + EC-PV-2/3/9; SPEC-PV-003/029;
+  REQ-PV-002/003/006/060/061; NFR-PV-014.
+- **Files:** `tests/domain/chat/providers/resolveProvider.test.ts` (new — the
+  blank-tab-ordered enabled filter (`[claude]` / `[codex, claude]` /
+  `[opencode, codex, claude]`, fresh array), the active fallback
+  (no-record/disabled → claude), the model-ownership resolve (codex/opencode/claude
+  owned + unowned → fallback), the never-throws legs).
+- **Outcome:** done — RED confirmed: the suite fails to import (no `resolveProvider`
+  module).
+- **Commit:** `5e62433e`.
+
+### T-PV-007 — `resolveProvider.ts` pure helpers + barrel (🔨 dev)
+
+- **Spec/req:** SPEC-PV-003/029; REQ-PV-002/003/006/060/061; NFR-PV-014.
+- **Files:** `src/domain/chat/providers/resolveProvider.ts` (new — pure/total
+  `listEnabledProviders` [filter `isEnabled` + sort `blankTabOrder`, fresh array],
+  `resolveActiveProvider` [recorded-if-registered-and-enabled, else
+  `DEFAULT_CHAT_PROVIDER_ID`], `resolveProviderForModel` [first `ownsModel`, else
+  `resolveActiveProvider`]; no `switch (providerId)` — gates on the descriptor data;
+  `recorded?.isEnabled(settings) === true` to satisfy strict-boolean +
+  optional-chain), `src/domain/chat/providers/index.ts` (barrel grows the three
+  re-exports).
+- **Outcome:** done — TEST-PV-002/003/060/061 + EC-PV-2/3/9 all pass (13 tests).
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 (whole project) + `npm run lint` 0
+  errors + `npx vitest run` 13 pass. No `obsidian`/`node:*`/Vue import; no
+  `switch (providerId)` (grep-clean).
 - **Commit:** _filled after commit_.
 - **Deviation:** none.
