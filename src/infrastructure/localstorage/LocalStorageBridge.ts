@@ -23,6 +23,8 @@ import {
 } from './LocalStorageComposerPorts';
 import { LocalStorageToolbarCatalog } from './LocalStorageToolbarCatalog';
 import { LocalStorageApprovalRuleStore } from './LocalStorageApprovalRuleStore';
+import { LocalStorageMcpConfigStore } from './LocalStorageMcpConfigStore';
+import { LocalStorageMcpClient } from './LocalStorageMcpClient';
 import type {
 	MentionDataProviderPort,
 	ProviderCommandCatalogPort,
@@ -32,6 +34,8 @@ import type {
 	SelectionHighlightPort,
 	ToolbarCatalogPort,
 	ApprovalRuleStorePort,
+	McpConfigStorePort,
+	McpClientPort,
 } from '@/domain/ports';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
@@ -243,6 +247,21 @@ export class LocalStorageBridge
 
 	get approvalRuleStore(): ApprovalRuleStorePort {
 		return this.approvalRuleStorePort;
+	}
+
+	// ── MCP client (SPEC-MC-011, ADR-MC-001/002) ────────────────────────────────
+	// The GitHub Pages demo persists the .claude/mcp.json document text in
+	// localStorage (the codec is the round-trip authority) but cannot run a
+	// transport — the client is inert (`isAvailable: false`). No Node runtime.
+	private readonly mcpConfigStorePort = new LocalStorageMcpConfigStore();
+	private readonly mcpClientPort = new LocalStorageMcpClient();
+
+	get mcpConfigStore(): McpConfigStorePort {
+		return this.mcpConfigStorePort;
+	}
+
+	get mcpClient(): McpClientPort {
+		return this.mcpClientPort;
 	}
 
 	showError(message: string, durationMs = 0): void {
