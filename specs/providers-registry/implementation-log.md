@@ -781,4 +781,31 @@ WIRE-IN/GATE batches ride their own subagents.
   directive (the ASCII-only comment satisfies the lightningcss constraint by
   construction).
 - **Deviation:** none.
-- **Commit (green):** <pending>.
+- **Commit (green):** `279b706d`.
+
+## T-PV-034 — RED wire-in: provider-registry surface routing + chooser mount (🧪)
+
+- **Spec/req:** SPEC-PV-020/031/034, REQ-PV-010/012/062/082/084/114, NFR-PV-001;
+  TEST-PV-010/012/062/084/114 surface legs + the TEST-PV-112 wiring leg.
+- **Files:** `tests/ui/chat/ChatSurface.providers.test.ts` (new — provides
+  `PROVIDER_REGISTRY_PORT` = the real `ProviderRegistry` + `SETTINGS_PORT` + the
+  widened `CHAT_RUNTIME_FACTORY` spy + a recording `ToolbarCatalogPort`; asserts the
+  chooser mounts + lists enabled providers in blank-tab order, selecting a provider
+  routes through `SelectProviderUseCase` so the factory is re-called with the selected
+  id + the selection persists device-local, the toolbar reads `getCatalog(active)`,
+  and a single-Claude / no-registry config mounts no chooser = byte-identical P8),
+  `tests/ui/chat/ChatSurface.po.ts` (the `hasProviderChooser`/`providerOptionIds`/
+  `selectProvider` PageObject helpers).
+- **Outcome:** done (RED confirmed — 4 fail / 2 pass: the chooser is not mounted, the
+  factory is called with `'claude'` not the resolved `'codex'`, the catalog reads
+  `'claude'`; the two byte-identical-P8 no-chooser cases already pass).
+- **Verify:** `vitest run tests/ui/chat/ChatSurface.providers.test.ts` 4 failed / 2
+  passed; `vue-tsc -p tsconfig.lint.json --noEmit` exit 0; whole-project `npm run lint`
+  0 errors (16 pre-existing warnings).
+- **Deviation:** the production `AgentSidebarView` / `src/ui/main.ts` provide-site
+  assertions ride the standalone-mount smoke (T-PV-036) + the live `main.ts.test.ts`
+  rather than a separate Obsidian-mock test — the deterministic routing contract is
+  the surface-level test above (no Obsidian needed). The three-port + consent-launcher
+  provide is verified at green via the standalone mount (no inject-or-throw) + the
+  `_coerceSettings` round-trip (T-PV-036).
+- **Commit (RED):** <pending>.
