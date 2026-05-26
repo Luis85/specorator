@@ -19,8 +19,8 @@ artifacts:
   implementation-log.md: in-progress (DOMAIN T-PV-001..010 + INFRA T-PV-011..018 + APPLICATION T-PV-019..024 + UI T-PV-025..032 + STYLES T-PV-033 + WIRE-IN T-PV-034..036 done; GATE T-PV-037..044 + manual legs M1/M2/M3/M4 remain — parent-owned)
   test-plan.md: in-progress (TESTPLAN-PV-001 — guard-verify + file-naming directive + manual legs + DOMAIN-batch + STYLES/WIRE-IN automated legs + T-PV-036 deferred-manual recorded)
   test-report.md: pending
-  review.md: pending
-  traceability.md: pending
+  review.md: complete (REVIEW-PV-001 — Approved with conditions; 0 P1/P2, 3 P3, 4 P4; security + live-wiring + capability-parity + guard-relax confirmed; conditions = manual legs M1/M2/M3/M4 + minAppVersion check + brand-reviewer fold)
+  traceability.md: complete (TRACE-PV-001 — full REQ-PV ↔ SPEC-PV ↔ TEST-PV ↔ code(file:line) ↔ manual-leg; 0 orphans; every must/should REQ has a downstream chain; M1/M2/M3/M4 recorded pending-manual)
   release-notes.md: pending
   retrospective.md: pending
 ---
@@ -39,7 +39,7 @@ artifacts:
 | 6. Tasks | `tasks.md` | complete |
 | 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-PV-001..010 + INFRA T-PV-011..018 + APPLICATION T-PV-019..024 + UI T-PV-025..032 + STYLES T-PV-033 + WIRE-IN T-PV-034..036 done; GATE T-PV-037..044 + manual legs M1/M2/M3/M4 remain — parent-owned) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; test-report pending) |
-| 9. Review | `review.md`, `traceability.md` | pending |
+| 9. Review | `review.md`, `traceability.md` | complete (REVIEW-PV-001 + TRACE-PV-001 — Approved with conditions; 0 P1/P2) |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
 
@@ -524,4 +524,46 @@ workspace registry, `~/.codex`/`~/.claude` transcript reads, the secret storage,
                           lightningcss-safe) then WIRE-IN T-PV-034..036. REMAINING OWNER:
                           dev/qa (STYLES→WIRE-IN→GATE); the 4 manual legs + parity screenshots
                           (TEST-PV-M4) are the human review gate.
+```
+
+### Stage 9 — reviewer → release-manager (2026-05-26)
+
+```
+FROM:  reviewer (/spec:review — REVIEW-PV-001 + TRACE-PV-001)
+TO:    release-manager (Stage 10) — conditional
+VERDICT: Approved with conditions. 0 P1/P2 (release-blocking) findings; 3 P3
+         (medium, scheduled), 4 P4 (nit). No code defect blocks merge to `next`.
+CONFIRMED (read + targeted vitest, base next@ae7e9559 = whole P9 diff):
+  - SECURITY: secret→app.secretStorage ONLY (SecretStorage.ts; key read at turn
+    boundary into subprocess env only; no value in data.json/log/notice/DTO);
+    HomeFsPort read-only + rooted at os.homedir() + scoped to HOME_FS_ROOTS +
+    path-escape→err (HomeFileSystem.ts + homeFsPath.ts) + consented once
+    (ProviderConsentGate); stdio spawns bounded/explicit/no-shell-eval +
+    windowsHide + .cmd quoting + SIGTERM→SIGKILL (JsonRpcStdioChannel.ts);
+    honest gate (Result.err, never crash); NO switch(providerId) (source-guard
+    test passes 6/6; Map dispatch tables).
+  - LIVE-WIRING: 3 ports + widened CHAT_RUNTIME_FACTORY + OPEN_PROVIDER_CONSENT
+    provided in BOTH AgentSidebarView.ts + main.ts; ChatSurface mounts
+    ProviderChooser, routes via SelectProviderUseCase + ProviderConsentGate
+    (readsHomeDir gate), reads getCatalog(activeProviderId) — 'claude' hardcode
+    REMOVED; optional-inject + ≤1-provider = byte-identical P8.
+  - homeFsConsent ROUND-TRIP FIXED: ObsidianBridge._coerceSettings +
+    core-settings load-or-default it (the APPLICATION-batch escalation resolved).
+  - CAPABILITY PARITY: verbatim vs claudian-main {claude,codex,opencode}/
+    capabilities.ts; only BACKED built, GATED-OFF honest-false.
+  - FILE-NAMING BAN honoured (SecretStorage.ts/HomeFileSystem.ts, NO
+    ObsidianSecretStore*); GUARD-RELAX scoped (only SecretStorePort/
+    SECRET_STORE_PORT dropped; ObsidianSecretStore* glob stays banned).
+  - en↔de i18n parity; forbidden-terms whitelist scoped to credential keys.
+CONDITIONS BEFORE MERGE → next (NOT self-claimable; final epic-review human gate):
+  1. Automated verify/test:all gate green (parent-owned).
+  2. Manual legs TEST-PV-M1 (Codex)/M2 (Opencode)/M3 (secret)/M4 (parity
+     screenshots) + the app.secretStorage minAppVersion API check (SPEC-PV-032,
+     CLAR-PV-004) — recorded pending-manual, ride the single final epic gate.
+  3. brand-reviewer subagent findings folded into review.md §Brand review with no
+     blocking signal (reviewer preliminary pass: none observed).
+P3 FOLLOW-UPS (non-blocking, owner noted in review.md): R-PV-001 (Codex no-
+  turn/completed idle case → verify at M1), R-PV-002 (hasServiceTier reuses
+  supportsTurnSteer — add a dedicated field in P10), R-PV-003 (JSONL/ACP→P3
+  history mapping is M1/M2-only, confirm explicitly).
 ```
