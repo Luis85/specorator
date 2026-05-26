@@ -25,3 +25,4 @@ export {
 	type EnvSnippetInput,
 	type EnvSnippetServiceDeps,
 } from './EnvSnippetService';
+export { resolveEnvScope, mergeScopeEnvs } from './resolveEnvScope';
