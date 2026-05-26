@@ -671,3 +671,39 @@ WIRE-IN/GATE batches ride their own subagents.
   still satisfies the "icon an accessible label" a11y rule (REQ-PV-110). The real
   lucide icon binding is a wire-in concern (T-PV-034..036, parent-owned).
 - **Commit (green):** `65aadc32`.
+
+## T-PV-029 — RED: `ProviderSecretField.vue` (🧪)
+
+- **Spec/req:** TEST-PV-070/072/092/102/110 (A legs), SPEC-PV-018, SPEC-PV-025,
+  REQ-PV-070/072/092/102/110, NFR-PV-002/008/009, EC-PV-10.
+- **Files:** `tests/ui/chat/providers/ProviderSecretField.po.ts` (new),
+  `tests/ui/chat/providers/ProviderSecretField.test.ts` (new). PO queries by
+  `data-testid` (`provider-secret-field`/`provider-secret-input`/
+  `provider-secret-save`/`provider-secret-unavailable`). Tests assert: masked
+  `type=password` input when available; accessible name; `save(value)`-emits on
+  submit; the typed value never echoes into the value attribute / markup; disabled +
+  honest unavailable message + no `save` emit when `available=false` (no plain-store
+  fallback); no `v-html`.
+- **Outcome:** done (RED confirmed — the test file fails to resolve the
+  not-yet-existing `.vue` import).
+- **Commit (RED):** `e75af92c`.
+
+## T-PV-030 — `ProviderSecretField.vue` (🔨)
+
+- **Spec/req:** SPEC-PV-018, SPEC-PV-025, SPEC-PV-030, REQ-PV-070/072/092/102/110,
+  NFR-PV-002/006/008/009.
+- **Files:** `src/ui/chat/providers/ProviderSecretField.vue` (new). Props
+  `providerId` + `available`; a masked `type=password` input bound to a transient
+  local ref (`draft`) that is cleared on emit and never crosses into a DTO/store;
+  emits `save(value)` on the save button click + on form submit (Enter); disabled +
+  `providers.secret.unavailable` status text when `!available`, with `save` guarded
+  off (no plain-store fallback). Accessible name + `<label for>` association; no
+  `obsidian`/`v-html`.
+- **Outcome:** done. The prior RED tests now pass (7/7).
+- **Verify:** `vitest run` on the field test green (7 passed); `vue-tsc -p
+  tsconfig.lint.json --noEmit` exit 0; whole-project `npm run lint` 0 errors (16
+  pre-existing warnings only).
+- **Deviation:** none. The save control is a `type=button` with an explicit `@click`
+  (plus the form `@submit.prevent` for Enter) so a single emit fires per save in both
+  jsdom and the browser — no double-emit on a submit-button click.
+- **Commit (green):** `54714b01`.
