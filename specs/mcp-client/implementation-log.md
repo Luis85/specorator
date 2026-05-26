@@ -684,3 +684,40 @@ this batch's scope.
   `v-html`; the no-secret-render assertion holds; co-located PO present.
 - **Deviation:** none. The `--sp-mcp-status-ok`/`--sp-mcp-status-error`/`--sp-mcp-row-gap`
   tokens are minted in T-MC-034.
+
+### T-MC-032 / T-MC-033 — `McpSelector.vue` EXPANDED (list + toggle + badge; keeps the P6 empty seam)
+
+- **Files:**
+  - `tests/ui/chat/toolbar/McpSelector.test.ts` + `.po.ts` (rewritten to drive
+    `McpViewModel`) — RED.
+  - `src/ui/chat/toolbar/McpSelector.vue` (prop `McpWidgetVm` → `McpViewModel`; added the
+    live list + toggle + badge; kept the P6 empty seam) — green.
+  - `src/ui/chat/toolbar/ToolbarStrip.vue` (adapts the toolbar `McpWidgetVm` → an
+    empty-seam `McpViewModel` via a `mcpVm` computed so the strip stays byte-identical) —
+    additive bridge.
+- **Spec:** SPEC-MC-018, SPEC-MC-024, REQ-MC-050/051/070/082, NFR-MC-006/007/008
+  (TEST-MC-050/051/082 A legs + EC-MC-1/8).
+- **Description:** `McpSelector` now takes `vm: McpViewModel` and emits
+  `set-enabled:[name, enabled]`. Hidden when `!vm.supported`. At `empty-seam` the P6
+  VISIBLE-EMPTY seam is kept byte-identical: the 🔌 shell (with the disabled-look opacity
+  via a `--empty` class), a count-0 badge, and the `agent.chat.toolbar.mcp.empty` panel on
+  open — no live server, no emit (EC-MC-1). At `live` the shell badge shows
+  `agent.chat.mcp.selector.badge "{count} enabled"` and the dropdown (on open) lists every
+  server with a keyboard-operable enabled toggle (emits `set-enabled`, EC-MC-8) + the
+  transport type. The P6 `aria-expanded` is kept. `ToolbarStrip` (no manager) adapts its
+  P6 `McpWidgetVm` into an empty-seam `McpViewModel`, so the toolbar regression
+  (`ToolbarStrip.test.ts` 5/5 + the toolbar dir 49/49) stays green; the manager-driven
+  live list is wired by the surface (T-MC-036).
+- **Outcome:** done — the prior RED (TEST-MC-050/051 A legs/082 selector leg + EC-MC-1/8)
+  now green: 5/5; P6 `ToolbarStrip` regression green (49/49 toolbar dir).
+- **Commits:** RED `T-MC-032`; green `T-MC-033` (SHAs in close-out).
+- **Verify:** `npx vitest run tests/ui/chat/toolbar/` **49/49 green** (incl. the rewritten
+  `McpSelector.test.ts` 5/5 + the `ToolbarStrip.test.ts` 5/5 regression); whole-project
+  `vue-tsc` **0 errors**; whole-project `npm run lint` **0 errors** (14 pre-existing
+  warnings only). No `obsidian`/`node:*` import under `src/ui/**`; no `v-html`; the P6
+  `agent.chat.toolbar.mcp.empty` string KEPT; co-located PO present.
+- **Deviation:** `ToolbarStrip.vue` gained a small `mcpVm` adapter computed (additive). It
+  is required to keep the strip compiling after the `McpSelector` prop type changed from
+  `McpWidgetVm` to `McpViewModel` (SPEC-MC-018); the toolbar surface has no manager, so the
+  adapter is fixed at the P6 empty seam — byte-identical P6 behaviour. The
+  `--sp-mcp-selector-badge`/`--sp-mcp-row-gap` tokens are minted in T-MC-034.

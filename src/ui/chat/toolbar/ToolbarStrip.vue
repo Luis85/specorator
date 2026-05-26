@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { ToolbarViewModel } from '@/application/chat/toolbar/buildToolbarViewModel';
+import type { McpViewModel } from '@/application/chat/mcp/buildMcpViewModel';
 import type { ReasoningChoice } from '@/domain/chat/Reasoning';
 import type { NotificationPort } from '@/domain/ports';
 import type { PermissionMode } from '@/domain/chat/PermissionMode';
@@ -25,7 +27,11 @@ import UsageMeter from './UsageMeter.vue';
  * trailing end of the wrapped row (NFR-TC-008). No `obsidian`/`v-html`. Claudian
  * ground-truth: `InputToolbar.ts` (`.claudian-input-toolbar`).
  */
-defineProps<{ vm: ToolbarViewModel; notify?: NotificationPort; permissionMode?: PermissionMode }>();
+const props = defineProps<{
+	vm: ToolbarViewModel;
+	notify?: NotificationPort;
+	permissionMode?: PermissionMode;
+}>();
 const emit = defineEmits<{
 	'pick-model': [id: string];
 	'set-mode': [value: string];
@@ -34,6 +40,20 @@ const emit = defineEmits<{
 	/** P7 (SPEC-AS-012): the live permission-mode change re-emitted to the surface. */
 	'set-permission': [mode: PermissionMode];
 }>();
+
+/**
+ * Adapt the toolbar's P6 `McpWidgetVm` to the P8 `McpViewModel` the expanded
+ * `McpSelector` consumes (SPEC-MC-018). The toolbar strip has no `McpServerManager`,
+ * so it always yields the P6 visible-empty seam (`empty-seam`); the manager-driven
+ * live list is wired by the surface (T-MC-036). `supported` mirrors the P6
+ * `supportsMcpTools` gate (the `visible` visibility kind).
+ */
+const mcpVm = computed<McpViewModel>(() => ({
+	kind: 'empty-seam',
+	servers: [],
+	enabledCount: 0,
+	supported: props.vm.mcp.visibility.kind === 'visible',
+}));
 </script>
 
 <template>
@@ -66,14 +86,18 @@ const emit = defineEmits<{
 				:vm="vm.serviceTier"
 				@toggle="emit('toggle-service-tier', $event)"
 			/>
-			<McpSelector v-if="vm.mcp.visibility.kind === 'visible'" :vm="vm.mcp" />
+			<McpSelector v-if="vm.mcp.visibility.kind === 'visible'" :vm="mcpVm" />
 			<ExternalContextControl
 				v-if="vm.external.visibility.kind === 'visible'"
 				:vm="vm.external"
 				:notify="notify"
 			/>
 		</div>
-		<UsageMeter v-if="vm.usage.visibility.kind === 'visible'" class="sp-toolbar-strip__meter" :vm="vm.usage" />
+		<UsageMeter
+			v-if="vm.usage.visibility.kind === 'visible'"
+			class="sp-toolbar-strip__meter"
+			:vm="vm.usage"
+		/>
 	</div>
 </template>
 

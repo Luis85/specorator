@@ -60,15 +60,17 @@ describe('McpSelector (SPEC-MC-018)', () => {
 		expect(wrapper.emitted('set-enabled')).toBeUndefined();
 	});
 
-	it('lists every server with its toggle + the count badge at live (TEST-MC-050)', () => {
+	it('lists every server with its toggle + the count badge at live (TEST-MC-050)', async () => {
 		const { po } = mountMcp(LIVE_VM);
 		expect(po.shellExists()).toBe(true);
 		expect(po.badgeText()).toContain('1');
+		await po.clickShell();
 		expect(po.serverCount()).toBe(2);
 	});
 
 	it('emits set-enabled([name, enabled]) when a server toggle changes (TEST-MC-051, EC-MC-8)', async () => {
 		const { wrapper, po } = mountMcp(LIVE_VM);
+		await po.clickShell();
 		await po.toggleServerAt(1); // the disabled 'remote' → enabled
 		expect(wrapper.emitted('set-enabled')?.[0]).toEqual(['remote', true]);
 	});
