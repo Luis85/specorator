@@ -361,4 +361,38 @@ WIRE-IN/GATE batches ride their own subagents.
   infra boundary (the same shape the ObsidianBridge uses), not the consuming-use-case /
   registry-reader branch the NFR-PV-014 grep gate targets. The shared `providerRegistry`
   remains data-driven (no id branch).
+- **Commit:** `58f53787`.
+
+### T-PV-018 — the Codex JSON-RPC + shared ACP transports (🔨 dev, coverage-excluded)
+
+- **Spec/test:** SPEC-PV-010/026; REQ-PV-030..035/040..044/050..052/101;
+  NFR-PV-004/005/007/011. Manual legs TEST-PV-M1/M2 + TEST-PV-030/031/033/035/040/044/101
+  (scheduled in `test-plan.md`).
+- **Files (new, coverage-excluded `src/infrastructure/obsidian/**`):**
+  - `JsonRpcStdioChannel.ts` — the shared in-tree line-delimited JSON-RPC 2.0 channel
+    over a child process's stdio (NO new runtime dep, ADR-PV-003 §5). Bounded explicit
+    spawn (merged env + enhanced PATH + `windowsHide` + `shell:false`; Windows
+    `.cmd`/`.bat` routed through `cmd.exe /d /s /c` + `windowsVerbatimArguments`,
+    REQ-PV-031/101); `request` with a per-request timeout/`AbortController` → `Result.err`
+    on timeout (the channel stays usable, REQ-PV-051); `notify`; server→client request
+    handlers; a stderr ring-buffer; `onClose` so a dying subprocess surfaces; `shutdown`
+    aborts in-flight + SIGTERM→SIGKILL(3s) (REQ-PV-035/044). `activeWindow` timers.
+  - `CodexRpcTransport.ts` — the Codex app-server transport over the channel:
+    `query(prompt)` streams `turn/delta`/`turn/thinking`/`turn/error` notifications as
+    `StreamChunk`s, a start-request timeout → terminal error chunk (EC-PV-11), a dying
+    subprocess → terminal `{type:'error'}` chunk with the stderr detail (EC-PV-12),
+    `steer(message)` (turn-steer, REQ-PV-033), `shutdown()`.
+  - `AcpTransport.ts` — the shared ACP transport over the channel: `initialize` +
+    `prompt(text)` streaming `session/update` deltas as `StreamChunk`s; no steer
+    (Opencode, REQ-PV-043); the same timeout/error-chunk/shutdown posture.
+- **Transport approach (no new dep):** both transports are thin wrappers over the one
+  shared `JsonRpcStdioChannel`; line-delimited JSON-RPC 2.0 over `node:child_process`
+  stdio — no vendor SDK, mirrors `ClaudeCliChatRuntime`'s subprocess + `SdkMcpClient`'s
+  bounded-spawn/enhanced-PATH posture. Externalize-only-if-genuinely-required is honoured
+  (nothing reaches `build:web`).
+- **Outcome:** done (coverage-excluded; behavioural gate = the manual legs). vue-tsc 0;
+  whole-project lint 0 errors. No `obsidian` symbol leaks past these files (they use only
+  `node:*` + `activeWindow`).
+- **Deviation:** none. The transports are turn-time-owned inside each runtime
+  (SPEC-PV-009 §5) — no separate app/UI turn-time transport call.
 - **Commit:** `…` (below).
