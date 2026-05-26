@@ -42,5 +42,47 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   `ObsidianMcp…`, never under `obsidian/mcp/`) is recorded in `test-plan.md`. A
   whole-project `npm run lint` over the pre-existing surface passes clean (no new
   key/port referenced yet).
-- **Commit:** <pending>
+- **Commit:** `bcff6d77`.
 - **Deviation:** none. No file under `src/` changed.
+
+## DOMAIN batch (T-MC-002..011)
+
+### T-MC-002 — RED `McpTypes` shapes + additive `enabledMcpServers?` (🧪 qa)
+
+- **Spec/test:** TEST-MC-001 (type-shape leg), TEST-MC-082 (serialisation leg);
+  SPEC-MC-001/002/022; REQ-MC-052/082; NFR-MC-001.
+- **Files:** `tests/domain/chat/mcp/McpTypes.test.ts` (new — the config union +
+  `ManagedMcpServer`/`McpTool`/`McpTestResult`/`ParsedMcpConfig`/`EnabledMcpServers`
+  exact-key + per-field type legs + the `DEFAULT_MCP_SERVER` value + construction
+  legs); `tests/domain/chat/ChatTurn.ts.test.ts` (extended — the `_queryKeys`
+  exact-keys grown to eight appending `enabledMcpServers`, the `enabledMcpServers?`
+  type leg, the `externalContextPaths`-stays-EXCLUDED leg, the P7-shaped
+  byte-identical serialisation leg + the empty-query leg + the carried-when-present
+  leg, the `mcpMentions` empty-`Set` seam).
+- **Outcome:** done — RED confirmed (`vue-tsc -p tsconfig.lint.json` failed on the
+  missing `@/domain/chat/mcp` module + `enabledMcpServers` not a key on
+  `ChatRuntimeQueryOptions`; the unresolved import also fails the vitest run).
+- **Commit:** `ea5c1c71`.
+
+### T-MC-003 — `McpTypes.ts` + `ChatRuntimeQueryOptions.enabledMcpServers?` + barrel (🔨 dev)
+
+- **Spec/req:** SPEC-MC-001/002/022; REQ-MC-052/082; NFR-MC-001.
+- **Files:** `src/domain/chat/mcp/McpTypes.ts` (new — the config union +
+  `ManagedMcpServer` + `McpTool` + `McpTestResult` + `ParsedMcpConfig` +
+  `EnabledMcpServers` + `DEFAULT_MCP_SERVER`, regrown verbatim from claudian
+  `core/types/mcp.ts` + `core/mcp/McpTester.ts:13-25`, `readonly` on the
+  store-boundary collections); `src/domain/chat/mcp/index.ts` (new — the barrel
+  re-export); `src/domain/chat/ChatTurn.ts` (the optional `enabledMcpServers?:
+  EnabledMcpServers` appended AFTER `permissionMode`, importing from
+  `./mcp/McpTypes`; the P0–P7 members byte-identical;
+  `PreparedChatTurn`/`ChatRuntimeEnsureReadyOptions`/`ChatTurnRequest` unchanged;
+  `externalContextPaths?` stays EXCLUDED).
+- **Outcome:** done — the TEST-MC-001 type-shape leg + TEST-MC-082 serialisation
+  leg now green (15/15 across the two files); a P7-shaped query is byte-identical
+  to P7. **No `implements ChatRuntimePort` break** (additive-only — the runtimes
+  read the optional field; no companion-stub needed).
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); whole-project
+  `npm run lint` 0 errors (12 pre-existing warnings); `vitest run` 15/15 green. No
+  `obsidian`/`node:*`/Vue import in `src/domain/chat/mcp/**`.
+- **Commit:** <pending>
+- **Deviation:** none.
