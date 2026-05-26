@@ -6,6 +6,7 @@ import {
   coerceActiveProvider,
   coerceEnabledProviders,
   coerceHomeFsConsent,
+  coerceOptionalSettingsFields,
   type PluginSettings,
 } from '@/domain/settings/PluginSettings'
 
@@ -39,6 +40,12 @@ export const coreSettingsModule = defineModule<PluginSettings>({
 
   validateSettings(raw: unknown): PluginSettings {
     const r = (raw ?? {}) as Partial<PluginSettings>
+    // P10 (SPEC-SS-001/012, REQ-SS-092): the six additive OPTIONAL device-local
+    // fields are assembled by the shared `coerceOptionalSettingsFields` helper — each
+    // present only when present so the exact-key contract stays byte-identical P9
+    // (NFR-SS-001). No migration (NG8). A secret-bearing env value lives only in
+    // SecretStorePort — the struct/scope here holds only a `secretRef` (SPEC-SS-019).
+    const homeFsConsent = coerceHomeFsConsent(r.homeFsConsent)
     return {
       locale: coerceString(r.locale, DEFAULT_SETTINGS.locale),
       logLevel: coerceEnum(r.logLevel, VALID_LOG_LEVELS, DEFAULT_SETTINGS.logLevel),
@@ -61,9 +68,9 @@ export const coreSettingsModule = defineModule<PluginSettings>({
       // P9 (SPEC-PV-014/024, REQ-PV-082): the one-time beyond-vault consent record
       // MUST round-trip so a recorded consent survives a reload (EC-PV-6). OPTIONAL —
       // absent when nothing recorded (byte-identical P0–P8, NFR-PV-001).
-      ...(coerceHomeFsConsent(r.homeFsConsent) !== undefined
-        ? { homeFsConsent: coerceHomeFsConsent(r.homeFsConsent) }
-        : {}),
+      ...(homeFsConsent !== undefined ? { homeFsConsent } : {}),
+      // P10 (SPEC-SS-001/012): the six OPTIONAL fields, each present only when present.
+      ...coerceOptionalSettingsFields(r),
     }
   },
 

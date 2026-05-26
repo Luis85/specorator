@@ -35,6 +35,9 @@ import type {
 import type { Result } from '@/domain/shared/Result';
 import { ok, err } from '@/domain/shared/Result';
 import { PROVIDER_DESCRIPTORS, DEFAULT_CHAT_PROVIDER_ID } from '@/domain/chat/providers';
+import type { SecretStorePort } from '@/domain/ports';
+import type { EnvEntry } from '@/domain/chat/environment/EnvSnippet';
+import { mergeScopeEnvs } from '@/application/settings/resolveEnvScope';
 import { MockChatRuntime } from './MockChatRuntime';
 
 /** The SPEC-PV-025 construct-gate mode a provider's `createChatRuntime` resolves. */
@@ -280,5 +283,43 @@ export class MockProviderRuntimeRegistry {
 		const transport = this.transportMode.get(providerId);
 		if (transport !== undefined) runtime.setTransportMode(transport);
 		return runtime;
+	}
+}
+
+/**
+ * The Mock subprocess-env capture (P10, SPEC-SS-013, REQ-SS-065). The automated leg
+ * for the env→subprocess merge: it composes the env a provider runtime would spawn
+ * with — `{ ...base, ...resolve(shared), ...resolve(provider:<id>) }` via the
+ * application {@link mergeScopeEnvs} — and records it so a test asserts the merge
+ * output WITHOUT a real subprocess (the real injection in `obsidian/**` is the
+ * coverage-excluded manual leg TEST-SS-M2). An `{kind:'inline'}` entry is read
+ * as-is; a `{kind:'secretRef'}` entry is resolved via `SecretStorePort.getSecret`
+ * **at this boundary only** — the resolved value reaches the captured env, never a
+ * DTO/notice/log (NFR-SS-002). `Result`-typed, never throws; a resolution failure
+ * records nothing. No `obsidian`, no `node:*`.
+ */
+export class MockProviderEnvCapture {
+	/** The most recently captured merged env, or `null` until a successful capture. */
+	private captured: Readonly<Record<string, string>> | null = null;
+
+	get lastEnv(): Readonly<Record<string, string>> | null {
+		return this.captured;
+	}
+
+	/**
+	 * Compose + record the merged subprocess env for one turn. A resolution failure
+	 * (e.g. the secret store unavailable) short-circuits to `err` with no secret value
+	 * substring and records nothing (the captured env stays as it was on failure).
+	 */
+	async captureEnv(
+		base: Readonly<Record<string, string>>,
+		sharedEntries: readonly EnvEntry[],
+		providerEntries: readonly EnvEntry[],
+		secretStore: SecretStorePort,
+	): Promise<Result<Record<string, string>>> {
+		const merged = await mergeScopeEnvs(base, sharedEntries, providerEntries, secretStore);
+		if (!merged.ok) return merged;
+		this.captured = merged.value;
+		return merged;
 	}
 }

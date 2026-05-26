@@ -15,6 +15,7 @@ import {
 	coerceActiveProvider,
 	coerceEnabledProviders,
 	coerceHomeFsConsent,
+	coerceOptionalSettingsFields,
 	type PluginSettings,
 } from '@/domain/settings/PluginSettings';
 import { trySync, tryAsync } from '@/domain/shared/tryAsync';
@@ -572,6 +573,11 @@ export class ObsidianBridge
 		// never re-prompts, EC-PV-6). OPTIONAL — absent (`undefined`) when nothing was
 		// recorded so the exact-key contract stays byte-identical P0–P8 (NFR-PV-001).
 		const homeFsConsent = coerceHomeFsConsent(obj.homeFsConsent);
+		// P10 (SPEC-SS-001/012, REQ-SS-092): the six additive OPTIONAL device-local
+		// fields, assembled by the shared `coerceOptionalSettingsFields` helper — each
+		// present only when present so the exact-key contract stays byte-identical P9
+		// (NFR-SS-001). No migration (NG8, SPEC-SS-025); a secret-bearing env value lives
+		// only in SecretStorePort — the struct/scope holds only a `secretRef` (SPEC-SS-019).
 		return {
 			locale,
 			logLevel,
@@ -581,6 +587,7 @@ export class ObsidianBridge
 			activeProvider,
 			enabledProviders,
 			...(homeFsConsent !== undefined ? { homeFsConsent } : {}),
+			...coerceOptionalSettingsFields(obj),
 		};
 	}
 

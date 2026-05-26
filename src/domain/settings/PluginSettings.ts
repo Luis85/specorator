@@ -347,3 +347,33 @@ export function coercePermissionMode(raw: unknown): PermissionMode | undefined {
 		? (raw as PermissionMode)
 		: undefined
 }
+
+/**
+ * Coerce the six additive OPTIONAL P10 device-local fields from a raw blob into a
+ * partial settings object (SPEC-SS-001/012). Each field is **present only when
+ * present** (the `coerce*` returned a value) so the exact-key contract stays
+ * byte-identical P9 when none was recorded (NFR-SS-001). This is the single
+ * load-or-default assembly both write-path twins spread (`ObsidianBridge._coerceSettings`
+ * + `core-settings.validateSettings`) so neither carries the six conditional spreads
+ * inline. A secret-bearing env value lives only in `SecretStorePort` — the struct/scope
+ * here holds only a `secretRef`, never a plaintext secret (SPEC-SS-019). Pure/total —
+ * never throws. No migration (NG8, SPEC-SS-025).
+ */
+export function coerceOptionalSettingsFields(
+	raw: Partial<Record<keyof PluginSettings, unknown>>,
+): Partial<PluginSettings> {
+	const envSnippets = coerceEnvSnippets(raw.envSnippets)
+	const envScopes = coerceEnvScopes(raw.envScopes)
+	const keyboardNav = coerceKeyboardNav(raw.keyboardNav)
+	const providerDefaultModel = coerceProviderDefaultModel(raw.providerDefaultModel)
+	const defaultPermissionMode = coercePermissionMode(raw.defaultPermissionMode)
+	const providerCliPath = coerceProviderCliPath(raw.providerCliPath)
+	return {
+		...(envSnippets !== undefined ? { envSnippets } : {}),
+		...(envScopes !== undefined ? { envScopes } : {}),
+		...(keyboardNav !== undefined ? { keyboardNav } : {}),
+		...(providerDefaultModel !== undefined ? { providerDefaultModel } : {}),
+		...(defaultPermissionMode !== undefined ? { defaultPermissionMode } : {}),
+		...(providerCliPath !== undefined ? { providerCliPath } : {}),
+	}
+}

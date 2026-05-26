@@ -18,6 +18,7 @@ import {
 	coerceProviderDefaultModel,
 	coercePermissionMode,
 	coerceProviderCliPath,
+	coerceOptionalSettingsFields,
 	envSecretKey,
 } from '@/domain/settings/PluginSettings';
 import type { EnvSnippetStruct } from '@/domain/chat/environment/EnvSnippet';
@@ -170,5 +171,33 @@ describe('coercePermissionMode (SPEC-SS-001)', () => {
 		expect(coercePermissionMode('bogus')).toBeUndefined();
 		expect(coercePermissionMode(undefined)).toBeUndefined();
 		expect(() => coercePermissionMode(42)).not.toThrow();
+	});
+});
+
+describe('coerceOptionalSettingsFields (SPEC-SS-001/012, the shared write-path assembly)', () => {
+	it('returns an empty object when no field is recorded (the exact-key contract holds, NFR-SS-001)', () => {
+		expect(coerceOptionalSettingsFields({})).toEqual({});
+		// Each key is ABSENT (not undefined) so a byte-identical P9 contract survives.
+		expect(Object.keys(coerceOptionalSettingsFields({}))).toEqual([]);
+	});
+
+	it('includes only the fields whose raw value coerces to a value', () => {
+		const result = coerceOptionalSettingsFields({
+			defaultPermissionMode: 'plan',
+			providerDefaultModel: { codex: 'gpt-5' },
+			// garbage — dropped, so the key stays absent.
+			envSnippets: 'nope',
+			keyboardNav: { scrollUpKey: 'ww', scrollDownKey: 's', focusInputKey: 'i' },
+		});
+		expect(result).toEqual({
+			defaultPermissionMode: 'plan',
+			providerDefaultModel: { codex: 'gpt-5' },
+		});
+		expect('envSnippets' in result).toBe(false);
+		expect('keyboardNav' in result).toBe(false);
+	});
+
+	it('never throws on garbage input', () => {
+		expect(() => coerceOptionalSettingsFields({ envScopes: 42, providerCliPath: [] })).not.toThrow();
 	});
 });
