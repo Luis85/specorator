@@ -1,10 +1,10 @@
 ---
 feature: mcp-client
 area: MC
-current_stage: design
+current_stage: specification
 status: active
 last_updated: 2026-05-26
-last_agent: pm (requirements — PRD-MC-001 accepted)
+last_agent: architect (design — DESIGN-MC-001 complete; ADR-MC-001..003 accepted)
 epic: claudian-reboot
 phase: P8
 integration_branch: next
@@ -13,7 +13,7 @@ artifacts:
   idea.md: skipped (parity-charter §3.7/§4 P8 + audits + claudian-main stand in, mirrors P1-P7)
   research.md: skipped
   requirements.md: accepted (PRD-MC-001; CLAR-MC-001..005 resolved-by-recommendation → P8 architect ADRs, notably McpConfigStorePort vault-file + McpClientPort transport contract)
-  design.md: pending
+  design.md: complete (DESIGN-MC-001; Parts A/B/C; ADR-MC-001 McpConfigStorePort vault file + ADR-MC-002 McpClientPort transport seam + ADR-MC-003 enabledMcpServers? + P7 approval composition — all accepted)
   spec.md: pending
   tasks.md: pending
   implementation-log.md: pending
@@ -34,7 +34,7 @@ artifacts:
 | 1. Idea | `idea.md` | skipped |
 | 2. Research | `research.md` | skipped |
 | 3. Requirements | `requirements.md` | accepted (PRD-MC-001) |
-| 4. Design | `design.md` | pending |
+| 4. Design | `design.md` | complete (DESIGN-MC-001; ADR-MC-001..003 accepted) |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
@@ -162,4 +162,68 @@ merge. Manual-Obsidian + parity-screenshot legs accumulate for the SINGLE FINAL 
                  McpTestModal result, no v-html/window.confirm, --sp-* mcp-modal/mcp-settings/mcp-selector
                  slice), the P6-selector list+toggle, and the P7 approval-gating wiring for MCP tools. Part A
                  UX + Part B visual parity per charter §5. CLAR-MC-001..005 do not block the architect.
+
+2026-05-26 (architect): Stage 4 COMPLETE. Wrote DESIGN-MC-001 (specs/mcp-client/design.md, Parts A
+                 UX / B UI / C Architecture) + filed ADR-MC-001..003 (docs/adr/, status ACCEPTED, README
+                 index rows added). All five CLARs ratified.
+                 ADR-MC-001 (CLAR-MC-001/002): McpConfigStorePort (load/save/exists, Result-typed) over
+                   the VAULT file `.claude/mcp.json` (the Claude-CLI-readable path + `_claudian` metadata
+                   sidecar) + a PURE McpConfigParser (the 4 paste formats → Result, throws→Result.err) +
+                   a pure config codec (non-default `_claudian` pruning on save). DIVERGES from the
+                   device-local ADR-PSR-002/ADR-AS-001 precedent BECAUSE the Claude CLI must read the
+                   config from a known vault path — justified in the ADR. No migration; no plaintext-
+                   secret duplication (SecretStorePort editor deferred, CLAR-MC-004).
+                 ADR-MC-002 (CLAR-MC-003): McpClientPort (isAvailable/test/connect/listTools/callTool/
+                   disconnect; test returns a structured McpTestResult and NEVER throws — success/partial/
+                   timeout(10s)/error/unavailable; live methods Result-typed). The real stdio (bounded
+                   explicit spawn = ShellExecPort posture, parsed cmd+args, merged env, stderr:'ignore',
+                   no shell-eval) / SSE / HTTP (Node http/https fetch, no TLS weakening) transports live
+                   in COVERAGE-EXCLUDED src/infrastructure/obsidian/** over @modelcontextprotocol/sdk.
+                   EXTERNALS/DEP DECISION: the SDK is a NEW runtime dep — bundled into the plugin main.js
+                   + covered by the existing vite.config ALL_EXTERNALS (builtinModules + node: forms, same
+                   as @codemirror/* + the agent-sdk); the standalone build:web NEVER sees it because the
+                   real port lives only in obsidian/** which src/ui/main.ts (MockBridge) never imports.
+                   Rationale recorded per AGENTS.md §8 (only sanctioned MCP client, MIT, Anthropic-
+                   maintained). Mock scriptable (canned test/listTools/callTool + failure/timeout/partial
+                   injection) + LS inert (isAvailable→false) carry the automated weight.
+                 ADR-MC-003 (CLAR-MC-005): the EXCLUDED ChatRuntimeQueryOptions.enabledMcpServers?
+                   (ChatTurn.ts:51) introduced ADDITIVELY = { servers: Record<name,config>; disallowedTools }
+                   computed by a McpServerManager APPLICATION use case (lifecycle add/edit/remove/setEnabled/
+                   setToolDisabled over the two ports + a PURE getActiveServers/disallowed-tools fold, empty
+                   mention-set default per NG3) and folded by a guarded foldEnabledMcpServers (written ONLY
+                   when non-empty → no-servers turn byte-identical to P7, REQ-MC-082/NFR-MC-001). The P6
+                   McpSelector expands to list + toggle the managed servers + count badge (buildMcpViewModel),
+                   keeping the P6 empty seam at 0. An MCP tool call routes through the UNCHANGED tool-agnostic
+                   P7 ApprovalManager.decide ({toolName:'mcp__<server>__<tool>', actionPattern}, mode) — NOT
+                   auto-trusted, NO MCP special-case in the gate, NO providerId branch. Disabled tools are in
+                   the disallowed list so they never reach the runtime callable.
+                 COMPONENT+MODAL INVENTORY (all new except McpSelector changed): McpSettingsManager.vue +
+                   McpServerRow.vue (list surface, capability-gated on supportsMcpTools), McpServerModal.vue
+                   (add/edit — name required/unique, config JSON/paste, parse-error) + McpTestModal.vue
+                   (running→success+per-tool toggles/partial/timeout/error/unavailable) via the modal SEAM
+                   (Obsidian Modal hosts in the plugin layer, Vue never imports obsidian, no v-html/
+                   window.confirm), McpSelector.vue expanded. Co-located data-testid POs; mcp-* → --sp-*
+                   token slice; en+de microcopy.
+                 NEW PORTS: McpConfigStorePort + McpClientPort, own InjectionKeys (MCP_CONFIG_STORE_PORT /
+                   MCP_CLIENT_PORT) + composables, one consumer each, no aggregate (ADR-008). New domain:
+                   McpTypes/McpConfigParser/McpConfigCodec/parseCommand/getActiveServers (all pure) +
+                   ChatRuntimeQueryOptions.enabledMcpServers? (additive). New application: McpServerManager,
+                   foldEnabledMcpServers, buildMcpViewModel. fake-ports grows mcpConfigStore + mcpClient.
+                 REQUIREMENTS NOTE: two items flagged slightly OVER-specified (non-blocking) — (1) the
+                   McpClientPort 5-verb scope vs the SDK performing the turn-time tool call from the
+                   advertised mcpServers set (the design keeps all 5 verbs but marks callTool off the P8
+                   turn-time critical path — pin in spec.md so the dev does not double-build a call path);
+                   (2) REQ-MC-053 context-saving pre-registration detail while the @mention trigger is NG3
+                   (the design wires the gating with mentionedNames always = ∅ in P8 — pin in spec.md).
+                 HAND-OFF → /spec:specify (architect→spec author): turn DESIGN-MC-001 Parts C + the three
+                   ADRs into SPEC-MC-* contracts — the McpConfigStorePort/McpClientPort method contracts
+                   (signatures, pre/post, errors, Result), the EnabledMcpServers DTO + the guarded fold
+                   byte-identical proof, the parser's 4-format + Result.err contract, the McpServerManager
+                   lifecycle + getActiveServers(∅) contract, the McpTestResult state semantics (10s/partial/
+                   unavailable), the modal-seam fn signatures (OpenMcpServerModalFn/OpenMcpTestModalFn), the
+                   P7-approval composition (no new gate surface), the mcp-* token map, en+de keys, the
+                   coverage-exclusion + manual real-transport leg TEST-MC-M1, and the open spec-level items
+                   (concurrency/ordering, the _claudian codec round-trip fidelity preserving CLI-written
+                   keys, the callTool turn-time-vs-tester split, mentionedNames=∅). CLAR-MC-001..005 do not
+                   block the spec author.
 ```
