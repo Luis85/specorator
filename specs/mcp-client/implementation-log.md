@@ -777,3 +777,40 @@ in the new `src/ui/**` files); vitest — the MCP UI batch (`tests/ui/chat/mcp/`
 tabsStore regression GREEN. No `obsidian`/`node:*`/SDK import under `src/ui/**`; no `v-html`;
 `styles.css` untouched (no build run). The STYLES (T-MC-034), WIRE-IN (T-MC-035..037), and
 GATE (T-MC-038..043) batches are out of this batch's scope.
+
+## T-MC-034 — `mcp-settings`/`mcp-modal`/`mcp-selector` `--sp-*` token slice + tokens-contract update (🔨 STYLES)
+
+- **Spec/req:** SPEC-MC-021, NFR-MC-009, REQ-MC-045, TEST-MC-045.
+- **Files:**
+  - `src/ui/styles/tokens.css` (+19 lines after the §4.14 block — the new
+    `section 4.15` ASCII-marker MCP slice on `.specorator-root`: `--sp-mcp-row-gap`
+    `= var(--sp-space-2)`, `--sp-mcp-status-ok` `= var(--sp-success)`,
+    `--sp-mcp-status-error` `= var(--sp-status-error)`, `--sp-mcp-selector-badge`
+    `= var(--sp-accent)`). Every value is a token-layer `var(--sp-*)` lookup — no
+    hex, no raw Obsidian var, no physical CSS property. All comments are ASCII-only
+    (lightningcss-safe; the P6/P7 lesson).
+  - `tests/ui/styles/tokens.test.ts` (added `MCP_CLIENT_TOKENS` list + two §4.15
+    tests — the presence assertion and the raw-hex/Obsidian-var leak guard
+    (TEST-MC-045); bounded the §4.14 leak-guard slice with the `section 4.15`
+    upper marker so it no longer trails to EOF).
+- **Commit:** `T-MC-034-SHA`.
+- **Outcome:** done.
+- **Tokens minted where:** `src/ui/styles/tokens.css` §4.15 (the only place the four
+  `--sp-mcp-*` tokens are declared). The five MCP widgets
+  (`McpSettingsManager.vue`/`McpServerRow.vue`/`McpServerModal.vue`/`McpTestModal.vue`
+  + `toolbar/McpSelector.vue`) already reference exactly these four tokens (authored
+  in T-MC-027/029/031/033) — verified each `var(--sp-mcp-*)` reference now resolves
+  to a declared token. The selector additionally reuses the P6
+  `--sp-toggle-active`/`--sp-z-dropdown`/`--sp-shadow-dropup`/`--sp-toolbar-widget-h`
+  set (no new token minted for those).
+- **Gates:** `vue-tsc -p tsconfig.lint.json` **0 errors**; whole-project `npm run lint`
+  **0 errors** (14 pre-existing warnings only, none from this change);
+  `npx vitest run tests/ui/styles/tokens.test.ts` **19/19** (incl. the 2 new §4.15
+  tests). `build:web` NOT run per the parent's directive (the parent regenerates
+  `styles.css` at the gate); the ASCII-only comment satisfies the lightningcss
+  constraint by construction.
+- **Deviation:** none. The four minted tokens match the SPEC-MC-021 candidate list
+  exactly; `--sp-mcp-status-ok` maps to `var(--sp-success)` (the spec's
+  `--sp-status-success` does not exist as a token — `--sp-success` is its §4.1
+  source and `--sp-status-completed` aliases it; mapping straight to `--sp-success`
+  keeps the lookup one hop and token-layer-clean).
