@@ -1,0 +1,117 @@
+---
+feature: providers-registry
+area: PV
+current_stage: requirements
+status: active
+last_updated: 2026-05-26
+last_agent: orchestrator (bootstrap)
+epic: claudian-reboot
+phase: P9
+integration_branch: next
+reference: D:\Projects\claudian-main
+artifacts:
+  idea.md: skipped (parity-charter §3.6/§4 P9 + audits + claudian-main stand in, mirrors P1-P8)
+  research.md: skipped
+  requirements.md: pending
+  design.md: pending
+  spec.md: pending
+  tasks.md: pending
+  implementation-log.md: pending
+  test-plan.md: pending
+  test-report.md: pending
+  review.md: pending
+  traceability.md: pending
+  release-notes.md: pending
+  retrospective.md: pending
+---
+
+# Workflow state — providers-registry (P9)
+
+## Stage progress
+
+| Stage | Artifact | Status |
+|---|---|---|
+| 1. Idea | `idea.md` | skipped |
+| 2. Research | `research.md` | skipped |
+| 3. Requirements | `requirements.md` | pending |
+| 4. Design | `design.md` | pending |
+| 5. Specification | `spec.md` | pending |
+| 6. Tasks | `tasks.md` | pending |
+| 7. Implementation | `implementation-log.md` + code | pending |
+| 8. Testing | `test-plan.md`, `test-report.md` | pending |
+| 9. Review | `review.md`, `traceability.md` | pending |
+| 10. Release | `release-notes.md` | pending |
+| 11. Learning | `retrospective.md` | pending |
+
+## Epic context — claudian-reboot P9 (Codex + Opencode providers + registry)
+
+P0-P8 merged to `next` (P8 mcp-client #449 / ae7e9559). P9 = multi-provider — the provider
+**registry** + the **Codex** (app-server JSON-RPC) + **Opencode** (ACP) provider runtimes + the shared
+ACP transport + model routing/capabilities/workspace registry, on the provider-agnostic P1-P8 chat
+surface. **This is the LARGEST phase.**
+
+**Scope (charter §4 P9 row + §3.6):**
+- **`ProviderRegistryPort`** + the provider-selection/routing seam — the existing `ChatRuntimePort` is
+  already provider-agnostic (P1 Claude CLI). P9 adds a registry that selects the active provider's
+  runtime; the P6 model/mode selectors gain real per-provider options; capability flags
+  (`RuntimeCapabilities`/`ToolbarCapabilities`) drive what each provider exposes.
+- **Codex** — app-server JSON-RPC transport, JSONL history, skills, subagents.
+- **Opencode** — ACP transport, modes, models, agents.
+- **ACP** shared transport (`providers/acp`), model routing, capabilities, workspace registry.
+- CSS: `opencode-model-picker` (charter §3.10) → `--sp-*`.
+
+**POSTURE (charter §6a confirmed 2026-05-24, BINDING):** ship **Claude complete**; **Codex + Opencode
+behind CAPABILITY GATES, feature-incomplete is ACCEPTABLE** (matches claudian's own posture). P9 is ONE
+phase that expands later. So: build the registry + the routing seam + the two provider runtimes at a
+functional-but-partial, capability-gated level — Claude stays the complete default; a non-Claude
+provider honestly reports reduced capabilities (the established honest-defer pattern). **Do NOT block P9
+on full Codex/Opencode parity.**
+
+**Key P9 ADRs (architecturally load-bearing — charter §6a):**
+- **`ProviderRegistryPort` + the provider-routing seam** — how the registry lists providers + selects
+  the active runtime; how `createChatRuntime`/the capabilities seam become provider-routed (additive —
+  Claude stays the default; P0-P8 byte-identical when only Claude is present). Narrow port, no aggregate.
+- **`HomeFsPort` (beyond-vault filesystem)** — Codex/Opencode read `~/.codex` / `~/.claude` transcripts;
+  the core ports are vault-scoped. **Security surface (reads outside the vault) — needs an ADR** (§6a).
+  Coverage-excluded Obsidian/Node infra → manual legs. Mock/inert for tests.
+- **`SecretStorePort`** — provider API keys/auth via Obsidian **native secret storage** (`app.secretStorage`),
+  NEVER `data.json`/plain settings (CHARTER-REQ-SEC). §6a says this lands "≈ P9 providers". File the ADR +
+  the `minAppVersion` check. Capability-gate when secret storage is unavailable.
+- The ACP transport port + the Codex JSON-RPC transport (real impls coverage-excluded; Mock scriptable).
+
+**Out of P9 (later phases):** settings shell polish / per-provider settings UX (P10 — P9 ships the
+provider seams + a minimal selection surface); i18n sweep (P11); a11y + final parity (P12).
+
+**Epic constraints (every phase):** secrets→`app.secretStorage` behind `SecretStorePort` (LANDS THIS
+PHASE), never `data.json`; device/user state→device-local; beyond-vault reads via `HomeFsPort` (ADR);
+NO backwards compat; DDD inward imports + narrow ports + 3 bridges; Vue never imports `obsidian`; no
+`innerHTML`/`v-html`/`window.confirm`; `<script setup>`; `Result<T,E>`; tests mirror `src/` +
+`data-testid` POs; coverage 80/70/80/80; perceptual `--sp-*` parity; identity stays Specorator; WCAG 2.2
+AA; manifest untouched (BUT `minAppVersion` may need the secretStorage check — confirm vs the intentional
+1.12.7 policy); CI SHA-pinned + actionlint. VERIFY GATE (`npm run verify` + `npm run test:all` zero).
+
+**Operating mode (human directive, /goal 2026-05-26):** AUTONOMOUS DRIVE the FULL remaining epic
+(P9→P12) via dedicated subagents in loops — no per-phase human checkpoint; self-parity-review vs claudian;
+merge each phase to `next` after a green gate + green CI; deploy to `D:/TestVault` after each merge.
+Manual-Obsidian + parity-screenshot legs accumulate for the SINGLE FINAL human review gate.
+
+**Mandatory inputs:** `specs/claudian-reboot/parity-charter.md` §3.6/§6a/§4 P9 +
+`claudian-audit-{frontend,backend}.md` + `D:\Projects\claudian-main` (`providers/codex`,
+`providers/opencode`, `providers/acp`, the provider registry, model routing, capabilities, the
+workspace registry, `~/.codex`/`~/.claude` transcript reads, the secret storage, `opencode-model-picker`).
+
+## Hand-off notes
+
+```
+2026-05-26 (orchestrator): P9 bootstrapped on feature/providers-registry (off next; P0-P8 merged).
+                          Scope = charter §3.6 multi-provider — registry + Codex (JSON-RPC) + Opencode
+                          (ACP) + ACP transport + model routing/capabilities/workspace registry.
+                          POSTURE: Claude complete, Codex/Opencode CAPABILITY-GATED + feature-incomplete
+                          OK (§6a). Autonomous full-epic drive. Next: /spec:requirements (pm) grounded in
+                          charter §3.6/§6a + audits + the claudian providers/{codex,opencode,acp} +
+                          registry/routing/capabilities/secret-storage sources. KEY: scope what is
+                          P9-backed vs capability-gated-stub per provider; the ProviderRegistryPort +
+                          routing seam; HomeFsPort (beyond-vault, security ADR); SecretStorePort
+                          (native secret storage, lands this phase, ADR + minAppVersion). Additive —
+                          Claude-only = byte-identical P0-P8.
+```
