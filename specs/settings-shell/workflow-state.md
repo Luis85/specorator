@@ -1,10 +1,10 @@
 ---
 feature: settings-shell
 area: SS
-current_stage: tasks
+current_stage: implementation
 status: active
 last_updated: 2026-05-26
-last_agent: planner (/spec:tasks)
+last_agent: dev (/spec:implement — DOMAIN batch T-SS-001..013)
 epic: claudian-reboot
 phase: P10
 integration_branch: next
@@ -16,8 +16,8 @@ artifacts:
   design.md: complete (DESIGN-SS-001; Parts A UX / B UI / C Architecture; ADR-SS-001 + ADR-SS-002 accepted + filed; CLAR-SS-001/004 ratified by ADR-SS-001, CLAR-SS-002 by ADR-SS-002)
   spec.md: complete (SPEC-SS-001; 28 spec items SPEC-SS-001..028 across 6 layer groups; EC-SS-1..16; TEST-SS-001..095 + M1..M4; every REQ-SS chained to ≥1 SPEC + ≥1 TEST)
   tasks.md: complete (TASKS-SS-001; 35 tasks T-SS-001..035 across 6 batches + baseline; TDD-ordered RED-before-green; every SPEC-SS-001..028 covered; manual legs TEST-SS-M1..M4; NO guard-relax / NO new InjectionKey / NO new obsidian file)
-  implementation-log.md: pending
-  test-plan.md: pending
+  implementation-log.md: in-progress (DOMAIN batch T-SS-001..013 done; APPLICATION/INFRA-PLUGIN/STYLES/WIRE-IN/GATE batches T-SS-014..035 remain)
+  test-plan.md: in-progress (TESTPLAN-SS-001; guard-verify note + Claude-only additivity baseline + DOMAIN automated status + manual legs TEST-SS-M1..M4)
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -37,8 +37,8 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-SS-001 + ADR-SS-001/002 accepted) |
 | 5. Specification | `spec.md` | complete (SPEC-SS-001..028; EC-SS-1..16; TEST-SS-001..095 + M1..M4) |
 | 6. Tasks | `tasks.md` | complete (TASKS-SS-001; 35 tasks T-SS-001..035) |
-| 7. Implementation | `implementation-log.md` + code | pending |
-| 8. Testing | `test-plan.md`, `test-report.md` | pending |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN batch T-SS-001..013 complete + committed; T-SS-014..035 remain) |
+| 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
@@ -240,4 +240,36 @@ settings, model picker, agent/skill/subagent + slash-command settings, env-snipp
                           parallel. Manual-Obsidian + parity-screenshot legs (T-SS-032/033/034, human) and the
                           subprocess env injection (T-SS-023 real obsidian/** coverage-excluded) accumulate for
                           the single final epic review gate.
+2026-05-26 (dev): /spec:implement — DOMAIN batch T-SS-001..013 COMPLETE on feature/settings-shell
+                          (off next). 13 tasks, one commit each (incremental). SHAs:
+                          T-SS-001 docs 99c62687 · T-SS-002 RED 16624177 · T-SS-004 RED 2300b58a ·
+                          T-SS-005 b805ef30 · T-SS-006 RED 448dec0f · T-SS-007 cf65a124 ·
+                          T-SS-008 RED b482f1f9 · T-SS-009 4ef021a8 · T-SS-010 RED 4b1b04bf ·
+                          T-SS-011 b6695e14 · T-SS-012 RED 2bb109c2 · T-SS-013 419e21b7 · T-SS-003 a1e14da6.
+                          LANDED: the six additive OPTIONAL PluginSettings fields (envSnippets/envScopes/
+                          keyboardNav/providerDefaultModel/defaultPermissionMode/providerCliPath, each ABSENT
+                          from DEFAULT_SETTINGS) + envSecretKey + six pure/total coerce* helpers; the additive
+                          ProviderDescriptor.environmentKeyPatterns? field + the three pinned frozen pattern
+                          arrays; src/domain/chat/environment/{EnvSnippet,classifyEnvKey,envScope}.ts + barrel
+                          (parseEnvironmentVariables / serializeEnvEntries-masked / parseContextLimit / the
+                          13-key SHARED_ENVIRONMENT_KEYS / classifyEnvKey / isSecretEnvKey / the four scope-
+                          routing fns); src/domain/settings/keyboardNav.ts + barrel (parseNavMappings /
+                          buildNavMappingText). ADDITIVITY PROVEN: the P9 frozen-matrix (TEST-PV-020..023) +
+                          settings round-trip + core-settings + ObsidianBridge.settings stay green (37 tests);
+                          DEFAULT_SETTINGS exact-key byte-identical. VERIFY: whole-project vue-tsc 0 +
+                          whole-project npm run lint 0 errors (16 pre-existing warnings) + the DOMAIN suites
+                          106/106 green. Full vitest = 1833 passed / 4 FLAKY in src/ui/main standalone-mount
+                          smoke (tests/ui/main.ts.test.ts, mount.rr.test.ts, toolbarMount.ts.test.ts) — all 4
+                          PASS in isolation (11/11), unrelated to this pure-domain batch (no src/ui touched);
+                          the prior post-T-SS-003 full run was exit 0. NO guard-relax / NO new InjectionKey /
+                          NO new obsidian/** file (verdict recorded T-SS-001). DEVIATIONS: (a) reworded the
+                          classifyEnvKey/envScope doc comments so the no-switch source-guard grep does not
+                          match the comment (P9 T-PV-012 precedent); (b) parseNavMappings returns the
+                          SPEC-SS-005 NavMappings shape (keyed scrollUp/Down/focusInput) not claudian's
+                          Record<NavAction,string>; (c) getEnvironmentScopeUpdates fires the fallback bucket
+                          only on meaningful-but-unsplittable content (empty/comment-only → []), per the
+                          SPEC-SS-004 "only when nothing classified" wording + the RED test. NEXT: the
+                          APPLICATION batch T-SS-014..019 (buildSettingsViewModel + SettingsControl union +
+                          discoverDefinitions + EnvSnippetService) — owner dev/qa; depends on this batch's
+                          frozen domain types. Then INFRA/PLUGIN T-SS-020..026, STYLES, WIRE-IN, GATE.
 ```
