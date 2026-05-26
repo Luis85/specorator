@@ -504,3 +504,89 @@ WIRE-IN/GATE batches ride their own subagents.
   the provider id" (not the literal "No `switch (providerId)`") so the source-guard grep
   does not match the comment itself (same pattern as T-PV-012).
 - **Commit (green):** `b7446528`.
+- **Impl-log commit:** `f05c73b0` (this entry + the T-PV-017 commit-SHA fix).
+
+### T-PV-023/024 — pure `buildProviderViewModel` (🧪 qa → 🔨 dev)
+
+- **Spec/test:** TEST-PV-006/013/024/034/043/062/063/064/090; SPEC-PV-015/029;
+  REQ-PV-002/006/013/024/034/043/062/063/064/090/114; NFR-PV-014; EC-PV-1/14/15.
+- **RED (T-PV-023):** `tests/application/chat/providers/buildProviderViewModel.test.ts`
+  (new, 12 tests): options (blank-tab-ordered rows + `isActive`/`isDefault` +
+  `active`), `showChooser = enabled>1` (single-Claude → false byte-identical P8; empty
+  list total), the per-flag widget VM from each provider's frozen bag (Claude all-but-
+  steer/service-tier; Codex no rewind/commands/MCP, fork+steer+service-tier on; Opencode
+  no rewind/fork/steer/MCP, commands on; field-for-field equality), the source guard +
+  never-throws. RED confirmed: the module did not resolve. **Commit:** `b8a6e5cd`.
+- **GREEN (T-PV-024):** `src/application/chat/providers/buildProviderViewModel.ts` (new) +
+  the barrel grows the function + the three DTO type re-exports. The pure
+  `buildProviderViewModel(enabled, active, activeCapabilities): ProviderViewModel` maps
+  the enabled descriptors to `ProviderOptionVM` rows + sets `showChooser = enabled.length
+  > 1` + reads `widgets` field-for-field from the active bag.
+- **Signature:** `buildProviderViewModel(enabled: readonly ProviderDescriptor[], active:
+  ProviderId, activeCapabilities: ProviderCapabilities): ProviderViewModel` with
+  `ProviderOptionVM { id, displayNameKey, isActive, isDefault }`, `ProviderWidgetVM
+  { showRewind, showFork, showTurnSteer, showProviderCommands, showMcp, showServiceTier,
+  reasoningControl }`, `ProviderViewModel { options, showChooser, active, widgets }`.
+- **How no-switch + honest-gating are realised:** every widget flag is a direct read of
+  the matching `activeCapabilities` field — `showRewind = supportsRewind`, … — so a
+  GATED-OFF `false` in the frozen bag hides the affordance through the EXISTING gated VM,
+  with no provider-id branch (the source guard asserts no `switch (provider…)` / per-id
+  `===`). `showServiceTier` derives from `supportsTurnSteer` (Codex-only, matching the
+  Mock runtime's `hasServiceTier` convention, SPEC-PV-015 service-tier note).
+- **Outcome:** done — 12/12 pass; vue-tsc 0 (whole project); whole-project `npm run lint`
+  0 errors (16 pre-existing warnings). Pure/total, DTO-only, no `obsidian`/`node:*`/Vue.
+- **Deviation:** `showServiceTier` is derived as `activeCapabilities.supportsTurnSteer`
+  (the frozen `ProviderCapabilities` bag carries no dedicated service-tier flag; turn-
+  steer is the Codex-only marker the matrix + the Mock `getToolbarCapabilities` already
+  use). The doc comment is worded "never branched on the provider id" (not the literal
+  switch phrase) for the source guard (same pattern as T-PV-012/020).
+- **Commit (green):** `1c760ab3`.
+
+### T-PV-021/022 — `ProviderConsentGate` (🧪 qa → 🔨 dev)
+
+- **Spec/test:** TEST-PV-082; SPEC-PV-014/024; REQ-PV-082/113/114; NFR-PV-003/005; EC-PV-6.
+- **RED (T-PV-021):** `tests/application/chat/providers/ProviderConsentGate.test.ts` (new,
+  6 tests) over the in-memory Mock settings + a stubbed `openConsent`: recorded-true →
+  `ok(true)` no prompt; no-record → `openConsent` once + record the accept + `ok(true)`;
+  declining → `ok(false)` persisted + a second call honours it without re-prompting;
+  the auto-decline launcher → `ok(false)` recorded; per-provider records don't clobber;
+  never throws. RED confirmed: the gate module did not resolve. **Commit:** `6b4f72bf`.
+- **GREEN (T-PV-022):** `src/application/chat/providers/ProviderConsentGate.ts` (new) +
+  the barrel + the domain `homeFsConsent` field/helper (see DEVIATION). `constructor(
+  settings: SettingsPort, openConsent: OpenProviderConsentFn)`; `ensureConsent(id):
+  Promise<Result<boolean>>` reads `homeFsConsent[homeFsConsentKey(id)]` → returns a
+  recorded accept/decline without a prompt; else `openConsent(id)` once, persists the
+  outcome device-local via read-modify-write `saveSettings`, returns `ok(outcome)`.
+- **Signature:** `class ProviderConsentGate { constructor(settings: SettingsPort,
+  openConsent: OpenProviderConsentFn); ensureConsent(id: ProviderId):
+  Promise<Result<boolean>> }`.
+- **How honest-gating is realised:** the gate never throws — a decline is `ok(false)`
+  (the caller disables that provider's history honestly), not an `err`. The prompt opens
+  ONLY through the injected `OpenProviderConsentFn` modal seam (auto-declines `false`
+  when its real Obsidian `Modal` is absent, REQ-PV-113), never `window.confirm`. The
+  record is one device-local write keyed `provider.homeFsConsent.<id>`, never a secret. A
+  Claude-only user never invokes the gate (`readsHomeDir:false`, REQ-PV-114).
+- **Outcome:** done — 6/6 pass; vue-tsc 0 (whole project); whole-project `npm run lint`
+  0 errors (16 pre-existing warnings); the full project suite passes (exit 0). No
+  `obsidian`/`node:*`/Vue import.
+- **DEVIATION / ESCALATION (domain touch — SPEC contradiction the DOMAIN batch missed):**
+  SPEC-PV-014 mandates the consent persist **device-local** through `SettingsPort` keyed
+  `provider.homeFsConsent.<id>`, but `SettingsPort` exposes only `getSettings`/
+  `saveSettings(PluginSettings)` and the DOMAIN batch's ACCEPTED RED tests froze
+  `PluginSettings` to EXACTLY `{locale, logLevel, sessionsFolder, maxTabs,
+  customSystemPrompt, activeProvider, enabledProviders}` (TEST-PV-114 +
+  `core-settings.test.ts:102` `Object.keys(DEFAULT_SETTINGS)` exact-key guard) — with no
+  consent field and no arbitrary-key device-local store. There is no spec-faithful way to
+  record consent through `SettingsPort` without a `PluginSettings` field. **Resolution
+  (minimal, non-breaking):** added an OPTIONAL `homeFsConsent?: Readonly<Record<string,
+  boolean>>` to `PluginSettings` + the pure `homeFsConsentKey(id)` helper, deliberately
+  ABSENT from `DEFAULT_SETTINGS` so BOTH qa-owned guards stay green (verified: the 21
+  settings/core/ObsidianBridge.settings tests pass unchanged — no qa assertion was
+  modified). **Open follow-up for the WIRE-IN batch (T-PV-031, INFRA, NOT done here):**
+  `ObsidianBridge._coerceSettings` reconstructs an explicit key list and currently DROPS
+  `homeFsConsent`, so in production the consent would not round-trip across a reload (the
+  gate would re-prompt). The Mock/LS bridges spread the full object, so the unit tests +
+  the demo round-trip correctly. The real `ObsidianBridge` coercer must load-or-default
+  `homeFsConsent` (a `coerceHomeFsConsent` helper) at wire-in to make the one-time consent
+  durable on the production bridge. Escalated in `workflow-state.md`.
+- **Commit (green):** `3758692f`.
