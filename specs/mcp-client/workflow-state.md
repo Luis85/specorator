@@ -4,7 +4,7 @@ area: MC
 current_stage: implementation
 status: active
 last_updated: 2026-05-26
-last_agent: dev (implementation — DOMAIN T-MC-001..011 + INFRA T-MC-012..017 + APPLICATION T-MC-018..021 complete; the McpServerManager lifecycle use case + the pure foldEnabledMcpServers + buildMcpViewModel; UI batch onward pending)
+last_agent: dev (implementation — DOMAIN T-MC-001..011 + INFRA T-MC-012..017 + APPLICATION T-MC-018..021 + UI T-MC-022..033 complete; the useMcp*Port composables + the MCP modal-seam launchers + McpSettingsManager/McpServerRow + McpServerModal + McpTestModal + the expanded McpSelector; STYLES/WIRE-IN/GATE batches pending)
 epic: claudian-reboot
 phase: P8
 integration_branch: next
@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-MC-001; Parts A/B/C; ADR-MC-001 McpConfigStorePort vault file + ADR-MC-002 McpClientPort transport seam + ADR-MC-003 enabledMcpServers? + P7 approval composition — all accepted)
   spec.md: complete (SPEC-MC-001; 30 spec items SPEC-MC-001..030 across domain/infra/app/ui/styles/cross-cutting; EC-MC-1..20; TEST-MC-001..082 + 020a + M1/M2; REQ-MC ↔ SPEC-MC ↔ TEST-MC coverage table — all 45 REQ-MC + 12 NFR-MC chained; the five design open items resolved in §0)
   tasks.md: complete (TASKS-MC-001; 42 tasks T-MC-001..043, TDD-ordered RED(qa)→impl(dev), 7 batches DOMAIN→INFRA→APP→UI→STYLES→WIRE-IN→GATE; dep graph + parallel batches + critical path + full SPEC/REQ/NFR/TEST coverage table; NO guard-relax needed; @modelcontextprotocol/sdk dep-add = T-MC-012; manual legs T-MC-041/042 (M1/M2))
-  implementation-log.md: in-progress (DOMAIN T-MC-001..011 + INFRA T-MC-012..017 + APPLICATION T-MC-018..021 complete; UI/STYLES/WIRE-IN/GATE batches T-MC-022..043 pending)
+  implementation-log.md: in-progress (DOMAIN T-MC-001..011 + INFRA T-MC-012..017 + APPLICATION T-MC-018..021 + UI T-MC-022..033 complete; STYLES T-MC-034 + WIRE-IN T-MC-035..037 + GATE T-MC-038..043 batches pending)
   test-plan.md: in-progress (guard-verification + Obsidian-infra file-naming directive + manual legs TEST-MC-M1/M2 + TEST-MC-021/022/061/064 scaffolded; DOMAIN-batch automated legs recorded)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-MC-001; ADR-MC-001..003 accepted) |
 | 5. Specification | `spec.md` | complete (SPEC-MC-001; 30 items, full coverage) |
 | 6. Tasks | `tasks.md` | complete (TASKS-MC-001; 42 tasks T-MC-001..043, TDD-ordered, full coverage) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-MC-001..011 + INFRA T-MC-012..017 + APPLICATION T-MC-018..021 complete; UI→GATE pending) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-MC-001..011 + INFRA T-MC-012..017 + APPLICATION T-MC-018..021 + UI T-MC-022..033 complete; STYLES T-MC-034 → GATE T-MC-043 pending) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; test-report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -393,4 +393,46 @@ merge. Manual-Obsidian + parity-screenshot legs accumulate for the SINGLE FINAL 
                  REMAINING (NOT in this batch): UI T-MC-022..033, STYLES T-MC-034, WIRE-IN T-MC-035..037,
                  GATE T-MC-038..043 (incl. human manual legs T-MC-041/042). NEXT agent: the UI-batch qa/dev
                  (T-MC-022 useMcp*Port composables RED is ready; deps T-MC-011/015 are committed).
+
+2026-05-26 — dev — UI batch T-MC-022..033 COMPLETE (12 tasks, RED→green, one commit per task on
+                 feature/mcp-client). Mirrored P5/P6/P7 patterns: useVaultPort inject-or-throw, the P5
+                 modalSeam launchers, the P7 ApprovalsPanel/ApprovalRuleRow list+row, the P6 McpSelector seam.
+                 - T-MC-022 RED 52bb26c4 / T-MC-023 green 703d7317 — useMcpConfigStorePort + useMcpClientPort
+                   (inject-or-throw, one port per composable, no aggregate). 4/4.
+                 - T-MC-024 RED 8e19a8f9 / T-MC-025 green 5234d6e8 — modalSeam.ts MCP launchers
+                   (OpenMcpServerModalFn/OpenMcpTestModalFn + keys + auto-dismiss/no-op fallbacks; P3/P4/P5
+                   handles byte-identical). 12/12.
+                 - T-MC-026 RED b277b5c9 / T-MC-027 green d3539139 — McpSettingsManager + McpServerRow +
+                   the full agent.chat.mcp.* i18n (en+de). Gated/empty/live; accessible-named controls. 11/11.
+                 - T-MC-028 RED 21efe648 / T-MC-029 green f8210d7e — McpServerModal (parseClipboardConfig-driven
+                   paste; name required/duplicate block; edit pre-fill; Escape cancels; no v-html/window.prompt).
+                   9/9. Added an existingNames? prop (the dup check needs the live name set).
+                 - T-MC-030 RED 903c476b / T-MC-031 green 41c625fd — McpTestModal 5-state machine (probe via
+                   the injected McpClientPort; running/success/partial/timeout/error/unavailable; per-tool
+                   set-tool-disabled; aria-live region; no secret render). 10/10.
+                 - T-MC-032 RED e0a29c50 / T-MC-033 green 2e4ad5e1 — McpSelector EXPANDED (prop McpWidgetVm →
+                   McpViewModel; P6 empty seam kept byte-identical; live list+toggle+enabledCount badge).
+                   ToolbarStrip adapts its McpWidgetVm → an empty-seam McpViewModel (additive bridge) so the
+                   strip stays byte-identical. 5/5 + ToolbarStrip 5/5.
+                 VERIFICATION (whole-project): vue-tsc -p tsconfig.lint.json 0 errors; npm run lint 0 errors
+                 (14 pre-existing warnings only, none in the new src/ui/** files); vitest — MCP UI batch
+                 tests/ui/chat/mcp/ + useMcp*Port 34/34, tests/ui/chat/toolbar/ 49/49 (incl. the rewritten
+                 McpSelector 5/5 + the ToolbarStrip 5/5 P6 regression), tests/ui/stores/tabsStore 43/43,
+                 tests/ui/chat/approvals/ + useApprovalRuleStorePort + modalSeam 23/23, ChatSurface.approvals
+                 6/6 — all P6-selector/P7-approval/tabsStore regressions GREEN. No obsidian/node:*/SDK import
+                 under src/ui/**; no v-html; styles.css untouched (no build run). DEVIATIONS: (1) McpServerModal
+                 gained an existingNames? prop (SPEC-MC-016 dup check needs the live name set; the seam fn
+                 carries only input?, so the host passes the list to the component). (2) ToolbarStrip gained a
+                 small mcpVm adapter computed — required to keep the strip compiling after the McpSelector prop
+                 type changed (SPEC-MC-018); fixed at the P6 empty seam (byte-identical P6). The
+                 --sp-mcp-row-gap/--sp-mcp-status-ok/--sp-mcp-status-error/--sp-mcp-selector-badge tokens
+                 referenced by the new components are minted in T-MC-034 (STYLES, not this batch; build:web
+                 out of scope here).
+                 REMAINING (NOT in this batch): STYLES T-MC-034 (the mcp-* --sp-* token slice + tokens-contract,
+                 needs build:web), WIRE-IN T-MC-035..037 (provide the two ports + the Obsidian Modal-host
+                 launchers in AgentSidebarView + ui/main.ts; the per-surface McpServerManager + the fold +
+                 the UNCHANGED P7 approval composition + the absent-port degrade), GATE T-MC-038..043 (incl.
+                 the human manual legs T-MC-041/042 M1/M2). NEXT agent: the STYLES dev (T-MC-034; deps
+                 T-MC-027/029/031/033 are committed) then the WIRE-IN qa/dev (T-MC-035 RED is ready; the Vue
+                 seam handles + composables + components it provides/mounts are all committed).
 ```

@@ -721,3 +721,59 @@ this batch's scope.
   `McpWidgetVm` to `McpViewModel` (SPEC-MC-018); the toolbar surface has no manager, so the
   adapter is fixed at the P6 empty seam — byte-identical P6 behaviour. The
   `--sp-mcp-selector-badge`/`--sp-mcp-row-gap` tokens are minted in T-MC-034.
+
+## UI batch (T-MC-022..033) — close-out
+
+All twelve UI-batch tasks executed RED-first (qa-shaped RED test, then dev green), one
+commit per task on `feature/mcp-client`, mirroring the P5/P6/P7 patterns the maintainer
+accepted (the `useVaultPort` inject-or-throw, the P5 `modalSeam` launcher seam, the P7
+`ApprovalsPanel`/`ApprovalRuleRow` list+row, the P6 `McpSelector` empty seam).
+
+| Task | RED | green |
+|---|---|---|
+| T-MC-022/023 useMcp*Port composables | `52bb26c4` | `703d7317` |
+| T-MC-024/025 modalSeam MCP launchers | `8e19a8f9` | `5234d6e8` |
+| T-MC-026/027 McpSettingsManager + McpServerRow + i18n | `b277b5c9` | `d3539139` |
+| T-MC-028/029 McpServerModal | `21efe648` | `f8210d7e` |
+| T-MC-030/031 McpTestModal | `903c476b` | `41c625fd` |
+| T-MC-032/033 McpSelector expanded | `e0a29c50` | `2e4ad5e1` |
+
+**Inventory (this batch):**
+- Composables: `src/ui/composables/useMcpConfigStorePort.ts`, `useMcpClientPort.ts`.
+- Seam: `src/ui/chat/modalSeam.ts` (appended `OpenMcpServerModalFn`/`OpenMcpTestModalFn` +
+  `OPEN_MCP_SERVER_MODAL`/`OPEN_MCP_TEST_MODAL` + `useOpenMcpServerModal`/`useOpenMcpTestModal`).
+- Components (each with a co-located `data-testid` PO): `src/ui/chat/mcp/McpSettingsManager.vue`
+  (+ `.po.ts`), `McpServerRow.vue` (+ `.po.ts`), `McpServerModal.vue` (+ `.po.ts`),
+  `McpTestModal.vue` (+ `.po.ts`), `src/ui/chat/toolbar/McpSelector.vue` (+ the rewritten
+  `.po.ts`).
+- i18n: `src/ui/i18n/locales/en.ts` + `de.ts` (the `agent.chat.mcp.*` block).
+- Additive bridge: `src/ui/chat/toolbar/ToolbarStrip.vue` (`mcpVm` adapter).
+
+**How the enabled-servers fold + selector + the P7 approval composition wire (this batch's
+share):** the Vue layer is now ready for T-MC-036 wire-in — the `McpSettingsManager` reads
+the `McpViewModel` (`buildMcpViewModel`) and emits add/paste/edit/remove/test/set-enabled;
+the `McpSelector` reads the same `McpViewModel` (the manager's list + `enabledCount`) and
+emits `set-enabled`; the `McpServerModal` parses via the pure `parseClipboardConfig` and
+emits the `McpServerDraft` the manager's `add`/`edit` consume; the `McpTestModal` probes
+through the injected `McpClientPort` and emits `set-tool-disabled` the manager's
+`setToolDisabled` consumes; the two modals launch through the new `modalSeam` handles
+(`useOpenMcpServerModal`/`useOpenMcpTestModal`, fallbacks degrade to auto-dismiss/no-op when
+the launchers are absent). The actual `provide(MCP_*_PORT, …)`, the Obsidian `Modal` hosts,
+the per-surface `McpServerManager`, the `foldEnabledMcpServers(∅) → queryOptions` fold, and
+the UNCHANGED P7 `ApprovalManager` gating of `mcp__<server>__<tool>` are T-MC-036 (WIRE-IN,
+not this batch). **Absent-port degrade:** the composables throw only when a consumer
+explicitly requires the port; the modal-seam launchers fall back (auto-dismiss `null` /
+no-op resolve); the `McpSelector`/`McpSettingsManager` keep the P6 empty seam when no
+manager feeds them a `live` view-model — so a mount without the ports stays byte-identical
+to P6/P7.
+
+**Final gate over the batch surface:** whole-project `vue-tsc -p tsconfig.lint.json`
+**0 errors**; whole-project `npm run lint` **0 errors** (14 pre-existing warnings only, none
+in the new `src/ui/**` files); vitest — the MCP UI batch (`tests/ui/chat/mcp/` +
+`useMcpConfigStorePort` + `useMcpClientPort`) **34/34**, `tests/ui/chat/toolbar/` **49/49**
+(incl. the rewritten `McpSelector` 5/5 + the `ToolbarStrip` 5/5 P6 regression),
+`tests/ui/stores/tabsStore` **43/43**, `tests/ui/chat/approvals/` + `useApprovalRuleStorePort`
++ `modalSeam` **23/23**, `ChatSurface.approvals` **6/6** — every P6-selector / P7-approval /
+tabsStore regression GREEN. No `obsidian`/`node:*`/SDK import under `src/ui/**`; no `v-html`;
+`styles.css` untouched (no build run). The STYLES (T-MC-034), WIRE-IN (T-MC-035..037), and
+GATE (T-MC-038..043) batches are out of this batch's scope.
