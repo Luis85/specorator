@@ -4,7 +4,7 @@ area: IL
 current_stage: requirements
 status: active
 last_updated: 2026-05-27
-last_agent: orchestrator (bootstrap)
+last_agent: pm (requirements)
 epic: claudian-reboot
 phase: P11
 integration_branch: next
@@ -12,7 +12,7 @@ reference: D:\Projects\claudian-main
 artifacts:
   idea.md: skipped (parity-charter §3.9 + claudian-main 10-locale set stand in, mirrors P1-P10)
   research.md: skipped
-  requirements.md: pending
+  requirements.md: accepted (PRD-IL-001 — 12 REQ-IL + 9 NFR-IL)
   design.md: pending
   spec.md: pending
   tasks.md: pending
@@ -33,7 +33,7 @@ artifacts:
 |---|---|---|
 | 1. Idea | `idea.md` | skipped |
 | 2. Research | `research.md` | skipped |
-| 3. Requirements | `requirements.md` | pending |
+| 3. Requirements | `requirements.md` | accepted |
 | 4. Design | `design.md` | pending |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
@@ -101,4 +101,16 @@ catalogs is large).**
                           /spec:requirements (pm) grounded in charter §3.9 + claudian locales + our
                           en.ts + the parity test. KEY: the all-10-parity enforcement; keep interpolation
                           placeholders + the forbidden-terms guard green; watch the bundle size.
+2026-05-27 (pm):          Stage 3 requirements accepted (autonomous). PRD-IL-001 written —
+                          12 functional REQ-IL (A locale set/registration: 001-002; B all-ten
+                          key-parity: 003-004; C narrowing incl. zh-CN/zh-TW + unknown→en: 005-006;
+                          D translation quality/claudian wording: 007; E placeholders+forbidden-terms
+                          guard: 008-009; F additivity/fallback/build: 010-012) + 9 NFR-IL
+                          (parity, placeholder-preservation, forbidden-terms-clean, no-crash fallback,
+                          en/de byte-identical, build, coverage 80/70/80/80, manifest untouched, plain-
+                          text leaves). Keyset source = OUR en.ts; claudian JSONs = WORDING reference
+                          only (their structure differs). CLAR-IL-001 (placeholder enforcement →
+                          dedicated automated test, not manual review) resolved. P11-done = 10 locales
+                          registered + all-10 parity green + build green; native-speaker polish deferred
+                          to P12/future. Hand-off → /spec:design (architect, Part A UX + Part B UI).
 ```
