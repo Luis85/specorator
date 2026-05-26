@@ -840,7 +840,7 @@ GATE (T-MC-038..043) batches are out of this batch's scope.
     mounts with the MCP ports provided + no inject-or-throw, MCP hidden on the inert
     Mock `supportsMcpTools:false` caps, the P7 byte-identical state — the T-MC-037
     deterministic leg).
-- **Commit:** `T-MC-035-SHA`.
+- **Commit:** `0b6b82c4`.
 - **Outcome:** done (RED confirmed).
 - **RED evidence:** `npx vitest run tests/ui/chat/ChatSurface.mcp.test.ts` → **4
   failed / 3 passed**. The 4 failures are the MCP-specific wiring legs that need the
