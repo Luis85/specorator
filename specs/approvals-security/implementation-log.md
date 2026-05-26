@@ -708,3 +708,29 @@ warnings only), `vitest run tests/application` **372/372 green** (incl. the P6
   `--sp-approvals-decision-allow` → `var(--sp-success)` (the genuine success colour). The deny
   token uses `var(--sp-status-error)` exactly as specified (it exists). Semantically identical
   to the spec intent (the allow/approve success colour).
+
+---
+
+## T-AS-031 🧪 — RED: provide `APPROVAL_RULE_STORE_PORT` + mount the approvals panel + the live approval-callback wiring
+
+- **Date:** 2026-05-26
+- **Owner:** qa (executed by dev under the P7 batch brief)
+- **Spec:** SPEC-AS-019, REQ-AS-002/030/053, NFR-AS-005; TEST-AS-053 (wiring leg), TEST-AS-022/040/043 (mount legs), TEST-AS-032 (structured-pattern leg)
+- **Files changed:**
+  - `tests/ui/main.ts.test.ts` (+~40) — new `describe` "standalone approvals smoke": mounts
+    `@/ui/main`, asserts `approvals-panel` renders + `approvals-mode` reflects `normal` +
+    `approvals-empty`. RED — `src/ui/main.ts` does not yet provide `APPROVAL_RULE_STORE_PORT`,
+    so `hasApprovals` is false + the panel does not mount.
+  - `tests/ui/chat/ChatSurface.approvals.test.ts` (+~30) — new leg "TEST-AS-032: a rule on the
+    STRUCTURED action pattern auto-decides": emits an `ApprovalRequest` carrying structured
+    `input: { file_path: '/notes/x.md' }` + a human `context` ("Write to file: /notes/x.md");
+    seeds a `Write` deny rule on `/notes`. RED — the gate currently derives the action pattern
+    from `req.context` (which does NOT path-prefix-match `/notes`), so no rule matches, the
+    inline block renders, and `emitApprovalRequest` never resolves (timeout). Green once
+    T-AS-032 threads `getActionPattern(tool, input)` through the request-building layer + the
+    gate's `deriveAction`, and `ApprovalRequest` carries `input`.
+- **RED confirmed:** `vitest run` (threads pool) — `tests/ui/main.ts.test.ts` 1 failed
+  (`approvals-panel` null) + `tests/ui/chat/ChatSurface.approvals.test.ts` 1 failed (timeout /
+  no auto-decide); 10 other legs pass.
+- **Outcome:** done (RED).
+- **Commit:** <pending>

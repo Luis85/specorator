@@ -264,3 +264,41 @@ describe('standalone toolbar smoke (TEST-TC-001/004/042 dev leg)', () => {
 		expect($('[data-testid="toolbar-mode"]')).not.toBeNull();
 	}, 15000);
 });
+
+/**
+ * T-AS-033 — standalone approvals smoke (TEST-AS-022/040/043 dev leg, deterministic).
+ *
+ * The `npm run dev` entry (`src/ui/main.ts`) provides `APPROVAL_RULE_STORE_PORT`
+ * (T-AS-032, the scriptable Mock store) so the surface constructs the per-surface
+ * `ApprovalManager`, gates the active runtime's approval callback through it, and
+ * mounts `ApprovalsPanel`. This deterministic leg proves the panel mounts against
+ * `MockBridge` (the provide reached the surface → `hasApprovals` is true), reflects
+ * the active permission mode, and shows the empty state on a fresh surface (no
+ * seeded rules cross the internally-constructed bridge). The persist-then-auto-allow
+ * + fail-safe + the live-feel pair with the human run (recorded in `test-plan.md`).
+ * Queried by `data-testid` only (ADR-009). SPEC-AS-019; NFR-AS-005.
+ */
+describe('standalone approvals smoke (TEST-AS-022/040/043 dev leg)', () => {
+	beforeEach(() => {
+		vi.resetModules();
+		document.body.replaceChildren();
+		const el = document.createElement('div');
+		el.id = 'app';
+		document.body.appendChild(el);
+	});
+
+	it('mounts the approvals panel (mode + empty state) against MockBridge', async () => {
+		await import('@/ui/main');
+		await settle();
+
+		// The surface mounts and the APPROVAL_RULE_STORE_PORT provide reached it, so
+		// the per-surface ApprovalManager is built and the panel renders (T-AS-032).
+		expect($('[data-testid="chat-surface"]')).not.toBeNull();
+		expect($('[data-testid="approvals-panel"]')).not.toBeNull();
+
+		// The panel reflects the active permission mode (fresh tab → 'normal') and the
+		// empty state (no persisted/session rules on the fresh internally-built store).
+		expect($('[data-testid="approvals-mode"]')?.textContent).toContain('normal');
+		expect($('[data-testid="approvals-empty"]')).not.toBeNull();
+	}, 15000);
+});
