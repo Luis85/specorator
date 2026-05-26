@@ -793,7 +793,7 @@ GATE (T-MC-038..043) batches are out of this batch's scope.
     tests — the presence assertion and the raw-hex/Obsidian-var leak guard
     (TEST-MC-045); bounded the §4.14 leak-guard slice with the `section 4.15`
     upper marker so it no longer trails to EOF).
-- **Commit:** `T-MC-034-SHA`.
+- **Commit:** `d61e9f6a`.
 - **Outcome:** done.
 - **Tokens minted where:** `src/ui/styles/tokens.css` §4.15 (the only place the four
   `--sp-mcp-*` tokens are declared). The five MCP widgets
