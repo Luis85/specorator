@@ -17,6 +17,7 @@ export {
 export {
 	discoverDefinitions,
 	makeHasProviderDefinitions,
+	makeGetProviderDefinitions,
 	type DiscoveredDefinitions,
 } from './discoverDefinitions';
 export {

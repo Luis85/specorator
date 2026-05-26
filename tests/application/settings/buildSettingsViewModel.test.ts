@@ -212,6 +212,23 @@ describe('buildSettingsViewModel — slash / agent lists (TEST-SS-031/040, EC-SS
 		const none = buildSettingsViewModel(makeInput());
 		expect(kindsOf(controlsOf(none.sections, 'provider:claude'))).not.toContain('agentList');
 	});
+
+	it('populates slashList/agentList with the discovered entries (R-SS-001, REQ-SS-030)', () => {
+		const vm = buildSettingsViewModel(
+			makeInput({
+				hasProviderDefinitions: () => ({ slash: true, skill: true, agent: false }),
+				getProviderDefinitions: () => ({
+					slash: [{ name: 'review', description: 'Review the diff' }],
+					agent: [{ name: 'auditor', description: 'Audit', kind: 'skill' }],
+				}),
+			}),
+		);
+		const controls = controlsOf(vm.sections, 'provider:claude');
+		const slash = controls.find((c) => c.kind === 'slashList');
+		const agent = controls.find((c) => c.kind === 'agentList');
+		expect(slash?.kind === 'slashList' && slash.entries.map((e) => e.name)).toEqual(['review']);
+		expect(agent?.kind === 'agentList' && agent.entries.map((e) => e.name)).toEqual(['auditor']);
+	});
 });
 
 describe('buildSettingsViewModel — approvals + permission mode (TEST-SS-082/083)', () => {

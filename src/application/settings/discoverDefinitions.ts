@@ -81,3 +81,16 @@ export async function makeHasProviderDefinitions(
 	};
 	return (_id: ProviderId): ProviderDefinitionPresence => presence;
 }
+
+/**
+ * Build the `getProviderDefinitions(id)` accessor `buildSettingsViewModel` lists
+ * (REQ-SS-030, R-SS-001) — the actual discovered slash + agent(skill-backed)
+ * entries. Provider-agnostic in P4, so the same lists for every provider; the
+ * presence gate (`makeHasProviderDefinitions`) still decides visibility.
+ */
+export async function makeGetProviderDefinitions(
+	catalog: ProviderCommandCatalogPort,
+): Promise<(id: ProviderId) => DiscoveredDefinitions> {
+	const definitions = await discoverDefinitions(catalog);
+	return (_id: ProviderId): DiscoveredDefinitions => definitions;
+}

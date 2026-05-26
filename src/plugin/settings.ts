@@ -14,6 +14,7 @@ import type { EnvSnippetService } from '@/application/settings/EnvSnippetService
 import {
 	buildSettingsViewModel,
 	makeHasProviderDefinitions,
+	makeGetProviderDefinitions,
 	type SettingsControl,
 	type SettingsSection,
 	type ProviderDefinitionPresence,
@@ -115,6 +116,7 @@ export class SpecoratorSettingTab extends PluginSettingTab {
 		const secretKeysSet = new Set<string>(keysResult.ok ? keysResult.value : []);
 		const hasProviderDefinitions: (id: ProviderId) => ProviderDefinitionPresence =
 			await makeHasProviderDefinitions(deps.providerCommandCatalog);
+		const getProviderDefinitions = await makeGetProviderDefinitions(deps.providerCommandCatalog);
 
 		const viewModel = buildSettingsViewModel({
 			settings: this.plugin.settings,
@@ -123,6 +125,7 @@ export class SpecoratorSettingTab extends PluginSettingTab {
 			secretKeysSet,
 			secretStorageAvailable: deps.secretStore.isAvailable(),
 			hasProviderDefinitions,
+			getProviderDefinitions,
 		});
 
 		// The shared section's `coreField`s are already rendered by the P0 core loop;

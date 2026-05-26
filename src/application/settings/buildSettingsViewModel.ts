@@ -20,6 +20,7 @@ import { providerSecretKey } from '@/domain/ports/SecretStorePort';
 import type { ToolbarCatalog, ModelOption } from '@/domain/chat/toolbar/ToolbarCatalog';
 import type { PluginSettings } from '@/domain/settings/PluginSettings';
 import { DEFAULT_CHAT_PROVIDER_ID } from '@/domain/chat/providers/ProviderDescriptor';
+import type { ProviderCapabilities } from '@/domain/chat/providers/ProviderDescriptor';
 import type { EnvironmentScope } from '@/domain/chat/environment/EnvSnippet';
 
 /** The state of the per-provider API-key field (the value NEVER crosses, REQ-SS-014). */
@@ -97,8 +98,17 @@ export interface BuildSettingsViewModelInput {
 	readonly secretKeysSet: ReadonlySet<string>;
 	/** From `SecretStorePort.isAvailable()` (REQ-SS-015). */
 	readonly secretStorageAvailable: boolean;
-	/** From the P4 discovery mapping (SPEC-SS-008). */
+	/** From the P4 discovery mapping (SPEC-SS-008) — the presence gate. */
 	readonly hasProviderDefinitions: (id: ProviderId) => ProviderDefinitionPresence;
+	/**
+	 * The actual discovered read-only slash/agent entries to LIST (REQ-SS-030,
+	 * R-SS-001). Optional — absent ⇒ the lists render empty (the gate still
+	 * decides visibility via `hasProviderDefinitions`).
+	 */
+	readonly getProviderDefinitions?: (id: ProviderId) => {
+		readonly slash: readonly DefinitionEntry[];
+		readonly agent: readonly AgentDefinitionEntry[];
+	};
 }
 
 const DEFAULT_PERMISSION_MODE: PermissionMode = 'normal';
@@ -143,11 +153,33 @@ function buildModelPicker(id: ProviderId, catalog: ToolbarCatalog, settings: Plu
 	};
 }
 
+/**
+ * The read-only slash + agent list controls (REQ-SS-030, R-SS-001) — gated on the
+ * presence flags + the capability bag, populated with the discovered entries.
+ * Extracted from `buildProviderSection` to keep its complexity under the cap.
+ */
+function buildDefinitionListControls(
+	id: ProviderId,
+	caps: ProviderCapabilities,
+	definitions: ProviderDefinitionPresence,
+	discovered: { readonly slash: readonly DefinitionEntry[]; readonly agent: readonly AgentDefinitionEntry[] } | undefined,
+): SettingsControl[] {
+	const controls: SettingsControl[] = [];
+	if (caps.supportsProviderCommands && definitions.slash) {
+		controls.push({ kind: 'slashList', providerId: id, entries: discovered?.slash ?? [] });
+	}
+	if (definitions.agent || definitions.skill) {
+		controls.push({ kind: 'agentList', providerId: id, entries: discovered?.agent ?? [] });
+	}
+	return controls;
+}
+
 /** Build one provider section's controls, gated entirely on the capability bag. */
 function buildProviderSection(id: ProviderId, input: BuildSettingsViewModelInput): SettingsSection {
-	const { settings, registry, getCatalog, secretKeysSet, secretStorageAvailable, hasProviderDefinitions } = input;
+	const { settings, registry, getCatalog, secretKeysSet, secretStorageAvailable, hasProviderDefinitions, getProviderDefinitions } = input;
 	const caps = registry.getCapabilities(id);
 	const definitions = hasProviderDefinitions(id);
+	const discovered = getProviderDefinitions?.(id);
 	const controls: SettingsControl[] = [];
 
 	// A non-Claude provider leads with its enable toggle; Claude (always enabled,
@@ -168,13 +200,7 @@ function buildProviderSection(id: ProviderId, input: BuildSettingsViewModelInput
 
 	controls.push(buildModelPicker(id, getCatalog(id), settings));
 
-	if (caps.supportsProviderCommands && definitions.slash) {
-		controls.push({ kind: 'slashList', providerId: id, entries: [] });
-	}
-
-	if (definitions.agent || definitions.skill) {
-		controls.push({ kind: 'agentList', providerId: id, entries: [] });
-	}
+	controls.push(...buildDefinitionListControls(id, caps, definitions, discovered));
 
 	if (caps.supportsMcpTools) {
 		controls.push({ kind: 'mcpManager', providerId: id });

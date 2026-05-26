@@ -19,8 +19,8 @@ artifacts:
   implementation-log.md: in-progress (DOMAIN T-SS-001..013 + APPLICATION T-SS-014..019 + INFRA T-SS-020..024 + PLUGIN T-SS-025..026 + STYLES T-SS-027 + WIRE-IN T-SS-029..030 done + committed; T-SS-028 token+additivity gate folded into T-SS-027 DoD; GATE T-SS-031..035 + manual legs TEST-SS-M1..M4 remain)
   test-plan.md: in-progress (TESTPLAN-SS-001; guard-verify note + Claude-only additivity baseline + DOMAIN automated status + manual legs TEST-SS-M1..M4)
   test-report.md: pending
-  review.md: pending
-  traceability.md: pending
+  review.md: complete (REVIEW-SS-001; verdict approve-with-conditions; 0 P1/P2, 1 medium R-SS-001 + 2 low; live-wiring + security + coerce-round-trip + env→runtime-merge + additivity confirmed; 4 manual legs TEST-SS-M1..M4 pending)
+  traceability.md: complete (TRACE-SS-001; all 37 REQ-SS + 12 NFR-SS chained REQ→SPEC→TEST→code; coverage-excluded legs recorded pending-manual; no orphans)
   release-notes.md: pending
   retrospective.md: pending
 ---
@@ -39,7 +39,7 @@ artifacts:
 | 6. Tasks | `tasks.md` | complete (TASKS-SS-001; 35 tasks T-SS-001..035) |
 | 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-SS-001..013 + APPLICATION T-SS-014..019 + INFRA T-SS-020..024 + PLUGIN T-SS-025..026 + STYLES T-SS-027 + WIRE-IN T-SS-029..030 complete + committed; GATE T-SS-031..035 + manual legs TEST-SS-M1..M4 remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; report pending) |
-| 9. Review | `review.md`, `traceability.md` | pending |
+| 9. Review | `review.md`, `traceability.md` | complete (REVIEW-SS-001 verdict approve-with-conditions; 0 P1/P2; TRACE-SS-001 no orphans) |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
 
@@ -398,3 +398,36 @@ settings, model picker, agent/skill/subagent + slash-command settings, env-snipp
                           review gate). REMAINING OWNER: dev (T-SS-031 invariant green + the verify gate) + human
                           (TEST-SS-M1..M4). Next agent: the GATE-batch dev/orchestrator.
 ```
+
+## Stage-9 review hand-off (2026-05-27, reviewer → release-manager / dev)
+
+REVIEW-SS-001 + TRACE-SS-001 written. **Verdict: approve-with-conditions** — 0 P1/P2
+findings, so nothing blocks the merge of `feature/settings-shell` → `next` after the
+GATE batch (T-SS-031..035) greens `npm run verify` + `npm run test:all`.
+
+Confirmed by the reviewer: live wiring (tab constructed with bridge ports +
+`EnvSnippetService` in `main.ts:94/104`; env→subprocess merge wired into all 3 P9
+runtimes); the security surface (no secret in `data.json`, resolve-only-at-spawn,
+masked `readScope`, safe-DOM/no-`window.confirm`, no `switch(providerId)`); the
+six-field `_coerceSettings` round-trip in both write-path twins; additivity
+(`DEFAULT_SETTINGS` byte-identical, manifest untouched); read-only agent/skill (NG1).
+Targeted reviewer test runs green (EnvSnippetService/secretLeak/coerceSettings 39/39;
+VM/no-switch/discovery/bridge 55/55; tokens/i18n 34/34).
+
+**Owners of open findings:**
+- **R-SS-001 (medium → dev + qa):** `agentList`/`slashList` emit `entries: []` —
+  discovered slash/skill names are gated-in but never threaded into the view-model
+  (`buildSettingsViewModel.ts:172,176`), so the list renders the `.empty` microcopy.
+  Thread `DiscoveredDefinitions` into the VM + add a `.entries` test. Fix before the
+  TEST-SS-M1 manual sign-off (not a merge blocker).
+- **R-SS-002 (low → pm/architect):** `mcpManager` is a reduced re-impl vs the full P8
+  manager — decide at the final gate whether to expand.
+- **R-SS-003 (low → dev):** `apply` scope-inference reconstructs `KEY=x` lines — optional
+  cleanup.
+
+**Pending-manual (NOT greened):** TEST-SS-M1 (DOM render + keyboard nav + modals),
+TEST-SS-M2 (real subprocess env injection), TEST-SS-M3 (real `app.secretStorage`
+round-trip + no-`data.json` proof), TEST-SS-M4 (parity screenshots) — accumulate for
+the single final epic human review gate per the operating-mode directive. Next agent:
+release-manager (after the GATE batch greens) — the four manual legs gate the epic, not
+this phase merge.
