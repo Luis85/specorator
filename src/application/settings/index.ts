@@ -14,3 +14,8 @@ export {
 	type ProviderDefinitionPresence,
 	type BuildSettingsViewModelInput,
 } from './buildSettingsViewModel';
+export {
+	discoverDefinitions,
+	makeHasProviderDefinitions,
+	type DiscoveredDefinitions,
+} from './discoverDefinitions';
