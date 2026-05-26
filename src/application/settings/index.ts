@@ -19,3 +19,9 @@ export {
 	makeHasProviderDefinitions,
 	type DiscoveredDefinitions,
 } from './discoverDefinitions';
+export {
+	createEnvSnippetService,
+	type EnvSnippetService,
+	type EnvSnippetInput,
+	type EnvSnippetServiceDeps,
+} from './EnvSnippetService';
