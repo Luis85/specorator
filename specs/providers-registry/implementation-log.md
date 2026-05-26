@@ -630,3 +630,44 @@ WIRE-IN/GATE batches ride their own subagents.
   pre-existing test-file warnings only).
 - **Deviation:** none.
 - **Commit (green):** `732cdd56`.
+
+## T-PV-027 — RED: `ProviderChooser.vue` + `ProviderOption.vue` (🧪)
+
+- **Spec/req:** TEST-PV-001/002/006/090/110/113/114 (A legs), SPEC-PV-016,
+  REQ-PV-001/002/003/004/006/090/110/113/114, NFR-PV-006/008/009.
+- **Files:** `tests/ui/chat/providers/ProviderOption.po.ts` (new),
+  `tests/ui/chat/providers/ProviderChooser.po.ts` (new),
+  `tests/ui/chat/providers/ProviderOption.test.ts` (new),
+  `tests/ui/chat/providers/ProviderChooser.test.ts` (new). POs query by
+  `data-testid` only (`provider-chooser`/`provider-option`/`provider-option-active`/
+  `provider-icon`). Tests assert: chooser absent at `showChooser=false`
+  (byte-identical P8), list-at->1 in blank-tab order, exactly-one active marker,
+  per-option icon, `select(id)` on click + on keyboard activate, an accessible name,
+  no `v-html`.
+- **Outcome:** done (RED confirmed — both test files fail to resolve the
+  not-yet-existing `.vue` imports).
+- **Commit (RED):** `1ce7a10d`.
+
+## T-PV-028 — `ProviderChooser.vue` + `ProviderOption.vue` (🔨)
+
+- **Spec/req:** SPEC-PV-016, SPEC-PV-030, REQ-PV-001/002/003/004/006/090/110/113/114,
+  NFR-PV-006/007/008/009.
+- **Files:** `src/ui/chat/providers/ProviderOption.vue` (new, presentational row:
+  icon + display name + active/default text marker; `aria-current` active announce;
+  Enter/Space activate; emits `select`), `src/ui/chat/providers/ProviderChooser.vue`
+  (new, `role=listbox`; renders nothing at `!showChooser`; lists `ProviderOption`
+  rows in the given blank-tab order; re-emits `select`), `src/ui/i18n/locales/en.ts`
+  + `de.ts` (added the `agent.chat.providers.*` block — chooser/name/secret/notice/
+  consent keys, en↔de parity), `eslint.config.js` (added `Claude`/`Codex`/`Opencode`/
+  `API` to the `ui/sentence-case` brand allowlist for the locale strings).
+- **Outcome:** done. The prior RED tests now pass (18/18 across the two files);
+  the en↔de locale-parity regression (`tests/ui/i18n/index.test.ts`) stays green.
+- **Verify:** `vitest run` on the chooser/option + i18n files green (26 passed);
+  `vue-tsc -p tsconfig.lint.json --noEmit` exit 0; whole-project `npm run lint` 0
+  errors (16 pre-existing warnings only).
+- **Deviation:** the provider icon renders as a decorative glyph with an accessible
+  label (a `role="img"` + `aria-label` span) rather than going through `useIconPort`/
+  `SpIcon`; this keeps the presentational chooser injection-free for unit mounts and
+  still satisfies the "icon an accessible label" a11y rule (REQ-PV-110). The real
+  lucide icon binding is a wire-in concern (T-PV-034..036, parent-owned).
+- **Commit (green):** `65aadc32`.
