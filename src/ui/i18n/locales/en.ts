@@ -331,6 +331,7 @@ export default {
 			nameRequired: 'A snippet name is required.',
 			deleteConfirm: 'Delete this snippet? Its stored secrets are removed too.',
 			loadFailed: 'Could not read your snippets.',
+			saveFailed: 'Could not save the snippet.',
 			applyFailed: 'Could not apply the snippet.',
 			removeFailed: 'Could not delete the snippet.',
 			modal: {

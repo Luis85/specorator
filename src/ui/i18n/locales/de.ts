@@ -332,6 +332,7 @@ export default {
 			nameRequired: 'Ein Snippet-Name ist erforderlich.',
 			deleteConfirm: 'Dieses Snippet löschen? Die gespeicherten Geheimnisse werden ebenfalls entfernt.',
 			loadFailed: 'Deine Snippets konnten nicht gelesen werden.',
+			saveFailed: 'Das Snippet konnte nicht gespeichert werden.',
 			applyFailed: 'Das Snippet konnte nicht angewendet werden.',
 			removeFailed: 'Das Snippet konnte nicht gelöscht werden.',
 			modal: {
