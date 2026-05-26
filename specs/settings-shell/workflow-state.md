@@ -1,10 +1,10 @@
 ---
 feature: settings-shell
 area: SS
-current_stage: specification
+current_stage: tasks
 status: active
 last_updated: 2026-05-26
-last_agent: architect (/spec:specify)
+last_agent: planner (/spec:tasks)
 epic: claudian-reboot
 phase: P10
 integration_branch: next
@@ -15,7 +15,7 @@ artifacts:
   requirements.md: accepted (PRD-SS-001; REQ-SS-001..095, NFR-SS-001..012; 6 CLAR-SS resolved-by-recommendation, CLAR-SS-001 ADR-needed)
   design.md: complete (DESIGN-SS-001; Parts A UX / B UI / C Architecture; ADR-SS-001 + ADR-SS-002 accepted + filed; CLAR-SS-001/004 ratified by ADR-SS-001, CLAR-SS-002 by ADR-SS-002)
   spec.md: complete (SPEC-SS-001; 28 spec items SPEC-SS-001..028 across 6 layer groups; EC-SS-1..16; TEST-SS-001..095 + M1..M4; every REQ-SS chained to ≥1 SPEC + ≥1 TEST)
-  tasks.md: pending
+  tasks.md: complete (TASKS-SS-001; 35 tasks T-SS-001..035 across 6 batches + baseline; TDD-ordered RED-before-green; every SPEC-SS-001..028 covered; manual legs TEST-SS-M1..M4; NO guard-relax / NO new InjectionKey / NO new obsidian file)
   implementation-log.md: pending
   test-plan.md: pending
   test-report.md: pending
@@ -36,7 +36,7 @@ artifacts:
 | 3. Requirements | `requirements.md` | accepted |
 | 4. Design | `design.md` | complete (DESIGN-SS-001 + ADR-SS-001/002 accepted) |
 | 5. Specification | `spec.md` | complete (SPEC-SS-001..028; EC-SS-1..16; TEST-SS-001..095 + M1..M4) |
-| 6. Tasks | `tasks.md` | pending |
+| 6. Tasks | `tasks.md` | complete (TASKS-SS-001; 35 tasks T-SS-001..035) |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
@@ -201,4 +201,43 @@ settings, model picker, agent/skill/subagent + slash-command settings, env-snipp
                           coverage-excluded) as the FINAL manual-leg task. Capture the Claude-only baseline on
                           `next` BEFORE implementation (SPEC-SS-028, pairs with NFR-SS-001/REQ-SS-093). REQ-SS-067
                           contextLimits is 'could' — sequence last, must not gate the must-tier snippet round-trip.
+2026-05-26 (planner): /spec:tasks COMPLETE → TASKS-SS-001 (specs/settings-shell/tasks.md). 35 tasks
+                          T-SS-001..035 decomposing SPEC-SS-001..028 across 6 batches + a baseline, mirroring
+                          the P9 TASKS-PV-001 shape (baseline/guard-verify → strict RED(qa,🧪)-before-green(dev,
+                          🔨) → additive-field + coerce* + 3-bridge → coverage-exclusion → manual-leg → gate).
+                          BATCHES: B0 baseline T-SS-001; DOMAIN T-SS-002..013 (the six additive OPTIONAL
+                          PluginSettings fields + six coerce* + envSecretKey; the additive
+                          ProviderDescriptor.environmentKeyPatterns? + classifyEnvKey + the 13-key
+                          SHARED_ENVIRONMENT_KEYS + isSecretEnvKey; EnvSnippet codec + parseContextLimit;
+                          envScope routing; keyboardNav parser); APPLICATION T-SS-014..019 (PURE
+                          buildSettingsViewModel + the 14-member SettingsControl union; the read-only P4
+                          discovery mapping; the EnvSnippetService secret-split, Result-typed, NO new port);
+                          INFRA T-SS-020..024 (the _coerceSettings six-field round-trip + Mock/LS env-slot
+                          SecretStore + Mock runtime env capture; the env→subprocess merge into the P9
+                          runtimes; the no-secret/correct-store/Result-boundary guards); PLUGIN T-SS-025..026
+                          (the Setting-API DOM tab + the snippet edit/delete modals, coverage-excluded →
+                          manual legs); STYLES T-SS-027..028 (the settings/* --sp-* slice, lightningcss-safe
+                          ASCII comments + the token+additivity gate); WIRE-IN T-SS-029..030 (the
+                          no-switch(providerId)/safe-DOM grep gate + the main.ts wire-in + smoke); GATE
+                          T-SS-031..035 (green the invariants + the four manual legs TEST-SS-M1/M2/M3/M4 +
+                          the feature-DoD verify + draft PR into next). GUARD VERDICT: NO guard-relax in P10
+                          (verified against eslint.config.js — DELETED_SUBSYSTEM_BAN lists none of
+                          @/domain/chat/environment/** · @/domain/settings/keyboardNav · @/application/settings/**;
+                          no EnvSnippet*/classifyEnvKey/EnvSnippetService ban glob; DELETED_INJECTION_KEYS
+                          irrelevant — NO new InjectionKey (compose SETTINGS_PORT + SECRET_STORE_PORT,
+                          ADR-SS-001); NO new obsidian/** file — the env-secret reuses the P9 SecretStorage.ts
+                          and the env→subprocess merge extends the P9 runtimes, so the still-banned
+                          @/infrastructure/obsidian/ObsidianSecretStore* glob is NOT tripped). BUILD-GREEN
+                          DISCIPLINE: both grows are PURELY ADDITIVE (no implements break) — the additive
+                          ProviderDescriptor.environmentKeyPatterns? (T-SS-005) keeps the P9 frozen-matrix
+                          tests green; the six OPTIONAL PluginSettings fields (T-SS-003, absent from
+                          DEFAULT_SETTINGS) keep the P9 settings round-trip + exact-key contract byte-identical.
+                          The ONE allowed switch is on SettingsControl.kind in the renderer, NEVER providerId.
+                          ~6-task CHUNK boundaries for the implementer: C1 T-SS-001 / C2 T-SS-002..011 / C3
+                          T-SS-012..017 / C4 T-SS-018..024 / C5 T-SS-025..030 / C6 T-SS-031..035. HAND-OFF →
+                          /spec:implement (dev/qa): the FIRST ready task is T-SS-001 (📐 dev, baseline +
+                          guard, no deps); then the domain RED legs T-SS-002/004/006/008/010 (qa) run in
+                          parallel. Manual-Obsidian + parity-screenshot legs (T-SS-032/033/034, human) and the
+                          subprocess env injection (T-SS-023 real obsidian/** coverage-excluded) accumulate for
+                          the single final epic review gate.
 ```
