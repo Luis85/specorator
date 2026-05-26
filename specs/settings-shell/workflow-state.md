@@ -1,10 +1,10 @@
 ---
 feature: settings-shell
 area: SS
-current_stage: design
+current_stage: specification
 status: active
 last_updated: 2026-05-26
-last_agent: architect (/spec:design)
+last_agent: architect (/spec:specify)
 epic: claudian-reboot
 phase: P10
 integration_branch: next
@@ -14,7 +14,7 @@ artifacts:
   research.md: skipped
   requirements.md: accepted (PRD-SS-001; REQ-SS-001..095, NFR-SS-001..012; 6 CLAR-SS resolved-by-recommendation, CLAR-SS-001 ADR-needed)
   design.md: complete (DESIGN-SS-001; Parts A UX / B UI / C Architecture; ADR-SS-001 + ADR-SS-002 accepted + filed; CLAR-SS-001/004 ratified by ADR-SS-001, CLAR-SS-002 by ADR-SS-002)
-  spec.md: pending
+  spec.md: complete (SPEC-SS-001; 28 spec items SPEC-SS-001..028 across 6 layer groups; EC-SS-1..16; TEST-SS-001..095 + M1..M4; every REQ-SS chained to ≥1 SPEC + ≥1 TEST)
   tasks.md: pending
   implementation-log.md: pending
   test-plan.md: pending
@@ -35,7 +35,7 @@ artifacts:
 | 2. Research | `research.md` | skipped |
 | 3. Requirements | `requirements.md` | accepted |
 | 4. Design | `design.md` | complete (DESIGN-SS-001 + ADR-SS-001/002 accepted) |
-| 5. Specification | `spec.md` | pending |
+| 5. Specification | `spec.md` | complete (SPEC-SS-001..028; EC-SS-1..16; TEST-SS-001..095 + M1..M4) |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
@@ -166,4 +166,39 @@ settings, model picker, agent/skill/subagent + slash-command settings, env-snipp
                           EnvSnippetStruct/EnvEntry shape + envSecretKey namespace + the additive field names
                           + their coerce* rules + the SettingsControl union members + the secret-classification
                           rule; capture the Claude-only baseline on `next` before implementation.
+2026-05-26 (architect): /spec:specify COMPLETE → SPEC-SS-001 (specs/settings-shell/spec.md). 28 spec items
+                          SPEC-SS-001..028 across 6 layer groups (DOMAIN SS-001..005 / APPLICATION SS-006..009 /
+                          INFRA+PLUGIN SS-010..014 / STYLES SS-015 / CROSS-CUTTING SS-016..028). PINNED: the six
+                          additive OPTIONAL PluginSettings fields (envSnippets/envScopes/keyboardNav/
+                          providerDefaultModel/defaultPermissionMode/providerCliPath, each absent from
+                          DEFAULT_SETTINGS) + their six coerce* rules; envSecretKey(scope,key)=env.<scope>.<KEY>;
+                          the EnvSnippetStruct/EnvEntry(inline|secretRef) shape + the EnvSnippetCodec +
+                          parseContextLimit (bounds 1_000..10_000_000); the PURE classifyEnvKey + the 13-key
+                          SHARED_ENVIRONMENT_KEYS set (regrown verbatim) + isSecretEnvKey rule (provider-owned
+                          auth suffix /_API_KEY|_AUTH_TOKEN|_TOKEN/i OR markSecret); the env-key patterns as an
+                          ADDITIVE ProviderDescriptor.environmentKeyPatterns? field (NOT a switch(providerId)) —
+                          claude ^ANTHROPIC_/^CLAUDE_, codex ^OPENAI_/^CODEX_, opencode ^OPENCODE_; the PURE
+                          buildSettingsViewModel(settings, registry, getCatalog, secretKeysSet,
+                          secretStorageAvailable, hasProviderDefinitions)→SettingsViewModel (ordered shared/
+                          provider:<id> blank-tab-order/environment, capability-gated, no switch(providerId)); the
+                          14-member SettingsControl discriminated union + per-member port wiring; the
+                          EnvSnippetService (list/create/edit/remove/apply/applyScopeText/readScope, secret-split,
+                          Result-typed, composes SettingsPort+SecretStorePort, NO new port); the parseNavMappings
+                          validator. EC-SS-1..16; TEST-SS-001..095 (U≈38 hold the 80/70/80/80 gate) + M1..M4
+                          (real PluginSettingTab DOM render + keyboard-nav + modals / real subprocess env
+                          injection / real app.secretStorage env-secret round-trip + no-data.json proof / parity
+                          screenshots) for the single final epic gate. RESOLVED the read-only discovery source =
+                          the P4 ProviderCommandCatalogPort.getEntries('command'|'skill'); NO P9 agent/subagent
+                          seam → agents omitted when absent (read-only either way, NG1) — flagged NON-BLOCKING to
+                          the planner (escalate to PM only if a richer agent source is wanted). Every REQ-SS +
+                          NFR-SS chained to ≥1 SPEC-SS + ≥1 TEST-SS (no TBD). No new ADR needed (ADR-SS-001/002
+                          cover the load-bearing choices). HAND-OFF → /spec:tasks (planner): decompose SPEC-SS-*
+                          into T-SS-NNN. SEQUENCE the pure domain FIRST (SPEC-SS-001..005 — the additive fields +
+                          coerce* + classifier + codec + scope routing + nav), then the application
+                          (SPEC-SS-006..009 — view-model + env service), then the DOM tab (SPEC-SS-010..011, SPLIT
+                          into ~6-task chunks per the P8/P9 subagent-timeout lesson), then the coerce round-trip +
+                          MockBridge (SPEC-SS-012/014), with the subprocess env injection (SPEC-SS-013,
+                          coverage-excluded) as the FINAL manual-leg task. Capture the Claude-only baseline on
+                          `next` BEFORE implementation (SPEC-SS-028, pairs with NFR-SS-001/REQ-SS-093). REQ-SS-067
+                          contextLimits is 'could' — sequence last, must not gate the must-tier snippet round-trip.
 ```
