@@ -650,7 +650,7 @@ warnings only), `vitest run tests/application` **372/372 green** (incl. the P6
   regression 256/256, the structural/composable/approvals 17/17. No `obsidian`/`v-html`/
   `window.confirm` in `src/ui/**`; a single per-surface `ApprovalManager`. `styles.css`
   untouched.
-- **Commit (RED / green):** `75a8684f` / `<GREEN-029>`.
+- **Commit (RED / green):** `75a8684f` / `15fe6643`.
 - **Deviation:** **(1)** the spec (SPEC-AS-016) describes the surface registering the approval
   callback directly via `setApprovalCallback`; the actual P4 architecture routes approvals
   through the composer arbiter (`EnqueueRuntime` + `RespondToInlineBlockUseCase`). The
