@@ -349,6 +349,58 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   than porting claudian's 460-line `utils/env.ts` `getEnhancedPath` — the same
   no-secret, GUI-sparse-PATH augmentation, scoped to what the spawn needs.
 
+### T-MC-014 — RED scriptable Mock store + client + fake-ports members (🧪 qa)
+
+- **Spec/test:** TEST-MC-001/002/007/030..034/072/080; SPEC-MC-010;
+  REQ-MC-002/004/007/030..033/080; NFR-MC-006.
+- **Files:** `tests/infrastructure/mock/MockMcpConfigStore.test.ts` (new — the
+  `seedMcpServers` pre-populate, the `load`/`save`/`exists` codec round-trip +
+  default-pruning, the `setMcpStoreFailMode('load'|'save'|'none')` fault inject, the
+  never-throws + the `MockBridge.mcpConfigStore` accessor + stable-instance legs);
+  `tests/infrastructure/mock/MockMcpClient.test.ts` (new — `isAvailable→true`, the
+  `setClientMode` SPEC-MC-028 matrix success/partial/timeout/error/unavailable, the
+  per-server `scriptTestResult` override, the canned
+  `connect`/`listTools`/`callTool`/`disconnect`, the never-throws + the
+  `MockBridge.mcpClient` accessor legs); `tests/__fakes__/fake-ports.test.ts` (extended
+  — the `mcpConfigStore` seedable/round-trip + fail-mode legs + the `mcpClient`
+  mode-driven matrix leg).
+- **Outcome:** done — RED confirmed (the two Mock modules
+  `@/infrastructure/mock/MockMcpConfigStore` / `MockMcpClient` + the
+  `mcpConfigStore`/`mcpClient` fake-ports members do not yet exist; 3 test files failed
+  on the unresolved imports / undefined members).
+- **Commit:** `73b574b4`.
+
+### T-MC-015 — `MockMcpConfigStore` + `MockMcpClient` + `fake-ports` members (🔨 dev)
+
+- **Spec/req:** SPEC-MC-010; REQ-MC-002/004/030..033/080; NFR-MC-006.
+- **Files:**
+  - `src/infrastructure/mock/MockMcpConfigStore.ts` (new — the scriptable in-memory
+    store: holds the `.claude/mcp.json` document text in memory, `seedMcpServers`
+    serialises through the **pure `McpConfigCodec`**, `load`/`save` round-trip through
+    the same codec (so default-pruning + CLI-key preservation are exercised), `exists`
+    reflects whether a document is present, `setMcpStoreFailMode('load'|'save'|'none')`
+    forces `Result.err`; total — never throws).
+  - `src/infrastructure/mock/MockMcpClient.ts` (new — the scriptable client:
+    `isAvailable→true`; `scriptTestResult(serverName,result)` (per-server canned,
+    highest precedence); `setClientMode(...)` driving the SPEC-MC-028 `test` matrix
+    (success w/ tools / partial empty-tools / `'Connection timeout (10s)'` / friendly
+    error / unavailable); canned `connect`/`listTools`/`callTool`/`disconnect` keyed by
+    an opaque connection id; total — `test` never throws).
+  - `src/infrastructure/mock/MockBridge.ts` (the `mcpConfigStorePort`/`mcpClientPort`
+    members + the `get mcpConfigStore`/`get mcpClient` accessors appended, mirroring
+    `approvalRuleStore`).
+  - `tests/__fakes__/fake-ports.ts` (the `mcpConfigStore` + `mcpClient` members +
+    `FakePorts` types appended, wired off the same `MockBridge`).
+- **Outcome:** done — the prior RED (the Mock store seed/codec-round-trip/fail-inject +
+  the scriptable client matrix + the `fake-ports` members) now green (39/39 across the
+  three files); `MockBridge` 10/10 unchanged. `setMcpStoreFailMode`/`setClientMode`
+  drive the paths deterministically.
+- **Verify:** whole-project `vue-tsc -p tsconfig.lint.json` **0 errors**; whole-project
+  `npm run lint` **0 errors** (12 pre-existing warnings); `npx vitest run` 39/39 (the
+  three files) + 10/10 (`MockBridge`). No `node:*`/`obsidian` import in
+  `src/infrastructure/mock/**`; total — never throws.
+- **Deviation:** none.
+
 ## DOMAIN batch (T-MC-001..011) — close-out
 
 All eleven DOMAIN-batch tasks executed in strict TDD order (RED qa → green dev), one

@@ -21,6 +21,8 @@ import { MockAuxModel } from './MockAuxModel';
 import { MockSelectionSource, MockSelectionHighlight } from './MockSelectionPorts';
 import { MockToolbarCatalog } from './MockToolbarCatalog';
 import { MockApprovalRuleStore } from './MockApprovalRuleStore';
+import { MockMcpConfigStore } from './MockMcpConfigStore';
+import { MockMcpClient } from './MockMcpClient';
 import type { MentionDataProviderPort, ShellExecResult } from '@/domain/ports';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
@@ -76,6 +78,10 @@ export class MockBridge
 	private readonly toolbarCatalogPort = new MockToolbarCatalog();
 	/** Scriptable approval-rule store (SPEC-AS-008). Stateless — the bridge exposes the port. */
 	private readonly approvalRuleStorePort = new MockApprovalRuleStore();
+	/** Scriptable in-memory MCP config store (SPEC-MC-010). The bridge IS the port. */
+	private readonly mcpConfigStorePort = new MockMcpConfigStore();
+	/** Scriptable MCP client driving the SPEC-MC-028 matrix. The bridge IS the port. */
+	private readonly mcpClientPort = new MockMcpClient();
 
 	constructor(
 		initialFiles: Record<string, string> = {},
@@ -273,6 +279,23 @@ export class MockBridge
 	/** Scriptable `ApprovalRuleStorePort` (`seedRules`/`setFailMode`; never throws). */
 	get approvalRuleStore(): MockApprovalRuleStore {
 		return this.approvalRuleStorePort;
+	}
+
+	// ── MCP config store + client ports (SPEC-MC-010, ADR-MC-001/002) ───────────
+	// The scriptable in-memory config store (`seedMcpServers` + `setMcpStoreFailMode`,
+	// round-tripped through the same pure codec) + the scriptable client
+	// (`scriptTestResult` + `setClientMode` across the SPEC-MC-028 matrix) the
+	// McpServerManager + settings + selector tests drive. Stateless — the bridge IS
+	// the port; never throws.
+
+	/** Scriptable `McpConfigStorePort` (`seedMcpServers`/`setMcpStoreFailMode`). */
+	get mcpConfigStore(): MockMcpConfigStore {
+		return this.mcpConfigStorePort;
+	}
+
+	/** Scriptable `McpClientPort` (`scriptTestResult`/`setClientMode`; never throws). */
+	get mcpClient(): MockMcpClient {
+		return this.mcpClientPort;
 	}
 
 	showError(message: string, durationMs = 0): void {
