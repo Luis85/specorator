@@ -909,7 +909,7 @@ GATE (T-MC-038..043) batches are out of this batch's scope.
     pure fold returns a value, so a no-server turn stays byte-identical to P7; extracted
     an `isNonEmptyText` guard + rebuilt the options object incrementally to keep the
     method under the complexity-10 lint ceiling).
-- **Commit:** `T-MC-036-SHA`.
+- **Commit:** `18f0093e`.
 - **Outcome:** done (T-MC-035 now green).
 - **How the wiring composes:** the surface owns the per-surface manager + the view-model;
   the toolbar selector + the settings read the SAME `mcpVm`; the turn's
