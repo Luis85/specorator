@@ -478,4 +478,40 @@ updates, the inline approval/plan-mode controllers, `status-panel`/`permission-t
                  APPROVAL_RULE_STORE_PORT in AgentSidebarView + ui/main.ts; the panel/gate are already
                  mounted/wired in ChatSurface when the port is present). The toggle/panel/inline/gate
                  components + the composable + the approval engine are ready for the production provide.
+
+2026-05-26 (dev): STYLES + WIRE-IN batch T-AS-030..033 COMPLETE on feature/approvals-security.
+                 - T-AS-030 e7ff652c — minted the §4.14 (ASCII marker `section 4.14`, lightningcss-safe)
+                   approvals/security --sp-* slice in tokens.css: --sp-approvals-row-gap (var(--sp-space-2)),
+                   --sp-approvals-decision-allow (var(--sp-success)), --sp-approvals-decision-deny
+                   (var(--sp-status-error)), --sp-permission-mode-active (var(--sp-toggle-active)); applied
+                   --sp-permission-mode-active to PermissionToggle's active option + PLAN label; extended
+                   tokens.test.ts with the §4.14 presence + leak guard (TEST-AS-062). DEVIATION: the spec
+                   table's allow default var(--sp-status-success) is NOT an existing token → mapped to the
+                   real var(--sp-success) (deny uses var(--sp-status-error) exactly as specified).
+                 - T-AS-031 ea3c9dac RED — the standalone approvals-panel mount leg (tests/ui/main.ts.test.ts)
+                   + a structured-action-pattern gate leg (since DESCOPED — see escalation).
+                 - T-AS-032 <this commit> green — provide APPROVAL_RULE_STORE_PORT in AgentSidebarView
+                   (ObsidianBridge.approvalRuleStore, device-local) + src/ui/main.ts (MockBridge.
+                   approvalRuleStore); the panel mounts + the live gate runs. The standalone-mount suite
+                   (main.ts/main/main.rr) stays green (additive provide; absent → P4 degrade).
+                 - T-AS-033 — deterministic standalone smoke automated in tests/ui/main.ts.test.ts
+                   ("standalone approvals smoke", PASS); the interactive live-`npm run dev` flow is a
+                   DEFERRED human-run leg (agent does not start the dev server) — recorded in test-plan.md.
+
+                 ESCALATION / OPEN CLARIFICATION (CLAR-AS-006, action-pattern follow-up — handed to
+                 architect/pm): the brief asked T-AS-032 to thread the structured action pattern onto the
+                 request so the gate runs getActionPattern(toolName, input) instead of deriving from
+                 req.context. This CONFLICTS with SPEC-AS-003 ("ApprovalRequest/ApprovalOption byte-identical
+                 to P4") + its frozen QA test (Equals<keyof ApprovalRequest, 'requestId'|'tool'|'context'|
+                 'options'> in tests/domain/chat/inline/Approval.test.ts). ANY new optional key (raw `input`
+                 or precomputed `actionPattern`) on ApprovalRequest fails that assertion. SPEC-AS-016 is
+                 internally inconsistent: it says "derive via getActionPattern(req.tool, …)" yet "the
+                 ApprovalRequest carries tool + context" (no input source). Per Article I.3 + the Dev
+                 boundary (no QA-assertion edits, no silent spec-frozen-interface widening) I did NOT force
+                 it: the gate retains its req.context-based derivation (correct for runtimes that put the
+                 raw command/path/glob in context — Bash "git status" matches "git *", green TEST-AS-020).
+                 RESOLUTION NEEDED: either (a) SPEC-AS-003 permits an additive optional input?/actionPattern?
+                 on ApprovalRequest (+ QA updates the structural test), or (b) a side-channel that does not
+                 widen the request keyset. See test-plan.md "CLARIFICATION — T-AS-032 action-pattern
+                 follow-up". GATE tasks T-AS-034..040 are owned by the parent orchestrator.
 ```

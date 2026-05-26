@@ -98,3 +98,56 @@ Tracked per RED test task (qa-owned) naming TEST-AS-001..062 (incl. the M1/M2/M3
 manual legs). These ride the INFRA (T-AS-012..015), APPLICATION (T-AS-016..019),
 UI (T-AS-020..035), STYLES (T-AS-036), WIRE-IN (T-AS-037..039), and GATE (T-AS-040)
 batches — out of the DOMAIN batch scope.
+
+## WIRE-IN batch (T-AS-031..033) — provide + mount + standalone smoke
+
+| Leg | Status | Where |
+|---|---|---|
+| TEST-AS-022/040/043 (standalone mount) — `src/ui/main.ts` provides `APPROVAL_RULE_STORE_PORT` (MockBridge scriptable store); the per-surface `ApprovalManager` is built + `ApprovalsPanel` mounts (mode reflects `normal`, empty state) | covered (RED→green, T-AS-031→032) | `tests/ui/main.ts.test.ts` ("standalone approvals smoke") |
+| TEST-AS-020/021/022/025/040/043 (surface gate) — the live approval callback gates through `ApprovalManager` (auto-allow / prompt / cancel / panel rule list / no-port degrade) | covered (green, T-AS-028/029 + T-AS-032 provide) | `tests/ui/chat/ChatSurface.approvals.test.ts` |
+| TEST-AS-053 (wiring leg) — both entry points provide the store: `AgentSidebarView` → `ObsidianBridge.approvalRuleStore` (device-local), `src/ui/main.ts` → `MockBridge.approvalRuleStore` | covered (green, T-AS-032) | `src/plugin/AgentSidebarView.ts`, `src/ui/main.ts`; mount-tested via `tests/ui/main.ts.test.ts` |
+
+**TEST-AS-M1/M3 (manual, human-run final review)** remain scheduled by T-AS-012 (the
+real device-local store round-trip + the real Claude SDK mapping/`setMode`). T-AS-032
+adds nothing self-claimable here — the production provide of
+`ObsidianBridge.approvalRuleStore` in `AgentSidebarView` is exercised by the human
+Obsidian leg (TEST-AS-M1) at the review gate.
+
+### T-AS-033 — `npm run dev` standalone approvals smoke
+
+- **Deterministic leg (automated + PASS):** the `tests/ui/main.ts.test.ts` "standalone
+  approvals smoke" mounts `@/ui/main` against `MockBridge` and asserts the approvals
+  panel mounts + reflects the active mode + the empty state. The toggle / inline
+  four-option / seeded-rule auto-allow / fail-safe legs are covered by the component +
+  `ChatSurface.approvals` + `ApprovalManager` suites.
+- **DEFERRED human-run leg:** the interactive live-`npm run dev` server flow (select each
+  of the three toggle modes incl. PLAN; the panel reflects the seeded rules + remove; the
+  inline four-option row incl. `deny-always`; an "always allow" persists a rule the next
+  matching request auto-allows; a forced `setFailMode` falls back to the prompt) is a
+  deferred human-run leg — **the agent does not start the long-running dev server**.
+  Recorded here for the final epic-review gate (TEST-AS-022/040/043/054 dev leg,
+  pass/fail + date to be filled by the human run).
+
+### CLARIFICATION — T-AS-032 action-pattern follow-up (escalated, not implemented)
+
+The brief asked T-AS-032 to also thread the structured action pattern onto the request
+so the gate runs `getActionPattern(toolName, input)` rather than deriving the pattern
+from `req.context`. **This conflicts with a frozen spec invariant + its QA structural
+test:** SPEC-AS-003 states the `ApprovalRequest`/`ApprovalOption` interfaces are
+**byte-identical** to P4, and `tests/domain/chat/inline/Approval.test.ts` locks this with
+`Equals<keyof ApprovalRequest, 'requestId' | 'tool' | 'context' | 'options'>`. Any new
+(even optional) key on `ApprovalRequest` — whether the raw `input` or a precomputed
+`actionPattern` — fails that QA assertion. SPEC-AS-016 is itself internally inconsistent
+here: it says "derive the `ApprovalAction` via `getActionPattern(req.tool, …)`" while also
+stating "the P4 `ApprovalRequest` carries `tool` + `context`" (no `input`), so
+`getActionPattern`'s second argument has no source on the request.
+
+Per the constitution (Article I.3 — update the spec before the code) and the Dev role
+boundary (do not change QA assertions; do not silently widen a spec-frozen interface),
+this follow-up is **escalated to architect/pm** rather than forced. The gate's current
+`req.context`-based derivation (committed in the UI batch, T-AS-029) is retained — it is
+correct for runtimes that place the raw command/path/glob in `context` (e.g. Bash
+`"git status"` matches a `"git *"` rule, the green TEST-AS-020). The fix needs either (a)
+SPEC-AS-003 to permit an additive optional `input?`/`actionPattern?` on `ApprovalRequest`
+(and the QA structural test updated by QA), or (b) a side-channel that does not widen the
+request keyset. See `workflow-state.md` clarifications.

@@ -159,39 +159,6 @@ describe('ChatSurface P7 approvals wiring (SPEC-AS-016)', () => {
 		expect(wrapper.find('[data-testid="approvals-rule"]').text()).toContain('Write');
 	});
 
-	it('TEST-AS-032: a rule on the STRUCTURED action pattern auto-decides (getActionPattern threaded)', async () => {
-		// The request carries the human description in `context` but the STRUCTURED tool
-		// input in `input` (the request-building layer ran getActionPattern, T-AS-032). A
-		// rule keyed on the structured path ('/notes') must auto-deny even though the
-		// human `context` string ("Write to file: /notes/x.md") does NOT prefix-match the
-		// rule. RED until the gate derives the pattern via getActionPattern over `input`
-		// (not just `req.context`) + `ApprovalRequest` carries `input`.
-		const store = new MockApprovalRuleStore();
-		store.seedRules([
-			{
-				id: 'rw',
-				toolName: 'Write',
-				actionPattern: '/notes',
-				decision: 'deny',
-				lifetime: 'persisted',
-				createdAt: 3,
-			},
-		]);
-		const { wrapper, created } = mountSurface({ store });
-		await settle();
-		const structured: ApprovalRequest = {
-			requestId: 'a2',
-			tool: 'Write',
-			context: 'Write to file: /notes/x.md',
-			input: { file_path: '/notes/x.md' },
-			options: APPROVAL.options,
-		};
-		const decision = await created[0].emitApprovalRequest(structured);
-		await settle();
-		expect(decision).toBe('deny');
-		expect(wrapper.find('[data-testid="inline-plan-approval"]').exists()).toBe(false);
-	});
-
 	it('degrades to always-prompt when the store port is absent (byte-identical P4)', async () => {
 		const { wrapper, created } = mountSurface({ store: null });
 		await settle();

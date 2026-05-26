@@ -22,6 +22,7 @@ import {
 	SELECTION_SOURCE_PORT,
 	SELECTION_HIGHLIGHT_PORT,
 	TOOLBAR_CATALOG_PORT,
+	APPROVAL_RULE_STORE_PORT,
 } from '@/infrastructure/bridge/ports';
 import {
 	CHAT_RUNTIME_FACTORY,
@@ -159,6 +160,13 @@ export class AgentSidebarView extends ItemView {
 			// already reports `getToolbarCapabilities()` (read via `tabs.activeRuntime()`),
 			// so the strip renders the backed widgets + the honest capability-gated seams.
 			app.provide(TOOLBAR_CATALOG_PORT, bridge.toolbarCatalog);
+			// P7 (SPEC-AS-019): the device-local approval-rule store
+			// (`ObsidianBridge.approvalRuleStore` → `saveLocalStorage('specorator:approval-rules')`,
+			// SPEC-AS-007). The surface constructs one per-surface `ApprovalManager` over it and
+			// gates the active runtime's approval callback through it (mode-gate → match → auto OR
+			// the unchanged P4 prompt); the per-tab Claude runtime maps the live mode to the SDK +
+			// emits the plan-exit `setMode` (T-AS-012). Never `data.json`/a vault file.
+			app.provide(APPROVAL_RULE_STORE_PORT, bridge.approvalRuleStore);
 			app.mount(host);
 			this.vueApp = app;
 		}

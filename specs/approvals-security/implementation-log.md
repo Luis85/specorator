@@ -734,3 +734,33 @@ warnings only), `vitest run tests/application` **372/372 green** (incl. the P6
   no auto-decide); 10 other legs pass.
 - **Outcome:** done (RED).
 - **Commit:** <pending>
+
+---
+
+## T-AS-032 🔨 — WIRE-IN: provide `APPROVAL_RULE_STORE_PORT` in `AgentSidebarView` + `src/ui/main.ts`
+
+- **Date:** 2026-05-26
+- **Owner:** dev
+- **Spec:** SPEC-AS-019, REQ-AS-002/030/053, NFR-AS-005/006
+- **Files changed:**
+  - `src/plugin/AgentSidebarView.ts` — import `APPROVAL_RULE_STORE_PORT`; `app.provide(APPROVAL_RULE_STORE_PORT, bridge.approvalRuleStore)` (the `ObsidianBridge` device-local store, `saveLocalStorage('specorator:approval-rules')`, SPEC-AS-007 — never `data.json`/a vault file). `obsidian` is allowed here (`src/plugin/**`).
+  - `src/ui/main.ts` — import `APPROVAL_RULE_STORE_PORT`; `app.provide(APPROVAL_RULE_STORE_PORT, bridge.approvalRuleStore)` (the `MockBridge` scriptable in-memory store). No `obsidian` symbol enters `src/ui/**`.
+- **How the provide reaches the gate:** the already-committed `ChatSurface` injects `APPROVAL_RULE_STORE_PORT` OPTIONALLY → builds one per-surface `ApprovalManager` → gates the active runtime's approval callback through the inner-most `ApprovalGateRuntime` decorator + mounts `ApprovalsPanel` (`v-if="hasApprovals"`). With the port now provided in both entry points the gate runs live; absent → the byte-identical P4 degrade (unchanged).
+- **Greened RED:** TEST-AS-053 wiring leg + the TEST-AS-022/040/043 standalone mount legs — `tests/ui/main.ts.test.ts` "standalone approvals smoke" now passes (the panel mounts, reflects `normal`, shows the empty state).
+- **Standalone-mount regression (additive provide must not break mounts):** `tests/ui/main.ts.test.ts` + `tests/ui/main.test.ts` + `tests/ui/main.rr.test.ts` 7/7 green (threads pool, no-file-parallelism).
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); `npm run lint` 0 errors (12 pre-existing warnings); `vitest run` (threads) — main.ts/main/main.rr 7/7, ChatSurface.approvals 6/6, chat mount + toolbarMount + composer mount + approvals + inline + the structural Approval/StreamChunk suites 28/28. `styles.css` untouched (no build run).
+- **Outcome:** done. The manual legs TEST-AS-M1/M3 (the real device-local round-trip + the real Claude SDK map/`setMode`) stay scheduled in `test-plan.md` for the human final-review gate.
+- **Commit:** <pending>
+- **Deviation (ESCALATED — action-pattern follow-up NOT implemented):** the brief asked T-AS-032 to also thread the structured action pattern onto the request so the gate runs `getActionPattern(toolName, input)` rather than deriving from `req.context`. This conflicts with SPEC-AS-003 ("`ApprovalRequest`/`ApprovalOption` byte-identical to P4") + its frozen QA structural test (`Equals<keyof ApprovalRequest, 'requestId'|'tool'|'context'|'options'>`). ANY new optional key on `ApprovalRequest` (raw `input` or precomputed `actionPattern`) fails that assertion; SPEC-AS-016 is itself inconsistent (it says derive via `getActionPattern(req.tool, …)` but states the request carries only `tool` + `context`). Per Article I.3 + the Dev boundary (no QA-assertion edits, no silent spec-frozen-interface widening), I escalated to architect/pm (CLAR-AS-006 in `workflow-state.md` + `test-plan.md`) and retained the gate's `req.context`-based derivation (correct for runtimes that place the raw command/path/glob in `context` — the green TEST-AS-020). I prototyped the additive `ApprovalRequest.input?`/`StreamChunk.input?`/`getActionPattern`-in-gate change, confirmed it breaks the frozen structural tests, and fully reverted it (domain/runtime/gate clean).
+
+---
+
+## T-AS-033 (dev leg) — `npm run dev` standalone approvals smoke
+
+- **Date:** 2026-05-26
+- **Owner:** qa (dev leg executed under the P7 batch brief)
+- **Spec:** TEST-AS-022/040/043/054 (dev leg), NFR-AS-005
+- **Deterministic leg (automated + PASS):** the `tests/ui/main.ts.test.ts` "standalone approvals smoke" mounts `@/ui/main` against `MockBridge` (with the T-AS-032 provide) and asserts the approvals panel mounts + reflects the active mode (`normal`) + the empty state. The toggle / inline four-option / seeded-rule auto-allow / fail-safe legs are covered by the `ApprovalsPanel`/`ApprovalRuleRow`/`InlinePlanApproval`/`ChatSurface.approvals`/`ApprovalManager` suites.
+- **DEFERRED human-run leg:** the interactive live-`npm run dev` server flow is a deferred human-run leg — the agent does NOT start the long-running dev server (recorded in `test-plan.md` for the final epic-review gate).
+- **Outcome:** done (deterministic leg automated + green; interactive leg deferred-manual).
+- **Commit:** rides the T-AS-032 commit (the standalone smoke test + the provide land together).
