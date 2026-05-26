@@ -250,3 +250,35 @@ WIRE-IN/GATE batches ride their own subagents.
   binding `TabDepsBinding.createRuntime` stays `() => ChatRuntimePort` (the
   ChatSurface adapter bridges the widened seam to it) — the resolved-provider
   routing is finalised at the wire-in batch (T-PV-031), out of this DOMAIN batch.
+
+---
+
+## INFRA batch (T-PV-011..018)
+
+### T-PV-011/012 — the shared descriptor-table `ProviderRegistry` impl (🧪 qa → 🔨 dev)
+
+- **Spec/test:** TEST-PV-001/002/003/013/020/060/061; SPEC-PV-008/029;
+  REQ-PV-001/002/003/013/020..023/060/061; NFR-PV-014.
+- **RED (T-PV-011):** `tests/infrastructure/providers/ProviderRegistry.test.ts`
+  (new) — registered/enabled lists (claude-only default + blank-tab-ordered
+  10/15/20), the descriptor/display-name/capability reads, the active/model
+  resolve delegation, the never-throws assertion, and an AST/source guard that the
+  reader has no `switch (provider…)` / `=== 'claude'|'codex'|'opencode'` branch.
+  RED watched: `ProviderRegistry` did not resolve (transform error). 
+- **GREEN (T-PV-012):** `src/infrastructure/providers/ProviderRegistry.ts` (new,
+  ~70 lines) — a single `ProviderRegistry implements ProviderRegistryPort` over the
+  frozen `PROVIDER_DESCRIPTORS` + the pure `resolveProvider` helpers. A
+  `ReadonlyMap<ProviderId, ProviderDescriptor>` backs `getDescriptor`/
+  `getDisplayNameKey`/`getCapabilities` (data-indexed, no id branch); the list +
+  active + model reads delegate to the pure SPEC-PV-003 helpers. Coverage-included
+  pure data — NOT under `obsidian/**`. No `obsidian`/`node:*`/Vue.
+- **How the data-driven routing works:** the registry never branches on the id —
+  reads index the frozen table by id through the map (total, closed union) and the
+  resolve methods delegate to the pure helpers, which themselves filter/sort/`find`
+  over the descriptor predicates. No `switch (providerId)` (NFR-PV-014).
+- **Outcome:** done. 11/11 pass; vue-tsc 0; whole-project lint 0 errors (16
+  pre-existing warnings).
+- **Deviation:** the doc comment was reworded from the literal "No `switch
+  (providerId)`" to "capability-gated, never branched on the provider id" so the
+  source-guard test (which greps the file text) does not match the comment itself.
+- **Commit:** see below.
