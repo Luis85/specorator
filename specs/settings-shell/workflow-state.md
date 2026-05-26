@@ -4,7 +4,7 @@ area: SS
 current_stage: implementation
 status: active
 last_updated: 2026-05-26
-last_agent: dev (/spec:implement — APPLICATION batch T-SS-014..019)
+last_agent: dev (/spec:implement — INFRA batch T-SS-020..024)
 epic: claudian-reboot
 phase: P10
 integration_branch: next
@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-SS-001; Parts A UX / B UI / C Architecture; ADR-SS-001 + ADR-SS-002 accepted + filed; CLAR-SS-001/004 ratified by ADR-SS-001, CLAR-SS-002 by ADR-SS-002)
   spec.md: complete (SPEC-SS-001; 28 spec items SPEC-SS-001..028 across 6 layer groups; EC-SS-1..16; TEST-SS-001..095 + M1..M4; every REQ-SS chained to ≥1 SPEC + ≥1 TEST)
   tasks.md: complete (TASKS-SS-001; 35 tasks T-SS-001..035 across 6 batches + baseline; TDD-ordered RED-before-green; every SPEC-SS-001..028 covered; manual legs TEST-SS-M1..M4; NO guard-relax / NO new InjectionKey / NO new obsidian file)
-  implementation-log.md: in-progress (DOMAIN T-SS-001..013 + APPLICATION T-SS-014..019 done; INFRA-PLUGIN/STYLES/WIRE-IN/GATE batches T-SS-020..035 remain)
+  implementation-log.md: in-progress (DOMAIN T-SS-001..013 + APPLICATION T-SS-014..019 + INFRA T-SS-020..024 done + committed; PLUGIN T-SS-025..026 / STYLES T-SS-027..028 / WIRE-IN T-SS-029..030 / GATE T-SS-031..035 + manual legs TEST-SS-M1..M4 remain)
   test-plan.md: in-progress (TESTPLAN-SS-001; guard-verify note + Claude-only additivity baseline + DOMAIN automated status + manual legs TEST-SS-M1..M4)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-SS-001 + ADR-SS-001/002 accepted) |
 | 5. Specification | `spec.md` | complete (SPEC-SS-001..028; EC-SS-1..16; TEST-SS-001..095 + M1..M4) |
 | 6. Tasks | `tasks.md` | complete (TASKS-SS-001; 35 tasks T-SS-001..035) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-SS-001..013 + APPLICATION T-SS-014..019 complete + committed; INFRA/PLUGIN/STYLES/WIRE-IN/GATE T-SS-020..035 remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-SS-001..013 + APPLICATION T-SS-014..019 + INFRA T-SS-020..024 complete + committed; PLUGIN T-SS-025..026 / STYLES T-SS-027..028 / WIRE-IN T-SS-029..030 / GATE T-SS-031..035 remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -318,4 +318,33 @@ settings, model picker, agent/skill/subagent + slash-command settings, env-snipp
                           SecretStore + Mock runtime env-capture; wire resolveEnvScope/mergeScopeEnvs into the P9
                           runtimes via T-SS-023; the no-secret/correct-store/Result-boundary guards) — owner
                           dev/qa; then PLUGIN T-SS-025..026 (DOM tab + modals), STYLES, WIRE-IN, GATE.
+2026-05-26 (dev): /spec:implement — INFRA batch T-SS-020..024 COMPLETE on feature/settings-shell.
+                          Per-task RED-before-green, one commit per task. SHAs: T-SS-020 RED 877b58be ·
+                          T-SS-021 green 03deb4bd · T-SS-022 merge-leg 079ac3b5 · T-SS-023 green efb38745 ·
+                          T-SS-024 guards 8a2daecd. VERIFY each task: vue-tsc 0 + WHOLE-project npm run lint 0
+                          errors (16 pre-existing warnings — none mine) + targeted vitest green. (1) _coerceSettings
+                          six-field round-trip: a shared PURE coerceOptionalSettingsFields(raw) helper (PluginSettings.ts)
+                          coerces the six OPTIONAL fields each present-only-when-present; BOTH write-path twins
+                          (ObsidianBridge._coerceSettings + core-settings.validateSettings) spread it after homeFsConsent
+                          — byte-identical-absent P9 (the exact homeFsConsent pattern), garbage->absent, no migration.
+                          (2) Mock/LS SettingsPort + SecretStore env.<scope>.<KEY> slots round-trip UNCHANGED (plain
+                          spread + generic key/value map — SPEC-SS-014 "unchanged surface" confirmed). (3) The Mock runtime
+                          env-capture = MockProviderEnvCapture (in MockProviderRuntime.ts) records the merged subprocess env
+                          via the application mergeScopeEnvs. (4) env->subprocess merge wired into the 3 P9 runtimes via a
+                          shared coverage-excluded obsidian/buildScopeEnv.ts: ClaudeCliChatRuntime/CodexRuntime/OpencodeRuntime
+                          each gain an optional settings?: SettingsPort dep + call buildScopeEnv at the spawn boundary;
+                          ObsidianProviderRuntimeRegistry threads deps.settings; ObsidianBridge wires settings: this. The
+                          env-scope secret is read ONLY at the spawn boundary (secretRef -> getSecret), never logged/DTO/UI
+                          (NFR-SS-002); optional deps -> P9 env byte-identical when absent. (5) the no-secret-leak +
+                          correct-store + Result-boundary guards (secretLeak.test.ts + resultBoundary.test.ts) pass-as-guard.
+                          DEVIATIONS: (a) extracted coerceOptionalSettingsFields to dodge the complexity lint cap (12/15 vs
+                          10) in both write-path twins (behaviour identical); (b) buildScopeEnv is one shared obsidian/**
+                          helper for the 3 runtimes (delegates to the unit-tested pure mergeScopeEnvs); (c) the Claude CLI
+                          runtime (reads no provider key) still gets settings/secretStore so a user's OWN applied env-scope
+                          vars reach the spawned CLI (REQ-SS-065). NEXT: PLUGIN T-SS-025..026 (the Setting-API DOM tab +
+                          the env-snippet edit/delete modals, coverage-excluded -> manual leg TEST-SS-M1), then STYLES
+                          T-SS-027..028, WIRE-IN T-SS-029..030 (register the expanded tab in main.ts + provide the
+                          EnvSnippetService), GATE T-SS-031..035. MANUAL legs accumulating for the epic gate: TEST-SS-M2
+                          (the real obsidian/** subprocess env injection — an applied env scope reaches the active
+                          provider's real subprocess at a turn, secretRef resolved via getSecret at the infra boundary).
 ```

@@ -358,3 +358,48 @@ All under `src/application/settings/**` — pure / port-driven, no
   runtime wiring (T-SS-023, outside this batch) imports and calls it at the boundary.
   This keeps the coverage on the composition while the real subprocess injection stays
   the coverage-excluded manual leg (TEST-SS-M2).
+
+## INFRA batch (T-SS-020..024)
+
+### T-SS-020 — RED _coerceSettings six-field round-trip + Mock/LS env-slot SecretStore + Mock runtime env-capture (qa)
+
+- **Spec/test:** SPEC-SS-012/014/019; TEST-SS-065/066/091/092; REQ-SS-015/065/066/091/092; NFR-SS-001/002/004/007.
+- **Files:** `tests/infrastructure/mock/MockBridge.settings.test.ts` (new — the six additive fields round-trip a save->getSettings on MockBridge; the `env.<scope>.<KEY>` slot round-trips through the generic key/value SecretStore + the availability switch; byte-identical-absent default), `tests/infrastructure/mock/MockRuntimeEnvCapture.test.ts` (new — the `MockProviderEnvCapture` merged-env capture hook: inline as-is + secretRef resolved at the boundary; precedence; store-fail -> err + nothing recorded), `tests/infrastructure/obsidian/ObsidianBridge.settings.test.ts` (extended — the `_coerceSettings` six-field save->fresh-bridge reload round-trip; garbage -> absent; P9-shaped byte-identical), `tests/__fakes__/fake-ports.test.ts` (extended — the each-setting-in-its-correct-store routing leg).
+- **Outcome:** done (RED) — the env-capture import + the `_coerceSettings` six-field wiring failed as expected; the Mock SettingsPort/SecretStore env-slot legs passed pre-impl (the Mock SettingsPort is a plain spread + the SecretStore is a generic key/value map, so the six OPTIONAL fields + the `env.<scope>.<KEY>` slot round-trip with no Mock change — confirming SPEC-SS-014 "unchanged surface").
+- **Commit:** `877b58be`.
+- **Deviation:** none.
+
+### T-SS-021 — _coerceSettings six-field round-trip + Mock runtime env-capture (dev)
+
+- **Spec/req:** SPEC-SS-012/014; REQ-SS-015/065/066/091/092; NFR-SS-001/002/004/007.
+- **Files:** `src/domain/settings/PluginSettings.ts` (added the shared pure `coerceOptionalSettingsFields(raw)` assembly — coerces the six OPTIONAL fields, each present only when present), `src/infrastructure/obsidian/ObsidianBridge.ts` (`_coerceSettings` spreads `...coerceOptionalSettingsFields(obj)` after `homeFsConsent`), `src/core/core-settings.ts` (the write-path twin `validateSettings` spreads `...coerceOptionalSettingsFields(r)`), `src/infrastructure/mock/MockProviderRuntime.ts` (added the `MockProviderEnvCapture` class — `captureEnv(base, shared, provider, secretStore)` via the application `mergeScopeEnvs`, records `lastEnv` on success only), `tests/domain/settings/coerceSettings.test.ts` (extended — the `coerceOptionalSettingsFields` unit leg).
+- **Outcome:** done — all target files green. The six fields round-trip a save->fresh-bridge reload; each OPTIONAL member present only when present (the exact homeFsConsent pattern); absent/garbage -> absent (no migration, NG8); a P9-shaped blob stays byte-identical. `MockProviderEnvCapture` records the merged subprocess env (inline as-is + secretRef resolved at the boundary, never logged).
+- **Verify:** vue-tsc 0 + whole-project lint 0 errors + targeted vitest green.
+- **Commit:** `03deb4bd`.
+- **Deviation:** extracted the six conditional spreads into the shared pure `coerceOptionalSettingsFields` helper (PluginSettings.ts) rather than inlining them twice — inlining tripped the `complexity` lint cap (12/15 vs 10) in both write-path twins. The helper dedupes the assembly + keeps each method under budget; behaviour is identical (each field present only when present).
+
+### T-SS-022 — RED env->subprocess merge leg over MockProviderEnvCapture (qa)
+
+- **Spec/test:** TEST-SS-065 (merge leg); SPEC-SS-013; REQ-SS-065; NFR-SS-002; EC-SS-15.
+- **Files:** `tests/infrastructure/mock/MockProviderRuntime.envMerge.test.ts` (new — the runtime turn-start composition `{ ...process.env, ...resolve(envScopes.shared), ...resolve(envScopes[provider:<id>]) }` over a settings-shaped envScopes record + the in-memory SecretStore: the precedence order, the inline-as-is + secretRef-resolved-at-boundary merge, the no-leak of the resolved value into the settings record).
+- **Outcome:** done — pass-as-guard for the established merge composition (`MockProviderEnvCapture` landed in T-SS-021; this documents the runtime-perspective composition). The real subprocess injection is the coverage-excluded manual leg TEST-SS-M2.
+- **Commit:** `079ac3b5`.
+- **Deviation:** the merge composition was already proven by `MockProviderEnvCapture` (T-SS-021), so this leg passes immediately (a guard, not a fresh RED) — recorded as the automated baseline for TEST-SS-065. A dot-notation/no-unnecessary-condition lint fix to this file rode the T-SS-023 commit (the gate must pass whole-project).
+
+### T-SS-023 — env->subprocess merge wired into the P9 runtimes (dev, coverage-excluded obsidian/**)
+
+- **Spec/req:** SPEC-SS-013; REQ-SS-065; NFR-SS-002; EC-SS-15.
+- **Files:** `src/infrastructure/obsidian/buildScopeEnv.ts` (new, coverage-excluded — reads `envScopes` off the SettingsPort + merges `{ ...base, ...resolve(shared), ...resolve(provider:<id>) }` over the runtime spawn env via the application `mergeScopeEnvs`; total — a settings/secret read failure degrades to the unmodified base, never throws), `src/infrastructure/obsidian/CodexRuntime.ts` + `OpencodeRuntime.ts` (each gains an optional `settings?: SettingsPort` dep + calls `buildScopeEnv` at the spawn boundary over the bare key env), `src/infrastructure/obsidian/ClaudeCliChatRuntime.ts` (constructor gains optional `settings?`/`secretStore?` positional args; `_buildEnv` is now async + merges the scope env over the PATH-augmented base when both deps are present), `src/infrastructure/obsidian/ObsidianProviderRuntimeRegistry.ts` (the deps gain optional `settings?`; threaded to each builder), `src/infrastructure/obsidian/ObsidianBridge.ts` (the runtime-registry getter wires `settings: this`), `tests/infrastructure/mock/MockProviderRuntime.envMerge.test.ts` (lint fix).
+- **Outcome:** done — TEST-SS-065 (the auto merge leg) green via `MockProviderEnvCapture`; 333 passed across infra/obsidian + mock + application settings. The env-scope secret is read ONLY at the spawn boundary (secretRef -> `getSecret`), never logged/returned to the UI/DTO. The optional deps keep the P9 env byte-identical when absent (NFR-SS-001). The real subprocess injection (the three `obsidian/**` runtimes) is coverage-excluded -> the manual leg TEST-SS-M2.
+- **Verify:** vue-tsc 0 + whole-project lint 0 errors + 333 passed (infra/mock/app settings); no new `obsidian/**` banned-glob file (extends the P9 runtimes); no `shell:true`/eval — a bounded explicit env merge.
+- **Commit:** `efb38745`.
+- **Deviation:** added a shared `buildScopeEnv` helper under `obsidian/**` (rather than duplicating the read-settings + merge logic in each runtime) so the three runtimes share one coverage-excluded boundary that delegates to the unit-tested pure `mergeScopeEnvs`. The Claude CLI runtime — which reads no provider key (NFR-CC-006) — still receives the optional `settings`/`secretStore` so a user's OWN applied env-scope vars (incl. user-marked secretRefs) reach the spawned CLI (REQ-SS-065); absent deps leave the P1 PATH-augmented env unchanged.
+
+### T-SS-024 — RED no-secret-leak + correct-store + Result-boundary guards (qa)
+
+- **Spec/test:** SPEC-SS-019/022/026; TEST-SS-014/090/091/094; REQ-SS-014/090/091/094; NFR-SS-002/004/006.
+- **Files:** `tests/application/settings/secretLeak.test.ts` (new — the zero-secret-bytes counter-metric across the provider-key + snippet-create + applyScopeText flows; the correct-store routing (secrets -> SecretStore `provider.<id>.apiKey` + `env.<scope>.<KEY>`; device prefs -> Settings); the masked-readScope no-echo), `tests/application/settings/resultBoundary.test.ts` (new — a failed secret write -> Result.err with no secret substring + no throw across a port; the service stays operable after a failure; every method returns a Result on a degraded store).
+- **Outcome:** done — 10 pass-as-guard for the established invariants (the EnvSnippetService secret-split + the coerce* round-trip + the `tryAsync`+`Result` discipline); recorded as the gate baseline.
+- **Verify:** vue-tsc 0 + whole-project lint 0 errors + 10 passed.
+- **Commit:** `8a2daecd`.
+- **Deviation:** none — the guards hold pass-as-guard (the invariants were established by T-SS-019/021); they are the recorded baseline the GATE batch (T-SS-031) re-confirms.
