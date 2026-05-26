@@ -136,3 +136,22 @@ export function coerceEnabledProviders(raw: unknown): readonly ProviderId[] {
 	}
 	return [...seen]
 }
+
+/**
+ * Coerce a raw `homeFsConsent` device-local value (SPEC-PV-014/024, REQ-PV-082): keep
+ * only `boolean`-valued entries; a non-object / no valid entry → `undefined` (the
+ * OPTIONAL field stays absent so the P0–P8 exact-key contract stays byte-identical,
+ * NFR-PV-001). The keys are the opaque `provider.homeFsConsent.<id>` strings (never a
+ * secret). Load-or-default, never throws. Pure/total. Returns the round-trippable
+ * record so a recorded one-time consent survives a production reload (the
+ * `ProviderConsentGate` never re-prompts, EC-PV-6).
+ */
+export function coerceHomeFsConsent(
+	raw: unknown,
+): Readonly<Record<string, boolean>> | undefined {
+	if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+	const entries = Object.entries(raw as Record<string, unknown>).filter(
+		(entry): entry is [string, boolean] => typeof entry[1] === 'boolean',
+	)
+	return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}

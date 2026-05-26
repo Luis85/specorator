@@ -346,3 +346,53 @@ describe('standalone MCP smoke (TEST-MC-040/043/044/050/052/082 dev leg)', () =>
 		expect($('[data-testid="toolbar-mcp"]')).toBeNull();
 	}, 15000);
 });
+
+/**
+ * T-PV-036 — standalone providers smoke (TEST-PV-006/062/072/090/100 dev leg,
+ * deterministic).
+ *
+ * The `npm run dev` entry (`src/ui/main.ts`) provides `PROVIDER_REGISTRY_PORT` +
+ * `SECRET_STORE_PORT` + `HOME_FS_PORT` + the widened `CHAT_RUNTIME_FACTORY` routed
+ * through the Mock runtime registry + the browser-safe consent stand-in (T-PV-035).
+ * This deterministic leg proves the P9 wiring runs against `MockBridge` without an
+ * inject-or-throw and stays byte-identical P8 on the default single-Claude config: the
+ * surface + composer mount, and because `enabledProviders` defaults to `[]` (only
+ * Claude) the `ProviderChooser` stays HIDDEN (the ≤ 1-enabled gate, EC-PV-1) — exactly
+ * the P8 no-chooser state. The chooser-list / provider-switch / secret-field /
+ * capability-gated-widgets flows depend on seeding `enabledProviders` against the live
+ * dev server, which pairs with the human run (recorded in `test-plan.md`, T-PV-036
+ * deferred-manual leg). Queried by `data-testid` only (ADR-009). SPEC-PV-020; NFR-PV-006.
+ */
+describe('standalone providers smoke (TEST-PV-006/062/072/090/100 dev leg)', () => {
+	beforeEach(() => {
+		vi.resetModules();
+		document.body.replaceChildren();
+		const el = document.createElement('div');
+		el.id = 'app';
+		document.body.appendChild(el);
+	});
+
+	it('mounts the provider-wired surface against MockBridge (ports provided, no chooser on the single-Claude default)', async () => {
+		await import('@/ui/main');
+		await settle();
+
+		// The provider-wired surface + composer mount (the new PROVIDER_REGISTRY_PORT /
+		// SECRET_STORE_PORT / HOME_FS_PORT / widened-factory / consent injects run without
+		// an inject-or-throw — the byte-identical Claude-reuse demo runtime still streams).
+		expect($('[data-testid="chat-surface"]')).not.toBeNull();
+		expect($('[data-testid="composer-textarea"]')).not.toBeNull();
+
+		// enabledProviders defaults to [] → only Claude → the chooser stays HIDDEN
+		// (EC-PV-1), exactly the P8 no-chooser state (NFR-PV-001).
+		expect($('[data-testid="provider-chooser"]')).toBeNull();
+
+		// The surface still streams on the byte-identical Claude reuse runtime.
+		const textarea = $('[data-testid="composer-textarea"]') as HTMLTextAreaElement;
+		textarea.value = 'Hello Claude';
+		textarea.dispatchEvent(new Event('input', { bubbles: true }));
+		await settle();
+		($('[data-testid="composer-send"]') as HTMLButtonElement).click();
+		await settle();
+		expect($('[data-testid="message-list"]')).not.toBeNull();
+	}, 15000);
+});

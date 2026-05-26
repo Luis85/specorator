@@ -7,6 +7,12 @@
  * P3 (SPEC-TS-005, T-TS-006): the settings shape grew additively with
  * `sessionsFolder`/`maxTabs`; the round-trip + load-or-default expectations carry
  * the defaulted fields, and the corrupt/absent paths fall back to DEFAULT_SETTINGS.
+ *
+ * P9 (SPEC-PV-014/024, T-PV-036): the OPTIONAL device-local `homeFsConsent` record
+ * MUST survive a `_coerceSettings` round-trip so a recorded one-time beyond-vault
+ * consent persists across a production reload (the gate never re-prompts, EC-PV-6,
+ * REQ-PV-082). The exact-key contract stays byte-identical P0–P8 when no consent was
+ * recorded (the field is absent, not `undefined`, NFR-PV-001).
  */
 import { describe, it, expect } from 'vitest';
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge';
@@ -58,5 +64,38 @@ describe('ObsidianBridge settings — device-local store (TEST-PSR-024)', () => 
 		store.set('specorator:settings', 'not-json{');
 		const bridge = new ObsidianBridge(app);
 		expect(await bridge.getSettings()).toEqual(DEFAULT_SETTINGS);
+	});
+
+	it('T-PV-036: a recorded homeFsConsent survives the save→reload round-trip (REQ-PV-082, EC-PV-6)', async () => {
+		const { app, store } = makeApp();
+		const bridge = new ObsidianBridge(app);
+
+		const saved = {
+			...DEFAULT_SETTINGS,
+			enabledProviders: ['codex'] as const,
+			activeProvider: 'codex' as const,
+			// The one-time beyond-vault consent record (provider.homeFsConsent.<id> keys).
+			homeFsConsent: { 'provider.homeFsConsent.codex': true },
+		};
+		await bridge.saveSettings(saved);
+
+		// A fresh bridge reading the persisted blob (simulating a production reload) MUST
+		// still carry the consent record — _coerceSettings must NOT drop it.
+		const reloaded = new ObsidianBridge(app);
+		const after = await reloaded.getSettings();
+		expect(after.homeFsConsent).toEqual({ 'provider.homeFsConsent.codex': true });
+		// Sanity: the blob round-trips verbatim through saveSettings + the coercion.
+		expect(JSON.parse(store.get('specorator:settings')!).homeFsConsent).toEqual(
+			saved.homeFsConsent,
+		);
+	});
+
+	it('T-PV-036: no recorded consent stays byte-identical P8 (homeFsConsent absent, not undefined)', async () => {
+		const { app } = makeApp();
+		const bridge = new ObsidianBridge(app);
+		const settings = await bridge.getSettings();
+		// The OPTIONAL field is absent (the exact-key contract holds, NFR-PV-001).
+		expect('homeFsConsent' in settings).toBe(false);
+		expect(settings).toEqual(DEFAULT_SETTINGS);
 	});
 });

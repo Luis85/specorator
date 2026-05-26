@@ -866,4 +866,63 @@ WIRE-IN/GATE batches ride their own subagents.
   selector in the demo, breaking NFR-PV-001). The Mock-registry tests stay green (they
   assert only claude `.ok` + a drainable query). The byte-identical claude-reuse mirrors
   the Obsidian registry reusing `ClaudeCliChatRuntime`.
+- **Commit (green):** `e343ce33`.
+
+## T-PV-036 — `_coerceSettings` homeFsConsent round-trip fix + standalone smoke (🔨/🧪 dev leg)
+
+- **Spec/req:** SPEC-PV-014/024, REQ-PV-082, NFR-PV-001/006; TEST-PV-006/062/072/090/100
+  (dev legs), EC-PV-6.
+- **CRITICAL carry-forward fix:** the APPLICATION batch added the OPTIONAL
+  `homeFsConsent?` to `PluginSettings` + `homeFsConsentKey(id)`, but BOTH coercion
+  sites (`ObsidianBridge._coerceSettings` AND `core-settings.ts` `validateSettings`)
+  rebuilt an explicit key list that DROPPED `homeFsConsent` — so a recorded one-time
+  beyond-vault consent would NOT survive a production reload (the gate would re-prompt
+  every reload). Fixed both sites to load-or-default the field.
+- **Files:**
+  - `src/domain/settings/PluginSettings.ts` — new pure `coerceHomeFsConsent(raw)`
+    helper (keeps only `boolean`-valued entries; a non-object / no entry → `undefined`
+    so the OPTIONAL field stays absent and the exact-key contract stays byte-identical
+    P0–P8, NFR-PV-001; never a secret).
+  - `src/infrastructure/obsidian/ObsidianBridge.ts` — `_coerceSettings` now
+    load-or-defaults `homeFsConsent` via the helper + conditionally spreads it (absent
+    when no consent recorded).
+  - `src/core/core-settings.ts` — `validateSettings` likewise round-trips
+    `homeFsConsent` on save (the write-path twin).
+  - `tests/infrastructure/obsidian/ObsidianBridge.settings.test.ts` — two new legs: a
+    recorded `homeFsConsent` survives a save→fresh-bridge-reload round-trip (REQ-PV-082,
+    EC-PV-6); no recorded consent stays byte-identical P8 (the field absent, not
+    `undefined`, NFR-PV-001).
+  - `tests/ui/main.ts.test.ts` — a standalone providers smoke (dev leg): the
+    provider-wired surface mounts against `MockBridge` (the three ports + widened
+    factory + consent stand-in, no inject-or-throw), the chooser stays HIDDEN on the
+    single-Claude default (EC-PV-1), the byte-identical Claude-reuse runtime still
+    streams.
+  - `tests/ui/chat/composer/mount.ts.test.ts` — HARNESS update (runnable, not an
+    assertion change): the inline-ask mount test spied on the OLD `bridge.createChatRuntime`
+    seam; the P9 wire-in routes the per-tab factory through
+    `bridge.providerRuntimeRegistry.createChatRuntime`, so the spy moves to that seam
+    (the inline-ask assertion is unchanged). This was the only test broken by the
+    factory-routing change.
+  - `specs/providers-registry/test-plan.md` — the STYLES/WIRE-IN automated legs + the
+    T-PV-036 deferred-manual (interactive live-dev) leg.
+- **Outcome:** done. The homeFsConsent round-trip + the standalone smoke + the
+  harness-fixed mount are green.
+- **Verify:** `vue-tsc -p tsconfig.lint.json --noEmit` exit 0; whole-project
+  `npm run lint` 0 errors (16 pre-existing warnings); `vitest run --pool=threads
+  --no-file-parallelism --testTimeout=30000` over the nine affected files = 42/42; the
+  full unit suite = 1953 passed, with **2 failures unrelated to this batch** (see
+  Deviation).
+- **Deviation:** the standalone interactive multi-provider flow (chooser-list / switch
+  / secret field / capability-gated widgets / LS inert non-Claude `err`) is the
+  deferred-manual leg (the agent does not start the long-running dev server) — recorded
+  in `test-plan.md`. **Pre-existing failure NOT in this batch's scope:**
+  `tests/i18n/forbidden-terms.test.ts` fails on `agent.chat.providers.notice.keyRequired`
+  / `.secret.label` ("API key" outside `settings.*`) — these locale strings were added
+  by the committed T-PV-028 UI batch and the failure reproduces at `279b706d^` (the
+  commit BEFORE my first task). The guard's `ALLOWED_PREFIXES` only whitelists
+  `settings.` / `errors.subprocess` / `provider.field.`, not the
+  `agent.chat.providers.*` notice/secret keys. This is a GATE-stage cross-cutting i18n
+  invariant (T-PV-037, parent-owned) — either extend `ALLOWED_PREFIXES` or reword the
+  copy. Flagged for the parent; NOT fixed here (outside T-PV-033..036 scope, and a test
+  change is QA/gate's call).
 - **Commit (green):** <pending>.

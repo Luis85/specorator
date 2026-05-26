@@ -16,8 +16,8 @@ artifacts:
   design.md: complete (DESIGN-PV-001 — Parts A/B/C; ADR-PV-001/002/003 accepted)
   spec.md: complete (SPEC-PV-001 — 34 spec items, 6 layer groups; 20 EC-PV; TEST-PV-001..114 + M1..M4; full REQ↔SPEC↔TEST table)
   tasks.md: complete (TASKS-PV-001 — 44 T-PV tasks across 7 batches; TDD RED-before-green; 4 manual legs M1/M2/M3/M4; dep graph + coverage sanity-check)
-  implementation-log.md: in-progress (DOMAIN T-PV-001..010 + INFRA T-PV-011..018 + APPLICATION T-PV-019..024 + UI T-PV-025..032 done; STYLES T-PV-033 / WIRE-IN T-PV-034..036 / GATE + manual legs M1/M2/M3/M4 remain)
-  test-plan.md: in-progress (TESTPLAN-PV-001 scaffolded — guard-verify + file-naming directive + manual legs + DOMAIN-batch status)
+  implementation-log.md: in-progress (DOMAIN T-PV-001..010 + INFRA T-PV-011..018 + APPLICATION T-PV-019..024 + UI T-PV-025..032 + STYLES T-PV-033 + WIRE-IN T-PV-034..036 done; GATE T-PV-037..044 + manual legs M1/M2/M3/M4 remain — parent-owned)
+  test-plan.md: in-progress (TESTPLAN-PV-001 — guard-verify + file-naming directive + manual legs + DOMAIN-batch + STYLES/WIRE-IN automated legs + T-PV-036 deferred-manual recorded)
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-PV-001..010 + INFRA T-PV-011..018 + APPLICATION T-PV-019..024 + UI T-PV-025..032 done; STYLES/WIRE-IN/GATE + manual legs remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-PV-001..010 + INFRA T-PV-011..018 + APPLICATION T-PV-019..024 + UI T-PV-025..032 + STYLES T-PV-033 + WIRE-IN T-PV-034..036 done; GATE T-PV-037..044 + manual legs M1/M2/M3/M4 remain — parent-owned) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; test-report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -103,6 +103,51 @@ workspace registry, `~/.codex`/`~/.claude` transcript reads, the secret storage,
 ## Hand-off notes
 
 ```
+2026-05-26 (dev): STYLES + WIRE-IN done (T-PV-033..036), all green. Commits:
+                          T-PV-033 279b706d (feat(pv) --sp-* token slice: section 4.16 — 4 minted tokens
+                            --sp-provider-brand-claude/-codex/-opencode aliasing the section 4.2 brand
+                            literals + --sp-model-picker-group-gap = --sp-space-5; ASCII-only comment,
+                            lightningcss-safe; applied to ProviderOption brand swatch + the opencode
+                            picker variant; tokens.test §4.16 presence+leak guard, TEST-PV-091).
+                          T-PV-034 fd5bb15e (test(pv) RED wire-in surface routing + chooser mount).
+                          T-PV-035 e343ce33 (feat(pv) wire PROVIDER_REGISTRY_PORT/SECRET_STORE_PORT/
+                            HOME_FS_PORT + the registry-routed widened CHAT_RUNTIME_FACTORY +
+                            OPEN_PROVIDER_CONSENT into AgentSidebarView + src/ui/main.ts; ChatSurface
+                            resolves the active provider, mounts ProviderChooser, routes a select via
+                            SelectProviderUseCase + tabs.rebindActiveRuntime (consent-gating a readsHomeDir
+                            provider), reads getCatalog(active); new tabsStore.rebindActiveRuntime action;
+                            the Mock runtime registry construction → a data-driven builder table whose
+                            CLAUDE entry REUSES the P1 MockChatRuntime so the standalone demo is
+                            byte-identical P8 — the prior MockProviderRuntime('claude') reported the frozen
+                            descriptor's supportsMcpTools:true and surfaced the MCP UI in the demo).
+                          T-PV-036 <pending> (feat(pv) the CRITICAL _coerceSettings homeFsConsent
+                            round-trip fix in BOTH coercion sites (ObsidianBridge._coerceSettings +
+                            core-settings.validateSettings) via the new pure coerceHomeFsConsent helper +
+                            the round-trip test; the standalone providers smoke dev leg; a harness update
+                            to mount.ts.test.ts moving the runtime spy to the new
+                            providerRuntimeRegistry.createChatRuntime factory seam — the only test broken by
+                            the factory routing change).
+                          VERIFY: vue-tsc -p tsconfig.lint.json --noEmit = 0; whole-project npm run lint =
+                            0 errors (16 pre-existing warnings); the standalone-mount + settings-round-trip
+                            + provider-routing + chooser-mount + tabsStore + Mock-registry tests = green
+                            (single-Claude byte-identical proven — MCP/service-tier stay hidden in the
+                            demo). Full unit suite = 1953 passed.
+                          BLOCKER for the GATE (parent-owned, NOT in T-PV-033..036 scope):
+                            tests/i18n/forbidden-terms.test.ts FAILS on agent.chat.providers.notice.keyRequired
+                            ("An API key is required…") + .secret.label ("API key") — these strings were added
+                            by the committed T-PV-028 UI batch and the failure reproduces at 279b706d^ (BEFORE
+                            my first commit). The guard's ALLOWED_PREFIXES whitelists only settings./
+                            errors.subprocess/provider.field., not the agent.chat.providers.* notice/secret
+                            keys. FIX at the GATE (T-PV-037, the cross-cutting i18n/microcopy invariant):
+                            either extend ALLOWED_PREFIXES to cover agent.chat.providers.{notice,secret}.* or
+                            reword the copy. Did NOT touch it (test-change = QA/gate's call; outside scope).
+                          NEXT AGENT → GATE T-PV-037..044 (the cross-cutting invariant RED+green incl. the
+                            i18n forbidden-terms fix above, full verify, the grep gates, the additivity
+                            byte-identical proof, the parity self-review, the manual real legs M1/M2/M3/M4,
+                            the draft PR into next). REMAINING OWNER: parent orchestrator (manual legs +
+                            final DoD/PR). build:web/build/docs:api/full verify NOT run here per the batch
+                            directive (parent regenerates styles.css at the gate).
+
 2026-05-26 (orchestrator): P9 bootstrapped on feature/providers-registry (off next; P0-P8 merged).
                           Scope = charter §3.6 multi-provider — registry + Codex (JSON-RPC) + Opencode
                           (ACP) + ACP transport + model routing/capabilities/workspace registry.

@@ -145,3 +145,25 @@ chooser/secret components, the `--sp-*` slice, and the wire-in carry the
 unit/component weight + the 80/70/80/80 coverage gate. Tracked per RED test task
 (qa-owned). These ride the INFRA, APPLICATION, UI, STYLES, WIRE-IN, and GATE
 batches — out of the DOMAIN batch (T-PV-002..010) scope.
+
+## STYLES + WIRE-IN batch (T-PV-033..036) — automated + deferred-manual legs
+
+| Leg | Status | Where |
+|---|---|---|
+| TEST-PV-091 (`--sp-*` token slice) — the `section 4.16` provider/`opencode-model-picker` slice: 4 minted tokens (`--sp-provider-brand-claude`/`-codex`/`-opencode` aliasing the `section 4.2` brand literals, `--sp-model-picker-group-gap` reusing `--sp-space-5`); no hex / no raw Obsidian var / no physical property; ASCII-only comments (lightningcss-safe) | green (T-PV-033) | `tests/ui/styles/tokens.test.ts` |
+| TEST-PV-010/012/062/084/112/114 (surface wiring) — the chooser mounts + lists enabled providers in blank-tab order (> 1 enabled) / hidden at ≤ 1 (byte-identical P8); the per-tab factory is called with the RESOLVED active provider; selecting routes through `SelectProviderUseCase` (factory re-called + selection persisted); the toolbar reads `getCatalog(active)`; no-registry → byte-identical P8 | RED→green (T-PV-034→035) | `tests/ui/chat/ChatSurface.providers.test.ts` |
+| T-PV-036 (homeFsConsent round-trip) — a recorded `homeFsConsent` survives the save→reload `_coerceSettings` round-trip (REQ-PV-082, EC-PV-6); no recorded consent stays byte-identical P8 (the OPTIONAL field absent, NFR-PV-001) | green (T-PV-036) | `tests/infrastructure/obsidian/ObsidianBridge.settings.test.ts` |
+| T-PV-036 (standalone providers smoke, dev leg) — `src/ui/main.ts` mounts the provider-wired surface against `MockBridge` (the three ports + widened factory + consent stand-in provided, no inject-or-throw); the chooser stays HIDDEN on the single-Claude default (EC-PV-1); the byte-identical Claude-reuse runtime still streams | green (T-PV-036) | `tests/ui/main.ts.test.ts` |
+
+> **T-PV-036 deferred-manual leg (interactive live-dev flow):** the agent does NOT
+> start the long-running `npm run dev` server. The deterministic mount + the
+> single-Claude no-chooser + the homeFsConsent round-trip legs are automated above. The
+> INTERACTIVE flows — seed `enabledProviders` so the chooser lists in blank-tab order +
+> select a provider (the active switches, the widgets re-list/gate from the active
+> capability bag, Codex/Opencode gated-off), the masked secret field (save /
+> disabled-when-unavailable via the in-memory store availability switch), a non-Claude
+> `createChatRuntime` → `err` "unavailable" on LS (the honest notice, the chat stays
+> usable), and the Claude-only no-chooser byte-identical state — pair with the human run
+> at the final epic-review gate (recorded here, not self-claimed). TEST-PV-006 (dev
+> leg), TEST-PV-062 (dev leg), TEST-PV-072 (dev leg), TEST-PV-090 (dev leg), TEST-PV-100
+> (dev leg).

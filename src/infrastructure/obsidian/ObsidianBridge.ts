@@ -14,6 +14,7 @@ import {
 	clampMaxTabs,
 	coerceActiveProvider,
 	coerceEnabledProviders,
+	coerceHomeFsConsent,
 	type PluginSettings,
 } from '@/domain/settings/PluginSettings';
 import { trySync, tryAsync } from '@/domain/shared/tryAsync';
@@ -566,6 +567,11 @@ export class ObsidianBridge
 		// through the pure coercers — never a secret, no migration (ADR-PV-002).
 		const activeProvider = coerceActiveProvider(obj.activeProvider);
 		const enabledProviders = coerceEnabledProviders(obj.enabledProviders);
+		// P9 (SPEC-PV-014/024, REQ-PV-082): the one-time beyond-vault consent record.
+		// MUST round-trip so a recorded consent survives a production reload (the gate
+		// never re-prompts, EC-PV-6). OPTIONAL — absent (`undefined`) when nothing was
+		// recorded so the exact-key contract stays byte-identical P0–P8 (NFR-PV-001).
+		const homeFsConsent = coerceHomeFsConsent(obj.homeFsConsent);
 		return {
 			locale,
 			logLevel,
@@ -574,6 +580,7 @@ export class ObsidianBridge
 			customSystemPrompt,
 			activeProvider,
 			enabledProviders,
+			...(homeFsConsent !== undefined ? { homeFsConsent } : {}),
 		};
 	}
 
