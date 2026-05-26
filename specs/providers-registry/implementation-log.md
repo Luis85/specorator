@@ -193,7 +193,6 @@ WIRE-IN/GATE batches ride their own subagents.
 - **Verify:** `vue-tsc -p tsconfig.lint.json` 0 (whole project) + `npm run lint` 0
   errors (deleted-symbol guard green) + `npx vitest run` 10 pass. No
   `obsidian`/`node:*` import in `src/domain/**`.
-- **Commit:** _filled after commit_.
 - **DEVIATION (guard-relax — contradicts the planner's no-relax verdict):**
   `eslint.config.js` had `@/domain/ports/SecretStorePort` in `DELETED_SUBSYSTEM_BAN`
   (`:152`) and `SECRET_STORE_PORT` in `DELETED_INJECTION_KEYS` (`:175`) — the OLD
@@ -206,3 +205,47 @@ WIRE-IN/GATE batches ride their own subagents.
   (a different name than the new `PROVIDER_REGISTRY_PORT`) stays banned. Recorded in
   `test-plan.md` + escalated in `workflow-state.md` (the planner's tasks.md
   guard-verification claim is a documented defect; resolution is unambiguous).
+- **Commit:** `dfc50ad0`.
+
+### T-PV-010 — widen `CHAT_RUNTIME_FACTORY` + `OPEN_PROVIDER_CONSENT` + fan-out (🔨 dev, 🪓)
+
+- **Spec/test:** TEST-PV-010/011/082/113/114; SPEC-PV-005/031;
+  REQ-PV-010/011/012/082/113/114; NFR-PV-001/008.
+- **Slice (a) — RED seam extension (qa):** `tests/ui/chat/modalSeam.ts.test.ts`
+  (extended — the widened `ChatRuntimeFactory` signature type leg, the `ok`/`err`
+  construct legs, the still-throws-when-absent leg, the `OpenProviderConsentFn` +
+  `OPEN_PROVIDER_CONSENT` + auto-decline-fallback legs). RED confirmed: type-level
+  (no `OPEN_PROVIDER_CONSENT` export, old `()=>ChatRuntimePort` signature) + runtime
+  (2 fail). **Commit:** `298b76ef`.
+- **Slice (b) — GREEN widen + fan-out (dev):**
+  - `src/ui/chat/modalSeam.ts` — `ChatRuntimeFactory` widened to
+    `(providerId: ProviderId) => Result<ChatRuntimePort>`; appended
+    `OpenProviderConsentFn` + `OPEN_PROVIDER_CONSENT` key + `useOpenProviderConsent()`
+    (auto-decline `false` fallback). `useChatRuntimeFactory()` still throws-when-absent.
+  - **Fan-out (same task, build-green — every call/provide-site):**
+    `src/plugin/AgentSidebarView.ts` (provide `(providerId) => ok(bridge.createChatRuntime())`),
+    `src/ui/main.ts` (same standalone provide + `import { ok }`),
+    `src/ui/chat/ChatSurface.vue` (the injected widened factory adapted to the
+    UNCHANGED P3 store binding `() => ChatRuntimePort` — pass default `'claude'`,
+    unwrap the `Result`; the resolved-provider + honest construct-fail routing lands
+    at the wire-in batch). The `tabsStore` `TabDepsBinding.createRuntime` contract is
+    UNCHANGED (a P3 contract, not in the widen).
+  - **Test-fixture fan-out (build-green, not assertion changes):** the seven
+    ChatSurface mount fixtures (`ChatSurface{,.ts,.inline,.approvals,.mcp,.context,.toolbar}.test.ts`)
+    provide the factory; updated `() => <runtime>` → `() => ok(<runtime>)` + the `ok`
+    import so the adapter's `result.ok` unwrap works at runtime.
+- **Outcome:** done — the RED seam legs pass; every call/provide-site compiles
+  against the widened signature; the P3–P8 handles byte-identical; the default
+  `'claude'` is byte-identical at runtime to P8 (the additivity invariant).
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 (whole project — the interface-change
+  fan-out is closed, no orphan call site) + `npm run lint` 0 errors (16 warnings — 2
+  more than baseline: ChatSurface.vue `max-lines` soft warning from the adapter +
+  one `one-component-per-file` from the added test probes, both pre-existing
+  categories) + `npx vitest run tests/ui` 68 files / 418 pass + full suite (below).
+  No `obsidian`/`node:*` import under `src/ui/**`; no `implements` break dangling.
+- **Commit:** _filled after commit_.
+- **Deviation:** none beyond the documented same-task interface-change fan-out
+  (the one INTERFACE widen in P9, per the task's build-green directive). The store
+  binding `TabDepsBinding.createRuntime` stays `() => ChatRuntimePort` (the
+  ChatSurface adapter bridges the widened seam to it) — the resolved-provider
+  routing is finalised at the wire-in batch (T-PV-031), out of this DOMAIN batch.

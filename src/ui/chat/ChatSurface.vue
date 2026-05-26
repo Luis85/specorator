@@ -110,7 +110,21 @@ const { isEmpty, isStreaming } = storeToRefs(tabs);
 const notify = useNotificationPort();
 const logger = useLoggerPort();
 const history = useProviderHistoryPort();
-const createRuntime = useChatRuntimeFactory();
+// P9 (SPEC-PV-005/031): the runtime factory widened to `(providerId) => Result`.
+// The store's per-tab binding stays `() => ChatRuntimePort` (the UNCHANGED P3
+// contract); this adapter passes the default `'claude'` provider and unwraps the
+// `Result` — a Claude-only configuration is always `ok` and the runtime is
+// byte-identical to P8 (NFR-PV-001). The resolved-active-provider routing + the
+// honest construct-fail notice land at the wire-in batch (the construct-fail path
+// is the `Result.err` the use case surfaces, REQ-PV-011).
+const runtimeFactory = useChatRuntimeFactory();
+const createRuntime = (): ChatRuntimePort => {
+	const result = runtimeFactory('claude');
+	if (!result.ok) {
+		throw result.error;
+	}
+	return result.value;
+};
 const chooseForkTarget = useChooseForkTarget();
 // SettingsPort is OPTIONAL here (the maxTabs preference): the surface degrades to
 // the default ceiling when the host does not provide it (parity with the demo).

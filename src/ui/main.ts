@@ -51,6 +51,7 @@ import {
 	OPEN_MCP_TEST_MODAL,
 } from '@/ui/chat/modalSeam';
 import { MockBridge } from '@/infrastructure/mock/MockBridge';
+import { ok } from '@/domain/shared/Result';
 
 const bridge = new MockBridge();
 const mountPoint = document.querySelector('#app');
@@ -75,7 +76,11 @@ app.provide(ICON_PORT, bridge.createIconPort());
 // demo provides browser-safe modal stand-ins (no Obsidian, no `window.confirm`):
 // fork lands in a new tab, delete proceeds — deterministic for the GitHub Pages demo.
 app.provide(PROVIDER_HISTORY_PORT, bridge.createProviderHistoryPort());
-app.provide(CHAT_RUNTIME_FACTORY, () => bridge.createChatRuntime());
+// P9 (SPEC-PV-005/031): the widened `(providerId) => Result<runtime>` factory. The
+// standalone demo constructs the Mock Claude runtime for any provider and wraps it
+// `ok` — the resolved-provider routing + the inert non-Claude `err` land at the
+// wire-in batch. Byte-identical at runtime to P8 for the default `'claude'`.
+app.provide(CHAT_RUNTIME_FACTORY, () => ok(bridge.createChatRuntime()));
 app.provide(CONFIRM_DELETE, () => Promise.resolve(true));
 app.provide(CHOOSE_FORK_TARGET, () => Promise.resolve('new-tab'));
 // P4 (SPEC-CP-028/038): the composer ports + the instruction-confirm seam. Mention/

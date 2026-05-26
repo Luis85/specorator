@@ -39,6 +39,7 @@ import {
 } from '@/ui/chat/modalSeam';
 import type { AttachedImage } from '@/domain/chat/attachments';
 import type { AuxModelPort } from '@/domain/ports';
+import { ok } from '@/domain/shared/Result';
 import type { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge';
 import { ForkTargetModal } from './modals/ForkTargetModal';
 import { DeleteConfirmModal } from './modals/DeleteConfirmModal';
@@ -110,7 +111,11 @@ export class AgentSidebarView extends ItemView {
 			// runtime per tab, ADR-TS-002 §1) + the Obsidian Modal launch seams. The
 			// Vue surface never imports `obsidian`; it launches the modals through these.
 			app.provide(PROVIDER_HISTORY_PORT, bridge.createProviderHistoryPort());
-			app.provide(CHAT_RUNTIME_FACTORY, () => bridge.createChatRuntime());
+			// P9 (SPEC-PV-005/031): the widened `(providerId) => Result<runtime>` factory.
+			// The resolved-active-provider routing + the real Codex/Opencode runtime
+			// construction land at the wire-in batch; here the default `'claude'` yields
+			// the SAME P1 runtime wrapped `ok` — byte-identical at runtime to P8 (NFR-PV-001).
+			app.provide(CHAT_RUNTIME_FACTORY, () => ok(bridge.createChatRuntime()));
 			app.provide(CONFIRM_DELETE, (message: string) =>
 				new DeleteConfirmModal(this.app, {
 					message,

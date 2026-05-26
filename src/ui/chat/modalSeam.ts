@@ -4,6 +4,8 @@ import type { ChatRuntimePort } from '@/domain/ports';
 import type { AttachedImage } from '@/domain/chat/attachments';
 import type { McpServerDraft } from '@/application/chat/mcp/McpServerManager';
 import type { ManagedMcpServer } from '@/domain/chat/mcp/McpTypes';
+import type { Result } from '@/domain/shared/Result';
+import type { ProviderId } from '@/domain/chat/ProviderId';
 
 /**
  * The plugin-owned modal-launch seam (SPEC-TS-023/024, NFR-TS-007). The Obsidian
@@ -21,11 +23,19 @@ export type ConfirmDeleteFn = (message: string) => Promise<boolean>;
 export type ChooseForkTargetFn = () => Promise<ForkTarget | null>;
 
 /**
- * Build one fresh `ChatRuntimePort` per tab (SPEC-TS-027, ADR-TS-002 §1). The
- * `tabsStore` calls this per `openTab` so each tab streams on its own runtime
- * (per-tab isolation). The mount points wrap `bridge.createChatRuntime`.
+ * Build one fresh `ChatRuntimePort` per tab for a provider (SPEC-TS-027/PV-005,
+ * ADR-TS-002 §1 / ADR-PV-001 §2). The `tabsStore` calls this per `openTab` so each
+ * tab streams on its own runtime (per-tab isolation). The mount points wrap
+ * `bridge.createChatRuntime(providerId)`.
+ *
+ * **WIDENED in P9 (was `() => ChatRuntimePort`):** the construction is now
+ * parameterised by provider and returns a `Result` — a no-key / no-CLI /
+ * transport-unavailable construction → `Result.err`, never a throw (REQ-PV-011).
+ * Every provide-site + the tabs store passes the resolved active provider (default
+ * `'claude'`); a Claude-only configuration yields `ok` with the SAME runtime as P8
+ * (byte-identical, NFR-PV-001, SPEC-PV-031).
  */
-export type ChatRuntimeFactory = () => ChatRuntimePort;
+export type ChatRuntimeFactory = (providerId: ProviderId) => Result<ChatRuntimePort>;
 
 /**
  * Confirm an instruction before it is appended to the custom system prompt;
@@ -61,7 +71,7 @@ export function useChatRuntimeFactory(): ChatRuntimeFactory {
 	const factory = inject(CHAT_RUNTIME_FACTORY);
 	if (factory === undefined) {
 		throw new Error(
-			'ChatRuntimeFactory was not provided. Call app.provide(CHAT_RUNTIME_FACTORY, () => bridge.createChatRuntime()) before mounting.',
+			'ChatRuntimeFactory was not provided. Call app.provide(CHAT_RUNTIME_FACTORY, (providerId) => bridge.createChatRuntime(providerId)) before mounting.',
 		);
 	}
 	return factory;
@@ -167,4 +177,24 @@ export function useOpenMcpServerModal(): OpenMcpServerModalFn {
 /** Inject the test-modal launcher; falls back to a no-op resolve when absent (SPEC-MC-023). */
 export function useOpenMcpTestModal(): OpenMcpTestModalFn {
 	return inject(OPEN_MCP_TEST_MODAL, () => Promise.resolve());
+}
+
+// ── P9 provider beyond-vault consent seam (SPEC-PV-005, ADR-PV-003 §2) ───────────────
+// Additive — every P3..P8 handle above stays byte-identical. The real Obsidian `Modal`
+// host lives in `src/plugin/**` (the modal seam target); the standalone entry provides
+// a browser-safe stand-in (no `window.*`).
+
+/** Open the one-time beyond-vault consent modal for `providerId`; resolves the user's choice (REQ-PV-082). */
+export type OpenProviderConsentFn = (providerId: ProviderId) => Promise<boolean>;
+
+export const OPEN_PROVIDER_CONSENT: InjectionKey<OpenProviderConsentFn> =
+	Symbol('OpenProviderConsent');
+
+/**
+ * Inject the beyond-vault consent launcher; falls back to an AUTO-DECLINE (`false`)
+ * when absent (SPEC-PV-005) — a missing launcher must NEVER silently read beyond the
+ * vault (REQ-PV-082/113). Mirrors `useConfirmDelete`'s auto-decline fallback.
+ */
+export function useOpenProviderConsent(): OpenProviderConsentFn {
+	return inject(OPEN_PROVIDER_CONSENT, () => Promise.resolve(false));
 }
