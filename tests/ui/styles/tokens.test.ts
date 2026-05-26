@@ -201,6 +201,23 @@ const TOOLBAR_CONTROLS_TOKENS = [
 	'--sp-service-tier-glow',
 ];
 
+/**
+ * §4.14 — Approvals & security (P7, SPEC-AS-020 / NFR-AS-012). The four `--sp-*`
+ * tokens the P7 status-panel + permission-toggle surfaces genuinely need (the
+ * rule-list row gap, the allow/deny decision badge tints, the active
+ * permission-mode pill fill). The toggle/panel reuse the existing set otherwise
+ * (`--sp-border`, `--sp-bg-*`, `--sp-text-*`, `--sp-space-*`, the P6
+ * `--sp-toggle-active`) — only these four are minted for P7. The block marker is
+ * ASCII (`section 4.14`) so the standalone lightningcss minifier accepts the
+ * comment.
+ */
+const APPROVALS_SECURITY_TOKENS = [
+	'--sp-approvals-row-gap',
+	'--sp-approvals-decision-allow',
+	'--sp-approvals-decision-deny',
+	'--sp-permission-mode-active',
+];
+
 const PROVIDER_IDS = ['claude', 'codex', 'opencode', 'cursor'] as const;
 
 function loadTokens(): string {
@@ -333,13 +350,39 @@ describe('src/ui/styles/tokens.css — token contract (REQ-AUX-006, REQ-AUX-009)
 
 	it('declares the §4.13 tokens with no raw-hex / Obsidian-var / physical-property leak (TEST-TC-026)', () => {
 		const css = loadTokens();
-		// Isolate the §4.13 declaration block and assert each P6 token resolves to a
-		// token-layer var() lookup (or a bare dimension/shadow) — never a raw hex, a
-		// raw Obsidian var, or a physical CSS property.
-		const block = css.slice(css.indexOf('§4.13'));
+		// Isolate the §4.13 declaration block (bounded by the §4.14 marker) and
+		// assert each P6 token resolves to a token-layer var() lookup (or a bare
+		// dimension/shadow) — never a raw hex, a raw Obsidian var, or a physical
+		// CSS property.
+		const block = css.slice(css.indexOf('§4.13'), css.indexOf('section 4.14'));
 		for (const token of TOOLBAR_CONTROLS_TOKENS) {
 			const match = new RegExp(`${token.replace(/-/g, '\\-')}\\s*:\\s*([^;]+);`).exec(block);
 			expect(match, `expected ${token} declared in the §4.13 block`).not.toBeNull();
+			const value = match?.[1] ?? '';
+			// No raw hex colour literal.
+			expect(value, `${token} must not carry a raw hex literal`).not.toMatch(/#[0-9a-fA-F]{3,8}/);
+			// No raw Obsidian theme var (only --sp-* lookups are allowed).
+			expect(value, `${token} must not read a raw Obsidian var`).not.toMatch(
+				/var\(--(?!sp-)[a-z]/,
+			);
+		}
+	});
+
+	it('declares every §4.14 approvals/security token (SPEC-AS-020, NFR-AS-012)', () => {
+		const css = loadTokens();
+		assertTokensDeclared(css, APPROVALS_SECURITY_TOKENS);
+	});
+
+	it('declares the §4.14 tokens with no raw-hex / Obsidian-var / physical-property leak (TEST-AS-062)', () => {
+		const css = loadTokens();
+		// Isolate the §4.14 declaration block (ASCII `section 4.14` marker so the
+		// standalone lightningcss minifier accepts the comment) and assert each P7
+		// token resolves to a token-layer var() lookup — never a raw hex or a raw
+		// Obsidian var.
+		const block = css.slice(css.indexOf('section 4.14'));
+		for (const token of APPROVALS_SECURITY_TOKENS) {
+			const match = new RegExp(`${token.replace(/-/g, '\\-')}\\s*:\\s*([^;]+);`).exec(block);
+			expect(match, `expected ${token} declared in the §4.14 block`).not.toBeNull();
 			const value = match?.[1] ?? '';
 			// No raw hex colour literal.
 			expect(value, `${token} must not carry a raw hex literal`).not.toMatch(/#[0-9a-fA-F]{3,8}/);

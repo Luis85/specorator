@@ -668,3 +668,43 @@ warnings only), `vitest run tests/application` **372/372 green** (incl. the P6
   out of this UI batch. **(3)** the `tabsStore` half of T-AS-029 required no code change (the
   P6 generic `setControl` + the T-AS-017 fold already cover `permissionMode`) — the new store
   test documents/locks this rather than adding redundant code.
+
+---
+
+## T-AS-030 🔨 — STYLES: `status-panel`/`permission-toggle` `--sp-*` token slice + tokens-contract update
+
+- **Date:** 2026-05-26
+- **Owner:** dev
+- **Spec:** SPEC-AS-020, NFR-AS-012, TEST-AS-062
+- **Files changed:**
+  - `src/ui/styles/tokens.css` (+19) — minted the §4.14 approvals/security token slice after
+    the §4.13 toolbar block: `--sp-approvals-row-gap` (`var(--sp-space-2)`),
+    `--sp-approvals-decision-allow` (`var(--sp-success)`), `--sp-approvals-decision-deny`
+    (`var(--sp-status-error)`), `--sp-permission-mode-active` (`var(--sp-toggle-active)`). The
+    block comment is **ASCII-prose only** (marker `section 4.14`, no `§`/backtick/`/`/`{}`) so
+    the standalone `build:web` lightningcss minifier accepts it (P6/P7 lesson).
+  - `src/ui/chat/toolbar/PermissionToggle.vue` (styles) — the live active-option fill + the
+    PLAN label now read `--sp-permission-mode-active` (replacing the direct `--sp-toggle-active`
+    reference); the `--active`/`--focused`/`__plan` rules apply the new token.
+  - `tests/ui/styles/tokens.test.ts` (+~40) — added the `APPROVALS_SECURITY_TOKENS` presence
+    list + a §4.14 presence test + a §4.14 leak guard (no raw hex / no raw Obsidian var,
+    TEST-AS-062); bounded the §4.13 leak-guard slice at the `section 4.14` marker so the two
+    blocks do not bleed.
+- **Already-referencing widgets (no change needed):** `ApprovalsPanel.vue` (`--sp-approvals-row-gap`)
+  + `ApprovalRuleRow.vue` (`--sp-approvals-decision-allow|deny`) already referenced the
+  spec-named tokens (authored in the UI batch); this task MINTS them.
+- **Deferred styling:** the P6 `toolbar.permission.deferred` dimmed seam styling stays only on
+  the non-live fallback button (rendered when no `mode` prop is wired — SPEC-AS-012 keeps the
+  P6 seam byte-identical there); the live three-mode path carries no deferred-specific styling.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); `npm run lint` 0 errors
+  (12 pre-existing warnings); `vitest run tests/ui/styles/tokens.test.ts` 17/17 (2 new). The
+  four tokens are token-layer lookups (leak guard green). `styles.css` untouched (no build run).
+- **Outcome:** done.
+- **Commit:** <pending>
+- **Deviation:** the SPEC-AS-020 table lists the allow-decision default as
+  `var(--sp-status-success)`, but `--sp-status-success` is **not** an existing token (the §4.9
+  success token is `--sp-success`, consumed by `--sp-status-completed: var(--sp-success)`). To
+  keep the token a real, resolvable token-layer lookup (not a dangling var), I mapped
+  `--sp-approvals-decision-allow` → `var(--sp-success)` (the genuine success colour). The deny
+  token uses `var(--sp-status-error)` exactly as specified (it exists). Semantically identical
+  to the spec intent (the allow/approve success colour).

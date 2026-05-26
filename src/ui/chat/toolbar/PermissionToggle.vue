@@ -194,22 +194,22 @@ function onDeferredActivate(): void {
 }
 
 .sp-toolbar-permission__option--active {
-	border-color: var(--sp-toggle-active);
-	color: var(--sp-toggle-active);
+	border-color: var(--sp-permission-mode-active);
+	color: var(--sp-permission-mode-active);
 	font-weight: var(--sp-font-weight-semibold);
 }
 
 .sp-toolbar-permission__option--focused {
-	border-color: var(--sp-toggle-active);
+	border-color: var(--sp-permission-mode-active);
 }
 
 .sp-toolbar-permission__plan {
 	display: inline-flex;
 	align-items: center;
 	block-size: var(--sp-toolbar-widget-h);
-	border: 1px solid var(--sp-toggle-active);
+	border: 1px solid var(--sp-permission-mode-active);
 	border-radius: var(--sp-radius-md);
-	color: var(--sp-toggle-active);
+	color: var(--sp-permission-mode-active);
 	padding-inline: var(--sp-space-2);
 	font-size: var(--sp-font-size-sm);
 	font-weight: var(--sp-font-weight-semibold);
