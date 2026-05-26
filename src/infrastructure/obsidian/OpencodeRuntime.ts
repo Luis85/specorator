@@ -30,9 +30,11 @@ import type {
 	ToolbarCapabilities,
 	LoggerPort,
 	SecretStorePort,
+	SettingsPort,
 	HomeFsPort,
 } from '@/domain/ports';
 import { providerSecretKey } from '@/domain/ports';
+import { buildScopeEnv } from './buildScopeEnv';
 import type {
 	AskUserQuestionRequest,
 	AskUserQuestionAnswer,
@@ -50,6 +52,13 @@ export interface OpencodeRuntimeDeps {
 	readonly cwd?: string | null;
 	readonly command?: string;
 	readonly logger?: LoggerPort;
+	/**
+	 * The device-local `SettingsPort` (P10, SPEC-SS-013). When present, the applied
+	 * `envScopes['shared']` + `envScopes['provider:opencode']` are resolved + merged
+	 * into the subprocess env at the turn boundary (REQ-SS-065). Optional — absent
+	 * leaves the P9 env untouched (byte-identical P9, NFR-SS-001).
+	 */
+	readonly settings?: SettingsPort;
 }
 
 const DEFAULT_OPENCODE_COMMAND = 'opencode';
@@ -93,12 +102,21 @@ export class OpencodeRuntime implements ChatRuntimePort {
 			yield { type: 'done' };
 			return;
 		}
+		// P10 (SPEC-SS-013, REQ-SS-065): merge the applied env scopes (inline values +
+		// secretRefs resolved via getSecret) over the provider key — read ONLY here at
+		// the spawn boundary, never logged or returned to the UI/DTO (NFR-SS-002). Absent
+		// settings → the bare key env.
+		const baseEnv = { OPENCODE_API_KEY: key.value };
+		const env =
+			this.deps.settings !== undefined
+				? await buildScopeEnv(baseEnv, 'opencode', this.deps.settings, this.deps.secretStore)
+				: baseEnv;
 		const transport = new AcpTransport(
 			{
 				command: this.deps.command ?? DEFAULT_OPENCODE_COMMAND,
 				args: ['acp'],
 				cwd: this.deps.cwd,
-				env: { OPENCODE_API_KEY: key.value },
+				env,
 			},
 			this.deps.logger,
 		);

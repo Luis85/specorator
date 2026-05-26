@@ -22,6 +22,7 @@ import type {
 	ProviderId,
 	LoggerPort,
 	SecretStorePort,
+	SettingsPort,
 	HomeFsPort,
 } from '@/domain/ports';
 import type { Result } from '@/domain/shared/Result';
@@ -35,6 +36,12 @@ export interface ObsidianRuntimeRegistryDeps {
 	readonly homeFs: HomeFsPort;
 	readonly cwd?: string | null;
 	readonly logger?: LoggerPort;
+	/**
+	 * The device-local `SettingsPort` (P10, SPEC-SS-013). Threaded to each runtime so
+	 * the applied `envScopes` reach the active provider's subprocess env at the turn
+	 * boundary (REQ-SS-065). Optional — absent leaves the P9 env untouched (NFR-SS-001).
+	 */
+	readonly settings?: SettingsPort;
 }
 
 /** A per-provider runtime builder (the data-driven dispatch entry). */
@@ -51,16 +58,19 @@ export class ObsidianProviderRuntimeRegistry {
 	>([
 		[
 			'claude',
-			(deps) => ok(new ClaudeCliChatRuntime(deps.logger, deps.cwd)),
+			// P10 (SPEC-SS-013): the Claude CLI runtime gains the settings + secretStore
+			// so its applied env scopes reach the spawned CLI env (REQ-SS-065).
+			(deps) => ok(new ClaudeCliChatRuntime(deps.logger, deps.cwd, deps.settings, deps.secretStore)),
 		],
 		[
 			'codex',
-			(deps) => ObsidianProviderRuntimeRegistry._buildKeyed(deps, (d) => new CodexRuntime(d)),
+			// P10 (SPEC-SS-013): `...d` carries the optional `settings` to the runtime.
+			(deps) => ObsidianProviderRuntimeRegistry._buildKeyed(deps, (d) => new CodexRuntime({ ...d })),
 		],
 		[
 			'opencode',
 			(deps) =>
-				ObsidianProviderRuntimeRegistry._buildKeyed(deps, (d) => new OpencodeRuntime(d)),
+				ObsidianProviderRuntimeRegistry._buildKeyed(deps, (d) => new OpencodeRuntime({ ...d })),
 		],
 	]);
 

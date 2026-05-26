@@ -235,6 +235,9 @@ export class ObsidianBridge
 			homeFs: this.homeFs,
 			cwd: this.getVaultBasePath(),
 			logger: this,
+			// P10 (SPEC-SS-013, REQ-SS-065): the device-local SettingsPort (the bridge
+			// itself) so the applied envScopes reach the active provider's subprocess env.
+			settings: this,
 		});
 		return this.providerRuntimeRegistryRef;
 	}

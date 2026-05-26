@@ -18,6 +18,7 @@ import { MockProviderEnvCapture } from '@/infrastructure/mock/MockProviderRuntim
 import { MockSecretStore } from '@/infrastructure/mock/MockSecretStore';
 import { envSecretKey, type PluginSettings, DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings';
 import type { ProviderId } from '@/domain/ports';
+import type { EnvEntry } from '@/domain/chat/environment/EnvSnippet';
 
 /** Model a runtime's turn-start composition over a settings-shaped envScopes record. */
 async function runtimeCaptureEnv(
@@ -27,8 +28,10 @@ async function runtimeCaptureEnv(
 	providerId: ProviderId,
 	secretStore: MockSecretStore,
 ): Promise<Readonly<Record<string, string>> | null> {
-	const scopes = settings.envScopes ?? {};
-	const shared = scopes['shared'] ?? [];
+	// A scope key may be absent at runtime — type it as possibly-undefined-valued so
+	// the load-or-default `?? []` is honest (mirrors `buildScopeEnv` in the runtime).
+	const scopes: Readonly<Record<string, readonly EnvEntry[] | undefined>> = settings.envScopes ?? {};
+	const shared = scopes.shared ?? [];
 	const provider = scopes[`provider:${providerId}`] ?? [];
 	const result = await capture.captureEnv(base, shared, provider, secretStore);
 	return result.ok ? result.value : null;
