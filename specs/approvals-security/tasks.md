@@ -642,9 +642,9 @@ pattern (ADR-PSR-002).
 - **Depends on:** T-AS-009, T-AS-014
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/ui/composables/useApprovalRuleStorePort.test.ts` exists, naming the TEST-AS-053 composable
+  - [x] `tests/ui/composables/useApprovalRuleStorePort.test.ts` exists, naming the TEST-AS-053 composable
         leg, covering inject-when-provided + throw-when-unprovided.
-  - [ ] Test fails (RED) — `useApprovalRuleStorePort` does not yet exist.
+  - [x] Test fails (RED) — `useApprovalRuleStorePort` does not yet exist.
 
 ### T-AS-021 🔨 — `useApprovalRuleStorePort.ts`
 
@@ -656,8 +656,8 @@ pattern (ADR-PSR-002).
 - **Depends on:** T-AS-020
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The prior RED test (TEST-AS-053 composable leg) now passes.
-  - [ ] No `obsidian` import under `src/ui/**`; `npm run typecheck` + `npm run lint` + `npm run test` green;
+  - [x] The prior RED test (TEST-AS-053 composable leg) now passes.
+  - [x] No `obsidian` import under `src/ui/**`; `npm run typecheck` + `npm run lint` + `npm run test` green;
         implementation-log entry added.
 
 ### T-AS-022 🧪 — RED: `PermissionToggle.vue` live three-mode (+ PLAN label) (PO co-located)
@@ -678,10 +678,10 @@ pattern (ADR-PSR-002).
 - **Depends on:** T-AS-003
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/toolbar/PermissionToggle.test.ts` + `PermissionToggle.po.ts` exist, naming the listed
+  - [x] `tests/ui/chat/toolbar/PermissionToggle.test.ts` + `PermissionToggle.po.ts` exist, naming the listed
         TEST-AS legs, querying by `data-testid` only, asserting the three-mode keyboard control + the PLAN
         label + the `set` emit + the removed seam state + the AT state + non-colour cues + the keyed strings.
-  - [ ] Tests fail (RED) — the P6 honest-defer `PermissionToggle.vue` does not yet offer the live three-mode
+  - [x] Tests fail (RED) — the P6 honest-defer `PermissionToggle.vue` does not yet offer the live three-mode
         control (the disabled seam still renders).
 
 ### T-AS-023 🔨 — `PermissionToggle.vue` (live three-mode + PLAN label)
@@ -700,10 +700,10 @@ pattern (ADR-PSR-002).
 - **Depends on:** T-AS-022
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-AS-001/002 toggle leg/003/006/050/051 A legs) now pass.
-  - [ ] No `obsidian` import under `src/ui/**`; no `v-html`; no `aria-disabled` seam; new strings via
+  - [x] The prior RED tests (TEST-AS-001/002 toggle leg/003/006/050/051 A legs) now pass.
+  - [x] No `obsidian` import under `src/ui/**`; no `v-html`; no `aria-disabled` seam; new strings via
         `TranslationPort` (en+de); the P6 `toolbar.permission.deferred` string removed.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-AS-024 🧪 — RED: `ApprovalsPanel.vue` + `ApprovalRuleRow.vue` (POs co-located)
 
@@ -727,10 +727,10 @@ pattern (ADR-PSR-002).
 - **Depends on:** T-AS-007
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/chat/approvals/ApprovalsPanel.test.ts` + `ApprovalsPanel.po.ts` +
+  - [x] `tests/ui/chat/approvals/ApprovalsPanel.test.ts` + `ApprovalsPanel.po.ts` +
         `tests/ui/chat/approvals/ApprovalRuleRow.test.ts` + `ApprovalRuleRow.po.ts` exist, naming the listed
         TEST-AS legs, querying by `data-testid` only.
-  - [ ] Tests fail (RED) — `ApprovalsPanel.vue` / `ApprovalRuleRow.vue` do not yet exist.
+  - [x] Tests fail (RED) — `ApprovalsPanel.vue` / `ApprovalRuleRow.vue` do not yet exist.
 
 ### T-AS-025 🔨 — `ApprovalsPanel.vue` + `ApprovalRuleRow.vue`
 
@@ -749,10 +749,10 @@ pattern (ADR-PSR-002).
 - **Depends on:** T-AS-024
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-AS-040/041/042 A leg/043/050/051 rule leg) now pass.
-  - [ ] No `obsidian` import under `src/ui/**`; no `v-html`; the decision badge carries a text label (not
+  - [x] The prior RED tests (TEST-AS-040/041/042 A leg/043/050/051 rule leg) now pass.
+  - [x] No `obsidian` import under `src/ui/**`; no `v-html`; the decision badge carries a text label (not
         colour-alone); new strings via `TranslationPort` (en+de); co-located POs present.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-AS-026 🧪 — RED: `InlineApproval.vue` +`deny-always` option (PO co-located, render otherwise unchanged)
 
@@ -771,10 +771,10 @@ pattern (ADR-PSR-002).
 - **Depends on:** T-AS-003
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/ui/chat/inline/InlineApproval.test.ts` + `InlineApproval.po.ts` are extended, naming the
+  - [x] `tests/ui/chat/inline/InlineApproval.test.ts` + `InlineApproval.po.ts` are extended, naming the
         listed TEST-AS legs, querying by `data-testid` only, asserting the four-option fixed-order row +
         the `deny-always` entry + Escape-cancels + the P4-unchanged render.
-  - [ ] Tests fail (RED) — the P4 `InlineApproval.vue` still renders three options (no `deny-always`).
+  - [x] Tests fail (RED) — the P4 `InlineApproval.vue` still renders three options (no `deny-always`).
 
 ### T-AS-027 🔨 — `InlineApproval.vue` (+`deny-always` option, additive)
 
@@ -791,10 +791,10 @@ pattern (ADR-PSR-002).
 - **Depends on:** T-AS-026
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-AS-016 option-row/022 A/025 A legs) now pass; the four options render in
+  - [x] The prior RED tests (TEST-AS-016 option-row/022 A/025 A legs) now pass; the four options render in
         the fixed order; Escape cancels; the P4 render is otherwise byte-identical (NG4).
-  - [ ] No `obsidian` import under `src/ui/**`; no `v-html`; the new label via `TranslationPort` (en+de).
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] No `obsidian` import under `src/ui/**`; no `v-html`; the new label via `TranslationPort` (en+de).
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ### T-AS-028 🧪 — RED: `ChatSurface` approval-callback → `ApprovalManager` wiring + `tabsStore` `permissionMode` control + approvals view-model
 
@@ -821,11 +821,11 @@ pattern (ADR-PSR-002).
 - **Depends on:** T-AS-017, T-AS-019, T-AS-021, T-AS-023, T-AS-025, T-AS-027
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/stores/tabsStore.ts.test.ts` (the P7 `permissionMode` control + fold-on-submit + tab-switch
+  - [x] `tests/ui/stores/tabsStore.ts.test.ts` (the P7 `permissionMode` control + fold-on-submit + tab-switch
         re-derive legs) and `tests/ui/chat/ChatSurface.test.ts` + `ChatSurface.po.ts` (the approval-callback
         → `ApprovalManager` wiring + the approvals view-model) are extended, naming the listed TEST-AS legs,
         querying by `data-testid` only.
-  - [ ] Tests fail (RED) — the `tabsStore` `permissionMode` reactive control + the `ChatSurface`
+  - [x] Tests fail (RED) — the `tabsStore` `permissionMode` reactive control + the `ChatSurface`
         approval-callback delegation + the approvals view-model do not yet exist.
 
 ### T-AS-029 🔨 — `ChatSurface.vue` approval-callback wiring + `tabsStore` `permissionMode` control + approvals view-model
@@ -851,11 +851,11 @@ pattern (ADR-PSR-002).
 - **Depends on:** T-AS-028
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] The prior RED tests (TEST-AS-002 store-fold/006/020/021/022/025/040/042/043 surface legs) now pass;
+  - [x] The prior RED tests (TEST-AS-002 store-fold/006/020/021/022/025/040/042/043 surface legs) now pass;
         the auto-decision renders no block; the prompt renders the unchanged P4 block; the panel is live.
-  - [ ] No `providerId` branch; no `obsidian` import under `src/ui/**`; no `v-html`/`window.confirm` (seam
+  - [x] No `providerId` branch; no `obsidian` import under `src/ui/**`; no `v-html`/`window.confirm` (seam
         notices via `NotificationPort`); a single per-surface `ApprovalManager`.
-  - [ ] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
+  - [x] `npm run typecheck` + `npm run lint` + `npm run test` green; implementation-log entry added.
 
 ---
 

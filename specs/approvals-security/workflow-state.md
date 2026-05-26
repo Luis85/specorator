@@ -4,7 +4,7 @@ area: AS
 current_stage: implementation
 status: active
 last_updated: 2026-05-26
-last_agent: dev (implementation — APPLICATION batch T-AS-016..019)
+last_agent: dev (implementation — UI batch T-AS-020..029)
 epic: claudian-reboot
 phase: P7
 integration_branch: next
@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-AS-001; ADR-AS-001/002/003 accepted; CLAR-AS-001..005 ratified)
   spec.md: complete (SPEC-AS-001; 28 items, 6 layer groups; 33 REQ-AS + 16 NFR-AS chained to TEST-AS; 6 design open items resolved)
   tasks.md: complete (TASKS-AS-001; 40 tasks T-AS-001..040; DDD batches DOMAIN→INFRA→APP→UI→STYLES→WIRE-IN→GATE; RED-before-green; 3 manual legs T-AS-036/037/038; NO guard-relax)
-  implementation-log.md: in-progress (DOMAIN T-AS-001..011 + INFRA T-AS-012..015 + APPLICATION T-AS-016..019 executed + logged; UI/STYLES/WIRE-IN/GATE batches T-AS-020..040 remain, incl. manual legs TEST-AS-M1/M2/M3)
+  implementation-log.md: in-progress (DOMAIN T-AS-001..011 + INFRA T-AS-012..015 + APPLICATION T-AS-016..019 + UI T-AS-020..029 executed + logged; STYLES T-AS-030 + WIRE-IN T-AS-031..033 + GATE T-AS-034..040 remain, incl. manual legs TEST-AS-M1/M2/M3)
   test-plan.md: in-progress (guard-verify note + manual legs TEST-AS-M1/M2/M3 + DOMAIN/INFRA automated status; APP/UI legs follow)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-AS-001; ADR-AS-001/002/003 accepted) |
 | 5. Specification | `spec.md` | complete (SPEC-AS-001; 28 items SPEC-AS-001..028) |
 | 6. Tasks | `tasks.md` | complete (TASKS-AS-001; 40 tasks T-AS-001..040; DDD batches; RED-before-green; 3 manual legs; NO guard-relax) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-AS-001..011 + INFRA T-AS-012..015 + APPLICATION T-AS-016..019 done; UI/STYLES/WIRE-IN/GATE T-AS-020..040 remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-AS-001..011 + INFRA T-AS-012..015 + APPLICATION T-AS-016..019 + UI T-AS-020..029 done; STYLES T-AS-030 + WIRE-IN T-AS-031..033 + GATE T-AS-034..040 remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; manual legs TEST-AS-M1/M3 scheduled at T-AS-012; test-report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -413,4 +413,69 @@ updates, the inline approval/plan-mode controllers, `status-panel`/`permission-t
                  storeError message) + tabsStore permissionMode control. The application use case
                  (ApprovalManager.decide/applyDecision/listRules) + the foldControlOptions clause are
                  ready for the surface to wire into the live P4 setApprovalCallback seam.
+
+2026-05-26 (dev): UI batch T-AS-020..029 COMPLETE on feature/approvals-security (off next).
+                 Strict TDD, one commit per task (RED qa -> green dev). Verification performed
+                 per task + at close-out = vue-tsc -p tsconfig.lint.json 0 errors (whole project)
+                 + whole-project npm run lint 0 errors (12 pre-existing warnings only) + vitest run
+                 on the changed + regression surface (heavy mounts under --pool=threads
+                 --no-file-parallelism --testTimeout=30000). styles.css untouched throughout.
+                 - T-AS-020 46d03f0f RED / T-AS-021 6a9a0399 green — useApprovalRuleStorePort
+                   (inject APPROVAL_RULE_STORE_PORT or throw; mirrors useToolbarCatalogPort). 2/2.
+                 - T-AS-022 d915348f RED / T-AS-023 517557e1 green — PermissionToggle live
+                   three-mode (normal/plan/yolo role=listbox, Arrow cycle, Enter/Space activate,
+                   Escape blur; PLAN label; aria-selected; set(mode) emit) ADDITIVELY over the P6
+                   honest-defer seam (optional `mode` prop — absent => the P6 disabled seam,
+                   byte-identical). SPEC-AS-022 i18n en+de added. Live 6/6 + P6 regression 3/3 +
+                   toolbar/buildToolbarViewModel/i18n 85/85.
+                 - T-AS-024 3225fe1f RED / T-AS-025 5aa89193 green — ApprovalsPanel.vue +
+                   ApprovalRuleRow.vue (status surface: active mode + live rule list + empty notice;
+                   one row = tool/pattern/decision/lifetime text + a persisted-only remove button;
+                   co-located POs). 9/9.
+                 - T-AS-026 47f91f4e RED / T-AS-027 1277a44e green — InlinePlanApproval +deny-always:
+                   the fourth option arrives via request.options; an additive :data-decision attribute
+                   targets it; render byte-identical to P4 (NG4). deny-always 3/3 + P4 regression 5/5.
+                 - T-AS-028 75a8684f RED / T-AS-029 15fe6643 green — ChatSurface approval gating +
+                   permissionMode wiring. A NEW ApprovalGateRuntime decorator (src/ui/chat/composer/)
+                   sits inner-most in the P4 approval chain (gate wraps runtime; EnqueueRuntime wraps
+                   gate): on a pulled approval it derives the action (toolName=req.tool,
+                   actionPattern=req.context) + reads the active mode, then ApprovalManager.decide ->
+                   ok('allow')/ok('deny') resolve silently (NO inline block) / ok('prompt') (or a
+                   defensive err) enqueue the unchanged P4 block, await the user, applyDecision, resolve
+                   the concrete decision (*-always -> allow/deny, cancel -> null). Degrades to the
+                   byte-identical P4 always-prompt path when APPROVAL_RULE_STORE_PORT is absent
+                   (manager null -> no gate, no panel). PermissionToggle.set + ApprovalsPanel.remove +
+                   the live mode thread through ToolbarStrip/ChatComposer to
+                   tabs.setControl('permissionMode'). NO providerId branch. ChatSurface approvals 6/6 +
+                   new tabsStore.permissionMode 5/5; regression: ChatSurface toolbar/inline/context/ts
+                   14/14, composer+toolbar+tabsStore+ChatComposer 256/256, structural/composable/
+                   approvals 17/17 — all green.
+                 DEVIATIONS (all logged in implementation-log.md, none alter the spec contract):
+                 (1) PermissionToggle keeps the P6 `vm` prop + adds an OPTIONAL `mode?` (vs SPEC-AS-012's
+                 `mode`-only) so the P6 ToolbarStrip wiring stays byte-identical until ChatSurface wires
+                 the live mode — the brief's "additive: no live mode => P6 disabled" directive.
+                 (2) The P6 toolbar.permission.deferred i18n string is RETAINED (SPEC-AS-022 says remove)
+                 because the no-live-mode P6 seam still renders it; dead only once the surface always
+                 supplies a live mode — a follow-up at the gate. (3) The component the spec names
+                 InlineApproval.vue is the real P4 InlinePlanApproval.vue (composer/, resolve emit via
+                 RespondToInlineBlockUseCase) — the deny-always option was added to the real component;
+                 the spec's inline-approval-deny-always testid is the additive [data-decision="deny-always"]
+                 selector. (4) SPEC-AS-016 describes a direct setApprovalCallback in ChatSurface; the real
+                 P4 routes approvals through the composer arbiter, so ApprovalManager is wired via the new
+                 ApprovalGateRuntime decorator (inner-most) rather than a direct callback. (5) The action
+                 pattern is derived from req.context (the P4 ApprovalRequest carries no structured input,
+                 byte-identical NG4) — carrying the structured input so getActionPattern runs over it is
+                 the runtime's job when building the request, a follow-up at the wire-in/runtime layer.
+                 (6) The tabsStore half of T-AS-029 needed NO code change (the P6 generic setControl +
+                 the T-AS-017 fold already cover permissionMode) — the new store test locks this.
+                 NOT touched: STYLES (the --sp-approvals-* + --sp-permission-mode-active tokens the panel/
+                 row reference are minted in T-AS-030), WIRE-IN (the production provide(APPROVAL_RULE_STORE_PORT)
+                 is T-AS-031..033), GATE. styles.css left untouched.
+                 HAND-OFF -> STYLES /spec:implement (dev): T-AS-030 (status-panel/permission-toggle --sp-*
+                 token slice — mint --sp-approvals-row-gap / --sp-approvals-decision-allow|deny /
+                 --sp-permission-mode-active; remove the P6 deferred styling with the seam; tokens-contract
+                 + lint-style-tokens guard TEST-AS-062), then WIRE-IN T-AS-031..033 (provide
+                 APPROVAL_RULE_STORE_PORT in AgentSidebarView + ui/main.ts; the panel/gate are already
+                 mounted/wired in ChatSurface when the port is present). The toggle/panel/inline/gate
+                 components + the composable + the approval engine are ready for the production provide.
 ```
