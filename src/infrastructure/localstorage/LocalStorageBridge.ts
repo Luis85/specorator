@@ -25,6 +25,10 @@ import { LocalStorageToolbarCatalog } from './LocalStorageToolbarCatalog';
 import { LocalStorageApprovalRuleStore } from './LocalStorageApprovalRuleStore';
 import { LocalStorageMcpConfigStore } from './LocalStorageMcpConfigStore';
 import { LocalStorageMcpClient } from './LocalStorageMcpClient';
+import { LocalStorageProviderRuntimeRegistry } from './LocalStorageProviderRuntime';
+import { LocalStorageSecretStore } from './LocalStorageSecretStore';
+import { LocalStorageHomeFs } from './LocalStorageHomeFs';
+import { ProviderRegistry } from '@/infrastructure/providers/ProviderRegistry';
 import type {
 	MentionDataProviderPort,
 	ProviderCommandCatalogPort,
@@ -36,6 +40,8 @@ import type {
 	ApprovalRuleStorePort,
 	McpConfigStorePort,
 	McpClientPort,
+	SecretStorePort,
+	HomeFsPort,
 } from '@/domain/ports';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { staticIconPort } from '@/infrastructure/icons/staticIconPort';
@@ -262,6 +268,38 @@ export class LocalStorageBridge
 
 	get mcpClient(): McpClientPort {
 		return this.mcpClientPort;
+	}
+
+	// ── Provider registry / runtime / secret / home-fs ports (SPEC-PV-012) ──────
+	// The shared descriptor-table registry + the inert demo runtime registry
+	// (Claude fixture `ok`, non-Claude `err` "unavailable" — no Node subprocess) +
+	// the in-memory secret store (`isAvailable()→true`, so the masked field is
+	// exercisable) + the inert home-fs (`isAvailable()→false`, no `node:fs`). The
+	// wire-in batch routes the per-tab factory through
+	// `providerRuntimeRegistry.createChatRuntime(providerId)`. Never throws.
+	private readonly providerRegistryPort = new ProviderRegistry();
+	private readonly providerRuntimeRegistryRef = new LocalStorageProviderRuntimeRegistry();
+	private readonly secretStorePort = new LocalStorageSecretStore();
+	private readonly homeFsPort = new LocalStorageHomeFs();
+
+	/** The shared descriptor-table `ProviderRegistryPort` (SPEC-PV-008/012). */
+	get providerRegistry(): ProviderRegistry {
+		return this.providerRegistryPort;
+	}
+
+	/** The inert demo runtime registry (Claude `ok` / non-Claude `err` "unavailable"). */
+	get providerRuntimeRegistry(): LocalStorageProviderRuntimeRegistry {
+		return this.providerRuntimeRegistryRef;
+	}
+
+	/** The in-memory demo `SecretStorePort` (`isAvailable()→true`; no real secret). */
+	get secretStore(): SecretStorePort {
+		return this.secretStorePort;
+	}
+
+	/** The inert demo `HomeFsPort` (`isAvailable()→false`; no `node:fs`). */
+	get homeFs(): HomeFsPort {
+		return this.homeFsPort;
 	}
 
 	showError(message: string, durationMs = 0): void {

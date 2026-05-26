@@ -333,4 +333,32 @@ WIRE-IN/GATE batches ride their own subagents.
   contract (additivity invariant, NFR-PV-001). The early `if (this.cancelled)` reads use
   a private `isCancelled()` opaque accessor (mirrors `MockChatRuntime`) to satisfy
   `no-unnecessary-condition`.
-- **Commit:** `36ff…` (below).
+- **Commit:** `50a0fdd7`.
+
+### T-PV-015/016 — LocalStorageBridge inert non-Claude runtime + in-memory secret + inert home-fs (🧪 qa → 🔨 dev)
+
+- **Spec/test:** TEST-PV-073/083/100 (LS legs); SPEC-PV-012; REQ-PV-073/083/100;
+  NFR-PV-012; EC-PV-8.
+- **Files (new):**
+  - `src/infrastructure/localstorage/LocalStorageProviderRuntime.ts` —
+    `LocalStorageProviderRuntimeRegistry.createChatRuntime(providerId)`: `'claude'` →
+    `ok(new FixtureChatRuntime())` (unchanged P1 demo runtime); non-Claude →
+    `err('unavailable')` (no Node subprocess; degrades, never errors, EC-PV-8).
+  - `src/infrastructure/localstorage/LocalStorageSecretStore.ts` — in-memory
+    `SecretStorePort` (`isAvailable()→true`; round-trips in a `Map`, NOT localStorage —
+    a secret must never persist device-local, NFR-PV-002).
+  - `src/infrastructure/localstorage/LocalStorageHomeFs.ts` — inert `HomeFsPort`
+    (`isAvailable()→false`; reads degrade to `ok(absent/empty)` / the path-escape `err`;
+    no `node:fs`).
+- **Files (edited):** `src/infrastructure/localstorage/LocalStorageBridge.ts` (added
+  the four getters + `SecretStorePort`/`HomeFsPort` to the port-type import).
+- **Tests (new):** `tests/infrastructure/localstorage/LocalStorageProviderRuntime.test.ts`,
+  `LocalStorageSecretStore.test.ts`, `LocalStorageHomeFs.test.ts`.
+- **Outcome:** done. 13 LS tests pass; vue-tsc 0; whole-project lint 0 errors (16
+  pre-existing warnings).
+- **Deviation:** the runtime registry distinguishes `providerId === 'claude'` (the one
+  runnable demo runtime) from the rest. This is per-provider runtime CONSTRUCTION at the
+  infra boundary (the same shape the ObsidianBridge uses), not the consuming-use-case /
+  registry-reader branch the NFR-PV-014 grep gate targets. The shared `providerRegistry`
+  remains data-driven (no id branch).
+- **Commit:** `…` (below).
