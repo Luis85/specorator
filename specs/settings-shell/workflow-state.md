@@ -1,10 +1,10 @@
 ---
 feature: settings-shell
 area: SS
-current_stage: requirements
+current_stage: design
 status: active
 last_updated: 2026-05-26
-last_agent: orchestrator (bootstrap)
+last_agent: pm (/spec:requirements)
 epic: claudian-reboot
 phase: P10
 integration_branch: next
@@ -12,7 +12,7 @@ reference: D:\Projects\claudian-main
 artifacts:
   idea.md: skipped (parity-charter §3.8/§4 P10 + audits + claudian-main stand in, mirrors P1-P9)
   research.md: skipped
-  requirements.md: pending
+  requirements.md: accepted (PRD-SS-001; REQ-SS-001..095, NFR-SS-001..012; 6 CLAR-SS resolved-by-recommendation, CLAR-SS-001 ADR-needed)
   design.md: pending
   spec.md: pending
   tasks.md: pending
@@ -33,7 +33,7 @@ artifacts:
 |---|---|---|
 | 1. Idea | `idea.md` | skipped |
 | 2. Research | `research.md` | skipped |
-| 3. Requirements | `requirements.md` | pending |
+| 3. Requirements | `requirements.md` | accepted |
 | 4. Design | `design.md` | pending |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
@@ -110,4 +110,27 @@ settings, model picker, agent/skill/subagent + slash-command settings, env-snipp
                           env-snippet/environment-settings store + shape (device-local? secret?); the
                           pure settings view-model driving the coverage-excluded DOM; read-only
                           agent/skill/subagent surfacing (no CRUD, per the P9 capability-gated posture).
+2026-05-26 (pm): /spec:requirements ACCEPTED → PRD-SS-001 (specs/settings-shell/requirements.md).
+                          37 functional reqs REQ-SS-001..095 (tagged NEW vs SURFACED) + 12 NFRs
+                          NFR-SS-001..012 + success metrics (counter-metric: zero secret bytes in
+                          data.json) + release criteria. SPLIT: ~30 SURFACED (render/wire the P6-P9
+                          ports — provider tabs/enable/order via ProviderRegistryPort; per-provider
+                          API key via SecretStorePort; default model via ToolbarCatalogPort; MCP via
+                          McpConfigStorePort; approval rules via ApprovalRuleStorePort; keyboard-nav
+                          keys; read-only agent/skill/subagent + slash) vs ~10+ NEW (the env settings +
+                          env-snippet manager subsystem — create/edit/remove/apply/inject + the
+                          shared/provider scope classifier + the secret-bearing-value split; the pure
+                          settings view-model; the WCAG 2.2 AA keyboard-navigable shell; safe-DOM).
+                          DECISIONS: (a) env-snippet STORE = device-local STRUCTURE (SettingsPort) +
+                          secret-bearing VALUES via SecretStorePort (CLAR-SS-001, ADR-NEEDED, parallels
+                          ADR-PV-002 — flagged for architect); (b) settings tab STAYS Obsidian
+                          Setting-API DOM, NOT Vue (CLAR-SS-002, no ADR); (c) agent/skill/subagent +
+                          slash = READ-ONLY surfacing, no CRUD (CLAR-SS-003/005, no ADR); (d) keyboard
+                          nav IN SCOPE — full WCAG 2.2 AA reach/operate (REQ-SS-072). 6 CLAR-SS items,
+                          all resolved-by-recommendation; CLAR-SS-001 (+ CLAR-SS-004) ADR-ratify at
+                          /spec:design; none blocks Stage 4. HAND-OFF → /spec:design (ux/ui-designer +
+                          architect): Part A UX (per-provider tab layout + env-snippet manager +
+                          key-field set/not-set + capability-gated section visibility) + Part B UI
+                          (settings/* → --sp-* parity) + the ADR for CLAR-SS-001 (EnvSnippetStorePort /
+                          the secret-vs-non-secret split).
 ```
