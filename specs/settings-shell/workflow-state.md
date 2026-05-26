@@ -3,8 +3,8 @@ feature: settings-shell
 area: SS
 current_stage: implementation
 status: active
-last_updated: 2026-05-26
-last_agent: dev (/spec:implement — INFRA batch T-SS-020..024)
+last_updated: 2026-05-27
+last_agent: dev (/spec:implement — PLUGIN T-SS-025..026 + STYLES T-SS-027 + WIRE-IN T-SS-029..030)
 epic: claudian-reboot
 phase: P10
 integration_branch: next
@@ -16,7 +16,7 @@ artifacts:
   design.md: complete (DESIGN-SS-001; Parts A UX / B UI / C Architecture; ADR-SS-001 + ADR-SS-002 accepted + filed; CLAR-SS-001/004 ratified by ADR-SS-001, CLAR-SS-002 by ADR-SS-002)
   spec.md: complete (SPEC-SS-001; 28 spec items SPEC-SS-001..028 across 6 layer groups; EC-SS-1..16; TEST-SS-001..095 + M1..M4; every REQ-SS chained to ≥1 SPEC + ≥1 TEST)
   tasks.md: complete (TASKS-SS-001; 35 tasks T-SS-001..035 across 6 batches + baseline; TDD-ordered RED-before-green; every SPEC-SS-001..028 covered; manual legs TEST-SS-M1..M4; NO guard-relax / NO new InjectionKey / NO new obsidian file)
-  implementation-log.md: in-progress (DOMAIN T-SS-001..013 + APPLICATION T-SS-014..019 + INFRA T-SS-020..024 done + committed; PLUGIN T-SS-025..026 / STYLES T-SS-027..028 / WIRE-IN T-SS-029..030 / GATE T-SS-031..035 + manual legs TEST-SS-M1..M4 remain)
+  implementation-log.md: in-progress (DOMAIN T-SS-001..013 + APPLICATION T-SS-014..019 + INFRA T-SS-020..024 + PLUGIN T-SS-025..026 + STYLES T-SS-027 + WIRE-IN T-SS-029..030 done + committed; T-SS-028 token+additivity gate folded into T-SS-027 DoD; GATE T-SS-031..035 + manual legs TEST-SS-M1..M4 remain)
   test-plan.md: in-progress (TESTPLAN-SS-001; guard-verify note + Claude-only additivity baseline + DOMAIN automated status + manual legs TEST-SS-M1..M4)
   test-report.md: pending
   review.md: pending
@@ -37,7 +37,7 @@ artifacts:
 | 4. Design | `design.md` | complete (DESIGN-SS-001 + ADR-SS-001/002 accepted) |
 | 5. Specification | `spec.md` | complete (SPEC-SS-001..028; EC-SS-1..16; TEST-SS-001..095 + M1..M4) |
 | 6. Tasks | `tasks.md` | complete (TASKS-SS-001; 35 tasks T-SS-001..035) |
-| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-SS-001..013 + APPLICATION T-SS-014..019 + INFRA T-SS-020..024 complete + committed; PLUGIN T-SS-025..026 / STYLES T-SS-027..028 / WIRE-IN T-SS-029..030 / GATE T-SS-031..035 remain) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-SS-001..013 + APPLICATION T-SS-014..019 + INFRA T-SS-020..024 + PLUGIN T-SS-025..026 + STYLES T-SS-027 + WIRE-IN T-SS-029..030 complete + committed; GATE T-SS-031..035 + manual legs TEST-SS-M1..M4 remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; report pending) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
@@ -347,4 +347,54 @@ settings, model picker, agent/skill/subagent + slash-command settings, env-snipp
                           EnvSnippetService), GATE T-SS-031..035. MANUAL legs accumulating for the epic gate: TEST-SS-M2
                           (the real obsidian/** subprocess env injection — an applied env scope reaches the active
                           provider's real subprocess at a turn, secretRef resolved via getSecret at the infra boundary).
+2026-05-27 (dev): /spec:implement — PLUGIN T-SS-025..026 + STYLES T-SS-027 + WIRE-IN T-SS-029..030 COMPLETE
+                          on feature/settings-shell. Per-task commit. SHAs: T-SS-025 b4c61538 · T-SS-026 2554e718 ·
+                          T-SS-027 8b46d149 · T-SS-029 e25c6760 · T-SS-030 0bb1ab0a (+ log-SHA doc a261fe1f).
+                          LANDED: (T-SS-025) src/plugin/settings.ts grown additively — keeps the slim P0
+                          module-schema core loop UNCHANGED, then when constructed with a SettingsTabDeps bundle
+                          walks buildSettingsViewModel and renders every SettingsControl via the Setting API /
+                          createEl / setText (safe DOM only); the renderer switch(control.kind) is the ONE allowed
+                          switch (eslint-disable complexity for the 14-member union, ApprovalMatcher precedent),
+                          never on providerId; each onChange wires its narrow port / EnvSnippetService and surfaces
+                          Result.err as a NotificationPort notice; apiKeyField masks (type=password) + shows only the
+                          secretKeysSet tri-state (value never read back); keyboardNav routes through parseNavMappings
+                          (invalid -> warning, nothing persisted); a toggle/key/snippet/rule change re-renders.
+                          (T-SS-026) src/plugin/modals/EnvSnippetModalHost.ts — createSnippetEditLauncher returns the
+                          SnippetEditLauncher seam the tab consumes: an Obsidian Modal snippet editor (name/desc/env/
+                          scope, Save -> EnvSnippetService.create/edit, empty name -> nameRequired notice + no
+                          close/persist) + a separate delete-confirm Modal (-> remove, struct + secret slots); safe
+                          DOM, NO window.confirm. (T-SS-027) tokens.css section 4.17 settings/* --sp-* slice (4 minted
+                          tokens, ASCII-only comments, lightningcss-safe) + tokens.test.ts §4.17 presence + no-leak
+                          guard; the T-SS-028 token+additivity gate folds in (additivity leg already green in
+                          buildSettingsViewModel.test.ts). (T-SS-029) tests/application/settings/noProviderSwitch.test.ts
+                          — no-switch(providerId) over application/settings + domain/chat/environment + the
+                          control.kind-only renderer + safe-DOM + i18n source guards (pass-as-guard). (T-SS-030)
+                          main.ts registers the expanded tab with buildSettingsTabDeps(bridge) — the six bridge ports
+                          + a composed createEnvSnippetService (SettingsPort + SecretStorePort + PROVIDER_DESCRIPTORS,
+                          NO new port) + createSnippetEditLauncher; the standalone (src/ui/main.ts) is unaffected (no
+                          settings tab there). i18n: a new top-level settings.* en+de namespace (section/provider/
+                          apiKey/model/mcp/slash/agent/approvals/permissionMode/keyboardNav/cliPath/env/envSnippets).
+                          VERIFY each task: vue-tsc 0 + WHOLE-project npm run lint 0 errors (19 pre-existing warnings
+                          incl. en/de.ts max-lines 351 from the additive namespace) + targeted vitest green
+                          (application/settings + ui/i18n 75; tokens 23 incl +2 §4.17; noProviderSwitch 14); the full
+                          npx vitest run exited 0. No obsidian import outside src/plugin/** + src/infrastructure/
+                          obsidian/** (grep-verified). COVERAGE-EXCLUDED legs (NOT self-claimed): the real
+                          PluginSettingTab DOM render + keyboard-nav + the snippet edit/delete modal focus-trap are
+                          the deferred MANUAL leg TEST-SS-M1; per the batch directive npm run build/build:web/dev were
+                          NOT run here (the GATE batch runs them). DEVIATIONS: (a) the mcpManager control renders a
+                          lightweight server-list + enable-toggles surface (McpConfigStorePort.load/save) rather than
+                          re-hosting the full P8 Vue McpServerModal seam (which needs McpClientPort, not in the
+                          SPEC-SS-007 mcpManager row); (b) the snippet editor is native Setting-API DOM (not a mounted
+                          Vue app like McpServerModalHost) — leaner + safe-DOM; (c) the snippet scope dropdown lists
+                          every REGISTERED provider (not only enabled) so a snippet can be authored before a provider
+                          is toggled on; (d) T-SS-029 passes-as-guard (no leak to green — invariants held by
+                          construction); (e) no automatable plugin-construction UNIT — the wiring is asserted by the
+                          type-checker compiling SettingsTabDeps against the real bridge getters + the
+                          EnvSnippetService/SnippetEditLauncher factory signatures + the T-SS-029 source guards; the
+                          plugin-build + npm run dev smoke is the GATE's responsibility (TEST-SS-M1). NEXT: the GATE
+                          batch T-SS-031..035 (green the cross-cutting invariants T-SS-024/028/029 at the gate; the
+                          feature-DoD npm run verify + test:all; the four manual legs TEST-SS-M1/M2/M3/M4; the draft
+                          PR into next) — owner dev + human (the manual legs accumulate for the single final epic
+                          review gate). REMAINING OWNER: dev (T-SS-031 invariant green + the verify gate) + human
+                          (TEST-SS-M1..M4). Next agent: the GATE-batch dev/orchestrator.
 ```
