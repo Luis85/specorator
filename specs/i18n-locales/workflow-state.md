@@ -1,10 +1,10 @@
 ---
 feature: i18n-locales
 area: IL
-current_stage: requirements
+current_stage: spec
 status: active
 last_updated: 2026-05-27
-last_agent: pm (requirements)
+last_agent: architect (design + spec)
 epic: claudian-reboot
 phase: P11
 integration_branch: next
@@ -13,8 +13,8 @@ artifacts:
   idea.md: skipped (parity-charter §3.9 + claudian-main 10-locale set stand in, mirrors P1-P10)
   research.md: skipped
   requirements.md: accepted (PRD-IL-001 — 12 REQ-IL + 9 NFR-IL)
-  design.md: pending
-  spec.md: pending
+  design.md: complete (DESIGN-IL-001 — Parts A/B/C; no new ADR)
+  spec.md: complete (SPEC-IL-001 — 9 SPEC-IL + 10 EC-IL + 12 TEST-IL)
   tasks.md: pending
   implementation-log.md: pending
   test-plan.md: pending
@@ -34,8 +34,8 @@ artifacts:
 | 1. Idea | `idea.md` | skipped |
 | 2. Research | `research.md` | skipped |
 | 3. Requirements | `requirements.md` | accepted |
-| 4. Design | `design.md` | pending |
-| 5. Specification | `spec.md` | pending |
+| 4. Design | `design.md` | complete |
+| 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
@@ -113,4 +113,25 @@ catalogs is large).**
                           dedicated automated test, not manual review) resolved. P11-done = 10 locales
                           registered + all-10 parity green + build green; native-speaker polish deferred
                           to P12/future. Hand-off → /spec:design (architect, Part A UX + Part B UI).
+2026-05-27 (architect):   Stage 4 design + Stage 5 spec complete (autonomous, one dispatch).
+                          DESIGN-IL-001 (LIGHT, Parts A/B/C): A — locale selection is the existing
+                          P0 `locale` dropdown grown 2→10, missing key falls back to en (no new
+                          flow); B — no new component, 8 new `locales/<code>.ts` mirroring de.ts
+                          (en keyset exact, translated, placeholders preserved, plain text); C —
+                          additive 2→10 widening of SupportedLocale/SUPPORTED_LOCALES/messages,
+                          toSupportedLocale body UNCHANGED (narrows via the array), all-10-vs-en
+                          parity test (snapshot-at-load), placeholder-multiset test (CLAR-IL-001
+                          resolved = dedicated test), forbidden-terms guard across all 10 (allowlist
+                          unchanged), bundle grows but bundled (no externalization). VERDICT: NO new
+                          port, NO new component, NO new ADR (i18n system + narrowing SPEC-PSR-012 +
+                          P7 parity pattern + P9 guard already exist; this is additive data + a
+                          4-site widening). SPEC-IL-001 (9 SPEC + 10 EC-IL + 12 TEST-IL): exact final
+                          shapes pinned (SupportedLocale union of 10, SUPPORTED_LOCALES en-first then
+                          de then alpha with zh-* last, messages map, 8 file contracts). Chunking for
+                          planner = 4 chunks: (1) es/fr/pt Romance, (2) ja/ko CJK, (3) zh-CN/zh-TW/ru,
+                          (4) index wiring + the 4 tests (lands last, flips suite green + records
+                          bundle delta). REQ↔SPEC↔TEST coverage table complete. Hand-off → /spec:tasks
+                          (planner): split per the 4 chunks; Chunk 4 may land RED test scaffold first
+                          so each locale chunk turns its row GREEN. No open clarifications
+                          (CLAR-IL-001 already resolved upstream).
 ```
