@@ -352,6 +352,25 @@
 	/* the service-tier `zap` active glow (reduced-motion-safe) */
 	--sp-service-tier-glow: 0 0 0 1px var(--sp-toggle-active);
 }
+
+/* section 4.14 - Approvals and security (P7, SPEC-AS-020, NFR-AS-012). The
+ * status-panel plus permission-toggle slice. Each token is a token-layer var
+ * lookup - no hex, no raw Obsidian var outside this layer, no physical CSS
+ * property (lint-style-tokens guard, TEST-AS-062). Reuses the existing set
+ * (--sp-border, --sp-radius, --sp-bg, --sp-text, --sp-space, --sp-success,
+ * --sp-status-error, and the P6 --sp-toggle-active) - only the four genuinely
+ * new approvals/permission tokens are minted here. The P6
+ * toolbar.permission.deferred styling is removed with the seam. */
+.specorator-root {
+	/* approvals rule list row spacing (status-panel.css list rhythm) */
+	--sp-approvals-row-gap: var(--sp-space-2);
+	/* allow-rule badge tint (the allow/approve state colour) */
+	--sp-approvals-decision-allow: var(--sp-success);
+	/* deny-rule badge tint (the deny/blocked state colour) */
+	--sp-approvals-decision-deny: var(--sp-status-error);
+	/* the active permission-mode pill fill (permission-toggle.css active) */
+	--sp-permission-mode-active: var(--sp-toggle-active);
+}
 /*
  * Specorator named-keyframes layer (ADR-AUX-002, spec.md §1.3.6 / §3.4 / §4.6).
  *
@@ -1169,7 +1188,7 @@
 	font-size: var(--sp-font-size-sm);
 }
 
-.specorator-root :where(.sp-inline-plan-approval[data-v-9dc5dea8]) {
+.specorator-root :where(.sp-inline-plan-approval[data-v-c3af4631]) {
 	display: flex;
 	flex-direction: column;
 	gap: var(--sp-space-2);
@@ -1179,10 +1198,10 @@
 	background: var(--sp-inline-block-bg);
 	outline: none;
 }
-.specorator-root :where(.sp-inline-plan-approval__tool[data-v-9dc5dea8]) {
+.specorator-root :where(.sp-inline-plan-approval__tool[data-v-c3af4631]) {
 	font-weight: var(--sp-font-weight-semibold);
 }
-.specorator-root :where(.sp-inline-plan-approval__context[data-v-9dc5dea8]) {
+.specorator-root :where(.sp-inline-plan-approval__context[data-v-c3af4631]) {
 	font-family: var(--sp-font-mono);
 	font-size: var(--sp-font-size-sm);
 	background: var(--sp-bg-secondary);
@@ -1190,11 +1209,11 @@
 	padding: var(--sp-space-2);
 	white-space: pre-wrap;
 }
-.specorator-root :where(.sp-inline-plan-approval__options[data-v-9dc5dea8]) {
+.specorator-root :where(.sp-inline-plan-approval__options[data-v-c3af4631]) {
 	display: flex;
 	gap: var(--sp-space-2);
 }
-.specorator-root :where(.sp-inline-plan-approval__option[data-v-9dc5dea8]) {
+.specorator-root :where(.sp-inline-plan-approval__option[data-v-c3af4631]) {
 	border: 1px solid var(--sp-border);
 	border-radius: var(--sp-radius-sm);
 	background: var(--sp-bg-primary);
@@ -1203,12 +1222,12 @@
 	padding-block: var(--sp-space-1);
 	cursor: pointer;
 }
-.specorator-root :where(.sp-inline-plan-approval__option--focused[data-v-9dc5dea8]) {
+.specorator-root :where(.sp-inline-plan-approval__option--focused[data-v-c3af4631]) {
 	background: var(--sp-ask-item-focused-bg);
 	border-color: var(--sp-ask-cursor);
 }
-.specorator-root :where(.sp-inline-plan-approval__hints[data-v-9dc5dea8]),
-.specorator-root :where(.sp-inline-plan-approval__readonly[data-v-9dc5dea8]) {
+.specorator-root :where(.sp-inline-plan-approval__hints[data-v-c3af4631]),
+.specorator-root :where(.sp-inline-plan-approval__readonly[data-v-c3af4631]) {
 	color: var(--sp-text-muted);
 	font-size: var(--sp-font-size-sm);
 }
@@ -1410,7 +1429,7 @@
 	color: var(--sp-text-normal);
 }
 
-.specorator-root :where(.sp-toolbar-permission[data-v-3108e21a]) {
+.specorator-root :where(.sp-toolbar-permission[data-v-2c4e93fd]) {
 	display: inline-flex;
 	align-items: center;
 	block-size: var(--sp-toolbar-widget-h);
@@ -1423,13 +1442,35 @@
 	opacity: var(--sp-toolbar-disabled-opacity);
 	cursor: pointer;
 }
-.specorator-root :where(.sp-toolbar-permission__plan[data-v-3108e21a]) {
+.specorator-root :where(.sp-toolbar-permission--live[data-v-2c4e93fd]) {
+	gap: var(--sp-space-1);
+	color: var(--sp-text-normal);
+	opacity: 1;
+}
+.specorator-root :where(.sp-toolbar-permission__option[data-v-2c4e93fd]) {
+	border: 1px solid transparent;
+	border-radius: var(--sp-radius-sm);
+	background: transparent;
+	color: var(--sp-text-muted);
+	padding-inline: var(--sp-space-2);
+	font-size: var(--sp-font-size-sm);
+	cursor: pointer;
+}
+.specorator-root :where(.sp-toolbar-permission__option--active[data-v-2c4e93fd]) {
+	border-color: var(--sp-permission-mode-active);
+	color: var(--sp-permission-mode-active);
+	font-weight: var(--sp-font-weight-semibold);
+}
+.specorator-root :where(.sp-toolbar-permission__option--focused[data-v-2c4e93fd]) {
+	border-color: var(--sp-permission-mode-active);
+}
+.specorator-root :where(.sp-toolbar-permission__plan[data-v-2c4e93fd]) {
 	display: inline-flex;
 	align-items: center;
 	block-size: var(--sp-toolbar-widget-h);
-	border: 1px solid var(--sp-toggle-active);
+	border: 1px solid var(--sp-permission-mode-active);
 	border-radius: var(--sp-radius-md);
-	color: var(--sp-toggle-active);
+	color: var(--sp-permission-mode-active);
 	padding-inline: var(--sp-space-2);
 	font-size: var(--sp-font-size-sm);
 	font-weight: var(--sp-font-weight-semibold);
@@ -1584,24 +1625,24 @@
 }
 }
 
-.specorator-root :where(.sp-toolbar-strip[data-v-32bb6d06]) {
+.specorator-root :where(.sp-toolbar-strip[data-v-23f3f74a]) {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--sp-toolbar-gap);
 }
-.specorator-root :where(.sp-toolbar-strip__group[data-v-32bb6d06]) {
+.specorator-root :where(.sp-toolbar-strip__group[data-v-23f3f74a]) {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--sp-toolbar-gap);
 }
-.specorator-root :where(.sp-toolbar-strip__meter[data-v-32bb6d06]) {
+.specorator-root :where(.sp-toolbar-strip__meter[data-v-23f3f74a]) {
 	margin-inline-start: auto;
 }
 
-.specorator-root :where(.sp-chat-composer[data-v-ccfbe406]) {
+.specorator-root :where(.sp-chat-composer[data-v-8b5c2974]) {
 	display: flex;
 	flex-direction: column;
 	min-block-size: var(--sp-input-min-h);
@@ -1610,22 +1651,22 @@
 	background: var(--sp-bg-primary);
 	padding: var(--sp-space-3);
 }
-.specorator-root :where(.sp-chat-composer__context[data-v-ccfbe406]) {
+.specorator-root :where(.sp-chat-composer__context[data-v-8b5c2974]) {
 	display: flex;
 	flex-direction: column;
 	gap: var(--sp-context-bar-gap);
 	padding-block-end: var(--sp-space-2);
 }
-.specorator-root :where(.sp-chat-composer--plan[data-v-ccfbe406]) {
+.specorator-root :where(.sp-chat-composer--plan[data-v-8b5c2974]) {
 	border-color: var(--sp-plan-border);
 }
-.specorator-root :where(.sp-chat-composer--instruction[data-v-ccfbe406]) {
+.specorator-root :where(.sp-chat-composer--instruction[data-v-8b5c2974]) {
 	border-color: var(--sp-instruction-border);
 }
-.specorator-root :where(.sp-chat-composer--bang-bash[data-v-ccfbe406]) {
+.specorator-root :where(.sp-chat-composer--bang-bash[data-v-8b5c2974]) {
 	border-color: var(--sp-bash-border);
 }
-.specorator-root :where(.sp-chat-composer__textarea[data-v-ccfbe406]) {
+.specorator-root :where(.sp-chat-composer__textarea[data-v-8b5c2974]) {
 	flex: 1;
 	border: none;
 	background: transparent;
@@ -1638,19 +1679,19 @@
 	max-block-size: var(--sp-textarea-max-h);
 	outline: none;
 }
-.specorator-root :where(.sp-chat-composer--mono .sp-chat-composer__textarea[data-v-ccfbe406]) {
+.specorator-root :where(.sp-chat-composer--mono .sp-chat-composer__textarea[data-v-8b5c2974]) {
 	font-family: var(--sp-font-mono);
 }
-.specorator-root :where(.sp-chat-composer__controls[data-v-ccfbe406]) {
+.specorator-root :where(.sp-chat-composer__controls[data-v-8b5c2974]) {
 	padding-block-start: var(--sp-space-2);
 }
-.specorator-root :where(.sp-chat-composer__toolbar[data-v-ccfbe406]) {
+.specorator-root :where(.sp-chat-composer__toolbar[data-v-8b5c2974]) {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	padding-block-start: var(--sp-space-2);
 }
-.specorator-root :where(.sp-chat-composer__attach[data-v-ccfbe406]) {
+.specorator-root :where(.sp-chat-composer__attach[data-v-8b5c2974]) {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -1662,7 +1703,7 @@
 	color: var(--sp-text-muted);
 	cursor: pointer;
 }
-.specorator-root :where(.sp-chat-composer__send[data-v-ccfbe406]) {
+.specorator-root :where(.sp-chat-composer__send[data-v-8b5c2974]) {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -1674,7 +1715,7 @@
 	color: var(--sp-text-on-accent);
 	cursor: pointer;
 }
-.specorator-root :where(.sp-chat-composer__send[data-v-ccfbe406]:disabled) {
+.specorator-root :where(.sp-chat-composer__send[data-v-8b5c2974]:disabled) {
 	opacity: 0.4;
 	cursor: default;
 }
@@ -1837,31 +1878,104 @@
 }
 }
 
-.specorator-root :where(.sp-chat-surface[data-v-57280aca]) {
+.specorator-root :where(.sp-approvals-rule[data-v-67cb01d7]) {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-space-2);
+	font-size: var(--sp-font-size-sm);
+}
+.specorator-root :where(.sp-approvals-rule__tool[data-v-67cb01d7]) {
+	font-weight: var(--sp-font-weight-semibold);
+}
+.specorator-root :where(.sp-approvals-rule__pattern[data-v-67cb01d7]) {
+	font-family: var(--sp-font-mono);
+	color: var(--sp-text-muted);
+}
+.specorator-root :where(.sp-approvals-rule__decision[data-v-67cb01d7]) {
+	border-radius: var(--sp-radius-sm);
+	padding-inline: var(--sp-space-1);
+}
+.specorator-root :where(.sp-approvals-rule__decision--allow[data-v-67cb01d7]) {
+	color: var(--sp-approvals-decision-allow);
+}
+.specorator-root :where(.sp-approvals-rule__decision--deny[data-v-67cb01d7]) {
+	color: var(--sp-approvals-decision-deny);
+}
+.specorator-root :where(.sp-approvals-rule__lifetime[data-v-67cb01d7]) {
+	color: var(--sp-text-muted);
+}
+.specorator-root :where(.sp-approvals-rule__remove[data-v-67cb01d7]) {
+	margin-inline-start: auto;
+	border: 1px solid var(--sp-border);
+	border-radius: var(--sp-radius-sm);
+	background: transparent;
+	color: var(--sp-text-muted);
+	cursor: pointer;
+}
+
+.specorator-root :where(.sp-approvals-panel[data-v-0675d5e0]) {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-space-2);
+	padding: var(--sp-space-3);
+	border: 1px solid var(--sp-border);
+	border-radius: var(--sp-radius-md);
+	background: var(--sp-bg-secondary);
+}
+.specorator-root :where(.sp-approvals-panel__title[data-v-0675d5e0]) {
+	margin: 0;
+	font-size: var(--sp-font-size-sm);
+	font-weight: var(--sp-font-weight-semibold);
+}
+.specorator-root :where(.sp-approvals-panel__mode[data-v-0675d5e0]) {
+	margin: 0;
+	font-size: var(--sp-font-size-sm);
+	color: var(--sp-text-muted);
+}
+.specorator-root :where(.sp-approvals-panel__heading[data-v-0675d5e0]) {
+	margin: 0;
+	font-size: var(--sp-font-size-sm);
+	color: var(--sp-text-muted);
+}
+.specorator-root :where(.sp-approvals-panel__empty[data-v-0675d5e0]) {
+	margin: 0;
+	font-size: var(--sp-font-size-sm);
+	color: var(--sp-text-muted);
+}
+.specorator-root :where(.sp-approvals-panel__rules[data-v-0675d5e0]) {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-approvals-row-gap);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.specorator-root :where(.sp-chat-surface[data-v-86c54f7c]) {
 	display: flex;
 	flex-direction: column;
 	block-size: 100%;
 	gap: var(--sp-space-3);
 	padding: var(--sp-space-5);
 }
-.specorator-root :where(.sp-chat-surface__region[data-v-57280aca]) {
+.specorator-root :where(.sp-chat-surface__region[data-v-86c54f7c]) {
 	display: flex;
 	flex-direction: column;
 	flex: 1;
 	min-block-size: 0;
 }
-.specorator-root :where(.sp-chat-surface__busy[data-v-57280aca]) {
+.specorator-root :where(.sp-chat-surface__busy[data-v-86c54f7c]) {
 	padding-block-start: var(--sp-space-3);
 	color: var(--sp-accent);
 	font-size: var(--sp-font-size-sm);
 	font-style: italic;
 }
-.specorator-root :where(.sp-chat-surface__actions[data-v-57280aca]) {
+.specorator-root :where(.sp-chat-surface__actions[data-v-86c54f7c]) {
 	display: flex;
 	align-items: center;
 	gap: var(--sp-space-2);
 }
-.specorator-root :where(.sp-chat-surface__compact[data-v-57280aca]) {
+.specorator-root :where(.sp-chat-surface__compact[data-v-86c54f7c]) {
 	border: 1px solid var(--sp-border);
 	border-radius: var(--sp-radius-md);
 	background: transparent;
