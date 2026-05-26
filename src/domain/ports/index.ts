@@ -116,3 +116,18 @@ export type {
 export type { PermissionMode } from '@/domain/chat/PermissionMode';
 export type { ApprovalRuleStorePort } from './ApprovalRuleStorePort';
 export type { ApprovalRule, ApprovalRuleInput } from '@/domain/chat/approvals/ApprovalRule';
+
+// P8 mcp-client (SPEC-MC-007/008, ADR-MC-001/002). The two narrow MCP ports (one
+// consumer each, no aggregate) + the connection handle, surfaced through the ports
+// barrel for one-stop import alongside the MCP DTOs they carry.
+export type { McpConfigStorePort } from './McpConfigStorePort';
+export type { McpClientPort, McpConnection } from './McpClientPort';
+export type {
+	McpServerConfig,
+	McpServerType,
+	ManagedMcpServer,
+	McpTool,
+	McpTestResult,
+	ParsedMcpConfig,
+	EnabledMcpServers,
+} from '@/domain/chat/mcp/McpTypes';

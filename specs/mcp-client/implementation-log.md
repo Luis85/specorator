@@ -203,9 +203,48 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   `npm run lint` 0 errors (12 pre-existing warnings); `vitest run` 23/23 (the two
   files) + 73/73 (the mcp suite). No `obsidian`/`node:*`/Vue import in
   `src/domain/chat/mcp/**`.
-- **Commit:** <pending>
+- **Commit:** `bf78a92a`.
 - **Deviation:** `splitCommandString`'s single-pass quote/whitespace state machine
   would exceed the cap-10 complexity inline; rather than a complexity-disable (the
   P7 `ApprovalMatcher` precedent) the per-char branch was extracted into a
   `stepCharacter(state, char, push)` helper — behaviour-identical to the verbatim
   Claudian loop, no disable needed.
+
+### T-MC-010 — RED `McpConfigStorePort` + `McpClientPort` + keys + barrels (🧪 qa)
+
+- **Spec/test:** TEST-MC-081 (port-shape leg); SPEC-MC-007/008;
+  REQ-MC-001/002/007/020..023/030..034; NFR-MC-005.
+- **Files:** `tests/domain/ports/McpConfigStorePort.test.ts` (new — exactly
+  `load`/`save`/`exists` Result-typed + own `MCP_CONFIG_STORE_PORT` key + the barrel
+  re-export of the port + `ManagedMcpServer`) + `tests/domain/ports/McpClientPort.test.ts`
+  (new — exactly `isAvailable`/`test`/`connect`/`listTools`/`callTool`/`disconnect`
+  (`test` → `McpTestResult` never throws, the live methods Result-typed) +
+  `McpConnection { readonly id }` + own `MCP_CLIENT_PORT` key + the barrel re-exports).
+- **Outcome:** done — RED confirmed (`vue-tsc` failed on the missing port modules,
+  the missing barrel members, and the missing keys; the unresolved imports fail the
+  vitest run).
+- **Commit:** `7f59e830`.
+
+### T-MC-011 — `McpConfigStorePort` + `McpClientPort` + keys + barrel re-exports (🔨 dev)
+
+- **Spec/req:** SPEC-MC-007/008; REQ-MC-001/002/007/020..023/030..034; NFR-MC-005/004.
+- **Files:** `src/domain/ports/McpConfigStorePort.ts` (new — `load`/`save`/`exists`,
+  all `Promise<Result<…>>`, the documented per-method contract: load-or-default
+  `ok([])`, codec-round-trip + CLI-key preservation, `exists`); `src/domain/ports/McpClientPort.ts`
+  (new — `isAvailable`/`test`/`connect`/`listTools`/`callTool`/`disconnect` +
+  `McpConnection`; `test` returns a structured `McpTestResult` and never throws, the
+  documented 10s-timeout + SPEC-MC-028 matrix contract); `src/infrastructure/bridge/ports.ts`
+  (the `MCP_CONFIG_STORE_PORT` + `MCP_CLIENT_PORT` `InjectionKey`s appended — own
+  keys, no aggregate); `src/domain/ports/index.ts` (the barrel re-exports of the two
+  ports + `McpConnection` + the MCP DTOs `McpServerConfig`/`McpServerType`/
+  `ManagedMcpServer`/`McpTool`/`McpTestResult`/`ParsedMcpConfig`/`EnabledMcpServers`
+  appended).
+- **Outcome:** done — the prior RED (TEST-MC-081 port-shape leg) now green (4/4);
+  the whole `tests/domain/{chat,ports}` surface 196/196. **Deleted-symbol guard green**
+  — the new keys / the new port paths resolve clean (no relaxation needed).
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); whole-project
+  `npm run lint` 0 errors (12 pre-existing warnings); `vitest run` 4/4 (the two port
+  files) + 196/196 (domain chat + ports). No `obsidian`/`node:*` import in
+  `src/domain/**`.
+- **Commit:** <pending>
+- **Deviation:** none.
