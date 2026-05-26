@@ -707,3 +707,52 @@ WIRE-IN/GATE batches ride their own subagents.
   (plus the form `@submit.prevent` for Enter) so a single emit fires per save in both
   jsdom and the browser — no double-emit on a submit-button click.
 - **Commit (green):** `54714b01`.
+
+## T-PV-031 — RED: provider-aware toolbar widgets + no-`switch(providerId)` guard (🧪)
+
+- **Spec/req:** TEST-PV-013/062 (A legs), SPEC-PV-017, SPEC-PV-029,
+  REQ-PV-013/024/034/043/062/063/064, NFR-PV-001/006/008/014.
+- **Files:** `tests/ui/chat/toolbar/ModelSelector.po.ts` (extended — an
+  `opencodePickerShown()` getter on the `opencode-model-picker` testid),
+  `tests/ui/chat/toolbar/ModelSelector.test.ts` (extended — a "provider-aware shape"
+  describe: opencode → the `opencode-model-picker` shape, absent/claude →
+  byte-identical P6), `tests/ui/chat/providers/no-provider-switch.test.ts` (new — a
+  source-level guard that the toolbar widgets + the provider components carry no
+  `switch (providerId)` / `provider-id === '…'` branch).
+- **Outcome:** done (RED confirmed — the opencode-shape assertion fails;
+  the P6 ModelSelector regression (14) + the no-switch guard pass).
+- **Scope note:** the `ThinkingSelector`/`ServiceTierToggle` + the rewind/fork/steer/
+  MCP/provider-command affordances ALREADY read the capability bag
+  (`getToolbarCapabilities`/`getCapabilities` → `buildToolbarViewModel`/
+  `buildProviderViewModel`), with no `providerId` branch (verified by grep) — P9 only
+  supplies the per-provider flags, so no new RED widget assertion is needed beyond the
+  opencode picker shape + the guard. The mid-turn `providers.notice.unsupported`
+  microcopy ships in the locale (T-PV-028) and rides the existing notice seam.
+- **Commit (RED):** `098fd7df`.
+
+## T-PV-032 — provider-aware `ModelSelector` opencode picker shape (🔨)
+
+- **Spec/req:** SPEC-PV-017, SPEC-PV-025, SPEC-PV-029, SPEC-PV-030,
+  REQ-PV-013/024/025/034/043/062/063/064, NFR-PV-006/008/014.
+- **Files:** `src/ui/chat/toolbar/ModelSelector.vue` (additive optional `providerId`
+  prop → a per-provider picker variant from a data-driven `PICKER_VARIANT` map; the
+  `opencode-model-picker` shape renders for opencode; a pure lookup, never a
+  provider-id branch), `src/ui/chat/toolbar/ToolbarStrip.vue` (threads the optional
+  `providerId` through to `ModelSelector`), `tests/ui/chat/providers/
+  no-provider-switch.test.ts` (hardened — strips comments before the guard match so a
+  doc-comment mention never trips it).
+- **Outcome:** done. The prior RED opencode-shape assertion now passes; the P6
+  ModelSelector/ThinkingSelector/ServiceTierToggle + ToolbarStrip regressions stay
+  green; the no-switch guard + the en↔de locale-parity stay green.
+- **Verify:** `vitest run` on the toolbar widgets + the provider components + the
+  guard + the locale-parity green (38 + 27 across the runs); `vue-tsc -p
+  tsconfig.lint.json --noEmit` exit 0; whole-project `npm run lint` 0 errors (16
+  pre-existing warnings only).
+- **Deviation:** the `ChatSurface`/`tabsStore` provide-site wiring (the actual
+  `provide(PROVIDER_REGISTRY_PORT/SECRET_STORE_PORT)`, the `getCatalog(active)`
+  un-hardcode, the chooser mount + `SelectProviderUseCase` routing) is intentionally
+  NOT done here — that is the parent-owned WIRE-IN (T-PV-034..036, SPEC-PV-020). This
+  task delivers only the additive component-layer seam (the optional `providerId` prop
+  + the picker variant), which degrades byte-identical to P6/P8 when the prop is
+  absent (NFR-PV-001).
+- **Commit (green):** `42490bca`.
