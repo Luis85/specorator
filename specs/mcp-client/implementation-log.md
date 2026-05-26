@@ -296,6 +296,59 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
   (no `npm install` mutation was required); T-MC-012 reduces to the externals +
   bundle-boundary verification and the AGENTS.md §8 rationale record.
 
+### T-MC-013 — `ObsidianBridge` real vault store + real SDK client (coverage-excluded) (🔨 dev)
+
+- **Spec/req:** SPEC-MC-009; REQ-MC-001/007/020..023/030..034/061..064/080;
+  NFR-MC-002/006 (manual leg).
+- **Files:**
+  - `src/infrastructure/obsidian/VaultMcpConfigStore.ts` (new — the
+    `McpConfigStorePort` over `VaultPort` on `.claude/mcp.json`: `load` probes
+    `fileExists` then reads the text or `null` → `deserializeMcpConfig`; `save`
+    reads the prior text → `serializeMcpConfig(servers, existingRaw)` → `createFolder('.claude')`
+    + `writeFile`; `exists` → `fileExists`. Vault file, NOT `data.json`, NOT
+    device-local — the pure codec is the round-trip authority, this bridge is thin
+    `Result`-typed I/O via `tryAsync`, never throws).
+  - `src/infrastructure/obsidian/SdkMcpClient.ts` (new — the `McpClientPort` real SDK
+    transports over `@modelcontextprotocol/sdk`: `isAvailable()→true`; `test` builds
+    the per-type transport — stdio (`StdioClientTransport`, bounded explicit spawn:
+    no-shell `parseCommand` cmd+args, merged `env` + enhanced `PATH`, `stderr:'ignore'`),
+    SSE (`SSEClientTransport`) / HTTP (`StreamableHTTPClientTransport`) over a Node
+    `http`/`https` fetch shim (no renderer CORS, TLS not weakened) — connects with a
+    **10s `AbortController`**, maps the SPEC-MC-028 state model (success / partial /
+    timeout / error / unavailable), tears every transport down in `finally`, NEVER
+    throws; `connect`/`listTools`/`callTool`/`disconnect` retain a live `Client` keyed
+    by an opaque id (the future-non-SDK / Mock seam, OFF the P8 turn-time path)).
+  - `src/infrastructure/obsidian/ObsidianBridge.ts` (the `get mcpConfigStore` →
+    `new VaultMcpConfigStore(this)` + `get mcpClient` → `new SdkMcpClient()` lazy
+    getters appended; `McpConfigStorePort`/`McpClientPort` added to the type imports —
+    NOT to the `implements` clause, since the bridge exposes them via getters like the
+    other P3–P7 factory/getter ports, not as direct members).
+- **File-naming directive honoured:** the files are `VaultMcpConfigStore.ts` +
+  `SdkMcpClient.ts` directly under `src/infrastructure/obsidian/` — NOT prefixed
+  `ObsidianMcp`, NOT under `src/infrastructure/obsidian/mcp/`, so neither still-active
+  ban glob (`@/infrastructure/obsidian/ObsidianMcp*` / `obsidian/mcp/**`) matches.
+- **Outcome:** done. Coverage-excluded (`src/infrastructure/obsidian/**`); the SDK is
+  imported ONLY here. The behavioural gate is the MANUAL legs **TEST-MC-M1** + the
+  real-transport sub-legs **TEST-MC-021/022/061/064** — scheduled in `test-plan.md`,
+  NOT self-claimed green by this agent.
+- **Verify:** whole-project `vue-tsc -p tsconfig.lint.json` **0 errors**; whole-project
+  `npm run lint` **0 errors** (12 pre-existing warnings only); `npm run build` (plugin)
+  green — the SDK + the stdio/SSE/HTTP transports **bundle into `main.js`** (1.65 MB,
+  4 transport-symbol matches), the node builtins stay external, `styles.css` clean. No
+  `obsidian`/SDK/`node:*` symbol leaks past the two files (the bridge imports only the
+  classes). `build:web` deliberately NOT run here (the orchestrator runs the full chain
+  at the gate; the SDK lives only under `obsidian/**` which `src/ui/main.ts` never imports).
+- **Deviation:** the SSE transport keeps a single `eslint-disable-next-line
+  @typescript-eslint/no-deprecated` on `new SSEClientTransport` (the SDK marks SSE
+  deprecated in favour of streamable-HTTP, but REQ-MC-021 requires SSE for legacy
+  servers — parity claudian `createLegacySseTransport`). The Node fetch shim is ported
+  from claudian `McpTester.createNodeFetch`, refactored into a top-level `runNodeRequest`
+  executor (complexity cap) with braced void-expression callbacks (project lint rules);
+  behaviour-identical. `_enhancedPath` mirrors `ObsidianShellExec._enhancedPath` /
+  `ClaudeCliChatRuntime._buildEnv` (the established plugin enhanced-PATH posture) rather
+  than porting claudian's 460-line `utils/env.ts` `getEnhancedPath` — the same
+  no-secret, GUI-sparse-PATH augmentation, scoped to what the spawn needs.
+
 ## DOMAIN batch (T-MC-001..011) — close-out
 
 All eleven DOMAIN-batch tasks executed in strict TDD order (RED qa → green dev), one

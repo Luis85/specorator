@@ -37,6 +37,8 @@ import type {
 	SelectionHighlightPort,
 	ToolbarCatalogPort,
 	ApprovalRuleStorePort,
+	McpConfigStorePort,
+	McpClientPort,
 } from '@/domain/ports';
 import type { Result } from '@/domain/shared/Result';
 import { ok, err } from '@/domain/shared/Result';
@@ -49,6 +51,8 @@ import { ObsidianShellExec } from './ObsidianShellExec';
 import { ObsidianSelectionSource, ObsidianSelectionHighlight } from './ObsidianSelectionPorts';
 import { ObsidianToolbarCatalog } from './ObsidianToolbarCatalog';
 import { ObsidianApprovalRuleStore } from './ObsidianApprovalRuleStore';
+import { VaultMcpConfigStore } from './VaultMcpConfigStore';
+import { SdkMcpClient } from './SdkMcpClient';
 import { VaultFileHistoryStore } from './history/VaultFileHistoryStore';
 import { safeMarkdownRender } from '@/application/chat/safeMarkdownRender';
 import { walkSvgElementToIconNode } from './walkSvgElementToIconNode';
@@ -393,6 +397,27 @@ export class ObsidianBridge
 	get approvalRuleStore(): ApprovalRuleStorePort {
 		this.approvalRuleStorePort ??= new ObsidianApprovalRuleStore(this.app);
 		return this.approvalRuleStorePort;
+	}
+
+	// ── MCP config store + client ports (SPEC-MC-009, ADR-MC-001/002) ───────────
+	// The real vault `.claude/mcp.json` round-trip (via the pure codec over the
+	// VaultPort — NEVER `data.json`, NEVER device-local, the single seam diverging
+	// from the device-local precedent because the Claude CLI must read it) + the
+	// real SDK stdio/SSE/HTTP transports over `@modelcontextprotocol/sdk` (the only
+	// place the SDK is imported). Lazily created; coverage-excluded infra (manual
+	// legs TEST-MC-M1 + TEST-MC-021/022/061/064). No `obsidian`/SDK/`node:*` symbol
+	// leaks past `VaultMcpConfigStore.ts` / `SdkMcpClient.ts`.
+	private mcpConfigStorePort: McpConfigStorePort | null = null;
+	private mcpClientPort: McpClientPort | null = null;
+
+	get mcpConfigStore(): McpConfigStorePort {
+		this.mcpConfigStorePort ??= new VaultMcpConfigStore(this);
+		return this.mcpConfigStorePort;
+	}
+
+	get mcpClient(): McpClientPort {
+		this.mcpClientPort ??= new SdkMcpClient();
+		return this.mcpClientPort;
 	}
 
 	private _track(notice: Notice): void {
