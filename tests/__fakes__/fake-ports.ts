@@ -11,6 +11,10 @@ import type { MockToolbarCatalog } from '@/infrastructure/mock/MockToolbarCatalo
 import type { MockApprovalRuleStore } from '@/infrastructure/mock/MockApprovalRuleStore';
 import type { MockMcpConfigStore } from '@/infrastructure/mock/MockMcpConfigStore';
 import type { MockMcpClient } from '@/infrastructure/mock/MockMcpClient';
+import type { ProviderRegistry } from '@/infrastructure/providers/ProviderRegistry';
+import type { MockProviderRuntimeRegistry } from '@/infrastructure/mock/MockProviderRuntime';
+import type { MockSecretStore } from '@/infrastructure/mock/MockSecretStore';
+import type { MockHomeFs } from '@/infrastructure/mock/MockHomeFs';
 import type {
 	SettingsPort,
 	VaultPort,
@@ -102,6 +106,31 @@ export interface FakePorts {
 	 * transport.
 	 */
 	readonly mcpClient: MockMcpClient;
+	/**
+	 * The shared descriptor-table `ProviderRegistryPort` (SPEC-PV-011, T-PV-014).
+	 * The chooser view-model + select use case read the registered/enabled lists +
+	 * the resolve helpers through it (the same impl all three bridges back).
+	 */
+	readonly providerRegistry: ProviderRegistry;
+	/**
+	 * The scriptable per-provider runtime/transport registry (SPEC-PV-011, T-PV-014).
+	 * The widened `(providerId) => Result<ChatRuntimePort>` factory body — drive the
+	 * SPEC-PV-025 construct gate via `setProviderConstructMode` + the SPEC-PV-026
+	 * stream/timeout/error-chunk matrix via `scriptProviderStream`/`setTransportMode`.
+	 */
+	readonly providerRuntimeRegistry: MockProviderRuntimeRegistry;
+	/**
+	 * The in-memory `SecretStorePort` (SPEC-PV-011, T-PV-014). `seedSecret` /
+	 * `getStoredKeys` / `setSecretStoreAvailable` drive the round-trip + the
+	 * availability gate without a real OS secret.
+	 */
+	readonly secretStore: MockSecretStore;
+	/**
+	 * The inert/seedable `HomeFsPort` (SPEC-PV-011, T-PV-014). `isAvailable()` →
+	 * `false` until `seedHomeFile` populates a fixture (flipping availability); the
+	 * path-escape rule still rejects reads outside `HOME_FS_ROOTS`.
+	 */
+	readonly homeFs: MockHomeFs;
 }
 
 export function fakeModulePorts(): FakePorts {
@@ -133,5 +162,9 @@ export function fakeModulePorts(): FakePorts {
 		approvalRuleStore: bridge.approvalRuleStore,
 		mcpConfigStore: bridge.mcpConfigStore,
 		mcpClient: bridge.mcpClient,
+		providerRegistry: bridge.providerRegistry,
+		providerRuntimeRegistry: bridge.providerRuntimeRegistry,
+		secretStore: bridge.secretStore,
+		homeFs: bridge.homeFs,
 	};
 }

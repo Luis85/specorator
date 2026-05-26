@@ -203,6 +203,38 @@ export default {
 					saveFailed: 'Could not save your MCP server configuration.',
 				},
 			},
+			providers: {
+				chooser: {
+					title: 'Provider',
+					select: 'Select {provider}',
+					active: 'Active',
+					default: 'Default',
+				},
+				name: {
+					claude: 'Claude',
+					codex: 'Codex',
+					opencode: 'Opencode',
+				},
+				secret: {
+					label: 'API key',
+					placeholder: 'Enter your API key',
+					save: 'Save API key',
+					unavailable: 'Secret storage is unavailable on this device.',
+				},
+				notice: {
+					keyRequired: 'An API key is required for {provider}.',
+					cliNotFound: 'The {provider} CLI was not found.',
+					unavailable: '{provider} is unavailable right now.',
+					unsupported: '{feature} is not supported by {provider}.',
+				},
+				consent: {
+					title: 'Allow reading {provider} history?',
+					body: '{provider} stores its conversation history outside your vault ({root}). Allow Specorator to read it?',
+					allow: 'Allow',
+					decline: 'Not now',
+					declined: '{provider} history stays disabled.',
+				},
+			},
 		},
 	},
 } as const;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fakeModulePorts } from './fake-ports'
+import { DEFAULT_SETTINGS } from '@/domain/settings/PluginSettings'
 
 describe('fakeModulePorts', () => {
 	it('returns the four narrow ports backed by one MockBridge', () => {
@@ -184,6 +185,59 @@ describe('fakeModulePorts', () => {
 		})
 		expect(res.success).toBe(false)
 		expect(res.error).toBe('Connection timeout (10s)')
+	})
+
+	// T-PV-014 (TEST-PV-011/050..053/070..073/080..083 fake-ports leg): the factory
+	// exposes the P9 provider members — the shared descriptor-table `providerRegistry`,
+	// the scriptable `providerRuntimeRegistry`, the in-memory `secretStore`, and the
+	// inert/seedable `homeFs` (SPEC-PV-011).
+	it('exposes a providerRegistry member (the shared descriptor table)', () => {
+		const ports = fakeModulePorts()
+		expect(ports.providerRegistry.listRegisteredProviders().map((d) => d.id)).toEqual([
+			'claude',
+			'codex',
+			'opencode',
+		])
+		// claude-only enabled by default.
+		expect(ports.providerRegistry.listEnabledProviders(DEFAULT_SETTINGS).map((d) => d.id)).toEqual([
+			'claude',
+		])
+	})
+
+	it('exposes a scriptable providerRuntimeRegistry member (construct + transport)', async () => {
+		const ports = fakeModulePorts()
+		ports.providerRuntimeRegistry.setProviderConstructMode('codex', 'no-key')
+		expect(ports.providerRuntimeRegistry.createChatRuntime('codex').ok).toBe(false)
+		ports.providerRuntimeRegistry.setProviderConstructMode('codex', 'ok')
+		ports.providerRuntimeRegistry.scriptProviderStream('codex', [{ type: 'text', content: 'hi' }])
+		const built = ports.providerRuntimeRegistry.createChatRuntime('codex')
+		expect(built.ok).toBe(true)
+		if (built.ok) {
+			const chunks: string[] = []
+			for await (const chunk of built.value.query(built.value.prepareTurn({ text: 'x' }))) {
+				chunks.push(chunk.type)
+			}
+			expect(chunks).toEqual(['text', 'done'])
+		}
+	})
+
+	it('exposes an in-memory secretStore member (availability switch + round-trip)', async () => {
+		const ports = fakeModulePorts()
+		expect(ports.secretStore.isAvailable()).toBe(true)
+		await ports.secretStore.setSecret('provider.codex.apiKey', 'sk-x')
+		const got = await ports.secretStore.getSecret('provider.codex.apiKey')
+		if (got.ok) expect(got.value).toBe('sk-x')
+		ports.secretStore.setSecretStoreAvailable(false)
+		expect((await ports.secretStore.getSecret('provider.codex.apiKey')).ok).toBe(false)
+	})
+
+	it('exposes an inert/seedable homeFs member (path-escape rule)', async () => {
+		const ports = fakeModulePorts()
+		expect(ports.homeFs.isAvailable()).toBe(false)
+		ports.homeFs.seedHomeFile('.codex/sessions/t.jsonl', '{}')
+		expect(ports.homeFs.isAvailable()).toBe(true)
+		expect((await ports.homeFs.readFile('.codex/sessions/t.jsonl')).ok).toBe(true)
+		expect((await ports.homeFs.readFile('../escape.txt')).ok).toBe(false)
 	})
 
 	it('providerHistory mutations are visible across the factory ports', async () => {

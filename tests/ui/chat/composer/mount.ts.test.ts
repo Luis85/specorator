@@ -176,7 +176,11 @@ describe('composer-power inline-block queue (TEST-CP-026 mount leg)', () => {
 		// A runtime the test can drive to invoke the registered ask-user callback.
 		const runtime = new MockChatRuntime([]);
 		const bridge = new MockBridge();
-		vi.spyOn(bridge, 'createChatRuntime').mockReturnValue(runtime);
+		const { ok } = await import('@/domain/shared/Result');
+		// P9 (SPEC-PV-020): the surface now builds the per-tab runtime through the widened
+		// CHAT_RUNTIME_FACTORY routed via `bridge.providerRuntimeRegistry.createChatRuntime`
+		// (the resolved active provider). Drive the controllable runtime onto that seam.
+		vi.spyOn(bridge.providerRuntimeRegistry, 'createChatRuntime').mockReturnValue(ok(runtime));
 		const plugin = { bridge, settings: { locale: 'en', logLevel: 'warn' } };
 
 		const view = new AgentSidebarView({} as never, plugin as never);

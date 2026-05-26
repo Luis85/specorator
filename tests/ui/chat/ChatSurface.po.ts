@@ -126,4 +126,26 @@ export class ChatSurfacePageObject {
 	mcpSelectorBadge(): string {
 		return this.wrapper.get('[data-testid="mcp-selector-badge"]').text();
 	}
+
+	// ── P9 providers-registry (SPEC-PV-020) ──────────────────────────────────────
+
+	hasProviderChooser(): boolean {
+		return this.wrapper.find('[data-testid="provider-chooser"]').exists();
+	}
+
+	/** The provider ids the chooser lists, in render (blank-tab) order. */
+	providerOptionIds(): string[] {
+		return this.wrapper
+			.findAll('[data-testid="provider-option"]')
+			.map((option) => option.attributes('data-provider') ?? '');
+	}
+
+	/** Click the chooser row for `id` (the per-provider switch). */
+	async selectProvider(id: string): Promise<void> {
+		const option = this.wrapper
+			.findAll('[data-testid="provider-option"]')
+			.find((row) => row.attributes('data-provider') === id);
+		if (option === undefined) throw new Error(`no provider option for "${id}"`);
+		await option.trigger('click');
+	}
 }

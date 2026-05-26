@@ -4,6 +4,7 @@ const TID = {
 	root: 'toolbar-model',
 	option: 'toolbar-model-option',
 	empty: 'toolbar-model-empty',
+	opencodePicker: 'opencode-model-picker',
 } as const;
 
 /** PageObject for `ModelSelector.vue` (SPEC-TC-013). Queries by `data-testid` only (ADR-009). */
@@ -72,6 +73,11 @@ export class ModelSelectorPageObject {
 
 	emptyExists(): boolean {
 		return this.wrapper.find(this.byTid(TID.empty)).exists();
+	}
+
+	/** True when the per-provider Opencode picker shape is rendered (REQ-PV-062). */
+	opencodePickerShown(): boolean {
+		return this.wrapper.find(this.byTid(TID.opencodePicker)).exists();
 	}
 
 	async clickButton(): Promise<void> {

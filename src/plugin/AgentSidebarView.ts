@@ -25,6 +25,9 @@ import {
 	APPROVAL_RULE_STORE_PORT,
 	MCP_CONFIG_STORE_PORT,
 	MCP_CLIENT_PORT,
+	PROVIDER_REGISTRY_PORT,
+	SECRET_STORE_PORT,
+	HOME_FS_PORT,
 } from '@/infrastructure/bridge/ports';
 import {
 	CHAT_RUNTIME_FACTORY,
@@ -36,9 +39,14 @@ import {
 	PICK_ATTACHMENT,
 	OPEN_MCP_SERVER_MODAL,
 	OPEN_MCP_TEST_MODAL,
+	OPEN_PROVIDER_CONSENT,
 } from '@/ui/chat/modalSeam';
 import type { AttachedImage } from '@/domain/chat/attachments';
 import type { AuxModelPort } from '@/domain/ports';
+import type { ProviderId } from '@/domain/chat/ProviderId';
+import { HOME_FS_ROOTS } from '@/domain/ports';
+import { i18nTranslate } from '@/ui/i18n';
+import { ProviderConsentModal } from './modals/ProviderConsentModal';
 import type { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge';
 import { ForkTargetModal } from './modals/ForkTargetModal';
 import { DeleteConfirmModal } from './modals/DeleteConfirmModal';
@@ -110,7 +118,36 @@ export class AgentSidebarView extends ItemView {
 			// runtime per tab, ADR-TS-002 §1) + the Obsidian Modal launch seams. The
 			// Vue surface never imports `obsidian`; it launches the modals through these.
 			app.provide(PROVIDER_HISTORY_PORT, bridge.createProviderHistoryPort());
-			app.provide(CHAT_RUNTIME_FACTORY, () => bridge.createChatRuntime());
+			// P9 (SPEC-PV-020): the shared descriptor-table registry + the real
+			// `app.secretStorage` secret store (NEVER `data.json`) + the real `node:fs`
+			// home-fs (root-scoped, read-only). The surface resolves the active provider
+			// from the registry + settings, mounts the chooser, and routes a selection
+			// through `SelectProviderUseCase`.
+			app.provide(PROVIDER_REGISTRY_PORT, bridge.providerRegistry);
+			app.provide(SECRET_STORE_PORT, bridge.secretStore);
+			app.provide(HOME_FS_PORT, bridge.homeFs);
+			// P9 (SPEC-PV-005/031): the widened `(providerId) => Result<runtime>` factory
+			// routed through the Obsidian runtime registry — Claude reuse / Codex JSON-RPC /
+			// Opencode ACP. A Claude-only configuration constructs the SAME P1 runtime as P8
+			// (byte-identical, NFR-PV-001); a no-key / no-CLI / transport-unavailable build
+			// returns `Result.err` (the surface surfaces an honest notice, never a throw).
+			app.provide(CHAT_RUNTIME_FACTORY, (providerId: ProviderId) =>
+				bridge.providerRuntimeRegistry.createChatRuntime(providerId),
+			);
+			// P9 (SPEC-PV-014/024, REQ-PV-082/113): the one-time beyond-vault consent
+			// launcher opens the REAL Obsidian `Modal` — the Vue surface never imports
+			// `obsidian` and never calls `window.confirm`. A decline disables that
+			// provider's history honestly; a Claude-only user never reaches it.
+			app.provide(OPEN_PROVIDER_CONSENT, (providerId: ProviderId) => {
+				const provider = i18nTranslate(`agent.chat.providers.name.${providerId}`);
+				const root = HOME_FS_ROOTS.join(', ');
+				return new ProviderConsentModal(this.app, {
+					title: i18nTranslate('agent.chat.providers.consent.title', { provider }),
+					body: i18nTranslate('agent.chat.providers.consent.body', { provider, root }),
+					allow: i18nTranslate('agent.chat.providers.consent.allow'),
+					decline: i18nTranslate('agent.chat.providers.consent.decline'),
+				}).confirm();
+			});
 			app.provide(CONFIRM_DELETE, (message: string) =>
 				new DeleteConfirmModal(this.app, {
 					message,

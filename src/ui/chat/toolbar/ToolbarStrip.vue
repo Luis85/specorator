@@ -5,6 +5,7 @@ import type { McpViewModel } from '@/application/chat/mcp/buildMcpViewModel';
 import type { ReasoningChoice } from '@/domain/chat/Reasoning';
 import type { NotificationPort } from '@/domain/ports';
 import type { PermissionMode } from '@/domain/chat/PermissionMode';
+import type { ProviderId } from '@/domain/chat/ProviderId';
 import ModelSelector from './ModelSelector.vue';
 import ModeSelector from './ModeSelector.vue';
 import PermissionToggle from './PermissionToggle.vue';
@@ -38,6 +39,13 @@ const props = defineProps<{
 	 * `McpServerManager` of its own, EC-MC-1).
 	 */
 	mcpVm?: McpViewModel;
+	/**
+	 * P9 (SPEC-PV-017): the resolved ACTIVE provider, threaded to `ModelSelector` so
+	 * it renders the per-provider picker shape (e.g. `opencode-model-picker`). Optional
+	 * + additive — absent ⇒ byte-identical P6/P8 (NFR-PV-001). NEVER branched on here
+	 * (the widgets read the capability bag; the picker variant is a data-driven map).
+	 */
+	providerId?: ProviderId;
 }>();
 const emit = defineEmits<{
 	'pick-model': [id: string];
@@ -74,6 +82,7 @@ const resolvedMcpVm = computed<McpViewModel>(
 			<ModelSelector
 				v-if="vm.model.visibility.kind === 'visible'"
 				:vm="vm.model"
+				:provider-id="providerId"
 				@pick="emit('pick-model', $event)"
 			/>
 			<ModeSelector

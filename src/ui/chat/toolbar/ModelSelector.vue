@@ -2,24 +2,43 @@
 import { ref, computed, nextTick, useId } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { ModelWidgetVm } from '@/application/chat/toolbar/buildToolbarViewModel';
+import type { ProviderId } from '@/domain/chat/ProviderId';
 
 /**
- * The model selector (SPEC-TC-013, REQ-TC-010/011/012/040). A grouped,
- * keyboard-operable listbox. Presentational — props in, events out. The button
- * (`role="combobox"`) shows the selected model's label, or the persisted id when
- * it is not in the option list (empty-catalog degrade, EC-TC-3). Opening (click
- * OR Enter/Space, NOT hover-only — REQ-TC-040) renders `vm.options` as a
- * `role="listbox"` with `role="presentation"` group separators where
- * `option.group` differs; each option is `role="option"` `aria-selected`. Arrow
- * up/down move `aria-activedescendant`, Home/End jump, Enter/Space select → emit
- * `pick`, Escape closes + restores button focus. No `obsidian`/`v-html`. Claudian
- * ground-truth: `ModelSelector.updateDisplay`/`renderOptions`.
+ * The model selector (SPEC-TC-013, REQ-TC-010/011/012/040; P9 SPEC-PV-017,
+ * REQ-PV-062). A grouped, keyboard-operable listbox. Presentational — props in,
+ * events out. The button (`role="combobox"`) shows the selected model's label, or
+ * the persisted id when it is not in the option list (empty-catalog degrade, EC-TC-3).
+ * Opening (click OR Enter/Space, NOT hover-only — REQ-TC-040) renders `vm.options` as
+ * a `role="listbox"` with `role="presentation"` group separators where `option.group`
+ * differs; each option is `role="option"` `aria-selected`. Arrow up/down move
+ * `aria-activedescendant`, Home/End jump, Enter/Space select → emit `pick`, Escape
+ * closes + restores button focus.
+ *
+ * P9: the OPTIONAL `providerId` prop selects a per-provider picker variant from the
+ * data-driven `PICKER_VARIANT` map (e.g. the `opencode-model-picker` shape) — a pure
+ * lookup, never a provider-id branch (NFR-PV-014); a provider with no variant (or an
+ * absent prop) renders byte-identical P6 (NFR-PV-001). No `obsidian`/`v-html`. Claudian
+ * ground-truth: `ModelSelector.updateDisplay`/`renderOptions` + `opencode-model-picker.css`.
  */
-const props = defineProps<{ vm: ModelWidgetVm }>();
+const props = defineProps<{ vm: ModelWidgetVm; providerId?: ProviderId }>();
 const emit = defineEmits<{ pick: [id: string] }>();
 
 const { t } = useI18n();
 const uid = useId();
+
+/**
+ * The per-provider picker `data-testid` variant (data-driven, REQ-PV-062). A provider
+ * absent from the map keeps the plain P6 picker (no variant testid) — adding a variant
+ * is a map entry, never a branch (NFR-PV-014, SPEC-PV-029).
+ */
+const PICKER_VARIANT: Partial<Record<ProviderId, string>> = {
+	opencode: 'opencode-model-picker',
+};
+
+const pickerVariant = computed<string | undefined>(() =>
+	props.providerId === undefined ? undefined : PICKER_VARIANT[props.providerId],
+);
 
 const open = ref(false);
 const activeIndex = ref(0);
@@ -118,7 +137,16 @@ function onListKeydown(event: KeyboardEvent): void {
 </script>
 
 <template>
-	<div class="sp-toolbar-model">
+	<div
+		class="sp-toolbar-model"
+		:class="pickerVariant ? `sp-toolbar-model--${pickerVariant}` : undefined"
+	>
+		<span
+			v-if="pickerVariant"
+			:data-testid="pickerVariant"
+			class="sp-toolbar-model__variant"
+			aria-hidden="true"
+		/>
 		<button
 			ref="button"
 			type="button"
@@ -214,6 +242,11 @@ function onListKeydown(event: KeyboardEvent): void {
 	color: var(--sp-text-muted);
 	font-size: var(--sp-font-size-sm);
 	font-weight: var(--sp-font-weight-semibold);
+}
+
+/* opencode-model-picker variant: a wider group separator gap (SPEC-PV-021). */
+.sp-toolbar-model--opencode-model-picker .sp-toolbar-model__group {
+	margin-block-start: var(--sp-model-picker-group-gap);
 }
 
 .sp-toolbar-model__option {

@@ -235,6 +235,24 @@ const MCP_CLIENT_TOKENS = [
 	'--sp-mcp-selector-badge',
 ];
 
+/**
+ * §4.16 — Providers registry (P9, SPEC-PV-021 / NFR-PV-010). The four `--sp-*`
+ * tokens the P9 provider-chooser + provider-secret + opencode-model-picker
+ * surfaces genuinely need (the per-provider brand swatch aliases + the
+ * model-picker group gap). The chooser/option/secret-field reuse the existing
+ * set otherwise (`--sp-border`, `--sp-radius-*`, `--sp-bg-*`, `--sp-surface-overlay`,
+ * `--sp-text-*`, `--sp-accent`, `--sp-space-*`, `--sp-font-*`, the P6
+ * `--sp-toolbar-widget-h`) — only these four are minted for P9. The block marker
+ * is ASCII (`section 4.16`) so the standalone lightningcss minifier accepts the
+ * comment.
+ */
+const PROVIDERS_REGISTRY_TOKENS = [
+	'--sp-provider-brand-claude',
+	'--sp-provider-brand-codex',
+	'--sp-provider-brand-opencode',
+	'--sp-model-picker-group-gap',
+];
+
 const PROVIDER_IDS = ['claude', 'codex', 'opencode', 'cursor'] as const;
 
 function loadTokens(): string {
@@ -418,13 +436,38 @@ describe('src/ui/styles/tokens.css — token contract (REQ-AUX-006, REQ-AUX-009)
 	it('declares the §4.15 tokens with no raw-hex / Obsidian-var / physical-property leak (TEST-MC-045)', () => {
 		const css = loadTokens();
 		// Isolate the §4.15 declaration block (ASCII `section 4.15` marker so the
-		// standalone lightningcss minifier accepts the comment) and assert each P8
-		// token resolves to a token-layer var() lookup — never a raw hex or a raw
-		// Obsidian var.
-		const block = css.slice(css.indexOf('section 4.15'));
+		// standalone lightningcss minifier accepts the comment), bounded by the
+		// §4.16 marker, and assert each P8 token resolves to a token-layer var()
+		// lookup — never a raw hex or a raw Obsidian var.
+		const block = css.slice(css.indexOf('section 4.15'), css.indexOf('section 4.16'));
 		for (const token of MCP_CLIENT_TOKENS) {
 			const match = new RegExp(`${token.replace(/-/g, '\\-')}\\s*:\\s*([^;]+);`).exec(block);
 			expect(match, `expected ${token} declared in the §4.15 block`).not.toBeNull();
+			const value = match?.[1] ?? '';
+			// No raw hex colour literal.
+			expect(value, `${token} must not carry a raw hex literal`).not.toMatch(/#[0-9a-fA-F]{3,8}/);
+			// No raw Obsidian theme var (only --sp-* lookups are allowed).
+			expect(value, `${token} must not read a raw Obsidian var`).not.toMatch(
+				/var\(--(?!sp-)[a-z]/,
+			);
+		}
+	});
+
+	it('declares every §4.16 providers-registry token (SPEC-PV-021, NFR-PV-010)', () => {
+		const css = loadTokens();
+		assertTokensDeclared(css, PROVIDERS_REGISTRY_TOKENS);
+	});
+
+	it('declares the §4.16 tokens with no raw-hex / Obsidian-var / physical-property leak (TEST-PV-091)', () => {
+		const css = loadTokens();
+		// Isolate the §4.16 declaration block (ASCII `section 4.16` marker so the
+		// standalone lightningcss minifier accepts the comment) and assert each P9
+		// token resolves to a token-layer var() lookup — never a raw hex or a raw
+		// Obsidian var.
+		const block = css.slice(css.indexOf('section 4.16'));
+		for (const token of PROVIDERS_REGISTRY_TOKENS) {
+			const match = new RegExp(`${token.replace(/-/g, '\\-')}\\s*:\\s*([^;]+);`).exec(block);
+			expect(match, `expected ${token} declared in the §4.16 block`).not.toBeNull();
 			const value = match?.[1] ?? '';
 			// No raw hex colour literal.
 			expect(value, `${token} must not carry a raw hex literal`).not.toMatch(/#[0-9a-fA-F]{3,8}/);

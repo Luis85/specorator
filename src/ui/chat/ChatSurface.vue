@@ -12,6 +12,7 @@ import {
 	useInstructionConfirm,
 	useOpenMcpServerModal,
 	useOpenMcpTestModal,
+	useOpenProviderConsent,
 } from '@/ui/chat/modalSeam';
 import { RunChatTurnUseCase } from '@/application/chat/RunChatTurnUseCase';
 import { GenerateTitleUseCase } from '@/application/threads/GenerateTitleUseCase';
@@ -42,13 +43,24 @@ import {
 	TOOLBAR_CATALOG_PORT,
 	APPROVAL_RULE_STORE_PORT,
 	MCP_CONFIG_STORE_PORT,
+	PROVIDER_REGISTRY_PORT,
 } from '@/infrastructure/bridge/ports';
 import type {
 	ToolbarCatalogPort,
 	ApprovalRuleStorePort,
 	ApprovalRule,
 	McpConfigStorePort,
+	ProviderRegistryPort,
 } from '@/domain/ports';
+import type { ProviderId } from '@/domain/chat/ProviderId';
+import { DEFAULT_CHAT_PROVIDER_ID } from '@/domain/chat/providers/ProviderDescriptor';
+import { SelectProviderUseCase } from '@/application/chat/providers/SelectProviderUseCase';
+import { ProviderConsentGate } from '@/application/chat/providers/ProviderConsentGate';
+import {
+	buildProviderViewModel,
+	type ProviderViewModel,
+} from '@/application/chat/providers/buildProviderViewModel';
+import ProviderChooser from './providers/ProviderChooser.vue';
 import type { TabControls } from '@/domain/chat/toolbar/TabControls';
 import type { PermissionMode } from '@/domain/chat/PermissionMode';
 import type { ReasoningChoice } from '@/domain/chat/Reasoning';
@@ -110,7 +122,31 @@ const { isEmpty, isStreaming } = storeToRefs(tabs);
 const notify = useNotificationPort();
 const logger = useLoggerPort();
 const history = useProviderHistoryPort();
-const createRuntime = useChatRuntimeFactory();
+// P9 (SPEC-PV-005/031): the runtime factory widened to `(providerId) => Result`.
+// The store's per-tab binding stays `() => ChatRuntimePort` (the UNCHANGED P3
+// contract); this adapter passes the RESOLVED active provider (default `'claude'`)
+// and unwraps the `Result`. A Claude-only configuration resolves `'claude'` and the
+// runtime is byte-identical to P8 (NFR-PV-001). The construct-fail path is the
+// `Result.err` the `SelectProviderUseCase` surfaces as an honest notice (REQ-PV-011);
+// a per-tab construct-fail at bind time degrades to the P8 Claude runtime so the
+// surface always mounts (the honest notice rides the explicit select path).
+const runtimeFactory = useChatRuntimeFactory();
+// SPEC-PV-020/031: the resolved active provider drives the per-tab factory + the
+// chooser + the toolbar catalog. A mutable holder (read by the synchronous
+// `createRuntime` the store calls per tab) loaded from the registry + settings on
+// mount; default `'claude'` (byte-identical P8) when no registry is provided.
+const activeProviderId = ref<ProviderId>(DEFAULT_CHAT_PROVIDER_ID);
+const createRuntime = (): ChatRuntimePort => {
+	const result = runtimeFactory(activeProviderId.value);
+	if (result.ok) return result.value;
+	// A construct-fail at bind time (e.g. the active provider lost its key) must not
+	// crash the surface mount; fall back to the byte-identical P8 Claude runtime so
+	// the chat still renders. The honest construct-fail notice rides the explicit
+	// `SelectProviderUseCase.select` path (REQ-PV-011, SPEC-PV-013).
+	const claude = runtimeFactory(DEFAULT_CHAT_PROVIDER_ID);
+	if (!claude.ok) throw claude.error;
+	return claude.value;
+};
 const chooseForkTarget = useChooseForkTarget();
 // SettingsPort is OPTIONAL here (the maxTabs preference): the surface degrades to
 // the default ceiling when the host does not provide it (parity with the demo).
@@ -121,6 +157,85 @@ const settingsPort = inject(SETTINGS_PORT, undefined);
 // transient unwired window in the real plugin is expected — title-gen degrades to a
 // best-effort err so the tab still streams (REQ-TS-025 keeps the caller's fallback).
 const aux = inject(AUX_MODEL_PORT, undefined);
+
+// ── P9 providers registry (SPEC-PV-020/031) ──────────────────────────────────────
+// `PROVIDER_REGISTRY_PORT` is OPTIONAL here (parity with the P6 toolbar): when present
+// (the wire-in batch) the surface resolves the active provider + the enabled list from
+// the registry + settings, mounts the `ProviderChooser` (hidden at ≤ 1 enabled →
+// byte-identical P8), and routes a selection through `SelectProviderUseCase`. When
+// absent the surface stays pure P8 (the active provider is the default `'claude'`, no
+// chooser). NEVER a `providerId` branch (NFR-PV-014, SPEC-PV-029) — the routing reads
+// the registry + the widened factory, the widgets gate on the capability bag.
+const providerRegistry: ProviderRegistryPort | undefined = inject(PROVIDER_REGISTRY_PORT, undefined);
+const openProviderConsent = useOpenProviderConsent();
+// The reactive chooser + widget view-model the surface renders. `undefined` until the
+// registry + settings resolve on mount (or always, with no registry → byte-identical P8).
+const providerVm = ref<ProviderViewModel | undefined>(undefined);
+
+const selectProviderUseCase: SelectProviderUseCase | null =
+	providerRegistry !== undefined && settingsPort !== undefined
+		? new SelectProviderUseCase(
+				providerRegistry,
+				settingsPort,
+				runtimeFactory,
+				new FeedbackService(logger, notify),
+		  )
+		: null;
+
+// The one-time beyond-vault consent gate (SPEC-PV-014/024). Built only when the
+// settings port is present; consulted before activating a `readsHomeDir` provider so a
+// Claude-only user (`readsHomeDir:false`) never reaches it (REQ-PV-114).
+const consentGate: ProviderConsentGate | null =
+	settingsPort !== undefined ? new ProviderConsentGate(settingsPort, openProviderConsent) : null;
+
+/** Resolve the active provider + rebuild the chooser VM from the registry + settings. */
+async function refreshProviderVm(): Promise<void> {
+	if (providerRegistry === undefined || settingsPort === undefined) return;
+	const settings = await settingsPort.getSettings();
+	const active = providerRegistry.resolveActiveProvider(settings);
+	activeProviderId.value = active;
+	providerVm.value = buildProviderViewModel(
+		providerRegistry.listEnabledProviders(settings),
+		active,
+		providerRegistry.getCapabilities(active),
+	);
+}
+
+/**
+ * On mount, resolve the active provider + build the chooser VM, then rebind the first
+ * (synchronously-seeded Claude) tab's runtime to the recorded active provider when it
+ * differs (SPEC-PV-020/031). A Claude-only configuration resolves `'claude'` → no
+ * rebind, byte-identical P8 (NFR-PV-001).
+ */
+async function refreshActiveProviderRuntime(): Promise<void> {
+	if (providerRegistry === undefined || settingsPort === undefined) return;
+	await refreshProviderVm();
+	if (activeProviderId.value === DEFAULT_CHAT_PROVIDER_ID) return;
+	const constructed = runtimeFactory(activeProviderId.value);
+	if (constructed.ok) tabs.rebindActiveRuntime(constructed.value);
+}
+
+/**
+ * Route a chooser selection through `SelectProviderUseCase` (SPEC-PV-013/023): a
+ * `readsHomeDir` provider first clears the one-time beyond-vault consent gate (a
+ * decline still switches but the provider's history stays disabled honestly,
+ * SPEC-PV-024); the use case tears down the prior runtime, persists the selection
+ * device-local, and constructs the active one via the widened factory; the surface
+ * rebinds the active tab's runtime + re-derives the chooser/toolbar VM. NEVER a
+ * `providerId` branch (NFR-PV-014).
+ */
+async function onSelectProvider(id: string): Promise<void> {
+	if (selectProviderUseCase === null || providerRegistry === undefined) return;
+	const providerId = id as ProviderId;
+	if (consentGate !== null && providerRegistry.getCapabilities(providerId).readsHomeDir) {
+		await consentGate.ensureConsent(providerId);
+	}
+	const constructed = await selectProviderUseCase.select(providerId, tabs.activeRuntime() ?? null);
+	if (constructed.ok) {
+		tabs.rebindActiveRuntime(constructed.value);
+	}
+	await refreshProviderVm();
+}
 
 let maxTabs = 3;
 
@@ -165,6 +280,11 @@ onMounted(() => {
 	// P8 (SPEC-MC-020, REQ-MC-001/002): load the managed MCP server list (the manager
 	// degrades to an empty list + a non-blocking notice on a store `err`).
 	void loadMcpServers();
+	// P9 (SPEC-PV-020): resolve the active provider + build the chooser VM. Also
+	// re-resolves the active provider into `activeProviderId` so the per-tab factory
+	// builds on the recorded provider (the first tab was seeded synchronously with the
+	// default `'claude'`; a recorded non-Claude active provider rebinds below).
+	void refreshActiveProviderRuntime();
 });
 
 onBeforeUnmount(() => {
@@ -578,8 +698,11 @@ const toolbarVm = computed<ToolbarViewModel | undefined>(() => {
 	if (toolbarCatalog === undefined) return undefined;
 	const caps = tabs.activeRuntime()?.getToolbarCapabilities();
 	if (caps === undefined) return undefined;
+	// P9 (SPEC-PV-020, REQ-PV-062): read the catalog for the RESOLVED active provider
+	// (default `'claude'` → byte-identical P8). Un-hardcoded from the prior `'claude'`
+	// literal; never a `providerId` branch (the catalog is the data, NFR-PV-014).
 	return buildToolbarViewModel(
-		toolbarCatalog.getCatalog('claude'),
+		toolbarCatalog.getCatalog(activeProviderId.value),
 		caps,
 		tabs.activeTab?.controls ?? {},
 		tabs.activeTab?.usage ?? null,
@@ -705,7 +828,13 @@ function onRewindCode(userMessageId: string): void {
 </script>
 
 <template>
-	<div ref="chatRoot" class="sp-chat-surface" data-testid="chat-surface" data-provider="claude">
+	<div ref="chatRoot" class="sp-chat-surface" data-testid="chat-surface" :data-provider="activeProviderId">
+		<ProviderChooser
+			v-if="providerVm !== undefined"
+			:options="providerVm.options"
+			:show-chooser="providerVm.showChooser"
+			@select="onSelectProvider"
+		/>
 		<TabBar />
 		<div class="sp-chat-surface__region">
 			<WelcomeGreeting v-if="isEmpty" />

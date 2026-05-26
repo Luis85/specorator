@@ -391,6 +391,28 @@
 	/* the enabled-server count badge fill (mcp-selector.css badge) */
 	--sp-mcp-selector-badge: var(--sp-accent);
 }
+
+/* section 4.16 - Providers registry (P9, SPEC-PV-021, NFR-PV-010). The
+ * provider-chooser plus provider-secret plus opencode-model-picker slice. Each
+ * token is a token-layer var lookup (or a bare dimension) - no hex, no raw
+ * Obsidian var outside this layer, no physical CSS property (lint-style-tokens
+ * guard, TEST-PV-091). The provider-brand tokens alias the section 4.2
+ * --sp-brand-* literals (the brand swatch on a chooser row) so the brand palette
+ * stays defined in one place; the model-picker group gap reuses --sp-space-5
+ * (12px, parity with opencode-model-picker.css gap). The chooser/option/
+ * secret-field otherwise reuse the existing set (--sp-border, --sp-radius,
+ * --sp-bg, --sp-surface-overlay, --sp-text, --sp-accent, --sp-space, --sp-font,
+ * and the P6 --sp-toolbar-widget-h) - only these four are minted for P9. The
+ * block marker is ASCII (section 4.16) so the standalone lightningcss minifier
+ * accepts the comment. */
+.specorator-root {
+	/* per-provider brand swatch on a chooser row (aliases the section 4.2 brand literals) */
+	--sp-provider-brand-claude: var(--sp-brand-claude);
+	--sp-provider-brand-codex: var(--sp-brand-codex);
+	--sp-provider-brand-opencode: var(--sp-brand-opencode);
+	/* opencode-model-picker group separator gap (parity 12px) */
+	--sp-model-picker-group-gap: var(--sp-space-5);
+}
 /*
  * Specorator named-keyframes layer (ADR-AUX-002, spec.md §1.3.6 / §3.4 / §4.6).
  *
@@ -444,6 +466,61 @@
 	.specorator-root .sp-spin {
 		animation: none;
 	}
+}
+
+.specorator-root :where(.sp-provider-option[data-v-7a6fdee7]) {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--sp-space-2);
+	inline-size: 100%;
+	block-size: var(--sp-toolbar-widget-h);
+	border: 1px solid var(--sp-border);
+	border-radius: var(--sp-radius-md);
+	background: var(--sp-bg-secondary);
+	color: var(--sp-text-normal);
+	padding-inline: var(--sp-space-2);
+	font-size: var(--sp-font-size-sm);
+	cursor: pointer;
+	text-align: start;
+}
+.specorator-root :where(.sp-provider-option--active[data-v-7a6fdee7]) {
+	border-color: var(--sp-accent);
+	font-weight: var(--sp-font-weight-semibold);
+}
+.specorator-root :where(.sp-provider-option__icon[data-v-7a6fdee7]) {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--sp-text-muted);
+}
+
+/* Per-provider brand swatch on the row icon (SPEC-PV-021). The brand colour
+   resolves from the section 4.16 provider-brand aliases by the row's data-provider. */
+.specorator-root :where(.sp-provider-option[data-provider='claude'] .sp-provider-option__icon[data-v-7a6fdee7]) {
+	color: var(--sp-provider-brand-claude);
+}
+.specorator-root :where(.sp-provider-option[data-provider='codex'] .sp-provider-option__icon[data-v-7a6fdee7]) {
+	color: var(--sp-provider-brand-codex);
+}
+.specorator-root :where(.sp-provider-option[data-provider='opencode'] .sp-provider-option__icon[data-v-7a6fdee7]) {
+	color: var(--sp-provider-brand-opencode);
+}
+.specorator-root :where(.sp-provider-option__name[data-v-7a6fdee7]) {
+	flex: 1 1 auto;
+}
+.specorator-root :where(.sp-provider-option__marker[data-v-7a6fdee7]) {
+	color: var(--sp-text-muted);
+	font-size: var(--sp-font-size-sm);
+}
+
+.specorator-root :where(.sp-provider-chooser[data-v-f5477fe9]) {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-space-1);
+	padding: var(--sp-space-1);
+	border: 1px solid var(--sp-border);
+	border-radius: var(--sp-radius-md);
+	background: var(--sp-surface-overlay);
 }
 
 .specorator-root :where(.sp-chat-welcome[data-v-3a496330]) {
@@ -1376,11 +1453,11 @@
 	color: var(--sp-text-normal);
 }
 
-.specorator-root :where(.sp-toolbar-model[data-v-05c6ad82]) {
+.specorator-root :where(.sp-toolbar-model[data-v-f04b95b3]) {
 	position: relative;
 	display: inline-flex;
 }
-.specorator-root :where(.sp-toolbar-model__button[data-v-05c6ad82]) {
+.specorator-root :where(.sp-toolbar-model__button[data-v-f04b95b3]) {
 	display: inline-flex;
 	align-items: center;
 	block-size: var(--sp-toolbar-widget-h);
@@ -1392,7 +1469,7 @@
 	font-size: var(--sp-font-size-sm);
 	cursor: pointer;
 }
-.specorator-root :where(.sp-toolbar-model__list[data-v-05c6ad82]) {
+.specorator-root :where(.sp-toolbar-model__list[data-v-f04b95b3]) {
 	position: absolute;
 	inset-block-end: calc(var(--sp-toolbar-widget-h) + var(--sp-space-1));
 	inset-inline-start: 0;
@@ -1406,26 +1483,31 @@
 	background: var(--sp-surface-overlay);
 	box-shadow: var(--sp-shadow-dropup);
 }
-.specorator-root :where(.sp-toolbar-model__group[data-v-05c6ad82]) {
+.specorator-root :where(.sp-toolbar-model__group[data-v-f04b95b3]) {
 	padding: var(--sp-space-1) var(--sp-space-2);
 	color: var(--sp-text-muted);
 	font-size: var(--sp-font-size-sm);
 	font-weight: var(--sp-font-weight-semibold);
 }
-.specorator-root :where(.sp-toolbar-model__option[data-v-05c6ad82]) {
+
+/* opencode-model-picker variant: a wider group separator gap (SPEC-PV-021). */
+.specorator-root :where(.sp-toolbar-model--opencode-model-picker .sp-toolbar-model__group[data-v-f04b95b3]) {
+	margin-block-start: var(--sp-model-picker-group-gap);
+}
+.specorator-root :where(.sp-toolbar-model__option[data-v-f04b95b3]) {
 	padding: var(--sp-space-1) var(--sp-space-2);
 	border-radius: var(--sp-radius-sm);
 	color: var(--sp-text-normal);
 	font-size: var(--sp-font-size-sm);
 	cursor: pointer;
 }
-.specorator-root :where(.sp-toolbar-model__option--active[data-v-05c6ad82]) {
+.specorator-root :where(.sp-toolbar-model__option--active[data-v-f04b95b3]) {
 	background: var(--sp-bg-secondary);
 }
-.specorator-root :where(.sp-toolbar-model__option[aria-selected='true'][data-v-05c6ad82]) {
+.specorator-root :where(.sp-toolbar-model__option[aria-selected='true'][data-v-f04b95b3]) {
 	font-weight: var(--sp-font-weight-semibold);
 }
-.specorator-root :where(.sp-toolbar-model__empty[data-v-05c6ad82]) {
+.specorator-root :where(.sp-toolbar-model__empty[data-v-f04b95b3]) {
 	padding: var(--sp-space-1) var(--sp-space-2);
 	color: var(--sp-text-muted);
 	font-size: var(--sp-font-size-sm);
@@ -1668,20 +1750,20 @@
 }
 }
 
-.specorator-root :where(.sp-toolbar-strip[data-v-8574c609]) {
+.specorator-root :where(.sp-toolbar-strip[data-v-70408f95]) {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--sp-toolbar-gap);
 }
-.specorator-root :where(.sp-toolbar-strip__group[data-v-8574c609]) {
+.specorator-root :where(.sp-toolbar-strip__group[data-v-70408f95]) {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--sp-toolbar-gap);
 }
-.specorator-root :where(.sp-toolbar-strip__meter[data-v-8574c609]) {
+.specorator-root :where(.sp-toolbar-strip__meter[data-v-70408f95]) {
 	margin-inline-start: auto;
 }
 
@@ -2068,31 +2150,31 @@
 	cursor: pointer;
 }
 
-.specorator-root :where(.sp-chat-surface[data-v-a1d72e56]) {
+.specorator-root :where(.sp-chat-surface[data-v-136cfe6d]) {
 	display: flex;
 	flex-direction: column;
 	block-size: 100%;
 	gap: var(--sp-space-3);
 	padding: var(--sp-space-5);
 }
-.specorator-root :where(.sp-chat-surface__region[data-v-a1d72e56]) {
+.specorator-root :where(.sp-chat-surface__region[data-v-136cfe6d]) {
 	display: flex;
 	flex-direction: column;
 	flex: 1;
 	min-block-size: 0;
 }
-.specorator-root :where(.sp-chat-surface__busy[data-v-a1d72e56]) {
+.specorator-root :where(.sp-chat-surface__busy[data-v-136cfe6d]) {
 	padding-block-start: var(--sp-space-3);
 	color: var(--sp-accent);
 	font-size: var(--sp-font-size-sm);
 	font-style: italic;
 }
-.specorator-root :where(.sp-chat-surface__actions[data-v-a1d72e56]) {
+.specorator-root :where(.sp-chat-surface__actions[data-v-136cfe6d]) {
 	display: flex;
 	align-items: center;
 	gap: var(--sp-space-2);
 }
-.specorator-root :where(.sp-chat-surface__compact[data-v-a1d72e56]) {
+.specorator-root :where(.sp-chat-surface__compact[data-v-136cfe6d]) {
 	border: 1px solid var(--sp-border);
 	border-radius: var(--sp-radius-md);
 	background: transparent;

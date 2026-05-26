@@ -20,6 +20,9 @@ import type {
 	ApprovalRuleStorePort,
 	McpConfigStorePort,
 	McpClientPort,
+	ProviderRegistryPort,
+	SecretStorePort,
+	HomeFsPort,
 } from '@/domain/ports';
 
 /**
@@ -88,3 +91,14 @@ export const APPROVAL_RULE_STORE_PORT: InjectionKey<ApprovalRuleStorePort> =
 export const MCP_CONFIG_STORE_PORT: InjectionKey<McpConfigStorePort> =
 	Symbol('McpConfigStorePort');
 export const MCP_CLIENT_PORT: InjectionKey<McpClientPort> = Symbol('McpClientPort');
+
+// P9 providers-registry (SPEC-PV-004/006/007, ADR-PV-001/002/003). Own keys, no
+// aggregate — one consumer each (the chooser view-model / select use case reads the
+// registry; the masked field + runtime env read the secret store; the Codex history
+// + consent gate read the home-fs). The three bridges back them: the shared
+// descriptor-table registry (coverage-included) + real `app.secretStorage` / real
+// `node:fs` (coverage-excluded) / in-memory + inert demo impls.
+export const PROVIDER_REGISTRY_PORT: InjectionKey<ProviderRegistryPort> =
+	Symbol('ProviderRegistryPort');
+export const SECRET_STORE_PORT: InjectionKey<SecretStorePort> = Symbol('SecretStorePort');
+export const HOME_FS_PORT: InjectionKey<HomeFsPort> = Symbol('HomeFsPort');

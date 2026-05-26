@@ -95,10 +95,14 @@ describe('coreSettingsModule — validate / schema / defaults (T-PSR-002)', () =
 		expect(fields.map((f) => f.type)).toEqual(['dropdown', 'dropdown', 'text', 'number']);
 	});
 
-	it('TEST-PSR-007 / SPEC-TS-005 / SPEC-CP-005: DEFAULT_SETTINGS keys are [customSystemPrompt, locale, logLevel, maxTabs, sessionsFolder]', () => {
-		// P4 (SPEC-CP-005) adds the device-local customSystemPrompt additively.
+	it('TEST-PSR-007 / SPEC-TS-005 / SPEC-CP-005 / SPEC-PV-001: DEFAULT_SETTINGS keys are [activeProvider, customSystemPrompt, enabledProviders, locale, logLevel, maxTabs, sessionsFolder]', () => {
+		// P4 (SPEC-CP-005) adds customSystemPrompt; P9 (SPEC-PV-001/027) adds the
+		// device-local provider selection (activeProvider + enabledProviders)
+		// additively — the P0–P8 keys stay byte-identical (NFR-PV-001).
 		expect(Object.keys(DEFAULT_SETTINGS).sort()).toEqual([
+			'activeProvider',
 			'customSystemPrompt',
+			'enabledProviders',
 			'locale',
 			'logLevel',
 			'maxTabs',

@@ -3,6 +3,9 @@ import {
   DEFAULT_SETTINGS,
   resolveSessionsFolder,
   clampMaxTabs,
+  coerceActiveProvider,
+  coerceEnabledProviders,
+  coerceHomeFsConsent,
   type PluginSettings,
 } from '@/domain/settings/PluginSettings'
 
@@ -51,6 +54,16 @@ export const coreSettingsModule = defineModule<PluginSettings>({
         typeof r.customSystemPrompt === 'string'
           ? r.customSystemPrompt
           : DEFAULT_SETTINGS.customSystemPrompt,
+      // P9 (SPEC-PV-001/027): the device-local provider selection. Load-or-default
+      // through the pure coercers — never a secret, no migration (ADR-PV-002).
+      activeProvider: coerceActiveProvider(r.activeProvider),
+      enabledProviders: coerceEnabledProviders(r.enabledProviders),
+      // P9 (SPEC-PV-014/024, REQ-PV-082): the one-time beyond-vault consent record
+      // MUST round-trip so a recorded consent survives a reload (EC-PV-6). OPTIONAL —
+      // absent when nothing recorded (byte-identical P0–P8, NFR-PV-001).
+      ...(coerceHomeFsConsent(r.homeFsConsent) !== undefined
+        ? { homeFsConsent: coerceHomeFsConsent(r.homeFsConsent) }
+        : {}),
     }
   },
 

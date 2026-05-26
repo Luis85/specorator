@@ -26,6 +26,7 @@ import {
 	SELECTION_HIGHLIGHT_PORT,
 } from '@/infrastructure/bridge/ports';
 import { CHAT_RUNTIME_FACTORY } from '@/ui/chat/modalSeam';
+import { ok } from '@/domain/shared/Result';
 import { safeMarkdownRenderPort } from '@/application/chat/safeMarkdownRenderPort';
 import { MockChatRuntime } from '@/infrastructure/mock/MockChatRuntime';
 import { MockHistoryStore } from '@/infrastructure/mock/MockHistoryStore';
@@ -58,7 +59,7 @@ function mountSurface() {
 		global: {
 			plugins: [i18n],
 			provide: {
-				[CHAT_RUNTIME_FACTORY as symbol]: () => new MockChatRuntime([]),
+				[CHAT_RUNTIME_FACTORY as symbol]: () => ok(new MockChatRuntime([])),
 				[MARKDOWN_RENDER_PORT as symbol]: safeMarkdownRenderPort,
 				[NOTIFICATION_PORT as symbol]: notifySpy(),
 				[LOGGER_PORT as symbol]: logger,

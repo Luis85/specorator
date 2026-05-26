@@ -204,6 +204,38 @@ export default {
 					saveFailed: 'Deine MCP-Server-Konfiguration konnte nicht gespeichert werden.',
 				},
 			},
+			providers: {
+				chooser: {
+					title: 'Anbieter',
+					select: '{provider} auswählen',
+					active: 'Aktiv',
+					default: 'Standard',
+				},
+				name: {
+					claude: 'Claude',
+					codex: 'Codex',
+					opencode: 'Opencode',
+				},
+				secret: {
+					label: 'API-Schlüssel',
+					placeholder: 'Gib deinen API-Schlüssel ein',
+					save: 'API-Schlüssel speichern',
+					unavailable: 'Der sichere Speicher ist auf diesem Gerät nicht verfügbar.',
+				},
+				notice: {
+					keyRequired: 'Für {provider} ist ein API-Schlüssel erforderlich.',
+					cliNotFound: 'Die {provider}-CLI wurde nicht gefunden.',
+					unavailable: '{provider} ist derzeit nicht verfügbar.',
+					unsupported: '{feature} wird von {provider} nicht unterstützt.',
+				},
+				consent: {
+					title: '{provider}-Verlauf lesen erlauben?',
+					body: '{provider} speichert seinen Gesprächsverlauf außerhalb deines Tresors ({root}). Specorator erlauben, ihn zu lesen?',
+					allow: 'Erlauben',
+					decline: 'Nicht jetzt',
+					declined: '{provider}-Verlauf bleibt deaktiviert.',
+				},
+			},
 		},
 	},
 } as const;

@@ -20,7 +20,16 @@ const FORBIDDEN = [/\bAPI key\b/i, /\bsubprocess\b/i, /\bSDK\b/i]
 // Settings-tab labels are allowed to use the literal terms because the user
 // is configuring those affordances. Anything outside `settings.*` is the
 // chat / badge / modal / notice surface and must stay plain-language.
-const ALLOWED_PREFIXES = ['settings.', 'errors.subprocess', 'provider.field.']
+// The P9 provider secret field + its key-required notice are a credential-
+// configuration affordance (the user is entering a provider API key), so they
+// share the settings-context exception (the literal term is the clearest copy).
+const ALLOWED_PREFIXES = [
+  'settings.',
+  'errors.subprocess',
+  'provider.field.',
+  'agent.chat.providers.secret.',
+  'agent.chat.providers.notice.keyRequired',
+]
 
 function flatten(obj: unknown, prefix = ''): Array<readonly [string, string]> {
   if (typeof obj === 'string') return [[prefix, obj]]

@@ -1,0 +1,569 @@
+---
+feature: providers-registry
+area: PV
+current_stage: implementation
+status: in-progress
+last_updated: 2026-05-26
+last_agent: dev (/spec:implement — UI batch T-PV-027..032)
+epic: claudian-reboot
+phase: P9
+integration_branch: next
+reference: D:\Projects\claudian-main
+artifacts:
+  idea.md: skipped (parity-charter §3.6/§4 P9 + audits + claudian-main stand in, mirrors P1-P8)
+  research.md: skipped
+  requirements.md: accepted (PRD-PV-001 — 64 EARS REQ-PV + 14 NFR-PV + 7 CLAR-PV)
+  design.md: complete (DESIGN-PV-001 — Parts A/B/C; ADR-PV-001/002/003 accepted)
+  spec.md: complete (SPEC-PV-001 — 34 spec items, 6 layer groups; 20 EC-PV; TEST-PV-001..114 + M1..M4; full REQ↔SPEC↔TEST table)
+  tasks.md: complete (TASKS-PV-001 — 44 T-PV tasks across 7 batches; TDD RED-before-green; 4 manual legs M1/M2/M3/M4; dep graph + coverage sanity-check)
+  implementation-log.md: in-progress (DOMAIN T-PV-001..010 + INFRA T-PV-011..018 + APPLICATION T-PV-019..024 + UI T-PV-025..032 + STYLES T-PV-033 + WIRE-IN T-PV-034..036 done; GATE T-PV-037..044 + manual legs M1/M2/M3/M4 remain — parent-owned)
+  test-plan.md: in-progress (TESTPLAN-PV-001 — guard-verify + file-naming directive + manual legs + DOMAIN-batch + STYLES/WIRE-IN automated legs + T-PV-036 deferred-manual recorded)
+  test-report.md: pending
+  review.md: complete (REVIEW-PV-001 — Approved with conditions; 0 P1/P2, 3 P3, 4 P4; security + live-wiring + capability-parity + guard-relax confirmed; conditions = manual legs M1/M2/M3/M4 + minAppVersion check + brand-reviewer fold)
+  traceability.md: complete (TRACE-PV-001 — full REQ-PV ↔ SPEC-PV ↔ TEST-PV ↔ code(file:line) ↔ manual-leg; 0 orphans; every must/should REQ has a downstream chain; M1/M2/M3/M4 recorded pending-manual)
+  release-notes.md: pending
+  retrospective.md: pending
+---
+
+# Workflow state — providers-registry (P9)
+
+## Stage progress
+
+| Stage | Artifact | Status |
+|---|---|---|
+| 1. Idea | `idea.md` | skipped |
+| 2. Research | `research.md` | skipped |
+| 3. Requirements | `requirements.md` | accepted |
+| 4. Design | `design.md` | complete |
+| 5. Specification | `spec.md` | complete |
+| 6. Tasks | `tasks.md` | complete |
+| 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-PV-001..010 + INFRA T-PV-011..018 + APPLICATION T-PV-019..024 + UI T-PV-025..032 + STYLES T-PV-033 + WIRE-IN T-PV-034..036 done; GATE T-PV-037..044 + manual legs M1/M2/M3/M4 remain — parent-owned) |
+| 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; test-report pending) |
+| 9. Review | `review.md`, `traceability.md` | complete (REVIEW-PV-001 + TRACE-PV-001 — Approved with conditions; 0 P1/P2) |
+| 10. Release | `release-notes.md` | pending |
+| 11. Learning | `retrospective.md` | pending |
+
+## Epic context — claudian-reboot P9 (Codex + Opencode providers + registry)
+
+P0-P8 merged to `next` (P8 mcp-client #449 / ae7e9559). P9 = multi-provider — the provider
+**registry** + the **Codex** (app-server JSON-RPC) + **Opencode** (ACP) provider runtimes + the shared
+ACP transport + model routing/capabilities/workspace registry, on the provider-agnostic P1-P8 chat
+surface. **This is the LARGEST phase.**
+
+**Scope (charter §4 P9 row + §3.6):**
+- **`ProviderRegistryPort`** + the provider-selection/routing seam — the existing `ChatRuntimePort` is
+  already provider-agnostic (P1 Claude CLI). P9 adds a registry that selects the active provider's
+  runtime; the P6 model/mode selectors gain real per-provider options; capability flags
+  (`RuntimeCapabilities`/`ToolbarCapabilities`) drive what each provider exposes.
+- **Codex** — app-server JSON-RPC transport, JSONL history, skills, subagents.
+- **Opencode** — ACP transport, modes, models, agents.
+- **ACP** shared transport (`providers/acp`), model routing, capabilities, workspace registry.
+- CSS: `opencode-model-picker` (charter §3.10) → `--sp-*`.
+
+**POSTURE (charter §6a confirmed 2026-05-24, BINDING):** ship **Claude complete**; **Codex + Opencode
+behind CAPABILITY GATES, feature-incomplete is ACCEPTABLE** (matches claudian's own posture). P9 is ONE
+phase that expands later. So: build the registry + the routing seam + the two provider runtimes at a
+functional-but-partial, capability-gated level — Claude stays the complete default; a non-Claude
+provider honestly reports reduced capabilities (the established honest-defer pattern). **Do NOT block P9
+on full Codex/Opencode parity.**
+
+**Key P9 ADRs (architecturally load-bearing — charter §6a):**
+- **`ProviderRegistryPort` + the provider-routing seam** — how the registry lists providers + selects
+  the active runtime; how `createChatRuntime`/the capabilities seam become provider-routed (additive —
+  Claude stays the default; P0-P8 byte-identical when only Claude is present). Narrow port, no aggregate.
+- **`HomeFsPort` (beyond-vault filesystem)** — Codex/Opencode read `~/.codex` / `~/.claude` transcripts;
+  the core ports are vault-scoped. **Security surface (reads outside the vault) — needs an ADR** (§6a).
+  Coverage-excluded Obsidian/Node infra → manual legs. Mock/inert for tests.
+- **`SecretStorePort`** — provider API keys/auth via Obsidian **native secret storage** (`app.secretStorage`),
+  NEVER `data.json`/plain settings (CHARTER-REQ-SEC). §6a says this lands "≈ P9 providers". File the ADR +
+  the `minAppVersion` check. Capability-gate when secret storage is unavailable.
+- The ACP transport port + the Codex JSON-RPC transport (real impls coverage-excluded; Mock scriptable).
+
+**Out of P9 (later phases):** settings shell polish / per-provider settings UX (P10 — P9 ships the
+provider seams + a minimal selection surface); i18n sweep (P11); a11y + final parity (P12).
+
+**Epic constraints (every phase):** secrets→`app.secretStorage` behind `SecretStorePort` (LANDS THIS
+PHASE), never `data.json`; device/user state→device-local; beyond-vault reads via `HomeFsPort` (ADR);
+NO backwards compat; DDD inward imports + narrow ports + 3 bridges; Vue never imports `obsidian`; no
+`innerHTML`/`v-html`/`window.confirm`; `<script setup>`; `Result<T,E>`; tests mirror `src/` +
+`data-testid` POs; coverage 80/70/80/80; perceptual `--sp-*` parity; identity stays Specorator; WCAG 2.2
+AA; manifest untouched (BUT `minAppVersion` may need the secretStorage check — confirm vs the intentional
+1.12.7 policy); CI SHA-pinned + actionlint. VERIFY GATE (`npm run verify` + `npm run test:all` zero).
+
+**Operating mode (human directive, /goal 2026-05-26):** AUTONOMOUS DRIVE the FULL remaining epic
+(P9→P12) via dedicated subagents in loops — no per-phase human checkpoint; self-parity-review vs claudian;
+merge each phase to `next` after a green gate + green CI; deploy to `D:/TestVault` after each merge.
+Manual-Obsidian + parity-screenshot legs accumulate for the SINGLE FINAL human review gate.
+
+**Mandatory inputs:** `specs/claudian-reboot/parity-charter.md` §3.6/§6a/§4 P9 +
+`claudian-audit-{frontend,backend}.md` + `D:\Projects\claudian-main` (`providers/codex`,
+`providers/opencode`, `providers/acp`, the provider registry, model routing, capabilities, the
+workspace registry, `~/.codex`/`~/.claude` transcript reads, the secret storage, `opencode-model-picker`).
+
+## Hand-off notes
+
+```
+2026-05-26 (dev): STYLES + WIRE-IN done (T-PV-033..036), all green. Commits:
+                          T-PV-033 279b706d (feat(pv) --sp-* token slice: section 4.16 — 4 minted tokens
+                            --sp-provider-brand-claude/-codex/-opencode aliasing the section 4.2 brand
+                            literals + --sp-model-picker-group-gap = --sp-space-5; ASCII-only comment,
+                            lightningcss-safe; applied to ProviderOption brand swatch + the opencode
+                            picker variant; tokens.test §4.16 presence+leak guard, TEST-PV-091).
+                          T-PV-034 fd5bb15e (test(pv) RED wire-in surface routing + chooser mount).
+                          T-PV-035 e343ce33 (feat(pv) wire PROVIDER_REGISTRY_PORT/SECRET_STORE_PORT/
+                            HOME_FS_PORT + the registry-routed widened CHAT_RUNTIME_FACTORY +
+                            OPEN_PROVIDER_CONSENT into AgentSidebarView + src/ui/main.ts; ChatSurface
+                            resolves the active provider, mounts ProviderChooser, routes a select via
+                            SelectProviderUseCase + tabs.rebindActiveRuntime (consent-gating a readsHomeDir
+                            provider), reads getCatalog(active); new tabsStore.rebindActiveRuntime action;
+                            the Mock runtime registry construction → a data-driven builder table whose
+                            CLAUDE entry REUSES the P1 MockChatRuntime so the standalone demo is
+                            byte-identical P8 — the prior MockProviderRuntime('claude') reported the frozen
+                            descriptor's supportsMcpTools:true and surfaced the MCP UI in the demo).
+                          T-PV-036 955dddc9 (feat(pv) the CRITICAL _coerceSettings homeFsConsent
+                            round-trip fix in BOTH coercion sites (ObsidianBridge._coerceSettings +
+                            core-settings.validateSettings) via the new pure coerceHomeFsConsent helper +
+                            the round-trip test; the standalone providers smoke dev leg; a harness update
+                            to mount.ts.test.ts moving the runtime spy to the new
+                            providerRuntimeRegistry.createChatRuntime factory seam — the only test broken by
+                            the factory routing change).
+                          VERIFY: vue-tsc -p tsconfig.lint.json --noEmit = 0; whole-project npm run lint =
+                            0 errors (16 pre-existing warnings); the standalone-mount + settings-round-trip
+                            + provider-routing + chooser-mount + tabsStore + Mock-registry tests = green
+                            (single-Claude byte-identical proven — MCP/service-tier stay hidden in the
+                            demo). Full unit suite = 1953 passed.
+                          BLOCKER for the GATE (parent-owned, NOT in T-PV-033..036 scope):
+                            tests/i18n/forbidden-terms.test.ts FAILS on agent.chat.providers.notice.keyRequired
+                            ("An API key is required…") + .secret.label ("API key") — these strings were added
+                            by the committed T-PV-028 UI batch and the failure reproduces at 279b706d^ (BEFORE
+                            my first commit). The guard's ALLOWED_PREFIXES whitelists only settings./
+                            errors.subprocess/provider.field., not the agent.chat.providers.* notice/secret
+                            keys. FIX at the GATE (T-PV-037, the cross-cutting i18n/microcopy invariant):
+                            either extend ALLOWED_PREFIXES to cover agent.chat.providers.{notice,secret}.* or
+                            reword the copy. Did NOT touch it (test-change = QA/gate's call; outside scope).
+                          NEXT AGENT → GATE T-PV-037..044 (the cross-cutting invariant RED+green incl. the
+                            i18n forbidden-terms fix above, full verify, the grep gates, the additivity
+                            byte-identical proof, the parity self-review, the manual real legs M1/M2/M3/M4,
+                            the draft PR into next). REMAINING OWNER: parent orchestrator (manual legs +
+                            final DoD/PR). build:web/build/docs:api/full verify NOT run here per the batch
+                            directive (parent regenerates styles.css at the gate).
+
+2026-05-26 (orchestrator): P9 bootstrapped on feature/providers-registry (off next; P0-P8 merged).
+                          Scope = charter §3.6 multi-provider — registry + Codex (JSON-RPC) + Opencode
+                          (ACP) + ACP transport + model routing/capabilities/workspace registry.
+                          POSTURE: Claude complete, Codex/Opencode CAPABILITY-GATED + feature-incomplete
+                          OK (§6a). Autonomous full-epic drive. Next: /spec:requirements (pm) grounded in
+                          charter §3.6/§6a + audits + the claudian providers/{codex,opencode,acp} +
+                          registry/routing/capabilities/secret-storage sources. KEY: scope what is
+                          P9-backed vs capability-gated-stub per provider; the ProviderRegistryPort +
+                          routing seam; HomeFsPort (beyond-vault, security ADR); SecretStorePort
+                          (native secret storage, lands this phase, ADR + minAppVersion). Additive —
+                          Claude-only = byte-identical P0-P8.
+2026-05-26 (pm): Stage 3 ACCEPTED. specs/providers-registry/requirements.md (PRD-PV-001) written —
+                          64 EARS REQ-PV grouped (registry/selection · routing · capabilities matrix ·
+                          Codex · Opencode · ACP transport · model routing · secret storage · home-fs/history ·
+                          settings/selector UI · security · a11y/additivity), 14 NFR-PV, success metrics +
+                          counter-metric, release criteria, 7 CLAR-PV resolved-by-recommendation. BINDING
+                          posture encoded: Claude COMPLETE default; Codex/Opencode CAPABILITY-GATED,
+                          feature-incomplete acceptable. Per-provider matrix grounded in claudian
+                          providers/{claude,codex,opencode}/capabilities.ts (frozen flags). Central decisions
+                          stated: ProviderRegistryPort + routing seam (CLAR-PV-001), HomeFsPort beyond-vault
+                          read-scoped/consented (CLAR-PV-002), SecretStorePort → app.secretStorage never
+                          data.json (CLAR-PV-003), minAppVersion verdict = keep 1.12.7 + capability-gate,
+                          escalate-don't-silently-bump if secretStorage needs newer (CLAR-PV-004). Additivity:
+                          Claude-only = P0-P8 byte-identical (REQ-PV-114/NFR-PV-001). HAND-OFF → /spec:design
+                          (architect: file the 3 P9 ADRs — ProviderRegistryPort+routing seam, HomeFsPort,
+                          SecretStorePort+minAppVersion check — then Part A UX + Part B UI parity vs
+                          charter §3.6/§3.10).
+2026-05-26 (architect): Stage 4 COMPLETE. specs/providers-registry/design.md (DESIGN-PV-001) written —
+                          Parts A (UX: provider selection/switch states, no-key/unavailable honest gate,
+                          per-provider model/thinking/service-tier lists, secret-entry + beyond-vault
+                          consent, WCAG 2.2 AA), B (UI: ProviderChooser/ProviderOption/ProviderSecretField
+                          + provider-aware P6 ModelSelector/ThinkingSelector/ServiceTierToggle, the
+                          opencode-model-picker + provider-brand --sp-* slice, en+de keys, no v-html,
+                          MINIMAL surface — full settings UX = P10), C (Architecture). THREE P9 ADRs filed
+                          + ACCEPTED + indexed in docs/adr/README.md:
+                          - ADR-PV-001 ProviderRegistryPort + data-driven routing seam (no switch(providerId);
+                            CHAT_RUNTIME_FACTORY widens to (providerId)=>Result<ChatRuntimePort>; capability-
+                            flag-gated; Claude-only = byte-identical P8; routed-aux stays Claude) →
+                            CLAR-PV-001/005/007.
+                          - ADR-PV-002 SecretStorePort → app.secretStorage, never data.json/notice/log/DTO;
+                            in-memory on Mock/LS; capability-gate when unavailable (no plain-store fallback);
+                            minAppVersion verdict = keep 1.12.7 + gate, ESCALATE-don't-bump if secretStorage
+                            provably needs newer (dev runs the API check at impl) → CLAR-PV-003/004/006.
+                          - ADR-PV-003 HomeFsPort read-scoped (~/.codex,~/.claude)/consented(Obsidian Modal)/
+                            read-only/inert-on-demo; history into the UNCHANGED P3 ProviderHistoryPort; the
+                            Codex JSON-RPC + shared ACP transports coverage-excluded behind the registry's
+                            runtime construction (timeout/abort/error-chunk, bounded spawn, SIGTERM→SIGKILL,
+                            Mock scriptable); NO new SDK dep by default (externalize like @modelcontextprotocol/
+                            sdk if ever required) → CLAR-PV-002 + the ACP/Codex transport note.
+                          Per-provider capability matrix frozen 1:1 from claudian providers/*/capabilities.ts
+                          (Claude all-true; Codex rewind/commands/MCP OFF, steer/fork ON; Opencode rewind/
+                          fork/steer/MCP OFF, commands ON). HAND-OFF → /spec:specify (planner→spec author):
+                          full ProviderRegistryPort/SecretStorePort/HomeFsPort contracts + the widened
+                          CHAT_RUNTIME_FACTORY signature + the ProviderDescriptor shape + the transport
+                          timeout/abort/error-chunk semantics + the consent-key/home-root/secret-key
+                          conventions + per-REQ test scenarios. Slight over-spec flagged (not blocking):
+                          build the BACKED caps only + honest-false the GATED-OFF (NG1); listKeys/service-
+                          tier are off the P9 critical path — pin verb/feature scope in spec.md so dev does
+                          not over-build.
+2026-05-26 (architect): Stage 5 COMPLETE. specs/providers-registry/spec.md (SPEC-PV-001) written — 34 spec
+                          items across 6 layer groups (DOMAIN SPEC-PV-001..007: ProviderId widen +
+                          ProviderDescriptor/ProviderCapabilities frozen bag + pure resolveProvider helpers +
+                          ProviderRegistryPort/SecretStorePort/HomeFsPort + the widened CHAT_RUNTIME_FACTORY/
+                          OPEN_PROVIDER_CONSENT seam; INFRA 008..012: the descriptor-table registry + the
+                          coverage-excluded Codex JSON-RPC + ACP transports + 3 bridges (Mock scriptable / LS
+                          inert); APPLICATION 013..015: SelectProviderUseCase + ProviderConsentGate +
+                          buildProviderViewModel; UI 016..020: ProviderChooser/ProviderOption/ProviderSecretField
+                          + provider-aware P6 widgets + composables + wiring; STYLES 021; CROSS-CUTTING 022..034:
+                          frozen matrix, the selection/consent/transport state models, additivity, security,
+                          no-switch(providerId), i18n, the widened-factory contract, the minAppVersion check,
+                          coverage-exclusion, history parity). 20 EC-PV; TEST-PV-001..114 + the 4 manual legs
+                          (M1 Codex JSON-RPC, M2 Opencode ACP, M3 app.secretStorage+minAppVersion, M4 parity
+                          screenshots) U/A/M split; FULL REQ-PV↔SPEC-PV↔TEST-PV coverage table — all 56 REQ-PV +
+                          14 NFR-PV chained, no TBD. Five design open items RESOLVED in §0: (1) widened factory
+                          (providerId)→Result + every P0-P8 site + tabs store passes the resolved active provider
+                          (default 'claude'), Claude → ok same runtime as P8 (byte-identical); (2) build BACKED
+                          caps only + honest-false the GATED-OFF (NG1); (3) listKeys + service-tier toggle off
+                          the P9 critical path; (4) secret key namespace provider.<id>.apiKey, home roots
+                          ~/.codex+~/.claude with path-escape→err, consent key provider.homeFsConsent.<id>;
+                          (5) turn streams through the runtime (no separate turn-time transport call). No new
+                          ADR needed (ADR-PV-001..003 cover it). HAND-OFF → /spec:tasks (planner): decompose the
+                          34 SPEC-PV into T-PV-NNN; sequence pure-domain-first (widen ProviderId → frozen
+                          descriptor table + resolve helpers + view-model → the 3 ports + 3 bridges incl. the
+                          in-memory secret/inert home-fs + the scriptable transport → SelectProviderUseCase +
+                          ProviderConsentGate + the provider-aware widgets + the chooser/secret UI); the real
+                          Codex JSON-RPC + ACP transports + real SecretStorePort/HomeFsPort (coverage-excluded)
+                          are the final manual-leg tasks (TEST-PV-M1/M2/M3). The minAppVersion app.secretStorage
+                          check is a dev task (escalate-don't-bump). No open clarifications block the planner.
+2026-05-26 (planner): Stage 6 COMPLETE. specs/providers-registry/tasks.md (TASKS-PV-001) written — 44
+                          T-PV tasks decomposing SPEC-PV-001..034, mirroring TASKS-MC-001 (P8) + TASKS-AS-001
+                          (P7) shape: baseline/guard-verify first (T-PV-001), then layer batches with strict
+                          RED(qa)-before-impl(dev), every dev task's first DoD = "prior RED passes" +
+                          whole-project npm run lint 0 + typecheck 0 + test green + impl-log. BATCHES: B0
+                          baseline T-PV-001; B1 DOMAIN T-PV-002..010 (ProviderId+settings widen; frozen
+                          ProviderDescriptor/capability matrix; pure resolveProvider; the 3 ports + keys +
+                          barrels; the WIDENED CHAT_RUNTIME_FACTORY + OPEN_PROVIDER_CONSENT seam); B2 INFRA
+                          T-PV-011..018 (shared descriptor-table ProviderRegistry coverage-included; Mock
+                          scriptable runtime/transport + in-memory secret + inert/seedable home-fs +
+                          fake-ports; LS inert; ObsidianBridge runtime registry + real app.secretStorage +
+                          real node:fs home-fs cov-excluded; Codex JSON-RPC + shared ACP transports
+                          cov-excluded); B3 APPLICATION T-PV-019..024 (SelectProviderUseCase,
+                          ProviderConsentGate, pure buildProviderViewModel); B4 UI T-PV-025..032 (3
+                          composables; ProviderChooser/ProviderOption; ProviderSecretField; provider-aware P6
+                          widgets incl. opencode-model-picker + capability-gated affordances; co-located
+                          data-testid POs); B5 STYLES T-PV-033 (--sp-* slice, ASCII-only lightningcss-safe);
+                          B6 WIRE-IN T-PV-034..036 (provide 3 ports + widened factory + consent launcher;
+                          tabs-store resolved-provider routing; provider-addressed history; chooser mount; dev
+                          smoke); B7 GATE T-PV-037..044 (invariants RED/green, token+additivity guard, the 4
+                          MANUAL legs T-PV-040 M1 Codex / T-PV-041 M2 Opencode / T-PV-042 M3 secret+minAppVersion
+                          / T-PV-043 M4 parity, feature DoD + draft PR into next). GUARD-RELAX VERDICT: NO
+                          relaxation needed — the new PROVIDER_REGISTRY_PORT/SECRET_STORE_PORT/HOME_FS_PORT keys
+                          + @/domain/chat/providers/** + @/application/chat/providers/** + @/ui/chat/providers/**
+                          + @/infrastructure/providers/** + the 3 new port paths are NOT in DELETED_SUBSYSTEM_BAN/
+                          DELETED_INJECTION_KEYS. SECRET-INFRA FILE-NAMING DIRECTIVE (T-PV-001/T-PV-017/T-PV-044):
+                          @/infrastructure/obsidian/ObsidianSecretStore* IS a still-banned glob — name the real
+                          secret infra SecretStorage.ts (NEVER ObsidianSecretStore*), the home-fs
+                          HomeFileSystem.ts, the runtimes/transports CodexRuntime/OpencodeRuntime/AcpTransport/
+                          CodexRpcTransport at the obsidian/ root, never under a banned subfolder — exactly as
+                          P8 did for VaultMcpConfigStore/SdkMcpClient; T-PV-001 enumerates the exact banned set
+                          vs the live eslint.config.js. WIDENED-FACTORY FAN-OUT = the one INTERFACE change (not a
+                          purely-additive optional): T-PV-010 widens ChatRuntimeFactory ()→ChatRuntimePort to
+                          (providerId)→Result<ChatRuntimePort> + updates EVERY call site + provide-site +
+                          modal-seam handle in the SAME task (build-green); resolved-provider routing finalises
+                          at T-PV-035; createProviderHistoryPort(providerId)/getCatalog(providerId) are
+                          UNCHANGED P3/P6 contracts (the seams receive the resolved provider at wire-in, not a
+                          signature change). Capability-matrix discipline: build BACKED only, honest-false
+                          GATED-OFF (NG1). HAND-OFF → /spec:implement (dev + qa): first ready task = T-PV-001
+                          (baseline + guard-verify, owner dev, no deps); then the B1 DOMAIN RED-first chain
+                          starting T-PV-002 (qa). The manual legs T-PV-040/041/042/043 are human-owned, never
+                          agent-self-claimed, accumulating for the single final epic-review gate (autonomous drive).
+2026-05-26 (dev): Stage 7 DOMAIN batch (T-PV-001..010) COMPLETE on
+                          feature/providers-registry. Commits: T-PV-001 33cf3225
+                          (baseline+guard-verify+naming, doc-only), T-PV-002 26e6e898
+                          (RED union+settings), T-PV-003 9c949b37 (widen ProviderId +
+                          PluginSettings.activeProvider/enabledProviders + coercers +
+                          additive fan-out), T-PV-004 ebde7ae4 (RED descriptor matrix),
+                          T-PV-005 c1b441d3 (frozen ProviderDescriptor matrix + barrel),
+                          T-PV-006 5e62433e (RED resolveProvider), T-PV-007 645bff2d
+                          (pure resolveProvider helpers), T-PV-008 1c9e464c (RED 3 port
+                          shapes), T-PV-009 dfc50ad0 (ProviderRegistryPort/SecretStorePort/
+                          HomeFsPort + 3 keys + barrel + guard-relax), T-PV-010 RED
+                          298b76ef + green 52b7dc54 (widen CHAT_RUNTIME_FACTORY to
+                          (providerId)=>Result + OPEN_PROVIDER_CONSENT + same-task call/
+                          provide-site fan-out). VERIFY: whole-project vue-tsc 0 + full
+                          npm run lint 0 errors (16 pre-existing warnings) + full vitest
+                          252 files / 1817 tests pass. The widened-factory fan-out kept
+                          the whole-project build green (sites: AgentSidebarView +
+                          src/ui/main.ts provide (providerId)=>ok(createChatRuntime());
+                          ChatSurface adapts to the UNCHANGED P3 store binding; 7
+                          ChatSurface mount fixtures wrap ok(); tabsStore TabDepsBinding
+                          UNCHANGED). Claude-only ADDITIVITY proven byte-identical to P8:
+                          DEFAULT_SETTINGS additive (activeProvider 'claude' /
+                          enabledProviders []), the P8-shaped settings round-trip leg
+                          passes (TEST-PV-114), the default 'claude' factory returns
+                          ok(<P1 runtime>) (TEST-PV-010), the full 1778->1817 suite
+                          (every P0-P8 test) stays green.
+                          *** ESCALATION (planner guard-verification defect, NON-BLOCKING
+                          — resolved per the documented per-phase regrow precedent):
+                          tasks.md / the planner hand-off asserted "NO guard-relax needed"
+                          and that SECRET_STORE_PORT / @/domain/ports/SecretStorePort are
+                          not banned. They ARE still banned (eslint.config.js:152 + :175 —
+                          the OLD P0-deleted secret symbols). SPEC-PV-006 / ADR-PV-002 §47
+                          pin EXACTLY that path + key with no alternative name, so P9
+                          regrows them — identical to P2's ICON_PORT drop. T-PV-009 dropped
+                          ONLY those two stale entries (the Obsidian-layer
+                          ObsidianSecretStore* glob stays banned). If the maintainer wants
+                          the tasks.md guard-verification line corrected, that is an
+                          architect/planner doc fix — the code resolution is unambiguous
+                          and is recorded in test-plan.md + implementation-log.md T-PV-001/
+                          T-PV-009. ***
+                          HAND-OFF → INFRA batch (T-PV-011..018, dev + qa): the shared
+                          descriptor-table ProviderRegistry impl (coverage-included,
+                          src/infrastructure/providers/ProviderRegistry.ts) + Mock
+                          scriptable runtime/transport + in-memory secret + inert/seedable
+                          home-fs + fake-ports members + LS inert + the coverage-excluded
+                          ObsidianBridge runtime registry + real SecretStorage.ts +
+                          HomeFileSystem.ts + Codex/ACP transports (NAME them
+                          SecretStorage.ts / HomeFileSystem.ts / CodexRuntime.ts /
+                          OpencodeRuntime.ts / AcpTransport.ts at obsidian/ root — NEVER
+                          ObsidianSecretStore*, per the test-plan.md file-naming directive).
+                          The frozen ProviderId / descriptors / resolve helpers / 3 ports /
+                          widened factory are now frozen for the INFRA/APP/UI batches.
+
+2026-05-26 — INFRA batch (T-PV-011..018) COMPLETE (dev).
+                          Commits: 7af60ea7 (T-PV-011/012 shared descriptor-table
+                          ProviderRegistry, coverage-included) · 50a0fdd7 (T-PV-013/014
+                          Mock scriptable runtime/transport + in-memory secret +
+                          inert/seedable home-fs + fake-ports members) · 58f53787
+                          (T-PV-015/016 LS inert non-Claude runtime + secret + home-fs) ·
+                          dcba7b99 (T-PV-018 Codex JSON-RPC + shared ACP stdio transports,
+                          in-tree, no new dep, coverage-excluded) · 988d7997 (T-PV-017
+                          ObsidianBridge runtime registry + real SecretStorage.ts +
+                          HomeFileSystem.ts, coverage-excluded).
+                          VERIFICATION: vue-tsc -p tsconfig.lint.json 0; whole-project
+                          npm run lint 0 errors (16 pre-existing warnings); full vitest
+                          260 files / 1877 tests pass (60 new, up from 1817 at T-PV-010).
+                          FILE NAMES confirmed per the T-PV-001 directive: the secret
+                          infra is SecretStorage.ts (NEVER ObsidianSecretStore*); home-fs
+                          HomeFileSystem.ts; transports CodexRpcTransport.ts/AcpTransport.ts
+                          + shared JsonRpcStdioChannel.ts; runtimes CodexRuntime.ts/
+                          OpencodeRuntime.ts at obsidian/ root — no banned glob.
+                          REGISTRY (data-driven, no switch(providerId)): the shared
+                          ProviderRegistry indexes the frozen PROVIDER_DESCRIPTORS by id via
+                          a ReadonlyMap + delegates resolve to the pure helpers; the
+                          ObsidianProviderRuntimeRegistry holds a Map<ProviderId,
+                          RuntimeBuilder> (claude reuse / codex / opencode) — construction
+                          dispatches through the map, never an id branch.
+                          BRIDGES: ObsidianBridge backs the real app.secretStorage
+                          (SecretStorage.ts, coverage-excluded → TEST-PV-M3, never data.json)
+                          + real node:fs home-fs (HomeFileSystem.ts, coverage-excluded →
+                          TEST-PV-M1/M2) + the Claude/Codex/Opencode runtime registry
+                          (coverage-excluded → TEST-PV-M1/M2). MockBridge = scriptable
+                          runtime/transport (setProviderConstructMode / scriptProviderStream
+                          / setTransportMode) + in-memory secret (setSecretStoreAvailable)
+                          + inert/seedable home-fs (seedHomeFile). LS = Claude-fixture ok /
+                          non-Claude err 'unavailable' + in-memory secret (isAvailable true)
+                          + inert home-fs (isAvailable false). fake-ports members added:
+                          providerRegistry / providerRuntimeRegistry / secretStore / homeFs.
+                          TRANSPORTS (no new dep): the shared JsonRpcStdioChannel is in-tree
+                          line-delimited JSON-RPC 2.0 over node:child_process stdio (bounded
+                          spawn, per-request timeout→err, dying-subprocess→terminal error
+                          chunk, SIGTERM→SIGKILL 3s); CodexRpcTransport adds turn-steer,
+                          AcpTransport adds initialize+prompt (no steer).
+                          DEVIATIONS: (1) the scriptable runtime registry is a separate
+                          `providerRuntimeRegistry` getter (its createChatRuntime(providerId)
+                          → Result) rather than overloading the P1 no-arg
+                          bridge.createChatRuntime() that CHAT_RUNTIME_PORT depends on; the
+                          wire-in batch (T-PV-031) routes the per-tab factory through it.
+                          (2) the key read is async inside each runtime's turn boundary
+                          (the widened factory is sync); the construct gate uses the sync
+                          secretStore.isAvailable() probe. (3) SecretStorage.deleteSecret
+                          clears-to-empty (app.secretStorage exposes no delete). None alter
+                          the additivity invariant (Claude byte-identical to P8).
+                          MANUAL LEGS (human-run, NOT agent-claimed, scheduled in
+                          test-plan.md): TEST-PV-M1 (real Codex JSON-RPC) / TEST-PV-M2 (real
+                          Opencode ACP) / TEST-PV-M3 (real app.secretStorage + minAppVersion
+                          + no-data.json) + the real sub-legs TEST-PV-030..033/035/040..042/
+                          044/101.
+                          NEXT AGENT → APPLICATION batch (T-PV-019..026, dev + qa):
+                          SelectProviderUseCase (resolve+activate+persist+reset+construct via
+                          the widened factory over the Mock providerRuntimeRegistry) +
+                          ProviderConsentGate (one-time beyond-vault consent over Mock
+                          settings + the OPEN_PROVIDER_CONSENT seam) + the PURE
+                          buildProviderViewModel. The INFRA seam (the 3 Mock scriptable
+                          ports + the shared registry + the widened factory body) is frozen
+                          and ready to inject. REMAINING OWNER: dev/qa (APP→UI→STYLES→
+                          WIRE-IN→GATE); the 4 manual legs + parity screenshots (TEST-PV-M4)
+                          are the human review gate.
+
+2026-05-26 dev (APPLICATION batch T-PV-019..024 — done, on feature/providers-registry):
+                          implemented the 3 application contracts strict-TDD (RED→green,
+                          one commit each):
+                          - T-PV-019/020 SelectProviderUseCase (SPEC-PV-013/023/029):
+                            select(id, prior) resets+cancels prior, persists activeProvider
+                            device-local (read-modify-write saveSettings, never data.json),
+                            constructs via the widened (providerId)=>Result factory — a
+                            construct err → feedback.warn(honest secret-free notice) + the
+                            err returns (chat usable, never throws); selectForModel auto-
+                            switches/no-ops. No switch(providerId). 12 tests. Commits
+                            feaa6c0a (RED) / b7446528 (green).
+                          - T-PV-023/024 buildProviderViewModel (SPEC-PV-015/029): pure/total
+                            chooser rows (isActive/isDefault) + showChooser=enabled>1
+                            (single-Claude→false, byte-identical P8) + capability-gated widget
+                            VM read field-for-field from the active bag (Codex/Opencode gated-
+                            off). DTO-only, no provider-id branch. 12 tests. Commits b8a6e5cd
+                            (RED) / 1c760ab3 (green).
+                          - T-PV-021/022 ProviderConsentGate (SPEC-PV-014/024): ensureConsent(id)
+                            reads/records provider.homeFsConsent.<id> device-local, opens the
+                            OPEN_PROVIDER_CONSENT modal seam once (auto-decline when absent,
+                            never window.confirm), decline→ok(false), never throws. 6 tests.
+                            Commits 6b4f72bf (RED) / 3758692f (green).
+                          VERIFICATION: vue-tsc -p tsconfig.lint.json 0 (whole project);
+                          whole-project npm run lint 0 errors (16 pre-existing warnings);
+                          app/providers + domain/settings 6 files/50 tests pass; the FULL
+                          project vitest suite completed exit 0 (no regressions). No
+                          obsidian/node:*/Vue under src/application/**; Result-returning +
+                          never throws; pure transform total; no switch(providerId).
+                          DEVIATION / ESCALATION (architect/planner attention — NOT a blocker
+                          for the application unit tests, but a WIRE-IN follow-up): SPEC-PV-014
+                          mandates the consent persist device-local via SettingsPort keyed
+                          provider.homeFsConsent.<id>, but the DOMAIN batch's accepted RED
+                          tests (TEST-PV-114 + core-settings.test.ts:102 exact-key guard) froze
+                          PluginSettings to EXACTLY the 7 existing keys with no consent field
+                          and no arbitrary-key device-local store. Resolved minimally + non-
+                          breakingly by adding an OPTIONAL homeFsConsent? field (absent from
+                          DEFAULT_SETTINGS, so BOTH qa-owned guards stay green — verified, 21
+                          settings tests unchanged) + the pure homeFsConsentKey(id) helper. OPEN
+                          WIRE-IN FOLLOW-UP (T-PV-031, INFRA — NOT done in this batch):
+                          ObsidianBridge._coerceSettings rebuilds an explicit key list and DROPS
+                          homeFsConsent, so the consent will not round-trip on a production
+                          reload (the gate would re-prompt). Mock/LS spread the full object, so
+                          unit tests + the demo round-trip correctly. The real ObsidianBridge
+                          coercer must load-or-default homeFsConsent (a coerceHomeFsConsent
+                          helper) at wire-in to make the one-time consent durable. The other
+                          honest-notice deviation: SelectProviderUseCase surfaces the construct-
+                          err via FeedbackService.warn (no literal notify() method exists).
+                          NEXT AGENT → UI batch (T-PV-025..032, dev + qa): the 3 composables
+                          (useProviderRegistryPort/useSecretStorePort/useHomeFsPort),
+                          ProviderChooser/ProviderOption, ProviderSecretField, the provider-
+                          aware capability-gated P6 widgets — all reading the
+                          buildProviderViewModel DTO + the SelectProviderUseCase. The 3
+                          application contracts are frozen + injectable. REMAINING OWNER:
+                          dev/qa (UI→STYLES→WIRE-IN→GATE); the WIRE-IN batch must close the
+                          homeFsConsent ObsidianBridge round-trip follow-up above; the 4 manual
+                          legs + parity screenshots (TEST-PV-M4) are the human review gate.
+
+2026-05-26 dev (UI batch T-PV-027..032 — done, on feature/providers-registry):
+                          completed the UI component layer strict-TDD (RED→green, one
+                          commit per task). Composables T-PV-025/026 were already done by
+                          a prior agent.
+                          - T-PV-027/028 ProviderChooser.vue + ProviderOption.vue
+                            (SPEC-PV-016): presentational props-in/events-out; chooser
+                            renders nothing at showChooser=false (single-Claude byte-
+                            identical P8), else a role=listbox of provider rows in the
+                            given blank-tab order; each row keyboard-operable (Enter/Space),
+                            announces active via aria-current, conveys state by text+icon
+                            (never colour-only). Added the agent.chat.providers.* i18n block
+                            (en+de, locale-parity preserved) + the Claude/Codex/Opencode/API
+                            ui/sentence-case brand allowlist entries. Commits 1ce7a10d (RED)
+                            / 65aadc32 (green) / 38448781 (log).
+                          - T-PV-029/030 ProviderSecretField.vue (SPEC-PV-018/025): masked
+                            type=password input; emits save(value); the typed secret lives
+                            only in a transient ref, cleared on emit, never echoed into the
+                            DOM/notice/log/store/DTO; disabled + honest providers.secret.
+                            unavailable + no save when available=false (no plain-store
+                            fallback, EC-PV-10). Commits e75af92c (RED) / 54714b01 (green) /
+                            760f89dc (log).
+                          - T-PV-031/032 provider-aware ModelSelector (SPEC-PV-017/029):
+                            an additive optional providerId prop selects a per-provider
+                            picker variant from a data-driven PICKER_VARIANT map (the
+                            opencode-model-picker shape) — a pure lookup, NEVER a
+                            switch(providerId)/provider-id branch (NFR-PV-014); absent/claude
+                            renders byte-identical P6 (NFR-PV-001). ToolbarStrip threads the
+                            optional providerId through. The ThinkingSelector/ServiceTierToggle
+                            + rewind/fork/steer/MCP/provider-command affordances ALREADY gate
+                            on the capability bag (getToolbarCapabilities/getCapabilities →
+                            buildToolbar/buildProviderViewModel), so P9 just supplies the
+                            per-provider flags. Added a source-level no-switch(providerId)
+                            guard over the toolbar widgets + provider components. Commits
+                            098fd7df (RED) / 42490bca (green) / 73940a1f (log).
+                          VERIFICATION: vue-tsc -p tsconfig.lint.json --noEmit exit 0 (whole
+                          project); whole-project npm run lint 0 errors (16 pre-existing
+                          warnings); vitest run on tests/ui/chat/providers + tests/ui/chat/
+                          toolbar + tests/ui/i18n/index.test.ts = 15 files / 91 tests pass —
+                          incl. the P6 ModelSelector/ThinkingSelector/ServiceTierToggle/
+                          ToolbarStrip regressions + the en↔de locale-parity regression, all
+                          green. No obsidian/node:*/v-html under src/ui/**; clean working
+                          tree (no styles.css/graphify-out drift).
+                          COMPONENT + PO INVENTORY (all co-located data-testid POs, ADR-009):
+                          ProviderChooser.vue + ProviderChooser.po.ts (provider-chooser),
+                          ProviderOption.vue + ProviderOption.po.ts (provider-option /
+                          provider-option-active / provider-icon), ProviderSecretField.vue +
+                          ProviderSecretField.po.ts (provider-secret-field / -input / -save /
+                          -unavailable), ModelSelector.vue (changed) + ModelSelector.po.ts
+                          (opencode-model-picker getter), ToolbarStrip.vue (changed, threads
+                          providerId), plus the no-provider-switch.test.ts source guard.
+                          DEGRADE-WHEN-ABSENT: the chooser renders nothing at showChooser=false
+                          / ≤1 enabled (byte-identical P8); the secret field is presentational
+                          (the wiring decides availability); ModelSelector with no providerId
+                          prop is byte-identical P6. The components inject NO ports directly —
+                          they take DTOs/props (the parent-owned wire-in injects
+                          PROVIDER_REGISTRY_PORT/SECRET_STORE_PORT and routes
+                          SelectProviderUseCase).
+                          SCOPE BOUNDARY (intentional, per the brief Rules): the ChatSurface/
+                          tabsStore provide-site wiring — the actual provide(...) of the 3
+                          ports, the getCatalog('claude') un-hardcode, the chooser mount +
+                          SelectProviderUseCase routing, and the _coerceSettings homeFsConsent
+                          round-trip fix — is NOT done here. That is the parent-owned WIRE-IN
+                          (T-PV-034..036, SPEC-PV-020). This batch delivers only the additive
+                          component seam (the optional providerId prop on ModelSelector/
+                          ToolbarStrip), which degrades byte-identical to P6/P8 when absent.
+                          NEXT AGENT → STYLES T-PV-033 (the provider-chooser/provider-secret/
+                          opencode-model-picker + provider-brand --sp-* slice, ASCII-only
+                          lightningcss-safe) then WIRE-IN T-PV-034..036. REMAINING OWNER:
+                          dev/qa (STYLES→WIRE-IN→GATE); the 4 manual legs + parity screenshots
+                          (TEST-PV-M4) are the human review gate.
+```
+
+### Stage 9 — reviewer → release-manager (2026-05-26)
+
+```
+FROM:  reviewer (/spec:review — REVIEW-PV-001 + TRACE-PV-001)
+TO:    release-manager (Stage 10) — conditional
+VERDICT: Approved with conditions. 0 P1/P2 (release-blocking) findings; 3 P3
+         (medium, scheduled), 4 P4 (nit). No code defect blocks merge to `next`.
+CONFIRMED (read + targeted vitest, base next@ae7e9559 = whole P9 diff):
+  - SECURITY: secret→app.secretStorage ONLY (SecretStorage.ts; key read at turn
+    boundary into subprocess env only; no value in data.json/log/notice/DTO);
+    HomeFsPort read-only + rooted at os.homedir() + scoped to HOME_FS_ROOTS +
+    path-escape→err (HomeFileSystem.ts + homeFsPath.ts) + consented once
+    (ProviderConsentGate); stdio spawns bounded/explicit/no-shell-eval +
+    windowsHide + .cmd quoting + SIGTERM→SIGKILL (JsonRpcStdioChannel.ts);
+    honest gate (Result.err, never crash); NO switch(providerId) (source-guard
+    test passes 6/6; Map dispatch tables).
+  - LIVE-WIRING: 3 ports + widened CHAT_RUNTIME_FACTORY + OPEN_PROVIDER_CONSENT
+    provided in BOTH AgentSidebarView.ts + main.ts; ChatSurface mounts
+    ProviderChooser, routes via SelectProviderUseCase + ProviderConsentGate
+    (readsHomeDir gate), reads getCatalog(activeProviderId) — 'claude' hardcode
+    REMOVED; optional-inject + ≤1-provider = byte-identical P8.
+  - homeFsConsent ROUND-TRIP FIXED: ObsidianBridge._coerceSettings +
+    core-settings load-or-default it (the APPLICATION-batch escalation resolved).
+  - CAPABILITY PARITY: verbatim vs claudian-main {claude,codex,opencode}/
+    capabilities.ts; only BACKED built, GATED-OFF honest-false.
+  - FILE-NAMING BAN honoured (SecretStorage.ts/HomeFileSystem.ts, NO
+    ObsidianSecretStore*); GUARD-RELAX scoped (only SecretStorePort/
+    SECRET_STORE_PORT dropped; ObsidianSecretStore* glob stays banned).
+  - en↔de i18n parity; forbidden-terms whitelist scoped to credential keys.
+CONDITIONS BEFORE MERGE → next (NOT self-claimable; final epic-review human gate):
+  1. Automated verify/test:all gate green (parent-owned).
+  2. Manual legs TEST-PV-M1 (Codex)/M2 (Opencode)/M3 (secret)/M4 (parity
+     screenshots) + the app.secretStorage minAppVersion API check (SPEC-PV-032,
+     CLAR-PV-004) — recorded pending-manual, ride the single final epic gate.
+  3. brand-reviewer subagent findings folded into review.md §Brand review with no
+     blocking signal (reviewer preliminary pass: none observed).
+P3 FOLLOW-UPS (non-blocking, owner noted in review.md): R-PV-001 (Codex no-
+  turn/completed idle case → verify at M1), R-PV-002 (hasServiceTier reuses
+  supportsTurnSteer — add a dedicated field in P10), R-PV-003 (JSONL/ACP→P3
+  history mapping is M1/M2-only, confirm explicitly).
+```

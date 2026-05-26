@@ -131,3 +131,17 @@ export type {
 	ParsedMcpConfig,
 	EnabledMcpServers,
 } from '@/domain/chat/mcp/McpTypes';
+
+// P9 providers-registry (SPEC-PV-004/006/007, ADR-PV-001/002/003). The three new
+// narrow ports (one consumer each, no aggregate) + the secret-key helper + the
+// home-fs roots constant + the descriptor/capability DTOs the registry returns,
+// surfaced through the ports barrel for one-stop import.
+export type { ProviderRegistryPort } from './ProviderRegistryPort';
+export type { SecretStorePort } from './SecretStorePort';
+export { providerSecretKey } from './SecretStorePort';
+export type { HomeFsPort } from './HomeFsPort';
+export { HOME_FS_ROOTS } from './HomeFsPort';
+export type {
+	ProviderCapabilities,
+	ProviderDescriptor,
+} from '@/domain/chat/providers/ProviderDescriptor';

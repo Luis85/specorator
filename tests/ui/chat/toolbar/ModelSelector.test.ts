@@ -17,11 +17,12 @@ import { mount } from '@vue/test-utils';
 import ModelSelector from '@/ui/chat/toolbar/ModelSelector.vue';
 import { i18n } from '@/ui/i18n';
 import type { ModelWidgetVm } from '@/application/chat/toolbar/buildToolbarViewModel';
+import type { ProviderId } from '@/domain/chat/ProviderId';
 import { ModelSelectorPageObject } from './ModelSelector.po';
 
-function mountModel(vm: ModelWidgetVm) {
+function mountModel(vm: ModelWidgetVm, providerId?: ProviderId) {
 	const wrapper = mount(ModelSelector, {
-		props: { vm },
+		props: providerId === undefined ? { vm } : { vm, providerId },
 		global: { plugins: [i18n] },
 	});
 	return { wrapper, po: new ModelSelectorPageObject(wrapper) };
@@ -114,5 +115,31 @@ describe('ModelSelector (SPEC-TC-013)', () => {
 		await po.clickButton();
 		expect(po.emptyExists()).toBe(true);
 		expect(po.optionCount()).toBe(0);
+	});
+});
+
+/**
+ * T-PV-031 (RED) — provider-aware `ModelSelector` (TEST-PV-062 A leg).
+ *
+ * SPEC-PV-017, REQ-PV-062. The P6 selector is CHANGED to render the active
+ * provider's models incl. the `opencode-model-picker` shape. The `providerId` prop is
+ * additive + optional — absent / `'claude'` is byte-identical P6 (NFR-PV-001); when
+ * `'opencode'` the picker carries the `opencode-model-picker` variant. No
+ * `switch (providerId)` (NFR-PV-014, asserted by the source grep below).
+ */
+describe('ModelSelector provider-aware shape (SPEC-PV-017)', () => {
+	it('renders the opencode-model-picker shape when the active provider is opencode (TEST-PV-062)', () => {
+		const { po } = mountModel(groupedVm, 'opencode');
+		expect(po.opencodePickerShown()).toBe(true);
+	});
+
+	it('does NOT render the opencode shape for opencode-absent — byte-identical P6 (NFR-PV-001)', () => {
+		const { po } = mountModel(groupedVm);
+		expect(po.opencodePickerShown()).toBe(false);
+	});
+
+	it('does NOT render the opencode shape for claude (NFR-PV-001)', () => {
+		const { po } = mountModel(groupedVm, 'claude');
+		expect(po.opencodePickerShown()).toBe(false);
 	});
 });

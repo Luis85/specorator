@@ -122,9 +122,15 @@ const PORTS_BAN_PATTERN = {
 // DELETED_INJECTION_KEYS below — these three regrown paths are now permitted
 // while EVERY other P0-deleted symbol stays forbidden. (`SpIcon` lives at the
 // new UI path `@/ui/chat/SpIcon`, which no ban glob matches — it is permitted by
-// construction.) Still-deleted subsystems — the `Feature` aggregate, the old
-// transport/MCP/secret/metadata/canvas ports + adapters — stay banned until
-// their own phase regrows them.
+// construction.) P9 (providers-registry, ADR-PV-002, T-PV-009) regrows the secret
+// seam (`SecretStorePort` + `SECRET_STORE_PORT` key, native `app.secretStorage`),
+// so `@/domain/ports/SecretStorePort` is dropped from this group and
+// `SECRET_STORE_PORT` from DELETED_INJECTION_KEYS below — exactly the ICON_PORT
+// precedent. The OLD Obsidian-layer impl glob `@/infrastructure/obsidian/
+// ObsidianSecretStore*` STAYS banned (the new infra is named `SecretStorage.ts`).
+// Still-deleted subsystems — the `Feature` aggregate, the old
+// transport/MCP/metadata/canvas ports + adapters — stay banned until their own
+// phase regrows them.
 const DELETED_SUBSYSTEM_BAN = {
 	group: [
 		'@/domain/feature',
@@ -149,7 +155,7 @@ const DELETED_SUBSYSTEM_BAN = {
 		'@/domain/ports/ChatTransportPort',
 		'@/domain/ports/TransportLifecyclePort',
 		'@/domain/ports/ConfirmModalPort',
-		'@/domain/ports/SecretStorePort',
+		// `@/domain/ports/SecretStorePort` regrows in P9 (ADR-PV-002, T-PV-009) — removed.
 		// `@/domain/ports/IconPort` regrows in P2 (ADR-RR-001 §4, T-RR-003) — removed.
 		'@/domain/ports/MetadataCachePort',
 		'@/domain/ports/CanvasPort',
@@ -172,7 +178,7 @@ const DELETED_INJECTION_KEYS = {
 		'PROVIDER_REGISTRY_KEY',
 		'TRANSPORT_LIFECYCLE_PORT',
 		'CONFIRM_MODAL_PORT',
-		'SECRET_STORE_PORT',
+		// `SECRET_STORE_PORT` regrows in P9 (ADR-PV-002, T-PV-009) — removed.
 		'TRANSPORT_KIND_KEY',
 		'IS_MOBILE_KEY',
 		'SETTINGS_VERSION_KEY',
@@ -672,7 +678,10 @@ export default defineConfig(
 	{
 		files: ['src/plugin/**/*.ts', 'src/ui/**/*.ts', 'src/ui/**/*.vue'],
 		rules: {
-			'obsidianmd/ui/sentence-case': ['error', { brands: ['Specorator', 'MCP'] }],
+			'obsidianmd/ui/sentence-case': [
+				'error',
+				{ brands: ['Specorator', 'MCP', 'Claude', 'Codex', 'Opencode', 'API'] },
+			],
 		},
 	},
 

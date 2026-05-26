@@ -12,6 +12,9 @@ import {
 	DEFAULT_SETTINGS,
 	resolveSessionsFolder,
 	clampMaxTabs,
+	coerceActiveProvider,
+	coerceEnabledProviders,
+	coerceHomeFsConsent,
 	type PluginSettings,
 } from '@/domain/settings/PluginSettings';
 import { trySync, tryAsync } from '@/domain/shared/tryAsync';
@@ -39,6 +42,9 @@ import type {
 	ApprovalRuleStorePort,
 	McpConfigStorePort,
 	McpClientPort,
+	ProviderRegistryPort,
+	SecretStorePort,
+	HomeFsPort,
 } from '@/domain/ports';
 import type { Result } from '@/domain/shared/Result';
 import { ok, err } from '@/domain/shared/Result';
@@ -53,6 +59,10 @@ import { ObsidianToolbarCatalog } from './ObsidianToolbarCatalog';
 import { ObsidianApprovalRuleStore } from './ObsidianApprovalRuleStore';
 import { VaultMcpConfigStore } from './VaultMcpConfigStore';
 import { SdkMcpClient } from './SdkMcpClient';
+import { ProviderRegistry } from '@/infrastructure/providers/ProviderRegistry';
+import { SecretStorage } from './SecretStorage';
+import { HomeFileSystem } from './HomeFileSystem';
+import { ObsidianProviderRuntimeRegistry } from './ObsidianProviderRuntimeRegistry';
 import { VaultFileHistoryStore } from './history/VaultFileHistoryStore';
 import { safeMarkdownRender } from '@/application/chat/safeMarkdownRender';
 import { walkSvgElementToIconNode } from './walkSvgElementToIconNode';
@@ -180,6 +190,52 @@ export class ObsidianBridge
 	// Reads/writes no secret (NFR-CC-006). Each call is a new instance.
 	createChatRuntime(): ChatRuntimePort {
 		return new ClaudeCliChatRuntime(this, this.getVaultBasePath());
+	}
+
+	// ── Provider registry / runtime / secret / home-fs ports (SPEC-PV-009) ──────
+	// The shared descriptor-table registry (coverage-included pure data) + the
+	// coverage-excluded runtime registry (Claude reuse / Codex JSON-RPC / Opencode
+	// ACP, the widened factory body) + the real `app.secretStorage` `SecretStorePort`
+	// (NEVER `data.json`) + the real `node:fs` `HomeFsPort` (root-scoped,
+	// path-escape→err). The wire-in batch routes the per-tab factory through
+	// `providerRuntimeRegistry.createChatRuntime(providerId)`. Lazily constructed.
+	private providerRegistryPort: ProviderRegistry | null = null;
+	private secretStorePort: SecretStorage | null = null;
+	private homeFsPortRef: HomeFileSystem | null = null;
+	private providerRuntimeRegistryRef: ObsidianProviderRuntimeRegistry | null = null;
+
+	/** The shared descriptor-table `ProviderRegistryPort` (SPEC-PV-008/009). */
+	get providerRegistry(): ProviderRegistryPort {
+		this.providerRegistryPort ??= new ProviderRegistry();
+		return this.providerRegistryPort;
+	}
+
+	/** The real `app.secretStorage` `SecretStorePort` (NEVER `data.json`, ADR-PV-002). */
+	get secretStore(): SecretStorePort {
+		this.secretStorePort ??= new SecretStorage(this.app);
+		return this.secretStorePort;
+	}
+
+	/** The real `node:fs` `HomeFsPort` rooted at `os.homedir()` (root-scoped, read-only). */
+	get homeFs(): HomeFsPort {
+		this.homeFsPortRef ??= new HomeFileSystem();
+		return this.homeFsPortRef;
+	}
+
+	/**
+	 * The runtime registry (`createChatRuntime(providerId): Result<ChatRuntimePort>`,
+	 * the widened factory body): Claude reuse / Codex JSON-RPC / Opencode ACP, gated
+	 * honestly on secret-store availability. Coverage-excluded; the manual legs
+	 * TEST-PV-M1/M2/M3 are the behavioural gate.
+	 */
+	get providerRuntimeRegistry(): ObsidianProviderRuntimeRegistry {
+		this.providerRuntimeRegistryRef ??= new ObsidianProviderRuntimeRegistry({
+			secretStore: this.secretStore,
+			homeFs: this.homeFs,
+			cwd: this.getVaultBasePath(),
+			logger: this,
+		});
+		return this.providerRuntimeRegistryRef;
 	}
 
 	// ── Aux model port (SPEC-CA-007 aux leg, ADR-CA-002 §1) ─────────────────────
@@ -507,7 +563,25 @@ export class ObsidianBridge
 			typeof obj.customSystemPrompt === 'string'
 				? obj.customSystemPrompt
 				: DEFAULT_SETTINGS.customSystemPrompt;
-		return { locale, logLevel, sessionsFolder, maxTabs, customSystemPrompt };
+		// P9 (SPEC-PV-001/027): the device-local provider selection. Load-or-default
+		// through the pure coercers — never a secret, no migration (ADR-PV-002).
+		const activeProvider = coerceActiveProvider(obj.activeProvider);
+		const enabledProviders = coerceEnabledProviders(obj.enabledProviders);
+		// P9 (SPEC-PV-014/024, REQ-PV-082): the one-time beyond-vault consent record.
+		// MUST round-trip so a recorded consent survives a production reload (the gate
+		// never re-prompts, EC-PV-6). OPTIONAL — absent (`undefined`) when nothing was
+		// recorded so the exact-key contract stays byte-identical P0–P8 (NFR-PV-001).
+		const homeFsConsent = coerceHomeFsConsent(obj.homeFsConsent);
+		return {
+			locale,
+			logLevel,
+			sessionsFolder,
+			maxTabs,
+			customSystemPrompt,
+			activeProvider,
+			enabledProviders,
+			...(homeFsConsent !== undefined ? { homeFsConsent } : {}),
+		};
 	}
 
 	private _shouldLog(level: 'debug' | 'info' | 'warn' | 'error'): boolean {
