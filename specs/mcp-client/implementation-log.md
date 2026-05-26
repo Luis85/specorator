@@ -548,3 +548,28 @@ none in `src/application/chat/mcp/**`); `npx vitest run tests/application/chat/m
 no `providerId` branch; `styles.css` untouched (no build run). The UI batch (T-MC-022
 onward: the composables + the settings/modal/selector components + the wiring) is out of
 this batch's scope.
+
+---
+
+## UI batch (T-MC-022..033)
+
+### T-MC-022 / T-MC-023 — `useMcpConfigStorePort` + `useMcpClientPort`
+
+- **Files:**
+  - `tests/ui/composables/useMcpConfigStorePort.test.ts` (new, 1-44) — RED.
+  - `tests/ui/composables/useMcpClientPort.test.ts` (new, 1-44) — RED.
+  - `src/ui/composables/useMcpConfigStorePort.ts` (new, 1-23) — green.
+  - `src/ui/composables/useMcpClientPort.ts` (new, 1-23) — green.
+- **Spec:** SPEC-MC-019, REQ-MC-081, NFR-MC-005 (TEST-MC-081 composable leg).
+- **Description:** Two composables mirroring `useApprovalRuleStorePort`/`useVaultPort`
+  inject-or-throw: each `inject`s its own key (`MCP_CONFIG_STORE_PORT` /
+  `MCP_CLIENT_PORT`), returns it when provided, throws a clear "was not provided" error
+  when absent. One-port-one-composable, no aggregate.
+- **Outcome:** done — the prior RED (TEST-MC-081 composable leg) now green: 4/4.
+- **Commits:** RED `T-MC-022`; green `T-MC-023` (SHAs below in close-out).
+- **Verify:** `npx vitest run tests/ui/composables/useMcpConfigStorePort.test.ts
+  tests/ui/composables/useMcpClientPort.test.ts` **4/4 green**; whole-project
+  `vue-tsc -p tsconfig.lint.json` **0 errors**; whole-project `npm run lint` **0 errors**
+  (12 pre-existing warnings only). No `obsidian`/`node:*` import under `src/ui/**`; no
+  aggregate `usePorts`.
+- **Deviation:** none.
