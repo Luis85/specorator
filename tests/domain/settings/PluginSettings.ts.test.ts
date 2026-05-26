@@ -14,6 +14,8 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings';
 import type { ProviderId } from '@/domain/chat/ProviderId';
+import type { PermissionMode } from '@/domain/chat/PermissionMode';
+import type { EnvEntry, EnvSnippetStruct } from '@/domain/chat/environment/EnvSnippet';
 
 type Equals<A, B> =
 	(<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
@@ -23,6 +25,38 @@ const _activeProvider: Equals<PluginSettings['activeProvider'], ProviderId> = tr
 const _enabledProviders: Equals<PluginSettings['enabledProviders'], readonly ProviderId[]> = true;
 void _activeProvider;
 void _enabledProviders;
+
+// ---- P10 settings-shell (TEST-SS-092/093, SPEC-SS-001): the six additive
+// OPTIONAL device-local fields exist with the pinned types and are each absent
+// from DEFAULT_SETTINGS (mirroring homeFsConsent, NFR-SS-001/SPEC-SS-020). ----
+const _envSnippets: Equals<PluginSettings['envSnippets'], readonly EnvSnippetStruct[] | undefined> =
+	true;
+const _envScopes: Equals<
+	PluginSettings['envScopes'],
+	Readonly<Record<string, readonly EnvEntry[]>> | undefined
+> = true;
+const _keyboardNav: Equals<
+	PluginSettings['keyboardNav'],
+	{ readonly scrollUpKey: string; readonly scrollDownKey: string; readonly focusInputKey: string } | undefined
+> = true;
+const _providerDefaultModel: Equals<
+	PluginSettings['providerDefaultModel'],
+	Readonly<Record<string, string>> | undefined
+> = true;
+const _defaultPermissionMode: Equals<
+	PluginSettings['defaultPermissionMode'],
+	PermissionMode | undefined
+> = true;
+const _providerCliPath: Equals<
+	PluginSettings['providerCliPath'],
+	Readonly<Record<string, string>> | undefined
+> = true;
+void _envSnippets;
+void _envScopes;
+void _keyboardNav;
+void _providerDefaultModel;
+void _defaultPermissionMode;
+void _providerCliPath;
 
 describe('PluginSettings additive provider fields (TEST-PV-114)', () => {
 	it('defaults activeProvider to "claude"', () => {
@@ -51,5 +85,47 @@ describe('PluginSettings additive provider fields (TEST-PV-114)', () => {
 		};
 		expect(p8Shaped.activeProvider).toBe('claude');
 		expect(p8Shaped.enabledProviders).toEqual([]);
+	});
+});
+
+describe('PluginSettings P10 additive OPTIONAL fields (TEST-SS-092/093, SPEC-SS-001/020)', () => {
+	it('the six P10 fields are absent from DEFAULT_SETTINGS (exact-key byte-identity, NFR-SS-001)', () => {
+		// The exact-key contract stays byte-identical to P9: DEFAULT_SETTINGS holds
+		// only the recorded P0–P9 keys; the six P10 fields are OPTIONAL + absent
+		// (mirroring homeFsConsent).
+		expect(Object.keys(DEFAULT_SETTINGS).sort()).toEqual(
+			[
+				'activeProvider',
+				'customSystemPrompt',
+				'enabledProviders',
+				'locale',
+				'logLevel',
+				'maxTabs',
+				'sessionsFolder',
+			].sort(),
+		);
+		expect('envSnippets' in DEFAULT_SETTINGS).toBe(false);
+		expect('envScopes' in DEFAULT_SETTINGS).toBe(false);
+		expect('keyboardNav' in DEFAULT_SETTINGS).toBe(false);
+		expect('providerDefaultModel' in DEFAULT_SETTINGS).toBe(false);
+		expect('defaultPermissionMode' in DEFAULT_SETTINGS).toBe(false);
+		expect('providerCliPath' in DEFAULT_SETTINGS).toBe(false);
+	});
+
+	it('accepts a fully-recorded P10 settings object (the OPTIONAL fields are assignable)', () => {
+		const recorded: PluginSettings = {
+			...DEFAULT_SETTINGS,
+			envSnippets: [
+				{ id: 's1', name: 'prod', description: '', envEntries: [{ key: 'FOO', value: { kind: 'inline', text: 'bar' } }] },
+			],
+			envScopes: { shared: [{ key: 'FOO', value: { kind: 'inline', text: 'bar' } }] },
+			keyboardNav: { scrollUpKey: 'w', scrollDownKey: 's', focusInputKey: 'i' },
+			providerDefaultModel: { claude: 'opus' },
+			defaultPermissionMode: 'plan',
+			providerCliPath: { codex: '/usr/bin/codex' },
+		};
+		expect(recorded.envSnippets?.[0]?.id).toBe('s1');
+		expect(recorded.keyboardNav?.scrollUpKey).toBe('w');
+		expect(recorded.defaultPermissionMode).toBe('plan');
 	});
 });
