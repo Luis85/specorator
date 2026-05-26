@@ -40,7 +40,20 @@ export interface PluginSettings {
 	 * install (Claude is always enabled; its membership is implicit, SPEC-PV-002).
 	 */
 	readonly enabledProviders: readonly ProviderId[]
+	/**
+	 * The one-time beyond-vault home-dir read consent records, keyed by
+	 * `provider.homeFsConsent.<id>` (SPEC-PV-014/024, REQ-PV-082). Device-local;
+	 * **OPTIONAL** + absent from `DEFAULT_SETTINGS` so the P0–P8 + DOMAIN-batch
+	 * exact-key contract stays byte-identical (NFR-PV-001) — a fresh install has no
+	 * consent record (read-as-absent → not consented). Never a secret. A `true`
+	 * value means the user consented once; the gate never re-prompts (EC-PV-6). A
+	 * Claude-only user never writes here (`readsHomeDir:false`, REQ-PV-114).
+	 */
+	readonly homeFsConsent?: Readonly<Record<string, boolean>>
 }
+
+/** The device-local consent record key for `id`'s beyond-vault reads (SPEC-PV-014, open item #4). */
+export const homeFsConsentKey = (id: ProviderId): string => `provider.homeFsConsent.${id}`
 
 export const DEFAULT_SETTINGS: PluginSettings = {
 	locale: 'en',
