@@ -2,13 +2,16 @@ import '@/ui/styles/tokens.css';
 import '@/ui/styles/animations.css';
 import { Plugin } from 'obsidian';
 import { AgentSidebarView, VIEW_TYPE_AGENT } from './AgentSidebarView';
-import { SpecoratorSettingTab } from './settings';
+import { SpecoratorSettingTab, type SettingsTabDeps } from './settings';
+import { createSnippetEditLauncher } from './modals/EnvSnippetModalHost';
 import { DEFAULT_SETTINGS, type PluginSettings } from '@/domain/settings/PluginSettings';
 import { ObsidianBridge } from '@/infrastructure/obsidian/ObsidianBridge';
 import { openInlineEdit } from './inlineEditLauncher';
 import { PluginCore } from '@/core/plugin-core';
 import { ALL_MODULES, type ModuleDescriptor } from '@/modules';
 import { coreSettingsModule } from '@/core/core-settings';
+import { createEnvSnippetService } from '@/application/settings';
+import { PROVIDER_DESCRIPTORS } from '@/domain/chat/providers';
 import { i18nMerge, i18nTranslate, setLocale, toSupportedLocale } from '@/ui/i18n';
 import type { TranslationPort } from '@/domain/ports';
 
@@ -26,7 +29,8 @@ export default class SpecoratorPlugin extends Plugin {
 	private _storedData: Record<string, unknown> = {};
 
 	async onload(): Promise<void> {
-		this.bridge = new ObsidianBridge(this.app);
+		const bridge = new ObsidianBridge(this.app);
+		this.bridge = bridge;
 		await this.loadSettings();
 
 		const translationPort: TranslationPort = { t: i18nTranslate };
@@ -87,7 +91,41 @@ export default class SpecoratorPlugin extends Plugin {
 			},
 		});
 
-		this.addSettingTab(new SpecoratorSettingTab(this.app, this));
+		this.addSettingTab(new SpecoratorSettingTab(this.app, this, this.buildSettingsTabDeps(bridge)));
+	}
+
+	/**
+	 * Assemble the P10 settings-shell ports + services the expanded tab renders the
+	 * view-model from (SPEC-SS-010, T-SS-030). The env subsystem composes the bridge's
+	 * `SettingsPort` + `SecretStorePort` behind a pure `EnvSnippetService` (NO new port,
+	 * ADR-SS-001); the snippet edit/delete modals are wired through the
+	 * `SnippetEditLauncher` seam so the tab never imports an Obsidian `Modal`.
+	 */
+	private buildSettingsTabDeps(bridge: ObsidianBridge): SettingsTabDeps {
+		const envSnippets = createEnvSnippetService({
+			settings: bridge,
+			secretStore: bridge.secretStore,
+			descriptors: PROVIDER_DESCRIPTORS,
+		});
+		const snippetLauncher = createSnippetEditLauncher({
+			app: this.app,
+			service: envSnippets,
+			registry: bridge.providerRegistry,
+			notify: bridge,
+			t: i18nTranslate,
+		});
+		return {
+			registry: bridge.providerRegistry,
+			secretStore: bridge.secretStore,
+			toolbarCatalog: bridge.toolbarCatalog,
+			mcpConfigStore: bridge.mcpConfigStore,
+			approvalRuleStore: bridge.approvalRuleStore,
+			providerCommandCatalog: bridge.createProviderCommandCatalog(),
+			envSnippets,
+			snippetLauncher,
+			notify: bridge,
+			t: i18nTranslate,
+		};
 	}
 
 	// Obsidian guarantees a single onunload(); detaching our own leaves here is
