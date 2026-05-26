@@ -2,9 +2,9 @@
 feature: providers-registry
 area: PV
 current_stage: requirements
-status: active
+status: accepted
 last_updated: 2026-05-26
-last_agent: orchestrator (bootstrap)
+last_agent: pm (/spec:requirements)
 epic: claudian-reboot
 phase: P9
 integration_branch: next
@@ -12,7 +12,7 @@ reference: D:\Projects\claudian-main
 artifacts:
   idea.md: skipped (parity-charter §3.6/§4 P9 + audits + claudian-main stand in, mirrors P1-P8)
   research.md: skipped
-  requirements.md: pending
+  requirements.md: accepted (PRD-PV-001 — 64 EARS REQ-PV + 14 NFR-PV + 7 CLAR-PV)
   design.md: pending
   spec.md: pending
   tasks.md: pending
@@ -33,7 +33,7 @@ artifacts:
 |---|---|---|
 | 1. Idea | `idea.md` | skipped |
 | 2. Research | `research.md` | skipped |
-| 3. Requirements | `requirements.md` | pending |
+| 3. Requirements | `requirements.md` | accepted |
 | 4. Design | `design.md` | pending |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
@@ -114,4 +114,20 @@ workspace registry, `~/.codex`/`~/.claude` transcript reads, the secret storage,
                           routing seam; HomeFsPort (beyond-vault, security ADR); SecretStorePort
                           (native secret storage, lands this phase, ADR + minAppVersion). Additive —
                           Claude-only = byte-identical P0-P8.
+2026-05-26 (pm): Stage 3 ACCEPTED. specs/providers-registry/requirements.md (PRD-PV-001) written —
+                          64 EARS REQ-PV grouped (registry/selection · routing · capabilities matrix ·
+                          Codex · Opencode · ACP transport · model routing · secret storage · home-fs/history ·
+                          settings/selector UI · security · a11y/additivity), 14 NFR-PV, success metrics +
+                          counter-metric, release criteria, 7 CLAR-PV resolved-by-recommendation. BINDING
+                          posture encoded: Claude COMPLETE default; Codex/Opencode CAPABILITY-GATED,
+                          feature-incomplete acceptable. Per-provider matrix grounded in claudian
+                          providers/{claude,codex,opencode}/capabilities.ts (frozen flags). Central decisions
+                          stated: ProviderRegistryPort + routing seam (CLAR-PV-001), HomeFsPort beyond-vault
+                          read-scoped/consented (CLAR-PV-002), SecretStorePort → app.secretStorage never
+                          data.json (CLAR-PV-003), minAppVersion verdict = keep 1.12.7 + capability-gate,
+                          escalate-don't-silently-bump if secretStorage needs newer (CLAR-PV-004). Additivity:
+                          Claude-only = P0-P8 byte-identical (REQ-PV-114/NFR-PV-001). HAND-OFF → /spec:design
+                          (architect: file the 3 P9 ADRs — ProviderRegistryPort+routing seam, HomeFsPort,
+                          SecretStorePort+minAppVersion check — then Part A UX + Part B UI parity vs
+                          charter §3.6/§3.10).
 ```
