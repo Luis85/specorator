@@ -19,8 +19,8 @@ artifacts:
   implementation-log.md: in-progress (DOMAIN T-AS-001..011 + INFRA T-AS-012..015 + APPLICATION T-AS-016..019 + UI T-AS-020..029 executed + logged; STYLES T-AS-030 + WIRE-IN T-AS-031..033 + GATE T-AS-034..040 remain, incl. manual legs TEST-AS-M1/M2/M3)
   test-plan.md: in-progress (guard-verify note + manual legs TEST-AS-M1/M2/M3 + DOMAIN/INFRA automated status; APP/UI legs follow)
   test-report.md: pending
-  review.md: pending
-  traceability.md: pending
+  review.md: complete (REVIEW-AS-001; verdict approve-with-conditions; 0 critical, 1 high R-AS-001 (EN locale missing permission.mode.* labels — blocking), 1 medium R-AS-002 (CLAR-AS-006 ruling: P3 acceptable deferral), 3 low; security-correctness confirmed; live-wiring + both-entry-point provide confirmed)
+  traceability.md: complete (TRACE-AS-001; every REQ-AS chained REQ→SPEC→code→TEST + manual leg; no orphan; manual legs M1/M2/M3 + parity screenshots pending-not-green)
   release-notes.md: pending
   retrospective.md: pending
 ---
@@ -39,7 +39,7 @@ artifacts:
 | 6. Tasks | `tasks.md` | complete (TASKS-AS-001; 40 tasks T-AS-001..040; DDD batches; RED-before-green; 3 manual legs; NO guard-relax) |
 | 7. Implementation | `implementation-log.md` + code | in-progress (DOMAIN T-AS-001..011 + INFRA T-AS-012..015 + APPLICATION T-AS-016..019 + UI T-AS-020..029 done; STYLES T-AS-030 + WIRE-IN T-AS-031..033 + GATE T-AS-034..040 remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (test-plan scaffolded; manual legs TEST-AS-M1/M3 scheduled at T-AS-012; test-report pending) |
-| 9. Review | `review.md`, `traceability.md` | pending |
+| 9. Review | `review.md`, `traceability.md` | complete (REVIEW-AS-001 / TRACE-AS-001; verdict approve-with-conditions — 1 blocking high R-AS-001) |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
 
@@ -514,4 +514,31 @@ updates, the inline approval/plan-mode controllers, `status-panel`/`permission-t
                  on ApprovalRequest (+ QA updates the structural test), or (b) a side-channel that does not
                  widen the request keyset. See test-plan.md "CLARIFICATION — T-AS-032 action-pattern
                  follow-up". GATE tasks T-AS-034..040 are owned by the parent orchestrator.
+
+2026-05-26 (reviewer): STAGE-9 REVIEW COMPLETE on feature/approvals-security (REVIEW-AS-001 +
+                 TRACE-AS-001 written; review-only — no code/spec/test edits).
+                 VERDICT: approve-with-conditions. Findings: 0 critical / 1 high / 1 medium / 3 low.
+                 Security-correctness CONFIRMED: fail-safe-to-prompt (decide resolves 'prompt' on
+                 store load err, never auto-allow, TEST-AS-054), deny-wins (persisted+session),
+                 matcher safety verbatim-parity with claudian-main ("git *"↛"github", bare-prefix
+                 never matches, "/a/b"↛"/a/bc.md", null-action guard), device-local-not-vault
+                 (ObsidianApprovalRuleStore loadLocalStorage/saveLocalStorage only). Live-wiring
+                 CONFIRMED: ApprovalManager.decide on the real ApprovalGateRuntime path (inner-most),
+                 *-always→applyDecision→store.addRule, APPROVAL_RULE_STORE_PORT provided in BOTH
+                 AgentSidebarView + ui/main.ts, panel mounts, optional-inject degrade = byte-identical
+                 P4. CLAR-AS-006 ruling: P3 (acceptable deferral) — the CLI reducer emits NO
+                 approval_request chunk (no live approval path yet; req.context-derivation cannot break
+                 it and degrades fail-safe-to-prompt); structured getActionPattern needs a SPEC-AS-003
+                 amendment, carried to architect for the interactive-transport phase.
+                 BLOCKING (must fix before merge to next):
+                 - R-AS-001 (high) — src/ui/i18n/locales/en.ts: agent.chat.toolbar.permission is
+                   missing the `mode.{normal,plan,yolo}` labels (de.ts has them). PermissionToggle.vue:49
+                   renders them; the EN default UI shows raw key strings on the live toggle + accessible
+                   name (NFR-AS-015, REQ-AS-001/051). Test gap: PermissionToggle.live.test.ts asserts
+                   data-mode/aria-selected/aria-label-length, never the visible TEXT — add the EN keys +
+                   a text assertion.
+                 HAND-OFF -> dev (fix R-AS-001 in en.ts; format en.ts per R-AS-003) + qa (add the
+                 label-text assertion). Then parent runs verify + test:all + records manual legs M1/M2/M3
+                 + parity screenshots for the epic gate. R-AS-002 (CLAR-AS-006) -> architect, not a P7
+                 blocker. R-AS-004/005 (low) scheduled.
 ```

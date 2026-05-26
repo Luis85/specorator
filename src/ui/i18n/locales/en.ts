@@ -100,6 +100,11 @@ export default {
 				},
 				permission: {
 					label: 'Permissions',
+					mode: {
+						normal: 'Normal',
+						plan: 'Plan',
+						yolo: 'Auto-allow',
+					},
 					plan: 'PLAN',
 					deferred: 'Permission rules arrive in a later release.',
 				},
