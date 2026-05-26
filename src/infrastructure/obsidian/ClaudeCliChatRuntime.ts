@@ -16,6 +16,7 @@ import type {
 	RuntimeCapabilities,
 	ToolbarCapabilities,
 } from '@/domain/ports';
+import type { PermissionMode } from '@/domain/chat/PermissionMode';
 import type {
 	AskUserQuestionRequest,
 	AskUserQuestionAnswer,
@@ -65,6 +66,11 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 	private approvalCallback:
 		| ((req: ApprovalRequest) => Promise<ApprovalDecision | null>)
 		| null = null;
+	// P7 (SPEC-AS-007, ADR-AS-002 §3): the live permission mode of the most recent
+	// query, mapped to the SDK wire value (yolo↔bypassPermissions / plan↔plan /
+	// normal↔default). The toolbar capability getter reflects it (display only — the
+	// fold sends the mode, NG6). Absent ⇒ the runtime default `'normal'`.
+	private liveMode: PermissionMode = 'normal';
 
 	constructor(
 		private readonly logger?: LoggerPort,
@@ -96,6 +102,10 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 		queryOptions?: ChatRuntimeQueryOptions,
 	): AsyncGenerator<StreamChunk> {
 		this.cancelled = false;
+		// P7 (SPEC-AS-007): record the turn's live permission mode (absent ⇒ 'normal')
+		// so the toolbar capability getter reflects the active mode; the SDK wire value
+		// is mapped in `_optionArgs`.
+		this.liveMode = queryOptions?.permissionMode ?? 'normal';
 		const reducer = new ClaudeStreamReducer();
 		const binary = this._resolveBinary();
 		if (binary === null) {
@@ -161,6 +171,14 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 		if (chunk.type === 'ask_user_question') {
 			void this.askUserQuestionCallback?.({ requestId: chunk.requestId, questions: chunk.questions });
 		} else if (chunk.type === 'exit_plan_mode') {
+			// P7 (SPEC-AS-007, ADR-AS-002 §3): on plan-exit the runtime syncs the resulting
+			// mode session-scoped — parity `ClaudeApprovalHandler.ts:63–71`
+			// `{type:'setMode',mode,destination:'session'}`. The one-shot `--print` transport
+			// has no live SDK session channel (it reports `supportsPlanMode:false`), so the
+			// sync is recorded on `liveMode` for the next turn's `--permission-mode` mapping
+			// rather than pushed mid-stream; a future interactive transport pushes the same
+			// `setMode` over the live channel. No `providerId` branch.
+			this._syncPlanExitMode('normal');
 			void this.exitPlanModeCallback?.({
 				requestId: chunk.requestId,
 				plan: chunk.plan,
@@ -248,10 +266,9 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 	//   medium/low), not a token budget.
 	// - `hasServiceTier: false`: no Codex fast-mode on Claude — the toggle collapses.
 	// - `hasModeToggle: true`: the catalog ships a mode descriptor (SPEC-TC-007).
-	// - `permissionMode`: mirrors the active P4 plan state (display only — P6 does not
-	//   own plan mode, NG6). The one-shot `--print` transport reports `supportsPlanMode:
-	//   false` (no interactive plan round-trip), so the displayed permission mode stays
-	//   `'default'` until an interactive transport flips it.
+	// - `permissionMode`: the LIVE mode of the most recent query (P7 SPEC-AS-007 — the
+	//   real SDK mapping; display only, the fold owns the send, NG6). Absent ⇒ the
+	//   `'normal'` default; a `plan`/`yolo` query reflects through to the toggle/panel.
 	// Synchronous + total; never throws. No `providerId` branch.
 	getToolbarCapabilities(): ToolbarCapabilities {
 		return {
@@ -259,7 +276,7 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 			reasoningControl: 'effort',
 			hasServiceTier: false,
 			hasModeToggle: true,
-			permissionMode: 'default',
+			permissionMode: this.liveMode,
 		};
 	}
 
@@ -288,6 +305,16 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 	}
 
 	// ── internals ─────────────────────────────────────────────────────────────
+
+	/**
+	 * Sync the session-scoped permission mode on a plan-exit (SPEC-AS-007,
+	 * ADR-AS-002 §3 — parity `ClaudeApprovalHandler.ts setMode destination:'session'`).
+	 * Records the resulting mode so the next turn's `--permission-mode` mapping +
+	 * `getToolbarCapabilities().permissionMode` reflect it. Total — never throws.
+	 */
+	private _syncPlanExitMode(mode: PermissionMode): void {
+		this.liveMode = mode;
+	}
 
 	/** Opaque read of the cancel flag so the streaming loop checks live state. */
 	private _isCancelled(): boolean {
@@ -331,7 +358,32 @@ export class ClaudeCliChatRuntime implements ChatRuntimePort {
 		if (appendSystemPrompt !== undefined && appendSystemPrompt.length > 0) {
 			argv.push('--append-system-prompt', appendSystemPrompt);
 		}
+		// P7 (SPEC-AS-007, ADR-AS-002 §3): map the live permission mode to the SDK
+		// `PermissionMode` on the wire (yolo↔bypassPermissions / plan↔plan /
+		// normal↔default). A `normal`/absent mode emits NO flag, so a P6-shaped turn runs
+		// byte-identically (NFR-AS-001); the mapping stays HERE in the Claude runtime — no
+		// `providerId` branch in the UI/app (SPEC-AS-023, NG6).
+		const sdkMode = ClaudeCliChatRuntime._toSdkPermissionMode(queryOptions?.permissionMode);
+		if (sdkMode !== null) {
+			argv.push('--permission-mode', sdkMode);
+		}
 		return argv;
+	}
+
+	/**
+	 * Map the domain `PermissionMode` to the SDK/CLI `--permission-mode` string
+	 * (parity `resolveSDKPermissionMode`): `yolo`→`bypassPermissions`, `plan`→`plan`,
+	 * `normal`/absent→`null` (no flag, the runtime's default). Total — never throws.
+	 */
+	private static _toSdkPermissionMode(mode: PermissionMode | undefined): string | null {
+		switch (mode) {
+			case 'yolo':
+				return 'bypassPermissions';
+			case 'plan':
+				return 'plan';
+			default:
+				return null;
+		}
 	}
 
 	/**

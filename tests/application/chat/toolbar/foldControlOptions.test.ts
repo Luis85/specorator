@@ -92,3 +92,69 @@ describe('foldControlOptions (TEST-TC-002/004 fold legs)', () => {
 		).not.toThrow();
 	});
 });
+
+/**
+ * TEST-AS-002 (fold leg) — the P7 guarded `permissionMode` clause.
+ *
+ * SPEC-AS-011: the added clause writes `folded.permissionMode = controls.permissionMode`
+ * ONLY when present AND non-`'normal'`. So `{}` → `{}` and `{ permissionMode: 'normal' }`
+ * → `{}` (both byte-identical to a P6 turn — the runtime applies its `normal` default,
+ * EC-AS-2/13); `'plan'`/`'yolo'` are folded. The P6 `model`/`mode`/`reasoning`/`serviceTier`
+ * clauses + behaviour stay byte-identical (SPEC-AS-021). Pure + total — never throws.
+ *
+ * Traces: TEST-AS-002 (fold leg), SPEC-AS-011, SPEC-AS-021, REQ-AS-002, REQ-AS-052,
+ * NFR-AS-001, EC-AS-2, EC-AS-13.
+ */
+describe('foldControlOptions — the P7 permissionMode clause (TEST-AS-002 fold leg)', () => {
+	it('folds nothing for an untouched toolbar ({}) — byte-identical P6 (EC-AS-2, NFR-AS-001)', () => {
+		const folded = foldControlOptions({});
+		expect(folded).toEqual({});
+		expect('permissionMode' in folded).toBe(false);
+	});
+
+	it('does NOT fold an explicit permissionMode: \'normal\' (the non-normal-only guard, EC-AS-13)', () => {
+		const folded = foldControlOptions({ permissionMode: 'normal' });
+		expect(folded).toEqual({});
+		expect('permissionMode' in folded).toBe(false);
+	});
+
+	it('folds permissionMode: \'plan\'', () => {
+		expect(foldControlOptions({ permissionMode: 'plan' })).toEqual({ permissionMode: 'plan' });
+	});
+
+	it('folds permissionMode: \'yolo\'', () => {
+		expect(foldControlOptions({ permissionMode: 'yolo' })).toEqual({ permissionMode: 'yolo' });
+	});
+
+	it('folds a non-normal permissionMode alongside the P6 fields without disturbing them', () => {
+		const controls: TabControls = {
+			model: 'claude-opus-4',
+			mode: 'verbose',
+			reasoning: { kind: 'effort', value: 'medium' },
+			serviceTier: 'standard',
+			permissionMode: 'yolo',
+		};
+		expect(foldControlOptions(controls)).toEqual({
+			model: 'claude-opus-4',
+			mode: 'verbose',
+			reasoning: { kind: 'effort', value: 'medium' },
+			serviceTier: 'standard',
+			permissionMode: 'yolo',
+		});
+	});
+
+	it('leaves the P6 fold byte-identical when permissionMode is normal (no extra key)', () => {
+		const controls: TabControls = { model: 'claude-haiku', permissionMode: 'normal' };
+		const folded = foldControlOptions(controls);
+		expect(folded).toEqual({ model: 'claude-haiku' });
+		expect('permissionMode' in folded).toBe(false);
+	});
+
+	it('is total — never throws when a permissionMode is present', () => {
+		expect(() => foldControlOptions({ permissionMode: 'plan' })).not.toThrow();
+		expect(() => foldControlOptions({ permissionMode: 'normal' })).not.toThrow();
+		expect(() =>
+			foldControlOptions({ model: 'm', permissionMode: 'yolo' }),
+		).not.toThrow();
+	});
+});

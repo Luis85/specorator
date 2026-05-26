@@ -38,10 +38,15 @@ import {
 	SELECTION_SOURCE_PORT,
 	SELECTION_HIGHLIGHT_PORT,
 	TOOLBAR_CATALOG_PORT,
+	APPROVAL_RULE_STORE_PORT,
 } from '@/infrastructure/bridge/ports';
-import type { ToolbarCatalogPort } from '@/domain/ports';
+import type { ToolbarCatalogPort, ApprovalRuleStorePort, ApprovalRule } from '@/domain/ports';
 import type { TabControls } from '@/domain/chat/toolbar/TabControls';
+import type { PermissionMode } from '@/domain/chat/PermissionMode';
 import type { ReasoningChoice } from '@/domain/chat/Reasoning';
+import { ApprovalManager } from '@/application/chat/approvals/ApprovalManager';
+import { ApprovalGateRuntime } from '@/ui/chat/composer/ApprovalGateRuntime';
+import { FeedbackService } from '@/application/shared/FeedbackService';
 import {
 	buildToolbarViewModel,
 	type ToolbarViewModel,
@@ -69,6 +74,7 @@ import UsageInfo from './UsageInfo.vue';
 import ChatComposer from './ChatComposer.vue';
 import TabBar from './TabBar.vue';
 import ResumeSessionDropdown from './ResumeSessionDropdown.vue';
+import ApprovalsPanel from './approvals/ApprovalsPanel.vue';
 
 /**
  * The chat container (SPEC-CC-018, extended P3 — SPEC-TS-026). Now driven by the
@@ -133,6 +139,8 @@ onMounted(() => {
 	void settingsPort?.getSettings().then((settings: PluginSettings) => {
 		maxTabs = clampMaxTabs(settings.maxTabs);
 	});
+	// P7 (SPEC-AS-016, REQ-AS-040/043): seed the live approvals view-model from the store.
+	void refreshApprovalRules();
 });
 
 onBeforeUnmount(() => {
@@ -172,6 +180,47 @@ const composerRuntime: ChatRuntimePort | null = composerEnabled
 	: null;
 
 const supportsInlineResponse = composerRuntime?.getCapabilities().supportsInlineResponse ?? false;
+
+// ── P7 approvals & security (SPEC-AS-016/017/018) ────────────────────────────────
+// `APPROVAL_RULE_STORE_PORT` is OPTIONAL here (parity with the P6 toolbar): when
+// provided (the wire-in batch, T-AS-032) the surface constructs ONE per-surface
+// `ApprovalManager` (per-surface session-rule scope, open item #1) and gates the active
+// runtime's approval callback through it (mode-gate → match → auto OR the unchanged P4
+// prompt). When absent the surface degrades to always-prompt — the byte-identical P4
+// path (no rule store → `decide` is never consulted, the P4 block always renders). The
+// store also backs the approvals view-model (the panel's rule list + remove). NEVER a
+// `providerId` branch (SPEC-AS-023).
+const approvalStore: ApprovalRuleStorePort | undefined = inject(APPROVAL_RULE_STORE_PORT, undefined);
+
+/** The active tab's live permission mode (`controls.permissionMode ?? 'normal'`). */
+const activePermissionMode = computed<PermissionMode>(
+	() => tabs.activeTab?.controls.permissionMode ?? 'normal',
+);
+
+// One `ApprovalManager` per surface (resolved open item #1) — built only when the store
+// is provided. It reads the active mode via the reactive getter so a per-tab mode change
+// (the toggle) re-derives without re-construction.
+const approvalManager: ApprovalManager | null =
+	approvalStore !== undefined
+		? new ApprovalManager(
+				approvalStore,
+				new FeedbackService(logger, notify),
+				t('agent.chat.approvals.storeError'),
+		  )
+		: null;
+
+/** True iff the approvals surface is wired (the store + the manager are present). */
+const hasApprovals = approvalManager !== null;
+
+// The reactive approvals view-model the panel reads (persisted ∪ session rules). It is
+// refreshed on mount + after a persist/remove so the panel stays live (REQ-AS-043).
+const approvalRules = ref<readonly ApprovalRule[]>([]);
+
+async function refreshApprovalRules(): Promise<void> {
+	if (approvalManager === null) return;
+	const result = await approvalManager.listRules();
+	if (result.ok) approvalRules.value = result.value;
+}
 
 const { composer, respond } = buildComposer();
 
@@ -228,8 +277,25 @@ function buildComposer(): {
 	// `RespondToInlineBlockUseCase` (it captures the runtime's awaiting resolve). One
 	// registration per callback (no last-wins conflict): the decorator wraps the use
 	// case's capture callback with an enqueue-first side effect.
+	// P7 (SPEC-AS-016): when an `ApprovalManager` is present, gate the approval callback
+	// through it FIRST — the gate is the inner-most decorator so an auto-decided approval
+	// (`yolo`/a matching rule) never reaches the enqueue/render path. `EnqueueRuntime`
+	// wraps the gate, so a `'prompt'` outcome still enqueues the unchanged P4 block and the
+	// user's answer routes through `applyDecision` then resolves. With no manager the chain
+	// is the byte-identical P4 path (no gate).
+	const gated: ChatRuntimePort =
+		approvalManager !== null
+			? new ApprovalGateRuntime(
+					runtime,
+					approvalManager,
+					() => activePermissionMode.value,
+					() => {
+						void refreshApprovalRules();
+					},
+			  )
+			: runtime;
 	const respondUseCase = new RespondToInlineBlockUseCase(
-		new EnqueueRuntime(runtime, (entry, hooks) => arbiter.enqueueInlineBlock(entry, hooks), logger),
+		new EnqueueRuntime(gated, (entry, hooks) => arbiter.enqueueInlineBlock(entry, hooks), logger),
 	);
 	return { composer: arbiter, respond: respondUseCase };
 }
@@ -424,6 +490,18 @@ function onToggleServiceTier(active: boolean): void {
 	onSetControl('serviceTier', active ? descriptor.activeValue : descriptor.inactiveValue);
 }
 
+/** P7 (SPEC-AS-016/017): route the live permission-mode toggle to the per-tab draft. */
+function onSetPermission(mode: PermissionMode): void {
+	onSetControl('permissionMode', mode);
+}
+
+/** P7 (SPEC-AS-016): remove a persisted rule then refresh the live panel (REQ-AS-042). */
+async function onRemoveApprovalRule(id: string): Promise<void> {
+	if (approvalStore === undefined) return;
+	await approvalStore.removeRule(id);
+	await refreshApprovalRules();
+}
+
 const activeMessages = computed<ChatMessage[]>(() => tabs.activeTab?.messages ?? []);
 const liveAssistantId = computed<string | null>(() => tabs.activeTab?.liveAssistantId ?? null);
 const interruptedId = computed<string | null>(() => tabs.activeTab?.interruptedId ?? null);
@@ -544,6 +622,12 @@ function onRewindCode(userMessageId: string): void {
 			</button>
 			<ResumeSessionDropdown />
 		</div>
+		<ApprovalsPanel
+			v-if="hasApprovals"
+			:mode="activePermissionMode"
+			:rules="approvalRules"
+			@remove="onRemoveApprovalRule"
+		/>
 		<ChatComposer
 			ref="composerRef"
 			:is-streaming="isStreaming"
@@ -558,6 +642,7 @@ function onRewindCode(userMessageId: string): void {
 			:supports-browser-selection="supportsBrowserSelection"
 			:resolve-thumb-src="resolveThumbSrc"
 			:toolbar="toolbarVm"
+			:permission-mode="activePermissionMode"
 			@submit="onSubmit"
 			@cancel="onCancel"
 			@remove-file="onRemoveFile"
@@ -571,6 +656,7 @@ function onRewindCode(userMessageId: string): void {
 			@set-mode="onSetMode"
 			@set-reasoning="onSetReasoning"
 			@toggle-service-tier="onToggleServiceTier"
+			@set-permission="onSetPermission"
 		/>
 	</div>
 </template>

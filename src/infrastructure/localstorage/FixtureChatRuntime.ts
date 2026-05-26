@@ -221,7 +221,8 @@ export class FixtureChatRuntime implements ChatRuntimePort {
 			reasoningControl: 'none',
 			hasServiceTier: false,
 			hasModeToggle: true,
-			permissionMode: 'default',
+			// P7 (SPEC-AS-006b): the P6 `'default'` maps to the live `'normal'` (inert demo).
+			permissionMode: 'normal',
 		};
 	}
 

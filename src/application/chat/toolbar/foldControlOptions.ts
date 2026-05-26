@@ -9,18 +9,26 @@ import type { ChatRuntimeQueryOptions } from '@/domain/chat/ChatTurn';
 
 /**
  * Fold the per-tab control selections into the additive `ChatRuntimeQueryOptions`
- * fields (`model`/`mode`/`reasoning`/`serviceTier`). ADDITIVE + GUARDED: a field is
- * written ONLY when `controls` carries an explicit present (non-empty) value, so an
- * untouched toolbar yields `{}` (byte-identical to a P5 turn, NFR-TC-001, EC-TC-1). A
- * descriptor default value is never folded — the runtime applies its own default when
- * a field is absent (EC-TC-6). The seam widgets (permission/MCP/external) contribute
- * nothing. Pure + total — never throws.
+ * fields (`model`/`mode`/`reasoning`/`serviceTier`/`permissionMode`). ADDITIVE +
+ * GUARDED: a field is written ONLY when `controls` carries an explicit present
+ * (non-empty) value, so an untouched toolbar yields `{}` (byte-identical to a P5/P6
+ * turn, NFR-TC-001/NFR-AS-001, EC-TC-1/EC-AS-2). A descriptor default value is never
+ * folded — the runtime applies its own default when a field is absent (EC-TC-6). The
+ * P7 `permissionMode` clause writes the mode ONLY when present AND non-`'normal'`
+ * (SPEC-AS-011, ADR-AS-002 §1) — `'normal'`/absent folds nothing so a no-rule + normal
+ * tab is byte-identical to P6 (EC-AS-13, REQ-AS-052). The seam widgets (MCP/external)
+ * contribute nothing. Pure + total — never throws.
  */
 export function foldControlOptions(
 	controls: TabControls,
-): Partial<Pick<ChatRuntimeQueryOptions, 'model' | 'mode' | 'reasoning' | 'serviceTier'>> {
+): Partial<
+	Pick<ChatRuntimeQueryOptions, 'model' | 'mode' | 'reasoning' | 'serviceTier' | 'permissionMode'>
+> {
 	const folded: Partial<
-		Pick<ChatRuntimeQueryOptions, 'model' | 'mode' | 'reasoning' | 'serviceTier'>
+		Pick<
+			ChatRuntimeQueryOptions,
+			'model' | 'mode' | 'reasoning' | 'serviceTier' | 'permissionMode'
+		>
 	> = {};
 
 	if (controls.model !== undefined && controls.model !== '') {
@@ -34,6 +42,9 @@ export function foldControlOptions(
 	}
 	if (controls.serviceTier !== undefined && controls.serviceTier !== '') {
 		folded.serviceTier = controls.serviceTier;
+	}
+	if (controls.permissionMode !== undefined && controls.permissionMode !== 'normal') {
+		folded.permissionMode = controls.permissionMode;
 	}
 
 	return folded;

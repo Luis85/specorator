@@ -1,5 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { i18nMerge, i18nTranslate, setLocale, toSupportedLocale } from '@/ui/i18n';
+import enMessages from '@/ui/i18n/locales/en';
+import deMessages from '@/ui/i18n/locales/de';
+
+/** Flatten a nested message tree into the leaf dot-paths. */
+function leafKeys(node: unknown, prefix = ''): string[] {
+	if (typeof node !== 'object' || node === null) return [prefix];
+	return Object.entries(node as Record<string, unknown>).flatMap(([k, v]) =>
+		leafKeys(v, prefix === '' ? k : `${prefix}.${k}`),
+	);
+}
+
+// Snapshot the key sets at MODULE LOAD — before the i18nMerge tests below mutate
+// the shared `enMessages` reference in place (vue-i18n holds the same object).
+const EN_KEYS_AT_LOAD = new Set(leafKeys(enMessages));
+const DE_KEYS_AT_LOAD = new Set(leafKeys(deMessages));
 
 describe('i18nMerge / flatToNested', () => {
 	it('merges flat dot-key messages without error', () => {
@@ -59,6 +74,15 @@ describe('i18nMerge / flatToNested', () => {
  * exports `toSupportedLocale`. Traces: REQ-PSR-006, NFR-PSR-003;
  * SPEC-PSR-010/011/012.
  */
+describe('locale key parity (en ↔ de)', () => {
+	it('en and de declare the EXACT same leaf key set (no missing/extra keys)', () => {
+		const missingInDe = [...EN_KEYS_AT_LOAD].filter((k) => !DE_KEYS_AT_LOAD.has(k)).sort();
+		const missingInEn = [...DE_KEYS_AT_LOAD].filter((k) => !EN_KEYS_AT_LOAD.has(k)).sort();
+		expect(missingInDe, `keys in en but missing in de: ${missingInDe.join(', ')}`).toEqual([]);
+		expect(missingInEn, `keys in de but missing in en: ${missingInEn.join(', ')}`).toEqual([]);
+	});
+});
+
 describe('agent placeholder + locale narrowing (T-PSR-006)', () => {
 	it('TEST-PSR-009: agent.empty.placeholder returns EN, then DE after setLocale', () => {
 		setLocale('en');

@@ -35,6 +35,7 @@ import {
 	SELECTION_SOURCE_PORT,
 	SELECTION_HIGHLIGHT_PORT,
 	TOOLBAR_CATALOG_PORT,
+	APPROVAL_RULE_STORE_PORT,
 } from '@/infrastructure/bridge/ports';
 import {
 	CHAT_RUNTIME_FACTORY,
@@ -106,6 +107,13 @@ app.provide(PICK_ATTACHMENT, () => Promise.resolve(null));
 // the GitHub Pages demo renders the full strip with the backed widgets + the
 // honest capability-gated seams (no live service-tier/MCP on the inert flags).
 app.provide(TOOLBAR_CATALOG_PORT, bridge.toolbarCatalog);
+// P7 (SPEC-AS-019): the approval-rule store. The `MockBridge` exposes a scriptable
+// in-memory store (seedable + failure-injectable) + an inert/scriptable runtime mode,
+// so the GitHub Pages demo exercises the permission toggle, the approvals panel, the
+// inline four-option block (incl. `deny-always`), and the live rule engine (mode-gate →
+// match → auto OR the unchanged P4 prompt) with no live SDK. The surface gates the
+// active runtime's approval callback through one per-surface `ApprovalManager`.
+app.provide(APPROVAL_RULE_STORE_PORT, bridge.approvalRuleStore);
 
 void bridge.getSettings().then((s) => {
 	setLocale(toSupportedLocale(s.locale));

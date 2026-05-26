@@ -4,10 +4,11 @@
  * The Mock runtime's `getToolbarCapabilities()` is scriptable so the view-model +
  * widget tests drive the seam-hidden-vs-visible matrix:
  *   - default → Claude-shaped (`supportsMcpTools:false`, `reasoningControl:'effort'`,
- *     `hasServiceTier:false`, `hasModeToggle:true`, `permissionMode:'default'`);
+ *     `hasServiceTier:false`, `hasModeToggle:true`, `permissionMode:'normal'` — P7
+ *     widens the P6 `'default'` to the live `'normal'`, SPEC-AS-006b);
  *   - `setToolbarCapabilities(caps)` overrides the returned flags (drives
  *     `supportsMcpTools` true/false, `hasServiceTier` true/false, `reasoningControl`
- *     effort/token-budget/none, `permissionMode` default/plan);
+ *     effort/token-budget/none, `permissionMode` normal/plan/yolo);
  *   - synchronous + total — never throws.
  *
  * Fails until T-TC-010 adds `MockChatRuntime.setToolbarCapabilities` (replacing the
@@ -28,7 +29,8 @@ describe('MockChatRuntime.getToolbarCapabilities (scriptable, TEST-TC-003/019/02
 			reasoningControl: 'effort',
 			hasServiceTier: false,
 			hasModeToggle: true,
-			permissionMode: 'default',
+			// P7 (SPEC-AS-006b): the P6 `'default'` default maps to the live `'normal'`.
+			permissionMode: 'normal',
 		});
 	});
 
@@ -52,7 +54,7 @@ describe('MockChatRuntime.getToolbarCapabilities (scriptable, TEST-TC-003/019/02
 			reasoningControl: 'none',
 			hasServiceTier: false,
 			hasModeToggle: true,
-			permissionMode: 'default',
+			permissionMode: 'normal',
 		});
 		expect(runtime.getToolbarCapabilities().reasoningControl).toBe('none');
 	});

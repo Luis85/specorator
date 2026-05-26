@@ -16,6 +16,7 @@ import type {
 	ApprovalRequest,
 	ApprovalDecision,
 } from '@/domain/chat/inline';
+import type { PermissionMode } from '@/domain/chat/PermissionMode';
 
 /**
  * Provider capability flags (SPEC-TS-003) — gate the fork/rewind UI affordances.
@@ -47,8 +48,14 @@ export interface ToolbarCapabilities {
 	readonly hasServiceTier: boolean;
 	/** Gates the mode selector alongside the catalog descriptor (REQ-TC-013). */
 	readonly hasModeToggle: boolean;
-	/** The permission display state (PLAN special-case, REQ-TC-015). */
-	readonly permissionMode: 'default' | 'plan';
+	/**
+	 * The live permission mode (PLAN special-case, REQ-TC-015; REQ-AS-003). P7
+	 * WIDENS this from the P6 `'default' | 'plan'` to the live `PermissionMode`
+	 * (`'normal' | 'plan' | 'yolo'`, SPEC-AS-006b / ADR-AS-002 §2) — the P6
+	 * `'default'` value maps to `'normal'`. Behaviour-additive: read through the
+	 * port, NEVER branched on by `providerId`.
+	 */
+	readonly permissionMode: PermissionMode;
 }
 
 /**

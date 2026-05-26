@@ -352,3 +352,22 @@ body.theme-light .specorator-root {
 	/* the service-tier `zap` active glow (reduced-motion-safe) */
 	--sp-service-tier-glow: 0 0 0 1px var(--sp-toggle-active);
 }
+
+/* section 4.14 - Approvals and security (P7, SPEC-AS-020, NFR-AS-012). The
+ * status-panel plus permission-toggle slice. Each token is a token-layer var
+ * lookup - no hex, no raw Obsidian var outside this layer, no physical CSS
+ * property (lint-style-tokens guard, TEST-AS-062). Reuses the existing set
+ * (--sp-border, --sp-radius, --sp-bg, --sp-text, --sp-space, --sp-success,
+ * --sp-status-error, and the P6 --sp-toggle-active) - only the four genuinely
+ * new approvals/permission tokens are minted here. The P6
+ * toolbar.permission.deferred styling is removed with the seam. */
+.specorator-root {
+	/* approvals rule list row spacing (status-panel.css list rhythm) */
+	--sp-approvals-row-gap: var(--sp-space-2);
+	/* allow-rule badge tint (the allow/approve state colour) */
+	--sp-approvals-decision-allow: var(--sp-success);
+	/* deny-rule badge tint (the deny/blocked state colour) */
+	--sp-approvals-decision-deny: var(--sp-status-error);
+	/* the active permission-mode pill fill (permission-toggle.css active) */
+	--sp-permission-mode-active: var(--sp-toggle-active);
+}

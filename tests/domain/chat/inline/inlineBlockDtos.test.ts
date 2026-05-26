@@ -5,8 +5,9 @@
  * non-empty string field; `AskUserQuestionAnswer.answers` is keyed by question id
  * with `string | {custom}` values; `ExitPlanModeDecision` is the three-kind union
  * with `revise` carrying `feedback`; `ApprovalDecision` is exactly
- * `'deny'|'allow'|'allow-always'` and `'allow-always'` carries NO persistence
- * field; all re-exported from `@/domain/chat/inline/index`.
+ * `'deny'|'allow'|'allow-always'|'deny-always'` (P7 grows the union additively,
+ * SPEC-AS-003) and the decision carries NO persistence field on the option; all
+ * re-exported from `@/domain/chat/inline/index`.
  *
  * Fails `vue-tsc -p tsconfig.lint.json` until T-CP-003 creates the DTOs.
  *
@@ -72,10 +73,10 @@ const _exitDecisionShape: Equals<
 void _exitRequestShape;
 void _exitDecisionShape;
 
-// ---- Approval shapes ----
+// ---- Approval shapes (P7 grows the union additively by 'deny-always', SPEC-AS-003) ----
 const _approvalDecisionShape: Equals<
 	ApprovalDecision,
-	'deny' | 'allow' | 'allow-always'
+	'deny' | 'allow' | 'allow-always' | 'deny-always'
 > = true;
 const _approvalOptionShape: Equals<
 	ApprovalOption,
@@ -123,11 +124,11 @@ describe('inline-block DTOs (TEST-CP-004)', () => {
 		expect([implement.kind, cancel.kind]).toEqual(['implement', 'cancel']);
 	});
 
-	it('ApprovalDecision is exactly deny|allow|allow-always; allow-always persists no rule', () => {
-		const decisions: ApprovalDecision[] = ['deny', 'allow', 'allow-always'];
-		expect(decisions).toEqual(['deny', 'allow', 'allow-always']);
+	it('ApprovalDecision is exactly deny|allow|allow-always|deny-always (P7 grows the union)', () => {
+		const decisions: ApprovalDecision[] = ['deny', 'allow', 'allow-always', 'deny-always'];
+		expect(decisions).toEqual(['deny', 'allow', 'allow-always', 'deny-always']);
 		const option: ApprovalOption = { decision: 'allow-always', label: 'Always allow' };
-		// Exactly two keys — no persistence field on the option (NG3, REQ-CP-026).
+		// Exactly two keys — no persistence field on the option (NG3, REQ-CP-026, NG4).
 		expect(Object.keys(option).sort()).toEqual(['decision', 'label']);
 	});
 

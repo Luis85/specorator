@@ -4,6 +4,7 @@
  * model + reasoning + mode.
  */
 import type { ReasoningChoice } from '../Reasoning';
+import type { PermissionMode } from '../PermissionMode';
 
 /**
  * The per-tab control selections the surface folds into the next turn. Every member
@@ -21,4 +22,10 @@ export interface TabControls {
 	reasoning?: ReasoningChoice;
 	/** Service-tier toggle → `.serviceTier` (REQ-TC-020). */
 	serviceTier?: string;
+	/**
+	 * Permission-mode toggle → {@link import('../ChatTurn').ChatRuntimeQueryOptions.permissionMode}
+	 * (P7 additive, SPEC-AS-002). Per-tab draft state; `freshTab()` seeds `controls: {}`
+	 * so an unset member ⇒ `'normal'` (REQ-AS-006, not persisted across a reload).
+	 */
+	permissionMode?: PermissionMode;
 }

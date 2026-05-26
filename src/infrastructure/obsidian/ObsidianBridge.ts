@@ -36,6 +36,7 @@ import type {
 	SelectionSourcePort,
 	SelectionHighlightPort,
 	ToolbarCatalogPort,
+	ApprovalRuleStorePort,
 } from '@/domain/ports';
 import type { Result } from '@/domain/shared/Result';
 import { ok, err } from '@/domain/shared/Result';
@@ -47,6 +48,7 @@ import { ObsidianProviderCommandCatalog } from './ObsidianProviderCommandCatalog
 import { ObsidianShellExec } from './ObsidianShellExec';
 import { ObsidianSelectionSource, ObsidianSelectionHighlight } from './ObsidianSelectionPorts';
 import { ObsidianToolbarCatalog } from './ObsidianToolbarCatalog';
+import { ObsidianApprovalRuleStore } from './ObsidianApprovalRuleStore';
 import { VaultFileHistoryStore } from './history/VaultFileHistoryStore';
 import { safeMarkdownRender } from '@/application/chat/safeMarkdownRender';
 import { walkSvgElementToIconNode } from './walkSvgElementToIconNode';
@@ -378,6 +380,19 @@ export class ObsidianBridge
 	get toolbarCatalog(): ToolbarCatalogPort {
 		this.toolbarCatalogPort ??= new ObsidianToolbarCatalog();
 		return this.toolbarCatalogPort;
+	}
+
+	// ── Approval-rule store port (SPEC-AS-007, ADR-AS-001 §4) ───────────────────
+	// The real device-local approval-rule store under `'specorator:approval-rules'`
+	// (`app.saveLocalStorage`/`loadLocalStorage`), mirroring the `SettingsPort`
+	// device-local pattern — NEVER `data.json`, NEVER a vault file (NFR-AS-003).
+	// Lazily created; coverage-excluded infra (manual leg TEST-AS-M1). No `obsidian`
+	// symbol leaks past `ObsidianApprovalRuleStore.ts` (it imports only the `App` type).
+	private approvalRuleStorePort: ApprovalRuleStorePort | null = null;
+
+	get approvalRuleStore(): ApprovalRuleStorePort {
+		this.approvalRuleStorePort ??= new ObsidianApprovalRuleStore(this.app);
+		return this.approvalRuleStorePort;
 	}
 
 	private _track(notice: Notice): void {

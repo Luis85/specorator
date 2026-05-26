@@ -115,6 +115,7 @@ function onKeydown(event: KeyboardEvent): void {
 					class="sp-inline-plan-approval__option"
 					:class="{ 'sp-inline-plan-approval__option--focused': i === focusedOption }"
 					:data-testid="`inline-plan-approval-option-${option.decision}`"
+						:data-decision="option.decision"
 					@click="choose(option.decision)"
 					@mouseenter="focusedOption = i"
 				>{{ option.label }}</button>

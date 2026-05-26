@@ -17,6 +17,7 @@ import type {
 	SelectionSourcePort,
 	SelectionHighlightPort,
 	ToolbarCatalogPort,
+	ApprovalRuleStorePort,
 } from '@/domain/ports';
 
 /**
@@ -71,3 +72,9 @@ export const SELECTION_HIGHLIGHT_PORT: InjectionKey<SelectionHighlightPort> =
 // descriptors through it.
 export const TOOLBAR_CATALOG_PORT: InjectionKey<ToolbarCatalogPort> =
 	Symbol('ToolbarCatalogPort');
+
+// P7 approvals-security (SPEC-AS-006, ADR-AS-001 §2). Own key, no aggregate — one
+// consumer (the approvals use cases) reads the persisted rule set through it; the
+// three bridges back it device-local / scriptable in-memory / browser-localStorage.
+export const APPROVAL_RULE_STORE_PORT: InjectionKey<ApprovalRuleStorePort> =
+	Symbol('ApprovalRuleStorePort');

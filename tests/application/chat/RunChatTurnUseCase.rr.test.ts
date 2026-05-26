@@ -116,13 +116,14 @@ class ScriptedRuntime implements ChatRuntimePort {
 		};
 	}
 	// P6 additive member (SPEC-TC-005) — Claude-shaped stub to satisfy the grown port.
+	// P7 (SPEC-AS-006b): the P6 `'default'` maps to the live `'normal'`.
 	getToolbarCapabilities(): ToolbarCapabilities {
 		return {
 			supportsMcpTools: false,
 			reasoningControl: 'effort',
 			hasServiceTier: false,
 			hasModeToggle: true,
-			permissionMode: 'default',
+			permissionMode: 'normal',
 		};
 	}
 	// P4 additive members (SPEC-CP-002) — no-op stubs to satisfy the grown port.
