@@ -596,3 +596,33 @@ this batch's scope.
   whole-project `vue-tsc` **0 errors**; whole-project `npm run lint` **0 errors**. No
   `obsidian` import under `src/ui/**`.
 - **Deviation:** none.
+
+### T-MC-026 / T-MC-027 — `McpSettingsManager.vue` + `McpServerRow.vue`
+
+- **Files:**
+  - `tests/ui/chat/mcp/McpServerRow.test.ts` + `.po.ts` (new) — RED.
+  - `tests/ui/chat/mcp/McpSettingsManager.test.ts` + `.po.ts` (new) — RED.
+  - `src/ui/chat/mcp/McpServerRow.vue` (new) — green.
+  - `src/ui/chat/mcp/McpSettingsManager.vue` (new) — green.
+  - `src/ui/i18n/locales/en.ts` + `de.ts` (added the `agent.chat.mcp.*` block:
+    settings/row/modal/test/selector/notice — the whole P8 microcopy set, en+de).
+- **Spec:** SPEC-MC-015, SPEC-MC-024, REQ-MC-013/014/040/041/070, NFR-MC-005/006/007/008
+  (TEST-MC-013/014/040/041/070 A legs).
+- **Description:** `McpServerRow` (presentational; `set-enabled:[enabled]`/`edit`/`remove`/
+  `test`): renders name · transport type (text) · an enabled checkbox toggle · the
+  test/edit/remove actions, each a focusable control with an accessible name carrying
+  the server name. `McpSettingsManager` (presentational; `vm: McpViewModel`): renders
+  nothing when `!vm.supported`, the empty state + add/paste affordances at `empty-seam`,
+  one `McpServerRow` per server at `live` re-emitting `edit`/`remove`/`test`/`set-enabled`
+  (folding the row's name into the up-event). i18n through `TranslationPort`/`vue-i18n`
+  (en+de). The new `agent.chat.mcp.*` block is a sibling of the kept P6
+  `agent.chat.toolbar.mcp.empty`.
+- **Outcome:** done — the prior RED (TEST-MC-013/014 A legs/040/041/070 settings leg) now
+  green: 11/11.
+- **Commits:** RED `T-MC-026`; green `T-MC-027` (SHAs in close-out).
+- **Verify:** `npx vitest run tests/ui/chat/mcp/McpServerRow.test.ts
+  tests/ui/chat/mcp/McpSettingsManager.test.ts` **11/11 green**; whole-project `vue-tsc`
+  **0 errors**; whole-project `npm run lint` **0 errors** (14 pre-existing warnings only).
+  No `obsidian`/`node:*` import under `src/ui/**`; no `v-html`; co-located POs present.
+- **Deviation:** none. The `--sp-mcp-row-gap` token referenced by both components is minted
+  in T-MC-034 (styles); CSS-var resolution is irrelevant to the component tests.

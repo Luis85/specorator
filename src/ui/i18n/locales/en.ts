@@ -20,8 +20,7 @@ export default {
 				inline: {
 					askTitle: 'Question',
 					customPlaceholder: 'Type a custom answer…',
-					readOnlyNotice:
-						"This provider can't answer inline; respond in your message instead.",
+					readOnlyNotice: "This provider can't answer inline; respond in your message instead.",
 					exitPlanTitle: 'Plan complete',
 					implement: 'Implement',
 					revise: 'Revise',
@@ -78,7 +77,8 @@ export default {
 					label: 'Attached images',
 					preview: 'Preview {name}',
 					remove: 'Remove {name}',
-					rejected: 'Could not attach {name} — not a supported image, or it exceeds the size limit.',
+					rejected:
+						'Could not attach {name} — not a supported image, or it exceeds the size limit.',
 				},
 				attach: 'Attach a file or image',
 				selection: {
@@ -135,22 +135,74 @@ export default {
 					compactHint: 'Context is filling up — run /compact to free space.',
 				},
 			},
-				approvals: {
-					title: 'Approvals',
-					mode: 'Mode: {mode}',
-					rulesHeading: 'Rules',
-					empty: 'No approval rules yet.',
-					decision: {
-						allow: 'allow',
-						deny: 'deny',
-					},
-					lifetime: {
-						session: 'session',
-						persisted: 'persisted',
-					},
-					remove: 'Remove rule: {tool} {pattern}',
-					storeError: 'Could not read your approval rules — asking for this action.',
+			approvals: {
+				title: 'Approvals',
+				mode: 'Mode: {mode}',
+				rulesHeading: 'Rules',
+				empty: 'No approval rules yet.',
+				decision: {
+					allow: 'allow',
+					deny: 'deny',
 				},
+				lifetime: {
+					session: 'session',
+					persisted: 'persisted',
+				},
+				remove: 'Remove rule: {tool} {pattern}',
+				storeError: 'Could not read your approval rules — asking for this action.',
+			},
+			mcp: {
+				settings: {
+					title: 'MCP servers',
+					empty: 'No MCP servers yet.',
+					add: 'Add MCP server',
+					paste: 'Paste configuration',
+				},
+				row: {
+					enabled: 'Enable {name}',
+					edit: 'Edit {name}',
+					remove: 'Remove {name}',
+					test: 'Test {name}',
+					type: {
+						stdio: 'stdio',
+						sse: 'SSE',
+						http: 'HTTP',
+					},
+				},
+				modal: {
+					addTitle: 'Add MCP server',
+					editTitle: 'Edit MCP server',
+					nameLabel: 'Name',
+					configLabel: 'Configuration',
+					configPlaceholder: 'Paste a server configuration as JSON…',
+					descriptionLabel: 'Description',
+					contextSavingLabel: 'Context-saving (load only when mentioned)',
+					nameRequired: 'A server name is required.',
+					nameDuplicate: 'A server named "{name}" already exists.',
+					parseError: 'Could not read that configuration: {reason}',
+					save: 'Save',
+					cancel: 'Cancel',
+				},
+				test: {
+					title: 'Test MCP server',
+					running: 'Connecting…',
+					successTitle: 'Connected',
+					server: '{name} {version}',
+					toolsHeading: 'Tools',
+					toolToggle: 'Enable tool {tool}',
+					partial: 'Connected, but no tools were listed.',
+					timeout: 'Connection timeout (10s)',
+					unavailable: 'MCP testing requires the desktop app.',
+					close: 'Close',
+				},
+				selector: {
+					badge: '{count} enabled',
+				},
+				notice: {
+					serverFailed: 'An MCP server could not be reached.',
+					saveFailed: 'Could not save your MCP server configuration.',
+				},
+			},
 		},
 	},
 } as const;
