@@ -18,3 +18,10 @@ export {
 	isSecretEnvKey,
 	type EnvKeyOwnership,
 } from './classifyEnvKey';
+export {
+	getEnvironmentReviewKeysForScope,
+	inferEnvironmentSnippetScope,
+	resolveEnvironmentSnippetScope,
+	getEnvironmentScopeUpdates,
+	type EnvironmentScopeUpdate,
+} from './envScope';
