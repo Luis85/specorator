@@ -1,0 +1,113 @@
+---
+feature: settings-shell
+area: SS
+current_stage: requirements
+status: active
+last_updated: 2026-05-26
+last_agent: orchestrator (bootstrap)
+epic: claudian-reboot
+phase: P10
+integration_branch: next
+reference: D:\Projects\claudian-main
+artifacts:
+  idea.md: skipped (parity-charter §3.8/§4 P10 + audits + claudian-main stand in, mirrors P1-P9)
+  research.md: skipped
+  requirements.md: pending
+  design.md: pending
+  spec.md: pending
+  tasks.md: pending
+  implementation-log.md: pending
+  test-plan.md: pending
+  test-report.md: pending
+  review.md: pending
+  traceability.md: pending
+  release-notes.md: pending
+  retrospective.md: pending
+---
+
+# Workflow state — settings-shell (P10)
+
+## Stage progress
+
+| Stage | Artifact | Status |
+|---|---|---|
+| 1. Idea | `idea.md` | skipped |
+| 2. Research | `research.md` | skipped |
+| 3. Requirements | `requirements.md` | pending |
+| 4. Design | `design.md` | pending |
+| 5. Specification | `spec.md` | pending |
+| 6. Tasks | `tasks.md` | pending |
+| 7. Implementation | `implementation-log.md` + code | pending |
+| 8. Testing | `test-plan.md`, `test-report.md` | pending |
+| 9. Review | `review.md`, `traceability.md` | pending |
+| 10. Release | `release-notes.md` | pending |
+| 11. Learning | `retrospective.md` | pending |
+
+## Epic context — claudian-reboot P10 (settings shell)
+
+P0-P9 merged to `next` (P9 providers-registry #450 / 4cc65597). P10 = the **settings shell** — the proper
+Obsidian settings-tab surface that consolidates + exposes the P6-P9 seams as a per-provider settings UX.
+
+**Scope (charter §4 P10 row + §3.8):** Provider tabs (Claude/Codex/Opencode each: settings tab, model
+picker, agent/skill/subagent settings — surfaced read-only per the P9 capability matrix, slash-command
+settings); Environment settings + env-snippet manager; keyboard navigation; approvals/permissions
+surfaced in settings. CSS: `settings/*` (agent, base, env-snippets, mcp, opencode-model-picker, plugin,
+slash) → `--sp-*`. **Mostly surfaces EXISTING P6-P9 machinery** (ProviderRegistryPort, SecretStorePort,
+ToolbarCatalogPort, ApprovalRuleStorePort, McpConfigStorePort, the capability matrix) into the settings
+tab — plus any genuinely-new bits (env settings / env-snippet store).
+
+**Existing surface to expand:** `src/plugin/settings.ts` is the P0 slim `PluginSettingTab` (module-schema
+DOM via the Obsidian `Setting` API — `coreSettingsModule` dropdowns, persists via `SettingsPort`). P10
+grows it into the full provider-tabbed shell. The settings tab is `src/plugin/**` Obsidian DOM
+(coverage-excluded) → the automated weight is a PURE settings view-model/builder + any new store/manager
+(application/domain, tested); the Setting-API DOM rendering is coverage-excluded → manual legs.
+
+**Likely P10 ADRs / decisions:**
+- **Env-snippet store + environment settings** — where env snippets/env vars persist (device-local per
+  CHARTER-REQ-SET? a new `EnvSnippetStorePort`?) + the shape; how they reach a provider's subprocess env
+  (the P9 runtimes' env). May need an ADR (security: env vars can carry secrets → `SecretStorePort`?).
+- The settings-shell composition: a pure `buildSettingsViewModel` (per-provider tabs + capability-gated
+  sections) driving the coverage-excluded `PluginSettingTab` DOM; keyboard-nav; how agent/skill/subagent
+  settings are surfaced (read-only — the providers expose them; full CRUD is out per the P9 posture).
+- Whether the settings shell stays Obsidian-`Setting`-API DOM (the existing pattern) or mounts Vue
+  (decide; the existing settings.ts is DOM — likely keep DOM, styled via `settings/*` --sp-* tokens).
+
+**Out of P10 (later phases):** i18n 10-locale sweep (P11); a11y stylesheet + final parity (P12). P10
+ships the settings shell consuming P6-P9; full agent/skill/subagent CRUD authoring is beyond the
+capability-gated posture (read-only surfacing only).
+
+**Epic constraints (every phase):** secrets→`SecretStorePort`/`app.secretStorage` never `data.json`;
+device/user state→device-local; NO backwards compat; DDD inward imports + narrow ports + 3 bridges; Vue
+never imports `obsidian`; the settings tab is `src/plugin/**` (the ONE place a `PluginSettingTab` may use
+the Obsidian `Setting` API DOM — no `innerHTML`/`v-html`, build DOM via `createEl`/`setText`); `Result`;
+tests mirror `src/` + `data-testid` POs for any Vue; coverage 80/70/80/80; perceptual `--sp-*` parity;
+identity stays Specorator; WCAG 2.2 AA (keyboard nav is in-scope this phase); manifest untouched; CI
+SHA-pinned + actionlint. VERIFY GATE (`npm run verify` + `npm run test:all` zero).
+
+**Operating mode (human directive, /goal 2026-05-26):** AUTONOMOUS DRIVE the FULL remaining epic
+(P10→P12) via dedicated subagents in loops — no per-phase human checkpoint; self-parity-review vs
+claudian; merge each phase to `next` after a green gate + green CI; deploy to `D:/TestVault` after each
+merge. Manual-Obsidian + parity-screenshot legs accumulate for the SINGLE FINAL human review gate.
+**Split big UI/plugin batches into ~6-task chunks (the P8/P9 subagent-timeout lesson).**
+
+**Mandatory inputs:** `specs/claudian-reboot/parity-charter.md` §3.8/§3.10/§4 P10 +
+`claudian-audit-{frontend,backend}.md` + `D:\Projects\claudian-main` (the settings tabs, per-provider
+settings, model picker, agent/skill/subagent + slash-command settings, env-snippet manager, the
+`settings/*` css) + the existing `src/plugin/settings.ts` + the P6-P9 ports.
+
+## Hand-off notes
+
+```
+2026-05-26 (orchestrator): P10 bootstrapped on feature/settings-shell (off next; P0-P9 merged).
+                          Scope = charter §3.8 settings shell — provider tabs + per-provider settings UX
+                          (model picker / agent-skill-subagent read-only / slash-command) + environment
+                          settings + env-snippet manager + keyboard nav + approvals surfaced. Mostly
+                          surfaces P6-P9 seams into src/plugin/settings.ts (Obsidian Setting-API DOM,
+                          coverage-excluded → automated weight in a pure settings view-model + any new
+                          env-snippet store). Autonomous full-epic drive; split big batches. Next:
+                          /spec:requirements (pm) grounded in charter §3.8 + audits + the claudian
+                          settings sources + the existing settings.ts + the P6-P9 ports. KEY: the
+                          env-snippet/environment-settings store + shape (device-local? secret?); the
+                          pure settings view-model driving the coverage-excluded DOM; read-only
+                          agent/skill/subagent surfacing (no CRUD, per the P9 capability-gated posture).
+```
