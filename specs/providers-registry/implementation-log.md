@@ -456,4 +456,51 @@ WIRE-IN/GATE batches ride their own subagents.
   `secretStore.isAvailable()` probe + (at turn time) the async key read → honest terminal
   error chunk. `deleteSecret` clears-to-empty because `app.secretStorage` exposes no
   delete method (Obsidian 1.11.4 API).
-- **Commit:** `…` (below).
+- **Commit:** `988d7997`.
+
+---
+
+## APPLICATION batch (T-PV-019..024)
+
+### T-PV-019/020 — `SelectProviderUseCase` (🧪 qa → 🔨 dev)
+
+- **Spec/test:** TEST-PV-004/010/011/012/060/071/100; SPEC-PV-013/023/029;
+  REQ-PV-004/010/011/012/060/061/071/100/102; NFR-PV-005/014; EC-PV-4/5/8/13.
+- **RED (T-PV-019):** `tests/application/chat/providers/SelectProviderUseCase.test.ts`
+  (new, 12 tests) over the scriptable Mock `providerRegistry` + `providerRuntimeRegistry`
+  factory + the in-memory `settings`: select (persist device-local + construct-ok /
+  construct-err honest-notice with the reason but NO seeded-secret substring /
+  reset+cancel prior / null-prior no-op / no-throw / no-secret-in-store), selectForModel
+  (auto-switch to a codex-owned `gpt-` model / no-op `ok(prior)` for a claude-owned model
+  / unowned-model fallback), and a source guard that the use case has no `switch(provider…)`
+  / `=== 'claude'|'codex'|'opencode'` branch. RED confirmed: the module did not resolve.
+  **Commit:** `feaa6c0a`.
+- **GREEN (T-PV-020):** `src/application/chat/providers/SelectProviderUseCase.ts` (new) +
+  `src/application/chat/providers/index.ts` (new barrel). `constructor(registry, settings,
+  runtimeFactory, feedback)`. `select(id, prior): Promise<Result<ChatRuntimePort>>` —
+  `prior?.resetSession()` + `prior?.cancel()`; read-modify-write
+  `saveSettings({ ...current, activeProvider: id })` (device-local, never `data.json`);
+  `runtimeFactory(id)` → `ok` returns the runtime, `err` → `feedback.warn(<honest notice
+  key>)` (the `providers.notice.{keyRequired,cliNotFound,unavailable}` copy, no secret) +
+  returns the `err`. `selectForModel(model, prior)` — resolve owning vs active; no-op
+  `ok(prior)` when they match and a live prior exists, else `select(owning, prior)`.
+- **Signature:** `class SelectProviderUseCase { constructor(registry: ProviderRegistryPort,
+  settings: SettingsPort, runtimeFactory: ChatRuntimeFactory, feedback: FeedbackService);
+  select(id, prior): Promise<Result<ChatRuntimePort>>; selectForModel(model, prior):
+  Promise<Result<ChatRuntimePort>> }`.
+- **How no-switch + honest-gating are realised:** routing reads `registry.resolveProvider*`
+  (data-driven over the descriptor predicates) + the widened factory; there is no
+  `switch (providerId)` / per-id `===` branch (the source guard asserts it). The
+  construct-fail reason (`keyRequired`/`cliNotFound`/`unavailable`, the Mock/real
+  `Result.err` message) maps to a fixed notice-copy record → `feedback.warn` (logs +
+  `showWarning`); the secret value is read only inside the runtime construction at the
+  infra boundary, never in the use case, and never enters a notice/log (REQ-PV-071/102).
+- **Outcome:** done — 12/12 pass; vue-tsc 0 (whole project); whole-project `npm run lint`
+  0 errors (16 pre-existing warnings). No `obsidian`/`node:*`/Vue import.
+- **Deviation:** the honest-notice path uses `FeedbackService.warn(message)` (logs +
+  `NotificationPort.showWarning`) — `FeedbackService` has no literal `notify(...)` method;
+  `warn` is the non-blocking severity that surfaces an honest reason without a secret
+  (REQ-PV-102). The doc comment was worded "capability-gated routing, never branched on
+  the provider id" (not the literal "No `switch (providerId)`") so the source-guard grep
+  does not match the comment itself (same pattern as T-PV-012).
+- **Commit (green):** `b7446528`.
