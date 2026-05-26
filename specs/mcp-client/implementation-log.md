@@ -84,5 +84,45 @@ reference, outcome, deviations. TDD per task — RED first (qa), then minimal im
 - **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); whole-project
   `npm run lint` 0 errors (12 pre-existing warnings); `vitest run` 15/15 green. No
   `obsidian`/`node:*`/Vue import in `src/domain/chat/mcp/**`.
-- **Commit:** <pending>
+- **Commit:** `db5226d6`.
 - **Deviation:** none.
+
+### T-MC-004 — RED pure `McpConfigParser` truth table (🧪 qa)
+
+- **Spec/test:** TEST-MC-003/004/005/006 + EC-MC-2/3/5/6; SPEC-MC-004/029;
+  REQ-MC-003/004/005/006; NFR-MC-004.
+- **Files:** `tests/domain/chat/mcp/McpConfigParser.test.ts` (new — the four
+  formats + `needsName`, the skip-invalid-entry, the empty/no-valid → err, the
+  malformed (`Invalid JSON` / `Invalid MCP configuration format`) cases incl. array
+  / null / primitive, the `getMcpServerType` (sse/http/bare-url→http/stdio) +
+  `isValidMcpServerConfig` per-shape tables, and the never-throws assertion across
+  an odd-input matrix incl. `null`).
+- **Outcome:** done — RED confirmed (27 failing; the parser functions are not yet
+  exported from `@/domain/chat/mcp`).
+- **Commit:** `12e68ec1`.
+
+### T-MC-005 — `McpConfigParser.ts` + barrel (🔨 dev)
+
+- **Spec/req:** SPEC-MC-004/029; REQ-MC-003/004/005/006; NFR-MC-003/004.
+- **Files:** `src/domain/chat/mcp/McpConfigParser.ts` (new —
+  `parseClipboardConfig` (the four formats → `Result<ParsedMcpConfig>`, the
+  malformed/err paths) + `getMcpServerType` + `isValidMcpServerConfig`, ported
+  verbatim from claudian `McpConfigParser.ts:17` + `core/types/mcp.ts:74/81` with
+  the throw paths converted to `Result.err`; `JSON.parse` wrapped in `trySync` per
+  the domain Result-discipline ban on raw try/catch); `src/domain/chat/mcp/index.ts`
+  (the parser re-exports appended).
+- **Outcome:** done — the prior RED (TEST-MC-003/004/005/006 + EC-MC-2/3/5/6) now
+  green (27/27); the functions never throw across the odd-input matrix; the stored
+  config is never corrupted on a malformed parse.
+- **Verify:** `vue-tsc -p tsconfig.lint.json` 0 errors (whole project); whole-project
+  `npm run lint` 0 errors (12 pre-existing warnings); `vitest run` 27/27. No
+  `obsidian`/`node:*`/Vue import in `src/domain/chat/mcp/**`; no `eval` — JSON parse
+  only.
+- **Commit:** <pending>
+- **Deviation:** `getMcpServerType` gains a leading `isRecord` guard (returns
+  `'stdio'` on a non-object) so it is **total — never throws** for any runtime input
+  (SPEC-MC-004 + NFR-MC-004 pin all three functions total; the QA never-throws leg
+  asserts it on `null`). For every real `McpServerConfig` the result is verbatim
+  Claudian. The JSON parse uses `trySync` (the domain layer bans raw `try/catch` per
+  the Result-discipline ESLint rule) and maps any parse fault to the contracted
+  `'Invalid JSON'` message — behaviour-identical to the Claudian `SyntaxError` branch.

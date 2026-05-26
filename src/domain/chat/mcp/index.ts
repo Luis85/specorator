@@ -15,3 +15,8 @@ export type {
 	EnabledMcpServers,
 } from './McpTypes';
 export { DEFAULT_MCP_SERVER } from './McpTypes';
+export {
+	parseClipboardConfig,
+	getMcpServerType,
+	isValidMcpServerConfig,
+} from './McpConfigParser';
