@@ -814,3 +814,48 @@ GATE (T-MC-038..043) batches are out of this batch's scope.
   `--sp-status-success` does not exist as a token — `--sp-success` is its §4.1
   source and `--sp-status-completed` aliases it; mapping straight to `--sp-success`
   keeps the lookup one hop and token-layer-clean).
+
+## T-MC-035 — RED: provide the two ports + the modal-seam launchers + mount the settings surface + the fold/gating wiring (🧪 WIRE-IN)
+
+- **Spec/req:** TEST-MC-052 (wiring leg), TEST-MC-065, TEST-MC-071, TEST-MC-072,
+  TEST-MC-082 (wiring leg), TEST-MC-081 (wiring leg), SPEC-MC-020, SPEC-MC-026,
+  REQ-MC-052/065/071/072/082, NFR-MC-004.
+- **Files:**
+  - `tests/ui/chat/ChatSurface.mcp.test.ts` (new — the per-surface
+    `McpServerManager` over `MockMcpConfigStore`/`MockMcpClient`: the settings
+    surface mounts at `live` + MCP-supported (TEST-MC-081 wiring leg); the toolbar
+    selector shows the manager-driven live list + badge (TEST-MC-050); a turn folds
+    `enabledMcpServers` only when an enabled server is active (TEST-MC-052) and omits
+    it for a no-server store (TEST-MC-082); an `mcp__fs__read` approval routes through
+    the UNCHANGED P7 `ApprovalManager` — a seeded allow rule auto-allows with no
+    inline block, no MCP special-case (TEST-MC-065); a store `load` fault degrades
+    gracefully — a notice + the chat still streams (TEST-MC-071/072); a mount without
+    the MCP ports keeps the P6 empty seam + omits the field (TEST-MC-082 degrade)).
+    Captures the runtime's `queryOptions` via a `vi.spyOn(runtime,'query')` so the
+    fold assertion is direct. The created runtime reports `supportsMcpTools:true`
+    via `MockChatRuntime.setToolbarCapabilities`.
+  - `tests/ui/chat/ChatSurface.po.ts` (added `hasMcpSettings`/`mcpServerRowCount`/
+    `hasMcpSelector`/`mcpSelectorBadge`, queried by `data-testid` only).
+  - `tests/ui/main.ts.test.ts` (added the standalone MCP smoke leg — the surface
+    mounts with the MCP ports provided + no inject-or-throw, MCP hidden on the inert
+    Mock `supportsMcpTools:false` caps, the P7 byte-identical state — the T-MC-037
+    deterministic leg).
+- **Commit:** `T-MC-035-SHA`.
+- **Outcome:** done (RED confirmed).
+- **RED evidence:** `npx vitest run tests/ui/chat/ChatSurface.mcp.test.ts` → **4
+  failed / 3 passed**. The 4 failures are the MCP-specific wiring legs that need the
+  T-MC-036 production wire-in: the settings surface mount (`mcp-settings` absent), the
+  live selector list, the `enabledMcpServers` fold (undefined — no fold exists yet),
+  and the graceful-degrade settings mount. The 3 already-passing legs are the absence
+  cases (the P7 `ApprovalGateRuntime` already gates the `mcp__`-prefixed tool name
+  tool-agnostically with no MCP branch — confirming SPEC-MC-026 needs no new surface;
+  the no-server + no-port turns already omit the field). The standalone smoke leg
+  (`main.ts.test.ts`) passes — it is the no-regression / T-MC-037 deterministic leg,
+  not a RED leg.
+- **Gates:** `vue-tsc -p tsconfig.lint.json` **0 errors**; whole-project `npm run lint`
+  **0 errors** (14 pre-existing warnings only); `main.ts.test.ts` **6/6** green.
+- **Deviation:** none. No production `AgentSidebarView.ts.test.ts` exists (the view
+  imports `obsidian`, coverage-excluded — its production-provide leg is the manual
+  TEST-MC-M1 + the surface tests, per the DoD's "or the existing provide test"). The
+  standalone-provide RED is carried by the surface test's no-port degrade + the
+  main.ts smoke (which T-MC-036 makes byte-identical-safe by adding the provides).

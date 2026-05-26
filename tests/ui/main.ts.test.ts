@@ -302,3 +302,47 @@ describe('standalone approvals smoke (TEST-AS-022/040/043 dev leg)', () => {
 		expect($('[data-testid="approvals-empty"]')).not.toBeNull();
 	}, 15000);
 });
+
+/**
+ * T-MC-037 — standalone MCP smoke (TEST-MC-040/043/044/050/052/082 dev leg,
+ * deterministic).
+ *
+ * The `npm run dev` entry (`src/ui/main.ts`) provides `MCP_CONFIG_STORE_PORT` +
+ * `MCP_CLIENT_PORT` (the scriptable Mock store + client) + browser-safe MCP modal-seam
+ * stand-ins (T-MC-036) and constructs the per-surface `McpServerManager`. This
+ * deterministic leg proves the MCP wiring runs against `MockBridge` without an
+ * inject-or-throw and stays byte-identical to P7 on the inert Mock capability flags: the
+ * surface + composer mount, and because the Mock runtime reports
+ * `supportsMcpTools:false` the MCP settings surface + the live selector stay HIDDEN (the
+ * `supportsMcpTools` gate, REQ-MC-041), exactly the P7-byte-identical state. The
+ * seed/list/add-edit/test-modal/selector-toggle/fold flows depend on the MCP-capable
+ * runtime + the live dev server, which pair with the human run (recorded in
+ * `test-plan.md`, T-MC-037 deferred-manual leg). Queried by `data-testid` only
+ * (ADR-009). SPEC-MC-020; NFR-MC-005.
+ */
+describe('standalone MCP smoke (TEST-MC-040/043/044/050/052/082 dev leg)', () => {
+	beforeEach(() => {
+		vi.resetModules();
+		document.body.replaceChildren();
+		const el = document.createElement('div');
+		el.id = 'app';
+		document.body.appendChild(el);
+	});
+
+	it('mounts the MCP-wired surface against MockBridge (ports provided, MCP hidden on the inert Mock caps)', async () => {
+		await import('@/ui/main');
+		await settle();
+
+		// The MCP-wired surface + composer mount (the new MCP_CONFIG_STORE_PORT /
+		// MCP_CLIENT_PORT injects + the per-surface McpServerManager run without an
+		// inject-or-throw).
+		expect($('[data-testid="chat-surface"]')).not.toBeNull();
+		expect($('[data-testid="composer-textarea"]')).not.toBeNull();
+
+		// The Mock runtime reports supportsMcpTools:false, so the MCP settings surface +
+		// the live selector stay HIDDEN — exactly the P7 byte-identical state (REQ-MC-041,
+		// REQ-MC-082). The capability-gated seam collapses, no MCP widget renders.
+		expect($('[data-testid="mcp-settings"]')).toBeNull();
+		expect($('[data-testid="toolbar-mcp"]')).toBeNull();
+	}, 15000);
+});
