@@ -1,10 +1,10 @@
 ---
 feature: i18n-locales
 area: IL
-current_stage: spec
+current_stage: tasks
 status: active
 last_updated: 2026-05-27
-last_agent: architect (design + spec)
+last_agent: planner (tasks)
 epic: claudian-reboot
 phase: P11
 integration_branch: next
@@ -15,7 +15,7 @@ artifacts:
   requirements.md: accepted (PRD-IL-001 — 12 REQ-IL + 9 NFR-IL)
   design.md: complete (DESIGN-IL-001 — Parts A/B/C; no new ADR)
   spec.md: complete (SPEC-IL-001 — 9 SPEC-IL + 10 EC-IL + 12 TEST-IL)
-  tasks.md: pending
+  tasks.md: complete (TASKS-IL-001 — 13 T-IL tasks; wiring+tests-first RED scaffold, 3 catalogue chunks, gate)
   implementation-log.md: pending
   test-plan.md: pending
   test-report.md: pending
@@ -36,7 +36,7 @@ artifacts:
 | 3. Requirements | `requirements.md` | accepted |
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
-| 6. Tasks | `tasks.md` | pending |
+| 6. Tasks | `tasks.md` | complete |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
@@ -134,4 +134,29 @@ catalogs is large).**
                           (planner): split per the 4 chunks; Chunk 4 may land RED test scaffold first
                           so each locale chunk turns its row GREEN. No open clarifications
                           (CLAR-IL-001 already resolved upstream).
+2026-05-27 (planner):     Stage 6 tasks complete (autonomous). TASKS-IL-001 — 13 T-IL tasks decomposing
+                          SPEC-IL-001..009. STRUCTURE = wiring+tests-first RED scaffold, then 2-3-locale
+                          catalogue chunks turning rows green, then gate. GUARD VERDICT: purely additive —
+                          NO new InjectionKey/port/composable/component/ADR, NO guard-relax; SupportedLocale
+                          is a string-union widen (no member removed), `messages` already cast `as unknown
+                          as Record<SupportedLocale,MessageSchema>` so the widen needs no type surgery,
+                          `toSupportedLocale` body UNCHANGED (narrows via the array). Tasks: T-IL-001 📐
+                          baseline (en keyset + placeholder inventory + 2-locale bundle baseline + guard
+                          verdict); T-IL-002 🔨 widen index.ts (the 4 sites: SupportedLocale union /
+                          SUPPORTED_LOCALES array / 8 imports / messages map); T-IL-003 🧪 all-ten parity
+                          (generalise en↔de, snapshot-at-load, table-driven); T-IL-004 🧪 placeholder-multiset
+                          (CLAR-IL-001 automated test); T-IL-005 🧪 forbidden-terms all-ten (ALLOWED_PREFIXES
+                          unchanged); T-IL-006 🧪 registration completeness + narrowing-the-ten + unknown→en
+                          + missing-key fallback; T-IL-007..009 🔨🪓 the 3 CATALOGUE CHUNKS — es/fr/pt
+                          (Romance) · ja/ko (CJK, ASCII braces) · zh-CN/zh-TW/ru (regional zh distinct +
+                          Cyrillic); T-IL-010 🧪 en/de/manifest byte-identical RED; T-IL-011 🔨 green-all
+                          invariants; T-IL-012 🚀👤 native-speaker polish DEFERRED to P12 (NOT gating —
+                          parity/placeholder are AUTOMATED); T-IL-013 🚀 feature DoD + bundle-size delta
+                          recorded + parity self-review + draft PR into next. WIRING+TESTS LAND FIRST so each
+                          catalogue chunk turns its parity/placeholder/forbidden rows green on landing (no
+                          tests-later gap). SUGGESTED DISPATCH CHUNKS: C1=T-IL-001..006 (scaffold), C2=T-IL-007
+                          (es/fr/pt), C3=T-IL-008 (ja/ko), C4=T-IL-009 (zh-CN/zh-TW/ru), C5=T-IL-010..013
+                          (gate) — C2/C3/C4 touch disjoint files, dispatch in any order/parallel. Hand-off →
+                          /spec:implement (dev): START with T-IL-001 (baseline, no upstream dep). No open
+                          clarifications.
 ```
