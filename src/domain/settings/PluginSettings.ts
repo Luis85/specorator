@@ -1,4 +1,7 @@
 import type { ProviderId } from '@/domain/chat/ProviderId'
+import type { PermissionMode } from '@/domain/chat/PermissionMode'
+import type { EnvEntry, EnvironmentScope, EnvSnippetStruct } from '@/domain/chat/environment/EnvSnippet'
+import { parseNavMappings } from '@/domain/settings/keyboardNav'
 
 /**
  * Domain-level plugin configuration. Persisted via `SettingsPort` (device-local
@@ -50,6 +53,27 @@ export interface PluginSettings {
 	 * Claude-only user never writes here (`readsHomeDir:false`, REQ-PV-114).
 	 */
 	readonly homeFsConsent?: Readonly<Record<string, boolean>>
+	// ---- P10 settings-shell (SPEC-SS-001) — six additive OPTIONAL device-local
+	// fields, each ABSENT from DEFAULT_SETTINGS (mirroring homeFsConsent) so the
+	// exact-key contract stays byte-identical to P9 (NFR-SS-001/SPEC-SS-020). Each
+	// is device-local, never a secret — a secret-bearing env value lives in
+	// SecretStorePort (ADR-SS-001). ----
+	/** The non-secret env-snippet structures (REQ-SS-060). A secret-bearing EnvEntry holds only a secretRef. */
+	readonly envSnippets?: readonly EnvSnippetStruct[]
+	/** The applied per-scope env (the non-secret structure of the live scopes, REQ-SS-050/064/065). */
+	readonly envScopes?: Readonly<Record<string, readonly EnvEntry[]>>
+	/** The message-pane keyboard-nav mappings (REQ-SS-070); defaults (w/s/i) apply when absent. */
+	readonly keyboardNav?: {
+		readonly scrollUpKey: string
+		readonly scrollDownKey: string
+		readonly focusInputKey: string
+	}
+	/** The persisted per-provider default model id (REQ-SS-021); keyed by ProviderId → model id. */
+	readonly providerDefaultModel?: Readonly<Record<string, string>>
+	/** The default permission mode (REQ-SS-083); one of 'normal' | 'plan' | 'yolo'. */
+	readonly defaultPermissionMode?: PermissionMode
+	/** The per-provider device-local CLI path (CLAR-SS-006); keyed by ProviderId → absolute path. */
+	readonly providerCliPath?: Readonly<Record<string, string>>
 }
 
 /** The device-local consent record key for `id`'s beyond-vault reads (SPEC-PV-014, open item #4). */
@@ -154,4 +178,172 @@ export function coerceHomeFsConsent(
 		(entry): entry is [string, boolean] => typeof entry[1] === 'boolean',
 	)
 	return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
+// ---- P10 settings-shell (SPEC-SS-001) — envSecretKey + the six coerce* helpers.
+// Each coercer is pure/total (never throws), mirroring coerceHomeFsConsent: an
+// OPTIONAL field stays ABSENT (undefined) when the raw value has no valid content,
+// so the exact-key contract holds (NFR-SS-001). No migration of any legacy value.
+
+/**
+ * The env-secret namespace (ADR-SS-001, mirrors `providerSecretKey`). Deterministic
+ * for get/set/delete. `scope` is `'shared' | provider:${ProviderId}`; `key` is the
+ * env var name (verbatim case). E.g. `env.shared.FOO`,
+ * `env.provider:codex.OPENAI_API_KEY`. Pure.
+ */
+export const envSecretKey = (scope: string, key: string): string => `env.${scope}.${key}`
+
+const VALID_ENVIRONMENT_SCOPES: readonly string[] = [
+	'shared',
+	'provider:claude',
+	'provider:codex',
+	'provider:opencode',
+]
+
+function isNonEmptyString(value: unknown): value is string {
+	return typeof value === 'string' && value.length > 0
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function coerceEnvEntry(raw: unknown): EnvEntry | undefined {
+	if (!isPlainObject(raw) || !isNonEmptyString(raw.key)) return undefined
+	const value = raw.value
+	if (!isPlainObject(value)) return undefined
+	if (value.kind === 'inline' && typeof value.text === 'string') {
+		return { key: raw.key, value: { kind: 'inline', text: value.text } }
+	}
+	if (value.kind === 'secretRef' && isNonEmptyString(value.secretRef)) {
+		return { key: raw.key, value: { kind: 'secretRef', secretRef: value.secretRef } }
+	}
+	return undefined
+}
+
+function coerceEnvEntries(raw: unknown): readonly EnvEntry[] {
+	if (!Array.isArray(raw)) return []
+	return raw.map(coerceEnvEntry).filter((entry): entry is EnvEntry => entry !== undefined)
+}
+
+function coerceContextLimits(raw: unknown): Readonly<Record<string, number>> | undefined {
+	if (!isPlainObject(raw)) return undefined
+	const entries = Object.entries(raw).filter(
+		(entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1]) && entry[1] > 0,
+	)
+	return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
+function coerceEnvSnippetStruct(raw: unknown): EnvSnippetStruct | undefined {
+	if (!isPlainObject(raw) || !isNonEmptyString(raw.id) || !isNonEmptyString(raw.name)) return undefined
+	const scope =
+		typeof raw.scope === 'string' && VALID_ENVIRONMENT_SCOPES.includes(raw.scope)
+			? (raw.scope as EnvironmentScope)
+			: undefined
+	const contextLimits = coerceContextLimits(raw.contextLimits)
+	return {
+		id: raw.id,
+		name: raw.name,
+		description: typeof raw.description === 'string' ? raw.description : '',
+		envEntries: coerceEnvEntries(raw.envEntries),
+		...(scope !== undefined ? { scope } : {}),
+		...(contextLimits !== undefined ? { contextLimits } : {}),
+	}
+}
+
+/**
+ * Coerce a raw `envSnippets` value (SPEC-SS-001): non-array / no valid struct →
+ * absent; per struct require non-empty string id+name, drop bad EnvEntries, keep a
+ * valid EnvironmentScope / finite-positive contextLimits only; empty → absent.
+ * Pure/total — never throws.
+ */
+export function coerceEnvSnippets(raw: unknown): readonly EnvSnippetStruct[] | undefined {
+	if (!Array.isArray(raw)) return undefined
+	const structs = raw
+		.map(coerceEnvSnippetStruct)
+		.filter((struct): struct is EnvSnippetStruct => struct !== undefined)
+	return structs.length > 0 ? structs : undefined
+}
+
+/**
+ * Coerce a raw `envScopes` value (SPEC-SS-001): non-object → absent; keep only valid
+ * EnvironmentScope keys whose value is a valid EnvEntry[]; empty → absent.
+ * Pure/total — never throws.
+ */
+export function coerceEnvScopes(
+	raw: unknown,
+): Readonly<Record<string, readonly EnvEntry[]>> | undefined {
+	if (!isPlainObject(raw)) return undefined
+	const result: Record<string, readonly EnvEntry[]> = {}
+	for (const [scope, value] of Object.entries(raw)) {
+		if (!VALID_ENVIRONMENT_SCOPES.includes(scope)) continue
+		const entries = coerceEnvEntries(value)
+		if (entries.length > 0) result[scope] = entries
+	}
+	return Object.keys(result).length > 0 ? result : undefined
+}
+
+/**
+ * Coerce a raw `keyboardNav` value (SPEC-SS-001): feed the shape through
+ * `parseNavMappings`; a valid `{settings}` (three unique single-char keys) → that
+ * record; any error / invalid shape → absent (defaults apply, REQ-SS-071).
+ * Pure/total — never throws.
+ */
+export function coerceKeyboardNav(
+	raw: unknown,
+): { scrollUpKey: string; scrollDownKey: string; focusInputKey: string } | undefined {
+	if (!isPlainObject(raw)) return undefined
+	const { scrollUpKey, scrollDownKey, focusInputKey } = raw
+	if (
+		!isNonEmptyString(scrollUpKey) ||
+		!isNonEmptyString(scrollDownKey) ||
+		!isNonEmptyString(focusInputKey)
+	) {
+		return undefined
+	}
+	const text = `map ${scrollUpKey} scrollUp\nmap ${scrollDownKey} scrollDown\nmap ${focusInputKey} focusInput`
+	const parsed = parseNavMappings(text)
+	return parsed.settings
+}
+
+function coerceProviderIdStringMap(raw: unknown): Readonly<Record<string, string>> | undefined {
+	if (!isPlainObject(raw)) return undefined
+	const entries = Object.entries(raw).filter(
+		(entry): entry is [string, string] =>
+			(VALID_PROVIDER_IDS as readonly string[]).includes(entry[0]) && isNonEmptyString(entry[1]),
+	)
+	return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
+/**
+ * Coerce a raw `providerDefaultModel` value (SPEC-SS-001): non-object → absent; keep
+ * only valid ProviderId keys with non-empty string values; empty → absent.
+ * Pure/total — never throws.
+ */
+export function coerceProviderDefaultModel(
+	raw: unknown,
+): Readonly<Record<string, string>> | undefined {
+	return coerceProviderIdStringMap(raw)
+}
+
+/**
+ * Coerce a raw `providerCliPath` value (SPEC-SS-001): non-object → absent; keep only
+ * valid ProviderId keys with non-empty string values; empty → absent. Pure/total.
+ */
+export function coerceProviderCliPath(
+	raw: unknown,
+): Readonly<Record<string, string>> | undefined {
+	return coerceProviderIdStringMap(raw)
+}
+
+const VALID_PERMISSION_MODES: readonly string[] = ['normal', 'plan', 'yolo']
+
+/**
+ * Coerce a raw `defaultPermissionMode` value (SPEC-SS-001): one of
+ * `'normal' | 'plan' | 'yolo'` → that value; else absent. Pure/total — never throws.
+ */
+export function coercePermissionMode(raw: unknown): PermissionMode | undefined {
+	return typeof raw === 'string' && VALID_PERMISSION_MODES.includes(raw)
+		? (raw as PermissionMode)
+		: undefined
 }

@@ -60,7 +60,7 @@ describe('coerceEnvSnippets (SPEC-SS-001)', () => {
 		];
 		const out = coerceEnvSnippets(raw);
 		expect(out).toBeDefined();
-		const struct = out?.[0] as EnvSnippetStruct;
+		const struct = out![0];
 		expect(struct.id).toBe('s1');
 		expect(struct.name).toBe('prod');
 		expect(struct.description).toBe('');
