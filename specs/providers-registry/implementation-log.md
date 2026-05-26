@@ -395,4 +395,65 @@ WIRE-IN/GATE batches ride their own subagents.
   `node:*` + `activeWindow`).
 - **Deviation:** none. The transports are turn-time-owned inside each runtime
   (SPEC-PV-009 §5) — no separate app/UI turn-time transport call.
+- **Commit:** `dcba7b99`.
+
+### T-PV-017 — ObsidianBridge runtime registry + real SecretStorage + real HomeFileSystem (🔨 dev, coverage-excluded)
+
+- **Spec/test:** SPEC-PV-009/031/034; REQ-PV-010..012/030..035/040..044/070/071/080/101/114;
+  NFR-PV-004/007. Manual legs TEST-PV-M1/M2/M3 + TEST-PV-030..033/035/040..042/044/101
+  (already scheduled in `test-plan.md`).
+- **Files (new, coverage-excluded `src/infrastructure/obsidian/**`, names per the
+  T-PV-001 directive — NOT `ObsidianSecretStore*` / no banned glob):**
+  - `SecretStorage.ts` — the real `SecretStorePort` over `app.secretStorage`
+    (sync `setSecret`/`getSecret`/`listSecrets`, wrapped in `trySync` → `Result`).
+    `isAvailable()` probes whether `app.secretStorage` exists (the SPEC-PV-032 / 1.12.7
+    availability check; older hosts gate the field off, no plain-store fallback,
+    EC-PV-10). The `provider.<id>.apiKey` namespace key is normalised to the native
+    store's lowercase-alphanumeric-dash id; `deleteSecret` clears to empty (the API has
+    no delete) → a later `getSecret` is `ok(null)`. NEVER `data.json` (ADR-PV-002).
+  - `HomeFileSystem.ts` — the real `HomeFsPort` over `node:fs/promises` rooted at
+    `os.homedir()`. Read-first (no write/delete); every read runs the pure
+    `isInsideHomeRoot` gate THEN a resolved-absolute-path containment re-check against
+    `~/.codex`/`~/.claude` (defence in depth) → path-escape `err` (REQ-PV-081).
+    `isAvailable()→true`.
+  - `CodexRuntime.ts` — the Codex `ChatRuntimePort` owning `CodexRpcTransport`; reads
+    the key via `SecretStorePort.getSecret(providerSecretKey('codex'))` into the
+    subprocess env at the turn boundary; exposes the frozen `CODEX_DESCRIPTOR` caps
+    (BACKED fork/turn-steer; GATED-OFF rewind/provider-commands/MCP = `false`); `steer`
+    (REQ-PV-033). A missing key → terminal `error` chunk (honest, no key substring).
+  - `OpencodeRuntime.ts` — the Opencode `ChatRuntimePort` owning `AcpTransport`; same
+    key/error story; frozen `OPENCODE_DESCRIPTOR` caps (GATED-OFF rewind/fork/steer/MCP
+    = `false`, provider-commands BACKED); no steer.
+  - `ObsidianProviderRuntimeRegistry.ts` — the widened factory body: a **data-driven
+    builder table** keyed by provider id (`Map<ProviderId, RuntimeBuilder>`) — `'claude'`
+    reuses the P1 `ClaudeCliChatRuntime` UNCHANGED (`ok`, byte-identical P8); `'codex'`/
+    `'opencode'` build their runtimes gated honestly on `secretStore.isAvailable()`
+    (→ `err('keyRequired')`). **No `switch (providerId)`** (NFR-PV-014).
+- **Files (edited):** `src/infrastructure/obsidian/ObsidianBridge.ts` — added the
+  `providerRegistry` / `secretStore` / `homeFs` / `providerRuntimeRegistry` getters
+  (lazy singletons; the registry is wired with `secretStore`/`homeFs`/vault-cwd/`this`
+  logger) + the three port-type imports. The P1 no-arg `createChatRuntime()` (Claude
+  `CHAT_RUNTIME_PORT` provide) is UNCHANGED.
+- **How the registry constructs per-provider runtimes (data-driven, no switch):** the
+  Obsidian registry holds a `Map<ProviderId, RuntimeBuilder>`; `createChatRuntime(id)`
+  does `builders.get(id)?.(deps)`. Claude's builder returns the reused P1 runtime;
+  Codex/Opencode builders gate on secret-store availability then construct the
+  transport-owning runtime. No provider-id branch anywhere.
+- **Which bridge backs what (+ coverage/manual):** ObsidianBridge backs the real
+  `app.secretStorage` (`SecretStorage.ts`, coverage-excluded → TEST-PV-M3) + the real
+  `node:fs` home-fs (`HomeFileSystem.ts`, coverage-excluded → TEST-PV-M1/M2) + the
+  Claude/Codex/Opencode runtime registry (coverage-excluded → TEST-PV-M1/M2). The shared
+  `ProviderRegistry` is coverage-included pure data (T-PV-012). MockBridge/LS back the
+  in-memory/inert halves (T-PV-014/016) carrying the automated weight.
+- **Outcome:** done (coverage-excluded; behavioural gate = the manual legs). vue-tsc 0;
+  whole-project lint 0 errors (16 pre-existing warnings — incl. the long-standing
+  ObsidianBridge `max-lines`); the existing 438 infra/fakes tests stay green.
+- **Deviation:** the per-tab factory is NOT yet routed through the runtime registry
+  (the provide-sites still pass the default-`'claude'` stand-in) — the resolved-provider
+  wire-in is T-PV-031 (out of this INFRA batch). The key read happens async inside the
+  runtime's turn boundary (not at the sync `createChatRuntime` construct), since the
+  widened factory is synchronous; the construct gate uses the sync
+  `secretStore.isAvailable()` probe + (at turn time) the async key read → honest terminal
+  error chunk. `deleteSecret` clears-to-empty because `app.secretStorage` exposes no
+  delete method (Obsidian 1.11.4 API).
 - **Commit:** `…` (below).
