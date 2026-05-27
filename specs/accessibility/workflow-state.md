@@ -1,10 +1,10 @@
 ---
 feature: accessibility
 area: AY
-current_stage: requirements
+current_stage: design
 status: active
 last_updated: 2026-05-27
-last_agent: orchestrator (bootstrap)
+last_agent: pm (requirements accepted; hand-off → /spec:design)
 epic: claudian-reboot
 phase: P12
 integration_branch: next
@@ -12,7 +12,7 @@ reference: D:\Projects\claudian-main
 artifacts:
   idea.md: skipped (parity-charter §3.9/§3.10/§4 P12 + audits + claudian-main accessibility.css stand in)
   research.md: skipped
-  requirements.md: pending
+  requirements.md: accepted (PRD-AY-001, 17 REQ-AY + 10 NFR-AY; autonomous accept)
   design.md: pending
   spec.md: pending
   tasks.md: pending
@@ -33,7 +33,7 @@ artifacts:
 |---|---|---|
 | 1. Idea | `idea.md` | skipped |
 | 2. Research | `research.md` | skipped |
-| 3. Requirements | `requirements.md` | pending |
+| 3. Requirements | `requirements.md` | accepted |
 | 4. Design | `design.md` | pending |
 | 5. Specification | `spec.md` | pending |
 | 6. Tasks | `tasks.md` | pending |
@@ -99,4 +99,19 @@ OUR `src/ui/styles/{tokens,animations}.css` + the P1-P11 components/modals for t
                           (reduced-motion/forced-colors/focus-visible/sr-only), the behaviour-gap audit,
                           the WCAG 2.2 AA criteria, the human screenshot sign-off as the FINAL gate.
                           AFTER P12 MERGES: present the final review + open (don't merge) next→develop.
+2026-05-27 (pm): /spec:requirements done. PRD-AY-001 accepted (autonomous) — 17 functional REQ-AY
+                          (Group A accessibility.css+pipeline, B reduced-motion, C forced-colors+contrast,
+                          D focus-visible+keyboard, E ARIA+sr-only+live-regions, F modal focus trap/restore
+                          at P5/P7/P8/P10 seams, G additivity+no-raw-HTML, H final human sign-off) + 10
+                          NFR-AY (WCAG 2.2 AA, token-discipline w/ documented forced-colors exception, no
+                          v-html/innerHTML, additivity, coverage 80/70/80/80, manifest untouched,
+                          lightningcss-safe, verify+test:all green). Automatable = REQ-AY-001..016 (TEST-AY-*);
+                          REQ-AY-017 = HUMAN final parity screenshot sign-off (all surfaces, light+dark,
+                          320/520/720) — the single final epic gate, not self-claimed. Ref bar = audit
+                          line 358 (claudian accessibility.css minimal/focus-visible-only → meet+beat).
+                          Two CLAR resolved (CLAR-AY-001 ref-file-not-readable→use audit chars; CLAR-AY-002
+                          reduced-motion global-guard complements per-section token overrides). Hand-off →
+                          /spec:design (Part A UX + Part B UI): open the actual claudian accessibility.css,
+                          design the .specorator-root reduced-motion/forced-colors/focus-visible/sr-only
+                          rule groups + the per-surface ARIA/live-region/modal-focus fixes.
 ```
