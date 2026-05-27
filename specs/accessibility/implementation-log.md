@@ -93,7 +93,7 @@ registration + its RED-before-green file-read/registration tests.
   - `src/ui/main.ts` (line 15) — `import './styles/accessibility.css';` as the 3rd CSS import after
     `animations.css`. `vite.config.ts` unchanged (the file is authored scope-safe).
   - `tests/ui/styles/accessibility.test.ts` (helper corrections — see the T-AY-003/004 deviation).
-- **Commit:** _(recorded below at commit time)_
+- **Commit:** `191443997dcad399778063d4809ca9b442071a55`
 - **Outcome:** done. T-AY-003/004 (14 tests) GREEN.
 - **Typecheck:** `npx vue-tsc -p tsconfig.lint.json --noEmit` -> **0**.
 - **Lint:** whole-project `npm run lint` -> **0 errors** (22 pre-existing warnings, none new).
@@ -102,3 +102,23 @@ registration + its RED-before-green file-read/registration tests.
   standalone bundle. `styles.css` not hand-edited.
 - **Deviation:** none on the impl. RG-4 carries a single placeholder selector (`.sp-toggle-switch`);
   T-AY-005 completes the concrete enumeration per SPEC-AY-006.
+
+### T-AY-005 — RG-4 forced-colors-border selector enumeration (🔨 dev)
+
+- **Spec/req:** SPEC-AY-006, SPEC-AY-001 (RG-4); REQ-AY-006; NFR-AY-009; EC-AY-003.
+- **Files:**
+  - `src/ui/styles/accessibility.css` (RG-4 block) — enumerates the concrete background-cue-only
+    control selectors per SPEC-AY-006: `.sp-toggle-switch` (toggle switch), `[data-state]` (state
+    pills), `.sp-chip` (file/image chips), `.sp-tab` (tab badges),
+    `[role="option"][aria-selected="true"]` (selected dropdown option), each given
+    `border: 1px solid currentColor` inside the existing `@media (forced-colors: active)` block.
+  - `tests/ui/styles/accessibility.test.ts` — adds the TEST-AY-006 file-read leg asserting RG-4
+    lists each enumerated control with a `currentColor` border (the coverage-table `006->T-AY-003(file)`
+    leg; the mount leg is T-AY-006, Chunk 2).
+- **Commit:** _(recorded below at commit time)_
+- **Outcome:** done. The TEST-AY-006 file-read leg passes (15 accessibility-css tests GREEN).
+- **Typecheck:** `npx vue-tsc -p tsconfig.lint.json --noEmit` -> **0**.
+- **Lint:** whole-project `npm run lint` -> **0 errors** (22 pre-existing warnings, none new).
+- **Default render:** unchanged outside `forced-colors` (the rule is inert unless the system palette
+  is replaced).
+- **Deviation:** none.

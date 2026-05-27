@@ -134,6 +134,27 @@ describe('src/ui/styles/accessibility.css — RG-3 forced-colors mapping (SPEC-A
 	});
 });
 
+describe('src/ui/styles/accessibility.css — RG-4 forced-colors borders (SPEC-AY-006, EC-AY-003)', () => {
+	it('TEST-AY-006 (file leg): RG-4 enumerates the background-cue-only controls with a currentColor border', () => {
+		const block = mediaBlock(loadA11y(), 'forced-colors:\\s*active');
+		expect(block, 'expected a `forced-colors: active` @media block').not.toBe('');
+		// Each enumerated control whose normal affordance is a background fill/wash.
+		const controls = [
+			'.sp-toggle-switch',
+			'[data-state]',
+			'.sp-chip',
+			'.sp-tab',
+			'[role="option"][aria-selected="true"]',
+		];
+		for (const sel of controls) {
+			expect(block, `expected RG-4 to list ${sel}`).toContain(sel);
+		}
+		expect(block, 'RG-4 gives a visible border under forced-colors').toMatch(
+			/border:\s*1px\s+solid\s+currentColor/,
+		);
+	});
+});
+
 describe('src/ui/styles/accessibility.css — RG-5 focus-visible ring (SPEC-AY-001, EC-AY-005/006/014)', () => {
 	it('TEST-AY-007 (file leg): RG-5 uses `:focus-visible` and consumes var(--sp-focus-ring)', () => {
 		const css = loadA11y();

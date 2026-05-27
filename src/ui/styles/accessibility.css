@@ -70,12 +70,17 @@
 	}
 }
 
-/* RG-4 - forced-colors border guarantee (REQ-AY-006, EC-AY-003).
+/* RG-4 - forced-colors border guarantee (REQ-AY-006, EC-AY-003, SPEC-AY-006).
  * Background-cue-only controls (those signalled by a fill or wash alone) gain a
  * visible currentColor border under forced-colors so they stay distinguishable.
- * The concrete selector enumeration is refined in T-AY-005 (SPEC-AY-006). */
+ * The enumerated controls per the audit: the toolbar toggle switch, state
+ * pills, file and image chips, tab badges, and the selected dropdown option. */
 @media (forced-colors: active) {
-	.specorator-root .sp-toggle-switch {
+	.specorator-root .sp-toggle-switch,
+	.specorator-root [data-state],
+	.specorator-root .sp-chip,
+	.specorator-root .sp-tab,
+	.specorator-root [role="option"][aria-selected="true"] {
 		border: 1px solid currentColor;
 	}
 }
