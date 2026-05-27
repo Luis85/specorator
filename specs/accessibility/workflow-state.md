@@ -4,7 +4,7 @@ area: AY
 current_stage: tasks
 status: active
 last_updated: 2026-05-27
-last_agent: architect (design + spec complete; hand-off → /spec:tasks)
+last_agent: planner (tasks complete; hand-off → /spec:implement)
 epic: claudian-reboot
 phase: P12
 integration_branch: next
@@ -15,7 +15,7 @@ artifacts:
   requirements.md: accepted (PRD-AY-001, 17 REQ-AY + 10 NFR-AY; autonomous accept)
   design.md: complete (DESIGN-AY-001, Parts A/B/C; no new port, no new ADR)
   spec.md: complete (SPEC-AY-001..011 + TEST-AY-001..017; coverage table)
-  tasks.md: pending
+  tasks.md: complete (TASKS-AY-001, 18 tasks T-AY-001..018; 3 chunks + GATE; coverage sanity-check)
   implementation-log.md: pending
   test-plan.md: pending
   test-report.md: pending
@@ -36,7 +36,7 @@ artifacts:
 | 3. Requirements | `requirements.md` | accepted |
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
-| 6. Tasks | `tasks.md` | pending |
+| 6. Tasks | `tasks.md` | complete |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
 | 9. Review | `review.md`, `traceability.md` | pending |
@@ -140,4 +140,31 @@ OUR `src/ui/styles/{tokens,animations}.css` + the P1-P11 components/modals for t
                           edits; (2) behaviour-fix sweep; (3) tests + parity-screenshots.md artifact.
                           OPEN CLARIFICATIONS: none blocking. AFTER P12 MERGES: present final review +
                           open (DO NOT merge) next→develop PR — the human's call.
+2026-05-27 (planner): /spec:tasks done. TASKS-AY-001 complete — 18 tasks (T-AY-001..018) decomposing
+                          SPEC-AY-001..011 across 3 chunks + a GATE. CHUNK 1 (accessibility.css +
+                          registration): T-AY-001 (baseline + guard verdict + parity-screenshots.md
+                          scaffold), T-AY-002 (the new src/ui/styles/accessibility.css RG-1..6 +
+                          register at BOTH import sites src/plugin/main.ts:2 + src/ui/main.ts:14),
+                          T-AY-003/004 (RED RG file-read + registration, land first), T-AY-005 (RG-4
+                          forced-colors-border selector enumeration). CHUNK 2 (behaviour-fix sweep,
+                          additive + mostly verify-only): T-AY-006..009/013 RED component/PageObject
+                          tests (forced-colors controls mounted, focus-visible+keyboard/labels,
+                          live-region, aria-expanded+sr-only, modal trap/restore verify-only across the
+                          8 seams); T-AY-010 (icon-only labels fill), T-AY-011 (notice-host live region),
+                          T-AY-012 (collapsible aria-expanded fill). CHUNK 3 (tests + additivity gate):
+                          T-AY-014 (additivity diff), T-AY-015 (no raw-HTML discipline scan), T-AY-016
+                          (parity-screenshots.md completeness). GATE: T-AY-018 (full verify + lightningcss
+                          build:web green + all-auto suites + parity self-review + draft PR into next),
+                          then T-AY-017 = the HUMAN final cross-surface parity screenshot sign-off (all
+                          P1-P11 surfaces, light+dark, 320/520/720 + the accumulated P5-P11 manual legs)
+                          — the SINGLE FINAL EPIC GATE, owner: human, NEVER agent-self-claimed. GUARD
+                          VERDICT: NO new InjectionKey/port/composable/component/ADR, NO guard-relax (CSS
+                          layer + additive ARIA; manifest/locales byte-identical). lightningcss-safe ASCII
+                          comments + RG-5 reuses --sp-focus-ring (no new token) + whole-project lint 0
+                          notes carried per task. AFTER P12 MERGES: present final review + open (DO NOT
+                          merge) next→develop PR — the human's call. Hand-off → /spec:implement (dev/qa):
+                          first ready task = T-AY-001 (dev, baseline + scaffold), then dispatch chunk C1
+                          (T-AY-003/004 RED → T-AY-002/005). Suggested dispatch: C1 accessibility.css;
+                          C2 Chunk-2 RED scaffold; C3 the three fills (parallel); C4 gate tests; C5
+                          T-AY-018 gate then T-AY-017 human sign-off.
 ```
