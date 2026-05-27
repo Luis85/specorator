@@ -2,18 +2,50 @@ import { createI18n } from 'vue-i18n';
 import type en from './locales/en';
 import enMessages from './locales/en';
 import deMessages from './locales/de';
+import esMessages from './locales/es';
+import frMessages from './locales/fr';
+import jaMessages from './locales/ja';
+import koMessages from './locales/ko';
+import ptMessages from './locales/pt';
+import ruMessages from './locales/ru';
+import zhCNMessages from './locales/zh-CN';
+import zhTWMessages from './locales/zh-TW';
 
 /** Type of the EN message catalogue — used for component type-safety. */
 export type MessageSchema = typeof en;
-export type SupportedLocale = 'en' | 'de';
+export type SupportedLocale =
+	| 'en'
+	| 'de'
+	| 'es'
+	| 'fr'
+	| 'ja'
+	| 'ko'
+	| 'pt'
+	| 'ru'
+	| 'zh-CN'
+	| 'zh-TW';
 
-export const SUPPORTED_LOCALES: SupportedLocale[] = ['en', 'de'];
+// en first (so fallbackLocale + the keyset authority are unambiguous), de second
+// (the existing locale), then the eight new codes alphabetically with the two
+// regional zh-* tags last (SPEC-IL-001).
+export const SUPPORTED_LOCALES: SupportedLocale[] = [
+	'en',
+	'de',
+	'es',
+	'fr',
+	'ja',
+	'ko',
+	'pt',
+	'ru',
+	'zh-CN',
+	'zh-TW',
+];
 
 /**
  * Narrow an arbitrary stored `locale` string to a `SupportedLocale`, falling
  * back to `'en'` for anything outside the catalogue (SPEC-PSR-012). The single
  * narrowing helper shared by every `setLocale` call site, so a stale/foreign
- * blob value (e.g. `'fr'`) never reaches `setLocale` as an unsafe cast.
+ * blob value (e.g. `'it'`) never reaches `setLocale` as an unsafe cast.
  */
 export function toSupportedLocale(locale: string): SupportedLocale {
 	return (SUPPORTED_LOCALES as readonly string[]).includes(locale)
@@ -27,7 +59,18 @@ export const i18n = createI18n({
 	fallbackLocale: 'en',
 	// Typed as unknown to avoid literal-type conflicts between locale files;
 	// vue-i18n still validates keys at runtime.
-	messages: { en: enMessages, de: deMessages } as unknown as Record<SupportedLocale, MessageSchema>,
+	messages: {
+		en: enMessages,
+		de: deMessages,
+		es: esMessages,
+		fr: frMessages,
+		ja: jaMessages,
+		ko: koMessages,
+		pt: ptMessages,
+		ru: ruMessages,
+		'zh-CN': zhCNMessages,
+		'zh-TW': zhTWMessages,
+	} as unknown as Record<SupportedLocale, MessageSchema>,
 });
 
 export function setLocale(locale: SupportedLocale): void {
