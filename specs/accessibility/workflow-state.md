@@ -1,10 +1,10 @@
 ---
 feature: accessibility
 area: AY
-current_stage: design
+current_stage: tasks
 status: active
 last_updated: 2026-05-27
-last_agent: pm (requirements accepted; hand-off → /spec:design)
+last_agent: architect (design + spec complete; hand-off → /spec:tasks)
 epic: claudian-reboot
 phase: P12
 integration_branch: next
@@ -13,8 +13,8 @@ artifacts:
   idea.md: skipped (parity-charter §3.9/§3.10/§4 P12 + audits + claudian-main accessibility.css stand in)
   research.md: skipped
   requirements.md: accepted (PRD-AY-001, 17 REQ-AY + 10 NFR-AY; autonomous accept)
-  design.md: pending
-  spec.md: pending
+  design.md: complete (DESIGN-AY-001, Parts A/B/C; no new port, no new ADR)
+  spec.md: complete (SPEC-AY-001..011 + TEST-AY-001..017; coverage table)
   tasks.md: pending
   implementation-log.md: pending
   test-plan.md: pending
@@ -34,8 +34,8 @@ artifacts:
 | 1. Idea | `idea.md` | skipped |
 | 2. Research | `research.md` | skipped |
 | 3. Requirements | `requirements.md` | accepted |
-| 4. Design | `design.md` | pending |
-| 5. Specification | `spec.md` | pending |
+| 4. Design | `design.md` | complete |
+| 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | pending |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
@@ -114,4 +114,30 @@ OUR `src/ui/styles/{tokens,animations}.css` + the P1-P11 components/modals for t
                           /spec:design (Part A UX + Part B UI): open the actual claudian accessibility.css,
                           design the .specorator-root reduced-motion/forced-colors/focus-visible/sr-only
                           rule groups + the per-surface ARIA/live-region/modal-focus fixes.
+2026-05-27 (architect): /spec:design + /spec:specify done. DESIGN-AY-001 (Parts A/B/C) + SPEC-AY-001
+                          (11 SPEC items + TEST-AY-001..017) complete. CLAR-AY-001 RESOLVED by reading
+                          the actual D:\Projects\claudian-main\src\style\accessibility.css — confirmed
+                          MINIMAL: focus-visible outline rings only (41 lines, 3 selector groups, NO
+                          reduced-motion / NO forced-colors / NO sr-only). So "meet" = the focus ring
+                          (REQ-AY-007); "beat" = the other five groups. CLAR-AY-002 RESOLVED: the global
+                          reduced-motion guard COMPLEMENTS (does not replace) the tokens.css per-section
+                          overrides + the CQ-AUX-14 spin halt. accessibility.css = 6 rule groups (RG-1
+                          reduced-motion guard, RG-2 spin halt, RG-3 forced-colors mapping, RG-4
+                          forced-colors borders, RG-5 :focus-visible ring, RG-6 .sr-only) scoped to
+                          .specorator-root, joins tokens.css+animations.css as the 3rd CSS layer at BOTH
+                          import sites (src/plugin/main.ts:2 + src/ui/main.ts:14). FOCUS TOKEN: reuse the
+                          EXISTING --sp-focus-ring (tokens.css:42) + --sp-shadow-focus-ring (:140) — NO
+                          new token. MODAL FOCUS: Obsidian Modal base natively traps+restores focus → the
+                          8 modal seams are VERIFY-ONLY, no hand-rolled trap. NO NEW PORT, NO NEW ADR
+                          (CSS layer + additive ARIA, all existing patterns). Behaviour sweep = mostly
+                          verify-only (busy region already aria-live polite+role=status, TabBar already
+                          full ARIA+roving tabindex) + targeted fills (collapsible aria-expanded,
+                          icon-only labels, RG-4 selector enumeration). SPLIT: TEST-AY-001..016 automatable
+                          (CSS-rule-read / registration / PageObject mounts / additivity diff / discipline
+                          scan); TEST-AY-017 = HUMAN final parity screenshot sign-off (all surfaces,
+                          light+dark, 320/520/720) — the single final epic gate, agent PRESENTS not claims.
+                          Hand-off → /spec:tasks (planner): 3 chunks — (1) accessibility.css + 2 import
+                          edits; (2) behaviour-fix sweep; (3) tests + parity-screenshots.md artifact.
+                          OPEN CLARIFICATIONS: none blocking. AFTER P12 MERGES: present final review +
+                          open (DO NOT merge) next→develop PR — the human's call.
 ```
