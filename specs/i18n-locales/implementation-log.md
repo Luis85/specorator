@@ -21,6 +21,55 @@ catalogues, the `index.ts` four-site widen (T-IL-002), and two generalised tests
 Catalogue authoring is chunked 2–3 locales per dispatch (the P8/P9
 subagent-timeout lesson).
 
+## Layer A — WIRING + TESTS (T-IL-001..006)
+
+### T-IL-001 — Baseline + guard-verify note (📐 dev)
+
+- **Spec/req:** SPEC-IL-003/004/005/006/007/009, NFR-IL-005/006/008, REQ-IL-007;
+  TEST-IL targets.
+- **Files:**
+  - `specs/i18n-locales/test-plan.md` (new, lines 1–119) — baseline + guard
+    verdict note.
+- **Commit:** `275c692e664bb8c0761ad56bba39fc8a05d33ea9`
+- **Outcome:** done.
+- **Baseline captured (deterministic leaf-flatten + multiset + regex script over
+  all 10 catalogues):** `en.ts` = **226 leaves**; **35 interpolating leaves**; 17
+  distinct tokens (`{canvasPath}` `{count}` `{feature}` `{keys}` `{lineCount}`
+  `{mode}` `{name}` `{notePath}` `{pattern}` `{percent}` `{provider}` `{reason}`
+  `{root}` `{scope}` `{startLine}` `{tool}` `{version}`). All 9 non-en catalogues:
+  226 leaves, 0 missing, 0 extra, 0 placeholder mismatch, 0 forbidden-terms
+  offenders outside the frozen `ALLOWED_PREFIXES`.
+- **Guard verdict:** NO new InjectionKey/port/composable (SupportedLocale is a
+  string-union widen; `messages` already cast; `toSupportedLocale` body
+  unchanged); NO guard-relax (locale codes are plain data filenames, the four
+  widened symbols pre-existed at 2 locales); `en.ts`/`de.ts`/`manifest.json`
+  untouched (T-IL-010/013 re-confirm via `git diff next`).
+- **Deviation:** none. No `src/` change. The two-locale bundle-baseline number +
+  ten-locale delta are recorded by T-IL-013 (out of this chunk's scope — no
+  `npm run build` here).
+
+### T-IL-002 — Widen `index.ts` to 10 locales (🔨 dev)
+
+- **Spec/req:** SPEC-IL-001, SPEC-IL-002, REQ-IL-001/005/006, NFR-IL-005.
+- **Files:**
+  - `src/ui/i18n/index.ts` (lines 1–73) — the four widened declaration sites:
+    `SupportedLocale` union (lines 16–26), `SUPPORTED_LOCALES` array (31–42), the
+    eight imports (5–12), the ten-entry `messages` map (62–73). `toSupportedLocale`
+    body byte-unchanged (50–54); stale doc example `fr` → `it` (line 48).
+- **Commit:** `28768ed3a28906a99f711ea92291ab5c45cc4d1f`
+- **Outcome:** done.
+- **Typecheck:** `npx vue-tsc -p tsconfig.lint.json --noEmit` → **0** (the union
+  widen + the existing `as unknown` cast compile clean now that the eight
+  catalogue files exist).
+- **Lint:** whole-project `npm run lint` → **0 errors** (22 pre-existing warnings:
+  `max-lines` on the locale catalogues + stores, `vue/one-component-per-file` in
+  tests — none new from this change). No new InjectionKey/port/composable; no
+  `obsidian`/`node:*` import in `index.ts`.
+- **Deviation:** updated the stale `toSupportedLocale` doc-comment example from
+  `'fr'` (now a supported locale) to `'it'` (genuinely unknown) — a one-word doc
+  accuracy fix; the function **body** is byte-unchanged per SPEC-IL-001. `en.ts` /
+  `de.ts` / `manifest.json` untouched.
+
 ## Layer B — CATALOGUES (T-IL-007..009)
 
 ### T-IL-007 — Romance chunk: `es.ts` + `fr.ts` + `pt.ts` (🔨🪓 dev)
@@ -75,7 +124,8 @@ subagent-timeout lesson).
   tests are untouched (additivity preserved — SPEC-IL-007). The all-ten parity
   test (T-IL-003) does not exist yet (it lands with the T-IL-002 wiring chunk);
   parity/placeholder/forbidden-terms were verified here by a deterministic
-  leaf-diff + multiset + regex script ahead of the wire-in.
+  leaf-diff + multiset + regex script ahead of the wire-in. [Superseded: the
+  wiring chunk T-IL-002..006 landed after this; see Layer A — TESTS below.]
 
 ### T-IL-008 — CJK chunk: `ja.ts` + `ko.ts` (🔨🪓 dev)
 
@@ -187,4 +237,54 @@ subagent-timeout lesson).
   tests are untouched (additivity preserved — SPEC-IL-007). The all-ten parity
   test (T-IL-003) does not exist yet (it lands with the T-IL-002 wiring chunk);
   parity/placeholder/forbidden-terms were verified here by a deterministic
-  leaf-diff + multiset + regex script ahead of the wire-in.
+  leaf-diff + multiset + regex script ahead of the wire-in. [Superseded: the
+  wiring chunk T-IL-002..006 landed after this; see Layer A — TESTS below.]
+
+## Layer A — TESTS (T-IL-003..006, authored after the catalogues landed)
+
+> The catalogues (T-IL-007..009) landed before this WIRING+TESTS chunk in the
+> actual dispatch order, so the all-ten parity / placeholder / forbidden-terms /
+> registration / narrowing / fallback tests went **GREEN immediately** on
+> authoring (not RED) — the catalogue defects the RED scaffold would have caught
+> were already absent (T-IL-001 baseline: 0 missing/extra/mismatch/offender).
+
+### T-IL-003 / T-IL-004 / T-IL-006 — all-ten parity + placeholder + registration/narrowing/fallback (🧪 qa, authored by dev in the wiring chunk)
+
+- **Spec/req:** SPEC-IL-001/002/004/005/008; REQ-IL-001..006/008/011; NFR-IL-001/002/004;
+  EC-IL-001..004/006..009. TEST-IL-001/002/003/004/005/006/008/011.
+- **Files:**
+  - `tests/ui/i18n/index.test.ts` (rewritten, lines 1–276) — imports all ten
+    catalogue defaults + `i18n`/`SUPPORTED_LOCALES`; snapshots per-locale keysets
+    at module load; adds `leafValue` + `placeholderMultiset` helpers.
+    - T-IL-003 (TEST-IL-003/004): table-driven all-ten-against-en parity
+      (`it.each(NON_EN_LOCALES)`), missing/extra both `[]`, locale+keys failure.
+    - T-IL-004 (TEST-IL-008): per-locale placeholder-multiset === en per key.
+    - T-IL-006 (TEST-IL-001/002): registration completeness (length 10 +
+      `SUPPORTED_LOCALES` set deep-equals `i18n.global.messages.value` key set +
+      every entry non-empty) + per-catalogue import shape; (TEST-IL-005/006)
+      narrows the ten incl. zh-CN/zh-TW + unknown→en (`it`/`zh`/`''`/`EN`/`de-DE`);
+      (TEST-IL-011) synthetic missing-key fallback (en string, no throw).
+    - The existing `i18nMerge`/`flatToNested` + `agent.empty.placeholder` tests
+      kept unchanged.
+- **Commit:** `ebf1d96bfd098bd0662fb2ac0334793a93b236ab`
+- **Outcome:** done — **51 tests green** in the file.
+- **Typecheck:** vue-tsc 0. **Lint:** whole-project 0 errors (22 pre-existing
+  warnings, none on the test file).
+- **Deviation:** T-IL-003/004/006 co-located in the one shared file per the spec
+  (SPEC-IL-004 puts the parity block there; the spec permits T-IL-006 in the same
+  file), so they ride one commit referencing the three IDs rather than three
+  commits to the same file. Tests are GREEN not RED (catalogues already correct).
+
+### T-IL-005 — forbidden-terms guard across all ten locales (🧪 qa, authored by dev in the wiring chunk)
+
+- **Spec/req:** SPEC-IL-006, REQ-IL-009, NFR-IL-003, EC-IL-005. TEST-IL-009.
+- **Files:**
+  - `tests/i18n/forbidden-terms.test.ts` (rewritten, lines 1–98) — imports all ten
+    catalogue defaults; table-driven `it.each(SUPPORTED_LOCALES)` over the
+    unchanged `FORBIDDEN` + `flatten` + `isAllowed`; `ALLOWED_PREFIXES`
+    byte-unchanged from P9; locale+key+value+pattern offender failure; an
+    EC-IL-005 defect-escalation note in the header comment.
+- **Commit:** `d0de0a999fb8f4ad39176f7f66d3e2db7b17bb9c`
+- **Outcome:** done — **10 locales scanned, 0 offenders, green**.
+- **Typecheck:** vue-tsc 0. **Lint:** whole-project 0 errors.
+- **Deviation:** none. GREEN not RED (catalogues already jargon-clean).

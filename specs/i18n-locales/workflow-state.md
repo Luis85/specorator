@@ -1,10 +1,10 @@
 ---
 feature: i18n-locales
 area: IL
-current_stage: tasks
+current_stage: implementation
 status: active
 last_updated: 2026-05-27
-last_agent: planner (tasks)
+last_agent: dev (T-IL-001..006 wiring+tests chunk)
 epic: claudian-reboot
 phase: P11
 integration_branch: next
@@ -16,8 +16,8 @@ artifacts:
   design.md: complete (DESIGN-IL-001 — Parts A/B/C; no new ADR)
   spec.md: complete (SPEC-IL-001 — 9 SPEC-IL + 10 EC-IL + 12 TEST-IL)
   tasks.md: complete (TASKS-IL-001 — 13 T-IL tasks; wiring+tests-first RED scaffold, 3 catalogue chunks, gate)
-  implementation-log.md: pending
-  test-plan.md: pending
+  implementation-log.md: in-progress  # T-IL-001..009 logged; gate T-IL-010..013 remain
+  test-plan.md: in-progress           # T-IL-001 baseline + guard verdict captured
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -159,4 +159,26 @@ catalogs is large).**
                           (gate) — C2/C3/C4 touch disjoint files, dispatch in any order/parallel. Hand-off →
                           /spec:implement (dev): START with T-IL-001 (baseline, no upstream dep). No open
                           clarifications.
+2026-05-27 (dev):         WIRING+TESTS chunk (T-IL-001..006) complete on feature/i18n-locales.
+                          T-IL-001 docs(il) 275c692e — test-plan.md baseline (en=226 leaves, 35
+                          interpolating, 17 tokens; all 9 non-en catalogues 0 missing/extra/mismatch/
+                          offender) + guard verdict (NO new InjectionKey/port, NO guard-relax, en/de/
+                          manifest untouched). T-IL-002 feat(il) 28768ed3 — index.ts widened 2→10 (the
+                          four sites: SupportedLocale union / SUPPORTED_LOCALES en-first-de-second-alpha-
+                          zh-*-last / 8 imports / 10-entry messages; toSupportedLocale body byte-unchanged,
+                          only a stale doc example fr→it). T-IL-003/004/006 test(il) ebf1d96b — tests/ui/
+                          i18n/index.test.ts generalised to all-ten parity + placeholder-multiset +
+                          registration/narrowing/fallback (51 tests). T-IL-005 test(il) d0de0a99 — tests/
+                          i18n/forbidden-terms.test.ts run over all ten (10 locales, 0 offenders).
+                          VERIFY (this chunk's gate): npx vue-tsc -p tsconfig.lint.json --noEmit = 0;
+                          whole-project npm run lint = 0 errors (22 pre-existing warnings: max-lines on
+                          catalogues+stores, vue/one-component-per-file in tests); npx vitest run the two
+                          i18n files = 61 tests GREEN (all 10 parity/placeholder/forbidden + narrowing +
+                          fallback). NO locale-file defect surfaced — catalogues (T-IL-007..009, already
+                          committed) were correct. NOT RUN (out of chunk scope, per directive): build/
+                          build:web/docs:api/verify/dev. REMAINING: gate chunk T-IL-010 (en/de/manifest
+                          byte-identity), T-IL-011 (green-all reconcile), T-IL-012 (deferred native-speaker
+                          polish, P12), T-IL-013 (feature DoD + bundle delta + draft PR into next). Next
+                          agent: dev/qa for the T-IL-010..013 gate chunk. Verification performed: vue-tsc 0,
+                          lint 0 errors, 61 i18n tests green.
 ```

@@ -122,17 +122,18 @@ the snapshot-at-module-load discipline), and the P9 forbidden-terms guard
 - **Depends on:** —
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `specs/i18n-locales/test-plan.md` exists with: the flattened `en.ts` leaf-key list (the parity
-        target), the per-leaf `{token}` multiset inventory (the placeholder target), and a note that each
-        of the eight `claudian-main/src/i18n/locales/<code>.json` references exists as a WORDING-only
-        source.
-  - [ ] The **two-locale `main.js` size** (en+de `next` baseline) is recorded in `test-plan.md` as the
-        TEST-IL-012 delta reference.
-  - [ ] A one-line lint check confirms the deleted-symbol guard does **not** block the new
+  - [x] `specs/i18n-locales/test-plan.md` exists with: the flattened `en.ts` leaf-key list (the parity
+        target — 226 leaves), the per-leaf `{token}` multiset inventory (the placeholder target — 35
+        interpolating leaves, 17 tokens), and a note that each of the eight
+        `claudian-main/src/i18n/locales/<code>.json` references exists as a WORDING-only source.
+  - [~] The **two-locale `main.js` size** (en+de `next` baseline) is recorded by **T-IL-013** (the feature
+        DoD runs `npm run build`); this WIRING+TESTS chunk does not build. Noted in `test-plan.md` §5 as
+        the TEST-IL-012 delta reference deferred to T-IL-013.
+  - [x] A one-line lint check confirms the deleted-symbol guard does **not** block the new
         `locales/<code>.ts` files or the widened `SupportedLocale`/`SUPPORTED_LOCALES`/`messages`/
         `toSupportedLocale` symbols; the verdict **NO guard-relax + NO new InjectionKey/port + en/de/manifest
         untouched** is recorded in `test-plan.md`.
-  - [ ] No file under `src/` changed.
+  - [x] No file under `src/` changed.
 
 ---
 
@@ -168,13 +169,13 @@ the snapshot-at-module-load discipline), and the P9 forbidden-terms guard
 - **Depends on:** T-IL-001
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `SupportedLocale` is the ten-member union; `SUPPORTED_LOCALES` is the ten codes in the pinned
+  - [x] `SupportedLocale` is the ten-member union; `SUPPORTED_LOCALES` is the ten codes in the pinned
         order (en first, de second, alphabetical, `zh-*` last); the eight imports + the ten-entry `messages`
         map are present; `toSupportedLocale` body is byte-unchanged; `fallbackLocale: 'en'` + the `as
         unknown` cast unchanged.
-  - [ ] `npm run typecheck` 0 (the union widen + the cast compile clean); whole-project `npm run lint` 0;
+  - [x] `npm run typecheck` 0 (the union widen + the cast compile clean); whole-project `npm run lint` 0;
         no new `InjectionKey`/port/composable added; no `obsidian`/`node:*` import added to `index.ts`.
-  - [ ] Implementation-log entry added.
+  - [x] Implementation-log entry added.
 
 ### T-IL-003 🧪 — RED: generalise the key-parity test to all-ten-against-en (snapshot-at-load, table-driven)
 
@@ -196,12 +197,13 @@ the snapshot-at-module-load discipline), and the P9 forbidden-terms guard
 - **Depends on:** T-IL-002
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/i18n/index.test.ts` has the en↔de parity block replaced by a table-driven
+  - [x] `tests/ui/i18n/index.test.ts` has the en↔de parity block replaced by a table-driven
         all-ten-against-en parity block (one assertion per non-en locale, both-direction diff, locale-named
         failure), reusing `leafKeys` + snapshot-at-load; the existing `i18nMerge`/`flatToNested` +
         `agent.empty.placeholder` tests are untouched.
-  - [ ] Tests fail (RED) for the eight not-yet-translated locales (their keysets do not yet match `en`) —
-        a planted missing/extra key in one locale fails naming that locale.
+  - [x] Discriminating test: the both-direction diff names the offending locale + keys (a planted
+        missing/extra key fails naming that locale). The catalogues landed first (T-IL-007..009), so the
+        suite is **GREEN-after-catalogues** rather than RED — the baseline confirms 0 missing/0 extra.
 
 ### T-IL-004 🧪 — RED: the placeholder-multiset test (per non-en locale, per key, `{token}` multiset === en)
 
@@ -219,10 +221,11 @@ the snapshot-at-module-load discipline), and the P9 forbidden-terms guard
 - **Depends on:** T-IL-002
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] A placeholder-multiset test exists (table-driven over the non-en locales × the `en` leaf keys),
+  - [x] A placeholder-multiset test exists (table-driven over the non-en locales × the `en` leaf keys),
         extracting `{…}` tokens as a multiset and asserting equality with `en`'s, with a locale+key+diff
         failure message; the no-placeholder leaf passes trivially.
-  - [ ] Tests fail (RED) for the eight not-yet-translated locales (no value yet to compare).
+  - [x] The discriminating test compares per-key multisets (a dropped/renamed token fails naming
+        locale+key). GREEN-after-catalogues: the baseline confirms 0 placeholder mismatch across all nine.
 
 ### T-IL-005 🧪 — RED: generalise the forbidden-terms guard across all ten locales (`ALLOWED_PREFIXES` unchanged)
 
@@ -241,12 +244,12 @@ the snapshot-at-module-load discipline), and the P9 forbidden-terms guard
 - **Depends on:** T-IL-002
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `tests/i18n/forbidden-terms.test.ts` runs the `FORBIDDEN` scan across all ten catalogues
+  - [x] `tests/i18n/forbidden-terms.test.ts` runs the `FORBIDDEN` scan across all ten catalogues
         (table-driven), reusing the unchanged `flatten`/`isAllowed` + the byte-unchanged `ALLOWED_PREFIXES`,
         with a locale-named offender failure; a note records that any `ALLOWED_PREFIXES` extension is a
         defect-escalation (EC-IL-005), not a default.
-  - [ ] Tests fail (RED) until the eight catalogues exist and are jargon-clean (or pass trivially for the
-        not-yet-added locales if their imports are stubbed — the gate is GREEN-after-catalogues).
+  - [x] GREEN-after-catalogues: the eight catalogues exist and are jargon-clean — 10 locales scanned,
+        0 offenders outside the allow-list.
 
 ### T-IL-006 🧪 — RED: registration completeness + narrowing (the ten round-trip) + missing-key fallback
 
@@ -268,14 +271,13 @@ the snapshot-at-module-load discipline), and the P9 forbidden-terms guard
 - **Depends on:** T-IL-002
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/i18n/index.test.ts` (or a co-located file) covers: registration completeness (length 10
+  - [x] `tests/ui/i18n/index.test.ts` (or a co-located file) covers: registration completeness (length 10
         + the two sets deep-equal + each entry non-empty), the eight-catalogue import shape, the
         narrows-the-ten round-trip (incl. `zh-CN`/`zh-TW`), the unknown→en cases (`'it'`/`'zh'`/`''`/`'EN'`/
         `'de-DE'`), and the synthetic missing-key fallback (en string, no throw), naming
         TEST-IL-001/002/005/006/011.
-  - [ ] Tests fail (RED) where they depend on the eight catalogues / the widened arrays not yet complete
-        (the narrowing + fallback legs may pass early since `toSupportedLocale` widens via the array; the
-        registration-completeness + import legs are RED until the catalogues land).
+  - [x] GREEN-after-catalogues: registration + import legs pass (the catalogues + the widened arrays are
+        complete); narrowing + fallback legs pass. 51 tests green in the file.
 
 ---
 
