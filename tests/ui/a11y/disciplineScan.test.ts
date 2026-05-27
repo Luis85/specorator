@@ -42,9 +42,15 @@ function resolveBaseRef(): string | null {
 
 const BASE_REF = resolveBaseRef();
 
-/** The added (`+`) lines of the P12 src/ diff vs the next baseline. */
+/**
+ * The added (`+`) lines of the P12 src/ diff vs the next baseline. Returns `[]`
+ * when no baseline is reachable — `describe.skipIf` skips the `it` bodies, but the
+ * describe *factory* still runs at collection time, so this must never invoke git
+ * with a null ref (that crashed CI's shallow checkout: `git diff  -- src`).
+ */
 function addedSrcLines(): string[] {
-	const diff = git(['diff', BASE_REF!, '--', 'src']);
+	if (BASE_REF === null) return [];
+	const diff = git(['diff', BASE_REF, '--', 'src']);
 	return diff
 		.split('\n')
 		.filter((line) => line.startsWith('+') && !line.startsWith('+++'))
