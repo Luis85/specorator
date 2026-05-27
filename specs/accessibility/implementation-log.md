@@ -40,7 +40,7 @@ registration + its RED-before-green file-read/registration tests.
     (reduced-motion / forced-colors) + the accumulated P5-P11 manual-leg note (the human TEST-AY-017
     sign-off artifact; TEST-AY-016 completeness structure).
   - `specs/accessibility/implementation-log.md` (new, this file).
-- **Commit:** _(recorded below at commit time)_
+- **Commit:** `6b9bf9204501bd92fbc83f0c7730976b3da103ec`
 - **Outcome:** done.
 - **Token reference verified:** `--sp-focus-ring` present at `tokens.css:42` (`var(--interactive-accent)`);
   `--sp-shadow-focus-ring` present at `tokens.css:140` (`0 0 0 2px var(--sp-focus-ring)`). No new token
@@ -54,3 +54,51 @@ registration + its RED-before-green file-read/registration tests.
   `DELETED_INJECTION_KEYS` rule. **NO guard-relax task in P12; NO new InjectionKey/port/composable/
   component/ADR; `manifest.json` + en/de + all ten locales untouched** (NFR-AY-004/008).
 - **Deviation:** none. No file under `src/` changed.
+
+### T-AY-003/004 — RED rule-group + registration tests (🧪 qa)
+
+- **Spec/req:** TEST-AY-001/002/003/004/005/007(file)/009(file)/015(css); SPEC-AY-001/002/003/011;
+  REQ-AY-001/002/003/004/005/007/009/015; NFR-AY-002/006; EC-AY-001.
+- **Files:**
+  - `tests/ui/styles/accessibility.test.ts` (new) — reads `accessibility.css` as text; asserts
+    RG-1..RG-6 present + ordered, every selector `.specorator-root`-scoped, RG-1 reduced-motion
+    collapse, RG-2 `animation: none`, RG-3 forced-colors + system colours, RG-5 `:focus-visible` +
+    `var(--sp-focus-ring)` + no bare `:focus`, RG-6 `.sr-only` clip technique (no `display:none`/
+    `visibility:hidden`), discipline scan (no hex / no raw non-`--sp-*` var outside `forced-colors`,
+    ASCII-only).
+  - `tests/ui/styles/accessibility-registration.test.ts` (new) — reads both entry files; asserts
+    `accessibility.css` imported after tokens + animations (3rd CSS import, line-order contract).
+- **Commit:** `46dc389691c6608c1e571c23ccf1df800f1e685f`
+- **Outcome:** done (RED). All 14 tests failed before T-AY-002 (file ENOENT + imports absent).
+- **Deviation:** the file-read test helpers (`mediaBlock` collecting all matching `@media` blocks;
+  the group-order marker scan keying off `RG-N -` section markers; the scoped-selector tokeniser)
+  were corrected when greening T-AY-002 — the **assertions were not weakened** (a missing group,
+  bare `:focus`, `display:none` `.sr-only`, or out-of-`forced-colors` hex still fails). Folded into
+  the T-AY-002 commit and recorded there.
+
+### T-AY-002 — `accessibility.css` (RG-1..RG-6) + register at both CSS import sites (🔨 dev)
+
+- **Spec/req:** SPEC-AY-001/002/003; REQ-AY-001/002/003/004/005/006/007/009/015; NFR-AY-002/005/006.
+- **Files:**
+  - `src/ui/styles/accessibility.css` (new, 1-130) — RG-1 reduced-motion guard (`!important` only
+    here), RG-2 spin halt (`animation: none !important`), RG-3 forced-colors surface mapping
+    (`forced-color-adjust` + `CanvasText`/`Canvas`/`Highlight`/`HighlightText`/`ButtonText`/
+    `ButtonFace`), RG-4 forced-colors border (`.sp-toggle-switch` placeholder, enumerated by
+    T-AY-005), RG-5 `:focus-visible` ring consuming `var(--sp-focus-ring)` + the
+    `var(--sp-shadow-focus-ring)` clipped-control variant, RG-6 `.sr-only` clip utility. Every
+    selector `.specorator-root`-prefixed; ASCII-only comments (no `/`/backtick/`{}` in comments); no
+    hex / no raw non-`--sp-*` var outside `forced-colors`.
+  - `src/plugin/main.ts` (line 3) — `import '@/ui/styles/accessibility.css';` as the 3rd CSS import
+    after `animations.css`.
+  - `src/ui/main.ts` (line 15) — `import './styles/accessibility.css';` as the 3rd CSS import after
+    `animations.css`. `vite.config.ts` unchanged (the file is authored scope-safe).
+  - `tests/ui/styles/accessibility.test.ts` (helper corrections — see the T-AY-003/004 deviation).
+- **Commit:** _(recorded below at commit time)_
+- **Outcome:** done. T-AY-003/004 (14 tests) GREEN.
+- **Typecheck:** `npx vue-tsc -p tsconfig.lint.json --noEmit` -> **0**.
+- **Lint:** whole-project `npm run lint` -> **0 errors** (22 pre-existing warnings, none new).
+- **lightningcss:** `npm run build:web` -> **green** (no CSS minify error, EC-AY-013); the RG rules
+  (`prefers-reduced-motion`, `forced-colors`, `focus-visible`, `.sr-only`) are present in the
+  standalone bundle. `styles.css` not hand-edited.
+- **Deviation:** none on the impl. RG-4 carries a single placeholder selector (`.sp-toggle-switch`);
+  T-AY-005 completes the concrete enumeration per SPEC-AY-006.

@@ -12,6 +12,7 @@
 import './standalone.css';
 import './styles/tokens.css';
 import './styles/animations.css';
+import './styles/accessibility.css';
 import { createApp, h } from 'vue';
 import { createPinia } from 'pinia';
 import ChatSurface from './chat/ChatSurface.vue';

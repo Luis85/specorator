@@ -31,26 +31,32 @@ function stripComments(css: string): string {
 	return css.replace(/\/\*[^]*?\*\//g, '');
 }
 
-/** Extract the body of the first `@media (<query>) { ... }` block whose header matches. */
+/** Concatenate the bodies of every `@media (<query>) { ... }` block whose header matches. */
 function mediaBlock(css: string, queryFragment: string): string {
 	const stripped = stripComments(css);
-	const headerRe = new RegExp(`@media[^{]*${queryFragment}[^{]*\\{`, 'i');
-	const m = headerRe.exec(stripped);
-	if (!m) return '';
-	// Walk braces from the header's opening `{` to its matching close.
-	let depth = 0;
-	let start = -1;
-	for (let i = m.index; i < stripped.length; i++) {
-		const ch = stripped[i];
-		if (ch === '{') {
-			if (depth === 0) start = i + 1;
-			depth++;
-		} else if (ch === '}') {
-			depth--;
-			if (depth === 0) return stripped.slice(start, i);
+	const headerRe = new RegExp(`@media[^{]*${queryFragment}[^{]*\\{`, 'gi');
+	const bodies: string[] = [];
+	let m: RegExpExecArray | null;
+	while ((m = headerRe.exec(stripped)) !== null) {
+		// Walk braces from the header's opening `{` to its matching close.
+		let depth = 0;
+		let start = -1;
+		for (let i = m.index; i < stripped.length; i++) {
+			const ch = stripped[i];
+			if (ch === '{') {
+				if (depth === 0) start = i + 1;
+				depth++;
+			} else if (ch === '}') {
+				depth--;
+				if (depth === 0) {
+					bodies.push(stripped.slice(start, i));
+					headerRe.lastIndex = i + 1;
+					break;
+				}
+			}
 		}
 	}
-	return '';
+	return bodies.join('\n');
 }
 
 describe('src/ui/styles/accessibility.css — rule-group contract (SPEC-AY-001)', () => {
@@ -60,30 +66,34 @@ describe('src/ui/styles/accessibility.css — rule-group contract (SPEC-AY-001)'
 
 	it('TEST-AY-001: declares all six rule groups RG-1..RG-6 in order', () => {
 		const css = loadA11y();
-		const groups = ['RG-1', 'RG-2', 'RG-3', 'RG-4', 'RG-5', 'RG-6'];
+		// Match each rule-group SECTION marker (`RG-N -` at the head of its comment),
+		// not bare `RG-N` prose mentions elsewhere (e.g. the file header naming the set).
 		let lastIdx = -1;
-		for (const g of groups) {
-			const idx = css.indexOf(g);
-			expect(idx, `expected rule-group marker ${g} present`).toBeGreaterThanOrEqual(0);
-			expect(idx, `expected ${g} to appear after the previous group (in order)`).toBeGreaterThan(
-				lastIdx,
-			);
+		for (let n = 1; n <= 6; n++) {
+			const re = new RegExp(`RG-${n}\\s*-`);
+			const idx = css.search(re);
+			expect(idx, `expected rule-group section marker RG-${n} present`).toBeGreaterThanOrEqual(0);
+			expect(
+				idx,
+				`expected RG-${n} section to appear after the previous group (in order)`,
+			).toBeGreaterThan(lastIdx);
 			lastIdx = idx;
 		}
 	});
 
 	it('TEST-AY-001: every selector is `.specorator-root`-scoped (no rule escapes the subtree)', () => {
 		const stripped = stripComments(loadA11y());
-		// Collect the selector text preceding each declaration block `{`, excluding
-		// at-rule headers (`@media`, `@keyframes`, …). Every concrete selector group
-		// must reference `.specorator-root`.
-		const blockRe = /([^{}@]+)\{/g;
-		let m: RegExpExecArray | null;
+		// Collect the selector text preceding each `{`. Tokenise on `{` and `}` so the
+		// segment after an opening brace (declarations) and at-rule headers (`@media`)
+		// are dropped; every concrete style-rule selector must reference
+		// `.specorator-root`.
 		const offenders: string[] = [];
-		while ((m = blockRe.exec(stripped)) !== null) {
-			const sel = m[1].trim();
-			if (sel === '' || sel.startsWith('@')) continue;
-			// The bare `.specorator-root { forced-color-adjust: auto; }` rule in RG-3 is fine.
+		const segments = stripped.split(/[{}]/);
+		for (const raw of segments) {
+			const sel = raw.trim();
+			if (sel === '') continue;
+			if (sel.startsWith('@')) continue; // at-rule header (@media …)
+			if (sel.includes(':')) continue; // a declaration body (prop: value) or empty between braces
 			if (!sel.includes('.specorator-root')) offenders.push(sel);
 		}
 		expect(offenders, `unscoped selectors: ${JSON.stringify(offenders)}`).toHaveLength(0);
