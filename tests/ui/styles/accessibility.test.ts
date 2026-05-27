@@ -138,11 +138,16 @@ describe('src/ui/styles/accessibility.css — RG-4 forced-colors borders (SPEC-A
 	it('TEST-AY-006 (file leg): RG-4 enumerates the background-cue-only controls with a currentColor border', () => {
 		const block = mediaBlock(loadA11y(), 'forced-colors:\\s*active');
 		expect(block, 'expected a `forced-colors: active` @media block').not.toBe('');
-		// Each enumerated control whose normal affordance is a background fill/wash.
+		// Each enumerated control whose normal affordance is a background fill/wash,
+		// keyed to the real swept-component selectors (TEST-AY-006 mount leg):
+		// the toggle switches are role="switch"; the chips are .sp-file-chips__chip
+		// / .sp-image-thumb; state pills carry data-state; tab badges are .sp-tab;
+		// the selected dropdown option is [role="option"][aria-selected="true"].
 		const controls = [
-			'.sp-toggle-switch',
+			'[role="switch"]',
 			'[data-state]',
-			'.sp-chip',
+			'.sp-file-chips__chip',
+			'.sp-image-thumb',
 			'.sp-tab',
 			'[role="option"][aria-selected="true"]',
 		];
