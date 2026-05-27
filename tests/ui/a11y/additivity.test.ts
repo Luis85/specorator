@@ -42,6 +42,30 @@ function git(args: string[]): string {
 	return execFileSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8' }).trim();
 }
 
+/**
+ * The baseline ref to diff against — `next` locally, `origin/next` in a fetched CI
+ * checkout. CI's shallow PR checkout may have NEITHER (no local `next` branch), in
+ * which case the diff-based additive guards SKIP (the mount-based render-additivity
+ * checks below still run; the diff guards are meaningful only where a baseline is
+ * reachable — locally + any base-fetched env). Never errors on a missing ref.
+ */
+function resolveBaseRef(): string | null {
+	for (const ref of ['next', 'origin/next']) {
+		try {
+			execFileSync('git', ['rev-parse', '--verify', '--quiet', ref], {
+				cwd: REPO_ROOT,
+				stdio: 'pipe',
+			});
+			return ref;
+		} catch {
+			/* ref not present in this checkout — try the next candidate */
+		}
+	}
+	return null;
+}
+
+const BASE_REF = resolveBaseRef();
+
 /** The exact P12 allow-list of `src/` files (additive layer + entry edits + host). */
 const ALLOWED = new Set([
 	'src/plugin/main.ts',
@@ -80,18 +104,18 @@ describe('additivity invariant (TEST-AY-014)', () => {
 		setActivePinia(createPinia());
 	});
 
-	it('the locale output is byte-identical to the next baseline (NFR-AY-004/008)', () => {
-		const diff = git(['diff', '--name-only', 'next', '--', 'src/ui/i18n/locales']);
+	it.skipIf(BASE_REF === null)('the locale output is byte-identical to the next baseline (NFR-AY-004/008)', () => {
+		const diff = git(['diff', '--name-only', BASE_REF!, '--', 'src/ui/i18n/locales']);
 		expect(diff, `locale files changed vs next:\n${diff}`).toBe('');
 	});
 
-	it('manifest.json is byte-identical to the next baseline (NFR-AY-008)', () => {
-		const diff = git(['diff', '--name-only', 'next', '--', 'manifest.json']);
+	it.skipIf(BASE_REF === null)('manifest.json is byte-identical to the next baseline (NFR-AY-008)', () => {
+		const diff = git(['diff', '--name-only', BASE_REF!, '--', 'manifest.json']);
 		expect(diff, 'manifest.json changed vs next').toBe('');
 	});
 
-	it('the src/ diff vs next touches only the P12 additive allow-list (no swept surface)', () => {
-		const out = git(['diff', '--name-only', 'next', '--', 'src']);
+	it.skipIf(BASE_REF === null)('the src/ diff vs next touches only the P12 additive allow-list (no swept surface)', () => {
+		const out = git(['diff', '--name-only', BASE_REF!, '--', 'src']);
 		const changed = out.length === 0 ? [] : out.split('\n').map((p) => p.replace(/\\/g, '/'));
 		const offenders = changed.filter((p) => !ALLOWED.has(p));
 		expect(offenders, `unexpected swept-surface changes vs next: ${JSON.stringify(offenders)}`).toEqual(

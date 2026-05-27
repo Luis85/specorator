@@ -20,16 +20,38 @@ function git(args: string[]): string {
 	return execFileSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8' });
 }
 
+/**
+ * The baseline ref — `next` locally, `origin/next` in a fetched CI checkout, or
+ * `null` when neither is present (CI's shallow PR checkout). The diff scan SKIPS
+ * when null — it is meaningful only where a baseline is reachable; never errors.
+ */
+function resolveBaseRef(): string | null {
+	for (const ref of ['next', 'origin/next']) {
+		try {
+			execFileSync('git', ['rev-parse', '--verify', '--quiet', ref], {
+				cwd: REPO_ROOT,
+				stdio: 'pipe',
+			});
+			return ref;
+		} catch {
+			/* ref not present — try the next candidate */
+		}
+	}
+	return null;
+}
+
+const BASE_REF = resolveBaseRef();
+
 /** The added (`+`) lines of the P12 src/ diff vs the next baseline. */
 function addedSrcLines(): string[] {
-	const diff = git(['diff', 'next', '--', 'src']);
+	const diff = git(['diff', BASE_REF!, '--', 'src']);
 	return diff
 		.split('\n')
 		.filter((line) => line.startsWith('+') && !line.startsWith('+++'))
 		.map((line) => line.slice(1));
 }
 
-describe('discipline scan — no added raw-HTML sink (TEST-AY-015 diff leg)', () => {
+describe.skipIf(BASE_REF === null)('discipline scan — no added raw-HTML sink (TEST-AY-015 diff leg)', () => {
 	const added = addedSrcLines();
 
 	it('the P12 diff adds no innerHTML / outerHTML / insertAdjacentHTML assignment', () => {
