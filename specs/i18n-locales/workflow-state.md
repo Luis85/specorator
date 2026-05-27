@@ -1,10 +1,10 @@
 ---
 feature: i18n-locales
 area: IL
-current_stage: implementation
+current_stage: review
 status: active
 last_updated: 2026-05-27
-last_agent: dev (T-IL-001..006 wiring+tests chunk)
+last_agent: reviewer (Stage-9 review + traceability)
 epic: claudian-reboot
 phase: P11
 integration_branch: next
@@ -19,8 +19,8 @@ artifacts:
   implementation-log.md: in-progress  # T-IL-001..009 logged; gate T-IL-010..013 remain
   test-plan.md: in-progress           # T-IL-001 baseline + guard verdict captured
   test-report.md: pending
-  review.md: pending
-  traceability.md: pending
+  review.md: complete (REVIEW-IL-001 — verdict APPROVE; 0 P1/P2; 1 non-blocking nit R-IL-001)
+  traceability.md: complete (TRACE-IL-001 — all 12 REQ-IL chained, no orphans)
   release-notes.md: pending
   retrospective.md: pending
 ---
@@ -39,7 +39,7 @@ artifacts:
 | 6. Tasks | `tasks.md` | complete |
 | 7. Implementation | `implementation-log.md` + code | pending |
 | 8. Testing | `test-plan.md`, `test-report.md` | pending |
-| 9. Review | `review.md`, `traceability.md` | pending |
+| 9. Review | `review.md`, `traceability.md` | complete |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
 
@@ -181,4 +181,23 @@ catalogs is large).**
                           polish, P12), T-IL-013 (feature DoD + bundle delta + draft PR into next). Next
                           agent: dev/qa for the T-IL-010..013 gate chunk. Verification performed: vue-tsc 0,
                           lint 0 errors, 61 i18n tests green.
+2026-05-27 (reviewer):    Stage-9 review complete (light — mechanical/additive phase). REVIEW-IL-001
+                          verdict = APPROVE. All 12 REQ-IL satisfied (REQ-IL-012 build/bundle = parent's
+                          leg). GATES CONFIRMED GREEN by reviewer: `npx vitest run tests/ui/i18n/
+                          index.test.ts tests/i18n/forbidden-terms.test.ts` = 2 files / 61 tests pass
+                          (all-ten parity + placeholder-multiset + forbidden-terms-all-ten + registration/
+                          narrowing/fallback). ADDITIVITY confirmed: `git diff next..HEAD -- en.ts de.ts
+                          manifest.json` = empty; index.ts widen is the only non-locale change (four sites,
+                          toSupportedLocale body unchanged save fr→it doc-comment). SPOT-CHECK: fr.ts /
+                          zh-CN.ts genuinely translated (not English copies); brand tokens Specorator/Claude/
+                          Codex/Opencode/MCP intact across all 8; placeholders verbatim ASCII; zh-CN ≠ zh-TW.
+                          No P1/P2. FINDINGS: R-IL-001 (N3 non-blocking — permission.plan 'PLAN' all-caps
+                          badge can't carry case in CJK; '计划'/'計畫', ru upper-cases 'ПЛАН'; accept, fold
+                          into T-IL-012); R-IL-002 (informational — native-speaker polish pending). TRACE-IL-001
+                          regenerated: all 12 REQ chained REQ↔SPEC↔TASK↔CODE↔TEST, no orphan test/task/ADR.
+                          HAND-OFF → release-manager: complete the full verify chain + `npm run build`
+                          (record main.js bundle-size delta at T-IL-013, TEST-IL-012) + open draft PR into
+                          next; carry PENDING manual leg T-IL-012 (native-speaker polish) + nit R-IL-001 to
+                          the epic final gate (P12/future) — neither gates P11. Verification performed: 61
+                          i18n tests green, en/de/manifest zero-diff confirmed.
 ```
