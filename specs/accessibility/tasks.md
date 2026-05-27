@@ -147,18 +147,18 @@ trap/restore), the `ChatSurface.vue` busy region (already `aria-live="polite"` +
 - **Depends on:** —
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] `specs/accessibility/test-plan.md` exists with: the `--sp-focus-ring`/`--sp-shadow-focus-ring`
+  - [x] `specs/accessibility/test-plan.md` exists with: the `--sp-focus-ring`/`--sp-shadow-focus-ring`
         token-reference note, the two import-site insertion points (`main.ts:2` + `ui/main.ts:14`), the
         five-keyframe reduced-motion source inventory, the enumerated RG-4 background-cue-only control
         selectors (toggle / pill / chip / `.sp-tab` / selected option), and the claudian
         minimal-focus-visible-only reference note (meet = RG-5; beat = RG-1..4 + RG-6).
-  - [ ] `specs/accessibility/parity-screenshots.md` scaffolded — every charter §3 surface listed at
+  - [x] `specs/accessibility/parity-screenshots.md` scaffolded — every charter §3 surface listed at
         320/520/720 px in light + dark, with a baseline (claudian) column and a Specorator column (the
         TEST-AY-016 completeness structure; cells placeholder until the screenshots are captured).
-  - [ ] A one-line lint check confirms the deleted-symbol guard does **not** block the new
+  - [x] A one-line lint check confirms the deleted-symbol guard does **not** block the new
         `accessibility.css` / the two import lines / the ARIA edits; the verdict **NO guard-relax + NO new
         InjectionKey/port/component/ADR + manifest/locales untouched** is recorded in `test-plan.md`.
-  - [ ] No file under `src/` changed.
+  - [x] No file under `src/` changed.
 
 ---
 
@@ -203,15 +203,15 @@ trap/restore), the `ChatSurface.vue` busy region (already `aria-live="polite"` +
 - **Depends on:** T-AY-001, T-AY-003 (RED), T-AY-004 (RED)
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `src/ui/styles/accessibility.css` exists with RG-1..RG-6 in order, every selector
+  - [x] `src/ui/styles/accessibility.css` exists with RG-1..RG-6 in order, every selector
         `.specorator-root`-prefixed, ASCII-only comments, `!important` only on RG-1, no hex / no raw
         Obsidian var outside the `forced-colors` block, RG-5 consuming the existing
         `--sp-focus-ring`/`--sp-shadow-focus-ring` (no new token), RG-5 using `:focus-visible` (not bare
         `:focus`), RG-2 setting `animation: none` (not a duration), RG-6 using the clip technique (not
         `display:none`).
-  - [ ] `accessibility.css` is imported as the **3rd** CSS import (after tokens + animations) at both
+  - [x] `accessibility.css` is imported as the **3rd** CSS import (after tokens + animations) at both
         `src/plugin/main.ts` and `src/ui/main.ts`; `vite.config.ts` unchanged.
-  - [ ] The RED file-read (T-AY-003) + registration (T-AY-004) tests now GREEN; whole-project
+  - [x] The RED file-read (T-AY-003) + registration (T-AY-004) tests now GREEN; whole-project
         `npm run lint` 0 + `npm run typecheck` 0 + `npm run test` green; implementation-log entry added.
 
 ### T-AY-003 🧪 — RED: `accessibility.css` rule-group presence (RG-1..RG-6, `.specorator-root`-scoped, discipline)
@@ -237,12 +237,12 @@ trap/restore), the `ChatSurface.vue` busy region (already `aria-live="polite"` +
 - **Depends on:** T-AY-001
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] `tests/ui/styles/accessibility.test.ts` reads the CSS file as text and asserts: RG-1..RG-6 present
+  - [x] `tests/ui/styles/accessibility.test.ts` reads the CSS file as text and asserts: RG-1..RG-6 present
         + ordered, every selector `.specorator-root`-scoped, RG-1 reduced-motion collapse, RG-2
         `animation: none`, RG-3 forced-colors + system colours, RG-5 `:focus-visible` + `--sp-focus-ring`,
         RG-6 clip technique, and the discipline scan (no hex / no raw var outside `forced-colors`, ASCII
         comments).
-  - [ ] Discriminating: a missing rule group, a bare-`:focus` ring, a `display:none` `.sr-only`, or a hex
+  - [x] Discriminating: a missing rule group, a bare-`:focus` ring, a `display:none` `.sr-only`, or a hex
         literal outside `forced-colors` fails the suite naming the offending group. RED until T-AY-002;
         GREEN once the file lands.
 
@@ -260,9 +260,9 @@ trap/restore), the `ChatSurface.vue` busy region (already `aria-live="polite"` +
 - **Depends on:** T-AY-001
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] A registration test reads both `src/plugin/main.ts` + `src/ui/main.ts` and asserts each imports
+  - [x] A registration test reads both `src/plugin/main.ts` + `src/ui/main.ts` and asserts each imports
         `accessibility.css` after the tokens + animations imports (3rd CSS import, line-order contract).
-  - [ ] Discriminating: a missing import in either entry, or an import placed before animations, fails
+  - [x] Discriminating: a missing import in either entry, or an import placed before animations, fails
         naming the offending entry. RED until T-AY-002; GREEN once both import lines land.
 
 ### T-AY-005 🔨 — `feat(ay):` enumerate the RG-4 forced-colors-border selector list (the swept background-cue-only controls)
@@ -283,10 +283,10 @@ trap/restore), the `ChatSurface.vue` busy region (already `aria-live="polite"` +
 - **Depends on:** T-AY-002
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] RG-4 in `accessibility.css` enumerates the concrete selectors for the toggle switch, state pills,
+  - [x] RG-4 in `accessibility.css` enumerates the concrete selectors for the toggle switch, state pills,
         chips, `.sp-tab` badges, and the selected dropdown option, each given a `currentColor` border
         (or non-shifting outline) inside the `forced-colors` block.
-  - [ ] The TEST-AY-006 file-read leg (RG-4 enumerates the background-cue-only controls) passes; default
+  - [x] The TEST-AY-006 file-read leg (RG-4 enumerates the background-cue-only controls) passes; default
         render unchanged outside `forced-colors`; whole-project `npm run lint` 0 + `npm run typecheck` 0 +
         `npm run test` green; implementation-log entry added.
 

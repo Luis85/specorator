@@ -115,7 +115,7 @@ registration + its RED-before-green file-read/registration tests.
   - `tests/ui/styles/accessibility.test.ts` — adds the TEST-AY-006 file-read leg asserting RG-4
     lists each enumerated control with a `currentColor` border (the coverage-table `006->T-AY-003(file)`
     leg; the mount leg is T-AY-006, Chunk 2).
-- **Commit:** _(recorded below at commit time)_
+- **Commit:** `e2a1c53d3c2db31e4e3f2fc2941c913d8d01c1c2`
 - **Outcome:** done. The TEST-AY-006 file-read leg passes (15 accessibility-css tests GREEN).
 - **Typecheck:** `npx vue-tsc -p tsconfig.lint.json --noEmit` -> **0**.
 - **Lint:** whole-project `npm run lint` -> **0 errors** (22 pre-existing warnings, none new).

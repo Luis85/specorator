@@ -4,7 +4,7 @@ area: AY
 current_stage: tasks
 status: active
 last_updated: 2026-05-27
-last_agent: planner (tasks complete; hand-off → /spec:implement)
+last_agent: dev (Chunk 1 T-AY-001..005 complete; hand-off → qa/dev for Chunk 2)
 epic: claudian-reboot
 phase: P12
 integration_branch: next
@@ -16,8 +16,8 @@ artifacts:
   design.md: complete (DESIGN-AY-001, Parts A/B/C; no new port, no new ADR)
   spec.md: complete (SPEC-AY-001..011 + TEST-AY-001..017; coverage table)
   tasks.md: complete (TASKS-AY-001, 18 tasks T-AY-001..018; 3 chunks + GATE; coverage sanity-check)
-  implementation-log.md: pending
-  test-plan.md: pending
+  implementation-log.md: in-progress (Chunk 1 T-AY-001..005 logged; Chunk 2/3 + gate remain)
+  test-plan.md: in-progress (T-AY-001 baseline + guard-verify note; parity-screenshots.md scaffolded)
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -37,8 +37,8 @@ artifacts:
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | pending |
-| 8. Testing | `test-plan.md`, `test-report.md` | pending |
+| 7. Implementation | `implementation-log.md` + code | in-progress (Chunk 1 done) |
+| 8. Testing | `test-plan.md`, `test-report.md` | in-progress (baseline + Chunk-1 tests) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
@@ -167,4 +167,27 @@ OUR `src/ui/styles/{tokens,animations}.css` + the P1-P11 components/modals for t
                           (T-AY-003/004 RED → T-AY-002/005). Suggested dispatch: C1 accessibility.css;
                           C2 Chunk-2 RED scaffold; C3 the three fills (parallel); C4 gate tests; C5
                           T-AY-018 gate then T-AY-017 human sign-off.
+2026-05-27 (dev): Chunk 1 (T-AY-001..005) COMPLETE on feature/accessibility (off next). Commits:
+                          T-AY-001 6b9bf920 (docs(ay): test-plan baseline + guard-verify note +
+                          parity-screenshots.md all-surfaces matrix scaffold + implementation-log);
+                          T-AY-003/004 46dc3896 (test(ay): RED RG-1..6 file-read + both-site
+                          registration tests, confirmed RED — file/imports absent);
+                          T-AY-002 19144399 (feat(ay): src/ui/styles/accessibility.css RG-1..RG-6,
+                          .specorator-root scoped, ASCII-only lightningcss-safe comments, no hex /
+                          no raw non --sp-* var outside forced-colors; registered as 3rd CSS import
+                          after tokens+animations at src/plugin/main.ts:3 + src/ui/main.ts:15;
+                          RG-5 reuses --sp-focus-ring / --sp-shadow-focus-ring, NO new token);
+                          T-AY-005 e2a1c53d (feat(ay): RG-4 forced-colors-border enumeration —
+                          .sp-toggle-switch / [data-state] / .sp-chip / .sp-tab /
+                          [role=option][aria-selected=true]). GREEN: 15 accessibility-css tests
+                          (TEST-AY-001/002/003/004/005/006-file/007-file/009-file/015-css). vue-tsc 0,
+                          whole-project lint 0 errors (22 pre-existing warnings), build:web lightningcss
+                          GREEN (RG rules present in the standalone bundle; styles.css not hand-edited).
+                          DEVIATION: RED test-helper bugs (mediaBlock all-blocks; RG-N section-marker
+                          order scan; scoped-selector tokeniser) corrected when greening T-AY-002 —
+                          assertions NOT weakened; folded into the T-AY-002 commit + logged.
+                          REMAINING (out of this chunk; parent dispatches): Chunk 2 (T-AY-006..013
+                          behaviour-fix sweep), Chunk 3 (T-AY-014..016 additivity/discipline/screenshot
+                          completeness), GATE (T-AY-018 verify + draft next PR), T-AY-017 (HUMAN final
+                          parity sign-off). Next agent: qa (Chunk 2 RED mount tests, dispatch C2).
 ```
