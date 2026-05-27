@@ -4,7 +4,7 @@ area: AY
 current_stage: tasks
 status: active
 last_updated: 2026-05-27
-last_agent: dev (Chunk 1 T-AY-001..005 complete; hand-off → qa/dev for Chunk 2)
+last_agent: dev (Chunk 2 T-AY-006..013 + Chunk 3 T-AY-014..016 complete; hand-off → parent for T-AY-018 gate + T-AY-017 human sign-off)
 epic: claudian-reboot
 phase: P12
 integration_branch: next
@@ -16,8 +16,8 @@ artifacts:
   design.md: complete (DESIGN-AY-001, Parts A/B/C; no new port, no new ADR)
   spec.md: complete (SPEC-AY-001..011 + TEST-AY-001..017; coverage table)
   tasks.md: complete (TASKS-AY-001, 18 tasks T-AY-001..018; 3 chunks + GATE; coverage sanity-check)
-  implementation-log.md: in-progress (Chunk 1 T-AY-001..005 logged; Chunk 2/3 + gate remain)
-  test-plan.md: in-progress (T-AY-001 baseline + guard-verify note; parity-screenshots.md scaffolded)
+  implementation-log.md: in-progress (Chunk 1 T-AY-001..005 + Chunk 2 T-AY-006..013 + Chunk 3 T-AY-014..016 logged; T-AY-018 gate + T-AY-017 human sign-off remain)
+  test-plan.md: in-progress (T-AY-001 baseline + guard-verify note; parity-screenshots.md complete — TEST-AY-016 green)
   test-report.md: pending
   review.md: pending
   traceability.md: pending
@@ -37,8 +37,8 @@ artifacts:
 | 4. Design | `design.md` | complete |
 | 5. Specification | `spec.md` | complete |
 | 6. Tasks | `tasks.md` | complete |
-| 7. Implementation | `implementation-log.md` + code | in-progress (Chunk 1 done) |
-| 8. Testing | `test-plan.md`, `test-report.md` | in-progress (baseline + Chunk-1 tests) |
+| 7. Implementation | `implementation-log.md` + code | in-progress (Chunk 1+2+3 done; T-AY-017/018 remain) |
+| 8. Testing | `test-plan.md`, `test-report.md` | in-progress (TEST-AY-001..016 green; TEST-AY-017 human) |
 | 9. Review | `review.md`, `traceability.md` | pending |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
@@ -190,4 +190,34 @@ OUR `src/ui/styles/{tokens,animations}.css` + the P1-P11 components/modals for t
                           behaviour-fix sweep), Chunk 3 (T-AY-014..016 additivity/discipline/screenshot
                           completeness), GATE (T-AY-018 verify + draft next PR), T-AY-017 (HUMAN final
                           parity sign-off). Next agent: qa (Chunk 2 RED mount tests, dispatch C2).
+2026-05-27 (dev): Chunk 2 (T-AY-006..013) + Chunk 3 (T-AY-014..016) COMPLETE on feature/accessibility.
+                          Commits: T-AY-006 46869990 (forced-colors RG-4 controls mount leg + corrected
+                          the RG-4 enumeration to the REAL swept selectors [role=switch] /
+                          .sp-file-chips__chip / .sp-image-thumb / [data-state] / .sp-tab /
+                          [role=option][aria-selected] — the T-AY-005 .sp-toggle-switch/.sp-chip were
+                          dead; the mount leg surfaced it); T-AY-007 8eb7c8da (focus-visible reachability
+                          + keyboard + accessible names — VERIFY-ONLY, all controls already labelled);
+                          T-AY-008 2b59482c (RED live-region: busy verify + notice-host RED); T-AY-009
+                          7603abf2 (collapsible aria-expanded flips + icon-only labels — VERIFY-ONLY, all
+                          via SpCollapsible / already labelled); T-AY-011 5fcc472e (FILL: NoticeLiveRegion.vue
+                          — the .sr-only standalone notice live region on the existing sp:notice channel,
+                          no new port; wired into ui/main.ts); T-AY-013 39121ad5 (modal trap/restore
+                          structural verify — all 8 seams extend Obsidian Modal; added a minimal Modal to
+                          the obsidian test stub); T-AY-014 7ead8bb6 (additivity invariant — locale +
+                          manifest byte-identical, src/ diff = ONLY the P12 allow-list, swept renders
+                          intact); T-AY-015 07c1fb7f (discipline scan — no added innerHTML/v-html sink);
+                          T-AY-016 3f103ef2 (parity-screenshots.md completeness + matrix marked complete).
+                          T-AY-010 + T-AY-012 = VERIFY-ONLY no-op (no gap found; logged, no code change).
+                          VERIFICATION: vue-tsc 0; whole-project lint 0 errors (22 pre-existing warnings);
+                          a11y + styles suite 80 green; P5-P11 regression (TabBar/ChatComposer/FileChips/
+                          ImageThumb/SpCollapsible/ToolCallBlock/ChatSurface/ServiceTierToggle/
+                          PermissionToggle/ui/main/modalSeam) 102 green. ADDITIVITY CONFIRMED: src/ diff
+                          vs next = accessibility.css + plugin/main.ts + ui/main.ts + NoticeLiveRegion.vue
+                          ONLY; no swept template, no locale, no manifest changed. GENUINE FILLS =
+                          NoticeLiveRegion (SPEC-AY-004 gap) + the RG-4 real-selector correction; all else
+                          verify-only (the per-phase a11y sweep was thorough, as designed). REMAINING
+                          (PARENT-OWNED, not executed): T-AY-018 (the gate — full verify + lightningcss
+                          build:web + draft next PR) + T-AY-017 (HUMAN final parity sign-off, 👤). DID NOT
+                          run verify/build/build:web/docs:api; DID NOT push. Next agent: parent (T-AY-018
+                          gate, then present T-AY-017 to the human + open — do NOT merge — next→develop).
 ```

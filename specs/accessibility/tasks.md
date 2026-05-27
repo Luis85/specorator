@@ -315,10 +315,10 @@ trap/restore), the `ChatSurface.vue` busy region (already `aria-live="polite"` +
 - **Depends on:** T-AY-001
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] A mount test with co-located PageObject(s) (data-testid only) asserts the RG-4-listed controls
+  - [x] A mount test with co-located PageObject(s) (data-testid only) asserts the RG-4-listed controls
         (toggle / pill / chip / `.sp-tab` / selected option) are present in the mounted toolbar + chat
         surfaces.
-  - [ ] Discriminating: a missing target control fails naming it. GREEN once the controls are confirmed
+  - [x] Discriminating: a missing target control fails naming it. GREEN once the controls are confirmed
         present (verify-only — the controls already exist per the audit).
 
 ### T-AY-007 🧪 — RED: focus-visible ring reachability + no-stray-mouse-ring (TEST-AY-007 mount leg) + keyboard operability (TEST-AY-008)
@@ -339,11 +339,11 @@ trap/restore), the `ChatSurface.vue` busy region (already `aria-live="polite"` +
 - **Depends on:** T-AY-001
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] A mount test (PageObject, data-testid) asserts a keyboard-focused control resolves the RG-5
+  - [x] A mount test (PageObject, data-testid) asserts a keyboard-focused control resolves the RG-5
         focus-visible target (custom `div[role]` controls carry `tabindex`) and mouse `:focus` shows no
         stray ring (structural where JSDOM limits `:focus-visible`); and every audited toolbar/settings/chat
         control is focusable with a non-empty accessible name.
-  - [ ] Discriminating: a control with an empty accessible name fails naming it (drives T-AY-010). RED until
+  - [x] Discriminating: a control with an empty accessible name fails naming it (drives T-AY-010). RED until
         the icon-only labels are filled; GREEN after T-AY-010.
 
 ### T-AY-008 🧪 — RED: live-region presence + severity (busy region + notice host, no focus theft) (TEST-AY-010)
@@ -360,9 +360,9 @@ trap/restore), the `ChatSurface.vue` busy region (already `aria-live="polite"` +
 - **Depends on:** T-AY-001
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] A mount test asserts the busy region has `aria-live="polite"` + `role="status"` (verify-only) and
+  - [x] A mount test asserts the busy region has `aria-live="polite"` + `role="status"` (verify-only) and
         the notice host announces error=assertive / info=polite via a live region without moving focus.
-  - [ ] Discriminating: a missing live region in the standalone notice host fails (drives T-AY-011); a
+  - [x] Discriminating: a missing live region in the standalone notice host fails (drives T-AY-011); a
         stolen focus on announcement fails. GREEN after T-AY-011 (or immediately if the host already
         conforms).
 
@@ -380,10 +380,10 @@ trap/restore), the `ChatSurface.vue` busy region (already `aria-live="polite"` +
 - **Depends on:** T-AY-001
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] A mount test asserts a collapsible header exposes `aria-expanded` that flips on Enter/Space/click +
+  - [x] A mount test asserts a collapsible header exposes `aria-expanded` that flips on Enter/Space/click +
         has an accessible name; and icon-only controls expose an `.sr-only`/`aria-label` name with zero
         visible footprint (clip technique).
-  - [ ] Discriminating: a header missing `aria-expanded`, or an unlabelled icon-only control, fails naming
+  - [x] Discriminating: a header missing `aria-expanded`, or an unlabelled icon-only control, fails naming
         it (drives T-AY-010/T-AY-012). RED until the fills land; GREEN after.
 
 ### T-AY-010 🔨🪓 — `feat(ay):` fill icon-only accessible names (`.sr-only` / `aria-label`) across toolbar / composer / chat
@@ -401,10 +401,10 @@ trap/restore), the `ChatSurface.vue` busy region (already `aria-live="polite"` +
 - **Depends on:** T-AY-007, T-AY-009
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] Every icon-only control flagged by the audit carries a non-empty accessible name (`aria-label` or
+  - [x] Every icon-only control flagged by the audit carries a non-empty accessible name (`aria-label` or
         `.sr-only`); decorative glyphs stay `aria-hidden="true"`; no visible-text / microcopy / locale
         change; no `innerHTML`/`v-html` added.
-  - [ ] The TEST-AY-008 + TEST-AY-009 (mount) legs go GREEN; whole-project `npm run lint` 0 +
+  - [x] The TEST-AY-008 + TEST-AY-009 (mount) legs go GREEN; whole-project `npm run lint` 0 +
         `npm run typecheck` 0 + `npm run test` green; implementation-log entry added.
 
 ### T-AY-011 🔨 — `feat(ay):` notice-host live region (standalone) — error assertive / info polite, no focus theft
@@ -422,10 +422,10 @@ trap/restore), the `ChatSurface.vue` busy region (already `aria-live="polite"` +
 - **Depends on:** T-AY-008
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] The standalone notice host has an `aria-live` region (polite default, assertive for error) mirroring
+  - [x] The standalone notice host has an `aria-live` region (polite default, assertive for error) mirroring
         notice text declaratively, no focus theft, no `innerHTML`/`v-html`; routed through the existing
         `NotificationPort` severity (no new channel/port). Verify-only if it already conforms.
-  - [ ] The TEST-AY-010 leg goes GREEN; whole-project `npm run lint` 0 + `npm run typecheck` 0 +
+  - [x] The TEST-AY-010 leg goes GREEN; whole-project `npm run lint` 0 + `npm run typecheck` 0 +
         `npm run test` green; implementation-log entry added.
 
 ### T-AY-012 🔨🪓 — `feat(ay):` collapsible `aria-expanded` + accessible name on the rich-render headers
@@ -441,10 +441,10 @@ trap/restore), the `ChatSurface.vue` busy region (already `aria-live="polite"` +
 - **Depends on:** T-AY-009
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] Each rich-render collapsible header exposes `aria-expanded` bound to its open state (flips on
+  - [x] Each rich-render collapsible header exposes `aria-expanded` bound to its open state (flips on
         toggle) + an accessible name; verify-only where already present; no default-render / microcopy /
         locale change; no `innerHTML`/`v-html` added.
-  - [ ] The TEST-AY-011 leg goes GREEN; whole-project `npm run lint` 0 + `npm run typecheck` 0 +
+  - [x] The TEST-AY-011 leg goes GREEN; whole-project `npm run lint` 0 + `npm run typecheck` 0 +
         `npm run test` green; implementation-log entry added.
 
 ### T-AY-013 🧪 — RED: modal focus trap + restore (the 8 Specorator modal seams) (TEST-AY-012 / TEST-AY-013)
@@ -466,9 +466,9 @@ trap/restore), the `ChatSurface.vue` busy region (already `aria-live="polite"` +
 - **Depends on:** T-AY-001
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] A test asserts each of the 8 launchers opens a `Modal` subclass (structural; Tab-cycle-stays-inside
+  - [x] A test asserts each of the 8 launchers opens a `Modal` subclass (structural; Tab-cycle-stays-inside
         where JSDOM allows) and that closing by any path restores focus to the opener (not `document.body`).
-  - [ ] A note records that a modal NOT extending `Modal` is a defect-escalation (file ADR-AY-001 + a new
+  - [x] A note records that a modal NOT extending `Modal` is a defect-escalation (file ADR-AY-001 + a new
         hand-rolled-trap task), never a silent default. GREEN against the current code (verify-only — all 8
         extend `Modal`).
 
@@ -495,9 +495,9 @@ trap/restore), the `ChatSurface.vue` busy region (already `aria-live="polite"` +
 - **Depends on:** T-AY-010, T-AY-011, T-AY-012
 - **Estimate:** M
 - **Definition of done:**
-  - [ ] A test asserts each swept component's default render + locale output is unchanged from baseline
+  - [x] A test asserts each swept component's default render + locale output is unchanged from baseline
         (structural/snapshot diff); a recorded `git diff next -- src/ui/i18n/locales` is empty.
-  - [ ] Discriminating: a fill that altered the visible default render, microcopy, or a locale string fails
+  - [x] Discriminating: a fill that altered the visible default render, microcopy, or a locale string fails
         naming the surface. RED until confirmed additive; GREEN once clean.
 
 ### T-AY-015 🧪 — RED: discipline scan (no added raw-HTML sink in the P12 diff) (TEST-AY-015 diff leg)
@@ -514,9 +514,9 @@ trap/restore), the `ChatSurface.vue` busy region (already `aria-live="polite"` +
 - **Depends on:** T-AY-010, T-AY-011, T-AY-012
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] A scan / recorded lint confirmation asserts the P12 diff adds no
+  - [x] A scan / recorded lint confirmation asserts the P12 diff adds no
         `innerHTML`/`outerHTML`/`insertAdjacentHTML`/`v-html` and no new suppression of the raw-HTML guards.
-  - [ ] Discriminating: a planted `v-html` / `innerHTML` in a changed file fails. GREEN against the actual
+  - [x] Discriminating: a planted `v-html` / `innerHTML` in a changed file fails. GREEN against the actual
         diff (the fills are declarative).
 
 ### T-AY-016 🧪 — RED: `parity-screenshots.md` completeness (all surfaces × 320/520/720 × light/dark) (TEST-AY-016)
@@ -532,10 +532,10 @@ trap/restore), the `ChatSurface.vue` busy region (already `aria-live="polite"` +
 - **Depends on:** T-AY-001
 - **Estimate:** S
 - **Definition of done:**
-  - [ ] A test asserts `specs/accessibility/parity-screenshots.md` lists every charter §3 surface at
+  - [x] A test asserts `specs/accessibility/parity-screenshots.md` lists every charter §3 surface at
         320/520/720 px in light + dark, each with a claudian-reference + Specorator cell (completeness
         structure only).
-  - [ ] Discriminating: a missing surface / width / theme cell fails naming the gap. GREEN once the matrix
+  - [x] Discriminating: a missing surface / width / theme cell fails naming the gap. GREEN once the matrix
         is structurally complete; the visual sign-off is TEST-AY-017 (human).
 
 ---
