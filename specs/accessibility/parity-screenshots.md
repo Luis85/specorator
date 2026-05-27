@@ -6,7 +6,7 @@ feature: accessibility
 area: AY
 epic: claudian-reboot
 phase: P12
-status: scaffold        # baseline column noted from claudian; Specorator + a11y-condition columns filled at the human final gate
+status: complete        # matrix structurally complete (T-AY-016 / TEST-AY-016 green); Specorator + a11y-condition cells filled + judged at the human final gate (T-AY-017)
 owner: dev
 reference: D:\Projects\claudian-main   # MIT, read-only parity reference
 satisfies:
@@ -26,10 +26,15 @@ baseline**. The completeness of this matrix (every required row/cell slot) is wh
 deterministically; the **visual judgment** (forced-colors + reduced-motion rendering, parity with the
 claudian baseline) is the **human's** at T-AY-017 — **never** agent-self-claimed.
 
-> **This file is the baseline scaffold (T-AY-001).** The `Baseline (claudian)` column is captured
-> from `D:\Projects\claudian-main` at the matching width/theme; the `Specorator` columns and the
-> a11y-condition columns are filled at the human final gate (T-AY-017). The automatable suite
-> (TEST-AY-001..016) ships under the verify gate; this matrix is the human leg.
+> **This matrix is complete and structurally checked (T-AY-016 / TEST-AY-016).** Every charter §3
+> surface is listed at 320/520/720 px in light + dark, each paired with its `Baseline (claudian)`
+> reference (captured from `D:\Projects\claudian-main` at the matching width/theme). The `Specorator`
+> capture columns and the two a11y-condition columns (`reduced-motion` / `forced-colors`) are left for
+> the human reviewer to populate + judge at the final epic gate (T-AY-017) — the visual sign-off no
+> automatable test replaces (NFR-AY-001, constitution Art. VII). The automatable suite
+> (TEST-AY-001..016) ships under the verify gate; this matrix is the human leg. The completeness of the
+> row/cell structure (every surface × width × theme slot present) is what TEST-AY-016 asserts
+> deterministically.
 
 Legend: ☐ = not yet captured. Each surface is captured **per theme × per width** for default render,
 plus the two a11y-condition columns (`prefers-reduced-motion: reduce` and `forced-colors: active`)
