@@ -1,10 +1,10 @@
 ---
 feature: accessibility
 area: AY
-current_stage: tasks
+current_stage: review
 status: active
 last_updated: 2026-05-27
-last_agent: dev (Chunk 2 T-AY-006..013 + Chunk 3 T-AY-014..016 complete; hand-off → parent for T-AY-018 gate + T-AY-017 human sign-off)
+last_agent: reviewer (REVIEW-AY-001 + TRACE-AY-001 complete; verdict approve-with-nits; hand-off → release-manager for T-AY-018 gate + the human REQ-AY-017 sign-off)
 epic: claudian-reboot
 phase: P12
 integration_branch: next
@@ -19,8 +19,8 @@ artifacts:
   implementation-log.md: in-progress (Chunk 1 T-AY-001..005 + Chunk 2 T-AY-006..013 + Chunk 3 T-AY-014..016 logged; T-AY-018 gate + T-AY-017 human sign-off remain)
   test-plan.md: in-progress (T-AY-001 baseline + guard-verify note; parity-screenshots.md complete — TEST-AY-016 green)
   test-report.md: pending
-  review.md: pending
-  traceability.md: pending
+  review.md: complete (REVIEW-AY-001 — verdict approve-with-nits; 0 P1/P2; 2 low nits R-AY-001/002)
+  traceability.md: complete (TRACE-AY-001 — full REQ↔SPEC↔TASK↔code↔TEST chain; no orphans; REQ-AY-017 pending = human gate)
   release-notes.md: pending
   retrospective.md: pending
 ---
@@ -39,7 +39,7 @@ artifacts:
 | 6. Tasks | `tasks.md` | complete |
 | 7. Implementation | `implementation-log.md` + code | in-progress (Chunk 1+2+3 done; T-AY-017/018 remain) |
 | 8. Testing | `test-plan.md`, `test-report.md` | in-progress (TEST-AY-001..016 green; TEST-AY-017 human) |
-| 9. Review | `review.md`, `traceability.md` | pending |
+| 9. Review | `review.md`, `traceability.md` | complete (approve-with-nits; 0 P1/P2; T-AY-018 gate + REQ-AY-017 human sign-off remain) |
 | 10. Release | `release-notes.md` | pending |
 | 11. Learning | `retrospective.md` | pending |
 
@@ -220,4 +220,27 @@ OUR `src/ui/styles/{tokens,animations}.css` + the P1-P11 components/modals for t
                           build:web + draft next PR) + T-AY-017 (HUMAN final parity sign-off, 👤). DID NOT
                           run verify/build/build:web/docs:api; DID NOT push. Next agent: parent (T-AY-018
                           gate, then present T-AY-017 to the human + open — do NOT merge — next→develop).
+2026-05-27 (reviewer): /spec:review done. REVIEW-AY-001 + TRACE-AY-001 complete. VERDICT:
+                          APPROVE-WITH-NITS — 0 critical/high/medium findings; 2 low doc-sync nits.
+                          VERIFIED read-only: all 6 rule groups RG-1..RG-6 present + ordered in
+                          src/ui/styles/accessibility.css (.specorator-root-scoped, ASCII comments,
+                          system colours only inside forced-colors, RG-5 reuses --sp-focus-ring/
+                          --sp-shadow-focus-ring — no new token); registered as 3rd CSS import at BOTH
+                          sites (plugin/main.ts:3 + ui/main.ts:15). Ran the 2 CSS suites (15 green) +
+                          tests/ui/a11y/ (40 green / 8 files). ADDITIVITY CONFIRMED: git diff next..HEAD
+                          under src/ = EXACTLY accessibility.css + plugin/main.ts + ui/main.ts +
+                          NoticeLiveRegion.vue (+ a test-only obsidian Modal stub); manifest.json +
+                          all locales byte-identical (empty diff). WCAG 2.2 AA met at the automatable
+                          level (focus-visible SC2.4.7, modal trap/restore SC2.1.2/2.4.3, forced-colors
+                          SC1.4.x, reduced-motion SC2.3.3, status messages SC4.1.3, name/role/value);
+                          visual conformance = the human leg. ARCH: no new port/InjectionKey/ADR;
+                          NoticeLiveRegion is pure Vue on the sp:notice channel (no obsidian import);
+                          no v-html/innerHTML; token discipline holds. Brand review: not-applicable.
+                          NITS (non-blocking): R-AY-001 (stage frontmatter in impl-log/test-plan/
+                          workflow-state lagged actual progress — partly fixed here), R-AY-002
+                          (test-plan §4 RG-4 selector table still lists the corrected placeholders).
+                          REQ-AY-017 (human final parity sign-off) recorded PENDING as the single final
+                          epic gate. Hand-off → release-manager: run T-AY-018 (full verify + build:web
+                          lightningcss + both-output presence + coverage 80/70/80/80), fold R-AY-001/002,
+                          then PRESENT (do NOT merge) the next→develop PR + surface REQ-AY-017 to the human.
 ```
