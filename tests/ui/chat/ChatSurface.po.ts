@@ -36,6 +36,10 @@ export class ChatSurfacePageObject {
 		return this.wrapper.get('[data-testid="chat-busy"]').attributes('aria-live');
 	}
 
+	busyRole(): string | undefined {
+		return this.wrapper.get('[data-testid="chat-busy"]').attributes('role');
+	}
+
 	assistantText(): string {
 		return this.wrapper.get('[data-testid="message-assistant"]').text();
 	}

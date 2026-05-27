@@ -12,10 +12,12 @@
 import './standalone.css';
 import './styles/tokens.css';
 import './styles/animations.css';
+import './styles/accessibility.css';
 import { createApp, h } from 'vue';
 import { createPinia } from 'pinia';
 import ChatSurface from './chat/ChatSurface.vue';
 import ErrorBoundary from './components/ErrorBoundary.vue';
+import NoticeLiveRegion from './components/NoticeLiveRegion.vue';
 import { i18n, setLocale, toSupportedLocale } from './i18n';
 import {
 	SETTINGS_PORT,
@@ -63,7 +65,14 @@ mountPoint?.classList.add('specorator-root');
 
 const app = createApp({
 	name: 'StandaloneRoot',
-	render: () => h(ErrorBoundary, null, { default: () => h(ChatSurface) }),
+	// The notice live region (SPEC-AY-004) rides alongside the chat surface so the
+	// standalone / GitHub Pages host announces non-blocking notices to screen
+	// readers. It is `.sr-only` (zero visible footprint), so the default render is
+	// byte-identical (REQ-AY-014).
+	render: () =>
+		h(ErrorBoundary, null, {
+			default: () => [h(ChatSurface), h(NoticeLiveRegion)],
+		}),
 });
 app.use(createPinia());
 app.use(i18n);

@@ -1,0 +1,127 @@
+/*
+ * Specorator accessibility CSS layer (DESIGN-AY-001 Part B, SPEC-AY-001).
+ *
+ * The third global CSS layer, after tokens.css and animations.css. It adds the
+ * six accessibility rule groups RG-1 through RG-6. Every selector is prefixed
+ * with .specorator-root so the build scopeBuiltCss step leaves it as-is, and
+ * keyframes are never targeted (the guard targets animation consumers, not the
+ * keyframe definitions). The only colour keywords in this file are CSS system
+ * colours inside the forced-colors block (RG-3 and RG-4) - the single
+ * documented exception (NFR-AY-002). RG-5 reuses the existing --sp-focus-ring
+ * and --sp-shadow-focus-ring tokens; no new token is minted. Comments use
+ * ASCII-only markers so the standalone lightningcss minifier accepts them
+ * (NFR-AY-005, EC-AY-013).
+ *
+ * Every rule is gated behind a media query, focus-visible, .sr-only, or an
+ * additive ARIA attribute, so the default render is the next baseline for
+ * mouse users, unchanged (REQ-AY-014).
+ *
+ * REQ-AY-001, REQ-AY-003, REQ-AY-004, REQ-AY-005, REQ-AY-006, REQ-AY-007,
+ * REQ-AY-009, REQ-AY-015.
+ */
+
+/* RG-1 - reduced-motion global guard (REQ-AY-003).
+ * Safety-net that collapses any animation or transition the per-section
+ * tokens.css duration overrides did not reach. Complements, does not replace,
+ * those overrides (CLAR-AY-002, D-AY-1). important is required here so the
+ * universal guard wins over any per-component shorthand. */
+@media (prefers-reduced-motion: reduce) {
+	.specorator-root *,
+	.specorator-root *::before,
+	.specorator-root *::after {
+		animation-duration: 0.001ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.001ms !important;
+		scroll-behavior: auto !important;
+	}
+}
+
+/* RG-2 - reduced-motion spin halt (REQ-AY-004, EC-AY-001).
+ * Re-asserts the CQ-AUX-14 explicit spin halt. An indeterminate loop is not
+ * stopped by a near-zero duration alone, so this sets animation none. */
+@media (prefers-reduced-motion: reduce) {
+	.specorator-root [data-animation="spin"],
+	.specorator-root .sp-spin {
+		animation: none !important;
+	}
+}
+
+/* RG-3 - forced-colors surface mapping (REQ-AY-005, D-AY-5).
+ * When the OS replaces the palette, map text and surfaces to system colours,
+ * focus and selected states to Highlight, and button affordances to the button
+ * system colours. Colour mapping only - no layout shift. */
+@media (forced-colors: active) {
+	.specorator-root {
+		forced-color-adjust: auto;
+		color: CanvasText;
+		background-color: Canvas;
+	}
+
+	.specorator-root :where(button, [role="button"]) {
+		color: ButtonText;
+		background-color: ButtonFace;
+	}
+
+	.specorator-root :where([aria-selected="true"], [data-selected="true"]),
+	.specorator-root :where(button, [role="tab"], [role="option"], [role="switch"],
+		a[href], textarea, input, select, [tabindex]):focus-visible {
+		color: HighlightText;
+		background-color: Highlight;
+	}
+}
+
+/* RG-4 - forced-colors border guarantee (REQ-AY-006, EC-AY-003, SPEC-AY-006).
+ * Background-cue-only controls (those signalled by a fill or wash alone) gain a
+ * visible currentColor border under forced-colors so they stay distinguishable.
+ * The enumerated controls per the swept-component audit (TEST-AY-006 mount leg):
+ * the toolbar toggle switches are role="switch" (ServiceTier/Mode/Permission);
+ * state pills carry data-state (the tab + subagent state machines); the file
+ * chips are .sp-file-chips__chip and the image thumbs .sp-image-thumb; the tab
+ * badges are .sp-tab; the selected dropdown option is
+ * [role="option"][aria-selected="true"]. */
+@media (forced-colors: active) {
+	.specorator-root [role="switch"],
+	.specorator-root [data-state],
+	.specorator-root .sp-file-chips__chip,
+	.specorator-root .sp-image-thumb,
+	.specorator-root .sp-tab,
+	.specorator-root [role="option"][aria-selected="true"] {
+		border: 1px solid currentColor;
+	}
+}
+
+/* RG-5 - focus-visible ring (REQ-AY-007, EC-AY-005/006/014).
+ * The keyboard focus ring across every interactive control. Uses
+ * focus-visible so a mouse click shows no stray ring (the counter-metric).
+ * Consumes the existing --sp-focus-ring token (no new token, D-AY-2); the ring
+ * follows the user theme accent via --interactive-accent (EC-AY-014). */
+.specorator-root
+	:where(button, [role="tab"], [role="option"], [role="switch"], a[href], textarea, input, select, [tabindex]):focus-visible {
+	outline: 2px solid var(--sp-focus-ring);
+	outline-offset: 2px;
+}
+
+/* The box-shadow ring variant for controls whose outline is clipped by an
+ * ancestor overflow hidden. Consumes the existing --sp-shadow-focus-ring. */
+.specorator-root
+	:where(.sp-clip-ring, [data-focus-ring="shadow"]):focus-visible {
+	outline: none;
+	box-shadow: var(--sp-shadow-focus-ring);
+}
+
+/* RG-6 - sr-only utility (REQ-AY-009, EC-AY-007).
+ * Visually hides an element while keeping it in the accessibility tree (the
+ * standard clip technique). Never display none or visibility hidden, which
+ * would remove the element from the accessibility tree. */
+.specorator-root .sr-only {
+	position: absolute;
+	inline-size: 1px;
+	block-size: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}

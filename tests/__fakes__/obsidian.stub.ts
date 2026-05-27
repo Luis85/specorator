@@ -58,6 +58,27 @@ export function setIcon(_el: HTMLElement, _name: string): void {
 }
 
 /**
+ * Minimal stand-in for the desktop `Modal` base class. The real `Modal`
+ * natively saves `document.activeElement` on `open()` and restores it on
+ * `close()`, and traps Tab/Shift+Tab within `.modal` (SPEC-AY-009, D-AY-3). The
+ * Specorator modal hosts (`src/plugin/modals/**`) only `extends Modal`, so the
+ * stub needs just enough surface for the `extends` chain to form + the
+ * structural `instanceof Modal` verify (TEST-AY-012/013). No-op `open`/`close`.
+ */
+export class Modal {
+  app: unknown
+  contentEl: HTMLElement = document.createElement('div')
+  modalEl: HTMLElement = document.createElement('div')
+  constructor(app: unknown) {
+    this.app = app
+  }
+  open(): void {}
+  close(): void {}
+  onOpen(): void {}
+  onClose(): void {}
+}
+
+/**
  * Minimal lifecycle-owner stub for `MarkdownRenderer.render` post-processors.
  * The real `Component` manages child lifecycles; the bridge only needs an
  * instance to pass through, so the stub is empty.
