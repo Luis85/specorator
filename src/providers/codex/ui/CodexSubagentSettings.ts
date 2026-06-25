@@ -1,0 +1,343 @@
+import type { App } from 'obsidian';
+import { Modal, Notice, Setting } from 'obsidian';
+
+import { t } from '../../../i18n/i18n';
+import type { ValidationError } from '../../../i18n/types';
+import { renderVaultAgentListItem } from '../../../shared/settings/vaultAgentListPanel';
+import type { CodexSubagentStorage } from '../storage/CodexSubagentStorage';
+import { DEFAULT_CODEX_PRIMARY_MODEL } from '../types/models';
+import type { CodexSubagentDefinition } from '../types/subagent';
+import { renderCodexModalFooter } from './codexSettingsModal';
+import { CodexVaultListSettings } from './codexVaultListSettings';
+
+const REASONING_EFFORT_OPTIONS = [
+  { value: '', label: 'Inherit' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'xhigh', label: 'Extra High' },
+] as const;
+
+const SANDBOX_MODE_OPTIONS = [
+  { value: '', label: 'Inherit' },
+  { value: 'read-only', label: 'Read only' },
+  { value: 'danger-full-access', label: 'Danger full access' },
+  { value: 'workspace-write', label: 'Workspace write' },
+] as const;
+
+const MAX_NAME_LENGTH = 64;
+const CODEX_AGENT_NAME_PATTERN = /^[a-z0-9_-]+$/;
+const CODEX_NICKNAME_PATTERN = /^[A-Za-z0-9 _-]+$/;
+
+export function validateCodexSubagentName(name: string): ValidationError | null {
+  if (!name) {
+    return { key: 'provider.codex.subagent.validation.required' };
+  }
+  if (name.length > MAX_NAME_LENGTH) {
+    return {
+      key: 'provider.codex.subagent.validation.tooLong',
+      params: { max: MAX_NAME_LENGTH },
+    };
+  }
+  if (!CODEX_AGENT_NAME_PATTERN.test(name)) {
+    return { key: 'provider.codex.subagent.validation.invalidChars' };
+  }
+  return null;
+}
+
+export function validateCodexNicknameCandidates(candidates: string[]): ValidationError | null {
+  const normalized = candidates.map(candidate => candidate.trim()).filter(Boolean);
+  if (normalized.length === 0) return null;
+
+  const seen = new Set<string>();
+  for (const candidate of normalized) {
+    if (!CODEX_NICKNAME_PATTERN.test(candidate)) {
+      return { key: 'provider.codex.subagent.validation.nicknameInvalidChars' };
+    }
+
+    const dedupeKey = candidate.toLowerCase();
+    if (seen.has(dedupeKey)) {
+      return { key: 'provider.codex.subagent.validation.nicknameDuplicate' };
+    }
+    seen.add(dedupeKey);
+  }
+
+  return null;
+}
+
+class CodexSubagentModal extends Modal {
+  private existing: CodexSubagentDefinition | null;
+  private allAgents: CodexSubagentDefinition[];
+  private onSave: (agent: CodexSubagentDefinition) => Promise<void>;
+
+  private _nameInput!: HTMLInputElement;
+  private _descInput!: HTMLInputElement;
+  private _instructionsArea!: HTMLTextAreaElement;
+  private _nicknamesInput!: HTMLInputElement;
+  private _modelInput!: HTMLInputElement;
+  private _reasoningEffort = '';
+  private _sandboxMode = '';
+  private _triggerSave!: () => Promise<void>;
+
+  constructor(
+    app: App,
+    existing: CodexSubagentDefinition | null,
+    allAgents: CodexSubagentDefinition[],
+    onSave: (agent: CodexSubagentDefinition) => Promise<void>,
+  ) {
+    super(app);
+    this.existing = existing;
+    this.allAgents = allAgents;
+    this.onSave = onSave;
+    this._reasoningEffort = existing?.modelReasoningEffort ?? '';
+    this._sandboxMode = existing?.sandboxMode ?? '';
+  }
+
+  getTestInputs() {
+    return {
+      nameInput: this._nameInput,
+      descInput: this._descInput,
+      instructionsArea: this._instructionsArea,
+      nicknamesInput: this._nicknamesInput,
+      modelInput: this._modelInput,
+      setReasoningEffort: (v: string) => { this._reasoningEffort = v; },
+      setSandboxMode: (v: string) => { this._sandboxMode = v; },
+      triggerSave: this._triggerSave,
+    };
+  }
+
+  onOpen() {
+    this.setTitle(this.existing ? 'Edit Codex Subagent' : 'Add Codex Subagent');
+    this.modalEl.addClass('specorator-sp-modal');
+
+    const { contentEl } = this;
+
+    new Setting(contentEl)
+      .setName('Name')
+      .setDesc('Agent name Codex uses when spawning (lowercase, hyphens, underscores)')
+      .addText(text => {
+        this._nameInput = text.inputEl;
+        text.setValue(this.existing?.name ?? '')
+          .setPlaceholder('Code_reviewer');
+      });
+
+    new Setting(contentEl)
+      .setName('Description')
+      .setDesc('When Codex should use this agent')
+      .addText(text => {
+        this._descInput = text.inputEl;
+        text.setValue(this.existing?.description ?? '')
+          .setPlaceholder('Reviews code for correctness and security');
+      });
+
+    // Advanced options
+    const details = contentEl.createEl('details', { cls: 'specorator-sp-advanced-section' });
+    details.createEl('summary', {
+      text: 'Advanced options',
+      cls: 'specorator-sp-advanced-summary',
+    });
+    if (
+      this.existing?.model ||
+      this.existing?.modelReasoningEffort ||
+      this.existing?.sandboxMode ||
+      this.existing?.nicknameCandidates?.length
+    ) {
+      details.open = true;
+    }
+
+    new Setting(details)
+      .setName('Model')
+      .setDesc('Model override (leave empty to inherit)')
+      .addText(text => {
+        this._modelInput = text.inputEl;
+        text.setValue(this.existing?.model ?? '')
+          .setPlaceholder(DEFAULT_CODEX_PRIMARY_MODEL);
+      });
+
+    new Setting(details)
+      .setName('Reasoning effort')
+      .setDesc('Model reasoning effort level')
+      .addDropdown(dropdown => {
+        for (const opt of REASONING_EFFORT_OPTIONS) {
+          dropdown.addOption(opt.value, opt.label);
+        }
+        dropdown.setValue(this._reasoningEffort);
+        dropdown.onChange(v => { this._reasoningEffort = v; });
+      });
+
+    new Setting(details)
+      .setName('Sandbox mode')
+      .setDesc('Sandbox restriction for this agent')
+      .addDropdown(dropdown => {
+        for (const opt of SANDBOX_MODE_OPTIONS) {
+          dropdown.addOption(opt.value, opt.label);
+        }
+        dropdown.setValue(this._sandboxMode);
+        dropdown.onChange(v => { this._sandboxMode = v; });
+      });
+
+    new Setting(details)
+      .setName('Nickname candidates')
+      .setDesc('Comma-separated display nicknames (e.g., atlas, delta, echo)')
+      .addText(text => {
+        this._nicknamesInput = text.inputEl;
+        text.setValue(this.existing?.nicknameCandidates?.join(', ') ?? '');
+      });
+
+    // Developer instructions
+    new Setting(contentEl)
+      .setName('Developer instructions')
+      .setDesc('Core instructions that define the agent\'s behavior');
+
+    const instructionsArea = contentEl.createEl('textarea', {
+      cls: 'specorator-sp-content-area',
+      attr: {
+        rows: '10',
+        placeholder: 'Review code like an owner.\nPrioritize correctness, security, and missing test coverage.',
+      },
+    });
+    instructionsArea.value = this.existing?.developerInstructions ?? '';
+    this._instructionsArea = instructionsArea;
+
+    // Buttons
+    const doSave = async () => {
+      const name = this._nameInput.value.trim();
+      const nameError = validateCodexSubagentName(name);
+      if (nameError) {
+        new Notice(t(nameError.key, nameError.params));
+        return;
+      }
+
+      const description = this._descInput.value.trim();
+      if (!description) {
+        new Notice(t('provider.codex.subagent.descriptionRequired'));
+        return;
+      }
+
+      const developerInstructions = this._instructionsArea.value;
+      if (!developerInstructions.trim()) {
+        new Notice(t('provider.codex.subagent.developerInstructionsRequired'));
+        return;
+      }
+
+      const nicknameCandidates = this._nicknamesInput.value
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+      const nicknameError = validateCodexNicknameCandidates(nicknameCandidates);
+      if (nicknameError) {
+        new Notice(t(nicknameError.key, nicknameError.params));
+        return;
+      }
+
+      const duplicate = this.allAgents.find(
+        a => a.name.toLowerCase() === name.toLowerCase() &&
+             a.persistenceKey !== this.existing?.persistenceKey,
+      );
+      if (duplicate) {
+        new Notice(t('provider.codex.subagent.duplicate', { name }));
+        return;
+      }
+
+      const agent: CodexSubagentDefinition = {
+        name,
+        description,
+        developerInstructions,
+        nicknameCandidates: nicknameCandidates.length > 0 ? nicknameCandidates : undefined,
+        model: this._modelInput.value.trim() || undefined,
+        modelReasoningEffort: this._reasoningEffort || undefined,
+        sandboxMode: this._sandboxMode || undefined,
+        persistenceKey: this.existing?.persistenceKey,
+        extraFields: this.existing?.extraFields,
+      };
+
+      try {
+        await this.onSave(agent);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        new Notice(t('provider.codex.subagent.saveFailed', { message }));
+        return;
+      }
+      this.close();
+    };
+    this._triggerSave = doSave;
+
+    renderCodexModalFooter(contentEl, {
+      onCancel: () => this.close(),
+      onSave: doSave,
+    });
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+}
+
+export class CodexSubagentSettings extends CodexVaultListSettings<CodexSubagentDefinition> {
+  private storage: CodexSubagentStorage;
+  private app?: App;
+  private onChanged?: () => void;
+
+  constructor(containerEl: HTMLElement, storage: CodexSubagentStorage, app?: App, onChanged?: () => void) {
+    super(containerEl);
+    this.storage = storage;
+    this.app = app;
+    this.onChanged = onChanged;
+    void this.render();
+  }
+
+  protected getLabel(): string {
+    return 'Codex Subagents';
+  }
+
+  protected getEmptyText(): string {
+    return 'No Codex subagents in vault. Click + to create one.';
+  }
+
+  protected loadItems(): Promise<CodexSubagentDefinition[]> {
+    return this.storage.loadAll();
+  }
+
+  protected renderItem(listEl: HTMLElement, agent: CodexSubagentDefinition): void {
+    const { headerRow } = renderVaultAgentListItem(listEl, this.app, {
+      name: agent.name,
+      description: agent.description,
+      onEdit: () => this.openModal(agent),
+      deleteConfirmMessage: `Delete subagent "${agent.name}"?`,
+      onDelete: async () => {
+        await this.storage.delete(agent);
+        await this.render();
+        this.onChanged?.();
+        new Notice(t('provider.codex.subagent.deleted', { name: agent.name }));
+      },
+      onDeleteFailed: () => {
+        new Notice(t('provider.codex.subagent.deleteFailed'));
+      },
+    });
+
+    if (agent.model) {
+      headerRow.createSpan({ text: agent.model, cls: 'specorator-slash-item-badge' });
+    }
+  }
+
+  protected openModal(existing: CodexSubagentDefinition | null): void {
+    if (!this.app) return;
+
+    const modal = new CodexSubagentModal(
+      this.app,
+      existing,
+      this.items,
+      async (agent) => {
+        await this.storage.save(agent, existing);
+        await this.render();
+        this.onChanged?.();
+        new Notice(
+          existing
+            ? t('provider.codex.subagent.updated', { name: agent.name })
+            : t('provider.codex.subagent.created', { name: agent.name }),
+        );
+      },
+    );
+    modal.open();
+  }
+}

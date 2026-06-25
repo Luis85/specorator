@@ -1,0 +1,208 @@
+.specorator-wo-templates-modal {
+  max-width: 560px;
+}
+
+.specorator-wo-templates-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.specorator-wo-templates-intro {
+  margin-bottom: 0.75em;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  line-height: 1.5;
+}
+
+.specorator-wo-templates-intro-lead {
+  margin: 0 0 0.5em;
+  color: var(--text-normal);
+}
+
+.specorator-wo-templates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.specorator-wo-templates-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1em;
+  padding-top: 0.75em;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.specorator-wo-templates-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 0.5em 0.75em;
+}
+
+.specorator-wo-templates-row--blank {
+  border-style: dashed;
+}
+
+.specorator-wo-templates-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+  flex: 1;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.specorator-wo-templates-main:hover {
+  color: var(--text-accent);
+}
+
+.specorator-wo-templates-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.specorator-wo-templates-desc {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
+.specorator-wo-templates-actions {
+  display: flex;
+  gap: 0.25em;
+  flex-shrink: 0;
+}
+
+.specorator-wo-template-body-setting {
+  display: block;
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 0.75em;
+}
+
+.specorator-wo-template-body-setting .setting-item-info {
+  margin-bottom: 0.5em;
+}
+
+.specorator-wo-template-body-setting .setting-item-control {
+  width: 100%;
+  justify-content: stretch;
+}
+
+.specorator-wo-template-body-input {
+  width: 100%;
+  font-family: var(--font-monospace);
+}
+
+/* ============================================================
+   Loop picker modal — mirrors the work-order template picker
+   (specorator-wo-templates-*) so the two pickers read identically.
+   ============================================================ */
+.specorator-loops-modal {
+  max-width: 560px;
+}
+
+.specorator-loops-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.specorator-loops-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.specorator-loops-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1em;
+  padding-top: 0.75em;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.specorator-loops-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 0.5em 0.75em;
+}
+
+/* "No loop" row uses a dashed border (mirrors the blank-template row). */
+.specorator-loops-row--none {
+  border-style: dashed;
+}
+
+.specorator-loops-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+  flex: 1;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.specorator-loops-main:hover {
+  color: var(--text-accent);
+}
+
+.specorator-loops-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Text column: name (strong), description, and use-when hint. */
+.specorator-loops-text {
+  min-width: 0;
+}
+
+.specorator-loops-desc {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
+/* Secondary hint line — smaller and fainter than the description. */
+.specorator-loops-usewhen {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.specorator-loops-actions {
+  display: flex;
+  gap: 0.25em;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   Loop editor modal — mirrors the work-order template editor
+   (specorator-wo-template-body-setting / specorator-wo-template-body-input).
+   ============================================================ */
+.specorator-loop-section-setting {
+  display: block;
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 0.75em;
+}
+
+.specorator-loop-section-setting .setting-item-info {
+  margin-bottom: 0.5em;
+}
+
+.specorator-loop-section-setting .setting-item-control {
+  width: 100%;
+  justify-content: stretch;
+}
+
+.specorator-loop-section-input {
+  width: 100%;
+  font-family: var(--font-monospace);
+}

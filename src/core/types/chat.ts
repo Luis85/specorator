@@ -1,0 +1,223 @@
+import type { SDKToolUseResult } from './diff';
+import type { ProviderId } from './provider';
+import type { SubagentMode, ToolCallInfo } from './tools';
+
+/** Fork origin reference: identifies the source session and checkpoint. */
+export interface ForkSource {
+  sessionId: string;
+  resumeAt: string;
+}
+
+/** View type identifier for Obsidian. */
+export const VIEW_TYPE_SPECORATOR = 'specorator-view';
+
+/** View type identifier for the optional Agent Board workspace. */
+export const VIEW_TYPE_SPECORATOR_AGENT_BOARD = 'specorator-agent-board-view';
+
+/** Supported image media types for attachments. */
+export type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+
+/** Image attachment metadata. */
+export interface ImageAttachment {
+  id: string;
+  name: string;
+  mediaType: ImageMediaType;
+  /** Base64 encoded image data - single source of truth. */
+  data: string;
+  /** Vault-relative path. Stamped on send. Survives ConversationStore save. */
+  path?: string;
+  width?: number;
+  height?: number;
+  size: number;
+  source: 'file' | 'paste' | 'drop';
+}
+
+/** Content block for preserving streaming order in messages. */
+export type ContentBlock =
+  | { type: 'text'; content: string }
+  | { type: 'tool_use'; toolId: string }
+  | { type: 'thinking'; content: string; durationSeconds?: number }
+  | { type: 'subagent'; subagentId: string; mode?: SubagentMode }
+  | { type: 'context_compacted' }
+  | { type: 'runtime_error'; content: string };
+
+/** Chat message with content, tool calls, and attachments. */
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  /** Display-only content (e.g., "/tests" when content is the expanded prompt). */
+  displayContent?: string;
+  timestamp: number;
+  toolCalls?: ToolCallInfo[];
+  contentBlocks?: ContentBlock[];
+  currentNote?: string;
+  images?: ImageAttachment[];
+  /** True if this message represents a user interrupt (from SDK storage). */
+  isInterrupt?: boolean;
+  /** True if this message is rebuilt context sent to SDK on session reset (should be hidden). */
+  isRebuiltContext?: boolean;
+  /** Duration in seconds from user send to response completion. */
+  durationSeconds?: number;
+  /** Flavor word used for duration display (e.g., "Baked", "Cooked"). */
+  durationFlavorWord?: string;
+  /** Provider-native user message identifier used for rewind. */
+  userMessageId?: string;
+  /** Provider-native assistant message identifier used for rewind/fork checkpoints. */
+  assistantMessageId?: string;
+}
+
+/**
+ * Optional, provider-neutral action surfaced on a chat message (e.g. in the
+ * user-message toolbar). Registered on the plugin so chat never depends on the
+ * feature that supplies the action.
+ */
+export interface ChatMessageAction {
+  id: string;
+  label: string;
+  icon: string;
+  isEligible(message: ChatMessage): boolean;
+  run(message: ChatMessage, conversationId: string | null): void;
+}
+
+/** Minimal identity of the active conversation, exposed to message actions. */
+export interface ConversationSnapshot {
+  id: string;
+  title: string;
+}
+
+/** Persisted conversation with messages and session state. */
+export interface Conversation {
+  id: string;
+  providerId: ProviderId;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  /** Timestamp when the last agent response completed. */
+  lastResponseAt?: number;
+  sessionId: string | null;
+  /** Opaque provider-owned state bag (session tracking, fork metadata, etc.). */
+  providerState?: Record<string, unknown>;
+  messages: ChatMessage[];
+  currentNote?: string;
+  /** Session-specific external context paths (directories with full access). Resets on new session. */
+  externalContextPaths?: string[];
+  /** Context window usage information. */
+  usage?: UsageInfo;
+  /** Status of AI title generation. */
+  titleGenerationStatus?: 'pending' | 'success' | 'failed';
+  /** UI-enabled MCP servers for this session (context-saving servers activated via selector). */
+  enabledMcpServers?: string[];
+  /** Assistant checkpoint identifier for resumeAtMessageId after rewind. */
+  resumeAtMessageId?: string;
+  /** Optional link to a work-order note path. Absent for ad-hoc chat. */
+  workOrderPath?: string;
+  /** Roster agent this conversation is bound to (e.g. 'roster:researcher'). Applied as system prompt appendix + model override. */
+  boundAgentId?: string;
+}
+
+/** Lightweight conversation metadata for the history dropdown. */
+export interface ConversationMeta {
+  id: string;
+  providerId: ProviderId;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  /** Timestamp when the last agent response completed. */
+  lastResponseAt?: number;
+  messageCount: number;
+  preview: string;
+  /** Status of AI title generation. */
+  titleGenerationStatus?: 'pending' | 'success' | 'failed';
+}
+
+/**
+ * Session metadata overlay for provider-native storage.
+ * The provider handles message storage; this stores UI-only state.
+ */
+export interface SessionMetadata {
+  id: string;
+  providerId?: ProviderId;
+  title: string;
+  titleGenerationStatus?: 'pending' | 'success' | 'failed';
+  createdAt: number;
+  updatedAt: number;
+  lastResponseAt?: number;
+  /** Session ID used for provider resume (may be cleared when invalidated). */
+  sessionId?: string | null;
+  /** Opaque provider-owned state bag. */
+  providerState?: Record<string, unknown>;
+  currentNote?: string;
+  externalContextPaths?: string[];
+  enabledMcpServers?: string[];
+  usage?: UsageInfo;
+  /** Assistant checkpoint identifier for resumeAtMessageId after rewind. */
+  resumeAtMessageId?: string;
+  /** Optional link to a work-order note path. Absent for ad-hoc chat. */
+  workOrderPath?: string;
+  /** Roster agent bound to this conversation. Persisted so the binding survives reload. */
+  boundAgentId?: string;
+}
+
+/**
+ * Normalized stream chunk emitted by the active provider runtime.
+ *
+ * All providers must emit: text, tool_use, tool_result, error, done, usage.
+ * Provider-specific behavior must be normalized before reaching this contract.
+ * Providers may keep provider-native turn metadata internally and expose it via
+ * runtime methods instead of encoding it as stream-control chunks.
+ */
+export type StreamChunk =
+  | { type: 'user_message_start'; content: string; itemId?: string }
+  | { type: 'assistant_message_start'; itemId?: string }
+  | { type: 'text'; content: string }
+  | { type: 'thinking'; content: string }
+  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+  | { type: 'tool_result'; id: string; content: string; isError?: boolean; toolUseResult?: SDKToolUseResult }
+  | { type: 'tool_output'; id: string; content: string }
+  | { type: 'error'; content: string }
+  | { type: 'notice'; content: string; level?: 'info' | 'warning' }
+  | { type: 'done' }
+  | { type: 'usage'; usage: UsageInfo; sessionId?: string | null }
+  | { type: 'context_compacted' }
+  | { type: 'async_subagent_result'; agentId: string; status: 'completed' | 'error'; result?: string }
+  | { type: 'subagent_tool_use'; subagentId: string; id: string; name: string; input: Record<string, unknown> }
+  | { type: 'subagent_tool_result'; subagentId: string; id: string; content: string; isError?: boolean; toolUseResult?: SDKToolUseResult };
+
+/**
+ * Context window usage information.
+ *
+ * `contextTokens` is the provider-reported context-window occupancy after the
+ * current turn (i.e. what the next turn will see). Providers may compute it
+ * differently (Claude: `inputTokens + cacheCreationInputTokens + cacheReadInputTokens`;
+ * Codex: `tokenUsage.last.inputTokens + outputTokens + reasoningOutputTokens`;
+ * Opencode/Cursor: `usage_update.used` or `total_tokens`). Feature code should
+ * display `contextTokens` directly and never recompute it from the breakdown.
+ *
+ * Cache token fields are populated only by providers with prompt caching (Claude,
+ * Opencode). Output/reasoning/thought are populated when the wire emits them.
+ * `costUsd` is populated only when the provider emits cost on the wire
+ * (currently Opencode via `AcpUsageUpdate.cost`); other providers leave it
+ * unset and rely on plugin-side estimation downstream.
+ */
+export interface UsageInfo {
+  model?: string;
+  inputTokens: number;
+  /** Assistant tokens emitted this turn. Optional; 0 if omitted. */
+  outputTokens?: number;
+  /** Reasoning tokens billed separately (Codex `reasoningOutputTokens`). 0 if omitted. */
+  reasoningOutputTokens?: number;
+  /** Thinking/thought tokens reported separately by some providers (Opencode). 0 if omitted. */
+  thoughtTokens?: number;
+  /** Prompt caching: tokens used to create cache entries. 0 if omitted. */
+  cacheCreationInputTokens?: number;
+  /** Prompt caching: tokens read from cache. 0 if omitted. */
+  cacheReadInputTokens?: number;
+  contextWindow: number;
+  /** True when `contextWindow` came from provider runtime data instead of a local heuristic. */
+  contextWindowIsAuthoritative?: boolean;
+  contextTokens: number;
+  percentage: number;
+  /** Estimated USD cost of this turn (Opencode wire, plus optional plugin-side estimate). */
+  costUsd?: number;
+}

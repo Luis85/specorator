@@ -1,0 +1,408 @@
+import '@/providers';
+
+import { createMockRuntimeHost } from '@test/helpers/runtimeHost';
+
+import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
+import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceRegistry';
+import type {
+  ProviderId,
+  TitleGenerationCallback,
+  TitleGenerationResult,
+  TitleGenerationService,
+} from '@/core/providers/types';
+import { DEFAULT_CODEX_PRIMARY_MODEL } from '@/providers/codex/types/models';
+
+describe('ProviderRegistry', () => {
+  beforeEach(() => {
+    ProviderWorkspaceRegistry.clear();
+    ProviderWorkspaceRegistry.setServices('claude', {
+      mcpManager: {} as any,
+      mcpServerManager: {} as any,
+    } as any);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('creates a runtime with the default provider id', () => {
+    const runtime = ProviderRegistry.createChatRuntime({
+      plugin: {} as any,
+      host: createMockRuntimeHost(),
+    });
+
+    expect(runtime.providerId).toBe('claude');
+  });
+
+  it('returns capabilities for the default provider', () => {
+    const caps = ProviderRegistry.getCapabilities();
+    expect(caps.providerId).toBe('claude');
+    expect(caps).toHaveProperty('supportsPlanMode');
+    expect(caps).toHaveProperty('supportsFork');
+  });
+
+  it('returns boundary services for the default provider', () => {
+    const historyService = ProviderRegistry.getConversationHistoryService();
+    expect(historyService).toHaveProperty('hydrateConversationHistory');
+
+    const taskInterpreter = ProviderRegistry.getTaskResultInterpreter();
+    expect(taskInterpreter).toHaveProperty('resolveTerminalStatus');
+  });
+
+  it('returns a settings reconciler for the default provider', () => {
+    const reconciler = ProviderRegistry.getSettingsReconciler();
+    expect(reconciler).toHaveProperty('reconcileModelWithEnvironment');
+    expect(reconciler).toHaveProperty('normalizeModelVariantSettings');
+  });
+
+  it('returns a chat UI config for the default provider', () => {
+    const uiConfig = ProviderRegistry.getChatUIConfig();
+    expect(uiConfig).toHaveProperty('getModelOptions');
+    expect(uiConfig).toHaveProperty('getCustomModelIds');
+  });
+
+  it('throws when an unknown provider is requested', () => {
+    expect(() => ProviderRegistry.getCapabilities(
+      'nonexistent' as any,
+    )).toThrow('Provider "nonexistent" is not registered.');
+  });
+
+  it('creates a Codex runtime', () => {
+    const runtime = ProviderRegistry.createChatRuntime({
+      providerId: 'codex',
+      plugin: {} as any,
+      host: createMockRuntimeHost(),
+    });
+    expect(runtime.providerId).toBe('codex');
+  });
+
+  it('returns Codex capabilities', () => {
+    const caps = ProviderRegistry.getCapabilities('codex');
+    expect(caps.providerId).toBe('codex');
+    expect(caps.supportsPlanMode).toBe(true);
+    expect(caps.supportsFork).toBe(true);
+    expect(caps.supportsInstructionMode).toBe(true);
+    expect(caps.supportsRewind).toBe(false);
+    expect(caps.reasoningControl).toBe('effort');
+  });
+
+  it('returns OpenCode capabilities', () => {
+    const caps = ProviderRegistry.getCapabilities('opencode');
+    expect(caps.providerId).toBe('opencode');
+    expect(caps.supportsProviderCommands).toBe(true);
+    expect(caps.supportsInstructionMode).toBe(true);
+    expect(caps.supportsFork).toBe(false);
+  });
+
+  it('lists registered provider ids', () => {
+    const ids = ProviderRegistry.getRegisteredProviderIds();
+    expect(ids).toContain('claude');
+    expect(ids).toContain('codex');
+    expect(ids).toContain('cursor');
+  });
+
+  describe('getCanonicalToolNames (ADR-0001 Phase 1)', () => {
+    it('exposes a non-empty canonical tool set for every registered provider', () => {
+      for (const providerId of ProviderRegistry.getRegisteredProviderIds()) {
+        const tools = ProviderRegistry.getCanonicalToolNames(providerId);
+        expect(tools).toBeInstanceOf(Set);
+        expect(tools.size).toBeGreaterThan(0);
+      }
+    });
+
+    it('claude emits the SDK core file tools', () => {
+      const tools = ProviderRegistry.getCanonicalToolNames('claude');
+      expect(tools.has('Read')).toBe(true);
+      expect(tools.has('Write')).toBe(true);
+      expect(tools.has('Edit')).toBe(true);
+      expect(tools.has('Bash')).toBe(true);
+      expect(tools.has('TodoWrite')).toBe(true);
+    });
+
+    it('codex includes its normalized tools and native pass-through set', () => {
+      const tools = ProviderRegistry.getCanonicalToolNames('codex');
+      // Normalized from TOOL_NAME_MAP values
+      expect(tools.has('Bash')).toBe(true);
+      expect(tools.has('TodoWrite')).toBe(true);
+      expect(tools.has('AskUserQuestion')).toBe(true);
+      expect(tools.has('Read')).toBe(true);
+      expect(tools.has('WebSearch')).toBe(true);
+      // Native Codex pass-through tools
+      expect(tools.has('apply_patch')).toBe(true);
+      expect(tools.has('spawn_agent')).toBe(true);
+      expect(tools.has('wait_agent')).toBe(true);
+    });
+
+    it('opencode lifts the value-set of its tool-name map', () => {
+      const tools = ProviderRegistry.getCanonicalToolNames('opencode');
+      expect(tools.has('Bash')).toBe(true);
+      expect(tools.has('Edit')).toBe(true);
+      expect(tools.has('Glob')).toBe(true);
+      expect(tools.has('Grep')).toBe(true);
+      expect(tools.has('Read')).toBe(true);
+      expect(tools.has('Write')).toBe(true);
+      expect(tools.has('WebFetch')).toBe(true);
+      expect(tools.has('WebSearch')).toBe(true);
+    });
+
+    it('cursor includes the direct-map keys plus Write (argument-shape resolved)', () => {
+      const tools = ProviderRegistry.getCanonicalToolNames('cursor');
+      // Direct map keys
+      expect(tools.has('Read')).toBe(true);
+      expect(tools.has('Bash')).toBe(true);
+      expect(tools.has('Glob')).toBe(true);
+      expect(tools.has('Grep')).toBe(true);
+      expect(tools.has('LS')).toBe(true);
+      expect(tools.has('Edit')).toBe(true);
+      // Write is resolved by argument-shape (oldString / content) inside
+      // resolveCursorToolKind, not via the direct map — still surface it.
+      expect(tools.has('Write')).toBe(true);
+    });
+  });
+
+  describe('getDefaultProviderConfigs', () => {
+    it('assembles fresh default config objects contributed by each registration', () => {
+      const first = ProviderRegistry.getDefaultProviderConfigs();
+      const second = ProviderRegistry.getDefaultProviderConfigs();
+
+      expect(first).toHaveProperty('claude');
+      expect(first).toHaveProperty('codex');
+      expect(first).toHaveProperty('cursor');
+      expect(first).toHaveProperty('opencode');
+
+      // Fresh clones each call so callers can mutate without touching defaults.
+      expect(first).not.toBe(second);
+      expect(first.claude).not.toBe(second.claude);
+      expect(first.codex).not.toBe(second.codex);
+      expect(first.opencode).not.toBe(second.opencode);
+      expect(first.cursor).not.toBe(second.cursor);
+
+      // Values match the providers' registered defaults.
+      expect(first).toEqual(second);
+    });
+  });
+
+  it('filters enabled provider ids using registration metadata', () => {
+    expect(ProviderRegistry.getEnabledProviderIds({
+      providerConfigs: {
+        claude: { enabled: true },
+        codex: { enabled: false },
+      },
+    })).toEqual(['claude']);
+    expect(ProviderRegistry.getEnabledProviderIds({
+      providerConfigs: {
+        claude: { enabled: true },
+        codex: { enabled: true },
+      },
+    })).toEqual(['codex', 'claude']);
+    expect(ProviderRegistry.getEnabledProviderIds({
+      providerConfigs: {
+        claude: { enabled: true },
+        codex: { enabled: true },
+        opencode: { enabled: true },
+        cursor: { enabled: true },
+      },
+    })).toEqual(['cursor', 'opencode', 'codex', 'claude']);
+  });
+
+  it('excludes Claude from enabled providers when claude.enabled is false', () => {
+    expect(ProviderRegistry.getEnabledProviderIds({
+      providerConfigs: {
+        claude: { enabled: false },
+      },
+    })).toEqual([]);
+    expect(ProviderRegistry.getEnabledProviderIds({
+      providerConfigs: {
+        claude: { enabled: false },
+        cursor: { enabled: true },
+      },
+    })).toEqual(['cursor']);
+  });
+
+  describe('resolveTitleGenerationProviderId', () => {
+    it('returns Claude when Claude is enabled and no title model is set', () => {
+      expect(ProviderRegistry.resolveTitleGenerationProviderId({
+        providerConfigs: { claude: { enabled: true } },
+      })).toBe('claude');
+      expect(ProviderRegistry.resolveTitleGenerationProviderId({
+        providerConfigs: { claude: { enabled: true }, codex: { enabled: true } },
+      })).toBe('claude');
+    });
+
+    it('falls back to the active provider when Claude is disabled and no title model is set', () => {
+      expect(ProviderRegistry.resolveTitleGenerationProviderId({
+        providerConfigs: {
+          claude: { enabled: false },
+          cursor: { enabled: true },
+        },
+      })).toBe('cursor');
+    });
+
+    it('routes an explicit title model to its owning provider', () => {
+      expect(ProviderRegistry.resolveTitleGenerationProviderId({
+        titleGenerationModel: DEFAULT_CODEX_PRIMARY_MODEL,
+        providerConfigs: { codex: { enabled: true } },
+      })).toBe('codex');
+    });
+  });
+
+  it('returns the display name from provider registration metadata', () => {
+    expect(ProviderRegistry.getProviderDisplayName('claude')).toBe('Claude');
+    expect(ProviderRegistry.getProviderDisplayName('codex')).toBe('Codex');
+    expect(ProviderRegistry.getProviderDisplayName('cursor')).toBe('Cursor Agent');
+  });
+
+  it('creates a Cursor runtime', () => {
+    const runtime = ProviderRegistry.createChatRuntime({
+      providerId: 'cursor',
+      plugin: {} as any,
+      host: createMockRuntimeHost(),
+    });
+    expect(runtime.providerId).toBe('cursor');
+  });
+
+  it('returns Cursor capabilities', () => {
+    const caps = ProviderRegistry.getCapabilities('cursor');
+    expect(caps.providerId).toBe('cursor');
+    expect(caps.supportsNativeHistory).toBe(true);
+    expect(caps.supportsFork).toBe(false);
+    expect(caps.supportsRewind).toBe(false);
+  });
+
+  it('routes auto title generation to Claude independently of chat provider state', async () => {
+    const providerCalls: ProviderId[] = [];
+    const originalCreate = ProviderRegistry.createTitleGenerationService.bind(ProviderRegistry);
+    jest.spyOn(ProviderRegistry, 'createTitleGenerationService')
+      .mockImplementation((plugin: any, providerId?: ProviderId) => {
+        if (!providerId) {
+          return originalCreate(plugin);
+        }
+        providerCalls.push(providerId);
+        return createMockTitleService(providerId);
+      });
+
+    const service = ProviderRegistry.createTitleGenerationService({
+      settings: {
+        titleGenerationModel: '',
+        providerConfigs: {
+          claude: { enabled: true },
+          codex: { enabled: true },
+        },
+      },
+    } as any);
+    const callback = jest.fn();
+
+    await service.generateTitle('conv-1', 'hello', callback);
+
+    expect(providerCalls).toEqual(['claude']);
+    expect(callback).toHaveBeenCalledWith('conv-1', {
+      success: true,
+      title: 'claude title',
+    });
+  });
+
+  it('routes explicit title model selections to the owning provider', async () => {
+    const providerCalls: ProviderId[] = [];
+    const originalCreate = ProviderRegistry.createTitleGenerationService.bind(ProviderRegistry);
+    jest.spyOn(ProviderRegistry, 'createTitleGenerationService')
+      .mockImplementation((plugin: any, providerId?: ProviderId) => {
+        if (!providerId) {
+          return originalCreate(plugin);
+        }
+        providerCalls.push(providerId);
+        return createMockTitleService(providerId);
+      });
+
+    const service = ProviderRegistry.createTitleGenerationService({
+      settings: {
+        titleGenerationModel: DEFAULT_CODEX_PRIMARY_MODEL,
+        providerConfigs: {
+          codex: { enabled: true },
+        },
+      },
+    } as any);
+    const callback = jest.fn();
+
+    await service.generateTitle('conv-1', 'hello', callback);
+
+    expect(providerCalls).toEqual(['codex']);
+    expect(callback).toHaveBeenCalledWith('conv-1', {
+      success: true,
+      title: 'codex title',
+    });
+  });
+
+  it('suppresses stale callbacks when a newer title generation replaces the old one', async () => {
+    const originalCreate = ProviderRegistry.createTitleGenerationService.bind(ProviderRegistry);
+    const claudeService = createDeferredTitleService();
+    const codexService = createMockTitleService('codex');
+
+    jest.spyOn(ProviderRegistry, 'createTitleGenerationService')
+      .mockImplementation((plugin: any, providerId?: ProviderId) => {
+        if (!providerId) {
+          return originalCreate(plugin);
+        }
+        return providerId === 'claude' ? claudeService : codexService;
+      });
+
+    const plugin = {
+      settings: {
+        titleGenerationModel: 'sonnet',
+        providerConfigs: {
+          codex: { enabled: true },
+        },
+      },
+    } as any;
+    const service = ProviderRegistry.createTitleGenerationService(plugin);
+    const callback = jest.fn();
+
+    const first = service.generateTitle('conv-1', 'first', callback);
+    plugin.settings.titleGenerationModel = DEFAULT_CODEX_PRIMARY_MODEL;
+    await service.generateTitle('conv-1', 'second', callback);
+    await claudeService.resolve({ success: true, title: 'stale title' });
+    await first;
+
+    expect(claudeService.cancel).toHaveBeenCalledTimes(1);
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(callback).toHaveBeenCalledWith('conv-1', {
+      success: true,
+      title: 'codex title',
+    });
+  });
+});
+
+function createMockTitleService(providerId: ProviderId): TitleGenerationService {
+  return {
+    cancel: jest.fn(),
+    generateTitle: jest.fn(async (conversationId, _userMessage, callback) => {
+      await callback(conversationId, {
+        success: true,
+        title: `${providerId} title`,
+      });
+    }),
+  };
+}
+
+function createDeferredTitleService(): TitleGenerationService & {
+  resolve: (result: TitleGenerationResult) => Promise<void>;
+} {
+  let callback: TitleGenerationCallback | null = null;
+  let conversationId = '';
+  let resolvePromise: (() => void) | null = null;
+  const done = new Promise<void>((resolve) => {
+    resolvePromise = resolve;
+  });
+
+  return {
+    cancel: jest.fn(),
+    generateTitle: jest.fn(async (nextConversationId, _userMessage, nextCallback) => {
+      conversationId = nextConversationId;
+      callback = nextCallback;
+      await done;
+    }),
+    resolve: async (result) => {
+      await callback?.(conversationId, result);
+      resolvePromise?.();
+    },
+  };
+}

@@ -1,0 +1,721 @@
+import type { CursorContext } from '../../utils/editor';
+import type { SharedAppStorage } from '../bootstrap/storage';
+import type { McpServerManager } from '../mcp/McpServerManager';
+import type { ChatRuntime } from '../runtime/ChatRuntime';
+import type { RuntimeHost } from '../runtime/RuntimeHost';
+import type { HomeFileAdapter } from '../storage/HomeFileAdapter';
+import type { VaultFileAdapter } from '../storage/VaultFileAdapter';
+import type {
+  AgentDefinition,
+  ChatMessage,
+  Conversation,
+  InstructionRefineResult,
+  ManagedMcpServer,
+  PluginInfo,
+  SessionMetadata,
+  SlashCommand,
+  SubagentInfo,
+  ToolCallInfo,
+  UsageInfo,
+} from '../types';
+import type { PluginContext } from '../types/PluginContext';
+import type { ProviderId } from '../types/provider';
+import type { ProviderCommandCatalog } from './commands/ProviderCommandCatalog';
+import type { ProviderSettingsTabRenderer } from './settingsWidgets';
+
+export type { ProviderId } from '../types/provider';
+export type {
+  ProviderSettingsTabRenderer,
+  ProviderSettingsTabRendererContext,
+  ProviderSettingsWidgetContext,
+  ProviderSettingsWidgetMount,
+} from './settingsWidgets';
+
+export interface ProviderCapabilities {
+  providerId: ProviderId;
+  supportsPersistentRuntime: boolean;
+  supportsNativeHistory: boolean;
+  supportsPlanMode: boolean;
+  supportsRewind: boolean;
+  supportsFork: boolean;
+  supportsProviderCommands: boolean;
+  supportsImageAttachments: boolean;
+  supportsInstructionMode: boolean;
+  supportsMcpTools: boolean;
+  supportsTurnSteer?: boolean;
+  reasoningControl: 'effort' | 'token-budget' | 'none';
+  planPathPrefix?: string;
+}
+
+export const DEFAULT_CHAT_PROVIDER_ID = 'claude' as const satisfies ProviderId;
+
+export interface CreateChatRuntimeOptions {
+  plugin: PluginContext;
+  providerId?: ProviderId;
+  /** Construction-time UI callback host (ADR-0001 Phase 2 / Move 3); replaces the former mutable callback setters. */
+  host: RuntimeHost;
+}
+
+/**
+ * Chat-facing provider registration.
+ *
+ * This is intentionally limited to chat-facing services.
+ * Shared bootstrap (defaults, storage) is in `src/core/bootstrap/`.
+ * Provider-owned workspace services (CLI resolution, commands, agents,
+ * MCP, settings tabs) live behind `src/providers/<id>/app/`.
+ */
+
+/**
+ * Provider-neutral roster agent shape handed to a provider so it can serialize
+ * the agent into its own native subagent file (path + content). Only identity +
+ * instructions are carried; tools/models stay the subagent's inherited defaults.
+ */
+export interface RosterAgentProjection {
+  name: string;
+  description: string;
+  prompt: string;
+  skills?: string[];
+  color?: string;
+}
+
+export interface ProviderRegistration {
+  displayName: string;
+  /** One-line product blurb for the first-run onboarding banner — rendered from the registry, not a hardcoded provider list (tech-debt 2026-06-07). */
+  firstRunBlurb: string;
+  /** CLI executable the provider requires on PATH (surfaced in onboarding copy). */
+  cliCommand: string;
+  blankTabOrder: number;
+  isEnabled: (settings: Record<string, unknown>) => boolean;
+  /**
+   * The provider's default settings bag, contributed at registration time so
+   * the app shell can assemble `providerConfigs` defaults without statically
+   * importing each provider's settings module (ARCH-2: breaks the
+   * `core -> app -> all-providers -> core` cycle class).
+   */
+  defaultConfig: Record<string, unknown>;
+  capabilities: ProviderCapabilities;
+  /**
+   * Canonical (Specorator-vocabulary) tool names a provider can emit after its
+   * normalization layer. Lifted as flat data so the seam can enumerate
+   * provider tools without a `providerId === 'x'` branch (ADR-0001 Phase 1 /
+   * Move 4). Cursor and Codex have argument-shape resolution that stays as
+   * logic in their normalization modules; this set is the produce-side
+   * artifact, not a bidirectional name table.
+   */
+  canonicalToolNames: ReadonlySet<string>;
+  environmentKeyPatterns?: RegExp[];
+  chatUIConfig: ProviderChatUIConfig;
+  settingsReconciler: ProviderSettingsReconciler;
+  createRuntime: (options: Omit<CreateChatRuntimeOptions, 'providerId'>) => ChatRuntime;
+  createTitleGenerationService: (plugin: PluginContext) => TitleGenerationService;
+  createInstructionRefineService: (plugin: PluginContext) => InstructionRefineService;
+  createInlineEditService: (plugin: PluginContext) => InlineEditService;
+  historyService: ProviderConversationHistoryService;
+  /** Omitted by providers without async subagent tasks; the registry substitutes a neutral default. */
+  taskResultInterpreter?: ProviderTaskResultInterpreter;
+  subagentLifecycleAdapter?: ProviderSubagentLifecycleAdapter;
+  /**
+   * Serializes a provider-neutral roster agent into this provider's native
+   * subagent file (vault-relative `path` + `content`), or `null` when the
+   * provider has no subagent convention. Lets the app publish roster agents into
+   * each provider's folder without importing provider internals.
+   */
+  projectRosterAgent?: (input: RosterAgentProjection, slug: string) => { path: string; content: string } | null;
+}
+
+/**
+ * SEC-A: resolves the effective env text for a provider WITH SecretStorage values
+ * overlaid, plus the names of any referenced secrets missing on this device.
+ * Env-hash reconciliation uses this so (a) moving a watched key into the keychain
+ * doesn't change the hash, and (b) when a *watched* secret is absent locally the
+ * env is incomplete, so invalidation is deferred until the user re-enters it.
+ */
+export type EnvTextResolver = (providerId: ProviderId) => { text: string; missingKeys: string[] };
+
+export interface ProviderSettingsReconciler {
+  handleEnvironmentChange?(settings: Record<string, unknown>): boolean;
+
+  reconcileModelWithEnvironment(
+    settings: Record<string, unknown>,
+    conversations: Conversation[],
+    resolveEnvText?: EnvTextResolver,
+  ): { changed: boolean; invalidatedConversations: Conversation[] };
+
+  normalizeModelVariantSettings(settings: Record<string, unknown>): boolean;
+
+  /**
+   * Settings cleanup applied when settings are loaded from disk. Lets a
+   * provider repair its own persisted state (e.g. reset a stale mode to a
+   * safe default) without the provider-neutral app shell importing
+   * provider-specific constants. Returns true when settings were mutated.
+   */
+  normalizeOnLoad?(settings: Record<string, unknown>): boolean;
+
+  /**
+   * Persist the provider's "last used model" into its own config namespace.
+   * Lets the app shell record model selection without importing a specific
+   * provider's settings helpers.
+   */
+  persistLastModel?(settings: Record<string, unknown>, model: string): void;
+
+  /**
+   * Persist the provider's environment hash into its own config namespace.
+   * Lets the app shell record env reconciliation state without importing a
+   * specific provider's settings helpers.
+   */
+  persistEnvironmentHash?(settings: Record<string, unknown>, hash: string): void;
+
+  /**
+   * Toggles the provider's `enabled` flag inside its own config namespace.
+   * Optional so the app shell can route enable toggles through the reconciler
+   * without importing the per-provider settings module. Each implementation
+   * delegates to its existing `update<Provider>ProviderSettings(s, { enabled })`.
+   */
+  setEnabled?(settings: Record<string, unknown>, enabled: boolean): void;
+}
+
+// ---------------------------------------------------------------------------
+// App-level service interfaces
+// ---------------------------------------------------------------------------
+
+/** Tab manager state persisted across restarts. */
+export interface AppTabManagerState {
+  openTabs: Array<{ tabId: string; conversationId: string | null; draftModel?: string | null; kind?: 'chat' | 'work-order' }>;
+  activeTabId: string | null;
+}
+
+/** Provider-neutral session metadata storage. */
+export interface AppSessionStorage {
+  listMetadata(): Promise<SessionMetadata[]>;
+  saveMetadata(meta: SessionMetadata): Promise<void>;
+  deleteMetadata(id: string): Promise<void>;
+  toSessionMetadata(conv: Conversation): SessionMetadata;
+}
+
+// ---------------------------------------------------------------------------
+// Provider-owned workspace sub-interfaces
+//
+// These remain here as standalone types so app-level settings/chat code can
+// depend on stable provider workspace contracts without importing concrete
+// provider implementations. They are NOT part of the shared bootstrap storage
+// contract (`SharedAppStorage`).
+// ---------------------------------------------------------------------------
+
+export interface AppMcpStorage {
+  load(): Promise<ManagedMcpServer[]>;
+  save(servers: ManagedMcpServer[]): Promise<void>;
+  tryParseClipboardConfig?(text: string): unknown;
+}
+
+export interface AppCommandStorage {
+  save(command: SlashCommand): Promise<void>;
+  delete(name: string): Promise<void>;
+}
+
+export interface AppSkillStorage {
+  save(skill: SlashCommand): Promise<void>;
+  delete(name: string): Promise<void>;
+}
+
+export interface AppAgentStorage {
+  load(agent: AgentDefinition): Promise<AgentDefinition | null>;
+  save(agent: AgentDefinition): Promise<void>;
+  delete(agent: AgentDefinition): Promise<void>;
+}
+
+export type AgentMentionSource = AgentDefinition['source'];
+
+export interface AgentMentionProvider {
+  searchAgents(query: string): Array<{
+    id: string;
+    name: string;
+    description?: string;
+    source: AgentMentionSource;
+  }>;
+}
+
+/** Provider plugin manager interface consumed by the app layer. */
+export interface AppPluginManager {
+  loadPlugins(): Promise<void>;
+  getPlugins(): PluginInfo[];
+  hasPlugins(): boolean;
+  hasEnabledPlugins(): boolean;
+  getEnabledCount(): number;
+  getPluginsKey(): string;
+  togglePlugin(pluginId: string): Promise<void>;
+  enablePlugin(pluginId: string): Promise<void>;
+  disablePlugin(pluginId: string): Promise<void>;
+}
+
+/** Provider agent manager interface consumed by the app layer. */
+export interface AppAgentManager extends AgentMentionProvider {
+  loadAgents(): Promise<void>;
+  getAvailableAgents(): AgentDefinition[];
+  getAgentById(id: string): AgentDefinition | undefined;
+  searchAgents(query: string): AgentDefinition[];
+  setBuiltinAgentNames(names: string[]): void;
+}
+
+// ---------------------------------------------------------------------------
+// Provider-owned chat UI configuration
+// ---------------------------------------------------------------------------
+
+/** Option for model, reasoning, or other UI selectors. */
+export interface ProviderUIOption {
+  value: string;
+  label: string;
+  description?: string;
+  /** Optional group label for visual separators in dropdowns. */
+  group?: string;
+  /** Per-option icon override (e.g. when mixing providers in a single dropdown). */
+  providerIcon?: ProviderIconSvg;
+  /**
+   * Optional per-option context window override. When a custom model row carries
+   * a contextWindow, the catalog surfaces it here so callers can prefer this
+   * value over provider defaults.
+   */
+  contextWindow?: number;
+}
+
+export interface ProviderPathIconSvg {
+  kind?: 'path';
+  viewBox: string;
+  path: string;
+}
+
+export interface ProviderSvgPathChild {
+  tag: 'path';
+  attributes: Record<string, string>;
+}
+
+export interface ProviderSvgGroupChild {
+  tag: 'g';
+  attributes: Record<string, string>;
+  children: ProviderSvgPathChild[];
+}
+
+export type ProviderSvgChild = ProviderSvgGroupChild | ProviderSvgPathChild;
+
+export interface ProviderCompositeIconSvg {
+  kind: 'composite';
+  viewBox: string;
+  children: ProviderSvgChild[];
+}
+
+/** SVG icon descriptor for provider branding in selectors and headers. */
+export type ProviderIconSvg = ProviderPathIconSvg | ProviderCompositeIconSvg;
+
+/** Extended option with token count for budget-based reasoning controls. */
+export interface ProviderReasoningOption extends ProviderUIOption {
+  tokens?: number;
+}
+
+/** Compact permission-mode toggle descriptor for providers that expose the current toolbar control. */
+export interface ProviderPermissionModeToggleConfig {
+  inactiveValue: string;
+  inactiveLabel: string;
+  activeValue: string;
+  activeLabel: string;
+  planValue?: string;
+  planLabel?: string;
+}
+
+/** Compact service-tier toggle descriptor for providers that expose a fast/standard toolbar control. */
+export interface ProviderServiceTierToggleConfig {
+  inactiveValue: string;
+  inactiveLabel: string;
+  activeValue: string;
+  activeLabel: string;
+  description?: string;
+}
+
+export interface ProviderModeSelectorConfig {
+  activeValue?: string;
+  label: string;
+  options: ProviderUIOption[];
+  value: string;
+}
+
+/** Per-model pricing descriptor. Tokens are billed per 1,000,000. */
+export interface ModelPricing {
+  /** USD per 1,000,000 input tokens. */
+  inputPer1M: number;
+  /** USD per 1,000,000 output tokens. */
+  outputPer1M: number;
+  /** USD per 1,000,000 cache-read tokens. Defaults to inputPer1M when omitted. */
+  cacheReadPer1M?: number;
+  /** USD per 1,000,000 cache-creation tokens. Defaults to inputPer1M when omitted. */
+  cacheWritePer1M?: number;
+}
+
+/** Static UI configuration owned by the provider (model list, reasoning, context window). */
+export interface ProviderChatUIConfig {
+  /** Model options for the selector dropdown. Provider extracts what it needs from the settings bag. */
+  getModelOptions(settings: Record<string, unknown>): ProviderUIOption[];
+
+  /** Whether this provider owns the given model id. */
+  ownsModel(model: string, settings: Record<string, unknown>): boolean;
+
+  /** Whether the model uses adaptive reasoning (effort levels vs token budgets). */
+  isAdaptiveReasoningModel(model: string, settings: Record<string, unknown>): boolean;
+
+  /** Reasoning options for the current model (effort levels if adaptive, budgets otherwise). */
+  getReasoningOptions(model: string, settings: Record<string, unknown>): ProviderReasoningOption[];
+
+  /** Default reasoning value for the model. */
+  getDefaultReasoningValue(model: string, settings: Record<string, unknown>): string;
+
+  /** Context window size in tokens. */
+  getContextWindowSize(model: string, customLimits?: Record<string, number>): number;
+
+  /** Optional per-model pricing seam. Returns null when pricing is not known. */
+  getModelPricing?(modelId: string): ModelPricing | null;
+
+  /** Whether this is a built-in (default) model vs custom/env model. */
+  isDefaultModel(model: string): boolean;
+
+  /** Apply model change side effects to settings (defaults, tracking). */
+  applyModelDefaults(model: string, settings: unknown): void;
+
+  /**
+   * Optional: re-validate the active `settings.model` against the provider's
+   * current option list (after custom-model edits), repointing it — with
+   * `applyModelDefaults` side effects — when it no longer resolves. Returns
+   * whether the selection changed.
+   */
+  reconcileModelSelection?(settings: Record<string, unknown>): boolean;
+
+  /** Optional provider hook to discover model-scoped metadata after a model is selected. */
+  prepareModelMetadata?(
+    model: string,
+    settings: Record<string, unknown>,
+    context: { plugin: PluginContext },
+  ): Promise<void>;
+
+  /** Optional hook when the toolbar changes a reasoning selection. */
+  applyReasoningSelection?(model: string, value: string, settings: unknown): void;
+
+  /** Normalize model variant based on visibility flags. Provider extracts what it needs from the settings bag. */
+  normalizeModelVariant(model: string, settings: Record<string, unknown>): string;
+
+  /** Extract custom model IDs from parsed environment variables. Used for per-model context limit UI. */
+  getCustomModelIds(envVars: Record<string, string>): Set<string>;
+
+  /** Optional permission-mode toggle descriptor. Return null when the provider exposes no permission toggle UI. */
+  getPermissionModeToggle?(): ProviderPermissionModeToggleConfig | null;
+
+  /** Optional provider-owned mapping back into the shared permission-mode contract. */
+  resolvePermissionMode?(settings: Record<string, unknown>): string | null;
+
+  /** Optional hook when the toolbar changes permission mode. */
+  applyPermissionMode?(value: string, settings: unknown): void;
+
+  /** Optional service-tier toggle descriptor. Return null when the provider exposes no fast/standard UI. */
+  getServiceTierToggle?(settings: Record<string, unknown>): ProviderServiceTierToggleConfig | null;
+
+  /** Optional provider-owned mode selector descriptor. */
+  getModeSelector?(settings: Record<string, unknown>): ProviderModeSelectorConfig | null;
+
+  /**
+   * Optional list of provider-owned modes for settings UIs that surface a
+   * mode dropdown outside an active selector. Returned modes are stable {id,
+   * label} pairs sourced from the provider's own settings bag. Opencode is
+   * the canonical user — its `selectedMode` setting field reads this so the
+   * field code never imports `getOpencodeProviderSettings` directly.
+   */
+  getAvailableModes?(settings: Record<string, unknown>): Array<{ id: string; label: string }>;
+
+  /** Optional hook when the toolbar changes a provider-owned mode selection. */
+  applyModeSelection?(value: string, settings: unknown): void;
+
+  /** Whether the provider enables the shared bang-bash input mode. */
+  isBangBashEnabled?(settings: Record<string, unknown>): boolean;
+
+  /**
+   * Whether the provider exposes the git commit & push toolbar action.
+   * Default behavior when omitted is enabled (any agent that can run shell
+   * commands shows the button). Return false to opt out.
+   */
+  isGitActionsEnabled?(settings: Record<string, unknown>): boolean;
+
+  /** SVG icon for the provider (shown next to model names in selectors). */
+  getProviderIcon?(): ProviderIconSvg | null;
+}
+
+// ---------------------------------------------------------------------------
+// Provider-owned boundary services
+// ---------------------------------------------------------------------------
+
+export interface ProviderCliResolver {
+  resolveFromSettings(settings: Record<string, unknown>): string | null;
+  reset(): void;
+}
+
+export interface ProviderRuntimeCommandLoaderContext {
+  // Shared command discovery may need a short-lived provider session; the tab
+  // manager decides when that is allowed for the active tab.
+  allowSessionCreation?: boolean;
+  conversation: Conversation | null;
+  externalContextPaths: string[];
+  plugin: PluginContext;
+  runtime: ChatRuntime | null;
+}
+
+export interface ProviderRuntimeCommandLoader {
+  isAvailable(settings: Record<string, unknown>): boolean;
+  loadCommands(context: ProviderRuntimeCommandLoaderContext): Promise<SlashCommand[]>;
+}
+
+// `commands` warms provider-owned command discovery without fully priming the
+// bound tab runtime. `runtime` primes the real tab runtime itself.
+export type ProviderTabWarmupMode = 'none' | 'commands' | 'runtime';
+
+export type ProviderTabWarmupLifecycleState = 'blank' | 'bound_cold' | 'bound_active' | 'closing';
+
+export interface ProviderTabWarmupContext {
+  conversation: Conversation | null;
+  externalContextPaths: string[];
+  plugin: PluginContext;
+  runtime: ChatRuntime | null;
+  tab: {
+    conversationId: string | null;
+    draftModel: string | null;
+    lifecycleState: ProviderTabWarmupLifecycleState;
+    providerId: ProviderId;
+  };
+}
+
+export interface ProviderTabWarmupPolicy {
+  resolveMode(context: ProviderTabWarmupContext): ProviderTabWarmupMode;
+}
+
+export interface ProviderWorkspaceServices {
+  commandCatalog?: ProviderCommandCatalog | null;
+  agentMentionProvider?: AgentMentionProvider | null;
+  cliResolver?: ProviderCliResolver | null;
+  runtimeCommandLoader?: ProviderRuntimeCommandLoader | null;
+  tabWarmupPolicy?: ProviderTabWarmupPolicy | null;
+  mcpServerManager?: McpServerManager | null;
+  settingsTabRenderer?: ProviderSettingsTabRenderer | null;
+  refreshAgentMentions?(): Promise<void>;
+}
+
+export interface ProviderWorkspaceInitContext {
+  plugin: PluginContext;
+  storage: SharedAppStorage;
+  vaultAdapter: VaultFileAdapter;
+  homeAdapter: HomeFileAdapter;
+}
+
+export interface ProviderWorkspaceRegistration<
+  TServices extends ProviderWorkspaceServices = ProviderWorkspaceServices,
+> {
+  initialize(context: ProviderWorkspaceInitContext): Promise<TServices>;
+}
+
+export interface HydrationContext {
+  vaultPath: string | null;
+  signal?: AbortSignal;
+  forceRefresh?: boolean;
+  reason: 'open' | 'reload' | 'tail' | 'fork-resume';
+}
+
+export type HistoryLoadErrorCode =
+  | 'store-missing'
+  | 'store-unreadable'
+  | 'sqlite-unavailable'
+  | 'parse-failed'
+  | 'invalid-session-id'
+  | 'fork-checkpoint-not-found'
+  | 'cancelled';
+
+export interface HistoryLoadError {
+  code: HistoryLoadErrorCode;
+  /** Redacted, user-safe summary. Must never embed `os.homedir()` literally. */
+  message: string;
+  /** Debug-only detail. Logged through the leveled logger, never rendered. */
+  detail?: string;
+}
+
+export type HistoryLoadOutcome =
+  | { kind: 'loaded'; messages: ChatMessage[]; sourceRef: string }
+  | { kind: 'cached'; sourceRef: string }
+  | { kind: 'empty'; reason: 'no-session' | 'no-store' | 'no-rows'; sourceRef: string | null }
+  | { kind: 'error'; error: HistoryLoadError; sourceRef: string | null };
+
+export type DeleteHistoryOutcome =
+  | { kind: 'deleted'; paths: string[] }
+  | { kind: 'no-op'; reason: 'provider-owned' | 'no-session' }
+  | { kind: 'error'; error: HistoryLoadError };
+
+export interface ProviderForkSupport {
+  isPendingForkConversation(conversation: Conversation): boolean;
+  buildForkProviderState(
+    sourceSessionId: string,
+    resumeAt: string,
+    sourceProviderState?: Record<string, unknown>,
+  ): Record<string, unknown>;
+}
+
+export interface ProviderConversationHistoryService<
+  TPersistedState = Record<string, unknown>,
+> {
+  /** Outcome-typed hydration. Returns the outcome; never mutates `conversation.messages`. */
+  hydrateConversationHistory(
+    conversation: Conversation,
+    ctx: HydrationContext,
+  ): Promise<HistoryLoadOutcome>;
+
+  /** Outcome-typed delete. */
+  deleteConversationSession(
+    conversation: Conversation,
+    ctx: HydrationContext,
+  ): Promise<DeleteHistoryOutcome>;
+
+  resolveSessionIdForConversation(conversation: Conversation | null): string | null;
+
+  /** Present only when `capabilities.supportsFork === true`. Enforced by the registry invariant test (Task 8). */
+  forkSupport?: ProviderForkSupport;
+
+  /** Provider-owned persisted metadata added to `Conversation.providerState` before session save. */
+  buildPersistedProviderState?(conversation: Conversation): TPersistedState | undefined;
+
+  /**
+   * Optional: recover the last `UsageInfo` from the provider's persisted transcript.
+   * Called by ConversationStore after message hydration when `conversation.usage` is
+   * unset. Implementations must return null on parse failure (never throw); the
+   * hydration site treats null as "no historical usage available."
+   */
+  extractLastUsage?(conversation: Conversation, ctx: HydrationContext): Promise<UsageInfo | null>;
+}
+
+export type ProviderTaskTerminalStatus = Extract<ToolCallInfo['status'], 'completed' | 'error'>;
+
+export interface ProviderTaskResultInterpreter {
+  hasAsyncLaunchMarker(toolUseResult: unknown): boolean;
+  extractAgentId(toolUseResult: unknown): string | null;
+  extractStructuredResult(toolUseResult: unknown): string | null;
+  resolveTerminalStatus(
+    toolUseResult: unknown,
+    fallbackStatus: ProviderTaskTerminalStatus,
+  ): ProviderTaskTerminalStatus;
+  extractTagValue(payload: string, tagName: string): string | null;
+  /** Nested tools from a completed sync task payload (Cursor conversationSteps). */
+  extractNestedToolCalls?(toolUseResult: unknown, parentToolUseId: string): ToolCallInfo[];
+}
+
+export interface ProviderSubagentLaunchResult {
+  agentId?: string;
+  nickname?: string;
+}
+
+export interface ProviderSubagentWaitStatus {
+  completed?: string;
+  error?: string;
+  failed?: string;
+}
+
+export interface ProviderSubagentWaitResult {
+  statuses: Record<string, ProviderSubagentWaitStatus>;
+  timedOut: boolean;
+}
+
+export interface ProviderSubagentLifecycleAdapter {
+  isHiddenTool(name: string): boolean;
+  isSpawnTool(name: string): boolean;
+  isWaitTool(name: string): boolean;
+  isCloseTool(name: string): boolean;
+  resolveSpawnToolIds(
+    waitToolCall: ToolCallInfo,
+    agentIdToSpawnId: ReadonlyMap<string, string>,
+  ): string[];
+  buildSubagentInfo(
+    spawnToolCall: ToolCallInfo,
+    siblingToolCalls?: ToolCallInfo[],
+  ): SubagentInfo;
+  extractSpawnResult(raw: string | undefined): ProviderSubagentLaunchResult;
+  extractWaitResult(raw: string | undefined): ProviderSubagentWaitResult;
+}
+
+// ---------------------------------------------------------------------------
+// Auxiliary service contracts
+// ---------------------------------------------------------------------------
+
+// -- Title generation --
+
+export type TitleGenerationResult =
+  | { success: true; title: string }
+  | { success: false; error: string };
+
+export type TitleGenerationCallback = (
+  conversationId: string,
+  result: TitleGenerationResult
+) => Promise<void>;
+
+export interface TitleGenerationService {
+  generateTitle(
+    conversationId: string,
+    userMessage: string,
+    callback: TitleGenerationCallback
+  ): Promise<void>;
+  cancel(): void;
+}
+
+// -- Instruction refinement --
+
+export type RefineProgressCallback = (update: InstructionRefineResult) => void;
+
+export interface InstructionRefineService {
+  setModelOverride?(model?: string): void;
+  resetConversation(): void;
+  refineInstruction(
+    rawInstruction: string,
+    existingInstructions: string,
+    onProgress?: RefineProgressCallback
+  ): Promise<InstructionRefineResult>;
+  continueConversation(
+    message: string,
+    onProgress?: RefineProgressCallback
+  ): Promise<InstructionRefineResult>;
+  cancel(): void;
+}
+
+// -- Inline edit --
+
+export type InlineEditMode = 'selection' | 'cursor';
+
+export interface InlineEditSelectionRequest {
+  mode: 'selection';
+  instruction: string;
+  notePath: string;
+  selectedText: string;
+  startLine?: number;
+  lineCount?: number;
+  contextFiles?: string[];
+}
+
+export interface InlineEditCursorRequest {
+  mode: 'cursor';
+  instruction: string;
+  notePath: string;
+  cursorContext: CursorContext;
+  contextFiles?: string[];
+}
+
+export type InlineEditRequest = InlineEditSelectionRequest | InlineEditCursorRequest;
+
+export interface InlineEditResult {
+  success: boolean;
+  editedText?: string;
+  insertedText?: string;
+  clarification?: string;
+  error?: string;
+}
+
+export interface InlineEditService {
+  setModelOverride?(model?: string): void;
+  resetConversation(): void;
+  editText(request: InlineEditRequest): Promise<InlineEditResult>;
+  continueConversation(message: string, contextFiles?: string[]): Promise<InlineEditResult>;
+  cancel(): void;
+}

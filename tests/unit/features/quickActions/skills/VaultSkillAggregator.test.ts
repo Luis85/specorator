@@ -1,0 +1,587 @@
+import { EventBus } from '@/core/events/EventBus';
+import type { ProviderCommandEntry } from '@/core/providers/commands/ProviderCommandEntry';
+import type { ProviderRecord, SkillTabEntry } from '@/features/quickActions/skills/types';
+import { VaultSkillAggregator } from '@/features/quickActions/skills/VaultSkillAggregator';
+
+function makeRecord(
+  overrides: Partial<ProviderRecord> & {
+    entries: ProviderCommandEntry[] | (() => Promise<ProviderCommandEntry[]>);
+  },
+): ProviderRecord {
+  const { entries, ...rest } = overrides;
+  return {
+    providerId: 'claude',
+    displayName: 'Claude',
+    isEnabled: true,
+    commandCatalog: {
+      setRuntimeCommands: jest.fn(),
+      listDropdownEntries: jest.fn().mockResolvedValue([]),
+      listVaultEntries: typeof entries === 'function'
+        ? (entries as () => Promise<ProviderCommandEntry[]>)
+        : jest.fn().mockResolvedValue(entries),
+      saveVaultEntry: jest.fn(),
+      deleteVaultEntry: jest.fn(),
+      getDropdownConfig: jest.fn().mockReturnValue({
+        providerId: rest.providerId ?? 'claude',
+        triggerChars: ['/'],
+        builtInPrefix: '/',
+        skillPrefix: '/',
+        commandPrefix: '/',
+      }),
+      refresh: jest.fn(),
+    },
+    ...rest,
+  };
+}
+
+function makeSkillEntry(overrides: Partial<ProviderCommandEntry>): ProviderCommandEntry {
+  return {
+    id: 'skill-default',
+    providerId: 'claude',
+    kind: 'skill',
+    name: 'default',
+    description: 'desc',
+    content: '',
+    scope: 'vault',
+    source: 'user',
+    isEditable: true,
+    isDeletable: true,
+    displayPrefix: '/',
+    insertPrefix: '/',
+    ...overrides,
+  };
+}
+
+describe('VaultSkillAggregator', () => {
+  it('returns empty array when no providers registered', async () => {
+    const agg = new VaultSkillAggregator(() => []);
+    expect(await agg.listAll()).toEqual([]);
+  });
+
+  it('filters out non-skill entries', async () => {
+    const records = [
+      makeRecord({
+        entries: [
+          makeSkillEntry({ id: 'skill-foo', name: 'foo' }),
+          makeSkillEntry({ id: 'cmd-bar', name: 'bar', kind: 'command' }),
+        ],
+      }),
+    ];
+    const agg = new VaultSkillAggregator(() => records);
+    const result = await agg.listAll();
+    expect(result.map((e) => e.name)).toEqual(['foo']);
+  });
+
+  it('tags entries with providerId and providerDisplayName', async () => {
+    const records = [
+      makeRecord({
+        providerId: 'codex',
+        displayName: 'Codex',
+        entries: [
+          makeSkillEntry({
+            id: 'codex-skill-x',
+            name: 'x',
+            providerId: 'codex',
+            insertPrefix: '$',
+          }),
+        ],
+      }),
+    ];
+    const agg = new VaultSkillAggregator(() => records);
+    const [entry] = await agg.listAll();
+    expect(entry.providerId).toBe('codex');
+    expect(entry.providerDisplayName).toBe('Codex');
+    expect(entry.id).toBe('codex:codex-skill-x');
+    expect(entry.insertPrefix).toBe('$');
+  });
+
+  it('sorts skills alphabetically within each provider', async () => {
+    const records = [
+      makeRecord({
+        entries: [
+          makeSkillEntry({ id: 'skill-zebra', name: 'zebra' }),
+          makeSkillEntry({ id: 'skill-apple', name: 'apple' }),
+          makeSkillEntry({ id: 'skill-mango', name: 'mango' }),
+        ],
+      }),
+    ];
+    const agg = new VaultSkillAggregator(() => records);
+    const result = await agg.listAll();
+    expect(result.map((e) => e.name)).toEqual(['apple', 'mango', 'zebra']);
+  });
+
+  it('preserves provider order from factory', async () => {
+    const records = [
+      makeRecord({
+        providerId: 'claude',
+        displayName: 'Claude',
+        entries: [makeSkillEntry({ id: 'a', name: 'a' })],
+      }),
+      makeRecord({
+        providerId: 'codex',
+        displayName: 'Codex',
+        entries: [
+          makeSkillEntry({ id: 'b', name: 'b', providerId: 'codex', insertPrefix: '$' }),
+        ],
+      }),
+    ];
+    const agg = new VaultSkillAggregator(() => records);
+    const result = await agg.listAll();
+    expect(result.map((e) => e.providerId)).toEqual(['claude', 'codex']);
+  });
+
+  it('swallows a per-provider throw and keeps others', async () => {
+    const records = [
+      makeRecord({
+        providerId: 'claude',
+        entries: () => Promise.reject(new Error('boom')),
+      }),
+      makeRecord({
+        providerId: 'codex',
+        displayName: 'Codex',
+        entries: [
+          makeSkillEntry({ id: 'b', name: 'b', providerId: 'codex', insertPrefix: '$' }),
+        ],
+      }),
+    ];
+    const agg = new VaultSkillAggregator(() => records);
+    const result = await agg.listAll();
+    expect(result.map((e) => e.providerId)).toEqual(['codex']);
+  });
+
+  it('logs a warn breadcrumb when a provider rejects and a logger is supplied', async () => {
+    const warn = jest.fn();
+    const logger = { scope: jest.fn().mockReturnValue({ warn }) };
+    const records = [
+      makeRecord({
+        providerId: 'claude',
+        entries: () => Promise.reject(new Error('boom')),
+      }),
+    ];
+    const agg = new VaultSkillAggregator(() => records, {
+      logger: logger as never,
+    });
+    await agg.listAll();
+    expect(logger.scope).toHaveBeenCalledWith('quickActions');
+    expect(warn).toHaveBeenCalledWith(
+      'vault skill aggregation failed',
+      expect.objectContaining({ providerId: 'claude' }),
+    );
+  });
+
+  it('merges empty result buckets cleanly when one provider has no skills', async () => {
+    const records = [
+      makeRecord({
+        providerId: 'claude',
+        entries: [],
+      }),
+      makeRecord({
+        providerId: 'codex',
+        displayName: 'Codex',
+        entries: [
+          makeSkillEntry({ id: 'b', name: 'b', providerId: 'codex', insertPrefix: '$' }),
+        ],
+      }),
+    ];
+    const agg = new VaultSkillAggregator(() => records);
+    const result = await agg.listAll();
+    expect(result.map((e) => e.providerId)).toEqual(['codex']);
+  });
+
+  it('maps undefined sourceFilePath to null', async () => {
+    const records = [
+      makeRecord({
+        entries: [makeSkillEntry({ id: 'skill-r', name: 'r' })],
+      }),
+    ];
+    const agg = new VaultSkillAggregator(() => records);
+    const [entry] = await agg.listAll();
+    expect(entry.sourceFilePath).toBeNull();
+  });
+
+  it('passes through sourceFilePath when present', async () => {
+    const records = [
+      makeRecord({
+        entries: [
+          makeSkillEntry({
+            id: 'skill-r',
+            name: 'r',
+            sourceFilePath: '.claude/skills/r/SKILL.md',
+          }),
+        ],
+      }),
+    ];
+    const agg = new VaultSkillAggregator(() => records);
+    const [entry] = await agg.listAll();
+    expect(entry.sourceFilePath).toBe('.claude/skills/r/SKILL.md');
+  });
+
+  it('reflects providerEnabled flag onto each entry', async () => {
+    const records = [
+      makeRecord({
+        isEnabled: false,
+        entries: [makeSkillEntry({ id: 'skill-x', name: 'x' })],
+      }),
+    ];
+    const agg = new VaultSkillAggregator(() => records);
+    const [entry] = await agg.listAll();
+    expect(entry.providerEnabled).toBe(false);
+  });
+
+  it('exposes streaming + cached + invalidate + dispose contract', () => {
+    const agg = new VaultSkillAggregator(() => []);
+    expect(typeof agg.listAll).toBe('function');
+    expect(typeof agg.listCachedNow).toBe('function');
+    expect(typeof agg.listAllStreaming).toBe('function');
+    expect(typeof agg.invalidate).toBe('function');
+    expect(typeof agg.dispose).toBe('function');
+  });
+
+  it('caches per-provider listVaultEntries calls within TTL', async () => {
+    const fetch = jest.fn().mockResolvedValue([makeSkillEntry({ id: 'skill-a', name: 'a' })]);
+    const records = [makeRecord({ entries: fetch })];
+    const agg = new VaultSkillAggregator(() => records, { ttlMs: 60_000 });
+
+    await agg.listAll();
+    await agg.listAll();
+    await agg.listAll();
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('refetches after TTL expiry', async () => {
+    let now = 1_000;
+    const fetch = jest.fn().mockResolvedValue([makeSkillEntry({ id: 'skill-a', name: 'a' })]);
+    const records = [makeRecord({ entries: fetch })];
+    const agg = new VaultSkillAggregator(() => records, {
+      ttlMs: 1_000,
+      nowMs: () => now,
+    });
+
+    await agg.listAll();
+    now += 500;
+    await agg.listAll();
+    now += 600;            // total elapsed 1100ms > ttl
+    await agg.listAll();
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('reflects current providerEnabled on cache hit (no refetch needed)', async () => {
+    const fetch = jest.fn().mockResolvedValue([makeSkillEntry({ id: 'skill-a', name: 'a' })]);
+    let enabled = true;
+    const recordsFactory = () => [
+      makeRecord({
+        entries: fetch,
+        get isEnabled() {
+          return enabled;
+        },
+      } as never),
+    ];
+    const agg = new VaultSkillAggregator(recordsFactory, { ttlMs: 60_000 });
+
+    const [first] = await agg.listAll();
+    expect(first.providerEnabled).toBe(true);
+
+    enabled = false;
+    const [second] = await agg.listAll();
+    expect(second.providerEnabled).toBe(false);
+    expect(fetch).toHaveBeenCalledTimes(1);   // bucket reused
+  });
+
+  it('invalidate(providerId) clears only that bucket', async () => {
+    const fetchA = jest.fn().mockResolvedValue([makeSkillEntry({ id: 'a', name: 'a' })]);
+    const fetchB = jest.fn().mockResolvedValue([
+      makeSkillEntry({ id: 'b', name: 'b', providerId: 'codex', insertPrefix: '$' }),
+    ]);
+    const records = [
+      makeRecord({ providerId: 'claude', entries: fetchA }),
+      makeRecord({ providerId: 'codex', displayName: 'Codex', entries: fetchB }),
+    ];
+    const agg = new VaultSkillAggregator(() => records, { ttlMs: 60_000 });
+    await agg.listAll();
+    expect(fetchA).toHaveBeenCalledTimes(1);
+    expect(fetchB).toHaveBeenCalledTimes(1);
+
+    agg.invalidate('claude');
+    await agg.listAll();
+    expect(fetchA).toHaveBeenCalledTimes(2);
+    expect(fetchB).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalidate() with no arg clears all buckets', async () => {
+    const fetch = jest.fn().mockResolvedValue([makeSkillEntry({ id: 'a', name: 'a' })]);
+    const records = [makeRecord({ entries: fetch })];
+    const agg = new VaultSkillAggregator(() => records, { ttlMs: 60_000 });
+    await agg.listAll();
+    agg.invalidate();
+    await agg.listAll();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('subscribes to EventBus vaultSkill.changed and invalidates the matching provider', async () => {
+    const bus = new EventBus<{ 'vaultSkill.changed': { providerId: 'claude' | 'codex' } }>();
+    const fetch = jest.fn().mockResolvedValue([makeSkillEntry({ id: 'a', name: 'a' })]);
+    const records = [makeRecord({ providerId: 'claude', entries: fetch })];
+    const agg = new VaultSkillAggregator(() => records, {
+      ttlMs: 60_000,
+      eventBus: bus as never,
+    });
+
+    await agg.listAll();
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    bus.emit('vaultSkill.changed', { providerId: 'claude' });
+    await agg.listAll();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('dispose() unsubscribes EventBus and clears caches', async () => {
+    const bus = new EventBus<{ 'vaultSkill.changed': { providerId: 'claude' | 'codex' } }>();
+    const fetch = jest.fn().mockResolvedValue([makeSkillEntry({ id: 'a', name: 'a' })]);
+    const records = [makeRecord({ providerId: 'claude', entries: fetch })];
+    const agg = new VaultSkillAggregator(() => records, {
+      ttlMs: 60_000,
+      eventBus: bus as never,
+    });
+
+    await agg.listAll();
+    agg.dispose();
+
+    // After dispose, emit should not invalidate (cache cleared anyway, but
+    // event handler must be unregistered to prevent late re-entry)
+    bus.emit('vaultSkill.changed', { providerId: 'claude' });
+
+    // Cache cleared by dispose, so this refetches
+    await agg.listAll();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    // No double-invalidate from a stale handler
+    await agg.listAll();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('deduplicates concurrent fetches per provider', async () => {
+    let resolveFn: (v: ProviderCommandEntry[]) => void = () => {};
+    const pending = new Promise<ProviderCommandEntry[]>((r) => { resolveFn = r; });
+    const fetch = jest.fn().mockReturnValue(pending);
+    const records = [makeRecord({ entries: fetch })];
+    const agg = new VaultSkillAggregator(() => records, { ttlMs: 60_000 });
+
+    const p1 = agg.listAll();
+    const p2 = agg.listAll();
+    const p3 = agg.listAll();
+    resolveFn([makeSkillEntry({ id: 'a', name: 'a' })]);
+    await Promise.all([p1, p2, p3]);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('listCachedNow returns empty before any fetch', () => {
+    const agg = new VaultSkillAggregator(() => []);
+    expect(agg.listCachedNow()).toEqual([]);
+  });
+
+  it('listCachedNow returns SkillTabEntry[] from in-memory cache after fetch', async () => {
+    const records = [
+      makeRecord({
+        entries: [
+          makeSkillEntry({ id: 'skill-z', name: 'z' }),
+          makeSkillEntry({ id: 'skill-a', name: 'a' }),
+        ],
+      }),
+    ];
+    const agg = new VaultSkillAggregator(() => records, { ttlMs: 60_000 });
+    await agg.listAll();
+    const cached = agg.listCachedNow();
+    expect(cached.map((e) => e.name)).toEqual(['a', 'z']);
+  });
+
+  it('listCachedNow returns cached entries even after TTL expiry', async () => {
+    let now = 1_000;
+    const records = [
+      makeRecord({ entries: [makeSkillEntry({ id: 'skill-a', name: 'a' })] }),
+    ];
+    const agg = new VaultSkillAggregator(() => records, {
+      ttlMs: 100,
+      nowMs: () => now,
+    });
+    await agg.listAll();
+    now += 5_000;
+    expect(agg.listCachedNow().map((e) => e.name)).toEqual(['a']);
+  });
+
+  it('listCachedNow re-tags providerEnabled from current records', async () => {
+    let enabled = true;
+    const recordsFactory = () => [
+      makeRecord({
+        entries: [makeSkillEntry({ id: 'skill-a', name: 'a' })],
+        get isEnabled() { return enabled; },
+      } as never),
+    ];
+    const agg = new VaultSkillAggregator(recordsFactory, { ttlMs: 60_000 });
+    await agg.listAll();
+    enabled = false;
+    const [entry] = agg.listCachedNow();
+    expect(entry.providerEnabled).toBe(false);
+  });
+
+  it('listAllStreaming fires callback once per provider in resolution order', async () => {
+    let resolveFast: (v: ProviderCommandEntry[]) => void = () => {};
+    let resolveSlow: (v: ProviderCommandEntry[]) => void = () => {};
+    const fast = new Promise<ProviderCommandEntry[]>((r) => { resolveFast = r; });
+    const slow = new Promise<ProviderCommandEntry[]>((r) => { resolveSlow = r; });
+    const records = [
+      makeRecord({ providerId: 'claude', entries: () => slow }),
+      makeRecord({ providerId: 'codex', displayName: 'Codex', entries: () => fast }),
+    ];
+    const agg = new VaultSkillAggregator(() => records, { ttlMs: 60_000 });
+
+    const seen: string[] = [];
+    const done = agg.listAllStreaming((providerId) => { seen.push(providerId); });
+
+    resolveFast([makeSkillEntry({ id: 'codex-x', name: 'x', providerId: 'codex', insertPrefix: '$' })]);
+    resolveSlow([makeSkillEntry({ id: 'skill-y', name: 'y' })]);
+
+    await done;
+    expect(seen).toEqual(['codex', 'claude']);
+  });
+
+  it('listAllStreaming resolves after every provider settles', async () => {
+    const records = [
+      makeRecord({ entries: [makeSkillEntry({ id: 'a', name: 'a' })] }),
+      makeRecord({
+        providerId: 'codex',
+        displayName: 'Codex',
+        entries: [makeSkillEntry({ id: 'b', name: 'b', providerId: 'codex', insertPrefix: '$' })],
+      }),
+    ];
+    const agg = new VaultSkillAggregator(() => records, { ttlMs: 60_000 });
+    const seen: string[] = [];
+    await agg.listAllStreaming((p) => { seen.push(p); });
+    expect(new Set(seen)).toEqual(new Set(['claude', 'codex']));
+  });
+
+  it('listAllStreaming callback receives sorted SkillTabEntry[] for that provider', async () => {
+    const records = [
+      makeRecord({
+        entries: [
+          makeSkillEntry({ id: 'skill-z', name: 'z' }),
+          makeSkillEntry({ id: 'skill-a', name: 'a' }),
+        ],
+      }),
+    ];
+    const agg = new VaultSkillAggregator(() => records, { ttlMs: 60_000 });
+    let received: SkillTabEntry[] = [];
+    await agg.listAllStreaming((_id, entries) => { received = entries; });
+    expect(received.map((e) => e.name)).toEqual(['a', 'z']);
+  });
+
+  it('listAllStreaming still fires for a provider whose fetch throws (empty entries)', async () => {
+    const records = [
+      makeRecord({
+        providerId: 'claude',
+        entries: () => Promise.reject(new Error('boom')),
+      }),
+    ];
+    const agg = new VaultSkillAggregator(() => records, { ttlMs: 60_000 });
+    const seen: Array<{ p: string; n: number }> = [];
+    await agg.listAllStreaming((p, e) => { seen.push({ p, n: e.length }); });
+    expect(seen).toEqual([{ p: 'claude', n: 0 }]);
+  });
+
+  it('hydrate() populates cache from a stubbed adapter so listCachedNow returns entries before any fetch', async () => {
+    const stored = JSON.stringify({
+      schemaVersion: 1,
+      writtenAt: 1,
+      buckets: {
+        claude: [
+          {
+            id: 'skill-hydrated',
+            providerId: 'claude',
+            kind: 'skill',
+            name: 'hydrated',
+            description: 'from disk',
+            content: '',
+            scope: 'vault',
+            source: 'user',
+            isEditable: true,
+            isDeletable: true,
+            displayPrefix: '/',
+            insertPrefix: '/',
+            sourceFilePath: '.claude/skills/hydrated/SKILL.md',
+          },
+        ],
+      },
+    });
+    const adapter = {
+      exists: jest.fn().mockResolvedValue(true),
+      read: jest.fn().mockResolvedValue(stored),
+      write: jest.fn().mockResolvedValue(undefined),
+    };
+    const fetch = jest.fn().mockResolvedValue([]);
+    const records = [makeRecord({ entries: fetch })];
+    const agg = new VaultSkillAggregator(() => records, {
+      ttlMs: 60_000,
+      cacheAdapter: adapter as never,
+      cachePath: '.specorator/cache/skill-index.json',
+    });
+    await agg.hydrate();
+    expect(adapter.read).toHaveBeenCalledWith('.specorator/cache/skill-index.json');
+    expect(agg.listCachedNow().map((e) => e.name)).toEqual(['hydrated']);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('hydrate() no-ops when cache file missing', async () => {
+    const adapter = {
+      exists: jest.fn().mockResolvedValue(false),
+      read: jest.fn(),
+      write: jest.fn(),
+    };
+    const agg = new VaultSkillAggregator(() => [], {
+      cacheAdapter: adapter as never,
+    });
+    await agg.hydrate();
+    expect(adapter.read).not.toHaveBeenCalled();
+  });
+
+  it('hydrate() ignores malformed JSON and logs a warn', async () => {
+    const warn = jest.fn();
+    const logger = { scope: jest.fn().mockReturnValue({ warn }) };
+    const adapter = {
+      exists: jest.fn().mockResolvedValue(true),
+      read: jest.fn().mockResolvedValue('not json'),
+      write: jest.fn(),
+    };
+    const agg = new VaultSkillAggregator(() => [], {
+      cacheAdapter: adapter as never,
+      logger: logger as never,
+    });
+    await agg.hydrate();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('hydrate'));
+  });
+
+  it('persists to disk after a successful fetch (debounced)', async () => {
+    jest.useFakeTimers();
+    const adapter = {
+      exists: jest.fn().mockResolvedValue(false),
+      read: jest.fn(),
+      write: jest.fn().mockResolvedValue(undefined),
+    };
+    const records = [makeRecord({ entries: [makeSkillEntry({ id: 'a', name: 'a' })] })];
+    const agg = new VaultSkillAggregator(() => records, {
+      ttlMs: 60_000,
+      cacheAdapter: adapter as never,
+      cachePath: '.specorator/cache/skill-index.json',
+    });
+    await agg.listAll();
+    expect(adapter.write).not.toHaveBeenCalled();    // debounce pending
+    jest.advanceTimersByTime(1100);
+    await Promise.resolve();                          // flush microtasks
+    await Promise.resolve();
+    expect(adapter.write).toHaveBeenCalledTimes(1);
+    const [path, body] = adapter.write.mock.calls[0];
+    expect(path).toBe('.specorator/cache/skill-index.json');
+    expect(JSON.parse(body).buckets.claude[0].name).toBe('a');
+    jest.useRealTimers();
+  });
+});

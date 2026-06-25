@@ -1,0 +1,206 @@
+/* File chip modifier accents */
+.specorator-file-chip--folder .specorator-file-chip-icon {
+  color: var(--text-accent);
+}
+
+.specorator-file-chip--current {
+  border-color: var(--interactive-accent);
+}
+
+.specorator-file-chip--folder {
+  cursor: default;
+}
+
+.specorator-file-chip--file,
+.specorator-file-chip--current {
+  cursor: pointer;
+}
+
+/* @ Mention dropdown */
+.specorator-mention-dropdown {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 4px;
+  background: var(--background-secondary);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.specorator-mention-dropdown.visible {
+  display: block;
+}
+
+/* Fixed positioning for inline editor */
+.specorator-mention-dropdown-fixed {
+  position: fixed;
+  bottom: var(--specorator-fixed-dropdown-bottom);
+  left: var(--specorator-fixed-dropdown-left);
+  right: auto;
+  width: var(--specorator-fixed-dropdown-width);
+  z-index: 10001;
+}
+
+.specorator-mention-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.specorator-mention-item:hover,
+.specorator-mention-item.selected {
+  background: var(--background-modifier-hover);
+}
+
+.specorator-mention-icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.specorator-mention-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.specorator-mention-path {
+  font-size: 13px;
+  color: var(--text-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.specorator-mention-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Scrollbar for mention dropdown */
+.specorator-mention-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.specorator-mention-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.specorator-mention-dropdown::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+  border-radius: 3px;
+}
+
+/* MCP items in @-mention dropdown */
+.specorator-mention-item.mcp-server .specorator-mention-icon {
+  color: var(--interactive-accent);
+}
+
+.specorator-mention-item.vault-folder .specorator-mention-icon {
+  color: var(--text-muted);
+}
+
+.specorator-mention-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.specorator-mention-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--interactive-accent);
+}
+
+.specorator-mention-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Context file items in @-mention dropdown */
+.specorator-mention-item.context-file .specorator-mention-icon {
+  color: var(--specorator-brand);
+}
+
+.specorator-mention-item.context-file .specorator-mention-text {
+  flex-direction: row;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.specorator-mention-item.context-file .specorator-mention-name-context {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* Context folder filter items in @-mention dropdown */
+.specorator-mention-item.context-folder .specorator-mention-icon {
+  color: var(--text-muted);
+}
+
+.specorator-mention-name-folder {
+  color: var(--text-normal);
+  font-weight: 500;
+}
+
+.specorator-mention-name-context {
+  color: var(--text-normal);
+}
+
+/* Agent folder items in @-mention dropdown */
+.specorator-mention-item.agent-folder .specorator-mention-icon {
+  color: var(--link-color);
+}
+
+.specorator-mention-name-agent-folder {
+  color: var(--link-color);
+  font-weight: 600;
+}
+
+/* Agent items in @-mention dropdown (inside @Agents/) */
+.specorator-mention-item.agent .specorator-mention-icon {
+  color: var(--link-color);
+}
+
+.specorator-mention-item.agent .specorator-mention-text {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.specorator-mention-item.agent .specorator-mention-name-agent {
+  color: var(--text-normal);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.specorator-mention-item.agent .specorator-mention-agent-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}

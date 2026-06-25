@@ -1,0 +1,103 @@
+/* Plan Mode - inline cards for EnterPlanMode / ExitPlanMode */
+
+.specorator-plan-approval-inline {
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  outline: none;
+}
+
+.specorator-plan-inline-title {
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 6px 10px 0;
+}
+
+/* ── Plan content preview ────────────────────────── */
+
+.specorator-plan-content-preview {
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 6px 10px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-normal);
+}
+
+.specorator-plan-content-preview::-webkit-scrollbar {
+  width: 4px;
+}
+
+.specorator-plan-content-preview::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+  border-radius: 2px;
+}
+
+.specorator-plan-content-preview p {
+  margin: 0 0 6px;
+}
+
+.specorator-plan-content-preview p:last-child {
+  margin-bottom: 0;
+}
+
+.specorator-plan-content-preview h1,
+.specorator-plan-content-preview h2,
+.specorator-plan-content-preview h3,
+.specorator-plan-content-preview h4 {
+  margin: 8px 0 4px;
+  font-size: 13px;
+}
+
+.specorator-plan-content-preview ul,
+.specorator-plan-content-preview ol {
+  margin: 2px 0 6px;
+  padding-left: 18px;
+}
+
+.specorator-plan-content-preview li {
+  margin: 0;
+}
+
+.specorator-plan-content-preview code {
+  font-size: 11px;
+}
+
+.specorator-plan-content-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-monospace);
+}
+
+/* ── Permissions list ──────────────────────────── */
+
+.specorator-plan-permissions {
+  padding: 4px 10px 8px;
+}
+
+.specorator-plan-permissions-label {
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.specorator-plan-permissions-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-normal);
+  line-height: 1.5;
+}
+
+.specorator-plan-permissions-list li {
+  margin: 0;
+}
+
+/* ── Plan mode input border ──────────────────────── */
+
+.specorator-input-wrapper.specorator-input-plan-mode {
+  border-color: rgb(92, 148, 140) !important;
+  box-shadow: 0 0 0 1px rgb(92, 148, 140);
+}

@@ -1,0 +1,39 @@
+/* Empty state shown when no chat provider is enabled */
+.specorator-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex: 1;
+  padding: 24px;
+  text-align: center;
+}
+
+.specorator-empty-state-title {
+  margin: 0;
+  color: var(--text-normal);
+}
+
+.specorator-empty-state-message {
+  margin: 0;
+  max-width: 320px;
+  color: var(--text-muted);
+}
+
+.specorator-empty-state-steps {
+  margin: 0;
+  max-width: 320px;
+  padding-left: 20px;
+  text-align: left;
+  color: var(--text-muted);
+}
+
+.specorator-empty-state-steps li {
+  margin-bottom: 6px;
+}
+
+.specorator-empty-state-button {
+  margin-top: 4px;
+  cursor: pointer;
+}

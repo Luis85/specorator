@@ -1,0 +1,32 @@
+.specorator-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+  font-family: var(--font-text);
+}
+
+.specorator-hidden {
+  display: none !important;
+}
+
+.specorator-visible-block {
+  display: block !important;
+}
+
+.specorator-visible-flex {
+  display: flex !important;
+}
+
+.specorator-provider-icon-variant--dark {
+  display: none;
+}
+
+body.theme-dark .specorator-provider-icon-variant--light {
+  display: none;
+}
+
+body.theme-dark .specorator-provider-icon-variant--dark {
+  display: inline;
+}

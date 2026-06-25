@@ -1,0 +1,69 @@
+import { CachedCliResolver } from '../../../core/providers/CachedCliResolver';
+import type { ProviderCommandCatalog } from '../../../core/providers/commands/ProviderCommandCatalog';
+import type {
+  ProviderCliResolver,
+  ProviderWorkspaceRegistration,
+  ProviderWorkspaceServices,
+} from '../../../core/providers/types';
+import type { HomeFileAdapter } from '../../../core/storage/HomeFileAdapter';
+import type { VaultFileAdapter } from '../../../core/storage/VaultFileAdapter';
+import type { PluginContext } from '../../../core/types/PluginContext';
+import { getVaultPath } from '../../../utils/path';
+import { CodexAgentMentionProvider } from '../agents/CodexAgentMentionProvider';
+import { CodexSkillCatalog } from '../commands/CodexSkillCatalog';
+import { codexCliSpec } from '../runtime/CodexCliResolver';
+import { CodexSkillListingService } from '../skills/CodexSkillListingService';
+import { CodexSkillStorage } from '../storage/CodexSkillStorage';
+import { CodexSubagentStorage } from '../storage/CodexSubagentStorage';
+import { codexSettingsTabRenderer } from '../ui/CodexSettingsTab';
+
+export interface CodexWorkspaceServices extends ProviderWorkspaceServices {
+  subagentStorage: CodexSubagentStorage;
+  commandCatalog: ProviderCommandCatalog;
+  agentMentionProvider: CodexAgentMentionProvider;
+  cliResolver: ProviderCliResolver;
+}
+
+function createCodexCliResolver(): ProviderCliResolver {
+  return new CachedCliResolver(codexCliSpec);
+}
+
+export async function createCodexWorkspaceServices(
+  plugin: PluginContext,
+  vaultAdapter: VaultFileAdapter,
+  homeAdapter: HomeFileAdapter,
+): Promise<CodexWorkspaceServices> {
+  const subagentStorage = new CodexSubagentStorage(vaultAdapter);
+  const agentMentionProvider = new CodexAgentMentionProvider(subagentStorage);
+  await agentMentionProvider.loadAgents();
+
+  const skillListProvider = new CodexSkillListingService(plugin);
+  const commandCatalog = new CodexSkillCatalog(
+    new CodexSkillStorage(
+      vaultAdapter,
+      homeAdapter,
+    ),
+    skillListProvider,
+    getVaultPath(plugin.app),
+    plugin.events,
+  );
+
+  return {
+    subagentStorage,
+    commandCatalog,
+    agentMentionProvider,
+    cliResolver: createCodexCliResolver(),
+    settingsTabRenderer: codexSettingsTabRenderer,
+    refreshAgentMentions: async () => {
+      await agentMentionProvider.loadAgents();
+    },
+  };
+}
+
+export const codexWorkspaceRegistration: ProviderWorkspaceRegistration<CodexWorkspaceServices> = {
+  initialize: async ({ plugin, vaultAdapter, homeAdapter }) => createCodexWorkspaceServices(
+    plugin,
+    vaultAdapter,
+    homeAdapter,
+  ),
+};

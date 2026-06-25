@@ -1,0 +1,351 @@
+import * as path from 'node:path';
+
+import { normalizePath } from 'obsidian';
+
+import type { VaultFileAdapter } from '../../../core/storage/VaultFileAdapter';
+import { extractBoolean, isRecord, parseFrontmatter } from '../../../utils/frontmatter';
+import { serializeExtraFrontmatter, serializeFrontmatterValue, yamlString } from '../../../utils/slashCommand';
+import {
+  OPENCODE_AGENT_KNOWN_KEYS,
+  type OpencodeAgentDefinition,
+} from '../types/agent';
+
+export const OPENCODE_AGENT_PATH = '.opencode/agent';
+export const OPENCODE_AGENTS_PATH = '.opencode/agents';
+const OPENCODE_AGENT_SCAN_PATHS = [
+  OPENCODE_AGENTS_PATH,
+  OPENCODE_AGENT_PATH,
+] as const;
+const OPENCODE_DEFAULT_AGENT_SAVE_PATH = OPENCODE_AGENT_PATH;
+const OPENCODE_AGENT_PERSISTENCE_PREFIX = 'opencode-agent';
+
+export interface OpencodeAgentLocation {
+  filePath: string;
+}
+
+export function createOpencodeAgentPersistenceKey(
+  location: OpencodeAgentLocation,
+): string {
+  return `${OPENCODE_AGENT_PERSISTENCE_PREFIX}:${encodeURIComponent(normalizeVaultPath(location.filePath))}`;
+}
+
+export function parseOpencodeAgentPersistenceKey(
+  persistenceKey?: string,
+): OpencodeAgentLocation | null {
+  if (!persistenceKey) {
+    return null;
+  }
+
+  const normalizedKey = normalizeVaultPath(persistenceKey);
+  if (isSupportedAgentFilePath(normalizedKey)) {
+    return { filePath: normalizedKey };
+  }
+
+  const [prefix, encodedRelativePath] = persistenceKey.split(':');
+  if (prefix !== OPENCODE_AGENT_PERSISTENCE_PREFIX || !encodedRelativePath) {
+    return null;
+  }
+
+  const decoded = normalizeVaultPath(decodeURIComponent(encodedRelativePath));
+  if (isSupportedAgentFilePath(decoded)) {
+    return { filePath: decoded };
+  }
+
+  return decoded.endsWith('.md')
+    ? { filePath: `${OPENCODE_AGENTS_PATH}/${decoded}` }
+    : null;
+}
+
+export class OpencodeAgentStorage {
+  constructor(
+    private vaultAdapter: Pick<VaultFileAdapter, 'exists' | 'read' | 'write' | 'delete' | 'listFilesRecursive' | 'ensureFolder'>,
+  ) {}
+
+  async loadAll(): Promise<OpencodeAgentDefinition[]> {
+    return this.scanAdapter(this.vaultAdapter);
+  }
+
+  async load(agent: OpencodeAgentDefinition): Promise<OpencodeAgentDefinition | null> {
+    const filePath = this.resolveCurrentPath(agent);
+    try {
+      if (!(await this.vaultAdapter.exists(filePath))) return null;
+      const content = await this.vaultAdapter.read(filePath);
+      return parseOpencodeAgentMarkdown(content, filePath);
+    } catch {
+      return null;
+    }
+  }
+
+  async save(agent: OpencodeAgentDefinition, previous?: OpencodeAgentDefinition | null): Promise<void> {
+    const filePath = this.resolveTargetPath(agent, previous);
+    const previousPath = previous ? this.resolveCurrentPath(previous) : null;
+    await this.vaultAdapter.ensureFolder(path.posix.dirname(filePath));
+    const content = serializeOpencodeAgentMarkdown(agent);
+    await this.vaultAdapter.write(filePath, content);
+
+    if (previousPath && previousPath !== filePath) {
+      await this.vaultAdapter.delete(previousPath);
+    }
+  }
+
+  async delete(agent: OpencodeAgentDefinition): Promise<void> {
+    const filePath = this.resolveCurrentPath(agent);
+    await this.vaultAdapter.delete(filePath);
+  }
+
+  private resolveCurrentPath(agent: OpencodeAgentDefinition): string {
+    // persistenceKey path and agent.name are user-/agent-supplied; normalize the
+    // vault path before it reaches the adapter's read/write/delete calls.
+    const persistedLocation = parseOpencodeAgentPersistenceKey(agent.persistenceKey);
+    if (persistedLocation) {
+      return normalizePath(persistedLocation.filePath);
+    }
+
+    return normalizePath(`${OPENCODE_DEFAULT_AGENT_SAVE_PATH}/${agent.name}.md`);
+  }
+
+  private resolveTargetPath(
+    agent: OpencodeAgentDefinition,
+    previous?: OpencodeAgentDefinition | null,
+  ): string {
+    if (previous && previous.name === agent.name) {
+      return this.resolveCurrentPath(previous);
+    }
+
+    return normalizePath(`${OPENCODE_DEFAULT_AGENT_SAVE_PATH}/${agent.name}.md`);
+  }
+
+  private async scanAdapter(
+    adapter: Pick<VaultFileAdapter, 'read' | 'listFilesRecursive'>,
+  ): Promise<OpencodeAgentDefinition[]> {
+    const agentsByName = new Map<string, OpencodeAgentDefinition>();
+
+    for (const rootPath of OPENCODE_AGENT_SCAN_PATHS) {
+      try {
+        const files = await adapter.listFilesRecursive(rootPath);
+        for (const filePath of files) {
+          if (!filePath.endsWith('.md')) continue;
+          try {
+            const content = await adapter.read(filePath);
+            const agent = parseOpencodeAgentMarkdown(content, filePath);
+            if (!agent) continue;
+
+            const dedupeKey = agent.name.toLowerCase();
+            agentsByName.delete(dedupeKey);
+            agentsByName.set(dedupeKey, agent);
+          } catch {
+            // Skip malformed files
+          }
+        }
+      } catch {
+        // Directory doesn't exist yet
+      }
+    }
+
+    return Array.from(agentsByName.values());
+  }
+}
+
+export function parseOpencodeAgentMarkdown(
+  content: string,
+  filePath: string,
+): OpencodeAgentDefinition | null {
+  const parsed = parseFrontmatter(content);
+  if (!parsed) {
+    return null;
+  }
+
+  const fileName = normalizeAgentNameFromPath(filePath);
+  const frontmatter = parsed.frontmatter;
+  const rawName = typeof frontmatter.name === 'string' ? frontmatter.name.trim() : '';
+  const name = rawName || fileName;
+  const description = typeof frontmatter.description === 'string' ? frontmatter.description.trim() : '';
+
+  if (!name || !description) {
+    return null;
+  }
+
+  const result: OpencodeAgentDefinition = {
+    name,
+    description,
+    prompt: parsed.body.trim(),
+    persistenceKey: createOpencodeAgentPersistenceKey({
+      filePath: normalizeVaultPath(filePath),
+    }),
+  };
+
+  applyModelFrontmatter(result, frontmatter);
+  applyBehaviorFrontmatter(result, frontmatter);
+
+  const extraFrontmatter: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(frontmatter)) {
+    if (!OPENCODE_AGENT_KNOWN_KEYS.has(key)) {
+      extraFrontmatter[key] = value;
+    }
+  }
+  if (Object.keys(extraFrontmatter).length > 0) {
+    result.extraFrontmatter = extraFrontmatter;
+  }
+
+  return result;
+}
+
+function applyModelFrontmatter(
+  result: OpencodeAgentDefinition,
+  frontmatter: Record<string, unknown>,
+): void {
+  const mode = normalizeMode(frontmatter.mode);
+  if (mode) result.mode = mode;
+
+  const model = normalizeTrimmedString(frontmatter.model);
+  if (model) result.model = model;
+
+  const variant = normalizeTrimmedString(frontmatter.variant);
+  if (variant) result.variant = variant;
+
+  const temperature = normalizeFiniteNumber(frontmatter.temperature);
+  if (temperature !== undefined) {
+    result.temperature = temperature;
+  }
+  const topP = normalizeFiniteNumber(frontmatter.top_p);
+  if (topP !== undefined) {
+    result.topP = topP;
+  }
+
+  const color = normalizeTrimmedString(frontmatter.color);
+  if (color) result.color = color;
+}
+
+function applyBehaviorFrontmatter(
+  result: OpencodeAgentDefinition,
+  frontmatter: Record<string, unknown>,
+): void {
+  const steps = normalizePositiveInteger(frontmatter.steps) ?? normalizePositiveInteger(frontmatter.maxSteps);
+  if (steps !== undefined) {
+    result.steps = steps;
+  }
+
+  if (extractBoolean(frontmatter, 'hidden') !== undefined) {
+    result.hidden = extractBoolean(frontmatter, 'hidden');
+  }
+  if (extractBoolean(frontmatter, 'disable') !== undefined) {
+    result.disable = extractBoolean(frontmatter, 'disable');
+  }
+
+  if (isBooleanRecord(frontmatter.tools)) {
+    result.tools = { ...frontmatter.tools };
+  }
+  if (isRecord(frontmatter.options)) {
+    result.options = { ...frontmatter.options };
+  }
+  if (frontmatter.permission !== undefined) {
+    result.permission = frontmatter.permission;
+  }
+}
+
+export function serializeOpencodeAgentMarkdown(agent: OpencodeAgentDefinition): string {
+  const lines: string[] = ['---'];
+
+  lines.push(`name: ${yamlString(agent.name)}`);
+  lines.push(`description: ${yamlString(agent.description)}`);
+
+  if (agent.mode) {
+    lines.push(`mode: ${agent.mode}`);
+  }
+  if (agent.model) {
+    lines.push(`model: ${serializeFrontmatterValue(agent.model)}`);
+  }
+  if (agent.variant) {
+    lines.push(`variant: ${serializeFrontmatterValue(agent.variant)}`);
+  }
+  if (agent.temperature !== undefined) {
+    lines.push(`temperature: ${serializeFrontmatterValue(agent.temperature)}`);
+  }
+  if (agent.topP !== undefined) {
+    lines.push(`top_p: ${serializeFrontmatterValue(agent.topP)}`);
+  }
+  if (agent.color) {
+    lines.push(`color: ${serializeFrontmatterValue(agent.color)}`);
+  }
+  if (agent.steps !== undefined) {
+    lines.push(`steps: ${serializeFrontmatterValue(agent.steps)}`);
+  }
+  if (agent.hidden) {
+    lines.push('hidden: true');
+  }
+  if (agent.disable) {
+    lines.push('disable: true');
+  }
+  if (agent.tools && Object.keys(agent.tools).length > 0) {
+    lines.push(`tools: ${serializeFrontmatterValue(agent.tools)}`);
+  }
+  if (agent.options && Object.keys(agent.options).length > 0) {
+    lines.push(`options: ${serializeFrontmatterValue(agent.options)}`);
+  }
+  if (agent.permission !== undefined) {
+    lines.push(`permission: ${serializeFrontmatterValue(agent.permission)}`);
+  }
+
+  serializeExtraFrontmatter(lines, agent.extraFrontmatter);
+
+  lines.push('---');
+  lines.push(agent.prompt);
+
+  return lines.join('\n');
+}
+
+function normalizeAgentNameFromPath(filePath: string): string {
+  const relativePath = toRelativeAgentPath(filePath);
+  return relativePath.replace(/\.md$/i, '');
+}
+
+function toRelativeAgentPath(filePath: string): string {
+  const normalized = normalizeVaultPath(filePath);
+
+  for (const rootPath of OPENCODE_AGENT_SCAN_PATHS) {
+    const prefix = `${rootPath}/`;
+    const index = normalized.lastIndexOf(prefix);
+    if (index >= 0) {
+      return normalized.slice(index + prefix.length);
+    }
+  }
+
+  return normalized.split('/').pop() ?? normalized;
+}
+
+function normalizeMode(value: unknown): OpencodeAgentDefinition['mode'] | undefined {
+  return value === 'subagent' || value === 'primary' || value === 'all'
+    ? value
+    : undefined;
+}
+
+function normalizeFiniteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function normalizeTrimmedString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function normalizePositiveInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+    ? value
+    : undefined;
+}
+
+function isBooleanRecord(value: unknown): value is Record<string, boolean> {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return Object.values(value).every((entry) => typeof entry === 'boolean');
+}
+
+function normalizeVaultPath(filePath: string): string {
+  return filePath.replace(/\\/g, '/');
+}
+
+function isSupportedAgentFilePath(filePath: string): boolean {
+  return OPENCODE_AGENT_SCAN_PATHS.some((rootPath) => filePath.startsWith(`${rootPath}/`))
+    && filePath.endsWith('.md');
+}

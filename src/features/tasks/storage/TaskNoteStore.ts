@@ -1,0 +1,457 @@
+import { stringifyYaml } from 'obsidian';
+
+import { parseFrontmatter } from '../../../utils/frontmatter';
+import { HANDOFF_FIELD_MARKER_STRINGS } from '../model/handoffSections';
+import type { TaskLedgerEntry, TaskPriority, TaskSpec, TaskStatus } from '../model/taskTypes';
+
+export const RUN_LEDGER_START = '<!-- specorator:run-ledger-start -->';
+export const RUN_LEDGER_END = '<!-- specorator:run-ledger-end -->';
+export const HANDOFF_START = '<!-- specorator:handoff-start -->';
+export const HANDOFF_END = '<!-- specorator:handoff-end -->';
+
+const SPECORATOR_MARKER_PREFIX = '<!-- specorator:';
+
+/**
+ * Default body of a freshly created work order's `## Context` section. Shared with
+ * the work-order builder so `appendContext` can recognise the untouched
+ * placeholder and replace it (rather than appending below it) on the first add.
+ */
+export const CONTEXT_PLACEHOLDER = '_Add the links, files, and scope the agent needs._';
+
+/** Statuses that mean the run has ended (run-finished metadata + heartbeat clear apply). */
+const RUN_ENDED_STATUSES: ReadonlySet<TaskStatus> = new Set([
+  'review',
+  'needs_handoff',
+  'done',
+  'failed',
+  'canceled',
+]);
+
+type WritableFrontmatter = TaskSpec['frontmatter'] & Record<string, unknown>;
+
+export interface ParsedTaskSpec extends Omit<TaskSpec, 'frontmatter'> {
+  frontmatter: WritableFrontmatter;
+}
+
+export interface TaskParseResult {
+  task: ParsedTaskSpec;
+}
+
+export interface WriteStatusOptions {
+  status: TaskStatus;
+  timestamp: string;
+  runId?: string | null;
+  conversationId?: string | null;
+  sidepanelTabId?: string | null;
+  /**
+   * When provided, records the run-start time. Set this only at the start of a
+   * run (not on heartbeats), otherwise the original start time is lost and
+   * elapsed/duration metadata is corrupted.
+   */
+  started?: string | null;
+  heartbeat?: string | null;
+  pauseReason?: string | null;
+  attempts?: number;
+}
+
+export interface WriteFieldsOptions {
+  title?: string;
+  /** Assigned Agents persona id (an unknown id is persisted verbatim). */
+  agent?: string;
+  provider?: string;
+  model?: string;
+  priority?: TaskPriority;
+  /** Loop slug to attach; pass an empty string to detach. */
+  loop?: string;
+}
+
+/**
+ * Editable work-order body sections. Each value, when provided, replaces the
+ * body under the matching `## Heading`. Omitted keys are left untouched.
+ */
+export interface WriteSectionsOptions {
+  objective?: string;
+  acceptanceCriteria?: string;
+  context?: string;
+  constraints?: string;
+}
+
+const SECTION_HEADINGS = Object.freeze({
+  objective: 'Objective',
+  acceptanceCriteria: 'Acceptance Criteria',
+  context: 'Context',
+  constraints: 'Constraints',
+});
+
+/**
+ * Strip any Specorator generated-region marker (`<!-- specorator:… -->`) from
+ * arbitrary user input before it is written into the note body. Such a marker
+ * would shadow the real ledger/handoff region markers, which
+ * extract/replaceGeneratedRegion locate by `indexOf` — corrupting those blocks.
+ */
+function stripSpecoratorMarkers(text: string): string {
+  return text.replace(/<!--\s*specorator:[\s\S]*?-->/g, '');
+}
+
+/**
+ * Replace the body's first level-1 ATX heading (the title `# …`) with the new
+ * title, skipping fenced code blocks. Level-2+ headings (`## Objective`, …) and
+ * notes without a title heading are left untouched.
+ */
+function syncTitleHeading(body: string, title: string): string {
+  const safeTitle = stripSpecoratorMarkers(title).trim();
+  const lines = body.split('\n');
+  let inFence = false;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (/^\s*(```|~~~)/.test(lines[i])) {
+      inFence = !inFence;
+      continue;
+    }
+    if (!inFence && /^#\s+/.test(lines[i])) {
+      lines[i] = `# ${safeTitle}`;
+      return lines.join('\n');
+    }
+  }
+  return body;
+}
+
+export class TaskNoteStore {
+  parse(path: string, content: string): TaskParseResult {
+    const parsed = parseFrontmatter(content);
+    if (!parsed) {
+      throw new Error('Missing YAML frontmatter');
+    }
+
+    if (parsed.frontmatter.type !== 'specorator-work-order') {
+      throw new Error('Invalid work order type');
+    }
+
+    if (parsed.frontmatter.schema_version !== 1) {
+      throw new Error('Unsupported work order schema_version');
+    }
+
+    return {
+      task: {
+        path,
+        frontmatter: { ...parsed.frontmatter } as WritableFrontmatter,
+        sections: {
+          objective: this.extractSection(parsed.body, SECTION_HEADINGS.objective),
+          acceptanceCriteria: this.extractSection(parsed.body, SECTION_HEADINGS.acceptanceCriteria),
+          context: this.extractSection(parsed.body, SECTION_HEADINGS.context),
+          constraints: this.extractSection(parsed.body, SECTION_HEADINGS.constraints),
+          ledger: this.extractGeneratedRegion(parsed.body, RUN_LEDGER_START, RUN_LEDGER_END),
+          handoff: this.extractGeneratedRegion(parsed.body, HANDOFF_START, HANDOFF_END),
+        },
+        body: parsed.body,
+        raw: content,
+      },
+    };
+  }
+
+  writeStatus(content: string, options: WriteStatusOptions): string {
+    const parsed = this.parse('', content);
+    const frontmatter: Record<string, unknown> = { ...parsed.task.frontmatter };
+
+    frontmatter.status = options.status;
+    frontmatter.updated = options.timestamp;
+
+    if (options.runId !== undefined) frontmatter.run_id = options.runId;
+    if (options.conversationId !== undefined) frontmatter.conversation_id = options.conversationId;
+    if (options.sidepanelTabId !== undefined) frontmatter.sidepanel_tab_id = options.sidepanelTabId;
+    if (options.started !== undefined) frontmatter.started = options.started;
+    if (options.heartbeat !== undefined) frontmatter.heartbeat = options.heartbeat;
+    if (options.pauseReason !== undefined) frontmatter.pause_reason = options.pauseReason;
+    if (options.attempts !== undefined) frontmatter.attempts = options.attempts;
+
+    // A fresh run is in progress and has not finished yet.
+    if (options.status === 'running') {
+      frontmatter.finished = null;
+    }
+
+    // The run has ended (whether or not the work order still needs human review):
+    // record the finish time and clear live-run metadata so the card stops
+    // showing a stale heartbeat and the duration is accurate.
+    if (RUN_ENDED_STATUSES.has(options.status)) {
+      frontmatter.finished = options.timestamp;
+      frontmatter.heartbeat = null;
+      frontmatter.pause_reason = null;
+    }
+
+    return this.withFrontmatter(frontmatter, parsed.task.body);
+  }
+
+  clearPause(content: string, timestamp: string): string {
+    return this.writeStatus(content, {
+      status: 'running',
+      timestamp,
+      heartbeat: timestamp,
+      pauseReason: null,
+    });
+  }
+
+  writeFields(content: string, fields: WriteFieldsOptions, timestamp: string = new Date().toISOString()): string {
+    const parsed = this.parse('', content);
+    const frontmatter: Record<string, unknown> = { ...parsed.task.frontmatter };
+    let body = parsed.task.body;
+
+    if (fields.title !== undefined) {
+      frontmatter.title = fields.title;
+      // The work-order body carries the title as its first level-1 `# ` heading
+      // (templates + createWorkOrder). Keep it in sync so a rename doesn't leave
+      // the note showing one title in frontmatter and another in the H1.
+      body = syncTitleHeading(body, fields.title);
+    }
+    if (fields.agent !== undefined) frontmatter.agent = fields.agent;
+    if (fields.provider !== undefined) frontmatter.provider = fields.provider;
+    if (fields.model !== undefined) frontmatter.model = fields.model;
+    if (fields.priority !== undefined) frontmatter.priority = fields.priority;
+    if (fields.loop !== undefined) {
+      if (fields.loop) frontmatter.loop = fields.loop;
+      else delete frontmatter.loop;
+    }
+    frontmatter.updated = timestamp;
+
+    return this.withFrontmatter(frontmatter, body);
+  }
+
+  /**
+   * Replace one or more editable body sections in place (Objective, Acceptance
+   * Criteria, Context, Constraints) and bump `updated`. Lets the Agent Board's
+   * detail modal save the whole work order without opening the note. Omitted
+   * keys are no-ops; generated regions and surrounding prose are preserved.
+   */
+  writeSections(
+    content: string,
+    sections: WriteSectionsOptions,
+    timestamp: string = new Date().toISOString(),
+  ): string {
+    const parsed = this.parse('', content);
+    const frontmatter: Record<string, unknown> = { ...parsed.task.frontmatter };
+    let body = parsed.task.body;
+
+    if (sections.objective !== undefined) {
+      body = this.replaceSection(body, SECTION_HEADINGS.objective, sections.objective);
+    }
+    if (sections.acceptanceCriteria !== undefined) {
+      body = this.replaceSection(body, SECTION_HEADINGS.acceptanceCriteria, sections.acceptanceCriteria);
+    }
+    if (sections.context !== undefined) {
+      body = this.replaceSection(body, SECTION_HEADINGS.context, sections.context);
+    }
+    if (sections.constraints !== undefined) {
+      body = this.replaceSection(body, SECTION_HEADINGS.constraints, sections.constraints);
+    }
+    frontmatter.updated = timestamp;
+
+    return this.withFrontmatter(frontmatter, body);
+  }
+
+  /**
+   * Replace the body under a `## Heading` with new content, stopping at the next
+   * `##` heading (so the generated Run Ledger / Handoff regions are never
+   * touched). When the heading is absent the section is inserted just before the
+   * generated regions so a hand-trimmed note still round-trips an edit. Markers
+   * embedded in the content are scrubbed to keep the real regions locatable.
+   */
+  private replaceSection(body: string, heading: string, content: string): string {
+    const safeContent = stripSpecoratorMarkers(content).trim();
+    const lines = body.split(/\r?\n/);
+    const headingPattern = /^##\s+(.+?)\s*$/;
+
+    let start = -1;
+    let end = lines.length;
+    for (let i = 0; i < lines.length; i += 1) {
+      const match = lines[i].match(headingPattern);
+      if (!match) continue;
+      if (start === -1) {
+        if (match[1] === heading) start = i;
+        continue;
+      }
+      end = i;
+      break;
+    }
+
+    if (start === -1) {
+      return this.insertSectionBeforeGenerated(lines, heading, safeContent);
+    }
+
+    const block = safeContent.length > 0 ? ['', safeContent, ''] : [''];
+    return [...lines.slice(0, start + 1), ...block, ...lines.slice(end)].join('\n');
+  }
+
+  private insertSectionBeforeGenerated(lines: string[], heading: string, content: string): string {
+    let insertAt = lines.length;
+    for (let i = 0; i < lines.length; i += 1) {
+      if (/^##\s+Run Ledger\s*$/.test(lines[i]) || lines[i].includes(RUN_LEDGER_START)) {
+        insertAt = i;
+        break;
+      }
+    }
+    const block = content.length > 0 ? [`## ${heading}`, '', content, ''] : [`## ${heading}`, ''];
+    return [...lines.slice(0, insertAt), ...block, ...lines.slice(insertAt)].join('\n');
+  }
+
+  appendLedger(content: string, entry: TaskLedgerEntry): string {
+    this.assertNoEmbeddedSpecoratorMarkers(entry.message);
+
+    const currentLedger = this.extractGeneratedRegion(content, RUN_LEDGER_START, RUN_LEDGER_END);
+    const nextLine = `- ${entry.timestamp} [${entry.status}] ${entry.message}`;
+    const nextLedger = currentLedger.length > 0 ? `${currentLedger}\n${nextLine}` : nextLine;
+    return this.replaceGeneratedRegion(content, RUN_LEDGER_START, RUN_LEDGER_END, nextLedger);
+  }
+
+  writeLedgerSnapshot(content: string, markdown: string): string {
+    this.assertNoEmbeddedSpecoratorMarkers(markdown);
+
+    return this.replaceGeneratedRegion(content, RUN_LEDGER_START, RUN_LEDGER_END, markdown.trim());
+  }
+
+  writeHandoff(content: string, markdown: string): string {
+    // The per-field markers emitted by renderHandoffMarkdown are the one
+    // sanctioned use of the specorator marker namespace inside a generated
+    // region; scrub exactly those, then reject anything else. Field bodies are
+    // already marker-free — parseTaskHandoff rejects them upstream.
+    let scrubbed = markdown;
+    for (const marker of HANDOFF_FIELD_MARKER_STRINGS) {
+      scrubbed = scrubbed.split(marker).join('');
+    }
+    this.assertNoEmbeddedSpecoratorMarkers(scrubbed);
+
+    return this.replaceGeneratedRegion(content, HANDOFF_START, HANDOFF_END, markdown.trim());
+  }
+
+  /**
+   * Append a reference (a wikilink or code-spanned path) as a bullet to the
+   * `## Context` section. The untouched placeholder is replaced on first add; an
+   * already-present reference is a no-op (`changed: false`) so repeated adds do
+   * not duplicate. Throws when the note has no `## Context` heading.
+   */
+  appendContext(content: string, reference: string): { content: string; changed: boolean } {
+    const { prefix, body } = this.splitFrontmatter(content);
+    const lines = body.split('\n');
+    const headingIndex = lines.findIndex(
+      (line) => /^##\s+(.+?)\s*$/.exec(line)?.[1] === SECTION_HEADINGS.context,
+    );
+    if (headingIndex === -1) {
+      throw new Error('Missing Context section');
+    }
+
+    let endIndex = lines.length;
+    for (let i = headingIndex + 1; i < lines.length; i += 1) {
+      if (/^##\s+/.test(lines[i])) {
+        endIndex = i;
+        break;
+      }
+    }
+
+    const sectionText = lines.slice(headingIndex + 1, endIndex).join('\n').trim();
+    if (sectionText.includes(reference)) {
+      return { content, changed: false };
+    }
+
+    const bullet = `- ${reference}`;
+    const isPlaceholder = sectionText === '' || sectionText === CONTEXT_PLACEHOLDER;
+    const nextSection = isPlaceholder ? bullet : `${sectionText}\n${bullet}`;
+    const rebuilt = [
+      ...lines.slice(0, headingIndex + 1),
+      '',
+      nextSection,
+      '',
+      ...lines.slice(endIndex),
+    ].join('\n');
+    return { content: `${prefix}${rebuilt}`, changed: true };
+  }
+
+  extractGeneratedRegion(content: string, start: string, end: string): string {
+    const body = this.splitFrontmatter(content).body;
+    const startIndex = body.indexOf(start);
+    const endIndex = body.indexOf(end, startIndex + start.length);
+    if (startIndex === -1 || endIndex === -1) {
+      return '';
+    }
+
+    return body.slice(startIndex + start.length, endIndex).trim();
+  }
+
+  private extractSection(body: string, heading: string): string {
+    const lines = body.split(/\r?\n/);
+    const headingPattern = /^##\s+(.+?)\s*$/;
+    const sectionLines: string[] = [];
+    let inSection = false;
+
+    for (const line of lines) {
+      const match = line.match(headingPattern);
+      if (match) {
+        if (inSection) break;
+        inSection = match[1] === heading;
+        continue;
+      }
+
+      if (inSection) {
+        sectionLines.push(line);
+      }
+    }
+
+    return sectionLines.join('\n').trim();
+  }
+
+  private replaceGeneratedRegion(content: string, start: string, end: string, markdown: string): string {
+    const { prefix, body } = this.splitFrontmatter(content);
+    const startIndex = body.indexOf(start);
+    const endIndex = body.indexOf(end, startIndex + start.length);
+    if (startIndex === -1 || endIndex === -1) {
+      throw new Error('Missing generated region markers');
+    }
+
+    const replacement = `${start}\n${markdown.trim()}\n${end}`;
+    const nextBody = `${body.slice(0, startIndex)}${replacement}${body.slice(endIndex + end.length)}`;
+    return `${prefix}${nextBody}`;
+  }
+
+  private splitFrontmatter(content: string): { prefix: string; body: string } {
+    const parsed = parseFrontmatter(content);
+    if (!parsed) {
+      return { prefix: '', body: content };
+    }
+
+    return {
+      prefix: content.slice(0, content.length - parsed.body.length),
+      body: parsed.body,
+    };
+  }
+
+  private assertNoEmbeddedSpecoratorMarkers(markdown: string): void {
+    if (markdown.includes(SPECORATOR_MARKER_PREFIX)) {
+      throw new Error('Generated task region content cannot contain Specorator markers');
+    }
+  }
+
+  private withFrontmatter(frontmatter: Record<string, unknown>, body: string): string {
+    return `---\n${this.renderFrontmatter(frontmatter).trim()}\n---\n${body}`;
+  }
+
+  private renderFrontmatter(frontmatter: Record<string, unknown>): string {
+    if (typeof stringifyYaml === 'function') {
+      return stringifyYaml(frontmatter);
+    }
+
+    return Object.entries(frontmatter)
+      .map(([key, value]) => `${key}: ${this.renderYamlValue(value)}`)
+      .join('\n');
+  }
+
+  private renderYamlValue(value: unknown): string {
+    if (value === null || value === undefined) return 'null';
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    if (Array.isArray(value)) return `[${value.map(item => this.renderYamlScalar(String(item))).join(', ')}]`;
+    if (typeof value === 'object') return JSON.stringify(value);
+    return this.renderYamlScalar(String(value));
+  }
+
+  private renderYamlScalar(value: string): string {
+    if (/[:#\n{}]|\[|\]|^\s|\s$|^(true|false|null|yes|no|on|off)$/i.test(value)) {
+      return JSON.stringify(value);
+    }
+    return value;
+  }
+}

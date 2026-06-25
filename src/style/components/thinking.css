@@ -1,0 +1,88 @@
+.specorator-thinking {
+  color: var(--specorator-brand);
+  font-style: italic;
+  padding: 4px 0;
+  text-align: start;
+  animation: thinking-pulse 1.5s ease-in-out infinite;
+}
+
+.specorator-thinking.specorator-thinking--compact {
+  color: var(--specorator-compact);
+}
+
+.specorator-thinking-hint {
+  color: var(--text-muted);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.specorator-thinking-block {
+  margin: 8px 0;
+}
+
+.specorator-text-block+.specorator-thinking-block {
+  margin-top: 8px;
+}
+
+.specorator-thinking-block+.specorator-text-block {
+  margin-top: 8px;
+}
+
+.specorator-thinking-block+.specorator-tool-call {
+  margin-top: 8px;
+}
+
+.specorator-tool-call+.specorator-thinking-block {
+  margin-top: 8px;
+}
+
+.specorator-thinking-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.specorator-thinking-label {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--specorator-brand);
+}
+
+/* Thinking block content - tree-branch style */
+.specorator-thinking-content {
+  padding: 4px 0;
+  padding-inline-start: 24px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-height: 400px;
+  overflow-y: auto;
+  border-inline-start: 2px solid var(--background-modifier-border);
+  margin-inline-start: 7px;
+}
+
+.specorator-thinking-content p {
+  margin: 0 0 8px 0;
+}
+
+.specorator-thinking-content p:last-child {
+  margin-bottom: 0;
+}
+
+.specorator-thinking-content .specorator-code-wrapper {
+  margin: 8px 0;
+}
+
+.specorator-thinking-content .specorator-code-wrapper pre {
+  padding: 8px 10px;
+  border-radius: 4px;
+}
+
+.specorator-thinking-content code {
+  font-family: var(--font-monospace);
+  font-size: 12px;
+}

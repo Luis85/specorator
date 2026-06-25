@@ -1,0 +1,54 @@
+/* Accessibility - Focus Visible Styles */
+
+/* outline + offset + border-radius */
+.specorator-tool-header:focus-visible,
+.specorator-thinking-header:focus-visible,
+.specorator-subagent-header:focus-visible,
+.specorator-header-btn:focus-visible,
+.specorator-model-btn:focus-visible,
+.specorator-thinking-current:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* outline + offset only */
+.specorator-action-btn:focus-visible,
+.specorator-tab-badge:focus-visible,
+.specorator-toggle-switch:focus-visible,
+.specorator-file-chip:focus-visible,
+.specorator-image-chip:focus-visible,
+.specorator-file-chip-remove:focus-visible,
+.specorator-image-remove:focus-visible,
+.specorator-image-modal-close:focus-visible,
+.specorator-approved-remove-btn:focus-visible,
+.specorator-save-env-btn:focus-visible,
+.specorator-restore-snippet-btn:focus-visible,
+.specorator-edit-snippet-btn:focus-visible,
+.specorator-delete-snippet-btn:focus-visible,
+.specorator-cancel-btn:focus-visible,
+.specorator-save-btn:focus-visible,
+.specorator-code-lang-label:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+
+/* outline + negative offset + border-radius */
+.specorator-history-item-content:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+/* Library views: the keyboard-activatable roster card name button and the
+   cross-library nav tabs need a visible focus ring. The card itself is a
+   role="group" (not focusable); its name <button> is the keyboard open
+   affordance and carries the ring. */
+.specorator-roster-card-name:focus-visible,
+.specorator-library-nav-item:focus-visible,
+.specorator-cap-picker-header:focus-visible,
+.specorator-cap-picker-chip:focus-visible,
+.specorator-roster-role-chip:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}

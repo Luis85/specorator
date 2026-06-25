@@ -1,0 +1,37 @@
+/* Brand & semantic color tokens */
+.specorator-container {
+  --specorator-brand: #D97757;
+  --specorator-brand-rgb: 217, 119, 87;
+  --specorator-brand-claude: #D97757;
+  --specorator-brand-claude-rgb: 217, 119, 87;
+  --specorator-brand-codex: #d0d0d0;
+  --specorator-brand-codex-rgb: 208, 208, 208;
+  --specorator-brand-opencode: #B8B8B8;
+  --specorator-brand-opencode-rgb: 184, 184, 184;
+  --specorator-error: #dc3545;
+  --specorator-error-rgb: 220, 53, 69;
+  --specorator-compact: #5bc0de;
+}
+
+body.theme-light .specorator-container {
+  --specorator-brand-codex: #000000;
+  --specorator-brand-codex-rgb: 0, 0, 0;
+  --specorator-brand-opencode: #707070;
+  --specorator-brand-opencode-rgb: 112, 112, 112;
+}
+
+/* Active-provider alias for single-provider surfaces. */
+.specorator-container[data-provider="claude"] {
+  --specorator-brand: var(--specorator-brand-claude);
+  --specorator-brand-rgb: var(--specorator-brand-claude-rgb);
+}
+
+.specorator-container[data-provider="codex"] {
+  --specorator-brand: var(--specorator-brand-codex);
+  --specorator-brand-rgb: var(--specorator-brand-codex-rgb);
+}
+
+.specorator-container[data-provider="opencode"] {
+  --specorator-brand: var(--specorator-brand-opencode);
+  --specorator-brand-rgb: var(--specorator-brand-opencode-rgb);
+}

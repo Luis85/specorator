@@ -1,0 +1,323 @@
+/* Agent Roster view — list/dashboard + detail editor.
+   The list shell + cards reuse the shared `.specorator-library-*` scaffold (see
+   features/library.css); the roster only layers its own deltas (clickable card,
+   avatar slot, plain-text name button, role chips) on top. */
+
+.specorator-roster-detail {
+  padding: var(--size-4-4);
+}
+
+/* ── List / cards ── */
+/* The card is itself clickable (mouse open affordance) — the shared library
+   card isn't, so add the cursor + hover affordance here. */
+.specorator-roster-card {
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.specorator-roster-card:hover {
+  border-color: var(--interactive-accent);
+  background: var(--background-modifier-hover);
+}
+
+.specorator-roster-card-avatar {
+  flex: 0 0 auto;
+  display: flex;
+}
+
+/* The name is a real <button> (keyboard/SR open action) styled to read as plain
+   text — the whole card still opens on mouse click. */
+.specorator-roster-card-name {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  box-shadow: none;
+  font-size: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.specorator-roster-card-desc {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.specorator-roster-card-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4-1);
+  margin-top: var(--size-4-1);
+}
+
+.specorator-roster-chip {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  background: var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  padding: 0 var(--size-4-1);
+}
+
+.specorator-roster-chip-role {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+}
+
+/* ── Detail editor ── */
+.specorator-roster-detail-topbar {
+  margin-bottom: var(--size-4-2);
+}
+
+.specorator-roster-detail-head {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-3);
+  margin-bottom: var(--size-4-3);
+  padding: var(--size-4-3);
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+}
+
+.specorator-roster-section {
+  margin: var(--size-4-4) 0 var(--size-4-1);
+  padding-bottom: var(--size-4-1);
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-size: var(--font-ui-small);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.specorator-roster-detail-footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  margin-top: var(--size-4-4);
+  padding: var(--size-4-3) 0;
+  background: var(--background-primary);
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.specorator-roster-footer-spacer {
+  flex: 1 1 auto;
+}
+
+.specorator-roster-dirty {
+  display: none;
+  align-items: center;
+  gap: var(--size-4-1);
+  color: var(--text-warning, var(--text-muted));
+  font-size: var(--font-ui-smaller);
+}
+
+.specorator-roster-dirty.is-visible {
+  display: inline-flex;
+}
+
+.specorator-roster-dirty::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ── Capability picker (shared Skills/Tools selector) ── */
+.specorator-cap-picker {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  margin-bottom: var(--size-4-3);
+}
+
+.specorator-cap-picker-header {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: var(--size-4-2) var(--size-4-3);
+  cursor: pointer;
+}
+
+.specorator-cap-picker-label {
+  font-weight: var(--font-semibold);
+}
+
+.specorator-cap-picker-count {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.specorator-cap-picker-caret {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+}
+
+.specorator-cap-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4-1);
+  padding: 0 var(--size-4-3) var(--size-4-2);
+}
+
+.specorator-cap-picker-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-4-1);
+  padding: var(--size-2-1) var(--size-4-2);
+  background: var(--background-modifier-hover);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+}
+
+/* Signal the whole chip is click-to-remove by warming the border on hover. */
+.specorator-cap-picker-chip:hover {
+  border-color: var(--text-error);
+}
+
+.specorator-cap-picker-chip-x::before {
+  content: '\00d7';
+  color: var(--text-muted);
+}
+
+.specorator-cap-picker-body {
+  padding: 0 var(--size-4-3) var(--size-4-2);
+}
+
+.specorator-cap-picker-search {
+  width: 100%;
+  margin-bottom: var(--size-4-2);
+}
+
+.specorator-cap-picker-list {
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-1);
+}
+
+.specorator-cap-picker-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-4-2);
+  padding: var(--size-2-1) var(--size-4-1);
+  cursor: pointer;
+}
+
+.specorator-cap-picker-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.specorator-cap-picker-row-name {
+  font-size: var(--font-ui-small);
+}
+
+.specorator-cap-picker-row-desc {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.specorator-cap-picker-row-badge {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.specorator-cap-picker-empty {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  padding: var(--size-4-2) 0;
+}
+
+/* Caption under the Tools picker: flags that tool grants are scoped to the
+   bound-chat path only (synced provider subagents inherit default access). */
+.specorator-roster-tools-scope-hint {
+  margin-top: var(--size-4-2);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: var(--line-height-tight);
+}
+
+/* ── Detail editor: cards + profile header ── */
+.specorator-roster-card-section {
+  padding: var(--size-4-3);
+  margin-bottom: var(--size-4-3);
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+}
+
+.specorator-roster-detail-headfields {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+}
+
+.specorator-roster-detail-name {
+  font-size: var(--font-ui-large);
+  font-weight: var(--font-semibold);
+}
+
+.specorator-roster-detail-name,
+.specorator-roster-detail-desc {
+  width: 100%;
+}
+
+.specorator-roster-appearance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4-2);
+  align-items: center;
+}
+
+.specorator-roster-appearance-initials {
+  width: 4em;
+  text-align: center;
+}
+
+.specorator-roster-roles {
+  display: flex;
+  gap: var(--size-4-1);
+}
+
+.specorator-roster-role-chip {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  background: var(--background-modifier-border);
+  box-shadow: none;
+}
+
+.specorator-roster-role-chip.is-on {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+}
+
+.specorator-roster-model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0 var(--size-4-4);
+}
+
+.specorator-roster-model-grid .setting-item {
+  border-top: none;
+  padding: var(--size-4-1) 0;
+}
+
+.specorator-roster-prompt-area {
+  width: 100%;
+  resize: vertical;
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small);
+}

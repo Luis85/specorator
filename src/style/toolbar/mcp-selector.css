@@ -1,0 +1,176 @@
+/* MCP Server Selector */
+.specorator-mcp-selector {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-left: 8px;
+}
+
+.specorator-mcp-selector-icon-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.specorator-mcp-selector-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--text-faint);
+  transition: color 0.15s ease;
+}
+
+.specorator-mcp-selector-icon-wrapper:hover .specorator-mcp-selector-icon {
+  color: var(--text-normal);
+}
+
+.specorator-mcp-selector-icon.active {
+  color: var(--specorator-brand);
+  animation: mcp-glow 2s ease-in-out infinite;
+}
+
+.specorator-mcp-selector-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.specorator-mcp-selector-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--specorator-brand);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.specorator-mcp-selector-badge.visible {
+  opacity: 1;
+}
+
+.specorator-mcp-selector-dropdown {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 100%;
+  margin-bottom: 4px;
+  min-width: 200px;
+  max-width: 280px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  z-index: 100;
+}
+
+/* Bridge the gap between icon and dropdown to prevent hover breaks */
+.specorator-mcp-selector-dropdown::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -8px;
+  height: 8px;
+}
+
+.specorator-mcp-selector-dropdown.visible,
+.specorator-mcp-selector:hover .specorator-mcp-selector-dropdown {
+  opacity: 1;
+  visibility: visible;
+}
+
+.specorator-mcp-selector-header {
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.specorator-mcp-selector-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.specorator-mcp-selector-empty {
+  padding: 16px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.specorator-mcp-selector-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.specorator-mcp-selector-item:hover {
+  background: var(--background-modifier-hover);
+}
+
+.specorator-mcp-selector-item.enabled {
+  background: rgba(var(--specorator-brand-rgb), 0.1);
+}
+
+.specorator-mcp-selector-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 3px;
+  color: var(--specorator-brand);
+}
+
+.specorator-mcp-selector-item.enabled .specorator-mcp-selector-check {
+  background: rgba(var(--specorator-brand-rgb), 0.2);
+  border-color: var(--specorator-brand);
+}
+
+.specorator-mcp-selector-check svg {
+  width: 12px;
+  height: 12px;
+}
+
+.specorator-mcp-selector-item-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.specorator-mcp-selector-item-name {
+  font-size: 12px;
+  color: var(--text-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.specorator-mcp-selector-cs-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(var(--specorator-brand-rgb), 0.2);
+  color: var(--specorator-brand);
+  flex-shrink: 0;
+  margin-left: auto;
+}

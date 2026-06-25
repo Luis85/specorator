@@ -1,0 +1,61 @@
+/* Git commit & push header action */
+.specorator-git-action {
+  display: flex;
+  align-items: center;
+}
+
+.specorator-git-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 19px;
+  padding: 0 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 5px;
+  color: var(--text-normal);
+  background: var(--background-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.specorator-git-action-btn:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--background-modifier-border-hover);
+  color: var(--interactive-accent);
+}
+
+.specorator-git-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.specorator-git-action-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.specorator-git-action-label {
+  white-space: nowrap;
+}
+
+.specorator-git-action-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+  pointer-events: none;
+}

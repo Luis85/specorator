@@ -1,0 +1,10 @@
+{
+  "id": "specorator",
+  "name": "Specorator",
+  "version": "1.0.0",
+  "minAppVersion": "1.11.5",
+  "description": "Spec-driven agent workspace for Obsidian. Plan, run, review, keep the record.",
+  "author": "Luis Mendez",
+  "authorUrl": "https://github.com/Luis85",
+  "isDesktopOnly": true
+}

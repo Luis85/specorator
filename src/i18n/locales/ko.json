@@ -1,0 +1,1211 @@
+{
+  "common": {
+    "save": "저장",
+    "cancel": "취소",
+    "delete": "삭제",
+    "edit": "편집",
+    "add": "추가",
+    "remove": "제거",
+    "clear": "지우기",
+    "clearAll": "모두 지우기",
+    "loading": "로딩 중",
+    "error": "오류",
+    "success": "성공",
+    "warning": "경고",
+    "confirm": "확인",
+    "settings": "설정",
+    "advanced": "고급",
+    "enabled": "활성화",
+    "disabled": "비활성화",
+    "platform": "플랫폼",
+    "refresh": "새로고침",
+    "rewind": "되감기",
+    "errorWithDetail": "Error: {error}"
+  },
+  "chat": {
+    "loadEarlier": "이전 메시지 불러오기",
+    "history": {
+      "showMore": "더 보기",
+      "loadFailed": "Failed to load conversation",
+      "regenerateFailed": "Failed to regenerate response",
+      "deleteFailed": "Failed to delete conversation",
+      "renameFailed": "Failed to rename conversation",
+      "linkedNotFound": "Linked conversation not found. It may have been deleted.",
+      "linkedNoFreeTab": "Cannot open conversation: tab limit reached. Close a tab first.",
+      "loading": "Loading conversation…"
+    },
+    "rewind": {
+      "confirmMessage": "이 시점으로 되감으시겠습니까? 이 메시지 이후의 파일 변경 사항이 되돌려집니다. 수동으로 또는 bash를 통해 편집된 파일에는 영향을 미치지 않습니다.",
+      "confirmMessageConversationOnly": "대화를 이 시점으로 되감으시겠습니까? 파일 변경 사항은 유지됩니다.",
+      "confirmButton": "되감기",
+      "ariaLabel": "여기로 되감기",
+      "menuConversationOnly": "대화만 되감기",
+      "menuCodeAndConversation": "코드 + 대화 되감기",
+      "notice": "되감기 완료: {count}개 파일 복원됨",
+      "noticeConversationOnly": "대화를 되감았습니다. 파일 변경 사항은 유지되었습니다",
+      "noticeSaveFailed": "되감기 완료: {count}개 파일 복원됨, 하지만 상태를 저장하지 못했습니다: {error}",
+      "noticeConversationOnlySaveFailed": "대화를 되감았지만 상태를 저장하지 못했습니다: {error}",
+      "failed": "되감기 실패: {error}",
+      "cannot": "되감기 불가: {error}",
+      "unavailableStreaming": "스트리밍 중에는 되감기할 수 없습니다",
+      "unavailableNoUuid": "되감기 불가: 메시지 식별자 누락",
+      "errMessageNotFound": "Message not found",
+      "errServiceUnavailable": "Agent service not available",
+      "errUnknown": "Unknown error",
+      "errUnsupported": "Rewind is not supported by this provider."
+    },
+    "fork": {
+      "ariaLabel": "대화 분기",
+      "chooseTarget": "대화 분기",
+      "targetNewTab": "새 탭",
+      "targetCurrentTab": "현재 탭",
+      "maxTabsReached": "분기 불가: 최대 {count}개 탭에 도달했습니다",
+      "notice": "새 탭으로 분기됨",
+      "noticeCurrentTab": "현재 탭에서 분기됨",
+      "failed": "분기 실패: {error}",
+      "unavailableStreaming": "스트리밍 중에는 분기할 수 없습니다",
+      "unavailableNoUuid": "분기 불가: 메시지 식별자 누락",
+      "unavailableNoResponse": "분기 불가: 분기할 응답이 없습니다",
+      "errorMessageNotFound": "메시지를 찾을 수 없습니다",
+      "errorNoSession": "사용 가능한 세션 ID가 없습니다",
+      "errorNoActiveTab": "활성 탭이 없습니다",
+      "commandNoMessages": "포크할 수 없습니다: 대화에 메시지가 없습니다",
+      "commandNoAssistantUuid": "포크할 수 없습니다: 식별자가 있는 어시스턴트 응답이 없습니다",
+      "unsupportedProvider": "Fork is not supported by this provider."
+    },
+    "feedback": {
+      "thumbsUp": {
+        "label": "도움 됨",
+        "prompt": "좋습니다. 그 방향으로 진행해 주세요."
+      },
+      "thumbsDown": {
+        "label": "도움 안 됨",
+        "prompt": "이 응답은 도움이 되지 않았습니다. 다시 시도하기 전에 제가 동의하지 않는 이유를 파악할 수 있는 구체적인 후속 질문을 하나만 해주세요."
+      }
+    },
+    "bangBash": {
+      "placeholder": "> bash 명령 실행...",
+      "commandPanel": "명령 패널",
+      "copyAriaLabel": "최신 명령 출력을 복사",
+      "clearAriaLabel": "bash 출력 지우기",
+      "commandLabel": "{command}",
+      "statusLabel": "상태: {status}",
+      "collapseOutput": "명령 출력 접기",
+      "expandOutput": "명령 출력 펼치기",
+      "running": "실행 중...",
+      "copyFailed": "클립보드에 복사하지 못했습니다",
+      "commandFailed": "Command failed: {error}"
+    },
+    "planMode": {
+      "ariaLabel": "Toggle plan mode",
+      "titleInactive": "Plan mode — click or Shift+Tab to enter",
+      "titleActive": "Plan mode on — click or Shift+Tab to exit",
+      "toggleFailed": "Failed to change plan mode"
+    },
+    "permissionMode": {
+      "yoloWarning": "YOLO mode lets the agent run commands and edit files with no approval prompts. A malicious or prompt-injected note could execute code. Only use YOLO in vaults you fully trust."
+    },
+    "queue": {
+      "steerFailed": "Failed to steer the queued message. It is still available."
+    },
+    "input": {
+      "initFailed": "Failed to initialize agent service. Please try again.",
+      "serviceUnavailable": "Agent service not available. Please reload the plugin.",
+      "instructionAdded": "Instruction added to custom system prompt",
+      "processResponseFailed": "Failed to process response",
+      "refineFailed": "Failed to refine instruction",
+      "noInstruction": "No instruction received",
+      "unexpectedApprovalSelection": "Unexpected approval selection: \"{value}\"",
+      "commandUnsupported": "/{command} is not supported by this provider.",
+      "externalContextUnavailable": "External context selector not available.",
+      "externalContextAdded": "Added external context: {path}",
+      "forkUnsupported": "Fork is not supported by this provider.",
+      "forkUnavailable": "Fork not available.",
+      "unknownCommand": "Unknown command: {command}",
+      "noConversationsToResume": "No conversations to resume",
+      "openConversationFailed": "Failed to open conversation: {error}",
+      "chatServiceInitFailed": "Failed to initialize chat service"
+    },
+    "runtimeError": {
+      "cliNotFound": {
+        "title": "CLI not found",
+        "body": "Specorator couldn't find the provider's command-line tool. Set the correct path in settings, then try again.",
+        "openSettings": "Open settings"
+      },
+      "unauthenticated": {
+        "title": "Sign-in required",
+        "body": "The provider rejected the request because you're not signed in. Sign in from your terminal, then retry.",
+        "hintLabel": "Run this in your terminal:",
+        "claudeHint": "claude login",
+        "codexHint": "codex login",
+        "cursorHint": "cursor-agent login",
+        "opencodeHint": "opencode auth login",
+        "genericHint": "Sign in to the provider CLI",
+        "copyHint": "Copy command",
+        "copied": "Copied",
+        "openSettings": "Open settings"
+      },
+      "contextTooLarge": {
+        "title": "Context too large",
+        "body": "This turn exceeds the model's context window. Remove some attachments or file context, or start a new conversation, then try again."
+      },
+      "generic": {
+        "title": "Something went wrong"
+      },
+      "retry": "Retry",
+      "detailsLabel": "Details"
+    },
+    "context": {
+      "fileNoTab": "Open Specorator chat and enable a provider before adding file context.",
+      "folderNoTab": "Open Specorator chat and enable a provider before adding folder context.",
+      "fileAttachFailed": "Could not add file to chat: {path}",
+      "folderAttachFailed": "Could not add folder to chat: {path}",
+      "fileAdded": "Added {path} to Specorator chat",
+      "folderAdded": "Added {path}/ to Specorator chat"
+    },
+    "drop": {
+      "image": "Drop image",
+      "fileContext": "Drop into context",
+      "folderContext": "Drop folder into context",
+      "osContext": "Drop file or folder into context",
+      "mixed": "Drop into chat",
+      "batchAdded": "Added {count} to context",
+      "batchSkipped": "Skipped {count}: outside vault or external context",
+      "externalFolderUnsupported": "Folders outside the vault aren't supported as context yet",
+      "outsideContext": "{path} is outside the vault and any configured external context",
+      "outsideContextBatch": "{count} items are outside the vault and any configured external context",
+      "imageFailed": "Failed to attach {count} image(s)"
+    },
+    "tab": {
+      "createFailed": "Failed to create tab",
+      "createConversationFailed": "Failed to create conversation",
+      "switchFailed": "Failed to switch tab",
+      "closeFailed": "Failed to close tab",
+      "maxReached": "Maximum {count} tabs allowed",
+      "providerSwitchBlocked": "Cannot switch provider on a bound session. Start a new tab instead."
+    },
+    "externalContext": {
+      "invalidRemoved": "Removed {count} invalid external context path(s): {paths}",
+      "persistFailed": "Cannot persist \"{path}\" - directory no longer exists",
+      "duplicate": "This folder is already added as an external context.",
+      "pickerFailed": "Unable to open folder picker."
+    },
+    "image": {
+      "unsupported": "Image attachments are not supported by this provider.",
+      "unavailable": "Image is no longer available in the vault."
+    },
+    "editedFiles": {
+      "label": "변경된 파일"
+    },
+    "fileOpen": {
+      "notFound": "Could not open file: {path}",
+      "failed": "Failed to open file: {error}"
+    },
+    "storage": {
+      "tabLayoutSaveFailed": "Failed to save tab layout"
+    },
+    "tabs": {
+      "maxChatReached": "Cannot open: maximum {count} chat tabs reached.",
+      "maxWorkOrderReached": "Work-order tab limit reached ({count}). Queue is waiting.",
+      "workOrderSuffix": "(work order)"
+    }
+  },
+  "settings": {
+    "title": "Specorator 설정",
+    "tabs": {
+      "general": "일반",
+      "claude": "Claude",
+      "codex": "Codex",
+      "quickActions": "Quick Actions"
+    },
+    "display": "표시",
+    "conversations": "대화",
+    "content": "콘텐츠",
+    "input": "입력",
+    "setup": "설정",
+    "models": "모델",
+    "experimental": "실험적 기능",
+    "userName": {
+      "name": "Specorator이 당신을 어떻게 불러야 합니까?",
+      "desc": "개인화된 인사에 사용할 이름 (비워두면 일반 인사)"
+    },
+    "excludedTags": {
+      "name": "제외 태그",
+      "desc": "이 태그가 포함된 노트는 자동으로 컨텍스트로 로드되지 않습니다 (한 줄에 하나, # 제외)"
+    },
+    "mediaFolder": {
+      "name": "미디어 폴더",
+      "desc": "첨부 파일/이미지를 저장할 폴더. 노트가 ![[image.jpg]]를 사용할 때 Claude가 여기서 찾습니다. 비워두면 저장소 루트 사용."
+    },
+    "systemPrompt": {
+      "name": "커스텀 시스템 프롬프트",
+      "desc": "기본 시스템 프롬프트에 추가되는 추가 지침"
+    },
+    "autoTitle": {
+      "name": "대화 제목 자동 생성",
+      "desc": "첫 번째 사용자 메시지 전송 후 자동으로 대화 제목을 생성합니다."
+    },
+    "titleModel": {
+      "name": "제목 생성 모델",
+      "desc": "대화 제목을 자동 생성하는 데 사용되는 모델.",
+      "auto": "자동 (Haiku)"
+    },
+    "navMappings": {
+      "name": "Vim 스타일 네비게이션 매핑",
+      "desc": "한 줄에 하나의 매핑. 형식: \"map <키> <동작>\" (동작: scrollUp, scrollDown, focusInput)."
+    },
+    "requireCommandOrControlEnterToSend": {
+      "name": "Command/Ctrl+Enter로 보내기 필수",
+      "desc": "활성화하면 Enter는 줄바꿈을 삽입합니다. macOS에서는 Command+Enter, Windows와 Linux에서는 Ctrl+Enter로 보냅니다."
+    },
+    "hotkeys": "단축키",
+    "inlineEditHotkey": {
+      "name": "인라인 편집",
+      "descWithKey": "현재 단축키: {hotkey}",
+      "descNoKey": "단축키 미설정",
+      "btnChange": "변경",
+      "btnSet": "단축키 설정"
+    },
+    "openChatHotkey": {
+      "name": "채팅 열기",
+      "descWithKey": "현재 단축키: {hotkey}",
+      "descNoKey": "단축키 미설정",
+      "btnChange": "변경",
+      "btnSet": "단축키 설정"
+    },
+    "newSessionHotkey": {
+      "name": "새 세션",
+      "descWithKey": "현재 단축키: {hotkey}",
+      "descNoKey": "단축키 미설정",
+      "btnChange": "변경",
+      "btnSet": "단축키 설정"
+    },
+    "newTabHotkey": {
+      "name": "새 탭",
+      "descWithKey": "현재 단축키: {hotkey}",
+      "descNoKey": "단축키 미설정",
+      "btnChange": "변경",
+      "btnSet": "단축키 설정"
+    },
+    "closeTabHotkey": {
+      "name": "탭 닫기",
+      "descWithKey": "현재 단축키: {hotkey}",
+      "descNoKey": "단축키 미설정",
+      "btnChange": "변경",
+      "btnSet": "단축키 설정"
+    },
+    "slashCommands": {
+      "name": "명령어와 스킬",
+      "desc": ".claude/commands/ 및 .claude/skills/에 저장된 Vault 수준의 명령어와 스킬을 관리합니다. /이름으로 트리거됩니다.",
+      "promptRequired": "Prompt template is required",
+      "commandDuplicate": "A command named \"/{name}\" already exists",
+      "skillDuplicate": "A skill named \"/{name}\" already exists",
+      "commandSaveFailed": "Failed to save slash command",
+      "skillSaveFailed": "Failed to save skill",
+      "convertFailed": "Failed to convert to skill",
+      "commandDeleteFailed": "Failed to delete slash command",
+      "skillDeleteFailed": "Failed to delete skill",
+      "commandCreated": "Slash command \"/{name}\" created",
+      "commandUpdated": "Slash command \"/{name}\" updated",
+      "commandDeleted": "Slash command \"/{name}\" deleted",
+      "skillCreated": "Skill \"/{name}\" created",
+      "skillUpdated": "Skill \"/{name}\" updated",
+      "skillDeleted": "Skill \"/{name}\" deleted",
+      "converted": "Converted \"/{name}\" to skill",
+      "validation": {
+        "required": "Command name is required",
+        "tooLong": "Command name must be {max} characters or fewer",
+        "invalidChars": "Command name can only contain lowercase letters, numbers, and hyphens",
+        "yamlReserved": "Command name cannot be a YAML reserved word (true, false, null, yes, no, on, off)"
+      }
+    },
+    "hiddenSlashCommands": {
+      "name": "숨겨진 명령어와 스킬",
+      "desc": "드롭다운에서 특정 명령어와 스킬을 숨깁니다. Specorator과 관련 없는 Claude Code 항목을 숨기는 데 유용합니다. 앞의 슬래시 없이 이름을 한 줄에 하나씩 입력하세요.",
+      "placeholder": "commit\nbuild\ntest"
+    },
+    "mcpServers": {
+      "name": "MCP 서버",
+      "desc": ".claude/mcp.json에 저장된 Vault 수준의 MCP 서버 구성을 관리합니다. 컨텍스트 저장 모드 서버는 @mention으로 활성화해야 합니다."
+    },
+    "plugins": {
+      "name": "Claude Code 플러그인",
+      "desc": "~/.claude/plugins에서 발견된 Claude Code 플러그인을 관리합니다. 활성화된 플러그인은 .claude/settings.json에 Vault별로 저장됩니다."
+    },
+    "subagents": {
+      "name": "서브에이전트",
+      "desc": ".claude/agents/에 저장된 Vault 수준의 서브에이전트를 관리합니다. 각 Markdown 파일이 하나의 커스텀 에이전트를 정의합니다.",
+      "noAgents": "구성된 서브에이전트가 없습니다. +를 클릭해 새로 만드세요.",
+      "deleteConfirm": "서브에이전트 \"{name}\"을 삭제하시겠습니까?",
+      "saveFailed": "서브에이전트를 저장하지 못했습니다: {message}",
+      "refreshFailed": "서브에이전트를 새로고침하지 못했습니다: {message}",
+      "deleteFailed": "서브에이전트를 삭제하지 못했습니다: {message}",
+      "renameCleanupFailed": "경고: \"{name}\"의 이전 파일을 제거하지 못했습니다",
+      "created": "서브에이전트 \"{name}\"를 생성했습니다",
+      "updated": "서브에이전트 \"{name}\"를 업데이트했습니다",
+      "deleted": "서브에이전트 \"{name}\"를 삭제했습니다",
+      "duplicateName": "\"{name}\"이라는 이름의 에이전트가 이미 있습니다",
+      "descriptionRequired": "설명은 필수입니다",
+      "promptRequired": "시스템 프롬프트는 필수입니다",
+      "modal": {
+        "titleEdit": "서브에이전트 편집",
+        "titleAdd": "서브에이전트 추가",
+        "name": "이름",
+        "nameDesc": "소문자, 숫자, 하이픈만 사용할 수 있습니다",
+        "namePlaceholder": "code-reviewer",
+        "description": "설명",
+        "descriptionDesc": "이 에이전트에 대한 간단한 설명",
+        "descriptionPlaceholder": "코드의 버그와 스타일을 검토합니다",
+        "advancedOptions": "고급 옵션",
+        "model": "모델",
+        "modelDesc": "이 에이전트에 사용할 모델 재정의",
+        "tools": "도구",
+        "toolsDesc": "허용할 도구를 쉼표로 구분해 입력하세요 (비워두면 모두 허용)",
+        "disallowedTools": "금지 도구",
+        "disallowedToolsDesc": "금지할 도구를 쉼표로 구분해 입력하세요",
+        "skills": "스킬",
+        "skillsDesc": "스킬 목록을 쉼표로 구분해 입력하세요",
+        "prompt": "시스템 프롬프트",
+        "promptDesc": "에이전트용 지침",
+        "promptPlaceholder": "당신은 코드 리뷰어입니다. 주어진 코드를 분석하여..."
+      },
+      "loadFailed": "Failed to load subagent \"{name}\": {message}",
+      "validation": {
+        "required": "Agent name is required",
+        "tooLong": "Agent name must be {max} characters or fewer",
+        "invalidChars": "Agent name can only contain lowercase letters, numbers, and hyphens",
+        "yamlReserved": "Agent name cannot be a YAML reserved word (true, false, null, yes, no, on, off)"
+      }
+    },
+    "safety": "보안",
+    "loadUserSettings": {
+      "name": "사용자 Claude 설정 로드",
+      "desc": "~/.claude/settings.json을 로드합니다. 활성화하면 사용자의 Claude Code 허용 규칙이 보안 모드를 우회할 수 있습니다."
+    },
+    "claudeSafeMode": {
+      "name": "Safe mode",
+      "desc": "Permission mode used when the Safe toggle is active."
+    },
+    "codexSafeMode": {
+      "name": "Safe mode",
+      "desc": "Sandbox mode used when the Safe toggle is active."
+    },
+    "environment": "환경",
+    "customVariables": {
+      "name": "커스텀 변수",
+      "desc": "Claude SDK 환경 변수 (KEY=VALUE 형식, 한 줄에 하나). export 접두사 지원."
+    },
+    "envSnippets": {
+      "name": "스니펫",
+      "addBtn": "스니펫 추가",
+      "noSnippets": "저장된 환경 변수 스니펫이 없습니다. +를 클릭하여 현재 구성을 저장하세요.",
+      "nameRequired": "스니펫 이름을 입력하세요",
+      "modal": {
+        "titleEdit": "스니펫 편집",
+        "titleSave": "스니펫 저장",
+        "name": "이름",
+        "namePlaceholder": "이 구성에 대한 설명적인 이름",
+        "description": "설명",
+        "descPlaceholder": "선택적 설명",
+        "envVars": "환경 변수",
+        "envVarsPlaceholder": "KEY=VALUE 형식, 한 줄에 하나 (export 접두사 지원)",
+        "save": "저장",
+        "update": "업데이트",
+        "cancel": "취소"
+      },
+      "insertFailed": "Failed to insert snippet",
+      "deleteFailed": "Failed to delete snippet",
+      "saved": "Environment snippet \"{name}\" saved",
+      "updated": "Environment snippet \"{name}\" updated",
+      "deleted": "Environment snippet \"{name}\" deleted"
+    },
+    "customModelOverrides": {
+      "name": "사용자 정의 모델 재정의",
+      "desc": "사용자 정의 모델의 모델 선택기 별칭과 컨텍스트 창 크기를 설정합니다."
+    },
+    "customModelAliases": {
+      "placeholder": "별칭"
+    },
+    "customContextLimits": {
+      "name": "사용자 정의 컨텍스트 제한",
+      "desc": "사용자 정의 모델의 컨텍스트 창 크기를 설정합니다. 기본값(200k 토큰)을 사용하려면 비워두세요.",
+      "invalid": "잘못된 형식입니다. 사용: 256k, 1m 또는 정확한 숫자(1000-10000000)."
+    },
+    "enableOpus1M": {
+      "name": "Opus 1M 컨텍스트 윈도우",
+      "desc": "모델 선택기에서 Opus 1M을 표시합니다. Max, Team, Enterprise 플랜에 포함됩니다. API 및 Pro 사용자는 추가 사용량이 필요합니다."
+    },
+    "enableSonnet1M": {
+      "name": "Sonnet 1M 컨텍스트 윈도우",
+      "desc": "모델 선택기에서 Sonnet 1M을 표시합니다. Max, Team, Enterprise 플랜에서 추가 사용량이 필요합니다. API 및 Pro 사용자는 추가 사용량이 필요합니다."
+    },
+    "customModels": {
+      "name": "Custom models",
+      "desc": "Append additional Claude model IDs to the picker, one per line. Environment model overrides still replace the picker.",
+      "placeholder": "claude-opus-4-6\nclaude-opus-4-6[1m]\nclaude-opus-4-5-20251101"
+    },
+    "enableChrome": {
+      "name": "Chrome 확장 프로그램 활성화",
+      "desc": "claude-in-chrome 확장 프로그램을 통해 Claude가 Chrome과 상호작용할 수 있도록 합니다. 확장 프로그램이 설치되어 있어야 합니다. 세션 재시작이 필요합니다."
+    },
+    "enableBangBash": {
+      "name": "bash 모드 (!) 활성화",
+      "desc": "입력창이 비어 있을 때 !를 입력하면 bash 모드로 들어갑니다. Node.js child_process를 통해 명령을 직접 실행합니다. 보기를 다시 열어야 합니다.",
+      "validation": {
+        "noNode": "PATH에서 Node.js를 찾을 수 없습니다. Node.js를 설치하거나 PATH 설정을 확인하세요."
+      }
+    },
+    "maxTabs": {
+      "name": "최대 채팅 탭 수",
+      "desc": "동시에 열 수 있는 최대 채팅 탭 수(3-10). 각 탭은 별도의 Claude 세션을 사용합니다.",
+      "warning": "5개 탭을 초과하면 성능 및 메모리 사용량에 영향을 줄 수 있습니다."
+    },
+    "tabBarPosition": {
+      "name": "탭 바 위치",
+      "desc": "탭 배지와 작업 버튼의 표시 위치 선택",
+      "input": "입력창 위(기본값)",
+      "header": "헤더에"
+    },
+    "enableAutoScroll": {
+      "name": "스트리밍 중 자동 스크롤",
+      "desc": "Claude가 응답을 스트리밍하는 동안 자동으로 아래로 스크롤합니다. 비활성화하면 상단에 머물러 처음부터 읽을 수 있습니다."
+    },
+    "showAgentEditedFiles": {
+      "name": "에이전트가 변경한 파일 표시",
+      "desc": "에이전트가 만들거나 편집한 파일을 채팅 입력창 위에 표시하여 한 번의 클릭으로 열 수 있습니다. 끄면 이전의 조용한 동작이 유지됩니다."
+    },
+    "deferMathRenderingDuringStreaming": {
+      "name": "스트리밍 중 수식 렌더링 지연",
+      "desc": "응답이 스트리밍되는 동안 원본 LaTeX를 표시하고 각 텍스트 블록이 완료되면 수식을 한 번 렌더링합니다."
+    },
+    "collapseStreamingResponse": {
+      "name": "스트리밍 중 미완성 응답 숨기기",
+      "desc": "응답이 스트리밍되는 동안 'Writing response...' 자리표시자를 표시하고 각 텍스트 블록이 완료되면 한 번에 렌더링합니다. 완성되지 않은 Markdown이나 XML 표시를 방지합니다."
+    },
+    "expandFileEditsByDefault": {
+      "name": "파일 편집을 기본적으로 펼치기",
+      "desc": "Write 및 Edit diff가 처음 표시될 때 펼친 상태로 보여줍니다."
+    },
+    "chatViewPlacement": {
+      "name": "Specorator 열 위치",
+      "desc": "채팅 패널이 생성될 때 열릴 위치를 선택합니다",
+      "rightSidebar": "오른쪽 사이드바",
+      "leftSidebar": "왼쪽 사이드바",
+      "mainTab": "메인 편집기 탭"
+    },
+    "cliPath": {
+      "name": "Claude CLI 경로",
+      "desc": "Claude Code CLI의 사용자 정의 경로. 비워두면 자동 감지 사용.",
+      "descWindows": "네이티브 설치 프로그램의 경우 claude.exe를 사용하세요. npm/pnpm/yarn 또는 기타 패키지 관리자 설치의 경우 cli-wrapper.cjs 경로를 사용하세요 (claude.cmd가 아님).",
+      "descUnix": "\"which claude\"의 출력을 붙여넣으세요 - 네이티브 및 npm/pnpm/yarn 설치 모두에서 작동합니다.",
+      "validation": {
+        "notExist": "경로가 존재하지 않습니다",
+        "isDirectory": "경로가 디렉토리입니다 파일이 아닙니다"
+      }
+    },
+    "language": {
+      "name": "언어",
+      "desc": "플러그인 인터페이스의 표시 언어 변경"
+    },
+    "quickActions": {
+      "folder": {
+        "name": "Quick actions folder",
+        "desc": "Vault folder containing quick action markdown files (YAML frontmatter with name, description, optional icon)."
+      }
+    },
+    "trustVault": {
+      "name": "Trust this vault's project settings",
+      "descRisky": "This vault's .claude/settings.json defines hooks or permission allow-rules that can run commands or auto-approve tools. They are withheld until you trust this vault.",
+      "descSafe": "Honor this vault's project .claude/settings.json (hooks / permission allow-rules). Only enable for vaults you trust."
+    },
+    "mcp": {
+      "reloadFailed": "Setting saved but reload failed. Changes will apply on next session.",
+      "saveFailed": "Failed to save MCP server",
+      "clipboardEmpty": "Clipboard is empty",
+      "invalidClipboard": "No valid mcp configuration found in clipboard",
+      "nameRequired": "Enter a name for the server",
+      "clipboardReadFailed": "Failed to read clipboard",
+      "duplicate": "Server \"{name}\" already exists",
+      "updated": "MCP server \"{name}\" updated",
+      "added": "MCP server \"{name}\" added",
+      "importNothing": "No new mcp servers imported",
+      "imported": "Imported {count} MCP server(s)",
+      "importedWithSkipped": "Imported {count} MCP server(s) ({skipped} skipped)",
+      "toggleEnabled": "MCP server \"{name}\" enabled",
+      "toggleDisabled": "MCP server \"{name}\" disabled",
+      "deleted": "MCP server \"{name}\" deleted",
+      "modal": {
+        "serverNameRequired": "Please enter a server name",
+        "serverNameInvalid": "Server name can only contain letters, numbers, dots, hyphens, and underscores",
+        "commandRequired": "Please enter a command",
+        "urlRequired": "Please enter a URL"
+      }
+    },
+    "agentBoard": {
+      "commonTemplates": "Common work-order templates: {templates}.",
+      "commonTemplatesEmpty": "Common work-order templates: nothing to do.",
+      "installFailed": "Install failed: {error}",
+      "commonLoops": "Common loops: {loops}.",
+      "commonLoopsEmpty": "Common loops: nothing to do.",
+      "loopFolderName": "Loop folder",
+      "loopFolderDesc": "Folder where loop notes are stored.",
+      "installLoopsName": "Install common loops",
+      "installLoopsDesc": "Add a starter set of loop notes to the loop folder."
+    },
+    "maxChatTabs": {
+      "name": "Max chat tabs",
+      "desc": "Maximum chat tabs you can have open at once.",
+      "warning": "More than 5 chat tabs may impact performance."
+    }
+  },
+  "quickActions": {
+    "toolbar": {
+      "ariaLabel": "Quick actions",
+      "title": "Quick actions"
+    },
+    "modal": {
+      "title": "Quick Actions",
+      "add": "Add action",
+      "deleteFailed": "Failed to delete quick action",
+      "searchPlaceholder": "Search actions by name, description, or tag…",
+      "noResults": "No quick actions match your search.",
+      "filterByTag": "Filter by tag {tag}",
+      "intro": "Click an action to send its prompt into the current chat. Use Edit or Delete on the right to manage vault files.",
+      "emptyLead": "Quick actions are reusable prompts stored as markdown notes in your vault—handy for workflows you run often.",
+      "emptyHintVault": "Each file uses frontmatter type quick-action, plus name, optional description and icon; the note body is the message sent to the chat.",
+      "emptyHintRun": "After you create actions, open this dialog from the toolbar and click a row to run one instantly.",
+      "emptyHintCreate": "Use Add action below to create your first quick action, or set the vault folder under Settings → Quick Actions.",
+      "markFavorite": "즐겨찾기에 추가",
+      "unmarkFavorite": "즐겨찾기에서 제거",
+      "favoriteLimitReached": "최대 5개의 빠른 작업을 즐겨찾기로 지정할 수 있습니다",
+      "tabs": {
+        "quickActions": "Quick actions",
+        "skills": "Skills"
+      }
+    },
+    "skills": {
+      "emptyAll": "No vault skills found.",
+      "emptyHint": "Skills live in .claude/skills/, .codex/skills/, and .agents/skills/.",
+      "providerDisabled": "Provider '{provider}' is disabled. Enable it in settings.",
+      "editInSettings": "Edit in {provider} settings",
+      "disabledBadge": "disabled",
+      "searchPlaceholder": "Search skills by name or description…",
+      "refreshTooltip": "스킬 새로고침",
+      "noResults": "No skills match your search."
+    },
+    "editor": {
+      "titleEdit": "Edit quick action",
+      "titleAdd": "Add quick action",
+      "name": "Name",
+      "nameDesc": "Used as the filename (cannot change when editing)",
+      "description": "Description",
+      "icon": "Icon",
+      "iconDesc": "Optional icon shown in the quick actions list",
+      "iconSearch": "Search icons…",
+      "iconNone": "No icon",
+      "iconNoResults": "No matching icons",
+      "prompt": "Prompt",
+      "promptDesc": "Message sent to the chat when you run this action",
+      "nameRequired": "Name is required",
+      "promptRequired": "Prompt is required",
+      "saveFailed": "Failed to save quick action",
+      "nameExists": "이 이름의 빠른 작업이 이미 존재합니다"
+    },
+    "capture": {
+      "label": "빠른 작업으로 저장",
+      "saved": "빠른 작업이 저장되었습니다",
+      "folderMissing": "먼저 빠른 작업 폴더를 설정하세요"
+    },
+    "contextMenu": {
+      "title": "Open Quick Actions",
+      "tabLimitReached": "Cannot open quick action: tab limit reached. Close a tab first."
+    },
+    "launchModal": {
+      "title": "Run \"{name}\"",
+      "providerLabel": "Provider",
+      "modelLabel": "Model",
+      "runButton": "Run",
+      "cancelButton": "Cancel",
+      "fallbackNotice": "Previous choice ({provider} / {model}) unavailable, defaulted to current selection.",
+      "noProvidersEnabled": "No providers enabled — configure in settings.",
+      "providerDisabled": "Selected provider is no longer enabled — open settings to re-enable.",
+      "untitledFallback": "(untitled action)"
+    },
+    "usage": {
+      "tabLabel": "Stats",
+      "topUsed": "Top 5 — Most used",
+      "dropCandidates": "Drop candidates",
+      "all": "All",
+      "uses": "{count} uses",
+      "uses_one": "1 use",
+      "uses_zero": "0 uses",
+      "lastUsed": {
+        "never": "never",
+        "today": "today",
+        "daysAgo": "{count} days ago",
+        "daysAgo_one": "1 day ago"
+      },
+      "sort": {
+        "label": "Sort by",
+        "mostUsed": "Most used",
+        "leastUsed": "Least used",
+        "longestUnused": "Longest unused",
+        "recentlyUsed": "Recently used"
+      },
+      "column": {
+        "type": "Type",
+        "name": "Name",
+        "count": "Count",
+        "lastUsed": "Last used"
+      },
+      "type": {
+        "quickAction": "Quick action",
+        "skill": "Skill"
+      },
+      "empty": "No usage tracked yet. Run a quick-action or skill to start the leaderboard.",
+      "clearAll": "Clear all stats",
+      "clearConfirm": {
+        "title": "Clear all usage stats?",
+        "body": "This cannot be undone.",
+        "confirm": "Clear",
+        "cancel": "Cancel"
+      }
+    }
+  },
+  "security": {
+    "vaultTrust": {
+      "title": "Trust this vault?",
+      "body": "This vault's .claude/settings.json defines hooks or permission allow-rules. These can run shell commands on every turn or auto-approve dangerous tools.",
+      "detail": "They stay disabled until you trust this vault. Only trust vaults whose contents you control.",
+      "trust": "Trust vault",
+      "keepBlocked": "Keep blocked"
+    }
+  },
+  "provider": {
+    "opencode": {
+      "subagent": {
+        "descriptionRequired": "Description is required",
+        "promptRequired": "Prompt is required",
+        "duplicate": "A subagent named \"{name}\" already exists",
+        "saveFailed": "Failed to save subagent: {message}",
+        "deleted": "Subagent \"{name}\" deleted",
+        "deleteFailed": "Failed to delete subagent",
+        "updated": "Subagent \"{name}\" updated",
+        "created": "Subagent \"{name}\" created",
+        "validation": {
+          "required": "Agent name is required",
+          "slashSegments": "Agent name must use slash-separated path segments without leading or trailing slashes",
+          "emptySegment": "Agent name path segments cannot be empty or whitespace-only",
+          "whitespaceSegment": "Agent name path segments cannot start or end with whitespace",
+          "dotSegment": "Agent name cannot include \".\" or \"..\" path segments",
+          "reservedChars": "Agent name path segments cannot contain Windows-reserved filename characters"
+        }
+      }
+    },
+    "codex": {
+      "subagent": {
+        "descriptionRequired": "Description is required",
+        "developerInstructionsRequired": "Developer instructions are required",
+        "duplicate": "A subagent named \"{name}\" already exists",
+        "saveFailed": "Failed to save subagent: {message}",
+        "deleted": "Subagent \"{name}\" deleted",
+        "deleteFailed": "Failed to delete subagent",
+        "updated": "Subagent \"{name}\" updated",
+        "created": "Subagent \"{name}\" created",
+        "validation": {
+          "required": "Subagent name is required",
+          "tooLong": "Subagent name must be {max} characters or fewer",
+          "invalidChars": "Subagent name can only contain lowercase letters, numbers, hyphens, and underscores",
+          "nicknameInvalidChars": "Nickname candidates can only contain ASCII letters, numbers, spaces, hyphens, and underscores",
+          "nicknameDuplicate": "Nickname candidates must be unique"
+        }
+      },
+      "skill": {
+        "instructionsRequired": "Instructions are required",
+        "saveFailed": "Failed to save Codex skill",
+        "deleteFailed": "Failed to delete Codex skill",
+        "deleted": "Codex skill \"{name}\" deleted",
+        "updated": "Codex skill \"{name}\" updated",
+        "created": "Codex skill \"{name}\" created"
+      }
+    },
+    "claude": {
+      "plugin": {
+        "toggleTabRestartFailed": "Plugin toggled, but some tabs failed to restart.",
+        "enabled": "Plugin \"{id}\" enabled",
+        "disabled": "Plugin \"{id}\" disabled",
+        "toggleFailed": "Failed to toggle plugin: {error}",
+        "listRefreshed": "Plugin list refreshed",
+        "refreshFailed": "Failed to refresh plugins: {error}",
+        "malformedEntry": "Specorator: plugin \"{id}\" has malformed entry in installed_plugins.json (expected array, got {type})"
+      },
+      "task": {
+        "resultRenderFailed": "Background task completed, but the result could not be rendered."
+      }
+    },
+    "cursor": {
+      "cli": {
+        "notFound": "Cursor CLI not found. Configure the CLI path first."
+      },
+      "models": {
+        "noModels": "Cursor returned no models. If you are not signed in, run `cursor-agent login`.",
+        "discoveredOne": "Discovered 1 Cursor model.",
+        "discoveredMany": "Discovered {count} Cursor models.",
+        "refreshFailed": "Failed to refresh Cursor models."
+      },
+      "subagent": {
+        "saved": "Saved subagent \"{name}\".",
+        "saveFailed": "Failed to save the subagent.",
+        "deleted": "Deleted subagent \"{name}\".",
+        "deleteFailed": "Failed to delete the subagent.",
+        "duplicate": "An agent named \"{name}\" already exists.",
+        "descriptionRequired": "Description is required.",
+        "nameRequired": "Name is required.",
+        "nameWhitespace": "Name cannot start or end with whitespace.",
+        "nameDotSegment": "Name cannot be a dot segment.",
+        "nameReservedChars": "Name cannot contain path separators or reserved characters."
+      }
+    }
+  },
+  "diagnostics": {
+    "logsEmpty": "No diagnostic log entries",
+    "logsCopied": "Copied {count} log entries",
+    "logsCleared": "Diagnostic logs cleared"
+  },
+  "tasks": {
+    "board": {
+      "stopRequested": "Requested stop for \"{title}\".",
+      "archived": "Archived \"{title}\".",
+      "deleted": "Deleted \"{title}\".",
+      "fileNotFound": "Work order file was not found.",
+      "updateFailed": "Cannot update work order: {error}",
+      "transitionInvalid": "Cannot move \"{title}\" from {from} to {to}.",
+      "runParseFailed": "Cannot run work order: {error}",
+      "runFailed": "Work order run failed: {error}",
+      "noReady": "No ready work orders to run.",
+      "laneSaveFailed": "Could not save lane change: {error}",
+      "addWorkOrder": "+ Add work order",
+      "addWorkOrderButton": "Add work order",
+      "runNextReady": "Run next ready",
+      "autoRun": {
+        "label": "Auto-run",
+        "tooltip": "Automatically starts work orders once they reach Ready. Runs in the background."
+      },
+      "activeCount": "{n}/{m} active",
+      "tabCount": "Work-order tabs {n}/{m} · {k} free",
+      "contextMenu": {
+        "openNote": "노트 열기",
+        "openConversation": "대화 열기",
+        "archive": "보관",
+        "delete": "삭제"
+      },
+      "cardAction": {
+        "run": "실행",
+        "retry": "재시도",
+        "backToInbox": "받은 편지함으로",
+        "goToConversation": "대화로 이동",
+        "moreActions": "추가 작업"
+      },
+      "card": {
+        "reply": {
+          "inputPlaceholder": "Your reply…",
+          "send": "Send",
+          "stop": "Stop",
+          "waitingForInput": "The agent is waiting for your input.",
+          "requestsApproval": "The agent requests approval to proceed.",
+          "risk": "Risk: {risk}",
+          "rejectReasonPlaceholder": "Reason (used if you reject)…",
+          "approve": "Approve",
+          "reject": "Reject",
+          "defaultRejectReason": "rejected"
+        },
+        "liveStrip": {
+          "attempt": "{elapsed} · attempt {attempt}",
+          "starting": "starting…",
+          "heartbeatFresh": "Fresh heartbeat ({age} ago)",
+          "heartbeatStale": "Stale heartbeat ({age} ago)",
+          "heartbeatVeryStale": "Very stale heartbeat ({age} ago)"
+        }
+      },
+      "notRunnable": "Mark \"{title}\" ready before running.",
+      "noFreeSlots": "사용 가능한 작업 지시 슬롯이 없습니다. 작업 지시 실행에는 빈 슬롯이 필요합니다. 채팅 패널에서 작업 지시 탭을 닫거나 Agent Board 설정에서 \"Concurrent work-order runs\"를 늘리세요.",
+      "collapseLane": "레인 접기",
+      "expandLane": "레인 {title} 펼치기",
+      "readyWhen": "준비 완료 조건",
+      "doneWhen": "완료 조건",
+      "boardNotices": "보드 알림",
+      "skippedNotes": "건너뛴 노트",
+      "queueHalted": "대기열 중지됨: {reason}",
+      "failureOne": "실패 {n}건",
+      "failureMany": "실패 {n}건",
+      "queueSkipped": "⊘ 대기열 건너뜀: {reason}"
+    },
+    "template": {
+      "nameRequired": "Template name is required.",
+      "bodyRequired": "Template body is required.",
+      "saveFailed": "Save failed: {error}",
+      "deleteFailed": "Delete failed: {error}"
+    },
+    "loop": {
+      "nameRequired": "A loop needs a name.",
+      "bodyRequired": "A loop needs an approach or steps.",
+      "saveFailed": "Could not save loop: {error}",
+      "deleteFailed": "Could not delete loop: {error}"
+    },
+    "loopPicker": {
+      "title": "Attach a loop",
+      "lead": "Pick a loop to guide this work order, or choose No loop.",
+      "newLoop": "New loop",
+      "noneTitle": "No loop",
+      "noneDesc": "Run the work order without an attached loop.",
+      "useWhenLabel": "Use when:",
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "loopEditor": {
+      "titleNew": "New loop",
+      "titleEdit": "Edit loop",
+      "nameName": "Name",
+      "nameDesc": "A short, memorable loop name.",
+      "descriptionName": "Description",
+      "descriptionDesc": "One line shown in the picker.",
+      "iconName": "Icon",
+      "iconDesc": "Lucide icon for the loop.",
+      "useWhenName": "Use when",
+      "useWhenDesc": "Selection guidance — not sent to the agent.",
+      "approachName": "Approach",
+      "approachDesc": "The core playbook the agent follows.",
+      "stepsName": "Steps",
+      "stepsDesc": "Ordered steps to work through.",
+      "verifyName": "Verify",
+      "verifyDesc": "How the agent confirms success.",
+      "notesName": "Notes",
+      "notesDesc": "Gotchas and guardrails.",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "create": {
+      "noActiveNote": "Open a note to create a work order from it.",
+      "noSelection": "Select text in a note to create a work order from it.",
+      "needsBrowserSelection": "Open Specorator chat and select text in a browser view first."
+    },
+    "fromChat": {
+      "nothingToCapture": "Nothing to capture from this message.",
+      "createdFromMessage": "Work order created from chat message.",
+      "noActiveChat": "Open a chat conversation first.",
+      "createdFromConversation": "Work order created from chat conversation."
+    },
+    "run": {
+      "needsProvider": "Set an Agent Board default provider in settings first.",
+      "needsModel": "Set an Agent Board default model in settings first.",
+      "templateProblems": "Template \"{name}\" has problems: {errors}"
+    },
+    "commitOnAccept": {
+      "title": "Commit & push?",
+      "bodyOne": "Accepted \"{title}\". 1 file changed in the vault git repo.",
+      "bodyMany": "Accepted \"{title}\". {count} files changed in the vault git repo.",
+      "dontAsk": "Don't ask again for this vault",
+      "skip": "Skip",
+      "commitAndPush": "Commit & push",
+      "failed": "Commit prompt failed: {error}",
+      "settingsSaveFailed": "Failed to save preference. Try again from settings."
+    },
+    "workOrderModal": {
+      "properties": "Properties",
+      "sectionObjective": "Objective",
+      "sectionAcceptance": "Acceptance criteria",
+      "fieldStatus": "Status",
+      "fieldAgent": "Agent",
+      "fieldProvider": "Provider",
+      "fieldModel": "Model",
+      "fieldPriority": "Priority",
+      "fieldCreated": "Created",
+      "fieldUpdated": "Updated",
+      "fieldAttempts": "Attempts",
+      "fieldConversation": "Conversation",
+      "fieldLoop": "Loop",
+      "loopNone": "No loop",
+      "sectionHandoff": "Agent handoff",
+      "sectionRunLedger": "Run ledger",
+      "handoffSummary": "Summary",
+      "handoffVerification": "Verification",
+      "handoffRisks": "Risks",
+      "handoffNextAction": "Next action",
+      "salvageTitle": "Run finished without a handoff",
+      "salvageCallout": "This run finished without producing a structured handoff. The transcript tail below is the available run trace.",
+      "transcriptTail": "Transcript tail",
+      "transcriptTailEmpty": "No transcript available.",
+      "editTitleHint": "✎ Click title to rename",
+      "startedAgo": "Started {ago} ago",
+      "finishedAt": "Finished {ago} ago",
+      "closeAriaLabel": "Close",
+      "actionOpenNote": "Open note",
+      "actionOpenConversation": "Open conversation",
+      "actionMarkReady": "Mark ready",
+      "actionStop": "Stop",
+      "actionRework": "Rework",
+      "actionAccept": "Accept",
+      "actionSendToReview": "Send to review",
+      "actionMarkFailed": "Mark failed",
+      "actionReopen": "Reopen",
+      "actionArchive": "Archive",
+      "sectionContext": "Context",
+      "sectionConstraints": "Constraints",
+      "actionEdit": "Edit",
+      "actionSaveSections": "Save",
+      "actionCancelEdit": "Cancel",
+      "editObjectivePlaceholder": "What should the agent accomplish?",
+      "editAcceptancePlaceholder": "Define what \"done\" means — one \"- [ ] \" item per line.",
+      "editContextPlaceholder": "Links, files, and scope the agent needs.",
+      "editConstraintsPlaceholder": "Guardrails the agent must respect."
+    },
+    "templateEditor": {
+      "titleNew": "새 작업 지시 템플릿",
+      "titleEdit": "작업 지시 템플릿 편집",
+      "useDefault": "기본값 사용",
+      "nameName": "Name",
+      "nameDesc": "선택기에 표시됩니다. 새 템플릿의 경우 템플릿 파일 이름이 됩니다.",
+      "descriptionName": "Description",
+      "descriptionDesc": "선택기에서 이름 아래에 표시되는 선택적 한 줄 요약입니다.",
+      "iconName": "Icon",
+      "iconDesc": "선택기 행에 사용할 선택적 Lucide 아이콘입니다.",
+      "providerName": "Provider",
+      "providerDesc": "선택 사항. 설정하지 않으면 Agent Board 기본 제공자를 사용합니다.",
+      "modelName": "Model",
+      "modelDesc": "선택 사항. 설정하지 않으면 Agent Board 기본 모델을 사용합니다.",
+      "priorityName": "Priority",
+      "priorityDesc": "선택 사항. 설정하지 않으면 normal로 설정됩니다.",
+      "bodyName": "Body",
+      "bodyDesc": "템플릿 본문. 자리표시자: {{title}}, {{date}}, {{source}}.",
+      "save": "저장",
+      "cancel": "취소",
+      "loopName": "Default loop",
+      "loopDesc": "Loop attached to every work order created from this template.",
+      "loopNone": "No loop",
+      "agentName": "Agent",
+      "agentDesc": "Optional roster agent assigned to work orders created from this template."
+    },
+    "addToWorkOrder": {
+      "title": "Add to work order",
+      "lead": "Pick a new or ready work order to add this file or folder to its context.",
+      "empty": "No new or ready work orders yet.",
+      "newWorkOrder": "New work order",
+      "added": "Added {name} to \"{title}\".",
+      "already": "{name} is already in the context of \"{title}\".",
+      "failed": "Could not add to work order: {error}"
+    },
+    "templatePicker": {
+      "title": "작업 지시 템플릿",
+      "newTemplate": "새 템플릿",
+      "emptyState": "아직 템플릿이 없습니다. 빈 항목을 선택해 간단한 작업 지시를 만들거나, 나중에 재사용할 템플릿을 추가하세요.",
+      "lead": "적용할 템플릿을 선택하거나 빈 상태로 시작하세요.",
+      "blankTitle": "빈 작업 지시",
+      "blankDesc": "목표, 수락 기준, 컨텍스트, 제약으로 구성된 빈 골격입니다.",
+      "edit": "편집",
+      "delete": "삭제"
+    },
+    "laneEditor": {
+      "untitledLane": "제목 없는 레인",
+      "laneDesc": "제목과 레인을 보드에 표시할지 여부입니다.",
+      "moveUp": "위로 이동",
+      "moveDown": "아래로 이동",
+      "removeLane": "레인 제거",
+      "collapsible": "접을 수 있음",
+      "routedTo": "\"{title}\"(으)로 라우팅됨",
+      "routedElsewhere": "⚠ 다른 곳으로 라우팅됨: {summary}",
+      "routedSummaryItem": "{status} → \"{lane}\"",
+      "definitionOfReady": "준비 완료 정의",
+      "definitionOfDone": "완료 정의",
+      "addLane": "레인 추가",
+      "resetToDefault": "기본값으로 재설정",
+      "newLaneTitle": "새 레인"
+    }
+  },
+  "env": {
+    "secretVarsHeading": "비밀 변수",
+    "secretVarsDesc": "API 키와 토큰은 평문 설정이 아니라 시스템 키체인에 보관됩니다.",
+    "secretNotSet": "이 기기에 설정되지 않았습니다 — 사용할 비밀을 선택하거나 만드세요.",
+    "secretRemove": "제거",
+    "secretAdd": "비밀 변수 추가",
+    "secretNamePlaceholder": "VARIABLE_NAME",
+    "secretAddButton": "추가",
+    "secretMissing": "이 기기에 공급자 비밀 \"{name}\"이(가) 설정되어 있지 않습니다. Specorator 설정에서 다시 입력하세요.",
+    "applyPartial": "Environment changes applied, but {count} affected tab(s) failed to restart.",
+    "applied": "Environment variables applied.",
+    "appliedRebuild": "Environment variables applied. Sessions will be rebuilt on next message."
+  },
+  "inlineEdit": {
+    "unavailable": "Inline edit unavailable: could not access the active editor. Try reopening the note.",
+    "filesLoadFailed": "Failed to load vault files. Vault @-mentions may be unavailable.",
+    "attachInvalidPath": "Failed to attach file: invalid path",
+    "noView": "Inline edit unavailable: could not access the active Markdown view.",
+    "inserted": "Inserted",
+    "applied": "Edit applied"
+  },
+  "agents": {
+    "persona": {
+      "standard": "표준"
+    }
+  },
+  "agentRoster": {
+    "title": "Agent Roster",
+    "newAgent": "New Agent",
+    "emptyState": "No agents yet. Create one to get started.",
+    "back": "Back",
+    "skills": "Skills",
+    "tools": "Tools",
+    "save": "Save",
+    "startChat": "이 에이전트와 채팅 시작",
+    "chattingWith": "{name}과 채팅 중",
+    "installStarter": "Install starter agents",
+    "installStarterDone": "Installed starter agents ({installed} new, {skipped} skipped).",
+    "installStarterNone": "All starter agents are already installed.",
+    "fieldName": "Name",
+    "fieldDescription": "Description",
+    "delete": "Delete",
+    "deleteConfirm": "Delete agent \"{name}\"? This cannot be undone.",
+    "sectionModel": "Model",
+    "sectionInstructions": "Instructions",
+    "provider": "Provider",
+    "model": "Model",
+    "providerDefault": "Default (global)",
+    "modelDefault": "Provider default",
+    "color": "Color",
+    "initials": "Initials",
+    "roleWorker": "Worker",
+    "roleVerifier": "Verifier",
+    "saved": "Saved {name}.",
+    "deleted": "Deleted {name}.",
+    "noToolsHint": "No user tools yet. Add tools in the Tool Library.",
+    "toolGrantScopeHint": "These tools apply only when you start a chat from here. Agents you sync to providers get that provider's default tools instead.",
+    "noSkillsHint": "No skills discovered yet. Add skills in the Skill Library.",
+    "startChatShort": "Start chat",
+    "capsSummary": "{skills} skills · {tools} tools",
+    "searchSkills": "Search skills…",
+    "searchTools": "Search tools…",
+    "selectedCount": "{count} selected",
+    "unsavedChanges": "Unsaved changes",
+    "discardConfirm": "Discard unsaved changes?",
+    "discard": "Discard",
+    "syncProviders": "Sync to providers",
+    "syncProvidersHint": "Write each agent as a native subagent file for your enabled providers (so they're @-mentionable). Deleting an agent removes its files.",
+    "syncDone": "Synced agents to {providers} ({written} files).",
+    "syncNone": "No enabled providers to sync to.",
+    "navLabel": "Agents",
+    "actionFailed": "Something went wrong — check the developer console.",
+    "syncFailed": "Synced with errors: {written} written, {failed} failed.",
+    "colorNone": "None",
+    "icon": "아이콘",
+    "iconNone": "기본값",
+    "bindingHint": "다른 에이전트를 사용하려면 새 채팅을 시작하세요.",
+    "navAriaLabel": "라이브러리 섹션",
+    "removeCapability": "{name} 제거"
+  },
+  "toolLibrary": {
+    "toolCreated": "Created {path}. Edit it, then it loads automatically.",
+    "title": "Tool Library",
+    "newTool": "New Tool",
+    "reload": "Reload",
+    "empty": "No tools yet.",
+    "errorPrefix": "Error: {error}",
+    "edit": "Edit",
+    "delete": "Delete",
+    "namePrompt": "New tool name (e.g. my_tool)",
+    "deleteConfirm": "Delete tool \"{name}\"? This removes its files.",
+    "deleted": "Deleted {name}.",
+    "statusError": "Error",
+    "statusReady": "Ready",
+    "reloadDone": "Reloaded tools.",
+    "source": "Source",
+    "inputSchema": "Input schema",
+    "save": "Save",
+    "saved": "Saved {name}.",
+    "close": "Close",
+    "metaName": "Name",
+    "metaDescription": "Description",
+    "notLoaded": "Not loaded — fix the error below and save.",
+    "navLabel": "Tools",
+    "nameField": "Name",
+    "actionFailed": "Something went wrong — check the developer console."
+  },
+  "workOrderActivity": {
+    "toggleRunning": "활성 작업 지시 {count}개",
+    "toggleAttention": "활성 작업 지시 {count}개, 주의 필요 {attention}개",
+    "toggleFinished": "완료된 작업 지시 {count}개",
+    "status": {
+      "running": "실행 중",
+      "needsInput": "입력 필요",
+      "needsApproval": "승인 필요",
+      "finished": "완료됨"
+    },
+    "action": {
+      "open": "열기",
+      "reply": "응답",
+      "review": "검토",
+      "close": "탭 닫기"
+    }
+  },
+  "skillLibrary": {
+    "title": "Skill Library",
+    "empty": "No skills discovered.",
+    "open": "Open",
+    "newSkill": "New Skill",
+    "namePrompt": "New skill name",
+    "created": "Created {path}.",
+    "readOnlyNote": "Read-only",
+    "noProvider": "No writable skill provider is enabled.",
+    "content": "Content",
+    "save": "Save",
+    "saved": "Saved {name}.",
+    "close": "Close",
+    "provider": "Provider",
+    "readonlyNotice": "This skill is read-only and cannot be edited here.",
+    "navLabel": "Skills",
+    "nameField": "Name",
+    "actionFailed": "Something went wrong — check the developer console.",
+    "providerVault": "Vault"
+  },
+  "loopLibrary": {
+    "navLabel": "Loops",
+    "title": "Loop library",
+    "newLoop": "New loop",
+    "installStarter": "Install starter loops",
+    "empty": "No loops yet. Create one to reuse a playbook across work orders.",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteConfirm": "Delete the loop \"{name}\"?",
+    "deleted": "Deleted {name}.",
+    "useWhenLabel": "Use when:",
+    "actionFailed": "Something went wrong — check the developer console."
+  },
+  "ribbon": {
+    "openChat": "Open Co-Worker Chat",
+    "openAgentBoard": "Open Agent Board",
+    "openAgentRoster": "Open Agent Roster",
+    "openToolLibrary": "Open Tool Library",
+    "openSkillLibrary": "Open Skill Library",
+    "openLoopLibrary": "Open loop library"
+  },
+  "commands": {
+    "openView": "Open chat view",
+    "openAgentBoard": "Open Agent Board",
+    "runNextReadyWorkOrder": "Run next ready work order",
+    "createWorkOrder": "Create work order",
+    "createWorkOrderFromCurrentNote": "Create work order from current note",
+    "createWorkOrderFromSelection": "Create work order from selection",
+    "createWorkOrderTemplate": "Create work-order template",
+    "installCommonWorkOrderTemplates": "Install common work-order templates",
+    "createWorkOrderFromBrowserSelection": "Create work order from browser selection",
+    "createWorkOrderFromChatConversation": "Create work order from current chat conversation",
+    "copyDiagnosticLogs": "Copy diagnostic logs",
+    "clearDiagnosticLogs": "Clear diagnostic logs",
+    "inlineEdit": "Inline edit",
+    "newTab": "New tab",
+    "newSession": "New session (in current tab)",
+    "closeCurrentTab": "Close current tab",
+    "openAgentRoster": "Open Agent Roster",
+    "openToolLibrary": "Open Tool Library",
+    "openSkillLibrary": "Open Skill Library",
+    "openLoopLibrary": "Open loop library"
+  }
+}

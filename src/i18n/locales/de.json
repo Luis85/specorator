@@ -1,0 +1,1211 @@
+{
+  "common": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "add": "Hinzufügen",
+    "remove": "Entfernen",
+    "clear": "Löschen",
+    "clearAll": "Alle löschen",
+    "loading": "Lädt",
+    "error": "Fehler",
+    "success": "Erfolg",
+    "warning": "Warnung",
+    "confirm": "Bestätigen",
+    "settings": "Einstellungen",
+    "advanced": "Erweitert",
+    "enabled": "Aktiviert",
+    "disabled": "Deaktiviert",
+    "platform": "Plattform",
+    "refresh": "Aktualisieren",
+    "rewind": "Zurückspulen",
+    "errorWithDetail": "Error: {error}"
+  },
+  "chat": {
+    "loadEarlier": "Frühere Nachrichten laden",
+    "history": {
+      "showMore": "Mehr anzeigen",
+      "loadFailed": "Failed to load conversation",
+      "regenerateFailed": "Failed to regenerate response",
+      "deleteFailed": "Failed to delete conversation",
+      "renameFailed": "Failed to rename conversation",
+      "linkedNotFound": "Linked conversation not found. It may have been deleted.",
+      "linkedNoFreeTab": "Cannot open conversation: tab limit reached. Close a tab first.",
+      "loading": "Loading conversation…"
+    },
+    "rewind": {
+      "confirmMessage": "Zu diesem Punkt zurückspulen? Dateiänderungen nach dieser Nachricht werden rückgängig gemacht. Das Zurückspulen betrifft keine manuell oder über Bash bearbeiteten Dateien.",
+      "confirmMessageConversationOnly": "Konversation zu diesem Punkt zurückspulen? Dateiänderungen bleiben erhalten.",
+      "confirmButton": "Zurückspulen",
+      "ariaLabel": "Hierher zurückspulen",
+      "menuConversationOnly": "Nur Konversation zurückspulen",
+      "menuCodeAndConversation": "Code + Konversation zurückspulen",
+      "notice": "Zurückgespult: {count} Datei(en) wiederhergestellt",
+      "noticeConversationOnly": "Konversation zurückgespult; Dateiänderungen bleiben erhalten",
+      "noticeSaveFailed": "Zurückgespult: {count} Datei(en) wiederhergestellt, aber Status konnte nicht gespeichert werden: {error}",
+      "noticeConversationOnlySaveFailed": "Konversation zurückgespult, aber Status konnte nicht gespeichert werden: {error}",
+      "failed": "Zurückspulen fehlgeschlagen: {error}",
+      "cannot": "Zurückspulen nicht möglich: {error}",
+      "unavailableStreaming": "Zurückspulen während des Streamings nicht möglich",
+      "unavailableNoUuid": "Zurückspulen nicht möglich: Nachrichtenkennungen fehlen",
+      "errMessageNotFound": "Message not found",
+      "errServiceUnavailable": "Agent service not available",
+      "errUnknown": "Unknown error",
+      "errUnsupported": "Rewind is not supported by this provider."
+    },
+    "fork": {
+      "ariaLabel": "Konversation verzweigen",
+      "chooseTarget": "Konversation verzweigen",
+      "targetNewTab": "Neuer Tab",
+      "targetCurrentTab": "Aktueller Tab",
+      "maxTabsReached": "Verzweigung nicht möglich: maximal {count} Tabs erreicht",
+      "notice": "In neuem Tab verzweigt",
+      "noticeCurrentTab": "Im aktuellen Tab verzweigt",
+      "failed": "Verzweigung fehlgeschlagen: {error}",
+      "unavailableStreaming": "Verzweigung während des Streamings nicht möglich",
+      "unavailableNoUuid": "Verzweigung nicht möglich: Nachrichtenkennungen fehlen",
+      "unavailableNoResponse": "Verzweigung nicht möglich: keine Antwort zum Verzweigen vorhanden",
+      "errorMessageNotFound": "Nachricht nicht gefunden",
+      "errorNoSession": "Keine Sitzungs-ID verfügbar",
+      "errorNoActiveTab": "Kein aktiver Tab",
+      "commandNoMessages": "Verzweigung nicht möglich: keine Nachrichten in der Konversation",
+      "commandNoAssistantUuid": "Verzweigung nicht möglich: keine Assistentenantwort mit Kennungen",
+      "unsupportedProvider": "Fork is not supported by this provider."
+    },
+    "feedback": {
+      "thumbsUp": {
+        "label": "Hilfreich",
+        "prompt": "Klingt gut. Mach mit diesem Ansatz weiter."
+      },
+      "thumbsDown": {
+        "label": "Nicht hilfreich",
+        "prompt": "Diese Antwort war nicht hilfreich. Stelle mir eine gezielte Rückfrage, um zu verstehen, warum ich anderer Meinung bin, bevor du es erneut versuchst."
+      }
+    },
+    "bangBash": {
+      "placeholder": "> Einen Bash-Befehl ausführen...",
+      "commandPanel": "Befehlspanel",
+      "copyAriaLabel": "Neueste Befehlsausgabe kopieren",
+      "clearAriaLabel": "Bash-Ausgabe löschen",
+      "commandLabel": "{command}",
+      "statusLabel": "Status des Befehls: {status}",
+      "collapseOutput": "Befehlsausgabe einklappen",
+      "expandOutput": "Befehlsausgabe ausklappen",
+      "running": "Wird ausgeführt...",
+      "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen",
+      "commandFailed": "Command failed: {error}"
+    },
+    "planMode": {
+      "ariaLabel": "Toggle plan mode",
+      "titleInactive": "Plan mode — click or Shift+Tab to enter",
+      "titleActive": "Plan mode on — click or Shift+Tab to exit",
+      "toggleFailed": "Failed to change plan mode"
+    },
+    "permissionMode": {
+      "yoloWarning": "YOLO mode lets the agent run commands and edit files with no approval prompts. A malicious or prompt-injected note could execute code. Only use YOLO in vaults you fully trust."
+    },
+    "queue": {
+      "steerFailed": "Failed to steer the queued message. It is still available."
+    },
+    "input": {
+      "initFailed": "Failed to initialize agent service. Please try again.",
+      "serviceUnavailable": "Agent service not available. Please reload the plugin.",
+      "instructionAdded": "Instruction added to custom system prompt",
+      "processResponseFailed": "Failed to process response",
+      "refineFailed": "Failed to refine instruction",
+      "noInstruction": "No instruction received",
+      "unexpectedApprovalSelection": "Unexpected approval selection: \"{value}\"",
+      "commandUnsupported": "/{command} is not supported by this provider.",
+      "externalContextUnavailable": "External context selector not available.",
+      "externalContextAdded": "Added external context: {path}",
+      "forkUnsupported": "Fork is not supported by this provider.",
+      "forkUnavailable": "Fork not available.",
+      "unknownCommand": "Unknown command: {command}",
+      "noConversationsToResume": "No conversations to resume",
+      "openConversationFailed": "Failed to open conversation: {error}",
+      "chatServiceInitFailed": "Failed to initialize chat service"
+    },
+    "runtimeError": {
+      "cliNotFound": {
+        "title": "CLI not found",
+        "body": "Specorator couldn't find the provider's command-line tool. Set the correct path in settings, then try again.",
+        "openSettings": "Open settings"
+      },
+      "unauthenticated": {
+        "title": "Sign-in required",
+        "body": "The provider rejected the request because you're not signed in. Sign in from your terminal, then retry.",
+        "hintLabel": "Run this in your terminal:",
+        "claudeHint": "claude login",
+        "codexHint": "codex login",
+        "cursorHint": "cursor-agent login",
+        "opencodeHint": "opencode auth login",
+        "genericHint": "Sign in to the provider CLI",
+        "copyHint": "Copy command",
+        "copied": "Copied",
+        "openSettings": "Open settings"
+      },
+      "contextTooLarge": {
+        "title": "Context too large",
+        "body": "This turn exceeds the model's context window. Remove some attachments or file context, or start a new conversation, then try again."
+      },
+      "generic": {
+        "title": "Something went wrong"
+      },
+      "retry": "Retry",
+      "detailsLabel": "Details"
+    },
+    "context": {
+      "fileNoTab": "Open Specorator chat and enable a provider before adding file context.",
+      "folderNoTab": "Open Specorator chat and enable a provider before adding folder context.",
+      "fileAttachFailed": "Could not add file to chat: {path}",
+      "folderAttachFailed": "Could not add folder to chat: {path}",
+      "fileAdded": "Added {path} to Specorator chat",
+      "folderAdded": "Added {path}/ to Specorator chat"
+    },
+    "drop": {
+      "image": "Drop image",
+      "fileContext": "Drop into context",
+      "folderContext": "Drop folder into context",
+      "osContext": "Drop file or folder into context",
+      "mixed": "Drop into chat",
+      "batchAdded": "Added {count} to context",
+      "batchSkipped": "Skipped {count}: outside vault or external context",
+      "externalFolderUnsupported": "Folders outside the vault aren't supported as context yet",
+      "outsideContext": "{path} is outside the vault and any configured external context",
+      "outsideContextBatch": "{count} items are outside the vault and any configured external context",
+      "imageFailed": "Failed to attach {count} image(s)"
+    },
+    "tab": {
+      "createFailed": "Failed to create tab",
+      "createConversationFailed": "Failed to create conversation",
+      "switchFailed": "Failed to switch tab",
+      "closeFailed": "Failed to close tab",
+      "maxReached": "Maximum {count} tabs allowed",
+      "providerSwitchBlocked": "Cannot switch provider on a bound session. Start a new tab instead."
+    },
+    "externalContext": {
+      "invalidRemoved": "Removed {count} invalid external context path(s): {paths}",
+      "persistFailed": "Cannot persist \"{path}\" - directory no longer exists",
+      "duplicate": "This folder is already added as an external context.",
+      "pickerFailed": "Unable to open folder picker."
+    },
+    "image": {
+      "unsupported": "Image attachments are not supported by this provider.",
+      "unavailable": "Image is no longer available in the vault."
+    },
+    "editedFiles": {
+      "label": "Geänderte Dateien"
+    },
+    "fileOpen": {
+      "notFound": "Could not open file: {path}",
+      "failed": "Failed to open file: {error}"
+    },
+    "storage": {
+      "tabLayoutSaveFailed": "Failed to save tab layout"
+    },
+    "tabs": {
+      "maxChatReached": "Cannot open: maximum {count} chat tabs reached.",
+      "maxWorkOrderReached": "Work-order tab limit reached ({count}). Queue is waiting.",
+      "workOrderSuffix": "(work order)"
+    }
+  },
+  "settings": {
+    "title": "Specorator Einstellungen",
+    "tabs": {
+      "general": "Allgemein",
+      "claude": "Claude",
+      "codex": "Codex",
+      "quickActions": "Schnellaktionen"
+    },
+    "display": "Anzeige",
+    "conversations": "Unterhaltungen",
+    "content": "Inhalte",
+    "input": "Eingabe",
+    "setup": "Einrichtung",
+    "models": "Modelle",
+    "experimental": "Experimentell",
+    "userName": {
+      "name": "Wie soll Specorator dich nennen?",
+      "desc": "Dein Name für personalisierte Begrüßungen (leer lassen für allgemeine Begrüßungen)"
+    },
+    "excludedTags": {
+      "name": "Ausgeschlossene Tags",
+      "desc": "Notizen mit diesen Tags werden nicht automatisch als Kontext geladen (einer pro Zeile, ohne #)"
+    },
+    "mediaFolder": {
+      "name": "Medienordner",
+      "desc": "Ordner mit Anhängen/Bildern. Wenn Notizen ![[image.jpg]] verwenden, sucht Claude hier. Leer lassen für Vault-Stammverzeichnis."
+    },
+    "systemPrompt": {
+      "name": "Benutzerdefinierter System-Prompt",
+      "desc": "Zusätzliche Anweisungen, die an den Standard-System-Prompt angehängt werden"
+    },
+    "autoTitle": {
+      "name": "Konversationstitel automatisch generieren",
+      "desc": "Generiert automatisch Konversationstitel nach der ersten Nutzernachricht."
+    },
+    "titleModel": {
+      "name": "Titel-Generierungsmodell",
+      "desc": "Modell zur automatischen Generierung von Konversationstiteln.",
+      "auto": "Automatisch (Haiku)"
+    },
+    "navMappings": {
+      "name": "Vim-Style Navigationszuordnungen",
+      "desc": "Eine Zuordnung pro Zeile. Format: \"map <Taste> <Aktion>\" (Aktionen: scrollUp, scrollDown, focusInput)."
+    },
+    "requireCommandOrControlEnterToSend": {
+      "name": "Command/Ctrl+Enter zum Senden erfordern",
+      "desc": "Wenn aktiviert, fügt Enter einen Zeilenumbruch ein. Command+Enter sendet unter macOS; Ctrl+Enter sendet unter Windows und Linux."
+    },
+    "hotkeys": "Tastenkürzel",
+    "inlineEditHotkey": {
+      "name": "Inline-Bearbeitung",
+      "descWithKey": "Aktuelles Tastenkürzel: {hotkey}",
+      "descNoKey": "Kein Tastenkürzel festgelegt",
+      "btnChange": "Ändern",
+      "btnSet": "Festlegen"
+    },
+    "openChatHotkey": {
+      "name": "Chat öffnen",
+      "descWithKey": "Aktuelles Tastenkürzel: {hotkey}",
+      "descNoKey": "Kein Tastenkürzel festgelegt",
+      "btnChange": "Ändern",
+      "btnSet": "Festlegen"
+    },
+    "newSessionHotkey": {
+      "name": "Neue Sitzung",
+      "descWithKey": "Aktuelles Tastenkürzel: {hotkey}",
+      "descNoKey": "Kein Tastenkürzel festgelegt",
+      "btnChange": "Ändern",
+      "btnSet": "Festlegen"
+    },
+    "newTabHotkey": {
+      "name": "Neuer Tab",
+      "descWithKey": "Aktuelles Tastenkürzel: {hotkey}",
+      "descNoKey": "Kein Tastenkürzel festgelegt",
+      "btnChange": "Ändern",
+      "btnSet": "Festlegen"
+    },
+    "closeTabHotkey": {
+      "name": "Tab schließen",
+      "descWithKey": "Aktuelles Tastenkürzel: {hotkey}",
+      "descNoKey": "Kein Tastenkürzel festgelegt",
+      "btnChange": "Ändern",
+      "btnSet": "Festlegen"
+    },
+    "slashCommands": {
+      "name": "Befehle und Fähigkeiten",
+      "desc": "Verwalte Vault-Befehle und -Fähigkeiten in .claude/commands/ und .claude/skills/. Ausgelöst durch /Name.",
+      "promptRequired": "Prompt template is required",
+      "commandDuplicate": "A command named \"/{name}\" already exists",
+      "skillDuplicate": "A skill named \"/{name}\" already exists",
+      "commandSaveFailed": "Failed to save slash command",
+      "skillSaveFailed": "Failed to save skill",
+      "convertFailed": "Failed to convert to skill",
+      "commandDeleteFailed": "Failed to delete slash command",
+      "skillDeleteFailed": "Failed to delete skill",
+      "commandCreated": "Slash command \"/{name}\" created",
+      "commandUpdated": "Slash command \"/{name}\" updated",
+      "commandDeleted": "Slash command \"/{name}\" deleted",
+      "skillCreated": "Skill \"/{name}\" created",
+      "skillUpdated": "Skill \"/{name}\" updated",
+      "skillDeleted": "Skill \"/{name}\" deleted",
+      "converted": "Converted \"/{name}\" to skill",
+      "validation": {
+        "required": "Command name is required",
+        "tooLong": "Command name must be {max} characters or fewer",
+        "invalidChars": "Command name can only contain lowercase letters, numbers, and hyphens",
+        "yamlReserved": "Command name cannot be a YAML reserved word (true, false, null, yes, no, on, off)"
+      }
+    },
+    "hiddenSlashCommands": {
+      "name": "Ausgeblendete Befehle und Fähigkeiten",
+      "desc": "Bestimmte Befehle und Fähigkeiten aus dem Dropdown ausblenden. Nützlich, um Claude Code-Einträge auszublenden, die für Specorator nicht relevant sind. Gib Namen ohne führenden Schrägstrich ein, einen pro Zeile.",
+      "placeholder": "commit\nbuild\ntest"
+    },
+    "mcpServers": {
+      "name": "MCP-Server",
+      "desc": "Verwalte Vault-MCP-Serverkonfigurationen in .claude/mcp.json. Server mit Kontext-Speichermodus benötigen @mention zur Aktivierung."
+    },
+    "plugins": {
+      "name": "Claude Code-Plugins",
+      "desc": "Verwalte Claude Code Plugins aus ~/.claude/plugins. Aktivierte Plugins werden pro Vault in .claude/settings.json gespeichert."
+    },
+    "subagents": {
+      "name": "Sub-Agenten",
+      "desc": "Verwalte Vault-Sub-Agenten in .claude/agents/. Jede Markdown-Datei definiert einen benutzerdefinierten Agenten.",
+      "noAgents": "Keine Sub-Agenten konfiguriert. Klicke auf +, um einen zu erstellen.",
+      "deleteConfirm": "Sub-Agent \"{name}\" löschen?",
+      "saveFailed": "Sub-Agent konnte nicht gespeichert werden: {message}",
+      "refreshFailed": "Sub-Agenten konnten nicht aktualisiert werden: {message}",
+      "deleteFailed": "Sub-Agent konnte nicht gelöscht werden: {message}",
+      "renameCleanupFailed": "Warnung: Alte Datei für \"{name}\" konnte nicht entfernt werden",
+      "created": "Sub-Agent \"{name}\" erstellt",
+      "updated": "Sub-Agent \"{name}\" aktualisiert",
+      "deleted": "Sub-Agent \"{name}\" gelöscht",
+      "duplicateName": "Ein Agent mit dem Namen \"{name}\" existiert bereits",
+      "descriptionRequired": "Beschreibung ist erforderlich",
+      "promptRequired": "System-Prompt ist erforderlich",
+      "modal": {
+        "titleEdit": "Sub-Agent bearbeiten",
+        "titleAdd": "Sub-Agent hinzufügen",
+        "name": "Name",
+        "nameDesc": "Nur Kleinbuchstaben, Zahlen und Bindestriche",
+        "namePlaceholder": "code-reviewer",
+        "description": "Beschreibung",
+        "descriptionDesc": "Kurzbeschreibung dieses Agenten",
+        "descriptionPlaceholder": "Prüft Code auf Fehler und Stil",
+        "advancedOptions": "Erweiterte Optionen",
+        "model": "Modell",
+        "modelDesc": "Modellüberschreibung für diesen Agenten",
+        "tools": "Tools",
+        "toolsDesc": "Kommagetrennte Liste zulässiger Tools (leer = alle)",
+        "disallowedTools": "Nicht erlaubte Tools",
+        "disallowedToolsDesc": "Kommagetrennte Liste der zu verbietenden Tools",
+        "skills": "Fähigkeiten",
+        "skillsDesc": "Kommagetrennte Liste von Fähigkeiten",
+        "prompt": "System-Prompt",
+        "promptDesc": "Anweisungen für den Agenten",
+        "promptPlaceholder": "Du bist ein Code-Reviewer. Analysiere den angegebenen Code auf..."
+      },
+      "loadFailed": "Failed to load subagent \"{name}\": {message}",
+      "validation": {
+        "required": "Agent name is required",
+        "tooLong": "Agent name must be {max} characters or fewer",
+        "invalidChars": "Agent name can only contain lowercase letters, numbers, and hyphens",
+        "yamlReserved": "Agent name cannot be a YAML reserved word (true, false, null, yes, no, on, off)"
+      }
+    },
+    "safety": "Sicherheit",
+    "loadUserSettings": {
+      "name": "Benutzer-Claude-Einstellungen laden",
+      "desc": "Lädt ~/.claude/settings.json. Wenn aktiviert, können Benutzer-Claude-Code-Berechtigungsregeln den Sicherheitsmodus umgehen."
+    },
+    "claudeSafeMode": {
+      "name": "Safe mode",
+      "desc": "Permission mode used when the Safe toggle is active."
+    },
+    "codexSafeMode": {
+      "name": "Safe mode",
+      "desc": "Sandbox mode used when the Safe toggle is active."
+    },
+    "environment": "Umgebung",
+    "customVariables": {
+      "name": "Benutzerdefinierte Variablen",
+      "desc": "Umgebungsvariablen für Claude SDK (KEY=VALUE-Format, eine pro Zeile). Export-Präfix unterstützt."
+    },
+    "envSnippets": {
+      "name": "Snippets",
+      "addBtn": "Snippet hinzufügen",
+      "noSnippets": "Keine gespeicherten Umgebungsvariablen-Snippets. Klicken Sie auf +, um Ihre aktuelle Konfiguration zu speichern.",
+      "nameRequired": "Bitte geben Sie einen Namen für das Snippet ein",
+      "modal": {
+        "titleEdit": "Snippet bearbeiten",
+        "titleSave": "Snippet speichern",
+        "name": "Name",
+        "namePlaceholder": "Ein beschreibender Name für diese Umgebungskonfiguration",
+        "description": "Beschreibung",
+        "descPlaceholder": "Optionale Beschreibung",
+        "envVars": "Umgebungsvariablen",
+        "envVarsPlaceholder": "KEY=VALUE-Format, eine pro Zeile (export-Präfix unterstützt)",
+        "save": "Speichern",
+        "update": "Aktualisieren",
+        "cancel": "Abbrechen"
+      },
+      "insertFailed": "Failed to insert snippet",
+      "deleteFailed": "Failed to delete snippet",
+      "saved": "Environment snippet \"{name}\" saved",
+      "updated": "Environment snippet \"{name}\" updated",
+      "deleted": "Environment snippet \"{name}\" deleted"
+    },
+    "customModelOverrides": {
+      "name": "Benutzerdefinierte Modellüberschreibungen",
+      "desc": "Legen Sie Aliasnamen in der Modellauswahl und Kontextfenstergrößen für benutzerdefinierte Modelle fest."
+    },
+    "customModelAliases": {
+      "placeholder": "Alias"
+    },
+    "customContextLimits": {
+      "name": "Benutzerdefinierte Kontextlimits",
+      "desc": "Legen Sie die Kontextfenstergrößen für Ihre benutzerdefinierten Modelle fest. Leer lassen für den Standardwert (200k Token).",
+      "invalid": "Ungültiges Format. Verwenden Sie: 256k, 1m oder exakte Anzahl (1000-10000000)."
+    },
+    "enableOpus1M": {
+      "name": "Opus 1M Kontextfenster",
+      "desc": "Opus 1M in der Modellauswahl anzeigen. In Max-, Team- und Enterprise-Plänen enthalten. API- und Pro-Nutzer benötigen zusätzliche Nutzung."
+    },
+    "enableSonnet1M": {
+      "name": "Sonnet 1M Kontextfenster",
+      "desc": "Sonnet 1M in der Modellauswahl anzeigen. Erfordert zusätzliche Nutzung bei Max-, Team- und Enterprise-Plänen. API- und Pro-Nutzer benötigen zusätzliche Nutzung."
+    },
+    "customModels": {
+      "name": "Custom models",
+      "desc": "Append additional Claude model IDs to the picker, one per line. Environment model overrides still replace the picker.",
+      "placeholder": "claude-opus-4-6\nclaude-opus-4-6[1m]\nclaude-opus-4-5-20251101"
+    },
+    "enableChrome": {
+      "name": "Chrome-Erweiterung aktivieren",
+      "desc": "Erlaubt Claude die Interaktion mit Chrome über die claude-in-chrome-Erweiterung. Die Erweiterung muss installiert sein. Erfordert Neustart der Sitzung."
+    },
+    "enableBangBash": {
+      "name": "Bash-Modus (!) aktivieren",
+      "desc": "Gib ! in ein leeres Eingabefeld ein, um den Bash-Modus zu starten. Führt Befehle direkt über Node.js child_process aus. Die Ansicht muss neu geöffnet werden.",
+      "validation": {
+        "noNode": "Node.js wurde auf PATH nicht gefunden. Installiere Node.js oder prüfe deine PATH-Konfiguration."
+      }
+    },
+    "maxTabs": {
+      "name": "Maximale Chat-Tabs",
+      "desc": "Maximale Anzahl gleichzeitiger Chat-Tabs (3-10). Jeder Tab verwendet eine separate Claude-Sitzung.",
+      "warning": "Mehr als 5 Tabs können Leistung und Speichernutzung beeinträchtigen."
+    },
+    "tabBarPosition": {
+      "name": "Tab-Leiste Position",
+      "desc": "Wählen Sie, wo Tab-Badges und Aktionsschaltflächen angezeigt werden",
+      "input": "Über Eingabefeld (Standard)",
+      "header": "In Kopfzeile"
+    },
+    "enableAutoScroll": {
+      "name": "Automatisches Scrollen während Streaming",
+      "desc": "Automatisch nach unten scrollen, während Claude Antworten streamt. Deaktivieren, um oben zu bleiben und von Anfang an zu lesen."
+    },
+    "showAgentEditedFiles": {
+      "name": "Vom Agenten geänderte Dateien anzeigen",
+      "desc": "Listet die vom Agenten erstellten oder bearbeiteten Dateien über dem Chat-Eingabefeld auf, damit du sie mit einem Klick öffnen kannst. Deaktivieren, um das bisherige stille Verhalten beizubehalten."
+    },
+    "deferMathRenderingDuringStreaming": {
+      "name": "Mathe-Rendering während Streaming aufschieben",
+      "desc": "LaTeX während des Streamings roh anzeigen und Mathematik einmal rendern, wenn der Textblock abgeschlossen ist."
+    },
+    "collapseStreamingResponse": {
+      "name": "Unvollständige Antworten während des Streamings ausblenden",
+      "desc": "Während eine Antwort gestreamt wird, einen Platzhalter „Writing response...“ anzeigen und jeden Textblock erst beim Abschluss in einem Durchgang rendern – verhindert halbfertiges Markdown oder XML."
+    },
+    "expandFileEditsByDefault": {
+      "name": "Dateibearbeitungen standardmäßig ausklappen",
+      "desc": "Write- und Edit-Diffs beim ersten Erscheinen ausgeklappt anzeigen."
+    },
+    "chatViewPlacement": {
+      "name": "Specorator öffnen in",
+      "desc": "Wählen Sie, wo das Chat-Panel beim Erstellen geöffnet wird",
+      "rightSidebar": "Rechte Seitenleiste",
+      "leftSidebar": "Linke Seitenleiste",
+      "mainTab": "Haupteditor-Tab"
+    },
+    "cliPath": {
+      "name": "Claude CLI-Pfad",
+      "desc": "Benutzerdefinierter Pfad zum Claude Code CLI. Leer lassen für automatische Erkennung.",
+      "descWindows": "Für den nativen Installer verwenden Sie claude.exe. Für npm/pnpm/yarn oder andere Paketmanager-Installationen verwenden Sie den cli-wrapper.cjs-Pfad (nicht claude.cmd).",
+      "descUnix": "Fügen Sie die Ausgabe von \"which claude\" ein — funktioniert sowohl für native als auch npm/pnpm/yarn-Installationen.",
+      "validation": {
+        "notExist": "Pfad existiert nicht",
+        "isDirectory": "Pfad ist ein Verzeichnis, keine Datei"
+      }
+    },
+    "language": {
+      "name": "Sprache",
+      "desc": "Anzeigesprache der Plugin-Oberfläche ändern"
+    },
+    "quickActions": {
+      "folder": {
+        "name": "Quick actions folder",
+        "desc": "Vault folder containing quick action markdown files (YAML frontmatter with name, description, optional icon)."
+      }
+    },
+    "trustVault": {
+      "name": "Trust this vault's project settings",
+      "descRisky": "This vault's .claude/settings.json defines hooks or permission allow-rules that can run commands or auto-approve tools. They are withheld until you trust this vault.",
+      "descSafe": "Honor this vault's project .claude/settings.json (hooks / permission allow-rules). Only enable for vaults you trust."
+    },
+    "mcp": {
+      "reloadFailed": "Setting saved but reload failed. Changes will apply on next session.",
+      "saveFailed": "Failed to save MCP server",
+      "clipboardEmpty": "Clipboard is empty",
+      "invalidClipboard": "No valid mcp configuration found in clipboard",
+      "nameRequired": "Enter a name for the server",
+      "clipboardReadFailed": "Failed to read clipboard",
+      "duplicate": "Server \"{name}\" already exists",
+      "updated": "MCP server \"{name}\" updated",
+      "added": "MCP server \"{name}\" added",
+      "importNothing": "No new mcp servers imported",
+      "imported": "Imported {count} MCP server(s)",
+      "importedWithSkipped": "Imported {count} MCP server(s) ({skipped} skipped)",
+      "toggleEnabled": "MCP server \"{name}\" enabled",
+      "toggleDisabled": "MCP server \"{name}\" disabled",
+      "deleted": "MCP server \"{name}\" deleted",
+      "modal": {
+        "serverNameRequired": "Please enter a server name",
+        "serverNameInvalid": "Server name can only contain letters, numbers, dots, hyphens, and underscores",
+        "commandRequired": "Please enter a command",
+        "urlRequired": "Please enter a URL"
+      }
+    },
+    "agentBoard": {
+      "commonTemplates": "Common work-order templates: {templates}.",
+      "commonTemplatesEmpty": "Common work-order templates: nothing to do.",
+      "installFailed": "Install failed: {error}",
+      "commonLoops": "Common loops: {loops}.",
+      "commonLoopsEmpty": "Common loops: nothing to do.",
+      "loopFolderName": "Loop folder",
+      "loopFolderDesc": "Folder where loop notes are stored.",
+      "installLoopsName": "Install common loops",
+      "installLoopsDesc": "Add a starter set of loop notes to the loop folder."
+    },
+    "maxChatTabs": {
+      "name": "Max chat tabs",
+      "desc": "Maximum chat tabs you can have open at once.",
+      "warning": "More than 5 chat tabs may impact performance."
+    }
+  },
+  "quickActions": {
+    "toolbar": {
+      "ariaLabel": "Quick actions",
+      "title": "Quick actions"
+    },
+    "modal": {
+      "title": "Quick Actions",
+      "add": "Add action",
+      "deleteFailed": "Failed to delete quick action",
+      "searchPlaceholder": "Search actions by name, description, or tag…",
+      "noResults": "No quick actions match your search.",
+      "filterByTag": "Filter by tag {tag}",
+      "intro": "Click an action to send its prompt into the current chat. Use Edit or Delete on the right to manage vault files.",
+      "emptyLead": "Quick actions are reusable prompts stored as markdown notes in your vault—handy for workflows you run often.",
+      "emptyHintVault": "Each file uses frontmatter type quick-action, plus name, optional description and icon; the note body is the message sent to the chat.",
+      "emptyHintRun": "After you create actions, open this dialog from the toolbar and click a row to run one instantly.",
+      "emptyHintCreate": "Use Add action below to create your first quick action, or set the vault folder under Settings → Quick Actions.",
+      "markFavorite": "Als Favorit markieren",
+      "unmarkFavorite": "Favorit-Markierung entfernen",
+      "favoriteLimitReached": "Du kannst bis zu 5 Schnellaktionen als Favoriten markieren",
+      "tabs": {
+        "quickActions": "Quick actions",
+        "skills": "Skills"
+      }
+    },
+    "skills": {
+      "emptyAll": "No vault skills found.",
+      "emptyHint": "Skills live in .claude/skills/, .codex/skills/, and .agents/skills/.",
+      "providerDisabled": "Provider '{provider}' is disabled. Enable it in settings.",
+      "editInSettings": "Edit in {provider} settings",
+      "disabledBadge": "disabled",
+      "searchPlaceholder": "Search skills by name or description…",
+      "refreshTooltip": "Skills aktualisieren",
+      "noResults": "No skills match your search."
+    },
+    "editor": {
+      "titleEdit": "Edit quick action",
+      "titleAdd": "Add quick action",
+      "name": "Name",
+      "nameDesc": "Used as the filename (cannot change when editing)",
+      "description": "Description",
+      "icon": "Icon",
+      "iconDesc": "Optional icon shown in the quick actions list",
+      "iconSearch": "Search icons…",
+      "iconNone": "No icon",
+      "iconNoResults": "No matching icons",
+      "prompt": "Prompt",
+      "promptDesc": "Message sent to the chat when you run this action",
+      "nameRequired": "Name is required",
+      "promptRequired": "Prompt is required",
+      "saveFailed": "Failed to save quick action",
+      "nameExists": "Eine Quick Action mit diesem Namen existiert bereits"
+    },
+    "capture": {
+      "label": "Als Quick Action speichern",
+      "saved": "Quick Action gespeichert",
+      "folderMissing": "Konfigurieren Sie zuerst den Quick-Actions-Ordner"
+    },
+    "contextMenu": {
+      "title": "Open Quick Actions",
+      "tabLimitReached": "Cannot open quick action: tab limit reached. Close a tab first."
+    },
+    "launchModal": {
+      "title": "Run \"{name}\"",
+      "providerLabel": "Provider",
+      "modelLabel": "Model",
+      "runButton": "Run",
+      "cancelButton": "Cancel",
+      "fallbackNotice": "Previous choice ({provider} / {model}) unavailable, defaulted to current selection.",
+      "noProvidersEnabled": "No providers enabled — configure in settings.",
+      "providerDisabled": "Selected provider is no longer enabled — open settings to re-enable.",
+      "untitledFallback": "(untitled action)"
+    },
+    "usage": {
+      "tabLabel": "Statistiken",
+      "topUsed": "Top 5 — Am häufigsten genutzt",
+      "dropCandidates": "Verzichtskandidaten",
+      "all": "Alle",
+      "uses": "{count} Aufrufe",
+      "uses_one": "1 Aufruf",
+      "uses_zero": "0 Aufrufe",
+      "lastUsed": {
+        "never": "nie",
+        "today": "heute",
+        "daysAgo": "vor {count} Tagen",
+        "daysAgo_one": "vor 1 Tag"
+      },
+      "sort": {
+        "label": "Sortieren nach",
+        "mostUsed": "Am häufigsten genutzt",
+        "leastUsed": "Am seltensten genutzt",
+        "longestUnused": "Längste Inaktivität",
+        "recentlyUsed": "Kürzlich genutzt"
+      },
+      "column": {
+        "type": "Typ",
+        "name": "Name",
+        "count": "Anzahl",
+        "lastUsed": "Letzte Nutzung"
+      },
+      "type": {
+        "quickAction": "Quick action",
+        "skill": "Skill"
+      },
+      "empty": "Noch keine Nutzung erfasst. Starte eine Quick-Action oder Skill, um die Bestenliste zu starten.",
+      "clearAll": "Alle Statistiken löschen",
+      "clearConfirm": {
+        "title": "Alle Nutzungsstatistiken löschen?",
+        "body": "Dies kann nicht rückgängig gemacht werden.",
+        "confirm": "Löschen",
+        "cancel": "Abbrechen"
+      }
+    }
+  },
+  "security": {
+    "vaultTrust": {
+      "title": "Trust this vault?",
+      "body": "This vault's .claude/settings.json defines hooks or permission allow-rules. These can run shell commands on every turn or auto-approve dangerous tools.",
+      "detail": "They stay disabled until you trust this vault. Only trust vaults whose contents you control.",
+      "trust": "Trust vault",
+      "keepBlocked": "Keep blocked"
+    }
+  },
+  "provider": {
+    "opencode": {
+      "subagent": {
+        "descriptionRequired": "Description is required",
+        "promptRequired": "Prompt is required",
+        "duplicate": "A subagent named \"{name}\" already exists",
+        "saveFailed": "Failed to save subagent: {message}",
+        "deleted": "Subagent \"{name}\" deleted",
+        "deleteFailed": "Failed to delete subagent",
+        "updated": "Subagent \"{name}\" updated",
+        "created": "Subagent \"{name}\" created",
+        "validation": {
+          "required": "Agent name is required",
+          "slashSegments": "Agent name must use slash-separated path segments without leading or trailing slashes",
+          "emptySegment": "Agent name path segments cannot be empty or whitespace-only",
+          "whitespaceSegment": "Agent name path segments cannot start or end with whitespace",
+          "dotSegment": "Agent name cannot include \".\" or \"..\" path segments",
+          "reservedChars": "Agent name path segments cannot contain Windows-reserved filename characters"
+        }
+      }
+    },
+    "codex": {
+      "subagent": {
+        "descriptionRequired": "Description is required",
+        "developerInstructionsRequired": "Developer instructions are required",
+        "duplicate": "A subagent named \"{name}\" already exists",
+        "saveFailed": "Failed to save subagent: {message}",
+        "deleted": "Subagent \"{name}\" deleted",
+        "deleteFailed": "Failed to delete subagent",
+        "updated": "Subagent \"{name}\" updated",
+        "created": "Subagent \"{name}\" created",
+        "validation": {
+          "required": "Subagent name is required",
+          "tooLong": "Subagent name must be {max} characters or fewer",
+          "invalidChars": "Subagent name can only contain lowercase letters, numbers, hyphens, and underscores",
+          "nicknameInvalidChars": "Nickname candidates can only contain ASCII letters, numbers, spaces, hyphens, and underscores",
+          "nicknameDuplicate": "Nickname candidates must be unique"
+        }
+      },
+      "skill": {
+        "instructionsRequired": "Instructions are required",
+        "saveFailed": "Failed to save Codex skill",
+        "deleteFailed": "Failed to delete Codex skill",
+        "deleted": "Codex skill \"{name}\" deleted",
+        "updated": "Codex skill \"{name}\" updated",
+        "created": "Codex skill \"{name}\" created"
+      }
+    },
+    "claude": {
+      "plugin": {
+        "toggleTabRestartFailed": "Plugin toggled, but some tabs failed to restart.",
+        "enabled": "Plugin \"{id}\" enabled",
+        "disabled": "Plugin \"{id}\" disabled",
+        "toggleFailed": "Failed to toggle plugin: {error}",
+        "listRefreshed": "Plugin list refreshed",
+        "refreshFailed": "Failed to refresh plugins: {error}",
+        "malformedEntry": "Specorator: plugin \"{id}\" has malformed entry in installed_plugins.json (expected array, got {type})"
+      },
+      "task": {
+        "resultRenderFailed": "Background task completed, but the result could not be rendered."
+      }
+    },
+    "cursor": {
+      "cli": {
+        "notFound": "Cursor CLI not found. Configure the CLI path first."
+      },
+      "models": {
+        "noModels": "Cursor returned no models. If you are not signed in, run `cursor-agent login`.",
+        "discoveredOne": "Discovered 1 Cursor model.",
+        "discoveredMany": "Discovered {count} Cursor models.",
+        "refreshFailed": "Failed to refresh Cursor models."
+      },
+      "subagent": {
+        "saved": "Saved subagent \"{name}\".",
+        "saveFailed": "Failed to save the subagent.",
+        "deleted": "Deleted subagent \"{name}\".",
+        "deleteFailed": "Failed to delete the subagent.",
+        "duplicate": "An agent named \"{name}\" already exists.",
+        "descriptionRequired": "Description is required.",
+        "nameRequired": "Name is required.",
+        "nameWhitespace": "Name cannot start or end with whitespace.",
+        "nameDotSegment": "Name cannot be a dot segment.",
+        "nameReservedChars": "Name cannot contain path separators or reserved characters."
+      }
+    }
+  },
+  "diagnostics": {
+    "logsEmpty": "No diagnostic log entries",
+    "logsCopied": "Copied {count} log entries",
+    "logsCleared": "Diagnostic logs cleared"
+  },
+  "tasks": {
+    "board": {
+      "stopRequested": "Requested stop for \"{title}\".",
+      "archived": "Archived \"{title}\".",
+      "deleted": "Deleted \"{title}\".",
+      "fileNotFound": "Work order file was not found.",
+      "updateFailed": "Cannot update work order: {error}",
+      "transitionInvalid": "Cannot move \"{title}\" from {from} to {to}.",
+      "runParseFailed": "Cannot run work order: {error}",
+      "runFailed": "Work order run failed: {error}",
+      "noReady": "No ready work orders to run.",
+      "laneSaveFailed": "Could not save lane change: {error}",
+      "addWorkOrder": "+ Add work order",
+      "addWorkOrderButton": "Add work order",
+      "runNextReady": "Run next ready",
+      "autoRun": {
+        "label": "Auto-run",
+        "tooltip": "Automatically starts work orders once they reach Ready. Runs in the background."
+      },
+      "activeCount": "{n}/{m} active",
+      "tabCount": "Work-order tabs {n}/{m} · {k} free",
+      "contextMenu": {
+        "openNote": "Notiz öffnen",
+        "openConversation": "Unterhaltung öffnen",
+        "archive": "Archivieren",
+        "delete": "Löschen"
+      },
+      "cardAction": {
+        "run": "Ausführen",
+        "retry": "Wiederholen",
+        "backToInbox": "Zurück zum Eingang",
+        "goToConversation": "Zur Unterhaltung",
+        "moreActions": "Weitere Aktionen"
+      },
+      "card": {
+        "reply": {
+          "inputPlaceholder": "Your reply…",
+          "send": "Send",
+          "stop": "Stop",
+          "waitingForInput": "The agent is waiting for your input.",
+          "requestsApproval": "The agent requests approval to proceed.",
+          "risk": "Risk: {risk}",
+          "rejectReasonPlaceholder": "Reason (used if you reject)…",
+          "approve": "Approve",
+          "reject": "Reject",
+          "defaultRejectReason": "rejected"
+        },
+        "liveStrip": {
+          "attempt": "{elapsed} · attempt {attempt}",
+          "starting": "starting…",
+          "heartbeatFresh": "Fresh heartbeat ({age} ago)",
+          "heartbeatStale": "Stale heartbeat ({age} ago)",
+          "heartbeatVeryStale": "Very stale heartbeat ({age} ago)"
+        }
+      },
+      "notRunnable": "Mark \"{title}\" ready before running.",
+      "noFreeSlots": "Keine freien Arbeitsauftrags-Slots. Ein Arbeitsauftrag braucht einen freien Slot – schließe einen Arbeitsauftrags-Tab im Chat-Bereich oder erhöhe „Concurrent work-order runs“ in den Agent-Board-Einstellungen.",
+      "collapseLane": "Spur einklappen",
+      "expandLane": "Spur {title} ausklappen",
+      "readyWhen": "Bereit, wenn",
+      "doneWhen": "Fertig, wenn",
+      "boardNotices": "Board-Hinweise",
+      "skippedNotes": "Übersprungene Notizen",
+      "queueHalted": "Warteschlange angehalten: {reason}",
+      "failureOne": "{n} Fehler",
+      "failureMany": "{n} Fehler",
+      "queueSkipped": "⊘ Warteschlange übersprungen: {reason}"
+    },
+    "template": {
+      "nameRequired": "Template name is required.",
+      "bodyRequired": "Template body is required.",
+      "saveFailed": "Save failed: {error}",
+      "deleteFailed": "Delete failed: {error}"
+    },
+    "loop": {
+      "nameRequired": "A loop needs a name.",
+      "bodyRequired": "A loop needs an approach or steps.",
+      "saveFailed": "Could not save loop: {error}",
+      "deleteFailed": "Could not delete loop: {error}"
+    },
+    "loopPicker": {
+      "title": "Attach a loop",
+      "lead": "Pick a loop to guide this work order, or choose No loop.",
+      "newLoop": "New loop",
+      "noneTitle": "No loop",
+      "noneDesc": "Run the work order without an attached loop.",
+      "useWhenLabel": "Use when:",
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "loopEditor": {
+      "titleNew": "New loop",
+      "titleEdit": "Edit loop",
+      "nameName": "Name",
+      "nameDesc": "A short, memorable loop name.",
+      "descriptionName": "Description",
+      "descriptionDesc": "One line shown in the picker.",
+      "iconName": "Icon",
+      "iconDesc": "Lucide icon for the loop.",
+      "useWhenName": "Use when",
+      "useWhenDesc": "Selection guidance — not sent to the agent.",
+      "approachName": "Approach",
+      "approachDesc": "The core playbook the agent follows.",
+      "stepsName": "Steps",
+      "stepsDesc": "Ordered steps to work through.",
+      "verifyName": "Verify",
+      "verifyDesc": "How the agent confirms success.",
+      "notesName": "Notes",
+      "notesDesc": "Gotchas and guardrails.",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "create": {
+      "noActiveNote": "Open a note to create a work order from it.",
+      "noSelection": "Select text in a note to create a work order from it.",
+      "needsBrowserSelection": "Open Specorator chat and select text in a browser view first."
+    },
+    "fromChat": {
+      "nothingToCapture": "Nothing to capture from this message.",
+      "createdFromMessage": "Work order created from chat message.",
+      "noActiveChat": "Open a chat conversation first.",
+      "createdFromConversation": "Work order created from chat conversation."
+    },
+    "run": {
+      "needsProvider": "Set an Agent Board default provider in settings first.",
+      "needsModel": "Set an Agent Board default model in settings first.",
+      "templateProblems": "Template \"{name}\" has problems: {errors}"
+    },
+    "commitOnAccept": {
+      "title": "Commit & push?",
+      "bodyOne": "Accepted \"{title}\". 1 file changed in the vault git repo.",
+      "bodyMany": "Accepted \"{title}\". {count} files changed in the vault git repo.",
+      "dontAsk": "Don't ask again for this vault",
+      "skip": "Skip",
+      "commitAndPush": "Commit & push",
+      "failed": "Commit prompt failed: {error}",
+      "settingsSaveFailed": "Failed to save preference. Try again from settings."
+    },
+    "workOrderModal": {
+      "properties": "Properties",
+      "sectionObjective": "Objective",
+      "sectionAcceptance": "Acceptance criteria",
+      "fieldStatus": "Status",
+      "fieldAgent": "Agent",
+      "fieldProvider": "Provider",
+      "fieldModel": "Model",
+      "fieldPriority": "Priority",
+      "fieldCreated": "Created",
+      "fieldUpdated": "Updated",
+      "fieldAttempts": "Attempts",
+      "fieldConversation": "Conversation",
+      "fieldLoop": "Loop",
+      "loopNone": "No loop",
+      "sectionHandoff": "Agent handoff",
+      "sectionRunLedger": "Run ledger",
+      "handoffSummary": "Summary",
+      "handoffVerification": "Verification",
+      "handoffRisks": "Risks",
+      "handoffNextAction": "Next action",
+      "salvageTitle": "Run finished without a handoff",
+      "salvageCallout": "This run finished without producing a structured handoff. The transcript tail below is the available run trace.",
+      "transcriptTail": "Transcript tail",
+      "transcriptTailEmpty": "No transcript available.",
+      "editTitleHint": "✎ Click title to rename",
+      "startedAgo": "Started {ago} ago",
+      "finishedAt": "Finished {ago} ago",
+      "closeAriaLabel": "Close",
+      "actionOpenNote": "Open note",
+      "actionOpenConversation": "Open conversation",
+      "actionMarkReady": "Mark ready",
+      "actionStop": "Stop",
+      "actionRework": "Rework",
+      "actionAccept": "Accept",
+      "actionSendToReview": "Send to review",
+      "actionMarkFailed": "Mark failed",
+      "actionReopen": "Reopen",
+      "actionArchive": "Archive",
+      "sectionContext": "Context",
+      "sectionConstraints": "Constraints",
+      "actionEdit": "Edit",
+      "actionSaveSections": "Save",
+      "actionCancelEdit": "Cancel",
+      "editObjectivePlaceholder": "What should the agent accomplish?",
+      "editAcceptancePlaceholder": "Define what \"done\" means — one \"- [ ] \" item per line.",
+      "editContextPlaceholder": "Links, files, and scope the agent needs.",
+      "editConstraintsPlaceholder": "Guardrails the agent must respect."
+    },
+    "templateEditor": {
+      "titleNew": "Neue Arbeitsauftrags-Vorlage",
+      "titleEdit": "Arbeitsauftrags-Vorlage bearbeiten",
+      "useDefault": "Standard verwenden",
+      "nameName": "Name",
+      "nameDesc": "Wird in der Auswahl angezeigt. Wird bei neuen Vorlagen zum Dateinamen der Vorlage.",
+      "descriptionName": "Description",
+      "descriptionDesc": "Optionale einzeilige Zusammenfassung, die in der Auswahl unter dem Namen angezeigt wird.",
+      "iconName": "Icon",
+      "iconDesc": "Optionales Lucide-Symbol für die Auswahlzeile.",
+      "providerName": "Provider",
+      "providerDesc": "Optional. Greift bei fehlender Angabe auf den Standard-Provider des Agent Board zurück.",
+      "modelName": "Model",
+      "modelDesc": "Optional. Greift bei fehlender Angabe auf das Standardmodell des Agent Board zurück.",
+      "priorityName": "Priority",
+      "priorityDesc": "Optional. Greift bei fehlender Angabe auf „normal“ zurück.",
+      "bodyName": "Body",
+      "bodyDesc": "Vorlagentext. Platzhalter: {{title}}, {{date}}, {{source}}.",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "loopName": "Default loop",
+      "loopDesc": "Loop attached to every work order created from this template.",
+      "loopNone": "No loop",
+      "agentName": "Agent",
+      "agentDesc": "Optional roster agent assigned to work orders created from this template."
+    },
+    "addToWorkOrder": {
+      "title": "Add to work order",
+      "lead": "Pick a new or ready work order to add this file or folder to its context.",
+      "empty": "No new or ready work orders yet.",
+      "newWorkOrder": "New work order",
+      "added": "Added {name} to \"{title}\".",
+      "already": "{name} is already in the context of \"{title}\".",
+      "failed": "Could not add to work order: {error}"
+    },
+    "templatePicker": {
+      "title": "Arbeitsauftrags-Vorlage",
+      "newTemplate": "Neue Vorlage",
+      "emptyState": "Noch keine Vorlagen. Wähle „Leer“, um einen einfachen Arbeitsauftrag zu erstellen, oder füge eine Vorlage hinzu, um sie später wiederzuverwenden.",
+      "lead": "Wähle eine Vorlage zum Anwenden oder beginne leer.",
+      "blankTitle": "Leerer Arbeitsauftrag",
+      "blankDesc": "Leeres Gerüst mit Ziel, Abnahme, Kontext und Einschränkungen.",
+      "edit": "Bearbeiten",
+      "delete": "Löschen"
+    },
+    "laneEditor": {
+      "untitledLane": "Unbenannte Spur",
+      "laneDesc": "Titel und ob die Spur auf dem Board angezeigt wird.",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "removeLane": "Spur entfernen",
+      "collapsible": "Einklappbar",
+      "routedTo": "Geleitet zu „{title}“",
+      "routedElsewhere": "⚠ Anderweitig geleitet: {summary}",
+      "routedSummaryItem": "{status} → „{lane}“",
+      "definitionOfReady": "Definition of Ready",
+      "definitionOfDone": "Definition of Done",
+      "addLane": "Spur hinzufügen",
+      "resetToDefault": "Auf Standard zurücksetzen",
+      "newLaneTitle": "Neue Spur"
+    }
+  },
+  "env": {
+    "secretVarsHeading": "Geheime Variablen",
+    "secretVarsDesc": "API-Schlüssel und Tokens werden im System-Schlüsselbund gespeichert, nicht im Klartext der Einstellungen.",
+    "secretNotSet": "Auf diesem Gerät nicht gesetzt – wähle das Geheimnis aus oder erstelle es, um es zu verwenden.",
+    "secretRemove": "Entfernen",
+    "secretAdd": "Geheime Variable hinzufügen",
+    "secretNamePlaceholder": "VARIABLE_NAME",
+    "secretAddButton": "Hinzufügen",
+    "secretMissing": "Anbieter-Geheimnis \"{name}\" ist auf diesem Gerät nicht gesetzt – bitte in den Specorator-Einstellungen erneut eingeben.",
+    "applyPartial": "Environment changes applied, but {count} affected tab(s) failed to restart.",
+    "applied": "Environment variables applied.",
+    "appliedRebuild": "Environment variables applied. Sessions will be rebuilt on next message."
+  },
+  "inlineEdit": {
+    "unavailable": "Inline edit unavailable: could not access the active editor. Try reopening the note.",
+    "filesLoadFailed": "Failed to load vault files. Vault @-mentions may be unavailable.",
+    "attachInvalidPath": "Failed to attach file: invalid path",
+    "noView": "Inline edit unavailable: could not access the active Markdown view.",
+    "inserted": "Inserted",
+    "applied": "Edit applied"
+  },
+  "agents": {
+    "persona": {
+      "standard": "Standard"
+    }
+  },
+  "agentRoster": {
+    "title": "Agent Roster",
+    "newAgent": "New Agent",
+    "emptyState": "No agents yet. Create one to get started.",
+    "back": "Back",
+    "skills": "Skills",
+    "tools": "Tools",
+    "save": "Save",
+    "startChat": "Chat mit diesem Agenten starten",
+    "chattingWith": "Chat mit {name}",
+    "installStarter": "Install starter agents",
+    "installStarterDone": "Installed starter agents ({installed} new, {skipped} skipped).",
+    "installStarterNone": "All starter agents are already installed.",
+    "fieldName": "Name",
+    "fieldDescription": "Description",
+    "delete": "Delete",
+    "deleteConfirm": "Delete agent \"{name}\"? This cannot be undone.",
+    "sectionModel": "Model",
+    "sectionInstructions": "Instructions",
+    "provider": "Provider",
+    "model": "Model",
+    "providerDefault": "Default (global)",
+    "modelDefault": "Provider default",
+    "color": "Color",
+    "initials": "Initials",
+    "roleWorker": "Worker",
+    "roleVerifier": "Verifier",
+    "saved": "Saved {name}.",
+    "deleted": "Deleted {name}.",
+    "noToolsHint": "No user tools yet. Add tools in the Tool Library.",
+    "toolGrantScopeHint": "These tools apply only when you start a chat from here. Agents you sync to providers get that provider's default tools instead.",
+    "noSkillsHint": "No skills discovered yet. Add skills in the Skill Library.",
+    "startChatShort": "Start chat",
+    "capsSummary": "{skills} skills · {tools} tools",
+    "searchSkills": "Search skills…",
+    "searchTools": "Search tools…",
+    "selectedCount": "{count} selected",
+    "unsavedChanges": "Unsaved changes",
+    "discardConfirm": "Discard unsaved changes?",
+    "discard": "Discard",
+    "syncProviders": "Sync to providers",
+    "syncProvidersHint": "Write each agent as a native subagent file for your enabled providers (so they're @-mentionable). Deleting an agent removes its files.",
+    "syncDone": "Synced agents to {providers} ({written} files).",
+    "syncNone": "No enabled providers to sync to.",
+    "navLabel": "Agents",
+    "actionFailed": "Something went wrong — check the developer console.",
+    "syncFailed": "Synced with errors: {written} written, {failed} failed.",
+    "colorNone": "None",
+    "icon": "Symbol",
+    "iconNone": "Standard",
+    "bindingHint": "Starte einen neuen Chat, um einen anderen Agenten zu verwenden.",
+    "navAriaLabel": "Bibliotheksbereiche",
+    "removeCapability": "{name} entfernen"
+  },
+  "toolLibrary": {
+    "toolCreated": "Created {path}. Edit it, then it loads automatically.",
+    "title": "Tool Library",
+    "newTool": "New Tool",
+    "reload": "Reload",
+    "empty": "No tools yet.",
+    "errorPrefix": "Error: {error}",
+    "edit": "Edit",
+    "delete": "Delete",
+    "namePrompt": "New tool name (e.g. my_tool)",
+    "deleteConfirm": "Delete tool \"{name}\"? This removes its files.",
+    "deleted": "Deleted {name}.",
+    "statusError": "Error",
+    "statusReady": "Ready",
+    "reloadDone": "Reloaded tools.",
+    "source": "Source",
+    "inputSchema": "Input schema",
+    "save": "Save",
+    "saved": "Saved {name}.",
+    "close": "Close",
+    "metaName": "Name",
+    "metaDescription": "Description",
+    "notLoaded": "Not loaded — fix the error below and save.",
+    "navLabel": "Tools",
+    "nameField": "Name",
+    "actionFailed": "Something went wrong — check the developer console."
+  },
+  "workOrderActivity": {
+    "toggleRunning": "{count} aktive Arbeitsauftrag(e)",
+    "toggleAttention": "{count} aktive Arbeitsauftrag(e), {attention} benötigt Aufmerksamkeit",
+    "toggleFinished": "{count} abgeschlossene(r) Arbeitsauftrag/Arbeitsaufträge",
+    "status": {
+      "running": "Läuft",
+      "needsInput": "Benötigt Eingabe",
+      "needsApproval": "Benötigt Freigabe",
+      "finished": "Abgeschlossen"
+    },
+    "action": {
+      "open": "Öffnen",
+      "reply": "Antworten",
+      "review": "Prüfen",
+      "close": "Tab schließen"
+    }
+  },
+  "skillLibrary": {
+    "title": "Skill Library",
+    "empty": "No skills discovered.",
+    "open": "Open",
+    "newSkill": "New Skill",
+    "namePrompt": "New skill name",
+    "created": "Created {path}.",
+    "readOnlyNote": "Read-only",
+    "noProvider": "No writable skill provider is enabled.",
+    "content": "Content",
+    "save": "Save",
+    "saved": "Saved {name}.",
+    "close": "Close",
+    "provider": "Provider",
+    "readonlyNotice": "This skill is read-only and cannot be edited here.",
+    "navLabel": "Skills",
+    "nameField": "Name",
+    "actionFailed": "Something went wrong — check the developer console.",
+    "providerVault": "Vault"
+  },
+  "loopLibrary": {
+    "navLabel": "Loops",
+    "title": "Loop library",
+    "newLoop": "New loop",
+    "installStarter": "Install starter loops",
+    "empty": "No loops yet. Create one to reuse a playbook across work orders.",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteConfirm": "Delete the loop \"{name}\"?",
+    "deleted": "Deleted {name}.",
+    "useWhenLabel": "Use when:",
+    "actionFailed": "Something went wrong — check the developer console."
+  },
+  "ribbon": {
+    "openChat": "Open Co-Worker Chat",
+    "openAgentBoard": "Open Agent Board",
+    "openAgentRoster": "Open Agent Roster",
+    "openToolLibrary": "Open Tool Library",
+    "openSkillLibrary": "Open Skill Library",
+    "openLoopLibrary": "Open loop library"
+  },
+  "commands": {
+    "openView": "Open chat view",
+    "openAgentBoard": "Open Agent Board",
+    "runNextReadyWorkOrder": "Run next ready work order",
+    "createWorkOrder": "Create work order",
+    "createWorkOrderFromCurrentNote": "Create work order from current note",
+    "createWorkOrderFromSelection": "Create work order from selection",
+    "createWorkOrderTemplate": "Create work-order template",
+    "installCommonWorkOrderTemplates": "Install common work-order templates",
+    "createWorkOrderFromBrowserSelection": "Create work order from browser selection",
+    "createWorkOrderFromChatConversation": "Create work order from current chat conversation",
+    "copyDiagnosticLogs": "Copy diagnostic logs",
+    "clearDiagnosticLogs": "Clear diagnostic logs",
+    "inlineEdit": "Inline edit",
+    "newTab": "New tab",
+    "newSession": "New session (in current tab)",
+    "closeCurrentTab": "Close current tab",
+    "openAgentRoster": "Open Agent Roster",
+    "openToolLibrary": "Open Tool Library",
+    "openSkillLibrary": "Open Skill Library",
+    "openLoopLibrary": "Open loop library"
+  }
+}

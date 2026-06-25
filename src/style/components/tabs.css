@@ -1,0 +1,254 @@
+.specorator-tab-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.specorator-tab-badges {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.specorator-tab-badge {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 2px solid var(--background-modifier-border);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-muted);
+  background: var(--background-primary);
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.specorator-tab-badge:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+/*
+ * Active tab (UX-1) — when multiple tabs are open the active one must read
+ * at a glance. The base styling differentiated active vs idle only by border
+ * color; with three tabs each in a different state that contrast collapses.
+ * Filled accent background + bold weight makes the active tab the first
+ * thing the eye lands on, even alongside attention/working pulses.
+ */
+.specorator-tab-badge-active {
+  border-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+  font-weight: 600;
+  /* Non-color differentiator (inset ring) so the active tab is distinguishable
+     in high-contrast / color-blind modes, not by accent fill alone. */
+  box-shadow: inset 0 0 0 1px var(--text-on-accent);
+}
+
+.specorator-tab-badge-active:hover {
+  background: var(--interactive-accent-hover, var(--interactive-accent));
+  color: var(--text-on-accent);
+}
+
+.specorator-tab-badge-attention {
+  border-color: var(--text-error);
+}
+
+/*
+ * Attention badge (UX-2) — a small dot in the corner that survives the
+ * active-tab fill (so the user sees attention pending even on the tab they
+ * are currently looking at) and the working pulse. Positioned bottom-left
+ * to avoid colliding with the worker dot (top-right) and the working dot
+ * (top-right).
+ */
+.specorator-tab-badge.specorator-tab-badge-attention::before {
+  content: '';
+  position: absolute;
+  bottom: 1px;
+  left: 1px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-error);
+  box-shadow: 0 0 0 1px var(--background-primary);
+  animation: specorator-tab-badge-attention-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes specorator-tab-badge-attention-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.55;
+    transform: scale(0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .specorator-tab-badge.specorator-tab-badge-attention::before {
+    animation: none;
+  }
+}
+
+.specorator-tab-badge-idle {
+  border-color: var(--background-modifier-border);
+}
+
+/*
+ * Work-order tab badge (Agent Board run host) — distinct from chat tabs:
+ *   - Wrench glyph replaces the index number (rendered by TabBar).
+ *   - Dashed border tints it apart from solid chat badges even at inactive state.
+ *   - First WO badge after a chat group gets an extra left margin so the two
+ *     groups read as separate clusters at a glance, not one continuous row.
+ */
+.specorator-tab-badge--work-order {
+  border-style: dashed;
+}
+
+.specorator-tab-badge--work-order-first {
+  margin-left: 12px;
+}
+
+.specorator-tab-badge-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.specorator-tab-badge-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/*
+ * Agent-bound chat badge — a small person glyph before the index number marks
+ * the tab as bound to a roster agent. The badge relaxes its fixed 24px square to
+ * a slightly wider pill so the glyph + number sit side by side.
+ */
+.specorator-tab-badge--agent {
+  width: auto;
+  min-width: 24px;
+  gap: 2px;
+  padding: 0 5px;
+}
+
+.specorator-tab-badge-agent-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 11px;
+  height: 11px;
+}
+
+.specorator-tab-badge-agent-icon svg {
+  width: 11px;
+  height: 11px;
+}
+
+@keyframes specorator-tab-badge-working-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--specorator-tab-working-color) 45%, transparent);
+  }
+
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--specorator-tab-working-color) 20%, transparent);
+  }
+}
+
+@keyframes specorator-tab-badge-working-dot-pulse {
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+}
+
+/*
+ * Working state — any tab running an agent turn (stacks with active / role).
+ * Declared after role + active so it wins the cascade for every tab type.
+ */
+.specorator-tab-badge.specorator-tab-badge-working {
+  --specorator-tab-working-color: var(--specorator-brand, #da7756);
+  border-color: var(--specorator-tab-working-color);
+  color: var(--text-normal);
+  animation: specorator-tab-badge-working-pulse 1.35s ease-in-out infinite;
+}
+
+.specorator-tab-badge.specorator-tab-badge-working[data-provider="claude"] {
+  --specorator-tab-working-color: var(--specorator-brand-claude, #d97757);
+}
+
+.specorator-tab-badge.specorator-tab-badge-working[data-provider="codex"] {
+  --specorator-tab-working-color: var(--specorator-brand-codex, #d0d0d0);
+}
+
+.specorator-tab-badge.specorator-tab-badge-working[data-provider="cursor"] {
+  --specorator-tab-working-color: var(--specorator-brand-cursor, #7c6fe6);
+}
+
+.specorator-tab-badge.specorator-tab-badge-working[data-provider="opencode"] {
+  --specorator-tab-working-color: var(--specorator-brand-opencode, #c8c8c8);
+}
+
+
+/* Universal working dot (all tab types, including plain chats) */
+.specorator-tab-badge.specorator-tab-badge-working::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--specorator-tab-working-color);
+  opacity: 0.9;
+  animation: specorator-tab-badge-working-dot-pulse 1.35s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .specorator-tab-badge.specorator-tab-badge-working {
+    animation: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--specorator-tab-working-color) 30%, transparent);
+  }
+
+  .specorator-tab-badge.specorator-tab-badge-working::after {
+    animation: none;
+  }
+}
+
+/* Legacy alias */
+.specorator-tab-badge-streaming {
+  border-color: var(--specorator-brand, #da7756);
+}
+
+.specorator-tab-content-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.specorator-tab-content {
+  position: relative; /* For scroll-to-bottom button positioning */
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}

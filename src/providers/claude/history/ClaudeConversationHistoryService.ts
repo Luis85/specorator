@@ -1,0 +1,492 @@
+import { BaseHistoryService } from '../../../core/providers/BaseHistoryService';
+import type {
+  DeleteHistoryOutcome,
+  HistoryLoadOutcome,
+  HydrationContext,
+  ProviderForkSupport,
+} from '../../../core/providers/types';
+import { buildUsageInfo } from '../../../core/providers/usage';
+import type {
+  ChatMessage,
+  Conversation,
+  ForkSource,
+  UsageInfo,
+} from '../../../core/types';
+import { getContextWindowSize } from '../types/models';
+import { type ClaudeProviderState, getClaudeState } from '../types/providerState';
+import {
+  deleteSDKSession,
+  getSDKSessionPath,
+  loadSDKSessionMessages,
+  readSDKSession,
+  sdkSessionExists,
+} from './ClaudeHistoryStore';
+import {
+  applySubagentData,
+  buildPersistedSubagentData,
+  enrichAsyncSubagentToolCalls,
+} from './claudeSubagentHydration';
+
+function dedupeMessages(messages: ChatMessage[]): ChatMessage[] {
+  const seen = new Set<string>();
+  const result: ChatMessage[] = [];
+
+  for (const message of messages) {
+    if (seen.has(message.id)) continue;
+    seen.add(message.id);
+    result.push(message);
+  }
+
+  return result;
+}
+
+function sanitizeProviderState(
+  providerState: ClaudeProviderState,
+): Record<string, unknown> | undefined {
+  const sanitizedEntries = Object.entries(providerState).filter(([, value]) => value !== undefined);
+  if (sanitizedEntries.length === 0) {
+    return undefined;
+  }
+
+  return Object.fromEntries(sanitizedEntries);
+}
+
+interface SdkSessionReadAccumulator {
+  messages: ChatMessage[];
+  missingSessionCount: number;
+  errorCount: number;
+  successCount: number;
+  cancelled: boolean;
+}
+
+// The per-session truncation inputs travel together; bundling them keeps the
+// read loop's parameter list within the lint cap.
+interface SessionTruncateContext {
+  currentSessionId: string | null | undefined;
+  isPendingFork: boolean;
+  state: ClaudeProviderState;
+  conversation: Conversation;
+}
+
+function resolveSessionTruncateAt(
+  sessionId: string,
+  ctx: SessionTruncateContext,
+): string | undefined {
+  if (sessionId !== ctx.currentSessionId) {
+    return undefined;
+  }
+  return ctx.isPendingFork ? ctx.state.forkSource!.resumeAt : ctx.conversation.resumeAtMessageId;
+}
+
+// Walks every candidate session, honoring mid-load abort, and tallies the
+// outcome counts the caller maps to a HistoryLoadOutcome.
+async function readSdkSessionMessages(
+  allSessionIds: string[],
+  truncateContext: SessionTruncateContext,
+  vaultPath: string,
+  signal: AbortSignal | undefined,
+): Promise<SdkSessionReadAccumulator> {
+  const acc: SdkSessionReadAccumulator = {
+    messages: [],
+    missingSessionCount: 0,
+    errorCount: 0,
+    successCount: 0,
+    cancelled: false,
+  };
+
+  for (const sessionId of allSessionIds) {
+    // Plan EDIT 7: mid-load abort. Check before each session read so a long
+    // multi-session walk releases promptly when the tab is switched.
+    if (signal?.aborted) {
+      acc.cancelled = true;
+      return acc;
+    }
+
+    if (!sdkSessionExists(vaultPath, sessionId)) {
+      acc.missingSessionCount++;
+      continue;
+    }
+
+    const truncateAt = resolveSessionTruncateAt(sessionId, truncateContext);
+    const result = await loadSDKSessionMessages(vaultPath, sessionId, truncateAt);
+
+    if (result.error) {
+      acc.errorCount++;
+      continue;
+    }
+
+    acc.successCount++;
+    acc.messages.push(...result.messages);
+  }
+
+  return acc;
+}
+
+function resolveSessionIds(
+  isPendingFork: boolean,
+  state: ClaudeProviderState,
+  conversation: Conversation,
+): string[] {
+  if (isPendingFork) {
+    return [state.forkSource!.sessionId];
+  }
+  return [
+    ...(state.previousProviderSessionIds || []),
+    state.providerSessionId ?? conversation.sessionId,
+  ].filter((id): id is string => !!id);
+}
+
+// Maps the read tally to a terminal outcome (cancel / all-missing / total
+// failure). Returns null when the read produced usable messages to merge.
+function resolveSessionReadFailure(
+  acc: SdkSessionReadAccumulator,
+  totalSessionCount: number,
+  sourceRef: string,
+): HistoryLoadOutcome | null {
+  if (acc.cancelled) {
+    return {
+      kind: 'error',
+      error: { code: 'cancelled', message: 'Hydration cancelled' },
+      sourceRef,
+    };
+  }
+
+  if (acc.missingSessionCount === totalSessionCount) {
+    return { kind: 'empty', reason: 'no-session', sourceRef };
+  }
+
+  if (acc.errorCount > 0 && acc.successCount === 0) {
+    return {
+      kind: 'error',
+      error: {
+        code: 'store-unreadable',
+        message: 'Failed to read Claude SDK session transcripts.',
+      },
+      sourceRef,
+    };
+  }
+
+  return null;
+}
+
+export class ClaudeConversationHistoryService extends BaseHistoryService<ClaudeProviderState> {
+  forkSupport: ProviderForkSupport = {
+    isPendingForkConversation: (conversation: Conversation): boolean => {
+      const state = getClaudeState(conversation.providerState);
+      return !!state.forkSource
+        && !state.providerSessionId
+        && !conversation.sessionId;
+    },
+    buildForkProviderState: (
+      sourceSessionId: string,
+      resumeAt: string,
+      _sourceProviderState?: Record<string, unknown>,
+    ): Record<string, unknown> => {
+      const state: ClaudeProviderState = {
+        forkSource: { sessionId: sourceSessionId, resumeAt } satisfies ForkSource,
+      };
+      return state as Record<string, unknown>;
+    },
+  };
+
+  resolveSessionIdForConversation(conversation: Conversation | null): string | null {
+    if (!conversation) return null;
+    const state = getClaudeState(conversation.providerState);
+    return state.providerSessionId ?? conversation.sessionId ?? state.forkSource?.sessionId ?? null;
+  }
+
+  buildPersistedProviderState(
+    conversation: Conversation,
+  ): ClaudeProviderState | undefined {
+    const providerState: ClaudeProviderState = {
+      ...getClaudeState(conversation.providerState),
+    };
+
+    const subagentData = buildPersistedSubagentData(conversation.messages);
+    if (Object.keys(subagentData).length > 0) {
+      providerState.subagentData = subagentData;
+    } else {
+      delete providerState.subagentData;
+    }
+
+    return sanitizeProviderState(providerState) as ClaudeProviderState | undefined;
+  }
+
+  protected computeCacheKey(
+    conversation: Conversation,
+    ctx: HydrationContext,
+  ): string | null {
+    if (!ctx.vaultPath) return null;
+    const state = getClaudeState(conversation.providerState);
+    const isPendingFork = this.forkSupport!.isPendingForkConversation(conversation);
+    const sessionIds = isPendingFork
+      ? [state.forkSource!.sessionId]
+      : [
+          ...(state.previousProviderSessionIds || []),
+          state.providerSessionId ?? conversation.sessionId,
+        ].filter((id): id is string => !!id);
+    if (sessionIds.length === 0) return null;
+    const composite = sessionIds.join('|');
+    // Rewind invariant (Plan EDIT 5): include resumeAtMessageId so a rewind on the same
+    // session invalidates the cache and re-truncates the SDK transcript.
+    const resumeMarker = conversation.resumeAtMessageId ?? '';
+    return `${ctx.vaultPath}::${composite}::${resumeMarker}`;
+  }
+
+  protected async loadMessages(
+    conversation: Conversation,
+    ctx: HydrationContext,
+  ): Promise<HistoryLoadOutcome> {
+    if (!ctx.vaultPath) {
+      return { kind: 'empty', reason: 'no-session', sourceRef: null };
+    }
+    const vaultPath = ctx.vaultPath;
+
+    const state = getClaudeState(conversation.providerState);
+    const isPendingFork = this.forkSupport!.isPendingForkConversation(conversation);
+    const allSessionIds = resolveSessionIds(isPendingFork, state, conversation);
+
+    if (allSessionIds.length === 0) {
+      return { kind: 'empty', reason: 'no-session', sourceRef: null };
+    }
+
+    const currentSessionId = isPendingFork
+      ? state.forkSource!.sessionId
+      : (state.providerSessionId ?? conversation.sessionId);
+    const sourceRef = allSessionIds.join('|');
+
+    const acc = await readSdkSessionMessages(
+      allSessionIds,
+      { currentSessionId, isPendingFork, state, conversation },
+      vaultPath,
+      ctx.signal,
+    );
+
+    const failure = resolveSessionReadFailure(acc, allSessionIds.length, sourceRef);
+    if (failure) {
+      return failure;
+    }
+
+    const filteredSdkMessages = acc.messages.filter(msg => !msg.isRebuiltContext);
+
+    const merged = dedupeMessages([
+      ...conversation.messages,
+      ...filteredSdkMessages,
+    ]).sort((a, b) => a.timestamp - b.timestamp);
+
+    if (state.subagentData) {
+      await enrichAsyncSubagentToolCalls(
+        state.subagentData,
+        vaultPath,
+        allSessionIds,
+      );
+      applySubagentData(merged, state.subagentData);
+    }
+
+    return { kind: 'loaded', messages: merged, sourceRef };
+  }
+
+  async deleteConversationSession(
+    conversation: Conversation,
+    ctx: HydrationContext,
+  ): Promise<DeleteHistoryOutcome> {
+    const state = getClaudeState(conversation.providerState);
+    const sessionId = state.providerSessionId ?? conversation.sessionId;
+    if (!ctx.vaultPath || !sessionId) {
+      return { kind: 'no-op', reason: 'no-session' };
+    }
+
+    await deleteSDKSession(ctx.vaultPath, sessionId);
+    // `getSDKSessionPath` validates the id; fall back to the bare id if validation rejects it
+    // (deleteSDKSession is best-effort and already swallows the same error class).
+    let resolvedPath = sessionId;
+    try {
+      resolvedPath = getSDKSessionPath(ctx.vaultPath, sessionId);
+    } catch {
+      // keep sessionId fallback
+    }
+    return { kind: 'deleted', paths: [resolvedPath] };
+  }
+
+  /**
+   * Recovers the most recent `UsageInfo` from the persisted JSONL transcript.
+   *
+   * Scan strategy (walk the raw SDK rows back to front):
+   * - The last `result` row carries `modelUsage[model].contextWindow` — when
+   *   present, that's the authoritative window for the matching model.
+   * - The last main-agent `assistant` row (no `parent_tool_use_id`) carries
+   *   `message.usage` (input + cache_creation + cache_read) and the model id.
+   *   Subagent assistant rows are excluded so we don't conflate windows.
+   *
+   * Returns null if neither row is found or any parse step fails.
+   */
+  async extractLastUsage(
+    conversation: Conversation,
+    ctx: HydrationContext,
+  ): Promise<UsageInfo | null> {
+    try {
+      if (!ctx.vaultPath) return null;
+      const state = getClaudeState(conversation.providerState);
+      const sessionId = state.providerSessionId ?? conversation.sessionId;
+      if (!sessionId) return null;
+
+      const session = await readSDKSession(ctx.vaultPath, sessionId);
+      if (session.error || session.messages.length === 0) return null;
+
+      return extractLastUsageFromSdkMessages(
+        session.messages as unknown as Record<string, unknown>[],
+      );
+    } catch {
+      return null;
+    }
+  }
+}
+
+interface ClaudeMessageUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeNonNegInteger(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+function readNestedUsage(msg: Record<string, unknown>): ClaudeMessageUsage | null {
+  if (!isRecord(msg.message)) return null;
+  const usage = (msg.message as Record<string, unknown>).usage;
+  if (!isRecord(usage)) return null;
+  return usage as ClaudeMessageUsage;
+}
+
+function readNestedModel(msg: Record<string, unknown>): string | undefined {
+  if (!isRecord(msg.message)) return undefined;
+  const model = (msg.message as Record<string, unknown>).model;
+  return typeof model === 'string' && model.trim().length > 0 ? model.trim() : undefined;
+}
+
+function readModelUsageMap(msg: Record<string, unknown>): Record<string, { contextWindow?: number }> | null {
+  if (!isRecord(msg.modelUsage)) return null;
+  return msg.modelUsage as Record<string, { contextWindow?: number }>;
+}
+
+function isMainAgentAssistant(msg: Record<string, unknown>): boolean {
+  const parent = msg.parent_tool_use_id;
+  return parent === null || parent === undefined;
+}
+
+interface ScannedSdkUsage {
+  assistantUsage: ClaudeMessageUsage | null;
+  assistantModel: string | undefined;
+  resultModelUsage: Record<string, { contextWindow?: number }> | null;
+}
+
+/**
+ * Walk the raw SDK rows back to front, capturing the latest result-message
+ * modelUsage (authoritative contextWindow) and the latest main-agent assistant
+ * usage. Subagent assistant rows are skipped so windows are not conflated.
+ */
+function scanSdkUsageRows(messages: readonly Record<string, unknown>[]): ScannedSdkUsage {
+  const scanned: ScannedSdkUsage = {
+    assistantUsage: null,
+    assistantModel: undefined,
+    resultModelUsage: null,
+  };
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (!isRecord(msg)) continue;
+
+    if (msg.type === 'result' && !scanned.resultModelUsage) {
+      const modelUsage = readModelUsageMap(msg);
+      if (modelUsage) {
+        scanned.resultModelUsage = modelUsage;
+      }
+      continue;
+    }
+
+    if (msg.type === 'assistant' && !scanned.assistantUsage && isMainAgentAssistant(msg)) {
+      const usage = readNestedUsage(msg);
+      if (usage) {
+        scanned.assistantUsage = usage;
+        scanned.assistantModel = readNestedModel(msg);
+      }
+    }
+
+    if (scanned.assistantUsage && scanned.resultModelUsage) break;
+  }
+
+  return scanned;
+}
+
+interface ResolvedContextWindow {
+  contextWindow: number;
+  contextWindowIsAuthoritative: boolean;
+}
+
+/**
+ * Resolve the context window: prefer the result-message authoritative entry for
+ * the same model, then the single-entry case (trust it even if the model id
+ * doesn't literal-match), else fall back to the model's heuristic window.
+ */
+function resolveContextWindow(
+  model: string,
+  resultModelUsage: Record<string, { contextWindow?: number }> | null,
+): ResolvedContextWindow {
+  const fallback: ResolvedContextWindow = {
+    contextWindow: getContextWindowSize(model),
+    contextWindowIsAuthoritative: false,
+  };
+  if (!resultModelUsage) return fallback;
+
+  const entryWindow = resultModelUsage[model]?.contextWindow;
+  if (typeof entryWindow === 'number' && entryWindow > 0) {
+    return { contextWindow: entryWindow, contextWindowIsAuthoritative: true };
+  }
+
+  const entries = Object.values(resultModelUsage)
+    .filter((u): u is { contextWindow: number } =>
+      typeof u?.contextWindow === 'number' && u.contextWindow > 0);
+  if (entries.length === 1) {
+    return { contextWindow: entries[0].contextWindow, contextWindowIsAuthoritative: true };
+  }
+
+  return fallback;
+}
+
+export function extractLastUsageFromSdkMessages(
+  messages: readonly Record<string, unknown>[],
+): UsageInfo | null {
+  const { assistantUsage, assistantModel, resultModelUsage } = scanSdkUsageRows(messages);
+
+  if (!assistantUsage) return null;
+  const model = assistantModel;
+  if (!model) return null;
+
+  const inputTokens = normalizeNonNegInteger(assistantUsage.input_tokens);
+  const outputTokens = normalizeNonNegInteger(assistantUsage.output_tokens);
+  const cacheCreationInputTokens = normalizeNonNegInteger(assistantUsage.cache_creation_input_tokens);
+  const cacheReadInputTokens = normalizeNonNegInteger(assistantUsage.cache_read_input_tokens);
+  const contextTokens = inputTokens + cacheCreationInputTokens + cacheReadInputTokens;
+
+  const { contextWindow, contextWindowIsAuthoritative } = resolveContextWindow(
+    model,
+    resultModelUsage,
+  );
+
+  return buildUsageInfo({
+    model,
+    inputTokens,
+    outputTokens: outputTokens > 0 ? outputTokens : undefined,
+    cacheCreationInputTokens: cacheCreationInputTokens > 0 ? cacheCreationInputTokens : undefined,
+    cacheReadInputTokens: cacheReadInputTokens > 0 ? cacheReadInputTokens : undefined,
+    contextTokens,
+    contextWindow,
+    contextWindowIsAuthoritative,
+  });
+}

@@ -1,0 +1,505 @@
+import { type App, Notice } from 'obsidian';
+
+import type { ProviderCommandDropdownConfig } from '../../../core/providers/commands/ProviderCommandCatalog';
+import type { ProviderCommandEntry } from '../../../core/providers/commands/ProviderCommandEntry';
+import { getEnabledProviderForModel, getProviderForModel } from '../../../core/providers/modelRouting';
+import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
+import type { ProviderChatUIConfig, ProviderId } from '../../../core/providers/types';
+import { DEFAULT_CHAT_PROVIDER_ID } from '../../../core/providers/types';
+import { t } from '../../../i18n/i18n';
+import type SpecoratorPlugin from '../../../main';
+import { SlashCommandDropdown } from '../../../shared/components/SlashCommandDropdown';
+import { getEnhancedPath } from '../../../utils/env';
+import { resolveOpenableVaultPath } from '../../../utils/fileLink';
+import { getVaultPath } from '../../../utils/path';
+import { resolveModelContextWindow } from '../../settings/customModels/resolveModelContextWindow';
+import { ChatDropController } from '../controllers/ChatDropController';
+import type { DragManagerLike } from '../controllers/dropPayloadDetection';
+import { BangBashService } from '../services/BangBashService';
+import { BangBashModeManager as BangBashModeManagerClass } from '../ui/BangBashModeManager';
+import { EditedFilesView } from '../ui/EditedFilesView';
+import { FileContextManager } from '../ui/FileContext';
+import { ImageContextManager } from '../ui/ImageContext';
+import { createInputToolbar } from '../ui/InputToolbar';
+import { InstructionModeManager as InstructionModeManagerClass } from '../ui/InstructionModeManager';
+import { NavigationSidebar } from '../ui/NavigationSidebar';
+import { StatusPanel } from '../ui/StatusPanel';
+import { autoResizeTextarea } from '../ui/textareaResize';
+import { recalculateUsageForModel } from '../utils/usageInfo';
+import { getTabProviderId } from './providerResolution';
+import { getBlankTabModelOptions } from './tabModelPolicy';
+import {
+  applyProviderUIGating,
+  cleanupTabRuntime,
+  ensureTitleGenerationService,
+  getProviderMcpManager,
+  getTabCapabilities,
+  getTabChatUIConfig,
+  getTabHiddenCommands,
+  getTabPermissionMode,
+  getTabSettingsSnapshot,
+  type ProviderCatalogInfo,
+  refreshTabProviderUI,
+  syncSlashCommandDropdownForProvider,
+  syncTabProviderServices,
+  updatePlanModeUI,
+  updateTabProviderSettings,
+} from './tabShared';
+import type { TabData } from './types';
+
+function initializeContextManagers(tab: TabData, plugin: SpecoratorPlugin): void {
+  const { dom } = tab;
+  const app = plugin.app;
+
+  // File context manager - chips in contextRowEl, dropdown in inputContainerEl
+  tab.ui.fileContextManager = new FileContextManager(
+    app,
+    dom.contextRowEl,
+    dom.inputEl,
+    {
+      getExcludedTags: () => plugin.settings.excludedTags,
+      onChipsChanged: () => {
+        tab.controllers.selectionController?.updateContextRowVisibility();
+        tab.controllers.browserSelectionController?.updateContextRowVisibility();
+        tab.controllers.canvasSelectionController?.updateContextRowVisibility();
+        autoResizeTextarea(dom.inputEl);
+        tab.renderer?.scrollToBottomIfNeeded();
+      },
+      getExternalContexts: () => tab.ui.externalContextSelector?.getExternalContexts() || [],
+    },
+    dom.inputContainerEl
+  );
+  tab.ui.fileContextManager.setMcpManager(getProviderMcpManager(getTabProviderId(tab, plugin)));
+
+  // Image context manager - drag/drop uses inputContainerEl, preview in contextRowEl
+  tab.ui.imageContextManager = new ImageContextManager(
+    dom.inputContainerEl,
+    dom.inputEl,
+    {
+      onImagesChanged: () => {
+        tab.controllers.selectionController?.updateContextRowVisibility();
+        tab.controllers.browserSelectionController?.updateContextRowVisibility();
+        tab.controllers.canvasSelectionController?.updateContextRowVisibility();
+        autoResizeTextarea(dom.inputEl);
+        tab.renderer?.scrollToBottomIfNeeded();
+      },
+    },
+    dom.contextRowEl
+  );
+
+  tab.ui.chatDropController = new ChatDropController(dom.inputContainerEl, {
+    fileContext: tab.ui.fileContextManager!,
+    imageContext: tab.ui.imageContextManager!,
+    getVaultPath: () => getVaultPath(app) ?? '',
+    getExternalContexts: () => tab.ui.externalContextSelector?.getExternalContexts() || [],
+    getDragManager: () => {
+      const dragMgr = (app as unknown as { dragManager?: unknown }).dragManager;
+      return (dragMgr as DragManagerLike | null) ?? null;
+    },
+    inputEl: dom.inputEl,
+  });
+  tab.ui.chatDropController.init();
+}
+
+function initializeSlashCommands(
+  tab: TabData,
+  getHiddenCommands?: () => Set<string>,
+  catalogInfo?: { config: ProviderCommandDropdownConfig; getEntries: () => Promise<ProviderCommandEntry[]> } | null,
+): void {
+  const { dom } = tab;
+
+  tab.ui.slashCommandDropdown = new SlashCommandDropdown(
+    dom.inputContainerEl,
+    dom.inputEl,
+    {
+      onSelect: () => {},
+      onHide: () => {},
+    },
+    {
+      hiddenCommands: getHiddenCommands?.() ?? new Set(),
+      providerConfig: catalogInfo?.config,
+      getProviderEntries: catalogInfo?.getEntries,
+    }
+  );
+}
+
+/**
+ * Initializes instruction mode and todo panel for a tab.
+ */
+function initializeInstructionAndTodo(tab: TabData, plugin: SpecoratorPlugin): void {
+  const { dom } = tab;
+
+  syncTabProviderServices(tab, plugin);
+  ensureTitleGenerationService(tab, plugin);
+  tab.ui.instructionModeManager = new InstructionModeManagerClass(
+    dom.inputEl,
+    {
+      onSubmit: async (rawInstruction) => {
+        await tab.controllers.inputController?.handleInstructionSubmit(rawInstruction);
+      },
+      getInputWrapper: () => dom.inputWrapper,
+    }
+  );
+
+  // Bang bash mode (! command execution)
+  if (isBangBashEnabled(plugin.settings)) {
+    const vaultPath = getVaultPath(plugin.app);
+    if (vaultPath) {
+      const enhancedPath = getEnhancedPath();
+      const bashService = new BangBashService(vaultPath, enhancedPath);
+
+      tab.ui.bangBashModeManager = new BangBashModeManagerClass(
+        dom.inputEl,
+        {
+          onSubmit: async (command) => {
+            const statusPanel = tab.ui.statusPanel;
+            if (!statusPanel) return;
+
+            const id = `bash-${Date.now()}`;
+            statusPanel.addBashOutput({ id, command, status: 'running', output: '' });
+
+            const result = await bashService.execute(command);
+            const output = [result.stdout, result.stderr, result.error].filter(Boolean).join('\n').trim();
+            const status = result.exitCode === 0 ? 'completed' : 'error';
+            statusPanel.updateBashOutput(id, { status, output, exitCode: result.exitCode });
+          },
+          getInputWrapper: () => dom.inputWrapper,
+        }
+      );
+    }
+  }
+
+  tab.ui.statusPanel = new StatusPanel();
+  tab.ui.statusPanel.mount(dom.statusPanelContainerEl);
+}
+
+function isBangBashEnabled(settings: Record<string, unknown>): boolean {
+  return ProviderRegistry.getEnabledProviderIds(settings).some((providerId) => (
+    ProviderRegistry.getChatUIConfig(providerId).isBangBashEnabled?.(settings) ?? false
+  ));
+}
+
+/**
+ * Creates and wires the input toolbar for a tab.
+ */
+function initializeInputToolbar(
+  tab: TabData,
+  plugin: SpecoratorPlugin,
+  getProviderCatalogConfig?: () => ProviderCatalogInfo,
+  onProviderChanged?: (providerId: ProviderId) => void | Promise<void>,
+): void {
+  const { dom } = tab;
+
+  const inputToolbar = dom.inputWrapper.createDiv({ cls: 'specorator-input-toolbar' });
+
+  // Blank-tab UI config wrapper that returns mixed model options
+  const blankTabUIConfigProxy = (): ProviderChatUIConfig => {
+    const draftProvider = tab.draftModel
+      ? getEnabledProviderForModel(tab.draftModel, plugin.settings)
+      : DEFAULT_CHAT_PROVIDER_ID;
+    const baseConfig = ProviderRegistry.getChatUIConfig(draftProvider);
+    return {
+      ...baseConfig,
+      getModelOptions: (settings: Record<string, unknown>) =>
+        getBlankTabModelOptions(settings),
+    };
+  };
+
+  const toolbarComponents = createInputToolbar(inputToolbar, {
+    getUIConfig: () => {
+      if (tab.lifecycleState === 'blank') {
+        return blankTabUIConfigProxy();
+      }
+      return getTabChatUIConfig(tab, plugin);
+    },
+    getCapabilities: () => getTabCapabilities(tab, plugin),
+    getSettings: () => {
+      const snapshot = getTabSettingsSnapshot(tab, plugin);
+      // Surface the tab-pinned model (e.g. Agent Board work-order model) so
+      // the ModelSelector displays it for the life of the tab rather than
+      // falling back to the provider's global `settings.model` once
+      // `tab.draftModel` is cleared during runtime init.
+      if (typeof tab.pinnedModel === 'string' && tab.pinnedModel.trim()) {
+        return { ...snapshot, model: tab.pinnedModel.trim() };
+      }
+      // Blank tabs that haven't sent yet still surface `draftModel` so the
+      // selector reflects the user's pending pick even before `settings.model`
+      // is updated on the next send.
+      if (tab.lifecycleState === 'blank' && typeof tab.draftModel === 'string' && tab.draftModel.trim()) {
+        return { ...snapshot, model: tab.draftModel.trim() };
+      }
+      return snapshot;
+    },
+    getEnvironmentVariables: () => plugin.getActiveEnvironmentVariables(),
+    onModelChange: async (model: string) => {
+      // Manual model pick on a task-run tab overrides the work-order pin.
+      // Cleared before the provider/draft branches so the new value takes effect
+      // on every subsequent turn rather than getting shadowed by the old pin.
+      if (typeof tab.pinnedModel === 'string' && tab.pinnedModel.trim() !== model) {
+        tab.pinnedModel = null;
+      }
+
+      // For blank tabs, update draft model and derive provider
+      if (tab.lifecycleState === 'blank') {
+        const previousProvider = tab.providerId;
+        tab.draftModel = model;
+        const newProvider = getEnabledProviderForModel(
+          model,
+          plugin.settings,
+        );
+        const didProviderChange = newProvider !== previousProvider;
+        if (tab.service) {
+          // Await so the outgoing runtime's CLI process exits before the next
+          // send constructs a replacement for the newly selected provider.
+          await cleanupTabRuntime(tab);
+        }
+        tab.providerId = newProvider;
+        if (didProviderChange) {
+          syncTabProviderServices(tab, plugin);
+        }
+        syncSlashCommandDropdownForProvider(tab, plugin, getProviderCatalogConfig);
+
+        // Update settings for the new provider
+        const uiConfig = ProviderRegistry.getChatUIConfig(newProvider);
+        await updateTabProviderSettings(tab, plugin, (settings) => {
+          settings.model = model;
+          uiConfig.applyModelDefaults(model, settings);
+        });
+        if (didProviderChange) {
+          await onProviderChanged?.(newProvider);
+        }
+        await uiConfig.prepareModelMetadata?.(model, plugin.settings, { plugin });
+        tab.ui.thinkingBudgetSelector?.updateDisplay();
+        tab.ui.serviceTierToggle?.updateDisplay();
+        tab.ui.modelSelector?.updateDisplay();
+        tab.ui.modeSelector?.updateDisplay();
+        // Re-render options (provider may have changed reasoning controls)
+        tab.ui.modelSelector?.renderOptions();
+        tab.ui.modeSelector?.renderOptions();
+        applyProviderUIGating(tab, plugin);
+        return;
+      }
+
+      // For bound tabs, reject cross-provider model changes
+      const boundProvider = tab.providerId;
+      const modelProvider = getProviderForModel(model, plugin.settings);
+      if (modelProvider !== boundProvider) {
+        new Notice(t('chat.tab.providerSwitchBlocked'));
+        tab.ui.modelSelector?.updateDisplay();
+        return;
+      }
+
+      const uiConfig: ProviderChatUIConfig = getTabChatUIConfig(tab, plugin);
+      const providerSettings = await updateTabProviderSettings(tab, plugin, (settings) => {
+        settings.model = model;
+        uiConfig.applyModelDefaults(model, settings);
+      });
+      await uiConfig.prepareModelMetadata?.(model, plugin.settings, { plugin });
+      tab.ui.thinkingBudgetSelector?.updateDisplay();
+      tab.ui.serviceTierToggle?.updateDisplay();
+      tab.ui.modelSelector?.updateDisplay();
+      tab.ui.modelSelector?.renderOptions();
+
+      // Recalculate context usage percentage for the new model's context window
+      const currentUsage = tab.state.usage;
+      if (currentUsage) {
+        const newContextWindow = resolveModelContextWindow(
+          uiConfig,
+          providerSettings,
+          model,
+          providerSettings.customContextLimits,
+        );
+        tab.state.usage = recalculateUsageForModel(currentUsage, model, newContextWindow);
+      }
+    },
+    onModeChange: async (mode: string) => {
+      await updateTabProviderSettings(tab, plugin, (settings) => {
+        getTabChatUIConfig(tab, plugin).applyModeSelection?.(mode, settings);
+      });
+      tab.ui.modeSelector?.updateDisplay();
+      tab.ui.modeSelector?.renderOptions();
+    },
+    onThinkingBudgetChange: async (budget: string) => {
+      await updateTabProviderSettings(tab, plugin, (settings) => {
+        settings.thinkingBudget = budget;
+        getTabChatUIConfig(tab, plugin).applyReasoningSelection?.(settings.model, budget, settings);
+      });
+    },
+    onEffortLevelChange: async (effort: string) => {
+      await updateTabProviderSettings(tab, plugin, (settings) => {
+        settings.effortLevel = effort;
+        getTabChatUIConfig(tab, plugin).applyReasoningSelection?.(settings.model, effort, settings);
+      });
+    },
+    onServiceTierChange: async (serviceTier: string) => {
+      await updateTabProviderSettings(tab, plugin, (settings) => {
+        settings.serviceTier = serviceTier;
+      });
+      tab.ui.serviceTierToggle?.updateDisplay();
+    },
+    onPermissionModeChange: async (mode: string) => {
+      await updateTabProviderSettings(tab, plugin, (settings) => {
+        const uiConfig = getTabChatUIConfig(tab, plugin);
+        if (uiConfig.applyPermissionMode) {
+          uiConfig.applyPermissionMode(mode, settings);
+        } else {
+          settings.permissionMode = mode;
+        }
+      });
+      await maybeWarnYoloMode(plugin, mode);
+      tab.ui.permissionToggle?.updateDisplay();
+      tab.ui.planModeToggle?.updateDisplay();
+      dom.inputWrapper.toggleClass(
+        'specorator-input-plan-mode',
+        mode === 'plan' && getTabCapabilities(tab, plugin).supportsPlanMode,
+      );
+    },
+    onPlanModeToggle: async () => {
+      const planValue = getTabChatUIConfig(tab, plugin).getPermissionModeToggle?.()?.planValue;
+      if (!planValue || !getTabCapabilities(tab, plugin).supportsPlanMode) {
+        return;
+      }
+      const current = getTabPermissionMode(tab, plugin);
+      if (current === planValue) {
+        const restoreMode = tab.state.prePlanPermissionMode ?? 'normal';
+        tab.state.prePlanPermissionMode = null;
+        await updatePlanModeUI(tab, plugin, restoreMode);
+      } else {
+        tab.state.prePlanPermissionMode = current;
+        await updatePlanModeUI(tab, plugin, planValue);
+      }
+    },
+  });
+
+  tab.ui.modelSelector = toolbarComponents.modelSelector;
+  tab.ui.modeSelector = toolbarComponents.modeSelector;
+  tab.ui.thinkingBudgetSelector = toolbarComponents.thinkingBudgetSelector;
+  tab.ui.contextUsageMeter = toolbarComponents.contextUsageMeter;
+  tab.ui.externalContextSelector = toolbarComponents.externalContextSelector;
+  tab.ui.mcpServerSelector = toolbarComponents.mcpServerSelector;
+  tab.ui.permissionToggle = toolbarComponents.permissionToggle;
+  tab.ui.planModeToggle = toolbarComponents.planModeToggle;
+  tab.ui.serviceTierToggle = toolbarComponents.serviceTierToggle;
+
+  tab.ui.mcpServerSelector.setMcpManager(getProviderMcpManager(getTabProviderId(tab, plugin)));
+
+  // Sync @-mentions to UI selector
+  tab.ui.fileContextManager?.setOnMcpMentionChange((servers) => {
+    tab.ui.mcpServerSelector?.addMentionedServers(servers);
+  });
+
+  // Wire external context changes
+  tab.ui.externalContextSelector.setOnChange(() => {
+    tab.ui.fileContextManager?.preScanExternalContexts();
+  });
+
+  // Initialize persistent paths
+  tab.ui.externalContextSelector.setPersistentPaths(
+    plugin.settings.persistentExternalContextPaths || []
+  );
+
+  // Wire persistence changes
+  tab.ui.externalContextSelector.setOnPersistenceChange((paths) => {
+    plugin.settings.persistentExternalContextPaths = paths;
+    void plugin.saveSettings();
+  });
+
+  refreshTabProviderUI(tab, plugin);
+
+  // Gate provider-specific UI elements
+  applyProviderUIGating(tab, plugin);
+}
+
+export interface InitializeTabUIOptions {
+  getProviderCatalogConfig?: () => ProviderCatalogInfo;
+  onProviderChanged?: (providerId: ProviderId) => void | Promise<void>;
+}
+
+/**
+ * Initializes the tab's UI components.
+ * Call this after the tab is created and before it becomes active.
+ */
+export function initializeTabUI(
+  tab: TabData,
+  plugin: SpecoratorPlugin,
+  options: InitializeTabUIOptions = {}
+): void {
+  const { dom, state } = tab;
+
+  // Initialize context managers (file/image)
+  initializeContextManagers(tab, plugin);
+
+  // Selection indicator - add to contextRowEl
+  dom.selectionIndicatorEl = dom.contextRowEl.createDiv({ cls: 'specorator-selection-indicator specorator-hidden' });
+
+  dom.browserIndicatorEl = dom.contextRowEl.createDiv({ cls: 'specorator-browser-selection-indicator specorator-hidden' });
+
+  dom.canvasIndicatorEl = dom.contextRowEl.createDiv({ cls: 'specorator-canvas-indicator specorator-hidden' });
+
+  const catalogInfo = options.getProviderCatalogConfig?.() ?? null;
+  initializeSlashCommands(
+    tab,
+    () => getTabHiddenCommands(tab, plugin),
+    catalogInfo,
+  );
+
+  if (dom.messagesEl.parentElement) {
+    tab.ui.navigationSidebar = new NavigationSidebar(
+      dom.messagesEl.parentElement,
+      dom.messagesEl
+    );
+  }
+
+  initializeInstructionAndTodo(tab, plugin);
+  initializeInputToolbar(tab, plugin, options.getProviderCatalogConfig, options.onProviderChanged);
+
+  tab.ui.editedFilesView = new EditedFilesView(dom.editedFilesRowEl, {
+    onOpenFile: (rawPath) => openEditedFile(plugin.app, rawPath),
+  });
+
+  state.callbacks = {
+    ...state.callbacks,
+    onUsageChanged: (usage) => {
+      tab.ui.contextUsageMeter?.update(usage);
+    },
+    onTodosChanged: (todos) => tab.ui.statusPanel?.updateTodos(todos),
+    onAutoScrollChanged: () => tab.ui.navigationSidebar?.updateVisibility(),
+    onEditedFilesChanged: (files) => {
+      tab.ui.editedFilesView?.render(files);
+      autoResizeTextarea(dom.inputEl);
+      tab.renderer?.scrollToBottomIfNeeded();
+    },
+  };
+  tab.ui.editedFilesView.render(state.editedFiles);
+
+  // ResizeObserver to detect overflow changes (e.g., content growth)
+  const resizeObserver = new ResizeObserver(() => {
+    tab.ui.navigationSidebar?.updateVisibility();
+  });
+  resizeObserver.observe(dom.messagesEl);
+  dom.eventCleanups.push(() => resizeObserver.disconnect());
+}
+
+// Opens a file from the agent-edited-files strip. Re-resolves at click time so a
+// file deleted after it was listed surfaces a Notice instead of opening nothing.
+function openEditedFile(app: App, rawPath: string): void {
+  const openPath = resolveOpenableVaultPath(app, rawPath);
+  if (!openPath) {
+    new Notice(t('chat.fileOpen.notFound', { path: rawPath }));
+    return;
+  }
+  void app.workspace.openLinkText(openPath, '', 'tab');
+}
+
+// SECURITY (SEC-1): 'yolo' maps to SDK bypassPermissions — tools run with no
+// approval UI. Warn the user the first time they opt in, then persist a flag so
+// the Notice shows only once.
+export async function maybeWarnYoloMode(plugin: SpecoratorPlugin, mode: string): Promise<void> {
+  if (mode !== 'yolo' || plugin.settings.yoloModeWarningShown) {
+    return;
+  }
+  plugin.settings.yoloModeWarningShown = true;
+  await plugin.saveSettings();
+  new Notice(t('chat.permissionMode.yoloWarning'), 12000);
+}
+

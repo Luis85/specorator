@@ -1,0 +1,294 @@
+/* Shared layout for the Tool Library and Skill Library views. */
+
+.specorator-library {
+  padding: var(--size-4-4);
+}
+
+/* Hide Obsidian's per-view title bar on the four library views — the in-view
+   nav strip identifies the current view and navigates between them. */
+.workspace-leaf-content[data-type="specorator-agent-roster"] .view-header,
+.workspace-leaf-content[data-type="specorator-tool-library"] .view-header,
+.workspace-leaf-content[data-type="specorator-skill-library"] .view-header,
+.workspace-leaf-content[data-type="specorator-loop-library"] .view-header {
+  display: none;
+}
+
+/* ── Cross-library nav strip ── */
+.specorator-library-nav {
+  display: flex;
+  gap: var(--size-4-1);
+  padding-bottom: var(--size-4-3);
+  margin-bottom: var(--size-4-3);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.specorator-library-nav-item {
+  flex: 1 1 0;
+  font-weight: var(--font-medium);
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.specorator-library-nav-item:hover {
+  color: var(--text-normal);
+}
+
+.specorator-library-nav-item.is-active {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+  border-color: var(--interactive-accent);
+  cursor: default;
+}
+
+.specorator-library-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--size-4-2);
+  margin-bottom: var(--size-4-4);
+}
+
+.specorator-library-header h2 {
+  margin: 0;
+}
+
+.specorator-library-header-actions {
+  display: flex;
+  gap: var(--size-4-2);
+}
+
+.specorator-library-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+}
+
+.specorator-library-loading {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  text-align: center;
+  padding: var(--size-4-4);
+}
+
+.specorator-library-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--size-4-2);
+  color: var(--text-muted);
+  text-align: center;
+  padding: var(--size-4-8) var(--size-4-4);
+}
+
+.specorator-library-empty-icon {
+  display: flex;
+  color: var(--text-faint);
+}
+
+.specorator-library-empty-icon svg {
+  width: 36px;
+  height: 36px;
+}
+
+.specorator-library-empty-text {
+  max-width: 36ch;
+  font-size: var(--font-ui-small);
+  line-height: var(--line-height-tight);
+}
+
+.specorator-library-empty-action {
+  margin-top: var(--size-4-1);
+}
+
+.specorator-library-card {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-3);
+  padding: var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+
+/* Optional leading media slot (e.g. an avatar) rendered before the body. */
+.specorator-library-card-leading {
+  flex: 0 0 auto;
+  display: flex;
+}
+
+.specorator-library-card-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.specorator-library-card-name {
+  font-weight: var(--font-semibold);
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+}
+
+/* The opt-in `nameAsButton` name button (createLibraryCard) renders inline like
+   the text it replaces: reset native button chrome and inherit the name row's
+   font/color. A consumer can still layer its own deltas on top. */
+.specorator-library-card-name-button {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  box-shadow: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.specorator-library-card-desc {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  margin-top: 2px;
+  /* Clamp long descriptions so a verbose tool/skill can't stretch the card. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.specorator-library-card-error {
+  color: var(--text-error);
+  font-size: var(--font-ui-small);
+  font-family: var(--font-monospace);
+  margin-top: 2px;
+}
+
+.specorator-library-chip {
+  font-size: var(--font-ui-smaller);
+  border-radius: var(--radius-s);
+  padding: 0 5px;
+  line-height: 1.5;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.specorator-library-chip-ready {
+  color: var(--text-on-accent);
+  background: var(--color-green);
+}
+
+.specorator-library-chip-error {
+  color: var(--text-on-accent);
+  background: var(--color-red);
+}
+
+.specorator-library-chip-muted {
+  color: var(--text-muted);
+  background: var(--background-modifier-border);
+}
+
+/* Outline variant: distinguishes the read-only marker from the filled provider chip. */
+.specorator-library-chip-outline {
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.specorator-library-card-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: var(--size-4-1);
+}
+
+.specorator-library-card-delete {
+  color: var(--text-error);
+}
+
+/* ── Editor modal (tools + skills) ── */
+.specorator-library-modal {
+  --dialog-width: min(820px, 92vw);
+  --modal-width: min(820px, 92vw);
+  --modal-max-width: min(820px, 92vw);
+}
+
+.specorator-library-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+}
+
+.specorator-library-modal-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+  padding: var(--size-4-3);
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+}
+
+.specorator-library-modal-status {
+  display: flex;
+}
+
+.specorator-library-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.specorator-library-modal-label {
+  font-size: var(--font-ui-smaller);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.specorator-library-modal-value {
+  color: var(--text-normal);
+}
+
+.specorator-library-modal-hint {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.specorator-library-modal-schema,
+.specorator-library-modal-error {
+  margin: 0;
+  padding: var(--size-4-2);
+  max-height: 180px;
+  overflow: auto;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+  white-space: pre-wrap;
+}
+
+.specorator-library-modal-error {
+  color: var(--text-error);
+}
+
+.specorator-library-modal-code {
+  width: 100%;
+  min-height: 320px;
+  resize: vertical;
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small);
+  line-height: 1.5;
+  tab-size: 2;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+
+.specorator-library-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--size-4-2);
+  margin-top: var(--size-4-1);
+}

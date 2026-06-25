@@ -1,0 +1,71 @@
+export interface ScheduledAnimationFrame {
+  kind: 'raf' | 'timeout';
+  id: number;
+  ownerWindow: Window | null;
+}
+
+function getRendererWindow(): Window | null {
+  return typeof window === 'undefined' ? null : window;
+}
+
+export function scheduleAnimationFrame(
+  callback: () => void,
+  ownerWindow: Window | null = getRendererWindow(),
+): ScheduledAnimationFrame {
+  const targetWindow = ownerWindow ?? getRendererWindow();
+  if (!targetWindow) {
+    callback();
+    return { kind: 'timeout', id: 0, ownerWindow: null };
+  }
+
+  if (typeof targetWindow.requestAnimationFrame === 'function') {
+    return {
+      kind: 'raf',
+      id: targetWindow.requestAnimationFrame(() => callback()),
+      ownerWindow: targetWindow,
+    };
+  }
+
+  return {
+    kind: 'timeout',
+    id: targetWindow.setTimeout(callback, 16),
+    ownerWindow: targetWindow,
+  };
+}
+
+/**
+ * Schedules a callback after a fixed delay using the renderer window's timers.
+ *
+ * Used for size-aware streaming backoff: once a live block grows large, re-parsing it on
+ * every animation frame is `O(C²)`. Coalescing the continuation renders behind a delay
+ * caps the re-parse rate without changing the final (flushed) output.
+ */
+export function scheduleDelayedFrame(
+  callback: () => void,
+  delayMs: number,
+  ownerWindow: Window | null = getRendererWindow(),
+): ScheduledAnimationFrame {
+  const targetWindow = ownerWindow ?? getRendererWindow();
+  if (!targetWindow) {
+    callback();
+    return { kind: 'timeout', id: 0, ownerWindow: null };
+  }
+
+  return {
+    kind: 'timeout',
+    id: targetWindow.setTimeout(callback, delayMs),
+    ownerWindow: targetWindow,
+  };
+}
+
+export function cancelScheduledAnimationFrame(frame: ScheduledAnimationFrame): void {
+  const targetWindow = frame.ownerWindow ?? getRendererWindow();
+  if (!targetWindow) return;
+
+  if (frame.kind === 'raf' && typeof targetWindow.cancelAnimationFrame === 'function') {
+    targetWindow.cancelAnimationFrame(frame.id);
+    return;
+  }
+
+  targetWindow.clearTimeout(frame.id);
+}

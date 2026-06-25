@@ -1,0 +1,154 @@
+/* Custom models table — editable per-provider model overrides */
+
+.specorator-customModels-table {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.specorator-customModels-row {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 0.8fr 0.6fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--background-primary);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.specorator-customModels-row:last-child {
+  border-bottom: none;
+}
+
+.specorator-customModels-row:hover {
+  background: var(--background-modifier-hover);
+}
+
+.specorator-customModels-row[data-source="env"] {
+  background: var(--background-secondary);
+  opacity: 0.85;
+}
+
+.specorator-customModels-id {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small);
+  color: var(--text-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.specorator-customModels-label {
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.specorator-customModels-ctxWindow {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.specorator-customModels-source {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  background: var(--background-modifier-border);
+  border-radius: 3px;
+  text-align: center;
+}
+
+.specorator-customModels-row[data-source="env"] .specorator-customModels-source {
+  background: var(--text-accent);
+  color: var(--text-on-accent);
+}
+
+.specorator-customModels-row button {
+  padding: 4px 10px;
+  font-size: var(--font-ui-smaller);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.specorator-customModels-row button:hover {
+  background: var(--background-modifier-hover);
+}
+
+.specorator-customModels-editor {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 0.8fr auto auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--background-secondary);
+  border: 1px solid var(--interactive-accent);
+  border-radius: 6px;
+}
+
+.specorator-customModels-editor input {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: var(--font-ui-small);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+
+.specorator-customModels-editor input:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+}
+
+.specorator-customModels-editor button {
+  padding: 6px 14px;
+  font-size: var(--font-ui-small);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.specorator-customModels-editor button[data-action="save"] {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+.specorator-customModels-editor button[data-action="save"]:hover {
+  background: var(--interactive-accent-hover);
+}
+
+.specorator-customModels-editor button[data-action="cancel"] {
+  background: var(--background-primary);
+  color: var(--text-muted);
+}
+
+.specorator-customModels-editor button[data-action="cancel"]:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.specorator-customModels-error {
+  margin: 8px 0 0;
+  padding: 6px 10px;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-error);
+  background: var(--background-modifier-error);
+  border-radius: 4px;
+}

@@ -1,0 +1,112 @@
+.specorator-work-order-handoff-card {
+  /* Positioning context for card-anchored `.specorator-text-actions` (absolute). */
+  position: relative;
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+  font-size: var(--font-ui-small);
+}
+
+.specorator-work-order-handoff-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  outline: none;
+}
+
+.specorator-work-order-handoff-card-header:focus-visible {
+  box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
+  border-radius: 6px;
+}
+
+.specorator-work-order-handoff-card-icon {
+  display: inline-flex;
+  color: var(--text-muted);
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+
+.specorator-work-order-handoff-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.specorator-work-order-handoff-card-title {
+  color: var(--text-normal);
+  font-weight: 600;
+}
+
+.specorator-work-order-handoff-card-preview {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.specorator-work-order-handoff-card-toggle {
+  color: var(--text-accent);
+  font-size: var(--font-ui-smaller);
+  white-space: nowrap;
+  margin-top: 1px;
+}
+
+.specorator-work-order-handoff-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.specorator-work-order-handoff-card-chip {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+/* The chips are a collapsed-state affordance; hide them once expanded so they
+   do not duplicate the section headers (setupCollapsible adds `expanded`). */
+.specorator-work-order-handoff-card.expanded .specorator-work-order-handoff-card-chips {
+  display: none;
+}
+
+.specorator-work-order-handoff-card-details {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.specorator-work-order-handoff-card-section + .specorator-work-order-handoff-card-section {
+  margin-top: 10px;
+}
+
+.specorator-work-order-handoff-card-section-title {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+
+.specorator-work-order-handoff-card-section-body {
+  color: var(--text-normal);
+}
+
+/* Handoff-only messages anchor `.specorator-text-actions` under the card instead
+   of a `.specorator-text-block`. That shared element is opacity:0 and is only
+   revealed by `.specorator-text-block:hover` in messages.css, so reveal it on card
+   hover/focus here too — otherwise actions like "Create work order" stay hidden. */
+.specorator-work-order-handoff-card:hover .specorator-text-actions,
+.specorator-work-order-handoff-card:focus-within .specorator-text-actions {
+  opacity: 1;
+}
