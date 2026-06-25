@@ -2,11 +2,7 @@
 
 > Plan the work, run it, review what came back, keep the record. All in your vault.
 
-![GitHub stars](https://img.shields.io/github/stars/Luis85/specorator?style=social)
-![GitHub release](https://img.shields.io/github/v/release/Luis85/specorator)
-![License](https://img.shields.io/github/license/Luis85/specorator)
-
-![Preview](Preview.png)
+![[Preview.png]]
 
 You're already using AI for serious work. Drafting emails. Planning trips. Comparing options. Reading the long report you don't want to read yourself. The conversations help, but the moment you close the tab, the work is gone. Tomorrow you start again from scratch.
 
