@@ -1,6 +1,7 @@
 import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
 import { ProviderSettingsCoordinator } from '../../../core/providers/ProviderSettingsCoordinator';
 import type { ProviderId } from '../../../core/providers/types';
+import { asSettingsBag } from '../../../core/types/settings';
 import type { SettingsCtx } from '../registry/SettingsField';
 import type { CustomModelsCommitHooks } from './CustomModelsTable';
 
@@ -17,7 +18,7 @@ export function customModelsCommitHooks(
 ): CustomModelsCommitHooks {
   return {
     beforeSave: () => {
-      const settings = ctx.settings as unknown as Record<string, unknown>;
+      const settings = asSettingsBag(ctx.settings);
       // Legacy guard: only repoint the active model when this provider owns
       // the current settings selection (or no provider is pinned yet).
       const activeProvider = settings.settingsProvider;

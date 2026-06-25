@@ -41,10 +41,7 @@ export class FirstRunBanner {
 
   private async handleEnable(): Promise<void> {
     const checked = this.rows.filter((r) => r.cb.checked).map((r) => r.id);
-    const live = this.ctx.settings as unknown as {
-      providerConfigs?: Record<string, { enabled?: boolean }>;
-      firstRunDismissed?: boolean;
-    };
+    const live = this.ctx.settings;
     live.providerConfigs = live.providerConfigs ?? {};
     for (const id of checked) {
       live.providerConfigs[id] = { ...(live.providerConfigs[id] ?? {}), enabled: true };
