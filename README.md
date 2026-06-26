@@ -2,11 +2,7 @@
 
 > Plan the work, run it, review what came back, keep the record. All in your vault.
 
-![GitHub stars](https://img.shields.io/github/stars/Luis85/specorator?style=social)
-![GitHub release](https://img.shields.io/github/v/release/Luis85/specorator)
-![License](https://img.shields.io/github/license/Luis85/specorator)
-
-![Preview](Preview.png)
+![[Preview.png]]
 
 You're already using AI for serious work. Drafting emails. Planning trips. Comparing options. Reading the long report you don't want to read yourself. The conversations help, but the moment you close the tab, the work is gone. Tomorrow you start again from scratch.
 
@@ -66,6 +62,48 @@ Install via the [Beta Reviewers Auto-update Tool (BRAT)](https://github.com/TfTH
 Submission to the official Obsidian community-plugin registry is planned once v1.0.x stabilises.
 
 Already installed? Open **Settings → Specorator** to point it at the providers you have, then open the chat sidebar from the ribbon or the command palette.
+
+## Privacy, network use, and data handling
+
+Specorator is a local plugin with **no telemetry and no analytics** — it never
+collects usage data or phones home. What leaves your machine is only what you
+send to the AI provider you choose, and only when you send it.
+
+- **Remote services.** When you run a turn, the prompt plus any context you
+  attach (selected text, mentioned files, images) is sent to the provider that
+  powers that conversation: **Anthropic** (Claude), **OpenAI** (Codex),
+  **Cursor**, or **Opencode**. If you configure MCP servers, the data you route
+  to them is sent to those endpoints too. Review each provider's own privacy
+  policy and terms — your usage is governed by them. No provider is contacted
+  until you trigger a turn against it.
+- **No account with us.** Specorator has no backend and no Specorator account.
+  Provider authentication is handled by each provider's own CLI/credentials.
+- **Credentials.** Provider API keys, MCP auth headers, and MCP env vars are
+  stored in your OS keychain via Obsidian `SecretStorage`, not in plain-text
+  vault config files. (This is why `minAppVersion` is 1.11.5.)
+- **Filesystem access beyond the vault.** Specorator reads provider transcript
+  directories outside your vault — `~/.claude/`, `~/.codex/`, and `~/.cursor/` —
+  to hydrate conversation history. The agents it runs use your vault as their
+  working directory, but because they are real provider-native CLIs they can
+  read, write, and execute anywhere your user account can. See **Security
+  model** below.
+
+## Security model
+
+Specorator runs **real provider-native agent CLIs** as subprocesses, which means
+the agent can edit files and run shell commands. Treat it with the same caution
+you would the underlying CLI in a terminal.
+
+- **Preview before apply (default).** File writes and edits surface a word-level
+  diff you approve before anything lands in your notes.
+- **YOLO mode is opt-in.** Turning it on lets a run apply edits and run tools
+  without per-step approval. Only enable it for runs you trust.
+- **Scoped subprocess environment.** Child processes receive an allowlisted
+  environment, not your full shell environment, so host secrets are not leaked
+  wholesale into spawned CLIs.
+- **External binaries required.** Specorator does not bundle the agents; it
+  drives the CLIs you install yourself (see Requirements). It contains no
+  auto-update mechanism — updates come through Obsidian.
 
 ## Where it's heading
 

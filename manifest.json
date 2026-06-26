@@ -3,7 +3,7 @@
   "name": "Specorator",
   "version": "1.0.0",
   "minAppVersion": "1.11.5",
-  "description": "Spec-driven agent workspace for Obsidian. Plan, run, review, keep the record.",
+  "description": "Plan, run, and review provider-native AI agents inside your vault, keeping every conversation and edit as Markdown you own.",
   "author": "Luis Mendez",
   "authorUrl": "https://github.com/Luis85",
   "isDesktopOnly": true
