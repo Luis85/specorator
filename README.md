@@ -2,7 +2,7 @@
 
 > Plan the work, run it, review what came back, keep the record. All in your vault.
 
-![[Preview.png]]
+![Specorator preview](Preview.png)
 
 You're already using AI for serious work. Drafting emails. Planning trips. Comparing options. Reading the long report you don't want to read yourself. The conversations help, but the moment you close the tab, the work is gone. Tomorrow you start again from scratch.
 
