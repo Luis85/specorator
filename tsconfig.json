@@ -17,6 +17,7 @@
     "isolatedModules": true,
     "strictNullChecks": true,
     "resolveJsonModule": true,
+    "useUnknownInCatchVariables": true,
     "types": ["node", "jest"],
     "lib": ["DOM", "ES2022"],
     "outDir": "./dist",

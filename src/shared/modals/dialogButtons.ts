@@ -21,7 +21,7 @@ export function renderDialogButtons(parent: HTMLElement, config: DialogButtonsCo
     .addButton((btn) => btn.setButtonText(t('common.cancel')).onClick(config.onCancel))
     .addButton((btn) => {
       btn.setButtonText(config.confirmLabel).onClick(config.onConfirm);
-      if (config.variant === 'warning') btn.setWarning();
+      if (config.variant === 'warning') btn.setDestructive();
       else btn.setCta();
     });
 }

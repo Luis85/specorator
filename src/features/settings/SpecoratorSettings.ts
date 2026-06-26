@@ -118,6 +118,18 @@ export class SpecoratorSettingTab extends PluginSettingTab {
     }
   }
 
+  /**
+   * Re-render the settings UI. Wraps the deprecated `display()` so the single
+   * eslint-disable lives in one place: Obsidian 1.13 deprecates `display()` in
+   * favor of the declarative `getSettingDefinitions`, which cannot express this
+   * plugin's custom tabbed/searchable settings UI, so the `display()` override
+   * remains the supported render path here.
+   */
+  private refreshDisplay(): void {
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- see refreshDisplay() doc: custom tabbed/searchable settings UI is not expressible via getSettingDefinitions
+    this.display();
+  }
+
   display(): void {
     if (this.displaying) {
       // Re-entrant call. Outer render is in flight and will produce the next
@@ -159,7 +171,7 @@ export class SpecoratorSettingTab extends PluginSettingTab {
       // through `readPath`/`writePath`, so the wider object is safe.
       settings: this.plugin.settings,
       saveSettings: () => this.plugin.saveSettings(),
-      refresh: () => this.display(),
+      refresh: () => this.refreshDisplay(),
       plugin: this.plugin,
     };
 
@@ -313,7 +325,7 @@ export class SpecoratorSettingTab extends PluginSettingTab {
             }
             this.plugin.settings.locale = locale;
             await this.plugin.saveSettings();
-            this.display();
+            this.refreshDisplay();
           });
       });
 
@@ -395,7 +407,7 @@ export class SpecoratorSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.enableAutoTitleGeneration = value;
             await this.plugin.saveSettings();
-            this.display();
+            this.refreshDisplay();
           })
       );
 
@@ -487,7 +499,7 @@ export class SpecoratorSettingTab extends PluginSettingTab {
     new Setting(container).setName('Providers').setHeading();
 
     for (const providerId of ProviderRegistry.getRegisteredProviderIds()) {
-      renderProviderEnableSetting(this.plugin, container, providerId, () => this.display());
+      renderProviderEnableSetting(this.plugin, container, providerId, () => this.refreshDisplay());
     }
   }
 

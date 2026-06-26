@@ -25,6 +25,7 @@ usage, and where this repo diverges from the generic fallow template — see
 |------|---------|--------|-----------------|
 | Lint (errors) | `npm run lint` | `lint` | Error-level rules block CI. Warnings print but do **not** fail — see "Lint severity policy" below. |
 | LOC guard | `npm run check:loc` | `lint` | New `src/**/*.ts` files above the cap; grandfathered hotspots that grow; stale baseline entries. |
+| CSS !important guard | `npm run check:css` | `lint` | New `!important` in any `src/style/**/*.css` not on `scripts/css-important-baseline.json`; baselined files that gain more; stale entries. Mirrors the marketplace validator's CSS finding. Comments excluded. |
 | Quality ratchet | `npm run check:quality` | `quality` | A fallow metric (dead code, duplication, complexity, maintainability) regressing past `scripts/quality-baseline.json`. See "Fallow quality ratchet" below. |
 | Typecheck | `npm run typecheck` | `typecheck` | Type regressions. |
 | Tests | `npm run test` | `test` (Linux + Windows) | Behavior regressions on both path/spawn targets. |
@@ -43,7 +44,7 @@ verified (aligned 2026-06-09; see
 Run the whole local set before pushing:
 
 ```bash
-npm run lint && npm run check:loc && npm run check:quality && npm run typecheck && npm run test && npm run build && npm run check:artifacts
+npm run lint && npm run check:loc && npm run check:css && npm run check:quality && npm run typecheck && npm run test && npm run build && npm run check:artifacts
 ```
 
 Optional, before opening a PR — surfaces fallow findings on changed files vs
@@ -136,6 +137,45 @@ npm run check:loc -- --update
 
 The per-file `reason` is the documented exception path the oversized-modules
 tech debt asks for; the largest hotspots carry their planned split.
+
+## CSS !important guard
+
+`scripts/check-css-important.mjs` counts `!important` (CSS comments excluded) in
+every `src/style/**/*.css` and ratchets against
+`scripts/css-important-baseline.json`, mirroring the LOC guard. Added after the
+2026-06-26 marketplace review (`docs/tech-debt/2026-06-26-obsidian-marketplace-review*.md`),
+whose validator flags every `!important` — a finding we previously had no way to
+reproduce locally.
+
+- Stylesheets with zero `!important` are always fine.
+- A new `!important` in a non-baselined file fails. Re-scope by specificity or
+  CSS variables (see `src/style/CLAUDE.md`: `!important` is permitted only when
+  overriding Obsidian defaults), or add a baseline entry with a `reason`.
+- Grandfathered stylesheets may **shrink** but never gain more `!important`.
+- A baselined file that drops below its recorded count or is deleted goes stale
+  and fails — keeping the baseline minimal and honest.
+
+```bash
+npm run check:css -- --update
+```
+
+Baseline at adoption: `inline-edit.css` (18, CM6 widget overrides) and
+`container.css` (3, visibility-toggle utilities).
+
+## Type-aware lint additions (2026-06-26, part 3)
+
+Two rules tightened so the marketplace validator's type findings fail locally:
+
+- **`@typescript-eslint/no-unnecessary-type-assertion`** (`error`, src) —
+  re-enabled after the part-3 review. The part-1 false positives were
+  load-bearing DOM `as` casts, now rewritten as generic type parameters
+  (`querySelector<HTMLElement>(...)`). One cross-lib exception in
+  `SpecoratorView.ts` (the bound-`load` cast) carries a justified inline disable:
+  our newer TS lib types `Function.prototype.bind` precisely (reads the cast as
+  redundant) while the validator's older lib needs it.
+- **`useUnknownInCatchVariables: true`** (`tsconfig.json`) — caught variables are
+  `unknown`, not `any`, so error handling can't silently propagate `any`. Zero
+  fallout at adoption.
 
 ## Artifact smoke
 

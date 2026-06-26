@@ -17,6 +17,7 @@
     "lint": "eslint \"{src,tests}/**/*.ts\"",
     "lint:fix": "npm run lint -- --fix",
     "check:loc": "node scripts/check-loc.mjs",
+    "check:css": "node scripts/check-css-important.mjs",
     "check:artifacts": "node scripts/check-artifacts.mjs",
     "check:quality": "node scripts/check-quality.mjs",
     "quality": "fallow",
@@ -72,7 +73,7 @@
     "fallow": "^2.91.0",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
-    "obsidian": "latest",
+    "obsidian": "^1.13.1",
     "ts-jest": "^29.4.9",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"

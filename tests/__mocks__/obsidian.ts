@@ -427,6 +427,7 @@ export class Setting {
       // helpers; tests don't assert on them but the production code calls
       // them and would crash without the stubs.
       setWarning() { return this; },
+      setDestructive() { return this; },
       setCta() { return this; },
       setClass() { return this; },
       setDisabled(_: boolean) { return this; },

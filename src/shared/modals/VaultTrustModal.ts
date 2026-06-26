@@ -42,7 +42,7 @@ class VaultTrustModal extends Modal {
       .addButton((btn) =>
         btn
           .setButtonText(t('security.vaultTrust.trust'))
-          .setWarning()
+          .setDestructive()
           .onClick(() => this.finish(true)),
       );
   }

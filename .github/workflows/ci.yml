@@ -27,6 +27,9 @@ jobs:
       - name: LOC guard
         run: npm run check:loc
 
+      - name: CSS !important guard
+        run: npm run check:css
+
   quality:
     # Fallow quality ratchet (docs/build-ci/quality-gates.md): dead code,
     # duplication, and complexity metrics may improve but not regress past

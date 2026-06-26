@@ -32,6 +32,7 @@ npm run test
 npm run test:watch
 npm run test:coverage
 npm run check:loc        # LOC ratchet guard (see docs/build-ci/quality-gates.md)
+npm run check:css        # CSS !important ratchet guard (see docs/build-ci/quality-gates.md)
 npm run check:artifacts  # post-build artifact smoke (run after npm run build)
 npm run check:quality    # fallow metric ratchet vs scripts/quality-baseline.json (blocking CI gate)
 npm run quality          # fallow: dead-code + dupes + health (advisory detail)

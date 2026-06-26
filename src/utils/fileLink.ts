@@ -325,9 +325,9 @@ export function registerFileLinkHandler(
 ): void {
   component.registerDomEvent(container, 'click', (event: MouseEvent) => {
     const target = event.target as HTMLElement;
-    const link = target.closest(
+    const link = target.closest<HTMLElement>(
       'a.specorator-file-link, a.internal-link, [data-href].specorator-file-link',
-    ) as HTMLElement | null;
+    );
 
     if (!link) {
       return;

@@ -215,6 +215,13 @@ export default defineConfig([
     // tsc. The one-time cleanup of its genuine hits was applied manually.
     files: ['src/**/*.ts'],
     rules: {
+      // Re-enabled after the part-3 marketplace review: the part-1 false
+      // positives were load-bearing DOM `as` casts, now rewritten as generic
+      // type parameters (`querySelector<HTMLElement>(...)`). The lone remaining
+      // exception (SpecoratorView's bound-load cast) carries a justified inline
+      // disable — our newer TS lib types `Function.prototype.bind` precisely, so
+      // it reads the cast as redundant, while the validator's older lib needs it.
+      '@typescript-eslint/no-unnecessary-type-assertion': 'error',
       '@typescript-eslint/no-unsafe-assignment': 'error',
       '@typescript-eslint/no-unsafe-call': 'error',
       '@typescript-eslint/no-unsafe-member-access': 'error',

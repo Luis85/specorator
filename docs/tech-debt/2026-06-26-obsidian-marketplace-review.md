@@ -13,7 +13,7 @@ scope: marketplace-submission
 | Lint Errors | ✅ fixed | + local guards now mirror the bot (see below) |
 | Dependency advisory | ✅ patched | all high-severity cleared via `overrides`; MCP SDK held at 1.29.0 |
 | Source-code warnings | ✅ fixed + locked | 22 hand-fixed, 101 assertions auto-cleaned, 9 type-aware rules promoted to error |
-| Obsidian API deprecations | ⏸️ deferred | replacements are 1.13-only; adopting forces `minAppVersion` 1.11.5 → 1.13.0 |
+| Obsidian API deprecations | ✅ resolved (part 3) | `minAppVersion` bumped 1.11.5 → 1.13.0; `setWarning`/`setDynamicTooltip` migrated; `display` kept behind a justified disable (custom UI). See part 3. |
 | CSS | ✅ mostly fixed | `text-decoration` + 10 redundant `!important` removed (3 mode-borders + 7 composer-textarea resets); ~20 justified host/CM6 overrides kept |
 
 Gate at close: `typecheck` ✓ · `lint` ✓ · 9069 tests ✓ · `build` ✓ · LOC ✓.

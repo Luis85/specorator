@@ -153,7 +153,7 @@ export function renderAgentBoardLaneEditor(container: HTMLElement, plugin: Speco
       .addButton((btn) =>
         btn
           .setButtonText(t('tasks.laneEditor.resetToDefault'))
-          .setWarning()
+          .setDestructive()
           .onClick(async () => {
             const snapshot = cloneConfig(config);
             config = cloneConfig(DEFAULT_BOARD_CONFIG);

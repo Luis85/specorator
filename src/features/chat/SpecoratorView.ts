@@ -103,7 +103,10 @@ export class SpecoratorView extends ItemView {
     // after our class is defined, but instance methods take precedence over prototype methods.
     const prototype = Object.getPrototypeOf(this) as LoadableView;
     // Cast the bound result: `Function.prototype.bind` is typed as returning
-    // `any` under some TS lib versions (marketplace validator's no-unsafe-*).
+    // `any` under the marketplace validator's older TS lib (its no-unsafe-*
+    // rules would fire without the cast). Our newer lib types bind precisely and
+    // reads the cast as redundant, hence the targeted disable.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- required under the marketplace validator's older TS lib where bind() returns any
     const originalLoad = prototype.load.bind(this) as () => Promise<void> | void;
     Object.defineProperty(this, 'load', {
       value: async () => {
