@@ -28,7 +28,7 @@ You keep a folder of quick-action notes. Each one has a name, an optional descri
 
 The actions live in your vault as ordinary files. You can edit them in any text editor, sync them with the rest of your notes, back them up, and share them with someone else. Specorator does not own them.
 
-![[quick-actions-overview.png]]
+![Quick Actions overview](../../attachments/quick-actions-overview.png)
 <!-- screenshot: quick actions picker open in chat toolbar, showing 4-5 action rows with icons -->
 
 ---
