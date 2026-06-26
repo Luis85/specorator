@@ -28,7 +28,7 @@ The sidebar opens on a hotkey. The path of the note you're on goes in automatica
 
 Conversations stick around. Every session saves under `.specorator/sessions/` so you can leave one open for weeks, jump back in tomorrow, or split it into two when one line of thinking deserves its own branch.
 
-![[chat-sidepanel-overview.png]]
+![Chat side panel overview](../../attachments/chat-sidepanel-overview.png)
 <!-- screenshot: chat sidebar open beside a note, with a selection highlighted and quoted in the chat composer -->
 
 When your co-worker rewrites a paragraph or fills in a draft section, you choose how the change lands. Preview, apply, and discard — accept or reject before anything touches the note. Flip on YOLO mode and they write directly while you watch.
