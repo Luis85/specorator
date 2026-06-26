@@ -374,8 +374,8 @@ export function migrateLegacyHostnameKeyedMap<T extends string>(
     return entries;
   }
 
-  const hasCurrentEntry = Object.prototype.hasOwnProperty.call(entries, currentKey);
-  const hasLegacyEntry = Object.prototype.hasOwnProperty.call(entries, legacyHostnameKey);
+  const hasCurrentEntry = Object.hasOwn(entries, currentKey);
+  const hasLegacyEntry = Object.hasOwn(entries, legacyHostnameKey);
   if (!hasLegacyEntry) {
     return entries;
   }

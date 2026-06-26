@@ -14,7 +14,7 @@ scope: marketplace-submission
 | Dependency advisory | ✅ patched | all high-severity cleared via `overrides`; MCP SDK held at 1.29.0 |
 | Source-code warnings | ✅ fixed + locked | 22 hand-fixed, 101 assertions auto-cleaned, 9 type-aware rules promoted to error |
 | Obsidian API deprecations | ⏸️ deferred | replacements are 1.13-only; adopting forces `minAppVersion` 1.11.5 → 1.13.0 |
-| CSS | ✅ mostly fixed | `text-decoration` + 3 redundant `!important` removed; ~27 justified host/CM6 overrides kept |
+| CSS | ✅ mostly fixed | `text-decoration` + 10 redundant `!important` removed (3 mode-borders + 7 composer-textarea resets); ~20 justified host/CM6 overrides kept |
 
 Gate at close: `typecheck` ✓ · `lint` ✓ · 9069 tests ✓ · `build` ✓ · LOC ✓.
 
@@ -120,10 +120,20 @@ Verified: typecheck ✓, lint ✓, build ✓, 9069 tests ✓, LOC guard ✓.
   - `text-decoration` partial support (file-link.css ×2): FIXED. Replaced the
     `text-decoration-color` longhand with `border-bottom` — universally supported,
     reproduces the same faint→bright underline, no visual change.
-  - `!important` (~30): 3 removed (evidence-backed safe), ~27 kept (justified):
+  - `!important` (~30): 10 removed (evidence-backed safe), ~20 kept (justified):
     - **Removed**: the three mode-border `!important` (plan-mode, instruction, bash) —
       proven redundant by specificity/source-order analysis (compound or later-defined
       selectors already beat the single-class base `.specorator-input-wrapper` border).
+    - **Removed (2026-06-26 follow-up)**: all 7 composer-textarea resets in `input.css`
+      (`.specorator-input` border/background/box-shadow + `:hover`/`:focus`
+      outline/border/background/box-shadow). The textarea is always created inside
+      `.specorator-input-wrapper` (verified in `tabFactory.ts`), so re-scoping the rules
+      to `.specorator-input-wrapper .specorator-input` (0,2,0) beats Obsidian's host
+      textarea resets (`.theme-dark textarea`, 0,1,1) by specificity — same methodology
+      as the mode-borders. Behaviour identical assuming Obsidian uses no `!important` on
+      base form controls (it does not in current app.css). In-app visual spot-check of
+      the composer is the final gate; CM6 inline-edit overrides intentionally untouched
+      (host specificity inside the editor is not statically verifiable headless).
     - **Kept**: CodeMirror 6 inline-edit overrides (`inline-edit.css`), Obsidian textarea
       resets (`input.css` border/background/box-shadow), and visibility toggle utilities
       (`.specorator-hidden` etc.). These override host/CM6 styles — the exact case the

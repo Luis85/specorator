@@ -102,7 +102,9 @@ export class SpecoratorView extends ItemView {
     // overwritten by prototype patching. Hover Editor patches SpecoratorView.prototype.load
     // after our class is defined, but instance methods take precedence over prototype methods.
     const prototype = Object.getPrototypeOf(this) as LoadableView;
-    const originalLoad = prototype.load.bind(this);
+    // Cast the bound result: `Function.prototype.bind` is typed as returning
+    // `any` under some TS lib versions (marketplace validator's no-unsafe-*).
+    const originalLoad = prototype.load.bind(this) as () => Promise<void> | void;
     Object.defineProperty(this, 'load', {
       value: async () => {
         // Ensure containerEl exists before any patched load code tries to use it

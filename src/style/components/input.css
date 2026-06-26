@@ -77,31 +77,35 @@
   text-overflow: ellipsis;
 }
 
-.specorator-input {
+/* Textarea always lives inside .specorator-input-wrapper (see tabFactory).
+   The 2-class descendant selector (0,2,0) beats Obsidian's host textarea
+   resets (`.theme-dark textarea`, 0,1,1) by specificity, so these resets win
+   without !important. */
+.specorator-input-wrapper .specorator-input {
   width: 100%;
   flex: 1 1 0;
   min-height: var(--specorator-textarea-min-height, 60px);
   max-height: var(--specorator-textarea-max-height, none);
   resize: none;
   padding: 8px 10px 10px 10px;
-  border: none !important;
+  border: none;
   border-radius: 6px;
-  background: transparent !important;
+  background: transparent;
   color: var(--text-normal);
   font-family: inherit;
   font-size: 14px;
   line-height: 1.4;
-  box-shadow: none !important;
+  box-shadow: none;
   overflow-y: auto;
   unicode-bidi: plaintext; /* Proper BiDi text handling for mixed RTL/LTR */
 }
 
-.specorator-input:hover,
-.specorator-input:focus {
-  outline: none !important;
-  border: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
+.specorator-input-wrapper .specorator-input:hover,
+.specorator-input-wrapper .specorator-input:focus {
+  outline: none;
+  border: none;
+  background: transparent;
+  box-shadow: none;
 }
 
 .specorator-input::placeholder {

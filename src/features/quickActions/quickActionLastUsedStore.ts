@@ -136,7 +136,7 @@ export class QuickActionLastUsedStore {
         return;
       }
       this.entries = parsed;
-    } catch (err) {
+    } catch (err: unknown) {
       this.logger.warn('last-used hydrate failed', { err });
     }
   }

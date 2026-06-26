@@ -16,8 +16,11 @@ import { renderAgentBoardLaneEditor } from '../../tasks/ui/AgentBoardLaneEditor'
  * still enabled; otherwise falls back to the first enabled provider so the provider dropdown and
  * the model dropdown never disagree about which provider is active.
  */
-export function resolveAgentBoardProvider(enabled: ProviderId[], stored: string): ProviderId | '' {
-  return enabled.includes(stored) ? (stored) : (enabled[0] ?? '');
+// Return type is `ProviderId` (an alias for `string`); a `| ''` constituent
+// would be redundant since `''` is already a `string`. The empty-string value
+// (no enabled provider) is still produced at runtime via the `?? ''` fallback.
+export function resolveAgentBoardProvider(enabled: ProviderId[], stored: string): ProviderId {
+  return enabled.includes(stored) ? stored : (enabled[0] ?? '');
 }
 
 export function renderAgentBoardSettingsSection(

@@ -311,8 +311,14 @@ export class StatusPanel {
   addBashOutput(info: PanelBashOutput): void {
     this.currentBashOutputs.set(info.id, info);
     while (this.currentBashOutputs.size > MAX_BASH_OUTPUTS) {
-      const oldest = this.currentBashOutputs.keys().next().value;
-      if (!oldest) break;
+      // for-of over keys() yields a typed `string`; `keys().next().value` is
+      // typed `any` under some TS lib versions (marketplace validator).
+      let oldest: string | undefined;
+      for (const key of this.currentBashOutputs.keys()) {
+        oldest = key;
+        break;
+      }
+      if (oldest === undefined) break;
       this.currentBashOutputs.delete(oldest);
       this.bashEntryExpanded.delete(oldest);
     }

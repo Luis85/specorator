@@ -66,7 +66,7 @@ function applyWindowsCursorAgentShellEnvironment(
   env: Record<string, string>,
   customEnv: Record<string, string>,
 ): void {
-  const userSet = (key: string) => Object.prototype.hasOwnProperty.call(customEnv, key);
+  const userSet = (key: string) => Object.hasOwn(customEnv, key);
 
   // Cursor Agent uses these Git-for-Windows signals to select its Bash executor.
   // They are paths/mode flags rather than secrets, and preserving them keeps Bash

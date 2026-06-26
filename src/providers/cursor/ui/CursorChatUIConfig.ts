@@ -160,13 +160,16 @@ export const cursorChatUIConfig: ProviderChatUIConfig = {
 
   applyModelDefaults(model: string, settings: unknown): void {
     const target = settings as Record<string, unknown>;
-    const familyValue = this.normalizeModelVariant(model, target);
+    // Reference the typed const rather than `this`: object-literal method `this`
+    // is inferred as `any` under the marketplace validator's TS, tripping the
+    // no-unsafe-* rules. `cursorChatUIConfig` carries the `ProviderChatUIConfig` type.
+    const familyValue = cursorChatUIConfig.normalizeModelVariant(model, target);
     const familyId = fromCursorModelValue(familyValue);
     if (!familyId) {
       return;
     }
     updateCursorProviderSettings(target, { lastModel: familyId });
-    target.effortLevel = this.getDefaultReasoningValue(familyValue, target);
+    target.effortLevel = cursorChatUIConfig.getDefaultReasoningValue(familyValue, target);
   },
 
   applyReasoningSelection(model: string, value: string, settings: unknown): void {
