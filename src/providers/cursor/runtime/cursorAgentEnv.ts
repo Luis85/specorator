@@ -73,7 +73,7 @@ function applyWindowsCursorAgentShellEnvironment(
   // tool calls running in Bash instead of silently switching to PowerShell.
   for (const key of ['MSYSTEM', 'EXEPATH', 'MINGW_PREFIX']) {
     if (!userSet(key) && typeof process.env[key] === 'string' && !env[key]) {
-      env[key] = process.env[key] as string;
+      env[key] = process.env[key];
     }
   }
 

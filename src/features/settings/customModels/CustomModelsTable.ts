@@ -26,7 +26,7 @@ export class CustomModelsTable {
 
   private async commitRows(updated: ProviderCustomModel[]): Promise<void> {
     writePathInPlace(
-      this.ctx.settings as object,
+      this.ctx.settings,
       `providerConfigs.${this.providerId}.customModels`,
       updated,
     );
@@ -120,19 +120,19 @@ export class CustomModelsTable {
 
     const idInput = editor.createEl('input', {
       attr: { type: 'text', placeholder: 'Model ID (required)' },
-    }) as HTMLInputElement;
+    });
     idInput.dataset.field = 'id';
     if (prefill) idInput.value = prefill.id;
 
     const labelInput = editor.createEl('input', {
       attr: { type: 'text', placeholder: 'Label (optional)' },
-    }) as HTMLInputElement;
+    });
     labelInput.dataset.field = 'label';
     if (prefill?.label) labelInput.value = prefill.label;
 
     const ctxWindowInput = editor.createEl('input', {
       attr: { type: 'number', placeholder: 'Context window' },
-    }) as HTMLInputElement;
+    });
     ctxWindowInput.dataset.field = 'contextWindow';
     if (prefill?.contextWindow !== undefined) {
       ctxWindowInput.value = String(prefill.contextWindow);

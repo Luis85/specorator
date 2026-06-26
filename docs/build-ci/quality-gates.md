@@ -96,6 +96,25 @@ assertion (outside the allowlisted `assertFunctionNames` wrappers), or a committ
 `.skip`/commented-out test, now fails CI instead of printing a warning.
 `eslint --print-config` confirms no rule remains at `warn`.
 
+### Directive-comment discipline (2026-06-26)
+
+Mirrors the Obsidian marketplace validator so its findings fail `npm run lint`
+locally instead of surfacing at submission. Scoped to `src/**/*.ts` (the bot
+lints plugin source only), via `@eslint-community/eslint-plugin-eslint-comments`:
+
+- `require-description` (`error`) — every `eslint-disable*` must carry a `--`
+  justification.
+- `no-restricted-disable` (`error`) — `@typescript-eslint/no-explicit-any` and
+  `obsidianmd/ui/sentence-case` may not be silenced inline; fix the code or
+  whitelist the term in the `sentence-case` `brands`/`ignoreWords` config.
+- `reportUnusedDisableDirectives` promoted `warn` → `error` — a stale disable now
+  blocks CI.
+
+The Function-constructor pair (`no-new-func`, `@typescript-eslint/no-implied-eval`,
+`error`, src only) was enabled the same day so the user-tool sandbox's justified
+disable is exercised locally rather than discovered by the bot. See
+[`docs/tech-debt/2026-06-26-obsidian-marketplace-review.md`](../tech-debt/2026-06-26-obsidian-marketplace-review.md).
+
 ## LOC guard
 
 `scripts/check-loc.mjs` counts nonblank lines for every `src/**/*.ts` file and

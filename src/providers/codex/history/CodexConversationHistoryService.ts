@@ -73,7 +73,7 @@ export class CodexConversationHistoryService extends BaseHistoryService<CodexPro
         ),
       };
       // CodexProviderState lacks an index signature; cast to the contract shape.
-      return providerState as Record<string, unknown>;
+      return providerState;
     },
   };
 
@@ -103,14 +103,14 @@ export class CodexConversationHistoryService extends BaseHistoryService<CodexPro
 
     // Branch 1: Pending fork with existing in-memory messages → keep them.
     if (
-      this.forkSupport!.isPendingForkConversation(conversation)
+      this.forkSupport.isPendingForkConversation(conversation)
       && conversation.messages.length > 0
     ) {
       return { kind: 'cached', sourceRef: pendingForkSourceRef(state) };
     }
 
     // Branch 2: Pending fork without messages → hydrate from source truncated at resumeAt.
-    if (this.forkSupport!.isPendingForkConversation(conversation)) {
+    if (this.forkSupport.isPendingForkConversation(conversation)) {
       return this.loadPendingForkMessages(state);
     }
 
@@ -311,7 +311,7 @@ export class CodexConversationHistoryService extends BaseHistoryService<CodexPro
     const entries = Object.entries(getCodexState(conversation.providerState))
       .filter(([, value]) => value !== undefined);
     return entries.length > 0
-      ? Object.fromEntries(entries) as CodexProviderState
+      ? Object.fromEntries(entries)
       : undefined;
   }
 

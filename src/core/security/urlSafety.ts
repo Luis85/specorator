@@ -354,7 +354,7 @@ export function createPinnedLookup(
         throw new UnsafeUrlError(`No vetted IPv${requestedFamily ?? '?'} address available for "${requested}".`);
       }
 
-      if (lookupOptions && (lookupOptions as LookupOptions).all) {
+      if (lookupOptions && (lookupOptions).all) {
         const all: LookupAddress[] = usable.map((entry) => ({ address: entry.address, family: entry.family }));
         callback(null, all);
       } else {

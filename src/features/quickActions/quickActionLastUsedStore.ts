@@ -61,7 +61,7 @@ export function parsePersistedLastUsed(raw: string): Map<string, LastUsedEntry> 
     if (typeof entry.model !== 'string') continue;
     if (typeof entry.updatedAt !== 'number') continue;
     out.set(stem, {
-      providerId: entry.providerId as ProviderId,
+      providerId: entry.providerId,
       model: entry.model,
       updatedAt: entry.updatedAt,
     });
@@ -204,7 +204,7 @@ export class QuickActionLastUsedStore {
     const payload = serializePersistedLastUsed(snapshot, writtenAt);
     const write = this.adapter
       .write(this.cachePath, payload)
-      .catch((err) => {
+      .catch((err: unknown) => {
         this.logger.warn('last-used persist failed', { err });
         this.dirty = true;
       });

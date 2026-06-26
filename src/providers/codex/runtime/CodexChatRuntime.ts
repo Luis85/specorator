@@ -686,7 +686,7 @@ export class CodexChatRuntime implements ChatRuntime {
 
     const updates: Partial<Conversation> = {
       sessionId: threadId,
-      providerState: providerState as Record<string, unknown>,
+      providerState: providerState,
     };
 
     if (params.sessionInvalidated && params.conversation) {

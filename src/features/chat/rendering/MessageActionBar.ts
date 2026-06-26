@@ -129,7 +129,7 @@ export class MessageActionBar {
     for (const selector of protocolCardSelectors) {
       const matches = msgEl.querySelectorAll<HTMLElement>(selector);
       if (matches.length > 0) {
-        cardAnchor = matches[matches.length - 1] as HTMLElement;
+        cardAnchor = matches[matches.length - 1];
         break;
       }
     }

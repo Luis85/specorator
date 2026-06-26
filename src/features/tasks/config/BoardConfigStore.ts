@@ -156,7 +156,7 @@ export function writeLaneCollapsed(
   const base = { ...(existing as Record<string, unknown>) };
   const lanesRaw = base.lanes;
   if (!Array.isArray(lanesRaw)) return;
-  const next = lanesRaw.map((laneRaw) => {
+  const next = lanesRaw.map((laneRaw: unknown) => {
     if (!laneRaw || typeof laneRaw !== 'object') return laneRaw;
     const lane = laneRaw as Record<string, unknown>;
     if (lane.id !== laneId) return lane;

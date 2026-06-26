@@ -17,7 +17,7 @@ const parseModelIds = (value: string): ProviderCustomModel[] =>
     .map((id) => ({ id, source: 'user' as const }));
 
 const readString = (bag: Record<string, unknown>, key: string): string =>
-  typeof bag[key] === 'string' ? (bag[key] as string) : '';
+  typeof bag[key] === 'string' ? (bag[key]) : '';
 
 export interface CustomModelsSettingOptions {
   /** Settings row name. */

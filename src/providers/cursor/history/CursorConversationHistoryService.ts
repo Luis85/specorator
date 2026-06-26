@@ -114,7 +114,7 @@ export class CursorConversationHistoryService extends BaseHistoryService<CursorP
     const merged: CursorProviderState = { ...state };
     if (sid) merged.chatSessionId = sid;
     const entries = Object.entries(merged).filter(([, value]) => value !== undefined);
-    return entries.length > 0 ? Object.fromEntries(entries) as CursorProviderState : undefined;
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined;
   }
 
   /**
@@ -153,7 +153,7 @@ function readModel(rec: Record<string, unknown>): string | null {
   if (typeof direct === 'string' && direct.trim().length > 0) return direct.trim();
   // Some Cursor records nest model under message.metadata or system payload.
   if (isRecord(rec.message)) {
-    const nested = (rec.message as Record<string, unknown>).model;
+    const nested = (rec.message).model;
     if (typeof nested === 'string' && nested.trim().length > 0) return nested.trim();
   }
   return null;
@@ -162,7 +162,7 @@ function readModel(rec: Record<string, unknown>): string | null {
 function hasUsageField(rec: Record<string, unknown>): boolean {
   if (rec.type === 'usage') return true;
   if (isRecord(rec.usage)) return true;
-  if (isRecord(rec.message) && isRecord((rec.message as Record<string, unknown>).usage)) {
+  if (isRecord(rec.message) && isRecord((rec.message).usage)) {
     return true;
   }
   return false;

@@ -1466,7 +1466,7 @@ export class ClaudeChatRuntime implements ChatRuntime {
         // the settings panel; when a non-Claude provider (e.g. Codex) is active
         // in YOLO mode, `plugin.settings.permissionMode` carries that provider's
         // value and would incorrectly override Claude's own saved safe-mode.
-        getPermissionMode: () => this.getScopedSettings().permissionMode as PermissionMode,
+        getPermissionMode: () => this.getScopedSettings().permissionMode,
         resolveSDKPermissionMode: (mode) => this.resolveSDKPermissionMode(mode),
         mcpManager: this.mcpManager,
         getSpecoratorToolServer: this.plugin.getSpecoratorToolServer
@@ -1828,7 +1828,7 @@ export class ClaudeChatRuntime implements ChatRuntime {
       host: this.host,
       // Same projection fix as applyDynamicUpdates: read the Claude-projected
       // mode so ExitPlanMode restores the correct post-plan permission level.
-      getPermissionMode: () => this.getScopedSettings().permissionMode as PermissionMode,
+      getPermissionMode: () => this.getScopedSettings().permissionMode,
       resolveSDKPermissionMode: (mode) => this.resolveSDKPermissionMode(mode),
       syncPermissionMode: (mode, sdkMode) => {
         if (this.currentConfig) {

@@ -17,7 +17,7 @@ export interface SectionHeaderHandle {
    * count). Created lazily on first access so headers without a trailing widget
    * stay clean.
    */
-  right(): HTMLElement;
+  right: () => HTMLElement;
 }
 
 /**

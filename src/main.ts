@@ -218,7 +218,7 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
         },
         isProviderGitEnabled: (providerId) => {
           try {
-            const config = ProviderRegistry.getChatUIConfig(providerId as ProviderId);
+            const config = ProviderRegistry.getChatUIConfig(providerId);
             return config.isGitActionsEnabled?.(this.settings) !== false;
           } catch {
             return false;
@@ -426,7 +426,7 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     }
   }
 
-  async onunload(): Promise<void> {
+  onunload(): void {
     this.unloaded = true;
     if (this.usageTracker) {
       void this.usageTracker.flush();
@@ -441,19 +441,19 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     this.commitOnAcceptCoordinator = null;
     this.gitStatusWatcher?.stop();
     this.gitStatusWatcher = null;
-    if (this.quickActionLastUsedStore) {
-      // Null the field BEFORE awaiting so any in-flight `set()` from a
-      // still-mounted modal short-circuits instead of arming another write
-      // against a store we're about to discard.
-      const store = this.quickActionLastUsedStore;
-      this.quickActionLastUsedStore = null;
-      await store.flush();
-    }
-    if (this.httpToolServer) {
-      const server = this.httpToolServer;
-      this.httpToolServer = null;
-      await server.stop();
-    }
+    // Null the fields BEFORE the async teardown so any in-flight `set()` from a
+    // still-mounted modal short-circuits instead of arming another write against
+    // a store we're about to discard. Obsidian calls onunload() synchronously and
+    // ignores its return, so the flush/stop run fire-and-forget (flush before
+    // stop is preserved by the awaited sequence inside the IIFE).
+    const store = this.quickActionLastUsedStore;
+    this.quickActionLastUsedStore = null;
+    const server = this.httpToolServer;
+    this.httpToolServer = null;
+    void (async () => {
+      if (store) await store.flush();
+      if (server) await server.stop();
+    })();
     this.lifecycle?.shutdownActiveRuntimes();
     void this.lifecycle?.persistOpenTabStates();
   }
@@ -908,7 +908,7 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     if (!existing) {
       await leaf.setViewState({ type: viewType, active: true });
     }
-    workspace.revealLeaf(leaf);
+    void workspace.revealLeaf(leaf);
   }
 
   getEnvironmentVariablesForScope(scope: EnvironmentScope): string {

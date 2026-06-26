@@ -9,7 +9,7 @@ import {
 import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
 import { ProviderWorkspaceRegistry } from '../../core/providers/ProviderWorkspaceRegistry';
 import type { ProviderId } from '../../core/providers/types';
-import { asSettingsBag, type ChatViewPlacement, type SpecoratorSettings } from '../../core/types/settings';
+import { asSettingsBag, type ChatViewPlacement } from '../../core/types/settings';
 import { getAvailableLocales, getLocaleDisplayName, setLocale, t } from '../../i18n/i18n';
 import type { Locale, TranslationKey } from '../../i18n/types';
 import type SpecoratorPlugin from '../../main';
@@ -157,7 +157,7 @@ export class SpecoratorSettingTab extends PluginSettingTab {
       // Cast: `SpecoratorPlugin.settings` carries provider-typed extensions
       // beyond the core `SpecoratorSettings` shape. Registry fields only read
       // through `readPath`/`writePath`, so the wider object is safe.
-      settings: this.plugin.settings as unknown as SpecoratorSettings,
+      settings: this.plugin.settings,
       saveSettings: () => this.plugin.saveSettings(),
       refresh: () => this.display(),
       plugin: this.plugin,
@@ -567,7 +567,7 @@ export class SpecoratorSettingTab extends PluginSettingTab {
     clearSearchAndShowTabs(containerEl, tabBar, resultsHost);
 
     // Switch to target tab
-    this.activeTab = tabId as SettingsTabId;
+    this.activeTab = tabId;
     const tabButtons = containerEl.querySelectorAll('.specorator-settings-tab');
     const tabContents = containerEl.querySelectorAll('.specorator-settings-tab-content');
 

@@ -22,15 +22,18 @@ code .specorator-file-link:hover {
 }
 
 /* Tool summaries and search result lines (non-anchor file links) */
+/* border-bottom instead of text-decoration-color: the longhand is only
+   partially supported on the minimum Obsidian version, while border-bottom
+   reproduces the same faint→bright underline everywhere. */
 .specorator-tool-summary .specorator-file-link,
 .specorator-write-edit-summary .specorator-file-link,
 .specorator-tool-line .specorator-file-link {
-  text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--text-accent) 35%, transparent);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--text-accent) 35%, transparent);
 }
 
 .specorator-tool-summary .specorator-file-link:hover,
 .specorator-write-edit-summary .specorator-file-link:hover,
 .specorator-tool-line .specorator-file-link:hover {
-  text-decoration-color: var(--text-accent);
+  border-bottom-color: var(--text-accent);
 }

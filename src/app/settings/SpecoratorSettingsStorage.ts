@@ -84,7 +84,7 @@ export class SpecoratorSettingsStorage {
     // Providers repair their own persisted state on load behind the generic
     // coordinator hook, so the app shell stays provider-neutral.
     const didNormalizeProviders = ProviderSettingsCoordinator.normalizeOnLoad(
-      migrated as Record<string, unknown>,
+      migrated,
     );
 
     if (didMigrateModelOverrides || didNormalizeProviders) {
@@ -120,8 +120,8 @@ export class SpecoratorSettingsStorage {
 
     const current = await this.load();
     ProviderSettingsCoordinator.persistProviderLastModel(
-      current as Record<string, unknown>,
-      ProviderRegistry.resolveSettingsProviderId(current as Record<string, unknown>),
+      current,
+      ProviderRegistry.resolveSettingsProviderId(current),
       model,
     );
     await this.save(current);
@@ -130,8 +130,8 @@ export class SpecoratorSettingsStorage {
   async setLastEnvHash(hash: string): Promise<void> {
     const current = await this.load();
     ProviderSettingsCoordinator.persistProviderEnvironmentHash(
-      current as Record<string, unknown>,
-      ProviderRegistry.resolveSettingsProviderId(current as Record<string, unknown>),
+      current,
+      ProviderRegistry.resolveSettingsProviderId(current),
       hash,
     );
     await this.save(current);

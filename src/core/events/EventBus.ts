@@ -5,12 +5,11 @@ export type EventHandler<P> = (payload: P) => void;
  * Minimal typed, synchronous, in-process event bus.
  * No Obsidian dependency so it can be unit-tested in isolation.
  */
-// `any` (not `unknown`) is required in the constraint: concrete event maps are
-// declared as `interface`s (ChatEventMap, TaskEventMap, ...), which lack an
-// implicit index signature and so satisfy `Record<string, any>` but not
-// `Record<string, unknown>`. The default and all member signatures stay precise.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export class EventBus<M extends Record<string, any> = Record<string, unknown>> {
+// No constraint on `M`: concrete event maps are declared as `interface`s
+// (ChatEventMap, TaskEventMap, ...), which lack an implicit index signature and
+// so fail a `Record<string, unknown>` constraint. Leaving `M` unconstrained
+// accepts them while keeping every member signature precise via `keyof M`/`M[K]`.
+export class EventBus<M = Record<string, unknown>> {
   private readonly handlers = new Map<keyof M, Set<EventHandler<never>>>();
   private errorSink?: (error: unknown, event: string) => void;
 
@@ -24,12 +23,12 @@ export class EventBus<M extends Record<string, any> = Record<string, unknown>> {
       set = new Set();
       this.handlers.set(event, set);
     }
-    set.add(handler as EventHandler<never>);
+    set.add(handler);
     return () => this.off(event, handler);
   }
 
   off<K extends keyof M>(event: K, handler: EventHandler<M[K]>): void {
-    this.handlers.get(event)?.delete(handler as EventHandler<never>);
+    this.handlers.get(event)?.delete(handler);
   }
 
   emit<K extends keyof M>(event: K, ...args: M[K] extends void ? [] : [M[K]]): void {

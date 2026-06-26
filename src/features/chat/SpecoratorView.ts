@@ -102,7 +102,7 @@ export class SpecoratorView extends ItemView {
     // overwritten by prototype patching. Hover Editor patches SpecoratorView.prototype.load
     // after our class is defined, but instance methods take precedence over prototype methods.
     const prototype = Object.getPrototypeOf(this) as LoadableView;
-    const originalLoad = prototype.load.bind(this) as () => Promise<void> | void;
+    const originalLoad = prototype.load.bind(this);
     Object.defineProperty(this, 'load', {
       value: async () => {
         // Ensure containerEl exists before any patched load code tries to use it
@@ -422,7 +422,6 @@ export class SpecoratorView extends ItemView {
 
     const steps = emptyState.createEl('ol', { cls: 'specorator-empty-state-steps' });
     steps.createEl('li', {
-      // eslint-disable-next-line obsidianmd/ui/sentence-case -- "Claude Code" is a product name.
       text: 'Open settings → Specorator → general and enable a provider (Claude Code, Cursor, Codex, or OpenCode).',
     });
     steps.createEl('li', {

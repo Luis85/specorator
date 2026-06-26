@@ -185,7 +185,7 @@ export class ClaudeConversationHistoryService extends BaseHistoryService<ClaudeP
       const state: ClaudeProviderState = {
         forkSource: { sessionId: sourceSessionId, resumeAt } satisfies ForkSource,
       };
-      return state as Record<string, unknown>;
+      return state;
     },
   };
 
@@ -209,7 +209,7 @@ export class ClaudeConversationHistoryService extends BaseHistoryService<ClaudeP
       delete providerState.subagentData;
     }
 
-    return sanitizeProviderState(providerState) as ClaudeProviderState | undefined;
+    return sanitizeProviderState(providerState);
   }
 
   protected computeCacheKey(
@@ -218,7 +218,7 @@ export class ClaudeConversationHistoryService extends BaseHistoryService<ClaudeP
   ): string | null {
     if (!ctx.vaultPath) return null;
     const state = getClaudeState(conversation.providerState);
-    const isPendingFork = this.forkSupport!.isPendingForkConversation(conversation);
+    const isPendingFork = this.forkSupport.isPendingForkConversation(conversation);
     const sessionIds = isPendingFork
       ? [state.forkSource!.sessionId]
       : [
@@ -243,7 +243,7 @@ export class ClaudeConversationHistoryService extends BaseHistoryService<ClaudeP
     const vaultPath = ctx.vaultPath;
 
     const state = getClaudeState(conversation.providerState);
-    const isPendingFork = this.forkSupport!.isPendingForkConversation(conversation);
+    const isPendingFork = this.forkSupport.isPendingForkConversation(conversation);
     const allSessionIds = resolveSessionIds(isPendingFork, state, conversation);
 
     if (allSessionIds.length === 0) {
@@ -359,14 +359,14 @@ function normalizeNonNegInteger(value: unknown): number {
 
 function readNestedUsage(msg: Record<string, unknown>): ClaudeMessageUsage | null {
   if (!isRecord(msg.message)) return null;
-  const usage = (msg.message as Record<string, unknown>).usage;
+  const usage = (msg.message).usage;
   if (!isRecord(usage)) return null;
-  return usage as ClaudeMessageUsage;
+  return usage;
 }
 
 function readNestedModel(msg: Record<string, unknown>): string | undefined {
   if (!isRecord(msg.message)) return undefined;
-  const model = (msg.message as Record<string, unknown>).model;
+  const model = (msg.message).model;
   return typeof model === 'string' && model.trim().length > 0 ? model.trim() : undefined;
 }
 

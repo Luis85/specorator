@@ -113,7 +113,7 @@ export function createOpencodePickerStore(
       } catch {
         // Metadata warmup is opportunistic; the first chat turn can still discover it.
       } finally {
-        runtime.cleanup();
+        void runtime.cleanup();
       }
     },
   };
@@ -382,7 +382,7 @@ async function loadModelCatalog(view: OpencodeCatalogView): Promise<void> {
     state.loadFailed = true;
   } finally {
     state.loading = false;
-    runtime.cleanup();
+    void runtime.cleanup();
     renderCatalog(view);
   }
 }

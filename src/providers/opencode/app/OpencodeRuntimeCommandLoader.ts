@@ -61,7 +61,7 @@ export class OpencodeRuntimeCommandLoader implements ProviderRuntimeCommandLoade
       return await runtime.getSupportedCommands();
     } finally {
       if (runtime !== context.runtime) {
-        runtime.cleanup();
+        void runtime.cleanup();
       }
     }
   }

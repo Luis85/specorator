@@ -64,7 +64,7 @@ export async function writeCursorMcpConfig(
   try {
     const raw = await fs.readFile(mcpJsonPath, 'utf-8');
     const parsed = JSON.parse(raw) as unknown;
-    existing = isPlainObject(parsed) ? (parsed as CursorMcpJsonShape) : null;
+    existing = isPlainObject(parsed) ? (parsed) : null;
   } catch {
     // Missing file or invalid JSON → treat as empty config.
   }

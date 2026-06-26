@@ -98,6 +98,7 @@
 /* ── Plan mode input border ──────────────────────── */
 
 .specorator-input-wrapper.specorator-input-plan-mode {
-  border-color: rgb(92, 148, 140) !important;
+  /* Compound selector (2 classes) already beats the single-class base border. */
+  border-color: rgb(92, 148, 140);
   box-shadow: 0 0 0 1px rgb(92, 148, 140);
 }

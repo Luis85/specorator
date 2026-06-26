@@ -66,7 +66,7 @@ export function resolveCursorAnswerLabels(
   answers: Record<string, string | string[]>,
   input: Record<string, unknown> | undefined,
 ): CursorLabeledAnswer[] {
-  const questions = Array.isArray(input?.questions) ? (input!.questions as unknown[]) : [];
+  const questions = Array.isArray(input?.questions) ? (input.questions as unknown[]) : [];
   const textByKey = new Map<string, string>();
   for (const q of questions) {
     if (!q || typeof q !== 'object') continue;

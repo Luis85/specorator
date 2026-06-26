@@ -30,7 +30,7 @@ export interface WorkOrderOption {
 
 export interface WorkOrderDetailModalCallbacks {
   onOpenNote(task: TaskSpec): void;
-  onOpenConversation?(task: TaskSpec): void;
+  onOpenConversation?: (task: TaskSpec) => void;
   /** Whether the linked conversation still exists and can be opened. Hides the button when false. */
   canOpenConversation?(task: TaskSpec): boolean;
   onRun?(task: TaskSpec): void;
@@ -334,7 +334,7 @@ export class WorkOrderDetailModal extends Modal {
 
     title.addEventListener('blur', commit);
     title.addEventListener('keydown', (evt) => {
-      const event = evt as KeyboardEvent;
+      const event = evt;
       // While an IME composition is active, Enter/Escape belong to the IME
       // (confirm / cancel the candidate) — don't treat them as commit/revert.
       if (event.isComposing) return;

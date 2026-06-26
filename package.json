@@ -47,7 +47,18 @@
     "type": "git",
     "url": "https://github.com/Luis85/specorator"
   },
+  "overrides": {
+    "@modelcontextprotocol/sdk": {
+      "hono": "^4.12.27",
+      "@hono/node-server": "^1.19.14",
+      "fast-uri": "^3.1.2",
+      "ip-address": "^10.2.0",
+      "qs": "^6.15.3"
+    },
+    "ws": "^8.21.0"
+  },
   "devDependencies": {
+    "@eslint-community/eslint-plugin-eslint-comments": "^4.7.2",
     "@eslint/js": "^10.0.1",
     "@types/jest": "^30.0.0",
     "@types/node": "^25.5.2",

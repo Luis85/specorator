@@ -752,7 +752,7 @@ export class StreamController {
       // call — guarding on `state.currentContentEl` here would mean the live
       // swap never fires on a normal completed turn (only after a reload).
       const liveContentEl =
-        (state.currentTextEl?.parentElement as HTMLElement | null | undefined)
+        (state.currentTextEl?.parentElement)
           ?? state.currentContentEl;
       const replacedWithCard =
         liveContentEl && state.currentTextEl

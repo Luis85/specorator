@@ -97,7 +97,7 @@ async function handleExitPlanMode(
  * the Claude Code CLI's built-in behavior.
  */
 function injectIsOther(input: ToolInput): void {
-  const questions = (input as Record<string, unknown>).questions;
+  const questions = (input).questions;
   if (!Array.isArray(questions)) return;
   for (const q of questions) {
     if (q && typeof q === 'object' && !('isOther' in q)) {

@@ -12,7 +12,7 @@ export interface SpecoratorToolManifest {
   description: string;
   input: z.ZodObject<z.ZodRawShape>;  // single schema -> validation + JSON schema
   // Reserved for a future result-validation pass; not yet consumed by the registry.
-  output?: z.ZodTypeAny;
+  output?: z.ZodType;
 }
 
 export interface ToolHostContext {

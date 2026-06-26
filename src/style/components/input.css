@@ -308,15 +308,17 @@
   height: 14px;
 }
 
-/* Light blue border when instruction mode is active */
+/* Light blue border when instruction mode is active.
+   Same specificity as the base wrapper border but defined later, so it wins
+   by source order without !important. */
 .specorator-input-instruction-mode {
-  border-color: #60a5fa !important;
+  border-color: #60a5fa;
   box-shadow: 0 0 0 1px #60a5fa;
 }
 
-/* Pink border when bash mode is active */
+/* Pink border when bash mode is active (wins by source order, as above) */
 .specorator-input-bang-bash-mode {
-  border-color: #f472b6 !important;
+  border-color: #f472b6;
   box-shadow: 0 0 0 1px #f472b6;
 }
 

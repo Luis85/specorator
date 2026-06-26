@@ -52,7 +52,7 @@ export function parsePersistedSkillIndex(
   const out = new Map<ProviderId, ProviderCommandEntry[]>();
   for (const [providerId, entries] of Object.entries(shape.buckets)) {
     if (!Array.isArray(entries)) continue;
-    out.set(providerId as ProviderId, entries as ProviderCommandEntry[]);
+    out.set(providerId, entries);
   }
   return out;
 }

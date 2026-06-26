@@ -1,7 +1,6 @@
 import { type DropdownComponent, Notice, Setting } from 'obsidian';
 
 import { ProviderRegistry } from '../../../../core/providers/ProviderRegistry';
-import type { ProviderId } from '../../../../core/providers/types';
 import { asSettingsBag } from '../../../../core/types/settings';
 import { t } from '../../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../../main';
@@ -178,7 +177,7 @@ export class AgentDetailEditor {
       modelDropdown.selectEl.empty();
       modelDropdown.addOption('', t('agentRoster.modelDefault'));
       const options = providerId
-        ? ProviderRegistry.getChatUIConfig(providerId as ProviderId).getModelOptions(settings)
+        ? ProviderRegistry.getChatUIConfig(providerId).getModelOptions(settings)
         : [];
       for (const o of options) modelDropdown.addOption(o.value, o.label);
       const current = this.draft.modelSelection?.modelId ?? '';
@@ -190,7 +189,7 @@ export class AgentDetailEditor {
       for (const id of providerIds) c.addOption(id, id);
       c.setValue(this.draft.providerOverride ?? '');
       c.onChange((v) => {
-        this.draft.providerOverride = (v || undefined) as ProviderId | undefined;
+        this.draft.providerOverride = (v || undefined);
         this.draft.modelSelection = undefined;
         populateModels(v);
         this.updateDirty();

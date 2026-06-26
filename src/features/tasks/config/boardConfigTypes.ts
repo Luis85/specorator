@@ -81,4 +81,4 @@ export const DEFAULT_BOARD_CONFIG: BoardConfig = Object.freeze({
     ),
   ) as BoardLaneConfig[],
   queue: Object.freeze({ paused: false }),
-}) as BoardConfig;
+});

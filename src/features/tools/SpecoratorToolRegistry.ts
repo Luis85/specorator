@@ -26,7 +26,13 @@ function evaluateModule(js: string, requireResolve: (id: string) => unknown): un
     throw new Error(`Cannot resolve module '${id}'`);
   };
   const module = { exports: {} as Record<string, unknown> };
-  const fn = new Function('module', 'exports', 'require', 'Z', `${js}\n//# sourceURL=specorator-tool`);
+  // eslint-disable-next-line no-new-func, @typescript-eslint/no-implied-eval -- user-authored vault tools (.specorator/tools/*) are transpiled then evaluated in a CommonJS-shaped sandbox; this dynamic evaluation IS the feature. Input is the user's own vault file, not remote/untrusted content.
+  const fn = new Function('module', 'exports', 'require', 'Z', `${js}\n//# sourceURL=specorator-tool`) as (
+    module: { exports: Record<string, unknown> },
+    exports: Record<string, unknown>,
+    require: (id: string) => unknown,
+    Z: unknown,
+  ) => void;
   const zodModule = requireResolve('zod') ?? { z };
   // Expose zod as `Z` global: if the resolved module has a `z` property (named export shape),
   // use that; otherwise assume the resolved value is the zod namespace directly.

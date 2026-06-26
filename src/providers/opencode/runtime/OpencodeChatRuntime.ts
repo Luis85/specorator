@@ -559,7 +559,7 @@ export class OpencodeChatRuntime implements ChatRuntime {
     };
     const updates: Partial<Conversation> = {
       providerState: Object.keys(providerState).length > 0
-        ? providerState as Record<string, unknown>
+        ? providerState
         : undefined,
       sessionId: this.sessionId,
     };
