@@ -195,7 +195,11 @@
       "unavailable": "Image is no longer available in the vault."
     },
     "editedFiles": {
-      "label": "已變更的檔案"
+      "label": "已變更的檔案",
+      "created": "新增 {count} 個",
+      "edited": "編輯 {count} 個",
+      "groupCreated": "新增",
+      "groupEdited": "編輯"
     },
     "fileOpen": {
       "notFound": "Could not open file: {path}",

@@ -195,7 +195,11 @@
       "unavailable": "Image is no longer available in the vault."
     },
     "editedFiles": {
-      "label": "Archivos modificados"
+      "label": "Archivos modificados",
+      "created": "{count} creados",
+      "edited": "{count} editados",
+      "groupCreated": "Creados",
+      "groupEdited": "Editados"
     },
     "fileOpen": {
       "notFound": "Could not open file: {path}",

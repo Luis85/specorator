@@ -195,7 +195,11 @@
       "unavailable": "Image is no longer available in the vault."
     },
     "editedFiles": {
-      "label": "変更されたファイル"
+      "label": "変更されたファイル",
+      "created": "{count} 件作成",
+      "edited": "{count} 件編集",
+      "groupCreated": "作成",
+      "groupEdited": "編集"
     },
     "fileOpen": {
       "notFound": "Could not open file: {path}",

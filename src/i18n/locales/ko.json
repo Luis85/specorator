@@ -195,7 +195,11 @@
       "unavailable": "Image is no longer available in the vault."
     },
     "editedFiles": {
-      "label": "변경된 파일"
+      "label": "변경된 파일",
+      "created": "{count}개 생성",
+      "edited": "{count}개 편집",
+      "groupCreated": "생성됨",
+      "groupEdited": "편집됨"
     },
     "fileOpen": {
       "notFound": "Could not open file: {path}",
