@@ -17,11 +17,12 @@ describe('createConsoleSink', () => {
     const sink = createConsoleSink(fake);
 
     sink(entry('error'));
+    sink(entry('warn'));
+    sink(entry('info'));
     sink(entry('debug'));
 
-    expect(calls[0][0]).toBe('error');
+    expect(calls.map((c) => c[0])).toEqual(['error', 'warn', 'info', 'debug']);
     expect(calls[0][1][0]).toBe('[area] hi');
     expect(calls[0][1][1]).toEqual({ a: 1 });
-    expect(calls[1][0]).toBe('debug');
   });
 });
