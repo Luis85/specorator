@@ -26,8 +26,12 @@ export class ChatWorkOrderLinker {
         currentNote: message.currentNote ?? null,
         conversationId,
       }),
+      { reveal: 'none' },
     );
-    if (created) new Notice(t('tasks.fromChat.createdFromMessage'));
+    if (created) {
+      new Notice(t('tasks.fromChat.createdFromMessage'));
+      await this.plugin.openWorkOrderInBoard(created);
+    }
     return created;
   }
 
@@ -40,8 +44,12 @@ export class ChatWorkOrderLinker {
     const created = await createWorkOrderFromSeed(
       this.plugin,
       buildConversationSeed({ conversationId: snapshot.id, conversationTitle: snapshot.title }),
+      { reveal: 'none' },
     );
-    if (created) new Notice(t('tasks.fromChat.createdFromConversation'));
+    if (created) {
+      new Notice(t('tasks.fromChat.createdFromConversation'));
+      await this.plugin.openWorkOrderInBoard(created);
+    }
     return created;
   }
 }
