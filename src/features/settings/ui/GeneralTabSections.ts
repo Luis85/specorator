@@ -112,6 +112,7 @@ export function renderMaxChatTabsSetting(
     slider
       .setLimits(3, 10, 1)
       .setValue(plugin.settings.maxChatTabs ?? 3)
+      .setDynamicTooltip()
       .onChange(async (value) => {
         plugin.settings.maxChatTabs = value;
         await plugin.saveSettings();

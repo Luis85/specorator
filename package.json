@@ -73,7 +73,7 @@
     "fallow": "^2.91.0",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
-    "obsidian": "^1.13.1",
+    "obsidian": "~1.12.3",
     "ts-jest": "^29.4.9",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
