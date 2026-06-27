@@ -20,6 +20,7 @@ import { encodeCursorTurn } from '../prompt/encodeCursorTurn';
 import { getCursorState, resolveCursorSessionId } from '../types';
 import { acquireCursorAgentSpawnLock } from './cursorAgentSpawnLock';
 import { buildCursorAnswerFollowUpPrompt } from './cursorAskUserQuestion';
+import { cleanupStaleCursorMcpServer } from './cursorMcpCleanup';
 import { forceKillCursorProcessTree } from './cursorProcessKill';
 import {
   awaitCursorExitCode,
@@ -46,6 +47,8 @@ export class CursorChatRuntime implements ChatRuntime {
   private askUserQuestionAbortController: AbortController | null = null;
   /** In-flight child termination, so a later cleanup() can await a cancel()-started kill. */
   private pendingTermination: Promise<void> | null = null;
+  /** One-shot guard for the dropped-tool-library `~/.cursor/mcp.json` migration. */
+  private staleMcpCleaned = false;
 
   constructor(plugin: PluginContext, host: RuntimeHost) {
     this.plugin = plugin;
@@ -130,6 +133,13 @@ export class CursorChatRuntime implements ChatRuntime {
       queryOptions,
       resumeId,
     });
+
+    // Migration: strip the dead loopback `specorator` entry older builds wrote to
+    // ~/.cursor/mcp.json (the HTTP tool server is gone). Once per runtime; never throws.
+    if (!this.staleMcpCleaned) {
+      this.staleMcpCleaned = true;
+      await cleanupStaleCursorMcpServer();
+    }
 
     const releaseSpawnLock = await acquireCursorAgentSpawnLock();
     let chunkTracker: CursorQueryChunkTracker;
