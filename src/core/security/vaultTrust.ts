@@ -73,7 +73,7 @@ function hasNonEmptyHooks(hooks: unknown): boolean {
   if (Array.isArray(hooks)) {
     return hooks.length > 0;
   }
-  return Object.keys(hooks as Record<string, unknown>).length > 0;
+  return Object.keys(hooks).length > 0;
 }
 
 const TRUSTED_VAULTS_KEY = 'trustedVaults';

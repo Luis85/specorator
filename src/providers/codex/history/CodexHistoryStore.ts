@@ -234,7 +234,7 @@ function extractReasoningText(payload: PersistedReasoningPayload | PersistedEven
 // Text extraction stays owned here; the persisted message/reasoning handlers in
 // codexPersistedItems.ts receive these so that module never imports the store.
 const persistedItemTextExtractors: PersistedItemTextExtractors = {
-  extractMessageText: (content) => extractMessageText(content as PersistedMessagePart[] | undefined),
+  extractMessageText: (content) => extractMessageText(content),
   isCodexSystemMessage,
   extractReasoningText: (payload) =>
     extractReasoningText(payload as PersistedReasoningPayload | PersistedEventPayload),
@@ -519,7 +519,7 @@ const PERSISTED_PAYLOAD_HANDLERS: Record<string, PersistedPayloadHandler> = {
   message: (payload, timestamp, _lineIndex, ctx) =>
     processPersistedMessagePayload(payload as PersistedMessagePayload, timestamp, ctx, persistedItemTextExtractors),
   reasoning: (payload, timestamp, _lineIndex, ctx) =>
-    processPersistedReasoningPayload(payload as PersistedReasoningPayload, timestamp, ctx, persistedItemTextExtractors),
+    processPersistedReasoningPayload(payload, timestamp, ctx, persistedItemTextExtractors),
   function_call: (payload, timestamp, _lineIndex, ctx) =>
     processPersistedToolCall(payload as PersistedToolCallPayload, timestamp, ctx),
   custom_tool_call: (payload, timestamp, _lineIndex, ctx) =>

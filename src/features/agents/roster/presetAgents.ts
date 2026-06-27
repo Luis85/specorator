@@ -5,7 +5,7 @@ import type { RosterAgent } from './rosterTypes';
 /**
  * A built-in starter agent the user can install on demand, mirroring the
  * work-order template presets. Specs carry only provider-neutral identity +
- * a system prompt; tools and skills start empty because those are vault-specific
+ * a system prompt; skills start empty because those are vault-specific
  * (the user grants them per agent from their own libraries afterward).
  */
 export interface PresetAgentSpec {
@@ -132,7 +132,6 @@ export function presetAgentToRosterAgent(spec: PresetAgentSpec, now: number): Ro
     name: spec.name,
     description: spec.description,
     prompt: spec.prompt,
-    tools: [],
     disallowedTools: [],
     skills: [],
     roles: spec.roles,

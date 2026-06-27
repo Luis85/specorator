@@ -275,7 +275,6 @@ export class OpencodeChatRuntime implements ChatRuntime {
 
   async ensureReady(
     options?: ChatRuntimeEnsureReadyOptions,
-    grantedToolIds?: string[],
   ): Promise<boolean> {
     const settings = getOpencodeProviderSettings(this.plugin.settings);
     if (!settings.enabled) {
@@ -291,7 +290,7 @@ export class OpencodeChatRuntime implements ChatRuntime {
       this.currentDatabasePath,
     );
     const promptSettings = this.getSystemPromptSettings(cwd);
-    const artifacts = await this.prepareLaunchArtifacts(promptSettings, runtimeEnv, cwd, grantedToolIds);
+    const artifacts = await prepareOpencodeLaunchArtifacts({ runtimeEnv, settings: promptSettings, workspaceRoot: cwd });
     this.currentDatabasePath = artifacts.databasePath;
 
     const nextLaunchKey = JSON.stringify({
@@ -353,14 +352,7 @@ export class OpencodeChatRuntime implements ChatRuntime {
     let shouldBootstrapHistory = previousMessages.length > 0
       && (!expectedSessionId || this.sessionInvalidated);
 
-    // Thread the bound agent's grant into the managed `mcp.specorator` config so
-    // it carries the scoped (per-grant) bearer token; an empty/absent grant
-    // yields today's all-tools default. Phase-1 limitation: Opencode's process +
-    // config are written once at spawn (ensureReady), not per-turn, so this
-    // scopes whichever conversation triggers the (re)spawn. Re-scoping a
-    // long-running process across conversations with *different* grants needs a
-    // live runtime — a Phase 2 concern; we do not re-spawn/rewrite config here.
-    if (!(await this.ensureReady(undefined, queryOptions?.boundAgentTools))) {
+    if (!(await this.ensureReady(undefined))) {
       yield { type: 'error', content: 'Failed to start OpenCode. Check the CLI path and login state.' };
       yield { type: 'done' };
       return;
@@ -559,7 +551,7 @@ export class OpencodeChatRuntime implements ChatRuntime {
     };
     const updates: Partial<Conversation> = {
       providerState: Object.keys(providerState).length > 0
-        ? providerState as Record<string, unknown>
+        ? providerState
         : undefined,
       sessionId: this.sessionId,
     };
@@ -1290,21 +1282,6 @@ export class OpencodeChatRuntime implements ChatRuntime {
     const baseMessage = error instanceof Error ? error.message : 'OpenCode request failed';
     const stderr = this.process?.getStderrSnapshot();
     return stderr ? `${baseMessage}\n\n${stderr}` : baseMessage;
-  }
-
-  private prepareLaunchArtifacts(
-    settings: SystemPromptSettings,
-    runtimeEnv: NodeJS.ProcessEnv,
-    cwd: string,
-    grantedToolIds?: string[],
-  ): ReturnType<typeof prepareOpencodeLaunchArtifacts> {
-    return prepareOpencodeLaunchArtifacts({
-      // Scoped to the bound agent's grant when present; empty/absent → all-tools.
-      httpToolServerConfig: this.plugin.getHttpToolServerConfig?.(grantedToolIds) ?? null,
-      runtimeEnv,
-      settings,
-      workspaceRoot: cwd,
-    });
   }
 
   private clearActiveSession(): void {

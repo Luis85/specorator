@@ -30,9 +30,6 @@ export interface ClaudeDynamicUpdateDeps {
   getPermissionMode: () => PermissionMode;
   resolveSDKPermissionMode: (mode: PermissionMode) => SDKPermissionMode;
   mcpManager: McpServerManager;
-  /** Optional in-process Specorator user-tool MCP server (Claude only). */
-  getSpecoratorToolServer?: () => unknown;
-  getSpecoratorToolKey?: () => string;
   buildPersistentQueryConfig: (
     vaultPath: string,
     cliPath: string,
@@ -188,14 +185,7 @@ async function updateMcpServers(
   const uiEnabledServers = queryOptions?.enabledMcpServers || new Set<string>();
   const combinedMentions = new Set([...mcpMentions, ...uiEnabledServers]);
   const mcpServers = deps.mcpManager.getActiveServers(combinedMentions);
-  // The in-process Specorator tool server (Claude only) is added after vetting —
-  // it's an `sdk`-type server, not a URL-based one. Track its presence in the
-  // key so toggling tools on/off re-applies (setMcpServers replaces the full set).
-  const specoratorToolServer = deps.getSpecoratorToolServer?.();
-  // Encode the scoped tool *contents* (not just presence) so a mid-session
-  // grant edit or a tool added/removed/errored re-applies the server.
-  const specoratorKey = specoratorToolServer ? `|specorator:${deps.getSpecoratorToolKey?.() ?? ''}` : '';
-  const mcpServersKey = JSON.stringify(mcpServers) + specoratorKey;
+  const mcpServersKey = JSON.stringify(mcpServers);
 
   const currentConfig = deps.getCurrentConfig();
   if (!currentConfig || mcpServersKey === currentConfig.mcpServersKey) {
@@ -213,11 +203,6 @@ async function updateMcpServers(
   const serverConfigs: Record<string, McpServerConfig> = {};
   for (const [name, config] of Object.entries(vetted.safe)) {
     serverConfigs[name] = config;
-  }
-  if (specoratorToolServer) {
-    // Key matches SPECORATOR_TOOL_SERVER_NAME in features/tools; kept as a literal
-    // because providers must not import from the features layer.
-    serverConfigs['specorator'] = specoratorToolServer as McpServerConfig;
   }
 
   try {

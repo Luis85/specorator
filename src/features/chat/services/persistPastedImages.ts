@@ -58,7 +58,7 @@ export async function persistPastedImages(
       const tFile: TFile = await app.vault.createBinary(targetPath, arrayBuffer);
       image.path = tFile.path;
       image.name = tFile.name;
-    } catch (err) {
+    } catch (err: unknown) {
       // Don't stop the batch on one failure — caller can still send base64 `data`.
       // Logger is optional but strongly recommended: silent EACCES/ENOSPC/bad-path
       // failures look like "image never saved" to the user with no way to debug.

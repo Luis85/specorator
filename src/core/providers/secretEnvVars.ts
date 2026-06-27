@@ -275,7 +275,7 @@ function migrateScopedBlob(
 // are materialized on insert (see resolveSnippetEnvText).
 function migrateSnippetBlobs(ctx: EnvSecretMigration): void {
   const snippets: Array<{ id?: unknown; envVars?: unknown }> = Array.isArray(ctx.settings.envSnippets)
-    ? ctx.settings.envSnippets
+    ? (ctx.settings.envSnippets as Array<{ id?: unknown; envVars?: unknown }>)
     : [];
   for (const snippet of snippets) {
     if (!snippet || typeof snippet.id !== 'string' || typeof snippet.envVars !== 'string') {
@@ -382,7 +382,7 @@ export function migrateEnvSecrets(
   // afterwards (it falls back to classifying that legacy blob) would drop
   // provider-owned lines that only lived in the legacy blob.
   const hadLegacy = typeof settings.environmentVariables === 'string'
-    && (settings.environmentVariables as string).length > 0;
+    && (settings.environmentVariables).length > 0;
   const sharedBlob = getSharedEnvironmentVariables(settings);
   const providerBlobs = new Map<ProviderId, string>(
     providerIds.map((id) => [id, getProviderEnvironmentVariables(settings, id)]),

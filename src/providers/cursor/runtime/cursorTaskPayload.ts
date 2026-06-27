@@ -15,7 +15,7 @@ export function parseCursorSubagentType(value: unknown): string | undefined {
     return undefined;
   }
 
-  const keys = Object.keys(value as Record<string, unknown>);
+  const keys = Object.keys(value);
   if (keys.length !== 1) {
     return undefined;
   }
@@ -66,7 +66,7 @@ export function extractCursorTaskResultText(success: Record<string, unknown> | u
   }
 
   for (let index = steps.length - 1; index >= 0; index -= 1) {
-    const step = steps[index];
+    const step: unknown = steps[index];
     if (!step || typeof step !== 'object') {
       continue;
     }

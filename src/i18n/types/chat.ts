@@ -59,8 +59,12 @@ export type ChatTranslationKey =
   | 'chat.fileOpen.notFound'
   | 'chat.fileOpen.failed'
 
-  // Chat - Files changed by the agent (edited-files strip)
+  // Chat - Files changed by the agent (edited-files badge + popover)
   | 'chat.editedFiles.label'
+  | 'chat.editedFiles.created'
+  | 'chat.editedFiles.edited'
+  | 'chat.editedFiles.groupCreated'
+  | 'chat.editedFiles.groupEdited'
 
   // Chat - Rewind
   | 'chat.rewind.confirmMessage'

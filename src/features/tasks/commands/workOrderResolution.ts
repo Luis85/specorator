@@ -1,7 +1,6 @@
 import { Notice } from 'obsidian';
 
 import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
-import type { ProviderId } from '../../../core/providers/types';
 import { t } from '../../../i18n/i18n';
 import type { TaskPriority, TaskStatus } from '../model/taskTypes';
 import {
@@ -22,11 +21,11 @@ export interface ResolvedRunTarget {
 /** Build the provider/model validators backed by the live registry + settings. */
 function registryValidators(settings: Record<string, unknown>): ProviderModelValidators {
   const isRegistered = (id: string): boolean =>
-    ProviderRegistry.getRegisteredProviderIds().includes(id as ProviderId);
+    ProviderRegistry.getRegisteredProviderIds().includes(id);
   return {
-    isValidProvider: (id) => isRegistered(id) && ProviderRegistry.isEnabled(id as ProviderId, settings),
+    isValidProvider: (id) => isRegistered(id) && ProviderRegistry.isEnabled(id, settings),
     ownsModel: (id, candidate) =>
-      isRegistered(id) && ProviderRegistry.getChatUIConfig(id as ProviderId).ownsModel(candidate, settings),
+      isRegistered(id) && ProviderRegistry.getChatUIConfig(id).ownsModel(candidate, settings),
   };
 }
 

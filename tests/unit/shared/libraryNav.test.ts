@@ -13,7 +13,7 @@ describe('renderLibraryNav', () => {
     renderLibraryNav(root, host, LIBRARY_VIEW_TYPES.skills);
 
     const items = Array.from(root.querySelectorAll('.specorator-library-nav-item')) as HTMLButtonElement[];
-    expect(items).toHaveLength(4);
+    expect(items).toHaveLength(3);
 
     const active = root.querySelector('.specorator-library-nav-item.is-active');
     expect(active?.textContent).toBe('Skills');

@@ -295,7 +295,7 @@ export class AgentBoardCardActions {
     // The hover cluster hides on mouseleave (it shows on card :hover/:focus-within);
     // keep it visible while THIS card's ⋯ menu is open so the trigger isn't
     // orphaned when the pointer moves onto the (body-portaled) menu.
-    const card = cluster.closest('.specorator-agent-board-card') as HTMLElement | null;
+    const card = cluster.closest('.specorator-agent-board-card');
 
     const popover = new PortalPopover({
       trigger,

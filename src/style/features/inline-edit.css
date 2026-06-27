@@ -1,9 +1,10 @@
 /* Inline Edit (CM6 decorations) */
 
-/* Selection highlight (shared by inline edit and chat) */
-.cm-line .specorator-selection-highlight,
-.specorator-selection-highlight {
-  background: var(--text-selection) !important;
+/* Selection highlight (shared by inline edit and chat). Applied only as a CM6
+   Decoration.mark, so it always lives inside `.cm-editor`; scoping there gives
+   the specificity to win over the editor's own line styling without `!important`. */
+.cm-editor .specorator-selection-highlight {
+  background: var(--text-selection);
   border-radius: 2px;
   padding: 3px 0;
   margin: -3px 0;
@@ -14,48 +15,50 @@
   background: var(--text-selection);
 }
 
-/* CM6 widget container - ensure transparent background */
-.cm-widgetBuffer,
-.cm-line.specorator-inline-input-line {
-  background: transparent !important;
+/* CM6 widget container - ensure transparent background. All inline-edit DOM is
+   mounted as CM6 widget/line decorations inside `.cm-editor`, so every rule below
+   is scoped there: that one extra class outranks the editor's and Obsidian's own
+   element-level styling (e.g. `.markdown-source-view input`, themed `button`),
+   which is what these declarations need to override — no `!important` required. */
+.cm-editor .cm-widgetBuffer,
+.cm-editor .cm-line.specorator-inline-input-line {
+  background: transparent;
 }
 
 /* Input container - fully transparent */
-.specorator-inline-input-container {
+.cm-editor .specorator-inline-input-container {
   display: flex;
   flex-direction: column;
   gap: 0;
   padding: 2px 0;
-  background: transparent !important;
+  background: transparent;
 }
 
 /* Input wrapper - contains input and spinner */
-.specorator-inline-input-wrap {
+.cm-editor .specorator-inline-input-wrap {
   flex: 1;
   position: relative;
-  background: transparent !important;
+  background: transparent;
   overflow: visible;
 }
 
 /* Input - fully transparent */
-.specorator-inline-input {
+.cm-editor .specorator-inline-input {
   width: 100%;
   padding: 4px 8px;
   padding-inline-end: 30px;
-  border-width: 1px !important;
-  border-style: solid !important;
-  border-color: var(--background-modifier-border) !important;
-  border-radius: 8px !important;
-  background: transparent !important;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: transparent;
   color: var(--text-normal);
-  font-family: var(--font-interface, -apple-system, BlinkMacSystemFont, sans-serif) !important;
-  font-size: var(--font-ui-small, 13px) !important;
+  font-family: var(--font-interface, -apple-system, BlinkMacSystemFont, sans-serif);
+  font-size: var(--font-ui-small, 13px);
 }
 
-.specorator-inline-input:focus,
-.specorator-inline-input:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
+.cm-editor .specorator-inline-input:focus,
+.cm-editor .specorator-inline-input:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .specorator-inline-input::placeholder {
@@ -155,28 +158,30 @@
   background: rgba(80, 200, 80, 0.2);
 }
 
-/* Accept/Reject buttons inline with diff */
-.specorator-inline-diff-buttons {
+/* Accept/Reject buttons inline with diff. Rendered inside a CM6 DiffWidget, so
+   scoping under `.cm-editor` outranks Obsidian's themed `button` styling and
+   strips its chrome (border/background/shadow/focus ring) without `!important`. */
+.cm-editor .specorator-inline-diff-buttons {
   display: inline-flex;
   gap: 8px;
   margin-inline-start: 6px;
-  background: none !important;
+  background: none;
 }
 
-.specorator-inline-diff-btn {
+.cm-editor .specorator-inline-diff-btn {
   padding: 4px 6px;
-  border: none !important;
-  background: none !important;
-  box-shadow: none !important;
-  outline: none !important;
+  border: none;
+  background: none;
+  box-shadow: none;
+  outline: none;
   font-size: 16px;
   cursor: pointer;
 }
 
-.specorator-inline-diff-btn.reject {
+.cm-editor .specorator-inline-diff-btn.reject {
   color: var(--color-red);
 }
 
-.specorator-inline-diff-btn.accept {
+.cm-editor .specorator-inline-diff-btn.accept {
   color: var(--color-green);
 }

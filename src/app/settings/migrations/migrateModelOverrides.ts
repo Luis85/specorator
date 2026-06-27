@@ -79,7 +79,7 @@ function isEmptyRecord(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return true;
   }
-  return Object.keys(value as Record<string, unknown>).length === 0;
+  return Object.keys(value).length === 0;
 }
 
 function normalizeModelKeyedRecord<T>(

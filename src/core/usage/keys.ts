@@ -1,4 +1,3 @@
-import type { ProviderId } from '../providers/types';
 import type { UsageEntryKind, UsageKey } from './types';
 
 const QUICK_ACTION_PROVIDER_SLOT = '_';
@@ -43,5 +42,5 @@ export function parseKey(serialized: string): UsageKey | null {
   if (providerSlot === QUICK_ACTION_PROVIDER_SLOT) {
     return { kind, name };
   }
-  return { kind, name, providerId: providerSlot as ProviderId };
+  return { kind, name, providerId: providerSlot };
 }

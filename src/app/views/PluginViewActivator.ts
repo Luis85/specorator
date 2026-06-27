@@ -1,4 +1,4 @@
-import type { WorkspaceLeaf } from 'obsidian';
+import type { TFile, WorkspaceLeaf } from 'obsidian';
 
 import { VIEW_TYPE_SPECORATOR, VIEW_TYPE_SPECORATOR_AGENT_BOARD } from '@/core/types';
 import type { ChatViewPlacement } from '@/core/types/settings';
@@ -121,6 +121,21 @@ export class PluginViewActivator {
     const view = leaf?.view;
     if (view instanceof AgentBoardView) {
       await view.runNextReady();
+    }
+  }
+
+  /**
+   * Reveal the Agent Board (creating its leaf if needed) and open the work-order
+   * detail modal for a freshly created note. Backs the file/folder right-click
+   * "Create work order" flow so it surfaces the modal — with the board's full
+   * action wiring — instead of opening the raw note.
+   */
+  async openWorkOrderInBoard(file: TFile): Promise<void> {
+    await this.activateAgentBoardView();
+    const leaf = this.plugin.app.workspace.getLeavesOfType(VIEW_TYPE_SPECORATOR_AGENT_BOARD)[0];
+    const view = leaf?.view;
+    if (view instanceof AgentBoardView) {
+      await view.openDetailForFile(file);
     }
   }
 

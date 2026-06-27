@@ -3,6 +3,5 @@ export type RibbonTranslationKey =
   | 'ribbon.openChat'
   | 'ribbon.openAgentBoard'
   | 'ribbon.openAgentRoster'
-  | 'ribbon.openToolLibrary'
   | 'ribbon.openSkillLibrary'
   | 'ribbon.openLoopLibrary';

@@ -56,8 +56,8 @@ export function redactArgs(args: unknown[]): unknown[] {
 function redactValue(value: unknown, seen: WeakSet<object>): unknown {
   if (typeof value === 'string') return scrubString(value);
   if (value === null || typeof value !== 'object') return value;
-  if (seen.has(value as object)) return '[circular]';
-  seen.add(value as object);
+  if (seen.has(value)) return '[circular]';
+  seen.add(value);
 
   if (Array.isArray(value)) {
     return value.map((item) => redactValue(item, seen));

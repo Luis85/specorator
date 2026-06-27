@@ -70,8 +70,6 @@ export interface ColdStartQueryContext extends QueryOptionsContext {
   allowedTools?: string[];
   hasEditorContext: boolean;
   externalContextPaths?: string[];
-  /** Optional in-process Specorator user-tool MCP server (Claude only). */
-  getSpecoratorToolServer?: () => unknown;
 }
 
 export class QueryOptionsBuilder {
@@ -227,12 +225,6 @@ export class QueryOptionsBuilder {
     const mcpServers: Record<string, unknown> = {
       ...ctx.mcpManager.getActiveServers(combinedMentions),
     };
-    const specoratorToolServer = ctx.getSpecoratorToolServer?.();
-    if (specoratorToolServer) {
-      // Key must match SPECORATOR_TOOL_SERVER_NAME in features/tools; kept as a
-      // literal because providers must not import from the features layer.
-      mcpServers['specorator'] = specoratorToolServer;
-    }
 
     if (Object.keys(mcpServers).length > 0) {
       options.mcpServers = mcpServers as typeof options.mcpServers;

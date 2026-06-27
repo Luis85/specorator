@@ -70,7 +70,7 @@ function registerModelFields(r: Registry): void {
       kind: 'dropdown',
       options: (settings) => {
         const config = ProviderRegistry.getChatUIConfig('opencode');
-        const modes = config.getAvailableModes?.(settings as Record<string, unknown>) ?? [];
+        const modes = config.getAvailableModes?.(settings) ?? [];
         return modes.map((mode) => ({ value: mode.id, label: mode.label }));
       },
     },

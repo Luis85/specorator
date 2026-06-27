@@ -188,7 +188,7 @@ export class EnvironmentApplyService {
         for (const id of registered) affected.add(id);
         continue;
       }
-      const id = scope.slice('provider:'.length) as ProviderId;
+      const id = scope.slice('provider:'.length);
       if (registered.has(id)) affected.add(id);
     }
     return Array.from(affected);

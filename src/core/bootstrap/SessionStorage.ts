@@ -222,7 +222,7 @@ export class SessionStorage {
       const content = await fs.readFile(nodePath.join(absSessionsDir, INDEX_FILE_NAME), 'utf8');
       const parsed = JSON.parse(content) as Partial<SessionIndexFile>;
       if (parsed.version !== INDEX_VERSION || !Array.isArray(parsed.entries)) return null;
-      return parsed.entries as SessionMetadata[];
+      return parsed.entries;
     } catch {
       return null;
     }

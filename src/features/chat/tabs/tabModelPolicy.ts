@@ -28,9 +28,9 @@ export function getBlankTabModelOptions(
 export function resolveBlankTabDefaultProviderId(settings: Record<string, unknown>): ProviderId {
   const current = settings.settingsProvider;
   if (typeof current === 'string'
-    && ProviderRegistry.getRegisteredProviderIds().includes(current as ProviderId)
-    && ProviderRegistry.isEnabled(current as ProviderId, settings)) {
-    return current as ProviderId;
+    && ProviderRegistry.getRegisteredProviderIds().includes(current)
+    && ProviderRegistry.isEnabled(current, settings)) {
+    return current;
   }
   return ProviderRegistry.getEnabledProviderIds(settings)[0] ?? DEFAULT_CHAT_PROVIDER_ID;
 }

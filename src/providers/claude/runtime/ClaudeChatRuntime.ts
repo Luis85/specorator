@@ -184,7 +184,6 @@ export class ClaudeChatRuntime implements ChatRuntime {
   // picks them up from buildPersistentQueryOptions at startPersistentQuery time.
   private currentBoundAgentPrompt: string | undefined;
   private currentBoundAgentModel: string | undefined;
-  private currentBoundAgentTools: string[] | undefined;
 
   // Current allowed tools for canUseTool enforcement (null = no restriction)
   private currentAllowedTools: string[] | null = null;
@@ -1361,7 +1360,6 @@ export class ClaudeChatRuntime implements ChatRuntime {
     // sees the correct values when a restart is triggered inside maybeRestart.
     this.currentBoundAgentPrompt = queryOptions?.boundAgentPrompt;
     this.currentBoundAgentModel = queryOptions?.boundAgentModel;
-    this.currentBoundAgentTools = queryOptions?.boundAgentTools;
 
     await this.applyTurnToolRestrictions(queryOptions);
 
@@ -1466,13 +1464,9 @@ export class ClaudeChatRuntime implements ChatRuntime {
         // the settings panel; when a non-Claude provider (e.g. Codex) is active
         // in YOLO mode, `plugin.settings.permissionMode` carries that provider's
         // value and would incorrectly override Claude's own saved safe-mode.
-        getPermissionMode: () => this.getScopedSettings().permissionMode as PermissionMode,
+        getPermissionMode: () => this.getScopedSettings().permissionMode,
         resolveSDKPermissionMode: (mode) => this.resolveSDKPermissionMode(mode),
         mcpManager: this.mcpManager,
-        getSpecoratorToolServer: this.plugin.getSpecoratorToolServer
-          ? () => this.plugin.getSpecoratorToolServer!(this.currentBoundAgentTools)
-          : undefined,
-        getSpecoratorToolKey: () => this.plugin.getSpecoratorToolKey?.(this.currentBoundAgentTools) ?? '',
         buildPersistentQueryConfig: (vaultPath, cliPath, externalContextPaths, boundAgentPrompt) =>
           this.buildPersistentQueryConfig(vaultPath, cliPath, externalContextPaths, undefined, boundAgentPrompt),
         needsRestart: (newConfig) => this.needsRestart(newConfig),
@@ -1506,7 +1500,6 @@ export class ClaudeChatRuntime implements ChatRuntime {
     // on the cold-start path (covers direct cold-starts and restarts from queryViaPersistent).
     this.currentBoundAgentPrompt = queryOptions?.boundAgentPrompt;
     this.currentBoundAgentModel = queryOptions?.boundAgentModel;
-    this.currentBoundAgentTools = queryOptions?.boundAgentTools;
     const selectedModel = queryOptions?.model || this.getScopedSettings().model;
 
     this.sessionManager.setPendingModel(selectedModel);
@@ -1576,9 +1569,6 @@ export class ClaudeChatRuntime implements ChatRuntime {
       allowedTools: resolveColdStartAllowedTools(queryOptions?.allowedTools),
       hasEditorContext,
       externalContextPaths,
-      getSpecoratorToolServer: this.plugin.getSpecoratorToolServer
-        ? () => this.plugin.getSpecoratorToolServer!(this.currentBoundAgentTools)
-        : undefined,
     };
 
     return QueryOptionsBuilder.buildColdStartQueryOptions(ctx);
@@ -1689,7 +1679,6 @@ export class ClaudeChatRuntime implements ChatRuntime {
     // Clear bound-agent state so the next conversation starts without stale overrides
     this.currentBoundAgentPrompt = undefined;
     this.currentBoundAgentModel = undefined;
-    this.currentBoundAgentTools = undefined;
 
     this.sessionManager.reset();
   }
@@ -1772,7 +1761,6 @@ export class ClaudeChatRuntime implements ChatRuntime {
       // The correct bound-agent values are threaded per-turn from queryOptions.
       this.currentBoundAgentPrompt = undefined;
       this.currentBoundAgentModel = undefined;
-      this.currentBoundAgentTools = undefined;
     }
 
     this.sessionManager.setSessionId(id, this.getScopedSettings().model);
@@ -1828,7 +1816,7 @@ export class ClaudeChatRuntime implements ChatRuntime {
       host: this.host,
       // Same projection fix as applyDynamicUpdates: read the Claude-projected
       // mode so ExitPlanMode restores the correct post-plan permission level.
-      getPermissionMode: () => this.getScopedSettings().permissionMode as PermissionMode,
+      getPermissionMode: () => this.getScopedSettings().permissionMode,
       resolveSDKPermissionMode: (mode) => this.resolveSDKPermissionMode(mode),
       syncPermissionMode: (mode, sdkMode) => {
         if (this.currentConfig) {

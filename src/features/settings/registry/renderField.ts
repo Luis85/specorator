@@ -10,7 +10,7 @@ import type { SettingsCtx, SettingsField } from './SettingsField';
 // the live object (passed by reference from `plugin.settings`) keeps the
 // persisted state in sync.
 function writeAndSave(ctx: SettingsCtx, id: string, value: unknown): Promise<void> {
-  writePathInPlace(ctx.settings as object, id, value);
+  writePathInPlace(ctx.settings, id, value);
   return ctx.saveSettings();
 }
 
@@ -96,7 +96,9 @@ export function renderField(
     case 'dropdown': {
       const opts = fieldType.options(ctx.settings);
       setting.addDropdown((d) => {
-        opts.forEach((o) => d.addOption(o.value, o.label));
+        opts.forEach((o) => {
+          d.addOption(o.value, o.label);
+        });
         d.setValue(String(current ?? ''));
         d.onChange(async (v: string) => {
           await writeAndSave(ctx, field.id, v);

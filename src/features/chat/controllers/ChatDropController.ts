@@ -54,7 +54,7 @@ export class ChatDropController {
   }
 
   init(): void {
-    const wrapper = this.containerEl.querySelector('.specorator-input-wrapper') as HTMLElement | null;
+    const wrapper = this.containerEl.querySelector<HTMLElement>('.specorator-input-wrapper');
     if (!wrapper) return;
     this.inputWrapperEl = wrapper;
 
@@ -80,7 +80,7 @@ export class ChatDropController {
     e.stopPropagation();
     if (!this.overlayEl || !this.overlayLabelEl) return;
 
-    const payload = this.peekPayload(e.dataTransfer as DataTransfer | null);
+    const payload = this.peekPayload(e.dataTransfer);
     const labelKey = pickOverlayLabel(payload);
     if (!labelKey) return;
 

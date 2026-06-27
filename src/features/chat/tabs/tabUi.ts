@@ -88,8 +88,8 @@ function initializeContextManagers(tab: TabData, plugin: SpecoratorPlugin): void
   );
 
   tab.ui.chatDropController = new ChatDropController(dom.inputContainerEl, {
-    fileContext: tab.ui.fileContextManager!,
-    imageContext: tab.ui.imageContextManager!,
+    fileContext: tab.ui.fileContextManager,
+    imageContext: tab.ui.imageContextManager,
     getVaultPath: () => getVaultPath(app) ?? '',
     getExternalContexts: () => tab.ui.externalContextSelector?.getExternalContexts() || [],
     getDragManager: () => {
@@ -363,10 +363,10 @@ function initializeInputToolbar(
       if (current === planValue) {
         const restoreMode = tab.state.prePlanPermissionMode ?? 'normal';
         tab.state.prePlanPermissionMode = null;
-        await updatePlanModeUI(tab, plugin, restoreMode);
+        updatePlanModeUI(tab, plugin, restoreMode);
       } else {
         tab.state.prePlanPermissionMode = current;
-        await updatePlanModeUI(tab, plugin, planValue);
+        updatePlanModeUI(tab, plugin, planValue);
       }
     },
   });

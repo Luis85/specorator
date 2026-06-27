@@ -242,7 +242,7 @@ function parseToolCompletion(record: Record<string, unknown>): CursorToolComplet
         content: capCursorToolResultLength(normalized.content),
         isError: normalized.isError,
         ...(normalized.toolUseResult
-          ? { toolUseResult: normalized.toolUseResult as SDKToolUseResult }
+          ? { toolUseResult: normalized.toolUseResult }
           : {}),
       };
     }

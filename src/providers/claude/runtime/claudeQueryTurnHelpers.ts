@@ -285,7 +285,7 @@ export function computeClaudeSessionUpdates(args: {
   return {
     updates: {
       sessionId: resolvedSessionId,
-      providerState: newProviderState as Record<string, unknown>,
+      providerState: newProviderState,
     },
   };
 }

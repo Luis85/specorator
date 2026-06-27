@@ -19,8 +19,8 @@ export interface CapabilityPickerOptions {
 }
 
 /**
- * Collapsible capability selector shared by the Skills and Tools sections of the
- * agent detail editor. Collapsed: a count + removable chips of the selection.
+ * Collapsible capability selector for the Skills section of the agent detail
+ * editor. Collapsed: a count + removable chips of the selection.
  * Expanded: a search box + a scrollable checklist with selected items sorted
  * first. Every selection change re-renders the chips/count and calls `onChange`.
  */

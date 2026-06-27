@@ -11,9 +11,9 @@ export interface CliPathTextControlOptions {
   validationHost: HTMLElement;
   placeholder: string;
   currentValue: string;
-  validate(value: string): string | null;
+  validate: (value: string) => string | null;
   /** Persist the validated value (already trimmed; '' clears the host entry). */
-  persist(trimmed: string): Promise<void>;
+  persist: (trimmed: string) => Promise<void>;
 }
 
 /** Standard CLI-path rule: the value must point to an existing file. */

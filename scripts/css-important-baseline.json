@@ -1,0 +1,4 @@
+{
+  "description": "Grandfathered stylesheets using `!important` (comments excluded). Counts may shrink but not grow; a new `!important` in any other file is rejected. Regenerate with `npm run check:css -- --update`.",
+  "allowlist": {}
+}

@@ -15,11 +15,14 @@ export function createConsoleSink(
    
   target: ConsoleLike = console,
 ): LogSink {
+  // Arrow wrappers rather than `.bind`: some TS lib versions type
+  // `Function.prototype.bind` as returning `any`, which trips the marketplace
+  // validator's no-unsafe-assignment. Direct calls preserve `target` as `this`.
   const methods: Record<EmittableLevel, (...args: unknown[]) => void> = {
-    error: target.error.bind(target),
-    warn: target.warn.bind(target),
-    info: target.info.bind(target),
-    debug: target.debug.bind(target),
+    error: (...args) => target.error(...args),
+    warn: (...args) => target.warn(...args),
+    info: (...args) => target.info(...args),
+    debug: (...args) => target.debug(...args),
   };
   return (entry: LogEntry) => {
     methods[entry.level](`[${entry.scope}] ${entry.msg}`, ...entry.args);

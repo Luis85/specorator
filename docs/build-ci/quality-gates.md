@@ -25,6 +25,7 @@ usage, and where this repo diverges from the generic fallow template — see
 |------|---------|--------|-----------------|
 | Lint (errors) | `npm run lint` | `lint` | Error-level rules block CI. Warnings print but do **not** fail — see "Lint severity policy" below. |
 | LOC guard | `npm run check:loc` | `lint` | New `src/**/*.ts` files above the cap; grandfathered hotspots that grow; stale baseline entries. |
+| CSS !important guard | `npm run check:css` | `lint` | New `!important` in any `src/style/**/*.css` not on `scripts/css-important-baseline.json`; baselined files that gain more; stale entries. Mirrors the marketplace validator's CSS finding. Comments excluded. |
 | Quality ratchet | `npm run check:quality` | `quality` | A fallow metric (dead code, duplication, complexity, maintainability) regressing past `scripts/quality-baseline.json`. See "Fallow quality ratchet" below. |
 | Typecheck | `npm run typecheck` | `typecheck` | Type regressions. |
 | Tests | `npm run test` | `test` (Linux + Windows) | Behavior regressions on both path/spawn targets. |
@@ -43,7 +44,7 @@ verified (aligned 2026-06-09; see
 Run the whole local set before pushing:
 
 ```bash
-npm run lint && npm run check:loc && npm run check:quality && npm run typecheck && npm run test && npm run build && npm run check:artifacts
+npm run lint && npm run check:loc && npm run check:css && npm run check:quality && npm run typecheck && npm run test && npm run build && npm run check:artifacts
 ```
 
 Optional, before opening a PR — surfaces fallow findings on changed files vs
@@ -96,6 +97,25 @@ assertion (outside the allowlisted `assertFunctionNames` wrappers), or a committ
 `.skip`/commented-out test, now fails CI instead of printing a warning.
 `eslint --print-config` confirms no rule remains at `warn`.
 
+### Directive-comment discipline (2026-06-26)
+
+Mirrors the Obsidian marketplace validator so its findings fail `npm run lint`
+locally instead of surfacing at submission. Scoped to `src/**/*.ts` (the bot
+lints plugin source only), via `@eslint-community/eslint-plugin-eslint-comments`:
+
+- `require-description` (`error`) — every `eslint-disable*` must carry a `--`
+  justification.
+- `no-restricted-disable` (`error`) — `@typescript-eslint/no-explicit-any` and
+  `obsidianmd/ui/sentence-case` may not be silenced inline; fix the code or
+  whitelist the term in the `sentence-case` `brands`/`ignoreWords` config.
+- `reportUnusedDisableDirectives` promoted `warn` → `error` — a stale disable now
+  blocks CI.
+
+The Function-constructor pair (`no-new-func`, `@typescript-eslint/no-implied-eval`,
+`error`, src only) was enabled the same day so the user-tool sandbox's justified
+disable is exercised locally rather than discovered by the bot. See
+[`docs/tech-debt/2026-06-26-obsidian-marketplace-review.md`](../tech-debt/2026-06-26-obsidian-marketplace-review.md).
+
 ## LOC guard
 
 `scripts/check-loc.mjs` counts nonblank lines for every `src/**/*.ts` file and
@@ -117,6 +137,53 @@ npm run check:loc -- --update
 
 The per-file `reason` is the documented exception path the oversized-modules
 tech debt asks for; the largest hotspots carry their planned split.
+
+## CSS !important guard
+
+`scripts/check-css-important.mjs` counts `!important` (CSS comments excluded) in
+every `src/style/**/*.css` and ratchets against
+`scripts/css-important-baseline.json`, mirroring the LOC guard. Added after the
+2026-06-26 marketplace review (`docs/tech-debt/2026-06-26-obsidian-marketplace-review*.md`),
+whose validator flags every `!important` — a finding we previously had no way to
+reproduce locally.
+
+- Stylesheets with zero `!important` are always fine.
+- A new `!important` in a non-baselined file fails. Re-scope by specificity or
+  CSS variables (see `src/style/CLAUDE.md`: `!important` is permitted only when
+  overriding Obsidian defaults), or add a baseline entry with a `reason`.
+- Grandfathered stylesheets may **shrink** but never gain more `!important`.
+- A baselined file that drops below its recorded count or is deleted goes stale
+  and fails — keeping the baseline minimal and honest.
+
+```bash
+npm run check:css -- --update
+```
+
+Baseline at adoption: `inline-edit.css` (18, CM6 widget overrides) and
+`container.css` (3, visibility-toggle utilities). Both were cleared in the
+2026-06-27 marketplace-readiness pass by re-scoping rather than `!important`:
+the inline-edit rules are scoped under `.cm-editor` (the extra class outranks
+Obsidian's element-level `input`/`button` theming), and the `container.css`
+visibility utilities are tripled (`.specorator-hidden.specorator-hidden.specorator-hidden`)
+to reach 0-3-0 specificity — above the two-class component `display` rules they
+collide with (e.g. `.specorator-header .specorator-tab-bar-container`). The
+allowlist is now empty — the whole `src/style/` tree is `!important`-free, so
+any new use fails the gate.
+
+## Type-aware lint additions (2026-06-26, part 3)
+
+Two rules tightened so the marketplace validator's type findings fail locally:
+
+- **`@typescript-eslint/no-unnecessary-type-assertion`** (`error`, src) —
+  re-enabled after the part-3 review. The part-1 false positives were
+  load-bearing DOM `as` casts, now rewritten as generic type parameters
+  (`querySelector<HTMLElement>(...)`). One cross-lib exception in
+  `SpecoratorView.ts` (the bound-`load` cast) carries a justified inline disable:
+  our newer TS lib types `Function.prototype.bind` precisely (reads the cast as
+  redundant) while the validator's older lib needs it.
+- **`useUnknownInCatchVariables: true`** (`tsconfig.json`) — caught variables are
+  `unknown`, not `any`, so error handling can't silently propagate `any`. Zero
+  fallout at adoption.
 
 ## Artifact smoke
 

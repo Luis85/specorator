@@ -1,5 +1,4 @@
 import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
-import type { ProviderId } from '../../../core/providers/types';
 import { buildAgentOptions, buildPersonaResolverFromAgents, type PersonaResolver } from '../../agents/personaRegistry';
 import type { RosterAgent } from '../../agents/roster/rosterTypes';
 
@@ -27,8 +26,8 @@ export function buildWorkOrderFieldOptions(
     getProviderOptions: () =>
       ProviderRegistry.getEnabledProviderIds(settings).map((id) => ({ value: id, label: id })),
     getModelOptions: (providerId) =>
-      ProviderRegistry.getRegisteredProviderIds().includes(providerId as ProviderId)
-        ? ProviderRegistry.getChatUIConfig(providerId as ProviderId).getModelOptions(settings)
+      ProviderRegistry.getRegisteredProviderIds().includes(providerId)
+        ? ProviderRegistry.getChatUIConfig(providerId).getModelOptions(settings)
         : [],
     getAgentOptions: () => buildAgentOptions(agents),
     resolvePersona: buildPersonaResolverFromAgents(agents),

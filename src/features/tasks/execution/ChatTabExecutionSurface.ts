@@ -1,4 +1,3 @@
-import type { ProviderId } from '../../../core/providers/types';
 import type SpecoratorPlugin from '../../../main';
 import type { TaskSpec } from '../model/taskTypes';
 import { ChatTabStreamAdapter } from './ChatTabStreamAdapter';
@@ -40,7 +39,7 @@ export class ChatTabExecutionSurface implements TaskExecutionSurface {
 
     const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const handle = await view.startTaskRunInFreshTab({
-      providerId: provider as ProviderId,
+      providerId: provider,
       model,
       prompt: options.prompt,
       tabReservation: options.tabReservation,
@@ -78,7 +77,7 @@ export class ChatTabExecutionSurface implements TaskExecutionSurface {
 
     await view.injectCommitTurnForConversation({
       conversationId: task.frontmatter.conversation_id ?? null,
-      fallbackProviderId: provider as ProviderId,
+      fallbackProviderId: provider,
       fallbackModel: model,
       prompt,
     });

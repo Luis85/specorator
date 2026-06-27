@@ -18,7 +18,7 @@ import { buildCursorAgentEnvironment } from './cursorAgentEnv';
 import { resolveCursorModelSelectionForCli } from './cursorCliModel';
 import { buildCursorAgentPrompt, resolveCursorCliPromptArg } from './cursorCliPrompt';
 import { resolveCursorLaunch } from './cursorLaunch';
-import { buildCursorAgentFlagArgs, type CursorPermissionMode } from './cursorLaunchArgs';
+import { buildCursorAgentFlagArgs } from './cursorLaunchArgs';
 import { getCachedCursorModelIds } from './cursorModelCatalog';
 
 export interface CursorQueryLaunchPlan {
@@ -45,7 +45,7 @@ export function resolveCursorQueryLaunch(params: {
   const { plugin, cli, turn, conversationHistory, queryOptions, resumeId } = params;
 
   const workspaceDir = getVaultPath(plugin.app) ?? process.cwd();
-  const permissionMode = plugin.settings.permissionMode as CursorPermissionMode;
+  const permissionMode = plugin.settings.permissionMode;
   const snapshot = ProviderSettingsCoordinator.getProviderSettingsSnapshot(
     asSettingsBag(plugin.settings),
     'cursor',
@@ -86,9 +86,9 @@ type ChildProcess = ReturnType<typeof spawn>;
 export interface SpawnedCursorChild {
   child: ChildProcess;
   /** True once the child emitted a spawn `error` (ENOENT/EINVAL/EPERM). */
-  hadSpawnError(): boolean;
+  hadSpawnError: () => boolean;
   /** Accumulated stderr plus the spawn error message, if any. */
-  stderrText(): string;
+  stderrText: () => string;
 }
 
 /**

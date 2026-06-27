@@ -176,8 +176,8 @@ export class TabBar {
    */
   private handleRovingKey(e: KeyboardEvent, badgeEl: HTMLElement): boolean {
     const badges = Array.from(
-      this.containerEl.querySelectorAll('.specorator-tab-badge'),
-    ) as HTMLElement[];
+      this.containerEl.querySelectorAll<HTMLElement>('.specorator-tab-badge'),
+    );
     const current = badges.indexOf(badgeEl);
     if (current === -1 || badges.length === 0) return false;
 

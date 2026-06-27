@@ -99,7 +99,7 @@ export class CommitOnAcceptCoordinator {
     });
 
     if (choice.dontAskAgain) {
-      const bag = this.deps.readSettings() as { promptCommitOnAccept?: boolean };
+      const bag = this.deps.readSettings();
       bag.promptCommitOnAccept = false;
       try {
         await this.deps.saveSettings();

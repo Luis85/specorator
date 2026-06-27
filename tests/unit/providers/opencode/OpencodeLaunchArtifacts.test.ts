@@ -140,56 +140,6 @@ describe('buildOpencodeManagedConfig', () => {
     });
   });
 
-  it('adds mcp.specorator remote entry when an httpToolServerConfig is provided', () => {
-    const result = buildOpencodeManagedConfig(
-      {},
-      '/vault/.specorator/opencode/system.md',
-      undefined,
-      undefined,
-      undefined,
-      { url: 'http://127.0.0.1:54321/mcp', headers: { Authorization: 'Bearer test-token' } },
-    );
-    expect(result.mcp).toEqual({
-      specorator: {
-        type: 'remote',
-        url: 'http://127.0.0.1:54321/mcp',
-        headers: { Authorization: 'Bearer test-token' },
-        enabled: true,
-      },
-    });
-  });
-
-  it('omits mcp.specorator when httpToolServerConfig is null', () => {
-    const result = buildOpencodeManagedConfig(
-      {},
-      '/vault/.specorator/opencode/system.md',
-      undefined,
-      undefined,
-      undefined,
-      null,
-    );
-    expect(result.mcp).toBeUndefined();
-  });
-
-  it('omits mcp.specorator when httpToolServerConfig is not provided', () => {
-    const result = buildOpencodeManagedConfig({}, '/vault/.specorator/opencode/system.md');
-    expect(result.mcp).toBeUndefined();
-  });
-
-  it('merges mcp.specorator with existing mcp entries from base config', () => {
-    const result = buildOpencodeManagedConfig(
-      { mcp: { other: { type: 'stdio', command: 'my-server' } } },
-      '/vault/.specorator/opencode/system.md',
-      undefined,
-      undefined,
-      undefined,
-      { url: 'http://127.0.0.1:54321/mcp', headers: { Authorization: 'Bearer token' } },
-    );
-    expect(result.mcp).toMatchObject({
-      other: { type: 'stdio', command: 'my-server' },
-      specorator: { type: 'remote', enabled: true },
-    });
-  });
 });
 
 describe('prepareOpencodeLaunchArtifacts', () => {

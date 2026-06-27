@@ -127,7 +127,7 @@ export const opencodeChatUIConfig: ProviderChatUIConfig = {
     } catch {
       // Metadata warmup is opportunistic; the first real turn can still discover it.
     } finally {
-      runtime.cleanup();
+      void runtime.cleanup();
     }
   },
 

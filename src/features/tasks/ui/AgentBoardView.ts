@@ -2,7 +2,6 @@ import type { TAbstractFile, WorkspaceLeaf } from 'obsidian';
 import { ItemView, Notice, TFile } from 'obsidian';
 
 import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
-import type { ProviderId } from '../../../core/providers/types';
 import { VIEW_TYPE_SPECORATOR_AGENT_BOARD } from '../../../core/types/chat';
 import { asSettingsBag } from '../../../core/types/settings';
 import { t } from '../../../i18n/i18n';
@@ -158,7 +157,6 @@ export class AgentBoardView extends ItemView {
   }
 
   getDisplayText(): string {
-    // eslint-disable-next-line obsidianmd/ui/sentence-case -- "Agent Board" is the product feature name.
     return 'Agent Board';
   }
 
@@ -324,7 +322,7 @@ export class AgentBoardView extends ItemView {
     // Preserve lane scroll position across full re-renders so interacting with a
     // card (which triggers refresh) doesn't jump the board back to the left.
     const lanesSelector = '.specorator-agent-board-lanes';
-    const previousLanes = this.contentEl.querySelector(lanesSelector) as HTMLElement | null;
+    const previousLanes = this.contentEl.querySelector(lanesSelector);
     const scrollLeft = previousLanes?.scrollLeft ?? 0;
     const scrollTop = previousLanes?.scrollTop ?? 0;
 
@@ -388,7 +386,7 @@ export class AgentBoardView extends ItemView {
       this.patchCard(taskId);
     }
 
-    const nextLanes = this.contentEl.querySelector(lanesSelector) as HTMLElement | null;
+    const nextLanes = this.contentEl.querySelector(lanesSelector);
     if (nextLanes) {
       nextLanes.scrollLeft = scrollLeft;
       nextLanes.scrollTop = scrollTop;
@@ -510,6 +508,17 @@ export class AgentBoardView extends ItemView {
   private async addWorkOrderFromBoard(): Promise<void> {
     const created = await createWorkOrderInteractive(this.plugin, null, { status: 'inbox', reveal: 'none' });
     if (!created) return;
+    await this.openDetailForFile(created);
+  }
+
+  /**
+   * Re-index the board, then open the detail modal for a freshly created
+   * work-order note. Shared by the board's "+" button and the file/folder
+   * right-click "Create work order" flow (via `plugin.openWorkOrderInBoard`),
+   * so both surface the new order in the modal with the board's full action
+   * wiring rather than opening the raw note.
+   */
+  async openDetailForFile(created: TFile): Promise<void> {
     await this.refresh();
     try {
       const content = await this.plugin.app.vault.read(created);
@@ -837,16 +846,16 @@ export class AgentBoardView extends ItemView {
   private isProviderEnabled(providerId: string): boolean {
     const settings = asSettingsBag(this.plugin.settings);
     return (
-      ProviderRegistry.getRegisteredProviderIds().includes(providerId as ProviderId) &&
-      ProviderRegistry.isEnabled(providerId as ProviderId, settings)
+      ProviderRegistry.getRegisteredProviderIds().includes(providerId) &&
+      ProviderRegistry.isEnabled(providerId, settings)
     );
   }
 
   private ownsModel(providerId: string, model: string): boolean {
     const settings = asSettingsBag(this.plugin.settings);
     return (
-      ProviderRegistry.getRegisteredProviderIds().includes(providerId as ProviderId) &&
-      ProviderRegistry.getChatUIConfig(providerId as ProviderId).ownsModel(model, settings)
+      ProviderRegistry.getRegisteredProviderIds().includes(providerId) &&
+      ProviderRegistry.getChatUIConfig(providerId).ownsModel(model, settings)
     );
   }
 

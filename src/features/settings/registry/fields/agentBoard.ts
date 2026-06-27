@@ -355,8 +355,8 @@ function renderDefaultProviderWidget(ctx: SettingsCtx, host: HTMLElement): () =>
         }
         dropdown.setValue(resolved ?? enabledIds[0]);
         dropdown.onChange(async (value) => {
-          writePathInPlace(ctx.settings as object, 'agentBoardDefaultProvider', value);
-          writePathInPlace(ctx.settings as object, 'agentBoardDefaultModel', null);
+          writePathInPlace(ctx.settings, 'agentBoardDefaultProvider', value);
+          writePathInPlace(ctx.settings, 'agentBoardDefaultModel', null);
           await ctx.saveSettings();
           // User-initiated change in the defaults section. Full refresh is
           // acceptable here because the user is not interacting with the lane
@@ -429,7 +429,7 @@ function renderDefaultModelWidget(ctx: SettingsCtx, host: HTMLElement): () => vo
           const resolvedModel = resolveAgentBoardDefaultModel(ctx.settings);
           dropdown.setValue(resolvedModel ?? '');
           dropdown.onChange(async (value) => {
-            writePathInPlace(ctx.settings as object, 'agentBoardDefaultModel', value || null);
+            writePathInPlace(ctx.settings, 'agentBoardDefaultModel', value || null);
             await ctx.saveSettings();
           });
         });

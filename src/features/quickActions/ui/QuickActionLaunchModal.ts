@@ -117,7 +117,7 @@ export class QuickActionLaunchModal extends Modal {
       if (provider.id === this.options.presetProviderId) opt.selected = true;
     }
     select.addEventListener('change', () => {
-      const next = select.value as ProviderId;
+      const next = select.value;
       const defaultModel = this.options.resolveDefaultModelForProvider(next);
       this.renderModelOptions(next, defaultModel);
       this.modelSelect?.focus();
@@ -178,7 +178,7 @@ export class QuickActionLaunchModal extends Modal {
     run.addEventListener('click', () => {
       if (!this.providerSelect || !this.modelSelect) return;
       const choice = {
-        providerId: this.providerSelect.value as ProviderId,
+        providerId: this.providerSelect.value,
         model: this.modelSelect.value,
       };
       this.options.onConfirm(choice);

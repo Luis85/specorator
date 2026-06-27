@@ -2,7 +2,6 @@ import type { App } from 'obsidian';
 import { Modal, Notice, Setting } from 'obsidian';
 
 import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
-import type { ProviderId } from '../../../core/providers/types';
 import { asSettingsBag } from '../../../core/types/settings';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
@@ -289,7 +288,7 @@ export class WorkOrderTemplateEditorModal extends Modal {
 function providerOptionList(settings: Record<string, unknown>): Array<{ value: string; label: string }> {
   const options: Array<{ value: string; label: string }> = [{ value: '', label: t('tasks.templateEditor.useDefault') }];
   for (const id of ProviderRegistry.getRegisteredProviderIds()) {
-    if (ProviderRegistry.isEnabled(id as ProviderId, settings)) {
+    if (ProviderRegistry.isEnabled(id, settings)) {
       options.push({ value: id, label: id });
     }
   }
@@ -309,7 +308,7 @@ function modelOptionList(
     return options;
   }
   try {
-    const config = ProviderRegistry.getChatUIConfig(providerId as ProviderId);
+    const config = ProviderRegistry.getChatUIConfig(providerId);
     for (const opt of config.getModelOptions(settings)) {
       options.push({ value: opt.value, label: opt.label });
     }

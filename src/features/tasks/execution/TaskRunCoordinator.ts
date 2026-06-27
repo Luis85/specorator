@@ -115,7 +115,7 @@ export class TaskRunCoordinator {
     if ((!provider || !model) && agentId?.startsWith('roster:') && this.deps.resolveAgentRunTarget) {
       const target = await this.deps.resolveAgentRunTarget(agentId);
       if (target) {
-        provider = provider ?? (target.providerId as ProviderId);
+        provider = provider ?? (target.providerId);
         model = model ?? target.model;
       }
     }

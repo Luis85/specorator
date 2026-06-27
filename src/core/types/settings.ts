@@ -248,5 +248,5 @@ export interface SpecoratorSettings {
  * lone sanctioned `as unknown as` cast (no `any`).
  */
 export function asSettingsBag(settings: SpecoratorSettings): Record<string, unknown> {
-  return settings as unknown as Record<string, unknown>;
+  return settings;
 }

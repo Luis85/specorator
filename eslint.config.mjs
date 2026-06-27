@@ -1,3 +1,4 @@
+import eslintComments from '@eslint-community/eslint-plugin-eslint-comments';
 import js from '@eslint/js';
 import tseslint from '@typescript-eslint/eslint-plugin';
 import jestPlugin from 'eslint-plugin-jest';
@@ -48,7 +49,15 @@ const stagedObsidianRules = {
     obsidianRuleSeverity,
     {
       ignoreWords: ['Specorator', 'Codex', 'OpenCode', 'WSL'],
-      brands: [...DEFAULT_BRANDS, 'Specorator', 'Codex', 'OpenCode'],
+      brands: [
+        ...DEFAULT_BRANDS,
+        'Specorator',
+        'Codex',
+        'OpenCode',
+        'Claude Code',
+        'Agent Board',
+        'Quick Actions',
+      ],
       acronyms: [...DEFAULT_ACRONYMS, 'TOML', 'WSL'],
       ignoreRegex: ['\\.(?:claude|codex|cursor|opencode)/'],
       enforceCamelCaseLower: true,
@@ -100,6 +109,13 @@ export default defineConfig([
     files: ['src/**/*.ts'],
     rules: {
       'no-console': 'error',
+      // Mirror the Obsidian marketplace validator: the Function constructor /
+      // implied eval is banned everywhere except the user-tool sandbox in
+      // SpecoratorToolRegistry, which carries a justified inline disable.
+      // Scoped to src only — no-implied-eval is type-aware and would crash on
+      // untyped test fixtures.
+      'no-new-func': 'error',
+      '@typescript-eslint/no-implied-eval': 'error',
       // Q-1 (Notice i18n sweep). Block hardcoded English in `new Notice()`:
       // every user-visible notice must go through `t('key')` or `t('key', params)`
       // so the 10 supported locales can override it. Identifier pass-throughs
@@ -159,6 +175,64 @@ export default defineConfig([
       obsidianmd,
     },
     rules: stagedObsidianRules,
+  },
+  {
+    // Directive-comment discipline mirrors the Obsidian marketplace validator,
+    // which lints plugin `src/` only. Three findings from the 2026-06-26 review
+    // (docs/tech-debt/2026-06-26-obsidian-marketplace-review.md) are codified
+    // here so a regression fails `npm run lint` locally instead of surfacing at
+    // submission: every disable must justify itself, the security/UI rules below
+    // may not be silenced inline, and stale disables are an error (not warn).
+    files: ['src/**/*.ts'],
+    plugins: {
+      '@eslint-community/eslint-comments': eslintComments,
+    },
+    linterOptions: {
+      reportUnusedDisableDirectives: 'error',
+    },
+    rules: {
+      '@eslint-community/eslint-comments/require-description': [
+        'error',
+        { ignore: [] },
+      ],
+      '@eslint-community/eslint-comments/no-restricted-disable': [
+        'error',
+        '@typescript-eslint/no-explicit-any',
+        'obsidianmd/ui/sentence-case',
+      ],
+    },
+  },
+  {
+    // Type-aware rules promoted to `error` after the 2026-06-26 marketplace
+    // review (docs/tech-debt/2026-06-26-obsidian-marketplace-review.md). Each
+    // backlog was driven to zero before promotion, per the ratchet policy in
+    // docs/build-ci/quality-gates.md § "Lint severity policy". These mirror the
+    // marketplace validator's type-aware warnings so a regression fails
+    // `npm run lint` locally instead of resurfacing at submission.
+    // NOTE: `no-unnecessary-type-assertion` is intentionally NOT enforced — it
+    // false-positives on load-bearing DOM casts (`querySelector(...) as
+    // HTMLElement`) under typescript@6 + typescript-eslint@8, disagreeing with
+    // tsc. The one-time cleanup of its genuine hits was applied manually.
+    files: ['src/**/*.ts'],
+    rules: {
+      // Re-enabled after the part-3 marketplace review: the part-1 false
+      // positives were load-bearing DOM `as` casts, now rewritten as generic
+      // type parameters (`querySelector<HTMLElement>(...)`). The lone remaining
+      // exception (SpecoratorView's bound-load cast) carries a justified inline
+      // disable — our newer TS lib types `Function.prototype.bind` precisely, so
+      // it reads the cast as redundant, while the validator's older lib needs it.
+      '@typescript-eslint/no-unnecessary-type-assertion': 'error',
+      '@typescript-eslint/no-unsafe-assignment': 'error',
+      '@typescript-eslint/no-unsafe-call': 'error',
+      '@typescript-eslint/no-unsafe-member-access': 'error',
+      '@typescript-eslint/no-unsafe-return': 'error',
+      '@typescript-eslint/no-unsafe-argument': 'error',
+      '@typescript-eslint/await-thenable': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/unbound-method': 'error',
+      '@typescript-eslint/no-deprecated': 'error',
+    },
   },
   {
     files: ['src/**/*.ts'],

@@ -91,7 +91,7 @@ export class VaultSkillAggregator implements VaultSkillSource {
       for (const [providerId, entries] of buckets) {
         this.cache.set(providerId, { entries, expiresAt });
       }
-    } catch (err) {
+    } catch (err: unknown) {
       this.logger?.warn('skill index hydrate failed', { err });
     }
   }
@@ -124,7 +124,7 @@ export class VaultSkillAggregator implements VaultSkillSource {
         const raw = await this.fetchBucket(r);
         try {
           onProviderResolved(r.providerId, this.mapBucket(raw, r));
-        } catch (err) {
+        } catch (err: unknown) {
           this.logger?.warn('skill stream callback threw', {
             providerId: r.providerId,
             err,
@@ -177,7 +177,7 @@ export class VaultSkillAggregator implements VaultSkillSource {
     const body = serializePersistedSkillIndex(buckets, this.nowMs());
     try {
       await this.cacheAdapter.write(this.cachePath, body);
-    } catch (err) {
+    } catch (err: unknown) {
       this.logger?.warn('skill index persist failed', { err });
     }
   }
@@ -202,7 +202,7 @@ export class VaultSkillAggregator implements VaultSkillSource {
         });
         this.schedulePersist();
         return raw;
-      } catch (err) {
+      } catch (err: unknown) {
         this.logger?.warn('vault skill aggregation failed', {
           providerId: record.providerId,
           err,

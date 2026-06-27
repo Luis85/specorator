@@ -8,14 +8,12 @@ import type { TranslationKey } from '../i18n/types';
  */
 export const LIBRARY_VIEW_TYPES = {
   agents: 'specorator-agent-roster',
-  tools: 'specorator-tool-library',
   skills: 'specorator-skill-library',
   loops: 'specorator-loop-library',
 } as const;
 
 const LIBRARY_NAV_ITEMS: ReadonlyArray<{ type: string; labelKey: TranslationKey }> = [
   { type: LIBRARY_VIEW_TYPES.agents, labelKey: 'agentRoster.navLabel' },
-  { type: LIBRARY_VIEW_TYPES.tools, labelKey: 'toolLibrary.navLabel' },
   { type: LIBRARY_VIEW_TYPES.skills, labelKey: 'skillLibrary.navLabel' },
   { type: LIBRARY_VIEW_TYPES.loops, labelKey: 'loopLibrary.navLabel' },
 ];
@@ -24,7 +22,7 @@ export interface LibraryNavHost {
   openLeafView(viewType: string): Promise<void>;
 }
 
-/** Renders the Agents / Tools / Skills / Loops nav strip, highlighting `activeType`. */
+/** Renders the Agents / Skills / Loops nav strip, highlighting `activeType`. */
 export function renderLibraryNav(container: HTMLElement, host: LibraryNavHost, activeType: string): void {
   const nav = container.createDiv({ cls: 'specorator-library-nav' });
   nav.setAttribute('role', 'navigation');

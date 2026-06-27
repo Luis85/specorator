@@ -39,7 +39,6 @@ describe('preset agents', () => {
   it('projects a spec into a RosterAgent with empty vault-specific grants', () => {
     const agent = presetAgentToRosterAgent(PRESET_AGENT_SPECS[0], 123);
     expect(agent.id).toBe(rosterIdFromSlug(slugifyRosterName(PRESET_AGENT_SPECS[0].name)));
-    expect(agent.tools).toEqual([]);
     expect(agent.skills).toEqual([]);
     expect(agent.createdAt).toBe(123);
     expect(agent.updatedAt).toBe(123);

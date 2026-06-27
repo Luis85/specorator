@@ -19,7 +19,7 @@ function parseRecord(line: string): SubagentJsonlRecord | null {
   if (!raw || typeof raw !== 'object') {
     return null;
   }
-  return raw as SubagentJsonlRecord;
+  return raw;
 }
 
 /** Non-empty trimmed top-level `result` string, or null. */

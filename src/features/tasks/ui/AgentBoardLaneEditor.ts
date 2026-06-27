@@ -255,14 +255,16 @@ function renderCollapsibleRow(block: HTMLElement, lane: BoardLaneConfig, ctx: La
   const collapsibleInput = collapsibleLabel.createEl('input', { type: 'checkbox' });
   collapsibleInput.dataset.focusKey = `lane:${lane.id}:collapsible`;
   collapsibleInput.checked = lane.collapsible;
-  collapsibleInput.addEventListener('change', async () => {
+  collapsibleInput.addEventListener('change', () => {
     const snapshot = ctx.snapshot();
     lane.collapsible = collapsibleInput.checked;
     if (!collapsibleInput.checked) lane.collapsed = false;
-    if (await ctx.persist(snapshot)) {
-      ctx.setFocus(`lane:${lane.id}:collapsible`);
-      ctx.rerender();
-    }
+    void ctx.persist(snapshot).then((persisted) => {
+      if (persisted) {
+        ctx.setFocus(`lane:${lane.id}:collapsible`);
+        ctx.rerender();
+      }
+    });
   });
   collapsibleLabel.createSpan({ text: t('tasks.laneEditor.collapsible') });
 }
@@ -285,20 +287,22 @@ function renderLaneStatuses(
     checkbox.dataset.focusKey = `lane:${lane.id}:status:${status}`;
     const isChecked = lane.statuses.includes(status);
     checkbox.checked = isChecked;
-    checkbox.addEventListener('change', async () => {
+    checkbox.addEventListener('change', () => {
       const snapshot = ctx.snapshot();
       if (checkbox.checked) {
         if (!lane.statuses.includes(status)) lane.statuses.push(status);
       } else {
         lane.statuses = lane.statuses.filter((value) => value !== status);
       }
-      if (await ctx.persist(snapshot)) {
-        // Restore focus to the same checkbox after the rebuild so keyboard
-        // users keep their place. The DOM node is replaced, but the
-        // `data-focus-key` selector finds the new instance.
-        ctx.setFocus(`lane:${lane.id}:status:${status}`);
-        ctx.rerender();
-      }
+      void ctx.persist(snapshot).then((persisted) => {
+        if (persisted) {
+          // Restore focus to the same checkbox after the rebuild so keyboard
+          // users keep their place. The DOM node is replaced, but the
+          // `data-focus-key` selector finds the new instance.
+          ctx.setFocus(`lane:${lane.id}:status:${status}`);
+          ctx.rerender();
+        }
+      });
     });
     label.createSpan({ text: status });
 

@@ -8,7 +8,7 @@ function isEnabled(s: SpecoratorSettings, id: ProviderId): boolean {
 }
 
 export function resolveAgentBoardDefaultProvider(s: SpecoratorSettings): ProviderId | null {
-  const stored = (s.agentBoardDefaultProvider ?? null) as ProviderId | null;
+  const stored = (s.agentBoardDefaultProvider ?? null);
   if (stored && isEnabled(s, stored)) return stored;
   // Iterate registration order — matches the historical preference
   // (claude > codex > opencode > cursor) without a hardcoded ORDER list.

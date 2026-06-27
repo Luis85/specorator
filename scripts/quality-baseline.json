@@ -8,7 +8,7 @@
     "boundaryViolations": 0,
     "cloneGroups": 40,
     "duplicatedLines": 1016,
-    "complexFunctions": 242,
+    "complexFunctions": 240,
     "criticalComplexity": 0,
     "averageMaintainability": 90.2
   }

@@ -255,7 +255,7 @@ function parseCursorBlobRecords(
 
 function openCursorSqliteReadonly(dbPath: string): CursorSqliteOpenResult {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/consistent-type-imports
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/consistent-type-imports -- node:sqlite is an optional built-in; lazy require keeps load failures catchable here instead of crashing module init
     const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite');
     const handle = new DatabaseSync(dbPath, { readOnly: true }) as unknown as CursorSqliteHandle;
     return { handle };

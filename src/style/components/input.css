@@ -77,31 +77,35 @@
   text-overflow: ellipsis;
 }
 
-.specorator-input {
+/* Textarea always lives inside .specorator-input-wrapper (see tabFactory).
+   The 2-class descendant selector (0,2,0) beats Obsidian's host textarea
+   resets (`.theme-dark textarea`, 0,1,1) by specificity, so these resets win
+   without !important. */
+.specorator-input-wrapper .specorator-input {
   width: 100%;
   flex: 1 1 0;
   min-height: var(--specorator-textarea-min-height, 60px);
   max-height: var(--specorator-textarea-max-height, none);
   resize: none;
   padding: 8px 10px 10px 10px;
-  border: none !important;
+  border: none;
   border-radius: 6px;
-  background: transparent !important;
+  background: transparent;
   color: var(--text-normal);
   font-family: inherit;
   font-size: 14px;
   line-height: 1.4;
-  box-shadow: none !important;
+  box-shadow: none;
   overflow-y: auto;
   unicode-bidi: plaintext; /* Proper BiDi text handling for mixed RTL/LTR */
 }
 
-.specorator-input:hover,
-.specorator-input:focus {
-  outline: none !important;
-  border: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
+.specorator-input-wrapper .specorator-input:hover,
+.specorator-input-wrapper .specorator-input:focus {
+  outline: none;
+  border: none;
+  background: transparent;
+  box-shadow: none;
 }
 
 .specorator-input::placeholder {
@@ -180,23 +184,21 @@
   background: var(--background-modifier-hover);
 }
 
-/* Edited-files row (files the agent created/edited, above the context row) */
+/* Edited-files affordance: a single-line badge above the context row that
+   toggles a floating, grouped popover. Fixed badge height keeps the composer
+   from growing; the popover floats upward over the messages. */
 .specorator-edited-files-row {
-  flex-wrap: wrap;
   align-items: center;
   flex-shrink: 0;
-  gap: 6px;
   padding: 6px 10px 0 10px;
 }
 
-.specorator-edited-files-label {
-  font-size: 11px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.specorator-edited-files {
+  position: relative;
+  display: inline-flex;
 }
 
-.specorator-edited-file-chip {
+.specorator-edited-files-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -206,35 +208,111 @@
   border-radius: 12px;
   font-size: 12px;
   line-height: 1;
-  max-width: 200px;
+  color: var(--text-muted);
   cursor: pointer;
 }
 
-.specorator-edited-file-chip:hover {
+.specorator-edited-files-badge:hover {
   background: var(--background-modifier-hover);
 }
 
-.specorator-edited-file-chip-icon {
+.specorator-edited-files-badge-icon,
+.specorator-edited-files-badge-chevron {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.specorator-edited-files-badge-icon svg,
+.specorator-edited-files-badge-chevron svg {
+  width: 12px;
+  height: 12px;
+}
+
+.specorator-edited-files-badge-count {
+  color: var(--text-normal);
+}
+
+.specorator-edited-files-badge-chevron {
+  transition: transform 0.12s ease;
+}
+
+.specorator-edited-files-badge[aria-expanded='true'] .specorator-edited-files-badge-chevron {
+  transform: rotate(180deg);
+}
+
+.specorator-edited-files-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  min-width: 220px;
+  max-width: 360px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.specorator-edited-files-group-label {
+  padding: 6px 8px 2px 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.specorator-edited-files-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.specorator-edited-files-item:hover,
+.specorator-edited-files-item:focus {
+  background: var(--background-modifier-hover);
+  outline: none;
+}
+
+.specorator-edited-files-item-icon {
   display: flex;
   align-items: center;
   flex-shrink: 0;
   color: var(--text-muted);
 }
 
-.specorator-edited-file-chip-icon svg {
+.specorator-edited-files-item-icon svg {
   width: 12px;
   height: 12px;
 }
 
-.specorator-edited-file-chip--created .specorator-edited-file-chip-icon {
+.specorator-edited-files-item--created .specorator-edited-files-item-icon {
   color: var(--text-success);
 }
 
-.specorator-edited-file-chip-name {
+.specorator-edited-files-item-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-normal);
+}
+
+.specorator-edited-files-item-dir {
+  margin-left: auto;
+  padding-left: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 /* Composer queue status row (queued follow-up preview + steer action) */
@@ -308,15 +386,17 @@
   height: 14px;
 }
 
-/* Light blue border when instruction mode is active */
+/* Light blue border when instruction mode is active.
+   Same specificity as the base wrapper border but defined later, so it wins
+   by source order without !important. */
 .specorator-input-instruction-mode {
-  border-color: #60a5fa !important;
+  border-color: #60a5fa;
   box-shadow: 0 0 0 1px #60a5fa;
 }
 
-/* Pink border when bash mode is active */
+/* Pink border when bash mode is active (wins by source order, as above) */
 .specorator-input-bang-bash-mode {
-  border-color: #f472b6 !important;
+  border-color: #f472b6;
   box-shadow: 0 0 0 1px #f472b6;
 }
 

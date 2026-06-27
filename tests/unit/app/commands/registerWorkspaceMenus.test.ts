@@ -5,9 +5,18 @@ import { registerWorkspaceMenus } from '@/app/commands/registerWorkspaceMenus';
 import type { QuickActionFavoritesCache } from '@/features/quickActions/QuickActionFavoritesCache';
 import { runQuickActionForFile } from '@/features/quickActions/runQuickActionForFile';
 import type { QuickAction } from '@/features/quickActions/types';
+import { createWorkOrderAndOpenModal } from '@/features/tasks/ui/createWorkOrderInteractive';
 import type SpecoratorPlugin from '@/main';
 
 const { MENU_SEPARATOR } = jest.requireActual('obsidian') as { MENU_SEPARATOR: symbol };
+
+// The work-order creation helpers open modals / pickers; stub the module so the
+// menu wiring can be asserted without pulling in the task UI stack.
+jest.mock('@/features/tasks/ui/createWorkOrderInteractive', () => ({
+  createWorkOrderInteractive: jest.fn(),
+  createWorkOrderFromSelectionInteractive: jest.fn(),
+  createWorkOrderAndOpenModal: jest.fn(),
+}));
 
 jest.mock('@/i18n/i18n', () => ({
   t: (key: string) => {
@@ -113,6 +122,36 @@ function createPlugin(favorites: QuickAction[] = []): {
 describe('registerWorkspaceMenus', () => {
   beforeEach(() => {
     (runQuickActionForFile as jest.Mock).mockClear();
+    (createWorkOrderAndOpenModal as jest.Mock).mockClear();
+  });
+
+  it('clicking "Create work order" on a file opens the work-order modal, not the note', () => {
+    const { plugin, fileMenu } = createPlugin();
+    registerWorkspaceMenus(plugin);
+    const file = Object.create(TFile.prototype) as TFile;
+    const { menu, items } = createMenu();
+    fileMenu.handler!(menu, file);
+
+    // Layout: [<sep>, Add file, Create work order, Add to work order, ...]
+    const createItem = items[2] as MenuItem;
+    expect((createItem.setTitle as jest.Mock)).toHaveBeenCalledWith('Create work order');
+    const onClick = (createItem.onClick as jest.Mock).mock.calls[0][0] as () => void;
+    onClick();
+    expect(createWorkOrderAndOpenModal).toHaveBeenCalledWith(plugin, file);
+  });
+
+  it('clicking "Create work order" on a folder opens the work-order modal', () => {
+    const { plugin, fileMenu } = createPlugin();
+    registerWorkspaceMenus(plugin);
+    const folder = Object.create(TFolder.prototype) as TFolder;
+    const { menu, items } = createMenu();
+    fileMenu.handler!(menu, folder);
+
+    const createItem = items[2] as MenuItem;
+    expect((createItem.setTitle as jest.Mock)).toHaveBeenCalledWith('Create work order');
+    const onClick = (createItem.onClick as jest.Mock).mock.calls[0][0] as () => void;
+    onClick();
+    expect(createWorkOrderAndOpenModal).toHaveBeenCalledWith(plugin, folder);
   });
 
   it('registers both file-menu and editor-menu handlers', () => {

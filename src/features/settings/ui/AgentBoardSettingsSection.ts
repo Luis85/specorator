@@ -16,8 +16,11 @@ import { renderAgentBoardLaneEditor } from '../../tasks/ui/AgentBoardLaneEditor'
  * still enabled; otherwise falls back to the first enabled provider so the provider dropdown and
  * the model dropdown never disagree about which provider is active.
  */
-export function resolveAgentBoardProvider(enabled: ProviderId[], stored: string): ProviderId | '' {
-  return enabled.includes(stored as ProviderId) ? (stored as ProviderId) : (enabled[0] ?? '');
+// Return type is `ProviderId` (an alias for `string`); a `| ''` constituent
+// would be redundant since `''` is already a `string`. The empty-string value
+// (no enabled provider) is still produced at runtime via the `?? ''` fallback.
+export function resolveAgentBoardProvider(enabled: ProviderId[], stored: string): ProviderId {
+  return enabled.includes(stored) ? stored : (enabled[0] ?? '');
 }
 
 export function renderAgentBoardSettingsSection(
@@ -46,11 +49,9 @@ export function renderAgentBoardSettingsSection(
 
   new Setting(container)
     .setName('Work order folder')
-    // eslint-disable-next-line obsidianmd/ui/sentence-case -- "Agent Board" is the product feature name.
     .setDesc('Folder where new Agent Board work orders are created.')
     .addText((text) =>
       text
-        // eslint-disable-next-line obsidianmd/ui/sentence-case -- folder path, not prose.
         .setPlaceholder('Agent Board/tasks')
         .setValue(plugin.settings.agentBoardWorkOrderFolder)
         .onChange(async (value) => {
@@ -66,7 +67,6 @@ export function renderAgentBoardSettingsSection(
     .setDesc('Folder where work-order templates live.')
     .addText((text) =>
       text
-        // eslint-disable-next-line obsidianmd/ui/sentence-case -- folder path, not prose.
         .setPlaceholder('Agent Board/templates')
         .setValue(plugin.settings.agentBoardTemplateFolder)
         .onChange(async (value) => {
@@ -81,8 +81,7 @@ export function renderAgentBoardSettingsSection(
 
   new Setting(container)
     .setName('Common templates')
-    // eslint-disable-next-line obsidianmd/ui/sentence-case -- preset names match their picker labels verbatim.
-    .setDesc('Install the starter set (Bug fix, Feature, Refactor, Research spike, Documentation, Test backfill). Re-running skips any whose filename already exists.')
+    .setDesc('Install the starter set (bug fix, feature, refactor, research spike, documentation, test backfill). Re-running skips any whose filename already exists.')
     .addButton((btn) => {
       btn.setButtonText('Install').onClick(async () => {
         btn.setDisabled(true);
@@ -101,7 +100,6 @@ export function renderAgentBoardSettingsSection(
     .setDesc(t('settings.agentBoard.loopFolderDesc'))
     .addText((text) =>
       text
-        // eslint-disable-next-line obsidianmd/ui/sentence-case -- folder path, not prose.
         .setPlaceholder('Agent Board/loops')
         .setValue(plugin.settings.agentBoardLoopFolder)
         .onChange(async (value) => {
@@ -128,11 +126,9 @@ export function renderAgentBoardSettingsSection(
 
   new Setting(container)
     .setName('Archive folder')
-    // eslint-disable-next-line obsidianmd/ui/sentence-case -- "Agent Board" is the product feature name.
     .setDesc('Folder where archived Agent Board work orders are moved. Keep it outside the work order folder.')
     .addText((text) =>
       text
-        // eslint-disable-next-line obsidianmd/ui/sentence-case -- folder path, not prose.
         .setPlaceholder('Agent Board/archive')
         .setValue(plugin.settings.agentBoardArchiveFolder)
         .onChange(async (value) => {
@@ -150,7 +146,7 @@ export function renderAgentBoardSettingsSection(
     modelDropdown.selectEl.empty();
     modelDropdown.addOption('', 'Provider default');
     const options = providerId
-      ? ProviderRegistry.getChatUIConfig(providerId as ProviderId).getModelOptions(settings)
+      ? ProviderRegistry.getChatUIConfig(providerId).getModelOptions(settings)
       : [];
     for (const option of options) {
       modelDropdown.addOption(option.value, option.label);
