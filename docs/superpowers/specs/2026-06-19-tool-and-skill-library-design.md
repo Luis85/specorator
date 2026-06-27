@@ -2,7 +2,8 @@
 type: design
 title: "Tool Library & Skill Library: Plugin-Owned Capabilities On Top of Providers"
 date: 2026-06-19
-status: draft
+status: superseded
+superseded_by: "[[docs/tech-debt/2026-06-27-revert-1.13-and-drop-tool-library]]"
 scope: agents
 tags:
   - design

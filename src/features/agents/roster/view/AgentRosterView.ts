@@ -41,7 +41,7 @@ export class AgentRosterView extends ItemView {
   // ── List / dashboard ──────────────────────────────────────────────────────
 
   private async renderList(): Promise<void> {
-    // The roster shares the library shell with the Tool/Skill views; only the
+    // The roster shares the library shell with the Skill/Loop views; only the
     // detail editor keeps its bespoke `specorator-roster-detail` root.
     this.contentEl.removeClass('specorator-roster-detail');
     const { actions: headerActions, list } = renderLibraryShell(
@@ -115,7 +115,7 @@ export class AgentRosterView extends ItemView {
     if (agent.skills.length > 0) {
       caps.createSpan({
         cls: 'specorator-roster-chip',
-        text: `${agent.skills.length} ${t('agentRoster.skills')}`,
+        text: t('agentRoster.capsSummary', { skills: String(agent.skills.length) }),
       });
     }
 

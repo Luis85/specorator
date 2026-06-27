@@ -1,7 +1,8 @@
 ---
 title: "HTTP Tool-Tier Grant Scoping — Design"
 date: 2026-06-22
-status: draft
+status: superseded
+superseded_by: "[[docs/tech-debt/2026-06-27-revert-1.13-and-drop-tool-library]]"
 scope: tools
 related:
   - "[[docs/superpowers/specs/2026-06-19-http-tool-tier-design]]"

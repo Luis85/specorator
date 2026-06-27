@@ -29,6 +29,15 @@ assertion (so the bot doesn't flag it) and resolves identically under our TS:
 
 ### API deprecations — FIXED via minAppVersion bump (8 sites)
 
+> **REVERSED 2026-06-27** — see
+> [`2026-06-27-revert-1.13-and-drop-tool-library.md`](2026-06-27-revert-1.13-and-drop-tool-library.md).
+> 1.13.0 is unreleased, and Obsidian refuses to load a plugin whose
+> `minAppVersion` exceeds the installed app — so on every shipping desktop
+> (≤1.12.x) the plugin failed to load and the entire settings tab vanished.
+> `minAppVersion` is back to 1.11.5, the three call sites are restored to their
+> ≤1.12.x forms, and `setWarning` / `setDynamicTooltip` / `display` return as
+> non-blocking bot Warnings/Recommendations until 1.13 ships.
+
 `manifest.minAppVersion` 1.11.5 → **1.13.0**; `obsidian` devDep `latest`(→1.12.3
 cached) pinned to **^1.13.1** so the replacement APIs are typed. This drops
 1.11.5–1.12.x users (deliberate; SecretStorage already required ≥1.11.5).
@@ -46,6 +55,14 @@ Test fallout: the obsidian button mocks (`tests/__mocks__/obsidian.ts` + the
 inline mock in `ConfirmModal.test.ts`) gained `setDestructive`.
 
 ### Function constructor (Error) — KEPT + disclosed
+
+> **REVERSED 2026-06-27** — see
+> [`2026-06-27-revert-1.13-and-drop-tool-library.md`](2026-06-27-revert-1.13-and-drop-tool-library.md).
+> This `Function` constructor was the only *blocking* marketplace Error. Rather
+> than ship it behind a disclosure, the user tool library feature was removed
+> entirely (code, both tool servers, transpile, i18n, styles, and the
+> bound-agent tool grants). It may be revisited with a non-`eval` execution
+> model; the design specs are kept as historical record, marked `superseded`.
 
 `SpecoratorToolRegistry.ts:30`. The user-tool sandbox transpiles + evaluates the
 user's **own** vault files (`.specorator/tools/*.ts`) — dynamic evaluation *is*

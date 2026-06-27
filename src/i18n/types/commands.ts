@@ -17,6 +17,5 @@ export type CommandsTranslationKey =
   | 'commands.newSession'
   | 'commands.closeCurrentTab'
   | 'commands.openAgentRoster'
-  | 'commands.openToolLibrary'
   | 'commands.openSkillLibrary'
   | 'commands.openLoopLibrary';

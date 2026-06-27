@@ -2,7 +2,8 @@
 type: design
 title: "Cross-Provider User Tools via an In-Process Local HTTP MCP Server"
 date: 2026-06-19
-status: draft
+status: superseded
+superseded_by: "[[docs/tech-debt/2026-06-27-revert-1.13-and-drop-tool-library]]"
 scope: agents
 related:
   - "[[docs/superpowers/specs/2026-06-19-tool-and-skill-library-design]]"
