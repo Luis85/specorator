@@ -49,6 +49,15 @@ describe('Logger behavior', () => {
     expect((logger.snapshot()[0].args[0] as Record<string, unknown>).token).toBe('[redacted]');
   });
 
+  it('stamps entries with the wall clock when no clock is injected', () => {
+    const sink: LogEntry[] = [];
+    const before = Date.now();
+    const logger = new Logger({ enabled: true, level: 'debug', sink: (e) => sink.push(e) });
+    logger.info('tick');
+    expect(sink[0].ts).toBeGreaterThanOrEqual(before);
+    expect(sink[0].ts).toBeLessThanOrEqual(Date.now());
+  });
+
   it('setEnabled and setLevel change behavior live', () => {
     const { logger, sink } = makeLogger();
     logger.setEnabled(false);

@@ -7,16 +7,25 @@
   font-family: var(--font-text);
 }
 
-.specorator-hidden {
-  display: none !important;
+/* Visibility utilities. Toggled at runtime via add/removeClass, so each must
+   beat whatever `display` a component sets on the same element. Each selector is
+   tripled (`.x.x.x`) to reach 0-3-0 specificity — above the two-class component
+   rules these collide with (notably header.css's
+   `.specorator-header .specorator-tab-bar-container { display: flex }`, which a
+   doubled 0-2-0 selector only ties and then loses to on @import order, leaving a
+   single-tab header bar stuck visible). Same effect as the old `!important`,
+   which the marketplace validator flags. No `display`-setting rule on any
+   toggled element reaches 0-3-0, so this wins without escalating further. */
+.specorator-hidden.specorator-hidden.specorator-hidden {
+  display: none;
 }
 
-.specorator-visible-block {
-  display: block !important;
+.specorator-visible-block.specorator-visible-block.specorator-visible-block {
+  display: block;
 }
 
-.specorator-visible-flex {
-  display: flex !important;
+.specorator-visible-flex.specorator-visible-flex.specorator-visible-flex {
+  display: flex;
 }
 
 .specorator-provider-icon-variant--dark {

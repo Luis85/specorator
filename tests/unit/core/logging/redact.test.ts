@@ -60,6 +60,15 @@ describe('redactArgs', () => {
     expect(redactArgs(['plain', 42, true])).toEqual(['plain', 42, true]);
   });
 
+  it('recurses into array values, redacting secret keys inside each element', () => {
+    const [out] = redactArgs([
+      { items: [{ token: 'abc', name: 'ok' }, 'plain'] },
+    ]) as [{ items: [Record<string, unknown>, string] }];
+    expect(out.items[0].token).toBe('[redacted]');
+    expect(out.items[0].name).toBe('ok');
+    expect(out.items[1]).toBe('plain');
+  });
+
   it('handles cycles without throwing', () => {
     const a: Record<string, unknown> = { name: 'a' };
     a.self = a;
