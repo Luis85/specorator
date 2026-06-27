@@ -7,16 +7,21 @@
   font-family: var(--font-text);
 }
 
-.specorator-hidden {
-  display: none !important;
+/* Visibility utilities. Each selector is doubled (`.x.x`) to reach 0-2-0
+   specificity so it overrides a component's own single-class `display` rule
+   regardless of @import order — the same effect as `!important`, which the
+   Obsidian marketplace validator flags. Mirrors the element-scoped pattern in
+   settings-search.css (`.specorator-settings-tabs.specorator-hidden`). */
+.specorator-hidden.specorator-hidden {
+  display: none;
 }
 
-.specorator-visible-block {
-  display: block !important;
+.specorator-visible-block.specorator-visible-block {
+  display: block;
 }
 
-.specorator-visible-flex {
-  display: flex !important;
+.specorator-visible-flex.specorator-visible-flex {
+  display: flex;
 }
 
 .specorator-provider-icon-variant--dark {

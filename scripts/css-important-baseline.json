@@ -1,13 +1,4 @@
 {
   "description": "Grandfathered stylesheets using `!important` (comments excluded). Counts may shrink but not grow; a new `!important` in any other file is rejected. Regenerate with `npm run check:css -- --update`.",
-  "allowlist": {
-    "src/style/features/inline-edit.css": {
-      "count": 18,
-      "reason": "Grandfathered host/CM6 override. Justified per src/style/CLAUDE.md (!important allowed only when overriding Obsidian defaults); shrink only."
-    },
-    "src/style/base/container.css": {
-      "count": 3,
-      "reason": "Grandfathered host/CM6 override. Justified per src/style/CLAUDE.md (!important allowed only when overriding Obsidian defaults); shrink only."
-    }
-  }
+  "allowlist": {}
 }

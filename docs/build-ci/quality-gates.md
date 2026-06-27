@@ -160,7 +160,13 @@ npm run check:css -- --update
 ```
 
 Baseline at adoption: `inline-edit.css` (18, CM6 widget overrides) and
-`container.css` (3, visibility-toggle utilities).
+`container.css` (3, visibility-toggle utilities). Both were cleared in the
+2026-06-27 marketplace-readiness pass by re-scoping rather than `!important`:
+the inline-edit rules are scoped under `.cm-editor` (the extra class outranks
+Obsidian's element-level `input`/`button` theming), and the `container.css`
+visibility utilities are doubled (`.specorator-hidden.specorator-hidden`) to
+reach 0-2-0 specificity. The allowlist is now empty — the whole `src/style/`
+tree is `!important`-free, so any new use fails the gate.
 
 ## Type-aware lint additions (2026-06-26, part 3)
 
