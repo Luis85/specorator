@@ -23,7 +23,6 @@ export function isRosterAgentDirty(original: RosterAgent, draft: RosterAgent): b
   }
   return (
     !sameSet(original.skills, draft.skills) ||
-    !sameSet(original.tools, draft.tools) ||
     !sameSet(original.roles, draft.roles) ||
     !sameModel(original.modelSelection, draft.modelSelection)
   );

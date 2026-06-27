@@ -96,7 +96,7 @@ describe('LoopLibraryView', () => {
     expect(contentEl.classList.contains('specorator-library')).toBe(true);
     expect(contentEl.querySelector('.specorator-library-nav')).not.toBeNull();
     const navItems = contentEl.querySelectorAll('.specorator-library-nav-item');
-    expect(navItems.length).toBe(4);
+    expect(navItems.length).toBe(3);
     const headerButtons = Array.from(
       contentEl.querySelectorAll('.specorator-library-header-actions button'),
     ).map((b) => b.textContent);

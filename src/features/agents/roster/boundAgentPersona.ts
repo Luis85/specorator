@@ -10,12 +10,11 @@ export interface BoundAgentPersonaInput {
   skills?: BoundAgentSkill[];
 }
 
-/** The resolved persona/model/tool projection a conversation adopts from its
- *  bound roster agent. */
+/** The resolved persona/model projection a conversation adopts from its bound
+ *  roster agent. */
 export interface BoundAgentProjection {
   prompt?: string;
   model?: string;
-  tools?: string[];
 }
 
 /**

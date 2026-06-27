@@ -9,7 +9,6 @@ import { renderLibraryLoading } from '../../../../utils/libraryView';
 import { renderAgentAvatar } from '../../agentAvatar';
 import { rosterAgentToPersona } from '../../personaRegistry';
 import { agentPreferredProviderId } from '../resolveAgentProvider';
-import { toolCapabilityId } from '../rosterCapabilities';
 import { isRosterAgentDirty } from '../rosterDirty';
 import type { RosterAgent } from '../rosterTypes';
 import { type CapabilityItem, renderCapabilityPicker } from './CapabilityPicker';
@@ -37,7 +36,7 @@ export class AgentDetailEditor {
   async render(root: HTMLElement, agent: RosterAgent, opts?: { isNew?: boolean }): Promise<void> {
     this.isNew = opts?.isNew ?? false;
     this.original = agent;
-    this.draft = { ...agent, roles: [...agent.roles], skills: [...agent.skills], tools: [...agent.tools] };
+    this.draft = { ...agent, roles: [...agent.roles], skills: [...agent.skills] };
 
     root.empty();
     // The list view shares the `specorator-library` shell; the detail page has its
@@ -50,7 +49,6 @@ export class AgentDetailEditor {
     this.renderModelCard(root);
     this.renderInstructionsCard(root);
     await this.renderSkillsCard(root);
-    this.renderToolsCard(root);
     this.renderFooter(root);
     this.updateDirty();
   }
@@ -234,23 +232,6 @@ export class AgentDetailEditor {
     });
   }
 
-  private renderToolsCard(root: HTMLElement): void {
-    const card = this.card(root);
-    const tools = (this.plugin.toolRegistry?.list() ?? []).filter((tool) => tool.module && !tool.error);
-    const items: CapabilityItem[] = tools.flatMap((tool) =>
-      tool.module ? [{ id: toolCapabilityId(tool.module.manifest.name), name: tool.module.manifest.name, description: tool.module.manifest.description }] : [],
-    );
-    renderCapabilityPicker(card, {
-      label: t('agentRoster.tools'),
-      items,
-      selectedIds: this.draft.tools,
-      emptyHint: t('agentRoster.noToolsHint'),
-      searchPlaceholder: t('agentRoster.searchTools'),
-      onChange: (ids) => { this.draft.tools = ids; this.updateDirty(); },
-    });
-    card.createDiv({ cls: 'specorator-roster-tools-scope-hint', text: t('agentRoster.toolGrantScopeHint') });
-  }
-
   private renderFooter(root: HTMLElement): void {
     const footer = root.createDiv({ cls: 'specorator-roster-detail-footer' });
     this.dirtyDot = footer.createSpan({ cls: 'specorator-roster-dirty', text: t('agentRoster.unsavedChanges') });
@@ -271,7 +252,7 @@ export class AgentDetailEditor {
   private async save(): Promise<void> {
     this.draft.updatedAt = Date.now();
     await this.plugin.agentRosterStore?.save(this.draft);
-    this.original = { ...this.draft, roles: [...this.draft.roles], skills: [...this.draft.skills], tools: [...this.draft.tools] };
+    this.original = { ...this.draft, roles: [...this.draft.roles], skills: [...this.draft.skills] };
     this.isNew = false;
     new Notice(t('agentRoster.saved', { name: this.draft.name }));
     this.updateDirty();

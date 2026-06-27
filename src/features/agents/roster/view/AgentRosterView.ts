@@ -110,15 +110,12 @@ export class AgentRosterView extends ItemView {
       const roleLabel = role === 'verifier' ? t('agentRoster.roleVerifier') : t('agentRoster.roleWorker');
       caps.createSpan({ cls: 'specorator-roster-chip specorator-roster-chip-role', text: roleLabel });
     }
-    // Only surface the capability count once the agent actually has skills or
-    // tools — a "0 · 0" chip on a fresh agent is noise.
-    if (agent.skills.length > 0 || agent.tools.length > 0) {
+    // Only surface the capability count once the agent actually has skills — a
+    // "0 Skills" chip on a fresh agent is noise.
+    if (agent.skills.length > 0) {
       caps.createSpan({
         cls: 'specorator-roster-chip',
-        text: t('agentRoster.capsSummary', {
-          skills: String(agent.skills.length),
-          tools: String(agent.tools.length),
-        }),
+        text: `${agent.skills.length} ${t('agentRoster.skills')}`,
       });
     }
 

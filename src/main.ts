@@ -6,7 +6,6 @@ import './providers';
 
 import type { TFile, TFolder } from 'obsidian';
 import { Notice, Plugin } from 'obsidian';
-import { z } from 'zod';
 
 import { registerPluginCommands } from './app/commands/registerPluginCommands';
 import { registerWorkspaceMenus } from './app/commands/registerWorkspaceMenus';
@@ -92,13 +91,6 @@ import { TaskNoteStore } from './features/tasks/storage/TaskNoteStore';
 import { AgentBoardView } from './features/tasks/ui/AgentBoardView';
 import { LoopLibraryView, VIEW_TYPE_LOOP_LIBRARY } from './features/tasks/ui/LoopLibraryView';
 import { WorkOrderActivityProvider } from './features/tasks/ui/WorkOrderActivityProvider';
-import { buildSpecoratorToolMcpServer } from './features/tools/host/InProcessToolMcpServer';
-import { SpecoratorHttpToolServer } from './features/tools/host/SpecoratorHttpToolServer';
-import { getScopedTools, scopedToolKey } from './features/tools/scopedTools';
-import { SpecoratorToolRegistry } from './features/tools/SpecoratorToolRegistry';
-import type { LoadedTool } from './features/tools/toolTypes';
-import { transpileToolSource } from './features/tools/transpile';
-import { ToolLibraryView, VIEW_TYPE_TOOL_LIBRARY } from './features/tools/view/ToolLibraryView';
 import { setLocale, t } from './i18n/i18n';
 import type { Locale } from './i18n/types';
 import type { BrowserSelectionContext } from './utils/browser';
@@ -125,12 +117,10 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
   public quickActionLastUsedStore: QuickActionLastUsedStore | null = null;
   public vaultSkillAggregator: VaultSkillAggregator | null = null;
   public vaultFileAdapter!: VaultFileAdapter;
-  public toolRegistry!: SpecoratorToolRegistry;
   /** Shared plugin-lifetime store for roster agent definitions. Constructed in onload
    * after vaultFileAdapter; consumers must not build their own instance. */
   public agentRosterStore!: AgentRosterStore;
   public usageTracker: UsageTracker | null = null;
-  private httpToolServer: SpecoratorHttpToolServer | null = null;
   private lifecycle!: PluginLifecycle;
   private unloaded = true;
   private viewActivator!: PluginViewActivator;
@@ -247,17 +237,14 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     });
 
     this.registerView(VIEW_TYPE_AGENT_ROSTER, (leaf) => new AgentRosterView(leaf, this));
-    this.registerView(VIEW_TYPE_TOOL_LIBRARY, (leaf) => new ToolLibraryView(leaf, this));
     this.registerView(VIEW_TYPE_SKILL_LIBRARY, (leaf) => new SkillLibraryView(leaf, this));
     this.registerView(VIEW_TYPE_LOOP_LIBRARY, (leaf) => new LoopLibraryView(leaf, this));
 
     const openView = (viewType: string) => this.openLeafView(viewType);
     this.addRibbonIcon('users', t('ribbon.openAgentRoster'), () => void openView(VIEW_TYPE_AGENT_ROSTER));
-    this.addRibbonIcon('wrench', t('ribbon.openToolLibrary'), () => void openView(VIEW_TYPE_TOOL_LIBRARY));
     this.addRibbonIcon('book-open', t('ribbon.openSkillLibrary'), () => void openView(VIEW_TYPE_SKILL_LIBRARY));
     this.addRibbonIcon('repeat', t('ribbon.openLoopLibrary'), () => void openView(VIEW_TYPE_LOOP_LIBRARY));
     this.addCommand({ id: 'open-agent-roster', name: t('commands.openAgentRoster'), callback: () => void openView(VIEW_TYPE_AGENT_ROSTER) });
-    this.addCommand({ id: 'open-tool-library', name: t('commands.openToolLibrary'), callback: () => void openView(VIEW_TYPE_TOOL_LIBRARY) });
     this.addCommand({ id: 'open-skill-library', name: t('commands.openSkillLibrary'), callback: () => void openView(VIEW_TYPE_SKILL_LIBRARY) });
 
     const chatWorkOrderLinker = new ChatWorkOrderLinker(this);
@@ -317,35 +304,10 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     );
     this.quickActionFavoritesCache.start();
 
-    // Tool registry: discover/transpile/validate user-authored tools under .specorator/tools/.
     this.vaultFileAdapter = new VaultFileAdapter(this.app);
     const rosterLog = this.logger.scope('agents');
     this.agentRosterStore = new AgentRosterStore(this.vaultFileAdapter, this.events,
       (path, error) => rosterLog.warn('skipped malformed roster file', path, error));
-    this.toolRegistry = new SpecoratorToolRegistry(this.vaultFileAdapter, {
-      transpile: transpileToolSource,
-      requireResolve: (id) => {
-        if (id === 'zod' || id === 'specorator/tools') return { z };
-        const req = (window as { require?: (m: string) => unknown }).require;
-        return req ? req(id) : undefined;
-      },
-    });
-    await this.toolRegistry.load();
-    this.httpToolServer = new SpecoratorHttpToolServer(
-      () => this.toolRegistry.list(),
-      (signal) => ({ app: this.app, signal }),
-    );
-    await this.httpToolServer.start();
-    this.registerEvent(
-      this.app.vault.on('modify', (file) => {
-        if (file.path.startsWith('.specorator/tools/')) {
-          void this.toolRegistry.load().then(() => {
-            this.events.emit('toolLibrary:changed');
-            void this.httpToolServer?.rebuild();
-          });
-        }
-      }),
-    );
 
     // Usage tracker must subscribe to the bus BEFORE any entry point that
     // can emit `usage.recorded` is registered. The file/folder context menu
@@ -448,48 +410,11 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     // stop is preserved by the awaited sequence inside the IIFE).
     const store = this.quickActionLastUsedStore;
     this.quickActionLastUsedStore = null;
-    const server = this.httpToolServer;
-    this.httpToolServer = null;
     void (async () => {
       if (store) await store.flush();
-      if (server) await server.stop();
     })();
     this.lifecycle?.shutdownActiveRuntimes();
     void this.lifecycle?.persistOpenTabStates();
-  }
-
-  /** The error-free user tools exposed to a conversation, scoped to a bound
-   *  agent's grant when non-empty (empty/absent grant = all). */
-  private getScopedSpecoratorTools(grantedToolIds?: string[]): LoadedTool[] {
-    return this.toolRegistry ? getScopedTools(this.toolRegistry.list(), grantedToolIds) : [];
-  }
-
-  getSpecoratorToolServer(grantedToolIds?: string[]): unknown {
-    const loaded = this.getScopedSpecoratorTools(grantedToolIds);
-    if (loaded.length === 0) return undefined;
-    return buildSpecoratorToolMcpServer(loaded, (signal) => ({
-      app: this.app,
-      signal,
-    }));
-  }
-
-  /**
-   * A stable fingerprint of the user tools the specorator server currently exposes
-   * for the given grant. Folded into the persistent-query MCP key so a
-   * mid-session tool-grant edit OR a tool added/removed/errored in the registry
-   * forces `setMcpServers` to re-apply the freshly-scoped server (the presence
-   * flag alone would miss a contents change).
-   */
-  getSpecoratorToolKey(grantedToolIds?: string[]): string {
-    return scopedToolKey(this.toolRegistry?.list() ?? [], grantedToolIds);
-  }
-
-  getHttpToolServerConfig(
-    grantedToolIds?: string[],
-  ): { url: string; headers: Record<string, string> } | null {
-    // A non-empty grant resolves a scoped, token-keyed layer; no/empty grant
-    // returns the default all-tools config (byte-identical to pre-scoping).
-    return this.httpToolServer?.getConfig(grantedToolIds) ?? null;
   }
 
   async resolveBoundAgent(
@@ -498,8 +423,8 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
   ): Promise<BoundAgentProjection | null> {
     const agent = await this.agentRosterStore?.get(boundAgentId);
     if (!agent) return null;
-    // Skills can't be runtime-scoped like tools (providers auto-discover every
-    // SKILL.md), so surface the granted ones as guidance baked into the prompt.
+    // Surface the agent's granted skills as guidance baked into the prompt;
+    // providers auto-discover every SKILL.md, so these can't be runtime-scoped.
     const catalog = (await this.vaultSkillAggregator?.listAll()) ?? [];
     const skills = selectAgentSkills(
       agent.skills,
@@ -517,7 +442,6 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
       // channel (Cursor) still adopt the persona instead of their built-in one.
       prompt: formatBoundAgentPersona({ ...agent, skills }),
       model,
-      tools: agent.tools,
     };
   }
 

@@ -1,11 +1,5 @@
 import type { RosterAgent } from './rosterTypes';
 
-export const SPECORATOR_TOOL_MCP_PREFIX = 'mcp__specorator__';
-
-export function toolCapabilityId(toolName: string): string {
-  return `${SPECORATOR_TOOL_MCP_PREFIX}${toolName}`;
-}
-
 export function slugifyRosterName(name: string): string {
   return name
     .toLowerCase()
@@ -36,7 +30,6 @@ export function createRosterAgent(name: string, now: number): RosterAgent {
     name,
     description: '',
     prompt: '',
-    tools: [],
     disallowedTools: [],
     skills: [],
     roles: ['worker'],

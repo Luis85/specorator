@@ -746,33 +746,6 @@ describe('QueryOptionsBuilder', () => {
       expect(options.mcpServers?.['test-server']).toBeDefined();
     });
 
-    it('merges the in-process specorator tool server when getSpecoratorToolServer returns one', () => {
-      const specoratorServer = { type: 'sdk', name: 'specorator' };
-      const ctx = {
-        ...createMockContext(),
-        abortController: new AbortController(),
-        hooks: {},
-        getSpecoratorToolServer: () => specoratorServer,
-        hasEditorContext: false,
-      };
-      const options = QueryOptionsBuilder.buildColdStartQueryOptions(ctx);
-
-      expect(options.mcpServers?.['specorator']).toBe(specoratorServer);
-    });
-
-    it('omits the specorator server when getSpecoratorToolServer returns nothing', () => {
-      const ctx = {
-        ...createMockContext(),
-        abortController: new AbortController(),
-        hooks: {},
-        getSpecoratorToolServer: () => undefined,
-        hasEditorContext: false,
-      };
-      const options = QueryOptionsBuilder.buildColdStartQueryOptions(ctx);
-
-      expect(options.mcpServers?.['specorator']).toBeUndefined();
-    });
-
     it('uses model override when provided', () => {
       const ctx = {
         ...createMockContext({
