@@ -274,9 +274,10 @@ export interface WorkOrderFooterRenderContext {
 /**
  * Render the sticky footer: secondary (ghost) actions group left, the primary
  * group (CTA / danger) right. Status actions close the modal first then run
- * (close-on-click); the inline edit actions toggle in place. While editing, the
- * status-specific right-side primary is suppressed so Cancel + Save are the only
- * primary actions. Re-run on every edit toggle (clears the footer first).
+ * (close-on-click); the inline edit actions toggle in place. The Edit affordance
+ * (view mode) and Cancel + Save (while editing) sit in the left group beside
+ * Open note; while editing the status-specific right-side primary is suppressed.
+ * Re-run on every edit toggle (clears the footer first).
  */
 export function renderWorkOrderFooter(parent: HTMLElement, ctx: WorkOrderFooterRenderContext): void {
   parent.empty();
@@ -294,8 +295,10 @@ export function renderWorkOrderFooter(parent: HTMLElement, ctx: WorkOrderFooterR
 
   if (!ctx.editable) return;
   if (ctx.editing) {
-    renderFooterButton(right, editAction('ghost', 'x', 'tasks.workOrderModal.actionCancelEdit', 'right', ctx.onCancel), null);
-    renderFooterButton(right, editAction('cta', 'check', 'tasks.workOrderModal.actionSaveSections', 'right', ctx.onSave), null);
+    // Cancel + Save sit beside Open note in the left group (no right-side
+    // primary while editing).
+    renderFooterButton(left, editAction('ghost', 'x', 'tasks.workOrderModal.actionCancelEdit', 'left', ctx.onCancel), null);
+    renderFooterButton(left, editAction('cta', 'check', 'tasks.workOrderModal.actionSaveSections', 'left', ctx.onSave), null);
   } else {
     renderFooterButton(left, editAction('ghost', 'pencil', 'tasks.workOrderModal.actionEdit', 'left', ctx.onEdit), null);
   }

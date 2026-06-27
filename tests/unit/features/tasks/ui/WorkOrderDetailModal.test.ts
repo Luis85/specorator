@@ -1851,25 +1851,27 @@ describe('WorkOrderDetailModal — inline edit driven from the footer', () => {
     expect(find(main, 'specorator-work-order-modal-edit-form')).toBeDefined();
   });
 
-  it('swaps the footer to Cancel + Save while editing (Edit + status CTA suppressed)', () => {
+  it('swaps the footer to Cancel + Save beside Open note while editing (Edit + status CTA suppressed)', () => {
     const { root } = open(makeTask('t', 'inbox'));
     footerBtn(root, 'Edit')!.click();
 
-    const labels = footerButtons(root).map((b) => b.label);
-    expect(labels).toContain('Open note'); // still available while editing
-    expect(labels).toContain('Cancel');
-    expect(labels).toContain('Save');
+    const buttons = footerButtons(root);
+    const labels = buttons.map((b) => b.label);
+    // Cancel + Save sit beside Open note in the left group, in this order.
+    expect(labels).toEqual(['Open note', 'Cancel', 'Save']);
     expect(labels).not.toContain('Edit');
     expect(labels).not.toContain('Mark ready'); // status CTA suppressed while editing
 
     const save = footerBtn(root, 'Save')!;
     const cancel = footerBtn(root, 'Cancel')!;
     expect(save.variant).toBe('cta');
-    expect(save.side).toBe('right');
+    expect(save.side).toBe('left');
     expect(save.icon).toBe('check');
     expect(cancel.variant).toBe('ghost');
-    expect(cancel.side).toBe('right');
+    expect(cancel.side).toBe('left');
     expect(cancel.icon).toBe('x');
+    // No right-side primary while editing.
+    expect(buttons.filter((b) => b.side === 'right')).toHaveLength(0);
   });
 
   it('Save collects every textarea value (including cleared ones) and returns to view, without closing', async () => {
