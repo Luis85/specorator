@@ -508,6 +508,17 @@ export class AgentBoardView extends ItemView {
   private async addWorkOrderFromBoard(): Promise<void> {
     const created = await createWorkOrderInteractive(this.plugin, null, { status: 'inbox', reveal: 'none' });
     if (!created) return;
+    await this.openDetailForFile(created);
+  }
+
+  /**
+   * Re-index the board, then open the detail modal for a freshly created
+   * work-order note. Shared by the board's "+" button and the file/folder
+   * right-click "Create work order" flow (via `plugin.openWorkOrderInBoard`),
+   * so both surface the new order in the modal with the board's full action
+   * wiring rather than opening the raw note.
+   */
+  async openDetailForFile(created: TFile): Promise<void> {
     await this.refresh();
     try {
       const content = await this.plugin.app.vault.read(created);

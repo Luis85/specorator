@@ -5,7 +5,23 @@ import {
 } from '@/core/commands/commandHotkeyRegistry';
 import type { ChatTabExecutionSurface } from '@/features/tasks/execution/ChatTabExecutionSurface';
 import type { ChatWorkOrderLinker } from '@/features/tasks/execution/ChatWorkOrderLinker';
+import {
+  createWorkOrderAndOpenModal,
+  createWorkOrderFromCurrentNoteAndOpenModal,
+  createWorkOrderFromSelectionAndOpenModal,
+} from '@/features/tasks/ui/createWorkOrderInteractive';
 import type SpecoratorPlugin from '@/main';
+
+// The create-work-order commands open modals / pickers; stub the module so the
+// command wiring can be asserted without the task UI stack.
+jest.mock('@/features/tasks/ui/createWorkOrderInteractive', () => ({
+  createWorkOrderInteractive: jest.fn(),
+  createWorkOrderFromCurrentNoteInteractive: jest.fn(),
+  createWorkOrderFromSelectionInteractive: jest.fn(),
+  createWorkOrderAndOpenModal: jest.fn(),
+  createWorkOrderFromCurrentNoteAndOpenModal: jest.fn(),
+  createWorkOrderFromSelectionAndOpenModal: jest.fn(),
+}));
 
 type AnyCommand = {
   id: string;
@@ -78,6 +94,24 @@ describe('registerPluginCommands', () => {
     });
 
     expect(getCommandHotkeys().map((h) => h.commandId)).toEqual(EXPECTED_COMMAND_IDS);
+  });
+
+  it('routes the create-work-order commands through the modal-opening helpers (not the note)', () => {
+    const { plugin, commands } = createPlugin();
+    registerPluginCommands({
+      plugin,
+      taskExecutionSurface: {} as ChatTabExecutionSurface,
+      chatWorkOrderLinker: {} as ChatWorkOrderLinker,
+    });
+
+    commands.find((c) => c.id === 'create-work-order')!.callback?.();
+    expect(createWorkOrderAndOpenModal).toHaveBeenCalledWith(plugin);
+
+    commands.find((c) => c.id === 'create-work-order-from-current-note')!.callback?.();
+    expect(createWorkOrderFromCurrentNoteAndOpenModal).toHaveBeenCalledWith(plugin);
+
+    commands.find((c) => c.id === 'create-work-order-from-selection')!.editorCallback?.();
+    expect(createWorkOrderFromSelectionAndOpenModal).toHaveBeenCalledWith(plugin);
   });
 
   it('clear-diagnostic-logs invokes plugin.logger.clear', () => {

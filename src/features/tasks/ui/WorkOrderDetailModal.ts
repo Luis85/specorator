@@ -8,8 +8,12 @@ import { parseAcceptanceProgress } from '../model/acceptanceProgress';
 import type { TaskPriority, TaskSpec, TaskStatus } from '../model/taskTypes';
 import { renderSectionHeader } from './sectionHeader';
 import { renderWorkOrderActivity } from './workOrderActivitySection';
-import { renderWorkOrderEditForm, type WorkOrderSectionUpdate } from './workOrderEditForm';
-import { type FooterAction, footerActionsForStatus } from './workOrderFooterActions';
+import {
+  renderWorkOrderEditForm,
+  type WorkOrderEditFormHandle,
+  type WorkOrderSectionUpdate,
+} from './workOrderEditForm';
+import { renderWorkOrderFooter } from './workOrderFooterActions';
 import { renderWorkOrderProperties } from './workOrderPropertiesPanel';
 
 export interface WorkOrderFieldUpdate {
@@ -103,6 +107,12 @@ export class WorkOrderDetailModal extends Modal {
   // main pane between the rendered sections and the textarea edit form.
   private editing = false;
   private mainEl: HTMLElement | null = null;
+  // The sticky footer is re-rendered on every edit toggle (it hosts the
+  // Edit / Cancel / Save actions), so keep a handle to it past onOpen.
+  private footerEl: HTMLElement | null = null;
+  // Live handle to the edit form's textareas while editing; the footer's Save
+  // button collects through it. Null in view mode.
+  private editForm: WorkOrderEditFormHandle | null = null;
 
   constructor(
     app: App,
@@ -146,38 +156,43 @@ export class WorkOrderDetailModal extends Modal {
     renderWorkOrderProperties(sidebar, this.task, this.callbacks);
 
     this.mainEl = main;
+    this.footerEl = footer;
     this.renderMainPane();
 
-    this.renderActions(footer);
+    this.renderFooter();
   }
 
   onClose(): void {
     this.markdownComponent.unload();
     this.contentEl.empty();
     this.mainEl = null;
+    this.footerEl = null;
+    this.editForm = null;
   }
 
   /**
    * Paints the scrolling main pane. In view mode it renders the read-only
    * sections (Objective / Acceptance / Context / Constraints) plus the
-   * status-driven Activity block, leading with an Edit affordance for the
-   * editable statuses. In edit mode it swaps in the textarea form. Re-runs
-   * itself (clearing the pane first) on every Edit/Save/Cancel toggle.
+   * status-driven Activity block. In edit mode it swaps in the textarea form.
+   * The Edit / Cancel / Save affordances live in the sticky footer (not here),
+   * so a toggle repaints both this pane and the footer. Re-runs itself
+   * (clearing the pane first) on every Edit/Save/Cancel toggle.
    */
   private renderMainPane(): void {
     const main = this.mainEl;
     if (!main) return;
     main.empty();
+    // The form handle is only valid while its DOM is mounted; drop it whenever
+    // the pane is repainted, then re-capture below if we're entering edit mode.
+    this.editForm = null;
 
     if (this.editing) {
-      renderWorkOrderEditForm(main, this.task, {
-        onSave: (sections) => void this.commitSections(sections),
-        onCancel: () => this.setEditing(false),
-      });
+      // Save / Cancel live in the footer (see renderFooter); the form only
+      // renders the textareas and hands back a collect() handle.
+      this.editForm = renderWorkOrderEditForm(main, this.task);
       return;
     }
 
-    if (this.isEditableStatus()) this.renderEditToggle(main);
     this.renderObjective(main);
     this.renderAcceptance(main);
     this.renderProseSection(main, 'link', 'tasks.workOrderModal.sectionContext', this.task.sections.context);
@@ -193,28 +208,12 @@ export class WorkOrderDetailModal extends Modal {
     return EDITABLE_TITLE_STATUSES.has(this.task.frontmatter.status);
   }
 
+  // Edit / Cancel / Save are footer actions, so a toggle repaints BOTH the main
+  // pane (sections ↔ textareas) and the footer (Edit ↔ Cancel/Save).
   private setEditing(editing: boolean): void {
     this.editing = editing;
     this.renderMainPane();
-  }
-
-  /**
-   * "Edit" affordance pinned to the top of the main pane for the editable
-   * statuses. Saving stays inside the form (Save / Cancel), so this only enters
-   * edit mode — there is no separate Done button up here.
-   */
-  private renderEditToggle(parent: HTMLElement): void {
-    const bar = parent.createDiv({ cls: 'specorator-work-order-modal-edit-bar' });
-    const button = bar.createEl('button', {
-      cls: 'specorator-work-order-modal-edit-button',
-      attr: { type: 'button' },
-    });
-    const icon = button.createSpan({ cls: 'specorator-work-order-modal-edit-button-icon' });
-    icon.setAttr('aria-hidden', 'true');
-    icon.setAttr('data-icon', 'pencil');
-    setIcon(icon, 'pencil');
-    button.createSpan({ text: t('tasks.workOrderModal.actionEdit') });
-    button.addEventListener('click', () => this.setEditing(true));
+    this.renderFooter();
   }
 
   private async commitSections(sections: WorkOrderSectionUpdate): Promise<void> {
@@ -506,47 +505,26 @@ export class WorkOrderDetailModal extends Modal {
   }
 
   /**
-   * Sticky-footer action set. Secondary (ghost) buttons group left, the primary
-   * group (CTA / danger) right — every button is a real keyboard-focusable
-   * `<button>` with a leading Lucide icon. The set is status-driven (see
-   * `footerActions`); each action closes the modal first, then runs its
-   * callback, preserving the prior close-on-click contract. Run is deliberately
-   * absent — in the redesign Run is a board-card action, not a modal action.
+   * (Re)paint the sticky footer. The status actions + inline edit affordances
+   * (Edit / Cancel / Save) are rendered by `renderWorkOrderFooter`; the modal
+   * only supplies its live state and the toggle/close callbacks. Called on open
+   * and on every edit toggle. Run is deliberately absent — in the redesign Run
+   * is a board-card action, not a modal action.
    */
-  private renderActions(parent: HTMLElement): void {
-    const actions = this.footerActions();
-
-    const left = parent.createDiv({
-      cls: 'specorator-work-order-modal-footer-group specorator-work-order-modal-footer-group--left',
-    });
-    const right = parent.createDiv({
-      cls: 'specorator-work-order-modal-footer-group specorator-work-order-modal-footer-group--right',
-    });
-
-    for (const action of actions) {
-      this.renderFooterButton(action.side === 'right' ? right : left, action);
-    }
-  }
-
-  private footerActions(): FooterAction[] {
-    return footerActionsForStatus(this.task, this.callbacks);
-  }
-
-  private renderFooterButton(parent: HTMLElement, action: FooterAction): void {
-    const button = parent.createEl('button', {
-      cls: `specorator-work-order-modal-action specorator-work-order-modal-action--${action.variant}`,
-      attr: { type: 'button' },
-    });
-    const icon = button.createSpan({ cls: 'specorator-work-order-modal-action-icon' });
-    icon.setAttr('aria-hidden', 'true');
-    // The mock `setIcon` is a no-op; the data attribute records the icon intent
-    // so tests can assert it (consistent with the rest of the modal).
-    icon.setAttr('data-icon', action.icon);
-    setIcon(icon, action.icon);
-    button.createSpan({ cls: 'specorator-work-order-modal-action-label', text: t(action.labelKey) });
-    button.addEventListener('click', () => {
-      this.close();
-      action.run();
+  private renderFooter(): void {
+    if (!this.footerEl) return;
+    renderWorkOrderFooter(this.footerEl, {
+      task: this.task,
+      callbacks: this.callbacks,
+      editing: this.editing,
+      editable: this.isEditableStatus(),
+      close: () => this.close(),
+      onEdit: () => this.setEditing(true),
+      onCancel: () => this.setEditing(false),
+      onSave: () => {
+        const update = this.editForm?.collect();
+        if (update) void this.commitSections(update);
+      },
     });
   }
 }

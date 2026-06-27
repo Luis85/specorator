@@ -526,6 +526,10 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     return this.viewActivator.runNextReadyWorkOrder();
   }
 
+  async openWorkOrderInBoard(file: TFile): Promise<void> {
+    return this.viewActivator.openWorkOrderInBoard(file);
+  }
+
   canCreateNewTab(): boolean {
     return this.viewActivator.canCreateNewTab();
   }

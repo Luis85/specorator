@@ -3,7 +3,7 @@ import { TFile, TFolder } from 'obsidian';
 
 import { appendQuickActionFavoritesAndPicker } from '@/features/quickActions/appendQuickActionMenu';
 import { addToWorkOrderInteractive } from '@/features/tasks/ui/AddToWorkOrderModal';
-import { createWorkOrderFromSelectionInteractive, createWorkOrderInteractive } from '@/features/tasks/ui/createWorkOrderInteractive';
+import { createWorkOrderAndOpenModal, createWorkOrderFromSelectionInteractive } from '@/features/tasks/ui/createWorkOrderInteractive';
 import type SpecoratorPlugin from '@/main';
 
 export function registerWorkspaceMenus(plugin: SpecoratorPlugin): void {
@@ -24,7 +24,7 @@ export function registerWorkspaceMenus(plugin: SpecoratorPlugin): void {
             .setTitle('Create work order')
             .setIcon('kanban-square')
             .onClick(() => {
-              void createWorkOrderInteractive(plugin, file);
+              void createWorkOrderAndOpenModal(plugin, file);
             });
         });
         menu.addItem((item) => {
@@ -56,7 +56,7 @@ export function registerWorkspaceMenus(plugin: SpecoratorPlugin): void {
             .setTitle('Create work order')
             .setIcon('kanban-square')
             .onClick(() => {
-              void createWorkOrderInteractive(plugin, file);
+              void createWorkOrderAndOpenModal(plugin, file);
             });
         });
         menu.addItem((item) => {

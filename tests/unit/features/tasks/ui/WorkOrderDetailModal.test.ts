@@ -1068,15 +1068,20 @@ describe('WorkOrderDetailModal — sticky footer action sets', () => {
 
   // ---- Exact per-status action sets (label + variant, in render order) ----
 
-  it('inbox: Open note (ghost) left, Mark ready (cta) right', () => {
+  it('inbox: Open note + Edit (ghost) left, Mark ready (cta) right', () => {
     const { buttons } = openFooter(makeTask('t', 'inbox'));
     expect(footerSummary(buttons)).toEqual([
       ['Open note', 'ghost'],
+      ['Edit', 'ghost'],
       ['Mark ready', 'cta'],
     ]);
-    const [openNote, markReady] = buttons;
+    const openNote = buttons.find((b) => b.label === 'Open note')!;
+    const edit = buttons.find((b) => b.label === 'Edit')!;
+    const markReady = buttons.find((b) => b.label === 'Mark ready')!;
     expect(openNote.side).toBe('left');
     expect(openNote.icon).toBe('file-text');
+    expect(edit.side).toBe('left');
+    expect(edit.icon).toBe('pencil');
     expect(markReady.side).toBe('right');
     expect(markReady.icon).toBe('check');
   });
@@ -1152,18 +1157,22 @@ describe('WorkOrderDetailModal — sticky footer action sets', () => {
 
   // ---- Statuses the spec does not tabulate (sensible minimal footers) ----
 
-  it('ready: Open note only (no right-side primary — Run is a board action)', () => {
+  it('ready: Open note + Edit (no right-side primary — Run is a board action)', () => {
     const { buttons } = openFooter(makeTask('t', 'ready'));
-    expect(footerSummary(buttons)).toEqual([['Open note', 'ghost']]);
+    expect(footerSummary(buttons)).toEqual([
+      ['Open note', 'ghost'],
+      ['Edit', 'ghost'],
+    ]);
     expect(buttons.some((b) => b.label === 'Run')).toBe(false);
     expect(buttons.filter((b) => b.side === 'right')).toHaveLength(0);
   });
 
-  it('needs_fix: Open note (+ Open conversation when available), no right-side primary', () => {
+  it('needs_fix: Open note + Open conversation + Edit, no right-side primary', () => {
     const { buttons } = openFooter(taskWithConversation('needs_fix'), convCallbacks());
     expect(footerSummary(buttons)).toEqual([
       ['Open note', 'ghost'],
       ['Open conversation', 'ghost'],
+      ['Edit', 'ghost'],
     ]);
     expect(buttons.filter((b) => b.side === 'right')).toHaveLength(0);
   });
@@ -1782,66 +1791,99 @@ describe('WorkOrderDetailModal — Context + Constraints sections', () => {
   });
 });
 
-describe('WorkOrderDetailModal — inline edit toggle', () => {
+describe('WorkOrderDetailModal — inline edit driven from the footer', () => {
   function open(
     task: TaskSpec,
     callbacks: WorkOrderDetailModalCallbacks = makeCallbacks(),
-  ): { modal: WorkOrderDetailModal; main: RecordingEl } {
+  ): { modal: WorkOrderDetailModal; root: RecordingEl; main: RecordingEl } {
     const modal = new WorkOrderDetailModal(mockApp, task, callbacks);
     const root = installRecordingContent(modal);
     modal.onOpen();
-    return { modal, main: find(root, 'specorator-work-order-modal-main')! };
+    return { modal, root, main: find(root, 'specorator-work-order-modal-main')! };
   }
 
-  const editButton = (main: RecordingEl): RecordingEl | undefined =>
-    find(main, 'specorator-work-order-modal-edit-button');
+  const footerBtn = (root: RecordingEl, label: string): FooterButton | undefined =>
+    footerButtons(root).find((b) => b.label === label);
   const textareas = (main: RecordingEl): RecordingEl[] =>
     findAll(main, (el) => el.tag === 'textarea');
-  const actionButton = (main: RecordingEl, label: string): RecordingEl | undefined =>
-    findAll(main, (el) => el.classes.has('specorator-work-order-modal-action')).find(
-      (btn) => find(btn, 'specorator-work-order-modal-action-label')?.text === label,
-    );
+  const closeMock = (modal: WorkOrderDetailModal): jest.Mock =>
+    (modal as unknown as { close: jest.Mock }).close;
 
-  it.each(['inbox', 'ready', 'needs_fix'] as const)('shows the Edit affordance in %s', (status) => {
-    expect(editButton(open(makeTask('t', status)).main)).toBeDefined();
-  });
-
-  it.each(['running', 'review', 'done', 'failed'] as const)(
-    'hides the Edit affordance in %s',
+  // The Edit affordance now lives in the sticky footer beside Open note, not in
+  // the scrolling main pane.
+  it.each(['inbox', 'ready', 'needs_fix'] as const)(
+    'shows an Edit footer button (ghost, left, pencil) in %s — and never in the main pane',
     (status) => {
-      expect(editButton(open(makeTask('t', status)).main)).toBeUndefined();
+      const { root, main } = open(makeTask('t', status));
+      const edit = footerBtn(root, 'Edit');
+      expect(edit).toBeDefined();
+      expect(edit!.side).toBe('left');
+      expect(edit!.variant).toBe('ghost');
+      expect(edit!.icon).toBe('pencil');
+      // No Edit affordance leaks into the main column anymore.
+      expect(find(main, 'specorator-work-order-modal-edit-bar')).toBeUndefined();
+      expect(find(main, 'specorator-work-order-modal-edit-button')).toBeUndefined();
     },
   );
 
-  it('enters edit mode with one textarea per section seeded from the task', () => {
+  it.each(['running', 'review', 'done', 'failed'] as const)(
+    'renders no Edit footer button in %s',
+    (status) => {
+      const { root } = open(makeTask('t', status, 'Handoff.', 'x'));
+      expect(footerBtn(root, 'Edit')).toBeUndefined();
+    },
+  );
+
+  it('clicking Edit enters edit mode (textareas in main) without closing the modal', () => {
     const task = makeTask('t', 'ready');
     task.sections.objective = 'Obj body';
     task.sections.acceptanceCriteria = '- [ ] crit';
     task.sections.context = 'ctx';
     task.sections.constraints = 'cons';
-    const { main } = open(task);
+    const { modal, root, main } = open(task);
 
-    editButton(main)!.emit('click');
+    footerBtn(root, 'Edit')!.click();
+
+    expect(closeMock(modal)).not.toHaveBeenCalled();
     const areas = textareas(main);
     expect(areas).toHaveLength(4);
     expect(areas.map((a) => a.value)).toEqual(['Obj body', '- [ ] crit', 'ctx', 'cons']);
-    // The read-only Objective markdown body is gone while editing.
-    expect(findSection(main, 'Objective')).toBeDefined(); // header still labels the field
     expect(find(main, 'specorator-work-order-modal-edit-form')).toBeDefined();
   });
 
-  it('Save collects every textarea value (including cleared ones) and returns to view', async () => {
+  it('swaps the footer to Cancel + Save while editing (Edit + status CTA suppressed)', () => {
+    const { root } = open(makeTask('t', 'inbox'));
+    footerBtn(root, 'Edit')!.click();
+
+    const labels = footerButtons(root).map((b) => b.label);
+    expect(labels).toContain('Open note'); // still available while editing
+    expect(labels).toContain('Cancel');
+    expect(labels).toContain('Save');
+    expect(labels).not.toContain('Edit');
+    expect(labels).not.toContain('Mark ready'); // status CTA suppressed while editing
+
+    const save = footerBtn(root, 'Save')!;
+    const cancel = footerBtn(root, 'Cancel')!;
+    expect(save.variant).toBe('cta');
+    expect(save.side).toBe('right');
+    expect(save.icon).toBe('check');
+    expect(cancel.variant).toBe('ghost');
+    expect(cancel.side).toBe('right');
+    expect(cancel.icon).toBe('x');
+  });
+
+  it('Save collects every textarea value (including cleared ones) and returns to view, without closing', async () => {
     const onSaveSections = jest.fn().mockResolvedValue(undefined);
     const task = makeTask('t', 'ready');
-    const { main } = open(task, { ...makeCallbacks(), onSaveSections });
+    const { modal, root, main } = open(task, { ...makeCallbacks(), onSaveSections });
 
-    editButton(main)!.emit('click');
+    footerBtn(root, 'Edit')!.click();
     const areas = textareas(main);
     areas[0].value = 'New objective';
     areas[1].value = '';
     areas[2].value = 'New context';
     areas[3].value = 'New constraints';
-    actionButton(main, 'Save')!.emit('click');
+    footerBtn(root, 'Save')!.click();
 
     expect(onSaveSections).toHaveBeenCalledWith(task, {
       objective: 'New objective',
@@ -1849,22 +1891,23 @@ describe('WorkOrderDetailModal — inline edit toggle', () => {
       context: 'New context',
       constraints: 'New constraints',
     });
+    expect(closeMock(modal)).not.toHaveBeenCalled();
     // The return-to-view re-render runs after the awaited persist resolves.
     await Promise.resolve();
     await Promise.resolve();
-    // Back to view mode: the form is gone, the Edit affordance is back.
+    // Back to view mode: the form is gone, the Edit footer button is back.
     expect(find(main, 'specorator-work-order-modal-edit-form')).toBeUndefined();
-    expect(editButton(main)).toBeDefined();
+    expect(footerBtn(root, 'Edit')).toBeDefined();
   });
 
   it('Save updates the in-memory snapshot so the re-rendered view shows new bodies', async () => {
     const onSaveSections = jest.fn().mockResolvedValue(undefined);
     const task = makeTask('t', 'ready');
-    const { main } = open(task, { ...makeCallbacks(), onSaveSections });
+    const { root, main } = open(task, { ...makeCallbacks(), onSaveSections });
 
-    editButton(main)!.emit('click');
+    footerBtn(root, 'Edit')!.click();
     textareas(main)[2].value = 'Freshly typed context';
-    actionButton(main, 'Save')!.emit('click');
+    footerBtn(root, 'Save')!.click();
     await Promise.resolve();
     await Promise.resolve();
 
@@ -1872,17 +1915,18 @@ describe('WorkOrderDetailModal — inline edit toggle', () => {
     expect(calls.some((c) => c[1] === 'Freshly typed context')).toBe(true);
   });
 
-  it('Cancel returns to view without persisting', () => {
+  it('Cancel returns to view without persisting or closing', () => {
     const onSaveSections = jest.fn();
     const task = makeTask('t', 'ready');
-    const { main } = open(task, { ...makeCallbacks(), onSaveSections });
+    const { modal, root, main } = open(task, { ...makeCallbacks(), onSaveSections });
 
-    editButton(main)!.emit('click');
+    footerBtn(root, 'Edit')!.click();
     textareas(main)[0].value = 'discarded';
-    actionButton(main, 'Cancel')!.emit('click');
+    footerBtn(root, 'Cancel')!.click();
 
     expect(onSaveSections).not.toHaveBeenCalled();
+    expect(closeMock(modal)).not.toHaveBeenCalled();
     expect(find(main, 'specorator-work-order-modal-edit-form')).toBeUndefined();
-    expect(editButton(main)).toBeDefined();
+    expect(footerBtn(root, 'Edit')).toBeDefined();
   });
 });

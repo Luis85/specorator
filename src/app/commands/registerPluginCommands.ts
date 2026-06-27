@@ -11,9 +11,9 @@ import type { ChatTabExecutionSurface } from '@/features/tasks/execution/ChatTab
 import type { ChatWorkOrderLinker } from '@/features/tasks/execution/ChatWorkOrderLinker';
 import { installPresetTemplatesWithNotice } from '@/features/tasks/templates/installPresetTemplates';
 import {
-  createWorkOrderFromCurrentNoteInteractive,
-  createWorkOrderFromSelectionInteractive,
-  createWorkOrderInteractive,
+  createWorkOrderAndOpenModal,
+  createWorkOrderFromCurrentNoteAndOpenModal,
+  createWorkOrderFromSelectionAndOpenModal,
 } from '@/features/tasks/ui/createWorkOrderInteractive';
 import { VIEW_TYPE_LOOP_LIBRARY } from '@/features/tasks/ui/LoopLibraryView';
 import { t } from '@/i18n/i18n';
@@ -72,7 +72,7 @@ function registerWorkOrderCommands(
     id: 'create-work-order',
     name: t('commands.createWorkOrder'),
     callback: () => {
-      void createWorkOrderInteractive(plugin);
+      void createWorkOrderAndOpenModal(plugin);
     },
   });
 
@@ -80,7 +80,7 @@ function registerWorkOrderCommands(
     id: 'create-work-order-from-current-note',
     name: t('commands.createWorkOrderFromCurrentNote'),
     callback: () => {
-      void createWorkOrderFromCurrentNoteInteractive(plugin);
+      void createWorkOrderFromCurrentNoteAndOpenModal(plugin);
     },
   });
 
@@ -88,7 +88,7 @@ function registerWorkOrderCommands(
     id: 'create-work-order-from-selection',
     name: t('commands.createWorkOrderFromSelection'),
     editorCallback: () => {
-      void createWorkOrderFromSelectionInteractive(plugin);
+      void createWorkOrderFromSelectionAndOpenModal(plugin);
     },
   });
 
