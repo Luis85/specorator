@@ -4,7 +4,7 @@
   padding: var(--size-4-4);
 }
 
-/* Hide Obsidian's per-view title bar on the four library views — the in-view
+/* Hide Obsidian's per-view title bar on the three library views — the in-view
    nav strip identifies the current view and navigates between them. */
 .workspace-leaf-content[data-type="specorator-agent-roster"] .view-header,
 .workspace-leaf-content[data-type="specorator-skill-library"] .view-header,
