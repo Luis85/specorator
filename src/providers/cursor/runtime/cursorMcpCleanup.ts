@@ -26,7 +26,8 @@ export function withoutSpecoratorServer(
     return { changed: false, result: base };
   }
 
-  const { specorator: _removed, ...rest } = servers;
+  const rest = { ...servers };
+  delete rest.specorator;
   return { changed: true, result: { ...base, mcpServers: rest } };
 }
 
