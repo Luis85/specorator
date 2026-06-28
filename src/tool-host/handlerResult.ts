@@ -8,6 +8,15 @@ function isCallToolResult(value: unknown): value is CallToolResult {
   );
 }
 
+function isSerializable(value: unknown): boolean {
+  try {
+    JSON.stringify(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Normalize a handler's return value into an MCP CallToolResult. */
 export function toCallToolResult(value: unknown): CallToolResult {
   // Side-effect-only handlers return nothing → empty (but valid) text result.
@@ -18,7 +27,11 @@ export function toCallToolResult(value: unknown): CallToolResult {
     return { content: [{ type: 'text', text: value }] };
   }
   if (isCallToolResult(value)) {
-    return value;
+    // A tool may return a content array with malformed/non-serializable blocks or extra fields.
+    // The SDK serializes the result downstream — OUTSIDE runHandler's catch — so a throw there would
+    // hang tools/call. Pass through only when serializable; otherwise surface a tool error.
+    if (isSerializable(value)) return value;
+    return { content: [{ type: 'text', text: 'Tool returned a non-serializable result' }], isError: true };
   }
   // JSON.stringify can still yield undefined (e.g. a bare function); coerce to string.
   const json = JSON.stringify(value);

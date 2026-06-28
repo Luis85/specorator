@@ -20,4 +20,12 @@ describe('toCallToolResult', () => {
     expect(toCallToolResult(undefined)).toEqual({ content: [{ type: 'text', text: '' }] });
     expect(toCallToolResult(null)).toEqual({ content: [{ type: 'text', text: '' }] });
   });
+
+  it('surfaces a non-serializable content result as a tool error instead of passing it through', () => {
+    // A content-shaped result carrying a BigInt would throw during SDK serialization downstream.
+    const bad = { content: [{ type: 'text', text: 'ok' }], extra: BigInt(1) } as unknown;
+    const res = toCallToolResult(bad);
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toMatch(/non-serializable/);
+  });
 });
