@@ -3,6 +3,7 @@ import { stringifyYaml } from 'obsidian';
 import { parseFrontmatter } from '../../../utils/frontmatter';
 import { HANDOFF_FIELD_MARKER_STRINGS } from '../model/handoffSections';
 import type { TaskLedgerEntry, TaskPriority, TaskSpec, TaskStatus } from '../model/taskTypes';
+import { extractSection } from '../shared/noteStoreShared';
 
 export const RUN_LEDGER_START = '<!-- specorator:run-ledger-start -->';
 export const RUN_LEDGER_END = '<!-- specorator:run-ledger-end -->';
@@ -135,10 +136,10 @@ export class TaskNoteStore {
         path,
         frontmatter: { ...parsed.frontmatter } as WritableFrontmatter,
         sections: {
-          objective: this.extractSection(parsed.body, SECTION_HEADINGS.objective),
-          acceptanceCriteria: this.extractSection(parsed.body, SECTION_HEADINGS.acceptanceCriteria),
-          context: this.extractSection(parsed.body, SECTION_HEADINGS.context),
-          constraints: this.extractSection(parsed.body, SECTION_HEADINGS.constraints),
+          objective: extractSection(parsed.body, SECTION_HEADINGS.objective),
+          acceptanceCriteria: extractSection(parsed.body, SECTION_HEADINGS.acceptanceCriteria),
+          context: extractSection(parsed.body, SECTION_HEADINGS.context),
+          constraints: extractSection(parsed.body, SECTION_HEADINGS.constraints),
           ledger: this.extractGeneratedRegion(parsed.body, RUN_LEDGER_START, RUN_LEDGER_END),
           handoff: this.extractGeneratedRegion(parsed.body, HANDOFF_START, HANDOFF_END),
         },
@@ -371,28 +372,6 @@ export class TaskNoteStore {
     }
 
     return body.slice(startIndex + start.length, endIndex).trim();
-  }
-
-  private extractSection(body: string, heading: string): string {
-    const lines = body.split(/\r?\n/);
-    const headingPattern = /^##\s+(.+?)\s*$/;
-    const sectionLines: string[] = [];
-    let inSection = false;
-
-    for (const line of lines) {
-      const match = line.match(headingPattern);
-      if (match) {
-        if (inSection) break;
-        inSection = match[1] === heading;
-        continue;
-      }
-
-      if (inSection) {
-        sectionLines.push(line);
-      }
-    }
-
-    return sectionLines.join('\n').trim();
   }
 
   private replaceGeneratedRegion(content: string, start: string, end: string, markdown: string): string {

@@ -1,7 +1,15 @@
 import type { App, Vault } from 'obsidian';
-import { normalizePath, TFile } from 'obsidian';
 
 import { extractString, parseFrontmatter } from '../../../utils/frontmatter';
+import {
+  deleteNote,
+  extractSection,
+  fileBaseName,
+  listNoteDefinitions,
+  noteFilePathForName,
+  saveNote,
+  slugify,
+} from '../shared/noteStoreShared';
 import type { LoopDefinition, SaveLoopInput } from './loopTypes';
 
 const SECTION_HEADINGS = Object.freeze({
@@ -11,40 +19,6 @@ const SECTION_HEADINGS = Object.freeze({
   verify: 'Verify',
   notes: 'Notes',
 });
-
-function fileBaseName(path: string): string {
-  const file = path.split('/').pop() ?? path;
-  return file.replace(/\.md$/i, '');
-}
-
-function normalizeFolder(folder: string): string {
-  return folder.replace(/^\/+|\/+$/g, '');
-}
-
-function slugify(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-function extractSection(body: string, heading: string): string {
-  const lines = body.split(/\r?\n/);
-  const headingPattern = /^##\s+(.+?)\s*$/;
-  const sectionLines: string[] = [];
-  let inSection = false;
-  for (const line of lines) {
-    const match = line.match(headingPattern);
-    if (match) {
-      if (inSection) break;
-      inSection = match[1] === heading;
-      continue;
-    }
-    if (inSection) sectionLines.push(line);
-  }
-  return sectionLines.join('\n').trim();
-}
 
 export class LoopNoteStore {
   parse(path: string, content: string): LoopDefinition {
@@ -96,49 +70,28 @@ export class LoopNoteStore {
   }
 
   async list(vault: Vault, folder: string): Promise<{ loops: LoopDefinition[]; warnings: string[] }> {
-    const normalized = normalizeFolder(folder);
-    const loops: LoopDefinition[] = [];
-    const warnings: string[] = [];
-    const files = vault.getMarkdownFiles().filter((file) => file.path.startsWith(`${normalized}/`));
-    for (const file of files) {
-      try {
-        loops.push(this.parse(file.path, await vault.read(file)));
-      } catch (error) {
-        warnings.push(`${file.path}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-    loops.sort((a, b) => a.name.localeCompare(b.name));
-    return { loops, warnings };
+    const { items, warnings } = await listNoteDefinitions(vault, folder, (path, content) =>
+      this.parse(path, content),
+    );
+    items.sort((a, b) => a.name.localeCompare(b.name));
+    return { loops: items, warnings };
   }
 
   getFilePathForName(folder: string, name: string): string {
-    const slug = slugify(name) || 'loop';
-    // folder + name are user-/settings-derived; normalize before any vault call.
-    return normalizePath(`${normalizeFolder(folder)}/${slug}.md`);
+    return noteFilePathForName(folder, name, 'loop');
   }
 
-  async save(vault: Vault, folder: string, input: SaveLoopInput, originalPath?: string): Promise<string> {
-    const content = this.build(input);
-    if (originalPath) {
-      const existing = vault.getAbstractFileByPath(originalPath);
-      if (existing instanceof TFile) {
-        await vault.modify(existing, content);
-        return originalPath;
-      }
-    }
-    const normalized = normalizePath(normalizeFolder(folder));
-    if (!vault.getAbstractFileByPath(normalized)) {
-      await vault.createFolder(normalized);
-    }
-    const filePath = this.getFilePathForName(normalized, input.name);
-    await vault.create(filePath, content);
-    return filePath;
+  save(vault: Vault, folder: string, input: SaveLoopInput, originalPath?: string): Promise<string> {
+    return saveNote(
+      vault,
+      folder,
+      this.build(input),
+      (normalized) => this.getFilePathForName(normalized, input.name),
+      originalPath,
+    );
   }
 
-  async delete(app: App, path: string): Promise<void> {
-    const file = app.vault.getAbstractFileByPath(path);
-    if (file) {
-      await app.fileManager.trashFile(file);
-    }
+  delete(app: App, path: string): Promise<void> {
+    return deleteNote(app, path);
   }
 }

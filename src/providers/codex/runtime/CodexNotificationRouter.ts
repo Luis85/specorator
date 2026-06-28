@@ -31,7 +31,13 @@ import type {
   UserMessageItem,
   WebSearchItem,
 } from './codexAppServerTypes';
+import {
+  buildFileChangeInput,
+  CodexFileChangeAccumulator,
+  formatFileChangeSummary,
+} from './codexFileChangeAccumulator';
 import { CODEX_DEFAULT_CONTEXT_WINDOW, codexModelContextWindow } from './codexModelWindowCatalog';
+import { asRecord, firstString } from './codexNotificationHelpers';
 
 type ChunkEmitter = (chunk: StreamChunk) => void;
 type TurnMetadataListener = (update: Partial<ChatTurnMetadata>) => void;
@@ -65,7 +71,7 @@ export class CodexNotificationRouter {
   private rawToolInputsByCallId = new Map<string, Record<string, unknown>>();
   private rawToolOutputsByCallId = new Map<string, RawToolResult>();
   private suppressedRawCallIds = new Set<string>();
-  private fileChangeInputsById = new Map<string, Record<string, unknown>>();
+  private readonly fileChanges = new CodexFileChangeAccumulator();
 
   constructor(
     private readonly emit: ChunkEmitter,
@@ -139,7 +145,7 @@ export class CodexNotificationRouter {
     this.rawToolInputsByCallId.clear();
     this.rawToolOutputsByCallId.clear();
     this.suppressedRawCallIds.clear();
-    this.fileChangeInputsById.clear();
+    this.fileChanges.reset();
   }
 
   handleNotification(method: string, params: unknown): void {
@@ -385,7 +391,7 @@ export class CodexNotificationRouter {
 
     if (rawName === 'apply_patch') {
       const input = normalizeCodexToolInput(rawName, parseRawArguments(item));
-      this.rememberFileChangeInput(callId, input);
+      this.fileChanges.remember(callId, input);
       this.suppressedRawCallIds.add(callId);
       this.resetAssistantSegmentText();
       return;
@@ -525,7 +531,7 @@ export class CodexNotificationRouter {
   // -- fileChange -------------------------------------------------------------
 
   private emitToolUseFromFileChange(item: FileChangeItem): void {
-    const input = this.rememberFileChangeInput(
+    const input = this.fileChanges.remember(
       item.id,
       buildFileChangeInput(item.changes ?? []),
     );
@@ -540,7 +546,7 @@ export class CodexNotificationRouter {
   }
 
   private emitToolResultFromFileChange(item: FileChangeItem): void {
-    const input = this.rememberFileChangeInput(
+    const input = this.fileChanges.remember(
       item.id,
       buildFileChangeInput(item.changes ?? []),
     );
@@ -563,7 +569,7 @@ export class CodexNotificationRouter {
       return;
     }
 
-    const input = this.rememberFileChangeInput(
+    const input = this.fileChanges.remember(
       itemId,
       buildFileChangeInput(params.changes ?? []),
     );
@@ -575,16 +581,6 @@ export class CodexNotificationRouter {
       name: normalizeCodexToolName('file_change'),
       input,
     });
-  }
-
-  private rememberFileChangeInput(
-    itemId: string,
-    input: Record<string, unknown>,
-  ): Record<string, unknown> {
-    const previous = this.fileChangeInputsById.get(itemId);
-    const merged = mergeApplyPatchInputs(previous, input);
-    this.fileChangeInputsById.set(itemId, merged);
-    return merged;
   }
 
   // -- imageView --------------------------------------------------------------
@@ -817,20 +813,6 @@ export class CodexNotificationRouter {
   }
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
-}
-
-function firstString(...values: unknown[]): string {
-  for (const value of values) {
-    if (typeof value === 'string') {
-      return value;
-    }
-  }
-  return '';
-}
 
 function getItemId(item: { id?: string } | Record<string, unknown>): string | undefined {
   return typeof item.id === 'string' ? item.id : undefined;
@@ -882,123 +864,6 @@ function stringifyRawOutput(value: unknown): string {
   } catch {
     return String(value);
   }
-}
-
-function buildFileChangeInput(changes: unknown): Record<string, unknown> {
-  return { changes: normalizeFileChanges(changes) };
-}
-
-function mergeApplyPatchInputs(
-  previous: Record<string, unknown> | undefined,
-  next: Record<string, unknown>,
-): Record<string, unknown> {
-  if (!previous) {
-    return next;
-  }
-
-  const patch = typeof next.patch === 'string'
-    ? next.patch
-    : typeof previous.patch === 'string'
-      ? previous.patch
-      : undefined;
-  const changes = mergeFileChanges(previous.changes, next.changes);
-  return {
-    ...previous,
-    ...next,
-    ...(patch ? { patch } : {}),
-    ...(changes.length > 0 ? { changes } : {}),
-  };
-}
-
-function normalizeFileChanges(changes: unknown): Record<string, unknown>[] {
-  if (!Array.isArray(changes)) {
-    return [];
-  }
-
-  return changes
-    .map(normalizeFileChange)
-    .filter((change): change is Record<string, unknown> => change !== null);
-}
-
-function normalizeFileChange(change: unknown): Record<string, unknown> | null {
-  const record = asRecord(change);
-  const path = firstString(record?.path);
-  if (!record || !path) {
-    return null;
-  }
-
-  const kindInfo = normalizeFileChangeKind(record.kind ?? record.type);
-  const diff = firstString(record.diff);
-  return {
-    ...record,
-    path,
-    kind: kindInfo.kind,
-    type: kindInfo.kind,
-    ...(kindInfo.movePath ? { movePath: kindInfo.movePath } : {}),
-    ...(diff ? { diff } : {}),
-  };
-}
-
-function normalizeFileChangeKind(value: unknown): { kind: string; movePath?: string } {
-  if (typeof value === 'string' && value) {
-    return { kind: value };
-  }
-
-  const record = asRecord(value);
-  const kind = firstString(record?.type) || 'change';
-  const movePath = firstString(record?.move_path);
-  return {
-    kind,
-    ...(movePath ? { movePath } : {}),
-  };
-}
-
-function mergeFileChanges(previous: unknown, next: unknown): Record<string, unknown>[] {
-  const previousChanges = normalizeFileChanges(previous);
-  const nextChanges = normalizeFileChanges(next);
-  if (previousChanges.length === 0) return nextChanges;
-  if (nextChanges.length === 0) return previousChanges;
-
-  const merged = new Map<string, Record<string, unknown>>();
-  for (const change of previousChanges) {
-    merged.set(fileChangeKey(change), change);
-  }
-  for (const change of nextChanges) {
-    const key = fileChangeKey(change);
-    const previousChange = merged.get(key);
-    merged.set(key, previousChange ? mergeFileChange(previousChange, change) : change);
-  }
-  return [...merged.values()];
-}
-
-function mergeFileChange(
-  previous: Record<string, unknown>,
-  next: Record<string, unknown>,
-): Record<string, unknown> {
-  return {
-    ...previous,
-    ...next,
-    ...(typeof next.diff === 'string'
-      ? { diff: next.diff }
-      : typeof previous.diff === 'string'
-        ? { diff: previous.diff }
-        : {}),
-  };
-}
-
-function fileChangeKey(change: Record<string, unknown>): string {
-  return `${firstString(change.path)}\0${firstString(change.movePath)}`;
-}
-
-function formatFileChangeSummary(change: unknown): string {
-  const record = asRecord(change);
-  const path = firstString(record?.path);
-  if (!record || !path) {
-    return '';
-  }
-
-  const kind = firstString(record.kind, record.type) || 'change';
-  return `${kind}: ${path}`;
 }
 
 function readContentText(value: unknown): string {

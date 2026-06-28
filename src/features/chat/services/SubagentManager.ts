@@ -25,6 +25,15 @@ import {
 } from '../rendering/SubagentRenderer';
 import type { PendingToolCall } from '../state/types';
 import { buildPendingTaskCall, spawnPendingTask } from './pendingTaskSpawn';
+import {
+  extractAgentIdFromRecord,
+  hasTerminalTaskStatus,
+  isRecord,
+  isTerminalTaskStatusValue,
+  parsedResultIndicatesRunning,
+  parseJsonRecord,
+  plainPayloadIndicatesRunning,
+} from './subagentResultParsing';
 
 export type SubagentStateChangeCallback = (subagent: SubagentInfo) => void;
 
@@ -38,18 +47,6 @@ export type RenderPendingResult =
   | { mode: 'sync'; subagentState: SubagentState }
   | { mode: 'async'; info: SubagentInfo; domState: AsyncSubagentState };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function parseJsonRecord(value: string): Record<string, unknown> | null {
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return isRecord(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
 
 function parseJsonValue(value: string): unknown {
   try {
@@ -695,24 +692,24 @@ export class SubagentManager {
 
     const parsed = parseJsonRecord(payload);
     if (parsed) {
-      if (this.hasTerminalTaskStatus(parsed)) {
+      if (hasTerminalTaskStatus(parsed)) {
         return null;
       }
 
-      const directAgentId = this.extractAgentIdFromRecord(parsed);
+      const directAgentId = extractAgentIdFromRecord(parsed);
       if (directAgentId) {
         return directAgentId;
       }
 
       const taskRecord = parsed.task;
       if (isRecord(taskRecord)) {
-        return this.extractAgentIdFromRecord(taskRecord);
+        return extractAgentIdFromRecord(taskRecord);
       }
     }
 
     const xmlStatus = this.taskResultInterpreter.extractTagValue(payload, 'retrieval_status')
       ?? this.taskResultInterpreter.extractTagValue(payload, 'status');
-    if (this.isTerminalTaskStatusValue(xmlStatus)) {
+    if (isTerminalTaskStatusValue(xmlStatus)) {
       return null;
     }
 
@@ -720,57 +717,6 @@ export class SubagentManager {
     return exactLineMatch?.[1] ?? null;
   }
 
-  private hasTerminalTaskStatus(value: unknown): boolean {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      return false;
-    }
-
-    const record = value as Record<string, unknown>;
-    const rawStatus = record.retrieval_status ?? record.status;
-    return this.isTerminalTaskStatusValue(rawStatus);
-  }
-
-  private isTerminalTaskStatusValue(rawStatus: unknown): boolean {
-    if (typeof rawStatus !== 'string') {
-      return false;
-    }
-
-    const normalized = rawStatus.toLowerCase();
-    return normalized === 'completed' || normalized === 'success' || normalized === 'error';
-  }
-
-  private extractAgentIdFromRecord(record: Record<string, unknown>): string | null {
-    const direct = record.agent_id ?? record.agentId;
-    if (typeof direct === 'string' && direct.length > 0) {
-      return direct;
-    }
-
-    const data = record.data;
-    if (!data || typeof data !== 'object' || Array.isArray(data)) {
-      return null;
-    }
-
-    const nested = (data as Record<string, unknown>).agent_id ?? (data as Record<string, unknown>).agentId;
-    return typeof nested === 'string' && nested.length > 0 ? nested : null;
-  }
-
-  private extractAgentIdFromString(value: string): string | null {
-    const regexPatterns = [
-      /"agent_id"\s*:\s*"([^"]+)"/,
-      /"agentId"\s*:\s*"([^"]+)"/,
-      /agent_id[=:]\s*"?([a-zA-Z0-9_-]+)"?/i,
-      /agentId[=:]\s*"?([a-zA-Z0-9_-]+)"?/i,
-    ];
-
-    for (const pattern of regexPatterns) {
-      const match = value.match(pattern);
-      if (match && match[1]) {
-        return match[1];
-      }
-    }
-
-    return null;
-  }
 
   // ============================================
   // Private: Async DOM State Updates
@@ -819,36 +765,9 @@ export class SubagentManager {
     const payload = this.unwrapTextPayload(trimmed);
     const parsed = parseJsonRecord(payload);
     if (parsed) {
-      return this.parsedResultIndicatesRunning(parsed);
+      return parsedResultIndicatesRunning(parsed);
     }
-    return this.plainPayloadIndicatesRunning(payload);
-  }
-
-  private parsedResultIndicatesRunning(parsed: Record<string, unknown>): boolean {
-    const status = parsed.retrieval_status ?? parsed.status;
-    if (status === 'not_ready' || status === 'running' || status === 'pending') {
-      return true;
-    }
-
-    const agents = isRecord(parsed.agents) ? parsed.agents : null;
-    if (!agents || Object.keys(agents).length === 0) {
-      return false;
-    }
-    return Object.values(agents)
-      .map((agent) => (isRecord(agent) && typeof agent.status === 'string') ? agent.status.toLowerCase() : '')
-      .some(s => s === 'running' || s === 'pending' || s === 'not_ready');
-  }
-
-  private plainPayloadIndicatesRunning(payload: string): boolean {
-    const lowerResult = payload.toLowerCase();
-    if (lowerResult.includes('not_ready') || lowerResult.includes('not ready')) {
-      return true;
-    }
-
-    const xmlStatusMatch = lowerResult.match(/<status>([^<]+)<\/status>/);
-    if (!xmlStatusMatch) return false;
-    const status = xmlStatusMatch[1].trim();
-    return status === 'running' || status === 'pending' || status === 'not_ready';
+    return plainPayloadIndicatesRunning(payload);
   }
 
   private extractAgentResult(result: string, agentId: string, toolUseResult?: unknown): string {

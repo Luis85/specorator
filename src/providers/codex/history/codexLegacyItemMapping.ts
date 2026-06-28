@@ -159,9 +159,20 @@ function applyLegacyFileChange(eventType: string, item: CodexItem, turn: TurnAcc
   }
 }
 
-function applyLegacyWebSearch(eventType: string, item: CodexItem, turn: TurnAccumulator): void {
+/**
+ * Shared legacy tool-call lifecycle: `item.started` seeds a new tool call,
+ * `item.completed` finds the matching seeded call and lets the caller mark its
+ * terminal status/result.
+ */
+function applyLegacyToolCallLifecycle(
+  eventType: string,
+  item: CodexItem,
+  turn: TurnAccumulator,
+  seed: (item: CodexItem) => ToolCallInfo,
+  onCompleted: (toolCall: ToolCallInfo) => void,
+): void {
   if (eventType === 'item.started') {
-    pushLegacyToolCall(turn, webSearchSeed(item));
+    pushLegacyToolCall(turn, seed(item));
     return;
   }
 
@@ -171,26 +182,22 @@ function applyLegacyWebSearch(eventType: string, item: CodexItem, turn: TurnAccu
 
   const tc = turn.toolCalls.find(tool => tool.id === item.id);
   if (tc) {
-    tc.result = 'Search complete';
-    tc.status = 'completed';
+    onCompleted(tc);
   }
 }
 
+function applyLegacyWebSearch(eventType: string, item: CodexItem, turn: TurnAccumulator): void {
+  applyLegacyToolCallLifecycle(eventType, item, turn, webSearchSeed, (tc) => {
+    tc.result = 'Search complete';
+    tc.status = 'completed';
+  });
+}
+
 function applyLegacyMcpToolCall(eventType: string, item: CodexItem, turn: TurnAccumulator): void {
-  if (eventType === 'item.started') {
-    pushLegacyToolCall(turn, mcpToolCallSeed(item));
-    return;
-  }
-
-  if (eventType !== 'item.completed') {
-    return;
-  }
-
-  const tc = turn.toolCalls.find(tool => tool.id === item.id);
-  if (tc) {
+  applyLegacyToolCallLifecycle(eventType, item, turn, mcpToolCallSeed, (tc) => {
     tc.status = item.status === 'completed' ? 'completed' : 'error';
     tc.result = item.status === 'completed' ? 'Completed' : 'Failed';
-  }
+  });
 }
 
 // ---------------------------------------------------------------------------
