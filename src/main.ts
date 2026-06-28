@@ -93,7 +93,7 @@ import { LoopLibraryView, VIEW_TYPE_LOOP_LIBRARY } from './features/tasks/ui/Loo
 import { WorkOrderActivityProvider } from './features/tasks/ui/WorkOrderActivityProvider';
 import { setLocale, t } from './i18n/i18n';
 import type { Locale } from './i18n/types';
-import type { CatalogPayload, ToolHostScan } from './tool-host/types';
+import type { ToolHostScan } from './tool-host/types';
 import type { BrowserSelectionContext } from './utils/browser';
 import { chatMessageText } from './utils/chatMessageText';
 import { getVaultPath } from './utils/path';
@@ -797,9 +797,9 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
    * single scan result is then fanned out to every open Claude runtime so their
    * sync builder caches (`hostMaterialized`, `toolsRev`, declared secrets) match.
    */
-  async reloadLocalToolHost(): Promise<CatalogPayload | null> {
+  async reloadLocalToolHost(): Promise<ToolHostScan> {
     const scanner = ProviderWorkspaceRegistry.getLocalToolHostScanner('claude');
-    if (!scanner) return null;
+    if (!scanner) return { catalog: null, declaredSecretIds: [], materialized: false };
     const scan = await scanner(this);
 
     for (const view of this.getAllViews()) {
@@ -812,7 +812,7 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
       });
     }
 
-    return scan.catalog;
+    return scan;
   }
 
   getActiveBrowserSelection(): BrowserSelectionContext | null {

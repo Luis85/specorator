@@ -75,7 +75,7 @@ import {
 } from '../stream/transformClaudeMessage';
 import { buildToolHostServer } from '../toolHost/buildToolHostServer';
 import {
-  normalizeToolHostScan,
+  reduceToolHostCache,
   resolveToolHostNode,
 } from '../toolHost/scanLocalToolHost';
 import { resolveToolHostPaths } from '../toolHost/toolHostPaths';
@@ -736,9 +736,12 @@ export class ClaudeChatRuntime implements ChatRuntime {
    */
   async reloadLocalToolHost(): Promise<CatalogPayload | null> {
     this.hostReloadAttempted = true;
-    const catalog = await this.plugin.reloadLocalToolHost();
-    this.applyToolHostScan(catalog);
-    return catalog;
+    const scan = await this.plugin.reloadLocalToolHost();
+    // Apply the FULL scan (not just `.catalog`) so the `scanFailed` no-clobber signal
+    // survives the direct init-seam re-apply — applying a bare null catalog would wrongly
+    // clear a previously-good secret union on a transient catalog failure.
+    this.applyToolHostScan(scan);
+    return scan.catalog;
   }
 
   /**
@@ -749,15 +752,20 @@ export class ClaudeChatRuntime implements ChatRuntime {
    * and caches the declared-secret union.
    */
   applyToolHostScan(scan: ToolHostScan | CatalogPayload | null): void {
-    const normalized = normalizeToolHostScan(scan);
-    if (!normalized.materialized || normalized.catalog === null) {
-      this.hostMaterialized = false;
-      this.declaredToolSecretIds = [];
-      return;
-    }
-    this.hostMaterialized = true;
-    this.toolsRev += 1;
-    this.declaredToolSecretIds = normalized.declaredSecretIds;
+    // `reduceToolHostCache` owns the three-way no-clobber logic: a `scanFailed` scan
+    // leaves these caches untouched (transient catalog failure must not drop a
+    // previously-good secret union or claim a healthy host built on a failed scan).
+    const next = reduceToolHostCache(
+      {
+        hostMaterialized: this.hostMaterialized,
+        toolsRev: this.toolsRev,
+        declaredToolSecretIds: this.declaredToolSecretIds,
+      },
+      scan,
+    );
+    this.hostMaterialized = next.hostMaterialized;
+    this.toolsRev = next.toolsRev;
+    this.declaredToolSecretIds = next.declaredToolSecretIds;
   }
 
   /** Run the implicit init-path reload at most once, before the first turn flows. */

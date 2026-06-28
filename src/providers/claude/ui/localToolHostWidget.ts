@@ -97,11 +97,12 @@ export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (hos
     }
   };
 
-  // reloadLocalToolHost owns the SINGLE materialize + catalog scan and returns the catalog, so
-  // opening settings / Reload performs exactly one scan (not two). It returns null when Node is
-  // missing or too old (the feature is then inert and the builder stays disabled).
+  // reloadLocalToolHost owns the SINGLE materialize + catalog scan and returns the scan, so
+  // opening settings / Reload performs exactly one scan (not two). `catalog` is null when Node is
+  // missing/old OR when the catalog scan failed (feature inert / builder stays disabled); a clean
+  // empty-dir scan returns an empty (non-null) catalog so "no tools" still renders.
   const refreshAll = async () => {
-    const catalog = await plugin.reloadLocalToolHost();
+    const { catalog } = await plugin.reloadLocalToolHost();
     if (!catalog) {
       listEl.empty();
       listEl.createEl('p', {

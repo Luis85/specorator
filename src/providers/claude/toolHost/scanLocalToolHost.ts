@@ -24,6 +24,36 @@ export function normalizeToolHostScan(
   return { catalog: scan, declaredSecretIds: unionSecretIds(scan), materialized: true };
 }
 
+/** The runtime's mutable local-tool-host caches that a scan result updates. */
+export interface ToolHostCacheState {
+  hostMaterialized: boolean;
+  toolsRev: number;
+  declaredToolSecretIds: string[];
+}
+
+/**
+ * Pure reducer for applying a scan to the runtime's tool-host caches. Three cases:
+ * - `scanFailed`: leave caches UNTOUCHED — a transient catalog failure must not clobber
+ *   a previously-good secret union with `[]` (silent secrets-drop) or claim the host ready.
+ * - disabled (not materialized / null catalog): clear the host (disabled or unsupported).
+ * - success: mark the host ready, bump `toolsRev` (→ re-spawn), cache the secret union.
+ */
+export function reduceToolHostCache(
+  prev: ToolHostCacheState,
+  scan: ToolHostScan | CatalogPayload | null,
+): ToolHostCacheState {
+  const normalized = normalizeToolHostScan(scan);
+  if (normalized.scanFailed) return prev;
+  if (!normalized.materialized || normalized.catalog === null) {
+    return { hostMaterialized: false, toolsRev: prev.toolsRev, declaredToolSecretIds: [] };
+  }
+  return {
+    hostMaterialized: true,
+    toolsRev: prev.toolsRev + 1,
+    declaredToolSecretIds: normalized.declaredSecretIds,
+  };
+}
+
 /**
  * Resolve the Node executable and enhanced PATH for the tool host the SAME way
  * the live Claude CLI subprocess resolves them: provider-configured env PATH
@@ -66,5 +96,11 @@ export async function scanLocalToolHost(plugin: PluginContext): Promise<ToolHost
     SPECORATOR_DISABLED_FILES: JSON.stringify(claude.localToolHostDisabledFiles),
   };
   const catalog = await readCatalog({ runCatalog: spawnCatalogRunner(nodePath, paths.hostEntry, env) });
+  // A null catalog means the host materialized but `--catalog` FAILED (timeout / bad
+  // output). Flag it so the fan-out leaves a previously-good secret union intact rather
+  // than caching `[]` over it — a failed scan is not a successful empty tool set.
+  if (catalog === null) {
+    return { catalog: null, declaredSecretIds: [], materialized: false, scanFailed: true };
+  }
   return { catalog, declaredSecretIds: unionSecretIds(catalog), materialized: true };
 }

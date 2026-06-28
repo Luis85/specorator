@@ -1,7 +1,7 @@
 import type { Plugin } from 'obsidian';
 
 import type { SpecoratorEventMap } from '../../app/events/specoratorEvents';
-import type { CatalogPayload } from '../../tool-host/types';
+import type { ToolHostScan } from '../../tool-host/types';
 import type { BrowserSelectionContext } from '../../utils/browser';
 import type { SharedAppStorage } from '../bootstrap/storage';
 import type { EventBus } from '../events/EventBus';
@@ -94,9 +94,11 @@ export interface PluginContext
   getVaultPath(): string | null;
   /**
    * Materialize + re-scan the local tool host on the active Claude runtime(s) and
-   * return the discovered catalog for the settings widget (null when off/unsupported).
+   * return the full scan. The runtime applies the complete scan (preserving the
+   * `scanFailed` no-clobber signal); the settings widget reads `.catalog` (null
+   * when off/unsupported, an empty payload when genuinely no tools).
    */
-  reloadLocalToolHost(): Promise<CatalogPayload | null>;
+  reloadLocalToolHost(): Promise<ToolHostScan>;
 
   getActiveBrowserSelection(): BrowserSelectionContext | null;
   getActiveConversationSnapshot(): ConversationSnapshot | null;

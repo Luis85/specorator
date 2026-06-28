@@ -2,6 +2,7 @@ import type { PluginContext } from '@/core/types/PluginContext';
 import * as nodeVersion from '@/providers/claude/toolHost/nodeVersion';
 import {
   normalizeToolHostScan,
+  reduceToolHostCache,
   scanLocalToolHost,
 } from '@/providers/claude/toolHost/scanLocalToolHost';
 import * as catalogMod from '@/providers/claude/toolHost/ToolHostCatalog';
@@ -79,6 +80,23 @@ describe('scanLocalToolHost', () => {
     expect(scan.catalog).toEqual(catalog);
     expect(scan.declaredSecretIds).toEqual(['K1', 'K2']);
   });
+
+  it('flags a failed catalog scan (readCatalog null) without claiming success or secrets', async () => {
+    jest.spyOn(envUtils, 'getEnhancedPath').mockReturnValue('/usr/bin');
+    jest.spyOn(envUtils, 'findNodeExecutable').mockReturnValue('/usr/bin/node');
+    jest.spyOn(envUtils, 'curateStdioMcpEnv').mockReturnValue({ PATH: '/usr/bin' });
+    jest.spyOn(nodeVersion, 'probeNodeMajor').mockResolvedValue(20);
+    jest.spyOn(materializer, 'materializeToolHost').mockResolvedValue(true);
+    jest.spyOn(catalogMod, 'spawnCatalogRunner').mockReturnValue(async () => ({ stdout: '', stderr: '', code: -1 }));
+    jest.spyOn(catalogMod, 'readCatalog').mockResolvedValue(null);
+
+    const scan = await scanLocalToolHost(makePlugin());
+
+    expect(scan.scanFailed).toBe(true);
+    expect(scan.materialized).toBe(false);
+    expect(scan.catalog).toBeNull();
+    expect(scan.declaredSecretIds).toEqual([]);
+  });
 });
 
 describe('normalizeToolHostScan', () => {
@@ -105,5 +123,51 @@ describe('normalizeToolHostScan', () => {
   it('passes a full scan through unchanged', () => {
     const scan = { catalog: null, declaredSecretIds: [], materialized: false };
     expect(normalizeToolHostScan(scan)).toBe(scan);
+  });
+});
+
+describe('reduceToolHostCache', () => {
+  const good = {
+    catalog: { tools: [{ file: 'a.mjs', name: 'a', description: '', secrets: ['K1', 'K2'] }], errors: [] },
+    declaredSecretIds: ['K1', 'K2'],
+    materialized: true,
+  };
+
+  it('marks the host ready and bumps toolsRev on a successful scan', () => {
+    const next = reduceToolHostCache(
+      { hostMaterialized: false, toolsRev: 3, declaredToolSecretIds: [] },
+      good,
+    );
+    expect(next).toEqual({ hostMaterialized: true, toolsRev: 4, declaredToolSecretIds: ['K1', 'K2'] });
+  });
+
+  it('does NOT clobber a previously-cached non-empty secret union on a failed scan', () => {
+    const prev = { hostMaterialized: true, toolsRev: 7, declaredToolSecretIds: ['K1', 'K2'] };
+    const next = reduceToolHostCache(prev, {
+      catalog: null,
+      declaredSecretIds: [],
+      materialized: false,
+      scanFailed: true,
+    });
+    // Prior good state is preserved verbatim — no empty-union drop, no toolsRev bump.
+    expect(next).toEqual(prev);
+    expect(next.hostMaterialized).toBe(true);
+    expect(next.declaredToolSecretIds).toEqual(['K1', 'K2']);
+  });
+
+  it('clears the host on a disabled scan (off / unsupported)', () => {
+    const next = reduceToolHostCache(
+      { hostMaterialized: true, toolsRev: 5, declaredToolSecretIds: ['K1'] },
+      null,
+    );
+    expect(next).toEqual({ hostMaterialized: false, toolsRev: 5, declaredToolSecretIds: [] });
+  });
+
+  it('clears the host on a genuinely-empty (clean) catalog rather than preserving stale secrets', () => {
+    const next = reduceToolHostCache(
+      { hostMaterialized: true, toolsRev: 2, declaredToolSecretIds: ['K1'] },
+      { catalog: { tools: [], errors: [] }, declaredSecretIds: [], materialized: true },
+    );
+    expect(next).toEqual({ hostMaterialized: true, toolsRev: 3, declaredToolSecretIds: [] });
   });
 });

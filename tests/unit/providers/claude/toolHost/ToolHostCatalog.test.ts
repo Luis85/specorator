@@ -13,13 +13,33 @@ describe('readCatalog', () => {
     expect(res).toEqual(payload);
   });
 
-  it('returns an empty catalog when the process fails', async () => {
+  it('returns null when the process fails (non-zero exit)', async () => {
     const res = await readCatalog({ runCatalog: fakeSpawn('boom', 1) });
-    expect(res).toEqual({ tools: [], errors: [] });
+    expect(res).toBeNull();
   });
 
-  it('returns an empty catalog on unparseable stdout', async () => {
+  it('returns null on a timeout exit (code -1)', async () => {
+    const res = await readCatalog({ runCatalog: fakeSpawn('', -1) });
+    expect(res).toBeNull();
+  });
+
+  it('returns null when the runner rejects (process error)', async () => {
+    const res = await readCatalog({ runCatalog: () => Promise.reject(new Error('spawn EACCES')) });
+    expect(res).toBeNull();
+  });
+
+  it('returns null on unparseable stdout', async () => {
     const res = await readCatalog({ runCatalog: fakeSpawn('not json') });
+    expect(res).toBeNull();
+  });
+
+  it('returns null on a clean exit with structurally-invalid JSON', async () => {
+    const res = await readCatalog({ runCatalog: fakeSpawn(JSON.stringify({ tools: 'nope' })) });
+    expect(res).toBeNull();
+  });
+
+  it('returns a genuinely-empty payload on a clean exit with no tools', async () => {
+    const res = await readCatalog({ runCatalog: fakeSpawn(JSON.stringify({ tools: [], errors: [] })) });
     expect(res).toEqual({ tools: [], errors: [] });
   });
 });
