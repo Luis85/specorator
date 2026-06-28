@@ -41,6 +41,16 @@ jest.mock('@/i18n/i18n', () => {
   };
 });
 
+const TWO_PROVIDERS: ModelLaunchModalOptions['enabledProviders'] = [
+  { id: 'claude', displayName: 'Claude', models: [
+    { value: 'claude-sonnet-4-5', label: 'Sonnet 4.5' },
+    { value: 'claude-opus-4-5', label: 'Opus 4.5' },
+  ] },
+  { id: 'codex', displayName: 'Codex', models: [
+    { value: 'gpt-5-codex', label: 'gpt-5-codex' },
+  ] },
+];
+
 function makeOptions(over: Partial<ModelLaunchModalOptions> = {}): ModelLaunchModalOptions {
   return {
     app: {} as never,
@@ -53,7 +63,7 @@ function makeOptions(over: Partial<ModelLaunchModalOptions> = {}): ModelLaunchMo
         { value: 'claude-opus-4-5', label: 'Opus 4.5' },
       ] },
     ],
-    resolveDefaultModelForProvider: () => 'claude-sonnet-4-5',
+    resolveDefaultModelForProvider: (id) => (id === 'claude' ? 'claude-sonnet-4-5' : 'gpt-5-codex'),
     onConfirm: jest.fn(),
     ...over,
   };
@@ -78,5 +88,47 @@ describe('ModelLaunchModal', () => {
     const modal = new ModelLaunchModal(makeOptions({ enabledProviders: [] }));
     modal.open();
     expect(modal.contentEl.querySelector<HTMLButtonElement>('[data-testid="qa-run"]')!.disabled).toBe(true);
+  });
+
+  it('lists only enabled providers', () => {
+    const modal = new ModelLaunchModal(makeOptions({ enabledProviders: TWO_PROVIDERS }));
+    modal.open();
+    const providerSelect = modal.contentEl.querySelector<HTMLSelectElement>('[data-testid="qa-provider"]')!;
+    const ids = Array.from(providerSelect.options).map((o) => o.value);
+    expect(ids).toEqual(['claude', 'codex']);
+  });
+
+  it('switching provider resets model to that provider default', () => {
+    const modal = new ModelLaunchModal(makeOptions({ enabledProviders: TWO_PROVIDERS }));
+    modal.open();
+    const providerSelect = modal.contentEl.querySelector<HTMLSelectElement>('[data-testid="qa-provider"]')!;
+    const modelSelect = modal.contentEl.querySelector<HTMLSelectElement>('[data-testid="qa-model"]')!;
+    providerSelect.value = 'codex';
+    providerSelect.dispatchEvent(new Event('change'));
+    expect(modelSelect.value).toBe('gpt-5-codex');
+  });
+
+  it('shows fallback notice when present', () => {
+    const modal = new ModelLaunchModal(makeOptions({
+      fallbackNotice: { storedProviderLabel: 'Codex', storedModelLabel: 'gpt-5-codex' },
+    }));
+    modal.open();
+    const notice = modal.contentEl.querySelector('[data-testid="qa-fallback-notice"]');
+    expect(notice?.textContent).toContain('Codex');
+    expect(notice?.textContent).toContain('gpt-5-codex');
+  });
+
+  it('hides fallback notice when absent', () => {
+    const modal = new ModelLaunchModal(makeOptions());
+    modal.open();
+    expect(modal.contentEl.querySelector('[data-testid="qa-fallback-notice"]')).toBeNull();
+  });
+
+  it('Cancel does not fire onConfirm', () => {
+    const opts = makeOptions();
+    const modal = new ModelLaunchModal(opts);
+    modal.open();
+    modal.contentEl.querySelector<HTMLButtonElement>('[data-testid="qa-cancel"]')!.click();
+    expect(opts.onConfirm).not.toHaveBeenCalled();
   });
 });
