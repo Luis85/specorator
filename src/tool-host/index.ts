@@ -112,14 +112,16 @@ async function main(): Promise<void> {
   }
 
   const ctxFactory = (toolName: string): ToolHandlerCtx => {
-    // Resolve the tool's FILE, then grant only ids that file declared AT CATALOG TIME.
-    // The serve-mode `manifest.secrets` is deliberately NOT consulted for the grant.
+    // Grant ids the file declared AT CATALOG TIME, intersected with what the CURRENT code
+    // still declares. The cataloged set is the ceiling (the serve manifest can never widen
+    // past it); the current manifest narrows it, so a file edited to drop a secret after a
+    // failed re-scan stops receiving it even while the stale cataloged map lingers in env.
     const tool = load.tools.find((t) => t.manifest.name === toolName);
     return {
       vaultPath,
       vault: createVaultContext(vaultPath),
       logger: createLogger(toolName, { logFilePath }),
-      secrets: grantSecrets(tool?.file, catalogedSecretsByFile, secretsById),
+      secrets: grantSecrets(tool?.file, catalogedSecretsByFile, secretsById, tool?.manifest.secrets ?? []),
     };
   };
 

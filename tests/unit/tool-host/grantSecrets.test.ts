@@ -33,4 +33,28 @@ describe('grantSecrets', () => {
   it('returns an empty grant for an undefined file', () => {
     expect(grantSecrets(undefined, { 'wc.mjs': ['OPENAI_API_KEY'] }, secretsById)).toEqual({});
   });
+
+  it('withholds a cataloged id the CURRENT code no longer declares (stale grant after failed re-scan)', () => {
+    // wc.mjs was cataloged with OPENAI_API_KEY, then edited to drop the declaration while a
+    // re-scan failed (stale map preserved). The current manifest declares nothing, so the
+    // narrowing gate withholds the lingering cataloged secret.
+    const cataloged = { 'wc.mjs': ['OPENAI_API_KEY'] };
+    expect(grantSecrets('wc.mjs', cataloged, secretsById, [])).toEqual({});
+  });
+
+  it('still cannot widen past the cataloged ceiling via the current manifest', () => {
+    // The current manifest re-declares both ids, but the catalog only ever recorded
+    // OPENAI_API_KEY for wc.mjs — the intersection keeps SLACK_TOKEN out.
+    const cataloged = { 'wc.mjs': ['OPENAI_API_KEY'] };
+    expect(grantSecrets('wc.mjs', cataloged, secretsById, ['OPENAI_API_KEY', 'SLACK_TOKEN'])).toEqual({
+      OPENAI_API_KEY: 'sk-open',
+    });
+  });
+
+  it('grants the cataloged id when the current code still declares it', () => {
+    const cataloged = { 'wc.mjs': ['OPENAI_API_KEY'] };
+    expect(grantSecrets('wc.mjs', cataloged, secretsById, ['OPENAI_API_KEY'])).toEqual({
+      OPENAI_API_KEY: 'sk-open',
+    });
+  });
 });

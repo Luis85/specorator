@@ -9,12 +9,21 @@ const mockedSpawn = spawn as unknown as jest.Mock;
 
 /** A fake child whose stdout emits `versionOut` then closes on the next tick. */
 function fakeChild(versionOut: string) {
-  const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter };
+  const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter; kill: jest.Mock };
   child.stdout = new EventEmitter();
+  child.kill = jest.fn();
   setImmediate(() => {
     child.stdout.emit('data', Buffer.from(versionOut));
     child.emit('close', 0);
   });
+  return child;
+}
+
+/** A fake child that accepts the spawn but never emits data or close (a hung `node` shim). */
+function hungChild() {
+  const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter; kill: jest.Mock };
+  child.stdout = new EventEmitter();
+  child.kill = jest.fn();
   return child;
 }
 
@@ -56,5 +65,38 @@ describe('probeNodeMajor', () => {
     mockedSpawn.mockReturnValue(child);
     setImmediate(() => child.emit('error', new Error('ENOENT')));
     await expect(probeNodeMajor('/missing/node', { PATH: '' })).resolves.toBeNull();
+  });
+
+  it('kills a hung child and resolves null after the timeout', async () => {
+    jest.useFakeTimers();
+    try {
+      const child = hungChild();
+      mockedSpawn.mockReturnValue(child);
+      const probe = probeNodeMajor('/usr/bin/node', { PATH: '' });
+      jest.advanceTimersByTime(5_000);
+      await expect(probe).resolves.toBeNull();
+      expect(child.kill).toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('clears the timeout when the child closes normally (no leaked timer)', async () => {
+    jest.useFakeTimers();
+    try {
+      const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter; kill: jest.Mock };
+      child.stdout = new EventEmitter();
+      child.kill = jest.fn();
+      mockedSpawn.mockReturnValue(child);
+      const probe = probeNodeMajor('/usr/bin/node', { PATH: '' });
+      child.stdout.emit('data', Buffer.from('v20.0.0\n'));
+      child.emit('close', 0);
+      await expect(probe).resolves.toBe(20);
+      // The pending timer must not fire (and must not kill) after a clean close.
+      jest.advanceTimersByTime(10_000);
+      expect(child.kill).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

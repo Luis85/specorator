@@ -2,6 +2,9 @@ import { spawn } from 'node:child_process';
 
 export const MIN_NODE_MAJOR = 18;
 
+/** Upper bound on `node --version`; a hung shim that accepts the spawn but never exits must not stall the UI. */
+const PROBE_TIMEOUT_MS = 5_000;
+
 /** Parse `process.version`-style output ("v18.20.4\n") to a major number, or null. */
 export function parseNodeMajor(versionOutput: string): number | null {
   const m = versionOutput.trim().match(/^v?(\d+)\./);
@@ -27,9 +30,23 @@ export function probeNodeMajor(
 ): Promise<number | null> {
   return new Promise((resolve) => {
     let out = '';
+    let settled = false;
     const child = spawn(nodePath, ['--version'], { env });
+    const finish = (value: number | null) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      resolve(value);
+    };
+    // A `node` shim that accepts the spawn but never exits from `--version` would otherwise
+    // leave both the settings enable check and scanLocalToolHost() awaiting forever (the
+    // catalog runner's own timeout is downstream of this probe). Treat a hang as unsupported.
+    const timer = window.setTimeout(() => {
+      child.kill();
+      finish(null);
+    }, PROBE_TIMEOUT_MS);
     child.stdout.on('data', (d) => (out += String(d)));
-    child.on('error', () => resolve(null));
-    child.on('close', () => resolve(parseNodeMajor(out)));
+    child.on('error', () => finish(null));
+    child.on('close', () => finish(parseNodeMajor(out)));
   });
 }
