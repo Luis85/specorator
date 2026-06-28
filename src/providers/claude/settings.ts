@@ -26,6 +26,8 @@ export interface ClaudeProviderSettings {
   enableBangBash: boolean;
   enableOpus1M: boolean;
   enableSonnet1M: boolean;
+  localToolHostEnabled: boolean;
+  localToolHostDisabledFiles: string[];
   customModels: ProviderCustomModel[];
   lastModel: string;
   environmentVariables: string;
@@ -42,6 +44,8 @@ export const DEFAULT_CLAUDE_PROVIDER_SETTINGS: Readonly<ClaudeProviderSettings> 
   enableBangBash: false,
   enableOpus1M: false,
   enableSonnet1M: false,
+  localToolHostEnabled: false,
+  localToolHostDisabledFiles: [] as string[],
   customModels: [] as ProviderCustomModel[],
   lastModel: 'haiku',
   environmentVariables: '',
@@ -52,6 +56,12 @@ function normalizeClaudeSafeMode(value: unknown): ClaudeSafeMode | undefined {
   return (CLAUDE_SAFE_MODES as readonly unknown[]).includes(value)
     ? value as ClaudeSafeMode
     : undefined;
+}
+
+function normalizeLocalToolHostDisabledFiles(value: unknown): string[] {
+  return Array.isArray(value)
+    ? (value as string[])
+    : [...DEFAULT_CLAUDE_PROVIDER_SETTINGS.localToolHostDisabledFiles];
 }
 
 export function getClaudeProviderSettings(
@@ -93,6 +103,9 @@ export function getClaudeProviderSettings(
     enableSonnet1M: (config.enableSonnet1M as boolean | undefined)
       ?? (settings.enableSonnet1M as boolean | undefined)
       ?? DEFAULT_CLAUDE_PROVIDER_SETTINGS.enableSonnet1M,
+    localToolHostEnabled: (config.localToolHostEnabled as boolean | undefined)
+      ?? DEFAULT_CLAUDE_PROVIDER_SETTINGS.localToolHostEnabled,
+    localToolHostDisabledFiles: normalizeLocalToolHostDisabledFiles(config.localToolHostDisabledFiles),
     customModels: normalizeCustomModels(config.customModels, { acceptLegacyNewlineString: true }),
     lastModel: (config.lastModel as string | undefined)
       ?? (settings.lastClaudeModel as string | undefined)
