@@ -1,10 +1,12 @@
 import { promises as fsp } from 'node:fs';
 
+import type { McpServerConfig } from '../../../core/types/mcp';
 import type { PluginContext } from '../../../core/types/PluginContext';
 import { TOOL_HOST_SOURCE } from '../../../tool-host/embeddedSource';
 import type { CatalogPayload, ToolHostScan } from '../../../tool-host/types';
 import { curateStdioMcpEnv, findNodeExecutable, getEnhancedPath } from '../../../utils/env';
 import { getClaudeProviderSettings } from '../settings';
+import { buildToolHostServer } from './buildToolHostServer';
 import { isSupportedNode, probeNodeMajor } from './nodeVersion';
 import { readCatalog, spawnCatalogRunner, unionSecretIds } from './ToolHostCatalog';
 import { materializeToolHost } from './ToolHostMaterializer';
@@ -24,19 +26,33 @@ export function normalizeToolHostScan(
   return { catalog: scan, declaredSecretIds: unionSecretIds(scan), materialized: true };
 }
 
-/** The runtime's mutable local-tool-host caches that a scan result updates. */
+/**
+ * The runtime's mutable local-tool-host caches that a scan result updates.
+ *
+ * `hostNodePath`/`hostEnv` are the VALIDATED spawn parameters from the last
+ * successful scan: the Node binary that passed the ≥18 probe and the curated env
+ * it ran with. The sync per-turn builder reuses these instead of re-resolving Node
+ * (it can't re-run the async probe), so a later PATH change pointing at an older
+ * `node` is honored only on the NEXT scan — never injected mid-session. Cleared on
+ * a disabled scan; preserved on a `scanFailed` scan.
+ */
 export interface ToolHostCacheState {
   hostMaterialized: boolean;
   toolsRev: number;
   declaredToolSecretIds: string[];
+  hostNodePath: string | null;
+  hostEnv: Record<string, string> | null;
 }
 
 /**
  * Pure reducer for applying a scan to the runtime's tool-host caches. Three cases:
  * - `scanFailed`: leave caches UNTOUCHED — a transient catalog failure must not clobber
- *   a previously-good secret union with `[]` (silent secrets-drop) or claim the host ready.
- * - disabled (not materialized / null catalog): clear the host (disabled or unsupported).
- * - success: mark the host ready, bump `toolsRev` (→ re-spawn), cache the secret union.
+ *   a previously-good secret union with `[]` (silent secrets-drop), drop the validated
+ *   node, or claim the host ready.
+ * - disabled (not materialized / null catalog): clear the host AND the validated node
+ *   (disabled or unsupported — there is no usable node to inject).
+ * - success: mark the host ready, bump `toolsRev` (→ re-spawn), cache the secret union
+ *   and the validated node path + curated env the host actually spawned with.
  */
 export function reduceToolHostCache(
   prev: ToolHostCacheState,
@@ -45,13 +61,62 @@ export function reduceToolHostCache(
   const normalized = normalizeToolHostScan(scan);
   if (normalized.scanFailed) return prev;
   if (!normalized.materialized || normalized.catalog === null) {
-    return { hostMaterialized: false, toolsRev: prev.toolsRev, declaredToolSecretIds: [] };
+    return {
+      hostMaterialized: false,
+      toolsRev: prev.toolsRev,
+      declaredToolSecretIds: [],
+      hostNodePath: null,
+      hostEnv: null,
+    };
   }
   return {
     hostMaterialized: true,
     toolsRev: prev.toolsRev + 1,
     declaredToolSecretIds: normalized.declaredSecretIds,
+    hostNodePath: normalized.nodePath ?? null,
+    hostEnv: normalized.env ?? null,
   };
+}
+
+/** Inputs for {@link buildToolHostServerFromCache} — the runtime-free builder seam. */
+export interface BuildToolHostFromCacheInput {
+  cache: ToolHostCacheState;
+  enabled: boolean;
+  hostEntry: string;
+  toolsDir: string;
+  vaultPath: string;
+  disabledFiles: string[];
+  resolveSecret: (id: string) => string | null;
+}
+
+/**
+ * Build the synthetic local-tool-host stdio config from the CACHED scan result.
+ *
+ * The sync per-turn builder must inject ONLY the Node binary that passed the scan's
+ * async ≥18 probe — never a freshly-resolved one. A failed/disabled scan clears
+ * `hostNodePath` (via {@link reduceToolHostCache}), so this returns null rather than
+ * falling back to a re-resolved node that could crash the `node18`-targeted host.
+ * A PATH change is honored only on the next scan, which re-validates or disables.
+ */
+export function buildToolHostServerFromCache(
+  input: BuildToolHostFromCacheInput,
+): McpServerConfig | null {
+  const { cache } = input;
+  // Gate on enable + materialized + a cached VALIDATED node. No re-resolution here:
+  // the only node we may inject is the one the scan's ≥18 probe approved.
+  if (!input.enabled || !cache.hostMaterialized || !cache.hostNodePath) return null;
+  return buildToolHostServer({
+    enabled: true,
+    nodePath: cache.hostNodePath,
+    hostEntry: input.hostEntry,
+    toolsDir: input.toolsDir,
+    vaultPath: input.vaultPath,
+    baseEnv: cache.hostEnv ?? {},
+    disabledFiles: input.disabledFiles,
+    declaredSecrets: cache.declaredToolSecretIds,
+    resolveSecret: input.resolveSecret,
+    toolsRev: cache.toolsRev,
+  });
 }
 
 /**
@@ -107,5 +172,14 @@ export async function scanLocalToolHost(plugin: PluginContext): Promise<ToolHost
   if (catalog === null) {
     return { catalog: null, declaredSecretIds: [], materialized: false, scanFailed: true };
   }
-  return { catalog, declaredSecretIds: unionSecretIds(catalog), materialized: true };
+  // Cache the VALIDATED node + the curated env the host spawned with (sans the
+  // per-scan SPECORATOR_* vars buildToolHostServer re-derives) so the sync per-turn
+  // builder reuses the probed-≥18 binary instead of re-resolving Node.
+  return {
+    catalog,
+    declaredSecretIds: unionSecretIds(catalog),
+    materialized: true,
+    nodePath,
+    env: baseEnv,
+  };
 }

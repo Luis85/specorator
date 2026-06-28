@@ -1,5 +1,6 @@
 import * as sdkModule from '@anthropic-ai/claude-agent-sdk';
 
+import { resolveToolHostNode } from '@/providers/claude/toolHost/scanLocalToolHost';
 import * as envUtils from '@/utils/env';
 import * as sessionUtils from '@/utils/session';
 
@@ -1072,7 +1073,10 @@ describe('ClaudeChatRuntime', () => {
         .spyOn(envUtils, 'findNodeExecutable')
         .mockReturnValue('/custom/node/bin/node');
 
-      const result = (service as any).resolveToolHostNode();
+      // The runtime resolves Node through the shared scan helper (the per-turn builder
+      // no longer re-resolves — it reuses the scan-validated node). Exercise the helper
+      // directly to keep coverage of the provider-env-PATH resolution at its real home.
+      const result = resolveToolHostNode(mockPlugin as never);
 
       // The enhanced PATH must be derived from the provider env PATH + CLI path,
       // not from a bare getEnhancedPath() call.

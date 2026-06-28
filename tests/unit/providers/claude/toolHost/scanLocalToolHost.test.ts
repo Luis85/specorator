@@ -127,47 +127,100 @@ describe('normalizeToolHostScan', () => {
 });
 
 describe('reduceToolHostCache', () => {
+  const emptyCache = {
+    hostMaterialized: false,
+    toolsRev: 0,
+    declaredToolSecretIds: [],
+    hostNodePath: null,
+    hostEnv: null,
+  };
   const good = {
     catalog: { tools: [{ file: 'a.mjs', name: 'a', description: '', secrets: ['K1', 'K2'] }], errors: [] },
     declaredSecretIds: ['K1', 'K2'],
     materialized: true,
+    nodePath: '/usr/bin/node',
+    env: { PATH: '/usr/bin' },
   };
 
   it('marks the host ready and bumps toolsRev on a successful scan', () => {
     const next = reduceToolHostCache(
-      { hostMaterialized: false, toolsRev: 3, declaredToolSecretIds: [] },
+      { ...emptyCache, toolsRev: 3 },
       good,
     );
-    expect(next).toEqual({ hostMaterialized: true, toolsRev: 4, declaredToolSecretIds: ['K1', 'K2'] });
+    expect(next).toEqual({
+      hostMaterialized: true,
+      toolsRev: 4,
+      declaredToolSecretIds: ['K1', 'K2'],
+      hostNodePath: '/usr/bin/node',
+      hostEnv: { PATH: '/usr/bin' },
+    });
   });
 
-  it('does NOT clobber a previously-cached non-empty secret union on a failed scan', () => {
-    const prev = { hostMaterialized: true, toolsRev: 7, declaredToolSecretIds: ['K1', 'K2'] };
+  it('caches the validated node path + curated env from the successful scan', () => {
+    const next = reduceToolHostCache(emptyCache, good);
+    expect(next.hostNodePath).toBe('/usr/bin/node');
+    expect(next.hostEnv).toEqual({ PATH: '/usr/bin' });
+  });
+
+  it('does NOT clobber a previously-cached non-empty secret union or validated node on a failed scan', () => {
+    const prev = {
+      hostMaterialized: true,
+      toolsRev: 7,
+      declaredToolSecretIds: ['K1', 'K2'],
+      hostNodePath: '/usr/bin/node',
+      hostEnv: { PATH: '/usr/bin' },
+    };
     const next = reduceToolHostCache(prev, {
       catalog: null,
       declaredSecretIds: [],
       materialized: false,
       scanFailed: true,
     });
-    // Prior good state is preserved verbatim — no empty-union drop, no toolsRev bump.
+    // Prior good state is preserved verbatim — no empty-union drop, no toolsRev bump,
+    // and the previously-validated node/env survive (the builder keeps using them).
     expect(next).toEqual(prev);
     expect(next.hostMaterialized).toBe(true);
     expect(next.declaredToolSecretIds).toEqual(['K1', 'K2']);
+    expect(next.hostNodePath).toBe('/usr/bin/node');
   });
 
-  it('clears the host on a disabled scan (off / unsupported)', () => {
+  it('clears the host AND the cached node on a disabled scan (off / unsupported)', () => {
     const next = reduceToolHostCache(
-      { hostMaterialized: true, toolsRev: 5, declaredToolSecretIds: ['K1'] },
+      {
+        hostMaterialized: true,
+        toolsRev: 5,
+        declaredToolSecretIds: ['K1'],
+        hostNodePath: '/usr/bin/node',
+        hostEnv: { PATH: '/usr/bin' },
+      },
       null,
     );
-    expect(next).toEqual({ hostMaterialized: false, toolsRev: 5, declaredToolSecretIds: [] });
+    expect(next).toEqual({
+      hostMaterialized: false,
+      toolsRev: 5,
+      declaredToolSecretIds: [],
+      hostNodePath: null,
+      hostEnv: null,
+    });
   });
 
   it('clears the host on a genuinely-empty (clean) catalog rather than preserving stale secrets', () => {
     const next = reduceToolHostCache(
-      { hostMaterialized: true, toolsRev: 2, declaredToolSecretIds: ['K1'] },
-      { catalog: { tools: [], errors: [] }, declaredSecretIds: [], materialized: true },
+      {
+        hostMaterialized: true,
+        toolsRev: 2,
+        declaredToolSecretIds: ['K1'],
+        hostNodePath: '/old/node',
+        hostEnv: { PATH: '/old' },
+      },
+      { catalog: { tools: [], errors: [] }, declaredSecretIds: [], materialized: true, nodePath: '/usr/bin/node', env: { PATH: '/usr/bin' } },
     );
-    expect(next).toEqual({ hostMaterialized: true, toolsRev: 3, declaredToolSecretIds: [] });
+    expect(next).toEqual({
+      hostMaterialized: true,
+      toolsRev: 3,
+      declaredToolSecretIds: [],
+      hostNodePath: '/usr/bin/node',
+      hostEnv: { PATH: '/usr/bin' },
+    });
   });
 });

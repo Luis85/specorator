@@ -78,10 +78,21 @@ export interface CatalogPayload {
  * disabled scan or a successful empty catalog: applying it leaves prior caches
  * (declared-secret union, `hostMaterialized`) intact rather than clobbering a
  * previously-good union with `[]` — a silent secrets-drop.
+ *
+ * `nodePath`/`env` are the VALIDATED spawn parameters this scan used: the Node
+ * binary that passed the ≥18 probe and the curated env it ran with. The sync
+ * per-turn builder reuses these cached values instead of re-resolving Node (which
+ * can't re-run the async probe), so a PATH change that points at an older `node`
+ * is honored only on the NEXT scan — never injected into a `node18`-targeted host
+ * mid-session. Present only on a successful scan.
  */
 export interface ToolHostScan {
   catalog: CatalogPayload | null;
   declaredSecretIds: string[];
   materialized: boolean;
   scanFailed?: boolean;
+  /** Validated Node binary (passed the ≥18 probe) the host/catalog spawned with. */
+  nodePath?: string;
+  /** Curated env the host/catalog spawned with (PATH-resolved, NODE_OPTIONS-stripped). */
+  env?: Record<string, string>;
 }

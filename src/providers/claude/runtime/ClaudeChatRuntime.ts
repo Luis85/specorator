@@ -58,7 +58,7 @@ import type { PluginContext } from '../../../core/types/PluginContext';
 import type { PermissionMode,SpecoratorSettings } from '../../../core/types/settings';
 import { t } from '../../../i18n/i18n';
 import type { CatalogPayload, ToolHostScan } from '../../../tool-host/types';
-import { curateStdioMcpEnv, getEnhancedPath, getMissingNodeError } from '../../../utils/env';
+import { getEnhancedPath, getMissingNodeError } from '../../../utils/env';
 import { getVaultPath } from '../../../utils/path';
 import { isSessionExpiredError } from '../../../utils/session';
 import { CLAUDE_PROVIDER_CAPABILITIES } from '../capabilities';
@@ -73,10 +73,9 @@ import {
   createTransformUsageState,
   transformSDKMessage,
 } from '../stream/transformClaudeMessage';
-import { buildToolHostServer } from '../toolHost/buildToolHostServer';
 import {
+  buildToolHostServerFromCache,
   reduceToolHostCache,
-  resolveToolHostNode,
 } from '../toolHost/scanLocalToolHost';
 import { resolveToolHostPaths } from '../toolHost/toolHostPaths';
 import { getClaudeState } from '../types/providerState';
@@ -224,6 +223,10 @@ export class ClaudeChatRuntime implements ChatRuntime {
   private hostMaterialized = false;
   /** Bumped on every reload so the synthetic config changes → host re-spawns with a fresh scan. */
   private toolsRev = 0;
+  /** Node binary the last successful scan validated (≥18 probe). Null when disabled/unscanned. */
+  private hostNodePath: string | null = null;
+  /** Curated env the last successful scan spawned the host with. Null when disabled/unscanned. */
+  private hostEnv: Record<string, string> | null = null;
   /** Gate so the implicit init-path reload runs at most once per session. */
   private hostReloadAttempted = false;
 
@@ -683,45 +686,42 @@ export class ClaudeChatRuntime implements ChatRuntime {
   }
 
   /**
-   * Resolve the Node executable and enhanced PATH for the tool host the SAME way
-   * the live Claude CLI subprocess resolves them: provider-configured env PATH
-   * (Claude settings → Environment) + the CLI dir, not just Obsidian's own PATH.
-   * Without this, a user who only put Node on PATH via the provider setting would
-   * fail the probe and never enable local tools, even though the CLI finds Node.
-   */
-  private resolveToolHostNode(): { nodePath: string | null; enhancedPath: string } {
-    return resolveToolHostNode(this.plugin);
-  }
-
-  /**
    * Sync closure (called per-turn at both query seams) that returns the synthetic
-   * local-tool-host stdio config, or null when off. It reads cached secret ids and
-   * `toolsRev` rather than spawning catalog mode on the hot path.
+   * local-tool-host stdio config, or null when off.
+   *
+   * It builds STRICTLY from the cached scan result (`buildToolHostServerFromCache`):
+   * the cached secret union, `toolsRev`, AND the validated node path + curated env
+   * the scan's async ≥18 probe approved. It must NOT re-resolve Node here — the sync
+   * builder can't re-run the probe, so re-resolving could inject an older `node` (if
+   * the user repointed the Environment PATH/CLI dir) into a `node18`-targeted host
+   * and crash it. A PATH change is honored only on the next scan (reload/settings),
+   * which re-validates the node or disables the host.
    */
   private makeLocalToolHostServerBuilder(): () => McpServerConfig | null {
     return () => {
       const claude = getClaudeProviderSettings(this.plugin.settings);
-      if (!claude.localToolHostEnabled) return null;
-      // Don't inject `node <pluginDir>/tool-host.mjs` until the file is actually on disk —
-      // otherwise a turn racing startup spawns a missing/stale entrypoint.
-      if (!this.hostMaterialized) return null;
+      // Short-circuit on the cheap gates (enable + a cached validated node) BEFORE
+      // touching plugin accessors — a disabled host needs no vault path resolution.
+      if (!claude.localToolHostEnabled || !this.hostMaterialized || !this.hostNodePath) {
+        return null;
+      }
       const vaultPath = this.plugin.getVaultPath();
       if (!vaultPath) return null;
-      const { nodePath, enhancedPath } = this.resolveToolHostNode();
       const paths = resolveToolHostPaths({ vaultPath, pluginDir: this.plugin.manifest.dir ?? '' });
-      return buildToolHostServer({
-        enabled: true,
-        nodePath,
+      return buildToolHostServerFromCache({
+        cache: {
+          hostMaterialized: this.hostMaterialized,
+          toolsRev: this.toolsRev,
+          declaredToolSecretIds: this.declaredToolSecretIds,
+          hostNodePath: this.hostNodePath,
+          hostEnv: this.hostEnv,
+        },
+        enabled: claude.localToolHostEnabled,
         hostEntry: paths.hostEntry,
         toolsDir: paths.toolsDir,
         vaultPath,
-        // Inject the resolved PATH through the curation/allowlist so the spawned
-        // `node tool-host.mjs` and user tools inherit the same Node as the CLI.
-        baseEnv: curateStdioMcpEnv({ PATH: enhancedPath }),
         disabledFiles: claude.localToolHostDisabledFiles,
-        declaredSecrets: this.declaredToolSecretIds,
         resolveSecret: (id) => this.plugin.secretStore.get(id),
-        toolsRev: this.toolsRev,
       });
     };
   }
@@ -760,12 +760,16 @@ export class ClaudeChatRuntime implements ChatRuntime {
         hostMaterialized: this.hostMaterialized,
         toolsRev: this.toolsRev,
         declaredToolSecretIds: this.declaredToolSecretIds,
+        hostNodePath: this.hostNodePath,
+        hostEnv: this.hostEnv,
       },
       scan,
     );
     this.hostMaterialized = next.hostMaterialized;
     this.toolsRev = next.toolsRev;
     this.declaredToolSecretIds = next.declaredToolSecretIds;
+    this.hostNodePath = next.hostNodePath;
+    this.hostEnv = next.hostEnv;
   }
 
   /** Run the implicit init-path reload at most once, before the first turn flows. */
