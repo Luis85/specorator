@@ -62,7 +62,7 @@ If no chat tab or no provider is open, you get a notice asking you to open Speco
 - **Click** a file pill or the current-note pill to **open** the file in a new editor leaf. If the file no longer resolves (renamed away, deleted), Specorator shows a notice rather than opening anything.
 - **Folder pills** don't open on click. They're a label only — use the Obsidian file explorer to browse the folder itself.
 
-The in-thread "Attached context" card (see [[agent-board-chat-interop-and-capture|Agent Board — Chat Interop & Capture]] for how cards relate to capture flows) shows the same set of paths after you send, derived from the folded `@mentions` in the message content.
+The in-thread "Attached context" card (see [Agent Board — Chat Interop & Capture](agent-board-chat-interop-and-capture.md) for how cards relate to capture flows) shows the same set of paths after you send, derived from the folded `@mentions` in the message content.
 
 ---
 

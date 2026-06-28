@@ -8,7 +8,7 @@ parent: "[[Multi Provider Support]]"
 
 This manual walks Windows users through installing the **Claude Code CLI**, the runtime Specorator drives when the Claude provider is enabled. Mac and Linux are not covered here.
 
-Specorator does not bundle Claude Code. The CLI must already exist on your machine before the Claude provider can spawn a session. Once installed, point Specorator at it under **Settings → Specorator → Claude → Claude CLI path** (or leave empty to auto-detect from `PATH`). See [[settings]] for the Claude tab layout.
+Specorator does not bundle Claude Code. The CLI must already exist on your machine before the Claude provider can spawn a session. Once installed, point Specorator at it under **Settings → Specorator → Claude → Claude CLI path** (or leave empty to auto-detect from `PATH`). See [settings](settings.md) for the Claude tab layout.
 
 ---
 
@@ -128,7 +128,7 @@ Typical results:
 
 Paste the result into **Settings → Specorator → Claude → Claude CLI path**, or leave empty to let Specorator auto-detect from `PATH`.
 
-> On npm installs, prefer the `cli-wrapper.cjs` file next to `claude.cmd` if Specorator's auto-detect picks the wrapper. It avoids a CMD launch hop and survives `npm` updates better. See [[settings]].
+> On npm installs, prefer the `cli-wrapper.cjs` file next to `claude.cmd` if Specorator's auto-detect picks the wrapper. It avoids a CMD launch hop and survives `npm` updates better. See [settings](settings.md).
 
 ---
 
@@ -162,5 +162,5 @@ For deeper troubleshooting, run `claude doctor` and consult Anthropic's [trouble
 ## Next steps
 
 - Open **Settings → Specorator → General → Providers** and toggle **Enable Claude**.
-- Open the Claude tab and confirm the CLI path is detected. Set safety mode, custom models, MCP servers, and plugins as needed — see [[settings]].
+- Open the Claude tab and confirm the CLI path is detected. Set safety mode, custom models, MCP servers, and plugins as needed — see [settings](settings.md).
 - Start a chat tab and pick a Claude model from the provider picker.

@@ -19,7 +19,7 @@ Both work for every provider (Claude, Codex, Opencode, Cursor) and persist acros
 
 There are no settings for this feature. Open the chat from the **ribbon** (`Open Specorator`, bot icon) or the command palette command **Open chat view**, then make sure a provider is enabled. Right-click on a folder or file in the file explorer is gated on having an active Specorator chat tab — without one, you get the notice *"Open Specorator chat and enable a provider before adding folder context."* (or *"… file context."*).
 
-For more on creating work orders from the same menu, see [[agent-board-chat-interop-and-capture]].
+For more on creating work orders from the same menu, see [agent-board-chat-interop-and-capture](agent-board-chat-interop-and-capture.md).
 
 ---
 

@@ -23,7 +23,7 @@ MCP servers extend a provider with additional tools (file search, GitHub APIs, b
 
 If you want a server visible to **all four providers**, you must register it in each provider's own configuration. Specorator does not bridge tools across providers.
 
-See [[settings]] for the full settings panel layout, [[install-claude]], [[install-codex]], [[install-opencode]], and [[install-cursor]] for CLI installation steps.
+See [settings](settings.md) for the full settings panel layout, [install-claude](install-claude.md), [install-codex](install-codex.md), [install-opencode](install-opencode.md), and [install-cursor](install-cursor.md) for CLI installation steps.
 
 ---
 
@@ -47,7 +47,7 @@ This is the main flow most users care about. The Claude provider exposes the ful
 
 ### Prerequisites
 
-1. Claude provider enabled in **Settings → Specorator → General → Providers**. See [[install-claude]].
+1. Claude provider enabled in **Settings → Specorator → General → Providers**. See [install-claude](install-claude.md).
 2. The Claude tab visible in the settings panel.
 
 ### Open the MCP section
@@ -151,7 +151,7 @@ Tools that fail to enumerate (e.g. servers that don't implement `tools/list`) sh
 | Symptom | Likely cause |
 |---------|--------------|
 | `Connection timeout (10s)` | stdio command never returned, or the URL is unreachable / behind a firewall. |
-| `spawn ENOENT` | The command in your config is not on `PATH`. Use an absolute path or set `PATH` in the shared environment (see [[settings]] → Environment). |
+| `spawn ENOENT` | The command in your config is not on `PATH`. Use an absolute path or set `PATH` in the shared environment (see [settings](settings.md) → Environment). |
 | `401 / 403` | Missing or wrong `Authorization` header for an http/sse server. |
 | `Permission denied. Check .claude/ folder permissions.` | Specorator could not write `.claude/mcp.json`. Check vault filesystem permissions. |
 | `Config file corrupted. Check .claude/mcp.json` | The JSON file was edited by hand and is no longer parseable. |

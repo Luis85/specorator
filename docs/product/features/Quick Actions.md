@@ -20,7 +20,7 @@ Some prompts you type every single day. *Draft a thank-you email for me. Summari
 
 **Quick Actions** stores any prompt as a plain Markdown note in your vault and surfaces it as a one-tap picker in every chat.
 
-Quick Actions are not another place to manage work. They are accelerators for the surfaces you already use: fire a repeated prompt into [[Co-Worker - Chat]], or run one against a work-order note from the [[Agent Kanban Board]] when you want to tidy, draft, or review the card.
+Quick Actions are not another place to manage work. They are accelerators for the surfaces you already use: fire a repeated prompt into [Co-Worker - Chat](Co-Worker%20-%20Chat.md), or run one against a work-order note from the [Agent Kanban Board](Agent%20Kanban%20Board.md) when you want to tidy, draft, or review the card.
 
 ---
 
@@ -47,11 +47,11 @@ The actions live in your vault as ordinary files. You can edit them in any text 
 - Placeholder substitution is not supported. Tokens like `{{title}}`, `{{selection}}`, or `{{date}}` will not be filled in. Prompts send word for word.
 - The current selection is not injected automatically. Write prompts that ask the helper to use what is already attached.
 - Quick actions are not slash commands or plugin commands. They are stored prompts, sent as written.
-- Quick actions are not a queue or a project board. Use the [[Agent Kanban Board]] when a prompt turns into tracked work.
+- Quick actions are not a queue or a project board. Use the [Agent Kanban Board](Agent%20Kanban%20Board.md) when a prompt turns into tracked work.
 
 ### Goes well with
 
-- [[Co-Worker - Chat]]: quick actions fire into the active co-worker session, which decides the provider and the context
+- [Co-Worker - Chat](Co-Worker%20-%20Chat.md): quick actions fire into the active co-worker session, which decides the provider and the context
 
 ---
 

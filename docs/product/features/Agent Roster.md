@@ -27,10 +27,11 @@ Use it when you have a recurring kind of work that deserves a dedicated speciali
 
 An agent is a small, saved profile. You pick a name and a colour, write the brief that says what it's for, and write the instructions it carries into every conversation. You grant it tools — and only those tools, so a read-only analyst can never write to your vault by accident. You can suggest the skills it should reach for, and pin a preferred model if you want it to always run on a particular one.
 
-![[agent-roster-overview.png]]
-<!-- screenshot: the Agent Roster view with a grid of agent cards (each with avatar, name, description), one card's "Start chat" action highlighted, and the detail editor open on the right showing name, instructions, granted tools, skills, and model -->
+![](Pasted%20image%2020260628100311.png)
 
-There are three ways to put an agent to work. Start a chat straight from its card and the conversation opens already bound to it — a chip in the header shows who you're talking to. Type `@` in any chat to pull an agent in by name. Or assign one to a card on the [[Agent Kanban Board]] so the work order runs as that specialist.
+<!-- screenshot: the Agent Roster view with a grid of agent cards (each with avatar, name, description) -->
+
+There are three ways to put an agent to work. Start a chat straight from its card and the conversation opens already bound to it — a chip in the header shows who you're talking to. Type `@` in any chat to pull an agent in by name. Or assign one to a card on the [Agent Kanban Board](Agent%20Kanban%20Board.md) so the work order runs as that specialist.
 
 When a conversation is bound to an agent, its brief and instructions lead the conversation, it sees only the tools you granted it, and — if you pinned one — it runs on its preferred model. Switch that conversation to a provider the agent's model doesn't belong to, and it quietly falls back to that provider's default instead of sending a model id that doesn't fit.
 
@@ -44,7 +45,7 @@ Your agents are plain JSON files under `.specorator/agents/`, one per agent. The
 - Scope each agent to the tools you grant it — a bound conversation only sees those, so a read-only specialist can't write
 - Start a chat already bound to an agent, with a header chip showing who you're chatting with
 - Pull any agent into a chat by name with an `@` mention
-- Assign an agent to an [[Agent Kanban Board]] work order so the run executes as that specialist
+- Assign an agent to an [Agent Kanban Board](Agent%20Kanban%20Board.md) work order so the run executes as that specialist
 - Pin a preferred model per agent; it applies on its own provider and steps aside for the default on others
 - Use agents across every engine — Claude, Codex, Opencode, and Cursor
 - Sync agents out to your providers so they show up as @-mentionable subagents there too
@@ -68,9 +69,9 @@ Your agents are plain JSON files under `.specorator/agents/`, one per agent. The
 
 ### Goes well with
 
-- [[Co-Worker - Chat]]: bind an agent to a sidebar session and work alongside it
-- [[Agent Kanban Board]]: assign an agent to a work order and let it run the card
-- [[Multi Provider Support]]: keep one roster and use it on whichever engine you have
+- [Co-Worker - Chat](Co-Worker%20-%20Chat.md): bind an agent to a sidebar session and work alongside it
+- [Agent Kanban Board](Agent%20Kanban%20Board.md): assign an agent to a work order and let it run the card
+- [Multi Provider Support](Multi%20Provider%20Support.md): keep one roster and use it on whichever engine you have
 
 ---
 

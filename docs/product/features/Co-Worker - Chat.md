@@ -20,7 +20,7 @@ You have a co-worker. They sit in the sidebar, know what you're working on, and 
 
 **Co-Worker - Chat** opens beside whatever note you're on. It reads the file, sees what you've highlighted, and writes back into the vault when you ask it to.
 
-Use it when you want to work **with** the assistant right now: ask, refine, rewrite, compare, brainstorm, or get one task unstuck without turning it into a formal work order. If the task grows into something you want to queue, prioritize, or review later, promote it to the [[Agent Kanban Board]].
+Use it when you want to work **with** the assistant right now: ask, refine, rewrite, compare, brainstorm, or get one task unstuck without turning it into a formal work order. If the task grows into something you want to queue, prioritize, or review later, promote it to the [Agent Kanban Board](Agent%20Kanban%20Board.md).
 
 ---
 
@@ -57,15 +57,15 @@ When your co-worker rewrites a paragraph or fills in a draft section, you choose
 ### What it doesn't do
 
 - Not a document editor. Suggested edits arrive as previews you accept, not silent writes mid-stream.
-- Queued and background-style handoffs belong on the [[Agent Kanban Board]]; Co-Worker - Chat runs in the foreground.
+- Queued and background-style handoffs belong on the [Agent Kanban Board](Agent%20Kanban%20Board.md); Co-Worker - Chat runs in the foreground.
 - Web search is not built in. Providers with their own search use it; others don't.
-- Capabilities differ per provider. See [[Multi Provider Support]] for the side-by-side.
+- Capabilities differ per provider. See [Multi Provider Support](Multi%20Provider%20Support.md) for the side-by-side.
 
 ### Goes well with
 
-- [[Quick Actions]]: store prompts you use daily, fire them into the active co-worker session with one tap
-- [[Multi Provider Support]]: open new tabs on whichever providers you have access to, side by side
-- [[Agent Kanban Board]]: track larger handoffs outside the chat tab
+- [Quick Actions](Quick%20Actions.md): store prompts you use daily, fire them into the active co-worker session with one tap
+- [Multi Provider Support](Multi%20Provider%20Support.md): open new tabs on whichever providers you have access to, side by side
+- [Agent Kanban Board](Agent%20Kanban%20Board.md): track larger handoffs outside the chat tab
 
 ---
 

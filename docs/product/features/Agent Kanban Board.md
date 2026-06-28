@@ -64,9 +64,9 @@ A card might be "draft a thank-you letter to Aunt Maria", "summarize this twelve
 
 ### Goes well with
 
-- [[Co-Worker - Chat]]: open a card as a co-worker session when you want to talk it through
-- [[Quick Actions]]: run a saved prompt on the active card to draft it, tidy it, or summarize it
-- [[Agent Loops]]: attach a reusable playbook to a card so each run follows the same disciplined steps
+- [Co-Worker - Chat](Co-Worker%20-%20Chat.md): open a card as a co-worker session when you want to talk it through
+- [Quick Actions](Quick%20Actions.md): run a saved prompt on the active card to draft it, tidy it, or summarize it
+- [Agent Loops](Agent%20Loops.md): attach a reusable playbook to a card so each run follows the same disciplined steps
 
 ---
 

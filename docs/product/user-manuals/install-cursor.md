@@ -8,7 +8,7 @@ parent: "[[Multi Provider Support]]"
 
 This manual walks Windows users through installing the **Cursor Agent CLI** (`cursor-agent` / `agent`), the runtime Specorator drives when the Cursor provider is enabled. Specorator drives it by spawning the `cursor-agent` CLI directly (`--output-format stream-json`, parsed as NDJSON) — **not** ACP; you only need the CLI on `PATH` (or pointed at explicitly).
 
-See [[settings]] for the Cursor tab layout, and [[cursor-model-families-and-modes]] for how Cursor model families and modes show up in chat.
+See [settings](settings.md) for the Cursor tab layout, and [cursor-model-families-and-modes](cursor-model-families-and-modes.md) for how Cursor model families and modes show up in chat.
 
 ---
 
@@ -126,7 +126,7 @@ WSL installs update by re-running the `curl ... | bash` line inside the distro.
 | Login browser tab loops | Delete `%USERPROFILE%\.cursor\cli-config.json` and re-run `cursor-agent login`. |
 | `EACCES` writing `cli-config.json` | Antivirus or another Cursor process holds the file. Close other Cursor instances and retry. |
 | Picker shows only **Auto** | No family is enabled. Tick at least one under **Cursor → Visible models**. |
-| Effort gear missing on a family | That family only has one mode. The shared composer hides the gear when there is nothing to pick — see [[cursor-model-families-and-modes]]. |
+| Effort gear missing on a family | That family only has one mode. The shared composer hides the gear when there is nothing to pick — see [cursor-model-families-and-modes](cursor-model-families-and-modes.md). |
 | Model errors mid-turn | Stored `lastModel` may no longer be enabled. Specorator falls back to **Auto** automatically; re-pick a family for new chats. |
 
 ---
@@ -148,6 +148,6 @@ Plan mode, the YOLO/Safe permission toggle, image attachments, the `#` instructi
 ## Next steps
 
 - Toggle **Enable Cursor** under **Settings → Specorator → General → Providers**.
-- Refresh and curate visible families in the Cursor tab — see [[settings]].
-- Read [[cursor-model-families-and-modes]] to understand how families and modes recombine into the raw `--model` id the CLI wants.
+- Refresh and curate visible families in the Cursor tab — see [settings](settings.md).
+- Read [cursor-model-families-and-modes](cursor-model-families-and-modes.md) to understand how families and modes recombine into the raw `--model` id the CLI wants.
 - Start a chat tab and pick a Cursor family from the provider picker.

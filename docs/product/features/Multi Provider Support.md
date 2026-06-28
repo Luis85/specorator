@@ -69,7 +69,7 @@ Claude is wired up the most fully today. Codex covers most of the same ground. O
 
 ### Goes well with
 
-- [[Co-Worker - Chat]]: the chat surface looks and feels the same across all four providers; the matrix shows what actually differs
+- [Co-Worker - Chat](Co-Worker%20-%20Chat.md): the chat surface looks and feels the same across all four providers; the matrix shows what actually differs
 
 ---
 

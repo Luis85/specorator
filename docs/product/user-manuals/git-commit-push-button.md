@@ -105,4 +105,4 @@ This feature has no dedicated commands or palette entries. The button is the onl
 5. The agent runs `git status` / `git diff`, drafts a Conventional Commits message, stages, commits, and pushes. Watch the chat for the commit hash and push result.
 6. Once the working tree is clean again, the button hides on its own — no further action needed.
 
-For richer multi-step workflows (e.g. running tests, opening a PR), drive the agent in chat directly. The button is a fast path for the common "commit what's there and push" case; see [[agent-board-chat-interop-and-capture]] when a change is bigger than a single commit and deserves a tracked work order.
+For richer multi-step workflows (e.g. running tests, opening a PR), drive the agent in chat directly. The button is a fast path for the common "commit what's there and push" case; see [agent-board-chat-interop-and-capture](agent-board-chat-interop-and-capture.md) when a change is bigger than a single commit and deserves a tracked work order.

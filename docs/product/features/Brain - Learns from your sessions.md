@@ -42,7 +42,7 @@ The Brain is **off until you turn it on**, and once on, it never saves anything 
 - **Consolidate a session:** turn a finished session into a short "what worked / what to avoid / decisions" note.
 - **Prime a session:** bring the relevant lessons into a new session so the assistant starts from what you've already learned.
 - **Consolidate on a schedule:** an optional scheduler prepares your knowledge in the background — at the end of a session, every so many sessions, or on a daily cadence — so lessons are always ready without you having to ask.
-- **Lessons agents can find:** consolidated lessons are published to a folder you choose, as a plain "Lessons Learned" note that delegated agents (including [[Agent Kanban Board]] work orders) read in their very first prompt — so a fresh agent starts already knowing your project's hard-won rules.
+- **Lessons agents can find:** consolidated lessons are published to a folder you choose, as a plain "Lessons Learned" note that delegated agents (including [Agent Kanban Board](Agent%20Kanban%20Board.md) work orders) read in their very first prompt — so a fresh agent starts already knowing your project's hard-won rules.
 - **Learns from your signals:** the thumbs up/down already in chat — plus implicit signals like retrying, rewinding, or copying a response — tell the Brain which turns were good and which missed.
 - **Verified, not flattering:** a lesson is only trusted when a positive signal is backed by an objective one (the code ran, the tests passed, the change stuck) — so the Brain learns correctness, not agreeableness.
 - **Propose, then approve:** every lesson is staged for your review before it's saved. Nothing is captured silently.
@@ -83,7 +83,7 @@ The Brain watches what you do, so trust is the precondition, not an afterthought
 
 ## Relationship to the roadmap
 
-The Brain builds directly on substrate the product already has — recorded sessions, the per-run ledger and handoff, and the thumbs up/down in [[Co-Worker - Chat]] — and complements [[RAG Layer - Ask your Vault]]: Ask Vault recalls what you *wrote*, the Brain distills what you *did*.
+The Brain builds directly on substrate the product already has — recorded sessions, the per-run ledger and handoff, and the thumbs up/down in [Co-Worker - Chat](Co-Worker%20-%20Chat.md) — and complements [RAG Layer - Ask your Vault](RAG%20Layer%20-%20Ask%20your%20Vault.md): Ask Vault recalls what you *wrote*, the Brain distills what you *did*.
 
 Planned in stages:
 

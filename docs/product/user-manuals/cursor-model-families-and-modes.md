@@ -28,7 +28,7 @@ Open **Settings → Specorator → Cursor**. You need two things in place before
 
 The Cursor CLI also has to be **signed in**. If `cursor-agent --list-models` returns nothing because you are not logged in, the **Refresh models** action surfaces a notice telling you to run `cursor-agent login`.
 
-See also [[agent-board-chat-interop-and-capture]] for Agent Board provider/model defaults, which are separate from the per-conversation pick described here.
+See also [agent-board-chat-interop-and-capture](agent-board-chat-interop-and-capture.md) for Agent Board provider/model defaults, which are separate from the per-conversation pick described here.
 
 ---
 

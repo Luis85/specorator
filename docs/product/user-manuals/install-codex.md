@@ -9,7 +9,7 @@ type: user-install-guide
 
 This manual walks Windows users through installing the **OpenAI Codex CLI**, the runtime Specorator drives when the Codex provider is enabled. Two flavours are supported: **Native Windows** (`codex.exe`) and **WSL** (Linux `codex` inside a WSL distro). Pick one method per machine and configure Specorator accordingly under **Settings → Specorator → Codex**.
 
-See [[settings]] for the Codex tab layout, including the **Installation method** toggle and the optional WSL distro override.
+See [settings](settings.md) for the Codex tab layout, including the **Installation method** toggle and the optional WSL distro override.
 
 ---
 
@@ -169,6 +169,6 @@ Same sign-in flow as native. Credentials cache under `~/.codex/auth.json` inside
 ## Next steps
 
 - Toggle **Enable Codex** under **Settings → Specorator → General → Providers**.
-- Configure safety mode, custom models, skills, and subagents in the Codex tab — see [[settings]].
+- Configure safety mode, custom models, skills, and subagents in the Codex tab — see [settings](settings.md).
 - Note that Codex MCP servers are managed via the `codex mcp` CLI, not in Specorator.
 - Start a chat tab and pick a Codex model from the provider picker.

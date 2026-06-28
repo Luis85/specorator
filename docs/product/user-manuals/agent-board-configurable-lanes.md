@@ -59,7 +59,7 @@ The shipped defaults reproduce the original board exactly: ten visible lanes, on
 | 9 | Failed | `failed` | yes |
 | 10 | Canceled | `canceled` | yes |
 
-All default lanes ship with empty Definition of ready / Definition of done. For the underlying run pipeline (capture → `inbox` → `ready` → run → `review` → `done`) see [[agent-board-chat-interop-and-capture]].
+All default lanes ship with empty Definition of ready / Definition of done. For the underlying run pipeline (capture → `inbox` → `ready` → run → `review` → `done`) see [agent-board-chat-interop-and-capture](agent-board-chat-interop-and-capture.md).
 
 ---
 

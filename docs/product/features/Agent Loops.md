@@ -17,7 +17,7 @@ parent: "[[Agent Kanban Board]]"
 
 You have a way you like things done. Bugs get reproduced before they get fixed. Research ends in a written recommendation, not a pile of tabs. Refactors stay behind a test so nothing breaks. But every time you hand a job to the assistant, you retype that approach from scratch — and if you forget a step, the result drifts.
 
-**Agent Loops** lets you save that approach once and reuse it. A loop is a small playbook — *Use when, Approach, Steps, Verify, Notes* — that you attach to a work order on the [[Agent Kanban Board]]. When the card runs, the loop's guidance travels with it, so the assistant works the same disciplined steps every time instead of improvising a new method on each run.
+**Agent Loops** lets you save that approach once and reuse it. A loop is a small playbook — *Use when, Approach, Steps, Verify, Notes* — that you attach to a work order on the [Agent Kanban Board](Agent%20Kanban%20Board.md). When the card runs, the loop's guidance travels with it, so the assistant works the same disciplined steps every time instead of improvising a new method on each run.
 
 Use a loop when you have a repeatable shape of work — a bug-fix loop, a refactor loop, a research-spike loop — and you want every run of that kind to follow it.
 
@@ -27,7 +27,7 @@ Loops live in a folder in your vault, just like your work orders and templates. 
 
 Attaching is one step. Open a work order, click the **Loop** chip, and pick a loop from the list — or set a **default loop** on a work-order template so every card made from that template starts with it already attached. From then on, when the card runs, the loop's approach, steps, and verify check fold into the instructions the assistant follows.
 
-![[agent-loops-overview.png]]
+![[agent-loop-features.png]]
 <!-- screenshot: work-order detail panel with the Loop chip open, the loop picker listing a few loops with their "Use when" lines, and a loop note open as Markdown alongside -->
 
 The loop and the run stay readable. The *Use when* line helps you pick the right loop, and the *Approach, Steps, Verify, Notes* are what the assistant actually works through. The folder is yours, so you can version it, back it up, or hand a teammate your house style as a handful of notes.
@@ -64,8 +64,8 @@ A loop might be "reproduce, then fix, then verify", "characterize with a test, t
 
 ### Goes well with
 
-- [[Agent Kanban Board]]: attach a loop to any card, or set a default loop on a template so every card from it inherits the approach
-- [[Quick Actions]]: a quick action fires a one-off prompt; a loop is the saved method a tracked work order follows
+- [Agent Kanban Board](Agent%20Kanban%20Board.md): attach a loop to any card, or set a default loop on a template so every card from it inherits the approach
+- [Quick Actions](Quick%20Actions.md): a quick action fires a one-off prompt; a loop is the saved method a tracked work order follows
 
 ---
 

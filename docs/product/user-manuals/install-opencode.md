@@ -10,7 +10,7 @@ This manual walks Windows users through installing the **Opencode CLI**, the run
 
 Opencode's upstream docs recommend WSL for the smoothest experience, but native Windows installs work for most flows. Pick one method below.
 
-See [[settings]] for the Opencode tab layout, and [[cursor-model-families-and-modes]] for how multi-model providers expose families and modes in chat (Opencode uses the same shared picker contract).
+See [settings](settings.md) for the Opencode tab layout, and [cursor-model-families-and-modes](cursor-model-families-and-modes.md) for how multi-model providers expose families and modes in chat (Opencode uses the same shared picker contract).
 
 ---
 
@@ -166,6 +166,6 @@ Subagents live under `.opencode/agent/` (legacy: `.opencode/agents/`). The Openc
 ## Next steps
 
 - Toggle **Enable Opencode** under **Settings → Specorator → General → Providers**.
-- Pick visible models in the Opencode tab — see [[settings]].
-- Plan mode runs as Opencode's managed `plan` mode (toggle it from the toolbar or Shift+Tab). When the plan turn produces assistant content, the runtime sets `planCompleted` and the shared inline approve / revise / cancel card opens — see [[plan-mode]]. Fork and rewind are gated. Image attachments, `#` instruction mode, subagents, runtime-discovered slash commands, and history reload are supported.
+- Pick visible models in the Opencode tab — see [settings](settings.md).
+- Plan mode runs as Opencode's managed `plan` mode (toggle it from the toolbar or Shift+Tab). When the plan turn produces assistant content, the runtime sets `planCompleted` and the shared inline approve / revise / cancel card opens — see [plan-mode](plan-mode.md). Fork and rewind are gated. Image attachments, `#` instruction mode, subagents, runtime-discovered slash commands, and history reload are supported.
 - Start a chat tab and pick an Opencode model from the provider picker.

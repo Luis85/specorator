@@ -93,15 +93,15 @@ dev
 # package-lock.json
 
 # Claude session config + worktrees (never commit these — worktrees show up as gitlinks)
-/.claude/worktrees/
-/.claude/worktrees/**
-/.specorator/
-/.specorator/
+/.claude
+/.codex
+/.specorator
 /.worktrees/
 /.worktrees/**
-/.claudian
 
 # Throwaway agent notes, handoff files, and probe scripts (per CLAUDE.md)
 /.context/
 /Agent Board/
 .fallow/
+
+/Conceptboards/

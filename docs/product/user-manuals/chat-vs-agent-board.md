@@ -12,8 +12,8 @@ related:
 
 Specorator gives you two work surfaces for AI help:
 
-- **[[sidepanel-chat|Co-Worker Chat]]** is for foreground collaboration: fast, conversational, low-ceremony work beside the note you are already editing.
-- **[[agent-board|Agent Board]]** is for durable handoffs: scoped work orders you can queue, prioritize, run, review, rework, and keep as a record in your vault.
+- **[Co-Worker Chat](sidepanel-chat.md)** is for foreground collaboration: fast, conversational, low-ceremony work beside the note you are already editing.
+- **[Agent Board](agent-board.md)** is for durable handoffs: scoped work orders you can queue, prioritize, run, review, rework, and keep as a record in your vault.
 
 The simple rule: **talk through it in chat; hand it off on the board.**
 
@@ -50,7 +50,7 @@ A work order is a Markdown note, so it stays in your vault after the chat tab is
 
 ## Use Quick Actions for repeated prompts
 
-[[quick-actions|Quick Actions]] are not a third workspace. They are shortcuts for prompts you reuse.
+[Quick Actions](quick-actions.md) are not a third workspace. They are shortcuts for prompts you reuse.
 
 Use them when you catch yourself typing the same instruction again:
 
@@ -67,14 +67,14 @@ Quick Actions usually fire into the active chat. On the Agent Board, they can al
 
 | If you want to… | Use |
 |-----------------|-----|
-| Ask, explore, or revise something immediately | Co-Worker Chat: [[sidepanel-chat]] |
-| Work beside the current note with selected text already attached | Co-Worker Chat: [[sidepanel-chat]] |
-| Have a back-and-forth conversation before you know the exact task | Co-Worker Chat: [[sidepanel-chat]] |
-| Save a prompt you use often | Quick Actions: [[quick-actions]] |
-| Turn a useful chat result into follow-up work | Create a work order: [[agent-board-chat-interop-and-capture]] |
-| Queue several tasks and pick the next one by priority | Agent Board: [[agent-board]] |
-| Define acceptance criteria and review the result before calling it done | Agent Board: [[agent-board]] |
-| Keep a durable handoff record in Markdown | Agent Board: [[agent-board]] |
+| Ask, explore, or revise something immediately | Co-Worker Chat: [sidepanel-chat](sidepanel-chat.md) |
+| Work beside the current note with selected text already attached | Co-Worker Chat: [sidepanel-chat](sidepanel-chat.md) |
+| Have a back-and-forth conversation before you know the exact task | Co-Worker Chat: [sidepanel-chat](sidepanel-chat.md) |
+| Save a prompt you use often | Quick Actions: [quick-actions](quick-actions.md) |
+| Turn a useful chat result into follow-up work | Create a work order: [agent-board-chat-interop-and-capture](agent-board-chat-interop-and-capture.md) |
+| Queue several tasks and pick the next one by priority | Agent Board: [agent-board](agent-board.md) |
+| Define acceptance criteria and review the result before calling it done | Agent Board: [agent-board](agent-board.md) |
+| Keep a durable handoff record in Markdown | Agent Board: [agent-board](agent-board.md) |
 
 ---
 
@@ -83,23 +83,23 @@ Quick Actions usually fire into the active chat. On the Agent Board, they can al
 ### Fast foreground task
 
 1. Open a note.
-2. Open [[sidepanel-chat|Co-Worker Chat]].
+2. Open [Co-Worker Chat](sidepanel-chat.md).
 3. Ask for a rewrite, summary, explanation, or comparison.
 4. Preview and apply the result, or keep chatting until it is right.
 
 ### Repeated task
 
 1. Type a useful prompt in chat.
-2. Capture it as a [[quick-actions|Quick Action]].
+2. Capture it as a [Quick Action](quick-actions.md).
 3. Next time, click the lightning-bolt picker and run it in one tap.
 
 ### Bigger handoff
 
 1. Start in chat to shape the idea.
-2. Capture the assistant's useful reply, or the whole conversation, as a [[agent-board-chat-interop-and-capture|work order]].
+2. Capture the assistant's useful reply, or the whole conversation, as a [work order](agent-board-chat-interop-and-capture.md).
 3. Scope the work order: objective, acceptance criteria, context, and constraints.
 4. Move it to **Ready**.
-5. Run it from the [[agent-board|Agent Board]].
+5. Run it from the [Agent Board](agent-board.md).
 6. Review the handoff, then accept, rework, archive, or reopen.
 
 ---

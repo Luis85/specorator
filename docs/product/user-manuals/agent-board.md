@@ -8,7 +8,7 @@ parent: "[[Agent Kanban Board]]"
 
 The Agent Board is a kanban-style view for **work orders**: Markdown notes (`type: specorator-work-order`) that Specorator tracks through a set of status lanes and runs through a fresh chat tab. This manual covers the base board — opening it, the work-order note structure, the default lanes, the detail view, and running.
 
-Capture (creating work orders from chat, selections, browser pages, file menus) is covered in [[agent-board-chat-interop-and-capture]]. Templates that prefill a work order's body are covered in [[work-order-templates]]. For the high-level choice between live chat and managed handoffs, see [[chat-vs-agent-board]].
+Capture (creating work orders from chat, selections, browser pages, file menus) is covered in [agent-board-chat-interop-and-capture](agent-board-chat-interop-and-capture.md). Templates that prefill a work order's body are covered in [work-order-templates](work-order-templates.md). For the high-level choice between live chat and managed handoffs, see [chat-vs-agent-board](chat-vs-agent-board.md).
 
 Use chat when you want to work through something immediately. Use the Agent Board when the work should become a durable handoff: scoped, prioritized, queued, run as a tracked item, and reviewed before you call it done.
 
@@ -119,7 +119,7 @@ The board lays out one lane per status, left-to-right, in this order:
 Lane titles in the UI are: **Inbox, Ready, Running, Needs input, Needs approval, Review, Needs fix, Done, Failed, Canceled**. Key rules:
 
 - Captured work orders land in **Inbox** — a triage lane that is *not* auto-run.
-- **Ready** and **Needs fix** are picked up by **Run next ready** (see [[agent-board-chat-interop-and-capture]] for the selection rule). `needs_fix` cards are treated as runnable so a reworked order can be queued without per-card intervention.
+- **Ready** and **Needs fix** are picked up by **Run next ready** (see [agent-board-chat-interop-and-capture](agent-board-chat-interop-and-capture.md) for the selection rule). `needs_fix` cards are treated as runnable so a reworked order can be queued without per-card intervention.
 - **Running** is reached only by clicking **Run**. The board enforces one active run per work order.
 - **Review** is reached only after a run produces a valid `<specorator_handoff>` block. A missing or malformed handoff sends the card to **Failed** instead.
 - **Failed** and **Canceled** cards keep their ledger and can be reopened to **Ready**.
@@ -128,7 +128,7 @@ Lane titles in the UI are: **Inbox, Ready, Running, Needs input, Needs approval,
 
 ## Adding a work order
 
-Click **Add work order** in the board header. A **template picker modal** opens — pick **Blank work order** for the empty skeleton or any saved template to prefill body, provider, model, and priority. See [[work-order-templates]] for the picker, the starter set, and authoring your own templates.
+Click **Add work order** in the board header. A **template picker modal** opens — pick **Blank work order** for the empty skeleton or any saved template to prefill body, provider, model, and priority. See [work-order-templates](work-order-templates.md) for the picker, the starter set, and authoring your own templates.
 
 Work orders created from the board's **Add work order** button land in **Inbox** and immediately open the detail view so you can scope them. Work orders created from the **Create work order** command palette entry land in **Ready** instead.
 
@@ -148,7 +148,7 @@ Clicking any card opens the **work-order detail modal**. What it shows depends o
 | `done` | Title, provider, model, priority | — | Edit, Open conversation*, **Reopen**, **Archive** |
 | `failed` / `canceled` | Title, provider, model, priority | — | Edit, Open conversation*, **Archive** |
 
-*Open conversation appears only when the work order has a `conversation_id` and the linked conversation still exists. See [[agent-board-chat-interop-and-capture]] for the chat round-trip.
+*Open conversation appears only when the work order has a `conversation_id` and the linked conversation still exists. See [agent-board-chat-interop-and-capture](agent-board-chat-interop-and-capture.md) for the chat round-trip.
 
 The body of the modal renders **Objective** and **Acceptance criteria** (with the `done/total` count when checkboxes are present). On `review` and `needs_fix`, the modal also renders the **Handoff** block from the prior run (when present), so the reviewer can see what the agent delivered before deciding to run again. On Failed, it renders the **Run ledger** so you can see why the run failed. Editable field changes save on dropdown change / text blur and refresh the board.
 
@@ -176,7 +176,7 @@ The **quick-action block** (favorites + picker) is hidden when either of:
 - the work order is **running** — avoids surprise side-prompts on an active run, and
 - the WO note path no longer resolves to a real file — covers deleted, moved, or shadowed-by-folder cases.
 
-`needs_input` and `needs_approval` keep the quick-action block — only `running` hides it. See [[quick-actions]] for how to author favorites and what the picker does.
+`needs_input` and `needs_approval` keep the quick-action block — only `running` hides it. See [quick-actions](quick-actions.md) for how to author favorites and what the picker does.
 
 ---
 
@@ -190,7 +190,7 @@ A run validates provider/model against the provider registry (disabled providers
 
 ### Run next ready
 
-Click **Run next ready** in the header or run command palette → **Run next ready work order**. Picks the highest-priority, oldest `ready` work order; shows *"No ready work orders to run."* if none qualify. See [[agent-board-chat-interop-and-capture]] for the full selection rule and the chat round-trip.
+Click **Run next ready** in the header or run command palette → **Run next ready work order**. Picks the highest-priority, oldest `ready` work order; shows *"No ready work orders to run."* if none qualify. See [agent-board-chat-interop-and-capture](agent-board-chat-interop-and-capture.md) for the full selection rule and the chat round-trip.
 
 > A run needs a free chat tab. If all tabs are full, close one in the chat panel or raise **Maximum chat tabs** in settings.
 
@@ -205,7 +205,7 @@ Click **Run next ready** in the header or run command palette → **Run next rea
 | **Create work order from current note** | Picker + active-note source link. |
 | **Run next ready work order** | Activates the board and runs the highest-priority, oldest `ready` work order. |
 
-Capture commands (selection, browser selection, message promotion, conversation promotion) and the chat **Create work order** message-toolbar button live in [[agent-board-chat-interop-and-capture]]. Template authoring commands live in [[work-order-templates]].
+Capture commands (selection, browser selection, message promotion, conversation promotion) and the chat **Create work order** message-toolbar button live in [agent-board-chat-interop-and-capture](agent-board-chat-interop-and-capture.md). Template authoring commands live in [work-order-templates](work-order-templates.md).
 
 ---
 

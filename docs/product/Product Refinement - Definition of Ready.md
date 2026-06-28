@@ -31,7 +31,7 @@ related:
 | **Software Architect** | Reviews scope, assumptions, and the "simplest viable approach" criterion |
 | **Requirements Engineer** | Structures problem statements and value hypotheses using the provided templates |
 
-To run a full automated refinement review against this DoR, use the [[product-refinement]] quick action.
+To run a full automated refinement review against this DoR, use the [product-refinement](../quick-actions/product-refinement.md) quick action.
 
 ---
 
@@ -383,7 +383,7 @@ flowchart TD
 
 | Note | Relationship |
 |------|--------------|
-| [[product-refinement]] | Quick Action that runs a multi-angle OD-DoR review using subagents — dispatches PM, RE, Delivery, UX, and Architect perspectives |
-| [[Specorator - Product Vision]] | Product vision and roadmap; the outcomes this DoR is designed to protect |
-| [[Specorator Agent Harness PRD]] | PRD that governs the harness roadmap; items entering development pass through this DoR first |
-| [[The Product Manager]] | JTBD profile for the primary audience of this document |
+| [product-refinement](../quick-actions/product-refinement.md) | Quick Action that runs a multi-angle OD-DoR review using subagents — dispatches PM, RE, Delivery, UX, and Architect perspectives |
+| [Specorator - Product Vision](Specorator%20-%20Product%20Vision.md) | Product vision and roadmap; the outcomes this DoR is designed to protect |
+| [Specorator Agent Harness PRD](Specorator%20Agent%20Harness%20PRD.md) | PRD that governs the harness roadmap; items entering development pass through this DoR first |
+| [The Product Manager](jobs-to-be-done/The%20Product%20Manager.md) | JTBD profile for the primary audience of this document |

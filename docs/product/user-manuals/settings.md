@@ -56,7 +56,7 @@ Toggle each provider on or off. Toggling **on** reveals that provider's tab. Tog
 |---------|--------------|---------|
 | **Quick actions folder** | Vault folder scanned for quick-action notes. Empty falls back to `Quick Actions`. | `Quick Actions` |
 
-See [[quick-actions]] for the quick-action note format and how they show up in the composer.
+See [quick-actions](quick-actions.md) for the quick-action note format and how they show up in the composer.
 
 ### Display
 
@@ -111,32 +111,32 @@ A shared environment scope plus a snippet manager.
 
 A review warning surfaces when a key in the shared scope (e.g. `OPENAI_API_KEY`) probably belongs in a provider-scoped section instead.
 
-Below the textarea, if any custom model ids are discovered from `*_MODEL` variables, **Custom model overrides** appears: per-model **Alias** (selector label) and context-window input (`200k`, `1m`, or a number 1000–10000000). See [[composer-context-pills]] for how the context window is surfaced in chat.
+Below the textarea, if any custom model ids are discovered from `*_MODEL` variables, **Custom model overrides** appears: per-model **Alias** (selector label) and context-window input (`200k`, `1m`, or a number 1000–10000000). See [composer-context-pills](composer-context-pills.md) for how the context window is surfaced in chat.
 
 For Codex (`gpt-5.2`, `gpt-5.3-codex`, `gpt-5.3-codex-spark`) and Cursor (Claude/Composer/Sonic/Grok/GPT/Gemini families) Specorator ships an exact-id catalog of known windows; a custom override here applies only to ids the catalog does not recognise.
 
 ### Diagnostics
 
-See the [Diagnostics](#diagnostics) section below and [[configurable-logger]].
+See the [Diagnostics](#diagnostics) section below and [configurable-logger](configurable-logger.md).
 
 ---
 
 ## Agent Board
 
-Cross-link: [[agent-board]] for the board UI, [[work-order-templates]] for templates, [[agent-board-configurable-lanes]] for lanes, [[agent-board-chat-interop-and-capture]] for chat capture.
+Cross-link: [agent-board](agent-board.md) for the board UI, [work-order-templates](work-order-templates.md) for templates, [agent-board-configurable-lanes](agent-board-configurable-lanes.md) for lanes, [agent-board-chat-interop-and-capture](agent-board-chat-interop-and-capture.md) for chat capture.
 
 | Setting | What it does | Default |
 |---------|--------------|---------|
 | **Work order folder** | Folder where new work-order notes are created. | `Agent Board/tasks` |
 | **Template folder** | Folder where work-order template notes live. If it matches the work order folder, an inline warning is shown — templates would otherwise render as invalid work orders on the board. | `Agent Board/templates` |
-| **Common templates → Install** | Writes the starter set (Bug fix, Feature, Refactor, Research spike, Documentation, Test backfill) into the template folder. Skips any whose filename already exists. Detail in [[work-order-templates]]. | — |
+| **Common templates → Install** | Writes the starter set (Bug fix, Feature, Refactor, Research spike, Documentation, Test backfill) into the template folder. Skips any whose filename already exists. Detail in [work-order-templates](work-order-templates.md). | — |
 | **Archive folder** | Where archived work orders move. Keep it outside the work order folder. | `Agent Board/archive` |
 | **Default provider** | Provider stamped on captured work orders. Dropdown lists only enabled providers; selection is auto-corrected to the first enabled provider if the stored choice is now disabled. | unset (`null`) until a provider is enabled, then the first enabled provider in registration order (Claude, Codex, Opencode, Cursor) |
 | **Default model** | Model stamped on captured work orders. Resets to **Provider default** whenever the provider changes. | Provider default |
 
 ### Board lanes
 
-The **Board lanes** sub-section beneath the table embeds the lane editor described in [[agent-board-configurable-lanes]]: per-lane title, visibility, status assignment, definition of ready, definition of done, move up/down, and remove. Changes are persisted as you edit.
+The **Board lanes** sub-section beneath the table embeds the lane editor described in [agent-board-configurable-lanes](agent-board-configurable-lanes.md): per-lane title, visibility, status assignment, definition of ready, definition of done, move up/down, and remove. Changes are persisted as you edit.
 
 ---
 
@@ -155,7 +155,7 @@ Visible when Claude is enabled.
 
 | Setting | What it does | Default |
 |---------|--------------|---------|
-| **Safe mode** | Permission mode used when the Safe toggle is active in chat: `acceptEdits`, `auto`, or `default`. See [[plan-mode]] for how Plan mode interacts with this. | `acceptEdits` |
+| **Safe mode** | Permission mode used when the Safe toggle is active in chat: `acceptEdits`, `auto`, or `default`. See [plan-mode](plan-mode.md) for how Plan mode interacts with this. | `acceptEdits` |
 | **Load user Claude settings** | Load `~/.claude/settings.json` (the Claude Code CLI's user-level rules). When on, those permission rules may bypass Safe mode. | On |
 
 ### Models
@@ -297,7 +297,7 @@ Visible when an Opencode workspace is available. Manages subagents under `.openc
 
 ## Cursor
 
-Visible when Cursor is enabled. Cross-link: [[cursor-model-families-and-modes]] for how families and modes show up in chat.
+Visible when Cursor is enabled. Cross-link: [cursor-model-families-and-modes](cursor-model-families-and-modes.md) for how families and modes show up in chat.
 
 ### Models
 
@@ -320,7 +320,7 @@ A warm discovery runs on first render to populate the list.
 
 ## Diagnostics
 
-Lives at the bottom of the **General** tab. Detail in [[configurable-logger]].
+Lives at the bottom of the **General** tab. Detail in [configurable-logger](configurable-logger.md).
 
 | Setting | What it does | Default |
 |---------|--------------|---------|

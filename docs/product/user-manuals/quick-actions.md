@@ -172,7 +172,7 @@ When you opened the picker by right-clicking a file or folder, the file/folder p
 
 ### Right-click on a work-order card
 
-The Agent Board also surfaces favorites and the picker via right-click on any work-order card. The favorites and the **Quick actions** entry appear below **Open note** and **Open conversation**, run against the work-order note as the target file, and are hidden while the work order is **running** or its note path no longer resolves. `needs_input` and `needs_approval` keep them. See [[agent-board#Right-click menu]] for the full menu layout.
+The Agent Board also surfaces favorites and the picker via right-click on any work-order card. The favorites and the **Quick actions** entry appear below **Open note** and **Open conversation**, run against the work-order note as the target file, and are hidden while the work order is **running** or its note path no longer resolves. `needs_input` and `needs_approval` keep them. See [agent-board](agent-board.md#right-click-menu) for the full menu layout.
 
 ### Disabled providers
 

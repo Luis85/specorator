@@ -8,7 +8,7 @@ parent: "[[Multi Provider Support]]"
 
 This manual covers running more than one AI provider inside the same Specorator workspace. Each provider keeps its own settings, models, commands, and session storage. A chat tab belongs to the provider you opened it with until you close it.
 
-For the feature pitch and capability matrix see [[Multi Provider Support]]. For provider-specific install steps see [[install-claude]], [[install-codex]], [[install-cursor]], [[install-opencode]].
+For the feature pitch and capability matrix see [Multi Provider Support](../features/Multi%20Provider%20Support.md). For provider-specific install steps see [install-claude](install-claude.md), [install-codex](install-codex.md), [install-cursor](install-cursor.md), [install-opencode](install-opencode.md).
 
 ---
 
@@ -18,10 +18,10 @@ You need at least one provider's CLI installed and reachable. Specorator does no
 
 | Provider | Runtime | Install guide |
 |----------|---------|---------------|
-| **Claude** | Claude Code CLI | [[install-claude]] |
-| **Codex** | Codex CLI (native Windows or WSL) | [[install-codex]] |
-| **Opencode** | Opencode CLI (`opencode acp`) | [[install-opencode]] |
-| **Cursor** | Cursor Agent CLI (`cursor-agent`) | [[install-cursor]] |
+| **Claude** | Claude Code CLI | [install-claude](install-claude.md) |
+| **Codex** | Codex CLI (native Windows or WSL) | [install-codex](install-codex.md) |
+| **Opencode** | Opencode CLI (`opencode acp`) | [install-opencode](install-opencode.md) |
+| **Cursor** | Cursor Agent CLI (`cursor-agent`) | [install-cursor](install-cursor.md) |
 
 You can enable any subset — one, several, or all four. Disabled providers stay invisible until you toggle them on.
 
@@ -46,7 +46,7 @@ After enabling a provider, point Specorator at its CLI in the provider's own tab
 
 ## Provider capability snapshot
 
-Each provider exposes a different feature surface. The full table lives in [[Multi Provider Support]]; the highlights:
+Each provider exposes a different feature surface. The full table lives in [Multi Provider Support](../features/Multi%20Provider%20Support.md); the highlights:
 
 | Capability | Claude | Codex | Opencode | Cursor |
 |------------|--------|-------|----------|--------|
@@ -70,7 +70,7 @@ You cannot change a tab's provider mid-conversation. The model is per-tab, the p
 
 - **Open a chat on a different provider** — click the provider name in the chat tab header (or open **Specorator: New Tab** and pick).
 - **Run several providers in parallel** — open one chat tab per provider. They run side by side; the tab cap is **Settings → General → Display → Maximum chat tabs** (default 3, up to 10).
-- **Compare answers** — fire the same Quick Action into two tabs on different providers. See [[quick-actions]].
+- **Compare answers** — fire the same Quick Action into two tabs on different providers. See [quick-actions](quick-actions.md).
 
 ---
 
@@ -85,7 +85,7 @@ Each provider has its own tab in **Settings → Specorator**. The tab is hidden 
 | **Opencode** | Opencode enabled | CLI path, visible-model picker, hidden commands, subagents, environment. |
 | **Cursor** | Cursor enabled | CLI path, visible-model picker, model refresh, environment. |
 
-Shared knobs (language, quick actions folder, display, hotkeys, shared environment, diagnostics) live in **General**. See [[settings]] for the full panel layout.
+Shared knobs (language, quick actions folder, display, hotkeys, shared environment, diagnostics) live in **General**. See [settings](settings.md) for the full panel layout.
 
 ---
 
@@ -99,7 +99,7 @@ Provider-native transcripts (`~/.claude/projects/`, `~/.codex/sessions/`, `~/.cu
 
 ## MCP servers across providers
 
-MCP is configured per provider, not globally. To make a server visible everywhere, register it in each provider's own config. See [[mcp-servers]] for the per-provider matrix:
+MCP is configured per provider, not globally. To make a server visible everywhere, register it in each provider's own config. See [mcp-servers](mcp-servers.md) for the per-provider matrix:
 
 - **Claude** — managed in **Settings → Claude → MCP Servers** (writes `.claude/mcp.json`).
 - **Codex** — managed by the `codex mcp` CLI, surfaced read-only in Specorator.
@@ -116,5 +116,5 @@ MCP is configured per provider, not globally. To make a server visible everywher
 | `.specorator/specorator-settings.json` | All Specorator settings, including per-provider config bags. |
 | **Settings → Specorator → General → Providers** | Master enable toggles. |
 | **Settings → Specorator → <Provider>** | Provider-specific CLI path, models, MCP, environment. |
-| [[install-claude]] / [[install-codex]] / [[install-cursor]] / [[install-opencode]] | CLI install steps per provider. |
-| [[Multi Provider Support]] | Feature pitch and full capability matrix. |
+| [install-claude](install-claude.md) / [install-codex](install-codex.md) / [install-cursor](install-cursor.md) / [install-opencode](install-opencode.md) | CLI install steps per provider. |
+| [Multi Provider Support](../features/Multi%20Provider%20Support.md) | Feature pitch and full capability matrix. |

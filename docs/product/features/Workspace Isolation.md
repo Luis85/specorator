@@ -51,9 +51,9 @@ The important part is that this is one feature. Copy workspaces and git worktree
 
 ### Goes well with
 
-- [[Co-Worker - Chat]]: move a conversation into an isolated workspace before asking for file changes
-- [[Agent Kanban Board]]: run work orders in separate workspaces and review the result before accepting it
-- [[Multi Provider Support]]: use the same isolation model whichever provider runs the work
+- [Co-Worker - Chat](Co-Worker%20-%20Chat.md): move a conversation into an isolated workspace before asking for file changes
+- [Agent Kanban Board](Agent%20Kanban%20Board.md): run work orders in separate workspaces and review the result before accepting it
+- [Multi Provider Support](Multi%20Provider%20Support.md): use the same isolation model whichever provider runs the work
 
 ---
 

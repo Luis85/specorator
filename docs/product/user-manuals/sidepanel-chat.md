@@ -8,13 +8,13 @@ parent: "[[Co-Worker - Chat]]"
 
 This manual covers the **chat sidebar**: the workspace where you talk to a provider beside your notes. The sidebar opens on a hotkey, picks up the note you're on and any selected text, and saves every conversation as a Specorator session you can resume tomorrow.
 
-For the high-level feature pitch see [[sidepanel-chat]]. For how attached files and folders appear above the composer see [[composer-context-pills]]. For drafting before running, see [[plan-mode]]. For durable background handoffs see [[agent-board]]. For a side-by-side decision guide, see [[chat-vs-agent-board]].
+For the high-level feature pitch see [sidepanel-chat](sidepanel-chat.md). For how attached files and folders appear above the composer see [composer-context-pills](composer-context-pills.md). For drafting before running, see [plan-mode](plan-mode.md). For durable background handoffs see [agent-board](agent-board.md). For a side-by-side decision guide, see [chat-vs-agent-board](chat-vs-agent-board.md).
 
 ---
 
 ## Before you start
 
-- At least one provider enabled in **Settings → Specorator → General → Providers**. Each provider needs its CLI installed — see [[install-claude]], [[install-codex]], [[install-cursor]], or [[install-opencode]].
+- At least one provider enabled in **Settings → Specorator → General → Providers**. Each provider needs its CLI installed — see [install-claude](install-claude.md), [install-codex](install-codex.md), [install-cursor](install-cursor.md), or [install-opencode](install-opencode.md).
 - A hotkey bound to **Open Chat** in Obsidian's Hotkeys settings (optional but recommended). The default ribbon icon also opens the chat view.
 
 The chat view position is controlled by **Settings → Specorator → General → Display → Open Specorator in**: **Right sidebar** (default), **Left sidebar**, or **Main editor tab**.
@@ -30,7 +30,7 @@ Use chat when you want quick, foreground collaboration with the assistant:
 - Work through a messy idea before you know the exact task.
 - Try a provider or model without setting up a work order.
 
-If the conversation turns into work that needs priority, acceptance criteria, background-style running, or a review record, create a work order and move it to the [[agent-board|Agent Board]].
+If the conversation turns into work that needs priority, acceptance criteria, background-style running, or a review record, create a work order and move it to the [Agent Board](agent-board.md).
 
 ---
 
@@ -65,13 +65,13 @@ The composer supports three special prefixes:
 
 | Prefix | What it does |
 |--------|--------------|
-| `@` | Attach a vault file, folder, or MCP server to this turn. See [[composer-context-pills]] for how attachments render. |
+| `@` | Attach a vault file, folder, or MCP server to this turn. See [composer-context-pills](composer-context-pills.md) for how attachments render. |
 | `/` | Open the slash-command picker (provider-specific — Claude full, Codex none, Opencode runtime-discovered, Cursor none). |
 | `$` | Open the skill picker (Claude + Codex + Opencode where supported). |
 | `#` | Instruction mode — facts the helper should always carry into this conversation. |
 | `!` | Bash mode (Claude, off by default — enable in **Settings → Claude → Experimental**). |
 
-Quick Actions stored as vault notes fire from the lightning-bolt picker. See [[quick-actions]].
+Quick Actions stored as vault notes fire from the lightning-bolt picker. See [quick-actions](quick-actions.md).
 
 ---
 
@@ -83,11 +83,11 @@ Replies stream inline. The toolbar gives you:
 - **Resume** — re-attach to a streaming session if you switched away.
 - **Auto-scroll** — follows the latest token (toggle in **Settings → General → Display**).
 
-Plan mode shows the plan inline before any write-side tool runs; see [[plan-mode]] for the approval card flow.
+Plan mode shows the plan inline before any write-side tool runs; see [plan-mode](plan-mode.md) for the approval card flow.
 
 Tool calls render as labeled blocks (file edits, bash output, web fetches, etc.). Expand a block to see the full payload.
 
-Every sent **user** message also exposes a small per-message toolbar — thumbs-up / thumbs-down feedback on assistant replies, **Create work order** on assistant replies, and **Capture as quick action** (the `bookmark-plus` icon) on user prompts. The capture button opens the inline editor pre-seeded with the prompt body; see [[quick-actions]] for the full flow.
+Every sent **user** message also exposes a small per-message toolbar — thumbs-up / thumbs-down feedback on assistant replies, **Create work order** on assistant replies, and **Capture as quick action** (the `bookmark-plus` icon) on user prompts. The capture button opens the inline editor pre-seeded with the prompt body; see [quick-actions](quick-actions.md) for the full flow.
 
 ---
 
