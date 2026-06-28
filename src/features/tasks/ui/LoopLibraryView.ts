@@ -110,17 +110,13 @@ export class LoopLibraryView extends ItemView {
   }
 
   private async cloneLoop(loop: LoopDefinition): Promise<void> {
-    await this.store.save(this.plugin.app.vault, this.folder(), {
-      name: `${loop.name} copy`,
-      description: loop.description,
-      icon: loop.icon,
-      useWhen: loop.useWhen,
-      approach: loop.approach,
-      steps: loop.steps,
-      verify: loop.verify,
-      notes: loop.notes,
-      tags: loop.tags,
-    });
+    const vault = this.plugin.app.vault;
+    const folder = this.folder();
+    let cloneName = `${loop.name} copy`;
+    for (let n = 2; vault.getAbstractFileByPath(this.store.getFilePathForName(folder, cloneName)); n += 1) {
+      cloneName = `${loop.name} copy ${n}`;
+    }
+    await this.store.save(vault, folder, { ...loop, name: cloneName });
     await this.render();
   }
 
