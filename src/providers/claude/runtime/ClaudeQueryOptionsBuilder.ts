@@ -12,7 +12,9 @@ import {
 } from '../../../core/prompt/mainAgent';
 import type { AppPluginManager } from '../../../core/providers/types';
 import { asSettingsBag } from '../../../core/types';
+import type { McpServerConfig } from '../../../core/types/mcp';
 import type { PermissionMode,SpecoratorSettings } from '../../../core/types/settings';
+import { LOCAL_TOOL_HOST_SERVER_NAME } from '../toolHost/buildToolHostServer';
 import {
   type ClaudeSafeMode,
   getClaudeProviderSettings,
@@ -37,6 +39,8 @@ export interface QueryOptionsContext {
   enhancedPath: string;
   mcpManager: McpServerManager;
   pluginManager: AppPluginManager;
+  /** Returns the synthetic local-tool-host stdio config, or null when off. */
+  buildLocalToolHostServer?: () => McpServerConfig | null;
   boundAgentPrompt?: string;
   boundAgentModel?: string;
 }
@@ -226,6 +230,12 @@ export class QueryOptionsBuilder {
     const mcpServers: Record<string, unknown> = {
       ...ctx.mcpManager.getActiveServers(combinedMentions),
     };
+
+    const localToolHost = ctx.buildLocalToolHostServer?.();
+    // Reserved synthetic name — never clobber a user MCP server that already uses it.
+    if (localToolHost && !(LOCAL_TOOL_HOST_SERVER_NAME in mcpServers)) {
+      mcpServers[LOCAL_TOOL_HOST_SERVER_NAME] = localToolHost;
+    }
 
     if (Object.keys(mcpServers).length > 0) {
       options.mcpServers = mcpServers as typeof options.mcpServers;
