@@ -1,3 +1,4 @@
+import { Console } from 'node:console';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -26,13 +27,11 @@ function parseStringList(raw: string): string[] {
   }
 }
 
-/** stdout carries MCP JSON-RPC / catalog JSON; redirect all console.* to stderr so a tool's
- * `console.log` (top-level or in a handler) can never corrupt the protocol stream. */
+/** stdout carries MCP JSON-RPC / catalog JSON; route the ENTIRE console (log/info/debug/warn/
+ * error/trace AND dir/table/group/count/time/assert/…) to stderr by replacing it with a Console
+ * whose stdout stream IS stderr, so no `console.*` from a tool can corrupt the protocol stream. */
 function guardStdout(): void {
-  const toStderr = (...args: unknown[]) => process.stderr.write(`${args.map((a) => String(a)).join(' ')}\n`);
-  for (const k of ['log', 'info', 'debug', 'warn', 'error', 'trace'] as const) {
-    (console as unknown as Record<string, unknown>)[k] = toStderr;
-  }
+  globalThis.console = new Console({ stdout: process.stderr, stderr: process.stderr });
 }
 
 async function main(): Promise<void> {

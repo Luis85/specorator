@@ -96,9 +96,14 @@ export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (hos
         );
     }
     for (const err of catalog.errors) {
+      // A failing tool is still imported (its top-level code runs) on every spawn, so give the
+      // user a toggle to disable it from Settings rather than forcing a file delete / JSON edit.
       new Setting(listEl)
         .setName(`${t('settings.localToolHost.loadError')}: ${err.file}`)
-        .setDesc(err.message);
+        .setDesc(err.message)
+        .addToggle((toggle) =>
+          toggle.setValue(true).onChange(() => void setDisabled(err.file, true)),
+        );
     }
   };
 
