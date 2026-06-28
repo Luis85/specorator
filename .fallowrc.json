@@ -12,7 +12,9 @@
     "**/coverage/**",
     "**/main.js",
     "**/styles.css",
-    "src/style/**"
+    "src/style/**",
+    "src/tool-host/embeddedSource.ts",
+    "src/tool-host/hostbundle.d.ts"
   ],
   "ignoreDependencies": [
     "tslib",
