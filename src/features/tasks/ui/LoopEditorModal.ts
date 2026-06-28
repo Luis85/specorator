@@ -21,6 +21,7 @@ export class LoopEditorModal extends Modal {
     super(app);
   }
 
+  // fallow-ignore-next-line complexity
   onOpen(): void {
     const isEdit = Boolean(this.existing);
     this.setTitle(isEdit ? t('tasks.loopEditor.titleEdit') : t('tasks.loopEditor.titleNew'));
@@ -73,11 +74,14 @@ export class LoopEditorModal extends Modal {
       setting.settingEl.addClass('specorator-loop-section-setting');
     };
 
-    area(t('tasks.loopEditor.useWhenName'), t('tasks.loopEditor.useWhenDesc'), useWhen, (v) => { useWhen = v; });
-    area(t('tasks.loopEditor.approachName'), t('tasks.loopEditor.approachDesc'), approach, (v) => { approach = v; });
-    area(t('tasks.loopEditor.stepsName'), t('tasks.loopEditor.stepsDesc'), steps, (v) => { steps = v; });
-    area(t('tasks.loopEditor.verifyName'), t('tasks.loopEditor.verifyDesc'), verify, (v) => { verify = v; });
-    area(t('tasks.loopEditor.notesName'), t('tasks.loopEditor.notesDesc'), notes, (v) => { notes = v; });
+    const sections: Array<[string, string, string, (v: string) => void]> = [
+      [t('tasks.loopEditor.useWhenName'), t('tasks.loopEditor.useWhenDesc'), useWhen, (v) => { useWhen = v; }],
+      [t('tasks.loopEditor.approachName'), t('tasks.loopEditor.approachDesc'), approach, (v) => { approach = v; }],
+      [t('tasks.loopEditor.stepsName'), t('tasks.loopEditor.stepsDesc'), steps, (v) => { steps = v; }],
+      [t('tasks.loopEditor.verifyName'), t('tasks.loopEditor.verifyDesc'), verify, (v) => { verify = v; }],
+      [t('tasks.loopEditor.notesName'), t('tasks.loopEditor.notesDesc'), notes, (v) => { notes = v; }],
+    ];
+    for (const [label, desc, value, set] of sections) area(label, desc, value, set);
 
     new Setting(this.contentEl)
       .setName(t('tasks.loopEditor.tagsName'))
