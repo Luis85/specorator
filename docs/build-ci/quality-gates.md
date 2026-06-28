@@ -541,3 +541,16 @@ clones or cycles. The stateful coordinator-style seams the agents surfaced — S
 text/thinking render coordinators, `CodexNotificationRouter`'s raw-tool / segment-buffer state machines,
 and `AgentBoardView`'s run-lifecycle / queue coordinators — were deliberately left: they own live
 streaming/turn or view-lifecycle state and need their own reviewed changes, not a broad-pass ride-along.
+Done 2026-06-28 (quality campaign run 23): the deferred stateful coordinators, each as a dedicated change
+with exhaustive verification. (1) `CodexNotificationRouter` → `codexFileChangeAccumulator` (pure
+file_change normalize/merge + the per-item memo map; the router keeps its emit methods so live emit
+ordering is byte-for-byte unchanged) + `codexNotificationHelpers` (shared asRecord/firstString); 879 →
+761, full codex suite (677) green. (2) `AgentBoardView` → `AgentBoardLiveHeartbeatTracker` (the live
+heartbeat map + the live-strip date math, now a focused-spec'd pure compute); the view keeps renderer +
+event wiring; 945 → 932, board suites + board perf gate green. (3) `StreamController` →
+`ThinkingRenderCoordinator` (the streaming thinking-block rAF render loop with the O(C²) re-parse
+backoff + pending-promise; logic moved verbatim, shared helpers injected as callbacks, appendThinking/
+finalizeCurrentThinkingBlock kept as delegators); 1067 → 964, the full chat suite (2129) + all three
+streaming perf gates + the whole 9131-test suite green. Gated metrics held at 31 / 754 / 236 / 0 / 90.2;
+LOC baseline re-locked. The symmetric StreamController **text** render coordinator and the remaining
+CodexNotificationRouter raw-tool/segment state machines are the natural next dedicated changes.
