@@ -209,3 +209,7 @@
 .specorator-mcp-delete-btn:hover {
   color: var(--text-error);
 }
+
+.specorator-tool-host-list {
+  margin-top: var(--size-4-2);
+}
