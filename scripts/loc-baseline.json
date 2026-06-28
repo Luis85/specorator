@@ -23,8 +23,8 @@
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Host⇆target session-path translation (toHostSessionPath/toTargetSessionPath/mapHostPathToTarget/mapRequiredHostPathsToTarget) extracted to codexSessionPathMapping.ts."
     },
     "src/features/chat/controllers/StreamController.ts": {
-      "loc": 964,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Streaming thinking-block render lifecycle extracted to ThinkingRenderCoordinator (the symmetric text coordinator remains)."
+      "loc": 774,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Streaming text + thinking render lifecycles extracted to TextRenderCoordinator / ThinkingRenderCoordinator over a shared StreamRenderLoop + streamRenderBackoff."
     },
     "src/main.ts": {
       "loc": 766,
