@@ -1,5 +1,6 @@
 import { appendFileSync } from 'node:fs';
 
+import { redactArgs, scrubString } from '../core/logging/redact';
 import type { ToolHandlerCtx } from './types';
 
 export interface LoggerOptions {
@@ -12,8 +13,12 @@ export interface LoggerOptions {
 }
 
 function format(now: string, level: string, tool: string, message: string, data?: unknown): string {
-  const tail = data === undefined ? '' : ` ${JSON.stringify(data)}`;
-  return `${now} [${level}] [${tool}] ${message}${tail}`;
+  // Deep-mask secret-keyed values before serializing, then scrub secret-shaped
+  // substrings from the whole line — so neither a keyed token in `data` nor an
+  // inline `Bearer ...`/`sk-...` shape in `message` lands in the vault log file.
+  const redacted = data === undefined ? undefined : redactArgs([data])[0];
+  const tail = redacted === undefined ? '' : ` ${JSON.stringify(redacted)}`;
+  return scrubString(`${now} [${level}] [${tool}] ${message}${tail}`);
 }
 
 export function createLogger(tool: string, options: LoggerOptions = {}): ToolHandlerCtx['logger'] {
