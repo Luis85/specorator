@@ -80,7 +80,12 @@ export async function scanLocalToolHost(plugin: PluginContext): Promise<ToolHost
   const { nodePath, enhancedPath } = resolveToolHostNode(plugin);
   const vaultPath = plugin.getVaultPath();
   if (!claude.localToolHostEnabled || !nodePath || !vaultPath) return DISABLED;
-  if (!isSupportedNode(await probeNodeMajor(nodePath))) return DISABLED;
+
+  // Probe with the SAME curated env the host/catalog spawn uses (strips NODE_OPTIONS
+  // etc.); inheriting process.env would let an Electron NODE_OPTIONS that standalone
+  // `node` rejects yield no version → wrongly disable a feature that would run fine.
+  const baseEnv = curateStdioMcpEnv({ PATH: enhancedPath });
+  if (!isSupportedNode(await probeNodeMajor(nodePath, baseEnv))) return DISABLED;
 
   const paths = resolveToolHostPaths({ vaultPath, pluginDir: plugin.manifest.dir ?? '' });
   await materializeToolHost(paths.hostEntry, TOOL_HOST_SOURCE, {
@@ -89,7 +94,7 @@ export async function scanLocalToolHost(plugin: PluginContext): Promise<ToolHost
   });
 
   const env = {
-    ...curateStdioMcpEnv({ PATH: enhancedPath }),
+    ...baseEnv,
     SPECORATOR_TOOLS_DIR: paths.toolsDir,
     SPECORATOR_VAULT_PATH: vaultPath,
     // JSON (comma-safe) disabled set so the catalog skips disabled files — their secrets must not enter the union.

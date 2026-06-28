@@ -5,7 +5,7 @@ import { asSettingsBag } from '../../../core/types';
 import type { PluginContext } from '../../../core/types/PluginContext';
 import { t } from '../../../i18n/i18n';
 import type { CatalogPayload } from '../../../tool-host/types';
-import { findNodeExecutable, getEnhancedPath } from '../../../utils/env';
+import { curateStdioMcpEnv, findNodeExecutable, getEnhancedPath } from '../../../utils/env';
 import { getClaudeProviderSettings, updateClaudeProviderSettings } from '../settings';
 import { isSupportedNode, probeNodeMajor } from '../toolHost/nodeVersion';
 
@@ -20,7 +20,12 @@ async function nodeSupported(plugin: PluginContext): Promise<boolean> {
   const cliPath = plugin.getResolvedProviderCliPath('claude') ?? '';
   const enhancedPath = getEnhancedPath(customEnv.PATH, cliPath);
   const nodePath = findNodeExecutable(enhancedPath);
-  return !!nodePath && isSupportedNode(await probeNodeMajor(nodePath));
+  // Probe with the curated env the host spawn uses, so a host-rejected NODE_OPTIONS
+  // in process.env can't make a runnable Node look unsupported and block the toggle.
+  return (
+    !!nodePath &&
+    isSupportedNode(await probeNodeMajor(nodePath, curateStdioMcpEnv({ PATH: enhancedPath })))
+  );
 }
 
 export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (host, context) => {
