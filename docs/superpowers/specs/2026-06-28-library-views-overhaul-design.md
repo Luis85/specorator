@@ -110,7 +110,7 @@ signature stays backward compatible.
 |---|---|---|---|
 | Agent | `RosterAgent.tags?: string[]` in the agent JSON | `AgentRosterStore` serializes the whole object — passthrough, no store change | `AgentDetailEditor` gains a tag input |
 | Loop | frontmatter `tags` on the `specorator-loop` note | `LoopNoteStore.parse`/`build` read/write `tags`; `LoopDefinition` + `SaveLoopInput` gain `tags?: string[]` | `LoopEditorModal` gains a tag input |
-| Skill | frontmatter `tags` on `SKILL.md` | `ProviderCommandEntry` (skill kind) + `SkillTabEntry` gain `tags?: string[]`, parsed by the catalogs that already read `SKILL.md` (Claude, Codex); flows through the aggregator cache to `SkillLibraryRow.tags`. Runtime-discovered skills (Opencode) carry none | `SkillEditorModal` gains a tag input (editable skills only; read-only skills display tags but cannot edit) |
+| Skill | frontmatter `tags` on `SKILL.md` | parsed at row-build time in `SkillLibraryView` via `vaultFileAdapter` + `extractStringArray` (vault-file skills only); home-scope (Codex `~/.codex/skills`) and runtime-discovered (Opencode) skills carry none. `SkillLibraryRow` gains `tags: string[]`. No provider-catalog change | `SkillEditorModal` gains a comma-separated tag input that upserts the frontmatter `tags` key via a new `setFrontmatterList` helper (editable vault skills only; read-only rows display tags but cannot edit) |
 
 Tag input UX: a simple comma/Enter-separated chip input. Empty `tags` is omitted
 from frontmatter/JSON (no noise on untagged items).
@@ -175,9 +175,11 @@ then `sendMessage`, keeping its behavior identical.
 - `launchQuickAction` becomes a thin caller of `launchWithModelPicker`
   (`lastUsedKey = 'qa:<stem>'`) — **behavior identical**, existing tests stay green.
 - `launchLoopPrompt` calls it with `lastUsedKey = 'loop:<id>'`.
-- The last-used store is generalized to a string-keyed memo (prefixed keys
-  `qa:` / `loop:`) so quick-actions and loops share one persistence surface
-  without new plumbing.
+- The last-used store (`QuickActionLastUsedStore`) already accepts an arbitrary
+  string key, so quick-actions and loops share it with no plumbing change.
+  Quick-actions keep their existing **bare stem** keys (preserving persisted
+  last-used data); loops use a `loop:<id>` prefix. The two never collide — a
+  quick-action stem cannot contain a colon.
 
 ## Data model summary
 
@@ -188,9 +190,6 @@ interface RosterAgent { /* … */ tags?: string[] }
 // loopTypes.ts
 interface LoopDefinition { /* … */ tags?: string[] }
 interface SaveLoopInput  { /* … */ tags?: string[] }
-
-// quickActions/skills/types.ts
-interface SkillTabEntry  { /* … */ tags?: string[] }
 
 // skillLibraryRows.ts
 interface SkillLibraryRow { /* … */ tags: string[] }
@@ -210,11 +209,10 @@ interface SkillLibraryRow { /* … */ tags: string[] }
 - `src/features/agents/roster/view/AgentRosterView.ts` — toolbar, tags chips, clone, interactive card.
 - `src/features/agents/roster/view/AgentDetailEditor.ts` — tag input.
 - `src/features/agents/roster/rosterTypes.ts` — `tags`.
-- `src/features/skills/view/SkillLibraryView.ts` — toolbar, Prompt button, tags, clone, interactive card; keep entries beside rows.
-- `src/features/skills/view/SkillEditorModal.ts` — tag input (editable only).
-- `src/features/skills/skillLibraryRows.ts` — `tags`; pass-through of source entries.
-- `src/features/quickActions/skills/types.ts` — `SkillTabEntry.tags`.
-- Claude + Codex command catalogs / `ProviderCommandEntry` — parse `tags` from `SKILL.md` frontmatter.
+- `src/features/skills/view/SkillLibraryView.ts` — toolbar, Prompt button, tags (parse from frontmatter), clone, interactive card; keep source `SkillTabEntry` beside each row for prompting.
+- `src/features/skills/view/SkillEditorModal.ts` — comma-separated tag input that upserts frontmatter `tags`.
+- `src/features/skills/skillLibraryRows.ts` — `tags`.
+- `src/utils/frontmatter.ts` — `setFrontmatterList(content, key, values)` upsert helper.
 - `src/features/tasks/ui/LoopLibraryView.ts` — toolbar, Prompt button, tags, clone, interactive card.
 - `src/features/tasks/ui/LoopEditorModal.ts` — tag input.
 - `src/features/tasks/loops/loopTypes.ts` — `tags`.
@@ -247,8 +245,10 @@ interface SkillLibraryRow { /* … */ tags: string[] }
 - **Touching the tested quick-actions launch path.** Mitigation: keep behavior
   byte-for-byte; `launchQuickAction` only changes its internals to delegate;
   run the quick-actions suite.
-- **Skill tags require provider-catalog changes (Claude, Codex).** Mitigation:
-  `tags` is optional everywhere; runtime-discovered skills simply have none.
+- **Skill tags only cover vault-file skills.** Home-scope (Codex) and
+  runtime-discovered (Opencode) skills have no readable vault path, so they show
+  no tags. Acceptable: the in-app skill authoring path writes to `.claude/skills`
+  (vault). Documented, not blocking.
 - **Read-only skills.** Tag editing is gated on `editable`; read-only rows show
   tags but the editor input is disabled, matching existing read-only handling.
 
