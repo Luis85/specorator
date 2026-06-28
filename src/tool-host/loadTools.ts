@@ -21,6 +21,10 @@ function importWithTimeout(p: Promise<ToolModule>, ms: number, file: string): Pr
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error(`import of ${file} timed out after ${ms}ms`)), ms);
   });
+  // The timeout EXCLUDES a slow module from the registry, but a dynamic import() can't be
+  // cancelled — if its top-level `await` later resolves, the rest of its top-level code still
+  // runs in-process. Bounding those delayed side effects requires per-tool Worker/vm isolation,
+  // which is deferred (same full-trust limitation as the synchronous-handler timeout).
   // Clear the timer on success/failure so a healthy import doesn't leave a live timer
   // keeping the --catalog process alive (and so unit tests don't leak open handles).
   return Promise.race([p, timeout]).finally(() => clearTimeout(timer));

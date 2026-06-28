@@ -775,6 +775,9 @@ export class ClaudeChatRuntime implements ChatRuntime {
     this.toolSecretsByFile = next.toolSecretsByFile;
     this.hostNodePath = next.hostNodePath;
     this.hostEnv = next.hostEnv;
+    // A scan was applied (our reload or a plugin fan-out from another tab/Settings) — count it as
+    // the one-time init attempt so the next turn doesn't re-scan and import every tool twice.
+    this.hostReloadAttempted = true;
   }
 
   /** Run the implicit init-path reload at most once, before the first turn flows. */

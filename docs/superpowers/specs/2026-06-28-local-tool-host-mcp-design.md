@@ -199,7 +199,12 @@ export async function handler(input, ctx) {
 - **Lazy start** — host spawns only when enabled *and* a tool exists; no idle
   process otherwise.
 - **Per-script isolation** — an import/parse failure registers nothing for that
-  file and shows an error badge in settings; other tools and the host stay up.
+  file and shows an error badge in settings; other tools and the host stay up. A
+  per-file *import timeout* bounds a slow top-level `await` so one tool can't
+  freeze startup — but a dynamic `import()` can't be cancelled, so an excluded
+  module's top-level code may still complete in-process later. Bounding those
+  delayed side effects (like the sync-handler case) needs Worker/vm isolation,
+  which is deferred.
 - **Handler faults** — every `handler` call is wrapped in `try/catch` + a
   timeout; a throw or timeout returns `{ isError: true }` to the model rather
   than crashing the host (an uncaught throw must never stop the agent loop). The
