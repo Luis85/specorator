@@ -1,7 +1,7 @@
 import type { App, Vault } from 'obsidian';
 import { normalizePath, TFile } from 'obsidian';
 
-import { extractString, parseFrontmatter } from '../../../utils/frontmatter';
+import { extractString, extractStringArray, parseFrontmatter } from '../../../utils/frontmatter';
 import type { LoopDefinition, SaveLoopInput } from './loopTypes';
 
 const SECTION_HEADINGS = Object.freeze({
@@ -66,6 +66,7 @@ export class LoopNoteStore {
       name,
       description: extractString(parsed.frontmatter, 'description'),
       icon: extractString(parsed.frontmatter, 'icon'),
+      tags: extractStringArray(parsed.frontmatter, 'tags'),
       useWhen: extractSection(parsed.body, SECTION_HEADINGS.useWhen),
       approach: extractSection(parsed.body, SECTION_HEADINGS.approach),
       steps: extractSection(parsed.body, SECTION_HEADINGS.steps),
@@ -83,6 +84,9 @@ export class LoopNoteStore {
     ];
     if (input.description) lines.push(`description: ${JSON.stringify(input.description)}`);
     if (input.icon) lines.push(`icon: ${JSON.stringify(input.icon)}`);
+    if (input.tags && input.tags.length > 0) {
+      lines.push(`tags: [${input.tags.map((tag) => JSON.stringify(tag)).join(', ')}]`);
+    }
     lines.push('---', '');
     const section = (heading: string, value: string): void => {
       if (value.trim()) lines.push(`## ${heading}`, '', value.trim(), '');
@@ -102,7 +106,9 @@ export class LoopNoteStore {
     const files = vault.getMarkdownFiles().filter((file) => file.path.startsWith(`${normalized}/`));
     for (const file of files) {
       try {
-        loops.push(this.parse(file.path, await vault.read(file)));
+        const def = this.parse(file.path, await vault.read(file));
+        def.updatedAt = file.stat?.mtime;
+        loops.push(def);
       } catch (error) {
         warnings.push(`${file.path}: ${error instanceof Error ? error.message : String(error)}`);
       }

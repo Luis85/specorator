@@ -34,6 +34,7 @@ export class LoopEditorModal extends Modal {
     let steps = this.existing?.steps ?? '';
     let verify = this.existing?.verify ?? '';
     let notes = this.existing?.notes ?? '';
+    let tags = (this.existing?.tags ?? []).join(', ');
 
     addNameAndDescriptionRows(this.contentEl, {
       name: {
@@ -79,11 +80,19 @@ export class LoopEditorModal extends Modal {
     area(t('tasks.loopEditor.notesName'), t('tasks.loopEditor.notesDesc'), notes, (v) => { notes = v; });
 
     new Setting(this.contentEl)
+      .setName(t('tasks.loopEditor.tagsName'))
+      .setDesc(t('tasks.loopEditor.tagsDesc'))
+      .addText((tc) => tc.setValue(tags).onChange((v) => { tags = v; }));
+
+    new Setting(this.contentEl)
       .addButton((btn) => {
         btn.setButtonText(t('tasks.loopEditor.save'))
           .setCta()
           .onClick(() => {
-            void this.handleSave({ name, description, icon, useWhen, approach, steps, verify, notes });
+            void this.handleSave({
+              name, description, icon, useWhen, approach, steps, verify, notes,
+              tags: tags.split(',').map((s) => s.trim()).filter(Boolean),
+            });
           });
       })
       .addButton((btn) => {
@@ -119,6 +128,7 @@ export class LoopEditorModal extends Modal {
       steps: form.steps.trim(),
       verify: form.verify.trim(),
       notes: form.notes.trim(),
+      tags: form.tags && form.tags.length > 0 ? form.tags : undefined,
       originalPath: this.existing?.path,
     };
 
