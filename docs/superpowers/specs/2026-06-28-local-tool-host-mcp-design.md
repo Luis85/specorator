@@ -202,7 +202,11 @@ export async function handler(input, ctx) {
   file and shows an error badge in settings; other tools and the host stay up.
 - **Handler faults** — every `handler` call is wrapped in `try/catch` + a
   timeout; a throw or timeout returns `{ isError: true }` to the model rather
-  than crashing the host (an uncaught throw must never stop the agent loop).
+  than crashing the host (an uncaught throw must never stop the agent loop). The
+  timeout guards *asynchronous* handlers; it cannot interrupt a *synchronous*
+  CPU-bound handler (an infinite loop blocks the event loop so the timer can't
+  fire) — an accepted limitation of the full-trust model (see Trust posture).
+  True interruption needs Worker/vm isolation, which is deferred.
 - **Refresh (no vault watcher)** — `.specorator/` is a dot-folder excluded from
   Obsidian's vault index, so `vault.on(...)` never fires for `.specorator/tools/`
   (documented in `src/features/quickActions/CLAUDE.md`). The tool list and

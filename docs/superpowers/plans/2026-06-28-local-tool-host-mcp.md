@@ -1134,10 +1134,11 @@ Then:
 
 ```bash
 node -e "const s=require('fs').readFileSync('src/tool-host/embeddedSource.hostbundle','utf8'); if(/from ['\"]obsidian['\"]|require\(['\"]obsidian['\"]\)/.test(s)){console.error('LEAK: obsidian in host');process.exit(1)} console.log('host bundle clean, '+s.length+' bytes');"
-node -e "const m=require('fs').readFileSync('main.js','utf8'); if(!m.includes('StdioServerTransport')){console.error('host source NOT baked into main.js');process.exit(1)} console.log('host baked into main.js');"
 ```
 
-Expected: both print success. (The host build runs before main, so `main.js` contains the bundle string.)
+Expected: the host bundle is emitted and obsidian-free.
+
+> **Bake-presence is deferred to after Task 20 (verified during implementation).** With `treeShaking: true`, esbuild drops the unreferenced `embeddedSource` module from `main.js` until a `main.js`-reachable consumer imports `TOOL_HOST_SOURCE` — which first happens when `ClaudeChatRuntime` is wired in Task 20. So the `main.js` includes `StdioServerTransport` check belongs in **Task 20's gate**, not here. Do NOT add an artificial reference or disable tree-shaking to force it early.
 
 - [ ] **Step 7: Confirm `main.js` is still the only shipped JS artifact.**
 
@@ -2049,10 +2050,14 @@ The plugin-level `reloadLocalToolHost()` (settings + the broadcast fan-out) runs
 
 - [ ] **Step 5: Add a unit test** for the declared-secret union. Extract the union step as a small pure helper `unionSecretIds(catalog: CatalogPayload): string[]` (used inside `reloadLocalToolHost`) and test it: assert `['A','B']` from tools declaring `['A']` and `['A','B']` (deduped). Also unit-test `nodeVersion` (Step 0 below).
 
-- [ ] **Step 6: Typecheck + full test + build.**
+- [ ] **Step 6: Typecheck + full test + build + bake-presence check (deferred from Task 10).** Now that `ClaudeChatRuntime` imports `TOOL_HOST_SOURCE`, the host bundle is reachable from `main.js` and survives tree-shaking, so verify it is actually baked in:
 
 Run: `npm run typecheck && npm run test && npm run build`
-Expected: PASS.
+Then:
+```bash
+node -e "const m=require('fs').readFileSync('main.js','utf8'); if(!m.includes('StdioServerTransport')){console.error('host source NOT baked into main.js');process.exit(1)} console.log('host baked into main.js');"
+```
+Expected: all PASS and the host source is present in `main.js`.
 
 - [ ] **Step 7: Commit.**
 
