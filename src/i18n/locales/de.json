@@ -332,6 +332,18 @@
       "name": "MCP-Server",
       "desc": "Verwalte Vault-MCP-Serverkonfigurationen in .claude/mcp.json. Server mit Kontext-Speichermodus benötigen @mention zur Aktivierung."
     },
+    "localToolHost": {
+      "name": "Local tool host",
+      "desc": "Run user-authored Node scripts from .specorator/tools as MCP tools. Requires Node installed. Scripts run with full Node access — only enable code you trust.",
+      "enable": "Enable local tool host",
+      "nodeMissing": "Node was not found on PATH. Install Node to use local tools.",
+      "nodeUnsupported": "Node 18 or newer is required for local tools (or Node was not found).",
+      "noTools": "No tools found in .specorator/tools.",
+      "trustWarning": "Tools run as a Node subprocess with full filesystem and network access.",
+      "loadError": "Failed to load",
+      "reload": "Reload tools",
+      "disabledHint": "Disabled — not loaded. Enable to run it again."
+    },
     "plugins": {
       "name": "Claude Code-Plugins",
       "desc": "Verwalte Claude Code Plugins aus ~/.claude/plugins. Aktivierte Plugins werden pro Vault in .claude/settings.json gespeichert."

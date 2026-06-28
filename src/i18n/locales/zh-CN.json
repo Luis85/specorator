@@ -332,6 +332,18 @@
       "name": "MCP 服务器",
       "desc": "管理存储在 .claude/mcp.json 中的 Vault 级 MCP 服务器配置。启用上下文保存模式的服务器需要 @ 提及才能激活。"
     },
+    "localToolHost": {
+      "name": "Local tool host",
+      "desc": "Run user-authored Node scripts from .specorator/tools as MCP tools. Requires Node installed. Scripts run with full Node access — only enable code you trust.",
+      "enable": "Enable local tool host",
+      "nodeMissing": "Node was not found on PATH. Install Node to use local tools.",
+      "nodeUnsupported": "Node 18 or newer is required for local tools (or Node was not found).",
+      "noTools": "No tools found in .specorator/tools.",
+      "trustWarning": "Tools run as a Node subprocess with full filesystem and network access.",
+      "loadError": "Failed to load",
+      "reload": "Reload tools",
+      "disabledHint": "Disabled — not loaded. Enable to run it again."
+    },
     "plugins": {
       "name": "Claude Code 插件",
       "desc": "管理从 ~/.claude/plugins 发现的 Claude Code 插件。启用的插件按 Vault 存储在 .claude/settings.json 中。"

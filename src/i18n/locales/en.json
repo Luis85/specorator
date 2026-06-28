@@ -446,6 +446,18 @@
       "name": "MCP Servers",
       "desc": "Manage vault-level MCP server configurations stored in .claude/mcp.json. Servers with context-saving mode require @mention to activate."
     },
+    "localToolHost": {
+      "name": "Local tool host",
+      "desc": "Run user-authored Node scripts from .specorator/tools as MCP tools. Requires Node installed. Scripts run with full Node access — only enable code you trust.",
+      "enable": "Enable local tool host",
+      "nodeMissing": "Node was not found on PATH. Install Node to use local tools.",
+      "nodeUnsupported": "Node 18 or newer is required for local tools (or Node was not found).",
+      "noTools": "No tools found in .specorator/tools.",
+      "trustWarning": "Tools run as a Node subprocess with full filesystem and network access.",
+      "loadError": "Failed to load",
+      "reload": "Reload tools",
+      "disabledHint": "Disabled — not loaded. Enable to run it again."
+    },
     "mcp": {
       "reloadFailed": "Setting saved but reload failed. Changes will apply on next session.",
       "saveFailed": "Failed to save MCP server",

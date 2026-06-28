@@ -332,6 +332,18 @@
       "name": "MCP 伺服器",
       "desc": "管理儲存在 .claude/mcp.json 中的 Vault 級 MCP 伺服器配置。啟用上下文保存模式的伺服器需要 @ 提及才能啟用。"
     },
+    "localToolHost": {
+      "name": "Local tool host",
+      "desc": "Run user-authored Node scripts from .specorator/tools as MCP tools. Requires Node installed. Scripts run with full Node access — only enable code you trust.",
+      "enable": "Enable local tool host",
+      "nodeMissing": "Node was not found on PATH. Install Node to use local tools.",
+      "nodeUnsupported": "Node 18 or newer is required for local tools (or Node was not found).",
+      "noTools": "No tools found in .specorator/tools.",
+      "trustWarning": "Tools run as a Node subprocess with full filesystem and network access.",
+      "loadError": "Failed to load",
+      "reload": "Reload tools",
+      "disabledHint": "Disabled — not loaded. Enable to run it again."
+    },
     "plugins": {
       "name": "Claude Code 外掛程式",
       "desc": "管理從 ~/.claude/plugins 發現的 Claude Code 外掛程式。已啟用的外掛程式按 Vault 儲存在 .claude/settings.json 中。"

@@ -332,6 +332,18 @@
       "name": "Serveurs MCP",
       "desc": "Gérez les configurations de serveurs MCP au niveau du vault stockées dans .claude/mcp.json. Les serveurs avec mode de sauvegarde de contexte nécessitent une @mention pour s'activer."
     },
+    "localToolHost": {
+      "name": "Local tool host",
+      "desc": "Run user-authored Node scripts from .specorator/tools as MCP tools. Requires Node installed. Scripts run with full Node access — only enable code you trust.",
+      "enable": "Enable local tool host",
+      "nodeMissing": "Node was not found on PATH. Install Node to use local tools.",
+      "nodeUnsupported": "Node 18 or newer is required for local tools (or Node was not found).",
+      "noTools": "No tools found in .specorator/tools.",
+      "trustWarning": "Tools run as a Node subprocess with full filesystem and network access.",
+      "loadError": "Failed to load",
+      "reload": "Reload tools",
+      "disabledHint": "Disabled — not loaded. Enable to run it again."
+    },
     "plugins": {
       "name": "Plugins Claude Code",
       "desc": "Gérez les plugins Claude Code découverts dans ~/.claude/plugins. Les plugins activés sont stockés par vault dans .claude/settings.json."
