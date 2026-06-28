@@ -265,7 +265,7 @@ export class AgentDetailEditor {
   private async save(): Promise<void> {
     this.draft.updatedAt = Date.now();
     await this.plugin.agentRosterStore?.save(this.draft);
-    this.original = { ...this.draft, roles: [...this.draft.roles], skills: [...this.draft.skills] };
+    this.original = { ...this.draft, roles: [...this.draft.roles], skills: [...this.draft.skills], tags: [...(this.draft.tags ?? [])] };
     this.isNew = false;
     new Notice(t('agentRoster.saved', { name: this.draft.name }));
     this.updateDirty();
