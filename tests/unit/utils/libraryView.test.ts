@@ -172,4 +172,26 @@ describe('DOM helpers', () => {
     renderModalFooter(root, { closeLabel: 'Close', onClose: jest.fn() });
     expect(root.querySelectorAll('.specorator-library-modal-footer button')).toHaveLength(1);
   });
+
+  it('renderLibraryShell returns a toolbar slot between header and list', () => {
+    const root = container();
+    const { actions, toolbar, list } = renderLibraryShell(root, 'Title');
+    expect(actions).toBeTruthy();
+    expect(toolbar).toBeTruthy();
+    expect(list).toBeTruthy();
+    expect(toolbar.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('createLibraryCard interactive makes the card a role=button that activates on click and Enter', () => {
+    const list = container();
+    let activations = 0;
+    const { card } = createLibraryCard(list, 'X', {
+      interactive: { onActivate: () => { activations += 1; }, ariaLabel: 'X' },
+    });
+    expect(card.getAttribute('role')).toBe('button');
+    expect(card.getAttribute('tabindex')).toBe('0');
+    card.dispatchEvent(new MouseEvent('click'));
+    card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(activations).toBe(2);
+  });
 });

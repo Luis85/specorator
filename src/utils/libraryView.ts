@@ -55,15 +55,16 @@ export function renderLibraryShell(
   contentEl: HTMLElement,
   title: string,
   renderNav?: (container: HTMLElement) => void,
-): { actions: HTMLElement; list: HTMLElement } {
+): { actions: HTMLElement; toolbar: HTMLElement; list: HTMLElement } {
   contentEl.empty();
   contentEl.addClass('specorator-library');
   renderNav?.(contentEl);
   const header = contentEl.createDiv({ cls: 'specorator-library-header' });
   header.createEl('h2', { text: title });
   const actions = header.createDiv({ cls: 'specorator-library-header-actions' });
+  const toolbar = contentEl.createDiv({ cls: 'specorator-library-toolbar-slot' });
   const list = contentEl.createDiv({ cls: 'specorator-library-list' });
-  return { actions, list };
+  return { actions, toolbar, list };
 }
 
 export interface LibraryEmptyStateOptions {
@@ -154,6 +155,11 @@ export interface LibraryCardOptions {
    * `nameButton` is the element; the caller wires its click handler.
    */
   nameAsButton?: boolean;
+  /**
+   * Makes the whole card a focusable `role=button` that fires `onActivate` on
+   * click and Enter/Space. Nested action buttons must call `stopPropagation`.
+   */
+  interactive?: { onActivate: () => void; ariaLabel: string };
 }
 
 /**
@@ -169,6 +175,19 @@ export function createLibraryCard(
   opts?: LibraryCardOptions,
 ): { card: HTMLElement; nameRow: HTMLElement; body: HTMLElement; actions: HTMLElement; nameButton?: HTMLButtonElement } {
   const card = list.createDiv({ cls: 'specorator-library-card' });
+  if (opts?.interactive) {
+    const { onActivate, ariaLabel } = opts.interactive;
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('aria-label', ariaLabel);
+    card.addEventListener('click', () => onActivate());
+    card.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onActivate();
+      }
+    });
+  }
   if (opts?.leading) opts.leading(card.createDiv({ cls: 'specorator-library-card-leading' }));
   const body = card.createDiv({ cls: 'specorator-library-card-body' });
   const nameRow = body.createDiv({ cls: 'specorator-library-card-name' });
