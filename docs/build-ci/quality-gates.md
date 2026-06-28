@@ -483,3 +483,19 @@ normalizers onto `normalizeUniqueRecords`, the `McpTestModal` optimistic/rollbac
 240 → 238 (incidental), with `criticalComplexity` 0, maintainability 90.2, and the structural counters
 held at 0. Behavior-preserving (full unit suite green); the entangled cross-provider runtime clones and
 the divergent BangBash/Instruction mode managers were left as before.
+Done 2026-06-28 (quality campaign run 18): clean-code guidelines + hotspot decomposition. Codified the
+refactoring practice the campaign has been applying in
+[`clean-code-refactoring.md`](clean-code-refactoring.md) (linked from `CLAUDE.md`), and sharpened the
+starter presets that embody it — the **Refactorer** roster agent, the **Architecture satisfaction**
+loop, and the **Refactor** work-order template. Then decomposed three >1,000-LOC coordinators along the
+self-contained seams an Explore pass mapped, each behavior-preserving with a focused spec:
+(1) `InputController` → `ResumeSessionDropdownCoordinator` (the `$`-resume dropdown lifecycle, a single
+field; 1202 → 1175); (2) `OpencodeChatRuntime` → `OpencodeSupportedCommandsRegistry` (the
+runtime-discovered slash-command list + first-discovery waiters; 1164 → 1116). Both keep thin delegators
+on the parent and take live accessors, so no import cycle. Gated metrics held at 32 / 786 / 238 / 0 /
+90.2 (the splits added no clones or complexity); LOC baseline re-locked for the two shrunk hotspots.
+**Deliberately deferred** (mapped but higher-risk — stateful surgery on core streaming, better as their
+own reviewed work orders driven by the new clean-code loop): `ClaudeChatRuntime`'s persistent-query
+lifecycle / response-consumer router (needs a ~16-field context object) and `InputController`'s
+plan-approval + provider-message-boundary state. Splitting those in the same PR would trade
+reviewability and behavior-safety for line count — exactly the trade the guidelines say not to make.
