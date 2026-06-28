@@ -32,6 +32,7 @@ npm run typecheck && npm run lint && npm run test && npm run build
 
 **New — plugin side (Claude):**
 - `src/providers/claude/toolHost/toolHostPaths.ts` — resolve absolute materialized `tool-host.mjs` path + tools dir.
+- `src/providers/claude/toolHost/nodeVersion.ts` — probe/parse `node --version`; gate the feature on Node ≥18.
 - `src/providers/claude/toolHost/ToolHostMaterializer.ts` — write the embedded host source to `<pluginDir>/tool-host.mjs` (overwrite-if-changed).
 - `src/providers/claude/toolHost/ToolHostCatalog.ts` — spawn catalog mode, parse JSON → `{ tools, errors }`.
 - `src/providers/claude/toolHost/buildToolHostServer.ts` — build the serve-mode stdio `McpServerConfig` (command/args/env + resolved secrets + disabled filter).
@@ -962,7 +963,17 @@ function parseStringList(raw: string): string[] {
   }
 }
 
+/** stdout carries MCP JSON-RPC / catalog JSON; redirect all console.* to stderr so a tool's
+ * `console.log` (top-level or in a handler) can never corrupt the protocol stream. */
+function guardStdout(): void {
+  const toStderr = (...args: unknown[]) => process.stderr.write(`${args.map((a) => String(a)).join(' ')}\n`);
+  for (const k of ['log', 'info', 'debug', 'warn', 'error', 'trace'] as const) {
+    (console as unknown as Record<string, unknown>)[k] = toStderr;
+  }
+}
+
 async function main(): Promise<void> {
+  guardStdout();   // BEFORE importing any tool — keep stdout exclusively for the protocol.
   const toolsDir = env('SPECORATOR_TOOLS_DIR');
   const vaultPath = env('SPECORATOR_VAULT_PATH');
   // Disabled state is keyed by FILE, not tool name — a name isn't known without importing,
@@ -1601,6 +1612,7 @@ Expected: the type-union file + `en.json` (and siblings). Use the type-union fil
   | 'settings.localToolHost.desc'
   | 'settings.localToolHost.enable'
   | 'settings.localToolHost.nodeMissing'
+  | 'settings.localToolHost.nodeUnsupported'
   | 'settings.localToolHost.noTools'
   | 'settings.localToolHost.trustWarning'
   | 'settings.localToolHost.loadError'
@@ -1616,6 +1628,7 @@ Expected: the type-union file + `en.json` (and siblings). Use the type-union fil
   "desc": "Run user-authored Node scripts from .specorator/tools as MCP tools. Requires Node installed. Scripts run with full Node access — only enable code you trust.",
   "enable": "Enable local tool host",
   "nodeMissing": "Node was not found on PATH. Install Node to use local tools.",
+  "nodeUnsupported": "Node 18 or newer is required for local tools (or Node was not found).",
   "noTools": "No tools found in .specorator/tools.",
   "trustWarning": "Tools run as a Node subprocess with full filesystem and network access.",
   "loadError": "Failed to load",
@@ -1648,19 +1661,19 @@ Follow the `mountClaudeMcpSection` pattern (widget = `(host, context) => void`).
 
 ```ts
 // src/providers/claude/ui/localToolHostWidget.ts
-import { promises as fsp } from 'node:fs';
 import { Notice, Setting } from 'obsidian';
 import type { ProviderSettingsWidgetMount } from '../../../core/providers/types';
+import type { CatalogPayload } from '../../../tool-host/types';
 import { getClaudeProviderSettings, updateClaudeProviderSettings } from '../settings';
-import { resolveToolHostPaths } from '../toolHost/toolHostPaths';
-import { materializeToolHost } from '../toolHost/ToolHostMaterializer';
-import { buildToolHostServer } from '../toolHost/buildToolHostServer';
-import { readCatalog, spawnCatalogRunner } from '../toolHost/ToolHostCatalog';
-import { TOOL_HOST_SOURCE } from '../../../tool-host/embeddedSource';
-import { curateStdioMcpEnv, findNodeExecutable, getEnhancedPath } from '../../../utils/env';
+import { isSupportedNode, probeNodeMajor } from '../toolHost/nodeVersion';
+import { findNodeExecutable, getEnhancedPath } from '../../../utils/env';
 import { t } from '../../../i18n';
 
-const fsAdapter = { read: (p: string) => fsp.readFile(p, 'utf8'), write: (p: string, c: string) => fsp.writeFile(p, c, 'utf8') };
+/** Node present on PATH AND at or above the host's minimum major (18). */
+async function nodeSupported(): Promise<boolean> {
+  const nodePath = findNodeExecutable(getEnhancedPath());
+  return !!nodePath && isSupportedNode(await probeNodeMajor(nodePath));
+}
 
 export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (host, context) => {
   const plugin = context.plugin;
@@ -1673,51 +1686,34 @@ export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (hos
     .setName(t('settings.localToolHost.enable'))
     .addToggle((toggle) =>
       toggle.setValue(claude.localToolHostEnabled).onChange(async (value) => {
-        // Never persist `true` without Node — revert the toggle and warn.
-        if (value && !findNodeExecutable(getEnhancedPath())) {
+        // Never persist `true` without a supported Node (>=18) — revert and warn.
+        if (value && !(await nodeSupported())) {
           toggle.setValue(false);
-          new Notice(t('settings.localToolHost.nodeMissing'));
+          new Notice(t('settings.localToolHost.nodeUnsupported'));
           return;
         }
         updateClaudeProviderSettings(settingsBag, { localToolHostEnabled: value });
         await plugin.saveSettings();
-        await plugin.reloadLocalToolHost?.();   // materialize + refresh runtime caches
+        await plugin.reloadLocalToolHost?.();
         context.refreshDisplay?.();
       }),
     );
 
   if (!claude.localToolHostEnabled) return;
 
-  const vaultPath = plugin.getVaultPath();
-  const nodePath = findNodeExecutable(getEnhancedPath());
-  if (!nodePath) {
-    host.createEl('p', { text: t('settings.localToolHost.nodeMissing'), cls: 'setting-item-description mod-warning' });
-    return;
-  }
-
-  const paths = resolveToolHostPaths({ vaultPath, pluginDir: plugin.manifest.dir ?? '' });
   const listEl = host.createDiv({ cls: 'specorator-tool-host-list' });
 
-  const renderList = async () => {
+  // refreshAll is defined below; setDisabled (defined in renderList) calls it at click time.
+  const renderList = (catalog: CatalogPayload) => {
     listEl.empty();
-    // The host is baked into main.js; materialize it before catalog/spawn (no vault watcher — dot-folder).
-    await materializeToolHost(paths.hostEntry, TOOL_HOST_SOURCE, fsAdapter);
     const disabledFiles = getClaudeProviderSettings(settingsBag).localToolHostDisabledFiles;
-    // Build the catalog env FRESH so it reflects the current disabled set. Catalog skips disabled
-    // files too, so a disabled tool is never imported/executed even on settings-open or Reload.
-    const catalogEnv = buildToolHostServer({
-      enabled: true, nodePath, hostEntry: paths.hostEntry, toolsDir: paths.toolsDir, vaultPath,
-      baseEnv: curateStdioMcpEnv({}), disabledFiles, declaredSecrets: [],
-      resolveSecret: (id) => plugin.secretStore.get(id), toolsRev: 0,
-    })?.env ?? {};
-    const catalog = await readCatalog({ runCatalog: spawnCatalogRunner(nodePath, paths.hostEntry, catalogEnv) });
 
     const setDisabled = async (file: string, disabled: boolean) => {
       const next = new Set(getClaudeProviderSettings(settingsBag).localToolHostDisabledFiles);
       if (disabled) next.add(file); else next.delete(file);
       updateClaudeProviderSettings(settingsBag, { localToolHostDisabledFiles: [...next] });
       await plugin.saveSettings();
-      await refreshAll();   // re-spawn host with the new disabled set + refresh caches + re-render
+      await refreshAll();   // one scan: re-spawn host with the new disabled set + re-render
     };
 
     if (catalog.tools.length === 0 && catalog.errors.length === 0 && disabledFiles.length === 0) {
@@ -1739,13 +1735,17 @@ export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (hos
     }
   };
 
-  // Both the initial open AND the manual button must refresh the RUNTIME caches
-  // (toolsRev + declaredToolSecretIds), not just the visible list — a dot-folder has no
-  // watcher, so opening settings is one of the explicit re-scan seams. Without this, the UI
-  // could show a new catalog while the next turn keeps the old host process and secret env.
+  // reloadLocalToolHost owns the SINGLE materialize + catalog scan and returns the catalog, so
+  // opening settings / Reload performs exactly one scan (not two). It returns null when Node is
+  // missing or too old (the feature is then inert and the builder stays disabled).
   const refreshAll = async () => {
-    await plugin.reloadLocalToolHost?.();   // re-materialize + bump toolsRev + refresh declared-secrets cache
-    await renderList();
+    const catalog = await plugin.reloadLocalToolHost?.();
+    if (!catalog) {
+      listEl.empty();
+      listEl.createEl('p', { text: t('settings.localToolHost.nodeUnsupported'), cls: 'setting-item-description mod-warning' });
+      return;
+    }
+    renderList(catalog);
   };
 
   new Setting(host).addButton((btn) =>
@@ -1756,7 +1756,7 @@ export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (hos
 };
 ```
 
-> Two helper assumptions to verify during implementation: `plugin.getVaultPath()` (grep `getVaultPath` in `src/main.ts` — if absent, use `(plugin.app.vault.adapter as FileSystemAdapter).getBasePath()`), and `context.refreshDisplay` (grep the widget `context` type in `src/core/providers/settingsWidgets.ts`; if absent, drop the call and let the toggle re-render on next settings open). `plugin.reloadLocalToolHost()` is added in Task 20 (materialize + refresh declared-secrets cache); the optional-chaining keeps the widget resilient if it isn't wired yet.
+> Helper assumptions to verify during implementation: `plugin.getVaultPath()` (used by the runtime, Task 20 — grep `getVaultPath` in `src/main.ts`; if absent use `(plugin.app.vault.adapter as FileSystemAdapter).getBasePath()`), and `context.refreshDisplay` (grep the widget `context` type in `src/core/providers/settingsWidgets.ts`; if absent, drop the call). `plugin.reloadLocalToolHost(): Promise<CatalogPayload | null>` is added in Task 20; the optional-chaining keeps the widget resilient if it isn't wired yet.
 
 - [ ] **Step 2: Register the widget** in `claudeSettingsWidgets.ts` — add the import and the map entry (next to `mcpServers: mountClaudeMcpSection` at line 283):
 
@@ -1910,9 +1910,58 @@ git commit -m "feat(claude): inject local tool host on dynamic mcp update"
 ### Task 20: Supply the closure from the runtime
 
 **Files:**
+- Create: `src/providers/claude/toolHost/nodeVersion.ts`, `tests/unit/providers/claude/toolHost/nodeVersion.test.ts`
 - Modify: `src/providers/claude/runtime/ClaudeChatRuntime.ts`
 
 Build one closure (capturing plugin, vault path, settings, secret resolver, curated env) and pass it into both the cold-start `QueryOptionsContext` and the dynamic-update deps.
+
+- [ ] **Step 0: Node-version helper (host needs Node ≥18).** A bare `findNodeExecutable` existence check still lets the feature run on Node 16/17, which crashes the `node18`-targeted host + the MCP SDK (`engines.node >=18`). Add a probe with a pure, testable parser:
+
+```ts
+// src/providers/claude/toolHost/nodeVersion.ts
+import { spawn } from 'node:child_process';
+
+export const MIN_NODE_MAJOR = 18;
+
+/** Parse `process.version`-style output ("v18.20.4\n") to a major number, or null. */
+export function parseNodeMajor(versionOutput: string): number | null {
+  const m = versionOutput.trim().match(/^v?(\d+)\./);
+  return m ? Number(m[1]) : null;
+}
+
+export function isSupportedNode(major: number | null): boolean {
+  return major !== null && major >= MIN_NODE_MAJOR;
+}
+
+/** Spawn `node --version`; resolves the major version or null (never throws). */
+export function probeNodeMajor(nodePath: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    let out = '';
+    const child = spawn(nodePath, ['--version']);
+    child.stdout.on('data', (d) => (out += String(d)));
+    child.on('error', () => resolve(null));
+    child.on('close', () => resolve(parseNodeMajor(out)));
+  });
+}
+```
+
+```ts
+// tests/unit/providers/claude/toolHost/nodeVersion.test.ts
+import { isSupportedNode, parseNodeMajor } from '@/providers/claude/toolHost/nodeVersion';
+
+describe('nodeVersion', () => {
+  it('parses the major version', () => {
+    expect(parseNodeMajor('v18.20.4\n')).toBe(18);
+    expect(parseNodeMajor('v22.3.0')).toBe(22);
+    expect(parseNodeMajor('garbage')).toBeNull();
+  });
+  it('gates on >= 18', () => {
+    expect(isSupportedNode(18)).toBe(true);
+    expect(isSupportedNode(16)).toBe(false);
+    expect(isSupportedNode(null)).toBe(false);
+  });
+});
+```
 
 - [ ] **Step 1: Add a private field + the closure helper** on the runtime. The closure is sync (called per-turn at both seams), so it reads a cached union of declared secret ids rather than spawning catalog mode on the hot path:
 
@@ -1949,29 +1998,20 @@ private makeLocalToolHostServerBuilder(): () => McpServerConfig | null {
   };
 }
 
-/** Spawn catalog mode, cache the union of declared secret ids. Best-effort; never throws. */
-async refreshDeclaredToolSecretIds(): Promise<void> {
+/**
+ * Materialize the host, then run catalog mode EXACTLY ONCE: caches the declared-secret union,
+ * bumps toolsRev, and returns the catalog so the UI can render it without a second scan.
+ * Gates on Node availability AND version (host targets node18; the MCP SDK needs >=18) — returns
+ * null (and leaves the builder disabled) when Node is missing or too old. Never throws.
+ */
+async reloadLocalToolHost(): Promise<CatalogPayload | null> {
   const claude = getClaudeProviderSettings(this.plugin.settings as unknown as Record<string, unknown>);
   const nodePath = findNodeExecutable(getEnhancedPath());
-  if (!claude.localToolHostEnabled || !nodePath) {
+  if (!claude.localToolHostEnabled || !nodePath || !isSupportedNode(await probeNodeMajor(nodePath))) {
+    this.hostMaterialized = false;
     this.declaredToolSecretIds = [];
-    return;
+    return null;
   }
-  const vaultPath = this.plugin.getVaultPath();
-  const paths = resolveToolHostPaths({ vaultPath, pluginDir: this.plugin.manifest.dir ?? '' });
-  const env = {
-    ...curateStdioMcpEnv({}),
-    SPECORATOR_TOOLS_DIR: paths.toolsDir,
-    SPECORATOR_VAULT_PATH: vaultPath,
-    // Pass the disabled set (JSON, comma-safe) so the catalog skips disabled files — their secrets must not enter the union.
-    SPECORATOR_DISABLED_FILES: JSON.stringify(claude.localToolHostDisabledFiles),
-  };
-  const catalog = await readCatalog({ runCatalog: spawnCatalogRunner(nodePath, paths.hostEntry, env) });
-  this.declaredToolSecretIds = [...new Set(catalog.tools.flatMap((t) => t.secrets))];
-}
-
-/** Materialize the embedded host to disk, then refresh the declared-secret cache. Idempotent. */
-async reloadLocalToolHost(): Promise<void> {
   const vaultPath = this.plugin.getVaultPath();
   const paths = resolveToolHostPaths({ vaultPath, pluginDir: this.plugin.manifest.dir ?? '' });
   await materializeToolHost(paths.hostEntry, TOOL_HOST_SOURCE, {
@@ -1980,11 +2020,22 @@ async reloadLocalToolHost(): Promise<void> {
   });
   this.hostMaterialized = true;   // unblocks the cold-start builder
   this.toolsRev += 1;             // force the synthetic config to differ → host re-spawns + re-scans
-  await this.refreshDeclaredToolSecretIds();
+  const env = {
+    ...curateStdioMcpEnv({}),
+    SPECORATOR_TOOLS_DIR: paths.toolsDir,
+    SPECORATOR_VAULT_PATH: vaultPath,
+    // JSON (comma-safe) disabled set so the catalog skips disabled files — their secrets must not enter the union.
+    SPECORATOR_DISABLED_FILES: JSON.stringify(claude.localToolHostDisabledFiles),
+  };
+  const catalog = await readCatalog({ runCatalog: spawnCatalogRunner(nodePath, paths.hostEntry, env) });
+  this.declaredToolSecretIds = [...new Set(catalog.tools.flatMap((t) => t.secrets))];
+  return catalog;   // the widget renders this — one scan per refresh, not two
 }
 ```
 
-Add the imports (`getClaudeProviderSettings`, `resolveToolHostPaths`, `materializeToolHost`, `buildToolHostServer`, `findNodeExecutable`, `getEnhancedPath`, `curateStdioMcpEnv`, `McpServerConfig`, `readCatalog`, `spawnCatalogRunner`, `TOOL_HOST_SOURCE` from `../../../tool-host/embeddedSource`, and `promises as fsp` from `node:fs`).
+Add the imports (`getClaudeProviderSettings`, `resolveToolHostPaths`, `materializeToolHost`, `buildToolHostServer`, `findNodeExecutable`, `getEnhancedPath`, `curateStdioMcpEnv`, `McpServerConfig`, `CatalogPayload`, `readCatalog`, `spawnCatalogRunner`, `isSupportedNode`/`probeNodeMajor` from `../toolHost/nodeVersion`, `TOOL_HOST_SOURCE` from `../../../tool-host/embeddedSource`, and `promises as fsp` from `node:fs`).
+
+The plugin-level `reloadLocalToolHost()` (settings + the broadcast fan-out) runs this once on the active runtime, applies the resulting catalog/`toolsRev` to any other Claude runtimes via a lightweight setter, and returns the `CatalogPayload` for the widget.
 
 - [ ] **Step 2: Pass it into the cold-start `QueryOptionsContext`** — find where the runtime builds the `QueryOptionsContext` (grep `mcpManager:` in this file) and add:
 
@@ -1996,7 +2047,7 @@ Add the imports (`getClaudeProviderSettings`, `resolveToolHostPaths`, `materiali
 
 - [ ] **Step 4: Invoke `reloadLocalToolHost()` at the explicit seams (no vault watcher — dot-folder).** `.specorator/` is excluded from Obsidian's vault index, so refresh is driven explicitly. **Await** `this.reloadLocalToolHost()` in the runtime's init/ready path so `hostMaterialized` flips before turns flow (and the cold-start builder gates on that flag, so even a turn that races startup simply skips injection that one turn rather than spawning a missing entrypoint). Add a thin plugin-level `reloadLocalToolHost()` that broadcasts to the active Claude runtime(s) — mirror the existing `broadcastMcpReload` → `reloadMcpServers` fan-out the MCP settings widget uses (grep `broadcastToAllTabs` / `reloadMcpServers`). The settings toggle `onChange` and the "Reload tools" button (Task 16) both call `plugin.reloadLocalToolHost()`. A full catalog re-scan covers create/delete/rename. **Reload is authoritative (no false staleness):** because `reloadLocalToolHost()` bumps `toolsRev` — which is emitted as `SPECORATOR_TOOLS_REV` in the synthetic config env — the serialized config *always* changes on reload, even when the tool's secrets/disabled state didn't. That guarantees the dynamic-update `mcpServersKey` differs → `setMcpServers` re-spawns the host → the host re-scans its dir and serves the new/edited tool on the next turn. The only manual step (dot-folder, no watcher) is clicking **"Reload tools"** (or re-opening settings) after editing files on disk.
 
-- [ ] **Step 5: Add a unit test** for `refreshDeclaredToolSecretIds` deduping the union (inject a fake `runCatalog` via the same seam `ToolHostCatalog` tests use, or extract the union step as a small pure helper `unionSecretIds(catalog)` and test that). Assert `['A','B']` from tools declaring `['A']` and `['A','B']`.
+- [ ] **Step 5: Add a unit test** for the declared-secret union. Extract the union step as a small pure helper `unionSecretIds(catalog: CatalogPayload): string[]` (used inside `reloadLocalToolHost`) and test it: assert `['A','B']` from tools declaring `['A']` and `['A','B']` (deduped). Also unit-test `nodeVersion` (Step 0 below).
 
 - [ ] **Step 6: Typecheck + full test + build.**
 
@@ -2010,7 +2061,7 @@ git add src/providers/claude/runtime/ClaudeChatRuntime.ts tests/unit/providers/c
 git commit -m "feat(claude): supply local tool host builder + declared-secret cache to both mcp seams"
 ```
 
-> **How declared secrets flow (v1, end-to-end):** the host reports each tool's `manifest.secrets` in catalog mode (Task 7) → the runtime caches their union via `refreshDeclaredToolSecretIds` (Step 4) → `buildToolHostServer` resolves each id through `secretStore.get` and emits `SPECORATOR_SECRET_<id>` into the host env (Task 13) → the host's `ctx.secrets` exposes the subset each tool declared (Task 9). The sync per-turn closure reads the cache, so no catalog spawn sits on the hot path.
+> **How declared secrets flow (v1, end-to-end):** the host reports each tool's `manifest.secrets` in catalog mode (Task 7) → `reloadLocalToolHost` caches their union (one scan) → `buildToolHostServer` resolves each id through `secretStore.get` and emits `SPECORATOR_SECRET_<id>` into the host env (Task 13) → the host scrubs them into host-owned state and `ctx.secrets` exposes only the calling tool's declared subset (Task 9). The sync per-turn closure reads the cache, so no catalog spawn sits on the hot path.
 
 ---
 
@@ -2144,6 +2195,9 @@ git commit -m "chore: re-baseline ratchets for local tool host"
 - Opt-in toggle (reverts when Node missing) + Node check + discovered-tool list + per-tool disable + error badges → Tasks 11, 16.
 - **Disable is file-keyed and enforced by skip-import in BOTH modes** — a disabled tool never executes (no side effects) and never reads secrets, in catalog or serve; settings shows it by filename → Tasks 6, 9, 16.
 - **Secret scoping** — the host scrubs `SPECORATOR_SECRET_*` from `process.env` into host-owned state before importing any tool; `ctx.secrets` exposes only the calling tool's declared subset → Task 9.
+- **stdout protected** — `console.*` is redirected to stderr before importing tools, so a tool's `console.log` can't corrupt the MCP/catalog JSON on stdout → Task 9.
+- **Node ≥18 gate** — enable toggle + runtime probe `node --version`; feature stays off / builder null below 18 (host targets node18, MCP SDK needs >=18) → Tasks 16, 20.
+- **One scan per refresh** — `reloadLocalToolHost` owns the single materialize + catalog scan and returns the catalog; the widget renders it instead of scanning again → Tasks 16, 20.
 - **Duplicate tool names rejected** as per-file load errors (first file alphabetically wins) before handler registration → Task 6.
 - Lazy start (server is `null` when disabled / no node / not yet materialized; SDK only spawns when injected) → Tasks 13, 18, 19, 20.
 - Per-script isolation + handler timeout/throw + **per-file import timeout** (catalog *and* serve) → Tasks 5, 6.

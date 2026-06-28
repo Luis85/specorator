@@ -71,7 +71,9 @@ the shipped bundle, not fetched remotely.
   `.specorator/tools/`.
 - **Claude provider only.** The host is provider-neutral; only the Claude wiring
   ships in v1.
-- Opt-in (off by default); requires Node installed on the host machine.
+- Opt-in (off by default); requires **Node ≥18** on the host machine (the host
+  targets `node18` and the MCP SDK needs `>=18`). The enable toggle probes
+  `node --version` and stays off when Node is missing or older.
 - A lightweight settings surface: enable toggle + discovered-tool list.
 
 **Out of scope (revisitable later):**
@@ -136,8 +138,10 @@ export async function handler(input, ctx) {
     the host process stderr (visible when Specorator debug logging is on). Each
     line is tagged with the tool name.
   - `ctx.secrets` — resolved values for the ids declared in `manifest.secrets`.
-  - (`globalThis.fetch` and `console` remain available in-process; `ctx` adds the
-    vault/logger/secret surface the process boundary otherwise can't reach.)
+  - (`globalThis.fetch` is available in-process. `console.*` is **redirected to
+    stderr** by the host before any tool is imported — stdout is reserved for MCP
+    JSON-RPC / catalog JSON, so a tool's `console.log` can't corrupt the protocol.
+    `ctx` adds the vault/logger/secret surface the process boundary can't reach.)
 
 ## Components
 
