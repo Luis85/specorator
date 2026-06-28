@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+
 import type { ToolHandlerCtx } from './types';
 
 /** Resolve a vault-relative path, throwing if it escapes the vault root. */

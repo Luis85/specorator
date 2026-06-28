@@ -1,5 +1,6 @@
 import path from 'node:path';
-import type { LoadResult, LoadedTool, LoadError, ToolModule } from './types';
+
+import type { LoadedTool, LoadError, LoadResult, ToolModule } from './types';
 
 export interface LoadDeps {
   readdir: (dir: string) => Promise<string[]>;

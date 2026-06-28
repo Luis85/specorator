@@ -313,4 +313,16 @@ export default defineConfig([
       'jest/no-commented-out-tests': 'error',
     },
   },
+  {
+    // src/tool-host/ is a standalone Node subprocess spawned by the plugin — it never
+    // imports `obsidian` and runs outside any Obsidian window. The Obsidian-specific
+    // popout-window timer rule does not apply (there is no `window`), and the MCP SDK's
+    // low-level `Server` is the intended API here (we pass plain JSON Schema, not Zod, so
+    // the high-level `McpServer` is not usable). Scope both relaxations to this directory.
+    files: ['src/tool-host/**/*.ts'],
+    rules: {
+      'obsidianmd/prefer-window-timers': 'off',
+      '@typescript-eslint/no-deprecated': 'off',
+    },
+  },
 ]);
