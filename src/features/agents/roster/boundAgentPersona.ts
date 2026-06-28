@@ -15,6 +15,11 @@ export interface BoundAgentPersonaInput {
 export interface BoundAgentProjection {
   prompt?: string;
   model?: string;
+  /** Agent slug (id with `roster:` prefix stripped). Passed to providers that
+   *  support native agent activation (e.g. Claude SDK `options.agent`). */
+  slug?: string;
+  /** Human-readable description forwarded to the native agent definition. */
+  description?: string;
 }
 
 /**

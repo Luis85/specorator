@@ -606,6 +606,8 @@ export class InputController {
       model: tabModelOverride ?? boundAgentModel,
       boundAgentPrompt: projection.prompt || undefined,
       boundAgentModel,
+      boundAgentSlug: projection.slug || undefined,
+      boundAgentDescription: projection.description || undefined,
     };
   }
 

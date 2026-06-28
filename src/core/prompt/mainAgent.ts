@@ -17,6 +17,13 @@ export interface SystemPromptBuildOptions {
    * assert two competing identities and the prominent base one wins.
    */
   suppressIdentity?: boolean;
+  /**
+   * When the native-agent path is active (Claude SDK `options.agent`), the agent
+   * slug is included in the system-prompt key so that switching bound agents
+   * triggers a persistent-query restart even though the appended text does not
+   * change (the SDK owns the identity injection in that path).
+   */
+  nativeAgentSlug?: string;
 }
 
 function getPathRules(vaultPath?: string): string {
@@ -243,6 +250,11 @@ export function computeSystemPromptKey(
     parts.push(appendixKey);
   }
 
+  // Native-agent path: slug identifies the active inline agent definition; a
+  // change triggers restart even when the appended text stays the same.
+  if (options.nativeAgentSlug) {
+    parts.push(`agent:${options.nativeAgentSlug}`);
+  }
 
   return parts.join('::');
 }

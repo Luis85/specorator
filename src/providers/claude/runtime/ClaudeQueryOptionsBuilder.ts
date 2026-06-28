@@ -39,6 +39,10 @@ export interface QueryOptionsContext {
   pluginManager: AppPluginManager;
   boundAgentPrompt?: string;
   boundAgentModel?: string;
+  /** Agent slug for native SDK agent activation (Claude-only). */
+  boundAgentSlug?: string;
+  /** Human-readable description forwarded to the inline AgentDefinition. */
+  boundAgentDescription?: string;
 }
 
 export interface PersistentQueryContext extends QueryOptionsContext {
@@ -113,6 +117,7 @@ export class QueryOptionsBuilder {
     externalContextPaths?: string[],
     modelOverride?: string,
     boundAgentPrompt?: string,
+    boundAgentSlug?: string,
   ): PersistentQueryConfig {
     const claudeSettings = getClaudeProviderSettings(ctx.settings);
     const systemPromptSettings: SystemPromptSettings = {
@@ -153,8 +158,12 @@ export class QueryOptionsBuilder {
       permissionMode: ctx.settings.permissionMode,
       sdkPermissionMode,
       systemPromptKey: computeSystemPromptKey(systemPromptSettings, {
-        appendices: boundAgentPrompt ? [boundAgentPrompt] : undefined,
-        suppressIdentity: !!boundAgentPrompt,
+        // Native-agent path: slug is the key differentiator; the agent's own
+        // prompt is not appended (it comes from the SDK agent definition instead).
+        // Fallback path: full persona text is appended as before.
+        appendices: (boundAgentSlug || !boundAgentPrompt) ? undefined : [boundAgentPrompt],
+        suppressIdentity: !!(boundAgentSlug || boundAgentPrompt),
+        nativeAgentSlug: boundAgentSlug,
       }),
       disallowedToolsKey,
       mcpServersKey: '', // Dynamic via setMcpServers, not tracked for restart
@@ -314,12 +323,9 @@ export class QueryOptionsBuilder {
       vaultPath: ctx.vaultPath,
       userName: ctx.settings.userName,
     };
+
     const options: Options = {
       cwd: ctx.vaultPath,
-      systemPrompt: buildSystemPrompt(systemPromptSettings, {
-        appendices: ctx.boundAgentPrompt ? [ctx.boundAgentPrompt] : undefined,
-        suppressIdentity: !!ctx.boundAgentPrompt,
-      }),
       model,
       abortController,
       pathToClaudeCodeExecutable: ctx.cliPath,
@@ -336,6 +342,34 @@ export class QueryOptionsBuilder {
       },
       includePartialMessages: true,
     };
+
+    if (ctx.boundAgentSlug && ctx.boundAgentPrompt) {
+      // Native-agent path: let the SDK own the identity via `--agent`/`--agents`.
+      // The agent definition carries the full persona text as its `prompt`, so the
+      // SDK system prompt must NOT repeat it. We activate the `claude_code` preset
+      // (which supplies the base Code assistant behavior) and append only the
+      // operational Specorator rules (path conventions, vault context, etc.) with
+      // the Specorator identity block stripped — the agent's prompt is the identity.
+      options.agent = ctx.boundAgentSlug;
+      options.agents = {
+        [ctx.boundAgentSlug]: {
+          description: ctx.boundAgentDescription ?? 'Specorator roster agent',
+          prompt: ctx.boundAgentPrompt,
+          ...(ctx.boundAgentModel ? { model: ctx.boundAgentModel } : {}),
+        },
+      };
+      options.systemPrompt = {
+        type: 'preset',
+        preset: 'claude_code',
+        append: buildSystemPrompt(systemPromptSettings, { suppressIdentity: true }),
+      };
+    } else {
+      // Fallback: inject persona (or nothing) directly into the system prompt.
+      options.systemPrompt = buildSystemPrompt(systemPromptSettings, {
+        appendices: ctx.boundAgentPrompt ? [ctx.boundAgentPrompt] : undefined,
+        suppressIdentity: !!ctx.boundAgentPrompt,
+      });
+    }
 
     QueryOptionsBuilder.applyExtraArgs(options, claudeSettings);
     options.spawnClaudeCodeProcess = createCustomSpawnFunction(ctx.enhancedPath);

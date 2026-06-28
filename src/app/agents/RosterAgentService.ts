@@ -63,11 +63,16 @@ export class RosterAgentService {
     const model = providerId
       ? resolveAgentModelForProvider(agent, providerId, undefined)
       : agent.modelSelection?.modelId;
+    // Derive the slug (strip the 'roster:' prefix) for providers that support
+    // native agent activation (e.g. the Claude SDK --agent flag).
+    const slug = agent.id.startsWith('roster:') ? agent.id.slice('roster:'.length) : agent.id;
     return {
       // A forceful identity directive so providers without a system-prompt
       // channel (Cursor) still adopt the persona instead of their built-in one.
       prompt: formatBoundAgentPersona({ ...agent, skills }),
       model,
+      slug,
+      description: agent.description,
     };
   }
 
