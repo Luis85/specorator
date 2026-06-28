@@ -47,7 +47,10 @@ export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (hos
         }
         updateClaudeProviderSettings(settingsBag, { localToolHostEnabled: value });
         await plugin.saveSettings();
-        await plugin.reloadLocalToolHost();
+        // On DISABLE, clear the runtime caches now — the remount returns early (no scan) when off.
+        // On ENABLE, skip this: the remount's refreshAll performs the single scan (avoid a double
+        // scan that would import every tool twice).
+        if (!value) await plugin.reloadLocalToolHost();
         context.requestRefresh();
       }),
     );
