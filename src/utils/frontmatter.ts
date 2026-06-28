@@ -191,6 +191,37 @@ export function extractStringArray(
   return normalizeStringArray(fm[key]);
 }
 
+/**
+ * Upsert a flow-sequence list (`key: ["a", "b"]`) into `content`'s frontmatter,
+ * replacing an existing `key:` flow line or block-sequence (`key:` + indented
+ * `- ` items). Removes the key entirely when `values` is empty. Returns content
+ * unchanged when no `---` frontmatter block is present.
+ */
+export function setFrontmatterList(content: string, key: string, values: string[]): string {
+  const match = content.match(FRONTMATTER_PATTERN);
+  if (!match) return content;
+
+  const yamlLines = match[1].split(/\r?\n/);
+  const body = match[2];
+  const keyLine = new RegExp(`^${key}\\s*:`);
+  const kept: string[] = [];
+  let skippingBlock = false;
+  for (const line of yamlLines) {
+    if (skippingBlock) {
+      if (/^\s*-\s+/.test(line)) continue; // drop block-list items under the removed key
+      skippingBlock = false;
+    }
+    if (keyLine.test(line)) { skippingBlock = true; continue; }
+    kept.push(line);
+  }
+  if (values.length > 0) {
+    const flow = values.map((v) => JSON.stringify(v)).join(', ');
+    kept.push(`${key}: [${flow}]`);
+  }
+  while (kept.length > 0 && kept[kept.length - 1].trim() === '') kept.pop();
+  return `---\n${kept.join('\n')}\n---\n${body}`;
+}
+
 export function extractBoolean(
   fm: Record<string, unknown>,
   key: string
