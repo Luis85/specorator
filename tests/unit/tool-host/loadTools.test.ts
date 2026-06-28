@@ -120,6 +120,15 @@ describe('loadTools', () => {
     expect(req.errors[0].message).toMatch(/required.*array of strings/);
   });
 
+  it('rejects an inputSchema that is not JSON-serializable (cycle/BigInt)', async () => {
+    const cyclic: Record<string, unknown> = { type: 'object' };
+    cyclic.self = cyclic;
+    const badMod = { manifest: { name: 'c', description: 'd', inputSchema: cyclic }, handler: async () => '' };
+    const res = await loadTools('/t', { readdir: async () => ['c.mjs'], importModule: async () => badMod as unknown as ToolModule });
+    expect(res.tools).toEqual([]);
+    expect(res.errors[0].message).toMatch(/JSON-serializable/);
+  });
+
   it('rejects a manifest whose secrets field is not a string array', async () => {
     const badSecrets = { manifest: { name: 's', description: 'd', inputSchema: { type: 'object' }, secrets: 'KEY' }, handler: async () => '' };
     const res = await loadTools('/tools', {

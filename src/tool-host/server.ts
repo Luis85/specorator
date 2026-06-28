@@ -1,3 +1,5 @@
+import type { Writable } from 'node:stream';
+
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -39,6 +41,9 @@ export async function createServer(
   tools: LoadedTool[],
   ctxFactory: (toolName: string) => ToolHandlerCtx,
   timeoutMs: number,
+  /** The real stdout, captured before process.stdout was redirected — JSON-RPC must use this so
+   * a tool's stray stdout write (now routed to stderr) can't interleave with protocol frames. */
+  protocolStdout: Writable,
 ): Promise<void> {
   const handlers = buildToolHandlers(tools, ctxFactory, timeoutMs);
   const server = new Server({ name: 'specorator-tools', version: '1.0.0' }, { capabilities: { tools: {} } });
@@ -48,5 +53,5 @@ export async function createServer(
   server.setRequestHandler(CallToolRequestSchema, (req) =>
     handlers.callTool(req as CallToolRequest) as Promise<CallToolResult & Record<string, unknown>>,
   );
-  await server.connect(new StdioServerTransport());
+  await server.connect(new StdioServerTransport(process.stdin, protocolStdout));
 }

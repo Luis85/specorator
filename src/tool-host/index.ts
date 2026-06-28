@@ -1,6 +1,7 @@
 import { Console } from 'node:console';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { Writable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 
 import { buildCatalog } from './catalog';
@@ -27,15 +28,27 @@ function parseStringList(raw: string): string[] {
   }
 }
 
-/** stdout carries MCP JSON-RPC / catalog JSON; route the ENTIRE console (log/info/debug/warn/
- * error/trace AND dir/table/group/count/time/assert/…) to stderr by replacing it with a Console
- * whose stdout stream IS stderr, so no `console.*` from a tool can corrupt the protocol stream. */
-function guardStdout(): void {
+/**
+ * stdout is reserved for MCP JSON-RPC / catalog JSON. Capture the REAL stdout for protocol use,
+ * then route everything else to stderr: the entire `console` (every method, not just log/warn) AND
+ * direct `process.stdout.write` (progress bars, CLI deps). A tool's stray stdout output therefore
+ * goes to stderr and can never corrupt the protocol stream. Returns the protocol stdout writer.
+ */
+function guardStdout(): Writable {
+  const realWrite = process.stdout.write.bind(process.stdout);
   globalThis.console = new Console({ stdout: process.stderr, stderr: process.stderr });
+  process.stdout.write = ((chunk: string | Uint8Array, ...rest: unknown[]) =>
+    (process.stderr.write as (...a: unknown[]) => boolean)(chunk, ...rest));
+  return new Writable({
+    write(chunk: string | Uint8Array, _enc, cb) {
+      realWrite(chunk, cb);
+    },
+  });
 }
 
 async function main(): Promise<void> {
-  guardStdout();   // BEFORE importing any tool — keep stdout exclusively for the protocol.
+  // BEFORE importing any tool — keep real stdout exclusively for the protocol; tools' stdout → stderr.
+  const protocolStdout = guardStdout();
   const toolsDir = env('SPECORATOR_TOOLS_DIR');
   const vaultPath = env('SPECORATOR_VAULT_PATH');
   // Disabled state is keyed by FILE, not tool name — a name isn't known without importing,
@@ -64,10 +77,10 @@ async function main(): Promise<void> {
   const load = await loadTools(toolsDir, deps, { skipFiles: disabledFiles });
 
   if (process.argv.includes('--catalog')) {
-    // Exit after stdout flushes: an imported tool may have left active handles (timer/watcher/
-    // socket) that would otherwise keep this process alive past the caller's close/timeout,
-    // causing a valid catalog to be discarded.
-    process.stdout.write(JSON.stringify(buildCatalog(load)), () => process.exit(0));
+    // Write via the protocol stdout (the real stdout) so tool output never prepends the JSON.
+    // Exit after it flushes: an imported tool may have left active handles (timer/watcher/socket)
+    // that would otherwise keep this process alive past the caller's close/timeout.
+    protocolStdout.write(JSON.stringify(buildCatalog(load)), () => process.exit(0));
     return;
   }
 
@@ -85,7 +98,7 @@ async function main(): Promise<void> {
     };
   };
 
-  await createServer(load.tools, ctxFactory, HANDLER_TIMEOUT_MS);
+  await createServer(load.tools, ctxFactory, HANDLER_TIMEOUT_MS, protocolStdout);
 }
 
 main().catch((err) => {

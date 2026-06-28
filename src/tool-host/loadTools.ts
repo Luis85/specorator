@@ -26,31 +26,43 @@ function importWithTimeout(p: Promise<ToolModule>, ms: number, file: string): Pr
   return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
 }
 
+/**
+ * Validate the manifest's `inputSchema` against the constraints the MCP client enforces on
+ * `tools/list` — a violation here would poison the WHOLE list, so we reject the file instead.
+ * Returns an error message, or null when valid.
+ */
+function validateInputSchema(value: unknown): string | null {
+  const schema = value as { type?: unknown; properties?: unknown; required?: unknown } | null | undefined;
+  if (!schema || typeof schema !== 'object' || schema.type !== 'object') {
+    return '`manifest.inputSchema` must be a JSON Schema object with root type "object"';
+  }
+  const props = schema.properties;
+  if (
+    props !== undefined &&
+    (typeof props !== 'object' || props === null ||
+      Object.values(props as Record<string, unknown>).some((v) => typeof v !== 'object' || v === null))
+  ) {
+    return '`manifest.inputSchema.properties` values must be schema objects';
+  }
+  if (schema.required !== undefined && (!Array.isArray(schema.required) || schema.required.some((r) => typeof r !== 'string'))) {
+    return '`manifest.inputSchema.required` must be an array of strings';
+  }
+  // Returned verbatim in tools/list and JSON-RPC-serialized; a cycle or BigInt would throw there.
+  try {
+    JSON.stringify(schema);
+  } catch {
+    return '`manifest.inputSchema` must be JSON-serializable (no cycles or BigInt)';
+  }
+  return null;
+}
+
 function validateManifest(mod: ToolModule, file: string): LoadError | null {
   const m = mod?.manifest;
   if (!m || typeof m.name !== 'string' || typeof m.description !== 'string') {
     return { file, message: 'Invalid or missing `manifest` (need name, description, inputSchema)' };
   }
-  // MCP ToolSchema requires an object-root JSON Schema; a non-object root would
-  // poison the whole ListTools response, so reject it as a per-file load error.
-  const schema = m.inputSchema as { type?: unknown; properties?: unknown; required?: unknown } | null | undefined;
-  if (!schema || typeof schema !== 'object' || schema.type !== 'object') {
-    return { file, message: '`manifest.inputSchema` must be a JSON Schema object with root type "object"' };
-  }
-  // The MCP client validates tools/list against ToolSchema: `properties` values must be schema
-  // objects and `required` entries must be strings. A malformed member would make the client
-  // reject the WHOLE tool list, so reject it per-file instead.
-  if (
-    schema.properties !== undefined &&
-    (typeof schema.properties !== 'object' ||
-      schema.properties === null ||
-      Object.values(schema.properties as Record<string, unknown>).some((v) => typeof v !== 'object' || v === null))
-  ) {
-    return { file, message: '`manifest.inputSchema.properties` values must be schema objects' };
-  }
-  if (schema.required !== undefined && (!Array.isArray(schema.required) || schema.required.some((r) => typeof r !== 'string'))) {
-    return { file, message: '`manifest.inputSchema.required` must be an array of strings' };
-  }
+  const schemaError = validateInputSchema(m.inputSchema);
+  if (schemaError) return { file, message: schemaError };
   // `secrets` is user-authored JS; a typo like `secrets: 'KEY'` would split into characters downstream.
   if (m.secrets !== undefined && (!Array.isArray(m.secrets) || m.secrets.some((s) => typeof s !== 'string'))) {
     return { file, message: '`manifest.secrets` must be a string array when present' };
