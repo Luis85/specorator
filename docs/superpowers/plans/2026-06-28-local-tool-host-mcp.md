@@ -40,6 +40,7 @@ npm run typecheck && npm run lint && npm run test && npm run build
 **Modified:**
 - `esbuild.config.mjs` — host build target emitting embedded text + `.hostbundle` text loader (host baked into `main.js`, not shipped separately).
 - `.gitignore` — `src/tool-host/embeddedSource.hostbundle` (generated).
+- `jest.config.js` — `moduleNameMapper` for `\.hostbundle$` → stub (build doesn't run in `test`/`coverage` CI jobs).
 - `src/providers/claude/settings.ts` — `localToolHostEnabled` + `localToolHostDisabledFiles`.
 - `src/providers/claude/ui/claudeSettingsWidgets.ts` + `ClaudeSettingsTab.ts` — register + mount the section.
 - `src/providers/claude/runtime/ClaudeQueryOptionsBuilder.ts` — inject synthetic server (cold start).
@@ -621,6 +622,16 @@ describe('loadTools', () => {
     expect(res.tools.map((t) => t.file)).toEqual(['a_first.mjs']);
     expect(res.errors).toEqual([{ file: 'b_dup.mjs', message: expect.stringMatching(/Duplicate tool name "word_count"/) }]);
   });
+
+  it('rejects a manifest whose secrets field is not a string array', async () => {
+    const badSecrets = { manifest: { name: 's', description: 'd', inputSchema: { type: 'object' }, secrets: 'KEY' }, handler: async () => '' };
+    const res = await loadTools('/tools', {
+      readdir: async () => ['s.mjs'],
+      importModule: async () => badSecrets as unknown as ToolModule,
+    });
+    expect(res.tools).toEqual([]);
+    expect(res.errors[0]).toEqual({ file: 's.mjs', message: expect.stringMatching(/secrets.*string array/) });
+  });
 });
 ```
 
@@ -650,12 +661,13 @@ export interface LoadOptions {
 const DEFAULT_IMPORT_TIMEOUT_MS = 5_000;
 
 function importWithTimeout(p: Promise<ToolModule>, ms: number, file: string): Promise<ToolModule> {
-  return Promise.race([
-    p,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`import of ${file} timed out after ${ms}ms`)), ms),
-    ),
-  ]);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`import of ${file} timed out after ${ms}ms`)), ms);
+  });
+  // Clear the timer on success/failure so a healthy import doesn't leave a live timer
+  // keeping the --catalog process alive (and so unit tests don't leak open handles).
+  return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
 }
 
 function validateManifest(mod: ToolModule, file: string): LoadError | null {
@@ -668,6 +680,10 @@ function validateManifest(mod: ToolModule, file: string): LoadError | null {
   const schema = m.inputSchema as { type?: unknown } | null | undefined;
   if (!schema || typeof schema !== 'object' || schema.type !== 'object') {
     return { file, message: '`manifest.inputSchema` must be a JSON Schema object with root type "object"' };
+  }
+  // `secrets` is user-authored JS; a typo like `secrets: 'KEY'` would split into characters downstream.
+  if (m.secrets !== undefined && (!Array.isArray(m.secrets) || m.secrets.some((s) => typeof s !== 'string'))) {
+    return { file, message: '`manifest.secrets` must be a string array when present' };
   }
   if (typeof mod.handler !== 'function') {
     return { file, message: 'Missing `handler` export (must be a function)' };
@@ -935,12 +951,23 @@ function env(name: string): string {
   return process.env[name] ?? '';
 }
 
+/** Parse a JSON string array env var; tolerate empty/invalid as []. */
+function parseStringList(raw: string): string[] {
+  if (!raw) return [];
+  try {
+    const v: unknown = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 async function main(): Promise<void> {
   const toolsDir = env('SPECORATOR_TOOLS_DIR');
   const vaultPath = env('SPECORATOR_VAULT_PATH');
   // Disabled state is keyed by FILE, not tool name — a name isn't known without importing,
   // and importing is exactly what we must avoid for a disabled (possibly untrusted) tool.
-  const disabledFiles = new Set(env('SPECORATOR_DISABLED_FILES').split(',').map((s) => s.trim()).filter(Boolean));
+  const disabledFiles = new Set(parseStringList(env('SPECORATOR_DISABLED_FILES')));
   const logFilePath = vaultPath ? path.join(vaultPath, '.specorator', 'tool-host.log') : undefined;
   const deps = {
     readdir: (dir: string) => fs.readdir(dir),
@@ -1007,8 +1034,8 @@ esbuild'd to a self-contained Node-ESM bundle, **embedded into `main.js` as a
 string** via a text loader, and materialized to disk at runtime (Task 10b).
 
 **Files:**
-- Modify: `esbuild.config.mjs`, `.gitignore`
-- Create: `src/tool-host/embeddedSource.ts`, `src/tool-host/hostbundle.d.ts`
+- Modify: `esbuild.config.mjs`, `.gitignore`, `jest.config.js`
+- Create: `src/tool-host/embeddedSource.ts`, `src/tool-host/hostbundle.d.ts`, `tests/__mocks__/hostbundle.ts`
 
 - [ ] **Step 1: Add the host build options** immediately after the `context` definition (after line 165). The host bundles `@modelcontextprotocol/sdk`, must NOT carry obsidian/electron, and is written into `src/` (not the repo root) with a `.hostbundle` extension so the main build can import it as text:
 
@@ -1075,6 +1102,20 @@ declare module '*.hostbundle' {
 src/tool-host/embeddedSource.hostbundle
 ```
 
+- [ ] **Step 5b: Make `.hostbundle` resolvable in Jest (no build runs in `test`/`coverage` CI jobs).** The bundle is gitignored and only produced by `npm run build`, but `embeddedSource.ts` imports it at module load, and provider code (Tasks 16, 20) transitively pulls `embeddedSource` into the test graph. Without a mapper, `npm run test` on a clean checkout fails to resolve `./embeddedSource.hostbundle`. Add a stub + a `moduleNameMapper` entry in **both** Jest projects (unit + integration) in `jest.config.js`:
+
+```ts
+// tests/__mocks__/hostbundle.ts
+export default '/* tool-host bundle stub (real bundle is produced by `npm run build`) */';
+```
+
+```js
+// jest.config.js — inside each project's moduleNameMapper (alongside the `@/` + obsidian entries)
+'\\.hostbundle$': '<rootDir>/tests/__mocks__/hostbundle.ts',
+```
+
+Tests never execute the real host bundle (they exercise plugin-side logic with the catalog/materializer mocked), so a stub string is sufficient.
+
 - [ ] **Step 6: Build and verify the source is baked in (and obsidian did not leak into the host).**
 
 Run: `npm run build`
@@ -1095,7 +1136,7 @@ Expected: PASS, unchanged (no new artifact — the host lives inside `main.js`).
 - [ ] **Step 8: Commit.**
 
 ```bash
-git add esbuild.config.mjs .gitignore src/tool-host/embeddedSource.ts src/tool-host/hostbundle.d.ts
+git add esbuild.config.mjs .gitignore jest.config.js src/tool-host/embeddedSource.ts src/tool-host/hostbundle.d.ts tests/__mocks__/hostbundle.ts
 git commit -m "build: bake tool-host bundle into main.js as embedded source"
 ```
 
@@ -1339,7 +1380,7 @@ describe('buildToolHostServer', () => {
       PATH: '/usr/bin',
       SPECORATOR_TOOLS_DIR: '/vault/.specorator/tools',
       SPECORATOR_VAULT_PATH: '/vault',
-      SPECORATOR_DISABLED_FILES: 'old_tool.mjs',
+      SPECORATOR_DISABLED_FILES: '["old_tool.mjs"]',
       SPECORATOR_SECRET_OPENAI_API_KEY: 'sk-test',
     });
   });
@@ -1394,7 +1435,8 @@ export function buildToolHostServer(input: BuildToolHostServerInput): McpStdioSe
     ...input.baseEnv,
     SPECORATOR_TOOLS_DIR: input.toolsDir,
     SPECORATOR_VAULT_PATH: input.vaultPath,
-    SPECORATOR_DISABLED_FILES: input.disabledFiles.join(','),
+    // JSON, not comma-join: vault filenames may contain commas, which would split into wrong names.
+    SPECORATOR_DISABLED_FILES: JSON.stringify(input.disabledFiles),
     SPECORATOR_TOOLS_REV: String(input.toolsRev),
   };
   for (const id of input.declaredSecrets) {
@@ -1921,8 +1963,8 @@ async refreshDeclaredToolSecretIds(): Promise<void> {
     ...curateStdioMcpEnv({}),
     SPECORATOR_TOOLS_DIR: paths.toolsDir,
     SPECORATOR_VAULT_PATH: vaultPath,
-    // Pass the disabled set so the catalog skips disabled files — their secrets must not enter the union.
-    SPECORATOR_DISABLED_FILES: claude.localToolHostDisabledFiles.join(','),
+    // Pass the disabled set (JSON, comma-safe) so the catalog skips disabled files — their secrets must not enter the union.
+    SPECORATOR_DISABLED_FILES: JSON.stringify(claude.localToolHostDisabledFiles),
   };
   const catalog = await readCatalog({ runCatalog: spawnCatalogRunner(nodePath, paths.hostEntry, env) });
   this.declaredToolSecretIds = [...new Set(catalog.tools.flatMap((t) => t.secrets))];
