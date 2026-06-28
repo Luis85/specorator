@@ -150,7 +150,7 @@ describe('LoopLibraryView', () => {
     expect(descs.some((d) => d?.startsWith('Use when:'))).toBe(true);
   });
 
-  it('wires Edit and Delete buttons on each card', async () => {
+  it('wires Prompt, Duplicate, and Delete actions on each card', async () => {
     const { view, contentEl } = makeView(makePlugin({
       'Agent Board/loops/alpha-loop.md': LOOP_A,
     }));
@@ -158,21 +158,23 @@ describe('LoopLibraryView', () => {
     await flush();
 
     const card = contentEl.querySelector('.specorator-library-card')!;
-    const buttons = Array.from(card.querySelectorAll('button'));
-    expect(buttons.map((b) => b.textContent)).toEqual(['Edit', 'Delete']);
+    const texts = Array.from(card.querySelectorAll('button')).map((b) => b.textContent);
+    // The whole card is now clickable to edit; explicit actions are Prompt, Duplicate (icon), Delete.
+    expect(texts).toContain('Prompt');
+    expect(texts).toContain('Delete');
     expect(card.querySelector('.specorator-library-card-delete')).not.toBeNull();
+    expect(card.querySelector('.specorator-library-card-icon')).not.toBeNull();
   });
 
-  it('clicking Edit opens the loop editor modal', async () => {
+  it('clicking a card opens the loop editor modal', async () => {
     const { view, contentEl } = makeView(makePlugin({
       'Agent Board/loops/alpha-loop.md': LOOP_A,
     }));
     await view.onOpen();
     await flush();
 
-    const editBtn = Array.from(contentEl.querySelectorAll('.specorator-library-card button'))
-      .find((b) => b.textContent === 'Edit') as HTMLButtonElement;
-    editBtn.click();
+    const card = contentEl.querySelector('.specorator-library-card') as HTMLElement;
+    card.click();
     expect(openMock).toHaveBeenCalled();
   });
 
