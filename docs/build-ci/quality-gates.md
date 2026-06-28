@@ -554,3 +554,26 @@ finalizeCurrentThinkingBlock kept as delegators); 1067 → 964, the full chat su
 streaming perf gates + the whole 9131-test suite green. Gated metrics held at 31 / 754 / 236 / 0 / 90.2;
 LOC baseline re-locked. The symmetric StreamController **text** render coordinator and the remaining
 CodexNotificationRouter raw-tool/segment state machines are the natural next dedicated changes.
+Done 2026-06-28 (quality campaign run 24): the symmetric StreamController **text** render coordinator,
+completing the streaming-render split started in run 23. The streaming assistant-text lifecycle (collapse
+snapshot, append/finalize transitions, finalize-time card swap / copy button / action re-anchor, deferred
+math re-render) moved verbatim into `TextRenderCoordinator`; `appendText` / `finalizeCurrentTextBlock`
+stay as delegators. Both render coordinators now share a single throttled `StreamRenderLoop` (rAF tick +
+the O(C) re-parse `streamRenderBackoff` + pending-promise flush), parameterised per block through deps
+accessors (`currentContent` / `currentTarget` identity token / `getWindow`). The first cut briefly
+regressed the clone gate (a copy-pasted text loop pushed `cloneGroups` 31 → 35, `duplicatedLines` 754 →
+900) and broke 7 StreamController tests (an explicit `undefined` third arg to `renderContent` failed the
+suite's strict `toHaveBeenCalledWith`); both were fixed by hoisting the one shared loop and passing
+`renderer` by reference so the loop branches 2-arg vs 3-arg internally and keeps the exact call arity.
+`StreamController` 964 → 774; full chat suite + all three streaming perf gates + the whole test suite
+green; gated metrics restored to 31 / 754 / 236 / 0 / 90.2 and the LOC baseline re-locked.
+
+**Deliberately deferred** (mapped this run, left for their own reviewed changes): the deep per-turn state
+clusters in the two largest runtimes. `ClaudeChatRuntime`'s response-routing cluster (routeMessage →
+markRoutedStreamContent → deliverRoutedStreamChunk → finishRoutedMessage → flushAutoTurnBuffer +
+register/unregisterResponseHandler) threads ~17 instance fields and sits on the default, full-feature
+provider; `OpencodeChatRuntime`'s session-selection state (currentSessionModelId / ModeId /
+EffortConfigId / EffortValue / EffortValues) is touched at 15+ sites woven through every turn path.
+Extracting either would force most of the runtime's per-turn state through a callback surface — trading
+readability and behavior-safety for line count, exactly the trade the clean-code guide says not to make.
+These belong in dedicated, in-app-verified work orders, not a campaign ride-along.
