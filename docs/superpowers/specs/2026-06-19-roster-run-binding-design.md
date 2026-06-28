@@ -21,8 +21,10 @@ action opens a chat **bound** to the agent, and the agent's **system prompt** an
 ## Scope (MVP)
 
 - **Provider:** Claude (the tool tier is Claude-only today).
-- **Projected:** the agent's `prompt` (appended to the system prompt) and
-  `modelSelection.modelId` (model override, only when the agent set one).
+- **Projected:** the agent's persona (its identity directive + `prompt` + granted
+  skills, via `formatBoundAgentPersona`) and `modelSelection.modelId` (model
+  override, only when the agent set one). The persona **replaces** the built-in
+  Specorator identity rather than stacking beneath it — see "Identity precedence".
 - **Deferred (follow-ups):** tool/skill *enforcement* (Claude's persistent query
   has no `allowedTools` SDK field — requires the `canUseTool` path), work-order →
   roster assignment, and non-Claude providers. The agent's granted user tools are
@@ -55,10 +57,27 @@ it at creation (single write).
    - **Model:** use `boundAgentModel` ahead of `settings.model` (but behind an
      explicit per-turn `modelOverride`).
    - **System prompt:** pass `boundAgentPrompt` as a `buildSystemPrompt(...,
-     { appendices })` entry.
-   - **Restart correctness:** include `boundAgentPrompt` in
-     `computeSystemPromptKey` so switching/clearing the bound agent restarts the
+     { appendices })` entry AND set `suppressIdentity: !!boundAgentPrompt` so the
+     built-in Specorator identity block is omitted (see "Identity precedence").
+   - **Restart correctness:** include `boundAgentPrompt` and the suppression flag
+     in `computeSystemPromptKey` so switching/clearing the bound agent restarts the
      persistent query (the SDK system prompt is built once per query).
+
+## Identity precedence
+
+The base system prompt always opens with a prominent `## Identity & Role —
+You are **Specorator**` block. Appending the bound-agent persona beneath it
+(the original MVP) left **two competing identities** in one prompt; the prominent
+base block won, so a bound chat answered "who are you?" as Specorator and ignored
+the agent (observed with the Code Reviewer starter agent).
+
+Fix: `buildSystemPrompt`/`getBaseSystemPrompt` split the **identity** block from
+the **operational rules** (path conventions, Obsidian context, image handling,
+untrusted-content contract). When `suppressIdentity` is set (i.e. an agent is
+bound), the identity block is omitted and the persona becomes the sole identity,
+while the operational rules are always retained so the agent still knows how to
+work in the vault. The persona's own directive (`formatBoundAgentPersona`) carries
+the "answer as <name>" instruction.
 
 ## Contracts touched
 

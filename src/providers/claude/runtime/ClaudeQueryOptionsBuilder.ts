@@ -154,6 +154,7 @@ export class QueryOptionsBuilder {
       sdkPermissionMode,
       systemPromptKey: computeSystemPromptKey(systemPromptSettings, {
         appendices: boundAgentPrompt ? [boundAgentPrompt] : undefined,
+        suppressIdentity: !!boundAgentPrompt,
       }),
       disallowedToolsKey,
       mcpServersKey: '', // Dynamic via setMcpServers, not tracked for restart
@@ -317,6 +318,7 @@ export class QueryOptionsBuilder {
       cwd: ctx.vaultPath,
       systemPrompt: buildSystemPrompt(systemPromptSettings, {
         appendices: ctx.boundAgentPrompt ? [ctx.boundAgentPrompt] : undefined,
+        suppressIdentity: !!ctx.boundAgentPrompt,
       }),
       model,
       abortController,

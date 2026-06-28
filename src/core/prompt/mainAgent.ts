@@ -9,6 +9,14 @@ export interface SystemPromptSettings {
 
 export interface SystemPromptBuildOptions {
   appendices?: string[];
+  /**
+   * Omit the built-in Specorator identity block so a bound-agent persona (passed
+   * via `appendices`) becomes the sole identity. Operational rules (path
+   * conventions, Obsidian context, image handling) are always retained, so the
+   * agent still knows how to work in the vault. Without this, the prompt would
+   * assert two competing identities and the prominent base one wins.
+   */
+  suppressIdentity?: boolean;
 }
 
 function getPathRules(vaultPath?: string): string {
@@ -27,23 +35,12 @@ function getPathRules(vaultPath?: string): string {
 **External context paths**: When external directories are selected, use absolute paths to access files there. These directories are explicitly granted for the current session.`;
 }
 
-function getBaseSystemPrompt(
-  vaultPath?: string,
-  userName?: string,
-): string {
-  const vaultInfo = vaultPath ? `\n\nVault absolute path: ${vaultPath}` : '';
-  const trimmedUserName = userName?.trim();
-  const userContext = trimmedUserName
-    ? `## User Context\n\nYou are collaborating with **${trimmedUserName}**.\n\n`
-    : '';
-  const pathRules = getPathRules(vaultPath);
-
-  return `${userContext}## Time Context
-
-- **Current Date**: Use \`bash: date\` to get the current date and time. Never guess or assume.
-- **Knowledge Status**: You possess extensive internal knowledge up to your training cutoff. You do not know the exact date of your cutoff, but you must assume that your internal weights are static and "past," while the Current Date is "present."
-
-## Identity & Role
+/**
+ * The built-in Specorator identity block. Suppressed when a roster agent is
+ * bound so the agent's persona is the only "who are you" statement in the prompt.
+ */
+function getIdentitySection(): string {
+  return `## Identity & Role
 
 You are **Specorator**, an expert AI assistant specialized in Obsidian vault management, knowledge organization, and code analysis. You operate directly inside the user's Obsidian vault.
 
@@ -53,7 +50,28 @@ You are **Specorator**, an expert AI assistant specialized in Obsidian vault man
 3.  **Proactive Thinking**: You do not just execute; you *plan* and *verify*. You anticipate potential issues (like broken links or missing files).
 4.  **Clarity**: Your changes are precise, minimizing "noise" in the user's notes or code.
 
-The current working directory is the user's vault root.${vaultInfo}
+`;
+}
+
+function getBaseSystemPrompt(
+  vaultPath?: string,
+  userName?: string,
+  suppressIdentity = false,
+): string {
+  const vaultInfo = vaultPath ? `\n\nVault absolute path: ${vaultPath}` : '';
+  const trimmedUserName = userName?.trim();
+  const userContext = trimmedUserName
+    ? `## User Context\n\nYou are collaborating with **${trimmedUserName}**.\n\n`
+    : '';
+  const pathRules = getPathRules(vaultPath);
+  const identity = suppressIdentity ? '' : getIdentitySection();
+
+  return `${userContext}## Time Context
+
+- **Current Date**: Use \`bash: date\` to get the current date and time. Never guess or assume.
+- **Knowledge Status**: You possess extensive internal knowledge up to your training cutoff. You do not know the exact date of your cutoff, but you must assume that your internal weights are static and "past," while the Current Date is "present."
+
+${identity}The current working directory is the user's vault root.${vaultInfo}
 
 ${pathRules}
 
@@ -185,7 +203,7 @@ export function buildSystemPrompt(
   settings: SystemPromptSettings = {},
   options: SystemPromptBuildOptions = {},
 ): string {
-  let prompt = getBaseSystemPrompt(settings.vaultPath, settings.userName);
+  let prompt = getBaseSystemPrompt(settings.vaultPath, settings.userName, options.suppressIdentity ?? false);
 
   prompt += getImageInstructions(settings.mediaFolder || '');
   prompt += getAppendixSections(options.appendices);
@@ -213,6 +231,13 @@ export function computeSystemPromptKey(
     settings.vaultPath || '',
     (settings.userName || '').trim(),
   ];
+
+  // Toggling identity suppression changes the effective prompt, so it must flip
+  // the key — otherwise binding/unbinding an agent would not restart the
+  // persistent query and the stale system prompt would persist.
+  if (options.suppressIdentity) {
+    parts.push('no-identity');
+  }
 
   if (appendixKey) {
     parts.push(appendixKey);

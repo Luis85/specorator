@@ -244,7 +244,10 @@ export class CodexChatRuntime implements ChatRuntime {
     const model = this.resolveModel(queryOptions);
     const promptText = buildSystemPrompt(
       this.getSystemPromptSettings(),
-      { appendices: queryOptions?.boundAgentPrompt ? [queryOptions.boundAgentPrompt] : undefined },
+      {
+        appendices: queryOptions?.boundAgentPrompt ? [queryOptions.boundAgentPrompt] : undefined,
+        suppressIdentity: !!queryOptions?.boundAgentPrompt,
+      },
     );
 
     // Set up notification router to push chunks

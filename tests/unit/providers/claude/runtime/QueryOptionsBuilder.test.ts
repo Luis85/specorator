@@ -891,6 +891,33 @@ describe('QueryOptionsBuilder', () => {
       const b = QueryOptionsBuilder.buildPersistentQueryConfig(ctx, [], undefined, prompt);
       expect(QueryOptionsBuilder.needsRestart(a, b)).toBe(false);
     });
+
+    it('suppresses the Specorator identity in the system prompt when an agent is bound', () => {
+      const persona = 'You are Researcher — investigates. Answer as Researcher.';
+      const options = QueryOptionsBuilder.buildColdStartQueryOptions({
+        ...createMockContext(),
+        boundAgentPrompt: persona,
+        abortController: new AbortController(),
+        hooks: {},
+        hasEditorContext: false,
+      });
+      const systemPrompt = String(options.systemPrompt);
+      // The bound persona is present and the competing base identity is gone.
+      expect(systemPrompt).toContain(persona);
+      expect(systemPrompt).not.toContain('You are **Specorator**');
+      // Operational rules the agent needs to work in the vault are retained.
+      expect(systemPrompt).toContain('## Path Conventions');
+    });
+
+    it('keeps the Specorator identity when no agent is bound', () => {
+      const options = QueryOptionsBuilder.buildColdStartQueryOptions({
+        ...createMockContext(),
+        abortController: new AbortController(),
+        hooks: {},
+        hasEditorContext: false,
+      });
+      expect(String(options.systemPrompt)).toContain('You are **Specorator**');
+    });
   });
 
   describe('resolveEffectiveModel precedence', () => {
