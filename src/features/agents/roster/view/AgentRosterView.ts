@@ -1,4 +1,4 @@
-import { ItemView, Notice, type WorkspaceLeaf } from 'obsidian';
+import { ItemView, Notice, setIcon, type WorkspaceLeaf } from 'obsidian';
 
 import { ProviderRegistry } from '../../../../core/providers/ProviderRegistry';
 import type { ProviderId } from '../../../../core/providers/types';
@@ -6,6 +6,7 @@ import { asSettingsBag } from '../../../../core/types/settings';
 import { t } from '../../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../../main';
 import { renderLibraryNav } from '../../../../shared/libraryNav';
+import { LibraryListController } from '../../../../shared/libraryToolbar';
 import { confirm } from '../../../../shared/modals/ConfirmModal';
 import { withErrorNotice } from '../../../../shared/uiAction';
 import { createLibraryCard, renderLibraryEmptyState, renderLibraryLoading, renderLibraryShell } from '../../../../utils/libraryView';
@@ -22,6 +23,13 @@ export const VIEW_TYPE_AGENT_ROSTER = 'specorator-agent-roster';
 const CARD_AVATAR_SIZE = 36;
 
 export class AgentRosterView extends ItemView {
+  private readonly controller = new LibraryListController<RosterAgent>({
+    getName: (a) => a.name,
+    getDescription: (a) => a.description,
+    getTags: (a) => [...a.roles, ...(a.tags ?? [])],
+    getUpdatedAt: (a) => a.updatedAt,
+  });
+
   constructor(leaf: WorkspaceLeaf, private plugin: SpecoratorPlugin) {
     super(leaf);
   }
@@ -44,7 +52,7 @@ export class AgentRosterView extends ItemView {
     // The roster shares the library shell with the Skill/Loop views; only the
     // detail editor keeps its bespoke `specorator-roster-detail` root.
     this.contentEl.removeClass('specorator-roster-detail');
-    const { actions: headerActions, list } = renderLibraryShell(
+    const { actions: headerActions, toolbar, list } = renderLibraryShell(
       this.contentEl,
       t('agentRoster.title'),
       (c) => renderLibraryNav(c, this.plugin, VIEW_TYPE_AGENT_ROSTER),
@@ -77,38 +85,47 @@ export class AgentRosterView extends ItemView {
       return;
     }
 
-    for (const agent of agents) {
-      this.renderCard(list, agent);
+    this.controller.setItems(agents);
+    this.controller.renderToolbar(toolbar, {
+      searchPlaceholder: t('library.searchPlaceholder'),
+      sortLabel: t('library.sortLabel'),
+      sortName: t('library.sortName'),
+      sortUpdated: t('library.sortUpdated'),
+      resetFilters: t('library.resetFilters'),
+    }, () => this.renderRows(list));
+    this.renderRows(list);
+  }
+
+  private renderRows(list: HTMLElement): void {
+    list.empty();
+    const rows = this.controller.apply();
+    if (rows.length === 0) {
+      list.createDiv({ cls: 'specorator-library-empty-text', text: t('library.noMatches') });
+      return;
     }
+    for (const agent of rows) this.renderCard(list, agent);
   }
 
   private renderCard(list: HTMLElement, agent: RosterAgent): void {
-    const { card, body, actions, nameButton } = createLibraryCard(list, agent.name, {
-      // Decorative avatar leads the card; the aria-label + name button convey
-      // the name, so the avatar is hidden from the accessibility tree.
+    const { card, body, actions } = createLibraryCard(list, agent.name, {
       leading: (slot) => {
         slot.addClass('specorator-roster-card-avatar');
         slot.setAttribute('aria-hidden', 'true');
         renderAgentAvatar(slot, rosterAgentToPersona(agent), CARD_AVATAR_SIZE);
       },
-      nameAsButton: true,
+      interactive: { onActivate: () => void this.openDetail(agent), ariaLabel: agent.name },
     });
     card.addClass('specorator-roster-card');
-    card.setAttribute('role', 'group');
-    card.setAttribute('aria-label', agent.name);
-    // Mouse convenience: clicking anywhere on the card opens the detail editor.
-    // Keyboard/SR users use the real name <button> as the open action, so the
-    // card itself is a plain group (no nested interactive in a role=button).
-    card.onclick = () => void this.openDetail(agent);
 
-    nameButton?.addClass('specorator-roster-card-name');
-    if (nameButton) nameButton.onclick = (e) => { e.stopPropagation(); void this.openDetail(agent); };
     body.createDiv({ cls: 'specorator-roster-card-desc', text: agent.description || '—' });
 
     const caps = body.createDiv({ cls: 'specorator-roster-card-caps' });
     for (const role of agent.roles) {
       const roleLabel = role === 'verifier' ? t('agentRoster.roleVerifier') : t('agentRoster.roleWorker');
       caps.createSpan({ cls: 'specorator-roster-chip specorator-roster-chip-role', text: roleLabel });
+    }
+    for (const tag of agent.tags ?? []) {
+      caps.createSpan({ cls: 'specorator-library-chip', text: tag });
     }
     // Only surface the capability count once the agent actually has skills — a
     // "0 Skills" chip on a fresh agent is noise.
@@ -124,6 +141,15 @@ export class AgentRosterView extends ItemView {
     startBtn.onclick = (e) => {
       e.stopPropagation();
       void withErrorNotice(() => this.startChatWithAgent(agent), fail, (err) => this.fail(err));
+    };
+    const cloneBtn = actions.createEl('button', {
+      cls: 'specorator-library-card-icon',
+      attr: { 'aria-label': t('library.duplicate'), title: t('library.duplicate') },
+    });
+    setIcon(cloneBtn, 'copy');
+    cloneBtn.onclick = (e) => {
+      e.stopPropagation();
+      void withErrorNotice(() => this.cloneAgent(agent), fail, (err) => this.fail(err));
     };
     const deleteBtn = actions.createEl('button', { cls: 'specorator-library-card-delete', text: t('agentRoster.delete') });
     deleteBtn.onclick = (e) => {
@@ -189,6 +215,22 @@ export class AgentRosterView extends ItemView {
         : t('agentRoster.installStarterNone'),
     );
     await this.renderList();
+  }
+
+  private async cloneAgent(agent: RosterAgent): Promise<void> {
+    const existing = await this.store.list();
+    const cloneName = `${agent.name} copy`;
+    const base = createRosterAgent(cloneName, Date.now());
+    const clone: RosterAgent = {
+      ...agent,
+      id: dedupeRosterId(base.id, existing.map((a) => a.id)),
+      name: cloneName,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    await this.store.save(clone);
+    await this.renderList();
+    await this.openDetail(clone);
   }
 
   private async deleteAgent(agent: RosterAgent): Promise<void> {

@@ -113,32 +113,25 @@ describe('DOM helpers', () => {
 
   it('createLibraryCard exposes card, name row, body and actions', () => {
     const root = container();
-    const { card, nameRow, body, actions, nameButton } = createLibraryCard(root, 'my-tool');
+    const { card, nameRow, body, actions } = createLibraryCard(root, 'my-tool');
     expect(card.classList.contains('specorator-library-card')).toBe(true);
     expect(nameRow.textContent).toBe('my-tool');
     // Default name is a plain span — no focusable button.
     expect(nameRow.querySelector('button')).toBeNull();
-    expect(nameButton).toBeUndefined();
     expect(body.classList.contains('specorator-library-card-body')).toBe(true);
     expect(actions.classList.contains('specorator-library-card-actions')).toBe(true);
     expect(root.querySelector('.specorator-library-card-leading')).toBeNull();
   });
 
-  it('createLibraryCard renders a leading slot and a focusable name button when asked', () => {
+  it('createLibraryCard renders a leading slot when asked', () => {
     const root = container();
     const seedLeading = jest.fn((slot: HTMLElement) => slot.createDiv({ cls: 'avatar-marker' }));
-    const { card, nameButton } = createLibraryCard(root, 'Agent', { leading: seedLeading, nameAsButton: true });
-
+    const { card } = createLibraryCard(root, 'Agent', { leading: seedLeading });
     const leading = card.querySelector('.specorator-library-card-leading');
     expect(leading).not.toBeNull();
     expect(seedLeading).toHaveBeenCalledWith(leading);
     expect(leading?.querySelector('.avatar-marker')).not.toBeNull();
-    // The leading slot precedes the body so the avatar reads first.
     expect(card.firstElementChild).toBe(leading);
-
-    expect(nameButton?.tagName).toBe('BUTTON');
-    expect(nameButton?.textContent).toBe('Agent');
-    expect(nameButton?.classList.contains('specorator-library-card-name-button')).toBe(true);
   });
 
   it('modal helpers render labels, fields, inputs, code areas and footer', () => {
