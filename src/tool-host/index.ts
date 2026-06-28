@@ -65,7 +65,10 @@ async function main(): Promise<void> {
   const load = await loadTools(toolsDir, deps, { skipFiles: disabledFiles });
 
   if (process.argv.includes('--catalog')) {
-    process.stdout.write(JSON.stringify(buildCatalog(load)));
+    // Exit after stdout flushes: an imported tool may have left active handles (timer/watcher/
+    // socket) that would otherwise keep this process alive past the caller's close/timeout,
+    // causing a valid catalog to be discarded.
+    process.stdout.write(JSON.stringify(buildCatalog(load)), () => process.exit(0));
     return;
   }
 
