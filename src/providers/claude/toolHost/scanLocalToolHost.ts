@@ -1,0 +1,70 @@
+import { promises as fsp } from 'node:fs';
+
+import type { PluginContext } from '../../../core/types/PluginContext';
+import { TOOL_HOST_SOURCE } from '../../../tool-host/embeddedSource';
+import type { CatalogPayload, ToolHostScan } from '../../../tool-host/types';
+import { curateStdioMcpEnv, findNodeExecutable, getEnhancedPath } from '../../../utils/env';
+import { getClaudeProviderSettings } from '../settings';
+import { isSupportedNode, probeNodeMajor } from './nodeVersion';
+import { readCatalog, spawnCatalogRunner, unionSecretIds } from './ToolHostCatalog';
+import { materializeToolHost } from './ToolHostMaterializer';
+import { resolveToolHostPaths } from './toolHostPaths';
+
+const DISABLED: ToolHostScan = { catalog: null, declaredSecretIds: [], materialized: false };
+
+/**
+ * Coerce a fan-out payload into a {@link ToolHostScan}. Accepts a full scan, a
+ * bare {@link CatalogPayload} (legacy single-catalog fan-out), or null (disabled).
+ */
+export function normalizeToolHostScan(
+  scan: ToolHostScan | CatalogPayload | null,
+): ToolHostScan {
+  if (scan === null) return DISABLED;
+  if ('materialized' in scan) return scan;
+  return { catalog: scan, declaredSecretIds: unionSecretIds(scan), materialized: true };
+}
+
+/**
+ * Resolve the Node executable and enhanced PATH for the tool host the SAME way
+ * the live Claude CLI subprocess resolves them: provider-configured env PATH
+ * (Claude settings → Environment) + the CLI dir, not just Obsidian's own PATH.
+ */
+export function resolveToolHostNode(plugin: PluginContext): {
+  nodePath: string | null;
+  enhancedPath: string;
+} {
+  const customEnv = plugin.getResolvedEnvironmentVariables('claude');
+  const cliPath = plugin.getResolvedProviderCliPath('claude') ?? '';
+  const enhancedPath = getEnhancedPath(customEnv.PATH, cliPath);
+  return { nodePath: findNodeExecutable(enhancedPath), enhancedPath };
+}
+
+/**
+ * Materialize the embedded host (when enabled and Node is supported), then run
+ * catalog mode exactly once. Pure of any runtime dependency — it only needs
+ * plugin-level accessors — so it works with zero open Claude tabs. Never throws
+ * on a missing/old Node; the host stays disabled in that case.
+ */
+export async function scanLocalToolHost(plugin: PluginContext): Promise<ToolHostScan> {
+  const claude = getClaudeProviderSettings(plugin.settings);
+  const { nodePath, enhancedPath } = resolveToolHostNode(plugin);
+  const vaultPath = plugin.getVaultPath();
+  if (!claude.localToolHostEnabled || !nodePath || !vaultPath) return DISABLED;
+  if (!isSupportedNode(await probeNodeMajor(nodePath))) return DISABLED;
+
+  const paths = resolveToolHostPaths({ vaultPath, pluginDir: plugin.manifest.dir ?? '' });
+  await materializeToolHost(paths.hostEntry, TOOL_HOST_SOURCE, {
+    read: (p) => fsp.readFile(p, 'utf8'),
+    write: (p, c) => fsp.writeFile(p, c, 'utf8'),
+  });
+
+  const env = {
+    ...curateStdioMcpEnv({ PATH: enhancedPath }),
+    SPECORATOR_TOOLS_DIR: paths.toolsDir,
+    SPECORATOR_VAULT_PATH: vaultPath,
+    // JSON (comma-safe) disabled set so the catalog skips disabled files — their secrets must not enter the union.
+    SPECORATOR_DISABLED_FILES: JSON.stringify(claude.localToolHostDisabledFiles),
+  };
+  const catalog = await readCatalog({ runCatalog: spawnCatalogRunner(nodePath, paths.hostEntry, env) });
+  return { catalog, declaredSecretIds: unionSecretIds(catalog), materialized: true };
+}

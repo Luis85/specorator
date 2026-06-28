@@ -11,8 +11,6 @@
  * - Dynamic updates (model, effort level, permission mode, MCP servers)
  */
 
-import { promises as fsp } from 'node:fs';
-
 import type {
   CanUseTool,
   Options,
@@ -59,9 +57,8 @@ import type { McpServerConfig } from '../../../core/types/mcp';
 import type { PluginContext } from '../../../core/types/PluginContext';
 import type { PermissionMode,SpecoratorSettings } from '../../../core/types/settings';
 import { t } from '../../../i18n/i18n';
-import { TOOL_HOST_SOURCE } from '../../../tool-host/embeddedSource';
-import type { CatalogPayload } from '../../../tool-host/types';
-import { curateStdioMcpEnv, findNodeExecutable, getEnhancedPath, getMissingNodeError } from '../../../utils/env';
+import type { CatalogPayload, ToolHostScan } from '../../../tool-host/types';
+import { curateStdioMcpEnv, getEnhancedPath, getMissingNodeError } from '../../../utils/env';
 import { getVaultPath } from '../../../utils/path';
 import { isSessionExpiredError } from '../../../utils/session';
 import { CLAUDE_PROVIDER_CAPABILITIES } from '../capabilities';
@@ -77,9 +74,10 @@ import {
   transformSDKMessage,
 } from '../stream/transformClaudeMessage';
 import { buildToolHostServer } from '../toolHost/buildToolHostServer';
-import { isSupportedNode, probeNodeMajor } from '../toolHost/nodeVersion';
-import { readCatalog, spawnCatalogRunner, unionSecretIds } from '../toolHost/ToolHostCatalog';
-import { materializeToolHost } from '../toolHost/ToolHostMaterializer';
+import {
+  normalizeToolHostScan,
+  resolveToolHostNode,
+} from '../toolHost/scanLocalToolHost';
 import { resolveToolHostPaths } from '../toolHost/toolHostPaths';
 import { getClaudeState } from '../types/providerState';
 import { createClaudeApprovalCallback } from './ClaudeApprovalHandler';
@@ -692,10 +690,7 @@ export class ClaudeChatRuntime implements ChatRuntime {
    * fail the probe and never enable local tools, even though the CLI finds Node.
    */
   private resolveToolHostNode(): { nodePath: string | null; enhancedPath: string } {
-    const customEnv = this.plugin.getResolvedEnvironmentVariables(this.providerId);
-    const cliPath = this.plugin.getResolvedProviderCliPath(this.providerId) ?? '';
-    const enhancedPath = getEnhancedPath(customEnv.PATH, cliPath);
-    return { nodePath: findNodeExecutable(enhancedPath), enhancedPath };
+    return resolveToolHostNode(this.plugin);
   }
 
   /**
@@ -732,54 +727,37 @@ export class ClaudeChatRuntime implements ChatRuntime {
   }
 
   /**
-   * Materialize the host, then run catalog mode EXACTLY ONCE: caches the declared-secret
-   * union, bumps `toolsRev`, and returns the catalog so the UI can render it without a
-   * second scan. Gates on Node availability AND version (host targets node18; the MCP SDK
-   * needs >=18) — returns null (and leaves the builder disabled) when Node is missing or
-   * too old. Never throws.
+   * Trigger the SINGLE plugin-level scan (works with zero or many tabs). The plugin
+   * fans the result out to every open Claude runtime via {@link applyToolHostScan};
+   * we additionally apply it to THIS runtime directly so the init seam updates our
+   * caches deterministically even if the fan-out hasn't yet seen this tab as
+   * service-initialized. Returns the catalog so the settings widget renders it
+   * without a second scan. Never throws (delegates to the plugin's guarded scan).
    */
   async reloadLocalToolHost(): Promise<CatalogPayload | null> {
     this.hostReloadAttempted = true;
-    const claude = getClaudeProviderSettings(this.plugin.settings);
-    const { nodePath, enhancedPath } = this.resolveToolHostNode();
-    const vaultPath = this.plugin.getVaultPath();
-    if (!claude.localToolHostEnabled || !nodePath || !vaultPath || !isSupportedNode(await probeNodeMajor(nodePath))) {
-      this.hostMaterialized = false;
-      this.declaredToolSecretIds = [];
-      return null;
-    }
-    const paths = resolveToolHostPaths({ vaultPath, pluginDir: this.plugin.manifest.dir ?? '' });
-    await materializeToolHost(paths.hostEntry, TOOL_HOST_SOURCE, {
-      read: (p) => fsp.readFile(p, 'utf8'),
-      write: (p, c) => fsp.writeFile(p, c, 'utf8'),
-    });
-    this.hostMaterialized = true;   // unblocks the cold-start builder
-    this.toolsRev += 1;             // force the synthetic config to differ → host re-spawns + re-scans
-    const env = {
-      ...curateStdioMcpEnv({ PATH: enhancedPath }),
-      SPECORATOR_TOOLS_DIR: paths.toolsDir,
-      SPECORATOR_VAULT_PATH: vaultPath,
-      // JSON (comma-safe) disabled set so the catalog skips disabled files — their secrets must not enter the union.
-      SPECORATOR_DISABLED_FILES: JSON.stringify(claude.localToolHostDisabledFiles),
-    };
-    const catalog = await readCatalog({ runCatalog: spawnCatalogRunner(nodePath, paths.hostEntry, env) });
-    this.declaredToolSecretIds = unionSecretIds(catalog);
-    return catalog;   // the widget renders this — one scan per refresh, not two
+    const catalog = await this.plugin.reloadLocalToolHost();
+    this.applyToolHostScan(catalog);
+    return catalog;
   }
 
   /**
-   * Apply another runtime's tool-host scan result to this runtime without re-scanning.
-   * Lets the plugin-level fan-out share one catalog across every open Claude tab.
+   * Apply a tool-host scan result to this runtime without re-scanning. The
+   * plugin-level fan-out shares one scan across every open Claude tab. A null/empty
+   * scan disables the builder; a successful scan flips `hostMaterialized`, bumps
+   * `toolsRev` (so the synthetic config differs → host re-spawns with a fresh scan),
+   * and caches the declared-secret union.
    */
-  applyToolHostScan(catalog: CatalogPayload | null): void {
-    if (catalog === null) {
+  applyToolHostScan(scan: ToolHostScan | CatalogPayload | null): void {
+    const normalized = normalizeToolHostScan(scan);
+    if (!normalized.materialized || normalized.catalog === null) {
       this.hostMaterialized = false;
       this.declaredToolSecretIds = [];
       return;
     }
     this.hostMaterialized = true;
     this.toolsRev += 1;
-    this.declaredToolSecretIds = unionSecretIds(catalog);
+    this.declaredToolSecretIds = normalized.declaredSecretIds;
   }
 
   /** Run the implicit init-path reload at most once, before the first turn flows. */

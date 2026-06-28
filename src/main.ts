@@ -93,20 +93,19 @@ import { LoopLibraryView, VIEW_TYPE_LOOP_LIBRARY } from './features/tasks/ui/Loo
 import { WorkOrderActivityProvider } from './features/tasks/ui/WorkOrderActivityProvider';
 import { setLocale, t } from './i18n/i18n';
 import type { Locale } from './i18n/types';
-import type { CatalogPayload } from './tool-host/types';
+import type { CatalogPayload, ToolHostScan } from './tool-host/types';
 import type { BrowserSelectionContext } from './utils/browser';
 import { chatMessageText } from './utils/chatMessageText';
 import { getVaultPath } from './utils/path';
 
 /** Claude runtime surface for the local tool host fan-out (narrowed from the neutral ChatRuntime). */
 interface ClaudeToolHostRuntime {
-  reloadLocalToolHost(): Promise<CatalogPayload | null>;
-  applyToolHostScan(catalog: CatalogPayload | null): void;
+  applyToolHostScan(scan: ToolHostScan): void;
 }
 
 function isClaudeToolHostRuntime(service: unknown): service is ClaudeToolHostRuntime {
   const s = service as Partial<ClaudeToolHostRuntime>;
-  return typeof s?.reloadLocalToolHost === 'function' && typeof s?.applyToolHostScan === 'function';
+  return typeof s?.applyToolHostScan === 'function';
 }
 
 export default class SpecoratorPlugin extends Plugin implements PluginContext {
@@ -791,29 +790,29 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
   }
 
   /**
-   * Materialize + re-scan the local tool host on the active Claude runtime(s).
-   * Scans once on the first Claude runtime and shares the catalog with the rest
-   * (mirrors the MCP-reload fan-out), then returns the catalog for the settings widget.
+   * Materialize + re-scan the local tool host. The scan is runtime-independent
+   * (it needs only settings, vault path, plugin dir, the provider-resolved Node,
+   * and host materialization), so it works with zero Claude tabs open — opening
+   * Settings before any chat tab still lists, reloads, and disables tools. The
+   * single scan result is then fanned out to every open Claude runtime so their
+   * sync builder caches (`hostMaterialized`, `toolsRev`, declared secrets) match.
    */
   async reloadLocalToolHost(): Promise<CatalogPayload | null> {
-    const runtimes: ClaudeToolHostRuntime[] = [];
+    const scanner = ProviderWorkspaceRegistry.getLocalToolHostScanner('claude');
+    if (!scanner) return null;
+    const scan = await scanner(this);
+
     for (const view of this.getAllViews()) {
       const tabManager = view.getTabManager();
       if (!tabManager) continue;
       await tabManager.broadcastToProviderTabs('claude', async (service) => {
         if (isClaudeToolHostRuntime(service)) {
-          runtimes.push(service);
+          service.applyToolHostScan(scan);
         }
       });
     }
-    if (runtimes.length === 0) return null;
 
-    const [primary, ...rest] = runtimes;
-    const catalog = await primary.reloadLocalToolHost();
-    for (const runtime of rest) {
-      runtime.applyToolHostScan(catalog);
-    }
-    return catalog;
+    return scan.catalog;
   }
 
   getActiveBrowserSelection(): BrowserSelectionContext | null {

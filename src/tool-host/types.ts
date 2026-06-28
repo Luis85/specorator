@@ -67,3 +67,14 @@ export interface CatalogPayload {
   tools: Array<{ file: string; name: string; description: string; secrets: string[] }>;
   errors: LoadError[];
 }
+
+/**
+ * Result of one runtime-independent local-tool-host scan. `catalog` is null when
+ * the feature is off or Node is missing/<18 (the host stays disabled). `materialized`
+ * is true only when the embedded host was written/confirmed on disk this pass.
+ */
+export interface ToolHostScan {
+  catalog: CatalogPayload | null;
+  declaredSecretIds: string[];
+  materialized: boolean;
+}
