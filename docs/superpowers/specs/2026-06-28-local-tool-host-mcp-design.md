@@ -156,13 +156,17 @@ export async function handler(input, ctx) {
 1. Feature enabled **and** ≥1 tool exists → `ToolHostConfig` emits the host stdio
    config (pointing `node` at the materialized path) into Claude's `mcpServers`.
 2. Claude SDK spawns `node <pluginDir>/tool-host.mjs` (curated env).
-3. Host scans the tools dir, `import()`s each `.mjs`, registers each `manifest`.
+3. Host scans the tools dir, `import()`s each **non-disabled** `.mjs`, registers
+   each `manifest`.
 4. Model invokes `mcp__specorator-tools__word_count`.
 5. Host runs that script's `handler` in-process; returns an MCP result (or
    auto-wrapped string).
 6. Result streams back as a normal MCP tool result.
-7. Per-tool disable reuses the existing `disabledTools` → `disallowedTools`
-   plumbing in `McpServerManager`.
+7. Per-tool disable is **keyed by filename** and enforced by **skipping the
+   import** in serve mode (the secret-bearing process): a disabled tool's
+   top-level code never runs and never sees `SPECORATOR_SECRET_*`. The secret-free
+   `--catalog` process still imports it to show its name/description in settings.
+   Changing the disabled set changes the config env → the host re-spawns next turn.
 
 ## Storage & config
 
@@ -235,7 +239,8 @@ overclaimed.
 
 **Integration:**
 - Host config lands in Claude `mcpServers` when enabled + tool present.
-- Disabled tool → `disallowedTools`.
+- Disabled file → skipped import in serve mode (never executes, never reads
+  secrets); still listed by `--catalog` (which runs without secrets).
 
 ## Open questions for the implementation plan
 

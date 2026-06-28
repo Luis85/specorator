@@ -40,7 +40,7 @@ npm run typecheck && npm run lint && npm run test && npm run build
 **Modified:**
 - `esbuild.config.mjs` — host build target emitting embedded text + `.hostbundle` text loader (host baked into `main.js`, not shipped separately).
 - `.gitignore` — `src/tool-host/embeddedSource.hostbundle` (generated).
-- `src/providers/claude/settings.ts` — `localToolHostEnabled` + `localToolHostDisabledTools`.
+- `src/providers/claude/settings.ts` — `localToolHostEnabled` + `localToolHostDisabledFiles`.
 - `src/providers/claude/ui/claudeSettingsWidgets.ts` + `ClaudeSettingsTab.ts` — register + mount the section.
 - `src/providers/claude/runtime/ClaudeQueryOptionsBuilder.ts` — inject synthetic server (cold start).
 - `src/providers/claude/runtime/ClaudeDynamicUpdates.ts` — inject synthetic server (dynamic update).
@@ -588,6 +588,27 @@ describe('loadTools', () => {
     });
     expect(res).toEqual({ tools: [], errors: [] });
   });
+
+  it('never imports a file listed in skipFiles', async () => {
+    const imported: string[] = [];
+    const res = await loadTools(
+      '/tools',
+      { readdir: async () => ['a.mjs', 'b.mjs'], importModule: async (p) => { imported.push(p); return goodModule; } },
+      { skipFiles: new Set(['b.mjs']) },
+    );
+    expect(res.tools.map((t) => t.file)).toEqual(['a.mjs']);
+    expect(imported.some((p) => p.endsWith('b.mjs'))).toBe(false);
+  });
+
+  it('converts a hung import into a per-file load error', async () => {
+    const res = await loadTools(
+      '/tools',
+      { readdir: async () => ['hang.mjs'], importModule: () => new Promise<ToolModule>(() => { /* never resolves */ }) },
+      { importTimeoutMs: 10 },
+    );
+    expect(res.tools).toEqual([]);
+    expect(res.errors[0]).toEqual({ file: 'hang.mjs', message: expect.stringMatching(/timed out/) });
+  });
 });
 ```
 
@@ -607,6 +628,24 @@ export interface LoadDeps {
   importModule: (absPath: string) => Promise<ToolModule>;
 }
 
+export interface LoadOptions {
+  /** Filenames to skip importing entirely — disabled tools must never execute (serve mode passes the disabled set). */
+  skipFiles?: Set<string>;
+  /** Per-file import timeout; a hung top-level `await` becomes a per-file load error instead of freezing the host. */
+  importTimeoutMs?: number;
+}
+
+const DEFAULT_IMPORT_TIMEOUT_MS = 5_000;
+
+function importWithTimeout(p: Promise<ToolModule>, ms: number, file: string): Promise<ToolModule> {
+  return Promise.race([
+    p,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`import of ${file} timed out after ${ms}ms`)), ms),
+    ),
+  ]);
+}
+
 function validateManifest(mod: ToolModule, file: string): LoadError | null {
   const m = mod?.manifest;
   if (!m || typeof m.name !== 'string' || typeof m.description !== 'string') {
@@ -624,7 +663,10 @@ function validateManifest(mod: ToolModule, file: string): LoadError | null {
   return null;
 }
 
-export async function loadTools(dir: string, deps: LoadDeps): Promise<LoadResult> {
+export async function loadTools(dir: string, deps: LoadDeps, opts: LoadOptions = {}): Promise<LoadResult> {
+  const skip = opts.skipFiles ?? new Set<string>();
+  const importTimeoutMs = opts.importTimeoutMs ?? DEFAULT_IMPORT_TIMEOUT_MS;
+
   let entries: string[];
   try {
     entries = await deps.readdir(dir);
@@ -636,9 +678,10 @@ export async function loadTools(dir: string, deps: LoadDeps): Promise<LoadResult
   const tools: LoadedTool[] = [];
   const errors: LoadError[] = [];
 
-  for (const file of entries.filter((f) => f.endsWith('.mjs')).sort()) {
+  // Disabled files are never imported, so their top-level code never runs (and can't read secrets from env).
+  for (const file of entries.filter((f) => f.endsWith('.mjs') && !skip.has(f)).sort()) {
     try {
-      const mod = await deps.importModule(path.join(dir, file));
+      const mod = await importWithTimeout(deps.importModule(path.join(dir, file)), importTimeoutMs, file);
       const invalid = validateManifest(mod, file);
       if (invalid) {
         errors.push(invalid);
@@ -873,23 +916,29 @@ function env(name: string): string {
 async function main(): Promise<void> {
   const toolsDir = env('SPECORATOR_TOOLS_DIR');
   const vaultPath = env('SPECORATOR_VAULT_PATH');
-  const disabled = new Set(env('SPECORATOR_DISABLED_TOOLS').split(',').map((s) => s.trim()).filter(Boolean));
+  // Disabled state is keyed by FILE, not tool name — a name isn't known without importing,
+  // and importing is exactly what we must avoid for a disabled (possibly untrusted) tool.
+  const disabledFiles = new Set(env('SPECORATOR_DISABLED_FILES').split(',').map((s) => s.trim()).filter(Boolean));
   const logFilePath = vaultPath ? path.join(vaultPath, '.specorator', 'tool-host.log') : undefined;
+  const deps = {
+    readdir: (dir: string) => fs.readdir(dir),
+    importModule: (p: string) => import(pathToFileURL(p).href) as Promise<ToolModule>,
+  };
 
-  const load = await loadTools(toolsDir, {
-    readdir: (dir) => fs.readdir(dir),
-    importModule: (p) => import(pathToFileURL(p).href) as Promise<ToolModule>,
-  });
-  const active = load.tools.filter((t) => !disabled.has(t.manifest.name));
-
+  // Catalog mode runs WITHOUT secrets in env (the plugin never passes SPECORATOR_SECRET_* to --catalog)
+  // and imports every tool so the settings UI can show names/descriptions, including disabled ones.
   if (process.argv.includes('--catalog')) {
-    process.stdout.write(JSON.stringify(buildCatalog(load)));
+    process.stdout.write(JSON.stringify(buildCatalog(await loadTools(toolsDir, deps))));
     return;
   }
 
+  // Serve mode HAS secrets in env, so disabled files are never imported — their top-level
+  // code never executes and cannot read process.env.SPECORATOR_SECRET_*.
+  const load = await loadTools(toolsDir, deps, { skipFiles: disabledFiles });
+
   const ctxFactory = (toolName: string): ToolHandlerCtx => {
     const secrets: Record<string, string> = {};
-    const tool = active.find((t) => t.manifest.name === toolName);
+    const tool = load.tools.find((t) => t.manifest.name === toolName);
     for (const id of tool?.manifest.secrets ?? []) {
       const v = process.env[`SPECORATOR_SECRET_${id}`];
       if (v !== undefined) secrets[id] = v;
@@ -902,7 +951,7 @@ async function main(): Promise<void> {
     };
   };
 
-  await createServer(active, ctxFactory, HANDLER_TIMEOUT_MS);
+  await createServer(load.tools, ctxFactory, HANDLER_TIMEOUT_MS);
 }
 
 main().catch((err) => {
@@ -1121,7 +1170,7 @@ git commit -m "feat(claude): materialize embedded tool host to plugin dir"
 ```ts
   enableSonnet1M: boolean;
   localToolHostEnabled: boolean;
-  localToolHostDisabledTools: string[];
+  localToolHostDisabledFiles: string[];
 ```
 
 - [ ] **Step 2: Add defaults** (in `DEFAULT_CLAUDE_PROVIDER_SETTINGS`, after `enableSonnet1M: false` on line 44):
@@ -1129,7 +1178,7 @@ git commit -m "feat(claude): materialize embedded tool host to plugin dir"
 ```ts
   enableSonnet1M: false,
   localToolHostEnabled: false,
-  localToolHostDisabledTools: [] as string[],
+  localToolHostDisabledFiles: [] as string[],
 ```
 
 - [ ] **Step 3: Read them in `getClaudeProviderSettings`** (after the `enableSonnet1M` block, ~line 95):
@@ -1137,9 +1186,9 @@ git commit -m "feat(claude): materialize embedded tool host to plugin dir"
 ```ts
     localToolHostEnabled: (config.localToolHostEnabled as boolean | undefined)
       ?? DEFAULT_CLAUDE_PROVIDER_SETTINGS.localToolHostEnabled,
-    localToolHostDisabledTools: Array.isArray(config.localToolHostDisabledTools)
-      ? (config.localToolHostDisabledTools as string[])
-      : [...DEFAULT_CLAUDE_PROVIDER_SETTINGS.localToolHostDisabledTools],
+    localToolHostDisabledFiles: Array.isArray(config.localToolHostDisabledFiles)
+      ? (config.localToolHostDisabledFiles as string[])
+      : [...DEFAULT_CLAUDE_PROVIDER_SETTINGS.localToolHostDisabledFiles],
 ```
 
 - [ ] **Step 4: Typecheck.**
@@ -1233,7 +1282,7 @@ const base = {
   toolsDir: '/vault/.specorator/tools',
   vaultPath: '/vault',
   baseEnv: { PATH: '/usr/bin' },
-  disabledTools: ['old_tool'],
+  disabledFiles: ['old_tool.mjs'],
   declaredSecrets: ['OPENAI_API_KEY'],
   resolveSecret: (id: string) => (id === 'OPENAI_API_KEY' ? 'sk-test' : null),
   toolsRev: 0,
@@ -1259,7 +1308,7 @@ describe('buildToolHostServer', () => {
       PATH: '/usr/bin',
       SPECORATOR_TOOLS_DIR: '/vault/.specorator/tools',
       SPECORATOR_VAULT_PATH: '/vault',
-      SPECORATOR_DISABLED_TOOLS: 'old_tool',
+      SPECORATOR_DISABLED_FILES: 'old_tool.mjs',
       SPECORATOR_SECRET_OPENAI_API_KEY: 'sk-test',
     });
   });
@@ -1295,7 +1344,7 @@ export interface BuildToolHostServerInput {
   vaultPath: string;
   /** Curated base env for the child (from curateStdioMcpEnv). */
   baseEnv: Record<string, string>;
-  disabledTools: string[];
+  disabledFiles: string[];
   declaredSecrets: string[];
   resolveSecret: (id: string) => string | null;
   /**
@@ -1314,7 +1363,7 @@ export function buildToolHostServer(input: BuildToolHostServerInput): McpStdioSe
     ...input.baseEnv,
     SPECORATOR_TOOLS_DIR: input.toolsDir,
     SPECORATOR_VAULT_PATH: input.vaultPath,
-    SPECORATOR_DISABLED_TOOLS: input.disabledTools.join(','),
+    SPECORATOR_DISABLED_FILES: input.disabledFiles.join(','),
     SPECORATOR_TOOLS_REV: String(input.toolsRev),
   };
   for (const id of input.declaredSecrets) {
@@ -1575,7 +1624,7 @@ export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (hos
   const server = buildToolHostServer({
     enabled: true, nodePath, hostEntry: paths.hostEntry, toolsDir: paths.toolsDir, vaultPath,
     baseEnv: curateStdioMcpEnv({}),
-    disabledTools: claude.localToolHostDisabledTools,
+    disabledFiles: claude.localToolHostDisabledFiles,
     declaredSecrets: [],
     resolveSecret: (id) => plugin.secretStore.get(id),
     toolsRev: 0,   // catalog env only; revision irrelevant for a one-shot --catalog run
@@ -1593,12 +1642,13 @@ export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (hos
       return;
     }
     for (const tool of catalog.tools) {
-      const disabled = getClaudeProviderSettings(settingsBag).localToolHostDisabledTools.includes(tool.name);
+      // Keyed by FILE: the host disables by filename (it can't know the name without importing).
+      const disabled = getClaudeProviderSettings(settingsBag).localToolHostDisabledFiles.includes(tool.file);
       new Setting(listEl).setName(tool.name).setDesc(tool.description).addToggle((toggle) =>
         toggle.setValue(!disabled).onChange(async (enabled) => {
-          const next = new Set(getClaudeProviderSettings(settingsBag).localToolHostDisabledTools);
-          if (enabled) next.delete(tool.name); else next.add(tool.name);
-          updateClaudeProviderSettings(settingsBag, { localToolHostDisabledTools: [...next] });
+          const next = new Set(getClaudeProviderSettings(settingsBag).localToolHostDisabledFiles);
+          if (enabled) next.delete(tool.file); else next.add(tool.file);
+          updateClaudeProviderSettings(settingsBag, { localToolHostDisabledFiles: [...next] });
           await plugin.saveSettings();
         }),
       );
@@ -1608,15 +1658,20 @@ export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (hos
     }
   };
 
-  // Manual reload — the only reliable refresh for a dot-folder Obsidian doesn't watch.
+  // Both the initial open AND the manual button must refresh the RUNTIME caches
+  // (toolsRev + declaredToolSecretIds), not just the visible list — a dot-folder has no
+  // watcher, so opening settings is one of the explicit re-scan seams. Without this, the UI
+  // could show a new catalog while the next turn keeps the old host process and secret env.
+  const refreshAll = async () => {
+    await plugin.reloadLocalToolHost?.();   // re-materialize + bump toolsRev + refresh declared-secrets cache
+    await renderList();
+  };
+
   new Setting(host).addButton((btn) =>
-    btn.setButtonText(t('settings.localToolHost.reload')).onClick(async () => {
-      await plugin.reloadLocalToolHost?.();   // re-materialize + refresh declared-secrets cache
-      await renderList();
-    }),
+    btn.setButtonText(t('settings.localToolHost.reload')).onClick(refreshAll),
   );
 
-  void renderList();
+  void refreshAll();
 };
 ```
 
@@ -1805,7 +1860,7 @@ private makeLocalToolHostServerBuilder(): () => McpServerConfig | null {
       toolsDir: paths.toolsDir,
       vaultPath,
       baseEnv: curateStdioMcpEnv({}),
-      disabledTools: claude.localToolHostDisabledTools,
+      disabledFiles: claude.localToolHostDisabledFiles,
       declaredSecrets: this.declaredToolSecretIds,
       resolveSecret: (id) => this.plugin.secretStore.get(id),
       toolsRev: this.toolsRev,
@@ -1901,7 +1956,7 @@ describe('local tool host injection (config-level)', () => {
       toolsDir: '/v/.specorator/tools',
       vaultPath: '/v',
       baseEnv: {},
-      disabledTools: [],
+      disabledFiles: [],
       declaredSecrets: [],
       resolveSecret: () => null,
       toolsRev: 0,
@@ -2003,13 +2058,14 @@ git commit -m "chore: re-baseline ratchets for local tool host"
 - `ctx.vault` (path-safe), `ctx.logger`, `ctx.secrets` → Tasks 3, 4, 9; declared secrets flow end-to-end via catalog (Task 7) → runtime cache (Task 20) → `buildToolHostServer` env (Task 13) → host `ctx.secrets` (Task 9).
 - **No vault watcher for the `.specorator/` dot-folder** — explicit re-scan on load/enable/settings-open + manual "Reload tools" button (covers create/delete/rename) → Tasks 16, 20.
 - Claude-only injection at both seams → Tasks 18–20.
-- Opt-in toggle + Node check + discovered-tool list + per-tool disable + error badges → Tasks 11, 16.
-- Lazy start (server is `null` when disabled / no node; SDK only spawns when injected) → Tasks 13, 18, 19.
-- Per-script isolation + handler timeout/throw → Tasks 5, 6.
+- Opt-in toggle (reverts when Node missing) + Node check + discovered-tool list + per-tool disable + error badges → Tasks 11, 16.
+- **Disable is file-keyed and enforced by skip-import in serve mode** — a disabled tool never executes and never reads secrets; catalog (secret-free) still lists it → Tasks 6, 9, 16.
+- Lazy start (server is `null` when disabled / no node / not yet materialized; SDK only spawns when injected) → Tasks 13, 18, 19, 20.
+- Per-script isolation + handler timeout/throw + **per-file import timeout** (catalog *and* serve) → Tasks 5, 6.
 - Storage rows (`.specorator/tools/`, `tool-host.log`, materialized `<pluginDir>/tool-host.mjs`) → Task 22.
 - Testing (host units, plugin units, integration) → Tasks 2–8, 10b, 12–14, 21.
 
 **Placeholder scan:** No "TBD"/"handle edge cases" — every code step shows code. The two runtime-wiring tasks (19, 20) say "grep for X" only to *locate* an exact existing assembly site, then show the exact lines to add; this is location guidance, not missing content.
 
-**Type consistency:** `ToolHandlerCtx`, `LoadedTool`, `CatalogPayload`, `McpStdioServerConfig`/`McpServerConfig`, `buildToolHostServer`, `resolveToolHostPaths`, `readCatalog`, `buildToolHandlers`, `toCallToolResult`, `createVaultContext`, `createLogger`, `runHandler`, `loadTools`, `buildCatalog` are defined once and reused with consistent signatures across tasks. Env var names (`SPECORATOR_TOOLS_DIR`, `SPECORATOR_VAULT_PATH`, `SPECORATOR_DISABLED_TOOLS`, `SPECORATOR_SECRET_*`) match between `buildToolHostServer` (Task 13) and the host entry (Task 9). `SPECORATOR_TOOLS_REV` is emitted by `buildToolHostServer` but intentionally **not** read by the host — it exists only to change the serialized config so a reload forces `setMcpServers` to re-spawn.
+**Type consistency:** `ToolHandlerCtx`, `LoadedTool`, `CatalogPayload`, `McpStdioServerConfig`/`McpServerConfig`, `buildToolHostServer`, `resolveToolHostPaths`, `readCatalog`, `buildToolHandlers`, `toCallToolResult`, `createVaultContext`, `createLogger`, `runHandler`, `loadTools`, `buildCatalog` are defined once and reused with consistent signatures across tasks. Env var names (`SPECORATOR_TOOLS_DIR`, `SPECORATOR_VAULT_PATH`, `SPECORATOR_DISABLED_FILES`, `SPECORATOR_SECRET_*`) match between `buildToolHostServer` (Task 13) and the host entry (Task 9). `SPECORATOR_TOOLS_REV` is emitted by `buildToolHostServer` but intentionally **not** read by the host — it exists only to change the serialized config so a reload forces `setMcpServers` to re-spawn.
 </content>
