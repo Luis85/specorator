@@ -107,6 +107,7 @@ export class SkillLibraryView extends ItemView {
     body.createDiv({ cls: 'specorator-library-card-desc', text: row.description });
     const caps = body.createDiv({ cls: 'specorator-roster-card-caps' });
     for (const tag of row.tags ?? []) caps.createSpan({ cls: 'specorator-library-chip', text: tag });
+    if (caps.childElementCount === 0) caps.remove();
 
     const promptBtn = actions.createEl('button', { cls: 'mod-cta', text: t('skillLibrary.prompt') });
     promptBtn.onclick = (e) => {

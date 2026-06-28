@@ -47,9 +47,12 @@ export async function renameLibraryItemDir(
 }
 
 /**
- * Builds the shared Tool/Skill library shell — `.specorator-library` root, a
- * header with the title, an actions container, and an empty list container —
- * returning the `actions` and `list` elements the caller fills in.
+ * Builds the shared library shell: mounts the `.specorator-library` root,
+ * optionally calls `renderNav` to inject a cross-library nav strip, then
+ * creates a header containing the page title and an `actions` container for
+ * header buttons, an opt-in `toolbar` slot below the header (search / sort /
+ * filter chips), and a `list` container for the card rows. Returns all three
+ * seams: `{ actions, toolbar, list }`.
  */
 export function renderLibraryShell(
   contentEl: HTMLElement,

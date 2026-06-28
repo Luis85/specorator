@@ -120,6 +120,7 @@ export class AgentRosterView extends ItemView {
         text: t('agentRoster.capsSummary', { skills: String(agent.skills.length) }),
       });
     }
+    if (caps.childElementCount === 0) caps.remove();
 
     const fail = t('agentRoster.actionFailed');
     const startBtn = actions.createEl('button', { cls: 'mod-cta', text: t('agentRoster.startChatShort') });

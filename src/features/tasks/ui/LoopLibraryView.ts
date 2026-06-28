@@ -76,6 +76,7 @@ export class LoopLibraryView extends ItemView {
     }
     const caps = body.createDiv({ cls: 'specorator-roster-card-caps' });
     for (const tag of loop.tags ?? []) caps.createSpan({ cls: 'specorator-library-chip', text: tag });
+    if (caps.childElementCount === 0) caps.remove();
 
     const promptBtn = cardActions.createEl('button', { cls: 'mod-cta', text: t('loopLibrary.prompt') });
     promptBtn.onclick = (e) => { e.stopPropagation(); launchLoopPrompt(this.plugin, loop); };
