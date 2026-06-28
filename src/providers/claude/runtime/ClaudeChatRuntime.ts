@@ -1273,6 +1273,14 @@ export class ClaudeChatRuntime implements ChatRuntime {
     // the correct --model flag immediately, without relying on setModel()
     // which only takes effect at turn boundaries.
     if (!this.persistentQuery && !this.shuttingDown) {
+      // Pre-sync bound-agent state so startPersistentQuery builds the
+      // native-agent options immediately from this turn's query options, rather
+      // than stale (undefined) defaults from before the first turn arrives.
+      // queryViaPersistent re-syncs these fields too — both sets are identical.
+      this.currentBoundAgentPrompt = ctx.queryOptions?.boundAgentPrompt;
+      this.currentBoundAgentModel = ctx.queryOptions?.boundAgentModel;
+      this.currentBoundAgentSlug = ctx.queryOptions?.boundAgentSlug;
+      this.currentBoundAgentDescription = ctx.queryOptions?.boundAgentDescription;
       await this.startPersistentQuery(
         ctx.vaultPath,
         ctx.cliPath,
@@ -1475,8 +1483,8 @@ export class ClaudeChatRuntime implements ChatRuntime {
         getPermissionMode: () => this.getScopedSettings().permissionMode,
         resolveSDKPermissionMode: (mode) => this.resolveSDKPermissionMode(mode),
         mcpManager: this.mcpManager,
-        buildPersistentQueryConfig: (vaultPath, cliPath, externalContextPaths, boundAgentPrompt) =>
-          this.buildPersistentQueryConfig(vaultPath, cliPath, externalContextPaths, undefined, boundAgentPrompt),
+        buildPersistentQueryConfig: (vaultPath, cliPath, externalContextPaths, boundAgentPrompt, boundAgentSlug) =>
+          this.buildPersistentQueryConfig(vaultPath, cliPath, externalContextPaths, undefined, boundAgentPrompt, boundAgentSlug),
         needsRestart: (newConfig) => this.needsRestart(newConfig),
         ensureReady: (options) => this.ensureReady(options),
         setCurrentExternalContextPaths: (paths) => {
