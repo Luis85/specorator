@@ -3,6 +3,7 @@ import { type App, Notice } from 'obsidian';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import { LibraryEditorModal } from '../../../shared/modals/LibraryEditorModal';
+import { setFrontmatterList } from '../../../utils/frontmatter';
 import { createModalCodeArea, librarySlug, renameLibraryItemDir, renderModalField, renderModalFooter, renderModalLabel, renderModalTextField } from '../../../utils/libraryView';
 import type { SkillLibraryRow } from '../skillLibraryRows';
 
@@ -16,6 +17,7 @@ import type { SkillLibraryRow } from '../skillLibraryRows';
 export class SkillEditorModal extends LibraryEditorModal {
   private contentArea: HTMLTextAreaElement | null = null;
   private nameEl: HTMLInputElement | null = null;
+  private tagsEl: HTMLInputElement | null = null;
 
   constructor(
     app: App,
@@ -44,6 +46,7 @@ export class SkillEditorModal extends LibraryEditorModal {
     }
 
     this.nameEl = renderModalTextField(root, t('skillLibrary.nameField'), this.row.name);
+    this.tagsEl = renderModalTextField(root, t('library.tagsField'), (this.row.tags ?? []).join(', '));
     renderModalLabel(root, t('skillLibrary.content'));
     const content = await this.plugin.vaultFileAdapter.read(this.row.sourceFilePath).catch(() => '');
     this.contentArea = createModalCodeArea(root, content, t('skillLibrary.content'));
@@ -64,12 +67,14 @@ export class SkillEditorModal extends LibraryEditorModal {
     const currentSlug = oldPath.split('/').slice(-2, -1)[0];
     const newName = this.nameEl?.value.trim() || this.row.name;
     const newSlug = librarySlug(newName) || currentSlug;
+    const tags = (this.tagsEl?.value ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+    const content = setFrontmatterList(this.contentArea.value, 'tags', tags);
     if (newSlug === currentSlug) {
-      await adapter.write(oldPath, this.contentArea.value);
+      await adapter.write(oldPath, content);
     } else {
       // root is the directory holding the per-skill folder, e.g. `.claude/skills`.
       const root = oldPath.split('/').slice(0, -2).join('/');
-      const newPath = await renameLibraryItemDir(adapter, oldPath, root, newSlug, this.contentArea.value);
+      const newPath = await renameLibraryItemDir(adapter, oldPath, root, newSlug, content);
       this.row = { ...this.row, name: newName, sourceFilePath: newPath };
     }
     // `.claude/` is a dot-folder Obsidian's vault watcher ignores, so this direct

@@ -1,17 +1,13 @@
 import type { SkillTabEntry } from '@/features/quickActions/skills/types';
 import { toSkillLibraryRows } from '@/features/skills/skillLibraryRows';
 
-const entry = (over: Partial<SkillTabEntry>): SkillTabEntry => ({
-  id: 'claude:tdd',
-  providerId: 'claude',
-  providerDisplayName: 'Claude',
-  name: 'tdd',
-  description: 'Test-driven dev',
-  insertPrefix: '$',
-  sourceFilePath: '.claude/skills/tdd/SKILL.md',
-  providerEnabled: true,
-  ...over,
-});
+function entry(over: Partial<SkillTabEntry> = {}): SkillTabEntry {
+  return {
+    id: 'claude:skill-a', providerId: 'claude', providerDisplayName: 'Claude', name: 'a',
+    description: 'desc', insertPrefix: '$', sourceFilePath: '.claude/skills/a/SKILL.md',
+    providerEnabled: true, ...over,
+  };
+}
 
 describe('toSkillLibraryRows', () => {
   it('marks file-backed entries editable and runtime entries read-only', () => {
@@ -29,5 +25,15 @@ describe('toSkillLibraryRows', () => {
       entry({ id: 'a', name: 'alpha' }),
     ]);
     expect(rows.map((r) => r.name)).toEqual(['alpha', 'beta']);
+  });
+
+  it('defaults tags to an empty array', () => {
+    const [row] = toSkillLibraryRows([entry()]);
+    expect(row.tags).toEqual([]);
+  });
+
+  it('applies tags from the supplied tag map', () => {
+    const [row] = toSkillLibraryRows([entry()], new Map([['claude:skill-a', ['x', 'y']]]));
+    expect(row.tags).toEqual(['x', 'y']);
   });
 });
