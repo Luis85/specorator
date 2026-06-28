@@ -1,4 +1,4 @@
-import { launchWithModelPicker } from '@/shared/launchWithModelPicker';
+import { launchWithModelPicker } from '@/features/quickActions/launchWithModelPicker';
 
 jest.mock('obsidian', () => ({ Notice: jest.fn() }));
 jest.mock('@/i18n/i18n', () => ({ t: (key: string) => key }));

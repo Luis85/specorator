@@ -4,7 +4,7 @@ import type { ProviderId } from '@/core/providers/types';
 import { resolveOverrideTargetTab } from '@/features/chat/tabs/resolveOverrideTargetTab';
 import { t } from '@/i18n/i18n';
 import type SpecoratorPlugin from '@/main';
-import { launchWithModelPicker } from '@/shared/launchWithModelPicker';
+import { launchWithModelPicker } from '@/features/quickActions/launchWithModelPicker';
 
 import type { LoopDefinition } from './loopTypes';
 import { renderLoopPromptText } from './renderLoopPromptText';
