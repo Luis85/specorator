@@ -7,8 +7,8 @@
       "reason": "Grandfathered. Planned split: extract persistent-query lifecycle (ensureReady, needsRestart, response-consumer startup) behind a smaller module interface. See docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md. +1 from the getSpecoratorToolKey dynamic-update dep wiring (tool-scope staleness key)."
     },
     "src/features/chat/controllers/InputController.ts": {
-      "loc": 1202,
-      "reason": "Grandfathered. Planned split: extract the resume dropdown and the plan/approval state machine. See docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md. +1 from importing the named BoundAgentProjection type for the resolved bound-agent value. +6 from threading the conversation provider into resolveBoundAgent so a bound agent's cross-provider model id is dropped after a disabled-provider fallback."
+      "loc": 1211,
+      "reason": "Grandfathered. Planned split: extract the resume dropdown and the plan/approval state machine. See docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md. +1 from importing the named BoundAgentProjection type for the resolved bound-agent value. +6 from threading the conversation provider into resolveBoundAgent so a bound agent's cross-provider model id is dropped after a disabled-provider fallback. +9 from the public seedComposerDraft composer-draft prefill seam (library loop prompting) plus the autoResumeWith refactor that reuses it."
     },
     "src/providers/opencode/runtime/OpencodeChatRuntime.ts": {
       "loc": 1164,
@@ -19,8 +19,8 @@
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. +12 from the two-row header (title row + agent/git meta row) and updateHeaderMetaRow collapse logic. +31 from chat-header a11y: wireHeaderButton helper (keyboard-operable header buttons), history aria-expanded/closeHistoryDropdown sync, and bound-agent chip aria-label."
     },
     "src/providers/codex/runtime/CodexChatRuntime.ts": {
-      "loc": 1082,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
+      "loc": 1085,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. +3: baseline synced to current LOC — this drift predates the library-views branch, which does not modify this file."
     },
     "src/features/chat/controllers/StreamController.ts": {
       "loc": 1067,
