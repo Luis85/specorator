@@ -291,3 +291,39 @@
   gap: var(--size-4-2);
   margin-top: var(--size-4-1);
 }
+
+/* Library toolbar: search + sort + filter chips (added 2026-06-28) */
+.specorator-library-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4-2);
+  align-items: center;
+  margin-bottom: var(--size-4-2);
+}
+.specorator-library-search { flex: 1 1 12rem; min-width: 8rem; }
+.specorator-library-sort { flex: 0 0 auto; }
+.specorator-library-filterchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-2-2);
+  flex-basis: 100%;
+}
+.specorator-library-filterchip,
+.specorator-library-filterreset {
+  font-size: var(--font-ui-smaller);
+  padding: var(--size-2-1) var(--size-2-3);
+  border-radius: var(--radius-s);
+  background: var(--background-modifier-hover);
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.specorator-library-filterchip.is-on {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+.specorator-library-filterreset.is-hidden { display: none; }
+.specorator-library-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

@@ -194,6 +194,8 @@ export type TasksTranslationKey =
   | 'tasks.loopEditor.notesDesc'
   | 'tasks.loopEditor.save'
   | 'tasks.loopEditor.cancel'
+  | 'tasks.loopEditor.tagsName'
+  | 'tasks.loopEditor.tagsDesc'
 
   // Tasks - Work-order template picker modal (redesign i18n sweep)
   | 'tasks.templatePicker.title'

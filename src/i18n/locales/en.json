@@ -813,7 +813,9 @@
       "notesName": "Notes",
       "notesDesc": "Gotchas and guardrails.",
       "save": "Save",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "tagsName": "Tags",
+      "tagsDesc": "Comma-separated tags for search and filtering."
     },
     "create": {
       "noActiveNote": "Open a note to create a work order from it.",
@@ -1099,7 +1101,9 @@
     "iconNone": "Default",
     "bindingHint": "Start a new chat to use a different agent.",
     "navAriaLabel": "Library sections",
-    "removeCapability": "Remove {name}"
+    "removeCapability": "Remove {name}",
+    "tagsLabel": "Tags",
+    "tagsPlaceholder": "comma, separated, tags"
   },
   "workOrderActivity": {
     "toggleRunning": "{count} active work order(s)",
@@ -1117,6 +1121,16 @@
       "review": "Review",
       "close": "Close tab"
     }
+  },
+  "library": {
+    "searchPlaceholder": "Search…",
+    "sortLabel": "Sort",
+    "sortName": "Name (A–Z)",
+    "sortUpdated": "Recently updated",
+    "resetFilters": "Clear filters",
+    "duplicate": "Duplicate",
+    "noMatches": "No items match your search.",
+    "tagsField": "Tags (comma-separated)"
   },
   "skillLibrary": {
     "title": "Skill Library",
@@ -1136,7 +1150,8 @@
     "navLabel": "Skills",
     "nameField": "Name",
     "actionFailed": "Something went wrong — check the developer console.",
-    "providerVault": "Vault"
+    "providerVault": "Vault",
+    "prompt": "Prompt"
   },
   "loopLibrary": {
     "navLabel": "Loops",
@@ -1149,7 +1164,9 @@
     "deleteConfirm": "Delete the loop \"{name}\"?",
     "deleted": "Deleted {name}.",
     "useWhenLabel": "Use when:",
-    "actionFailed": "Something went wrong — check the developer console."
+    "actionFailed": "Something went wrong — check the developer console.",
+    "prompt": "Prompt",
+    "promptTitle": "Prompt with loop: {name}"
   },
   "ribbon": {
     "openChat": "Open Co-Worker Chat",

@@ -1,4 +1,13 @@
 export type ToolLibraryTranslationKey =
+  // Shared library toolbar / chip keys
+  | 'library.searchPlaceholder'
+  | 'library.sortLabel'
+  | 'library.sortName'
+  | 'library.sortUpdated'
+  | 'library.resetFilters'
+  | 'library.duplicate'
+  | 'library.noMatches'
+  | 'library.tagsField'
   // Skill Library
   | 'skillLibrary.title'
   | 'skillLibrary.empty'
@@ -18,6 +27,7 @@ export type ToolLibraryTranslationKey =
   | 'skillLibrary.nameField'
   | 'skillLibrary.providerVault'
   | 'skillLibrary.actionFailed'
+  | 'skillLibrary.prompt'
   // Loop Library
   | 'loopLibrary.navLabel'
   | 'loopLibrary.title'
@@ -29,4 +39,6 @@ export type ToolLibraryTranslationKey =
   | 'loopLibrary.deleteConfirm'
   | 'loopLibrary.deleted'
   | 'loopLibrary.useWhenLabel'
-  | 'loopLibrary.actionFailed';
+  | 'loopLibrary.actionFailed'
+  | 'loopLibrary.prompt'
+  | 'loopLibrary.promptTitle';
