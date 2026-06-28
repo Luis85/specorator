@@ -37,9 +37,12 @@ export class SkillLibraryView extends ItemView {
     // Provider is a filter facet too (mirrors the agent view feeding roles), so a
     // provider chip filters the list and matches the card's provider chip label.
     getTags: (r) => [r.providerDisplayName, ...(r.tags ?? [])],
-    getUpdatedAt: () => 0, // skills have no in-app mtime; "recently updated" falls back to name order
+    // mtime is populated by loadSkillTags; falls back to 0 for skills without a
+    // local source file (e.g. runtime-discovered Opencode skills).
+    getUpdatedAt: (r) => this.skillMtime.get(r.id) ?? 0,
   });
   private entryById = new Map<string, SkillTabEntry>();
+  private skillMtime = new Map<string, number>();
 
   constructor(leaf: WorkspaceLeaf, private plugin: SpecoratorPlugin) {
     super(leaf);
@@ -78,9 +81,10 @@ export class SkillLibraryView extends ItemView {
     mountLibraryList({ controller: this.controller, items: rows, toolbar, list, renderCard: (l, r) => this.renderSkillCard(l, r) });
   }
 
-  /** Read frontmatter `tags` for vault-file skills. Home/abs paths fail the
-   * vault read and yield no tags (documented limitation). */
+  /** Read frontmatter `tags` and file mtime for vault-file skills. Home/abs
+   * paths fail the vault read and yield no tags (documented limitation). */
   private async loadSkillTags(entries: SkillTabEntry[]): Promise<Map<string, string[]>> {
+    this.skillMtime.clear();
     const out = new Map<string, string[]>();
     await Promise.all(entries.map(async (e) => {
       if (!e.sourceFilePath) return;
@@ -89,7 +93,9 @@ export class SkillLibraryView extends ItemView {
         const parsed = parseFrontmatter(content);
         const tags = parsed ? extractStringArray(parsed.frontmatter, 'tags') : undefined;
         if (tags && tags.length > 0) out.set(e.id, tags);
-      } catch { /* home-scope/abs path or missing → no tags */ }
+        const st = await this.plugin.vaultFileAdapter.stat(e.sourceFilePath);
+        if (st) this.skillMtime.set(e.id, st.mtime);
+      } catch { /* home-scope/abs path or missing → no tags/mtime */ }
     }));
     return out;
   }
