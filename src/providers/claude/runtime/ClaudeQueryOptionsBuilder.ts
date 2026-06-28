@@ -14,12 +14,12 @@ import type { AppPluginManager } from '../../../core/providers/types';
 import { asSettingsBag } from '../../../core/types';
 import type { McpServerConfig } from '../../../core/types/mcp';
 import type { PermissionMode,SpecoratorSettings } from '../../../core/types/settings';
-import { LOCAL_TOOL_HOST_SERVER_NAME } from '../toolHost/buildToolHostServer';
 import {
   type ClaudeSafeMode,
   getClaudeProviderSettings,
   resolveClaudeSettingSources,
 } from '../settings';
+import { LOCAL_TOOL_HOST_SERVER_NAME } from '../toolHost/buildToolHostServer';
 import {
   resolveEffortLevel,
 } from '../types/models';

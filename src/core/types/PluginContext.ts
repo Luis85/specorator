@@ -1,6 +1,7 @@
 import type { Plugin } from 'obsidian';
 
 import type { SpecoratorEventMap } from '../../app/events/specoratorEvents';
+import type { CatalogPayload } from '../../tool-host/types';
 import type { BrowserSelectionContext } from '../../utils/browser';
 import type { SharedAppStorage } from '../bootstrap/storage';
 import type { EventBus } from '../events/EventBus';
@@ -88,6 +89,14 @@ export interface PluginContext
   getResolvedEnvironmentVariables(providerId?: ProviderId): Record<string, string>;
   getEnvironmentVariablesForScope(scope: EnvironmentScope): string;
   getResolvedProviderCliPath(providerId: ProviderId): string | null;
+
+  /** Absolute filesystem path of the vault root, or null when unavailable. */
+  getVaultPath(): string | null;
+  /**
+   * Materialize + re-scan the local tool host on the active Claude runtime(s) and
+   * return the discovered catalog for the settings widget (null when off/unsupported).
+   */
+  reloadLocalToolHost(): Promise<CatalogPayload | null>;
 
   getActiveBrowserSelection(): BrowserSelectionContext | null;
   getActiveConversationSnapshot(): ConversationSnapshot | null;

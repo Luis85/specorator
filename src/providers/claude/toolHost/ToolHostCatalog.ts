@@ -15,6 +15,11 @@ export interface ReadCatalogDeps {
 
 const EMPTY: CatalogPayload = { tools: [], errors: [] };
 
+/** Deduped union of every tool's declared `secrets`, used to seed the host env. */
+export function unionSecretIds(catalog: CatalogPayload): string[] {
+  return [...new Set(catalog.tools.flatMap((t) => t.secrets))];
+}
+
 export async function readCatalog(deps: ReadCatalogDeps): Promise<CatalogPayload> {
   let result: CatalogRunResult;
   try {

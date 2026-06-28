@@ -11,6 +11,8 @@
  * - Dynamic updates (model, effort level, permission mode, MCP servers)
  */
 
+import { promises as fsp } from 'node:fs';
+
 import type {
   CanUseTool,
   Options,
@@ -53,10 +55,13 @@ import type {
   StreamChunk,
   ToolCallInfo,
 } from '../../../core/types';
+import type { McpServerConfig } from '../../../core/types/mcp';
 import type { PluginContext } from '../../../core/types/PluginContext';
 import type { PermissionMode,SpecoratorSettings } from '../../../core/types/settings';
 import { t } from '../../../i18n/i18n';
-import { getEnhancedPath, getMissingNodeError } from '../../../utils/env';
+import { TOOL_HOST_SOURCE } from '../../../tool-host/embeddedSource';
+import type { CatalogPayload } from '../../../tool-host/types';
+import { curateStdioMcpEnv, findNodeExecutable, getEnhancedPath, getMissingNodeError } from '../../../utils/env';
 import { getVaultPath } from '../../../utils/path';
 import { isSessionExpiredError } from '../../../utils/session';
 import { CLAUDE_PROVIDER_CAPABILITIES } from '../capabilities';
@@ -71,6 +76,11 @@ import {
   createTransformUsageState,
   transformSDKMessage,
 } from '../stream/transformClaudeMessage';
+import { buildToolHostServer } from '../toolHost/buildToolHostServer';
+import { isSupportedNode, probeNodeMajor } from '../toolHost/nodeVersion';
+import { readCatalog, spawnCatalogRunner, unionSecretIds } from '../toolHost/ToolHostCatalog';
+import { materializeToolHost } from '../toolHost/ToolHostMaterializer';
+import { resolveToolHostPaths } from '../toolHost/toolHostPaths';
 import { getClaudeState } from '../types/providerState';
 import { createClaudeApprovalCallback } from './ClaudeApprovalHandler';
 import { applyClaudeDynamicUpdates } from './ClaudeDynamicUpdates';
@@ -208,6 +218,16 @@ export class ClaudeChatRuntime implements ChatRuntime {
   private bufferedUsageChunk: StreamChunk & { type: 'usage' } | null = null;
   private streamTransformState = createTransformStreamState();
   private usageTransformState = createTransformUsageState();
+
+  // Local tool host (synthetic MCP server)
+  /** Union of `manifest.secrets` across discovered tools, refreshed from the catalog. */
+  private declaredToolSecretIds: string[] = [];
+  /** Set true once the embedded host has been written to disk this session. */
+  private hostMaterialized = false;
+  /** Bumped on every reload so the synthetic config changes → host re-spawns with a fresh scan. */
+  private toolsRev = 0;
+  /** Gate so the implicit init-path reload runs at most once per session. */
+  private hostReloadAttempted = false;
 
   private getLegacyPluginDeps(): PluginContext & {
     agentManager?: Pick<AppAgentManager, 'setBuiltinAgentNames'>;
@@ -650,6 +670,7 @@ export class ClaudeChatRuntime implements ChatRuntime {
       enhancedPath,
       mcpManager: this.mcpManager,
       pluginManager: this.requirePluginManager(),
+      buildLocalToolHostServer: this.makeLocalToolHostServerBuilder(),
       boundAgentPrompt: this.currentBoundAgentPrompt,
       boundAgentModel: this.currentBoundAgentModel,
     };
@@ -661,6 +682,98 @@ export class ClaudeChatRuntime implements ChatRuntime {
       throw new Error('Claude plugin manager is unavailable.');
     }
     return pluginManager;
+  }
+
+  /**
+   * Sync closure (called per-turn at both query seams) that returns the synthetic
+   * local-tool-host stdio config, or null when off. It reads cached secret ids and
+   * `toolsRev` rather than spawning catalog mode on the hot path.
+   */
+  private makeLocalToolHostServerBuilder(): () => McpServerConfig | null {
+    return () => {
+      const claude = getClaudeProviderSettings(this.plugin.settings);
+      if (!claude.localToolHostEnabled) return null;
+      // Don't inject `node <pluginDir>/tool-host.mjs` until the file is actually on disk —
+      // otherwise a turn racing startup spawns a missing/stale entrypoint.
+      if (!this.hostMaterialized) return null;
+      const vaultPath = this.plugin.getVaultPath();
+      if (!vaultPath) return null;
+      const nodePath = findNodeExecutable(getEnhancedPath());
+      const paths = resolveToolHostPaths({ vaultPath, pluginDir: this.plugin.manifest.dir ?? '' });
+      return buildToolHostServer({
+        enabled: true,
+        nodePath,
+        hostEntry: paths.hostEntry,
+        toolsDir: paths.toolsDir,
+        vaultPath,
+        baseEnv: curateStdioMcpEnv({}),
+        disabledFiles: claude.localToolHostDisabledFiles,
+        declaredSecrets: this.declaredToolSecretIds,
+        resolveSecret: (id) => this.plugin.secretStore.get(id),
+        toolsRev: this.toolsRev,
+      });
+    };
+  }
+
+  /**
+   * Materialize the host, then run catalog mode EXACTLY ONCE: caches the declared-secret
+   * union, bumps `toolsRev`, and returns the catalog so the UI can render it without a
+   * second scan. Gates on Node availability AND version (host targets node18; the MCP SDK
+   * needs >=18) — returns null (and leaves the builder disabled) when Node is missing or
+   * too old. Never throws.
+   */
+  async reloadLocalToolHost(): Promise<CatalogPayload | null> {
+    this.hostReloadAttempted = true;
+    const claude = getClaudeProviderSettings(this.plugin.settings);
+    const nodePath = findNodeExecutable(getEnhancedPath());
+    const vaultPath = this.plugin.getVaultPath();
+    if (!claude.localToolHostEnabled || !nodePath || !vaultPath || !isSupportedNode(await probeNodeMajor(nodePath))) {
+      this.hostMaterialized = false;
+      this.declaredToolSecretIds = [];
+      return null;
+    }
+    const paths = resolveToolHostPaths({ vaultPath, pluginDir: this.plugin.manifest.dir ?? '' });
+    await materializeToolHost(paths.hostEntry, TOOL_HOST_SOURCE, {
+      read: (p) => fsp.readFile(p, 'utf8'),
+      write: (p, c) => fsp.writeFile(p, c, 'utf8'),
+    });
+    this.hostMaterialized = true;   // unblocks the cold-start builder
+    this.toolsRev += 1;             // force the synthetic config to differ → host re-spawns + re-scans
+    const env = {
+      ...curateStdioMcpEnv({}),
+      SPECORATOR_TOOLS_DIR: paths.toolsDir,
+      SPECORATOR_VAULT_PATH: vaultPath,
+      // JSON (comma-safe) disabled set so the catalog skips disabled files — their secrets must not enter the union.
+      SPECORATOR_DISABLED_FILES: JSON.stringify(claude.localToolHostDisabledFiles),
+    };
+    const catalog = await readCatalog({ runCatalog: spawnCatalogRunner(nodePath, paths.hostEntry, env) });
+    this.declaredToolSecretIds = unionSecretIds(catalog);
+    return catalog;   // the widget renders this — one scan per refresh, not two
+  }
+
+  /**
+   * Apply another runtime's tool-host scan result to this runtime without re-scanning.
+   * Lets the plugin-level fan-out share one catalog across every open Claude tab.
+   */
+  applyToolHostScan(catalog: CatalogPayload | null): void {
+    if (catalog === null) {
+      this.hostMaterialized = false;
+      this.declaredToolSecretIds = [];
+      return;
+    }
+    this.hostMaterialized = true;
+    this.toolsRev += 1;
+    this.declaredToolSecretIds = unionSecretIds(catalog);
+  }
+
+  /** Run the implicit init-path reload at most once, before the first turn flows. */
+  private async ensureLocalToolHostReady(): Promise<void> {
+    if (this.hostReloadAttempted) return;
+    try {
+      await this.reloadLocalToolHost();
+    } catch {
+      // Tool host stays disabled this session; a turn that races simply skips injection.
+    }
   }
 
   private getAgentManager(): Pick<AppAgentManager, 'setBuiltinAgentNames'> | null {
@@ -1141,6 +1254,11 @@ export class ClaudeChatRuntime implements ChatRuntime {
       return;
     }
 
+    // Init/ready seam: materialize + scan the local tool host once before any turn so
+    // `hostMaterialized` flips before injection at either query seam (.specorator/ has no
+    // vault watcher; subsequent refreshes come from the settings widget via the plugin).
+    await this.ensureLocalToolHostReady();
+
     const { promptToSend, forceColdStart } = this.prepareQueryPrompt(prompt, conversationHistory);
 
     const effectiveQueryOptions = forceColdStart
@@ -1467,6 +1585,7 @@ export class ClaudeChatRuntime implements ChatRuntime {
         getPermissionMode: () => this.getScopedSettings().permissionMode,
         resolveSDKPermissionMode: (mode) => this.resolveSDKPermissionMode(mode),
         mcpManager: this.mcpManager,
+        buildLocalToolHostServer: this.makeLocalToolHostServerBuilder(),
         buildPersistentQueryConfig: (vaultPath, cliPath, externalContextPaths, boundAgentPrompt) =>
           this.buildPersistentQueryConfig(vaultPath, cliPath, externalContextPaths, undefined, boundAgentPrompt),
         needsRestart: (newConfig) => this.needsRestart(newConfig),
