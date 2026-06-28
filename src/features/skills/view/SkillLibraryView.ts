@@ -1,9 +1,9 @@
-import { ItemView, Notice, setIcon, type WorkspaceLeaf } from 'obsidian';
+import { ItemView, Notice, type WorkspaceLeaf } from 'obsidian';
 
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import { renderLibraryNav } from '../../../shared/libraryNav';
-import { LibraryListController } from '../../../shared/libraryToolbar';
+import { LibraryListController, mountLibraryList, renderCloneButton } from '../../../shared/libraryToolbar';
 import { promptReason } from '../../../shared/modals/PromptModal';
 import { withErrorNotice } from '../../../shared/uiAction';
 import { extractStringArray, parseFrontmatter } from '../../../utils/frontmatter';
@@ -73,15 +73,7 @@ export class SkillLibraryView extends ItemView {
       return;
     }
 
-    this.controller.setItems(rows);
-    this.controller.renderToolbar(toolbar, {
-      searchPlaceholder: t('library.searchPlaceholder'),
-      sortLabel: t('library.sortLabel'),
-      sortName: t('library.sortName'),
-      sortUpdated: t('library.sortUpdated'),
-      resetFilters: t('library.resetFilters'),
-    }, () => this.renderRows(list));
-    this.renderRows(list);
+    mountLibraryList({ controller: this.controller, items: rows, toolbar, list, renderCard: (l, r) => this.renderSkillCard(l, r) });
   }
 
   /** Read frontmatter `tags` for vault-file skills. Home/abs paths fail the
@@ -98,16 +90,6 @@ export class SkillLibraryView extends ItemView {
       } catch { /* home-scope/abs path or missing → no tags */ }
     }));
     return out;
-  }
-
-  private renderRows(list: HTMLElement): void {
-    list.empty();
-    const rows = this.controller.apply();
-    if (rows.length === 0) {
-      list.createDiv({ cls: 'specorator-library-empty-text', text: t('library.noMatches') });
-      return;
-    }
-    for (const row of rows) this.renderSkillCard(list, row);
   }
 
   private renderSkillCard(list: HTMLElement, row: SkillLibraryRow): void {
@@ -130,12 +112,7 @@ export class SkillLibraryView extends ItemView {
       const entry = this.entryById.get(row.id);
       if (entry) void runVaultSkill(this.plugin, entry, null);
     };
-    const cloneBtn = actions.createEl('button', {
-      cls: 'specorator-library-card-icon',
-      attr: { 'aria-label': t('library.duplicate'), title: t('library.duplicate') },
-    });
-    setIcon(cloneBtn, 'copy');
-    cloneBtn.onclick = (e) => { e.stopPropagation(); void this.cloneSkill(row); };
+    renderCloneButton(actions, (e) => { e.stopPropagation(); void this.cloneSkill(row); });
   }
 
   private async cloneSkill(row: SkillLibraryRow): Promise<void> {

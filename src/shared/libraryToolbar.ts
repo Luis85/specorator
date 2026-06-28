@@ -1,3 +1,7 @@
+import { setIcon } from 'obsidian';
+
+import { t } from '@/i18n/i18n';
+
 export type LibrarySort = 'name' | 'updated';
 
 export interface LibraryItemAccessors<T> {
@@ -145,4 +149,54 @@ export class LibraryListController<T> {
     }
     refreshAll();
   }
+}
+
+/** The standard library toolbar labels, shared by all library views. */
+export function libraryToolbarLabels(): LibraryToolbarLabels {
+  return {
+    searchPlaceholder: t('library.searchPlaceholder'),
+    sortLabel: t('library.sortLabel'),
+    sortName: t('library.sortName'),
+    sortUpdated: t('library.sortUpdated'),
+    resetFilters: t('library.resetFilters'),
+  };
+}
+
+/**
+ * Mounts the search/sort/filter toolbar for `controller` into `toolbar` and
+ * paints the filtered rows into `list`, re-rendering ONLY the list on change
+ * (search input keeps focus). `renderCard` paints one row; an empty filter
+ * result shows the shared "no matches" line.
+ */
+export function mountLibraryList<T>(opts: {
+  controller: LibraryListController<T>;
+  items: T[];
+  toolbar: HTMLElement;
+  list: HTMLElement;
+  renderCard: (list: HTMLElement, item: T) => void;
+}): void {
+  const { controller, items, toolbar, list, renderCard } = opts;
+  controller.setItems(items);
+  const renderRows = (): void => {
+    list.empty();
+    const rows = controller.apply();
+    if (rows.length === 0) {
+      list.createDiv({ cls: 'specorator-library-empty-text', text: t('library.noMatches') });
+      return;
+    }
+    for (const row of rows) renderCard(list, row);
+  };
+  controller.renderToolbar(toolbar, libraryToolbarLabels(), renderRows);
+  renderRows();
+}
+
+/** Renders the shared Duplicate (copy-icon) card-action button. */
+export function renderCloneButton(actions: HTMLElement, onClick: (e: MouseEvent) => void): HTMLButtonElement {
+  const btn = actions.createEl('button', {
+    cls: 'specorator-library-card-icon',
+    attr: { 'aria-label': t('library.duplicate'), title: t('library.duplicate') },
+  });
+  setIcon(btn, 'copy');
+  btn.onclick = onClick;
+  return btn;
 }

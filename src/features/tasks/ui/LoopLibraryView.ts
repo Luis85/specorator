@@ -1,9 +1,9 @@
-import { ItemView, Notice, setIcon, type WorkspaceLeaf } from 'obsidian';
+import { ItemView, Notice, type WorkspaceLeaf } from 'obsidian';
 
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import { renderLibraryNav } from '../../../shared/libraryNav';
-import { LibraryListController } from '../../../shared/libraryToolbar';
+import { LibraryListController, mountLibraryList, renderCloneButton } from '../../../shared/libraryToolbar';
 import { confirm } from '../../../shared/modals/ConfirmModal';
 import { withErrorNotice } from '../../../shared/uiAction';
 import { createLibraryCard, renderLibraryEmptyState, renderLibraryLoading, renderLibraryShell } from '../../../utils/libraryView';
@@ -61,25 +61,7 @@ export class LoopLibraryView extends ItemView {
       return;
     }
 
-    this.controller.setItems(loops);
-    this.controller.renderToolbar(toolbar, {
-      searchPlaceholder: t('library.searchPlaceholder'),
-      sortLabel: t('library.sortLabel'),
-      sortName: t('library.sortName'),
-      sortUpdated: t('library.sortUpdated'),
-      resetFilters: t('library.resetFilters'),
-    }, () => this.renderRows(list));
-    this.renderRows(list);
-  }
-
-  private renderRows(list: HTMLElement): void {
-    list.empty();
-    const rows = this.controller.apply();
-    if (rows.length === 0) {
-      list.createDiv({ cls: 'specorator-library-empty-text', text: t('library.noMatches') });
-      return;
-    }
-    for (const loop of rows) this.renderLoopCard(list, loop);
+    mountLibraryList({ controller: this.controller, items: loops, toolbar, list, renderCard: (l, lp) => this.renderLoopCard(l, lp) });
   }
 
   private renderLoopCard(list: HTMLElement, loop: LoopDefinition): void {
@@ -98,12 +80,7 @@ export class LoopLibraryView extends ItemView {
     const promptBtn = cardActions.createEl('button', { cls: 'mod-cta', text: t('loopLibrary.prompt') });
     promptBtn.onclick = (e) => { e.stopPropagation(); launchLoopPrompt(this.plugin, loop); };
 
-    const cloneBtn = cardActions.createEl('button', {
-      cls: 'specorator-library-card-icon',
-      attr: { 'aria-label': t('library.duplicate'), title: t('library.duplicate') },
-    });
-    setIcon(cloneBtn, 'copy');
-    cloneBtn.onclick = (e) => { e.stopPropagation(); void withErrorNotice(() => this.cloneLoop(loop), t('loopLibrary.actionFailed'), (err) => this.fail(err)); };
+    renderCloneButton(cardActions, (e) => { e.stopPropagation(); void withErrorNotice(() => this.cloneLoop(loop), t('loopLibrary.actionFailed'), (err) => this.fail(err)); });
 
     const deleteBtn = cardActions.createEl('button', { cls: 'specorator-library-card-delete', text: t('loopLibrary.delete') });
     deleteBtn.onclick = (e) => { e.stopPropagation(); void withErrorNotice(() => this.deleteLoop(loop), t('loopLibrary.actionFailed'), (err) => this.fail(err)); };

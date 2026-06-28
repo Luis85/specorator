@@ -1,4 +1,4 @@
-import { ItemView, Notice, setIcon, type WorkspaceLeaf } from 'obsidian';
+import { ItemView, Notice, type WorkspaceLeaf } from 'obsidian';
 
 import { ProviderRegistry } from '../../../../core/providers/ProviderRegistry';
 import type { ProviderId } from '../../../../core/providers/types';
@@ -6,7 +6,7 @@ import { asSettingsBag } from '../../../../core/types/settings';
 import { t } from '../../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../../main';
 import { renderLibraryNav } from '../../../../shared/libraryNav';
-import { LibraryListController } from '../../../../shared/libraryToolbar';
+import { LibraryListController, mountLibraryList, renderCloneButton } from '../../../../shared/libraryToolbar';
 import { confirm } from '../../../../shared/modals/ConfirmModal';
 import { withErrorNotice } from '../../../../shared/uiAction';
 import { createLibraryCard, renderLibraryEmptyState, renderLibraryLoading, renderLibraryShell } from '../../../../utils/libraryView';
@@ -88,25 +88,7 @@ export class AgentRosterView extends ItemView {
       return;
     }
 
-    this.controller.setItems(agents);
-    this.controller.renderToolbar(toolbar, {
-      searchPlaceholder: t('library.searchPlaceholder'),
-      sortLabel: t('library.sortLabel'),
-      sortName: t('library.sortName'),
-      sortUpdated: t('library.sortUpdated'),
-      resetFilters: t('library.resetFilters'),
-    }, () => this.renderRows(list));
-    this.renderRows(list);
-  }
-
-  private renderRows(list: HTMLElement): void {
-    list.empty();
-    const rows = this.controller.apply();
-    if (rows.length === 0) {
-      list.createDiv({ cls: 'specorator-library-empty-text', text: t('library.noMatches') });
-      return;
-    }
-    for (const agent of rows) this.renderCard(list, agent);
+    mountLibraryList({ controller: this.controller, items: agents, toolbar, list, renderCard: (l, a) => this.renderCard(l, a) });
   }
 
   private renderCard(list: HTMLElement, agent: RosterAgent): void {
@@ -145,15 +127,10 @@ export class AgentRosterView extends ItemView {
       e.stopPropagation();
       void withErrorNotice(() => this.startChatWithAgent(agent), fail, (err) => this.fail(err));
     };
-    const cloneBtn = actions.createEl('button', {
-      cls: 'specorator-library-card-icon',
-      attr: { 'aria-label': t('library.duplicate'), title: t('library.duplicate') },
-    });
-    setIcon(cloneBtn, 'copy');
-    cloneBtn.onclick = (e) => {
+    renderCloneButton(actions, (e) => {
       e.stopPropagation();
       void withErrorNotice(() => this.cloneAgent(agent), fail, (err) => this.fail(err));
-    };
+    });
     const deleteBtn = actions.createEl('button', { cls: 'specorator-library-card-delete', text: t('agentRoster.delete') });
     deleteBtn.onclick = (e) => {
       e.stopPropagation();
