@@ -163,10 +163,15 @@ export async function handler(input, ctx) {
    auto-wrapped string).
 6. Result streams back as a normal MCP tool result.
 7. Per-tool disable is **keyed by filename** and enforced by **skipping the
-   import** in serve mode (the secret-bearing process): a disabled tool's
-   top-level code never runs and never sees `SPECORATOR_SECRET_*`. The secret-free
-   `--catalog` process still imports it to show its name/description in settings.
-   Changing the disabled set changes the config env → the host re-spawns next turn.
+   import in both modes** (serve *and* catalog): a disabled tool's top-level code
+   never executes — no fs/network side effects, no secret access — anywhere.
+   Disabled tools are shown in settings by filename only (they're never imported,
+   so no name/description is available until re-enabled). Changing the disabled
+   set changes the config env → the host re-spawns next turn.
+8. **Secret scoping:** the host reads every `SPECORATOR_SECRET_*` into host-owned
+   state and **deletes it from `process.env` before importing any tool**, so a
+   tool module can't read another tool's secret off the environment. `ctx.secrets`
+   exposes only the subset the calling tool declared in `manifest.secrets`.
 
 ## Storage & config
 
@@ -178,9 +183,12 @@ export async function handler(input, ctx) {
 | settings store | Opt-in enable flag + per-tool disabled state. |
 
 - **Secrets:** `manifest.secrets` lists SecretStorage-backed ids; the plugin
-  resolves them and passes the values into the host's curated env, exposed to
-  handlers via `ctx.secrets`. Reuses the existing `secretEnv` mechanism —
-  secret values never land in the script file.
+  resolves them and passes the values into the host's curated env as transport.
+  The host **scrubs `SPECORATOR_SECRET_*` from `process.env` into host-owned state
+  before importing any tool**, then exposes only the calling tool's declared subset
+  via `ctx.secrets`. Reuses the existing `secretEnv` mechanism — secret values
+  never land in the script file, and no tool can read another tool's secret off
+  the environment.
 
 ## Error handling & lifecycle
 
@@ -239,19 +247,21 @@ overclaimed.
 
 **Integration:**
 - Host config lands in Claude `mcpServers` when enabled + tool present.
-- Disabled file → skipped import in serve mode (never executes, never reads
-  secrets); still listed by `--catalog` (which runs without secrets).
+- Disabled file → skipped import in **both** modes (never executes, never reads
+  secrets); shown in settings by filename only.
 
 ## Open questions for the implementation plan
 
 1. **Node resolution** — reuse Claude's `customSpawn` node-path resolution, or a
    dedicated resolver? (The host is spawned by the Claude SDK from the stdio
    config, so node-path resolution must be baked into `command`.)
-2. **Host bundling** — confirm the esbuild config can emit a second entrypoint
-   (`tool-host.mjs`) bundling `@modelcontextprotocol/sdk` without bloating
-   `main.js`.
-3. **Secret env scoping** — v1 passes declared secrets as host-process env
-   (process-wide). Acceptable for a single-host model; revisit if per-tool secret
-   isolation is needed.
+2. **Host bundle size** — confirm baking the `@modelcontextprotocol/sdk`-bearing
+   host bundle into `main.js` as text is an acceptable `main.js` size increase
+   (vs. lazy-materializing from a compressed/base64 blob).
+3. **Secret scoping vs. full trust** — secrets are scrubbed from `process.env` into
+   host-owned state and scoped per-tool via `ctx.secrets`, which stops casual
+   cross-tool env reads. A fully malicious tool still runs with full Node
+   privileges (the documented trust model), so this is defense-in-depth, not a
+   hard boundary. Worker/iframe isolation remains the deferred stronger option.
 </content>
 </invoke>

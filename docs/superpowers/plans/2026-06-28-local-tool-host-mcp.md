@@ -609,6 +609,18 @@ describe('loadTools', () => {
     expect(res.tools).toEqual([]);
     expect(res.errors[0]).toEqual({ file: 'hang.mjs', message: expect.stringMatching(/timed out/) });
   });
+
+  it('rejects a second file that reuses a tool name (first file alphabetically wins)', async () => {
+    // Both modules declare name 'word_count' (goodModule already does).
+    const dup: ToolModule = { manifest: { name: 'word_count', description: 'd2', inputSchema: { type: 'object' } }, handler: async () => '' };
+    const res = await loadTools('/tools', {
+      readdir: async () => ['b_dup.mjs', 'a_first.mjs'],
+      importModule: async (p) => (p.endsWith('a_first.mjs') ? goodModule : dup),
+    });
+    // a_first.mjs sorts first and keeps the name; b_dup.mjs is rejected.
+    expect(res.tools.map((t) => t.file)).toEqual(['a_first.mjs']);
+    expect(res.errors).toEqual([{ file: 'b_dup.mjs', message: expect.stringMatching(/Duplicate tool name "word_count"/) }]);
+  });
 });
 ```
 
@@ -677,8 +689,10 @@ export async function loadTools(dir: string, deps: LoadDeps, opts: LoadOptions =
 
   const tools: LoadedTool[] = [];
   const errors: LoadError[] = [];
+  const seenNames = new Map<string, string>();   // tool name → first file that claimed it
 
   // Disabled files are never imported, so their top-level code never runs (and can't read secrets from env).
+  // Files are sorted, so the first file alphabetically keeps a duplicated name deterministically.
   for (const file of entries.filter((f) => f.endsWith('.mjs') && !skip.has(f)).sort()) {
     try {
       const mod = await importWithTimeout(deps.importModule(path.join(dir, file)), importTimeoutMs, file);
@@ -687,6 +701,14 @@ export async function loadTools(dir: string, deps: LoadDeps, opts: LoadOptions =
         errors.push(invalid);
         continue;
       }
+      const name = mod.manifest.name;
+      const firstFile = seenNames.get(name);
+      if (firstFile) {
+        // Two files sharing a name would shadow handlers and mismatch secrets — reject the later one.
+        errors.push({ file, message: `Duplicate tool name "${name}" (already defined in ${firstFile})` });
+        continue;
+      }
+      seenNames.set(name, file);
       tools.push({ file, manifest: mod.manifest, handler: mod.handler });
     } catch (err) {
       errors.push({ file, message: err instanceof Error ? err.message : String(err) });
@@ -925,23 +947,32 @@ async function main(): Promise<void> {
     importModule: (p: string) => import(pathToFileURL(p).href) as Promise<ToolModule>,
   };
 
-  // Catalog mode runs WITHOUT secrets in env (the plugin never passes SPECORATOR_SECRET_* to --catalog)
-  // and imports every tool so the settings UI can show names/descriptions, including disabled ones.
-  if (process.argv.includes('--catalog')) {
-    process.stdout.write(JSON.stringify(buildCatalog(await loadTools(toolsDir, deps))));
-    return;
+  // Capture declared secrets into host-owned state and SCRUB them from process.env BEFORE
+  // importing any tool, so no tool module can read another tool's secret via
+  // process.env.SPECORATOR_SECRET_*. ctx.secrets then exposes only the calling tool's subset.
+  const SECRET_PREFIX = 'SPECORATOR_SECRET_';
+  const secretsById: Record<string, string> = {};
+  for (const key of Object.keys(process.env)) {
+    if (key.startsWith(SECRET_PREFIX)) {
+      secretsById[key.slice(SECRET_PREFIX.length)] = process.env[key] ?? '';
+      delete process.env[key];
+    }
   }
 
-  // Serve mode HAS secrets in env, so disabled files are never imported — their top-level
-  // code never executes and cannot read process.env.SPECORATOR_SECRET_*.
+  // Disabled files are never imported in EITHER mode — their top-level code never executes
+  // (no fs/network side effects, no secret access), in catalog or serve.
   const load = await loadTools(toolsDir, deps, { skipFiles: disabledFiles });
+
+  if (process.argv.includes('--catalog')) {
+    process.stdout.write(JSON.stringify(buildCatalog(load)));
+    return;
+  }
 
   const ctxFactory = (toolName: string): ToolHandlerCtx => {
     const secrets: Record<string, string> = {};
     const tool = load.tools.find((t) => t.manifest.name === toolName);
     for (const id of tool?.manifest.secrets ?? []) {
-      const v = process.env[`SPECORATOR_SECRET_${id}`];
-      if (v !== undefined) secrets[id] = v;
+      if (secretsById[id] !== undefined) secrets[id] = secretsById[id];
     }
     return {
       vaultPath,
@@ -1532,6 +1563,7 @@ Expected: the type-union file + `en.json` (and siblings). Use the type-union fil
   | 'settings.localToolHost.trustWarning'
   | 'settings.localToolHost.loadError'
   | 'settings.localToolHost.reload'
+  | 'settings.localToolHost.disabledHint'
 ```
 
 - [ ] **Step 3: Add the block to every locale.** In each `src/i18n/locales/*.json`, add under `settings` (English values shown; translate or copy English for the others to preserve key parity — the parity test only checks keys exist):
@@ -1545,7 +1577,8 @@ Expected: the type-union file + `en.json` (and siblings). Use the type-union fil
   "noTools": "No tools found in .specorator/tools.",
   "trustWarning": "Tools run as a Node subprocess with full filesystem and network access.",
   "loadError": "Failed to load",
-  "reload": "Reload tools"
+  "reload": "Reload tools",
+  "disabledHint": "Disabled — not loaded. Enable to run it again."
 }
 ```
 
@@ -1621,37 +1654,43 @@ export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (hos
   }
 
   const paths = resolveToolHostPaths({ vaultPath, pluginDir: plugin.manifest.dir ?? '' });
-  const server = buildToolHostServer({
-    enabled: true, nodePath, hostEntry: paths.hostEntry, toolsDir: paths.toolsDir, vaultPath,
-    baseEnv: curateStdioMcpEnv({}),
-    disabledFiles: claude.localToolHostDisabledFiles,
-    declaredSecrets: [],
-    resolveSecret: (id) => plugin.secretStore.get(id),
-    toolsRev: 0,   // catalog env only; revision irrelevant for a one-shot --catalog run
-  });
-
   const listEl = host.createDiv({ cls: 'specorator-tool-host-list' });
 
   const renderList = async () => {
     listEl.empty();
     // The host is baked into main.js; materialize it before catalog/spawn (no vault watcher — dot-folder).
     await materializeToolHost(paths.hostEntry, TOOL_HOST_SOURCE, fsAdapter);
-    const catalog = await readCatalog({ runCatalog: spawnCatalogRunner(nodePath, paths.hostEntry, server?.env ?? {}) });
-    if (catalog.tools.length === 0 && catalog.errors.length === 0) {
+    const disabledFiles = getClaudeProviderSettings(settingsBag).localToolHostDisabledFiles;
+    // Build the catalog env FRESH so it reflects the current disabled set. Catalog skips disabled
+    // files too, so a disabled tool is never imported/executed even on settings-open or Reload.
+    const catalogEnv = buildToolHostServer({
+      enabled: true, nodePath, hostEntry: paths.hostEntry, toolsDir: paths.toolsDir, vaultPath,
+      baseEnv: curateStdioMcpEnv({}), disabledFiles, declaredSecrets: [],
+      resolveSecret: (id) => plugin.secretStore.get(id), toolsRev: 0,
+    })?.env ?? {};
+    const catalog = await readCatalog({ runCatalog: spawnCatalogRunner(nodePath, paths.hostEntry, catalogEnv) });
+
+    const setDisabled = async (file: string, disabled: boolean) => {
+      const next = new Set(getClaudeProviderSettings(settingsBag).localToolHostDisabledFiles);
+      if (disabled) next.add(file); else next.delete(file);
+      updateClaudeProviderSettings(settingsBag, { localToolHostDisabledFiles: [...next] });
+      await plugin.saveSettings();
+      await refreshAll();   // re-spawn host with the new disabled set + refresh caches + re-render
+    };
+
+    if (catalog.tools.length === 0 && catalog.errors.length === 0 && disabledFiles.length === 0) {
       listEl.createEl('p', { text: t('settings.localToolHost.noTools'), cls: 'setting-item-description' });
       return;
     }
+    // Enabled tools come from the catalog (which excludes disabled — they're never imported).
     for (const tool of catalog.tools) {
-      // Keyed by FILE: the host disables by filename (it can't know the name without importing).
-      const disabled = getClaudeProviderSettings(settingsBag).localToolHostDisabledFiles.includes(tool.file);
-      new Setting(listEl).setName(tool.name).setDesc(tool.description).addToggle((toggle) =>
-        toggle.setValue(!disabled).onChange(async (enabled) => {
-          const next = new Set(getClaudeProviderSettings(settingsBag).localToolHostDisabledFiles);
-          if (enabled) next.delete(tool.file); else next.add(tool.file);
-          updateClaudeProviderSettings(settingsBag, { localToolHostDisabledFiles: [...next] });
-          await plugin.saveSettings();
-        }),
-      );
+      new Setting(listEl).setName(tool.name).setDesc(tool.description)
+        .addToggle((toggle) => toggle.setValue(true).onChange(() => void setDisabled(tool.file, true)));
+    }
+    // Disabled tools are shown by FILENAME only — never imported, so no name/description is available.
+    for (const file of disabledFiles) {
+      new Setting(listEl).setName(file).setDesc(t('settings.localToolHost.disabledHint'))
+        .addToggle((toggle) => toggle.setValue(false).onChange(() => void setDisabled(file, false)));
     }
     for (const err of catalog.errors) {
       new Setting(listEl).setName(`${t('settings.localToolHost.loadError')}: ${err.file}`).setDesc(err.message);
@@ -1882,6 +1921,8 @@ async refreshDeclaredToolSecretIds(): Promise<void> {
     ...curateStdioMcpEnv({}),
     SPECORATOR_TOOLS_DIR: paths.toolsDir,
     SPECORATOR_VAULT_PATH: vaultPath,
+    // Pass the disabled set so the catalog skips disabled files — their secrets must not enter the union.
+    SPECORATOR_DISABLED_FILES: claude.localToolHostDisabledFiles.join(','),
   };
   const catalog = await readCatalog({ runCatalog: spawnCatalogRunner(nodePath, paths.hostEntry, env) });
   this.declaredToolSecretIds = [...new Set(catalog.tools.flatMap((t) => t.secrets))];
@@ -2059,7 +2100,9 @@ git commit -m "chore: re-baseline ratchets for local tool host"
 - **No vault watcher for the `.specorator/` dot-folder** — explicit re-scan on load/enable/settings-open + manual "Reload tools" button (covers create/delete/rename) → Tasks 16, 20.
 - Claude-only injection at both seams → Tasks 18–20.
 - Opt-in toggle (reverts when Node missing) + Node check + discovered-tool list + per-tool disable + error badges → Tasks 11, 16.
-- **Disable is file-keyed and enforced by skip-import in serve mode** — a disabled tool never executes and never reads secrets; catalog (secret-free) still lists it → Tasks 6, 9, 16.
+- **Disable is file-keyed and enforced by skip-import in BOTH modes** — a disabled tool never executes (no side effects) and never reads secrets, in catalog or serve; settings shows it by filename → Tasks 6, 9, 16.
+- **Secret scoping** — the host scrubs `SPECORATOR_SECRET_*` from `process.env` into host-owned state before importing any tool; `ctx.secrets` exposes only the calling tool's declared subset → Task 9.
+- **Duplicate tool names rejected** as per-file load errors (first file alphabetically wins) before handler registration → Task 6.
 - Lazy start (server is `null` when disabled / no node / not yet materialized; SDK only spawns when injected) → Tasks 13, 18, 19, 20.
 - Per-script isolation + handler timeout/throw + **per-file import timeout** (catalog *and* serve) → Tasks 5, 6.
 - Storage rows (`.specorator/tools/`, `tool-host.log`, materialized `<pluginDir>/tool-host.mjs`) → Task 22.
