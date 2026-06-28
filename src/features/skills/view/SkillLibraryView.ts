@@ -34,7 +34,9 @@ export class SkillLibraryView extends ItemView {
   private readonly controller = new LibraryListController<SkillLibraryRow>({
     getName: (r) => r.name,
     getDescription: (r) => r.description,
-    getTags: (r) => r.tags ?? [],
+    // Provider is a filter facet too (mirrors the agent view feeding roles), so a
+    // provider chip filters the list and matches the card's provider chip label.
+    getTags: (r) => [r.providerDisplayName, ...(r.tags ?? [])],
     getUpdatedAt: () => 0, // skills have no in-app mtime; "recently updated" falls back to name order
   });
   private entryById = new Map<string, SkillTabEntry>();
