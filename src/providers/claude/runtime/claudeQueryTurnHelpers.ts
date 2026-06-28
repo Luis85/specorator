@@ -199,20 +199,25 @@ export function buildQueryOptionsFromTurnRequest(
     enabledMcpServers: request.enabledMcpServers ?? legacyQueryOptions?.enabledMcpServers,
     forceColdStart: legacyQueryOptions?.forceColdStart,
     externalContextPaths: request.externalContextPaths ?? legacyQueryOptions?.externalContextPaths,
+    // Bound roster-agent persona/model ride in on the explicit options; without
+    // carrying them through the prepared-turn rebuild the agent's identity never
+    // reaches the runtime and the chat answers with the generic assistant.
+    boundAgentPrompt: legacyQueryOptions?.boundAgentPrompt,
+    boundAgentModel: legacyQueryOptions?.boundAgentModel,
   };
 
-  if (
-    effectiveQueryOptions.allowedTools === undefined &&
-    effectiveQueryOptions.model === undefined &&
-    effectiveQueryOptions.enabledMcpServers === undefined &&
-    effectiveQueryOptions.forceColdStart === undefined &&
-    effectiveQueryOptions.externalContextPaths === undefined &&
-    (effectiveQueryOptions.mcpMentions?.size ?? 0) === 0
-  ) {
-    return undefined;
-  }
+  const hasScalarOption = [
+    effectiveQueryOptions.allowedTools,
+    effectiveQueryOptions.model,
+    effectiveQueryOptions.enabledMcpServers,
+    effectiveQueryOptions.forceColdStart,
+    effectiveQueryOptions.externalContextPaths,
+    effectiveQueryOptions.boundAgentPrompt,
+    effectiveQueryOptions.boundAgentModel,
+  ].some((value) => value !== undefined);
+  const hasMentions = (effectiveQueryOptions.mcpMentions?.size ?? 0) > 0;
 
-  return effectiveQueryOptions;
+  return hasScalarOption || hasMentions ? effectiveQueryOptions : undefined;
 }
 
 export function noteVisibleStreamContent(
