@@ -47,8 +47,8 @@
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Per-tool pure renderers extracted to siblings: askUserQuestionRenderer, webSearchRenderer, the renderLinesExpanded primitive (toolLinesExpanded), and the contentFallback primitive."
     },
     "src/features/chat/rendering/MessageRenderer.ts": {
-      "loc": 812,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
+      "loc": 770,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Code-block post-render transform extracted to codeBlockFormatter.ts."
     },
     "src/features/inline-edit/ui/InlineEditModal.ts": {
       "loc": 785,
@@ -88,10 +88,6 @@
     },
     "src/features/settings/SpecoratorSettings.ts": {
       "loc": 550,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
-    },
-    "src/providers/cursor/runtime/cursorToolNormalization.ts": {
-      "loc": 542,
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
     },
     "src/providers/codex/runtime/codexAppServerTypes.ts": {

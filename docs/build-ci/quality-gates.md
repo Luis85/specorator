@@ -530,3 +530,14 @@ that was the SubagentManager↔ClaudeTaskResultInterpreter cross-zone clone; 936
 StreamController text/thinking render coordinators were mapped but left for a follow-up — they are
 hot-path stateful (render-throttle + O(C²) backoff), so they warrant their own reviewed change rather
 than riding along here.
+Done 2026-06-28 (quality campaign run 22): broad pure-helper pass across two more hotspots (Explore-agent
+seam maps for StreamController / MessageRenderer / AgentBoardView / CodexNotificationRouter informed the
+picks). `cursorToolNormalization` (entirely pure) shed its per-tool-kind input-mapping family →
+`cursorToolInputMapping.ts` plus the shared value coercers → `cursorToolValueCoercion.ts`; 542 → 358,
+which drops it **below the 500 LOC cap** so its grandfathered entry is removed (24 → 23 hotspots).
+`MessageRenderer` shed its post-markdown code-block transform → `codeBlockFormatter.ts` (plus a dead
+`runRendererAction`); 812 → 770. Behavior-preserving (cursor + renderer suites pass untouched), no new
+clones or cycles. The stateful coordinator-style seams the agents surfaced — StreamController's
+text/thinking render coordinators, `CodexNotificationRouter`'s raw-tool / segment-buffer state machines,
+and `AgentBoardView`'s run-lifecycle / queue coordinators — were deliberately left: they own live
+streaming/turn or view-lifecycle state and need their own reviewed changes, not a broad-pass ride-along.
