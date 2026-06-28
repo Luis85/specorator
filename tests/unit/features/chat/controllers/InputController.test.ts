@@ -23,6 +23,7 @@ function createMockInputEl() {
   return {
     value: '',
     focus: jest.fn(),
+    dispatchEvent: jest.fn(),
   } as unknown as HTMLTextAreaElement;
 }
 

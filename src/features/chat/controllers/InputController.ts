@@ -756,10 +756,21 @@ export class InputController {
     return applyPlanApprovalDecision(decision, turn.turnMetadata, this.deps);
   }
 
+  /**
+   * Seeds the composer with draft text WITHOUT sending. Used by the library
+   * "prompt as draft" flows (loops) so the user can append a task before
+   * sending. Fires an `input` event so autosize/validation update.
+   */
+  seedComposerDraft(content: string): void {
+    const el = this.deps.getInputEl();
+    el.value = content;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
   /** Auto-sends `content` as the next (resumed) turn — shared by plan auto-implement,
    * approve-new-session, and Cursor's AskUserQuestion answer follow-up. */
   private autoResumeWith(content: string): void {
-    this.deps.getInputEl().value = content;
+    this.seedComposerDraft(content);
     this.sendMessage().catch((err: unknown) => {
       this.deps.plugin.logger.scope('input').error('sendMessage failed unexpectedly', err);
     });
