@@ -30,6 +30,7 @@ export function registerClaudeTabFields(): void {
       { id: 'commands', label: t('settings.slashCommands.name'), order: 40 },
       { id: 'subagents', label: t('settings.subagents.name'), order: 50 },
       { id: 'mcp', label: t('settings.mcpServers.name'), order: 60 },
+      { id: 'localToolHost', label: t('settings.localToolHost.name'), order: 65 },
       { id: 'plugins', label: t('settings.plugins.name'), order: 70 },
       { id: 'environment', label: t('settings.environment'), order: 80 },
       { id: 'experimental', label: t('settings.experimental'), order: 90 },
@@ -206,6 +207,20 @@ function registerWorkspaceWidgetFields(r: Registry): void {
     },
     default: null,
     keywords: ['mcp', 'servers', 'model context protocol', 'tools'],
+  });
+
+  r.registerField({
+    id: 'claude.localToolHost',
+    tabId: 'claude',
+    sectionId: 'localToolHost',
+    label: t('settings.localToolHost.name'),
+    description: t('settings.localToolHost.desc'),
+    type: {
+      kind: 'custom',
+      render: (ctx, host) => renderProviderSettingsWidget(ctx, host, 'claude', 'localToolHost'),
+    },
+    default: null,
+    keywords: ['local', 'tool', 'host', 'scripts', 'node', 'tools'],
   });
 
   r.registerField({
