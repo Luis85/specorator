@@ -7,7 +7,9 @@ import type { ToolHandlerCtx } from './types';
 function safeResolve(root: string, relPath: string): string {
   const resolved = path.resolve(root, relPath);
   const rel = path.relative(root, resolved);
-  if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
+  // `rel === ''` means the path IS the vault root (e.g. list('')) — that's inside
+  // the vault, not an escape. Only `..`-traversal and absolute paths are escapes.
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
     throw new Error(`Path "${relPath}" is outside the vault root`);
   }
   return resolved;

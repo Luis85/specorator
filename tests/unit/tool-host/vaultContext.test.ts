@@ -23,6 +23,13 @@ describe('createVaultContext', () => {
     expect((await vault.list('dir')).sort()).toEqual(['one.md', 'two.md']);
   });
 
+  it("lists the vault root with list('') instead of rejecting it", async () => {
+    const vault = createVaultContext(root);
+    await vault.write('top.md', 'x');
+    await vault.write('sub/nested.md', 'y');
+    expect(await vault.list('')).toEqual(['top.md']); // root-level files only (dirs filtered out)
+  });
+
   it('rejects a traversal path that escapes the root', async () => {
     const vault = createVaultContext(root);
     await expect(vault.read('../escape.md')).rejects.toThrow(/outside the vault/i);

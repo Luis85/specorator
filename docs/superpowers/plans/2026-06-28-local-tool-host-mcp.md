@@ -309,7 +309,8 @@ import type { ToolHandlerCtx } from './types';
 function safeResolve(root: string, relPath: string): string {
   const resolved = path.resolve(root, relPath);
   const rel = path.relative(root, resolved);
-  if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
+  // `rel === ''` is the vault root itself (e.g. list('')) — inside the vault, not an escape.
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
     throw new Error(`Path "${relPath}" is outside the vault root`);
   }
   return resolved;
