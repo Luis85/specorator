@@ -52,14 +52,16 @@ const REFACTOR_BODY = `# {{title}}
 
 ## Objective
 
-Refactor the area described below without changing behavior.
+Refactor the area described below for clarity and reuse without changing observable behavior.
 
 ## Acceptance Criteria
 
-- [ ] Behavior unchanged (existing tests stay green)
-- [ ] Smell named and reduced
+- [ ] Behavior unchanged (existing tests stay green and untouched)
+- [ ] Smell named and reduced (duplication, oversized unit, or unclear seam)
+- [ ] Change made in small, reviewable steps — no behavior change mixed in
+- [ ] Extracted code is pure or focused; names say intent, comments say why
 - [ ] No new public API surface
-- [ ] typecheck + lint clean
+- [ ] typecheck + lint + tests clean
 
 ## Context
 
@@ -67,7 +69,9 @@ Refactor the area described below without changing behavior.
 
 ## Constraints
 
-- Do not change observable behavior.
+- Do not change observable behavior; a behavior change belongs in its own task.
+- Prefer extracting and consolidating over rewriting.
+- If coverage is thin where you work, add characterization tests first.
 - Do not modify unrelated files.
 `;
 
