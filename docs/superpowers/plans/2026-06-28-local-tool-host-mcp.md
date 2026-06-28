@@ -568,6 +568,19 @@ describe('loadTools', () => {
     expect(res.errors[0]).toEqual({ file: 'x.mjs', message: expect.stringMatching(/syntax/) });
   });
 
+  it('rejects a manifest whose inputSchema root is not type "object"', async () => {
+    const bad: ToolModule = {
+      manifest: { name: 'b', description: 'd', inputSchema: { type: 'string' } },
+      handler: async () => '',
+    };
+    const res = await loadTools('/tools', {
+      readdir: async () => ['bad.mjs', 'good.mjs'],
+      importModule: async (p) => (p.endsWith('good.mjs') ? goodModule : bad),
+    });
+    expect(res.tools.map((t) => t.file)).toEqual(['good.mjs']);
+    expect(res.errors).toEqual([{ file: 'bad.mjs', message: expect.stringMatching(/type "object"/) }]);
+  });
+
   it('returns empty when the directory does not exist', async () => {
     const res = await loadTools('/tools', {
       readdir: async () => { throw Object.assign(new Error('nope'), { code: 'ENOENT' }); },
@@ -596,8 +609,14 @@ export interface LoadDeps {
 
 function validateManifest(mod: ToolModule, file: string): LoadError | null {
   const m = mod?.manifest;
-  if (!m || typeof m.name !== 'string' || typeof m.description !== 'string' || typeof m.inputSchema !== 'object') {
+  if (!m || typeof m.name !== 'string' || typeof m.description !== 'string') {
     return { file, message: 'Invalid or missing `manifest` (need name, description, inputSchema)' };
+  }
+  // MCP ToolSchema requires an object-root JSON Schema; a non-object root would
+  // poison the whole ListTools response, so reject it as a per-file load error.
+  const schema = m.inputSchema as { type?: unknown } | null | undefined;
+  if (!schema || typeof schema !== 'object' || schema.type !== 'object') {
+    return { file, message: '`manifest.inputSchema` must be a JSON Schema object with root type "object"' };
   }
   if (typeof mod.handler !== 'function') {
     return { file, message: 'Missing `handler` export (must be a function)' };
@@ -1217,6 +1236,7 @@ const base = {
   disabledTools: ['old_tool'],
   declaredSecrets: ['OPENAI_API_KEY'],
   resolveSecret: (id: string) => (id === 'OPENAI_API_KEY' ? 'sk-test' : null),
+  toolsRev: 0,
 };
 
 describe('buildToolHostServer', () => {
@@ -1248,6 +1268,11 @@ describe('buildToolHostServer', () => {
     const cfg = buildToolHostServer({ ...base, resolveSecret: () => null });
     expect(cfg!.env).not.toHaveProperty('SPECORATOR_SECRET_OPENAI_API_KEY');
   });
+
+  it('emits the tools revision so a reload changes the serialized config', () => {
+    expect(buildToolHostServer(base)!.env!.SPECORATOR_TOOLS_REV).toBe('0');
+    expect(buildToolHostServer({ ...base, toolsRev: 5 })!.env!.SPECORATOR_TOOLS_REV).toBe('5');
+  });
 });
 ```
 
@@ -1273,6 +1298,13 @@ export interface BuildToolHostServerInput {
   disabledTools: string[];
   declaredSecrets: string[];
   resolveSecret: (id: string) => string | null;
+  /**
+   * Monotonic revision bumped on every successful reload. Emitted as an env var
+   * the host ignores; its only job is to change the serialized config so the
+   * dynamic-update `mcpServersKey` differs → `setMcpServers` re-spawns the host →
+   * fresh dir scan, even when tools/secrets/disabled didn't change.
+   */
+  toolsRev: number;
 }
 
 export function buildToolHostServer(input: BuildToolHostServerInput): McpStdioServerConfig | null {
@@ -1283,6 +1315,7 @@ export function buildToolHostServer(input: BuildToolHostServerInput): McpStdioSe
     SPECORATOR_TOOLS_DIR: input.toolsDir,
     SPECORATOR_VAULT_PATH: input.vaultPath,
     SPECORATOR_DISABLED_TOOLS: input.disabledTools.join(','),
+    SPECORATOR_TOOLS_REV: String(input.toolsRev),
   };
   for (const id of input.declaredSecrets) {
     const value = input.resolveSecret(id);
@@ -1545,6 +1578,7 @@ export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (hos
     disabledTools: claude.localToolHostDisabledTools,
     declaredSecrets: [],
     resolveSecret: (id) => plugin.secretStore.get(id),
+    toolsRev: 0,   // catalog env only; revision irrelevant for a one-shot --catalog run
   });
 
   const listEl = host.createDiv({ cls: 'specorator-tool-host-list' });
@@ -1751,6 +1785,8 @@ Build one closure (capturing plugin, vault path, settings, secret resolver, cura
 private declaredToolSecretIds: string[] = [];
 /** Set true once the embedded host has been written to disk this session. */
 private hostMaterialized = false;
+/** Bumped on every reload so the synthetic config changes → host re-spawns with a fresh scan. */
+private toolsRev = 0;
 
 private makeLocalToolHostServerBuilder(): () => McpServerConfig | null {
   return () => {
@@ -1772,6 +1808,7 @@ private makeLocalToolHostServerBuilder(): () => McpServerConfig | null {
       disabledTools: claude.localToolHostDisabledTools,
       declaredSecrets: this.declaredToolSecretIds,
       resolveSecret: (id) => this.plugin.secretStore.get(id),
+      toolsRev: this.toolsRev,
     });
   };
 }
@@ -1804,6 +1841,7 @@ async reloadLocalToolHost(): Promise<void> {
     write: (p, c) => fsp.writeFile(p, c, 'utf8'),
   });
   this.hostMaterialized = true;   // unblocks the cold-start builder
+  this.toolsRev += 1;             // force the synthetic config to differ → host re-spawns + re-scans
   await this.refreshDeclaredToolSecretIds();
 }
 ```
@@ -1818,7 +1856,7 @@ Add the imports (`getClaudeProviderSettings`, `resolveToolHostPaths`, `materiali
 
 - [ ] **Step 3: Pass it into the dynamic-update deps** — find where `ClaudeDynamicUpdateDeps` is assembled (grep `mcpManager` again) and add the same line.
 
-- [ ] **Step 4: Invoke `reloadLocalToolHost()` at the explicit seams (no vault watcher — dot-folder).** `.specorator/` is excluded from Obsidian's vault index, so refresh is driven explicitly. **Await** `this.reloadLocalToolHost()` in the runtime's init/ready path so `hostMaterialized` flips before turns flow (and the cold-start builder gates on that flag, so even a turn that races startup simply skips injection that one turn rather than spawning a missing entrypoint). Add a thin plugin-level `reloadLocalToolHost()` that broadcasts to the active Claude runtime(s) — mirror the existing `broadcastMcpReload` → `reloadMcpServers` fan-out the MCP settings widget uses (grep `broadcastToAllTabs` / `reloadMcpServers`). The settings toggle `onChange` and the "Reload tools" button (Task 16) both call `plugin.reloadLocalToolHost()`. A full catalog re-scan covers create/delete/rename. **Staleness caveat (documented, acceptable for v1, matching the codebase's posture for external dot-folder edits):** a tool added on disk mid-session is picked up after the next explicit refresh (Reload button or settings re-open); since the host re-scans its dir on each spawn and the synthetic config's `mcpServersKey` changes when the resolved env changes, the next turn then spawns the host with the new tool + its secret present.
+- [ ] **Step 4: Invoke `reloadLocalToolHost()` at the explicit seams (no vault watcher — dot-folder).** `.specorator/` is excluded from Obsidian's vault index, so refresh is driven explicitly. **Await** `this.reloadLocalToolHost()` in the runtime's init/ready path so `hostMaterialized` flips before turns flow (and the cold-start builder gates on that flag, so even a turn that races startup simply skips injection that one turn rather than spawning a missing entrypoint). Add a thin plugin-level `reloadLocalToolHost()` that broadcasts to the active Claude runtime(s) — mirror the existing `broadcastMcpReload` → `reloadMcpServers` fan-out the MCP settings widget uses (grep `broadcastToAllTabs` / `reloadMcpServers`). The settings toggle `onChange` and the "Reload tools" button (Task 16) both call `plugin.reloadLocalToolHost()`. A full catalog re-scan covers create/delete/rename. **Reload is authoritative (no false staleness):** because `reloadLocalToolHost()` bumps `toolsRev` — which is emitted as `SPECORATOR_TOOLS_REV` in the synthetic config env — the serialized config *always* changes on reload, even when the tool's secrets/disabled state didn't. That guarantees the dynamic-update `mcpServersKey` differs → `setMcpServers` re-spawns the host → the host re-scans its dir and serves the new/edited tool on the next turn. The only manual step (dot-folder, no watcher) is clicking **"Reload tools"** (or re-opening settings) after editing files on disk.
 
 - [ ] **Step 5: Add a unit test** for `refreshDeclaredToolSecretIds` deduping the union (inject a fake `runCatalog` via the same seam `ToolHostCatalog` tests use, or extract the union step as a small pure helper `unionSecretIds(catalog)` and test that). Assert `['A','B']` from tools declaring `['A']` and `['A','B']`.
 
@@ -1866,6 +1904,7 @@ describe('local tool host injection (config-level)', () => {
       disabledTools: [],
       declaredSecrets: [],
       resolveSecret: () => null,
+      toolsRev: 0,
     });
 
   // Mirrors the cold-start merge in ClaudeQueryOptionsBuilder (Task 18).
@@ -1972,5 +2011,5 @@ git commit -m "chore: re-baseline ratchets for local tool host"
 
 **Placeholder scan:** No "TBD"/"handle edge cases" — every code step shows code. The two runtime-wiring tasks (19, 20) say "grep for X" only to *locate* an exact existing assembly site, then show the exact lines to add; this is location guidance, not missing content.
 
-**Type consistency:** `ToolHandlerCtx`, `LoadedTool`, `CatalogPayload`, `McpStdioServerConfig`/`McpServerConfig`, `buildToolHostServer`, `resolveToolHostPaths`, `readCatalog`, `buildToolHandlers`, `toCallToolResult`, `createVaultContext`, `createLogger`, `runHandler`, `loadTools`, `buildCatalog` are defined once and reused with consistent signatures across tasks. Env var names (`SPECORATOR_TOOLS_DIR`, `SPECORATOR_VAULT_PATH`, `SPECORATOR_DISABLED_TOOLS`, `SPECORATOR_SECRET_*`) match between `buildToolHostServer` (Task 13) and the host entry (Task 9).
+**Type consistency:** `ToolHandlerCtx`, `LoadedTool`, `CatalogPayload`, `McpStdioServerConfig`/`McpServerConfig`, `buildToolHostServer`, `resolveToolHostPaths`, `readCatalog`, `buildToolHandlers`, `toCallToolResult`, `createVaultContext`, `createLogger`, `runHandler`, `loadTools`, `buildCatalog` are defined once and reused with consistent signatures across tasks. Env var names (`SPECORATOR_TOOLS_DIR`, `SPECORATOR_VAULT_PATH`, `SPECORATOR_DISABLED_TOOLS`, `SPECORATOR_SECRET_*`) match between `buildToolHostServer` (Task 13) and the host entry (Task 9). `SPECORATOR_TOOLS_REV` is emitted by `buildToolHostServer` but intentionally **not** read by the host — it exists only to change the serialized config so a reload forces `setMcpServers` to re-spawn.
 </content>
