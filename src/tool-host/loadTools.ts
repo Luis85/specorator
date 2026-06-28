@@ -64,27 +64,43 @@ export async function loadTools(dir: string, deps: LoadDeps, opts: LoadOptions =
   const seenNames = new Map<string, string>();   // tool name → first file that claimed it
 
   // Disabled files are never imported, so their top-level code never runs (and can't read secrets from env).
-  // Files are sorted, so the first file alphabetically keeps a duplicated name deterministically.
-  for (const file of entries.filter((f) => f.endsWith('.mjs') && !skip.has(f)).sort()) {
-    try {
-      const mod = await importWithTimeout(deps.importModule(path.join(dir, file)), importTimeoutMs, file);
-      const invalid = validateManifest(mod, file);
-      if (invalid) {
-        errors.push(invalid);
-        continue;
+  const files = entries.filter((f) => f.endsWith('.mjs') && !skip.has(f)).sort();
+
+  // Import in PARALLEL so N hung files time out concurrently (~importTimeoutMs total) instead of
+  // sequentially (N × timeout) — otherwise many bad files race the outer catalog deadline and the
+  // whole scan fails instead of surfacing per-file load errors.
+  const settled = await Promise.all(
+    files.map(async (file) => {
+      try {
+        const mod = await importWithTimeout(deps.importModule(path.join(dir, file)), importTimeoutMs, file);
+        return { file, ok: true as const, mod };
+      } catch (err) {
+        return { file, ok: false as const, error: err instanceof Error ? err.message : String(err) };
       }
-      const name = mod.manifest.name;
-      const firstFile = seenNames.get(name);
-      if (firstFile) {
-        // Two files sharing a name would shadow handlers and mismatch secrets — reject the later one.
-        errors.push({ file, message: `Duplicate tool name "${name}" (already defined in ${firstFile})` });
-        continue;
-      }
-      seenNames.set(name, file);
-      tools.push({ file, manifest: mod.manifest, handler: mod.handler });
-    } catch (err) {
-      errors.push({ file, message: err instanceof Error ? err.message : String(err) });
+    }),
+  );
+
+  // Process in sorted order so duplicate-name resolution stays deterministic (first file wins).
+  for (const result of settled) {
+    if (!result.ok) {
+      errors.push({ file: result.file, message: result.error });
+      continue;
     }
+    const { file, mod } = result;
+    const invalid = validateManifest(mod, file);
+    if (invalid) {
+      errors.push(invalid);
+      continue;
+    }
+    const name = mod.manifest.name;
+    const firstFile = seenNames.get(name);
+    if (firstFile) {
+      // Two files sharing a name would shadow handlers and mismatch secrets — reject the later one.
+      errors.push({ file, message: `Duplicate tool name "${name}" (already defined in ${firstFile})` });
+      continue;
+    }
+    seenNames.set(name, file);
+    tools.push({ file, manifest: mod.manifest, handler: mod.handler });
   }
 
   return { tools, errors };

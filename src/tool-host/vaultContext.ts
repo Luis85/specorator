@@ -3,7 +3,15 @@ import path from 'node:path';
 
 import type { ToolHandlerCtx } from './types';
 
-/** Resolve a vault-relative path, throwing if it escapes the vault root. */
+/**
+ * Resolve a vault-relative path, throwing if it lexically escapes the vault root.
+ *
+ * This is a LEXICAL guard, not a security boundary: it does not resolve symlinks, so a
+ * symlinked dir inside the vault that points elsewhere is not detected. That is acceptable —
+ * tools run full-trust with raw `node:fs`, so `ctx.vault` is a convenience guard against
+ * accidental escapes, not a sandbox (see the spec's trust posture). Real isolation would need
+ * Worker/vm, which is deferred.
+ */
 function safeResolve(root: string, relPath: string): string {
   const resolved = path.resolve(root, relPath);
   const rel = path.relative(root, resolved);

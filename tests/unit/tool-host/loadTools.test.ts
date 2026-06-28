@@ -77,6 +77,22 @@ describe('loadTools', () => {
     expect(res.errors[0]).toEqual({ file: 'hang.mjs', message: expect.stringMatching(/timed out/) });
   });
 
+  it('isolates multiple hung files concurrently — good tools still load', async () => {
+    // Parallel import: two never-resolving files both time out at ~10ms (concurrently, not summed),
+    // and the good file still loads. (If imports were sequential this would take 2× the timeout.)
+    const res = await loadTools(
+      '/tools',
+      {
+        readdir: async () => ['a_hang.mjs', 'b_hang.mjs', 'good.mjs'],
+        importModule: async (p) =>
+          p.endsWith('good.mjs') ? goodModule : new Promise<ToolModule>(() => { /* never resolves */ }),
+      },
+      { importTimeoutMs: 10 },
+    );
+    expect(res.tools.map((t) => t.file)).toEqual(['good.mjs']);
+    expect(res.errors.map((e) => e.file).sort()).toEqual(['a_hang.mjs', 'b_hang.mjs']);
+  });
+
   it('rejects a second file that reuses a tool name (first file alphabetically wins)', async () => {
     // Both modules declare name 'word_count' (goodModule already does).
     const dup: ToolModule = { manifest: { name: 'word_count', description: 'd2', inputSchema: { type: 'object' } }, handler: async () => '' };
