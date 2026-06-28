@@ -8,6 +8,7 @@ import type { TFile, TFolder } from 'obsidian';
 import { Notice, Plugin } from 'obsidian';
 
 import { RosterAgentService } from './app/agents/RosterAgentService';
+import { registerChatMessageActions } from './app/commands/registerChatMessageActions';
 import { registerPluginCommands } from './app/commands/registerPluginCommands';
 import { registerWorkspaceMenus } from './app/commands/registerWorkspaceMenus';
 import { ConversationStore } from './app/conversations/ConversationStore';
@@ -18,6 +19,7 @@ import { type RosterProjectionResult, type RosterRemovalResult } from './app/ros
 import { DEFAULT_SPECORATOR_SETTINGS } from './app/settings/defaultSettings';
 import { SharedStorageService } from './app/storage/SharedStorageService';
 import { PluginViewActivator } from './app/views/PluginViewActivator';
+import { registerPluginViews } from './app/views/registerPluginViews';
 import type { SharedAppStorage } from './core/bootstrap/storage';
 import { ChatTabReservations } from './core/chatTabReservations';
 import { EventBus } from './core/events/EventBus';
@@ -48,10 +50,7 @@ import type {
   ConversationSnapshot,
   SpecoratorSettings,
 } from './core/types';
-import {
-  VIEW_TYPE_SPECORATOR,
-  VIEW_TYPE_SPECORATOR_AGENT_BOARD,
-} from './core/types';
+import { VIEW_TYPE_SPECORATOR } from './core/types';
 import type { PluginContext } from './core/types/PluginContext';
 import { type EnvironmentScope, type SecretEnvVarRef } from './core/types/settings';
 import type { UsageEventMap } from './core/usage/events';
@@ -60,19 +59,15 @@ import { UsageTracker } from './core/usage/UsageTracker';
 import { AgentRosterStore } from './features/agents/roster/AgentRosterStore';
 import type { BoundAgentProjection } from './features/agents/roster/boundAgentPersona';
 import type { RosterAgent } from './features/agents/roster/rosterTypes';
-import { AgentRosterView, VIEW_TYPE_AGENT_ROSTER } from './features/agents/roster/view/AgentRosterView';
-import { sendFeedbackPrompt } from './features/chat/feedback/sendFeedbackPrompt';
 import { isSpecoratorView } from './features/chat/isSpecoratorView';
 import type { GitStatusWatcher } from './features/chat/services/GitStatusWatcher';
-import { SpecoratorView } from './features/chat/SpecoratorView';
-import { isCaptureEligible, openCaptureFromMessage } from './features/quickActions/captureFromMessage';
+import type { SpecoratorView } from './features/chat/SpecoratorView';
 import { QuickActionFavoritesCache } from './features/quickActions/QuickActionFavoritesCache';
 import { QuickActionLastUsedStore } from './features/quickActions/quickActionLastUsedStore';
 import { QuickActionStorage } from './features/quickActions/QuickActionStorage';
 import { buildProviderRecords } from './features/quickActions/skills/buildProviderRecords';
 import { VaultSkillAggregator } from './features/quickActions/skills/VaultSkillAggregator';
 import { SpecoratorSettingTab } from './features/settings/SpecoratorSettings';
-import { SkillLibraryView, VIEW_TYPE_SKILL_LIBRARY } from './features/skills/view/SkillLibraryView';
 import { CommitOnAcceptCoordinator } from './features/tasks/commit/CommitOnAcceptCoordinator';
 import { CommitOnAcceptModal } from './features/tasks/commit/CommitOnAcceptModal';
 import { ChatTabExecutionSurface } from './features/tasks/execution/ChatTabExecutionSurface';
@@ -81,13 +76,10 @@ import { createQueueControlState, type QueueControlState } from './features/task
 import { QueueSlotTracker } from './features/tasks/execution/QueueSlotTracker';
 import { RunSidecarStore } from './features/tasks/storage/RunSidecarStore';
 import { TaskNoteStore } from './features/tasks/storage/TaskNoteStore';
-import { AgentBoardView } from './features/tasks/ui/AgentBoardView';
-import { LoopLibraryView, VIEW_TYPE_LOOP_LIBRARY } from './features/tasks/ui/LoopLibraryView';
 import { WorkOrderActivityProvider } from './features/tasks/ui/WorkOrderActivityProvider';
 import { setLocale, t } from './i18n/i18n';
 import type { Locale } from './i18n/types';
 import type { BrowserSelectionContext } from './utils/browser';
-import { chatMessageText } from './utils/chatMessageText';
 import { getVaultPath } from './utils/path';
 
 export default class SpecoratorPlugin extends Plugin implements PluginContext {
@@ -174,15 +166,6 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
       this.workOrderActivity = null;
     });
 
-    this.registerView(
-      VIEW_TYPE_SPECORATOR,
-      (leaf) => new SpecoratorView(leaf, this)
-    );
-
-    this.addRibbonIcon('bot', t('ribbon.openChat'), () => {
-      void this.activateView();
-    });
-
     const taskExecutionSurface = new ChatTabExecutionSurface(this);
     {
       const noteStore = new TaskNoteStore();
@@ -221,70 +204,11 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
       });
       this.commitOnAcceptCoordinator.start();
     }
-    this.registerView(
-      VIEW_TYPE_SPECORATOR_AGENT_BOARD,
-      (leaf) => new AgentBoardView(leaf, this, taskExecutionSurface),
-    );
 
-    this.addRibbonIcon('kanban-square', t('ribbon.openAgentBoard'), () => {
-      void this.activateAgentBoardView();
-    });
-
-    this.registerView(VIEW_TYPE_AGENT_ROSTER, (leaf) => new AgentRosterView(leaf, this));
-    this.registerView(VIEW_TYPE_SKILL_LIBRARY, (leaf) => new SkillLibraryView(leaf, this));
-    this.registerView(VIEW_TYPE_LOOP_LIBRARY, (leaf) => new LoopLibraryView(leaf, this));
-
-    const openView = (viewType: string) => this.openLeafView(viewType);
-    this.addRibbonIcon('users', t('ribbon.openAgentRoster'), () => void openView(VIEW_TYPE_AGENT_ROSTER));
-    this.addRibbonIcon('book-open', t('ribbon.openSkillLibrary'), () => void openView(VIEW_TYPE_SKILL_LIBRARY));
-    this.addRibbonIcon('repeat', t('ribbon.openLoopLibrary'), () => void openView(VIEW_TYPE_LOOP_LIBRARY));
-    this.addCommand({ id: 'open-agent-roster', name: t('commands.openAgentRoster'), callback: () => void openView(VIEW_TYPE_AGENT_ROSTER) });
-    this.addCommand({ id: 'open-skill-library', name: t('commands.openSkillLibrary'), callback: () => void openView(VIEW_TYPE_SKILL_LIBRARY) });
+    registerPluginViews({ plugin: this, taskExecutionSurface });
 
     const chatWorkOrderLinker = new ChatWorkOrderLinker(this);
-
-    // Registration order = left-to-right render order inside .specorator-text-actions
-    // (which itself sits left of the copy button). Visual order under an assistant
-    // response: thumbs-up, thumbs-down, work-order, copy. The capture action below
-    // targets user messages only (gated by isCaptureEligible).
-    this.registerChatMessageAction({
-      id: 'thumbs-up-feedback',
-      label: t('chat.feedback.thumbsUp.label'),
-      icon: 'thumbs-up',
-      isEligible: (msg) => msg.role === 'assistant' && Boolean(chatMessageText(msg)),
-      run: (msg, conversationId) => {
-        sendFeedbackPrompt(this, msg, conversationId, 'up');
-      },
-    });
-
-    this.registerChatMessageAction({
-      id: 'thumbs-down-feedback',
-      label: t('chat.feedback.thumbsDown.label'),
-      icon: 'thumbs-down',
-      isEligible: (msg) => msg.role === 'assistant' && Boolean(chatMessageText(msg)),
-      run: (msg, conversationId) => {
-        sendFeedbackPrompt(this, msg, conversationId, 'down');
-      },
-    });
-
-    this.registerChatMessageAction({
-      id: 'create-work-order-from-message',
-      label: 'Create work order',
-      icon: 'kanban-square',
-      isEligible: (msg) => msg.role === 'assistant' && Boolean(chatMessageText(msg)),
-      run: (msg, conversationId) => {
-        void chatWorkOrderLinker.promoteMessageToWorkOrder(msg, conversationId);
-      },
-    });
-
-    this.registerChatMessageAction({
-      id: 'capture-prompt-as-quick-action',
-      label: t('quickActions.capture.label'),
-      icon: 'bookmark-plus',
-      isEligible: isCaptureEligible,
-      run: (msg) => openCaptureFromMessage(this, msg),
-    });
-
+    registerChatMessageActions({ plugin: this, chatWorkOrderLinker });
     registerPluginCommands({ plugin: this, taskExecutionSurface, chatWorkOrderLinker });
 
     this.quickActionStorage = new QuickActionStorage(

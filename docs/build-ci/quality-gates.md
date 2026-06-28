@@ -510,3 +510,11 @@ callers (chat InputController, Agent Board, roster view) are unchanged. Boundary
 focused service spec covers null-agent, skill-baking, cross-provider model gating, and run-target
 resolution). `main.ts` 963 → 833. The HTTP tool server wiring and the tool-scope staleness fingerprint
 are the next earmarked service extractions (noted in the loc-baseline `reason`).
+Done 2026-06-28 (quality campaign run 20): `main.ts` → orchestrator, part 2. Two more cohesive
+`onload` blocks moved to dedicated `app/` modules mirroring the existing `registerPluginCommands` /
+`PluginViewActivator` pattern: workspace view + ribbon + view-open command registration →
+`app/views/registerPluginViews.ts`, and the chat message-toolbar actions (thumbs up/down, work-order,
+capture) → `app/commands/registerChatMessageActions.ts`. Both take `{ plugin, … }` and call back through
+the plugin's public surface (type-only `main` import — boundary-legal), so behavior and registration
+order are preserved. `main.ts` 833 → 766; the entry class now reads as orchestration. All affected
+suites pass.

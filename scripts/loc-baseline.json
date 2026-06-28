@@ -27,8 +27,8 @@
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
     },
     "src/main.ts": {
-      "loc": 833,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Roster-agent resolution + provider projection (resolveBoundAgent / resolveAgentRunTarget / syncRosterAgentsToProviders / removeRosterAgentProjection) extracted to app/agents/RosterAgentService.ts; the plugin keeps thin delegators. Remaining clusters earmarked for follow-up services: HTTP tool server wiring (SpecoratorHttpToolServer + getHttpToolServerConfig) and the tool-scope staleness fingerprint (getScopedSpecoratorTools + getSpecoratorToolKey)."
+      "loc": 766,
+      "reason": "Grandfathered orchestrator. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Extracted to dedicated modules: roster-agent resolution + provider projection (app/agents/RosterAgentService.ts), workspace view/ribbon/view-command registration (app/views/registerPluginViews.ts), and chat message toolbar actions (app/commands/registerChatMessageActions.ts); the plugin keeps thin delegators. Remaining clusters earmarked for follow-up services: HTTP tool server wiring (SpecoratorHttpToolServer + getHttpToolServerConfig) and the tool-scope staleness fingerprint (getScopedSpecoratorTools + getSpecoratorToolKey)."
     },
     "src/features/chat/services/SubagentManager.ts": {
       "loc": 936,
