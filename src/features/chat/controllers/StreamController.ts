@@ -33,10 +33,6 @@ import type { MessageRenderer, RenderContentOptions } from '../rendering/Message
 import { scrollMessagesToBottom } from '../rendering/scrollToBottom';
 import { resolveSubagentLifecycleAdapter } from '../rendering/subagentLifecycleResolution';
 import {
-  createThinkingBlock,
-  finalizeThinkingBlock,
-} from '../rendering/ThinkingBlockRenderer';
-import {
   isBlockedToolResult,
   renderToolCall,
   updateToolCallResult,
@@ -62,6 +58,7 @@ import {
   projectUsage,
 } from './StreamProjection';
 import { SubagentStreamCoordinator } from './SubagentStreamCoordinator';
+import { ThinkingRenderCoordinator } from './ThinkingRenderCoordinator';
 import {
   appendToolCallToMessage,
   createRunningToolCall,
@@ -108,10 +105,7 @@ export class StreamController {
   // (not re-evaluated) through the block's append/render/finalize lifecycle so a
   // mid-block toggle can't race those steps; the toggle takes effect next block.
   private currentTextBlockCollapsed = false;
-  private pendingThinkingRenderFrame: ScheduledAnimationFrame | null = null;
-  private pendingThinkingRenderPromise: Promise<void> | null = null;
-  private resolvePendingThinkingRender: (() => void) | null = null;
-  private isThinkingRenderRunning = false;
+  private readonly thinkingRender: ThinkingRenderCoordinator;
   private pendingToolOutputFrames = new Map<string, ScheduledAnimationFrame>();
   private pendingScrollFrame: ScheduledAnimationFrame | null = null;
 
@@ -160,6 +154,16 @@ export class StreamController {
       normalizeToolResultContent: (content) => this.normalizeToolResultContent(content),
       getSubagentLifecycleAdapter: (toolName) => this.getSubagentLifecycleAdapter(toolName),
       flushPendingTools: () => this.flushPendingTools(),
+    });
+    this.thinkingRender = new ThinkingRenderCoordinator({
+      state: deps.state,
+      renderer: deps.renderer,
+      hideThinkingIndicator: () => this.hideThinkingIndicator(),
+      getStreamingRenderOptions: (content) => this.getStreamingRenderOptions(content),
+      scheduleContinuation: (content, renderWindow, callback) =>
+        this.scheduleStreamContinuation(content, renderWindow, callback),
+      scrollToBottom: () => this.scrollToBottom(),
+      getMessagesWindow: () => this.getMessagesWindow(),
     });
   }
 
@@ -950,132 +954,12 @@ export class StreamController {
   // Thinking Block Management
   // ============================================
 
-  async appendThinking(content: string): Promise<void> {
-    const { state, renderer } = this.deps;
-    if (!state.currentContentEl) return;
-
-    this.hideThinkingIndicator();
-    if (!state.currentThinkingState) {
-      state.currentThinkingState = createThinkingBlock(
-        state.currentContentEl,
-        (el, md) => renderer.renderContent(el, md)
-      );
-    }
-
-    state.currentThinkingState.content += content;
-    void this.scheduleCurrentThinkingRender();
+  appendThinking(content: string): Promise<void> {
+    return this.thinkingRender.append(content);
   }
 
-  async finalizeCurrentThinkingBlock(msg?: ChatMessage): Promise<void> {
-    const { state, renderer } = this.deps;
-    if (!state.currentThinkingState) return;
-    await this.flushPendingThinkingRender();
-
-    const thinkingState = state.currentThinkingState;
-    if (this.getStreamingRenderOptions(thinkingState.content)) {
-      await renderer.renderContent(thinkingState.contentEl, thinkingState.content);
-    }
-
-    const durationSeconds = finalizeThinkingBlock(thinkingState);
-
-    if (msg && thinkingState.content) {
-      msg.contentBlocks = msg.contentBlocks || [];
-      msg.contentBlocks.push({
-        type: 'thinking',
-        content: thinkingState.content,
-        durationSeconds,
-      });
-    }
-
-    state.currentThinkingState = null;
-  }
-
-  private scheduleCurrentThinkingRender(): Promise<void> {
-    if (!this.pendingThinkingRenderPromise) {
-      this.pendingThinkingRenderPromise = new Promise(resolve => {
-        this.resolvePendingThinkingRender = resolve;
-      });
-    }
-
-    if (this.pendingThinkingRenderFrame === null && !this.isThinkingRenderRunning) {
-      this.pendingThinkingRenderFrame = this.scheduleStreamContinuation(
-        this.deps.state.currentThinkingState?.content ?? '',
-        this.getThinkingRenderWindow(),
-        () => {
-          this.pendingThinkingRenderFrame = null;
-          void this.renderPendingThinking();
-        },
-      );
-    }
-
-    return this.pendingThinkingRenderPromise;
-  }
-
-  private async flushPendingThinkingRender(): Promise<void> {
-    const pendingRender = this.pendingThinkingRenderPromise;
-    if (!pendingRender) return;
-
-    if (this.pendingThinkingRenderFrame !== null) {
-      cancelScheduledAnimationFrame(this.pendingThinkingRenderFrame);
-      this.pendingThinkingRenderFrame = null;
-      void this.renderPendingThinking();
-    }
-
-    await pendingRender;
-  }
-
-  private async renderPendingThinking(): Promise<void> {
-    if (this.isThinkingRenderRunning) return;
-    this.isThinkingRenderRunning = true;
-
-    const { state, renderer } = this.deps;
-    const thinkingState = state.currentThinkingState;
-    const content = thinkingState?.content ?? '';
-
-    try {
-      if (thinkingState) {
-        const options = this.getStreamingRenderOptions(content);
-        if (options) {
-          await renderer.renderContent(thinkingState.contentEl, content, options);
-        } else {
-          await renderer.renderContent(thinkingState.contentEl, content);
-        }
-        this.scrollToBottom();
-      }
-    } catch {
-      // MessageRenderer owns user-visible render fallback; keep stream state moving.
-    } finally {
-      this.isThinkingRenderRunning = false;
-    }
-
-    if (state.currentThinkingState === thinkingState && thinkingState && thinkingState.content !== content) {
-      this.pendingThinkingRenderFrame = this.scheduleStreamContinuation(
-        thinkingState.content,
-        this.getThinkingRenderWindow(),
-        () => {
-          this.pendingThinkingRenderFrame = null;
-          void this.renderPendingThinking();
-        },
-      );
-      return;
-    }
-
-    const resolve = this.resolvePendingThinkingRender;
-    this.pendingThinkingRenderPromise = null;
-    this.resolvePendingThinkingRender = null;
-    resolve?.();
-  }
-
-  private cancelPendingThinkingRender(): void {
-    if (this.pendingThinkingRenderFrame !== null) {
-      cancelScheduledAnimationFrame(this.pendingThinkingRenderFrame);
-      this.pendingThinkingRenderFrame = null;
-    }
-
-    const resolve = this.resolvePendingThinkingRender;
-    this.pendingThinkingRenderPromise = null;
-    this.resolvePendingThinkingRender = null;
-    resolve?.();
+  finalizeCurrentThinkingBlock(msg?: ChatMessage): Promise<void> {
+    return this.thinkingRender.finalize(msg);
   }
 
   /** Forwarded from SubagentManager (via tab wiring) when an async subagent's state changes. */
@@ -1198,17 +1082,10 @@ export class StreamController {
       ?? this.getMessagesWindow();
   }
 
-  private getThinkingRenderWindow(): Window | null {
-    const { state } = this.deps;
-    return state.currentThinkingState?.contentEl.ownerDocument?.defaultView
-      ?? state.currentContentEl?.ownerDocument?.defaultView
-      ?? this.getMessagesWindow();
-  }
-
   resetStreamingState(): void {
     const { state } = this.deps;
     this.cancelPendingTextRender();
-    this.cancelPendingThinkingRender();
+    this.thinkingRender.cancel();
     this.cancelPendingToolOutputRenders();
     this.cancelPendingScroll();
     this.hideThinkingIndicator();
