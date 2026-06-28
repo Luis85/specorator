@@ -116,6 +116,7 @@ export interface LibraryItemAccessors<T> {
 
 export interface LibraryToolbarLabels {
   searchPlaceholder: string;
+  sortLabel: string;
   sortName: string;
   sortUpdated: string;
   resetFilters: string;
@@ -210,7 +211,7 @@ export class LibraryListController<T> {
 
     const sort = host.createEl('select', {
       cls: 'specorator-library-sort dropdown',
-      attr: { 'aria-label': labels.sortName },
+      attr: { 'aria-label': labels.sortLabel },
     });
     sort.createEl('option', { value: 'name', text: labels.sortName });
     sort.createEl('option', { value: 'updated', text: labels.sortUpdated });
@@ -1364,6 +1365,7 @@ git commit -m "feat(utils): setFrontmatterList upsert helper"
 
 ```
 library.searchPlaceholder      = "Search…"
+library.sortLabel              = "Sort"
 library.sortName               = "Name (A–Z)"
 library.sortUpdated            = "Recently updated"
 library.resetFilters           = "Clear filters"
@@ -1846,6 +1848,7 @@ In `src/features/agents/roster/view/AgentRosterView.ts`:
     this.controller.setItems(agents);
     this.controller.renderToolbar(toolbar, {
       searchPlaceholder: t('library.searchPlaceholder'),
+      sortLabel: t('library.sortLabel'),
       sortName: t('library.sortName'),
       sortUpdated: t('library.sortUpdated'),
       resetFilters: t('library.resetFilters'),
@@ -2022,6 +2025,7 @@ import { createLibraryCard } from '../../../utils/libraryView'; // already impor
     this.controller.setItems(rows);
     this.controller.renderToolbar(toolbar, {
       searchPlaceholder: t('library.searchPlaceholder'),
+      sortLabel: t('library.sortLabel'),
       sortName: t('library.sortName'),
       sortUpdated: t('library.sortUpdated'),
       resetFilters: t('library.resetFilters'),
@@ -2176,6 +2180,7 @@ import { launchLoopPrompt } from '../loops/launchLoopPrompt';
     this.controller.setItems(loops);
     this.controller.renderToolbar(toolbar, {
       searchPlaceholder: t('library.searchPlaceholder'),
+      sortLabel: t('library.sortLabel'),
       sortName: t('library.sortName'),
       sortUpdated: t('library.sortUpdated'),
       resetFilters: t('library.resetFilters'),
