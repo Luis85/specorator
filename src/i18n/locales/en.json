@@ -1166,7 +1166,8 @@
     "useWhenLabel": "Use when:",
     "actionFailed": "Something went wrong — check the developer console.",
     "prompt": "Prompt",
-    "promptTitle": "Prompt with loop: {name}"
+    "promptTitle": "Prompt with loop: {name}",
+    "tabLimitReached": "Cannot prompt loop: tab limit reached. Close a tab first."
   },
   "ribbon": {
     "openChat": "Open Co-Worker Chat",

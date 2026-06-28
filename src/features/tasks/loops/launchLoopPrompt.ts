@@ -40,7 +40,7 @@ async function seedLoopDraft(
 
   const target = await resolveOverrideTargetTab(plugin, tabManager, { providerId, model });
   if (!target) {
-    new Notice(t('quickActions.contextMenu.tabLimitReached'));
+    new Notice(t('loopLibrary.tabLimitReached'));
     return;
   }
 

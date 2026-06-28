@@ -41,4 +41,5 @@ export type ToolLibraryTranslationKey =
   | 'loopLibrary.useWhenLabel'
   | 'loopLibrary.actionFailed'
   | 'loopLibrary.prompt'
-  | 'loopLibrary.promptTitle';
+  | 'loopLibrary.promptTitle'
+  | 'loopLibrary.tabLimitReached';
