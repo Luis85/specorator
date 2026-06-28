@@ -90,6 +90,8 @@ export const manifest = {
 
 export async function handler(input, ctx) {
   const n = String(input.text).trim().split(/\s+/).filter(Boolean).length;
+  ctx.logger.info('counted words', { n });          // surfaced to user (see ctx.logger)
+  await ctx.vault.write('Reports/word-count.md', `Words: ${n}\n`);  // path-safe vault write
   return String(n);          // string → auto-wrapped into MCP result
   // or return { content: [{ type: 'text', text: '...' }] } for full control
 }
@@ -105,12 +107,25 @@ export async function handler(input, ctx) {
 - `handler(input, ctx)` — `async`. Returns either:
   - a **string** → host wraps it as `{ content: [{ type: 'text', text }] }`, or
   - a raw **MCP result object** (`{ content: [...], isError? }`) → passed through.
-- `ctx` (minimal for v1):
-  - `ctx.vaultPath` — absolute path to the vault root (scripts reach vault files
-    through `node:fs`; there is no `App` object across the process boundary).
+- `ctx`:
+  - `ctx.vaultPath` — absolute path to the vault root.
+  - `ctx.vault` — a **path-safe vault reader/writer** (resolves vault-relative
+    paths against `ctx.vaultPath` and rejects any path that escapes the root):
+    - `await ctx.vault.read(relPath)` → string
+    - `await ctx.vault.write(relPath, content)` (creates parent dirs)
+    - `await ctx.vault.exists(relPath)` → boolean
+    - `await ctx.vault.list(relPath)` → string[]
+    - It is **convenience + a traversal guard, not a security boundary** — raw
+      `node:fs` is still available in-process (full-trust model). The guard exists
+      so well-behaved scripts can't accidentally write outside the vault.
+  - `ctx.logger` — `ctx.logger.info|warn|error(message, data?)`. Writes
+    structured lines that are surfaced to the user: appended to a host log file
+    `.specorator/tool-host.log` in the vault (user-inspectable) and mirrored to
+    the host process stderr (visible when Specorator debug logging is on). Each
+    line is tagged with the tool name.
   - `ctx.secrets` — resolved values for the ids declared in `manifest.secrets`.
-  - (A logger / `fetch` helper are candidates for later; v1 keeps `ctx` minimal —
-    `node:fetch` and `console` are already available in-process.)
+  - (`globalThis.fetch` and `console` remain available in-process; `ctx` adds the
+    vault/logger/secret surface the process boundary otherwise can't reach.)
 
 ## Components
 
@@ -139,6 +154,7 @@ export async function handler(input, ctx) {
 | Path | Contents |
 |---|---|
 | `.specorator/tools/*.mjs` | User tool scripts (new). |
+| `.specorator/tool-host.log` | Host log file written by `ctx.logger` (new). |
 | settings store | Opt-in enable flag + per-tool disabled state. |
 
 - **Secrets:** `manifest.secrets` lists SecretStorage-backed ids; the plugin
@@ -184,6 +200,10 @@ overclaimed.
 - `inputSchema` passthrough to the registered tool.
 - Per-script error isolation (one bad file doesn't sink the host).
 - Handler throw / timeout → `{ isError: true }`.
+- `ctx.vault` read/write/exists/list resolve under the root; a traversal path
+  (`../outside`, absolute path) is rejected.
+- `ctx.logger` appends tool-tagged lines to `.specorator/tool-host.log` and
+  mirrors to stderr.
 
 **Plugin (unit):**
 - `ToolHostConfig` emission: command, args, curated env, declared secrets.
