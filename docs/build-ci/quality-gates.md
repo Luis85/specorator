@@ -499,3 +499,14 @@ own reviewed work orders driven by the new clean-code loop): `ClaudeChatRuntime`
 lifecycle / response-consumer router (needs a ~16-field context object) and `InputController`'s
 plan-approval + provider-message-boundary state. Splitting those in the same PR would trade
 reviewability and behavior-safety for line count — exactly the trade the guidelines say not to make.
+Done 2026-06-28 (quality campaign run 19): `main.ts` → dedicated roster-agent service. The four
+roster-agent operations on the plugin entry class — `resolveBoundAgent` / `resolveAgentRunTarget`
+(bound/run-target agent → provider-scoped prompt + model) and `syncRosterAgentsToProviders` /
+`removeRosterAgentProjection` (project agents into / clean them out of each provider's native subagent
+folder) — moved to `app/agents/RosterAgentService.ts`, constructed with accessors so it always reads the
+plugin's current settings + skill aggregator. The plugin keeps thin public delegators, so external
+callers (chat InputController, Agent Board, roster view) are unchanged. Boundary-clean (`app` → `core` /
+`features` is allowed; violations held at 0), behavior-preserving (main/roster/board suites pass; a
+focused service spec covers null-agent, skill-baking, cross-provider model gating, and run-target
+resolution). `main.ts` 963 → 833. The HTTP tool server wiring and the tool-scope staleness fingerprint
+are the next earmarked service extractions (noted in the loc-baseline `reason`).

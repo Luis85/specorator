@@ -7,13 +7,14 @@ import './providers';
 import type { TFile, TFolder } from 'obsidian';
 import { Notice, Plugin } from 'obsidian';
 
+import { RosterAgentService } from './app/agents/RosterAgentService';
 import { registerPluginCommands } from './app/commands/registerPluginCommands';
 import { registerWorkspaceMenus } from './app/commands/registerWorkspaceMenus';
 import { ConversationStore } from './app/conversations/ConversationStore';
 import { EnvironmentApplyService } from './app/environment/EnvironmentApplyService';
 import type { SpecoratorEventMap } from './app/events/specoratorEvents';
 import { PluginLifecycle } from './app/lifecycle/PluginLifecycle';
-import { projectRosterAgentsToProviders, removeProjectedAgent, type RosterProjectionResult, type RosterRemovalResult } from './app/rosterAgentProjection';
+import { type RosterProjectionResult, type RosterRemovalResult } from './app/rosterAgentProjection';
 import { DEFAULT_SPECORATOR_SETTINGS } from './app/settings/defaultSettings';
 import { SharedStorageService } from './app/storage/SharedStorageService';
 import { PluginViewActivator } from './app/views/PluginViewActivator';
@@ -52,20 +53,12 @@ import {
   VIEW_TYPE_SPECORATOR_AGENT_BOARD,
 } from './core/types';
 import type { PluginContext } from './core/types/PluginContext';
-import { asSettingsBag, type EnvironmentScope, type SecretEnvVarRef } from './core/types/settings';
+import { type EnvironmentScope, type SecretEnvVarRef } from './core/types/settings';
 import type { UsageEventMap } from './core/usage/events';
 import { UsageStorage } from './core/usage/UsageStorage';
 import { UsageTracker } from './core/usage/UsageTracker';
 import { AgentRosterStore } from './features/agents/roster/AgentRosterStore';
-import {
-  type BoundAgentProjection,
-  formatBoundAgentPersona,
-  selectAgentSkills,
-} from './features/agents/roster/boundAgentPersona';
-import {
-  resolveAgentModelForProvider,
-  resolveAgentProvider,
-} from './features/agents/roster/resolveAgentProvider';
+import type { BoundAgentProjection } from './features/agents/roster/boundAgentPersona';
 import type { RosterAgent } from './features/agents/roster/rosterTypes';
 import { AgentRosterView, VIEW_TYPE_AGENT_ROSTER } from './features/agents/roster/view/AgentRosterView';
 import { sendFeedbackPrompt } from './features/chat/feedback/sendFeedbackPrompt';
@@ -120,6 +113,7 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
   /** Shared plugin-lifetime store for roster agent definitions. Constructed in onload
    * after vaultFileAdapter; consumers must not build their own instance. */
   public agentRosterStore!: AgentRosterStore;
+  private rosterAgentService!: RosterAgentService;
   public usageTracker: UsageTracker | null = null;
   private lifecycle!: PluginLifecycle;
   private unloaded = true;
@@ -308,6 +302,13 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     const rosterLog = this.logger.scope('agents');
     this.agentRosterStore = new AgentRosterStore(this.vaultFileAdapter, this.events,
       (path, error) => rosterLog.warn('skipped malformed roster file', path, error));
+    this.rosterAgentService = new RosterAgentService({
+      rosterStore: this.agentRosterStore,
+      vaultFileAdapter: this.vaultFileAdapter,
+      logger: this.logger,
+      getSettings: () => this.settings,
+      getSkillAggregator: () => this.vaultSkillAggregator,
+    });
 
     // Usage tracker must subscribe to the bus BEFORE any entry point that
     // can emit `usage.recorded` is registered. The file/folder context menu
@@ -417,61 +418,17 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     void this.lifecycle?.persistOpenTabStates();
   }
 
-  async resolveBoundAgent(
+  resolveBoundAgent(
     boundAgentId: string,
     providerId?: ProviderId,
   ): Promise<BoundAgentProjection | null> {
-    const agent = await this.agentRosterStore?.get(boundAgentId);
-    if (!agent) return null;
-    // Surface the agent's granted skills as guidance baked into the prompt;
-    // providers auto-discover every SKILL.md, so these can't be runtime-scoped.
-    const catalog = (await this.vaultSkillAggregator?.listAll()) ?? [];
-    const skills = selectAgentSkills(
-      agent.skills,
-      catalog.map((e) => ({ name: e.name, description: e.description })),
-    );
-    // The agent's saved model is provider-specific. When the caller knows the
-    // conversation's provider, only forward the model if its selection targets
-    // that provider; otherwise drop it (undefined) so the conversation uses its
-    // own provider's default/selected model rather than a cross-provider id.
-    const model = providerId
-      ? resolveAgentModelForProvider(agent, providerId, undefined)
-      : agent.modelSelection?.modelId;
-    return {
-      // A forceful identity directive so providers without a system-prompt
-      // channel (Cursor) still adopt the persona instead of their built-in one.
-      prompt: formatBoundAgentPersona({ ...agent, skills }),
-      model,
-    };
+    return this.rosterAgentService.resolveBoundAgent(boundAgentId, providerId);
   }
 
-  /**
-   * Resolves the provider + model a work-order run should adopt from its assigned
-   * roster agent, mirroring how chat resolves an agent's provider: the agent's
-   * preferred provider (override → model's provider) wins only when enabled, else
-   * the active/default enabled provider; the model is the agent's selection, else
-   * that provider's configured default. Returns `null` when the id isn't a known
-   * roster agent so the run keeps its own frontmatter provider/model.
-   */
-  async resolveAgentRunTarget(
+  resolveAgentRunTarget(
     agentId: string,
   ): Promise<{ providerId: ProviderId; model: string } | null> {
-    const agent = await this.agentRosterStore?.get(agentId);
-    if (!agent) return null;
-    const settings = asSettingsBag(this.settings);
-    const providerId = resolveAgentProvider(
-      agent,
-      (p) => ProviderRegistry.isEnabled(p, settings),
-      ProviderRegistry.resolveSettingsProviderId(settings),
-    );
-    // The agent's saved model is provider-specific, so it only applies when its
-    // selection targets the provider the run actually resolved to (which may be
-    // a fallback after the preferred provider was found disabled); otherwise use
-    // the resolved provider's configured default.
-    const providerDefaultModel =
-      ProviderSettingsCoordinator.getProviderSettingsSnapshot(this.settings, providerId).model;
-    const model = resolveAgentModelForProvider(agent, providerId, providerDefaultModel);
-    return { providerId, model: model ?? providerDefaultModel };
+    return this.rosterAgentService.resolveAgentRunTarget(agentId);
   }
 
   async addFileToActiveChat(file: TFile): Promise<boolean> {
@@ -802,30 +759,12 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     await view?.getTabManager()?.openConversation(conversationId, options);
   }
 
-  /**
-   * Publishes every roster agent into each enabled provider's native subagent
-   * folder (.claude/agents, .codex/agents, .cursor/agents, .opencode/agent) so
-   * the agents are @-mentionable as that provider's own subagents.
-   */
-  async syncRosterAgentsToProviders(): Promise<RosterProjectionResult> {
-    const agents = await this.agentRosterStore.list();
-    const enabled = ProviderRegistry.getEnabledProviderIds(asSettingsBag(this.settings));
-    const log = this.logger.scope('agents');
-    return projectRosterAgentsToProviders(agents, enabled, this.vaultFileAdapter,
-      (provider, name, error) => log.warn('roster agent projection failed', provider, name, error));
+  syncRosterAgentsToProviders(): Promise<RosterProjectionResult> {
+    return this.rosterAgentService.syncRosterAgentsToProviders();
   }
 
-  /**
-   * Removes an agent's projected provider files (.claude/agents, .codex/agents,
-   * .cursor/agents, .opencode/agent) when it's deleted from the roster. Uses all
-   * registered providers — not just enabled ones — so a provider disabled after a
-   * prior sync still gets its orphaned subagent file cleaned up.
-   */
-  async removeRosterAgentProjection(agent: RosterAgent): Promise<RosterRemovalResult> {
-    const providers = ProviderRegistry.getRegisteredProviderIds();
-    const log = this.logger.scope('agents');
-    return removeProjectedAgent(agent, providers, this.vaultFileAdapter,
-      (path, error) => log.warn('roster agent projection cleanup failed', path, error));
+  removeRosterAgentProjection(agent: RosterAgent): Promise<RosterRemovalResult> {
+    return this.rosterAgentService.removeRosterAgentProjection(agent);
   }
 
   /** Reveals (or opens) a singleton workspace leaf for the given view type. */
