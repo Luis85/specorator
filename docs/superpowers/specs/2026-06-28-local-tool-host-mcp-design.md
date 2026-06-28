@@ -45,16 +45,28 @@ constructor, no `eval`. User scripts are loaded with native ESM `import()`
 Obsidian renderer. This is the entire reason the design is viable where 1.13 was
 not.
 
+**The host ships inside `main.js`, not as a separate file.** Obsidian's
+community-plugin installer only ever downloads `main.js`, `manifest.json`, and
+`styles.css` from a release — any extra artifact (a standalone `tool-host.mjs`)
+would never reach marketplace-installed users. So the host bundle is **baked into
+`main.js` as embedded source** and **materialized to `<pluginDir>/tool-host.mjs`
+on plugin load** (overwritten each load so it tracks the installed version),
+then spawned by `node`. The materialized file is *our* reviewed code emitted from
+the shipped bundle, not fetched remotely.
+
 > **Flagged risk to verify before marketplace submission:** confirm the review
-> bot does not object to `import()` in the separately-bundled `tool-host.mjs`.
-> The prior Error was specifically the `Function` constructor; dynamic `import()`
-> is standard ESM and should not be flagged — but this must be checked, not
-> assumed.
+> bot does not object to (a) dynamic `import()` of user scripts inside the
+> materialized host, or (b) writing the embedded host source to disk and spawning
+> it. The prior Error was specifically the `Function` constructor in the renderer;
+> neither of these is `Function`/`eval` in the renderer, and the host source is
+> bundled (not remote) — but this must be checked, not assumed.
 
 ## Scope
 
 **In scope (v1):**
-- A bundled stdio MCP server ("tool host") shipped alongside `main.js`.
+- A stdio MCP server ("tool host") **bundled into `main.js`** as embedded source
+  and materialized to `<pluginDir>/tool-host.mjs` at runtime (no extra release
+  artifact — Obsidian ships only `main.js`/`manifest.json`/`styles.css`).
 - User scripts authored in **plain JS / ESM** (`.mjs`), discovered from
   `.specorator/tools/`.
 - **Claude provider only.** The host is provider-neutral; only the Claude wiring
@@ -131,16 +143,19 @@ export async function handler(input, ctx) {
 
 | Component | Location | Responsibility |
 |---|---|---|
-| **Tool host** | `tool-host/` → bundled to `tool-host.mjs` | Standalone `@modelcontextprotocol/sdk` stdio server. Reads tools dir from env, `import()`s each script, registers `manifest` as an MCP tool, routes `CallToolRequest` → `handler`. Watches its dir; emits `tools/list_changed`. **No plugin imports** — clean process boundary. |
-| **`ToolHostConfig`** | plugin (Claude side) | Builds the stdio `McpServerConfig` (`command: <node>`, `args: [hostEntrypoint, …]`, curated `env` with tools dir + vault path + declared secrets). Injected into Claude `mcpServers` at the `ClaudeQueryOptionsBuilder` seam the 1.13 design used (now pointing at the real host). |
-| **`ToolDiscovery`** | plugin | Scans `.specorator/tools/` for the settings list and load-error surfacing; backed by `vault.on('modify')`. |
+| **Tool host** | `src/tool-host/` → esbuild'd to embedded source baked into `main.js` | Standalone `@modelcontextprotocol/sdk` stdio server. Reads tools dir from env, `import()`s each script, registers `manifest` as an MCP tool, routes `CallToolRequest` → `handler`. **No plugin imports** — clean process boundary. |
+| **`ToolHostMaterializer`** | plugin (Claude side) | Writes the embedded host source to `<pluginDir>/tool-host.mjs` on plugin load / enable (overwrite to track the installed version); returns its absolute path. This is how the host reaches disk without being a separate release artifact. |
+| **`ToolHostConfig`** | plugin (Claude side) | Builds the stdio `McpServerConfig` (`command: <node>`, `args: [materialized host path]`, curated `env` with tools dir + vault path + declared secrets). Injected into Claude `mcpServers` at the `ClaudeQueryOptionsBuilder` seam the 1.13 design used. |
+| **`ToolDiscovery`** (catalog read) | plugin | Spawns the host in `--catalog` mode to list tools + load errors for the settings UI and the declared-secrets cache. Re-run explicitly (load / enable / settings-open / "Reload tools") — **not** `vault.on(...)`, which doesn't fire for dot-folders. |
 | **Settings section** | Claude settings, near existing MCP UI | Opt-in toggle (+ Node-availability check), discovered-tool list with per-tool enable/disable and error badges, trust-posture notice. |
 
 ## Data flow (one turn)
 
+0. On plugin load / enable, `ToolHostMaterializer` writes the embedded host source
+   to `<pluginDir>/tool-host.mjs`.
 1. Feature enabled **and** ≥1 tool exists → `ToolHostConfig` emits the host stdio
-   config into Claude's `mcpServers`.
-2. Claude SDK spawns `node tool-host.mjs` (curated env).
+   config (pointing `node` at the materialized path) into Claude's `mcpServers`.
+2. Claude SDK spawns `node <pluginDir>/tool-host.mjs` (curated env).
 3. Host scans the tools dir, `import()`s each `.mjs`, registers each `manifest`.
 4. Model invokes `mcp__specorator__word_count`.
 5. Host runs that script's `handler` in-process; returns an MCP result (or
@@ -155,6 +170,7 @@ export async function handler(input, ctx) {
 |---|---|
 | `.specorator/tools/*.mjs` | User tool scripts (new). |
 | `.specorator/tool-host.log` | Host log file written by `ctx.logger` (new). |
+| `<pluginDir>/tool-host.mjs` | Host runtime, materialized from the source baked into `main.js` on load (new; not a release artifact). |
 | settings store | Opt-in enable flag + per-tool disabled state. |
 
 - **Secrets:** `manifest.secrets` lists SecretStorage-backed ids; the plugin
@@ -171,9 +187,14 @@ export async function handler(input, ctx) {
 - **Handler faults** — every `handler` call is wrapped in `try/catch` + a
   timeout; a throw or timeout returns `{ isError: true }` to the model rather
   than crashing the host (an uncaught throw must never stop the agent loop).
-- **Hot reload** — the host watches its dir and emits MCP `tools/list_changed`;
-  the settings list refreshes via `vault.on('modify')`. Editing a script
-  re-registers it without an app restart.
+- **Refresh (no vault watcher)** — `.specorator/` is a dot-folder excluded from
+  Obsidian's vault index, so `vault.on(...)` never fires for `.specorator/tools/`
+  (documented in `src/features/quickActions/CLAUDE.md`). The tool list and
+  declared-secrets cache are re-scanned **explicitly**: on plugin load, on enable,
+  on settings-section open, and via a manual **"Reload tools"** button. A full
+  re-scan covers create/delete/rename. The host re-scans its own dir on each
+  spawn, so after a refresh the next turn picks up added/edited scripts — no app
+  restart needed.
 - **Node missing** — the enable toggle checks Node availability (reusing CLI
   resolution); if absent, the feature stays off with a clear message.
 
@@ -208,7 +229,9 @@ overclaimed.
 **Plugin (unit):**
 - `ToolHostConfig` emission: command, args, curated env, declared secrets.
 - Node-missing path keeps the feature off with a message.
-- `ToolDiscovery` list state + reload on `vault.on('modify')`.
+- Catalog read → settings list state + declared-secrets cache; explicit reload
+  (no `vault.on` — dot-folder). Materializer writes the embedded host only when
+  content differs.
 
 **Integration:**
 - Host config lands in Claude `mcpServers` when enabled + tool present.

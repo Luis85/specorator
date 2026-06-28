@@ -4,9 +4,9 @@
 
 **Goal:** Ship a bundled stdio MCP server (`tool-host.mjs`) that the Claude provider spawns, which exposes user-authored `.mjs` scripts in `.specorator/tools/` as callable tools — opt-in, Node-required, with no in-plugin code evaluation.
 
-**Architecture:** User scripts run inside a **separately-bundled `node` subprocess** loaded via native `import()` — never `Function`/`eval` in the plugin renderer (the blocker that reverted the 1.13 tool library; see `docs/superpowers/specs/2026-06-28-local-tool-host-mcp-design.md`). The host has two modes: **catalog** (`--catalog`: scan + print JSON of discovered tools/errors, then exit — used by the plugin to populate the settings list without executing code in-renderer) and **serve** (default: run the MCP stdio server). The plugin injects a synthetic `mcpServers['specorator']` stdio config into the Claude SDK at the existing cold-start and dynamic-update seams.
+**Architecture:** The host is esbuild'd to a Node-ESM bundle that is **baked into `main.js` as embedded text** (Obsidian ships only `main.js`/`manifest.json`/`styles.css`, so a separate file can't reach marketplace installs) and **materialized to `<pluginDir>/tool-host.mjs` at runtime**, then spawned. User scripts run inside that `node` subprocess loaded via native `import()` — never `Function`/`eval` in the plugin renderer (the blocker that reverted the 1.13 tool library; see `docs/superpowers/specs/2026-06-28-local-tool-host-mcp-design.md`). The host has two modes: **catalog** (`--catalog`: scan + print JSON of discovered tools/errors, then exit — populates the settings list + declared-secrets cache without executing code in-renderer) and **serve** (default: run the MCP stdio server). The plugin injects a synthetic `mcpServers['specorator']` stdio config into the Claude SDK at the existing cold-start and dynamic-update seams. `.specorator/` is a dot-folder Obsidian doesn't index, so the tool list refreshes via explicit re-scan, never `vault.on(...)`.
 
-**Tech Stack:** TypeScript, esbuild (second `node`/`esm` build target), `@modelcontextprotocol/sdk` (low-level `Server` API, already a dependency at `~1.29.0`), Obsidian plugin API, Jest (unit + integration).
+**Tech Stack:** TypeScript, esbuild (host bundled as embedded text baked into `main.js` via a text loader), `@modelcontextprotocol/sdk` (low-level `Server` API, already a dependency at `~1.29.0`), Obsidian plugin API, Jest (unit + integration).
 
 **Verification gate (run after every phase; hard gate at the end):**
 ```bash
@@ -27,25 +27,28 @@ npm run typecheck && npm run lint && npm run test && npm run build
 - `src/tool-host/server.ts` — wire the MCP low-level `Server` (ListTools/CallTool) over stdio.
 - `src/tool-host/index.ts` — entry: parse argv, dispatch catalog vs serve.
 - `src/tool-host/types.ts` — `ToolManifest`, `ToolModule`, `LoadedTool`, `LoadError`, `ToolHandlerCtx`, `CatalogPayload`.
+- `src/tool-host/embeddedSource.ts` — exports `TOOL_HOST_SOURCE` (the host bundle baked into `main.js` as text).
+- `src/tool-host/hostbundle.d.ts` — ambient `*.hostbundle` text-module declaration.
 
 **New — plugin side (Claude):**
-- `src/providers/claude/toolHost/toolHostPaths.ts` — resolve absolute `tool-host.mjs` path, tools dir, node executable.
+- `src/providers/claude/toolHost/toolHostPaths.ts` — resolve absolute materialized `tool-host.mjs` path + tools dir.
+- `src/providers/claude/toolHost/ToolHostMaterializer.ts` — write the embedded host source to `<pluginDir>/tool-host.mjs` (overwrite-if-changed).
 - `src/providers/claude/toolHost/ToolHostCatalog.ts` — spawn catalog mode, parse JSON → `{ tools, errors }`.
 - `src/providers/claude/toolHost/buildToolHostServer.ts` — build the serve-mode stdio `McpServerConfig` (command/args/env + resolved secrets + disabled filter).
-- `src/providers/claude/ui/localToolHostWidget.ts` — `mountClaudeLocalToolHostSection`.
+- `src/providers/claude/ui/localToolHostWidget.ts` — `mountClaudeLocalToolHostSection` (incl. a manual "Reload tools" button).
 
 **Modified:**
-- `esbuild.config.mjs` — second build target + copy `tool-host.mjs`.
+- `esbuild.config.mjs` — host build target emitting embedded text + `.hostbundle` text loader (host baked into `main.js`, not shipped separately).
+- `.gitignore` — `src/tool-host/embeddedSource.hostbundle` (generated).
 - `src/providers/claude/settings.ts` — `localToolHostEnabled` + `localToolHostDisabledTools`.
 - `src/providers/claude/ui/claudeSettingsWidgets.ts` + `ClaudeSettingsTab.ts` — register + mount the section.
 - `src/providers/claude/runtime/ClaudeQueryOptionsBuilder.ts` — inject synthetic server (cold start).
 - `src/providers/claude/runtime/ClaudeDynamicUpdates.ts` — inject synthetic server (dynamic update).
-- `src/providers/claude/runtime/ClaudeChatRuntime.ts` — supply the `buildLocalToolHostServer` closure into both seams.
+- `src/providers/claude/runtime/ClaudeChatRuntime.ts` — supply the `buildLocalToolHostServer` closure; materialize host + refresh catalog/declared-secrets cache on load/enable.
 - i18n: `src/i18n/types/settings.ts` (or nearest) + all 10 locales — `settings.localToolHost.*`.
 - `CLAUDE.md`, `src/core/CLAUDE.md` — storage rows.
-- `scripts/check-artifacts.mjs` (if it asserts an artifact list) — add `tool-host.mjs`.
-- `scripts/release.mjs` — `const ASSETS` list (currently `['main.js', 'manifest.json', 'styles.css']`) must include `tool-host.mjs`, or released/marketplace installs ship without the host and enabling local tools spawns a missing entrypoint.
-- `.github/workflows/release.yml` — both `files:` upload lists must include `tool-host.mjs`.
+
+> **Dot-folder watching (do NOT use `vault.on`):** `.specorator/` is a dot-folder Obsidian excludes from its vault index, so `vault.on('create'|'modify'|'delete'|'rename')` never fires for `.specorator/tools/*.mjs` (documented in `src/features/quickActions/CLAUDE.md`). The tool list, declared-secrets cache, and host re-spawn are refreshed by **explicit re-scan** — on plugin load, on feature enable, on settings-section open, and via a manual **"Reload tools"** button — never a vault watcher. A full catalog re-scan covers create/delete/rename, not just modify. The running host re-scans its own dir each spawn (next turn picks up changes after a refresh).
 
 **Tests (mirrored):**
 - `tests/unit/tool-host/*.test.ts`
@@ -885,16 +888,23 @@ git add src/tool-host/index.ts
 git commit -m "feat(tool-host): entry with catalog/serve mode dispatch"
 ```
 
-### Task 10: esbuild second target → `tool-host.mjs`
+### Task 10: Bake the host bundle into `main.js`
+
+**Why not a separate file:** Obsidian's community-plugin installer only downloads
+`main.js`, `manifest.json`, and `styles.css` from a release. A standalone
+`tool-host.mjs` would never reach marketplace-installed users. So the host is
+esbuild'd to a self-contained Node-ESM bundle, **embedded into `main.js` as a
+string** via a text loader, and materialized to disk at runtime (Task 10b).
 
 **Files:**
-- Modify: `esbuild.config.mjs`
+- Modify: `esbuild.config.mjs`, `.gitignore`
+- Create: `src/tool-host/embeddedSource.ts`, `src/tool-host/hostbundle.d.ts`
 
-- [ ] **Step 1: Add a second build before the watch/rebuild dispatch.** Insert immediately after the `context` definition (after line 165), before the `if (prod)` block:
+- [ ] **Step 1: Add the host build options** immediately after the `context` definition (after line 165). The host bundles `@modelcontextprotocol/sdk`, must NOT carry obsidian/electron, and is written into `src/` (not the repo root) with a `.hostbundle` extension so the main build can import it as text:
 
 ```js
-// Second target: the tool host runs as a standalone Node ESM subprocess.
-// It bundles @modelcontextprotocol/sdk and must NOT carry obsidian/electron.
+// The tool host runs as a standalone Node ESM subprocess. Emitted as text and
+// baked into main.js (Obsidian ships only main.js/manifest.json/styles.css).
 const toolHostBuildOptions = {
   entryPoints: ['src/tool-host/index.ts'],
   bundle: true,
@@ -902,75 +912,170 @@ const toolHostBuildOptions = {
   format: 'esm',
   target: 'node18',
   external: [...builtinModules, ...builtinModules.map((m) => `node:${m}`)],
-  sourcemap: prod ? false : 'inline',
+  sourcemap: false,
   treeShaking: true,
   logLevel: 'info',
-  outfile: 'tool-host.mjs',
+  outfile: 'src/tool-host/embeddedSource.hostbundle',
 };
 ```
 
-- [ ] **Step 2: Extend `copyToObsidian`'s file list** so the host ships alongside `main.js`. Change line 122:
+- [ ] **Step 2: Teach the main build to inline `.hostbundle` as text.** Add a `loader` entry to the main `context` options (the object at lines 136–165):
 
 ```js
-      const files = ['main.js', 'manifest.json', 'styles.css', 'tool-host.mjs'];
+  loader: { '.hostbundle': 'text' },
 ```
 
-- [ ] **Step 3: Build the host in both prod and watch paths.** Replace the final `if (prod) { ... } else { ... }` block (lines 167–172) with:
+- [ ] **Step 3: Build the host FIRST, then main, in both paths.** Replace the final `if (prod) { ... } else { ... }` block (lines 167–172) with:
 
 ```js
 const toolHostContext = await esbuild.context(toolHostBuildOptions);
+// Emit the host bundle before the main build resolves its text import.
+await toolHostContext.rebuild();
 
 if (prod) {
   await context.rebuild();
-  await toolHostContext.rebuild();
   process.exit(0);
 } else {
-  await context.watch();
   await toolHostContext.watch();
+  await context.watch();
 }
 ```
 
-> Note: `copyToObsidian` is attached to the `main.js` build's `onEnd`. In watch mode the host file is emitted by its own context to the repo root; the copy step picks it up on the next `main.js` rebuild. For a one-shot `npm run build` (prod) the host is emitted before `process.exit`, so `check:artifacts` (Task, below) sees it.
+- [ ] **Step 4: Create the typed accessor** for the embedded source:
 
-- [ ] **Step 4: Build and verify the artifact exists.**
+```ts
+// src/tool-host/embeddedSource.ts
+import source from './embeddedSource.hostbundle';
 
-Run: `npm run build && ls -la tool-host.mjs`
-Expected: `tool-host.mjs` exists at repo root; build prints no errors.
+/** The full tool-host bundle as a string, baked into main.js at build time. */
+export const TOOL_HOST_SOURCE: string = source;
+```
 
-- [ ] **Step 5: Confirm the host has no obsidian/electron references** (sanity that the externals are right):
+```ts
+// src/tool-host/hostbundle.d.ts
+declare module '*.hostbundle' {
+  const content: string;
+  export default content;
+}
+```
 
-Run: `node -e "const s=require('fs').readFileSync('tool-host.mjs','utf8'); if(/require\(['\"]obsidian['\"]\)|from ['\"]obsidian['\"]/.test(s)) { console.error('LEAK: obsidian in tool-host'); process.exit(1);} console.log('clean');"`
-Expected: `clean`
+- [ ] **Step 5: Gitignore the generated bundle.** Add to `.gitignore`:
 
-- [ ] **Step 6: Update `check:artifacts` if it asserts an artifact list.** Open `scripts/check-artifacts.mjs`; if it checks a fixed file list, add `'tool-host.mjs'`. If it only checks `main.js`, leave it.
+```
+src/tool-host/embeddedSource.hostbundle
+```
+
+- [ ] **Step 6: Build and verify the source is baked in (and obsidian did not leak into the host).**
+
+Run: `npm run build`
+Then:
+
+```bash
+node -e "const s=require('fs').readFileSync('src/tool-host/embeddedSource.hostbundle','utf8'); if(/from ['\"]obsidian['\"]|require\(['\"]obsidian['\"]\)/.test(s)){console.error('LEAK: obsidian in host');process.exit(1)} console.log('host bundle clean, '+s.length+' bytes');"
+node -e "const m=require('fs').readFileSync('main.js','utf8'); if(!m.includes('StdioServerTransport')){console.error('host source NOT baked into main.js');process.exit(1)} console.log('host baked into main.js');"
+```
+
+Expected: both print success. (The host build runs before main, so `main.js` contains the bundle string.)
+
+- [ ] **Step 7: Confirm `main.js` is still the only shipped JS artifact.**
 
 Run: `npm run check:artifacts`
-Expected: PASS.
-
-- [ ] **Step 7: Ship the host in release assets.** Without this, a GitHub/marketplace release uploads only `main.js`/`manifest.json`/`styles.css`, so `resolveToolHostPaths` (Task 12) points at a `tool-host.mjs` that was never published.
-
-In `scripts/release.mjs`, extend the assets constant:
-
-```js
-const ASSETS = ['main.js', 'manifest.json', 'styles.css', 'tool-host.mjs'];
-```
-
-In `.github/workflows/release.yml`, add `tool-host.mjs` to **both** `files:` upload lists (the two blocks currently listing `main.js` / `manifest.json` / `styles.css`):
-
-```yaml
-          files: |
-            main.js
-            manifest.json
-            styles.css
-            tool-host.mjs
-```
+Expected: PASS, unchanged (no new artifact — the host lives inside `main.js`).
 
 - [ ] **Step 8: Commit.**
 
 ```bash
-git add esbuild.config.mjs scripts/check-artifacts.mjs scripts/release.mjs .github/workflows/release.yml
-git commit -m "build: bundle + release tool-host.mjs as a standalone node esm target"
+git add esbuild.config.mjs .gitignore src/tool-host/embeddedSource.ts src/tool-host/hostbundle.d.ts
+git commit -m "build: bake tool-host bundle into main.js as embedded source"
 ```
+
+### Task 10b: `ToolHostMaterializer` — write the embedded host to disk
+
+**Files:**
+- Create: `src/providers/claude/toolHost/ToolHostMaterializer.ts`
+- Test: `tests/unit/providers/claude/toolHost/ToolHostMaterializer.test.ts`
+
+The host source is baked into `main.js`; before it can be spawned it must exist
+as a file `node` can run. The materializer writes `TOOL_HOST_SOURCE` to
+`<pluginDir>/tool-host.mjs`, overwriting only when the content differs (so it
+tracks the installed plugin version without rewriting every load). Inject the fs
+ops so the test never touches the real disk.
+
+- [ ] **Step 1: Write the failing test.**
+
+```ts
+// tests/unit/providers/claude/toolHost/ToolHostMaterializer.test.ts
+import { materializeToolHost } from '@/providers/claude/toolHost/ToolHostMaterializer';
+
+function fakeFs(initial: Record<string, string> = {}) {
+  const files = new Map(Object.entries(initial));
+  return {
+    files,
+    read: async (p: string) => { if (!files.has(p)) throw new Error('ENOENT'); return files.get(p)!; },
+    write: async (p: string, c: string) => { files.set(p, c); },
+  };
+}
+
+describe('materializeToolHost', () => {
+  it('writes the source when the file is absent', async () => {
+    const fs = fakeFs();
+    const wrote = await materializeToolHost('/plugin/tool-host.mjs', 'SOURCE', fs);
+    expect(wrote).toBe(true);
+    expect(fs.files.get('/plugin/tool-host.mjs')).toBe('SOURCE');
+  });
+
+  it('skips the write when content already matches', async () => {
+    const fs = fakeFs({ '/plugin/tool-host.mjs': 'SOURCE' });
+    const wrote = await materializeToolHost('/plugin/tool-host.mjs', 'SOURCE', fs);
+    expect(wrote).toBe(false);
+  });
+
+  it('overwrites when content differs (version bump)', async () => {
+    const fs = fakeFs({ '/plugin/tool-host.mjs': 'OLD' });
+    const wrote = await materializeToolHost('/plugin/tool-host.mjs', 'NEW', fs);
+    expect(wrote).toBe(true);
+    expect(fs.files.get('/plugin/tool-host.mjs')).toBe('NEW');
+  });
+});
+```
+
+- [ ] **Step 2: Run — expect FAIL.** `npm test -- tests/unit/providers/claude/toolHost/ToolHostMaterializer.test.ts`
+
+- [ ] **Step 3: Implement.**
+
+```ts
+// src/providers/claude/toolHost/ToolHostMaterializer.ts
+export interface MaterializerFs {
+  read(path: string): Promise<string>;
+  write(path: string, content: string): Promise<void>;
+}
+
+/** Write `source` to `hostPath` only if it differs. Returns true if it wrote. */
+export async function materializeToolHost(
+  hostPath: string,
+  source: string,
+  fs: MaterializerFs,
+): Promise<boolean> {
+  try {
+    if ((await fs.read(hostPath)) === source) return false;
+  } catch {
+    /* absent → fall through to write */
+  }
+  await fs.write(hostPath, source);
+  return true;
+}
+```
+
+- [ ] **Step 4: Run — expect PASS.** `npm test -- tests/unit/providers/claude/toolHost/ToolHostMaterializer.test.ts`
+
+- [ ] **Step 5: Commit.**
+
+```bash
+git add src/providers/claude/toolHost/ToolHostMaterializer.ts tests/unit/providers/claude/toolHost/ToolHostMaterializer.test.ts
+git commit -m "feat(claude): materialize embedded tool host to plugin dir"
+```
+
+> **Wiring (consumed in later tasks):** call `materializeToolHost(paths.hostEntry, TOOL_HOST_SOURCE, fsAdapter)` before the first spawn — in the settings widget (Task 16, before the catalog runs) and in the runtime on enable/load (Task 20). `fsAdapter` wraps the Obsidian filesystem adapter's read/write against absolute paths (the plugin dir is outside the vault-relative API, so use `app.vault.adapter` with the full path or `node:fs/promises` — the host path is absolute from `resolveToolHostPaths`). Materialization is idempotent, so calling it on every enable + load is cheap.
 
 ---
 
@@ -1318,6 +1423,7 @@ Expected: the type-union file + `en.json` (and siblings). Use the type-union fil
   | 'settings.localToolHost.noTools'
   | 'settings.localToolHost.trustWarning'
   | 'settings.localToolHost.loadError'
+  | 'settings.localToolHost.reload'
 ```
 
 - [ ] **Step 3: Add the block to every locale.** In each `src/i18n/locales/*.json`, add under `settings` (English values shown; translate or copy English for the others to preserve key parity — the parity test only checks keys exist):
@@ -1330,7 +1436,8 @@ Expected: the type-union file + `en.json` (and siblings). Use the type-union fil
   "nodeMissing": "Node was not found on PATH. Install Node to use local tools.",
   "noTools": "No tools found in .specorator/tools.",
   "trustWarning": "Tools run as a Node subprocess with full filesystem and network access.",
-  "loadError": "Failed to load"
+  "loadError": "Failed to load",
+  "reload": "Reload tools"
 }
 ```
 
@@ -1358,15 +1465,19 @@ Follow the `mountClaudeMcpSection` pattern (widget = `(host, context) => void`).
 
 ```ts
 // src/providers/claude/ui/localToolHostWidget.ts
+import { promises as fsp } from 'node:fs';
 import { Setting } from 'obsidian';
 import type { ProviderSettingsWidgetMount } from '../../../core/providers/types';
 import { getClaudeProviderSettings, updateClaudeProviderSettings } from '../settings';
 import { resolveToolHostPaths } from '../toolHost/toolHostPaths';
+import { materializeToolHost } from '../toolHost/ToolHostMaterializer';
 import { buildToolHostServer } from '../toolHost/buildToolHostServer';
 import { readCatalog, spawnCatalogRunner } from '../toolHost/ToolHostCatalog';
-import { curateStdioMcpEnv } from '../../../utils/env';
-import { findNodeExecutable, getEnhancedPath } from '../../../utils/env';
+import { TOOL_HOST_SOURCE } from '../../../tool-host/embeddedSource';
+import { curateStdioMcpEnv, findNodeExecutable, getEnhancedPath } from '../../../utils/env';
 import { t } from '../../../i18n';
+
+const fsAdapter = { read: (p: string) => fsp.readFile(p, 'utf8'), write: (p: string, c: string) => fsp.writeFile(p, c, 'utf8') };
 
 export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (host, context) => {
   const plugin = context.plugin;
@@ -1381,6 +1492,7 @@ export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (hos
       toggle.setValue(claude.localToolHostEnabled).onChange(async (value) => {
         updateClaudeProviderSettings(settingsBag, { localToolHostEnabled: value });
         await plugin.saveSettings();
+        await plugin.reloadLocalToolHost?.();   // materialize + refresh runtime caches
         context.refreshDisplay?.();
       }),
     );
@@ -1396,11 +1508,7 @@ export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (hos
 
   const paths = resolveToolHostPaths({ vaultPath, pluginDir: plugin.manifest.dir ?? '' });
   const server = buildToolHostServer({
-    enabled: true,
-    nodePath,
-    hostEntry: paths.hostEntry,
-    toolsDir: paths.toolsDir,
-    vaultPath,
+    enabled: true, nodePath, hostEntry: paths.hostEntry, toolsDir: paths.toolsDir, vaultPath,
     baseEnv: curateStdioMcpEnv({}),
     disabledTools: claude.localToolHostDisabledTools,
     declaredSecrets: [],
@@ -1408,36 +1516,45 @@ export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (hos
   });
 
   const listEl = host.createDiv({ cls: 'specorator-tool-host-list' });
-  void readCatalog({ runCatalog: spawnCatalogRunner(nodePath, paths.hostEntry, server?.env ?? {}) }).then(
-    (catalog) => {
-      if (catalog.tools.length === 0 && catalog.errors.length === 0) {
-        listEl.createEl('p', { text: t('settings.localToolHost.noTools'), cls: 'setting-item-description' });
-        return;
-      }
-      for (const tool of catalog.tools) {
-        const disabled = claude.localToolHostDisabledTools.includes(tool.name);
-        new Setting(listEl)
-          .setName(tool.name)
-          .setDesc(tool.description)
-          .addToggle((toggle) =>
-            toggle.setValue(!disabled).onChange(async (enabled) => {
-              const next = new Set(getClaudeProviderSettings(settingsBag).localToolHostDisabledTools);
-              if (enabled) next.delete(tool.name);
-              else next.add(tool.name);
-              updateClaudeProviderSettings(settingsBag, { localToolHostDisabledTools: [...next] });
-              await plugin.saveSettings();
-            }),
-          );
-      }
-      for (const err of catalog.errors) {
-        new Setting(listEl).setName(`${t('settings.localToolHost.loadError')}: ${err.file}`).setDesc(err.message);
-      }
-    },
+
+  const renderList = async () => {
+    listEl.empty();
+    // The host is baked into main.js; materialize it before catalog/spawn (no vault watcher — dot-folder).
+    await materializeToolHost(paths.hostEntry, TOOL_HOST_SOURCE, fsAdapter);
+    const catalog = await readCatalog({ runCatalog: spawnCatalogRunner(nodePath, paths.hostEntry, server?.env ?? {}) });
+    if (catalog.tools.length === 0 && catalog.errors.length === 0) {
+      listEl.createEl('p', { text: t('settings.localToolHost.noTools'), cls: 'setting-item-description' });
+      return;
+    }
+    for (const tool of catalog.tools) {
+      const disabled = getClaudeProviderSettings(settingsBag).localToolHostDisabledTools.includes(tool.name);
+      new Setting(listEl).setName(tool.name).setDesc(tool.description).addToggle((toggle) =>
+        toggle.setValue(!disabled).onChange(async (enabled) => {
+          const next = new Set(getClaudeProviderSettings(settingsBag).localToolHostDisabledTools);
+          if (enabled) next.delete(tool.name); else next.add(tool.name);
+          updateClaudeProviderSettings(settingsBag, { localToolHostDisabledTools: [...next] });
+          await plugin.saveSettings();
+        }),
+      );
+    }
+    for (const err of catalog.errors) {
+      new Setting(listEl).setName(`${t('settings.localToolHost.loadError')}: ${err.file}`).setDesc(err.message);
+    }
+  };
+
+  // Manual reload — the only reliable refresh for a dot-folder Obsidian doesn't watch.
+  new Setting(host).addButton((btn) =>
+    btn.setButtonText(t('settings.localToolHost.reload')).onClick(async () => {
+      await plugin.reloadLocalToolHost?.();   // re-materialize + refresh declared-secrets cache
+      await renderList();
+    }),
   );
+
+  void renderList();
 };
 ```
 
-> Two helper assumptions to verify during implementation: `plugin.getVaultPath()` (grep `getVaultPath` in `src/main.ts` — if absent, use `(plugin.app.vault.adapter as FileSystemAdapter).getBasePath()`), and `context.refreshDisplay` (grep the widget `context` type in `src/core/providers/settingsWidgets.ts`; if absent, re-render by calling the tab's display — match how `mountClaudeMcpSection`'s `broadcastMcpReload` obtains re-render). If neither exists, drop the `refreshDisplay?.()` call and let the toggle re-render on next settings open.
+> Two helper assumptions to verify during implementation: `plugin.getVaultPath()` (grep `getVaultPath` in `src/main.ts` — if absent, use `(plugin.app.vault.adapter as FileSystemAdapter).getBasePath()`), and `context.refreshDisplay` (grep the widget `context` type in `src/core/providers/settingsWidgets.ts`; if absent, drop the call and let the toggle re-render on next settings open). `plugin.reloadLocalToolHost()` is added in Task 20 (materialize + refresh declared-secrets cache); the optional-chaining keeps the widget resilient if it isn't wired yet.
 
 - [ ] **Step 2: Register the widget** in `claudeSettingsWidgets.ts` — add the import and the map entry (next to `mcpServers: mountClaudeMcpSection` at line 283):
 
@@ -1633,9 +1750,20 @@ async refreshDeclaredToolSecretIds(): Promise<void> {
   const catalog = await readCatalog({ runCatalog: spawnCatalogRunner(nodePath, paths.hostEntry, env) });
   this.declaredToolSecretIds = [...new Set(catalog.tools.flatMap((t) => t.secrets))];
 }
+
+/** Materialize the embedded host to disk, then refresh the declared-secret cache. Idempotent. */
+async reloadLocalToolHost(): Promise<void> {
+  const vaultPath = this.plugin.getVaultPath();
+  const paths = resolveToolHostPaths({ vaultPath, pluginDir: this.plugin.manifest.dir ?? '' });
+  await materializeToolHost(paths.hostEntry, TOOL_HOST_SOURCE, {
+    read: (p) => fsp.readFile(p, 'utf8'),
+    write: (p, c) => fsp.writeFile(p, c, 'utf8'),
+  });
+  await this.refreshDeclaredToolSecretIds();
+}
 ```
 
-Add the imports (`getClaudeProviderSettings`, `resolveToolHostPaths`, `buildToolHostServer`, `findNodeExecutable`, `getEnhancedPath`, `curateStdioMcpEnv`, `McpServerConfig`, `readCatalog`, `spawnCatalogRunner`).
+Add the imports (`getClaudeProviderSettings`, `resolveToolHostPaths`, `materializeToolHost`, `buildToolHostServer`, `findNodeExecutable`, `getEnhancedPath`, `curateStdioMcpEnv`, `McpServerConfig`, `readCatalog`, `spawnCatalogRunner`, `TOOL_HOST_SOURCE` from `../../../tool-host/embeddedSource`, and `promises as fsp` from `node:fs`).
 
 - [ ] **Step 2: Pass it into the cold-start `QueryOptionsContext`** — find where the runtime builds the `QueryOptionsContext` (grep `mcpManager:` in this file) and add:
 
@@ -1645,7 +1773,7 @@ Add the imports (`getClaudeProviderSettings`, `resolveToolHostPaths`, `buildTool
 
 - [ ] **Step 3: Pass it into the dynamic-update deps** — find where `ClaudeDynamicUpdateDeps` is assembled (grep `mcpManager` again) and add the same line.
 
-- [ ] **Step 4: Refresh the cached declared-secret ids when the tool set can change.** Call `void this.refreshDeclaredToolSecretIds()` (a) once during the runtime's init/ready path, and (b) on the `.specorator/tools` `vault.on('modify')` watcher (the same watcher the settings list uses; if the runtime doesn't own one, add a `registerEvent(app.vault.on('modify', …))` filtered to the tools dir). This keeps `ctx.secrets` populated for secret-declaring tools. **Staleness caveat (documented, acceptable for v1):** a tool added mid-session that declares a *new* secret sees it only after the next refresh (file-watch tick or settings re-open); the synthetic config's `mcpServersKey` already changes when the resolved env changes, so the next turn re-spawns the host with the secret present.
+- [ ] **Step 4: Invoke `reloadLocalToolHost()` at the explicit seams (no vault watcher — dot-folder).** `.specorator/` is excluded from Obsidian's vault index, so refresh is driven explicitly: call `void this.reloadLocalToolHost()` in the runtime's init/ready path. Add a thin plugin-level `reloadLocalToolHost()` that broadcasts to the active Claude runtime(s) — mirror the existing `broadcastMcpReload` → `reloadMcpServers` fan-out the MCP settings widget uses (grep `broadcastToAllTabs` / `reloadMcpServers`). The settings toggle `onChange` and the "Reload tools" button (Task 16) both call `plugin.reloadLocalToolHost()`. A full catalog re-scan covers create/delete/rename. **Staleness caveat (documented, acceptable for v1, matching the codebase's posture for external dot-folder edits):** a tool added on disk mid-session is picked up after the next explicit refresh (Reload button or settings re-open); since the host re-scans its dir on each spawn and the synthetic config's `mcpServersKey` changes when the resolved env changes, the next turn then spawns the host with the new tool + its secret present.
 
 - [ ] **Step 5: Add a unit test** for `refreshDeclaredToolSecretIds` deduping the union (inject a fake `runCatalog` via the same seam `ToolHostCatalog` tests use, or extract the union step as a small pure helper `unionSecretIds(catalog)` and test that). Assert `['A','B']` from tools declaring `['A']` and `['A','B']`.
 
@@ -1723,9 +1851,10 @@ git commit -m "test(claude): local tool host injection is gated on enable"
 ```markdown
 | `.specorator/tools/*.mjs` | User-authored local tool scripts (Claude tool host) |
 | `.specorator/tool-host.log` | Local tool host log (written by `ctx.logger`) |
+| `<pluginDir>/tool-host.mjs` | Tool host runtime, materialized from source baked into `main.js` (not a release artifact) |
 ```
 
-- [ ] **Step 2: Add a one-line architecture note** under the Claude adaptor bullet noting the bundled `tool-host.mjs` stdio server and its `.specorator/tools/` source.
+- [ ] **Step 2: Add a one-line architecture note** under the Claude adaptor bullet: the tool host is **baked into `main.js`**, materialized to `<pluginDir>/tool-host.mjs` at load, and spawned as a stdio MCP server over `.specorator/tools/` (refreshed explicitly — `.specorator/` is a dot-folder Obsidian doesn't watch).
 
 - [ ] **Step 3: Commit.**
 
@@ -1762,23 +1891,24 @@ git commit -m "chore: re-baseline ratchets for local tool host"
 - **TypeScript authoring** (Node-native type-stripping, Node ≥23).
 - **Codex / Cursor / Opencode wiring** — the host is provider-neutral; later work is per-provider config marshalling only.
 - **Dedicated Tool Library view + in-app editor.**
-- **Hot reload via MCP `tools/list_changed`** — v1 reload happens on settings re-open and on the next turn's `setMcpServers` (env/key change). A `fs.watch` + `list_changed` push from the host is a refinement.
+- **Live hot reload** — v1 refreshes explicitly (manual "Reload tools" button + load/enable/settings-open re-scan); the host re-scans its dir each spawn. An in-host `node:fs.watch` → MCP `tools/list_changed` push (raw fs *does* see dot-folders, unlike Obsidian's vault index) is a refinement.
 
 ---
 
 ## Self-Review
 
 **Spec coverage:**
-- Bundled stdio host + native `import()` (no eval) → Tasks 1–10.
+- Host bundled + native `import()` (no eval) → Tasks 1–10.
+- **Host baked into `main.js`** (no separate release artifact — Obsidian ships only 3 files) and **materialized to `<pluginDir>/tool-host.mjs`** at runtime → Task 10 (bake) + Task 10b (materialize).
 - Plain-JS/ESM authoring contract (`manifest` + `handler`, JSON Schema, string|object return) → Tasks 1, 2, 6, 8.
 - `ctx.vault` (path-safe), `ctx.logger`, `ctx.secrets` → Tasks 3, 4, 9; declared secrets flow end-to-end via catalog (Task 7) → runtime cache (Task 20) → `buildToolHostServer` env (Task 13) → host `ctx.secrets` (Task 9).
-- Ship the host in release assets (`scripts/release.mjs`, `release.yml`) → Task 10 Step 7.
+- **No vault watcher for the `.specorator/` dot-folder** — explicit re-scan on load/enable/settings-open + manual "Reload tools" button (covers create/delete/rename) → Tasks 16, 20.
 - Claude-only injection at both seams → Tasks 18–20.
 - Opt-in toggle + Node check + discovered-tool list + per-tool disable + error badges → Tasks 11, 16.
 - Lazy start (server is `null` when disabled / no node; SDK only spawns when injected) → Tasks 13, 18, 19.
 - Per-script isolation + handler timeout/throw → Tasks 5, 6.
-- Storage rows (`.specorator/tools/`, `tool-host.log`) → Task 22.
-- Testing (host units, plugin units, integration) → Tasks 2–8, 12–14, 21.
+- Storage rows (`.specorator/tools/`, `tool-host.log`, materialized `<pluginDir>/tool-host.mjs`) → Task 22.
+- Testing (host units, plugin units, integration) → Tasks 2–8, 10b, 12–14, 21.
 
 **Placeholder scan:** No "TBD"/"handle edge cases" — every code step shows code. The two runtime-wiring tasks (19, 20) say "grep for X" only to *locate* an exact existing assembly site, then show the exact lines to add; this is location guidance, not missing content.
 
