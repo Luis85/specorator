@@ -110,7 +110,7 @@ export async function handler(input, ctx) {
 ```
 
 **Contract rules:**
-- `manifest.name` — the tool name; exposed as `mcp__specorator__<name>`.
+- `manifest.name` — the tool name; exposed as `mcp__specorator-tools__<name>`.
 - `manifest.description` — shown to the model.
 - `manifest.inputSchema` — a **plain JSON Schema** object, passed straight to MCP
   as the tool's input schema. No zod dependency in the host.
@@ -157,7 +157,7 @@ export async function handler(input, ctx) {
    config (pointing `node` at the materialized path) into Claude's `mcpServers`.
 2. Claude SDK spawns `node <pluginDir>/tool-host.mjs` (curated env).
 3. Host scans the tools dir, `import()`s each `.mjs`, registers each `manifest`.
-4. Model invokes `mcp__specorator__word_count`.
+4. Model invokes `mcp__specorator-tools__word_count`.
 5. Host runs that script's `handler` in-process; returns an MCP result (or
    auto-wrapped string).
 6. Result streams back as a normal MCP tool result.

@@ -4,7 +4,7 @@
 
 **Goal:** Ship a bundled stdio MCP server (`tool-host.mjs`) that the Claude provider spawns, which exposes user-authored `.mjs` scripts in `.specorator/tools/` as callable tools — opt-in, Node-required, with no in-plugin code evaluation.
 
-**Architecture:** The host is esbuild'd to a Node-ESM bundle that is **baked into `main.js` as embedded text** (Obsidian ships only `main.js`/`manifest.json`/`styles.css`, so a separate file can't reach marketplace installs) and **materialized to `<pluginDir>/tool-host.mjs` at runtime**, then spawned. User scripts run inside that `node` subprocess loaded via native `import()` — never `Function`/`eval` in the plugin renderer (the blocker that reverted the 1.13 tool library; see `docs/superpowers/specs/2026-06-28-local-tool-host-mcp-design.md`). The host has two modes: **catalog** (`--catalog`: scan + print JSON of discovered tools/errors, then exit — populates the settings list + declared-secrets cache without executing code in-renderer) and **serve** (default: run the MCP stdio server). The plugin injects a synthetic `mcpServers['specorator']` stdio config into the Claude SDK at the existing cold-start and dynamic-update seams. `.specorator/` is a dot-folder Obsidian doesn't index, so the tool list refreshes via explicit re-scan, never `vault.on(...)`.
+**Architecture:** The host is esbuild'd to a Node-ESM bundle that is **baked into `main.js` as embedded text** (Obsidian ships only `main.js`/`manifest.json`/`styles.css`, so a separate file can't reach marketplace installs) and **materialized to `<pluginDir>/tool-host.mjs` at runtime**, then spawned. User scripts run inside that `node` subprocess loaded via native `import()` — never `Function`/`eval` in the plugin renderer (the blocker that reverted the 1.13 tool library; see `docs/superpowers/specs/2026-06-28-local-tool-host-mcp-design.md`). The host has two modes: **catalog** (`--catalog`: scan + print JSON of discovered tools/errors, then exit — populates the settings list + declared-secrets cache without executing code in-renderer) and **serve** (default: run the MCP stdio server). The plugin injects a synthetic `mcpServers['specorator-tools']` stdio config (reserved name `LOCAL_TOOL_HOST_SERVER_NAME`, never overwriting a same-named user server) into the Claude SDK at the existing cold-start and dynamic-update seams. `.specorator/` is a dot-folder Obsidian doesn't index, so the tool list refreshes via explicit re-scan, never `vault.on(...)`.
 
 **Tech Stack:** TypeScript, esbuild (host bundled as embedded text baked into `main.js` via a text loader), `@modelcontextprotocol/sdk` (low-level `Server` API, already a dependency at `~1.29.0`), Obsidian plugin API, Jest (unit + integration).
 
@@ -189,6 +189,11 @@ describe('toCallToolResult', () => {
       content: [{ type: 'text', text: '{"a":1}' }],
     });
   });
+
+  it('maps an undefined (side-effect-only) return to an empty text result', () => {
+    expect(toCallToolResult(undefined)).toEqual({ content: [{ type: 'text', text: '' }] });
+    expect(toCallToolResult(null)).toEqual({ content: [{ type: 'text', text: '' }] });
+  });
 });
 ```
 
@@ -212,13 +217,19 @@ function isCallToolResult(value: unknown): value is CallToolResult {
 
 /** Normalize a handler's return value into an MCP CallToolResult. */
 export function toCallToolResult(value: unknown): CallToolResult {
+  // Side-effect-only handlers return nothing → empty (but valid) text result.
+  if (value === undefined || value === null) {
+    return { content: [{ type: 'text', text: '' }] };
+  }
   if (typeof value === 'string') {
     return { content: [{ type: 'text', text: value }] };
   }
   if (isCallToolResult(value)) {
     return value;
   }
-  return { content: [{ type: 'text', text: JSON.stringify(value) }] };
+  // JSON.stringify can still yield undefined (e.g. a bare function); coerce to string.
+  const json = JSON.stringify(value);
+  return { content: [{ type: 'text', text: typeof json === 'string' ? json : String(value) }] };
 }
 ```
 
@@ -795,7 +806,7 @@ export async function createServer(
   timeoutMs: number,
 ): Promise<void> {
   const handlers = buildToolHandlers(tools, ctxFactory, timeoutMs);
-  const server = new Server({ name: 'specorator', version: '1.0.0' }, { capabilities: { tools: {} } });
+  const server = new Server({ name: 'specorator-tools', version: '1.0.0' }, { capabilities: { tools: {} } });
   server.setRequestHandler(ListToolsRequestSchema, () => handlers.listTools());
   server.setRequestHandler(CallToolRequestSchema, (req) => handlers.callTool(req as CallToolRequest));
   await server.connect(new StdioServerTransport());
@@ -1188,7 +1199,7 @@ git commit -m "feat(claude): resolve tool host paths"
 - Create: `src/providers/claude/toolHost/buildToolHostServer.ts`
 - Test: `tests/unit/providers/claude/toolHost/buildToolHostServer.test.ts`
 
-This returns the `McpStdioServerConfig` injected as `mcpServers['specorator']`, or `null` when disabled / no node. Secrets resolve synchronously via the same `(id) => secretStore.get(id)` resolver used by `McpServerManager`.
+This returns the `McpStdioServerConfig` injected as `mcpServers[LOCAL_TOOL_HOST_SERVER_NAME]` (`'specorator-tools'`), or `null` when disabled / no node. Secrets resolve synchronously via the same `(id) => secretStore.get(id)` resolver used by `McpServerManager`.
 
 - [ ] **Step 1: Write the failing test.**
 
@@ -1247,6 +1258,9 @@ describe('buildToolHostServer', () => {
 ```ts
 // src/providers/claude/toolHost/buildToolHostServer.ts
 import type { McpStdioServerConfig } from '../../../core/types/mcp';
+
+/** Reserved mcpServers key for the local tool host. Tools surface as `mcp__specorator-tools__<name>`. */
+export const LOCAL_TOOL_HOST_SERVER_NAME = 'specorator-tools';
 
 export interface BuildToolHostServerInput {
   enabled: boolean;
@@ -1372,23 +1386,35 @@ export async function readCatalog(deps: ReadCatalogDeps): Promise<CatalogPayload
 ```ts
 import { spawn } from 'node:child_process';
 
+const CATALOG_TIMEOUT_MS = 10_000;
+
 export function spawnCatalogRunner(
   nodePath: string,
   hostEntry: string,
   env: Record<string, string>,
+  timeoutMs: number = CATALOG_TIMEOUT_MS,
 ): () => Promise<CatalogRunResult> {
   return () =>
     new Promise((resolve, reject) => {
       const child = spawn(nodePath, [hostEntry, '--catalog'], { env });
       let stdout = '';
       let stderr = '';
+      let settled = false;
+      const done = (r: CatalogRunResult) => { if (!settled) { settled = true; clearTimeout(timer); resolve(r); } };
+      // A tool with a hanging top-level await would never close the child; kill it.
+      const timer = setTimeout(() => {
+        child.kill();
+        done({ stdout, stderr: `${stderr}\ncatalog timed out after ${timeoutMs}ms`, code: -1 });
+      }, timeoutMs);
       child.stdout.on('data', (d) => (stdout += String(d)));
       child.stderr.on('data', (d) => (stderr += String(d)));
-      child.on('error', reject);
-      child.on('close', (code) => resolve({ stdout, stderr, code }));
+      child.on('error', (err) => { if (!settled) { settled = true; clearTimeout(timer); reject(err); } });
+      child.on('close', (code) => done({ stdout, stderr, code }));
     });
 }
 ```
+
+> `readCatalog` already maps any non-zero exit (including the `-1` timeout) to an empty catalog, so a single hanging tool degrades to "no tools" + a logged stderr rather than freezing the enable / settings-open / reload flows. Surfacing the timeout as a visible per-tool error entry is a later refinement.
 
 - [ ] **Step 6: Typecheck + commit.**
 
@@ -1466,7 +1492,7 @@ Follow the `mountClaudeMcpSection` pattern (widget = `(host, context) => void`).
 ```ts
 // src/providers/claude/ui/localToolHostWidget.ts
 import { promises as fsp } from 'node:fs';
-import { Setting } from 'obsidian';
+import { Notice, Setting } from 'obsidian';
 import type { ProviderSettingsWidgetMount } from '../../../core/providers/types';
 import { getClaudeProviderSettings, updateClaudeProviderSettings } from '../settings';
 import { resolveToolHostPaths } from '../toolHost/toolHostPaths';
@@ -1490,6 +1516,12 @@ export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (hos
     .setName(t('settings.localToolHost.enable'))
     .addToggle((toggle) =>
       toggle.setValue(claude.localToolHostEnabled).onChange(async (value) => {
+        // Never persist `true` without Node — revert the toggle and warn.
+        if (value && !findNodeExecutable(getEnhancedPath())) {
+          toggle.setValue(false);
+          new Notice(t('settings.localToolHost.nodeMissing'));
+          return;
+        }
         updateClaudeProviderSettings(settingsBag, { localToolHostEnabled: value });
         await plugin.saveSettings();
         await plugin.reloadLocalToolHost?.();   // materialize + refresh runtime caches
@@ -1647,14 +1679,17 @@ import type { McpServerConfig } from '../../../core/types/mcp';
   };
 
   const localToolHost = ctx.buildLocalToolHostServer?.();
-  if (localToolHost) {
-    mcpServers['specorator'] = localToolHost;
+  // Reserved synthetic name — never clobber a user MCP server that already uses it.
+  if (localToolHost && !(LOCAL_TOOL_HOST_SERVER_NAME in mcpServers)) {
+    mcpServers[LOCAL_TOOL_HOST_SERVER_NAME] = localToolHost;
   }
 
   if (Object.keys(mcpServers).length > 0) {
     options.mcpServers = mcpServers as typeof options.mcpServers;
   }
 ```
+
+Import the constant: `import { LOCAL_TOOL_HOST_SERVER_NAME } from '../toolHost/buildToolHostServer';`
 
 - [ ] **Step 3: Typecheck.** `npm run typecheck` → PASS.
 
@@ -1683,9 +1718,13 @@ Import `McpServerConfig` from `../../../core/types/mcp` if not already imported.
 ```ts
   const mcpServers = deps.mcpManager.getActiveServers(combinedMentions);
   const localToolHost = deps.buildLocalToolHostServer?.();
-  const merged = localToolHost ? { ...mcpServers, specorator: localToolHost } : mcpServers;
+  const merged = localToolHost && !(LOCAL_TOOL_HOST_SERVER_NAME in mcpServers)
+    ? { ...mcpServers, [LOCAL_TOOL_HOST_SERVER_NAME]: localToolHost }
+    : mcpServers;
   const mcpServersKey = JSON.stringify(merged);
 ```
+
+Import the constant: `import { LOCAL_TOOL_HOST_SERVER_NAME } from '../toolHost/buildToolHostServer';`
 
 Then replace the later `vetActiveServersForRuntime(mcpServers)` and `serverConfigs` assembly to operate on `merged` instead of `mcpServers` (grep within the function; the synthetic stdio config is loopback-free so it passes vetting unchanged).
 
@@ -1710,11 +1749,16 @@ Build one closure (capturing plugin, vault path, settings, secret resolver, cura
 ```ts
 /** Union of `manifest.secrets` across discovered tools, refreshed from the catalog. */
 private declaredToolSecretIds: string[] = [];
+/** Set true once the embedded host has been written to disk this session. */
+private hostMaterialized = false;
 
 private makeLocalToolHostServerBuilder(): () => McpServerConfig | null {
   return () => {
     const claude = getClaudeProviderSettings(this.plugin.settings as unknown as Record<string, unknown>);
     if (!claude.localToolHostEnabled) return null;
+    // Don't inject `node <pluginDir>/tool-host.mjs` until the file is actually on disk —
+    // otherwise a turn racing startup spawns a missing/stale entrypoint.
+    if (!this.hostMaterialized) return null;
     const vaultPath = this.plugin.getVaultPath();
     const nodePath = findNodeExecutable(getEnhancedPath());
     const paths = resolveToolHostPaths({ vaultPath, pluginDir: this.plugin.manifest.dir ?? '' });
@@ -1759,6 +1803,7 @@ async reloadLocalToolHost(): Promise<void> {
     read: (p) => fsp.readFile(p, 'utf8'),
     write: (p, c) => fsp.writeFile(p, c, 'utf8'),
   });
+  this.hostMaterialized = true;   // unblocks the cold-start builder
   await this.refreshDeclaredToolSecretIds();
 }
 ```
@@ -1773,7 +1818,7 @@ Add the imports (`getClaudeProviderSettings`, `resolveToolHostPaths`, `materiali
 
 - [ ] **Step 3: Pass it into the dynamic-update deps** — find where `ClaudeDynamicUpdateDeps` is assembled (grep `mcpManager` again) and add the same line.
 
-- [ ] **Step 4: Invoke `reloadLocalToolHost()` at the explicit seams (no vault watcher — dot-folder).** `.specorator/` is excluded from Obsidian's vault index, so refresh is driven explicitly: call `void this.reloadLocalToolHost()` in the runtime's init/ready path. Add a thin plugin-level `reloadLocalToolHost()` that broadcasts to the active Claude runtime(s) — mirror the existing `broadcastMcpReload` → `reloadMcpServers` fan-out the MCP settings widget uses (grep `broadcastToAllTabs` / `reloadMcpServers`). The settings toggle `onChange` and the "Reload tools" button (Task 16) both call `plugin.reloadLocalToolHost()`. A full catalog re-scan covers create/delete/rename. **Staleness caveat (documented, acceptable for v1, matching the codebase's posture for external dot-folder edits):** a tool added on disk mid-session is picked up after the next explicit refresh (Reload button or settings re-open); since the host re-scans its dir on each spawn and the synthetic config's `mcpServersKey` changes when the resolved env changes, the next turn then spawns the host with the new tool + its secret present.
+- [ ] **Step 4: Invoke `reloadLocalToolHost()` at the explicit seams (no vault watcher — dot-folder).** `.specorator/` is excluded from Obsidian's vault index, so refresh is driven explicitly. **Await** `this.reloadLocalToolHost()` in the runtime's init/ready path so `hostMaterialized` flips before turns flow (and the cold-start builder gates on that flag, so even a turn that races startup simply skips injection that one turn rather than spawning a missing entrypoint). Add a thin plugin-level `reloadLocalToolHost()` that broadcasts to the active Claude runtime(s) — mirror the existing `broadcastMcpReload` → `reloadMcpServers` fan-out the MCP settings widget uses (grep `broadcastToAllTabs` / `reloadMcpServers`). The settings toggle `onChange` and the "Reload tools" button (Task 16) both call `plugin.reloadLocalToolHost()`. A full catalog re-scan covers create/delete/rename. **Staleness caveat (documented, acceptable for v1, matching the codebase's posture for external dot-folder edits):** a tool added on disk mid-session is picked up after the next explicit refresh (Reload button or settings re-open); since the host re-scans its dir on each spawn and the synthetic config's `mcpServersKey` changes when the resolved env changes, the next turn then spawns the host with the new tool + its secret present.
 
 - [ ] **Step 5: Add a unit test** for `refreshDeclaredToolSecretIds` deduping the union (inject a fake `runCatalog` via the same seam `ToolHostCatalog` tests use, or extract the union step as a small pure helper `unionSecretIds(catalog)` and test that). Assert `['A','B']` from tools declaring `['A']` and `['A','B']`.
 
@@ -1800,11 +1845,14 @@ git commit -m "feat(claude): supply local tool host builder + declared-secret ca
 **Files:**
 - Create: `tests/integration/providers/claude/localToolHostInjection.test.ts`
 
-- [ ] **Step 1: Write the test** (verifies the cold-start builder injects `specorator` only when enabled). Use the existing integration harness style; assert on the built `mcpServers` map.
+- [ ] **Step 1: Write the test** (verifies the builder gates on enable and that injection uses the reserved name without clobbering a user server of the same name). Mirror the cold-start merge logic from Task 18.
 
 ```ts
 // tests/integration/providers/claude/localToolHostInjection.test.ts
-import { buildToolHostServer } from '@/providers/claude/toolHost/buildToolHostServer';
+import {
+  buildToolHostServer,
+  LOCAL_TOOL_HOST_SERVER_NAME,
+} from '@/providers/claude/toolHost/buildToolHostServer';
 
 describe('local tool host injection (config-level)', () => {
   const builder = (enabled: boolean) =>
@@ -1820,12 +1868,24 @@ describe('local tool host injection (config-level)', () => {
       resolveSecret: () => null,
     });
 
+  // Mirrors the cold-start merge in ClaudeQueryOptionsBuilder (Task 18).
+  const inject = (active: Record<string, unknown>, enabled: boolean) => {
+    const merged = { ...active };
+    const host = builder(enabled);
+    if (host && !(LOCAL_TOOL_HOST_SERVER_NAME in merged)) merged[LOCAL_TOOL_HOST_SERVER_NAME] = host;
+    return merged;
+  };
+
   it('produces a server only when enabled', () => {
     expect(builder(false)).toBeNull();
-    const cfg = builder(true);
-    const mcpServers: Record<string, unknown> = {};
-    if (cfg) mcpServers['specorator'] = cfg;
-    expect(Object.keys(mcpServers)).toEqual(['specorator']);
+    expect(inject({}, false)).toEqual({});
+    expect(Object.keys(inject({}, true))).toEqual([LOCAL_TOOL_HOST_SERVER_NAME]);
+  });
+
+  it('does not clobber a user MCP server already named specorator-tools', () => {
+    const userServer = { type: 'stdio', command: 'mine' };
+    const merged = inject({ [LOCAL_TOOL_HOST_SERVER_NAME]: userServer }, true);
+    expect(merged[LOCAL_TOOL_HOST_SERVER_NAME]).toBe(userServer);
   });
 });
 ```
@@ -1875,7 +1935,7 @@ Expected: all PASS.
 Run: `npm run check:loc && npm run check:css && npm run check:quality && npm run check:artifacts`
 Expected: PASS (re-baseline where the gate doc instructs).
 
-- [ ] **Step 3: Manual smoke (optional, documented for the reviewer).** With a vault that has `.specorator/tools/wordCount.mjs` (the spec's example) and the toggle on, send a Claude turn asking it to count words; confirm `mcp__specorator__word_count` runs and `.specorator/tool-host.log` gets a line.
+- [ ] **Step 3: Manual smoke (optional, documented for the reviewer).** With a vault that has `.specorator/tools/wordCount.mjs` (the spec's example) and the toggle on, send a Claude turn asking it to count words; confirm `mcp__specorator-tools__word_count` runs and `.specorator/tool-host.log` gets a line.
 
 - [ ] **Step 4: Final commit if anything changed in Steps 1–2.**
 
