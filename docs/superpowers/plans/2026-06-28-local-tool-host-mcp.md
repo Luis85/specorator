@@ -44,6 +44,8 @@ npm run typecheck && npm run lint && npm run test && npm run build
 - i18n: `src/i18n/types/settings.ts` (or nearest) + all 10 locales — `settings.localToolHost.*`.
 - `CLAUDE.md`, `src/core/CLAUDE.md` — storage rows.
 - `scripts/check-artifacts.mjs` (if it asserts an artifact list) — add `tool-host.mjs`.
+- `scripts/release.mjs` — `const ASSETS` list (currently `['main.js', 'manifest.json', 'styles.css']`) must include `tool-host.mjs`, or released/marketplace installs ship without the host and enabling local tools spawns a missing entrypoint.
+- `.github/workflows/release.yml` — both `files:` upload lists must include `tool-host.mjs`.
 
 **Tests (mirrored):**
 - `tests/unit/tool-host/*.test.ts`
@@ -145,7 +147,7 @@ export interface LoadResult {
 }
 
 export interface CatalogPayload {
-  tools: Array<{ file: string; name: string; description: string }>;
+  tools: Array<{ file: string; name: string; description: string; secrets: string[] }>;
   errors: LoadError[];
 }
 ```
@@ -644,15 +646,23 @@ import { buildCatalog } from '@/tool-host/catalog';
 import type { LoadResult } from '@/tool-host/types';
 
 describe('buildCatalog', () => {
-  it('maps a load result to file/name/description plus errors', () => {
+  it('maps a load result to file/name/description/secrets plus errors', () => {
     const load: LoadResult = {
-      tools: [{ file: 'a.mjs', manifest: { name: 'a', description: 'da', inputSchema: {} }, handler: async () => '' }],
+      tools: [{ file: 'a.mjs', manifest: { name: 'a', description: 'da', inputSchema: {}, secrets: ['K'] }, handler: async () => '' }],
       errors: [{ file: 'b.mjs', message: 'bad' }],
     };
     expect(buildCatalog(load)).toEqual({
-      tools: [{ file: 'a.mjs', name: 'a', description: 'da' }],
+      tools: [{ file: 'a.mjs', name: 'a', description: 'da', secrets: ['K'] }],
       errors: [{ file: 'b.mjs', message: 'bad' }],
     });
+  });
+
+  it('defaults secrets to an empty array when the manifest omits them', () => {
+    const load: LoadResult = {
+      tools: [{ file: 'c.mjs', manifest: { name: 'c', description: 'dc', inputSchema: {} }, handler: async () => '' }],
+      errors: [],
+    };
+    expect(buildCatalog(load).tools[0].secrets).toEqual([]);
   });
 });
 ```
@@ -671,6 +681,7 @@ export function buildCatalog(load: LoadResult): CatalogPayload {
       file: t.file,
       name: t.manifest.name,
       description: t.manifest.description,
+      secrets: t.manifest.secrets ?? [],
     })),
     errors: load.errors,
   };
@@ -936,11 +947,29 @@ Expected: `clean`
 Run: `npm run check:artifacts`
 Expected: PASS.
 
-- [ ] **Step 7: Commit.**
+- [ ] **Step 7: Ship the host in release assets.** Without this, a GitHub/marketplace release uploads only `main.js`/`manifest.json`/`styles.css`, so `resolveToolHostPaths` (Task 12) points at a `tool-host.mjs` that was never published.
+
+In `scripts/release.mjs`, extend the assets constant:
+
+```js
+const ASSETS = ['main.js', 'manifest.json', 'styles.css', 'tool-host.mjs'];
+```
+
+In `.github/workflows/release.yml`, add `tool-host.mjs` to **both** `files:` upload lists (the two blocks currently listing `main.js` / `manifest.json` / `styles.css`):
+
+```yaml
+          files: |
+            main.js
+            manifest.json
+            styles.css
+            tool-host.mjs
+```
+
+- [ ] **Step 8: Commit.**
 
 ```bash
-git add esbuild.config.mjs scripts/check-artifacts.mjs
-git commit -m "build: bundle tool-host.mjs as a standalone node esm target"
+git add esbuild.config.mjs scripts/check-artifacts.mjs scripts/release.mjs .github/workflows/release.yml
+git commit -m "build: bundle + release tool-host.mjs as a standalone node esm target"
 ```
 
 ---
@@ -1559,9 +1588,12 @@ git commit -m "feat(claude): inject local tool host on dynamic mcp update"
 
 Build one closure (capturing plugin, vault path, settings, secret resolver, curated env) and pass it into both the cold-start `QueryOptionsContext` and the dynamic-update deps.
 
-- [ ] **Step 1: Add a private helper** on the runtime that returns the closure:
+- [ ] **Step 1: Add a private field + the closure helper** on the runtime. The closure is sync (called per-turn at both seams), so it reads a cached union of declared secret ids rather than spawning catalog mode on the hot path:
 
 ```ts
+/** Union of `manifest.secrets` across discovered tools, refreshed from the catalog. */
+private declaredToolSecretIds: string[] = [];
+
 private makeLocalToolHostServerBuilder(): () => McpServerConfig | null {
   return () => {
     const claude = getClaudeProviderSettings(this.plugin.settings as unknown as Record<string, unknown>);
@@ -1577,14 +1609,33 @@ private makeLocalToolHostServerBuilder(): () => McpServerConfig | null {
       vaultPath,
       baseEnv: curateStdioMcpEnv({}),
       disabledTools: claude.localToolHostDisabledTools,
-      declaredSecrets: [],
+      declaredSecrets: this.declaredToolSecretIds,
       resolveSecret: (id) => this.plugin.secretStore.get(id),
     });
   };
 }
+
+/** Spawn catalog mode, cache the union of declared secret ids. Best-effort; never throws. */
+async refreshDeclaredToolSecretIds(): Promise<void> {
+  const claude = getClaudeProviderSettings(this.plugin.settings as unknown as Record<string, unknown>);
+  const nodePath = findNodeExecutable(getEnhancedPath());
+  if (!claude.localToolHostEnabled || !nodePath) {
+    this.declaredToolSecretIds = [];
+    return;
+  }
+  const vaultPath = this.plugin.getVaultPath();
+  const paths = resolveToolHostPaths({ vaultPath, pluginDir: this.plugin.manifest.dir ?? '' });
+  const env = {
+    ...curateStdioMcpEnv({}),
+    SPECORATOR_TOOLS_DIR: paths.toolsDir,
+    SPECORATOR_VAULT_PATH: vaultPath,
+  };
+  const catalog = await readCatalog({ runCatalog: spawnCatalogRunner(nodePath, paths.hostEntry, env) });
+  this.declaredToolSecretIds = [...new Set(catalog.tools.flatMap((t) => t.secrets))];
+}
 ```
 
-Add the imports (`getClaudeProviderSettings`, `resolveToolHostPaths`, `buildToolHostServer`, `findNodeExecutable`, `getEnhancedPath`, `curateStdioMcpEnv`, `McpServerConfig`).
+Add the imports (`getClaudeProviderSettings`, `resolveToolHostPaths`, `buildToolHostServer`, `findNodeExecutable`, `getEnhancedPath`, `curateStdioMcpEnv`, `McpServerConfig`, `readCatalog`, `spawnCatalogRunner`).
 
 - [ ] **Step 2: Pass it into the cold-start `QueryOptionsContext`** — find where the runtime builds the `QueryOptionsContext` (grep `mcpManager:` in this file) and add:
 
@@ -1594,19 +1645,23 @@ Add the imports (`getClaudeProviderSettings`, `resolveToolHostPaths`, `buildTool
 
 - [ ] **Step 3: Pass it into the dynamic-update deps** — find where `ClaudeDynamicUpdateDeps` is assembled (grep `mcpManager` again) and add the same line.
 
-- [ ] **Step 4: Typecheck + full test + build.**
+- [ ] **Step 4: Refresh the cached declared-secret ids when the tool set can change.** Call `void this.refreshDeclaredToolSecretIds()` (a) once during the runtime's init/ready path, and (b) on the `.specorator/tools` `vault.on('modify')` watcher (the same watcher the settings list uses; if the runtime doesn't own one, add a `registerEvent(app.vault.on('modify', …))` filtered to the tools dir). This keeps `ctx.secrets` populated for secret-declaring tools. **Staleness caveat (documented, acceptable for v1):** a tool added mid-session that declares a *new* secret sees it only after the next refresh (file-watch tick or settings re-open); the synthetic config's `mcpServersKey` already changes when the resolved env changes, so the next turn re-spawns the host with the secret present.
+
+- [ ] **Step 5: Add a unit test** for `refreshDeclaredToolSecretIds` deduping the union (inject a fake `runCatalog` via the same seam `ToolHostCatalog` tests use, or extract the union step as a small pure helper `unionSecretIds(catalog)` and test that). Assert `['A','B']` from tools declaring `['A']` and `['A','B']`.
+
+- [ ] **Step 6: Typecheck + full test + build.**
 
 Run: `npm run typecheck && npm run test && npm run build`
 Expected: PASS.
 
-- [ ] **Step 5: Commit.**
+- [ ] **Step 7: Commit.**
 
 ```bash
-git add src/providers/claude/runtime/ClaudeChatRuntime.ts
-git commit -m "feat(claude): supply local tool host builder to both mcp seams"
+git add src/providers/claude/runtime/ClaudeChatRuntime.ts tests/unit/providers/claude
+git commit -m "feat(claude): supply local tool host builder + declared-secret cache to both mcp seams"
 ```
 
-> **Note on `declaredSecrets`:** v1 passes `[]` (the per-tool secret declarations live inside the scripts, which the plugin doesn't execute). The host already reads `SPECORATOR_SECRET_*` from its env; to actually populate them, a follow-up wires the catalog to also report each tool's `manifest.secrets` so the builder can resolve them. For v1 the env channel exists end-to-end and is exercised by `buildToolHostServer`'s unit test; surfacing declared secrets through the catalog is captured in "Deferred" below.
+> **How declared secrets flow (v1, end-to-end):** the host reports each tool's `manifest.secrets` in catalog mode (Task 7) → the runtime caches their union via `refreshDeclaredToolSecretIds` (Step 4) → `buildToolHostServer` resolves each id through `secretStore.get` and emits `SPECORATOR_SECRET_<id>` into the host env (Task 13) → the host's `ctx.secrets` exposes the subset each tool declared (Task 9). The sync per-turn closure reads the cache, so no catalog spawn sits on the hot path.
 
 ---
 
@@ -1704,7 +1759,6 @@ git commit -m "chore: re-baseline ratchets for local tool host"
 
 ## Deferred (explicitly out of scope; revisit later)
 
-- **Declared-secret surfacing:** report each tool's `manifest.secrets` through the catalog so the builder resolves them into `SPECORATOR_SECRET_*` (the env channel + host read already exist; only the plugin-side wiring of *which* ids is deferred). See Task 20's note.
 - **TypeScript authoring** (Node-native type-stripping, Node ≥23).
 - **Codex / Cursor / Opencode wiring** — the host is provider-neutral; later work is per-provider config marshalling only.
 - **Dedicated Tool Library view + in-app editor.**
@@ -1717,7 +1771,8 @@ git commit -m "chore: re-baseline ratchets for local tool host"
 **Spec coverage:**
 - Bundled stdio host + native `import()` (no eval) → Tasks 1–10.
 - Plain-JS/ESM authoring contract (`manifest` + `handler`, JSON Schema, string|object return) → Tasks 1, 2, 6, 8.
-- `ctx.vault` (path-safe), `ctx.logger`, `ctx.secrets` → Tasks 3, 4, 9 + `buildToolHostServer` secret env (Task 13).
+- `ctx.vault` (path-safe), `ctx.logger`, `ctx.secrets` → Tasks 3, 4, 9; declared secrets flow end-to-end via catalog (Task 7) → runtime cache (Task 20) → `buildToolHostServer` env (Task 13) → host `ctx.secrets` (Task 9).
+- Ship the host in release assets (`scripts/release.mjs`, `release.yml`) → Task 10 Step 7.
 - Claude-only injection at both seams → Tasks 18–20.
 - Opt-in toggle + Node check + discovered-tool list + per-tool disable + error badges → Tasks 11, 16.
 - Lazy start (server is `null` when disabled / no node; SDK only spawns when injected) → Tasks 13, 18, 19.
