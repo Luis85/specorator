@@ -158,11 +158,13 @@ export class QueryOptionsBuilder {
       permissionMode: ctx.settings.permissionMode,
       sdkPermissionMode,
       systemPromptKey: computeSystemPromptKey(systemPromptSettings, {
-        // Native-agent path: slug is the key differentiator; the agent's own
-        // prompt is not appended (it comes from the SDK agent definition instead).
-        // Fallback path: full persona text is appended as before.
+        // Native-agent path: agent's prompt is the identity (SDK-owned); no
+        // appendix — slug alone is the differentiator. Fallback path: full
+        // persona text is appended as before. Both paths suppress the built-in
+        // Specorator identity whenever a boundAgentPrompt is present, matching
+        // the actual behavior in buildBaseOptions exactly.
         appendices: (boundAgentSlug || !boundAgentPrompt) ? undefined : [boundAgentPrompt],
-        suppressIdentity: !!(boundAgentSlug || boundAgentPrompt),
+        suppressIdentity: !!boundAgentPrompt,
         nativeAgentSlug: boundAgentSlug,
       }),
       disallowedToolsKey,

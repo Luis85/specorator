@@ -920,6 +920,219 @@ describe('QueryOptionsBuilder', () => {
     });
   });
 
+  describe('native agent activation (boundAgentSlug)', () => {
+    const PERSONA = 'You review changes with technical rigor. Answer as Code Reviewer.';
+    const SLUG = 'code-reviewer';
+    const DESC = 'Reviews code for best practices';
+
+    // ── buildColdStartQueryOptions (cold-start path) ──────────────────────────
+
+    it('cold-start: sets options.agent and options.agents when slug+prompt present', () => {
+      const options = QueryOptionsBuilder.buildColdStartQueryOptions({
+        ...createMockContext({ boundAgentSlug: SLUG, boundAgentPrompt: PERSONA }),
+        abortController: new AbortController(),
+        hooks: {},
+        hasEditorContext: false,
+      });
+      expect(options.agent).toBe(SLUG);
+      expect(options.agents).toBeDefined();
+      expect(options.agents?.[SLUG]).toBeDefined();
+      expect(options.agents?.[SLUG].prompt).toBe(PERSONA);
+    });
+
+    it('cold-start: uses description from context when available', () => {
+      const options = QueryOptionsBuilder.buildColdStartQueryOptions({
+        ...createMockContext({ boundAgentSlug: SLUG, boundAgentPrompt: PERSONA, boundAgentDescription: DESC }),
+        abortController: new AbortController(),
+        hooks: {},
+        hasEditorContext: false,
+      });
+      expect(options.agents?.[SLUG].description).toBe(DESC);
+    });
+
+    it('cold-start: falls back to default description when none provided', () => {
+      const options = QueryOptionsBuilder.buildColdStartQueryOptions({
+        ...createMockContext({ boundAgentSlug: SLUG, boundAgentPrompt: PERSONA }),
+        abortController: new AbortController(),
+        hooks: {},
+        hasEditorContext: false,
+      });
+      expect(options.agents?.[SLUG].description).toBe('Specorator roster agent');
+    });
+
+    it('cold-start: systemPrompt is the claude_code preset (not a string)', () => {
+      const options = QueryOptionsBuilder.buildColdStartQueryOptions({
+        ...createMockContext({ boundAgentSlug: SLUG, boundAgentPrompt: PERSONA }),
+        abortController: new AbortController(),
+        hooks: {},
+        hasEditorContext: false,
+      });
+      expect(typeof options.systemPrompt).toBe('object');
+      const preset = options.systemPrompt as { type: string; preset: string; append?: string };
+      expect(preset.type).toBe('preset');
+      expect(preset.preset).toBe('claude_code');
+    });
+
+    it('cold-start: preset append omits Specorator identity but keeps operational rules', () => {
+      const options = QueryOptionsBuilder.buildColdStartQueryOptions({
+        ...createMockContext({ boundAgentSlug: SLUG, boundAgentPrompt: PERSONA }),
+        abortController: new AbortController(),
+        hooks: {},
+        hasEditorContext: false,
+      });
+      const preset = options.systemPrompt as { append?: string };
+      expect(preset.append).not.toContain('You are **Specorator**');
+      expect(preset.append).toContain('## Path Conventions');
+    });
+
+    it('cold-start: preset append does NOT include the agent persona (agent owns its own identity)', () => {
+      const options = QueryOptionsBuilder.buildColdStartQueryOptions({
+        ...createMockContext({ boundAgentSlug: SLUG, boundAgentPrompt: PERSONA }),
+        abortController: new AbortController(),
+        hooks: {},
+        hasEditorContext: false,
+      });
+      const preset = options.systemPrompt as { append?: string };
+      expect(preset.append).not.toContain(PERSONA);
+    });
+
+    it('cold-start: falls back to string system prompt when slug absent', () => {
+      const options = QueryOptionsBuilder.buildColdStartQueryOptions({
+        ...createMockContext({ boundAgentPrompt: PERSONA }),
+        abortController: new AbortController(),
+        hooks: {},
+        hasEditorContext: false,
+      });
+      expect(typeof options.systemPrompt).toBe('string');
+      expect(options.agent).toBeUndefined();
+      expect(options.agents).toBeUndefined();
+    });
+
+    it('cold-start: falls back to string system prompt when prompt absent (slug only)', () => {
+      const options = QueryOptionsBuilder.buildColdStartQueryOptions({
+        ...createMockContext({ boundAgentSlug: SLUG }),
+        abortController: new AbortController(),
+        hooks: {},
+        hasEditorContext: false,
+      });
+      // Slug without prompt: identity NOT suppressed (no persona to replace it)
+      expect(typeof options.systemPrompt).toBe('string');
+      expect(String(options.systemPrompt)).toContain('You are **Specorator**');
+      expect(options.agent).toBeUndefined();
+      expect(options.agents).toBeUndefined();
+    });
+
+    it('cold-start: threads boundAgentModel into the agent definition when present', () => {
+      const options = QueryOptionsBuilder.buildColdStartQueryOptions({
+        ...createMockContext({ boundAgentSlug: SLUG, boundAgentPrompt: PERSONA, boundAgentModel: 'claude-opus-4-5' }),
+        abortController: new AbortController(),
+        hooks: {},
+        hasEditorContext: false,
+      });
+      expect(options.agents?.[SLUG].model).toBe('claude-opus-4-5');
+    });
+
+    it('cold-start: omits model from agent definition when boundAgentModel absent', () => {
+      const options = QueryOptionsBuilder.buildColdStartQueryOptions({
+        ...createMockContext({ boundAgentSlug: SLUG, boundAgentPrompt: PERSONA }),
+        abortController: new AbortController(),
+        hooks: {},
+        hasEditorContext: false,
+      });
+      expect(options.agents?.[SLUG].model).toBeUndefined();
+    });
+
+    // ── buildPersistentQueryOptions (persistent-query path) ───────────────────
+
+    it('persistent: sets options.agent and options.agents when slug+prompt present', () => {
+      const options = QueryOptionsBuilder.buildPersistentQueryOptions({
+        ...createMockContext({ boundAgentSlug: SLUG, boundAgentPrompt: PERSONA }),
+        abortController: new AbortController(),
+        hooks: {},
+      });
+      expect(options.agent).toBe(SLUG);
+      expect(options.agents?.[SLUG].prompt).toBe(PERSONA);
+      const preset = options.systemPrompt as { type: string; preset: string };
+      expect(preset.type).toBe('preset');
+      expect(preset.preset).toBe('claude_code');
+    });
+
+    it('persistent: falls back to string system prompt when no slug', () => {
+      const options = QueryOptionsBuilder.buildPersistentQueryOptions({
+        ...createMockContext({ boundAgentPrompt: PERSONA }),
+        abortController: new AbortController(),
+        hooks: {},
+      });
+      expect(typeof options.systemPrompt).toBe('string');
+      expect(options.agent).toBeUndefined();
+    });
+
+    // ── buildPersistentQueryConfig — systemPromptKey ──────────────────────────
+
+    it('config key includes agent slug when both slug and prompt are present', () => {
+      const ctx = createMockContext();
+      const config = QueryOptionsBuilder.buildPersistentQueryConfig(ctx, [], undefined, PERSONA, SLUG);
+      expect(config.systemPromptKey).toContain(`agent:${SLUG}`);
+    });
+
+    it('config key excludes agent: prefix when no slug', () => {
+      const ctx = createMockContext();
+      const config = QueryOptionsBuilder.buildPersistentQueryConfig(ctx, [], undefined, PERSONA, undefined);
+      expect(config.systemPromptKey).not.toContain('agent:');
+    });
+
+    it('config key excludes agent: prefix when slug present but no prompt', () => {
+      // Slug without prompt falls to fallback path; no native agent activated.
+      const ctx = createMockContext();
+      const config = QueryOptionsBuilder.buildPersistentQueryConfig(ctx, [], undefined, undefined, SLUG);
+      // Slug IS included in the key to detect its presence for restart purposes,
+      // but no-identity is NOT set (no persona → identity not suppressed).
+      expect(config.systemPromptKey).toContain(`agent:${SLUG}`);
+      expect(config.systemPromptKey).not.toContain('no-identity');
+    });
+
+    it('needsRestart when slug added to existing prompt-only session', () => {
+      const ctx = createMockContext();
+      const before = QueryOptionsBuilder.buildPersistentQueryConfig(ctx, [], undefined, PERSONA, undefined);
+      const after  = QueryOptionsBuilder.buildPersistentQueryConfig(ctx, [], undefined, PERSONA, SLUG);
+      expect(QueryOptionsBuilder.needsRestart(before, after)).toBe(true);
+    });
+
+    it('needsRestart when slug changes between two agents', () => {
+      const ctx = createMockContext();
+      const a = QueryOptionsBuilder.buildPersistentQueryConfig(ctx, [], undefined, PERSONA, 'agent-alpha');
+      const b = QueryOptionsBuilder.buildPersistentQueryConfig(ctx, [], undefined, PERSONA, 'agent-beta');
+      expect(QueryOptionsBuilder.needsRestart(a, b)).toBe(true);
+    });
+
+    it('no restart when slug and prompt are both stable', () => {
+      const ctx = createMockContext();
+      const a = QueryOptionsBuilder.buildPersistentQueryConfig(ctx, [], undefined, PERSONA, SLUG);
+      const b = QueryOptionsBuilder.buildPersistentQueryConfig(ctx, [], undefined, PERSONA, SLUG);
+      expect(QueryOptionsBuilder.needsRestart(a, b)).toBe(false);
+    });
+
+    it('needsRestart when switching from native-agent path back to no-agent', () => {
+      const ctx = createMockContext();
+      const bound   = QueryOptionsBuilder.buildPersistentQueryConfig(ctx, [], undefined, PERSONA, SLUG);
+      const unbound = QueryOptionsBuilder.buildPersistentQueryConfig(ctx, [], undefined, undefined, undefined);
+      expect(QueryOptionsBuilder.needsRestart(bound, unbound)).toBe(true);
+    });
+
+    it('suppressIdentity matches actual buildBaseOptions behavior: set iff prompt present', () => {
+      const ctx = createMockContext();
+      // slug + prompt → suppressIdentity=true in key
+      const withBoth = QueryOptionsBuilder.buildPersistentQueryConfig(ctx, [], undefined, PERSONA, SLUG);
+      expect(withBoth.systemPromptKey).toContain('no-identity');
+      // slug + no-prompt → suppressIdentity=false in key (fallback; identity not suppressed)
+      const slugOnly = QueryOptionsBuilder.buildPersistentQueryConfig(ctx, [], undefined, undefined, SLUG);
+      expect(slugOnly.systemPromptKey).not.toContain('no-identity');
+      // no-slug + prompt → suppressIdentity=true in key (fallback path)
+      const promptOnly = QueryOptionsBuilder.buildPersistentQueryConfig(ctx, [], undefined, PERSONA, undefined);
+      expect(promptOnly.systemPromptKey).toContain('no-identity');
+    });
+  });
+
   describe('resolveEffectiveModel precedence', () => {
     it('explicit model overrides boundAgentModel', () => {
       expect(QueryOptionsBuilder.resolveEffectiveModel('explicit', 'agent-model', 'settings-model'))

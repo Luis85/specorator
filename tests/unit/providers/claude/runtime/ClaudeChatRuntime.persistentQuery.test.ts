@@ -265,6 +265,41 @@ describe('ClaudeChatRuntime', () => {
       expect(storedConfig.systemPromptKey).not.toBe(noBoundConfig.systemPromptKey);
       expect((service as any).needsRestart(noBoundConfig)).toBe(true);
     });
+
+    // Regression for the native-agent path: slug must be pre-synced before
+    // startPersistentQuery so the very first turn starts with the agent active,
+    // and the stored key must include agent:<slug> so needsRestart correctly
+    // detects slug changes on subsequent turns.
+    it('native-agent path: stores systemPromptKey with agent:<slug> when slug pre-synced', async () => {
+      const boundPrompt = 'You review changes with technical rigor.';
+      const boundSlug = 'code-reviewer';
+      (service as any).currentBoundAgentPrompt = boundPrompt;
+      (service as any).currentBoundAgentSlug = boundSlug;
+
+      await (service as any).startPersistentQuery('/mock/vault/path', '/usr/local/bin/claude');
+
+      const storedConfig = (service as any).currentConfig;
+      expect(storedConfig).toBeTruthy();
+      expect(storedConfig.systemPromptKey).toContain(`agent:${boundSlug}`);
+
+      // Same slug → no restart.
+      const sameSlugConfig = (service as any).buildPersistentQueryConfig(
+        '/mock/vault/path', '/usr/local/bin/claude', undefined, undefined, boundPrompt, boundSlug,
+      );
+      expect((service as any).needsRestart(sameSlugConfig)).toBe(false);
+
+      // Different slug → restart (agent switch).
+      const diffSlugConfig = (service as any).buildPersistentQueryConfig(
+        '/mock/vault/path', '/usr/local/bin/claude', undefined, undefined, boundPrompt, 'other-agent',
+      );
+      expect((service as any).needsRestart(diffSlugConfig)).toBe(true);
+
+      // No slug (fallback path) → restart (key diverges).
+      const noSlugConfig = (service as any).buildPersistentQueryConfig(
+        '/mock/vault/path', '/usr/local/bin/claude', undefined, undefined, boundPrompt, undefined,
+      );
+      expect((service as any).needsRestart(noSlugConfig)).toBe(true);
+    });
   });
 
 
