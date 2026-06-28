@@ -466,3 +466,20 @@ common transport. Behavior-preserving — transport unit + consumer suites pass 
 `JsonRpcStdioClient` spec covers pending-request rejection, timeout, abort, and routing. No gated
 metric moved (the two transports weren't a tracked clone): an architectural dedup, counters held at
 32 / 803 / 236 / 0.
+Done 2026-06-28 (quality campaign run 17): ratchet-regression recovery + same-zone clone
+consolidation. Between runs 16 and 17 the gated baselines had drifted up to 40 / 1016 / 240 and the
+LOC guard was red (`CodexChatRuntime` 1082 → 1085). This run drove them back down and re-locked.
+(1) Note-store dedup: the parallel `LoopNoteStore` / `TemplateNoteStore` / `TaskNoteStore` and the
+`installPresetLoops` / `installPresetTemplates` pairs were lifted onto shared
+`features/tasks/shared/noteStoreShared.ts` (`fileBaseName`/`normalizeFolder`/`slugify`/`extractSection`/
+`listNoteDefinitions`/`saveNote`/`deleteNote`) and `installPresetNotes.ts`
+(`installPresetNotes` + `noticePresetInstall`), with the stores keeping their public method shapes.
+(2) `CodexChatRuntime` host⇆target session-path translation extracted to `codexSessionPathMapping.ts`
+as pure functions taking the launch spec (new focused spec added), dropping the file 1085 → 1051 and
+clearing the LOC regression. (3) Same-zone/same-file clone extractions: the two OpenCode discovery
+normalizers onto `normalizeUniqueRecords`, the `McpTestModal` optimistic/rollback toggle loop into
+`syncToolTogglesToDisabledSet`, and the two legacy Codex tool-call lifecycles onto
+`applyLegacyToolCallLifecycle`. `cloneGroups` 40 → 32, `duplicatedLines` 1016 → 786, `complexFunctions`
+240 → 238 (incidental), with `criticalComplexity` 0, maintainability 90.2, and the structural counters
+held at 0. Behavior-preserving (full unit suite green); the entangled cross-provider runtime clones and
+the divergent BangBash/Instruction mode managers were left as before.

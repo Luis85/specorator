@@ -1,3 +1,5 @@
+import { normalizeUniqueRecords } from './normalizeRecords';
+
 export interface OpencodeMode {
   description?: string;
   id: string;
@@ -33,37 +35,21 @@ const OPENCODE_MANAGED_MODE_IDS = new Set([
 ]);
 
 export function normalizeOpencodeAvailableModes(value: unknown): OpencodeMode[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  const normalized: OpencodeMode[] = [];
-  const seen = new Set<string>();
-  for (const entry of value as unknown[]) {
-    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-      continue;
+  return normalizeUniqueRecords(value, (str) => {
+    const id = str('id');
+    if (!id) {
+      return null;
     }
-    const record = entry as Record<string, unknown>;
-
-    const id = typeof record.id === 'string' ? record.id.trim() : '';
-    const name = typeof record.name === 'string' ? record.name.trim() : id;
-    const description = typeof record.description === 'string'
-      ? record.description.trim()
-      : '';
-
-    if (!id || seen.has(id)) {
-      continue;
-    }
-
-    seen.add(id);
-    normalized.push({
-      ...(description ? { description } : {}),
-      id,
-      name: name || id,
-    });
-  }
-
-  return normalized;
+    const description = str('description');
+    return {
+      dedupeKey: id,
+      item: {
+        ...(description ? { description } : {}),
+        id,
+        name: str('name') || id,
+      },
+    };
+  });
 }
 
 export function getEffectiveOpencodeModes(modes: OpencodeMode[]): OpencodeMode[] {
