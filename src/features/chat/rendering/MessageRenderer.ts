@@ -22,6 +22,7 @@ import {
   type AssistantContentHost,
   renderAssistantMessageContent,
 } from './assistantMessageContent';
+import { formatCodeBlocks } from './codeBlockFormatter';
 import { MessageActionBar } from './MessageActionBar';
 import { renderMessageContextCard } from './MessageContextCard';
 import { MessageImageRenderer } from './MessageImageRenderer';
@@ -76,11 +77,6 @@ function findResponseFooterChild(contentEl: HTMLElement): HTMLElement | null {
   return null;
 }
 
-function runRendererAction(action: () => Promise<void>): void {
-  void action().catch(() => {
-    // UI actions already surface expected failures locally.
-  });
-}
 
 /** Optional host hooks wired by the owning tab; all default to inert no-ops. */
 export interface MessageRendererHooks {
@@ -813,49 +809,7 @@ export class MessageRenderer {
       );
 
       // Wrap pre elements and move buttons outside scroll area
-      el.querySelectorAll('pre').forEach((pre) => {
-        // Skip if already wrapped
-        if (pre.parentElement?.classList.contains('specorator-code-wrapper')) return;
-
-        // Create wrapper
-        const wrapper = createEl('div', { cls: 'specorator-code-wrapper' });
-        pre.parentElement?.insertBefore(wrapper, pre);
-        wrapper.appendChild(pre);
-
-        // Check for language class and add label
-        const code = pre.querySelector('code[class*="language-"]');
-        if (code) {
-          const match = code.className.match(/language-(\w+)/);
-          if (match) {
-            wrapper.classList.add('has-language');
-            const label = createEl('span', {
-              cls: 'specorator-code-lang-label',
-              text: match[1],
-            });
-            wrapper.appendChild(label);
-            label.addEventListener('click', () => {
-              runRendererAction(async () => {
-                const originalLabel = match[1];
-                if (!originalLabel) return;
-
-                try {
-                  await navigator.clipboard.writeText(code.textContent || '');
-                  label.setText('Copied!');
-                  window.setTimeout(() => label.setText(originalLabel), 1500);
-                } catch {
-                  // Clipboard API may fail in non-secure contexts
-                }
-              });
-            });
-          }
-        }
-
-        // Move Obsidian's copy button outside pre into wrapper
-        const copyBtn = pre.querySelector('.copy-code-button');
-        if (copyBtn) {
-          wrapper.appendChild(copyBtn);
-        }
-      });
+      formatCodeBlocks(el);
 
       // Wikilinks and vault paths in assistant prose (Cursor often emits absolute paths in inline code).
       processFileLinks(this.app, el);
