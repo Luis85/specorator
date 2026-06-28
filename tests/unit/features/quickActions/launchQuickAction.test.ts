@@ -9,7 +9,7 @@ jest.mock('@/i18n/i18n', () => ({
 }));
 
 const launchMock = jest.fn();
-jest.mock('@/shared/launchWithModelPicker', () => ({
+jest.mock('@/features/quickActions/launchWithModelPicker', () => ({
   launchWithModelPicker: (...a: unknown[]) => launchMock(...a),
 }));
 
