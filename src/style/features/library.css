@@ -113,6 +113,19 @@
   background: var(--background-secondary);
 }
 
+/* Interactive cards (whole row opens on click, via createLibraryCard's
+   `interactive` option which sets role="button") get the mouse affordance —
+   cursor + hover — shared across the Agent / Skill / Loop library views. */
+.specorator-library-card[role="button"] {
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.specorator-library-card[role="button"]:hover {
+  border-color: var(--interactive-accent);
+  background: var(--background-modifier-hover);
+}
+
 /* Optional leading media slot (e.g. an avatar) rendered before the body. */
 .specorator-library-card-leading {
   flex: 0 0 auto;
