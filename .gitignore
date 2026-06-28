@@ -1,6 +1,7 @@
 # Build output
 main.js
 styles.css
+src/tool-host/embeddedSource.hostbundle
 .codex-vendor/
 *.js.map
 dist/
