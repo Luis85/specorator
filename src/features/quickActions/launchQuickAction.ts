@@ -2,8 +2,8 @@ import { type TAbstractFile } from 'obsidian';
 
 import { t } from '@/i18n/i18n';
 import type SpecoratorPlugin from '@/main';
-import { launchWithModelPicker } from './launchWithModelPicker';
 
+import { launchWithModelPicker } from './launchWithModelPicker';
 import { quickActionStemFromPath } from './quickActionStem';
 import { runQuickActionForFile } from './runQuickActionForFile';
 import type { QuickAction } from './types';
