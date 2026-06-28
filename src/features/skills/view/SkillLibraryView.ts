@@ -149,6 +149,15 @@ export class SkillLibraryView extends ItemView {
     this.plugin.events.emit('vaultSkill.changed', { providerId: 'claude' });
     new Notice(t('skillLibrary.created', { path }));
     await this.render();
+    this.openEditor({
+      id: `skill-${dir.split('/').pop()}`,
+      name: row.name,
+      description: row.description,
+      providerDisplayName: row.providerDisplayName,
+      sourceFilePath: path,
+      editable: true,
+      tags: row.tags,
+    });
   }
 
   private createSkillSafely(): void {
