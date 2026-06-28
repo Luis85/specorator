@@ -12,12 +12,25 @@ export interface LoggerOptions {
   logFilePath?: string;
 }
 
+/**
+ * Serialize redacted data without throwing. `JSON.stringify` throws on circular
+ * refs and BigInt; a logging failure must never fail an otherwise-successful
+ * tool run, so fall back to a non-throwing representation.
+ */
+function safeStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
 function format(now: string, level: string, tool: string, message: string, data?: unknown): string {
   // Deep-mask secret-keyed values before serializing, then scrub secret-shaped
   // substrings from the whole line — so neither a keyed token in `data` nor an
   // inline `Bearer ...`/`sk-...` shape in `message` lands in the vault log file.
   const redacted = data === undefined ? undefined : redactArgs([data])[0];
-  const tail = redacted === undefined ? '' : ` ${JSON.stringify(redacted)}`;
+  const tail = redacted === undefined ? '' : ` ${safeStringify(redacted)}`;
   return scrubString(`${now} [${level}] [${tool}] ${message}${tail}`);
 }
 

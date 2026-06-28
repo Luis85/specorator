@@ -35,4 +35,22 @@ describe('createLogger', () => {
     expect(line).not.toContain('sk-deadbeef0011');
     expect(line).toContain('[redacted]');
   });
+
+  it('does not throw and still emits a line for circular data', () => {
+    const lines: string[] = [];
+    const log = createLogger('looper', { sink: (l) => lines.push(l), now: () => 'T' });
+    const circular: Record<string, unknown> = {};
+    circular.a = circular;
+    expect(() => log.info('circular', circular)).not.toThrow();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('T [info] [looper] circular');
+  });
+
+  it('does not throw and still emits a line for BigInt data', () => {
+    const lines: string[] = [];
+    const log = createLogger('bigint', { sink: (l) => lines.push(l), now: () => 'T' });
+    expect(() => log.info('big', { n: BigInt('9007199254740993') })).not.toThrow();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('T [info] [bigint] big');
+  });
 });
