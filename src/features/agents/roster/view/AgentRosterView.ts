@@ -26,7 +26,10 @@ export class AgentRosterView extends ItemView {
   private readonly controller = new LibraryListController<RosterAgent>({
     getName: (a) => a.name,
     getDescription: (a) => a.description,
-    getTags: (a) => [...a.roles, ...(a.tags ?? [])],
+    getTags: (a) => [
+      ...a.roles.map((r) => (r === 'verifier' ? t('agentRoster.roleVerifier') : t('agentRoster.roleWorker'))),
+      ...(a.tags ?? []),
+    ],
     getUpdatedAt: (a) => a.updatedAt,
   });
 
@@ -229,7 +232,6 @@ export class AgentRosterView extends ItemView {
       updatedAt: Date.now(),
     };
     await this.store.save(clone);
-    await this.renderList();
     await this.openDetail(clone);
   }
 
