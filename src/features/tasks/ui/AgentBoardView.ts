@@ -31,6 +31,7 @@ import { canTransitionTaskStatus, isRunnableTaskStatus } from '../model/taskStat
 import type { TaskBoardModel, TaskSpec, TaskStatus } from '../model/taskTypes';
 import { renderTaskPrompt } from '../prompt/TaskPromptRenderer';
 import { TaskNoteStore } from '../storage/TaskNoteStore';
+import { AgentBoardLiveHeartbeatTracker } from './agentBoardLiveHeartbeat';
 import { type AgentBoardPauseState, AgentBoardRenderer } from './AgentBoardRenderer';
 import { createWorkOrderInteractive } from './createWorkOrderInteractive';
 import { loadLatestTaskSpec } from './loadLatestTaskSpec';
@@ -94,7 +95,7 @@ export class AgentBoardView extends ItemView {
   // updates the heartbeat at start/pause/resume, so reading it for the live
   // strip would freeze the age display between transitions; this map holds the
   // sidecar tick's `at` value so the rendered age stays fresh second-by-second.
-  private readonly liveHeartbeats = new Map<string, string>();
+  private readonly heartbeatTracker = new AgentBoardLiveHeartbeatTracker();
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -190,7 +191,7 @@ export class AgentBoardView extends ItemView {
     this.register(this.plugin.events.on('task:attempt-started', (p) => this.patchCard(p.taskId)));
     this.register(this.plugin.events.on('task:ledger-appended', (p) => this.patchLiveStrip(p.taskId, p.entry.message)));
     this.register(this.plugin.events.on('task:heartbeat', (p) => {
-      this.liveHeartbeats.set(p.taskId, p.at);
+      this.heartbeatTracker.record(p.taskId, p.at);
       this.patchLiveStrip(p.taskId);
     }));
     this.register(this.plugin.events.on('task:needs-input', (p) => this.onPauseRequested('needs_input', p)));
@@ -293,7 +294,7 @@ export class AgentBoardView extends ItemView {
     if (!task) return;
     const id = task.frontmatter.id;
     this.pauseState.delete(id);
-    this.liveHeartbeats.delete(id);
+    this.heartbeatTracker.evict(id);
     this.lastRunStatus.delete(id);
     this.renderer.removeCard(id);
   }
@@ -600,21 +601,7 @@ export class AgentBoardView extends ItemView {
   private patchLiveStrip(taskId: string, lastLedger?: string): void {
     const task = this.model.tasks.find((entry) => entry.frontmatter.id === taskId);
     if (!task) return;
-    const now = Date.now();
-    const startedAt = task.frontmatter.started ? Date.parse(task.frontmatter.started) : now;
-    // Prefer the live heartbeat captured from the run event — frontmatter only
-    // updates at transitions, so the rendered age would otherwise freeze between
-    // start and the next pause/resume even though the run is still ticking.
-    const liveHeartbeat = this.liveHeartbeats.get(taskId);
-    const heartbeatSource = liveHeartbeat ?? task.frontmatter.heartbeat;
-    const heartbeatAt = heartbeatSource ? Date.parse(heartbeatSource) : now;
-    const ledger = lastLedger ?? task.sections.ledger.split('\n').filter((line) => line.trim().length > 0).pop();
-    this.renderer.patchLiveStrip(taskId, {
-      lastLedger: ledger,
-      elapsedMs: Math.max(0, now - startedAt),
-      attemptNumber: task.frontmatter.attempts,
-      heartbeatAgeMs: Math.max(0, now - heartbeatAt),
-    });
+    this.renderer.patchLiveStrip(taskId, this.heartbeatTracker.computePatch(task, lastLedger, Date.now()));
   }
 
   private onStatusChanged(p: { taskId: string; status: TaskStatus }): void {
@@ -632,7 +619,7 @@ export class AgentBoardView extends ItemView {
       || p.status === 'canceled'
       || p.status === 'needs_handoff'
     ) {
-      this.liveHeartbeats.delete(p.taskId);
+      this.heartbeatTracker.evict(p.taskId);
     }
     this.patchCard(p.taskId);
   }

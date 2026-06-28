@@ -68,6 +68,12 @@ import { type CodexRuntimeContext, createCodexRuntimeContext } from './CodexRunt
 import { CodexServerRequestRouter } from './CodexServerRequestRouter';
 import { CodexSessionManager } from './CodexSessionManager';
 import {
+  mapHostPathToTarget,
+  mapRequiredHostPathsToTarget,
+  toHostSessionPath,
+  toTargetSessionPath,
+} from './codexSessionPathMapping';
+import {
   applyForkReplaySuffix,
   buildThreadSessionParams,
   type CodexThreadContext,
@@ -324,7 +330,7 @@ export class CodexChatRuntime implements ChatRuntime {
       // Pending fork: fork the source thread, optionally roll back, then start a turn
       const forked = await this.forkPendingThread(this.pendingFork, model, promptText, turn, conversationHistory);
       ({ threadId, threadTargetPath } = forked);
-      threadPath = this.toHostSessionPath(threadTargetPath);
+      threadPath = toHostSessionPath(this.launchSpec, threadTargetPath);
       nextTurn = forked.turn;
       this.loadedThreadId = threadId;
       completedPendingFork = true;
@@ -333,7 +339,7 @@ export class CodexChatRuntime implements ChatRuntime {
       const resumeResult = await this.resumeThread(existingThreadId, model, promptText);
       threadId = resumeResult.thread.id;
       threadTargetPath = resumeResult.thread.path ?? null;
-      threadPath = this.toHostSessionPath(threadTargetPath);
+      threadPath = toHostSessionPath(this.launchSpec, threadTargetPath);
       this.loadedThreadId = threadId;
     } else if (existingThreadId && existingThreadId === this.loadedThreadId) {
       // Thread already loaded — just start a new turn
@@ -343,7 +349,7 @@ export class CodexChatRuntime implements ChatRuntime {
       const startResult = await this.startThread(model, promptText);
       threadId = startResult.thread.id;
       threadTargetPath = startResult.thread.path ?? null;
-      threadPath = this.toHostSessionPath(threadTargetPath);
+      threadPath = toHostSessionPath(this.launchSpec, threadTargetPath);
       this.loadedThreadId = threadId;
     }
 
@@ -907,7 +913,8 @@ export class CodexChatRuntime implements ChatRuntime {
       return undefined;
     }
 
-    const mappedExternalContextPaths = this.mapRequiredHostPathsToTarget(
+    const mappedExternalContextPaths = mapRequiredHostPathsToTarget(
+      this.launchSpec,
       externalContextPaths,
       'external context path',
     );
@@ -923,9 +930,9 @@ export class CodexChatRuntime implements ChatRuntime {
       this.launchSpec?.targetCwd ?? getVaultPath(this.plugin.app),
       ...mappedExternalContextPaths,
       memoriesDirTarget,
-      this.mapHostPathToTarget(os.tmpdir()),
+      mapHostPathToTarget(this.launchSpec, os.tmpdir()),
       this.launchSpec?.target.platformFamily === 'unix' ? '/tmp' : null,
-      this.mapHostPathToTarget(process.env.TMPDIR),
+      mapHostPathToTarget(this.launchSpec, process.env.TMPDIR),
     ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
 
     return {
@@ -1110,7 +1117,7 @@ export class CodexChatRuntime implements ChatRuntime {
           const filename = toAttachmentFilename(img, i);
           const filePath = path.join(tempDir, `${i + 1}-${filename}`);
           fs.writeFileSync(filePath, Buffer.from(img.data, 'base64'));
-          const targetFilePath = this.mapHostPathToTarget(filePath);
+          const targetFilePath = mapHostPathToTarget(this.launchSpec, filePath);
           if (!targetFilePath) {
             throw new Error(`Codex cannot access image attachment path from the selected target: ${filePath}`);
           }
@@ -1133,59 +1140,6 @@ export class CodexChatRuntime implements ChatRuntime {
     }
   }
 
-  private toHostSessionPath(targetPath: string | null | undefined): string | null {
-    if (!targetPath) {
-      return null;
-    }
-
-    return this.launchSpec?.pathMapper.toHostPath(targetPath) ?? targetPath;
-  }
-
-  private toTargetSessionPath(sessionPath: string | null | undefined): string | null {
-    if (!sessionPath) {
-      return null;
-    }
-
-    if (!this.launchSpec) {
-      return sessionPath;
-    }
-
-    if (this.launchSpec.target.platformFamily === 'unix' && sessionPath.startsWith('/')) {
-      return sessionPath;
-    }
-
-    if (
-      this.launchSpec.target.platformFamily === 'windows'
-      && (/^[A-Za-z]:[\\/]/.test(sessionPath) || sessionPath.startsWith('\\\\'))
-    ) {
-      return sessionPath;
-    }
-
-    return this.launchSpec.pathMapper.toTargetPath(sessionPath) ?? sessionPath;
-  }
-
-  private mapHostPathToTarget(hostPath: string | null | undefined): string | null {
-    if (!hostPath) {
-      return null;
-    }
-
-    return this.launchSpec?.pathMapper.toTargetPath(hostPath) ?? hostPath;
-  }
-
-  private mapRequiredHostPathsToTarget(hostPaths: string[], label: string): string[] {
-    if (!this.launchSpec) {
-      return hostPaths;
-    }
-
-    return hostPaths.map((hostPath) => {
-      const targetPath = this.launchSpec!.pathMapper.toTargetPath(hostPath);
-      if (!targetPath) {
-        throw new Error(`Codex cannot access ${label} from the selected target: ${hostPath}`);
-      }
-      return targetPath;
-    });
-  }
-
   private resolveTranscriptRootHost(sessionFilePath?: string | null): string | null {
     return this.runtimeContext?.sessionsDirHost
       ?? deriveCodexSessionsRootFromSessionPath(
@@ -1198,7 +1152,8 @@ export class CodexChatRuntime implements ChatRuntime {
       return this.runtimeContext.sessionsDirTarget;
     }
 
-    const targetSessionPath = this.toTargetSessionPath(
+    const targetSessionPath = toTargetSessionPath(
+      this.launchSpec,
       sessionFilePath ?? this.session.getSessionFilePath() ?? this.currentThreadPath,
     );
     return deriveCodexSessionsRootFromSessionPath(targetSessionPath);

@@ -1,6 +1,7 @@
 import { sharedRunRegistry } from '@/features/tasks/execution/activeRunRegistry';
 import { createQueueControlState } from '@/features/tasks/execution/QueueRunner';
 import { QueueSlotTracker } from '@/features/tasks/execution/QueueSlotTracker';
+import { AgentBoardLiveHeartbeatTracker } from '@/features/tasks/ui/agentBoardLiveHeartbeat';
 import { AgentBoardView } from '@/features/tasks/ui/AgentBoardView';
 
 describe('AgentBoardView.onToggleQueue', () => {
@@ -387,7 +388,7 @@ describe('AgentBoardView.patchLiveStrip live heartbeat', () => {
         sections: { ledger: '' },
       }],
     };
-    view.liveHeartbeats = new Map<string, string>();
+    view.heartbeatTracker = new AgentBoardLiveHeartbeatTracker();
     return { view, patchLiveStrip };
   }
 
@@ -396,7 +397,7 @@ describe('AgentBoardView.patchLiveStrip live heartbeat', () => {
     // A live event fired ~1s ago should make the rendered age small.
     const stale = new Date(Date.now() - 10 * 60_000).toISOString();
     const { view, patchLiveStrip } = buildLiveStripView(stale);
-    view.liveHeartbeats.set('wo-1', new Date(Date.now() - 1_000).toISOString());
+    view.heartbeatTracker.record('wo-1', new Date(Date.now() - 1_000).toISOString());
 
     view.patchLiveStrip('wo-1');
 
@@ -421,7 +422,9 @@ describe('AgentBoardView.onStatusChanged liveHeartbeat eviction', () => {
   function buildEvictView() {
     const view = Object.create(AgentBoardView.prototype) as any;
     view.pauseState = new Map();
-    view.liveHeartbeats = new Map<string, string>([['wo-1', '2026-06-06T00:00:00Z']]);
+    view.heartbeatTracker = new AgentBoardLiveHeartbeatTracker();
+    view.heartbeatTracker.record('wo-1', '2026-06-06T00:00:00Z');
+    view.evictSpy = jest.spyOn(view.heartbeatTracker, 'evict');
     view.patchCard = jest.fn();
     return view;
   }
@@ -431,14 +434,14 @@ describe('AgentBoardView.onStatusChanged liveHeartbeat eviction', () => {
     (status) => {
       const view = buildEvictView();
       view.onStatusChanged({ taskId: 'wo-1', status });
-      expect(view.liveHeartbeats.has('wo-1')).toBe(false);
+      expect(view.evictSpy).toHaveBeenCalledWith('wo-1');
     },
   );
 
   it('keeps the live heartbeat entry on a non-terminal status change', () => {
     const view = buildEvictView();
     view.onStatusChanged({ taskId: 'wo-1', status: 'running' });
-    expect(view.liveHeartbeats.has('wo-1')).toBe(true);
+    expect(view.evictSpy).not.toHaveBeenCalled();
   });
 });
 

@@ -2,7 +2,6 @@ import { type App,setIcon } from 'obsidian';
 
 import type { TodoItem } from '../../../core/tools/todo';
 import { getToolIcon, MCP_ICON_MARKER } from '../../../core/tools/toolIcons';
-import { extractResolvedAnswersFromResultText } from '../../../core/tools/toolInput';
 import {
   isAgentLifecycleTool,
   TOOL_APPLY_PATCH,
@@ -24,7 +23,7 @@ import {
   TOOL_WRITE_STDIN,
 } from '../../../core/tools/toolNames';
 import { extractToolResultContent } from '../../../core/tools/toolResultContent';
-import type { AskUserQuestionItem, AskUserQuestionOption, ToolCallInfo } from '../../../core/types';
+import type { ToolCallInfo } from '../../../core/types';
 import type { DiffStats } from '../../../core/types/diff';
 import { appendMcpIcon } from '../../../shared/icons';
 import { parseApplyPatchDiffs, parseFileUpdateChangeDiffs } from '../../../utils/diff';
@@ -34,7 +33,12 @@ import {
   renderApplyPatchChangeList,
   renderApplyPatchResultFallback,
 } from './applyPatchExpandedHelpers';
+import {
+  renderAskUserQuestionFallback,
+  renderAskUserQuestionResult,
+} from './askUserQuestionRenderer';
 import { setupCollapsible } from './collapsible';
+import { contentFallback } from './contentFallback';
 import { renderDiffContent, renderDiffStats } from './DiffRenderer';
 import { renderTodoItems } from './todoUtils';
 import {
@@ -45,11 +49,11 @@ import {
   getToolLabel,
   getWebSearchSummary,
   getWriteStdinSummary,
-  normalizeWebSearchDisplayData,
   parseToolSearchQuery,
   truncateText,
 } from './toolLabel';
-import { isPlaceholderWebSearchResult, shouldRenderWebSearchAction } from './webSearchExpandedHelpers';
+import { renderLinesExpanded } from './toolLinesExpanded';
+import { renderWebSearchExpanded } from './webSearchRenderer';
 
 // Re-exported so existing consumers (e.g. WriteEditRenderer, SubagentRenderer, tests)
 // keep importing these from here after the label logic moved to ./toolLabel.
@@ -122,141 +126,6 @@ export function getToolSummary(name: string, input: Record<string, unknown>): st
   }
 }
 
-interface WebSearchLink {
-  title: string;
-  url: string;
-}
-
-function appendToolLink(parent: HTMLElement, title: string, url: string): void {
-  const linkEl = parent.createEl('a', { cls: 'specorator-tool-link' });
-  linkEl.setAttribute('href', url);
-  linkEl.setAttribute('target', '_blank');
-  linkEl.setAttribute('rel', 'noopener noreferrer');
-
-  const iconEl = linkEl.createSpan({ cls: 'specorator-tool-link-icon' });
-  setIcon(iconEl, 'external-link');
-
-  linkEl.createSpan({ cls: 'specorator-tool-link-title', text: title });
-}
-
-function parseWebSearchResult(result: string): { links: WebSearchLink[]; summary: string } | null {
-  const linksMatch = result.match(/Links:\s*(\[[\s\S]*?\])(?:\n|$)/);
-  if (!linksMatch) return null;
-
-  try {
-    const parsed = JSON.parse(linksMatch[1]) as WebSearchLink[];
-    if (!Array.isArray(parsed) || parsed.length === 0) return null;
-
-    const linksEndIndex = result.indexOf(linksMatch[0]) + linksMatch[0].length;
-    const summary = result.slice(linksEndIndex).trim();
-    return { links: parsed.filter(l => l.title && l.url), summary };
-  } catch {
-    return null;
-  }
-}
-
-function renderWebSearchActionExpanded(container: HTMLElement, input: Record<string, unknown>): boolean {
-  const data = normalizeWebSearchDisplayData(input);
-  const hasStructuredData = Boolean(data.actionType || data.query || data.queries.length || data.url || data.pattern);
-  if (!hasStructuredData) {
-    return false;
-  }
-
-  const linesEl = container.createDiv({ cls: 'specorator-tool-lines' });
-
-  switch (data.actionType) {
-    case 'open_page':
-      linesEl.createDiv({ cls: 'specorator-tool-line', text: 'Open page' });
-      if (data.url) {
-        appendToolLink(linesEl, data.url, data.url);
-      } else {
-        linesEl.createDiv({ cls: 'specorator-tool-line', text: 'URL unavailable' });
-      }
-      return true;
-
-    case 'find_in_page':
-      linesEl.createDiv({ cls: 'specorator-tool-line', text: 'Find in page' });
-      if (data.url) {
-        appendToolLink(linesEl, data.url, data.url);
-      } else {
-        linesEl.createDiv({ cls: 'specorator-tool-line', text: 'URL unavailable' });
-      }
-      if (data.pattern) {
-        linesEl.createDiv({ cls: 'specorator-tool-line', text: `Pattern: ${data.pattern}` });
-      }
-      return true;
-
-    case 'search':
-    default: {
-      const primaryQuery = data.query || data.queries[0];
-      linesEl.createDiv({
-        cls: 'specorator-tool-line',
-        text: primaryQuery ? `Query: ${primaryQuery}` : 'Search web',
-      });
-
-      const alternateQueries = data.queries.filter(query => query !== primaryQuery);
-      for (const query of alternateQueries.slice(0, 4)) {
-        linesEl.createDiv({ cls: 'specorator-tool-line', text: `Alt query: ${query}` });
-      }
-      if (alternateQueries.length > 4) {
-        linesEl.createDiv({
-          cls: 'specorator-tool-truncated',
-          text: `... ${alternateQueries.length - 4} more queries`,
-        });
-      }
-      return true;
-    }
-  }
-}
-
-function renderWebSearchParsedLinks(
-  container: HTMLElement,
-  parsed: { links: WebSearchLink[]; summary: string },
-): void {
-  const linksEl = container.createDiv({ cls: 'specorator-tool-lines' });
-  for (const link of parsed.links) appendToolLink(linksEl, link.title, link.url);
-  if (!parsed.summary) return;
-  const summaryEl = container.createDiv({ cls: 'specorator-tool-web-summary' });
-  summaryEl.setText(parsed.summary.length > 800 ? parsed.summary.slice(0, 800) + '...' : parsed.summary);
-}
-
-// Renders the action card and, when present, non-placeholder result lines below it.
-function renderWebSearchActionFirst(
-  container: HTMLElement,
-  input: Record<string, unknown>,
-  result: string | undefined,
-): boolean {
-  if (!renderWebSearchActionExpanded(container, input)) return false;
-  if (result && !isPlaceholderWebSearchResult(result)) renderLinesExpanded(container, result, 12);
-  return true;
-}
-
-function renderWebSearchExpanded(
-  container: HTMLElement,
-  input: Record<string, unknown>,
-  result: string | undefined,
-): void {
-  const parsed = result ? parseWebSearchResult(result) : null;
-  if (parsed && parsed.links.length > 0) {
-    renderWebSearchParsedLinks(container, parsed);
-    return;
-  }
-
-  const data = normalizeWebSearchDisplayData(input);
-  if (shouldRenderWebSearchAction(data, result) && renderWebSearchActionFirst(container, input, result)) {
-    return;
-  }
-
-  if (result) {
-    renderLinesExpanded(container, result, 20);
-    return;
-  }
-
-  if (renderWebSearchActionExpanded(container, input)) return;
-
-  container.createDiv({ cls: 'specorator-tool-empty', text: 'No result' });
-}
-
 function isFileSearchHeaderLine(line: string): boolean {
   const trimmed = line.trim();
   return /^Found \d+ files?:/i.test(trimmed) || /^\d+ matches across/i.test(trimmed);
@@ -280,32 +149,6 @@ function renderFileSearchExpanded(app: App, container: HTMLElement, result: stri
     } else {
       lineEl.setText(stripped || ' ');
     }
-  }
-}
-
-function renderLinesExpanded(
-  container: HTMLElement,
-  result: string,
-  maxLines: number,
-  hoverable = false
-): void {
-  const lines = result.split(/\r?\n/);
-  const truncated = lines.length > maxLines;
-  const displayLines = truncated ? lines.slice(0, maxLines) : lines;
-
-  const linesEl = container.createDiv({ cls: 'specorator-tool-lines' });
-  for (const line of displayLines) {
-    const stripped = line.replace(/^\s*\d+→/, '');
-    const lineEl = linesEl.createDiv({ cls: 'specorator-tool-line' });
-    if (hoverable) lineEl.addClass('hoverable');
-    lineEl.setText(stripped || ' ');
-  }
-
-  if (truncated) {
-    linesEl.createDiv({
-      cls: 'specorator-tool-truncated',
-      text: `... ${lines.length - maxLines} more lines`,
-    });
   }
 }
 
@@ -678,117 +521,6 @@ function createToolElementStructure(
   const content = toolEl.createDiv({ cls: 'specorator-tool-content' });
 
   return { toolEl, header, iconEl, nameEl, summaryEl, statusEl, content, currentTaskEl };
-}
-
-function formatAnswer(raw: unknown): string {
-  if (Array.isArray(raw)) return raw.join(', ');
-  if (typeof raw === 'string') return raw;
-  return '';
-}
-
-function resolveAskUserAnswers(toolCall: ToolCallInfo): Record<string, unknown> | undefined {
-  if (toolCall.resolvedAnswers) return toolCall.resolvedAnswers;
-
-  const parsed = extractResolvedAnswersFromResultText(toolCall.result);
-  if (parsed) {
-    toolCall.resolvedAnswers = parsed;
-    return parsed;
-  }
-
-  return undefined;
-}
-
-function renderAskUserQuestionResult(container: HTMLElement, toolCall: ToolCallInfo): boolean {
-  container.empty();
-  const questions = toolCall.input.questions as AskUserQuestionItem[] | undefined;
-  const answers = resolveAskUserAnswers(toolCall);
-  if (!questions || !Array.isArray(questions) || !answers) return false;
-
-  const reviewEl = container.createDiv({ cls: 'specorator-ask-review' });
-  for (let i = 0; i < questions.length; i++) {
-    const q = questions[i];
-    const answer = formatAnswer(
-      (q.id ? answers[q.id] : undefined) ?? answers[q.question]
-    );
-    const pairEl = reviewEl.createDiv({ cls: 'specorator-ask-review-pair' });
-    pairEl.createDiv({ text: `${i + 1}.`, cls: 'specorator-ask-review-num' });
-    const bodyEl = pairEl.createDiv({ cls: 'specorator-ask-review-body' });
-    bodyEl.createDiv({ text: q.question, cls: 'specorator-ask-review-q-text' });
-    bodyEl.createDiv({
-      text: answer || 'Not answered',
-      cls: answer ? 'specorator-ask-review-a-text' : 'specorator-ask-review-empty',
-    });
-  }
-
-  return true;
-}
-
-function renderAskUserQuestionFallback(container: HTMLElement, toolCall: ToolCallInfo, initialText?: string): void {
-  container.empty();
-
-  const questions = Array.isArray(toolCall.input.questions)
-    ? toolCall.input.questions as AskUserQuestionItem[]
-    : [];
-
-  if (questions.length === 0) {
-    contentFallback(container, initialText || toolCall.result || 'Waiting for answer...');
-    return;
-  }
-
-  if (initialText || toolCall.result) {
-    container.createDiv({
-      cls: 'specorator-ask-review-prompt',
-      text: initialText || toolCall.result || 'Waiting for answer...',
-    });
-  }
-
-  for (let questionIndex = 0; questionIndex < questions.length; questionIndex++) {
-    const question = questions[questionIndex];
-    const reviewEl = container.createDiv({ cls: 'specorator-ask-review' });
-    const pairEl = reviewEl.createDiv({ cls: 'specorator-ask-review-pair' });
-    pairEl.createDiv({ text: `${questionIndex + 1}.`, cls: 'specorator-ask-review-num' });
-    const bodyEl = pairEl.createDiv({ cls: 'specorator-ask-review-body' });
-    bodyEl.createDiv({ text: question.question, cls: 'specorator-ask-review-q-text' });
-
-    if (!Array.isArray(question.options) || question.options.length === 0) {
-      bodyEl.createDiv({ cls: 'specorator-ask-review-empty', text: 'No options recorded' });
-      continue;
-    }
-
-    const listEl = bodyEl.createDiv({ cls: 'specorator-ask-list' });
-    question.options.forEach((option, optionIndex) => {
-      renderAskUserQuestionOption(listEl, option, optionIndex, question.multiSelect === true);
-    });
-  }
-}
-
-function renderAskUserQuestionOption(
-  parentEl: HTMLElement,
-  option: AskUserQuestionOption,
-  optionIndex: number,
-  isMultiSelect: boolean,
-): void {
-  const itemEl = parentEl.createDiv({ cls: 'specorator-ask-item is-disabled' });
-
-  if (isMultiSelect) {
-    itemEl.createDiv({ cls: 'specorator-ask-check', text: '[ ] ' });
-  } else {
-    itemEl.createDiv({ cls: 'specorator-ask-item-num', text: `${optionIndex + 1}. ` });
-  }
-
-  const contentEl = itemEl.createDiv({ cls: 'specorator-ask-item-content' });
-  const labelRowEl = contentEl.createDiv({ cls: 'specorator-ask-label-row' });
-  labelRowEl.createDiv({ cls: 'specorator-ask-item-label', text: option.label });
-
-  if (option.description) {
-    contentEl.createDiv({ cls: 'specorator-ask-item-desc', text: option.description });
-  }
-}
-
-function contentFallback(container: HTMLElement, text: string): void {
-  const resultRow = container.createDiv({ cls: 'specorator-tool-result-row' });
-  const resultText = resultRow.createSpan({ cls: 'specorator-tool-result-text' });
-  resultText.setText(text);
 }
 
 function renderBashContent(

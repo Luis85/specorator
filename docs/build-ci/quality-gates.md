@@ -466,3 +466,114 @@ common transport. Behavior-preserving — transport unit + consumer suites pass 
 `JsonRpcStdioClient` spec covers pending-request rejection, timeout, abort, and routing. No gated
 metric moved (the two transports weren't a tracked clone): an architectural dedup, counters held at
 32 / 803 / 236 / 0.
+Done 2026-06-28 (quality campaign run 17): ratchet-regression recovery + same-zone clone
+consolidation. Between runs 16 and 17 the gated baselines had drifted up to 40 / 1016 / 240 and the
+LOC guard was red (`CodexChatRuntime` 1082 → 1085). This run drove them back down and re-locked.
+(1) Note-store dedup: the parallel `LoopNoteStore` / `TemplateNoteStore` / `TaskNoteStore` and the
+`installPresetLoops` / `installPresetTemplates` pairs were lifted onto shared
+`features/tasks/shared/noteStoreShared.ts` (`fileBaseName`/`normalizeFolder`/`slugify`/`extractSection`/
+`listNoteDefinitions`/`saveNote`/`deleteNote`) and `installPresetNotes.ts`
+(`installPresetNotes` + `noticePresetInstall`), with the stores keeping their public method shapes.
+(2) `CodexChatRuntime` host⇆target session-path translation extracted to `codexSessionPathMapping.ts`
+as pure functions taking the launch spec (new focused spec added), dropping the file 1085 → 1051 and
+clearing the LOC regression. (3) Same-zone/same-file clone extractions: the two OpenCode discovery
+normalizers onto `normalizeUniqueRecords`, the `McpTestModal` optimistic/rollback toggle loop into
+`syncToolTogglesToDisabledSet`, and the two legacy Codex tool-call lifecycles onto
+`applyLegacyToolCallLifecycle`. `cloneGroups` 40 → 32, `duplicatedLines` 1016 → 786, `complexFunctions`
+240 → 238 (incidental), with `criticalComplexity` 0, maintainability 90.2, and the structural counters
+held at 0. Behavior-preserving (full unit suite green); the entangled cross-provider runtime clones and
+the divergent BangBash/Instruction mode managers were left as before.
+Done 2026-06-28 (quality campaign run 18): clean-code guidelines + hotspot decomposition. Codified the
+refactoring practice the campaign has been applying in
+[`clean-code-refactoring.md`](clean-code-refactoring.md) (linked from `CLAUDE.md`), and sharpened the
+starter presets that embody it — the **Refactorer** roster agent, the **Architecture satisfaction**
+loop, and the **Refactor** work-order template. Then decomposed three >1,000-LOC coordinators along the
+self-contained seams an Explore pass mapped, each behavior-preserving with a focused spec:
+(1) `InputController` → `ResumeSessionDropdownCoordinator` (the `$`-resume dropdown lifecycle, a single
+field; 1202 → 1175); (2) `OpencodeChatRuntime` → `OpencodeSupportedCommandsRegistry` (the
+runtime-discovered slash-command list + first-discovery waiters; 1164 → 1116). Both keep thin delegators
+on the parent and take live accessors, so no import cycle. Gated metrics held at 32 / 786 / 238 / 0 /
+90.2 (the splits added no clones or complexity); LOC baseline re-locked for the two shrunk hotspots.
+**Deliberately deferred** (mapped but higher-risk — stateful surgery on core streaming, better as their
+own reviewed work orders driven by the new clean-code loop): `ClaudeChatRuntime`'s persistent-query
+lifecycle / response-consumer router (needs a ~16-field context object) and `InputController`'s
+plan-approval + provider-message-boundary state. Splitting those in the same PR would trade
+reviewability and behavior-safety for line count — exactly the trade the guidelines say not to make.
+Done 2026-06-28 (quality campaign run 19): `main.ts` → dedicated roster-agent service. The four
+roster-agent operations on the plugin entry class — `resolveBoundAgent` / `resolveAgentRunTarget`
+(bound/run-target agent → provider-scoped prompt + model) and `syncRosterAgentsToProviders` /
+`removeRosterAgentProjection` (project agents into / clean them out of each provider's native subagent
+folder) — moved to `app/agents/RosterAgentService.ts`, constructed with accessors so it always reads the
+plugin's current settings + skill aggregator. The plugin keeps thin public delegators, so external
+callers (chat InputController, Agent Board, roster view) are unchanged. Boundary-clean (`app` → `core` /
+`features` is allowed; violations held at 0), behavior-preserving (main/roster/board suites pass; a
+focused service spec covers null-agent, skill-baking, cross-provider model gating, and run-target
+resolution). `main.ts` 963 → 833. The HTTP tool server wiring and the tool-scope staleness fingerprint
+are the next earmarked service extractions (noted in the loc-baseline `reason`).
+Done 2026-06-28 (quality campaign run 20): `main.ts` → orchestrator, part 2. Two more cohesive
+`onload` blocks moved to dedicated `app/` modules mirroring the existing `registerPluginCommands` /
+`PluginViewActivator` pattern: workspace view + ribbon + view-open command registration →
+`app/views/registerPluginViews.ts`, and the chat message-toolbar actions (thumbs up/down, work-order,
+capture) → `app/commands/registerChatMessageActions.ts`. Both take `{ plugin, … }` and call back through
+the plugin's public surface (type-only `main` import — boundary-legal), so behavior and registration
+order are preserved. `main.ts` 833 → 766; the entry class now reads as orchestration. All affected
+suites pass.
+Done 2026-06-28 (quality campaign run 21): pure-helper decomposition of two more hotspots, guided by an
+Explore-agent seam map. `ToolCallRenderer` (entirely pure free functions) shed its ask-user-question
+cluster → `askUserQuestionRenderer.ts`, its web-search cluster → `webSearchRenderer.ts`, and the shared
+`renderLinesExpanded` + `contentFallback` primitives into their own modules; 854 → 628. `SubagentManager`
+shed its status-classification / JSON-coercion / agent-id-extraction heuristics → a pure
+`subagentResultParsing.ts` (with a 17-case spec), and dropped a dead private `extractAgentIdFromString`
+that was the SubagentManager↔ClaudeTaskResultInterpreter cross-zone clone; 936 → 869. Behavior-preserving
+(renderer + subagent suites pass untouched). Gated metrics improved and re-locked: `cloneGroups` 32 → 31,
+`duplicatedLines` 786 → 754, `complexFunctions` 238 → 236, structural counters held at 0. The
+StreamController text/thinking render coordinators were mapped but left for a follow-up — they are
+hot-path stateful (render-throttle + O(C²) backoff), so they warrant their own reviewed change rather
+than riding along here.
+Done 2026-06-28 (quality campaign run 22): broad pure-helper pass across two more hotspots (Explore-agent
+seam maps for StreamController / MessageRenderer / AgentBoardView / CodexNotificationRouter informed the
+picks). `cursorToolNormalization` (entirely pure) shed its per-tool-kind input-mapping family →
+`cursorToolInputMapping.ts` plus the shared value coercers → `cursorToolValueCoercion.ts`; 542 → 358,
+which drops it **below the 500 LOC cap** so its grandfathered entry is removed (24 → 23 hotspots).
+`MessageRenderer` shed its post-markdown code-block transform → `codeBlockFormatter.ts` (plus a dead
+`runRendererAction`); 812 → 770. Behavior-preserving (cursor + renderer suites pass untouched), no new
+clones or cycles. The stateful coordinator-style seams the agents surfaced — StreamController's
+text/thinking render coordinators, `CodexNotificationRouter`'s raw-tool / segment-buffer state machines,
+and `AgentBoardView`'s run-lifecycle / queue coordinators — were deliberately left: they own live
+streaming/turn or view-lifecycle state and need their own reviewed changes, not a broad-pass ride-along.
+Done 2026-06-28 (quality campaign run 23): the deferred stateful coordinators, each as a dedicated change
+with exhaustive verification. (1) `CodexNotificationRouter` → `codexFileChangeAccumulator` (pure
+file_change normalize/merge + the per-item memo map; the router keeps its emit methods so live emit
+ordering is byte-for-byte unchanged) + `codexNotificationHelpers` (shared asRecord/firstString); 879 →
+761, full codex suite (677) green. (2) `AgentBoardView` → `AgentBoardLiveHeartbeatTracker` (the live
+heartbeat map + the live-strip date math, now a focused-spec'd pure compute); the view keeps renderer +
+event wiring; 945 → 932, board suites + board perf gate green. (3) `StreamController` →
+`ThinkingRenderCoordinator` (the streaming thinking-block rAF render loop with the O(C²) re-parse
+backoff + pending-promise; logic moved verbatim, shared helpers injected as callbacks, appendThinking/
+finalizeCurrentThinkingBlock kept as delegators); 1067 → 964, the full chat suite (2129) + all three
+streaming perf gates + the whole 9131-test suite green. Gated metrics held at 31 / 754 / 236 / 0 / 90.2;
+LOC baseline re-locked. The symmetric StreamController **text** render coordinator and the remaining
+CodexNotificationRouter raw-tool/segment state machines are the natural next dedicated changes.
+Done 2026-06-28 (quality campaign run 24): the symmetric StreamController **text** render coordinator,
+completing the streaming-render split started in run 23. The streaming assistant-text lifecycle (collapse
+snapshot, append/finalize transitions, finalize-time card swap / copy button / action re-anchor, deferred
+math re-render) moved verbatim into `TextRenderCoordinator`; `appendText` / `finalizeCurrentTextBlock`
+stay as delegators. Both render coordinators now share a single throttled `StreamRenderLoop` (rAF tick +
+the O(C) re-parse `streamRenderBackoff` + pending-promise flush), parameterised per block through deps
+accessors (`currentContent` / `currentTarget` identity token / `getWindow`). The first cut briefly
+regressed the clone gate (a copy-pasted text loop pushed `cloneGroups` 31 → 35, `duplicatedLines` 754 →
+900) and broke 7 StreamController tests (an explicit `undefined` third arg to `renderContent` failed the
+suite's strict `toHaveBeenCalledWith`); both were fixed by hoisting the one shared loop and passing
+`renderer` by reference so the loop branches 2-arg vs 3-arg internally and keeps the exact call arity.
+`StreamController` 964 → 774; full chat suite + all three streaming perf gates + the whole test suite
+green; gated metrics restored to 31 / 754 / 236 / 0 / 90.2 and the LOC baseline re-locked.
+
+**Deliberately deferred** (mapped this run, left for their own reviewed changes): the deep per-turn state
+clusters in the two largest runtimes. `ClaudeChatRuntime`'s response-routing cluster (routeMessage →
+markRoutedStreamContent → deliverRoutedStreamChunk → finishRoutedMessage → flushAutoTurnBuffer +
+register/unregisterResponseHandler) threads ~17 instance fields and sits on the default, full-feature
+provider; `OpencodeChatRuntime`'s session-selection state (currentSessionModelId / ModeId /
+EffortConfigId / EffortValue / EffortValues) is touched at 15+ sites woven through every turn path.
+Extracting either would force most of the runtime's per-turn state through a callback surface — trading
+readability and behavior-safety for line count, exactly the trade the clean-code guide says not to make.
+These belong in dedicated, in-app-verified work orders, not a campaign ride-along.
