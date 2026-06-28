@@ -31,8 +31,8 @@
       "reason": "Grandfathered orchestrator. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Extracted to dedicated modules: roster-agent resolution + provider projection (app/agents/RosterAgentService.ts), workspace view/ribbon/view-command registration (app/views/registerPluginViews.ts), and chat message toolbar actions (app/commands/registerChatMessageActions.ts); the plugin keeps thin delegators. Remaining clusters earmarked for follow-up services: HTTP tool server wiring (SpecoratorHttpToolServer + getHttpToolServerConfig) and the tool-scope staleness fingerprint (getScopedSpecoratorTools + getSpecoratorToolKey)."
     },
     "src/features/chat/services/SubagentManager.ts": {
-      "loc": 936,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
+      "loc": 869,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Pure result-parsing heuristics (status classification, JSON-record coercion, agent-id extraction) extracted to subagentResultParsing.ts."
     },
     "src/features/tasks/ui/AgentBoardView.ts": {
       "loc": 945,
@@ -43,8 +43,8 @@
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
     },
     "src/features/chat/rendering/ToolCallRenderer.ts": {
-      "loc": 854,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
+      "loc": 628,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Per-tool pure renderers extracted to siblings: askUserQuestionRenderer, webSearchRenderer, the renderLinesExpanded primitive (toolLinesExpanded), and the contentFallback primitive."
     },
     "src/features/chat/rendering/MessageRenderer.ts": {
       "loc": 812,

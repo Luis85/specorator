@@ -518,3 +518,15 @@ capture) → `app/commands/registerChatMessageActions.ts`. Both take `{ plugin, 
 the plugin's public surface (type-only `main` import — boundary-legal), so behavior and registration
 order are preserved. `main.ts` 833 → 766; the entry class now reads as orchestration. All affected
 suites pass.
+Done 2026-06-28 (quality campaign run 21): pure-helper decomposition of two more hotspots, guided by an
+Explore-agent seam map. `ToolCallRenderer` (entirely pure free functions) shed its ask-user-question
+cluster → `askUserQuestionRenderer.ts`, its web-search cluster → `webSearchRenderer.ts`, and the shared
+`renderLinesExpanded` + `contentFallback` primitives into their own modules; 854 → 628. `SubagentManager`
+shed its status-classification / JSON-coercion / agent-id-extraction heuristics → a pure
+`subagentResultParsing.ts` (with a 17-case spec), and dropped a dead private `extractAgentIdFromString`
+that was the SubagentManager↔ClaudeTaskResultInterpreter cross-zone clone; 936 → 869. Behavior-preserving
+(renderer + subagent suites pass untouched). Gated metrics improved and re-locked: `cloneGroups` 32 → 31,
+`duplicatedLines` 786 → 754, `complexFunctions` 238 → 236, structural counters held at 0. The
+StreamController text/thinking render coordinators were mapped but left for a follow-up — they are
+hot-path stateful (render-throttle + O(C²) backoff), so they warrant their own reviewed change rather
+than riding along here.
