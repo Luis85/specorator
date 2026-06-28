@@ -16,10 +16,10 @@ jest.mock('@/shared/launchWithModelPicker', () => ({
 const runMock = jest.fn().mockResolvedValue(undefined);
 jest.mock('@/features/quickActions/runQuickActionForFile', () => ({
   runQuickActionForFile: (...args: unknown[]) => runMock(...args),
-  quickActionStemFromPath: (p: string) => p.split('/').pop()?.replace(/\.md$/, '') ?? p,
+  quickActionStemFromPath: (p: string) => (p.split('/').pop()?.replace(/\.md$/, '') ?? p).toLowerCase(),
 }));
 
-const ACTION: QuickAction = { id: 'a', name: 'Summarize', description: 'd', prompt: 'p', filePath: 'qa/summarize.md' };
+const ACTION: QuickAction = { id: 'a', name: 'Summarize', description: 'd', prompt: 'p', filePath: 'qa/Summarize.md' };
 function makeFile(): TFile { const f = Object.create(TFile.prototype); f.path = 'note.md'; return f as TFile; }
 
 beforeEach(() => jest.clearAllMocks());
@@ -32,8 +32,7 @@ describe('launchQuickAction delegation', () => {
     const [p, launch] = launchMock.mock.calls[0];
     expect(p).toBe(plugin);
     expect(launch.lastUsedKey).toBe('summarize');
-    expect(typeof launch.title).toBe('string');
-    expect(launch.title.length).toBeGreaterThan(0);
+    expect(launch.title).toBe('quickActions.launchModal.title:Summarize');
   });
 
   it('its onConfirm dispatches runQuickActionForFile with the choice', async () => {
