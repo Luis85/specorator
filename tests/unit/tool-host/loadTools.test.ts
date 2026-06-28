@@ -105,6 +105,21 @@ describe('loadTools', () => {
     expect(res.errors).toEqual([{ file: 'b_dup.mjs', message: expect.stringMatching(/Duplicate tool name "word_count"/) }]);
   });
 
+  it('rejects malformed inputSchema members (non-object properties value, non-string required)', async () => {
+    const badProps: ToolModule = {
+      manifest: { name: 'p', description: 'd', inputSchema: { type: 'object', properties: { name: 'string' } } },
+      handler: async () => '',
+    };
+    const badReq: ToolModule = {
+      manifest: { name: 'r', description: 'd', inputSchema: { type: 'object', required: [1] } },
+      handler: async () => '',
+    } as unknown as ToolModule;
+    const props = await loadTools('/t', { readdir: async () => ['p.mjs'], importModule: async () => badProps });
+    expect(props.errors[0].message).toMatch(/properties.*schema objects/);
+    const req = await loadTools('/t', { readdir: async () => ['r.mjs'], importModule: async () => badReq });
+    expect(req.errors[0].message).toMatch(/required.*array of strings/);
+  });
+
   it('rejects a manifest whose secrets field is not a string array', async () => {
     const badSecrets = { manifest: { name: 's', description: 'd', inputSchema: { type: 'object' }, secrets: 'KEY' }, handler: async () => '' };
     const res = await loadTools('/tools', {

@@ -33,9 +33,23 @@ function validateManifest(mod: ToolModule, file: string): LoadError | null {
   }
   // MCP ToolSchema requires an object-root JSON Schema; a non-object root would
   // poison the whole ListTools response, so reject it as a per-file load error.
-  const schema = m.inputSchema as { type?: unknown } | null | undefined;
+  const schema = m.inputSchema as { type?: unknown; properties?: unknown; required?: unknown } | null | undefined;
   if (!schema || typeof schema !== 'object' || schema.type !== 'object') {
     return { file, message: '`manifest.inputSchema` must be a JSON Schema object with root type "object"' };
+  }
+  // The MCP client validates tools/list against ToolSchema: `properties` values must be schema
+  // objects and `required` entries must be strings. A malformed member would make the client
+  // reject the WHOLE tool list, so reject it per-file instead.
+  if (
+    schema.properties !== undefined &&
+    (typeof schema.properties !== 'object' ||
+      schema.properties === null ||
+      Object.values(schema.properties as Record<string, unknown>).some((v) => typeof v !== 'object' || v === null))
+  ) {
+    return { file, message: '`manifest.inputSchema.properties` values must be schema objects' };
+  }
+  if (schema.required !== undefined && (!Array.isArray(schema.required) || schema.required.some((r) => typeof r !== 'string'))) {
+    return { file, message: '`manifest.inputSchema.required` must be an array of strings' };
   }
   // `secrets` is user-authored JS; a typo like `secrets: 'KEY'` would split into characters downstream.
   if (m.secrets !== undefined && (!Array.isArray(m.secrets) || m.secrets.some((s) => typeof s !== 'string'))) {
