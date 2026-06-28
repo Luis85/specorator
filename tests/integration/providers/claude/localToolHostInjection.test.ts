@@ -23,6 +23,7 @@ const EMPTY_CACHE: ToolHostCacheState = {
   hostMaterialized: false,
   toolsRev: 0,
   declaredToolSecretIds: [],
+  toolSecretsByFile: {},
   hostNodePath: null,
   hostEnv: null,
 };
@@ -36,6 +37,7 @@ const CATALOG: CatalogPayload = {
 const SUCCESS_SCAN = {
   catalog: CATALOG,
   declaredSecretIds: [],
+  toolSecretsByFile: { 'word_count.mjs': [] },
   materialized: true,
   nodePath: '/validated/node',
   env: { PATH: '/validated/bin' },

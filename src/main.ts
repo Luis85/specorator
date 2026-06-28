@@ -680,7 +680,7 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
    */
   async reloadLocalToolHost(): Promise<ToolHostScan> {
     const scanner = ProviderWorkspaceRegistry.getLocalToolHostScanner('claude');
-    if (!scanner) return { catalog: null, declaredSecretIds: [], materialized: false };
+    if (!scanner) return { catalog: null, declaredSecretIds: [], toolSecretsByFile: {}, materialized: false };
     const scan = await scanner(this);
 
     for (const view of this.getAllViews()) {

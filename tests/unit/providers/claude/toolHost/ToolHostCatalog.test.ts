@@ -1,4 +1,4 @@
-import { readCatalog, unionSecretIds } from '@/providers/claude/toolHost/ToolHostCatalog';
+import { catalogSecretsByFile, readCatalog, unionSecretIds } from '@/providers/claude/toolHost/ToolHostCatalog';
 import type { CatalogPayload } from '@/tool-host/types';
 
 function fakeSpawn(stdout: string, code = 0) {
@@ -62,5 +62,35 @@ describe('unionSecretIds', () => {
       errors: [],
     };
     expect(unionSecretIds(catalog)).toEqual([]);
+  });
+});
+
+describe('catalogSecretsByFile', () => {
+  it('maps each file to its own declared secret ids (not the union)', () => {
+    const catalog: CatalogPayload = {
+      tools: [
+        { file: 'a.mjs', name: 'a', description: '', secrets: ['A'] },
+        { file: 'b.mjs', name: 'b', description: '', secrets: ['A', 'B'] },
+      ],
+      errors: [],
+    };
+    expect(catalogSecretsByFile(catalog)).toEqual({
+      'a.mjs': ['A'],
+      'b.mjs': ['A', 'B'],
+    });
+  });
+
+  it('keys by file, so a tool only ever sees its own declaration', () => {
+    const catalog: CatalogPayload = {
+      tools: [
+        { file: 'wc.mjs', name: 'wc', description: '', secrets: ['OPENAI_API_KEY'] },
+        { file: 'slack.mjs', name: 'slack', description: '', secrets: ['SLACK_TOKEN'] },
+      ],
+      errors: [],
+    };
+    const byFile = catalogSecretsByFile(catalog);
+    // wc.mjs declared only OPENAI_API_KEY — it must not be associated with SLACK_TOKEN.
+    expect(byFile['wc.mjs']).toEqual(['OPENAI_API_KEY']);
+    expect(byFile['wc.mjs']).not.toContain('SLACK_TOKEN');
   });
 });

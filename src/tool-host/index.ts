@@ -5,6 +5,7 @@ import { Writable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 
 import { buildCatalog } from './catalog';
+import { grantSecrets } from './grantSecrets';
 import { loadTools } from './loadTools';
 import { createLogger } from './logger';
 import { createServer } from './server';
@@ -17,15 +18,37 @@ function env(name: string): string {
   return process.env[name] ?? '';
 }
 
+/** Parse a JSON env var, tolerating empty/invalid input as `undefined`. */
+function parseJson(raw: string): unknown {
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Keep only the string members of an unknown value (non-arrays → []). */
+function toStringArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string') : [];
+}
+
 /** Parse a JSON string array env var; tolerate empty/invalid as []. */
 function parseStringList(raw: string): string[] {
-  if (!raw) return [];
-  try {
-    const v: unknown = JSON.parse(raw);
-    return Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string') : [];
-  } catch {
-    return [];
-  }
+  return toStringArray(parseJson(raw));
+}
+
+/**
+ * Parse the cataloged per-tool secrets map (`{ file: [secretId, ...] }`) env var;
+ * tolerate empty/invalid as {}. This is the immutable catalog-time declaration the
+ * grant is keyed off — NOT the serve-time manifest.
+ */
+function parseToolSecretsMap(raw: string): Record<string, string[]> {
+  const v = parseJson(raw);
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const out: Record<string, string[]> = {};
+  for (const [file, ids] of Object.entries(v)) out[file] = toStringArray(ids);
+  return out;
 }
 
 /**
@@ -71,6 +94,10 @@ async function main(): Promise<void> {
       delete process.env[key];
     }
   }
+  // The CATALOGED per-tool declaration (file → declared ids), captured from the
+  // successful catalog scan. The grant is keyed off THIS, not the serve manifest,
+  // so a tool can't claim another tool's secret by listing its id in serve mode.
+  const catalogedSecretsByFile = parseToolSecretsMap(env('SPECORATOR_TOOL_SECRETS'));
 
   // Disabled files are never imported in EITHER mode — their top-level code never executes
   // (no fs/network side effects, no secret access), in catalog or serve.
@@ -85,16 +112,14 @@ async function main(): Promise<void> {
   }
 
   const ctxFactory = (toolName: string): ToolHandlerCtx => {
-    const secrets: Record<string, string> = {};
+    // Resolve the tool's FILE, then grant only ids that file declared AT CATALOG TIME.
+    // The serve-mode `manifest.secrets` is deliberately NOT consulted for the grant.
     const tool = load.tools.find((t) => t.manifest.name === toolName);
-    for (const id of tool?.manifest.secrets ?? []) {
-      if (secretsById[id] !== undefined) secrets[id] = secretsById[id];
-    }
     return {
       vaultPath,
       vault: createVaultContext(vaultPath),
       logger: createLogger(toolName, { logFilePath }),
-      secrets,
+      secrets: grantSecrets(tool?.file, catalogedSecretsByFile, secretsById),
     };
   };
 

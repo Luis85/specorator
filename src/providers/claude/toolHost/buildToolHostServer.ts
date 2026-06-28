@@ -13,6 +13,12 @@ export interface BuildToolHostServerInput {
   baseEnv: Record<string, string>;
   disabledFiles: string[];
   declaredSecrets: string[];
+  /**
+   * Cataloged per-tool secrets declaration (file → declared ids). Emitted as the
+   * `SPECORATOR_TOOL_SECRETS` JSON env var so the host grants each tool only the
+   * ids its own file declared at catalog time — never the serve-time manifest.
+   */
+  toolSecretsByFile: Record<string, string[]>;
   resolveSecret: (id: string) => string | null;
   /**
    * Monotonic revision bumped on every successful reload. Emitted as an env var
@@ -33,6 +39,8 @@ export function buildToolHostServer(input: BuildToolHostServerInput): McpStdioSe
     // JSON, not comma-join: vault filenames may contain commas, which would split into wrong names.
     SPECORATOR_DISABLED_FILES: JSON.stringify(input.disabledFiles),
     SPECORATOR_TOOLS_REV: String(input.toolsRev),
+    // Per-tool cataloged declaration: the host grants ctx.secrets keyed off THIS map.
+    SPECORATOR_TOOL_SECRETS: JSON.stringify(input.toolSecretsByFile),
   };
   for (const id of input.declaredSecrets) {
     const value = input.resolveSecret(id);

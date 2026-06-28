@@ -19,6 +19,18 @@ export function unionSecretIds(catalog: CatalogPayload): string[] {
 }
 
 /**
+ * Per-tool cataloged secret declaration: `{ file: [secretId, ...] }`. The host
+ * grants each tool ONLY the ids its own file declared at catalog time (keyed by
+ * file), closing the serve-manifest isolation bypass. Carried in lockstep with
+ * {@link unionSecretIds} (which transports the values).
+ */
+export function catalogSecretsByFile(catalog: CatalogPayload): Record<string, string[]> {
+  const byFile: Record<string, string[]> = {};
+  for (const tool of catalog.tools) byFile[tool.file] = [...tool.secrets];
+  return byFile;
+}
+
+/**
  * Run the host in `--catalog` mode and parse its output. Returns `null` on
  * ANY failure (process error, non-zero/`-1` timeout exit, or unparseable/invalid
  * stdout) so callers can distinguish a *failed* scan from a genuinely *empty*

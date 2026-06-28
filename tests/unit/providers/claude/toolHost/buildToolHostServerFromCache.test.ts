@@ -6,6 +6,7 @@ const baseCache = {
   hostMaterialized: true,
   toolsRev: 2,
   declaredToolSecretIds: ['OPENAI_API_KEY'],
+  toolSecretsByFile: { 'wc.mjs': ['OPENAI_API_KEY'] },
   hostNodePath: '/validated/node18',
   hostEnv: { PATH: '/validated/bin' },
 };
@@ -49,6 +50,7 @@ describe('buildToolHostServerFromCache', () => {
       SPECORATOR_DISABLED_FILES: '["old.mjs"]',
       SPECORATOR_TOOLS_REV: '2',
       SPECORATOR_SECRET_OPENAI_API_KEY: 'sk-test',
+      SPECORATOR_TOOL_SECRETS: '{"wc.mjs":["OPENAI_API_KEY"]}',
     });
   });
 

@@ -9,6 +9,7 @@ const base = {
   baseEnv: { PATH: '/usr/bin' },
   disabledFiles: ['old_tool.mjs'],
   declaredSecrets: ['OPENAI_API_KEY'],
+  toolSecretsByFile: { 'wc.mjs': ['OPENAI_API_KEY'] },
   resolveSecret: (id: string) => (id === 'OPENAI_API_KEY' ? 'sk-test' : null),
   toolsRev: 0,
 };
@@ -46,5 +47,10 @@ describe('buildToolHostServer', () => {
   it('emits the tools revision so a reload changes the serialized config', () => {
     expect(buildToolHostServer(base)!.env!.SPECORATOR_TOOLS_REV).toBe('0');
     expect(buildToolHostServer({ ...base, toolsRev: 5 })!.env!.SPECORATOR_TOOLS_REV).toBe('5');
+  });
+
+  it('emits the cataloged per-tool secrets map so the host grants per file, not per serve manifest', () => {
+    const cfg = buildToolHostServer(base);
+    expect(cfg!.env!.SPECORATOR_TOOL_SECRETS).toBe('{"wc.mjs":["OPENAI_API_KEY"]}');
   });
 });

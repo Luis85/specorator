@@ -219,6 +219,8 @@ export class ClaudeChatRuntime implements ChatRuntime {
   // Local tool host (synthetic MCP server)
   /** Union of `manifest.secrets` across discovered tools, refreshed from the catalog. */
   private declaredToolSecretIds: string[] = [];
+  /** Cataloged per-tool secrets declaration (file → ids); host grants ctx.secrets from this. */
+  private toolSecretsByFile: Record<string, string[]> = {};
   /** Set true once the embedded host has been written to disk this session. */
   private hostMaterialized = false;
   /** Bumped on every reload so the synthetic config changes → host re-spawns with a fresh scan. */
@@ -713,6 +715,7 @@ export class ClaudeChatRuntime implements ChatRuntime {
           hostMaterialized: this.hostMaterialized,
           toolsRev: this.toolsRev,
           declaredToolSecretIds: this.declaredToolSecretIds,
+          toolSecretsByFile: this.toolSecretsByFile,
           hostNodePath: this.hostNodePath,
           hostEnv: this.hostEnv,
         },
@@ -760,6 +763,7 @@ export class ClaudeChatRuntime implements ChatRuntime {
         hostMaterialized: this.hostMaterialized,
         toolsRev: this.toolsRev,
         declaredToolSecretIds: this.declaredToolSecretIds,
+        toolSecretsByFile: this.toolSecretsByFile,
         hostNodePath: this.hostNodePath,
         hostEnv: this.hostEnv,
       },
@@ -768,6 +772,7 @@ export class ClaudeChatRuntime implements ChatRuntime {
     this.hostMaterialized = next.hostMaterialized;
     this.toolsRev = next.toolsRev;
     this.declaredToolSecretIds = next.declaredToolSecretIds;
+    this.toolSecretsByFile = next.toolSecretsByFile;
     this.hostNodePath = next.hostNodePath;
     this.hostEnv = next.hostEnv;
   }

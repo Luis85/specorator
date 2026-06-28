@@ -8,11 +8,16 @@ import { curateStdioMcpEnv, findNodeExecutable, getEnhancedPath } from '../../..
 import { getClaudeProviderSettings } from '../settings';
 import { buildToolHostServer } from './buildToolHostServer';
 import { isSupportedNode, probeNodeMajor } from './nodeVersion';
-import { readCatalog, spawnCatalogRunner, unionSecretIds } from './ToolHostCatalog';
+import { catalogSecretsByFile, readCatalog, spawnCatalogRunner, unionSecretIds } from './ToolHostCatalog';
 import { materializeToolHost } from './ToolHostMaterializer';
 import { resolveToolHostPaths } from './toolHostPaths';
 
-const DISABLED: ToolHostScan = { catalog: null, declaredSecretIds: [], materialized: false };
+const DISABLED: ToolHostScan = {
+  catalog: null,
+  declaredSecretIds: [],
+  toolSecretsByFile: {},
+  materialized: false,
+};
 
 /**
  * Coerce a fan-out payload into a {@link ToolHostScan}. Accepts a full scan, a
@@ -23,7 +28,12 @@ export function normalizeToolHostScan(
 ): ToolHostScan {
   if (scan === null) return DISABLED;
   if ('materialized' in scan) return scan;
-  return { catalog: scan, declaredSecretIds: unionSecretIds(scan), materialized: true };
+  return {
+    catalog: scan,
+    declaredSecretIds: unionSecretIds(scan),
+    toolSecretsByFile: catalogSecretsByFile(scan),
+    materialized: true,
+  };
 }
 
 /**
@@ -40,6 +50,13 @@ export interface ToolHostCacheState {
   hostMaterialized: boolean;
   toolsRev: number;
   declaredToolSecretIds: string[];
+  /**
+   * Cataloged per-tool secrets declaration (file → declared ids) from the last
+   * successful scan. Kept in lockstep with `declaredToolSecretIds` (the union):
+   * preserved together on `scanFailed`, cleared together when disabled, replaced
+   * together on success. The host grants each tool secrets keyed off this map.
+   */
+  toolSecretsByFile: Record<string, string[]>;
   hostNodePath: string | null;
   hostEnv: Record<string, string> | null;
 }
@@ -65,6 +82,7 @@ export function reduceToolHostCache(
       hostMaterialized: false,
       toolsRev: prev.toolsRev,
       declaredToolSecretIds: [],
+      toolSecretsByFile: {},
       hostNodePath: null,
       hostEnv: null,
     };
@@ -73,6 +91,7 @@ export function reduceToolHostCache(
     hostMaterialized: true,
     toolsRev: prev.toolsRev + 1,
     declaredToolSecretIds: normalized.declaredSecretIds,
+    toolSecretsByFile: normalized.toolSecretsByFile,
     hostNodePath: normalized.nodePath ?? null,
     hostEnv: normalized.env ?? null,
   };
@@ -114,6 +133,7 @@ export function buildToolHostServerFromCache(
     baseEnv: cache.hostEnv ?? {},
     disabledFiles: input.disabledFiles,
     declaredSecrets: cache.declaredToolSecretIds,
+    toolSecretsByFile: cache.toolSecretsByFile,
     resolveSecret: input.resolveSecret,
     toolsRev: cache.toolsRev,
   });
@@ -170,7 +190,13 @@ export async function scanLocalToolHost(plugin: PluginContext): Promise<ToolHost
   // output). Flag it so the fan-out leaves a previously-good secret union intact rather
   // than caching `[]` over it — a failed scan is not a successful empty tool set.
   if (catalog === null) {
-    return { catalog: null, declaredSecretIds: [], materialized: false, scanFailed: true };
+    return {
+      catalog: null,
+      declaredSecretIds: [],
+      toolSecretsByFile: {},
+      materialized: false,
+      scanFailed: true,
+    };
   }
   // Cache the VALIDATED node + the curated env the host spawned with (sans the
   // per-scan SPECORATOR_* vars buildToolHostServer re-derives) so the sync per-turn
@@ -178,6 +204,7 @@ export async function scanLocalToolHost(plugin: PluginContext): Promise<ToolHost
   return {
     catalog,
     declaredSecretIds: unionSecretIds(catalog),
+    toolSecretsByFile: catalogSecretsByFile(catalog),
     materialized: true,
     nodePath,
     env: baseEnv,

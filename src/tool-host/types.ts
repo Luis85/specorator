@@ -89,6 +89,14 @@ export interface CatalogPayload {
 export interface ToolHostScan {
   catalog: CatalogPayload | null;
   declaredSecretIds: string[];
+  /**
+   * The cataloged per-tool secrets declaration (file → declared secret ids) from
+   * THIS scan's successful catalog. Carried in lockstep with `declaredSecretIds`
+   * (the union): the host grants each tool only the ids its own file declared at
+   * catalog time, keyed by file — never the serve-time manifest. Empty when the
+   * host is disabled or the scan failed.
+   */
+  toolSecretsByFile: Record<string, string[]>;
   materialized: boolean;
   scanFailed?: boolean;
   /** Validated Node binary (passed the ≥18 probe) the host/catalog spawned with. */
