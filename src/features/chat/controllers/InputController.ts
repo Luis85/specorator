@@ -27,7 +27,6 @@ import type {
 import type { ApprovalDecision, ChatMessage, ExitPlanModeDecision, StreamChunk } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
-import { ResumeSessionDropdown } from '../../../shared/components/ResumeSessionDropdown';
 import { InstructionModal } from '../../../shared/modals/InstructionConfirmModal';
 import type { BrowserSelectionContext } from '../../../utils/browser';
 import type { CanvasSelectionContext } from '../../../utils/canvas';
@@ -66,6 +65,7 @@ import {
 import type { ConversationController } from './ConversationController';
 import { InlinePromptController } from './InlinePromptController';
 import { QueuedMessageController } from './QueuedMessageController';
+import { ResumeSessionDropdownCoordinator } from './ResumeSessionDropdownCoordinator';
 import type { SelectionController } from './SelectionController';
 import type { StreamController } from './StreamController';
 
@@ -141,7 +141,7 @@ export interface ProgrammaticSendResult {
 
 export class InputController {
   private deps: InputControllerDeps;
-  private activeResumeDropdown: ResumeSessionDropdown | null = null;
+  private readonly resumeDropdown: ResumeSessionDropdownCoordinator;
   private readonly queuedMessages: QueuedMessageController;
   private readonly inlinePrompts: InlinePromptController;
   private activeStreamingAssistantMessage: ChatMessage | null = null;
@@ -162,6 +162,14 @@ export class InputController {
 
   constructor(deps: InputControllerDeps) {
     this.deps = deps;
+    this.resumeDropdown = new ResumeSessionDropdownCoordinator({
+      getInputContainerEl: () => this.deps.getInputContainerEl(),
+      getInputEl: () => this.deps.getInputEl(),
+      getConversations: () => this.deps.plugin.getConversationList(),
+      getCurrentConversationId: () => this.deps.state.currentConversationId,
+      openConversation: (id) =>
+        this.deps.openConversation?.(id) ?? this.deps.conversationController.switchTo(id),
+    });
     this.queuedMessages = new QueuedMessageController({
       state: deps.state,
       getAgentService: () => this.getAgentService(),
@@ -1289,7 +1297,7 @@ export class InputController {
         break;
       }
       case 'resume':
-        this.showResumeDropdown();
+        this.resumeDropdown.show();
         break;
       case 'fork': {
         if (!this.getActiveCapabilities().supportsFork) {
@@ -1319,53 +1327,14 @@ export class InputController {
   // ============================================
 
   handleResumeKeydown(e: KeyboardEvent): boolean {
-    if (!this.activeResumeDropdown?.isVisible()) return false;
-    return this.activeResumeDropdown.handleKeydown(e);
+    return this.resumeDropdown.handleKeydown(e);
   }
 
   isResumeDropdownVisible(): boolean {
-    return this.activeResumeDropdown?.isVisible() ?? false;
+    return this.resumeDropdown.isVisible();
   }
 
   destroyResumeDropdown(): void {
-    if (this.activeResumeDropdown) {
-      this.activeResumeDropdown.destroy();
-      this.activeResumeDropdown = null;
-    }
-  }
-
-  private showResumeDropdown(): void {
-    const { plugin, state, conversationController } = this.deps;
-
-    // Clean up any existing dropdown
-    this.destroyResumeDropdown();
-
-    const conversations = plugin.getConversationList();
-    if (conversations.length === 0) {
-      new Notice(t('chat.input.noConversationsToResume'));
-      return;
-    }
-
-    const openConversation = this.deps.openConversation
-      ?? ((id: string) => conversationController.switchTo(id));
-
-    this.activeResumeDropdown = new ResumeSessionDropdown(
-      this.deps.getInputContainerEl(),
-      this.deps.getInputEl(),
-      conversations,
-      state.currentConversationId,
-      {
-        onSelect: (id) => {
-          this.destroyResumeDropdown();
-          openConversation(id).catch((err: unknown) => {
-            const msg = err instanceof Error ? err.message : String(err);
-            new Notice(t('chat.input.openConversationFailed', { error: msg }));
-          });
-        },
-        onDismiss: () => {
-          this.destroyResumeDropdown();
-        },
-      }
-    );
+    this.resumeDropdown.destroy();
   }
 }
