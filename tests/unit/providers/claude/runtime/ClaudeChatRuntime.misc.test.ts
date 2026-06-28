@@ -1050,4 +1050,39 @@ describe('ClaudeChatRuntime', () => {
     });
   });
 
+  describe('Local tool host Node resolution', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('resolves Node against the provider-configured env PATH and CLI dir', () => {
+      // Node lives ONLY on the PATH the user set via the Claude provider
+      // Environment setting — not on Obsidian's base PATH.
+      (mockPlugin.getResolvedEnvironmentVariables as jest.Mock).mockReturnValue({
+        PATH: '/custom/node/bin',
+      });
+      (mockPlugin.getResolvedProviderCliPath as jest.Mock).mockReturnValue(
+        '/usr/local/bin/claude',
+      );
+
+      const getEnhancedPath = jest
+        .spyOn(envUtils, 'getEnhancedPath')
+        .mockReturnValue('/custom/node/bin:/usr/local/bin');
+      const findNodeExecutable = jest
+        .spyOn(envUtils, 'findNodeExecutable')
+        .mockReturnValue('/custom/node/bin/node');
+
+      const result = (service as any).resolveToolHostNode();
+
+      // The enhanced PATH must be derived from the provider env PATH + CLI path,
+      // not from a bare getEnhancedPath() call.
+      expect(getEnhancedPath).toHaveBeenCalledWith('/custom/node/bin', '/usr/local/bin/claude');
+      expect(findNodeExecutable).toHaveBeenCalledWith('/custom/node/bin:/usr/local/bin');
+      expect(result).toEqual({
+        nodePath: '/custom/node/bin/node',
+        enhancedPath: '/custom/node/bin:/usr/local/bin',
+      });
+    });
+  });
+
 });

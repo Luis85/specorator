@@ -685,6 +685,20 @@ export class ClaudeChatRuntime implements ChatRuntime {
   }
 
   /**
+   * Resolve the Node executable and enhanced PATH for the tool host the SAME way
+   * the live Claude CLI subprocess resolves them: provider-configured env PATH
+   * (Claude settings → Environment) + the CLI dir, not just Obsidian's own PATH.
+   * Without this, a user who only put Node on PATH via the provider setting would
+   * fail the probe and never enable local tools, even though the CLI finds Node.
+   */
+  private resolveToolHostNode(): { nodePath: string | null; enhancedPath: string } {
+    const customEnv = this.plugin.getResolvedEnvironmentVariables(this.providerId);
+    const cliPath = this.plugin.getResolvedProviderCliPath(this.providerId) ?? '';
+    const enhancedPath = getEnhancedPath(customEnv.PATH, cliPath);
+    return { nodePath: findNodeExecutable(enhancedPath), enhancedPath };
+  }
+
+  /**
    * Sync closure (called per-turn at both query seams) that returns the synthetic
    * local-tool-host stdio config, or null when off. It reads cached secret ids and
    * `toolsRev` rather than spawning catalog mode on the hot path.
@@ -698,7 +712,7 @@ export class ClaudeChatRuntime implements ChatRuntime {
       if (!this.hostMaterialized) return null;
       const vaultPath = this.plugin.getVaultPath();
       if (!vaultPath) return null;
-      const nodePath = findNodeExecutable(getEnhancedPath());
+      const { nodePath, enhancedPath } = this.resolveToolHostNode();
       const paths = resolveToolHostPaths({ vaultPath, pluginDir: this.plugin.manifest.dir ?? '' });
       return buildToolHostServer({
         enabled: true,
@@ -706,7 +720,9 @@ export class ClaudeChatRuntime implements ChatRuntime {
         hostEntry: paths.hostEntry,
         toolsDir: paths.toolsDir,
         vaultPath,
-        baseEnv: curateStdioMcpEnv({}),
+        // Inject the resolved PATH through the curation/allowlist so the spawned
+        // `node tool-host.mjs` and user tools inherit the same Node as the CLI.
+        baseEnv: curateStdioMcpEnv({ PATH: enhancedPath }),
         disabledFiles: claude.localToolHostDisabledFiles,
         declaredSecrets: this.declaredToolSecretIds,
         resolveSecret: (id) => this.plugin.secretStore.get(id),
@@ -725,7 +741,7 @@ export class ClaudeChatRuntime implements ChatRuntime {
   async reloadLocalToolHost(): Promise<CatalogPayload | null> {
     this.hostReloadAttempted = true;
     const claude = getClaudeProviderSettings(this.plugin.settings);
-    const nodePath = findNodeExecutable(getEnhancedPath());
+    const { nodePath, enhancedPath } = this.resolveToolHostNode();
     const vaultPath = this.plugin.getVaultPath();
     if (!claude.localToolHostEnabled || !nodePath || !vaultPath || !isSupportedNode(await probeNodeMajor(nodePath))) {
       this.hostMaterialized = false;
@@ -740,7 +756,7 @@ export class ClaudeChatRuntime implements ChatRuntime {
     this.hostMaterialized = true;   // unblocks the cold-start builder
     this.toolsRev += 1;             // force the synthetic config to differ → host re-spawns + re-scans
     const env = {
-      ...curateStdioMcpEnv({}),
+      ...curateStdioMcpEnv({ PATH: enhancedPath }),
       SPECORATOR_TOOLS_DIR: paths.toolsDir,
       SPECORATOR_VAULT_PATH: vaultPath,
       // JSON (comma-safe) disabled set so the catalog skips disabled files — their secrets must not enter the union.

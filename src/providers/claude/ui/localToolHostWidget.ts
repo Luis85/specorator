@@ -2,15 +2,24 @@ import { Notice, Setting } from 'obsidian';
 
 import type { ProviderSettingsWidgetMount } from '../../../core/providers/settingsWidgets';
 import { asSettingsBag } from '../../../core/types';
+import type { PluginContext } from '../../../core/types/PluginContext';
 import { t } from '../../../i18n/i18n';
 import type { CatalogPayload } from '../../../tool-host/types';
 import { findNodeExecutable, getEnhancedPath } from '../../../utils/env';
 import { getClaudeProviderSettings, updateClaudeProviderSettings } from '../settings';
 import { isSupportedNode, probeNodeMajor } from '../toolHost/nodeVersion';
 
-/** Node present on PATH AND at or above the host's minimum major (18). */
-async function nodeSupported(): Promise<boolean> {
-  const nodePath = findNodeExecutable(getEnhancedPath());
+/**
+ * Node present on PATH AND at or above the host's minimum major (18). Resolves
+ * the enhanced PATH the same way the runtime does (provider-configured env PATH
+ * + CLI dir), so the pre-enable toggle check matches the runtime's resolution
+ * and doesn't wrongly block when Node is only on the provider's Environment PATH.
+ */
+async function nodeSupported(plugin: PluginContext): Promise<boolean> {
+  const customEnv = plugin.getResolvedEnvironmentVariables('claude');
+  const cliPath = plugin.getResolvedProviderCliPath('claude') ?? '';
+  const enhancedPath = getEnhancedPath(customEnv.PATH, cliPath);
+  const nodePath = findNodeExecutable(enhancedPath);
   return !!nodePath && isSupportedNode(await probeNodeMajor(nodePath));
 }
 
@@ -26,7 +35,7 @@ export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (hos
     .addToggle((toggle) =>
       toggle.setValue(claude.localToolHostEnabled).onChange(async (value) => {
         // Never persist `true` without a supported Node (>=18) — revert and warn.
-        if (value && !(await nodeSupported())) {
+        if (value && !(await nodeSupported(plugin))) {
           toggle.setValue(false);
           new Notice(t('settings.localToolHost.nodeUnsupported'));
           return;
