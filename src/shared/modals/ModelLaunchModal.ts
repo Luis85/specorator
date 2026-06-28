@@ -23,10 +23,12 @@ export interface ModelLaunchModalOptions {
 }
 
 /**
- * Content-agnostic provider+model confirmation modal. Forces the user to confirm
- * provider+model before a prompt dispatches from outside an active chat tab.
- * Generalized from the original quick-action launch modal; reused by quick
- * actions and loop prompting.
+ * Provider+model confirmation modal shared by quick-action and loop prompting.
+ * The per-consumer text is the `title` option; the chrome strings (Provider /
+ * Model / Run / Cancel / fallback notice / "no providers") are intentionally
+ * shared and live in the `quickActions.launchModal.*` i18n bucket because they
+ * are generic across consumers. If a future consumer needs different chrome
+ * copy, add an optional `labels` bag then — not before.
  */
 export class ModelLaunchModal extends Modal {
   private readonly options: ModelLaunchModalOptions;
@@ -69,13 +71,13 @@ export class ModelLaunchModal extends Modal {
         attr: { id: emptyId, 'data-testid': 'qa-empty', 'aria-live': 'polite' },
       });
       empty.setText(t('quickActions.launchModal.noProvidersEnabled'));
-      this.renderActions(root, true, emptyId);
+      this.renderActions(root, /* runDisabled */ true, emptyId);
       return;
     }
 
     this.renderProviderRow(root);
     this.renderModelRow(root);
-    this.renderActions(root, false);
+    this.renderActions(root, /* runDisabled */ false);
     this.contentEl.querySelector<HTMLButtonElement>('[data-testid="qa-run"]')?.focus();
   }
 
