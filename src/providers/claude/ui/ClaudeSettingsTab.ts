@@ -27,6 +27,7 @@ import {
   mountClaudeSubagentsSection,
   mountClaudeTrustVaultSetting,
 } from './claudeSettingsWidgets';
+import { mountClaudeLocalToolHostSection } from './localToolHostWidget';
 
 export const claudeSettingsTabRenderer: ProviderSettingsTabRenderer = {
   render(container, context) {
@@ -134,6 +135,12 @@ export const claudeSettingsTabRenderer: ProviderSettingsTabRenderer = {
     new Setting(container).setName(t('settings.mcpServers.name')).setHeading();
 
     mountClaudeMcpSection(container, widgetCtx);
+
+    // --- Local Tool Host ---
+
+    new Setting(container).setName(t('settings.localToolHost.name')).setHeading();
+
+    mountClaudeLocalToolHostSection(container, widgetCtx);
 
     // --- Plugins ---
 
