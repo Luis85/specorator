@@ -36,7 +36,7 @@ export class AgentDetailEditor {
   async render(root: HTMLElement, agent: RosterAgent, opts?: { isNew?: boolean }): Promise<void> {
     this.isNew = opts?.isNew ?? false;
     this.original = agent;
-    this.draft = { ...agent, roles: [...agent.roles], skills: [...agent.skills] };
+    this.draft = { ...agent, roles: [...agent.roles], skills: [...agent.skills], tags: [...(agent.tags ?? [])] };
 
     root.empty();
     // The list view shares the `specorator-library` shell; the detail page has its
@@ -100,6 +100,7 @@ export class AgentDetailEditor {
 
     this.renderAppearanceRow(fields);
     this.renderRolesRow(fields);
+    this.renderTagsRow(fields);
   }
 
   private renderAppearanceRow(parent: HTMLElement): void {
@@ -161,6 +162,18 @@ export class AgentDetailEditor {
         this.updateDirty();
       });
     }
+  }
+
+  private renderTagsRow(parent: HTMLElement): void {
+    const row = parent.createDiv({ cls: 'specorator-roster-tags' });
+    const input = row.createEl('input', { cls: 'specorator-roster-tags-input', type: 'text' });
+    input.value = (this.draft.tags ?? []).join(', ');
+    input.placeholder = t('agentRoster.tagsPlaceholder');
+    input.setAttribute('aria-label', t('agentRoster.tagsLabel'));
+    input.addEventListener('input', () => {
+      this.draft.tags = input.value.split(',').map((s) => s.trim()).filter(Boolean);
+      this.updateDirty();
+    });
   }
 
   private renderModelCard(root: HTMLElement): void {

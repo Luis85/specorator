@@ -16,6 +16,8 @@ export interface RosterAgent {
   modelSelection?: RosterAgentModelSelection;
   permissionMode?: string;
   roles: Array<'worker' | 'verifier'>;
+  /** Freeform user tags for search + filtering in the roster. */
+  tags?: string[];
   color?: string;
   initials?: string;
   icon?: string;

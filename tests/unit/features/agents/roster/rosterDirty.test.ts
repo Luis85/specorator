@@ -1,5 +1,6 @@
 import { createRosterAgent } from '@/features/agents/roster/rosterCapabilities';
 import { isRosterAgentDirty } from '@/features/agents/roster/rosterDirty';
+import type { RosterAgent } from '@/features/agents/roster/rosterTypes';
 
 const base = () => ({ ...createRosterAgent('Reviewer', 1), prompt: 'p', skills: ['s1'], roles: ['worker' as const] });
 
@@ -40,5 +41,24 @@ describe('isRosterAgentDirty', () => {
     expect(isRosterAgentDirty(a, { ...a, icon: 'wrench' })).toBe(true);
     expect(isRosterAgentDirty({ ...a, icon: 'wrench' }, { ...a, icon: 'bug' })).toBe(true);
     expect(isRosterAgentDirty({ ...a, icon: 'wrench' }, { ...a, icon: 'wrench' })).toBe(false);
+  });
+});
+
+function agent(over: Partial<RosterAgent> = {}): RosterAgent {
+  return {
+    id: 'roster:a', name: 'A', description: '', prompt: '', disallowedTools: [], skills: [],
+    roles: [], createdAt: 0, updatedAt: 0, ...over,
+  };
+}
+
+describe('isRosterAgentDirty tags', () => {
+  it('is dirty when tags differ', () => {
+    expect(isRosterAgentDirty(agent({ tags: ['x'] }), agent({ tags: ['y'] }))).toBe(true);
+  });
+  it('is clean when tags match (order-insensitive)', () => {
+    expect(isRosterAgentDirty(agent({ tags: ['x', 'y'] }), agent({ tags: ['y', 'x'] }))).toBe(false);
+  });
+  it('treats undefined and empty as equal', () => {
+    expect(isRosterAgentDirty(agent({ tags: undefined }), agent({ tags: [] }))).toBe(false);
   });
 });
