@@ -9,6 +9,8 @@ export interface LibraryItemAccessors<T> {
 
 export interface LibraryToolbarLabels {
   searchPlaceholder: string;
+  /** Accessible name for the sort control itself (announced by screen readers). */
+  sortLabel: string;
   sortName: string;
   sortUpdated: string;
   resetFilters: string;
@@ -103,7 +105,7 @@ export class LibraryListController<T> {
 
     const sort = host.createEl('select', {
       cls: 'specorator-library-sort dropdown',
-      attr: { 'aria-label': labels.sortName },
+      attr: { 'aria-label': labels.sortLabel },
     });
     sort.createEl('option', { value: 'name', text: labels.sortName });
     sort.createEl('option', { value: 'updated', text: labels.sortUpdated });
@@ -114,16 +116,14 @@ export class LibraryListController<T> {
     if (tags.length === 0) return;
 
     const chips = host.createDiv({ cls: 'specorator-library-filterchips' });
-    const reset = chips.createEl('button', { cls: 'specorator-library-filterreset', text: labels.resetFilters });
+    const reset = chips.createEl('button', {
+      cls: 'specorator-library-filterreset',
+      text: labels.resetFilters,
+      attr: { type: 'button' },
+    });
     const syncReset = (): void => { reset.toggleClass('is-hidden', this.active.size === 0); };
-    reset.addEventListener('click', () => { this.clearFilters(); refreshAll(); onChange(); });
 
     const chipEls: Array<{ tag: string; el: HTMLElement }> = [];
-    for (const tag of tags) {
-      const chip = chips.createEl('button', { cls: 'specorator-library-filterchip', text: tag });
-      chip.addEventListener('click', () => { this.toggleFilter(tag); refreshAll(); onChange(); });
-      chipEls.push({ tag, el: chip });
-    }
     const refreshAll = (): void => {
       for (const { tag, el } of chipEls) {
         const on = this.active.has(tag);
@@ -132,6 +132,17 @@ export class LibraryListController<T> {
       }
       syncReset();
     };
+
+    reset.addEventListener('click', () => { this.clearFilters(); refreshAll(); onChange(); });
+    for (const tag of tags) {
+      const chip = chips.createEl('button', {
+        cls: 'specorator-library-filterchip',
+        text: tag,
+        attr: { type: 'button' },
+      });
+      chip.addEventListener('click', () => { this.toggleFilter(tag); refreshAll(); onChange(); });
+      chipEls.push({ tag, el: chip });
+    }
     refreshAll();
   }
 }
