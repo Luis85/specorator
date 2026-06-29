@@ -767,12 +767,18 @@ export class InputController {
   /**
    * Seeds the composer with draft text WITHOUT sending. Used by the library
    * "prompt as draft" flows (loops) so the user can append a task before
-   * sending. Fires an `input` event so autosize/validation update.
+   * sending. Fires an `input` event so autosize/validation update, and focuses
+   * the composer so the user lands on the seeded draft (the target tab may not
+   * be visually obvious). With `keepExisting`, a non-empty existing draft is
+   * preserved above the seeded content rather than clobbered.
    */
-  seedComposerDraft(content: string): void {
+  seedComposerDraft(content: string, opts?: { keepExisting?: boolean }): void {
     const el = this.deps.getInputEl();
-    el.value = content;
+    const existing = opts?.keepExisting ? el.value.trim() : '';
+    el.value = existing ? `${existing}\n\n${content}` : content;
     el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
   }
 
   /** Auto-sends `content` as the next (resumed) turn — shared by plan auto-implement,

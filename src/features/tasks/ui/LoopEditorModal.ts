@@ -4,6 +4,7 @@ import { Modal, Notice, Setting } from 'obsidian';
 import { t } from '../../../i18n/i18n';
 import type { LucideIconPicker } from '../../../shared/components/LucideIconPicker';
 import { addIconPickerRow, addNameAndDescriptionRows } from '../../../shared/settings/nameDescriptionRows';
+import { normalizeStringArray } from '../../../utils/frontmatter';
 import type { LoopDefinition, SaveLoopInput } from '../loops/loopTypes';
 
 export interface LoopEditorPayload extends SaveLoopInput {
@@ -95,7 +96,7 @@ export class LoopEditorModal extends Modal {
           .onClick(() => {
             void this.handleSave({
               name, description, icon, useWhen, approach, steps, verify, notes,
-              tags: tags.split(',').map((s) => s.trim()).filter(Boolean),
+              tags: normalizeStringArray(tags) ?? [],
             });
           });
       })

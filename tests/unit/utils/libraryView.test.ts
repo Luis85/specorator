@@ -187,4 +187,19 @@ describe('DOM helpers', () => {
     card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
     expect(activations).toBe(2);
   });
+
+  it('createLibraryCard interactive does NOT activate when Enter/Space bubbles from a nested action button', () => {
+    const list = container();
+    let activations = 0;
+    const { actions } = createLibraryCard(list, 'X', {
+      interactive: { onActivate: () => { activations += 1; }, ariaLabel: 'X' },
+    });
+    const btn = actions.createEl('button', { text: 'Delete' });
+    // Keydown originating on the nested button bubbles to the card; the card must
+    // ignore it (e.target !== card) so the button keeps its own native behavior
+    // instead of also opening the card.
+    btn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    btn.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    expect(activations).toBe(0);
+  });
 });

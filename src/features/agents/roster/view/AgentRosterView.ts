@@ -104,7 +104,7 @@ export class AgentRosterView extends ItemView {
 
     body.createDiv({ cls: 'specorator-roster-card-desc', text: agent.description || '—' });
 
-    const caps = body.createDiv({ cls: 'specorator-roster-card-caps' });
+    const caps = body.createDiv({ cls: 'specorator-library-card-caps' });
     for (const role of agent.roles) {
       const roleLabel = role === 'verifier' ? t('agentRoster.roleVerifier') : t('agentRoster.roleWorker');
       caps.createSpan({ cls: 'specorator-roster-chip specorator-roster-chip-role', text: roleLabel });

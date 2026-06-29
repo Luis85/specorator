@@ -1128,6 +1128,7 @@
     "sortName": "Name (A–Z)",
     "sortUpdated": "Recently updated",
     "resetFilters": "Clear filters",
+    "filterGroupLabel": "Filter by tag",
     "duplicate": "Duplicate",
     "noMatches": "No items match your search.",
     "tagsField": "Tags (comma-separated)"
@@ -1167,7 +1168,8 @@
     "actionFailed": "Something went wrong — check the developer console.",
     "prompt": "Prompt",
     "promptTitle": "Prompt with loop: {name}",
-    "tabLimitReached": "Cannot prompt loop: tab limit reached. Close a tab first."
+    "tabLimitReached": "Cannot prompt loop: tab limit reached. Close a tab first.",
+    "emptyBody": "This loop has no body to prompt — add an Approach or Steps section first."
   },
   "ribbon": {
     "openChat": "Open Co-Worker Chat",

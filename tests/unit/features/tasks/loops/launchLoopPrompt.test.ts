@@ -106,6 +106,31 @@ describe('launchLoopPrompt', () => {
     expect(draft).not.toContain('Use when');
   });
 
+  it('seeds with keepExisting so an unsent draft in a reused tab is preserved', async () => {
+    const seedMock = jest.fn();
+    const tab = {
+      id: 't3',
+      controllers: { inputController: { seedComposerDraft: seedMock, sendMessage: jest.fn() } },
+    };
+    const tabManager = { switchToTab: jest.fn().mockResolvedValue(undefined) };
+    resolveMock.mockResolvedValue(tab);
+    launchLoopPrompt(makePlugin(tabManager), loop);
+    const [, launch] = launchMock.mock.calls[0];
+    launch.onConfirm({ providerId: 'claude', model: 'sonnet' });
+    await new Promise((r) => setImmediate(r));
+    expect(seedMock.mock.calls[0][1]).toEqual({ keepExisting: true });
+  });
+
+  it('notices and never opens the picker when the loop has no body sections', () => {
+    const useWhenOnly: LoopDefinition = {
+      path: 'y.md', id: 'empty', name: 'Empty',
+      useWhen: 'context only', approach: '', steps: '', verify: '', notes: '',
+    };
+    launchLoopPrompt(makePlugin(null), useWhenOnly);
+    expect(noticeMock).toHaveBeenCalledWith('loopLibrary.emptyBody');
+    expect(launchMock).not.toHaveBeenCalled();
+  });
+
   it('does not seed when the view is unavailable after activateView', async () => {
     const seedMock = jest.fn();
     const plugin = {

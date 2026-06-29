@@ -165,7 +165,7 @@ describe('SkillLibraryView', () => {
     const { view, contentEl } = makeView(makePlugin([ENTRY_EDITABLE], ['testing', 'workflow']));
     await view.onOpen();
     await flush();
-    const caps = contentEl.querySelector('.specorator-roster-card-caps');
+    const caps = contentEl.querySelector('.specorator-library-card-caps');
     expect(caps).not.toBeNull();
     const tagChips = Array.from(caps!.querySelectorAll('.specorator-library-chip')).map((c) => c.textContent);
     expect(tagChips).toContain('testing');
@@ -174,11 +174,11 @@ describe('SkillLibraryView', () => {
 
   it('tagless skill has NO empty caps div (guard removes it)', async () => {
     // The view calls caps.remove() when childElementCount === 0, so a skill
-    // with no frontmatter tags must leave no .specorator-roster-card-caps in the DOM.
+    // with no frontmatter tags must leave no .specorator-library-card-caps in the DOM.
     const { view, contentEl } = makeView(makePlugin([ENTRY_EDITABLE]));
     await view.onOpen();
     await flush();
-    expect(contentEl.querySelector('.specorator-roster-card-caps')).toBeNull();
+    expect(contentEl.querySelector('.specorator-library-card-caps')).toBeNull();
   });
 
   it('Prompt button calls runVaultSkill with the matching entry', async () => {

@@ -178,6 +178,10 @@ export function createLibraryCard(
     card.setAttribute('aria-label', ariaLabel);
     card.addEventListener('click', () => onActivate());
     card.addEventListener('keydown', (e: KeyboardEvent) => {
+      // Only the card itself activates on Enter/Space — events bubbling up from a
+      // nested action button (Start chat / Prompt / Delete) keep their own
+      // native keyboard behavior instead of also opening the card.
+      if (e.target !== card) return;
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         onActivate();

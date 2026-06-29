@@ -174,7 +174,7 @@ describe('AgentRosterView', () => {
     const { view, contentEl } = makeView(makePlugin([AGENT_A]));
     await view.onOpen();
     await flush();
-    const caps = contentEl.querySelector('.specorator-roster-card-caps');
+    const caps = contentEl.querySelector('.specorator-library-card-caps');
     expect(caps).not.toBeNull();
     const roleChips = Array.from(caps!.querySelectorAll('.specorator-roster-chip-role'));
     expect(roleChips.length).toBeGreaterThan(0);
@@ -187,7 +187,7 @@ describe('AgentRosterView', () => {
     const { view, contentEl } = makeView(makePlugin([AGENT_B]));
     await view.onOpen();
     await flush();
-    const allCaps = contentEl.querySelectorAll('.specorator-roster-card-caps');
+    const allCaps = contentEl.querySelectorAll('.specorator-library-card-caps');
     for (const c of allCaps) {
       expect(c.childElementCount).toBeGreaterThan(0);
     }
@@ -254,7 +254,7 @@ describe('AgentRosterView', () => {
     const { view, contentEl } = makeView(makePlugin([withSkills]));
     await view.onOpen();
     await flush();
-    const caps = contentEl.querySelector('.specorator-roster-card-caps');
+    const caps = contentEl.querySelector('.specorator-library-card-caps');
     expect(caps).not.toBeNull();
     const skillChip = Array.from(caps!.querySelectorAll('.specorator-roster-chip'))
       .find((c) => !c.classList.contains('specorator-roster-chip-role'));

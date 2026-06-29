@@ -5,6 +5,7 @@ export type ToolLibraryTranslationKey =
   | 'library.sortName'
   | 'library.sortUpdated'
   | 'library.resetFilters'
+  | 'library.filterGroupLabel'
   | 'library.duplicate'
   | 'library.noMatches'
   | 'library.tagsField'
@@ -42,4 +43,5 @@ export type ToolLibraryTranslationKey =
   | 'loopLibrary.actionFailed'
   | 'loopLibrary.prompt'
   | 'loopLibrary.promptTitle'
-  | 'loopLibrary.tabLimitReached';
+  | 'loopLibrary.tabLimitReached'
+  | 'loopLibrary.emptyBody';

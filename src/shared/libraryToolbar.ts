@@ -119,7 +119,10 @@ export class LibraryListController<T> {
     const tags = this.allTags();
     if (tags.length === 0) return;
 
-    const chips = host.createDiv({ cls: 'specorator-library-filterchips' });
+    const chips = host.createDiv({
+      cls: 'specorator-library-filterchips',
+      attr: { role: 'group', 'aria-label': t('library.filterGroupLabel') },
+    });
     const reset = chips.createEl('button', {
       cls: 'specorator-library-filterreset',
       text: labels.resetFilters,
@@ -188,6 +191,18 @@ export function mountLibraryList<T>(opts: {
   };
   controller.renderToolbar(toolbar, libraryToolbarLabels(), renderRows);
   renderRows();
+}
+
+/**
+ * Renders a card's user-tag chip row (`.specorator-library-card-caps`) into
+ * `body`, one `.specorator-library-chip` per tag. Renders nothing when there are
+ * no tags. Shared by the Skill and Loop cards; the Agent card builds its own caps
+ * row because it interleaves role/skills chips with the user tags.
+ */
+export function renderLibraryCardTags(body: HTMLElement, tags: string[]): void {
+  if (tags.length === 0) return;
+  const caps = body.createDiv({ cls: 'specorator-library-card-caps' });
+  for (const tag of tags) caps.createSpan({ cls: 'specorator-library-chip', text: tag });
 }
 
 /** Renders the shared Duplicate (copy-icon) card-action button. */

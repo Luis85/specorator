@@ -3,7 +3,7 @@ import { type App, Notice } from 'obsidian';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import { LibraryEditorModal } from '../../../shared/modals/LibraryEditorModal';
-import { setFrontmatterList } from '../../../utils/frontmatter';
+import { normalizeStringArray, setFrontmatterList } from '../../../utils/frontmatter';
 import { createModalCodeArea, librarySlug, renameLibraryItemDir, renderModalField, renderModalFooter, renderModalLabel, renderModalTextField } from '../../../utils/libraryView';
 import type { SkillLibraryRow } from '../skillLibraryRows';
 
@@ -67,7 +67,7 @@ export class SkillEditorModal extends LibraryEditorModal {
     const currentSlug = oldPath.split('/').slice(-2, -1)[0];
     const newName = this.nameEl?.value.trim() || this.row.name;
     const newSlug = librarySlug(newName) || currentSlug;
-    const tags = (this.tagsEl?.value ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+    const tags = normalizeStringArray(this.tagsEl?.value) ?? [];
     const content = setFrontmatterList(this.contentArea.value, 'tags', tags);
     if (newSlug === currentSlug) {
       await adapter.write(oldPath, content);

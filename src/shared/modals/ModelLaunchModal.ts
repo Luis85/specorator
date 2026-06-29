@@ -29,6 +29,11 @@ export interface ModelLaunchModalOptions {
  * shared and live in the `quickActions.launchModal.*` i18n bucket because they
  * are generic across consumers. If a future consumer needs different chrome
  * copy, add an optional `labels` bag then — not before.
+ *
+ * The DOM classes and `data-testid`s retain the legacy `specorator-qa-*` prefix
+ * (this modal was extracted from `QuickActionLaunchModal`) so existing CSS and
+ * tests stay green across all consumers; the prefix is a shared token, not a
+ * quick-action coupling — same rationale as the shared i18n bucket above.
  */
 export class ModelLaunchModal extends Modal {
   private readonly options: ModelLaunchModalOptions;
