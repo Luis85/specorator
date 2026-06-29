@@ -131,3 +131,44 @@ describe('Claude customModels normalization', () => {
     ]);
   });
 });
+
+describe('Claude localToolHostSecrets normalization (fail-closed allowlist)', () => {
+  it('defaults to an empty allowlist (no secret resolves without an explicit grant)', () => {
+    expect(DEFAULT_CLAUDE_PROVIDER_SETTINGS.localToolHostSecrets).toEqual([]);
+    expect(getClaudeProviderSettings({}).localToolHostSecrets).toEqual([]);
+  });
+
+  it('keeps only well-formed { name, secretId } entries and drops malformed ones', () => {
+    const settings = {
+      providerConfigs: {
+        claude: {
+          localToolHostSecrets: [
+            { name: 'OPENAI_API_KEY', secretId: 'kc-openai' },
+            { name: 'NO_ID' },                 // missing secretId
+            { secretId: 'kc-orphan' },         // missing name
+            { name: '', secretId: 'kc-empty' },// empty name
+            'garbage',                          // wrong shape
+          ],
+        },
+      },
+    };
+    expect(getClaudeProviderSettings(settings).localToolHostSecrets).toEqual([
+      { name: 'OPENAI_API_KEY', secretId: 'kc-openai' },
+    ]);
+  });
+
+  it('returns an empty allowlist for a non-array value', () => {
+    const settings = { providerConfigs: { claude: { localToolHostSecrets: 42 } } };
+    expect(getClaudeProviderSettings(settings).localToolHostSecrets).toEqual([]);
+  });
+
+  it('persists allowlist entries through the update writer', () => {
+    const settings: Record<string, unknown> = {};
+    updateClaudeProviderSettings(settings, {
+      localToolHostSecrets: [{ name: 'SLACK_TOKEN', secretId: 'kc-slack' }],
+    });
+    expect(getClaudeProviderSettings(settings).localToolHostSecrets).toEqual([
+      { name: 'SLACK_TOKEN', secretId: 'kc-slack' },
+    ]);
+  });
+});

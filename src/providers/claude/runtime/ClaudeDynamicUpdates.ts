@@ -9,7 +9,9 @@ import type { McpServerManager } from '../../../core/mcp/McpServerManager';
 import type {
   ChatRuntimeQueryOptions,
 } from '../../../core/runtime/types';
+import type { McpServerConfig as LocalToolHostServerConfig } from '../../../core/types/mcp';
 import type { PermissionMode,SpecoratorSettings } from '../../../core/types/settings';
+import { LOCAL_TOOL_HOST_SERVER_NAME } from '../toolHost/buildToolHostServer';
 import {
   resolveEffortLevel,
 } from '../types/models';
@@ -30,6 +32,8 @@ export interface ClaudeDynamicUpdateDeps {
   getPermissionMode: () => PermissionMode;
   resolveSDKPermissionMode: (mode: PermissionMode) => SDKPermissionMode;
   mcpManager: McpServerManager;
+  /** Returns the synthetic local-tool-host stdio config, or null when off. */
+  buildLocalToolHostServer?: () => LocalToolHostServerConfig | null;
   buildPersistentQueryConfig: (
     vaultPath: string,
     cliPath: string,
@@ -185,7 +189,13 @@ async function updateMcpServers(
   const uiEnabledServers = queryOptions?.enabledMcpServers || new Set<string>();
   const combinedMentions = new Set([...mcpMentions, ...uiEnabledServers]);
   const mcpServers = deps.mcpManager.getActiveServers(combinedMentions);
-  const mcpServersKey = JSON.stringify(mcpServers);
+  const localToolHost = deps.buildLocalToolHostServer?.();
+  // Reserved synthetic name — never clobber a user MCP server that already uses it.
+  // Folded into the change-detection key so a reload (toolsRev bump) re-spawns the host.
+  const merged = localToolHost && !(LOCAL_TOOL_HOST_SERVER_NAME in mcpServers)
+    ? { ...mcpServers, [LOCAL_TOOL_HOST_SERVER_NAME]: localToolHost }
+    : mcpServers;
+  const mcpServersKey = JSON.stringify(merged);
 
   const currentConfig = deps.getCurrentConfig();
   if (!currentConfig || mcpServersKey === currentConfig.mcpServersKey) {
@@ -196,7 +206,7 @@ async function updateMcpServers(
   // Claude CLI — the settings Test button is not on this path. Unsafe
   // servers are dropped (fail closed) rather than failing the turn; the key
   // still tracks the raw set so the drop is not re-announced every turn.
-  const vetted = await vetActiveServersForRuntime(mcpServers);
+  const vetted = await vetActiveServersForRuntime(merged);
   for (const entry of vetted.dropped) {
     deps.notifyFailure(`MCP server "${entry.name}" was not activated: ${entry.reason}`);
   }

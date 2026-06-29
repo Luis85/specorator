@@ -53,9 +53,11 @@ import type {
   StreamChunk,
   ToolCallInfo,
 } from '../../../core/types';
+import type { McpServerConfig } from '../../../core/types/mcp';
 import type { PluginContext } from '../../../core/types/PluginContext';
 import type { PermissionMode,SpecoratorSettings } from '../../../core/types/settings';
 import { t } from '../../../i18n/i18n';
+import type { CatalogPayload, ToolHostScan } from '../../../tool-host/types';
 import { getEnhancedPath, getMissingNodeError } from '../../../utils/env';
 import { getVaultPath } from '../../../utils/path';
 import { isSessionExpiredError } from '../../../utils/session';
@@ -71,6 +73,11 @@ import {
   createTransformUsageState,
   transformSDKMessage,
 } from '../stream/transformClaudeMessage';
+import {
+  buildToolHostServerFromCache,
+  reduceToolHostCache,
+} from '../toolHost/scanLocalToolHost';
+import { resolveToolHostPaths } from '../toolHost/toolHostPaths';
 import { getClaudeState } from '../types/providerState';
 import { createClaudeApprovalCallback } from './ClaudeApprovalHandler';
 import { applyClaudeDynamicUpdates } from './ClaudeDynamicUpdates';
@@ -208,6 +215,22 @@ export class ClaudeChatRuntime implements ChatRuntime {
   private bufferedUsageChunk: StreamChunk & { type: 'usage' } | null = null;
   private streamTransformState = createTransformStreamState();
   private usageTransformState = createTransformUsageState();
+
+  // Local tool host (synthetic MCP server)
+  /** Union of `manifest.secrets` across discovered tools, refreshed from the catalog. */
+  private declaredToolSecretIds: string[] = [];
+  /** Cataloged per-tool secrets declaration (file → ids); host grants ctx.secrets from this. */
+  private toolSecretsByFile: Record<string, string[]> = {};
+  /** Set true once the embedded host has been written to disk this session. */
+  private hostMaterialized = false;
+  /** Bumped on every reload so the synthetic config changes → host re-spawns with a fresh scan. */
+  private toolsRev = 0;
+  /** Node binary the last successful scan validated (≥18 probe). Null when disabled/unscanned. */
+  private hostNodePath: string | null = null;
+  /** Curated env the last successful scan spawned the host with. Null when disabled/unscanned. */
+  private hostEnv: Record<string, string> | null = null;
+  /** Gate so the implicit init-path reload runs at most once per session. */
+  private hostReloadAttempted = false;
 
   private getLegacyPluginDeps(): PluginContext & {
     agentManager?: Pick<AppAgentManager, 'setBuiltinAgentNames'>;
@@ -650,6 +673,7 @@ export class ClaudeChatRuntime implements ChatRuntime {
       enhancedPath,
       mcpManager: this.mcpManager,
       pluginManager: this.requirePluginManager(),
+      buildLocalToolHostServer: this.makeLocalToolHostServerBuilder(),
       boundAgentPrompt: this.currentBoundAgentPrompt,
       boundAgentModel: this.currentBoundAgentModel,
     };
@@ -661,6 +685,110 @@ export class ClaudeChatRuntime implements ChatRuntime {
       throw new Error('Claude plugin manager is unavailable.');
     }
     return pluginManager;
+  }
+
+  /**
+   * Sync closure (called per-turn at both query seams) that returns the synthetic
+   * local-tool-host stdio config, or null when off.
+   *
+   * It builds STRICTLY from the cached scan result (`buildToolHostServerFromCache`):
+   * the cached secret union, `toolsRev`, AND the validated node path + curated env
+   * the scan's async ≥18 probe approved. It must NOT re-resolve Node here — the sync
+   * builder can't re-run the probe, so re-resolving could inject an older `node` (if
+   * the user repointed the Environment PATH/CLI dir) into a `node18`-targeted host
+   * and crash it. A PATH change is honored only on the next scan (reload/settings),
+   * which re-validates the node or disables the host.
+   */
+  private makeLocalToolHostServerBuilder(): () => McpServerConfig | null {
+    return () => {
+      const claude = getClaudeProviderSettings(this.plugin.settings);
+      // Short-circuit on the cheap gates (enable + a cached validated node) BEFORE
+      // touching plugin accessors — a disabled host needs no vault path resolution.
+      if (!claude.localToolHostEnabled || !this.hostMaterialized || !this.hostNodePath) {
+        return null;
+      }
+      const vaultPath = this.plugin.getVaultPath();
+      if (!vaultPath) return null;
+      const paths = resolveToolHostPaths({ vaultPath, pluginDir: this.plugin.manifest.dir ?? '' });
+      return buildToolHostServerFromCache({
+        cache: {
+          hostMaterialized: this.hostMaterialized,
+          toolsRev: this.toolsRev,
+          declaredToolSecretIds: this.declaredToolSecretIds,
+          toolSecretsByFile: this.toolSecretsByFile,
+          hostNodePath: this.hostNodePath,
+          hostEnv: this.hostEnv,
+        },
+        enabled: claude.localToolHostEnabled,
+        hostEntry: paths.hostEntry,
+        toolsDir: paths.toolsDir,
+        vaultPath,
+        disabledFiles: claude.localToolHostDisabledFiles,
+        allowedSecrets: claude.localToolHostSecrets,
+        resolveSecret: (secretId) => this.plugin.secretStore.get(secretId),
+      });
+    };
+  }
+
+  /**
+   * Trigger the SINGLE plugin-level scan (works with zero or many tabs). The plugin
+   * fans the result out to every open Claude runtime via {@link applyToolHostScan};
+   * we additionally apply it to THIS runtime directly so the init seam updates our
+   * caches deterministically even if the fan-out hasn't yet seen this tab as
+   * service-initialized. Returns the catalog so the settings widget renders it
+   * without a second scan. Never throws (delegates to the plugin's guarded scan).
+   */
+  async reloadLocalToolHost(): Promise<CatalogPayload | null> {
+    this.hostReloadAttempted = true;
+    const scan = await this.plugin.reloadLocalToolHost();
+    // Apply the FULL scan (not just `.catalog`) so the `scanFailed` no-clobber signal
+    // survives the direct init-seam re-apply — applying a bare null catalog would wrongly
+    // clear a previously-good secret union on a transient catalog failure.
+    this.applyToolHostScan(scan);
+    return scan.catalog;
+  }
+
+  /**
+   * Apply a tool-host scan result to this runtime without re-scanning. The
+   * plugin-level fan-out shares one scan across every open Claude tab. A null/empty
+   * scan disables the builder; a successful scan flips `hostMaterialized`, bumps
+   * `toolsRev` (so the synthetic config differs → host re-spawns with a fresh scan),
+   * and caches the declared-secret union.
+   */
+  applyToolHostScan(scan: ToolHostScan | CatalogPayload | null): void {
+    // `reduceToolHostCache` owns the three-way no-clobber logic: a `scanFailed` scan
+    // leaves these caches untouched (transient catalog failure must not drop a
+    // previously-good secret union or claim a healthy host built on a failed scan).
+    const next = reduceToolHostCache(
+      {
+        hostMaterialized: this.hostMaterialized,
+        toolsRev: this.toolsRev,
+        declaredToolSecretIds: this.declaredToolSecretIds,
+        toolSecretsByFile: this.toolSecretsByFile,
+        hostNodePath: this.hostNodePath,
+        hostEnv: this.hostEnv,
+      },
+      scan,
+    );
+    this.hostMaterialized = next.hostMaterialized;
+    this.toolsRev = next.toolsRev;
+    this.declaredToolSecretIds = next.declaredToolSecretIds;
+    this.toolSecretsByFile = next.toolSecretsByFile;
+    this.hostNodePath = next.hostNodePath;
+    this.hostEnv = next.hostEnv;
+    // A scan was applied (our reload or a plugin fan-out from another tab/Settings) — count it as
+    // the one-time init attempt so the next turn doesn't re-scan and import every tool twice.
+    this.hostReloadAttempted = true;
+  }
+
+  /** Run the implicit init-path reload at most once, before the first turn flows. */
+  private async ensureLocalToolHostReady(): Promise<void> {
+    if (this.hostReloadAttempted) return;
+    try {
+      await this.reloadLocalToolHost();
+    } catch {
+      // Tool host stays disabled this session; a turn that races simply skips injection.
+    }
   }
 
   private getAgentManager(): Pick<AppAgentManager, 'setBuiltinAgentNames'> | null {
@@ -1141,6 +1269,11 @@ export class ClaudeChatRuntime implements ChatRuntime {
       return;
     }
 
+    // Init/ready seam: materialize + scan the local tool host once before any turn so
+    // `hostMaterialized` flips before injection at either query seam (.specorator/ has no
+    // vault watcher; subsequent refreshes come from the settings widget via the plugin).
+    await this.ensureLocalToolHostReady();
+
     const { promptToSend, forceColdStart } = this.prepareQueryPrompt(prompt, conversationHistory);
 
     const effectiveQueryOptions = forceColdStart
@@ -1467,6 +1600,7 @@ export class ClaudeChatRuntime implements ChatRuntime {
         getPermissionMode: () => this.getScopedSettings().permissionMode,
         resolveSDKPermissionMode: (mode) => this.resolveSDKPermissionMode(mode),
         mcpManager: this.mcpManager,
+        buildLocalToolHostServer: this.makeLocalToolHostServerBuilder(),
         buildPersistentQueryConfig: (vaultPath, cliPath, externalContextPaths, boundAgentPrompt) =>
           this.buildPersistentQueryConfig(vaultPath, cliPath, externalContextPaths, undefined, boundAgentPrompt),
         needsRestart: (newConfig) => this.needsRestart(newConfig),

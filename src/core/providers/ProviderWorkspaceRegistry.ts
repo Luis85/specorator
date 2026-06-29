@@ -1,3 +1,4 @@
+import type { ToolHostScan } from '../../tool-host/types';
 import { HomeFileAdapter } from '../storage/HomeFileAdapter';
 import type { PluginContext } from '../types/PluginContext';
 import type { ProviderCommandCatalog } from './commands/ProviderCommandCatalog';
@@ -123,5 +124,15 @@ export class ProviderWorkspaceRegistry {
 
   static getSettingsTabRenderer(providerId: ProviderId): ProviderSettingsTabRenderer | null {
     return this.getServices(providerId)?.settingsTabRenderer ?? null;
+  }
+
+  /**
+   * Runtime-independent local-tool-host scanner for a provider, if it offers one.
+   * Lets the plugin scan tools without an open chat tab (e.g. Settings opened first).
+   */
+  static getLocalToolHostScanner(
+    providerId: ProviderId,
+  ): ((plugin: PluginContext) => Promise<ToolHostScan>) | null {
+    return this.getServices(providerId)?.scanLocalToolHost ?? null;
   }
 }

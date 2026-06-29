@@ -16,6 +16,19 @@ export const CLAUDE_SAFE_MODES = ['acceptEdits', 'auto', 'default'] as const;
 export type ClaudeSafeMode = typeof CLAUDE_SAFE_MODES[number];
 export type ClaudeSettingSource = 'user' | 'project' | 'local';
 
+/**
+ * One entry in the local-tool-host secret allowlist (SEC: explicit grant).
+ * `name` is the id a tool declares in `manifest.secrets` and reads from
+ * `ctx.secrets`; `secretId` is the keychain (SecretStorage) handle holding the
+ * value. The host resolves a declared id ONLY through a matching entry here, so
+ * a tool can never reach an arbitrary global secret (provider keys, MCP creds)
+ * by naming its id — the keychain handle is user-chosen, never tool-controlled.
+ */
+export interface ToolHostSecretRef {
+  name: string;
+  secretId: string;
+}
+
 export interface ClaudeProviderSettings {
   enabled: boolean;
   safeMode: ClaudeSafeMode;
@@ -26,6 +39,9 @@ export interface ClaudeProviderSettings {
   enableBangBash: boolean;
   enableOpus1M: boolean;
   enableSonnet1M: boolean;
+  localToolHostEnabled: boolean;
+  localToolHostDisabledFiles: string[];
+  localToolHostSecrets: ToolHostSecretRef[];
   customModels: ProviderCustomModel[];
   lastModel: string;
   environmentVariables: string;
@@ -42,6 +58,9 @@ export const DEFAULT_CLAUDE_PROVIDER_SETTINGS: Readonly<ClaudeProviderSettings> 
   enableBangBash: false,
   enableOpus1M: false,
   enableSonnet1M: false,
+  localToolHostEnabled: false,
+  localToolHostDisabledFiles: [] as string[],
+  localToolHostSecrets: [] as ToolHostSecretRef[],
   customModels: [] as ProviderCustomModel[],
   lastModel: 'haiku',
   environmentVariables: '',
@@ -52,6 +71,29 @@ function normalizeClaudeSafeMode(value: unknown): ClaudeSafeMode | undefined {
   return (CLAUDE_SAFE_MODES as readonly unknown[]).includes(value)
     ? value as ClaudeSafeMode
     : undefined;
+}
+
+function normalizeLocalToolHostDisabledFiles(value: unknown): string[] {
+  return Array.isArray(value)
+    ? (value as string[])
+    : [...DEFAULT_CLAUDE_PROVIDER_SETTINGS.localToolHostDisabledFiles];
+}
+
+/**
+ * Keep only well-formed `{ name, secretId }` entries with both fields non-empty.
+ * A malformed persisted value must never widen the grant — a bad entry is dropped,
+ * not coerced, so the allowlist stays a strict, explicit set of permitted ids.
+ */
+function normalizeLocalToolHostSecrets(value: unknown): ToolHostSecretRef[] {
+  if (!Array.isArray(value)) return [];
+  const out: ToolHostSecretRef[] = [];
+  for (const entry of value) {
+    const ref = entry as { name?: unknown; secretId?: unknown } | null;
+    if (ref && typeof ref.name === 'string' && typeof ref.secretId === 'string' && ref.name && ref.secretId) {
+      out.push({ name: ref.name, secretId: ref.secretId });
+    }
+  }
+  return out;
 }
 
 export function getClaudeProviderSettings(
@@ -93,6 +135,10 @@ export function getClaudeProviderSettings(
     enableSonnet1M: (config.enableSonnet1M as boolean | undefined)
       ?? (settings.enableSonnet1M as boolean | undefined)
       ?? DEFAULT_CLAUDE_PROVIDER_SETTINGS.enableSonnet1M,
+    localToolHostEnabled: (config.localToolHostEnabled as boolean | undefined)
+      ?? DEFAULT_CLAUDE_PROVIDER_SETTINGS.localToolHostEnabled,
+    localToolHostDisabledFiles: normalizeLocalToolHostDisabledFiles(config.localToolHostDisabledFiles),
+    localToolHostSecrets: normalizeLocalToolHostSecrets(config.localToolHostSecrets),
     customModels: normalizeCustomModels(config.customModels, { acceptLegacyNewlineString: true }),
     lastModel: (config.lastModel as string | undefined)
       ?? (settings.lastClaudeModel as string | undefined)

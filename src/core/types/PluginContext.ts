@@ -1,6 +1,7 @@
 import type { Plugin } from 'obsidian';
 
 import type { SpecoratorEventMap } from '../../app/events/specoratorEvents';
+import type { ToolHostScan } from '../../tool-host/types';
 import type { BrowserSelectionContext } from '../../utils/browser';
 import type { SharedAppStorage } from '../bootstrap/storage';
 import type { EventBus } from '../events/EventBus';
@@ -88,6 +89,16 @@ export interface PluginContext
   getResolvedEnvironmentVariables(providerId?: ProviderId): Record<string, string>;
   getEnvironmentVariablesForScope(scope: EnvironmentScope): string;
   getResolvedProviderCliPath(providerId: ProviderId): string | null;
+
+  /** Absolute filesystem path of the vault root, or null when unavailable. */
+  getVaultPath(): string | null;
+  /**
+   * Materialize + re-scan the local tool host on the active Claude runtime(s) and
+   * return the full scan. The runtime applies the complete scan (preserving the
+   * `scanFailed` no-clobber signal); the settings widget reads `.catalog` (null
+   * when off/unsupported, an empty payload when genuinely no tools).
+   */
+  reloadLocalToolHost(): Promise<ToolHostScan>;
 
   getActiveBrowserSelection(): BrowserSelectionContext | null;
   getActiveConversationSnapshot(): ConversationSnapshot | null;

@@ -1,5 +1,6 @@
 import * as sdkModule from '@anthropic-ai/claude-agent-sdk';
 
+import { resolveToolHostNode } from '@/providers/claude/toolHost/scanLocalToolHost';
 import * as envUtils from '@/utils/env';
 import * as sessionUtils from '@/utils/session';
 
@@ -1047,6 +1048,44 @@ describe('ClaudeChatRuntime', () => {
       expect(result.error).toBe('Unexpected error');
       expect((service as any).pendingResumeAt).toBeUndefined();
       expect((service as any).persistentQuery).toBeNull();
+    });
+  });
+
+  describe('Local tool host Node resolution', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('resolves Node against the provider-configured env PATH and CLI dir', () => {
+      // Node lives ONLY on the PATH the user set via the Claude provider
+      // Environment setting — not on Obsidian's base PATH.
+      (mockPlugin.getResolvedEnvironmentVariables as jest.Mock).mockReturnValue({
+        PATH: '/custom/node/bin',
+      });
+      (mockPlugin.getResolvedProviderCliPath as jest.Mock).mockReturnValue(
+        '/usr/local/bin/claude',
+      );
+
+      const getEnhancedPath = jest
+        .spyOn(envUtils, 'getEnhancedPath')
+        .mockReturnValue('/custom/node/bin:/usr/local/bin');
+      const findNodeExecutable = jest
+        .spyOn(envUtils, 'findNodeExecutable')
+        .mockReturnValue('/custom/node/bin/node');
+
+      // The runtime resolves Node through the shared scan helper (the per-turn builder
+      // no longer re-resolves — it reuses the scan-validated node). Exercise the helper
+      // directly to keep coverage of the provider-env-PATH resolution at its real home.
+      const result = resolveToolHostNode(mockPlugin as never);
+
+      // The enhanced PATH must be derived from the provider env PATH + CLI path,
+      // not from a bare getEnhancedPath() call.
+      expect(getEnhancedPath).toHaveBeenCalledWith('/custom/node/bin', '/usr/local/bin/claude');
+      expect(findNodeExecutable).toHaveBeenCalledWith('/custom/node/bin:/usr/local/bin');
+      expect(result).toEqual({
+        nodePath: '/custom/node/bin/node',
+        enhancedPath: '/custom/node/bin:/usr/local/bin',
+      });
     });
   });
 

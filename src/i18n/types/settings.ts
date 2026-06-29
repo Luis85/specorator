@@ -114,6 +114,26 @@ export type SettingsTranslationKey =
   | 'settings.mcp.toggleDisabled'
   | 'settings.mcp.deleted'
 
+  // Settings - Local Tool Host
+  | 'settings.localToolHost.name'
+  | 'settings.localToolHost.desc'
+  | 'settings.localToolHost.enable'
+  | 'settings.localToolHost.nodeMissing'
+  | 'settings.localToolHost.nodeUnsupported'
+  | 'settings.localToolHost.noTools'
+  | 'settings.localToolHost.trustWarning'
+  | 'settings.localToolHost.loadError'
+  | 'settings.localToolHost.reload'
+  | 'settings.localToolHost.disabledHint'
+  | 'settings.localToolHost.secretsHeading'
+  | 'settings.localToolHost.secretsDesc'
+  | 'settings.localToolHost.secretNotSet'
+  | 'settings.localToolHost.secretRemove'
+  | 'settings.localToolHost.secretAdd'
+  | 'settings.localToolHost.secretNamePlaceholder'
+  | 'settings.localToolHost.secretAddButton'
+  | 'settings.localToolHost.scanFailed'
+
   // Settings - Plugins
   | 'settings.plugins.name'
   | 'settings.plugins.desc'

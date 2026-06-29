@@ -332,6 +332,26 @@
       "name": "Servidores MCP",
       "desc": "Gerencie configurações de servidores MCP a nível de vault armazenadas em .claude/mcp.json. Servidores com modo de salvamento de contexto exigem @mention para ativar."
     },
+    "localToolHost": {
+      "name": "Local tool host",
+      "desc": "Run user-authored Node scripts from .specorator/tools as MCP tools. Requires Node installed. Scripts run with full Node access — only enable code you trust.",
+      "enable": "Enable local tool host",
+      "nodeMissing": "Node was not found on PATH. Install Node to use local tools.",
+      "nodeUnsupported": "Node 18 or newer is required for local tools (or Node was not found).",
+      "noTools": "No tools found in .specorator/tools.",
+      "trustWarning": "Tools run as a Node subprocess with full filesystem and network access.",
+      "loadError": "Failed to load",
+      "reload": "Reload tools",
+      "disabledHint": "Disabled — not loaded. Enable to run it again.",
+      "secretsHeading": "Tool secrets",
+      "secretsDesc": "Secrets a tool may read via ctx.secrets. A tool only receives a secret whose name you list here — nothing else from your keychain is exposed.",
+      "secretNotSet": "Not set on this device — select or create the secret to use it.",
+      "secretRemove": "Remove",
+      "secretAdd": "Allow a tool secret",
+      "secretNamePlaceholder": "SECRET_NAME",
+      "secretAddButton": "Add",
+      "scanFailed": "A tool scan failed — a tool script errored or timed out during loading. Check .specorator/tool-host.log, then fix or disable the script and click Reload tools."
+    },
     "plugins": {
       "name": "Plugins do Claude Code",
       "desc": "Gerencie plugins do Claude Code descobertos em ~/.claude/plugins. Plugins ativados são armazenados por vault em .claude/settings.json."

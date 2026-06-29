@@ -1,3 +1,4 @@
+import type { ToolHostScan } from '../../tool-host/types';
 import type { CursorContext } from '../../utils/editor';
 import type { SharedAppStorage } from '../bootstrap/storage';
 import type { McpServerManager } from '../mcp/McpServerManager';
@@ -498,6 +499,8 @@ export interface ProviderWorkspaceServices {
   mcpServerManager?: McpServerManager | null;
   settingsTabRenderer?: ProviderSettingsTabRenderer | null;
   refreshAgentMentions?(): Promise<void>;
+  // Runtime-independent local-tool-host scan; works with zero open chat tabs (only Claude provides it).
+  scanLocalToolHost?: (plugin: PluginContext) => Promise<ToolHostScan>;
 }
 
 export interface ProviderWorkspaceInitContext {

@@ -79,8 +79,19 @@ import { TaskNoteStore } from './features/tasks/storage/TaskNoteStore';
 import { WorkOrderActivityProvider } from './features/tasks/ui/WorkOrderActivityProvider';
 import { setLocale, t } from './i18n/i18n';
 import type { Locale } from './i18n/types';
+import type { ToolHostScan } from './tool-host/types';
 import type { BrowserSelectionContext } from './utils/browser';
 import { getVaultPath } from './utils/path';
+
+/** Claude runtime surface for the local tool host fan-out (narrowed from the neutral ChatRuntime). */
+interface ClaudeToolHostRuntime {
+  applyToolHostScan(scan: ToolHostScan): void;
+}
+
+function isClaudeToolHostRuntime(service: unknown): service is ClaudeToolHostRuntime {
+  const s = service as Partial<ClaudeToolHostRuntime>;
+  return typeof s?.applyToolHostScan === 'function';
+}
 
 export default class SpecoratorPlugin extends Plugin implements PluginContext {
   settings!: SpecoratorSettings;
@@ -653,6 +664,36 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
         .debug(`MCP secret "${ref.name}" for "${ref.serverName}" missing on this device.`);
       new Notice(t('env.secretMissing', { name: `${ref.serverName}: ${ref.name}` }));
     }
+  }
+
+  getVaultPath(): string | null {
+    return getVaultPath(this.app);
+  }
+
+  /**
+   * Materialize + re-scan the local tool host. The scan is runtime-independent
+   * (it needs only settings, vault path, plugin dir, the provider-resolved Node,
+   * and host materialization), so it works with zero Claude tabs open — opening
+   * Settings before any chat tab still lists, reloads, and disables tools. The
+   * single scan result is then fanned out to every open Claude runtime so their
+   * sync builder caches (`hostMaterialized`, `toolsRev`, declared secrets) match.
+   */
+  async reloadLocalToolHost(): Promise<ToolHostScan> {
+    const scanner = ProviderWorkspaceRegistry.getLocalToolHostScanner('claude');
+    if (!scanner) return { catalog: null, declaredSecretIds: [], toolSecretsByFile: {}, materialized: false };
+    const scan = await scanner(this);
+
+    for (const view of this.getAllViews()) {
+      const tabManager = view.getTabManager();
+      if (!tabManager) continue;
+      await tabManager.broadcastToProviderTabs('claude', async (service) => {
+        if (isClaudeToolHostRuntime(service)) {
+          service.applyToolHostScan(scan);
+        }
+      });
+    }
+
+    return scan;
   }
 
   getActiveBrowserSelection(): BrowserSelectionContext | null {

@@ -26,6 +26,7 @@ import {
   vaultProjectSettingsRisky,
 } from '../runtime/claudeProjectTrust';
 import { StorageService } from '../storage/StorageService';
+import { scanLocalToolHost } from '../toolHost/scanLocalToolHost';
 import { claudeSettingsTabRenderer } from '../ui/ClaudeSettingsTab';
 
 export interface ClaudeWorkspaceServices extends ProviderWorkspaceServices {
@@ -125,6 +126,7 @@ export async function createClaudeWorkspaceServices(
     commandCatalog,
     agentMentionProvider: agentManager,
     settingsTabRenderer: claudeSettingsTabRenderer,
+    scanLocalToolHost,
     refreshAgentMentions: async () => {
       await agentManager.loadAgents();
     },

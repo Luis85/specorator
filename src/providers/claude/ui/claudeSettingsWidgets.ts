@@ -24,6 +24,7 @@ import {
 } from '../runtime/claudeProjectTrust';
 import { getClaudeProviderSettings, updateClaudeProviderSettings } from '../settings';
 import { AgentSettings } from './AgentSettings';
+import { mountClaudeLocalToolHostSection } from './localToolHostWidget';
 import { PluginSettingsManager } from './PluginSettingsManager';
 import { SlashCommandSettings } from './SlashCommandSettings';
 
@@ -281,6 +282,7 @@ export const claudeSettingsWidgets: Readonly<Record<string, ProviderSettingsWidg
   hiddenCommands: mountClaudeHiddenCommandsSetting,
   subagents: mountClaudeSubagentsSection,
   mcpServers: mountClaudeMcpSection,
+  localToolHost: mountClaudeLocalToolHostSection,
   plugins: mountClaudePluginsSection,
   environment: (host, context) => mountClaudeEnvironmentSection(host, context),
   enableBangBash: mountClaudeBangBashToggle,

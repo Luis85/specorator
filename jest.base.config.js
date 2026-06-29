@@ -20,6 +20,9 @@ module.exports = {
     '^@anthropic-ai/claude-agent-sdk$': '<rootDir>/tests/__mocks__/claude-agent-sdk.ts',
     '^obsidian$': '<rootDir>/tests/__mocks__/obsidian.ts',
     '^@modelcontextprotocol/sdk/(.*)$': '<rootDir>/node_modules/@modelcontextprotocol/sdk/dist/cjs/$1',
+    // The generated `.hostbundle` (baked by `npm run build`) is gitignored and
+    // absent in `test`/`coverage` CI; stub it so `embeddedSource.ts` resolves.
+    '\\.hostbundle$': '<rootDir>/tests/__mocks__/hostbundle.ts',
   },
   transformIgnorePatterns: [
     'node_modules/(?!(@anthropic-ai/claude-agent-sdk)/)',

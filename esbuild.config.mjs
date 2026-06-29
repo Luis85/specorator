@@ -162,11 +162,32 @@ const context = await esbuild.context({
   treeShaking: true,
   // Minify runs in patchRendererUnsafeUnref onEnd (after SDK patches), not here.
   outfile: 'main.js',
+  loader: { '.hostbundle': 'text' },
 });
+
+// The tool host runs as a standalone Node ESM subprocess. Emitted as text and
+// baked into main.js (Obsidian ships only main.js/manifest.json/styles.css).
+const toolHostBuildOptions = {
+  entryPoints: ['src/tool-host/index.ts'],
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  target: 'node18',
+  external: [...builtinModules, ...builtinModules.map((m) => `node:${m}`)],
+  sourcemap: false,
+  treeShaking: true,
+  logLevel: 'info',
+  outfile: 'src/tool-host/embeddedSource.hostbundle',
+};
+
+const toolHostContext = await esbuild.context(toolHostBuildOptions);
+// Emit the host bundle before the main build resolves its text import.
+await toolHostContext.rebuild();
 
 if (prod) {
   await context.rebuild();
   process.exit(0);
 } else {
+  await toolHostContext.watch();
   await context.watch();
 }
