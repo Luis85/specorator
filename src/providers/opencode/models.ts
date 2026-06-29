@@ -1,3 +1,5 @@
+import { normalizeUniqueRecords } from './normalizeRecords';
+
 export interface OpencodeDiscoveredModel {
   description?: string;
   label: string;
@@ -68,37 +70,21 @@ export function decodeOpencodeModelId(model: string): string | null {
 }
 
 export function normalizeOpencodeDiscoveredModels(value: unknown): OpencodeDiscoveredModel[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  const normalized: OpencodeDiscoveredModel[] = [];
-  const seen = new Set<string>();
-  for (const entry of value as unknown[]) {
-    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-      continue;
+  return normalizeUniqueRecords(value, (str) => {
+    const rawId = str('rawId');
+    if (!rawId) {
+      return null;
     }
-    const record = entry as Record<string, unknown>;
-
-    const rawId = typeof record.rawId === 'string' ? record.rawId.trim() : '';
-    const label = typeof record.label === 'string' ? record.label.trim() : rawId;
-    const description = typeof record.description === 'string'
-      ? record.description.trim()
-      : '';
-
-    if (!rawId || seen.has(rawId)) {
-      continue;
-    }
-
-    seen.add(rawId);
-    normalized.push({
-      ...(description ? { description } : {}),
-      label: label || rawId,
-      rawId,
-    });
-  }
-
-  return normalized;
+    const description = str('description');
+    return {
+      dedupeKey: rawId,
+      item: {
+        ...(description ? { description } : {}),
+        label: str('label') || rawId,
+        rawId,
+      },
+    };
+  });
 }
 
 export function normalizeOpencodeModelVariants(value: unknown): OpencodeModelVariant[] {

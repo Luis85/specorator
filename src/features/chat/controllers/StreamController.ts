@@ -22,7 +22,6 @@ import {
   cancelScheduledAnimationFrame,
   scheduleAnimationFrame,
   type ScheduledAnimationFrame,
-  scheduleDelayedFrame,
 } from '../../../utils/animationFrame';
 import { extractDiffData } from '../../../utils/diff';
 import { toVaultRelativeOpenPath } from '../../../utils/fileLink';
@@ -32,10 +31,6 @@ import { renderInlineRuntimeError } from '../rendering/InlineRuntimeError';
 import type { MessageRenderer, RenderContentOptions } from '../rendering/MessageRenderer';
 import { scrollMessagesToBottom } from '../rendering/scrollToBottom';
 import { resolveSubagentLifecycleAdapter } from '../rendering/subagentLifecycleResolution';
-import {
-  createThinkingBlock,
-  finalizeThinkingBlock,
-} from '../rendering/ThinkingBlockRenderer';
 import {
   isBlockedToolResult,
   renderToolCall,
@@ -61,7 +56,10 @@ import {
   projectNoticeText,
   projectUsage,
 } from './StreamProjection';
+import { scheduleStreamContinuation } from './streamRenderBackoff';
 import { SubagentStreamCoordinator } from './SubagentStreamCoordinator';
+import { TextRenderCoordinator } from './TextRenderCoordinator';
+import { ThinkingRenderCoordinator } from './ThinkingRenderCoordinator';
 import {
   appendToolCallToMessage,
   createRunningToolCall,
@@ -89,29 +87,9 @@ export interface StreamControllerDeps {
 }
 
 export class StreamController {
-  // Size-aware streaming backoff (PERF-3): streaming render is NOT a delta append —
-  // each throttled tick re-parses the entire accumulated block, so cost is O(C) per
-  // tick (O(C²) cumulative as the block grows). Below the threshold we re-render every
-  // frame for snappy feedback; past it we coalesce continuation renders behind a delay
-  // to cap the re-parse rate. The final render is always exact because finalize flushes
-  // synchronously. Delta-append rendering is deliberately deferred unless users report
-  // jank on very long single answers (docs/issues/streaming-render-cost.md).
-  private static readonly STREAM_REPARSE_BACKOFF_THRESHOLD_CHARS = 4096;
-  private static readonly STREAM_REPARSE_BACKOFF_MS = 200;
-
   private deps: StreamControllerDeps;
-  private pendingTextRenderFrame: ScheduledAnimationFrame | null = null;
-  private pendingTextRenderPromise: Promise<void> | null = null;
-  private resolvePendingTextRender: (() => void) | null = null;
-  private isTextRenderRunning = false;
-  // Collapse setting snapshotted once when the current text block starts. Read
-  // (not re-evaluated) through the block's append/render/finalize lifecycle so a
-  // mid-block toggle can't race those steps; the toggle takes effect next block.
-  private currentTextBlockCollapsed = false;
-  private pendingThinkingRenderFrame: ScheduledAnimationFrame | null = null;
-  private pendingThinkingRenderPromise: Promise<void> | null = null;
-  private resolvePendingThinkingRender: (() => void) | null = null;
-  private isThinkingRenderRunning = false;
+  private readonly textRender: TextRenderCoordinator;
+  private readonly thinkingRender: ThinkingRenderCoordinator;
   private pendingToolOutputFrames = new Map<string, ScheduledAnimationFrame>();
   private pendingScrollFrame: ScheduledAnimationFrame | null = null;
 
@@ -160,6 +138,25 @@ export class StreamController {
       normalizeToolResultContent: (content) => this.normalizeToolResultContent(content),
       getSubagentLifecycleAdapter: (toolName) => this.getSubagentLifecycleAdapter(toolName),
       flushPendingTools: () => this.flushPendingTools(),
+    });
+    this.thinkingRender = new ThinkingRenderCoordinator({
+      state: deps.state,
+      renderer: deps.renderer,
+      hideThinkingIndicator: () => this.hideThinkingIndicator(),
+      getStreamingRenderOptions: (content) => this.getStreamingRenderOptions(content),
+      scrollToBottom: () => this.scrollToBottom(),
+      getMessagesWindow: () => this.getMessagesWindow(),
+    });
+    this.textRender = new TextRenderCoordinator({
+      state: deps.state,
+      renderer: deps.renderer,
+      showWriting: () => this.indicator.showWriting(),
+      hideThinkingIndicator: () => this.hideThinkingIndicator(),
+      scrollToBottom: () => this.scrollToBottom(),
+      getStreamingRenderOptions: (content) => this.getStreamingRenderOptions(content),
+      shouldDeferMathRendering: () => this.shouldDeferMathRendering(),
+      shouldCollapseStreamingResponse: () => this.shouldCollapseStreamingResponse(),
+      getMessagesWindow: () => this.getMessagesWindow(),
     });
   }
 
@@ -699,211 +696,12 @@ export class StreamController {
   // Text Block Management
   // ============================================
 
-  async appendText(text: string): Promise<void> {
-    const { state } = this.deps;
-    if (!state.currentContentEl) return;
-
-    // Snapshot the collapse setting once, when the block starts. Reading it again
-    // mid-block would let a toggle race the append/render/finalize steps; instead
-    // a block keeps the mode it started in and a toggle applies to the next block.
-    if (!state.currentTextEl) {
-      state.currentTextEl = state.currentContentEl.createDiv({ cls: 'specorator-text-block' });
-      state.currentTextContent = '';
-      this.currentTextBlockCollapsed = this.shouldCollapseStreamingResponse();
-    }
-
-    if (!this.currentTextBlockCollapsed) {
-      this.hideThinkingIndicator();
-    }
-
-    state.currentTextContent += text;
-
-    if (this.currentTextBlockCollapsed) {
-      // Hide the half-formed render: keep an immediate placeholder up and render
-      // the whole block in one pass when it finalizes.
-      this.indicator.showWriting();
-      return;
-    }
-
-    void this.scheduleCurrentTextRender();
+  appendText(text: string): Promise<void> {
+    return this.textRender.append(text);
   }
 
-  async finalizeCurrentTextBlock(msg?: ChatMessage): Promise<void> {
-    const { state, renderer } = this.deps;
-    await this.flushPendingTextRender();
-
-    // A block keeps the collapse mode it started in (snapshotted in appendText),
-    // so finalize follows that snapshot, not the live setting.
-    const collapsed = this.currentTextBlockCollapsed;
-    // A collapsed block kept its "Writing response..." placeholder up for the
-    // whole block; drop it before the one-pass render below.
-    if (collapsed) {
-      this.hideThinkingIndicator();
-    }
-
-    if (msg && state.currentTextContent) {
-      await this.renderFinalizedTextBlock(state.currentTextEl, state.currentTextContent, collapsed);
-      msg.contentBlocks = msg.contentBlocks || [];
-      msg.contentBlocks.push({ type: 'text', content: state.currentTextContent });
-      // Work-order tabs swap a completed handoff block for the compact card on
-      // finalize; everything else keeps the raw text block plus copy button.
-      // Derive the content element from the text element's parent because
-      // `InputController` nulls `state.currentContentEl` right before this
-      // call — guarding on `state.currentContentEl` here would mean the live
-      // swap never fires on a normal completed turn (only after a reload).
-      const liveContentEl =
-        (state.currentTextEl?.parentElement)
-          ?? state.currentContentEl;
-      const replacedWithCard =
-        liveContentEl && state.currentTextEl
-          ? renderer.finalizeStreamedAssistantText?.(
-              liveContentEl,
-              state.currentTextEl,
-              state.currentTextContent,
-            ) ?? false
-          : false;
-      // Copy button added here (not during streaming) to match history-loaded messages
-      if (state.currentTextEl && !replacedWithCard) {
-        renderer.addTextCopyButton(state.currentTextEl, state.currentTextContent);
-      }
-      // The card swap removed the text block that registered actions anchor to;
-      // re-anchor them onto the card so a freshly completed run keeps actions
-      // (e.g. Create work order) without waiting for a reload.
-      if (replacedWithCard && msg) {
-        renderer.refreshMessageActions?.(msg);
-      }
-    }
-    state.currentTextEl = null;
-    state.currentTextContent = '';
-    this.currentTextBlockCollapsed = false;
-  }
-
-  /**
-   * Renders the finalized text into its element. A collapsed block was never
-   * live-rendered, so render it once now; a non-collapsed block already holds the
-   * streamed render and only needs a re-render to bake deferred math.
-   */
-  private async renderFinalizedTextBlock(
-    textEl: HTMLElement | null,
-    content: string,
-    collapsed: boolean,
-  ): Promise<void> {
-    if (!textEl) return;
-    if (collapsed) {
-      await this.deps.renderer.renderContent(textEl, content);
-      return;
-    }
-    if (this.shouldDeferMathRendering() && hasStreamingMathDelimiters(content)) {
-      await this.deps.renderer.renderContent(textEl, content);
-    }
-  }
-
-  private scheduleCurrentTextRender(): Promise<void> {
-    if (!this.pendingTextRenderPromise) {
-      this.pendingTextRenderPromise = new Promise(resolve => {
-        this.resolvePendingTextRender = resolve;
-      });
-    }
-
-    if (this.pendingTextRenderFrame === null && !this.isTextRenderRunning) {
-      this.pendingTextRenderFrame = this.scheduleStreamContinuation(
-        this.deps.state.currentTextContent,
-        this.getStreamingRenderWindow(),
-        () => {
-          this.pendingTextRenderFrame = null;
-          void this.renderPendingText();
-        },
-      );
-    }
-
-    return this.pendingTextRenderPromise;
-  }
-
-  private async flushPendingTextRender(): Promise<void> {
-    const pendingRender = this.pendingTextRenderPromise;
-    if (!pendingRender) return;
-
-    if (this.pendingTextRenderFrame !== null) {
-      cancelScheduledAnimationFrame(this.pendingTextRenderFrame);
-      this.pendingTextRenderFrame = null;
-      void this.renderPendingText();
-    }
-
-    await pendingRender;
-  }
-
-  // Full re-parse of the accumulated block on every throttled tick (O(C)/tick, see
-  // PERF-3 note on the backoff constants above) — not an O(1) delta append.
-  private async renderPendingText(): Promise<void> {
-    if (this.isTextRenderRunning) return;
-    this.isTextRenderRunning = true;
-
-    const { state, renderer } = this.deps;
-    const textEl = state.currentTextEl;
-    const content = state.currentTextContent;
-
-    try {
-      if (textEl) {
-        const options = this.getStreamingRenderOptions(content);
-        if (options) {
-          await renderer.renderContent(textEl, content, options);
-        } else {
-          await renderer.renderContent(textEl, content);
-        }
-        this.scrollToBottom();
-      }
-    } catch {
-      // MessageRenderer owns user-visible render fallback; keep stream state moving.
-    } finally {
-      this.isTextRenderRunning = false;
-    }
-
-    if (state.currentTextEl === textEl && state.currentTextContent !== content) {
-      this.pendingTextRenderFrame = this.scheduleStreamContinuation(
-        state.currentTextContent,
-        this.getStreamingRenderWindow(),
-        () => {
-          this.pendingTextRenderFrame = null;
-          void this.renderPendingText();
-        },
-      );
-      return;
-    }
-
-    const resolve = this.resolvePendingTextRender;
-    this.pendingTextRenderPromise = null;
-    this.resolvePendingTextRender = null;
-    resolve?.();
-  }
-
-  /**
-   * Schedules the next streaming render of a growing block. Each render is a full
-   * re-parse of the accumulated content — O(C) per throttled tick, not O(1)/chunk.
-   * Small blocks re-render every animation frame; large blocks coalesce behind a delay
-   * (PERF-3 backoff) so the O(C²) cumulative re-parse cost stays bounded. Either way
-   * the trailing render is exact via the synchronous flush path.
-   */
-  private scheduleStreamContinuation(
-    content: string,
-    renderWindow: Window | null,
-    callback: () => void,
-  ): ScheduledAnimationFrame {
-    if (content.length >= StreamController.STREAM_REPARSE_BACKOFF_THRESHOLD_CHARS) {
-      return scheduleDelayedFrame(callback, StreamController.STREAM_REPARSE_BACKOFF_MS, renderWindow);
-    }
-    return scheduleAnimationFrame(callback, renderWindow);
-  }
-
-  private cancelPendingTextRender(): void {
-    if (this.pendingTextRenderFrame !== null) {
-      cancelScheduledAnimationFrame(this.pendingTextRenderFrame);
-      this.pendingTextRenderFrame = null;
-    }
-
-    const resolve = this.resolvePendingTextRender;
-    this.pendingTextRenderPromise = null;
-    this.resolvePendingTextRender = null;
-    resolve?.();
+  finalizeCurrentTextBlock(msg?: ChatMessage): Promise<void> {
+    return this.textRender.finalize(msg);
   }
 
   private scheduleToolOutputRender(toolId: string, toolCall: ToolCallInfo): void {
@@ -923,7 +721,7 @@ export class StreamController {
       );
       this.scrollToBottom();
     };
-    const frame = this.scheduleStreamContinuation(
+    const frame = scheduleStreamContinuation(
       toolCall.result ?? '',
       this.getMessagesWindow(),
       render,
@@ -950,132 +748,12 @@ export class StreamController {
   // Thinking Block Management
   // ============================================
 
-  async appendThinking(content: string): Promise<void> {
-    const { state, renderer } = this.deps;
-    if (!state.currentContentEl) return;
-
-    this.hideThinkingIndicator();
-    if (!state.currentThinkingState) {
-      state.currentThinkingState = createThinkingBlock(
-        state.currentContentEl,
-        (el, md) => renderer.renderContent(el, md)
-      );
-    }
-
-    state.currentThinkingState.content += content;
-    void this.scheduleCurrentThinkingRender();
+  appendThinking(content: string): Promise<void> {
+    return this.thinkingRender.append(content);
   }
 
-  async finalizeCurrentThinkingBlock(msg?: ChatMessage): Promise<void> {
-    const { state, renderer } = this.deps;
-    if (!state.currentThinkingState) return;
-    await this.flushPendingThinkingRender();
-
-    const thinkingState = state.currentThinkingState;
-    if (this.getStreamingRenderOptions(thinkingState.content)) {
-      await renderer.renderContent(thinkingState.contentEl, thinkingState.content);
-    }
-
-    const durationSeconds = finalizeThinkingBlock(thinkingState);
-
-    if (msg && thinkingState.content) {
-      msg.contentBlocks = msg.contentBlocks || [];
-      msg.contentBlocks.push({
-        type: 'thinking',
-        content: thinkingState.content,
-        durationSeconds,
-      });
-    }
-
-    state.currentThinkingState = null;
-  }
-
-  private scheduleCurrentThinkingRender(): Promise<void> {
-    if (!this.pendingThinkingRenderPromise) {
-      this.pendingThinkingRenderPromise = new Promise(resolve => {
-        this.resolvePendingThinkingRender = resolve;
-      });
-    }
-
-    if (this.pendingThinkingRenderFrame === null && !this.isThinkingRenderRunning) {
-      this.pendingThinkingRenderFrame = this.scheduleStreamContinuation(
-        this.deps.state.currentThinkingState?.content ?? '',
-        this.getThinkingRenderWindow(),
-        () => {
-          this.pendingThinkingRenderFrame = null;
-          void this.renderPendingThinking();
-        },
-      );
-    }
-
-    return this.pendingThinkingRenderPromise;
-  }
-
-  private async flushPendingThinkingRender(): Promise<void> {
-    const pendingRender = this.pendingThinkingRenderPromise;
-    if (!pendingRender) return;
-
-    if (this.pendingThinkingRenderFrame !== null) {
-      cancelScheduledAnimationFrame(this.pendingThinkingRenderFrame);
-      this.pendingThinkingRenderFrame = null;
-      void this.renderPendingThinking();
-    }
-
-    await pendingRender;
-  }
-
-  private async renderPendingThinking(): Promise<void> {
-    if (this.isThinkingRenderRunning) return;
-    this.isThinkingRenderRunning = true;
-
-    const { state, renderer } = this.deps;
-    const thinkingState = state.currentThinkingState;
-    const content = thinkingState?.content ?? '';
-
-    try {
-      if (thinkingState) {
-        const options = this.getStreamingRenderOptions(content);
-        if (options) {
-          await renderer.renderContent(thinkingState.contentEl, content, options);
-        } else {
-          await renderer.renderContent(thinkingState.contentEl, content);
-        }
-        this.scrollToBottom();
-      }
-    } catch {
-      // MessageRenderer owns user-visible render fallback; keep stream state moving.
-    } finally {
-      this.isThinkingRenderRunning = false;
-    }
-
-    if (state.currentThinkingState === thinkingState && thinkingState && thinkingState.content !== content) {
-      this.pendingThinkingRenderFrame = this.scheduleStreamContinuation(
-        thinkingState.content,
-        this.getThinkingRenderWindow(),
-        () => {
-          this.pendingThinkingRenderFrame = null;
-          void this.renderPendingThinking();
-        },
-      );
-      return;
-    }
-
-    const resolve = this.resolvePendingThinkingRender;
-    this.pendingThinkingRenderPromise = null;
-    this.resolvePendingThinkingRender = null;
-    resolve?.();
-  }
-
-  private cancelPendingThinkingRender(): void {
-    if (this.pendingThinkingRenderFrame !== null) {
-      cancelScheduledAnimationFrame(this.pendingThinkingRenderFrame);
-      this.pendingThinkingRenderFrame = null;
-    }
-
-    const resolve = this.resolvePendingThinkingRender;
-    this.pendingThinkingRenderPromise = null;
-    this.resolvePendingThinkingRender = null;
-    resolve?.();
+  finalizeCurrentThinkingBlock(msg?: ChatMessage): Promise<void> {
+    return this.thinkingRender.finalize(msg);
   }
 
   /** Forwarded from SubagentManager (via tab wiring) when an async subagent's state changes. */
@@ -1191,31 +869,16 @@ export class StreamController {
     return this.deps.getMessagesEl().ownerDocument.defaultView ?? null;
   }
 
-  private getStreamingRenderWindow(): Window | null {
-    const { state } = this.deps;
-    return state.currentTextEl?.ownerDocument?.defaultView
-      ?? state.currentContentEl?.ownerDocument?.defaultView
-      ?? this.getMessagesWindow();
-  }
-
-  private getThinkingRenderWindow(): Window | null {
-    const { state } = this.deps;
-    return state.currentThinkingState?.contentEl.ownerDocument?.defaultView
-      ?? state.currentContentEl?.ownerDocument?.defaultView
-      ?? this.getMessagesWindow();
-  }
-
   resetStreamingState(): void {
     const { state } = this.deps;
-    this.cancelPendingTextRender();
-    this.cancelPendingThinkingRender();
+    this.textRender.cancel();
+    this.thinkingRender.cancel();
     this.cancelPendingToolOutputRenders();
     this.cancelPendingScroll();
     this.hideThinkingIndicator();
     state.currentContentEl = null;
     state.currentTextEl = null;
     state.currentTextContent = '';
-    this.currentTextBlockCollapsed = false;
     state.currentThinkingState = null;
     this.deps.subagentManager.resetStreamingState();
     state.pendingTools.clear();

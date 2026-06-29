@@ -34,8 +34,23 @@ describe('setFrontmatterList', () => {
     expect(out).toContain('name: x');
   });
 
-  it('returns content unchanged when there is no frontmatter', () => {
+  it('prepends a new frontmatter block when none exists and values are present', () => {
     const src = `No frontmatter here`;
-    expect(setFrontmatterList(src, 'tags', ['a'])).toBe(src);
+    const out = setFrontmatterList(src, 'tags', ['a', 'b']);
+    expect(tagsOf(out)).toEqual(['a', 'b']);
+    expect(out).toContain('No frontmatter here');
+    expect(out.startsWith('---\n')).toBe(true);
+  });
+
+  it('returns content unchanged when there is no frontmatter and no values', () => {
+    const src = `No frontmatter here`;
+    expect(setFrontmatterList(src, 'tags', [])).toBe(src);
+  });
+
+  it('block-list key followed by another key: replaces only the list, keeps the next key', () => {
+    const src = `---\ntags:\n  - old1\n  - old2\nname: keep\n---\nBody`;
+    const out = setFrontmatterList(src, 'tags', ['new']);
+    expect(tagsOf(out)).toEqual(['new']);
+    expect(out).toContain('name: keep');
   });
 });

@@ -5,6 +5,7 @@ import { asSettingsBag } from '../../../../core/types/settings';
 import { t } from '../../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../../main';
 import { confirm } from '../../../../shared/modals/ConfirmModal';
+import { normalizeStringArray } from '../../../../utils/frontmatter';
 import { renderLibraryLoading } from '../../../../utils/libraryView';
 import { renderAgentAvatar } from '../../agentAvatar';
 import { rosterAgentToPersona } from '../../personaRegistry';
@@ -171,7 +172,7 @@ export class AgentDetailEditor {
     input.placeholder = t('agentRoster.tagsPlaceholder');
     input.setAttribute('aria-label', t('agentRoster.tagsLabel'));
     input.addEventListener('input', () => {
-      this.draft.tags = input.value.split(',').map((s) => s.trim()).filter(Boolean);
+      this.draft.tags = normalizeStringArray(input.value) ?? [];
       this.updateDirty();
     });
   }

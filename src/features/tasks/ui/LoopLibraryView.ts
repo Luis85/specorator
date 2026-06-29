@@ -3,7 +3,7 @@ import { ItemView, Notice, type WorkspaceLeaf } from 'obsidian';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import { renderLibraryNav } from '../../../shared/libraryNav';
-import { LibraryListController, mountLibraryList, renderCloneButton } from '../../../shared/libraryToolbar';
+import { LibraryListController, mountLibraryList, renderCloneButton, renderLibraryCardTags } from '../../../shared/libraryToolbar';
 import { confirm } from '../../../shared/modals/ConfirmModal';
 import { withErrorNotice } from '../../../shared/uiAction';
 import { createLibraryCard, renderLibraryEmptyState, renderLibraryLoading, renderLibraryShell } from '../../../utils/libraryView';
@@ -74,9 +74,7 @@ export class LoopLibraryView extends ItemView {
     if (loop.useWhen) {
       body.createDiv({ cls: 'specorator-library-card-desc', text: `${t('loopLibrary.useWhenLabel')} ${loop.useWhen}` });
     }
-    const caps = body.createDiv({ cls: 'specorator-roster-card-caps' });
-    for (const tag of loop.tags ?? []) caps.createSpan({ cls: 'specorator-library-chip', text: tag });
-    if (caps.childElementCount === 0) caps.remove();
+    renderLibraryCardTags(body, loop.tags ?? []);
 
     const promptBtn = cardActions.createEl('button', { cls: 'mod-cta', text: t('loopLibrary.prompt') });
     promptBtn.onclick = (e) => { e.stopPropagation(); launchLoopPrompt(this.plugin, loop); };

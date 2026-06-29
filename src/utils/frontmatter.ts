@@ -194,12 +194,17 @@ export function extractStringArray(
 /**
  * Upsert a flow-sequence list (`key: ["a", "b"]`) into `content`'s frontmatter,
  * replacing an existing `key:` flow line or block-sequence (`key:` + indented
- * `- ` items). Removes the key entirely when `values` is empty. Returns content
- * unchanged when no `---` frontmatter block is present.
+ * `- ` items). Removes the key entirely when `values` is empty. When `content`
+ * has no `---` frontmatter block, a new one is prepended (only when there are
+ * values to write — an empty list on a block-less document is a no-op).
  */
 export function setFrontmatterList(content: string, key: string, values: string[]): string {
   const match = content.match(FRONTMATTER_PATTERN);
-  if (!match) return content;
+  if (!match) {
+    if (values.length === 0) return content;
+    const flow = values.map((v) => JSON.stringify(v)).join(', ');
+    return `---\n${key}: [${flow}]\n---\n${content}`;
+  }
 
   const yamlLines = match[1].split(/\r?\n/);
   const body = match[2];

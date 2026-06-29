@@ -126,6 +126,22 @@
   background: var(--background-modifier-hover);
 }
 
+/* The whole card is the keyboard open affordance (role="button" tabindex="0"),
+   so it must show a visible focus ring when tabbed to. */
+.specorator-library-card[role="button"]:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+
+/* Tag/role/provider chip row on a card. Neutral (non-roster) name so the Skill
+   and Loop views don't borrow a roster-namespaced class. */
+.specorator-library-card-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4-1);
+  margin-top: var(--size-4-1);
+}
+
 /* Optional leading media slot (e.g. an avatar) rendered before the body. */
 .specorator-library-card-leading {
   flex: 0 0 auto;
@@ -319,6 +335,11 @@
 .specorator-library-filterchip.is-on {
   background: var(--interactive-accent);
   color: var(--text-on-accent);
+}
+.specorator-library-filterchip:focus-visible,
+.specorator-library-filterreset:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
 }
 .specorator-library-filterreset.is-hidden { display: none; }
 .specorator-library-card-icon {

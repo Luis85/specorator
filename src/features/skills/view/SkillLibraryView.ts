@@ -3,7 +3,7 @@ import { ItemView, Notice, type WorkspaceLeaf } from 'obsidian';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import { renderLibraryNav } from '../../../shared/libraryNav';
-import { LibraryListController, mountLibraryList, renderCloneButton } from '../../../shared/libraryToolbar';
+import { LibraryListController, mountLibraryList, renderCloneButton, renderLibraryCardTags } from '../../../shared/libraryToolbar';
 import { promptReason } from '../../../shared/modals/PromptModal';
 import { withErrorNotice } from '../../../shared/uiAction';
 import { extractStringArray, parseFrontmatter } from '../../../utils/frontmatter';
@@ -111,15 +111,20 @@ export class SkillLibraryView extends ItemView {
       nameRow.createSpan({ cls: 'specorator-library-chip specorator-library-chip-outline', text: t('skillLibrary.readOnlyNote') });
     }
     body.createDiv({ cls: 'specorator-library-card-desc', text: row.description });
-    const caps = body.createDiv({ cls: 'specorator-roster-card-caps' });
-    for (const tag of row.tags ?? []) caps.createSpan({ cls: 'specorator-library-chip', text: tag });
-    if (caps.childElementCount === 0) caps.remove();
+    renderLibraryCardTags(body, row.tags ?? []);
 
     const promptBtn = actions.createEl('button', { cls: 'mod-cta', text: t('skillLibrary.prompt') });
     promptBtn.onclick = (e) => {
       e.stopPropagation();
       const entry = this.entryById.get(row.id);
-      if (entry) void runVaultSkill(this.plugin, entry, null);
+      if (entry) {
+        void runVaultSkill(this.plugin, entry, null);
+      } else {
+        // Rows derive from entries, so this is unreachable unless the entry map
+        // desyncs — surface it instead of leaving a dead button.
+        new Notice(t('skillLibrary.actionFailed'));
+        this.plugin.logger.scope('skills').warn('skill prompt: no entry for row', row.id);
+      }
     };
     renderCloneButton(actions, (e) => { e.stopPropagation(); void this.cloneSkill(row); });
   }
@@ -135,9 +140,13 @@ export class SkillLibraryView extends ItemView {
     this.plugin.events.emit('vaultSkill.changed', { providerId: 'claude' });
     new Notice(t('skillLibrary.created', { path }));
     await this.render();
+    // A skill's display name is its folder basename, so the clone is named after
+    // its fresh `<slug>-copy` dir. Open the editor on that name (not the source
+    // row's) so its fields match the file just written instead of the original.
+    const cloneSlug = dir.split('/').pop() ?? `${librarySlug(row.name)}-copy`;
     this.openEditor({
-      id: `skill-${dir.split('/').pop()}`,
-      name: row.name,
+      id: `skill-${cloneSlug}`,
+      name: cloneSlug,
       description: row.description,
       providerDisplayName: row.providerDisplayName,
       sourceFilePath: path,

@@ -9,12 +9,25 @@ import type SpecoratorPlugin from '@/main';
 import type { LoopDefinition } from './loopTypes';
 import { renderLoopPromptText } from './renderLoopPromptText';
 
+/** A loop is promptable only if it has at least one body section — the picker
+ * seeds Approach/Steps/Verify/Notes, so a `useWhen`-only loop seeds nothing
+ * actionable. The editor enforces this, but externally-authored notes bypass it. */
+function hasPromptableBody(loop: LoopDefinition): boolean {
+  return Boolean(
+    loop.approach?.trim() || loop.steps?.trim() || loop.verify?.trim() || loop.notes?.trim(),
+  );
+}
+
 /**
  * Prompt a loop from the library: open the provider+model picker, then on
  * confirm resolve a tab pinned to the chosen model and SEED the loop body into
  * its composer as a draft (no auto-send). The user appends their task and sends.
  */
 export function launchLoopPrompt(plugin: SpecoratorPlugin, loop: LoopDefinition): void {
+  if (!hasPromptableBody(loop)) {
+    new Notice(t('loopLibrary.emptyBody'));
+    return;
+  }
   launchWithModelPicker(plugin, {
     lastUsedKey: `loop:${loop.id}`,
     title: t('loopLibrary.promptTitle', { name: loop.name }),
@@ -45,5 +58,9 @@ async function seedLoopDraft(
   }
 
   await tabManager.switchToTab(target.id);
-  target.controllers.inputController?.seedComposerDraft(renderLoopPromptText(loop));
+  // keepExisting: the resolved tab may be an active blank tab the user already
+  // typed an unsent note into — preserve it above the seeded loop body.
+  target.controllers.inputController?.seedComposerDraft(renderLoopPromptText(loop), {
+    keepExisting: true,
+  });
 }

@@ -268,6 +268,22 @@ export class McpTestModal extends Modal {
     toolEl.toggleClass('specorator-mcp-test-tool-disabled', !enabled);
   }
 
+  /** Reflects the current `disabledTools` set onto every tool's toggle + row. */
+  private syncToolTogglesToDisabledSet(): void {
+    if (!this.result) return;
+    for (const tool of this.result.tools) {
+      const toggle = this.toolToggles.get(tool.name);
+      const toolEl = this.toolElements.get(tool.name);
+      if (!toggle || !toolEl) continue;
+
+      const isEnabled = !this.disabledTools.has(tool.name);
+      toggle.checkbox.checked = isEnabled;
+      toggle.container.toggleClass('is-enabled', isEnabled);
+      this.updateToolState(toolEl, isEnabled);
+    }
+    this.updateToggleAllButton();
+  }
+
   private updateToggleAllButton() {
     if (!this.toggleAllBtn || !this.result) return;
 
@@ -302,33 +318,13 @@ export class McpTestModal extends Modal {
 
     // Optimistic UI update
     this.disabledTools = new Set(newDisabledTools);
-    for (const tool of this.result.tools) {
-      const toggle = this.toolToggles.get(tool.name);
-      const toolEl = this.toolElements.get(tool.name);
-      if (!toggle || !toolEl) continue;
-
-      const isEnabled = !this.disabledTools.has(tool.name);
-      toggle.checkbox.checked = isEnabled;
-      toggle.container.toggleClass('is-enabled', isEnabled);
-      this.updateToolState(toolEl, isEnabled);
-    }
-    this.updateToggleAllButton();
+    this.syncToolTogglesToDisabledSet();
 
     try {
       await this.onBulkToggle(newDisabledTools);
     } catch (error) {
       this.disabledTools = previousDisabled;
-      for (const tool of this.result.tools) {
-        const toggle = this.toolToggles.get(tool.name);
-        const toolEl = this.toolElements.get(tool.name);
-        if (!toggle || !toolEl) continue;
-
-        const isEnabled = !this.disabledTools.has(tool.name);
-        toggle.checkbox.checked = isEnabled;
-        toggle.container.toggleClass('is-enabled', isEnabled);
-        this.updateToolState(toolEl, isEnabled);
-      }
-      this.updateToggleAllButton();
+      this.syncToolTogglesToDisabledSet();
       new Notice(formatToggleError(error));
     }
 
