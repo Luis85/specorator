@@ -91,6 +91,20 @@ export type ChatRuntimeConversationState = Pick<
   'sessionId' | 'providerState'
 >;
 
+/**
+ * Minimal bound-agent projection synced to a runtime before ensureReady() so
+ * the persistent query starts with the correct system-prompt key. Matches the
+ * shape of `BoundAgentProjection` (features layer); defined here to keep the
+ * core runtime contract free of feature-layer imports.
+ */
+export interface BoundAgentState {
+  prompt?: string;
+  model?: string;
+  /** Agent slug forwarded to providers that support native agent activation. */
+  slug?: string;
+  description?: string;
+}
+
 export interface SessionUpdateResult {
   updates: Partial<Conversation>;
 }

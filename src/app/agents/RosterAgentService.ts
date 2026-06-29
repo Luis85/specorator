@@ -47,8 +47,13 @@ export class RosterAgentService {
     boundAgentId: string,
     providerId?: ProviderId,
   ): Promise<BoundAgentProjection | null> {
+    const log = this.deps.logger.scope('agents');
+    log.debug('[bound-agent] resolveBoundAgent called', { boundAgentId, providerId });
     const agent = await this.deps.rosterStore.get(boundAgentId);
-    if (!agent) return null;
+    if (!agent) {
+      log.debug('[bound-agent] resolveBoundAgent: agent not found in store', { boundAgentId });
+      return null;
+    }
     // Surface the agent's granted skills as guidance baked into the prompt;
     // providers auto-discover every SKILL.md, so these can't be runtime-scoped.
     const catalog = (await this.deps.getSkillAggregator()?.listAll()) ?? [];
@@ -66,10 +71,14 @@ export class RosterAgentService {
     // Derive the slug (strip the 'roster:' prefix) for providers that support
     // native agent activation (e.g. the Claude SDK --agent flag).
     const slug = agent.id.startsWith('roster:') ? agent.id.slice('roster:'.length) : agent.id;
+    // A forceful identity directive so providers without a system-prompt
+    // channel (Cursor) still adopt the persona instead of their built-in one.
+    const prompt = formatBoundAgentPersona({ ...agent, skills });
+    log.debug('[bound-agent] resolveBoundAgent: projection built', {
+      slug, model, hasPrompt: !!prompt, promptLen: prompt.length, agentName: agent.name,
+    });
     return {
-      // A forceful identity directive so providers without a system-prompt
-      // channel (Cursor) still adopt the persona instead of their built-in one.
-      prompt: formatBoundAgentPersona({ ...agent, skills }),
+      prompt,
       model,
       slug,
       description: agent.description,

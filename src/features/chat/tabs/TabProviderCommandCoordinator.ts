@@ -222,6 +222,21 @@ export class TabProviderCommandCoordinator {
     }
 
     runtime.syncConversationState(context.conversation, context.externalContextPaths);
+
+    // Sync bound-agent projection before ensureReady so the persistent query
+    // starts with the agent's native-agent path and correct system-prompt key.
+    // Without this, the pre-warm fires ensureReady() with undefined agent state
+    // and the SDK starts with the full Specorator identity instead of the
+    // bound agent persona — the user sees "Specorator" when they expect
+    // the agent they launched from the roster.
+    const boundAgentId = context.conversation?.boundAgentId;
+    if (boundAgentId && runtime.syncBoundAgentState) {
+      const projection = await this.deps.plugin.resolveBoundAgent?.(boundAgentId, providerId);
+      if (projection) {
+        runtime.syncBoundAgentState(projection);
+      }
+    }
+
     await runtime.ensureReady();
     if (ProviderRegistry.getCapabilities(providerId).supportsProviderCommands) {
       await this.getSdkCommands(tab.id);

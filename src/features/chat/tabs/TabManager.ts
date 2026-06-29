@@ -191,7 +191,7 @@ export class TabManager implements TabManagerInterface {
       return null;
     }
 
-    const { activate = true, draftModel, pinnedModel } = options;
+    const { activate = true, draftModel } = options;
 
     const conversation = conversationId
       ? await this.plugin.getConversationById(conversationId)
@@ -204,6 +204,21 @@ export class TabManager implements TabManagerInterface {
       ?? (conversation
         ? undefined
         : (activeTab ? getTabProviderId(activeTab, this.plugin) : undefined));
+
+    // Resolve the effective pinned model: caller-supplied wins; for agent-bound
+    // conversations without an explicit pin, seed from the agent's configured
+    // model so the ModelSelector reflects reality from the first render.
+    let pinnedModel = options.pinnedModel;
+    if (!pinnedModel && conversation?.boundAgentId) {
+      const projection = await this.plugin.resolveBoundAgent?.(
+        conversation.boundAgentId,
+        conversation.providerId,
+      );
+      const agentModel = projection?.model?.trim();
+      if (agentModel) {
+        pinnedModel = agentModel;
+      }
+    }
 
     const tab = createTab({
       plugin: this.plugin,

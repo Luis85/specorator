@@ -34,6 +34,7 @@ import type {
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import type { RuntimeHost } from '../../../core/runtime/RuntimeHost';
 import type {
+  BoundAgentState,
   ChatRewindMode,
   ChatRewindResult,
   ChatRuntimeConversationState,
@@ -356,6 +357,20 @@ export class ClaudeChatRuntime implements ChatRuntime {
 
     const resolvedSessionId = this.applyForkState(conversation);
     this.setSessionId(resolvedSessionId, externalContextPaths);
+  }
+
+  /**
+   * Syncs the bound-agent projection so the next ensureReady() / startPersistentQuery()
+   * uses the correct native-agent path and system-prompt key. Called by the
+   * pre-warm coordinator before ensureReady() so the persistent query starts
+   * with the agent persona from turn zero rather than the generic Specorator identity.
+   */
+  syncBoundAgentState(state: BoundAgentState): void {
+    this.plugin.logger.scope('claude.runtime').debug('[bound-agent] syncBoundAgentState', { hasPrompt: !!state.prompt, slug: state.slug, model: state.model });
+    this.currentBoundAgentPrompt = state.prompt;
+    this.currentBoundAgentModel = state.model;
+    this.currentBoundAgentSlug = state.slug;
+    this.currentBoundAgentDescription = state.description;
   }
 
   buildSessionUpdates({ conversation, sessionInvalidated }: {
@@ -1281,6 +1296,7 @@ export class ClaudeChatRuntime implements ChatRuntime {
       this.currentBoundAgentModel = ctx.queryOptions?.boundAgentModel;
       this.currentBoundAgentSlug = ctx.queryOptions?.boundAgentSlug;
       this.currentBoundAgentDescription = ctx.queryOptions?.boundAgentDescription;
+      this.plugin.logger.scope('claude.runtime').debug('[bound-agent] runPersistentTurn: starting persistent query', { hasPrompt: !!ctx.queryOptions?.boundAgentPrompt, slug: ctx.queryOptions?.boundAgentSlug, model: ctx.queryOptions?.boundAgentModel });
       await this.startPersistentQuery(
         ctx.vaultPath,
         ctx.cliPath,
@@ -1376,6 +1392,7 @@ export class ClaudeChatRuntime implements ChatRuntime {
     this.currentBoundAgentModel = queryOptions?.boundAgentModel;
     this.currentBoundAgentSlug = queryOptions?.boundAgentSlug;
     this.currentBoundAgentDescription = queryOptions?.boundAgentDescription;
+    this.plugin.logger.scope('claude.runtime').debug('[bound-agent] queryViaPersistent: bound-agent state synced', { hasPrompt: !!queryOptions?.boundAgentPrompt, promptLen: queryOptions?.boundAgentPrompt?.length, slug: queryOptions?.boundAgentSlug });
 
     await this.applyTurnToolRestrictions(queryOptions);
 

@@ -112,6 +112,12 @@ export class AgentRosterView extends ItemView {
     for (const tag of agent.tags ?? []) {
       caps.createSpan({ cls: 'specorator-library-chip', text: tag });
     }
+    if (agent.modelSelection) {
+      const { modelId, providerId } = agent.modelSelection;
+      const modelOptions = ProviderRegistry.getChatUIConfig(providerId).getModelOptions(asSettingsBag(this.plugin.settings));
+      const modelLabel = modelOptions.find((o) => o.value === modelId)?.label ?? modelId;
+      caps.createSpan({ cls: 'specorator-roster-chip specorator-roster-chip-model', text: modelLabel });
+    }
     // Only surface the capability count once the agent actually has skills — a
     // "0 Skills" chip on a fresh agent is noise.
     if (agent.skills.length > 0) {

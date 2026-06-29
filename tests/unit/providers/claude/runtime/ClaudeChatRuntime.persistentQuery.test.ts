@@ -168,6 +168,40 @@ describe('ClaudeChatRuntime', () => {
       expect(closePersistentQuerySpy).toHaveBeenCalledWith('config changed', { preserveHandlers: undefined });
     });
 
+    it('should start persistent query with bound agent state when syncBoundAgentState is called before ensureReady', async () => {
+      // Regression: pre-warm calls ensureReady() before the first turn arrives.
+      // If syncBoundAgentState() isn't called beforehand, currentBoundAgentSlug is
+      // undefined at startPersistentQuery time and the SDK starts with the full
+      // Specorator identity instead of the bound agent persona.
+      const startPersistentQuerySpy = jest.spyOn(service as any, 'startPersistentQuery');
+      let capturedSlug: string | undefined;
+
+      startPersistentQuerySpy.mockImplementation(async (...args: unknown[]) => {
+        const [vaultPath, cliPath, , externalContextPaths] = args as [string, string, string?, string[]?];
+        (service as any).persistentQuery = { interrupt: jest.fn().mockResolvedValue(undefined) };
+        // Capture the slug as it exists when startPersistentQuery is invoked —
+        // this is when buildPersistentQueryConfig bakes it into currentConfig.
+        capturedSlug = (service as any).currentBoundAgentSlug;
+        (service as any).currentConfig = (service as any).buildPersistentQueryConfig(
+          vaultPath, cliPath, externalContextPaths, undefined,
+          (service as any).currentBoundAgentPrompt,
+          (service as any).currentBoundAgentSlug,
+        );
+      });
+
+      service.syncBoundAgentState({
+        slug: 'code-reviewer',
+        prompt: 'You review changes with technical rigor.',
+        model: 'claude-3-5-sonnet',
+        description: 'Reviews changes for correctness',
+      });
+
+      await service.ensureReady();
+
+      expect(capturedSlug).toBe('code-reviewer');
+      expect((service as any).currentConfig?.systemPromptKey).toContain('agent:code-reviewer');
+    });
+
     it('should cleanup resources', () => {
       const closePersistentQuerySpy = jest.spyOn(service, 'closePersistentQuery');
       const cancelSpy = jest.spyOn(service, 'cancel');

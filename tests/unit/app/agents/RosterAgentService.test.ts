@@ -36,7 +36,7 @@ function makeService(overrides: {
   const deps: RosterAgentServiceDeps = {
     rosterStore,
     vaultFileAdapter: {} as RosterAgentServiceDeps['vaultFileAdapter'],
-    logger: { scope: () => ({ warn: jest.fn() }) } as unknown as RosterAgentServiceDeps['logger'],
+    logger: { scope: () => ({ warn: jest.fn(), debug: jest.fn() }) } as unknown as RosterAgentServiceDeps['logger'],
     getSettings: () => (overrides.settings ?? {}) as SpecoratorSettings,
     getSkillAggregator: () => aggregator,
   };
