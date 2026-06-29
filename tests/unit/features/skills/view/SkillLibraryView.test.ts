@@ -52,6 +52,23 @@ const ENTRY_READONLY: SkillTabEntry = {
   providerEnabled: true,
 };
 
+// Codex skills surface a HOST-ABSOLUTE sourceFilePath (CodexSkillListingService
+// maps the path via toHostPath), so it is non-null but not vault-relative.
+const ENTRY_CODEX_ABS: SkillTabEntry = {
+  id: 'codex:skill-review',
+  providerId: 'codex',
+  providerDisplayName: 'Codex',
+  name: 'Review',
+  description: 'Code review skill.',
+  insertPrefix: '$',
+  sourceFilePath: '/home/user/.codex/skills/review/SKILL.md',
+  providerEnabled: true,
+};
+
+function cloneButton(card: Element): Element | null {
+  return card.querySelector('.specorator-library-card-icon');
+}
+
 function makePlugin(entries: SkillTabEntry[], tagsForEditable?: string[]) {
   return {
     app: {},
@@ -194,6 +211,32 @@ describe('SkillLibraryView', () => {
     expect(runVaultSkillMock.mock.calls[0][1]).toEqual(
       expect.objectContaining({ id: ENTRY_EDITABLE.id }),
     );
+  });
+
+  it('vault-relative skill exposes a Duplicate button', async () => {
+    const { view, contentEl } = makeView(makePlugin([ENTRY_EDITABLE]));
+    await view.onOpen();
+    await flush();
+    const card = contentEl.querySelector('.specorator-library-card')!;
+    expect(cloneButton(card)).not.toBeNull();
+  });
+
+  it('Codex skill with a host-absolute path does NOT expose a Duplicate button', async () => {
+    // The vault adapter cannot write a host-absolute path; cloning it would
+    // scatter a /home/.../.codex/skills tree inside the vault. Gate it off.
+    const { view, contentEl } = makeView(makePlugin([ENTRY_CODEX_ABS]));
+    await view.onOpen();
+    await flush();
+    const card = contentEl.querySelector('.specorator-library-card')!;
+    expect(cloneButton(card)).toBeNull();
+  });
+
+  it('runtime-discovered (path-less) skill does NOT expose a Duplicate button', async () => {
+    const { view, contentEl } = makeView(makePlugin([ENTRY_READONLY]));
+    await view.onOpen();
+    await flush();
+    const card = contentEl.querySelector('.specorator-library-card')!;
+    expect(cloneButton(card)).toBeNull();
   });
 
   it('clicking the card opens the SkillEditorModal', async () => {

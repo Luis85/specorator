@@ -19,6 +19,20 @@ export const VIEW_TYPE_SKILL_LIBRARY = 'specorator-skill-library';
 // stays in the features layer rather than importing provider storage.
 const SKILLS_DIR = '.claude/skills';
 
+/**
+ * Duplicate writes through the vault adapter, which only understands
+ * vault-relative paths. Non-Claude skills surface host-absolute source paths
+ * (Codex maps via `toHostPath`) and runtime-discovered skills have none — both
+ * would make Duplicate scatter a misplaced/empty tree inside the vault (and the
+ * post-write invalidation only targets Claude). Gate the action to paths the
+ * adapter can actually clone: vault-relative, no drive letter, no `..` escape.
+ */
+function isCloneableSkillPath(p: string | null): p is string {
+  if (!p || p.startsWith('/') || p.startsWith('~') || p.startsWith('\\')) return false;
+  if (/^[A-Za-z]:/.test(p) || p.includes('\\')) return false; // Windows drive / UNC / host separators
+  return !p.split('/').some((segment) => segment === '..');
+}
+
 function skillTemplate(name: string): string {
   return `---
 description: Describe what this skill does and when to use it.
@@ -126,11 +140,13 @@ export class SkillLibraryView extends ItemView {
         this.plugin.logger.scope('skills').warn('skill prompt: no entry for row', row.id);
       }
     };
-    renderCloneButton(actions, (e) => { e.stopPropagation(); void this.cloneSkill(row); });
+    if (isCloneableSkillPath(row.sourceFilePath)) {
+      renderCloneButton(actions, (e) => { e.stopPropagation(); void this.cloneSkill(row); });
+    }
   }
 
   private async cloneSkill(row: SkillLibraryRow): Promise<void> {
-    if (!row.sourceFilePath) { new Notice(t('skillLibrary.readonlyNotice')); return; }
+    if (!isCloneableSkillPath(row.sourceFilePath)) { new Notice(t('skillLibrary.readonlyNotice')); return; }
     const adapter = this.plugin.vaultFileAdapter;
     const root = row.sourceFilePath.split('/').slice(0, -2).join('/'); // `.claude/skills`
     const content = await adapter.read(row.sourceFilePath).catch(() => '');

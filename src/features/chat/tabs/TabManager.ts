@@ -5,6 +5,7 @@ import { hasForkSupport } from '../../../core/providers/typeGuards';
 import type { ProviderId } from '../../../core/providers/types';
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import type { SlashCommand } from '../../../core/types';
+import type { Conversation } from '../../../core/types/chat';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import { chooseForkTarget } from '../../../shared/modals/ForkTargetModal';
@@ -174,6 +175,39 @@ export class TabManager implements TabManagerInterface {
   // ============================================
 
   /**
+   * Inherit the active tab's provider so a new blank tab picks up its model,
+   * unless the caller pins an explicit provider (e.g. an Agent Board task run)
+   * or the tab loads an existing conversation (which carries its own provider).
+   */
+  private resolveDefaultProviderId(
+    options: CreateTabOptions,
+    conversation: Conversation | undefined,
+  ): ProviderId | undefined {
+    if (options.defaultProviderId) return options.defaultProviderId;
+    if (conversation) return undefined;
+    const activeTab = this.getActiveTab();
+    return activeTab ? getTabProviderId(activeTab, this.plugin) : undefined;
+  }
+
+  /**
+   * Resolve the effective pinned model: caller-supplied wins; for agent-bound
+   * conversations without an explicit pin, seed from the agent's configured
+   * model so the ModelSelector reflects reality from the first render.
+   */
+  private async resolvePinnedModel(
+    options: CreateTabOptions,
+    conversation: Conversation | undefined,
+  ): Promise<string | undefined> {
+    if (options.pinnedModel) return options.pinnedModel;
+    if (!conversation?.boundAgentId) return undefined;
+    const projection = await this.plugin.resolveBoundAgent?.(
+      conversation.boundAgentId,
+      conversation.providerId,
+    );
+    return projection?.model?.trim() || undefined;
+  }
+
+  /**
    * Creates a new tab.
    * @param conversationId Optional conversation to load into the tab.
    * @param tabId Optional tab ID (for restoration).
@@ -197,28 +231,8 @@ export class TabManager implements TabManagerInterface {
       ? await this.plugin.getConversationById(conversationId)
       : undefined;
 
-    // Inherit the active tab's provider so the new blank tab picks up its model,
-    // unless the caller pins an explicit provider (e.g. an Agent Board task run).
-    const activeTab = this.getActiveTab();
-    const defaultProviderId = options.defaultProviderId
-      ?? (conversation
-        ? undefined
-        : (activeTab ? getTabProviderId(activeTab, this.plugin) : undefined));
-
-    // Resolve the effective pinned model: caller-supplied wins; for agent-bound
-    // conversations without an explicit pin, seed from the agent's configured
-    // model so the ModelSelector reflects reality from the first render.
-    let pinnedModel = options.pinnedModel;
-    if (!pinnedModel && conversation?.boundAgentId) {
-      const projection = await this.plugin.resolveBoundAgent?.(
-        conversation.boundAgentId,
-        conversation.providerId,
-      );
-      const agentModel = projection?.model?.trim();
-      if (agentModel) {
-        pinnedModel = agentModel;
-      }
-    }
+    const defaultProviderId = this.resolveDefaultProviderId(options, conversation ?? undefined);
+    const pinnedModel = await this.resolvePinnedModel(options, conversation ?? undefined);
 
     const tab = createTab({
       plugin: this.plugin,
