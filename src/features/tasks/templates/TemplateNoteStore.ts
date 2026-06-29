@@ -1,28 +1,17 @@
 import type { App, Vault } from 'obsidian';
-import { normalizePath, TFile } from 'obsidian';
 
 import { extractString, parseFrontmatter } from '../../../utils/frontmatter';
 import type { TaskPriority } from '../model/taskTypes';
+import {
+  deleteNote,
+  fileBaseName,
+  listNoteDefinitions,
+  noteFilePathForName,
+  saveNote,
+} from '../shared/noteStoreShared';
 import type { WorkOrderTemplate } from './templateTypes';
 
 const VALID_PRIORITIES: ReadonlySet<TaskPriority> = new Set<TaskPriority>(['0 - urgent', '1 - high', '2 - normal', '3 - low']);
-
-function fileBaseName(path: string): string {
-  const file = path.split('/').pop() ?? path;
-  return file.replace(/\.md$/i, '');
-}
-
-function normalizeFolder(folder: string): string {
-  return folder.replace(/^\/+|\/+$/g, '');
-}
-
-function slugify(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
 
 export interface SaveTemplateInput {
   name: string;
@@ -67,19 +56,11 @@ export class TemplateNoteStore {
   }
 
   async list(vault: Vault, folder: string): Promise<{ templates: WorkOrderTemplate[]; warnings: string[] }> {
-    const normalized = normalizeFolder(folder);
-    const templates: WorkOrderTemplate[] = [];
-    const warnings: string[] = [];
-    const files = vault.getMarkdownFiles().filter((file) => file.path.startsWith(`${normalized}/`));
-    for (const file of files) {
-      try {
-        templates.push(this.parse(file.path, await vault.read(file)));
-      } catch (error) {
-        warnings.push(`${file.path}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-    templates.sort((a, b) => a.name.localeCompare(b.name));
-    return { templates, warnings };
+    const { items, warnings } = await listNoteDefinitions(vault, folder, (path, content) =>
+      this.parse(path, content),
+    );
+    items.sort((a, b) => a.name.localeCompare(b.name));
+    return { templates: items, warnings };
   }
 
   build(input: SaveTemplateInput): string {
@@ -101,38 +82,25 @@ export class TemplateNoteStore {
   }
 
   getFilePathForName(folder: string, name: string): string {
-    const slug = slugify(name) || 'template';
-    // folder + name are user-/settings-derived; normalize before any vault call.
-    return normalizePath(`${normalizeFolder(folder)}/${slug}.md`);
+    return noteFilePathForName(folder, name, 'template');
   }
 
-  async save(
+  save(
     vault: Vault,
     folder: string,
     input: SaveTemplateInput,
     originalPath?: string,
   ): Promise<string> {
-    const content = this.build(input);
-    if (originalPath) {
-      const existing = vault.getAbstractFileByPath(originalPath);
-      if (existing instanceof TFile) {
-        await vault.modify(existing, content);
-        return originalPath;
-      }
-    }
-    const normalized = normalizePath(normalizeFolder(folder));
-    if (!vault.getAbstractFileByPath(normalized)) {
-      await vault.createFolder(normalized);
-    }
-    const filePath = this.getFilePathForName(normalized, input.name);
-    await vault.create(filePath, content);
-    return filePath;
+    return saveNote(
+      vault,
+      folder,
+      this.build(input),
+      (normalized) => this.getFilePathForName(normalized, input.name),
+      originalPath,
+    );
   }
 
-  async delete(app: App, path: string): Promise<void> {
-    const file = app.vault.getAbstractFileByPath(path);
-    if (file) {
-      await app.fileManager.trashFile(file);
-    }
+  delete(app: App, path: string): Promise<void> {
+    return deleteNote(app, path);
   }
 }

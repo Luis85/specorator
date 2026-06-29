@@ -1,0 +1,156 @@
+import type { ChatMessage } from '../../../core/types';
+import { hasStreamingMathDelimiters } from '../../../utils/markdownMath';
+import type { MessageRenderer, RenderContentOptions } from '../rendering/MessageRenderer';
+import type { ChatState } from '../state/ChatState';
+import { StreamRenderLoop, type StreamRenderTarget } from './streamRenderLoop';
+
+export interface TextRenderDeps {
+  state: ChatState;
+  renderer: MessageRenderer;
+  showWriting: () => void;
+  hideThinkingIndicator: () => void;
+  scrollToBottom: () => void;
+  getStreamingRenderOptions: (content: string) => RenderContentOptions | undefined;
+  shouldDeferMathRendering: () => boolean;
+  shouldCollapseStreamingResponse: () => boolean;
+  getMessagesWindow: () => Window | null;
+}
+
+/**
+ * Owns the streaming assistant-text render lifecycle lifted out of
+ * `StreamController`: the collapse-mode snapshot, the finalize-time card swap /
+ * copy button, and the append/finalize transitions. The throttled render loop is
+ * the shared `StreamRenderLoop`; the text block element + content live on the
+ * shared `ChatState`.
+ */
+export class TextRenderCoordinator {
+  private readonly loop: StreamRenderLoop;
+  // Collapse setting snapshotted once when the current text block starts. Read
+  // (not re-evaluated) through the block's append/render/finalize lifecycle so a
+  // mid-block toggle can't race those steps; the toggle takes effect next block.
+  private currentBlockCollapsed = false;
+
+  constructor(private readonly deps: TextRenderDeps) {
+    this.loop = new StreamRenderLoop({
+      renderer: deps.renderer,
+      getStreamingRenderOptions: deps.getStreamingRenderOptions,
+      scrollToBottom: deps.scrollToBottom,
+      currentContent: () => deps.state.currentTextContent,
+      currentTarget: (): StreamRenderTarget | null => {
+        const el = deps.state.currentTextEl;
+        return el ? { el, token: el } : null;
+      },
+      getWindow: () => this.getWindow(),
+    });
+  }
+
+  async append(text: string): Promise<void> {
+    const { state } = this.deps;
+    if (!state.currentContentEl) return;
+
+    // Snapshot the collapse setting once, when the block starts. Reading it again
+    // mid-block would let a toggle race the append/render/finalize steps; instead
+    // a block keeps the mode it started in and a toggle applies to the next block.
+    if (!state.currentTextEl) {
+      state.currentTextEl = state.currentContentEl.createDiv({ cls: 'specorator-text-block' });
+      state.currentTextContent = '';
+      this.currentBlockCollapsed = this.deps.shouldCollapseStreamingResponse();
+    }
+
+    if (!this.currentBlockCollapsed) {
+      this.deps.hideThinkingIndicator();
+    }
+
+    state.currentTextContent += text;
+
+    if (this.currentBlockCollapsed) {
+      // Hide the half-formed render: keep an immediate placeholder up and render
+      // the whole block in one pass when it finalizes.
+      this.deps.showWriting();
+      return;
+    }
+
+    void this.loop.schedule();
+  }
+
+  async finalize(msg?: ChatMessage): Promise<void> {
+    const { state, renderer } = this.deps;
+    await this.loop.flush();
+
+    // A block keeps the collapse mode it started in (snapshotted in append),
+    // so finalize follows that snapshot, not the live setting.
+    const collapsed = this.currentBlockCollapsed;
+    // A collapsed block kept its "Writing response..." placeholder up for the
+    // whole block; drop it before the one-pass render below.
+    if (collapsed) {
+      this.deps.hideThinkingIndicator();
+    }
+
+    if (msg && state.currentTextContent) {
+      await this.renderFinalizedTextBlock(state.currentTextEl, state.currentTextContent, collapsed);
+      msg.contentBlocks = msg.contentBlocks || [];
+      msg.contentBlocks.push({ type: 'text', content: state.currentTextContent });
+      // Work-order tabs swap a completed handoff block for the compact card on
+      // finalize; everything else keeps the raw text block plus copy button.
+      // Derive the content element from the text element's parent because
+      // `InputController` nulls `state.currentContentEl` right before this
+      // call — guarding on `state.currentContentEl` here would mean the live
+      // swap never fires on a normal completed turn (only after a reload).
+      const liveContentEl =
+        (state.currentTextEl?.parentElement)
+          ?? state.currentContentEl;
+      const replacedWithCard =
+        liveContentEl && state.currentTextEl
+          ? renderer.finalizeStreamedAssistantText?.(
+              liveContentEl,
+              state.currentTextEl,
+              state.currentTextContent,
+            ) ?? false
+          : false;
+      // Copy button added here (not during streaming) to match history-loaded messages
+      if (state.currentTextEl && !replacedWithCard) {
+        renderer.addTextCopyButton(state.currentTextEl, state.currentTextContent);
+      }
+      // The card swap removed the text block that registered actions anchor to;
+      // re-anchor them onto the card so a freshly completed run keeps actions
+      // (e.g. Create work order) without waiting for a reload.
+      if (replacedWithCard && msg) {
+        renderer.refreshMessageActions?.(msg);
+      }
+    }
+    state.currentTextEl = null;
+    state.currentTextContent = '';
+    this.currentBlockCollapsed = false;
+  }
+
+  cancel(): void {
+    this.loop.cancel();
+  }
+
+  /**
+   * Renders the finalized text into its element. A collapsed block was never
+   * live-rendered, so render it once now; a non-collapsed block already holds the
+   * streamed render and only needs a re-render to bake deferred math.
+   */
+  private async renderFinalizedTextBlock(
+    textEl: HTMLElement | null,
+    content: string,
+    collapsed: boolean,
+  ): Promise<void> {
+    if (!textEl) return;
+    if (collapsed) {
+      await this.deps.renderer.renderContent(textEl, content);
+      return;
+    }
+    if (this.deps.shouldDeferMathRendering() && hasStreamingMathDelimiters(content)) {
+      await this.deps.renderer.renderContent(textEl, content);
+    }
+  }
+
+  private getWindow(): Window | null {
+    const { state } = this.deps;
+    return state.currentTextEl?.ownerDocument?.defaultView
+      ?? state.currentContentEl?.ownerDocument?.defaultView
+      ?? this.deps.getMessagesWindow();
+  }
+}
