@@ -65,7 +65,15 @@ export interface ToolHostCacheState {
  * Pure reducer for applying a scan to the runtime's tool-host caches. Three cases:
  * - `scanFailed`: leave caches UNTOUCHED — a transient catalog failure must not clobber
  *   a previously-good secret union with `[]` (silent secrets-drop), drop the validated
- *   node, or claim the host ready.
+ *   node, or claim the host ready. Keeping `prev` verbatim also keeps the per-turn builder's
+ *   serialized config BYTE-IDENTICAL, so the running host is not re-spawned on a transient
+ *   blip (the alternative — clearing the union — would change the env, force a re-spawn, and
+ *   strip secrets from an otherwise-healthy host). The stale per-file map cannot escalate a
+ *   grant: if an unrelated restart re-spawns the host against edited files, the secret a tool
+ *   receives is bounded by BOTH the user's fail-closed allowlist (buildToolHostServer) and the
+ *   host's intersection with the file's CURRENT manifest (grantSecrets) — a stale entry can
+ *   only narrow that set, never hand a tool a secret the user didn't allowlist or whose current
+ *   code no longer declares it.
  * - disabled (not materialized / null catalog): clear the host AND the validated node
  *   (disabled or unsupported — there is no usable node to inject).
  * - success: mark the host ready, bump `toolsRev` (→ re-spawn), cache the secret union

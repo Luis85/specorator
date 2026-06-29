@@ -112,20 +112,23 @@ export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (hos
   };
 
   // reloadLocalToolHost owns the SINGLE materialize + catalog scan and returns the scan, so
-  // opening settings / Reload performs exactly one scan (not two). `catalog` is null when Node is
-  // missing/old OR when the catalog scan failed (feature inert / builder stays disabled); a clean
-  // empty-dir scan returns an empty (non-null) catalog so "no tools" still renders.
+  // opening settings / Reload performs exactly one scan (not two). A null catalog has TWO distinct
+  // causes that need different remediation: `scanFailed` means Node ran but a tool script errored/
+  // timed out during `--catalog` (point the user at the log + Reload), whereas a plain null catalog
+  // means Node is missing/old. A clean empty-dir scan returns an empty (non-null) catalog.
   const refreshAll = async () => {
-    const { catalog } = await plugin.reloadLocalToolHost();
-    if (!catalog) {
+    const scan = await plugin.reloadLocalToolHost();
+    if (!scan.catalog) {
       listEl.empty();
       listEl.createEl('p', {
-        text: t('settings.localToolHost.nodeUnsupported'),
+        text: scan.scanFailed
+          ? t('settings.localToolHost.scanFailed')
+          : t('settings.localToolHost.nodeUnsupported'),
         cls: 'setting-item-description mod-warning',
       });
       return;
     }
-    renderList(catalog);
+    renderList(scan.catalog);
   };
 
   new Setting(host).addButton((btn) =>

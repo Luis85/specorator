@@ -463,7 +463,8 @@
       "secretRemove": "Remove",
       "secretAdd": "Allow a tool secret",
       "secretNamePlaceholder": "SECRET_NAME",
-      "secretAddButton": "Add"
+      "secretAddButton": "Add",
+      "scanFailed": "A tool scan failed — a tool script errored or timed out during loading. Check .specorator/tool-host.log, then fix or disable the script and click Reload tools."
     },
     "mcp": {
       "reloadFailed": "Setting saved but reload failed. Changes will apply on next session.",

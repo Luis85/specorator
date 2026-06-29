@@ -132,6 +132,7 @@ export type SettingsTranslationKey =
   | 'settings.localToolHost.secretAdd'
   | 'settings.localToolHost.secretNamePlaceholder'
   | 'settings.localToolHost.secretAddButton'
+  | 'settings.localToolHost.scanFailed'
 
   // Settings - Plugins
   | 'settings.plugins.name'
