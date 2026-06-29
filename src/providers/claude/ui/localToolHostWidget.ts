@@ -1,12 +1,13 @@
-import { Notice, Setting } from 'obsidian';
+import { Notice, SecretComponent, Setting } from 'obsidian';
 
 import type { ProviderSettingsWidgetMount } from '../../../core/providers/settingsWidgets';
+import { isSpecoratorGeneratedSecretId } from '../../../core/security/secretIds';
 import { asSettingsBag } from '../../../core/types';
 import type { PluginContext } from '../../../core/types/PluginContext';
 import { t } from '../../../i18n/i18n';
 import type { CatalogPayload } from '../../../tool-host/types';
 import { curateStdioMcpEnv, findNodeExecutable, getEnhancedPath } from '../../../utils/env';
-import { getClaudeProviderSettings, updateClaudeProviderSettings } from '../settings';
+import { getClaudeProviderSettings, type ToolHostSecretRef,updateClaudeProviderSettings } from '../settings';
 import { isSupportedNode, probeNodeMajor } from '../toolHost/nodeVersion';
 
 /**
@@ -131,5 +132,100 @@ export const mountClaudeLocalToolHostSection: ProviderSettingsWidgetMount = (hos
     btn.setButtonText(t('settings.localToolHost.reload')).onClick(refreshAll),
   );
 
+  renderSecretAllowlist(host.createDiv({ cls: 'specorator-tool-host-secrets' }), plugin, settingsBag);
+
   void refreshAll();
 };
+
+/**
+ * Editor for the fail-closed secret allowlist. Each row binds a tool-facing `name`
+ * (what a tool declares in `manifest.secrets` / reads from `ctx.secrets`) to a
+ * keychain `secretId` (Obsidian `SecretComponent`). A tool receives a secret ONLY
+ * when its declared name appears here, so naming another credential's id grants
+ * nothing — the keychain handle is user-chosen, never tool-controlled.
+ */
+function renderSecretAllowlist(
+  host: HTMLElement,
+  plugin: PluginContext,
+  settingsBag: Record<string, unknown>,
+): void {
+  render();
+
+  function currentRefs(): ToolHostSecretRef[] {
+    return getClaudeProviderSettings(settingsBag).localToolHostSecrets;
+  }
+
+  async function persist(next: ToolHostSecretRef[]): Promise<void> {
+    updateClaudeProviderSettings(settingsBag, { localToolHostSecrets: next });
+    await plugin.saveSettings();
+    render();
+  }
+
+  /** Clear a Specorator-owned value once no row references it (global ids are left alone). */
+  function clearIfOrphaned(secretId: string, refs: ToolHostSecretRef[]): void {
+    if (!isSpecoratorGeneratedSecretId(secretId)) return;
+    if (refs.some((ref) => ref.secretId === secretId)) return;
+    plugin.secretStore.clear(secretId);
+  }
+
+  function render(): void {
+    host.empty();
+    new Setting(host)
+      .setName(t('settings.localToolHost.secretsHeading'))
+      .setDesc(t('settings.localToolHost.secretsDesc'))
+      .setHeading();
+
+    for (const ref of currentRefs()) {
+      const setting = new Setting(host).setName(ref.name);
+      if (!isSecretSet(plugin, ref.secretId)) {
+        setting.setDesc(t('settings.localToolHost.secretNotSet'));
+      }
+      setting.addComponent((el) =>
+        new SecretComponent(plugin.app, el)
+          .setValue(ref.secretId)
+          .onChange((secretId) => {
+            const previousId = ref.secretId;
+            const next = currentRefs().map((r) => (r.name === ref.name ? { ...r, secretId } : r));
+            void persist(next).then(() => clearIfOrphaned(previousId, next));
+          }),
+      );
+      setting.addExtraButton((btn) =>
+        btn.setIcon('trash').setTooltip(t('settings.localToolHost.secretRemove')).onClick(() => {
+          const next = currentRefs().filter((r) => r.name !== ref.name);
+          void persist(next).then(() => clearIfOrphaned(ref.secretId, next));
+        }),
+      );
+    }
+
+    const draft = { name: '', secretId: '' };
+    new Setting(host)
+      .setName(t('settings.localToolHost.secretAdd'))
+      .addText((text) =>
+        text
+          .setPlaceholder(t('settings.localToolHost.secretNamePlaceholder'))
+          .onChange((value) => { draft.name = value.trim(); }),
+      )
+      .addComponent((el) =>
+        new SecretComponent(plugin.app, el).onChange((secretId) => { draft.secretId = secretId; }),
+      )
+      .addButton((btn) =>
+        btn.setButtonText(t('settings.localToolHost.secretAddButton')).onClick(() => {
+          if (!draft.name || !draft.secretId) return;
+          // One entry per name: replacing keeps the allowlist a strict set (a stale row would
+          // otherwise still grant once the newer one is removed). Clear the displaced id if orphaned.
+          const replaced = currentRefs().find((r) => r.name === draft.name);
+          const next = currentRefs().filter((r) => r.name !== draft.name);
+          next.push({ name: draft.name, secretId: draft.secretId });
+          void persist(next).then(() => {
+            if (replaced) clearIfOrphaned(replaced.secretId, next);
+          });
+        }),
+      );
+  }
+}
+
+/** A ref is "set" only when SecretStorage holds a non-empty value on this device. */
+function isSecretSet(plugin: PluginContext, secretId: string): boolean {
+  const value = plugin.app.secretStorage?.getSecret(secretId);
+  return value !== null && value !== undefined && value !== '';
+}

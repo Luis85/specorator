@@ -724,7 +724,8 @@ export class ClaudeChatRuntime implements ChatRuntime {
         toolsDir: paths.toolsDir,
         vaultPath,
         disabledFiles: claude.localToolHostDisabledFiles,
-        resolveSecret: (id) => this.plugin.secretStore.get(id),
+        allowedSecrets: claude.localToolHostSecrets,
+        resolveSecret: (secretId) => this.plugin.secretStore.get(secretId),
       });
     };
   }

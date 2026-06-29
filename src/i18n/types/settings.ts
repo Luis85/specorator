@@ -125,6 +125,13 @@ export type SettingsTranslationKey =
   | 'settings.localToolHost.loadError'
   | 'settings.localToolHost.reload'
   | 'settings.localToolHost.disabledHint'
+  | 'settings.localToolHost.secretsHeading'
+  | 'settings.localToolHost.secretsDesc'
+  | 'settings.localToolHost.secretNotSet'
+  | 'settings.localToolHost.secretRemove'
+  | 'settings.localToolHost.secretAdd'
+  | 'settings.localToolHost.secretNamePlaceholder'
+  | 'settings.localToolHost.secretAddButton'
 
   // Settings - Plugins
   | 'settings.plugins.name'

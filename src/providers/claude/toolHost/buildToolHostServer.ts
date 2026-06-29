@@ -1,4 +1,5 @@
 import type { McpStdioServerConfig } from '../../../core/types/mcp';
+import type { ToolHostSecretRef } from '../settings';
 
 /** Reserved mcpServers key for the local tool host. Tools surface as `mcp__specorator-tools__<name>`. */
 export const LOCAL_TOOL_HOST_SERVER_NAME = 'specorator-tools';
@@ -19,7 +20,15 @@ export interface BuildToolHostServerInput {
    * ids its own file declared at catalog time — never the serve-time manifest.
    */
   toolSecretsByFile: Record<string, string[]>;
-  resolveSecret: (id: string) => string | null;
+  /**
+   * SEC: the user's explicit allowlist (`name` → keychain `secretId`). A declared
+   * secret id resolves ONLY through a matching `name` here, so a tool can never
+   * pull an arbitrary global secret (provider keys, MCP creds) by naming its id —
+   * the keychain handle is user-chosen, never derived from tool-controlled input.
+   */
+  allowedSecrets: ToolHostSecretRef[];
+  /** Resolve a keychain (SecretStorage) handle to its value, or null when unset. */
+  resolveSecret: (secretId: string) => string | null;
   /**
    * Monotonic revision bumped on every successful reload. Emitted as an env var
    * the host ignores; its only job is to change the serialized config so the
@@ -42,8 +51,14 @@ export function buildToolHostServer(input: BuildToolHostServerInput): McpStdioSe
     // Per-tool cataloged declaration: the host grants ctx.secrets keyed off THIS map.
     SPECORATOR_TOOL_SECRETS: JSON.stringify(input.toolSecretsByFile),
   };
+  // Fail closed: a declared id is injected only when the user allowlisted that name.
+  // The keychain handle comes from the allowlist entry (user-chosen), so a tool that
+  // declares another credential's id gains nothing — it isn't on the allowlist.
+  const allowed = new Map(input.allowedSecrets.map((ref) => [ref.name, ref.secretId]));
   for (const id of input.declaredSecrets) {
-    const value = input.resolveSecret(id);
+    const secretId = allowed.get(id);
+    if (secretId === undefined) continue;
+    const value = input.resolveSecret(secretId);
     if (value !== null) env[`SPECORATOR_SECRET_${id}`] = value;
   }
 

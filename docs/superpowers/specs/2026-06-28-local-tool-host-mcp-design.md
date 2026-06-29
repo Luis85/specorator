@@ -184,13 +184,17 @@ export async function handler(input, ctx) {
 | `.specorator/tools/*.mjs` | User tool scripts (new). |
 | `.specorator/tool-host.log` | Host log file written by `ctx.logger` (new). |
 | `<pluginDir>/tool-host.mjs` | Host runtime, materialized from the source baked into `main.js` on load (new; not a release artifact). |
-| settings store | Opt-in enable flag + per-tool disabled state. |
+| settings store | Opt-in enable flag + per-tool disabled state + secret allowlist. |
 
-- **Secrets:** `manifest.secrets` lists SecretStorage-backed ids; the plugin
-  resolves them and passes the values into the host's curated env as transport.
-  The host **scrubs `SPECORATOR_SECRET_*` from `process.env` into host-owned state
-  before importing any tool**, then exposes only the calling tool's declared subset
-  via `ctx.secrets`. Reuses the existing `secretEnv` mechanism — secret values
+- **Secrets:** `manifest.secrets` lists ids a tool *requests*; the host resolves
+  each only through the user's **explicit allowlist** (`localToolHostSecrets`, a
+  set of `name → keychain secretId` entries managed in settings). The keychain
+  handle is user-chosen, so a tool that declares an unlisted id — including a
+  provider/MCP credential id it scraped from vault files — resolves **nothing**
+  (fail closed). The plugin passes only allowlisted values into the host's curated
+  env as transport; the host **scrubs `SPECORATOR_SECRET_*` from `process.env`
+  into host-owned state before importing any tool**, then exposes only the calling
+  tool's cataloged-and-still-declared subset via `ctx.secrets`. Secret values
   never land in the script file, and no tool can read another tool's secret off
   the environment.
 
@@ -230,8 +234,11 @@ network). This matches the Obsidian norm (Dataview, Templater, QuickAdd, JS
 Engine) and is stated plainly in the settings UI and docs. Mitigations:
 - **Opt-in** — off by default.
 - **Curated env** — host spawns with `curateStdioMcpEnv`, so host credentials
-  (cloud tokens, provider keys) do not leak into the child; only declared
-  secrets are passed.
+  (cloud tokens, provider keys) do not leak into the child.
+- **Fail-closed secret allowlist** — a tool reaches the keychain only through the
+  user's `name → secretId` allowlist; a declared id with no allowlist entry
+  resolves nothing, so a tool can't pull a provider/MCP credential by naming its
+  id even though it can read the (non-secret) vault files that list those ids.
 - **Per-handler `try/catch` + timeout.**
 
 Web Worker / iframe isolation is explicitly deferred; the process boundary plus
@@ -271,10 +278,13 @@ overclaimed.
 2. **Host bundle size** — confirm baking the `@modelcontextprotocol/sdk`-bearing
    host bundle into `main.js` as text is an acceptable `main.js` size increase
    (vs. lazy-materializing from a compressed/base64 blob).
-3. **Secret scoping vs. full trust** — secrets are scrubbed from `process.env` into
-   host-owned state and scoped per-tool via `ctx.secrets`, which stops casual
-   cross-tool env reads. A fully malicious tool still runs with full Node
-   privileges (the documented trust model), so this is defense-in-depth, not a
-   hard boundary. Worker/iframe isolation remains the deferred stronger option.
+3. **Secret scoping vs. full trust** — secrets are gated by the user's fail-closed
+   allowlist (a tool reaches only `name`s the user mapped to a keychain `secretId`),
+   then scrubbed from `process.env` into host-owned state and scoped per-tool via
+   `ctx.secrets`. This makes keychain reach an explicit grant, not something a tool
+   can widen by declaring an id. A fully malicious tool still runs with full Node
+   privileges over the filesystem/network (the documented trust model), so the
+   allowlist hardens the *keychain* boundary specifically; Worker/iframe isolation
+   remains the deferred stronger option for the rest.
 </content>
 </invoke>

@@ -10,7 +10,9 @@ const base = {
   disabledFiles: ['old_tool.mjs'],
   declaredSecrets: ['OPENAI_API_KEY'],
   toolSecretsByFile: { 'wc.mjs': ['OPENAI_API_KEY'] },
-  resolveSecret: (id: string) => (id === 'OPENAI_API_KEY' ? 'sk-test' : null),
+  // The allowlist maps the tool-facing name to a user-chosen keychain handle.
+  allowedSecrets: [{ name: 'OPENAI_API_KEY', secretId: 'kc-openai' }],
+  resolveSecret: (secretId: string) => (secretId === 'kc-openai' ? 'sk-test' : null),
   toolsRev: 0,
 };
 
@@ -41,6 +43,32 @@ describe('buildToolHostServer', () => {
 
   it('omits a declared secret that does not resolve', () => {
     const cfg = buildToolHostServer({ ...base, resolveSecret: () => null });
+    expect(cfg!.env).not.toHaveProperty('SPECORATOR_SECRET_OPENAI_API_KEY');
+  });
+
+  it('withholds a declared secret that is NOT on the allowlist (fail closed)', () => {
+    // A malicious tool declares another credential's id; with no allowlist entry it
+    // resolves nothing — the keychain is never reached for an unlisted name.
+    const cfg = buildToolHostServer({
+      ...base,
+      declaredSecrets: ['ANTHROPIC_API_KEY'],
+      resolveSecret: () => 'sk-should-never-be-read',
+    });
+    expect(cfg!.env).not.toHaveProperty('SPECORATOR_SECRET_ANTHROPIC_API_KEY');
+  });
+
+  it('resolves the allowlist secretId, not the declared name', () => {
+    const seen: string[] = [];
+    buildToolHostServer({
+      ...base,
+      resolveSecret: (secretId) => { seen.push(secretId); return 'sk-test'; },
+    });
+    // The tool declares OPENAI_API_KEY but the keychain lookup uses the user-chosen handle.
+    expect(seen).toEqual(['kc-openai']);
+  });
+
+  it('injects nothing when the allowlist is empty', () => {
+    const cfg = buildToolHostServer({ ...base, allowedSecrets: [] });
     expect(cfg!.env).not.toHaveProperty('SPECORATOR_SECRET_OPENAI_API_KEY');
   });
 

@@ -5,7 +5,7 @@ import type { PluginContext } from '../../../core/types/PluginContext';
 import { TOOL_HOST_SOURCE } from '../../../tool-host/embeddedSource';
 import type { CatalogPayload, ToolHostScan } from '../../../tool-host/types';
 import { curateStdioMcpEnv, findNodeExecutable, getEnhancedPath } from '../../../utils/env';
-import { getClaudeProviderSettings } from '../settings';
+import { getClaudeProviderSettings, type ToolHostSecretRef } from '../settings';
 import { buildToolHostServer } from './buildToolHostServer';
 import { isSupportedNode, probeNodeMajor } from './nodeVersion';
 import { catalogSecretsByFile, readCatalog, spawnCatalogRunner, unionSecretIds } from './ToolHostCatalog';
@@ -105,7 +105,9 @@ export interface BuildToolHostFromCacheInput {
   toolsDir: string;
   vaultPath: string;
   disabledFiles: string[];
-  resolveSecret: (id: string) => string | null;
+  /** User's explicit secret allowlist (`name` → keychain `secretId`); read fresh per turn. */
+  allowedSecrets: ToolHostSecretRef[];
+  resolveSecret: (secretId: string) => string | null;
 }
 
 /**
@@ -134,6 +136,7 @@ export function buildToolHostServerFromCache(
     disabledFiles: input.disabledFiles,
     declaredSecrets: cache.declaredToolSecretIds,
     toolSecretsByFile: cache.toolSecretsByFile,
+    allowedSecrets: input.allowedSecrets,
     resolveSecret: input.resolveSecret,
     toolsRev: cache.toolsRev,
   });

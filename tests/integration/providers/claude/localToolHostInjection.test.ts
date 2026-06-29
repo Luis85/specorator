@@ -57,6 +57,7 @@ function buildServer(enabled: boolean, cache: ToolHostCacheState) {
     toolsDir: '/vault/.specorator/tools',
     vaultPath: '/vault',
     disabledFiles: [],
+    allowedSecrets: [],
     resolveSecret: () => null,
   });
 }

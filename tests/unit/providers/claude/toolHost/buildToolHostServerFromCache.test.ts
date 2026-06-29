@@ -18,7 +18,8 @@ const baseInput = {
   toolsDir: '/vault/.specorator/tools',
   vaultPath: '/vault',
   disabledFiles: ['old.mjs'],
-  resolveSecret: (id: string) => (id === 'OPENAI_API_KEY' ? 'sk-test' : null),
+  allowedSecrets: [{ name: 'OPENAI_API_KEY', secretId: 'kc-openai' }],
+  resolveSecret: (secretId: string) => (secretId === 'kc-openai' ? 'sk-test' : null),
 };
 
 describe('buildToolHostServerFromCache', () => {
