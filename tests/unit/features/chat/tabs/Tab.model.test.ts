@@ -438,6 +438,70 @@ describe('Tab - Cross-Provider Model Rejection', () => {
 });
 
 
+describe('Tab - Bound Agent Display Model', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('getSettings surfaces displayModel for a bound tab without pinning it', () => {
+    const plugin = createMockPlugin();
+    const tab = createTab(createMockOptions({ plugin }));
+    initializeTabUI(tab, plugin);
+
+    tab.lifecycleState = 'bound_cold';
+    tab.providerId = 'claude';
+    tab.pinnedModel = null;
+    tab.displayModel = 'opus';
+
+    const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
+      createInputToolbar: jest.Mock;
+    };
+    const toolbarCallbacks = toolbarModule.createInputToolbar.mock.calls.at(-1)?.[1];
+
+    // Display-only seed shows in the selector, but it is NOT a pin: the per-turn
+    // override (getTabModelOverride) ignores displayModel, so the model stays live.
+    expect(toolbarCallbacks.getSettings().model).toBe('opus');
+  });
+
+  it('onModelChange clears displayModel so a manual pick is not shadowed', async () => {
+    (Notice as unknown as jest.Mock).mockClear();
+    jest.spyOn(ProviderRegistry, 'createInstructionRefineService').mockReturnValue({ cancel: jest.fn(), resetConversation: jest.fn() } as any);
+    jest.spyOn(ProviderRegistry, 'createTitleGenerationService').mockReturnValue({ cancel: jest.fn() } as any);
+    jest.spyOn(ProviderRegistry, 'getTaskResultInterpreter').mockReturnValue({} as any);
+    jest.spyOn(ProviderRegistry, 'getChatUIConfig').mockReturnValue({
+      getModelOptions: jest.fn().mockReturnValue([]),
+      ownsModel: jest.fn((model: string) => model.startsWith('gpt-') || /^o\d/.test(model)),
+      isAdaptiveReasoningModel: jest.fn().mockReturnValue(false),
+      getReasoningOptions: jest.fn().mockReturnValue([]),
+      getDefaultReasoningValue: jest.fn().mockReturnValue('off'),
+      getContextWindowSize: jest.fn().mockReturnValue(200000),
+      isDefaultModel: jest.fn().mockReturnValue(false),
+      applyModelDefaults: jest.fn(),
+      normalizeModelVariant: jest.fn((model: string) => model),
+      getCustomModelIds: jest.fn().mockReturnValue(new Set()),
+    } as any);
+
+    const plugin = createMockPlugin();
+    const tab = createTab(createMockOptions({ plugin }));
+    initializeTabUI(tab, plugin);
+
+    tab.lifecycleState = 'bound_cold';
+    tab.providerId = 'claude';
+    tab.displayModel = 'sonnet';
+
+    const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
+      createInputToolbar: jest.Mock;
+    };
+    const toolbarCallbacks = toolbarModule.createInputToolbar.mock.calls.at(-1)?.[1];
+
+    await toolbarCallbacks.onModelChange('opus'); // same provider (Claude)
+
+    expect(Notice).not.toHaveBeenCalled();
+    expect(tab.displayModel).toBeNull();
+  });
+});
+
+
 describe('Tab - Blank Tab Draft Model Change', () => {
   it('updates draft model and provider without creating runtime', async () => {
     jest.spyOn(ProviderRegistry, 'createInstructionRefineService').mockReturnValue({ cancel: jest.fn(), resetConversation: jest.fn() } as any);

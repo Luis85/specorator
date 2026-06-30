@@ -240,6 +240,16 @@ export interface TabData {
    */
   pinnedModel?: string | null;
 
+  /**
+   * Display-only initial model for a bound-agent tab. Seeds the ModelSelector so
+   * it shows the agent's configured model from the first render, WITHOUT becoming
+   * a query override (unlike `pinnedModel`). The per-turn model is resolved live
+   * from the bound agent each send, so editing the agent's model mid-session
+   * takes effect; this is just the picker's initial hint. Cleared on a manual
+   * model pick. Null for regular and work-order tabs.
+   */
+  displayModel?: string | null;
+
   /** Vault-relative work-order note path when this tab hosts an Agent Board run. */
   workOrderPath?: string | null;
 

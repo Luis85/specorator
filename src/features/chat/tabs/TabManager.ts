@@ -189,22 +189,21 @@ export class TabManager implements TabManagerInterface {
     return activeTab ? getTabProviderId(activeTab, this.plugin) : undefined;
   }
 
-  /**
-   * Resolve the effective pinned model: caller-supplied wins; for agent-bound
-   * conversations without an explicit pin, seed from the agent's configured
-   * model so the ModelSelector reflects reality from the first render.
-   */
-  private async resolvePinnedModel(
+  /** Split the tab's initial model: an explicit caller pin (e.g. a work-order
+   * run) forces the per-turn `queryOptions.model`; a bound agent's model is a
+   * display-only seed instead — shown in the ModelSelector but never a query
+   * override, so the per-turn model resolves live and mid-session edits apply. */
+  private async resolveInitialModels(
     options: CreateTabOptions,
     conversation: Conversation | undefined,
-  ): Promise<string | undefined> {
-    if (options.pinnedModel) return options.pinnedModel;
-    if (!conversation?.boundAgentId) return undefined;
+  ): Promise<{ pinnedModel?: string; displayModel?: string }> {
+    if (options.pinnedModel) return { pinnedModel: options.pinnedModel };
+    if (!conversation?.boundAgentId) return {};
     const projection = await this.plugin.resolveBoundAgent?.(
       conversation.boundAgentId,
       conversation.providerId,
     );
-    return projection?.model?.trim() || undefined;
+    return { displayModel: projection?.model?.trim() || undefined };
   }
 
   /**
@@ -232,7 +231,7 @@ export class TabManager implements TabManagerInterface {
       : undefined;
 
     const defaultProviderId = this.resolveDefaultProviderId(options, conversation ?? undefined);
-    const pinnedModel = await this.resolvePinnedModel(options, conversation ?? undefined);
+    const { pinnedModel, displayModel } = await this.resolveInitialModels(options, conversation ?? undefined);
 
     const tab = createTab({
       plugin: this.plugin,
@@ -241,6 +240,7 @@ export class TabManager implements TabManagerInterface {
       tabId,
       ...(typeof draftModel === 'string' ? { draftModel } : {}),
       ...(typeof pinnedModel === 'string' ? { pinnedModel } : {}),
+      ...(typeof displayModel === 'string' ? { displayModel } : {}),
       defaultProviderId,
       kind,
       onStreamingChanged: (isStreaming) => {

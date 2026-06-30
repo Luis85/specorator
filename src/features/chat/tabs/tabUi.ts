@@ -228,6 +228,14 @@ function initializeInputToolbar(
       if (tab.lifecycleState === 'blank' && typeof tab.draftModel === 'string' && tab.draftModel.trim()) {
         return { ...snapshot, model: tab.draftModel.trim() };
       }
+      // Bound-agent tabs surface the agent's model as a display-only seed so the
+      // selector shows it from the first render. Unlike `pinnedModel` this never
+      // reaches `getTabModelOverride`, so the per-turn model stays live (resolved
+      // from the bound agent each send). Cleared by `onModelChange` on a manual
+      // pick so it can't shadow the user's explicit choice.
+      if (typeof tab.displayModel === 'string' && tab.displayModel.trim()) {
+        return { ...snapshot, model: tab.displayModel.trim() };
+      }
       return snapshot;
     },
     getEnvironmentVariables: () => plugin.getActiveEnvironmentVariables(),
@@ -237,6 +245,13 @@ function initializeInputToolbar(
       // on every subsequent turn rather than getting shadowed by the old pin.
       if (typeof tab.pinnedModel === 'string' && tab.pinnedModel.trim() !== model) {
         tab.pinnedModel = null;
+      }
+
+      // An explicit pick supersedes the bound-agent display seed; clear it so the
+      // selector shows the chosen model (via settings.model) rather than the
+      // agent's seeded value.
+      if (typeof tab.displayModel === 'string') {
+        tab.displayModel = null;
       }
 
       // For blank tabs, update draft model and derive provider

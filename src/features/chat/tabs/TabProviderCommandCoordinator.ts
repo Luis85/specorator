@@ -223,18 +223,21 @@ export class TabProviderCommandCoordinator {
 
     runtime.syncConversationState(context.conversation, context.externalContextPaths);
 
-    // Sync bound-agent projection before ensureReady so the persistent query
-    // starts with the agent's native-agent path and correct system-prompt key.
-    // Without this, the pre-warm fires ensureReady() with undefined agent state
-    // and the SDK starts with the full Specorator identity instead of the
-    // bound agent persona — the user sees "Specorator" when they expect
-    // the agent they launched from the roster.
-    const boundAgentId = context.conversation?.boundAgentId;
-    if (boundAgentId && runtime.syncBoundAgentState) {
-      const projection = await this.deps.plugin.resolveBoundAgent?.(boundAgentId, providerId);
-      if (projection) {
-        runtime.syncBoundAgentState(projection);
-      }
+    // Re-sync (or clear) the bound-agent projection before ensureReady so the
+    // persistent query starts with the agent's native-agent path and correct
+    // system-prompt key. Without the sync, the pre-warm fires ensureReady() with
+    // undefined agent state and the SDK starts with the full Specorator identity
+    // instead of the bound persona. Without the clear, a runtime reused for a
+    // later unbound (or differently-bound) conversation keeps the prior agent's
+    // slug/prompt — `syncConversationState(null)` leaves an already-null session
+    // id untouched, so only re-syncing empty state flips the system-prompt key
+    // enough for needsRestart() to fire.
+    if (runtime.syncBoundAgentState) {
+      const boundAgentId = context.conversation?.boundAgentId;
+      const projection = boundAgentId
+        ? await this.deps.plugin.resolveBoundAgent?.(boundAgentId, providerId)
+        : null;
+      runtime.syncBoundAgentState(projection ?? {});
     }
 
     await runtime.ensureReady();
