@@ -7,8 +7,8 @@ import { LibraryListController, mountLibraryList, renderCloneButton, renderLibra
 import { confirm } from '../../../shared/modals/ConfirmModal';
 import { withErrorNotice } from '../../../shared/uiAction';
 import { createLibraryCard, renderLibraryEmptyState, renderLibraryLoading, renderLibraryShell } from '../../../utils/libraryView';
+import { launchLoopPrompt } from '../../quickActions/launchLoopPrompt';
 import { installPresetLoopsWithNotice } from '../loops/installPresetLoops';
-import { launchLoopPrompt } from '../loops/launchLoopPrompt';
 import { LoopNoteStore } from '../loops/LoopNoteStore';
 import type { LoopDefinition } from '../loops/loopTypes';
 import { LoopEditorModal } from './LoopEditorModal';

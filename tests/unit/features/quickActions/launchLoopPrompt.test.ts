@@ -1,20 +1,20 @@
-import { launchLoopPrompt } from '../../../../../src/features/tasks/loops/launchLoopPrompt';
-import type { LoopDefinition } from '../../../../../src/features/tasks/loops/loopTypes';
+import { launchLoopPrompt } from '../../../../src/features/quickActions/launchLoopPrompt';
+import type { LoopDefinition } from '../../../../src/features/tasks/loops/loopTypes';
 
 const launchMock = jest.fn();
-jest.mock('../../../../../src/features/quickActions/launchWithModelPicker', () => ({
+jest.mock('../../../../src/features/quickActions/launchWithModelPicker', () => ({
   launchWithModelPicker: (...a: unknown[]) => launchMock(...a),
 }));
 
 const resolveMock = jest.fn();
-jest.mock('../../../../../src/features/chat/tabs/resolveOverrideTargetTab', () => ({
+jest.mock('../../../../src/features/chat/tabs/resolveOverrideTargetTab', () => ({
   resolveOverrideTargetTab: (...a: unknown[]) => resolveMock(...a),
 }));
 
 const noticeMock = jest.fn();
 jest.mock('obsidian', () => ({ Notice: class { constructor(msg: string) { noticeMock(msg); } } }));
 
-jest.mock('../../../../../src/i18n/i18n', () => ({
+jest.mock('../../../../src/i18n/i18n', () => ({
   t: (key: string, vars?: Record<string, string>) => (vars?.name ? `${key}:${vars.name}` : key),
 }));
 

@@ -3,11 +3,15 @@ import { Notice } from 'obsidian';
 import type { ProviderId } from '@/core/providers/types';
 import { resolveOverrideTargetTab } from '@/features/chat/tabs/resolveOverrideTargetTab';
 import { launchWithModelPicker } from '@/features/quickActions/launchWithModelPicker';
+import type { LoopDefinition } from '@/features/tasks/loops/loopTypes';
+import { renderLoopPromptText } from '@/features/tasks/loops/renderLoopPromptText';
 import { t } from '@/i18n/i18n';
 import type SpecoratorPlugin from '@/main';
 
-import type { LoopDefinition } from './loopTypes';
-import { renderLoopPromptText } from './renderLoopPromptText';
+// Lives in features/quickActions (not features/tasks): seeding a composer draft
+// is a chat-side orchestration, so keeping it here lets the Loop Library reuse
+// it without features/tasks reaching into chat tab internals — mirroring how the
+// work-order context menu reuses quickActions helpers (see tasks/CLAUDE.md).
 
 /** A loop is promptable only if it has at least one body section — the picker
  * seeds Approach/Steps/Verify/Notes, so a `useWhen`-only loop seeds nothing

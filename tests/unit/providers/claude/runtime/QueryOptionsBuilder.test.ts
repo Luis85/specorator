@@ -1022,24 +1022,31 @@ describe('QueryOptionsBuilder', () => {
       expect(options.agents).toBeUndefined();
     });
 
-    it('cold-start: threads boundAgentModel into the agent definition when present', () => {
+    it('cold-start: agent definition omits model so it inherits the resolved main model', () => {
+      // boundAgentModel feeds resolveEffectiveModel (→ options.model); the agent
+      // definition must NOT pin its own model, or the SDK ignores an explicit
+      // tab/work-order override for the agent's turns.
       const options = QueryOptionsBuilder.buildColdStartQueryOptions({
         ...createMockContext({ boundAgentSlug: SLUG, boundAgentPrompt: PERSONA, boundAgentModel: 'claude-opus-4-5' }),
         abortController: new AbortController(),
         hooks: {},
         hasEditorContext: false,
       });
-      expect(options.agents?.[SLUG].model).toBe('claude-opus-4-5');
+      expect(options.agents?.[SLUG].model).toBeUndefined();
+      expect(options.model).toBe('claude-opus-4-5');
     });
 
-    it('cold-start: omits model from agent definition when boundAgentModel absent', () => {
+    it('cold-start: an explicit model override wins over boundAgentModel for the agent', () => {
       const options = QueryOptionsBuilder.buildColdStartQueryOptions({
-        ...createMockContext({ boundAgentSlug: SLUG, boundAgentPrompt: PERSONA }),
+        ...createMockContext({ boundAgentSlug: SLUG, boundAgentPrompt: PERSONA, boundAgentModel: 'claude-opus-4-5' }),
+        modelOverride: 'claude-haiku-4-5',
         abortController: new AbortController(),
         hooks: {},
         hasEditorContext: false,
       });
+      // Agent inherits options.model, which the override now drives.
       expect(options.agents?.[SLUG].model).toBeUndefined();
+      expect(options.model).toBe('claude-haiku-4-5');
     });
 
     // ── buildPersistentQueryOptions (persistent-query path) ───────────────────

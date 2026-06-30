@@ -362,7 +362,12 @@ export class QueryOptionsBuilder {
         [ctx.boundAgentSlug]: {
           description: ctx.boundAgentDescription ?? 'Specorator roster agent',
           prompt: ctx.boundAgentPrompt,
-          ...(ctx.boundAgentModel ? { model: ctx.boundAgentModel } : {}),
+          // No `model`: the SDK reads AgentDefinition.model as the agent's OWN
+          // model and ignores the top-level `--model`. Omitting it lets the
+          // agent inherit `options.model` (= resolveEffectiveModel, which already
+          // folds in boundAgentModel), so an explicit tab/work-order model
+          // override actually applies to the agent's turns instead of being
+          // shadowed by the agent's saved model.
         },
       };
       options.systemPrompt = {
