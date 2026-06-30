@@ -166,6 +166,11 @@ export class QueryOptionsBuilder {
         appendices: (boundAgentSlug || !boundAgentPrompt) ? undefined : [boundAgentPrompt],
         suppressIdentity: !!boundAgentPrompt,
         nativeAgentSlug: boundAgentSlug,
+        // The native AgentDefinition (prompt + description) ships via
+        // options.agents, not the appendix above, so key on it explicitly —
+        // otherwise editing a bound agent in place wouldn't restart the query.
+        nativeAgentPrompt: boundAgentSlug ? boundAgentPrompt : undefined,
+        nativeAgentDescription: boundAgentSlug ? ctx.boundAgentDescription : undefined,
       }),
       disallowedToolsKey,
       mcpServersKey: '', // Dynamic via setMcpServers, not tracked for restart

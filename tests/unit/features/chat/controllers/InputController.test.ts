@@ -132,7 +132,11 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
       },
       logger: {
         scope: jest.fn().mockReturnValue({
+          debug: jest.fn(),
+          info: jest.fn(),
+          warn: jest.fn(),
           error: jest.fn(),
+          isEnabled: jest.fn().mockReturnValue(false),
         }),
       },
       mcpManager: {

@@ -24,6 +24,15 @@ export interface SystemPromptBuildOptions {
    * change (the SDK owns the identity injection in that path).
    */
   nativeAgentSlug?: string;
+  /**
+   * Inline AgentDefinition prompt + description for the native-agent path. The
+   * persona is delivered out-of-band via `options.agents[slug]` rather than the
+   * system prompt, so it never reaches `appendices` — fold it into the key here
+   * so editing a bound agent in place (same slug) still restarts the persistent
+   * query onto the fresh definition.
+   */
+  nativeAgentPrompt?: string;
+  nativeAgentDescription?: string;
 }
 
 function getPathRules(vaultPath?: string): string {
@@ -251,9 +260,17 @@ export function computeSystemPromptKey(
   }
 
   // Native-agent path: slug identifies the active inline agent definition; a
-  // change triggers restart even when the appended text stays the same.
+  // change triggers restart even when the appended text stays the same. The
+  // prompt/description are folded in too so an in-place edit (same slug) still
+  // flips the key — the persona lives in options.agents, never in appendices.
   if (options.nativeAgentSlug) {
     parts.push(`agent:${options.nativeAgentSlug}`);
+    if (options.nativeAgentPrompt) {
+      parts.push(`agent-prompt:${options.nativeAgentPrompt.trim()}`);
+    }
+    if (options.nativeAgentDescription) {
+      parts.push(`agent-desc:${options.nativeAgentDescription.trim()}`);
+    }
   }
 
   return parts.join('::');

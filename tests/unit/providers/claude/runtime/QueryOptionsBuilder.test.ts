@@ -1131,6 +1131,26 @@ describe('QueryOptionsBuilder', () => {
       const promptOnly = QueryOptionsBuilder.buildPersistentQueryConfig(ctx, [], undefined, PERSONA, undefined);
       expect(promptOnly.systemPromptKey).toContain('no-identity');
     });
+
+    // On the native-agent path the persona is delivered via the inline
+    // AgentDefinition (options.agents[slug].prompt), not appended to the system
+    // prompt — so the slug alone must not be the whole key, or editing a bound
+    // agent's prompt/description in place (same slug) would leave the running
+    // persistent query on the stale definition until an unrelated restart.
+    it('needsRestart when the bound agent prompt is edited but the slug stays the same', () => {
+      const ctx = createMockContext();
+      const before = QueryOptionsBuilder.buildPersistentQueryConfig(ctx, [], undefined, PERSONA, SLUG);
+      const after = QueryOptionsBuilder.buildPersistentQueryConfig(ctx, [], undefined, `${PERSONA} Also be terse.`, SLUG);
+      expect(QueryOptionsBuilder.needsRestart(before, after)).toBe(true);
+    });
+
+    it('needsRestart when the bound agent description is edited but the slug stays the same', () => {
+      const before = QueryOptionsBuilder.buildPersistentQueryConfig(
+        createMockContext({ boundAgentDescription: 'Reviews changes.' }), [], undefined, PERSONA, SLUG);
+      const after = QueryOptionsBuilder.buildPersistentQueryConfig(
+        createMockContext({ boundAgentDescription: 'Reviews and refactors changes.' }), [], undefined, PERSONA, SLUG);
+      expect(QueryOptionsBuilder.needsRestart(before, after)).toBe(true);
+    });
   });
 
   describe('resolveEffectiveModel precedence', () => {
