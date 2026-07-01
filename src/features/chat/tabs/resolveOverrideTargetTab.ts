@@ -1,7 +1,7 @@
 import type { ProviderId } from '@/core/providers/types';
 import type SpecoratorPlugin from '@/main';
 
-import { blankTabHasPendingDraft } from './blankTabDraft';
+import { blankTabHasAttachedContext, blankTabHasPendingDraft } from './blankTabDraft';
 import { getTabProviderId } from './providerResolution';
 import type { TabManager } from './TabManager';
 import { resolveBlankTabModel } from './tabShared';
@@ -31,20 +31,21 @@ function resolveActiveBlankTabModel(
 }
 
 /**
- * Additive callers (loop-prompt seeding via `seedComposerDraft({ keepExisting })`)
- * preserve any unsent draft and never send or clear pills, so they may reuse a
- * draft-bearing blank. Destructive send callers (quick actions, library skills)
- * must not — reusing would consume the draft's context during `buildOutgoingTurn`.
+ * `allowDraftBlank` is for additive callers (loop-prompt seeding via
+ * `seedComposerDraft({ keepExisting })`) that preserve unsent composer TEXT. It
+ * relaxes only the text check — attached pills/images are still disqualifying,
+ * because activating the blank runs the welcome reset that clears them regardless
+ * of `keepExisting`. Destructive send callers (quick actions, library skills)
+ * omit the flag and reject any pending draft.
  */
 export interface ResolveTargetOptions { allowDraftBlank?: boolean }
 
 /**
- * A blank tab is a safe reuse target when it holds no pending draft (unless the
- * caller opts into draft reuse) AND either there is no override, or BOTH its
- * provider and its currently effective model match the override. The provider
- * check alone is not enough: `switchToTab` does not accept a model, so a blank
- * Claude tab pinned to claude-haiku would silently drop the user's claude-sonnet
- * pick from the launch modal.
+ * A blank tab is a safe reuse target when it holds no disqualifying draft AND
+ * either there is no override, or BOTH its provider and its currently effective
+ * model match the override. The provider check alone is not enough: `switchToTab`
+ * does not accept a model, so a blank Claude tab pinned to claude-haiku would
+ * silently drop the user's claude-sonnet pick from the launch modal.
  */
 function isReusableBlankTab(
   tab: TabData,
@@ -53,7 +54,13 @@ function isReusableBlankTab(
   options: ResolveTargetOptions,
 ): boolean {
   if (tab.lifecycleState !== 'blank') return false;
-  if (!options.allowDraftBlank && blankTabHasPendingDraft(tab)) return false;
+  // Additive callers tolerate composer text (preserved by keepExisting) but never
+  // attached context (wiped by the welcome reset on switch); destructive callers
+  // reject any pending draft.
+  const disqualified = options.allowDraftBlank
+    ? blankTabHasAttachedContext(tab)
+    : blankTabHasPendingDraft(tab);
+  if (disqualified) return false;
   if (override === undefined) return true;
   return getTabProviderId(tab, plugin) === override.providerId
     && resolveActiveBlankTabModel(tab, plugin, override.providerId) === override.model;

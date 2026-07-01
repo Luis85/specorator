@@ -56,9 +56,10 @@ async function seedLoopDraft(
   if (!tabManager) return;
 
   // allowDraftBlank: loop seeding is additive — `seedComposerDraft({ keepExisting })`
-  // preserves the user's unsent note and neither sends nor clears pills, so a
-  // model-matching draft-bearing blank is a valid target (and must not trip the
-  // send-path draft guard into a spurious tab-limit failure at the cap).
+  // preserves the user's unsent composer TEXT, so a model-matching text-draft
+  // blank is a valid target (and must not trip the send-path guard into a
+  // spurious tab-limit failure at the cap). A blank holding attached pills/images
+  // is still skipped: switchToTab's welcome reset would wipe that context.
   const target = await resolveOverrideTargetTab(
     plugin, tabManager, { providerId, model }, { allowDraftBlank: true },
   );

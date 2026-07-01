@@ -157,6 +157,29 @@ describe('resolveOverrideTargetTab', () => {
     expect(createTab).not.toHaveBeenCalled();
   });
 
+  it('with allowDraftBlank, still skips a blank holding attached pills (welcome reset would wipe them)', async () => {
+    const active = { id: 'conv', lifecycleState: 'bound_active' };
+    const blank = {
+      id: 'blank',
+      lifecycleState: 'blank',
+      pinnedModel: 'sonnet',
+      dom: { inputEl: { value: 'draft text' } },
+      ui: {
+        fileContextManager: {
+          getAttachedFiles: () => new Set(['notes/a.md']),
+          getAttachedFolders: () => new Set<string>(),
+        },
+      },
+    };
+    const created = { id: 'new' };
+    const { tm, createTab } = tabManager({ active, allTabs: [active, blank], created, canCreate: true });
+    const got = await resolveOverrideTargetTab(
+      {} as never, tm, { providerId: 'claude', model: 'sonnet' }, { allowDraftBlank: true },
+    );
+    expect(got).toBe(created);
+    expect(createTab).toHaveBeenCalled();
+  });
+
   it('with allowDraftBlank, still honors the model match (no reuse on mismatch)', async () => {
     const active = { id: 'conv', lifecycleState: 'bound_active' };
     const blank = {
