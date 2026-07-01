@@ -744,6 +744,13 @@ export const LEGACY_VIEW_TYPE_TO_TAB: Readonly<Record<string, LibraryTab>> = {
   'specorator-skill-library': 'skills',
   'specorator-loop-library': 'loops',
 };
+
+/** Inverse of the above — used by the flag-off rollback redirect. */
+export const TAB_TO_LEGACY_VIEW_TYPE: Readonly<Record<LibraryTab, string>> = {
+  agents: 'specorator-agent-roster',
+  skills: 'specorator-skill-library',
+  loops: 'specorator-loop-library',
+};
 ```
 
 (Literals, not imports of the legacy `VIEW_TYPE_*` constants, mirroring `shared/libraryNav.ts`'s cycle-avoidance pattern.)
@@ -860,7 +867,7 @@ import { getLibraryPinia } from './vue/globalPinia';
 import { ACTIVE_TAB_KEY, PLUGIN_KEY, TAB_GUARD_KEY, VIEW_KEY } from './vue/libraryKeys';
 import LibraryRoot from './vue/LibraryRoot.vue';
 import type { LibraryTab } from './viewType';
-import { VIEW_TYPE_LIBRARY } from './viewType';
+import { TAB_TO_LEGACY_VIEW_TYPE, VIEW_TYPE_LIBRARY } from './viewType';
 
 const DEFAULT_TAB: LibraryTab = 'agents';
 
@@ -912,10 +919,13 @@ export class LibraryView extends ItemView {
 
   async onOpen(): Promise<void> {
     if (!this.plugin.settings.useVueLibrary) {
-      // Flag off: hand this leaf to the legacy roster view so a stale unified
-      // leaf never strands as an empty view (mirror of the legacy views'
-      // flag-on redirect).
-      await this.leaf.setViewState({ type: 'specorator-agent-roster', active: true });
+      // Flag off: hand this leaf to the MATCHING legacy view (setState has
+      // already restored the persisted tab for saved leaves) so rollback
+      // reopens Skills/Loops where they were, not always the roster.
+      await this.leaf.setViewState({
+        type: TAB_TO_LEGACY_VIEW_TYPE[this.activeTab.value],
+        active: true,
+      });
       return;
     }
     this.contentEl.empty();
@@ -1056,6 +1066,18 @@ describe('LibraryView', () => {
     await view.onOpen();
     expect((leaf as { setViewState: ReturnType<typeof vi.fn> }).setViewState).toHaveBeenCalledWith({
       type: 'specorator-agent-roster',
+      active: true,
+    });
+  });
+
+  it('re-homes a stale leaf to the legacy view MATCHING its persisted tab', async () => {
+    const leaf = makeLeaf();
+    const view = new LibraryView(leaf, makePlugin(false));
+    mountView(view);
+    await view.setActiveTab('loops'); // stands in for setState-restored tab
+    await view.onOpen();
+    expect((leaf as { setViewState: ReturnType<typeof vi.fn> }).setViewState).toHaveBeenCalledWith({
+      type: 'specorator-loop-library',
       active: true,
     });
   });
@@ -2725,15 +2747,15 @@ and at the end of the private `save()` method, after the store write succeeds, a
     this.callbacks.onSaved?.(this.original);
 ```
 
-Additionally expose the editor's existing dirty computation (used by its Back
-discard-confirm path, ~lines 69–77) as a public method — extract, don't
-duplicate, so Back and the tab guard can never disagree:
+Additionally expose the editor's dirty state as a public method. The
+comparison already lives in an exported helper (`isRosterAgentDirty`, used by
+`handleBack()` at AgentDetailEditor.ts:71), so this is a one-liner — and have
+`handleBack()` call it so Back and the tab guard can never disagree:
 
 ```ts
   /** True when the draft differs from the last persisted state. */
   isDirty(): boolean {
-    // move the exact comparison the back path already performs into here and
-    // have the back path call this method (behavior-preserving refactor)
+    return isRosterAgentDirty(this.original, this.draft);
   }
 ```
 
@@ -2879,7 +2901,8 @@ async function openDetail(agent: RosterAgent, opts?: { isNew?: boolean }): Promi
         await closeDetail();
         return true;
       }
-      const ok = await confirm(plugin.app, /* same message/label t() keys as the editor's back discard prompt */);
+      // Same strings as AgentDetailEditor.handleBack (AgentDetailEditor.ts:74).
+      const ok = await confirm(plugin.app, t('agentRoster.discardConfirm'), t('agentRoster.discard'));
       if (ok) await closeDetail();
       return ok;
     };
