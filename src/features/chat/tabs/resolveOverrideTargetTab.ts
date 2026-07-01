@@ -54,6 +54,9 @@ function isReusableBlankTab(
   options: ResolveTargetOptions,
 ): boolean {
   if (tab.lifecycleState !== 'blank') return false;
+  // `getAllTabs()` also returns hidden work-order run tabs; never hijack one for a
+  // quick-action / loop dispatch — it has its own lifecycle and tab cap.
+  if (tab.kind === 'work-order') return false;
   // Additive callers tolerate composer text (preserved by keepExisting) but never
   // attached context (wiped by the welcome reset on switch); destructive callers
   // reject any pending draft.

@@ -93,8 +93,11 @@ async function resolveTargetTab(
   targetProviderId: ProviderId,
 ): Promise<TabData | null> {
   const activeTab = tabManager.getActiveTab();
+  // `getAllTabs()` also returns hidden work-order run tabs; exclude them so a
+  // library skill send never lands in a task-run tab (own lifecycle + tab cap).
   const isReusable = (tab: TabData): boolean =>
     tab.lifecycleState === 'blank'
+    && tab.kind !== 'work-order'
     && !blankTabHasPendingDraft(tab)
     && getTabProviderId(tab, plugin) === targetProviderId;
 

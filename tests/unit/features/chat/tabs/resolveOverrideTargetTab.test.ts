@@ -157,6 +157,16 @@ describe('resolveOverrideTargetTab', () => {
     expect(createTab).not.toHaveBeenCalled();
   });
 
+  it('does not reuse a blank WORK-ORDER tab (hidden task-run tab, own cap/lifecycle)', async () => {
+    const active = { id: 'conv', lifecycleState: 'bound_active' };
+    const woBlank = { id: 'wo', lifecycleState: 'blank', kind: 'work-order', pinnedModel: 'sonnet' };
+    const created = { id: 'new' };
+    const { tm, createTab } = tabManager({ active, allTabs: [active, woBlank], created, canCreate: true });
+    const got = await resolveOverrideTargetTab({} as never, tm, { providerId: 'claude', model: 'sonnet' });
+    expect(got).toBe(created);
+    expect(createTab).toHaveBeenCalled();
+  });
+
   it('with allowDraftBlank, still skips a blank holding attached pills (welcome reset would wipe them)', async () => {
     const active = { id: 'conv', lifecycleState: 'bound_active' };
     const blank = {

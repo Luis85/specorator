@@ -49,6 +49,7 @@ function makeTab(opts: {
   id?: string;
   providerId?: string;
   lifecycleState?: string;
+  kind?: string;
   draftText?: string;
   attachedFiles?: string[];
   hasImages?: boolean;
@@ -57,6 +58,7 @@ function makeTab(opts: {
     id: opts.id ?? 'tab-1',
     providerId: opts.providerId ?? 'claude',
     lifecycleState: opts.lifecycleState ?? 'blank',
+    kind: opts.kind ?? 'chat',
     dom: { inputEl: { value: opts.draftText ?? '' } },
     ui: {
       fileContextManager: {
@@ -236,6 +238,23 @@ describe('runVaultSkill', () => {
 
     expect(tabManager.createTab).toHaveBeenCalled();
     expect(tabManager.switchToTab).toHaveBeenCalledWith('tab-3');
+  });
+
+  it('does not send a skill into a blank WORK-ORDER tab (hidden task-run tab)', async () => {
+    const active = { id: 'tab-1', providerId: 'codex', lifecycleState: 'bound_active' };
+    const woBlank = makeTab({ id: 'wo', providerId: 'claude', lifecycleState: 'blank', kind: 'work-order' });
+    const newTab = makeTab({ id: 'tab-3', providerId: 'claude' });
+    const { plugin, tabManager } = makePlugin({
+      activeTab: active as never,
+      allTabs: [active as never, woBlank],
+      newTab,
+    });
+
+    await runVaultSkill(plugin as any, makeEntry(), null);
+
+    expect(tabManager.createTab).toHaveBeenCalled();
+    expect(tabManager.switchToTab).toHaveBeenCalledWith('tab-3');
+    expect(woBlank.controllers.inputController.sendMessage).not.toHaveBeenCalled();
   });
 
   it('still reuses a draft-free blank match on the target provider', async () => {
