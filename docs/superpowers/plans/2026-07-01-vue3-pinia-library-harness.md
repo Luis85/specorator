@@ -37,7 +37,7 @@ src/features/library/
   vue/
     libraryKeys.ts               — typed InjectionKeys (plugin, view, activeTab)
     globalPinia.ts               — module-singleton Pinia (reset hook for tests)
-    Library.vue                  — root: tab nav + active panel
+    LibraryRoot.vue                  — root: tab nav + active panel
     useLibraryList.ts            — reactive search/sort/filter (wraps pure engine)
     components/
       LibraryToolbar.vue         — search input + sort select + filter chips
@@ -518,6 +518,17 @@ import pluginVue from 'eslint-plugin-vue';
   },
 ```
 
+Then mirror the src-only safety rules onto SFC `<script>` blocks — without this, a `.vue` under `src/` could use `console.*` or assign `innerHTML` and lint would stay green. Refactor the existing `src/**/*.ts` safety block: hoist its `rules` object into a module-level `const srcSafetyRules = { 'no-console': 'error', 'no-new-func': 'error', 'no-restricted-syntax': [ /* the existing array, moved verbatim: Notice-i18n selectors + innerHTML/outerHTML/insertAdjacentHTML bans */ ] }`, spread it back into the `src/**/*.ts` block (KEEP `'@typescript-eslint/no-implied-eval': 'error'` in that block only — it is type-aware and must stay off the `.vue` fast lint), and add:
+
+```js
+  {
+    // SFC <script> parity with the src/**/*.ts safety gate. Type-aware rules
+    // (no-implied-eval) intentionally excluded — vue-tsc is the type gate.
+    files: ['src/**/*.vue'],
+    rules: srcSafetyRules,
+  },
+```
+
 - [ ] **Step 4.3: Widen the lint glob in `package.json`:**
 
 ```json
@@ -680,13 +691,13 @@ git commit -m "feat(settings): add useVueLibrary flag (default off) with toggle 
 
 ---
 
-### Task 7: `LibraryView` island + `Library.vue` shell + activation + redirects
+### Task 7: `LibraryView` island + `LibraryRoot.vue` shell + activation + redirects
 
 **Files:**
 - Create: `src/features/library/viewType.ts`
 - Create: `src/features/library/vue/libraryKeys.ts`
 - Create: `src/features/library/vue/globalPinia.ts`
-- Create: `src/features/library/vue/Library.vue`
+- Create: `src/features/library/vue/LibraryRoot.vue`
 - Create: `src/features/library/LibraryView.ts`
 - Create: `src/features/library/activateLibrary.ts`
 - Create: `tests/vue/helpers.ts` (shared fake-plugin factory)
@@ -754,7 +765,7 @@ export function resetLibraryPinia(): void {
 }
 ```
 
-- [ ] **Step 7.4: Create the root SFC `src/features/library/vue/Library.vue`.** Tab strip reuses the existing `specorator-library-nav` CSS and i18n nav labels; panels arrive in Tasks 10–12 (placeholder until then):
+- [ ] **Step 7.4: Create the root SFC `src/features/library/vue/LibraryRoot.vue`.** (Multi-word name on purpose: `vue/multi-word-component-names` is an ERROR in the essential ruleset, so a `Library.vue` would fail lint.) Tab strip reuses the existing `specorator-library-nav` CSS and i18n nav labels; panels arrive in Tasks 10–12 (placeholder until then):
 
 ```vue
 <script setup lang="ts">
@@ -765,7 +776,7 @@ import type { LibraryTab } from '../viewType';
 import { ACTIVE_TAB_KEY } from './libraryKeys';
 
 const injected = inject(ACTIVE_TAB_KEY);
-if (!injected) throw new Error('Library.vue mounted without ACTIVE_TAB_KEY');
+if (!injected) throw new Error('LibraryRoot.vue mounted without ACTIVE_TAB_KEY');
 // Re-bind after the guard so the template binding's DECLARED type is already
 // narrowed to Ref<LibraryTab> — vue-tsc checks templates against declared types.
 const activeTab = injected;
@@ -816,7 +827,7 @@ import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
 import { getLibraryPinia } from './vue/globalPinia';
 import { ACTIVE_TAB_KEY, PLUGIN_KEY, VIEW_KEY } from './vue/libraryKeys';
-import Library from './vue/Library.vue';
+import LibraryRoot from './vue/LibraryRoot.vue';
 import type { LibraryTab } from './viewType';
 import { VIEW_TYPE_LIBRARY } from './viewType';
 
@@ -874,7 +885,7 @@ export class LibraryView extends ItemView {
     // test-lane polyfill (tests/setup/obsidianDom.ts) is single-arg.
     this.contentEl.addClass('specorator-library');
     this.contentEl.addClass('specorator-library-vue-root');
-    const app = createApp(Library);
+    const app = createApp(LibraryRoot);
     app.use(getLibraryPinia());
     // markRaw: Obsidian objects are large and cyclic; never deep-proxy them.
     app.provide(PLUGIN_KEY, markRaw(this.plugin));
@@ -1149,7 +1160,7 @@ and change the existing block (lines 111–115) to:
 
 Use the literal `'specorator-library'` (not an import) to avoid feature-layer import cycles — matching the `viewType.ts` comment.
 
-- [ ] **Step 7.12b: Keep the Jest lane green (REQUIRED — 16 Jest suites transitively import `@/main`, which now reaches `Library.vue`).** Jest cannot parse `.vue`. Create `tests/__mocks__/vueComponentStub.ts`:
+- [ ] **Step 7.12b: Keep the Jest lane green (REQUIRED — 16 Jest suites transitively import `@/main`, which now reaches `LibraryRoot.vue`).** Jest cannot parse `.vue`. Create `tests/__mocks__/vueComponentStub.ts`:
 
 ```ts
 // Jest-lane stand-in for any .vue import (Jest never renders Vue components;
@@ -1733,7 +1744,7 @@ git commit -m "feat(library): shared Vue atoms — toolbar, interactive card, em
 **Files:**
 - Create: `src/features/library/vue/stores/loopLibraryStore.ts`
 - Create: `src/features/library/vue/panels/LoopsPanel.vue`
-- Modify: `src/features/library/vue/Library.vue` (mount the panel)
+- Modify: `src/features/library/vue/LibraryRoot.vue` (mount the panel)
 - Test: `tests/vue/stores/loopLibraryStore.test.ts`
 - Test: `tests/vue/panels/loopsPanel.test.ts`
 
@@ -2105,7 +2116,7 @@ onMounted(() => { if (el.value) setIcon(el.value, props.icon); });
 <template><span ref="el" /></template>
 ```
 
-- [ ] **Step 10.5: Wire the panel into `Library.vue`.** Replace the placeholder `<div class="specorator-library-list" ... />` with:
+- [ ] **Step 10.5: Wire the panel into `LibraryRoot.vue`.** Replace the placeholder `<div class="specorator-library-list" ... />` with:
 
 ```vue
   <LoopsPanel v-if="activeTab === 'loops'" />
@@ -2157,7 +2168,7 @@ git commit -m "feat(library): Loops tab — useLoopLibraryStore + LoopsPanel wit
 - Modify: `src/features/skills/view/SkillLibraryView.ts` (import from skillCloning.ts, delete the local copies)
 - Create: `src/features/library/vue/stores/skillLibraryStore.ts`
 - Create: `src/features/library/vue/panels/SkillsPanel.vue`
-- Modify: `src/features/library/vue/Library.vue`
+- Modify: `src/features/library/vue/LibraryRoot.vue`
 - Test: `tests/vue/stores/skillLibraryStore.test.ts`
 - Test: `tests/vue/panels/skillsPanel.test.ts`
 
@@ -2461,7 +2472,7 @@ function onCreateSkill(): void {
 
 - Empty state: icon `book-open`, `t('skillLibrary.empty')`, CTA `t('skillLibrary.newSkill')`.
 
-- [ ] **Step 11.6: Wire into `Library.vue`** (add `SkillsPanel v-else-if="activeTab === 'skills'"` + import; the placeholder now only covers `agents`). Update `tests/vue/libraryView.test.ts` accordingly (skills tab asserts the Skill Library h2).
+- [ ] **Step 11.6: Wire into `LibraryRoot.vue`** (add `SkillsPanel v-else-if="activeTab === 'skills'"` + import; the placeholder now only covers `agents`). Update `tests/vue/libraryView.test.ts` accordingly (skills tab asserts the Skill Library h2).
 
 - [ ] **Step 11.7: Run everything**
 
@@ -2485,7 +2496,7 @@ git commit -m "feat(library): Skills tab — useSkillLibraryStore + SkillsPanel 
 **Files:**
 - Create: `src/features/library/vue/stores/rosterStore.ts`
 - Create: `src/features/library/vue/panels/AgentsPanel.vue`
-- Modify: `src/features/library/vue/Library.vue`
+- Modify: `src/features/library/vue/LibraryRoot.vue`
 - Test: `tests/vue/stores/rosterStore.test.ts`
 - Test: `tests/vue/panels/agentsPanel.test.ts`
 
@@ -2909,7 +2920,7 @@ function onDelete(agent: RosterAgent): void {
 - `onSync` ports `syncToProviders` (legacy lines 174–188) verbatim including both Notice branches.
 - `onInstallStarters` ports `installStarters` (legacy lines 194–205): `installPresetAgents(plugin.agentRosterStore)` + Notice + reload.
 
-- [ ] **Step 12.5: Wire into `Library.vue`** — replace the last placeholder with `<AgentsPanel v-else />` + import; delete the `data-active-tab` placeholder div entirely. Update `tests/vue/libraryView.test.ts`: the default tab now asserts the Agent Roster h2; drop the `data-active-tab` assertions and assert per-tab h2 text instead (`'Agent Roster'` / `'Skill Library'` / `'Loop library'`).
+- [ ] **Step 12.5: Wire into `LibraryRoot.vue`** — replace the last placeholder with `<AgentsPanel v-else />` + import; delete the `data-active-tab` placeholder div entirely. Update `tests/vue/libraryView.test.ts`: the default tab now asserts the Agent Roster h2; drop the `data-active-tab` assertions and assert per-tab h2 text instead (`'Agent Roster'` / `'Skill Library'` / `'Loop library'`).
 
 - [ ] **Step 12.6: Run everything**
 
@@ -3010,7 +3021,7 @@ npm run test:perf && npm run build && npm run check:artifacts
 Expected: ALL green.
 
 ```bash
-git add vitest.config.mts scripts/check-artifacts.mjs CLAUDE.md scripts/*.json
+git add vitest.config.mts scripts/check-artifacts.mjs CLAUDE.md scripts/*.json tests/vue
 git commit -m "quality: lock Vue coverage floors, artifact marker, and docs for the library pilot"
 ```
 

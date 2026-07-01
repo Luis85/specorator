@@ -37,7 +37,7 @@ Research backing every decision below: `docs/research/2026-07-01-vue3-pinia-fron
 - esbuild SFC build wiring, Vue feature-flag `define`s, runtime style injection.
 - New dev/quality tooling: `eslint-plugin-vue`, `vue-tsc`, Vitest + Vue testing libraries.
 - Extending `check-loc.mjs`, `eslint.config.mjs`, `tsconfig`, CI to cover `.vue`.
-- A unified `LibraryView` (`createApp` per leaf) rendering `Library.vue` with a reactive
+- A unified `LibraryView` (`createApp` per leaf) rendering `LibraryRoot.vue` with a reactive
   `activeTab` (`'loops' | 'skills' | 'agents'`) and three panel SFCs.
 - Three global Pinia stores wrapping the existing services (`LoopNoteStore`,
   `VaultSkillAggregator`, `AgentRosterStore`) and a `useLibraryList` composable ported from
@@ -187,7 +187,7 @@ interactive cards, and **in-library prompting** (`runVaultSkill` direct; loops v
   - `onClose`: `app.unmount()` → `this.contentEl.empty()` → null the ref.
   - Stores `vueApp` as an **instance field** (never a singleton — Obsidian opens the type in
     multiple leaves).
-- **`Library.vue` root** holds `const activeTab = ref<'loops'|'skills'|'agents'>(initialTab)`
+- **`LibraryRoot.vue` root** holds `const activeTab = ref<'loops'|'skills'|'agents'>(initialTab)`
   and renders a tab bar (the Vue expression of `renderLibraryNav`) + `<component :is>` for the
   active panel. `activeTab` is per-leaf UI state → a local `ref`, not a store.
 - **Three panel SFCs** — `LoopsPanel.vue`, `SkillsPanel.vue`, `AgentsPanel.vue` — thin,
@@ -248,7 +248,7 @@ Land the harness incrementally, proving each gate on the smallest slice first.
    style injection; add deps; add `vue-shims.d.ts`, `tsconfig.vue.json`, `typecheck:vue`;
    Vitest config with the obsidian alias; ESLint `.vue` block + `no-v-html`; extend
    `check-loc.mjs`; add the `component` CI job. Prove green by mounting a **minimal
-   `Library.vue` shell** (tab bar only) in a leaf behind the flag.
+   `LibraryRoot.vue` shell** (tab bar only) in a leaf behind the flag.
 2. **Loops tab (first real target).** `useLoopLibraryStore` + `useLibraryList` +
    `LoopsPanel.vue` with search/sort/filter, tag chips, clone, Loop Prompt. Full test set.
 3. **Skills tab.** `useSkillLibraryStore` + `SkillsPanel.vue` (incl. direct Prompt, read-only
@@ -266,7 +266,7 @@ Land the harness incrementally, proving each gate on the smallest slice first.
   reset); the three stores via `setActivePinia` (list/save/delete/tags round-trip, real
   service faked at the boundary).
 - **Component (Vitest + Testing Library):** each panel renders toolbar + tag chips + card +
-  clone + Prompt; interactive card opens on Enter/click; `Library.vue` tab switching swaps
+  clone + Prompt; interactive card opens on Enter/click; `LibraryRoot.vue` tab switching swaps
   panels. Small stable DOM snapshots per panel (not full-view snapshots).
 - **Integration:** mount `LibraryView` against the faked `obsidian` + fake services; assert a
   panel renders and a Prompt handler calls the (spied) flow.
