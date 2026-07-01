@@ -3,6 +3,12 @@ import { Notice } from 'obsidian';
 import type { SkillLibraryRow } from '@/features/skills/skillLibraryRows';
 import { SkillEditorModal } from '@/features/skills/view/SkillEditorModal';
 
+const refreshMock = jest.fn().mockResolvedValue(undefined);
+const getCommandCatalogMock = jest.fn((..._a: unknown[]) => ({ refresh: refreshMock }));
+jest.mock('@/core/providers/ProviderWorkspaceRegistry', () => ({
+  ProviderWorkspaceRegistry: { getCommandCatalog: (...a: unknown[]) => getCommandCatalogMock(...a) },
+}));
+
 function makeRow(over: Partial<SkillLibraryRow> = {}): SkillLibraryRow {
   return {
     id: 'codex:review',
@@ -44,7 +50,11 @@ function primeAndSave(modal: SkillEditorModal, opts: { tags: string; body?: stri
   return m.save();
 }
 
-beforeEach(() => (Notice as jest.Mock).mockClear());
+beforeEach(() => {
+  (Notice as jest.Mock).mockClear();
+  refreshMock.mockClear();
+  getCommandCatalogMock.mockClear();
+});
 
 describe('SkillEditorModal.save — Codex host-absolute path', () => {
   it('writes to the converted vault-relative path, not the raw host-absolute one', async () => {
@@ -67,6 +77,18 @@ describe('SkillEditorModal.save — Codex host-absolute path', () => {
     await primeAndSave(modal, { tags: 'x' });
 
     expect(emit).toHaveBeenCalledWith('vaultSkill.changed', { providerId: 'codex' });
+  });
+
+  it('force-reloads the owning provider catalog after a direct save (else the stale listing cache would drop a rename)', async () => {
+    const { plugin } = makePlugin();
+    const modal = new SkillEditorModal(plugin as never, plugin as never, makeRow(), jest.fn());
+
+    await primeAndSave(modal, { tags: 'x' });
+
+    // refresh() invalidates + force-reloads the provider's listing cache (Codex's
+    // 5s listSkills TTL) before the re-render re-fetches entries.
+    expect(getCommandCatalogMock).toHaveBeenCalledWith('codex');
+    expect(refreshMock).toHaveBeenCalledTimes(1);
   });
 
   it('does not write when the skill lives outside the vault (home-scope path)', async () => {

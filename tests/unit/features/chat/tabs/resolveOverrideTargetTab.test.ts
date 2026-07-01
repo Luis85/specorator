@@ -139,4 +139,38 @@ describe('resolveOverrideTargetTab', () => {
     expect(got).toBe(blank);
     expect(createTab).not.toHaveBeenCalled();
   });
+
+  it('with allowDraftBlank, reuses a matching draft-bearing blank at the cap (additive loop seeding)', async () => {
+    const active = { id: 'conv', lifecycleState: 'bound_active' };
+    const blank = {
+      id: 'blank',
+      lifecycleState: 'blank',
+      pinnedModel: 'sonnet',
+      dom: { inputEl: { value: 'my unsent task note' } },
+    };
+    const { tm, createTab } = tabManager({ active, allTabs: [active, blank], canCreate: false });
+    const got = await resolveOverrideTargetTab(
+      {} as never, tm, { providerId: 'claude', model: 'sonnet' }, { allowDraftBlank: true },
+    );
+    // Draft is preserved by keepExisting seeding, so reuse instead of the cap notice.
+    expect(got).toBe(blank);
+    expect(createTab).not.toHaveBeenCalled();
+  });
+
+  it('with allowDraftBlank, still honors the model match (no reuse on mismatch)', async () => {
+    const active = { id: 'conv', lifecycleState: 'bound_active' };
+    const blank = {
+      id: 'blank',
+      lifecycleState: 'blank',
+      pinnedModel: 'haiku',
+      dom: { inputEl: { value: 'draft' } },
+    };
+    const created = { id: 'new' };
+    const { tm, createTab } = tabManager({ active, allTabs: [active, blank], created, canCreate: true });
+    const got = await resolveOverrideTargetTab(
+      {} as never, tm, { providerId: 'claude', model: 'sonnet' }, { allowDraftBlank: true },
+    );
+    expect(got).toBe(created);
+    expect(createTab).toHaveBeenCalled();
+  });
 });

@@ -55,7 +55,13 @@ async function seedLoopDraft(
   const tabManager = view.getTabManager();
   if (!tabManager) return;
 
-  const target = await resolveOverrideTargetTab(plugin, tabManager, { providerId, model });
+  // allowDraftBlank: loop seeding is additive — `seedComposerDraft({ keepExisting })`
+  // preserves the user's unsent note and neither sends nor clears pills, so a
+  // model-matching draft-bearing blank is a valid target (and must not trip the
+  // send-path draft guard into a spurious tab-limit failure at the cap).
+  const target = await resolveOverrideTargetTab(
+    plugin, tabManager, { providerId, model }, { allowDraftBlank: true },
+  );
   if (!target) {
     new Notice(t('loopLibrary.tabLimitReached'));
     return;

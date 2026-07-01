@@ -31,19 +31,29 @@ function resolveActiveBlankTabModel(
 }
 
 /**
- * A blank tab is a safe reuse target when it holds no pending draft AND either
- * there is no override, or BOTH its provider and its currently effective model
- * match the override. The provider check alone is not enough: `switchToTab` does
- * not accept a model, so a blank Claude tab pinned to claude-haiku would silently
- * drop the user's claude-sonnet pick from the launch modal.
+ * Additive callers (loop-prompt seeding via `seedComposerDraft({ keepExisting })`)
+ * preserve any unsent draft and never send or clear pills, so they may reuse a
+ * draft-bearing blank. Destructive send callers (quick actions, library skills)
+ * must not — reusing would consume the draft's context during `buildOutgoingTurn`.
+ */
+export interface ResolveTargetOptions { allowDraftBlank?: boolean }
+
+/**
+ * A blank tab is a safe reuse target when it holds no pending draft (unless the
+ * caller opts into draft reuse) AND either there is no override, or BOTH its
+ * provider and its currently effective model match the override. The provider
+ * check alone is not enough: `switchToTab` does not accept a model, so a blank
+ * Claude tab pinned to claude-haiku would silently drop the user's claude-sonnet
+ * pick from the launch modal.
  */
 function isReusableBlankTab(
   tab: TabData,
   plugin: SpecoratorPlugin,
   override: TabModelOverride | undefined,
+  options: ResolveTargetOptions,
 ): boolean {
   if (tab.lifecycleState !== 'blank') return false;
-  if (blankTabHasPendingDraft(tab)) return false;
+  if (!options.allowDraftBlank && blankTabHasPendingDraft(tab)) return false;
   if (override === undefined) return true;
   return getTabProviderId(tab, plugin) === override.providerId
     && resolveActiveBlankTabModel(tab, plugin, override.providerId) === override.model;
@@ -60,14 +70,15 @@ export async function resolveOverrideTargetTab(
   plugin: SpecoratorPlugin,
   tabManager: TabManager,
   override?: TabModelOverride,
+  options: ResolveTargetOptions = {},
 ): Promise<TabData | null> {
   const activeTab = tabManager.getActiveTab();
-  if (activeTab && isReusableBlankTab(activeTab, plugin, override)) return activeTab;
+  if (activeTab && isReusableBlankTab(activeTab, plugin, override, options)) return activeTab;
 
   // Reuse any other open blank tab that matches before creating or failing at
   // the cap — the active tab may be a conversation while a safe blank exists.
   for (const tab of tabManager.getAllTabs()) {
-    if (tab !== activeTab && isReusableBlankTab(tab, plugin, override)) return tab;
+    if (tab !== activeTab && isReusableBlankTab(tab, plugin, override, options)) return tab;
   }
 
   if (tabManager.canCreateTab()) {

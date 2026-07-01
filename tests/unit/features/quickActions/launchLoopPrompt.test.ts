@@ -63,10 +63,13 @@ describe('launchLoopPrompt', () => {
     const [, launch] = launchMock.mock.calls[0];
     launch.onConfirm({ providerId: 'claude', model: 'sonnet' });
     await new Promise((r) => setImmediate(r));
+    // Loop seeding is additive (keepExisting), so it opts into reusing a
+    // draft-bearing matching blank rather than tripping the send-path draft guard.
     expect(resolveMock).toHaveBeenCalledWith(
       expect.anything(),
       tabManager,
       { providerId: 'claude', model: 'sonnet' },
+      { allowDraftBlank: true },
     );
     expect(tabManager.switchToTab).toHaveBeenCalledWith('t1');
     expect(seedMock).toHaveBeenCalledTimes(1);
