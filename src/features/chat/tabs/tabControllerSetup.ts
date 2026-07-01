@@ -236,6 +236,10 @@ export function buildTabConversationController(
         );
         tab.lifecycleState = 'blank';
         tab.draftModel = resolveBlankTabModel(plugin, previousProviderId);
+        // Drop the bound-agent display seed: New Chat leaves an unbound tab, so
+        // once its draftModel clears on first send the selector must fall back to
+        // provider settings, not linger on the previous agent's model.
+        tab.displayModel = null;
         tab.conversationId = null;
         tab.providerId = getTabProviderId(tab, plugin);
         if (tab.providerId !== previousProviderId) {
