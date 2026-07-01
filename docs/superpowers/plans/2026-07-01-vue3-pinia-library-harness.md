@@ -2790,8 +2790,7 @@ Script additions (on top of the LoopsPanel skeleton's imports, add `nextTick` an
 
 ```ts
 import { AgentDetailEditor } from '../../../agents/roster/view/AgentDetailEditor';
-import { renderAgentAvatar } from '../../../agents/agentAvatar';
-import { rosterAgentToPersona } from '../../../agents/personaRegistry';
+import AvatarSlot from '../components/AvatarSlot.vue';
 import { resolveAgentProvider } from '../../../agents/roster/resolveAgentProvider';
 import { installPresetAgents } from '../../../agents/roster/presetAgents';
 import { ProviderRegistry } from '../../../../core/providers/ProviderRegistry';
