@@ -223,23 +223,12 @@ export class TabProviderCommandCoordinator {
 
     runtime.syncConversationState(context.conversation, context.externalContextPaths);
 
-    // Re-sync (or clear) the bound-agent projection before ensureReady so the
-    // persistent query starts with the agent's native-agent path and correct
-    // system-prompt key. Without the sync, the pre-warm fires ensureReady() with
-    // undefined agent state and the SDK starts with the full Specorator identity
-    // instead of the bound persona. Without the clear, a runtime reused for a
-    // later unbound (or differently-bound) conversation keeps the prior agent's
-    // slug/prompt — `syncConversationState(null)` leaves an already-null session
-    // id untouched, so only re-syncing empty state flips the system-prompt key
-    // enough for needsRestart() to fire.
-    if (runtime.syncBoundAgentState) {
-      const boundAgentId = context.conversation?.boundAgentId;
-      const projection = boundAgentId
-        ? await this.deps.plugin.resolveBoundAgent?.(boundAgentId, providerId)
-        : null;
-      runtime.syncBoundAgentState(projection ?? {});
-    }
-
+    // No bound-agent sync here on purpose: the persona (and its clearing for an
+    // unbound conversation) is applied on the send path — runPersistentTurn /
+    // queryViaPersistent set currentBoundAgent* from the turn's queryOptions
+    // before the persistent query starts or restarts. This method is only reached
+    // under 'runtime' warmup, which no provider currently emits, so a pre-warm
+    // sync would be dead code; if a 'runtime' policy is ever added, sync there.
     await runtime.ensureReady();
     if (ProviderRegistry.getCapabilities(providerId).supportsProviderCommands) {
       await this.getSdkCommands(tab.id);
