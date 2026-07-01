@@ -116,13 +116,13 @@ Conventions that apply to ALL tasks:
 
 ```bash
 npm install vue@^3.5.39 pinia@^3.0.4
-npm install -D unplugin-vue@^7.2.0 vue-tsc@^3.3.6 eslint-plugin-vue@^10.9.2 \
+npm install -D unplugin-vue@^7.2.0 vue-tsc@^3.3.6 eslint-plugin-vue@^10.9.2 vue-eslint-parser@^10.4.1 \
   vitest@^4.1.9 vite@^8.1.2 @vitejs/plugin-vue@^6.0.7 jsdom@^29.1.1 \
   @vue/test-utils@^2.4.11 @testing-library/vue@^8.1.0 @pinia/testing@^1.0.3 \
   @vitest/coverage-v8@^4.1.9
 ```
 
-Expected: package.json gains `vue`/`pinia` under dependencies, the rest under devDependencies. `vite` is a REQUIRED peer of vitest 4 — do not omit it. Do NOT install `@vue/eslint-config-typescript` (we wire the parser manually in Task 4; the helper wraps the whole config and doesn't fit the repo's hand-rolled flat config). Do NOT install `esbuild-plugin-vue3` (rejected: unmaintained peers — cheerio/pug/sass — and the spike proved unplugin-vue).
+Expected: package.json gains `vue`/`pinia` under dependencies, the rest under devDependencies. `vite` is a REQUIRED peer of vitest 4 — do not omit it. `vue-eslint-parser` is a required PEER of eslint-plugin-vue (npm auto-installs it, but only into the lockfile) — declare it explicitly so Task 4's parser is a first-class pinned dep. Do NOT install `@vue/eslint-config-typescript` (we wire the parser manually in Task 4; the helper wraps the whole config and doesn't fit the repo's hand-rolled flat config). Do NOT install `esbuild-plugin-vue3` (rejected: unmaintained peers — cheerio/pug/sass — and the spike proved unplugin-vue).
 
 - [ ] **Step 1.2: Wire unplugin-vue + Vue feature flags + CSS merge into esbuild.config.mjs**
 
@@ -333,13 +333,27 @@ export default defineConfig({
 - [ ] **Step 3.2: Create `tests/vue/setup.ts`**
 
 ```ts
-import { vi } from 'vitest';
+import { cleanup } from '@testing-library/vue';
+import { afterEach, vi } from 'vitest';
+
+// Obsidian's HTMLElement prototype extensions (empty/addClass/removeClass/...)
+// — the same polyfill module the Jest lane uses; it self-installs on import.
+// Without it, any code path touching contentEl.empty()/addClass() throws in
+// the Vitest lane.
+import '../setup/obsidianDom';
 
 // tests/__mocks__/obsidian.ts calls jest.fn() at module scope. vi.fn is
 // API-compatible for everything the mock uses (fn/mockResolvedValue/
 // mockReturnValue/mockImplementation), so alias the global before any test
 // file imports 'obsidian' through the vitest resolve.alias.
 (globalThis as Record<string, unknown>).jest = vi;
+
+// @testing-library/vue auto-registers its per-test cleanup ONLY when a global
+// afterEach exists at import time (it does not under vitest without
+// test.globals). Register it explicitly, or every render() leaks its container
+// into document.body and the second test in a file hits
+// 'Found multiple elements'.
+afterEach(() => cleanup());
 ```
 
 - [ ] **Step 3.3: Create the canary SFC `tests/vue/fixtures/HarnessProbe.vue`**
@@ -678,6 +692,8 @@ git commit -m "feat(settings): add useVueLibrary flag (default off) with toggle 
 - Modify: `src/i18n/types/toolLibrary.ts`, all 10 locale JSONs (`library.viewTitle`)
 - Modify: `src/app/views/registerPluginViews.ts`
 - Modify: `src/app/commands/registerPluginCommands.ts` (existing open-loop-library command becomes flag-aware)
+- Create: `tests/__mocks__/vueComponentStub.ts` (Jest-lane stub for .vue imports)
+- Modify: `jest.base.config.js` (.vue moduleNameMapper) and `jest.config.js` (coverage exclusion for the Vitest-owned subtree)
 - Modify: `src/features/agents/roster/view/AgentRosterView.ts` (onOpen guard)
 - Modify: `src/features/skills/view/SkillLibraryView.ts` (onOpen guard)
 - Modify: `src/features/tasks/ui/LoopLibraryView.ts` (onOpen guard)
@@ -851,7 +867,10 @@ export class LibraryView extends ItemView {
       return;
     }
     this.contentEl.empty();
-    this.contentEl.addClass('specorator-library', 'specorator-library-vue-root');
+    // Two calls, not one: Obsidian's real addClass is variadic but the shared
+    // test-lane polyfill (tests/setup/obsidianDom.ts) is single-arg.
+    this.contentEl.addClass('specorator-library');
+    this.contentEl.addClass('specorator-library-vue-root');
     const app = createApp(Library);
     app.use(getLibraryPinia());
     // markRaw: Obsidian objects are large and cyclic; never deep-proxy them.
@@ -867,7 +886,8 @@ export class LibraryView extends ItemView {
     // listeners (Vue's documented leak class when the container is kept).
     this.vueApp?.unmount();
     this.vueApp = null;
-    this.contentEl.removeClass('specorator-library', 'specorator-library-vue-root');
+    this.contentEl.removeClass('specorator-library');
+    this.contentEl.removeClass('specorator-library-vue-root');
     this.contentEl.empty();
   }
 }
@@ -903,7 +923,19 @@ import { LibraryView } from '@/features/library/LibraryView';
 import { resetLibraryPinia } from '@/features/library/vue/globalPinia';
 
 function makePlugin(useVueLibrary: boolean) {
-  return { settings: { useVueLibrary } } as never;
+  // Includes every backend surface the three panels touch on mount, so this
+  // fake keeps working as Tasks 10-12 swap real panels into the shell.
+  return {
+    settings: { useVueLibrary },
+    app: { vault: { getAbstractFileByPath: vi.fn().mockReturnValue(null) } },
+    logger: { scope: () => ({ error: vi.fn(), warn: vi.fn() }) },
+    agentRosterStore: { list: vi.fn().mockResolvedValue([]) },
+    vaultSkillAggregator: { listAll: vi.fn().mockResolvedValue([]) },
+    vaultFileAdapter: {
+      read: vi.fn().mockResolvedValue(''),
+      stat: vi.fn().mockResolvedValue(null),
+    },
+  } as never;
 }
 
 function makeLeaf() {
@@ -980,12 +1012,20 @@ describe('LibraryView open/close leak guard', () => {
   beforeEach(() => {
     resetLibraryPinia();
     netListeners = 0;
+    // Vue 3 does NOT removeEventListener on unmount — it drops the subtree and
+    // lets GC reclaim element listeners (empirically verified: 3 adds, 0
+    // removes per mount/unmount). Element-level listeners are therefore NOT a
+    // leak once contentEl.empty() drops the subtree. The leak class this guard
+    // targets is listeners attached to document/window/body, which empty()
+    // cannot reclaim — count ONLY those.
+    const counted = (target: unknown): boolean =>
+      target === document || target === window || target === document.body;
     EventTarget.prototype.addEventListener = function (...args) {
-      netListeners += 1;
+      if (counted(this)) netListeners += 1;
       return origAdd.apply(this, args as Parameters<typeof origAdd>);
     };
     EventTarget.prototype.removeEventListener = function (...args) {
-      netListeners -= 1;
+      if (counted(this)) netListeners -= 1;
       return origRemove.apply(this, args as Parameters<typeof origRemove>);
     };
   });
@@ -1006,9 +1046,8 @@ describe('LibraryView open/close leak guard', () => {
       await view.onOpen();
       await view.onClose();
       expect(el.childElementCount).toBe(0);
-      // Vue removes element listeners with the element; only listeners the
-      // island attached to document/window would survive empty(). Net drift
-      // per cycle must be zero once the container is dropped.
+      // Only document/window/body listeners are counted (see beforeEach); net
+      // drift per cycle must be zero once the container is dropped.
       expect(netListeners - before).toBeLessThanOrEqual(0);
     }
   });
@@ -1090,6 +1129,31 @@ and change the existing block (lines 111–115) to:
 
 Use the literal `'specorator-library'` (not an import) to avoid feature-layer import cycles — matching the `viewType.ts` comment.
 
+- [ ] **Step 7.12b: Keep the Jest lane green (REQUIRED — 16 Jest suites transitively import `@/main`, which now reaches `Library.vue`).** Jest cannot parse `.vue`. Create `tests/__mocks__/vueComponentStub.ts`:
+
+```ts
+// Jest-lane stand-in for any .vue import (Jest never renders Vue components;
+// the Vitest lane owns them). Shaped like an SFC default export.
+export default {};
+```
+
+In `jest.base.config.js`, add to `moduleNameMapper` (before the `@/` entry):
+
+```js
+    '\\.vue$': '<rootDir>/tests/__mocks__/vueComponentStub.ts',
+```
+
+In `jest.config.js`, add to `collectCoverageFrom` (with the comment):
+
+```js
+    // src/features/library/** is tested and coverage-gated in the Vitest lane
+    // (vitest.config.mts coverage.include + the CI component job); counting it
+    // here at 0% would sink the Jest global floors.
+    '!src/features/library/**',
+```
+
+Run `npm run test` — expected: all Jest suites green.
+
 - [ ] **Step 7.13: Full verification**
 
 ```bash
@@ -1097,7 +1161,7 @@ npm run typecheck && npm run typecheck:vue && npm run lint && npm run test:vue
 npm run test
 ```
 
-Expected: all green. CONTINGENCY: if `tests/integration/main.test.ts` asserts an exact `registerView` call count, update that count (+1 for `VIEW_TYPE_LIBRARY`). No command count changes — the loop command already existed in `registerPluginCommands.ts` and is only made flag-aware.
+Expected: all green. (`tests/integration/main.test.ts` uses `toHaveBeenCalledWith`/find-by-id assertions, not exact call counts — verified 2026-07-01 — so the extra `registerView` needs no test change; the Jest lane stays green because of Step 7.12b.)
 
 - [ ] **Step 7.14: Build check** (first task where a real `.vue` enters the bundle):
 
@@ -1803,7 +1867,7 @@ Run the store test again — expected PASS.
 - [ ] **Step 10.3: Write the failing panel test `tests/vue/panels/loopsPanel.test.ts`**
 
 ```ts
-import { render, screen, fireEvent } from '@testing-library/vue';
+import { fireEvent, render, screen, within } from '@testing-library/vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -1844,7 +1908,10 @@ describe('LoopsPanel', () => {
     setup([loop]);
     expect(await screen.findByText('A loop')).toBeTruthy();
     expect(screen.getByText('desc')).toBeTruthy();
-    expect(screen.getByText('tag1')).toBeTruthy();
+    // Tags render in BOTH the toolbar filter chips and the card — scope to the
+    // card or getByText throws 'Found multiple elements'.
+    const card = screen.getByRole('button', { name: 'A loop' });
+    expect(within(card).getByText('tag1')).toBeTruthy();
   });
 
   it('Prompt button launches the loop prompt flow without activating the card', async () => {
@@ -2031,6 +2098,19 @@ import LoopsPanel from './panels/LoopsPanel.vue';
 ```
 
 Then update `tests/vue/libraryView.test.ts`'s tab-switch assertions: clicking the third tab now mounts the Loops panel instead of the placeholder — assert `el.querySelector('.specorator-library-header h2')?.textContent` contains the loop title (`'Loop library'`) instead of checking `data-active-tab="loops"` (keep the `skills` placeholder assertion as-is until Task 11).
+
+ALSO: the mounted panel resolves its Pinia store against the view's module-singleton pinia, and the real `LoopNoteStore.list` would hit the fake vault. Pre-init the store with a stubbed note store on THAT pinia before `view.onOpen()`:
+
+```ts
+import { setActivePinia } from 'pinia';
+import { getLibraryPinia } from '@/features/library/vue/globalPinia';
+import { useLoopLibraryStore } from '@/features/library/vue/stores/loopLibraryStore';
+// inside the test, after makePlugin():
+setActivePinia(getLibraryPinia());
+useLoopLibraryStore().init(plugin, { list: vi.fn().mockResolvedValue({ loops: [], warnings: [] }) } as never);
+```
+
+(The Skills/Agents panels' backends are already stubbed on the shared `makePlugin` fake, so Tasks 11/12 need no extra store pre-init here.)
 
 - [ ] **Step 10.6: Run everything**
 
@@ -2223,7 +2303,7 @@ Run the store test — expected PASS.
 - [ ] **Step 11.4: Write the failing panel test `tests/vue/panels/skillsPanel.test.ts`**
 
 ```ts
-import { fireEvent, render, screen } from '@testing-library/vue';
+import { fireEvent, render, screen, within } from '@testing-library/vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -2264,8 +2344,10 @@ describe('SkillsPanel', () => {
     useSkillLibraryStore().init(plugin);
     render(SkillsPanel, { global: { provide: { [PLUGIN_KEY as symbol]: plugin } } });
     expect(await screen.findByText('a-skill')).toBeTruthy();
-    expect(screen.getByText('Vault')).toBeTruthy();
-    expect(screen.getByText('t1')).toBeTruthy();
+    // Provider name + tags also appear as toolbar filter chips — scope to the card.
+    const card = screen.getByRole('button', { name: 'a-skill' });
+    expect(within(card).getByText('Vault')).toBeTruthy();
+    expect(within(card).getByText('t1')).toBeTruthy();
   });
 
   it('Prompt routes through runVaultSkill with the source entry', async () => {
@@ -2386,7 +2468,7 @@ git commit -m "feat(library): Skills tab — useSkillLibraryStore + SkillsPanel 
 - Test: `tests/vue/stores/rosterStore.test.ts`
 - Test: `tests/vue/panels/agentsPanel.test.ts`
 
-Reference APIs: `plugin.agentRosterStore` (`AgentRosterStore`: `list/get/save/delete`); `AgentDetailEditor` is a PAGE-OWNING class, not a modal — `new AgentDetailEditor(plugin, { onBack, onStartChat, onDeleted })` then `await editor.render(rootEl, agent, opts?)`; clone helpers `createRosterAgent(name, now)` / `dedupeRosterId(baseId, existingIds)` from `src/features/agents/roster/rosterCapabilities.ts`; avatar via `renderAgentAvatar(slot, rosterAgentToPersona(agent), 36)` (`agentAvatar.ts` / `personaRegistry.ts`); provider resolution via `resolveAgentProvider` (`resolveAgentProvider.ts`) + `ProviderRegistry`; starters via `installPresetAgents(store)` (`presetAgents.ts`); chat start via `plugin.createConversation({ providerId, boundAgentId })` + `plugin.openConversation(id, { requireNewTab: true })`; sync via `plugin.syncRosterAgentsToProviders()`.
+Reference APIs: `plugin.agentRosterStore` (`AgentRosterStore`: `list/get/save/delete`); `AgentDetailEditor` is a PAGE-OWNING class, not a modal — `new AgentDetailEditor(plugin, { onBack, onStartChat, onDeleted })` then `await editor.render(rootEl, agent, opts?)`; clone helpers `createRosterAgent(name, now)` / `dedupeRosterId(baseId, existingIds)` from `src/features/agents/roster/rosterCapabilities.ts`; avatar via `renderAgentAvatar(slot, rosterAgentToPersona(agent), 36)` — NOTE these live directly under `src/features/agents/` (`agentAvatar.ts:23`, `personaRegistry.ts:48`), NOT under `agents/roster/`; provider resolution via `resolveAgentProvider` (`resolveAgentProvider.ts`) + `ProviderRegistry`; starters via `installPresetAgents(store)` (`presetAgents.ts`); chat start via `plugin.createConversation({ providerId, boundAgentId })` + `plugin.openConversation(id, { requireNewTab: true })`; sync via `plugin.syncRosterAgentsToProviders()`.
 
 - [ ] **Step 12.1: Write the failing store test `tests/vue/stores/rosterStore.test.ts`**
 
@@ -2541,7 +2623,7 @@ Run the store test — expected PASS.
 - [ ] **Step 12.3: Write the failing panel test `tests/vue/panels/agentsPanel.test.ts`**
 
 ```ts
-import { fireEvent, render, screen } from '@testing-library/vue';
+import { fireEvent, render, screen, within } from '@testing-library/vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -2555,7 +2637,7 @@ const renderSpy = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/features/agents/roster/view/AgentDetailEditor', () => ({
   AgentDetailEditor: vi.fn().mockImplementation(() => ({ render: renderSpy })),
 }));
-vi.mock('@/features/agents/roster/agentAvatar', () => ({ renderAgentAvatar: vi.fn() }));
+vi.mock('@/features/agents/agentAvatar', () => ({ renderAgentAvatar: vi.fn() }));
 
 const agent = {
   id: 'roster:a', name: 'Alice', description: 'router', prompt: '', disallowedTools: [],
@@ -2583,7 +2665,8 @@ describe('AgentsPanel', () => {
     render(AgentsPanel, { global: { provide: { [PLUGIN_KEY as symbol]: plugin } } });
     expect(await screen.findByText('Alice')).toBeTruthy();
     expect(screen.getByText('router')).toBeTruthy();
-    expect(screen.getByText('t')).toBeTruthy();
+    // Role labels + tags also appear as toolbar filter chips — scope to the card.
+    expect(within(screen.getByRole('button', { name: 'Alice' })).getByText('t')).toBeTruthy();
   });
 
   it('cloning opens the detail editor on the returned clone (legacy parity)', async () => {
@@ -2616,8 +2699,8 @@ Script additions (on top of the LoopsPanel skeleton's imports, add `nextTick` an
 
 ```ts
 import { AgentDetailEditor } from '../../../agents/roster/view/AgentDetailEditor';
-import { renderAgentAvatar } from '../../../agents/roster/agentAvatar';
-import { rosterAgentToPersona } from '../../../agents/roster/personaRegistry';
+import { renderAgentAvatar } from '../../../agents/agentAvatar';
+import { rosterAgentToPersona } from '../../../agents/personaRegistry';
 import { resolveAgentProvider } from '../../../agents/roster/resolveAgentProvider';
 import { installPresetAgents } from '../../../agents/roster/presetAgents';
 import { ProviderRegistry } from '../../../../core/providers/ProviderRegistry';
@@ -2699,7 +2782,9 @@ async function confirmedDelete(agent: RosterAgent): Promise<boolean> {
 }
 
 function leadingAvatar(slot: HTMLElement, agent: RosterAgent): void {
-  slot.addClass('specorator-roster-card-avatar');
+  // classList.add, not Obsidian's addClass: this runs on a Vue-owned element
+  // and must not depend on Obsidian's HTMLElement prototype extensions.
+  slot.classList.add('specorator-roster-card-avatar');
   slot.setAttribute('aria-hidden', 'true');
   renderAgentAvatar(slot, rosterAgentToPersona(agent), CARD_AVATAR_SIZE);
 }
