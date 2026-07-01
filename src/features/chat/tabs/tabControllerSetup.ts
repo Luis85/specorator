@@ -24,6 +24,7 @@ import {
   type ProviderCatalogInfo,
   refreshTabProviderUI,
   resolveBlankTabModel,
+  resolveBoundAgentDisplayModel,
   syncSlashCommandDropdownForProvider,
   syncTabProviderServices,
   updatePlanModeUI,
@@ -202,15 +203,10 @@ export function buildTabConversationController(
         // a history / open-conversation switch shows the NEW conversation's agent
         // model (keyed to that conversation) instead of the previous agent's. Sends
         // already resolve the live model; this keeps the ModelSelector in sync.
-        // Mirrors TabManager.resolveInitialModels. (Even without this, the seed's
-        // conversation key would invalidate the stale value — this makes the new
-        // agent's model show rather than falling back to provider settings.)
-        const rebindAgentModel = conversation?.boundAgentId
-          ? (await plugin.resolveBoundAgent?.(conversation.boundAgentId, conversation.providerId))?.model?.trim()
-          : undefined;
-        tab.displayModel = rebindAgentModel
-          ? { conversationId: conversation?.id ?? null, model: rebindAgentModel }
-          : null;
+        // (Even without this, the seed's conversation key would invalidate the
+        // stale value — this makes the new agent's model show rather than falling
+        // back to provider settings.)
+        tab.displayModel = await resolveBoundAgentDisplayModel(plugin, conversation);
         syncSlashCommandDropdownForProvider(tab, plugin, getProviderCatalogConfig, conversation);
 
         // If the runtime already exists for the right provider, sync it passively

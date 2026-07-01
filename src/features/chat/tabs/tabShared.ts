@@ -13,7 +13,42 @@ import type { Conversation } from '../../../core/types';
 import { asSettingsBag } from '../../../core/types/settings';
 import type SpecoratorPlugin from '../../../main';
 import { getTabProviderId } from './providerResolution';
-import type { TabData, TabProviderContext } from './types';
+import type { TabData, TabDisplayModel, TabProviderContext } from './types';
+
+/**
+ * Conversation-keyed display-only model seed for a bound-agent conversation
+ * (null when unbound or unresolved). Shared by the tab-rebind path and the
+ * `roster:changed` refresh so the ModelSelector label tracks the agent's saved
+ * model. Never used as a query override — the per-turn model resolves live.
+ */
+export async function resolveBoundAgentDisplayModel(
+  plugin: SpecoratorPlugin,
+  conversation: Conversation | null | undefined,
+): Promise<TabDisplayModel | null> {
+  if (!conversation?.boundAgentId) return null;
+  const model = (await plugin.resolveBoundAgent?.(
+    conversation.boundAgentId,
+    conversation.providerId,
+  ))?.model?.trim();
+  return model ? { conversationId: conversation.id, model } : null;
+}
+
+/**
+ * Recompute the bound-agent display seed for every open tab (skipping blank
+ * tabs). Called on `roster:changed` so an in-place edit to an agent's saved
+ * model — which the conversation key can't invalidate — is reflected in the
+ * ModelSelector. Callers refresh the selector afterward.
+ */
+export async function refreshBoundAgentDisplayModels(
+  plugin: SpecoratorPlugin,
+  tabs: Iterable<TabData>,
+): Promise<void> {
+  for (const tab of tabs) {
+    if (!tab.conversationId) continue;
+    const conversation = await plugin.getConversationById(tab.conversationId);
+    tab.displayModel = await resolveBoundAgentDisplayModel(plugin, conversation);
+  }
+}
 
 export type TabProviderSettings = Record<string, unknown> & {
   model: string;

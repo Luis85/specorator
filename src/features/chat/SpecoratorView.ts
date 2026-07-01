@@ -37,6 +37,7 @@ import {
 } from './tabs/Tab';
 import { TabBar } from './tabs/TabBar';
 import { TabManager } from './tabs/TabManager';
+import { refreshBoundAgentDisplayModels } from './tabs/tabShared';
 import type { TabData, TabId, TaskRunTabHandle } from './tabs/types';
 import { GitActionButton } from './ui/GitActionButton';
 import { WorkOrderActivityDropdown } from './ui/WorkOrderActivityDropdown';
@@ -1151,6 +1152,14 @@ export class SpecoratorView extends ItemView {
         this.syncHeaderTitle();
       }
       this.updateTabBar();
+    }));
+
+    // A roster edit can change a bound agent's saved model while its tab stays
+    // open; the conversation-keyed displayModel seed wouldn't invalidate (same
+    // conversation), so recompute the seeds and refresh the selector to track it.
+    this.register(this.plugin.events.on('roster:changed', () => {
+      void refreshBoundAgentDisplayModels(this.plugin, this.tabManager?.getAllTabs() ?? [])
+        .then(() => this.refreshModelSelector());
     }));
 
     // History Service Contract (Task 11): surface a Notice + inline banner when
