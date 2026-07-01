@@ -611,8 +611,10 @@ git commit -m "quality: count .vue sources in the LOC ratchet"
 
 ```ts
   /** When true, the three library views open as the unified Vue Library view. */
-  useVueLibrary: boolean;
+  useVueLibrary?: boolean;
 ```
+
+OPTIONAL, not required, deliberately (mirrors `promptCommitOnAccept?` in the same block): a required member would break every complete `SpecoratorSettings` object literal — e.g. the three fixtures in `tests/unit/providers/claude/types/types.test.ts:74/141/207` — at the Step 6.5 typecheck. Absence reads as off; every flag check in this plan is truthy-only (`plugin.settings.useVueLibrary ? … : …`), which is correct for `boolean | undefined`.
 
 - [ ] **Step 6.2: Add the default** — in `src/app/settings/defaultSettings.ts` next to `firstRunDismissed: false,`:
 
