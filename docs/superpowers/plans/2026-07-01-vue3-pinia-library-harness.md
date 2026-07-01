@@ -1301,6 +1301,7 @@ Expected: existing controller tests PASS unchanged.
 
 ```ts
 import { describe, expect, it } from 'vitest';
+import { shallowRef } from 'vue';
 
 import { useLibraryList } from '@/features/library/vue/useLibraryList';
 
@@ -1319,10 +1320,17 @@ const rows: Row[] = [
   { name: 'Gamma', desc: 'third', tags: [], updated: 1 },
 ];
 
+// The composable consumes a reactive SOURCE (not snapshots) so every mounted
+// panel — including a second Library leaf — re-derives when the shared store
+// changes. Tests drive the source through a shallowRef.
+function makeList(initial: Row[]) {
+  const src = shallowRef(initial);
+  return { src, list: useLibraryList(() => src.value, accessors) };
+}
+
 describe('useLibraryList', () => {
   it('sorts by name by default and by updated desc when switched', () => {
-    const list = useLibraryList(accessors);
-    list.setItems(rows);
+    const { list } = makeList(rows);
     expect(list.rows.value.map((r) => r.name)).toEqual(['Alpha', 'Beta', 'Gamma']);
     list.sort.value = 'updated';
     expect(list.rows.value.map((r) => r.name)).toEqual(['Alpha', 'Beta', 'Gamma'].sort(
@@ -1331,15 +1339,13 @@ describe('useLibraryList', () => {
   });
 
   it('filters by case-insensitive substring over name+desc+tags', () => {
-    const list = useLibraryList(accessors);
-    list.setItems(rows);
+    const { list } = makeList(rows);
     list.query.value = 'FIRST';
     expect(list.rows.value.map((r) => r.name)).toEqual(['Alpha']);
   });
 
   it('OR-filters by active tags and exposes the sorted tag union', () => {
-    const list = useLibraryList(accessors);
-    list.setItems(rows);
+    const { list } = makeList(rows);
     expect(list.allTags.value).toEqual(['x', 'y']);
     list.toggleFilter('y');
     expect(list.rows.value.map((r) => r.name)).toEqual(['Alpha']);
@@ -1349,11 +1355,16 @@ describe('useLibraryList', () => {
     expect(list.rows.value).toHaveLength(3);
   });
 
-  it('prunes active filters that vanish from the item set', () => {
-    const list = useLibraryList(accessors);
-    list.setItems(rows);
+  it('re-derives rows when the source changes (cross-leaf consistency)', () => {
+    const { src, list } = makeList(rows);
+    src.value = rows.filter((r) => r.name !== 'Beta');
+    expect(list.rows.value.map((r) => r.name)).toEqual(['Alpha', 'Gamma']);
+  });
+
+  it('prunes active filters that vanish from the source', () => {
+    const { src, list } = makeList(rows);
     list.toggleFilter('y');
-    list.setItems(rows.filter((r) => !r.tags.includes('y')));
+    src.value = rows.filter((r) => !r.tags.includes('y'));
     expect(list.activeFilters.value).toEqual([]);
   });
 });
@@ -1365,32 +1376,36 @@ Expected: FAIL — module not found.
 - [ ] **Step 8.4: Implement `src/features/library/vue/useLibraryList.ts`**
 
 ```ts
-import type { ComputedRef, Ref, ShallowRef } from 'vue';
-import { computed, ref, shallowRef, triggerRef } from 'vue';
+import type { ComputedRef, Ref } from 'vue';
+import { computed, ref, shallowRef, triggerRef, watch } from 'vue';
 
 import type { LibraryItemAccessors, LibrarySort } from '../../../shared/libraryToolbar';
 import { applyLibraryQuery, collectLibraryTags } from '../../../shared/libraryToolbar';
 
 export interface LibraryList<T> {
-  items: ShallowRef<T[]>;
+  items: ComputedRef<T[]>;
   query: Ref<string>;
   sort: Ref<LibrarySort>;
   activeFilters: ComputedRef<string[]>;
   allTags: ComputedRef<string[]>;
   rows: ComputedRef<T[]>;
-  setItems(next: T[]): void;
   toggleFilter(tag: string): void;
   clearFilters(): void;
 }
 
 /**
  * Reactive twin of LibraryListController for the Vue panels: same pure engine
- * (applyLibraryQuery/collectLibraryTags), state held in refs so `rows`
- * recomputes on any input change. Items are shallowRef — list identity, not
- * per-item mutation, drives updates (matches how the stores replace arrays).
+ * (applyLibraryQuery/collectLibraryTags), driven by a reactive SOURCE getter
+ * (typically `() => store.xxx`) rather than snapshots. This is what keeps a
+ * SECOND Library leaf consistent: the stores are plugin-global, so any leaf's
+ * mutation reloads the store and every mounted panel's rows re-derive — no
+ * manual "setItems after each action" step to forget.
  */
-export function useLibraryList<T>(accessors: LibraryItemAccessors<T>): LibraryList<T> {
-  const items = shallowRef<T[]>([]);
+export function useLibraryList<T>(
+  source: () => T[],
+  accessors: LibraryItemAccessors<T>,
+): LibraryList<T> {
+  const items = computed(source);
   const query = ref('');
   const sort = ref<LibrarySort>('name');
   const active = shallowRef(new Set<string>());
@@ -1405,14 +1420,20 @@ export function useLibraryList<T>(accessors: LibraryItemAccessors<T>): LibraryLi
     }),
   );
 
-  function setItems(next: T[]): void {
-    items.value = next;
-    const present = new Set(collectLibraryTags(next, accessors));
+  // Prune active filters whose tag vanished from the item set. flush: 'sync'
+  // keeps the semantics of the old setItems() prune (and test determinism).
+  // Called from component setup, the watcher is auto-disposed on unmount.
+  watch(allTags, (tags) => {
+    const present = new Set(tags);
+    let changed = false;
     for (const tag of [...active.value]) {
-      if (!present.has(tag)) active.value.delete(tag);
+      if (!present.has(tag)) {
+        active.value.delete(tag);
+        changed = true;
+      }
     }
-    triggerRef(active);
-  }
+    if (changed) triggerRef(active);
+  }, { flush: 'sync' });
 
   function toggleFilter(tag: string): void {
     if (active.value.has(tag)) active.value.delete(tag);
@@ -1425,7 +1446,7 @@ export function useLibraryList<T>(accessors: LibraryItemAccessors<T>): LibraryLi
     triggerRef(active);
   }
 
-  return { items, query, sort, activeFilters, allTags, rows, setItems, toggleFilter, clearFilters };
+  return { items, query, sort, activeFilters, allTags, rows, toggleFilter, clearFilters };
 }
 ```
 
@@ -1989,19 +2010,16 @@ if (!plugin) throw new Error('LoopsPanel mounted without PLUGIN_KEY');
 const store = useLoopLibraryStore();
 store.init(plugin);
 
-const list = useLibraryList<LoopDefinition>({
+// Source-based: rows re-derive from the global store, so a mutation in ANY
+// Library leaf updates every mounted panel (multi-leaf consistency).
+const list = useLibraryList<LoopDefinition>(() => store.loops, {
   getName: (l) => l.name,
   getDescription: (l) => `${l.description ?? ''} ${l.useWhen ?? ''}`,
   getTags: (l) => l.tags ?? [],
   getUpdatedAt: (l) => l.updatedAt ?? 0,
 });
 
-async function reload(): Promise<void> {
-  await store.load();
-  list.setItems(store.loops);
-}
-
-onMounted(() => void withErrorNotice(reload, t('loopLibrary.actionFailed'), fail));
+onMounted(() => void withErrorNotice(() => store.load(), t('loopLibrary.actionFailed'), fail));
 
 function fail(error: unknown): void {
   plugin?.logger.scope('tasks').error('loop library action failed', error);
@@ -2010,8 +2028,7 @@ function fail(error: unknown): void {
 function openEditor(existing: LoopDefinition | null): void {
   if (!plugin) return;
   new LoopEditorModal(plugin.app, existing, async (payload) => {
-    await store.save(payload, payload.originalPath);
-    list.setItems(store.loops);
+    await store.save(payload, payload.originalPath); // store reload propagates reactively
   }).open();
 }
 
@@ -2020,10 +2037,7 @@ function onPrompt(loop: LoopDefinition): void {
 }
 
 function onClone(loop: LoopDefinition): void {
-  void withErrorNotice(async () => {
-    await store.clone(loop);
-    list.setItems(store.loops);
-  }, t('loopLibrary.actionFailed'), fail);
+  void withErrorNotice(() => store.clone(loop), t('loopLibrary.actionFailed'), fail);
 }
 
 function onDelete(loop: LoopDefinition): void {
@@ -2032,7 +2046,6 @@ function onDelete(loop: LoopDefinition): void {
     const ok = await confirm(plugin.app, t('loopLibrary.deleteConfirm', { name: loop.name }), t('loopLibrary.delete'));
     if (!ok) return;
     await store.remove(loop);
-    list.setItems(store.loops);
     new Notice(t('loopLibrary.deleted', { name: loop.name }));
   }, t('loopLibrary.actionFailed'), fail);
 }
@@ -2041,7 +2054,7 @@ function onInstallStarters(): void {
   void withErrorNotice(async () => {
     if (!plugin) return;
     await installPresetLoopsWithNotice(plugin);
-    await reload();
+    await store.load();
   }, t('loopLibrary.actionFailed'), fail);
 }
 </script>
@@ -2400,12 +2413,14 @@ Run — expected FAIL.
 - Store: `useSkillLibraryStore`; accessors:
 
 ```ts
-const list = useLibraryList<SkillLibraryRow>({
+const list = useLibraryList<SkillLibraryRow>(() => store.rows, {
   getName: (r) => r.name,
   getDescription: (r) => r.description,
   getTags: (r) => [r.providerDisplayName, ...(r.tags ?? [])],
   getUpdatedAt: (r) => store.mtimeFor(r.id),
 });
+
+// reload() in this panel is just store.load() — rows re-derive reactively.
 ```
 
 - Header: title `t('skillLibrary.title')`; single CTA `t('skillLibrary.newSkill')` → `onCreateSkill()`.
@@ -2748,14 +2763,13 @@ const CARD_AVATAR_SIZE = 36;
 const detailHost = ref<HTMLElement | null>(null);
 const detailOpen = ref(false);
 
-// Every mutation path must end by re-syncing the filtered list: store refs and
-// the useLibraryList items ref are SEPARATE state (same rule in all panels).
+// Rows re-derive from the global store (source-based useLibraryList), so
+// mutations in ANY leaf propagate to every mounted panel automatically.
 async function reload(): Promise<void> {
   await store.load();
-  list.setItems(store.agents);
 }
 
-const list = useLibraryList<RosterAgent>({
+const list = useLibraryList<RosterAgent>(() => store.agents, {
   getName: (a) => a.name,
   getDescription: (a) => a.description,
   getTags: (a) => [
@@ -2905,17 +2919,15 @@ function onClone(agent: RosterAgent): void {
 }
 ```
 
-- The card's `onDelete(agent)` must re-sync the filtered list after a successful delete — `store.remove()` reloads `store.agents` (the Pinia ref) but NOT the panel's `useLibraryList` items ref:
+- The card's `onDelete(agent)`:
 
 ```ts
 function onDelete(agent: RosterAgent): void {
-  void withErrorNotice(async () => {
-    if (await confirmedDelete(agent)) list.setItems(store.agents);
-  }, t('agentRoster.actionFailed'), fail);
+  void withErrorNotice(() => confirmedDelete(agent), t('agentRoster.actionFailed'), fail);
 }
 ```
 
-  BOTH delete paths (card button and detail editor) go through `confirmedDelete`; never call `store.remove` directly from a UI handler. (The editor path re-syncs via `closeDetail()` → `reload()`.)
+  BOTH delete paths (card button and detail editor) go through `confirmedDelete`; never call `store.remove` directly from a UI handler. No manual list re-sync anywhere: `useLibraryList` is source-based, so `store.remove()`'s internal reload propagates to every mounted panel — including a second Library leaf.
 - `onNewAgent` = `store.draftNewAgent(t('agentRoster.newAgent'))` → `openDetail(draft, { isNew: true })` (in-memory draft, NOT pre-saved — parity with `createAndEdit`).
 - `onSync` ports `syncToProviders` (legacy lines 174–188) verbatim including both Notice branches.
 - `onInstallStarters` ports `installStarters` (legacy lines 194–205): `installPresetAgents(plugin.agentRosterStore)` + Notice + reload.
