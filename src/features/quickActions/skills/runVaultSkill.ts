@@ -3,6 +3,7 @@ import { Notice, type TAbstractFile, TFile, TFolder } from 'obsidian';
 import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import type { ProviderId } from '@/core/providers/types';
 import { asSettingsBag } from '@/core/types/settings';
+import { blankTabHasPendingDraft } from '@/features/chat/tabs/blankTabDraft';
 import { getTabProviderId } from '@/features/chat/tabs/providerResolution';
 import type { TabManager } from '@/features/chat/tabs/TabManager';
 import type { TabData } from '@/features/chat/tabs/types';
@@ -22,11 +23,13 @@ import type { SkillTabEntry } from './types';
  * modal was open must not silently send into a disabled provider, and a
  * provider re-enabled while the modal was open must not silently fail.
  *
- * Tab routing order:
- * 1. Active tab matches provider and is blank → reuse.
- * 2. Active tab matches provider but is not blank → create new tab.
+ * Tab routing order (a "blank" tab is only reusable when draft-free — no unsent
+ * composer text or attached file/folder/image context — so a library skill send
+ * never consumes a user's pending draft during `buildOutgoingTurn`):
+ * 1. Active tab matches provider and is a draft-free blank → reuse.
+ * 2. Active tab matches provider but is not a reusable blank → create new tab.
  * 3. Active tab provider mismatches:
- *    a. Another blank tab on the target provider exists → reuse it.
+ *    a. Another draft-free blank tab on the target provider exists → reuse it.
  *    b. Else → create new tab with `defaultProviderId`.
  *
  * Pill attach MUST happen AFTER switchToTab — initializeWelcome on a blank
@@ -94,7 +97,7 @@ async function resolveTargetTab(
   if (activeTab) {
     const activeProvider = getTabProviderId(activeTab, plugin);
     if (activeProvider === targetProviderId) {
-      if (activeTab.lifecycleState === 'blank') {
+      if (activeTab.lifecycleState === 'blank' && !blankTabHasPendingDraft(activeTab)) {
         return activeTab;
       }
       return createTabForProvider(tabManager, targetProviderId);
@@ -102,9 +105,10 @@ async function resolveTargetTab(
   }
 
   // Active tab provider mismatches (or no active tab). Look for an existing
-  // blank tab on the target provider before creating a new one.
+  // draft-free blank tab on the target provider before creating a new one.
   const blankMatch = tabManager.getAllTabs().find((tab) => {
     if (tab.lifecycleState !== 'blank') return false;
+    if (blankTabHasPendingDraft(tab)) return false;
     return getTabProviderId(tab, plugin) === targetProviderId;
   });
   if (blankMatch) {

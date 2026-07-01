@@ -1,6 +1,7 @@
 import type { ProviderId } from '@/core/providers/types';
 import type SpecoratorPlugin from '@/main';
 
+import { blankTabHasPendingDraft } from './blankTabDraft';
 import { getTabProviderId } from './providerResolution';
 import type { TabManager } from './TabManager';
 import { resolveBlankTabModel } from './tabShared';
@@ -27,23 +28,6 @@ function resolveActiveBlankTabModel(
     return tab.draftModel.trim();
   }
   return resolveBlankTabModel(plugin, providerId);
-}
-
-/**
- * A blank tab carries pending user work when its composer has unsent text or any
- * file/folder/image context is attached. Quick-action dispatch switches to the
- * target and sends programmatic content — `buildOutgoingTurn` consumes and clears
- * those pills — so reusing such a tab would silently steal the user's draft.
- */
-function blankTabHasPendingDraft(tab: TabData): boolean {
-  const draftText = tab.dom?.inputEl?.value;
-  if (typeof draftText === 'string' && draftText.trim()) return true;
-  const fileContext = tab.ui?.fileContextManager;
-  if (fileContext
-    && (fileContext.getAttachedFiles().size > 0 || fileContext.getAttachedFolders().size > 0)) {
-    return true;
-  }
-  return Boolean(tab.ui?.imageContextManager?.hasImages());
 }
 
 /**

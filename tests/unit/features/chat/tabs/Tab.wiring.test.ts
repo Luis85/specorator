@@ -1903,6 +1903,9 @@ describe('Tab - History Bind Without Runtime', () => {
     plugin.resolveBoundAgent = jest.fn();
     const tab = createTab(createMockOptions({ plugin }));
     (tab as any).displayModel = 'stale-previous-agent-model';
+    // A bound-agent manual pick (or work-order model) left a pin on the previous
+    // conversation; it must not shadow the newly bound one.
+    tab.pinnedModel = 'stale-pinned-model';
     initializeTabUI(tab, plugin);
     initializeTabControllers(tab, plugin, {} as any);
 
@@ -1913,6 +1916,7 @@ describe('Tab - History Bind Without Runtime', () => {
 
     expect(plugin.resolveBoundAgent).not.toHaveBeenCalled();
     expect(tab.displayModel).toBeNull();
+    expect(tab.pinnedModel).toBeNull();
   });
 
   it('ensureServiceForConversation updates hidden commands when the provider changes', async () => {

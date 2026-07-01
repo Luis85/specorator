@@ -198,6 +198,11 @@ export function buildTabConversationController(
         // Bind session state only — runtime starts on send
         tab.conversationId = conversation?.id ?? null;
         tab.draftModel = null;
+        // Drop any per-tab model pin (a work-order model or a bound-agent manual
+        // pick): it belonged to the previous conversation, so it must not shadow
+        // the (re)bound one's live/default model. workOrderPath is cleared above
+        // for the same reason.
+        tab.pinnedModel = null;
         tab.lifecycleState = conversation ? 'bound_cold' : 'blank';
         // Recompute the display-only model seed for the (re)bound conversation so
         // a history / open-conversation switch shows the NEW conversation's agent
@@ -237,10 +242,12 @@ export function buildTabConversationController(
         );
         tab.lifecycleState = 'blank';
         tab.draftModel = resolveBlankTabModel(plugin, previousProviderId);
-        // Drop the bound-agent display seed: New Chat leaves an unbound tab, so
-        // once its draftModel clears on first send the selector must fall back to
-        // provider settings, not linger on the previous agent's model.
+        // Drop the bound-agent display seed and any per-tab model pin (work-order
+        // model or a bound-agent manual pick): New Chat leaves an unbound tab, so
+        // once its draftModel clears on first send the selector/override must fall
+        // back to provider settings, not linger on the previous agent's model.
         tab.displayModel = null;
+        tab.pinnedModel = null;
         tab.conversationId = null;
         tab.providerId = getTabProviderId(tab, plugin);
         if (tab.providerId !== previousProviderId) {

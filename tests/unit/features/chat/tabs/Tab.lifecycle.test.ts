@@ -1027,15 +1027,19 @@ describe('Tab - Service Initialization', () => {
       tab.lifecycleState = 'bound_cold';
       tab.conversationId = 'conv-1';
       (tab as any).displayModel = 'previous-agent-model';
+      // A bound-agent manual pick left a pin on the previous conversation.
+      tab.pinnedModel = 'previous-pinned-model';
 
       const callback = (jest.requireMock('@/features/chat/controllers/ConversationController') as {
         ConversationController: jest.Mock;
       }).ConversationController.mock.calls.at(-1)?.[1]?.onNewConversation;
       callback();
 
-      // New Chat leaves an unbound tab; the seed must be gone so the selector
-      // doesn't linger on the previous agent's model after the first send.
+      // New Chat leaves an unbound tab; the seed AND the pin must be gone so the
+      // selector/override don't linger on the previous agent's model after the
+      // first send.
       expect(tab.displayModel).toBeNull();
+      expect(tab.pinnedModel).toBeNull();
     });
 
     it('preserves codex provider on new session when tab was codex', () => {
