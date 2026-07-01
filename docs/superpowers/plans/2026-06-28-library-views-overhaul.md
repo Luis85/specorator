@@ -1,3 +1,6 @@
+---
+status: open
+---
 
 
 # Library Views Overhaul Implementation Plan

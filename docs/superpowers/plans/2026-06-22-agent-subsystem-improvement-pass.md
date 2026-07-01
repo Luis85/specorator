@@ -1,3 +1,6 @@
+---
+status: open
+---
 # Agent Subsystem Improvement Pass — Implementation Plan
 
 > Executed via subagent-driven development: one implementer subagent per increment, gates after each, a quality/spec review on the substantive increments, commit per increment. Derived from a 5-lens review (UX, accessibility, security/resilience, architecture, i18n/content) of PR #117.

@@ -1,7 +1,7 @@
 ---
 title: Work-order write race fix (sidecar ledger + heartbeat)
 date: 2026-06-06
-status: implemented
+status: done
 scope: features/tasks
 parent: Quality
 ---
