@@ -210,6 +210,28 @@ describe('AgentRosterView', () => {
     expect(deleteBtn).not.toBeNull();
   });
 
+  it('cloning an agent appends " copy" to the display name', async () => {
+    const plugin = makePlugin([AGENT_A]);
+    const { view } = makeView(plugin);
+    await (view as any).cloneAgent(AGENT_A);
+    expect(plugin.agentRosterStore.save).toHaveBeenCalledTimes(1);
+    expect(plugin.agentRosterStore.save.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ name: 'Agent Alpha copy' }),
+    );
+  });
+
+  it('cloning again when "X copy" already exists yields a unique "X copy 2" name', async () => {
+    // The roster/search/chat chrome shows agent.name, so a second clone must not
+    // reuse "Agent Alpha copy" — it probes existing names and bumps the suffix.
+    const existingCopy = makeAgent({ id: 'roster:agent-a-copy', name: 'Agent Alpha copy' });
+    const plugin = makePlugin([AGENT_A, existingCopy]);
+    const { view } = makeView(plugin);
+    await (view as any).cloneAgent(AGENT_A);
+    expect(plugin.agentRosterStore.save.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ name: 'Agent Alpha copy 2' }),
+    );
+  });
+
   it('clicking the card opens the detail editor (AgentDetailEditor.render fires)', async () => {
     const { view, contentEl } = makeView(makePlugin([AGENT_A]));
     await view.onOpen();

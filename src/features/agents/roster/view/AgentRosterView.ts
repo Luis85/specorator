@@ -206,7 +206,14 @@ export class AgentRosterView extends ItemView {
 
   private async cloneAgent(agent: RosterAgent): Promise<void> {
     const existing = await this.store.list();
-    const cloneName = `${agent.name} copy`;
+    // Probe existing names so a second clone of the same agent is `X copy 2`
+    // rather than a duplicate `X copy` — the roster/search/chat chrome shows the
+    // name, so identical names would be indistinguishable (mirrors loop cloning).
+    const existingNames = new Set(existing.map((a) => a.name));
+    let cloneName = `${agent.name} copy`;
+    for (let n = 2; existingNames.has(cloneName); n += 1) {
+      cloneName = `${agent.name} copy ${n}`;
+    }
     const base = createRosterAgent(cloneName, Date.now());
     const clone: RosterAgent = {
       ...agent,
