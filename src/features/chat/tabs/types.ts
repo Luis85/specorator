@@ -207,6 +207,14 @@ export interface TabDOMElements {
  */
 export type TabLifecycleState = 'blank' | 'bound_cold' | 'bound_active' | 'closing';
 
+/** Conversation-keyed display-only model seed for a bound-agent tab's selector.
+ * See `TabData.displayModel` — the key auto-invalidates the seed on any
+ * conversation change so it can never show a previous conversation's model. */
+export interface TabDisplayModel {
+  conversationId: string | null;
+  model: string;
+}
+
 /**
  * Represents a single tab in the multi-tab system.
  * Each tab is an independent chat session with its own runtime instance.
@@ -241,14 +249,15 @@ export interface TabData {
   pinnedModel?: string | null;
 
   /**
-   * Display-only initial model for a bound-agent tab. Seeds the ModelSelector so
-   * it shows the agent's configured model from the first render, WITHOUT becoming
-   * a query override (unlike `pinnedModel`). The per-turn model is resolved live
-   * from the bound agent each send, so editing the agent's model mid-session
-   * takes effect; this is just the picker's initial hint. Cleared on a manual
-   * model pick. Null for regular and work-order tabs.
+   * Display-only model seed for a bound-agent tab, keyed to the conversation it
+   * was computed for. `getSettings` shows `model` in the ModelSelector ONLY while
+   * `conversationId` still matches `tab.conversationId` — so any conversation
+   * change (history switch, New Chat, rebind, or any future path) auto-invalidates
+   * a stale seed instead of lingering on the previous agent's model. Never a query
+   * override (unlike `pinnedModel`): the per-turn model resolves live from the
+   * bound agent each send. Null for regular and work-order tabs.
    */
-  displayModel?: string | null;
+  displayModel?: TabDisplayModel | null;
 
   /** Vault-relative work-order note path when this tab hosts an Agent Board run. */
   workOrderPath?: string | null;

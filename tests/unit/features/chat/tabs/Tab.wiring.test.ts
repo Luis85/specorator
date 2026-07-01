@@ -1888,9 +1888,10 @@ describe('Tab - History Bind Without Runtime', () => {
     await deps.ensureServiceForConversation({ id: 'c1', providerId: 'claude', boundAgentId: 'reviewer', messages: [] });
 
     // Switching to a different bound-agent conversation must not leave the
-    // selector on the previous agent's model.
+    // selector on the previous agent's model — the seed is recomputed and keyed
+    // to the new conversation.
     expect(plugin.resolveBoundAgent).toHaveBeenCalledWith('reviewer', 'claude');
-    expect(tab.displayModel).toBe('opus');
+    expect(tab.displayModel).toEqual({ conversationId: 'c1', model: 'opus' });
   });
 
   it('ensureServiceForConversation clears displayModel when rebinding to an unbound conversation', async () => {

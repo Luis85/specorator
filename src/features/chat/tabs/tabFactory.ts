@@ -93,7 +93,9 @@ export function createTab(options: TabCreateOptions): TabData {
   const displayModelInput = typeof options.displayModel === 'string'
     ? options.displayModel.trim()
     : '';
-  const displayModel = displayModelInput || null;
+  const displayModel = displayModelInput
+    ? { conversationId: conversation?.id ?? null, model: displayModelInput }
+    : null;
 
   const tab: TabData = {
     id,

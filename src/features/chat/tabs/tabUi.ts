@@ -231,10 +231,13 @@ function initializeInputToolbar(
       // Bound-agent tabs surface the agent's model as a display-only seed so the
       // selector shows it from the first render. Unlike `pinnedModel` this never
       // reaches `getTabModelOverride`, so the per-turn model stays live (resolved
-      // from the bound agent each send). Cleared by `onModelChange` on a manual
-      // pick so it can't shadow the user's explicit choice.
-      if (typeof tab.displayModel === 'string' && tab.displayModel.trim()) {
-        return { ...snapshot, model: tab.displayModel.trim() };
+      // from the bound agent each send). The seed is KEYED to its conversation:
+      // trusting it only while `conversationId` still matches means any
+      // conversation change auto-invalidates a stale seed (no per-path clearing
+      // needed), and `onModelChange` clears it outright on a manual pick.
+      if (tab.displayModel && tab.displayModel.conversationId === tab.conversationId
+          && tab.displayModel.model.trim()) {
+        return { ...snapshot, model: tab.displayModel.model.trim() };
       }
       return snapshot;
     },
@@ -247,10 +250,10 @@ function initializeInputToolbar(
         tab.pinnedModel = null;
       }
 
-      // An explicit pick supersedes the bound-agent display seed; clear it so the
-      // selector shows the chosen model (via settings.model) rather than the
-      // agent's seeded value.
-      if (typeof tab.displayModel === 'string') {
+      // An explicit pick supersedes the bound-agent display seed on the SAME
+      // conversation (the key wouldn't invalidate it), so clear it outright — the
+      // selector then shows the chosen model via settings.model.
+      if (tab.displayModel) {
         tab.displayModel = null;
       }
 

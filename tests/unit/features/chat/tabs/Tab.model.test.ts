@@ -450,8 +450,9 @@ describe('Tab - Bound Agent Display Model', () => {
 
     tab.lifecycleState = 'bound_cold';
     tab.providerId = 'claude';
+    tab.conversationId = 'conv-x';
     tab.pinnedModel = null;
-    tab.displayModel = 'opus';
+    tab.displayModel = { conversationId: 'conv-x', model: 'opus' };
 
     const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
       createInputToolbar: jest.Mock;
@@ -461,6 +462,11 @@ describe('Tab - Bound Agent Display Model', () => {
     // Display-only seed shows in the selector, but it is NOT a pin: the per-turn
     // override (getTabModelOverride) ignores displayModel, so the model stays live.
     expect(toolbarCallbacks.getSettings().model).toBe('opus');
+
+    // Keyed to its conversation: once the tab is rebound to a different
+    // conversation, the stale seed is ignored without any per-path clearing.
+    tab.conversationId = 'conv-other';
+    expect(toolbarCallbacks.getSettings().model).not.toBe('opus');
   });
 
   it('onModelChange clears displayModel so a manual pick is not shadowed', async () => {
@@ -487,7 +493,8 @@ describe('Tab - Bound Agent Display Model', () => {
 
     tab.lifecycleState = 'bound_cold';
     tab.providerId = 'claude';
-    tab.displayModel = 'sonnet';
+    tab.conversationId = 'conv-1';
+    tab.displayModel = { conversationId: 'conv-1', model: 'sonnet' };
 
     const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
       createInputToolbar: jest.Mock;
