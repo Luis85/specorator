@@ -2844,6 +2844,11 @@ async function closeDetail(): Promise<void> {
   await reload();
 }
 
+/** Card-action wrapper the template calls; mirrors the detail editor's path. */
+function onStartChat(agent: RosterAgent): void {
+  void withErrorNotice(() => startChat(agent), t('agentRoster.actionFailed'), fail);
+}
+
 async function startChat(agent: RosterAgent): Promise<void> {
   if (!plugin) return;
   const settings = asSettingsBag(plugin.settings);
@@ -3015,7 +3020,7 @@ Expected: all PASS.
 - [ ] **Step 12.7: Commit**
 
 ```bash
-git add src/features/library tests/vue
+git add src/features/library tests/vue src/features/agents/roster/view/AgentDetailEditor.ts
 git commit -m "feat(library): Agents tab — useRosterStore + AgentsPanel with detail-editor handoff"
 ```
 
