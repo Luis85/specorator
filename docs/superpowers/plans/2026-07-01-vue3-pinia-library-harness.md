@@ -2875,13 +2875,8 @@ async function confirmedDelete(agent: RosterAgent): Promise<boolean> {
   return true;
 }
 
-function leadingAvatar(slot: HTMLElement, agent: RosterAgent): void {
-  // classList.add, not Obsidian's addClass: this runs on a Vue-owned element
-  // and must not depend on Obsidian's HTMLElement prototype extensions.
-  slot.classList.add('specorator-roster-card-avatar');
-  slot.setAttribute('aria-hidden', 'true');
-  renderAgentAvatar(slot, rosterAgentToPersona(agent), CARD_AVATAR_SIZE);
-}
+// Avatar rendering lives in components/AvatarSlot.vue (watchEffect-based; see
+// the AvatarSlot note below) — imported and used in the card's leading slot.
 ```
 
 CAUTION (import name): the legacy view imports `resolveAgentProvider as resolveAgentProviderId` from `../resolveAgentProvider` and ALSO defines a private method of the same name. Check the actual export name in `src/features/agents/roster/resolveAgentProvider.ts` before writing the import; the exported function takes `(agent, isEnabled, fallback)` per the legacy call site (`AgentRosterView.ts:250-257`).
@@ -2950,7 +2945,35 @@ Template shape:
 ```
 
 Notes:
-- `AvatarSlot` is a 10-line local child component in the same file directory (`components/AvatarSlot.vue`) wrapping `leadingAvatar` in `onMounted` — or inline the avatar with a `:ref` callback; either is acceptable, keep it under 15 lines.
+- `AvatarSlot` (`components/AvatarSlot.vue`) must use `watchEffect`, NOT `onMounted`: cards are keyed by `agent.id`, so after a detail save the SAME component instance receives a new agent object — an `onMounted`-only render would leave name/initials/color/icon avatars stale (in this leaf and any other open Library leaf). Full component:
+
+```vue
+<script setup lang="ts">
+import { ref, watchEffect } from 'vue';
+
+import { renderAgentAvatar } from '../../../agents/agentAvatar';
+import { rosterAgentToPersona } from '../../../agents/personaRegistry';
+import type { RosterAgent } from '../../../agents/roster/rosterTypes';
+
+const props = defineProps<{ agent: RosterAgent; size: number }>();
+const host = ref<HTMLElement | null>(null);
+
+// Runs on mount (template ref assignment is reactive) AND whenever the agent
+// prop is replaced by a store reload — avatar edits re-render in place.
+watchEffect(() => {
+  const el = host.value;
+  if (!el) return;
+  el.textContent = '';
+  renderAgentAvatar(el, rosterAgentToPersona(props.agent), props.size);
+});
+</script>
+
+<template>
+  <span ref="host" class="specorator-roster-card-avatar" aria-hidden="true" />
+</template>
+```
+
+  Template usage in the card's leading slot: `<AvatarSlot :agent="agent" :size="CARD_AVATAR_SIZE" />`. The `leadingAvatar` helper from the script additions is superseded by this component — do not implement both.
 - Model chip parity (legacy lines 115–120: `agent.modelSelection` → label from `ProviderRegistry.getChatUIConfig(providerId).getModelOptions(asSettingsBag(plugin.settings))`) — include it in the caps row guarded by `v-if="agent.modelSelection"` with the label computed in a script helper.
 - `onClone` must reproduce the legacy handoff (`AgentRosterView.cloneAgent` ends with `openDetail(clone)` — `AgentRosterView.ts:225-226`): saving the clone and reloading is NOT enough; the user is taken straight to the clone for review/editing. `useRosterStore.clone()` returns the clone for exactly this:
 
