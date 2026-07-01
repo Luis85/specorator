@@ -40,6 +40,7 @@ import {
   getTabSettingsSnapshot,
   type ProviderCatalogInfo,
   refreshTabProviderUI,
+  resolveBoundAgentDisplayModel,
   syncSlashCommandDropdownForProvider,
   syncTabProviderServices,
   updatePlanModeUI,
@@ -180,6 +181,25 @@ function isBangBashEnabled(settings: Record<string, unknown>): boolean {
 }
 
 /**
+ * On a bound-agent conversation the per-turn model resolves live from the agent,
+ * so a manual pick must become a real per-tab override (`pinnedModel`) or the
+ * send would silently run on the agent's saved model while the selector shows
+ * the pick. No-op for unbound conversations. Re-evaluated on every pick because
+ * `onModelChange` clears any prior pin first.
+ */
+async function pinModelIfBoundAgentConversation(
+  tab: TabData,
+  plugin: SpecoratorPlugin,
+  model: string,
+): Promise<void> {
+  if (!tab.conversationId) return;
+  const conversation = await plugin.getConversationById(tab.conversationId);
+  if (await resolveBoundAgentDisplayModel(plugin, conversation)) {
+    tab.pinnedModel = model;
+  }
+}
+
+/**
  * Creates and wires the input toolbar for a tab.
  */
 function initializeInputToolbar(
@@ -251,8 +271,9 @@ function initializeInputToolbar(
       }
 
       // An explicit pick supersedes the bound-agent display seed on the SAME
-      // conversation (the key wouldn't invalidate it), so clear it outright — the
-      // selector then shows the chosen model via settings.model.
+      // conversation (the key wouldn't invalidate it), so clear it outright. On a
+      // bound conversation the pick is then re-pinned below so it actually wins;
+      // otherwise the selector falls back to settings.model.
       if (tab.displayModel) {
         tab.displayModel = null;
       }
@@ -306,6 +327,10 @@ function initializeInputToolbar(
         tab.ui.modelSelector?.updateDisplay();
         return;
       }
+
+      // Turn an explicit pick on a bound-agent conversation into a real per-tab
+      // override so the send uses it instead of the agent's live model.
+      await pinModelIfBoundAgentConversation(tab, plugin, model);
 
       const uiConfig: ProviderChatUIConfig = getTabChatUIConfig(tab, plugin);
       const providerSettings = await updateTabProviderSettings(tab, plugin, (settings) => {

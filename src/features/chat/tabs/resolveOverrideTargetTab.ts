@@ -30,11 +30,28 @@ function resolveActiveBlankTabModel(
 }
 
 /**
- * A blank tab is a safe reuse target when there is no override, or when BOTH its
- * provider and its currently effective model match the override. The provider
- * check alone is not enough: `switchToTab` does not accept a model, so a blank
- * Claude tab pinned to claude-haiku would silently drop the user's claude-sonnet
- * pick from the launch modal.
+ * A blank tab carries pending user work when its composer has unsent text or any
+ * file/folder/image context is attached. Quick-action dispatch switches to the
+ * target and sends programmatic content — `buildOutgoingTurn` consumes and clears
+ * those pills — so reusing such a tab would silently steal the user's draft.
+ */
+function blankTabHasPendingDraft(tab: TabData): boolean {
+  const draftText = tab.dom?.inputEl?.value;
+  if (typeof draftText === 'string' && draftText.trim()) return true;
+  const fileContext = tab.ui?.fileContextManager;
+  if (fileContext
+    && (fileContext.getAttachedFiles().size > 0 || fileContext.getAttachedFolders().size > 0)) {
+    return true;
+  }
+  return Boolean(tab.ui?.imageContextManager?.hasImages());
+}
+
+/**
+ * A blank tab is a safe reuse target when it holds no pending draft AND either
+ * there is no override, or BOTH its provider and its currently effective model
+ * match the override. The provider check alone is not enough: `switchToTab` does
+ * not accept a model, so a blank Claude tab pinned to claude-haiku would silently
+ * drop the user's claude-sonnet pick from the launch modal.
  */
 function isReusableBlankTab(
   tab: TabData,
@@ -42,6 +59,7 @@ function isReusableBlankTab(
   override: TabModelOverride | undefined,
 ): boolean {
   if (tab.lifecycleState !== 'blank') return false;
+  if (blankTabHasPendingDraft(tab)) return false;
   if (override === undefined) return true;
   return getTabProviderId(tab, plugin) === override.providerId
     && resolveActiveBlankTabModel(tab, plugin, override.providerId) === override.model;

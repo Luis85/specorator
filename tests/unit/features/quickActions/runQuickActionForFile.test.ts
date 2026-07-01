@@ -34,7 +34,10 @@ function makeMockTab(lifecycleState: 'blank' | 'active') {
       fileContextManager: {
         attachFileAsPill: jest.fn(),
         attachFolderAsPill: jest.fn(),
+        getAttachedFiles: jest.fn(() => new Set<string>()),
+        getAttachedFolders: jest.fn(() => new Set<string>()),
       },
+      imageContextManager: { hasImages: jest.fn(() => false) },
     },
     controllers: {
       inputController: { sendMessage: jest.fn() },

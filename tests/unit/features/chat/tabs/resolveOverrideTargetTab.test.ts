@@ -68,4 +68,75 @@ describe('resolveOverrideTargetTab', () => {
     expect(got).toBe(created);
     expect(createTab).toHaveBeenCalled();
   });
+
+  it('does not reuse a matching blank tab that holds an unsent composer draft', async () => {
+    const active = { id: 'conv', lifecycleState: 'bound_active' };
+    const blank = {
+      id: 'blank',
+      lifecycleState: 'blank',
+      pinnedModel: 'sonnet',
+      dom: { inputEl: { value: '  half-written thought  ' } },
+    };
+    const created = { id: 'new' };
+    const { tm, createTab } = tabManager({ active, allTabs: [active, blank], created, canCreate: true });
+    const got = await resolveOverrideTargetTab({} as never, tm, { providerId: 'claude', model: 'sonnet' });
+    expect(got).toBe(created);
+    expect(createTab).toHaveBeenCalled();
+  });
+
+  it('does not reuse a matching blank tab that has attached file pills', async () => {
+    const active = { id: 'conv', lifecycleState: 'bound_active' };
+    const blank = {
+      id: 'blank',
+      lifecycleState: 'blank',
+      pinnedModel: 'sonnet',
+      ui: {
+        fileContextManager: {
+          getAttachedFiles: () => new Set(['notes/a.md']),
+          getAttachedFolders: () => new Set<string>(),
+        },
+      },
+    };
+    const created = { id: 'new' };
+    const { tm, createTab } = tabManager({ active, allTabs: [active, blank], created, canCreate: true });
+    const got = await resolveOverrideTargetTab({} as never, tm, { providerId: 'claude', model: 'sonnet' });
+    expect(got).toBe(created);
+    expect(createTab).toHaveBeenCalled();
+  });
+
+  it('does not reuse a matching blank tab that has attached images', async () => {
+    const active = { id: 'conv', lifecycleState: 'bound_active' };
+    const blank = {
+      id: 'blank',
+      lifecycleState: 'blank',
+      pinnedModel: 'sonnet',
+      ui: { imageContextManager: { hasImages: () => true } },
+    };
+    const created = { id: 'new' };
+    const { tm, createTab } = tabManager({ active, allTabs: [active, blank], created, canCreate: true });
+    const got = await resolveOverrideTargetTab({} as never, tm, { providerId: 'claude', model: 'sonnet' });
+    expect(got).toBe(created);
+    expect(createTab).toHaveBeenCalled();
+  });
+
+  it('still reuses a matching blank tab whose composer is empty and has no pills', async () => {
+    const active = { id: 'conv', lifecycleState: 'bound_active' };
+    const blank = {
+      id: 'blank',
+      lifecycleState: 'blank',
+      pinnedModel: 'sonnet',
+      dom: { inputEl: { value: '   ' } },
+      ui: {
+        fileContextManager: {
+          getAttachedFiles: () => new Set<string>(),
+          getAttachedFolders: () => new Set<string>(),
+        },
+        imageContextManager: { hasImages: () => false },
+      },
+    };
+    const { tm, createTab } = tabManager({ active, allTabs: [active, blank], canCreate: true });
+    const got = await resolveOverrideTargetTab({} as never, tm, { providerId: 'claude', model: 'sonnet' });
+    expect(got).toBe(blank);
+    expect(createTab).not.toHaveBeenCalled();
+  });
 });
