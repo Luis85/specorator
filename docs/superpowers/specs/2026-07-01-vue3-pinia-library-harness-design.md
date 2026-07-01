@@ -228,9 +228,10 @@ Kept as-is and called from Vue event handlers:
 
 - Register the new `VIEW_TYPE_LIBRARY`. Add `plugin.activateLibrary(tab?)` mirroring the
   existing `activateView`/`activateAgentBoardView` helpers.
-- Keep the three ribbon icons (`users`/`book-open`/`repeat`) and the roster/skill commands
-  (add the missing loop command); each now opens the unified Library at its tab via
-  `activateLibrary('agents'|'skills'|'loops')`.
+- Keep the three ribbon icons (`users`/`book-open`/`repeat`) and all three commands — the
+  roster/skill commands live in `registerPluginViews.ts`, the loop command already exists in
+  `registerPluginCommands.ts` (make it flag-aware in place; do NOT register a duplicate id);
+  each now opens the unified Library at its tab via `activateLibrary('agents'|'skills'|'loops')`.
 - The three legacy `VIEW_TYPE_*` resolve/redirect to the Library at the matching tab; stale
   already-open leaves of the old types are re-homed on plugin load. `detachLeavesOfType` for
   `VIEW_TYPE_LIBRARY` (and the legacy types) in `onunload`.

@@ -86,7 +86,8 @@ src/features/settings/registry/fields/general.ts — toggle field
 src/i18n/types/settings.ts       — settings.useVueLibrary.* keys
 src/i18n/types/toolLibrary.ts    — library.viewTitle key
 src/i18n/locales/*.json (10)     — new strings
-src/app/views/registerPluginViews.ts — register LibraryView, flag-aware ribbon/commands, loop command
+src/app/views/registerPluginViews.ts — register LibraryView, flag-aware ribbons + roster/skill commands
+src/app/commands/registerPluginCommands.ts — make the EXISTING open-loop-library command flag-aware
 src/shared/libraryToolbar.ts     — extract pure applyLibraryQuery/collectLibraryTags (behavior-preserving)
 src/features/agents/roster/view/AgentRosterView.ts — 3-line flag redirect in onOpen
 src/features/skills/view/SkillLibraryView.ts       — 3-line flag redirect + import from skillCloning.ts
@@ -676,6 +677,7 @@ git commit -m "feat(settings): add useVueLibrary flag (default off) with toggle 
 - Create: `tests/vue/libraryView.leak.test.ts`
 - Modify: `src/i18n/types/toolLibrary.ts`, all 10 locale JSONs (`library.viewTitle`)
 - Modify: `src/app/views/registerPluginViews.ts`
+- Modify: `src/app/commands/registerPluginCommands.ts` (existing open-loop-library command becomes flag-aware)
 - Modify: `src/features/agents/roster/view/AgentRosterView.ts` (onOpen guard)
 - Modify: `src/features/skills/view/SkillLibraryView.ts` (onOpen guard)
 - Modify: `src/features/tasks/ui/LoopLibraryView.ts` (onOpen guard)
@@ -1051,14 +1053,28 @@ Replace the `openView` helper block (the three ribbons + two commands, lines 40�
     name: t('commands.openSkillLibrary'),
     callback: () => void openLibrary('skills', VIEW_TYPE_SKILL_LIBRARY),
   });
-  plugin.addCommand({
+```
+
+IMPORTANT — do NOT add an `open-loop-library` command here: it is ALREADY registered in `src/app/commands/registerPluginCommands.ts:111-115` (a duplicate id would shadow/duplicate registry + hotkey metadata). Instead, make that existing registration flag-aware. In `registerPluginCommands.ts`, add the imports:
+
+```ts
+import { activateLibrary } from '@/features/library/activateLibrary';
+```
+
+and change the existing block (lines 111–115) to:
+
+```ts
+  register({
     id: 'open-loop-library',
     name: t('commands.openLoopLibrary'),
-    callback: () => void openLibrary('loops', VIEW_TYPE_LOOP_LIBRARY),
+    callback: () =>
+      void (plugin.settings.useVueLibrary
+        ? activateLibrary(plugin, 'loops')
+        : plugin.openLeafView(VIEW_TYPE_LOOP_LIBRARY)),
   });
 ```
 
-(`commands.openLoopLibrary` already exists in every locale — the command registration was simply missing; this closes that gap.)
+(Match the import style already used in that file — if it uses relative imports, mirror them.)
 
 - [ ] **Step 7.12: Legacy-view self-migration.** Add the same 4-line guard at the TOP of `onOpen()` in each of the three legacy views (adjust the tab literal per view — `'agents'` / `'skills'` / `'loops'`):
 
@@ -1081,7 +1097,7 @@ npm run typecheck && npm run typecheck:vue && npm run lint && npm run test:vue
 npm run test
 ```
 
-Expected: all green. CONTINGENCY: if `tests/integration/main.test.ts` asserts an exact `registerView` call count, update that count (+1 for `VIEW_TYPE_LIBRARY`); if it asserts an exact `addCommand` count, +1 for `open-loop-library`.
+Expected: all green. CONTINGENCY: if `tests/integration/main.test.ts` asserts an exact `registerView` call count, update that count (+1 for `VIEW_TYPE_LIBRARY`). No command count changes — the loop command already existed in `registerPluginCommands.ts` and is only made flag-aware.
 
 - [ ] **Step 7.14: Build check** (first task where a real `.vue` enters the bundle):
 
@@ -1095,6 +1111,7 @@ Expected: build green; grep count ≥ 1 (the compiled Library island is in the b
 
 ```bash
 git add src/features/library src/app/views/registerPluginViews.ts \
+  src/app/commands/registerPluginCommands.ts \
   src/features/agents/roster/view/AgentRosterView.ts \
   src/features/skills/view/SkillLibraryView.ts \
   src/features/tasks/ui/LoopLibraryView.ts \
