@@ -687,6 +687,7 @@ git commit -m "feat(settings): add useVueLibrary flag (default off) with toggle 
 - Create: `src/features/library/vue/Library.vue`
 - Create: `src/features/library/LibraryView.ts`
 - Create: `src/features/library/activateLibrary.ts`
+- Create: `tests/vue/helpers.ts` (shared fake-plugin factory)
 - Create: `tests/vue/libraryView.test.ts`
 - Create: `tests/vue/libraryView.leak.test.ts`
 - Modify: `src/i18n/types/toolLibrary.ts`, all 10 locale JSONs (`library.viewTitle`)
@@ -914,17 +915,21 @@ export async function activateLibrary(plugin: SpecoratorPlugin, tab: LibraryTab)
 }
 ```
 
-- [ ] **Step 7.8: Write the failing view tests `tests/vue/libraryView.test.ts`**
+- [ ] **Step 7.8: Create the shared fake and write the failing view tests.**
+
+First `tests/vue/helpers.ts` — used by BOTH `libraryView.test.ts` and the leak
+guard (once Task 12 makes AgentsPanel the default tab, `onOpen()` mounts a real
+panel in every view/leak test, so every fake must carry the panel backends):
 
 ```ts
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { vi } from 'vitest';
 
-import { LibraryView } from '@/features/library/LibraryView';
-import { resetLibraryPinia } from '@/features/library/vue/globalPinia';
-
-function makePlugin(useVueLibrary: boolean) {
-  // Includes every backend surface the three panels touch on mount, so this
-  // fake keeps working as Tasks 10-12 swap real panels into the shell.
+/**
+ * Fake SpecoratorPlugin covering every backend surface the three Library
+ * panels touch on mount, so view-level tests keep working as Tasks 10-12 swap
+ * real panels into the shell.
+ */
+export function makePlugin(useVueLibrary: boolean) {
   return {
     settings: { useVueLibrary },
     app: { vault: { getAbstractFileByPath: vi.fn().mockReturnValue(null) } },
@@ -937,6 +942,17 @@ function makePlugin(useVueLibrary: boolean) {
     },
   } as never;
 }
+```
+
+Then `tests/vue/libraryView.test.ts`:
+
+```ts
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { LibraryView } from '@/features/library/LibraryView';
+import { resetLibraryPinia } from '@/features/library/vue/globalPinia';
+
+import { makePlugin } from './helpers';
 
 function makeLeaf() {
   return { setViewState: vi.fn().mockResolvedValue(undefined) } as never;
@@ -1004,6 +1020,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LibraryView } from '@/features/library/LibraryView';
 import { resetLibraryPinia } from '@/features/library/vue/globalPinia';
 
+import { makePlugin } from './helpers';
+
 describe('LibraryView open/close leak guard', () => {
   let netListeners = 0;
   const origAdd = EventTarget.prototype.addEventListener;
@@ -1036,7 +1054,7 @@ describe('LibraryView open/close leak guard', () => {
   });
 
   it('leaves no DOM and no dangling document/window listeners across 5 cycles', async () => {
-    const plugin = { settings: { useVueLibrary: true } } as never;
+    const plugin = makePlugin(true);
     const leaf = { setViewState: vi.fn() } as never;
     for (let i = 0; i < 5; i += 1) {
       const view = new LibraryView(leaf, plugin);
@@ -1179,7 +1197,8 @@ git add src/features/library src/app/views/registerPluginViews.ts \
   src/features/agents/roster/view/AgentRosterView.ts \
   src/features/skills/view/SkillLibraryView.ts \
   src/features/tasks/ui/LoopLibraryView.ts \
-  src/i18n tests/vue
+  src/i18n tests/vue \
+  tests/__mocks__/vueComponentStub.ts jest.base.config.js jest.config.js
 git commit -m "feat(library): unified Vue LibraryView behind useVueLibrary (per-leaf island, tab shell, redirects, leak guard)"
 ```
 
@@ -2632,8 +2651,12 @@ import AgentsPanel from '@/features/library/vue/panels/AgentsPanel.vue';
 import { useRosterStore } from '@/features/library/vue/stores/rosterStore';
 
 // The imperative detail editor renders into a Vue-owned host div; stub it so
-// panel tests assert the handoff, not the editor internals.
-const renderSpy = vi.fn().mockResolvedValue(undefined);
+// panel tests assert the handoff, not the editor internals. vi.hoisted is
+// REQUIRED: vi.mock factories are hoisted above imports, so a plain top-level
+// const would still be in the temporal dead zone when the factory runs.
+const { renderSpy } = vi.hoisted(() => ({
+  renderSpy: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('@/features/agents/roster/view/AgentDetailEditor', () => ({
   AgentDetailEditor: vi.fn().mockImplementation(() => ({ render: renderSpy })),
 }));
