@@ -59,7 +59,7 @@ Specorator is available in the official Obsidian community plugin directory:
 2. Search for **Specorator** and click **Install**.
 3. Enable Specorator under **Settings → Community plugins**.
 
-Or open it directly in the directory: [Specorator on obsidian.md/plugins](https://obsidian.md/plugins?id=specorator).
+Or open it directly in the directory: [Specorator on the Obsidian plugin directory](https://community.obsidian.md/plugins/specorator).
 
 Prefer pre-release builds? The [Beta Reviewers Auto-update Tool (BRAT)](https://github.com/TfTHacker/obsidian42-brat) still works: **Add Beta Plugin** → `Luis85/specorator`. If you previously installed via BRAT, switching to the community-plugin install keeps your settings — they live in your vault, not in the plugin folder.
 
