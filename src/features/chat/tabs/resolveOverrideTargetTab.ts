@@ -30,11 +30,29 @@ function resolveActiveBlankTabModel(
 }
 
 /**
- * Resolve the tab a provider+model override should target. Reuses the active
- * blank tab only when BOTH its provider and effective model match the override
- * (`switchToTab` carries no model, so a mismatched pinned tab would silently
- * drop the picked model); otherwise creates a fresh tab pinned to the override.
- * Returns null at the tab limit. With no override, reuses any blank active tab.
+ * A blank tab is a safe reuse target when there is no override, or when BOTH its
+ * provider and its currently effective model match the override. The provider
+ * check alone is not enough: `switchToTab` does not accept a model, so a blank
+ * Claude tab pinned to claude-haiku would silently drop the user's claude-sonnet
+ * pick from the launch modal.
+ */
+function isReusableBlankTab(
+  tab: TabData,
+  plugin: SpecoratorPlugin,
+  override: TabModelOverride | undefined,
+): boolean {
+  if (tab.lifecycleState !== 'blank') return false;
+  if (override === undefined) return true;
+  return getTabProviderId(tab, plugin) === override.providerId
+    && resolveActiveBlankTabModel(tab, plugin, override.providerId) === override.model;
+}
+
+/**
+ * Resolve the tab a provider+model override should target. Prefers the active
+ * blank tab when it matches, then any other open blank tab that matches, before
+ * creating a fresh tab pinned to the override. Only returns null at the tab
+ * limit when no reusable blank tab exists — a matching blank elsewhere is a safe
+ * target and must not be skipped straight into a spurious tab-limit failure.
  */
 export async function resolveOverrideTargetTab(
   plugin: SpecoratorPlugin,
@@ -42,19 +60,14 @@ export async function resolveOverrideTargetTab(
   override?: TabModelOverride,
 ): Promise<TabData | null> {
   const activeTab = tabManager.getActiveTab();
-  const isBlank = activeTab?.lifecycleState === 'blank';
-  // When an override is present, the active blank tab is only reusable if its
-  // provider AND its currently effective model both match the override. The
-  // provider check alone is not enough: `switchToTab` does not accept a model,
-  // so a blank Claude tab pinned to claude-haiku would silently drop the user's
-  // claude-sonnet pick from the launch modal.
-  const overrideMatchesActive = override !== undefined && isBlank && activeTab
-    ? getTabProviderId(activeTab, plugin) === override.providerId
-      && resolveActiveBlankTabModel(activeTab, plugin, override.providerId) === override.model
-    : false;
+  if (activeTab && isReusableBlankTab(activeTab, plugin, override)) return activeTab;
 
-  if (override === undefined && isBlank && activeTab) return activeTab;
-  if (overrideMatchesActive && activeTab) return activeTab;
+  // Reuse any other open blank tab that matches before creating or failing at
+  // the cap — the active tab may be a conversation while a safe blank exists.
+  for (const tab of tabManager.getAllTabs()) {
+    if (tab !== activeTab && isReusableBlankTab(tab, plugin, override)) return tab;
+  }
+
   if (tabManager.canCreateTab()) {
     const created = await tabManager.createTab(null, undefined, {
       activate: false,

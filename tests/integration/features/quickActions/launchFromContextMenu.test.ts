@@ -98,6 +98,7 @@ it('end-to-end: launch modal → confirm Codex → tab created with codex + pinn
   };
   const tabManager = {
     getActiveTab: () => null,
+    getAllTabs: () => [],
     canCreateTab: () => true,
     createTab: jest.fn().mockResolvedValue(createdTab),
     switchToTab: jest.fn().mockResolvedValue(undefined),
@@ -166,6 +167,7 @@ it('end-to-end: launch modal → confirm Codex → tab created with codex + pinn
 it('integration: Cancel path does not persist or dispatch', async () => {
   const tabManager = {
     getActiveTab: () => null,
+    getAllTabs: () => [],
     canCreateTab: () => true,
     createTab: jest.fn(),
     switchToTab: jest.fn(),

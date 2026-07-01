@@ -49,6 +49,7 @@ function makeMockTabManager(opts: {
 }) {
   return {
     getActiveTab: jest.fn(() => opts.activeTab),
+    getAllTabs: jest.fn(() => (opts.activeTab ? [opts.activeTab] : [])),
     canCreateTab: jest.fn(() => opts.canCreate),
     createTab: jest.fn().mockResolvedValue(opts.newTab ?? null),
     switchToTab: jest.fn().mockResolvedValue(undefined),
