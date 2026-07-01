@@ -2647,7 +2647,10 @@ async function openDetail(agent: RosterAgent, opts?: { isNew?: boolean }): Promi
   const editor = new AgentDetailEditor(plugin, {
     onBack: () => void closeDetail(),
     onStartChat: (a) => void withErrorNotice(() => startChat(a), t('agentRoster.actionFailed'), fail),
-    onDeleted: (a) => void withErrorNotice(async () => { await store.remove(a); await closeDetail(); }, t('agentRoster.actionFailed'), fail),
+    onDeleted: (a) =>
+      void withErrorNotice(async () => {
+        if (await confirmedDelete(a)) await closeDetail();
+      }, t('agentRoster.actionFailed'), fail),
   });
   await editor.render(detailHost.value, agent, opts);
 }
@@ -2668,6 +2671,24 @@ async function startChat(agent: RosterAgent): Promise<void> {
   );
   const conversation = await plugin.createConversation({ providerId, boundAgentId: agent.id });
   await plugin.openConversation(conversation.id, { requireNewTab: true });
+}
+
+/**
+ * Legacy deleteAgent parity (AgentRosterView.ts:229-238): confirm -> remove ->
+ * Notice. Shared by the card Delete button AND the detail editor's onDeleted
+ * so neither path is destructive without confirmation. Returns whether deleted.
+ */
+async function confirmedDelete(agent: RosterAgent): Promise<boolean> {
+  if (!plugin) return false;
+  const ok = await confirm(
+    plugin.app,
+    t('agentRoster.deleteConfirm', { name: agent.name }),
+    t('agentRoster.delete'),
+  );
+  if (!ok) return false;
+  await store.remove(agent);
+  new Notice(t('agentRoster.deleted', { name: agent.name }));
+  return true;
 }
 
 function leadingAvatar(slot: HTMLElement, agent: RosterAgent): void {
@@ -2756,7 +2777,7 @@ function onClone(agent: RosterAgent): void {
 }
 ```
 
-- Delete confirm mirrors the legacy `deleteAgent`: `confirm(plugin.app, t('agentRoster.deleteConfirm', { name }), t('agentRoster.delete'))`, then `store.remove`, then `new Notice(t('agentRoster.deleted', { name }))`.
+- The card's `onDelete(agent)` is `void withErrorNotice(async () => { if (await confirmedDelete(agent)) { /* list reloads inside store.remove */ } }, t('agentRoster.actionFailed'), fail)` — BOTH delete paths (card button and detail editor) go through `confirmedDelete`; never call `store.remove` directly from a UI handler.
 - `onNewAgent` = `store.draftNewAgent(t('agentRoster.newAgent'))` → `openDetail(draft, { isNew: true })` (in-memory draft, NOT pre-saved — parity with `createAndEdit`).
 - `onSync` ports `syncToProviders` (legacy lines 174–188) verbatim including both Notice branches.
 - `onInstallStarters` ports `installStarters` (legacy lines 194–205): `installPresetAgents(plugin.agentRosterStore)` + Notice + reload.
