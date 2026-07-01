@@ -760,6 +760,12 @@ import type { LibraryTab } from '../viewType';
 export const PLUGIN_KEY: InjectionKey<SpecoratorPlugin> = Symbol('specorator-plugin');
 export const VIEW_KEY: InjectionKey<LibraryView> = Symbol('specorator-library-view');
 export const ACTIVE_TAB_KEY: InjectionKey<Ref<LibraryTab>> = Symbol('specorator-library-tab');
+/**
+ * A panel may register a guard that every tab switch must pass (resolve true)
+ * first — e.g. the Agents detail editor guarding unsaved edits. Null = no guard.
+ */
+export const TAB_GUARD_KEY: InjectionKey<Ref<(() => Promise<boolean>) | null>> =
+  Symbol('specorator-library-tab-guard');
 ```
 
 - [ ] **Step 7.3: Create `src/features/library/vue/globalPinia.ts`**
@@ -792,13 +798,14 @@ import { inject } from 'vue';
 
 import { t } from '../../../i18n/i18n';
 import type { LibraryTab } from '../viewType';
-import { ACTIVE_TAB_KEY } from './libraryKeys';
+import { ACTIVE_TAB_KEY, TAB_GUARD_KEY } from './libraryKeys';
 
 const injected = inject(ACTIVE_TAB_KEY);
 if (!injected) throw new Error('LibraryRoot.vue mounted without ACTIVE_TAB_KEY');
 // Re-bind after the guard so the template binding's DECLARED type is already
 // narrowed to Ref<LibraryTab> — vue-tsc checks templates against declared types.
 const activeTab = injected;
+const tabGuard = inject(TAB_GUARD_KEY, null);
 
 const TABS: ReadonlyArray<{ id: LibraryTab; label: string }> = [
   { id: 'agents', label: t('agentRoster.navLabel') },
@@ -806,8 +813,13 @@ const TABS: ReadonlyArray<{ id: LibraryTab; label: string }> = [
   { id: 'loops', label: t('loopLibrary.navLabel') },
 ];
 
-function select(tab: LibraryTab): void {
-  if (activeTab) activeTab.value = tab;
+async function select(tab: LibraryTab): Promise<void> {
+  if (activeTab.value === tab) return;
+  // A panel may have registered a guard (dirty detail editor) — switching
+  // tabs unmounts the panel, so silent discards must be intercepted here.
+  const guard = tabGuard?.value;
+  if (guard && !(await guard())) return;
+  activeTab.value = tab;
 }
 </script>
 
@@ -820,7 +832,7 @@ function select(tab: LibraryTab): void {
       class="specorator-library-nav-item"
       :class="{ 'is-active': activeTab === tab.id }"
       :aria-current="activeTab === tab.id ? 'page' : undefined"
-      @click="select(tab.id)"
+      @click="void select(tab.id)"
     >
       {{ tab.label }}
     </button>
@@ -845,7 +857,7 @@ import { createApp, markRaw, ref } from 'vue';
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
 import { getLibraryPinia } from './vue/globalPinia';
-import { ACTIVE_TAB_KEY, PLUGIN_KEY, VIEW_KEY } from './vue/libraryKeys';
+import { ACTIVE_TAB_KEY, PLUGIN_KEY, TAB_GUARD_KEY, VIEW_KEY } from './vue/libraryKeys';
 import LibraryRoot from './vue/LibraryRoot.vue';
 import type { LibraryTab } from './viewType';
 import { VIEW_TYPE_LIBRARY } from './viewType';
@@ -860,6 +872,8 @@ export class LibraryView extends ItemView {
   /** One Vue app per leaf — Obsidian can open several Library leaves at once. */
   private vueApp: VueApp | null = null;
   private readonly activeTab = ref<LibraryTab>(DEFAULT_TAB);
+  /** Set by panels (via TAB_GUARD_KEY) to intercept tab switches; see libraryKeys.ts. */
+  private readonly tabGuard = ref<(() => Promise<boolean>) | null>(null);
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: SpecoratorPlugin) {
     super(leaf);
@@ -877,12 +891,17 @@ export class LibraryView extends ItemView {
     return 'library';
   }
 
-  setActiveTab(tab: LibraryTab): void {
+  async setActiveTab(tab: LibraryTab): Promise<void> {
+    if (this.activeTab.value === tab) return;
+    const guard = this.tabGuard.value;
+    if (guard && !(await guard())) return;
     this.activeTab.value = tab;
   }
 
   async setState(state: unknown, result: ViewStateResult): Promise<void> {
     const tab = (state as { tab?: unknown } | null)?.tab;
+    // Workspace-restore path sets the tab directly (no guard): it runs before
+    // any panel could have registered one.
     if (isLibraryTab(tab)) this.activeTab.value = tab;
     await super.setState(state, result);
   }
@@ -910,6 +929,7 @@ export class LibraryView extends ItemView {
     app.provide(PLUGIN_KEY, markRaw(this.plugin));
     app.provide(VIEW_KEY, markRaw(this));
     app.provide(ACTIVE_TAB_KEY, this.activeTab);
+    app.provide(TAB_GUARD_KEY, this.tabGuard);
     app.mount(this.contentEl);
     this.vueApp = app;
   }
@@ -942,7 +962,7 @@ export async function activateLibrary(plugin: SpecoratorPlugin, tab: LibraryTab)
     leaf = workspace.getLeaf('tab');
     await leaf.setViewState({ type: VIEW_TYPE_LIBRARY, active: true });
   }
-  if (leaf.view instanceof LibraryView) leaf.view.setActiveTab(tab);
+  if (leaf.view instanceof LibraryView) await leaf.view.setActiveTab(tab);
   await workspace.revealLeaf(leaf);
 }
 ```
@@ -2705,6 +2725,18 @@ and at the end of the private `save()` method, after the store write succeeds, a
     this.callbacks.onSaved?.(this.original);
 ```
 
+Additionally expose the editor's existing dirty computation (used by its Back
+discard-confirm path, ~lines 69–77) as a public method — extract, don't
+duplicate, so Back and the tab guard can never disagree:
+
+```ts
+  /** True when the draft differs from the last persisted state. */
+  isDirty(): boolean {
+    // move the exact comparison the back path already performs into here and
+    // have the back path call this method (behavior-preserving refactor)
+  }
+```
+
 The legacy `AgentRosterView` passes no `onSaved` (optional — zero behavior change); the Vue panel supplies one in Step 12.4. Run `npm run test -- --selectProjects unit -t "AgentDetail"` + `npm run typecheck` — expected green.
 
 - [ ] **Step 12.3: Write the failing panel test `tests/vue/panels/agentsPanel.test.ts`**
@@ -2786,7 +2818,7 @@ Run — expected FAIL.
 
 - [ ] **Step 12.4: Implement `src/features/library/vue/panels/AgentsPanel.vue`.** Same skeleton as the other panels plus the detail-editor host. Key parts (assemble the full SFC from the LoopsPanel shape + these):
 
-Script additions (on top of the LoopsPanel skeleton's imports, add `nextTick` and `ref` to the `vue` import):
+Script additions (on top of the LoopsPanel skeleton's imports, add `nextTick`, `onUnmounted`, and `ref` to the `vue` import, and `TAB_GUARD_KEY` to the libraryKeys import):
 
 ```ts
 import { AgentDetailEditor } from '../../../agents/roster/view/AgentDetailEditor';
@@ -2818,6 +2850,8 @@ const list = useLibraryList<RosterAgent>(() => store.agents, {
   getUpdatedAt: (a) => a.updatedAt,
 });
 
+const tabGuard = inject(TAB_GUARD_KEY, null);
+
 async function openDetail(agent: RosterAgent, opts?: { isNew?: boolean }): Promise<void> {
   if (!plugin) return;
   detailOpen.value = true;
@@ -2836,13 +2870,34 @@ async function openDetail(agent: RosterAgent, opts?: { isNew?: boolean }): Promi
     onSaved: () => void withErrorNotice(() => store.load(), t('agentRoster.actionFailed'), fail),
   });
   await editor.render(detailHost.value, agent, opts);
+  // Tab switches unmount this panel and would silently discard dirty edits —
+  // register a guard that reuses the editor's own dirty state and the SAME
+  // confirm strings its Back path uses (see AgentDetailEditor ~lines 69–77).
+  if (tabGuard) {
+    tabGuard.value = async () => {
+      if (!editor.isDirty()) {
+        await closeDetail();
+        return true;
+      }
+      const ok = await confirm(plugin.app, /* same message/label t() keys as the editor's back discard prompt */);
+      if (ok) await closeDetail();
+      return ok;
+    };
+  }
 }
 
 async function closeDetail(): Promise<void> {
   // v-if destroys the host node on the flag flip — no manual cleanup needed.
   detailOpen.value = false;
+  if (tabGuard) tabGuard.value = null;
   await reload();
 }
+
+// Safety net: if the panel unmounts through any other path, never leave a
+// stale guard blocking the tab strip.
+onUnmounted(() => {
+  if (tabGuard) tabGuard.value = null;
+});
 
 /** Card-action wrapper the template calls; mirrors the detail editor's path. */
 function onStartChat(agent: RosterAgent): void {
@@ -3121,7 +3176,7 @@ git commit -m "quality: lock Vue coverage floors, artifact marker, and docs for 
   2. Toggle the flag ON in settings → click each of the three ribbons → the unified Library opens at the matching tab; tab strip switches panels; search/sort/filter chips work in each tab.
   3. Loops: create, edit, clone, delete, Prompt (model picker → composer draft seeded, NOT sent).
   4. Skills: Prompt sends `$name`/`/name` to a matching tab; clone gated to vault skills; create → editor opens.
-  5. Agents: open detail (page swap), back, start chat (new tab), clone, delete, install starters, sync.
+  5. Agents: open detail (page swap), back, start chat (new tab), clone, delete, install starters, sync. With unsaved edits in the detail editor, click another Library tab → the discard confirm appears; Cancel keeps the editor, Confirm switches tabs.
   6. Open a second Library leaf (drag/split): both leaves render independently; closing one leaves the other working (per-leaf app isolation).
   7. Toggle the flag OFF → open a library ribbon → legacy view; any open unified leaf re-homes to the roster view when reopened.
 - [ ] **Step 14.2: Push and open the PR**
