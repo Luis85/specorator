@@ -27,10 +27,10 @@ import type { SkillTabEntry } from './types';
  * composer text or attached file/folder/image context — so a library skill send
  * never consumes a user's pending draft during `buildOutgoingTurn`):
  * 1. Active tab matches provider and is a draft-free blank → reuse.
- * 2. Active tab matches provider but is not a reusable blank → create new tab.
- * 3. Active tab provider mismatches:
- *    a. Another draft-free blank tab on the target provider exists → reuse it.
- *    b. Else → create new tab with `defaultProviderId`.
+ * 2. Else scan the other open tabs for a draft-free blank on the target provider
+ *    → reuse it (so a bound or draft-bearing active tab doesn't hit the tab cap
+ *    when a safe background blank exists).
+ * 3. Else create a new tab with `defaultProviderId` (null at the cap).
  *
  * Pill attach MUST happen AFTER switchToTab — initializeWelcome on a blank
  * tab wipes any pill attached before the switch. See openContextMenuQuickAction
@@ -93,24 +93,20 @@ async function resolveTargetTab(
   targetProviderId: ProviderId,
 ): Promise<TabData | null> {
   const activeTab = tabManager.getActiveTab();
+  const isReusable = (tab: TabData): boolean =>
+    tab.lifecycleState === 'blank'
+    && !blankTabHasPendingDraft(tab)
+    && getTabProviderId(tab, plugin) === targetProviderId;
 
-  if (activeTab) {
-    const activeProvider = getTabProviderId(activeTab, plugin);
-    if (activeProvider === targetProviderId) {
-      if (activeTab.lifecycleState === 'blank' && !blankTabHasPendingDraft(activeTab)) {
-        return activeTab;
-      }
-      return createTabForProvider(tabManager, targetProviderId);
-    }
+  if (activeTab && isReusable(activeTab)) {
+    return activeTab;
   }
 
-  // Active tab provider mismatches (or no active tab). Look for an existing
-  // draft-free blank tab on the target provider before creating a new one.
-  const blankMatch = tabManager.getAllTabs().find((tab) => {
-    if (tab.lifecycleState !== 'blank') return false;
-    if (blankTabHasPendingDraft(tab)) return false;
-    return getTabProviderId(tab, plugin) === targetProviderId;
-  });
+  // The active tab isn't a safe target (wrong provider, not blank, or a
+  // draft-bearing blank). Scan any OTHER open tab for a draft-free provider
+  // match before creating/failing — otherwise a bound or draft-bearing active
+  // tab would hit the tab cap even though a safe background blank exists.
+  const blankMatch = tabManager.getAllTabs().find((tab) => tab !== activeTab && isReusable(tab));
   if (blankMatch) {
     return blankMatch;
   }

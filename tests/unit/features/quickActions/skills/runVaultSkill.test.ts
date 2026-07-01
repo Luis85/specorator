@@ -252,6 +252,44 @@ describe('runVaultSkill', () => {
     expect(tabManager.switchToTab).toHaveBeenCalledWith('tab-2');
   });
 
+  it('reuses a background draft-free blank when the active same-provider tab is bound', async () => {
+    // Active tab matches provider but is a conversation; a draft-free background
+    // blank on the same provider must be reused rather than creating a new tab.
+    const activeTab = makeTab({ id: 'tab-1', providerId: 'claude', lifecycleState: 'bound_active' });
+    const blankMatch = makeTab({ id: 'tab-2', providerId: 'claude', lifecycleState: 'blank' });
+    const { plugin, tabManager } = makePlugin({
+      activeTab,
+      allTabs: [activeTab, blankMatch],
+    });
+
+    await runVaultSkill(plugin as any, makeEntry(), null);
+
+    expect(tabManager.createTab).not.toHaveBeenCalled();
+    expect(tabManager.switchToTab).toHaveBeenCalledWith('tab-2');
+  });
+
+  it('at the tab cap, reuses a draft-free background blank instead of the tab-limit notice', async () => {
+    // Regression for the draft-guard fall-through: a draft-bearing active blank
+    // must not skip the background scan straight into a spurious cap failure.
+    const activeTab = makeTab({
+      id: 'tab-1',
+      providerId: 'claude',
+      lifecycleState: 'blank',
+      draftText: 'unsent draft',
+    });
+    const blankMatch = makeTab({ id: 'tab-2', providerId: 'claude', lifecycleState: 'blank' });
+    const { plugin, tabManager } = makePlugin({
+      activeTab,
+      allTabs: [activeTab, blankMatch],
+      canCreate: false,
+    });
+
+    await runVaultSkill(plugin as any, makeEntry(), null);
+
+    expect(Notice).not.toHaveBeenCalled();
+    expect(tabManager.switchToTab).toHaveBeenCalledWith('tab-2');
+  });
+
   it('shows tab-limit Notice when canCreateTab is false', async () => {
     const activeTab = makeTab({ providerId: 'codex', lifecycleState: 'bound_active' });
     const { plugin, tabManager } = makePlugin({ activeTab, canCreate: false });
