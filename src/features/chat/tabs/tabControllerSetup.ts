@@ -198,6 +198,14 @@ export function buildTabConversationController(
         tab.conversationId = conversation?.id ?? null;
         tab.draftModel = null;
         tab.lifecycleState = conversation ? 'bound_cold' : 'blank';
+        // Recompute the display-only model seed for the (re)bound conversation so
+        // a history / open-conversation switch shows the NEW conversation's agent
+        // model (or clears it for an unbound chat) instead of leaving the selector
+        // on the previous agent's model. Sends already resolve the live model; this
+        // keeps the ModelSelector in sync. Mirrors TabManager.resolveInitialModels.
+        tab.displayModel = conversation?.boundAgentId
+          ? ((await plugin.resolveBoundAgent?.(conversation.boundAgentId, conversation.providerId))?.model?.trim() || null)
+          : null;
         syncSlashCommandDropdownForProvider(tab, plugin, getProviderCatalogConfig, conversation);
 
         // If the runtime already exists for the right provider, sync it passively

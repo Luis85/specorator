@@ -1870,6 +1870,50 @@ describe('Tab - History Bind Without Runtime', () => {
     expect(tab.serviceInitialized).toBe(false);
   });
 
+  it('ensureServiceForConversation recomputes displayModel for a rebound bound-agent conversation', async () => {
+    jest.spyOn(ProviderRegistry, 'createInstructionRefineService').mockReturnValue({ cancel: jest.fn(), resetConversation: jest.fn() } as any);
+    jest.spyOn(ProviderRegistry, 'createTitleGenerationService').mockReturnValue({ cancel: jest.fn() } as any);
+    jest.spyOn(ProviderRegistry, 'getTaskResultInterpreter').mockReturnValue({} as any);
+
+    const plugin = createMockPlugin();
+    plugin.resolveBoundAgent = jest.fn().mockResolvedValue({ slug: 'reviewer', model: 'opus' });
+    const tab = createTab(createMockOptions({ plugin }));
+    (tab as any).displayModel = 'stale-previous-agent-model';
+    initializeTabUI(tab, plugin);
+    initializeTabControllers(tab, plugin, {} as any);
+
+    const deps = (jest.requireMock('@/features/chat/controllers/ConversationController') as {
+      ConversationController: jest.Mock;
+    }).ConversationController.mock.calls.at(-1)?.[0];
+    await deps.ensureServiceForConversation({ id: 'c1', providerId: 'claude', boundAgentId: 'reviewer', messages: [] });
+
+    // Switching to a different bound-agent conversation must not leave the
+    // selector on the previous agent's model.
+    expect(plugin.resolveBoundAgent).toHaveBeenCalledWith('reviewer', 'claude');
+    expect(tab.displayModel).toBe('opus');
+  });
+
+  it('ensureServiceForConversation clears displayModel when rebinding to an unbound conversation', async () => {
+    jest.spyOn(ProviderRegistry, 'createInstructionRefineService').mockReturnValue({ cancel: jest.fn(), resetConversation: jest.fn() } as any);
+    jest.spyOn(ProviderRegistry, 'createTitleGenerationService').mockReturnValue({ cancel: jest.fn() } as any);
+    jest.spyOn(ProviderRegistry, 'getTaskResultInterpreter').mockReturnValue({} as any);
+
+    const plugin = createMockPlugin();
+    plugin.resolveBoundAgent = jest.fn();
+    const tab = createTab(createMockOptions({ plugin }));
+    (tab as any).displayModel = 'stale-previous-agent-model';
+    initializeTabUI(tab, plugin);
+    initializeTabControllers(tab, plugin, {} as any);
+
+    const deps = (jest.requireMock('@/features/chat/controllers/ConversationController') as {
+      ConversationController: jest.Mock;
+    }).ConversationController.mock.calls.at(-1)?.[0];
+    await deps.ensureServiceForConversation({ id: 'c2', providerId: 'claude', messages: [] });
+
+    expect(plugin.resolveBoundAgent).not.toHaveBeenCalled();
+    expect(tab.displayModel).toBeNull();
+  });
+
   it('ensureServiceForConversation updates hidden commands when the provider changes', async () => {
     jest.spyOn(ProviderRegistry, 'createInstructionRefineService').mockReturnValue({ cancel: jest.fn(), resetConversation: jest.fn() } as any);
     jest.spyOn(ProviderRegistry, 'createTitleGenerationService').mockReturnValue({ cancel: jest.fn() } as any);
