@@ -72,7 +72,7 @@ A card might be "draft a thank-you letter to Aunt Maria", "summarize this twelve
 
 ## Get Specorator
 
-Install via BRAT or the Obsidian community plugins directory.
+Install from the official Obsidian community plugin directory: in Obsidian, open **Settings → Community plugins → Browse** and search for **Specorator**.
 
 **→ [GitHub — Luis85/specorator](https://github.com/Luis85/specorator)**
 
