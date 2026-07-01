@@ -2629,6 +2629,13 @@ const CARD_AVATAR_SIZE = 36;
 const detailHost = ref<HTMLElement | null>(null);
 const detailOpen = ref(false);
 
+// Every mutation path must end by re-syncing the filtered list: store refs and
+// the useLibraryList items ref are SEPARATE state (same rule in all panels).
+async function reload(): Promise<void> {
+  await store.load();
+  list.setItems(store.agents);
+}
+
 const list = useLibraryList<RosterAgent>({
   getName: (a) => a.name,
   getDescription: (a) => a.description,
@@ -2777,7 +2784,17 @@ function onClone(agent: RosterAgent): void {
 }
 ```
 
-- The card's `onDelete(agent)` is `void withErrorNotice(async () => { if (await confirmedDelete(agent)) { /* list reloads inside store.remove */ } }, t('agentRoster.actionFailed'), fail)` — BOTH delete paths (card button and detail editor) go through `confirmedDelete`; never call `store.remove` directly from a UI handler.
+- The card's `onDelete(agent)` must re-sync the filtered list after a successful delete — `store.remove()` reloads `store.agents` (the Pinia ref) but NOT the panel's `useLibraryList` items ref:
+
+```ts
+function onDelete(agent: RosterAgent): void {
+  void withErrorNotice(async () => {
+    if (await confirmedDelete(agent)) list.setItems(store.agents);
+  }, t('agentRoster.actionFailed'), fail);
+}
+```
+
+  BOTH delete paths (card button and detail editor) go through `confirmedDelete`; never call `store.remove` directly from a UI handler. (The editor path re-syncs via `closeDetail()` → `reload()`.)
 - `onNewAgent` = `store.draftNewAgent(t('agentRoster.newAgent'))` → `openDetail(draft, { isNew: true })` (in-memory draft, NOT pre-saved — parity with `createAndEdit`).
 - `onSync` ports `syncToProviders` (legacy lines 174–188) verbatim including both Notice branches.
 - `onInstallStarters` ports `installStarters` (legacy lines 194–205): `installPresetAgents(plugin.agentRosterStore)` + Notice + reload.
