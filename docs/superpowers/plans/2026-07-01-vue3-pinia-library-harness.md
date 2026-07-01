@@ -2586,6 +2586,17 @@ describe('AgentsPanel', () => {
     expect(screen.getByText('t')).toBeTruthy();
   });
 
+  it('cloning opens the detail editor on the returned clone (legacy parity)', async () => {
+    const plugin = makePlugin();
+    const store = useRosterStore();
+    store.init(plugin);
+    vi.spyOn(store, 'clone').mockResolvedValue({ ...agent, id: 'roster:a-copy', name: 'Alice copy' } as never);
+    render(AgentsPanel, { global: { provide: { [PLUGIN_KEY as symbol]: plugin } } });
+    await screen.findByText('Alice');
+    await fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }));
+    expect(renderSpy).toHaveBeenCalledWith(expect.any(HTMLElement), expect.objectContaining({ id: 'roster:a-copy' }), undefined);
+  });
+
   it('activating a card hands off to the imperative AgentDetailEditor', async () => {
     const plugin = makePlugin();
     useRosterStore().init(plugin);
@@ -2734,6 +2745,17 @@ Template shape:
 Notes:
 - `AvatarSlot` is a 10-line local child component in the same file directory (`components/AvatarSlot.vue`) wrapping `leadingAvatar` in `onMounted` — or inline the avatar with a `:ref` callback; either is acceptable, keep it under 15 lines.
 - Model chip parity (legacy lines 115–120: `agent.modelSelection` → label from `ProviderRegistry.getChatUIConfig(providerId).getModelOptions(asSettingsBag(plugin.settings))`) — include it in the caps row guarded by `v-if="agent.modelSelection"` with the label computed in a script helper.
+- `onClone` must reproduce the legacy handoff (`AgentRosterView.cloneAgent` ends with `openDetail(clone)` — `AgentRosterView.ts:225-226`): saving the clone and reloading is NOT enough; the user is taken straight to the clone for review/editing. `useRosterStore.clone()` returns the clone for exactly this:
+
+```ts
+function onClone(agent: RosterAgent): void {
+  void withErrorNotice(async () => {
+    const clone = await store.clone(agent);
+    await openDetail(clone);
+  }, t('agentRoster.actionFailed'), fail);
+}
+```
+
 - Delete confirm mirrors the legacy `deleteAgent`: `confirm(plugin.app, t('agentRoster.deleteConfirm', { name }), t('agentRoster.delete'))`, then `store.remove`, then `new Notice(t('agentRoster.deleted', { name }))`.
 - `onNewAgent` = `store.draftNewAgent(t('agentRoster.newAgent'))` → `openDetail(draft, { isNew: true })` (in-memory draft, NOT pre-saved — parity with `createAndEdit`).
 - `onSync` ports `syncToProviders` (legacy lines 174–188) verbatim including both Notice branches.
