@@ -4,6 +4,7 @@ import { Modal, Notice, Setting } from 'obsidian';
 import { t } from '../../../i18n/i18n';
 import type { LucideIconPicker } from '../../../shared/components/LucideIconPicker';
 import { addIconPickerRow, addNameAndDescriptionRows } from '../../../shared/settings/nameDescriptionRows';
+import { normalizeStringArray } from '../../../utils/frontmatter';
 import type { LoopDefinition, SaveLoopInput } from '../loops/loopTypes';
 
 export interface LoopEditorPayload extends SaveLoopInput {
@@ -21,6 +22,7 @@ export class LoopEditorModal extends Modal {
     super(app);
   }
 
+  // fallow-ignore-next-line complexity
   onOpen(): void {
     const isEdit = Boolean(this.existing);
     this.setTitle(isEdit ? t('tasks.loopEditor.titleEdit') : t('tasks.loopEditor.titleNew'));
@@ -34,6 +36,7 @@ export class LoopEditorModal extends Modal {
     let steps = this.existing?.steps ?? '';
     let verify = this.existing?.verify ?? '';
     let notes = this.existing?.notes ?? '';
+    let tags = (this.existing?.tags ?? []).join(', ');
 
     addNameAndDescriptionRows(this.contentEl, {
       name: {
@@ -72,18 +75,29 @@ export class LoopEditorModal extends Modal {
       setting.settingEl.addClass('specorator-loop-section-setting');
     };
 
-    area(t('tasks.loopEditor.useWhenName'), t('tasks.loopEditor.useWhenDesc'), useWhen, (v) => { useWhen = v; });
-    area(t('tasks.loopEditor.approachName'), t('tasks.loopEditor.approachDesc'), approach, (v) => { approach = v; });
-    area(t('tasks.loopEditor.stepsName'), t('tasks.loopEditor.stepsDesc'), steps, (v) => { steps = v; });
-    area(t('tasks.loopEditor.verifyName'), t('tasks.loopEditor.verifyDesc'), verify, (v) => { verify = v; });
-    area(t('tasks.loopEditor.notesName'), t('tasks.loopEditor.notesDesc'), notes, (v) => { notes = v; });
+    const sections: Array<[string, string, string, (v: string) => void]> = [
+      [t('tasks.loopEditor.useWhenName'), t('tasks.loopEditor.useWhenDesc'), useWhen, (v) => { useWhen = v; }],
+      [t('tasks.loopEditor.approachName'), t('tasks.loopEditor.approachDesc'), approach, (v) => { approach = v; }],
+      [t('tasks.loopEditor.stepsName'), t('tasks.loopEditor.stepsDesc'), steps, (v) => { steps = v; }],
+      [t('tasks.loopEditor.verifyName'), t('tasks.loopEditor.verifyDesc'), verify, (v) => { verify = v; }],
+      [t('tasks.loopEditor.notesName'), t('tasks.loopEditor.notesDesc'), notes, (v) => { notes = v; }],
+    ];
+    for (const [label, desc, value, set] of sections) area(label, desc, value, set);
+
+    new Setting(this.contentEl)
+      .setName(t('tasks.loopEditor.tagsName'))
+      .setDesc(t('tasks.loopEditor.tagsDesc'))
+      .addText((tc) => tc.setValue(tags).onChange((v) => { tags = v; }));
 
     new Setting(this.contentEl)
       .addButton((btn) => {
         btn.setButtonText(t('tasks.loopEditor.save'))
           .setCta()
           .onClick(() => {
-            void this.handleSave({ name, description, icon, useWhen, approach, steps, verify, notes });
+            void this.handleSave({
+              name, description, icon, useWhen, approach, steps, verify, notes,
+              tags: normalizeStringArray(tags) ?? [],
+            });
           });
       })
       .addButton((btn) => {
@@ -119,6 +133,7 @@ export class LoopEditorModal extends Modal {
       steps: form.steps.trim(),
       verify: form.verify.trim(),
       notes: form.notes.trim(),
+      tags: form.tags && form.tags.length > 0 ? form.tags : undefined,
       originalPath: this.existing?.path,
     };
 

@@ -1,7 +1,7 @@
 ---
 title: Collapse streaming response implementation plan
 date: 2026-06-14
-status: in-progress
+status: done
 scope: chat/controllers, chat/rendering, settings, i18n, core/types
 ---
 

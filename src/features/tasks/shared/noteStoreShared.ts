@@ -46,7 +46,7 @@ export function noteFilePathForName(folder: string, name: string, fallbackSlug: 
 export async function listNoteDefinitions<T>(
   vault: Vault,
   folder: string,
-  parse: (path: string, content: string) => T,
+  parse: (path: string, content: string, file: TFile) => T,
 ): Promise<{ items: T[]; warnings: string[] }> {
   const normalized = normalizeFolder(folder);
   const items: T[] = [];
@@ -54,7 +54,7 @@ export async function listNoteDefinitions<T>(
   const files = vault.getMarkdownFiles().filter((file) => file.path.startsWith(`${normalized}/`));
   for (const file of files) {
     try {
-      items.push(parse(file.path, await vault.read(file)));
+      items.push(parse(file.path, await vault.read(file), file));
     } catch (error) {
       warnings.push(`${file.path}: ${error instanceof Error ? error.message : String(error)}`);
     }

@@ -24,11 +24,11 @@ The chat user-message toolbar exposes a "Capture as quick action" button via the
 
 `runVaultSkill(plugin, entry, file)` re-checks `ProviderRegistry.isEnabled` at execution time — `SkillTabEntry.providerEnabled` is a listing-time cache used only for picker dimming; a provider toggled while the modal was open must not silently dispatch into a disabled provider, and a provider re-enabled while the modal was open must not silently fail. The helper then resolves a target tab in this order:
 
-1. Active tab matches provider and is `blank` → reuse.
-2. Active tab matches provider but is not blank → create new tab.
-3. Active tab provider mismatches:
-   - Another blank tab on the target provider exists → reuse it.
-   - Else → create new tab with `defaultProviderId: entry.providerId`.
+1. Active tab matches provider and is a draft-free `blank` → reuse.
+2. Else scan the other open tabs for a draft-free blank on the target provider → reuse it (so a bound or draft-bearing active tab doesn't hit the tab cap when a safe background blank exists).
+3. Else → create a new tab with `defaultProviderId: entry.providerId` (null at the cap).
+
+A "blank" tab counts as reusable only when draft-free — no unsent composer text or attached file/folder/image pills — so a library skill send never consumes a user's pending draft. The `resolveOverrideTargetTab` flow (quick actions / loop prompts) shares the same `blankTabHasPendingDraft` guard.
 
 **Pill attach order**: `switchToTab` must precede `attachFileAsPill`/`attachFolderAsPill`. A blank tab's `initializeWelcome` wipes any pill attached before the switch.
 

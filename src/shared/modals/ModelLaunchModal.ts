@@ -1,46 +1,46 @@
-import { type App,Modal } from 'obsidian';
+import { type App, Modal } from 'obsidian';
 
 import type { ProviderId } from '@/core/providers/types';
 import { t } from '@/i18n/i18n';
 
-import type { QuickAction } from '../types';
+export interface ModelLaunchModelOption { value: string; label: string }
 
-export interface QuickActionLaunchModelOption {
-  value: string;
-  label: string;
-}
-
-export interface QuickActionLaunchProvider {
+export interface ModelLaunchProvider {
   id: ProviderId;
   displayName: string;
-  models: QuickActionLaunchModelOption[];
+  models: ModelLaunchModelOption[];
 }
 
-export interface QuickActionLaunchModalOptions {
+export interface ModelLaunchModalOptions {
   app: App;
-  action: QuickAction;
+  title: string;
   presetProviderId: ProviderId;
   presetModel: string;
-  enabledProviders: QuickActionLaunchProvider[];
+  enabledProviders: ModelLaunchProvider[];
   resolveDefaultModelForProvider: (providerId: ProviderId) => string;
-  fallbackNotice?: {
-    storedProviderLabel: string;
-    storedModelLabel: string;
-  };
+  fallbackNotice?: { storedProviderLabel: string; storedModelLabel: string };
   onConfirm: (choice: { providerId: ProviderId; model: string }) => void;
 }
 
 /**
- * Confirmation modal opened by `launchQuickAction` whenever a quick-action
- * fires from outside an active chat tab. Forces the user to confirm
- * provider+model before dispatch so the wrong model never receives the prompt.
+ * Provider+model confirmation modal shared by quick-action and loop prompting.
+ * The per-consumer text is the `title` option; the chrome strings (Provider /
+ * Model / Run / Cancel / fallback notice / "no providers") are intentionally
+ * shared and live in the `quickActions.launchModal.*` i18n bucket because they
+ * are generic across consumers. If a future consumer needs different chrome
+ * copy, add an optional `labels` bag then — not before.
+ *
+ * The DOM classes and `data-testid`s retain the legacy `specorator-qa-*` prefix
+ * (this modal was extracted from `QuickActionLaunchModal`) so existing CSS and
+ * tests stay green across all consumers; the prefix is a shared token, not a
+ * quick-action coupling — same rationale as the shared i18n bucket above.
  */
-export class QuickActionLaunchModal extends Modal {
-  private readonly options: QuickActionLaunchModalOptions;
+export class ModelLaunchModal extends Modal {
+  private readonly options: ModelLaunchModalOptions;
   private providerSelect: HTMLSelectElement | null = null;
   private modelSelect: HTMLSelectElement | null = null;
 
-  constructor(options: QuickActionLaunchModalOptions) {
+  constructor(options: ModelLaunchModalOptions) {
     super(options.app);
     this.options = options;
   }
@@ -50,19 +50,13 @@ export class QuickActionLaunchModal extends Modal {
     const root = this.contentEl;
     root.empty();
 
-    // Register Enter-to-Run before rendering so the binding survives any render error.
     this.scope?.register?.([], 'Enter', (event) => {
       if (this.options.enabledProviders.length === 0) return;
       event.preventDefault();
-      const btn = this.contentEl.querySelector<HTMLButtonElement>('[data-testid="qa-run"]');
-      btn?.click();
+      this.contentEl.querySelector<HTMLButtonElement>('[data-testid="qa-run"]')?.click();
     });
 
-    const rawName = this.options.action.name?.trim();
-    const name = rawName && rawName.length > 0
-      ? rawName
-      : t('quickActions.launchModal.untitledFallback');
-    this.titleEl.setText(t('quickActions.launchModal.title', { name }));
+    this.titleEl.setText(this.options.title);
 
     if (this.options.fallbackNotice) {
       const notice = root.createDiv({
@@ -89,9 +83,7 @@ export class QuickActionLaunchModal extends Modal {
     this.renderProviderRow(root);
     this.renderModelRow(root);
     this.renderActions(root, /* runDisabled */ false);
-
-    const runBtn = this.contentEl.querySelector<HTMLButtonElement>('[data-testid="qa-run"]');
-    runBtn?.focus();
+    this.contentEl.querySelector<HTMLButtonElement>('[data-testid="qa-run"]')?.focus();
   }
 
   onClose(): void {
@@ -104,13 +96,8 @@ export class QuickActionLaunchModal extends Modal {
   private renderProviderRow(root: HTMLElement): void {
     const selectId = 'specorator-qa-provider-' + Math.random().toString(36).slice(2, 9);
     const row = root.createDiv({ cls: 'specorator-qa-launch-row' });
-    row.createEl('label', {
-      text: t('quickActions.launchModal.providerLabel'),
-      attr: { for: selectId },
-    });
-    const select = row.createEl('select', {
-      attr: { id: selectId, 'data-testid': 'qa-provider' },
-    });
+    row.createEl('label', { text: t('quickActions.launchModal.providerLabel'), attr: { for: selectId } });
+    const select = row.createEl('select', { attr: { id: selectId, 'data-testid': 'qa-provider' } });
     for (const provider of this.options.enabledProviders) {
       const opt = select.createEl('option', { text: provider.displayName });
       opt.value = provider.id;
@@ -118,8 +105,7 @@ export class QuickActionLaunchModal extends Modal {
     }
     select.addEventListener('change', () => {
       const next = select.value;
-      const defaultModel = this.options.resolveDefaultModelForProvider(next);
-      this.renderModelOptions(next, defaultModel);
+      this.renderModelOptions(next, this.options.resolveDefaultModelForProvider(next));
       this.modelSelect?.focus();
     });
     this.providerSelect = select;
@@ -128,13 +114,8 @@ export class QuickActionLaunchModal extends Modal {
   private renderModelRow(root: HTMLElement): void {
     const selectId = 'specorator-qa-model-' + Math.random().toString(36).slice(2, 9);
     const row = root.createDiv({ cls: 'specorator-qa-launch-row' });
-    row.createEl('label', {
-      text: t('quickActions.launchModal.modelLabel'),
-      attr: { for: selectId },
-    });
-    const select = row.createEl('select', {
-      attr: { id: selectId, 'data-testid': 'qa-model' },
-    });
+    row.createEl('label', { text: t('quickActions.launchModal.modelLabel'), attr: { for: selectId } });
+    const select = row.createEl('select', { attr: { id: selectId, 'data-testid': 'qa-model' } });
     this.modelSelect = select;
     this.renderModelOptions(this.options.presetProviderId, this.options.presetModel);
   }
@@ -142,8 +123,7 @@ export class QuickActionLaunchModal extends Modal {
   private renderModelOptions(providerId: ProviderId, selectedValue: string): void {
     if (!this.modelSelect) return;
     this.modelSelect.empty();
-    const provider = this.options.enabledProviders.find((p) => p.id === providerId);
-    const models = provider?.models ?? [];
+    const models = this.options.enabledProviders.find((p) => p.id === providerId)?.models ?? [];
     for (const model of models) {
       const opt = this.modelSelect.createEl('option', { text: model.label });
       opt.value = model.value;
@@ -156,32 +136,22 @@ export class QuickActionLaunchModal extends Modal {
 
   private renderActions(root: HTMLElement, runDisabled: boolean, describedById?: string): void {
     const actions = root.createDiv({ cls: 'specorator-qa-launch-actions' });
-
-    // DOM order: Cancel first, Run second. Visual order is reversed via
-    // `flex-direction: row-reverse` in CSS so Run appears on the right while
-    // Tab order naturally ends on Run as the primary action.
     const cancel = actions.createEl('button', {
       text: t('quickActions.launchModal.cancelButton'),
-      attr: { 'data-testid': 'qa-cancel' },
+      attr: { 'data-testid': 'qa-cancel', type: 'button' },
     });
     cancel.addEventListener('click', () => this.close());
 
     const run = actions.createEl('button', {
       text: t('quickActions.launchModal.runButton'),
-      attr: { 'data-testid': 'qa-run' },
+      attr: { 'data-testid': 'qa-run', type: 'button' },
     });
     run.addClass('mod-cta');
     run.disabled = runDisabled;
-    if (runDisabled && describedById) {
-      run.setAttribute('aria-describedby', describedById);
-    }
+    if (runDisabled && describedById) run.setAttribute('aria-describedby', describedById);
     run.addEventListener('click', () => {
       if (!this.providerSelect || !this.modelSelect) return;
-      const choice = {
-        providerId: this.providerSelect.value,
-        model: this.modelSelect.value,
-      };
-      this.options.onConfirm(choice);
+      this.options.onConfirm({ providerId: this.providerSelect.value, model: this.modelSelect.value });
       this.close();
     });
   }

@@ -49,4 +49,6 @@ export type AgentsTranslationKey =
   | 'agentRoster.syncFailed'
   | 'agentRoster.icon'
   | 'agentRoster.iconNone'
-  | 'agentRoster.bindingHint';
+  | 'agentRoster.bindingHint'
+  | 'agentRoster.tagsLabel'
+  | 'agentRoster.tagsPlaceholder';

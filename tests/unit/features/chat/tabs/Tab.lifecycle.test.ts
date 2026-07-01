@@ -1014,6 +1014,34 @@ describe('Tab - Service Initialization', () => {
       expect(tab.serviceInitialized).toBe(false);
     });
 
+    it('clears the bound-agent displayModel seed on New Chat reset', () => {
+      jest.spyOn(ProviderRegistry, 'createInstructionRefineService').mockReturnValue({ cancel: jest.fn(), resetConversation: jest.fn() } as any);
+      jest.spyOn(ProviderRegistry, 'createTitleGenerationService').mockReturnValue({ cancel: jest.fn() } as any);
+      jest.spyOn(ProviderRegistry, 'getTaskResultInterpreter').mockReturnValue({} as any);
+
+      const plugin = createMockPlugin();
+      const tab = createTab(createMockOptions({ plugin }));
+      initializeTabUI(tab, plugin);
+      initializeTabControllers(tab, plugin, {} as any);
+
+      tab.lifecycleState = 'bound_cold';
+      tab.conversationId = 'conv-1';
+      (tab as any).displayModel = 'previous-agent-model';
+      // A bound-agent manual pick left a pin on the previous conversation.
+      tab.pinnedModel = 'previous-pinned-model';
+
+      const callback = (jest.requireMock('@/features/chat/controllers/ConversationController') as {
+        ConversationController: jest.Mock;
+      }).ConversationController.mock.calls.at(-1)?.[1]?.onNewConversation;
+      callback();
+
+      // New Chat leaves an unbound tab; the seed AND the pin must be gone so the
+      // selector/override don't linger on the previous agent's model after the
+      // first send.
+      expect(tab.displayModel).toBeNull();
+      expect(tab.pinnedModel).toBeNull();
+    });
+
     it('preserves codex provider on new session when tab was codex', () => {
       jest.spyOn(ProviderRegistry, 'createInstructionRefineService').mockReturnValue({ cancel: jest.fn(), resetConversation: jest.fn() } as any);
       jest.spyOn(ProviderRegistry, 'createTitleGenerationService').mockReturnValue({ cancel: jest.fn() } as any);

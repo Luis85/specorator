@@ -17,6 +17,22 @@ export interface SystemPromptBuildOptions {
    * assert two competing identities and the prominent base one wins.
    */
   suppressIdentity?: boolean;
+  /**
+   * When the native-agent path is active (Claude SDK `options.agent`), the agent
+   * slug is included in the system-prompt key so that switching bound agents
+   * triggers a persistent-query restart even though the appended text does not
+   * change (the SDK owns the identity injection in that path).
+   */
+  nativeAgentSlug?: string;
+  /**
+   * Inline AgentDefinition prompt + description for the native-agent path. The
+   * persona is delivered out-of-band via `options.agents[slug]` rather than the
+   * system prompt, so it never reaches `appendices` — fold it into the key here
+   * so editing a bound agent in place (same slug) still restarts the persistent
+   * query onto the fresh definition.
+   */
+  nativeAgentPrompt?: string;
+  nativeAgentDescription?: string;
 }
 
 function getPathRules(vaultPath?: string): string {
@@ -243,6 +259,19 @@ export function computeSystemPromptKey(
     parts.push(appendixKey);
   }
 
+  // Native-agent path: slug identifies the active inline agent definition; a
+  // change triggers restart even when the appended text stays the same. The
+  // prompt/description are folded in too so an in-place edit (same slug) still
+  // flips the key — the persona lives in options.agents, never in appendices.
+  if (options.nativeAgentSlug) {
+    parts.push(`agent:${options.nativeAgentSlug}`);
+    if (options.nativeAgentPrompt) {
+      parts.push(`agent-prompt:${options.nativeAgentPrompt.trim()}`);
+    }
+    if (options.nativeAgentDescription) {
+      parts.push(`agent-desc:${options.nativeAgentDescription.trim()}`);
+    }
+  }
 
   return parts.join('::');
 }

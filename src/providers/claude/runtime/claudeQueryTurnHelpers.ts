@@ -204,6 +204,8 @@ export function buildQueryOptionsFromTurnRequest(
     // reaches the runtime and the chat answers with the generic assistant.
     boundAgentPrompt: legacyQueryOptions?.boundAgentPrompt,
     boundAgentModel: legacyQueryOptions?.boundAgentModel,
+    boundAgentSlug: legacyQueryOptions?.boundAgentSlug,
+    boundAgentDescription: legacyQueryOptions?.boundAgentDescription,
   };
 
   const hasScalarOption = [
@@ -214,6 +216,8 @@ export function buildQueryOptionsFromTurnRequest(
     effectiveQueryOptions.externalContextPaths,
     effectiveQueryOptions.boundAgentPrompt,
     effectiveQueryOptions.boundAgentModel,
+    effectiveQueryOptions.boundAgentSlug,
+    effectiveQueryOptions.boundAgentDescription,
   ].some((value) => value !== undefined);
   const hasMentions = (effectiveQueryOptions.mcpMentions?.size ?? 0) > 0;
 

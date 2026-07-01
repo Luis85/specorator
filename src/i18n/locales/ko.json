@@ -886,7 +886,9 @@
       "notesName": "Notes",
       "notesDesc": "Gotchas and guardrails.",
       "save": "Save",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "tagsName": "Tags",
+      "tagsDesc": "Comma-separated tags for search and filtering."
     },
     "create": {
       "noActiveNote": "Open a note to create a work order from it.",
@@ -1099,7 +1101,9 @@
     "iconNone": "기본값",
     "bindingHint": "다른 에이전트를 사용하려면 새 채팅을 시작하세요.",
     "navAriaLabel": "라이브러리 섹션",
-    "removeCapability": "{name} 제거"
+    "removeCapability": "{name} 제거",
+    "tagsLabel": "Tags",
+    "tagsPlaceholder": "comma, separated, tags"
   },
   "workOrderActivity": {
     "toggleRunning": "활성 작업 지시 {count}개",
@@ -1117,6 +1121,17 @@
       "review": "검토",
       "close": "탭 닫기"
     }
+  },
+  "library": {
+    "searchPlaceholder": "Search…",
+    "sortLabel": "Sort",
+    "sortName": "Name (A–Z)",
+    "sortUpdated": "Recently updated",
+    "resetFilters": "Clear filters",
+    "filterGroupLabel": "Filter by tag",
+    "duplicate": "Duplicate",
+    "noMatches": "No items match your search.",
+    "tagsField": "Tags (comma-separated)"
   },
   "skillLibrary": {
     "title": "Skill Library",
@@ -1136,7 +1151,8 @@
     "navLabel": "Skills",
     "nameField": "Name",
     "actionFailed": "Something went wrong — check the developer console.",
-    "providerVault": "Vault"
+    "providerVault": "Vault",
+    "prompt": "Prompt"
   },
   "loopLibrary": {
     "navLabel": "Loops",
@@ -1149,7 +1165,11 @@
     "deleteConfirm": "Delete the loop \"{name}\"?",
     "deleted": "Deleted {name}.",
     "useWhenLabel": "Use when:",
-    "actionFailed": "Something went wrong — check the developer console."
+    "actionFailed": "Something went wrong — check the developer console.",
+    "prompt": "Prompt",
+    "promptTitle": "Prompt with loop: {name}",
+    "tabLimitReached": "Cannot prompt loop: tab limit reached. Close a tab first.",
+    "emptyBody": "This loop has no body to prompt — add an Approach or Steps section first."
   },
   "ribbon": {
     "openChat": "Open Co-Worker Chat",

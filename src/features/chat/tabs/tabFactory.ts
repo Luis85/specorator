@@ -25,6 +25,11 @@ export interface TabCreateOptions {
    *   - is forwarded as `queryOptions.model` on every turn.
    */
   pinnedModel?: string | null;
+  /**
+   * Display-only initial model for a bound-agent tab (seeds the ModelSelector
+   * without forcing a query override — see `TabData.displayModel`).
+   */
+  displayModel?: string | null;
   /** Provider to inherit for blank tabs (e.g. from the active tab). */
   defaultProviderId?: ProviderId;
   /** Immutable tab kind. Defaults to 'chat' when omitted. */
@@ -85,12 +90,20 @@ export function createTab(options: TabCreateOptions): TabData {
     : '';
   const pinnedModel = pinnedModelInput || null;
 
+  const displayModelInput = typeof options.displayModel === 'string'
+    ? options.displayModel.trim()
+    : '';
+  const displayModel = displayModelInput
+    ? { conversationId: conversation?.id ?? null, model: displayModelInput }
+    : null;
+
   const tab: TabData = {
     id,
     kind: options.kind ?? 'chat',
     lifecycleState: isBound ? 'bound_cold' : 'blank',
     draftModel,
     pinnedModel,
+    displayModel,
     providerId: initialProviderId,
     conversationId: conversation?.id ?? null,
     service: null,

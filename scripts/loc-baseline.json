@@ -3,60 +3,56 @@
   "description": "Grandfathered source files above maxLoc nonblank LOC. Entries may shrink but not grow; new files above maxLoc are rejected. Regenerate with `npm run check:loc -- --update`.",
   "allowlist": {
     "src/providers/claude/runtime/ClaudeChatRuntime.ts": {
-      "loc": 1636,
-      "reason": "Grandfathered. Planned split: extract persistent-query lifecycle (ensureReady, needsRestart, response-consumer startup) behind a smaller module interface. See docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md. +1 from the getSpecoratorToolKey dynamic-update dep wiring (tool-scope staleness key)."
+      "loc": 1662,
+      "reason": "Grandfathered. Planned split: extract persistent-query lifecycle (ensureReady, needsRestart, response-consumer startup) behind a smaller module interface. See docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md. +1 from the getSpecoratorToolKey dynamic-update dep wiring (tool-scope staleness key). Library-views-overhaul: bound-agent native SDK activation (syncBoundAgentState + threading boundAgentPrompt/slug/model/description through query → runPersistentTurn → queryViaPersistent and the config/options builders)."
     },
     "src/features/chat/controllers/InputController.ts": {
-      "loc": 1175,
-      "reason": "Grandfathered. Planned split: the resume dropdown is now extracted to ResumeSessionDropdownCoordinator; the plan/approval state machine remains a follow-up. See docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md. +1 from importing the named BoundAgentProjection type for the resolved bound-agent value. +6 from threading the conversation provider into resolveBoundAgent so a bound agent's cross-provider model id is dropped after a disabled-provider fallback."
+      "loc": 1199,
+      "reason": "Grandfathered. Planned split: the resume dropdown is now extracted to ResumeSessionDropdownCoordinator; the plan/approval state machine remains a follow-up. See docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md. +1 from importing the named BoundAgentProjection type for the resolved bound-agent value. +6 from threading the conversation provider into resolveBoundAgent so a bound agent's cross-provider model id is dropped after a disabled-provider fallback. +9 from the public seedComposerDraft composer-draft prefill seam (library loop prompting) plus the autoResumeWith refactor that reuses it. +6 from the seedComposerDraft keepExisting/focus polish (preserve an unsent draft above the seeded content, focus the composer, caret to end)."
     },
     "src/providers/opencode/runtime/OpencodeChatRuntime.ts": {
       "loc": 1116,
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Runtime-discovered slash-command state extracted to OpencodeSupportedCommandsRegistry. +12 from threading the bound-agent tool grant through query → ensureReady → prepareLaunchArtifacts into the scoped getHttpToolServerConfig call (HTTP tool-tier grant scoping P1b)."
     },
     "src/features/chat/SpecoratorView.ts": {
-      "loc": 1104,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. +12 from the two-row header (title row + agent/git meta row) and updateHeaderMetaRow collapse logic. +31 from chat-header a11y: wireHeaderButton helper (keyboard-operable header buttons), history aria-expanded/closeHistoryDropdown sync, and bound-agent chip aria-label."
+      "loc": 1112,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. +12 from the two-row header (title row + agent/git meta row) and updateHeaderMetaRow collapse logic. +31 from chat-header a11y: wireHeaderButton helper (keyboard-operable header buttons), history aria-expanded/closeHistoryDropdown sync, and bound-agent chip aria-label. +8 from the roster:changed subscription that recomputes bound-agent displayModel seeds (via the tabShared free function) when an agent's saved model is edited in place, since the conversation-keyed seed can't self-invalidate on a same-conversation model change."
     },
     "src/providers/codex/runtime/CodexChatRuntime.ts": {
       "loc": 1051,
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Host⇆target session-path translation (toHostSessionPath/toTargetSessionPath/mapHostPathToTarget/mapRequiredHostPathsToTarget) extracted to codexSessionPathMapping.ts."
     },
-    "src/features/chat/controllers/StreamController.ts": {
-      "loc": 774,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Streaming text + thinking render lifecycles extracted to TextRenderCoordinator / ThinkingRenderCoordinator over a shared StreamRenderLoop + streamRenderBackoff."
-    },
-    "src/main.ts": {
-      "loc": 766,
-      "reason": "Grandfathered orchestrator. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Extracted to dedicated modules: roster-agent resolution + provider projection (app/agents/RosterAgentService.ts), workspace view/ribbon/view-command registration (app/views/registerPluginViews.ts), and chat message toolbar actions (app/commands/registerChatMessageActions.ts); the plugin keeps thin delegators. Remaining clusters earmarked for follow-up services: HTTP tool server wiring (SpecoratorHttpToolServer + getHttpToolServerConfig) and the tool-scope staleness fingerprint (getScopedSpecoratorTools + getSpecoratorToolKey)."
+    "src/features/tasks/ui/AgentBoardView.ts": {
+      "loc": 932,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Live-heartbeat map + live-strip date math extracted to AgentBoardLiveHeartbeatTracker. +10 from openDetailForFile (the create→detail-modal tail extracted from addWorkOrderFromBoard and made public) so the file/folder right-click 'Create work order' opens the modal via plugin.openWorkOrderInBoard instead of the raw note."
     },
     "src/features/chat/services/SubagentManager.ts": {
       "loc": 869,
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Pure result-parsing heuristics (status classification, JSON-record coercion, agent-id extraction) extracted to subagentResultParsing.ts."
     },
-    "src/features/tasks/ui/AgentBoardView.ts": {
-      "loc": 932,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Live-heartbeat map + live-strip date math extracted to AgentBoardLiveHeartbeatTracker. +10 from openDetailForFile (the create→detail-modal tail extracted from addWorkOrderFromBoard and made public) so the file/folder right-click 'Create work order' opens the modal via plugin.openWorkOrderInBoard instead of the raw note."
-    },
-    "src/providers/codex/runtime/CodexNotificationRouter.ts": {
-      "loc": 761,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. file_change normalization/merge + per-item memo extracted to codexFileChangeAccumulator; shared asRecord/firstString to codexNotificationHelpers."
-    },
-    "src/features/chat/rendering/ToolCallRenderer.ts": {
-      "loc": 628,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Per-tool pure renderers extracted to siblings: askUserQuestionRenderer, webSearchRenderer, the renderLinesExpanded primitive (toolLinesExpanded), and the contentFallback primitive."
-    },
-    "src/features/chat/rendering/MessageRenderer.ts": {
-      "loc": 770,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Code-block post-render transform extracted to codeBlockFormatter.ts."
+    "src/features/chat/tabs/TabManager.ts": {
+      "loc": 795,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. +3 from the isAgentBound tab-bar-item field (agent-bound badge glyph). Library-views-overhaul: createTab gained bound-agent provider/model seeding; that branching was extracted into resolveDefaultProviderId/resolvePinnedModel helpers to clear the createTab critical-complexity finding (criticalComplexity stays 0), trading a small net LOC rise for lower per-function complexity."
     },
     "src/features/inline-edit/ui/InlineEditModal.ts": {
       "loc": 785,
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
     },
-    "src/features/chat/tabs/TabManager.ts": {
-      "loc": 768,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. +3 from the isAgentBound tab-bar-item field (agent-bound badge glyph)."
+    "src/features/chat/controllers/StreamController.ts": {
+      "loc": 774,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Streaming text + thinking render lifecycles extracted to TextRenderCoordinator / ThinkingRenderCoordinator over a shared StreamRenderLoop + streamRenderBackoff."
+    },
+    "src/features/chat/rendering/MessageRenderer.ts": {
+      "loc": 770,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Code-block post-render transform extracted to codeBlockFormatter.ts."
+    },
+    "src/main.ts": {
+      "loc": 766,
+      "reason": "Grandfathered orchestrator. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Extracted to dedicated modules: roster-agent resolution + provider projection (app/agents/RosterAgentService.ts), workspace view/ribbon/view-command registration (app/views/registerPluginViews.ts), and chat message toolbar actions (app/commands/registerChatMessageActions.ts); the plugin keeps thin delegators. Remaining clusters earmarked for follow-up services: HTTP tool server wiring (SpecoratorHttpToolServer + getHttpToolServerConfig) and the tool-scope staleness fingerprint (getScopedSpecoratorTools + getSpecoratorToolKey)."
+    },
+    "src/providers/codex/runtime/CodexNotificationRouter.ts": {
+      "loc": 761,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. file_change normalization/merge + per-item memo extracted to codexFileChangeAccumulator; shared asRecord/firstString to codexNotificationHelpers."
     },
     "src/providers/codex/history/CodexHistoryStore.ts": {
       "loc": 746,
@@ -69,6 +65,10 @@
     "src/features/chat/controllers/ConversationController.ts": {
       "loc": 677,
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
+    },
+    "src/features/chat/rendering/ToolCallRenderer.ts": {
+      "loc": 628,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Per-tool pure renderers extracted to siblings: askUserQuestionRenderer, webSearchRenderer, the renderLinesExpanded primitive (toolLinesExpanded), and the contentFallback primitive."
     },
     "src/features/tasks/execution/RunSession.ts": {
       "loc": 625,
@@ -87,7 +87,7 @@
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
     },
     "src/features/settings/SpecoratorSettings.ts": {
-      "loc": 550,
+      "loc": 539,
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
     },
     "src/providers/codex/runtime/codexAppServerTypes.ts": {

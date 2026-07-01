@@ -34,6 +34,7 @@ import type {
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import type { RuntimeHost } from '../../../core/runtime/RuntimeHost';
 import type {
+  BoundAgentState,
   ChatRewindMode,
   ChatRewindResult,
   ChatRuntimeConversationState,
@@ -184,6 +185,8 @@ export class ClaudeChatRuntime implements ChatRuntime {
   // picks them up from buildPersistentQueryOptions at startPersistentQuery time.
   private currentBoundAgentPrompt: string | undefined;
   private currentBoundAgentModel: string | undefined;
+  private currentBoundAgentSlug: string | undefined;
+  private currentBoundAgentDescription: string | undefined;
 
   // Current allowed tools for canUseTool enforcement (null = no restriction)
   private currentAllowedTools: string[] | null = null;
@@ -356,6 +359,20 @@ export class ClaudeChatRuntime implements ChatRuntime {
     this.setSessionId(resolvedSessionId, externalContextPaths);
   }
 
+  /**
+   * Syncs the bound-agent projection so the next ensureReady() / startPersistentQuery()
+   * uses the correct native-agent path and system-prompt key. Called by the
+   * pre-warm coordinator before ensureReady() so the persistent query starts
+   * with the agent persona from turn zero rather than the generic Specorator identity.
+   */
+  syncBoundAgentState(state: BoundAgentState): void {
+    this.plugin.logger.scope('claude.runtime').debug('[bound-agent] syncBoundAgentState', { hasPrompt: !!state.prompt, slug: state.slug, model: state.model });
+    this.currentBoundAgentPrompt = state.prompt;
+    this.currentBoundAgentModel = state.model;
+    this.currentBoundAgentSlug = state.slug;
+    this.currentBoundAgentDescription = state.description;
+  }
+
   buildSessionUpdates({ conversation, sessionInvalidated }: {
     conversation: Conversation | null;
     sessionInvalidated: boolean;
@@ -442,8 +459,8 @@ export class ClaudeChatRuntime implements ChatRuntime {
       closePersistentQuery: (reason, preserveHandlers) =>
         this.closePersistentQuery(reason, { preserveHandlers }),
       needsRestartForConfig: (vaultPath, cliPath, externalContextPaths) =>
-        // Include the bound-agent prompt so this unforced check matches the stored key.
-        this.needsRestart(this.buildPersistentQueryConfig(vaultPath, cliPath, externalContextPaths, undefined, this.currentBoundAgentPrompt)),
+        // Include bound-agent state so this unforced check matches the stored key.
+        this.needsRestart(this.buildPersistentQueryConfig(vaultPath, cliPath, externalContextPaths, undefined, this.currentBoundAgentPrompt, this.currentBoundAgentSlug)),
     };
   }
 
@@ -478,10 +495,10 @@ export class ClaudeChatRuntime implements ChatRuntime {
 
     this.queryAbortController = new AbortController();
 
-    // Fold the bound-agent prompt into the stored config so its systemPromptKey
-    // matches the actual query options below; otherwise needsRestart fires every
-    // bound-agent turn (stored key lacks the appendix the recomputed key has).
-    const config = this.buildPersistentQueryConfig(vaultPath, cliPath, externalContextPaths, modelOverride, this.currentBoundAgentPrompt);
+    // Fold bound-agent state into the stored config so its systemPromptKey matches
+    // the actual query options below; otherwise needsRestart fires every bound-agent
+    // turn (stored key lacks the appendix / slug the recomputed key has).
+    const config = this.buildPersistentQueryConfig(vaultPath, cliPath, externalContextPaths, modelOverride, this.currentBoundAgentPrompt, this.currentBoundAgentSlug);
     this.currentConfig = config;
 
     const resumeAtMessageId = this.pendingResumeAt;
@@ -619,12 +636,14 @@ export class ClaudeChatRuntime implements ChatRuntime {
     externalContextPaths?: string[],
     modelOverride?: string,
     boundAgentPrompt?: string,
+    boundAgentSlug?: string,
   ): PersistentQueryConfig {
     return QueryOptionsBuilder.buildPersistentQueryConfig(
       this.buildQueryOptionsContext(vaultPath, cliPath),
       externalContextPaths,
       modelOverride,
       boundAgentPrompt,
+      boundAgentSlug,
     );
   }
 
@@ -652,6 +671,8 @@ export class ClaudeChatRuntime implements ChatRuntime {
       pluginManager: this.requirePluginManager(),
       boundAgentPrompt: this.currentBoundAgentPrompt,
       boundAgentModel: this.currentBoundAgentModel,
+      boundAgentSlug: this.currentBoundAgentSlug,
+      boundAgentDescription: this.currentBoundAgentDescription,
     };
   }
 
@@ -1267,6 +1288,15 @@ export class ClaudeChatRuntime implements ChatRuntime {
     // the correct --model flag immediately, without relying on setModel()
     // which only takes effect at turn boundaries.
     if (!this.persistentQuery && !this.shuttingDown) {
+      // Pre-sync bound-agent state so startPersistentQuery builds the
+      // native-agent options immediately from this turn's query options, rather
+      // than stale (undefined) defaults from before the first turn arrives.
+      // queryViaPersistent re-syncs these fields too — both sets are identical.
+      this.currentBoundAgentPrompt = ctx.queryOptions?.boundAgentPrompt;
+      this.currentBoundAgentModel = ctx.queryOptions?.boundAgentModel;
+      this.currentBoundAgentSlug = ctx.queryOptions?.boundAgentSlug;
+      this.currentBoundAgentDescription = ctx.queryOptions?.boundAgentDescription;
+      this.plugin.logger.scope('claude.runtime').debug('[bound-agent] runPersistentTurn: starting persistent query', { hasPrompt: !!ctx.queryOptions?.boundAgentPrompt, slug: ctx.queryOptions?.boundAgentSlug, model: ctx.queryOptions?.boundAgentModel });
       await this.startPersistentQuery(
         ctx.vaultPath,
         ctx.cliPath,
@@ -1360,6 +1390,9 @@ export class ClaudeChatRuntime implements ChatRuntime {
     // sees the correct values when a restart is triggered inside maybeRestart.
     this.currentBoundAgentPrompt = queryOptions?.boundAgentPrompt;
     this.currentBoundAgentModel = queryOptions?.boundAgentModel;
+    this.currentBoundAgentSlug = queryOptions?.boundAgentSlug;
+    this.currentBoundAgentDescription = queryOptions?.boundAgentDescription;
+    this.plugin.logger.scope('claude.runtime').debug('[bound-agent] queryViaPersistent: bound-agent state synced', { hasPrompt: !!queryOptions?.boundAgentPrompt, promptLen: queryOptions?.boundAgentPrompt?.length, slug: queryOptions?.boundAgentSlug });
 
     await this.applyTurnToolRestrictions(queryOptions);
 
@@ -1467,8 +1500,8 @@ export class ClaudeChatRuntime implements ChatRuntime {
         getPermissionMode: () => this.getScopedSettings().permissionMode,
         resolveSDKPermissionMode: (mode) => this.resolveSDKPermissionMode(mode),
         mcpManager: this.mcpManager,
-        buildPersistentQueryConfig: (vaultPath, cliPath, externalContextPaths, boundAgentPrompt) =>
-          this.buildPersistentQueryConfig(vaultPath, cliPath, externalContextPaths, undefined, boundAgentPrompt),
+        buildPersistentQueryConfig: (vaultPath, cliPath, externalContextPaths, boundAgentPrompt, boundAgentSlug) =>
+          this.buildPersistentQueryConfig(vaultPath, cliPath, externalContextPaths, undefined, boundAgentPrompt, boundAgentSlug),
         needsRestart: (newConfig) => this.needsRestart(newConfig),
         ensureReady: (options) => this.ensureReady(options),
         setCurrentExternalContextPaths: (paths) => {
@@ -1500,6 +1533,8 @@ export class ClaudeChatRuntime implements ChatRuntime {
     // on the cold-start path (covers direct cold-starts and restarts from queryViaPersistent).
     this.currentBoundAgentPrompt = queryOptions?.boundAgentPrompt;
     this.currentBoundAgentModel = queryOptions?.boundAgentModel;
+    this.currentBoundAgentSlug = queryOptions?.boundAgentSlug;
+    this.currentBoundAgentDescription = queryOptions?.boundAgentDescription;
     const selectedModel = queryOptions?.model || this.getScopedSettings().model;
 
     this.sessionManager.setPendingModel(selectedModel);
@@ -1679,6 +1714,8 @@ export class ClaudeChatRuntime implements ChatRuntime {
     // Clear bound-agent state so the next conversation starts without stale overrides
     this.currentBoundAgentPrompt = undefined;
     this.currentBoundAgentModel = undefined;
+    this.currentBoundAgentSlug = undefined;
+    this.currentBoundAgentDescription = undefined;
 
     this.sessionManager.reset();
   }
@@ -1761,6 +1798,8 @@ export class ClaudeChatRuntime implements ChatRuntime {
       // The correct bound-agent values are threaded per-turn from queryOptions.
       this.currentBoundAgentPrompt = undefined;
       this.currentBoundAgentModel = undefined;
+      this.currentBoundAgentSlug = undefined;
+      this.currentBoundAgentDescription = undefined;
     }
 
     this.sessionManager.setSessionId(id, this.getScopedSettings().model);

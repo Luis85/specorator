@@ -45,16 +45,29 @@ function makeEntry(overrides: Partial<SkillTabEntry> = {}): SkillTabEntry {
   };
 }
 
-function makeTab(opts: { id?: string; providerId?: string; lifecycleState?: string } = {}) {
+function makeTab(opts: {
+  id?: string;
+  providerId?: string;
+  lifecycleState?: string;
+  kind?: string;
+  draftText?: string;
+  attachedFiles?: string[];
+  hasImages?: boolean;
+} = {}) {
   return {
     id: opts.id ?? 'tab-1',
     providerId: opts.providerId ?? 'claude',
     lifecycleState: opts.lifecycleState ?? 'blank',
+    kind: opts.kind ?? 'chat',
+    dom: { inputEl: { value: opts.draftText ?? '' } },
     ui: {
       fileContextManager: {
         attachFileAsPill: jest.fn(),
         attachFolderAsPill: jest.fn(),
+        getAttachedFiles: jest.fn(() => new Set<string>(opts.attachedFiles ?? [])),
+        getAttachedFolders: jest.fn(() => new Set<string>()),
       },
+      imageContextManager: { hasImages: jest.fn(() => opts.hasImages ?? false) },
     },
     controllers: {
       inputController: {
@@ -186,6 +199,113 @@ describe('runVaultSkill', () => {
       undefined,
       expect.objectContaining({ activate: false, defaultProviderId: 'claude' }),
     );
+    expect(tabManager.switchToTab).toHaveBeenCalledWith('tab-2');
+  });
+
+  it('creates a new tab instead of reusing a blank active tab that holds an unsent draft', async () => {
+    const activeTab = makeTab({
+      providerId: 'claude',
+      lifecycleState: 'blank',
+      draftText: '  half-written  ',
+    });
+    const newTab = makeTab({ id: 'tab-2', providerId: 'claude' });
+    const { plugin, tabManager } = makePlugin({ activeTab, newTab });
+
+    await runVaultSkill(plugin as any, makeEntry(), null);
+
+    // The draft-bearing blank must not be reused, or its pills would be consumed
+    // by the skill send's buildOutgoingTurn.
+    expect(tabManager.switchToTab).toHaveBeenCalledWith('tab-2');
+    expect(activeTab.controllers.inputController.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('skips a background blank tab with attached pills and creates a new tab', async () => {
+    const activeTab = makeTab({ id: 'tab-1', providerId: 'codex', lifecycleState: 'bound_active' });
+    const draftBlank = makeTab({
+      id: 'tab-2',
+      providerId: 'claude',
+      lifecycleState: 'blank',
+      attachedFiles: ['notes/a.md'],
+    });
+    const newTab = makeTab({ id: 'tab-3', providerId: 'claude' });
+    const { plugin, tabManager } = makePlugin({
+      activeTab,
+      allTabs: [activeTab, draftBlank],
+      newTab,
+    });
+
+    await runVaultSkill(plugin as any, makeEntry(), null);
+
+    expect(tabManager.createTab).toHaveBeenCalled();
+    expect(tabManager.switchToTab).toHaveBeenCalledWith('tab-3');
+  });
+
+  it('does not send a skill into a blank WORK-ORDER tab (hidden task-run tab)', async () => {
+    const active = { id: 'tab-1', providerId: 'codex', lifecycleState: 'bound_active' };
+    const woBlank = makeTab({ id: 'wo', providerId: 'claude', lifecycleState: 'blank', kind: 'work-order' });
+    const newTab = makeTab({ id: 'tab-3', providerId: 'claude' });
+    const { plugin, tabManager } = makePlugin({
+      activeTab: active as never,
+      allTabs: [active as never, woBlank],
+      newTab,
+    });
+
+    await runVaultSkill(plugin as any, makeEntry(), null);
+
+    expect(tabManager.createTab).toHaveBeenCalled();
+    expect(tabManager.switchToTab).toHaveBeenCalledWith('tab-3');
+    expect(woBlank.controllers.inputController.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('still reuses a draft-free blank match on the target provider', async () => {
+    const activeTab = makeTab({ id: 'tab-1', providerId: 'codex', lifecycleState: 'bound_active' });
+    const blankMatch = makeTab({ id: 'tab-2', providerId: 'claude', lifecycleState: 'blank' });
+    const { plugin, tabManager } = makePlugin({
+      activeTab,
+      allTabs: [activeTab, blankMatch],
+    });
+
+    await runVaultSkill(plugin as any, makeEntry(), null);
+
+    expect(tabManager.createTab).not.toHaveBeenCalled();
+    expect(tabManager.switchToTab).toHaveBeenCalledWith('tab-2');
+  });
+
+  it('reuses a background draft-free blank when the active same-provider tab is bound', async () => {
+    // Active tab matches provider but is a conversation; a draft-free background
+    // blank on the same provider must be reused rather than creating a new tab.
+    const activeTab = makeTab({ id: 'tab-1', providerId: 'claude', lifecycleState: 'bound_active' });
+    const blankMatch = makeTab({ id: 'tab-2', providerId: 'claude', lifecycleState: 'blank' });
+    const { plugin, tabManager } = makePlugin({
+      activeTab,
+      allTabs: [activeTab, blankMatch],
+    });
+
+    await runVaultSkill(plugin as any, makeEntry(), null);
+
+    expect(tabManager.createTab).not.toHaveBeenCalled();
+    expect(tabManager.switchToTab).toHaveBeenCalledWith('tab-2');
+  });
+
+  it('at the tab cap, reuses a draft-free background blank instead of the tab-limit notice', async () => {
+    // Regression for the draft-guard fall-through: a draft-bearing active blank
+    // must not skip the background scan straight into a spurious cap failure.
+    const activeTab = makeTab({
+      id: 'tab-1',
+      providerId: 'claude',
+      lifecycleState: 'blank',
+      draftText: 'unsent draft',
+    });
+    const blankMatch = makeTab({ id: 'tab-2', providerId: 'claude', lifecycleState: 'blank' });
+    const { plugin, tabManager } = makePlugin({
+      activeTab,
+      allTabs: [activeTab, blankMatch],
+      canCreate: false,
+    });
+
+    await runVaultSkill(plugin as any, makeEntry(), null);
+
+    expect(Notice).not.toHaveBeenCalled();
     expect(tabManager.switchToTab).toHaveBeenCalledWith('tab-2');
   });
 

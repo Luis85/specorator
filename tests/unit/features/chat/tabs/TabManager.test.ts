@@ -302,6 +302,44 @@ describe('TabManager - Tab Lifecycle', () => {
         expect.objectContaining({ tabId: 'restored-tab-id' })
       );
     });
+
+    it('seeds a bound agent model as displayModel (not pinnedModel) so it stays live', async () => {
+      const plugin = createMockPlugin({
+        getConversationById: jest.fn().mockResolvedValue({
+          id: 'conv-bound',
+          boundAgentId: 'reviewer',
+          providerId: 'claude',
+        }),
+        resolveBoundAgent: jest.fn().mockResolvedValue({ slug: 'reviewer', model: 'opus' }),
+      });
+      const manager = createManager({ plugin, callbacks });
+
+      await manager.createTab('conv-bound');
+
+      const opts = mockCreateTab.mock.calls.at(-1)![0];
+      // Display-only seed for the ModelSelector — NOT a pin, so getTabModelOverride
+      // returns null and the per-turn model resolves live from the bound agent.
+      expect(opts.displayModel).toBe('opus');
+      expect(opts.pinnedModel).toBeUndefined();
+    });
+
+    it('keeps an explicit caller pin as pinnedModel and does not add a displayModel', async () => {
+      const plugin = createMockPlugin({
+        getConversationById: jest.fn().mockResolvedValue({
+          id: 'conv-bound',
+          boundAgentId: 'reviewer',
+          providerId: 'claude',
+        }),
+        resolveBoundAgent: jest.fn().mockResolvedValue({ slug: 'reviewer', model: 'opus' }),
+      });
+      const manager = createManager({ plugin, callbacks });
+
+      await manager.createTab('conv-bound', undefined, { pinnedModel: 'haiku' });
+
+      const opts = mockCreateTab.mock.calls.at(-1)![0];
+      expect(opts.pinnedModel).toBe('haiku');
+      expect(opts.displayModel).toBeUndefined();
+    });
   });
 
   describe('switchToTab', () => {

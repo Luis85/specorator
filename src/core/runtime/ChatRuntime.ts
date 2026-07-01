@@ -1,6 +1,7 @@
 import type { ProviderCapabilities, ProviderId } from '../providers/types';
 import type { ChatMessage, Conversation, SlashCommand, StreamChunk, ToolCallInfo } from '../types';
 import type {
+  BoundAgentState,
   ChatRewindMode,
   ChatRewindResult,
   ChatRuntimeConversationState,
@@ -23,6 +24,13 @@ export interface ChatRuntime {
     conversation: ChatRuntimeConversationState | null,
     externalContextPaths?: string[],
   ): void;
+  /**
+   * Optional: sync the bound-agent projection before ensureReady() so the
+   * first persistent query starts with the correct system-prompt key and model.
+   * Providers that don't start persistent queries (or resolve agent state
+   * per-turn) may leave this unimplemented — the coordinator guards with `?.`.
+   */
+  syncBoundAgentState?(state: BoundAgentState): void;
   reloadMcpServers(): Promise<void>;
   ensureReady(options?: ChatRuntimeEnsureReadyOptions): Promise<boolean>;
   query(

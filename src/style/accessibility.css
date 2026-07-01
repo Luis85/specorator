@@ -40,11 +40,9 @@
   border-radius: 4px;
 }
 
-/* Library views: the keyboard-activatable roster card name button and the
-   cross-library nav tabs need a visible focus ring. The card itself is a
-   role="group" (not focusable); its name <button> is the keyboard open
-   affordance and carries the ring. */
-.specorator-roster-card-name:focus-visible,
+/* Library views: the cross-library nav tabs and cap-picker controls need a
+   visible focus ring. (The card's own focus ring lives in library.css; the
+   whole card is the keyboard open affordance, role="button" tabindex="0".) */
 .specorator-library-nav-item:focus-visible,
 .specorator-cap-picker-header:focus-visible,
 .specorator-cap-picker-chip:focus-visible,

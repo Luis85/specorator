@@ -1,7 +1,7 @@
 ---
-title: "Settings registry port completion"
+title: Settings registry port completion
 date: 2026-06-11
-status: active
+status: open
 scope: settings-architecture
 ---
 

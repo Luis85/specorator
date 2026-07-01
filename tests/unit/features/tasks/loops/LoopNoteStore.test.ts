@@ -164,6 +164,27 @@ describe('LoopNoteStore.list', () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('bad.md');
   });
+
+  it('stamps each loop with its file mtime (drives the recently-updated sort)', async () => {
+    const byPath: Record<string, string> = {
+      'Agent Board/loops/a.md': VALID_LOOP.replace('name: "My Loop"', 'name: "Apple"'),
+      'Agent Board/loops/b.md': VALID_LOOP.replace('name: "My Loop"', 'name: "Zebra"'),
+    };
+    const mtimes: Record<string, number> = {
+      'Agent Board/loops/a.md': 1000,
+      'Agent Board/loops/b.md': 2000,
+    };
+    const vault = {
+      getMarkdownFiles: () =>
+        Object.keys(byPath).map((path) => ({ path, stat: { mtime: mtimes[path] } })),
+      read: async (file: { path: string }) => byPath[file.path],
+    } as unknown as Vault;
+
+    const { loops } = await new LoopNoteStore().list(vault, 'Agent Board/loops');
+    const byName = Object.fromEntries(loops.map((l) => [l.name, l.updatedAt]));
+    expect(byName.Apple).toBe(1000);
+    expect(byName.Zebra).toBe(2000);
+  });
 });
 
 describe('LoopNoteStore.save', () => {

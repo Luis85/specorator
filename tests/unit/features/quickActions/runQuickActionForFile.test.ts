@@ -34,7 +34,10 @@ function makeMockTab(lifecycleState: 'blank' | 'active') {
       fileContextManager: {
         attachFileAsPill: jest.fn(),
         attachFolderAsPill: jest.fn(),
+        getAttachedFiles: jest.fn(() => new Set<string>()),
+        getAttachedFolders: jest.fn(() => new Set<string>()),
       },
+      imageContextManager: { hasImages: jest.fn(() => false) },
     },
     controllers: {
       inputController: { sendMessage: jest.fn() },
@@ -49,6 +52,7 @@ function makeMockTabManager(opts: {
 }) {
   return {
     getActiveTab: jest.fn(() => opts.activeTab),
+    getAllTabs: jest.fn(() => (opts.activeTab ? [opts.activeTab] : [])),
     canCreateTab: jest.fn(() => opts.canCreate),
     createTab: jest.fn().mockResolvedValue(opts.newTab ?? null),
     switchToTab: jest.fn().mockResolvedValue(undefined),

@@ -8,35 +8,13 @@
 }
 
 /* ── List / cards ── */
-/* The card is itself clickable (mouse open affordance) — the shared library
-   card isn't, so add the cursor + hover affordance here. */
-.specorator-roster-card {
-  cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease;
-}
-
-.specorator-roster-card:hover {
-  border-color: var(--interactive-accent);
-  background: var(--background-modifier-hover);
-}
+/* The cursor + hover affordance for the clickable card now lives on the shared
+   interactive card rule (.specorator-library-card[role="button"]) so it applies
+   uniformly across the Agent / Skill / Loop views. */
 
 .specorator-roster-card-avatar {
   flex: 0 0 auto;
   display: flex;
-}
-
-/* The name is a real <button> (keyboard/SR open action) styled to read as plain
-   text — the whole card still opens on mouse click. */
-.specorator-roster-card-name {
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  box-shadow: none;
-  font-size: inherit;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
 }
 
 .specorator-roster-card-desc {
@@ -45,13 +23,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.specorator-roster-card-caps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--size-4-1);
-  margin-top: var(--size-4-1);
 }
 
 .specorator-roster-chip {

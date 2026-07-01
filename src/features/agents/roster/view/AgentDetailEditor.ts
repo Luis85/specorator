@@ -5,6 +5,7 @@ import { asSettingsBag } from '../../../../core/types/settings';
 import { t } from '../../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../../main';
 import { confirm } from '../../../../shared/modals/ConfirmModal';
+import { normalizeStringArray } from '../../../../utils/frontmatter';
 import { renderLibraryLoading } from '../../../../utils/libraryView';
 import { renderAgentAvatar } from '../../agentAvatar';
 import { rosterAgentToPersona } from '../../personaRegistry';
@@ -36,7 +37,7 @@ export class AgentDetailEditor {
   async render(root: HTMLElement, agent: RosterAgent, opts?: { isNew?: boolean }): Promise<void> {
     this.isNew = opts?.isNew ?? false;
     this.original = agent;
-    this.draft = { ...agent, roles: [...agent.roles], skills: [...agent.skills] };
+    this.draft = { ...agent, roles: [...agent.roles], skills: [...agent.skills], tags: [...(agent.tags ?? [])] };
 
     root.empty();
     // The list view shares the `specorator-library` shell; the detail page has its
@@ -100,6 +101,7 @@ export class AgentDetailEditor {
 
     this.renderAppearanceRow(fields);
     this.renderRolesRow(fields);
+    this.renderTagsRow(fields);
   }
 
   private renderAppearanceRow(parent: HTMLElement): void {
@@ -161,6 +163,18 @@ export class AgentDetailEditor {
         this.updateDirty();
       });
     }
+  }
+
+  private renderTagsRow(parent: HTMLElement): void {
+    const row = parent.createDiv({ cls: 'specorator-roster-tags' });
+    const input = row.createEl('input', { cls: 'specorator-roster-tags-input', type: 'text' });
+    input.value = (this.draft.tags ?? []).join(', ');
+    input.placeholder = t('agentRoster.tagsPlaceholder');
+    input.setAttribute('aria-label', t('agentRoster.tagsLabel'));
+    input.addEventListener('input', () => {
+      this.draft.tags = normalizeStringArray(input.value) ?? [];
+      this.updateDirty();
+    });
   }
 
   private renderModelCard(root: HTMLElement): void {
@@ -252,7 +266,7 @@ export class AgentDetailEditor {
   private async save(): Promise<void> {
     this.draft.updatedAt = Date.now();
     await this.plugin.agentRosterStore?.save(this.draft);
-    this.original = { ...this.draft, roles: [...this.draft.roles], skills: [...this.draft.skills] };
+    this.original = { ...this.draft, roles: [...this.draft.roles], skills: [...this.draft.skills], tags: [...(this.draft.tags ?? [])] };
     this.isNew = false;
     new Notice(t('agentRoster.saved', { name: this.draft.name }));
     this.updateDirty();

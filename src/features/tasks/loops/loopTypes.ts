@@ -11,6 +11,10 @@ export interface LoopDefinition {
   steps: string;
   verify: string;
   notes: string;
+  /** Freeform user tags for search + filtering. */
+  tags?: string[];
+  /** File mtime, populated by LoopNoteStore.list for "recently updated" sort. */
+  updatedAt?: number;
 }
 
 export interface SaveLoopInput {
@@ -22,4 +26,6 @@ export interface SaveLoopInput {
   steps: string;
   verify: string;
   notes: string;
+  /** Freeform user tags for search + filtering. */
+  tags?: string[];
 }

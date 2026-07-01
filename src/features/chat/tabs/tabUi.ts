@@ -40,6 +40,7 @@ import {
   getTabSettingsSnapshot,
   type ProviderCatalogInfo,
   refreshTabProviderUI,
+  resolveBoundAgentDisplayModel,
   syncSlashCommandDropdownForProvider,
   syncTabProviderServices,
   updatePlanModeUI,
@@ -180,6 +181,25 @@ function isBangBashEnabled(settings: Record<string, unknown>): boolean {
 }
 
 /**
+ * On a bound-agent conversation the per-turn model resolves live from the agent,
+ * so a manual pick must become a real per-tab override (`pinnedModel`) or the
+ * send would silently run on the agent's saved model while the selector shows
+ * the pick. No-op for unbound conversations. Re-evaluated on every pick because
+ * `onModelChange` clears any prior pin first.
+ */
+async function pinModelIfBoundAgentConversation(
+  tab: TabData,
+  plugin: SpecoratorPlugin,
+  model: string,
+): Promise<void> {
+  if (!tab.conversationId) return;
+  const conversation = await plugin.getConversationById(tab.conversationId);
+  if (await resolveBoundAgentDisplayModel(plugin, conversation)) {
+    tab.pinnedModel = model;
+  }
+}
+
+/**
  * Creates and wires the input toolbar for a tab.
  */
 function initializeInputToolbar(
@@ -228,6 +248,17 @@ function initializeInputToolbar(
       if (tab.lifecycleState === 'blank' && typeof tab.draftModel === 'string' && tab.draftModel.trim()) {
         return { ...snapshot, model: tab.draftModel.trim() };
       }
+      // Bound-agent tabs surface the agent's model as a display-only seed so the
+      // selector shows it from the first render. Unlike `pinnedModel` this never
+      // reaches `getTabModelOverride`, so the per-turn model stays live (resolved
+      // from the bound agent each send). The seed is KEYED to its conversation:
+      // trusting it only while `conversationId` still matches means any
+      // conversation change auto-invalidates a stale seed (no per-path clearing
+      // needed), and `onModelChange` clears it outright on a manual pick.
+      if (tab.displayModel && tab.displayModel.conversationId === tab.conversationId
+          && tab.displayModel.model.trim()) {
+        return { ...snapshot, model: tab.displayModel.model.trim() };
+      }
       return snapshot;
     },
     getEnvironmentVariables: () => plugin.getActiveEnvironmentVariables(),
@@ -237,6 +268,14 @@ function initializeInputToolbar(
       // on every subsequent turn rather than getting shadowed by the old pin.
       if (typeof tab.pinnedModel === 'string' && tab.pinnedModel.trim() !== model) {
         tab.pinnedModel = null;
+      }
+
+      // An explicit pick supersedes the bound-agent display seed on the SAME
+      // conversation (the key wouldn't invalidate it), so clear it outright. On a
+      // bound conversation the pick is then re-pinned below so it actually wins;
+      // otherwise the selector falls back to settings.model.
+      if (tab.displayModel) {
+        tab.displayModel = null;
       }
 
       // For blank tabs, update draft model and derive provider
@@ -288,6 +327,10 @@ function initializeInputToolbar(
         tab.ui.modelSelector?.updateDisplay();
         return;
       }
+
+      // Turn an explicit pick on a bound-agent conversation into a real per-tab
+      // override so the send uses it instead of the agent's live model.
+      await pinModelIfBoundAgentConversation(tab, plugin, model);
 
       const uiConfig: ProviderChatUIConfig = getTabChatUIConfig(tab, plugin);
       const providerSettings = await updateTabProviderSettings(tab, plugin, (settings) => {

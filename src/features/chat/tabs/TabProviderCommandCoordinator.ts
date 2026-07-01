@@ -222,6 +222,13 @@ export class TabProviderCommandCoordinator {
     }
 
     runtime.syncConversationState(context.conversation, context.externalContextPaths);
+
+    // No bound-agent sync here on purpose: the persona (and its clearing for an
+    // unbound conversation) is applied on the send path — runPersistentTurn /
+    // queryViaPersistent set currentBoundAgent* from the turn's queryOptions
+    // before the persistent query starts or restarts. This method is only reached
+    // under 'runtime' warmup, which no provider currently emits, so a pre-warm
+    // sync would be dead code; if a 'runtime' policy is ever added, sync there.
     await runtime.ensureReady();
     if (ProviderRegistry.getCapabilities(providerId).supportsProviderCommands) {
       await this.getSdkCommands(tab.id);

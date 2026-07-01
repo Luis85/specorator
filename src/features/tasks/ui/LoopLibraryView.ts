@@ -3,9 +3,11 @@ import { ItemView, Notice, type WorkspaceLeaf } from 'obsidian';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import { renderLibraryNav } from '../../../shared/libraryNav';
+import { LibraryListController, mountLibraryList, renderCloneButton, renderLibraryCardTags } from '../../../shared/libraryToolbar';
 import { confirm } from '../../../shared/modals/ConfirmModal';
 import { withErrorNotice } from '../../../shared/uiAction';
 import { createLibraryCard, renderLibraryEmptyState, renderLibraryLoading, renderLibraryShell } from '../../../utils/libraryView';
+import { launchLoopPrompt } from '../../quickActions/launchLoopPrompt';
 import { installPresetLoopsWithNotice } from '../loops/installPresetLoops';
 import { LoopNoteStore } from '../loops/LoopNoteStore';
 import type { LoopDefinition } from '../loops/loopTypes';
@@ -15,6 +17,12 @@ export const VIEW_TYPE_LOOP_LIBRARY = 'specorator-loop-library';
 
 export class LoopLibraryView extends ItemView {
   private readonly store = new LoopNoteStore();
+  private readonly controller = new LibraryListController<LoopDefinition>({
+    getName: (l) => l.name,
+    getDescription: (l) => `${l.description ?? ''} ${l.useWhen ?? ''}`,
+    getTags: (l) => l.tags ?? [],
+    getUpdatedAt: (l) => l.updatedAt ?? 0,
+  });
 
   constructor(leaf: WorkspaceLeaf, private plugin: SpecoratorPlugin) {
     super(leaf);
@@ -33,7 +41,7 @@ export class LoopLibraryView extends ItemView {
   }
 
   private async render(): Promise<void> {
-    const { actions, list } = renderLibraryShell(this.contentEl, t('loopLibrary.title'),
+    const { actions, toolbar, list } = renderLibraryShell(this.contentEl, t('loopLibrary.title'),
       (c) => renderLibraryNav(c, this.plugin, VIEW_TYPE_LOOP_LIBRARY));
     const newBtn = actions.createEl('button', { cls: 'mod-cta', text: t('loopLibrary.newLoop') });
     newBtn.onclick = () => this.openEditorSafely(null);
@@ -53,23 +61,39 @@ export class LoopLibraryView extends ItemView {
       return;
     }
 
-    for (const loop of loops) {
-      const { body, actions: cardActions } = createLibraryCard(list, loop.name);
-      if (loop.description) {
-        body.createDiv({ cls: 'specorator-library-card-desc', text: loop.description });
-      }
-      if (loop.useWhen) {
-        body.createDiv({
-          cls: 'specorator-library-card-desc',
-          text: `${t('loopLibrary.useWhenLabel')} ${loop.useWhen}`,
-        });
-      }
+    mountLibraryList({ controller: this.controller, items: loops, toolbar, list, renderCard: (l, lp) => this.renderLoopCard(l, lp) });
+  }
 
-      const editBtn = cardActions.createEl('button', { text: t('loopLibrary.edit') });
-      editBtn.onclick = () => this.openEditorSafely(loop);
-      const deleteBtn = cardActions.createEl('button', { cls: 'specorator-library-card-delete', text: t('loopLibrary.delete') });
-      deleteBtn.onclick = () => void withErrorNotice(() => this.deleteLoop(loop), t('loopLibrary.actionFailed'), (e) => this.fail(e));
+  private renderLoopCard(list: HTMLElement, loop: LoopDefinition): void {
+    const { body, actions: cardActions } = createLibraryCard(list, loop.name, {
+      interactive: { onActivate: () => this.openEditorSafely(loop), ariaLabel: loop.name },
+    });
+    if (loop.description) {
+      body.createDiv({ cls: 'specorator-library-card-desc', text: loop.description });
     }
+    if (loop.useWhen) {
+      body.createDiv({ cls: 'specorator-library-card-desc', text: `${t('loopLibrary.useWhenLabel')} ${loop.useWhen}` });
+    }
+    renderLibraryCardTags(body, loop.tags ?? []);
+
+    const promptBtn = cardActions.createEl('button', { cls: 'mod-cta', text: t('loopLibrary.prompt') });
+    promptBtn.onclick = (e) => { e.stopPropagation(); launchLoopPrompt(this.plugin, loop); };
+
+    renderCloneButton(cardActions, (e) => { e.stopPropagation(); void withErrorNotice(() => this.cloneLoop(loop), t('loopLibrary.actionFailed'), (err) => this.fail(err)); });
+
+    const deleteBtn = cardActions.createEl('button', { cls: 'specorator-library-card-delete', text: t('loopLibrary.delete') });
+    deleteBtn.onclick = (e) => { e.stopPropagation(); void withErrorNotice(() => this.deleteLoop(loop), t('loopLibrary.actionFailed'), (err) => this.fail(err)); };
+  }
+
+  private async cloneLoop(loop: LoopDefinition): Promise<void> {
+    const vault = this.plugin.app.vault;
+    const folder = this.folder();
+    let cloneName = `${loop.name} copy`;
+    for (let n = 2; vault.getAbstractFileByPath(this.store.getFilePathForName(folder, cloneName)); n += 1) {
+      cloneName = `${loop.name} copy ${n}`;
+    }
+    await this.store.save(vault, folder, { ...loop, name: cloneName });
+    await this.render();
   }
 
   private async installStarters(): Promise<void> {

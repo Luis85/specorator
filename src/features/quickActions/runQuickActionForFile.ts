@@ -1,9 +1,7 @@
 import { Notice, type TAbstractFile, TFile, TFolder } from 'obsidian';
 
 import type { ProviderId } from '@/core/providers/types';
-import { getTabProviderId } from '@/features/chat/tabs/providerResolution';
-import { resolveBlankTabModel } from '@/features/chat/tabs/tabShared';
-import type { TabData } from '@/features/chat/tabs/types';
+import { resolveOverrideTargetTab } from '@/features/chat/tabs/resolveOverrideTargetTab';
 import { t } from '@/i18n/i18n';
 import type SpecoratorPlugin from '@/main';
 
@@ -23,27 +21,6 @@ export { quickActionStemFromPath };
 export interface QuickActionRunOverride {
   providerId: ProviderId;
   model: string;
-}
-
-/**
- * Resolve the effective model a blank tab is currently using, mirroring the
- * resolution order in `tabControllers.getTabModelOverride` and `tabUi`:
- *   1. `pinnedModel` — survives runtime init
- *   2. `draftModel` — composer-picked, only on blank tabs
- *   3. provider-projected blank model fallback
- */
-function resolveActiveBlankTabModel(
-  tab: Pick<TabData, 'pinnedModel' | 'draftModel'>,
-  plugin: SpecoratorPlugin,
-  providerId: ProviderId,
-): string {
-  if (typeof tab.pinnedModel === 'string' && tab.pinnedModel.trim()) {
-    return tab.pinnedModel.trim();
-  }
-  if (typeof tab.draftModel === 'string' && tab.draftModel.trim()) {
-    return tab.draftModel.trim();
-  }
-  return resolveBlankTabModel(plugin, providerId);
 }
 
 /**
@@ -114,36 +91,8 @@ export async function runQuickActionForFile(
     return;
   }
 
-  const activeTab = tabManager.getActiveTab();
-  const isBlank = activeTab?.lifecycleState === 'blank';
-  // When an override is present, the active blank tab is only reusable if its
-  // provider AND its currently effective model both match the override. The
-  // provider check alone is not enough: `switchToTab` does not accept a model,
-  // so a blank Claude tab pinned to claude-haiku would silently drop the user's
-  // claude-sonnet pick from the launch modal.
-  const overrideMatchesActive = override !== undefined && isBlank && activeTab
-    ? getTabProviderId(activeTab, plugin) === override.providerId
-      && resolveActiveBlankTabModel(activeTab, plugin, override.providerId) === override.model
-    : false;
-  let targetTab;
-
-  if (override === undefined && isBlank && activeTab) {
-    targetTab = activeTab;
-  } else if (overrideMatchesActive && activeTab) {
-    targetTab = activeTab;
-  } else if (tabManager.canCreateTab()) {
-    const newTab = await tabManager.createTab(null, undefined, {
-      activate: false,
-      ...(override !== undefined
-        ? { defaultProviderId: override.providerId, pinnedModel: override.model }
-        : {}),
-    });
-    if (!newTab) {
-      new Notice(t('quickActions.contextMenu.tabLimitReached'));
-      return;
-    }
-    targetTab = newTab;
-  } else {
+  const targetTab = await resolveOverrideTargetTab(plugin, tabManager, override);
+  if (!targetTab) {
     new Notice(t('quickActions.contextMenu.tabLimitReached'));
     return;
   }

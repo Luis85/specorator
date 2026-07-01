@@ -24,6 +24,7 @@ import {
   type ProviderCatalogInfo,
   refreshTabProviderUI,
   resolveBlankTabModel,
+  resolveBoundAgentDisplayModel,
   syncSlashCommandDropdownForProvider,
   syncTabProviderServices,
   updatePlanModeUI,
@@ -197,7 +198,20 @@ export function buildTabConversationController(
         // Bind session state only — runtime starts on send
         tab.conversationId = conversation?.id ?? null;
         tab.draftModel = null;
+        // Drop any per-tab model pin (a work-order model or a bound-agent manual
+        // pick): it belonged to the previous conversation, so it must not shadow
+        // the (re)bound one's live/default model. workOrderPath is cleared above
+        // for the same reason.
+        tab.pinnedModel = null;
         tab.lifecycleState = conversation ? 'bound_cold' : 'blank';
+        // Recompute the display-only model seed for the (re)bound conversation so
+        // a history / open-conversation switch shows the NEW conversation's agent
+        // model (keyed to that conversation) instead of the previous agent's. Sends
+        // already resolve the live model; this keeps the ModelSelector in sync.
+        // (Even without this, the seed's conversation key would invalidate the
+        // stale value — this makes the new agent's model show rather than falling
+        // back to provider settings.)
+        tab.displayModel = await resolveBoundAgentDisplayModel(plugin, conversation);
         syncSlashCommandDropdownForProvider(tab, plugin, getProviderCatalogConfig, conversation);
 
         // If the runtime already exists for the right provider, sync it passively
@@ -228,6 +242,12 @@ export function buildTabConversationController(
         );
         tab.lifecycleState = 'blank';
         tab.draftModel = resolveBlankTabModel(plugin, previousProviderId);
+        // Drop the bound-agent display seed and any per-tab model pin (work-order
+        // model or a bound-agent manual pick): New Chat leaves an unbound tab, so
+        // once its draftModel clears on first send the selector/override must fall
+        // back to provider settings, not linger on the previous agent's model.
+        tab.displayModel = null;
+        tab.pinnedModel = null;
         tab.conversationId = null;
         tab.providerId = getTabProviderId(tab, plugin);
         if (tab.providerId !== previousProviderId) {

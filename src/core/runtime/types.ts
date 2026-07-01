@@ -72,6 +72,13 @@ export interface ChatRuntimeQueryOptions {
   boundAgentPrompt?: string;
   /** Model override sourced from the conversation's bound roster agent. Beats settings.model but loses to an explicit tab/work-order override. Claude-only. */
   boundAgentModel?: string;
+  /** Agent slug (roster id with `roster:` stripped). Forwarded to providers that
+   *  support native agent activation so they can use their own agent protocol
+   *  rather than raw system-prompt injection. Claude-only for now. */
+  boundAgentSlug?: string;
+  /** Human-readable description of the bound agent forwarded to native agent
+   *  definitions that require one (e.g. Claude SDK AgentDefinition.description). */
+  boundAgentDescription?: string;
 }
 
 export interface ChatRuntimeEnsureReadyOptions {
@@ -83,6 +90,20 @@ export type ChatRuntimeConversationState = Pick<
   Conversation,
   'sessionId' | 'providerState'
 >;
+
+/**
+ * Minimal bound-agent projection synced to a runtime before ensureReady() so
+ * the persistent query starts with the correct system-prompt key. Matches the
+ * shape of `BoundAgentProjection` (features layer); defined here to keep the
+ * core runtime contract free of feature-layer imports.
+ */
+export interface BoundAgentState {
+  prompt?: string;
+  model?: string;
+  /** Agent slug forwarded to providers that support native agent activation. */
+  slug?: string;
+  description?: string;
+}
 
 export interface SessionUpdateResult {
   updates: Partial<Conversation>;

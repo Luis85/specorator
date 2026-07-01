@@ -2,7 +2,7 @@
 title: Specorator Standalone Migration (v1.0.0 rebrand)
 date: 2026-05-30
 refreshed: 2026-06-23
-status: open
+status: done
 scope: brand/standalone migration — Claudian → Specorator v1.0.0 (packaging, not new capability)
 parent: "[[Specorator - Product Vision]]"
 related:

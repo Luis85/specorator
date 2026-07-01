@@ -1,6 +1,6 @@
 import type { App, Vault } from 'obsidian';
 
-import { extractString, parseFrontmatter } from '../../../utils/frontmatter';
+import { extractString, extractStringArray, parseFrontmatter } from '../../../utils/frontmatter';
 import {
   deleteNote,
   extractSection,
@@ -40,6 +40,7 @@ export class LoopNoteStore {
       name,
       description: extractString(parsed.frontmatter, 'description'),
       icon: extractString(parsed.frontmatter, 'icon'),
+      tags: extractStringArray(parsed.frontmatter, 'tags'),
       useWhen: extractSection(parsed.body, SECTION_HEADINGS.useWhen),
       approach: extractSection(parsed.body, SECTION_HEADINGS.approach),
       steps: extractSection(parsed.body, SECTION_HEADINGS.steps),
@@ -57,6 +58,9 @@ export class LoopNoteStore {
     ];
     if (input.description) lines.push(`description: ${JSON.stringify(input.description)}`);
     if (input.icon) lines.push(`icon: ${JSON.stringify(input.icon)}`);
+    if (input.tags && input.tags.length > 0) {
+      lines.push(`tags: [${input.tags.map((tag) => JSON.stringify(tag)).join(', ')}]`);
+    }
     lines.push('---', '');
     const section = (heading: string, value: string): void => {
       if (value.trim()) lines.push(`## ${heading}`, '', value.trim(), '');
@@ -70,9 +74,11 @@ export class LoopNoteStore {
   }
 
   async list(vault: Vault, folder: string): Promise<{ loops: LoopDefinition[]; warnings: string[] }> {
-    const { items, warnings } = await listNoteDefinitions(vault, folder, (path, content) =>
-      this.parse(path, content),
-    );
+    const { items, warnings } = await listNoteDefinitions(vault, folder, (path, content, file) => {
+      const def = this.parse(path, content);
+      def.updatedAt = file.stat?.mtime;
+      return def;
+    });
     items.sort((a, b) => a.name.localeCompare(b.name));
     return { loops: items, warnings };
   }

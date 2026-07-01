@@ -23,6 +23,8 @@ function createMockInputEl() {
   return {
     value: '',
     focus: jest.fn(),
+    setSelectionRange: jest.fn(),
+    dispatchEvent: jest.fn(),
   } as unknown as HTMLTextAreaElement;
 }
 
@@ -130,7 +132,11 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
       },
       logger: {
         scope: jest.fn().mockReturnValue({
+          debug: jest.fn(),
+          info: jest.fn(),
+          warn: jest.fn(),
           error: jest.fn(),
+          isEnabled: jest.fn().mockReturnValue(false),
         }),
       },
       mcpManager: {

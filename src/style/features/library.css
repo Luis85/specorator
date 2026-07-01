@@ -113,6 +113,35 @@
   background: var(--background-secondary);
 }
 
+/* Interactive cards (whole row opens on click, via createLibraryCard's
+   `interactive` option which sets role="button") get the mouse affordance —
+   cursor + hover — shared across the Agent / Skill / Loop library views. */
+.specorator-library-card[role="button"] {
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.specorator-library-card[role="button"]:hover {
+  border-color: var(--interactive-accent);
+  background: var(--background-modifier-hover);
+}
+
+/* The whole card is the keyboard open affordance (role="button" tabindex="0"),
+   so it must show a visible focus ring when tabbed to. */
+.specorator-library-card[role="button"]:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+
+/* Tag/role/provider chip row on a card. Neutral (non-roster) name so the Skill
+   and Loop views don't borrow a roster-namespaced class. */
+.specorator-library-card-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4-1);
+  margin-top: var(--size-4-1);
+}
+
 /* Optional leading media slot (e.g. an avatar) rendered before the body. */
 .specorator-library-card-leading {
   flex: 0 0 auto;
@@ -131,20 +160,6 @@
   gap: var(--size-4-2);
 }
 
-/* The opt-in `nameAsButton` name button (createLibraryCard) renders inline like
-   the text it replaces: reset native button chrome and inherit the name row's
-   font/color. A consumer can still layer its own deltas on top. */
-.specorator-library-card-name-button {
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  box-shadow: none;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
 
 .specorator-library-card-desc {
   color: var(--text-muted);
@@ -290,4 +305,45 @@
   justify-content: flex-end;
   gap: var(--size-4-2);
   margin-top: var(--size-4-1);
+}
+
+/* Library toolbar: search + sort + filter chips (added 2026-06-28) */
+.specorator-library-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4-2);
+  align-items: center;
+  margin-bottom: var(--size-4-2);
+}
+.specorator-library-search { flex: 1 1 12rem; min-width: 8rem; }
+.specorator-library-sort { flex: 0 0 auto; }
+.specorator-library-filterchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-2-2);
+  flex-basis: 100%;
+}
+.specorator-library-filterchip,
+.specorator-library-filterreset {
+  font-size: var(--font-ui-smaller);
+  padding: var(--size-2-1) var(--size-2-3);
+  border-radius: var(--radius-s);
+  background: var(--background-modifier-hover);
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.specorator-library-filterchip.is-on {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+.specorator-library-filterchip:focus-visible,
+.specorator-library-filterreset:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+.specorator-library-filterreset.is-hidden { display: none; }
+.specorator-library-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
