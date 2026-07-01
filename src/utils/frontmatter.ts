@@ -209,11 +209,16 @@ export function setFrontmatterList(content: string, key: string, values: string[
   const yamlLines = match[1].split(/\r?\n/);
   const body = match[2];
   const keyLine = new RegExp(`^${key}\\s*:`);
+  const topLevelKey = /^[\w-]+\s*:/;
   const kept: string[] = [];
   let skippingBlock = false;
   for (const line of yamlLines) {
     if (skippingBlock) {
-      if (/^\s*-\s+/.test(line)) continue; // drop block-list items under the removed key
+      // Drop the removed key's entire block value — indented items/continuations,
+      // column-0 `- ` sequence rows, interleaved comments and blank lines — until
+      // the next top-level key ends it. Stopping at only the first non-`-` line
+      // would orphan later items (e.g. `tags:\n  # group\n  - old`) and corrupt YAML.
+      if (!topLevelKey.test(line)) continue;
       skippingBlock = false;
     }
     if (keyLine.test(line)) { skippingBlock = true; continue; }

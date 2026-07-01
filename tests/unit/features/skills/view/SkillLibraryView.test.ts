@@ -71,7 +71,9 @@ function cloneButton(card: Element): Element | null {
 
 function makePlugin(entries: SkillTabEntry[], tagsForEditable?: string[]) {
   return {
-    app: {},
+    // A real adapter with no basePath: getVaultPath returns null, so absolute
+    // (Codex host) paths convert to null and are skipped without throwing.
+    app: { vault: { adapter: {} } },
     settings: {},
     logger: { scope: () => ({ error: jest.fn(), warn: jest.fn() }) },
     events: { emit: jest.fn() },
@@ -187,6 +189,50 @@ describe('SkillLibraryView', () => {
     const tagChips = Array.from(caps!.querySelectorAll('.specorator-library-chip')).map((c) => c.textContent);
     expect(tagChips).toContain('testing');
     expect(tagChips).toContain('workflow');
+  });
+
+  it('loads tags for a Codex vault skill whose sourceFilePath is host-absolute', async () => {
+    // Codex maps SKILL.md paths through toHostPath → `<vault>/.codex/skills/...`.
+    // The view must convert that back to vault-relative before reading, or the
+    // skill loses its frontmatter tags (Codex-skill regression).
+    const codexEntry: SkillTabEntry = {
+      id: 'codex:skill-review',
+      providerId: 'codex',
+      providerDisplayName: 'Codex',
+      name: 'Review',
+      description: 'Code review.',
+      insertPrefix: '$',
+      sourceFilePath: '/vault/.codex/skills/review/SKILL.md',
+      providerEnabled: true,
+    };
+    const read = jest.fn().mockImplementation(async (p: string) =>
+      // Only the vault-relative form resolves; the raw host-absolute path would 404.
+      (!p.startsWith('/') && p.includes('review'))
+        ? '---\ntags:\n  - alpha\n  - beta\n---\n# Review\n'
+        : '# Skill\n',
+    );
+    const plugin = {
+      app: { vault: { adapter: { basePath: '/vault' } } },
+      settings: {},
+      logger: { scope: () => ({ error: jest.fn(), warn: jest.fn() }) },
+      events: { emit: jest.fn() },
+      vaultSkillAggregator: { listAll: jest.fn().mockResolvedValue([codexEntry]) },
+      vaultFileAdapter: {
+        read,
+        stat: jest.fn().mockResolvedValue({ mtime: 5, size: 5 }),
+        write: jest.fn().mockResolvedValue(undefined),
+        exists: jest.fn().mockResolvedValue(false),
+      },
+    } as any;
+    const { view, contentEl } = makeView(plugin);
+    await view.onOpen();
+    await flush();
+    const caps = contentEl.querySelector('.specorator-library-card-caps');
+    const tagChips = Array.from(caps!.querySelectorAll('.specorator-library-chip')).map((c) => c.textContent);
+    expect(tagChips).toContain('alpha');
+    expect(tagChips).toContain('beta');
+    // Confirm the read went through the converted vault-relative path, not the host-absolute one.
+    expect(read).toHaveBeenCalledWith('.codex/skills/review/SKILL.md');
   });
 
   it('tagless skill has NO empty caps div (guard removes it)', async () => {

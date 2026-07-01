@@ -53,4 +53,31 @@ describe('setFrontmatterList', () => {
     expect(tagsOf(out)).toEqual(['new']);
     expect(out).toContain('name: keep');
   });
+
+  it('drops a block list that has an indented comment before its items (no orphaned rows)', () => {
+    const src = `---\ntags:\n  # group\n  - old\nname: keep\n---\nBody`;
+    const out = setFrontmatterList(src, 'tags', ['new']);
+    expect(tagsOf(out)).toEqual(['new']);
+    expect(out).toContain('name: keep');
+    // The stale item and its comment must be gone — leaving them orphans the YAML.
+    expect(out).not.toContain('old');
+    expect(out).not.toContain('# group');
+  });
+
+  it('drops a block list that has a blank line between items', () => {
+    const src = `---\ntags:\n  - old1\n\n  - old2\nname: keep\n---\nBody`;
+    const out = setFrontmatterList(src, 'tags', ['new']);
+    expect(tagsOf(out)).toEqual(['new']);
+    expect(out).toContain('name: keep');
+    expect(out).not.toContain('old1');
+    expect(out).not.toContain('old2');
+  });
+
+  it('drops a column-0 block sequence (items at the key indent)', () => {
+    const src = `---\ntags:\n- old\nname: keep\n---\nBody`;
+    const out = setFrontmatterList(src, 'tags', ['new']);
+    expect(tagsOf(out)).toEqual(['new']);
+    expect(out).toContain('name: keep');
+    expect(out).not.toContain('old');
+  });
 });

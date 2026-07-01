@@ -6,6 +6,7 @@ import { renderLibraryNav } from '../../../shared/libraryNav';
 import { LibraryListController, mountLibraryList, renderCloneButton, renderLibraryCardTags } from '../../../shared/libraryToolbar';
 import { promptReason } from '../../../shared/modals/PromptModal';
 import { withErrorNotice } from '../../../shared/uiAction';
+import { toVaultRelativeOpenPath } from '../../../utils/fileLink';
 import { extractStringArray, parseFrontmatter } from '../../../utils/frontmatter';
 import { createLibraryCard, librarySlug, renderLibraryEmptyState, renderLibraryLoading, renderLibraryShell, uniqueChildDir } from '../../../utils/libraryView';
 import { runVaultSkill } from '../../quickActions/skills/runVaultSkill';
@@ -70,6 +71,16 @@ export class SkillLibraryView extends ItemView {
     await this.render();
   }
 
+  /** Vault-adapter-readable path for a skill's SKILL.md, or null if unreadable.
+   * Claude skills are already vault-relative. Codex skills surface a host-absolute
+   * `sourceFilePath` (mapped via `toHostPath`); convert it back to vault-relative
+   * when it lives inside the vault. Genuinely out-of-vault (home-scope) paths
+   * return null — the vault adapter can't read them. */
+  private resolveSkillReadPath(sourceFilePath: string): string | null {
+    if (!/^([/~\\]|[A-Za-z]:)/.test(sourceFilePath)) return sourceFilePath;
+    return toVaultRelativeOpenPath(this.plugin.app, sourceFilePath);
+  }
+
   private async render(): Promise<void> {
     const { actions, toolbar, list } = renderLibraryShell(this.contentEl, t('skillLibrary.title'),
       (c) => renderLibraryNav(c, this.plugin, VIEW_TYPE_SKILL_LIBRARY));
@@ -95,21 +106,26 @@ export class SkillLibraryView extends ItemView {
     mountLibraryList({ controller: this.controller, items: rows, toolbar, list, renderCard: (l, r) => this.renderSkillCard(l, r) });
   }
 
-  /** Read frontmatter `tags` and file mtime for vault-file skills. Home/abs
-   * paths fail the vault read and yield no tags (documented limitation). */
+  /** Read frontmatter `tags` and file mtime for vault-file skills. Codex vault
+   * skills surface a host-absolute `sourceFilePath` (mapped via `toHostPath`), so
+   * convert it back to a vault-relative path before reading — otherwise the vault
+   * adapter can't resolve it and the skill loses tags + sorts as `updated=0`.
+   * Genuinely out-of-vault (home-scope) paths still fail and yield no tags/mtime. */
   private async loadSkillTags(entries: SkillTabEntry[]): Promise<Map<string, string[]>> {
     this.skillMtime.clear();
     const out = new Map<string, string[]>();
     await Promise.all(entries.map(async (e) => {
       if (!e.sourceFilePath) return;
+      const readPath = this.resolveSkillReadPath(e.sourceFilePath);
+      if (!readPath) return; // out-of-vault (home-scope) path → no tags/mtime
       try {
-        const content = await this.plugin.vaultFileAdapter.read(e.sourceFilePath);
+        const content = await this.plugin.vaultFileAdapter.read(readPath);
         const parsed = parseFrontmatter(content);
         const tags = parsed ? extractStringArray(parsed.frontmatter, 'tags') : undefined;
         if (tags && tags.length > 0) out.set(e.id, tags);
-        const st = await this.plugin.vaultFileAdapter.stat(e.sourceFilePath);
+        const st = await this.plugin.vaultFileAdapter.stat(readPath);
         if (st) this.skillMtime.set(e.id, st.mtime);
-      } catch { /* home-scope/abs path or missing → no tags/mtime */ }
+      } catch { /* out-of-vault path or missing → no tags/mtime */ }
     }));
     return out;
   }
