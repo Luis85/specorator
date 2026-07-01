@@ -1,7 +1,7 @@
 {
   "id": "specorator",
   "name": "Specorator",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "minAppVersion": "1.11.5",
   "description": "Plan, run, and review provider-native AI agents inside your vault, keeping every conversation and edit as Markdown you own.",
   "author": "Luis Mendez",
