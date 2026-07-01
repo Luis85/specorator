@@ -6,6 +6,7 @@ import { LibraryEditorModal } from '../../../shared/modals/LibraryEditorModal';
 import { normalizeStringArray, setFrontmatterList } from '../../../utils/frontmatter';
 import { createModalCodeArea, librarySlug, renameLibraryItemDir, renderModalField, renderModalFooter, renderModalLabel, renderModalTextField } from '../../../utils/libraryView';
 import type { SkillLibraryRow } from '../skillLibraryRows';
+import { resolveSkillVaultPath } from '../skillPaths';
 
 /**
  * Edits a skill's `SKILL.md` in a modal. Skill files live under provider
@@ -39,7 +40,12 @@ export class SkillEditorModal extends LibraryEditorModal {
       meta.createDiv({ cls: 'specorator-library-modal-hint', text: this.row.description });
     }
 
-    if (!this.row.editable || !this.row.sourceFilePath) {
+    // Codex vault skills surface a host-absolute `sourceFilePath`; resolve the
+    // vault-relative path the adapter can actually read/write. Out-of-vault
+    // (home-scope) skills resolve to null and stay read-only — writing them
+    // would create a bogus in-vault `/.../.codex/skills/...` tree.
+    const writePath = this.resolveWritePath();
+    if (!this.row.editable || !writePath) {
       root.createDiv({ cls: 'specorator-library-modal-hint', text: t('skillLibrary.readonlyNotice') });
       renderModalFooter(root, { closeLabel: t('skillLibrary.close'), onClose: () => this.close() });
       return;
@@ -48,7 +54,7 @@ export class SkillEditorModal extends LibraryEditorModal {
     this.nameEl = renderModalTextField(root, t('skillLibrary.nameField'), this.row.name);
     this.tagsEl = renderModalTextField(root, t('library.tagsField'), (this.row.tags ?? []).join(', '));
     renderModalLabel(root, t('skillLibrary.content'));
-    const content = await this.plugin.vaultFileAdapter.read(this.row.sourceFilePath).catch(() => '');
+    const content = await this.plugin.vaultFileAdapter.read(writePath).catch(() => '');
     this.contentArea = createModalCodeArea(root, content, t('skillLibrary.content'));
 
     this.renderSaveFooter(root, {
@@ -60,10 +66,19 @@ export class SkillEditorModal extends LibraryEditorModal {
     });
   }
 
+  /**
+   * Vault-relative path the adapter can write, or null when the skill lives
+   * outside the vault (home-scope) and must stay read-only.
+   */
+  private resolveWritePath(): string | null {
+    if (!this.row.sourceFilePath) return null;
+    return resolveSkillVaultPath(this.plugin.app, this.row.sourceFilePath);
+  }
+
   private async save(): Promise<void> {
-    if (!this.contentArea || !this.row.sourceFilePath) return;
+    const oldPath = this.resolveWritePath();
+    if (!this.contentArea || !oldPath) return;
     const adapter = this.plugin.vaultFileAdapter;
-    const oldPath = this.row.sourceFilePath;
     const currentSlug = oldPath.split('/').slice(-2, -1)[0];
     const newName = this.nameEl?.value.trim() || this.row.name;
     const newSlug = librarySlug(newName) || currentSlug;
@@ -77,10 +92,11 @@ export class SkillEditorModal extends LibraryEditorModal {
       const newPath = await renameLibraryItemDir(adapter, oldPath, root, newSlug, content);
       this.row = { ...this.row, name: newName, sourceFilePath: newPath };
     }
-    // `.claude/` is a dot-folder Obsidian's vault watcher ignores, so this direct
-    // write/rename bypasses the provider-catalog event seam. Invalidate the
-    // aggregator's 'claude' bucket explicitly before the refresh below re-fetches.
-    this.plugin.events.emit('vaultSkill.changed', { providerId: 'claude' });
+    // Provider skill dot-folders (`.claude/`, `.codex/`) are ignored by Obsidian's
+    // vault watcher, so this direct write/rename bypasses the provider-catalog
+    // event seam. Invalidate the owning provider's bucket explicitly before the
+    // refresh below re-fetches — a Codex skill edit must not invalidate Claude.
+    this.plugin.events.emit('vaultSkill.changed', { providerId: this.row.providerId });
     this.onSaved();
     new Notice(t('skillLibrary.saved', { name: this.row.name }));
     this.close();

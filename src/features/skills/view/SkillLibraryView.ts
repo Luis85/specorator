@@ -6,12 +6,12 @@ import { renderLibraryNav } from '../../../shared/libraryNav';
 import { LibraryListController, mountLibraryList, renderCloneButton, renderLibraryCardTags } from '../../../shared/libraryToolbar';
 import { promptReason } from '../../../shared/modals/PromptModal';
 import { withErrorNotice } from '../../../shared/uiAction';
-import { toVaultRelativeOpenPath } from '../../../utils/fileLink';
 import { extractStringArray, parseFrontmatter } from '../../../utils/frontmatter';
 import { createLibraryCard, librarySlug, renderLibraryEmptyState, renderLibraryLoading, renderLibraryShell, uniqueChildDir } from '../../../utils/libraryView';
 import { runVaultSkill } from '../../quickActions/skills/runVaultSkill';
 import type { SkillTabEntry } from '../../quickActions/skills/types';
 import { type SkillLibraryRow, toSkillLibraryRows } from '../skillLibraryRows';
+import { resolveSkillVaultPath } from '../skillPaths';
 import { SkillEditorModal } from './SkillEditorModal';
 
 export const VIEW_TYPE_SKILL_LIBRARY = 'specorator-skill-library';
@@ -71,14 +71,8 @@ export class SkillLibraryView extends ItemView {
     await this.render();
   }
 
-  /** Vault-adapter-readable path for a skill's SKILL.md, or null if unreadable.
-   * Claude skills are already vault-relative. Codex skills surface a host-absolute
-   * `sourceFilePath` (mapped via `toHostPath`); convert it back to vault-relative
-   * when it lives inside the vault. Genuinely out-of-vault (home-scope) paths
-   * return null — the vault adapter can't read them. */
   private resolveSkillReadPath(sourceFilePath: string): string | null {
-    if (!/^([/~\\]|[A-Za-z]:)/.test(sourceFilePath)) return sourceFilePath;
-    return toVaultRelativeOpenPath(this.plugin.app, sourceFilePath);
+    return resolveSkillVaultPath(this.plugin.app, sourceFilePath);
   }
 
   private async render(): Promise<void> {
@@ -180,6 +174,7 @@ export class SkillLibraryView extends ItemView {
       id: `skill-${cloneSlug}`,
       name: cloneSlug,
       description: row.description,
+      providerId: row.providerId,
       providerDisplayName: row.providerDisplayName,
       sourceFilePath: path,
       editable: true,
@@ -215,6 +210,8 @@ export class SkillLibraryView extends ItemView {
       id: `skill-${dir.split('/').pop()}`,
       name,
       description: '',
+      // New skills are created under `.claude/skills/` (SKILLS_DIR).
+      providerId: 'claude',
       providerDisplayName: t('skillLibrary.providerVault'),
       sourceFilePath: path,
       editable: true,

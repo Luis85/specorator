@@ -1,9 +1,12 @@
+import type { ProviderId } from '../../core/providers/types';
 import type { SkillTabEntry } from '../quickActions/skills/types';
 
 export interface SkillLibraryRow {
   id: string;
   name: string;
   description: string;
+  /** Owning provider — drives the `vaultSkill.changed` invalidation bucket. */
+  providerId: ProviderId;
   providerDisplayName: string;
   sourceFilePath: string | null;
   editable: boolean;
@@ -24,6 +27,7 @@ export function toSkillLibraryRows(
       id: e.id,
       name: e.name,
       description: e.description,
+      providerId: e.providerId,
       providerDisplayName: e.providerDisplayName,
       sourceFilePath: e.sourceFilePath,
       editable: e.sourceFilePath !== null,

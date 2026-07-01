@@ -36,4 +36,9 @@ describe('toSkillLibraryRows', () => {
     const [row] = toSkillLibraryRows([entry()], new Map([['claude:skill-a', ['x', 'y']]]));
     expect(row.tags).toEqual(['x', 'y']);
   });
+
+  it('carries the entry providerId onto the row (drives the invalidation bucket)', () => {
+    const [row] = toSkillLibraryRows([entry({ providerId: 'codex' })]);
+    expect(row.providerId).toBe('codex');
+  });
 });
