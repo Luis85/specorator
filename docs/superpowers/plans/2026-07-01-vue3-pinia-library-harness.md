@@ -509,14 +509,33 @@ import pluginVue from 'eslint-plugin-vue';
         sourceType: 'module',
       },
     },
+    plugins: {
+      'simple-import-sort': simpleImportSort,
+    },
     rules: {
       // The Vue analogue of the innerHTML ban below (OBS-B): v-html sets
       // el.innerHTML under the hood. Render markdown/agent content through
       // Obsidian's MarkdownRenderer against a template ref instead.
       'vue/no-v-html': 'error',
+      // Mirror the repo's non-type-aware TS guardrails onto <script setup>
+      // blocks (same options as the src/tests .ts block above). Type-aware
+      // rules stay off SFC fast lint — vue-tsc is that gate.
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        { prefer: 'type-imports', fixStyle: 'separate-type-imports' },
+      ],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { args: 'none', ignoreRestSiblings: true },
+      ],
+      '@typescript-eslint/no-explicit-any': 'error',
+      'simple-import-sort/imports': 'error',
+      'simple-import-sort/exports': 'error',
     },
   },
 ```
+
+NOTE: the `plugins` key here must not collide — `simple-import-sort` is already registered by the earlier `src/**/*.ts` block, but flat config scopes plugin registration per config object, so re-declaring it for `**/*.vue` is required and safe.
 
 Then mirror the src-only safety rules onto SFC `<script>` blocks — without this, a `.vue` under `src/` could use `console.*` or assign `innerHTML` and lint would stay green. Refactor the existing `src/**/*.ts` safety block: hoist its `rules` object into a module-level `const srcSafetyRules = { 'no-console': 'error', 'no-new-func': 'error', 'no-restricted-syntax': [ /* the existing array, moved verbatim: Notice-i18n selectors + innerHTML/outerHTML/insertAdjacentHTML bans */ ] }`, spread it back into the `src/**/*.ts` block (KEEP `'@typescript-eslint/no-implied-eval': 'error'` in that block only — it is type-aware and must stay off the `.vue` fast lint), and add:
 
@@ -2511,6 +2530,7 @@ git commit -m "feat(library): Skills tab — useSkillLibraryStore + SkillsPanel 
 **Files:**
 - Create: `src/features/library/vue/stores/rosterStore.ts`
 - Create: `src/features/library/vue/panels/AgentsPanel.vue`
+- Modify: `src/features/agents/roster/view/AgentDetailEditor.ts` (optional `onSaved` callback)
 - Modify: `src/features/library/vue/LibraryRoot.vue`
 - Test: `tests/vue/stores/rosterStore.test.ts`
 - Test: `tests/vue/panels/agentsPanel.test.ts`
@@ -2667,6 +2687,26 @@ export const useRosterStore = defineStore('library-agents', () => {
 
 Run the store test — expected PASS.
 
+- [ ] **Step 12.2b: Add an optional `onSaved` callback to `AgentDetailEditor`.** The editor's `save()` writes straight to `plugin.agentRosterStore.save(this.draft)` (line ~268), bypassing the Pinia store — with two Library leaves open, the other leaf keeps stale name/tags/model until the detail page closes. In `src/features/agents/roster/view/AgentDetailEditor.ts`:
+
+```ts
+export interface AgentDetailEditorCallbacks {
+  onBack(): void;
+  onStartChat(agent: RosterAgent): void;
+  onDeleted(agent: RosterAgent): void;
+  /** Fires after every successful persist (explicit Save AND the start-chat auto-save). */
+  onSaved?(agent: RosterAgent): void;
+}
+```
+
+and at the end of the private `save()` method, after the store write succeeds, add:
+
+```ts
+    this.callbacks.onSaved?.(this.original);
+```
+
+The legacy `AgentRosterView` passes no `onSaved` (optional — zero behavior change); the Vue panel supplies one in Step 12.4. Run `npm run test -- --selectProjects unit -t "AgentDetail"` + `npm run typecheck` — expected green.
+
 - [ ] **Step 12.3: Write the failing panel test `tests/vue/panels/agentsPanel.test.ts`**
 
 ```ts
@@ -2791,6 +2831,10 @@ async function openDetail(agent: RosterAgent, opts?: { isNew?: boolean }): Promi
       void withErrorNotice(async () => {
         if (await confirmedDelete(a)) await closeDetail();
       }, t('agentRoster.actionFailed'), fail),
+    // Keep the shared Pinia store fresh on every detail save so OTHER mounted
+    // Library leaves re-derive immediately (the editor persists directly to
+    // plugin.agentRosterStore, not through useRosterStore).
+    onSaved: () => void withErrorNotice(() => store.load(), t('agentRoster.actionFailed'), fail),
   });
   await editor.render(detailHost.value, agent, opts);
 }
@@ -2923,7 +2967,11 @@ function onClone(agent: RosterAgent): void {
 
 ```ts
 function onDelete(agent: RosterAgent): void {
-  void withErrorNotice(() => confirmedDelete(agent), t('agentRoster.actionFailed'), fail);
+  // async wrapper: withErrorNotice takes () => Promise<void> and TS 6 rejects
+  // a Promise<boolean>-returning callback (verified); keep the boolean internal.
+  void withErrorNotice(async () => {
+    await confirmedDelete(agent);
+  }, t('agentRoster.actionFailed'), fail);
 }
 ```
 
