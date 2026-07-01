@@ -57,7 +57,7 @@ The actions live in your vault as ordinary files. You can edit them in any text 
 
 ## Get Specorator
 
-Install via BRAT or the Obsidian community plugins directory.
+Install from the official Obsidian community plugin directory: in Obsidian, open **Settings → Community plugins → Browse** and search for **Specorator**.
 
 **→ [GitHub — Luis85/specorator](https://github.com/Luis85/specorator)**
 
