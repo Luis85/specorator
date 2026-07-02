@@ -1,4 +1,7 @@
+import * as fs from 'fs';
 import type { App } from 'obsidian';
+import * as os from 'os';
+import * as nodePath from 'path';
 
 import {
   extractLinkTarget,
@@ -6,9 +9,15 @@ import {
   toVaultRelativeOpenPath,
 } from '@/utils/fileLink';
 
+// The vault path must be a real, canonicalized, existing directory. Vault
+// resolution runs through path.ts's resolveRealPath (real fs.realpathSync /
+// existsSync); a synthetic '/vault' resolves non-deterministically across
+// machines and drive layouts (subst/network/symlinked drives), which made this
+// suite a rare parallel-worker flake. A canonicalized tmp dir resolves stably.
+let mockVaultPath = os.tmpdir();
 jest.mock('@/utils/path', () => ({
   ...jest.requireActual('@/utils/path'),
-  getVaultPath: jest.fn(() => '/vault'),
+  getVaultPath: jest.fn(() => mockVaultPath),
 }));
 
 jest.mock('@/utils/obsidianCompat', () => ({
@@ -248,6 +257,20 @@ describe('wikilink pattern matching', () => {
 
   describe('toVaultRelativeOpenPath', () => {
     const app = {} as App;
+    let outsidePath = '';
+
+    beforeAll(() => {
+      // Real, canonicalized, existing dirs → deterministic resolveRealPath.
+      const vaultDir = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'specorator-vault-'));
+      const outsideDir = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'specorator-outside-'));
+      mockVaultPath = fs.realpathSync.native(vaultDir);
+      outsidePath = nodePath.join(fs.realpathSync.native(outsideDir), 'generated.md');
+    });
+
+    afterAll(() => {
+      fs.rmSync(mockVaultPath, { recursive: true, force: true });
+      fs.rmSync(nodePath.dirname(outsidePath), { recursive: true, force: true });
+    });
 
     it('resolves an in-vault path without requiring the file to exist yet', () => {
       // getVaultFileByPath is mocked to null (file not indexed), so the
@@ -257,11 +280,12 @@ describe('wikilink pattern matching', () => {
     });
 
     it('resolves an in-vault absolute path', () => {
-      expect(toVaultRelativeOpenPath(app, '/vault/notes/new.md')).toBe('notes/new.md');
+      const absolute = nodePath.join(mockVaultPath, 'notes', 'new.md');
+      expect(toVaultRelativeOpenPath(app, absolute)).toBe('notes/new.md');
     });
 
     it('rejects an out-of-vault absolute path instead of stripping it into the vault', () => {
-      expect(toVaultRelativeOpenPath(app, '/tmp/generated.md')).toBeNull();
+      expect(toVaultRelativeOpenPath(app, outsidePath)).toBeNull();
     });
 
     it('rejects an out-of-vault escaping relative path instead of cleaning it into the vault', () => {
