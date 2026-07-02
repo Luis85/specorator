@@ -421,6 +421,8 @@ describe('vue test harness', () => {
 });
 ```
 
+- [ ] **Step 3.4b: Ignore the Vue coverage output everywhere.** `reportsDirectory: 'coverage-vue'` writes an unignored top-level dir that would dirty the worktree and get scanned by fallow. Add `coverage-vue/` to `.gitignore` (next to the existing `coverage/` entry) and add `"**/coverage-vue/**"` to the `ignorePatterns` array in `.fallowrc.json` (next to `"**/coverage/**"`).
+
 - [ ] **Step 3.5: Add scripts to `package.json`** (after `"test:perf"`):
 
 ```json
@@ -472,7 +474,7 @@ Expected: `isolated` (zero matches; Jest globs are `**/tests/unit|integration/**
 - [ ] **Step 3.9: Commit**
 
 ```bash
-git add vitest.config.mts tests/vue package.json .github/workflows/ci.yml
+git add vitest.config.mts tests/vue package.json .github/workflows/ci.yml .gitignore .fallowrc.json
 git commit -m "test: add Vitest lane for the Vue surface (jsdom, obsidian alias, coverage floors, CI job)"
 ```
 
