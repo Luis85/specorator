@@ -627,6 +627,10 @@
       "name": "Auto-scroll during streaming",
       "desc": "Automatically scroll to the bottom as Claude streams responses. Disable to stay at the top and read from the beginning."
     },
+    "useVueLibrary": {
+      "name": "Unified library view (beta)",
+      "desc": "Open Agents, Skills, and Loops as one library view with tabs. Applies the next time a library view is opened."
+    },
     "showAgentEditedFiles": {
       "name": "Show files changed by the agent",
       "desc": "List the files the agent creates or edits above the chat input so you can open them with one click. Turn off to keep the previous silent behavior."

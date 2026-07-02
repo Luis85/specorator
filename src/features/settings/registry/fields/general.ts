@@ -246,6 +246,17 @@ function registerDisplayFields(r: Registry): void {
   });
 
   r.registerField({
+    id: 'useVueLibrary',
+    tabId: 'general',
+    sectionId: 'display',
+    label: t('settings.useVueLibrary.name'),
+    description: t('settings.useVueLibrary.desc'),
+    type: { kind: 'toggle' },
+    default: false,
+    keywords: ['library', 'vue', 'agents', 'skills', 'loops', 'beta'],
+  });
+
+  r.registerField({
     id: 'deferMathRenderingDuringStreaming',
     tabId: 'general',
     sectionId: 'display',

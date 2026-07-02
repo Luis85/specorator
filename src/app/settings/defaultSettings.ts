@@ -68,6 +68,7 @@ export const DEFAULT_SPECORATOR_SETTINGS: SpecoratorSettings = {
   chatViewPlacement: 'right-sidebar',
   firstRunDismissed: false,
   promptCommitOnAccept: true,
+  useVueLibrary: false,
 
   agentBoardWorkOrderFolder: 'Agent Board/tasks',
   agentBoardTemplateFolder: 'Agent Board/templates',

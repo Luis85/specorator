@@ -237,6 +237,8 @@ export type SettingsTranslationKey =
   | 'settings.tabBarPosition.header'
   | 'settings.enableAutoScroll.name'
   | 'settings.enableAutoScroll.desc'
+  | 'settings.useVueLibrary.name'
+  | 'settings.useVueLibrary.desc'
   | 'settings.deferMathRenderingDuringStreaming.name'
   | 'settings.deferMathRenderingDuringStreaming.desc'
   | 'settings.showAgentEditedFiles.name'
