@@ -1912,7 +1912,7 @@ function onSort(e: Event): void {
         type="button"
         class="specorator-library-filterchip"
         :class="{ 'is-on': activeSet.has(tag) }"
-        :aria-pressed="String(activeSet.has(tag))"
+        :aria-pressed="activeSet.has(tag) ? 'true' : 'false'"
         @click="emit('toggle-filter', tag)"
       >
         {{ tag }}
