@@ -1664,6 +1664,21 @@ describe('useLibraryList', () => {
     src.value = rows.filter((r) => !r.tags.includes('y'));
     expect(list.activeFilters.value).toEqual([]);
   });
+
+  it('toggling an active tag off re-derives rows', () => {
+    const { list } = makeList(rows);
+    list.toggleFilter('y');
+    list.toggleFilter('y');
+    expect(list.activeFilters.value).toEqual([]);
+    expect(list.rows.value).toHaveLength(3);
+  });
+
+  it('keeps still-present active filters when the source changes', () => {
+    const { src, list } = makeList(rows);
+    list.toggleFilter('x');
+    src.value = rows.filter((r) => !r.tags.includes('y'));
+    expect(list.activeFilters.value).toEqual(['x']);
+  });
 });
 ```
 
