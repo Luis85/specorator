@@ -10,6 +10,6 @@
     "duplicatedLines": 787,
     "complexFunctions": 235,
     "criticalComplexity": 0,
-    "averageMaintainability": 90.2
+    "averageMaintainability": 90
   }
 }

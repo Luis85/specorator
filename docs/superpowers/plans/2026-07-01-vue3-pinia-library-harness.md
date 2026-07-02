@@ -323,7 +323,8 @@ export default defineConfig({
       include: ['src/features/library/**/*.{ts,vue}'],
       reportsDirectory: 'coverage-vue',
       // Regression floors, not aspirations (repo convention). Provisional until
-      // Task 13 re-measures and locks them a few points under actuals.
+      // Task 13 re-measures and locks them a few points under actuals; dormant
+      // (0/0 passes) until Task 7 lands the first library file.
       thresholds: { statements: 80, branches: 70, functions: 80, lines: 80 },
     },
   },
@@ -339,8 +340,8 @@ import { afterEach, vi } from 'vitest';
 // Obsidian's HTMLElement prototype extensions (empty/addClass/removeClass/...)
 // — the same polyfill module the Jest lane uses; it self-installs on import.
 // Without it, any code path touching contentEl.empty()/addClass() throws in
-// the Vitest lane.
-import '../setup/obsidianDom';
+// the Vitest lane. Imported via `@test` so the alias is exercised every run.
+import '@test/setup/obsidianDom';
 
 // tests/__mocks__/obsidian.ts calls jest.fn() at module scope. vi.fn is
 // API-compatible for everything the mock uses (fn/mockResolvedValue/
@@ -423,7 +424,7 @@ describe('vue test harness', () => {
 
 - [ ] **Step 3.4b: Ignore the Vue coverage output everywhere.** `reportsDirectory: 'coverage-vue'` writes an unignored top-level dir that would dirty the worktree and get scanned by fallow. Add `coverage-vue/` to `.gitignore` (next to the existing `coverage/` entry) and add `"**/coverage-vue/**"` to the `ignorePatterns` array in `.fallowrc.json` (next to `"**/coverage/**"`).
 
-- [ ] **Step 3.4c: Drop the transient fallow ignore for `pinia`.** The harness canary test (Step 3.4) is the repo's first direct `pinia` import, so remove `"pinia"` from the `ignoreDependencies` array in `.fallowrc.json` (it was added as a transient entry while nothing imported it yet). `npm run check:quality` must stay green (deadCodeIssues 0). `.fallowrc.json` is already staged in this task's commit (Step 3.9).
+- [ ] **Step 3.4c: KEEP the transient fallow ignore for `pinia`.** The harness canary test (Step 3.4) is the repo's first direct `pinia` import, but it is test-only — fallow's `test-only-dependency` rule flags a production dependency whose only importers are test files, so removing `"pinia"` from the `ignoreDependencies` array in `.fallowrc.json` here would trip `deadCodeIssues` 0 → 1 (verified 2026-07-02). The entry stays until Task 7 lands `src/features/library/vue/globalPinia.ts`, the first `src/` importer (retired in Step 7.12c). Do NOT add `"test-only-dependencies": "off"` — the rule class stays active.
 
 - [ ] **Step 3.5: Add scripts to `package.json`** (after `"test:perf"`):
 
@@ -475,8 +476,10 @@ Expected: `isolated` (zero matches; Jest globs are `**/tests/unit|integration/**
 
 - [ ] **Step 3.9: Commit**
 
+Re-lock the quality baseline first: fallow's built-in Vitest plugin AST-parses the `resolve.alias` map in `vitest.config.mts` and applies it to the WHOLE repo module graph, so all ~275 `import 'obsidian'` sites (production `src/` included) now resolve to `tests/__mocks__/obsidian.ts` — ~270 untouched files each gain fan_out +1 (small maintainability dips), moving `averageMaintainability` 90.2 → 90.0 with every counter metric unchanged. Run `npm run check:quality -- --update` and verify the `scripts/quality-baseline.json` diff touches ONLY `averageMaintainability` (if any counter moved, stop and investigate). Side effect to remember: `tests/__mocks__/obsidian.ts` now shows fan-in ≈274 and ranks as a top hotspot/refactor target in `npm run quality:health` — that is an artifact of the Vitest alias, not a real refactor target.
+
 ```bash
-git add vitest.config.mts tests/vue package.json .github/workflows/ci.yml .gitignore .fallowrc.json
+git add vitest.config.mts tests/vue package.json .github/workflows/ci.yml .gitignore .fallowrc.json scripts/quality-baseline.json
 git commit -m "test: add Vitest lane for the Vue surface (jsdom, obsidian alias, coverage floors, CI job)"
 ```
 
@@ -1252,6 +1255,8 @@ In `jest.config.js`, add to `collectCoverageFrom` (with the comment):
 
 Run `npm run test` — expected: all Jest suites green.
 
+- [ ] **Step 7.12c: Retire the transient fallow ignore for `pinia`.** `src/features/library/vue/globalPinia.ts` (Step 7.3) is the repo's first `src/` importer of `pinia`, so fallow's `test-only-dependency` rule no longer fires: remove `"pinia"` from the `ignoreDependencies` array in `.fallowrc.json` (deferred from Task 3 Step 3.4c, where the canary's test-only import would have tripped it). `npm run check:quality` must stay green (deadCodeIssues 0). `.fallowrc.json` is staged in this task's commit (Step 7.15).
+
 - [ ] **Step 7.13: Full verification**
 
 ```bash
@@ -1277,7 +1282,7 @@ git add src/features/library src/app/views/registerPluginViews.ts \
   src/features/agents/roster/view/AgentRosterView.ts \
   src/features/skills/view/SkillLibraryView.ts \
   src/features/tasks/ui/LoopLibraryView.ts \
-  src/i18n tests/vue \
+  src/i18n tests/vue .fallowrc.json \
   tests/__mocks__/vueComponentStub.ts jest.base.config.js jest.config.js
 git commit -m "feat(library): unified Vue LibraryView behind useVueLibrary (per-leaf island, tab shell, redirects, leak guard)"
 ```

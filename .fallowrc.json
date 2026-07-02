@@ -10,6 +10,7 @@
     "**/scripts/**",
     "**/.fallow/**",
     "**/coverage/**",
+    "**/coverage-vue/**",
     "**/main.js",
     "**/styles.css",
     "src/style/**"

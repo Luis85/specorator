@@ -32,6 +32,7 @@ usage, and where this repo diverges from the generic fallow template — see
 | Coverage floors | `npm run test:coverage` | `coverage` | Coverage dropping below `coverageThreshold`. |
 | Provider-boundary guards | `npm run test` | `test` | A registered provider with an incomplete `ProviderRegistration`; new hardcoded provider-id lists/switches outside `src/providers/index.ts`. See "Provider-boundary guards" below. |
 | Perf scaling guards | `npm run test:perf` | `perf` | A hot path's cost scaling with unbounded input instead of its bounded window (render window, per-turn tools, slot cap). Deterministic count assertions only — timings stay report-only. |
+| Vue component lane | `npm run test:vue:coverage` | `component` | Vue-surface regressions (`tests/vue/**`, Vitest); coverage floors on `src/features/library/**`. See "Vue component lane (Vitest)" below. |
 | Production build | `npm run build` | `build` | CSS concat, esbuild bundle, SDK patching, renderer-unsafe-unref guard. |
 | Artifact smoke | `npm run check:artifacts` | `build` | Missing/empty artifacts, package/manifest version desync, missing `minAppVersion`, bundle-size budget. |
 
@@ -218,6 +219,37 @@ existing `test` job — no new tooling:
   `src/features/settings/firstRunBanner/FirstRunBanner.ts` (grandfathered; its
   per-provider `name`/`blurb`/`cli` list should move to the registry — see
   `docs/tech-debt/2026-06-07-firstrun-banner-provider-list.md`).
+
+## Vue component lane (Vitest)
+
+The `component` CI job runs `npm run test:vue:coverage` — the Vitest lane
+(`vitest.config.mts`) for the Vue surface: SFC component tests, Pinia stores,
+and composables under `tests/vue/**`, in jsdom. The shared
+`tests/__mocks__/obsidian.ts` fake is served through a `resolve.alias`, with
+the mock's `jest.*` calls shimmed to `vi` and `@testing-library/vue` cleanup
+registered explicitly in `tests/vue/setup.ts`.
+
+Coverage floors (v8 provider, thresholds in `vitest.config.mts`) apply to
+`src/features/library/**` only, mirroring the Jest `coverage` job for the rest
+of `src/`. They are dormant (a 0/0 pass) until the first library file lands
+(Task 7 of `docs/superpowers/plans/2026-07-01-vue3-pinia-library-harness.md`).
+Reports go to `coverage-vue/`, ignored by both git and fallow.
+
+Lane isolation is exclusive by construction: Vitest's `include` sees only
+`tests/vue/**`, while Jest's `testMatch` globs cover only
+`tests/{unit,integration}/**` (perf has its own config) — the two runners never
+share a test file.
+
+Metrics-integrity note: fallow's built-in Vitest plugin AST-parses the
+config's `resolve.alias` and applies it to the whole repo module graph, so all
+~275 `import 'obsidian'` sites (production `src/` included) resolve to
+`tests/__mocks__/obsidian.ts` in fallow's eyes. Two knock-on artifacts, both
+verified when the lane landed (2026-07-02): the mock shows fan-in ≈274 and
+ranks as a top hotspot/refactor target in `npm run quality:health` — an alias
+artifact, not a real refactor target — and ~270 files gained fan_out +1, which
+moved `averageMaintainability` 90.2 → 90.0 at the lane's introduction. That
+float was re-locked in `scripts/quality-baseline.json` with every counter
+metric unchanged.
 
 ## Fallow quality ratchet
 
