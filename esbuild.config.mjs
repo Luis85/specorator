@@ -145,11 +145,26 @@ const mergeVueSfcStyles = {
   setup(build) {
     build.onEnd(async (result) => {
       if (result.errors.length > 0) return;
+      const stylesPath = path.join(process.cwd(), 'styles.css');
       const cssPath = path.join(process.cwd(), 'main.css');
-      if (!existsSync(cssPath)) return;
+      if (!existsSync(cssPath)) {
+        // No SFC styles this build: still strip a stale marker section left by
+        // a previous watch rebuild so removed <style> blocks actually disappear.
+        if (existsSync(stylesPath)) {
+          const base = await fsPromises.readFile(stylesPath, 'utf8');
+          const markerIdx = base.indexOf(VUE_STYLES_MARKER);
+          if (markerIdx !== -1) {
+            await fsPromises.writeFile(stylesPath, base.slice(0, markerIdx), 'utf8');
+          }
+        }
+        return;
+      }
       let vueCss = await fsPromises.readFile(cssPath, 'utf8');
       rmSync(cssPath, { force: true });
       rmSync(`${cssPath}.map`, { force: true });
+      // Dev builds append an inline sourcemap whose mappings describe main.css,
+      // not the merged styles.css — strip it (counterpart of the .map rm above).
+      vueCss = vueCss.replace(/\/\*# sourceMappingURL=[\s\S]*?\*\/\s*$/, '');
       if (prod) {
         const minified = await esbuild.transform(vueCss, {
           loader: 'css',
@@ -158,7 +173,6 @@ const mergeVueSfcStyles = {
         });
         vueCss = minified.code;
       }
-      const stylesPath = path.join(process.cwd(), 'styles.css');
       const base = existsSync(stylesPath)
         ? await fsPromises.readFile(stylesPath, 'utf8')
         : '';
@@ -186,8 +200,8 @@ const context = await esbuild.context({
     __VUE_PROD_DEVTOOLS__: 'false',
     __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',
     // Vue's esm-bundler runtime gates its dev-mode branches on
-    // process.env.NODE_ENV. Define it ONLY for prod so dev builds keep
-    // today's behavior (undefined) for every other bundled dependency.
+    // process.env.NODE_ENV. Define it ONLY for prod so dev builds leave the
+    // expression unreplaced and the runtime environment decides.
     ...(prod ? { 'process.env.NODE_ENV': '"production"' } : {}),
   },
   external: [
