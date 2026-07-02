@@ -20,6 +20,49 @@ export interface LibraryToolbarLabels {
   resetFilters: string;
 }
 
+/** Sorted union of every trimmed, non-empty tag across `items`. */
+export function collectLibraryTags<T>(items: T[], accessors: LibraryItemAccessors<T>): string[] {
+  const set = new Set<string>();
+  for (const item of items) {
+    for (const tag of accessors.getTags(item)) {
+      const trimmed = tag.trim();
+      if (trimmed) set.add(trimmed);
+    }
+  }
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+/** Case-insensitive substring filter + OR-tag filter + name/updated sort. */
+export function applyLibraryQuery<T>(
+  items: T[],
+  accessors: LibraryItemAccessors<T>,
+  state: { query: string; sort: LibrarySort; active: ReadonlySet<string> },
+): T[] {
+  const q = state.query.trim().toLowerCase();
+  const filtered = items.filter((item) => {
+    if (q) {
+      const haystack = [
+        accessors.getName(item),
+        accessors.getDescription(item),
+        ...accessors.getTags(item),
+      ].join(' ').toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    if (state.active.size > 0) {
+      const tags = accessors.getTags(item).map((tag) => tag.trim());
+      if (!tags.some((tag) => state.active.has(tag))) return false;
+    }
+    return true;
+  });
+  const sorted = [...filtered];
+  if (state.sort === 'name') {
+    sorted.sort((a, b) => accessors.getName(a).localeCompare(accessors.getName(b)));
+  } else {
+    sorted.sort((a, b) => accessors.getUpdatedAt(b) - accessors.getUpdatedAt(a));
+  }
+  return sorted;
+}
+
 /**
  * Content-agnostic search/sort/filter engine shared by the Agent, Skill, and
  * Loop library views. Holds query + sort + active-tag state; `apply()` returns
@@ -54,40 +97,15 @@ export class LibraryListController<T> {
 
   /** Sorted union of every tag across the current item set. */
   allTags(): string[] {
-    const set = new Set<string>();
-    for (const item of this.items) {
-      for (const tag of this.accessors.getTags(item)) {
-        const trimmed = tag.trim();
-        if (trimmed) set.add(trimmed);
-      }
-    }
-    return [...set].sort((a, b) => a.localeCompare(b));
+    return collectLibraryTags(this.items, this.accessors);
   }
 
   apply(): T[] {
-    const q = this.query.trim().toLowerCase();
-    const filtered = this.items.filter((item) => {
-      if (q) {
-        const haystack = [
-          this.accessors.getName(item),
-          this.accessors.getDescription(item),
-          ...this.accessors.getTags(item),
-        ].join(' ').toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      if (this.active.size > 0) {
-        const tags = this.accessors.getTags(item).map((tag) => tag.trim());
-        if (!tags.some((tag) => this.active.has(tag))) return false;
-      }
-      return true;
+    return applyLibraryQuery(this.items, this.accessors, {
+      query: this.query,
+      sort: this.sort,
+      active: this.active,
     });
-    const sorted = [...filtered];
-    if (this.sort === 'name') {
-      sorted.sort((a, b) => this.accessors.getName(a).localeCompare(this.accessors.getName(b)));
-    } else {
-      sorted.sort((a, b) => this.accessors.getUpdatedAt(b) - this.accessors.getUpdatedAt(a));
-    }
-    return sorted;
   }
 
   /**
