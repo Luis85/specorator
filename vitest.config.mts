@@ -22,12 +22,23 @@ export default defineConfig({
     include: ['tests/vue/**/*.test.ts'],
     coverage: {
       provider: 'v8',
-      include: ['src/features/library/**/*.{ts,vue}'],
+      include: [
+        'src/features/library/**/*.{ts,vue}',
+        // Shared accessor/action modules whose meaningful exercise lives in
+        // this lane: the loop accessors feed LoopsPanel, and the roster pair
+        // is only function-covered by AgentsPanel tests (the legacy
+        // AgentRosterView Jest test evaluates but barely calls them, and is
+        // slated for deletion with the flag flip). skillLibraryRows stays
+        // Jest-gated via tests/unit/features/skills/skillLibraryRows.test.ts.
+        'src/features/tasks/loops/loopLibraryAccessors.ts',
+        'src/features/agents/roster/rosterLibraryAccessors.ts',
+        'src/features/agents/roster/rosterAgentActions.ts',
+      ],
       reportsDirectory: 'coverage-vue',
-      // Regression floors, not aspirations (repo convention). Provisional until
-      // Task 13 re-measures and locks them a few points under actuals; dormant
-      // (0/0 passes) until Task 7 lands the first library file.
-      thresholds: { statements: 80, branches: 70, functions: 80, lines: 80 },
+      // Regression floors, not aspirations (repo convention; see jest.config.js).
+      // Locked 2026-07-02 (Task 13) a few points under the measured actuals:
+      //   statements 92.38 / branches 79.00 / functions 94.70 / lines 97.05
+      thresholds: { statements: 88, branches: 75, functions: 90, lines: 93 },
     },
   },
 });

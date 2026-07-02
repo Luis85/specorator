@@ -31,6 +31,8 @@ npm run lint:fix
 npm run test
 npm run test:watch
 npm run test:coverage
+npm run test:vue        # Vue-surface tests (Vitest lane, tests/vue/)
+npm run typecheck:vue   # SFC typecheck (vue-tsc)
 npm run check:loc        # LOC ratchet guard (see docs/build-ci/quality-gates.md)
 npm run check:css        # CSS !important ratchet guard (see docs/build-ci/quality-gates.md)
 npm run check:artifacts  # post-build artifact smoke (run after npm run build)
@@ -58,6 +60,7 @@ non-blocking backlog) are catalogued in
 | **features/chat** | Main sidebar interface | See [`src/features/chat/CLAUDE.md`](src/features/chat/CLAUDE.md) |
 | **features/inline-edit** | Inline edit modal and provider-backed edit services | `InlineEditModal` plus provider-owned inline edit services |
 | **features/settings** | Settings shell + registry renderer | All seven tabs render through the settings registry (`registry/`, parity tests in `tests/integration/settings/`); provider-owned widgets mount via the `widgets` map on each provider's `settingsTabRenderer`. Legacy imperative renderers remain as fallback until the v4.0.0 deletion pass |
+| **features/library** | Unified Library view (Vue 3 island) | `LibraryView` mounts a per-leaf Vue app behind the `useVueLibrary` flag (default off); Pinia stores wrap `LoopNoteStore`/`VaultSkillAggregator`/`AgentRosterStore`; legacy roster/skill/loop views redirect when the flag is on. Tab switches pass a shared tab guard (`TAB_GUARD_KEY` — a dirty detail editor can veto), and the Pinia stores are reactive projections over the existing source stores (I/O stays in the wrapped stores, never duplicated state). Tests run in the Vitest lane (`npm run test:vue`, `tests/vue/`). |
 | **features/tasks** | Agent Board work orders and run coordination | See [`src/features/tasks/CLAUDE.md`](src/features/tasks/CLAUDE.md) |
 | **features/quickActions** | Quick action parsing and storage | Vault-defined quick actions surfaced in chat |
 | **shared** | Reusable UI building blocks | Dropdowns, modals, mention UI, icons |

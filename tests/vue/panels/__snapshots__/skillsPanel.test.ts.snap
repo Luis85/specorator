@@ -1,0 +1,69 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`SkillsPanel mutation flows > card structure snapshot (small, stable sub-tree) 1`] = `
+<div
+  aria-label="a-skill"
+  class="specorator-library-card"
+  role="button"
+  tabindex="0"
+>
+  <!--v-if-->
+  <div
+    class="specorator-library-card-body"
+  >
+    <div
+      class="specorator-library-card-name"
+    >
+      <span>
+        a-skill
+      </span>
+      
+      <span
+        class="specorator-library-chip specorator-library-chip-muted"
+      >
+        Vault
+      </span>
+      <!--v-if-->
+      
+    </div>
+    
+    <div
+      class="specorator-library-card-desc"
+    >
+      does a
+    </div>
+    
+    <div
+      class="specorator-library-card-caps"
+    >
+      
+      <span
+        class="specorator-library-chip"
+      >
+        t1
+      </span>
+      
+    </div>
+  </div>
+  <div
+    class="specorator-library-card-actions"
+  >
+    
+    <button
+      class="mod-cta"
+      type="button"
+    >
+      Prompt
+    </button>
+    <button
+      aria-label="Duplicate"
+      class="specorator-library-card-icon"
+      title="Duplicate"
+      type="button"
+    >
+       ⧉ 
+    </button>
+    
+  </div>
+</div>
+`;

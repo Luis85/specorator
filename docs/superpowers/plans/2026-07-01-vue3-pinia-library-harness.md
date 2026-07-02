@@ -3580,6 +3580,7 @@ git commit -m "quality: lock Vue coverage floors, artifact marker, and docs for 
   5. Agents: open detail (page swap), back, start chat (new tab), clone, delete, install starters, sync. With unsaved edits in the detail editor, click another Library tab → the discard confirm appears; Cancel keeps the editor, Confirm switches tabs.
   6. Open a second Library leaf (drag/split): both leaves render independently; closing one leaves the other working (per-leaf app isolation).
   7. Toggle the flag OFF → open a library ribbon → legacy view; any open unified leaf re-homes to the legacy view MATCHING its saved tab when reopened (a leaf left on Skills reopens as the Skill Library, Loops as the Loop library — never always-roster).
+  8. Duplicate button glyph: accept ⧉ or swap to a setIcon-based icon button if it reads wrong — QA decides.
 - [ ] **Step 14.2: Push and open the PR**
 
 ```bash

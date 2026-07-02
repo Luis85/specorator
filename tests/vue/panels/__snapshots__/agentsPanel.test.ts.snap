@@ -1,0 +1,88 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AgentsPanel mutation flows > card structure snapshot (small, stable sub-tree) 1`] = `
+<div
+  aria-label="Alice"
+  class="specorator-library-card specorator-roster-card"
+  role="button"
+  tabindex="0"
+>
+  <div
+    class="specorator-library-card-leading"
+  >
+    
+    <span
+      aria-hidden="true"
+      class="specorator-roster-card-avatar"
+    />
+    
+  </div>
+  <div
+    class="specorator-library-card-body"
+  >
+    <div
+      class="specorator-library-card-name"
+    >
+      <span>
+        Alice
+      </span>
+      
+      
+    </div>
+    
+    <div
+      class="specorator-roster-card-desc"
+    >
+      router
+    </div>
+    <div
+      class="specorator-library-card-caps"
+    >
+      
+      <span
+        class="specorator-roster-chip specorator-roster-chip-role"
+      >
+        Worker
+      </span>
+      
+      
+      <span
+        class="specorator-library-chip"
+      >
+        t
+      </span>
+      
+      <!--v-if-->
+      <!--v-if-->
+    </div>
+    
+    <!--v-if-->
+  </div>
+  <div
+    class="specorator-library-card-actions"
+  >
+    
+    <button
+      class="mod-cta"
+      type="button"
+    >
+      Start chat
+    </button>
+    <button
+      aria-label="Duplicate"
+      class="specorator-library-card-icon"
+      title="Duplicate"
+      type="button"
+    >
+       ⧉ 
+    </button>
+    <button
+      class="specorator-library-card-delete"
+      type="button"
+    >
+      Delete
+    </button>
+    
+  </div>
+</div>
+`;

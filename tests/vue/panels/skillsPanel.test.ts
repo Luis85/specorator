@@ -217,4 +217,13 @@ describe('SkillsPanel mutation flows', () => {
     const { errorLog } = setupMutable([], { listAll: vi.fn().mockRejectedValue(new Error('boom')) });
     await waitFor(() => expect(errorLog).toHaveBeenCalled());
   });
+
+  // Spec DoD 5: snapshot ONE card (small stable sub-tree), never the whole
+  // panel — locale strings are deterministic ('en' in tests), fixtures carry
+  // no timestamps/ids that reach the DOM.
+  it('card structure snapshot (small, stable sub-tree)', async () => {
+    setupMutable([entry]);
+    await screen.findByText('a-skill');
+    expect(document.querySelector('.specorator-library-card')).toMatchSnapshot();
+  });
 });

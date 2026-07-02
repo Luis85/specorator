@@ -71,6 +71,16 @@ for (const [file, maxBytes] of Object.entries(BUDGET)) {
   }
 }
 
+// The unified Library island must survive bundling+minification: its root
+// class name is emitted by LibraryView.onOpen and proves compiled-SFC code
+// (unplugin-vue output) reached main.js.
+if (existsSync(join(ROOT, 'main.js'))) {
+  const mainJs = readFileSync(join(ROOT, 'main.js'), 'utf8');
+  if (!mainJs.includes('specorator-library-vue-root')) {
+    errors.push('main.js is missing the compiled Vue Library island (specorator-library-vue-root marker).');
+  }
+}
+
 const manifest = readJson('manifest.json');
 const pkg = readJson('package.json');
 
