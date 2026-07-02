@@ -13,7 +13,7 @@ scope: build, tooling, testing, features/library, features/agents/roster, featur
 
 **Architecture:** Vue mounts as an island per Obsidian leaf (`createApp` in `ItemView.onOpen`, `unmount()` + `contentEl.empty()` in `onClose`). One module-singleton Pinia carries three global setup stores that wrap the existing services (`LoopNoteStore`, `VaultSkillAggregator`, `AgentRosterStore`) — I/O stays in services, stores orchestrate. A reactive `activeTab` ref (provided into the tree; NO vue-router) switches three panel SFCs. Legacy views stay registered; a `useVueLibrary` flag (default off) flips ribbon/command targets and makes legacy leaves self-migrate. Editor modals and prompt flows stay imperative and are invoked from Vue handlers.
 
-**Tech Stack:** vue 3.5, pinia 3, unplugin-vue/esbuild (build), vue-tsc (typecheck), eslint-plugin-vue (lint), Vitest 4 + @vitejs/plugin-vue + jsdom + @testing-library/vue + @vue/test-utils + @pinia/testing (tests). Jest stays untouched for all existing suites.
+**Tech Stack:** vue 3.5, pinia 3, unplugin-vue/esbuild (build), vue-tsc (typecheck), eslint-plugin-vue (lint), Vitest 4 + @vitejs/plugin-vue + jsdom + @testing-library/vue + @vue/test-utils (tests; @pinia/testing dropped: never imported — tests use real pinia + service fakes). Jest stays untouched for all existing suites.
 
 **Spec:** `docs/superpowers/specs/2026-07-01-vue3-pinia-library-harness-design.md`
 **Research:** `docs/research/2026-07-01-vue3-pinia-frontend-refactor-research.md`
@@ -21,7 +21,7 @@ scope: build, tooling, testing, features/library, features/agents/roster, featur
 **Empirically verified in a spike before this plan was written** (throwaway in `.context/vue-spike/`, git-ignored):
 - esbuild 0.28 + `unplugin-vue/esbuild` (option `sourceMap: false` is REQUIRED — the default `true` makes esbuild's CSS loader fail with "Unknown word sourceMappingURL") compiles `<script setup lang="ts">` + scoped styles. Scoped CSS is EXTRACTED to a sibling `main.css` (`data-v-*` attrs correct in both JS and CSS). The bundle contains no `eval`, no `new Function`, no runtime template compiler.
 - Vitest 4.1.9 + @vitejs/plugin-vue + jsdom renders SFCs; Pinia setup stores work with `setActivePinia`; the EXISTING `tests/__mocks__/obsidian.ts` (which calls `jest.fn()` at module scope) works under Vitest via `resolve.alias` + a one-line `globalThis.jest = vi` setup shim — `vi.isMockFunction(setIcon)` is true and call assertions work.
-- Registry versions checked 2026-07-01: vue 3.5.39, pinia 3.0.4, unplugin-vue 7.2.0, vue-tsc 3.3.6 (peer TS >=5 — repo has TS 6.0.2 ✓), eslint-plugin-vue 10.9.2 (peer eslint ^10 ✓), vitest 4.1.9 (vite ^8 is a REQUIRED peer), @vitejs/plugin-vue 6.0.7, @vue/test-utils 2.4.11, @testing-library/vue 8.1.0, @pinia/testing 1.0.3, jsdom 29.1.1.
+- Registry versions checked 2026-07-01: vue 3.5.39, pinia 3.0.4, unplugin-vue 7.2.0, vue-tsc 3.3.6 (peer TS >=5 — repo has TS 6.0.2 ✓), eslint-plugin-vue 10.9.2 (peer eslint ^10 ✓), vitest 4.1.9 (vite ^8 is a REQUIRED peer), @vitejs/plugin-vue 6.0.7, @vue/test-utils 2.4.11, @testing-library/vue 8.1.0, jsdom 29.1.1.
 
 ---
 
@@ -118,7 +118,7 @@ Conventions that apply to ALL tasks:
 npm install vue@^3.5.39 pinia@^3.0.4
 npm install -D unplugin-vue@^7.2.0 vue-tsc@^3.3.6 eslint-plugin-vue@^10.9.2 vue-eslint-parser@^10.4.1 \
   vitest@^4.1.9 vite@^8.1.2 @vitejs/plugin-vue@^6.0.7 jsdom@^29.1.1 \
-  @vue/test-utils@^2.4.11 @testing-library/vue@^8.1.0 @pinia/testing@^1.0.3 \
+  @vue/test-utils@^2.4.11 @testing-library/vue@^8.1.0 \
   @vitest/coverage-v8@^4.1.9
 ```
 
@@ -423,6 +423,8 @@ describe('vue test harness', () => {
 
 - [ ] **Step 3.4b: Ignore the Vue coverage output everywhere.** `reportsDirectory: 'coverage-vue'` writes an unignored top-level dir that would dirty the worktree and get scanned by fallow. Add `coverage-vue/` to `.gitignore` (next to the existing `coverage/` entry) and add `"**/coverage-vue/**"` to the `ignorePatterns` array in `.fallowrc.json` (next to `"**/coverage/**"`).
 
+- [ ] **Step 3.4c: Drop the transient fallow ignore for `pinia`.** The harness canary test (Step 3.4) is the repo's first direct `pinia` import, so remove `"pinia"` from the `ignoreDependencies` array in `.fallowrc.json` (it was added as a transient entry while nothing imported it yet). `npm run check:quality` must stay green (deadCodeIssues 0). `.fallowrc.json` is already staged in this task's commit (Step 3.9).
+
 - [ ] **Step 3.5: Add scripts to `package.json`** (after `"test:perf"`):
 
 ```json
@@ -556,6 +558,8 @@ Then mirror the src-only safety rules onto SFC `<script>` blocks — without thi
     "lint": "eslint \"{src,tests}/**/*.{ts,vue}\"",
 ```
 
+- [ ] **Step 4.3b: Drop the transient fallow ignore for `eslint-plugin-vue`.** Step 4.1's `eslint.config.mjs` import is the first direct use, so remove `"eslint-plugin-vue"` from the `ignoreDependencies` array in `.fallowrc.json` (it was added as a transient entry while nothing imported it yet). `npm run check:quality` must stay green (deadCodeIssues 0). (`vue-eslint-parser` stays ignored permanently: it is a required peer wired via the flat configs' parser, never imported directly.)
+
 - [ ] **Step 4.4: Verify — clean pass, then prove the guard bites.** First:
 
 ```bash
@@ -585,7 +589,7 @@ Expected: lint FAILS with `vue/no-v-html` at `NoVHtmlProbe.vue`; after `rm`, `np
 - [ ] **Step 4.5: Commit**
 
 ```bash
-git add eslint.config.mjs package.json
+git add eslint.config.mjs package.json .fallowrc.json
 git commit -m "lint: lint .vue SFCs (essential=error, recommended=warn backlog, no-v-html=error)"
 ```
 

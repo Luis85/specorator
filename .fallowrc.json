@@ -16,7 +16,11 @@
   ],
   "ignoreDependencies": [
     "tslib",
-    "electron"
+    "electron",
+    "vue-eslint-parser",
+    "@vue/test-utils",
+    "pinia",
+    "eslint-plugin-vue"
   ],
   "duplicates": {
     "minOccurrences": 2,
