@@ -157,7 +157,7 @@ it('end-to-end: launch modal → confirm Codex → tab created with codex + pinn
   expect(tabManager.switchToTab).toHaveBeenCalledWith('new-tab');
   expect(createdTab.ui.fileContextManager.attachFileAsPill).toHaveBeenCalledWith('note.md');
   expect(createdTab.controllers.inputController.sendMessage)
-    .toHaveBeenCalledWith({ content: 'Summarize this.' });
+    .toHaveBeenCalledWith({ content: 'Summarize this.', includeComposerDraft: true });
   expect(eventsEmit).toHaveBeenCalledWith('usage.recorded', expect.objectContaining({
     kind: 'quickAction',
     name: 'summarize',
