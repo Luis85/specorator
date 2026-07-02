@@ -11,52 +11,19 @@ import { createLibraryCard, librarySlug, renderLibraryEmptyState, renderLibraryL
 import { VIEW_TYPE_LIBRARY } from '../../library/viewType';
 import { runVaultSkill } from '../../quickActions/skills/runVaultSkill';
 import type { SkillTabEntry } from '../../quickActions/skills/types';
-import { type SkillLibraryRow, toSkillLibraryRows } from '../skillLibraryRows';
+import { isCloneableSkillPath, SKILLS_DIR, skillTemplate, writeSkillClone } from '../skillCloning';
+import { skillLibraryAccessors, type SkillLibraryRow, toSkillLibraryRows } from '../skillLibraryRows';
 import { resolveSkillVaultPath } from '../skillPaths';
 import { SkillEditorModal } from './SkillEditorModal';
 
 export const VIEW_TYPE_SKILL_LIBRARY = 'specorator-skill-library';
 
-// Canonical vault skill location (Claude-compatible). Kept local so the view
-// stays in the features layer rather than importing provider storage.
-const SKILLS_DIR = '.claude/skills';
-
-/**
- * Duplicate writes through the vault adapter, which only understands
- * vault-relative paths. Non-Claude skills surface host-absolute source paths
- * (Codex maps via `toHostPath`) and runtime-discovered skills have none — both
- * would make Duplicate scatter a misplaced/empty tree inside the vault (and the
- * post-write invalidation only targets Claude). Gate the action to paths the
- * adapter can actually clone: vault-relative, no drive letter, no `..` escape.
- */
-function isCloneableSkillPath(p: string | null): p is string {
-  if (!p || p.startsWith('/') || p.startsWith('~') || p.startsWith('\\')) return false;
-  if (/^[A-Za-z]:/.test(p) || p.includes('\\')) return false; // Windows drive / UNC / host separators
-  return !p.split('/').some((segment) => segment === '..');
-}
-
-function skillTemplate(name: string): string {
-  return `---
-description: Describe what this skill does and when to use it.
----
-
-# ${name}
-
-Write the skill instructions here.
-`;
-}
-
 export class SkillLibraryView extends ItemView {
-  private readonly controller = new LibraryListController<SkillLibraryRow>({
-    getName: (r) => r.name,
-    getDescription: (r) => r.description,
-    // Provider is a filter facet too (mirrors the agent view feeding roles), so a
-    // provider chip filters the list and matches the card's provider chip label.
-    getTags: (r) => [r.providerDisplayName, ...(r.tags ?? [])],
-    // mtime is populated by loadSkillTags; falls back to 0 for skills without a
-    // local source file (e.g. runtime-discovered Opencode skills).
-    getUpdatedAt: (r) => this.skillMtime.get(r.id) ?? 0,
-  });
+  // mtime is populated by loadSkillTags; the accessor defers the lookup, so the
+  // field-initialization order (skillMtime declared below) is safe.
+  private readonly controller = new LibraryListController<SkillLibraryRow>(
+    skillLibraryAccessors((id) => this.skillMtime.get(id) ?? 0),
+  );
   private entryById = new Map<string, SkillTabEntry>();
   private skillMtime = new Map<string, number>();
 
@@ -162,19 +129,14 @@ export class SkillLibraryView extends ItemView {
 
   private async cloneSkill(row: SkillLibraryRow): Promise<void> {
     if (!isCloneableSkillPath(row.sourceFilePath)) { new Notice(t('skillLibrary.readonlyNotice')); return; }
-    const adapter = this.plugin.vaultFileAdapter;
-    const root = row.sourceFilePath.split('/').slice(0, -2).join('/'); // `.claude/skills`
-    const content = await adapter.read(row.sourceFilePath).catch(() => '');
-    const dir = await uniqueChildDir(adapter, root, `${librarySlug(row.name)}-copy`);
-    const path = `${dir}/SKILL.md`;
-    await adapter.write(path, content);
+    const path = await writeSkillClone(this.plugin.vaultFileAdapter, row.sourceFilePath, row.name);
     this.plugin.events.emit('vaultSkill.changed', { providerId: 'claude' });
     new Notice(t('skillLibrary.created', { path }));
     await this.render();
     // A skill's display name is its folder basename, so the clone is named after
     // its fresh `<slug>-copy` dir. Open the editor on that name (not the source
     // row's) so its fields match the file just written instead of the original.
-    const cloneSlug = dir.split('/').pop() ?? `${librarySlug(row.name)}-copy`;
+    const cloneSlug = path.split('/').at(-2) ?? `${librarySlug(row.name)}-copy`;
     this.openEditor({
       id: `skill-${cloneSlug}`,
       name: cloneSlug,

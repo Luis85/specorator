@@ -2592,6 +2592,28 @@ describe('useSkillLibraryStore', () => {
     expect(store.mtimeFor(store.rows[0].id)).toBe(42);
   });
 
+  it('a stale load resolving after a newer one cannot overwrite fresher state', async () => {
+    const store = useSkillLibraryStore();
+    const entryB = { ...entry, id: 'claude:skill-b', name: 'b', sourceFilePath: '.claude/skills/b/SKILL.md' };
+    const plugin = makePlugin([entry]);
+    let resolveStale: (v: unknown[]) => void = () => undefined;
+    const p = plugin as { vaultSkillAggregator: { listAll: ReturnType<typeof vi.fn> } };
+    p.vaultSkillAggregator.listAll = vi.fn()
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveStale = resolve; }))
+      .mockResolvedValue([entry, entryB]);
+    store.init(plugin);
+    const stale = store.load(); // load A — blocked on listAll
+    await store.load(); // load B — resolves with fresher data
+    expect(store.rows).toHaveLength(2);
+    resolveStale([entry]); // A resolves late with the stale single-entry list
+    await stale;
+    // Fresher result retained; lookup maps stay in sync with rows.
+    expect(store.rows).toHaveLength(2);
+    expect(store.entryFor('claude:skill-b')).toMatchObject({ name: 'b' });
+    expect(store.mtimeFor('claude:skill-b')).toBe(42);
+    expect(store.loading).toBe(false);
+  });
+
   it('clone() writes a -copy dir, emits vaultSkill.changed, and reloads', async () => {
     const store = useSkillLibraryStore();
     const plugin = makePlugin([entry]);
@@ -2616,9 +2638,8 @@ import { ref, shallowRef } from 'vue';
 
 import type SpecoratorPlugin from '../../../../main';
 import { extractStringArray, parseFrontmatter } from '../../../../utils/frontmatter';
-import { librarySlug, uniqueChildDir } from '../../../../utils/libraryView';
 import type { SkillTabEntry } from '../../../quickActions/skills/types';
-import { isCloneableSkillPath } from '../../../skills/skillCloning';
+import { isCloneableSkillPath, writeSkillClone } from '../../../skills/skillCloning';
 import type { SkillLibraryRow } from '../../../skills/skillLibraryRows';
 import { toSkillLibraryRows } from '../../../skills/skillLibraryRows';
 import { resolveSkillVaultPath } from '../../../skills/skillPaths';
@@ -2630,6 +2651,7 @@ export const useSkillLibraryStore = defineStore('library-skills', () => {
   let plugin: SpecoratorPlugin | null = null;
   let entryById = new Map<string, SkillTabEntry>();
   let mtimeById = new Map<string, number>();
+  let loadToken = 0;
 
   function init(p: SpecoratorPlugin): void {
     plugin = p;
@@ -2643,10 +2665,12 @@ export const useSkillLibraryStore = defineStore('library-skills', () => {
     return mtimeById.get(id) ?? 0;
   }
 
-  async function loadSkillTags(entries: SkillTabEntry[]): Promise<Map<string, string[]>> {
+  async function loadSkillTags(
+    entries: SkillTabEntry[],
+    mtimes: Map<string, number>,
+  ): Promise<Map<string, string[]>> {
     const p = plugin;
     if (!p) throw new Error('skillLibraryStore used before init()');
-    mtimeById = new Map();
     const out = new Map<string, string[]>();
     await Promise.all(entries.map(async (e) => {
       if (!e.sourceFilePath) return;
@@ -2658,7 +2682,7 @@ export const useSkillLibraryStore = defineStore('library-skills', () => {
         const tags = parsed ? extractStringArray(parsed.frontmatter, 'tags') : undefined;
         if (tags && tags.length > 0) out.set(e.id, tags);
         const st = await p.vaultFileAdapter.stat(readPath);
-        if (st) mtimeById.set(e.id, st.mtime);
+        if (st) mtimes.set(e.id, st.mtime);
       } catch { /* out-of-vault path or missing -> no tags/mtime */ }
     }));
     return out;
@@ -2667,14 +2691,23 @@ export const useSkillLibraryStore = defineStore('library-skills', () => {
   async function load(): Promise<void> {
     const p = plugin;
     if (!p) throw new Error('skillLibraryStore used before init()');
+    // Request-token guard: a slow load that STARTED before a mutation must not
+    // resolve AFTER the mutation's reload and overwrite fresher data (two
+    // leaves open, or the mount load overlapping clone/create). ALL state —
+    // rows AND the entry/mtime lookup maps — commits behind the token check so
+    // a stale read can't desync the lookups from the rows either.
+    const token = ++loadToken;
     loading.value = true;
     try {
       const entries = (await p.vaultSkillAggregator?.listAll()) ?? [];
+      const mtimes = new Map<string, number>();
+      const tagsById = await loadSkillTags(entries, mtimes);
+      if (token !== loadToken) return; // superseded by a newer load — drop stale result
       entryById = new Map(entries.map((e) => [e.id, e]));
-      const tagsById = await loadSkillTags(entries);
+      mtimeById = mtimes;
       rows.value = toSkillLibraryRows(entries, tagsById);
     } finally {
-      loading.value = false;
+      if (token === loadToken) loading.value = false;
     }
   }
 
@@ -2683,12 +2716,7 @@ export const useSkillLibraryStore = defineStore('library-skills', () => {
     const p = plugin;
     if (!p) throw new Error('skillLibraryStore used before init()');
     if (!isCloneableSkillPath(row.sourceFilePath)) return null;
-    const adapter = p.vaultFileAdapter;
-    const root = row.sourceFilePath.split('/').slice(0, -2).join('/');
-    const content = await adapter.read(row.sourceFilePath).catch(() => '');
-    const dir = await uniqueChildDir(adapter, root, `${librarySlug(row.name)}-copy`);
-    const path = `${dir}/SKILL.md`;
-    await adapter.write(path, content);
+    const path = await writeSkillClone(p.vaultFileAdapter, row.sourceFilePath, row.name);
     p.events.emit('vaultSkill.changed', { providerId: 'claude' });
     await load();
     return path;

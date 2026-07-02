@@ -60,7 +60,7 @@ describe('LibraryView', () => {
     expect(el.querySelector('.specorator-library-header h2')?.textContent).toContain('Loop library');
     view.setActiveTab('skills');
     await new Promise((r) => setTimeout(r));
-    expect(el.querySelector('[data-active-tab]')?.getAttribute('data-active-tab')).toBe('skills');
+    expect(el.querySelector('.specorator-library-header h2')?.textContent).toContain('Skill Library');
   });
 
   it('treats clicking the already-active tab as a no-op', async () => {
