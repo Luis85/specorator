@@ -15,7 +15,7 @@
     "release": "node scripts/release.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:vue": "vue-tsc --noEmit -p tsconfig.vue.json",
-    "lint": "eslint \"{src,tests}/**/*.ts\"",
+    "lint": "eslint \"{src,tests}/**/*.{ts,vue}\"",
     "lint:fix": "npm run lint -- --fix",
     "check:loc": "node scripts/check-loc.mjs",
     "check:css": "node scripts/check-css-important.mjs",

@@ -498,15 +498,18 @@ import tsParser from '@typescript-eslint/parser';
 import pluginVue from 'eslint-plugin-vue';
 ```
 
-- [ ] **Step 4.2: Add the Vue config blocks** — insert immediately AFTER the `...tseslint.configs['flat/recommended'],` line (order matters: the Vue configs must come later so `vue-eslint-parser` wins over the TS parser for `*.vue` files):
+- [ ] **Step 4.2: Add the Vue config block** — insert immediately AFTER the `...tseslint.configs['flat/recommended'],` line (order matters: the Vue config must come later so `vue-eslint-parser` wins over the TS parser for `*.vue` files):
 
 ```js
-  // Vue SFC lint. flat/recommended = base + essential (errors) +
-  // strongly-recommended + recommended (warnings — the tracked, non-blocking
-  // backlog tier per docs/build-ci/quality-gates.md § lint severity policy).
-  ...pluginVue.configs['flat/recommended'],
   {
+    // Vue SFC lint. flat/recommended = base + essential (errors) +
+    // strongly-recommended + recommended (warnings — the tracked, non-blocking
+    // backlog tier per docs/build-ci/quality-gates.md § lint severity policy).
     files: ['**/*.vue'],
+    // Scoped via extends: three of flat/recommended's sub-configs ship with no
+    // `files` restriction and would otherwise resolve 116 vue/* rules against
+    // every .ts file (pure no-op cost, ~10% lint wall-clock).
+    extends: [pluginVue.configs['flat/recommended']],
     languageOptions: {
       parserOptions: {
         // vue-eslint-parser stays the outer parser (set by the configs above);
@@ -524,6 +527,11 @@ import pluginVue from 'eslint-plugin-vue';
       // el.innerHTML under the hood. Render markdown/agent content through
       // Obsidian's MarkdownRenderer against a template ref instead.
       'vue/no-v-html': 'error',
+      // vue-tsc owns undefined-identifier checking for <script lang="ts"> —
+      // core no-undef is redundant there and false-positives on browser
+      // globals (window/setTimeout), mirroring typescript-eslint's stance
+      // that no-undef is off for type-checked code.
+      'no-undef': 'off',
       // Mirror the repo's non-type-aware TS guardrails onto <script setup>
       // blocks (same options as the src/tests .ts block above). Type-aware
       // rules stay off SFC fast lint — vue-tsc is that gate.
@@ -554,6 +562,8 @@ Then mirror the src-only safety rules onto SFC `<script>` blocks — without thi
     rules: srcSafetyRules,
   },
 ```
+
+Also widen the directive-comment discipline block (`@eslint-community/eslint-comments`) from `files: ['src/**/*.ts']` to `files: ['src/**/*.ts', 'src/**/*.vue']` so SFC `<script>` blocks carry the same disable-directive rules (justified disables only, restricted-disable list, stale disables error).
 
 - [ ] **Step 4.3: Widen the lint glob in `package.json`:**
 

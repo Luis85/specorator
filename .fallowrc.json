@@ -20,8 +20,7 @@
     "electron",
     "vue-eslint-parser",
     "@vue/test-utils",
-    "pinia",
-    "eslint-plugin-vue"
+    "pinia"
   ],
   "duplicates": {
     "minOccurrences": 2,

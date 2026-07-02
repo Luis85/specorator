@@ -76,10 +76,16 @@ LOC can't see. As of run 13, the last `warn`-tier rules were promoted:
 `jest/expect-expect` (the staged-backlog rule) plus `jest/no-disabled-tests` and
 `jest/no-commented-out-tests`, which ship at `warn` from the jest-recommended
 preset (`...jestRecommended.rules`). `eslint --print-config` now reports **no
-rule at `warn`** for any file, so the lint gate is genuinely all-error — which
-matters because CI does not pass `--max-warnings`, so a `warn` rule would
-otherwise never fail the build. The `warn` tier stays available for staging a
-future rule but is currently empty.
+rule at `warn`** for any `.ts` file, so the lint gate is genuinely all-error
+for TypeScript — which matters because CI does not pass `--max-warnings`, so a
+`warn` rule would otherwise never fail the build. `.vue` SFCs (linted since
+2026-07-02) are the deliberate exception: eslint-plugin-vue's
+strongly-recommended and recommended tiers report at `warn` there as the
+tracked, non-blocking backlog, while the essential tier, `vue/no-v-html`, and
+the mirrored src-safety/TS guardrails report as `error` — errors block,
+warnings are tracked, same policy as above. See "Vue component lane (Vitest)"
+below for the rest of the Vue surface's gates. The `warn` tier stays available
+for staging a future `.ts` rule.
 
 Promoted to `error` on 2026-06-10, after their backlogs reached zero: the
 staged `obsidianmd/*` set, `@typescript-eslint/no-explicit-any` (src only;
@@ -96,7 +102,7 @@ jest-recommended preset's `jest/no-disabled-tests` + `jest/no-commented-out-test
 All three had zero offenders, so the promotions just lock the gain: a test with no
 assertion (outside the allowlisted `assertFunctionNames` wrappers), or a committed
 `.skip`/commented-out test, now fails CI instead of printing a warning.
-`eslint --print-config` confirms no rule remains at `warn`.
+`eslint --print-config` confirms no rule remains at `warn` for `.ts` files.
 
 ### Directive-comment discipline (2026-06-26)
 
