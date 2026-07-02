@@ -1,7 +1,9 @@
+import { setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LibraryView } from '@/features/library/LibraryView';
-import { resetLibraryPinia } from '@/features/library/vue/globalPinia';
+import { getLibraryPinia, resetLibraryPinia } from '@/features/library/vue/globalPinia';
+import { useLoopLibraryStore } from '@/features/library/vue/stores/loopLibraryStore';
 
 import { makePlugin } from './helpers';
 
@@ -42,12 +44,20 @@ describe('LibraryView', () => {
   });
 
   it('switches tabs on click and via setActiveTab', async () => {
-    const view = new LibraryView(makeLeaf(), makePlugin(true));
+    const plugin = makePlugin(true);
+    // The mounted Loops panel resolves its store against the view's
+    // module-singleton pinia — pre-init it there with a stubbed note store so
+    // the panel's load() never hits the fake vault.
+    setActivePinia(getLibraryPinia());
+    useLoopLibraryStore().init(plugin, {
+      list: vi.fn().mockResolvedValue({ loops: [], warnings: [] }),
+    } as never);
+    const view = new LibraryView(makeLeaf(), plugin);
     const el = mountView(view);
     await view.onOpen();
     (el.querySelectorAll('.specorator-library-nav-item')[2] as HTMLElement).click();
     await new Promise((r) => setTimeout(r));
-    expect(el.querySelector('[data-active-tab]')?.getAttribute('data-active-tab')).toBe('loops');
+    expect(el.querySelector('.specorator-library-header h2')?.textContent).toContain('Loop library');
     view.setActiveTab('skills');
     await new Promise((r) => setTimeout(r));
     expect(el.querySelector('[data-active-tab]')?.getAttribute('data-active-tab')).toBe('skills');

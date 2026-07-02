@@ -4,6 +4,7 @@ import { inject } from 'vue';
 import { t } from '../../../i18n/i18n';
 import type { LibraryTab } from '../viewType';
 import { ACTIVE_TAB_KEY, VIEW_KEY } from './libraryKeys';
+import LoopsPanel from './panels/LoopsPanel.vue';
 
 const injected = inject(ACTIVE_TAB_KEY);
 if (!injected) throw new Error('LibraryRoot.vue mounted without ACTIVE_TAB_KEY');
@@ -46,8 +47,10 @@ function select(tab: LibraryTab): void {
       {{ tab.label }}
     </button>
   </div>
-  <!-- Panels land in Tasks 10-12; keep the shell shippable until then. -->
+  <!-- Remaining placeholder panels land in Tasks 11-12. -->
+  <LoopsPanel v-if="activeTab === 'loops'" />
   <div
+    v-else
     class="specorator-library-list"
     :data-active-tab="activeTab"
   />

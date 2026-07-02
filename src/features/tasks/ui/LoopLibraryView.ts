@@ -10,6 +10,7 @@ import { createLibraryCard, renderLibraryEmptyState, renderLibraryLoading, rende
 import { VIEW_TYPE_LIBRARY } from '../../library/viewType';
 import { launchLoopPrompt } from '../../quickActions/launchLoopPrompt';
 import { installPresetLoopsWithNotice } from '../loops/installPresetLoops';
+import { loopLibraryAccessors } from '../loops/loopLibraryAccessors';
 import { LoopNoteStore } from '../loops/LoopNoteStore';
 import type { LoopDefinition } from '../loops/loopTypes';
 import { LoopEditorModal } from './LoopEditorModal';
@@ -18,12 +19,7 @@ export const VIEW_TYPE_LOOP_LIBRARY = 'specorator-loop-library';
 
 export class LoopLibraryView extends ItemView {
   private readonly store = new LoopNoteStore();
-  private readonly controller = new LibraryListController<LoopDefinition>({
-    getName: (l) => l.name,
-    getDescription: (l) => `${l.description ?? ''} ${l.useWhen ?? ''}`,
-    getTags: (l) => l.tags ?? [],
-    getUpdatedAt: (l) => l.updatedAt ?? 0,
-  });
+  private readonly controller = new LibraryListController<LoopDefinition>(loopLibraryAccessors);
 
   constructor(leaf: WorkspaceLeaf, private plugin: SpecoratorPlugin) {
     super(leaf);

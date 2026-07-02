@@ -29,10 +29,17 @@ describe('LibraryToolbar', () => {
     });
     const beta = screen.getByRole('button', { name: 'beta' });
     expect(beta.getAttribute('aria-pressed')).toBe('true');
+    expect(beta.classList.contains('is-on')).toBe(true);
+    expect(screen.getByText('Clear filters').classList.contains('is-hidden')).toBe(false);
     await fireEvent.click(screen.getByRole('button', { name: 'alpha' }));
     expect(emitted()['toggle-filter']).toEqual([['alpha']]);
     await fireEvent.click(screen.getByText('Clear filters'));
     expect(emitted()['clear-filters']).toHaveLength(1);
+  });
+
+  it('hides the reset button via is-hidden when no filters are active', () => {
+    render(LibraryToolbar, { props: baseProps });
+    expect(screen.getByText('Clear filters').classList.contains('is-hidden')).toBe(true);
   });
 
   it('hides the chip row entirely when there are no tags', () => {

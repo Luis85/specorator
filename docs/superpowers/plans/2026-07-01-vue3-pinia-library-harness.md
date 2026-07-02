@@ -1822,10 +1822,17 @@ describe('LibraryToolbar', () => {
     });
     const beta = screen.getByRole('button', { name: 'beta' });
     expect(beta.getAttribute('aria-pressed')).toBe('true');
+    expect(beta.classList.contains('is-on')).toBe(true);
+    expect(screen.getByText('Clear filters').classList.contains('is-hidden')).toBe(false);
     await fireEvent.click(screen.getByRole('button', { name: 'alpha' }));
     expect(emitted()['toggle-filter']).toEqual([['alpha']]);
     await fireEvent.click(screen.getByText('Clear filters'));
     expect(emitted()['clear-filters']).toHaveLength(1);
+  });
+
+  it('hides the reset button via is-hidden when no filters are active', () => {
+    render(LibraryToolbar, { props: baseProps });
+    expect(screen.getByText('Clear filters').classList.contains('is-hidden')).toBe(true);
   });
 
   it('hides the chip row entirely when there are no tags', () => {
@@ -1935,10 +1942,12 @@ describe('LibraryCard', () => {
   it('renders name, activates on card click and on Enter, but NOT from nested buttons', async () => {
     let activations = 0;
     let nested = 0;
+    // The slot button does NOT stop propagation itself — the card's actions
+    // container (@click.stop) must be what prevents the bubble-up activate.
     render(LibraryCard, {
       props: { name: 'My item', ariaLabel: 'My item', onActivate: () => { activations += 1; } },
       slots: {
-        actions: () => h('button', { type: 'button', onClick: (e: MouseEvent) => { e.stopPropagation(); nested += 1; } }, 'Do'),
+        actions: () => h('button', { type: 'button', onClick: () => { nested += 1; } }, 'Do'),
       },
     });
     const card = screen.getByRole('button', { name: 'My item' });
@@ -1949,6 +1958,25 @@ describe('LibraryCard', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Do' }));
     expect(nested).toBe(1);
     expect(activations).toBe(2);
+  });
+
+  it('activates on Space keydown on the card itself', async () => {
+    let activations = 0;
+    render(LibraryCard, {
+      props: { name: 'x', ariaLabel: 'x', onActivate: () => { activations += 1; } },
+    });
+    await fireEvent.keyDown(screen.getByRole('button', { name: 'x' }), { key: ' ' });
+    expect(activations).toBe(1);
+  });
+
+  it('does NOT activate on keydown originating from a nested element', async () => {
+    let activations = 0;
+    render(LibraryCard, {
+      props: { name: 'x', ariaLabel: 'x', onActivate: () => { activations += 1; } },
+      slots: { actions: () => h('button', { type: 'button' }, 'Do') },
+    });
+    await fireEvent.keyDown(screen.getByRole('button', { name: 'Do' }), { key: 'Enter' });
+    expect(activations).toBe(0);
   });
 
   it('renders tag chips only when tags exist', () => {
@@ -2150,6 +2178,23 @@ describe('useLoopLibraryStore', () => {
     expect(noteStore.save).toHaveBeenCalled();
     expect(noteStore.list).toHaveBeenCalled();
   });
+
+  it('remove() deletes through the note store and reloads', async () => {
+    const store = useLoopLibraryStore();
+    const noteStore = {
+      list: vi.fn().mockResolvedValue({ loops: [], warnings: [] }),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+    store.init(makePlugin(), noteStore as never);
+    await store.remove(loopA as never);
+    expect(noteStore.delete).toHaveBeenCalledWith(expect.anything(), 'l/a.md');
+    expect(noteStore.list).toHaveBeenCalled();
+  });
+
+  it('load() rejects when the store is used before init()', async () => {
+    const store = useLoopLibraryStore();
+    await expect(store.load()).rejects.toThrow('used before init()');
+  });
 });
 ```
 
@@ -2307,6 +2352,7 @@ import { confirm } from '../../../../shared/modals/ConfirmModal';
 import { withErrorNotice } from '../../../../shared/uiAction';
 import { launchLoopPrompt } from '../../../quickActions/launchLoopPrompt';
 import { installPresetLoopsWithNotice } from '../../../tasks/loops/installPresetLoops';
+import { loopLibraryAccessors } from '../../../tasks/loops/loopLibraryAccessors';
 import type { LoopDefinition } from '../../../tasks/loops/loopTypes';
 import { LoopEditorModal } from '../../../tasks/ui/LoopEditorModal';
 import LibraryCard from '../components/LibraryCard.vue';
@@ -2324,12 +2370,9 @@ store.init(plugin);
 
 // Source-based: rows re-derive from the global store, so a mutation in ANY
 // Library leaf updates every mounted panel (multi-leaf consistency).
-const list = useLibraryList<LoopDefinition>(() => store.loops, {
-  getName: (l) => l.name,
-  getDescription: (l) => `${l.description ?? ''} ${l.useWhen ?? ''}`,
-  getTags: (l) => l.tags ?? [],
-  getUpdatedAt: (l) => l.updatedAt ?? 0,
-});
+// loopLibraryAccessors is extracted to features/tasks/loops/ and shared with
+// the legacy LoopLibraryView (clone-group ratchet).
+const list = useLibraryList<LoopDefinition>(() => store.loops, loopLibraryAccessors);
 
 onMounted(() => void withErrorNotice(() => store.load(), t('loopLibrary.actionFailed'), fail));
 
@@ -2409,7 +2452,7 @@ function onInstallStarters(): void {
         v-for="loop in list.rows.value"
         :key="loop.path"
         :name="loop.name"
-        :aria-label="loop.name"
+        :ariaLabel="loop.name"
         :tags="loop.tags ?? []"
         @activate="openEditor(loop)"
       >

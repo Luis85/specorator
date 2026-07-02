@@ -12,6 +12,11 @@ function bump(): void {
 <template>
   <div class="harness-probe">
     <span>{{ props.label }}</span>
-    <button type="button" @click="bump">{{ count }} / {{ doubled }}</button>
+    <button
+      type="button"
+      @click="bump"
+    >
+      {{ count }} / {{ doubled }}
+    </button>
   </div>
 </template>
