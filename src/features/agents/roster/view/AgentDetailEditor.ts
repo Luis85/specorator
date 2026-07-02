@@ -22,6 +22,8 @@ export interface AgentDetailEditorCallbacks {
   onBack(): void;
   onStartChat(agent: RosterAgent): void;
   onDeleted(agent: RosterAgent): void;
+  /** Fires after every successful persist (explicit Save AND the start-chat auto-save). */
+  onSaved?(agent: RosterAgent): void;
 }
 
 /** Owns the agent detail/edit page: cards, pickers, dirty tracking, sticky footer. */
@@ -67,13 +69,18 @@ export class AgentDetailEditor {
   }
 
   private handleBack(): void {
-    if (!isRosterAgentDirty(this.original, this.draft)) {
+    if (!this.isDirty()) {
       this.callbacks.onBack();
       return;
     }
     void confirm(this.plugin.app, t('agentRoster.discardConfirm'), t('agentRoster.discard')).then((ok) => {
       if (ok) this.callbacks.onBack();
     });
+  }
+
+  /** True when the draft differs from the last persisted state. */
+  isDirty(): boolean {
+    return isRosterAgentDirty(this.original, this.draft);
   }
 
   private renderHeaderCard(root: HTMLElement): void {
@@ -270,6 +277,7 @@ export class AgentDetailEditor {
     this.isNew = false;
     new Notice(t('agentRoster.saved', { name: this.draft.name }));
     this.updateDirty();
+    this.callbacks.onSaved?.(this.original);
   }
 
   private async startChatFromEditor(): Promise<void> {

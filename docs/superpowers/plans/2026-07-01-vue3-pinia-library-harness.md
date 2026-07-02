@@ -2191,6 +2191,26 @@ describe('useLoopLibraryStore', () => {
     expect(noteStore.list).toHaveBeenCalled();
   });
 
+  it('a stale load resolving after a newer one cannot overwrite fresher state', async () => {
+    const store = useLoopLibraryStore();
+    const loopB = { ...loopA, path: 'l/b.md', id: 'b', name: 'B loop' };
+    let resolveStale: (v: unknown) => void = () => undefined;
+    const noteStore = {
+      list: vi.fn()
+        .mockImplementationOnce(() => new Promise((resolve) => { resolveStale = resolve; }))
+        .mockResolvedValue({ loops: [loopA, loopB], warnings: [] }),
+    };
+    store.init(makePlugin(), noteStore as never);
+    const stale = store.load(); // load A — blocked on list()
+    await store.load(); // load B — resolves with fresher data
+    expect(store.loops).toHaveLength(2);
+    resolveStale({ loops: [loopA], warnings: [] }); // A resolves late with the stale list
+    await stale;
+    // Fresher result retained; the guarded finally left `loading` settled.
+    expect(store.loops).toHaveLength(2);
+    expect(store.loading).toBe(false);
+  });
+
   it('load() rejects when the store is used before init()', async () => {
     const store = useLoopLibraryStore();
     await expect(store.load()).rejects.toThrow('used before init()');
@@ -2222,6 +2242,7 @@ export const useLoopLibraryStore = defineStore('library-loops', () => {
 
   let plugin: SpecoratorPlugin | null = null;
   let noteStore = new LoopNoteStore();
+  let loadToken = 0;
 
   function init(p: SpecoratorPlugin, store?: LoopNoteStore): void {
     plugin = p;
@@ -2235,12 +2256,19 @@ export const useLoopLibraryStore = defineStore('library-loops', () => {
 
   async function load(): Promise<void> {
     if (!plugin) throw new Error('loopLibraryStore used before init()');
+    // Request-token guard: a slow load that STARTED before a mutation must not
+    // resolve AFTER the mutation's reload and overwrite fresher data (two
+    // leaves open, or the mount load overlapping save/clone/remove). The
+    // `loading` flag also commits behind the token check so a stale load can't
+    // clear it while a newer one is still in flight.
+    const token = ++loadToken;
     loading.value = true;
     try {
       const { loops: list } = await noteStore.list(plugin.app.vault, folder());
+      if (token !== loadToken) return; // superseded by a newer load — drop stale result
       loops.value = list;
     } finally {
-      loading.value = false;
+      if (token === loadToken) loading.value = false;
     }
   }
 
@@ -2938,6 +2966,25 @@ describe('useRosterStore', () => {
     expect(store.agents).toHaveLength(1);
   });
 
+  it('a stale load resolving after a newer one cannot overwrite fresher state', async () => {
+    const { plugin, rosterStore } = makePlugin([agent]);
+    const agentB = { ...agent, id: 'roster:b', name: 'Bob' };
+    let resolveStale: (v: unknown[]) => void = () => undefined;
+    rosterStore.list = vi.fn()
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveStale = resolve; }))
+      .mockResolvedValue([agent, agentB]);
+    const store = useRosterStore();
+    store.init(plugin);
+    const stale = store.load(); // load A — blocked on list()
+    await store.load(); // load B — resolves with fresher data
+    expect(store.agents).toHaveLength(2);
+    resolveStale([agent]); // A resolves late with the stale single-agent list
+    await stale;
+    // Fresher result retained; the guarded finally left `loading` settled.
+    expect(store.agents).toHaveLength(2);
+    expect(store.loading).toBe(false);
+  });
+
   it('clone() saves "<name> copy" with deduped id and returns the clone', async () => {
     const { plugin, rosterStore } = makePlugin([agent]);
     const store = useRosterStore();
@@ -2978,6 +3025,7 @@ export const useRosterStore = defineStore('library-agents', () => {
   const loading = ref(false);
 
   let plugin: SpecoratorPlugin | null = null;
+  let loadToken = 0;
 
   function init(p: SpecoratorPlugin): void {
     plugin = p;
@@ -2990,11 +3038,19 @@ export const useRosterStore = defineStore('library-agents', () => {
 
   async function load(): Promise<void> {
     const p = requirePlugin();
+    // Request-token guard: a slow load that STARTED before a mutation must not
+    // resolve AFTER the mutation's reload and overwrite fresher data (two
+    // leaves open, or the mount load overlapping clone/save/remove). The
+    // `loading` flag also commits behind the token check so a stale load can't
+    // clear it while a newer one is still in flight.
+    const token = ++loadToken;
     loading.value = true;
     try {
-      agents.value = await p.agentRosterStore.list();
+      const list = await p.agentRosterStore.list();
+      if (token !== loadToken) return; // superseded by a newer load — drop stale result
+      agents.value = list;
     } finally {
-      loading.value = false;
+      if (token === loadToken) loading.value = false;
     }
   }
 

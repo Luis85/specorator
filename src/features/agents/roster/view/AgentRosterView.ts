@@ -1,7 +1,6 @@
 import { ItemView, Notice, type WorkspaceLeaf } from 'obsidian';
 
 import { ProviderRegistry } from '../../../../core/providers/ProviderRegistry';
-import type { ProviderId } from '../../../../core/providers/types';
 import { asSettingsBag } from '../../../../core/types/settings';
 import { t } from '../../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../../main';
@@ -13,9 +12,9 @@ import { createLibraryCard, renderLibraryEmptyState, renderLibraryLoading, rende
 import { VIEW_TYPE_LIBRARY } from '../../../library/viewType';
 import { renderAgentAvatar } from '../../agentAvatar';
 import { rosterAgentToPersona } from '../../personaRegistry';
-import { installPresetAgents } from '../presetAgents';
-import { resolveAgentProvider as resolveAgentProviderId } from '../resolveAgentProvider';
-import { createRosterAgent, dedupeRosterId } from '../rosterCapabilities';
+import { installPresetAgentsWithNotice, startChatWithRosterAgent, syncRosterAgentsWithNotice } from '../rosterAgentActions';
+import { cloneRosterAgent, draftRosterAgent } from '../rosterCapabilities';
+import { rosterLibraryAccessors, rosterRoleLabel } from '../rosterLibraryAccessors';
 import type { RosterAgent } from '../rosterTypes';
 import { AgentDetailEditor } from './AgentDetailEditor';
 
@@ -24,15 +23,7 @@ export const VIEW_TYPE_AGENT_ROSTER = 'specorator-agent-roster';
 const CARD_AVATAR_SIZE = 36;
 
 export class AgentRosterView extends ItemView {
-  private readonly controller = new LibraryListController<RosterAgent>({
-    getName: (a) => a.name,
-    getDescription: (a) => a.description,
-    getTags: (a) => [
-      ...a.roles.map((r) => (r === 'verifier' ? t('agentRoster.roleVerifier') : t('agentRoster.roleWorker'))),
-      ...(a.tags ?? []),
-    ],
-    getUpdatedAt: (a) => a.updatedAt,
-  });
+  private readonly controller = new LibraryListController<RosterAgent>(rosterLibraryAccessors);
 
   constructor(leaf: WorkspaceLeaf, private plugin: SpecoratorPlugin) {
     super(leaf);
@@ -111,8 +102,7 @@ export class AgentRosterView extends ItemView {
 
     const caps = body.createDiv({ cls: 'specorator-library-card-caps' });
     for (const role of agent.roles) {
-      const roleLabel = role === 'verifier' ? t('agentRoster.roleVerifier') : t('agentRoster.roleWorker');
-      caps.createSpan({ cls: 'specorator-roster-chip specorator-roster-chip-role', text: roleLabel });
+      caps.createSpan({ cls: 'specorator-roster-chip specorator-roster-chip-role', text: rosterRoleLabel(role) });
     }
     for (const tag of agent.tags ?? []) {
       caps.createSpan({ cls: 'specorator-library-chip', text: tag });
@@ -165,31 +155,14 @@ export class AgentRosterView extends ItemView {
 
   private async createAndEdit(): Promise<void> {
     const existing = await this.store.list();
-    const agent = createRosterAgent(t('agentRoster.newAgent'), Date.now());
-    const uniqueId = dedupeRosterId(agent.id, existing.map((a) => a.id));
-    if (uniqueId !== agent.id) {
-      agent.id = uniqueId;
-      agent.name = `${t('agentRoster.newAgent')} ${uniqueId.split('-').pop()}`;
-    }
     // Don't pre-save: open the editor in-memory and let the user's first Save
     // (or Start chat) persist it. Abandoning the editor leaves no orphan file.
+    const agent = draftRosterAgent(t('agentRoster.newAgent'), existing, Date.now());
     await this.openDetail(agent, { isNew: true });
   }
 
   private async syncToProviders(): Promise<void> {
-    const result = await this.plugin.syncRosterAgentsToProviders();
-    if (result.failed.length > 0) {
-      new Notice(t('agentRoster.syncFailed', { written: String(result.written), failed: String(result.failed.length) }));
-      return;
-    }
-    new Notice(
-      result.providers.length > 0
-        ? t('agentRoster.syncDone', {
-            written: String(result.written),
-            providers: result.providers.join(', '),
-          })
-        : t('agentRoster.syncNone'),
-    );
+    await syncRosterAgentsWithNotice(this.plugin);
   }
 
   private fail(error: unknown): void {
@@ -197,36 +170,13 @@ export class AgentRosterView extends ItemView {
   }
 
   private async installStarters(): Promise<void> {
-    const result = await installPresetAgents(this.store);
-    new Notice(
-      result.installed.length > 0
-        ? t('agentRoster.installStarterDone', {
-            installed: String(result.installed.length),
-            skipped: String(result.skipped.length),
-          })
-        : t('agentRoster.installStarterNone'),
-    );
+    await installPresetAgentsWithNotice(this.plugin);
     await this.renderList();
   }
 
   private async cloneAgent(agent: RosterAgent): Promise<void> {
     const existing = await this.store.list();
-    // Probe existing names so a second clone of the same agent is `X copy 2`
-    // rather than a duplicate `X copy` — the roster/search/chat chrome shows the
-    // name, so identical names would be indistinguishable (mirrors loop cloning).
-    const existingNames = new Set(existing.map((a) => a.name));
-    let cloneName = `${agent.name} copy`;
-    for (let n = 2; existingNames.has(cloneName); n += 1) {
-      cloneName = `${agent.name} copy ${n}`;
-    }
-    const base = createRosterAgent(cloneName, Date.now());
-    const clone: RosterAgent = {
-      ...agent,
-      id: dedupeRosterId(base.id, existing.map((a) => a.id)),
-      name: cloneName,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
+    const clone = cloneRosterAgent(agent, existing, Date.now());
     await this.store.save(clone);
     await this.openDetail(clone);
   }
@@ -244,30 +194,9 @@ export class AgentRosterView extends ItemView {
     await this.renderList();
   }
 
-  /**
-   * Opens a chat bound to the agent on a supported provider. The agent's
-   * preferred provider (explicit `providerOverride`, else its model's provider)
-   * wins only when that provider is actually enabled; otherwise it falls back to
-   * the user's active/default enabled provider. This prevents defaulting to a
-   * disabled Claude (which would error with "CLI not found") when, say, only
-   * Cursor is enabled.
-   */
-  private resolveAgentProvider(agent: RosterAgent): ProviderId {
-    const settings = asSettingsBag(this.plugin.settings);
-    return resolveAgentProviderId(
-      agent,
-      (p) => ProviderRegistry.isEnabled(p, settings),
-      ProviderRegistry.resolveSettingsProviderId(settings),
-    );
-  }
-
   private async startChatWithAgent(agent: RosterAgent): Promise<void> {
-    const conversation = await this.plugin.createConversation({
-      providerId: this.resolveAgentProvider(agent),
-      boundAgentId: agent.id,
-    });
-    // Always open the agent in a fresh tab so it never hijacks a chat already in
-    // use (e.g. a streaming conversation in the active tab).
-    await this.plugin.openConversation(conversation.id, { requireNewTab: true });
+    // Provider resolution + fresh-tab policy live in rosterAgentActions,
+    // shared with the Vue AgentsPanel.
+    await startChatWithRosterAgent(this.plugin, agent);
   }
 }

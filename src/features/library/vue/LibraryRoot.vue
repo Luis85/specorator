@@ -4,6 +4,7 @@ import { inject } from 'vue';
 import { t } from '../../../i18n/i18n';
 import type { LibraryTab } from '../viewType';
 import { ACTIVE_TAB_KEY, VIEW_KEY } from './libraryKeys';
+import AgentsPanel from './panels/AgentsPanel.vue';
 import LoopsPanel from './panels/LoopsPanel.vue';
 import SkillsPanel from './panels/SkillsPanel.vue';
 
@@ -48,12 +49,7 @@ function select(tab: LibraryTab): void {
       {{ tab.label }}
     </button>
   </div>
-  <!-- The remaining placeholder panel (agents) lands in Task 12. -->
   <LoopsPanel v-if="activeTab === 'loops'" />
   <SkillsPanel v-else-if="activeTab === 'skills'" />
-  <div
-    v-else
-    class="specorator-library-list"
-    :data-active-tab="activeTab"
-  />
+  <AgentsPanel v-else />
 </template>

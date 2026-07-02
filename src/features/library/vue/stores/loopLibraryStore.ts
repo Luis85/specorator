@@ -17,6 +17,7 @@ export const useLoopLibraryStore = defineStore('library-loops', () => {
 
   let plugin: SpecoratorPlugin | null = null;
   let noteStore = new LoopNoteStore();
+  let loadToken = 0;
 
   function init(p: SpecoratorPlugin, store?: LoopNoteStore): void {
     plugin = p;
@@ -30,12 +31,19 @@ export const useLoopLibraryStore = defineStore('library-loops', () => {
 
   async function load(): Promise<void> {
     if (!plugin) throw new Error('loopLibraryStore used before init()');
+    // Request-token guard: a slow load that STARTED before a mutation must not
+    // resolve AFTER the mutation's reload and overwrite fresher data (two
+    // leaves open, or the mount load overlapping save/clone/remove). The
+    // `loading` flag also commits behind the token check so a stale load can't
+    // clear it while a newer one is still in flight.
+    const token = ++loadToken;
     loading.value = true;
     try {
       const { loops: list } = await noteStore.list(plugin.app.vault, folder());
+      if (token !== loadToken) return; // superseded by a newer load — drop stale result
       loops.value = list;
     } finally {
-      loading.value = false;
+      if (token === loadToken) loading.value = false;
     }
   }
 

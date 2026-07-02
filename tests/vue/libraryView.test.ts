@@ -34,13 +34,14 @@ describe('LibraryView', () => {
     expect(view.getIcon()).toBe('library');
   });
 
-  it('mounts the tab strip with three tabs when the flag is on', async () => {
+  it('mounts the tab strip with three tabs and the Agents panel as the default', async () => {
     const view = new LibraryView(makeLeaf(), makePlugin(true));
     const el = mountView(view);
     await view.onOpen();
     const tabs = el.querySelectorAll('.specorator-library-nav-item');
     expect(tabs).toHaveLength(3);
     expect(el.querySelector('[aria-current="page"]')?.textContent).toContain('Agents');
+    expect(el.querySelector('.specorator-library-header h2')?.textContent).toContain('Agent Roster');
   });
 
   it('switches tabs on click and via setActiveTab', async () => {
@@ -71,7 +72,7 @@ describe('LibraryView', () => {
     (el.querySelectorAll('.specorator-library-nav-item')[0] as HTMLElement).click();
     await new Promise((r) => setTimeout(r));
     expect(setActiveTab).not.toHaveBeenCalled();
-    expect(el.querySelector('[data-active-tab]')?.getAttribute('data-active-tab')).toBe('agents');
+    expect(el.querySelector('.specorator-library-header h2')?.textContent).toContain('Agent Roster');
   });
 
   it('asks a registered tab guard and stays put when it declines', async () => {

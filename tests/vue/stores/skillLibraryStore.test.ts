@@ -59,6 +59,28 @@ describe('useSkillLibraryStore', () => {
     expect(store.loading).toBe(false);
   });
 
+  it('keeps loading true when an older load resolves while a newer one is pending', async () => {
+    const store = useSkillLibraryStore();
+    const plugin = makePlugin([entry]);
+    const p = plugin as { vaultSkillAggregator: { listAll: ReturnType<typeof vi.fn> } };
+    let resolveFirst: (v: unknown[]) => void = () => undefined;
+    let resolveSecond: (v: unknown[]) => void = () => undefined;
+    p.vaultSkillAggregator.listAll = vi.fn()
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve; }));
+    store.init(plugin);
+    const first = store.load(); // older token
+    const second = store.load(); // newer token — still pending
+    resolveFirst([entry]);
+    await first;
+    // Guarded finally: the superseded load must NOT clear the flag out from
+    // under the load that is still in flight.
+    expect(store.loading).toBe(true);
+    resolveSecond([entry]);
+    await second;
+    expect(store.loading).toBe(false);
+  });
+
   it('clone() writes a -copy dir, emits vaultSkill.changed, and reloads', async () => {
     const store = useSkillLibraryStore();
     const plugin = makePlugin([entry]);

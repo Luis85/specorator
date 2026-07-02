@@ -70,6 +70,26 @@ describe('useLoopLibraryStore', () => {
     expect(noteStore.list).toHaveBeenCalled();
   });
 
+  it('a stale load resolving after a newer one cannot overwrite fresher state', async () => {
+    const store = useLoopLibraryStore();
+    const loopB = { ...loopA, path: 'l/b.md', id: 'b', name: 'B loop' };
+    let resolveStale: (v: unknown) => void = () => undefined;
+    const noteStore = {
+      list: vi.fn()
+        .mockImplementationOnce(() => new Promise((resolve) => { resolveStale = resolve; }))
+        .mockResolvedValue({ loops: [loopA, loopB], warnings: [] }),
+    };
+    store.init(makePlugin(), noteStore as never);
+    const stale = store.load(); // load A — blocked on list()
+    await store.load(); // load B — resolves with fresher data
+    expect(store.loops).toHaveLength(2);
+    resolveStale({ loops: [loopA], warnings: [] }); // A resolves late with the stale list
+    await stale;
+    // Fresher result retained; the guarded finally left `loading` settled.
+    expect(store.loops).toHaveLength(2);
+    expect(store.loading).toBe(false);
+  });
+
   it('load() rejects when the store is used before init()', async () => {
     const store = useLoopLibraryStore();
     await expect(store.load()).rejects.toThrow('used before init()');
