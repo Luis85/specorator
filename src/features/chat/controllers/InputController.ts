@@ -244,6 +244,8 @@ export class InputController {
     canvasContextOverride?: CanvasSelectionContext | null;
     content?: string;
     images?: ChatMessage['images'];
+    /** Fold the unsent composer draft into a content-override send and clear the composer. */
+    includeComposerDraft?: boolean;
     turnRequestOverride?: ChatTurnRequest;
   }): Promise<ProgrammaticSendResult | void> {
     const { state } = this.deps;
@@ -296,7 +298,7 @@ export class InputController {
   }
 
   private clearComposerInputIfUserSend(send: ComposerSendContext): void {
-    if (send.shouldUseInput) {
+    if (send.shouldUseInput || send.consumesComposerDraft) {
       send.inputEl.value = '';
       this.deps.resetInputHeight();
     }
@@ -340,7 +342,7 @@ export class InputController {
     send.fileContextManager?.clearAttachedPills();
 
     this.clearComposerInputIfUserSend(send);
-    if (send.shouldUseInput) {
+    if (send.shouldUseInput || send.consumesComposerDraft) {
       send.imageContextManager?.clearImages();
     }
     this.queuedMessages.updateQueueIndicator();
@@ -412,8 +414,9 @@ export class InputController {
     const imagesForMessage = images.length > 0 ? [...images] : undefined;
     const isCompact = /^\/compact(\s|$)/i.test(send.content);
 
-    // Only clear images if we consumed user input (not for programmatic content override)
-    if (send.shouldUseInput) {
+    // Only clear images if we consumed user input — either a plain user send or a
+    // content-override send that folded the composer draft in (quick actions).
+    if (send.shouldUseInput || send.consumesComposerDraft) {
       send.imageContextManager?.clearImages();
     }
 
