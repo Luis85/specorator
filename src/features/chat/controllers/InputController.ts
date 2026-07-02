@@ -48,6 +48,7 @@ import {
   applyPlanApprovalDecision,
   bakeResponseDurationFooter,
   beginStreamingTurnState,
+  clearConsumedComposerInput,
   completeApprovedNewSessionPlanToolCalls,
   type ComposerSendContext,
   type ComposerTurnOptions,
@@ -268,7 +269,7 @@ export class InputController {
     // Check for built-in commands first (e.g., /clear, /new, /add-dir)
     const builtInCmd = detectBuiltInCommand(send.content);
     if (builtInCmd) {
-      this.clearComposerInputIfUserSend(send);
+      clearConsumedComposerInput(send, () => this.deps.resetInputHeight());
       await this.executeBuiltInCommand(builtInCmd.command, builtInCmd.args);
       return;
     }
@@ -295,13 +296,6 @@ export class InputController {
     return state.isCreatingConversation
       || state.isSwitchingConversation
       || state.isHydrating;
-  }
-
-  private clearComposerInputIfUserSend(send: ComposerSendContext): void {
-    if (send.shouldUseInput || send.consumesComposerDraft) {
-      send.inputEl.value = '';
-      this.deps.resetInputHeight();
-    }
   }
 
   private async persistComposerImages(send: ComposerSendContext): Promise<void> {
@@ -341,7 +335,7 @@ export class InputController {
     // so they don't linger in the composer after the user hits send while streaming.
     send.fileContextManager?.clearAttachedPills();
 
-    this.clearComposerInputIfUserSend(send);
+    clearConsumedComposerInput(send, () => this.deps.resetInputHeight());
     if (send.shouldUseInput || send.consumesComposerDraft) {
       send.imageContextManager?.clearImages();
     }
@@ -356,7 +350,7 @@ export class InputController {
     send: ComposerSendContext,
     options?: ComposerTurnOptions,
   ): Promise<ProgrammaticSendResult | void> {
-    this.clearComposerInputIfUserSend(send);
+    clearConsumedComposerInput(send, () => this.deps.resetInputHeight());
     // Bug — selected work-order model didn't reach the runtime: capture the
     // tab-pinned model BEFORE `ensureServiceInitialized` runs, since the tab
     // lifecycle clears `draftModel` during init. Plumbed into `query()` as

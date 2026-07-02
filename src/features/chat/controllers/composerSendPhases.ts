@@ -103,6 +103,20 @@ export function resolveComposerSend(args: {
   };
 }
 
+/**
+ * Clears the composer textarea when this send consumed it: a plain user send,
+ * or a content-override send that folded the draft in (quick actions).
+ */
+export function clearConsumedComposerInput(
+  send: ComposerSendContext,
+  resetInputHeight: () => void,
+): void {
+  if (send.shouldUseInput || send.consumesComposerDraft) {
+    send.inputEl.value = '';
+    resetInputHeight();
+  }
+}
+
 export function resolveComposerSourceImages(
   send: ComposerSendContext,
 ): NonNullable<ChatMessage['images']> {
