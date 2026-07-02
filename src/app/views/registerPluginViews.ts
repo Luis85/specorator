@@ -1,6 +1,10 @@
 import { VIEW_TYPE_SPECORATOR, VIEW_TYPE_SPECORATOR_AGENT_BOARD } from '@/core/types';
 import { AgentRosterView, VIEW_TYPE_AGENT_ROSTER } from '@/features/agents/roster/view/AgentRosterView';
 import { SpecoratorView } from '@/features/chat/SpecoratorView';
+import { activateLibrary } from '@/features/library/activateLibrary';
+import { LibraryView } from '@/features/library/LibraryView';
+import type { LibraryTab } from '@/features/library/viewType';
+import { VIEW_TYPE_LIBRARY } from '@/features/library/viewType';
 import { SkillLibraryView, VIEW_TYPE_SKILL_LIBRARY } from '@/features/skills/view/SkillLibraryView';
 import type { ChatTabExecutionSurface } from '@/features/tasks/execution/ChatTabExecutionSurface';
 import { AgentBoardView } from '@/features/tasks/ui/AgentBoardView';
@@ -37,18 +41,22 @@ export function registerPluginViews({ plugin, taskExecutionSurface }: PluginView
   plugin.registerView(VIEW_TYPE_SKILL_LIBRARY, (leaf) => new SkillLibraryView(leaf, plugin));
   plugin.registerView(VIEW_TYPE_LOOP_LIBRARY, (leaf) => new LoopLibraryView(leaf, plugin));
 
+  plugin.registerView(VIEW_TYPE_LIBRARY, (leaf) => new LibraryView(leaf, plugin));
+
   const openView = (viewType: string) => plugin.openLeafView(viewType);
-  plugin.addRibbonIcon('users', t('ribbon.openAgentRoster'), () => void openView(VIEW_TYPE_AGENT_ROSTER));
-  plugin.addRibbonIcon('book-open', t('ribbon.openSkillLibrary'), () => void openView(VIEW_TYPE_SKILL_LIBRARY));
-  plugin.addRibbonIcon('repeat', t('ribbon.openLoopLibrary'), () => void openView(VIEW_TYPE_LOOP_LIBRARY));
+  const openLibrary = (tab: LibraryTab, legacyType: string) =>
+    plugin.settings.useVueLibrary ? activateLibrary(plugin, tab) : openView(legacyType);
+  plugin.addRibbonIcon('users', t('ribbon.openAgentRoster'), () => void openLibrary('agents', VIEW_TYPE_AGENT_ROSTER));
+  plugin.addRibbonIcon('book-open', t('ribbon.openSkillLibrary'), () => void openLibrary('skills', VIEW_TYPE_SKILL_LIBRARY));
+  plugin.addRibbonIcon('repeat', t('ribbon.openLoopLibrary'), () => void openLibrary('loops', VIEW_TYPE_LOOP_LIBRARY));
   plugin.addCommand({
     id: 'open-agent-roster',
     name: t('commands.openAgentRoster'),
-    callback: () => void openView(VIEW_TYPE_AGENT_ROSTER),
+    callback: () => void openLibrary('agents', VIEW_TYPE_AGENT_ROSTER),
   });
   plugin.addCommand({
     id: 'open-skill-library',
     name: t('commands.openSkillLibrary'),
-    callback: () => void openView(VIEW_TYPE_SKILL_LIBRARY),
+    callback: () => void openLibrary('skills', VIEW_TYPE_SKILL_LIBRARY),
   });
 }

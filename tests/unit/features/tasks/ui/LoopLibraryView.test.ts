@@ -3,6 +3,7 @@
  */
 import '../../../../setup/obsidianDom';
 
+import { VIEW_TYPE_LIBRARY } from '../../../../../src/features/library/viewType';
 import { LoopNoteStore } from '../../../../../src/features/tasks/loops/LoopNoteStore';
 import { LoopLibraryView, VIEW_TYPE_LOOP_LIBRARY } from '../../../../../src/features/tasks/ui/LoopLibraryView';
 
@@ -218,5 +219,37 @@ describe('LoopLibraryView', () => {
     await flush();
 
     expect(deleteMock).toHaveBeenCalledWith(plugin.app, 'Agent Board/loops/alpha-loop.md');
+  });
+});
+
+// ── useVueLibrary self-migration (unified Library redirect) ──────────────────
+
+describe('LoopLibraryView useVueLibrary self-migration', () => {
+  function makeGuardView(useVueLibrary: boolean) {
+    const plugin = makePlugin({});
+    plugin.settings.useVueLibrary = useVueLibrary;
+    const leaf = { setViewState: jest.fn().mockResolvedValue(undefined) };
+    const view = new LoopLibraryView(leaf as any, plugin);
+    const contentEl = document.createElement('div');
+    (view as unknown as { contentEl: HTMLElement }).contentEl = contentEl;
+    return { view, leaf, contentEl };
+  }
+
+  it('re-homes the leaf to the unified Library (loops tab) when the flag is on', async () => {
+    const { view, leaf, contentEl } = makeGuardView(true);
+    await view.onOpen();
+    expect(leaf.setViewState).toHaveBeenCalledWith({
+      type: VIEW_TYPE_LIBRARY,
+      active: true,
+      state: { tab: 'loops' },
+    });
+    expect(contentEl.childElementCount).toBe(0); // nothing rendered
+  });
+
+  it('renders the legacy loop library when the flag is off', async () => {
+    const { view, leaf, contentEl } = makeGuardView(false);
+    await view.onOpen();
+    expect(leaf.setViewState).not.toHaveBeenCalled();
+    expect(contentEl.childElementCount).toBeGreaterThan(0);
   });
 });

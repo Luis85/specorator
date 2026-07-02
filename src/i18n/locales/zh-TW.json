@@ -1127,6 +1127,7 @@
     }
   },
   "library": {
+    "viewTitle": "庫",
     "searchPlaceholder": "Search…",
     "sortLabel": "Sort",
     "sortName": "Name (A–Z)",

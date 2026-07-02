@@ -8,6 +8,7 @@ import { promptReason } from '../../../shared/modals/PromptModal';
 import { withErrorNotice } from '../../../shared/uiAction';
 import { extractStringArray, parseFrontmatter } from '../../../utils/frontmatter';
 import { createLibraryCard, librarySlug, renderLibraryEmptyState, renderLibraryLoading, renderLibraryShell, uniqueChildDir } from '../../../utils/libraryView';
+import { VIEW_TYPE_LIBRARY } from '../../library/viewType';
 import { runVaultSkill } from '../../quickActions/skills/runVaultSkill';
 import type { SkillTabEntry } from '../../quickActions/skills/types';
 import { type SkillLibraryRow, toSkillLibraryRows } from '../skillLibraryRows';
@@ -68,6 +69,10 @@ export class SkillLibraryView extends ItemView {
   getIcon(): string { return 'book-open'; }
 
   async onOpen(): Promise<void> {
+    if (this.plugin.settings.useVueLibrary) {
+      await this.leaf.setViewState({ type: VIEW_TYPE_LIBRARY, active: true, state: { tab: 'skills' } });
+      return;
+    }
     await this.render();
   }
 

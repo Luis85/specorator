@@ -3,6 +3,7 @@
  */
 import '../../../../../tests/setup/obsidianDom';
 
+import { VIEW_TYPE_LIBRARY } from '../../../../../src/features/library/viewType';
 import type { SkillTabEntry } from '../../../../../src/features/quickActions/skills/types';
 import { SkillLibraryView, VIEW_TYPE_SKILL_LIBRARY } from '../../../../../src/features/skills/view/SkillLibraryView';
 
@@ -317,5 +318,37 @@ describe('SkillLibraryView', () => {
     const empty = contentEl.querySelector('.specorator-library-empty');
     expect(empty).not.toBeNull();
     expect(contentEl.querySelectorAll('.specorator-library-card').length).toBe(0);
+  });
+});
+
+// ── useVueLibrary self-migration (unified Library redirect) ──────────────────
+
+describe('SkillLibraryView useVueLibrary self-migration', () => {
+  function makeGuardView(useVueLibrary: boolean) {
+    const plugin = makePlugin([]);
+    plugin.settings.useVueLibrary = useVueLibrary;
+    const leaf = { setViewState: jest.fn().mockResolvedValue(undefined) };
+    const view = new SkillLibraryView(leaf as any, plugin);
+    const contentEl = document.createElement('div');
+    (view as unknown as { contentEl: HTMLElement }).contentEl = contentEl;
+    return { view, leaf, contentEl };
+  }
+
+  it('re-homes the leaf to the unified Library (skills tab) when the flag is on', async () => {
+    const { view, leaf, contentEl } = makeGuardView(true);
+    await view.onOpen();
+    expect(leaf.setViewState).toHaveBeenCalledWith({
+      type: VIEW_TYPE_LIBRARY,
+      active: true,
+      state: { tab: 'skills' },
+    });
+    expect(contentEl.childElementCount).toBe(0); // nothing rendered
+  });
+
+  it('renders the legacy skill library when the flag is off', async () => {
+    const { view, leaf, contentEl } = makeGuardView(false);
+    await view.onOpen();
+    expect(leaf.setViewState).not.toHaveBeenCalled();
+    expect(contentEl.childElementCount).toBeGreaterThan(0);
   });
 });

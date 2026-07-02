@@ -1127,6 +1127,7 @@
     }
   },
   "library": {
+    "viewTitle": "Библиотека",
     "searchPlaceholder": "Search…",
     "sortLabel": "Sort",
     "sortName": "Name (A–Z)",

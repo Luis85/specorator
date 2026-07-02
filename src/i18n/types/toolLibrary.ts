@@ -1,5 +1,6 @@
 export type ToolLibraryTranslationKey =
   // Shared library toolbar / chip keys
+  | 'library.viewTitle'
   | 'library.searchPlaceholder'
   | 'library.sortLabel'
   | 'library.sortName'

@@ -741,14 +741,17 @@ git commit -m "feat(settings): add useVueLibrary flag (default off) with toggle 
 - Create: `tests/vue/helpers.ts` (shared fake-plugin factory)
 - Create: `tests/vue/libraryView.test.ts`
 - Create: `tests/vue/libraryView.leak.test.ts`
+- Create: `tests/vue/activateLibrary.test.ts`
 - Modify: `src/i18n/types/toolLibrary.ts`, all 10 locale JSONs (`library.viewTitle`)
 - Modify: `src/app/views/registerPluginViews.ts`
 - Modify: `src/app/commands/registerPluginCommands.ts` (existing open-loop-library command becomes flag-aware)
 - Create: `tests/__mocks__/vueComponentStub.ts` (Jest-lane stub for .vue imports)
+- Modify: `tests/__mocks__/obsidian.ts` (additive `ItemView.setState`/`getState` no-ops so `super.` calls work in both mock lanes)
 - Modify: `jest.base.config.js` (.vue moduleNameMapper) and `jest.config.js` (coverage exclusion for the Vitest-owned subtree)
 - Modify: `src/features/agents/roster/view/AgentRosterView.ts` (onOpen guard)
 - Modify: `src/features/skills/view/SkillLibraryView.ts` (onOpen guard)
 - Modify: `src/features/tasks/ui/LoopLibraryView.ts` (onOpen guard)
+- Modify: `tests/unit/features/agents/roster/view/AgentRosterView.test.ts`, `tests/unit/features/skills/view/SkillLibraryView.test.ts`, `tests/unit/features/tasks/ui/LoopLibraryView.test.ts` (flag-redirect specs)
 
 - [ ] **Step 7.1: Create `src/features/library/viewType.ts`**
 
@@ -824,14 +827,16 @@ import { inject } from 'vue';
 
 import { t } from '../../../i18n/i18n';
 import type { LibraryTab } from '../viewType';
-import { ACTIVE_TAB_KEY, TAB_GUARD_KEY } from './libraryKeys';
+import { ACTIVE_TAB_KEY, VIEW_KEY } from './libraryKeys';
 
 const injected = inject(ACTIVE_TAB_KEY);
 if (!injected) throw new Error('LibraryRoot.vue mounted without ACTIVE_TAB_KEY');
 // Re-bind after the guard so the template binding's DECLARED type is already
 // narrowed to Ref<LibraryTab> — vue-tsc checks templates against declared types.
 const activeTab = injected;
-const tabGuard = inject(TAB_GUARD_KEY, null);
+const injectedView = inject(VIEW_KEY);
+if (!injectedView) throw new Error('LibraryRoot.vue mounted without VIEW_KEY');
+const view = injectedView;
 
 const TABS: ReadonlyArray<{ id: LibraryTab; label: string }> = [
   { id: 'agents', label: t('agentRoster.navLabel') },
@@ -839,18 +844,20 @@ const TABS: ReadonlyArray<{ id: LibraryTab; label: string }> = [
   { id: 'loops', label: t('loopLibrary.navLabel') },
 ];
 
-async function select(tab: LibraryTab): Promise<void> {
+function select(tab: LibraryTab): void {
   if (activeTab.value === tab) return;
-  // A panel may have registered a guard (dirty detail editor) — switching
-  // tabs unmounts the panel, so silent discards must be intercepted here.
-  const guard = tabGuard?.value;
-  if (guard && !(await guard())) return;
-  activeTab.value = tab;
+  // Tab-switch policy (panel guard + pending latch) lives in ONE choke point:
+  // LibraryView.setActiveTab. The check above is only a cheap same-tab skip.
+  void view.setActiveTab(tab);
 }
 </script>
 
 <template>
-  <div class="specorator-library-nav" role="navigation" :aria-label="t('agentRoster.navAriaLabel')">
+  <div
+    class="specorator-library-nav"
+    role="navigation"
+    :aria-label="t('agentRoster.navAriaLabel')"
+  >
     <button
       v-for="tab in TABS"
       :key="tab.id"
@@ -858,13 +865,16 @@ async function select(tab: LibraryTab): Promise<void> {
       class="specorator-library-nav-item"
       :class="{ 'is-active': activeTab === tab.id }"
       :aria-current="activeTab === tab.id ? 'page' : undefined"
-      @click="void select(tab.id)"
+      @click="select(tab.id)"
     >
       {{ tab.label }}
     </button>
   </div>
   <!-- Panels land in Tasks 10-12; keep the shell shippable until then. -->
-  <div class="specorator-library-list" :data-active-tab="activeTab" />
+  <div
+    class="specorator-library-list"
+    :data-active-tab="activeTab"
+  />
 </template>
 ```
 
@@ -882,11 +892,11 @@ import { createApp, markRaw, ref } from 'vue';
 
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
+import type { LibraryTab } from './viewType';
+import { TAB_TO_LEGACY_VIEW_TYPE, VIEW_TYPE_LIBRARY } from './viewType';
 import { getLibraryPinia } from './vue/globalPinia';
 import { ACTIVE_TAB_KEY, PLUGIN_KEY, TAB_GUARD_KEY, VIEW_KEY } from './vue/libraryKeys';
 import LibraryRoot from './vue/LibraryRoot.vue';
-import type { LibraryTab } from './viewType';
-import { TAB_TO_LEGACY_VIEW_TYPE, VIEW_TYPE_LIBRARY } from './viewType';
 
 const DEFAULT_TAB: LibraryTab = 'agents';
 
@@ -900,6 +910,8 @@ export class LibraryView extends ItemView {
   private readonly activeTab = ref<LibraryTab>(DEFAULT_TAB);
   /** Set by panels (via TAB_GUARD_KEY) to intercept tab switches; see libraryKeys.ts. */
   private readonly tabGuard = ref<(() => Promise<boolean>) | null>(null);
+  /** True while a guard prompt is awaiting the user — later switches no-op. */
+  private guardPending = false;
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: SpecoratorPlugin) {
     super(leaf);
@@ -920,7 +932,17 @@ export class LibraryView extends ItemView {
   async setActiveTab(tab: LibraryTab): Promise<void> {
     if (this.activeTab.value === tab) return;
     const guard = this.tabGuard.value;
-    if (guard && !(await guard())) return;
+    if (guard) {
+      // Latch: while one guard prompt is awaiting the user, further switch
+      // requests no-op instead of stacking a second prompt.
+      if (this.guardPending) return;
+      this.guardPending = true;
+      try {
+        if (!(await guard())) return;
+      } finally {
+        this.guardPending = false;
+      }
+    }
     this.activeTab.value = tab;
   }
 
@@ -930,6 +952,17 @@ export class LibraryView extends ItemView {
     // any panel could have registered one.
     if (isLibraryTab(tab)) this.activeTab.value = tab;
     await super.setState(state, result);
+    if (!this.plugin.settings.useVueLibrary) {
+      // Flag off: hand this leaf to the MATCHING legacy view so rollback
+      // reopens Skills/Loops where they were, not always the roster. The
+      // redirect lives here, not in onOpen — Obsidian delivers the persisted
+      // state AFTER onOpen, so an onOpen redirect would always see the
+      // default tab.
+      await this.leaf.setViewState({
+        type: TAB_TO_LEGACY_VIEW_TYPE[this.activeTab.value],
+        active: true,
+      });
+    }
   }
 
   getState(): Record<string, unknown> {
@@ -937,16 +970,14 @@ export class LibraryView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
-    if (!this.plugin.settings.useVueLibrary) {
-      // Flag off: hand this leaf to the MATCHING legacy view (setState has
-      // already restored the persisted tab for saved leaves) so rollback
-      // reopens Skills/Loops where they were, not always the roster.
-      await this.leaf.setViewState({
-        type: TAB_TO_LEGACY_VIEW_TYPE[this.activeTab.value],
-        active: true,
-      });
-      return;
-    }
+    // Flag off: mount nothing. The rollback redirect happens in setState,
+    // which Obsidian calls after onOpen with the persisted tab (see there).
+    if (!this.plugin.settings.useVueLibrary) return;
+    // Popout/move flows can run onOpen twice on one view instance
+    // (Hover Editor-style; see SpecoratorView) — drop any previous island
+    // before mounting a fresh one.
+    this.vueApp?.unmount();
+    this.vueApp = null;
     this.contentEl.empty();
     // Two calls, not one: Obsidian's real addClass is variadic but the shared
     // test-lane polyfill (tests/setup/obsidianDom.ts) is single-arg.
@@ -991,8 +1022,12 @@ export async function activateLibrary(plugin: SpecoratorPlugin, tab: LibraryTab)
     leaf = workspace.getLeaf('tab');
     await leaf.setViewState({ type: VIEW_TYPE_LIBRARY, active: true });
   }
-  if (leaf.view instanceof LibraryView) await leaf.view.setActiveTab(tab);
   await workspace.revealLeaf(leaf);
+  // A workspace-restored leaf may still hold a DeferredView placeholder
+  // (Obsidian >= 1.7.2) — load it so the tab switch reaches the real view
+  // (repo convention; see src/features/chat/isSpecoratorView.ts).
+  await leaf.loadIfDeferred();
+  if (leaf.view instanceof LibraryView) await leaf.view.setActiveTab(tab);
 }
 ```
 
@@ -1013,7 +1048,13 @@ import { vi } from 'vitest';
 export function makePlugin(useVueLibrary: boolean) {
   return {
     settings: { useVueLibrary },
-    app: { vault: { getAbstractFileByPath: vi.fn().mockReturnValue(null) } },
+    app: {
+      vault: {
+        getAbstractFileByPath: vi.fn().mockReturnValue(null),
+        getMarkdownFiles: vi.fn().mockReturnValue([]),
+        read: vi.fn().mockResolvedValue(''),
+      },
+    },
     logger: { scope: () => ({ error: vi.fn(), warn: vi.fn() }) },
     agentRosterStore: { list: vi.fn().mockResolvedValue([]) },
     vaultSkillAggregator: { listAll: vi.fn().mockResolvedValue([]) },
@@ -1046,8 +1087,21 @@ function mountView(view: LibraryView): HTMLElement {
   return el;
 }
 
+/** Test seam for the panel-registered tab guard (TAB_GUARD_KEY's backing ref). */
+function setGuard(view: LibraryView, guard: (() => Promise<boolean>) | null): void {
+  (view as unknown as { tabGuard: { value: (() => Promise<boolean>) | null } }).tabGuard.value =
+    guard;
+}
+
 describe('LibraryView', () => {
   beforeEach(() => resetLibraryPinia());
+
+  it('exposes the stable view type and metadata', () => {
+    const view = new LibraryView(makeLeaf(), makePlugin(true));
+    expect(view.getViewType()).toBe('specorator-library');
+    expect(view.getDisplayText()).toBe('Library');
+    expect(view.getIcon()).toBe('library');
+  });
 
   it('mounts the tab strip with three tabs when the flag is on', async () => {
     const view = new LibraryView(makeLeaf(), makePlugin(true));
@@ -1070,6 +1124,55 @@ describe('LibraryView', () => {
     expect(el.querySelector('[data-active-tab]')?.getAttribute('data-active-tab')).toBe('skills');
   });
 
+  it('treats clicking the already-active tab as a no-op', async () => {
+    const view = new LibraryView(makeLeaf(), makePlugin(true));
+    const el = mountView(view);
+    await view.onOpen();
+    const setActiveTab = vi.spyOn(view, 'setActiveTab');
+    (el.querySelectorAll('.specorator-library-nav-item')[0] as HTMLElement).click();
+    await new Promise((r) => setTimeout(r));
+    expect(setActiveTab).not.toHaveBeenCalled();
+    expect(el.querySelector('[data-active-tab]')?.getAttribute('data-active-tab')).toBe('agents');
+  });
+
+  it('asks a registered tab guard and stays put when it declines', async () => {
+    const view = new LibraryView(makeLeaf(), makePlugin(true));
+    const guard = vi.fn().mockResolvedValue(false);
+    setGuard(view, guard);
+    await view.setActiveTab('skills');
+    expect(guard).toHaveBeenCalledTimes(1);
+    expect(view.getState().tab).toBe('agents');
+    guard.mockResolvedValue(true);
+    await view.setActiveTab('skills');
+    expect(view.getState().tab).toBe('skills');
+  });
+
+  it('latches while a guard prompt is pending instead of stacking prompts', async () => {
+    const view = new LibraryView(makeLeaf(), makePlugin(true));
+    let resolveGuard: (ok: boolean) => void = () => undefined;
+    const guard = vi.fn().mockImplementation(
+      () => new Promise<boolean>((resolve) => (resolveGuard = resolve)),
+    );
+    setGuard(view, guard);
+    const first = view.setActiveTab('skills');
+    await view.setActiveTab('loops'); // latched: resolves without a second prompt
+    expect(guard).toHaveBeenCalledTimes(1);
+    resolveGuard(true);
+    await first;
+    expect(view.getState().tab).toBe('skills');
+  });
+
+  it('round-trips the active tab through setState/getState', async () => {
+    const view = new LibraryView(makeLeaf(), makePlugin(true));
+    expect(view.getState().tab).toBe('agents');
+    await view.setState({ tab: 'skills' }, {} as never);
+    expect(view.getState().tab).toBe('skills');
+    await view.setState({ tab: 'bogus' }, {} as never); // unknown tab ignored
+    expect(view.getState().tab).toBe('skills');
+    await view.setState(null, {} as never); // restore with no state ignored
+    expect(view.getState().tab).toBe('skills');
+  });
+
   it('unmounts and empties contentEl on close', async () => {
     const view = new LibraryView(makeLeaf(), makePlugin(true));
     const el = mountView(view);
@@ -1081,9 +1184,15 @@ describe('LibraryView', () => {
   it('redirects the leaf to the legacy roster view when the flag is off', async () => {
     const leaf = makeLeaf();
     const view = new LibraryView(leaf, makePlugin(false));
-    mountView(view);
+    const el = mountView(view);
+    // Real Obsidian ordering: onOpen first (mounts nothing, no redirect yet),
+    // THEN setState delivers the persisted state and triggers the redirect.
     await view.onOpen();
-    expect((leaf as { setViewState: ReturnType<typeof vi.fn> }).setViewState).toHaveBeenCalledWith({
+    expect(el.childElementCount).toBe(0);
+    const setViewState = (leaf as { setViewState: ReturnType<typeof vi.fn> }).setViewState;
+    expect(setViewState).not.toHaveBeenCalled();
+    await view.setState(null, {} as never);
+    expect(setViewState).toHaveBeenCalledWith({
       type: 'specorator-agent-roster',
       active: true,
     });
@@ -1093,8 +1202,8 @@ describe('LibraryView', () => {
     const leaf = makeLeaf();
     const view = new LibraryView(leaf, makePlugin(false));
     mountView(view);
-    await view.setActiveTab('loops'); // stands in for setState-restored tab
     await view.onOpen();
+    await view.setState({ tab: 'loops' }, {} as never);
     expect((leaf as { setViewState: ReturnType<typeof vi.fn> }).setViewState).toHaveBeenCalledWith({
       type: 'specorator-loop-library',
       active: true,
@@ -1102,6 +1211,10 @@ describe('LibraryView', () => {
   });
 });
 ```
+
+The setState/getState round-trip calls `super.setState(...)`/`super.getState()`, so extend the shared
+obsidian mock's `ItemView` (`tests/__mocks__/obsidian.ts`) with a no-op `async setState()` and a
+`getState(): Record<string, unknown> { return {}; }` — additive; existing Jest suites are unaffected.
 
 - [ ] **Step 7.9: Run to verify state** — `npm run test:vue` — the suite should PASS if 7.1–7.7 landed first, or FAIL with resolution errors if you wrote the test first; either order is fine as long as it ends green. Also run `npm run typecheck:vue` — expected PASS.
 
@@ -1154,13 +1267,110 @@ describe('LibraryView open/close leak guard', () => {
       const el = document.createElement('div');
       Object.defineProperty(view, 'contentEl', { value: el, configurable: true });
       const before = netListeners;
+      const bodyChildrenBefore = document.body.childElementCount;
       await view.onOpen();
       await view.onClose();
       expect(el.childElementCount).toBe(0);
+      // Panels must not park DOM on <body> (teleports/popovers) and leave it
+      // behind — contentEl.empty() cannot reclaim that either.
+      expect(document.body.childElementCount).toBe(bodyChildrenBefore);
       // Only document/window/body listeners are counted (see beforeEach); net
       // drift per cycle must be zero once the container is dropped.
       expect(netListeners - before).toBeLessThanOrEqual(0);
     }
+  });
+});
+```
+
+Also create `tests/vue/activateLibrary.test.ts` — existing-leaf, create-leaf, deferred-leaf
+(Obsidian >= 1.7.2 `DeferredView`: `loadIfDeferred()` swaps the placeholder for the real view
+before the tab switch), and non-LibraryView-leaf paths:
+
+```ts
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { activateLibrary } from '@/features/library/activateLibrary';
+import { LibraryView } from '@/features/library/LibraryView';
+import { VIEW_TYPE_LIBRARY } from '@/features/library/viewType';
+import { resetLibraryPinia } from '@/features/library/vue/globalPinia';
+
+import { makePlugin } from './helpers';
+
+interface FakeLeaf {
+  view: unknown;
+  setViewState: ReturnType<typeof vi.fn>;
+  loadIfDeferred: ReturnType<typeof vi.fn>;
+}
+
+function makeLibraryLeaf(view: unknown): FakeLeaf {
+  return {
+    view,
+    setViewState: vi.fn().mockResolvedValue(undefined),
+    loadIfDeferred: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+/** Plugin whose workspace serves `existing` Library leaves and creates `created`. */
+function makeWorkspacePlugin(existing: FakeLeaf[], created?: FakeLeaf) {
+  const workspace = {
+    getLeavesOfType: vi.fn().mockReturnValue(existing),
+    getLeaf: vi.fn().mockReturnValue(created),
+    revealLeaf: vi.fn().mockResolvedValue(undefined),
+  };
+  const plugin = makePlugin(true) as { app: { workspace?: unknown } };
+  plugin.app.workspace = workspace;
+  return { plugin: plugin as never, workspace };
+}
+
+function makeRealView(): LibraryView {
+  return new LibraryView(makeLibraryLeaf(null) as never, makePlugin(true));
+}
+
+describe('activateLibrary', () => {
+  beforeEach(() => resetLibraryPinia());
+
+  it('reuses an existing Library leaf, reveals it, and switches the tab', async () => {
+    const view = makeRealView();
+    const leaf = makeLibraryLeaf(view);
+    const { plugin, workspace } = makeWorkspacePlugin([leaf]);
+    await activateLibrary(plugin, 'skills');
+    expect(workspace.getLeaf).not.toHaveBeenCalled();
+    expect(leaf.setViewState).not.toHaveBeenCalled();
+    expect(workspace.revealLeaf).toHaveBeenCalledWith(leaf);
+    expect(leaf.loadIfDeferred).toHaveBeenCalled();
+    expect(view.getState().tab).toBe('skills');
+  });
+
+  it('creates a Library leaf when none exists and lands on the requested tab', async () => {
+    const view = makeRealView();
+    const leaf = makeLibraryLeaf(view);
+    const { plugin, workspace } = makeWorkspacePlugin([], leaf);
+    await activateLibrary(plugin, 'loops');
+    expect(workspace.getLeaf).toHaveBeenCalledWith('tab');
+    expect(leaf.setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE_LIBRARY, active: true });
+    expect(workspace.revealLeaf).toHaveBeenCalledWith(leaf);
+    expect(view.getState().tab).toBe('loops');
+  });
+
+  it('loads a deferred leaf BEFORE switching, so the tab reaches the real view', async () => {
+    const view = makeRealView();
+    // Workspace restore can hand back a DeferredView placeholder; the real
+    // LibraryView only appears after loadIfDeferred().
+    const leaf = makeLibraryLeaf({ deferred: true });
+    leaf.loadIfDeferred.mockImplementation(async () => {
+      leaf.view = view;
+    });
+    const { plugin } = makeWorkspacePlugin([leaf]);
+    await activateLibrary(plugin, 'skills');
+    expect(leaf.loadIfDeferred).toHaveBeenCalled();
+    expect(view.getState().tab).toBe('skills');
+  });
+
+  it('still reveals (and does not throw) when the leaf view is not a LibraryView', async () => {
+    const leaf = makeLibraryLeaf({ not: 'a library view' });
+    const { plugin, workspace } = makeWorkspacePlugin([leaf]);
+    await expect(activateLibrary(plugin, 'agents')).resolves.toBeUndefined();
+    expect(workspace.revealLeaf).toHaveBeenCalledWith(leaf);
   });
 });
 ```
@@ -1226,19 +1436,19 @@ and change the existing block (lines 111–115) to:
 
 (Match the import style already used in that file — if it uses relative imports, mirror them.)
 
-- [ ] **Step 7.12: Legacy-view self-migration.** Add the same 4-line guard at the TOP of `onOpen()` in each of the three legacy views (adjust the tab literal per view — `'agents'` / `'skills'` / `'loops'`):
+- [ ] **Step 7.12: Legacy-view self-migration.** Add the same guard at the TOP of `onOpen()` in each of the three legacy views (adjust the tab literal per view — `'agents'` / `'skills'` / `'loops'`; the existing body is `this.render()` in the Skill/Loop views), importing `VIEW_TYPE_LIBRARY` from the library `viewType` module (cycle-free — `viewType.ts` has zero imports):
 
 ```ts
   async onOpen(): Promise<void> {
     if (this.plugin.settings.useVueLibrary) {
-      await this.leaf.setViewState({ type: 'specorator-library', active: true, state: { tab: 'agents' } });
+      await this.leaf.setViewState({ type: VIEW_TYPE_LIBRARY, active: true, state: { tab: 'agents' } });
       return;
     }
-    await this.renderList(); // (existing body — `this.render()` in Skill/Loop views)
+    await this.renderList();
   }
 ```
 
-Use the literal `'specorator-library'` (not an import) to avoid feature-layer import cycles — matching the `viewType.ts` comment.
+Add a pair of Jest specs to each view's existing test file (`tests/unit/features/agents/roster/view/AgentRosterView.test.ts`, `tests/unit/features/skills/view/SkillLibraryView.test.ts`, `tests/unit/features/tasks/ui/LoopLibraryView.test.ts`): flag ON → `onOpen` re-homes the leaf via `leaf.setViewState({ type: VIEW_TYPE_LIBRARY, active: true, state: { tab: '<per-view>' } })` and renders nothing; flag OFF → renders and never calls `setViewState`. (These also keep the Jest coverage floors honest for the guard lines.)
 
 - [ ] **Step 7.12b: Keep the Jest lane green (REQUIRED — 16 Jest suites transitively import `@/main`, which now reaches `LibraryRoot.vue`).** Jest cannot parse `.vue`. Create `tests/__mocks__/vueComponentStub.ts`:
 
@@ -1270,7 +1480,7 @@ Run `npm run test` — expected: all Jest suites green.
 - [ ] **Step 7.13: Full verification**
 
 ```bash
-npm run typecheck && npm run typecheck:vue && npm run lint && npm run test:vue
+npm run typecheck && npm run typecheck:vue && npm run lint && npm run test:vue:coverage
 npm run test
 ```
 
@@ -1293,7 +1503,12 @@ git add src/features/library src/app/views/registerPluginViews.ts \
   src/features/skills/view/SkillLibraryView.ts \
   src/features/tasks/ui/LoopLibraryView.ts \
   src/i18n tests/vue .fallowrc.json \
-  tests/__mocks__/vueComponentStub.ts jest.base.config.js jest.config.js
+  tests/__mocks__/vueComponentStub.ts tests/__mocks__/obsidian.ts \
+  tests/unit/features/agents/roster/view/AgentRosterView.test.ts \
+  tests/unit/features/skills/view/SkillLibraryView.test.ts \
+  tests/unit/features/tasks/ui/LoopLibraryView.test.ts \
+  jest.base.config.js jest.config.js \
+  docs/superpowers/plans/2026-07-01-vue3-pinia-library-harness.md
 git commit -m "feat(library): unified Vue LibraryView behind useVueLibrary (per-leaf island, tab shell, redirects, leak guard)"
 ```
 

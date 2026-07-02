@@ -3,6 +3,7 @@ import { MarkdownView, Notice } from 'obsidian';
 
 import { registerCommandHotkey } from '@/core/commands/commandHotkeyRegistry';
 import { type InlineEditContext, InlineEditModal } from '@/features/inline-edit/ui/InlineEditModal';
+import { activateLibrary } from '@/features/library/activateLibrary';
 import {
   createWorkOrderFromBrowserSelection,
   createWorkOrderTemplate,
@@ -111,7 +112,10 @@ function registerWorkOrderCommands(
   register({
     id: 'open-loop-library',
     name: t('commands.openLoopLibrary'),
-    callback: () => void plugin.openLeafView(VIEW_TYPE_LOOP_LIBRARY),
+    callback: () =>
+      void (plugin.settings.useVueLibrary
+        ? activateLibrary(plugin, 'loops')
+        : plugin.openLeafView(VIEW_TYPE_LOOP_LIBRARY)),
   });
 
   register({

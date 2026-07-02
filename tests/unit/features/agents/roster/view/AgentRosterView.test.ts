@@ -5,6 +5,7 @@ import '../../../../../../tests/setup/obsidianDom';
 
 import type { RosterAgent } from '../../../../../../src/features/agents/roster/rosterTypes';
 import { AgentRosterView, VIEW_TYPE_AGENT_ROSTER } from '../../../../../../src/features/agents/roster/view/AgentRosterView';
+import { VIEW_TYPE_LIBRARY } from '../../../../../../src/features/library/viewType';
 
 // ── Module mocks ─────────────────────────────────────────────────────────────
 
@@ -281,5 +282,37 @@ describe('AgentRosterView', () => {
     const skillChip = Array.from(caps!.querySelectorAll('.specorator-roster-chip'))
       .find((c) => !c.classList.contains('specorator-roster-chip-role'));
     expect(skillChip).not.toBeNull();
+  });
+});
+
+// ── useVueLibrary self-migration (unified Library redirect) ──────────────────
+
+describe('AgentRosterView useVueLibrary self-migration', () => {
+  function makeGuardView(useVueLibrary: boolean) {
+    const plugin = makePlugin([]);
+    plugin.settings.useVueLibrary = useVueLibrary;
+    const leaf = { setViewState: jest.fn().mockResolvedValue(undefined) };
+    const view = new AgentRosterView(leaf as any, plugin);
+    const contentEl = document.createElement('div');
+    (view as unknown as { contentEl: HTMLElement }).contentEl = contentEl;
+    return { view, leaf, contentEl };
+  }
+
+  it('re-homes the leaf to the unified Library (agents tab) when the flag is on', async () => {
+    const { view, leaf, contentEl } = makeGuardView(true);
+    await view.onOpen();
+    expect(leaf.setViewState).toHaveBeenCalledWith({
+      type: VIEW_TYPE_LIBRARY,
+      active: true,
+      state: { tab: 'agents' },
+    });
+    expect(contentEl.childElementCount).toBe(0); // nothing rendered
+  });
+
+  it('renders the legacy roster when the flag is off', async () => {
+    const { view, leaf, contentEl } = makeGuardView(false);
+    await view.onOpen();
+    expect(leaf.setViewState).not.toHaveBeenCalled();
+    expect(contentEl.childElementCount).toBeGreaterThan(0);
   });
 });

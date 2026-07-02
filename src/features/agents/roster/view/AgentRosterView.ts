@@ -10,6 +10,7 @@ import { LibraryListController, mountLibraryList, renderCloneButton } from '../.
 import { confirm } from '../../../../shared/modals/ConfirmModal';
 import { withErrorNotice } from '../../../../shared/uiAction';
 import { createLibraryCard, renderLibraryEmptyState, renderLibraryLoading, renderLibraryShell } from '../../../../utils/libraryView';
+import { VIEW_TYPE_LIBRARY } from '../../../library/viewType';
 import { renderAgentAvatar } from '../../agentAvatar';
 import { rosterAgentToPersona } from '../../personaRegistry';
 import { installPresetAgents } from '../presetAgents';
@@ -46,6 +47,10 @@ export class AgentRosterView extends ItemView {
   getIcon(): string { return 'users'; }
 
   async onOpen(): Promise<void> {
+    if (this.plugin.settings.useVueLibrary) {
+      await this.leaf.setViewState({ type: VIEW_TYPE_LIBRARY, active: true, state: { tab: 'agents' } });
+      return;
+    }
     await this.renderList();
   }
 

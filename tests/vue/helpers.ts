@@ -1,0 +1,26 @@
+import { vi } from 'vitest';
+
+/**
+ * Fake SpecoratorPlugin covering every backend surface the three Library
+ * panels touch on mount, so view-level tests keep working as Tasks 10-12 swap
+ * real panels into the shell.
+ */
+export function makePlugin(useVueLibrary: boolean) {
+  return {
+    settings: { useVueLibrary },
+    app: {
+      vault: {
+        getAbstractFileByPath: vi.fn().mockReturnValue(null),
+        getMarkdownFiles: vi.fn().mockReturnValue([]),
+        read: vi.fn().mockResolvedValue(''),
+      },
+    },
+    logger: { scope: () => ({ error: vi.fn(), warn: vi.fn() }) },
+    agentRosterStore: { list: vi.fn().mockResolvedValue([]) },
+    vaultSkillAggregator: { listAll: vi.fn().mockResolvedValue([]) },
+    vaultFileAdapter: {
+      read: vi.fn().mockResolvedValue(''),
+      stat: vi.fn().mockResolvedValue(null),
+    },
+  } as never;
+}

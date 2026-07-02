@@ -19,8 +19,7 @@
     "tslib",
     "electron",
     "vue-eslint-parser",
-    "@vue/test-utils",
-    "pinia"
+    "@vue/test-utils"
   ],
   "duplicates": {
     "minOccurrences": 2,

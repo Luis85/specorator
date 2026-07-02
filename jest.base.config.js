@@ -15,6 +15,7 @@ module.exports = {
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   setupFilesAfterEnv: ['<rootDir>/tests/setupWindow.ts'],
   moduleNameMapper: {
+    '\\.vue$': '<rootDir>/tests/__mocks__/vueComponentStub.ts',
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@test/(.*)$': '<rootDir>/tests/$1',
     '^@anthropic-ai/claude-agent-sdk$': '<rootDir>/tests/__mocks__/claude-agent-sdk.ts',

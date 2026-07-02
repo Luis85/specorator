@@ -61,6 +61,14 @@ export class ItemView {
   getIcon(): string {
     return '';
   }
+
+  // Real ItemView persistence hooks (no-ops here) so subclasses can call
+  // `super.setState(...)` / spread `super.getState()` like they do in Obsidian.
+  async setState(_state: unknown, _result: unknown): Promise<void> {}
+
+  getState(): Record<string, unknown> {
+    return {};
+  }
 }
 
 export class WorkspaceLeaf {}
