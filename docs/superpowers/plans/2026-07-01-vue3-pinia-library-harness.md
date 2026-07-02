@@ -3004,7 +3004,7 @@ Template shape:
           :aria-label="agent.name"
           @activate="openDetail(agent)"
         >
-          <template #leading><AvatarSlot :agent="agent" /></template>
+          <template #leading><AvatarSlot :agent="agent" :size="CARD_AVATAR_SIZE" /></template>
           <div class="specorator-roster-card-desc">{{ agent.description || '—' }}</div>
           <div class="specorator-library-card-caps">
             <span v-for="role in agent.roles" :key="role" class="specorator-roster-chip specorator-roster-chip-role">
