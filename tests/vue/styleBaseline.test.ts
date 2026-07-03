@@ -77,3 +77,40 @@ describe('Vue style baseline: token guard', () => {
     }
   });
 });
+
+/** Obsidian host classes the island legitimately renders, plus the legacy
+ *  detail-editor mount. Extending this list is a reviewed decision — do it
+ *  in the same PR as the class that needs it. */
+const NAMESPACE_ALLOWLIST = new Set(['mod-cta', 'dropdown', 'specorator-roster-detail']);
+
+describe('Vue style baseline: namespace guard', () => {
+  it('static template classes are specorator-vue-*, is-* state modifiers, or allowlisted', () => {
+    const allOffenders: Array<{ file: string; cls: string }> = [];
+    for (const vuePath of collect(LIBRARY_DIR, ['.vue'])) {
+      const source = readFileSync(vuePath, 'utf8');
+      // Commented-out markup must not trip the guard (HTML analogue of
+      // stripComments above).
+      const template = (source.match(/<template>([\s\S]*)<\/template>/)?.[1] ?? '').replace(
+        /<!--[\s\S]*?-->/g,
+        '',
+      );
+      // Static class attributes only, either quote style; dynamic :class
+      // bindings are reviewed, not guarded (see the 2026-07-03 spec,
+      // Guardrails). The lookbehind skips `:class` and props that merely end
+      // in `class` (e.g. `row-class`).
+      const classAttrs = [
+        ...template.matchAll(/(?<![:\w-])class=(?:"([^"]*)"|'([^']*)')/g),
+      ].map((m) => m[1] ?? m[2]);
+      const offenders = classAttrs
+        .flatMap((attr) => attr.split(/\s+/).filter(Boolean))
+        .filter(
+          (cls) =>
+            !/^specorator-vue(-[a-z0-9]+)+$/.test(cls) &&
+            !/^is-[a-z0-9-]+$/.test(cls) &&
+            !NAMESPACE_ALLOWLIST.has(cls),
+        );
+      allOffenders.push(...offenders.map((cls) => ({ file: vuePath, cls })));
+    }
+    expect(allOffenders, 'non-namespace static classes').toEqual([]);
+  });
+});

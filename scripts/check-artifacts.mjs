@@ -20,6 +20,11 @@
  *      current version.
  *   4. main.js and styles.css stay within the byte budget below. Budgets have
  *      headroom to absorb normal growth but catch an accidental doubling.
+ *   5. main.js contains the compiled Vue Library island (its root class name
+ *      proves unplugin-vue output survived bundling+minification).
+ *   6. styles.css carries the Vue style markers: scoped SFC rules after
+ *      VUE_STYLES_MARKER, and the .specorator-vue tokens/reset baseline
+ *      before it.
  *
  * Bump a budget deliberately (with a reason in the PR) when a real dependency
  * pushes the bundle up — do not silently raise it to make CI pass.
@@ -28,6 +33,8 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { VUE_STYLES_MARKER } from './mergeVueSfcStyles.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -71,13 +78,39 @@ for (const [file, maxBytes] of Object.entries(BUDGET)) {
   }
 }
 
-// The unified Library island must survive bundling+minification: its root
+// 5: the unified Library island must survive bundling+minification: its root
 // class name is emitted by LibraryView.onOpen and proves compiled-SFC code
 // (unplugin-vue output) reached main.js.
 if (existsSync(join(ROOT, 'main.js'))) {
   const mainJs = readFileSync(join(ROOT, 'main.js'), 'utf8');
   if (!mainJs.includes('specorator-library-vue-root')) {
     errors.push('main.js is missing the compiled Vue Library island (specorator-library-vue-root marker).');
+  }
+}
+
+// 6: SFC styles must actually reach styles.css: scoped rules carry a [data-v-
+// attribute selector AFTER the merge marker, and the .specorator-vue
+// baseline (tokens/reset via index.css) must sit BEFORE it. The two checks
+// catch a dead merge pipeline and a dropped index.css registration
+// independently. The baseline check needs both a bare `.specorator-vue`
+// selector AND an `--sp-` token: atoms.css alone (`.specorator-vue-*`
+// classes) must not satisfy it when tokens/reset were dropped.
+if (existsSync(join(ROOT, 'styles.css'))) {
+  const css = readFileSync(join(ROOT, 'styles.css'), 'utf8');
+  const markerIdx = css.indexOf(VUE_STYLES_MARKER);
+  if (markerIdx === -1) {
+    errors.push('styles.css is missing the Vue SFC styles marker (mergeVueSfcStyles did not run).');
+  } else {
+    if (!css.slice(markerIdx + VUE_STYLES_MARKER.length).includes('[data-v-')) {
+      errors.push('styles.css has no scoped SFC rules after the Vue marker (SFC style extraction is dead).');
+    }
+    const before = css.slice(0, markerIdx);
+    if (!/\.specorator-vue[\s,{:]/.test(before) || !before.includes('--sp-')) {
+      errors.push(
+        'styles.css lacks the .specorator-vue tokens/reset baseline before the ' +
+          'marker (vue/tokens.css + vue/reset.css registration dropped from index.css).',
+      );
+    }
   }
 }
 
