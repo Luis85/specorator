@@ -194,9 +194,9 @@ function hasCaps(agent: RosterAgent): boolean {
 
 <template>
   <div v-show="!detailOpen">
-    <div class="specorator-library-header">
+    <div class="specorator-vue-panel-header">
       <h2>{{ t('agentRoster.title') }}</h2>
-      <div class="specorator-library-header-actions">
+      <div class="specorator-vue-panel-actions">
         <button
           type="button"
           class="mod-cta"
@@ -219,7 +219,7 @@ function hasCaps(agent: RosterAgent): boolean {
         </button>
       </div>
     </div>
-    <div class="specorator-library-toolbar-slot">
+    <div class="specorator-vue-toolbar-slot">
       <LibraryToolbar
         v-if="store.agents.length > 0"
         :query="list.query.value"
@@ -232,10 +232,10 @@ function hasCaps(agent: RosterAgent): boolean {
         @clear-filters="list.clearFilters()"
       />
     </div>
-    <div class="specorator-library-list">
+    <div class="specorator-vue-panel-list">
       <div
         v-if="store.loading"
-        class="specorator-library-loading"
+        class="specorator-vue-panel-loading"
       >
         {{ t('common.loading') }}
       </div>
@@ -249,7 +249,7 @@ function hasCaps(agent: RosterAgent): boolean {
       <template v-else>
         <div
           v-if="list.rows.value.length === 0"
-          class="specorator-library-empty-text"
+          class="specorator-vue-empty-text"
         >
           {{ t('library.noMatches') }}
         </div>
@@ -259,7 +259,7 @@ function hasCaps(agent: RosterAgent): boolean {
         <LibraryCard
           v-for="agent in list.rows.value"
           :key="agent.id"
-          class="specorator-roster-card"
+          class="specorator-vue-agent-card"
           :name="agent.name"
           :ariaLabel="agent.name"
           @activate="openDetail(agent)"
@@ -270,34 +270,34 @@ function hasCaps(agent: RosterAgent): boolean {
               :size="CARD_AVATAR_SIZE"
             />
           </template>
-          <div class="specorator-roster-card-desc">
+          <div class="specorator-vue-agent-card-desc">
             {{ agent.description || '—' }}
           </div>
           <div
             v-if="hasCaps(agent)"
-            class="specorator-library-card-caps"
+            class="specorator-vue-card-caps"
           >
             <span
               v-for="role in agent.roles"
               :key="role"
-              class="specorator-roster-chip specorator-roster-chip-role"
+              class="specorator-vue-agent-chip specorator-vue-agent-chip-role"
             >
               {{ rosterRoleLabel(role) }}
             </span>
             <span
               v-for="tag in agent.tags ?? []"
               :key="tag"
-              class="specorator-library-chip"
+              class="specorator-vue-chip"
             >{{ tag }}</span>
             <span
               v-if="agent.modelSelection"
-              class="specorator-roster-chip specorator-roster-chip-model"
+              class="specorator-vue-agent-chip specorator-vue-agent-chip-model"
             >
               {{ modelLabel(agent) }}
             </span>
             <span
               v-if="agent.skills.length > 0"
-              class="specorator-roster-chip"
+              class="specorator-vue-agent-chip"
             >
               {{ t('agentRoster.capsSummary', { skills: String(agent.skills.length) }) }}
             </span>
@@ -312,7 +312,7 @@ function hasCaps(agent: RosterAgent): boolean {
             </button>
             <button
               type="button"
-              class="specorator-library-card-icon"
+              class="specorator-vue-card-icon"
               :aria-label="t('library.duplicate')"
               :title="t('library.duplicate')"
               @click="onClone(agent)"
@@ -321,7 +321,7 @@ function hasCaps(agent: RosterAgent): boolean {
             </button>
             <button
               type="button"
-              class="specorator-library-card-delete"
+              class="specorator-vue-card-delete"
               @click="onDelete(agent)"
             >
               {{ t('agentRoster.delete') }}
@@ -338,3 +338,40 @@ function hasCaps(agent: RosterAgent): boolean {
     class="specorator-roster-detail"
   />
 </template>
+
+<style scoped>
+/* Roster-specific card deltas (forked from features/agent-roster.css; the
+   legacy rules stay for the legacy roster view until the v4.0.0 deletion). */
+.specorator-vue-agent-card-desc {
+  color: var(--sp-text-muted);
+  font-size: var(--sp-font-small);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+  cursor: text;
+}
+
+.specorator-vue-agent-chip {
+  font-size: var(--sp-font-smaller);
+  color: var(--sp-text-muted);
+  background: var(--sp-border);
+  border-radius: var(--sp-radius-s);
+  padding: 0 var(--sp-space-2xs);
+}
+
+.specorator-vue-agent-chip-role {
+  color: var(--sp-text-on-accent);
+  background: var(--sp-accent);
+}
+
+/* Embedded legacy detail editor: neutralize its own padding — the island
+   already pads contentEl. Plain scoped rule, NOT :deep(): the host is a
+   root node of this multi-root component, so no ancestor carries our scope
+   attribute. Root nodes DO get our data-v attribute, and
+   .specorator-roster-detail[data-v-x] (0,2,0) beats agent-roster.css's
+   single-class rule (0,1,0). */
+.specorator-roster-detail {
+  padding: 0;
+}
+</style>

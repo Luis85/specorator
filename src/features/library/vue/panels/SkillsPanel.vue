@@ -109,9 +109,9 @@ function onCreateSkill(): void {
 </script>
 
 <template>
-  <div class="specorator-library-header">
+  <div class="specorator-vue-panel-header">
     <h2>{{ t('skillLibrary.title') }}</h2>
-    <div class="specorator-library-header-actions">
+    <div class="specorator-vue-panel-actions">
       <button
         type="button"
         class="mod-cta"
@@ -121,7 +121,7 @@ function onCreateSkill(): void {
       </button>
     </div>
   </div>
-  <div class="specorator-library-toolbar-slot">
+  <div class="specorator-vue-toolbar-slot">
     <LibraryToolbar
       v-if="store.rows.length > 0"
       :query="list.query.value"
@@ -134,10 +134,10 @@ function onCreateSkill(): void {
       @clear-filters="list.clearFilters()"
     />
   </div>
-  <div class="specorator-library-list">
+  <div class="specorator-vue-panel-list">
     <div
       v-if="store.loading"
-      class="specorator-library-loading"
+      class="specorator-vue-panel-loading"
     >
       {{ t('common.loading') }}
     </div>
@@ -151,7 +151,7 @@ function onCreateSkill(): void {
     <template v-else>
       <div
         v-if="list.rows.value.length === 0"
-        class="specorator-library-empty-text"
+        class="specorator-vue-empty-text"
       >
         {{ t('library.noMatches') }}
       </div>
@@ -167,13 +167,13 @@ function onCreateSkill(): void {
         @activate="openEditor(row)"
       >
         <template #name-chips>
-          <span class="specorator-library-chip specorator-library-chip-muted">{{ row.providerDisplayName }}</span>
+          <span class="specorator-vue-chip specorator-vue-chip-muted">{{ row.providerDisplayName }}</span>
           <span
             v-if="!row.editable"
-            class="specorator-library-chip specorator-library-chip-outline"
+            class="specorator-vue-chip specorator-vue-chip-outline"
           >{{ t('skillLibrary.readOnlyNote') }}</span>
         </template>
-        <div class="specorator-library-card-desc">
+        <div class="specorator-vue-card-desc">
           {{ row.description }}
         </div>
         <template #actions>
@@ -187,7 +187,7 @@ function onCreateSkill(): void {
           <button
             v-if="isCloneableSkillPath(row.sourceFilePath)"
             type="button"
-            class="specorator-library-card-icon"
+            class="specorator-vue-card-icon"
             :aria-label="t('library.duplicate')"
             :title="t('library.duplicate')"
             @click="onClone(row)"

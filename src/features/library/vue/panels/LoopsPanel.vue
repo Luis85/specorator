@@ -68,9 +68,9 @@ function onInstallStarters(): void {
 </script>
 
 <template>
-  <div class="specorator-library-header">
+  <div class="specorator-vue-panel-header">
     <h2>{{ t('loopLibrary.title') }}</h2>
-    <div class="specorator-library-header-actions">
+    <div class="specorator-vue-panel-actions">
       <button
         type="button"
         class="mod-cta"
@@ -86,7 +86,7 @@ function onInstallStarters(): void {
       </button>
     </div>
   </div>
-  <div class="specorator-library-toolbar-slot">
+  <div class="specorator-vue-toolbar-slot">
     <LibraryToolbar
       v-if="store.loops.length > 0"
       :query="list.query.value"
@@ -99,10 +99,10 @@ function onInstallStarters(): void {
       @clear-filters="list.clearFilters()"
     />
   </div>
-  <div class="specorator-library-list">
+  <div class="specorator-vue-panel-list">
     <div
       v-if="store.loading"
-      class="specorator-library-loading"
+      class="specorator-vue-panel-loading"
     >
       {{ t('common.loading') }}
     </div>
@@ -116,7 +116,7 @@ function onInstallStarters(): void {
     <template v-else>
       <div
         v-if="list.rows.value.length === 0"
-        class="specorator-library-empty-text"
+        class="specorator-vue-empty-text"
       >
         {{ t('library.noMatches') }}
       </div>
@@ -133,13 +133,13 @@ function onInstallStarters(): void {
       >
         <div
           v-if="loop.description"
-          class="specorator-library-card-desc"
+          class="specorator-vue-card-desc"
         >
           {{ loop.description }}
         </div>
         <div
           v-if="loop.useWhen"
-          class="specorator-library-card-desc"
+          class="specorator-vue-card-desc"
         >
           {{ t('loopLibrary.useWhenLabel') }} {{ loop.useWhen }}
         </div>
@@ -153,7 +153,7 @@ function onInstallStarters(): void {
           </button>
           <button
             type="button"
-            class="specorator-library-card-icon"
+            class="specorator-vue-card-icon"
             :aria-label="t('library.duplicate')"
             :title="t('library.duplicate')"
             @click="onClone(loop)"
@@ -162,7 +162,7 @@ function onInstallStarters(): void {
           </button>
           <button
             type="button"
-            class="specorator-library-card-delete"
+            class="specorator-vue-card-delete"
             @click="onDelete(loop)"
           >
             {{ t('loopLibrary.delete') }}

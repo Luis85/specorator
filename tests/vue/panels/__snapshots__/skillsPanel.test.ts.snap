@@ -24,7 +24,7 @@ exports[`SkillsPanel mutation flows > card structure snapshot (small, stable sub
       </span>
       
       <span
-        class="specorator-library-chip specorator-library-chip-muted"
+        class="specorator-vue-chip specorator-vue-chip-muted"
       >
         Vault
       </span>
@@ -33,7 +33,7 @@ exports[`SkillsPanel mutation flows > card structure snapshot (small, stable sub
     </div>
     
     <div
-      class="specorator-library-card-desc"
+      class="specorator-vue-card-desc"
     >
       does a
     </div>
@@ -65,7 +65,7 @@ exports[`SkillsPanel mutation flows > card structure snapshot (small, stable sub
     </button>
     <button
       aria-label="Duplicate"
-      class="specorator-library-card-icon"
+      class="specorator-vue-card-icon"
       title="Duplicate"
       type="button"
     >

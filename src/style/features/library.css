@@ -4,12 +4,6 @@
   padding: var(--size-4-4);
 }
 
-/* Vue host keeps the library padding on contentEl; neutralize the nested
-   detail-editor layer so it isn't padded twice — legacy swaps classes instead. */
-.specorator-library-vue-root .specorator-roster-detail {
-  padding: 0;
-}
-
 /* Hide Obsidian's per-view title bar on the three library views — the in-view
    nav strip identifies the current view and navigates between them. */
 .workspace-leaf-content[data-type="specorator-agent-roster"] .view-header,

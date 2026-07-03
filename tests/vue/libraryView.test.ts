@@ -41,7 +41,7 @@ describe('LibraryView', () => {
     const tabs = el.querySelectorAll('.specorator-vue-lib-nav-item');
     expect(tabs).toHaveLength(3);
     expect(el.querySelector('[aria-current="page"]')?.textContent).toContain('Agents');
-    expect(el.querySelector('.specorator-library-header h2')?.textContent).toContain('Agent Roster');
+    expect(el.querySelector('.specorator-vue-panel-header h2')?.textContent).toContain('Agent Roster');
   });
 
   it('switches tabs on click and via setActiveTab', async () => {
@@ -58,10 +58,10 @@ describe('LibraryView', () => {
     await view.onOpen();
     (el.querySelectorAll('.specorator-vue-lib-nav-item')[2] as HTMLElement).click();
     await new Promise((r) => setTimeout(r));
-    expect(el.querySelector('.specorator-library-header h2')?.textContent).toContain('Loop library');
+    expect(el.querySelector('.specorator-vue-panel-header h2')?.textContent).toContain('Loop library');
     view.setActiveTab('skills');
     await new Promise((r) => setTimeout(r));
-    expect(el.querySelector('.specorator-library-header h2')?.textContent).toContain('Skill Library');
+    expect(el.querySelector('.specorator-vue-panel-header h2')?.textContent).toContain('Skill Library');
   });
 
   it('treats clicking the already-active tab as a no-op', async () => {
@@ -72,7 +72,7 @@ describe('LibraryView', () => {
     (el.querySelectorAll('.specorator-vue-lib-nav-item')[0] as HTMLElement).click();
     await new Promise((r) => setTimeout(r));
     expect(setActiveTab).not.toHaveBeenCalled();
-    expect(el.querySelector('.specorator-library-header h2')?.textContent).toContain('Agent Roster');
+    expect(el.querySelector('.specorator-vue-panel-header h2')?.textContent).toContain('Agent Roster');
   });
 
   it('asks a registered tab guard and stays put when it declines', async () => {

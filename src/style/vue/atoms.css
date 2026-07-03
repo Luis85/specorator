@@ -95,3 +95,15 @@
   font-size: var(--sp-font-small);
   line-height: var(--sp-line-tight);
 }
+
+/* Obsidian sets user-select: none on body; opt text content back in per
+   region — never blanket the island (chrome must stay non-selectable).
+   The Agents panel's .specorator-vue-agent-card-desc opts in separately in
+   its scoped block (it forks the roster's single-line desc, not this
+   clamped one). */
+.specorator-vue-card-desc,
+.specorator-vue-empty-text,
+.specorator-vue-panel-loading {
+  user-select: text;
+  cursor: text;
+}

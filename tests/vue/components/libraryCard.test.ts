@@ -1,10 +1,14 @@
 import { fireEvent, render, screen } from '@testing-library/vue';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { h } from 'vue';
 
 import LibraryCard from '@/features/library/vue/components/LibraryCard.vue';
 
 describe('LibraryCard', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('renders name, activates on card click and on Enter, but NOT from nested buttons', async () => {
     let activations = 0;
     let nested = 0;
@@ -43,6 +47,24 @@ describe('LibraryCard', () => {
     });
     await fireEvent.keyDown(screen.getByRole('button', { name: 'Do' }), { key: 'Enter' });
     expect(activations).toBe(0);
+  });
+
+  it('does NOT activate on the click that releases a text selection', async () => {
+    let activations = 0;
+    render(LibraryCard, {
+      props: { name: 'x', ariaLabel: 'x', onActivate: () => { activations += 1; } },
+    });
+    const card = screen.getByRole('button', { name: 'x' });
+    const spy = vi
+      .spyOn(window, 'getSelection')
+      .mockReturnValue({ toString: () => 'selected text' } as Selection);
+    await fireEvent.click(card);
+    expect(activations).toBe(0);
+    // With no live selection, the same click activates as usual.
+    spy.mockReturnValue({ toString: () => '' } as Selection);
+    await fireEvent.click(card);
+    expect(activations).toBe(1);
+    spy.mockRestore();
   });
 
   it('renders tag chips only when tags exist', () => {

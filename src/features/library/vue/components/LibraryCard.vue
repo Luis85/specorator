@@ -10,6 +10,14 @@ const props = defineProps<{
 const emit = defineEmits<{ activate: [] }>();
 const cardEl = ref<HTMLElement | null>(null);
 
+// Releasing a text selection fires click on the ancestor card; selecting
+// desc text (user-select opt-in) must not open the detail and destroy the
+// selection. Click-path only — keyboard activation never carries a selection.
+function onClick(): void {
+  if (window.getSelection()?.toString()) return;
+  emit('activate');
+}
+
 function onKeydown(e: KeyboardEvent): void {
   if (e.target !== cardEl.value) return;
   if (e.key === 'Enter' || e.key === ' ') {
@@ -26,7 +34,7 @@ function onKeydown(e: KeyboardEvent): void {
     role="button"
     tabindex="0"
     :aria-label="props.ariaLabel"
-    @click="emit('activate')"
+    @click="onClick"
     @keydown="onKeydown"
   >
     <div

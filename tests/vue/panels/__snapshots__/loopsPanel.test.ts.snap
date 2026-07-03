@@ -27,12 +27,12 @@ exports[`LoopsPanel mutation flows > card structure snapshot (small, stable sub-
     </div>
     
     <div
-      class="specorator-library-card-desc"
+      class="specorator-vue-card-desc"
     >
       desc
     </div>
     <div
-      class="specorator-library-card-desc"
+      class="specorator-vue-card-desc"
     >
       Use when: when
     </div>
@@ -64,14 +64,14 @@ exports[`LoopsPanel mutation flows > card structure snapshot (small, stable sub-
     </button>
     <button
       aria-label="Duplicate"
-      class="specorator-library-card-icon"
+      class="specorator-vue-card-icon"
       title="Duplicate"
       type="button"
     >
        ⧉ 
     </button>
     <button
-      class="specorator-library-card-delete"
+      class="specorator-vue-card-delete"
       type="button"
     >
       Delete
