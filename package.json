@@ -1,6 +1,6 @@
 {
   "name": "specorator",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Plan, run, and review provider-native AI agents inside your Obsidian vault, keeping every conversation and edit as Markdown you own.",
   "main": "main.js",
   "engines": {
