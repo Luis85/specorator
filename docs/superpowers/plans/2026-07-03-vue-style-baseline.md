@@ -92,7 +92,7 @@ Apply with replace-all per file; where one name is a prefix of another (marked �
 - Modify: `src/style/index.css` (after line 8, the Base block)
 - Modify: `src/features/library/LibraryView.ts:97-98` and `:115-116`
 
-- [ ] **Step 1: Write the failing token-guard spec**
+- [x] **Step 1: Write the failing token-guard spec**
 
 Create `tests/vue/styleBaseline.test.ts`:
 
@@ -155,12 +155,12 @@ describe('Vue style baseline: token guard', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `npx vitest run tests/vue/styleBaseline.test.ts`
 Expected: FAIL — `ENOENT ... src/style/vue/tokens.css`.
 
-- [ ] **Step 3: Create `src/style/vue/tokens.css`**
+- [x] **Step 3: Create `src/style/vue/tokens.css`**
 
 ```css
 /* Semantic design tokens for Vue surfaces (the `--sp-*` layer).
@@ -212,7 +212,7 @@ Expected: FAIL — `ENOENT ... src/style/vue/tokens.css`.
 }
 ```
 
-- [ ] **Step 4: Create `src/style/vue/reset.css`**
+- [x] **Step 4: Create `src/style/vue/reset.css`**
 
 ```css
 /* Baseline reset for Vue islands, scoped to `.specorator-vue` (added to the
@@ -250,7 +250,7 @@ Expected: FAIL — `ENOENT ... src/style/vue/tokens.css`.
 }
 ```
 
-- [ ] **Step 5: Create `src/style/vue/library-host.css`**
+- [x] **Step 5: Create `src/style/vue/library-host.css`**
 
 ```css
 /* Host-level rules for the unified Library view. These target workspace
@@ -272,7 +272,7 @@ Expected: FAIL — `ENOENT ... src/style/vue/tokens.css`.
 }
 ```
 
-- [ ] **Step 6: Register the sheets in `src/style/index.css`**
+- [x] **Step 6: Register the sheets in `src/style/index.css`**
 
 After the Base block (line 8, `@import "./base/modal.css";`), insert:
 
@@ -285,7 +285,7 @@ After the Base block (line 8, `@import "./base/modal.css";`), insert:
 @import "./vue/library-host.css";
 ```
 
-- [ ] **Step 7: Swap the island scope class in `src/features/library/LibraryView.ts`**
+- [x] **Step 7: Swap the island scope class in `src/features/library/LibraryView.ts`**
 
 In `onOpen` (currently lines 97–98) replace:
 ```ts
@@ -309,13 +309,13 @@ with:
 ```
 Keep the two-call shape and its comment (the shared obsidian mock's `addClass` is single-arg).
 
-- [ ] **Step 8: Verify**
+- [x] **Step 8: Verify**
 
 Run: `npx vitest run tests/vue && npm run typecheck && npm run typecheck:vue && npm run build:css`
 Expected: styleBaseline tests PASS (second test passes vacuously — no non-token sheets reference non-sp vars; reset/host use `--sp-accent`/`--sp-space-l` which pass), all existing Vue tests PASS, CSS build succeeds.
 Run: `npx eslint tests/vue/styleBaseline.test.ts src/features/library/LibraryView.ts`
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/style/vue/ src/style/index.css src/features/library/LibraryView.ts tests/vue/styleBaseline.test.ts
@@ -332,7 +332,7 @@ git commit -m "feat(style): Vue island baseline — --sp-* tokens, reset, librar
 
 The rules are forked from `src/style/features/library.css` (which stays untouched) with names from the rename map and values from the token sheet. No template uses these classes yet — they go live in Tasks 4–5.
 
-- [ ] **Step 1: Create `src/style/vue/atoms.css`**
+- [x] **Step 1: Create `src/style/vue/atoms.css`**
 
 ```css
 /* Shared visual vocabulary for Vue islands — classes rendered by MORE THAN
@@ -431,19 +431,19 @@ The rules are forked from `src/style/features/library.css` (which stays untouche
 }
 ```
 
-- [ ] **Step 2: Register it in `src/style/index.css`** — extend the Vue baseline block from Task 1:
+- [x] **Step 2: Register it in `src/style/index.css`** — extend the Vue baseline block from Task 1:
 
 ```css
 @import "./vue/atoms.css";
 ```
 (after the `library-host.css` import)
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 Run: `npx vitest run tests/vue/styleBaseline.test.ts && npm run build:css`
 Expected: PASS — the token guard now really exercises atoms.css (it references only `--sp-*`).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/style/vue/atoms.css src/style/index.css
@@ -459,17 +459,17 @@ git commit -m "feat(style): shared Vue atoms vocabulary (panel scaffold, card sl
 - Modify: `src/features/library/vue/components/LibraryToolbar.vue`
 - Modify: `tests/vue/libraryView.test.ts`, `tests/vue/components/libraryToolbar.test.ts`
 
-- [ ] **Step 1: Update test selectors first (failing)**
+- [x] **Step 1: Update test selectors first (failing)**
 
 In `tests/vue/libraryView.test.ts`: replace every `.specorator-library-nav-item` with `.specorator-vue-lib-nav-item` (lines 41, 59, 72). Do NOT touch the `.specorator-library-header h2` selectors — the panel header renames land in Task 5.
 In `tests/vue/components/libraryToolbar.test.ts`: replace `.specorator-library-filterchips` with `.specorator-vue-toolbar-filterchips` (line 47).
 
-- [ ] **Step 2: Run to verify failures**
+- [x] **Step 2: Run to verify failures**
 
 Run: `npx vitest run tests/vue/libraryView.test.ts tests/vue/components/libraryToolbar.test.ts`
 Expected: FAIL — nav-item and filterchips selectors match nothing.
 
-- [ ] **Step 3: Rename classes in `LibraryRoot.vue` template and add its scoped block**
+- [x] **Step 3: Rename classes in `LibraryRoot.vue` template and add its scoped block**
 
 Template: `specorator-library-nav-item` → `specorator-vue-lib-nav-item` (line 44), then `specorator-library-nav` → `specorator-vue-lib-nav` (line 36).
 
@@ -508,7 +508,7 @@ Append after the `</template>`:
 </style>
 ```
 
-- [ ] **Step 4: Rename classes in `LibraryToolbar.vue` template and add its scoped block**
+- [x] **Step 4: Rename classes in `LibraryToolbar.vue` template and add its scoped block**
 
 Template renames (longest first): `specorator-library-filterchips` → `specorator-vue-toolbar-filterchips` (line 59), `specorator-library-filterchip` → `specorator-vue-toolbar-filterchip` (line 75), `specorator-library-filterreset` → `specorator-vue-toolbar-filterreset` (line 65), `specorator-library-search` → `specorator-vue-toolbar-search` (line 37), `specorator-library-sort` → `specorator-vue-toolbar-sort` (line 45; the adjacent `dropdown` class STAYS — it is what gives the select Obsidian's native look), `specorator-library-toolbar` → `specorator-vue-toolbar` (line 35).
 
@@ -562,12 +562,12 @@ Append:
 ```
 (The legacy per-class `:focus-visible` rules are NOT forked — the reset's generic ring covers them; spec "focus-ring consolidation".)
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run: `npx vitest run tests/vue && npm run typecheck:vue && npx eslint src/features/library/vue/LibraryRoot.vue src/features/library/vue/components/LibraryToolbar.vue`
 Expected: ALL PASS. If panel snapshots complain about `data-v` attrs on toolbar content, regenerate: `npx vitest run tests/vue -u` and eyeball the diff (class renames + `data-v` only).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/features/library/vue/LibraryRoot.vue src/features/library/vue/components/LibraryToolbar.vue tests/vue
@@ -583,7 +583,7 @@ git commit -m "feat(library): fork nav + toolbar styles into scoped SFC blocks"
 - Modify: `tests/vue/components/libraryCard.test.ts:52`, `tests/vue/components/avatarSlot.test.ts:26`
 - Snapshots: `tests/vue/panels/__snapshots__/*.snap`
 
-- [ ] **Step 1: Update test selectors first (failing)**
+- [x] **Step 1: Update test selectors first (failing)**
 
 `libraryCard.test.ts:52`: `.specorator-library-chip` → `.specorator-vue-chip`.
 `avatarSlot.test.ts:26`: `'specorator-roster-card-avatar'` → `'specorator-vue-avatar'`.
@@ -593,7 +593,7 @@ Panel tests query the card family too — they break in THIS task when the compo
 
 Run: `npx vitest run tests/vue/components tests/vue/panels` — expected FAIL on all updated selectors.
 
-- [ ] **Step 2: `LibraryCard.vue` — renames + scoped block**
+- [x] **Step 2: `LibraryCard.vue` — renames + scoped block**
 
 Template renames (longest first): `-card-leading` (line 34), `-card-body` (38), `-card-name` (39), `-card-caps` (46), `-card-actions` (56) each `specorator-library-` → `specorator-vue-`; `specorator-library-chip` → `specorator-vue-chip` (51); `specorator-library-card` → `specorator-vue-card` (25).
 
@@ -649,7 +649,7 @@ Append:
 ```
 (`-card-caps` and `-chip` rules live in atoms.css — this template renders them but their DOM is also slot-fed by panels.)
 
-- [ ] **Step 3: `AvatarSlot.vue` — rename + scoped block**
+- [x] **Step 3: `AvatarSlot.vue` — rename + scoped block**
 
 Template: `specorator-roster-card-avatar` → `specorator-vue-avatar` (line 24). Append:
 
@@ -662,7 +662,7 @@ Template: `specorator-roster-card-avatar` → `specorator-vue-avatar` (line 24).
 </style>
 ```
 
-- [ ] **Step 4: `LibraryEmptyState.vue` — renames + scoped block**
+- [x] **Step 4: `LibraryEmptyState.vue` — renames + scoped block**
 
 Template renames (longest first): `specorator-library-empty-icon` (23) → `specorator-vue-empty-icon`, `specorator-library-empty-text` (25) → `specorator-vue-empty-text`, `specorator-library-empty-action` (31) → `specorator-vue-empty-action` (keep `mod-cta`), `specorator-library-empty` (20) → `specorator-vue-empty`. Append:
 
@@ -697,14 +697,14 @@ Template renames (longest first): `specorator-library-empty-icon` (23) → `spec
 ```
 (`-empty-text` layout lives in atoms.css.)
 
-- [ ] **Step 5: Verify + regenerate snapshots**
+- [x] **Step 5: Verify + regenerate snapshots**
 
 Run: `npx vitest run tests/vue`
 Expected: component tests PASS; the three panel snapshots FAIL (renamed card/avatar/chip classes + `data-v` attrs).
 Run: `npx vitest run tests/vue -u`, then `git diff tests/vue/panels/__snapshots__/` and confirm the diff is ONLY class renames + `data-v` attributes.
 Run: `npm run typecheck:vue && npx eslint src/features/library/vue/components/*.vue`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/features/library/vue/components tests/vue
@@ -721,14 +721,14 @@ git commit -m "feat(library): fork card, avatar, and empty-state styles into sco
 - Modify: `tests/vue/libraryView.test.ts`, `tests/vue/panels/*.test.ts`
 - Snapshots: `tests/vue/panels/__snapshots__/*.snap`
 
-- [ ] **Step 1: Update test selectors first (failing)**
+- [x] **Step 1: Update test selectors first (failing)**
 
 - `tests/vue/libraryView.test.ts`: `.specorator-library-header h2` → `.specorator-vue-panel-header h2` (lines 44, 61, 64, 75).
 - `agentsPanel.test.ts` `.specorator-roster-detail` queries (lines 328, 331, 343): KEEP — the embed boundary does not rename. (The card/empty-action selectors were already updated in Task 4.)
 
 Run: `npx vitest run tests/vue/libraryView.test.ts` — expected FAIL on the header selectors.
 
-- [ ] **Step 2: Rename classes in all three panel templates**
+- [x] **Step 2: Rename classes in all three panel templates**
 
 Apply the rename map with replace-all per file, longest-first within each family:
 
@@ -738,7 +738,7 @@ Apply the rename map with replace-all per file, longest-first within each family
 - **SkillsPanel:** `specorator-library-chip-muted` → `specorator-vue-chip-muted`, `specorator-library-chip-outline` → `specorator-vue-chip-outline`, then `specorator-library-chip` → `specorator-vue-chip`.
 - **AgentsPanel:** `specorator-library-card-caps` → `specorator-vue-card-caps`; `specorator-library-chip` → `specorator-vue-chip`; `specorator-roster-card-desc` → `specorator-vue-agent-card-desc` (line 273); `specorator-roster-card` → `specorator-vue-agent-card` (line 262); `specorator-roster-chip-role` → `specorator-vue-agent-chip-role`; `specorator-roster-chip-model` → `specorator-vue-agent-chip-model`; `specorator-roster-chip` → `specorator-vue-agent-chip`. **`specorator-roster-detail` stays.**
 
-- [ ] **Step 3: Add AgentsPanel's scoped block**
+- [x] **Step 3: Add AgentsPanel's scoped block**
 
 Append to `AgentsPanel.vue`:
 
@@ -780,7 +780,7 @@ Append to `AgentsPanel.vue`:
 ```
 (`specorator-vue-agent-card` and `-agent-chip-model` get no rules — class-only hooks, no legacy CSS exists for them.)
 
-- [ ] **Step 3b: `user-select` opt-in for content regions (research follow-up, docs/research/2026-07-03-obsidian-css-reset-for-vue-islands.md §4.1)**
+- [x] **Step 3b: `user-select` opt-in for content regions (research follow-up, docs/research/2026-07-03-obsidian-css-reset-for-vue-islands.md §4.1)**
 
 Obsidian's `body { user-select: none }` inherits into the island, making all
 island text unselectable. Opt content regions back in — never the whole
@@ -801,7 +801,7 @@ Append to `src/style/vue/atoms.css` (after the empty-text rule):
 And add `user-select: text;` as the last declaration of
 `.specorator-vue-agent-card-desc` in AgentsPanel's scoped block (Step 3).
 
-- [ ] **Step 4: Delete the Vue-host rule from `src/style/features/library.css`**
+- [x] **Step 4: Delete the Vue-host rule from `src/style/features/library.css`**
 
 Delete lines 7–11 exactly (the comment + rule):
 ```css
@@ -813,7 +813,7 @@ Delete lines 7–11 exactly (the comment + rule):
 ```
 This is the ONLY legacy CSS change in the whole plan.
 
-- [ ] **Step 5: Verify + regenerate snapshots**
+- [x] **Step 5: Verify + regenerate snapshots**
 
 Run: `npx vitest run tests/vue`
 Expected: selector tests PASS; panel snapshots FAIL on renamed classes.
@@ -821,7 +821,7 @@ Run: `npx vitest run tests/vue -u`; `git diff tests/vue/panels/__snapshots__/` m
 Run: `npm run test:vue:coverage` — floors (88/75/90/93) must hold.
 Run: `npm run typecheck:vue && npx eslint src/features/library/vue/panels/*.vue && npm run build:css`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/features/library/vue/panels src/style/features/library.css tests/vue
@@ -837,7 +837,7 @@ git commit -m "feat(library): fork panel styles to the Vue namespace; drop the l
 - Modify: `scripts/check-css-important.mjs`
 - Modify: `scripts/check-artifacts.mjs`
 
-- [ ] **Step 1: Append the namespace guard to `tests/vue/styleBaseline.test.ts`**
+- [x] **Step 1: Append the namespace guard to `tests/vue/styleBaseline.test.ts`**
 
 ```ts
 /** Obsidian host classes the island legitimately renders, plus the legacy
@@ -867,12 +867,12 @@ describe('Vue style baseline: namespace guard', () => {
 });
 ```
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 Run: `npx vitest run tests/vue/styleBaseline.test.ts`
 Expected: PASS (Tasks 3–5 completed all renames). If it fails, a rename was missed — fix the template, not the guard.
 
-- [ ] **Step 3: Extend `scripts/check-css-important.mjs` to scan SFC style blocks**
+- [x] **Step 3: Extend `scripts/check-css-important.mjs` to scan SFC style blocks**
 
 Replace the `countImportant` function (lines 53–57) and the `files` assignment (lines 81–84) with:
 
@@ -925,7 +925,7 @@ const files = [
   .sort((a, b) => b.count - a.count);
 ```
 
-- [ ] **Step 4: Extend `scripts/check-artifacts.mjs` with the marker assertions**
+- [x] **Step 4: Extend `scripts/check-artifacts.mjs` with the marker assertions**
 
 Add at the top (after the existing imports):
 ```js
@@ -955,7 +955,7 @@ if (existsSync(join(ROOT, 'styles.css'))) {
 }
 ```
 
-- [ ] **Step 5: Verify the guards end-to-end**
+- [x] **Step 5: Verify the guards end-to-end**
 
 Run: `npm run check:css`
 Expected: `CSS !important guard OK` (no SFC uses `!important`; baseline untouched).
@@ -963,7 +963,7 @@ Run: `npm run build && node scripts/check-artifacts.mjs`
 Expected: `Artifact check OK` — and to prove the new assertions bite, temporarily rename `VUE_STYLES_MARKER` in a scratch copy is NOT required; instead run `node -e "const c=require('fs').readFileSync('styles.css','utf8'); console.log(c.includes('[data-v-'))"` → `true`.
 Run: `npx vitest run tests/vue && npx eslint tests/vue/styleBaseline.test.ts`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add tests/vue/styleBaseline.test.ts scripts/check-css-important.mjs scripts/check-artifacts.mjs
@@ -978,7 +978,7 @@ git commit -m "quality: namespace guard + .vue-aware !important ratchet + Vue ma
 - Modify: `src/style/CLAUDE.md`, `docs/build-ci/quality-gates.md`, `CLAUDE.md`
 - Modify: `docs/superpowers/specs/2026-07-03-vue-style-baseline-design.md` frontmatter `status: approved` → `status: implemented`
 
-- [ ] **Step 1: `src/style/CLAUDE.md`** — add to Structure the `vue/` line and a new section after Conventions:
+- [x] **Step 1: `src/style/CLAUDE.md`** — add to Structure the `vue/` line and a new section after Conventions:
 
 ```markdown
 ## Vue surfaces (`src/style/vue/` + SFC `<style scoped>`)
@@ -1013,20 +1013,20 @@ per region via `user-select: text` (Obsidian sets `user-select: none` on
 body) — never blanket the island.
 ```
 
-- [ ] **Step 2: `docs/build-ci/quality-gates.md`** — in the Vue component lane section, add a short "Vue style guards" paragraph naming: token guard + namespace guard (`tests/vue/styleBaseline.test.ts`, blocking via the component job), the `.vue`-aware `check:css` scan, and the two `check:artifacts` marker assertions.
+- [x] **Step 2: `docs/build-ci/quality-gates.md`** — in the Vue component lane section, add a short "Vue style guards" paragraph naming: token guard + namespace guard (`tests/vue/styleBaseline.test.ts`, blocking via the component job), the `.vue`-aware `check:css` scan, and the two `check:artifacts` marker assertions.
 
-- [ ] **Step 3: Root `CLAUDE.md`** — in the `features/library` row, append one sentence: "Vue surfaces style through the `.specorator-vue` baseline + `--sp-*` tokens (`src/style/vue/`, spec `docs/superpowers/specs/2026-07-03-vue-style-baseline-design.md`); legacy views keep the untouched `.specorator-library-*` CSS until the v4.0.0 deletion pass."
+- [x] **Step 3: Root `CLAUDE.md`** — in the `features/library` row, append one sentence: "Vue surfaces style through the `.specorator-vue` baseline + `--sp-*` tokens (`src/style/vue/`, spec `docs/superpowers/specs/2026-07-03-vue-style-baseline-design.md`); legacy views keep the untouched `.specorator-library-*` CSS until the v4.0.0 deletion pass."
 
-- [ ] **Step 4: Flip the spec status** to `status: implemented`.
+- [x] **Step 4: Flip the spec status** to `status: implemented`.
 
-- [ ] **Step 5: Full gate sweep**
+- [x] **Step 5: Full gate sweep**
 
 ```bash
 npm run typecheck && npm run typecheck:vue && npm run lint && npm run test && npx vitest run tests/vue && npm run test:vue:coverage && npm run build && node scripts/check-artifacts.mjs && npm run check:css && npm run check:loc && npm run check:quality
 ```
 Expected: ALL GREEN. `check:loc`: no `.vue` file crosses the 500-line cap (largest, AgentsPanel.vue, lands ≈ 380). `check:quality`: at baseline (CSS is not analyzed by fallow).
 
-- [ ] **Step 6: Commit, push, update PR #478**
+- [x] **Step 6: Commit, push, update PR #478**
 
 ```bash
 git add -A && git commit -m "docs: Vue style baseline — style guide, quality gates, architecture notes"

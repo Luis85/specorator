@@ -1,7 +1,7 @@
 ---
 title: Vue style baseline — reset, semantic tokens, and dedicated Library styles
 date: 2026-07-03
-status: approved
+status: implemented
 scope: features/library (Vue island), src/style, build guards
 ---
 

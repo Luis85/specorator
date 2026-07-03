@@ -246,6 +246,21 @@ Lane isolation is exclusive by construction: Vitest's `include` sees only
 `tests/{unit,integration}/**` (perf has its own config) — the two runners never
 share a test file.
 
+Vue style guards (2026-07-03, with the Vue style baseline —
+`docs/superpowers/specs/2026-07-03-vue-style-baseline-design.md`):
+`tests/vue/styleBaseline.test.ts` runs in this lane, so both guards block CI
+via the `component` job — the **token guard** (`src/style/vue/tokens.css`
+defines only `--sp-*` properties, each mapped from exactly one Obsidian var;
+every other Vue stylesheet and SFC `<style>` block consumes only `--sp-*`
+tokens) and the **namespace guard** (static template classes must be
+`specorator-vue-*`, `is-*` state modifiers, or on the reviewed allowlist).
+Two existing gates were made Vue-aware in the same pass: the CSS `!important`
+guard also scans `<style>` blocks in `src/**/*.vue`, so the ratchet can't be
+bypassed by moving CSS into a component, and the artifact smoke asserts
+`styles.css` has scoped (`[data-v-`) rules after the `VUE_STYLES_MARKER` and
+the `.specorator-vue` baseline before it — catching a dead SFC-style merge
+pipeline and a dropped `index.css` registration independently.
+
 Metrics-integrity note: fallow's built-in Vitest plugin AST-parses the
 config's `resolve.alias` and applies it to the whole repo module graph, so all
 ~275 `import 'obsidian'` sites (production `src/` included) resolve to
