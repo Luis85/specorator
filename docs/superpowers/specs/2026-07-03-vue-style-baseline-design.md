@@ -78,8 +78,10 @@ centralize. Placement rule:
 > `<style scoped>`. A class rendered by two or more components (including via
 > slots) → `atoms.css`.
 
-`atoms.css` rules are written under the `.specorator-vue` scope, use only
-`--sp-*` tokens, and use only `.specorator-vue-*` class selectors.
+`atoms.css` rules use only `--sp-*` tokens and only bare `.specorator-vue-*`
+class selectors — deliberately NOT nested under `.specorator-vue`: the name
+prefix is the namespace, and the flat (0,1,0) specificity floor guarantees
+scoped SFC rules (0,2,0) win by specificity rather than by merge order.
 
 ### Tier 3 — Component-private styles (`<style scoped>` per SFC)
 
