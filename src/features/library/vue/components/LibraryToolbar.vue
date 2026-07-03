@@ -32,9 +32,9 @@ function onSort(e: Event): void {
 </script>
 
 <template>
-  <div class="specorator-library-toolbar">
+  <div class="specorator-vue-toolbar">
     <input
-      class="specorator-library-search"
+      class="specorator-vue-toolbar-search"
       type="search"
       :placeholder="labels.searchPlaceholder"
       :aria-label="labels.searchPlaceholder"
@@ -42,7 +42,7 @@ function onSort(e: Event): void {
       @input="onSearch"
     >
     <select
-      class="specorator-library-sort dropdown"
+      class="specorator-vue-toolbar-sort dropdown"
       :aria-label="labels.sortLabel"
       :value="props.sort"
       @change="onSort"
@@ -56,13 +56,13 @@ function onSort(e: Event): void {
     </select>
     <div
       v-if="props.tags.length > 0"
-      class="specorator-library-filterchips"
+      class="specorator-vue-toolbar-filterchips"
       role="group"
       :aria-label="t('library.filterGroupLabel')"
     >
       <button
         type="button"
-        class="specorator-library-filterreset"
+        class="specorator-vue-toolbar-filterreset"
         :class="{ 'is-hidden': props.activeFilters.length === 0 }"
         @click="emit('clear-filters')"
       >
@@ -72,7 +72,7 @@ function onSort(e: Event): void {
         v-for="tag in props.tags"
         :key="tag"
         type="button"
-        class="specorator-library-filterchip"
+        class="specorator-vue-toolbar-filterchip"
         :class="{ 'is-on': activeSet.has(tag) }"
         :aria-pressed="activeSet.has(tag) ? 'true' : 'false'"
         @click="emit('toggle-filter', tag)"
@@ -82,3 +82,48 @@ function onSort(e: Event): void {
     </div>
   </div>
 </template>
+
+<style scoped>
+.specorator-vue-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-space-s);
+  align-items: center;
+  margin-bottom: var(--sp-space-s);
+}
+
+.specorator-vue-toolbar-search {
+  flex: 1 1 12rem;
+  min-width: 8rem;
+}
+
+.specorator-vue-toolbar-sort {
+  flex: 0 0 auto;
+}
+
+.specorator-vue-toolbar-filterchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-space-2xs);
+  flex-basis: 100%;
+}
+
+.specorator-vue-toolbar-filterchip,
+.specorator-vue-toolbar-filterreset {
+  font-size: var(--sp-font-smaller);
+  padding: var(--sp-space-3xs) var(--sp-space-xs);
+  border-radius: var(--sp-radius-s);
+  background: var(--sp-surface-hover);
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.specorator-vue-toolbar-filterchip.is-on {
+  background: var(--sp-accent);
+  color: var(--sp-text-on-accent);
+}
+
+.specorator-vue-toolbar-filterreset.is-hidden {
+  display: none;
+}
+</style>

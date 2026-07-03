@@ -38,7 +38,7 @@ describe('LibraryView', () => {
     const view = new LibraryView(makeLeaf(), makePlugin(true));
     const el = mountView(view);
     await view.onOpen();
-    const tabs = el.querySelectorAll('.specorator-library-nav-item');
+    const tabs = el.querySelectorAll('.specorator-vue-lib-nav-item');
     expect(tabs).toHaveLength(3);
     expect(el.querySelector('[aria-current="page"]')?.textContent).toContain('Agents');
     expect(el.querySelector('.specorator-library-header h2')?.textContent).toContain('Agent Roster');
@@ -56,7 +56,7 @@ describe('LibraryView', () => {
     const view = new LibraryView(makeLeaf(), plugin);
     const el = mountView(view);
     await view.onOpen();
-    (el.querySelectorAll('.specorator-library-nav-item')[2] as HTMLElement).click();
+    (el.querySelectorAll('.specorator-vue-lib-nav-item')[2] as HTMLElement).click();
     await new Promise((r) => setTimeout(r));
     expect(el.querySelector('.specorator-library-header h2')?.textContent).toContain('Loop library');
     view.setActiveTab('skills');
@@ -69,7 +69,7 @@ describe('LibraryView', () => {
     const el = mountView(view);
     await view.onOpen();
     const setActiveTab = vi.spyOn(view, 'setActiveTab');
-    (el.querySelectorAll('.specorator-library-nav-item')[0] as HTMLElement).click();
+    (el.querySelectorAll('.specorator-vue-lib-nav-item')[0] as HTMLElement).click();
     await new Promise((r) => setTimeout(r));
     expect(setActiveTab).not.toHaveBeenCalled();
     expect(el.querySelector('.specorator-library-header h2')?.textContent).toContain('Agent Roster');

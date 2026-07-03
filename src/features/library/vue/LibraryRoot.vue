@@ -33,7 +33,7 @@ function select(tab: LibraryTab): void {
 
 <template>
   <div
-    class="specorator-library-nav"
+    class="specorator-vue-lib-nav"
     role="navigation"
     :aria-label="t('agentRoster.navAriaLabel')"
   >
@@ -41,7 +41,7 @@ function select(tab: LibraryTab): void {
       v-for="tab in TABS"
       :key="tab.id"
       type="button"
-      class="specorator-library-nav-item"
+      class="specorator-vue-lib-nav-item"
       :class="{ 'is-active': activeTab === tab.id }"
       :aria-current="activeTab === tab.id ? 'page' : undefined"
       @click="select(tab.id)"
@@ -53,3 +53,34 @@ function select(tab: LibraryTab): void {
   <SkillsPanel v-else-if="activeTab === 'skills'" />
   <AgentsPanel v-else />
 </template>
+
+<style scoped>
+.specorator-vue-lib-nav {
+  display: flex;
+  gap: var(--sp-space-2xs);
+  padding-bottom: var(--sp-space-m);
+  margin-bottom: var(--sp-space-m);
+  border-bottom: 1px solid var(--sp-border);
+}
+
+.specorator-vue-lib-nav-item {
+  flex: 1 1 0;
+  font-weight: var(--sp-weight-medium);
+  color: var(--sp-text-muted);
+  background: var(--sp-surface-raised);
+  border: 1px solid var(--sp-border);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.specorator-vue-lib-nav-item:hover {
+  color: var(--sp-text);
+}
+
+.specorator-vue-lib-nav-item.is-active {
+  color: var(--sp-text-on-accent);
+  background: var(--sp-accent);
+  border-color: var(--sp-accent);
+  cursor: default;
+}
+</style>

@@ -44,6 +44,6 @@ describe('LibraryToolbar', () => {
 
   it('hides the chip row entirely when there are no tags', () => {
     render(LibraryToolbar, { props: { ...baseProps, tags: [] } });
-    expect(document.querySelector('.specorator-library-filterchips')).toBeNull();
+    expect(document.querySelector('.specorator-vue-toolbar-filterchips')).toBeNull();
   });
 });
