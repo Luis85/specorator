@@ -3,18 +3,23 @@
 exports[`SkillsPanel mutation flows > card structure snapshot (small, stable sub-tree) 1`] = `
 <div
   aria-label="a-skill"
-  class="specorator-library-card"
+  class="specorator-vue-card"
+  data-v-1932512b=""
   role="button"
   tabindex="0"
 >
   <!--v-if-->
   <div
-    class="specorator-library-card-body"
+    class="specorator-vue-card-body"
+    data-v-1932512b=""
   >
     <div
-      class="specorator-library-card-name"
+      class="specorator-vue-card-name"
+      data-v-1932512b=""
     >
-      <span>
+      <span
+        data-v-1932512b=""
+      >
         a-skill
       </span>
       
@@ -34,11 +39,13 @@ exports[`SkillsPanel mutation flows > card structure snapshot (small, stable sub
     </div>
     
     <div
-      class="specorator-library-card-caps"
+      class="specorator-vue-card-caps"
+      data-v-1932512b=""
     >
       
       <span
-        class="specorator-library-chip"
+        class="specorator-vue-chip"
+        data-v-1932512b=""
       >
         t1
       </span>
@@ -46,7 +53,8 @@ exports[`SkillsPanel mutation flows > card structure snapshot (small, stable sub
     </div>
   </div>
   <div
-    class="specorator-library-card-actions"
+    class="specorator-vue-card-actions"
+    data-v-1932512b=""
   >
     
     <button

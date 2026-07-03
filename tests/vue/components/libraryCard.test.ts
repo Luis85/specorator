@@ -49,6 +49,6 @@ describe('LibraryCard', () => {
     render(LibraryCard, {
       props: { name: 'x', ariaLabel: 'x', tags: ['t1', 't2'] },
     });
-    expect(document.querySelectorAll('.specorator-library-chip')).toHaveLength(2);
+    expect(document.querySelectorAll('.specorator-vue-chip')).toHaveLength(2);
   });
 });

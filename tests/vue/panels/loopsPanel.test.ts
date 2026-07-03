@@ -163,7 +163,7 @@ describe('LoopsPanel mutation flows', () => {
     // DOM cycles empty → loading → empty during the mount-time load(); a
     // macrotask tick lets it settle before we grab the CTA.
     await new Promise((r) => setTimeout(r));
-    const cta = document.querySelector('.specorator-library-empty-action');
+    const cta = document.querySelector('.specorator-vue-empty-action');
     expect(cta).toBeTruthy();
     await fireEvent.click(cta as Element);
     expect(LoopEditorModal).toHaveBeenCalledWith(expect.anything(), null, expect.any(Function));
@@ -200,6 +200,6 @@ describe('LoopsPanel mutation flows', () => {
   it('card structure snapshot (small, stable sub-tree)', async () => {
     setup([loop]);
     await screen.findByText('A loop');
-    expect(document.querySelector('.specorator-library-card')).toMatchSnapshot();
+    expect(document.querySelector('.specorator-vue-card')).toMatchSnapshot();
   });
 });

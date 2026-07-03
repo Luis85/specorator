@@ -21,7 +21,14 @@ watchEffect(() => {
 <template>
   <span
     ref="host"
-    class="specorator-roster-card-avatar"
+    class="specorator-vue-avatar"
     aria-hidden="true"
   />
 </template>
+
+<style scoped>
+.specorator-vue-avatar {
+  flex: 0 0 auto;
+  display: flex;
+}
+</style>

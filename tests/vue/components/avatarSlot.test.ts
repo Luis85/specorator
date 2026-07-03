@@ -23,7 +23,7 @@ describe('AvatarSlot', () => {
     await nextTick();
     expect(renderAgentAvatar).toHaveBeenCalledTimes(1);
     const [host, persona, size] = vi.mocked(renderAgentAvatar).mock.calls[0];
-    expect(host.classList.contains('specorator-roster-card-avatar')).toBe(true);
+    expect(host.classList.contains('specorator-vue-avatar')).toBe(true);
     expect(persona).toMatchObject({ id: 'roster:a', name: 'Alice', initials: 'A' });
     expect(size).toBe(36);
   });

@@ -3,27 +3,34 @@
 exports[`AgentsPanel mutation flows > card structure snapshot (small, stable sub-tree) 1`] = `
 <div
   aria-label="Alice"
-  class="specorator-library-card specorator-roster-card"
+  class="specorator-vue-card specorator-roster-card"
+  data-v-1932512b=""
   role="button"
   tabindex="0"
 >
   <div
-    class="specorator-library-card-leading"
+    class="specorator-vue-card-leading"
+    data-v-1932512b=""
   >
     
     <span
       aria-hidden="true"
-      class="specorator-roster-card-avatar"
+      class="specorator-vue-avatar"
+      data-v-5434e477=""
     />
     
   </div>
   <div
-    class="specorator-library-card-body"
+    class="specorator-vue-card-body"
+    data-v-1932512b=""
   >
     <div
-      class="specorator-library-card-name"
+      class="specorator-vue-card-name"
+      data-v-1932512b=""
     >
-      <span>
+      <span
+        data-v-1932512b=""
+      >
         Alice
       </span>
       
@@ -59,7 +66,8 @@ exports[`AgentsPanel mutation flows > card structure snapshot (small, stable sub
     <!--v-if-->
   </div>
   <div
-    class="specorator-library-card-actions"
+    class="specorator-vue-card-actions"
+    data-v-1932512b=""
   >
     
     <button
