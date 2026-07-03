@@ -328,6 +328,27 @@ describe('InputController - Message Queue', () => {
 
       expect(deps.state.queuedMessage).toBeNull();
     });
+
+    it('folds the composer draft into a quick-action send when includeComposerDraft is set', async () => {
+      deps.state.isStreaming = true;
+      inputEl.value = 'my chat context';
+
+      await controller.sendMessage({ content: 'Summarize this.', includeComposerDraft: true });
+
+      expect(deps.state.queuedMessage!.content).toBe('Summarize this.\n\nmy chat context');
+      expect(deps.state.queuedMessage?.turnRequest?.text).toBe('Summarize this.\n\nmy chat context');
+      expect(inputEl.value).toBe('');
+    });
+
+    it('preserves the composer draft on a content-override send without includeComposerDraft', async () => {
+      deps.state.isStreaming = true;
+      inputEl.value = 'my chat context';
+
+      await controller.sendMessage({ content: 'Implement the plan.' });
+
+      expect(deps.state.queuedMessage!.content).toBe('Implement the plan.');
+      expect(inputEl.value).toBe('my chat context');
+    });
   });
 
   describe('Queued message processing', () => {

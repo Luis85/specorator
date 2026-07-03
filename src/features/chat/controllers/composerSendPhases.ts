@@ -19,6 +19,12 @@ import type { ImageContextManager } from '../ui/ImageContext';
 export interface ComposerSendContext {
   content: string;
   shouldUseInput: boolean;
+  /**
+   * Content-override send that also consumed the composer (quick actions
+   * launched from the chat header): the unsent draft rode along as context,
+   * so the composer must be cleared like a user send.
+   */
+  consumesComposerDraft: boolean;
   hasImages: boolean;
   imageOverride?: ChatMessage['images'];
   inputEl: HTMLTextAreaElement;
@@ -72,12 +78,15 @@ export function resolveComposerSend(args: {
   inputEl: HTMLTextAreaElement;
   imageContextManager: ImageContextManager | null;
   fileContextManager: FileContextManager | null;
-  overrides?: { content?: string; images?: ChatMessage['images'] };
+  overrides?: { content?: string; images?: ChatMessage['images']; includeComposerDraft?: boolean };
 }): ComposerSendContext {
   const contentOverride = args.overrides?.content;
   const imageOverride = args.overrides?.images;
   const shouldUseInput = contentOverride === undefined;
-  const content = (contentOverride ?? args.inputEl.value).trim();
+  const consumesComposerDraft = !shouldUseInput && (args.overrides?.includeComposerDraft ?? false);
+  const baseContent = (contentOverride ?? args.inputEl.value).trim();
+  const draft = consumesComposerDraft ? args.inputEl.value.trim() : '';
+  const content = draft ? `${baseContent}\n\n${draft}` : baseContent;
   const hasImages = imageOverride !== undefined
     ? imageOverride.length > 0
     : (args.imageContextManager?.hasImages() ?? false);
@@ -85,12 +94,27 @@ export function resolveComposerSend(args: {
   return {
     content,
     shouldUseInput,
+    consumesComposerDraft,
     hasImages,
     imageOverride,
     inputEl: args.inputEl,
     imageContextManager: args.imageContextManager,
     fileContextManager: args.fileContextManager,
   };
+}
+
+/**
+ * Clears the composer textarea when this send consumed it: a plain user send,
+ * or a content-override send that folded the draft in (quick actions).
+ */
+export function clearConsumedComposerInput(
+  send: ComposerSendContext,
+  resetInputHeight: () => void,
+): void {
+  if (send.shouldUseInput || send.consumesComposerDraft) {
+    send.inputEl.value = '';
+    resetInputHeight();
+  }
 }
 
 export function resolveComposerSourceImages(
