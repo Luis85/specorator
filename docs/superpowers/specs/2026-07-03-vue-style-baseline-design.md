@@ -220,7 +220,7 @@ existing `is-*` convention (`is-active`, `is-on`, `is-hidden`).
 |---|---|---|
 | `specorator-library-nav`, `-nav-item` | `specorator-vue-lib-nav`, `-nav-item` | `LibraryRoot.vue` (scoped) |
 | `specorator-library-toolbar`, `-search`, `-sort`, `-filterchips`, `-filterchip`, `-filterreset` | `specorator-vue-toolbar`, `-toolbar-search`, `-toolbar-sort`, `-toolbar-filterchips`, `-toolbar-filterchip`, `-toolbar-filterreset` | `LibraryToolbar.vue` (scoped) |
-| `specorator-library-toolbar-slot` | `specorator-vue-toolbar-slot` | atoms (all three panels) |
+| `specorator-library-toolbar-slot` | `specorator-vue-toolbar-slot` | all three panels — class-only hook: no CSS rule exists for it anywhere in `src/style`, so this is a template rename, not a CSS migration |
 | `specorator-library-card`, `-card-leading`, `-card-body`, `-card-name`, `-card-actions` | `specorator-vue-card`, `-card-leading`, `-card-body`, `-card-name`, `-card-actions` | `LibraryCard.vue` (scoped) |
 | `specorator-library-card-caps` | `specorator-vue-card-caps` | atoms (card + panels via slot) |
 | `specorator-library-card-desc` | `specorator-vue-card-desc` | atoms (SkillsPanel + LoopsPanel; Agents uses the roster variant) |
@@ -230,7 +230,7 @@ existing `is-*` convention (`is-active`, `is-on`, `is-hidden`).
 | `specorator-library-header`, `-header-actions`, `-list`, `-loading` | `specorator-vue-panel-header`, `-panel-actions`, `-panel-list`, `-panel-loading` | atoms (all three panels) |
 | `specorator-library-empty`, `-empty-icon`, `-empty-action` | `specorator-vue-empty`, `-empty-icon`, `-empty-action` | `LibraryEmptyState.vue` (scoped) |
 | `specorator-library-empty-text` | `specorator-vue-empty-text` | atoms (LibraryEmptyState + all three panels' loading/hint copy) |
-| `specorator-roster-card` (modifier), `-roster-card-desc` | `specorator-vue-agent-card`, `-agent-card-desc` | `AgentsPanel.vue` (scoped) |
+| `specorator-roster-card` (modifier), `-roster-card-desc` | `specorator-vue-agent-card`, `-agent-card-desc` | `AgentsPanel.vue` — `-agent-card-desc` scoped; the bare `-agent-card` modifier is a class-only hook (no CSS rule exists for `specorator-roster-card` in `src/style`), so it is a template rename only |
 | `specorator-roster-chip`, `-chip-role` | `specorator-vue-agent-chip`, `-agent-chip-role` | `AgentsPanel.vue` (scoped) |
 | `specorator-roster-chip-model` | `specorator-vue-agent-chip-model` | `AgentsPanel.vue` — class-only hook: no CSS rule exists for it anywhere in `src/style`, so this is a template rename, not a CSS migration |
 | `specorator-roster-card-avatar` | `specorator-vue-avatar` | `AvatarSlot.vue` (scoped) |
