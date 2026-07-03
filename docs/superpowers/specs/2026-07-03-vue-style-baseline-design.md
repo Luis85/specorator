@@ -342,6 +342,19 @@ requirement, not a specific rule count).
    pixel-equivalent in the default theme; manual QA signs off deltas (a)–(d)
    explicitly when comparing flag-on before/after.
 
+## Addendum (2026-07-03, post-research)
+
+Web research (docs/research/2026-07-03-obsidian-css-reset-for-vue-islands.md)
+validated the reset depth and "No control primitives" decisions against
+Obsidian's actual `app.css`, ecosystem practice, and cascade mechanics. One
+gap it surfaced ships with this spec: Obsidian sets `user-select: none` on
+`body`, which inherits into islands — text-bearing atom classes
+(`-card-desc`, `-empty-text`, `-panel-loading`, `-agent-card-desc`) opt back
+in with `user-select: text`, per region, never island-wide. Deferred paths it
+established: a curated per-control neutralization recipe (only if a surface
+needs non-native controls) and Shadow DOM islands (major version,
+post-v4.0.0, gated on a markdown-rendering strategy).
+
 ## Out of scope
 
 - Restyling or migrating the detail editor, modals, chat, or Agent Board.

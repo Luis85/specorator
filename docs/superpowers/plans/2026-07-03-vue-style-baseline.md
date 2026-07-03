@@ -779,6 +779,27 @@ Append to `AgentsPanel.vue`:
 ```
 (`specorator-vue-agent-card` and `-agent-chip-model` get no rules — class-only hooks, no legacy CSS exists for them.)
 
+- [ ] **Step 3b: `user-select` opt-in for content regions (research follow-up, docs/research/2026-07-03-obsidian-css-reset-for-vue-islands.md §4.1)**
+
+Obsidian's `body { user-select: none }` inherits into the island, making all
+island text unselectable. Opt content regions back in — never the whole
+island (toolbars/nav must stay non-selectable, matching Obsidian chrome).
+
+Append to `src/style/vue/atoms.css` (after the empty-text rule):
+
+```css
+/* Obsidian sets user-select: none on body; opt text content back in per
+   region — never blanket the island (chrome must stay non-selectable). */
+.specorator-vue-card-desc,
+.specorator-vue-empty-text,
+.specorator-vue-panel-loading {
+  user-select: text;
+}
+```
+
+And add `user-select: text;` as the last declaration of
+`.specorator-vue-agent-card-desc` in AgentsPanel's scoped block (Step 3).
+
 - [ ] **Step 4: Delete the Vue-host rule from `src/style/features/library.css`**
 
 Delete lines 7–11 exactly (the comment + rule):
@@ -980,6 +1001,15 @@ would beat its equal-specificity mod-cta/hover rules by source order);
 imperatively created DOM needs `:deep()` from its scoped host, but `:deep()`
 never reaches a multi-root component's own root nodes (use a plain scoped
 rule there — root nodes carry the component's own `data-v` attribute).
+
+Conventions from docs/research/2026-07-03-obsidian-css-reset-for-vue-islands.md:
+selects always carry the Obsidian `dropdown` class (the arrow icon only ships
+on it); avoid `radio`/`date`/`file` inputs (Obsidian leaves them as raw
+Chromium widgets); never include `.markdown-rendered` subtrees in island
+resets; custom focusable widgets rely on the reset's `:focus-visible` ring
+(Obsidian globally removes the UA outline); text content opts into selection
+per region via `user-select: text` (Obsidian sets `user-select: none` on
+body) — never blanket the island.
 ```
 
 - [ ] **Step 2: `docs/build-ci/quality-gates.md`** — in the Vue component lane section, add a short "Vue style guards" paragraph naming: token guard + namespace guard (`tests/vue/styleBaseline.test.ts`, blocking via the component job), the `.vue`-aware `check:css` scan, and the two `check:artifacts` marker assertions.
