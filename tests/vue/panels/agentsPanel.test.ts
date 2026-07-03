@@ -280,6 +280,37 @@ describe('AgentsPanel mutation flows', () => {
     expect(tabGuard.value).toBeNull();
   });
 
+  it('arms the tab guard before editor.render resolves (slow skill catalog)', async () => {
+    // render() shows editable fields before its skill-catalog await resolves,
+    // so the guard must be armed as soon as the render starts — otherwise a
+    // slow vault read leaves a window where a tab switch discards edits.
+    let resolveRender!: () => void;
+    renderSpy.mockReturnValueOnce(new Promise<void>((r) => { resolveRender = r; }));
+    const { tabGuard } = setupMutable([agent]);
+    await screen.findByText('Alice');
+    await fireEvent.click(screen.getByRole('button', { name: 'Alice' }));
+    await waitFor(() => expect(renderSpy).toHaveBeenCalled());
+    expect(tabGuard.value).toBeTypeOf('function');
+    resolveRender();
+  });
+
+  it('does not re-arm the guard when render resolves after unmount', async () => {
+    // The tabGuard ref outlives the panel (it belongs to the view). A render
+    // continuation landing after unmount must not leave a stale guard armed.
+    let resolveRender!: () => void;
+    renderSpy.mockReturnValueOnce(new Promise<void>((r) => { resolveRender = r; }));
+    const { tabGuard, unmount } = setupMutable([agent]);
+    await screen.findByText('Alice');
+    await fireEvent.click(screen.getByRole('button', { name: 'Alice' }));
+    await waitFor(() => expect(renderSpy).toHaveBeenCalled());
+    unmount();
+    expect(tabGuard.value).toBeNull();
+    resolveRender();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(tabGuard.value).toBeNull();
+  });
+
   it('editor onSaved reloads the shared store so other leaves re-derive', async () => {
     const { p } = setupMutable([agent]);
     await screen.findByText('Alice');

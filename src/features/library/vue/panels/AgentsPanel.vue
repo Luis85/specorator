@@ -68,10 +68,15 @@ async function openDetail(agent: RosterAgent, opts?: { isNew?: boolean }): Promi
     // plugin.agentRosterStore, not through useRosterStore).
     onSaved: () => void withErrorNotice(() => store.load(), t('agentRoster.actionFailed'), fail),
   });
-  await editor.render(detailHost.value, agent, opts);
+  const renderDone = editor.render(detailHost.value, agent, opts);
   // Tab switches unmount this panel and would silently discard dirty edits —
   // register a guard that reuses the editor's own dirty state and the SAME
   // confirm strings its Back path uses (see AgentDetailEditor.handleBack).
+  // Armed BEFORE awaiting render: the editor shows editable fields (and
+  // initializes its dirty state) synchronously, before its skill-catalog
+  // await resolves, so a slow vault read must not leave a guard-free window.
+  // Arming pre-await also means unmount can never race a late registration
+  // onto the view-owned guard ref after onUnmounted cleared it.
   if (tabGuard) {
     tabGuard.value = async () => {
       if (!editor.isDirty()) {
@@ -83,6 +88,7 @@ async function openDetail(agent: RosterAgent, opts?: { isNew?: boolean }): Promi
       return ok;
     };
   }
+  await renderDone;
 }
 
 async function closeDetail(): Promise<void> {
