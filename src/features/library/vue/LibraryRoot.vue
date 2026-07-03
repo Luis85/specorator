@@ -63,13 +63,15 @@ function select(tab: LibraryTab): void {
   border-bottom: 1px solid var(--sp-border);
 }
 
+/* No background/box-shadow here: Obsidian's button rules (0,1,1) styled
+   these pre-fork (the legacy (0,1,0) declarations were dead) — leaving them
+   unset keeps the native button look AND hover feedback (a scoped (0,2,0)
+   background would beat button:hover (0,1,1)). */
 .specorator-vue-lib-nav-item {
   flex: 1 1 0;
   font-weight: var(--sp-weight-medium);
   color: var(--sp-text-muted);
-  background: var(--sp-surface-raised);
   border: 1px solid var(--sp-border);
-  box-shadow: none;
   cursor: pointer;
 }
 

@@ -108,12 +108,15 @@ function onSort(e: Event): void {
   flex-basis: 100%;
 }
 
+/* No background here: Obsidian's button rules (0,1,1) styled these pre-fork
+   (the legacy (0,1,0) background was dead) — leaving it unset keeps the
+   native button look AND hover feedback (a scoped (0,2,0) background would
+   beat button:hover (0,1,1)). */
 .specorator-vue-toolbar-filterchip,
 .specorator-vue-toolbar-filterreset {
   font-size: var(--sp-font-smaller);
   padding: var(--sp-space-3xs) var(--sp-space-xs);
   border-radius: var(--sp-radius-s);
-  background: var(--sp-surface-hover);
   border: 1px solid transparent;
   cursor: pointer;
 }

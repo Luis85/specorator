@@ -66,9 +66,10 @@ describe('Vue style baseline: token guard', () => {
     const blocks = vueFiles.flatMap((p) =>
       sfcStyleBlocks(p).map((css, i) => ({ id: `${p}#style[${i}]`, css })),
     );
-    // Corpus guard: scoped blocks exist since the Task 3 forks — an empty
-    // sweep here means the SFC collection went vacuous, not that we're clean.
-    expect(blocks.length).toBeGreaterThan(0);
+    // Corpus guard: SFC scoped blocks exist from the component forks onward
+    // (see docs/superpowers/specs/2026-07-03-vue-style-baseline-design.md,
+    // Tier 3) — an empty corpus means extraction went vacuous.
+    expect(blocks.length, 'SFC style corpus went vacuous').toBeGreaterThan(0);
     for (const { id, css } of [...sheets, ...blocks]) {
       const refs = [...stripComments(css).matchAll(/var\(\s*(--[\w-]+)/g)].map((m) => m[1]);
       const offenders = refs.filter((r) => !r.startsWith('--sp-'));

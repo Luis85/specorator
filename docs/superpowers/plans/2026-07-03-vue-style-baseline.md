@@ -28,6 +28,7 @@ npm run check:css && npm run check:loc && npm run check:quality
 - The reset uses `:where()` for margin zeroing so it stays at (0,1,0) and, being imported EARLY in `index.css`, loses ties to later legacy rules like `.specorator-roster-section` (explicit margins in the embedded detail editor survive; only true default-margin reliance is zeroed).
 - `specorator-library-toolbar-slot` and bare `specorator-roster-card` have NO CSS rules anywhere — template renames only.
 - Dead legacy rules NOT forked: `.specorator-library-card-error`, `-chip-ready`, `-chip-error`, `.specorator-library-header h2 { margin: 0 }` (redundant under the reset).
+- Fork LIVE declarations, not bytes: a legacy (0,1,0) declaration on a native control may have been DEAD (losing to Obsidian's (0,1,1) element rules, e.g. `button:not(.clickable-icon)` background/box-shadow). Verify the pre-fork computed winner before porting background/box-shadow onto buttons; a scoped (0,2,0) rule resurrects dead declarations and kills Obsidian's hover/state feedback (found in Task 3 review).
 
 ---
 
