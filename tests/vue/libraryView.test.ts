@@ -113,6 +113,18 @@ describe('LibraryView', () => {
     expect(view.getState().tab).toBe('skills');
   });
 
+  it('scopes contentEl under the Vue island classes while open, not the legacy scaffold', async () => {
+    const view = new LibraryView(makeLeaf(), makePlugin(true));
+    const el = mountView(view);
+    await view.onOpen();
+    expect(el.classList.contains('specorator-vue')).toBe(true);
+    expect(el.classList.contains('specorator-library-vue-root')).toBe(true);
+    expect(el.classList.contains('specorator-library')).toBe(false);
+    await view.onClose();
+    expect(el.classList.contains('specorator-vue')).toBe(false);
+    expect(el.classList.contains('specorator-library-vue-root')).toBe(false);
+  });
+
   it('unmounts and empties contentEl on close', async () => {
     const view = new LibraryView(makeLeaf(), makePlugin(true));
     const el = mountView(view);

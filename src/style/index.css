@@ -7,6 +7,12 @@
 @import "./base/animations.css";
 @import "./base/modal.css";
 
+/* Vue baseline (islands) — imported EARLY so legacy feature rules win
+   specificity ties against the reset by source order. */
+@import "./vue/tokens.css";
+@import "./vue/reset.css";
+@import "./vue/library-host.css";
+
 /* Components */
 @import "./components/header.css";
 @import "./components/tabs.css";

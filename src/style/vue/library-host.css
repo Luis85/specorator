@@ -1,0 +1,17 @@
+/* Host-level rules for the unified Library view. These target workspace
+   chrome OUTSIDE the island's contentEl, so they cannot be scoped SFC
+   styles. */
+
+/* The in-view nav strip identifies and navigates the Library — hide the
+   redundant per-view title bar, matching the three legacy library views
+   (features/library.css does the same for their data-types). */
+.workspace-leaf-content[data-type="specorator-library"] .view-header {
+  display: none;
+}
+
+/* Island padding — replaces the legacy `.specorator-library` scaffold class
+   the Vue host no longer adds. contentEl carries `.specorator-vue`, so
+   `--sp-*` resolves here. */
+.specorator-library-vue-root {
+  padding: var(--sp-space-l);
+}

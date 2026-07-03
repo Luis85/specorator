@@ -94,7 +94,7 @@ export class LibraryView extends ItemView {
     this.contentEl.empty();
     // Two calls, not one: Obsidian's real addClass is variadic but the shared
     // test-lane polyfill (tests/setup/obsidianDom.ts) is single-arg.
-    this.contentEl.addClass('specorator-library');
+    this.contentEl.addClass('specorator-vue');
     this.contentEl.addClass('specorator-library-vue-root');
     const app = createApp(LibraryRoot);
     app.use(getLibraryPinia());
@@ -112,7 +112,7 @@ export class LibraryView extends ItemView {
     // listeners (Vue's documented leak class when the container is kept).
     this.vueApp?.unmount();
     this.vueApp = null;
-    this.contentEl.removeClass('specorator-library');
+    this.contentEl.removeClass('specorator-vue');
     this.contentEl.removeClass('specorator-library-vue-root');
     this.contentEl.empty();
   }
