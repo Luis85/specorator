@@ -102,6 +102,18 @@ describe('runQuickActionForFile', () => {
     expect(tab.ui.fileContextManager.attachFolderAsPill).toHaveBeenCalledWith('docs');
   });
 
+  it('null file (Library tab entry): skips both pill attaches but still dispatches', async () => {
+    const tab = makeMockTab('blank');
+    const tm = makeMockTabManager({ activeTab: tab, canCreate: true });
+    const plugin = makeMockPlugin(tm);
+
+    await runQuickActionForFile(plugin as any, null, MOCK_ACTION);
+
+    expect(tab.ui.fileContextManager.attachFileAsPill).not.toHaveBeenCalled();
+    expect(tab.ui.fileContextManager.attachFolderAsPill).not.toHaveBeenCalled();
+    expect(tab.controllers.inputController.sendMessage).toHaveBeenCalledWith({ content: 'Summarize this.' });
+  });
+
   it('creates a new tab when the active tab is not blank', async () => {
     const active = makeMockTab('active');
     const newTab = makeMockTab('blank');

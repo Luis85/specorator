@@ -196,6 +196,8 @@ export class QuickActionStorage {
     await this.adapter.delete(filePath);
   }
 
+  /** Public for the Library duplicate flow's collision probe: callers check
+   * `exists(getFilePathForName(candidate))` with the same slugging save() uses. */
   getFilePathForName(name: string): string {
     const folder = this.resolveFolder();
     const safe = name
