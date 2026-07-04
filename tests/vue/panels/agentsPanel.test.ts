@@ -322,10 +322,15 @@ describe('AgentsPanel mutation flows', () => {
   });
 
   it('editor onBack closes the detail host and reloads the list', async () => {
-    const { p } = setupMutable([agent]);
+    const { p, container } = setupMutable([agent]);
     await screen.findByText('Alice');
     await fireEvent.click(screen.getByRole('button', { name: 'Alice' }));
     await waitFor(() => expect(document.querySelector('.specorator-roster-detail')).toBeTruthy());
+    // Structural contract for the sticky-footer fix in vue/library-host.css:
+    // `.specorator-library-vue-root:has(> .specorator-roster-detail)` requires
+    // the detail host to be a DIRECT child of the mount root (AgentsPanel and
+    // LibraryRoot are both multi-root fragments — no wrapper in between).
+    expect(document.querySelector('.specorator-roster-detail')?.parentElement).toBe(container);
     const listCalls = p.agentRosterStore.list.mock.calls.length;
     editorCallbacks().onBack();
     await waitFor(() => expect(document.querySelector('.specorator-roster-detail')).toBeNull());

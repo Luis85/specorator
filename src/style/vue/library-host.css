@@ -15,3 +15,10 @@
 .specorator-library-vue-root {
   padding: var(--sp-space-l);
 }
+
+/* The detail editor's sticky footer pins to the scrollport minus the
+   scroller's bottom padding — zero that padding while the embedded editor
+   is open so the footer sits flush; the footer supplies its own spacing. */
+.specorator-library-vue-root:has(> .specorator-roster-detail) {
+  padding-bottom: 0;
+}

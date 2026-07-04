@@ -4,7 +4,10 @@
    avatar slot, plain-text name button, role chips) on top. */
 
 .specorator-roster-detail {
-  padding: var(--size-4-4);
+  /* No bottom padding: it would inset the sticky footer's pin edge above the
+     pane bottom (sticky pins inside the scroller's padding box); the footer
+     spaces itself via its own padding/margin-top. */
+  padding: var(--size-4-4) var(--size-4-4) 0;
 }
 
 /* ── List / cards ── */
