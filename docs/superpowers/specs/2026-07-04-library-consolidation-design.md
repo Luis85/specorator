@@ -10,7 +10,9 @@ scope: features/library, features/quickActions (additive), app/views, settings, 
 ## Problem
 
 The unified Vue Library shipped behind `useVueLibrary` (default off) with the
-three legacy views intact and a planned v4.0.0 deletion pass. Manual QA
+three legacy views intact, pending a deletion pass once the unified view
+proved itself. The plugin is now published — there is no future major-version
+milestone to park the deletion behind. Manual QA
 approved the unified view; keeping the flag now costs three ribbon icons,
 duplicated redirect logic, and a frozen legacy codepath nobody should enter.
 Separately, Quick Actions — vault-authored prompt notes with full storage,
@@ -21,7 +23,7 @@ they are only reachable through the chat modal and context menus.
 
 | Question | Decision |
 |----------|----------|
-| Flag lifetime | **Remove `useVueLibrary` now** (ahead of the planned v4.0.0 pass). The unified Library is the only library surface. |
+| Flag lifetime | **Remove `useVueLibrary` now.** The plugin is published and there is no v4.0.0 milestone to wait for — the deletion pass IS this change. The unified Library is the only library surface. |
 | Legacy views | **Delete** AgentRosterView, SkillLibraryView, LoopLibraryView, their registrations, redirect guards, and tests. |
 | Saved workspaces holding legacy leaves | **Hard cut.** The legacy view types become unregistered; stale leaves show Obsidian's default empty pane. No redirect shims, no migration. |
 | Ribbons | **One "Open Library" ribbon** (`library-big` icon) replaces the three library ribbons. Chat and Agent Board ribbons unchanged. |
@@ -82,10 +84,17 @@ diff limited to removed/improved entries.
 
 ### ADR
 
-`docs/adr/` gains a short ADR: retire the legacy library and flag ahead of
-the planned v4.0.0 pass; hard-cut rationale (QA-approved unified view, no
-redirect shims, accepted stale-leaf cost); what remains imperative (editor
-modals, embedded detail editor) and why.
+`docs/adr/` gains a short ADR: retire the legacy library and flag now that
+the plugin is published (no major-version milestone exists to defer to);
+hard-cut rationale (QA-approved unified view, no redirect shims, accepted
+stale-leaf cost); what remains imperative (editor modals, embedded detail
+editor) and why.
+
+Docs sweep: every remaining "v4.0.0 deletion pass" reference becomes stale
+with this change and is updated in the docs task — root `CLAUDE.md`
+(features/library row), the 2026-07-03 style-baseline spec's addendum/out-of-
+scope mentions (annotated, not rewritten — it is a historical record), and
+the comment in `AgentsPanel.vue` that cites the pass.
 
 ## Part 2 — Single ribbon + commands
 
