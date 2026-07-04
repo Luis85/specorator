@@ -31,6 +31,8 @@ jest.mock('../../../../../../src/features/agents/roster/view/CapabilityPicker', 
   renderCapabilityPicker: jest.fn(),
 }));
 
+import { renderCapabilityPicker } from '../../../../../../src/features/agents/roster/view/CapabilityPicker';
+
 const confirmMock = jest.fn().mockResolvedValue(false);
 jest.mock('../../../../../../src/shared/modals/ConfirmModal', () => ({
   confirm: (...args: unknown[]) => confirmMock(...args),
@@ -132,6 +134,30 @@ describe('AgentDetailEditor dirty state', () => {
     await flush();
     expect(confirmMock).toHaveBeenCalledTimes(1);
     expect(callbacks.onBack).not.toHaveBeenCalled();
+  });
+});
+
+describe('AgentDetailEditor skills picker', () => {
+  it('collapses same-named cross-provider skills into ONE item with a merged badge', async () => {
+    const plugin = makePlugin();
+    plugin.vaultSkillAggregator.listAll.mockResolvedValue([
+      { name: 'brainstorming', description: 'Ideate broadly', providerDisplayName: 'Claude' },
+      { name: 'brainstorming', description: 'Ideate (codex copy)', providerDisplayName: 'Codex' },
+      { name: 'pdf-extract', description: 'Extract text', providerDisplayName: 'Claude' },
+    ]);
+    const pickerMock = renderCapabilityPicker as jest.Mock;
+    pickerMock.mockClear();
+    const editor = new AgentDetailEditor(plugin, makeCallbacks());
+    const root = document.createElement('div');
+    await editor.render(root, makeAgent());
+    expect(pickerMock).toHaveBeenCalledTimes(1);
+    const options = pickerMock.mock.calls[0][1];
+    expect(options.items).toEqual([
+      // One item per NAME (agent.skills is name-keyed), first entry's
+      // description, provider badges merged in listAll order.
+      { id: 'brainstorming', name: 'brainstorming', description: 'Ideate broadly', badge: 'Claude, Codex' },
+      { id: 'pdf-extract', name: 'pdf-extract', description: 'Extract text', badge: 'Claude' },
+    ]);
   });
 });
 

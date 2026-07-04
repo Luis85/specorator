@@ -94,6 +94,19 @@ describe('renderCapabilityPicker', () => {
     expect(root.querySelectorAll('.specorator-cap-picker-chip')).toHaveLength(0);
   });
 
+  it('renders exactly one chip per selected id even when items share an id', () => {
+    const root = host();
+    const dupes: CapabilityItem[] = [
+      { id: 'brainstorming', name: 'brainstorming', badge: 'Claude' },
+      { id: 'brainstorming', name: 'brainstorming', badge: 'Codex' },
+    ];
+    renderCapabilityPicker(root, {
+      label: 'Skills', items: dupes, selectedIds: ['brainstorming'], emptyHint: 'none', searchPlaceholder: 'Search…', onChange: jest.fn(),
+    });
+    expect(root.querySelectorAll('.specorator-cap-picker-chip')).toHaveLength(1);
+    expect(root.querySelector('.specorator-cap-picker-count')?.textContent).toBe('1 selected');
+  });
+
   it('renders the empty hint when the catalog is empty', () => {
     const root = host();
     renderCapabilityPicker(root, {

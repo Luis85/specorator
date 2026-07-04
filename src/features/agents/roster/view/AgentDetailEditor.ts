@@ -240,9 +240,27 @@ export class AgentDetailEditor {
     renderLibraryLoading(card, t('common.loading'));
     const entries = (await this.plugin.vaultSkillAggregator?.listAll()) ?? [];
     card.empty();
-    const items: CapabilityItem[] = entries.map((e) => ({
-      id: e.name, name: e.name, description: e.description, badge: e.providerDisplayName,
-    }));
+    // agent.skills is name-keyed (providers each ship their own copy of a
+    // same-named skill and sync independently), so collapse duplicates into
+    // ONE item per name and merge the provider badges. Keeps listAll order;
+    // the first entry's description wins.
+    const byName = new Map<string, { item: CapabilityItem; badges: string[] }>();
+    const items: CapabilityItem[] = [];
+    for (const e of entries) {
+      const existing = byName.get(e.name);
+      if (existing) {
+        if (!existing.badges.includes(e.providerDisplayName)) {
+          existing.badges.push(e.providerDisplayName);
+          existing.item.badge = existing.badges.join(', ');
+        }
+        continue;
+      }
+      const item: CapabilityItem = {
+        id: e.name, name: e.name, description: e.description, badge: e.providerDisplayName,
+      };
+      byName.set(e.name, { item, badges: [e.providerDisplayName] });
+      items.push(item);
+    }
     renderCapabilityPicker(card, {
       label: t('agentRoster.skills'),
       items,
