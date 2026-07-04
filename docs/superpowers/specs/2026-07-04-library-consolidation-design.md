@@ -149,7 +149,12 @@ State: `actions: QuickAction[]`, `loading`, `error`. Methods:
 - `useLibraryList` over `store.actions` with accessors: name, description,
   tags; `updated` returns 0 (QuickAction carries no mtime — the sort
   dropdown keeps both options; "updated" degenerates to stable order,
-  matching the accessors contract).
+  matching the accessors contract). *Addendum (external-review follow-up,
+  2026-07-04):* `QuickAction` now carries an optional `mtime` populated by
+  `QuickActionStorage.loadAll()` from the adapter's file stat (the skills-tab
+  precedent), so `getUpdatedAt` returns the real vault mtime and the
+  "Recently updated" sort actually sorts; 0 remains only for unstat-able
+  files. The field is load-time-only — `save()` never serializes it.
 - Card: leading icon (`setIcon` via the imperative-host pattern with a
   scoped `:deep()` or the existing card-icon atom), name, favorite star
   button (`aria-pressed`, toggles via store), description, tag chips.

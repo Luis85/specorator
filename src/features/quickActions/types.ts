@@ -11,6 +11,8 @@ export interface QuickAction {
   filePath: string;
   favorite?: boolean;
   favoriteRank?: number;
+  /** Vault file mtime, populated by loadAll for recency sorting; not serialized to frontmatter. */
+  mtime?: number;
 }
 
 export interface QuickActionFrontmatter {

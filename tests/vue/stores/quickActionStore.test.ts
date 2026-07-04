@@ -1,5 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { shallowRef } from 'vue';
 
 import type * as quickActionStorageModule from '@/features/quickActions/QuickActionStorage';
 import type { QuickAction } from '@/features/quickActions/types';
@@ -44,6 +45,7 @@ vi.mock('@/features/quickActions/QuickActionStorage', async (importOriginal) => 
 
 import { quickActionLibraryAccessors } from '@/features/library/vue/quickActionLibraryAccessors';
 import { useQuickActionStore } from '@/features/library/vue/stores/quickActionStore';
+import { useLibraryList } from '@/features/library/vue/useLibraryList';
 
 const baseAction: QuickAction = {
   id: 'summarize',
@@ -243,11 +245,28 @@ describe('useQuickActionStore', () => {
 });
 
 describe('quickActionLibraryAccessors', () => {
-  it('maps QuickAction fields; updated degrades to 0 (quick actions carry no mtime)', () => {
+  it('maps QuickAction fields; getUpdatedAt reads the vault mtime (0 only for unstat-able files)', () => {
     expect(quickActionLibraryAccessors.getName(baseAction)).toBe('Summarize');
     expect(quickActionLibraryAccessors.getDescription(baseAction)).toBe('d');
     expect(quickActionLibraryAccessors.getTags({ ...baseAction, tags: ['t'] })).toEqual(['t']);
     expect(quickActionLibraryAccessors.getTags(baseAction)).toEqual([]);
+    expect(quickActionLibraryAccessors.getUpdatedAt({ ...baseAction, mtime: 1234 })).toBe(1234);
     expect(quickActionLibraryAccessors.getUpdatedAt(baseAction)).toBe(0);
+  });
+
+  // End-to-end through the real list engine: the panel's "Recently updated"
+  // option must actually reorder rows, not silently keep loadAll's name order.
+  it('sorts newest-first through useLibraryList when sort=updated', () => {
+    const older: QuickAction = {
+      ...baseAction, id: 'older', name: 'Aardvark', filePath: 'Quick Actions/older.md', mtime: 1000,
+    };
+    const newer: QuickAction = {
+      ...baseAction, id: 'newer', name: 'Zebra', filePath: 'Quick Actions/newer.md', mtime: 2000,
+    };
+    const src = shallowRef<QuickAction[]>([older, newer]);
+    const list = useLibraryList(() => src.value, quickActionLibraryAccessors);
+    expect(list.rows.value.map((a) => a.name)).toEqual(['Aardvark', 'Zebra']);
+    list.sort.value = 'updated';
+    expect(list.rows.value.map((a) => a.name)).toEqual(['Zebra', 'Aardvark']);
   });
 });
