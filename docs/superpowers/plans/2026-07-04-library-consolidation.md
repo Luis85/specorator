@@ -101,6 +101,13 @@ If any baseline diff contains anything other than removals/improvements, STOP an
 
 - [ ] **Step 1: Audit each deletion target**
 
+FIRST (found by Task 1's spec review): delete `src/shared/libraryNav.ts` +
+`tests/unit/shared/libraryNav.test.ts`. It is dead legacy nav DOM whose only
+consumers were the deleted views; it holds the legacy view types as raw
+string literals (invisible to symbol greps) and references
+`specorator-library-nav`/`-nav-item`, which would otherwise make the nav CSS
+look alive to the greps below. Audit-gate it: `grep -rn "libraryNav\|renderLibraryNav\|LIBRARY_VIEW_TYPES" src/ tests/` must show only the file itself + its test before `git rm`.
+
 ```bash
 grep -rn "LibraryListController\|mountLibraryList" src/ tests/     # expect: definition + legacy-only/test hits
 grep -rn "specorator-library-nav\|specorator-library-toolbar\b\|specorator-library-search\|specorator-library-sort\|specorator-library-filterchip\|specorator-library-filterreset\|specorator-library-card\|specorator-library-chip\|specorator-library-empty\|specorator-library-loading\|specorator-library-list\|specorator-library-header" src/ --include="*.ts" --include="*.vue"
