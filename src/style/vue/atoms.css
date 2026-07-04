@@ -65,6 +65,20 @@
   color: var(--sp-text-error);
 }
 
+/* Busy row: an async card action (clone/delete/start-chat) is in flight and
+   the panel has disabled the row's buttons. Obsidian only swaps the cursor on
+   disabled buttons, so the dim is the visible feedback. The state-gated
+   `button:disabled` here is NOT a control primitive (see the no-element-
+   primitives rule): it can't fight mod-cta's baseline outside is-busy. */
+.specorator-vue-card-actions.is-busy {
+  cursor: progress;
+}
+
+.specorator-vue-card-actions.is-busy button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
 /* ── Chips ── */
 /* Chip modifiers co-locate with the family even when single-consumer today
    (spec exception): one family, one place. */

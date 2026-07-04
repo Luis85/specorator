@@ -16,6 +16,7 @@ import LibraryToolbar from '../components/LibraryToolbar.vue';
 import { PLUGIN_KEY } from '../libraryKeys';
 import { useLoopLibraryStore } from '../stores/loopLibraryStore';
 import { useLibraryList } from '../useLibraryList';
+import { useRowActionPending } from '../useRowActionPending';
 
 const plugin = inject(PLUGIN_KEY);
 if (!plugin) throw new Error('LoopsPanel mounted without PLUGIN_KEY');
@@ -26,6 +27,10 @@ store.init(plugin);
 // Source-based: rows re-derive from the global store, so a mutation in ANY
 // Library leaf updates every mounted panel (multi-leaf consistency).
 const list = useLibraryList<LoopDefinition>(() => store.loops, loopLibraryAccessors);
+
+// Busy gate for the async card actions: disables the row's buttons while
+// vault I/O runs and drops re-entrant fires (double-click = double clone).
+const pending = useRowActionPending();
 
 onMounted(() => void withErrorNotice(() => store.load(), t('loopLibrary.actionFailed'), fail));
 
@@ -45,17 +50,21 @@ function onPrompt(loop: LoopDefinition): void {
 }
 
 function onClone(loop: LoopDefinition): void {
-  void withErrorNotice(() => store.clone(loop), t('loopLibrary.actionFailed'), fail);
+  void pending.run(loop.path, () =>
+    withErrorNotice(() => store.clone(loop), t('loopLibrary.actionFailed'), fail));
 }
 
 function onDelete(loop: LoopDefinition): void {
-  void withErrorNotice(async () => {
-    if (!plugin) return;
-    const ok = await confirm(plugin.app, t('loopLibrary.deleteConfirm', { name: loop.name }), t('loopLibrary.delete'));
-    if (!ok) return;
-    await store.remove(loop);
-    new Notice(t('loopLibrary.deleted', { name: loop.name }));
-  }, t('loopLibrary.actionFailed'), fail);
+  // The confirm lives INSIDE run(): busy-through-confirm prevents stacked
+  // confirms and delete-during-clone races on the same row.
+  void pending.run(loop.path, () =>
+    withErrorNotice(async () => {
+      if (!plugin) return;
+      const ok = await confirm(plugin.app, t('loopLibrary.deleteConfirm', { name: loop.name }), t('loopLibrary.delete'));
+      if (!ok) return;
+      await store.remove(loop);
+      new Notice(t('loopLibrary.deleted', { name: loop.name }));
+    }, t('loopLibrary.actionFailed'), fail));
 }
 
 function onInstallStarters(): void {
@@ -129,6 +138,7 @@ function onInstallStarters(): void {
         :name="loop.name"
         :ariaLabel="loop.name"
         :tags="loop.tags ?? []"
+        :busy="pending.isBusy(loop.path)"
         @activate="openEditor(loop)"
       >
         <div
@@ -147,6 +157,8 @@ function onInstallStarters(): void {
           <button
             type="button"
             class="mod-cta"
+            :disabled="pending.isBusy(loop.path)"
+            :aria-busy="pending.isBusy(loop.path) ? 'true' : undefined"
             @click="onPrompt(loop)"
           >
             {{ t('loopLibrary.prompt') }}
@@ -156,6 +168,8 @@ function onInstallStarters(): void {
             class="specorator-vue-card-icon"
             :aria-label="t('library.duplicate')"
             :title="t('library.duplicate')"
+            :disabled="pending.isBusy(loop.path)"
+            :aria-busy="pending.isBusy(loop.path) ? 'true' : undefined"
             @click="onClone(loop)"
           >
             ⧉
@@ -163,6 +177,8 @@ function onInstallStarters(): void {
           <button
             type="button"
             class="specorator-vue-card-delete"
+            :disabled="pending.isBusy(loop.path)"
+            :aria-busy="pending.isBusy(loop.path) ? 'true' : undefined"
             @click="onDelete(loop)"
           >
             {{ t('loopLibrary.delete') }}

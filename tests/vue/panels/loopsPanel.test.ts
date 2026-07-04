@@ -194,6 +194,49 @@ describe('LoopsPanel mutation flows', () => {
     await waitFor(() => expect(errorLog).toHaveBeenCalled());
   });
 
+  it('Duplicate marks the row busy (all actions disabled + aria-busy), fires ONE clone on double-click, re-enables on resolve', async () => {
+    const { store } = setupMutable([loop]);
+    await screen.findByText('A loop');
+    let resolveClone!: () => void;
+    const cloneSpy = vi.spyOn(store, 'clone')
+      .mockReturnValue(new Promise<void>((r) => { resolveClone = r; }));
+    const dup = screen.getByRole('button', { name: 'Duplicate' }) as HTMLButtonElement;
+    const del = screen.getByRole('button', { name: 'Delete' }) as HTMLButtonElement;
+    const prompt = screen.getByRole('button', { name: 'Prompt' }) as HTMLButtonElement;
+    await fireEvent.click(dup);
+    await waitFor(() => expect(dup.disabled).toBe(true));
+    // One busy bit per row gates ALL of that row's actions.
+    expect(del.disabled).toBe(true);
+    expect(prompt.disabled).toBe(true);
+    expect(dup.getAttribute('aria-busy')).toBe('true');
+    const actions = document.querySelector('.specorator-vue-card-actions');
+    expect(actions?.classList.contains('is-busy')).toBe(true);
+    // The double-clone bug: a second click during the vault write must not
+    // fire a second clone.
+    await fireEvent.click(dup);
+    expect(cloneSpy).toHaveBeenCalledTimes(1);
+    resolveClone();
+    await waitFor(() => expect(dup.disabled).toBe(false));
+    expect(actions?.classList.contains('is-busy')).toBe(false);
+    expect(dup.getAttribute('aria-busy')).toBeNull();
+  });
+
+  it('Delete holds the row busy through the confirm, blocking clone-during-delete races', async () => {
+    let resolveConfirm!: (ok: boolean) => void;
+    vi.mocked(confirm).mockReturnValueOnce(new Promise<boolean>((r) => { resolveConfirm = r; }));
+    const { store, noteStore } = setupMutable([loop]);
+    await screen.findByText('A loop');
+    const cloneSpy = vi.spyOn(store, 'clone');
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    const dup = screen.getByRole('button', { name: 'Duplicate' }) as HTMLButtonElement;
+    await waitFor(() => expect(dup.disabled).toBe(true));
+    await fireEvent.click(dup);
+    expect(cloneSpy).not.toHaveBeenCalled();
+    resolveConfirm(false);
+    await waitFor(() => expect(dup.disabled).toBe(false));
+    expect(noteStore.delete).not.toHaveBeenCalled();
+  });
+
   // Spec DoD 5: snapshot ONE card (small stable sub-tree), never the whole
   // panel — locale strings are deterministic ('en' in tests), fixtures carry
   // no timestamps/ids that reach the DOM.

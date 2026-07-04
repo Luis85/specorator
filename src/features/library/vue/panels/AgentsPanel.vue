@@ -18,6 +18,7 @@ import LibraryToolbar from '../components/LibraryToolbar.vue';
 import { PLUGIN_KEY, TAB_GUARD_KEY } from '../libraryKeys';
 import { useRosterStore } from '../stores/rosterStore';
 import { useLibraryList } from '../useLibraryList';
+import { useRowActionPending } from '../useRowActionPending';
 
 const plugin = inject(PLUGIN_KEY);
 if (!plugin) throw new Error('AgentsPanel mounted without PLUGIN_KEY');
@@ -32,6 +33,12 @@ const detailOpen = ref(false);
 // Rows re-derive from the global store (source-based useLibraryList), so
 // mutations in ANY leaf propagate to every mounted panel automatically.
 const list = useLibraryList<RosterAgent>(() => store.agents, rosterLibraryAccessors);
+
+// Busy gate for the async card actions (start chat / clone / delete):
+// disables the row's buttons while the work runs and drops re-entrant fires
+// (double-click = double clone). Detail-editor callbacks stay unwrapped —
+// the gate is a card-row affordance.
+const pending = useRowActionPending();
 
 const tabGuard = inject(TAB_GUARD_KEY, null);
 
@@ -103,7 +110,8 @@ async function closeDetail(): Promise<void> {
 
 /** Card-action wrapper the template calls; mirrors the detail editor's path. */
 function onStartChat(agent: RosterAgent): void {
-  void withErrorNotice(() => startChat(agent), t('agentRoster.actionFailed'), fail);
+  void pending.run(agent.id, () =>
+    withErrorNotice(() => startChat(agent), t('agentRoster.actionFailed'), fail));
 }
 
 async function startChat(agent: RosterAgent): Promise<void> {
@@ -133,18 +141,22 @@ async function confirmedDelete(agent: RosterAgent): Promise<boolean> {
 
 /** Legacy cloneAgent parity: the user lands on the clone for review/editing. */
 function onClone(agent: RosterAgent): void {
-  void withErrorNotice(async () => {
-    const clone = await store.clone(agent);
-    await openDetail(clone);
-  }, t('agentRoster.actionFailed'), fail);
+  void pending.run(agent.id, () =>
+    withErrorNotice(async () => {
+      const clone = await store.clone(agent);
+      await openDetail(clone);
+    }, t('agentRoster.actionFailed'), fail));
 }
 
 function onDelete(agent: RosterAgent): void {
   // async wrapper: withErrorNotice takes () => Promise<void>, so the
-  // confirmedDelete boolean stays internal.
-  void withErrorNotice(async () => {
-    await confirmedDelete(agent);
-  }, t('agentRoster.actionFailed'), fail);
+  // confirmedDelete boolean stays internal. The confirm lives INSIDE run():
+  // busy-through-confirm prevents stacked confirms and delete-during-clone
+  // races on the same row.
+  void pending.run(agent.id, () =>
+    withErrorNotice(async () => {
+      await confirmedDelete(agent);
+    }, t('agentRoster.actionFailed'), fail));
 }
 
 function onNewAgent(): void {
@@ -262,6 +274,7 @@ function hasCaps(agent: RosterAgent): boolean {
           class="specorator-vue-agent-card"
           :name="agent.name"
           :ariaLabel="agent.name"
+          :busy="pending.isBusy(agent.id)"
           @activate="openDetail(agent)"
         >
           <template #leading>
@@ -306,6 +319,8 @@ function hasCaps(agent: RosterAgent): boolean {
             <button
               type="button"
               class="mod-cta"
+              :disabled="pending.isBusy(agent.id)"
+              :aria-busy="pending.isBusy(agent.id) ? 'true' : undefined"
               @click="onStartChat(agent)"
             >
               {{ t('agentRoster.startChatShort') }}
@@ -315,6 +330,8 @@ function hasCaps(agent: RosterAgent): boolean {
               class="specorator-vue-card-icon"
               :aria-label="t('library.duplicate')"
               :title="t('library.duplicate')"
+              :disabled="pending.isBusy(agent.id)"
+              :aria-busy="pending.isBusy(agent.id) ? 'true' : undefined"
               @click="onClone(agent)"
             >
               ⧉
@@ -322,6 +339,8 @@ function hasCaps(agent: RosterAgent): boolean {
             <button
               type="button"
               class="specorator-vue-card-delete"
+              :disabled="pending.isBusy(agent.id)"
+              :aria-busy="pending.isBusy(agent.id) ? 'true' : undefined"
               @click="onDelete(agent)"
             >
               {{ t('agentRoster.delete') }}

@@ -377,6 +377,54 @@ describe('AgentsPanel mutation flows', () => {
     await waitFor(() => expect(errorLog).toHaveBeenCalled());
   });
 
+  it('Duplicate marks the row busy (all actions disabled + aria-busy), fires ONE clone on double-click, re-enables on resolve', async () => {
+    const { store } = setupMutable([agent]);
+    await screen.findByText('Alice');
+    let resolveClone!: (a: typeof agent) => void;
+    const cloneSpy = vi.spyOn(store, 'clone')
+      .mockReturnValue(new Promise((r) => { resolveClone = r; }) as never);
+    const dup = screen.getByRole('button', { name: 'Duplicate' }) as HTMLButtonElement;
+    const del = screen.getByRole('button', { name: 'Delete' }) as HTMLButtonElement;
+    const start = screen.getByRole('button', { name: 'Start chat' }) as HTMLButtonElement;
+    await fireEvent.click(dup);
+    await waitFor(() => expect(dup.disabled).toBe(true));
+    // One busy bit per row gates ALL of that row's actions.
+    expect(del.disabled).toBe(true);
+    expect(start.disabled).toBe(true);
+    expect(dup.getAttribute('aria-busy')).toBe('true');
+    const actions = document.querySelector('.specorator-vue-card-actions');
+    expect(actions?.classList.contains('is-busy')).toBe(true);
+    // The double-clone bug: a second click during the vault write must not
+    // fire a second clone.
+    await fireEvent.click(dup);
+    expect(cloneSpy).toHaveBeenCalledTimes(1);
+    resolveClone({ ...agent, id: 'roster:a-copy', name: 'Alice copy' });
+    await waitFor(() => expect(dup.disabled).toBe(false));
+    expect(actions?.classList.contains('is-busy')).toBe(false);
+  });
+
+  it('Start chat shares the row busy gate: single fire, other actions blocked, re-enables on resolve', async () => {
+    const { store, p } = setupMutable([agent]);
+    await screen.findByText('Alice');
+    let resolveCreate!: (v: unknown) => void;
+    p.createConversation.mockReturnValue(new Promise((r) => { resolveCreate = r; }));
+    const cloneSpy = vi.spyOn(store, 'clone');
+    const start = screen.getByRole('button', { name: 'Start chat' }) as HTMLButtonElement;
+    const dup = screen.getByRole('button', { name: 'Duplicate' }) as HTMLButtonElement;
+    await fireEvent.click(start);
+    await waitFor(() => expect(start.disabled).toBe(true));
+    expect(start.getAttribute('aria-busy')).toBe('true');
+    // Double-click on Start chat: exactly one conversation.
+    await fireEvent.click(start);
+    expect(p.createConversation).toHaveBeenCalledTimes(1);
+    // The busy row blocks its OTHER actions too (no clone-during-start race).
+    await fireEvent.click(dup);
+    expect(cloneSpy).not.toHaveBeenCalled();
+    resolveCreate({ id: 'conv-1' });
+    await waitFor(() => expect(start.disabled).toBe(false));
+    expect(p.openConversation).toHaveBeenCalledWith('conv-1', { requireNewTab: true });
+  });
+
   // Spec DoD 5: snapshot ONE card (small stable sub-tree), never the whole
   // panel — locale strings are deterministic ('en' in tests), the avatar
   // renderer is mocked, and fixtures carry no timestamps/ids that reach the DOM.

@@ -287,6 +287,33 @@ describe('SkillsPanel mutation flows', () => {
     await waitFor(() => expect(errorLog).toHaveBeenCalled());
   });
 
+  it('Duplicate marks the row busy (all actions disabled + aria-busy), fires ONE clone on double-click, re-enables on resolve', async () => {
+    const { store } = setupMutable([entry]);
+    await screen.findByText('a-skill');
+    let resolveClone!: (path: string | null) => void;
+    const cloneSpy = vi.spyOn(store, 'clone')
+      .mockReturnValue(new Promise<string | null>((r) => { resolveClone = r; }));
+    const dup = screen.getByRole('button', { name: 'Duplicate' }) as HTMLButtonElement;
+    const del = screen.getByRole('button', { name: 'Delete' }) as HTMLButtonElement;
+    const prompt = screen.getByRole('button', { name: 'Prompt' }) as HTMLButtonElement;
+    await fireEvent.click(dup);
+    await waitFor(() => expect(dup.disabled).toBe(true));
+    // One busy bit per row gates ALL of that row's actions.
+    expect(del.disabled).toBe(true);
+    expect(prompt.disabled).toBe(true);
+    expect(dup.getAttribute('aria-busy')).toBe('true');
+    const actions = document.querySelector('.specorator-vue-card-actions');
+    expect(actions?.classList.contains('is-busy')).toBe(true);
+    // The double-clone bug: a second click during the vault write must not
+    // fire a second clone.
+    await fireEvent.click(dup);
+    expect(cloneSpy).toHaveBeenCalledTimes(1);
+    resolveClone('.claude/skills/a-skill-copy/SKILL.md');
+    await waitFor(() => expect(dup.disabled).toBe(false));
+    expect(actions?.classList.contains('is-busy')).toBe(false);
+    expect(dup.getAttribute('aria-busy')).toBeNull();
+  });
+
   // Spec DoD 5: snapshot ONE card (small stable sub-tree), never the whole
   // panel — locale strings are deterministic ('en' in tests), fixtures carry
   // no timestamps/ids that reach the DOM.

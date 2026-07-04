@@ -5,6 +5,9 @@ const props = defineProps<{
   name: string;
   ariaLabel: string;
   tags?: string[];
+  /** A row action is in flight: flags the actions container (is-busy) while
+   *  the panel disables the slotted buttons. Card activation stays enabled. */
+  busy?: boolean;
 }>();
 
 const emit = defineEmits<{ activate: [] }>();
@@ -62,6 +65,7 @@ function onKeydown(e: KeyboardEvent): void {
     </div>
     <div
       class="specorator-vue-card-actions"
+      :class="{ 'is-busy': props.busy }"
       @click.stop
     >
       <slot name="actions" />

@@ -17,6 +17,7 @@ import LibraryToolbar from '../components/LibraryToolbar.vue';
 import { PLUGIN_KEY } from '../libraryKeys';
 import { useSkillLibraryStore } from '../stores/skillLibraryStore';
 import { useLibraryList } from '../useLibraryList';
+import { useRowActionPending } from '../useRowActionPending';
 
 const plugin = inject(PLUGIN_KEY);
 if (!plugin) throw new Error('SkillsPanel mounted without PLUGIN_KEY');
@@ -30,6 +31,10 @@ const list = useLibraryList<SkillLibraryRow>(
   () => store.rows,
   skillLibraryAccessors((id) => store.mtimeFor(id)),
 );
+
+// Busy gate for the async card actions: disables the row's buttons while
+// vault I/O runs and drops re-entrant fires (double-click = double clone).
+const pending = useRowActionPending();
 
 onMounted(() => void withErrorNotice(() => store.load(), t('skillLibrary.actionFailed'), fail));
 
@@ -60,7 +65,7 @@ function onPrompt(row: SkillLibraryRow): void {
 }
 
 function onClone(row: SkillLibraryRow): void {
-  void withErrorNotice(async () => {
+  void pending.run(row.id, () => withErrorNotice(async () => {
     const path = await store.clone(row);
     if (!path) { new Notice(t('skillLibrary.readonlyNotice')); return; }
     new Notice(t('skillLibrary.created', { path }));
@@ -78,11 +83,13 @@ function onClone(row: SkillLibraryRow): void {
       editable: true,
       tags: row.tags,
     });
-  }, t('skillLibrary.actionFailed'), fail);
+  }, t('skillLibrary.actionFailed'), fail));
 }
 
 function onDelete(row: SkillLibraryRow): void {
-  void withErrorNotice(async () => {
+  // The confirm lives INSIDE run(): busy-through-confirm prevents stacked
+  // confirms and delete-during-clone races on the same row.
+  void pending.run(row.id, () => withErrorNotice(async () => {
     if (!plugin) return;
     const ok = await confirm(plugin.app, t('skillLibrary.deleteConfirm', { name: row.name }), t('skillLibrary.delete'));
     if (!ok) return;
@@ -90,7 +97,7 @@ function onDelete(row: SkillLibraryRow): void {
     // Unreachable through the gated button; kept for programmatic callers.
     if (!removed) { new Notice(t('skillLibrary.readonlyNotice')); return; }
     new Notice(t('skillLibrary.deleted', { name: row.name }));
-  }, t('skillLibrary.actionFailed'), fail);
+  }, t('skillLibrary.actionFailed'), fail));
 }
 
 function onCreateSkill(): void {
@@ -177,6 +184,7 @@ function onCreateSkill(): void {
         :name="row.name"
         :ariaLabel="row.name"
         :tags="row.tags ?? []"
+        :busy="pending.isBusy(row.id)"
         @activate="openEditor(row)"
       >
         <template #name-chips>
@@ -193,6 +201,8 @@ function onCreateSkill(): void {
           <button
             type="button"
             class="mod-cta"
+            :disabled="pending.isBusy(row.id)"
+            :aria-busy="pending.isBusy(row.id) ? 'true' : undefined"
             @click="onPrompt(row)"
           >
             {{ t('skillLibrary.prompt') }}
@@ -203,6 +213,8 @@ function onCreateSkill(): void {
             class="specorator-vue-card-icon"
             :aria-label="t('library.duplicate')"
             :title="t('library.duplicate')"
+            :disabled="pending.isBusy(row.id)"
+            :aria-busy="pending.isBusy(row.id) ? 'true' : undefined"
             @click="onClone(row)"
           >
             ⧉
@@ -213,6 +225,8 @@ function onCreateSkill(): void {
             v-if="isCloneableSkillPath(row.sourceFilePath)"
             type="button"
             class="specorator-vue-card-delete"
+            :disabled="pending.isBusy(row.id)"
+            :aria-busy="pending.isBusy(row.id) ? 'true' : undefined"
             @click="onDelete(row)"
           >
             {{ t('skillLibrary.delete') }}
