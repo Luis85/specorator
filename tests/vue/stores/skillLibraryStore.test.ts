@@ -124,6 +124,52 @@ describe('useSkillLibraryStore', () => {
     expect(refresh).toHaveBeenCalled();
   });
 
+  // Codex's catalog refresh spawns an ephemeral app-server; if the CLI can't
+  // start, refresh() rejects AFTER the vault mutation already landed. The
+  // mutation flow must still reload (else the UI is stale) and report success
+  // — a retry would otherwise write a second copy / re-delete.
+  it('clone() still reloads and returns the path when the catalog refresh rejects', async () => {
+    const store = useSkillLibraryStore();
+    const plugin = makePlugin([entry]);
+    const warn = vi.fn();
+    (plugin as { logger: unknown }).logger = { scope: () => ({ error: vi.fn(), warn }) };
+    vi.mocked(ProviderWorkspaceRegistry.getCommandCatalog).mockReturnValue({
+      refresh: vi.fn().mockRejectedValue(new Error('codex app-server failed to start')),
+    } as never);
+    store.init(plugin);
+    await store.load();
+    const p = plugin as { vaultSkillAggregator: { listAll: ReturnType<typeof vi.fn> } };
+    const loadsBefore = p.vaultSkillAggregator.listAll.mock.calls.length;
+    const clonePath = await store.clone(store.rows[0]);
+    expect(clonePath).toBe('.claude/skills/a-copy/SKILL.md');
+    // The copy is already on disk — the store must reload so the UI shows it.
+    expect(p.vaultSkillAggregator.listAll.mock.calls.length).toBeGreaterThan(loadsBefore);
+    expect(warn).toHaveBeenCalledWith(expect.any(String), expect.any(Error));
+  });
+
+  it('remove() still reloads and returns true when the catalog refresh rejects', async () => {
+    const store = useSkillLibraryStore();
+    const plugin = makePlugin([entry]);
+    const warn = vi.fn();
+    (plugin as { logger: unknown }).logger = { scope: () => ({ error: vi.fn(), warn }) };
+    vi.mocked(ProviderWorkspaceRegistry.getCommandCatalog).mockReturnValue({
+      refresh: vi.fn().mockRejectedValue(new Error('codex app-server failed to start')),
+    } as never);
+    store.init(plugin);
+    await store.load();
+    const p = plugin as {
+      vaultSkillAggregator: { listAll: ReturnType<typeof vi.fn> };
+      vaultFileAdapter: { deleteFolderRecursive: ReturnType<typeof vi.fn> };
+    };
+    const loadsBefore = p.vaultSkillAggregator.listAll.mock.calls.length;
+    const removed = await store.remove(store.rows[0]);
+    expect(removed).toBe(true);
+    // The folder is already gone — the store must reload so the UI drops the row.
+    expect(p.vaultFileAdapter.deleteFolderRecursive).toHaveBeenCalled();
+    expect(p.vaultSkillAggregator.listAll.mock.calls.length).toBeGreaterThan(loadsBefore);
+    expect(warn).toHaveBeenCalledWith(expect.any(String), expect.any(Error));
+  });
+
   it('clone() refuses non-cloneable (host-absolute) paths without writing', async () => {
     const store = useSkillLibraryStore();
     const plugin = makePlugin([entry]);

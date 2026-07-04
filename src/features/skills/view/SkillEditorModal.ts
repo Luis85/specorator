@@ -1,11 +1,11 @@
 import { type App, Notice } from 'obsidian';
 
-import { ProviderWorkspaceRegistry } from '../../../core/providers/ProviderWorkspaceRegistry';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import { LibraryEditorModal } from '../../../shared/modals/LibraryEditorModal';
 import { normalizeStringArray, setFrontmatterList } from '../../../utils/frontmatter';
 import { createModalCodeArea, librarySlug, renameLibraryItemDir, renderModalField, renderModalFooter, renderModalLabel, renderModalTextField } from '../../../utils/libraryView';
+import { refreshSkillCatalogBestEffort } from '../refreshSkillCatalogBestEffort';
 import type { SkillLibraryRow } from '../skillLibraryRows';
 import { resolveSkillVaultPath } from '../skillPaths';
 
@@ -101,7 +101,7 @@ export class SkillEditorModal extends LibraryEditorModal {
     // below, dropping the renamed skill until the TTL. A Codex edit must not
     // invalidate Claude, so both are keyed to the owning provider.
     this.plugin.events.emit('vaultSkill.changed', { providerId: this.row.providerId });
-    await ProviderWorkspaceRegistry.getCommandCatalog(this.row.providerId)?.refresh();
+    await refreshSkillCatalogBestEffort(this.plugin, this.row.providerId);
     this.onSaved();
     new Notice(t('skillLibrary.saved', { name: this.row.name }));
     this.close();

@@ -1,10 +1,10 @@
 import { defineStore } from 'pinia';
 import { ref, shallowRef } from 'vue';
 
-import { ProviderWorkspaceRegistry } from '../../../../core/providers/ProviderWorkspaceRegistry';
 import type SpecoratorPlugin from '../../../../main';
 import { extractStringArray, parseFrontmatter } from '../../../../utils/frontmatter';
 import type { SkillTabEntry } from '../../../quickActions/skills/types';
+import { refreshSkillCatalogBestEffort } from '../../../skills/refreshSkillCatalogBestEffort';
 import { isCloneableSkillPath, vaultSkillFolderOf, writeSkillClone } from '../../../skills/skillCloning';
 import type { SkillLibraryRow } from '../../../skills/skillLibraryRows';
 import { toSkillLibraryRows } from '../../../skills/skillLibraryRows';
@@ -97,7 +97,7 @@ export const useSkillLibraryStore = defineStore('library-skills', () => {
     if (!isCloneableSkillPath(row.sourceFilePath)) return null;
     const path = await writeSkillClone(p.vaultFileAdapter, row.sourceFilePath, row.name);
     p.events.emit('vaultSkill.changed', { providerId: row.providerId });
-    await ProviderWorkspaceRegistry.getCommandCatalog(row.providerId)?.refresh();
+    await refreshSkillCatalogBestEffort(p, row.providerId);
     await load();
     return path;
   }
@@ -119,7 +119,7 @@ export const useSkillLibraryStore = defineStore('library-skills', () => {
     // watcher, so invalidate the aggregator bucket AND force-reload the owning
     // provider's catalog (Codex serves a 5s listing cache the event can't clear).
     p.events.emit('vaultSkill.changed', { providerId: row.providerId });
-    await ProviderWorkspaceRegistry.getCommandCatalog(row.providerId)?.refresh();
+    await refreshSkillCatalogBestEffort(p, row.providerId);
     await load();
     return true;
   }
