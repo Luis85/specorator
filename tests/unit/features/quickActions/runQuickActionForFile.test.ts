@@ -84,7 +84,10 @@ describe('runQuickActionForFile', () => {
 
     expect(tm.switchToTab).toHaveBeenCalledWith('tab-1');
     expect(tab.ui.fileContextManager.attachFileAsPill).toHaveBeenCalledWith('note.md');
-    expect(tab.controllers.inputController.sendMessage).toHaveBeenCalledWith({ content: 'Summarize this.' });
+    expect(tab.controllers.inputController.sendMessage).toHaveBeenCalledWith({
+      content: 'Summarize this.',
+      includeComposerDraft: true,
+    });
 
     const switchOrder = (tm.switchToTab as jest.Mock).mock.invocationCallOrder[0];
     const attachOrder = (tab.ui.fileContextManager.attachFileAsPill as jest.Mock).mock.invocationCallOrder[0];
@@ -111,7 +114,10 @@ describe('runQuickActionForFile', () => {
 
     expect(tab.ui.fileContextManager.attachFileAsPill).not.toHaveBeenCalled();
     expect(tab.ui.fileContextManager.attachFolderAsPill).not.toHaveBeenCalled();
-    expect(tab.controllers.inputController.sendMessage).toHaveBeenCalledWith({ content: 'Summarize this.' });
+    expect(tab.controllers.inputController.sendMessage).toHaveBeenCalledWith({
+      content: 'Summarize this.',
+      includeComposerDraft: true,
+    });
   });
 
   it('creates a new tab when the active tab is not blank', async () => {
@@ -222,7 +228,7 @@ describe('dispatchQuickActionToTab (shared seam)', () => {
       filePath: 'Quick Actions/idea-to-design.md',
     });
 
-    expect(sendMessage).toHaveBeenCalledWith({ content: 'p' });
+    expect(sendMessage).toHaveBeenCalledWith({ content: 'p', includeComposerDraft: true });
     expect(recorded).toEqual([{ kind: 'quickAction', name: 'idea-to-design' }]);
   });
 

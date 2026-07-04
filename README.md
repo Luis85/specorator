@@ -53,13 +53,15 @@ Everyday surfaces:
 
 ## Install
 
-Install via the [Beta Reviewers Auto-update Tool (BRAT)](https://github.com/TfTHacker/obsidian42-brat):
+Specorator is available in the official Obsidian community plugin directory:
 
-1. Install BRAT from the Obsidian community-plugin directory.
-2. In BRAT, **Add Beta Plugin** → `Luis85/specorator`.
-3. Enable Specorator in Obsidian → Settings → Community plugins.
+1. In Obsidian, open **Settings → Community plugins → Browse**.
+2. Search for **Specorator** and click **Install**.
+3. Enable Specorator under **Settings → Community plugins**.
 
-Submission to the official Obsidian community-plugin registry is planned once v1.0.x stabilises.
+Or open it directly in the directory: [Specorator on the Obsidian plugin directory](https://community.obsidian.md/plugins/specorator).
+
+Prefer pre-release builds? The [Beta Reviewers Auto-update Tool (BRAT)](https://github.com/TfTHacker/obsidian42-brat) still works: **Add Beta Plugin** → `Luis85/specorator`. If you previously installed via BRAT, switching to the community-plugin install keeps your settings — they live in your vault, not in the plugin folder.
 
 Already installed? Open **Settings → Specorator** to point it at the providers you have, then open the chat sidebar from the ribbon or the command palette.
 

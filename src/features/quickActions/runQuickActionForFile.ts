@@ -32,7 +32,7 @@ export interface QuickActionRunOverride {
 export interface QuickActionDispatchTarget {
   controllers: {
     inputController?: {
-      sendMessage(options: { content: string }): Promise<unknown>;
+      sendMessage(options: { content: string; includeComposerDraft?: boolean }): Promise<unknown>;
     } | null;
   };
 }
@@ -54,7 +54,11 @@ export async function dispatchQuickActionToTab(
 ): Promise<void> {
   const inputController = tab.controllers.inputController;
   if (!inputController) return;
-  await inputController.sendMessage({ content: action.prompt });
+  // Fold any unsent composer draft into the send: the chat-header entry point
+  // targets the active tab, where the user may have typed context they expect
+  // the action to receive. Context-menu / favorites entry points resolve
+  // draft-free tabs (blankTabHasPendingDraft guard), so this is a no-op there.
+  await inputController.sendMessage({ content: action.prompt, includeComposerDraft: true });
   plugin.events.emit('usage.recorded', {
     kind: 'quickAction',
     name: quickActionStemFromPath(action.filePath),
