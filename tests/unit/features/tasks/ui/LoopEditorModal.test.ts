@@ -10,6 +10,7 @@ import { Notice, Setting } from 'obsidian';
 
 import type { LoopDefinition } from '../../../../../src/features/tasks/loops/loopTypes';
 import { LoopEditorModal } from '../../../../../src/features/tasks/ui/LoopEditorModal';
+import { t } from '../../../../../src/i18n/i18n';
 
 // The mock Setting tracks all instances in a static array.
 type MockSetting = InstanceType<typeof Setting> & {
@@ -108,6 +109,19 @@ describe('LoopEditorModal — new mode (existing = null)', () => {
     const editTitle = (editModal.setTitle as jest.Mock).mock.calls[0][0] as string;
 
     expect(newTitle).not.toBe(editTitle);
+  });
+
+  it('renders the tags input in the top metadata section, before the section textareas', () => {
+    const modal = new LoopEditorModal(mockApp, null, jest.fn());
+    modal.onOpen();
+    const names = settingInstances().map(
+      (s) => (s.setName as jest.Mock).mock.calls[0]?.[0] as string | undefined,
+    );
+    const tagsIdx = names.indexOf(t('tasks.loopEditor.tagsName'));
+    const firstSectionIdx = names.indexOf(t('tasks.loopEditor.useWhenName'));
+    expect(tagsIdx).toBeGreaterThanOrEqual(0);
+    expect(firstSectionIdx).toBeGreaterThanOrEqual(0);
+    expect(tagsIdx).toBeLessThan(firstSectionIdx);
   });
 
   it('renders a save button and a cancel button', () => {

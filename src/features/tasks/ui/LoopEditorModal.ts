@@ -61,6 +61,13 @@ export class LoopEditorModal extends Modal {
       onChange: (v) => { icon = v; },
     });
 
+    // Tags belong to the top metadata block (name/description/icon), not
+    // after the long section textareas where they were easy to miss.
+    new Setting(this.contentEl)
+      .setName(t('tasks.loopEditor.tagsName'))
+      .setDesc(t('tasks.loopEditor.tagsDesc'))
+      .addText((tc) => tc.setValue(tags).onChange((v) => { tags = v; }));
+
     // t() requires literal TranslationKey values, so pass resolved strings rather
     // than a dynamic key to keep the helper signature typed without suppression.
     const area = (label: string, desc: string, value: string, set: (v: string) => void): void => {
@@ -83,11 +90,6 @@ export class LoopEditorModal extends Modal {
       [t('tasks.loopEditor.notesName'), t('tasks.loopEditor.notesDesc'), notes, (v) => { notes = v; }],
     ];
     for (const [label, desc, value, set] of sections) area(label, desc, value, set);
-
-    new Setting(this.contentEl)
-      .setName(t('tasks.loopEditor.tagsName'))
-      .setDesc(t('tasks.loopEditor.tagsDesc'))
-      .addText((tc) => tc.setValue(tags).onChange((v) => { tags = v; }));
 
     new Setting(this.contentEl)
       .addButton((btn) => {
