@@ -12,6 +12,9 @@ export function makePlugin() {
         getAbstractFileByPath: vi.fn().mockReturnValue(null),
         getMarkdownFiles: vi.fn().mockReturnValue([]),
         read: vi.fn().mockResolvedValue(''),
+        // Quick Actions panel subscribes folder-scoped vault events on mount.
+        on: vi.fn(() => ({})),
+        offref: vi.fn(),
       },
     },
     logger: { scope: () => ({ error: vi.fn(), warn: vi.fn() }) },

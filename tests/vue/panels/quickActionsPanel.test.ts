@@ -84,14 +84,33 @@ function noticeTexts(): unknown[] {
   return vi.mocked(Notice).mock.calls.map((c) => c[0]);
 }
 
+type VaultHandler = (file: { path?: string }, oldPath?: string) => void;
+
+/** Vault fake capturing the panel's folder-scoped event subscriptions so tests
+ * can fire create/modify/delete/rename as an external writer would. */
+function makeVaultFake() {
+  const handlers: Record<string, VaultHandler> = {};
+  return {
+    handlers,
+    vault: {
+      on: vi.fn((name: string, handler: VaultHandler) => {
+        handlers[name] = handler;
+        return { event: name }; // opaque EventRef token, asserted against offref
+      }),
+      offref: vi.fn(),
+    },
+  };
+}
+
 function setup(actions: QuickAction[], opts: { folderConfigured?: boolean } = {}) {
   const pinia = createPinia();
   setActivePinia(pinia);
   const errorLog = vi.fn();
+  const { vault, handlers } = makeVaultFake();
   // One plugin object for BOTH init() and provide() — the panel re-inits the
   // store with the injected plugin, so they must be the same fake.
   const plugin = {
-    app: { vault: {} },
+    app: { vault },
     settings: {},
     storage: { getAdapter: vi.fn(() => ({})) },
     quickActionFavoritesCache: { refresh: vi.fn() },
@@ -118,7 +137,7 @@ function setup(actions: QuickAction[], opts: { folderConfigured?: boolean } = {}
   const utils = render(QuickActionsPanel, {
     global: { plugins: [pinia], provide: { [PLUGIN_KEY as symbol]: plugin } },
   });
-  return { store, plugin, storage, errorLog, ...utils };
+  return { store, plugin, storage, errorLog, vault, vaultHandlers: handlers, ...utils };
 }
 
 describe('QuickActionsPanel', () => {
@@ -337,7 +356,7 @@ describe('QuickActionsPanel', () => {
     const pinia = createPinia();
     setActivePinia(pinia);
     const plugin = {
-      app: { vault: {} },
+      app: { vault: makeVaultFake().vault },
       settings: {},
       storage: { getAdapter: vi.fn(() => ({})) },
       quickActionFavoritesCache: { refresh: vi.fn() },
@@ -354,6 +373,83 @@ describe('QuickActionsPanel', () => {
     });
     await waitFor(() => expect(store.error).toBe('boom'));
     expect(await screen.findByText(/boom/)).toBeTruthy();
+  });
+
+  // External writers (QuickActionsModal, capture-from-message) persist through
+  // their own QuickActionStorage — no store call, no event bus. Quick actions
+  // live in a REGULAR vault folder, so vault events fire for them and the
+  // mounted panel must refresh from a folder-scoped subscription (the
+  // QuickActionFavoritesCache pattern).
+  describe('vault-event refresh', () => {
+    it('reloads (debounced, coalescing bursts) after a create inside the quick-actions folder', async () => {
+      const { storage, vaultHandlers } = setup([action]);
+      await screen.findByText('Summarize');
+      const before = storage.loadAll.mock.calls.length;
+      vi.useFakeTimers();
+      try {
+        vaultHandlers.create({ path: 'Quick Actions/from-capture.md' });
+        vaultHandlers.modify({ path: 'Quick Actions/from-capture.md' });
+        // Debounce window still open: no reload yet.
+        expect(storage.loadAll.mock.calls.length).toBe(before);
+        await vi.advanceTimersByTimeAsync(400);
+      } finally {
+        vi.useRealTimers();
+      }
+      // The two-event burst coalesced into exactly one reload.
+      expect(storage.loadAll.mock.calls.length).toBe(before + 1);
+    });
+
+    it('ignores vault events outside the quick-actions folder', async () => {
+      const { storage, vaultHandlers } = setup([action]);
+      await screen.findByText('Summarize');
+      const before = storage.loadAll.mock.calls.length;
+      vi.useFakeTimers();
+      try {
+        vaultHandlers.modify({ path: 'Notes/unrelated.md' });
+        // Prefix must be path-segment-aware: a sibling folder sharing the
+        // configured folder's prefix is OUTSIDE.
+        vaultHandlers.create({ path: 'Quick Actionsish/nope.md' });
+        await vi.advanceTimersByTimeAsync(400);
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(storage.loadAll.mock.calls.length).toBe(before);
+    });
+
+    it('reloads when a rename moves a note OUT of the folder (old path was inside)', async () => {
+      const { storage, vaultHandlers } = setup([action]);
+      await screen.findByText('Summarize');
+      const before = storage.loadAll.mock.calls.length;
+      vi.useFakeTimers();
+      try {
+        vaultHandlers.rename({ path: 'Notes/moved-away.md' }, 'Quick Actions/summarize.md');
+        await vi.advanceTimersByTimeAsync(400);
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(storage.loadAll.mock.calls.length).toBe(before + 1);
+    });
+
+    it('unmount offrefs all four subscriptions and drops a pending debounce (no leak)', async () => {
+      const { storage, vault, vaultHandlers, unmount } = setup([action]);
+      await screen.findByText('Summarize');
+      expect(vault.on.mock.calls.map((c) => c[0]).sort())
+        .toEqual(['create', 'delete', 'modify', 'rename']);
+      const refs = vault.on.mock.results.map((r) => r.value);
+      const before = storage.loadAll.mock.calls.length;
+      vi.useFakeTimers();
+      try {
+        vaultHandlers.delete({ path: 'Quick Actions/summarize.md' });
+        unmount();
+        await vi.advanceTimersByTimeAsync(400);
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(vault.offref).toHaveBeenCalledTimes(4);
+      for (const ref of refs) expect(vault.offref).toHaveBeenCalledWith(ref);
+      // The queued reload died with the panel.
+      expect(storage.loadAll.mock.calls.length).toBe(before);
+    });
   });
 
   // Spec DoD: snapshot ONE card (small stable sub-tree), never the whole

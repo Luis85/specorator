@@ -138,8 +138,11 @@ State: `actions: QuickAction[]`, `loading`, `error`. Methods:
   cache refresh, `load()`.
 - Every mutation reloads (multi-leaf consistency); no event-bus seam exists
   for quick-action writes from other surfaces (the modal doesn't emit), so
-  the panel also reloads on mount/tab-activation — same staleness contract
-  as the existing modal.
+  the panel also reloads on mount/tab-activation. *Addendum (external-review
+  follow-up, 2026-07-04):* the mounted panel now also subscribes to
+  folder-scoped vault create/modify/delete/rename events (debounced, the
+  `QuickActionFavoritesCache` pattern), so external writes from the modal and
+  the capture flow refresh a mounted tab without a remount.
 
 ### Panel (`QuickActionsPanel.vue`)
 
