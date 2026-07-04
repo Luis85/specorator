@@ -22,6 +22,7 @@ priority: 3 - low
 > and the residual was already tracked as a v4.0.0 followup.
 
 # Settings Overhaul Implementation Plan
+*(2026-07-04: the v4.0.0 milestone framing below is historical — it was retired with the library consolidation (docs/adr/0003-retire-legacy-library-views.md); deferred deletions land as dedicated passes.)*
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

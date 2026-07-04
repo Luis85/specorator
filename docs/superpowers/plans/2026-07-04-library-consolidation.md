@@ -51,7 +51,7 @@
 
 **Files:** delete the 3 legacy view files + their 3 test suites (`tests/unit/features/agents/roster/view/AgentRosterView.test.ts`, `tests/unit/features/skills/view/SkillLibraryView.test.ts`, `tests/unit/features/tasks/ui/LoopLibraryView.test.ts`); modify `settings.ts`/defaults/`fields/general.ts`/10 locales, `viewType.ts`, `LibraryView.ts`, `activateLibrary.ts` callers unchanged, `registerPluginViews.ts`, `registerPluginCommands.ts`, `tests/vue/libraryView.test.ts` (flag-off tests), settings parity tests.
 
-- [ ] **Step 1: Enumerate every flag + legacy-view consumer (the audit)**
+- [x] **Step 1: Enumerate every flag + legacy-view consumer (the audit)**
 
 Run and paste into the commit body:
 ```bash
@@ -62,9 +62,9 @@ grep -rn "LEGACY_VIEW_TYPE_TO_TAB\|TAB_TO_LEGACY_VIEW_TYPE" src/ tests/
 ```
 Every hit must be resolved by this task (deleted file, edited site, or justified keep — e.g. `AgentDetailEditor` shared helpers are NOT hits for these symbols; if an unexpected consumer appears, STOP and report instead of deleting).
 
-- [ ] **Step 2: Update tests first (red)** — in `tests/vue/libraryView.test.ts`: delete the flag-off tests ("returns without mounting when the flag is off", the setState legacy-redirect test — grep `useVueLibrary` in the file) and change every `makePlugin(true)`-style flag argument the helpers take so the plugin fake no longer carries `useVueLibrary` (read the helper; make it flag-free). In `tests/unit/app/commands/registerPluginCommands.test.ts` update the `open-loop-library` expectation to the unified target (see Step 5's code). Run both suites — expect failures against current code (`npx vitest run tests/vue/libraryView.test.ts`; `npx jest tests/unit/app/commands/registerPluginCommands.test.ts --silent`).
+- [x] **Step 2: Update tests first (red)** — in `tests/vue/libraryView.test.ts`: delete the flag-off tests ("returns without mounting when the flag is off", the setState legacy-redirect test — grep `useVueLibrary` in the file) and change every `makePlugin(true)`-style flag argument the helpers take so the plugin fake no longer carries `useVueLibrary` (read the helper; make it flag-free). In `tests/unit/app/commands/registerPluginCommands.test.ts` update the `open-loop-library` expectation to the unified target (see Step 5's code). Run both suites — expect failures against current code (`npx vitest run tests/vue/libraryView.test.ts`; `npx jest tests/unit/app/commands/registerPluginCommands.test.ts --silent`).
 
-- [ ] **Step 3: Cut the code**
+- [x] **Step 3: Cut the code**
 
 1. `viewType.ts` becomes exactly:
 ```ts
@@ -78,7 +78,7 @@ export type LibraryTab = 'agents' | 'skills' | 'loops';
 5. `registerPluginCommands.ts:113-116`: `open-loop-library` callback becomes `() => void activateLibrary(plugin, 'loops')` (import from `@/features/library/activateLibrary`); delete its flag branch and legacy imports.
 6. Flag removal: delete the `useVueLibrary` field from the settings type + defaults + the registry field block in `fields/general.ts` (grep `useVueLibrary` — the block is ~6 lines with `id/label/description`), and the `settings.useVueLibrary` key object from ALL 10 locale files (script it; re-parse each JSON after edit). Check `tests/integration/settings/` parity fixtures for the field and update.
 
-- [ ] **Step 4: Green + ratchet re-locks**
+- [x] **Step 4: Green + ratchet re-locks**
 
 ```bash
 npm run typecheck && npm run typecheck:vue && npm run lint
@@ -91,7 +91,7 @@ npx jest tests/unit/i18n --silent # locale alignment
 ```
 If any baseline diff contains anything other than removals/improvements, STOP and report.
 
-- [ ] **Step 5: Commit** — `feat(library)!: remove the useVueLibrary flag and the three legacy library views` with the audit output + "hard cut: legacy view types are unregistered; stale workspace leaves show Obsidian's empty pane (user-accepted)" in the body.
+- [x] **Step 5: Commit** — `feat(library)!: remove the useVueLibrary flag and the three legacy library views` with the audit output + "hard cut: legacy view types are unregistered; stale workspace leaves show Obsidian's empty pane (user-accepted)" in the body.
 
 ---
 
@@ -99,7 +99,7 @@ If any baseline diff contains anything other than removals/improvements, STOP an
 
 **Files:** `src/shared/libraryToolbar.ts`, `src/style/features/library.css`, `src/style/features/agent-roster.css`, `src/style/accessibility.css`, its test file if any (grep `libraryToolbar` in tests/).
 
-- [ ] **Step 1: Audit each deletion target**
+- [x] **Step 1: Audit each deletion target**
 
 FIRST (found by Task 1's spec review): delete `src/shared/libraryNav.ts` +
 `tests/unit/shared/libraryNav.test.ts`. It is dead legacy nav DOM whose only
@@ -115,14 +115,14 @@ grep -rn "specorator-roster-card-avatar\|specorator-roster-card-desc\|specorator
 ```
 Decision rule: a CSS rule dies only when NO ts/vue file references its class anymore. Known keeps: `specorator-library-card-delete` (AgentDetailEditor footer button), `.specorator-library-modal-*` (SkillEditorModal / loop editor), `.specorator-library` bare class if any non-view consumer remains (expected none — verify). If `renderLibraryLoading`/clone-button helpers in `src/utils/libraryView.ts` still have consumers (AgentDetailEditor does), they stay.
 
-- [ ] **Step 2: Prune**
+- [x] **Step 2: Prune**
 
 1. `libraryToolbar.ts`: delete `LibraryListController` and `mountLibraryList` (+ their private helpers if now unused); keep the pure functions + labels + types. Update its header comment. Delete/trim their tests (grep tests/ for the deleted symbols).
 2. `library.css`: delete the legacy view-header hide rule (3 legacy data-types), nav, header (+`h2`), list, loading, empty*, card* (EXCEPT `-card-delete`), chip*, toolbar/search/sort/filterchips/filterchip/filterreset rules. KEEP: `.specorator-library` padding? — grep first; if only legacy views added that class, delete it too. KEEP all `.specorator-library-modal-*` rules. Update the file header comment to say "editor-modal + shared remnants for the imperative modals".
 3. `agent-roster.css`: delete `-roster-card-avatar`, `-roster-card-desc`, `-roster-chip`, `-roster-chip-role` (the Vue forks own these looks now; the legacy roster view is gone). KEEP everything the detail editor uses (`-roster-detail*`, `-roster-section`, `-roster-card-section`, `-roster-role-chip`, footer, dirty…) — the earlier grep list is the source of truth.
 4. `accessibility.css:46` area: remove the `.specorator-library-nav-item:focus-visible` selector from its rule list (and any other dead `specorator-library-*` selectors in that file).
 
-- [ ] **Step 3: Verify + re-lock**
+- [x] **Step 3: Verify + re-lock**
 
 ```bash
 npm run build:css && npm run build && node scripts/check-artifacts.mjs
@@ -132,7 +132,7 @@ npm run check:quality                  # re-lock if improved (libraryToolbar shr
 ```
 Then re-run Step 1's greps — every deleted class must now have ZERO ts/vue hits and zero CSS definitions; paste the residual-grep summary into the commit body.
 
-- [ ] **Step 4: Commit** — `chore(library): prune legacy-only library CSS and list DOM helpers`.
+- [x] **Step 4: Commit** — `chore(library): prune legacy-only library CSS and list DOM helpers`.
 
 ---
 
@@ -140,9 +140,9 @@ Then re-run Step 1's greps — every deleted class must now have ZERO ts/vue hit
 
 **Files:** `src/features/library/activateLibrary.ts`, `src/app/views/registerPluginViews.ts`, 10 locales, `tests/unit/app/views/` (new or existing registration test — check `PluginViewActivator*` first and follow suit), `tests/vue/activateLibrary.test.ts`.
 
-- [ ] **Step 1: Failing tests** — extend `tests/vue/activateLibrary.test.ts`: calling `activateLibrary(plugin)` with NO tab (a) reveals an existing leaf and does NOT call `setActiveTab`; (b) with no leaf, creates one (existing create-path assertions) and does not force a tab. Jest: registration test asserting exactly ONE library ribbon (`library-big`, label = `ribbon.openLibrary`) and the commands `open-agent-roster`/`open-skill-library`/`open-loop-library`/`open-library`/`open-quick-actions` exist (the last targets the tab added in Task 5 — register it here already; the tab id string is `'quick-actions'`). Red first.
+- [x] **Step 1: Failing tests** — extend `tests/vue/activateLibrary.test.ts`: calling `activateLibrary(plugin)` with NO tab (a) reveals an existing leaf and does NOT call `setActiveTab`; (b) with no leaf, creates one (existing create-path assertions) and does not force a tab. Jest: registration test asserting exactly ONE library ribbon (`library-big`, label = `ribbon.openLibrary`) and the commands `open-agent-roster`/`open-skill-library`/`open-loop-library`/`open-library`/`open-quick-actions` exist (the last targets the tab added in Task 5 — register it here already; the tab id string is `'quick-actions'`). Red first.
 
-- [ ] **Step 2: Implement**
+- [x] **Step 2: Implement**
 
 `activateLibrary.ts` — signature `(plugin, tab?: LibraryTab)`; the final line becomes:
 ```ts
@@ -171,7 +171,7 @@ accordingly.
 
 NOTE: `'quick-actions'` is not a valid `LibraryTab` until Task 5 — to keep Task 3 compiling, add the union member in THIS task (`viewType.ts`: `export type LibraryTab = 'agents' | 'skills' | 'loops' | 'quick-actions';`) and let `LibraryRoot` handle the unknown tab gracefully until Task 5 (check `LibraryRoot.vue`'s panel switch: `AgentsPanel` is the `v-else` fallback — an unmatched tab falls back to Agents; acceptable transiently, note it in the commit). i18n: add `ribbon.openLibrary`, `commands.openLibrary`, `commands.openQuickActions` to all 10 locales.
 
-- [ ] **Step 3: Verify + commit** — both lanes + typechecks + lint + locale alignment; commit `feat(library): single Open Library ribbon and unified commands`.
+- [x] **Step 3: Verify + commit** — both lanes + typechecks + lint + locale alignment; commit `feat(library): single Open Library ribbon and unified commands`.
 
 ---
 
@@ -179,9 +179,9 @@ NOTE: `'quick-actions'` is not a valid `LibraryTab` until Task 5 — to keep Tas
 
 **Files:** Create `src/features/library/vue/stores/quickActionStore.ts`, `src/features/library/vue/quickActionLibraryAccessors.ts`; modify `src/features/quickActions/QuickActionStorage.ts` (make `getFilePathForName` public with a doc comment: "public for the Library duplicate flow's collision probe"), `src/features/quickActions/runQuickActionForFile.ts` (widen `file: TAbstractFile | null`; the two `instanceof` guards already handle null). Tests: `tests/vue/stores/quickActionStore.test.ts` (+ a Jest case in the existing `runQuickActionForFile`/quickActions suite pinning the null-file path skips pill attach but still dispatches).
 
-- [ ] **Step 1: Failing store spec** — mirror `tests/vue/stores/skillLibraryStore.test.ts` conventions (read it): init-guard (second `init` no-op), `load()` token-guard interleaving (stale slow load must not clobber a newer one), `remove` → `storage.delete(filePath)` + favorites refresh + reload, `duplicate` → name `"X copy"` then `"X copy 2"` when `exists` says taken (pin the exact `getFilePathForName` probe calls) + save + reload, `toggleFavorite` on/off → `setFavorite(action, rank-from-assignNextFavoriteRank)` / `unsetFavorite` + refresh + reload, `folderConfigured` exposed from `hasConfiguredFolder`. Red.
+- [x] **Step 1: Failing store spec** — mirror `tests/vue/stores/skillLibraryStore.test.ts` conventions (read it): init-guard (second `init` no-op), `load()` token-guard interleaving (stale slow load must not clobber a newer one), `remove` → `storage.delete(filePath)` + favorites refresh + reload, `duplicate` → name `"X copy"` then `"X copy 2"` when `exists` says taken (pin the exact `getFilePathForName` probe calls) + save + reload, `toggleFavorite` on/off → `setFavorite(action, rank-from-assignNextFavoriteRank)` / `unsetFavorite` + refresh + reload, `folderConfigured` exposed from `hasConfiguredFolder`. Red.
 
-- [ ] **Step 2: Implement the store**
+- [x] **Step 2: Implement the store**
 
 ```ts
 import { defineStore } from 'pinia';
@@ -283,9 +283,9 @@ export const quickActionLibraryAccessors: LibraryItemAccessors<QuickAction> = {
 ```
 (Verify the real `LibraryItemAccessors` field names against `src/shared/libraryToolbar.ts:7-13` and mirror `loopLibraryAccessors.ts` — adjust to the actual interface, keeping the 0-mtime note.)
 
-- [ ] **Step 3: `runQuickActionForFile` widening (Jest red first)** — add a test: `file = null` → no `attachFileAsPill`/`attachFolderAsPill` call, `dispatchQuickActionToTab` still called. Widen the signature + JSDoc ("null = no file context, e.g. the Library tab").
+- [x] **Step 3: `runQuickActionForFile` widening (Jest red first)** — add a test: `file = null` → no `attachFileAsPill`/`attachFolderAsPill` call, `dispatchQuickActionToTab` still called. Widen the signature + JSDoc ("null = no file context, e.g. the Library tab").
 
-- [ ] **Step 4: Green + commit** — `npx vitest run tests/vue && npx jest tests/unit/features/quickActions --silent && npm run typecheck && npm run typecheck:vue`; commit `feat(library): quick-action store with duplicate/favorite/delete flows`.
+- [x] **Step 4: Green + commit** — `npx vitest run tests/vue && npx jest tests/unit/features/quickActions --silent && npm run typecheck && npm run typecheck:vue`; commit `feat(library): quick-action store with duplicate/favorite/delete flows`.
 
 ---
 
@@ -293,9 +293,9 @@ export const quickActionLibraryAccessors: LibraryItemAccessors<QuickAction> = {
 
 **Files:** Create `src/features/library/vue/panels/QuickActionsPanel.vue`; modify `LibraryRoot.vue` (4th tab entry + panel branch), 10 locales (new `quickActions.library.*` keys), `tests/vue/panels/quickActionsPanel.test.ts` (new), `tests/vue/libraryView.test.ts` (nav now has 4 tabs).
 
-- [ ] **Step 1: Failing panel spec** — mirror `tests/vue/panels/loopsPanel.test.ts` harness: renders cards (name/desc/tags/star state); Run resolves through a mocked `runQuickActionForFile` with `(plugin, null, action)`; Edit opens a mocked `QuickActionEditorModal` and its `onSave` persists via storage + reloads; New respects `folderConfigured === false` → CTA disabled/hint shown; Duplicate/Delete busy-gated (deferred promise, double-click fires once — copy the busy-test pattern); Delete confirm-declined does nothing; star toggle calls the store. LibraryRoot test: 4 nav items, clicking the 4th shows the panel heading. Red.
+- [x] **Step 1: Failing panel spec** — mirror `tests/vue/panels/loopsPanel.test.ts` harness: renders cards (name/desc/tags/star state); Run resolves through a mocked `runQuickActionForFile` with `(plugin, null, action)`; Edit opens a mocked `QuickActionEditorModal` and its `onSave` persists via storage + reloads; New respects `folderConfigured === false` → CTA disabled/hint shown; Duplicate/Delete busy-gated (deferred promise, double-click fires once — copy the busy-test pattern); Delete confirm-declined does nothing; star toggle calls the store. LibraryRoot test: 4 nav items, clicking the 4th shows the panel heading. Red.
 
-- [ ] **Step 2: Implement the panel** (structure mirrors `LoopsPanel.vue` — read it first and keep the same section order):
+- [x] **Step 2: Implement the panel** (structure mirrors `LoopsPanel.vue` — read it first and keep the same section order):
 
 ```vue
 <script setup lang="ts">
@@ -319,18 +319,18 @@ import { useRowActionPending } from '../useRowActionPending';
 ```
 Body essentials (write the full component following LoopsPanel's shape): store init + `onMounted(load)`; `useLibraryList(() => store.actions, quickActionLibraryAccessors)`; header `specorator-vue-panel-header` with `<h2>{{ t('quickActions.library.title') }}</h2>` + New button (`mod-cta`, disabled when `!store.folderConfigured`, opens `QuickActionEditorModal(plugin.app, null, onSaved, storageOf(store), undefined)` — the store must expose its storage or a `save(action)` method; ADD `save(action)` to the store in this task (storage.save + favorites refresh + load) and route the modal's `onSave` through it, keeping storage private); loading row; empty state (two variants: folder-not-configured hint `quickActions.library.folderNotConfigured` with NO CTA, vs configured-but-empty with New CTA); card list — leading icon via the `-card-icon` atom + `setIcon` host pattern (copy from LoopsPanel), name-chips slot hosts the favorite star button (`aria-pressed`, classes `specorator-vue-qa-star` + `is-on` when favorite, scoped block styles it with `--sp-*` tokens only), desc, tags via card `tags` prop, actions Run/Edit/Duplicate/Delete all wrapped in `pending.run(action.filePath, ...)` (filePath is the stable row id) with `withErrorNotice`, Delete confirm inside the busy window (`quickActions.library.deleteConfirm` interpolating name, "and its note" wording — deleting a quick action deletes one note file, not a folder). Run: `void pending.run(action.filePath, () => withErrorNotice(() => runQuickActionForFile(plugin, null, action), t('quickActions.library.actionFailed'), fail))`.
 
-- [ ] **Step 3: Wire the 4th tab** — `LibraryRoot.vue` TABS array gains `{ id: 'quick-actions', label: t('quickActions.library.tab') }` and the template panel switch gains `<QuickActionsPanel v-else-if="activeTab === 'quick-actions'" />` BEFORE the Agents `v-else`. i18n: add the `quickActions.library` namespace (tab, title, newAction, actionFailed, run, edit, duplicate, delete, deleteConfirm, deleted, favoriteAria, folderNotConfigured) ×10 locales + `TranslationKey` unions (find the quickActions type file via `grep -rn "quickActions.editor" src/i18n/types/`).
+- [x] **Step 3: Wire the 4th tab** — `LibraryRoot.vue` TABS array gains `{ id: 'quick-actions', label: t('quickActions.library.tab') }` and the template panel switch gains `<QuickActionsPanel v-else-if="activeTab === 'quick-actions'" />` BEFORE the Agents `v-else`. i18n: add the `quickActions.library` namespace (tab, title, newAction, actionFailed, run, edit, duplicate, delete, deleteConfirm, deleted, favoriteAria, folderNotConfigured) ×10 locales + `TranslationKey` unions (find the quickActions type file via `grep -rn "quickActions.editor" src/i18n/types/`).
 
-- [ ] **Step 4: Green + guards + commit** — `npx vitest run tests/vue` (snapshots for the new card if the harness adds one), `npm run test:vue:coverage` (floors hold — the new store/panel need the specs from Steps 1/4 of Task 4), `npx vitest run tests/vue/styleBaseline.test.ts` (namespace guard covers the new template automatically — `specorator-vue-qa-star` matches the pattern), locale alignment, typechecks, lint, `npm run build && node scripts/check-artifacts.mjs`. Commit `feat(library): Quick Actions tab with full management`.
+- [x] **Step 4: Green + guards + commit** — `npx vitest run tests/vue` (snapshots for the new card if the harness adds one), `npm run test:vue:coverage` (floors hold — the new store/panel need the specs from Steps 1/4 of Task 4), `npx vitest run tests/vue/styleBaseline.test.ts` (namespace guard covers the new template automatically — `specorator-vue-qa-star` matches the pattern), locale alignment, typechecks, lint, `npm run build && node scripts/check-artifacts.mjs`. Commit `feat(library): Quick Actions tab with full management`.
 
 ---
 
 ### Task 6: ADR + docs sweep + full gates + PR update
 
-- [ ] **Step 1: ADR** — `docs/adr/` next free number, `retire-legacy-library-views.md`: context (flag shipped default-off; QA approved; plugin now published — no major-version milestone), decision (hard cut, no shims; single ribbon; Quick Actions join the Library), consequences (stale saved leaves show empty panes once; editor modals + embedded detail editor stay imperative until their own migrations). Frontmatter per existing ADRs (read one).
-- [ ] **Step 2: Docs sweep** — ALSO (Task 3 spec-review advisory): `plugin.openLeafView` in `src/main.ts` went dead when libraryNav.ts was deleted — audit-gate (`grep -rn "openLeafView" src/ tests/` must show only the definition) and delete it. ALSO (Task 2 observations): `.specorator-roster-card-actions` in `src/style/settings/agent-settings.css` has zero ts/vue consumers — audit-gate and delete it here. Same for the three dead-but-kept modal rules (`-modal-error`, `-modal-schema`, `-modal-status` in library.css — kept in Task 2 only because of the blanket modal keep; audit-gate and delete if still consumer-free). Update: root `CLAUDE.md` features/library row (no flag, four tabs incl. Quick Actions, single ribbon, legacy views deleted — rewrite the row) + features/quickActions row (mention the Library management tab); `src/style/CLAUDE.md` (drop "legacy views keep the untouched CSS until v4.0.0" phrasing → "legacy library CSS was pruned 2026-07-04; the imperative editor modals keep `.specorator-library-modal-*`"); annotate (do not rewrite) the 2026-07-03 style-baseline spec: one-line note under its Decisions table: "*(2026-07-04: the deletion pass landed with the library consolidation — see docs/superpowers/specs/2026-07-04-library-consolidation-design.md.)*"; fix the `AgentsPanel.vue` comment citing agent-roster.css legacy lifetime; `grep -rn "v4.0.0" src/ docs/ CLAUDE.md` → resolve every hit (annotate or rewrite per the spec's sweep rule); `docs/build-ci/quality-gates.md` only if it references the flag.
-- [ ] **Step 3: Full gate sweep** — `npm run typecheck && npm run typecheck:vue && npm run lint && npm run test && npx vitest run tests/vue && npm run test:vue:coverage && npm run build && node scripts/check-artifacts.mjs && npm run check:css && npm run check:loc && npm run check:quality` — ALL green; report each.
-- [ ] **Step 4: Commit + push is controller-owned** — commit `docs: ADR + docs sweep for the library consolidation`; the controller pushes and updates the PR body (consolidation section + revised QA checklist: single ribbon entry, 4-tab library, quick-action management flows, stale-leaf note).
+- [x] **Step 1: ADR** — `docs/adr/` next free number, `retire-legacy-library-views.md`: context (flag shipped default-off; QA approved; plugin now published — no major-version milestone), decision (hard cut, no shims; single ribbon; Quick Actions join the Library), consequences (stale saved leaves show empty panes once; editor modals + embedded detail editor stay imperative until their own migrations). Frontmatter per existing ADRs (read one).
+- [x] **Step 2: Docs sweep** — ALSO (Task 3 spec-review advisory): `plugin.openLeafView` in `src/main.ts` went dead when libraryNav.ts was deleted — audit-gate (`grep -rn "openLeafView" src/ tests/` must show only the definition) and delete it. ALSO (Task 2 observations): `.specorator-roster-card-actions` in `src/style/settings/agent-settings.css` has zero ts/vue consumers — audit-gate and delete it here. Same for the three dead-but-kept modal rules (`-modal-error`, `-modal-schema`, `-modal-status` in library.css — kept in Task 2 only because of the blanket modal keep; audit-gate and delete if still consumer-free). Update: root `CLAUDE.md` features/library row (no flag, four tabs incl. Quick Actions, single ribbon, legacy views deleted — rewrite the row) + features/quickActions row (mention the Library management tab); `src/style/CLAUDE.md` (drop "legacy views keep the untouched CSS until v4.0.0" phrasing → "legacy library CSS was pruned 2026-07-04; the imperative editor modals keep `.specorator-library-modal-*`"); annotate (do not rewrite) the 2026-07-03 style-baseline spec: one-line note under its Decisions table: "*(2026-07-04: the deletion pass landed with the library consolidation — see docs/superpowers/specs/2026-07-04-library-consolidation-design.md.)*"; fix the `AgentsPanel.vue` comment citing agent-roster.css legacy lifetime; `grep -rn "v4.0.0" src/ docs/ CLAUDE.md` → resolve every hit (annotate or rewrite per the spec's sweep rule); `docs/build-ci/quality-gates.md` only if it references the flag.
+- [x] **Step 3: Full gate sweep** — `npm run typecheck && npm run typecheck:vue && npm run lint && npm run test && npx vitest run tests/vue && npm run test:vue:coverage && npm run build && node scripts/check-artifacts.mjs && npm run check:css && npm run check:loc && npm run check:quality` — ALL green; report each.
+- [x] **Step 4: Commit + push is controller-owned** — commit `docs: ADR + docs sweep for the library consolidation`; the controller pushes and updates the PR body (consolidation section + revised QA checklist: single ribbon entry, 4-tab library, quick-action management flows, stale-leaf note).
 
 ---
 

@@ -9,9 +9,9 @@ import { resolveAgentProvider } from './resolveAgentProvider';
 import type { RosterAgent } from './rosterTypes';
 
 /**
- * Roster actions shared verbatim by the legacy `AgentRosterView` and the Vue
- * `AgentsPanel` (both stay alive until the v4.0.0 legacy deletion pass), so
- * the Notice copy and provider-resolution rules cannot drift between them.
+ * Roster actions consumed by the Vue `AgentsPanel` (extracted for the legacy
+ * `AgentRosterView`, deleted 2026-07-04 — see ADR 0003), keeping the Notice
+ * copy and provider-resolution rules in one place.
  */
 
 /** Sync every roster agent to the enabled providers, noticing both result branches. */

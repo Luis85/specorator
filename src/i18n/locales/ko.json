@@ -1193,9 +1193,6 @@
   "ribbon": {
     "openChat": "Open Co-Worker Chat",
     "openAgentBoard": "Open Agent Board",
-    "openAgentRoster": "Open Agent Roster",
-    "openSkillLibrary": "Open Skill Library",
-    "openLoopLibrary": "Open loop library",
     "openLibrary": "Open Library"
   },
   "commands": {

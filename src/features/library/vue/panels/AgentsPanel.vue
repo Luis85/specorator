@@ -360,7 +360,8 @@ function hasCaps(agent: RosterAgent): boolean {
 
 <style scoped>
 /* Roster-specific card deltas (forked from features/agent-roster.css; the
-   legacy rules stay for the legacy roster view until the v4.0.0 deletion). */
+   legacy roster view was deleted 2026-07-04 — agent-roster.css now only
+   serves the embedded AgentDetailEditor). */
 .specorator-vue-agent-card-desc {
   color: var(--sp-text-muted);
   font-size: var(--sp-font-small);

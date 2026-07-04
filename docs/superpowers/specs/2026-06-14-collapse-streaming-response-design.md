@@ -6,6 +6,7 @@ scope: chat/controllers, chat/rendering, settings, i18n, core/types
 ---
 
 # Collapse streaming response until complete
+*(2026-07-04: the v4.0.0 milestone framing below is historical — it was retired with the library consolidation (docs/adr/0003-retire-legacy-library-views.md); deferred deletions land as dedicated passes.)*
 
 ## Problem
 

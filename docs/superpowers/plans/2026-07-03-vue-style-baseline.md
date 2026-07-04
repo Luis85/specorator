@@ -4,6 +4,7 @@ priority: 1 - high
 parent: Frontend
 ---
 # Vue Style Baseline Implementation Plan
+*(2026-07-04: the legacy-library deletion pass referenced below landed with the library consolidation — see docs/superpowers/specs/2026-07-04-library-consolidation-design.md; the v4.0.0 milestone framing is retired, docs/adr/0003-retire-legacy-library-views.md.)*
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

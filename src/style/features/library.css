@@ -37,10 +37,6 @@
   border-radius: var(--radius-m);
 }
 
-.specorator-library-modal-status {
-  display: flex;
-}
-
 .specorator-library-modal-field {
   display: flex;
   flex-direction: column;
@@ -61,24 +57,6 @@
 .specorator-library-modal-hint {
   color: var(--text-muted);
   font-size: var(--font-ui-small);
-}
-
-.specorator-library-modal-schema,
-.specorator-library-modal-error {
-  margin: 0;
-  padding: var(--size-4-2);
-  max-height: 180px;
-  overflow: auto;
-  background: var(--background-primary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-s);
-  font-family: var(--font-monospace);
-  font-size: var(--font-ui-smaller);
-  white-space: pre-wrap;
-}
-
-.specorator-library-modal-error {
-  color: var(--text-error);
 }
 
 .specorator-library-modal-code {

@@ -6,6 +6,7 @@ scope: src/style/vue baseline evolution; future Vue views (chat, Agent Board)
 ---
 
 # Obsidian CSS and the Vue Island "Blank Slate"
+*(2026-07-04: the legacy-library deletion pass referenced below landed with the library consolidation — see docs/superpowers/specs/2026-07-04-library-consolidation-design.md; the v4.0.0 milestone framing is retired, docs/adr/0003-retire-legacy-library-views.md.)*
 
 Three-agent web research answering: **which Obsidian styles must we reset to
 get a predictable (blank-slate-like) base inside Vue components, and by what

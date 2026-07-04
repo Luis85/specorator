@@ -41,6 +41,8 @@ header above the in-view nav strip.
 | Reset depth | **Normalize + primitives.** Predictable baseline for the elements we render, standard focus ring, zeroed structural margins. Obsidian typography still inherits — Vue surfaces should look native. *Amended during adversarial self-review:* control primitives (button/input/select/textarea restyling) were found to fight Obsidian core rules at equal specificity and are dropped — Obsidian's native control styling is the baseline (see Reset sheet). |
 | Authoring model | **Scoped SFC styles + central baseline.** Component-private rules live in `<style scoped>`; island-generic and cross-component rules live in `src/style/vue/`. |
 
+*(2026-07-04: the deletion pass landed with the library consolidation — see docs/superpowers/specs/2026-07-04-library-consolidation-design.md.)*
+
 ## Architecture: three tiers
 
 ### Tier 1 — Baseline (island-generic, `src/style/vue/`)
