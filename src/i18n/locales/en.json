@@ -267,6 +267,21 @@
       "saveFailed": "Failed to save quick action",
       "nameExists": "A quick action with this name already exists"
     },
+    "library": {
+      "tab": "Quick actions",
+      "title": "Quick action library",
+      "newAction": "New action",
+      "actionFailed": "Something went wrong — check the developer console.",
+      "run": "Run",
+      "edit": "Edit",
+      "duplicate": "Duplicate",
+      "delete": "Delete",
+      "deleteConfirm": "Delete the quick action \"{name}\" and its note?",
+      "deleted": "Deleted {name}.",
+      "favoriteAria": "Toggle favorite",
+      "folderNotConfigured": "No Quick Actions folder is configured. Set one under Settings → Quick Actions to start creating actions.",
+      "favoriteLimit": "You can favorite up to 5 quick actions"
+    },
     "capture": {
       "label": "Capture as quick action",
       "saved": "Quick action saved",

@@ -615,6 +615,21 @@
       "saveFailed": "Failed to save quick action",
       "nameExists": "Une action rapide avec ce nom existe déjà"
     },
+    "library": {
+      "tab": "Actions rapides",
+      "title": "Bibliothèque d'actions rapides",
+      "newAction": "Nouvelle action",
+      "actionFailed": "Une erreur est survenue — consultez la console développeur.",
+      "run": "Exécuter",
+      "edit": "Modifier",
+      "duplicate": "Dupliquer",
+      "delete": "Supprimer",
+      "deleteConfirm": "Supprimer l'action rapide « {name} » et sa note ?",
+      "deleted": "{name} supprimé.",
+      "favoriteAria": "Basculer le favori",
+      "folderNotConfigured": "Aucun dossier d'actions rapides n'est configuré. Définissez-en un dans Paramètres → Actions rapides pour créer des actions.",
+      "favoriteLimit": "Vous pouvez marquer jusqu'à 5 actions rapides en favoris"
+    },
     "capture": {
       "label": "Enregistrer comme action rapide",
       "saved": "Action rapide enregistrée",

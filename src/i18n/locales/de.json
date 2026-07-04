@@ -615,6 +615,21 @@
       "saveFailed": "Failed to save quick action",
       "nameExists": "Eine Quick Action mit diesem Namen existiert bereits"
     },
+    "library": {
+      "tab": "Schnellaktionen",
+      "title": "Schnellaktionen-Bibliothek",
+      "newAction": "Neue Aktion",
+      "actionFailed": "Etwas ist schiefgelaufen — prüfe die Entwicklerkonsole.",
+      "run": "Ausführen",
+      "edit": "Bearbeiten",
+      "duplicate": "Duplizieren",
+      "delete": "Löschen",
+      "deleteConfirm": "Die Schnellaktion \"{name}\" und ihre Notiz löschen?",
+      "deleted": "{name} gelöscht.",
+      "favoriteAria": "Favorit umschalten",
+      "folderNotConfigured": "Es ist kein Ordner für Schnellaktionen konfiguriert. Lege unter Einstellungen → Schnellaktionen einen fest, um Aktionen zu erstellen.",
+      "favoriteLimit": "Du kannst bis zu 5 Schnellaktionen als Favoriten markieren"
+    },
     "capture": {
       "label": "Als Quick Action speichern",
       "saved": "Quick Action gespeichert",

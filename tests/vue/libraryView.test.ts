@@ -36,14 +36,24 @@ describe('LibraryView', () => {
     expect(view.getIcon()).toBe('library');
   });
 
-  it('mounts the tab strip with three tabs and the Agents panel as the default', async () => {
+  it('mounts the tab strip with four tabs and the Agents panel as the default', async () => {
     const view = new LibraryView(makeLeaf(), makePlugin());
     const el = mountView(view);
     await view.onOpen();
     const tabs = el.querySelectorAll('.specorator-vue-lib-nav-item');
-    expect(tabs).toHaveLength(3);
+    expect(tabs).toHaveLength(4);
     expect(el.querySelector('[aria-current="page"]')?.textContent).toContain('Agents');
     expect(el.querySelector('.specorator-vue-panel-header h2')?.textContent).toContain('Agent Roster');
+  });
+
+  it('clicking the Quick actions tab mounts the Quick Actions panel', async () => {
+    const view = new LibraryView(makeLeaf(), makePlugin());
+    const el = mountView(view);
+    await view.onOpen();
+    (el.querySelectorAll('.specorator-vue-lib-nav-item')[3] as HTMLElement).click();
+    await new Promise((r) => setTimeout(r));
+    expect(el.querySelector('.specorator-vue-panel-header h2')?.textContent)
+      .toContain('Quick action library');
   });
 
   it('switches tabs on click and via setActiveTab', async () => {

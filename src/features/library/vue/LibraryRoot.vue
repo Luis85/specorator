@@ -6,6 +6,7 @@ import type { LibraryTab } from '../viewType';
 import { ACTIVE_TAB_KEY, VIEW_KEY } from './libraryKeys';
 import AgentsPanel from './panels/AgentsPanel.vue';
 import LoopsPanel from './panels/LoopsPanel.vue';
+import QuickActionsPanel from './panels/QuickActionsPanel.vue';
 import SkillsPanel from './panels/SkillsPanel.vue';
 
 const injected = inject(ACTIVE_TAB_KEY);
@@ -21,6 +22,7 @@ const TABS: ReadonlyArray<{ id: LibraryTab; label: string }> = [
   { id: 'agents', label: t('agentRoster.navLabel') },
   { id: 'skills', label: t('skillLibrary.navLabel') },
   { id: 'loops', label: t('loopLibrary.navLabel') },
+  { id: 'quick-actions', label: t('quickActions.library.tab') },
 ];
 
 function select(tab: LibraryTab): void {
@@ -51,6 +53,7 @@ function select(tab: LibraryTab): void {
   </div>
   <LoopsPanel v-if="activeTab === 'loops'" />
   <SkillsPanel v-else-if="activeTab === 'skills'" />
+  <QuickActionsPanel v-else-if="activeTab === 'quick-actions'" />
   <AgentsPanel v-else />
 </template>
 

@@ -15,6 +15,10 @@ export function makePlugin() {
       },
     },
     logger: { scope: () => ({ error: vi.fn(), warn: vi.fn() }) },
+    // Quick-action store wiring: real QuickActionStorage over a stub adapter
+    // (loadAll resolves to [] when the folder listing is empty).
+    storage: { getAdapter: vi.fn(() => ({ listFilesRecursive: vi.fn().mockResolvedValue([]) })) },
+    quickActionFavoritesCache: { refresh: vi.fn() },
     agentRosterStore: { list: vi.fn().mockResolvedValue([]) },
     vaultSkillAggregator: { listAll: vi.fn().mockResolvedValue([]) },
     vaultFileAdapter: {

@@ -615,6 +615,21 @@
       "saveFailed": "Failed to save quick action",
       "nameExists": "この名前のクイックアクションは既に存在します"
     },
+    "library": {
+      "tab": "クイックアクション",
+      "title": "クイックアクションライブラリ",
+      "newAction": "新規アクション",
+      "actionFailed": "問題が発生しました。開発者コンソールを確認してください。",
+      "run": "実行",
+      "edit": "編集",
+      "duplicate": "複製",
+      "delete": "削除",
+      "deleteConfirm": "クイックアクション「{name}」とそのノートを削除しますか?",
+      "deleted": "{name} を削除しました。",
+      "favoriteAria": "お気に入りを切り替え",
+      "folderNotConfigured": "クイックアクションのフォルダーが設定されていません。設定 → Quick Actions でフォルダーを指定するとアクションを作成できます。",
+      "favoriteLimit": "お気に入りに登録できるクイックアクションは最大5つです"
+    },
     "capture": {
       "label": "クイックアクションとして保存",
       "saved": "クイックアクションを保存しました",
